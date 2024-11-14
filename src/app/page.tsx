@@ -31,11 +31,16 @@ export default function Home() {
   return (
     <div className="grid grid-rows-[104px_1fr_512px] gap-14 pt-14 items-center justify-items-center min-h-screen">
       <Navbar />
-      <main className="w-full max-w-screen-2xl px-14 h-screen">
-        <div className="flex gap-[40px] h-96">
-          <div className="w-[456px] bg-primary/[2%] rounded-2xl shrink-0"></div>
-          <div className="w-full">
-            <Resource />
+      <main className="w-full max-w-screen-2xl px-14">
+        <div className="flex gap-[40px]">
+          <div className="w-[456px] bg-primary/[2%] rounded-2xl shrink-0 h-96">
+          </div>
+          <div className="w-full flex flex-col gap-6">
+            {
+              Array.from({ length: 10 }).map((_, index) => (
+                <Resource key={index} />
+              ))
+            }
           </div>
         </div>
       </main>
