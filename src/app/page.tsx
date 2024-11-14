@@ -3,6 +3,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { links, socialLinks } from "@/constants/links";
 import { RiFacebookCircleFill, RiLinkedinBoxFill, RiTwitterXFill } from "react-icons/ri";
+import { Button } from "@/components/nextui/Button";
+import Resource from "@/components/Resource";
 
 const footerInfo = {
   Email: "opendeved@gmail.com",
@@ -27,17 +29,19 @@ function FooterFieldColumn({
 
 export default function Home() {
   return (
-    <div className="grid grid-rows-[104px_1fr_420px] gap-14 pt-14 items-center justify-items-center min-h-screen">
+    <div className="grid grid-rows-[104px_1fr_512px] gap-14 pt-14 items-center justify-items-center min-h-screen">
       <Navbar />
       <main className="w-full max-w-screen-2xl px-14 h-screen">
         <div className="flex gap-[40px] h-96">
-          <div className="w-[456px] bg-primary/[2%] rounded-2xl"></div>
-          <div></div>
+          <div className="w-[456px] bg-primary/[2%] rounded-2xl shrink-0"></div>
+          <div className="w-full">
+            <Resource />
+          </div>
         </div>
       </main>
-      <footer className="row-start-3 bg-primary/[2%] h-full w-full flex justify-center items-center">
+      <footer className="row-start-3 bg-primary/[2%] h-full w-full flex justify-center items-center flex-col gap-14">
         <div className="max-w-screen-2xl px-14 flex w-full justify-between items-center">
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-6 h-full items-start">
             <Image src={"/logo.png"} alt="logo" width={232} height={81} />
             <div className="flex flex-col gap-[14px]">
               {Object.entries(footerInfo).map(([key, value]) => (
@@ -67,7 +71,7 @@ export default function Home() {
               </div>
             }
           />
-          <div className="flex flex-col gap-6">
+          <div className="flex flex-col h-full gap-6">
             <FooterFieldColumn
               title="Stay Connected"
               content={
@@ -83,9 +87,17 @@ export default function Home() {
             <FooterFieldColumn
               title="Contact Us"
               content={<div className="mt-6">
+                  <Button className="px-12">Contact Us</Button>
               </div>}
             />
           </div>
+        </div>
+        <div className="flex gap-4">
+          <Link className="text-primary/60 font-medium" href="/">Privacy Policy</Link>
+          <span className="font-medium text-primary/10 ">
+            |
+          </span>
+          <Link className="text-primary/60 font-medium" href="/">Terms of Service</Link>
         </div>
       </footer>
     </div>

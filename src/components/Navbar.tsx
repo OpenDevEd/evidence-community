@@ -14,7 +14,7 @@ export default function Navbar() {
     <nav className="w-full max-w-screen-2xl px-14">
       <div className="h-[104px] bg-secondary rounded-[20px] flex items-center p-8 gap-9">
         <Image src={"/logo.png"} alt="logo" height={104} width={171} />
-        <div className="flex flex-1 items-center justify-end gap-8">
+        <div className="flex flex-1 items-center justify-end gap-8 overflow-hidden">
           {links.map((link) => (
             !link.navExclude && <Link
               href={link.href}
@@ -24,8 +24,10 @@ export default function Navbar() {
                 pathname === link.href && "text-accent"
               )}
             >
-              {link.icon && <link.icon className="fill-current h-6 w-6" />}
+              {link.icon && <link.icon className="fill-current size-6 shrink-0" />}
+              <span className="line-clamp-1">
               {link.label}
+              </span>
             </Link>
           ))}
         </div>
