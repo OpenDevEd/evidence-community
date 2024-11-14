@@ -1,11 +1,21 @@
+"use client";
 import Navbar from "@/components/Navbar";
 import Image from "next/image";
 import Link from "next/link";
 import { links, socialLinks } from "@/constants/links";
-import { RiFacebookCircleFill, RiLinkedinBoxFill, RiTwitterXFill } from "react-icons/ri";
+import {
+  RiFacebookCircleFill,
+  RiLinkedinBoxFill,
+  RiTwitterXFill,
+} from "react-icons/ri";
 import { Button } from "@/components/nextui/Button";
 import Resource from "@/components/Resource";
 import Programmes from "@/components/Programmes";
+import { Input, SelectItem } from "@nextui-org/react";
+import { BiSearch } from "react-icons/bi";
+import { IoSearch } from "react-icons/io5";
+import { LuHelpCircle } from "react-icons/lu";
+import { Select } from "@/components/nextui/Select";
 
 const footerInfo = {
   Email: "opendeved@gmail.com",
@@ -35,12 +45,81 @@ export default function Home() {
       <main className="w-full max-w-screen-2xl px-14">
         <div className="flex gap-[40px]">
           <Programmes />
-          <div className="w-full flex flex-col gap-6">
-            {
-              Array.from({ length: 10 }).map((_, index) => (
+          <div className="w-full">
+            <div className="flex w-full justify-between items-end h-12">
+              <h1 className="text-primary/60 font-medium text-3xl">Search</h1>
+              <div className="flex gap-4 h-12 flex-1 justify-end">
+                <Button
+                  className="h-full px-6 font-medium text-base"
+                  endContent={<LuHelpCircle className="size-6" />}
+                >
+                  Help
+                </Button>
+                <Select
+                  items={[
+                    { key: "newest", name: "Newest" },
+                    { key: "oldest", name: "Oldest" },
+                  ]}
+                  defaultSelectedKeys={["newest"]}
+                  startContent={
+                    <div className="text-primary/60 shrink-0 font-medium">
+                      Sort by:
+                    </div>
+                  }
+                >
+                  {(item: any) => {
+                    return (
+                      <SelectItem
+                        classNames={{
+                          title: "text-primary/60 font-medium text-base",
+                        }}
+                        key={item.key}
+                      >
+                        {item.name}
+                      </SelectItem>
+                    );
+                  }}
+                </Select>
+              </div>
+            </div>
+            <div className="flex my-4 gap-4">
+              <Input
+                placeholder="Search"
+                isClearable
+                classNames={{
+                  inputWrapper:
+                    "bg-secondary border border-primary/10 h-12 rounded-2xl",
+                  input: "placeholder:text-primary/40",
+                }}
+                startContent={
+                  <IoSearch className="size-6 fill-current text-primary/40" />
+                }
+              />
+                <Select
+                  items={[
+                    { key: "newest", name: "Newest" },
+                    { key: "oldest", name: "Oldest" },
+                  ]}
+                >
+                  {(item: any) => {
+                    return (
+                      <SelectItem
+                        classNames={{
+                          title: "text-primary/60 font-medium text-base",
+                        }}
+                        key={item.key}
+                      >
+                        {item.name}
+                      </SelectItem>
+                    );
+                  }}
+                </Select>
+            </div>
+            <div className="flex flex-col gap-6">
+              {Array.from({ length: 10 }).map((_, index) => (
                 <Resource key={index} />
-              ))
-            }
+              ))}
+            </div>
           </div>
         </div>
       </main>
@@ -91,18 +170,22 @@ export default function Home() {
             />
             <FooterFieldColumn
               title="Contact Us"
-              content={<div className="mt-6">
+              content={
+                <div className="mt-6">
                   <Button className="px-12">Contact Us</Button>
-              </div>}
+                </div>
+              }
             />
           </div>
         </div>
         <div className="flex gap-4">
-          <Link className="text-primary/60 font-medium" href="/">Privacy Policy</Link>
-          <span className="font-medium text-primary/10 ">
-            |
-          </span>
-          <Link className="text-primary/60 font-medium" href="/">Terms of Service</Link>
+          <Link className="text-primary/60 font-medium" href="/">
+            Privacy Policy
+          </Link>
+          <span className="font-medium text-primary/10 ">|</span>
+          <Link className="text-primary/60 font-medium" href="/">
+            Terms of Service
+          </Link>
         </div>
       </footer>
     </div>
