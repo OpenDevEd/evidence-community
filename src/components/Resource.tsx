@@ -23,7 +23,7 @@ function ResourceData({
       {startContent}
       <span
         className={twMerge(
-          "text-primary/60 font-medium text-lg",
+          "text-primary/60 font-medium text-lg line-clamp-1",
           classNames?.text
         )}
       >
@@ -40,7 +40,7 @@ export default function Resource() {
         online tutoring works: experimental evidence from a program with
         vulnerrable children
       </h1>
-      <div className="flex w-full gap-2 items-center">
+      <div className="flex w-full gap-2 items-center flex-wrap">
         <ResourceData
           startContent={<AboutUs className="fill-accent size-6" />}
           text="Open Development & Education"
