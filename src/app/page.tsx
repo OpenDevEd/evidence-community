@@ -5,6 +5,7 @@ import { links, socialLinks } from "@/constants/links";
 import { RiFacebookCircleFill, RiLinkedinBoxFill, RiTwitterXFill } from "react-icons/ri";
 import { Button } from "@/components/nextui/Button";
 import Resource from "@/components/Resource";
+import Programmes from "@/components/Programmes";
 
 const footerInfo = {
   Email: "opendeved@gmail.com",
@@ -33,8 +34,7 @@ export default function Home() {
       <Navbar />
       <main className="w-full max-w-screen-2xl px-14">
         <div className="flex gap-[40px]">
-          <div className="w-[456px] bg-primary/[2%] rounded-2xl shrink-0 h-96">
-          </div>
+          <Programmes />
           <div className="w-full flex flex-col gap-6">
             {
               Array.from({ length: 10 }).map((_, index) => (
