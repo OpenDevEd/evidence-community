@@ -19,6 +19,7 @@ import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
+import { ScrollShadow } from "@nextui-org/react";
 const footerInfo = {
   Email: "opendeved@gmail.com",
   Phone: "+1-123-456-7890",
@@ -47,7 +48,7 @@ export default function Home() {
       <main className="w-full max-w-screen-2xl px-14">
         <div className="flex gap-[40px]">
           <Programmes />
-          <div className="w-full flex flex-col gap-8">
+          <div className="w-full flex flex-col gap-4">
             <div className="flex w-full justify-between items-end h-12">
               <h1 className="text-primary/60 font-medium text-3xl">Search</h1>
               <div className="flex gap-4 h-12 flex-1 justify-end">
@@ -103,12 +104,36 @@ export default function Home() {
                 Resources
               </h2>
               <Card>
-                <div className="px-4">
-                  <Switch size="sm" classNames={{
-                    base: "flex-row-reverse"
-                  }}>Abstract</Switch>
+                <div className="px-3">
+                  <Switch
+                    size="sm"
+                    classNames={{
+                      base: "flex-row-reverse",
+                    }}
+                  >
+                    Abstract
+                  </Switch>
                 </div>
               </Card>
+            </div>
+            <div className="flex gap-4 w-full max-w-full h-12 relative">
+                  <ScrollShadow orientation="horizontal" className="flex gap-4 overflow-y-hidden overflow-x-scroll absolute inset-0">
+                    {[
+                    { label: "2 Implementation Guidance", count: 6 },
+                    { label: "3 Resources: TPD Implementation", count: 3 },
+                    { label: "1 Programme Reports", count: 3 },
+                    { label: "1 Programme Reports", count: 3 },
+                    { label: "Outputs Registry", count: 7 },
+                  ].map((item) => (
+                    <Button size="xs" variant="solid" className="shrink-0" key={item.label}>
+                      {item.label}
+                      <span className="text-primary/40 font-medium text-sm leading-3">
+                        {`(${item.count})`}
+                      </span>
+
+                    </Button>
+                  ))}
+                </ScrollShadow>
             </div>
             <div className="flex flex-col gap-6">
               {Array.from({ length: 10 }).map((_, index) => (
