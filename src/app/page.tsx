@@ -20,6 +20,11 @@ import { SelectItem } from "@/components/nextui/SelectItem";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
 import { ScrollShadow } from "@nextui-org/react";
+import { Pagination } from "@/components/nextui/Pagination";
+import { AiOutlineDownload, AiOutlineHome, AiOutlinePrinter } from "react-icons/ai";
+import { HiOutlineDownload, HiOutlineHome, HiOutlinePrinter } from "react-icons/hi";
+import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
+
 const footerInfo = {
   Email: "opendeved@gmail.com",
   Phone: "+1-123-456-7890",
@@ -117,28 +122,46 @@ export default function Home() {
               </Card>
             </div>
             <div className="flex gap-4 w-full max-w-full h-12 relative">
-                  <ScrollShadow orientation="horizontal" className="flex gap-4 overflow-y-hidden overflow-x-scroll absolute inset-0">
-                    {[
-                    { label: "2 Implementation Guidance", count: 6 },
-                    { label: "3 Resources: TPD Implementation", count: 3 },
-                    { label: "1 Programme Reports", count: 3 },
-                    { label: "1 Programme Reports", count: 3 },
-                    { label: "Outputs Registry", count: 7 },
-                  ].map((item) => (
-                    <Button size="xs" variant="solid" className="shrink-0" key={item.label}>
-                      {item.label}
-                      <span className="text-primary/40 font-medium text-sm leading-3">
-                        {`(${item.count})`}
-                      </span>
-
-                    </Button>
-                  ))}
-                </ScrollShadow>
+              <ScrollShadow 
+                orientation="horizontal"
+                className="flex gap-4 overflow-y-hidden overflow-x-scroll absolute inset-0"
+              >
+                {[
+                  { label: "2 Implementation Guidance", count: 6 },
+                  { label: "3 Resources: TPD Implementation", count: 3 },
+                  { label: "1 Programme Reports", count: 3 },
+                  { label: "1 Programme Reports", count: 3 },
+                  { label: "Outputs Registry", count: 7 },
+                ].map((item) => (
+                  <Button
+                    size="xs"
+                    variant="solid"
+                    className="shrink-0"
+                    key={item.label}
+                  >
+                    {item.label}
+                    <span className="text-primary/40 font-medium text-sm leading-3">
+                      {`(${item.count})`}
+                    </span>
+                  </Button>
+                ))}
+              </ScrollShadow>
             </div>
             <div className="flex flex-col gap-6">
               {Array.from({ length: 10 }).map((_, index) => (
                 <Resource key={index} />
               ))}
+            </div>
+            <div className="w-full flex justify-center mt-6">
+              <Pagination siblings={3}  total={100} />
+            </div>
+            <div className="flex justify-end mt-6 gap-4">
+              <Button endContent={<HiOutlineDownload className="size-6" />}>Download 6,788 Records</Button>
+              <Button endContent={<HiOutlinePrinter className="size-6" />}>Print 5,654 Citations</Button>
+              <Button endContent={<HiOutlineCodeBracketSquare className="size-6" />}>Main Feed</Button>
+            </div>
+            <div className="text-end text-primary/40 text-sm">
+            Last update from database: 30/03/2024, 15:01 (UTC)
             </div>
           </div>
         </div>
