@@ -4,14 +4,20 @@ import {extendVariants, Button as NextUIButton} from "@nextui-org/react";
 export const Button = extendVariants(NextUIButton, {
   variants: {
     color: {
-      secondary: "text-primary/60 bg-secondary border-small border-primary/10",
+      secondary: "text-primary/60 bg-secondary border-primary/10",
     },
-    custom: {
-      default: "rounded-2xl"
-    }
+    variant: {
+      default: "border-small rounded-2xl",
+      solid: "border-none rounded-lg"
+    },
+    size: {
+      lg: "",
+      xs: "text-xs px-3 h-8 gap-1  font-light"
+    },
   },
   defaultVariants: {
     color: "secondary",
-    custom: "default"
+    variant: "default",
+    size: "lg"
   },
 });
