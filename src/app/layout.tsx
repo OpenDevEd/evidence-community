@@ -20,11 +20,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className="dark">
+    <html lang="en" suppressHydrationWarning>
       <body
-        className={`${ubuntu.className} bg-background `}
+        className={`${ubuntu.className}`}
       >
-        <Providers>{children}</Providers>
+        <div className="h-full w-full bg-background_light dark:bg-background">
+          <Providers>{children}</Providers>
+        </div>
       </body>
     </html>
   );
