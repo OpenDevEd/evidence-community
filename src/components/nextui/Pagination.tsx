@@ -19,8 +19,8 @@ export const Pagination = extendVariants(NextUIPagination, {
     },
     custom: {
       default: {
-        item: "rounded-lg text-xl",
-        cursor: "rounded-lg text-xl",
+        item: "rounded-lg",
+        cursor: "rounded-lg",
         wrapper: "gap-4",
       },
     }
