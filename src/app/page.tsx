@@ -11,11 +11,12 @@ import {
 import { Button } from "@/components/nextui/Button";
 import Resource from "@/components/Resource";
 import Programmes from "@/components/Programmes";
-import { Input, SelectItem } from "@nextui-org/react";
+import { SelectItem } from "@nextui-org/react";
 import { BiSearch } from "react-icons/bi";
 import { IoSearch } from "react-icons/io5";
 import { LuHelpCircle } from "react-icons/lu";
 import { Select } from "@/components/nextui/Select";
+import { Input } from "@/components/nextui/Input";
 
 const footerInfo = {
   Email: "opendeved@gmail.com",
@@ -86,11 +87,6 @@ export default function Home() {
               <Input
                 placeholder="Search"
                 isClearable
-                classNames={{
-                  inputWrapper:
-                    "bg-secondary border border-primary/10 h-12 rounded-2xl",
-                  input: "placeholder:text-primary/40",
-                }}
                 startContent={
                   <IoSearch className="size-6 fill-current text-primary/40" />
                 }
