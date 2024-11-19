@@ -1,0 +1,28 @@
+"use client";
+import { extendVariants, Card as NextUICard } from "@nextui-org/react";
+
+export const Card = extendVariants(NextUICard, {
+  variants: {
+    color: {
+      tertiary: {
+        base: "bg-tertiary/20 border-primary/10",
+      },
+    },
+    variant: {
+      default: {
+        base: "rounded-2xl border",
+      },
+    },
+    custom: {
+      default: {
+        base: "p-3",
+      },
+    },
+  },
+  defaultVariants: {
+    color: "tertiary",
+    variant: "default",
+    custom: "default",
+  },
+});
+    
