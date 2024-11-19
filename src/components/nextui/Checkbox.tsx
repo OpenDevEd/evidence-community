@@ -32,7 +32,7 @@ export const Checkbox = extendVariants(NextUICheckbox, {
     },
     color: {
       primary: {
-        label: "text-primary/40 font-normal",
+        label: "text-black/40 dark:text-white/40 font-normal",
       },
     },
   },

@@ -5,8 +5,8 @@ export const Input = extendVariants(NextUIInput, {
   variants: {
     color: {
       secondary: {
-        inputWrapper: "bg-secondary border-primary/10",
-        input: "placeholder:text-primary/40",
+        inputWrapper: "bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%]",
+        input: "placeholder:text-black/60 dark:placeholder:text-white/40",
       },
     },
     variant: {

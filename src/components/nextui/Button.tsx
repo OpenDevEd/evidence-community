@@ -1,23 +1,30 @@
-"use client"
-import {extendVariants, Button as NextUIButton} from "@nextui-org/react";
+"use client";
+import { extendVariants, Button as NextUIButton } from "@nextui-org/react";
 
 export const Button = extendVariants(NextUIButton, {
   variants: {
     color: {
-      secondary: "text-primary/60 bg-secondary border-primary/10",
+      secondary:
+        `text-black/80 dark:text-white/60 
+        bg-white dark:bg-secondary 
+        border-black/10 dark:border-white/10`,
+      accent:
+        `text-white dark:text-white/60 
+        bg-accent dark:bg-accent-500 
+        border-black/10 dark:border-white/10`,
     },
     variant: {
       default: "border-small rounded-2xl",
-      solid: "border-none rounded-lg"
+      solid: "border-none rounded-lg",
     },
     size: {
       lg: "",
-      xs: "text-xs px-3 h-8 gap-1  font-light"
+      xs: "text-xs px-3 h-8 gap-1",
     },
   },
   defaultVariants: {
     color: "secondary",
     variant: "default",
-    size: "lg"
+    size: "lg",
   },
 });

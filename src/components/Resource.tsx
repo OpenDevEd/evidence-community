@@ -3,7 +3,7 @@ import AboutUs from "./icons/AboutUs";
 import { twMerge } from "tailwind-merge";
 
 function ResourceDivider() {
-  return <div className="text-primary/60">|</div>;
+  return <div className="text-black/80 dark:text-white/60">|</div>;
 }
 
 function ResourceData({
@@ -23,7 +23,7 @@ function ResourceData({
       {startContent}
       <span
         className={twMerge(
-          "text-primary/60 font-medium text-lg line-clamp-1",
+          "text-black/60 dark:text-white/60 font-medium text-lg line-clamp-1",
           classNames?.text
         )}
       >
@@ -35,8 +35,8 @@ function ResourceData({
 
 export default function Resource() {
   return (
-    <div className="w-full bg-primary/[4%] rounded-xl p-6 flex flex-col gap-4">
-      <h1 className="capitalize text-2xl text-primary/80 line-clamp-2">
+    <div className="w-full bg-white dark:bg-white/[4%] rounded-xl p-6 flex flex-col gap-4">
+      <h1 className="capitalize text-2xl text-black/80 dark:text-white/80 line-clamp-2">
         online tutoring works: experimental evidence from a program with
         vulnerrable children
       </h1>
@@ -48,14 +48,14 @@ export default function Resource() {
         <ResourceDivider />
         <ResourceData
           text="Mar 26th, 2024"
-          classNames={{ text: "text-primary/60 font-normal" }}
+          classNames={{ text: "text-black/60 dark:text-white/60 font-normal" }}
         />
         <ResourceDivider />
-        <div className="bg-accent rounded-lg px-4 py-1 text-primary/80 font-medium">
+        <div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium">
           In Progress
         </div>
       </div>
-      <p className="text-primary/40 line-clamp-3 text-lg">
+      <p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg">
         Lorem, ipsum dolor sit amet consectetur adipisicing elit. Sapiente animi
         tempora accusamus temporibus praesentium sequi voluptates impedit ad
         architecto voluptatibus natus ut mollitia aspernatur rerum, autem
@@ -65,7 +65,7 @@ export default function Resource() {
         quaerat. Officiis, unde quo!
       </p>
       <Link showAnchorIcon href="/" className="font-medium text-tertiary-400">
-        <span className="text-primary/60 ">view on docs.opendeved.net</span>
+        <span className="text-black/60 dark:text-white/60 ">view on docs.opendeved.net</span>
       </Link>
     </div>
   );

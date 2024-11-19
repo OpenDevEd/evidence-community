@@ -8,8 +8,8 @@ export const SelectItem = extendVariants(NextUISelectItem, {
   variants: {
     color: {
       secondary: {
-        title: "text-primary/60 font-medium text-base",
-        base: "data-[selectable=true]:focus:bg-primary/10",
+        title: "text-current font-medium text-base",
+        base: "data-[selectable=true]:focus:bg-black/[4%] dark:data-[selectable=true]:focus:bg-white/[4%]",
       },
     },
     variant: {

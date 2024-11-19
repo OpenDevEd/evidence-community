@@ -6,13 +6,13 @@ export const CheckboxGroup = extendVariants(NextUICheckboxGroup, {
   variants: {
     size: {
       xl: {
-        base: "text-primary/80",
+        base: "text-white/80",
         
       },
     },
     color: {
       primary: {
-        base: "text-primary/10",
+        base: "text-white/10",
       }
     },
   },

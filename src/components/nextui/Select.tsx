@@ -5,14 +5,14 @@ export const Select = extendVariants(NextUISelect, {
   variants: {
     color: {
       secondary: {
-        trigger: "bg-secondary text-primary/60 border-primary/10",
-        value: "!text-primary/60 font-medium text-base text-center",
-        popoverContent: "bg-secondary border-primary/10",
+        trigger: "bg-white dark:bg-secondary text-black/80 dark:text-white/60 border-black/10 dark:border-white/10 data-[hover]:bg-black/[4%] dark:data-[hover]:bg-white/[4%]",
+        value: "text-black/80 dark:text-white/60 font-medium text-base text-center",
+        popoverContent: "bg-white dark:bg-secondary border-black/10 dark:border-white/10 text-black/80 dark:text-white/60",
       },
       tertiary: {
-        trigger: "bg-tertiary/10 text-primary/60 border-primary/10 data-[hover]:bg-tertiary/20",
-        value: "!text-primary/60 font-medium text-base text-center",
-        popoverContent: "bg-tertiary-50 border-primary/10 ",
+        trigger: "bg-tertiary dark:bg-tertiary/10 text-white dark:text-white/60 border-white/10 data-[hover]:bg-tertiary-600 dark:data-[hover]:bg-tertiary/20",
+        value: "text-white dark:text-white/60 font-medium text-base text-center",
+        popoverContent: "bg-tertiary dark:bg-tertiary-50 text-white dark:text-white/60 border-white/10 ",
       }
     },
     variant: {

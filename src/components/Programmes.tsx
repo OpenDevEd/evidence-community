@@ -15,10 +15,10 @@ export default function Programmes() {
         selectionMode="multiple"
         fullWidth={false}
         variant="shadow"
-        className="bg-primary/[2%] p-6 rounded-xl shadow-none"
+        className="bg-white dark:bg-white/[2%] p-6 rounded-xl shadow-none"
         itemClasses={{
-          title: "text-primary/80 font-base text-2xl",
-          indicator: "text-primary/80",
+          title: "text-black/80 dark:text-white/80 font-base text-2xl",
+          indicator: "text-black/80 dark:text-white/80",
           trigger: "p-0",
           base: "mb-4 last:mb-0",
           content: "pt-4",
@@ -75,7 +75,7 @@ export default function Programmes() {
             </Checkbox>
             <Checkbox value="2">21st century learning in Zambia</Checkbox>
             <Checkbox value="3">21st century learning in Zambia</Checkbox>
-            <Button>
+            <Button className="bg-black/[4%]">
               See More
               <VscChevronDown className="size-6" />
             </Button>

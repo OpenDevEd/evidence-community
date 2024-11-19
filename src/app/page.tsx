@@ -24,6 +24,7 @@ import { Pagination } from "@/components/nextui/Pagination";
 import { AiOutlineDownload, AiOutlineHome, AiOutlinePrinter } from "react-icons/ai";
 import { HiOutlineDownload, HiOutlineHome, HiOutlinePrinter } from "react-icons/hi";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
+import { useTheme } from "next-themes";
 
 const footerInfo = {
   Email: "opendeved@gmail.com",
@@ -40,13 +41,15 @@ function FooterFieldColumn({
 }) {
   return (
     <div className="flex flex-col">
-      <span className="text-primary/80 font-bold text-xl">{title}</span>
+      <span className="text-black/80 dark:text-white/80 font-bold text-xl">{title}</span>
       {content}
     </div>
   );
 }
 
 export default function Home() {
+  const { theme } = useTheme();
+  
   return (
     <div className="grid grid-rows-[104px_1fr_512px] gap-14 pt-14 items-center justify-items-center min-h-screen">
       <Navbar />
@@ -55,7 +58,7 @@ export default function Home() {
           <Programmes />
           <div className="w-full flex flex-col gap-4">
             <div className="flex w-full justify-between items-end h-12">
-              <h1 className="text-primary/60 font-medium text-3xl">Search</h1>
+              <h1 className="text-black dark:text-white/60 font-medium text-3xl">Search</h1>
               <div className="flex gap-4 h-12 flex-1 justify-end">
                 <Button
                   className="h-full px-6 font-medium text-base"
@@ -70,7 +73,7 @@ export default function Home() {
                   ]}
                   defaultSelectedKeys={["newest"]}
                   startContent={
-                    <div className="text-primary/60 shrink-0 font-medium">
+                    <div className="text-black/80 dark:text-white/60 shrink-0 font-medium">
                       Sort by:
                     </div>
                   }
@@ -86,7 +89,7 @@ export default function Home() {
                 placeholder="Search"
                 isClearable
                 startContent={
-                  <IoSearch className="size-6 fill-current text-primary/40" />
+                  <IoSearch className="size-6 fill-current text-black/60 dark:text-white/40" />
                 }
               />
               <Select
@@ -104,7 +107,7 @@ export default function Home() {
               </Select>
             </div>
             <div className="flex justify-between">
-              <h2 className="text-primary/80 text-lg leading-[1.125rem] flex items-center gap-2">
+              <h2 className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center gap-2">
                 <span className="text-2xl leading-6">5,454</span>
                 Resources
               </h2>
@@ -132,15 +135,15 @@ export default function Home() {
                   { label: "1 Programme Reports", count: 3 },
                   { label: "1 Programme Reports", count: 3 },
                   { label: "Outputs Registry", count: 7 },
-                ].map((item) => (
+                ].map((item, index) => (
                   <Button
                     size="xs"
                     variant="solid"
                     className="shrink-0"
-                    key={item.label}
+                    key={index}
                   >
                     {item.label}
-                    <span className="text-primary/40 font-medium text-sm leading-3">
+                    <span className="text-black/80 dark:text-white/40 font-medium text-sm leading-3">
                       {`(${item.count})`}
                     </span>
                   </Button>
@@ -160,21 +163,21 @@ export default function Home() {
               <Button endContent={<HiOutlinePrinter className="size-6" />}>Print 5,654 Citations</Button>
               <Button endContent={<HiOutlineCodeBracketSquare className="size-6" />}>Main Feed</Button>
             </div>
-            <div className="text-end text-primary/40 text-sm">
+            <div className="text-end text-black/40 dark:text-white/40 text-sm">
             Last update from database: 30/03/2024, 15:01 (UTC)
             </div>
           </div>
         </div>
       </main>
-      <footer className="row-start-3 bg-primary/[2%] h-full w-full flex justify-center items-center flex-col gap-14">
+      <footer className="row-start-3 bg-white dark:bg-white/[2%] h-full w-full flex justify-center items-center flex-col gap-14">
         <div className="max-w-screen-2xl px-14 flex w-full justify-between items-center">
           <div className="flex flex-col gap-6 h-full items-start">
             <Image src={"/logo.png"} alt="logo" width={232} height={81} />
             <div className="flex flex-col gap-[14px]">
               {Object.entries(footerInfo).map(([key, value]) => (
                 <div key={key} className="flex gap-2">
-                  <span className="text-primary/40">{key}</span>
-                  <span className="text-primary/60 font-bold">{value}</span>
+                  <span className="text-black/60 dark:text-white/60">{key}</span>
+                  <span className="text-black/60 dark:text-white/60 font-bold">{value}</span>
                 </div>
               ))}
             </div>
@@ -189,7 +192,7 @@ export default function Home() {
                       <Link
                         href={link.href}
                         key={link.label}
-                        className="text-primary/40 text-xl"
+                        className="text-black/60 dark:text-white/60 text-xl"
                       >
                         {link.label}
                       </Link>
@@ -205,7 +208,7 @@ export default function Home() {
                 <div className="flex mt-6 gap-8">
                   {socialLinks.map((link) => (
                     <Link href={link.href} key={link.label}>
-                      <link.icon className="text-primary/40 w-6 h-6" />
+                      <link.icon className="text-black/60 dark:text-white/60 w-6 h-6" />
                     </Link>
                   ))}
                 </div>
@@ -215,18 +218,18 @@ export default function Home() {
               title="Contact Us"
               content={
                 <div className="mt-6">
-                  <Button className="px-12">Contact Us</Button>
+                  <Button color={theme === "light" ? "accent" : undefined } className="px-12">Contact Us</Button>
                 </div>
               }
             />
           </div>
         </div>
         <div className="flex gap-4">
-          <Link className="text-primary/60 font-medium" href="/">
+          <Link className="text-black/60 dark:text-white/60 font-medium" href="/">
             Privacy Policy
           </Link>
-          <span className="font-medium text-primary/10 ">|</span>
-          <Link className="text-primary/60 font-medium" href="/">
+          <span className="font-medium text-black/60 dark:text-white/60">|</span>
+          <Link className="text-black/60 dark:text-white/60 font-medium" href="/">
             Terms of Service
           </Link>
         </div>

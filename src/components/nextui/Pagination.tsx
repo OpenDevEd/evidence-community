@@ -8,8 +8,8 @@ export const Pagination = extendVariants(NextUIPagination, {
   variants: {
     color: {
       primary: {
-        cursor: "bg-accent text-whit ",
-        item: "bg-primary/[4%] text-primary/60 border-primary/[8%]",
+        cursor: "bg-accent text-white ",
+        item: "bg-white dark:bg-white/[4%] text-black/60 dark:text-white/60 border-white/0 dark:border-white/10",
       },
     },
     variant: {

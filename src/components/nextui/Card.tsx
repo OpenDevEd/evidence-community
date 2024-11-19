@@ -5,7 +5,7 @@ export const Card = extendVariants(NextUICard, {
   variants: {
     color: {
       tertiary: {
-        base: "bg-tertiary/20 border-primary/10",
+        base: "bg-white border-tertiary dark:bg-tertiary/20 dark:border-white/10",
       },
     },
     variant: {
