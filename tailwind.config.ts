@@ -14,6 +14,18 @@ const colors = {
     800: "#9f9f9f",
     900: "#cfcfcf",
   },
+  background_light: {
+    DEFAULT: "#F4F2EE",
+    100: "#312F2D",
+    200: "#625E5A", 
+    300: "#938E87",
+    400: "#C4BDB5",
+    500: "#F4F2EE",
+    600: "#F6F4F1",
+    700: "#F8F7F4",
+    800: "#FAF9F7",
+    900: "#FCFBFA"
+  },
   primary: {
     DEFAULT: "#ffffff",
     100: "#333333",
