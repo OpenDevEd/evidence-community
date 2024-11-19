@@ -11,12 +11,12 @@ import {
 import { Button } from "@/components/nextui/Button";
 import Resource from "@/components/Resource";
 import Programmes from "@/components/Programmes";
-import { SelectItem } from "@nextui-org/react";
 import { BiSearch } from "react-icons/bi";
 import { IoSearch } from "react-icons/io5";
 import { LuHelpCircle } from "react-icons/lu";
 import { Select } from "@/components/nextui/Select";
 import { Input } from "@/components/nextui/Input";
+import { SelectItem } from "@/components/nextui/SelectItem";
 
 const footerInfo = {
   Email: "opendeved@gmail.com",
@@ -71,9 +71,6 @@ export default function Home() {
                   {(item: any) => {
                     return (
                       <SelectItem
-                        classNames={{
-                          title: "text-primary/60 font-medium text-base",
-                        }}
                         key={item.key}
                       >
                         {item.name}
@@ -93,16 +90,16 @@ export default function Home() {
               />
                 <Select
                   items={[
-                    { key: "newest", name: "Newest" },
-                    { key: "oldest", name: "Oldest" },
-                  ]}
-                >
+                    { key: "authors", name: "in authors or contributors" },
+                    { key: "title", name: "in title" },
+                ]}
+                defaultSelectedKeys={["authors"]}
+                color="tertiary"
+                size="md"
+              >
                   {(item: any) => {
                     return (
                       <SelectItem
-                        classNames={{
-                          title: "text-primary/60 font-medium text-base",
-                        }}
                         key={item.key}
                       >
                         {item.name}
