@@ -10,9 +10,9 @@ export const Select = extendVariants(NextUISelect, {
         popoverContent: "bg-secondary border-primary/10 ",
       },
       tertiary: {
-        trigger: "bg-secondary text-primary/60 border-primary/10",
+        trigger: "bg-tertiary/10 text-primary/60 border-primary/10",
         value: "!text-primary/60 font-medium text-base text-center",
-        popoverContent: "bg-secondary border-primary/10 ",
+        popoverContent: "bg-tertiary-50 border-primary/10 ",
       }
     },
     variant: {
@@ -26,12 +26,17 @@ export const Select = extendVariants(NextUISelect, {
     size: {
       sm: { 
         base: "max-w-52",
+      },
+      md: {
+        base: "max-w-72",
       }
     },
     custom: {
       default: {
-        trigger: "h-12 min-h-0 px-6 rounded-2xl"
-      }
+        trigger: "h-12 min-h-0 px-6 rounded-2xl",
+        selectorIcon: "!size-6",
+        popoverContent: "rounded-2xl"
+      },
     }
   },
   defaultVariants: {
