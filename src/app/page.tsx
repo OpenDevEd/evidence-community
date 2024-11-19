@@ -17,7 +17,8 @@ import { LuHelpCircle } from "react-icons/lu";
 import { Select } from "@/components/nextui/Select";
 import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
-
+import { Card } from "@/components/nextui/Card";
+import { Switch } from "@/components/nextui/Switch";
 const footerInfo = {
   Email: "opendeved@gmail.com",
   Phone: "+1-123-456-7890",
@@ -46,7 +47,7 @@ export default function Home() {
       <main className="w-full max-w-screen-2xl px-14">
         <div className="flex gap-[40px]">
           <Programmes />
-          <div className="w-full">
+          <div className="w-full flex flex-col gap-8">
             <div className="flex w-full justify-between items-end h-12">
               <h1 className="text-primary/60 font-medium text-3xl">Search</h1>
               <div className="flex gap-4 h-12 flex-1 justify-end">
@@ -69,18 +70,12 @@ export default function Home() {
                   }
                 >
                   {(item: any) => {
-                    return (
-                      <SelectItem
-                        key={item.key}
-                      >
-                        {item.name}
-                      </SelectItem>
-                    );
+                    return <SelectItem key={item.key}>{item.name}</SelectItem>;
                   }}
                 </Select>
               </div>
             </div>
-            <div className="flex my-4 gap-4">
+            <div className="flex gap-4">
               <Input
                 placeholder="Search"
                 isClearable
@@ -88,25 +83,32 @@ export default function Home() {
                   <IoSearch className="size-6 fill-current text-primary/40" />
                 }
               />
-                <Select
-                  items={[
-                    { key: "authors", name: "in authors or contributors" },
-                    { key: "title", name: "in title" },
+              <Select
+                items={[
+                  { key: "authors", name: "in authors or contributors" },
+                  { key: "title", name: "in title" },
                 ]}
                 defaultSelectedKeys={["authors"]}
                 color="tertiary"
                 size="md"
               >
-                  {(item: any) => {
-                    return (
-                      <SelectItem
-                        key={item.key}
-                      >
-                        {item.name}
-                      </SelectItem>
-                    );
-                  }}
-                </Select>
+                {(item: any) => {
+                  return <SelectItem key={item.key}>{item.name}</SelectItem>;
+                }}
+              </Select>
+            </div>
+            <div className="flex justify-between">
+              <h2 className="text-primary/80 text-lg leading-[1.125rem] flex items-center gap-2">
+                <span className="text-2xl leading-6">5,454</span>
+                Resources
+              </h2>
+              <Card>
+                <div className="px-4">
+                  <Switch size="sm" classNames={{
+                    base: "flex-row-reverse"
+                  }}>Abstract</Switch>
+                </div>
+              </Card>
             </div>
             <div className="flex flex-col gap-6">
               {Array.from({ length: 10 }).map((_, index) => (
