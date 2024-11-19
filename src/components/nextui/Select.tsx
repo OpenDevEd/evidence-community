@@ -7,10 +7,10 @@ export const Select = extendVariants(NextUISelect, {
       secondary: {
         trigger: "bg-secondary text-primary/60 border-primary/10",
         value: "!text-primary/60 font-medium text-base text-center",
-        popoverContent: "bg-secondary border-primary/10 ",
+        popoverContent: "bg-secondary border-primary/10",
       },
       tertiary: {
-        trigger: "bg-tertiary/10 text-primary/60 border-primary/10",
+        trigger: "bg-tertiary/10 text-primary/60 border-primary/10 data-[hover]:bg-tertiary/20",
         value: "!text-primary/60 font-medium text-base text-center",
         popoverContent: "bg-tertiary-50 border-primary/10 ",
       }
