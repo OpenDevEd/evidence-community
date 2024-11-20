@@ -10,7 +10,7 @@ import { useTheme } from "next-themes";
 import { HiOutlineMoon, HiOutlineSun } from "react-icons/hi2";
 import { IoMdSunny } from "react-icons/io";
 import { useState, useEffect } from "react";
-import { Skeleton } from "@nextui-org/react";
+import { Skeleton } from "@/components/nextui/Skeleton";
 
 function ThemeSwitcher({ theme, setTheme, isMounted }: { theme: string | undefined, setTheme: (theme: string) => void, isMounted: boolean }) {
   return (

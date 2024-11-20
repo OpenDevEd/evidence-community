@@ -9,7 +9,7 @@ import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
-import { ScrollShadow, Skeleton } from "@nextui-org/react";
+import { ScrollShadow } from "@nextui-org/react";
 import { Pagination } from "@/components/nextui/Pagination";
 import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
@@ -18,6 +18,7 @@ import { fetcher } from "@/lib/fetcher";
 import { Suspense, useCallback, useRef, useState } from "react";
 import { ItemsGetResponse } from "@/app/api/items/route";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { Skeleton } from "@/components/nextui/Skeleton";
 
 const ITEM_PER_PAGE = 20;
 
@@ -140,14 +141,14 @@ function ContentInteractions({
   );
 }
 
-function ResourcesList({ data, abstract }: { data: ItemsGetResponse | undefined; abstract: boolean }) {
+function ResourcesList({ data, isLoading, abstract }: { data: ItemsGetResponse | undefined; isLoading: boolean; abstract: boolean }) {
   return (
     <>
       <div className="flex flex-col gap-6">
         {Array.from({ length: ITEM_PER_PAGE }).map(
           (_, index) =>
             (!data || (data && data.items[index])) && (
-              <Resource key={index} itemData={data?.items[index]} abstract={abstract} />
+              <Resource key={index} itemData={data?.items[index]} abstract={abstract} isLoading={isLoading} />
             )
         )}
       </div>
@@ -209,15 +210,12 @@ function MainContent() {
   const search = searchParams.get("search") || "";
 
   const [abstract, setAbstract] = useState(true);
-  const lastData = useRef<ItemsGetResponse | undefined>(undefined);
 
   const { data, error, isLoading } = useSWR<ItemsGetResponse>(
     `/items?page=${pageNumber}&limit=${ITEM_PER_PAGE}&sort=${sort}&search=${search}`,
     fetcher,
     {
-      onSuccess: (data) => {
-        lastData.current = data;
-      },
+      keepPreviousData: true,
     }
   );
 
@@ -250,15 +248,15 @@ function MainContent() {
       <ContentInteractions
         sort={sort}
         onSortChange={handleSortChange}
-        data={lastData.current}
+        data={data}
         abstract={abstract}
         onAbstractChange={setAbstract}
       />
-      <ResourcesList data={data} abstract={abstract} />
+      <ResourcesList data={data} isLoading={isLoading} abstract={abstract} />
       <PaginationControls
         page={pageNumber}
         setPage={handlePageChange}
-        totalPages={lastData.current?.totalPages || 0}
+        totalPages={data?.totalPages || 0}
       />
       <ContentActions />
       <div className="text-end text-black/40 dark:text-white/40 text-sm">

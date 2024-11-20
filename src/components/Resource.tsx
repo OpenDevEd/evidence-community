@@ -1,9 +1,10 @@
-import { Link, Skeleton } from "@nextui-org/react";
+import { Link } from "@nextui-org/react";
 import AboutUs from "./icons/AboutUs";
 import { twMerge } from "tailwind-merge";
 import { InferSelectModel } from "drizzle-orm";
 import { item } from "@/db/schema/tables/item";
 import { firstNonNullOrEmpty } from "@/lib/lib";
+import { Skeleton } from "@/components/nextui/Skeleton";
 
 function ResourceDivider() {
   return <div className="text-black/80 dark:text-white/60">|</div>;
@@ -19,7 +20,7 @@ function ResourceData({
     container?: string;
     text?: string;
   };
-  text: string;
+  text: string | null;
 }) {
   return (
     <div className={twMerge("flex gap-2 items-center", classNames?.container)}>
@@ -27,7 +28,8 @@ function ResourceData({
       <span
         className={twMerge(
           "text-black/60 dark:text-white/60 font-medium text-lg line-clamp-1",
-          classNames?.text
+          classNames?.text,
+          !text && "!w-24"
         )}
       >
         {text}
@@ -39,9 +41,11 @@ function ResourceData({
 export default function Resource({
   itemData,
   abstract,
+  isLoading,
 }: {
   itemData: InferSelectModel<typeof item>;
   abstract: boolean;
+  isLoading: boolean;
 }) {
   const abstractText = itemData && firstNonNullOrEmpty(itemData, [
     "fullTextPDF",
@@ -50,12 +54,12 @@ export default function Resource({
 
   return (
     <div className="w-full bg-white dark:bg-white/[4%] rounded-xl p-6 flex flex-col gap-4">
-      <Skeleton isLoaded={!!itemData} className="w-full min-h-8 rounded-2xl">
+      <Skeleton isLoaded={!isLoading} className="w-full min-h-8 rounded-2xl">
         <h1 className="capitalize text-2xl text-black/80 dark:text-white/80 line-clamp-2">
           {itemData?.title}
         </h1>
       </Skeleton>
-      <Skeleton isLoaded={!!itemData} className="w-full min-h-8 rounded-2xl">
+      <Skeleton isLoaded={!isLoading} className="w-full min-h-8 rounded-2xl">
         <div className="flex w-full gap-2 items-center flex-wrap">
           <ResourceData
             startContent={<AboutUs className="fill-accent size-6" />}
@@ -63,7 +67,9 @@ export default function Resource({
           />
           <ResourceDivider />
           <ResourceData
-            text="Mar 26th, 2024"
+            text={itemData ? new Date(itemData?.dateAdded!).toLocaleDateString("en-US", {
+              dateStyle: "medium",
+            }) : null}
             classNames={{
               text: "text-black/60 dark:text-white/60 font-normal",
             }}
@@ -75,13 +81,13 @@ export default function Resource({
         </div>
       </Skeleton>
       {abstract && (abstractText || !itemData) && (
-        <Skeleton isLoaded={!!itemData} className={twMerge("w-full min-h-0 rounded-2xl ", !itemData ? "min-h-20" : "min-h-0")}>
+        <Skeleton isLoaded={!isLoading} className={twMerge("w-full min-h-0 rounded-2xl ", !itemData ? "min-h-20" : "min-h-0")}>
           <p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full break-all">
             {abstractText}
           </p>
         </Skeleton>
       )}
-      <Skeleton isLoaded={!!itemData} className="w-1/2 rounded-2xl">
+      <Skeleton isLoaded={!isLoading} className="w-1/2 rounded-2xl">
         <Link showAnchorIcon href="/" className="font-medium text-tertiary-400">
           <span className="text-black/60 dark:text-white/60 ">
           view on docs.opendeved.net
