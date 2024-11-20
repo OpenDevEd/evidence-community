@@ -131,7 +131,7 @@ export default function Home() {
                 </div>
               </Card>
             </div>
-            <div className="flex gap-4 w-full max-w-full h-12 relative">
+            <div className="flex gap-4 w-full max-w-full h-12 relative hidden">
               <ScrollShadow 
                 orientation="horizontal"
                 className="flex gap-4 overflow-y-hidden overflow-x-scroll absolute inset-0"
