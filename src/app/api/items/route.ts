@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { count, InferSelectModel } from "drizzle-orm";
+import { count, InferSelectModel, asc, desc } from "drizzle-orm";
 import { item } from "@/db/schema/tables/item";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -17,14 +17,19 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const pageNum = Math.max(1, Number(searchParams.get("page")) || 1);
   const limitNum = Math.min(100, Math.max(1, Number(searchParams.get("limit")) || ITEMS_PER_PAGE));
+  const sort = searchParams.get("sort") || "asc";
 
   const [items, [totalCount]] = await db.transaction(async (tx) => {
     return Promise.all([
       tx.query.item.findMany({
         offset: (pageNum - 1) * limitNum,
         limit: limitNum,
+        orderBy:
+          sort === "desc"
+            ? (item) => [asc(item.dateAdded)]
+            : (item) => [desc(item.dateAdded)],
       }),
-      tx.select({ count: count() }).from(item)
+      tx.select({ count: count() }).from(item),
     ]);
   });
 

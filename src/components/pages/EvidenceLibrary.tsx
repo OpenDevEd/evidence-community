@@ -21,7 +21,15 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const ITEM_PER_PAGE = 20;
 
-function ContentInteractions({ data }: { data: ItemsGetResponse | undefined }) {
+function ContentInteractions({
+  data,
+  sort,
+  onSortChange,
+}: {
+  data: ItemsGetResponse | undefined;
+  sort: string;
+  onSortChange: (sort: any) => void;
+}) {
   return (
     <>
       <div className="flex w-full justify-between items-end h-12">
@@ -37,10 +45,11 @@ function ContentInteractions({ data }: { data: ItemsGetResponse | undefined }) {
           </Button>
           <Select
             items={[
-              { key: "newest", name: "Newest" },
-              { key: "oldest", name: "Oldest" },
+              { key: "asc", name: "Newest" },
+              { key: "desc", name: "Oldest" },
             ]}
-            defaultSelectedKeys={["newest"]}
+            selectedKeys={sort && [sort]}
+            onSelectionChange={onSortChange}
             startContent={
               <div className="text-black/80 dark:text-white/60 shrink-0 font-medium">
                 Sort by:
@@ -76,7 +85,10 @@ function ContentInteractions({ data }: { data: ItemsGetResponse | undefined }) {
         </Select>
       </div>
       <div className="flex justify-between gap-4">
-        <Skeleton isLoaded={!!data} className="flex items-center flex-1 rounded-2xl">
+        <Skeleton
+          isLoaded={!!data}
+          className="flex items-center flex-1 rounded-2xl"
+        >
           <h2 className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center gap-2">
             <span className="text-2xl leading-6">
               {data?.totalItems.toLocaleString()}
@@ -185,10 +197,14 @@ function MainContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const pathname = usePathname();
+
   const pageNumber = Number(searchParams.get("page")) || 1;
+  const sort = searchParams.get("sort") || "asc";
+  const search = searchParams.get("search") || "";
+
   const lastData = useRef<ItemsGetResponse | undefined>(undefined);
   const { data, error, isLoading } = useSWR<ItemsGetResponse>(
-    `/items?page=${pageNumber}&limit=${ITEM_PER_PAGE}`,
+    `/items?page=${pageNumber}&limit=${ITEM_PER_PAGE}&sort=${sort}&search=${search}`,
     fetcher,
     {
       onSuccess: (data) => {
@@ -198,21 +214,36 @@ function MainContent() {
   );
 
   const createQueryString = useCallback(
-    (name: string, value: string) => {
+    (pathname: string, newParams: [string, string][]) => {
       const params = new URLSearchParams(searchParams.toString());
-      params.set(name, value);
-      return params.toString();
+      newParams.forEach(([name, value]) => {
+        if (value) {
+          params.set(name, value);
+        } else {
+          params.delete(name);
+        }
+      });
+      return `${pathname}?${params.toString()}`;
     },
     [searchParams]
   );
 
   const handlePageChange = (newPage: number) => {
-    router.push(`${pathname}?${createQueryString("page", String(newPage))}`);
+    router.push(createQueryString(pathname, [["page", String(newPage)]]));
+  };
+
+  const handleSortChange = (sort: Set<string>) => {
+    const value = sort.values().next().value;
+    if (value) router.push(createQueryString(pathname, [["sort", value]]));
   };
 
   return (
     <div className="w-full flex flex-col gap-4">
-      <ContentInteractions data={lastData.current} />
+      <ContentInteractions
+        sort={sort}
+        onSortChange={handleSortChange}
+        data={lastData.current}
+      />
       <ResourcesList data={data} />
       <PaginationControls
         page={pageNumber}
