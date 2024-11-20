@@ -38,9 +38,16 @@ function ResourceData({
 
 export default function Resource({
   itemData,
+  abstract,
 }: {
   itemData: InferSelectModel<typeof item>;
+  abstract: boolean;
 }) {
+  const abstractText = itemData && firstNonNullOrEmpty(itemData, [
+    "fullTextPDF",
+    "abstractNote",
+  ])
+
   return (
     <div className="w-full bg-white dark:bg-white/[4%] rounded-xl p-6 flex flex-col gap-4">
       <Skeleton isLoaded={!!itemData} className="w-full min-h-8 rounded-2xl">
@@ -67,14 +74,13 @@ export default function Resource({
           </div>
         </div>
       </Skeleton>
-      <Skeleton isLoaded={!!itemData} className={twMerge("w-full min-h-0 rounded-2xl ", !itemData ? "min-h-20" : "min-h-0")}>
-        <p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full break-all">
-          {itemData && firstNonNullOrEmpty(itemData, [
-            "fullTextPDF",
-            "abstractNote",
-          ])}
-        </p>
-      </Skeleton>
+      {abstract && (abstractText || !itemData) && (
+        <Skeleton isLoaded={!!itemData} className={twMerge("w-full min-h-0 rounded-2xl ", !itemData ? "min-h-20" : "min-h-0")}>
+          <p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full break-all">
+            {abstractText}
+          </p>
+        </Skeleton>
+      )}
       <Skeleton isLoaded={!!itemData} className="w-1/2 rounded-2xl">
         <Link showAnchorIcon href="/" className="font-medium text-tertiary-400">
           <span className="text-black/60 dark:text-white/60 ">

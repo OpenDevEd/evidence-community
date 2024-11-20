@@ -15,7 +15,7 @@ import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import { Suspense, useCallback, useRef } from "react";
+import { Suspense, useCallback, useRef, useState } from "react";
 import { ItemsGetResponse } from "@/app/api/items/route";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
@@ -25,10 +25,14 @@ function ContentInteractions({
   data,
   sort,
   onSortChange,
+  abstract,
+  onAbstractChange,
 }: {
   data: ItemsGetResponse | undefined;
   sort: string;
   onSortChange: (sort: any) => void;
+  abstract: boolean;
+  onAbstractChange: (abstract: boolean) => void;
 }) {
   return (
     <>
@@ -100,6 +104,8 @@ function ContentInteractions({
           <div className="px-3">
             <Switch
               size="sm"
+              isSelected={abstract}
+              onValueChange={onAbstractChange}
               classNames={{
                 base: "flex-row-reverse",
               }}
@@ -134,14 +140,14 @@ function ContentInteractions({
   );
 }
 
-function ResourcesList({ data }: { data: ItemsGetResponse | undefined }) {
+function ResourcesList({ data, abstract }: { data: ItemsGetResponse | undefined; abstract: boolean }) {
   return (
     <>
       <div className="flex flex-col gap-6">
         {Array.from({ length: ITEM_PER_PAGE }).map(
           (_, index) =>
             (!data || (data && data.items[index])) && (
-              <Resource key={index} itemData={data?.items[index]} />
+              <Resource key={index} itemData={data?.items[index]} abstract={abstract} />
             )
         )}
       </div>
@@ -202,7 +208,9 @@ function MainContent() {
   const sort = searchParams.get("sort") || "asc";
   const search = searchParams.get("search") || "";
 
+  const [abstract, setAbstract] = useState(true);
   const lastData = useRef<ItemsGetResponse | undefined>(undefined);
+
   const { data, error, isLoading } = useSWR<ItemsGetResponse>(
     `/items?page=${pageNumber}&limit=${ITEM_PER_PAGE}&sort=${sort}&search=${search}`,
     fetcher,
@@ -243,8 +251,10 @@ function MainContent() {
         sort={sort}
         onSortChange={handleSortChange}
         data={lastData.current}
+        abstract={abstract}
+        onAbstractChange={setAbstract}
       />
-      <ResourcesList data={data} />
+      <ResourcesList data={data} abstract={abstract} />
       <PaginationControls
         page={pageNumber}
         setPage={handlePageChange}
