@@ -25,6 +25,8 @@ import { AiOutlineDownload, AiOutlineHome, AiOutlinePrinter } from "react-icons/
 import { HiOutlineDownload, HiOutlineHome, HiOutlinePrinter } from "react-icons/hi";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import { useTheme } from "next-themes";
+import { useEffect } from "react";
+import { useState } from "react";
 
 const footerInfo = {
   Email: "opendeved@gmail.com",
@@ -49,7 +51,12 @@ function FooterFieldColumn({
 
 export default function Home() {
   const { theme } = useTheme();
-  
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   return (
     <div className="grid grid-rows-[104px_1fr_512px] gap-14 pt-14 items-center justify-items-center min-h-screen">
       <Navbar />
@@ -218,7 +225,7 @@ export default function Home() {
               title="Contact Us"
               content={
                 <div className="mt-6">
-                  <Button color={theme === "light" ? "accent" : undefined } className="px-12">Contact Us</Button>
+                  <Button color={isMounted && theme === "light" ? "accent" : undefined } className="px-12">Contact Us</Button>
                 </div>
               }
             />
