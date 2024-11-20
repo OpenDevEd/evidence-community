@@ -92,6 +92,19 @@ const config: Config = {
     },
   },
   darkMode: "class",
-  plugins: [nextui()],
+  plugins: [nextui({
+    themes: {
+      dark: {
+        colors: {
+          focus: colors.accent,
+        }
+      },
+      light: {
+        colors: {
+          focus: colors.accent,
+        }
+      }
+    }
+  })],
 };
 export default config;
