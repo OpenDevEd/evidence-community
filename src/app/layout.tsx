@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Providers from "@/providers/Providers";
 import { Ubuntu } from "next/font/google";
+import Navbar from "@/components/Navbar";
+import Footer from "@/components/Footer";
 
 const ubuntu = Ubuntu({
   subsets: ["latin"],
@@ -21,12 +23,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body
-        className={`${ubuntu.className}`}
-      >
-        <div className="h-full w-full bg-background_light dark:bg-background">
-          <Providers>{children}</Providers>
-        </div>
+      <body className={`${ubuntu.className}`}>
+        <Providers>
+          <div className="h-full w-full bg-background_light dark:bg-background grid grid-rows-[104px_1fr_512px] gap-14 pt-14 items-center justify-items-center min-h-screen">
+            <Navbar />
+            {children}
+            <Footer />
+          </div>
+        </Providers>
       </body>
     </html>
   );
