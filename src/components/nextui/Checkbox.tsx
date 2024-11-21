@@ -17,7 +17,6 @@ export const Checkbox = extendVariants(NextUICheckbox, {
         icon: "w-5 h-4 ",
       },
       lg: {
-        base: "ml-8",
         label: "text-xl",
         wrapper: [
           "w-6 h-6 mr-3 rtl:ml-2 rtl:mr-[unset]",
