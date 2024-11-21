@@ -1,9 +1,10 @@
 import { db } from "@/db";
-import { count, InferSelectModel, asc, desc } from "drizzle-orm";
+import { count, InferSelectModel, asc, desc, notInArray } from "drizzle-orm";
 import { item } from "@/db/schema/tables/item";
 import { NextRequest, NextResponse } from "next/server";
 
 const ITEMS_PER_PAGE = 20;
+const EXCLUDED_ITEM_TYPES = ["Note", "Attachment"] as any[];
 
 export type ItemsGetResponse = {
   items: InferSelectModel<typeof item>[] | any[];
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
   const [items, [totalCount]] = await db.transaction(async (tx) => {
     return Promise.all([
       tx.query.item.findMany({
+        where: (item) => notInArray(item.itemType, EXCLUDED_ITEM_TYPES),
         offset: (pageNum - 1) * limitNum,
         limit: limitNum,
         orderBy:
@@ -29,7 +31,9 @@ export async function GET(request: NextRequest) {
             ? (item) => [asc(item.dateAdded)]
             : (item) => [desc(item.dateAdded)],
       }),
-      tx.select({ count: count() }).from(item),
+      tx.select({ count: count() })
+        .from(item)
+        .where(notInArray(item.itemType, EXCLUDED_ITEM_TYPES)),
     ]);
   });
 
