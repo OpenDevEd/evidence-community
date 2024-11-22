@@ -15,10 +15,12 @@ import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import { Suspense, useCallback, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { ItemsGetResponse } from "@/app/api/items/route";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Skeleton } from "@/components/nextui/Skeleton";
+import { CollectionsGetResponse } from "@/app/api/collections/route";
+import { useParamsState } from "@/hooks/useParamsState";
 
 const ITEM_PER_PAGE = 20;
 
@@ -201,17 +203,15 @@ function PaginationControls({
 }
 
 function MainContent() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const pathname = usePathname();
-
+  const { searchParams, router, pathname, createQueryString } = useParamsState();
+  
   const pageNumber = Number(searchParams.get("page")) || 1;
   const sort = searchParams.get("sort") || "asc";
   const search = searchParams.get("search") || "";
 
   const [abstract, setAbstract] = useState(true);
 
-  const { data, error, isLoading } = useSWR<ItemsGetResponse>(
+  const { data: itemsData, error: itemsError, isLoading: isItemsLoading } = useSWR<ItemsGetResponse>(
     `/items?page=${pageNumber}&limit=${ITEM_PER_PAGE}&sort=${sort}&search=${search}`,
     fetcher,
     {
@@ -219,19 +219,9 @@ function MainContent() {
     }
   );
 
-  const createQueryString = useCallback(
-    (pathname: string, newParams: [string, string][]) => {
-      const params = new URLSearchParams(searchParams.toString());
-      newParams.forEach(([name, value]) => {
-        if (value) {
-          params.set(name, value);
-        } else {
-          params.delete(name);
-        }
-      });
-      return `${pathname}?${params.toString()}`;
-    },
-    [searchParams]
+  const { data: collectionsData, error: collectionsError, isLoading: isCollectionsLoading } = useSWR<CollectionsGetResponse>(
+    "/collections",
+    fetcher
   );
 
   const handlePageChange = (newPage: number) => {
@@ -244,25 +234,28 @@ function MainContent() {
   };
 
   return (
-    <div className="w-full flex flex-col gap-4">
-      <ContentInteractions
+    <>
+      <Programmes data={collectionsData} />
+      <div className="w-full flex flex-col gap-4">
+        <ContentInteractions
         sort={sort}
         onSortChange={handleSortChange}
-        data={data}
+        data={itemsData}
         abstract={abstract}
         onAbstractChange={setAbstract}
       />
-      <ResourcesList data={data} isLoading={isLoading} abstract={abstract} />
+      <ResourcesList data={itemsData} isLoading={isItemsLoading} abstract={abstract} />
       <PaginationControls
         page={pageNumber}
         setPage={handlePageChange}
-        totalPages={data?.totalPages || 0}
+        totalPages={itemsData?.totalPages || 0}
       />
       <ContentActions />
       <div className="text-end text-black/40 dark:text-white/40 text-sm">
         Last update from database: 30/03/2024, 15:01 (UTC)
       </div>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -270,7 +263,6 @@ export default function EvidenceLibrary() {
   return (
     <main className="w-full max-w-screen-2xl px-14">
       <div className="flex gap-[40px]">
-        <Programmes />
         <MainContent />
       </div>
     </main>

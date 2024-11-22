@@ -1,23 +1,21 @@
 "use client";
 
-import { Accordion, AccordionItem, CheckboxGroup } from "@nextui-org/react";
+import { Accordion, AccordionItem } from "@nextui-org/react";
 import { Checkbox } from "./nextui/Checkbox";
-import AboutUs from "./icons/AboutUs";
-import { BiCheck, BiDownArrow } from "react-icons/bi";
-import { Button } from "./nextui/Button";
-import { VscChevronDown, VscChevronLeft } from "react-icons/vsc";
-import { fetcher } from "@/lib/fetcher";
 import { CollectionsGetResponse } from "@/app/api/collections/route";
-import useSWR from "swr";
 import { useMemo, useState } from "react";
 import { InferSelectModel } from "drizzle-orm";
 import { collection } from "@/db/schema/tables/collection";
+import { useParamsState } from "@/hooks/useParamsState";
 
-type Collection = InferSelectModel<typeof collection>;
+type CollectionWithChildren = InferSelectModel<typeof collection> & {
+  level?: number;
+  children?: CollectionWithChildren[];
+};
 
 function calculateNumItemsRecursively(
-  collection: Collection,
-  collections: Collection[]
+  collection: CollectionWithChildren,
+  collections: CollectionWithChildren[]
 ): number {
   const children = collections.filter(
     (c) => c.parentCollection === collection.key
@@ -31,49 +29,129 @@ function calculateNumItemsRecursively(
   );
 }
 
+function getDescendantKeys(
+  collection: CollectionWithChildren
+): string[] {
+  const children = collection.children || [];
+  console.log("CHILDREN OF", collection.key, children);
+
+  return children.flatMap(child => [
+    child.key,
+    ...getDescendantKeys(child),
+  ]);
+}
+
+function recursiveFind(
+  key: string,
+  collections: CollectionWithChildren[]
+): CollectionWithChildren | undefined {
+  for (const collection of collections) {
+    if (collection.key === key) {
+      return collection;
+    }
+    const found = collection.children && recursiveFind(key, collection.children);
+    if (found) {
+      return found;
+    }
+  }
+  return undefined;
+}
+
 function Hierarchy({
-  level,
   collectionData,
   collections,
+  selectedCollections,
+  onCheckboxChange,
 }: {
-  level: number;
-  collectionData: Collection;
-  collections: Collection[];
+  collectionData: CollectionWithChildren;
+  collections: CollectionWithChildren[];
+  selectedCollections: string[];
+  onCheckboxChange: (key: string) => void;
 }) {
-  const children = useMemo(() => {
-    return collections.filter((c) => c.parentCollection === collectionData.key);
-  }, [collectionData, collections]);
-  const [showChildren, setShowChildren] = useState(level === 0);
+  const children = collectionData.children || [];
+  const level = collectionData.level || 0;
+  const isSelected = selectedCollections.includes(collectionData.key);
 
   return (
     <>
       {level !== 0 && (
         <Checkbox
-          onClick={() => setShowChildren(!showChildren)}
+          isSelected={isSelected}
+          onValueChange={() => onCheckboxChange(collectionData.key)}
           style={{ marginLeft: `${(level - 1) * 16}px` }}
         >
           {collectionData.name} (
           {calculateNumItemsRecursively(collectionData, collections)})
         </Checkbox>
       )}
-      {showChildren &&
+      {(isSelected || level === 0) &&
         children.map((child) => (
           <Hierarchy
             key={child.key}
-            level={level + 1}
             collectionData={child}
             collections={collections}
+            selectedCollections={selectedCollections}
+            onCheckboxChange={onCheckboxChange}
           />
         ))}
     </>
   );
 }
 
-export default function Programmes() {
-  const { data, isLoading } = useSWR<CollectionsGetResponse>(
-    "/collections",
-    fetcher
-  );
+export default function Programmes({
+  data,
+}: {
+  data: CollectionsGetResponse | undefined;
+}) {
+  const { searchParams, router, pathname, createQueryString } =
+    useParamsState();
+
+  const selectedCollections = searchParams.get("collections")?.split(",") || [];
+
+  const hierarchy = useMemo(() => {
+    if (!data) return [];
+    const buildHierarchy = (
+      collections: CollectionWithChildren[],
+      parentKey: string | null = null,
+      level: number = 0
+    ): CollectionWithChildren[] => {
+      return collections
+        .filter((collection) => collection.parentCollection === parentKey)
+        .map((collection) => ({
+          ...collection,
+          level,
+          children: buildHierarchy(collections, collection.key, level + 1),
+        }));
+    };
+
+    return buildHierarchy(data.collections as CollectionWithChildren[]);
+  }, [data]);
+
+  const handleCheckboxChange = (key: string) => {
+    const alreadySelected = selectedCollections.includes(key);
+    let newSelectedCollections;
+
+    if (alreadySelected) {
+      const collectionToDeselect = recursiveFind(key, hierarchy);
+
+      const descendantKeys = collectionToDeselect
+        ? getDescendantKeys(collectionToDeselect)
+        : [];
+      console.log(descendantKeys);
+      newSelectedCollections = selectedCollections.filter(
+        (k) => k !== key && !descendantKeys.includes(k)
+      );
+    } else {
+      newSelectedCollections = [...selectedCollections, key];
+    }
+
+    router.push(
+      createQueryString(pathname, [
+        ["collections", newSelectedCollections.join(",")],
+      ]),
+      { scroll: false }
+    );
+  };
 
   return (
     <div className="w-[456px] shrink-0">
@@ -93,19 +171,18 @@ export default function Programmes() {
           }}
           showDivider={false}
         >
-          {data?.collections
-            .filter((collection: any) => collection.parentCollection === null)
-            .map((collection: any) => (
-              <AccordionItem key={collection.id} title={collection.name}>
-                <div className="flex flex-col gap-4">
-                  <Hierarchy
-                    level={0}
-                    collectionData={collection}
-                    collections={data?.collections as Collection[]}
-                  />
-                </div>
-              </AccordionItem>
-            ))}
+          {hierarchy.map((collection) => (
+            <AccordionItem key={collection.id} title={collection.name}>
+              <div className="flex flex-col gap-4">
+                <Hierarchy
+                  collectionData={collection}
+                  collections={hierarchy}
+                  selectedCollections={selectedCollections}
+                  onCheckboxChange={handleCheckboxChange}
+                />
+              </div>
+            </AccordionItem>
+          ))}
         </Accordion>
       )}
     </div>
