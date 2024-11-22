@@ -133,6 +133,7 @@ export const item = pgTable('item', {
   parentItem: varchar('parentItem').references((): any => item.key),
 
   tags: varchar().array(),
+  collections: varchar().array(),
   
   relations: json(),
 
