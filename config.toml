@@ -1,0 +1,60 @@
+[kerko.facets]
+
+    [kerko.facets.tag]
+    enabled = false
+
+    [kerko.facets.link]
+    enabled = false
+
+    [kerko.facets.item_type]
+    enabled = false
+
+    [kerko.facets.theme]
+    enabled = true
+    type = "collection"
+    collection_key = "GJX4SBYM"
+    filter_key = "theme"
+    title = "Theme"
+    weight = 30
+    initial_limit = 10
+    initial_limit_leeway = 2
+
+    [kerko.facets.featured]
+    enabled = true
+    type = "collection"
+    collection_key = "7XAM9PEM"
+    filter_key = "featured"
+    title = "Our programmes"
+    weight = 10
+    initial_limit = 15
+    initial_limit_leeway = 5
+
+    [kerko.facets.organisations]
+    enabled = true
+    type = "collection"
+    collection_key = "36S77JVF"
+    filter_key = "organisations"
+    title = "Organisations, collaborators and clients"
+    weight = 10
+    initial_limit = 15
+    initial_limit_leeway = 5
+
+    [kerko.facets.pubtype]
+    enabled = true
+    type = "collection"
+    collection_key = "VPIKW9C7"
+    filter_key = "pubtype"
+    title = "Publication type"
+    weight = 20
+    initial_limit = 5
+    initial_limit_leeway = 2
+
+    [kerko.facets.location]
+    enabled = true
+    type = "collection"
+    collection_key = "94GNF2EB"
+    filter_key = "location"
+    title = "Location"
+    weight = 50
+    initial_limit = 5
+    initial_limit_leeway = 2

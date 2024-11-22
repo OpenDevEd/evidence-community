@@ -1,16 +1,17 @@
 import { collection } from "@/db/schema/tables/collection";
 import { InferSelectModel } from "drizzle-orm";
 
-export type CollectionWithChildren = InferSelectModel<typeof collection> & {
+export type ColllectionHierarchy = InferSelectModel<typeof collection> & {
   level?: number;
-  children?: CollectionWithChildren[];
+  children?: ColllectionHierarchy[];
+  title?: string;
 };
 
 export function buildHierarchy(
-  collections: CollectionWithChildren[],
+  collections: ColllectionHierarchy[],
   parentKey: string | null = null,
   level: number = 0
-): CollectionWithChildren[] {
+): ColllectionHierarchy[] {
   return collections
     .filter((collection) => collection.parentCollection === parentKey)
     .map((collection) => ({
@@ -21,8 +22,8 @@ export function buildHierarchy(
 }
 
 export function calculateNumItemsRecursively(
-  collection: CollectionWithChildren,
-  collections: CollectionWithChildren[]
+  collection: ColllectionHierarchy,
+  collections: ColllectionHierarchy[]
 ): number {
   const children = collections.filter(
     (c) => c.parentCollection === collection.key
@@ -37,18 +38,17 @@ export function calculateNumItemsRecursively(
 }
 
 export function getDescendantKeys(
-  collection: CollectionWithChildren
+  collection: ColllectionHierarchy
 ): string[] {
   const children = collection.children || [];
-  console.log("CHILDREN OF", collection.key, children);
 
   return children.flatMap((child) => [child.key, ...getDescendantKeys(child)]);
 }
 
 export function recursiveFind(
   key: string,
-  collections: CollectionWithChildren[]
-): CollectionWithChildren | undefined {
+  collections: ColllectionHierarchy[]
+): ColllectionHierarchy | undefined {
   for (const collection of collections) {
     if (collection.key === key) {
       return collection;
@@ -60,4 +60,14 @@ export function recursiveFind(
     }
   }
   return undefined;
+}
+
+export function flattenHierarchy(collections: ColllectionHierarchy[]): ColllectionHierarchy[] {
+  return collections.flatMap((collection) => [{
+      ...collection,
+      children: undefined,
+      level: undefined,
+    },
+    ...flattenHierarchy(collection.children || [])
+  ]);
 }

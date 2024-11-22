@@ -17,7 +17,12 @@ import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { useCallback, useState } from "react";
 import { ItemsGetResponse } from "@/app/api/items/route";
-import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
+import {
+  useParams,
+  usePathname,
+  useRouter,
+  useSearchParams,
+} from "next/navigation";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { CollectionsGetResponse } from "@/app/api/collections/route";
 import { useParamsState } from "@/hooks/useParamsState";
@@ -143,15 +148,36 @@ function ContentInteractions({
   );
 }
 
-function ResourcesList({ data, isLoading, abstract }: { data: ItemsGetResponse | undefined; isLoading: boolean; abstract: boolean }) {
+function ResourcesList({
+  data,
+  isLoading,
+  abstract,
+}: {
+  data: ItemsGetResponse | undefined;
+  isLoading: boolean;
+  abstract: boolean;
+}) {
+  const actuallyNoData = !isLoading && data && data.items.length === 0;
+
   return (
     <>
       <div className="flex flex-col gap-6">
-        {Array.from({ length: ITEM_PER_PAGE }).map(
-          (_, index) =>
-            (!data || (data && data.items[index])) && (
-              <Resource key={index} itemData={data?.items[index]} abstract={abstract} isLoading={isLoading} />
-            )
+        {actuallyNoData ? (
+          <div className="text-center text-black/40 dark:text-white/40 text-sm">
+            No resources found
+          </div>
+        ) : (
+          Array.from({ length: ITEM_PER_PAGE }).map(
+            (_, index) =>
+              (!data || (data && data.items[index])) && (
+                <Resource
+                  key={index}
+                  itemData={data?.items[index]}
+                  abstract={abstract}
+                  isLoading={isLoading}
+                />
+              )
+          )
         )}
       </div>
     </>
@@ -177,52 +203,48 @@ function ContentActions() {
 function PaginationControls({
   page,
   setPage,
-  totalPages,
+  data,
+  isLoading,
 }: {
   page: number;
   setPage: (page: number) => void;
-  totalPages: number;
+  data: ItemsGetResponse | undefined;
+  isLoading: boolean;
 }) {
+  const totalPages = data?.totalPages || 0;
+  const actuallyNoData = !isLoading && data && data.items.length === 0;
+
   return (
-    <div className="w-full flex justify-center sticky bottom-0 bg-background_light dark:bg-background py-6">
-      <Skeleton
-        isLoaded={totalPages > 0}
-        className="w-full h-14 rounded-2xl flex items-center justify-center"
-      >
-        {totalPages > 0 && (
-          <Pagination
-            page={page}
-            onChange={setPage}
-            siblings={3}
-            total={totalPages}
-          />
-        )}
-      </Skeleton>
-    </div>
+    !actuallyNoData && (
+      <div className="w-full flex justify-center sticky bottom-0 bg-background_light dark:bg-background py-6">
+        <Skeleton
+          isLoaded={totalPages > 0}
+          className="w-full h-14 rounded-2xl flex items-center justify-center"
+        >
+          {totalPages > 0 && (
+            <Pagination
+              page={page}
+              onChange={setPage}
+              siblings={3}
+              total={totalPages}
+            />
+          )}
+        </Skeleton>
+      </div>
+    )
   );
 }
 
 function MainContent() {
-  const { searchParams, router, pathname, createQueryString } = useParamsState();
-  
+  const { searchParams, router, pathname, createQueryString } =
+    useParamsState();
+
   const pageNumber = Number(searchParams.get("page")) || 1;
   const sort = searchParams.get("sort") || "asc";
   const search = searchParams.get("search") || "";
+  const collections = searchParams.get("collections")?.split(",") || [];
 
   const [abstract, setAbstract] = useState(true);
-
-  const { data: itemsData, error: itemsError, isLoading: isItemsLoading } = useSWR<ItemsGetResponse>(
-    `/items?page=${pageNumber}&limit=${ITEM_PER_PAGE}&sort=${sort}&search=${search}`,
-    fetcher,
-    {
-      keepPreviousData: true,
-    }
-  );
-
-  const { data: collectionsData, error: collectionsError, isLoading: isCollectionsLoading } = useSWR<CollectionsGetResponse>(
-    "/collections",
-    fetcher
-  );
 
   const handlePageChange = (newPage: number) => {
     router.push(createQueryString(pathname, [["page", String(newPage)]]));
@@ -233,27 +255,57 @@ function MainContent() {
     if (value) router.push(createQueryString(pathname, [["sort", value]]));
   };
 
+  const {
+    data: itemsData,
+    error: itemsError,
+    isLoading: isItemsLoading,
+  } = useSWR<ItemsGetResponse>(
+    `/items?page=${pageNumber}&limit=${ITEM_PER_PAGE}&sort=${sort}&search=${search}${
+      collections.length > 0 ? `&collections=${collections.join(",")}` : ""
+    }`,
+    fetcher,
+    {
+      keepPreviousData: true,
+      onSuccess: (data) => {
+        if (data.totalPages < pageNumber) {
+          handlePageChange(data.totalPages);
+        }
+      },
+    }
+  );
+
+  const {
+    data: collectionsData,
+    error: collectionsError,
+    isLoading: isCollectionsLoading,
+  } = useSWR<CollectionsGetResponse>("/collections", fetcher);
+
   return (
     <>
       <Programmes data={collectionsData} />
       <div className="w-full flex flex-col gap-4">
         <ContentInteractions
-        sort={sort}
-        onSortChange={handleSortChange}
-        data={itemsData}
-        abstract={abstract}
-        onAbstractChange={setAbstract}
-      />
-      <ResourcesList data={itemsData} isLoading={isItemsLoading} abstract={abstract} />
-      <PaginationControls
-        page={pageNumber}
-        setPage={handlePageChange}
-        totalPages={itemsData?.totalPages || 0}
-      />
-      <ContentActions />
-      <div className="text-end text-black/40 dark:text-white/40 text-sm">
-        Last update from database: 30/03/2024, 15:01 (UTC)
-      </div>
+          sort={sort}
+          onSortChange={handleSortChange}
+          data={itemsData}
+          abstract={abstract}
+          onAbstractChange={setAbstract}
+        />
+        <ResourcesList
+          data={itemsData}
+          isLoading={isItemsLoading}
+          abstract={abstract}
+        />
+        <PaginationControls
+          page={pageNumber}
+          setPage={handlePageChange}
+          data={itemsData}
+          isLoading={isItemsLoading}
+        />
+        <ContentActions />
+        <div className="text-end text-black/40 dark:text-white/40 text-sm">
+          Last update from database: 30/03/2024, 15:01 (UTC)
+        </div>
       </div>
     </>
   );

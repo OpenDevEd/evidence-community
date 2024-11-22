@@ -4,16 +4,16 @@ import { Accordion, AccordionItem } from "@nextui-org/react";
 import { Checkbox } from "./nextui/Checkbox";
 import { CollectionsGetResponse } from "@/app/api/collections/route";
 import { useMemo, useState } from "react";
-import { InferSelectModel } from "drizzle-orm";
-import { collection } from "@/db/schema/tables/collection";
 import { useParamsState } from "@/hooks/useParamsState";
 import {
   buildHierarchy,
   calculateNumItemsRecursively,
-  CollectionWithChildren,
+  ColllectionHierarchy,
   getDescendantKeys,
   recursiveFind,
 } from "@/lib/collections";
+import { Skeleton } from "./nextui/Skeleton";
+import { GrConfigure } from "react-icons/gr";
 
 function Hierarchy({
   collectionData,
@@ -21,8 +21,8 @@ function Hierarchy({
   selectedCollections,
   onCheckboxChange,
 }: {
-  collectionData: CollectionWithChildren;
-  collections: CollectionWithChildren[];
+  collectionData: ColllectionHierarchy;
+  collections: ColllectionHierarchy[];
   selectedCollections: string[];
   onCheckboxChange: (key: string) => void;
 }) {
@@ -32,16 +32,14 @@ function Hierarchy({
 
   return (
     <>
-      {level !== 0 && (
-        <Checkbox
-          isSelected={isSelected}
-          onValueChange={() => onCheckboxChange(collectionData.key)}
-          style={{ marginLeft: `${(level - 1) * 16}px` }}
-        >
-          {collectionData.name} (
-          {calculateNumItemsRecursively(collectionData, collections)})
-        </Checkbox>
-      )}
+      <Checkbox
+        size={collectionData.level !== 0 ? "lg" : undefined}
+        isSelected={isSelected}
+        onValueChange={() => onCheckboxChange(collectionData.key)}
+        style={{ marginLeft: `${(level) * 16}px` }}
+      >
+        {collectionData.name} ({collectionData.numItems})
+      </Checkbox>
       {(isSelected || level === 0) &&
         children.map((child) => (
           <Hierarchy
@@ -68,7 +66,7 @@ export default function Programmes({
 
   const hierarchy = useMemo(() => {
     if (!data) return [];
-    return buildHierarchy(data.collections as CollectionWithChildren[]);
+    return buildHierarchy(data.collections as ColllectionHierarchy[]);
   }, [data]);
 
   const handleCheckboxChange = (key: string) => {
@@ -92,43 +90,62 @@ export default function Programmes({
     router.push(
       createQueryString(pathname, [
         ["collections", newSelectedCollections.join(",")],
+        ["page", "1"],
       ]),
       { scroll: false }
     );
   };
 
+  console.log(
+    "DEFAULT EXPANDED KEYS",
+    hierarchy.map((c) => c.key)
+  );
+
+  console.log("Data", data);
+
   return (
     <div className="w-[456px] shrink-0">
-      {data && (
-        <Accordion
-          defaultExpandedKeys={["1", "2", "3", "4"]}
-          selectionMode="multiple"
-          fullWidth={false}
-          variant="shadow"
-          className="bg-white dark:bg-white/[2%] p-6 rounded-xl shadow-none"
-          itemClasses={{
-            title: "text-black/80 dark:text-white/80 font-base text-2xl",
-            indicator: "text-black/80 dark:text-white/80",
-            trigger: "p-0",
-            base: "mb-4 last:mb-0",
-            content: "pt-4",
-          }}
-          showDivider={false}
-        >
-          {hierarchy.map((collection) => (
-            <AccordionItem key={collection.id} title={collection.name}>
-              <div className="flex flex-col gap-4">
-                <Hierarchy
-                  collectionData={collection}
-                  collections={hierarchy}
-                  selectedCollections={selectedCollections}
-                  onCheckboxChange={handleCheckboxChange}
-                />
-              </div>
-            </AccordionItem>
-          ))}
-        </Accordion>
-      )}
+      <Skeleton className="w-full min-h-screen rounded-2xl" isLoaded={!!data}>
+        {hierarchy && hierarchy.length > 0 ? (
+          <Accordion
+            defaultExpandedKeys={hierarchy.map((c) => c.key)}
+            selectionMode="multiple"
+            fullWidth={false}
+            variant="shadow"
+            className="bg-white dark:bg-white/[2%] p-6 rounded-xl shadow-none"
+            itemClasses={{
+              title: "text-black/80 dark:text-white/80 font-base text-2xl",
+              indicator: "text-black/80 dark:text-white/80",
+              trigger: "p-0",
+              base: "mb-4 last:mb-0",
+              content: "pt-4",
+            }}
+            showDivider={false}
+          >
+            {hierarchy
+              .map((collection) => (
+                <AccordionItem
+                  key={collection.key}
+                  title={collection.title || collection.name}
+                >
+                  <div className="flex flex-col gap-4">
+                    <Hierarchy
+                      collectionData={collection}
+                      collections={hierarchy}
+                      selectedCollections={selectedCollections}
+                      onCheckboxChange={handleCheckboxChange}
+                    />
+                  </div>
+                </AccordionItem>
+              ))}
+          </Accordion>
+        ) : (
+          <div className="text-lg bg-white dark:bg-white/[2%] p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 h-screen select-none">
+            <GrConfigure className="stroke-current size-6" />
+            <span>No facets configured.</span>
+          </div>
+        )}
+      </Skeleton>
     </div>
   );
 }
