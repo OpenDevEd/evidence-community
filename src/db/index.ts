@@ -8,6 +8,10 @@ import * as itemToTagTable from "./schema/tables/itemToTag";
 import * as languageTable from "./schema/tables/language";
 import * as tagTable from "./schema/tables/tag";
 
+import * as itemRelations from './schema/relations/item';
+import * as collectionRelations from './schema/relations/collection';
+import * as itemToCollectionRelations from './schema/relations/itemToCollection';
+
 export const schema = {
     ...itemTable,
     ...collectionTable,
@@ -15,7 +19,10 @@ export const schema = {
     ...itemToCollectionTable,
     ...itemToTagTable,
     ...languageTable,
-    ...tagTable
+    ...tagTable,
+    ...collectionRelations,
+    ...itemRelations,
+    ...itemToCollectionRelations,
 }
 
 export const db = drizzle(process.env.DATABASE_URL_POST!, { schema });
