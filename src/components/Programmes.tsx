@@ -14,6 +14,8 @@ import {
 } from "@/lib/collections";
 import { Skeleton } from "./nextui/Skeleton";
 import { GrConfigure } from "react-icons/gr";
+import { useHierarchy } from "@/hooks/useHierarchy";
+import { twMerge } from "tailwind-merge";
 
 function Hierarchy({
   collectionData,
@@ -32,14 +34,16 @@ function Hierarchy({
 
   return (
     <>
-      <Checkbox
-        size={collectionData.level !== 0 ? "lg" : undefined}
-        isSelected={isSelected}
-        onValueChange={() => onCheckboxChange(collectionData.key)}
-        style={{ marginLeft: `${(level) * 16}px` }}
+      {collectionData.level !== 0 && (
+        <Checkbox
+          size={collectionData.level !== 1 ? "lg" : undefined}
+          isSelected={isSelected}
+          onValueChange={() => onCheckboxChange(collectionData.key)}
+          style={{ marginLeft: `${(level - 1) * 16}px` }}
       >
-        {collectionData.name} ({collectionData.numItems})
-      </Checkbox>
+          {collectionData.name} ({collectionData.numItems})
+        </Checkbox>
+      )}
       {(isSelected || level === 0) &&
         children.map((child) => (
           <Hierarchy
@@ -56,56 +60,27 @@ function Hierarchy({
 
 export default function Programmes({
   data,
+  handleCheckboxChange,
+  selectedCollections,
+  hierarchy,
+  isModal = false,
 }: {
   data: CollectionsGetResponse | undefined;
-}) {
+  handleCheckboxChange: (key: string) => void;
+  selectedCollections: string[];
+  isModal?: boolean;
+} & ReturnType<typeof useHierarchy>) {
   const { searchParams, router, pathname, createQueryString } =
     useParamsState();
 
-  const selectedCollections = searchParams.get("collections")?.split(",") || [];
-
-  const hierarchy = useMemo(() => {
-    if (!data) return [];
-    return buildHierarchy(data.collections as ColllectionHierarchy[]);
-  }, [data]);
-
-  const handleCheckboxChange = (key: string) => {
-    const alreadySelected = selectedCollections.includes(key);
-    let newSelectedCollections;
-
-    if (alreadySelected) {
-      const collectionToDeselect = recursiveFind(key, hierarchy);
-
-      const descendantKeys = collectionToDeselect
-        ? getDescendantKeys(collectionToDeselect)
-        : [];
-      console.log(descendantKeys);
-      newSelectedCollections = selectedCollections.filter(
-        (k) => k !== key && !descendantKeys.includes(k)
-      );
-    } else {
-      newSelectedCollections = [...selectedCollections, key];
-    }
-
-    router.push(
-      createQueryString(pathname, [
-        ["collections", newSelectedCollections.join(",")],
-        ["page", "1"],
-      ]),
-      { scroll: false }
-    );
-  };
-
-  console.log(
-    "DEFAULT EXPANDED KEYS",
-    hierarchy.map((c) => c.key)
-  );
-
-  console.log("Data", data);
-
   return (
-    <div className="w-[456px] shrink-0">
-      <Skeleton className="w-full min-h-screen rounded-2xl" isLoaded={!!data}>
+    <div
+      className={twMerge(
+        "w-full xl:w-[456px] shrink-0",
+        isModal ? "block" : "hidden xl:block"
+      )}
+    >
+      <Skeleton className="w-full xl:min-h-screen rounded-2xl" isLoaded={!!data}>
         {hierarchy && hierarchy.length > 0 ? (
           <Accordion
             defaultExpandedKeys={hierarchy.map((c) => c.key)}
@@ -140,7 +115,7 @@ export default function Programmes({
               ))}
           </Accordion>
         ) : (
-          <div className="text-lg bg-white dark:bg-white/[2%] p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 h-screen select-none">
+          <div className="text-lg bg-white dark:bg-white/[2%] p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 xl:h-screen select-none">
             <GrConfigure className="stroke-current size-6" />
             <span>No facets configured.</span>
           </div>
