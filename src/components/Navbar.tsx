@@ -59,7 +59,7 @@ export default function Navbar() {
   }, []);
 
   return (
-    <nav className="w-full max-w-screen-2xl px-14">
+    <nav className="w-full max-w-screen-2xl px-4 xl:px-14">
       <div className="h-[104px] bg-white dark:bg-secondary rounded-[20px] flex items-center p-8 gap-9">
         <Logo theme={theme} isMounted={isMounted} />
         <div className="flex flex-1 items-center justify-end gap-8 overflow-hidden">

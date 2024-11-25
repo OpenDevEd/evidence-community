@@ -10,7 +10,7 @@
     enabled = false
 
     [kerko.facets.theme]
-    enabled = true
+    enabled = false
     type = "collection"
     collection_key = "GJX4SBYM"
     filter_key = "theme"
