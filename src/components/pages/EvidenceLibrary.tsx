@@ -61,8 +61,8 @@ function ContentInteractions({
           </Button>
           <Select
             items={[
-              { key: "asc", name: "Newest" },
-              { key: "desc", name: "Oldest" },
+              { key: "desc", name: "Newest" },
+              { key: "asc", name: "Oldest" },
             ]}
             selectedKeys={sort && [sort]}
             onSelectionChange={onSortChange}
@@ -246,7 +246,7 @@ function MainContent() {
     useParamsState();
 
   const pageNumber = Number(searchParams.get("page")) || 1;
-  const sort = searchParams.get("sort") || "asc";
+  const sort = searchParams.get("sort") || "desc";
   const search = searchParams.get("search") || "";
   const collections = searchParams.get("collections")?.split(",") || [];
 
