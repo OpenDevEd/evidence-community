@@ -75,7 +75,7 @@ export default function Resource({
             }}
           />
           <ResourceDivider />
-          <div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium">
+          <div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full xl:w-auto text-center">
             In Progress
           </div>
         </div>
