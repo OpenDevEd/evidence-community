@@ -20,8 +20,8 @@ const ITEMS_PER_PAGE = 20;
 const EXCLUDED_ITEM_TYPES = ["Note", "Attachment"] as any[];
 
 const meilisearchClient = new MeiliSearch({
-  host: "http://localhost:7700",
-  apiKey: process.env.MASTER_KEY,
+  host: process.env.MEILISEARCH_HOST || "",
+  apiKey: process.env.MASTER_KEY || "",
 });
 
 export type ItemsGetResponse = {
