@@ -33,7 +33,7 @@ export const Select = extendVariants(NextUISelect, {
     },
     custom: {
       default: {
-        trigger: "h-12 min-h-0 px-6 rounded-2xl",
+        trigger: "h-12 min-h-0 px-4 xl:px-6 rounded-2xl",
         selectorIcon: "!size-6",
         popoverContent: "rounded-2xl"
       },
