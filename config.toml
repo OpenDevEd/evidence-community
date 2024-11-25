@@ -29,16 +29,6 @@
     initial_limit = 15
     initial_limit_leeway = 5
 
-    [kerko.facets.organisations]
-    enabled = true
-    type = "collection"
-    collection_key = "36S77JVF"
-    filter_key = "organisations"
-    title = "Organisations, collaborators and clients"
-    weight = 10
-    initial_limit = 15
-    initial_limit_leeway = 5
-
     [kerko.facets.pubtype]
     enabled = true
     type = "collection"
@@ -48,6 +38,16 @@
     weight = 20
     initial_limit = 5
     initial_limit_leeway = 2
+
+    [kerko.facets.organisations]
+    enabled = true
+    type = "collection"
+    collection_key = "36S77JVF"
+    filter_key = "organisations"
+    title = "Organisations, collaborators and clients"
+    weight = 10
+    initial_limit = 15
+    initial_limit_leeway = 5
 
     [kerko.facets.location]
     enabled = true

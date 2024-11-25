@@ -45,6 +45,7 @@ export async function GET(request: NextRequest) {
   fs.writeFileSync("hierarchy.json", JSON.stringify(hierarchy, null, 2));
 
   const filteredCollections = configCollections
+    .filter((configCollection) => configCollection.enabled && configCollection.collection_key)
     .map((configCollection) => {
       const collection = recursiveFind(
         configCollection.collection_key,
@@ -52,6 +53,7 @@ export async function GET(request: NextRequest) {
       );
       if (!collection) return undefined;
       return {
+        title: collection.name,
         ...configCollection,
         ...collection,
         parentCollection: null,
