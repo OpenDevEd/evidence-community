@@ -3,13 +3,20 @@ import { Button } from "@/components/nextui/Button";
 import Resource from "@/components/Resource";
 import Programmes from "@/components/Programmes";
 import { IoSearch } from "react-icons/io5";
-import { LuHelpCircle } from "react-icons/lu";
+import { LuChevronLeft, LuHelpCircle, LuX } from "react-icons/lu";
 import { Select } from "@/components/nextui/Select";
 import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
-import { ScrollShadow } from "@nextui-org/react";
+import {
+  Modal,
+  ModalContent,
+  ModalFooter,
+  ModalHeader,
+  ScrollShadow,
+  useDisclosure,
+} from "@nextui-org/react";
 import { Pagination } from "@/components/nextui/Pagination";
 import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
@@ -26,6 +33,10 @@ import {
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { CollectionsGetResponse } from "@/app/api/collections/route";
 import { useParamsState } from "@/hooks/useParamsState";
+import { FaSort } from "react-icons/fa";
+import { BiCompass } from "react-icons/bi";
+import { AiOutlineCompass } from "react-icons/ai";
+import { useHierarchy } from "@/hooks/useHierarchy";
 
 const ITEM_PER_PAGE = 20;
 
@@ -37,6 +48,10 @@ function ContentInteractions({
   onSearchChange,
   abstract,
   onAbstractChange,
+  collectionsData,
+  selectedCollections,
+  handleCheckboxChange,
+  hierarchy,
 }: {
   data: ItemsGetResponse | undefined;
   sort: string;
@@ -45,16 +60,60 @@ function ContentInteractions({
   onSearchChange: (search: string) => void;
   abstract: boolean;
   onAbstractChange: (abstract: boolean) => void;
-}) {
+  collectionsData: CollectionsGetResponse | undefined;
+} & ReturnType<typeof useHierarchy>) {
+  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+
   return (
     <>
-      <div className="flex w-full justify-between items-end h-12">
-        <h1 className="text-black dark:text-white/60 font-medium text-3xl">
+      <div className="flex w-full flex-col xl:flex-row xl:justify-between xl:items-end h-28 xl:h-12 gap-4">
+        <h1 className="text-black dark:text-white/60 font-medium text-3xl w-full xl:w-auto h-12 flex justify-between items-end">
           Search
+          <Button
+            startContent={<AiOutlineCompass className="size-6" />}
+            className="xl:hidden ml-auto"
+            onClick={onOpen}
+          >
+            Explore
+          </Button>
+          <Modal
+            hideCloseButton
+            classNames={{
+              base: "bg-background_light dark:bg-background",
+              wrapper: "no-scrollbar",
+            }}
+            scrollBehavior="outside"
+            isOpen={isOpen}
+            onOpenChange={onOpenChange}
+          >
+            <ModalContent>
+              {(onClose) => (
+                <>
+                  <ModalHeader className="text-black dark:text-white/60 flex justify-center items-center gap-4 text-2xl ">
+                    <AiOutlineCompass className="size-8" />
+                    Explore
+                    <Button
+                      className="ml-auto"
+                      onClick={onClose}
+                      isIconOnly
+                      startContent={<LuX className="size-6" />}
+                    />
+                  </ModalHeader>
+                  <Programmes
+                    data={collectionsData}
+                    handleCheckboxChange={handleCheckboxChange}
+                    selectedCollections={selectedCollections}
+                    hierarchy={hierarchy}
+                    isModal
+                  />
+                </>
+              )}
+            </ModalContent>
+          </Modal>
         </h1>
         <div className="flex gap-4 h-12 flex-1 justify-end">
           <Button
-            className="h-full px-6 font-medium text-base"
+            className="h-full xl:px-6 px-0 font-medium text-base flex-1 xl:flex-none"
             endContent={<LuHelpCircle className="size-6" />}
           >
             Help
@@ -67,9 +126,12 @@ function ContentInteractions({
             selectedKeys={sort && [sort]}
             onSelectionChange={onSortChange}
             startContent={
-              <div className="text-black/80 dark:text-white/60 shrink-0 font-medium">
-                Sort by:
-              </div>
+              <>
+                <div className="text-black/80 dark:text-white/60 shrink-0 font-medium hidden xl:block">
+                  Sort by:
+                </div>
+                <FaSort className="size-6 xl:hidden" />
+              </>
             }
           >
             {(item: any) => {
@@ -78,11 +140,12 @@ function ContentInteractions({
           </Select>
         </div>
       </div>
-      <div className="flex gap-4">
+      <div className="flex flex-col xl:flex-row gap-4">
         <Input
           value={search}
           onValueChange={onSearchChange}
           placeholder="Search"
+          size="lg"
           isClearable
           startContent={
             <IoSearch className="size-6 fill-current text-black/60 dark:text-white/40" />
@@ -96,6 +159,9 @@ function ContentInteractions({
           defaultSelectedKeys={["authors"]}
           color="tertiary"
           size="md"
+          classNames={{
+            base: "xl:max-w-72 w-full max-w-full",
+          }}
         >
           {(item: any) => {
             return <SelectItem key={item.key}>{item.name}</SelectItem>;
@@ -192,7 +258,7 @@ function ResourcesList({
 
 function ContentActions() {
   return (
-    <div className="flex justify-end mt-6 gap-4">
+    <div className="xl:flex xl:justify-end grid gap-4 flex-wrap">
       <Button endContent={<HiOutlineDownload className="size-6" />}>
         Download 6,788 Records
       </Button>
@@ -231,7 +297,7 @@ function PaginationControls({
             <Pagination
               page={page}
               onChange={setPage}
-              siblings={3}
+              siblings={0}
               total={totalPages}
             />
           )}
@@ -253,14 +319,20 @@ function MainContent() {
   const [abstract, setAbstract] = useState(true);
   const [searchInput, setSearchInput] = useState(search);
 
-  const handlePageChange = useCallback((newPage: number) => {
-    router.push(createQueryString(pathname, [["page", String(newPage)]]));
-  }, [router, pathname, createQueryString]);
+  const handlePageChange = useCallback(
+    (newPage: number) => {
+      router.push(createQueryString(pathname, [["page", String(newPage)]]));
+    },
+    [router, pathname, createQueryString]
+  );
 
-  const handleSortChange = useCallback((sort: Set<string>) => {
-    const value = sort.values().next().value;
-    if (value) router.push(createQueryString(pathname, [["sort", value]]));
-  }, [router, pathname, createQueryString]);
+  const handleSortChange = useCallback(
+    (sort: Set<string>) => {
+      const value = sort.values().next().value;
+      if (value) router.push(createQueryString(pathname, [["sort", value]]));
+    },
+    [router, pathname, createQueryString]
+  );
 
   const {
     data: itemsData,
@@ -300,9 +372,20 @@ function MainContent() {
     return () => clearTimeout(timeout);
   }, [searchInput]);
 
+  const { hierarchy, handleCheckboxChange, selectedCollections } = useHierarchy(
+    {
+      data: collectionsData,
+    }
+  );
+
   return (
     <>
-      <Programmes data={collectionsData} />
+      <Programmes
+        data={collectionsData}
+        handleCheckboxChange={handleCheckboxChange}
+        selectedCollections={selectedCollections}
+        hierarchy={hierarchy}
+      />
       <div className="w-full flex flex-col gap-4">
         <ContentInteractions
           sort={sort}
@@ -312,6 +395,10 @@ function MainContent() {
           data={itemsData}
           abstract={abstract}
           onAbstractChange={setAbstract}
+          selectedCollections={selectedCollections}
+          handleCheckboxChange={handleCheckboxChange}
+          collectionsData={collectionsData}
+          hierarchy={hierarchy}
         />
         <ResourcesList
           data={itemsData}
@@ -335,8 +422,8 @@ function MainContent() {
 
 export default function EvidenceLibrary() {
   return (
-    <main className="w-full max-w-screen-2xl px-14">
-      <div className="flex gap-[40px]">
+    <main className="w-full max-w-screen-2xl px-4 xl:px-14">
+      <div className="flex gap-[40px] flex-col xl:flex-row">
         <MainContent />
       </div>
     </main>
