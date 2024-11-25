@@ -15,7 +15,7 @@ import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ItemsGetResponse } from "@/app/api/items/route";
 import {
   useParams,
@@ -33,12 +33,16 @@ function ContentInteractions({
   data,
   sort,
   onSortChange,
+  search,
+  onSearchChange,
   abstract,
   onAbstractChange,
 }: {
   data: ItemsGetResponse | undefined;
   sort: string;
   onSortChange: (sort: any) => void;
+  search: string;
+  onSearchChange: (search: string) => void;
   abstract: boolean;
   onAbstractChange: (abstract: boolean) => void;
 }) {
@@ -76,6 +80,8 @@ function ContentInteractions({
       </div>
       <div className="flex gap-4">
         <Input
+          value={search}
+          onValueChange={onSearchChange}
           placeholder="Search"
           isClearable
           startContent={
@@ -245,24 +251,25 @@ function MainContent() {
   const collections = searchParams.get("collections")?.split(",") || [];
 
   const [abstract, setAbstract] = useState(true);
+  const [searchInput, setSearchInput] = useState(search);
 
-  const handlePageChange = (newPage: number) => {
+  const handlePageChange = useCallback((newPage: number) => {
     router.push(createQueryString(pathname, [["page", String(newPage)]]));
-  };
+  }, [router, pathname, createQueryString]);
 
-  const handleSortChange = (sort: Set<string>) => {
+  const handleSortChange = useCallback((sort: Set<string>) => {
     const value = sort.values().next().value;
     if (value) router.push(createQueryString(pathname, [["sort", value]]));
-  };
+  }, [router, pathname, createQueryString]);
 
   const {
     data: itemsData,
     error: itemsError,
     isLoading: isItemsLoading,
   } = useSWR<ItemsGetResponse>(
-    `/items?page=${pageNumber}&limit=${ITEM_PER_PAGE}&sort=${sort}&search=${search}${
+    `/items?page=${pageNumber}&limit=${ITEM_PER_PAGE}&sort=${sort}${
       collections.length > 0 ? `&collections=${collections.join(",")}` : ""
-    }`,
+    }${search.length > 0 ? `&search=${search}` : ""}`,
     fetcher,
     {
       keepPreviousData: true,
@@ -280,12 +287,27 @@ function MainContent() {
     isLoading: isCollectionsLoading,
   } = useSWR<CollectionsGetResponse>("/collections", fetcher);
 
+  useEffect(() => {
+    let timeout: NodeJS.Timeout;
+    timeout = setTimeout(() => {
+      router.push(
+        createQueryString(pathname, [
+          ["search", searchInput],
+          ["page", "1"],
+        ])
+      );
+    }, 200);
+    return () => clearTimeout(timeout);
+  }, [searchInput]);
+
   return (
     <>
       <Programmes data={collectionsData} />
       <div className="w-full flex flex-col gap-4">
         <ContentInteractions
           sort={sort}
+          search={searchInput}
+          onSearchChange={setSearchInput}
           onSortChange={handleSortChange}
           data={itemsData}
           abstract={abstract}
