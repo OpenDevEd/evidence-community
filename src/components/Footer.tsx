@@ -21,7 +21,7 @@ function FooterFieldColumn({
   content: React.ReactNode;
 }) {
   return (
-    <div className="flex flex-col">
+    <div className="flex flex-col w-full xl:w-auto">
       <span className="text-black/80 dark:text-white/80 font-bold text-xl">
         {title}
       </span>
@@ -39,8 +39,8 @@ export default function Footer() {
   }, []);
 
   return (
-    <footer className="row-start-3 bg-white dark:bg-white/[2%] h-full w-full flex justify-center items-center flex-col gap-14">
-      <div className="max-w-screen-2xl px-14 flex w-full justify-between items-center">
+    <footer className="row-start-3 bg-white dark:bg-white/[2%] h-full w-full flex justify-center items-center flex-col gap-14 py-14 xl:py-0">
+      <div className="max-w-screen-2xl px-14 flex w-full justify-between items-center flex-col gap-14 xl:gap-0 xl:flex-row">
         <div className="flex flex-col gap-6 h-full items-start">
           <Image src={"/logo.png"} alt="logo" width={232} height={81} />
           <div className="flex flex-col gap-[14px]">
@@ -73,7 +73,7 @@ export default function Footer() {
             </div>
           }
         />
-        <div className="flex flex-col h-full gap-6">
+        <div className="flex flex-col h-full gap-14 xl:gap-6 w-full xl:w-auto">
           <FooterFieldColumn
             title="Stay Connected"
             content={
