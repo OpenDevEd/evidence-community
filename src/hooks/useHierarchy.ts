@@ -21,21 +21,26 @@ export function useHierarchy({
   }, [data]);
 
   const handleCheckboxChange = (key: string) => {
-    const alreadySelected = selectedCollections.includes(key);
-    let newSelectedCollections;
+    let newSelectedCollections: string[];
 
-    if (alreadySelected) {
-      const collectionToDeselect = recursiveFind(key, hierarchy);
-
-      const descendantKeys = collectionToDeselect
-        ? getDescendantKeys(collectionToDeselect)
-        : [];
-      console.log(descendantKeys);
-      newSelectedCollections = selectedCollections.filter(
-        (k) => k !== key && !descendantKeys.includes(k)
-      );
+    if (key === "") {
+      newSelectedCollections = [];
     } else {
-      newSelectedCollections = [...selectedCollections, key];
+      const alreadySelected = selectedCollections.includes(key);
+
+      if (alreadySelected) {
+        const collectionToDeselect = recursiveFind(key, hierarchy);
+
+        const descendantKeys = collectionToDeselect
+          ? getDescendantKeys(collectionToDeselect)
+          : [];
+        console.log(descendantKeys);
+        newSelectedCollections = selectedCollections.filter(
+          (k) => k !== key && !descendantKeys.includes(k)
+        );
+      } else {
+        newSelectedCollections = [...selectedCollections, key];
+      }
     }
 
     router.push(
