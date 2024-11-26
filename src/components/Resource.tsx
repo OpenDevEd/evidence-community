@@ -87,7 +87,7 @@ export default function Resource({
           </p>
         </Skeleton>
       )}
-      <Skeleton isLoaded={!isLoading} className="w-1/2 rounded-2xl">
+      <Skeleton isLoaded={!isLoading} className="w-full xl:w-1/2 rounded-2xl">
         <Link showAnchorIcon href="/" className="font-medium text-tertiary-400">
           <span className="text-black/60 dark:text-white/60 ">
           view on docs.opendeved.net
