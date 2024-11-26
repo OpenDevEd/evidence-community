@@ -8,11 +8,14 @@ import { links } from "@/constants/links";
 import Dark from "@/components/icons/Dark";
 import { useTheme } from "next-themes";
 import { HiOutlineMoon, HiOutlineSun } from "react-icons/hi2";
-import { IoMdSunny } from "react-icons/io";
+import { IoMdClose, IoMdSunny } from "react-icons/io";
 import { useState, useEffect } from "react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { RxHamburgerMenu } from "react-icons/rx";
 import { GiHamburgerMenu } from "react-icons/gi";
+import { AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
+import { IoCloseSharp } from "react-icons/io5";
 
 function ThemeSwitcher({
   theme,
@@ -139,10 +142,23 @@ export default function Navbar() {
           setTheme={setTheme}
           isMounted={isMounted}
         />
-        <GiHamburgerMenu
-          className="xl:hidden block ml-auto size-6 !fill-accent !stroke-accent"
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        />
+        <AnimatePresence mode="wait">
+          {(isMobileMenuOpen ? [IoCloseSharp] : [GiHamburgerMenu]).map((Icon) => (
+            <motion.div
+              key={isMobileMenuOpen ? "close" : "menu"}
+              initial={{ opacity: 0, scale: 0.8 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.8 }}
+              transition={{ duration: 0.15 }}
+              className="xl:hidden block ml-auto"
+            >
+              <Icon
+                className="size-8 !fill-accent !stroke-accent cursor-pointer transition-transform active:scale-80 delay-0"
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
       </div>
       <div
         className={twMerge(
