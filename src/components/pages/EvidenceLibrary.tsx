@@ -37,6 +37,7 @@ import { FaSort } from "react-icons/fa";
 import { BiCompass } from "react-icons/bi";
 import { AiOutlineCompass } from "react-icons/ai";
 import { useHierarchy } from "@/hooks/useHierarchy";
+import useBreakpoint from "@/lib/useBreakpoint";
 
 const ITEM_PER_PAGE = 20;
 
@@ -142,8 +143,8 @@ function ContentInteractions({
       </div>
       <div className="flex flex-col xl:flex-row gap-4">
         <Input
-          value={search}
-          onValueChange={onSearchChange}
+          defaultValue={search}
+          onChange={(e) => onSearchChange(e.target.value)}
           placeholder="Search"
           size="lg"
           isClearable
@@ -285,6 +286,7 @@ function PaginationControls({
 }) {
   const totalPages = data?.totalPages || 0;
   const actuallyNoData = !isLoading && data && data.items.length === 0;
+  const isDesktop = useBreakpoint("xl");
 
   return (
     !actuallyNoData && (
@@ -297,7 +299,7 @@ function PaginationControls({
             <Pagination
               page={page}
               onChange={setPage}
-              siblings={0}
+              siblings={isDesktop ? 3 : 0}
               total={totalPages}
             />
           )}
