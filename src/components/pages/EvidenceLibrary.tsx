@@ -33,12 +33,15 @@ import {
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { CollectionsGetResponse } from "@/app/api/collections/route";
 import { useParamsState } from "@/hooks/useParamsState";
-import { FaSort } from "react-icons/fa";
+import { FaSort, FaTrash } from "react-icons/fa";
 import { BiCompass } from "react-icons/bi";
 import { AiOutlineCompass } from "react-icons/ai";
 import { useHierarchy } from "@/hooks/useHierarchy";
 import useBreakpoint from "@/lib/useBreakpoint";
 import { useDebounce } from "@/hooks/useDebounce";
+import { ColllectionHierarchy } from "@/lib/collections";
+import { AnimatePresence, motion } from "framer-motion";
+import { twMerge } from "tailwind-merge";
 
 const ITEM_PER_PAGE = 20;
 
@@ -236,7 +239,7 @@ function ResourcesList({
 
   return (
     <>
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-6 -mt-4">
         {actuallyNoData ? (
           <div className="text-center text-black/40 dark:text-white/40 text-sm">
             No resources found
@@ -308,6 +311,75 @@ function PaginationControls({
         </Skeleton>
       </div>
     )
+  );
+}
+
+function FilterChips({
+  collections,
+  handleCheckboxChange,
+  collectionsData,
+}: {
+  collections: string[];
+  handleCheckboxChange: (key: string) => void;
+  collectionsData: CollectionsGetResponse | undefined;
+}) {
+  return (
+      <div className={twMerge("flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0", collections.length > 0 && "max-h-[512px] mb-4 opacity-100")}>
+        <div className="flex-1 flex gap-2 flex-wrap">
+          <AnimatePresence>
+            {collectionsData &&
+              collections.map((collection: string, index) => {
+                const collectionData = collectionsData.collections.find(
+                  (c) => c.key === collection
+                );
+
+                return (
+                  <motion.div
+                    key={collection}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    <Button
+                      size="xs"
+                      variant="solid"
+                      className="shrink-0"
+                      onClick={() => {
+                        handleCheckboxChange(collection);
+                      }}
+                    >
+                      {collectionData?.name}
+                      <span className="text-black/80 dark:text-white/40 font-medium text-sm leading-3">
+                        {`(${collectionData?.numItems})`}
+                      </span>
+                    </Button>
+                  </motion.div>
+                );
+              })}
+          </AnimatePresence>
+        </div>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.2 }}
+          className="w-8 flex justify-end"
+        > 
+          <Button
+            onClick={() => {
+              handleCheckboxChange("");
+            }}
+            isIconOnly
+            size="sm"
+            variant="solid"
+            color="accent"
+          >
+            <FaTrash className="text-white size-3" />
+          </Button>
+        </motion.div>
+      </div>
+    
   );
 }
 
@@ -400,6 +472,11 @@ function MainContent() {
           handleCheckboxChange={handleCheckboxChange}
           collectionsData={collectionsData}
           hierarchy={hierarchy}
+        />
+        <FilterChips
+          collections={selectedCollections}
+          handleCheckboxChange={handleCheckboxChange}
+          collectionsData={collectionsData}
         />
         <ResourcesList
           data={itemsData}
