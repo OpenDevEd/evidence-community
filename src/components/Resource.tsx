@@ -67,7 +67,7 @@ export default function Resource({
           />
           <ResourceDivider />
           <ResourceData
-            text={itemData ? new Date(itemData?.dateAdded!).toLocaleDateString("en-US", {
+            text={itemData && itemData.dateAdded ? new Date(itemData.dateAdded).toLocaleDateString("en-US", {
               dateStyle: "medium",
             }) : null}
             classNames={{
