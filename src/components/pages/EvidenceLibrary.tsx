@@ -22,7 +22,7 @@ import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ItemsGetResponse } from "@/app/api/items/route";
 import {
   useParams,
@@ -38,6 +38,7 @@ import { BiCompass } from "react-icons/bi";
 import { AiOutlineCompass } from "react-icons/ai";
 import { useHierarchy } from "@/hooks/useHierarchy";
 import useBreakpoint from "@/lib/useBreakpoint";
+import { useDebounce } from "@/hooks/useDebounce";
 
 const ITEM_PER_PAGE = 20;
 
@@ -64,6 +65,7 @@ function ContentInteractions({
   collectionsData: CollectionsGetResponse | undefined;
 } & ReturnType<typeof useHierarchy>) {
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const debouncedSearch = useDebounce(onSearchChange, 200);
 
   return (
     <>
@@ -144,7 +146,7 @@ function ContentInteractions({
       <div className="flex flex-col xl:flex-row gap-4">
         <Input
           defaultValue={search}
-          onChange={(e) => onSearchChange(e.target.value)}
+          onChange={(e) => debouncedSearch(e.target.value)}
           placeholder="Search"
           size="lg"
           isClearable
@@ -290,7 +292,7 @@ function PaginationControls({
 
   return (
     !actuallyNoData && (
-      <div className="w-full flex justify-center sticky bottom-0 bg-background_light dark:bg-background py-6">
+      <div className="w-full flex justify-center sticky bottom-0 bg-background_light dark:bg-background py-6 z-10">
         <Skeleton
           isLoaded={totalPages > 0}
           className="w-full h-14 rounded-2xl flex items-center justify-center"
@@ -319,7 +321,6 @@ function MainContent() {
   const collections = searchParams.get("collections")?.split(",") || [];
 
   const [abstract, setAbstract] = useState(true);
-  const [searchInput, setSearchInput] = useState(search);
 
   const handlePageChange = useCallback(
     (newPage: number) => {
@@ -333,6 +334,17 @@ function MainContent() {
       const value = sort.values().next().value;
       if (value) router.push(createQueryString(pathname, [["sort", value]]));
     },
+    [router, pathname, createQueryString]
+  );
+
+  const handleSearchChange = useCallback(
+    (text: string) =>
+      router.push(
+        createQueryString(pathname, [
+          ["search", text],
+          ["page", "1"],
+        ])
+      ),
     [router, pathname, createQueryString]
   );
 
@@ -361,19 +373,6 @@ function MainContent() {
     isLoading: isCollectionsLoading,
   } = useSWR<CollectionsGetResponse>("/collections", fetcher);
 
-  useEffect(() => {
-    let timeout: NodeJS.Timeout;
-    timeout = setTimeout(() => {
-      router.push(
-        createQueryString(pathname, [
-          ["search", searchInput],
-          ["page", "1"],
-        ])
-      );
-    }, 200);
-    return () => clearTimeout(timeout);
-  }, [searchInput]);
-
   const { hierarchy, handleCheckboxChange, selectedCollections } = useHierarchy(
     {
       data: collectionsData,
@@ -391,8 +390,8 @@ function MainContent() {
       <div className="w-full flex flex-col gap-4">
         <ContentInteractions
           sort={sort}
-          search={searchInput}
-          onSearchChange={setSearchInput}
+          search={search}
+          onSearchChange={handleSearchChange}
           onSortChange={handleSortChange}
           data={itemsData}
           abstract={abstract}
