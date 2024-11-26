@@ -39,7 +39,7 @@ export default function Footer() {
   }, []);
 
   return (
-    <footer className="row-start-3 bg-white dark:bg-white/[2%] h-full w-full flex justify-center items-center flex-col gap-14 py-14 xl:py-0">
+    <footer className="row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-14 py-14 xl:py-0">
       <div className="max-w-screen-2xl px-14 flex w-full justify-between items-center flex-col gap-14 xl:gap-0 xl:flex-row">
         <div className="flex flex-col gap-6 h-full items-start">
           <Image src={"/logo.png"} alt="logo" width={232} height={81} />
