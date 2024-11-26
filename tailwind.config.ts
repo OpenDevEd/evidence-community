@@ -17,14 +17,14 @@ const colors = {
   background_light: {
     DEFAULT: "#F4F2EE",
     100: "#312F2D",
-    200: "#625E5A", 
+    200: "#625E5A",
     300: "#938E87",
     400: "#C4BDB5",
     500: "#F4F2EE",
     600: "#F6F4F1",
     700: "#F8F7F4",
     800: "#FAF9F7",
-    900: "#FCFBFA"
+    900: "#FCFBFA",
   },
   primary: {
     DEFAULT: "#ffffff",
@@ -74,7 +74,19 @@ const colors = {
     700: "#f0b47b",
     800: "#f5cda7",
     900: "#fae6d3",
-  }
+  },
+  card: {
+    DEFAULT: "#141414",
+    100: "#040404",
+    200: "#080808",
+    300: "#0c0c0c",
+    400: "#101010",
+    500: "#141414",
+    600: "#434343",
+    700: "#727272",
+    800: "#a1a1a1",
+    900: "#d0d0d0",
+  },
 };
 
 const config: Config = {
@@ -92,19 +104,21 @@ const config: Config = {
     },
   },
   darkMode: "class",
-  plugins: [nextui({
-    themes: {
-      dark: {
-        colors: {
-          focus: colors.accent,
-        }
+  plugins: [
+    nextui({
+      themes: {
+        dark: {
+          colors: {
+            focus: colors.accent,
+          },
+        },
+        light: {
+          colors: {
+            focus: colors.accent,
+          },
+        },
       },
-      light: {
-        colors: {
-          focus: colors.accent,
-        }
-      }
-    }
-  })],
+    }),
+  ],
 };
 export default config;
