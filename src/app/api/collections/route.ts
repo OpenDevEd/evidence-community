@@ -1,6 +1,4 @@
 import { db } from "@/db";
-import { collection } from "@/db/schema/tables/collection";
-import { inArray, InferSelectModel } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import toml from "toml";
@@ -10,17 +8,13 @@ import {
   flattenHierarchy,
   recursiveFind,
 } from "@/lib/collections";
+import { Collection, CollectionsGetResponse } from "./types";
 
 let facets: {
   kerko?: {
     facets?: Record<string, any>;
   };
 } = {};
-
-
-export type CollectionsGetResponse = {
-  collections: InferSelectModel<typeof collection>[];
-};
 
 export async function GET(request: NextRequest) {
   try {
@@ -79,6 +73,6 @@ export async function GET(request: NextRequest) {
   );
 
   return NextResponse.json<CollectionsGetResponse>({
-    collections: uniqueCollections as InferSelectModel<typeof collection>[],
+    collections: uniqueCollections as Collection[],
   });
 }
