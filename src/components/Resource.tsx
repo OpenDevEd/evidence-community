@@ -53,7 +53,7 @@ export default function Resource({
   ])
 
   return (
-    <div className="w-full bg-white dark:bg-white/[4%] rounded-xl p-6 flex flex-col gap-4">
+    <div className="w-full bg-white dark:bg-white/[4%] rounded-xl p-4 xl:p-6 flex flex-col gap-4">
       <Skeleton isLoaded={!isLoading} className="w-full min-h-8 rounded-2xl">
         <h1 className="capitalize text-2xl text-black/80 dark:text-white/80 line-clamp-2">
           {itemData?.title}
