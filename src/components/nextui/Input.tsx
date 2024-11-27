@@ -15,9 +15,6 @@ export const Input = extendVariants(NextUIInput, {
       },
     },
     size: {
-      md: {
-        inputWrapper: "h-12",
-      },
     },
     custom: {
       default: {
@@ -27,7 +24,6 @@ export const Input = extendVariants(NextUIInput, {
   },
   defaultVariants: {
     color: "secondary",
-    size: "md",
     custom: "default",
     variant: "default",
   },
