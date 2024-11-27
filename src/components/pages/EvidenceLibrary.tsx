@@ -85,7 +85,7 @@ function ContentInteractions({
           <Modal
             hideCloseButton
             classNames={{
-              base: "bg-background_light dark:bg-background my-0",
+              base: "bg-background_light dark:bg-background my-0 mx-0 min-h-screen",
               wrapper: "no-scrollbar",
             }}
             scrollBehavior="outside"
