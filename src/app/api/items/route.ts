@@ -1,36 +1,13 @@
-import { db } from "@/db";
-import {
-  count,
-  InferSelectModel,
-  asc,
-  desc,
-  notInArray,
-  inArray,
-  arrayOverlaps,
-  and,
-  or,
-  sql,
-} from "drizzle-orm";
-import { item } from "@/db/schema/tables/item";
 import { NextRequest, NextResponse } from "next/server";
-import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { MeiliSearch } from "meilisearch";
-
-const ITEMS_PER_PAGE = 20;
-const EXCLUDED_ITEM_TYPES = ["Note", "Attachment"] as any[];
+import { EXCLUDED_ITEM_TYPES, ITEMS_PER_PAGE, SCOPE_OPTIONS, SORT_OPTIONS } from "./constants";
+import { ItemsGetResponse } from "./types";
 
 const meilisearchClient = new MeiliSearch({
   host: process.env.MEILISEARCH_HOST || "",
   apiKey: process.env.MASTER_KEY || "",
 });
 
-export type ItemsGetResponse = {
-  items: InferSelectModel<typeof item>[] | any[];
-  currentPage: number;
-  totalItems: number;
-  perPage: number;
-  totalPages: number;
-};
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -39,23 +16,26 @@ export async function GET(request: NextRequest) {
     100,
     Math.max(1, Number(searchParams.get("limit")) || ITEMS_PER_PAGE)
   );
-
-  const sort = searchParams.get("sort") || "asc";
+  const sort = searchParams.get("sort") || SORT_OPTIONS[0].key;
   const collections = searchParams.get("collections")?.split(",") || [];
   const search = searchParams.get("search") || "";
-
+  const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
   const searchIndex = meilisearchClient.index("items");
+  const sortOption = SORT_OPTIONS.find((option) => option.key === sort)?.sort || SORT_OPTIONS[0].sort;
+
+  console.log(sortOption);
 
   const searchResults = await searchIndex.search(search, {
     offset: (pageNum - 1) * limitNum,
     limit: limitNum,
-    sort: [`dateAdded:${sort}`],
+    attributesToSearchOn: SCOPE_OPTIONS.find((option) => option.key === scope)?.attributesToSearchOn || SCOPE_OPTIONS[0].attributesToSearchOn,
     filter: [
       `itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
       collections.length > 0
         ? `collections IN ${JSON.stringify(collections)}`
         : null,
     ].filter((f): f is string => f !== null),
+    sort: [sortOption],
   });
 
   const items = searchResults.hits;
