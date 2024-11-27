@@ -18,7 +18,7 @@ export const Button = extendVariants(NextUIButton, {
       solid: "border-none rounded-lg",
     },
     size: {
-      lg: "",
+      lg: "px-3 gap-2 xl:px-6 xl:gap-3",
       xs: "text-xs px-3 h-8 gap-1",
     },
   },
