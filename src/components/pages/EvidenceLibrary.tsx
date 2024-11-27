@@ -67,7 +67,6 @@ function ContentInteractions({
   onAbstractChange: (abstract: boolean) => void;
   collectionsData: CollectionsGetResponse | undefined;
 } & ReturnType<typeof useHierarchy>) {
-  const isDesktop = useBreakpoint("xl");
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const debouncedSearch = useDebounce(onSearchChange, 200);
 
@@ -120,11 +119,10 @@ function ContentInteractions({
         </h1>
         <div className="flex gap-4 h-10 xl:h-12 flex-1 justify-end">
           <Button
-            isIconOnly={!isDesktop}
-            className="h-full xl:px-6 px-0 font-medium text-base xl:flex-none"
+            className="h-full font-medium text-base"
             endContent={<LuHelpCircle className="size-6" />}
           >
-            {isDesktop && "Help"}
+            Help
           </Button>
           <Select
             items={[
@@ -157,7 +155,10 @@ function ContentInteractions({
           defaultValue={search}
           onChange={(e) => debouncedSearch(e.target.value)}
           placeholder="Search"
-          size={isDesktop ? "lg" : "md"}
+          size={"lg"}
+          classNames={{
+            inputWrapper: "h-10 xl:h-12 min-h-10 xl:min-h-12",
+          }}
           isClearable
           startContent={
             <IoSearch className="size-6 fill-current text-black/60 dark:text-white/40" />
