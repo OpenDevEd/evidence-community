@@ -25,7 +25,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${ubuntu.className}`}>
         <Providers>
-          <div className="h-full w-full bg-background_light dark:bg-background flex flex-col xl:grid xl:grid-rows-[104px_1fr_512px] gap-4 xl:gap-14 pt-4 xl:pt-14 items-center justify-items-center min-h-screen">
+          <div className="h-full w-full bg-background_light dark:bg-background flex flex-col xl:grid xl:grid-rows-[104px_1fr_512px] gap-4 xl:gap-14 pt-0 xl:pt-14 items-center justify-items-center min-h-screen">
             <Navbar />
             {children}
             <Footer />

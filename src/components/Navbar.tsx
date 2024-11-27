@@ -133,8 +133,8 @@ export default function Navbar() {
   }, []);
 
   return (
-    <nav className="w-full max-w-screen-2xl px-4 xl:px-14 z-10 ">
-      <div className="h-[104px] bg-white dark:bg-secondary rounded-[20px] flex items-center p-8 gap-9 z-10">
+    <nav className="w-full max-w-screen-2xl px-0 xl:px-14 sticky top-0 xl:static z-50">
+      <div className="h-18 xl:h-[104px] bg-white dark:bg-secondary xl:rounded-[20px] flex items-center p-4 py-6 xl:p-8 gap-9 z-10">
         <Logo theme={theme} isMounted={isMounted} />
         <LinksList pathname={pathname} />
         <ThemeSwitcher
@@ -162,10 +162,10 @@ export default function Navbar() {
       </div>
       <div
         className={twMerge(
-          "xl:hidden bg-[#EAE9E5] dark:bg-secondary-400 rounded-[20px] rounded-t-none relative duration-300 overflow-y-hidden -mt-4 -z-10 flex flex-col gap-8",
+          "xl:hidden bg-[#EAE9E5] dark:bg-secondary-400 rounded-[20px] rounded-t-none relative duration-300 overflow-y-hidden -z-10 flex flex-col gap-8",
           isMobileMenuOpen
-            ? "max-h-[calc(100vh-104px)] py-8 pt-12 opacity-100"
-            : "max-h-0 mb-4 opacity-0"
+            ? "max-h-[calc(100vh-104px)] py-8 mb-4 opacity-100 shadow-xl shadow-[#EAE9E5] dark:shadow-secondary-400"
+            : "max-h-0 opacity-0"
         )}
       >
         <LinksList pathname={pathname} isMobile={true} />
