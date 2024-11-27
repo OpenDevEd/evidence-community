@@ -1,8 +1,7 @@
 import { Link } from "@nextui-org/react";
 import AboutUs from "./icons/AboutUs";
 import { twMerge } from "tailwind-merge";
-import { InferSelectModel } from "drizzle-orm";
-import { item } from "@/db/schema/tables/item";
+import { Item } from "@/app/api/items/types";
 import { firstNonNullOrEmpty } from "@/lib/lib";
 import { Skeleton } from "@/components/nextui/Skeleton";
 
@@ -43,7 +42,7 @@ export default function Resource({
   abstract,
   isLoading,
 }: {
-  itemData: InferSelectModel<typeof item>;
+  itemData: Item;
   abstract: boolean;
   isLoading: boolean;
 }) {
