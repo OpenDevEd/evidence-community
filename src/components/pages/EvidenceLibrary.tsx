@@ -23,7 +23,7 @@ import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ItemsGetResponse } from "@/app/api/items/route";
+import { ItemsGetResponse } from "@/app/api/items/types";
 import {
   useParams,
   usePathname,
@@ -31,7 +31,7 @@ import {
   useSearchParams,
 } from "next/navigation";
 import { Skeleton } from "@/components/nextui/Skeleton";
-import { CollectionsGetResponse } from "@/app/api/collections/route";
+import { CollectionsGetResponse } from "@/app/api/collections/types";
 import { useParamsState } from "@/hooks/useParamsState";
 import { FaSort, FaTrash } from "react-icons/fa";
 import { BiCompass } from "react-icons/bi";
@@ -39,16 +39,33 @@ import { AiOutlineCompass } from "react-icons/ai";
 import { useHierarchy } from "@/hooks/useHierarchy";
 import useBreakpoint from "@/lib/useBreakpoint";
 import { useDebounce } from "@/hooks/useDebounce";
-import { ColllectionHierarchy } from "@/lib/collections";
+import { ColllectionHierarchy } from "@/app/api/collections/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { twMerge } from "tailwind-merge";
+import { ITEMS_PER_PAGE, SORT_OPTIONS, SCOPE_OPTIONS } from "@/app/api/items/constants";
 
-const ITEM_PER_PAGE = 20;
+
+function buildItemsQuery(params: any): string {
+  const { pageNumber, sort, collections, search, scope } = params;
+
+  const queryParts = [
+    `page=${pageNumber}`,
+    `limit=${ITEMS_PER_PAGE}`,
+    `sort=${sort}`,
+    collections.length > 0 && `collections=${collections.join(",")}`,
+    search.length > 0 && `search=${search}`,
+    scope !== SCOPE_OPTIONS[0].key && `scope=${scope}`,
+  ];
+
+  return `/items?${queryParts.filter(Boolean).join("&")}`;
+}
 
 function ContentInteractions({
   data,
   sort,
   onSortChange,
+  scope,
+  onScopeChange,
   search,
   onSearchChange,
   abstract,
@@ -63,6 +80,8 @@ function ContentInteractions({
   onSortChange: (sort: any) => void;
   search: string;
   onSearchChange: (search: string) => void;
+  scope: string;
+  onScopeChange: (scope: any) => void;
   abstract: boolean;
   onAbstractChange: (abstract: boolean) => void;
   collectionsData: CollectionsGetResponse | undefined;
@@ -125,22 +144,18 @@ function ContentInteractions({
             Help
           </Button>
           <Select
-            items={[
-              { key: "desc", name: "Newest" },
-              { key: "asc", name: "Oldest" },
-            ]}
+            items={SORT_OPTIONS}
             selectedKeys={sort && [sort]}
             onSelectionChange={onSortChange}
             classNames={{
               mainWrapper: "h-full",
-              base: "flex-1 max-w-full xl:max-w-52",
+              base: "flex-1 max-w-full xl:max-w-56",
             }}
             startContent={
               <>
-                <div className="text-black/80 dark:text-white/60 shrink-0 font-medium hidden xl:block">
+                <div className="text-black/80 dark:text-white/60 shrink-0 font-medium">
                   Sort by:
                 </div>
-                <FaSort className="size-6 xl:hidden" />
               </>
             }
           >
@@ -154,6 +169,7 @@ function ContentInteractions({
         <Input
           defaultValue={search}
           onChange={(e) => debouncedSearch(e.target.value)}
+          onClear={() => debouncedSearch("")}
           placeholder="Search"
           size={"lg"}
           classNames={{
@@ -165,11 +181,9 @@ function ContentInteractions({
           }
         />
         <Select
-          items={[
-            { key: "authors", name: "in authors or contributors" },
-            { key: "title", name: "in title" },
-          ]}
-          defaultSelectedKeys={["authors"]}
+          items={SCOPE_OPTIONS}
+          selectedKeys={scope && [scope]}
+          onSelectionChange={onScopeChange}
           color="tertiary"
           size="md"
           classNames={{
@@ -232,7 +246,7 @@ function ResourcesList({
             No resources found
           </div>
         ) : (
-          Array.from({ length: ITEM_PER_PAGE }).map(
+          Array.from({ length: ITEMS_PER_PAGE }).map(
             (_, index) =>
               (!data || (data && data.items[index])) && (
                 <Resource
@@ -375,9 +389,10 @@ function MainContent() {
     useParamsState();
 
   const pageNumber = Number(searchParams.get("page")) || 1;
-  const sort = searchParams.get("sort") || "desc";
+  const sort = searchParams.get("sort") || SORT_OPTIONS[0].key;
   const search = searchParams.get("search") || "";
   const collections = searchParams.get("collections")?.split(",") || [];
+  const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
 
   const [abstract, setAbstract] = useState(true);
 
@@ -392,6 +407,14 @@ function MainContent() {
     (sort: Set<string>) => {
       const value = sort.values().next().value;
       if (value) router.push(createQueryString(pathname, [["sort", value]]));
+    },
+    [router, pathname, createQueryString]
+  );
+
+  const handleScopeChange = useCallback(
+    (scope: Set<string>) => {
+      const value = scope.values().next().value;
+      if (value) router.push(createQueryString(pathname, [["scope", value]]));
     },
     [router, pathname, createQueryString]
   );
@@ -412,9 +435,13 @@ function MainContent() {
     error: itemsError,
     isLoading: isItemsLoading,
   } = useSWR<ItemsGetResponse>(
-    `/items?page=${pageNumber}&limit=${ITEM_PER_PAGE}&sort=${sort}${
-      collections.length > 0 ? `&collections=${collections.join(",")}` : ""
-    }${search.length > 0 ? `&search=${search}` : ""}`,
+    buildItemsQuery({
+      pageNumber,
+      sort,
+      collections,
+      search,
+      scope,
+    }),
     fetcher,
     {
       keepPreviousData: true,
@@ -450,7 +477,9 @@ function MainContent() {
         <ContentInteractions
           sort={sort}
           search={search}
+          scope={scope}
           onSearchChange={handleSearchChange}
+          onScopeChange={handleScopeChange}
           onSortChange={handleSortChange}
           data={itemsData}
           abstract={abstract}
