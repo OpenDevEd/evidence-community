@@ -67,17 +67,18 @@ function ContentInteractions({
   onAbstractChange: (abstract: boolean) => void;
   collectionsData: CollectionsGetResponse | undefined;
 } & ReturnType<typeof useHierarchy>) {
+  const isDesktop = useBreakpoint("xl");
   const { isOpen, onOpen, onOpenChange } = useDisclosure();
   const debouncedSearch = useDebounce(onSearchChange, 200);
 
   return (
     <>
-      <div className="flex w-full flex-col xl:flex-row xl:justify-between xl:items-end h-28 xl:h-12 gap-4">
-        <h1 className="text-black dark:text-white/60 font-medium text-3xl w-full xl:w-auto h-12 flex justify-between items-end">
+      <div className="flex w-full flex-col xl:flex-row xl:justify-between xl:items-end h-24 xl:h-12 gap-4">
+        <h1 className="text-black dark:text-white/60 font-medium text-2xl xl:text-3xl w-full xl:w-auto h-10 xl:h-12 flex justify-between items-end">
           Search
           <Button
             startContent={<AiOutlineCompass className="size-6" />}
-            className="xl:hidden ml-auto"
+            className="xl:hidden ml-auto h-full"
             onClick={onOpen}
           >
             Explore
@@ -85,7 +86,7 @@ function ContentInteractions({
           <Modal
             hideCloseButton
             classNames={{
-              base: "bg-background_light dark:bg-background",
+              base: "bg-background_light dark:bg-background my-0",
               wrapper: "no-scrollbar",
             }}
             scrollBehavior="outside"
@@ -117,12 +118,13 @@ function ContentInteractions({
             </ModalContent>
           </Modal>
         </h1>
-        <div className="flex gap-4 h-12 flex-1 justify-end">
+        <div className="flex gap-4 h-10 xl:h-12 flex-1 justify-end">
           <Button
-            className="h-full xl:px-6 px-0 font-medium text-base flex-1 xl:flex-none"
+            isIconOnly={!isDesktop}
+            className="h-full xl:px-6 px-0 font-medium text-base xl:flex-none"
             endContent={<LuHelpCircle className="size-6" />}
           >
-            Help
+            {isDesktop && "Help"}
           </Button>
           <Select
             items={[
@@ -131,6 +133,10 @@ function ContentInteractions({
             ]}
             selectedKeys={sort && [sort]}
             onSelectionChange={onSortChange}
+            classNames={{
+              mainWrapper: "h-full",
+              base: "flex-1 max-w-full xl:max-w-52",
+            }}
             startContent={
               <>
                 <div className="text-black/80 dark:text-white/60 shrink-0 font-medium hidden xl:block">
@@ -151,7 +157,7 @@ function ContentInteractions({
           defaultValue={search}
           onChange={(e) => debouncedSearch(e.target.value)}
           placeholder="Search"
-          size="lg"
+          size={isDesktop ? "lg" : "md"}
           isClearable
           startContent={
             <IoSearch className="size-6 fill-current text-black/60 dark:text-white/40" />
@@ -167,6 +173,7 @@ function ContentInteractions({
           size="md"
           classNames={{
             base: "xl:max-w-72 w-full max-w-full",
+            mainWrapper: "h-10 xl:h-full",
           }}
         >
           {(item: any) => {
@@ -174,7 +181,7 @@ function ContentInteractions({
           }}
         </Select>
       </div>
-      <div className="flex justify-between gap-4">
+      <div className="flex justify-between h-10 xl:h-12 gap-4">
         <Skeleton
           isLoaded={!!data}
           className="flex items-center flex-1 rounded-2xl"
@@ -186,8 +193,8 @@ function ContentInteractions({
             Resources
           </h2>
         </Skeleton>
-        <Card>
-          <div className="px-3">
+        <Card className="h-full flex items-center justify-center">
+          <div className="xl:px-3 px-1">
             <Switch
               size="sm"
               isSelected={abstract}
@@ -200,27 +207,6 @@ function ContentInteractions({
             </Switch>
           </div>
         </Card>
-      </div>
-      <div className="gap-4 w-full max-w-full h-12 relative hidden">
-        <ScrollShadow
-          orientation="horizontal"
-          className="flex gap-4 overflow-y-hidden overflow-x-scroll absolute inset-0"
-        >
-          {[
-            { label: "2 Implementation Guidance", count: 6 },
-            { label: "3 Resources: TPD Implementation", count: 3 },
-            { label: "1 Programme Reports", count: 3 },
-            { label: "1 Programme Reports", count: 3 },
-            { label: "Outputs Registry", count: 7 },
-          ].map((item, index) => (
-            <Button size="xs" variant="solid" className="shrink-0" key={index}>
-              {item.label}
-              <span className="text-black/80 dark:text-white/40 font-medium text-sm leading-3">
-                {`(${item.count})`}
-              </span>
-            </Button>
-          ))}
-        </ScrollShadow>
       </div>
     </>
   );
@@ -295,7 +281,7 @@ function PaginationControls({
 
   return (
     !actuallyNoData && (
-      <div className="w-full flex justify-center sticky bottom-0 bg-background_light dark:bg-background py-6 z-10">
+      <div className="w-full flex justify-center sticky bottom-0 bg-background_light dark:bg-background py-2 xl:py-6 z-10">
         <Skeleton
           isLoaded={totalPages > 0}
           className="w-full h-14 rounded-2xl flex items-center justify-center"
@@ -490,7 +476,7 @@ function MainContent() {
           isLoading={isItemsLoading}
         />
         <ContentActions />
-        <div className="text-end text-black/40 dark:text-white/40 text-sm">
+        <div className="text-center xl:text-end text-black/40 dark:text-white/40 text-sm">
           Last update from database: 30/03/2024, 15:01 (UTC)
         </div>
       </div>
