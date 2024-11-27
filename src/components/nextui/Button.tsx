@@ -16,6 +16,7 @@ export const Button = extendVariants(NextUIButton, {
     variant: {
       default: "border-small rounded-2xl",
       solid: "border-none rounded-lg",
+      transparent: "bg-transparent dark:bg-transparent border-none",
     },
     size: {
       lg: "px-3 gap-2 xl:px-6 xl:gap-3",
