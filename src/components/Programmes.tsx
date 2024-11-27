@@ -2,13 +2,11 @@
 
 import { Accordion, AccordionItem } from "@nextui-org/react";
 import { Checkbox } from "./nextui/Checkbox";
-import { CollectionsGetResponse } from "@/app/api/collections/route";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParamsState } from "@/hooks/useParamsState";
 import {
   buildHierarchy,
   calculateNumItemsRecursively,
-  ColllectionHierarchy,
   getDescendantKeys,
   recursiveFind,
 } from "@/lib/collections";
@@ -21,6 +19,7 @@ import { Button } from "./nextui/Button";
 import { motion } from "framer-motion";
 import { AnimatePresence } from "framer-motion";
 import { LuChevronDown } from "react-icons/lu";
+import { CollectionsGetResponse, ColllectionHierarchy } from "@/app/api/collections/types";
 
 const MAX_COLLAPSED_HEIGHT = 400;
 
@@ -83,7 +82,7 @@ function Category({
   useEffect(() => {
     const apply = () => {
       if (ref.current) {
-        setShowMore(ref.current.scrollHeight > MAX_COLLAPSED_HEIGHT);
+        setShowMore(ref.current.scrollHeight > (MAX_COLLAPSED_HEIGHT));
       }
     };
 
@@ -107,7 +106,6 @@ function Category({
         }}
         className={twMerge(
           "flex flex-col gap-4 overflow-hidden transition-all duration-200 pb-0",
-          expanded && showMore && "pb-16"
         )}
         ref={ref}
       >
@@ -118,7 +116,9 @@ function Category({
           onCheckboxChange={handleCheckboxChange}
         />
       </div>
-      <AnimatePresence>
+      <div className={twMerge("transition-all duration-200 pb-0", expanded && showMore && "pb-16")}>
+      </div>
+      <AnimatePresence mode="wait">
         {showMore && (
           <motion.div
             initial={{ opacity: 0 }}
@@ -129,6 +129,7 @@ function Category({
               "before:absolute before:-top-24 before:left-0 before:right-0 before:h-24 before:bg-gradient-to-t from-white dark:before:from-card before:to-transparent before:z-10 before:opacity-100 before:transition-opacity duration-400 before:pointer-events-none",
               expanded && "before:opacity-0"
             )}
+            key={"show-more"}
           >
             <Button
               className="w-full"
