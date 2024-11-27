@@ -1,11 +1,4 @@
-import { collection } from "@/db/schema/tables/collection";
-import { InferSelectModel } from "drizzle-orm";
-
-export type ColllectionHierarchy = InferSelectModel<typeof collection> & {
-  level?: number;
-  children?: ColllectionHierarchy[];
-  title?: string;
-};
+import { Collection, ColllectionHierarchy } from "@/app/api/collections/types";
 
 export function buildHierarchy(
   collections: ColllectionHierarchy[],
