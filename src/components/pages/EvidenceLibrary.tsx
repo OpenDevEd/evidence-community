@@ -3,7 +3,7 @@ import { Button } from "@/components/nextui/Button";
 import Resource from "@/components/Resource";
 import Programmes from "@/components/Programmes";
 import { IoSearch } from "react-icons/io5";
-import { LuChevronLeft, LuHelpCircle, LuX } from "react-icons/lu";
+import { LuHelpCircle, LuX } from "react-icons/lu";
 import { Select } from "@/components/nextui/Select";
 import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
@@ -11,10 +11,10 @@ import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
 import {
   Modal,
+  ModalBody,
   ModalContent,
   ModalFooter,
   ModalHeader,
-  ScrollShadow,
   useDisclosure,
 } from "@nextui-org/react";
 import { Pagination } from "@/components/nextui/Pagination";
@@ -22,28 +22,25 @@ import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import useSWR from "swr";
 import { fetcher } from "@/lib/fetcher";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { ItemsGetResponse } from "@/app/api/items/types";
-import {
-  useParams,
-  usePathname,
-  useRouter,
-  useSearchParams,
-} from "next/navigation";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { CollectionsGetResponse } from "@/app/api/collections/types";
 import { useParamsState } from "@/hooks/useParamsState";
-import { FaSort, FaTrash } from "react-icons/fa";
-import { BiCompass } from "react-icons/bi";
+import { FaTrash } from "react-icons/fa";
 import { AiOutlineCompass } from "react-icons/ai";
 import { useHierarchy } from "@/hooks/useHierarchy";
 import useBreakpoint from "@/lib/useBreakpoint";
 import { useDebounce } from "@/hooks/useDebounce";
-import { ColllectionHierarchy } from "@/app/api/collections/types";
 import { AnimatePresence, motion } from "framer-motion";
 import { twMerge } from "tailwind-merge";
-import { ITEMS_PER_PAGE, SORT_OPTIONS, SCOPE_OPTIONS } from "@/app/api/items/constants";
-
+import {
+  ITEMS_PER_PAGE,
+  SORT_OPTIONS,
+  SCOPE_OPTIONS,
+} from "@/app/api/items/constants";
+import HelpModal from "../HelpModal";
+import { SectionTitle } from "../typography/SectionTitle";
 
 function buildItemsQuery(params: any): string {
   const { pageNumber, sort, collections, search, scope } = params;
@@ -86,7 +83,16 @@ function ContentInteractions({
   onAbstractChange: (abstract: boolean) => void;
   collectionsData: CollectionsGetResponse | undefined;
 } & ReturnType<typeof useHierarchy>) {
-  const { isOpen, onOpen, onOpenChange } = useDisclosure();
+  const {
+    isOpen: isExploreOpen,
+    onOpen: onExploreOpen,
+    onOpenChange: onExploreOpenChange,
+  } = useDisclosure();
+  const {
+    isOpen: isHelpOpen,
+    onOpen: onHelpOpen,
+    onOpenChange: onHelpOpenChange,
+  } = useDisclosure();
   const debouncedSearch = useDebounce(onSearchChange, 200);
 
   return (
@@ -97,31 +103,33 @@ function ContentInteractions({
           <Button
             startContent={<AiOutlineCompass className="size-6" />}
             className="xl:hidden ml-auto h-full"
-            onClick={onOpen}
+            onClick={onExploreOpen}
           >
             Explore
           </Button>
           <Modal
             hideCloseButton
             classNames={{
-              base: "bg-background_light dark:bg-background my-0 mx-0 min-h-screen",
+              base: "bg-background_light dark:bg-background my-0 mx-0 min-h-dvh",
               wrapper: "no-scrollbar",
             }}
             scrollBehavior="outside"
-            isOpen={isOpen}
-            onOpenChange={onOpenChange}
+            isOpen={isExploreOpen}
+            onOpenChange={onExploreOpenChange}
           >
             <ModalContent>
               {(onClose) => (
                 <>
-                  <ModalHeader className="text-black dark:text-white/60 flex justify-center items-center gap-4 text-2xl ">
-                    <AiOutlineCompass className="size-8" />
-                    Explore
+                  <ModalHeader className="flex items-center justify-between gap-2 sticky top-0 bg-background_light dark:bg-background z-30">
+                    <SectionTitle>Explore</SectionTitle>
                     <Button
-                      className="ml-auto"
                       onClick={onClose}
                       isIconOnly
-                      startContent={<LuX className="size-6" />}
+                      variant="transparent"
+                      className="xl:px-0 px-0 translate-x-2"
+                      startContent={
+                        <LuX className="size-6 text-black dark:text-white/80" />
+                      }
                     />
                   </ModalHeader>
                   <Programmes
@@ -140,9 +148,11 @@ function ContentInteractions({
           <Button
             className="h-full font-medium text-base"
             endContent={<LuHelpCircle className="size-6" />}
+            onClick={onHelpOpen}
           >
             Help
           </Button>
+          <HelpModal isOpen={isHelpOpen} onOpenChange={onHelpOpenChange} />
           <Select
             items={SORT_OPTIONS}
             selectedKeys={sort && [sort]}
@@ -153,7 +163,7 @@ function ContentInteractions({
             }}
             startContent={
               <>
-                <div className="text-black/80 dark:text-white/60 shrink-0 font-medium">
+                <div className="text-black/60 dark:text-white/40 shrink-0 font-medium">
                   Sort by:
                 </div>
               </>
@@ -325,62 +335,66 @@ function FilterChips({
   collectionsData: CollectionsGetResponse | undefined;
 }) {
   return (
-      <div className={twMerge("flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0", collections.length > 0 && "max-h-[512px] mb-4 opacity-100")}>
-        <div className="flex-1 flex gap-2 flex-wrap">
-          <AnimatePresence>
-            {collectionsData &&
-              collections.map((collection: string, index) => {
-                const collectionData = collectionsData.collections.find(
-                  (c) => c.key === collection
-                );
+    <div
+      className={twMerge(
+        "flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0",
+        collections.length > 0 && "max-h-[512px] mb-4 opacity-100"
+      )}
+    >
+      <div className="flex-1 flex gap-2 flex-wrap">
+        <AnimatePresence>
+          {collectionsData &&
+            collections.map((collection: string, index) => {
+              const collectionData = collectionsData.collections.find(
+                (c) => c.key === collection
+              );
 
-                return (
-                  <motion.div
-                    key={collection}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
+              return (
+                <motion.div
+                  key={collection}
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Button
+                    size="xs"
+                    variant="solid"
+                    className="shrink-0"
+                    onClick={() => {
+                      handleCheckboxChange(collection);
+                    }}
                   >
-                    <Button
-                      size="xs"
-                      variant="solid"
-                      className="shrink-0"
-                      onClick={() => {
-                        handleCheckboxChange(collection);
-                      }}
-                    >
-                      {collectionData?.name}
-                      <span className="text-black/80 dark:text-white/40 font-medium text-sm leading-3">
-                        {`(${collectionData?.numItems})`}
-                      </span>
-                    </Button>
-                  </motion.div>
-                );
-              })}
-          </AnimatePresence>
-        </div>
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -10 }}
-          transition={{ duration: 0.2 }}
-          className="w-8 flex justify-end"
-        > 
-          <Button
-            onClick={() => {
-              handleCheckboxChange("");
-            }}
-            isIconOnly
-            size="sm"
-            variant="solid"
-            color="accent"
-          >
-            <FaTrash className="text-white size-3" />
-          </Button>
-        </motion.div>
+                    {collectionData?.name}
+                    <span className="text-black/80 dark:text-white/40 font-medium text-sm leading-3">
+                      {`(${collectionData?.numItems})`}
+                    </span>
+                  </Button>
+                </motion.div>
+              );
+            })}
+        </AnimatePresence>
       </div>
-    
+      <motion.div
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -10 }}
+        transition={{ duration: 0.2 }}
+        className="w-8 flex justify-end"
+      >
+        <Button
+          onClick={() => {
+            handleCheckboxChange("");
+          }}
+          isIconOnly
+          size="sm"
+          variant="solid"
+          color="accent"
+        >
+          <FaTrash className="text-white size-3" />
+        </Button>
+      </motion.div>
+    </div>
   );
 }
 
