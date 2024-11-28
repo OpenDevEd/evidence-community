@@ -9,7 +9,7 @@ export const Button = extendVariants(NextUIButton, {
         bg-white dark:bg-secondary 
         border-black/10 dark:border-white/10`,
       accent:
-        `text-white dark:text-white/60 
+        `text-white dark:text-white 
         bg-accent dark:bg-accent-500 
         border-black/10 dark:border-white/10`,
     },
