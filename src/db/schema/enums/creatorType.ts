@@ -32,3 +32,35 @@ export const creatorType = pgEnum("creatorType", [
     'presenter'
    ]);
 
+
+export const creatorTypeLabels = {
+    artist: 'Artist',
+    contributor: 'Contributor',
+    performer: 'Performer',
+    composer: 'Composer',
+    wordsBy: 'Words By',
+    sponsor: 'Sponsor',
+    cosponsor: 'Co-sponsor',
+    author: 'Author',
+    editor: 'Editor',
+    bookAuthor: 'Book Author',
+    seriesEditor: 'Series Editor',
+    translator: 'Translator',
+    counsel: 'Counsel',
+    programmer: 'Programmer',
+    reviewedAuthor: 'Reviewed Author',
+    recipient: 'Recipient',
+    cartographer: 'Cartographer',
+    inventor: 'Inventor',
+    attorneyAgent: 'Attorney/Agent',
+    podcaster: 'Podcaster',
+    guest: 'Guest',
+    director: 'Director',
+    castMember: 'Cast Member',
+    producer: 'Producer',
+    scriptwriter: 'Scriptwriter',
+    commenter: 'Commenter',
+    interviewee: 'Interviewee',
+    interviewer: 'Interviewer',
+    presenter: 'Presenter'
+} as const;
