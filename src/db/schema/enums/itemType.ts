@@ -38,4 +38,43 @@ export const itemType = pgEnum("itemType", [
     "VideoRecording",
     "Webpage"
   ]);
+
+export const itemTypeLabels: Record<(typeof itemType.enumValues)[number], string> = {
+  Artwork: "Artwork",
+  Attachment: "Attachment",
+  AudioRecording: "Audio Recording",
+  Bill: "Bill",
+  BlogPost: "Blog Post",
+  Book: "Book",
+  BookSection: "Book Section",
+  Case: "Case",
+  ComputerProgram: "Computer Program",
+  ConferencePaper: "Conference Paper",
+  DictionaryEntry: "Dictionary Entry",
+  Document: "Document",
+  Email: "Email",
+  EncyclopediaArticle: "Encyclopedia Article",
+  Film: "Film",
+  ForumPost: "Forum Post",
+  Hearing: "Hearing",
+  InstantMessage: "Instant Message",
+  Interview: "Interview",
+  JournalArticle: "Journal Article",
+  Letter: "Letter",
+  MagazineArticle: "Magazine Article",
+  Manuscript: "Manuscript",
+  Map: "Map",
+  NewspaperArticle: "Newspaper Article",
+  Note: "Note",
+  Patent: "Patent",
+  Podcast: "Podcast",
+  Presentation: "Presentation",
+  RadioBroadcast: "Radio Broadcast",
+  Report: "Report",
+  Statute: "Statute",
+  TvBroadcast: "TV Broadcast",
+  Thesis: "Thesis",
+  VideoRecording: "Video Recording",
+  Webpage: "Webpage"
+};
   
