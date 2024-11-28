@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { MeiliSearch } from "meilisearch";
 import { EXCLUDED_ITEM_TYPES, ITEMS_PER_PAGE, SCOPE_OPTIONS, SORT_OPTIONS } from "./constants";
 import { ItemsGetResponse } from "./types";
+import { Item } from "../item/types";
 
 const meilisearchClient = new MeiliSearch({
   host: process.env.MEILISEARCH_HOST || "",
@@ -42,7 +43,7 @@ export async function GET(request: NextRequest) {
   const totalCount = searchResults.estimatedTotalHits;
 
   return NextResponse.json<ItemsGetResponse>({
-    items,
+    items: items as Item[],
     currentPage: pageNum,
     totalItems: totalCount,
     perPage: limitNum,
