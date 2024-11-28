@@ -1,10 +1,10 @@
-import { Collection, ColllectionHierarchy } from "@/app/api/collections/types";
+import { Collection } from "@/app/api/collections/types";
 
 export function buildHierarchy(
-  collections: ColllectionHierarchy[],
+  collections: Collection[],
   parentKey: string | null = null,
   level: number = 0
-): ColllectionHierarchy[] {
+): Collection[] {
   return collections
     .filter((collection) => collection.parentCollection === parentKey)
     .map((collection) => ({
@@ -15,8 +15,8 @@ export function buildHierarchy(
 }
 
 export function calculateNumItemsRecursively(
-  collection: ColllectionHierarchy,
-  collections: ColllectionHierarchy[]
+  collection: Collection,
+  collections: Collection[]
 ): number {
   const children = collections.filter(
     (c) => c.parentCollection === collection.key
@@ -31,7 +31,7 @@ export function calculateNumItemsRecursively(
 }
 
 export function getDescendantKeys(
-  collection: ColllectionHierarchy
+  collection: Collection
 ): string[] {
   const children = collection.children || [];
 
@@ -40,8 +40,8 @@ export function getDescendantKeys(
 
 export function recursiveFind(
   key: string,
-  collections: ColllectionHierarchy[]
-): ColllectionHierarchy | undefined {
+  collections: Collection[]
+): Collection | undefined {
   for (const collection of collections) {
     if (collection.key === key) {
       return collection;
@@ -55,8 +55,11 @@ export function recursiveFind(
   return undefined;
 }
 
-export function flattenHierarchy(collections: ColllectionHierarchy[]): ColllectionHierarchy[] {
-  return collections.flatMap((collection) => [{
+export function flattenHierarchy(
+  collections: Collection[]
+): Collection[] {
+  return collections.flatMap((collection) => [
+    {
       ...collection,
       children: undefined,
       level: undefined,

@@ -19,7 +19,7 @@ import { Button } from "./nextui/Button";
 import { motion } from "framer-motion";
 import { AnimatePresence } from "framer-motion";
 import { LuChevronDown } from "react-icons/lu";
-import { CollectionsGetResponse, ColllectionHierarchy } from "@/app/api/collections/types";
+import { CollectionsGetResponse, Collection } from "@/app/api/collections/types";
 
 const MAX_COLLAPSED_HEIGHT = 400;
 
@@ -29,8 +29,8 @@ function Hierarchy({
   selectedCollections,
   onCheckboxChange,
 }: {
-  collectionData: ColllectionHierarchy;
-  collections: ColllectionHierarchy[];
+  collectionData: Collection;
+  collections: Collection[];
   selectedCollections: string[];
   onCheckboxChange: (key: string) => void;
 }) {
@@ -70,8 +70,8 @@ function Category({
   selectedCollections,
   handleCheckboxChange,
 }: {
-  collection: ColllectionHierarchy;
-  hierarchy: ColllectionHierarchy[];
+  collection: Collection;
+  hierarchy: Collection[];
   selectedCollections: string[];
   handleCheckboxChange: (key: string) => void;
 }) {

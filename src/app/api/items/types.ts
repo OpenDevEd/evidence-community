@@ -1,10 +1,7 @@
-import { InferSelectModel } from "drizzle-orm";
-import { item } from "@/db/schema/tables/item";
-
-export type Item = InferSelectModel<typeof item>;
+import { Item } from "../item/types";
 
 export type ItemsGetResponse = {
-  items: Item[] | any[];
+  items: Item[];
   currentPage: number;
   totalItems: number;
   perPage: number;

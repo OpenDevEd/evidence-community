@@ -1,9 +1,8 @@
 import { getDescendantKeys, recursiveFind } from "@/lib/collections";
 import { buildHierarchy } from "@/lib/collections";
-import { ColllectionHierarchy } from "@/lib/collections";
 import { useParamsState } from "./useParamsState";
 import { useMemo } from "react";
-import { CollectionsGetResponse } from "@/app/api/collections/route";
+import { Collection, CollectionsGetResponse } from "@/app/api/collections/types";
 
 export function useHierarchy({
   data,
@@ -17,7 +16,7 @@ export function useHierarchy({
 
   const hierarchy = useMemo(() => {
     if (!data) return [];
-    return buildHierarchy(data.collections as ColllectionHierarchy[]);
+    return buildHierarchy(data.collections as Collection[]);
   }, [data]);
 
   const handleCheckboxChange = (key: string) => {
