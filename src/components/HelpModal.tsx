@@ -119,11 +119,11 @@ export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, o
             </ListItem>
             <ListItem>
               You may require exact sequences of words (with double
-              quotes), e.g., "A B C". The default difference between
+              quotes), e.g., &quot;A B C&quot;. The default difference between
               word positions is 1, meaning that an entry will match if
               it contains the words next to each other, but a
               different maximum distance may be specified (with the
-              tilde character), e.g., "Web Search"~2 allows up to 1
+              tilde character), e.g., &quot;Web Search&quot;~2 allows up to 1
               word between Web and Search, meaning it could match web
               site search as well as web search.
             </ListItem>
