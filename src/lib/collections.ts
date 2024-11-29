@@ -3,14 +3,21 @@ import { Collection } from "@/app/api/collections/types";
 export function buildHierarchy(
   collections: Collection[],
   parentKey: string | null = null,
-  level: number = 0
+  level: number = 0,
+  ancestry: string[] = []
 ): Collection[] {
   return collections
     .filter((collection) => collection.parentCollection === parentKey)
     .map((collection) => ({
       ...collection,
       level,
-      children: buildHierarchy(collections, collection.key, level + 1),
+      ancestry,
+      children: buildHierarchy(
+        collections, 
+        collection.key, 
+        level + 1,
+        level !== 0 ? [...ancestry, collection.key] : []
+      ),
     }));
 }
 
