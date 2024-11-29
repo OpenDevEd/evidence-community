@@ -6,6 +6,8 @@ import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { Item, ItemGetResponse } from "../types";
 import { Collection } from "../../collections/types";
+import { getCollections } from "../../collections/route";
+import { revalidateTag } from "next/cache";
 
 export async function GET(
 	request: NextRequest,
@@ -22,12 +24,7 @@ export async function GET(
 				tx.query.item.findMany({
 					where: eq(item.parentItem, key),
 				}),
-				tx.query.itemToCollection.findMany({
-					where: eq(itemToCollection.itemKey, key),
-					with: {
-						collection: true,
-					},
-				}),
+				getCollections(),
 			]);
 		}
 	);
@@ -38,9 +35,7 @@ export async function GET(
 
 	response.item.attachmentsData = attachments || [];
 
-	response.item.collectionsData = collections
-		? (collections.map((c) => c.collection) as Collection[])
-		: [];
+	response.item.collectionsData = collections.filter((c) => result?.collections?.includes(c.key))
 
 	return NextResponse.json(response);
 }
