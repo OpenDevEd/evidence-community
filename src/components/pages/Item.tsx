@@ -32,13 +32,13 @@ const valueFormatter: Record<
 		if (value.length === 0) return null;
 		return (
 			<ul className="flex flex-col gap-2">
-				{value.map((creator: Creator) => {
+				{value.map((creator: Creator, index: number) => {
 					const creatorTypeLabel =
 						creatorTypeLabels[
 							creator.creatorType as keyof typeof creatorTypeLabels
 						];
 					return (
-						<li className="flex gap-2" key={creator.creatorType}>
+						<li className="flex gap-2" key={index}>
 							<span className="font-medium text-accent">
 								{`${creator.firstName}, ${creator.lastName}`}
 							</span>
@@ -66,11 +66,12 @@ const valueFormatter: Record<
 		return (
 			<ul className="flex flex-col gap-2">
 				{value.map((collection: Collection) => {
+					const ancestry = collection.ancestry || []
 					return (
 						<li key={collection.id}>
 							<Link
 								showAnchorIcon
-								href={`/?collections=${collection.key}`}
+								href={`/?collections=${[...ancestry, collection.key].join(",")}`}
 								className="text-tertiary-400"
 							>
 								<span className="text-black/60 dark:text-white/60 underline">
@@ -104,9 +105,9 @@ function Row({ item, row }: { item: Item; row: string }) {
 			>
 				{rowName || row}:
 			</h3>
-			<p className="text-lg text-black/80 dark:text-white/80 font-medium overflow-hidden break-words">
+			<div className="text-lg text-black/80 dark:text-white/80 font-medium overflow-hidden break-words">
 				{rowValue}
-			</p>
+			</div>
 		</div>
 	);
 }
