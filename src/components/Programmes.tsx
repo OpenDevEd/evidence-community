@@ -78,11 +78,16 @@ function Category({
   const [expanded, setExpanded] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const [showMore, setShowMore] = useState(false);
+  const previousShowMore = useRef(showMore);
 
   useEffect(() => {
     const apply = () => {
       if (ref.current) {
-        setShowMore(ref.current.scrollHeight > (MAX_COLLAPSED_HEIGHT));
+        setShowMore((prev) => {
+          previousShowMore.current = prev;
+          if (!ref.current) return prev;
+          return ref.current.scrollHeight > (MAX_COLLAPSED_HEIGHT);
+        });
       }
     };
 
@@ -95,6 +100,7 @@ function Category({
       observer.disconnect();
     };
   }, [ref]);
+
 
   return (
     <div className="relative">
@@ -121,7 +127,7 @@ function Category({
       <AnimatePresence mode="wait">
         {showMore && (
           <motion.div
-            initial={{ opacity: 0 }}
+            initial={previousShowMore.current == false ? { opacity: 0 } : { opacity: 1 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className={twMerge(
