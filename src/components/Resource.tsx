@@ -54,8 +54,7 @@ export default function Resource({
 	isLoading: boolean;
 }) {
 	const abstractText =
-		itemData &&
-		firstNonNullOrEmpty(itemData, ["abstractNote"]);
+		itemData && firstNonNullOrEmpty(itemData, ["abstractNote"]);
 
 	const router = useRouter();
 

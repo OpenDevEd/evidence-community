@@ -8,11 +8,11 @@ export function ListItem({
     className?: string;
   }) {
     return (
-      <p
+      <li
         className={twMerge("text-black dark:text-white/80 text-base", className)}
       >
         {children}
-      </p>
+      </li>
     );
   }
   
