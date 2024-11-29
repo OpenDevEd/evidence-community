@@ -9,9 +9,10 @@ export type CreatorType = {
 };
 
 export type Creator = {
-  creatorType: string;
-  firstName: string;
-  lastName: string;
+  creatorType?: string;
+  firstName?: string;
+  lastName?: string;
+  name?: string;
 };
 
 export const item = pgTable('item', {
@@ -129,6 +130,19 @@ export const item = pgTable('item', {
   md5: varchar(),
   mtime: varchar(),
   charset: varchar(),
+
+  // identifier: varchar(),
+  // type: varchar(),
+  // repository: varchar(),
+  // repositoryLocation: varchar(),
+  // format: varchar(),
+  // citationKey: varchar(),
+  // archiveID: varchar(),
+  // organization: varchar(),
+  // number: varchar(),
+  // status: varchar(),
+
+
   dateAdded: timestamp('dateAdded'),
   dateModified: timestamp('dateModified'),
 

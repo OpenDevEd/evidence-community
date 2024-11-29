@@ -40,7 +40,9 @@ const valueFormatter: Record<
 					return (
 						<li className="flex gap-2" key={index}>
 							<span className="font-medium text-accent">
-								{`${creator.firstName}, ${creator.lastName}`}
+								{creator.firstName
+									? `${creator.firstName}, ${creator.lastName}`
+									: creator.name}
 							</span>
 							<span
 								className={twMerge(
