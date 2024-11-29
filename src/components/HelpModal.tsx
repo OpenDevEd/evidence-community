@@ -10,7 +10,7 @@ import { Button } from "./nextui/Button";
 
 export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, onOpenChange: (open: boolean) => void }) {
   return <Modal
-  size="2xl"
+  size="4xl"
   scrollBehavior="inside"
   placement="top-center"
   hideCloseButton
