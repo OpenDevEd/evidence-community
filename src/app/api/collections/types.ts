@@ -5,6 +5,7 @@ export type Collection = InferSelectModel<typeof collection> & {
   children?: Collection[];
   title?: string;
   level?: number;
+  ancestry?: string[];
 }
 
 export type CollectionsGetResponse = {
