@@ -1,14 +1,47 @@
-import AboutUs from "./icons/AboutUs";
 import { twMerge } from "tailwind-merge";
 import { Item } from "@/app/api/item/types";
 import { firstNonNullOrEmpty } from "@/lib/lib";
 import { Skeleton } from "@/components/nextui/Skeleton";
-import Link from "next/link";
 import { Link as NextUILink } from "@nextui-org/react";
 import { useRouter } from "next/navigation";
+import { INSTITUTION_LOGOS } from "@/constants/institutions";
+
+function ResourceAuthors({ itemData }: { itemData: Item | undefined }) {
+	if (itemData?.institution) {
+		const institutionLogo = Object.entries(INSTITUTION_LOGOS).find(
+			([key]) => itemData.institution?.includes(key)
+		)?.[1];
+
+		return (
+			<ResourceData
+				startContent={institutionLogo}
+				text={itemData?.institution}
+			/>
+		);
+	}
+
+	if (itemData && itemData.creators && itemData.creators.length > 0)
+		return (
+			<div className="max-w-64 truncate overflow-hidden">
+				{itemData?.creators
+					?.map((creator: any) =>
+						creator.firstName
+							? `${creator.firstName}, ${creator.lastName}`
+							: creator.name || null
+					)
+					.join(", ")}
+			</div>
+		);
+
+	return null;
+}
 
 function ResourceDivider() {
-	return <div className="text-black/80 dark:text-white/60">|</div>;
+	return (
+		<div className="text-black/80 dark:text-white/60 first:hidden last:hidden">
+			|
+		</div>
+	);
 }
 
 function ResourceData({
@@ -76,12 +109,7 @@ export default function Resource({
 				className="w-full min-h-8 rounded-2xl"
 			>
 				<div className="flex w-full gap-2 items-center flex-wrap">
-					<ResourceData
-						startContent={
-							<AboutUs className="fill-accent size-6" />
-						}
-						text="Open Development & Education"
-					/>
+					<ResourceAuthors itemData={itemData} />
 					<ResourceDivider />
 					<ResourceData
 						text={
@@ -98,9 +126,11 @@ export default function Resource({
 						}}
 					/>
 					<ResourceDivider />
-					<div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full xl:w-auto text-center">
-						In Progress
-					</div>
+					{itemData?.collections?.includes("_comingsoon") && (
+						<div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full xl:w-auto text-center">
+							In Progress
+						</div>
+					)}
 				</div>
 			</Skeleton>
 			{abstract && (abstractText || !itemData) && (
