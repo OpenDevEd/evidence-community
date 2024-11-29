@@ -9,6 +9,7 @@ import {
   recursiveFind,
 } from "@/lib/collections";
 import { Collection, CollectionsGetResponse } from "./types";
+import { revalidateTag, unstable_cache } from "next/cache";
 
 let facets: {
   kerko?: {
@@ -16,21 +17,24 @@ let facets: {
   };
 } = {};
 
-export async function GET(request: NextRequest) {
-  try {
-    facets = toml.parse(fs.readFileSync("config.toml", "utf8"));
-  } catch (error) {
-    console.error(error);
-  }
-  
+try {
+  facets = toml.parse(fs.readFileSync("config.toml", "utf8"));
+} catch (error) {
+  console.error(error);
+}
+
+export const getCollections = unstable_cache(async () => {
+  console.log("• Fetching new collections")
+
   const configCollections = Object.entries(facets?.kerko?.facets || {})
-    .filter(([key, facet]) => facet.type === "collection")
+    .filter(([_, facet]) => facet.type === "collection")
     .map(([key, facet]: [string, any]) => {
       return {
         key,
         ...facet,
       };
     });
+
 
   const collections = await db.query.collection.findMany();
   
@@ -51,6 +55,7 @@ export async function GET(request: NextRequest) {
         ...configCollection,
         ...collection,
         parentCollection: null,
+        ancestry: undefined,
       };
     })
     .filter((c) => c !== undefined);
@@ -60,7 +65,7 @@ export async function GET(request: NextRequest) {
     JSON.stringify(filteredCollections, null, 2)
   );
 
-  const flattenedCollections = flattenHierarchy(filteredCollections);
+  const flattenedCollections = flattenHierarchy(buildHierarchy(flattenHierarchy(filteredCollections)));
 
   const uniqueCollections = flattenedCollections.filter(
     (c, index, self) =>
@@ -72,6 +77,12 @@ export async function GET(request: NextRequest) {
     JSON.stringify(uniqueCollections, null, 2)
   );
 
+  return uniqueCollections;
+}, ["collections"]);
+
+export async function GET() {
+  const uniqueCollections = await getCollections();
+  
   return NextResponse.json<CollectionsGetResponse>({
     collections: uniqueCollections as Collection[],
   });
