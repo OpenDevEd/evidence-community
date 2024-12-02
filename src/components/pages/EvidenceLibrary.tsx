@@ -79,7 +79,7 @@ function ContentInteractions({
 		onOpen: onHelpOpen,
 		onOpenChange: onHelpOpenChange,
 	} = useDisclosure();
-	const debouncedSearch = useDebounce(onSearchChange, 200);
+	const debouncedSearch = useDebounce(onSearchChange, 0);
 
 	return (
 		<>
