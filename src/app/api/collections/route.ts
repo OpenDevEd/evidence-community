@@ -22,7 +22,7 @@ export const getCollections = unstable_cache(async () => {
   
   const hierarchy = buildHierarchy(collections);
   
-  fs.writeFileSync("hierarchy.json", JSON.stringify(hierarchy, null, 2));
+  // fs.writeFileSync("hierarchy.json", JSON.stringify(hierarchy, null, 2));
 
   const filteredCollections = Object.entries(configCollections)
     .filter(([_, config]) => config.enabled)
@@ -41,10 +41,10 @@ export const getCollections = unstable_cache(async () => {
     })
     .filter((c) => c !== undefined);
 
-  fs.writeFileSync(
-    "filteredCollections.json",
-    JSON.stringify(filteredCollections, null, 2)
-  );
+  // fs.writeFileSync(
+  //   "filteredCollections.json",
+  //   JSON.stringify(filteredCollections, null, 2)
+  // );
 
   const flattenedCollections = flattenHierarchy(buildHierarchy(flattenHierarchy(filteredCollections)));
 
