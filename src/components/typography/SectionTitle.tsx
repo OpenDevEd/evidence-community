@@ -10,7 +10,7 @@ export function SectionTitle({
     return (
       <h2
         className={twMerge(
-          "text-black dark:text-white/80 font-medium text-xl",
+          "text-black dark:text-white/80 font-medium text-2xl",
           className
         )}
       >

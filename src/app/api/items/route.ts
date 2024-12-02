@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { MeiliSearch } from "meilisearch";
-import { EXCLUDED_ITEM_TYPES, ITEMS_PER_PAGE, SCOPE_OPTIONS, SORT_OPTIONS } from "./constants";
+import { EXCLUDED_ITEM_TYPES, ITEMS_PER_PAGE, SCOPE_OPTIONS, SORT_OPTIONS } from "@/constants/items";
 import { ItemsGetResponse } from "./types";
 import { Item } from "../item/types";
-
-const meilisearchClient = new MeiliSearch({
-  host: process.env.MEILISEARCH_HOST || "",
-  apiKey: process.env.MASTER_KEY || "",
-});
-
+import meilisearchClient from "@/lib/meilisearch";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

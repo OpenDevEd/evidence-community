@@ -10,31 +10,13 @@ import {
 } from "@/lib/collections";
 import { Collection, CollectionsGetResponse } from "./types";
 import { revalidateTag, unstable_cache } from "next/cache";
+import config from "@/constants/config.json";
 
-let facets: {
-  kerko?: {
-    facets?: Record<string, any>;
-  };
-} = {};
-
-try {
-  facets = toml.parse(fs.readFileSync("config.toml", "utf8"));
-} catch (error) {
-  console.error(error);
-}
 
 export const getCollections = unstable_cache(async () => {
   console.log("• Fetching new collections")
 
-  const configCollections = Object.entries(facets?.kerko?.facets || {})
-    .filter(([_, facet]) => facet.type === "collection")
-    .map(([key, facet]: [string, any]) => {
-      return {
-        key,
-        ...facet,
-      };
-    });
-
+  const configCollections = config.collections;
 
   const collections = await db.query.collection.findMany();
   
@@ -42,18 +24,17 @@ export const getCollections = unstable_cache(async () => {
   
   fs.writeFileSync("hierarchy.json", JSON.stringify(hierarchy, null, 2));
 
-  const filteredCollections = configCollections
-    .filter((configCollection) => configCollection.enabled && configCollection.collection_key)
-    .map((configCollection) => {
+  const filteredCollections = Object.entries(configCollections)
+    .filter(([_, config]) => config.enabled)
+    .map(([key, config]) => {
       const collection = recursiveFind(
-        configCollection.collection_key,
+        key,
         hierarchy
       );
       if (!collection) return undefined;
       return {
-        title: collection.name,
-        ...configCollection,
         ...collection,
+        ...config,
         parentCollection: null,
         ancestry: undefined,
       };
@@ -78,11 +59,13 @@ export const getCollections = unstable_cache(async () => {
   );
 
   return uniqueCollections;
-}, ["collections"]);
+}, ["collections"], {
+  tags: ["collections"],
+});
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   const uniqueCollections = await getCollections();
-  
+
   return NextResponse.json<CollectionsGetResponse>({
     collections: uniqueCollections as Collection[],
   });

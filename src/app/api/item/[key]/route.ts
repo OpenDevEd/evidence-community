@@ -1,41 +1,57 @@
 import { db } from "@/db";
-import { item } from "@/db/schema/tables/item";
-import { itemToCollection } from "@/db/schema/tables/itemToCollection";
-import { eq } from "drizzle-orm";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { Item, ItemGetResponse } from "../types";
-import { Collection } from "../../collections/types";
 import { getCollections } from "../../collections/route";
-import { revalidateTag } from "next/cache";
+import meilisearchClient from "@/lib/meilisearch";
+import { unstable_cache } from "next/cache";
+import { item } from "@/db/schema/tables/item";
+import { eq } from "drizzle-orm";
+import { Collection } from "../../collections/types";
+
+async function getMeilisearchItem(key: string) {
+	const result = await (
+		await meilisearchClient.getIndex("items")
+	).getDocument(key);
+	return result as Item;
+}
+
+async function getDatabaseItem(key: string) {
+	const result = await db.query.item.findFirst({
+		where: eq(item.key, key),
+	});
+	return result as Item;
+}
 
 export async function GET(
 	request: NextRequest,
-	{ params }: { params: { key: string } }
+	{ params }: { params: { key: string; source: "db" | "meilisearch" } }
 ) {
+	const { searchParams } = new URL(request.url);
+	const source = searchParams.get("source") || "meilisearch";
 	const { key } = params;
 
-	const [result, attachments, collections] = await db.transaction(
-		async (tx) => {
-			return await Promise.all([
-				tx.query.item.findFirst({
-					where: eq(item.key, key),
-				}),
-				tx.query.item.findMany({
-					where: eq(item.parentItem, key),
-				}),
-				getCollections(),
-			]);
-		}
-	);
+	const [result, collections] = await Promise.all([
+		source === "db" ? getDatabaseItem(key) : getMeilisearchItem(key),
+		getCollections()
+	]);
+
+	if (collections) {
+		result.collectionsData = result.collections
+			?.map((collection) => {
+				const collectionData = collections.find(
+					(c) => c.key === collection
+				);
+				return collectionData;
+			})
+			.filter(
+				(collectionData) => collectionData !== undefined
+			) as Collection[];
+	}
 
 	const response: ItemGetResponse = {
 		item: result as Item,
 	};
-
-	response.item.attachmentsData = attachments || [];
-
-	response.item.collectionsData = collections.filter((c) => result?.collections?.includes(c.key))
 
 	return NextResponse.json(response);
 }

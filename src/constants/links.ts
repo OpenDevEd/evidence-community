@@ -19,7 +19,7 @@ export const links = [
   },
   {
     label: "Evidence Library",
-    href: "/",
+    href: "/lib",
     icon: EvidenceLibrary,
   },
   {

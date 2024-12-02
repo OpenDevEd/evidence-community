@@ -92,6 +92,7 @@ function LinksList({
   pathname: string;
   isMobile?: boolean;
 }) {
+
   return (
     <div
       className={twMerge(
@@ -108,7 +109,7 @@ function LinksList({
               key={link.label}
               className={twMerge(
                 "flex text-black/60 dark:text-white/60 gap-2 text-lg items-center justify-center font-medium",
-                pathname === link.href && "text-accent dark:text-accent"
+                (pathname + "/").includes(link.href + "/") && "text-accent dark:text-accent"
               )}
             >
               {link.icon && (

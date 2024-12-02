@@ -1,10 +1,10 @@
 import EvidenceLibrary from "@/components/pages/EvidenceLibrary";
-import { Suspense } from "react";
+import { redirect } from "next/navigation";
 
 export default async function Home() {
+  redirect("/lib");
+
   return (
-    <Suspense>
-      <EvidenceLibrary />
-    </Suspense>
+    <EvidenceLibrary />
   );
 }

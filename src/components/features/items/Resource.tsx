@@ -1,81 +1,12 @@
 import { twMerge } from "tailwind-merge";
 import { Item } from "@/app/api/item/types";
-import { firstNonNullOrEmpty } from "@/lib/lib";
+import { firstNonNullOrEmpty } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Link as NextUILink } from "@nextui-org/react";
 import { useRouter } from "next/navigation";
-import { INSTITUTION_LOGOS } from "@/constants/institutions";
-
-function ResourceAuthors({ itemData }: { itemData: Item | undefined }) {
-	if (itemData?.institution) {
-		const institutionLogo = Object.entries(INSTITUTION_LOGOS).find(
-			([key]) => itemData.institution?.includes(key)
-		)?.[1];
-
-		return (
-			<ResourceData
-				startContent={institutionLogo}
-				text={itemData?.institution}
-			/>
-		);
-	}
-
-	if (itemData && itemData.creators && itemData.creators.length > 0)
-		return (
-			<div className="max-w-64 truncate overflow-hidden">
-				{itemData?.creators
-					?.map((creator: any) =>
-						creator.firstName
-							? `${creator.firstName}, ${creator.lastName}`
-							: creator.name || null
-					)
-					.join(", ")}
-			</div>
-		);
-
-	return null;
-}
-
-function ResourceDivider() {
-	return (
-		<div className="text-black/80 dark:text-white/60 first:hidden last:hidden">
-			|
-		</div>
-	);
-}
-
-function ResourceData({
-	startContent,
-	classNames,
-	text,
-}: {
-	startContent?: React.ReactNode;
-	classNames?: {
-		container?: string;
-		text?: string;
-	};
-	text: string | null;
-}) {
-	return (
-		<div
-			className={twMerge(
-				"flex gap-2 items-center",
-				classNames?.container
-			)}
-		>
-			{startContent}
-			<span
-				className={twMerge(
-					"text-black/60 dark:text-white/60 font-medium text-lg line-clamp-1",
-					classNames?.text,
-					!text && "!w-24"
-				)}
-			>
-				{text}
-			</span>
-		</div>
-	);
-}
+import ResourceAuthors from "./ResourceAuthors";
+import ResourceDivider from "./ResourceDivider";
+import ResourceData from "./ResourceData";
 
 export default function Resource({
 	itemData,
@@ -93,7 +24,7 @@ export default function Resource({
 
 	return (
 		<div
-			onClick={() => router.push(`/item/${itemData?.key}`)}
+			onClick={() => router.push(`/lib/${itemData?.key}`)}
 			className="w-full bg-white dark:bg-white/[4%] rounded-xl p-4 xl:p-6 flex flex-col gap-4 cursor-pointer hover:brightness-90 transition-all"
 		>
 			<Skeleton

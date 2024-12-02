@@ -9,7 +9,7 @@ export function ListItem({
   }) {
     return (
       <li
-        className={twMerge("text-black dark:text-white/80 text-base", className)}
+        className={twMerge("text-black dark:text-white/80 text-lg", className)}
       >
         {children}
       </li>

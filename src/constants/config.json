@@ -1,0 +1,56 @@
+{
+	"collections": {
+		"X6MP49KP": {
+			"title": "Learners",
+			"enabled": true
+		},
+		"HCTKHFNN": {
+			"title": "Educators",
+			"enabled": true
+		},
+		"X3DPTXLG": {
+			"title": "Education systems",
+			"enabled": true
+		},
+		"3TN4ME9B": {
+			"title": "Cost effectiveness",
+			"enabled": true
+		},
+		"C965YJYB": {
+			"title": "Hardware and modality",
+			"enabled": true
+		},
+		"B42SBYGD": {
+			"title": "Educational level",
+			"enabled": true
+		},
+		"P3Q22NYF": {
+			"title": "Within-country contexts",
+			"enabled": true
+		},
+		"ZNNITHFH": {
+			"title": "Language of publication",
+			"enabled": true
+		},
+		"N6HGZU24": {
+			"title": "Publisher and type",
+			"enabled": true
+		},
+		"9WEL59XM": {
+			"title": "Research method",
+			"enabled": true
+		},
+		"NRS95TC8": {
+			"title": "COVID and reopening of schools",
+			"enabled": true
+		},
+		"W6YXX3J6": {
+			"title": "Topic Area",
+			"enabled": true
+		},
+		"F29UQFBX": {
+			"title": "Focus Countries",
+			"enabled": true
+		}
+	}
+}

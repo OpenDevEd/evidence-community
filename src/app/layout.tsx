@@ -1,9 +1,10 @@
 import type { Metadata } from "next";
-import "./globals.css";
-import Providers from "@/providers/Providers";
+import "@/styles/globals.css";
+import Providers from "@/context/Providers";
 import { Ubuntu } from "next/font/google";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
+import { Suspense } from "react";
 
 const ubuntu = Ubuntu({
   subsets: ["latin"],
@@ -24,13 +25,15 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${ubuntu.className}`}>
-        <Providers>
-          <div className="h-full w-full bg-background_light dark:bg-background flex flex-col xl:grid xl:grid-rows-[104px_1fr_512px] gap-4 xl:gap-14 pt-0 xl:pt-14 items-center justify-items-center min-h-screen">
-            <Navbar />
-            {children}
-            <Footer />
-          </div>
-        </Providers>
+        <Suspense>
+          <Providers>
+            <div className="h-full w-full bg-background_light dark:bg-background flex flex-col xl:grid xl:grid-rows-[104px_1fr_512px] gap-4 xl:gap-14 pt-0 xl:pt-14 items-center justify-items-center min-h-screen">
+              <Navbar />
+              {children}
+              <Footer />
+            </div>
+          </Providers>
+        </Suspense>
       </body>
     </html>
   );

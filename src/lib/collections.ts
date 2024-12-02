@@ -4,7 +4,8 @@ export function buildHierarchy(
   collections: Collection[],
   parentKey: string | null = null,
   level: number = 0,
-  ancestry: string[] = []
+  ancestry: string[] = [],
+  title: string | null = null
 ): Collection[] {
   return collections
     .filter((collection) => collection.parentCollection === parentKey)
@@ -12,11 +13,13 @@ export function buildHierarchy(
       ...collection,
       level,
       ancestry,
+      title: title || collection.title || collection.key,
       children: buildHierarchy(
         collections, 
         collection.key, 
         level + 1,
-        level !== 0 ? [...ancestry, collection.key] : []
+        level !== 0 ? [...ancestry, collection.key] : [],
+        title || collection.title || collection.key
       ),
     }));
 }

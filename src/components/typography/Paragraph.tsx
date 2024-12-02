@@ -9,7 +9,7 @@ export function Paragraph({
   }) {
     return (
       <p
-        className={twMerge("text-black dark:text-white/80 text-base", className)}
+        className={twMerge("text-black dark:text-white/80 text-lg", className)}
       >
         {children}
       </p>
