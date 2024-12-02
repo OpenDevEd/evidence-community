@@ -53,10 +53,10 @@ export const getCollections = unstable_cache(async () => {
       index === self.findIndex((t) => t.key === c.key)
   );
 
-  fs.writeFileSync(
-    "facets.json",
-    JSON.stringify(uniqueCollections, null, 2)
-  );
+  // fs.writeFileSync(
+  //   "facets.json",
+  //   JSON.stringify(uniqueCollections, null, 2)
+  // );
 
   return uniqueCollections;
 }, ["collections"], {
