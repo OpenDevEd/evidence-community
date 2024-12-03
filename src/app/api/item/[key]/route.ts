@@ -1,10 +1,9 @@
 import { db } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { Item, ItemGetResponse } from "../types";
+import { Item } from "../types";
 import { getCollections } from "../../collections/route";
 import meilisearchClient from "@/lib/meilisearch";
-import { unstable_cache } from "next/cache";
 import { item } from "@/db/schema/tables/item";
 import { eq } from "drizzle-orm";
 import { Collection } from "../../collections/types";
@@ -23,17 +22,13 @@ async function getDatabaseItem(key: string) {
 	return result as Item;
 }
 
-export async function GET(
-	request: NextRequest,
-	{ params }: { params: { key: string; source: "db" | "meilisearch" } }
+export async function getItem(
+	key: string,
+	source: "db" | "meilisearch" = "meilisearch"
 ) {
-	const { searchParams } = new URL(request.url);
-	const source = searchParams.get("source") || "meilisearch";
-	const { key } = params;
-
 	const [result, collections] = await Promise.all([
 		source === "db" ? getDatabaseItem(key) : getMeilisearchItem(key),
-		getCollections()
+		getCollections(),
 	]);
 
 	if (collections) {
@@ -49,9 +44,20 @@ export async function GET(
 			) as Collection[];
 	}
 
-	const response: ItemGetResponse = {
-		item: result as Item,
+	return {
+		item: result,
 	};
+}
 
-	return NextResponse.json(response);
+export async function GET(
+	request: NextRequest,
+	{ params }: { params: { key: string; source: "db" | "meilisearch" } }
+) {
+	const { searchParams } = new URL(request.url);
+	const source = searchParams.get("source") || "meilisearch";
+	const { key } = params;
+
+	const result = await getItem(key, source as "db" | "meilisearch");
+
+	return NextResponse.json(result);
 }
