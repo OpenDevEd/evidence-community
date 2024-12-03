@@ -47,7 +47,7 @@ export default function CollectionsList({
 							indicator: "text-black/80 dark:text-white/80",
 							trigger: "p-0",
 							base: "mb-4 last:mb-0",
-							content: "pt-4",
+							content: "py-0 pt-2",
 						}}
 						showDivider={false}
 					>

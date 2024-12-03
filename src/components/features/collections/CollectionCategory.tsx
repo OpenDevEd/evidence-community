@@ -30,8 +30,8 @@ export default function CollectionCategory({
 		const apply = () => {
 			if (ref.current) {
 				setShowMore((prev) => {
-					previousShowMore.current = prev;
 					if (!ref.current) return prev;
+					previousShowMore.current = prev;
 					return ref.current.scrollHeight > MAX_COLLAPSED_HEIGHT;
 				});
 			}
@@ -59,7 +59,7 @@ export default function CollectionCategory({
 						: `${MAX_COLLAPSED_HEIGHT}px`,
 				}}
 				className={twMerge(
-					"flex flex-col gap-4 overflow-hidden transition-all duration-200 pb-0"
+					"flex flex-col gap-4 overflow-hidden transition-all duration-200 pb-0 py-2"
 				)}
 				ref={ref}
 			>
@@ -73,7 +73,7 @@ export default function CollectionCategory({
 			<div
 				className={twMerge(
 					"transition-all duration-200 pb-0",
-					expanded && showMore && "pb-16"
+					expanded && showMore && "pb-14"
 				)}
 			></div>
 			<AnimatePresence mode="wait">
