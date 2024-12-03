@@ -5,6 +5,7 @@ import { Ubuntu } from "next/font/google";
 import Navbar from "@/components/layout/Navbar";
 import Footer from "@/components/layout/Footer";
 import { Suspense } from "react";
+import { Analytics } from '@vercel/analytics/react';
 
 const ubuntu = Ubuntu({
   subsets: ["latin"],
@@ -34,6 +35,7 @@ export default function RootLayout({
             </div>
           </Providers>
         </Suspense>
+        <Analytics />
       </body>
     </html>
   );
