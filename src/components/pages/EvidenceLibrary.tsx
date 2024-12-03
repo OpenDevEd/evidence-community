@@ -308,7 +308,7 @@ function PaginationControls({
 
 	return (
 		!actuallyNoData && (
-			<div className="w-full flex justify-center sticky bottom-0 bg-background_light dark:bg-background py-2 xl:py-6 z-10">
+			<div className="w-full flex justify-center bg-background_light dark:bg-background py-2 xl:py-6 z-10">
 				<Skeleton
 					isLoaded={totalPages > 0}
 					className="w-full h-14 rounded-2xl flex items-center justify-center"
