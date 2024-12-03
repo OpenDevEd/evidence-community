@@ -8,5 +8,5 @@ export type Item = InferSelectModel<typeof item> & {
 };
 
 export type ItemGetResponse = {
-  item: Item;
+  item: Item | undefined;
 };
