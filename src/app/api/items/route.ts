@@ -3,6 +3,7 @@ import { EXCLUDED_ITEM_TYPES, ITEMS_PER_PAGE, SCOPE_OPTIONS, SORT_OPTIONS } from
 import { ItemsGetResponse } from "./types";
 import { Item } from "../item/types";
 import meilisearchClient from "@/lib/meilisearch";
+import config from "@/constants/config.json";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -15,7 +16,7 @@ export async function GET(request: NextRequest) {
   const collections = searchParams.get("collections")?.split(",") || [];
   const search = searchParams.get("search") || "";
   const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
-  const searchIndex = meilisearchClient.index("items");
+  const searchIndex = meilisearchClient.index(config.index);
   const sortOption = SORT_OPTIONS.find((option) => option.key === sort)?.sort || SORT_OPTIONS[0].sort;
 
   console.log(sortOption);

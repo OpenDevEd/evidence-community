@@ -57,6 +57,8 @@ function ContentInteractions({
 	selectedCollections,
 	handleCheckboxChange,
 	hierarchy,
+	isLoading,
+	error,
 }: {
 	data: ItemsGetResponse | undefined;
 	sort: string;
@@ -68,6 +70,8 @@ function ContentInteractions({
 	abstract: boolean;
 	onAbstractChange: (abstract: boolean) => void;
 	collectionsData: CollectionsGetResponse | undefined;
+	isLoading: boolean;
+	error: any;
 } & ReturnType<typeof useHierarchy>) {
 	const {
 		isOpen: isExploreOpen,
@@ -80,6 +84,8 @@ function ContentInteractions({
 		onOpenChange: onHelpOpenChange,
 	} = useDisclosure();
 	const debouncedSearch = useDebounce(onSearchChange, 0);
+	const actuallyNoData =
+		(!isLoading && data && data.items.length === 0) || error;
 
 	return (
 		<>
@@ -208,12 +214,14 @@ function ContentInteractions({
 			</div>
 			<div className="flex justify-between h-10 xl:h-12 gap-4">
 				<Skeleton
-					isLoaded={!!data}
+					isLoaded={!isLoading}
 					className="flex items-center flex-1 rounded-2xl"
 				>
 					<h2 className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center gap-2">
 						<span className="text-2xl leading-6">
-							{data?.totalItems.toLocaleString()}
+							{actuallyNoData
+								? "0"
+								: data?.totalItems.toLocaleString()}
 						</span>
 						Resources
 					</h2>
@@ -239,20 +247,23 @@ function ContentInteractions({
 
 function ResourcesList({
 	data,
+	error,
 	isLoading,
 	abstract,
 }: {
 	data: ItemsGetResponse | undefined;
+	error: any;
 	isLoading: boolean;
 	abstract: boolean;
 }) {
-	const actuallyNoData = !isLoading && data && data.items.length === 0;
+	const actuallyNoData =
+		(!isLoading && data && data.items.length === 0) || error;
 
 	return (
 		<>
 			<div className="flex flex-col gap-6 -mt-4">
 				{actuallyNoData ? (
-					<div className="text-center text-black/40 dark:text-white/40 text-sm">
+					<div className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
 						No resources found
 					</div>
 				) : (
@@ -296,14 +307,17 @@ function PaginationControls({
 	setPage,
 	data,
 	isLoading,
+	error,
 }: {
 	page: number;
 	setPage: (page: number) => void;
 	data: ItemsGetResponse | undefined;
 	isLoading: boolean;
+	error: any;
 }) {
 	const totalPages = data?.totalPages || 0;
-	const actuallyNoData = !isLoading && data && data.items.length === 0;
+	const actuallyNoData =
+		(!isLoading && data && data.items.length === 0) || error;
 	const isDesktop = useBreakpoint("xl");
 
 	return (
@@ -532,6 +546,8 @@ function MainContent() {
 					handleCheckboxChange={handleCheckboxChange}
 					collectionsData={collectionsData}
 					hierarchy={hierarchy}
+					isLoading={isItemsLoading}
+					error={itemsError}
 				/>
 				<FilterChips
 					collections={selectedCollections}
@@ -540,6 +556,7 @@ function MainContent() {
 				/>
 				<ResourcesList
 					data={itemsData}
+					error={itemsError}
 					isLoading={isItemsLoading}
 					abstract={abstract}
 				/>
@@ -547,6 +564,7 @@ function MainContent() {
 					page={pageNumber}
 					setPage={handlePageChange}
 					data={itemsData}
+					error={itemsError}
 					isLoading={isItemsLoading}
 				/>
 				<ContentActions />

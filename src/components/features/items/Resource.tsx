@@ -57,7 +57,7 @@ export default function Resource({
 						}}
 					/>
 					<ResourceDivider />
-					{itemData?.collections?.includes("_comingsoon") && (
+					{itemData?.tags?.includes("_comingsoon") && (
 						<div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full xl:w-auto text-center">
 							In Progress
 						</div>

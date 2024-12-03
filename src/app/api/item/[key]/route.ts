@@ -7,10 +7,11 @@ import meilisearchClient from "@/lib/meilisearch";
 import { item } from "@/db/schema/tables/item";
 import { eq } from "drizzle-orm";
 import { Collection } from "../../collections/types";
+import config from "@/constants/config.json"
 
 async function getMeilisearchItem(key: string) {
 	const result = await (
-		await meilisearchClient.getIndex("items")
+		await meilisearchClient.getIndex(config.index)
 	).getDocument(key);
 	return result as Item;
 }
