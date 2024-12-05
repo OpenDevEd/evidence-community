@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
   const collections = searchParams.get("collections")?.split(",") || [];
   const search = searchParams.get("search") || "";
   const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
-  const searchIndex = meilisearchClient.index(config.index);
+  const searchIndex = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
   const sortOption = SORT_OPTIONS.find((option) => option.key === sort)?.sort || SORT_OPTIONS[0].sort;
 
   console.log(sortOption);

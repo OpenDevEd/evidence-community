@@ -11,7 +11,7 @@ import config from "@/constants/config.json"
 
 async function getMeilisearchItem(key: string) {
 	const result = await (
-		await meilisearchClient.getIndex(config.index)
+		await meilisearchClient.getIndex(process.env.MEILI_INDEX || config.index)
 	).getDocument(key);
 	return result as Item;
 }
