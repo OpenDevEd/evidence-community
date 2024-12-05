@@ -22,7 +22,7 @@ export default function ItemRow({ item, row }: { item: Item; row: string }) {
 			>
 				{rowName || row}:
 			</h3>
-			<div className="text-lg text-black/80 dark:text-white/80 font-medium overflow-hidden break-words">
+			<div className="text-lg text-black/80 dark:text-white/80 font-medium break-words w-full">
 				{rowValue ? rowValue : "N/A"}
 			</div>
 		</div>
