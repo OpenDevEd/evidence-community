@@ -1655,4 +1655,5 @@ export const columnLabels = {
   university: 'University',
   studio: 'Studio',
   websiteTitle: 'Website Title',
+  attachmentsData: 'Attachments',
 } as const;
