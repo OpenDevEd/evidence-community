@@ -1,11 +1,15 @@
-import { ReactNode } from "react";
+import { ReactNode, useCallback, useRef, useState } from "react";
 import { Item } from "@/app/api/item/types";
 import { creatorTypeLabels } from "@/db/schema/enums/creatorType";
 import { Collection } from "@/app/api/collections/types";
-import { Link } from "@nextui-org/react";
+import { Link, Skeleton } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import { itemTypeLabels } from "@/db/schema/enums/itemType";
 import { Creator } from "@/db/schema/tables/item";
+import Image from "next/image";
+import { LuDownload, LuPrinter } from "react-icons/lu";
+import { Button } from "@/components/nextui/Button";
+import { FaEye } from "react-icons/fa";
 
 export const valueFormatter: Record<
 	any,
@@ -14,7 +18,6 @@ export const valueFormatter: Record<
 	id: () => false,
 	version: () => false,
 	key: (value) => false,
-	attachmentsData: () => false,
 	updatedAt: () => false,
 	createdAt: () => false,
 	tags: () => false,
@@ -62,8 +65,9 @@ export const valueFormatter: Record<
 		if (!value) return null;
 		if (value.length === 0) return null;
 
-		value.sort((a: Collection, b: Collection) =>
-			a.title?.localeCompare(b.title || "") || 0
+		value.sort(
+			(a: Collection, b: Collection) =>
+				a.title?.localeCompare(b.title || "") || 0
 		);
 
 		return (
@@ -104,4 +108,119 @@ export const valueFormatter: Record<
 			{value}
 		</Link>
 	),
+	attachmentsData: (value) => {
+		const filteredValue = value.filter(
+			(data: any) => data.PDFCoverPageImage
+		);
+		if (filteredValue.length === 0) return false;
+
+		const downloadLink = useCallback((url: string, filename: string) => {
+			fetch(url)
+				.then((response) => response.blob())
+				.then((blob) => {
+					const link = document.createElement("a");
+					link.href = URL.createObjectURL(blob);
+					link.download = filename;
+					link.click();
+				})
+				.catch(console.error);
+		}, []);
+
+		return (
+			<div className="flex flex-col gap-2 w-2/3">
+				{value
+					.filter((data: any) => data.PDFCoverPageImage)
+					.map((data: Item) => {
+						const [loaded, setLoaded] = useState(false);
+						const canHover = loaded || !data?.PDFCoverPageImage;
+						const imageRef = useRef<HTMLImageElement>(null);
+						const imageHeight = imageRef.current?.height;
+						const parentRef = useRef<HTMLDivElement>(null);
+						const parentHeight = parentRef.current?.clientHeight;
+
+						console.log(imageHeight);
+
+						return (
+							<div
+								ref={parentRef}
+								className=" flex gap-4 bg-black/[4%] border-2 border-white/10 p-4 rounded-2xl relative w-full"
+								key={data.id}
+							>
+								<div
+									data-height={imageHeight}
+									style={{
+										"--image-height": `${
+											-(imageHeight ?? 0) + (parentHeight ?? 0) - (4 * 4)
+										}px`,
+									} as any}
+									className={twMerge(
+										"w-48 bottom-0 top-4 absolute overflow-hidden transition-all",
+										canHover &&
+											"hover:top-[var(--image-height)]"
+									)}
+								>
+									{data?.PDFCoverPageImage ? (
+										<Skeleton
+											isLoaded={loaded}
+											className={"rounded-xl w-full"}
+										>
+											<Image
+												ref={imageRef}
+												src={
+													data?.PDFCoverPageImage ||
+													""
+												}
+												alt={data?.filename || ""}
+												width={512}
+												height={512}
+												onLoad={() => setLoaded(true)}
+												className="rounded-xl bg-accent w-full"
+											/>
+										</Skeleton>
+									) : (
+										<div className="rounded-xl bg-accent w-full aspect-[9/12]" />
+									)}
+								</div>
+								<div className="flex flex-col gap-2 h-full ml-52">
+									<h1 className="text-lg font-medium">
+										{data.filename}
+									</h1>
+									<div className="flex gap-2">
+										<Button
+											size="sm"
+											onClick={() => {
+												window.open(
+													data.url || "",
+													"_blank"
+												);
+											}}
+											startContent={
+												<FaEye className="size-5" />
+											}
+										>
+											View
+										</Button>
+										<Button
+											size="sm"
+											color="accent"
+											startContent={
+												<LuDownload className="size-5" />
+											}
+											onClick={() => {
+												downloadLink(
+													data.url || "",
+													data.filename || ""
+												);
+											}}
+										>
+											Download
+										</Button>
+									</div>
+								</div>
+							</div>
+						);
+					})}
+			</div>
+		);
+	},
 };
