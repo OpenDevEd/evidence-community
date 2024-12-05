@@ -27,7 +27,7 @@ export default function useAIStream(endpoint: string) {
 			const text = decoder.decode(value, { stream: true });
 			setResponse((prev) => prev + text);
 		}
-	}, []);
+	}, [endpoint]);
 
 	return { response, stream };
 }
