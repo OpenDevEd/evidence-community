@@ -53,6 +53,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const messageListRef = useRef<HTMLDivElement>(null);
 	const [summary, setSummary] = useState<string>("");
 	const [explain, setExplain] = useState<string>("");
+	const [isLoading, setIsLoading] = useState<boolean>(false);
 
 	const sendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -71,6 +72,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 		setCurrentMessage("");
 
 		try {
+			setIsLoading(true);
 			const response = await fetch("/api/ai/chat", {
 				method: "POST",
 				headers: {
@@ -115,6 +117,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 				},
 			]);
 		}
+		setIsLoading(false);
 	};
 
 	const getSummary = async () => {
@@ -266,6 +269,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 										onSubmit={sendMessage}
 									>
 										<Input
+											isDisabled={isLoading}
 											autoComplete="off"
 											label="Ask AI"
 											value={currentMessage}
