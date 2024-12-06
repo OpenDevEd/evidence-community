@@ -44,9 +44,9 @@ export default function Resource({
 					<ResourceDivider />
 					<ResourceData
 						text={
-							itemData && itemData.dateAdded
+							itemData && itemData.date
 								? new Date(
-										itemData.dateAdded
+										itemData.date
 								  ).toLocaleDateString("en-US", {
 										dateStyle: "medium",
 								  })
