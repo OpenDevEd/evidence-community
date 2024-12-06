@@ -3,9 +3,11 @@ import { twMerge } from "tailwind-merge";
 export function SectionTitle({
     children,
     className,
+    startContent,
   }: {
     children: React.ReactNode;
     className?: string;
+    startContent?: React.ReactNode;
   }) {
     return (
       <h2
@@ -14,6 +16,7 @@ export function SectionTitle({
           className
         )}
       >
+        {startContent}
         {children}
       </h2>
     );
