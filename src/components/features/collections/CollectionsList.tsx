@@ -43,7 +43,6 @@ function YearPicker({
 }) {
 	return (
 		<Autocomplete
-			onClear={() => onSelectionChange(null)}
 			className="flex-1"
 			placeholder={placeholder}
 			label={label}
