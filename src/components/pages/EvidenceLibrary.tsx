@@ -439,14 +439,16 @@ function FilterChips({
 	);
 }
 
-function MainContent() {
-	const { searchParams, router, pathname, createQueryString } =
-		useParamsState();
+function MainContent({ searchParams }: { searchParams: { [key: string]: any } }) {
+	const { router, pathname, createQueryString } =
+		useParamsState(searchParams);
 
-	const pageNumber = Number(searchParams.get("page")) || 1;
-	const sort = searchParams.get("sort") || SORT_OPTIONS[0].key;
-	const search = searchParams.get("search") || "";
-	const collections = searchParams.get("collections")?.split(",") || [];
+const collectionsParam = searchParams["collections"];
+	const collections = collectionsParam ? collectionsParam.split(",") : [];
+	const pageNumber = Number(searchParams["page"]) || 1;
+	const sort = searchParams["sort"] || SORT_OPTIONS[0].key;
+	const search = searchParams["search"] || "";
+	const scope = searchParams["scope"] || SCOPE_OPTIONS[0].key;
 	const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
 
 	const [abstract, setAbstract] = useState(true);
@@ -521,6 +523,7 @@ function MainContent() {
 	const { hierarchy, handleCheckboxChange, selectedCollections } =
 		useHierarchy({
 			data: collectionsData,
+searchParams,
 		});
 
 	return (
@@ -576,11 +579,11 @@ function MainContent() {
 	);
 }
 
-export default function EvidenceLibrary() {
+export default function EvidenceLibrary({ searchParams }: { searchParams: { [key: string]: any } }) {
 	return (
 		<main className="w-full max-w-screen-2xl px-4 xl:px-14">
 			<div className="flex gap-[40px] flex-col xl:flex-row">
-				<MainContent />
+				<MainContent searchParams={searchParams} />
 			</div>
 		</main>
 	);
