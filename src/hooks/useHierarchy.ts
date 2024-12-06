@@ -35,7 +35,6 @@ export function useHierarchy({
         const descendantKeys = collectionToDeselect
           ? getDescendantKeys(collectionToDeselect)
           : [];
-        console.log(descendantKeys);
         newSelectedCollections = selectedCollections.filter(
           (k: string) => k !== key && !descendantKeys.includes(k)
         );

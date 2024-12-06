@@ -2,11 +2,12 @@
 
 import { Button } from "@/components/nextui/Button";
 import {
-    Modal, ModalHeader,
-    ModalContent,
-    Input,
-    ModalBody,
-    ModalFooter
+	Modal,
+	ModalHeader,
+	ModalContent,
+	Input,
+	ModalBody,
+	ModalFooter,
 } from "@nextui-org/react";
 import { LuBot, LuSend, LuUser, LuX } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
@@ -26,9 +27,17 @@ type Message = {
 	content: string;
 };
 
-export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: boolean, onOpenChange: (open: boolean) => void, data: ItemGetResponse | undefined }) {
-    const [currentMessage, setCurrentMessage] = useState<string>("");
-    const [isLoading, setIsLoading] = useState<boolean>(false);
+export default function ChatModal({
+	isOpen,
+	onOpenChange,
+	data,
+}: {
+	isOpen: boolean;
+	onOpenChange: (open: boolean) => void;
+	data: ItemGetResponse | undefined;
+}) {
+	const [currentMessage, setCurrentMessage] = useState<string>("");
+	const [isLoading, setIsLoading] = useState<boolean>(false);
 	const inputRef = useRef<HTMLInputElement>(null);
 
 	const [chatHistory, setChatHistory] = useState<Message[]>([
@@ -39,12 +48,16 @@ export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: bool
 		{
 			role: "assistant",
 			content: `Hello! How can I assist you today? You can ask me questions about "${data?.item?.title}" or anything else related to the data.`,
-		}
+		},
 	]);
 	const messageListRef = useRef<HTMLDivElement>(null);
 
-    const sendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
+	const sendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
+		if (inputRef.current) {
+			inputRef.current.focus();
+		}
+		if (isLoading) return;
 		if (!currentMessage.trim()) return;
 		setChatHistory((prev) => [
 			...prev,
@@ -87,7 +100,10 @@ export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: bool
 				const text = decoder.decode(value, { stream: true });
 				setChatHistory((messages) => {
 					const lastMessage = messages[messages.length - 1];
-					const otherMessages = messages.slice(0, messages.length - 1);
+					const otherMessages = messages.slice(
+						0,
+						messages.length - 1
+					);
 					return [
 						...otherMessages,
 						{ ...lastMessage, content: lastMessage.content + text },
@@ -108,12 +124,11 @@ export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: bool
 		setIsLoading(false);
 	};
 
-    useEffect(() => {
+	useEffect(() => {
 		const apply = () => {
 			if (messageListRef.current) {
 				messageListRef.current.scrollTop =
 					messageListRef.current.scrollHeight;
-				console.log("scrolled");
 			}
 		};
 		const observer = new MutationObserver(apply);
@@ -123,13 +138,9 @@ export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: bool
 				subtree: true,
 			});
 		}
-		if (inputRef.current) {
-			inputRef.current.focus();
-		}
 		apply();
 		return () => observer.disconnect();
 	}, [chatHistory]);
-
 
 	return (
 		<Modal
@@ -147,12 +158,18 @@ export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: bool
 				{(onClose) => (
 					<>
 						<ModalHeader className="flex items-center justify-between gap-2">
-							<SectionTitle startContent={<BsStars className="text-accent" />} className="flex items-center gap-2">
-									<span className="bg-gradient-to-r from-accent dark:to-accent-800 to-accent-600 bg-clip-text text-transparent">
-										Ask AI
-									</span>
+							<SectionTitle
+								startContent={
+									<BsStars className="text-accent" />
+								}
+								className="flex items-center gap-2"
+							>
+								<span className="bg-gradient-to-r from-accent dark:to-accent-800 to-accent-600 bg-clip-text text-transparent">
+									Ask AI
+								</span>
 							</SectionTitle>
 							<Button
+								isDisabled={isLoading}
 								onClick={onClose}
 								isIconOnly
 								variant="transparent"
@@ -211,21 +228,35 @@ export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: bool
 						</ModalBody>
 						<ModalFooter className="p-0">
 							<div className="w-full">
-
-							<form className="w-full p-2" onSubmit={sendMessage}>
-								<Input
-									ref={inputRef}
-									autoFocus
-									isDisabled={isLoading}
-									autoComplete="off"
-									label="Ask AI"
-									endContent={<Button type="submit" isIconOnly className="flex items-center justify-center h-full aspect-square !p-0"><IoSend className="size-4 text-black dark:text-white/60" /></Button>}
-									placeholder="Ask me anything!"
-									value={currentMessage}
-									onValueChange={setCurrentMessage}
-									fullWidth
-								/>
-							</form>
+								<form
+									className="w-full p-2"
+									onSubmit={sendMessage}
+								>
+									<Input
+										ref={inputRef}
+										autoFocus
+										autoComplete="off"
+										label="Ask AI"
+										endContent={
+											<Button
+												isDisabled={isLoading}
+												type="submit"
+												isIconOnly
+												className="flex items-center justify-center h-full aspect-square !p-0"
+											>
+												{isLoading ? (
+													<ImSpinner8 className="animate-spin" />
+												) : (
+													<IoSend className="size-4 text-black dark:text-white/60" />
+												)}
+											</Button>
+										}
+										placeholder="Ask me anything!"
+										value={currentMessage}
+										onValueChange={setCurrentMessage}
+										fullWidth
+									/>
+								</form>
 							</div>
 						</ModalFooter>
 					</>

@@ -10,7 +10,6 @@ export function useParamsState(searchParams: { [key: string]: any }) {
           const params = new URLSearchParams(searchParams);
 
           newParams.forEach(([name, value]) => {
-            console.log(name, value);
             if (value) {
               params.set(name, value);
             } else {

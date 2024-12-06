@@ -27,8 +27,6 @@ export default function Attachment({ data }: { data: Item }) {
 	const parentRef = useRef<HTMLDivElement>(null);
 	const parentHeight = parentRef.current?.clientHeight;
 
-	console.log(imageHeight);
-
 	return (
 		<div
 			ref={parentRef}
