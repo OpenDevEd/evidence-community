@@ -35,13 +35,10 @@ export default function AIModal({
 				{(onClose) => (
 					<>
 						<ModalHeader className="flex items-center justify-between gap-2">
-							<SectionTitle>
-								<div className="flex items-center gap-2 text-accent">
-									<BsStars />
-									<span className="bg-gradient-to-r from-accent to-accent-800 bg-clip-text text-transparent">
+							<SectionTitle startContent={<BsStars className="text-accent" />} className="flex items-center gap-2">
+									<span className="bg-gradient-to-r from-accent dark:to-accent-800 to-accent-600 bg-clip-text text-transparent">
 										{title}
 									</span>
-								</div>
 							</SectionTitle>
 							<Button
 								onClick={onClose}
@@ -56,9 +53,10 @@ export default function AIModal({
 						<ModalBody className="w-full">
 							<Skeleton
 								isLoaded={content.length > 0}
-								className="w-full h-full rounded-2xl text-lg min-h-64"
+								className="w-full h-full rounded-2xl min-h-64"
 							>
-								<Markdown remarkPlugins={[remarkGfm]}>
+								{/* decrease spacing between paragraphs */}
+								<Markdown remarkPlugins={[remarkGfm]} className="prose dark:prose-invert space-y-2">
 									{content}
 								</Markdown>
 							</Skeleton>
