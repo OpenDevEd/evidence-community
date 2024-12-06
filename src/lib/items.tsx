@@ -1,15 +1,11 @@
-import { ReactNode, useCallback, useRef, useState } from "react";
+import { ReactNode } from "react";
 import { Item } from "@/app/api/item/types";
 import { creatorTypeLabels } from "@/db/schema/enums/creatorType";
 import { Collection } from "@/app/api/collections/types";
-import { Link, Skeleton } from "@nextui-org/react";
+import { Link } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import { itemTypeLabels } from "@/db/schema/enums/itemType";
 import { Creator } from "@/db/schema/tables/item";
-import Image from "next/image";
-import { LuDownload, LuPrinter } from "react-icons/lu";
-import { Button } from "@/components/nextui/Button";
-import { FaEye } from "react-icons/fa";
 import Attachment from "@/components/features/items/Attachment";
 
 function formatDate(value: string) {
@@ -37,6 +33,8 @@ export const valueFormatter: Record<
 	dateModified: () => false,
 	relations: () => false,
 	deleted: () => false,
+	year: () => false,
+	fullNames: () => false,
 	itemType: (value) => itemTypeLabels[value as keyof typeof itemTypeLabels]!,
 	collections: () => false,
 	creators: (value) => {
@@ -71,7 +69,6 @@ export const valueFormatter: Record<
 		);
 	},
 	title: (value) => value,
-	accessDate: (value) => value,
 	collectionsData: (value) => {
 		if (!value) return null;
 		if (value.length === 0) return null;
