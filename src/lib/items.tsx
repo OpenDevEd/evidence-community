@@ -12,6 +12,16 @@ import { Button } from "@/components/nextui/Button";
 import { FaEye } from "react-icons/fa";
 import Attachment from "@/components/features/items/Attachment";
 
+function formatDate(value: string) {
+	if (!value) return false;
+	if (isNaN(new Date(value).getTime())) return false;
+	return new Date(value).toLocaleDateString("en-GB", {
+		year: "numeric",
+		month: "long",
+		day: "numeric",
+	});
+}
+
 export const valueFormatter: Record<
 	any,
 	(value: any, item?: Item) => ReactNode | boolean
@@ -95,15 +105,8 @@ export const valueFormatter: Record<
 			</ul>
 		);
 	},
-	date: (value) => {
-		if (!value) return false;
-		if (isNaN(new Date(value).getTime())) return false;
-		return new Date(value).toLocaleDateString("en-GB", {
-			year: "numeric",
-			month: "long",
-			day: "numeric",
-		});
-	},
+	date: formatDate,
+	accessDate: formatDate,
 	url: (value) => (
 		<Link href={value} className="text-accent break-all" showAnchorIcon>
 			{value}
