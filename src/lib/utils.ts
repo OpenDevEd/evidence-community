@@ -4,7 +4,7 @@ import { SCOPE_OPTIONS } from "@/constants/items";
 export const fetcher = (url: string) => fetch(`/api${url}`).then(res => res.json())
 
 export function buildItemsQuery(params: any): string {
-	const { pageNumber, sort, collections, search, scope } = params;
+	const { pageNumber, sort, collections, search, scope, range } = params;
 
 	const queryParts = [
 		`page=${pageNumber}`,
@@ -13,6 +13,7 @@ export function buildItemsQuery(params: any): string {
 		collections.length > 0 && `collections=${collections.join(",")}`,
 		search.length > 0 && `search=${search}`,
 		scope !== SCOPE_OPTIONS[0].key && `scope=${scope}`,
+		range && `range=${range}`,
 	];
 
 	return `/items?${queryParts.filter(Boolean).join("&")}`;

@@ -59,6 +59,8 @@ function ContentInteractions({
 	hierarchy,
 	isLoading,
 	error,
+	range,
+	handleRangeChange,
 }: {
 	data: ItemsGetResponse | undefined;
 	sort: string;
@@ -72,6 +74,8 @@ function ContentInteractions({
 	collectionsData: CollectionsGetResponse | undefined;
 	isLoading: boolean;
 	error: any;
+	range: string;
+	handleRangeChange: (start: string | null, end: string | null) => void;
 } & ReturnType<typeof useHierarchy>) {
 	const {
 		isOpen: isExploreOpen,
@@ -134,6 +138,8 @@ function ContentInteractions({
 										}
 										hierarchy={hierarchy}
 										isModal
+										range={range}
+										handleRangeChange={handleRangeChange}
 									/>
 								</>
 							)}
@@ -443,14 +449,14 @@ function MainContent({ searchParams }: { searchParams: { [key: string]: any } })
 	const { router, pathname, createQueryString } =
 		useParamsState(searchParams);
 
-const collectionsParam = searchParams["collections"];
+	const collectionsParam = searchParams["collections"];
 	const collections = collectionsParam ? collectionsParam.split(",") : [];
 	const pageNumber = Number(searchParams["page"]) || 1;
 	const sort = searchParams["sort"] || SORT_OPTIONS[0].key;
 	const search = searchParams["search"] || "";
 	const scope = searchParams["scope"] || SCOPE_OPTIONS[0].key;
-	const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
-
+	const range = searchParams["range"] || "";
+	
 	const [abstract, setAbstract] = useState(true);
 
 	const handlePageChange = useCallback(
@@ -491,6 +497,13 @@ const collectionsParam = searchParams["collections"];
 		[router, pathname, createQueryString]
 	);
 
+	const handleRangeChange = useCallback(
+		(start: string | null, end: string | null) => {
+			router.push(createQueryString(pathname, [["range", [start, end].join(end !== null ? "-" : "")]]));
+		},
+		[router, pathname, createQueryString]
+	);
+
 	const {
 		data: itemsData,
 		error: itemsError,
@@ -502,6 +515,7 @@ const collectionsParam = searchParams["collections"];
 			collections,
 			search,
 			scope,
+			range,
 		}),
 		fetcher,
 		{
@@ -523,16 +537,18 @@ const collectionsParam = searchParams["collections"];
 	const { hierarchy, handleCheckboxChange, selectedCollections } =
 		useHierarchy({
 			data: collectionsData,
-searchParams,
+			searchParams,
 		});
 
-	return (
+	return (	
 		<>
 			<CollectionsList
 				data={collectionsData}
 				handleCheckboxChange={handleCheckboxChange}
 				selectedCollections={selectedCollections}
 				hierarchy={hierarchy}
+				range={range}
+				handleRangeChange={handleRangeChange}
 			/>
 			<div className="w-full flex flex-col gap-4">
 				<ContentInteractions
@@ -551,6 +567,8 @@ searchParams,
 					hierarchy={hierarchy}
 					isLoading={isItemsLoading}
 					error={itemsError}
+					range={range}
+					handleRangeChange={handleRangeChange}
 				/>
 				<FilterChips
 					collections={selectedCollections}
