@@ -8,7 +8,7 @@ import {
     ModalBody,
     ModalFooter
 } from "@nextui-org/react";
-import { LuBot, LuUser, LuX } from "react-icons/lu";
+import { LuBot, LuSend, LuUser, LuX } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { ImSpinner8 } from "react-icons/im";
 import Markdown from "react-markdown";
@@ -19,6 +19,7 @@ import { useState } from "react";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { SectionTitle } from "@/components/typography/SectionTitle";
 import { BsStars } from "react-icons/bs";
+import { IoSend } from "react-icons/io5";
 
 type Message = {
 	role: "user" | "assistant";
@@ -28,12 +29,17 @@ type Message = {
 export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: boolean, onOpenChange: (open: boolean) => void, data: ItemGetResponse | undefined }) {
     const [currentMessage, setCurrentMessage] = useState<string>("");
     const [isLoading, setIsLoading] = useState<boolean>(false);
+	const inputRef = useRef<HTMLInputElement>(null);
 
 	const [chatHistory, setChatHistory] = useState<Message[]>([
 		{
 			role: "user",
 			content: JSON.stringify(data),
 		},
+		{
+			role: "assistant",
+			content: `Hello! How can I assist you today? You can ask me questions about "${data?.item?.title}" or anything else related to the data.`,
+		}
 	]);
 	const messageListRef = useRef<HTMLDivElement>(null);
 
@@ -117,9 +123,13 @@ export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: bool
 				subtree: true,
 			});
 		}
+		if (inputRef.current) {
+			inputRef.current.focus();
+		}
 		apply();
 		return () => observer.disconnect();
 	}, [chatHistory]);
+
 
 	return (
 		<Modal
@@ -137,13 +147,10 @@ export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: bool
 				{(onClose) => (
 					<>
 						<ModalHeader className="flex items-center justify-between gap-2">
-							<SectionTitle>
-								<div className="flex items-center gap-2 text-accent">
-									<BsStars />
-									<span className="bg-gradient-to-r from-accent to-accent-800 bg-clip-text text-transparent">
+							<SectionTitle startContent={<BsStars className="text-accent" />} className="flex items-center gap-2">
+									<span className="bg-gradient-to-r from-accent dark:to-accent-800 to-accent-600 bg-clip-text text-transparent">
 										Ask AI
 									</span>
-								</div>
 							</SectionTitle>
 							<Button
 								onClick={onClose}
@@ -155,9 +162,9 @@ export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: bool
 								}
 							/>
 						</ModalHeader>
-						<ModalBody className="p-0 min-h-[50vh] w-full">
+						<ModalBody className="p-0 min-h-[50vh] w-full grid grid-cols-1 grid-rows-1">
 							<div
-								className="flex flex-col gap-4 w-full overflow-y-scroll overflow-x-hidden py-8"
+								className="flex flex-col gap-4 w-full overflow-y-scroll overflow-x-hidden py-8  h-full"
 								ref={messageListRef}
 							>
 								{chatHistory
@@ -180,7 +187,7 @@ export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: bool
 											</div>
 											<div
 												className={twMerge(
-													"bg-secondary dark:bg-secondary/50 rounded-xl p-4 text-wrap max-w-full overflow-hidden break-words text-lg",
+													"bg-secondary dark:bg-secondary rounded-xl p-4 text-wrap max-w-full overflow-hidden break-words text-lg",
 													message.role !== "user" &&
 														"bg-accent dark:bg-accent-300"
 												)}
@@ -203,18 +210,23 @@ export default function ChatModal({ isOpen, onOpenChange, data }: { isOpen: bool
 							</div>
 						</ModalBody>
 						<ModalFooter className="p-0">
-							<form className="w-full" onSubmit={sendMessage}>
+							<div className="w-full">
+
+							<form className="w-full p-2" onSubmit={sendMessage}>
 								<Input
+									ref={inputRef}
+									autoFocus
 									isDisabled={isLoading}
 									autoComplete="off"
 									label="Ask AI"
+									endContent={<Button type="submit" isIconOnly className="flex items-center justify-center h-full aspect-square !p-0"><IoSend className="size-4 text-black dark:text-white/60" /></Button>}
+									placeholder="Ask me anything!"
 									value={currentMessage}
 									onValueChange={setCurrentMessage}
-									classNames={{
-										inputWrapper: "rounded-t-none",
-									}}
+									fullWidth
 								/>
 							</form>
+							</div>
 						</ModalFooter>
 					</>
 				)}
