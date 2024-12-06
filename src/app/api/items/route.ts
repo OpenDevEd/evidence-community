@@ -5,6 +5,27 @@ import { Item } from "../item/types";
 import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 
+function formatRange(range: string | null) {
+  if (!range) return null;
+  
+  const getTimestamp = (year: string) => {
+    const num = Number(year);
+    return num > 0 ? new Date(num, 0, 1).getTime() : null;
+  };
+
+  const [start, end] = range.includes("-") ? range.split("-") : [range, range];
+  const startTs = getTimestamp(start);
+  const endTs = getTimestamp(end);
+  
+  if (!startTs && !endTs) return null;
+  if (startTs === endTs) return `year = ${startTs}`;
+  
+  return [
+    startTs && `year >= ${startTs}`,
+    endTs && `year <= ${endTs}`
+  ].filter(Boolean).join(" AND ");
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const pageNum = Math.max(1, Number(searchParams.get("page")) || 1);
@@ -16,11 +37,10 @@ export async function GET(request: NextRequest) {
   const collections = searchParams.get("collections")?.split(",") || [];
   const search = searchParams.get("search") || "";
   const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
+  const range = searchParams.get("range") || null;
   const searchIndex = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
   const sortOption = SORT_OPTIONS.find((option) => option.key === sort)?.sort || SORT_OPTIONS[0].sort;
-
-  console.log(sortOption);
-
+  
   const searchResults = await searchIndex.search(search, {
     offset: (pageNum - 1) * limitNum,
     limit: limitNum,
@@ -30,6 +50,7 @@ export async function GET(request: NextRequest) {
       collections.length > 0
         ? `collections IN ${JSON.stringify(collections)}`
         : null,
+      range && formatRange(range),
     ].filter((f): f is string => f !== null),
     sort: [sortOption],
   });
