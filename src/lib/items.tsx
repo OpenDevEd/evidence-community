@@ -105,7 +105,7 @@ export const valueFormatter: Record<
 		});
 	},
 	url: (value) => (
-		<Link href={value} className="text-accent" showAnchorIcon>
+		<Link href={value} className="text-accent break-all" showAnchorIcon>
 			{value}
 		</Link>
 	),
