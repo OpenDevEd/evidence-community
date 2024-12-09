@@ -221,7 +221,7 @@ function ContentInteractions({
 			</div>
 			<div className="flex justify-between h-10 xl:h-12 gap-4">
 				<Skeleton
-					isLoaded={!isLoading}
+					isLoaded={!!data}
 					className="flex items-center flex-1 rounded-2xl"
 				>
 					<h2 className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center gap-2">
