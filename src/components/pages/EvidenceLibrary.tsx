@@ -377,7 +377,7 @@ function Chip({
 			<Button
 				size="xs"
 				variant="solid"
-				className="shrink-0"
+				className="shrink-0 p-1 h-auto pr-2"
 				onClick={() => {
 					if (canClick.current) {
 						handleCheckboxChange(collection);
@@ -386,9 +386,12 @@ function Chip({
 					debounceCanClick();
 				}}
 			>
+				<span className="text-white dark:text-white/40 font-medium text-xs leading-3 dark:bg-black/50 bg-black/50 p-1 px-2 rounded-md">
+					{collectionData?.title}
+				</span>
+				<span className="truncate text-wrap">
+
 				{collectionData?.name}
-				<span className="text-black/80 dark:text-white/40 font-medium text-sm leading-3">
-					{`(${collectionData?.numItems})`}
 				</span>
 			</Button>
 		</motion.div>

@@ -44,9 +44,6 @@ export default function CollectionHierarchy({
 							)
 						</span>
 					)}
-					<span className="opacity-50 ml-1 text-sm align-top">
-						({collectionData.numItems})
-					</span>
 				</Checkbox>
 			)}
 			{(isSelected || level === 0) &&
