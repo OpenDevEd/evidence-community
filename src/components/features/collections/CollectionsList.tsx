@@ -10,7 +10,6 @@ import {
 	DropdownItem,
 	DropdownMenu,
 	DropdownTrigger,
-	Input,
 	tv,
 	useDisclosure,
 } from "@nextui-org/react";
@@ -25,10 +24,10 @@ import { Autocomplete } from "../../nextui/Autocomplete";
 import { Switch } from "../../nextui/Switch";
 import { useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-
-const currentYear = new Date().getFullYear();
-
-const years = Array.from({ length: 300 }).map((_, i) => String(currentYear - i));
+import config from "@/constants/config.json";
+import { Input } from "../../nextui/Input";
+import { useDebounce } from "@/hooks/useDebounce";
+import { years } from "@/constants/misc";
 
 function YearPicker({
 	label,
@@ -41,29 +40,41 @@ function YearPicker({
 	selectedKey: string | null;
 	onSelectionChange: (value: any | null) => void;
 }) {
+	const debouncedOnSelectionChange = useDebounce(onSelectionChange, 500);
+
+	if (config.yearsDropDown) {
+		return (
+			<Autocomplete
+				className="flex-1"
+				placeholder={placeholder}
+				label={label}
+				key={label}
+				fullWidth={true}
+				selectedKey={selectedKey}
+				onSelectionChange={onSelectionChange}
+				inputProps={{
+					classNames: {
+						inputWrapper:
+							"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+						input: "placeholder:text-black/60 dark:placeholder:text-white/40",
+					},
+				}}
+			>
+				{years.map((year) => (
+					<AutocompleteItem key={year}>{year}</AutocompleteItem>
+				))}
+			</Autocomplete>
+		);
+	}
+
 	return (
-		<Autocomplete
-			className="flex-1"
-			placeholder={placeholder}
+		<Input
+			type="number"
 			label={label}
-			key={label}
-			fullWidth={true}
-			selectedKey={selectedKey}
-			onSelectionChange={onSelectionChange}
-			inputProps={{
-				classNames: {
-					inputWrapper:
-						"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
-					input: "placeholder:text-black/60 dark:placeholder:text-white/40",
-				},
-			}}
-		>
-			{years.map((year) => (
-				<AutocompleteItem key={year}>
-					{year}
-				</AutocompleteItem>
-			))}
-		</Autocomplete>
+			placeholder={placeholder}
+			defaultValue={selectedKey || ""}
+			onChange={(e) => debouncedOnSelectionChange(e.target.value)}
+		/>
 	);
 }
 
@@ -108,7 +119,12 @@ export default function CollectionsList({
 						<div className="flex gap-4 items-center flex-1 justify-end">
 							<Switch
 								isSelected={!sameYear}
-								onValueChange={(value) => handleRangeChange(start, sameYear ? end : null)}
+								onValueChange={(value) =>
+									handleRangeChange(
+										start,
+										sameYear ? end : null
+									)
+								}
 								classNames={{
 									label: "text-sm font-normal",
 								}}
@@ -132,7 +148,9 @@ export default function CollectionsList({
 										label="Exact Year"
 										placeholder="Year"
 										selectedKey={start}
-										onSelectionChange={(key) => handleRangeChange(key, null)}
+										onSelectionChange={(key) =>
+											handleRangeChange(key, null)
+										}
 									/>
 								</motion.div>
 							) : (
@@ -153,20 +171,26 @@ export default function CollectionsList({
 											label: "To",
 											placeholder: "Year",
 										},
-									].map(
-										({ label, placeholder }, index) => (
-											<YearPicker
-												key={label}
-												label={label}
-												placeholder={placeholder}
-												selectedKey={index === 0 ? start : end}
-												onSelectionChange={(key) => handleRangeChange(
-													index === 0 ? (key || "") : start,
-													index === 1 ? (key || "") : end
-												)}
-											/>
-										)
-									)}
+									].map(({ label, placeholder }, index) => (
+										<YearPicker
+											key={label}
+											label={label}
+											placeholder={placeholder}
+											selectedKey={
+												index === 0 ? start : end
+											}
+											onSelectionChange={(key) =>
+												handleRangeChange(
+													index === 0
+														? key || ""
+														: start,
+													index === 1
+														? key || ""
+														: end
+												)
+											}
+										/>
+									))}
 								</motion.div>
 							)}
 						</AnimatePresence>
