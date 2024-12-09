@@ -1,5 +1,56 @@
 import type { Config } from "tailwindcss";
 import { nextui } from "@nextui-org/react";
+import jsonConfig from "./src/constants/config.json";
+
+export const style = process.env.STYLE || jsonConfig?.style || "opendeved";
+
+const accentColors = {
+  "opendeved": "#e68124",
+  "edtechhub": "#ff5c00",
+}
+
+function generateColorVariants(baseColor: string) {
+  const normalizeHex = (hex: string) => hex.replace('#', '');
+
+  const hexToRgb = (hex: string): [number, number, number] => {
+    const normalized = normalizeHex(hex);
+    return [
+      parseInt(normalized.slice(0, 2), 16),
+      parseInt(normalized.slice(2, 4), 16),
+      parseInt(normalized.slice(4, 6), 16)
+    ];
+  };
+
+  const rgbToHex = (r: number, g: number, b: number): string => {
+    const toHex = (n: number) => Math.round(Math.max(0, Math.min(255, n))).toString(16).padStart(2, '0');
+    return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+  };
+
+  const adjustBrightness = (rgb: [number, number, number], factor: number): string => {
+    return rgbToHex(
+      rgb[0] * factor,
+      rgb[1] * factor,
+      rgb[2] * factor
+    );
+  };
+
+  const rgb = hexToRgb(baseColor);
+  
+  const variations = {
+    DEFAULT: baseColor,
+    100: adjustBrightness(rgb, 0.2),
+    200: adjustBrightness(rgb, 0.4),
+    300: adjustBrightness(rgb, 0.6),
+    400: adjustBrightness(rgb, 0.8),
+    500: baseColor,
+    600: adjustBrightness(rgb, 1.15),
+    700: adjustBrightness(rgb, 1.3),
+    800: adjustBrightness(rgb, 1.45),
+    900: adjustBrightness(rgb, 1.6)
+  };
+
+  return variations;
+}
 
 const colors = {
   background: {
@@ -63,18 +114,7 @@ const colors = {
     800: "#bedefe",
     900: "#dfefff",
   },
-  accent: {
-    DEFAULT: "#e68124",
-    100: "#301a05",
-    200: "#5f340b",
-    300: "#8f4d10",
-    400: "#bf6715",
-    500: "#e68124",
-    600: "#eb9a4f",
-    700: "#f0b47b",
-    800: "#f5cda7",
-    900: "#fae6d3",
-  },
+  accent: generateColorVariants(accentColors[style as keyof typeof accentColors]),
   card: {
     DEFAULT: "#141414",
     100: "#040404",

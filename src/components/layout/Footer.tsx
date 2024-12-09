@@ -7,6 +7,7 @@ import { useTheme } from "next-themes";
 import { useEffect } from "react";
 import { useState } from "react";
 import { Skeleton } from "@nextui-org/react";
+import { style } from "@/../tailwind.config";
 
 const footerInfo = {
   Email: "opendeved@gmail.com",
@@ -42,7 +43,7 @@ function Logo({ theme }: { theme: string | undefined }) {
     <Skeleton isLoaded={isMounted} className="w-[232px] h-[54px] rounded-lg">
       {isMounted && (
         <Image
-          src={theme === "dark" ? "/logo.png" : "/logo_light.png"}
+          src={theme === "dark" ? `/logos/${style}/logo.png` : `/logos/${style}/logo_light.png`}
           alt="logo"
           width={232}
           height={54}
@@ -80,7 +81,7 @@ export default function Footer() {
           title="Quick Links"
           content={
             <div className="flex flex-col gap-4 mt-6 items-center xl:items-start">
-              {links.map(
+              {links[style as keyof typeof links].map(
                 (link) =>
                   !link.footerExclude && (
                     <Link

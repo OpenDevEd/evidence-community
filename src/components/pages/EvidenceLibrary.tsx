@@ -87,7 +87,7 @@ function ContentInteractions({
 		onOpen: onHelpOpen,
 		onOpenChange: onHelpOpenChange,
 	} = useDisclosure();
-	const debouncedSearch = useDebounce(onSearchChange, 0);
+	const [debouncedSearch, _] = useDebounce(onSearchChange, 0);
 	const actuallyNoData =
 		(!isLoading && data && data.items.length === 0) || error;
 
@@ -362,7 +362,7 @@ function Chip({
 		(c) => c.key === collection
 	);
 	const canClick = useRef(true);
-	const debounceCanClick = useDebounce(() => {
+	const [debounceCanClick] = useDebounce(() => {
 		canClick.current = true;
 	}, 1000);
 

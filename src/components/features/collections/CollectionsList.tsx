@@ -42,7 +42,7 @@ function YearPicker({
 	selectedKey: string | null;
 	onSelectionChange: (value: any | null) => void;
 }) {
-	const debouncedOnSelectionChange = useDebounce(onSelectionChange, 500);
+	const [debouncedOnSelectionChange, _] = useDebounce(onSelectionChange, 500);
 
 	if ((config as any).yearsDropDown) {
 		return (
