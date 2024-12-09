@@ -37,6 +37,7 @@ export const valueFormatter: Record<
 	fullNames: () => false,
 	itemType: (value) => itemTypeLabels[value as keyof typeof itemTypeLabels]!,
 	collections: () => false,
+	title: (value) => false,
 	creators: (value) => {
 		if (!value) return null;
 		if (value.length === 0) return null;
@@ -68,7 +69,6 @@ export const valueFormatter: Record<
 			</ul>
 		);
 	},
-	title: (value) => value,
 	collectionsData: (value) => {
 		if (!value) return null;
 		if (value.length === 0) return null;
