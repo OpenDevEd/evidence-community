@@ -14,9 +14,9 @@ const baseSiteMap: MetadataRoute.Sitemap = [
 ]
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-    const documents = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments()
-
-    console.log(documents)
+    const documents = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments({
+        limit: 1000000,
+    })
 
     return [...baseSiteMap, ...documents.results.map((item) => ({
         url: `${process.env.BASE_URL || config.baseURL}/lib/${item.key}`,
