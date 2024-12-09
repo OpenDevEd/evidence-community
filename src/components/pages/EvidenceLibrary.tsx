@@ -140,6 +140,7 @@ function ContentInteractions({
 										isModal
 										range={range}
 										handleRangeChange={handleRangeChange}
+										facetDistribution={data?.facetDistribution}
 									/>
 								</>
 							)}
@@ -335,6 +336,7 @@ function PaginationControls({
 				>
 					{totalPages > 0 && (
 						<Pagination
+							showControls
 							page={page}
 							onChange={setPage}
 							siblings={isDesktop ? 3 : 0}
@@ -549,6 +551,7 @@ function MainContent({ searchParams }: { searchParams: { [key: string]: any } })
 				hierarchy={hierarchy}
 				range={range}
 				handleRangeChange={handleRangeChange}
+				facetDistribution={itemsData?.facetDistribution}
 			/>
 			<div className="w-full flex flex-col gap-4">
 				<ContentInteractions

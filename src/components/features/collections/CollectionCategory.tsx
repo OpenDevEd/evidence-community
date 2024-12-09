@@ -9,17 +9,20 @@ import { LuChevronDown } from "react-icons/lu";
 import { Collection } from "@/app/api/collections/types";
 import { MAX_COLLAPSED_HEIGHT } from "@/constants/collections";
 import CollectionHierarchy from "./CollectionHierarchy";
+import { FacetDistribution } from "meilisearch";
 
 export default function CollectionCategory({
 	collection,
 	hierarchy,
 	selectedCollections,
 	handleCheckboxChange,
+	facetDistribution,
 }: {
 	collection: Collection;
 	hierarchy: Collection[];
 	selectedCollections: string[];
 	handleCheckboxChange: (key: string) => void;
+	facetDistribution: FacetDistribution | undefined;
 }) {
 	const [expanded, setExpanded] = useState(false);
 	const ref = useRef<HTMLDivElement>(null);
@@ -68,6 +71,7 @@ export default function CollectionCategory({
 					collections={hierarchy}
 					selectedCollections={selectedCollections}
 					onCheckboxChange={handleCheckboxChange}
+					facetDistribution={facetDistribution}
 				/>
 			</div>
 			<div

@@ -1,31 +1,52 @@
 import { Collection } from "@/app/api/collections/types";
 import { Checkbox } from "@/components/nextui/Checkbox";
+import { FacetDistribution } from "meilisearch";
 
 export default function CollectionHierarchy({
 	collectionData,
 	collections,
 	selectedCollections,
 	onCheckboxChange,
+	facetDistribution,
 }: {
 	collectionData: Collection;
 	collections: Collection[];
 	selectedCollections: string[];
 	onCheckboxChange: (key: string) => void;
+	facetDistribution: FacetDistribution | undefined;
 }) {
 	const children = collectionData.children || [];
 	const level = collectionData.level || 0;
 	const isSelected = selectedCollections.includes(collectionData.key);
+	const show =
+		isSelected ||
+		(collectionData.level !== 0 &&
+			facetDistribution?.collections[collectionData.key] &&
+			facetDistribution?.collections[collectionData.key] > 0);
 
 	return (
 		<>
-			{collectionData.level !== 0 && (
+			{show && (
 				<Checkbox
 					size={collectionData.level !== 1 ? "lg" : undefined}
 					isSelected={isSelected}
 					onValueChange={() => onCheckboxChange(collectionData.key)}
 					style={{ marginLeft: `${(level - 1) * 16}px` }}
+					className="collection"
 				>
-					{collectionData.name} ({collectionData.numItems})
+					{collectionData.name}
+					{!isSelected && (
+						<span className="opacity-75 ml-1">
+							(
+							{facetDistribution?.collections[
+								collectionData.key
+							] || 0}
+							)
+						</span>
+					)}
+					<span className="opacity-50 ml-1 text-sm align-top">
+						({collectionData.numItems})
+					</span>
 				</Checkbox>
 			)}
 			{(isSelected || level === 0) &&
@@ -36,6 +57,7 @@ export default function CollectionHierarchy({
 						collections={collections}
 						selectedCollections={selectedCollections}
 						onCheckboxChange={onCheckboxChange}
+						facetDistribution={facetDistribution}
 					/>
 				))}
 		</>
