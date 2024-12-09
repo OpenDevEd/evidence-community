@@ -23,8 +23,8 @@ export default function ResourceAuthors({
 		return (
 			<div className="max-w-64 truncate overflow-hidden">
 				{itemData?.creators
-					?.map((creator: any) => creator.firstName
-						? `${creator.firstName}, ${creator.lastName}`
+					?.map((creator: any) => (creator.firstName || creator.lastName)
+						? [creator.firstName, creator.lastName].filter(Boolean).join(" ")
 						: creator.name || null
 					)
 					.join(", ")}
