@@ -44,12 +44,11 @@ export async function GET(request: NextRequest) {
   const searchResults = await searchIndex.search(search, {
     offset: (pageNum - 1) * limitNum,
     limit: limitNum,
+    facets: ["collections"],
     attributesToSearchOn: SCOPE_OPTIONS.find((option) => option.key === scope)?.attributesToSearchOn || SCOPE_OPTIONS[0].attributesToSearchOn,
     filter: [
       `itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
-      collections.length > 0
-        ? `collections IN ${JSON.stringify(collections)}`
-        : null,
+      ...collections.map(collection => `collections = "${collection}"`),
       range && formatRange(range),
     ].filter((f): f is string => f !== null),
     sort: [sortOption],
@@ -64,5 +63,6 @@ export async function GET(request: NextRequest) {
     totalItems: totalCount,
     perPage: limitNum,
     totalPages: Math.ceil(totalCount / limitNum),
+    facetDistribution: searchResults.facetDistribution
   });
 }
