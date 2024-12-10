@@ -26,107 +26,107 @@ export type LinkObject = {
 };
 
 export const links: Record<string, LinkObject[]> = {
-	opendeved: [
-		{
-			label: "Home",
-			href: "/",
-			navExclude: true,
-		},
-		{
-			label: "About Us",
-			href: "/about-us",
-			icon: AboutUs,
-		},
-		{
-			label: "Evidence Library",
-			href: "/lib",
-			icon: EvidenceLibrary,
-		},
-		{
-			label: "Programs",
-			href: "/programs",
-			icon: Programs,
-		},
-		{
-			label: "Blog",
-			href: "/blog",
-			icon: Blog,
-		},
-		{
-			label: "Team",
-			href: "/team",
-			icon: Team,
-		},
-		{
-			label: "Contact Us",
-			href: "/contact-us",
-			icon: ContactUs,
-			footerExclude: true,
-		},
-	],
-	edtechhub: [
-		{
-			label: "Home",
-			href: "/",
-			navExclude: true,
-		},
-		{
-			label: "About Us",
-			href: "/about-us",
-			icon: RiTeamFill,
-		},
-		{
-			label: "Tools",
-			href: "/tools",
-			icon: RiToolsFill,
-		},
-		{
-			label: "Evidence",
-			href: "/lib",
-			icon: RiBookOpenFill,
-			dropdown: [
-				{
-					label: "About Evidence in EdTech",
-					href: "/blog/about-evidence-in-edtech",
-				},
-				{
-					label: "Evidence Library",
-					href: "/lib",
-				},
-				{
-					label: "Country Engagement",
-					href: "/country-engagement",
-				},
-				{
-					label: "Topic Areas",
-					href: "/topic-areas",
-				},
-				{
-					label: "Research Portfolio",
-					href: "/research-portfolio",
-				},
-				{
-					label: "Sandboxes",
-					href: "/sandboxes",
-				},
-				{
-					label: "Helpdesk",
-					href: "/helpdesk",
-				},
-			],
-		},
-		{
-			label: "Blog",
-			href: "/blog",
-			icon: GiBookshelf,
-		},
-		{
-			label: "Connect with us",
-			href: "/contact-us",
-			icon: BsChatRightDotsFill,
-			footerExclude: true,
-		},
-	],
+    opendeved: [
+        {
+            label: "home",
+            href: "/",
+            navExclude: true,
+        },
+        {
+            label: "aboutUs",
+            href: "/about-us",
+            icon: AboutUs,
+        },
+        {
+            label: "evidenceLibrary",
+            href: "/lib",
+            icon: EvidenceLibrary,
+        },
+        {
+            label: "programs",
+            href: "/programs",
+            icon: Programs,
+        },
+        {
+            label: "blog",
+            href: "/blog",
+            icon: Blog,
+        },
+        {
+            label: "team",
+            href: "/team",
+            icon: Team,
+        },
+        {
+            label: "contactUs",
+            href: "/contact-us",
+            icon: ContactUs,
+            footerExclude: true,
+        },
+    ],
+    edtechhub: [
+        {
+            label: "home",
+            href: "/",
+            navExclude: true,
+        },
+        {
+            label: "aboutUs",
+            href: "/about-us",
+            icon: RiTeamFill,
+        },
+        {
+            label: "tools",
+            href: "/tools",
+            icon: RiToolsFill,
+        },
+        {
+            label: "evidence",
+            href: "/lib",
+            icon: RiBookOpenFill,
+            dropdown: [
+                {
+                    label: "aboutEvidenceInEdtech",
+                    href: "/blog/about-evidence-in-edtech",
+                },
+                {
+                    label: "evidenceLibrary",
+                    href: "/lib",
+                },
+                {
+                    label: "countryEngagement",
+                    href: "/country-engagement",
+                },
+                {
+                    label: "topicAreas",
+                    href: "/topic-areas",
+                },
+                {
+                    label: "researchPortfolio",
+                    href: "/research-portfolio",
+                },
+                {
+                    label: "sandboxes",
+                    href: "/sandboxes",
+                },
+                {
+                    label: "helpdesk",
+                    href: "/helpdesk",
+                },
+            ],
+        },
+        {
+            label: "blog",
+            href: "/blog",
+            icon: GiBookshelf,
+        },
+        {
+            label: "connectWithUs",
+            href: "/contact-us",
+            icon: BsChatRightDotsFill,
+            footerExclude: true,
+        },
+    ],
 };
 
 export const socialLinks = [

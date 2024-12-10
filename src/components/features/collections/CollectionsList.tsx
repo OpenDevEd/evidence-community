@@ -30,6 +30,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { years } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { LuX } from "react-icons/lu";
+import { useFeatureFlagEnabled } from 'posthog-js/react'
 
 function YearPicker({
 	label,
@@ -44,7 +45,9 @@ function YearPicker({
 }) {
 	const [debouncedOnSelectionChange, _] = useDebounce(onSelectionChange, 500);
 
-	if ((config as any).yearsDropDown) {
+	const isYearsDropDownEnabled = useFeatureFlagEnabled('years-dropdown')
+
+	if (isYearsDropDownEnabled) {
 		return (
 			<Autocomplete
 				className="flex-1"

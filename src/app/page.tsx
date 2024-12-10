@@ -1,8 +1,9 @@
-import EvidenceLibrary from "@/components/pages/EvidenceLibrary";
-import { redirect } from "next/navigation";
+import Base from "@/components/layout/Base";
+import { redirect } from "@/i18n/routing";
 
-export default async function Home() {
-  redirect("/lib");
-
-  return null;
+export default function RootPage() {
+	redirect({
+		href: "/lib",
+		locale: "en",
+	});
 }

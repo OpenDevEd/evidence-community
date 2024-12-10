@@ -1,12 +1,14 @@
 "use client";
 
 import { LuChevronLeft, LuDownload, LuPrinter } from "react-icons/lu";
-import { useRouter } from "next/navigation";
 import { Button } from "@/components/nextui/Button";
 import { TiDocumentText } from "react-icons/ti";
 import { PiSlidersHorizontalBold } from "react-icons/pi";
+import { useRouter } from "@/i18n/routing";
+import { useTranslations } from "next-intl";
 
 export default function ItemControls() {
+	const t = useTranslations("ui");
 	const router = useRouter();
 
 	return (
@@ -15,24 +17,24 @@ export default function ItemControls() {
 				startContent={<LuChevronLeft className="size-5" />}
 				onClick={() => router.back()}
 			>
-				Return
+				{t("return")}
 			</Button>
 			<Button
 				className="ml-auto"
 				startContent={<TiDocumentText className="size-5" />}
 			>
-				Read Document
+				{t("readDocument")}
 			</Button>
 			<Button startContent={<LuDownload className="size-5" />}>
-				Download This Record
+				{t("downloadRecord")}
 			</Button>
 			<Button startContent={<LuPrinter className="size-5" />}>
-				Print This Record
+				{t("printRecord")}
 			</Button>
 			<Button
 				startContent={<PiSlidersHorizontalBold className="size-5" />}
 			>
-				Preferences
+				{t("preferences")}
 			</Button>
 		</div>
 	);

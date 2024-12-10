@@ -1,5 +1,6 @@
-import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback } from "react";
+import { useRouter } from "@/i18n/routing";
+import { usePathname } from "@/i18n/routing";
 
 export function useParamsState(searchParams: { [key: string]: any }) {
     const router = useRouter();

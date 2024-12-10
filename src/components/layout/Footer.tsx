@@ -8,11 +8,12 @@ import { useEffect } from "react";
 import { useState } from "react";
 import { Skeleton } from "@nextui-org/react";
 import { style } from "@/../tailwind.config";
+import { useTranslations } from "next-intl";
 
 const footerInfo = {
-  Email: "opendeved@gmail.com",
-  Phone: "+1-123-456-7890",
-  Address: "123 Creativity Lane, Designville",
+  email: "opendeved@gmail.com",
+  phone: "+1-123-456-7890",
+  address: "123 Creativity Lane, Designville",
 };
 
 function FooterFieldColumn({
@@ -54,6 +55,8 @@ function Logo({ theme }: { theme: string | undefined }) {
 }
 
 export default function Footer() {
+  const t = useTranslations("footer");
+  const tNav = useTranslations("nav")
   const [isMounted, setIsMounted] = useState(false);
   const { theme } = useTheme();
 
@@ -69,7 +72,9 @@ export default function Footer() {
           <div className="flex flex-col gap-[14px]">
             {Object.entries(footerInfo).map(([key, value]) => (
               <div key={key} className="flex gap-2 justify-center xl:justify-start">
-                <span className="text-black/60 dark:text-white/60">{key}</span>
+                <span className="text-black/60 dark:text-white/60">
+                  {t(key)}
+                </span>
                 <span className="text-black/60 dark:text-white/60 font-bold">
                   {value}
                 </span>
@@ -78,7 +83,7 @@ export default function Footer() {
           </div>
         </div>
         <FooterFieldColumn
-          title="Quick Links"
+          title={t("quickLinks")}
           content={
             <div className="flex flex-col gap-4 mt-6 items-center xl:items-start">
               {links[style as keyof typeof links].map(
@@ -89,7 +94,7 @@ export default function Footer() {
                       key={link.label}
                       className="text-black/60 dark:text-white/60 text-xl"
                     >
-                      {link.label}
+                      {tNav(link.label)}
                     </Link>
                   )
               )}
@@ -98,7 +103,7 @@ export default function Footer() {
         />
         <div className="flex flex-col h-full gap-6 w-full xl:w-auto">
           <FooterFieldColumn
-            title="Stay Connected"
+            title={t("stayConnected")}
             content={
               <div className="flex mt-6 gap-8">
                 {socialLinks.map((link) => (
@@ -110,14 +115,14 @@ export default function Footer() {
             }
           />
           <FooterFieldColumn
-            title="Contact Us"
+            title={t("contactUs")}
             content={
               <div className="mt-6">
                 <Button
                   color={isMounted && theme === "light" ? "accent" : undefined}
                   className="px-12"
                 >
-                  Contact Us
+                  {tNav("contactUs")}
                 </Button>
               </div>
             }
@@ -126,11 +131,11 @@ export default function Footer() {
       </div>
       <div className="flex gap-4">
         <Link className="text-black/60 dark:text-white/60 font-medium" href="/">
-          Privacy Policy
+          {t("privacyPolicy")}
         </Link>
         <span className="font-medium text-black/60 dark:text-white/60">|</span>
         <Link className="text-black/60 dark:text-white/60 font-medium" href="/">
-          Terms of Service
+          {t("termsOfService")}
         </Link>
       </div>
     </footer>

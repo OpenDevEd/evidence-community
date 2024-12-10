@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "next/navigation";
+import { usePathname } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
 import { links } from "@/constants/links";
 import Dark from "@/components/icons/Dark";
@@ -28,6 +28,7 @@ import {
 } from "@nextui-org/react";
 import { ChevronDownIcon } from "@nextui-org/shared-icons";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useTranslations } from "next-intl";
 
 function ThemeSwitcher({
 	theme,
@@ -107,6 +108,7 @@ function Logo({
 }
 
 function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
+	const t = useTranslations("nav");
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const [debouncedOnClose, timeoutRef] = useDebounce(onClose, 250);
 
@@ -138,7 +140,7 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 				{link.icon && (
 					<link.icon className={twMerge("fill-current size-6 shrink-0", style === "edtechhub" && "size-5")} />
 				)}
-				<span className="line-clamp-1">{link.label}</span>
+				<span className="line-clamp-1">{t(link.label)}</span>
 			</Link>
 			{link.dropdown && (
 				<Dropdown
@@ -155,11 +157,12 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 						</div>
 					</DropdownTrigger>
 					<DropdownMenu itemClasses={{
-						base: "data-[hover]:bg-accent-400"
+						base: "data-[hover]:bg-accent-400 ",
+						title: "text-white"
 					}}>
 						{link.dropdown?.map((child) => (
 							<DropdownItem key={child.label} href={child.href}>
-								{child.label}
+								{t(child.label)}
 							</DropdownItem>
 						))}
 					</DropdownMenu>

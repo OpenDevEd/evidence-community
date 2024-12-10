@@ -3,10 +3,10 @@ import { Item } from "@/app/api/item/types";
 import { firstNonNullOrEmpty } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Link as NextUILink } from "@nextui-org/react";
-import { useRouter } from "next/navigation";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
+import { useRouter } from "@/i18n/routing";
 
 export default function Resource({
 	itemData,

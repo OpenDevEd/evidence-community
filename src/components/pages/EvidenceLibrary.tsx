@@ -22,7 +22,7 @@ import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import useSWR from "swr";
 import { fetcher } from "@/lib/utils";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { CollectionsGetResponse } from "@/app/api/collections/types";
@@ -42,6 +42,7 @@ import {
 import HelpModal from "@/components/features/modals/HelpModal";
 import { SectionTitle } from "@/components/typography/SectionTitle";
 import { buildItemsQuery } from "@/lib/utils";
+
 
 function ContentInteractions({
 	data,
@@ -432,7 +433,7 @@ function FilterChips({
 				animate={{ opacity: 1, y: 0 }}
 				exit={{ opacity: 0, y: -10 }}
 				transition={{ duration: 0.2 }}
-				className="w-8 flex justify-end"
+				className="w-7 flex justify-end"
 			>
 				<Button
 					onClick={() => {
@@ -442,6 +443,7 @@ function FilterChips({
 					size="sm"
 					variant="solid"
 					color="accent"
+					className="h-7 w-7 min-w-7"
 				>
 					<FaTrash className="text-white size-3" />
 				</Button>

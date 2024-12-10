@@ -2,10 +2,12 @@ import { valueFormatter } from "@/lib/items";
 import { columnLabels } from "@/db/schema/views/columns";
 import { twMerge } from "tailwind-merge";
 import type { Item } from "@/app/api/item/types";
+import { useTranslations } from "next-intl";
 
 export default function ItemRow({ item, row }: { item: Item; row: string }) {
+	const t = useTranslations("article");
 	const originalValue = item[row as keyof Item];
-	const rowName = columnLabels[row as keyof typeof columnLabels];
+	const rowName = t(row);
 	const rowValue = valueFormatter[row]
 		? valueFormatter[row]!(originalValue, item) : (originalValue ? String(originalValue) : "N/A");
 
