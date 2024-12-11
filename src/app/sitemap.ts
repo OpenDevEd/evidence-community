@@ -32,12 +32,12 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
         getEntry('/lib')
     ];
 
-    const documentEntries = documents.results.map((item) => 
-        getEntry(`/lib/${item.key}`, new Date(item.updatedAt))
-    );
+    // const documentEntries = documents.results.map((item) => 
+    //     getEntry(`/lib/${item.key}`, new Date(item.updatedAt))
+    // );
 
     return [
         ...baseEntries,
-        ...documentEntries
+        // ...documentEntries
     ];
 }
