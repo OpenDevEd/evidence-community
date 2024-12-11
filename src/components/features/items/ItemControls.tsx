@@ -14,13 +14,13 @@ export default function ItemControls() {
 	return (
 		<div className="flex justify-start gap-6 w-full">
 			<Button
-				startContent={<LuChevronLeft className="size-5" />}
+				startContent={<LuChevronLeft className="size-5 rtl:rotate-180" />}
 				onClick={() => router.back()}
 			>
 				{t("return")}
 			</Button>
 			<Button
-				className="ml-auto"
+				className="ml-auto rtl:ml-0 rtl:mr-auto"
 				startContent={<TiDocumentText className="size-5" />}
 			>
 				{t("readDocument")}
