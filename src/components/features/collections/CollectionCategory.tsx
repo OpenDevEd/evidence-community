@@ -10,6 +10,7 @@ import { Collection } from "@/app/api/collections/types";
 import { MAX_COLLAPSED_HEIGHT } from "@/constants/collections";
 import CollectionHierarchy from "./CollectionHierarchy";
 import { FacetDistribution } from "meilisearch";
+import { useTranslations } from "next-intl";
 
 export default function CollectionCategory({
 	collection,
@@ -24,6 +25,7 @@ export default function CollectionCategory({
 	handleCheckboxChange: (key: string) => void;
 	facetDistribution: FacetDistribution | undefined;
 }) {
+	const t = useTranslations("ui");
 	const [expanded, setExpanded] = useState(false);
 	const ref = useRef<HTMLDivElement>(null);
 	const [showMore, setShowMore] = useState(false);
@@ -108,7 +110,7 @@ export default function CollectionCategory({
 							}
 							onPress={() => setExpanded(!expanded)}
 						>
-							{expanded ? "See Less" : "See More"}
+							{expanded ? t("seeLess") : t("seeMore")}
 						</Button>
 					</motion.div>
 				)}
