@@ -26,7 +26,8 @@
 		"to": "To",
 		"viewOnDocs": "View on {site}",
 		"inProgress": "In Progress",
-		"resourcesCount": "<number>{count}</number> resources"
+		"resourcesCount": "<number>{count}</number> resources",
+		"noFacetsFound": "No facets found"
 	},
 	"sorts": {
 		"desc": "Newest",

@@ -26,7 +26,8 @@
 		"to": "إلى",
 		"viewOnDocs": "عرض على {site}",
 		"inProgress": "قيد التنفيذ",
-		"resourcesCount": "<number>{count}</number> موارد"
+		"resourcesCount": "<number>{count}</number> موارد",
+		"noFacetsFound": "لم يتم العثور على مجموعات"
 	},
 	"sorts": {
 		"desc": "الأحدث",
