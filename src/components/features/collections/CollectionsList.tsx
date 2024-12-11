@@ -31,6 +31,7 @@ import { years } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { LuX } from "react-icons/lu";
 import { useFeatureFlagEnabled } from 'posthog-js/react'
+import { useTranslations } from "next-intl";
 
 function YearPicker({
 	label,
@@ -101,6 +102,8 @@ export default function CollectionsList({
 	range: string;
 	handleRangeChange: (start: string | null, end: string | null) => void;
 } & ReturnType<typeof useHierarchy>) {
+	const t = useTranslations("ui");
+
 	const [start, end, sameYear] = useMemo(() => {
 		const dashExists = range.includes("-");
 		const [start, end] = range.split("-");
@@ -135,7 +138,7 @@ export default function CollectionsList({
 			>
 				<div className="w-full  bg-black/[4%] dark:bg-secondary rounded-t-2xl flex flex-col gap-4 p-6">
 					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-						<span>Publication Year</span>
+						<span>{t("publicationYear")}</span>
 						<div className="flex gap-4 items-center flex-1 justify-end">
 							<Switch
 								isSelected={!sameYear}
@@ -149,7 +152,7 @@ export default function CollectionsList({
 									label: "text-sm font-normal",
 								}}
 							>
-								Year Range
+								{t("yearRange")}
 							</Switch>
 						</div>
 					</div>
@@ -165,8 +168,8 @@ export default function CollectionsList({
 									className="w-full"
 								>
 									<YearPicker
-										label="Exact Year"
-										placeholder="Year"
+										label={t("year")}
+										placeholder={t("year")}
 										selectedKey={start}
 										onSelectionChange={(key) =>
 											handleRangeChange(key, null)
@@ -184,12 +187,12 @@ export default function CollectionsList({
 								>
 									{[
 										{
-											label: "From",
-											placeholder: "Year",
+											label: t("from"),
+											placeholder: t("year"),
 										},
 										{
-											label: "To",
-											placeholder: "Year",
+											label: t("to"),
+											placeholder: t("year"),
 										},
 									].map(({ label, placeholder }, index) => (
 										<YearPicker
@@ -258,7 +261,7 @@ export default function CollectionsList({
 				) : (
 					<div className="text-lg bg-white dark:bg-card p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 select-none">
 						<LuX className="stroke-current size-6" />
-						<span>No facets found.</span>
+						<span>{t("noFacetsFound")}</span>
 					</div>
 				)}
 			</Skeleton>
