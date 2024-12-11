@@ -7,6 +7,12 @@ export const routing = defineRouting({
   defaultLocale: 'en',
 });
 
+export const localesNames = {
+	en: "English",
+	de: "Deutsch",
+	ar: "العربية",
+};
+
 // export type Pathnames = keyof typeof routing.pathnames;
 export type Locale = (typeof routing.locales)[number];
 

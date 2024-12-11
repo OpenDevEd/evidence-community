@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname } from "@/i18n/routing";
+import { localesNames, routing, usePathname, useRouter } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
 import { links } from "@/constants/links";
 import Dark from "@/components/icons/Dark";
@@ -28,7 +28,8 @@ import {
 } from "@nextui-org/react";
 import { ChevronDownIcon } from "@nextui-org/shared-icons";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
+import { Dropdown } from "@/components/nextui/Dropdown";
 
 function ThemeSwitcher({
 	theme,
@@ -198,6 +199,36 @@ function LinksList({
 	);
 }
 
+function LanguageSwitcher() {
+	const router = useRouter();
+	const locale = useLocale();
+	const pathname = usePathname();
+
+	return (
+		<Dropdown>
+			<DropdownTrigger className="cursor-pointer select-none">
+				<div className="relative flex items-center gap-2 uppercase">
+					<span className="text-lg font-medium">
+						{localesNames[locale as keyof typeof localesNames]}
+					</span>
+					<ChevronDownIcon className="size-4" />
+				</div>
+			</DropdownTrigger>
+			<DropdownMenu
+				onAction={(locale) => {
+					router.push(pathname, { locale: locale as string });
+				}}
+			>
+				{routing.locales.map((locale) => (
+					<DropdownItem key={locale}>
+						{localesNames[locale as keyof typeof localesNames]}
+					</DropdownItem>
+				))}
+			</DropdownMenu>
+		</Dropdown>
+	);
+}
+
 export default function Navbar() {
 	const pathname = usePathname();
 	const [isMounted, setIsMounted] = useState(false);
@@ -225,6 +256,7 @@ export default function Navbar() {
 			>
 				<Logo theme={theme} isMounted={isMounted} />
 				<LinksList pathname={pathname} />
+				<LanguageSwitcher />
 				<ThemeSwitcher
 					theme={theme}
 					setTheme={setTheme}
