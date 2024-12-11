@@ -42,6 +42,7 @@ import {
 import HelpModal from "@/components/features/modals/HelpModal";
 import { SectionTitle } from "@/components/typography/SectionTitle";
 import { buildItemsQuery } from "@/lib/utils";
+import { useTranslations } from "next-intl";
 
 
 function ContentInteractions({
@@ -91,18 +92,21 @@ function ContentInteractions({
 	const [debouncedSearch, _] = useDebounce(onSearchChange, 0);
 	const actuallyNoData =
 		(!isLoading && data && data.items.length === 0) || error;
+	const t = useTranslations("ui");
+	const tSorts = useTranslations("sorts");
+	const tScopes = useTranslations("scopes");
 
 	return (
 		<>
 			<div className="flex w-full flex-col xl:flex-row xl:justify-between xl:items-end h-24 xl:h-12 gap-4">
 				<h1 className="text-black dark:text-white/60 font-medium text-2xl xl:text-3xl w-full xl:w-auto h-10 xl:h-12 flex justify-between items-end">
-					Search
+					{t("searchTitle")}
 					<Button
 						startContent={<AiOutlineCompass className="size-6" />}
-						className="xl:hidden ml-auto h-full"
+						className="xl:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
 						onClick={onExploreOpen}
 					>
-						Explore
+						{t("explore")}
 					</Button>
 					<Modal
 						hideCloseButton
@@ -118,7 +122,7 @@ function ContentInteractions({
 							{(onClose) => (
 								<>
 									<ModalHeader className="flex items-center justify-between gap-2 sticky top-0 bg-background_light dark:bg-background z-30">
-										<SectionTitle>Explore</SectionTitle>
+										<SectionTitle>{t("explore")}</SectionTitle>
 										<Button
 											onClick={onClose}
 											isIconOnly
@@ -154,7 +158,7 @@ function ContentInteractions({
 						endContent={<LuHelpCircle className="size-6" />}
 						onClick={onHelpOpen}
 					>
-						Help
+						{t("help")}
 					</Button>
 					<HelpModal
 						isOpen={isHelpOpen}
@@ -164,22 +168,16 @@ function ContentInteractions({
 						items={SORT_OPTIONS}
 						selectedKeys={sort && [sort]}
 						onSelectionChange={onSortChange}
+						label={t("sortBy")}
 						classNames={{
 							mainWrapper: "h-full",
 							base: "flex-1 max-w-full xl:max-w-56",
 						}}
-						startContent={
-							<>
-								<div className="text-black/60 dark:text-white/40 shrink-0 font-medium">
-									Sort by:
-								</div>
-							</>
-						}
 					>
 						{(item: any) => {
 							return (
 								<SelectItem key={item.key}>
-									{item.name}
+									{tSorts(item.key)}
 								</SelectItem>
 							);
 						}}
@@ -192,7 +190,7 @@ function ContentInteractions({
 					defaultValue={search}
 					onChange={(e) => debouncedSearch(e.target.value)}
 					onClear={() => debouncedSearch("")}
-					placeholder="Search"
+					placeholder={t("search")}
 					size={"lg"}
 					classNames={{
 						inputWrapper: "h-10 xl:h-12 min-h-10 xl:min-h-12",
@@ -215,7 +213,7 @@ function ContentInteractions({
 				>
 					{(item: any) => {
 						return (
-							<SelectItem key={item.key}>{item.name}</SelectItem>
+							<SelectItem key={item.key}>{tScopes(item.key)}</SelectItem>
 						);
 					}}
 				</Select>
@@ -226,12 +224,12 @@ function ContentInteractions({
 					className="flex items-center flex-1 rounded-2xl"
 				>
 					<h2 className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center gap-2">
-						<span className="text-2xl leading-6">
-							{actuallyNoData
-								? "0"
-								: data?.totalItems.toLocaleString()}
-						</span>
-						Resources
+						{t.rich("resourcesCount", {
+							count: actuallyNoData ? "0" : data?.totalItems.toLocaleString(),
+							number: (chunks) => (
+								<span className="text-2xl leading-6">{chunks}</span>
+							),
+						})}
 					</h2>
 				</Skeleton>
 				<Card className="h-full flex items-center justify-center">
@@ -244,7 +242,7 @@ function ContentInteractions({
 								base: "flex-row-reverse",
 							}}
 						>
-							Abstract
+							{t("abstract")}
 						</Switch>
 					</div>
 				</Card>
@@ -264,6 +262,7 @@ function ResourcesList({
 	isLoading: boolean;
 	abstract: boolean;
 }) {
+	const t = useTranslations("ui");
 	const actuallyNoData =
 		(!isLoading && data && data.items.length === 0) || error;
 
@@ -272,7 +271,7 @@ function ResourcesList({
 			<div className="flex flex-col gap-6 -mt-4">
 				{actuallyNoData ? (
 					<div className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
-						No resources found
+						{t("noResourcesFound")}
 					</div>
 				) : (
 					Array.from({ length: ITEMS_PER_PAGE }).map(
@@ -293,18 +292,20 @@ function ResourcesList({
 }
 
 function ContentActions() {
+	const t = useTranslations("ui");
+
 	return (
 		<div className="xl:flex xl:justify-end grid gap-4 flex-wrap">
 			<Button endContent={<HiOutlineDownload className="size-6" />}>
-				Download 6,788 Records
+				{t("downloadRecords", { count: "6,788" })}
 			</Button>
 			<Button endContent={<HiOutlinePrinter className="size-6" />}>
-				Print 5,654 Citations
+				{t("printCitations", { count: "5,654" })}
 			</Button>
 			<Button
 				endContent={<HiOutlineCodeBracketSquare className="size-6" />}
 			>
-				Main Feed
+				{t("mainFeed")}
 			</Button>
 		</div>
 	);
@@ -455,6 +456,7 @@ function FilterChips({
 function MainContent({ searchParams }: { searchParams: { [key: string]: any } }) {
 	const { router, pathname, createQueryString } =
 		useParamsState(searchParams);
+	const t = useTranslations("ui");
 
 	const collectionsParam = searchParams["collections"];
 	const collections = collectionsParam ? collectionsParam.split(",") : [];
@@ -598,7 +600,7 @@ function MainContent({ searchParams }: { searchParams: { [key: string]: any } })
 				/>
 				<ContentActions />
 				<div className="text-center xl:text-end text-black/40 dark:text-white/40 text-sm">
-					Last update from database: 30/03/2024, 15:01 (UTC)
+					{t("lastUpdate", { date: "30/03/2024, 15:01" })}
 				</div>
 			</div>
 		</>
