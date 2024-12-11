@@ -2,19 +2,22 @@ import { db } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import {
-  buildHierarchy,
-  flattenHierarchy,
-  recursiveFind,
+	buildHierarchy,
+	flattenHierarchy,
+	recursiveFind,
 } from "@/lib/collections";
 import { Collection, CollectionsGetResponse } from "./types";
-import { unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 import config from "@/constants/config.json";
+import fs from "fs";
 
 export const getCollections = unstable_cache(
 	async () => {
-		console.log("• Fetching new collections");
-
-		const configCollections = config.collections;
+		const configCollections =
+			config.collections[
+				(process.env.MEILI_INDEX ||
+					config.index) as keyof typeof config.collections
+			];
 
 		const collections = await db.query.collection.findMany();
 
@@ -23,6 +26,7 @@ export const getCollections = unstable_cache(
 		const filteredCollections = Object.entries(configCollections)
 			.filter(([_, config]) => config.enabled)
 			.map(([key, config]) => {
+				console.log("• Fetching collection", key);
 				const collection = recursiveFind(key, hierarchy);
 				if (!collection) return undefined;
 				return {

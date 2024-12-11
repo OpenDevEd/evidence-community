@@ -9,58 +9,81 @@
 		"summarize": "You are a concise AI assistant created by OpenDevEd (Open Development & Education), focused on delivering clear research summaries. MARKDOWN FORMATTING IS MANDATORY FOR ALL RESPONSES. Create a brief yet comprehensive overview that: 1) States the main research question or objective in 1-2 sentences, 2) Outlines the key findings in 2-3 bullet points, 3) Highlights the most significant conclusions, and 4) Mentions any critical implications. Keep the entire summary under 200 words. Focus primarily on the Document, incorporating key points from PDFs or Attachments only when they add essential context. Use clear, straightforward language avoiding technical jargon unless absolutely necessary. You MUST use proper markdown formatting throughout: # for main titles (largest font), ## for major sections (large font), ### for subsections (medium font), regular text for paragraphs (normal font), and • or - for bullet points. All lists MUST use proper bullet points or numbering. All quotes MUST be properly formatted with > symbol. If asked about anything outside the provided research data, politely decline to answer."
 	},
 	"collections": {
-		"X6MP49KP": {
-			"title": "Learners",
-			"enabled": true
+		"items": {
+			"X6MP49KP": {
+				"title": "Learners",
+				"enabled": true
+			},
+			"HCTKHFNN": {
+				"title": "Educators",
+				"enabled": true
+			},
+			"X3DPTXLG": {
+				"title": "Education systems",
+				"enabled": true
+			},
+			"3TN4ME9B": {
+				"title": "Cost effectiveness",
+				"enabled": true
+			},
+			"C965YJYB": {
+				"title": "Hardware and modality",
+				"enabled": true
+			},
+			"B42SBYGD": {
+				"title": "Educational level",
+				"enabled": true
+			},
+			"P3Q22NYF": {
+				"title": "Within-country contexts",
+				"enabled": true
+			},
+			"ZNNITHFH": {
+				"title": "Language of publication",
+				"enabled": true
+			},
+			"N6HGZU24": {
+				"title": "Publisher and type",
+				"enabled": true
+			},
+			"9WEL59XM": {
+				"title": "Research method",
+				"enabled": true
+			},
+			"NRS95TC8": {
+				"title": "COVID and reopening of schools",
+				"enabled": true
+			},
+			"W6YXX3J6": {
+				"title": "Topic Area",
+				"enabled": true
+			},
+			"F29UQFBX": {
+				"title": "Focus Countries",
+				"enabled": true
+			}
 		},
-		"HCTKHFNN": {
-			"title": "Educators",
-			"enabled": true
-		},
-		"X3DPTXLG": {
-			"title": "Education systems",
-			"enabled": true
-		},
-		"3TN4ME9B": {
-			"title": "Cost effectiveness",
-			"enabled": true
-		},
-		"C965YJYB": {
-			"title": "Hardware and modality",
-			"enabled": true
-		},
-		"B42SBYGD": {
-			"title": "Educational level",
-			"enabled": true
-		},
-		"P3Q22NYF": {
-			"title": "Within-country contexts",
-			"enabled": true
-		},
-		"ZNNITHFH": {
-			"title": "Language of publication",
-			"enabled": true
-		},
-		"N6HGZU24": {
-			"title": "Publisher and type",
-			"enabled": true
-		},
-		"9WEL59XM": {
-			"title": "Research method",
-			"enabled": true
-		},
-		"NRS95TC8": {
-			"title": "COVID and reopening of schools",
-			"enabled": true
-		},
-		"W6YXX3J6": {
-			"title": "Topic Area",
-			"enabled": true
-		},
-		"F29UQFBX": {
-			"title": "Focus Countries",
-			"enabled": true
+		"itemsTest": {
+			"GJX4SBYM": {
+				"title": "Theme",
+				"enabled": true
+			},
+			"7XAM9PEM": {
+				"title": "Our programmes",
+				"enabled": true
+			},
+			"VPIKW9C7": {
+				"title": "Publication type",
+				"enabled": true
+			},
+			"36S77JVF": {
+				"title": "Organisations, collaborators and clients",
+				"enabled": true
+			},
+			"94GNF2EB": {
+				"title": "Location",
+				"enabled": true
+			}
 		}
-		
 	}
 }
