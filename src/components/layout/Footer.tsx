@@ -6,9 +6,9 @@ import { Button } from "@/components/nextui/Button";
 import { useTheme } from "next-themes";
 import { useEffect } from "react";
 import { useState } from "react";
-import { Skeleton } from "@nextui-org/react";
 import { style } from "@/../tailwind.config";
 import { useTranslations } from "next-intl";
+import { Skeleton } from "@/components/nextui/Skeleton";
 
 const footerInfo = {
   email: "opendeved@gmail.com",
