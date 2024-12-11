@@ -17,7 +17,7 @@ export const getCollections = unstable_cache(
 			config.collections[
 				(process.env.MEILI_INDEX ||
 					config.index) as keyof typeof config.collections
-			];
+			] || {};
 
 		const collections = await db.query.collection.findMany();
 
