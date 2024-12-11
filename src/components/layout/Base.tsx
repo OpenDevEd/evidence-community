@@ -8,7 +8,7 @@ import { twMerge } from "tailwind-merge";
 import { style } from "@/../tailwind.config";
 import { getMessages } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
-
+import {getLangDir} from 'rtl-detect';
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -35,9 +35,10 @@ export default async function Base({
 	locale: string;
 }>) {
 	const messages = await getMessages();
+	const dir = getLangDir(locale);
 
 	return (
-		<html lang={locale} suppressHydrationWarning>
+		<html lang={locale} dir={dir} suppressHydrationWarning>
 			<body
 				className={`${
 					style === "edtechhub"
