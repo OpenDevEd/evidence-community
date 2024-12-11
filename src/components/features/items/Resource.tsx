@@ -7,6 +7,7 @@ import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
 import { useRouter } from "@/i18n/routing";
+import { useFormatter, useTranslations } from "next-intl";
 
 export default function Resource({
 	itemData,
@@ -17,6 +18,9 @@ export default function Resource({
 	abstract: boolean;
 	isLoading: boolean;
 }) {
+	const t = useTranslations("ui");
+	const format = useFormatter();
+
 	const abstractText =
 		itemData && firstNonNullOrEmpty(itemData, ["abstractNote"]);
 
@@ -42,24 +46,27 @@ export default function Resource({
 				<div className="flex w-full gap-2 items-center flex-wrap">
 					<ResourceAuthors itemData={itemData} />
 					<ResourceDivider />
-					<ResourceData
-						text={
-							itemData && itemData.date
-								? new Date(
-										itemData.date
-								  ).toLocaleDateString("en-US", {
-										dateStyle: "medium",
-								  })
-								: null
-						}
-						classNames={{
-							text: "text-black/60 dark:text-white/60 font-normal",
-						}}
-					/>
-					<ResourceDivider />
+					{itemData?.date &&
+						!isNaN(new Date(itemData.date).getTime()) && (
+							<>
+								<ResourceData
+									text={format.dateTime(
+										new Date(itemData.date),
+										{
+											dateStyle: "medium",
+										}
+									)}
+									classNames={{
+										text: "text-black/60 dark:text-white/60 font-normal",
+									}}
+								/>
+								<ResourceDivider />
+							</>
+						)}
+
 					{itemData?.tags?.includes("_comingsoon") && (
 						<div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full xl:w-auto text-center">
-							In Progress
+							{t("inProgress")}
 						</div>
 					)}
 				</div>
@@ -87,7 +94,7 @@ export default function Resource({
 					className="font-medium text-tertiary-400"
 				>
 					<span className="text-black/60 dark:text-white/60 ">
-						view on docs.opendeved.net
+						{t("viewOnDocs", { site: "docs.opendeved.net" })}
 					</span>
 				</NextUILink>
 			</Skeleton>
