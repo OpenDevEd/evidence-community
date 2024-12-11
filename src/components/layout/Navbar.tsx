@@ -20,10 +20,11 @@ import config from "@/constants/config.json";
 import { style } from "@/../tailwind.config";
 import type { LinkObject } from "@/constants/links";
 import {
-	Dropdown,
 	DropdownItem,
 	DropdownMenu,
 	DropdownTrigger,
+	Select,
+	SelectItem,
 	useDisclosure,
 } from "@nextui-org/react";
 import { ChevronDownIcon } from "@nextui-org/shared-icons";
@@ -139,15 +140,18 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 				)}
 			>
 				{link.icon && (
-					<link.icon className={twMerge("fill-current size-6 shrink-0", style === "edtechhub" && "size-5")} />
+					<link.icon
+						className={twMerge(
+							"fill-current size-6 shrink-0",
+							style === "edtechhub" && "size-5"
+						)}
+					/>
 				)}
 				<span className="line-clamp-1">{t(link.label)}</span>
 			</Link>
 			{link.dropdown && (
 				<Dropdown
-					classNames={{
-						content: "bg-accent "
-					}}
+					color="accent"
 					isOpen={isOpen}
 					onOpenChange={onOpenChange}
 					offset={12}
@@ -157,10 +161,12 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 							<ChevronDownIcon className="size-4" />
 						</div>
 					</DropdownTrigger>
-					<DropdownMenu itemClasses={{
-						base: "data-[hover]:bg-accent-400 ",
-						title: "text-white"
-					}}>
+					<DropdownMenu
+						itemClasses={{
+							base: "data-[hover]:bg-accent-400 ",
+							title: "text-white",
+						}}
+					>
 						{link.dropdown?.map((child) => (
 							<DropdownItem key={child.label} href={child.href}>
 								{t(child.label)}
@@ -186,7 +192,7 @@ function LinksList({
 				"flex flex-1 items-center justify-end gap-8",
 				style === "edtechhub" && "gap-6",
 				isMobile && "flex-col gap-8",
-				!isMobile && "hidden xl:flex",
+				!isMobile && "hidden xl:flex"
 			)}
 		>
 			{links[style as keyof typeof links].map(
@@ -243,8 +249,7 @@ export default function Navbar() {
 		<nav
 			className={twMerge(
 				"w-full max-w-screen-2xl px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0",
-				style === "edtechhub" &&
-					"bg-white dark:bg-secondary max-w-none"
+				style === "edtechhub" && "bg-white dark:bg-secondary max-w-none"
 			)}
 		>
 			<div
@@ -273,7 +278,7 @@ export default function Navbar() {
 							animate={{ opacity: 1, scale: 1 }}
 							exit={{ opacity: 0, scale: 0.8 }}
 							transition={{ duration: 0.15 }}
-							className="xl:hidden block ml-auto"
+							className="xl:hidden block ml-auto rtl:ml-0 rtl:mr-auto"
 						>
 							<Icon
 								className="size-8 !fill-accent !stroke-accent cursor-pointer transition-transform active:scale-80 delay-0"
@@ -293,7 +298,7 @@ export default function Navbar() {
 						: "max-h-0 opacity-0"
 				)}
 			>
-				{/* <LinksList pathname={pathname} isMobile={true} /> */}
+				<LinksList pathname={pathname} isMobile={true} />
 				<ThemeSwitcher
 					theme={theme}
 					setTheme={setTheme}
