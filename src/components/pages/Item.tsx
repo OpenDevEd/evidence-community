@@ -111,7 +111,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 
 export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 	const router = useRouter();
-
+	const t = useTranslations("ui");
 	return (
 		<main className="w-full max-w-screen-2xl px-4 xl:px-14 flex flex-col gap-12 mt-4">
 			<ItemControls router={router} />
@@ -135,7 +135,7 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 					</>
 				) : (
 					<div className="text-center text-2xl text-black/80 dark:text-white/80 font-medium min-h-screen flex items-center justify-center">
-						Item not found
+						{t("itemNotFound")}
 					</div>
 				)}
 			</div>

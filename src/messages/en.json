@@ -27,7 +27,9 @@
 		"viewOnDocs": "View on {site}",
 		"inProgress": "In Progress",
 		"resourcesCount": "<number>{count}</number> resources",
-		"noFacetsFound": "No facets found"
+		"noFacetsFound": "No facets found",
+		"pageNotFound": "Page Not Found",
+		"itemNotFound": "Resource Not Found"
 	},
 	"ai": {
 		"summarize": "Summarize",

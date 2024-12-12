@@ -27,7 +27,9 @@
 		"viewOnDocs": "عرض على {site}",
 		"inProgress": "قيد التنفيذ",
 		"resourcesCount": "<number>{count}</number> موارد",
-		"noFacetsFound": "لم يتم العثور على مجموعات"
+		"noFacetsFound": "لم يتم العثور على مجموعات",
+		"pageNotFound": "الصفحة غير موجودة",
+		"itemNotFound": "المورد غير موجود"
 	},
 	"ai": {
 		"summarize": "تلخيص",

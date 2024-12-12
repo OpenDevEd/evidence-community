@@ -27,7 +27,9 @@
 		"viewOnDocs": "在 {site} 上查看",
 		"inProgress": "进行中",
 		"resourcesCount": "<number>{count}</number> 个资源",
-		"noFacetsFound": "未找到面"
+		"noFacetsFound": "未找到面",
+		"pageNotFound": "页面未找到",
+		"itemNotFound": "资源未找到"
 	},
 	"ai": {
 		"summarize": "总结",
