@@ -226,13 +226,13 @@ function ContentInteractions({
 					isLoaded={!!data}
 					className="flex items-center flex-1 rounded-2xl"
 				>
-					<h2 className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center gap-2">
+					<h2 suppressHydrationWarning className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center gap-2">
 						{t.rich("resourcesCount", {
 							count: formatter.number(
 								actuallyNoData ? 0 : data?.totalItems || 0
 							),
 							number: (chunks) => (
-								<span className="text-2xl leading-6">
+								<span suppressHydrationWarning className="text-2xl leading-6">
 									{chunks}
 								</span>
 							),
