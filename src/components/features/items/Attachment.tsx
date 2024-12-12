@@ -11,6 +11,10 @@ function downloadLink(url: string, filename: string) {
 	fetch(url)
 		.then((response) => response.blob())
 		.then((blob) => {
+posthog.capture("download_attachment", {
+				key,
+				filename,
+			});
 			const link = document.createElement("a");
 			link.href = URL.createObjectURL(blob);
 			link.download = filename;
@@ -70,6 +74,10 @@ export default function Attachment({ data }: { data: Item }) {
 						size="sm"
 						onClick={() => {
 							window.open(data.url || "", "_blank");
+posthog.capture("view_attachment", {
+								key: data.key,
+								filename: data.filename,
+							});
 						}}
 						startContent={<FaEye className="size-5" />}
 					>
