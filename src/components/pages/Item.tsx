@@ -74,7 +74,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 								description: t("summarizeDescription"),
 								onClick: () => {
 									onSummaryOpenChange();
-									summaryStream(data);
+									summaryStream(data?.item?.key ?? "");
 								},
 							},
 							{
@@ -83,7 +83,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 								description: t("explainDescription"),
 								onClick: () => {
 									onExplainOpenChange();
-									explainStream(data);
+									explainStream(data?.item?.key ?? "");
 								},
 							},
 							{
