@@ -12,47 +12,39 @@ import { Button } from "@/components/nextui/Button";
 import { FaClipboard, FaClipboardCheck } from "react-icons/fa";
 import { useState } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
+import CopyButton from "./CopyButton";
 
-function ResourceInteractions({itemData, isLoading}: {itemData: Item | undefined, isLoading: boolean}) {
-	const [isCopied, setIsCopied] = useState(false);
-	const [clearCopied] = useDebounce(() => setIsCopied(false), 2000);
-	const locale = useLocale();
+
+function ResourceInteractions({
+	itemData,
+	isLoading,
+}: {
+	itemData: Item | undefined;
+	isLoading: boolean;
+}) {
 	const t = useTranslations("ui");
 
-	const handleCopy = () => {
-		const currentUrl = window.location.href;
-		const url = new URL(currentUrl);
-		url.pathname = `/${locale}/lib/${itemData?.key}`;
-		url.search = "";
-		navigator.clipboard.writeText(url.toString());
-		setIsCopied(true);
-		clearCopied();
-	};
-
-	return (<div className="p-2 bg-black/5 dark:bg-white/[4%] rounded-b-xl">
-		<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
-			<div className="w-full rounded-2xl flex flex-row items-center">
-				<NextUILink
-					showAnchorIcon
-					href="/"
-					className="font-medium text-tertiary-400 shrink-1 px-2"
-				>
-					<span className="text-black/60 dark:text-white/60 ">
-						{t("viewOnDocs", {
-							site: "docs.opendeved.net",
-						})}
-					</span>
-				</NextUILink>
-				<div
-					className="flex-1 flex items-center justify-end z-10"
-				>
-					<Button color={isCopied ? "success" : "secondary"} startContent={isCopied ? <FaClipboardCheck /> : <FaClipboard />} size="sm" onClick={handleCopy}>
-						{isCopied ? t("copied") : t("copyLink")}
-					</Button>
+	return (
+		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl">
+			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
+				<div className="w-full rounded-2xl flex flex-row items-center">
+					<NextUILink
+						showAnchorIcon
+						href="/"
+						className="font-medium text-tertiary-400 shrink-1 px-2"
+					>
+						<span className="text-black/60 dark:text-white/60 ">
+							{t("viewOnDocs", {
+								site: "docs.opendeved.net",
+							})}
+						</span>
+					</NextUILink>
+					<div className="flex-1 flex items-center justify-end z-10">
+						<CopyButton itemData={itemData} />
+					</div>
 				</div>
-			</div>
-		</Skeleton>
-	</div>
+			</Skeleton>
+		</div>
 	);
 }
 
