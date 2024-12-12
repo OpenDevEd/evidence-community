@@ -224,7 +224,7 @@ function LanguageSwitcher() {
 	return (
 		<Dropdown>
 			<DropdownTrigger className="cursor-pointer select-none">
-				<div className="relative flex items-center gap-2 uppercase">
+				<div data-style={style} className="relative flex items-center gap-2 data-[style=edtechhub]:uppercase">
 					<span className="text-lg font-medium">
 						{localesNames[locale as keyof typeof localesNames]}
 					</span>

@@ -2,7 +2,7 @@ import type { Config } from "tailwindcss";
 import { nextui } from "@nextui-org/react";
 import jsonConfig from "./src/constants/config.json";
 
-export const style = process.env.STYLE || jsonConfig?.style || "opendeved";
+export const style = process.env.NEXT_PUBLIC_STYLE || jsonConfig?.style || "opendeved";
 
 const accentColors = {
   "opendeved": "#e68124",
