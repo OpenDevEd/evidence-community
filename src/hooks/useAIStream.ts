@@ -1,8 +1,10 @@
+import { useLocale } from "next-intl";
 import { useState, useCallback, useRef } from "react";
 
 export default function useAIStream(endpoint: string) {
     const [response, setResponse] = useState<string>("");
     const fetched = useRef(false);
+	const locale = useLocale();
 
 	const stream = useCallback(async (data: any) => {
 		if (fetched.current) return;
@@ -11,6 +13,10 @@ export default function useAIStream(endpoint: string) {
 		const res = await fetch(endpoint, {
 			method: "POST",
 			body: JSON.stringify(data),
+			headers: {
+				"Content-Type": "application/json",
+				"Accept-Language": locale,
+			},
 		});
 
 		const reader = res.body?.getReader();
@@ -27,7 +33,7 @@ export default function useAIStream(endpoint: string) {
 			const text = decoder.decode(value, { stream: true });
 			setResponse((prev) => prev + text);
 		}
-	}, [endpoint]);
+	}, [endpoint, locale]);
 
 	return { response, stream };
 }
