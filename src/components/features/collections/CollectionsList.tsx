@@ -125,6 +125,10 @@ export default function CollectionsList({
 		};
 	}, [facetDistribution, data]);
 
+	const displayedCollections = useMemo(() => {
+		return hierarchy.filter(collection => data?.collections.filter(c => c.originalFacet === collection.key && filteredFacetDistribution.collections[c.key]).length)
+	}, [hierarchy, data, filteredFacetDistribution])
+
 	return (
 		<div
 			className={twMerge(
@@ -240,11 +244,10 @@ export default function CollectionsList({
 						}}
 						showDivider={false}
 					>
-						{hierarchy.map((collection) => (
+						{displayedCollections.map((collection) => (
 							<AccordionItem
 								key={collection.key}
 								title={collection.title || collection.name}
-								className="[&:not(:has(.collection))]:hidden"
 							>
 								<CollectionCategory
 									collection={collection}
