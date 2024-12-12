@@ -28,10 +28,12 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const { isOpen: isExplainOpen, onOpenChange: onExplainOpenChange } =
 		useDisclosure();
 
-	const { response: summaryResponse, stream: summaryStream } =
-		useAIStream("/api/ai?prompt=summarize");
-	const { response: explainResponse, stream: explainStream } =
-		useAIStream("/api/ai?prompt=explain");
+	const { response: summaryResponse, stream: summaryStream } = useAIStream(
+		"/api/ai?prompt=summarize"
+	);
+	const { response: explainResponse, stream: explainStream } = useAIStream(
+		"/api/ai?prompt=explain"
+	);
 
 	return (
 		<div className="fixed bottom-0 right-0">
@@ -98,7 +100,11 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 						}}
 					>
 						{(item) => (
-							<DropdownItem key={item.key} description={item.description} onClick={item.onClick}>
+							<DropdownItem
+								key={item.key}
+								description={item.description}
+								onClick={item.onClick}
+							>
 								{item.label}
 							</DropdownItem>
 						)}
@@ -113,31 +119,35 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 	const router = useRouter();
 	const t = useTranslations("ui");
 	return (
-		<main className="w-full max-w-screen-2xl px-4 xl:px-14 flex flex-col gap-12 mt-4">
-			<ItemControls router={router} />
-			<div className="p-10 w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] flex flex-col gap-8 ">
-				{data?.item ? (
-					<>
-						<h1 className="text-4xl text-black/80 dark:text-white/80 font-medium">
-							{data?.item.title}
-						</h1>
-						<div className="flex flex-col gap-8">
-							{data?.item &&
-								Object.keys(data.item).map((row: string) => (
-									<ItemRow
-										item={data.item!}
-										key={row}
-										row={row}
-										router={router}
-									/>
-								))}
+		<main className="w-full max-w-screen-2xl px-4 xl:px-14 flex flex-col">
+			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
+				<ItemControls itemData={data?.item} router={router} />
+				<div className="flex flex-col gap-8 p-10">
+					{data?.item ? (
+						<>
+							<h1 className="text-4xl text-black/80 dark:text-white/80 font-medium">
+								{data?.item.title}
+							</h1>
+							<div className="flex flex-col gap-8">
+								{data?.item &&
+									Object.keys(data.item).map(
+										(row: string) => (
+											<ItemRow
+												item={data.item!}
+												key={row}
+												row={row}
+												router={router}
+											/>
+										)
+									)}
+							</div>
+						</>
+					) : (
+						<div className="text-center text-2xl text-black/80 dark:text-white/80 font-medium min-h-screen flex items-center justify-center">
+							{t("itemNotFound")}
 						</div>
-					</>
-				) : (
-					<div className="text-center text-2xl text-black/80 dark:text-white/80 font-medium min-h-screen flex items-center justify-center">
-						{t("itemNotFound")}
-					</div>
-				)}
+					)}
+				</div>
 			</div>
 			{data && <AiButton data={data} />}
 		</main>
