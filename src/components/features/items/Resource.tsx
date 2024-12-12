@@ -23,6 +23,7 @@ function ResourceInteractions({itemData, isLoading}: {itemData: Item | undefined
 		const currentUrl = window.location.href;
 		const url = new URL(currentUrl);
 		url.pathname = `/${locale}/lib/${itemData?.key}`;
+		url.search = "";
 		navigator.clipboard.writeText(url.toString());
 		setIsCopied(true);
 		clearCopied();
