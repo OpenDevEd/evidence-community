@@ -6,12 +6,14 @@ import Image from "next/image";
 import { LuDownload } from "react-icons/lu";
 import { Button } from "@/components/nextui/Button";
 import { FaEye } from "react-icons/fa";
+import posthog from "posthog-js";
+import { useTranslations } from "next-intl";
 
-function downloadLink(url: string, filename: string) {
+function downloadLink(url: string, filename: string, key: string) {
 	fetch(url)
 		.then((response) => response.blob())
 		.then((blob) => {
-posthog.capture("download_attachment", {
+			posthog.capture("download_attachment", {
 				key,
 				filename,
 			});
@@ -30,6 +32,7 @@ export default function Attachment({ data }: { data: Item }) {
 	const imageHeight = imageRef.current?.height;
 	const parentRef = useRef<HTMLDivElement>(null);
 	const parentHeight = parentRef.current?.clientHeight;
+	const t = useTranslations("ui");
 
 	return (
 		<div
@@ -67,31 +70,31 @@ export default function Attachment({ data }: { data: Item }) {
 					<div className="rounded-xl bg-accent w-full aspect-[9/12]" />
 				)}
 			</div>
-			<div className="flex flex-col gap-2 h-full ml-52">
+			<div className="flex flex-col gap-2 h-full ltr:ml-52 rtl:mr-52">
 				<h1 className="text-lg font-medium">{data.filename}</h1>
 				<div className="flex gap-2">
 					<Button
 						size="sm"
 						onClick={() => {
 							window.open(data.url || "", "_blank");
-posthog.capture("view_attachment", {
+							posthog.capture("view_attachment", {
 								key: data.key,
 								filename: data.filename,
 							});
 						}}
 						startContent={<FaEye className="size-5" />}
 					>
-						View
+						{t("viewAttachment")}
 					</Button>
 					<Button
 						size="sm"
 						color="accent"
 						startContent={<LuDownload className="size-5" />}
 						onClick={() => {
-							downloadLink(data.url || "", data.filename || "");
+							downloadLink(data.url || "", data.filename || "", data.key || "");
 						}}
 					>
-						Download
+						{t("downloadAttachment")}
 					</Button>
 				</div>
 			</div>
