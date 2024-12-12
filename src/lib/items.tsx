@@ -6,18 +6,17 @@ import { twMerge } from "tailwind-merge";
 import { Creator } from "@/db/schema/tables/item";
 import Attachment from "@/components/features/items/Attachment";
 import { createFormatter, useTranslations } from "next-intl";
+import { useRouter } from "@/i18n/routing";
 
 type FormatterProps = {
 	value: any;
 	item: Item;
+	router: ReturnType<typeof useRouter>;
 	formatter: ReturnType<typeof createFormatter>;
 	t: ReturnType<typeof useTranslations>;
 };
 
-function formatDate({
-	value,
-	formatter,
-}: FormatterProps) {
+function formatDate({ value, formatter }: FormatterProps) {
 	if (!value) return false;
 	if (isNaN(new Date(value).getTime())) return value;
 	return formatter.dateTime(new Date(value), {
@@ -44,18 +43,23 @@ export const valueFormatter: Record<
 	deleted: () => false,
 	year: () => false,
 	fullNames: () => false,
-	itemType: ({value, t}) => t("itemType." + value),
+	itemType: ({ value, t }) => t("itemType." + value),
 	collections: () => false,
 	title: () => false,
-	creators: ({value, t}) => {
+	creators: ({ value, t }) => {
 		if (!value) return null;
 		if (value.length === 0) return null;
 		return (
 			<ul className="flex flex-col gap-2">
 				{value.map((creator: Creator, index: number) => {
-					const creatorTypeLabel = t("creatorType." + creator.creatorType);
+					const creatorTypeLabel = t(
+						"creatorType." + creator.creatorType
+					);
 					return (
-						<li className="flex gap-2 rtl:flex-row-reverse max-w-fit" key={index}>
+						<li
+							className="flex gap-2 rtl:flex-row-reverse max-w-fit"
+							key={index}
+						>
 							<span className="font-medium text-accent">
 								{creator.firstName
 									? `${creator.firstName}, ${creator.lastName}`
@@ -75,7 +79,7 @@ export const valueFormatter: Record<
 			</ul>
 		);
 	},
-	collectionsData: ({value}) => {
+	collectionsData: ({ value }) => {
 		if (!value) return null;
 		if (value.length === 0) return null;
 
@@ -110,12 +114,12 @@ export const valueFormatter: Record<
 	},
 	date: formatDate,
 	accessDate: formatDate,
-	url: ({value}) => (
+	url: ({ value }) => (
 		<Link href={value} className="text-accent break-all" showAnchorIcon>
 			{value}
 		</Link>
 	),
-	attachmentsData: ({value}) => {
+	attachmentsData: ({ value }) => {
 		const filteredValue = value.filter(
 			(data: any) => data.PDFCoverPageImage
 		);
@@ -132,4 +136,3 @@ export const valueFormatter: Record<
 		);
 	},
 };
-

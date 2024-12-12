@@ -15,7 +15,7 @@ import {
 import AIModal from "../features/modals/AIModal";
 import useAIStream from "@/hooks/useAIStream";
 import ChatModal from "../features/modals/ChatModal";
-
+import { useRouter } from "@/i18n/routing";
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
@@ -103,9 +103,11 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 }
 
 export default function Item({ data }: { data: ItemGetResponse | undefined }) {
+	const router = useRouter();
+
 	return (
 		<main className="w-full max-w-screen-2xl px-4 xl:px-14 flex flex-col gap-12 mt-4">
-			<ItemControls />
+			<ItemControls router={router} />
 			<div className="p-10 w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] flex flex-col gap-8 ">
 				{data?.item ? (
 					<>
@@ -119,6 +121,7 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 										item={data.item!}
 										key={row}
 										row={row}
+										router={router}
 									/>
 								))}
 						</div>

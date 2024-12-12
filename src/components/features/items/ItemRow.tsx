@@ -1,15 +1,15 @@
 import { valueFormatter } from "@/lib/items";
-import { columnLabels } from "@/db/schema/views/columns";
 import { twMerge } from "tailwind-merge";
 import type { Item } from "@/app/api/item/types";
 import { useFormatter, useTranslations } from "next-intl";
+import { useRouter } from "@/i18n/routing";
 
-export default function ItemRow({ item, row }: { item: Item; row: string }) {
+export default function ItemRow({ item, row, router }: { item: Item; row: string; router: ReturnType<typeof useRouter> }) {
 	const t = useTranslations();
 	const formatter = useFormatter();
 	const originalValue = item[row as keyof Item];
 	const rowValue = valueFormatter[row]
-	? valueFormatter[row]!({value: originalValue, item, formatter, t}) : (originalValue ? String(originalValue) : "N/A");
+	? valueFormatter[row]!({value: originalValue, item, formatter, t, router}) : (originalValue ? String(originalValue) : "N/A");
 	if (!rowValue || !originalValue) return null;
 	const rowName = t("article." + row);
 

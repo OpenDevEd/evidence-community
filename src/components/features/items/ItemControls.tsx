@@ -7,9 +7,8 @@ import { PiSlidersHorizontalBold } from "react-icons/pi";
 import { useRouter } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 
-export default function ItemControls() {
+export default function ItemControls({ router }: { router: ReturnType<typeof useRouter> }) {
 	const t = useTranslations("ui");
-	const router = useRouter();
 
 	return (
 		<div className="flex justify-start gap-6 w-full">
