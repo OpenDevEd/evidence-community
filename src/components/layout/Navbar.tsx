@@ -225,7 +225,7 @@ function LanguageSwitcher() {
 					router.push(pathname, { locale: locale as string });
 				}}
 			>
-				{routing.locales.map((locale) => (
+				{routing.locales.filter(currentLocale => currentLocale !== locale).map((locale) => (
 					<DropdownItem key={locale}>
 						{localesNames[locale as keyof typeof localesNames]}
 					</DropdownItem>
