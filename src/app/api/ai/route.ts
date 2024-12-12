@@ -5,6 +5,7 @@ import config from "@/constants/config.json";
 export async function POST(req: Request) {
 	const { searchParams } = new URL(req.url);
 	const prompt = searchParams.get("prompt") || "summarize";
+	const locale = req.headers.get("Accept-Language") || "en";
 	const systemPrompt = config.prompts[prompt as keyof typeof config.prompts];
 
 	if (!systemPrompt || prompt === "chat") {
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
 
 	const completion = await openai.chat.completions.create({
 		messages: [
-			{ role: "system", content: systemPrompt },
+			{ role: "system", content: systemPrompt + `\n\nLanguage: ${locale}` },
 			{ role: "user", content: JSON.stringify(data) },
 		],
 		model: process.env.OPENAI_MODEL as any,
