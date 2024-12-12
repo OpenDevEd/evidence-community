@@ -6,8 +6,11 @@ import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/i18n/routing";
 import posthog from "posthog-js";
 import { PostHogProvider, usePostHog } from "posthog-js/react";
-import { Suspense, useEffect } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { useRouter } from "@/i18n/routing";
+import { createContext } from "react";
+
+export const CacheContext = createContext<any>({});
 
 function PageView() {
 	const pathname = usePathname();
@@ -29,17 +32,24 @@ function PageView() {
 	return null;
 }
 
-export default function Providers({
-	children,
-}: {
-	children: React.ReactNode;
-}) {
+function CacheProvider({ children }: { children: React.ReactNode }) {
+	const [cache, setCache] = useState({});
+	const itemsCache = useRef(undefined);
+
+	return (
+		<CacheContext.Provider value={{ cache, setCache, itemsCache }}>
+			{children}
+		</CacheContext.Provider>
+	);
+}
+
+export default function Providers({ children }: { children: React.ReactNode }) {
 	const router = useRouter();
 
 	useEffect(() => {
 		posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
 			api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST,
-			person_profiles: 'always',
+			person_profiles: "always",
 			capture_pageview: false,
 			capture_pageleave: true,
 		});
@@ -52,12 +62,14 @@ export default function Providers({
 			disableTransitionOnChange
 		>
 			<PostHogProvider client={posthog}>
-				<NextUIProvider navigate={router.push}>
-					<Suspense>
-						<PageView />
-					</Suspense>
-					{children}
-				</NextUIProvider>
+				<CacheProvider>
+					<NextUIProvider navigate={router.push}>
+						<Suspense>
+							<PageView />
+						</Suspense>
+						{children}
+					</NextUIProvider>
+				</CacheProvider>
 			</PostHogProvider>
 		</ThemeProvider>
 	);
