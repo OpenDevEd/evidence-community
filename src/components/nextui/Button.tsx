@@ -12,6 +12,10 @@ export const Button = extendVariants(NextUIButton, {
         `text-white dark:text-white 
         bg-accent dark:bg-accent-500 
         border-black/10 dark:border-white/10`,
+      success:
+        `text-white dark:text-white 
+        bg-success dark:bg-success-500 
+        border-black/10 dark:border-white/10`,
     },
     variant: {
       default: "border-small rounded-2xl",
