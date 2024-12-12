@@ -29,7 +29,11 @@
 		"resourcesCount": "<number>{count}</number> resources",
 		"noFacetsFound": "No facets found",
 		"pageNotFound": "Page Not Found",
-		"itemNotFound": "Resource Not Found"
+		"itemNotFound": "Resource Not Found",
+		"copyLink": "Copy Link",
+		"copied": "Copied!",
+		"viewAttachment": "View",
+		"downloadAttachment": "Download"
 	},
 	"ai": {
 		"summarize": "Summarize",

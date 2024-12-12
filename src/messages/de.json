@@ -29,7 +29,11 @@
 		"resourcesCount": "<number>{count}</number> Ressourcen",
 		"noFacetsFound": "Keine Facets gefunden",
 		"pageNotFound": "Seite nicht gefunden",
-		"itemNotFound": "Ressource nicht gefunden"
+		"itemNotFound": "Ressource nicht gefunden",
+		"copyLink": "Link kopieren",
+		"copied": "Link kopiert!",
+		"viewAttachment": "Ansehen",
+		"downloadAttachment": "Download"
 	},
 	"ai": {
 		"summarize": "Zusammenfassen",

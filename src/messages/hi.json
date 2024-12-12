@@ -29,7 +29,11 @@
 		"resourcesCount": "<number>{count}</number> संसाधन",
 		"noFacetsFound": "कोई पहलू नहीं मिला",
 		"pageNotFound": "पृष्ठ नहीं मिला",
-		"itemNotFound": "संसाधन नहीं मिला"
+		"itemNotFound": "संसाधन नहीं मिला",
+		"copyLink": "लिंक कॉपी करें",
+		"copied": "लिंक कॉपी हो गया!",
+		"viewAttachment": "देखें",
+		"downloadAttachment": "डाउनलोड"
 	},
 	"ai": {
 		"summarize": "सारांश",

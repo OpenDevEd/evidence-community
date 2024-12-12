@@ -29,7 +29,11 @@
 		"resourcesCount": "<number>{count}</number> 个资源",
 		"noFacetsFound": "未找到面",
 		"pageNotFound": "页面未找到",
-		"itemNotFound": "资源未找到"
+		"itemNotFound": "资源未找到",
+		"copyLink": "复制链接",
+		"copied": "已复制链接!",
+		"viewAttachment": "查看",
+		"downloadAttachment": "下载"
 	},
 	"ai": {
 		"summarize": "总结",

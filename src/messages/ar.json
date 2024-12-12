@@ -29,7 +29,11 @@
 		"resourcesCount": "<number>{count}</number> موارد",
 		"noFacetsFound": "لم يتم العثور على مجموعات",
 		"pageNotFound": "الصفحة غير موجودة",
-		"itemNotFound": "المورد غير موجود"
+		"itemNotFound": "المورد غير موجود",
+		"copyLink": "نسخ الرابط",
+		"copied": "تم نسخ الرابط!",
+		"viewAttachment": "عرض",
+		"downloadAttachment": "تحميل"
 	},
 	"ai": {
 		"summarize": "تلخيص",
