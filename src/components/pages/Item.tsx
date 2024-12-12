@@ -16,7 +16,11 @@ import AIModal from "../features/modals/AIModal";
 import useAIStream from "@/hooks/useAIStream";
 import ChatModal from "../features/modals/ChatModal";
 import { useRouter } from "@/i18n/routing";
+import { useTranslations } from "next-intl";
+
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
+	const t = useTranslations("ai");
+
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
 	const { isOpen: isSummaryOpen, onOpenChange: onSummaryOpenChange } =
@@ -41,13 +45,13 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 					isOpen={isSummaryOpen}
 					onOpenChange={onSummaryOpenChange}
 					content={summaryResponse}
-					title="Summary"
+					title={t("summarize")}
 				/>
 				<AIModal
 					isOpen={isExplainOpen}
 					onOpenChange={onExplainOpenChange}
 					content={explainResponse}
-					title="Explain"
+					title={t("explain")}
 				/>
 				<Dropdown
 					classNames={{
@@ -66,7 +70,8 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 						items={[
 							{
 								key: "summary",
-								label: "Summarize",
+								label: t("summarize"),
+								description: t("summarizeDescription"),
 								onClick: () => {
 									onSummaryOpenChange();
 									summaryStream(data);
@@ -74,7 +79,8 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 							},
 							{
 								key: "explain",
-								label: "Explain",
+								label: t("explain"),
+								description: t("explainDescription"),
 								onClick: () => {
 									onExplainOpenChange();
 									explainStream(data);
@@ -82,7 +88,8 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 							},
 							{
 								key: "chat",
-								label: "Ask AI",
+								label: t("askAI"),
+								description: t("chatDescription"),
 								onClick: onChatOpenChange,
 							},
 						]}
@@ -91,7 +98,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 						}}
 					>
 						{(item) => (
-							<DropdownItem key={item.key} onClick={item.onClick}>
+							<DropdownItem key={item.key} description={item.description} onClick={item.onClick}>
 								{item.label}
 							</DropdownItem>
 						)}
