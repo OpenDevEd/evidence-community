@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import Image from "next/image";
 import { localesNames, routing, usePathname, useRouter } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
@@ -31,6 +30,7 @@ import { ChevronDownIcon } from "@nextui-org/shared-icons";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useLocale, useTranslations } from "next-intl";
 import { Dropdown } from "@/components/nextui/Dropdown";
+import { Link } from "@/i18n/routing";
 
 function ThemeSwitcher({
 	theme,
