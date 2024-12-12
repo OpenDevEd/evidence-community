@@ -6,8 +6,54 @@ import { Link as NextUILink } from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
-import { useRouter } from "@/i18n/routing";
-import { useFormatter, useTranslations } from "next-intl";
+import { Link, useRouter } from "@/i18n/routing";
+import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { Button } from "@/components/nextui/Button";
+import { FaClipboard, FaClipboardCheck } from "react-icons/fa";
+import { useState } from "react";
+import { useDebounce } from "@/hooks/useDebounce";
+
+function ResourceInteractions({itemData, isLoading}: {itemData: Item | undefined, isLoading: boolean}) {
+	const [isCopied, setIsCopied] = useState(false);
+	const [clearCopied] = useDebounce(() => setIsCopied(false), 2000);
+	const locale = useLocale();
+	const t = useTranslations("ui");
+
+	const handleCopy = () => {
+		const currentUrl = window.location.href;
+		const url = new URL(currentUrl);
+		url.pathname = `/${locale}/lib/${itemData?.key}`;
+		navigator.clipboard.writeText(url.toString());
+		setIsCopied(true);
+		clearCopied();
+	};
+
+	return (<div className="p-2 bg-black/5 dark:bg-white/[4%] rounded-b-xl">
+		<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
+			<div className="w-full rounded-2xl flex flex-row items-center">
+				<NextUILink
+					showAnchorIcon
+					href="/"
+					className="font-medium text-tertiary-400 shrink-1 px-2"
+				>
+					<span className="text-black/60 dark:text-white/60 ">
+						{t("viewOnDocs", {
+							site: "docs.opendeved.net",
+						})}
+					</span>
+				</NextUILink>
+				<div
+					className="flex-1 flex items-center justify-end z-10"
+				>
+					<Button color={isCopied ? "success" : "secondary"} startContent={isCopied ? <FaClipboardCheck /> : <FaClipboard />} size="sm" onClick={handleCopy}>
+						{isCopied ? t("copied") : t("copyLink")}
+					</Button>
+				</div>
+			</div>
+		</Skeleton>
+	</div>
+	);
+}
 
 export default function Resource({
 	itemData,
@@ -27,77 +73,66 @@ export default function Resource({
 	const router = useRouter();
 
 	return (
-		<div
-			onClick={() => router.push(`/lib/${itemData?.key}`)}
-			className="w-full bg-white dark:bg-white/[4%] rounded-xl p-4 xl:p-6 flex flex-col gap-4 cursor-pointer hover:brightness-90 transition-all"
-		>
-			<Skeleton
-				isLoaded={!isLoading}
-				className="w-full min-h-8 rounded-2xl"
+		<div className="w-full bg-white dark:bg-white/[4%] rounded-xl">
+			<Link
+				href={`/lib/${itemData?.key}`}
+				className="p-4 xl:p-6 flex flex-col gap-4 hover:brightness-90 transition-all"
 			>
-				<h1 className="capitalize text-2xl text-black/80 dark:text-white/80 line-clamp-2">
-					{itemData?.title}
-				</h1>
-			</Skeleton>
-			<Skeleton
-				isLoaded={!isLoading}
-				className="w-full min-h-8 rounded-2xl"
-			>
-				<div className="flex w-full gap-2 items-center flex-wrap">
-					<ResourceAuthors itemData={itemData} />
-					<ResourceDivider />
-					{itemData?.date &&
-						!isNaN(new Date(itemData.date).getTime()) && (
-							<>
-								<ResourceData
-									text={format.dateTime(
-										new Date(itemData.date),
-										{
-											dateStyle: "medium",
-										}
-									)}
-									classNames={{
-										text: "text-black/60 dark:text-white/60 font-normal",
-									}}
-								/>
-								<ResourceDivider />
-							</>
-						)}
-
-					{itemData?.tags?.includes("_comingsoon") && (
-						<div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full xl:w-auto text-center">
-							{t("inProgress")}
-						</div>
-					)}
-				</div>
-			</Skeleton>
-			{abstract && (abstractText || !itemData) && (
 				<Skeleton
 					isLoaded={!isLoading}
-					className={twMerge(
-						"w-full min-h-0 rounded-2xl ",
-						!itemData ? "min-h-20" : "min-h-0"
-					)}
+					className="w-full min-h-8 rounded-2xl"
 				>
-					<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full break-all">
-						{abstractText}
-					</p>
+					<h1 className="capitalize text-2xl text-black/80 dark:text-white/80 line-clamp-2">
+						{itemData?.title}
+					</h1>
 				</Skeleton>
-			)}
-			<Skeleton
-				isLoaded={!isLoading}
-				className="w-full xl:w-1/2 rounded-2xl"
-			>
-				<NextUILink
-					showAnchorIcon
-					href="/"
-					className="font-medium text-tertiary-400"
+				<Skeleton
+					isLoaded={!isLoading}
+					className="w-full min-h-8 rounded-2xl"
 				>
-					<span className="text-black/60 dark:text-white/60 ">
-						{t("viewOnDocs", { site: "docs.opendeved.net" })}
-					</span>
-				</NextUILink>
-			</Skeleton>
+					<div className="flex w-full gap-2 items-center flex-wrap">
+						<ResourceAuthors itemData={itemData} />
+						<ResourceDivider />
+						{itemData?.date &&
+							!isNaN(new Date(itemData.date).getTime()) && (
+								<>
+									<ResourceData
+										text={format.dateTime(
+											new Date(itemData.date),
+											{
+												dateStyle: "medium",
+											}
+										)}
+										classNames={{
+											text: "text-black/60 dark:text-white/60 font-normal",
+										}}
+									/>
+									<ResourceDivider />
+								</>
+							)}
+
+						{itemData?.tags?.includes("_comingsoon") && (
+							<div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full xl:w-auto text-center">
+								{t("inProgress")}
+							</div>
+						)}
+					</div>
+				</Skeleton>
+				{abstract && (abstractText || !itemData) && (
+					<Skeleton
+						isLoaded={!isLoading}
+						className={twMerge(
+							"w-full min-h-0 rounded-2xl ",
+							!itemData ? "min-h-20" : "min-h-0"
+						)}
+					>
+						<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full break-all">
+							{abstractText}
+						</p>
+					</Skeleton>
+				)}
+			</Link>
+			<ResourceInteractions itemData={itemData} isLoading={isLoading} />
 		</div>
 	);
 }
