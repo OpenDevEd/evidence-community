@@ -29,6 +29,17 @@
 		"resourcesCount": "<number>{count}</number> موارد",
 		"noFacetsFound": "لم يتم العثور على مجموعات"
 	},
+	"ai": {
+		"summarize": "تلخيص",
+		"summarizeDescription": "تلخيص هذا المورد بأقل عدد ممكن من الكلمات",
+		"explain": "شرح",
+		"explainDescription": "شرح هذا المورد بالتفصيل",
+		"askAI": "اسأل الذكاء الاصطناعي",
+		"chatDescription": "تحدث مع هذا المورد",
+		"askMeAnything": "اسألني أي شيء!",
+		"chatPlaceholder": "مرحباً! كيف يمكنني مساعدتك اليوم؟ يمكنك أن تسألني عن \"{title}\" أو أي شيء آخر متعلق بالبيانات",
+		"errorMessage": "عذراً، لقد واجهت خطأ. يرجى المحاولة مرة أخرى لاحقاً"
+	},
 	"sorts": {
 		"desc": "الأحدث",
 		"asc": "الأقدم",
@@ -217,7 +228,7 @@
         "forumTitle": "عنوان المنتدى",
         "postType": "نوع المنشور",
         "committee": "اللجنة",
-        "documentNumber": "رقم الوثيقة",
+        "documentNumber": "ر��م الوثيقة",
         "interviewMedium": "وسيط المقابلة",
         "publicationTitle": "عنوان المنشور",
         "issue": "العدد",
@@ -247,7 +258,7 @@
         "runningTime": "مدة التشغيل",
         "presentationType": "نوع العرض التقديمي",
         "meetingName": "اسم الاجتماع",
-        "programTitle": "عنوا�� البرنامج",
+        "programTitle": "عنوان البرنامج",
         "network": "الشبكة",
         "reportNumber": "رقم التقرير",
         "reportType": "نوع التقرير",

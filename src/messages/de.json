@@ -29,6 +29,17 @@
 		"resourcesCount": "<number>{count}</number> Ressourcen",
 		"noFacetsFound": "Keine Facets gefunden"
 	},
+	"ai": {
+		"summarize": "Zusammenfassen",
+		"summarizeDescription": "Fasse diese Ressource in möglichst wenigen Worten zusammen.",
+		"explain": "Erklären",
+		"explainDescription": "Erkläre diese Ressource im Detail.",
+		"askAI": "KI fragen",
+		"chatDescription": "Chatte mit dieser Ressource.",
+		"askMeAnything": "Frag mich alles!",
+		"chatPlaceholder": "Hallo! Wie kann ich dir heute helfen? Du kannst mir Fragen zu \"{title}\" oder anderen verwandten Themen stellen.",
+		"errorMessage": "Entschuldigung, aber es ist ein Fehler aufgetreten. Bitte versuche es später erneut."
+	},
     "sorts": {
 		"desc": "Neueste",
 		"asc": "Älteste",

@@ -29,6 +29,17 @@
 		"resourcesCount": "<number>{count}</number> resources",
 		"noFacetsFound": "No facets found"
 	},
+	"ai": {
+		"summarize": "Summarize",
+		"summarizeDescription": "Summarize this resource in as few words as possible.",
+		"explain": "Explain",
+		"explainDescription": "Explain this resource in detail.",
+		"askAI": "Ask AI",
+		"chatDescription": "Chat with this resource.",
+		"askMeAnything": "Ask me anything!",
+		"chatPlaceholder": "Hello! How can I assist you today? You can ask me questions about \"{title}\" or anything else related to the data.",
+		"errorMessage": "I'm sorry, but I encountered an error. Please try again later."
+	},
 	"sorts": {
 		"desc": "Newest",
 		"asc": "Oldest", 
