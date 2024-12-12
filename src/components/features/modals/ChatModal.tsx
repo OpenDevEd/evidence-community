@@ -9,24 +9,19 @@ import {
 	ModalBody,
 	ModalFooter,
 } from "@nextui-org/react";
-import { LuBot, LuSend, LuUser, LuX } from "react-icons/lu";
+import { LuBot, LuUser, LuX } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { ImSpinner8 } from "react-icons/im";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { useEffect } from "react";
 import { useRef } from "react";
-import { useState } from "react";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { SectionTitle } from "@/components/typography/SectionTitle";
 import { BsStars } from "react-icons/bs";
 import { IoSend } from "react-icons/io5";
-import { useTranslations } from "next-intl";
-
-type Message = {
-	role: "user" | "assistant";
-	content: string;
-};
+import { useLocale, useTranslations } from "next-intl";
+import { useChat } from "ai/react";
 
 export default function ChatModal({
 	isOpen,
@@ -38,95 +33,27 @@ export default function ChatModal({
 	data: ItemGetResponse | undefined;
 }) {
 	const t = useTranslations("ai");
+	const locale = useLocale();
+	const id = "1";
 
-	const [currentMessage, setCurrentMessage] = useState<string>("");
-	const [isLoading, setIsLoading] = useState<boolean>(false);
-	const inputRef = useRef<HTMLInputElement>(null);
-
-	const [chatHistory, setChatHistory] = useState<Message[]>([
-		{
-			role: "user",
-			content: JSON.stringify(data),
-		},
-		{
-			role: "assistant",
-			content: t("chatPlaceholder", {
-				title: data?.item?.title,
-			}),
-		},
-	]);
-	const messageListRef = useRef<HTMLDivElement>(null);
-
-	const sendMessage = async (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		if (inputRef.current) {
-			inputRef.current.focus();
-		}
-		if (isLoading) return;
-		if (!currentMessage.trim()) return;
-		setChatHistory((prev) => [
-			...prev,
-			{
-				role: "user",
-				content: currentMessage.trim(),
-			},
+	const { messages, handleSubmit, input, setInput, append, isLoading, stop } = useChat({
+		id,
+		api: "/api/ai/chat",
+		initialMessages: [
 			{
 				role: "assistant",
-				content: "",
+				content: t("chatPlaceholder", { title: data?.item?.title }),
+				id: "start",
 			},
-		]);
-		setCurrentMessage("");
+		],
+		body: { id, key: data?.item?.key },
+		headers: {
+			"Accept-Language": locale,
+		},
+	});
 
-		try {
-			setIsLoading(true);
-			const response = await fetch("/api/ai/chat", {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify([
-					...chatHistory,
-					{ role: "user", content: currentMessage.trim() },
-				]),
-			});
-
-			if (!response.ok) {
-				throw new Error("Error sending message");
-			}
-
-			const reader = response.body?.getReader();
-			const decoder = new TextDecoder();
-
-			if (!reader) return;
-
-			while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-				const text = decoder.decode(value, { stream: true });
-				setChatHistory((messages) => {
-					const lastMessage = messages[messages.length - 1];
-					const otherMessages = messages.slice(
-						0,
-						messages.length - 1
-					);
-					return [
-						...otherMessages,
-						{ ...lastMessage, content: lastMessage.content + text },
-					];
-				});
-			}
-		} catch (error) {
-			console.error("Error:", error);
-			setChatHistory((messages) => [
-				...messages,
-				{
-					role: "assistant",
-					content: t("errorMessage"),
-				},
-			]);
-		}
-		setIsLoading(false);
-	};
+	const inputRef = useRef<HTMLInputElement>(null);
+	const messageListRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		const apply = () => {
@@ -144,7 +71,9 @@ export default function ChatModal({
 		}
 		apply();
 		return () => observer.disconnect();
-	}, [chatHistory]);
+	}, [messages]);
+
+	console.log(messages);
 
 	return (
 		<Modal
@@ -188,8 +117,7 @@ export default function ChatModal({
 								className="flex flex-col gap-4 w-full overflow-y-scroll overflow-x-hidden py-8  h-full"
 								ref={messageListRef}
 							>
-								{chatHistory
-									.filter((message, index) => index > 0)
+								{messages
 									.map((message, index) => (
 										<div
 											key={index}
@@ -234,7 +162,7 @@ export default function ChatModal({
 							<div className="w-full">
 								<form
 									className="w-full p-2"
-									onSubmit={sendMessage}
+									onSubmit={handleSubmit}
 								>
 									<Input
 										ref={inputRef}
@@ -256,8 +184,8 @@ export default function ChatModal({
 											</Button>
 										}
 										placeholder={t("askMeAnything")}
-										value={currentMessage}
-										onValueChange={setCurrentMessage}
+										value={input}
+										onValueChange={setInput}
 										fullWidth
 									/>
 								</form>
