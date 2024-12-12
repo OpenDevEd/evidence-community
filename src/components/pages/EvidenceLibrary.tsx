@@ -22,7 +22,7 @@ import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import useSWR from "swr";
 import { fetcher } from "@/lib/utils";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { CollectionsGetResponse } from "@/app/api/collections/types";
@@ -34,16 +34,12 @@ import useBreakpoint from "@/hooks/useBreakpoint";
 import { useDebounce } from "@/hooks/useDebounce";
 import { AnimatePresence, motion } from "framer-motion";
 import { twMerge } from "tailwind-merge";
-import {
-	ITEMS_PER_PAGE,
-	SORT_OPTIONS,
-	SCOPE_OPTIONS,
-} from "@/constants/items";
+import { ITEMS_PER_PAGE, SORT_OPTIONS, SCOPE_OPTIONS } from "@/constants/items";
 import HelpModal from "@/components/features/modals/HelpModal";
 import { SectionTitle } from "@/components/typography/SectionTitle";
 import { buildItemsQuery } from "@/lib/utils";
-import { useTranslations } from "next-intl";
-
+import { useFormatter, useTranslations } from "next-intl";
+import { CacheContext } from "@/context/Providers";
 
 function ContentInteractions({
 	data,
@@ -95,6 +91,7 @@ function ContentInteractions({
 	const t = useTranslations("ui");
 	const tSorts = useTranslations("sorts");
 	const tScopes = useTranslations("scopes");
+	const formatter = useFormatter();
 
 	return (
 		<>
@@ -122,7 +119,9 @@ function ContentInteractions({
 							{(onClose) => (
 								<>
 									<ModalHeader className="flex items-center justify-between gap-2 sticky top-0 bg-background_light dark:bg-background z-30">
-										<SectionTitle>{t("explore")}</SectionTitle>
+										<SectionTitle>
+											{t("explore")}
+										</SectionTitle>
 										<Button
 											onClick={onClose}
 											isIconOnly
@@ -145,7 +144,9 @@ function ContentInteractions({
 										isModal
 										range={range}
 										handleRangeChange={handleRangeChange}
-										facetDistribution={data?.facetDistribution}
+										facetDistribution={
+											data?.facetDistribution
+										}
 									/>
 								</>
 							)}
@@ -213,7 +214,9 @@ function ContentInteractions({
 				>
 					{(item: any) => {
 						return (
-							<SelectItem key={item.key}>{tScopes(item.key)}</SelectItem>
+							<SelectItem key={item.key}>
+								{tScopes(item.key)}
+							</SelectItem>
 						);
 					}}
 				</Select>
@@ -225,9 +228,13 @@ function ContentInteractions({
 				>
 					<h2 className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center gap-2">
 						{t.rich("resourcesCount", {
-							count: actuallyNoData ? "0" : data?.totalItems.toLocaleString(),
+							count: formatter.number(
+								actuallyNoData ? 0 : data?.totalItems || 0
+							),
 							number: (chunks) => (
-								<span className="text-2xl leading-6">{chunks}</span>
+								<span className="text-2xl leading-6">
+									{chunks}
+								</span>
 							),
 						})}
 					</h2>
@@ -392,8 +399,7 @@ function Chip({
 					{collectionData?.title}
 				</span>
 				<span className="truncate text-wrap">
-
-				{collectionData?.name}
+					{collectionData?.name}
 				</span>
 			</Button>
 		</motion.div>
@@ -417,7 +423,7 @@ function FilterChips({
 			)}
 		>
 			<div className="flex-1 flex gap-2 flex-wrap">
-				<AnimatePresence>
+				<AnimatePresence initial={false}>
 					{collectionsData &&
 						collections.map((collection: string, index) => (
 							<Chip
@@ -429,33 +435,40 @@ function FilterChips({
 						))}
 				</AnimatePresence>
 			</div>
-			<motion.div
-				initial={{ opacity: 0, y: 10 }}
-				animate={{ opacity: 1, y: 0 }}
-				exit={{ opacity: 0, y: -10 }}
-				transition={{ duration: 0.2 }}
-				className="w-7 flex justify-end"
-			>
-				<Button
-					onClick={() => {
-						handleCheckboxChange("");
-					}}
-					isIconOnly
-					size="sm"
-					variant="solid"
-					color="accent"
-					className="h-7 w-7 min-w-7"
+			<AnimatePresence initial={false}>
+				<motion.div
+					initial={{ opacity: 0, y: 10 }}
+					animate={{ opacity: 1, y: 0 }}
+					exit={{ opacity: 0, y: -10 }}
+					transition={{ duration: 0.2 }}
+					className="w-7 flex justify-end"
 				>
-					<FaTrash className="text-white size-3" />
-				</Button>
-			</motion.div>
+					<Button
+						onClick={() => {
+							handleCheckboxChange("");
+						}}
+						isIconOnly
+						size="sm"
+						variant="solid"
+						color="accent"
+						className="h-7 w-7 min-w-7"
+					>
+						<FaTrash className="text-white size-3" />
+					</Button>
+				</motion.div>
+			</AnimatePresence>
 		</div>
 	);
 }
 
-function MainContent({ searchParams }: { searchParams: { [key: string]: any } }) {
+function MainContent({
+	searchParams,
+}: {
+	searchParams: { [key: string]: any };
+}) {
 	const { router, pathname, createQueryString } =
 		useParamsState(searchParams);
+	const { itemsCache } = useContext(CacheContext);
 	const t = useTranslations("ui");
 
 	const collectionsParam = searchParams["collections"];
@@ -465,7 +478,7 @@ function MainContent({ searchParams }: { searchParams: { [key: string]: any } })
 	const search = searchParams["search"] || "";
 	const scope = searchParams["scope"] || SCOPE_OPTIONS[0].key;
 	const range = searchParams["range"] || "";
-	
+
 	const [abstract, setAbstract] = useState(true);
 
 	const handlePageChange = useCallback(
@@ -508,13 +521,17 @@ function MainContent({ searchParams }: { searchParams: { [key: string]: any } })
 
 	const handleRangeChange = useCallback(
 		(start: string | null, end: string | null) => {
-			router.push(createQueryString(pathname, [["range", [start, end].join(end !== null ? "-" : "")]]));
+			router.push(
+				createQueryString(pathname, [
+					["range", [start, end].join(end !== null ? "-" : "")],
+				])
+			);
 		},
 		[router, pathname, createQueryString]
 	);
 
 	const {
-		data: itemsData,
+		data: fetchedItemsData,
 		error: itemsError,
 		isLoading: isItemsLoading,
 	} = useSWR<ItemsGetResponse>(
@@ -537,11 +554,21 @@ function MainContent({ searchParams }: { searchParams: { [key: string]: any } })
 		}
 	);
 
+	if (fetchedItemsData) {
+		itemsCache.current = fetchedItemsData;
+	}
+
+	const itemsData = itemsCache.current;
+
+	console.log(itemsData);
+
 	const {
 		data: collectionsData,
 		error: collectionsError,
 		isLoading: isCollectionsLoading,
-	} = useSWR<CollectionsGetResponse>("/collections", fetcher);
+	} = useSWR<CollectionsGetResponse>("/collections", fetcher, {
+		keepPreviousData: true,
+	});
 
 	const { hierarchy, handleCheckboxChange, selectedCollections } =
 		useHierarchy({
@@ -549,7 +576,7 @@ function MainContent({ searchParams }: { searchParams: { [key: string]: any } })
 			searchParams,
 		});
 
-	return (	
+	return (
 		<>
 			<CollectionsList
 				data={collectionsData}
@@ -607,7 +634,11 @@ function MainContent({ searchParams }: { searchParams: { [key: string]: any } })
 	);
 }
 
-export default function EvidenceLibrary({ searchParams }: { searchParams: { [key: string]: any } }) {
+export default function EvidenceLibrary({
+	searchParams,
+}: {
+	searchParams: { [key: string]: any };
+}) {
 	return (
 		<main className="w-full max-w-screen-2xl px-4 xl:px-14">
 			<div className="flex gap-[40px] flex-col xl:flex-row">
