@@ -91,20 +91,31 @@ function Logo({
 	return (
 		<Skeleton
 			isLoaded={isMounted}
-			className="w-[171px] h-[40px] rounded-lg"
+			className="w-[171px] h-[40px] rounded-lg "
 		>
-			{isMounted && (
-				<Image
-					src={
-						theme === "dark"
-							? `/logos/${style}/logo.png`
-							: `/logos/${style}/logo_light.png`
+			<div className="hover:brightness-90 hover:scale-95 active:scale-105 transition-all select-none">
+				<Link
+					href={
+						links[style as keyof typeof links].find(
+							(link) => link.label === "home"
+						)?.href ?? "/"
 					}
-					alt="logo"
-					height={40}
-					width={171}
-				/>
-			)}
+				>
+					{isMounted && (
+						<Image
+							src={
+								theme === "dark"
+									? `/logos/${style}/logo.png`
+									: `/logos/${style}/logo_light.png`
+							}
+							alt="logo"
+							className="pointer-events-none"
+							height={40}
+							width={171}
+						/>
+					)}
+				</Link>
+			</div>
 		</Skeleton>
 	);
 }
@@ -225,11 +236,13 @@ function LanguageSwitcher() {
 					router.push(pathname, { locale: locale as string });
 				}}
 			>
-				{routing.locales.filter(currentLocale => currentLocale !== locale).map((locale) => (
-					<DropdownItem key={locale}>
-						{localesNames[locale as keyof typeof localesNames]}
-					</DropdownItem>
-				))}
+				{routing.locales
+					.filter((currentLocale) => currentLocale !== locale)
+					.map((locale) => (
+						<DropdownItem key={locale}>
+							{localesNames[locale as keyof typeof localesNames]}
+						</DropdownItem>
+					))}
 			</DropdownMenu>
 		</Dropdown>
 	);

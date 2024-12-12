@@ -29,7 +29,7 @@ export const links: Record<string, LinkObject[]> = {
     opendeved: [
         {
             label: "home",
-            href: "/",
+            href: "/lib",
             navExclude: true,
         },
         {
@@ -67,7 +67,7 @@ export const links: Record<string, LinkObject[]> = {
     edtechhub: [
         {
             label: "home",
-            href: "/",
+            href: "/lib",
             navExclude: true,
         },
         {
