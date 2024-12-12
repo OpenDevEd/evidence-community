@@ -1,40 +1,46 @@
-import { NextResponse } from "next/server";
-import OpenAI from "openai";
 import config from "@/constants/config.json";
+import {
+	convertToCoreMessages,
+	streamText
+} from "ai";
+import { getCachedItem } from "../../cache";
+import { NextResponse } from "next/server";
+import { model, provider } from "../model";
 
-const systemPrompt = config.prompts.chat;
+const systemPrompt = config.prompts.chat.join("\n");
 
 export async function POST(req: Request) {
-	const openai = new OpenAI({
-		apiKey: process.env.OPENAI_API_KEY,
+	const { id, messages, key } = await req.json();
+	const locale = req.headers.get("Accept-Language") || "en";
+	const item = await getCachedItem(key);
+
+	if (!item) {
+		return new NextResponse("Item not found", { status: 404 });
+	}
+
+	messages.unshift({
+		role: "user",
+		content: [
+			{
+				type: "text",
+				text: "This is the data for the item, please use it to answer the user's question.",
+			},
+			{
+				type: "text",
+				text: item ? JSON.stringify(item) : undefined,
+			},
+		],
 	});
 
-	const data = await req.json();
+	const coreMessages = convertToCoreMessages(messages).filter(
+		(message) => message.content.length > 0
+	);
 
-	const completion = await openai.chat.completions.create({
-		messages: [{ role: "system", content: systemPrompt }, ...data],
-		model: process.env.OPENAI_MODEL as any,
-		stream: true,
+	const result = streamText({
+		model: provider(model as any),
+		system: systemPrompt + `\n\nLanguage: ${locale}`,
+		messages: coreMessages,
 	});
 
-	const stream = new ReadableStream({
-		async start(controller) {
-			const encoder = new TextEncoder();
-			try {
-				for await (const chunk of completion) {
-					const content = chunk.choices[0]?.delta?.content;
-					if (content) {
-						const text = encoder.encode(content);
-						controller.enqueue(text);
-					}
-				}
-			} catch (err) {
-				controller.error(err);
-			} finally {
-				controller.close();
-			}
-		},
-	});
-
-	return new NextResponse(stream);
+	return result.toDataStreamResponse({});
 }
