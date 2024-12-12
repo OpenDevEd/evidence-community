@@ -138,7 +138,7 @@ export default function CollectionsList({
 		>
 			<Skeleton
 				className="w-full xl:min-h-screen rounded-2xl"
-				isLoaded={!!data}
+				isLoaded={!!data && !!facetDistribution}
 			>
 				<div className="w-full  bg-black/[4%] dark:bg-secondary rounded-t-2xl flex flex-col gap-4 p-6">
 					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
