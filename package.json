@@ -9,8 +9,12 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@ai-sdk/google": "^1.0.9",
+    "@ai-sdk/openai": "^1.0.8",
+    "@google/generative-ai": "^0.21.0",
     "@nextui-org/react": "^2.4.8",
     "@vercel/analytics": "^1.4.1",
+    "ai": "^4.0.14",
     "drizzle-orm": "^0.36.3",
     "framer-motion": "^11.11.15",
     "meilisearch": "^0.45.0",
@@ -50,4 +54,3 @@
     "tabWidth": 4
   }
 }
-
