@@ -7,6 +7,7 @@ import { LuX } from "react-icons/lu";
 import { Button } from "@/components/nextui/Button";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { BsStars } from "react-icons/bs";
+import { useTranslations } from "next-intl";
 
 export default function AIModal({
 	isOpen,
@@ -44,7 +45,7 @@ export default function AIModal({
 								onClick={onClose}
 								isIconOnly
 								variant="transparent"
-								className="xl:px-0 px-0 translate-x-2"
+								className="xl:px-0 px-0 translate-x-2 rtl:-translate-x-2"
 								startContent={
 									<LuX className="size-6 text-black dark:text-white/80" />
 								}
@@ -55,7 +56,6 @@ export default function AIModal({
 								isLoaded={content.length > 0}
 								className="w-full h-full rounded-2xl min-h-64"
 							>
-								{/* decrease spacing between paragraphs */}
 								<Markdown remarkPlugins={[remarkGfm]} className="prose dark:prose-invert space-y-2">
 									{content}
 								</Markdown>

@@ -21,6 +21,7 @@ import { ItemGetResponse } from "@/app/api/item/types";
 import { SectionTitle } from "@/components/typography/SectionTitle";
 import { BsStars } from "react-icons/bs";
 import { IoSend } from "react-icons/io5";
+import { useTranslations } from "next-intl";
 
 type Message = {
 	role: "user" | "assistant";
@@ -36,6 +37,8 @@ export default function ChatModal({
 	onOpenChange: (open: boolean) => void;
 	data: ItemGetResponse | undefined;
 }) {
+	const t = useTranslations("ai");
+
 	const [currentMessage, setCurrentMessage] = useState<string>("");
 	const [isLoading, setIsLoading] = useState<boolean>(false);
 	const inputRef = useRef<HTMLInputElement>(null);
@@ -47,7 +50,9 @@ export default function ChatModal({
 		},
 		{
 			role: "assistant",
-			content: `Hello! How can I assist you today? You can ask me questions about "${data?.item?.title}" or anything else related to the data.`,
+			content: t("chatPlaceholder", {
+				title: data?.item?.title,
+			}),
 		},
 	]);
 	const messageListRef = useRef<HTMLDivElement>(null);
@@ -116,8 +121,7 @@ export default function ChatModal({
 				...messages,
 				{
 					role: "assistant",
-					content:
-						"I'm sorry, but I encountered an error. Please try again later.",
+					content: t("errorMessage"),
 				},
 			]);
 		}
@@ -165,7 +169,7 @@ export default function ChatModal({
 								className="flex items-center gap-2"
 							>
 								<span className="bg-gradient-to-r from-accent dark:to-accent-800 to-accent-600 bg-clip-text text-transparent">
-									Ask AI
+									{t("askAI")}
 								</span>
 							</SectionTitle>
 							<Button
@@ -173,7 +177,7 @@ export default function ChatModal({
 								onClick={onClose}
 								isIconOnly
 								variant="transparent"
-								className="xl:px-0 px-0 translate-x-2"
+								className="xl:px-0 px-0 translate-x-2 rtl:-translate-x-2"
 								startContent={
 									<LuX className="size-6 text-black dark:text-white/80" />
 								}
@@ -236,7 +240,7 @@ export default function ChatModal({
 										ref={inputRef}
 										autoFocus
 										autoComplete="off"
-										label="Ask AI"
+										label={t("askAI")}
 										endContent={
 											<Button
 												isDisabled={isLoading}
@@ -251,7 +255,7 @@ export default function ChatModal({
 												)}
 											</Button>
 										}
-										placeholder="Ask me anything!"
+										placeholder={t("askMeAnything")}
 										value={currentMessage}
 										onValueChange={setCurrentMessage}
 										fullWidth
