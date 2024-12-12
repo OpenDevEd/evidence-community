@@ -386,7 +386,7 @@ function Chip({
 			<Button
 				size="xs"
 				variant="solid"
-				className="shrink-0 p-1 h-auto pr-2"
+				className="shrink-0 p-1 h-auto ltr:pr-2 rtl:pl-2"
 				onClick={() => {
 					if (canClick.current) {
 						handleCheckboxChange(collection);
