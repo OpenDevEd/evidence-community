@@ -22,35 +22,41 @@ import { BsStars } from "react-icons/bs";
 import { IoSend } from "react-icons/io5";
 import { useLocale, useTranslations } from "next-intl";
 import { useChat } from "ai/react";
+import AIHeader from "../ai/AIHeader";
+import AIModal from "@/components/nextui/AIModal";
+import { models } from "@/constants/ai";
 
 export default function ChatModal({
 	isOpen,
 	onOpenChange,
 	data,
+	modelIndex,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 	data: ItemGetResponse | undefined;
+	modelIndex: number;
 }) {
 	const t = useTranslations("ai");
 	const locale = useLocale();
 	const id = "1";
 
-	const { messages, handleSubmit, input, setInput, append, isLoading, stop } = useChat({
-		id,
-		api: "/api/ai/chat",
-		initialMessages: [
-			{
-				role: "assistant",
-				content: t("chatPlaceholder", { title: data?.item?.title }),
-				id: "start",
+	const { messages, handleSubmit, input, setInput, append, isLoading, stop } =
+		useChat({
+			id,
+			api: "/api/ai/chat",
+			initialMessages: [
+				{
+					role: "assistant",
+					content: t("chatPlaceholder", { title: data?.item?.title }),
+					id: "start",
+				},
+			],
+			body: { id, key: data?.item?.key, modelIndex },
+			headers: {
+				"Accept-Language": locale,
 			},
-		],
-		body: { id, key: data?.item?.key },
-		headers: {
-			"Accept-Language": locale,
-		},
-	});
+		});
 
 	const inputRef = useRef<HTMLInputElement>(null);
 	const messageListRef = useRef<HTMLDivElement>(null);
@@ -76,7 +82,7 @@ export default function ChatModal({
 	console.log(messages);
 
 	return (
-		<Modal
+		<AIModal
 			size="4xl"
 			scrollBehavior="inside"
 			placement="top-center"
@@ -90,72 +96,56 @@ export default function ChatModal({
 			<ModalContent>
 				{(onClose) => (
 					<>
-						<ModalHeader className="flex items-center justify-between gap-2">
-							<SectionTitle
-								startContent={
-									<BsStars className="text-accent" />
-								}
-								className="flex items-center gap-2"
-							>
-								<span className="bg-gradient-to-r from-accent dark:to-accent-800 to-accent-600 bg-clip-text text-transparent">
-									{t("askAI")}
-								</span>
-							</SectionTitle>
-							<Button
-								isDisabled={isLoading}
-								onClick={onClose}
-								isIconOnly
-								variant="transparent"
-								className="xl:px-0 px-0 translate-x-2 rtl:-translate-x-2"
-								startContent={
-									<LuX className="size-6 text-black dark:text-white/80" />
-								}
-							/>
-						</ModalHeader>
+						<AIHeader isLoading={isLoading} onClose={onClose}>
+							{t("askAI")}
+						</AIHeader>
 						<ModalBody className="p-0 min-h-[50vh] w-full grid grid-cols-1 grid-rows-1">
 							<div
 								className="flex flex-col gap-4 w-full overflow-y-scroll overflow-x-hidden py-8  h-full"
 								ref={messageListRef}
 							>
-								{messages
-									.map((message, index) => (
+								{messages.map((message, index) => (
+									<div
+										key={index}
+										className={twMerge(
+											"flex items-start justify-start gap-2 px-8 w-full",
+											message.role !== "user" &&
+												"flex-row-reverse"
+										)}
+									>
+										<div className="rounded-full bg-accent dark:bg-accent p-2">
+											{message.role === "user" ? (
+												<LuUser className="size-4" />
+											) : (
+												models
+													.filter(
+														(model, index) =>
+															index === modelIndex
+													)
+													.map((model) => (
+														<model.icon className="size-4 invert" />
+													))
+											)}
+										</div>
 										<div
-											key={index}
 											className={twMerge(
-												"flex items-start justify-start gap-2 px-8 w-full",
+												"bg-secondary dark:bg-secondary rounded-xl p-4 text-wrap max-w-full overflow-hidden break-words text-lg",
 												message.role !== "user" &&
-													"flex-row-reverse"
+													"bg-accent dark:bg-accent-300"
 											)}
 										>
-											<div className="rounded-full bg-accent dark:bg-accent p-2">
-												{message.role === "user" ? (
-													<LuUser />
-												) : (
-													<LuBot />
-												)}
-											</div>
-											<div
-												className={twMerge(
-													"bg-secondary dark:bg-secondary rounded-xl p-4 text-wrap max-w-full overflow-hidden break-words text-lg",
-													message.role !== "user" &&
-														"bg-accent dark:bg-accent-300"
-												)}
-											>
-												{message.content.length ===
-												0 ? (
-													<ImSpinner8 className="animate-spin" />
-												) : (
-													<Markdown
-														remarkPlugins={[
-															remarkGfm,
-														]}
-													>
-														{message.content}
-													</Markdown>
-												)}
-											</div>
+											{message.content.length === 0 ? (
+												<ImSpinner8 className="animate-spin" />
+											) : (
+												<Markdown
+													remarkPlugins={[remarkGfm]}
+												>
+													{message.content}
+												</Markdown>
+											)}
 										</div>
-									))}
+									</div>
+								))}
 							</div>
 						</ModalBody>
 						<ModalFooter className="p-0">
@@ -194,6 +184,6 @@ export default function ChatModal({
 					</>
 				)}
 			</ModalContent>
-		</Modal>
+		</AIModal>
 	);
 }
