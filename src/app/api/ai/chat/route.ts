@@ -5,17 +5,23 @@ import {
 } from "ai";
 import { getCachedItem } from "../../cache";
 import { NextResponse } from "next/server";
-import { model, provider } from "../model";
+import { getModel } from "@/lib/ai";
 
 const systemPrompt = config.prompts.chat.join("\n");
 
 export async function POST(req: Request) {
-	const { id, messages, key } = await req.json();
+	const { id, messages, key, modelIndex } = await req.json();
 	const locale = req.headers.get("Accept-Language") || "en";
 	const item = await getCachedItem(key);
 
 	if (!item) {
 		return new NextResponse("Item not found", { status: 404 });
+	}
+
+	const { provider, modelName, error } = getModel(modelIndex);
+
+	if (error) {
+		return new NextResponse(error, { status: 404 });
 	}
 
 	messages.unshift({
@@ -37,7 +43,7 @@ export async function POST(req: Request) {
 	);
 
 	const result = streamText({
-		model: provider(model as any),
+		model: provider!(modelName!),
 		system: systemPrompt + `\n\nLanguage: ${locale}`,
 		messages: coreMessages,
 	});
