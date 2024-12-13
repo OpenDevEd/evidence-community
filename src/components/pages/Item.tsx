@@ -11,21 +11,35 @@ import {
 	DropdownTrigger,
 	DropdownMenu,
 	useDisclosure,
+	ModalContent,
+	ModalBody,
 } from "@nextui-org/react";
-import AIModal from "../features/modals/AIModal";
+import GenerativeModal from "../features/modals/GenerativeModal";
 import useAIStream from "@/hooks/useAIStream";
 import ChatModal from "../features/modals/ChatModal";
 import { useRouter } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
+import useSWR from "swr";
+import { fetcher } from "@/lib/utils";
+import Resource from "../features/items/Resource";
+import { Skeleton } from "../nextui/Skeleton";
+import AIHeader from "../features/ai/AIHeader";
+import AIModal from "../nextui/AIModal";
+import { useState } from "react";
+import { FaCheck } from "react-icons/fa";
+import { models } from "@/constants/ai";
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ai");
+	const [selectedModel, setSelectedModel] = useState(0);
 
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
 	const { isOpen: isSummaryOpen, onOpenChange: onSummaryOpenChange } =
 		useDisclosure();
 	const { isOpen: isExplainOpen, onOpenChange: onExplainOpenChange } =
+		useDisclosure();
+	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
 		useDisclosure();
 
 	const { response: summaryResponse, stream: summaryStream } = useAIStream(
@@ -38,18 +52,68 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	return (
 		<div className="fixed bottom-0 right-0">
 			<div className="flex items-center justify-center p-4">
+				<AIModal
+					size="md"
+					isOpen={isChangeOpen}
+					onOpenChange={onChangeOpenChange}
+				>
+					<ModalContent>
+						<AIHeader onClose={onChangeOpenChange}>
+							{t("change")}
+						</AIHeader>
+						<ModalBody className="p-0">
+							<div className="flex flex-col pt-0">
+								<p className="text-base text-black/80 dark:text-white/80 font-medium p-2 text-center dark:bg-secondary bg-white">
+									{t("changeAbtract")}
+								</p>
+								{models.map((model, index) => (
+									<div
+										key={model.name}
+										data-selected={index === selectedModel}
+										className="p-6 cursor-pointer data-[selected=true]:dark:bg-accent/10 data-[selected=true]:bg-accent/20 transition-colors group"
+										onClick={() => setSelectedModel(index)}
+									>
+										<div className="flex items-center gap-4 hover:brightness-75 active:scale-[95%] transition-all">
+											<div className="size-10 shrink-0 bg-accent p-2 rounded">
+												<model.icon className="h-full w-full invert" />
+											</div>
+											<div className="flex flex-col">
+												<div className="flex items-center gap-2">
+													<p className="font-medium">
+														{model.name}
+													</p>
+													<span className="text-xs text-default-500">
+														{t("byCompany", {
+															company:
+																model.company,
+														})}
+													</span>
+												</div>
+												<p className="text-sm text-default-500">
+													{model.model}
+												</p>
+											</div>
+											<FaCheck className="size-4 shrink-0 text-accent ltr:ml-auto rtl:mr-auto group-data-[selected=true]:opacity-100 group-data-[selected=true]:translate-x-0 transition-all opacity-0 ltr:-translate-x-10 rtl:translate-x-10" />
+										</div>
+									</div>
+								))}
+							</div>
+						</ModalBody>
+					</ModalContent>
+				</AIModal>
 				<ChatModal
 					isOpen={isChatOpen}
 					onOpenChange={onChatOpenChange}
 					data={data}
+					modelIndex={selectedModel}
 				/>
-				<AIModal
+				<GenerativeModal
 					isOpen={isSummaryOpen}
 					onOpenChange={onSummaryOpenChange}
 					content={summaryResponse}
 					title={t("summarize")}
 				/>
-				<AIModal
+				<GenerativeModal
 					isOpen={isExplainOpen}
 					onOpenChange={onExplainOpenChange}
 					content={explainResponse}
@@ -71,12 +135,40 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 					<DropdownMenu
 						items={[
 							{
+								key: "change",
+								label: t("change"),
+								description: t("changeDescription", {
+									model: models[selectedModel].name,
+								}),
+								startContent: (
+									<>
+										{models
+											.filter(
+												(model, index) =>
+													index === selectedModel
+											)
+											.map((model) => (
+												<div className="size-8 shrink-0 bg-accent p-1.5 rounded">
+													<model.icon className="h-full w-full invert" />
+												</div>
+											))}
+									</>
+								),
+								onClick: () => {
+									onChangeOpenChange();
+								},
+							},
+							{
 								key: "summary",
 								label: t("summarize"),
 								description: t("summarizeDescription"),
 								onClick: () => {
 									onSummaryOpenChange();
-									summaryStream(data?.item?.key ?? "");
+									summaryStream(data?.item?.key ?? "", {
+										body: {
+											modelIndex: selectedModel,
+										},
+									});
 								},
 							},
 							{
@@ -85,7 +177,11 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 								description: t("explainDescription"),
 								onClick: () => {
 									onExplainOpenChange();
-									explainStream(data?.item?.key ?? "");
+									explainStream(data?.item?.key ?? "", {
+										body: {
+											modelIndex: selectedModel,
+										},
+									});
 								},
 							},
 							{
@@ -104,6 +200,8 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 								key={item.key}
 								description={item.description}
 								onClick={item.onClick}
+								startContent={item.startContent}
+								className="gap-4"
 							>
 								{item.label}
 							</DropdownItem>
@@ -118,7 +216,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 	const router = useRouter();
 	const t = useTranslations("ui");
-const { data: embeddings } = useSWR(
+	const { data: embeddings } = useSWR(
 		`/ai/embeddings/${data?.item?.key}`,
 		fetcher
 	);
@@ -155,7 +253,7 @@ const { data: embeddings } = useSWR(
 				</div>
 			</div>
 			{data && <AiButton data={data} />}
-<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
+			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
 				<div className="flex flex-row">
 					<div className="text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-24 shrink-0 rounded p-10">
 						{t("relatedItems")}
