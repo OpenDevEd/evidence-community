@@ -560,8 +560,6 @@ function MainContent({
 
 	const itemsData = itemsCache.current;
 
-	console.log(itemsData);
-
 	const {
 		data: collectionsData,
 		error: collectionsError,

@@ -8,6 +8,7 @@ import {
 	Input,
 	ModalBody,
 	ModalFooter,
+	ScrollShadow,
 } from "@nextui-org/react";
 import { LuBot, LuUser, LuX } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
@@ -79,8 +80,6 @@ export default function ChatModal({
 		return () => observer.disconnect();
 	}, [messages]);
 
-	console.log(messages);
-
 	return (
 		<AIModal
 			size="4xl"
@@ -100,7 +99,7 @@ export default function ChatModal({
 							{t("askAI")}
 						</AIHeader>
 						<ModalBody className="p-0 min-h-[50vh] w-full grid grid-cols-1 grid-rows-1">
-							<div
+							<ScrollShadow
 								className="flex flex-col gap-4 w-full overflow-y-scroll overflow-x-hidden py-8  h-full"
 								ref={messageListRef}
 							>
@@ -149,7 +148,7 @@ export default function ChatModal({
 										</div>
 									</div>
 								))}
-							</div>
+							</ScrollShadow>
 						</ModalBody>
 						<ModalFooter className="p-0">
 							<div className="w-full">
