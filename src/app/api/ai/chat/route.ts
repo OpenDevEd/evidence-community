@@ -7,11 +7,11 @@ import { getCachedItem } from "../../cache";
 import { NextResponse } from "next/server";
 import { getModel } from "@/lib/ai";
 
-const systemPrompt = config.prompts.chat.join("\n");
-
 export async function POST(req: Request) {
 	const { id, messages, key, modelIndex } = await req.json();
 	const locale = req.headers.get("Accept-Language") || "en";
+	const systemPrompt = config.prompts.chat.join("\n");
+	const sharedCriticalRules = config.shared_critical_rules.join("\n")
 	const item = await getCachedItem(key);
 
 	if (!item) {
@@ -44,7 +44,11 @@ export async function POST(req: Request) {
 
 	const result = streamText({
 		model: provider!(modelName!),
-		system: systemPrompt + `\n\nLanguage: ${locale}`,
+		system: [
+			`LOCALE: ${locale}\n`,
+			systemPrompt,
+			sharedCriticalRules,
+		].join("\n"),
 		messages: coreMessages,
 	});
 

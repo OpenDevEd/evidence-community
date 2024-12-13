@@ -8,7 +8,8 @@ export async function POST(req: Request) {
 	const { searchParams } = new URL(req.url);
 	const prompt = searchParams.get("prompt") || "summarize";
 	const locale = req.headers.get("Accept-Language") || "en";
-	const systemPrompt = config.prompts[prompt as keyof typeof config.prompts]?.join("\n");
+	const systemPrompt = config.prompts[prompt as keyof typeof config.prompts]?.join("\n")
+	const sharedCriticalRules = config.shared_critical_rules.join("\n")
 	const { prompt: key, modelIndex } = await req.json();
 
 	if (!systemPrompt || prompt === "chat") {
@@ -27,13 +28,13 @@ export async function POST(req: Request) {
 		return new NextResponse(error, { status: 404 });
 	}
 
-	console.log("Now using", {
-		modelName,
-	});
-
 	const result = streamText({
 		model: provider!(modelName!),
-		system: systemPrompt + `\n\nLanguage: ${locale}`,
+		system: [
+			`LOCALE: ${locale}\n`,
+			systemPrompt,
+			sharedCriticalRules,
+		].join("\n"),
 		prompt: JSON.stringify(item),
 	});
 
