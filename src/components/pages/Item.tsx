@@ -118,8 +118,13 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 	const router = useRouter();
 	const t = useTranslations("ui");
+const { data: embeddings } = useSWR(
+		`/ai/embeddings/${data?.item?.key}`,
+		fetcher
+	);
+
 	return (
-		<main className="w-full max-w-screen-2xl px-4 xl:px-14 flex flex-col">
+		<main className="w-full max-w-screen-2xl px-4 xl:px-14 flex flex-col gap-4">
 			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
 				<ItemControls itemData={data?.item} router={router} />
 				<div className="flex flex-col gap-8 p-10">
@@ -150,6 +155,30 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 				</div>
 			</div>
 			{data && <AiButton data={data} />}
+<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
+				<div className="flex flex-row">
+					<div className="text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-24 shrink-0 rounded p-10">
+						{t("relatedItems")}
+					</div>
+					<div className="bg-white dark:bg-black/25 w-full">
+						<Skeleton
+							isLoaded={!!embeddings}
+							className="data-[loaded]:min-h-auto min-h-screen rounded-2xl rounded-l-none p-4 w-full"
+						>
+							<ul className="grid grid-cols-2 gap-4">
+								{embeddings?.hits.map((hit: any) => (
+									<Resource
+										key={hit.id}
+										itemData={hit}
+										abstract={false}
+										isLoading={false}
+									/>
+								))}
+							</ul>
+						</Skeleton>
+					</div>
+				</div>
+			</div>
 		</main>
 	);
 }
