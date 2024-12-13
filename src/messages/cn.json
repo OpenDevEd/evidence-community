@@ -33,18 +33,23 @@
 		"copyLink": "复制链接",
 		"copied": "已复制链接!",
 		"viewAttachment": "查看",
-		"downloadAttachment": "下载"
+		"downloadAttachment": "下载",
+		"relatedItems": "相关资源"
 	},
 	"ai": {
 		"summarize": "总结",
-		"summarizeDescription": "尽可能简短地总结此资源。",
+		"summarizeDescription": "用最简洁的语言总结此资源。",
 		"explain": "解释",
 		"explainDescription": "详细解释此资源。",
-		"askAI": "询问 AI",
-		"chatDescription": "与此资源聊天。",
+		"askAI": "询问AI",
+		"chatDescription": "与此资源进行对话。",
 		"askMeAnything": "问我任何问题！",
-		"chatPlaceholder": "你好！今天我能帮你什么？你可以问我关于 \"{title}\" 的问题或与数据相关的任何问题。",
-		"errorMessage": "抱歉，我遇到了一个错误。请稍后再试。"
+		"chatPlaceholder": "你好！我能为你做些什么？你可以询问我关于 \"{title}\" 的问题，或其他任何相关数据的问题。",
+		"errorMessage": "抱歉，我遇到了一个错误。请稍后再试。",
+		"change": "更换AI模型",
+		"changeDescription": "当前使用的是 {model}。",
+		"changeAbtract": "更换用于生成解释、总结和对话回复的AI模型。",
+		"byCompany": "由 {company} 提供"
 	},
 	"sorts": {
 		"desc": "最新",

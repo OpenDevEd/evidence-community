@@ -33,7 +33,8 @@
 		"copyLink": "Link kopieren",
 		"copied": "Link kopiert!",
 		"viewAttachment": "Ansehen",
-		"downloadAttachment": "Download"
+		"downloadAttachment": "Download",
+		"relatedItems": "Verwandte Ressourcen"
 	},
 	"ai": {
 		"summarize": "Zusammenfassen",
@@ -43,8 +44,12 @@
 		"askAI": "KI fragen",
 		"chatDescription": "Chatte mit dieser Ressource.",
 		"askMeAnything": "Frag mich alles!",
-		"chatPlaceholder": "Hallo! Wie kann ich dir heute helfen? Du kannst mir Fragen zu \"{title}\" oder anderen verwandten Themen stellen.",
-		"errorMessage": "Entschuldigung, aber es ist ein Fehler aufgetreten. Bitte versuche es später erneut."
+		"chatPlaceholder": "Hallo! Wie kann ich dir heute helfen? Du kannst mir Fragen zu \"{title}\" oder zu anderen verwandten Themen stellen.",
+		"errorMessage": "Entschuldigung, aber es ist ein Fehler aufgetreten. Bitte versuche es später erneut.",
+		"change": "KI-Modell ändern",
+		"changeDescription": "Aktuell wird {model} verwendet.",
+		"changeAbtract": "Ändere das KI-Modell, das für die Erklärung, Zusammenfassung und Chat-Antworten verwendet wird.",
+		"byCompany": "von {company}"
 	},
     "sorts": {
 		"desc": "Neueste",

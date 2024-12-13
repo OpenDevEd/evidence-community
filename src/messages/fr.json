@@ -33,18 +33,23 @@
 		"copyLink": "Copier le lien",
 		"copied": "Lien copié!",
 		"viewAttachment": "Voir",
-		"downloadAttachment": "Télécharger"
+		"downloadAttachment": "Télécharger",
+		"relatedItems": "Ressources similaires"
 	},
 	"ai": {
 		"summarize": "Résumer",
-		"summarizeDescription": "Résumer cette ressource en un minimum de mots.",
+		"summarizeDescription": "Résumer cette ressource en aussi peu de mots que possible.",
 		"explain": "Expliquer",
 		"explainDescription": "Expliquer cette ressource en détail.",
-		"askAI": "Demander à l'IA",
+		"askAI": "Interroger l'IA",
 		"chatDescription": "Discuter avec cette ressource.",
 		"askMeAnything": "Posez-moi n'importe quelle question !",
 		"chatPlaceholder": "Bonjour ! Comment puis-je vous aider aujourd'hui ? Vous pouvez me poser des questions sur \"{title}\" ou tout autre sujet lié aux données.",
-		"errorMessage": "Je suis désolé, mais j'ai rencontré une erreur. Veuillez réessayer plus tard."
+		"errorMessage": "Je suis désolé, mais j'ai rencontré une erreur. Veuillez réessayer plus tard.",
+		"change": "Changer de modèle d'IA",
+		"changeDescription": "Utilise actuellement {model}.",
+		"changeAbtract": "Changer le modèle d'IA utilisé pour générer l'explication, le résumé et les réponses du chat.",
+		"byCompany": "par {company}"
 	},
 	"sorts": {
 		"desc": "Plus récent",

@@ -33,7 +33,8 @@
 		"copyLink": "نسخ الرابط",
 		"copied": "تم نسخ الرابط!",
 		"viewAttachment": "عرض",
-		"downloadAttachment": "تحميل"
+		"downloadAttachment": "تحميل",
+		"relatedItems": "الموارد المتشابهة"
 	},
 	"ai": {
 		"summarize": "تلخيص",
@@ -44,7 +45,11 @@
 		"chatDescription": "تحدث مع هذا المورد",
 		"askMeAnything": "اسألني أي شيء!",
 		"chatPlaceholder": "مرحباً! كيف يمكنني مساعدتك اليوم؟ يمكنك أن تسألني عن \"{title}\" أو أي شيء آخر متعلق بالبيانات",
-		"errorMessage": "عذراً، لقد واجهت خطأ. يرجى المحاولة مرة أخرى لاحقاً"
+		"errorMessage": "عذراً، لقد واجهت خطأ. يرجى المحاولة مرة أخرى لاحقاً",
+		"change": "تغيير نموذج الذكاء الاصطناعي",
+		"changeDescription": "يتم استخدام {model} حالياً",
+		"changeAbtract": "تغيير نموذج الذكاء الاصطناعي المستخدم لإنشاء الشرح والملخص وردود المحادثة",
+		"byCompany": "بواسطة {company}"
 	},
 	"sorts": {
 		"desc": "الأحدث",
@@ -147,7 +152,7 @@
 		"cartographer": "رسام خرائط",
 		"inventor": "مخترع",
 		"attorneyAgent": "محامي/وكيل",
-		"podcaster": "مقدم بودكاست",
+		"podcaster": "م��دم بودكاست",
 		"guest": "ضيف",
 		"director": "مخرج",
 		"castMember": "عضو طاقم التمثيل",
@@ -207,7 +212,7 @@
         "series": "السلسلة",
         "seriesNumber": "رقم السلسلة",
         "edition": "الطبعة",
-        "publisher": "الناشر",
+        "publisher": "ال��اشر",
         "numPages": "عدد الصفحات",
         "bookTitle": "عنوان الكتاب",
         "pages": "الصفحات",
@@ -234,7 +239,7 @@
         "forumTitle": "عنوان المنتدى",
         "postType": "نوع المنشور",
         "committee": "اللجنة",
-        "documentNumber": "ر��م الوثيقة",
+        "documentNumber": "رم الوثيقة",
         "interviewMedium": "وسيط المقابلة",
         "publicationTitle": "عنوان المنشور",
         "issue": "العدد",
