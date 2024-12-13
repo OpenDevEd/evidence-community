@@ -3,34 +3,23 @@
 import {
 	Accordion,
 	AccordionItem,
-	AutocompleteItem,
-	Button,
-	Checkbox,
-	Dropdown,
-	DropdownItem,
-	DropdownMenu,
-	DropdownTrigger,
-	tv,
-	useDisclosure,
+	AutocompleteItem
 } from "@nextui-org/react";
-import { useParamsState } from "@/hooks/useParamsState";
 import { Skeleton } from "../../nextui/Skeleton";
-import { GrConfigure } from "react-icons/gr";
 import { useHierarchy } from "@/hooks/useHierarchy";
 import { twMerge } from "tailwind-merge";
 import CollectionCategory from "./CollectionCategory";
 import { CollectionsGetResponse } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
 import { Switch } from "../../nextui/Switch";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import config from "@/constants/config.json";
 import { Input } from "../../nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
 import { years } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { LuX } from "react-icons/lu";
-import { useFeatureFlagEnabled } from 'posthog-js/react'
+import { useFeatureFlagEnabled } from 'posthog-js/react';
 import { useTranslations } from "next-intl";
 
 function YearPicker({
@@ -64,6 +53,9 @@ function YearPicker({
 							"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
 						input: "placeholder:text-black/60 dark:placeholder:text-white/40",
 					},
+				}}
+				listboxProps={{
+					isVirtualized: true,
 				}}
 			>
 				{years.map((year) => (
