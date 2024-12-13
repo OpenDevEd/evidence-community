@@ -149,7 +149,10 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 											)
 											.map((model) => (
 												<div className="size-8 shrink-0 bg-accent p-1.5 rounded">
-													<model.icon className="h-full w-full invert" />
+													<model.icon
+														key={model.name}
+														className="h-full w-full invert"
+													/>
 												</div>
 											))}
 									</>

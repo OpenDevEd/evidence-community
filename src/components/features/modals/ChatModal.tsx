@@ -123,7 +123,10 @@ export default function ChatModal({
 															index === modelIndex
 													)
 													.map((model) => (
-														<model.icon className="size-4 invert" />
+														<model.icon
+															key={model.name}
+															className="size-4 invert"
+														/>
 													))
 											)}
 										</div>
