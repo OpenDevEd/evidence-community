@@ -4,7 +4,7 @@ import { useState, useCallback, useRef } from "react";
 
 export default function useAIStream(endpoint: string) {
     const locale = useLocale();
-    const { completion, complete } = useCompletion({
+    const { completion, complete, isLoading } = useCompletion({
         api: endpoint,
         headers: {
             "Content-Type": "application/json",
@@ -12,5 +12,10 @@ export default function useAIStream(endpoint: string) {
         },
     })
 
-	return { response: completion, stream: complete };
+    const debouncedComplete = useCallback((...args: Parameters<typeof complete>) => {
+        if (isLoading || completion) return;
+        complete(...args);
+    }, [isLoading, completion, complete]);
+
+	return { response: completion, stream: debouncedComplete };
 }
