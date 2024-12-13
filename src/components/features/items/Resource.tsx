@@ -25,7 +25,7 @@ function ResourceInteractions({
 	const t = useTranslations("ui");
 
 	return (
-		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl">
+		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
 			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
 				<div className="w-full rounded-2xl flex flex-row items-center">
 					<NextUILink
@@ -66,10 +66,10 @@ export default function Resource({
 	const router = useRouter();
 
 	return (
-		<div className="w-full bg-white dark:bg-white/[4%] rounded-xl">
+		<div className="w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col">
 			<Link
 				href={`/lib/${itemData?.key}`}
-				className="p-4 xl:p-6 flex flex-col gap-4 hover:brightness-90 transition-all"
+				className="p-4 xl:p-6 flex flex-col gap-4 hover:brightness-90 transition-all flex-1"
 			>
 				<Skeleton
 					isLoaded={!isLoading}
