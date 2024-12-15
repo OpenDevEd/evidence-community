@@ -52,5 +52,9 @@ export async function POST(req: Request) {
 		messages: coreMessages,
 	});
 
-	return result.toDataStreamResponse({});
+	return result.toDataStreamResponse({
+		headers: {
+			'Content-Type': 'text/event-stream',
+		},
+	});
 }

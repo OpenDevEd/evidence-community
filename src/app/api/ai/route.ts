@@ -32,25 +32,40 @@ export async function POST(req: Request) {
 		return new NextResponse(error, { status: 404 });
 	}
 
-	const result = await generateText({
+	// const result = await generateText({
+	// 	model: provider!(modelName!),
+	// 	system: [
+	// 		`LOCALE: ${locale}\n`,
+	// 		systemPrompt,
+	// 		sharedCriticalRules,
+	// 	].join("\n"),
+	// 	prompt: JSON.stringify(item),
+	// });
+
+	// const proofReaderResult = streamText({
+	// 	model: provider!(modelName!),
+	// 	system: [
+	// 		sharedCriticalRules,
+	// 		proofReaderPrompt,
+	// 	].join("\n"),
+	// 	prompt: "1. Source Document: " + JSON.stringify(item) + "\n\n2. Report: " + result.text,
+	// }) 
+
+	// return proofReaderResult.toDataStreamResponse()
+
+	const result = streamText({
 		model: provider!(modelName!),
 		system: [
-			`LOCALE: ${locale}\n`,
-			systemPrompt,
 			sharedCriticalRules,
+			systemPrompt,
 		].join("\n"),
 		prompt: JSON.stringify(item),
-	});
+	})
 
-	const proofReaderResult = streamText({
-		model: provider!(modelName!),
-		system: [
-			sharedCriticalRules,
-			proofReaderPrompt,
-		].join("\n"),
-		prompt: "1. Source Document: " + JSON.stringify(item) + "\n\n2. Report: " + result.text,
-	}) 
-
-	return proofReaderResult.toDataStreamResponse()
+	return result.toDataStreamResponse({
+		headers: {
+			'Content-Type': 'text/event-stream',
+		},
+	})
 
 }
