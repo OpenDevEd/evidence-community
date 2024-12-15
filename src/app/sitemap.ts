@@ -23,9 +23,9 @@ function getEntry(href: Href, lastModified: Date = new Date()) {
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-    const documents = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments({
-        limit: 1000000,
-    });
+    // const documents = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments({
+    //     limit: 1000000,
+    // });
 
     const baseEntries = [
         getEntry('/'),
