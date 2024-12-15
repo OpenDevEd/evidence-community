@@ -63,5 +63,5 @@ export const SCOPE_OPTIONS = [
   { key: "authors", name: "in authors or contributors", attributesToSearchOn: ["fullNames"] },
   { key: "title", name: "in title", attributesToSearchOn: ["title"] },
   { key: "fields", name: "in fields", attributesToSearchOn: ITEM_COLUMNS.filter((col) => col !== "fullTextPDF" && col !== "attachmentsData") },
-  { key: "documents", name: "in documents", attributesToSearchOn: ["fullTextPDF", "attachmentsData.fullTextPDF"] },
+  { key: "documents", name: "in documents", attributesToSearchOn: ["fullTextPDF", "attachmentsData.fullTextPDF.text"] },
 ];

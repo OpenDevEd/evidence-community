@@ -1,14 +1,16 @@
 import { NextResponse } from "next/server";
 import config from "@/constants/config.json";
 import { getCachedItem } from "../cache";
-import { streamText } from 'ai';
+import { generateText, streamText } from 'ai';
 import { getModel } from "@/lib/ai";
+// import fs from "fs";
 
 export async function POST(req: Request) {
 	const { searchParams } = new URL(req.url);
 	const prompt = searchParams.get("prompt") || "summarize";
 	const locale = req.headers.get("Accept-Language") || "en";
 	const systemPrompt = config.prompts[prompt as keyof typeof config.prompts]?.join("\n")
+	const proofReaderPrompt = config.proofreader?.join("\n")
 	const sharedCriticalRules = config.shared_critical_rules.join("\n")
 	const { prompt: key, modelIndex } = await req.json();
 
@@ -17,6 +19,8 @@ export async function POST(req: Request) {
 	}
 
 	const item = await getCachedItem(key!);
+
+	// fs.writeFileSync("lastUsedItem.json", JSON.stringify(item, null, 2));
 
 	if (!item) {
 		return new NextResponse("Item not found", { status: 404 });
@@ -28,7 +32,7 @@ export async function POST(req: Request) {
 		return new NextResponse(error, { status: 404 });
 	}
 
-	const result = streamText({
+	const result = await generateText({
 		model: provider!(modelName!),
 		system: [
 			`LOCALE: ${locale}\n`,
@@ -38,5 +42,15 @@ export async function POST(req: Request) {
 		prompt: JSON.stringify(item),
 	});
 
-	return result.toDataStreamResponse({});
+	const proofReaderResult = streamText({
+		model: provider!(modelName!),
+		system: [
+			sharedCriticalRules,
+			proofReaderPrompt,
+		].join("\n"),
+		prompt: "1. Source Document: " + JSON.stringify(item) + "\n\n2. Report: " + result.text,
+	}) 
+
+	return proofReaderResult.toDataStreamResponse()
+
 }
