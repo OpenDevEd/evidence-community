@@ -5,6 +5,8 @@ import { generateText, streamText } from 'ai';
 import { getModel } from "@/lib/ai";
 // import fs from "fs";
 
+export const maxDuration = 60;
+
 export async function POST(req: Request) {
 	const { searchParams } = new URL(req.url);
 	const prompt = searchParams.get("prompt") || "summarize";
