@@ -44,10 +44,10 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
 		useDisclosure();
 
-	const { response: summaryResponse, stream: summaryStream } = useAIStream(
+	const { response: summaryResponse, stream: summaryStream, error: summaryError } = useAIStream(
 		"/api/ai?prompt=summarize"
 	);
-	const { response: explainResponse, stream: explainStream } = useAIStream(
+	const { response: explainResponse, stream: explainStream, error: explainError } = useAIStream(
 		"/api/ai?prompt=explain"
 	);
 
@@ -133,12 +133,14 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 					onOpenChange={onSummaryOpenChange}
 					content={summaryResponse}
 					title={t("summarize")}
+					error={summaryError}
 				/>
 				<GenerativeModal
 					isOpen={isExplainOpen}
 					onOpenChange={onExplainOpenChange}
 					content={explainResponse}
 					title={t("explain")}
+					error={explainError}
 				/>
 				<Dropdown
 					classNames={{

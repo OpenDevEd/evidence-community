@@ -10,6 +10,8 @@ import { ReactNode } from "react";
 import { BiSolidBookBookmark, BiSolidBookContent } from "react-icons/bi";
 import { Node } from "unist";
 import { AIMarkdown } from "../ai/Markdown";
+import { motion, MotionConfig } from "framer-motion";
+import { useTranslations } from "next-intl";
 
 
 export default function GenerativeModal({
@@ -17,13 +19,15 @@ export default function GenerativeModal({
 	onOpenChange,
 	content,
 	title,
+	error,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 	content: string;
 	title: string;
+	error?: Error;
 }) {
-	console.log(content);
+	const t = useTranslations("ai");
 
 	return (
 		<AIModal isOpen={isOpen} onOpenChange={onOpenChange}>
@@ -36,14 +40,29 @@ export default function GenerativeModal({
 						<ModalBody className="w-full">
 							<ScrollShadow className="w-full h-full">
 								<Skeleton
-									isLoaded={content.length > 0}
-									className="w-full rounded-2xl h-full min-h-64"
+									isLoaded={content.length > 0 || !!error}
+									className="w-full rounded-2xl h-full min-h-64 relative"
 								>
-									<AIMarkdown
-										className="prose dark:prose-invert space-y-2 max-w-full px-4 py-2"
-									>
-										{content}
-									</AIMarkdown>
+									{error ? (
+										<div
+											className="text-red-500 flex items-center justify-center text-xl absolute inset-0 bg-red-500/10 rounded-2xl text-center px-24 text-balance overflow-hidden "
+										>
+											<motion.div
+												initial={{ opacity: 0, y: -100 }}
+												animate={{ opacity: 1, y: 0 }}
+												exit={{ opacity: 0, y: 100 }}
+												transition={{ delay: 0.5 }}
+											>
+												{t("errorMessage")}
+											</motion.div>
+										</div>
+									) : (
+										<AIMarkdown
+											className="prose dark:prose-invert space-y-2 max-w-full px-4 py-2"
+										>
+											{content}
+										</AIMarkdown>
+									)}
 								</Skeleton>
 							</ScrollShadow>
 						</ModalBody>
