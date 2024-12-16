@@ -40,3 +40,4 @@ next-env.d.ts
 facets.json
 filteredCollections.json
 hierarchy.json
+lastUsedItem.json

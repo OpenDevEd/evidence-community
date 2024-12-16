@@ -30,10 +30,11 @@ import AIModal from "../nextui/AIModal";
 import { useState } from "react";
 import { FaCheck } from "react-icons/fa";
 import { models } from "@/constants/ai";
+import { useLocalStorage } from "usehooks-ts";
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ai");
-	const [selectedModel, setSelectedModel] = useState(0);
+	const [selectedModel, setSelectedModel] = useLocalStorage("ai-model", 0);
 
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
