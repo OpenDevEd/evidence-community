@@ -51,7 +51,7 @@ export default function CollectionCategory({
 		return () => {
 			observer.disconnect();
 		};
-	}, [ref]);
+	}, [ref, collection.key, previousExpansionStates.current]);
 
 	if (previousExpansionStates.current[collection.key] === undefined) {
 		previousExpansionStates.current[collection.key] = showMore;
