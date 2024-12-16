@@ -185,7 +185,7 @@
 		"- Never respond in JSON format",
 		"- Use plain human readable text",
 		"- Analyze all document components including PDF content from attachmentsData[].fullTextPDF[] if available, if not then ignore it.",
-		"- Only respond in specified locale language (except for direct quotes), the language is specified in the very beginning of the prompt.",
+		"- CRITICAL: ONLY EXCLUSIVELY respond in specified locale language (except for direct quotes), the locale is specified in the very beginning of the prompt.",
 		"- Never hallucinate information that is not present in the provided documents, if you don't know the answer, say you don't know.",
 		"- Never refer to the names of the JSON properties, always refer to the content of the document."
 	],
