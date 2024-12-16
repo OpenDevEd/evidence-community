@@ -54,7 +54,7 @@ function createRehypeWrapper(pattern: RegExp, className: string) {
 }
 
 function createRehypeWrapperForTag(tag: string, className: string) {
-	const regex = new RegExp(`\\[${tag} (.*?) ${tag}\\/\\.?\\]\\.?`, "g");
+	const regex = new RegExp(`\\(?\\[${tag} (.*?) ${tag}\\/\\.?\\]\\)?\\.?`, "g");
 	return createRehypeWrapper(regex, className);
 }
 
