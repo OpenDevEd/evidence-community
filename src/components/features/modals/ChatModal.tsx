@@ -22,7 +22,7 @@ import { SectionTitle } from "@/components/typography/SectionTitle";
 import { BsStars } from "react-icons/bs";
 import { IoSend } from "react-icons/io5";
 import { useLocale, useTranslations } from "next-intl";
-import { useChat } from "ai/react";
+import { Message, useChat } from "ai/react";
 import AIHeader from "../ai/AIHeader";
 import AIModal from "@/components/nextui/AIModal";
 import { models } from "@/constants/ai";
@@ -43,25 +43,44 @@ export default function ChatModal({
 	const locale = useLocale();
 	const id = "1";
 
-	const { messages, handleSubmit, input, setInput, append, isLoading, stop } =
-		useChat({
-			id,
-			api: "/api/ai/chat",
-			initialMessages: [
-				{
-					role: "assistant",
-					content: t("chatPlaceholder", { title: data?.item?.title }),
-					id: "start",
-				},
-			],
-			body: { id, key: data?.item?.key, modelIndex },
-			headers: {
-				"Accept-Language": locale,
+	const {
+		messages,
+		handleSubmit,
+		input,
+		setInput,
+		append,
+		isLoading,
+		stop,
+		setMessages,
+	} = useChat({
+		id,
+		api: "/api/ai/chat",
+		initialMessages: [
+			{
+				role: "assistant",
+				content: t("chatPlaceholder", { title: data?.item?.title }),
+				id: "start",
 			},
-		});
+		],
+		body: { id, key: data?.item?.key, modelIndex },
+		headers: {
+			"Accept-Language": locale,
+		},
+		onError: (error) => {
+			appendMessage({
+				role: "assistant",
+				content: t("errorMessage"),
+				id: "error",
+			});
+		},
+	});
 
 	const inputRef = useRef<HTMLInputElement>(null);
 	const messageListRef = useRef<HTMLDivElement>(null);
+
+	const appendMessage = (message: Message) => {
+		setMessages((prevMessages) => [...prevMessages, message]);
+	};
 
 	useEffect(() => {
 		const apply = () => {
@@ -134,13 +153,17 @@ export default function ChatModal({
 											className={twMerge(
 												"bg-white dark:bg-secondary rounded-xl p-4 text-wrap max-w-full overflow-hidden break-words text-lg",
 												message.role !== "user" &&
-													"bg-accent dark:bg-accent-300"
+													"bg-accent dark:bg-accent-300",
+												message.content == t("errorMessage") &&
+													"bg-red-500 dark:bg-red-500"
 											)}
 										>
 											{message.content.length === 0 ? (
 												<ImSpinner8 className="animate-spin" />
 											) : (
-												<AIMarkdown>{message.content}</AIMarkdown>
+												<AIMarkdown>
+													{message.content}
+												</AIMarkdown>
 											)}
 										</p>
 									</div>
