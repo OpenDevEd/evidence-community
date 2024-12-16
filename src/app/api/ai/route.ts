@@ -57,6 +57,7 @@ export async function POST(req: Request) {
 	const result = streamText({
 		model: provider!(modelName!),
 		system: [
+			`LOCALE: ${locale}\n`,
 			systemPrompt,
 			sharedRules,
 			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? pdfRules : "",
