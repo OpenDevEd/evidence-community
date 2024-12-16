@@ -52,6 +52,7 @@ export async function POST(req: Request) {
 			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? pdfRules : "",
 		].join("\n"),
 		messages: coreMessages,
+		temperature: 0,
 	});
 
 	return result.toDataStreamResponse({
