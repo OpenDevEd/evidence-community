@@ -11,7 +11,8 @@ export async function POST(req: Request) {
 	const locale = req.headers.get("Accept-Language") || "en";
 	const systemPrompt = config.prompts[prompt as keyof typeof config.prompts]?.join("\n")
 	const proofReaderPrompt = config.proofreader?.join("\n")
-	const sharedCriticalRules = config.shared_critical_rules.join("\n")
+	const sharedRules = config.shared_rules.join("\n")
+	const pdfRules = config.pdf_rules.join("\n")
 	const { prompt: key, modelIndex } = await req.json();
 
 	if (!systemPrompt || prompt === "chat") {
@@ -56,8 +57,9 @@ export async function POST(req: Request) {
 	const result = streamText({
 		model: provider!(modelName!),
 		system: [
-			sharedCriticalRules,
 			systemPrompt,
+			sharedRules,
+			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? pdfRules : "",
 		].join("\n"),
 		prompt: JSON.stringify(item),
 	})

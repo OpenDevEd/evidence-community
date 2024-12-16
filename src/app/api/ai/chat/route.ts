@@ -11,7 +11,8 @@ export async function POST(req: Request) {
 	const { id, messages, key, modelIndex } = await req.json();
 	const locale = req.headers.get("Accept-Language") || "en";
 	const systemPrompt = config.prompts.chat.join("\n");
-	const sharedCriticalRules = config.shared_critical_rules.join("\n")
+	const sharedRules = config.shared_rules.join("\n")
+	const pdfRules = config.pdf_rules.join("\n")
 	const item = await getCachedItem(key);
 
 	if (!item) {
@@ -47,7 +48,8 @@ export async function POST(req: Request) {
 		system: [
 			`LOCALE: ${locale}\n`,
 			systemPrompt,
-			sharedCriticalRules,
+			sharedRules,
+			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? pdfRules : "",
 		].join("\n"),
 		messages: coreMessages,
 	});
