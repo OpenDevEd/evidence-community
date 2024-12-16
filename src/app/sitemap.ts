@@ -1,43 +1,50 @@
-import type { MetadataRoute } from "next";
 import meilisearchClient from "@/lib/meilisearch";
+import { MetadataRoute } from 'next'
+import { routing } from '@/i18n/routing'
 import config from "@/constants/config.json";
-import { Locale, getPathname, routing } from '@/i18n/routing';
 
-type Href = Parameters<typeof getPathname>[0]['href'];
+const locales = routing.locales.map((locale) => locale);
 
-function getUrl(href: Href, locale: Locale) {
-    const pathname = getPathname({ locale, href });
-    return `${process.env.BASE_URL || config.baseURL}${pathname}`;
+const LIMIT_PER_SITEMAP = 10000;
+
+function getItems(args: {
+    [key: string]: any;
+} = {}) {
+    return meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments({
+        limit: 1000000,
+        ...args
+    });
 }
 
-function getEntry(href: Href, lastModified: Date = new Date()) {
-    return {
-        url: getUrl(href, routing.defaultLocale),
-        lastModified,
-        alternates: {
-            languages: Object.fromEntries(
-                routing.locales.map((locale) => [locale, getUrl(href, locale)])
-            )
-        }
-    };
+export async function generateSitemaps() {
+	const items = await getItems()
+	
+	return Array.from({ length: Math.ceil((items.total * locales.length) / LIMIT_PER_SITEMAP) }, (_, i) => ({ id: i }))
 }
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-    // const documents = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments({
-    //     limit: 1000000,
-    // });
+export default async function sitemap({ 
+	id 
+}: { 
+	id: number 
+}): Promise<MetadataRoute.Sitemap> {
+	const itemsPerLocale = Math.ceil(LIMIT_PER_SITEMAP / locales.length)
+	const offset = id * itemsPerLocale
+	
+	const items = await getItems({
+		limit: itemsPerLocale,
+		offset: offset
+	})
 
-    const baseEntries = [
-        getEntry('/'),
-        getEntry('/lib')
-    ];
-
-    // const documentEntries = documents.results.map((item) => 
-    //     getEntry(`/lib/${item.key}`, new Date(item.updatedAt))
-    // );
-
-    return [
-        ...baseEntries,
-        // ...documentEntries
-    ];
+	return items.results.flatMap(item => 
+		locales.map(locale => ({
+			url: `${process.env.BASE_URL}/${locale}/lib/${item.key}`,
+			lastModified: item.updatedAt,
+			alternates: {
+				languages: locales.reduce((acc, l) => ({
+					...acc,
+					[l]: `${process.env.BASE_URL}/${l}/lib/${item.key}`
+				}), {})
+			}
+		}))
+	)
 }
