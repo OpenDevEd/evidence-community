@@ -35,9 +35,10 @@ function PageView() {
 function CacheProvider({ children }: { children: React.ReactNode }) {
 	const [cache, setCache] = useState({});
 	const itemsCache = useRef(undefined);
+	const previousExpansionStates = useRef({});
 
 	return (
-		<CacheContext.Provider value={{ cache, setCache, itemsCache }}>
+		<CacheContext.Provider value={{ cache, setCache, itemsCache, previousExpansionStates }}>
 			{children}
 		</CacheContext.Provider>
 	);

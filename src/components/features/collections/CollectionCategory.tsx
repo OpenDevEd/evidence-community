@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "../../nextui/Button";
 import { motion } from "framer-motion";
@@ -11,6 +11,7 @@ import { MAX_COLLAPSED_HEIGHT } from "@/constants/collections";
 import CollectionHierarchy from "./CollectionHierarchy";
 import { FacetDistribution } from "meilisearch";
 import { useTranslations } from "next-intl";
+import { CacheContext } from "@/context/Providers";
 
 export default function CollectionCategory({
 	collection,
@@ -29,15 +30,15 @@ export default function CollectionCategory({
 	const [expanded, setExpanded] = useState(false);
 	const ref = useRef<HTMLDivElement>(null);
 	const [showMore, setShowMore] = useState(false);
-	const previousShowMore = useRef(showMore);
+	const { previousExpansionStates } = useContext(CacheContext);
 
 	useEffect(() => {
 		const apply = () => {
 			if (ref.current) {
 				setShowMore((prev) => {
 					if (!ref.current) return prev;
-					previousShowMore.current = prev;
-					return ref.current.scrollHeight > MAX_COLLAPSED_HEIGHT;
+					previousExpansionStates.current[collection.key] = ref.current.scrollHeight > (MAX_COLLAPSED_HEIGHT - 200);
+					return previousExpansionStates.current[collection.key];
 				});
 			}
 		};
@@ -51,6 +52,14 @@ export default function CollectionCategory({
 			observer.disconnect();
 		};
 	}, [ref]);
+
+	if (previousExpansionStates.current[collection.key] === undefined) {
+		previousExpansionStates.current[collection.key] = showMore;
+	}
+
+	if (collection.key === "HCTKHFNN") {
+		console.log(previousExpansionStates.current[collection.key]);
+	}
 
 	return (
 		<div className="relative">
@@ -82,11 +91,11 @@ export default function CollectionCategory({
 					expanded && showMore && "pb-14"
 				)}
 			></div>
-			<AnimatePresence mode="wait">
+			<AnimatePresence mode="wait" initial={false}>
 				{showMore && (
 					<motion.div
 						initial={
-							previousShowMore.current == false
+							previousExpansionStates.current[collection.key] !== showMore
 								? { opacity: 0 }
 								: { opacity: 1 }
 						}
