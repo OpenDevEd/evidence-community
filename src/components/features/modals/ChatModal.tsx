@@ -26,6 +26,7 @@ import { useChat } from "ai/react";
 import AIHeader from "../ai/AIHeader";
 import AIModal from "@/components/nextui/AIModal";
 import { models } from "@/constants/ai";
+import { AIMarkdown } from "../ai/Markdown";
 
 export default function ChatModal({
 	isOpen,
@@ -129,9 +130,9 @@ export default function ChatModal({
 													))
 											)}
 										</div>
-										<div
+										<p
 											className={twMerge(
-												"bg-secondary dark:bg-secondary rounded-xl p-4 text-wrap max-w-full overflow-hidden break-words text-lg",
+												"bg-white dark:bg-secondary rounded-xl p-4 text-wrap max-w-full overflow-hidden break-words text-lg",
 												message.role !== "user" &&
 													"bg-accent dark:bg-accent-300"
 											)}
@@ -139,13 +140,9 @@ export default function ChatModal({
 											{message.content.length === 0 ? (
 												<ImSpinner8 className="animate-spin" />
 											) : (
-												<Markdown
-													remarkPlugins={[remarkGfm]}
-												>
-													{message.content}
-												</Markdown>
+												<AIMarkdown>{message.content}</AIMarkdown>
 											)}
-										</div>
+										</p>
 									</div>
 								))}
 							</ScrollShadow>
