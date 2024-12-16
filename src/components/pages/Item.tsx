@@ -13,6 +13,8 @@ import {
 	useDisclosure,
 	ModalContent,
 	ModalBody,
+	Listbox,
+	ListboxItem,
 } from "@nextui-org/react";
 import GenerativeModal from "../features/modals/GenerativeModal";
 import useAIStream from "@/hooks/useAIStream";
@@ -66,37 +68,56 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 								<p className="text-base text-black/80 dark:text-white/80 font-medium p-2 text-center dark:bg-secondary bg-white">
 									{t("changeAbtract")}
 								</p>
-								{models.map((model, index) => (
-									<div
-										key={model.name}
-										data-selected={index === selectedModel}
-										className="p-6 cursor-pointer data-[selected=true]:dark:bg-accent/10 data-[selected=true]:bg-accent/20 transition-colors group"
-										onClick={() => setSelectedModel(index)}
-									>
-										<div className="flex items-center gap-4 hover:brightness-75 active:scale-[95%] transition-all">
-											<div className="size-10 shrink-0 bg-accent p-2 rounded">
-												<model.icon className="h-full w-full invert" />
-											</div>
-											<div className="flex flex-col">
-												<div className="flex items-center gap-2">
-													<p className="font-medium">
-														{model.name}
-													</p>
-													<span className="text-xs text-default-500">
-														{t("byCompany", {
-															company:
-																model.company,
-														})}
-													</span>
+								<Listbox
+									onAction={(index) => {
+										console.log(index);
+										setSelectedModel(Number(index));
+									}}
+									classNames={{
+										base: "p-0",
+										list: "gap-0",
+									}}
+								>
+									{models.map((model, index) => (
+										<ListboxItem
+											key={index}
+											className="!p-0 !bg-transparent !rounded-none"
+										>
+											<div
+												data-selected={
+													index === selectedModel
+												}
+												className="p-6 cursor-pointer data-[selected=true]:dark:bg-accent/10 data-[selected=true]:bg-accent/20 transition-colors group rounded-none"
+											>
+												<div className="flex items-center gap-4 hover:brightness-75 active:scale-[95%] transition-all">
+													<div className="size-10 shrink-0 bg-accent p-2 rounded">
+														<model.icon className="h-full w-full invert" />
+													</div>
+													<div className="flex flex-col">
+														<div className="flex items-center gap-2">
+															<p className="font-medium">
+																{model.name}
+															</p>
+															<span className="text-xs text-default-500">
+																{t(
+																	"byCompany",
+																	{
+																		company:
+																			model.company,
+																	}
+																)}
+															</span>
+														</div>
+														<p className="text-sm text-default-500">
+															{model.model}
+														</p>
+													</div>
+													<FaCheck className="size-4 shrink-0 text-accent ltr:ml-auto rtl:mr-auto group-data-[selected=true]:opacity-100 group-data-[selected=true]:translate-x-0 transition-all opacity-0 ltr:-translate-x-10 rtl:translate-x-10" />
 												</div>
-												<p className="text-sm text-default-500">
-													{model.model}
-												</p>
 											</div>
-											<FaCheck className="size-4 shrink-0 text-accent ltr:ml-auto rtl:mr-auto group-data-[selected=true]:opacity-100 group-data-[selected=true]:translate-x-0 transition-all opacity-0 ltr:-translate-x-10 rtl:translate-x-10" />
-										</div>
-									</div>
-								))}
+										</ListboxItem>
+									))}
+								</Listbox>
 							</div>
 						</ModalBody>
 					</ModalContent>
@@ -152,9 +173,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 													key={model.name}
 													className="size-8 shrink-0 bg-accent p-1.5 rounded"
 												>
-													<model.icon
-														className="h-full w-full invert"
-													/>
+													<model.icon className="h-full w-full invert" />
 												</div>
 											))}
 									</>
