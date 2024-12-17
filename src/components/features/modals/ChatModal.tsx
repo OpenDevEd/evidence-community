@@ -27,6 +27,7 @@ import AIHeader from "../ai/AIHeader";
 import AIModal from "@/components/nextui/AIModal";
 import { models } from "@/constants/ai";
 import { AIMarkdown } from "../ai/Markdown";
+import posthog from "posthog-js";
 
 export default function ChatModal({
 	isOpen,
@@ -62,7 +63,7 @@ export default function ChatModal({
 				id: "start",
 			},
 		],
-		body: { id, key: data?.item?.key, modelIndex },
+		body: { id, key: data?.item?.key, modelIndex, distinctId: posthog.get_distinct_id() },
 		headers: {
 			"Accept-Language": locale,
 		},
