@@ -1,26 +1,25 @@
 "use client";
 
-import {
-	Accordion,
-	AccordionItem,
-	AutocompleteItem
-} from "@nextui-org/react";
+import { Accordion, AccordionItem, AutocompleteItem } from "@nextui-org/react";
 import { Skeleton } from "../../nextui/Skeleton";
 import { useHierarchy } from "@/hooks/useHierarchy";
 import { twMerge } from "tailwind-merge";
 import CollectionCategory from "./CollectionCategory";
-import { CollectionsGetResponse } from "@/app/api/collections/types";
+import {
+	Collection,
+	CollectionsGetResponse,
+} from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
 import { Switch } from "../../nextui/Switch";
-import { useMemo } from "react";
+import { useContext, useMemo } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Input } from "../../nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
 import { years } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { LuX } from "react-icons/lu";
-import { useFeatureFlagEnabled } from 'posthog-js/react';
 import { useTranslations } from "next-intl";
+import { useFeatureFlagEnabled } from "@/context/Providers";
 
 function YearPicker({
 	label,
@@ -35,7 +34,7 @@ function YearPicker({
 }) {
 	const [debouncedOnSelectionChange, _] = useDebounce(onSelectionChange, 500);
 
-	const isYearsDropDownEnabled = useFeatureFlagEnabled('years-dropdown')
+	const isYearsDropDownEnabled = useFeatureFlagEnabled("years-dropdown");
 
 	if (isYearsDropDownEnabled) {
 		return (
@@ -76,6 +75,89 @@ function YearPicker({
 	);
 }
 
+export function InnerCollectionList({
+	data,
+	facetDistribution,
+	handleCheckboxChange,
+	selectedCollections,
+	hierarchy,
+}: {
+	data: CollectionsGetResponse | undefined;
+	facetDistribution: FacetDistribution | undefined;
+	handleCheckboxChange: (key: string) => void;
+	selectedCollections: string[];
+	hierarchy: Collection[];
+}) {
+	const t = useTranslations("ui");
+	const filteredFacetDistribution = useMemo(() => {
+		if (!facetDistribution?.collections || !data?.collections) {
+			return { collections: {} };
+		}
+
+		return {
+			collections: Object.fromEntries(
+				Object.entries(facetDistribution.collections).filter(([key]) =>
+					data.collections.some((c) => c.key === key)
+				)
+			),
+		};
+	}, [facetDistribution, data]);
+
+	const displayedCollections = useMemo(() => {
+		return hierarchy.filter(
+			(collection) =>
+				data?.collections.filter(
+					(c) =>
+						c.originalFacet === collection.key &&
+						filteredFacetDistribution.collections[c.key]
+				).length
+		);
+	}, [hierarchy, data, filteredFacetDistribution]);
+
+	return hierarchy &&
+		hierarchy.length > 0 &&
+		facetDistribution &&
+		Object.keys(facetDistribution.collections).filter((key) =>
+			data?.collections.find((c) => c.key === key)
+		).length > 0 ? (
+		<Accordion
+			defaultExpandedKeys={hierarchy.map((c) => c.key)}
+			selectionMode="multiple"
+			fullWidth={false}
+			variant="shadow"
+			className="bg-white dark:bg-card p-6 rounded-xl rounded-t-none shadow-none"
+			itemClasses={{
+				title: "text-black/80 dark:text-white/80 font-base text-2xl",
+				indicator: "text-black/80 dark:text-white/80",
+				trigger: "p-0",
+				base: "mb-4 last:mb-0",
+				content: "py-0 pt-2",
+			}}
+			showDivider={false}
+		>
+			{displayedCollections.map((collection) => (
+				<AccordionItem
+					key={collection.key}
+					title={collection.title || collection.name}
+				>
+					<CollectionCategory
+						collection={collection}
+						hierarchy={hierarchy}
+						selectedCollections={selectedCollections}
+						handleCheckboxChange={handleCheckboxChange}
+						facetDistribution={filteredFacetDistribution}
+					/>
+				</AccordionItem>
+			))}
+		</Accordion>
+	) : (
+		<div className="text-lg bg-white dark:bg-card p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 select-none">
+			<LuX className="stroke-current size-6" />
+			<span>{t("noFacetsFound")}</span>
+		</div>
+	);
+}
+
 export default function CollectionsList({
 	data,
 	facetDistribution,
@@ -95,6 +177,7 @@ export default function CollectionsList({
 	handleRangeChange: (start: string | null, end: string | null) => void;
 } & ReturnType<typeof useHierarchy>) {
 	const t = useTranslations("ui");
+	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
 
 	const [start, end, sameYear] = useMemo(() => {
 		const dashExists = range.includes("-");
@@ -104,23 +187,6 @@ export default function CollectionsList({
 		return [startNumber, endNumber, !dashExists];
 	}, [range]);
 
-	const filteredFacetDistribution = useMemo(() => {
-		if (!facetDistribution?.collections || !data?.collections) {
-			return { collections: {} };
-		}
-
-		return {
-			collections: Object.fromEntries(
-				Object.entries(facetDistribution.collections)
-					.filter(([key]) => data.collections.some(c => c.key === key))
-			)
-		};
-	}, [facetDistribution, data]);
-
-	const displayedCollections = useMemo(() => {
-		return hierarchy.filter(collection => data?.collections.filter(c => c.originalFacet === collection.key && filteredFacetDistribution.collections[c.key]).length)
-	}, [hierarchy, data, filteredFacetDistribution])
-
 	return (
 		<div
 			className={twMerge(
@@ -129,10 +195,11 @@ export default function CollectionsList({
 			)}
 		>
 			<Skeleton
-				className="w-full xl:min-h-screen rounded-2xl"
+				data-collections={isCollectionsEnabled}
+				className="w-full data-[collections=true]:xl:min-h-screen rounded-2xl"
 				isLoaded={!!data && !!facetDistribution}
 			>
-				<div className="w-full  bg-black/[4%] dark:bg-secondary rounded-t-2xl flex flex-col gap-4 p-6">
+				<div className="w-full bg-black/[4%] dark:bg-secondary rounded-t-2xl last:rounded-b-2xl flex flex-col gap-4 p-6">
 					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 						<span>{t("publicationYear")}</span>
 						<div className="flex gap-4 items-center flex-1 justify-end">
@@ -215,49 +282,14 @@ export default function CollectionsList({
 						</AnimatePresence>
 					</div>
 				</div>
-				{hierarchy &&
-				hierarchy.length > 0 &&
-				facetDistribution &&
-				Object.keys(facetDistribution.collections).filter((key) =>
-					data?.collections.find((c) => c.key === key)
-				).length > 0 ? (
-					<Accordion
-						defaultExpandedKeys={hierarchy.map((c) => c.key)}
-						selectionMode="multiple"
-						fullWidth={false}
-						variant="shadow"
-						className="bg-white dark:bg-card p-6 rounded-xl rounded-t-none shadow-none"
-						itemClasses={{
-							title: "text-black/80 dark:text-white/80 font-base text-2xl",
-							indicator: "text-black/80 dark:text-white/80",
-							trigger: "p-0",
-							base: "mb-4 last:mb-0",
-							content: "py-0 pt-2",
-						}}
-						showDivider={false}
-					>
-						{displayedCollections.map((collection) => (
-							<AccordionItem
-								key={collection.key}
-								title={collection.title || collection.name}
-							>
-								<CollectionCategory
-									collection={collection}
-									hierarchy={hierarchy}
-									selectedCollections={selectedCollections}
-									handleCheckboxChange={handleCheckboxChange}
-									facetDistribution={
-										filteredFacetDistribution
-									}
-								/>
-							</AccordionItem>
-						))}
-					</Accordion>
-				) : (
-					<div className="text-lg bg-white dark:bg-card p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 select-none">
-						<LuX className="stroke-current size-6" />
-						<span>{t("noFacetsFound")}</span>
-					</div>
+				{isCollectionsEnabled && (
+					<InnerCollectionList
+						data={data}
+						facetDistribution={facetDistribution}
+						handleCheckboxChange={handleCheckboxChange}
+						selectedCollections={selectedCollections}
+						hierarchy={hierarchy}
+					/>
 				)}
 			</Skeleton>
 		</div>
