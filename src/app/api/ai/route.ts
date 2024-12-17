@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 import config from "@/constants/config.json";
 import { getCachedItem } from "../cache";
 import { generateText, streamText } from 'ai';
-import { getModel } from "@/lib/ai";
-// import fs from "fs";
+import { getModel, trackUsage } from "@/lib/ai";
 
 export const maxDuration = 60;
 
@@ -15,15 +14,13 @@ export async function POST(req: Request) {
 	const proofReaderPrompt = config.proofreader?.join("\n")
 	const sharedRules = config.shared_rules.join("\n")
 	const pdfRules = config.pdf_rules.join("\n")
-	const { prompt: key, modelIndex } = await req.json();
+	const { prompt: key, modelIndex, distinctId } = await req.json();
 
 	if (!systemPrompt || prompt === "chat") {
 		return new NextResponse("Invalid prompt", { status: 400 });
 	}
 
 	const item = await getCachedItem(key!);
-
-	// fs.writeFileSync("lastUsedItem.json", JSON.stringify(item, null, 2));
 
 	if (!item) {
 		return new NextResponse("Item not found", { status: 404 });
@@ -35,27 +32,6 @@ export async function POST(req: Request) {
 		return new NextResponse(error, { status: 404 });
 	}
 
-	// const result = await generateText({
-	// 	model: provider!(modelName!),
-	// 	system: [
-	// 		`LOCALE: ${locale}\n`,
-	// 		systemPrompt,
-	// 		sharedCriticalRules,
-	// 	].join("\n"),
-	// 	prompt: JSON.stringify(item),
-	// });
-
-	// const proofReaderResult = streamText({
-	// 	model: provider!(modelName!),
-	// 	system: [
-	// 		sharedCriticalRules,
-	// 		proofReaderPrompt,
-	// 	].join("\n"),
-	// 	prompt: "1. Source Document: " + JSON.stringify(item) + "\n\n2. Report: " + result.text,
-	// }) 
-
-	// return proofReaderResult.toDataStreamResponse()
-
 	const result = streamText({
 		model: provider!(modelName!),
 		system: [
@@ -65,6 +41,9 @@ export async function POST(req: Request) {
 			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? pdfRules : "",
 		].join("\n"),
 		prompt: JSON.stringify(item),
+		onFinish(event) {
+			trackUsage("ai_" + prompt, event, distinctId, prompt);
+		},
 	})
 
 	return result.toDataStreamResponse({
