@@ -5,10 +5,10 @@ import {
 } from "ai";
 import { getCachedItem } from "../../cache";
 import { NextResponse } from "next/server";
-import { getModel } from "@/lib/ai";
+import { getModel, trackUsage } from "@/lib/ai";
 
 export async function POST(req: Request) {
-	const { id, messages, key, modelIndex } = await req.json();
+	const { distinctId, messages, key, modelIndex } = await req.json();
 	const locale = req.headers.get("Accept-Language") || "en";
 	const systemPrompt = config.prompts.chat.join("\n");
 	const sharedRules = config.shared_rules.join("\n")
@@ -53,6 +53,9 @@ export async function POST(req: Request) {
 		].join("\n"),
 		messages: coreMessages,
 		temperature: 0,
+		onFinish(event) {
+			trackUsage("chat_completion", event, distinctId, messages.at(-1)?.content);
+		},
 	});
 
 	return result.toDataStreamResponse({
