@@ -47,6 +47,7 @@ export async function GET(
 				semanticRatio: 0.7,
 			},
 			filter: [`id != ${item.id}`],
+			limit: 5,
 		});
 
 	return NextResponse.json(result);
