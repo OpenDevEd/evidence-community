@@ -27,11 +27,15 @@
 	background-color: transparent;
 }
 
+body {
+	overflow-x: hidden;
+}
+
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-  
+	.text-balance {
+		text-wrap: balance;
+	}
+
 	.no-scrollbar::-webkit-scrollbar {
 		display: none;
 	}
