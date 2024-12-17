@@ -24,3 +24,36 @@ export const models = [
 		icon: Claude,
 	},
 ];
+
+const MILLION = 1000000
+
+export const pricings = {
+	"gpt-4o": {
+		input: 2.5 / MILLION,
+		output: 10 / MILLION,
+	},
+	"gpt-4o-mini": {
+		input: 0.150 / MILLION,
+		output: 0.6 / MILLION,
+	},
+	"gemini-1.5-pro": {
+		input: 1.25 / MILLION,
+		output: 5 / MILLION,
+	},
+	"gemini-1.5-flash": {
+		input: 0.075 / MILLION,
+		output: 0.3 / MILLION,
+	},
+	"gemini-1.5-flash-8b": {
+		input: 0.0375 / MILLION,
+		output: 0.15 / MILLION,
+	},
+	"claude-3-5-sonnet-20241022": {
+		input: 3 / MILLION,
+		output: 15 / MILLION,
+	},
+	"claude-3-5-haiku-20241022": {
+		input: 0.8 / MILLION,
+		output: 4 / MILLION,
+	},
+}
