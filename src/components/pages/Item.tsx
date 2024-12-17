@@ -31,6 +31,8 @@ import { useState } from "react";
 import { FaCheck } from "react-icons/fa";
 import { models } from "@/constants/ai";
 import { useLocalStorage } from "usehooks-ts";
+import { motion } from "framer-motion";
+import { useFeatureFlagEnabled } from "@/context/Providers";
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ai");
@@ -45,15 +47,23 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
 		useDisclosure();
 
-	const { response: summaryResponse, stream: summaryStream, error: summaryError } = useAIStream(
-		"/api/ai?prompt=summarize"
-	);
-	const { response: explainResponse, stream: explainStream, error: explainError } = useAIStream(
-		"/api/ai?prompt=explain"
-	);
+	const {
+		response: summaryResponse,
+		stream: summaryStream,
+		error: summaryError,
+	} = useAIStream("/api/ai?prompt=summarize");
+	const {
+		response: explainResponse,
+		stream: explainStream,
+		error: explainError,
+	} = useAIStream("/api/ai?prompt=explain");
 
 	return (
-		<div className="fixed bottom-0 right-0">
+		<motion.div
+			className="fixed bottom-0 right-0"
+			initial={{ opacity: 0, x: 100 }}
+			animate={{ opacity: 1, x: 0 }}
+		>
 			<div className="flex items-center justify-center p-4">
 				<AIModal
 					size="md"
@@ -236,15 +246,17 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 					</DropdownMenu>
 				</Dropdown>
 			</div>
-		</div>
+		</motion.div>
 	);
 }
 
 export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 	const router = useRouter();
 	const t = useTranslations("ui");
+	const isAIEnabled = useFeatureFlagEnabled("ai-features");
+	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources");
 	const { data: embeddings } = useSWR(
-		`/ai/embeddings/${data?.item?.key}`,
+		isRelatedItemsEnabled ? `/ai/embeddings/${data?.item?.key}` : null,
 		fetcher
 	);
 
@@ -279,31 +291,33 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 					)}
 				</div>
 			</div>
-			{data && <AiButton data={data} />}
-			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
-				<div className="flex flex-row">
-					<div className="text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-24 shrink-0 rounded p-10">
-						{t("relatedItems")}
-					</div>
-					<div className="bg-white dark:bg-black/25 w-full">
-						<Skeleton
-							isLoaded={!!embeddings}
-							className="data-[loaded]:min-h-auto min-h-screen rounded-2xl rounded-l-none p-4 w-full"
-						>
-							<ul className="grid grid-cols-2 gap-4">
-								{embeddings?.hits.map((hit: any) => (
-									<Resource
-										key={hit.id}
-										itemData={hit}
-										abstract={false}
-										isLoading={false}
-									/>
-								))}
-							</ul>
-						</Skeleton>
+			{isAIEnabled && data && <AiButton data={data} />}
+			{isRelatedItemsEnabled && (
+				<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
+					<div className="flex flex-row">
+						<div className="text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-24 shrink-0 rounded p-10">
+							{t("relatedItems")}
+						</div>
+						<div className="w-full">
+							<Skeleton
+								isLoaded={!!embeddings}
+								className="data-[loaded]:min-h-0 min-h-screen rounded-2xl rounded-l-none p-4 w-full"
+							>
+								<ul className="grid grid-cols-1 gap-4">
+									{embeddings?.hits.map((hit: any) => (
+										<Resource
+											key={hit.id}
+											itemData={hit}
+											abstract={false}
+											isLoading={false}
+										/>
+									))}
+								</ul>
+							</Skeleton>
+						</div>
 					</div>
 				</div>
-			</div>
+			)}
 		</main>
 	);
 }
