@@ -1,6 +1,7 @@
 import { useCompletion } from "ai/react";
 import { useLocale } from "next-intl";
-import { useState, useCallback, useRef } from "react";
+import posthog from "posthog-js";
+import { useCallback } from "react";
 
 export default function useAIStream(endpoint: string) {
     const locale = useLocale();
@@ -10,6 +11,9 @@ export default function useAIStream(endpoint: string) {
             "Content-Type": "application/json",
             "Accept-Language": locale,
         },
+        body: {
+            distinctId: posthog.get_distinct_id()
+        }
     })
 
     const debouncedComplete = useCallback((...args: Parameters<typeof complete>) => {
