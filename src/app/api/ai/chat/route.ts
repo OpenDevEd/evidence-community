@@ -52,7 +52,6 @@ export async function POST(req: Request) {
 			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? pdfRules : "",
 		].join("\n"),
 		messages: coreMessages,
-		temperature: 0,
 		onFinish(event) {
 			trackUsage("chat_completion", event, distinctId, messages.at(-1)?.content);
 		},
