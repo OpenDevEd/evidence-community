@@ -27,7 +27,7 @@ import Resource from "../features/items/Resource";
 import { Skeleton } from "../nextui/Skeleton";
 import AIHeader from "../features/ai/AIHeader";
 import AIModal from "../nextui/AIModal";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FaCheck } from "react-icons/fa";
 import { models } from "@/constants/ai";
 import { useLocalStorage } from "usehooks-ts";
@@ -51,12 +51,15 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 		response: summaryResponse,
 		stream: summaryStream,
 		error: summaryError,
+		setCompletion: setSummaryCompletion,
 	} = useAIStream("/api/ai?prompt=summarize");
 	const {
 		response: explainResponse,
 		stream: explainStream,
 		error: explainError,
+		setCompletion: setExplainCompletion,
 	} = useAIStream("/api/ai?prompt=explain");
+
 
 	return (
 		<motion.div
@@ -81,8 +84,10 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 								</p>
 								<Listbox
 									onAction={(index) => {
-										console.log(index);
+										if (Number(index) === selectedModel) return;
 										setSelectedModel(Number(index));
+										setSummaryCompletion("");
+										setExplainCompletion("");
 									}}
 									classNames={{
 										base: "p-0",
