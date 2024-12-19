@@ -44,10 +44,11 @@ function CacheProvider({ children }: { children: React.ReactNode }) {
 	const [cache, setCache] = useState({});
 	const itemsCache = useRef(undefined);
 	const previousExpansionStates = useRef({});
+	const [globalExpanded, setGlobalExpanded] = useState({});
 
 	return (
 		<CacheContext.Provider
-			value={{ cache, setCache, itemsCache, previousExpansionStates }}
+			value={{ cache, setCache, itemsCache, previousExpansionStates, globalExpanded, setGlobalExpanded }}
 		>
 			{children}
 		</CacheContext.Provider>
