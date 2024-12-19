@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, useRef, useState } from "react";
+import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "../../nextui/Button";
 import { motion } from "framer-motion";
@@ -27,17 +27,31 @@ export default function CollectionCategory({
 	facetDistribution: FacetDistribution | undefined;
 }) {
 	const t = useTranslations("ui");
-	const [expanded, setExpanded] = useState(false);
 	const ref = useRef<HTMLDivElement>(null);
+	const { previousExpansionStates, globalExpanded, setGlobalExpanded } =
+		useContext(CacheContext);
+	const [expanded, setExpanded] = useMemo(() => {
+		const currentValue = globalExpanded[collection.key] ?? false;
+		return [
+			currentValue,
+			(value: boolean | ((prev: boolean) => boolean)) => {
+				setGlobalExpanded((obj: Record<string, boolean>) => ({
+					...obj,
+					[collection.key]:
+						typeof value === "boolean" ? value : value(currentValue),
+				}));
+			},
+		];
+	}, [globalExpanded, collection.key]);
 	const [showMore, setShowMore] = useState(false);
-	const { previousExpansionStates } = useContext(CacheContext);
 
 	useEffect(() => {
 		const apply = () => {
 			if (ref.current) {
 				setShowMore((prev) => {
 					if (!ref.current) return prev;
-					previousExpansionStates.current[collection.key] = ref.current.scrollHeight > (MAX_COLLAPSED_HEIGHT - 200);
+					previousExpansionStates.current[collection.key] =
+						ref.current.scrollHeight > MAX_COLLAPSED_HEIGHT;
 					return previousExpansionStates.current[collection.key];
 				});
 			}
@@ -64,14 +78,11 @@ export default function CollectionCategory({
 	return (
 		<div className="relative">
 			<div
-				style={{
-					maxHeight: expanded
-						? `${
-								(ref.current?.scrollHeight ??
-									MAX_COLLAPSED_HEIGHT) + 200
-						  }px`
-						: `${MAX_COLLAPSED_HEIGHT}px`,
-				}}
+				style={
+					!expanded ? {
+						maxHeight: MAX_COLLAPSED_HEIGHT,
+					} : {}
+				}
 				className={twMerge(
 					"flex flex-col gap-4 overflow-hidden transition-all duration-200 pb-0 py-2"
 				)}
@@ -85,17 +96,20 @@ export default function CollectionCategory({
 					facetDistribution={facetDistribution}
 				/>
 			</div>
-			<div
-				className={twMerge(
-					"transition-all duration-200 pb-0",
-					expanded && showMore && "pb-14"
-				)}
-			></div>
+			{ref.current?.scrollHeight && (
+				<div
+					className={twMerge(
+						"transition-all duration-200 pb-0",
+						expanded && showMore && "pb-14"
+					)}
+				></div>
+			)}
 			<AnimatePresence mode="wait" initial={false}>
-				{showMore && (
+				{showMore && ref.current?.scrollHeight && (
 					<motion.div
 						initial={
-							previousExpansionStates.current[collection.key] !== showMore
+							previousExpansionStates.current[collection.key] !==
+							showMore
 								? { opacity: 0 }
 								: { opacity: 1 }
 						}
