@@ -34,9 +34,20 @@ import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 
+export type AIHistory = {
+	id: string;
+	title: string;
+	key: string;
+	content: string;
+	date: Date;
+	modelIndex: number;
+}
+
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ai");
 	const [selectedModel, setSelectedModel] = useLocalStorage("ai-model", 0);
+
+	const id = useRef(crypto.randomUUID());
 
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
@@ -47,18 +58,34 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
 		useDisclosure();
 
+	const [histories, setHistories] = useLocalStorage<Record<string, AIHistory[]>>(`ai-history`, {});
+
+	const updateHistory = (prompt: string, completion: string, id: string) => {
+		setHistories((prev) => {
+			const newHistory = prev[prompt] || [];
+			const obj = newHistory.find((item) => item.id === id);
+			if (obj) {
+				obj.content = completion;
+			} else {
+				newHistory.unshift({ id, content: completion, date: new Date(), title: data!.item!.title!, key: data!.item!.key!, modelIndex: selectedModel });
+			}
+			return { ...prev, [prompt]: newHistory };
+		});
+	}
+
 	const {
 		response: summaryResponse,
 		stream: summaryStream,
 		error: summaryError,
 		setCompletion: setSummaryCompletion,
-	} = useAIStream("/api/ai?prompt=summarize");
+	} = useAIStream("/api/ai?prompt=summarize", (completion, id) => updateHistory("summarize", completion, id), id.current);
+
 	const {
 		response: explainResponse,
 		stream: explainStream,
 		error: explainError,
 		setCompletion: setExplainCompletion,
-	} = useAIStream("/api/ai?prompt=explain");
+	} = useAIStream("/api/ai?prompt=explain", (completion, id) => updateHistory("explain", completion, id), id.current);
 
 
 	return (
@@ -88,6 +115,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 										setSelectedModel(Number(index));
 										setSummaryCompletion("");
 										setExplainCompletion("");
+										id.current = crypto.randomUUID();
 									}}
 									classNames={{
 										base: "p-0",
@@ -150,6 +178,9 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 					content={summaryResponse}
 					title={t("summarize")}
 					error={summaryError}
+					history={histories["summarize"] || []}
+					setHistory={(history) => setHistories((prev) => ({ ...prev, "summarize": history }))}
+					id={id.current}
 				/>
 				<GenerativeModal
 					isOpen={isExplainOpen}
@@ -157,6 +188,9 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 					content={explainResponse}
 					title={t("explain")}
 					error={explainError}
+					history={histories["explain"] || []}
+					setHistory={(history) => setHistories((prev) => ({ ...prev, "explain": history }))}
+					id={id.current}
 				/>
 				<Dropdown
 					classNames={{
