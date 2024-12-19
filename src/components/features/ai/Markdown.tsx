@@ -103,9 +103,9 @@ function Highlight({
 
 function QuoteHighlight({ children }: { children: ReactNode }) {
 	return (
-		<blockquote className="italic font-normal text-white border-l-4 border-tertiary-400/50 pl-3 py-1 my-1 block bg-black/10 rounded-lg">
+		<span className="italic font-normal text-white border-l-4 border-tertiary-400/50 pl-3 py-1 my-1 block bg-black/10 rounded-lg">
 			{children}
-		</blockquote>
+		</span>
 	);
 }
 
