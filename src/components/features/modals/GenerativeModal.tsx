@@ -15,7 +15,7 @@ import {
 	BiSolidBookContent,
 	BiTrash,
 } from "react-icons/bi";
-import { AIMarkdown } from "../ai/Markdown";
+import { AIMarkdown } from "../markdown/Markdown";
 import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { models } from "@/constants/ai";
@@ -64,14 +64,14 @@ export default function GenerativeModal({
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
 		>
-			<ModalContent className="p-0">
+			<ModalContent className="p-0  h-[720px] max-h-screen">
 				{(onClose) => (
 					<>
 						<AIHeader isLoading={false} onClose={onClose}>
 							{title}
 						</AIHeader>
 						<ModalBody className="w-full p-0 grid grid-cols-12">
-							<ScrollShadow className="col-span-3 w-full max-h-full flex flex-col gap-2 p-2 dark:bg-secondary bg-white rounded-tr-3xl rounded-bl-xl">
+							<ScrollShadow className="col-span-3 w-full flex flex-col gap-2 p-2 dark:bg-secondary bg-white rounded-tr-3xl rounded-bl-xl">
 								<Listbox
 									selectionMode="single"
 									onSelectionChange={(keys) => {
@@ -112,7 +112,7 @@ export default function GenerativeModal({
 									)}
 								</Listbox>
 							</ScrollShadow>
-							<div className="w-full overflow-hidden col-span-9 flex flex-col h-[75vh] max-h-[720px]">
+							<div className="w-full overflow-hidden col-span-9 flex flex-col">
 								 <div className="w-full dark:bg-secondary bg-white rounded-tl-3xl p-2 flex gap-1">
 									<Button size="sm" startContent={<BiCopy />}>
 										Copy
