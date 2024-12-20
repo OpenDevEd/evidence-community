@@ -4,33 +4,27 @@ import Image from "next/image";
 import { localesNames, routing, usePathname, useRouter } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
 import { links } from "@/constants/links";
-import Dark from "@/components/icons/Dark";
 import { useTheme } from "next-themes";
-import { HiOutlineMoon, HiOutlineSun } from "react-icons/hi2";
-import { IoMdClose, IoMdSunny } from "react-icons/io";
+import { HiOutlineMoon } from "react-icons/hi2";
+import { IoMdSunny } from "react-icons/io";
 import { useState, useEffect, useCallback } from "react";
 import { Skeleton } from "@/components/nextui/Skeleton";
-import { RxHamburgerMenu } from "react-icons/rx";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { AnimatePresence } from "framer-motion";
 import { motion } from "framer-motion";
 import { IoCloseSharp } from "react-icons/io5";
-import config from "@/constants/config.json";
 import { style } from "@/../tailwind.config";
-import type { LinkObject } from "@/constants/links";
 import {
 	DropdownItem,
 	DropdownMenu,
-	DropdownTrigger,
-	Select,
-	SelectItem,
-	useDisclosure,
+	DropdownTrigger, useDisclosure
 } from "@nextui-org/react";
 import { ChevronDownIcon } from "@nextui-org/shared-icons";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useLocale, useTranslations } from "next-intl";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Link } from "@/i18n/routing";
+import { LinkObject } from "@/types/links";
 
 function ThemeSwitcher({
 	theme,
