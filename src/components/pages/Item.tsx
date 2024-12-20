@@ -11,13 +11,8 @@ import {
 	DropdownTrigger,
 	DropdownMenu,
 	useDisclosure,
-	ModalContent,
-	ModalBody,
-	Listbox,
-	ListboxItem,
 } from "@nextui-org/react";
 import GenerativeModal from "../features/modals/GenerativeModal";
-import useAIStream from "@/hooks/useAIStream";
 import ChatModal from "../features/modals/ChatModal";
 import { useRouter } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
@@ -25,32 +20,29 @@ import useSWR from "swr";
 import { fetcher } from "@/lib/utils";
 import Resource from "../features/items/Resource";
 import { Skeleton } from "../nextui/Skeleton";
-import AIHeader from "../features/ai/AIHeader";
-import AIModal from "../nextui/AIModal";
-import { useRef, useState } from "react";
-import { FaCheck } from "react-icons/fa";
-import { models } from "@/constants/ai";
+import { useRef } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { AIHistory } from "@/types/ai";
+import ModelSelector from "../features/ai/ModelSelector";
+import { useAIFeature } from "@/hooks/useAIFeature";
+import { AI_DROPDOWN_ITEMS } from "@/components/features/ai/AIDropdownItems";
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ai");
-	const [selectedModel, setSelectedModel] = useLocalStorage("ai-model", 0);
 
+	const [selectedModel, setSelectedModel] = useLocalStorage("ai-model", 0);
 	const id = useRef(crypto.randomUUID());
 
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
-	const { isOpen: isSummaryOpen, onOpenChange: onSummaryOpenChange } =
-		useDisclosure();
-	const { isOpen: isExplainOpen, onOpenChange: onExplainOpenChange } =
-		useDisclosure();
 	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
 		useDisclosure();
 
-	const [histories, setHistories] = useLocalStorage<Record<string, AIHistory[]>>(`ai-history`, {});
+	const [histories, setHistories] = useLocalStorage<
+		Record<string, AIHistory[]>
+	>(`ai-history`, {});
 
 	const updateHistory = (prompt: string, completion: string, id: string) => {
 		setHistories((prev) => {
@@ -59,26 +51,29 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 			if (obj) {
 				obj.content = completion;
 			} else {
-				newHistory.unshift({ id, content: completion, date: new Date(), title: data!.item!.title!, key: data!.item!.key!, modelIndex: selectedModel });
+				newHistory.unshift({
+					id,
+					content: completion,
+					date: new Date(),
+					title: data!.item!.title!,
+					key: data!.item!.key!,
+					modelIndex: selectedModel,
+				});
 			}
 			return { ...prev, [prompt]: newHistory };
 		});
-	}
+	};
 
-	const {
-		response: summaryResponse,
-		stream: summaryStream,
-		error: summaryError,
-		setCompletion: setSummaryCompletion,
-	} = useAIStream("/api/ai?prompt=summarize", (completion, id) => updateHistory("summarize", completion, id), id.current);
+	const summaryFeature = useAIFeature("summarize", id.current, updateHistory, data, selectedModel);
+	const explainFeature = useAIFeature("explain", id.current, updateHistory, data, selectedModel);
 
-	const {
-		response: explainResponse,
-		stream: explainStream,
-		error: explainError,
-		setCompletion: setExplainCompletion,
-	} = useAIStream("/api/ai?prompt=explain", (completion, id) => updateHistory("explain", completion, id), id.current);
-
+	const handleModelChange = (modelIndex: number) => {
+		setSelectedModel(modelIndex);
+		[summaryFeature, explainFeature].forEach((feature) => {
+			feature.setCompletion("");
+		});
+		id.current = crypto.randomUUID();
+	};
 
 	return (
 		<motion.div
@@ -87,103 +82,36 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 			animate={{ opacity: 1, x: 0 }}
 		>
 			<div className="flex items-center justify-center p-4">
-				<AIModal
-					size="md"
+				<ModelSelector
 					isOpen={isChangeOpen}
 					onOpenChange={onChangeOpenChange}
-				>
-					<ModalContent>
-						<AIHeader onClose={onChangeOpenChange}>
-							{t("change")}
-						</AIHeader>
-						<ModalBody className="p-0">
-							<div className="flex flex-col pt-0">
-								<p className="text-base text-black/80 dark:text-white/80 font-medium p-2 text-center dark:bg-secondary bg-white">
-									{t("changeAbtract")}
-								</p>
-								<Listbox
-									onAction={(index) => {
-										if (Number(index) === selectedModel) return;
-										setSelectedModel(Number(index));
-										setSummaryCompletion("");
-										setExplainCompletion("");
-										id.current = crypto.randomUUID();
-									}}
-									classNames={{
-										base: "p-0",
-										list: "gap-0",
-									}}
-								>
-									{models.map((model, index) => (
-										<ListboxItem
-											key={index}
-											className="!p-0 !bg-transparent !rounded-none"
-										>
-											<div
-												data-selected={
-													index === selectedModel
-												}
-												className="p-6 cursor-pointer data-[selected=true]:dark:bg-accent/10 data-[selected=true]:bg-accent/20 transition-colors group rounded-none"
-											>
-												<div className="flex items-center gap-4 hover:brightness-75 active:scale-[95%] transition-all">
-													<div className="size-10 shrink-0 bg-accent p-2 rounded">
-														<model.icon className="h-full w-full invert" />
-													</div>
-													<div className="flex flex-col">
-														<div className="flex items-center gap-2">
-															<p className="font-medium">
-																{model.name}
-															</p>
-															<span className="text-xs text-default-500">
-																{t(
-																	"byCompany",
-																	{
-																		company:
-																			model.company,
-																	}
-																)}
-															</span>
-														</div>
-														<p className="text-sm text-default-500">
-															{model.model}
-														</p>
-													</div>
-													<FaCheck className="size-4 shrink-0 text-accent ltr:ml-auto rtl:mr-auto group-data-[selected=true]:opacity-100 group-data-[selected=true]:translate-x-0 transition-all opacity-0 ltr:-translate-x-10 rtl:translate-x-10" />
-												</div>
-											</div>
-										</ListboxItem>
-									))}
-								</Listbox>
-							</div>
-						</ModalBody>
-					</ModalContent>
-				</AIModal>
+					selectedModel={selectedModel}
+					onModelChange={handleModelChange}
+				/>
 				<ChatModal
 					isOpen={isChatOpen}
 					onOpenChange={onChatOpenChange}
 					data={data}
 					modelIndex={selectedModel}
 				/>
-				<GenerativeModal
-					isOpen={isSummaryOpen}
-					onOpenChange={onSummaryOpenChange}
-					content={summaryResponse}
-					title={t("summarize")}
-					error={summaryError}
-					history={histories["summarize"] || []}
-					setHistory={(history) => setHistories((prev) => ({ ...prev, "summarize": history }))}
-					id={id.current}
-				/>
-				<GenerativeModal
-					isOpen={isExplainOpen}
-					onOpenChange={onExplainOpenChange}
-					content={explainResponse}
-					title={t("explain")}
-					error={explainError}
-					history={histories["explain"] || []}
-					setHistory={(history) => setHistories((prev) => ({ ...prev, "explain": history }))}
-					id={id.current}
-				/>
+				{[summaryFeature, explainFeature].map((feature) => (
+					<GenerativeModal
+						key={feature.key}
+						isOpen={feature.isOpen}
+						onOpenChange={feature.onOpenChange}
+						content={feature.response}
+						title={t(feature.key)}
+						error={feature.error}
+						history={histories[feature.key] || []}
+						setHistory={(history) =>
+							setHistories((prev) => ({
+								...prev,
+								[feature.key]: history,
+							}))
+						}
+						id={id.current}
+					/>
+				))}
 				<Dropdown
 					classNames={{
 						content: "bg-white dark:bg-secondary",
@@ -198,67 +126,14 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 						</Button>
 					</DropdownTrigger>
 					<DropdownMenu
-						items={[
-							{
-								key: "change",
-								label: t("change"),
-								description: t("changeDescription", {
-									model: models[selectedModel].name,
-								}),
-								startContent: (
-									<>
-										{models
-											.filter(
-												(model, index) =>
-													index === selectedModel
-											)
-											.map((model) => (
-												<div
-													key={model.name}
-													className="size-8 shrink-0 bg-accent p-1.5 rounded"
-												>
-													<model.icon className="h-full w-full invert" />
-												</div>
-											))}
-									</>
-								),
-								onClick: () => {
-									onChangeOpenChange();
-								},
-							},
-							{
-								key: "summary",
-								label: t("summarize"),
-								description: t("summarizeDescription"),
-								onClick: () => {
-									onSummaryOpenChange();
-									summaryStream(data?.item?.key ?? "", {
-										body: {
-											modelIndex: selectedModel,
-										},
-									});
-								},
-							},
-							{
-								key: "explain",
-								label: t("explain"),
-								description: t("explainDescription"),
-								onClick: () => {
-									onExplainOpenChange();
-									explainStream(data?.item?.key ?? "", {
-										body: {
-											modelIndex: selectedModel,
-										},
-									});
-								},
-							},
-							{
-								key: "chat",
-								label: t("askAI"),
-								description: t("chatDescription"),
-								onClick: onChatOpenChange,
-							},
-						]}
+						items={AI_DROPDOWN_ITEMS(
+							t,
+							selectedModel,
+							onChangeOpenChange,
+							summaryFeature,
+							explainFeature,
+							onChatOpenChange,
+						)}
 						itemClasses={{
 							base: "data-[hover]:bg-accent dark:data-[hover]:bg-accent data-[hover]:text-white dark:data-[hover]:text-white",
 						}}
