@@ -4,28 +4,24 @@ import {
 	ModalBody,
 	ScrollShadow,
 } from "@nextui-org/react";
-import { Modal, ModalContent } from "@nextui-org/react";
-import remarkGfm from "remark-gfm";
-import Markdown from "react-markdown";
+import { ModalContent } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import AIHeader from "../ai/AIHeader";
 import AIModal from "@/components/nextui/AIModal";
-import { visit } from "unist-util-visit";
-import { ReactNode, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import {
 	BiCopy,
 	BiSolidBookBookmark,
 	BiSolidBookContent,
 	BiTrash,
 } from "react-icons/bi";
-import { Node } from "unist";
 import { AIMarkdown } from "../ai/Markdown";
-import { motion, MotionConfig } from "framer-motion";
+import { motion } from "framer-motion";
 import { useTranslations } from "next-intl";
 import { models } from "@/constants/ai";
 import React from "react";
 import { Button } from "@/components/nextui/Button";
-import { AIHistory } from "@/components/pages/Item";
+import { AIHistory } from "@/types/ai";
 
 export default function GenerativeModal({
 	history,
