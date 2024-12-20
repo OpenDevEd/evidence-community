@@ -7,7 +7,6 @@ import { PropsWithChildren, ReactNode } from "react";
 import { BiSolidBookBookmark, BiSolidBookContent } from "react-icons/bi";
 import { twMerge } from "tailwind-merge";
 import ReactMarkdown from "react-markdown";
-import { toString } from "mdast-util-to-string";
 
 function createRehypeWrapper(pattern: RegExp, className: string) {
 	return () => (tree: Node) => {

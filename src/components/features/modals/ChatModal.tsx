@@ -20,7 +20,7 @@ import { Message, useChat } from "ai/react";
 import AIHeader from "../ai/AIHeader";
 import AIModal from "@/components/nextui/AIModal";
 import { models } from "@/constants/ai";
-import { AIMarkdown } from "../ai/Markdown";
+import { AIMarkdown } from "../markdown/Markdown";
 import posthog from "posthog-js";
 
 export default function ChatModal({
