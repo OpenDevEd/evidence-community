@@ -2,24 +2,18 @@
 
 import { Button } from "@/components/nextui/Button";
 import {
-	Modal,
-	ModalHeader,
 	ModalContent,
 	Input,
 	ModalBody,
 	ModalFooter,
-	ScrollShadow,
+	ScrollShadow
 } from "@nextui-org/react";
-import { LuBot, LuUser, LuX } from "react-icons/lu";
+import { LuUser } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { ImSpinner8 } from "react-icons/im";
-import Markdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { useEffect } from "react";
 import { useRef } from "react";
 import { ItemGetResponse } from "@/app/api/item/types";
-import { SectionTitle } from "@/components/typography/SectionTitle";
-import { BsStars } from "react-icons/bs";
 import { IoSend } from "react-icons/io5";
 import { useLocale, useTranslations } from "next-intl";
 import { Message, useChat } from "ai/react";
@@ -42,7 +36,6 @@ export default function ChatModal({
 }) {
 	const t = useTranslations("ai");
 	const locale = useLocale();
-	const id = "1";
 
 	const {
 		messages,
@@ -54,7 +47,6 @@ export default function ChatModal({
 		stop,
 		setMessages,
 	} = useChat({
-		id,
 		api: "/api/ai/chat",
 		initialMessages: [
 			{
@@ -63,11 +55,11 @@ export default function ChatModal({
 				id: "start",
 			},
 		],
-		body: { id, key: data?.item?.key, modelIndex, distinctId: posthog.get_distinct_id() },
+		body: { key: data?.item?.key, modelIndex, distinctId: posthog.get_distinct_id() },
 		headers: {
 			"Accept-Language": locale,
 		},
-		onError: (error) => {
+		onError: () => {
 			appendMessage({
 				role: "assistant",
 				content: t("errorMessage"),
