@@ -5,25 +5,16 @@ import Blog from "@/components/icons/Blog";
 import Team from "@/components/icons/Team";
 import ContactUs from "@/components/icons/ContactUs";
 import {
-	RiBookOpenFill,
-	RiFacebookCircleFill,
-	RiLinkedinBoxFill,
-	RiTeamFill,
-	RiToolsFill,
-	RiTwitterXFill,
+    RiBookOpenFill,
+    RiFacebookCircleFill,
+    RiLinkedinBoxFill,
+    RiTeamFill,
+    RiToolsFill,
+    RiTwitterXFill,
 } from "react-icons/ri";
 import { BsChatRightDotsFill } from "react-icons/bs";
 import { GiBookshelf } from "react-icons/gi";
-import { FaTools } from "react-icons/fa";
-import { style } from "@/../tailwind.config";
-export type LinkObject = {
-	label: string;
-	href: string;
-	icon?: React.ElementType;
-	dropdown?: LinkObject[];
-	navExclude?: boolean;
-	footerExclude?: boolean;
-};
+import { LinkObject } from "@/types/links";
 
 export const links: Record<string, LinkObject[]> = {
     opendeved: [

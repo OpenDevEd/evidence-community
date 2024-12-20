@@ -33,15 +33,7 @@ import { models } from "@/constants/ai";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
 import { useFeatureFlagEnabled } from "@/context/Providers";
-
-export type AIHistory = {
-	id: string;
-	title: string;
-	key: string;
-	content: string;
-	date: Date;
-	modelIndex: number;
-}
+import { AIHistory } from "@/types/ai";
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ai");
