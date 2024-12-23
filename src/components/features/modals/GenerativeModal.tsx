@@ -1,4 +1,7 @@
 import {
+	DropdownItem,
+	DropdownMenu,
+	DropdownTrigger,
 	Listbox,
 	ListboxItem,
 	ModalBody,
@@ -8,8 +11,9 @@ import { ModalContent } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import AIHeader from "../ai/AIHeader";
 import AIModal from "@/components/nextui/AIModal";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
+	BiChevronDown,
 	BiCopy,
 	BiSolidBookBookmark,
 	BiSolidBookContent,
@@ -23,6 +27,9 @@ import React from "react";
 import { Button } from "@/components/nextui/Button";
 import { AIHistory } from "@/types/ai";
 import CopyButton from "../items/CopyButton";
+import { Dropdown } from "@/components/nextui/Dropdown";
+import { BsBodyText, BsCodeSlash, BsMarkdown } from "react-icons/bs";
+import { AIControls } from "./AIControls";
 
 export default function GenerativeModal({
 	history,
@@ -46,7 +53,7 @@ export default function GenerativeModal({
 	const t = useTranslations("ai");
 	const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(0);
 	const selectedHistoryItem = history[selectedHistoryIndex];
-	
+	const contentRef = useRef<HTMLDivElement>(null);
 	const currentItem = useMemo(() => {
 		return history.find((item) => item.id === id);
 	}, [id, history]);
@@ -115,8 +122,29 @@ export default function GenerativeModal({
 							</ScrollShadow>
 							<div className="w-full overflow-hidden col-span-9 flex flex-col">
 								 <div className="w-full dark:bg-secondary bg-white rounded-tl-3xl p-2 flex gap-1">
-									<CopyButton
+									<AIControls
+										controls={[
+											{
+												label: "Copy as Markdown",
+												icon: <BsMarkdown />,
+												action: "markdown"
+											},
+											{
+												label: "Copy as HTML",
+												icon: <BsCodeSlash />,
+												action: "html"
+											},
+											{
+												label: "Copy as plain text",
+												icon: <BsBodyText />,
+												action: "plaintext"
+											}
+										]}
+										contentRef={contentRef}
 										content={contentToDisplay}
+										type="copy"
+										buttonLabel="Copy"
+										buttonIcon={<BiCopy />}
 									/>
 									<Button
 										size="sm"
@@ -125,12 +153,30 @@ export default function GenerativeModal({
 									>
 										Bookmark
 									</Button>
-									<Button
-										size="sm"
-										startContent={<BiSolidBookContent />}
-									>
-										Export
-									</Button>
+									<AIControls
+										contentRef={contentRef}
+										controls={[
+											{
+												label: "Export as .md",
+												icon: <BsMarkdown />,
+												action: "markdown"
+											},
+											{
+												label: "Export as .html",
+												icon: <BsCodeSlash />,
+												action: "html"
+											},
+											{
+												label: "Export as .txt",
+												icon: <BsBodyText />,
+												action: "plaintext"
+											}
+										]}
+										content={contentToDisplay}
+										type="download"
+										buttonLabel="Export"
+										buttonIcon={<BiSolidBookContent />}
+									/>
 									{selectedHistoryItem && <div className="text-xs text-black/50 dark:text-white/50 flex-1 flex justify-center items-center">
 										{`${new Date(
 											selectedHistoryItem.date
@@ -186,9 +232,11 @@ export default function GenerativeModal({
 												</motion.div>
 											</div>
 										) : (
-											<AIMarkdown className="prose dark:prose-invert space-y-2 max-w-full p-6 ">
-												{contentToDisplay}
-											</AIMarkdown>
+											<div ref={contentRef}>
+												<AIMarkdown className="prose dark:prose-invert space-y-2 max-w-full p-6 ">
+													{contentToDisplay}
+												</AIMarkdown>
+											</div>
 										)}
 									</Skeleton>
 								</ScrollShadow>
