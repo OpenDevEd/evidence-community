@@ -31,6 +31,8 @@
 		"pageNotFound": "Page Not Found",
 		"itemNotFound": "Resource Not Found",
 		"copyLink": "Copy Link",
+		"linkCopied": "Copied!",
+		"copy": "Copy",
 		"copied": "Copied!",
 		"viewAttachment": "View",
 		"downloadAttachment": "Download",

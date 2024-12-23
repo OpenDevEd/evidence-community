@@ -31,7 +31,9 @@
 		"pageNotFound": "页面未找到",
 		"itemNotFound": "资源未找到",
 		"copyLink": "复制链接",
-		"copied": "已复制链接!",
+		"linkCopied": "已复制链接!",
+		"copy": "复制",
+		"copied": "已复制!",
 		"viewAttachment": "查看",
 		"downloadAttachment": "下载",
 		"relatedItems": "相关资源"

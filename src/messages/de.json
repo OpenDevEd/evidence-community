@@ -31,7 +31,9 @@
 		"pageNotFound": "Seite nicht gefunden",
 		"itemNotFound": "Ressource nicht gefunden",
 		"copyLink": "Link kopieren",
-		"copied": "Link kopiert!",
+		"linkCopied": "Link kopiert!",
+		"copy": "Kopieren",
+		"copied": "Kopiert!",
 		"viewAttachment": "Ansehen",
 		"downloadAttachment": "Download",
 		"relatedItems": "Verwandte Ressourcen"

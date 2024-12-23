@@ -31,7 +31,9 @@
 		"pageNotFound": "الصفحة غير موجودة",
 		"itemNotFound": "المورد غير موجود",
 		"copyLink": "نسخ الرابط",
-		"copied": "تم نسخ الرابط!",
+		"linkCopied": "تم نسخ الرابط!",
+		"copy": "نسخ",
+		"copied": "تم نسخ!",
 		"viewAttachment": "عرض",
 		"downloadAttachment": "تحميل",
 		"relatedItems": "الموارد المتشابهة"
