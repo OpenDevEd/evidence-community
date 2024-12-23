@@ -8,8 +8,14 @@ import { useTranslations } from "next-intl";
 
 export default function CopyButton({
 	itemData,
+	content,
+	text,
+	textOnCopy,
 }: {
-	itemData: Item | undefined;
+	itemData?: Item | undefined;
+	content?: string;
+	text?: string;
+	textOnCopy?: string;
 }) {
 	const [isCopied, setIsCopied] = useState(false);
 	const [clearCopied] = useDebounce(() => setIsCopied(false), 2000);
@@ -17,11 +23,15 @@ export default function CopyButton({
 	const t = useTranslations("ui");
 
 	const handleCopy = () => {
-		const currentUrl = window.location.href;
-		const url = new URL(currentUrl);
-		url.pathname = `/${locale}/lib/${itemData?.key}`;
-		url.search = "";
-		navigator.clipboard.writeText(url.toString());
+		if (content) {
+			navigator.clipboard.writeText(content);
+		} else {
+			const currentUrl = window.location.href;
+			const url = new URL(currentUrl);
+			url.pathname = `/${locale}/lib/${itemData?.key}`;
+			url.search = "";
+			navigator.clipboard.writeText(url.toString());
+		}
 		setIsCopied(true);
 		clearCopied();
 	};
@@ -33,7 +43,7 @@ export default function CopyButton({
 			size="sm"
 			onClick={handleCopy}
 		>
-			{isCopied ? t("copied") : t("copyLink")}
+			{isCopied ? (textOnCopy || t("copied")) : (text || t("copy"))}
 		</Button>
 	);
 }
