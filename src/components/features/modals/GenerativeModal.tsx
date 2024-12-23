@@ -22,6 +22,7 @@ import { models } from "@/constants/ai";
 import React from "react";
 import { Button } from "@/components/nextui/Button";
 import { AIHistory } from "@/types/ai";
+import CopyButton from "../items/CopyButton";
 
 export default function GenerativeModal({
 	history,
@@ -92,7 +93,7 @@ export default function GenerativeModal({
 															].icon,
 															{
 																className:
-																	"h-full fill-white group-[.icon-container:hover]:opacity-0",
+																	"h-full fill-white group-[.icon-container:hover]:scale-90 transition-all duration-300",
 															}
 														)}
 													</div>
@@ -114,9 +115,9 @@ export default function GenerativeModal({
 							</ScrollShadow>
 							<div className="w-full overflow-hidden col-span-9 flex flex-col">
 								 <div className="w-full dark:bg-secondary bg-white rounded-tl-3xl p-2 flex gap-1">
-									<Button size="sm" startContent={<BiCopy />}>
-										Copy
-									</Button>
+									<CopyButton
+										content={contentToDisplay}
+									/>
 									<Button
 										size="sm"
 										className="hidden"
