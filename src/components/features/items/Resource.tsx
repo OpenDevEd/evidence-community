@@ -40,7 +40,7 @@ function ResourceInteractions({
 						</span>
 					</NextUILink>
 					<div className="flex-1 flex items-center justify-end z-10">
-						<CopyButton itemData={itemData} />
+						<CopyButton itemData={itemData} text={t("copyLink")} textOnCopy={t("linkCopied")} />
 					</div>
 				</div>
 			</Skeleton>
