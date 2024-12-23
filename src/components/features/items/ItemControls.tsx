@@ -43,7 +43,7 @@ export default function ItemControls({
 			<Button size="sm" startContent={<LuPrinter className="size-5" />}>
 				{t("printRecord")}
 			</Button>
-			<CopyButton itemData={itemData} />
+			<CopyButton itemData={itemData} text={t("copyLink")} textOnCopy={t("linkCopied")} />
 			<Button
 				size="sm"
 				className="rounded-full"
