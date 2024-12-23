@@ -26,11 +26,26 @@ export function AIControls({ controls, content, type, buttonLabel, buttonIcon, c
   const handleAction = async (action: ControlAction) => {
     const getContent = (action: ControlAction): string => {
       switch (action) {
-        case 'markdown':
-          return content;
+        case 'markdown': {
+          let transformed = content.replace(
+            /\[QUOTE\s*(.*?)\s*QUOTE\/\]/g,
+            '\n> $1'
+          );
+          transformed = transformed.replace(
+            /\[PAGE\s*(.*?)\s*PAGE\/\]/g,
+            '(p.$1)'
+          );
+          transformed = transformed.replace(
+            /\[SECTION\s*(.*?)\s*SECTION\/\]/g,
+            '(s.$1)'
+          );
+          return transformed;
+        }
         case 'html': {
           const html = contentRef.current?.innerHTML || '';
-          return html.replace(/^<div[^>]*>([\s\S]*)<\/div>$/, '$1');
+          return html
+            .replace(/^<div[^>]*>([\s\S]*)<\/div>$/, '$1')
+            .replace(/<([a-zA-Z0-9]+)[^>]*>/g, '<$1>');
         }
         case 'plaintext':
           return contentRef.current?.textContent || '';
