@@ -57,11 +57,11 @@ function CacheProvider({ children }: { children: React.ReactNode }) {
 
 function LoadingScreen({
 	children,
-	mounted,
+	isMounted,
 	featureFlags,
 }: {
 	children: React.ReactNode;
-	mounted: boolean;
+	isMounted: boolean;
 	featureFlags: Set<string> | null;
 }) {
 	const { theme } = useTheme();
@@ -76,10 +76,10 @@ function LoadingScreen({
 					initial={{ opacity: 1 }}
 					animate={{ opacity: 1 }}
 					exit={{ opacity: 0 }}
-					className="fixed inset-0 w-full bg-background flex justify-center items-center gap-4 z-[999]"
+					className="fixed inset-0 w-full bg-background_light dark:bg-background flex justify-center items-center gap-4 z-[999]"
 				>
 					<AnimatePresence mode="popLayout">
-						{mounted ? (
+						{isMounted ? (
 							<motion.div
 								key="logo"
 								initial={{
@@ -126,10 +126,10 @@ function LoadingScreen({
 export default function Providers({ children }: { children: React.ReactNode }) {
 	const router = useRouter();
 	const [featureFlags, setFeatureFlags] = useState<Set<string> | null>(null);
-	const [mounted, setMounted] = useState(false);
+	const [isMounted, setIsMounted] = useState(false);
 
 	useEffect(() => {
-		setMounted(true);
+		setIsMounted(true);
 		posthog
 			.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
 				person_profiles: "always",
@@ -158,7 +158,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 								<PageView />
 							</Suspense>
 							<LoadingScreen
-								mounted={mounted}
+								isMounted={isMounted}
 								featureFlags={featureFlags}
 							>
 								{children}
