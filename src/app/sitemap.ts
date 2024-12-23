@@ -17,9 +17,11 @@ function getItems(args: {
 }
 
 export async function generateSitemaps() {
-	const items = await getItems()
-	
-	return Array.from({ length: Math.ceil((items.total * locales.length) / LIMIT_PER_SITEMAP) }, (_, i) => ({ id: i }))
+	if (process.env.SHOULD_GENERATE_SITEMAP === "true") {
+		const items = await getItems()
+		return Array.from({ length: Math.ceil((items.total * locales.length) / LIMIT_PER_SITEMAP) }, (_, i) => ({ id: i }))
+	}
+	return [];
 }
 
 export default async function sitemap({ 
