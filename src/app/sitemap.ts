@@ -12,6 +12,7 @@ function getItems(args: {
 } = {}) {
     return meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments({
         limit: 1000000,
+		fields: ["key", "updatedAt"],
         ...args
     });
 }
