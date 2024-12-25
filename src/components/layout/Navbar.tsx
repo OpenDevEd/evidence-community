@@ -17,7 +17,8 @@ import { style } from "@/../tailwind.config";
 import {
 	DropdownItem,
 	DropdownMenu,
-	DropdownTrigger, useDisclosure
+	DropdownTrigger,
+	useDisclosure,
 } from "@nextui-org/react";
 import { ChevronDownIcon } from "@nextui-org/shared-icons";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -49,25 +50,31 @@ function ThemeSwitcher({
 			}}
 		>
 			<div className="flex items-center justify-center gap-2">
-				{[IoMdSunny, HiOutlineMoon].map(
-					(Icon, index) =>
-						isMounted && (
-							<Icon
-								key={index}
-								className={twMerge(
-									"size-5 xl:size-6 cursor-pointer select-none active:scale-95 transition-all",
-									theme === "dark"
-										? "stroke-accent"
-										: "fill-accent",
-									theme === "dark" && index === 0 && "hidden",
-									theme === "light" && index === 1 && "hidden"
-								)}
-							/>
-						)
-				)}
-				{isMobile && isMounted && (
+				{[IoMdSunny, HiOutlineMoon].map((Icon, index) => (
+					<Icon
+						key={index}
+						className={twMerge(
+							"size-5 xl:size-6 cursor-pointer select-none active:scale-95 transition-all",
+							"dark:stroke-accent fill-accent dark:fill-none",
+							index === 0 && "dark:hidden",
+							index === 1 && "hidden dark:block"
+						)}
+					/>
+				))}
+				{isMobile && (
 					<span className="text-sm text-accent">
-						Switch to {theme === "dark" ? "Light" : "Dark"} mode
+						{["dark", "light"].map((themeToMatch) => (
+							<span
+								key={themeToMatch}
+								className={twMerge(
+									themeToMatch === "dark"
+										? "dark:hidden"
+										: "hidden dark:block"
+								)}
+							>
+								{`Switch to ${themeToMatch} mode`}
+							</span>
+						))}
 					</span>
 				)}
 			</div>
@@ -75,16 +82,12 @@ function ThemeSwitcher({
 	);
 }
 
-function Logo({
-	theme,
-	isMounted,
-}: {
-	theme: string | undefined;
-	isMounted: boolean;
-}) {
+function Logo({ theme }: { theme: string | undefined }) {
+	const [isLoaded, setIsLoaded] = useState(false);
+
 	return (
 		<Skeleton
-			isLoaded={isMounted}
+			isLoaded={isLoaded}
 			className="w-[171px] h-[40px] rounded-lg "
 		>
 			<div className="hover:brightness-90 hover:scale-95 active:scale-105 transition-all select-none">
@@ -95,19 +98,26 @@ function Logo({
 						)?.href ?? "/"
 					}
 				>
-					{isMounted && (
+					{["dark", "light"].map((themeToMatch) => (
 						<Image
+							key={themeToMatch}
+							onLoad={() => setIsLoaded(true)}
 							src={
-								theme === "dark"
+								themeToMatch === "dark"
 									? `/logos/${style}/logo.png`
 									: `/logos/${style}/logo_light.png`
 							}
 							alt="logo"
-							className="pointer-events-none"
+							className={twMerge(
+								"pointer-events-none",
+								themeToMatch === "light"
+									? "dark:hidden"
+									: "hidden dark:block"
+							)}
 							height={40}
 							width={171}
 						/>
-					)}
+					))}
 				</Link>
 			</div>
 		</Skeleton>
@@ -217,8 +227,13 @@ function LanguageSwitcher({ className }: { className?: string }) {
 
 	return (
 		<Dropdown>
-			<DropdownTrigger className={twMerge("cursor-pointer select-none", className)}>
-				<div data-style={style} className="relative flex items-center gap-2 data-[style=edtechhub]:uppercase">
+			<DropdownTrigger
+				className={twMerge("cursor-pointer select-none", className)}
+			>
+				<div
+					data-style={style}
+					className="relative flex items-center gap-2 data-[style=edtechhub]:uppercase"
+				>
 					<span className="text-lg font-medium">
 						{localesNames[locale as keyof typeof localesNames]}
 					</span>
@@ -266,7 +281,7 @@ export default function Navbar() {
 						"bg-transparent max-w-screen-2xl mx-auto xl:px-14"
 				)}
 			>
-				<Logo theme={theme} isMounted={isMounted} />
+				<Logo theme={theme} />
 				<LinksList pathname={pathname} />
 				<LanguageSwitcher className="!hidden xl:!flex" />
 				<ThemeSwitcher
