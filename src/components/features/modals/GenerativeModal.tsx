@@ -117,11 +117,11 @@ export default function GenerativeModal({
 													setSelectedHistoryIndex(
 														Number(key)
 													);
-													setIsHistoryOpen(false);
 												}}
 												selectedKeys={[
 													selectedHistoryIndex.toString(),
 												]}
+												onAction={() => setIsHistoryOpen(false)}
 												disallowEmptySelection
 											>
 												{history.map((item, index) => (
