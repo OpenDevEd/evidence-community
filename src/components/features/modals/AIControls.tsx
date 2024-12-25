@@ -92,7 +92,7 @@ export function AIControls({ controls, content, type, buttonLabel, buttonIcon, c
           startContent={buttonIcon}
           endContent={<BiChevronDown />}
         >
-          {buttonLabel}
+          <span className="hidden xl:block">{buttonLabel}</span>
         </Button>
       </DropdownTrigger>
       <DropdownMenu>
