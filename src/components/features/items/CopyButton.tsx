@@ -44,7 +44,7 @@ const CopyButton = forwardRef<
 			startContent={isCopied ? <FaClipboardCheck /> : <FaClipboard />}
 			size="sm"
 			onClick={handleCopy}
-			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square", className)}
+			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square xl:aspect-auto xl:px-3", className)}
 		>
 			<span className={twMerge(shrinkOnMobile && "hidden xl:block")}>
 				{isCopied ? textOnCopy || t("copied") : text || t("copy")}
