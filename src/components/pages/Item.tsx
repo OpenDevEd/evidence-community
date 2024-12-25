@@ -77,7 +77,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 
 	return (
 		<motion.div
-			className="fixed bottom-0 right-0"
+			className="fixed bottom-0 right-0 z-40"
 			initial={{ opacity: 0, x: 100 }}
 			animate={{ opacity: 1, x: 0 }}
 		>
