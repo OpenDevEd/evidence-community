@@ -126,7 +126,7 @@ export const valueFormatter: Record<
 		if (filteredValue.length === 0) return false;
 
 		return (
-			<div className="flex flex-col gap-2 w-2/3">
+			<div className="flex flex-col gap-2 xl:w-2/3 w-full">
 				{value
 					.filter((data: any) => data.PDFCoverPageImage)
 					.map((data: Item, index: number) => (
