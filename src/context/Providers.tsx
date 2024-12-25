@@ -12,6 +12,7 @@ import { createContext, useContext } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { style } from "../../tailwind.config";
 import Image from "next/image";
+import { twMerge } from "tailwind-merge";
 export const CacheContext = createContext<any>({});
 export const FeatureFlagsContext = createContext<any>({});
 
@@ -48,7 +49,14 @@ function CacheProvider({ children }: { children: React.ReactNode }) {
 
 	return (
 		<CacheContext.Provider
-			value={{ cache, setCache, itemsCache, previousExpansionStates, globalExpanded, setGlobalExpanded }}
+			value={{
+				cache,
+				setCache,
+				itemsCache,
+				previousExpansionStates,
+				globalExpanded,
+				setGlobalExpanded,
+			}}
 		>
 			{children}
 		</CacheContext.Provider>
@@ -79,43 +87,37 @@ function LoadingScreen({
 					className="fixed inset-0 w-full bg-background_light dark:bg-background flex justify-center items-center gap-4 z-[999]"
 				>
 					<AnimatePresence mode="popLayout">
-						{isMounted ? (
-							<motion.div
-								key="logo"
-								initial={{
-									opacity: 0,
-								}}
-								animate={{
-									opacity: 1,
-								}}
-								exit={{ opacity: 0, scale: 0 }}
-								className="flex flex-col items-center justify-center"
-							>
+						<motion.div
+							key="logo"
+							initial={{
+								opacity: 0,
+							}}
+							animate={{
+								opacity: 1,
+							}}
+							exit={{ opacity: 0, scale: 0 }}
+							className="flex flex-col items-center justify-center"
+						>
+							{["dark", "light"].map((themeToMatch) => (
 								<Image
+									key={themeToMatch}
 									src={
-										theme === "dark"
+										themeToMatch === "dark"
 											? `/logos/${style}/logo.png`
 											: `/logos/${style}/logo_light.png`
 									}
+									className={twMerge(
+										"pointer-events-none",
+										themeToMatch === "light"
+											? "dark:hidden"
+											: "hidden dark:block"
+									)}
 									alt="logo"
 									width={171}
 									height={40}
 								/>
-							</motion.div>
-						) : (
-							<motion.div
-								key="spinner"
-								initial={{ opacity: 1, scale: 1 }}
-								exit={{ opacity: 0, scale: 0 }}
-							>
-								<Spinner
-									classNames={{
-										circle1: "border-b-accent",
-										circle2: "border-b-accent",
-									}}
-								/>
-							</motion.div>
-						)}
+							))}
+						</motion.div>
 					</AnimatePresence>
 				</motion.div>
 			)}
