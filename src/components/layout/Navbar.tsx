@@ -210,14 +210,14 @@ function LinksList({
 	);
 }
 
-function LanguageSwitcher() {
+function LanguageSwitcher({ className }: { className?: string }) {
 	const router = useRouter();
 	const locale = useLocale();
 	const pathname = usePathname();
 
 	return (
 		<Dropdown>
-			<DropdownTrigger className="cursor-pointer select-none">
+			<DropdownTrigger className={twMerge("cursor-pointer select-none", className)}>
 				<div data-style={style} className="relative flex items-center gap-2 data-[style=edtechhub]:uppercase">
 					<span className="text-lg font-medium">
 						{localesNames[locale as keyof typeof localesNames]}
@@ -268,7 +268,7 @@ export default function Navbar() {
 			>
 				<Logo theme={theme} isMounted={isMounted} />
 				<LinksList pathname={pathname} />
-				<LanguageSwitcher />
+				<LanguageSwitcher className="!hidden xl:!flex" />
 				<ThemeSwitcher
 					theme={theme}
 					setTheme={setTheme}
@@ -306,6 +306,7 @@ export default function Navbar() {
 				)}
 			>
 				<LinksList pathname={pathname} isMobile={true} />
+				<LanguageSwitcher className="w-full flex justify-center" />
 				<ThemeSwitcher
 					theme={theme}
 					setTheme={setTheme}
