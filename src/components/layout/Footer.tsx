@@ -9,6 +9,7 @@ import { style } from "@/../tailwind.config";
 import { useTranslations } from "next-intl";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Link } from "@/i18n/routing";
+import { twMerge } from "tailwind-merge";
 
 const footerInfo = {
   email: "opendeved@gmail.com",
@@ -33,23 +34,26 @@ function FooterFieldColumn({
   );
 }
 
-function Logo({ theme }: { theme: string | undefined }) {
-  const [isMounted, setIsMounted] = useState(false);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+function Logo() {
+  const [isLoaded, setIsLoaded] = useState(false);
 
   return (
-    <Skeleton isLoaded={isMounted} className="w-[232px] h-[54px] rounded-lg">
-      {isMounted && (
+    <Skeleton isLoaded={isLoaded} className="w-[232px] h-[54px] rounded-lg">
+      {["dark", "light"].map((themeToMatch) => (
         <Image
-          src={theme === "dark" ? `/logos/${style}/logo.png` : `/logos/${style}/logo_light.png`}
+          key={themeToMatch}
+          onLoad={() => setIsLoaded(true)}
+          className={twMerge(
+            themeToMatch === "light" 
+								? "dark:hidden" 
+								: "hidden dark:block")
+          }
+          src={`/logos/${style}/logo${themeToMatch === "light" ? "_light" : ""}.png`}
           alt="logo"
           width={232}
           height={54}
         />
-      )}
+      ))}
     </Skeleton>
   );
 }
@@ -68,7 +72,7 @@ export default function Footer() {
     <footer className="row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 xl:gap-14 py-12 xl:py-0">
       <div className="max-w-screen-2xl px-14 flex w-full justify-between items-center flex-col gap-6 xl:gap-14 xl:flex-row">
         <div className="flex flex-col gap-6 h-full items-center xl:items-start">
-          <Logo theme={theme} />
+          <Logo />
           <div className="flex flex-col gap-[14px]">
             {Object.entries(footerInfo).map(([key, value]) => (
               <div key={key} className="flex gap-2 justify-center xl:justify-start">
