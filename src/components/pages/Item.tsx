@@ -170,7 +170,7 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 		<main className="w-full max-w-screen-2xl px-4 xl:px-14 flex flex-col gap-4">
 			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
 				<ItemControls itemData={data?.item} router={router} />
-				<div className="flex flex-col gap-8 p-10">
+				<div className="flex flex-col gap-8 p-4 xl:p-10">
 					{data?.item ? (
 						<>
 							<h1 className="text-4xl text-black/80 dark:text-white/80 font-medium">
@@ -200,8 +200,8 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 			{isAIEnabled && data && <AiButton data={data} />}
 			{isRelatedItemsEnabled && (
 				<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
-					<div className="flex flex-row">
-						<div className="text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-24 shrink-0 rounded p-10">
+					<div className="flex xl:flex-row flex-col">
+						<div className="text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-full shrink-0 rounded xl:p-10 p-4 pb-0">
 							{t("relatedItems")}
 						</div>
 						<div className="w-full">
