@@ -75,7 +75,7 @@ export default function Footer() {
                 <span className="text-black/60 dark:text-white/60">
                   {t(key)}
                 </span>
-                <span className="text-black/60 dark:text-white/60 font-bold">
+                <span className="text-black/60 dark:text-white/60 font-bold break-all text-wrap">
                   {value}
                 </span>
               </div>
