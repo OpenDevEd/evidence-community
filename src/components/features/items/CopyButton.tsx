@@ -5,17 +5,22 @@ import { useState } from "react";
 import { Button } from "@/components/nextui/Button";
 import { FaClipboard, FaClipboardCheck } from "react-icons/fa";
 import { useTranslations } from "next-intl";
+import { twMerge } from "tailwind-merge";
 
 export default function CopyButton({
 	itemData,
 	content,
 	text,
 	textOnCopy,
+	className,
+	shrinkOnMobile = false,
 }: {
 	itemData?: Item | undefined;
 	content?: string;
 	text?: string;
 	textOnCopy?: string;
+	className?: string;
+	shrinkOnMobile?: boolean;
 }) {
 	const [isCopied, setIsCopied] = useState(false);
 	const [clearCopied] = useDebounce(() => setIsCopied(false), 2000);
@@ -42,8 +47,11 @@ export default function CopyButton({
 			startContent={isCopied ? <FaClipboardCheck /> : <FaClipboard />}
 			size="sm"
 			onClick={handleCopy}
+			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square", className)}
 		>
-			{isCopied ? (textOnCopy || t("copied")) : (text || t("copy"))}
+			<span className={twMerge(shrinkOnMobile && "hidden xl:block")}>
+				{isCopied ? textOnCopy || t("copied") : text || t("copy")}
+			</span>
 		</Button>
 	);
 }
