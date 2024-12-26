@@ -117,12 +117,12 @@ export default function GenerativeModal({
 													setSelectedHistoryIndex(
 														Number(key)
 													);
+													setIsHistoryOpen(false);
 												}}
-												selectedKeys={[
+												selectedKeys={isDesktop ? [
 													selectedHistoryIndex.toString(),
-												]}
-												onAction={() => setIsHistoryOpen(false)}
-												disallowEmptySelection
+												] : []}
+												disallowEmptySelection={isDesktop}
 											>
 												{history.map((item, index) => (
 													<ListboxItem
@@ -141,7 +141,7 @@ export default function GenerativeModal({
 																)}
 															</div>
 														}
-														className="data-[selected]:opacity-100 opacity-50 p-2 pr-4 rounded-full"
+														className="data-[selected]:opacity-100 xl:opacity-50 p-2 pr-4 rounded-full"
 													>
 														<div className="text-base font-medium line-clamp-1 leading-none">
 															{item.title}
