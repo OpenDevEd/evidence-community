@@ -13,6 +13,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { style } from "../../tailwind.config";
 import Image from "next/image";
 import { twMerge } from "tailwind-merge";
+import { SessionProvider, useSession } from "next-auth/react";
+import { Session } from "next-auth";
+
 export const CacheContext = createContext<any>({});
 export const FeatureFlagsContext = createContext<any>({});
 
@@ -73,10 +76,11 @@ function LoadingScreen({
 	featureFlags: Set<string> | null;
 }) {
 	const { theme } = useTheme();
+	const { data: session, status } = useSession();
 
 	return (
 		<AnimatePresence mode="popLayout">
-			{featureFlags ? (
+			{(featureFlags && status !== "loading") ? (
 				children
 			) : (
 				<motion.div
@@ -125,7 +129,7 @@ function LoadingScreen({
 	);
 }
 
-export default function Providers({ children }: { children: React.ReactNode }) {
+export default function Providers({ children, session }: { children: React.ReactNode, session: Session | null }) {
 	const router = useRouter();
 	const [featureFlags, setFeatureFlags] = useState<Set<string> | null>(null);
 	const [isMounted, setIsMounted] = useState(false);
@@ -152,23 +156,25 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 			defaultTheme="dark"
 			disableTransitionOnChange
 		>
-			<PostHogProvider client={posthog}>
-				<FeatureFlagsContext.Provider value={{ featureFlags }}>
-					<CacheProvider>
-						<NextUIProvider navigate={router.push}>
-							<Suspense>
-								<PageView />
-							</Suspense>
-							<LoadingScreen
-								isMounted={isMounted}
-								featureFlags={featureFlags}
-							>
-								{children}
-							</LoadingScreen>
-						</NextUIProvider>
-					</CacheProvider>
-				</FeatureFlagsContext.Provider>
-			</PostHogProvider>
+			<SessionProvider session={session}>
+				<PostHogProvider client={posthog}>
+					<FeatureFlagsContext.Provider value={{ featureFlags }}>
+						<CacheProvider>
+							<NextUIProvider navigate={router.push}>
+								<Suspense>
+									<PageView />
+								</Suspense>
+								<LoadingScreen
+									isMounted={isMounted}
+									featureFlags={featureFlags}
+								>
+									{children}
+								</LoadingScreen>
+							</NextUIProvider>
+						</CacheProvider>
+					</FeatureFlagsContext.Provider>
+				</PostHogProvider>
+			</SessionProvider>
 		</ThemeProvider>
 	);
 }
