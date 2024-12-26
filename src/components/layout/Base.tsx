@@ -9,6 +9,7 @@ import { style } from "@/../tailwind.config";
 import { getMessages } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
 import {getLangDir} from 'rtl-detect';
+import { getServerSession } from "next-auth";
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -31,6 +32,7 @@ export default async function Base({
 }>) {
 	const messages = await getMessages();
 	const dir = getLangDir(locale);
+	const session = await getServerSession();
 
 	return (
 		<html lang={locale} dir={dir} suppressHydrationWarning>
@@ -42,7 +44,7 @@ export default async function Base({
 				}`}
 			>
 				<NextIntlClientProvider messages={messages}>
-					<Providers>
+					<Providers session={session}>
 						<div
 							className={twMerge(
 								"h-full w-full bg-background_light dark:bg-background flex flex-col xl:grid xl:grid-rows-[104px_1fr_512px] gap-4 xl:gap-14 items-center justify-items-center min-h-screen",
