@@ -28,8 +28,8 @@ export function AIControls({ controls, content, type, buttonLabel, buttonIcon, c
       switch (action) {
         case 'markdown': {
           let transformed = content.replace(
-            /\[QUOTE\s*(.*?)\s*QUOTE\/\]/g,
-            '\n> $1'
+            /\[QUOTE\s*(.*?)\s*QUOTE\/\][\s.,]*/g,
+            '\n> $1\n'
           );
           transformed = transformed.replace(
             /\[PAGE\s*(.*?)\s*PAGE\/\]/g,
