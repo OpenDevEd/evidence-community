@@ -15,6 +15,7 @@ import { motion } from "framer-motion";
 import { IoCloseSharp } from "react-icons/io5";
 import { style } from "@/../tailwind.config";
 import {
+	Avatar,
 	DropdownItem,
 	DropdownMenu,
 	DropdownTrigger,
@@ -26,6 +27,9 @@ import { useLocale, useTranslations } from "next-intl";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Link } from "@/i18n/routing";
 import { LinkObject } from "@/types/links";
+import { Button } from "../nextui/Button";
+import { BiLogIn, BiLogOut } from "react-icons/bi";
+import { signIn, signOut, useSession } from "next-auth/react";
 
 function ThemeSwitcher({
 	theme,
@@ -257,12 +261,40 @@ function LanguageSwitcher({ className }: { className?: string }) {
 	);
 }
 
+function UserButton() {
+	const { data: session } = useSession();
+
+	return (
+		<Dropdown>
+			<DropdownTrigger>
+				<Avatar src={session?.user?.image ?? ""} />
+			</DropdownTrigger>
+			<DropdownMenu onAction={(key) => {
+				if (key === "logout") {
+					signOut();
+				}
+			}}>
+				<DropdownItem key="profile">
+					Profile
+				</DropdownItem>
+				<DropdownItem key="settings">
+					Settings
+				</DropdownItem>
+				<DropdownItem key="logout" color="danger">
+					Logout
+				</DropdownItem>
+			</DropdownMenu>
+		</Dropdown>
+	)
+}
+
 export default function Navbar() {
 	const pathname = usePathname();
 	const [isMounted, setIsMounted] = useState(false);
 	const { theme, setTheme } = useTheme();
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
+	const { data: session } = useSession();
+	
 	useEffect(() => {
 		setIsMounted(true);
 	}, []);
@@ -289,6 +321,18 @@ export default function Navbar() {
 					setTheme={setTheme}
 					isMounted={isMounted}
 				/>
+				{!session ? (
+					<Button
+						onClick={() => (session ? signOut() : signIn())}
+						startContent={<BiLogIn className="size-5 shrink-0" />}
+						color={"accent"}
+						className={twMerge("h-full xl:min-w-0 xl:pl-4")}
+				>
+						Login
+					</Button>
+				) : (
+					<UserButton />
+				)}
 				<AnimatePresence mode="wait">
 					{(isMobileMenuOpen
 						? [IoCloseSharp]
