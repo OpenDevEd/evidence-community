@@ -2,6 +2,10 @@ import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SCOPE_OPTIONS } from "@/constants/items";
 
 export const fetcher = (url: string) => fetch(`/api${url}`).then(res => res.json())
+export const setter = (url: string, { arg }: { arg: any }) => fetch(`/api${url}`, {
+	method: "POST",
+	body: JSON.stringify(arg),
+})
 
 export function buildItemsQuery(params: any): string {
 	const { pageNumber, sort, collections, search, scope, range } = params;
