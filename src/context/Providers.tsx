@@ -80,7 +80,7 @@ function LoadingScreen({
 
 	return (
 		<AnimatePresence mode="popLayout">
-			{(featureFlags && status !== "loading") ? (
+			{(featureFlags && (status !== "loading" || !!session)) ? (
 				children
 			) : (
 				<motion.div
