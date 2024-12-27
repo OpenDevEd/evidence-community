@@ -1,19 +1,20 @@
 import { twMerge } from "tailwind-merge";
 import { Item } from "@/app/api/item/types";
-import { firstNonNullOrEmpty } from "@/lib/utils";
+import { firstNonNullOrEmpty, setter } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
-import { Link as NextUILink } from "@nextui-org/react";
+import { Link as NextUILink, Spinner } from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
 import { Link, useRouter } from "@/i18n/routing";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
-import { FaClipboard, FaClipboardCheck } from "react-icons/fa";
+import { FaClipboard, FaClipboardCheck, FaHeart, FaHeartBroken } from "react-icons/fa";
 import { useState } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 import CopyButton from "./CopyButton";
-
+import useSWRMutation from "swr/mutation";
+import { useSession } from "next-auth/react";
 
 function ResourceInteractions({
 	itemData,
@@ -22,7 +23,25 @@ function ResourceInteractions({
 	itemData: Item | undefined;
 	isLoading: boolean;
 }) {
+	const [mutationLoading, setMutationLoading] = useState(false);
 	const t = useTranslations("ui");
+	const { trigger } = useSWRMutation(`/like`, setter);
+	const { data: session, update } = useSession();
+	const isLiked = itemData && session?.user.likes[itemData.key];
+
+	const handleLike = async (e: React.MouseEvent<HTMLButtonElement>) => {
+		e.preventDefault();
+		setMutationLoading(true);
+		try {
+			await trigger({
+				itemKey: itemData?.key,
+			});
+			await update();
+		} catch (error) {
+			console.error(error);
+		}
+		setMutationLoading(false);
+	};
 
 	return (
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
@@ -39,8 +58,20 @@ function ResourceInteractions({
 							})}
 						</span>
 					</NextUILink>
-					<div className="flex-1 flex items-center justify-end z-10">
-						<CopyButton shrinkOnMobile itemData={itemData} text={t("copyLink")} textOnCopy={t("linkCopied")} />
+					<div className="flex-1 flex items-center justify-end z-10 gap-2">
+						<Button
+							isLoading={mutationLoading}
+							color={isLiked ? "accent" : "secondary"}
+							isIconOnly
+							size="sm"
+							onClick={handleLike}
+						> {isLiked ? <FaHeartBroken /> : <FaHeart />}</Button>
+						<CopyButton
+							shrinkOnMobile
+							itemData={itemData}
+							text={t("copyLink")}
+							textOnCopy={t("linkCopied")}
+						/>
 					</div>
 				</div>
 			</Skeleton>
