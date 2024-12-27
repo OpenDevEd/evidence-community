@@ -4,15 +4,8 @@ import { creatorType } from '../enums/creatorType';
 import { group } from './group';
 import { language } from './language';
 
-export type CreatorType = {
+type CreatorType = {
   [key in typeof creatorType.enumValues[number]]?: string[];
-};
-
-export type Creator = {
-  creatorType?: string;
-  firstName?: string;
-  lastName?: string;
-  name?: string;
 };
 
 export const item = pgTable('item', {
@@ -153,7 +146,7 @@ export const item = pgTable('item', {
 
   languageName: varchar('languageName').references(() => language.name),
   groupExternalId: integer('groupExternalId').references(() => group.externalId),
-  parentItem: varchar('parentItem').references((): any => item.key),
+  parentItem: varchar('parentItem'),
 
   tags: varchar().array(),
   collections: varchar().array(),
