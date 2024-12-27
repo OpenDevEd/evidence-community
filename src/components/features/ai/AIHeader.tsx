@@ -14,7 +14,6 @@ export default function AIHeader({
 	return (
 		<GenericHeader
 			onClose={onClose}
-			children={children}
 			startContent={<BsStars className="text-accent" />}
 			classNames={{
 				base: "flex items-center justify-between gap-2",
@@ -23,6 +22,8 @@ export default function AIHeader({
 				button: "xl:px-0 px-0 translate-x-2 rtl:-translate-x-2",
 				buttonIcon: "size-6 text-accent",
 			}}
-		/>
+		>
+			{children}
+		</GenericHeader>
 	)
 }
