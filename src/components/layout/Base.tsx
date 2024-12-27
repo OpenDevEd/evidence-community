@@ -10,6 +10,7 @@ import { getMessages } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
 import {getLangDir} from 'rtl-detect';
 import { getServerSession } from "next-auth";
+import authOptions from "@/app/api/auth/[...nextauth]/config";
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -32,7 +33,7 @@ export default async function Base({
 }>) {
 	const messages = await getMessages();
 	const dir = getLangDir(locale);
-	const session = await getServerSession();
+	const session = await getServerSession(authOptions);
 
 	return (
 		<html lang={locale} dir={dir} suppressHydrationWarning>
