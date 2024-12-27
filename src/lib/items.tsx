@@ -3,7 +3,6 @@ import { Item } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
 import { Link } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
-import { Creator } from "@/db/schema/tables/item";
 import Attachment from "@/components/features/items/Attachment";
 import { createFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
@@ -14,6 +13,13 @@ type FormatterProps = {
 	router: ReturnType<typeof useRouter>;
 	formatter: ReturnType<typeof createFormatter>;
 	t: ReturnType<typeof useTranslations>;
+};
+
+type Creator = {
+	creatorType?: string;
+	firstName?: string;
+	lastName?: string;
+	name?: string;
 };
 
 function formatDate({ value, formatter }: FormatterProps) {
