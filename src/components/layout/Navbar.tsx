@@ -19,7 +19,11 @@ import {
 	DropdownItem,
 	DropdownMenu,
 	DropdownTrigger,
+	ModalContent,
+	Modal,
+	ModalHeader,
 	useDisclosure,
+	ModalBody,
 } from "@nextui-org/react";
 import { ChevronDownIcon } from "@nextui-org/shared-icons";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -30,6 +34,10 @@ import { LinkObject } from "@/types/links";
 import { Button } from "../nextui/Button";
 import { BiLogIn, BiLogOut } from "react-icons/bi";
 import { signIn, signOut, useSession } from "next-auth/react";
+import { Input } from "../nextui/Input";
+import AIModal from "../nextui/AIModal";
+import GenericHeader from "../features/modals/GenericHeader";
+import { FaGoogle, FaEnvelope, FaLock } from "react-icons/fa";
 
 function ThemeSwitcher({
 	theme,
@@ -86,7 +94,7 @@ function ThemeSwitcher({
 	);
 }
 
-function Logo({ theme }: { theme: string | undefined }) {
+function Logo() {
 	const [isLoaded, setIsLoaded] = useState(false);
 
 	return (
@@ -288,13 +296,41 @@ function UserButton() {
 	)
 }
 
+function LoginModal({ isOpen, onOpenChange, onClose }: { isOpen: boolean, onOpenChange: (open: boolean) => void, onClose: () => void }) {
+	return (
+		<AIModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
+			<ModalContent>
+				<GenericHeader onClose={onClose}>
+					<Logo />
+				</GenericHeader>
+				<ModalBody>
+					<div className="flex flex-col gap-2 pb-4">
+						<Input startContent={<FaEnvelope className="size-5 fill-black dark:fill-white/40" />} placeholder="Email" />
+						<Input startContent={<FaLock className="size-5 fill-black dark:fill-white/40" />} placeholder="Password" />
+						<div className="flex items-center gap-2 h-10">
+							<Button color="accent" className="w-full h-full">Login</Button>
+							<Button color="secondary" className="w-full h-full">Register</Button>
+						</div>
+						<div className="flex items-center gap-4 my-4">
+							<div className="flex-1 h-[1px] bg-black/10 dark:bg-white/10" />
+							<span className="text-black/60 dark:text-white/60">Or</span>
+							<div className="flex-1 h-[1px] bg-black/10 dark:bg-white/10" />
+						</div>
+						<Button onClick={() => signIn("google")} color="secondary" className="w-full dark:bg-white dark:text-black" startContent={<FaGoogle className="size-5" />}>Continue with Google</Button>
+					</div>
+				</ModalBody>
+			</ModalContent>
+		</AIModal>
+	)
+}
+
 export default function Navbar() {
 	const pathname = usePathname();
 	const [isMounted, setIsMounted] = useState(false);
 	const { theme, setTheme } = useTheme();
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const { data: session } = useSession();
-	
+	const { isOpen: isLoginModalOpen, onOpen: onLoginModalOpen, onOpenChange: onLoginModalOpenChange, onClose: onLoginModalClose } = useDisclosure();
 	useEffect(() => {
 		setIsMounted(true);
 	}, []);
@@ -313,7 +349,7 @@ export default function Navbar() {
 						"bg-transparent max-w-screen-2xl mx-auto xl:px-14"
 				)}
 			>
-				<Logo theme={theme} />
+				<Logo />
 				<LinksList pathname={pathname} />
 				<LanguageSwitcher className="!hidden xl:!flex" />
 				<ThemeSwitcher
@@ -321,13 +357,18 @@ export default function Navbar() {
 					setTheme={setTheme}
 					isMounted={isMounted}
 				/>
+				<LoginModal
+					isOpen={isLoginModalOpen}
+					onOpenChange={onLoginModalOpenChange}
+					onClose={onLoginModalClose}
+				/>
 				{!session ? (
 					<Button
-						onClick={() => (session ? signOut() : signIn())}
 						startContent={<BiLogIn className="size-5 shrink-0" />}
 						color={"accent"}
 						className={twMerge("h-full xl:min-w-0 xl:pl-4")}
-				>
+						onPress={onLoginModalOpen}
+					>
 						Login
 					</Button>
 				) : (
