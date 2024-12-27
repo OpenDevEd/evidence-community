@@ -12,6 +12,11 @@ import * as itemRelations from './schema/relations/item';
 import * as collectionRelations from './schema/relations/collection';
 import * as itemToCollectionRelations from './schema/relations/itemToCollection';
 
+import * as userTable from './schema/tables/user';
+import * as userToLikesTable from './schema/tables/userToLikes';
+import * as userRelations from './schema/relations/user';
+import * as userToLikesRelations from './schema/relations/userToLikes';
+
 export const schema = {
     ...itemTable,
     ...collectionTable,
@@ -23,6 +28,10 @@ export const schema = {
     ...collectionRelations,
     ...itemRelations,
     ...itemToCollectionRelations,
+    ...userTable,
+    ...userToLikesTable,
+    ...userRelations,
+    ...userToLikesRelations,
 }
 
 export const db = drizzle(process.env.DATABASE_URL_POST!, { schema });
