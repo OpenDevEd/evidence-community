@@ -96,15 +96,40 @@ function ThemeSwitcher({
 	);
 }
 
-function Logo() {
+function Logo({ interactive = true }: { interactive?: boolean }) {
 	const [isLoaded, setIsLoaded] = useState(false);
+
+	const logoContent = (
+		<div className={twMerge("transition-all select-none", interactive && "cursor-pointer hover:brightness-90 hover:scale-95 active:scale-105 ")}>
+			{["dark", "light"].map((themeToMatch) => (
+				<Image
+					key={themeToMatch}
+					onLoad={() => setIsLoaded(true)}
+					src={
+						themeToMatch === "dark"
+							? `/logos/${style}/logo.png`
+							: `/logos/${style}/logo_light.png`
+					}
+					alt="logo"
+					className={twMerge(
+						"pointer-events-none",
+						themeToMatch === "light"
+							? "dark:hidden"
+							: "hidden dark:block"
+					)}
+					height={40}
+					width={171}
+				/>
+			))}
+		</div>
+	);
 
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
 			className="w-[171px] h-[40px] rounded-lg "
 		>
-			<div className="hover:brightness-90 hover:scale-95 active:scale-105 transition-all select-none">
+			{interactive ? (
 				<Link
 					href={
 						links[style as keyof typeof links].find(
@@ -112,28 +137,11 @@ function Logo() {
 						)?.href ?? "/"
 					}
 				>
-					{["dark", "light"].map((themeToMatch) => (
-						<Image
-							key={themeToMatch}
-							onLoad={() => setIsLoaded(true)}
-							src={
-								themeToMatch === "dark"
-									? `/logos/${style}/logo.png`
-									: `/logos/${style}/logo_light.png`
-							}
-							alt="logo"
-							className={twMerge(
-								"pointer-events-none",
-								themeToMatch === "light"
-									? "dark:hidden"
-									: "hidden dark:block"
-							)}
-							height={40}
-							width={171}
-						/>
-					))}
+					{logoContent}
 				</Link>
-			</div>
+			) : (
+				logoContent
+			)}
 		</Skeleton>
 	);
 }
@@ -360,7 +368,7 @@ function LoginModal({
 				)}
 			>
 				<GenericHeader onClose={onClose}>
-					<Logo />
+					<Logo interactive={false} />
 				</GenericHeader>
 				<ModalBody>
 					<div
