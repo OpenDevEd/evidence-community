@@ -7,10 +7,10 @@ import { links } from "@/constants/links";
 import { useTheme } from "next-themes";
 import { HiOutlineMoon } from "react-icons/hi2";
 import { IoMdSunny } from "react-icons/io";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { GiHamburgerMenu } from "react-icons/gi";
-import { AnimatePresence } from "framer-motion";
+import { animate, AnimatePresence } from "framer-motion";
 import { motion } from "framer-motion";
 import { IoCloseSharp } from "react-icons/io5";
 import { style } from "@/../tailwind.config";
@@ -32,12 +32,14 @@ import { Dropdown } from "@/components/nextui/Dropdown";
 import { Link } from "@/i18n/routing";
 import { LinkObject } from "@/types/links";
 import { Button } from "../nextui/Button";
-import { BiLogIn, BiLogOut } from "react-icons/bi";
+import { BiError, BiErrorCircle, BiLogIn, BiLogOut } from "react-icons/bi";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { Input } from "../nextui/Input";
 import AIModal from "../nextui/AIModal";
 import GenericHeader from "../features/modals/GenericHeader";
 import { FaGoogle, FaEnvelope, FaLock } from "react-icons/fa";
+import { authenticate } from "@/lib/actions";
+import { Router } from "next/router";
 
 function ThemeSwitcher({
 	theme,
@@ -277,51 +279,170 @@ function UserButton() {
 			<DropdownTrigger>
 				<Avatar src={session?.user?.image ?? ""} />
 			</DropdownTrigger>
-			<DropdownMenu onAction={(key) => {
-				if (key === "logout") {
-					signOut();
-				}
-			}}>
-				<DropdownItem key="profile">
-					Profile
-				</DropdownItem>
-				<DropdownItem key="settings">
-					Settings
-				</DropdownItem>
+			<DropdownMenu
+				onAction={(key) => {
+					if (key === "logout") {
+						signOut({
+							redirect: false,
+						});
+					}
+				}}
+			>
+				<DropdownItem key="profile">Profile</DropdownItem>
+				<DropdownItem key="settings">Settings</DropdownItem>
 				<DropdownItem key="logout" color="danger">
 					Logout
 				</DropdownItem>
 			</DropdownMenu>
 		</Dropdown>
-	)
+	);
 }
 
-function LoginModal({ isOpen, onOpenChange, onClose }: { isOpen: boolean, onOpenChange: (open: boolean) => void, onClose: () => void }) {
+function LoginModal({
+	isOpen,
+	onOpenChange,
+	onClose,
+}: {
+	isOpen: boolean;
+	onOpenChange: (open: boolean) => void;
+	onClose: () => void;
+}) {
+	const ANIMATION_DURATION = 0.5;
+
+	const router = useRouter();
+	const containerRef = useRef<HTMLDivElement>(null);
+	const [errorMessage, setErrorMessage] = useState<string | null>(null);
+	const [debouncedSetErrorMessage, _] = useDebounce(
+		() => setErrorMessage(null),
+		ANIMATION_DURATION * 5 * 1000
+	);
+
+	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault();
+		const formData = new FormData(e.target as HTMLFormElement);
+		const email = formData.get("email") as string;
+		const password = formData.get("password") as string;
+		const submitButton = document.activeElement as HTMLButtonElement;
+		const isRegister = submitButton.hasAttribute("data-register");
+
+		const result = await authenticate({
+			email,
+			password,
+			register: isRegister,
+		});
+		if (
+			result?.error &&
+			containerRef.current?.parentElement?.parentElement
+		) {
+			setErrorMessage(result.error);
+			debouncedSetErrorMessage();
+			const originalColor =
+				containerRef.current.parentElement.parentElement.style
+					.backgroundColor;
+			animate(
+				containerRef.current.parentElement.parentElement,
+				{
+					x: [-10, 10, -10, 10, -5, 5, -2, 2, 0],
+				},
+				{ duration: ANIMATION_DURATION }
+			);
+		} else if (!result?.error) {
+			onClose();
+		}
+	};
+
 	return (
 		<AIModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
-			<ModalContent>
+			<ModalContent
+				className={twMerge(
+					"transition-colors duration-500",
+					errorMessage && "!bg-red-800/25"
+				)}
+			>
 				<GenericHeader onClose={onClose}>
 					<Logo />
 				</GenericHeader>
 				<ModalBody>
-					<div className="flex flex-col gap-2 pb-4">
-						<Input startContent={<FaEnvelope className="size-5 fill-black dark:fill-white/40" />} placeholder="Email" />
-						<Input startContent={<FaLock className="size-5 fill-black dark:fill-white/40" />} placeholder="Password" />
-						<div className="flex items-center gap-2 h-10">
-							<Button color="accent" className="w-full h-full">Login</Button>
-							<Button color="secondary" className="w-full h-full">Register</Button>
+					<div
+						ref={containerRef}
+						className="flex flex-col gap-2 pb-4"
+					>
+						<div>
+							<form
+								onSubmit={handleSubmit}
+								className="flex flex-col gap-2"
+							>
+								<Input
+									startContent={
+										<FaEnvelope className="size-5 mr-1 fill-black dark:fill-white/40" />
+									}
+									name="email"
+									placeholder="Email"
+								/>
+								<Input
+									startContent={
+										<FaLock className="size-5 mr-1 fill-black dark:fill-white/40" />
+									}
+									type="password"
+									name="password"
+									placeholder="Password"
+								/>
+								<div className="flex items-center gap-2 h-10">
+									<Button
+										color="accent"
+										className="w-full h-full"
+										type="submit"
+									>
+										Login
+									</Button>
+									<Button
+										color="secondary"
+										className="w-full h-full"
+										data-register
+										type="submit"
+									>
+										Register
+									</Button>
+								</div>
+							</form>
+							<AnimatePresence mode="sync">
+								{errorMessage && (
+									<motion.div
+										initial={{ height: 0, opacity: 0, y: 8 }}
+										animate={{ height: "auto", opacity: 1 }}
+										exit={{ height: 0, opacity: 0, y: 0 }}
+										className="bg-red-800/50 rounded-2xl overflow-hidden"
+									>
+										<div className="p-2 grid grid-cols-[auto_1fr] gap-2">
+											<BiErrorCircle className="size-8 p-1 aspect-square bg-black/50 rounded-full" />
+											<span className="text-sm flex items-center">
+												{errorMessage}
+											</span>
+										</div>
+									</motion.div>
+								)}
+							</AnimatePresence>
 						</div>
 						<div className="flex items-center gap-4 my-4">
 							<div className="flex-1 h-[1px] bg-black/10 dark:bg-white/10" />
-							<span className="text-black/60 dark:text-white/60">Or</span>
+							<span className="text-black/60 dark:text-white/60">
+								Or
+							</span>
 							<div className="flex-1 h-[1px] bg-black/10 dark:bg-white/10" />
 						</div>
-						<Button onClick={() => signIn("google")} color="secondary" className="w-full dark:bg-white dark:text-black" startContent={<FaGoogle className="size-5" />}>Continue with Google</Button>
+						<Button
+							onClick={() => signIn("google")}
+							color="secondary"
+							className="w-full dark:bg-white dark:text-black"
+							startContent={<FaGoogle className="size-5" />}
+						>
+							Continue with Google
+						</Button>
 					</div>
 				</ModalBody>
 			</ModalContent>
 		</AIModal>
-	)
+	);
 }
 
 export default function Navbar() {
@@ -330,7 +451,12 @@ export default function Navbar() {
 	const { theme, setTheme } = useTheme();
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const { data: session } = useSession();
-	const { isOpen: isLoginModalOpen, onOpen: onLoginModalOpen, onOpenChange: onLoginModalOpenChange, onClose: onLoginModalClose } = useDisclosure();
+	const {
+		isOpen: isLoginModalOpen,
+		onOpen: onLoginModalOpen,
+		onOpenChange: onLoginModalOpenChange,
+		onClose: onLoginModalClose,
+	} = useDisclosure();
 	useEffect(() => {
 		setIsMounted(true);
 	}, []);
