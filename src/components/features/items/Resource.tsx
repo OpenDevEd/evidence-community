@@ -20,6 +20,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
+import LikeButton from "./LikeButton";
 
 function ResourceInteractions({
 	itemData,
@@ -28,25 +29,7 @@ function ResourceInteractions({
 	itemData: Item | undefined;
 	isLoading: boolean;
 }) {
-	const [mutationLoading, setMutationLoading] = useState(false);
 	const t = useTranslations("ui");
-	const { trigger } = useSWRMutation(`/like`, setter);
-	const { data: session, update } = useSession();
-	const isLiked = itemData && session?.user.likes[itemData.key];
-
-	const handleLike = async (e: React.MouseEvent<HTMLButtonElement>) => {
-		e.preventDefault();
-		setMutationLoading(true);
-		try {
-			await trigger({
-				itemKey: itemData?.key,
-			});
-			await update();
-		} catch (error) {
-			console.error(error);
-		}
-		setMutationLoading(false);
-	};
 
 	return (
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
@@ -64,18 +47,7 @@ function ResourceInteractions({
 						</span>
 					</NextUILink>
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
-						{session && (
-							<Button
-								isLoading={mutationLoading}
-								color={isLiked ? "accent" : "secondary"}
-								isIconOnly
-								size="sm"
-								onClick={handleLike}
-							>
-								{" "}
-								{isLiked ? <FaHeartBroken /> : <FaHeart />}
-							</Button>
-						)}
+						<LikeButton itemData={itemData} />
 						<CopyButton
 							shrinkOnMobile
 							itemData={itemData}
