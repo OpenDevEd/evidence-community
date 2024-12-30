@@ -9,7 +9,12 @@ import ResourceData from "./ResourceData";
 import { Link, useRouter } from "@/i18n/routing";
 import { useFormatter, useLocale, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
-import { FaClipboard, FaClipboardCheck, FaHeart, FaHeartBroken } from "react-icons/fa";
+import {
+	FaClipboard,
+	FaClipboardCheck,
+	FaHeart,
+	FaHeartBroken,
+} from "react-icons/fa";
 import { useState } from "react";
 import { useDebounce } from "@/hooks/useDebounce";
 import CopyButton from "./CopyButton";
@@ -59,13 +64,18 @@ function ResourceInteractions({
 						</span>
 					</NextUILink>
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
-						<Button
-							isLoading={mutationLoading}
-							color={isLiked ? "accent" : "secondary"}
-							isIconOnly
-							size="sm"
-							onClick={handleLike}
-						> {isLiked ? <FaHeartBroken /> : <FaHeart />}</Button>
+						{session && (
+							<Button
+								isLoading={mutationLoading}
+								color={isLiked ? "accent" : "secondary"}
+								isIconOnly
+								size="sm"
+								onClick={handleLike}
+							>
+								{" "}
+								{isLiked ? <FaHeartBroken /> : <FaHeart />}
+							</Button>
+						)}
 						<CopyButton
 							shrinkOnMobile
 							itemData={itemData}
