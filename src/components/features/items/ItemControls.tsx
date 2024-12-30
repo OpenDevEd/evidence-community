@@ -15,14 +15,16 @@ import { DropdownMenu } from "@nextui-org/dropdown";
 import { DropdownTrigger } from "@nextui-org/react";
 import { BsThreeDots } from "react-icons/bs";
 import { FaClipboard } from "react-icons/fa";
+import LikeButton from "./LikeButton";
 
-type Interaction = "readDocument" | "downloadRecord" | "printRecord" | "copyLink" | "preferences";
+type Interaction = "readDocument" | "downloadRecord" | "printRecord" | "copyLink" | "preferences" | "like";
 
 type ButtonConfig = {
 	key: Interaction;
-	Component: typeof Button | typeof CopyButton;
+	Component: typeof Button | typeof CopyButton | typeof LikeButton;
 	label: string;
 	props: Record<string, any>;
+	hideFromDropdown?: boolean;
 	hideLabel?: boolean;
 };
 
@@ -40,6 +42,7 @@ export default function ItemControls({
 		printRecord: null,
 		copyLink: null,
 		preferences: null,
+		like: null,
 	});
 
 	const buttonConfigs: ButtonConfig[] = useMemo(() => [
@@ -86,6 +89,15 @@ export default function ItemControls({
 			}
 		},
 		{
+			key: "like",
+			Component: LikeButton,
+			label: t("like"),
+			hideFromDropdown: true,
+			props: {
+				itemData: itemData,
+			}
+		},
+		{
 			key: "preferences",
 			Component: Button,
 			label: t("preferences"),
@@ -111,11 +123,11 @@ export default function ItemControls({
 			>
 				{t("return")}
 			</Button>
-			{buttonConfigs.map(({ key, Component, label, props, hideLabel }) => (
+			{buttonConfigs.map(({ key, Component, label, props, hideLabel }: any) => (
 				<Component
 					key={key}
 					ref={(el: HTMLButtonElement | null) => {
-						controlsRef.current[key] = el;
+						controlsRef.current[key as Interaction] = el;
 					}}
 					{...props}
 				>
@@ -130,7 +142,7 @@ export default function ItemControls({
 				<DropdownMenu onAction={(key) => {
 					controlsRef.current[key as Interaction]?.click();
 				}}>
-					{buttonConfigs.map(({ key, label, props }) => (
+					{buttonConfigs.filter(({ hideFromDropdown }) => !hideFromDropdown).map(({ key, label, props }) => (
 						<DropdownItem key={key} startContent={props.startContent}>
 							{label}
 						</DropdownItem>
