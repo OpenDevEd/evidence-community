@@ -1,3 +1,10 @@
+"use server";
+
+import { db } from "@/db";
+import { users } from "@/db/schema/tables/user";
+import { usersToLikes } from "@/db/schema/tables/userToLikes";
+import { eq } from "drizzle-orm";
+import { Session } from "next-auth";
 import { signIn } from "next-auth/react";
 import Error from "next/error";
 import meilisearchClient from "@/lib/meilisearch";
