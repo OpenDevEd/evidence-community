@@ -281,7 +281,7 @@ function LanguageSwitcher({ className }: { className?: string }) {
 
 function UserButton() {
 	const { data: session } = useSession();
-
+	const router = useRouter();
 	return (
 		<Dropdown>
 			<DropdownTrigger>
@@ -293,6 +293,8 @@ function UserButton() {
 						signOut({
 							redirect: false,
 						});
+					} else if (key === "profile") {
+						router.push(`/profile/${session.user.id}`);
 					}
 				}}
 			>
