@@ -6,7 +6,10 @@ const withNextIntl = createNextIntlPlugin();
 
 const nextConfig = {
 	images: {
-		remotePatterns: [{ hostname: 'tlxvwvgyaanqlmuyoguz.supabase.co' }],
+		remotePatterns: [
+			{ hostname: 'tlxvwvgyaanqlmuyoguz.supabase.co' },
+			{ hostname: 'lh3.googleusercontent.com' }
+		],
 	},
 	async rewrites() {
 		return [
