@@ -294,7 +294,7 @@ function UserButton() {
 							redirect: false,
 						});
 					} else if (key === "profile") {
-						router.push(`/profile/${session.user.id}`);
+						router.push(`/profile/${session?.user?.id}`);
 					}
 				}}
 			>
