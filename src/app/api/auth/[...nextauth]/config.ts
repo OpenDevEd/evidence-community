@@ -10,6 +10,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 import { fromError } from "zod-validation-error";
+import { getProfile } from "@/lib/actions";
 
 export const credentialsSchema = z.object({
 	email: z.string().email(),
@@ -111,20 +112,8 @@ const authOptions: NextAuthOptions = {
 			return token;
 		},
 		session: async ({ session, user }: { session: any; user: any }) => {
-			const likes = await db.query.usersToLikes.findMany({
-				where: eq(usersToLikes.userId, user.id),
-				columns: {
-					itemKey: true,
-					createdAt: true,
-				},
-			});
-			if (session.user) {
-				session.user.likes = likes.reduce((acc, like) => {
-					acc[like.itemKey] = like.createdAt;
-					return acc;
-				}, {} as Session["user"]["likes"]);
-				session.user.id = user.id;
-			}
+			const updatedUser = await getProfile(user.id, session);
+			session.user = updatedUser;
 			return session;
 		},
 	},
