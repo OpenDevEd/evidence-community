@@ -2,15 +2,16 @@ import { DefaultSession, NextAuthOptions, Session } from "next-auth";
 import { db } from "@/db";
 import GoogleProvider from "next-auth/providers/google";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { users } from "@/db/schema/tables/user";
+import { accounts, authenticators, sessions, users, verificationTokens } from "@/db/schema/tables/user";
 import { encode as defaultEncode } from "next-auth/jwt";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
-import { eq } from "drizzle-orm";
+import { eq, InferSelectModel } from "drizzle-orm";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { z } from "zod";
 import bcrypt from "bcrypt";
 import { fromError } from "zod-validation-error";
 import { getProfile } from "@/lib/actions";
+import { userCollection } from "@/db/schema/tables/userCollection";
 
 export const credentialsSchema = z.object({
 	email: z.string().email(),
@@ -45,7 +46,15 @@ declare module "next-auth" {
 			likes: {
 				[key: string]: Date;
 			};
+			following: {
+				[key: string]: Date;
+			};
+			followers: {
+				[key: string]: Date;
+			};
+			collections: InferSelectModel<typeof userCollection>[];
 			id: string;
+			createdAt?: Date;
 		} & DefaultSession["user"];
 	}
 }
@@ -71,8 +80,12 @@ const authOptions: NextAuthOptions = {
 			},
 			type: "credentials",
 			async authorize(credentials, req) {
+				console.log("Authorizing credentials", credentials);
+		
 				const parsedCredentials =
 					credentialsSchema.safeParse(credentials);
+					
+				console.log("Parsed credentials", parsedCredentials);
 
 				if (!parsedCredentials.success)
 					throw new Error(
