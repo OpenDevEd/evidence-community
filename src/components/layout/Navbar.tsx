@@ -7,7 +7,7 @@ import { links } from "@/constants/links";
 import { useTheme } from "next-themes";
 import { HiOutlineMoon } from "react-icons/hi2";
 import { IoMdSunny } from "react-icons/io";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { animate, AnimatePresence } from "framer-motion";
@@ -38,8 +38,9 @@ import { Input } from "../nextui/Input";
 import AIModal from "../nextui/AIModal";
 import GenericHeader from "../features/modals/GenericHeader";
 import { FaGoogle, FaEnvelope, FaLock } from "react-icons/fa";
-import { authenticate } from "@/lib/actions";
+import { authenticate } from "@/lib/auth";
 import { Router } from "next/router";
+import { useModalError } from "@/hooks/useModalError";
 
 function ThemeSwitcher({
 	theme,
@@ -100,7 +101,13 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 	const [isLoaded, setIsLoaded] = useState(false);
 
 	const logoContent = (
-		<div className={twMerge("transition-all select-none", interactive && "cursor-pointer hover:brightness-90 hover:scale-95 active:scale-105 ")}>
+		<div
+			className={twMerge(
+				"transition-all select-none",
+				interactive &&
+					"cursor-pointer hover:brightness-90 hover:scale-95 active:scale-105 "
+			)}
+		>
 			{["dark", "light"].map((themeToMatch) => (
 				<Image
 					key={themeToMatch}
@@ -317,15 +324,22 @@ function LoginModal({
 	onOpenChange: (open: boolean) => void;
 	onClose: () => void;
 }) {
-	const ANIMATION_DURATION = 0.5;
-
 	const router = useRouter();
-	const containerRef = useRef<HTMLDivElement>(null);
-	const [errorMessage, setErrorMessage] = useState<string | null>(null);
-	const [debouncedSetErrorMessage, _] = useDebounce(
-		() => setErrorMessage(null),
-		ANIMATION_DURATION * 5 * 1000
-	);
+	const {
+		displayOnError,
+		errorClassName,
+		ErrorField,
+		containerRef,
+		errorMessage,
+	} = useModalError({
+		initial: {
+			height: 0,
+			opacity: 0,
+			y: 8,
+		},
+		animate: { height: "auto", opacity: 1 },
+		exit: { height: 0, opacity: 0, y: 0 },
+	});
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -340,35 +354,14 @@ function LoginModal({
 			password,
 			register: isRegister,
 		});
-		if (
-			result?.error &&
-			containerRef.current?.parentElement?.parentElement
-		) {
-			setErrorMessage(result.error);
-			debouncedSetErrorMessage();
-			const originalColor =
-				containerRef.current.parentElement.parentElement.style
-					.backgroundColor;
-			animate(
-				containerRef.current.parentElement.parentElement,
-				{
-					x: [-10, 10, -10, 10, -5, 5, -2, 2, 0],
-				},
-				{ duration: ANIMATION_DURATION }
-			);
-		} else if (!result?.error) {
+		if (!displayOnError(result?.error)) {
 			onClose();
 		}
 	};
 
 	return (
 		<AIModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
-			<ModalContent
-				className={twMerge(
-					"transition-colors duration-500",
-					errorMessage && "!bg-red-800/25"
-				)}
-			>
+			<ModalContent className={errorClassName}>
 				<GenericHeader onClose={onClose}>
 					<Logo interactive={false} />
 				</GenericHeader>
@@ -416,21 +409,7 @@ function LoginModal({
 								</div>
 							</form>
 							<AnimatePresence mode="sync">
-								{errorMessage && (
-									<motion.div
-										initial={{ height: 0, opacity: 0, y: 8 }}
-										animate={{ height: "auto", opacity: 1 }}
-										exit={{ height: 0, opacity: 0, y: 0 }}
-										className="bg-red-800/50 rounded-2xl overflow-hidden"
-									>
-										<div className="p-2 grid grid-cols-[auto_1fr] gap-2">
-											<BiErrorCircle className="size-8 p-1 aspect-square bg-black/50 rounded-full" />
-											<span className="text-sm flex items-center">
-												{errorMessage}
-											</span>
-										</div>
-									</motion.div>
-								)}
+								{errorMessage && <ErrorField />}
 							</AnimatePresence>
 						</div>
 						<div className="flex items-center gap-4 my-4">
