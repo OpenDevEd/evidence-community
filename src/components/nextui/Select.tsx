@@ -21,7 +21,7 @@ export const Select = extendVariants(NextUISelect, {
           "border-small",
         value: "font-medium text-base text-center rtl:text-center",
         popoverContent: "border-small ",
-        label: " text-center w-full",
+        label: "text-center w-full",
       },
     },
     size: {
@@ -31,6 +31,13 @@ export const Select = extendVariants(NextUISelect, {
       md: {
         base: "max-w-72",
       }
+    },
+    placement: {
+      center: {},
+      left: {
+        value: "text-left rtl:text-right",
+        label: "text-left rtl:text-right",
+      },
     },
     custom: {
       default: {
@@ -44,6 +51,7 @@ export const Select = extendVariants(NextUISelect, {
     variant: "default",
     custom: "default",
     size: "sm",
-    color: "secondary"
+    color: "secondary",
+    placement: "center",
   },
 });
