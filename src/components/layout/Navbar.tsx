@@ -41,6 +41,7 @@ import { FaGoogle, FaEnvelope, FaLock } from "react-icons/fa";
 import { authenticate } from "@/lib/auth";
 import { Router } from "next/router";
 import { useModalError } from "@/hooks/useModalError";
+import { useFeatureFlagEnabled } from "@/context/Providers";
 
 function ThemeSwitcher({
 	theme,
@@ -440,6 +441,7 @@ export default function Navbar() {
 	const { theme, setTheme } = useTheme();
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const { data: session } = useSession();
+	const isLoginEnabled = useFeatureFlagEnabled("login");
 	const {
 		isOpen: isLoginModalOpen,
 		onOpen: onLoginModalOpen,
@@ -478,14 +480,15 @@ export default function Navbar() {
 					onClose={onLoginModalClose}
 				/>
 				{!session ? (
-					<Button
-						startContent={<BiLogIn className="size-5 shrink-0" />}
-						color={"accent"}
-						className={twMerge("h-full xl:min-w-0 xl:pl-4")}
-						onPress={onLoginModalOpen}
+					isLoginEnabled && (
+						<Button
+							startContent={<BiLogIn className="size-5 shrink-0" />}
+							color={"accent"}
+							className={twMerge("h-full xl:min-w-0 xl:pl-4")}
+							onPress={onLoginModalOpen}
 					>
 						Login
-					</Button>
+					</Button>)
 				) : (
 					<UserButton />
 				)}
