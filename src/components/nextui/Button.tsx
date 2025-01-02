@@ -8,6 +8,10 @@ export const Button = extendVariants(NextUIButton, {
         `text-black/80 dark:text-white/60 
         bg-white dark:bg-secondary 
         border-black/10 dark:border-white/10`,
+      card:
+        `text-white dark:text-white 
+        bg-white/50 dark:bg-card 
+        border-black/10 dark:border-white/10`,
       accent:
         `text-white dark:text-white 
         bg-accent dark:bg-accent-500 
@@ -28,6 +32,7 @@ export const Button = extendVariants(NextUIButton, {
     },
     size: {
       lg: "px-3 gap-2 xl:px-6 xl:gap-3",
+      md: "px-3 gap-2 xl:px-6 xl:gap-3 h-10",
       xs: "text-xs px-3 h-8 gap-1",
     },
   },
