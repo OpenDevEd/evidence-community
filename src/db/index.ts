@@ -17,6 +17,14 @@ import * as userToLikesTable from './schema/tables/userToLikes';
 import * as userRelations from './schema/relations/user';
 import * as userToLikesRelations from './schema/relations/userToLikes';
 
+import * as userToFollowTable from './schema/tables/userToFollow';
+import * as userToFollowRelations from './schema/relations/userToFollow';
+import * as userCollectionTable from './schema/tables/userCollection';
+import * as userCollectionRelations from './schema/relations/userCollection';
+import * as itemToUserCollectionTable from './schema/tables/itemToUserCollection';
+import * as itemToUserCollectionRelations from './schema/relations/itemToUserCollection';
+
+
 export const schema = {
     ...itemTable,
     ...collectionTable,
@@ -32,6 +40,12 @@ export const schema = {
     ...userToLikesTable,
     ...userRelations,
     ...userToLikesRelations,
+    ...userToFollowTable,
+    ...userToFollowRelations,
+    ...userCollectionTable,
+    ...userCollectionRelations,
+    ...itemToUserCollectionTable,
+    ...itemToUserCollectionRelations,
 }
 
 export const db = drizzle(process.env.DATABASE_URL_POST!, { schema });
