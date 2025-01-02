@@ -46,7 +46,7 @@ export async function GET(
 				embedder: "openai",
 				semanticRatio: 0.7,
 			},
-			filter: [`id != ${item.id}`],
+			filter: [`key != ${key}`],
 			limit: 5,
 		});
 
