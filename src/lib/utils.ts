@@ -7,8 +7,8 @@ export const setter = (url: string, { arg }: { arg: any }) => fetch(`/api${url}`
 	body: JSON.stringify(arg),
 })
 
-export function buildItemsQuery(params: any): string {
-	const { pageNumber, sort, collections, search, scope, range } = params;
+export function buildItemsQuery(params: any, url: string = "/items"): string {
+	const { pageNumber, sort, collections, search, scope, range, collectionId } = params;
 
 	const queryParts = [
 		`page=${pageNumber}`,
@@ -18,9 +18,10 @@ export function buildItemsQuery(params: any): string {
 		search.length > 0 && `search=${search}`,
 		scope !== SCOPE_OPTIONS[0].key && `scope=${scope}`,
 		range && `range=${range}`,
+		collectionId && `collectionId=${collectionId}`,
 	];
 
-	return `/items?${queryParts.filter(Boolean).join("&")}`;
+	return `${url}?${queryParts.filter(Boolean).join("&")}`;
 }
 
 export function firstNonNullOrEmpty<T>(
