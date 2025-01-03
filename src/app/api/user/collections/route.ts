@@ -10,7 +10,7 @@ import { fromError } from "zod-validation-error";
 export const createCollectionSchema = z.object({
   name: z.string().min(1).max(24),
   private: z.boolean(),
-  description: z.string().min(1).max(200).optional(),
+  description: z.string().min(0).max(200).optional(),
 });
 
 export async function POST(req: NextRequest) {
