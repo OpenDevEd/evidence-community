@@ -5,11 +5,13 @@ import { Session } from "next-auth";
 
 export default async function ProfilePage({
 	params,
+	searchParams,
 }: {
 	params: { id: string };
+	searchParams: { [key: string]: any };
 }) {
 	const profile = await getProfile(params.id, null);
 	const likedPosts = await getLikedPosts(profile.likes);
 
-	return <Profile data={profile} likedPosts={likedPosts} />;
+	return <Profile data={profile} likedPosts={likedPosts} searchParams={searchParams} />;
 }
