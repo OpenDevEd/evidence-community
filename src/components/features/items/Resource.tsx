@@ -1,8 +1,14 @@
 import { twMerge } from "tailwind-merge";
 import { Item } from "@/app/api/item/types";
-import { firstNonNullOrEmpty, setter } from "@/lib/utils";
+import { fetcher, firstNonNullOrEmpty, setter } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
-import { Link as NextUILink, Spinner } from "@nextui-org/react";
+import {
+	ModalBody,
+	ModalContent,
+	Link as NextUILink,
+	Spinner,
+	useDisclosure,
+} from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
@@ -21,6 +27,78 @@ import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
 import LikeButton from "./LikeButton";
+import { BsPlus } from "react-icons/bs";
+import AIModal from "@/components/nextui/AIModal";
+import GenericHeader from "../modals/GenericHeader";
+import CollectionsList from "../user/CollectionsList";
+import { Session } from "next-auth";
+import useSWR from "swr";
+
+function AddButton({
+	itemData,
+	data,
+}: {
+	itemData: Item | undefined;
+	data: Session["user"] | undefined;
+}) {
+	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
+	const [loading, setLoading] = useState(false);
+	const { trigger } = useSWRMutation(`/user/item/${itemData?.key}`, setter);
+	const { data: collections, isLoading: collectionsLoading, mutate } = useSWR(
+		isOpen ? `/user/item/${itemData?.key}` : null,
+		fetcher
+	);
+	const { data: session, update } = useSession();
+
+	const onCollectionSelect = async (collectionId: string) => {
+		setLoading(true);
+		try {
+			await trigger({ collectionId });
+			await Promise.all([mutate(), update()]);
+		} catch (error) {
+			console.error(error);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	return (
+		data && (
+			<>
+				<AIModal size="lg" isOpen={isOpen} onOpenChange={onOpenChange}>
+					<ModalContent>
+						<GenericHeader onClose={onClose}>
+							Select a collection
+						</GenericHeader>
+						<ModalBody className="p-6 pt-0 gap-6">
+							<Skeleton
+								isLoaded={!collectionsLoading}
+								className="w-full rounded-2xl"
+							>
+								<div className="flex flex-col gap-4">
+									<CollectionsList
+										isLoading={loading}
+										highlightedCollections={
+											collections?.collections
+										}
+										data={data}
+										classNames={{
+											container: "grid-cols-2 gap-3",
+										}}
+										onCollectionSelect={onCollectionSelect}
+									/>
+								</div>
+							</Skeleton>
+						</ModalBody>
+					</ModalContent>
+				</AIModal>
+				<Button isIconOnly size="sm" onClick={onOpen}>
+					<BsPlus className="size-5" />
+				</Button>
+			</>
+		)
+	);
+}
 
 function ResourceInteractions({
 	itemData,
@@ -30,6 +108,8 @@ function ResourceInteractions({
 	isLoading: boolean;
 }) {
 	const t = useTranslations("ui");
+	const { data } = useSession();
+	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 
 	return (
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
@@ -47,6 +127,7 @@ function ResourceInteractions({
 						</span>
 					</NextUILink>
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
+						<AddButton itemData={itemData} data={data?.user} />
 						<LikeButton itemData={itemData} />
 						<CopyButton
 							shrinkOnMobile
