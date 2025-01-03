@@ -5,13 +5,13 @@ import { BsPen, BsPlus } from "react-icons/bs";
 import AboutUs from "../icons/AboutUs";
 import { Button } from "../nextui/Button";
 import Resource from "../features/items/Resource";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useContext, useMemo, useState } from "react";
 import { Skeleton } from "../nextui/Skeleton";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
 import { useSession } from "next-auth/react";
 import { Session } from "next-auth";
-import { setter } from "@/lib/utils";
+import { fetcher, buildItemsQuery, setter } from "@/lib/utils";
 import useSWRMutation from "swr/mutation";
 import { twMerge } from "tailwind-merge";
 import { Textarea } from "../nextui/Textarea";
@@ -26,63 +26,28 @@ import { Modal, useDisclosure } from "@nextui-org/react";
 import GenericHeader from "../features/modals/GenericHeader";
 import AIModal from "../nextui/AIModal";
 import { Select } from "../nextui/Select";
-import { COLLECTION_VISIBILITY_OPTIONS } from "@/constants/user";
+import {
+	COLLECTION_PER_PAGE,
+	COLLECTION_VISIBILITY_OPTIONS,
+} from "@/constants/user";
 import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence } from "framer-motion";
+import { Pagination } from "../nextui/Pagination";
+import CollectionsList from "../features/user/CollectionsList";
+import UserCollection from "../features/user/UserCollection";
+import { ResourcesView } from "../features/resources/ResourcesView";
+import { CacheContext } from "@/context/Providers";
+import { ITEMS_PER_PAGE, SORT_OPTIONS } from "@/constants/items";
+import { useParamsState } from "@/hooks/useParamsState";
+import { SCOPE_OPTIONS } from "@/constants/items";
+import { ItemsGetResponse } from "@/app/api/items/types";
+import useSWR from "swr";
 
 function Pen() {
 	return (
 		<div className="rounded-full bg-primary dark:bg-secondary flex items-center justify-center p-1.5 size-6">
 			<BsPen className="size-full fill-black/60 dark:fill-white/60 " />
 		</div>
-	);
-}
-
-function UserCollection({
-	collection,
-	onClick,
-}: {
-	collection?: Session["user"]["collections"][number];
-	onClick?: () => void;
-}) {
-	const [loading, setLoading] = useState(false);
-
-	return (
-		<Button
-			color={collection ? "secondary" : "card"}
-			startContent={
-				!collection &&
-				!loading && <BsPlus className="size-6 invert dark:invert-0" />
-			}
-			className="flex items-center justify-center aspect-video min-h-0 max-h-auto h-full"
-			onClick={onClick}
-			isLoading={loading}
-		>
-			<Tooltip
-				className="bg-white dark:bg-card"
-				content={
-					collection?.description ? (
-						<div className="flex flex-col max-w-64">
-							<span className="text-black/60 dark:text-white/60">
-								Description
-							</span>
-							<span className="text-sm text-black/80 dark:text-white/80 break-all">
-								{collection?.description}
-							</span>
-						</div>
-					) : ""
-				}
-			>
-				<div className="flex flex-col items-center justify-center">
-					<span className="text-sm text-black/60 dark:text-white/60">
-						{collection?.name}
-					</span>
-					<span className="text-black/80 dark:text-white/80 font-medium text-2xl">
-						{collection?.numItems}
-					</span>
-				</div>
-			</Tooltip>
-		</Button>
 	);
 }
 
@@ -195,11 +160,14 @@ function CreateCollectionModal({
 							className="flex flex-col gap-3"
 						>
 							<Input
+								autoComplete="off"
+								autoFocus
 								label="Name"
 								name="name"
 								placeholder="Collection Name"
 							/>
 							<Textarea
+								autoComplete="off"
 								label="Description"
 								name="description"
 								color="secondary"
@@ -242,21 +210,141 @@ function CreateCollectionModal({
 	);
 }
 
+function ItemsList({
+	searchParams,
+	data,
+	collectionId,
+}: {
+	searchParams: { [key: string]: any };
+	data: any;
+	collectionId: string | null;
+}) {
+	const { router, pathname, createQueryString } =
+		useParamsState(searchParams);
+
+	const collectionsParam = searchParams["collections"];
+	const collections = collectionsParam ? collectionsParam.split(",") : [];
+	const pageNumber = Number(searchParams["page"]) || 1;
+	const sort = searchParams["sort"] || SORT_OPTIONS[0].key;
+	const search = searchParams["search"] || "";
+	const scope = searchParams["scope"] || SCOPE_OPTIONS[0].key;
+	const range = searchParams["range"] || "";
+
+	const handlePageChange = useCallback(
+		(newPage: number) => {
+			router.push(
+				createQueryString(pathname, [["page", String(newPage)]])
+			);
+		},
+		[router, pathname, createQueryString]
+	);
+
+	const handleSortChange = useCallback(
+		(sort: Set<string>) => {
+			const value = sort.values().next().value;
+			if (value)
+				router.push(createQueryString(pathname, [["sort", value]]));
+		},
+		[router, pathname, createQueryString]
+	);
+
+	const handleScopeChange = useCallback(
+		(scope: Set<string>) => {
+			const value = scope.values().next().value;
+			if (value)
+				router.push(createQueryString(pathname, [["scope", value]]));
+		},
+		[router, pathname, createQueryString]
+	);
+
+	const handleSearchChange = useCallback(
+		(text: string) =>
+			router.push(
+				createQueryString(pathname, [
+					["search", text],
+					["page", "1"],
+				])
+			),
+		[router, pathname, createQueryString]
+	);
+
+	const handleRangeChange = useCallback(
+		(start: string | null, end: string | null) => {
+			router.push(
+				createQueryString(pathname, [
+					["range", [start, end].join(end !== null ? "-" : "")],
+				])
+			);
+		},
+		[router, pathname, createQueryString]
+	);
+
+
+	const {
+		data: itemsData,
+		error: itemsError,
+		isLoading: isItemsLoading,
+	} = useSWR<ItemsGetResponse>(
+		buildItemsQuery(
+			{
+				pageNumber,
+				sort,
+				collections,
+				search,
+				scope,
+				range,
+				collectionId,
+			},
+			`/user/items/${data.id}`
+		),
+		fetcher,
+		{
+			keepPreviousData: true,
+			onSuccess: (data) => {
+				if (data.totalPages < pageNumber) {
+					handlePageChange(data.totalPages);
+				}
+			},
+		}
+	);
+
+	return (
+		<ResourcesView
+			sort={sort}
+			search={search}
+			scope={scope}
+			handleSearchChange={handleSearchChange}
+			handleScopeChange={handleScopeChange}
+			handleSortChange={handleSortChange}
+			itemsData={itemsData}
+			itemsError={itemsError}
+			isItemsLoading={isItemsLoading}
+			range={range}
+			handleRangeChange={handleRangeChange}
+			pageNumber={pageNumber}
+			handlePageChange={handlePageChange}
+		/>
+	);
+}
+
 export default function Profile({
 	data,
 	likedPosts,
+	searchParams,
 }: {
 	data: any;
 	likedPosts: any[];
+	searchParams: { [key: string]: any };
 }) {
 	const [currentlyEditing, setCurrentlyEditing] = useState(false);
 	const { data: session, update } = useSession();
 	const t = useTranslations("ui");
 	const formatter = useFormatter();
 	const [selectedTab, setSelectedTab] = useState("Liked Posts");
-
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
+	const { router, pathname, createQueryString } = useParamsState(searchParams);
 
+	const selectedCollection = searchParams["collectionId"] || "";
 	const isCurrentUser = session?.user.id == data.id;
 
 	const displayData = useMemo(() => {
@@ -276,6 +364,18 @@ export default function Profile({
 
 		return displayData;
 	}, [data, session]);
+
+
+	const handleCollectionSelect = useCallback(
+		(collectionId: string) => {
+			if (collectionId === selectedCollection) {
+				router.push(createQueryString(pathname, [["collectionId", ""]]));
+			} else {
+				router.push(createQueryString(pathname, [["collectionId", collectionId]]));
+			}
+		},
+		[router, pathname, createQueryString]
+	);
 
 	return (
 		<div className="w-full max-w-screen-2xl px-4 xl:px-14 flex gap-8 items-start">
@@ -305,14 +405,8 @@ export default function Profile({
 							)}
 						</div>
 						<div className="w-3/4 flex flex-col p-4 justify-center">
-							{/* <Textarea
-									placeholder="Write something about yourself"
-									minRows={1}
-									maxRows={1}
-								/> */}
 							<div className="text-xl font-medium text-black/80 dark:text-white/80 flex items-center gap-2">
 								{displayData.name ?? "____________________"}
-								{/* <Pen /> */}
 							</div>
 							<div className="text-sm text-black/60 dark:text-white/60">
 								Joined in{" "}
@@ -342,15 +436,10 @@ export default function Profile({
 						<div className="flex flex-col gap-2">
 							<div className="text-xl font-medium text-black/80 dark:text-white/80 flex items-center gap-2">
 								About me
-								{/* <Pen /> */}
 							</div>
 							<div className="text-sm text-black/60 dark:text-white/60 min-h-16 break-words">
 								{displayData.description ??
 									"Lorem ipsum dolor sit amet consectetur adipisicing elit. Dignissimos adipisci blanditiis dolorum amet tenetur fugiat reprehenderit nihil facilis impedit, cumque provident, quasi qui maiores rem iure quibusdam numquam architecto earum?"}
-								{/* <Textarea
-									placeholder="Write something about yourself"
-									className="w-full"
-								/> */}
 							</div>
 						</div>
 						{session?.user?.id !== displayData.id ? (
@@ -374,20 +463,15 @@ export default function Profile({
 							<span className="text-sm text-black/60 dark:text-white/60 rtl:mr-auto rtl:ml-auto">
 								{displayData.collections.length}
 							</span>
-						</div>
-						<div className="w-full grid grid-cols-2 gap-2">
-							{displayData.collections.map(
-								(collection: any, index: number) => (
-									<UserCollection
-										key={index}
-										collection={collection}
-									/>
-								)
-							)}
 							{isCurrentUser && (
 								<UserCollection onClick={onOpen} />
 							)}
 						</div>
+						<CollectionsList
+							highlightedCollections={selectedCollection ? [selectedCollection] : []}
+							onCollectionSelect={handleCollectionSelect}
+							data={displayData}
+						/>
 					</div>
 				</div>
 			</div>
@@ -410,37 +494,11 @@ export default function Profile({
 						)
 					)}
 				</div>
-				<Skeleton
-					isLoaded={!!displayData}
-					className="flex items-center flex-1 rounded-2xl"
-				>
-					<h2
-						suppressHydrationWarning
-						className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center gap-2"
-					>
-						{t.rich("resourcesCount", {
-							count: formatter.number(likedPosts.length),
-							number: (chunks) => (
-								<span
-									suppressHydrationWarning
-									className="text-2xl leading-6"
-								>
-									{chunks}
-								</span>
-							),
-						})}
-					</h2>
-				</Skeleton>
-				<div className="w-full flex flex-col gap-4">
-					{likedPosts.map((post: any) => (
-						<Resource
-							key={post.key}
-							itemData={post}
-							abstract={true}
-							isLoading={false}
-						/>
-					))}
-				</div>
+				<ItemsList
+					data={displayData}
+					searchParams={searchParams}
+					collectionId={selectedCollection}
+				/>
 			</div>
 		</div>
 	);
