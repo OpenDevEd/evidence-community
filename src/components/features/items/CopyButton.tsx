@@ -16,8 +16,9 @@ const CopyButton = forwardRef<
 		textOnCopy?: string;
 		className?: string;
 		shrinkOnMobile?: boolean;
+		isIconOnly?: boolean;
 	}
->(({ itemData, content, text, textOnCopy, className, shrinkOnMobile = false }, ref) => {
+>(({ itemData, content, text, textOnCopy, className, shrinkOnMobile = false, isIconOnly = false }, ref) => {
 	const [isCopied, setIsCopied] = useState(false);
 	const [clearCopied] = useDebounce(() => setIsCopied(false), 2000);
 	const locale = useLocale();
@@ -45,10 +46,11 @@ const CopyButton = forwardRef<
 			size="sm"
 			onClick={handleCopy}
 			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square xl:aspect-auto xl:px-3", className)}
+			isIconOnly={isIconOnly}
 		>
-			<span className={twMerge(shrinkOnMobile && "hidden xl:block")}>
+			{!isIconOnly && <span className={twMerge(shrinkOnMobile && "hidden xl:block")}>
 				{isCopied ? textOnCopy || t("copied") : text || t("copy")}
-			</span>
+			</span>}
 		</Button>
 	);
 });
