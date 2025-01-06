@@ -29,7 +29,8 @@ import ModelSelector from "../features/ai/ModelSelector";
 import { useAIFeature } from "@/hooks/useAIFeature";
 import { AI_DROPDOWN_ITEMS } from "@/components/features/ai/AIDropdownItems";
 
-const Cite = require('citation-js');
+// @ts-expect-error citation-js is not typed
+import Cite from 'citation-js';
 
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
