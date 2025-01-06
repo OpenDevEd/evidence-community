@@ -69,7 +69,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 	} else if (likes) {
 		res = await searchIndex(request, {
 			filter: [
-				`key IN [${likes.map((like) => `"${like.itemKey}"`).join(",")}]`,
+				`key IN [${likes.filter((like) => !like.deleted).map((like) => `"${like.itemKey}"`).join(",")}]`,
 			],
 		});
 	}
