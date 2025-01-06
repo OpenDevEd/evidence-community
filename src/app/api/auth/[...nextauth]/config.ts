@@ -55,6 +55,11 @@ declare module "next-auth" {
 			collections: InferSelectModel<typeof userCollection>[];
 			id: string;
 			createdAt?: Date;
+			itemsCollections: {
+				[key: string]: {
+					[key: string]: Date;
+				};
+			};
 		} & DefaultSession["user"];
 	}
 }
