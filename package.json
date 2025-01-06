@@ -45,6 +45,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
+    "@tailwindcss/container-queries": "^0.1.1",
     "@tailwindcss/typography": "^0.5.15",
     "@types/bcrypt": "^5.0.2",
     "@types/node": "^20",
