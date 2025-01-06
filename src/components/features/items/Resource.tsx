@@ -36,25 +36,21 @@ import useSWR from "swr";
 
 function AddButton({
 	itemData,
-	data,
+	userData,
 }: {
 	itemData: Item | undefined;
-	data: Session["user"] | undefined;
+	userData?: Session["user"];
 }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const [loading, setLoading] = useState(false);
 	const { trigger } = useSWRMutation(`/user/item/${itemData?.key}`, setter);
-	const { data: collections, isLoading: collectionsLoading, mutate } = useSWR(
-		isOpen ? `/user/item/${itemData?.key}` : null,
-		fetcher
-	);
 	const { data: session, update } = useSession();
 
 	const onCollectionSelect = async (collectionId: string) => {
 		setLoading(true);
 		try {
 			await trigger({ collectionId });
-			await Promise.all([mutate(), update()]);
+			await update();
 		} catch (error) {
 			console.error(error);
 		} finally {
@@ -63,7 +59,7 @@ function AddButton({
 	};
 
 	return (
-		data && (
+		session && (
 			<>
 				<AIModal size="lg" isOpen={isOpen} onOpenChange={onOpenChange}>
 					<ModalContent>
@@ -72,16 +68,16 @@ function AddButton({
 						</GenericHeader>
 						<ModalBody className="p-6 pt-0 gap-6">
 							<Skeleton
-								isLoaded={!collectionsLoading}
 								className="w-full rounded-2xl"
+								isLoaded={!!itemData}
 							>
 								<div className="flex flex-col gap-4">
 									<CollectionsList
 										isLoading={loading}
 										highlightedCollections={
-											collections?.collections
+											Object.keys(itemData ? (session?.user.itemsCollections[itemData.key] ?? {}) : {})
 										}
-										data={data}
+										data={session?.user}
 										classNames={{
 											container: "grid-cols-2 gap-3",
 										}}
@@ -103,9 +99,11 @@ function AddButton({
 function ResourceInteractions({
 	itemData,
 	isLoading,
+	userData,
 }: {
 	itemData: Item | undefined;
 	isLoading: boolean;
+	userData?: Session["user"];
 }) {
 	const t = useTranslations("ui");
 	const { data } = useSession();
@@ -127,7 +125,7 @@ function ResourceInteractions({
 						</span>
 					</NextUILink>
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
-						<AddButton itemData={itemData} data={data?.user} />
+						<AddButton itemData={itemData} userData={userData} />
 						<LikeButton itemData={itemData} />
 						<CopyButton
 							shrinkOnMobile
@@ -146,10 +144,12 @@ export default function Resource({
 	itemData,
 	abstract,
 	isLoading,
+	userData,
 }: {
 	itemData: Item | undefined;
 	abstract: boolean;
 	isLoading: boolean;
+	userData?: Session["user"];
 }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
@@ -219,7 +219,7 @@ export default function Resource({
 					</Skeleton>
 				)}
 			</Link>
-			<ResourceInteractions itemData={itemData} isLoading={isLoading} />
+			<ResourceInteractions itemData={itemData} isLoading={isLoading} userData={userData} />
 		</div>
 	);
 }
