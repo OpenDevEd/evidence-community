@@ -20,6 +20,7 @@ import { ItemsGetResponse } from "@/app/api/items/types";
 import { Item } from "@/app/api/item/types";
 import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
+import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 
 export async function getLikedPosts(likes: Session["user"]["likes"]) {
 	const res = await meilisearchClient
@@ -57,8 +58,12 @@ function formatRange(range: string | null) {
 
 export async function searchIndex(
 	request: NextRequest,
-	extraProperties: Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1] = {},
-	extraFilters: NonNullable<Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]>["filter"] = []
+	extraProperties: Parameters<
+		ReturnType<typeof meilisearchClient.index>["search"]
+	>[1] = {},
+	extraFilters: NonNullable<
+		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
+	>["filter"] = []
 ) {
 	const { searchParams } = new URL(request.url);
 	const pageNum = Math.max(1, Number(searchParams.get("page")) || 1);
@@ -109,6 +114,8 @@ export async function getProfile(
 	id: string,
 	session: Session | null
 ): Promise<Session["user"]> {
+	const isCurrentUser = session?.user.id === id;
+
 	const data = await db.transaction(async (tx) => {
 		const following = await tx.query.userToFollow
 			.findMany({
@@ -144,7 +151,10 @@ export async function getProfile(
 
 		const likes = await tx.query.usersToLikes
 			.findMany({
-				where: eq(usersToLikes.userId, id),
+				where: and(
+					eq(usersToLikes.userId, id),
+					eq(usersToLikes.deleted, false)
+				),
 				columns: {
 					itemKey: true,
 					createdAt: true,
@@ -157,16 +167,7 @@ export async function getProfile(
 				}, {} as Session["user"]["likes"])
 			);
 
-		return {
-			following,
-			followers,
-			likes,
-			collections,
-		};
-	});
-
-	if (!session) {
-		const profile = await db.query.users.findFirst({
+		const profile = isCurrentUser ? session?.user : await db.query.users.findFirst({
 			where: eq(users.id, id),
 			columns: {
 				name: true,
@@ -176,18 +177,32 @@ export async function getProfile(
 			},
 		});
 
+		const itemsCollections = await tx.query.itemToUserCollection.findMany({
+			where: and(eq(itemToUserCollection.userId, id), eq(itemToUserCollection.deleted, false)),
+		}).then((items) => items.reduce((acc, item) => {
+			acc[item.itemKey] = acc[item.itemKey] || {};
+			acc[item.itemKey][item.userCollectionId] = item.updatedAt;
+				return acc;
+			}, {} as Session["user"]["itemsCollections"])
+		);
+
 		return {
 			...profile,
+			following,
+			followers,
+			likes,
+			collections,
 			id,
+			itemsCollections,
+		};
+	});
+
+	if (session) {
+		session.user = {
+			...session.user,
 			...data,
 		};
 	}
 
-	session.user = {
-		...session.user,
-		id,
-		...data,
-	};
-
-	return session.user;
+	return session ? session.user : data;
 }
