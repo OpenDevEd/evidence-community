@@ -1,11 +1,12 @@
 import { ReactNode } from "react";
 import { Item } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
-import { Link } from "@nextui-org/react";
+import { Button, Link } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import Attachment from "@/components/features/items/Attachment";
 import { createFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
+import CopyButton from "@/components/features/items/CopyButton";
 
 type FormatterProps = {
 	value: any;
@@ -140,5 +141,17 @@ export const valueFormatter: Record<
 					))}
 			</div>
 		);
+	},
+	citation: ({ value }) => {
+		if (!value) return null;
+		return <div className="flex gap-4 w-full bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between">
+				<div dangerouslySetInnerHTML={{ __html: value.format('bibliography', {
+					format: 'html',
+					template: 'apa',
+				}) }} />
+				<CopyButton isIconOnly content={value.format('bibliography', {
+					template: 'apa',
+				})} />
+			</div>
 	},
 };
