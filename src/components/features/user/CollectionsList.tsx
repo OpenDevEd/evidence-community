@@ -16,16 +16,16 @@ export default function CollectionsList({ data, highlightedCollections, classNam
 	const [search, setSearch] = useState("");
 	const [collectionsPage, totalPages, currentPage] = useMemo(() => {
 		const sortedCollections = data.collections.sort((a, b) => {
-			const aHighlighted = highlightedCollections?.includes(a.id) || false;
-			const bHighlighted = highlightedCollections?.includes(b.id) || false;
-			if (aHighlighted !== bHighlighted) {
-				return bHighlighted ? 1 : -1;
-			}
-			const aItems = a.numItems || 0;
-			const bItems = b.numItems || 0;
-			if (aItems !== bItems) {
-				return bItems - aItems;
-			}
+			// const aHighlighted = highlightedCollections?.includes(a.id) || false;
+			// const bHighlighted = highlightedCollections?.includes(b.id) || false;
+			// if (aHighlighted !== bHighlighted) {
+			// 	return bHighlighted ? 1 : -1;
+			// }
+			// const aItems = a.numItems || 0;
+			// const bItems = b.numItems || 0;
+			// if (aItems !== bItems) {
+			// 	return bItems - aItems;
+			// }
 			return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
 		});
 		const filteredCollections = sortedCollections.filter((collection) => {
