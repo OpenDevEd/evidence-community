@@ -67,7 +67,12 @@ export async function POST(request: NextRequest) {
       .returning();
     
     const cachedLikes = cachedUserLikes.get(session.user.id) || [];
-    cachedUserLikes.set(session.user.id, [...cachedLikes, result[0]]);
+    const cachedLike = cachedLikes.find(like => like.itemKey === itemKey);
+    if (cachedLike) {
+      cachedLikes.splice(cachedLikes.indexOf(cachedLike), 1);
+    }
+    cachedLikes.push(result[0]);
+    cachedUserLikes.set(session.user.id, cachedLikes);
 
     return NextResponse.json({ liked: !result[0].deleted });
   } catch (error) {
