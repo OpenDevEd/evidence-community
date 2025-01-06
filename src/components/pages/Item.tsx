@@ -29,6 +29,9 @@ import ModelSelector from "../features/ai/ModelSelector";
 import { useAIFeature } from "@/hooks/useAIFeature";
 import { AI_DROPDOWN_ITEMS } from "@/components/features/ai/AIDropdownItems";
 
+const Cite = require('citation-js');
+
+
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ai");
 
@@ -156,6 +159,13 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	);
 }
 
+function formatItemToOriginalFormat(item: NonNullable<ItemGetResponse['item']>) {
+	return {
+		...item,
+		language: item.languageName,
+	};
+}
+
 export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 	const router = useRouter();
 	const t = useTranslations("ui");
@@ -165,6 +175,7 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 		isRelatedItemsEnabled ? `/ai/embeddings/${data?.item?.key}` : null,
 		fetcher
 	);
+	const { data: citation } = useSWR(data?.item ? `${data?.item?.key}.citation` : null, async () => Cite.async(formatItemToOriginalFormat(data!.item!)));
 
 	return (
 		<main className="w-full max-w-screen-2xl px-4 xl:px-14 flex flex-col gap-4">
@@ -188,6 +199,7 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 											/>
 										)
 									)}
+								{citation && <ItemRow item={data.item!} row="citation" router={router} value={citation} />}
 							</div>
 						</>
 					) : (
