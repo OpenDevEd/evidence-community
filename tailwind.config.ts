@@ -146,6 +146,7 @@ const config: Config = {
   },
   darkMode: "class",
   plugins: [
+    require('@tailwindcss/container-queries'),
     require('@tailwindcss/typography'),
     nextui({
       themes: {
