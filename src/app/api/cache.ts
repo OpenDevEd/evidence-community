@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { getItem } from "./item/[key]/route";
 import { ItemGetResponse } from "./item/types";
-import { eq, InferSelectModel } from "drizzle-orm";
+import { and, eq, InferSelectModel } from "drizzle-orm";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 
 export const cachedItems = new Map<string, ItemGetResponse>();
@@ -27,7 +27,7 @@ export async function getCachedUserCollectionKeys(collectionId: string, ignoreCa
 		console.log("fetching for the first time");
 
 		const res = await db.query.itemToUserCollection.findMany({
-			where: eq(itemToUserCollection.userCollectionId, collectionId),
+			where: and(eq(itemToUserCollection.userCollectionId, collectionId), eq(itemToUserCollection.deleted, false)),
 			columns: {
 				itemKey: true,
 			},
