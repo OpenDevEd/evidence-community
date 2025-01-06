@@ -7,7 +7,7 @@ import { usersToLikes } from "@/db/schema/tables/userToLikes";
 
 export const cachedItems = new Map<string, ItemGetResponse>();
 export const cachedUserCollectionKeys = new Map<string, { private: boolean, userId: string, itemKeys: string[] }>();
-export const cachedUserLikes = new Map<string, { itemKey: string, createdAt: Date }[]>();
+export const cachedUserLikes = new Map<string, InferSelectModel<typeof usersToLikes>[]>();
 
 export async function getCachedItem(key: string) {
 	let item = cachedItems.get(key);
@@ -64,14 +64,8 @@ export async function getCachedUserLikes(userId: string, ignoreCache: boolean = 
 	if (!likes || ignoreCache) {
 		likes = await db.query.usersToLikes.findMany({
 			where: eq(usersToLikes.userId, userId),
-			columns: {
-				itemKey: true,
-				createdAt: true,
-			},
 		});
-
 		cachedUserLikes.set(userId, likes);
 	}
-
 	return likes;
 }
