@@ -17,6 +17,7 @@ export const usersToLikes = pgTable("userToLikes", {
 	itemKey: text("itemKey")
 		.notNull()
 		.references(() => item.key, { onDelete: "cascade" }),
+	deleted: boolean("deleted").notNull().default(false),
 	createdAt: timestamp("createdAt", { mode: "date" }).notNull().defaultNow(),
 	updatedAt: timestamp("updatedAt", { mode: "date" }).notNull().defaultNow(),
 }, (table) => ({
