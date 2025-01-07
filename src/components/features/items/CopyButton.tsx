@@ -17,16 +17,18 @@ const CopyButton = forwardRef<
 		className?: string;
 		shrinkOnMobile?: boolean;
 		isIconOnly?: boolean;
+		contentRef?: React.RefObject<any>;
 	}
->(({ itemData, content, text, textOnCopy, className, shrinkOnMobile = false, isIconOnly = false }, ref) => {
+>(({ itemData, content, text, textOnCopy, className, shrinkOnMobile = false, isIconOnly = false, contentRef }, ref) => {
 	const [isCopied, setIsCopied] = useState(false);
 	const [clearCopied] = useDebounce(() => setIsCopied(false), 2000);
 	const locale = useLocale();
 	const t = useTranslations("ui");
 
 	const handleCopy = () => {
-		if (content) {
-			navigator.clipboard.writeText(content);
+		if (content || contentRef) {
+			const contentToCopy = content || contentRef?.current?.textContent;
+			navigator.clipboard.writeText(contentToCopy.trim());
 		} else {
 			const currentUrl = window.location.href;
 			const url = new URL(currentUrl);
