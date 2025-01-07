@@ -1,4 +1,4 @@
-import { ReactNode } from "react";
+import { ReactNode, useRef } from "react";
 import { Item } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
 import { Button, Link } from "@nextui-org/react";
@@ -31,6 +31,16 @@ function formatDate({ value, formatter }: FormatterProps) {
 		month: "long",
 		day: "numeric",
 	});
+}
+
+function Citation({ value }: FormatterProps) {
+	const contentRef = useRef(null);
+	return (
+		<div className="flex gap-4 w-full bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between">
+			<div ref={contentRef} dangerouslySetInnerHTML={{ __html: value }} />
+			<CopyButton isIconOnly contentRef={contentRef} />
+		</div>
+	);
 }
 
 export const valueFormatter: Record<
@@ -142,11 +152,8 @@ export const valueFormatter: Record<
 			</div>
 		);
 	},
-	citation: ({ value }) => {
-		if (!value) return null;
-		return <div className="flex gap-4 w-full bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between">
-				<div dangerouslySetInnerHTML={{ __html: value }} />
-				<CopyButton isIconOnly content={value} />
-			</div>
+	citation: (args) => {
+		if (!args.value) return false;
+		return <Citation {...args} />;
 	},
 };
