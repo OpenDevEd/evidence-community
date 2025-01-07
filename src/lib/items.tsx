@@ -145,10 +145,7 @@ export const valueFormatter: Record<
 	citation: ({ value }) => {
 		if (!value) return null;
 		return <div className="flex gap-4 w-full bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between">
-				<div dangerouslySetInnerHTML={{ __html: value.format('bibliography', {
-					format: 'html',
-					template: 'apa',
-				}) }} />
+				<div dangerouslySetInnerHTML={{ __html: value }} />
 				<CopyButton isIconOnly content={value.format('bibliography', {
 					template: 'apa',
 				})} />
