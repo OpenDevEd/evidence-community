@@ -9,9 +9,9 @@ export const cachedItems = new Map<string, ItemGetResponse>();
 export const cachedUserCollectionKeys = new Map<string, { private: boolean, userId: string, itemKeys: string[] }>();
 export const cachedUserLikes = new Map<string, InferSelectModel<typeof usersToLikes>[]>();
 
-export async function getCachedItem(key: string) {
+export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 	let item = cachedItems.get(key);
-	if (!item) {
+	if (!item || ignoreCache) {
 		item = await getItem(key);
 		if (!item || !item.item) {
 			return null;
