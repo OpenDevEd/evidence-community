@@ -135,6 +135,8 @@ export const item = pgTable('item', {
   // number: varchar(),
   // status: varchar(),
 
+  citation: varchar(),
+
 
   dateAdded: timestamp('dateAdded'),
   dateModified: timestamp('dateModified'),
