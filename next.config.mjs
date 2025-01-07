@@ -1,5 +1,6 @@
 /** @type {import('next').NextConfig} */
 import createNextIntlPlugin from 'next-intl/plugin';
+import { hostname } from 'os';
 
 const withNextIntl = createNextIntlPlugin();
 
@@ -8,7 +9,8 @@ const nextConfig = {
 	images: {
 		remotePatterns: [
 			{ hostname: 'tlxvwvgyaanqlmuyoguz.supabase.co' },
-			{ hostname: 'lh3.googleusercontent.com' }
+			{ hostname: 'lh3.googleusercontent.com' },
+			{ hostname: "ocivvlhqiwtxvnycqnia.supabase.co"}
 		],
 	},
 	async rewrites() {
