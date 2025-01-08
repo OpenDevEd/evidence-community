@@ -1,13 +1,16 @@
 import { Button } from "@/components/nextui/Button";
 import { Item } from "@/app/api/item/types";
 import { FaHeart, FaHeartBroken } from "react-icons/fa";
-import { useState } from "react";
+import { useState, forwardRef } from "react";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
 import { setter } from "@/lib/utils";
 import { twMerge } from "tailwind-merge";
 
-export default function LikeButton({ itemData, className }: { itemData: Item | undefined, className?: any }) {
+const LikeButton = forwardRef<
+  HTMLButtonElement,
+  { itemData: Item | undefined; className?: any }
+>(function LikeButton({ itemData, className }, ref) {
   const [mutationLoading, setMutationLoading] = useState(false);
   const { trigger } = useSWRMutation(`/like`, setter);
   const { data: session, update } = useSession();
@@ -31,6 +34,7 @@ export default function LikeButton({ itemData, className }: { itemData: Item | u
 
   return (
     <Button
+      ref={ref}
       isLoading={mutationLoading}
       color={isLiked ? "accent" : "secondary"}
       isIconOnly
@@ -41,4 +45,8 @@ export default function LikeButton({ itemData, className }: { itemData: Item | u
       {isLiked ? <FaHeartBroken /> : <FaHeart />}
     </Button>
   );
-} 
+});
+
+LikeButton.displayName = "LikeButton";
+
+export default LikeButton; 
