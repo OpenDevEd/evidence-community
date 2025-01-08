@@ -27,6 +27,8 @@
 		"viewOnDocs": "View on {site}",
 		"inProgress": "In Progress",
 		"resourcesCount": "<number>{count}</number> resources",
+		"likedItemsCount": "<number>{count}</number> liked resources",
+		"itemsInCollection": "<number>{count}</number> resources in <collections>{collection}</collections>",
 		"noFacetsFound": "No facets found",
 		"pageNotFound": "Page Not Found",
 		"itemNotFound": "Resource Not Found",
