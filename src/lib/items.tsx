@@ -1,4 +1,4 @@
-import { ReactNode, useRef } from "react";
+import { ReactNode, useRef, useMemo } from "react";
 import { Item } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
 import { Button, Link } from "@nextui-org/react";
@@ -37,10 +37,55 @@ function Citation({ value }: FormatterProps) {
 	const contentRef = useRef(null);
 	return (
 		<div className="flex gap-4 w-full bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between">
-			<div ref={contentRef} dangerouslySetInnerHTML={{ __html: value }} />
+			<div
+				ref={contentRef}
+				dangerouslySetInnerHTML={{ __html: value.trim() }}
+			/>
 			<CopyButton isIconOnly contentRef={contentRef} />
 		</div>
 	);
+}
+
+function Extra({ value }: { value: string }) {
+	const DOIRegex = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
+	const DOIs = useMemo(() => Array.from(value.matchAll(DOIRegex)), [value]);
+
+	const elements = useMemo(() => {
+		if (!DOIs.length) return [value];
+
+		let lastIndex = 0;
+		const elements = [];
+
+		DOIs.forEach((match, i) => {
+			const doi = match[0];
+			const startIndex = match.index!;
+
+			if (startIndex > lastIndex) {
+				elements.push(value.slice(lastIndex, startIndex));
+			}
+
+			elements.push(
+				<Link
+					key={i}
+					href={`https://doi.org/${doi}`}
+					className="text-accent"
+					showAnchorIcon
+				>
+					{doi}
+				</Link>
+			);
+
+			lastIndex = startIndex + doi.length;
+		});
+
+		if (lastIndex < value.length) {
+			elements.push(value.slice(lastIndex));
+		}
+
+		return elements;
+	}, [DOIs, value]);
+
+	return <>{elements}</>;
 }
 
 export const valueFormatter: Record<
@@ -149,6 +194,13 @@ export const valueFormatter: Record<
 					.map((data: Item, index: number) => (
 						<Attachment data={data} key={index} />
 					))}
+			</div>
+		);
+	},
+	extra: (args) => {
+		return (
+			<div className="whitespace-pre-line">
+				<Extra {...args} />
 			</div>
 		);
 	},
