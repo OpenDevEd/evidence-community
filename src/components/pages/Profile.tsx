@@ -5,7 +5,7 @@ import { BsPen, BsPlus } from "react-icons/bs";
 import AboutUs from "../icons/AboutUs";
 import { Button } from "../nextui/Button";
 import Resource from "../features/items/Resource";
-import { useCallback, useContext, useMemo, useState } from "react";
+import { ReactNode, useCallback, useContext, useMemo, useState } from "react";
 import { Skeleton } from "../nextui/Skeleton";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
@@ -210,6 +210,14 @@ function CreateCollectionModal({
 	);
 }
 
+function NumberWrapper({ children }: { children: ReactNode }) {
+	return <span className="text-xl font-medium text-black/80 dark:text-white/80">{children}</span>;
+}
+
+function CollectionWrapper({ children }: { children: ReactNode }) {
+	return <span className="text-sm text-black/60 dark:text-white/60">{children}</span>;
+}
+
 function ItemsList({
 	searchParams,
 	data,
@@ -229,6 +237,8 @@ function ItemsList({
 	const search = searchParams["search"] || "";
 	const scope = searchParams["scope"] || SCOPE_OPTIONS[0].key;
 	const range = searchParams["range"] || "";
+	const t = useTranslations("ui");
+	const formatter = useFormatter();
 
 	const handlePageChange = useCallback(
 		(newPage: number) => {
@@ -323,6 +333,17 @@ function ItemsList({
 			handleRangeChange={handleRangeChange}
 			pageNumber={pageNumber}
 			handlePageChange={handlePageChange}
+			countLabel={<div>
+				{collectionId ? t.rich("itemsInCollection", {
+					count: formatter.number(itemsData?.totalItems || 0),
+					number: (chunks) => <NumberWrapper>{chunks}</NumberWrapper>,
+					collection: data.collections.find((collection: any) => collection.id === collectionId)?.name,
+					collections: (chunks) => <CollectionWrapper>{chunks}</CollectionWrapper>
+				}) : t.rich("likedItemsCount", {
+					count: formatter.number(itemsData?.totalItems || 0),
+					number: (chunks) => <NumberWrapper>{chunks}</NumberWrapper>
+				})}
+			</div>}
 		/>
 	);
 }
@@ -439,7 +460,7 @@ export default function Profile({
 							</div>
 							<div className="text-sm text-black/60 dark:text-white/60 min-h-16 break-words">
 								{displayData.description ??
-									"Lorem ipsum dolor sit amet consectetur adipisicing elit. Dignissimos adipisci blanditiis dolorum amet tenetur fugiat reprehenderit nihil facilis impedit, cumque provident, quasi qui maiores rem iure quibusdam numquam architecto earum?"}
+									<span className="italic opacity-50">No description provided</span>}
 							</div>
 						</div>
 						{session?.user?.id !== displayData.id ? (
