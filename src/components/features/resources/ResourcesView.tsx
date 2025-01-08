@@ -1,5 +1,5 @@
 "use client";
-import { useRef, useState } from "react";
+import { ReactNode, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { CollectionsGetResponse } from "@/app/api/collections/types";
@@ -36,6 +36,8 @@ interface ResourcesViewProps {
     handleRangeChange: (start: string | null, end: string | null) => void;
     pageNumber: number;
     handlePageChange: (newPage: number) => void;
+    header?: ReactNode;
+	countLabel?: ReactNode;
 }
 
 function Chip({
@@ -149,11 +151,13 @@ function ResourcesList({
 	error,
 	isLoading,
 	abstract,
+	view,
 }: {
 	data: ItemsGetResponse | undefined;
 	error: any;
 	isLoading: boolean;
 	abstract: boolean;
+	view: string;
 }) {
 	const t = useTranslations("ui");
 	const actuallyNoData =
@@ -161,7 +165,7 @@ function ResourcesList({
 
 	return (
 		<>
-			<div className="flex flex-col gap-6 -mt-4">
+			<div className={twMerge("gap-6 -mt-4", view === "list" ? "flex flex-col flex-col" : "grid grid-cols-2")}>
 				{actuallyNoData ? (
 					<div className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
 						{t("noResourcesFound")}
@@ -245,6 +249,7 @@ function PaginationControls({
 }
 
 export function ResourcesView({
+    header,
     sort,
     search,
     scope,
@@ -262,13 +267,16 @@ export function ResourcesView({
     handleRangeChange,
     pageNumber,
     handlePageChange,
+	countLabel,
 }: ResourcesViewProps) {
     const t = useTranslations("ui");
     const [abstract, setAbstract] = useState(true);
+	const [view, setView] = useState("list");
 
     return (
         <div className="w-full flex flex-col gap-4">
             <ContentInteractions
+                header={header}
                 sort={sort}
                 search={search}
                 scope={scope}
@@ -286,6 +294,9 @@ export function ResourcesView({
                 error={itemsError}
                 range={range}
                 handleRangeChange={handleRangeChange}
+				view={view}
+				setView={setView}
+				countLabel={countLabel}
             />
             <FilterChips
                 collections={selectedCollections!}
@@ -297,6 +308,7 @@ export function ResourcesView({
                 error={itemsError}
                 isLoading={isItemsLoading}
                 abstract={abstract}
+				view={view}
             />
             <PaginationControls
                 page={pageNumber}
