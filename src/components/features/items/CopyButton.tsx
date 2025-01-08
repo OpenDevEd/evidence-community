@@ -15,11 +15,16 @@ const CopyButton = forwardRef<
 		text?: string;
 		textOnCopy?: string;
 		className?: string;
+		classNames?: {
+			button?: string;
+			icon?: string;
+			text?: string;
+		};
 		shrinkOnMobile?: boolean;
 		isIconOnly?: boolean;
 		contentRef?: React.RefObject<any>;
 	}
->(({ itemData, content, text, textOnCopy, className, shrinkOnMobile = false, isIconOnly = false, contentRef }, ref) => {
+>(({ itemData, content, text, textOnCopy, className, shrinkOnMobile = false, isIconOnly = false, contentRef, classNames }, ref) => {
 	const [isCopied, setIsCopied] = useState(false);
 	const [clearCopied] = useDebounce(() => setIsCopied(false), 2000);
 	const locale = useLocale();
@@ -44,13 +49,13 @@ const CopyButton = forwardRef<
 		<Button
 			ref={ref}
 			color={isCopied ? "success" : "secondary"}
-			startContent={isCopied ? <FaClipboardCheck /> : <FaClipboard />}
+			startContent={isCopied ? <FaClipboardCheck className={classNames?.icon} /> : <FaClipboard className={classNames?.icon} />}
 			size="sm"
 			onClick={handleCopy}
-			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square xl:aspect-auto xl:px-3", className)}
+			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square xl:aspect-auto xl:px-3", classNames?.button, className)}
 			isIconOnly={isIconOnly}
 		>
-			{!isIconOnly && <span className={twMerge(shrinkOnMobile && "hidden xl:block")}>
+			{!isIconOnly && <span className={twMerge(shrinkOnMobile && "hidden xl:block", classNames?.text)}>
 				{isCopied ? textOnCopy || t("copied") : text || t("copy")}
 			</span>}
 		</Button>
