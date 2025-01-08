@@ -5,18 +5,15 @@ import { users } from "@/db/schema/tables/user";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { eq, and } from "drizzle-orm";
 import { Session } from "next-auth";
-import { signIn } from "next-auth/react";
-import Error from "next/error";
 import { userToFollow } from "@/db/schema/tables/userToFollow";
 import { userCollection } from "@/db/schema/tables/userCollection";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import {
 	EXCLUDED_ITEM_TYPES,
 	ITEMS_PER_PAGE,
 	SCOPE_OPTIONS,
 	SORT_OPTIONS,
 } from "@/constants/items";
-import { ItemsGetResponse } from "@/app/api/items/types";
 import { Item } from "@/app/api/item/types";
 import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
