@@ -128,10 +128,13 @@ function ResourceInteractions({
 						<AddButton itemData={itemData} userData={userData} />
 						<LikeButton itemData={itemData} />
 						<CopyButton
-							shrinkOnMobile
 							itemData={itemData}
 							text={t("copyLink")}
 							textOnCopy={t("linkCopied")}
+							classNames={{
+								button: "px-0 min-w-0 aspect-square @[720px]:aspect-auto @[720px]:px-3",
+								text: "hidden @[720px]:block",
+							}}
 						/>
 					</div>
 				</div>
@@ -160,10 +163,10 @@ export default function Resource({
 	const router = useRouter();
 
 	return (
-		<div className="w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col">
+		<div className="@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col">
 			<Link
 				href={`/lib/${itemData?.key}`}
-				className="p-4 xl:p-6 flex flex-col gap-4 hover:brightness-90 transition-all flex-1"
+				className="p-4 @[720px]:p-6 flex flex-col gap-4 hover:brightness-90 transition-all flex-1"
 			>
 				<Skeleton
 					isLoaded={!isLoading}
@@ -199,7 +202,7 @@ export default function Resource({
 							)}
 
 						{itemData?.tags?.includes("_comingsoon") && (
-							<div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full xl:w-auto text-center">
+							<div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full @[720px]:w-auto text-center">
 								{t("inProgress")}
 							</div>
 						)}
