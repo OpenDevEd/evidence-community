@@ -36,6 +36,14 @@ import { FaSort, FaThList } from "react-icons/fa";
 import { IoMdListBox } from "react-icons/io";
 import { HiOutlineViewList } from "react-icons/hi";
 
+function DropDownIcon(Icon: any) {
+	return (
+		<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
+			<Icon className="w-full h-full" />
+		</div>
+	);
+}
+
 export function ContentInteractions({
 	data,
 	sort,
@@ -95,16 +103,6 @@ export function ContentInteractions({
 	const tSorts = useTranslations("sorts");
 	const tScopes = useTranslations("scopes");
 	const formatter = useFormatter();
-
-	const DropDownIcon = useMemo(() => {
-		return (Icon: any) => {
-			return (
-				<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
-					<Icon className="w-full h-full" />
-				</div>
-			);
-		};
-	}, []);
 
 	const SortComponent = useMemo(() => {
 		return (
@@ -278,19 +276,20 @@ export function ContentInteractions({
 						suppressHydrationWarning
 						className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center gap-2"
 					>
-						{countLabel || t.rich("resourcesCount", {
-							count: formatter.number(
-								actuallyNoData ? 0 : data?.totalItems || 0
-							),
-							number: (chunks) => (
-								<span
-									suppressHydrationWarning
-									className="text-2xl leading-6"
-								>
-									{chunks}
-								</span>
-							),
-						})}
+						{countLabel ||
+							t.rich("resourcesCount", {
+								count: formatter.number(
+									actuallyNoData ? 0 : data?.totalItems || 0
+								),
+								number: (chunks) => (
+									<span
+										suppressHydrationWarning
+										className="text-2xl leading-6"
+									>
+										{chunks}
+									</span>
+								),
+							})}
 					</h2>
 				</Skeleton>
 				<Card className="h-full flex items-center justify-center">
