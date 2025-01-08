@@ -44,7 +44,7 @@ export default function UserCollection({
 							line-clamp-2
 							@[150px]:line-clamp-3"
 						>
-							Lorem ipsum dolor sit amet consectetur adipisicing elit. Quisquam, quos.
+							{collection?.description}
 						</span>
 					</div>
 					<span className="text-black/60 dark:text-white/60 font-medium text-xs truncate max-w-full flex items-center gap-1">
