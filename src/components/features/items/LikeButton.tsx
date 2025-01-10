@@ -6,6 +6,7 @@ import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
 import { setter } from "@/lib/utils";
 import { twMerge } from "tailwind-merge";
+import { BsBookmarkCheckFill, BsBookmarkFill } from "react-icons/bs";
 
 const LikeButton = forwardRef<
   any,
@@ -42,7 +43,7 @@ const LikeButton = forwardRef<
       onClick={handleLike}
       className={twMerge(className)}
     >
-      {isLiked ? <FaHeartBroken /> : <FaHeart />}
+      {!isLiked ? <BsBookmarkFill /> : <BsBookmarkCheckFill />}
     </Button>
   );
 });

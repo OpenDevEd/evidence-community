@@ -27,7 +27,7 @@
 		"viewOnDocs": "View on {site}",
 		"inProgress": "In Progress",
 		"resourcesCount": "<number>{count}</number> resources",
-		"likedItemsCount": "<number>{count}</number> liked resources",
+		"likedItemsCount": "<number>{count}</number> bookmarked resources",
 		"itemsInCollection": "<number>{count}</number> resources in <collections>{collection}</collections>",
 		"noFacetsFound": "No facets found",
 		"pageNotFound": "Page Not Found",
@@ -39,7 +39,7 @@
 		"viewAttachment": "View",
 		"downloadAttachment": "Download",
 		"relatedItems": "Related Resources",
-		"like": "Like",
+		"like": "Bookmark",
 		"downloadDescription": "You can download this resource in the following formats"
 	},
 	"ai": {
