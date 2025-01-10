@@ -18,6 +18,19 @@ import { Item } from "@/app/api/item/types";
 import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
+import { BibTeXExporter } from "@/lib/formatAsBibTeX";
+
+export async function convertItem(item: Item, format: "ris" | "bibtex") {
+	const BibTeX = new BibTeXExporter(item);
+
+	if (format === "ris") {
+		return await BibTeX.toRIS();
+	}
+
+	if (format === "bibtex") {
+		return await BibTeX.toBibTeX();
+	}
+}
 
 export async function getLikedPosts(likes: Session["user"]["likes"]) {
 	const res = await meilisearchClient
