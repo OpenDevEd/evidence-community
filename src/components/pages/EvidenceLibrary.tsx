@@ -2,7 +2,7 @@
 import { Button } from "@/components/nextui/Button";
 import CollectionsList from "@/components/features/collections/CollectionsList";
 import { IoGrid, IoSearch } from "react-icons/io5";
-import { LuChevronDown, LuHelpCircle, LuX } from "react-icons/lu";
+import { LuChevronDown, LuX } from "react-icons/lu";
 import { Select } from "@/components/nextui/Select";
 import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
@@ -35,6 +35,7 @@ import { GiArchiveResearch } from "react-icons/gi";
 import { FaSort, FaThList } from "react-icons/fa";
 import { IoMdListBox } from "react-icons/io";
 import { HiOutlineViewList } from "react-icons/hi";
+import { BiHelpCircle } from "react-icons/bi";
 
 function DropDownIcon(Icon: any) {
 	return (
@@ -187,7 +188,7 @@ export function ContentInteractions({
 							onOpenChange={onExploreOpenChange}
 						>
 							<ModalContent>
-								{(onClose) => (
+								{(onClose: any) => (
 									<>
 										<ModalHeader className="flex items-center justify-between gap-2 sticky top-0 bg-background_light dark:bg-background z-30">
 											<SectionTitle>
@@ -236,7 +237,7 @@ export function ContentInteractions({
 									isIconOnly
 									onClick={onHelpOpen}
 								>
-									<LuHelpCircle className="size-6" />
+									<BiHelpCircle className="size-6" />
 								</Button>
 								<HelpModal
 									isOpen={isHelpOpen}

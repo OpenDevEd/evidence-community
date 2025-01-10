@@ -1,24 +1,30 @@
 "use client";
 
+import { use } from "react";
 import { redirect } from "@/i18n/routing";
-import { getProfile } from "@/lib/actions";
 import { useSession } from "next-auth/react";
 import { notFound } from "next/navigation";
 
-export default function ProfilePage({ params: { locale } }: { params: { locale: string } }) {
-	const { data: session, status } = useSession();
+export default function ProfilePage(props: { params: Promise<{ locale: string }> }) {
+    const params = use(props.params);
 
-	console.log(session);
+    const {
+        locale
+    } = params;
 
-	if (status === "loading") {
+    const { data: session, status } = useSession();
+
+    console.log(session);
+
+    if (status === "loading") {
 		return <div>Loading...</div>;
 	}
 
-	if (!session) {
+    if (!session) {
 		return notFound();
 	}
 
-	return redirect({
+    return redirect({
 		href: "/profile/" + session.user.id,
 		locale,
 	});

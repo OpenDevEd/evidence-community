@@ -2,8 +2,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import authOptions from "../../auth/[...nextauth]/config";
+import { authOptions, auth } from "../../auth/[...nextauth]/config";
 import { userCollection } from "@/db/schema/tables/userCollection";
 import { fromError } from "zod-validation-error";
 
@@ -15,7 +14,7 @@ export const createCollectionSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession(authOptions);
+    const session = await auth();
     if (!session?.user) {
       return NextResponse.json(
         { error: "Unauthorized" },

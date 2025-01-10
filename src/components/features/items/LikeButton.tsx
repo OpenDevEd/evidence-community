@@ -8,7 +8,7 @@ import { setter } from "@/lib/utils";
 import { twMerge } from "tailwind-merge";
 
 const LikeButton = forwardRef<
-  HTMLButtonElement,
+  any,
   { itemData: Item | undefined; className?: any }
 >(function LikeButton({ itemData, className }, ref) {
   const [mutationLoading, setMutationLoading] = useState(false);

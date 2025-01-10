@@ -38,7 +38,8 @@
 		"copied": "Copied!",
 		"viewAttachment": "View",
 		"downloadAttachment": "Download",
-		"relatedItems": "Related Resources"
+		"relatedItems": "Related Resources",
+		"like": "Like"
 	},
 	"ai": {
 		"summarize": "Summarize",

@@ -2,8 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { searchIndex } from "@/lib/actions";
 import { getCachedUserCollectionKeys, getCachedUserLikes } from "../../../cache";
-import { getServerSession } from "next-auth";
-import authOptions from "../../../auth/[...nextauth]/config";
+import { authOptions, auth } from "../../../auth/[...nextauth]/config";
 import { z } from "zod";
 
 const EMPTY_ITEMS_RESPONSE = {
@@ -19,24 +18,25 @@ const getItemsSchema = z.object({
 	userId: z.string().optional(),
 });
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-	const { searchParams } = new URL(request.url);
-	const collectionId = searchParams.get("collectionId") || "";
-	const { id } = params;
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+    const params = await props.params;
+    const { searchParams } = new URL(request.url);
+    const collectionId = searchParams.get("collectionId") || "";
+    const { id } = params;
 
-	if (!collectionId && !id) {
+    if (!collectionId && !id) {
 		return NextResponse.json<ItemsGetResponse>(EMPTY_ITEMS_RESPONSE);
 	}
 
-	const [session, collectionKeys, likes] = await Promise.all([
-		getServerSession(authOptions),
+    const [session, collectionKeys, likes] = await Promise.all([
+		auth(),
 		collectionId ? getCachedUserCollectionKeys(collectionId) : null,
 		id && !collectionId ? getCachedUserLikes(id) : null,
 	]);
 
-  let res: ItemsGetResponse = EMPTY_ITEMS_RESPONSE;
+    let res: ItemsGetResponse = EMPTY_ITEMS_RESPONSE;
 
-	if (collectionKeys) {
+    if (collectionKeys) {
 		if (!collectionKeys) {
 			return NextResponse.json<ItemsGetResponse>(res);
 		}
@@ -74,6 +74,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 		});
 	}
 
-	return NextResponse.json<ItemsGetResponse>(res);
+    return NextResponse.json<ItemsGetResponse>(res);
 }
 

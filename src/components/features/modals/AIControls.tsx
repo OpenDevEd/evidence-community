@@ -19,7 +19,7 @@ interface AIControlsProps {
   type: ControlType;
   buttonLabel: string;
   buttonIcon: ReactNode;
-  contentRef: React.RefObject<HTMLDivElement>;
+  contentRef: React.RefObject<HTMLDivElement | null>;
 }
 
 export function AIControls({ controls, content, type, buttonLabel, buttonIcon, contentRef }: AIControlsProps) {

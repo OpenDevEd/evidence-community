@@ -1,28 +1,19 @@
 import { twMerge } from "tailwind-merge";
 import { Item } from "@/app/api/item/types";
-import { fetcher, firstNonNullOrEmpty, setter } from "@/lib/utils";
+import { firstNonNullOrEmpty, setter } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import {
 	ModalBody,
 	ModalContent,
-	Link as NextUILink,
-	Spinner,
-	useDisclosure,
+	Link as NextUILink, useDisclosure
 } from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
 import { Link, useRouter } from "@/i18n/routing";
-import { useFormatter, useLocale, useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
-import {
-	FaClipboard,
-	FaClipboardCheck,
-	FaHeart,
-	FaHeartBroken,
-} from "react-icons/fa";
 import { useState } from "react";
-import { useDebounce } from "@/hooks/useDebounce";
 import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
@@ -32,7 +23,6 @@ import AIModal from "@/components/nextui/AIModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
 import { Session } from "next-auth";
-import useSWR from "swr";
 
 function AddButton({
 	itemData,

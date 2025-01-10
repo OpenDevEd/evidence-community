@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 
 const CopyButton = forwardRef<
-	HTMLButtonElement,
+	any,
 	{
 		itemData?: Item | undefined;
 		content?: string;

@@ -53,9 +53,7 @@ function YearPicker({
 						input: "placeholder:text-black/60 dark:placeholder:text-white/40",
 					},
 				}}
-				listboxProps={{
-					isVirtualized: true,
-				}}
+				isVirtualized={true}
 			>
 				{years.map((year) => (
 					<AutocompleteItem key={year}>{year}</AutocompleteItem>

@@ -1,17 +1,16 @@
-import { DefaultSession, NextAuthOptions, Session } from "next-auth";
 import { db } from "@/db";
-import GoogleProvider from "next-auth/providers/google";
-import { DrizzleAdapter } from "@auth/drizzle-adapter";
-import { accounts, authenticators, sessions, users, verificationTokens } from "@/db/schema/tables/user";
-import { encode as defaultEncode } from "next-auth/jwt";
-import { usersToLikes } from "@/db/schema/tables/userToLikes";
-import { eq, InferSelectModel } from "drizzle-orm";
-import CredentialsProvider from "next-auth/providers/credentials";
-import { z } from "zod";
-import bcrypt from "bcrypt";
-import { fromError } from "zod-validation-error";
-import { getProfile } from "@/lib/actions";
+import { users } from "@/db/schema/tables/user";
 import { userCollection } from "@/db/schema/tables/userCollection";
+import { getProfile } from "@/lib/actions";
+import { DrizzleAdapter } from "@auth/drizzle-adapter";
+import bcrypt from "bcrypt";
+import { eq, InferSelectModel } from "drizzle-orm";
+import NextAuth, { NextAuthConfig, User } from "next-auth";
+import { encode as defaultEncode } from "next-auth/jwt";
+import CredentialsProvider from "next-auth/providers/credentials";
+import Google from "next-auth/providers/google";
+import { z } from "zod";
+import { fromError } from "zod-validation-error";
 
 export const credentialsSchema = z.object({
 	email: z.string().email(),
@@ -60,19 +59,17 @@ declare module "next-auth" {
 					[key: string]: Date;
 				};
 			};
-		} & DefaultSession["user"];
+		} & User;
 	}
 }
 
 const adapter = DrizzleAdapter(db);
 
-const authOptions: NextAuthOptions = {
+export const authOptions: NextAuthConfig = {
+	trustHost: true,
 	adapter,
 	providers: [
-		GoogleProvider({
-			clientId: process.env.GOOGLE_CLIENT_ID!,
-			clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-		}),
+		Google,
 		CredentialsProvider({
 			name: "Credentials",
 			credentials: {
@@ -86,10 +83,10 @@ const authOptions: NextAuthOptions = {
 			type: "credentials",
 			async authorize(credentials, req) {
 				console.log("Authorizing credentials", credentials);
-		
+
 				const parsedCredentials =
 					credentialsSchema.safeParse(credentials);
-					
+
 				console.log("Parsed credentials", parsedCredentials);
 
 				if (!parsedCredentials.success)
@@ -161,4 +158,4 @@ const authOptions: NextAuthOptions = {
 	},
 };
 
-export default authOptions;
+export const { auth, handlers, signIn, signOut } = NextAuth(authOptions);

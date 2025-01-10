@@ -25,12 +25,13 @@ import { ItemGetResponse } from "@/app/api/item/types";
 // 	return [];
 // }
 
-export default async function ItemPage({
-	params,
-}: {
-	params: { key: string };
-}) {
-	const data = await getCachedItem(params.key).catch(() => ({ item: undefined }));
+export default async function ItemPage(
+    props: {
+        params: Promise<{ key: string }>;
+    }
+) {
+    const params = await props.params;
+    const data = await getCachedItem(params.key).catch(() => ({ item: undefined }));
 
-	return <ItemComponent data={data as ItemGetResponse} />;
+    return <ItemComponent data={data as ItemGetResponse} />;
 }

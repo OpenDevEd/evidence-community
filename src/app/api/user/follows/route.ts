@@ -1,12 +1,11 @@
-import { getServerSession } from "next-auth";
 import { z } from "zod";
 import { db } from "@/db";
-import authOptions from "@/app/api/auth/[...nextauth]/config";
+import { authOptions, auth } from "@/app/api/auth/[...nextauth]/config";
 import { userToFollow } from "@/db/schema/tables/userToFollow";
 import { and, eq, sql } from "drizzle-orm";
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }

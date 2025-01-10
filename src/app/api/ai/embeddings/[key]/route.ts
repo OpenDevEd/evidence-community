@@ -4,21 +4,19 @@ import { Item } from "@/app/api/item/types";
 import client from "@/lib/meilisearch";
 import { NextRequest, NextResponse } from "next/server";
 
-export async function GET(
-	request: NextRequest,
-	{ params }: { params: { key: string } }
-) {
-	const { key } = params;
+export async function GET(request: NextRequest, props: { params: Promise<{ key: string }> }) {
+    const params = await props.params;
+    const { key } = params;
 
-	const itemResponse = await getCachedItem(key);
+    const itemResponse = await getCachedItem(key);
 
-	if (!itemResponse) {
+    if (!itemResponse) {
 		return NextResponse.json({ error: "Item not found" }, { status: 404 });
 	}
 
-	const item: any = itemResponse.item;
+    const item: any = itemResponse.item;
 
-	const description = `This ${item.itemType || 'document'} ${
+    const description = `This ${item.itemType || 'document'} ${
 		item.title ? `entitled '${item.title}'` : '(Untitled)'
 	} ${
 		item.fullNames?.length > 0 
@@ -38,7 +36,7 @@ export async function GET(
 		item.abstractNote ? `. The authors provide the following abstract: '${item.abstractNote}'` : ''
 	}`;
 
-	const result = await client
+    const result = await client
 		.index(process.env.MEILI_INDEX! || "items")
 		.search("", {
 			q: description,
@@ -50,5 +48,5 @@ export async function GET(
 			limit: 5,
 		});
 
-	return NextResponse.json(result);
+    return NextResponse.json(result);
 }

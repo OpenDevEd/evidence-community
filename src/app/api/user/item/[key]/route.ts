@@ -1,7 +1,6 @@
 import { db } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import authOptions from "../../../auth/[...nextauth]/config";
+import { authOptions, auth } from "../../../auth/[...nextauth]/config";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -12,17 +11,15 @@ const addToCollectionSchema = z.object({
 	collectionId: z.string().uuid(),
 });
 
-export async function GET(
-	request: NextRequest,
-	{ params }: { params: { key: string } }
-) {
-	const session = await getServerSession(authOptions);
+export async function GET(request: NextRequest, props: { params: Promise<{ key: string }> }) {
+    const params = await props.params;
+    const session = await auth();
 
-	if (!session?.user) {
+    if (!session?.user) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
-	try {
+    try {
 		const { key } = params;
 
 		const collections = await db.query.itemToUserCollection.findMany({
@@ -48,17 +45,15 @@ export async function GET(
 	}
 }
 
-export async function POST(
-	request: NextRequest,
-	{ params }: { params: { key: string } }
-) {
-	const session = await getServerSession(authOptions);
+export async function POST(request: NextRequest, props: { params: Promise<{ key: string }> }) {
+    const params = await props.params;
+    const session = await auth();
 
-	if (!session?.user) {
+    if (!session?.user) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
-	try {
+    try {
 		const { key } = params;
 		const body = await request.json();
 
