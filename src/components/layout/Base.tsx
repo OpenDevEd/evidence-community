@@ -47,7 +47,7 @@ export default async function Base({
 					<Providers session={session}>
 						<div
 							className={twMerge(
-								"h-full w-full bg-background_light dark:bg-background flex flex-col xl:grid xl:grid-rows-[104px_1fr_512px] gap-4 xl:gap-14 items-center justify-items-center min-h-screen",
+								"h-full w-full bg-background_light dark:bg-background flex flex-col xl:grid xl:grid-rows-[6.5rem_1fr_32rem] gap-4 xl:gap-14 items-center justify-items-center min-h-screen",
 								style === "opendeved" && "xl:pt-14"
 							)}
 						>

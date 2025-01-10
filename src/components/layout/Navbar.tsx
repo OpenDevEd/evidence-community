@@ -135,7 +135,7 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className="w-[171px] h-[40px] rounded-lg "
+			className="w-[10.6875rem] h-[2.5rem] rounded-lg "
 		>
 			{interactive ? (
 				<Link
@@ -414,11 +414,11 @@ function LoginModal({
 							</AnimatePresence>
 						</div>
 						<div className="flex items-center gap-4 my-4">
-							<div className="flex-1 h-[1px] bg-black/10 dark:bg-white/10" />
+							<div className="flex-1 h-[0.0625rem] bg-black/10 dark:bg-white/10" />
 							<span className="text-black/60 dark:text-white/60">
 								Or
 							</span>
-							<div className="flex-1 h-[1px] bg-black/10 dark:bg-white/10" />
+							<div className="flex-1 h-[0.0625rem] bg-black/10 dark:bg-white/10" />
 						</div>
 						<Button
 							onClick={() => signIn("google")}
@@ -455,15 +455,15 @@ export default function Navbar() {
 	return (
 		<nav
 			className={twMerge(
-				"w-full max-w-screen-2xl px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0",
+				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0",
 				style === "edtechhub" && "bg-white dark:bg-secondary max-w-none"
 			)}
 		>
 			<div
 				className={twMerge(
-					"h-18 xl:h-[104px] bg-white dark:bg-secondary xl:rounded-[20px] flex items-center p-4 py-6 xl:p-8 gap-9 z-10",
+					"h-[4.5rem] xl:h-[6.5rem] bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-9 z-10",
 					style === "edtechhub" &&
-						"bg-transparent max-w-screen-2xl mx-auto xl:px-14"
+						"bg-transparent max-w-[96rem] mx-auto xl:px-14"
 				)}
 			>
 				<Logo />
@@ -517,7 +517,7 @@ export default function Navbar() {
 			</div>
 			<div
 				className={twMerge(
-					"xl:hidden bg-[#EAE9E5] dark:bg-secondary-400 rounded-[20px] rounded-t-none relative duration-300 overflow-y-hidden -z-10 flex flex-col gap-8",
+					"xl:hidden bg-[#EAE9E5] dark:bg-secondary-400 rounded-2xl rounded-t-none relative duration-300 overflow-y-hidden -z-10 flex flex-col gap-8",
 					isMobileMenuOpen
 						? "max-h-[calc(100vh-104px)] py-8 mb-4 opacity-100 shadow-xl shadow-[#EAE9E5] dark:shadow-secondary-400"
 						: "max-h-0 opacity-0"

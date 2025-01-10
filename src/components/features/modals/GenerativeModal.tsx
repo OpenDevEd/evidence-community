@@ -78,7 +78,7 @@ export default function GenerativeModal({
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
 		>
-			<ModalContent className="p-0 h-[720px] max-h-screen overflow-x-hidden">
+			<ModalContent className="p-0 h-[45rem] max-h-screen overflow-x-hidden">
 				{(onClose) => (
 					<>
 						<AIHeader isLoading={false} onClose={onClose}>

@@ -399,7 +399,7 @@ export default function Profile({
 	);
 
 	return (
-		<div className="w-full max-w-screen-2xl px-4 xl:px-14 flex gap-8 items-start">
+		<div className="w-full max-w-[96rem] px-1 xl:px-3.5 flex gap-2 items-start">
 			<CreateCollectionModal
 				onClose={onClose}
 				isOpen={isOpen}

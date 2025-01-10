@@ -102,7 +102,7 @@ function FilterChips({
 		<div
 			className={twMerge(
 				"flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0",
-				collections && collections.length > 0 && "max-h-[512px] mb-4 opacity-100"
+				collections && collections.length > 0 && "max-h-[32rem] mb-4 opacity-100"
 			)}
 		>
 			<div className="flex-1 flex gap-2 flex-wrap">

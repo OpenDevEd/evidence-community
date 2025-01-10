@@ -38,7 +38,7 @@ function Logo() {
   const [isLoaded, setIsLoaded] = useState(false);
 
   return (
-    <Skeleton isLoaded={isLoaded} className="w-[232px] h-[54px] rounded-lg">
+    <Skeleton isLoaded={isLoaded} className="w-[14.5rem] h-[3.375rem] rounded-lg">
       {["dark", "light"].map((themeToMatch) => (
         <Image
           key={themeToMatch}
@@ -70,10 +70,10 @@ export default function Footer() {
 
   return (
     <footer className="row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 xl:gap-14 py-12 xl:py-0">
-      <div className="max-w-screen-2xl px-14 flex w-full justify-between items-center flex-col gap-6 xl:gap-14 xl:flex-row">
+      <div className="max-w-[96rem] px-14 flex w-full justify-between items-center flex-col gap-6 xl:gap-14 xl:flex-row">
         <div className="flex flex-col gap-6 h-full items-center xl:items-start">
           <Logo />
-          <div className="flex flex-col gap-[14px]">
+          <div className="flex flex-col gap-[0.875rem]">
             {Object.entries(footerInfo).map(([key, value]) => (
               <div key={key} className="flex gap-2 justify-center xl:justify-start">
                 <span className="text-black/60 dark:text-white/60">

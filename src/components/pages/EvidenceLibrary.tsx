@@ -482,7 +482,7 @@ export default function EvidenceLibrary({
 	searchParams: { [key: string]: any };
 }) {
 	return (
-		<main className="w-full max-w-screen-2xl px-4 xl:px-14">
+		<main className="w-full max-w-[96rem] px-4 xl:px-14">
 			<div className="flex gap-[40px] flex-col xl:flex-row">
 				<MainContent searchParams={searchParams} />
 			</div>

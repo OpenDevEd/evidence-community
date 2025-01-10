@@ -188,7 +188,7 @@ export default function CollectionsList({
 	return (
 		<div
 			className={twMerge(
-				"w-full xl:w-[456px] shrink-0 z-20",
+				"w-full xl:w-[28.5rem] shrink-0 z-20",
 				isModal ? "block" : "hidden xl:block"
 			)}
 		>
