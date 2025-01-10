@@ -36,7 +36,7 @@ function formatDate({ value, formatter }: FormatterProps) {
 function Citation({ value }: FormatterProps) {
 	const contentRef = useRef(null);
 	return (
-		<div className="flex gap-4 w-full bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between">
+		<div className="flex gap-4 w-full bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between break-all">
 			<div
 				ref={contentRef}
 				dangerouslySetInnerHTML={{ __html: value.trim() }}
