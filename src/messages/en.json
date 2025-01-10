@@ -39,7 +39,8 @@
 		"viewAttachment": "View",
 		"downloadAttachment": "Download",
 		"relatedItems": "Related Resources",
-		"like": "Like"
+		"like": "Like",
+		"downloadDescription": "You can download this resource in the following formats"
 	},
 	"ai": {
 		"summarize": "Summarize",
