@@ -265,8 +265,8 @@ export function ContentInteractions({
 						<IoSearch className="size-6 fill-current text-black/60 dark:text-white/40" />
 					}
 				/>
-				{!handleCheckboxChange && SortComponent}
 				{ScopeComponent}
+				{!handleCheckboxChange && SortComponent}
 			</div>
 			<div className="flex justify-between h-10 xl:h-12 gap-4">
 				<Skeleton
@@ -293,37 +293,39 @@ export function ContentInteractions({
 							})}
 					</h2>
 				</Skeleton>
-				<Card className="h-full flex items-center justify-center">
-					<div className="xl:px-3 px-1">
-						<Switch
-							size="sm"
-							isSelected={abstract}
-							onValueChange={onAbstractChange}
-							classNames={{
-								base: "flex-row-reverse",
-							}}
+				<div className="xl:w-72 flex gap-4">
+					<Card className="h-full flex items-center justify-center flex-1">
+						<div className="xl:px-3 px-1">
+							<Switch
+								size="sm"
+								isSelected={abstract}
+								onValueChange={onAbstractChange}
+								classNames={{
+									base: "flex-row-reverse",
+								}}
+							>
+								{t("abstract")}
+							</Switch>
+						</div>
+					</Card>
+					<div className="hidden xl:flex gap-0 w-28">
+						<Button
+							color={view === "list" ? "tertiary" : "secondary"}
+							isIconOnly
+							className="!p-0 rounded-r-none flex-1"
+							onClick={() => setView("list")}
 						>
-							{t("abstract")}
-						</Switch>
+							<HiOutlineViewList className="size-6" />
+						</Button>
+						<Button
+							color={view === "grid" ? "tertiary" : "secondary"}
+							isIconOnly
+							className="!p-0 rounded-l-none flex-1"
+							onClick={() => setView("grid")}
+						>
+							<IoGrid className="size-4" />
+						</Button>
 					</div>
-				</Card>
-				<div className="hidden xl:flex gap-0 w-28">
-					<Button
-						color={view === "list" ? "tertiary" : "secondary"}
-						isIconOnly
-						className="!p-0 rounded-r-none flex-1"
-						onClick={() => setView("list")}
-					>
-						<HiOutlineViewList className="size-6" />
-					</Button>
-					<Button
-						color={view === "grid" ? "tertiary" : "secondary"}
-						isIconOnly
-						className="!p-0 rounded-l-none flex-1"
-						onClick={() => setView("grid")}
-					>
-						<IoGrid className="size-4" />
-					</Button>
 				</div>
 			</div>
 		</>
