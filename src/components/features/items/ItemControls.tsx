@@ -46,16 +46,16 @@ export default function ItemControls({
 	});
 
 	const buttonConfigs: ButtonConfig[] = useMemo(() => [
-		{
-			key: "readDocument",
-			Component: Button,
-			label: t("readDocument"),
-			props: {
-				size: "sm",
-				className: "ml-auto rtl:ml-0 rtl:mr-auto hidden xl:flex",
-				startContent: <TiDocumentText className="size-5" />
-			}
-		},
+		// {
+			// 				key: "readDocument",
+// 				Component: Button,
+// 				label: t("readDocument"),
+// 				props: {
+// 						size: "sm",
+// 						className: "ml-auto rtl:ml-0 rtl:mr-auto hidden xl:flex",
+// 						startContent: <TiDocumentText className="size-5" />
+			// 	}
+			// 		},
 		{
 			key: "downloadRecord",
 			Component: Button,
