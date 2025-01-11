@@ -399,14 +399,14 @@ export default function Profile({
 	);
 
 	return (
-		<div className="w-full max-w-[96rem] px-1 xl:px-3.5 flex gap-2 items-start">
+		<div className="w-full max-w-[96rem] px-4 xl:px-14 flex gap-[40px] items-start">
 			<CreateCollectionModal
 				onClose={onClose}
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
 				update={update}
 			/>
-			<div className="w-96 flex flex-col gap-4 shrink-0">
+			<div className="w-96 flex flex-col gap-6 shrink-0">
 				<div className="w-full dark:bg-secondary bg-black/[4%] rounded-2xl">
 					<div className="w-full dark:bg-card bg-white rounded-2xl rounded-b-none overflow-hidden flex">
 						<div className="w-1/4 aspect-square">

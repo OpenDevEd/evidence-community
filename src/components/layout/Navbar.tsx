@@ -461,7 +461,7 @@ export default function Navbar() {
 		>
 			<div
 				className={twMerge(
-					"h-[4.5rem] xl:h-[6.5rem] bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-9 z-10",
+					"xl:h-[6.5rem] bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-9 z-10",
 					style === "edtechhub" &&
 						"bg-transparent max-w-[96rem] mx-auto xl:px-14"
 				)}
