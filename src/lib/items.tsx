@@ -112,7 +112,7 @@ export const valueFormatter: Record<
 		if (!value) return null;
 		if (value.length === 0) return null;
 		return (
-			<ul className="flex flex-col gap-2">
+			<ul className="flex flex-col xl:gap-2">
 				{value.map((creator: Creator, index: number) => {
 					const creatorTypeLabel = t(
 						"creatorType." + creator.creatorType

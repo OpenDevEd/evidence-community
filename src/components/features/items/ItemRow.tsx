@@ -14,7 +14,7 @@ export default function ItemRow({ item, row, router, value }: { item: Item; row:
 	const rowName = t("article." + row);
 
 	return (
-		<div className="flex xl:flex-row flex-col gap-4">
+		<div className="flex xl:flex-row flex-col ">
 			<h3
 				className={twMerge(
 					"text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-full shrink-0 rounded",
