@@ -36,11 +36,12 @@ import { FaSort, FaThList } from "react-icons/fa";
 import { IoMdListBox } from "react-icons/io";
 import { HiOutlineViewList } from "react-icons/hi";
 import { BiHelpCircle } from "react-icons/bi";
+import { twMerge } from "tailwind-merge";
 
-function DropDownIcon(Icon: any) {
+function DropDownIcon({Icon, className}: {Icon: any, className?: string}) {
 	return (
 		<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
-			<Icon className="w-full h-full" />
+			<Icon className={twMerge("w-full h-full", className)} />
 		</div>
 	);
 }
@@ -108,7 +109,7 @@ export function ContentInteractions({
 	const SortComponent = useMemo(() => {
 		return (
 			<Select
-				startContent={DropDownIcon(FaSort)}
+				startContent={<DropDownIcon Icon={FaSort} />}
 				selectedKeys={sort && [sort]}
 				onSelectionChange={onSortChange}
 				items={SORT_OPTIONS}
@@ -136,7 +137,7 @@ export function ContentInteractions({
 	const ScopeComponent = useMemo(() => {
 		return (
 			<Select
-				startContent={DropDownIcon(GiArchiveResearch)}
+				startContent={<DropDownIcon Icon={GiArchiveResearch} />}
 				color="tertiary"
 				selectedKeys={scope && [scope]}
 				onSelectionChange={onScopeChange}
