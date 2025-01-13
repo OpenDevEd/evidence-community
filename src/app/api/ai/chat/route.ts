@@ -6,10 +6,11 @@ import {
 import { getCachedItem } from "../../cache";
 import { NextResponse } from "next/server";
 import { getModel, trackUsage } from "@/lib/ai";
+import { routing } from "@/i18n/routing";
 
 export async function POST(req: Request) {
 	const { distinctId, messages, key, modelIndex } = await req.json();
-	const locale = req.headers.get("Accept-Language") || "en";
+	const locale = req.headers.get("Accept-Language") || routing.defaultLocale;
 	const systemPrompt = config.prompts.chat.join("\n");
 	const sharedRules = config.shared_rules.join("\n")
 	const pdfRules = config.pdf_rules.join("\n")

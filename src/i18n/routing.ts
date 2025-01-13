@@ -3,8 +3,8 @@ import {createNavigation} from 'next-intl/navigation';
 
  
 export const routing = defineRouting({
-  locales: ["en-US", "en-GB", "de", "ar", "hi", "fr", "cn"],
-  defaultLocale: 'en-US',
+  locales: ["en-GB", "en-US", "de", "ar", "hi", "fr", "cn"],
+  defaultLocale: 'en-GB',
 });
 
 export const localesNames = {
