@@ -9,11 +9,13 @@ import { Input } from "@/components/nextui/Input";
 import { InferSelectModel } from "drizzle-orm";
 import { userCollection } from "@/db/schema/tables/userCollection";
 import UserCollection from "./UserCollection";
+import { useTranslations } from "next-intl";
 
 
 export default function CollectionsList({ data, highlightedCollections, classNames, onCollectionSelect, isLoading }: { data: Session["user"], highlightedCollections?: string[], classNames?: { container?: string, pagination?: string }, onCollectionSelect?: (collectionId: string) => void, isLoading?: boolean	 }) {
 	const [page, setPage] = useState(1);
 	const [search, setSearch] = useState("");
+	const t = useTranslations("ui");
 	const [collectionsPage, totalPages, currentPage] = useMemo(() => {
 		const sortedCollections = data.collections.sort((a, b) => {
 			// const aHighlighted = highlightedCollections?.includes(a.id) || false;
@@ -45,7 +47,7 @@ export default function CollectionsList({ data, highlightedCollections, classNam
 
 	return (
 		<>
-			<Input placeholder="Search" onChange={(e) => setSearch(e.target.value)} onClear={() => setSearch("")} />
+			<Input placeholder={t("searchCollections")} onChange={(e) => setSearch(e.target.value)} onClear={() => setSearch("")} />
 			<div className={twMerge("w-full grid grid-cols-2 gap-2", classNames?.container)}>
 				{collectionsPage.map((collection: any, index: number) => (
 					<UserCollection isLoading={isLoading} isHighlighted={highlightedCollections?.includes(collection.id)} onClick={() => onCollectionSelect?.(collection.id)} key={index} collection={collection} />
