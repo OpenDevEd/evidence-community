@@ -35,7 +35,7 @@ function AddButton({
 	const [loading, setLoading] = useState(false);
 	const { trigger } = useSWRMutation(`/user/item/${itemData?.key}`, setter);
 	const { data: session, update } = useSession();
-
+	const t = useTranslations("ui");
 	const onCollectionSelect = async (collectionId: string) => {
 		setLoading(true);
 		try {
@@ -54,7 +54,7 @@ function AddButton({
 				<AIModal size="lg" isOpen={isOpen} onOpenChange={onOpenChange}>
 					<ModalContent>
 						<GenericHeader onClose={onClose}>
-							Select a collection
+							{t("selectCollection")}
 						</GenericHeader>
 						<ModalBody className="p-6 pt-0 gap-6">
 							<Skeleton
