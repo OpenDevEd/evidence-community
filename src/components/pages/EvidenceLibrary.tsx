@@ -294,8 +294,8 @@ export function ContentInteractions({
 							})}
 					</h2>
 				</Skeleton>
-				<div className="xl:w-72 flex gap-4">
-					<Card className="h-full flex items-center justify-center flex-1">
+				<div className="xl:min-w-72 flex gap-4">
+					<Card className="h-full flex items-center justify-center flex-1 min-w-0 px-0">
 						<div className="xl:px-3 px-1">
 							<Switch
 								size="sm"
