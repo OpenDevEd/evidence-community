@@ -190,6 +190,11 @@ export default function GenerativeModal({
 											<AIControls
 												controls={[
 													{
+														label: t("copyAsPlainText"),
+														icon: <BsBodyText />,
+														action: "plaintext",
+													},
+													{
 														label: t("copyAsMarkdown"),
 														icon: <BsMarkdown />,
 														action: "markdown",
@@ -198,11 +203,6 @@ export default function GenerativeModal({
 														label: t("copyAsHTML"),
 														icon: <BsCodeSlash />,
 														action: "html",
-													},
-													{
-														label: t("copyAsPlainText"),
-														icon: <BsBodyText />,
-														action: "plaintext",
 													},
 												]}
 												contentRef={contentRef}
@@ -215,6 +215,11 @@ export default function GenerativeModal({
 												contentRef={contentRef}
 												controls={[
 													{
+														label: t("exportAsPlainText"),
+														icon: <BsBodyText />,
+														action: "plaintext",
+													},
+													{
 														label: t("exportAsMarkdown"),
 														icon: <BsMarkdown />,
 														action: "markdown",
@@ -223,12 +228,7 @@ export default function GenerativeModal({
 														label: t("exportAsHTML"),
 														icon: <BsCodeSlash />,
 														action: "html",
-													},
-													{
-														label: t("exportAsPlainText"),
-														icon: <BsBodyText />,
-														action: "plaintext",
-													},
+													}
 												]}
 												content={contentToDisplay}
 												type="download"
