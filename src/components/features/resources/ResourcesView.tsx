@@ -165,7 +165,7 @@ function ResourcesList({
 
 	return (
 		<>
-			<div className={twMerge("gap-6 -mt-4", view === "list" ? "flex flex-col flex-col" : "grid grid-cols-2")}>
+			<div className={twMerge("gap-6 -mt-4", (view === "list" || actuallyNoData) ? "flex flex-col" : "grid grid-cols-2")}>
 				{actuallyNoData ? (
 					<div className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
 						{t("noResourcesFound")}
