@@ -18,7 +18,7 @@ import {
 } from "react-icons/bi";
 import { AIMarkdown } from "../markdown/Markdown";
 import { AnimatePresence, motion } from "framer-motion";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { models } from "@/constants/ai";
 import React from "react";
 import { Button } from "@/components/nextui/Button";
@@ -53,6 +53,7 @@ export default function GenerativeModal({
 	id: string;
 }) {
 	const t = useTranslations("ai");
+	const format = useFormatter();
 	const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(0);
 	const selectedHistoryItem = history[selectedHistoryIndex];
 	const contentRef = useRef<HTMLDivElement>(null);
@@ -143,13 +144,15 @@ export default function GenerativeModal({
 														}
 														className="data-[selected]:opacity-100 xl:opacity-50 p-2 pr-4 rounded-full"
 													>
-														<div className="text-base font-medium line-clamp-1 leading-none">
+														<div className="text-base font-medium line-clamp-1 leading-5">
 															{item.title}
 														</div>
-														<div className="text-xs text-black/50 dark:text-white/50">
-															{new Date(
-																item.date
-															).toLocaleString()}
+														<div className="text-xs text-black/50 dark:text-white/50 leading-4">
+															{format.dateTime(new Date(item.date), {
+																year: "2-digit",
+																month: "2-digit",
+																day: "2-digit"
+															})}
 														</div>
 													</ListboxItem>
 												))}
@@ -182,22 +185,22 @@ export default function GenerativeModal({
 												}
 												className="xl:hidden"
 											>
-												History
+												{t("history")}
 											</Button>
 											<AIControls
 												controls={[
 													{
-														label: "Copy as Markdown",
+														label: t("copyAsMarkdown"),
 														icon: <BsMarkdown />,
 														action: "markdown",
 													},
 													{
-														label: "Copy as HTML",
+														label: t("copyAsHTML"),
 														icon: <BsCodeSlash />,
 														action: "html",
 													},
 													{
-														label: "Copy as plain text",
+														label: t("copyAsPlainText"),
 														icon: <BsBodyText />,
 														action: "plaintext",
 													},
@@ -205,61 +208,52 @@ export default function GenerativeModal({
 												contentRef={contentRef}
 												content={contentToDisplay}
 												type="copy"
-												buttonLabel="Copy"
+												buttonLabel={t("copy")}
 												buttonIcon={<BiCopy />}
 											/>
-											<Button
-												size="sm"
-												className="hidden"
-												startContent={
-													<BiSolidBookBookmark />
-												}
-											>
-												Bookmark
-											</Button>
 											<AIControls
 												contentRef={contentRef}
 												controls={[
 													{
-														label: "Export as .md",
+														label: t("exportAsMarkdown"),
 														icon: <BsMarkdown />,
 														action: "markdown",
 													},
 													{
-														label: "Export as .html",
+														label: t("exportAsHTML"),
 														icon: <BsCodeSlash />,
 														action: "html",
 													},
 													{
-														label: "Export as .txt",
+														label: t("exportAsPlainText"),
 														icon: <BsBodyText />,
 														action: "plaintext",
 													},
 												]}
 												content={contentToDisplay}
 												type="download"
-												buttonLabel="Export"
+												buttonLabel={t("export")}
 												buttonIcon={
 													<BiSolidBookContent />
 												}
 											/>
 											{selectedHistoryItem && (
 												<Tooltip
-													content={new Date(
-														selectedHistoryItem.date
-													).toTimeString()}
+													content={format.dateTime(new Date(selectedHistoryItem.date), {
+														year: 'numeric',
+														month: 'long',
+														day: 'numeric',
+														hour: 'numeric',
+														minute: 'numeric',
+														second: 'numeric'
+													})}
 												>
 													<div className="text-xs text-black/50 dark:text-white/50 flex-1 flex justify-center items-center">
-														{`${new Date(
-															selectedHistoryItem.date
-														).toLocaleString(
-															undefined,
-															{
-																year: "numeric",
-																month: "long",
-																day: "numeric",
-															}
-														)}`}
+														{format.dateTime(new Date(selectedHistoryItem.date), {
+															year: "numeric",
+															month: "long",
+															day: "numeric"
+														})}
 													</div>
 												</Tooltip>
 											)}
@@ -286,7 +280,7 @@ export default function GenerativeModal({
 												}}
 											>
 												<span className="hidden xl:block">
-													Delete
+													{t("delete")}
 												</span>
 											</Button>
 										</div>
