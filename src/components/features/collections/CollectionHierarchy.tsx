@@ -36,7 +36,7 @@ export default function CollectionHierarchy({
 				>
 					{collectionData.name}
 					{!isSelected && (
-						<span className="opacity-75 ml-1">
+						<span className="opacity-75 ltr:ml-1 rtl:mr-1">
 							(
 							{facetDistribution?.collections[
 								collectionData.key
