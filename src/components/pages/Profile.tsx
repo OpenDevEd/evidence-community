@@ -1,7 +1,14 @@
 "use client";
 
 import Image from "next/image";
-import { BsPen, BsPlus } from "react-icons/bs";
+import {
+	BsBookmark,
+	BsBoxArrowRight,
+	BsCollection,
+	BsGear,
+	BsPen,
+	BsPlus,
+} from "react-icons/bs";
 import AboutUs from "../icons/AboutUs";
 import { Button } from "../nextui/Button";
 import Resource from "../features/items/Resource";
@@ -17,6 +24,11 @@ import { twMerge } from "tailwind-merge";
 import { Textarea } from "../nextui/Textarea";
 import { Input } from "../nextui/Input";
 import {
+	Divider,
+	Listbox,
+	ListboxItem,
+	ListboxItemProps,
+	ListboxProps,
 	ModalBody,
 	ModalContent,
 	SelectItem,
@@ -42,6 +54,7 @@ import { useParamsState } from "@/hooks/useParamsState";
 import { SCOPE_OPTIONS } from "@/constants/items";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import useSWR from "swr";
+import { IconType } from "react-icons/lib";
 
 function Pen() {
 	return (
@@ -211,11 +224,19 @@ function CreateCollectionModal({
 }
 
 function NumberWrapper({ children }: { children: ReactNode }) {
-	return <span className="text-xl font-medium text-black/80 dark:text-white/80">{children}</span>;
+	return (
+		<span className="text-xl font-medium text-black/80 dark:text-white/80">
+			{children}
+		</span>
+	);
 }
 
 function CollectionWrapper({ children }: { children: ReactNode }) {
-	return <span className="text-sm text-black/60 dark:text-white/60">{children}</span>;
+	return (
+		<span className="text-sm text-black/60 dark:text-white/60">
+			{children}
+		</span>
+	);
 }
 
 function ItemsList({
@@ -289,7 +310,6 @@ function ItemsList({
 		[router, pathname, createQueryString]
 	);
 
-
 	const {
 		data: itemsData,
 		error: itemsError,
@@ -333,17 +353,202 @@ function ItemsList({
 			handleRangeChange={handleRangeChange}
 			pageNumber={pageNumber}
 			handlePageChange={handlePageChange}
-			countLabel={<div>
-				{collectionId ? t.rich("itemsInCollection", {
-					count: formatter.number(itemsData?.totalItems || 0),
-					number: (chunks) => <NumberWrapper>{chunks}</NumberWrapper>,
-					collection: data.collections.find((collection: any) => collection.id === collectionId)?.name,
-					collections: (chunks) => <CollectionWrapper>{chunks}</CollectionWrapper>
-				}) : t.rich("likedItemsCount", {
-					count: formatter.number(itemsData?.totalItems || 0),
-					number: (chunks) => <NumberWrapper>{chunks}</NumberWrapper>
-				})}
-			</div>}
+			countLabel={
+				<div>
+					{collectionId
+						? t.rich("itemsInCollection", {
+								count: formatter.number(
+									itemsData?.totalItems || 0
+								),
+								number: (chunks) => (
+									<NumberWrapper>{chunks}</NumberWrapper>
+								),
+								collection: data.collections.find(
+									(collection: any) =>
+										collection.id === collectionId
+								)?.name,
+								collections: (chunks) => (
+									<CollectionWrapper>
+										{chunks}
+									</CollectionWrapper>
+								),
+						  })
+						: t.rich("likedItemsCount", {
+								count: formatter.number(
+									itemsData?.totalItems || 0
+								),
+								number: (chunks) => (
+									<NumberWrapper>{chunks}</NumberWrapper>
+								),
+						  })}
+				</div>
+			}
+		/>
+	);
+}
+
+type ProfileListItem = {
+	label: any;
+	icon: IconType;
+	className?: string;
+	index: number;
+	id?: string;
+} & Omit<ListboxItemProps, "children">;
+
+function ProfileListbox({
+	data,
+	listItems,
+	className,
+	...props
+}: {
+	data: any;
+	listItems: ProfileListItem[];
+} & Omit<ListboxProps, "children">) {
+	return (
+		<Listbox
+			variant="flat"
+			selectionMode="single"
+			className={twMerge("flex flex-col py-6", className)}
+			{...props}
+		>
+			{listItems.map(
+				({ label, icon: Icon, className, index, ...itemProps }) => (
+					<ListboxItem
+						inlist={false}
+						key={String(index)}
+						shouldHighlightOnFocus
+						startContent={<Icon className="shrink-0" />}
+						className={twMerge(
+							"text-xl gap-4",
+							props.selectionMode !== "none" &&
+								"data-[selected]:opacity-100 opacity-60 text-xl",
+							className
+						)}
+						{...itemProps}
+					>
+						<div className="text-xl">{label}</div>
+					</ListboxItem>
+				)
+			)}
+		</Listbox>
+	);
+}
+
+function ProfileCollectionsList({
+	displayData,
+	selectedTab,
+	setSelectedTab,
+	handleCollectionSelect,
+	onOpen,
+	selectedCollection,
+}: {
+	displayData: any;
+	selectedTab: Set<string>;
+	setSelectedTab: any;
+	onOpen: any;
+	handleCollectionSelect: any;
+	selectedCollection?: string;
+}) {
+	const [search, setSearch] = useState("");
+	const t = useTranslations("ui");
+	const formatter = useFormatter();
+	const [mainListboxList, selectedCollectionIndex] = useMemo(() => {
+		const collectionsItems = Object.keys(displayData.itemsCollections).reduce((acc: { [key: string]: string[] }, itemKey) => {
+			for (const collectionId of Object.keys(displayData.itemsCollections[itemKey])) {
+				if (!acc[collectionId]) {
+					acc[collectionId] = [];
+				}
+				acc[collectionId].push(itemKey);
+			}
+			return acc;
+		}, {});
+
+		const dataList: ProfileListItem[] = [
+			{
+				label: (
+					<span>
+						{t("liked")}
+						<span className="text-sm ltr:ml-2 rtl:mr-2 opacity-60">
+							({formatter.number(Object.keys(displayData.likes).length)})
+						</span>
+					</span>
+				),
+				description: t("likedDescription"),
+				icon: BsBookmark,
+				index: 0,
+			},
+			...displayData.collections.map((collection: any): ProfileListItem => ({
+				label: (
+					<span>
+						{collection.name}
+						<span className="text-sm ltr:ml-2 rtl:mr-2 opacity-60">
+							({formatter.number(collectionsItems[collection.id]?.length || 0)})
+						</span>
+					</span>
+				),
+				description: collection.description,
+				icon: BsCollection,
+				id: collection.id,
+				index: 0,
+			})),
+		];
+
+		const dataListIndexed = dataList.map((item, index) => ({
+			...item,
+			onPress: () => {
+				if (item.id && !selectedTab.has(String(index))) {
+					handleCollectionSelect(item.id);
+				} else {
+					handleCollectionSelect("");
+					if (item.id) {
+						setSelectedTab(new Set([String(0)]));
+					}
+				}
+			},
+			index,
+		}));
+
+		const filteredDataList = dataListIndexed.filter(
+			(item) =>
+				(typeof item.label === "string" &&
+					item.label.toLowerCase().includes(search.toLowerCase())) ||
+				(typeof item.description === "string" &&
+					item.description
+						.toLowerCase()
+						.includes(search.toLowerCase()))
+		);
+
+		return [filteredDataList, dataListIndexed.findIndex((item) => item.id === selectedCollection)];
+	}, [displayData, search]);
+
+	return (
+		<ProfileListbox
+			disallowEmptySelection
+			selectedKeys={selectedCollection ? [String(selectedCollectionIndex)] : selectedTab}
+			onSelectionChange={setSelectedTab as any}
+			data={displayData}
+			className="flex-1 z-10"
+			classNames={{
+				list: "min-h-80 max-h-80 overflow-y-auto xl:scrollbar-hide hover:scrollbar-default",
+			}}
+			listItems={mainListboxList}
+			topContent={
+				<Input
+					placeholder={t("searchCollections")}
+					className="w-full mb-2"
+					onChange={(e) => setSearch(e.target.value)}
+				/>
+			}
+			bottomContent={
+				<Button
+					className="mt-2"
+					startContent={<BsPlus />}
+					size="md"
+					onClick={onOpen}
+				>
+					{t("createCollection")}
+				</Button>
+			}
 		/>
 	);
 }
@@ -357,18 +562,16 @@ export default function Profile({
 	likedPosts: any[];
 	searchParams: { [key: string]: any };
 }) {
-	const [currentlyEditing, setCurrentlyEditing] = useState(false);
 	const { data: session, update } = useSession();
-	const t = useTranslations("ui");
-	const formatter = useFormatter();
-	const [selectedTab, setSelectedTab] = useState("Liked Posts");
+	const [selectedTab, setSelectedTab] = useState(new Set(["0"]));
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
-	const { router, pathname, createQueryString } = useParamsState(searchParams);
-
+	const { router, pathname, createQueryString } =
+		useParamsState(searchParams);
+	const t = useTranslations("ui");
 	const selectedCollection = searchParams["collectionId"] || "";
 	const isCurrentUser = session?.user.id == data.id;
 
-	const displayData = useMemo(() => {
+	const displayData: Session["user"] = useMemo(() => {
 		const displayData = {
 			...data,
 			...(isCurrentUser ? session?.user : {}),
@@ -386,13 +589,18 @@ export default function Profile({
 		return displayData;
 	}, [data, session]);
 
-
 	const handleCollectionSelect = useCallback(
 		(collectionId: string) => {
 			if (collectionId === selectedCollection) {
-				router.push(createQueryString(pathname, [["collectionId", ""]]));
+				router.push(
+					createQueryString(pathname, [["collectionId", ""]])
+				);
 			} else {
-				router.push(createQueryString(pathname, [["collectionId", collectionId]]));
+				router.push(
+					createQueryString(pathname, [
+						["collectionId", collectionId],
+					])
+				);
 			}
 		},
 		[router, pathname, createQueryString]
@@ -407,7 +615,7 @@ export default function Profile({
 				update={update}
 			/>
 			<div className="w-96 flex flex-col gap-6 shrink-0">
-				<div className="w-full dark:bg-secondary bg-black/[4%] rounded-2xl">
+				<div className="w-full dark:bg-secondary bg-black/[4%] rounded-2xl flex flex-col">
 					<div className="w-full dark:bg-card bg-white rounded-2xl rounded-b-none overflow-hidden flex">
 						<div className="w-1/4 aspect-square">
 							{displayData.image ? (
@@ -426,95 +634,85 @@ export default function Profile({
 							)}
 						</div>
 						<div className="w-3/4 flex flex-col p-4 justify-center">
-							<div className="text-xl font-medium text-black/80 dark:text-white/80 flex items-center gap-2">
-								{displayData.name ?? "____________________"}
-							</div>
+							{displayData.name && <div className="text-xl font-medium text-black/80 dark:text-white/80 flex items-center gap-2">
+								{displayData.name}
+							</div>}
 							<div className="text-sm text-black/60 dark:text-white/60">
-								Joined in{" "}
-								{new Date(displayData.createdAt).getFullYear()}
+								{displayData.email}
 							</div>
 						</div>
 					</div>
-					<div className="w-full flex flex-col p-4 gap-4">
-						<div className="flex gap-4">
-							<div className="flex-1 flex flex-col items-center dark:bg-card bg-white rounded-2xl p-4">
-								<div className="text-xl font-medium text-black/80 dark:text-white/80 flex items-center gap-2">
-									{Object.keys(displayData.followers).length}
+					<div className="flex p-6 gap-2">
+						{[
+							{
+								label: t("liked"),
+								count:
+									"+" +
+										Object.keys(displayData.likes).length ||
+									0,
+							},
+							{
+								label: t("saved"),
+								count:
+									Object.keys(displayData.itemsCollections)
+										.length || 0,
+							},
+							{
+								label: t("collections"),
+								count: displayData.collections.length || 0,
+							},
+						].map((item) => (
+							<div
+								key={item.label}
+								className="flex flex-col justify-center flex-1"
+							>
+								<div className="text-2xl font-medium text-black/80 dark:text-white/80">
+									{item.count}
 								</div>
-								<div className="text-sm text-black/60 dark:text-white/60">
-									Followers
+								<div className="text-sm text-black/60 dark:text-white/60 line-clamp-1">
+									{item.label}
 								</div>
 							</div>
-							<div className="flex-1 flex flex-col items-center dark:bg-card bg-white rounded-2xl p-4">
-								<div className="text-xl font-medium text-black/80 dark:text-white/80 flex items-center gap-2">
-									{Object.keys(displayData.following).length}
-								</div>
-								<div className="text-sm text-black/60 dark:text-white/60">
-									Following
-								</div>
-							</div>
-						</div>
-						<div className="flex flex-col gap-2">
-							<div className="text-xl font-medium text-black/80 dark:text-white/80 flex items-center gap-2">
-								About me
-							</div>
-							<div className="text-sm text-black/60 dark:text-white/60 min-h-16 break-words">
-								{displayData.description ??
-									<span className="italic opacity-50">No description provided</span>}
-							</div>
-						</div>
-						{session?.user?.id !== displayData.id ? (
-							<FollowButton
-								displayData={displayData}
-								session={session}
-								update={update}
-							/>
-						) : (
-							<Button>
-								{currentlyEditing ? "Save" : "Edit Profile"}
-							</Button>
-						)}
+						))}
 					</div>
-				</div>
-
-				<div className="w-full flex flex-col gap-4 dark:bg-secondary bg-black/[4%] rounded-2xl p-4">
-					<div className="w-full flex flex-col gap-4">
-						<div className="text-xl font-medium text-black/80 dark:text-white/80 flex items-center gap-2">
-							Collections
-							<span className="text-sm text-black/60 dark:text-white/60 rtl:mr-auto rtl:ml-auto">
-								{displayData.collections.length}
-							</span>
-							{isCurrentUser && (
-								<UserCollection onClick={onOpen} />
-							)}
-						</div>
-						<CollectionsList
-							highlightedCollections={selectedCollection ? [selectedCollection] : []}
-							onCollectionSelect={handleCollectionSelect}
-							data={displayData}
+					<div className="px-6 flex flex-col flex-1">
+						<Divider className="" />
+						<ProfileCollectionsList
+							handleCollectionSelect={handleCollectionSelect}
+							displayData={displayData}
+							selectedTab={selectedTab}
+							setSelectedTab={setSelectedTab}
+							onOpen={onOpen}
+							selectedCollection={selectedCollection}
 						/>
+						{isCurrentUser && (
+							<>
+								<Divider className="" />
+								<ProfileListbox
+									selectionMode="none"
+									data={displayData}
+									listItems={[
+										{
+											label: t("settings"),
+											icon: BsGear,
+										},
+										{
+											label: t("logout"),
+											icon: BsBoxArrowRight,
+											className:
+												"text-red-500 dark:text-red-500",
+										},
+									].map((item, index) => ({
+										...item,
+										index,
+									}))}
+								/>
+							</>
+						)}
 					</div>
 				</div>
 			</div>
 			<div className="w-full flex flex-col gap-4">
-				<div className="flex w-full dark:bg-card bg-white rounded-xl overflow-hidden hidden">
-					{["Liked Posts", "Recommendations Feed"].map(
-						(tab: string) => (
-							<Button
-								key={tab}
-								size="sm"
-								radius="none"
-								color={
-									selectedTab === tab ? "accent" : "default"
-								}
-								variant="light"
-								onClick={() => setSelectedTab(tab)}
-							>
-								{tab}
-							</Button>
-						)
-					)}
-				</div>
 				<ItemsList
 					data={displayData}
 					searchParams={searchParams}
