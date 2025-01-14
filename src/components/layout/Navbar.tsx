@@ -1,12 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { localesNames, routing, usePathname, useRouter } from "@/i18n/routing";
+import { localesNames, routing, shortLocalesNames, usePathname, useRouter } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
 import { links } from "@/constants/links";
 import { useTheme } from "next-themes";
 import { HiOutlineMoon } from "react-icons/hi2";
-import { IoMdSunny } from "react-icons/io";
+import { IoIosLogIn, IoMdSunny } from "react-icons/io";
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { GiHamburgerMenu } from "react-icons/gi";
@@ -234,8 +234,7 @@ function LinksList({
 	return (
 		<div
 			className={twMerge(
-				"flex flex-1 items-center justify-end gap-8",
-				style === "edtechhub" && "gap-6",
+				"flex flex-1 items-center justify-end gap-6",
 				isMobile && "flex-col gap-8",
 				!isMobile && "hidden xl:flex"
 			)}
@@ -265,7 +264,7 @@ function LanguageSwitcher({ className }: { className?: string }) {
 					className="relative flex items-center gap-2 data-[style=edtechhub]:uppercase"
 				>
 					<span className="text-lg font-medium">
-						{localesNames[locale as keyof typeof localesNames]}
+						{shortLocalesNames[locale as keyof typeof shortLocalesNames]}
 					</span>
 					<ChevronDownIcon className="size-4" />
 				</div>
@@ -461,9 +460,9 @@ export default function Navbar() {
 		>
 			<div
 				className={twMerge(
-					"xl:h-[6.5rem] bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-9 z-10",
+					"xl:h-[6.5rem] bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10",
 					style === "edtechhub" &&
-						"bg-transparent max-w-[96rem] mx-auto xl:px-14"
+						"bg-transparent max-w-[96rem] mx-auto xl:px-14 gap-9"
 				)}
 			>
 				<Logo />
@@ -482,12 +481,16 @@ export default function Navbar() {
 				{!session ? (
 					isLoginEnabled && (
 						<Button
-							startContent={<BiLogIn className="size-5 shrink-0" />}
+							startContent={<IoIosLogIn className="size-5 shrink-0" />}
 							color={"accent"}
-							className={twMerge("h-full xl:min-w-0 xl:pl-4")}
+							className={twMerge(
+								"h-full xl:min-w-0 xl:pl-4",
+								style === "opendeved" && "!p-0 rounded-full !size-10"
+							)}
 							onPress={onLoginModalOpen}
-					>
-						Login
+							isIconOnly={style === "opendeved"}
+						>
+							{style === "edtechhub" ? "Login" : ""}
 					</Button>)
 				) : (
 					<UserButton />
