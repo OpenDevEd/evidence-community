@@ -2,43 +2,45 @@ import { item } from "@/db/schema/tables/item";
 import { getTableColumns } from "drizzle-orm";
 import Image from "next/image";
 import AboutUs from "@/components/icons/AboutUs";
+import { cn } from "@nextui-org/react";
 
-export const INSTITUTION_LOGOS: Record<string, React.ReactNode> = {
-	"EdTech Hub": (
-		<Image
+const InstitutionLogo = ({ src, alt, ...props }: { src: string; alt: string } & React.ComponentProps<typeof Image>) => (
+	<Image
+		src={src}
+		alt={alt}
+		width={24}
+		height={24}
+		className="size-6 object-contain dark:bg-white/80 p-0.5 rounded-md"
+		{...props}
+	/>
+);
+
+const OpenDevLogo = ({ className, ...props }: { className: string } & React.HTMLAttributes<HTMLDivElement>) => (
+	<div className={cn("flex justify-center items-center dark:bg-white/80 text-accent p-0.5 rounded-md size-6", className)} {...props}>
+		<AboutUs className="fill-current size-full" />
+	</div>
+);
+
+export const INSTITUTION_LOGOS: Record<string, any> = {
+	"EdTech Hub": (props: React.ComponentProps<typeof InstitutionLogo>) => (
+		<InstitutionLogo
+			{...props}
 			src="/institutions/EdTechHub.png"
 			alt="EdTech Hub"
-			width={24}
-			height={24}
-			className="size-6 object-contain dark:bg-white/80 p-0.5 rounded-md"
 		/>
 	),
-	"Open Development & Education": <AboutUs className="fill-accent size-6" />,
-	IIEP: (
-		<Image
-			src="/institutions/IIEP.png"
-			alt="IIEP"
-			width={24}
-			height={24}
-			className="size-6 object-contain dark:bg-white/80 p-0.5 rounded-md"
-		/>
+	"Open Development & Education": (props: React.ComponentProps<typeof OpenDevLogo>) => <OpenDevLogo {...props} />,
+	IIEP: (props: React.ComponentProps<typeof InstitutionLogo>) => (
+		<InstitutionLogo {...props} src="/institutions/IIEP.png" alt="IIEP" />
 	),
-	"British Standards Institution": (
-		<Image
-			src="/institutions/BSI.png"
-			alt="BSI"
-			width={24}
-			height={24}
-			className="size-6 object-contain dark:bg-white/80 p-0.5 rounded-md"
-		/>
+	"British Standards Institution": (props: React.ComponentProps<typeof InstitutionLogo>) => (
+		<InstitutionLogo {...props} src="/institutions/BSI.png" alt="BSI" />
 	),
-	"UK National Commission to UNESCO": (
-		<Image
+	"UK National Commission to UNESCO": (props: React.ComponentProps<typeof InstitutionLogo>) => (
+		<InstitutionLogo
+			{...props}
 			src="/institutions/UKUNESCO.png"
 			alt="UK National Commission to UNESCO"
-			width={24}
-			height={24}
-			className="size-6 object-contain dark:bg-white/80 p-0.5 rounded-md"
 		/>
 	),
 };
@@ -48,20 +50,39 @@ export const ITEMS_PER_PAGE = 20;
 export const EXCLUDED_ITEM_TYPES = ["Note", "Attachment"];
 
 export const SORT_OPTIONS = [
-  { key: "desc", name: "Newest", sort: "dateAdded:desc" },
-  { key: "asc", name: "Oldest", sort: "dateAdded:asc" },
-  { key: "authorAZ", name: "Author A-Z", sort: "fullNames:asc" },
-  { key: "authorZA", name: "Author Z-A", sort: "fullNames:desc" },
-  { key: "titleAZ", name: "Title A-Z", sort: "title:asc" },
-  { key: "titleZA", name: "Title Z-A", sort: "title:desc" },
+	{ key: "desc", name: "Newest", sort: "dateAdded:desc" },
+	{ key: "asc", name: "Oldest", sort: "dateAdded:asc" },
+	{ key: "authorAZ", name: "Author A-Z", sort: "fullNames:asc" },
+	{ key: "authorZA", name: "Author Z-A", sort: "fullNames:desc" },
+	{ key: "titleAZ", name: "Title A-Z", sort: "title:asc" },
+	{ key: "titleZA", name: "Title Z-A", sort: "title:desc" },
 ];
 
-export const ITEM_COLUMNS = Object.values(getTableColumns(item)).map((col: any) => col.name);
+export const ITEM_COLUMNS = Object.values(getTableColumns(item)).map(
+	(col: any) => col.name
+);
 
 export const SCOPE_OPTIONS = [
-  { key: "everywhere", name: "Everywhere", attributesToSearchOn: ["*"] },
-  { key: "authors", name: "in authors or contributors", attributesToSearchOn: ["fullNames"] },
-  { key: "title", name: "in title", attributesToSearchOn: ["title"] },
-  { key: "fields", name: "in fields", attributesToSearchOn: ITEM_COLUMNS.filter((col) => col !== "fullTextPDF" && col !== "attachmentsData") },
-  { key: "documents", name: "in documents", attributesToSearchOn: ["fullTextPDF", "attachmentsData.fullTextPDF.text"] },
+	{ key: "everywhere", name: "Everywhere", attributesToSearchOn: ["*"] },
+	{
+		key: "authors",
+		name: "in authors or contributors",
+		attributesToSearchOn: ["fullNames"],
+	},
+	{ key: "title", name: "in title", attributesToSearchOn: ["title"] },
+	{
+		key: "fields",
+		name: "in fields",
+		attributesToSearchOn: ITEM_COLUMNS.filter(
+			(col) => col !== "fullTextPDF" && col !== "attachmentsData"
+		),
+	},
+	{
+		key: "documents",
+		name: "in documents",
+		attributesToSearchOn: [
+			"fullTextPDF",
+			"attachmentsData.fullTextPDF.text",
+		],
+	},
 ];
