@@ -2,21 +2,21 @@ import { item } from "@/db/schema/tables/item";
 import { getTableColumns } from "drizzle-orm";
 import Image from "next/image";
 import AboutUs from "@/components/icons/AboutUs";
-import { cn } from "@nextui-org/react";
+import { twMerge } from "tailwind-merge";
 
-const InstitutionLogo = ({ src, alt, ...props }: { src: string; alt: string } & React.ComponentProps<typeof Image>) => (
+const InstitutionLogo = ({ src, alt, className, ...props }: { src: string; alt: string; className?: string } & React.ComponentProps<typeof Image>) => (
 	<Image
 		src={src}
 		alt={alt}
 		width={24}
 		height={24}
-		className="size-6 object-contain dark:bg-white/80 p-0.5 rounded-md"
+		className={twMerge("size-6 object-contain dark:bg-white/80 p-0.5 rounded-md", className)}
 		{...props}
 	/>
 );
 
 const OpenDevLogo = ({ className, ...props }: { className: string } & React.HTMLAttributes<HTMLDivElement>) => (
-	<div className={cn("flex justify-center items-center dark:bg-white/80 text-accent p-0.5 rounded-md size-6", className)} {...props}>
+	<div className={twMerge("flex justify-center items-center dark:bg-white/80 text-accent p-0.5 rounded-md size-6", className)} {...props}>
 		<AboutUs className="fill-current size-full" />
 	</div>
 );
