@@ -17,5 +17,15 @@ export const localesNames = {
   cn: "中文",
 };
 
+export const shortLocalesNames = {
+  "en-US": "EN-US",
+  "en-GB": "EN-GB",
+  de: "DE",
+  ar: "AR",
+  hi: "HI",
+  fr: "FR",
+  cn: "CN",
+};
+
 export const {Link, getPathname, redirect, usePathname, useRouter} =
   createNavigation(routing);
