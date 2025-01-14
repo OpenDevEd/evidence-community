@@ -104,6 +104,7 @@ export const valueFormatter: Record<
 	relations: () => false,
 	deleted: () => false,
 	year: () => false,
+	collectionsAncestry: () => false,
 	fullNames: () => false,
 	itemType: ({ value, t }) => t("itemType." + value),
 	collections: () => false,
