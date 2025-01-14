@@ -1,12 +1,14 @@
 import { ReactNode, useRef, useMemo } from "react";
 import { Item } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
-import { Button, Link } from "@nextui-org/react";
+import { Button, CardBody, Link } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import Attachment from "@/components/features/items/Attachment";
 import { createFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import CopyButton from "@/components/features/items/CopyButton";
+import { Card } from "@/components/nextui/Card";
+import { INSTITUTION_LOGOS } from "@/constants/items";
 
 type FormatterProps = {
 	value: any;
@@ -36,7 +38,7 @@ function formatDate({ value, formatter }: FormatterProps) {
 function Citation({ value }: FormatterProps) {
 	const contentRef = useRef(null);
 	return (
-		<div className="flex gap-4 w-full bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between break-all">
+		<div className="flex gap-4 w-full bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between break-all">
 			<div
 				ref={contentRef}
 				dangerouslySetInnerHTML={{ __html: value.trim() }}
@@ -208,5 +210,25 @@ export const valueFormatter: Record<
 	citation: (args) => {
 		if (!args.value) return false;
 		return <Citation {...args} />;
+	},
+	institution: ({ value }) => {
+		if (!value) return false;
+
+		const InstitutionLogo = Object.entries(INSTITUTION_LOGOS).find(
+			([key]) => value.includes(key)
+		)?.[1];
+
+		return (
+			<div>
+				<Card className="max-w-fit p-2" color="accent">
+					<div className="flex gap-2 items-center">
+						<InstitutionLogo className="bg-black/60 rounded-full" />
+						<h3 className="text-black/80 dark:text-white/80">
+							{value}
+						</h3>
+					</div>
+				</Card>
+			</div>
+		);
 	},
 };
