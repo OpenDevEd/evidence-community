@@ -21,8 +21,8 @@ export default function CollectionHierarchy({
 	const show =
 		isSelected ||
 		(collectionData.level !== 0 &&
-			facetDistribution?.collections[collectionData.key] &&
-			facetDistribution?.collections[collectionData.key] > 0);
+			facetDistribution?.collectionsAncestry[collectionData.key] &&
+			facetDistribution?.collectionsAncestry[collectionData.key] > 0);
 
 	return (
 		<>
@@ -38,7 +38,7 @@ export default function CollectionHierarchy({
 					{!isSelected && (
 						<span className="opacity-75 ltr:ml-1 rtl:mr-1">
 							(
-							{facetDistribution?.collections[
+							{facetDistribution?.collectionsAncestry[
 								collectionData.key
 							] || 0}
 							)

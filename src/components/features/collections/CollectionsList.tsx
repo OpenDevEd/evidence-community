@@ -88,13 +88,13 @@ export function InnerCollectionList({
 }) {
 	const t = useTranslations("ui");
 	const filteredFacetDistribution = useMemo(() => {
-		if (!facetDistribution?.collections || !data?.collections) {
-			return { collections: {} };
+		if (!facetDistribution?.collectionsAncestry || !data?.collections) {
+			return { collectionsAncestry: {} };
 		}
 
 		return {
-			collections: Object.fromEntries(
-				Object.entries(facetDistribution.collections).filter(([key]) =>
+			collectionsAncestry: Object.fromEntries(
+				Object.entries(facetDistribution.collectionsAncestry).filter(([key]) =>
 					data.collections.some((c) => c.key === key)
 				)
 			),
@@ -107,7 +107,7 @@ export function InnerCollectionList({
 				data?.collections.filter(
 					(c) =>
 						c.originalFacet === collection.key &&
-						filteredFacetDistribution.collections[c.key]
+						filteredFacetDistribution.collectionsAncestry[c.key]
 				).length
 		);
 	}, [hierarchy, data, filteredFacetDistribution]);
@@ -115,7 +115,7 @@ export function InnerCollectionList({
 	return hierarchy &&
 		hierarchy.length > 0 &&
 		facetDistribution &&
-		Object.keys(facetDistribution.collections).filter((key) =>
+		Object.keys(facetDistribution.collectionsAncestry).filter((key) =>
 			data?.collections.find((c) => c.key === key)
 		).length > 0 ? (
 		<Accordion

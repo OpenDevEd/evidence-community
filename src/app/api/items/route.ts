@@ -7,9 +7,9 @@ export async function GET(request: NextRequest) {
   const collections = searchParams.get("collections")?.split(",") || [];
 
   const res = await searchIndex(request, {
-    facets: ["collections"],
+    facets: ["collectionsAncestry"],
     filter: [
-      ...collections.map(collection => `collections = "${collection}"`),
+      ...collections.map(collection => `collectionsAncestry = "${collection}"`),
     ],
   });
 
