@@ -8,13 +8,13 @@ export default function ResourceAuthors({
 	itemData: Item | undefined;
 }) {
 	if (itemData?.institution) {
-		const institutionLogo = Object.entries(INSTITUTION_LOGOS).find(
+		const InstitutionLogo = Object.entries(INSTITUTION_LOGOS).find(
 			([key]) => itemData.institution?.includes(key)
 		)?.[1];
 
 		return (
 			<ResourceData
-				startContent={institutionLogo}
+				startContent={InstitutionLogo ? <InstitutionLogo /> : null}
 				text={itemData?.institution} />
 		);
 	}
