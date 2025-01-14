@@ -231,9 +231,9 @@ export const valueFormatter: Record<
 
 		return (
 			<div>
-				<Card className="max-w-fit p-2" color="accent">
+				<Card className="max-w-fit p-2 rounded-2xl" color="accent">
 					<div className="flex gap-2 items-center">
-						{InstitutionLogo && <InstitutionLogo className="bg-black/60 rounded-full" />}
+						{InstitutionLogo && <InstitutionLogo className="bg-white/80" />}
 						<h3 className="text-black/80 dark:text-white/80">
 							{value}
 						</h3>
