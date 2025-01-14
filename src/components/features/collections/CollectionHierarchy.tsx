@@ -1,6 +1,8 @@
 import { Collection } from "@/app/api/collections/types";
 import { Checkbox } from "@/components/nextui/Checkbox";
 import { FacetDistribution } from "meilisearch";
+import { useMemo } from "react";
+import { IoIosArrowDown } from "react-icons/io";
 
 export default function CollectionHierarchy({
 	collectionData,
@@ -15,7 +17,12 @@ export default function CollectionHierarchy({
 	onCheckboxChange: (key: string) => void;
 	facetDistribution: FacetDistribution | undefined;
 }) {
-	const children = collectionData.children || [];
+	const childrenUnsorted = collectionData.children || [];
+	const children = useMemo(() => {
+		return childrenUnsorted.toSorted((a: Collection, b: Collection) =>
+			(a.name || "").localeCompare(b.name || "")
+		);
+	}, [childrenUnsorted]);
 	const level = collectionData.level || 0;
 	const isSelected = selectedCollections.includes(collectionData.key);
 	const show =
@@ -23,6 +30,7 @@ export default function CollectionHierarchy({
 		(collectionData.level !== 0 &&
 			facetDistribution?.collectionsAncestry[collectionData.key] &&
 			facetDistribution?.collectionsAncestry[collectionData.key] > 0);
+	const hasChildren = children.length > 0;
 
 	return (
 		<>
@@ -34,16 +42,23 @@ export default function CollectionHierarchy({
 					style={{ marginLeft: `${(level - 1) * 16}px` }}
 					className="collection"
 				>
-					{collectionData.name}
-					{!isSelected && (
-						<span className="opacity-75 ltr:ml-1 rtl:mr-1">
-							(
-							{facetDistribution?.collectionsAncestry[
-								collectionData.key
-							] || 0}
-							)
-						</span>
-					)}
+					<div className="">
+						{collectionData.name}
+						{!isSelected && (
+							<span className="opacity-75 ltr:ml-1 rtl:mr-1">
+								(
+								{facetDistribution?.collectionsAncestry[
+									collectionData.key
+								] || 0}
+								)
+							</span>
+						)}
+						{hasChildren && (
+							<div className="opacity-75 ltr:ml-2 rtl:mr-2 inline-block translate-y-0.5">
+								<IoIosArrowDown className="size-4" />
+							</div>
+						)}
+					</div>
 				</Checkbox>
 			)}
 			{(isSelected || level === 0) &&
