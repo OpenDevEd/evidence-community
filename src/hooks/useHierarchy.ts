@@ -47,8 +47,7 @@ export function useHierarchy({
       createQueryString(pathname, [
         ["collections", newSelectedCollections.join(",")],
         ["page", "1"],
-      ]),
-      { scroll: false }
+      ])
     );
   };
 
