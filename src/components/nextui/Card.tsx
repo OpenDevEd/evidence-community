@@ -7,6 +7,9 @@ export const Card = extendVariants(NextUICard, {
       tertiary: {
         base: "bg-white border-tertiary dark:bg-tertiary/20 dark:border-white/10",
       },
+      accent: {
+        base: "bg-accent border-accent dark:bg-accent/20 dark:border-white/10",
+      }
     },
     variant: {
       default: {
