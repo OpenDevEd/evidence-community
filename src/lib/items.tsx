@@ -188,6 +188,7 @@ export const valueFormatter: Record<
 		const filteredValue = value.filter(
 			(data: any) => data.PDFCoverPageImage
 		);
+		
 		if (filteredValue.length === 0) return false;
 
 		return (
@@ -201,10 +202,20 @@ export const valueFormatter: Record<
 		);
 	},
 	extra: (args) => {
+		const finalValue = args.value.replace(
+			/(\S+):\s*([^:\n]+?)(?=\s+\S+:|$)/g,
+			'\n$1: $2'
+		).trim();
+
 		return (
-			<div className="whitespace-pre-line">
-				<Extra {...args} />
+			<>
+			<div>
+				{args.value}
 			</div>
+			<div className="whitespace-pre-line">
+				<Extra {...args} value={finalValue} />
+			</div>
+			</>
 		);
 	},
 	citation: (args) => {
@@ -222,7 +233,7 @@ export const valueFormatter: Record<
 			<div>
 				<Card className="max-w-fit p-2" color="accent">
 					<div className="flex gap-2 items-center">
-						<InstitutionLogo className="bg-black/60 rounded-full" />
+						{InstitutionLogo && <InstitutionLogo className="bg-black/60 rounded-full" />}
 						<h3 className="text-black/80 dark:text-white/80">
 							{value}
 						</h3>
