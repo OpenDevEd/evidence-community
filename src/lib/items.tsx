@@ -208,14 +208,9 @@ export const valueFormatter: Record<
 		).trim();
 
 		return (
-			<>
-			<div>
-				{args.value}
-			</div>
 			<div className="whitespace-pre-line">
 				<Extra {...args} value={finalValue} />
 			</div>
-			</>
 		);
 	},
 	citation: (args) => {
