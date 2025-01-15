@@ -319,7 +319,13 @@ export function ResourcesView({
             />
             <ContentActions />
             <div className="text-center xl:text-end text-black/40 dark:text-white/40 text-sm">
-                {t("lastUpdate", { date: "30/03/2024, 15:01" })}
+                {t("lastUpdate", { date: format.dateTime(status.databaseUpdatedAt!, {
+					day: "2-digit",
+					month: "2-digit",
+					year: "numeric",
+					hour: "2-digit",
+					minute: "2-digit",
+				}) })}
             </div>
         </div>
     );
