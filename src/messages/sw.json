@@ -50,7 +50,9 @@
 		"searchCollections": "Tafuta Makusanyo",
 		"downloadDescription": "Unaweza kupakua rasilimali katika miundo ifuatayo",
 		"selectCollection": "Chagua mkusanyiko",
-		"download": "Pakua"
+		"download": "Pakua",
+        "RISDescription": "Muundo unaopendekezwa kwa programu nyingi za usimamizi wa marejeleo",
+        "BibTeXDescription": "Muundo unaopendekezwa kwa programu maalum za BibTeX"
 	},
 	"ai": {
 		"summarize": "Fupisha",

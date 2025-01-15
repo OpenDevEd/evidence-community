@@ -50,7 +50,9 @@
 		"searchCollections": "Pesquisar Coleções",
 		"downloadDescription": "Você pode baixar recursos nos seguintes formatos",
 		"selectCollection": "Selecione uma coleção",
-		"download": "Baixar"
+		"download": "Baixar",
+        "RISDescription": "Formato recomendado para a maioria dos softwares de gerenciamento de referências",
+        "BibTeXDescription": "Formato recomendado para softwares específicos do BibTeX"
 	},
 	"ai": {
 		"summarize": "Resumir",
