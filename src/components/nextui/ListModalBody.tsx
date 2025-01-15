@@ -1,4 +1,4 @@
-import { ModalBody, ModalBodyProps, Listbox, ListboxItem } from "@nextui-org/react";
+import { ModalBody, ModalBodyProps, Listbox, ListboxItem, Spinner } from "@nextui-org/react";
 import { FaCheck } from "react-icons/fa";
 import { Key } from "react";
 
@@ -9,19 +9,24 @@ export type ListModalBodyItem = {
   icon?: React.ElementType;
 }
 
-export function ListModalBody({ description, onAction, highlightedIndexes, children, list, ...props }: { 
+export function ListModalBody({ description, onAction, highlightedIndexes, children, list, isLoading, ...props }: { 
   description: string, 
   onAction: (index: number) => void, 
   highlightedIndexes?: number[], 
-  list: ListModalBodyItem[] 
+  list: ListModalBodyItem[],
+  isLoading?: boolean
 } & ModalBodyProps) {
   return (
-    <ModalBody className="p-0" {...props}>
-      <div className="flex flex-col pt-0">
+    <ModalBody className="p-0 overflow-hidden" {...props}>
+      <div className="flex flex-col pt-0 relative overflow-hidden">
+        {isLoading && <div className="flex items-center justify-center absolute inset-0 ">
+          <Spinner />
+        </div>}
         <p className="text-base text-black/80 dark:text-white/80 font-medium p-2 text-center dark:bg-secondary bg-white">
           {description}
         </p>
         <Listbox
+          disabledKeys={isLoading ? list.map((_, index) => String(index)) : undefined}
           onAction={onAction as (key: Key) => void}
           classNames={{
             base: "p-0",

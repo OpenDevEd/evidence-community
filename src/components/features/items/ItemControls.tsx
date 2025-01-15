@@ -8,7 +8,7 @@ import { useRouter } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 import CopyButton from "./CopyButton";
 import { Item } from "@/app/api/item/types";
-import { PropsWithChildren, useMemo, useRef } from "react";
+import { PropsWithChildren, useMemo, useRef, useState } from "react";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { DropdownItem } from "@nextui-org/dropdown";
 import { DropdownMenu } from "@nextui-org/dropdown";
@@ -62,6 +62,7 @@ export function DownloadModal({
 	fileName: string;
 }) {
 	const t = useTranslations("ui");
+	const [loading, setLoading] = useState(false);
 
 	return (
 		<AIModal
@@ -76,38 +77,44 @@ export function DownloadModal({
 				</GenericHeader>
 				<ListModalBody
 					description={t("downloadDescription")}
+					isLoading={loading}
 					onAction={async (index: number) => {
-						const format = ["ris", "bibtex"][index] as
-							| "ris"
-							| "bibtex";
-						const ret = await action(format);
-						const blob = new Blob([ret], {
-							type:
-								format === "ris"
-									? "application/x-research-info-systems"
-									: "application/x-bibtex",
-						});
-						const url = URL.createObjectURL(blob);
-						const a = document.createElement("a");
-						a.href = url;
-						a.download = `${fileName}.${
-							format === "ris" ? "ris" : "bib"
-						}`;
-						a.click();
+						setLoading(true);
+						try {
+							const format = ["ris", "bibtex"][index] as
+								| "ris"
+								| "bibtex";
+							const ret = await action(format);
+							const blob = new Blob([ret], {
+								type:
+									format === "ris"
+										? "application/x-research-info-systems"
+										: "application/x-bibtex",
+							});
+							const url = URL.createObjectURL(blob);
+							const a = document.createElement("a");
+							a.href = url;
+							a.download = `${fileName}.${
+								format === "ris" ? "ris" : "bib"
+							}`;
+							a.click();
+						} catch (error) {
+							console.error(error);
+						} finally {
+							setLoading(false);
+						}
 					}}
 					highlightedIndexes={[]}
 					list={[
 						{
 							name: "RIS",
 							subtitle: ".ris",
-							description:
-								t("RISDescription")
+							description: t("RISDescription"),
 						},
 						{
 							name: "BibTeX",
 							subtitle: ".bib",
-							description:
-								t("BibTeXDescription")
+							description: t("BibTeXDescription"),
 						},
 					]}
 				/>
@@ -120,7 +127,10 @@ export function DownloadButton({
 	action,
 	fileName,
 	...props
-}: PropsWithChildren<typeof Button> & { action: (format: "ris" | "bibtex") => Promise<string>; fileName: string }) {
+}: PropsWithChildren<typeof Button> & {
+	action: (format: "ris" | "bibtex") => Promise<string>;
+	fileName: string;
+}) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const t = useTranslations("ui");
 
