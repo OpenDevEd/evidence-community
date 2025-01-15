@@ -200,8 +200,6 @@ export async function searchIndex(
 		...(Array.isArray(extraFilters) ? extraFilters : []),
 	].filter((f): f is string => f !== null);
 
-	console.log("finalFilters", finalFilters);
-
 	const searchResults = await searchIndex.search(search, {
 		offset: (pageNum - 1) * limitNum,
 		limit: limitNum,
