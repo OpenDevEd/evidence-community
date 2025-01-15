@@ -15,6 +15,18 @@ import Image from "next/image";
 import { twMerge } from "tailwind-merge";
 import { SessionProvider, useSession } from "next-auth/react";
 import { Session } from "next-auth";
+import { InferSelectModel } from "drizzle-orm";
+import { status as statusTable } from "@/db/schema/tables/status";
+
+export type CacheContextType = {
+	status: InferSelectModel<typeof statusTable>;
+	cache: any;
+	setCache: (cache: any) => void;
+	itemsCache: any;
+	previousExpansionStates: any;
+	globalExpanded: any;
+	setGlobalExpanded: (globalExpanded: any) => void;
+};
 
 export const CacheContext = createContext<any>({});
 export const FeatureFlagsContext = createContext<any>({});
@@ -44,7 +56,7 @@ function PageView() {
 	return null;
 }
 
-function CacheProvider({ children }: { children: React.ReactNode }) {
+function CacheProvider({ children, status }: { children: React.ReactNode, status: InferSelectModel<typeof statusTable> }) {
 	const [cache, setCache] = useState({});
 	const itemsCache = useRef(undefined);
 	const previousExpansionStates = useRef({});
@@ -59,6 +71,7 @@ function CacheProvider({ children }: { children: React.ReactNode }) {
 				previousExpansionStates,
 				globalExpanded,
 				setGlobalExpanded,
+				status,
 			}}
 		>
 			{children}
@@ -129,7 +142,7 @@ function LoadingScreen({
 	);
 }
 
-export default function Providers({ children, session }: { children: React.ReactNode, session: Session | null }) {
+export default function Providers({ children, session, status }: { children: React.ReactNode, session: Session | null, status: InferSelectModel<typeof statusTable> }) {
 	const router = useRouter();
 	const [featureFlags, setFeatureFlags] = useState<Set<string> | null>(null);
 	const [isMounted, setIsMounted] = useState(false);
@@ -159,7 +172,7 @@ export default function Providers({ children, session }: { children: React.React
 			<SessionProvider session={session}>
 				<PostHogProvider client={posthog}>
 					<FeatureFlagsContext.Provider value={{ featureFlags }}>
-						<CacheProvider>
+						<CacheProvider status={status}>
 							<NextUIProvider navigate={router.push}>
 								<Suspense>
 									<PageView />
