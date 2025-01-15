@@ -261,6 +261,18 @@ function ItemsList({
 	const t = useTranslations("ui");
 	const formatter = useFormatter();
 
+	const queryParams = {
+		pageNumber,
+		sort,
+		collections,
+		search,
+		scope,
+		range,
+		collectionId,
+	}
+
+	const itemsQuery = buildItemsQuery(queryParams, `/user/items/${data.id}`);
+
 	const handlePageChange = useCallback(
 		(newPage: number) => {
 			router.push(
@@ -315,18 +327,7 @@ function ItemsList({
 		error: itemsError,
 		isLoading: isItemsLoading,
 	} = useSWR<ItemsGetResponse>(
-		buildItemsQuery(
-			{
-				pageNumber,
-				sort,
-				collections,
-				search,
-				scope,
-				range,
-				collectionId,
-			},
-			`/user/items/${data.id}`
-		),
+		itemsQuery,
 		fetcher,
 		{
 			keepPreviousData: true,
@@ -383,6 +384,10 @@ function ItemsList({
 						  })}
 				</div>
 			}
+			queryParams={queryParams}
+			params={{
+				id: data.id,
+			}}
 		/>
 	);
 }
@@ -467,13 +472,13 @@ function ProfileCollectionsList({
 			{
 				label: (
 					<span>
-						{t("liked")}
+						{t("likedItemsLabel")}
 						<span className="text-sm ltr:ml-2 rtl:mr-2 opacity-60">
 							({formatter.number(Object.keys(displayData.likes).length)})
 						</span>
 					</span>
 				),
-				description: t("likedDescription"),
+				description: t("likedItemsDescription"),
 				icon: BsBookmark,
 				index: 0,
 			},
@@ -529,7 +534,11 @@ function ProfileCollectionsList({
 			data={displayData}
 			className="flex-1 z-10"
 			classNames={{
-				list: "min-h-80 max-h-80 overflow-y-auto xl:scrollbar-hide hover:scrollbar-default",
+				list: "min-h-80 max-h-80 overflow-y-auto xl:scrollbar-hide hover:scrollbar-default overflow-x-hidden",
+			}}
+			itemClasses={{
+				wrapper: "overflow-x-hidden",
+				description: "truncate",
 			}}
 			listItems={mainListboxList}
 			topContent={
@@ -645,14 +654,14 @@ export default function Profile({
 					<div className="flex p-6 gap-2">
 						{[
 							{
-								label: t("liked"),
+								label: t("likedItemsLabel"),
 								count:
 									"+" +
 										Object.keys(displayData.likes).length ||
 									0,
 							},
 							{
-								label: t("saved"),
+								label: t("savedItemsLabel"),
 								count:
 									Object.keys(displayData.itemsCollections)
 										.length || 0,

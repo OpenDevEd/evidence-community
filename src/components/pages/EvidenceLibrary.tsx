@@ -350,6 +350,17 @@ function MainContent({
 	const scope = searchParams["scope"] || SCOPE_OPTIONS[0].key;
 	const range = searchParams["range"] || "";
 
+	const queryParams = {
+		pageNumber,
+		sort,
+		collections,
+		search,
+		scope,
+		range,
+	}
+
+	const itemsURL = buildItemsQuery(queryParams);
+
 	const handlePageChange = useCallback(
 		(newPage: number) => {
 			router.push(
@@ -404,14 +415,7 @@ function MainContent({
 		error: itemsError,
 		isLoading: isItemsLoading,
 	} = useSWR<ItemsGetResponse>(
-		buildItemsQuery({
-			pageNumber,
-			sort,
-			collections,
-			search,
-			scope,
-			range,
-		}),
+		itemsURL,
 		fetcher,
 		{
 			keepPreviousData: true,
@@ -472,6 +476,7 @@ function MainContent({
 				handleRangeChange={handleRangeChange}
 				pageNumber={pageNumber}
 				handlePageChange={handlePageChange}
+				queryParams={queryParams}
 			/>
 		</>
 	);
