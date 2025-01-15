@@ -48,7 +48,79 @@ type ButtonConfig = {
 	hideLabel?: boolean;
 };
 
-function DownloadButton({itemData, ...props}: PropsWithChildren<typeof Button> & {itemData: Item}) {
+export function DownloadModal({
+	isOpen,
+	onOpenChange,
+	onClose,
+	action,
+	fileName,
+}: {
+	isOpen: boolean;
+	onOpenChange: (open: boolean) => void;
+	onClose: () => void;
+	action: (format: "ris" | "bibtex") => Promise<string>;
+	fileName: string;
+}) {
+	const t = useTranslations("ui");
+
+	return (
+		<AIModal
+			size="md"
+			isOpen={isOpen}
+			onOpenChange={onOpenChange}
+			onClose={onClose}
+		>
+			<ModalContent>
+				<GenericHeader startContent={<LuDownload />} onClose={onClose}>
+					{t("download")}
+				</GenericHeader>
+				<ListModalBody
+					description={t("downloadDescription")}
+					onAction={async (index: number) => {
+						const format = ["ris", "bibtex"][index] as
+							| "ris"
+							| "bibtex";
+						const ret = await action(format);
+						const blob = new Blob([ret], {
+							type:
+								format === "ris"
+									? "application/x-research-info-systems"
+									: "application/x-bibtex",
+						});
+						const url = URL.createObjectURL(blob);
+						const a = document.createElement("a");
+						a.href = url;
+						a.download = `${fileName}.${
+							format === "ris" ? "ris" : "bib"
+						}`;
+						a.click();
+					}}
+					highlightedIndexes={[]}
+					list={[
+						{
+							name: "RIS",
+							subtitle: ".ris",
+							description:
+								t("RISDescription")
+						},
+						{
+							name: "BibTeX",
+							subtitle: ".bib",
+							description:
+								t("BibTeXDescription")
+						},
+					]}
+				/>
+			</ModalContent>
+		</AIModal>
+	);
+}
+
+export function DownloadButton({
+	action,
+	fileName,
+	...props
+}: PropsWithChildren<typeof Button> & { action: (format: "ris" | "bibtex") => Promise<string>; fileName: string }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const t = useTranslations("ui");
 
@@ -57,39 +129,13 @@ function DownloadButton({itemData, ...props}: PropsWithChildren<typeof Button> &
 			<Button {...props} onPress={onOpen}>
 				{props.children}
 			</Button>
-			<AIModal
-				size="md"
+			<DownloadModal
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
 				onClose={onClose}
-			>
-				<ModalContent>
-					<GenericHeader startContent={<LuDownload />} onClose={onClose}>Download</GenericHeader>
-					<ListModalBody
-						description={t("downloadDescription")}
-						onAction={async (index) => {
-							const format = ["ris", "bibtex"][index] as "ris" | "bibtex";
-							const ret = await convertItem(itemData, format);
-							const blob = new Blob([ret], { type: format === "ris" ? "application/x-research-info-systems" : "text/plain" });
-							const url = URL.createObjectURL(blob);
-							const a = document.createElement("a");
-							a.href = url;
-							a.download = `${itemData.key}.${format === "ris" ? "ris" : "bib"}`;
-							a.click();
-						}}
-						highlightedIndexes={[]}
-						list={[{
-							name: "RIS",
-							subtitle: ".ris",
-							description: "Recommended format for most reference management software",
-						}, {
-							name: "BibTeX",
-							subtitle: ".bib",
-							description: "Recommended format for BibTeX-specific software",
-						}]}
-					/>
-				</ModalContent>
-			</AIModal>
+				action={action}
+				fileName={fileName}
+			/>
 		</>
 	);
 }
@@ -128,7 +174,10 @@ export default function ItemControls({
 				Component: DownloadButton,
 				label: t("downloadRecord"),
 				props: {
-					itemData: itemData,
+					action: async (format: "ris" | "bibtex") => {
+						return await convertItem(itemData!, format);
+					},
+					fileName: itemData!.key,
 					size: "sm",
 					className: "hidden xl:flex ml-auto rtl:ml-0 rtl:mr-auto",
 					startContent: <LuDownload className="size-5" />,
