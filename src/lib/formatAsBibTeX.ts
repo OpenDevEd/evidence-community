@@ -1089,8 +1089,6 @@ export class BibTeXExporter {
         this.lines = [];
         this.options = options;
 
-		console.log("PRINTING", this.item);
-
 		const format = this.format();
 
 		this.cite = Cite.async(format);
@@ -1269,17 +1267,12 @@ export class BibTeXExporter {
 			}
 		}
 
-        if(this.item.attachments) {
+        if(this.item.attachments && this.options.exportFileData) {
 			let attachmentString = "";
 			
 			for(let i = 0; i < this.item.attachments.length; i++) {
 				const attachment = this.item.attachments[i];
-				if(this.options.exportFileData && attachment.saveFile) {
-					attachment.saveFile(attachment.defaultPath, true);
-					attachmentString += ";" + attachment.title + ":" + attachment.defaultPath + ":" + attachment.mimeType;
-				} else if(attachment.localPath) {
-					attachmentString += ";" + attachment.title + ":" + attachment.localPath + ":" + attachment.mimeType;
-				}
+				attachmentString += ";" + attachment.title + ":" + attachment.localPath + ":" + attachment.mimeType;
 			}
 			
 			if(attachmentString) {
