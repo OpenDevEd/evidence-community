@@ -14,9 +14,9 @@ import {
 } from "react-icons/ri";
 import { BsChatRightDotsFill } from "react-icons/bs";
 import { GiBookshelf } from "react-icons/gi";
-import { LinkObject } from "@/types/links";
+import { LinkObject, LinksList } from "@/db/schema/tables/status";
 
-export const links: Record<string, LinkObject[]> = {
+export const links: LinksList = {
     opendeved: [
         {
             label: "home",
