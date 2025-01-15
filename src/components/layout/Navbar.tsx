@@ -30,7 +30,6 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useLocale, useTranslations } from "next-intl";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Link } from "@/i18n/routing";
-import { LinkObject } from "@/types/links";
 import { Button } from "../nextui/Button";
 import { BiError, BiErrorCircle, BiLogIn, BiLogOut } from "react-icons/bi";
 import { signIn, signOut, useSession } from "next-auth/react";
@@ -42,6 +41,7 @@ import { authenticate } from "@/lib/auth";
 import { Router } from "next/router";
 import { useModalError } from "@/hooks/useModalError";
 import { useFeatureFlagEnabled } from "@/context/Providers";
+import { LinkObject } from "@/db/schema/tables/status";
 
 function ThemeSwitcher({
 	theme,
@@ -212,7 +212,7 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 							title: "text-white",
 						}}
 					>
-						{link.dropdown?.map((child) => (
+						{link.dropdown?.map((child: any) => (
 							<DropdownItem key={child.label} href={child.href}>
 								{t(child.label)}
 							</DropdownItem>

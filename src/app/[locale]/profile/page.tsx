@@ -14,8 +14,6 @@ export default function ProfilePage(props: { params: Promise<{ locale: string }>
 
     const { data: session, status } = useSession();
 
-    console.log(session);
-
     if (status === "loading") {
 		return <div>Loading...</div>;
 	}
