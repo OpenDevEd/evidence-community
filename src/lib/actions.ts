@@ -19,17 +19,121 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
+import { buildItemsQuery } from "@/lib/utils";
+import { getCachedUserLikes } from "@/app/api/cache";
+import { getCachedUserCollectionKeys } from "@/app/api/cache";
+import { auth } from "@/app/api/auth/[...nextauth]/config";
 
-export async function convertItem(item: Item, format: "ris" | "bibtex") {
-	const BibTeX = new BibTeXExporter(item);
-
-	if (format === "ris") {
-		return await BibTeX.toRIS();
+export async function getProfileSearchFilter(
+	id: string | null,
+	collectionId: string | null
+) {
+	if (!collectionId && !id) {
+		return { filter: null };
 	}
 
-	if (format === "bibtex") {
-		return await BibTeX.toBibTeX();
+	const [session, collectionKeys, likes] = await Promise.all([
+		auth(),
+		collectionId ? getCachedUserCollectionKeys(collectionId, true) : null,
+		id && !collectionId ? getCachedUserLikes(id, true) : null,
+	]);
+
+	if (collectionKeys) {
+		if (!collectionKeys) {
+			return { filter: null };
+		}
+
+		if (collectionKeys.private) {
+			const userId = session?.user?.id;
+
+			if (!id) {
+				return { filter: null, status: 401 };
+			}
+
+			if (collectionKeys.userId !== userId) {
+				return { filter: null, status: 403 };
+			}
+		}
+
+		return {
+			filter: [
+				`key IN [${collectionKeys.itemKeys
+					.map((key) => `"${key}"`)
+					.join(",")}]`,
+			],
+		};
 	}
+
+	if (likes) {
+		return {
+			filter: [
+				`key IN [${likes
+					.filter((like) => !like.deleted)
+					.map((like) => `"${like.itemKey}"`)
+					.join(",")}]`,
+			],
+		};
+	}
+
+	return { filter: null };
+}
+
+export async function convertItem(
+	item: Item | Item[],
+	format: "ris" | "bibtex"
+) {
+	const itemsList = Array.isArray(item) ? item : [item];
+	let textFormat = ``;
+
+	const promises = itemsList.map(async (item) => {
+		try {
+			const BibTeX = new BibTeXExporter(item);
+
+			if (format === "ris") {
+				const ret = await BibTeX.toRIS();
+				textFormat += ret + "\n\n";
+			}
+
+			if (format === "bibtex") {
+				const ret = await BibTeX.toBibTeX();
+				textFormat += ret + "\n\n";
+			}
+		} catch (error) {
+			console.log("Error converting item", item.key);
+		}
+	});
+
+	await Promise.allSettled(promises);
+
+	return textFormat;
+}
+
+export async function downloadItems(
+	queryParams: Record<string, any>,
+	params: Record<string, any>,
+	format: "ris" | "bibtex"
+) {
+	const url = buildItemsQuery(queryParams, "https://www.example.com");
+	const { searchParams } = new URL(url);
+	const collections = searchParams.get("collections")?.split(",") || [];
+	const collectionId = searchParams.get("collectionId");
+	const id = params.id;
+	const { filter, status } = await getProfileSearchFilter(id, collectionId);
+
+	const items = await searchIndex(
+		url,
+		{
+			limit: 1000000,
+		},
+		[
+			...collections.map(
+				(collection: string) => `collectionsAncestry = "${collection}"`
+			),
+			...(filter ? filter : []),
+		]
+	);
+
+	return await convertItem(items.items, format);
 }
 
 export async function getLikedPosts(likes: Session["user"]["likes"]) {
@@ -47,27 +151,25 @@ export async function getLikedPosts(likes: Session["user"]["likes"]) {
 function formatRange(range: string | null) {
 	if (!range) return null;
 
-	const getTimestamp = (year: string) => {
-		const num = Number(year);
-		return num > 0 ? new Date(num, 0, 1).getTime() : null;
-	};
-
 	const [start, end] = range.includes("-")
 		? range.split("-")
 		: [range, range];
-	const startTs = getTimestamp(start);
-	const endTs = getTimestamp(end);
+	const startYear = Number(start);
+	const endYear = Number(end);
 
-	if (!startTs && !endTs) return null;
-	if (startTs === endTs) return `year = ${startTs}`;
+	if (isNaN(startYear) && isNaN(endYear)) return null;
+	if (startYear === endYear) return `year = ${startYear}`;
 
-	return [startTs && `year >= ${startTs}`, endTs && `year <= ${endTs}`]
+	return [
+		startYear > 0 && `year >= ${startYear}`,
+		endYear > 0 && `year <= ${endYear}`
+	]
 		.filter(Boolean)
 		.join(" AND ");
 }
 
 export async function searchIndex(
-	request: NextRequest,
+	url: string,
 	extraProperties: Parameters<
 		ReturnType<typeof meilisearchClient.index>["search"]
 	>[1] = {},
@@ -75,7 +177,7 @@ export async function searchIndex(
 		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
 	>["filter"] = []
 ) {
-	const { searchParams } = new URL(request.url);
+	const { searchParams } = new URL(url);
 	const pageNum = Math.max(1, Number(searchParams.get("page")) || 1);
 	const limitNum = Math.min(
 		100,
@@ -91,6 +193,14 @@ export async function searchIndex(
 	const sortOption =
 		SORT_OPTIONS.find((option) => option.key === sort)?.sort ||
 		SORT_OPTIONS[0].sort;
+	
+	const finalFilters = [
+		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
+			range ? formatRange(range) : null,
+		...(Array.isArray(extraFilters) ? extraFilters : []),
+	].filter((f): f is string => f !== null);
+
+	console.log("finalFilters", finalFilters);
 
 	const searchResults = await searchIndex.search(search, {
 		offset: (pageNum - 1) * limitNum,
@@ -98,13 +208,9 @@ export async function searchIndex(
 		attributesToSearchOn:
 			SCOPE_OPTIONS.find((option) => option.key === scope)
 				?.attributesToSearchOn || SCOPE_OPTIONS[0].attributesToSearchOn,
-		filter: [
-			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
-			range && formatRange(range),
-			...(Array.isArray(extraFilters) ? extraFilters : []),
-		].filter((f): f is string => f !== null),
 		sort: [sortOption],
 		...extraProperties,
+		filter: finalFilters,
 	});
 
 	const items = searchResults.hits;
@@ -177,24 +283,32 @@ export async function getProfile(
 				}, {} as Session["user"]["likes"])
 			);
 
-		const profile = isCurrentUser ? session?.user : await db.query.users.findFirst({
-			where: eq(users.id, id),
-			columns: {
-				name: true,
-				image: true,
-				email: true,
-				createdAt: true,
-			},
-		});
+		const profile = isCurrentUser
+			? session?.user
+			: await db.query.users.findFirst({
+					where: eq(users.id, id),
+					columns: {
+						name: true,
+						image: true,
+						email: true,
+						createdAt: true,
+					},
+			  });
 
-		const itemsCollections = await tx.query.itemToUserCollection.findMany({
-			where: and(eq(itemToUserCollection.userId, id), eq(itemToUserCollection.deleted, false)),
-		}).then((items) => items.reduce((acc, item) => {
-			acc[item.itemKey] = acc[item.itemKey] || {};
-			acc[item.itemKey][item.userCollectionId] = item.updatedAt;
-				return acc;
-			}, {} as Session["user"]["itemsCollections"])
-		);
+		const itemsCollections = await tx.query.itemToUserCollection
+			.findMany({
+				where: and(
+					eq(itemToUserCollection.userId, id),
+					eq(itemToUserCollection.deleted, false)
+				),
+			})
+			.then((items) =>
+				items.reduce((acc, item) => {
+					acc[item.itemKey] = acc[item.itemKey] || {};
+					acc[item.itemKey][item.userCollectionId] = item.updatedAt;
+					return acc;
+				}, {} as Session["user"]["itemsCollections"])
+			);
 
 		return {
 			...profile,
