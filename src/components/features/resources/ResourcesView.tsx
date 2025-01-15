@@ -1,6 +1,6 @@
 "use client";
-import { ReactNode, useRef, useState } from "react";
-import { useTranslations } from "next-intl";
+import { ReactNode, useContext, useRef, useState } from "react";
+import { useFormatter, useTranslations } from "next-intl";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { CollectionsGetResponse } from "@/app/api/collections/types";
 import { twMerge } from "tailwind-merge";
@@ -16,6 +16,10 @@ import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import Resource from "../items/Resource";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
+import { CacheContext, CacheContextType } from "@/context/Providers";
+import { DownloadModal } from "../items/ItemControls";
+import { useDisclosure } from "@nextui-org/react";
+import { downloadItems } from "@/lib/actions";
 
 
 interface ResourcesViewProps {
@@ -38,6 +42,8 @@ interface ResourcesViewProps {
     handlePageChange: (newPage: number) => void;
     header?: ReactNode;
 	countLabel?: ReactNode;
+	queryParams?: Record<string, any>;
+	params?: Record<string, any>;
 }
 
 function Chip({
@@ -188,16 +194,32 @@ function ResourcesList({
 	);
 }
 
-function ContentActions() {
+function ContentActions({ data, queryParams, params }: { data: ItemsGetResponse | undefined, queryParams?: Record<string, any>, params?: Record<string, any> }) {
 	const t = useTranslations("ui");
+	const format = useFormatter();
+	const totalItems = data?.totalItems || 0;
+	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 
 	return (
 		<div className="xl:flex xl:justify-end grid gap-4 flex-wrap">
-			<Button endContent={<HiOutlineDownload className="size-6" />}>
-				{t("downloadRecords", { count: "6,788" })}
+			<DownloadModal
+				isOpen={isOpen}
+				onOpenChange={onOpenChange}
+				onClose={onClose}
+				action={async (format: "ris" | "bibtex") => {
+					return await downloadItems(queryParams || {}, params || {}, format);
+				}}
+				fileName={format.number(totalItems) + " " + format.dateTime(new Date(), {
+					day: "2-digit",
+					month: "2-digit",
+					year: "numeric",
+				})}
+			/>
+			<Button endContent={<HiOutlineDownload className="size-6" />} onPress={onOpen}>
+				{t("downloadRecords", { count: format.number(totalItems) })}
 			</Button>
 			<Button endContent={<HiOutlinePrinter className="size-6" />}>
-				{t("printCitations", { count: "5,654" })}
+				{t("printCitations", { count: format.number(totalItems) })}
 			</Button>
 			<Button
 				endContent={<HiOutlineCodeBracketSquare className="size-6" />}
@@ -268,10 +290,14 @@ export function ResourcesView({
     pageNumber,
     handlePageChange,
 	countLabel,
+	queryParams,
+	params,
 }: ResourcesViewProps) {
     const t = useTranslations("ui");
+	const format = useFormatter();
     const [abstract, setAbstract] = useState(true);
 	const [view, setView] = useState("list");
+	const { status } = useContext(CacheContext) as CacheContextType;
 
     return (
         <div className="w-full flex flex-col gap-4">
@@ -317,7 +343,7 @@ export function ResourcesView({
                 error={itemsError}
                 isLoading={isItemsLoading}
             />
-            <ContentActions />
+		<ContentActions data={itemsData} queryParams={queryParams} params={params}/>
             <div className="text-center xl:text-end text-black/40 dark:text-white/40 text-sm">
                 {t("lastUpdate", { date: format.dateTime(status.databaseUpdatedAt!, {
 					day: "2-digit",
