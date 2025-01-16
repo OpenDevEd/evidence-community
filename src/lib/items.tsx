@@ -9,6 +9,7 @@ import { useRouter } from "@/i18n/routing";
 import CopyButton from "@/components/features/items/CopyButton";
 import { Card } from "@/components/nextui/Card";
 import { INSTITUTION_LOGOS } from "@/constants/items";
+import { useFeatureFlagEnabled } from "@/context/Providers";
 
 type FormatterProps = {
 	value: any;
@@ -90,6 +91,43 @@ function Extra({ value }: { value: string }) {
 	return <>{elements}</>;
 }
 
+function Collections({ value }: { value: Collection[] }) {
+	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
+	
+	if (!isCollectionsEnabled) return false;
+	if (!value) return false;
+	if (value.length === 0) return false;
+
+	value.sort(
+		(a: Collection, b: Collection) =>
+			a.title?.localeCompare(b.title || "") || 0
+	);
+
+	return (
+		<ul className="flex flex-col gap-2">
+			{value.map((collection: Collection) => {
+				const ancestry = collection.ancestry || [];
+				return (
+					<li key={collection.id}>
+						<Link
+							showAnchorIcon
+							href={`/lib?collections=${[
+								...ancestry,
+								collection.key,
+							].join(",")}`}
+							className="text-tertiary-400"
+						>
+							<span className="text-black/60 dark:text-white/60 underline">
+								{collection.title} / {collection.name}
+							</span>
+						</Link>
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+
 export const valueFormatter: Record<
 	any,
 	(props: FormatterProps) => ReactNode | boolean
@@ -144,39 +182,7 @@ export const valueFormatter: Record<
 			</ul>
 		);
 	},
-	collectionsData: ({ value }) => {
-		if (!value) return null;
-		if (value.length === 0) return null;
-
-		value.sort(
-			(a: Collection, b: Collection) =>
-				a.title?.localeCompare(b.title || "") || 0
-		);
-
-		return (
-			<ul className="flex flex-col gap-2">
-				{value.map((collection: Collection) => {
-					const ancestry = collection.ancestry || [];
-					return (
-						<li key={collection.id}>
-							<Link
-								showAnchorIcon
-								href={`/lib?collections=${[
-									...ancestry,
-									collection.key,
-								].join(",")}`}
-								className="text-tertiary-400"
-							>
-								<span className="text-black/60 dark:text-white/60 underline">
-									{collection.title} / {collection.name}
-								</span>
-							</Link>
-						</li>
-					);
-				})}
-			</ul>
-		);
-	},
+	collectionsData: Collections,
 	date: formatDate,
 	accessDate: formatDate,
 	url: ({ value }) => (
@@ -188,7 +194,7 @@ export const valueFormatter: Record<
 		const filteredValue = value.filter(
 			(data: any) => data.PDFCoverPageImage
 		);
-		
+
 		if (filteredValue.length === 0) return false;
 
 		return (
@@ -202,10 +208,9 @@ export const valueFormatter: Record<
 		);
 	},
 	extra: (args) => {
-		const finalValue = args.value.replace(
-			/(\S+):\s*([^:\n]+?)(?=\s+\S+:|$)/g,
-			'\n$1: $2'
-		).trim();
+		const finalValue = args.value
+			.replace(/(\S+):\s*([^:\n]+?)(?=\s+\S+:|$)/g, "\n$1: $2")
+			.trim();
 
 		return (
 			<div className="whitespace-pre-line">
@@ -228,7 +233,9 @@ export const valueFormatter: Record<
 			<div>
 				<Card className="max-w-fit p-2 rounded-2xl" color="accent">
 					<div className="flex gap-2 items-center">
-						{InstitutionLogo && <InstitutionLogo className="bg-white/80" />}
+						{InstitutionLogo && (
+							<InstitutionLogo className="bg-white/80" />
+						)}
 						<h3 className="text-black/80 dark:text-white/80">
 							{value}
 						</h3>
