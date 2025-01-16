@@ -208,9 +208,7 @@ export const valueFormatter: Record<
 		);
 	},
 	extra: (args) => {
-		const finalValue = args.value
-			.replace(/(\S+):\s*([^:\n]+?)(?=\s+\S+:|$)/g, "\n$1: $2")
-			.trim();
+		const finalValue = args.value;
 
 		return (
 			<div className="whitespace-pre-line">
@@ -232,7 +230,7 @@ export const valueFormatter: Record<
 		return (
 			<div>
 				<Card className="max-w-fit p-2 rounded-2xl" color="accent">
-					<div className="flex gap-2 items-center">
+					<div className={twMerge("flex gap-2 items-center", !InstitutionLogo && "px-2")}>
 						{InstitutionLogo && (
 							<InstitutionLogo className="bg-white/80" />
 						)}
