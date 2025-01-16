@@ -3,8 +3,6 @@ import { MetadataRoute } from 'next'
 import { routing } from '@/i18n/routing'
 import config from "@/constants/config.json";
 
-const locales = routing.locales.map((locale) => locale);
-
 const LIMIT_PER_SITEMAP = 10000;
 
 function getItems(args: {
@@ -20,7 +18,7 @@ function getItems(args: {
 export async function generateSitemaps() {
 	if (process.env.SHOULD_GENERATE_SITEMAP === "true") {
 		const items = await getItems()
-		return Array.from({ length: Math.ceil((items.total * locales.length) / LIMIT_PER_SITEMAP) }, (_, i) => ({ id: i }))
+		return Array.from({ length: Math.ceil((items.total) / LIMIT_PER_SITEMAP) }, (_, i) => ({ id: i }))
 	}
 	return [];
 }
@@ -30,7 +28,7 @@ export default async function sitemap({
 }: { 
 	id: number 
 }): Promise<MetadataRoute.Sitemap> {
-	const itemsPerLocale = Math.ceil(LIMIT_PER_SITEMAP / locales.length)
+	const itemsPerLocale = Math.ceil(LIMIT_PER_SITEMAP)
 	const offset = id * itemsPerLocale
 	
 	const items = await getItems({
@@ -38,16 +36,8 @@ export default async function sitemap({
 		offset: offset
 	})
 
-	return items.results.flatMap(item => 
-		locales.map(locale => ({
-			url: `${process.env.BASE_URL}/${locale}/lib/${item.key}`,
+	return items.results.flatMap(item => ({
+			url: `${process.env.BASE_URL}//lib/${item.key}`,
 			lastModified: item.updatedAt,
-			alternates: {
-				languages: locales.reduce((acc, l) => ({
-					...acc,
-					[l]: `${process.env.BASE_URL}/${l}/lib/${item.key}`
-				}), {})
-			}
-		}))
-	)
+	}))
 }
