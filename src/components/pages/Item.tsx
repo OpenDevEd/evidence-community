@@ -156,27 +156,20 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	);
 }
 
-function formatItemToOriginalFormat(item: NonNullable<ItemGetResponse['item']>) {
-	return {
-		...item,
-		language: item.languageName,
-	};
-}
-
 export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 	const router = useRouter();
 	const t = useTranslations("ui");
 	const isAIEnabled = useFeatureFlagEnabled("ai-features");
 	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources");
 	const { data: embeddings } = useSWR(
-		isRelatedItemsEnabled ? `/ai/embeddings/${data?.item?.key}` : null,
+		(isRelatedItemsEnabled && data?.item) ? `/ai/embeddings/${data?.item?.key}` : null,
 		fetcher
 	);
 
 	return (
 		<main className="w-full max-w-[96rem] px-4 xl:px-14 flex flex-col gap-4">
 			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
-				<ItemControls itemData={data?.item} router={router} />
+				{data?.item && <ItemControls itemData={data?.item} router={router} />}
 				<div className="flex flex-col gap-8 p-4 xl:p-10">
 					{data?.item ? (
 						<>
@@ -204,8 +197,8 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 					)}
 				</div>
 			</div>
-			{isAIEnabled && data && <AiButton data={data} />}
-			{isRelatedItemsEnabled && (
+			{isAIEnabled && data?.item && <AiButton data={data} />}
+			{isRelatedItemsEnabled && data?.item && (
 				<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
 					<div className="flex xl:flex-row flex-col">
 						<div className="text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-full shrink-0 rounded xl:p-10 p-4 pb-0">
