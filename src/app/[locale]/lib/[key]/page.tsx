@@ -39,6 +39,10 @@ export async function generateMetadata(props: {
     const data = await getCurrentItem(params.key);
     const DOI_REGEX = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
     const DOIs = Array.from(new Set([data?.item?.DOI, ...(Array.from(data?.item?.extra?.matchAll(DOI_REGEX) || []).map(m => m[0]))].filter(Boolean).map(doi => doi?.trim())))
+    const attachmentExists = data?.item?.attachmentsData?.find((a: any) => 
+        a.PDFCoverPageImage
+    );
+
 
 	return {
 		title: data?.item?.title,
@@ -54,9 +58,8 @@ export async function generateMetadata(props: {
                 "application/x-bibtex": `${process.env.BASE_URL!}/lib/${data?.item?.key}/export/bibtex`,
             },
             media: {
-                'image/jpeg': data?.item?.attachmentsData?.find((a: any) => 
-                    a.PDFCoverPageImage
-                )?.PDFCoverPageImage ?? null
+                'image/jpeg': attachmentExists?.PDFCoverPageImage ?? null,
+                'application/pdf': attachmentExists?.url ?? null
             }
         },
         other: {
@@ -118,11 +121,9 @@ export async function generateMetadata(props: {
             siteName: 'OpenDeved',
             images: [
                 {
-                    url: data?.item?.attachmentsData?.find((a: any) => 
-                        a.PDFCoverPageImage
-                    )?.PDFCoverPageImage ?? '',
-                    width: 1200,
-                    height: 630,
+                    url: attachmentExists?.PDFCoverPageImage ?? '',
+                    width: attachmentExists?.PDFCoverPageWidth ?? 1200,
+                    height: attachmentExists?.PDFCoverPageHeight ?? 630,
                     alt: data?.item?.title ?? ''
                 }
             ],
