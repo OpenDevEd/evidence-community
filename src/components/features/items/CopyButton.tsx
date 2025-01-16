@@ -6,6 +6,7 @@ import { Button } from "@/components/nextui/Button";
 import { FaClipboard, FaClipboardCheck } from "react-icons/fa";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
+import { routing } from "@/i18n/routing";
 
 const CopyButton = forwardRef<
 	any,
@@ -37,7 +38,11 @@ const CopyButton = forwardRef<
 		} else {
 			const currentUrl = window.location.href;
 			const url = new URL(currentUrl);
-			url.pathname = `/${locale}/lib/${itemData?.key}`;
+			if (locale !== routing.defaultLocale) {
+				url.pathname = `/${locale}/lib/${itemData?.key}`;
+			} else {
+				url.pathname = `/lib/${itemData?.key}`;
+			}
 			url.search = "";
 			navigator.clipboard.writeText(url.toString());
 		}
