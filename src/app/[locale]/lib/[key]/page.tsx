@@ -43,6 +43,22 @@ export async function generateMetadata(props: {
 	return {
 		title: data?.item?.title,
         description: data?.item?.abstractNote,
+        alternates: {
+            canonical: `${process.env.BASE_URL!}/lib/${data?.item?.key}`,
+            languages: routing.locales.filter(locale => locale !== routing.defaultLocale).reduce((acc: { [locale: string]: string }, locale) => {
+                acc[locale] = `${process.env.BASE_URL!}/${locale}/lib/${data?.item?.key}`;
+                return acc;
+            }, {}),
+            types: {
+                "application/json": `${process.env.BASE_URL!}/lib/${data?.item?.key}/export/ris`,
+                "application/x-bibtex": `${process.env.BASE_URL!}/lib/${data?.item?.key}/export/bibtex`,
+            },
+            media: {
+                'image/jpeg': data?.item?.attachmentsData?.find((a: any) => 
+                    a.PDFCoverPageImage
+                )?.PDFCoverPageImage ?? null
+            }
+        },
         other: {
             "citation_title": data?.item?.title ?? "",
             "citation_date": data?.item?.date ?? "",
@@ -94,7 +110,33 @@ export async function generateMetadata(props: {
                 }
                 return acc;
             }, {}) ?? {})
-        }
+        },
+        openGraph: {
+            title: data?.item?.title ?? '',
+            description: data?.item?.abstractNote ?? '',
+            url: `${process.env.BASE_URL!}/lib/${data?.item?.key}`,
+            siteName: 'OpenDeved',
+            images: [
+                {
+                    url: data?.item?.attachmentsData?.find((a: any) => 
+                        a.PDFCoverPageImage
+                    )?.PDFCoverPageImage ?? '',
+                    width: 1200,
+                    height: 630,
+                    alt: data?.item?.title ?? ''
+                }
+            ],
+            locale: 'en_US',
+            type: 'article',
+            authors: data?.item?.creators?.map((creator: any) => 
+                Object.entries(creator)
+                    .filter(([key]) => key !== 'creatorType')
+                    .map(([_, value]) => value)
+                    .join(', ')
+            ) ?? [],
+            publishedTime: data?.item?.date?.toString() ?? '',
+            modifiedTime: (data?.item?.dateModified ?? data?.item?.date)?.toString() ?? '',
+        },
 	};
 }
 
