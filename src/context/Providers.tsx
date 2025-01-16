@@ -36,6 +36,11 @@ export function useFeatureFlagEnabled(flag: string) {
 	return featureFlags?.has(flag);
 }
 
+export function useStatus(): CacheContextType["status"] {
+	const { status } = useContext(CacheContext);
+	return status;
+}
+
 function PageView() {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
