@@ -56,7 +56,13 @@ function PageView() {
 	return null;
 }
 
-function CacheProvider({ children, status }: { children: React.ReactNode, status: InferSelectModel<typeof statusTable> }) {
+function CacheProvider({
+	children,
+	status,
+}: {
+	children: React.ReactNode;
+	status: InferSelectModel<typeof statusTable>;
+}) {
 	const [cache, setCache] = useState({});
 	const itemsCache = useRef(undefined);
 	const previousExpansionStates = useRef({});
@@ -93,7 +99,7 @@ function LoadingScreen({
 
 	return (
 		<AnimatePresence mode="popLayout">
-			{(featureFlags && (status !== "loading" || !!session)) ? (
+			{featureFlags && (status !== "loading" || !!session) ? (
 				children
 			) : (
 				<motion.div
@@ -142,7 +148,15 @@ function LoadingScreen({
 	);
 }
 
-export default function Providers({ children, session, status }: { children: React.ReactNode, session: Session | null, status: InferSelectModel<typeof statusTable> }) {
+export default function Providers({
+	children,
+	session,
+	status,
+}: {
+	children: React.ReactNode;
+	session: Session | null;
+	status: InferSelectModel<typeof statusTable>;
+}) {
 	const router = useRouter();
 	const [featureFlags, setFeatureFlags] = useState<Set<string> | null>(null);
 	const [isMounted, setIsMounted] = useState(false);
