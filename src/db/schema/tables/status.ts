@@ -5,7 +5,7 @@ import { pgTable } from "drizzle-orm/pg-core";
 export type LinkObject = {
 	label: string;
 	href: string;
-	icon?: React.ElementType;
+	icon?: string;
 	dropdown?: LinkObject[];
 	navExclude?: boolean;
 	footerExclude?: boolean;
@@ -25,9 +25,9 @@ export const status = pgTable("status", {
     companyName: text("companyName"),
     companyLogo: text("companyLogo"),
     companyFooter: json("companyFooter").$type<CompanyFooter>(),
-    links: json("links").$type< LinksList>(),
+    links: json("links").$type<LinkObject[]>(),
     externalLinks: json("externalLinks").$type<ExternalLinks>(),
-    docsLinks: text("docsLinks"),
+    docsLink: text("docsLink"),
     style: text("style"),
     allRISURL: text("allRISURL"),
     allBibTeXURL: text("allBibTeXURL"),

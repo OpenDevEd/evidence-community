@@ -143,6 +143,8 @@ export const item = pgTable('item', {
 
   fullTextPDF: varchar(),
   PDFCoverPageImage: varchar(),
+  PDFCoverPageWidth: integer(),
+  PDFCoverPageHeight: integer(),
 
   deleted: integer('deleted').default(0),
 
