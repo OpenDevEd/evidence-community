@@ -2,11 +2,13 @@ import type { Config } from "tailwindcss";
 import { nextui } from "@nextui-org/react";
 import jsonConfig from "./src/constants/config.json";
 
-export const style = process.env.NEXT_PUBLIC_STYLE || jsonConfig?.style || "opendeved";
+export const style = process.env.NEXT_PUBLIC_STYLE || jsonConfig?.style || "small";
+export const accent = process.env.NEXT_PUBLIC_ACCENT || jsonConfig?.accent || "opendeved";
 
 const accentColors = {
   "opendeved": "#e68124",
   "edtechhub": "#ff5c00",
+  "ekitabu": "#ed1c24",
 }
 
 function generateColorVariants(baseColor: string) {
@@ -114,7 +116,7 @@ const colors = {
     800: "#bedefe",
     900: "#dfefff",
   },
-  accent: generateColorVariants(accentColors[style as keyof typeof accentColors]),
+  accent: generateColorVariants(accentColors[accent as keyof typeof accentColors]),
   card: {
     DEFAULT: "#141414",
     100: "#040404",
