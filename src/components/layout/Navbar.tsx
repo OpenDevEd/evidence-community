@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { localesNames, routing, shortLocalesNames, usePathname, useRouter } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
-import { links } from "@/constants/links";
+import { links, NAVBAR_ICONS } from "@/constants/links";
 import { useTheme } from "next-themes";
 import { HiOutlineMoon } from "react-icons/hi2";
 import { IoIosLogIn, IoMdSunny } from "react-icons/io";
@@ -40,7 +40,7 @@ import { FaGoogle, FaEnvelope, FaLock } from "react-icons/fa";
 import { authenticate } from "@/lib/auth";
 import { Router } from "next/router";
 import { useModalError } from "@/hooks/useModalError";
-import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
 import { LinkObject } from "@/db/schema/tables/status";
 
 function ThemeSwitcher({
@@ -100,6 +100,7 @@ function ThemeSwitcher({
 
 function Logo({ interactive = true }: { interactive?: boolean }) {
 	const [isLoaded, setIsLoaded] = useState(false);
+	const status = useStatus();
 
 	const logoContent = (
 		<div
@@ -115,8 +116,8 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 					onLoad={() => setIsLoaded(true)}
 					src={
 						themeToMatch === "dark"
-							? `/logos/${style}/logo.png`
-							: `/logos/${style}/logo_light.png`
+							? `/logos/${status?.companyName?.toLowerCase()}/logo.png`
+							: `/logos/${status?.companyName?.toLowerCase()}/logo_light.png`
 					}
 					alt="logo"
 					className={twMerge(
@@ -181,16 +182,19 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 				key={link.label}
 				className={twMerge(
 					"flex  gap-2 text-lg items-center justify-center font-medium",
-					style === "edtechhub" && "uppercase font-base"
+					style === "wide" && "uppercase font-base"
 				)}
 			>
 				{link.icon && (
-					<link.icon
-						className={twMerge(
-							"fill-current size-6 shrink-0",
-							style === "edtechhub" && "size-5"
-						)}
-					/>
+					Object.entries(NAVBAR_ICONS).filter(([key]) => key === link.icon).map(([key, Value]) => (
+						<Value
+							key={key}
+							className={twMerge(
+								"fill-current size-6 shrink-0",
+								style === "wide" && "size-5"
+							)}
+						/>
+					))
 				)}
 				<span className="line-clamp-1">{t(link.label)}</span>
 			</Link>
@@ -231,6 +235,10 @@ function LinksList({
 	pathname: string;
 	isMobile?: boolean;
 }) {
+	const status = useStatus();
+
+	const links: LinkObject[] = status.links || [];
+
 	return (
 		<div
 			className={twMerge(
@@ -239,7 +247,7 @@ function LinksList({
 				!isMobile && "hidden xl:flex"
 			)}
 		>
-			{links[style as keyof typeof links].map(
+			{links.map(
 				(link, index) =>
 					!link.navExclude && (
 						<LinkItem link={link} pathname={pathname} key={index} />
@@ -261,7 +269,7 @@ function LanguageSwitcher({ className }: { className?: string }) {
 			>
 				<div
 					data-style={style}
-					className="relative flex items-center gap-2 data-[style=edtechhub]:uppercase"
+					className="relative flex items-center gap-2 data-[style=wide]:uppercase"
 				>
 					<span className="text-lg font-medium">
 						{shortLocalesNames[locale as keyof typeof shortLocalesNames]}
@@ -455,13 +463,13 @@ export default function Navbar() {
 		<nav
 			className={twMerge(
 				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0",
-				style === "edtechhub" && "bg-white dark:bg-secondary max-w-none"
+				style === "wide" && "bg-white dark:bg-secondary max-w-none"
 			)}
 		>
 			<div
 				className={twMerge(
 					"xl:h-[6.5rem] bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10",
-					style === "edtechhub" &&
+					style === "wide" &&
 						"bg-transparent max-w-[96rem] mx-auto xl:px-14 gap-9"
 				)}
 			>
@@ -485,12 +493,12 @@ export default function Navbar() {
 							color={"accent"}
 							className={twMerge(
 								"h-full xl:min-w-0 xl:pl-4",
-								style === "opendeved" && "!p-0 rounded-full !size-10"
+								style === "small" && "!p-0 rounded-full !size-10"
 							)}
 							onPress={onLoginModalOpen}
-							isIconOnly={style === "opendeved"}
+							isIconOnly={style === "small"}
 						>
-							{style === "edtechhub" ? "Login" : ""}
+							{style === "wide" ? "Login" : ""}
 					</Button>)
 				) : (
 					<UserButton />

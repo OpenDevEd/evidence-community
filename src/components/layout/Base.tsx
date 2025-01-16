@@ -12,6 +12,7 @@ import {getLangDir} from 'rtl-detect';
 import { authOptions, auth } from "@/app/api/auth/[...nextauth]/config";
 import { db } from "@/db";
 import { status as statusTable } from "@/db/schema/tables/status";
+
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
 	weight: ["300", "400", "500", "700"],
@@ -40,7 +41,7 @@ export default async function Base({
 		<html lang={locale} dir={dir} suppressHydrationWarning>
 			<body
 				className={`${
-					style === "edtechhub"
+					style === "wide"
 						? montserrat.className
 						: ubuntu.className
 				}`}
@@ -50,7 +51,7 @@ export default async function Base({
 						<div
 							className={twMerge(
 								"h-full w-full bg-background_light dark:bg-background flex flex-col xl:grid xl:grid-rows-[6.5rem_1fr_32rem] gap-4 xl:gap-14 items-center justify-items-center min-h-screen",
-								style === "opendeved" && "xl:pt-14"
+								style === "small" && "xl:pt-14"
 							)}
 						>
 							<Navbar />
