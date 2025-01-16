@@ -2,7 +2,7 @@ import ItemComponent from "@/components/pages/Item";
 import { getItem } from "@/app/api/item/[key]/route";
 import { db } from "@/db";
 import { routing } from "@/i18n/routing";
-import { getCachedItem } from "@/app/api/cache";
+import { getCachedItem, getCachedStatus } from "@/app/api/cache";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
 
@@ -43,6 +43,9 @@ export async function generateMetadata(props: {
         a.PDFCoverPageImage
     );
 
+    const status = await getCachedStatus();
+
+    const companyName = status.companyName ?? "Evidence Library";
 
 	return {
 		title: data?.item?.title,
@@ -118,7 +121,7 @@ export async function generateMetadata(props: {
             title: data?.item?.title ?? '',
             description: data?.item?.abstractNote ?? '',
             url: `${process.env.BASE_URL!}/lib/${data?.item?.key}`,
-            siteName: 'OpenDeved',
+            siteName: companyName,
             images: [
                 {
                     url: attachmentExists?.PDFCoverPageImage ?? '',
