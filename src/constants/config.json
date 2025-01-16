@@ -2,7 +2,8 @@
 	"index": "itemsOpenDeved",
 	"yearsDropDown": false,
 	"baseURL": "https://new-kerko.vercel.app",
-	"style": "edtechhub",
+	"style": "wide",
+	"accent": "opendeved",
 	"proofreader": [
 		"CRITICAL: You are a proofreader that will receive:",
 		"1. A JSON object containing the source document data",
@@ -232,6 +233,24 @@
 			},
 			"F29UQFBX": {
 				"title": "Focus Countries",
+				"enabled": true
+			}
+		},
+		"itemsEkitabu": {
+			"YSDHT2PA": {
+				"title": "Country",
+				"enabled": true
+			},
+			"QPKFSP99": {
+				"title": "Publication type",
+				"enabled": true
+			},
+			"MB72ER4U": {
+				"title": "Organization",
+				"enabled": true
+			},
+			"XNZEBD2E": {
+				"title": "Thematic area",
 				"enabled": true
 			}
 		},
