@@ -50,7 +50,7 @@ export async function generateMetadata(props: {
                 return acc;
             }, {}),
             types: {
-                "application/json": `${process.env.BASE_URL!}/lib/${data?.item?.key}/export/ris`,
+                "application/x-research-info-systems": `${process.env.BASE_URL!}/lib/${data?.item?.key}/export/ris`,
                 "application/x-bibtex": `${process.env.BASE_URL!}/lib/${data?.item?.key}/export/bibtex`,
             },
             media: {
