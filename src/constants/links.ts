@@ -16,8 +16,26 @@ import { BsChatRightDotsFill } from "react-icons/bs";
 import { GiBookshelf } from "react-icons/gi";
 import { LinkObject, LinksList } from "@/db/schema/tables/status";
 
-export const links: LinksList = {
-    opendeved: [
+export const NAVBAR_ICONS = {
+    "AboutUs": AboutUs,
+    "EvidenceLibrary": EvidenceLibrary,
+    "Programs": Programs,
+    "Blog": Blog,
+    "Team": Team,
+    "ContactUs": ContactUs,
+    "TeamFill": RiTeamFill,
+    "ToolsFill": RiToolsFill,
+    "BookOpenFill": RiBookOpenFill,
+    "Bookshelf": GiBookshelf,
+    "ChatRightDotsFill": BsChatRightDotsFill,
+}
+
+export const links: {
+    [key: string]: Array<LinkObject & {
+        icon?: keyof typeof NAVBAR_ICONS;
+    }>;
+} = {
+    small: [
         {
             label: "home",
             href: "/lib",
@@ -26,36 +44,36 @@ export const links: LinksList = {
         {
             label: "aboutUs",
             href: "/about-us",
-            icon: AboutUs,
+            icon: "AboutUs",
         },
         {
             label: "evidenceLibrary",
             href: "/lib",
-            icon: EvidenceLibrary,
+            icon: "EvidenceLibrary",
         },
         {
             label: "programs",
             href: "/programs",
-            icon: Programs,
+            icon: "Programs",
         },
         {
             label: "blog",
             href: "/blog",
-            icon: Blog,
+            icon: "Blog",
         },
         {
             label: "team",
             href: "/team",
-            icon: Team,
+            icon: "Team",
         },
         {
             label: "contactUs",
             href: "/contact-us",
-            icon: ContactUs,
+            icon: "ContactUs",
             footerExclude: true,
         },
     ],
-    edtechhub: [
+    wide: [
         {
             label: "home",
             href: "/lib",
@@ -64,17 +82,17 @@ export const links: LinksList = {
         {
             label: "aboutUs",
             href: "/about-us",
-            icon: RiTeamFill,
+            icon: "TeamFill",
         },
         {
             label: "tools",
             href: "/tools",
-            icon: RiToolsFill,
+            icon: "ToolsFill",
         },
         {
             label: "evidence",
             href: "/lib",
-            icon: RiBookOpenFill,
+            icon: "BookOpenFill",
             dropdown: [
                 {
                     label: "aboutEvidenceInEdtech",
@@ -109,12 +127,12 @@ export const links: LinksList = {
         {
             label: "blog",
             href: "/blog",
-            icon: GiBookshelf,
+            icon: "Bookshelf",
         },
         {
             label: "connectWithUs",
             href: "/contact-us",
-            icon: BsChatRightDotsFill,
+            icon: "ChatRightDotsFill",
             footerExclude: true,
         },
     ],
