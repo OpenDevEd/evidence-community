@@ -23,6 +23,7 @@ import AIModal from "@/components/nextui/AIModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
 import { Session } from "next-auth";
+import { useStatus } from "@/context/Providers";
 
 function AddButton({
 	itemData,
@@ -86,6 +87,14 @@ function AddButton({
 	);
 }
 
+function FixURL( url: string | null ) {
+	if (!url) return null;
+	if (!url.startsWith("https://")) {
+		return `https://${url}`;
+	}
+	return url;
+}
+
 function ResourceInteractions({
 	itemData,
 	isLoading,
@@ -98,22 +107,27 @@ function ResourceInteractions({
 	const t = useTranslations("ui");
 	const { data } = useSession();
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
+	const status = useStatus();
+
+	const url = FixURL(status?.docsLink);
+
 
 	return (
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
 			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
 				<div className="w-full rounded-2xl flex flex-row items-center">
-					<NextUILink
-						showAnchorIcon
-						href="/"
-						className="font-medium text-tertiary-400 shrink-1 px-2"
+					{url && (
+						<NextUILink
+							showAnchorIcon
+							href={url + "/lib/" + itemData?.key}
+							className="font-medium text-tertiary-400 shrink-1 px-2"
 					>
 						<span className="text-black/60 dark:text-white/60 ">
 							{t("viewOnDocs", {
-								site: "docs.opendeved.net",
+								site: url.split("/")[2],
 							})}
 						</span>
-					</NextUILink>
+					</NextUILink>)}
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
 						<AddButton itemData={itemData} userData={userData} />
 						<LikeButton itemData={itemData} />
