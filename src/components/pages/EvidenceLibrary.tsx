@@ -296,7 +296,7 @@ export function ContentInteractions({
 				</Skeleton>
 				<div className="xl:min-w-72 flex gap-4">
 					<Card className="h-full flex items-center justify-center flex-1 min-w-0 px-0">
-						<div className="xl:px-3 px-1">
+						<div className="px-3">
 							<Switch
 								size="sm"
 								isSelected={abstract}
