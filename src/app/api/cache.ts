@@ -4,10 +4,12 @@ import { getItem } from "./item/[key]/route";
 import { ItemGetResponse } from "./item/types";
 import { and, eq, InferSelectModel } from "drizzle-orm";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
+import { status as statusTable } from "@/db/schema/tables/status";
 
 export const cachedItems = new Map<string, ItemGetResponse>();
 export const cachedUserCollectionKeys = new Map<string, { private: boolean, userId: string, itemKeys: string[] }>();
 export const cachedUserLikes = new Map<string, InferSelectModel<typeof usersToLikes>[]>();
+export const cachedStatus: any = {};
 
 export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 	let item = cachedItems.get(key);
@@ -68,4 +70,20 @@ export async function getCachedUserLikes(userId: string, ignoreCache: boolean = 
 		cachedUserLikes.set(userId, likes);
 	}
 	return likes;
+}
+
+export async function getCachedStatus(ignoreCache: boolean = false): Promise<InferSelectModel<typeof statusTable>> {
+	if (Object.keys(cachedStatus).length === 0 || ignoreCache) {
+		const table = await db.query.status.findFirst();
+		if (table) {
+			Object.keys(table).forEach(key => {
+				cachedStatus[key] = table[key as keyof typeof table];
+			});
+		}
+	}
+	return cachedStatus;
+}
+
+export async function updateCachedStatus() {
+	return getCachedStatus();
 }
