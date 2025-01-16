@@ -1,17 +1,10 @@
-"use client";
-
 import { routing } from "@/i18n/routing";
 import { redirect } from "@/i18n/routing";
+import NotFound from "@/components/layout/NotFound";
+import BaseLayout from "@/components/layout/Base";
 
 export default function NotFoundPage() {
-	if (typeof window !== "undefined") {
-		const pathName = window?.location?.pathname || "/";
-
-		redirect({
-			href: pathName,
-			locale: routing.defaultLocale,
-		});
-	}
-
-	return null;
+	return <BaseLayout locale={routing.defaultLocale}>
+		<NotFound />
+	</BaseLayout>
 }
