@@ -142,7 +142,7 @@ export default function ChatModal({
 													))
 											)}
 										</div>
-										<p
+										<div
 											className={twMerge(
 												"bg-white dark:bg-secondary rounded-xl p-4 text-wrap max-w-full overflow-hidden break-words text-lg",
 												message.role !== "user" &&
@@ -158,7 +158,7 @@ export default function ChatModal({
 													{message.content}
 												</AIMarkdown>
 											)}
-										</p>
+										</div>
 									</div>
 								))}
 							</ScrollShadow>
