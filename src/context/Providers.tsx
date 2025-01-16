@@ -100,7 +100,8 @@ function LoadingScreen({
 	featureFlags: Set<string> | null;
 }) {
 	const { theme } = useTheme();
-	const { data: session, status } = useSession();
+	const { data: session } = useSession();
+	const statusTable = useStatus();
 
 	return (
 		<AnimatePresence mode="popLayout">
@@ -131,8 +132,8 @@ function LoadingScreen({
 									key={themeToMatch}
 									src={
 										themeToMatch === "dark"
-											? `/logos/${style}/logo.png`
-											: `/logos/${style}/logo_light.png`
+											? `/logos/${statusTable?.companyName?.toLowerCase()}/logo.png`
+											: `/logos/${statusTable?.companyName?.toLowerCase()}/logo_light.png`
 									}
 									className={twMerge(
 										"pointer-events-none",

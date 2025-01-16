@@ -1,6 +1,6 @@
 "use client";
 import Image from "next/image";
-import { links, socialLinks } from "@/constants/links";
+import { socialLinks } from "@/constants/links";
 import { Button } from "@/components/nextui/Button";
 import { useTheme } from "next-themes";
 import { useEffect } from "react";
@@ -10,6 +10,7 @@ import { useTranslations } from "next-intl";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Link } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
+import { useStatus } from "@/context/Providers";
 
 const footerInfo = {
   email: "opendeved@gmail.com",
@@ -36,7 +37,7 @@ function FooterFieldColumn({
 
 function Logo() {
   const [isLoaded, setIsLoaded] = useState(false);
-
+  const status = useStatus();
   return (
     <Skeleton isLoaded={isLoaded} className="w-[14.5rem] h-[3.375rem] rounded-lg">
       {["dark", "light"].map((themeToMatch) => (
@@ -48,7 +49,7 @@ function Logo() {
 								? "dark:hidden" 
 								: "hidden dark:block")
           }
-          src={`/logos/${style}/logo${themeToMatch === "light" ? "_light" : ""}.png`}
+          src={`/logos/${status?.companyName?.toLowerCase()}/logo${themeToMatch === "light" ? "_light" : ""}.png`}
           alt="logo"
           width={232}
           height={54}
@@ -63,6 +64,10 @@ export default function Footer() {
   const tNav = useTranslations("nav")
   const [isMounted, setIsMounted] = useState(false);
   const { theme } = useTheme();
+  const status = useStatus();
+
+  const links = status.links || [];
+  const footer = status.companyFooter || {};
 
   useEffect(() => {
     setIsMounted(true);
@@ -70,17 +75,17 @@ export default function Footer() {
 
   return (
     <footer className="row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 xl:gap-14 py-12 xl:py-0">
-      <div className="max-w-[96rem] px-14 flex w-full justify-between items-center flex-col gap-6 xl:gap-14 xl:flex-row">
+      <div className="max-w-[96rem] px-14 flex w-full justify-between items-start flex-col gap-6 xl:gap-14 xl:flex-row">
         <div className="flex flex-col gap-6 h-full items-center xl:items-start">
           <Logo />
           <div className="flex flex-col gap-[0.875rem]">
             {Object.entries(footerInfo).map(([key, value]) => (
-              <div key={key} className="flex gap-2 justify-center xl:justify-start">
-                <span className="text-black/60 dark:text-white/60">
+              footer[key] && <div key={key} className="flex gap-2 justify-center xl:justify-start">
+                 <span className="text-black/60 dark:text-white/60">
                   {t(key)}
                 </span>
                 <span className="text-black/60 dark:text-white/60 font-bold break-all text-wrap">
-                  {value}
+                  {footer[key]}
                 </span>
               </div>
             ))}
@@ -90,7 +95,7 @@ export default function Footer() {
           title={t("quickLinks")}
           content={
             <div className="flex flex-col gap-4 mt-6 items-center xl:items-start">
-              {links[style as keyof typeof links].map(
+              {links.map(
                 (link) =>
                   !link.footerExclude && (
                     <Link
