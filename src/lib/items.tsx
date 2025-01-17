@@ -11,6 +11,7 @@ import { Card } from "@/components/nextui/Card";
 import { INSTITUTION_LOGOS } from "@/constants/items";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { getExtraValues } from "./utils";
+import { buildHierarchy } from "./collections";
 
 type FormatterProps = {
 	value: any;
@@ -61,8 +62,66 @@ function Citation({ value }: FormatterProps) {
 	);
 }
 
+function CollectionRow({ collection }: { collection: Collection }) {
+	return (
+		<li key={collection.id}>
+			<Link href={`/lib?collections=${collection.key}`} className="text-tertiary-400">
+				{collection.title}
+			</Link>
+			{
+				collection.children?.map((child) => (
+					<CollectionRow collection={child} />
+				))
+			}
+		</li>
+	);
+}
+
+function Extra({ value }: { value: string }) {
+	const DOIRegex = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
+	const DOIs = useMemo(() => Array.from(value.matchAll(DOIRegex)), [value]);
+
+	const elements = useMemo(() => {
+		if (!DOIs.length) return [value];
+
+		let lastIndex = 0;
+		const elements = [];
+
+		DOIs.forEach((match, i) => {
+			const doi = match[0];
+			const startIndex = match.index!;
+
+			if (startIndex > lastIndex) {
+				elements.push(value.slice(lastIndex, startIndex));
+			}
+
+			elements.push(
+				<Link
+					key={i}
+					href={`https://doi.org/${doi}`}
+					className="text-accent"
+					showAnchorIcon
+				>
+					{doi}
+				</Link>
+			);
+
+			lastIndex = startIndex + doi.length;
+		});
+
+		if (lastIndex < value.length) {
+			elements.push(value.slice(lastIndex));
+		}
+
+		return elements;
+	}, [DOIs, value]);
+
+	return <>{elements}</>;
+}
+
 function Collections({ value }: { value: Collection[] }) {
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
+	const hierarchy = buildHierarchy(value);
 
 	if (!isCollectionsEnabled) return false;
 	if (!value) return false;
@@ -75,25 +134,9 @@ function Collections({ value }: { value: Collection[] }) {
 
 	return (
 		<ul className="flex flex-col gap-2">
-			{value.map((collection: Collection) => {
-				const ancestry = collection.ancestry || [];
-				return (
-					<li key={collection.id}>
-						<Link
-							showAnchorIcon
-							href={`/lib?collections=${[
-								...ancestry,
-								collection.key,
-							].join(",")}`}
-							className="text-tertiary-400"
-						>
-							<span className="text-black/60 dark:text-white/60 underline">
-								{collection.title} / {collection.name}
-							</span>
-						</Link>
-					</li>
-				);
-			})}
+			{hierarchy.map((collection) => (
+				<CollectionRow collection={collection} />
+			))}
 		</ul>
 	);
 }
@@ -180,7 +223,6 @@ export const valueFormatter: Record<
 	extra: (args) => {
 		const finalValue = args.value;
 		const values = getExtraValues(finalValue);
-		const DOIRegex = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
 		const filteredValues = Array.from(values.entries())
 
 		if (filteredValues.length === 0) return false;
@@ -192,19 +234,9 @@ export const valueFormatter: Record<
 					console.log(formattedValue);
 					return (
 						<div key={index} className="flex items-center">
-							<CopyButton text={key} content={formattedValue} className="mr-2" />
+							<CopyButton text={key} content={formattedValue} className="ltr:mr-2 rtl:ml-2 shrink-0" />
 							<span className="text-white/60 text-base leading-none">
-								{DOIRegex.test(value) ? (
-									<Link
-										href={`https://doi.org/${value}`}
-										className="text-accent"
-										showAnchorIcon
-									>
-										{value}
-									</Link>
-								) : (
-									formattedValue
-								)}
+								<Extra value={value} />
 							</span>
 						</div>
 					);
