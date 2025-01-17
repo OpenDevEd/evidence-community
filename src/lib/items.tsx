@@ -62,21 +62,6 @@ function Citation({ value }: FormatterProps) {
 	);
 }
 
-function CollectionRow({ collection }: { collection: Collection }) {
-	return (
-		<li key={collection.id}>
-			<Link href={`/lib?collections=${collection.key}`} className="text-tertiary-400">
-				{collection.title}
-			</Link>
-			{
-				collection.children?.map((child) => (
-					<CollectionRow collection={child} />
-				))
-			}
-		</li>
-	);
-}
-
 function Extra({ value }: { value: string }) {
 	const DOIRegex = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
 	const DOIs = useMemo(() => Array.from(value.matchAll(DOIRegex)), [value]);
@@ -121,7 +106,6 @@ function Extra({ value }: { value: string }) {
 
 function Collections({ value }: { value: Collection[] }) {
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
-	const hierarchy = buildHierarchy(value);
 
 	if (!isCollectionsEnabled) return false;
 	if (!value) return false;
@@ -134,12 +118,29 @@ function Collections({ value }: { value: Collection[] }) {
 
 	return (
 		<ul className="flex flex-col gap-2">
-			{hierarchy.map((collection) => (
-				<CollectionRow collection={collection} />
-			))}
+			{value.map((collection: Collection) => {
+				const ancestry = collection.ancestry || [];
+				return (
+					<li key={collection.id}>
+						<Link
+							showAnchorIcon
+							href={`/lib?collections=${[
+								...ancestry,
+								collection.key,
+							].join(",")}`}
+							className="text-tertiary-400"
+						>
+							<span className="text-black/60 dark:text-white/60 underline">
+								{collection.title} / {collection.name}
+							</span>
+						</Link>
+					</li>
+				);
+			})}
 		</ul>
 	);
 }
+
 
 export const valueFormatter: Record<
 	any,
