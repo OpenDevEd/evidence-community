@@ -43,7 +43,8 @@ export function firstNonNullOrEmpty<T>(
 	] as string | null;
 }
 
-export function getExtraValues(extra: string) {
+export function getExtraValues(extraUnsplit: string) {
+	const extra = extraUnsplit.split("KerkoCite")[0];
 	let colonIndex;
 	let currentKey = "";
 	let currentValue = "";
