@@ -80,10 +80,10 @@ export async function getProfileSearchFilter(
 
 export async function convertItem(
 	item: Item | Item[],
-	format: "ris" | "bibtex"
+	format: "ris" | "bibtex" | "citation"
 ) {
 	const itemsList = Array.isArray(item) ? item : [item];
-	let textFormat = ``;
+	const texts: string[] = [];
 
 	const promises = itemsList.map(async (item) => {
 		try {
@@ -91,21 +91,27 @@ export async function convertItem(
 
 			if (format === "ris") {
 				const ret = await BibTeX.toRIS();
-				textFormat += ret + "\n\n";
+				texts.push(ret);
 			}
 
 			if (format === "bibtex") {
 				const ret = await BibTeX.toBibTeX();
-				textFormat += ret + "\n\n";
+				texts.push(ret);
+			}
+
+			if (format === "citation") {
+				const ret = await BibTeX.toCitation();
+				texts.push(ret);
 			}
 		} catch (error) {
 			console.log("Error converting item", item.key);
+			console.log(error);
 		}
 	});
 
 	await Promise.allSettled(promises);
 
-	return textFormat;
+	return texts.join("\n\n");
 }
 
 export async function downloadItems(
