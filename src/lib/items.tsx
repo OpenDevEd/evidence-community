@@ -28,12 +28,23 @@ type Creator = {
 
 function formatDate({ value, formatter }: FormatterProps) {
 	if (!value) return false;
-	if (isNaN(new Date(value).getTime())) return value;
-	return formatter.dateTime(new Date(value), {
+	if (isNaN(new Date(value).getTime())) {
+		return value};
+
+	const date = new Date(value);
+	const hasTime = date.getHours() !== 0 || date.getMinutes() !== 0;
+
+	const returnedDate = formatter.dateTime(date, {
 		year: "numeric",
 		month: "long",
 		day: "numeric",
+...(hasTime && {
+			hour: "numeric",
+			minute: "numeric",
+		}),
 	});
+
+	return returnedDate;
 }
 
 function Citation({ value }: FormatterProps) {
