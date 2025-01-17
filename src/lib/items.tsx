@@ -181,14 +181,7 @@ export const valueFormatter: Record<
 		const finalValue = args.value;
 		const values = getExtraValues(finalValue);
 		const DOIRegex = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
-		const filteredValues = Array.from(values.entries()).filter(
-			([key]) =>
-				!(
-					["KerkoCite"].some((k) =>
-						key.toLowerCase().includes(k.toLowerCase())
-					) || /^\d+$/.test(key)
-				)
-		);
+		const filteredValues = Array.from(values.entries())
 
 		if (filteredValues.length === 0) return false;
 
