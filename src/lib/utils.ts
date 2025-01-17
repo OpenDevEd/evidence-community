@@ -44,40 +44,13 @@ export function firstNonNullOrEmpty<T>(
 }
 
 export function getExtraValues(extraUnsplit: string) {
-	const extra = extraUnsplit.split("KerkoCite")[0];
-	let colonIndex;
-	let currentKey = "";
-	let currentValue = "";
+	const pairs = extraUnsplit.split("\n");
 	const finalMap: Map<string, string> = new Map();
-	for (let i = 0; i < extra.length; i++) {
-		if (extra[i] === ":") {
-			colonIndex = i;
-		} else if (
-			(/\s/.test(extra[i]) || i == extra.length - 1) &&
-			colonIndex)
-		 {
-			if (currentValue.length > 0) {
-				if (!extra.slice(i).includes("\n") || extra[i] == "\n") {
-					finalMap.set(currentKey, currentValue);
-					currentKey = "";
-					currentValue = "";
-					colonIndex = null;
-				} else {
-					currentValue += extra[i]
-				}
-			} else {
-				while (i < extra.length && /\s/.test(extra[i])) {
-					i++;
-				}
-				i--;
-			}
-		} else {
-			if (colonIndex) {
-				currentValue += extra[i];
-			} else {
-				currentKey += extra[i];
-			}
-		}
+
+	for (const pair of pairs) {
+		const [key, ...reset] = pair.split(":");
+		finalMap.set(key, reset.join(":"));
 	}
+
 	return finalMap;
 }
