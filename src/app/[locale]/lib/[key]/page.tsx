@@ -5,6 +5,7 @@ import { routing } from "@/i18n/routing";
 import { getCachedItem, getCachedStatus } from "@/app/api/cache";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
+import { getExtraValues } from "@/lib/utils";
 
 // export async function generateStaticParams() {
 // 	if (process.env.SHOULD_GENERATE_STATIC_PAGES === "true") {
@@ -38,10 +39,10 @@ export async function generateMetadata(props: {
     const params = await props.params;
     const data = await getCurrentItem(params.key);
     const DOI_REGEX = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
-    const DOIs = Array.from(new Set([data?.item?.DOI, ...(Array.from(data?.item?.extra?.matchAll(DOI_REGEX) || []).map(m => m[0]))].filter(Boolean).map(doi => doi?.trim())))
     const attachmentExists = data?.item?.attachmentsData?.find((a: any) => 
         a.PDFCoverPageImage
     );
+    const extraValues = getExtraValues(data?.item?.extra ?? "");
 
     const status = await getCachedStatus();
 
@@ -81,9 +82,10 @@ export async function generateMetadata(props: {
             "citation_firstpage": data?.item?.pages?.split('-')[0] ?? "",
             "citation_lastpage": data?.item?.pages?.split('-')[1] ?? "",
 
-            "citation_doi": DOIs as any,
-            "citation_isbn": data?.item?.ISBN ?? "",
-            "citation_issn": data?.item?.ISSN ?? "",
+            "citation_doi": data?.item?.DOI ?? extraValues.get("DOI") ?? "",
+            "citation_isbn": data?.item?.ISBN ?? extraValues.get("ISBN") ?? "",
+            "citation_issn": data?.item?.ISSN ?? extraValues.get("ISSN") ?? "",
+            "citation_pmid": extraValues.get("pmid") ?? "",
 
             "citation_public_url": data?.item?.url ?? "",
             "citation_pdf_url": data?.item?.attachmentsData?.filter( (a: any) => {
