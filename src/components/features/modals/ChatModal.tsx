@@ -59,12 +59,21 @@ export default function ChatModal({
 		headers: {
 			"Accept-Language": locale,
 		},
-		onError: () => {
-			appendMessage({
-				role: "assistant",
-				content: t("errorMessage"),
-				id: "error",
-			});
+		onError: (e) => {
+			const isRateLimited = e.message.includes("Rate limit exceeded");
+			if (!isRateLimited) {
+				appendMessage({
+					role: "assistant",
+					content: t("errorMessage"),
+					id: "error-" + Date.now(),
+				});
+			} else {
+				appendMessage({
+					role: "assistant",
+					content: t("rateLimitedMessage"),
+					id: "error-" + Date.now(),
+				});
+			}
 		},
 	});
 
@@ -147,7 +156,7 @@ export default function ChatModal({
 												"bg-white dark:bg-secondary rounded-xl p-4 text-wrap max-w-full overflow-hidden break-words text-lg",
 												message.role !== "user" &&
 													"bg-accent dark:bg-accent-300",
-												message.content == t("errorMessage") &&
+												message.id.includes("error") &&
 													"bg-red-500 dark:bg-red-500"
 											)}
 										>
