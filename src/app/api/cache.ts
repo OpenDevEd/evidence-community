@@ -5,11 +5,23 @@ import { ItemGetResponse } from "./item/types";
 import { and, eq, InferSelectModel } from "drizzle-orm";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { status as statusTable } from "@/db/schema/tables/status";
+import { Collection } from "./collections/types";
+import { getCollections } from "./collections/route";
 
 export const cachedItems = new Map<string, ItemGetResponse>();
 export const cachedUserCollectionKeys = new Map<string, { private: boolean, userId: string, itemKeys: string[] }>();
 export const cachedUserLikes = new Map<string, InferSelectModel<typeof usersToLikes>[]>();
-export const cachedStatus: any = {};
+export const cachedStatus = new Map<string, InferSelectModel<typeof statusTable>>();
+export const cachedCollections = new Map<string, Collection[]>();
+
+export async function getCachedCollections(ignoreCache: boolean = false) {
+	let collections = cachedCollections.get(process.env.MEILI_INDEX!);
+	if (!collections || ignoreCache) {
+		collections = await getCollections();
+		cachedCollections.set(process.env.MEILI_INDEX!, collections);
+	}
+	return collections;
+}
 
 export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 	let item = cachedItems.get(key);
@@ -73,15 +85,16 @@ export async function getCachedUserLikes(userId: string, ignoreCache: boolean = 
 }
 
 export async function getCachedStatus(ignoreCache: boolean = false): Promise<InferSelectModel<typeof statusTable>> {
-	if (Object.keys(cachedStatus).length === 0 || ignoreCache) {
-		const table = await db.query.status.findFirst();
-		if (table) {
-			Object.keys(table).forEach(key => {
-				cachedStatus[key] = table[key as keyof typeof table];
-			});
+	let status = cachedStatus.get(process.env.MEILI_INDEX!);
+	if (!status || ignoreCache) {
+		const newStatus = await db.query.status.findFirst();
+		if (!newStatus) {
+			throw new Error('Status not found');
 		}
+		status = newStatus;
+		cachedStatus.set(process.env.MEILI_INDEX!, status);
 	}
-	return cachedStatus;
+	return status;
 }
 
 export async function updateCachedStatus() {
