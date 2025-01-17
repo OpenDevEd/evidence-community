@@ -8,6 +8,8 @@ import { item } from "@/db/schema/tables/item";
 import { eq } from "drizzle-orm";
 import { Collection } from "../../collections/types";
 import config from "@/constants/config.json"
+import { getCachedCollections } from "../../cache";
+import { convertItem } from "@/lib/actions";
 
 async function getMeilisearchItem(key: string) {
 	const result = await (
@@ -29,7 +31,7 @@ export async function getItem(
 ) {
 	const [result, collections] = await Promise.all([
 		source === "db" ? getDatabaseItem(key) : getMeilisearchItem(key),
-		getCollections(),
+		getCachedCollections(),
 	]);
 
 	if (collections) {
@@ -43,6 +45,11 @@ export async function getItem(
 			.filter(
 				(collectionData) => collectionData !== undefined
 			) as Collection[];
+	}
+
+	if (result) {
+		const citation = await convertItem(result, "citation");
+		result.citation = citation;
 	}
 
 	return {
