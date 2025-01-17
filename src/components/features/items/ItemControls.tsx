@@ -250,7 +250,13 @@ export default function ItemControls({
 					<LuChevronLeft className="size-5 rtl:rotate-180" />
 				}
 				className="ltr:pl-1.5 rtl:pr-1.5"
-				onClick={() => router.back()}
+				onClick={() => {
+					if (window.history.length > 1) {
+						router.back();
+					} else {
+						router.push("/lib");
+					}
+				}}
 			>
 				{t("return")}
 			</Button>
