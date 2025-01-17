@@ -10,6 +10,7 @@ import CopyButton from "@/components/features/items/CopyButton";
 import { Card } from "@/components/nextui/Card";
 import { INSTITUTION_LOGOS } from "@/constants/items";
 import { useFeatureFlagEnabled } from "@/context/Providers";
+import { getExtraValues } from "./utils";
 
 type FormatterProps = {
 	value: any;
@@ -38,7 +39,7 @@ function formatDate({ value, formatter }: FormatterProps) {
 		year: "numeric",
 		month: "long",
 		day: "numeric",
-...(hasTime && {
+		...(hasTime && {
 			hour: "numeric",
 			minute: "numeric",
 		}),
@@ -60,51 +61,9 @@ function Citation({ value }: FormatterProps) {
 	);
 }
 
-function Extra({ value }: { value: string }) {
-	const DOIRegex = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
-	const DOIs = useMemo(() => Array.from(value.matchAll(DOIRegex)), [value]);
-
-	const elements = useMemo(() => {
-		if (!DOIs.length) return [value];
-
-		let lastIndex = 0;
-		const elements = [];
-
-		DOIs.forEach((match, i) => {
-			const doi = match[0];
-			const startIndex = match.index!;
-
-			if (startIndex > lastIndex) {
-				elements.push(value.slice(lastIndex, startIndex));
-			}
-
-			elements.push(
-				<Link
-					key={i}
-					href={`https://doi.org/${doi}`}
-					className="text-accent"
-					showAnchorIcon
-				>
-					{doi}
-				</Link>
-			);
-
-			lastIndex = startIndex + doi.length;
-		});
-
-		if (lastIndex < value.length) {
-			elements.push(value.slice(lastIndex));
-		}
-
-		return elements;
-	}, [DOIs, value]);
-
-	return <>{elements}</>;
-}
-
 function Collections({ value }: { value: Collection[] }) {
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
-	
+
 	if (!isCollectionsEnabled) return false;
 	if (!value) return false;
 	if (value.length === 0) return false;
@@ -220,10 +179,43 @@ export const valueFormatter: Record<
 	},
 	extra: (args) => {
 		const finalValue = args.value;
+		const values = getExtraValues(finalValue);
+		const DOIRegex = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
+		const filteredValues = Array.from(values.entries()).filter(
+			([key]) =>
+				!(
+					["KerkoCite"].some((k) =>
+						key.toLowerCase().includes(k.toLowerCase())
+					) || /^\d+$/.test(key)
+				)
+		);
+
+		if (filteredValues.length === 0) return false;
 
 		return (
-			<div className="whitespace-pre-line">
-				<Extra {...args} value={finalValue} />
+			<div className="whitespace-pre-line space-y-2">
+				{filteredValues.map(([key, value], index) => {
+					const formattedValue = formatDate({ ...args, value });
+					console.log(formattedValue);
+					return (
+						<div key={index} className="flex items-center">
+							<CopyButton text={key} content={formattedValue} className="mr-2" />
+							<span className="text-white/60 text-base leading-none">
+								{DOIRegex.test(value) ? (
+									<Link
+										href={`https://doi.org/${value}`}
+										className="text-accent"
+										showAnchorIcon
+									>
+										{value}
+									</Link>
+								) : (
+									formattedValue
+								)}
+							</span>
+						</div>
+					);
+				})}
 			</div>
 		);
 	},
@@ -241,7 +233,12 @@ export const valueFormatter: Record<
 		return (
 			<div>
 				<Card className="max-w-fit p-2 rounded-2xl" color="accent">
-					<div className={twMerge("flex gap-2 items-center", !InstitutionLogo && "px-2")}>
+					<div
+						className={twMerge(
+							"flex gap-2 items-center",
+							!InstitutionLogo && "px-2"
+						)}
+					>
 						{InstitutionLogo && (
 							<InstitutionLogo className="bg-white/80" />
 						)}
