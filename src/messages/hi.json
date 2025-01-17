@@ -77,7 +77,8 @@
 		"exportAsHTML": ".html के रूप में निर्यात करें",
 		"exportAsPlainText": ".txt के रूप में निर्यात करें",
 		"delete": "हटाएं",
-		"history": "इतिहास"
+		"history": "इतिहास",
+		"rateLimitedMessage": "आपने दर सीमा पर पहुंच गए हैं। कृपया बाद में पुनः प्रयास करें।"
 	},
 	"sorts": {
 		"desc": "नवीनतम",

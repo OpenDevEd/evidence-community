@@ -77,7 +77,8 @@
 		"exportAsHTML": "Export as .html",
 		"exportAsPlainText": "Export as .txt",
 		"delete": "Delete",
-		"history": "History"
+		"history": "History",
+		"rateLimitedMessage": "You have reached the rate limit. Please try again later."
 	},
 	"sorts": {
 		"desc": "Newest",

@@ -77,7 +77,8 @@
 		"exportAsHTML": "تصدير كـ .html",
 		"exportAsPlainText": "تصدير كـ .txt",
 		"delete": "حذف",
-		"history": "السجل"
+		"history": "السجل",
+		"rateLimitedMessage": "لقد تجاوزت الحد المسموح به. يرجى المحاولة مرة أخرى لاحقاً."
 	},
 	"sorts": {
 		"desc": "الأحدث",

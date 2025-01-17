@@ -52,7 +52,8 @@
 		"selectCollection": "Chagua mkusanyiko",
 		"download": "Pakua",
         "RISDescription": "Muundo unaopendekezwa kwa programu nyingi za usimamizi wa marejeleo",
-        "BibTeXDescription": "Muundo unaopendekezwa kwa programu maalum za BibTeX"
+        "BibTeXDescription": "Muundo unaopendekezwa kwa programu maalum za BibTeX",
+		"rateLimitedMessage": "Unaweza kupakua rasilimali katika miundo ifuatayo"
 	},
 	"ai": {
 		"summarize": "Fupisha",
