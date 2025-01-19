@@ -24,8 +24,6 @@ export async function POST(req: NextRequest) {
 
     const body = await req.json();
     const validatedData = createCollectionSchema.safeParse(body);
-
-    console.log("validatedData", validatedData);
     
     if (!validatedData.success) {
       return NextResponse.json(

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { getProfileSearchFilter, searchIndex } from "@/lib/actions";
 import { z } from "zod";
+import { defaultParams } from "@/lib/utils";
 
 const EMPTY_ITEMS_RESPONSE = {
 	items: [],
@@ -19,10 +20,11 @@ const getItemsSchema = z.object({
 export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
 	const params = await props.params;
 	const { searchParams } = new URL(request.url);
-	const collectionId = searchParams.get("collectionId") || "";
 	const { id } = params;
 
-	const { filter, status } = await getProfileSearchFilter(id, collectionId);
+	const queryParams = defaultParams(searchParams);
+
+	const { filter, status } = await getProfileSearchFilter(id, queryParams.collectionId);
 	
 	if (status) {
 		return NextResponse.json<ItemsGetResponse>(
@@ -31,8 +33,9 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 		);
 	}
 
+
 	const res = filter 
-		? await searchIndex(request.url, {}, filter)
+		? await searchIndex(new URLSearchParams(searchParams), {}, filter)
 		: EMPTY_ITEMS_RESPONSE;
 
 	return NextResponse.json<ItemsGetResponse>(res);

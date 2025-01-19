@@ -26,7 +26,6 @@ export async function getCollections() {
 	const filteredCollections = Object.entries(configCollections)
 		.filter(([_, config]) => config.enabled)
 		.map(([key, config]) => {
-			// console.log("• Fetching collection", key);
 			const collection = recursiveFind(key, hierarchy);
 			if (!collection) return undefined;
 			return {

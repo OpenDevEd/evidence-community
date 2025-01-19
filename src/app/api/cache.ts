@@ -38,8 +38,6 @@ export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 export async function getCachedUserCollectionKeys(collectionId: string, ignoreCache: boolean = false) {
 	let keys = cachedUserCollectionKeys.get(collectionId);
 	if (!keys || ignoreCache) {
-		console.log("fetching for the first time");
-
 		const res = await db.query.itemToUserCollection.findMany({
 			where: and(eq(itemToUserCollection.userCollectionId, collectionId), eq(itemToUserCollection.deleted, false)),
 			columns: {

@@ -29,13 +29,13 @@ export async function getItem(
 	key: string,
 	source: "db" | "meilisearch" = "meilisearch"
 ) {
-	const [result, collections] = await Promise.all([
+	const [result, collections] = (await Promise.all([
 		source === "db" ? getDatabaseItem(key) : getMeilisearchItem(key),
 		getCachedCollections(),
-	]);
+	]));
 
 	if (collections) {
-		result.collectionsData = result.collections
+		result.collectionsData = result.collectionsAncestry
 			?.map((collection) => {
 				const collectionData = collections.find(
 					(c) => c.key === collection
