@@ -1,17 +1,46 @@
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SCOPE_OPTIONS } from "@/constants/items";
+import { SORT_OPTIONS } from "@/constants/items";
 
 export const fetcher = (url: string) =>
 	fetch(`/api${url}`).then((res) => res.json());
+
 export const setter = (url: string, { arg }: { arg: any }) =>
 	fetch(`/api${url}`, {
 		method: "POST",
 		body: JSON.stringify(arg),
 	});
 
+export function defaultParams(searchParams: Record<string, string> | URLSearchParams) {
+	const getParam = (key: string): string => {
+		return searchParams instanceof URLSearchParams
+			? searchParams.get(key) || ""
+			: searchParams[key] || "";
+	};
+
+	const collectionsParam = getParam("collections");
+	const collections = collectionsParam ? collectionsParam.split(",") : [];
+	const page = Number(getParam("page")) || 1;
+	const sort = getParam("sort") || SORT_OPTIONS[0].key;
+	const search = getParam("search") || "";
+	const scope = getParam("scope") || SCOPE_OPTIONS[0].key;
+	const range = getParam("range") || "";
+	const collectionId = getParam("collectionId") || "";
+
+	return {
+		page,
+		sort,
+		collections,
+		search,
+		scope,
+		range,
+		collectionId,
+	};
+}
+
 export function buildItemsQuery(params: any, url: string = "/items"): string {
 	const {
-		pageNumber,
+		page,
 		sort,
 		collections,
 		search,
@@ -21,11 +50,10 @@ export function buildItemsQuery(params: any, url: string = "/items"): string {
 	} = params;
 
 	const queryParts = [
-		`page=${pageNumber}`,
-		`limit=${ITEMS_PER_PAGE}`,
+		`page=${page}`,
 		`sort=${sort}`,
-		collections.length > 0 && `collections=${collections.join(",")}`,
-		search.length > 0 && `search=${search}`,
+		collections?.length > 0 && `collections=${collections.join(",")}`,
+		search?.length > 0 && `search=${search}`,
 		scope !== SCOPE_OPTIONS[0].key && `scope=${scope}`,
 		range && `range=${range}`,
 		collectionId && `collectionId=${collectionId}`,
@@ -49,7 +77,7 @@ export function getExtraValues(extraUnsplit: string) {
 
 	for (const pair of pairs) {
 		const [key, ...reset] = pair.split(":");
-		finalMap.set(key, reset.join(":"));
+		finalMap.set(key, reset.join(":").trim());
 	}
 
 	return finalMap;
