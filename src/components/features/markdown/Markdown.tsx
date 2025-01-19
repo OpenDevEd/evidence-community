@@ -31,7 +31,12 @@ function createRehypeWrapper(pattern: RegExp, className: string) {
 					type: "element",
 					tagName: "span",
 					properties: { className: [className] },
-					children: [{ type: "text", value: captured }],
+					children: [{ 
+						type: "text", 
+						value: className === "QuoteHighlight" 
+							? captured.replace(/\\n/g, '\n') 
+							: captured 
+					}],
 				});
 
 				lastIndex = pattern.lastIndex;
