@@ -19,7 +19,7 @@ import { years } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { LuX } from "react-icons/lu";
 import { useTranslations } from "next-intl";
-import { useFeatureFlagEnabled } from "@/context/Providers";
+import { CacheContext, useFeatureFlagEnabled } from "@/context/Providers";
 
 function YearPicker({
 	label,
@@ -86,6 +86,8 @@ export function InnerCollectionList({
 	selectedCollections: string[];
 	hierarchy: Collection[];
 }) {
+	const { accordionGlobalExpanded, setAccordionGlobalExpanded } = useContext(CacheContext);
+
 	const t = useTranslations("ui");
 	const filteredFacetDistribution = useMemo(() => {
 		if (!facetDistribution?.collectionsAncestry || !data?.collections) {
@@ -119,7 +121,13 @@ export function InnerCollectionList({
 			data?.collections.find((c) => c.key === key)
 		).length > 0 ? (
 		<Accordion
-			defaultExpandedKeys={hierarchy.map((c) => c.key)}
+			defaultSelectedKeys={accordionGlobalExpanded ? Object.keys(accordionGlobalExpanded) : hierarchy.map((c) => c.key)}
+			onSelectionChange={(keys) => {
+				setAccordionGlobalExpanded(Array.from(keys as Set<string>).reduce((acc: Record<string, boolean>, key: string) => ({
+					...acc,
+					[key]: !acc[key],
+				}), {} as Record<string, boolean>));
+			}}
 			selectionMode="multiple"
 			fullWidth={false}
 			variant="shadow"

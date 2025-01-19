@@ -72,6 +72,7 @@ function CacheProvider({
 	const itemsCache = useRef(undefined);
 	const previousExpansionStates = useRef({});
 	const [globalExpanded, setGlobalExpanded] = useState({});
+	const [accordionGlobalExpanded, setAccordionGlobalExpanded] = useState(null);
 
 	return (
 		<CacheContext.Provider
@@ -82,6 +83,8 @@ function CacheProvider({
 				previousExpansionStates,
 				globalExpanded,
 				setGlobalExpanded,
+				accordionGlobalExpanded,
+				setAccordionGlobalExpanded,
 				status,
 			}}
 		>
@@ -179,7 +182,6 @@ export default function Providers({
 			})
 			?.onFeatureFlags((featureFlags) => {
 				setFeatureFlags(new Set(featureFlags));
-				console.log("featureFlags", featureFlags);
 			});
 	}, []);
 
