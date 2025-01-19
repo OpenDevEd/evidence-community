@@ -3,7 +3,6 @@ import { collection } from "@/db/schema/tables/collection";
 
 export type Collection = InferSelectModel<typeof collection> & {
   children?: Collection[];
-  collectionsAncestry?: string[];
   title?: string;
   level?: number;
   ancestry?: string[];
