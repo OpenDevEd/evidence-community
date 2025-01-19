@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import { users } from "@/db/schema/tables/user";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
-import { eq, and } from "drizzle-orm";
+import { eq, and, InferSelectModel } from "drizzle-orm";
 import { Session } from "next-auth";
 import { userToFollow } from "@/db/schema/tables/userToFollow";
 import { userCollection } from "@/db/schema/tables/userCollection";
@@ -20,10 +20,10 @@ import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
 import { buildItemsQuery } from "@/lib/utils";
-import { getCachedUserLikes } from "@/app/api/cache";
+import { cachedItemsSmall, getCachedUserLikes, setCachedItemSmall } from "@/app/api/cache";
 import { getCachedUserCollectionKeys } from "@/app/api/cache";
 import { auth } from "@/app/api/auth/[...nextauth]/config";
-import { unstable_cache } from "next/cache";
+import { revalidateTag, unstable_cache } from "next/cache";
 
 export async function getItems(
 	searchParams: URLSearchParams | Record<string, any>
@@ -77,7 +77,7 @@ export async function getProfileSearchFilter(
 		return {
 			filter: [
 				`key IN [${collectionKeys.itemKeys
-					.map((key) => `"${key}"`)
+					.map((key: string) => `"${key}"`)
 					.join(",")}]`,
 			],
 		};
@@ -87,8 +87,8 @@ export async function getProfileSearchFilter(
 		return {
 			filter: [
 				`key IN [${likes
-					.filter((like) => !like.deleted)
-					.map((like) => `"${like.itemKey}"`)
+					.filter((like: InferSelectModel<typeof usersToLikes>) => !like.deleted)
+					.map((like: InferSelectModel<typeof usersToLikes>) => `"${like.itemKey}"`)
 					.join(",")}]`,
 			],
 		};
@@ -208,7 +208,7 @@ export async function getMainAttributes() {
 
 	const attributes = await getCachedResults();
 
-	return attributes.filter((attribute) => !["attachmentsData", "collectionsData"].some(excludedAttribute => attribute.startsWith(excludedAttribute)))
+	return attributes.filter((attribute) => !attribute.endsWith("fullTextPDFs"))
 }
 
 
@@ -254,14 +254,20 @@ export async function searchIndex(
 					SCOPE_OPTIONS.find((option) => option.key === scope)
 						?.attributesToSearchOn ||
 					SCOPE_OPTIONS[0].attributesToSearchOn,
-				sort: [sortOption],
 				attributesToRetrieve: allAttributes,
+				sort: [sortOption],
 				...extraProperties,
 				filter: finalFilters,
 			});
 
 			const items = searchResults.hits;
 			const totalCount = searchResults.estimatedTotalHits;
+			
+			for (const item of items) {
+				setCachedItemSmall(item.key, {
+					item: item as Item,
+				});
+			}
 
 			return {
 				items: items as Item[],
