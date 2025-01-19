@@ -45,10 +45,6 @@ function setRateLimitHeaders(response: NextResponse, rateLimit: RateLimit | null
 
 
 export default function middleware(request: NextRequest) {
-  rateLimits.forEach((value, key) => {
-    console.log(key, value);
-  })
-
   const rateLimit = generateRateLimitObject(request);
 
   const supportedFormats = ['ris', 'bibtex'];
@@ -64,6 +60,12 @@ export default function middleware(request: NextRequest) {
     const key = exportMatch[1];
     const format = exportMatch[2];
     const finalURL = new URL(`/api/item/${key}/export/${format}`, request.url);
+    return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
+  } else if (request.nextUrl.pathname === "/lib/atom.xml") {
+    const finalURL = new URL(`/api/feed`, request.url);
+    request.nextUrl.searchParams.forEach((value, key) => {
+      finalURL.searchParams.set(key, value);
+    });
     return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
   } else if (request.nextUrl.pathname.startsWith("/api/")) {
     if (request.nextUrl.pathname.startsWith("/api/ai") && !request.nextUrl.pathname.includes("embeddings")) {
@@ -104,6 +106,7 @@ export const config = {
     '/((?!_next|_vercel|ingest|.*\\..*).*)',
     // Updated matchers for new export URL format
     '/([\\w-]+)?/lib/:path*/export/ris',
-    '/([\\w-]+)?/lib/:path*/export/bibtex'
+    '/([\\w-]+)?/lib/:path*/export/bibtex',
+    '/([\\w-]+)?/lib/atom.xml'
   ]
 };
