@@ -50,7 +50,7 @@ export default function CollectionsList({ data, highlightedCollections, classNam
 			<Input placeholder={t("searchCollections")} onChange={(e) => setSearch(e.target.value)} onClear={() => setSearch("")} />
 			<div className={twMerge("w-full grid grid-cols-2 gap-2", classNames?.container)}>
 				{collectionsPage.map((collection: any, index: number) => (
-					<UserCollection isLoading={isLoading} isHighlighted={highlightedCollections?.includes(collection.id)} onClick={() => onCollectionSelect?.(collection.id)} key={index} collection={collection} />
+					<UserCollection isLoading={isLoading} isHighlighted={highlightedCollections?.includes(collection.id)} onPress={() => onCollectionSelect?.(collection.id)} key={index} collection={collection} />
 				))}
 			</div>
 			<div

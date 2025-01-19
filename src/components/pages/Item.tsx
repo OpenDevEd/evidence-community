@@ -20,7 +20,7 @@ import useSWR from "swr";
 import { fetcher } from "@/lib/utils";
 import Resource from "../features/items/Resource";
 import { Skeleton } from "../nextui/Skeleton";
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
 import { useFeatureFlagEnabled } from "@/context/Providers";
@@ -28,6 +28,9 @@ import { AIHistory } from "@/types/ai";
 import ModelSelector from "../features/ai/ModelSelector";
 import { useAIFeature } from "@/hooks/useAIFeature";
 import { AI_DROPDOWN_ITEMS } from "@/components/features/ai/AIDropdownItems";
+import { buildHierarchy } from "@/lib/collections";
+import { Collection } from "@/app/api/collections/types";
+import { CollectionsRow } from "@/lib/items";
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ai");
@@ -142,7 +145,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 							<DropdownItem
 								key={item.key}
 								description={item.description}
-								onClick={item.onClick}
+								onPress={item.onPress}
 								startContent={item.startContent}
 								className="gap-4"
 							>
@@ -161,10 +164,16 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ui");
 	const isAIEnabled = useFeatureFlagEnabled("ai-features");
 	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources");
+	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
 	const { data: embeddings } = useSWR(
 		(isRelatedItemsEnabled && data?.item) ? `/ai/embeddings/${data?.item?.key}` : null,
 		fetcher
 	);
+
+	const hierarchy = useMemo(() => {
+		if (!data?.item?.collectionsData) return null;
+		return buildHierarchy(data.item.collectionsData);
+	}, [data?.item?.collectionsData]);
 
 	return (
 		<main className="w-full max-w-[96rem] px-4 xl:px-14 flex flex-col gap-4">
@@ -189,6 +198,17 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 										)
 									)}
 							</div>
+							{(isCollectionsEnabled && hierarchy) && (
+								hierarchy.filter((collection: Collection) => collection.children?.length && collection.children?.length > 0).map((collection: Collection) => (
+									<ItemRow
+										item={data.item!}
+										key={collection.id}
+										router={router}
+										customRowName={collection.title}
+										value={<CollectionsRow value={collection.children!} />}
+									/>
+								))
+							)}
 						</>
 					) : (
 						<div className="text-center text-2xl text-black/80 dark:text-white/80 font-medium min-h-screen flex items-center justify-center">

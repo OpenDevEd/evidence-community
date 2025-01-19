@@ -17,7 +17,7 @@ const LikeButton = forwardRef<
   const { data: session, update } = useSession();
   const isLiked = itemData && session?.user.likes[itemData.key];
 
-  const handleLike = async (e: React.MouseEvent<HTMLButtonElement>) => {
+  const handleLike = async (e: any) => {
     e.preventDefault();
     setMutationLoading(true);
     try {
@@ -40,7 +40,7 @@ const LikeButton = forwardRef<
       color={isLiked ? "accent" : "secondary"}
       isIconOnly
       size="sm"
-      onClick={handleLike}
+      onPress={handleLike}
       className={twMerge(className)}
     >
       {!isLiked ? <BsBookmarkFill /> : <BsBookmarkCheckFill />}

@@ -70,11 +70,7 @@ export default function CollectionCategory({
 	if (previousExpansionStates.current[collection.key] === undefined) {
 		previousExpansionStates.current[collection.key] = showMore;
 	}
-
-	if (collection.key === "HCTKHFNN") {
-		console.log(previousExpansionStates.current[collection.key]);
-	}
-
+	
 	return (
 		<div className="relative">
 			<div

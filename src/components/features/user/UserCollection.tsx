@@ -11,12 +11,12 @@ import { BiSolidBookBookmark } from "react-icons/bi";
 export default function UserCollection({
 	collection,
 	isHighlighted,
-	onClick,
+	onPress,
 	isLoading,
 }: {
 	collection?: Session["user"]["collections"][number];
 	isHighlighted?: boolean;
-	onClick?: () => void;
+	onPress?: () => void;
 	isLoading?: boolean;
 }) {
 	return (
@@ -31,7 +31,7 @@ export default function UserCollection({
 				!collection && "h-8 ml-auto",
 				isHighlighted && "border-2 border-accent dark:border-accent"
 			)}
-			onClick={onClick}
+			onPress={onPress}
 			isDisabled={isLoading}
 		>
 			{!!collection && (

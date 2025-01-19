@@ -26,24 +26,24 @@ export const AI_DROPDOWN_ITEMS = (
                 })}
             </div>
         ),
-        onClick: onChangeOpenChange,
+        onPress: onChangeOpenChange,
     },
     {
         key: "summary",
         label: t("summarize"),
         description: t("summarizeDescription"),
-        onClick: summaryFeature.onClick,
+        onPress: summaryFeature.onPress,
     },
     {
         key: "explain",
         label: t("explain"),
         description: t("explainDescription"),
-        onClick: explainFeature.onClick,
+        onPress: explainFeature.onPress,
     },
     {
         key: "chat",
         label: t("askAI"),
         description: t("chatDescription"),
-        onClick: onChatOpenChange,
+        onPress: onChatOpenChange,
     },
 ]; 

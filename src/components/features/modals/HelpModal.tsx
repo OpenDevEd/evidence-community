@@ -26,7 +26,7 @@ export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, o
         <ModalHeader className="flex items-center justify-between gap-2">
           <SectionTitle>Help</SectionTitle>
           <Button
-            onClick={onClose}
+            onPress={onClose}
             isIconOnly
             variant="transparent"
             className="xl:px-0 px-0 translate-x-2"
@@ -225,7 +225,7 @@ export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, o
           </ul>
         </ModalBody>
         <ModalFooter>
-          <Button color="accent" fullWidth onClick={onClose}>
+          <Button color="accent" fullWidth onPress={onClose}>
             Close
           </Button>
         </ModalFooter>

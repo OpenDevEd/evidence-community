@@ -10,7 +10,7 @@ type AIFeature = {
     error: Error | undefined;
     stream: (key: string, options: any) => void;
     setCompletion: (completion: string) => void;
-    onClick: () => void;
+    onPress: () => void;
 };
 
 export function useAIFeature(
@@ -32,7 +32,7 @@ export function useAIFeature(
         id,
     );
 
-    const onClick = () => {
+    const onPress = () => {
         onOpenChange();
         stream(item?.item?.key ?? "", {
             body: { modelIndex },
@@ -47,6 +47,6 @@ export function useAIFeature(
         error,
         stream,
         setCompletion,
-        onClick,
+        onPress,
     };
 } 

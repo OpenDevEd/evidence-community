@@ -56,7 +56,7 @@ const CopyButton = forwardRef<
 			color={isCopied ? "success" : "secondary"}
 			startContent={isCopied ? <FaClipboardCheck className={classNames?.icon} /> : <FaClipboard className={classNames?.icon} />}
 			size="sm"
-			onClick={handleCopy}
+			onPress={handleCopy}
 			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square xl:aspect-auto xl:px-3", classNames?.button, className)}
 			isIconOnly={isIconOnly}
 		>

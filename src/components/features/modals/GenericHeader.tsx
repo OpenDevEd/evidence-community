@@ -17,7 +17,7 @@ export default function GenericHeader({ onClose, children, startContent, classNa
 				</span>
 			</SectionTitle>
 			<Button
-				onClick={onClose}
+				onPress={onClose}
 				isIconOnly
 				variant="transparent"
 				className={twMerge("xl:px-0 px-0 translate-x-2 rtl:-translate-x-2", classNames?.button)}

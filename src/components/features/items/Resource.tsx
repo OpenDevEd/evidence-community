@@ -79,7 +79,7 @@ function AddButton({
 						</ModalBody>
 					</ModalContent>
 				</AIModal>
-				<Button isIconOnly size="sm" onClick={onOpen}>
+				<Button isIconOnly size="sm" onPress={onOpen}>
 					<BsPlus className="size-5" />
 				</Button>
 			</>
@@ -116,7 +116,7 @@ function ResourceInteractions({
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
 			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
 				<div className="w-full rounded-2xl flex flex-row items-center">
-					{url && (
+					{(url && itemData?.key) && (
 						<NextUILink
 							showAnchorIcon
 							href={url + "/lib/" + itemData?.key}

@@ -18,7 +18,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
 import { useSession } from "next-auth/react";
 import { Session } from "next-auth";
-import { fetcher, buildItemsQuery, setter } from "@/lib/utils";
+import { fetcher, buildItemsQuery, setter, defaultParams } from "@/lib/utils";
 import useSWRMutation from "swr/mutation";
 import { twMerge } from "tailwind-merge";
 import { Textarea } from "../nextui/Textarea";
@@ -95,7 +95,7 @@ function FollowButton({
 	return (
 		<Button
 			color={isFollowing ? "danger" : "accent"}
-			onClick={handleClick}
+			onPress={handleClick}
 			isLoading={loading}
 			className={twMerge(!session && "hidden")}
 		>
@@ -251,25 +251,10 @@ function ItemsList({
 	const { router, pathname, createQueryString } =
 		useParamsState(searchParams);
 
-	const collectionsParam = searchParams["collections"];
-	const collections = collectionsParam ? collectionsParam.split(",") : [];
-	const pageNumber = Number(searchParams["page"]) || 1;
-	const sort = searchParams["sort"] || SORT_OPTIONS[0].key;
-	const search = searchParams["search"] || "";
-	const scope = searchParams["scope"] || SCOPE_OPTIONS[0].key;
-	const range = searchParams["range"] || "";
 	const t = useTranslations("ui");
 	const formatter = useFormatter();
 
-	const queryParams = {
-		pageNumber,
-		sort,
-		collections,
-		search,
-		scope,
-		range,
-		collectionId,
-	}
+	const queryParams = defaultParams(searchParams);
 
 	const itemsQuery = buildItemsQuery(queryParams, `/user/items/${data.id}`);
 
@@ -332,7 +317,7 @@ function ItemsList({
 		{
 			keepPreviousData: true,
 			onSuccess: (data) => {
-				if (data.totalPages < pageNumber) {
+				if (data.totalPages < queryParams.page) {
 					handlePageChange(data.totalPages);
 				}
 			},
@@ -341,19 +326,20 @@ function ItemsList({
 
 	return (
 		<ResourcesView
-			sort={sort}
-			search={search}
-			scope={scope}
+			sort={queryParams.sort}
+			search={queryParams.search}
+			scope={queryParams.scope}
 			handleSearchChange={handleSearchChange}
 			handleScopeChange={handleScopeChange}
 			handleSortChange={handleSortChange}
 			itemsData={itemsData}
 			itemsError={itemsError}
 			isItemsLoading={isItemsLoading}
-			range={range}
+			range={queryParams.range}
 			handleRangeChange={handleRangeChange}
-			pageNumber={pageNumber}
+			pageNumber={queryParams.page}
 			handlePageChange={handlePageChange}
+			searchParams={searchParams}
 			countLabel={
 				<div>
 					{collectionId
@@ -553,7 +539,7 @@ function ProfileCollectionsList({
 					className="mt-2"
 					startContent={<BsPlus />}
 					size="md"
-					onClick={onOpen}
+					onPress={onOpen}
 				>
 					{t("createCollection")}
 				</Button>

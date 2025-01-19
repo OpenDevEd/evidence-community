@@ -15,7 +15,7 @@ import {
 	useDisclosure,
 } from "@nextui-org/react";
 import useSWR from "swr";
-import { fetcher } from "@/lib/utils";
+import { defaultParams, fetcher } from "@/lib/utils";
 import { ReactNode, useCallback, useContext, useMemo, useState } from "react";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -174,7 +174,7 @@ export function ContentInteractions({
 								<AiOutlineCompass className="size-6" />
 							}
 							className="xl:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
-							onClick={onExploreOpen}
+							onPress={onExploreOpen}
 						>
 							{t("explore")}
 						</Button>
@@ -196,7 +196,7 @@ export function ContentInteractions({
 												{t("explore")}
 											</SectionTitle>
 											<Button
-												onClick={onClose}
+												onPress={onClose}
 												isIconOnly
 												variant="transparent"
 												className="xl:px-0 px-0 translate-x-2"
@@ -236,7 +236,7 @@ export function ContentInteractions({
 								<Button
 									className="h-full font-medium text-base !p-0"
 									isIconOnly
-									onClick={onHelpOpen}
+									onPress={onHelpOpen}
 								>
 									<BiHelpCircle className="size-6" />
 								</Button>
@@ -314,7 +314,7 @@ export function ContentInteractions({
 							color={view === "list" ? "tertiary" : "secondary"}
 							isIconOnly
 							className="!p-0 rounded-r-none flex-1"
-							onClick={() => setView("list")}
+							onPress={() => setView("list")}
 						>
 							<HiOutlineViewList className="size-6" />
 						</Button>
@@ -322,7 +322,7 @@ export function ContentInteractions({
 							color={view === "grid" ? "tertiary" : "secondary"}
 							isIconOnly
 							className="!p-0 rounded-l-none flex-1"
-							onClick={() => setView("grid")}
+							onPress={() => setView("grid")}
 						>
 							<IoGrid className="size-4" />
 						</Button>
@@ -342,22 +342,7 @@ function MainContent({
 		useParamsState(searchParams);
 	const { itemsCache } = useContext(CacheContext);
 
-	const collectionsParam = searchParams["collections"];
-	const collections = collectionsParam ? collectionsParam.split(",") : [];
-	const pageNumber = Number(searchParams["page"]) || 1;
-	const sort = searchParams["sort"] || SORT_OPTIONS[0].key;
-	const search = searchParams["search"] || "";
-	const scope = searchParams["scope"] || SCOPE_OPTIONS[0].key;
-	const range = searchParams["range"] || "";
-
-	const queryParams = {
-		pageNumber,
-		sort,
-		collections,
-		search,
-		scope,
-		range,
-	}
+	const queryParams = defaultParams(searchParams);
 
 	const itemsURL = buildItemsQuery(queryParams);
 
@@ -420,7 +405,7 @@ function MainContent({
 		{
 			keepPreviousData: true,
 			onSuccess: (data) => {
-				if (data.totalPages < pageNumber) {
+				if (data.totalPages < queryParams.page) {
 					handlePageChange(data.totalPages);
 				}
 			},
@@ -454,14 +439,14 @@ function MainContent({
 				handleCheckboxChange={handleCheckboxChange}
 				selectedCollections={selectedCollections}
 				hierarchy={hierarchy}
-				range={range}
+				range={queryParams.range}
 				handleRangeChange={handleRangeChange}
 				facetDistribution={itemsData?.facetDistribution}
 			/>
 			<ResourcesView
-				sort={sort}
-				search={search}
-				scope={scope}
+				sort={queryParams.sort}
+				search={queryParams.search}
+				scope={queryParams.scope}
 				handleSearchChange={handleSearchChange}
 				handleScopeChange={handleScopeChange}
 				handleSortChange={handleSortChange}
@@ -472,11 +457,12 @@ function MainContent({
 				handleCheckboxChange={handleCheckboxChange}
 				collectionsData={collectionsData}
 				hierarchy={hierarchy}
-				range={range}
+				range={queryParams.range}
 				handleRangeChange={handleRangeChange}
-				pageNumber={pageNumber}
+				pageNumber={queryParams.page}
 				handlePageChange={handlePageChange}
 				queryParams={queryParams}
+				searchParams={searchParams}
 			/>
 		</>
 	);

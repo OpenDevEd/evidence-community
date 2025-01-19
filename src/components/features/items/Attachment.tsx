@@ -75,7 +75,7 @@ export default function Attachment({ data }: { data: Item }) {
 				<div className="flex gap-2">
 					<Button
 						size="sm"
-						onClick={() => {
+						onPress={() => {
 							window.open(data.url || "", "_blank");
 							posthog.capture("view_attachment", {
 								key: data.key,
@@ -90,7 +90,7 @@ export default function Attachment({ data }: { data: Item }) {
 						size="sm"
 						color="accent"
 						startContent={<LuDownload className="size-5" />}
-						onClick={() => {
+						onPress={() => {
 							downloadLink(data.url || "", data.filename || "", data.key || "");
 						}}
 					>

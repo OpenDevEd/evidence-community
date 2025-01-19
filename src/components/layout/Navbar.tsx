@@ -61,39 +61,39 @@ function ThemeSwitcher({
 				"h-6 w-6 rounded-lg",
 				isMobile ? "xl:hidden block w-full" : "xl:block hidden"
 			)}
-			onClick={() => {
-				setTheme(theme === "dark" ? "light" : "dark");
-			}}
+			
 		>
-			<div className="flex items-center justify-center gap-2">
-				{[IoMdSunny, HiOutlineMoon].map((Icon, index) => (
-					<Icon
-						key={index}
-						className={twMerge(
-							"size-5 xl:size-6 cursor-pointer select-none active:scale-95 transition-all",
-							"dark:stroke-accent fill-accent dark:fill-none",
-							index === 0 && "dark:hidden",
-							index === 1 && "hidden dark:block"
-						)}
-					/>
-				))}
-				{isMobile && (
-					<span className="text-sm text-accent">
-						{["dark", "light"].map((themeToMatch) => (
-							<span
-								key={themeToMatch}
-								className={twMerge(
-									themeToMatch === "dark"
-										? "dark:hidden"
-										: "hidden dark:block"
-								)}
-							>
-								{`Switch to ${themeToMatch} mode`}
-							</span>
-						))}
-					</span>
-				)}
-			</div>
+			<Button className="flex items-center justify-center gap-2 !w-full" variant="invisible" onPress={() => {
+				setTheme(theme === "dark" ? "light" : "dark");
+			}}>
+					{[IoMdSunny, HiOutlineMoon].map((Icon, index) => (
+						<Icon
+							key={index}
+							className={twMerge(
+								"size-5 xl:size-6 cursor-pointer select-none active:scale-95 transition-all",
+								"dark:stroke-accent fill-accent dark:fill-none",
+								index === 0 && "dark:hidden",
+								index === 1 && "hidden dark:block"
+							)}
+						/>
+					))}
+					{isMobile && (
+						<span className="text-sm text-accent">
+							{["dark", "light"].map((themeToMatch) => (
+								<span
+									key={themeToMatch}
+									className={twMerge(
+										themeToMatch === "dark"
+											? "dark:hidden"
+											: "hidden dark:block"
+									)}
+								>
+									{`Switch to ${themeToMatch} mode`}
+								</span>
+							))}
+						</span>
+					)}
+			</Button>
 		</Skeleton>
 	);
 }
@@ -428,7 +428,7 @@ function LoginModal({
 							<div className="flex-1 h-[0.0625rem] bg-black/10 dark:bg-white/10" />
 						</div>
 						<Button
-							onClick={() => signIn("google")}
+							onPress={() => signIn("google")}
 							color="secondary"
 							className="w-full dark:bg-white dark:text-black"
 							startContent={<FaGoogle className="size-5" />}
@@ -516,12 +516,13 @@ export default function Navbar() {
 							transition={{ duration: 0.15 }}
 							className="xl:hidden block ml-auto rtl:ml-0 rtl:mr-auto"
 						>
-							<Icon
-								className="size-8 !fill-accent !stroke-accent cursor-pointer transition-transform active:scale-80 delay-0"
-								onClick={() =>
-									setIsMobileMenuOpen(!isMobileMenuOpen)
-								}
-							/>
+							<Button variant="invisible" onPress={() => {
+								setIsMobileMenuOpen(!isMobileMenuOpen)
+							}}>
+								<Icon
+									className="size-8 !fill-accent !stroke-accent cursor-pointer transition-transform active:scale-80 delay-0"
+								/>
+							</Button>
 						</motion.div>
 					))}
 				</AnimatePresence>

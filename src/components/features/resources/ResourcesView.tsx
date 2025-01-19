@@ -19,7 +19,8 @@ import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import { CacheContext, CacheContextType } from "@/context/Providers";
 import { DownloadModal } from "../items/ItemControls";
 import { useDisclosure } from "@nextui-org/react";
-import { downloadItems } from "@/lib/actions";
+import { downloadItems, searchIndex } from "@/lib/actions";
+import { routing, useRouter } from "@/i18n/routing";
 
 
 interface ResourcesViewProps {
@@ -44,6 +45,7 @@ interface ResourcesViewProps {
 	countLabel?: ReactNode;
 	queryParams?: Record<string, any>;
 	params?: Record<string, any>;
+	searchParams?: Record<string, any>;
 }
 
 function Chip({
@@ -75,7 +77,7 @@ function Chip({
 				size="xs"
 				variant="solid"
 				className="shrink-0 p-1 h-auto ltr:pr-2 rtl:pl-2"
-				onClick={() => {
+				onPress={() => {
 					if (canClick.current) {
 						handleCheckboxChange(collection);
 						canClick.current = false;
@@ -135,7 +137,7 @@ function FilterChips({
 					className="w-7 flex justify-end"
 				>
 					<Button
-						onClick={() => {
+						onPress={() => {
 							handleCheckboxChange?.("");
 						}}
 						isIconOnly
@@ -194,11 +196,12 @@ function ResourcesList({
 	);
 }
 
-function ContentActions({ data, queryParams, params }: { data: ItemsGetResponse | undefined, queryParams?: Record<string, any>, params?: Record<string, any> }) {
+function ContentActions({ data, queryParams, params, searchParams }: { data: ItemsGetResponse | undefined, queryParams?: Record<string, any>, params?: Record<string, any>, searchParams?: Record<string, any> }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const totalItems = data?.totalItems || 0;
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
+	const router = useRouter();
 
 	return (
 		<div className="xl:flex xl:justify-end grid gap-4 flex-wrap">
@@ -222,9 +225,17 @@ function ContentActions({ data, queryParams, params }: { data: ItemsGetResponse 
 				{t("printCitations", { count: format.number(totalItems) })}
 			</Button>
 			<Button
+				onClick={() => {
+					router.push({
+						pathname: "/lib/atom.xml",
+						query: searchParams,
+					}, {
+						locale: routing.defaultLocale
+					})
+				}}
 				endContent={<HiOutlineCodeBracketSquare className="size-6" />}
 			>
-				{t("mainFeed")}
+				{JSON.stringify(searchParams) == "{}" ? t("mainFeed") : t("customFeed")}
 			</Button>
 		</div>
 	);
@@ -292,6 +303,7 @@ export function ResourcesView({
 	countLabel,
 	queryParams,
 	params,
+	searchParams,
 }: ResourcesViewProps) {
     const t = useTranslations("ui");
 	const format = useFormatter();
@@ -343,7 +355,7 @@ export function ResourcesView({
                 error={itemsError}
                 isLoading={isItemsLoading}
             />
-		<ContentActions data={itemsData} queryParams={queryParams} params={params}/>
+		<ContentActions data={itemsData} queryParams={queryParams} params={params} searchParams={searchParams}/>
             <div className="text-center xl:text-end text-black/40 dark:text-white/40 text-sm">
                 {t("lastUpdate", { date: format.dateTime(status.databaseUpdatedAt!, {
 					day: "2-digit",
