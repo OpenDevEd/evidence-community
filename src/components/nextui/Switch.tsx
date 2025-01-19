@@ -21,7 +21,7 @@ export const Switch = extendVariants(NextUISwitch, {
     },
     size: {
       sm: {
-        label: "text-base font-medium text-black/80 dark:text-white/60",
+        label: "text-base font-medium text-black/80 dark:text-white/60 ms-0",
         wrapper: "h-4 w-8 p-0.5",
         base: "h-4 p-0",
         thumb: "h-3 w-3 group-data-[selected]:ml-4",
