@@ -3,7 +3,7 @@ import { getItem } from "@/app/api/item/[key]/route";
 import { db } from "@/db";
 import { routing } from "@/i18n/routing";
 import { getCachedItem, getCachedStatus } from "@/app/api/cache";
-import { ItemGetResponse } from "@/app/api/item/types";
+import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
 import { getExtraValues } from "@/lib/utils";
 
@@ -15,8 +15,6 @@ import { getExtraValues } from "@/lib/utils";
 // 				parentItem: true,
 // 			},
 // 		});
-
-//         console.log("documents", documents);
 
 // 		return documents.flatMap((item) => 
 // 			routing.locales.map((locale) => ({
@@ -33,115 +31,119 @@ async function getCurrentItem(key: string) {
     return data;
 }
 
+function getPages(pages: string): { firstPage?: string; lastPage?: string } {
+    if (!pages) return {};
+
+    const normalizedPages = pages.replace(/[-\u2013]/g, '-');
+
+    const pageParts = normalizedPages.split(/\s*-\s*/);
+    
+    return {
+        firstPage: pageParts[0]?.trim() || undefined,
+        lastPage: pageParts[1]?.trim() || undefined
+    };
+}
+
 export async function generateMetadata(props: {
     params: Promise<{ key: string }>;
 }): Promise<Metadata> {
     const params = await props.params;
     const data = await getCurrentItem(params.key);
-    const DOI_REGEX = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
-    const attachmentExists = data?.item?.attachmentsData?.find((a: any) => 
-        a.PDFCoverPageImage
-    );
-    const extraValues = getExtraValues(data?.item?.extra ?? "");
-
     const status = await getCachedStatus();
 
     const companyName = status.companyName ?? "Evidence Library";
 
+    if (!data || !data.item) {
+        return {
+            title: "404 - Not Found",
+            description: "404 - Not Found",
+            generator: "new-el",
+        };
+    }
+
+    const item = data.item;
+    const extraValues = getExtraValues(item.extra ?? "");
+    const attachmentExists = item.attachmentsData?.find((a: any) => 
+        a.PDFCoverPageImage
+    );
+
 	return {
-		title: data?.item?.title,
-        description: data?.item?.abstractNote,
+		title: item.title,
+        description: item.abstractNote,
+        generator: "new-el",
         alternates: {
-            canonical: `${process.env.BASE_URL!}/lib/${data?.item?.key}`,
+            canonical: `${process.env.BASE_URL!}/lib/${item.key}`,
             languages: routing.locales.filter(locale => locale !== routing.defaultLocale).reduce((acc: { [locale: string]: string }, locale) => {
-                acc[locale] = `${process.env.BASE_URL!}/${locale}/lib/${data?.item?.key}`;
+                acc[locale] = `${process.env.BASE_URL!}/${locale}/lib/${item.key}`;
                 return acc;
             }, {}),
             types: {
-                "application/x-research-info-systems": `${process.env.BASE_URL!}/lib/${data?.item?.key}/export/ris`,
-                "application/x-bibtex": `${process.env.BASE_URL!}/lib/${data?.item?.key}/export/bibtex`,
+                "application/x-research-info-systems": `${process.env.BASE_URL!}/lib/${item.key}/export/ris`,
+                "application/x-bibtex": `${process.env.BASE_URL!}/lib/${item.key}/export/bibtex`,
             },
             media: {
                 'image/jpeg': attachmentExists?.PDFCoverPageImage ?? null,
                 'application/pdf': attachmentExists?.url ?? null
-            }
+            },
         },
         other: {
-            "citation_title": data?.item?.title ?? "",
-            "citation_date": data?.item?.date ?? "",
-            "citation_publication_date": data?.item?.date ?? "",
-            "citation_cover_date": data?.item?.date ?? "",
-            "citation_online_date": data?.item?.date ?? "",
+            "citation_title": item.title ?? "",
+            "citation_publication_date": item.date ?? "",
+            "citation_date": item.date ?? "",
+            "citation_year": item.year ?? "",
 
-            "citation_journal_title": data?.item?.publicationTitle ?? "",
-            "citation_journal_abbrev": data?.item?.journalAbbreviation ?? "",
-            "citation_book_title": data?.item?.bookTitle ?? "",
-            "citation_series_title": data?.item?.series ?? "",
-            "citation_volume": data?.item?.volume ?? "",
-            "citation_issue": data?.item?.issue ?? "",
-            "citation_firstpage": data?.item?.pages?.split('-')[0] ?? "",
-            "citation_lastpage": data?.item?.pages?.split('-')[1] ?? "",
-
-            "citation_doi": data?.item?.DOI ?? extraValues.get("DOI") ?? "",
-            "citation_isbn": data?.item?.ISBN ?? extraValues.get("ISBN") ?? "",
-            "citation_issn": data?.item?.ISSN ?? extraValues.get("ISSN") ?? "",
-            "citation_pmid": extraValues.get("pmid") ?? "",
-
-            "citation_public_url": data?.item?.url ?? "",
-            "citation_pdf_url": data?.item?.attachmentsData?.filter( (a: any) => {
-                return a.contentType === 'application/pdf'
-            })?.map((a: any) => a.url) ?? [],
-
-            "citation_publisher": data?.item?.publisher ?? "",
-            "citation_dissertation_institution": data?.item?.university ?? "",
-            "citation_technical_report_institution": data?.item?.institution ?? "",
-            "citation_technical_report_number": data?.item?.reportNumber ?? "",
-
-            "citation_language": data?.item?.languageName ?? "",
-            "citation_keywords": data?.item?.tags?.join('; ') ?? "",
-            "citation_abstract": data?.item?.abstractNote ?? "",
-            "citation_conference_title": data?.item?.conferenceName ?? "",
-
-            ...(data?.item?.creators?.reduce((acc: any, creator: any) => {
-                const citationKey = `citation_${creator.creatorType.toLowerCase()}`;
-                const creatorName = Object.entries(creator)
+            "citation_author": item.creators?.filter((creator: any) => creator.creatorType === "author").map((creator: any) => 
+                Object.entries(creator)
                     .filter(([key]) => key !== 'creatorType')
                     .map(([_, value]) => value)
-                    .join(', ');
-                
-                if (acc[citationKey]) {
-                    acc[citationKey] = Array.isArray(acc[citationKey]) 
-                        ? [...acc[citationKey], creatorName]
-                        : [acc[citationKey], creatorName];
-                } else {
-                    acc[citationKey] = creatorName;
-                }
-                return acc;
-            }, {}) ?? {})
+                    .join(', ')
+            ) ?? [],
+            
+            "citation_volume": item.volume ?? "",
+            "citation_issue": item.issue ?? "",
+            "citation_language": item.languageName ?? "",
+            "citation_publisher": item.publisher ?? "",
+            "citation_firstpage": getPages(item.pages ?? "").firstPage ?? "",
+            "citation_lastpage": getPages(item.pages ?? "").lastPage ?? "",
+
+            "citation_conference_title": item.conferenceName ?? "",
+            "citation_journal_title": item.publicationTitle ?? "",
+            "citation_dissertation_institution": item.university ?? "",
+            "citation_technical_report_institution": item.institution ?? "",
+            "citation_technical_report_number": item.reportNumber ?? "",
+
+            "citation_isbn": item.ISBN ?? extraValues.get("ISBN") ?? "",
+            "citation_issn": item.ISSN ?? extraValues.get("ISSN") ?? "",
+            "citation_doi": item.DOI ?? extraValues.get("DOI") ?? "",
+
+            "citation_public_url": item.url ?? "",
+            "citation_pdf_url": item.attachmentsData?.find((a: Item) => 
+                a.fullTextPDF
+            )?.url ?? "",
         },
         openGraph: {
-            title: data?.item?.title ?? '',
-            description: data?.item?.abstractNote ?? '',
-            url: `${process.env.BASE_URL!}/lib/${data?.item?.key}`,
+            title: item.title ?? '',
+            description: item.abstractNote ?? '',
+            url: `${process.env.BASE_URL!}/lib/${item.key}`,
             siteName: companyName,
             images: [
                 {
                     url: attachmentExists?.PDFCoverPageImage ?? '',
                     width: attachmentExists?.PDFCoverPageWidth ?? 1200,
                     height: attachmentExists?.PDFCoverPageHeight ?? 630,
-                    alt: data?.item?.title ?? ''
+                    alt: item.title ?? ''
                 }
             ],
-            locale: 'en_US',
+            locale: 'en_GB',
             type: 'article',
-            authors: data?.item?.creators?.map((creator: any) => 
+            authors: item.creators?.filter((creator: any) => creator.creatorType === "author").map((creator: any) => 
                 Object.entries(creator)
                     .filter(([key]) => key !== 'creatorType')
                     .map(([_, value]) => value)
                     .join(', ')
             ) ?? [],
-            publishedTime: data?.item?.date?.toString() ?? '',
-            modifiedTime: (data?.item?.dateModified ?? data?.item?.date)?.toString() ?? '',
+            publishedTime: item.date?.toString() ?? '',
+            modifiedTime: (item.dateModified ?? item.date)?.toString() ?? '',
         },
 	};
 }
