@@ -5,6 +5,8 @@ import { Collection } from "../collections/types";
 export type Item = InferSelectModel<typeof item> & {
   attachmentsData?: Item[];
   collectionsData?: Collection[];
+  collectionsAncestry?: string[];
+  year?: string;
 };
 
 export type ItemGetResponse = {
