@@ -1,4 +1,4 @@
-import { ReactNode, useRef, useMemo } from "react";
+import { ReactNode, useRef, useMemo, memo } from "react";
 import { Item } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
 import { Button, CardBody, Link } from "@nextui-org/react";
@@ -31,7 +31,8 @@ type Creator = {
 function formatDate({ value, formatter }: FormatterProps) {
 	if (!value) return false;
 	if (isNaN(new Date(value).getTime())) {
-		return value};
+		return value;
+	}
 
 	const date = new Date(value);
 	const hasTime = date.getHours() !== 0 || date.getMinutes() !== 0;
@@ -84,7 +85,7 @@ function Extra({ value }: { value: string }) {
 				<Link
 					key={i}
 					href={`https://doi.org/${doi}`}
-					className="text-accent"
+					className="text-accent text-lg"
 					showAnchorIcon
 				>
 					{doi}
@@ -104,43 +105,42 @@ function Extra({ value }: { value: string }) {
 	return <>{elements}</>;
 }
 
-function Collections({ value }: { value: Collection[] }) {
-	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
 
-	if (!isCollectionsEnabled) return false;
-	if (!value) return false;
-	if (value.length === 0) return false;
-
-	value.sort(
-		(a: Collection, b: Collection) =>
-			a.title?.localeCompare(b.title || "") || 0
-	);
+function CollectionLevel({ collection }: { collection: Collection }) {
+	const ancestry = collection.ancestry || [];
+	const href = `/lib?collections=${[...ancestry, collection.key].join(",")}`;
 
 	return (
-		<ul className="flex flex-col gap-2">
-			{value.map((collection: Collection) => {
-				const ancestry = collection.ancestry || [];
-				return (
-					<li key={collection.id}>
-						<Link
-							showAnchorIcon
-							href={`/lib?collections=${[
-								...ancestry,
-								collection.key,
-							].join(",")}`}
-							className="text-tertiary-400"
-						>
-							<span className="text-black/60 dark:text-white/60 underline">
-								{collection.title} / {collection.name}
-							</span>
-						</Link>
-					</li>
-				);
-			})}
-		</ul>
+		<div className="text-black/60 dark:text-white/60 flex flex-col">
+			<Link
+			showAnchorIcon
+			href={href}
+			className="text-tertiary-400 gap-2 text-lg"
+			underline="hover"
+		>
+				<span className="text-black/60 dark:text-white/60">
+					{collection.name}
+				</span>
+			</Link>
+			<div className="ml-8">
+				{collection.children?.map((child) => (
+					<CollectionLevel key={child.id} collection={child} />
+				))}
+			</div>
+		</div>
 	);
 }
 
+export function CollectionsRow({ value }: { value: Collection[] }) {
+	if (!value) return false;
+	if (value.length === 0) return false;
+
+	return (
+		<ul className="flex flex-col gap-2">
+			{value.map((collection: Collection) => <CollectionLevel key={collection.id} collection={collection} />)}
+		</ul>
+	);
+}
 
 export const valueFormatter: Record<
 	any,
@@ -163,6 +163,7 @@ export const valueFormatter: Record<
 	itemType: ({ value, t }) => t("itemType." + value),
 	collections: () => false,
 	title: () => false,
+	DOI: ({ value }) => <Extra value={value} />,
 	creators: ({ value, t }) => {
 		if (!value) return null;
 		if (value.length === 0) return null;
@@ -196,11 +197,11 @@ export const valueFormatter: Record<
 			</ul>
 		);
 	},
-	collectionsData: Collections,
+	collectionsData: () => false,
 	date: formatDate,
 	accessDate: formatDate,
 	url: ({ value }) => (
-		<Link href={value} className="text-accent break-all" showAnchorIcon>
+		<Link href={value} className="text-accent break-all text-lg" showAnchorIcon>
 			{value}
 		</Link>
 	),
@@ -224,7 +225,7 @@ export const valueFormatter: Record<
 	extra: (args) => {
 		const finalValue = args.value;
 		const values = getExtraValues(finalValue);
-		const filteredValues = Array.from(values.entries())
+		const filteredValues = Array.from(values.entries());
 
 		if (filteredValues.length === 0) return false;
 
@@ -232,11 +233,14 @@ export const valueFormatter: Record<
 			<div className="whitespace-pre-line space-y-2">
 				{filteredValues.map(([key, value], index) => {
 					const formattedValue = formatDate({ ...args, value });
-					console.log(formattedValue);
 					return (
-						<div key={index} className="flex items-center">
-							<CopyButton text={key} content={formattedValue} className="ltr:mr-2 rtl:ml-2 shrink-0" />
-							<span className="text-white/60 text-base leading-none">
+						<div key={index} className="flex items-center xl:flex-nowrap flex-wrap">
+							<CopyButton
+								text={key}
+								content={formattedValue}
+								className="ltr:mr-2 rtl:ml-2 shrink-0"
+							/>
+							<span className="text-white/60 text-lg leading-none">
 								<Extra value={value} />
 							</span>
 						</div>
