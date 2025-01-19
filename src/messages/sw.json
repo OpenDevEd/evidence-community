@@ -53,7 +53,14 @@
 		"download": "Pakua",
         "RISDescription": "Muundo unaopendekezwa kwa programu nyingi za usimamizi wa marejeleo",
         "BibTeXDescription": "Muundo unaopendekezwa kwa programu maalum za BibTeX",
-		"rateLimitedMessage": "Unaweza kupakua rasilimali katika miundo ifuatayo"
+		"rateLimitedMessage": "Unaweza kupakua rasilimali katika miundo ifuatayo",
+		"openInZotero": "Tumia Zotero",
+		"viewOnZotero": "Tazama kwenye Zotero.org",
+		"openInZoteroToggleLabel": "\"Tumia Zotero\" Button",
+		"viewOnZoteroToggleLabel": "\"Tazama kwenye Zotero.org\" Button",
+		"openInZoteroToggleDescription": "Ongeza au kuzuia \"Tumia Zotero\" Button kwenye ukurasa wa rekodi kabisa. Button hii inaweza kuwa muhimu kwa kuwa unaweza kufungua rekodi katika programu Zotero. Inawezekanavyo kwa kuwa unaweza kuweka programu Zotero kwenye kifaa chako, na kuwa na uwezo wa kufikia rekodi katika makusanyo yako.",
+		"viewOnZoteroToggleDescription": "Ongeza au kuzuia \"Tazama kwenye Zotero.org\" Button kwenye ukurasa wa rekodi kabisa. Button hii inaweza kuwa muhimu kwa kuwa unaweza kuona rekodi kwenye ukurasa Zotero.org. Inawezekanavyo kwa kuwa unaweza kuona rekodi katika kifaa cha mtandao.",
+		"customFeed": "Taarifa Kuu"
 	},
 	"ai": {
 		"summarize": "Fupisha",

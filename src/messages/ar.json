@@ -52,7 +52,14 @@
 		"selectCollection": "اختر مجموعة",
 		"download": "تحميل",
 		"RISDescription": "التنسيق الموصى به لمعظم برامج إدارة المراجع",
-		"BibTeXDescription": "التنسيق الموصى به لبرامج BibTeX"
+		"BibTeXDescription": "التنسيق الموصى به لبرامج BibTeX",
+		"openInZotero": "فتح في Zotero",
+		"viewOnZotero": "عرض على Zotero.org",
+		"openInZoteroToggleLabel": "\"فتح في Zotero\" زر",
+		"viewOnZoteroToggleLabel": "\"عرض على Zotero.org\" زر",
+		"openInZoteroToggleDescription": "إظهار أو إخفاء زر \"فتح في Zotero\" على صفحات السجلات الكاملة. يمكن أن يكون مفيدًا فقط إذا كان لديك تطبيق Zotero مثبت على جهازك، وإذا تم منحك الوصول إلى مكتبة المحفوظات التي تحتوي على السجل.",
+		"viewOnZoteroToggleDescription": "إظهار أو إخفاء زر \"عرض على Zotero.org\" على صفحات السجلات الكاملة. يمكن أن يكون مفيدًا إذا أردت عرض السجل في متصفح الويب.",
+		"customFeed": "تغذية خاصة"
 	},
 	"ai": {
 		"summarize": "تلخيص",

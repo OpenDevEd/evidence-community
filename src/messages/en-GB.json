@@ -52,7 +52,14 @@
 		"selectCollection": "Select a collection",
 		"download": "Download",
 		"RISDescription": "Recommended format for most reference management software",
-		"BibTeXDescription": "Recommended format for BibTeX-specific software"
+		"BibTeXDescription": "Recommended format for BibTeX-specific software",
+		"openInZotero": "Open in Zotero",
+		"viewOnZotero": "View on Zotero.org",
+		"openInZoteroToggleLabel": "\"Open in Zotero\" Button",
+		"viewOnZoteroToggleLabel": "\"View on Zotero.org\" Button",
+		"openInZoteroToggleDescription": "Show or hide the \"Open in Zotero\" button on full bibliographic record pages. This button allows you to open the record in the Zotero application. It might be useful only if you have the Zotero application installed on your device, and if you were granted access to the Zotero library that holds the record.",
+		"viewOnZoteroToggleDescription": "Show or hide the \"View on zotero.org\" button on full bibliographic record pages. This button allows you to view the record on the zotero.org website. It might be useful if you want to view the record in a web browser.",
+		"customFeed": "Custom Feed"
 	},
 	"ai": {
 		"summarize": "Summarise",

@@ -52,7 +52,14 @@
 		"selectCollection": "एक संग्रह चुनें",
 		"download": "डाउनलोड",
 		"RISDescription": "अधिकांश संदर्भ प्रबंधन सॉफ्टवेयर के लिए अनुशंसित प्रारूप",
-		"BibTeXDescription": "BibTeX-विशिष्ट सॉफ्टवेयर के लिए अनुशंसित प्रारूप"
+		"BibTeXDescription": "BibTeX-विशिष्ट सॉफ्टवेयर के लिए अनुशंसित प्रारूप",
+		"openInZotero": "Zotero में खोलें",
+		"viewOnZotero": "Zotero.org पर देखें",
+		"openInZoteroToggleLabel": "\"Zotero में खोलें\" बटन",
+		"viewOnZoteroToggleLabel": "\"Zotero.org पर देखें\" बटन",
+		"openInZoteroToggleDescription": "वैधानिक रिकॉर्ड पृष्ठों पर \"Zotero में खोलें\" बटन दिखाएं या छिपाएं। यह बटन आपको Zotero अनुप्रयोग में रिकॉर्ड खोलने की अनुमति देता है। यह केवल यदि आपके डिवाइस पर Zotero अनुप्रयोग स्थापित है और आपको रिकॉर्ड वाली Zotero लाइब्रेरी के उपयोग की अनुमति मिलती है।",
+		"viewOnZoteroToggleDescription": "वैधानिक रिकॉर्ड पृष्ठों पर \"Zotero.org पर देखें\" बटन दिखाएं या छिपाएं। यह बटन आपको Zotero.org वेबसाइट पर रिकॉर्ड देखने की अनुमति देता है। यह तब उपयोगी हो सकता है जब आप वेब ब्राउज़र में रिकॉर्ड देखना चाहते हैं।",
+		"customFeed": "व्यक्तिगत फ़ीड"
 	},
 	"ai": {
 		"summarize": "सारांश",

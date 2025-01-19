@@ -52,7 +52,14 @@
 		"selectCollection": "Sélectionner une collection",
 		"download": "Télécharger",
 		"RISDescription": "Format recommandé pour la plupart des logiciels de gestion bibliographique",
-		"BibTeXDescription": "Format recommandé pour les logiciels spécifiques à BibTeX"
+		"BibTeXDescription": "Format recommandé pour les logiciels spécifiques à BibTeX",
+		"openInZotero": "Ouvrir dans Zotero",
+		"viewOnZotero": "Voir sur Zotero.org",
+		"openInZoteroToggleLabel": "\"Ouvrir dans Zotero\" bouton",
+		"viewOnZoteroToggleLabel": "\"Voir sur Zotero.org\" bouton",
+		"openInZoteroToggleDescription": "Affiche ou masque le bouton \"Ouvrir dans Zotero\" sur les pages de records bibliographiques complètes. Ce bouton vous permet d'ouvrir le record dans l'application Zotero. Il peut être utile uniquement si vous avez installé l'application Zotero sur votre appareil et si vous avez accès à la bibliothèque Zotero qui contient le record.",
+		"viewOnZoteroToggleDescription": "Affiche ou masque le bouton \"Voir sur Zotero.org\" sur les pages de records bibliographiques complètes. Ce bouton vous permet de voir le record sur le site web Zotero.org. Il peut être utile si vous souhaitez voir le record dans un navigateur web.",
+		"customFeed": "Flux personnalisé"
 	},
 	"ai": {
 		"summarize": "Résumer",

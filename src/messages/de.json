@@ -52,7 +52,14 @@
 		"selectCollection": "Sammlung auswählen",
 		"download": "Herunterladen",
 		"RISDescription": "Empfohlenes Format für die meiste Literaturverwaltungssoftware",
-		"BibTeXDescription": "Empfohlenes Format für BibTeX-spezifische Software"
+		"BibTeXDescription": "Empfohlenes Format für BibTeX-spezifische Software",
+		"openInZotero": "In Zotero öffnen",
+		"viewOnZotero": "Auf Zotero.org ansehen",
+		"openInZoteroToggleLabel": "\"In Zotero öffnen\" Button",
+		"viewOnZoteroToggleLabel": "\"Auf Zotero.org ansehen\" Button",
+		"openInZoteroToggleDescription": "Zeigt oder verbirgt den \"In Zotero öffnen\" Button auf vollständigen bibliographischen Einträgen. Dieser Button ermöglicht es Ihnen, den Eintrag in der Zotero-Anwendung zu öffnen. Er ist möglicherweise nur nützlich, wenn Sie die Zotero-Anwendung auf Ihrem Gerät installiert haben und Zugriff auf die Zotero-Bibliothek erhalten haben, die den Eintrag enthält.",
+		"viewOnZoteroToggleDescription": "Zeigt oder verbirgt den \"Auf Zotero.org ansehen\" Button auf vollständigen bibliographischen Einträgen. Dieser Button ermöglicht es Ihnen, den Eintrag auf der Zotero.org-Website zu sehen. Es ist möglicherweise nützlich, wenn Sie den Eintrag in einem Webbrowser ansehen möchten.",
+		"customFeed": "Benutzerdefiniertes Feed"
 	},
 	"ai": {
 		"summarize": "Zusammenfassen",
