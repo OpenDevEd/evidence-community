@@ -21,5 +21,10 @@ export async function GET(
 
     const converted = await convertItem(result.item, format as "ris" | "bibtex");
 
-    return NextResponse.json(converted);
+    return new Response(converted, {
+        headers: {
+            "Content-Type": format === "ris" ? "application/x-research-info-systems" : "application/x-bibtex",
+            "Content-Disposition": `attachment; filename="${key}.${format}"`
+        }
+    });
 }
