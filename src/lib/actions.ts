@@ -23,6 +23,25 @@ import { buildItemsQuery } from "@/lib/utils";
 import { getCachedUserLikes } from "@/app/api/cache";
 import { getCachedUserCollectionKeys } from "@/app/api/cache";
 import { auth } from "@/app/api/auth/[...nextauth]/config";
+import { unstable_cache } from "next/cache";
+
+export async function getItems(
+	searchParams: URLSearchParams | Record<string, any>
+) {
+	const collections = searchParams instanceof URLSearchParams
+		? searchParams.get("collections") || []
+		: searchParams.collections || [];
+
+	return searchIndex(
+		searchParams instanceof URLSearchParams
+			? searchParams
+			: new URLSearchParams(searchParams),
+		{
+			facets: ["collectionsAncestry"],
+		},
+		collections.map((collection: string) => `collectionsAncestry = "${collection}"`)
+	);
+}
 
 export async function getProfileSearchFilter(
 	id: string | null,
@@ -127,7 +146,7 @@ export async function downloadItems(
 	const { filter, status } = await getProfileSearchFilter(id, collectionId);
 
 	const items = await searchIndex(
-		url,
+		searchParams,
 		{
 			limit: 1000000,
 		},
@@ -168,14 +187,33 @@ function formatRange(range: string | null) {
 
 	return [
 		startYear > 0 && `year >= ${startYear}`,
-		endYear > 0 && `year <= ${endYear}`
+		endYear > 0 && `year <= ${endYear}`,
 	]
 		.filter(Boolean)
 		.join(" AND ");
 }
 
+export async function getMainAttributes() {
+	const getCachedResults = unstable_cache(
+		async () => {
+			const attributes = await meilisearchClient.index(
+				process.env.MEILI_INDEX || config.index
+			).getDisplayedAttributes();
+
+			return attributes;
+		},
+		[],
+		{ tags: ["attributes"] }
+	);
+
+	const attributes = await getCachedResults();
+
+	return attributes.filter((attribute) => !["attachmentsData", "collectionsData"].some(excludedAttribute => attribute.startsWith(excludedAttribute)))
+}
+
+
 export async function searchIndex(
-	url: string,
+	searchParams: URLSearchParams,
 	extraProperties: Parameters<
 		ReturnType<typeof meilisearchClient.index>["search"]
 	>[1] = {},
@@ -183,51 +221,65 @@ export async function searchIndex(
 		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
 	>["filter"] = []
 ) {
-	const { searchParams } = new URL(url);
-	const pageNum = Math.max(1, Number(searchParams.get("page")) || 1);
-	const limitNum = Math.min(
-		100,
-		Math.max(1, Number(searchParams.get("limit")) || ITEMS_PER_PAGE)
+	const getCachedResults = unstable_cache(
+		async () => {
+			const pageNum = Math.max(1, Number(searchParams.get("page")) || 1);
+			const limitNum = Math.min(
+				100,
+				Math.max(1, Number(searchParams.get("limit")) || ITEMS_PER_PAGE)
+			);
+			const sort = searchParams.get("sort") || SORT_OPTIONS[0].key;
+			const search = searchParams.get("search") || "";
+			const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
+			const range = searchParams.get("range") || null;
+			const searchIndex = meilisearchClient.index(
+				process.env.MEILI_INDEX || config.index
+			);
+			const sortOption =
+				SORT_OPTIONS.find((option) => option.key === sort)?.sort ||
+				SORT_OPTIONS[0].sort;
+
+			const finalFilters = [
+				`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
+				range ? formatRange(range) : null,
+				...(Array.isArray(extraFilters) ? extraFilters : []),
+			].filter((f): f is string => f !== null);
+
+			const allAttributes = await getMainAttributes();
+			
+			const searchResults = await searchIndex.search(search, {
+				offset: (pageNum - 1) * limitNum,
+				limit: limitNum,
+				attributesToSearchOn:
+					SCOPE_OPTIONS.find((option) => option.key === scope)
+						?.attributesToSearchOn ||
+					SCOPE_OPTIONS[0].attributesToSearchOn,
+				sort: [sortOption],
+				attributesToRetrieve: allAttributes,
+				...extraProperties,
+				filter: finalFilters,
+			});
+
+			const items = searchResults.hits;
+			const totalCount = searchResults.estimatedTotalHits;
+
+			return {
+				items: items as Item[],
+				currentPage: pageNum,
+				totalItems: totalCount,
+				perPage: limitNum,
+				totalPages: Math.ceil(totalCount / limitNum),
+				facetDistribution: searchResults.facetDistribution,
+			};
+		},
+		[searchParams.toString()],
+		{
+			tags: ["searchIndex"],
+			revalidate: 60 * 60,
+		}
 	);
-	const sort = searchParams.get("sort") || SORT_OPTIONS[0].key;
-	const search = searchParams.get("search") || "";
-	const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
-	const range = searchParams.get("range") || null;
-	const searchIndex = meilisearchClient.index(
-		process.env.MEILI_INDEX || config.index
-	);
-	const sortOption =
-		SORT_OPTIONS.find((option) => option.key === sort)?.sort ||
-		SORT_OPTIONS[0].sort;
-	
-	const finalFilters = [
-		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
-			range ? formatRange(range) : null,
-		...(Array.isArray(extraFilters) ? extraFilters : []),
-	].filter((f): f is string => f !== null);
 
-	const searchResults = await searchIndex.search(search, {
-		offset: (pageNum - 1) * limitNum,
-		limit: limitNum,
-		attributesToSearchOn:
-			SCOPE_OPTIONS.find((option) => option.key === scope)
-				?.attributesToSearchOn || SCOPE_OPTIONS[0].attributesToSearchOn,
-		sort: [sortOption],
-		...extraProperties,
-		filter: finalFilters,
-	});
-
-	const items = searchResults.hits;
-	const totalCount = searchResults.estimatedTotalHits;
-
-	return {
-		items: items as Item[],
-		currentPage: pageNum,
-		totalItems: totalCount,
-		perPage: limitNum,
-		totalPages: Math.ceil(totalCount / limitNum),
-		facetDistribution: searchResults.facetDistribution,
-	};
+	return getCachedResults();
 }
 
 export async function getProfile(
