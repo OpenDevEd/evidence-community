@@ -8,11 +8,21 @@ import { status as statusTable } from "@/db/schema/tables/status";
 import { Collection } from "./collections/types";
 import { getCollections } from "./collections/route";
 
-export const cachedItems = new Map<string, ItemGetResponse>();
-export const cachedUserCollectionKeys = new Map<string, { private: boolean, userId: string, itemKeys: string[] }>();
-export const cachedUserLikes = new Map<string, InferSelectModel<typeof usersToLikes>[]>();
-export const cachedStatus = new Map<string, InferSelectModel<typeof statusTable>>();
-export const cachedCollections = new Map<string, Collection[]>();
+declare global {
+	let _cachedItems: Map<string, ItemGetResponse> | undefined;
+	let _cachedItemsSmall: Map<string, ItemGetResponse> | undefined;
+	let _cachedUserCollectionKeys: Map<string, { private: boolean, userId: string, itemKeys: string[] }> | undefined;
+	let _cachedUserLikes: Map<string, InferSelectModel<typeof usersToLikes>[]> | undefined;
+	let _cachedStatus: Map<string, InferSelectModel<typeof statusTable>> | undefined;
+	let _cachedCollections: Map<string, Collection[]> | undefined;
+}
+
+export const cachedItems = (global as any)._cachedItems || ((global as any)._cachedItems = new Map());
+export const cachedItemsSmall = (global as any)._cachedItemsSmall || ((global as any)._cachedItemsSmall = new Map());
+export const cachedUserCollectionKeys = (global as any)._cachedUserCollectionKeys || ((global as any)._cachedUserCollectionKeys = new Map());
+export const cachedUserLikes = (global as any)._cachedUserLikes || ((global as any)._cachedUserLikes = new Map());
+export const cachedStatus = (global as any)._cachedStatus || ((global as any)._cachedStatus = new Map());
+export const cachedCollections = (global as any)._cachedCollections || ((global as any)._cachedCollections = new Map());
 
 export async function getCachedCollections(ignoreCache: boolean = false) {
 	let collections = cachedCollections.get(process.env.MEILI_INDEX!);
@@ -33,6 +43,26 @@ export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 		cachedItems.set(key, item);
 	}
 	return item;
+}
+
+export async function getCachedItemSmall(key: string, ignoreCache: boolean = false) {
+	let item = cachedItemsSmall.get(key);
+	console.log("cached items small", cachedItemsSmall.size);
+	if (!item || ignoreCache) {
+		console.log("getting item small", key);
+		item = await getItem(key);
+		if (!item || !item.item) {
+			return null;
+		}
+		cachedItemsSmall.set(key, item);
+	} else {
+		console.log("cached item size in mb", JSON.stringify(item).length / 1024 / 1024);
+	}
+	return item;
+}
+
+export async function setCachedItemSmall(key: string, item: ItemGetResponse) {
+	cachedItemsSmall.set(key, item);
 }
 
 export async function getCachedUserCollectionKeys(collectionId: string, ignoreCache: boolean = false) {
