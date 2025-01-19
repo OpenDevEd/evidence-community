@@ -2,7 +2,7 @@ import ItemComponent from "@/components/pages/Item";
 import { getItem } from "@/app/api/item/[key]/route";
 import { db } from "@/db";
 import { routing } from "@/i18n/routing";
-import { getCachedItem, getCachedStatus } from "@/app/api/cache";
+import { getCachedItem, getCachedItemSmall, getCachedStatus } from "@/app/api/cache";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
 import { getExtraValues } from "@/lib/utils";
@@ -27,7 +27,7 @@ import { getExtraValues } from "@/lib/utils";
 
 
 async function getCurrentItem(key: string) {
-    const data = await getCachedItem(key).catch(() => ({ item: undefined }));
+    const data = await getCachedItemSmall(key).catch(() => ({ item: undefined }));
     return data;
 }
 
@@ -61,11 +61,13 @@ export async function generateMetadata(props: {
         };
     }
 
-    const item = data.item;
+    const item: Item = data.item;
     const extraValues = getExtraValues(item.extra ?? "");
     const attachmentExists = item.attachmentsData?.find((a: any) => 
         a.PDFCoverPageImage
     );
+
+    const fullTextPDFs = item.fullTextPDFs ?? [];
 
 	return {
 		title: item.title,
@@ -118,7 +120,7 @@ export async function generateMetadata(props: {
 
             "citation_public_url": item.url ?? "",
             "citation_pdf_url": item.attachmentsData?.find((a: Item) => 
-                a.fullTextPDF
+                fullTextPDFs.find((f: any) => f.key === a.key)
             )?.url ?? "",
         },
         openGraph: {

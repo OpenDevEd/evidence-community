@@ -38,7 +38,7 @@ export async function getItem(
 		result.collectionsData = result.collectionsAncestry
 			?.map((collection) => {
 				const collectionData = collections.find(
-					(c) => c.key === collection
+					(c: Collection) => c.key === collection
 				);
 				return collectionData;
 			})

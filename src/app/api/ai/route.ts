@@ -33,6 +33,14 @@ export async function POST(req: Request) {
 		return new NextResponse(error, { status: 404 });
 	}
 
+	const {fullTextPDFs, ...cleanItem} = item.item;
+	for (const attachment of cleanItem.attachmentsData) {
+		const fullTextPDF = fullTextPDFs?.find((f: any) => f.key === attachment.key)?.fullTextPDF
+		if (fullTextPDF) {
+			attachment.fullTextPDF = fullTextPDF
+		}
+	}
+
 	const result = streamText({
 		model: provider!(modelName!),
 		system: [
@@ -41,7 +49,7 @@ export async function POST(req: Request) {
 			sharedRules,
 			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? pdfRules : "",
 		].join("\n"),
-		prompt: JSON.stringify(item),
+		prompt: JSON.stringify(cleanItem),
 		onFinish(event) {
 			trackUsage("ai_" + prompt, event, distinctId, prompt);
 		},

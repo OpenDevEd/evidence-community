@@ -7,6 +7,7 @@ export type Item = InferSelectModel<typeof item> & {
   collectionsData?: Collection[];
   collectionsAncestry?: string[];
   year?: string;
+  fullTextPDFs?: Array<{ key: string; fullTextPDF: Array<{ text: string, page: number }> }>;
 };
 
 export type ItemGetResponse = {

@@ -154,6 +154,7 @@ export const valueFormatter: Record<
 	tags: () => false,
 	groupExternalId: () => false,
 	dateAdded: () => false,
+	fullTextPDFs: () => false,
 	dateModified: () => false,
 	relations: () => false,
 	deleted: () => false,

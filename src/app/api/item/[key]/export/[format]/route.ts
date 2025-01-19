@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCachedItem } from '../../../../cache';
+import { getCachedItem, getCachedItemSmall } from '../../../../cache';
 import { convertItem } from '@/lib/actions';
 
 export async function GET(
@@ -9,7 +9,7 @@ export async function GET(
     const params = await props.params;
     const { key, format } = params;
 
-    const result = await getCachedItem(key);
+    const result = await getCachedItemSmall(key);
 
     if (!result || !result.item) {
         return NextResponse.json({

@@ -26,6 +26,14 @@ export async function POST(req: Request) {
 		return new NextResponse(error, { status: 404 });
 	}
 
+	const {fullTextPDFs, ...cleanItem} = item.item;
+	for (const attachment of cleanItem.attachmentsData) {
+		const fullTextPDF = fullTextPDFs?.find((f: any) => f.key === attachment.key)?.fullTextPDF
+		if (fullTextPDF) {
+			attachment.fullTextPDF = fullTextPDF
+		}
+	}
+	
 	messages.unshift({
 		role: "user",
 		content: [
@@ -35,7 +43,7 @@ export async function POST(req: Request) {
 			},
 			{
 				type: "text",
-				text: item ? JSON.stringify(item) : undefined,
+				text: item ? JSON.stringify(cleanItem) : undefined,
 			},
 		],
 	});

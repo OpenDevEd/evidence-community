@@ -1,4 +1,4 @@
-import { getCachedItem } from "@/app/api/cache";
+import { getCachedItem, getCachedItemSmall } from "@/app/api/cache";
 import { getItem } from "@/app/api/item/[key]/route";
 import { Item } from "@/app/api/item/types";
 import client from "@/lib/meilisearch";
@@ -8,7 +8,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
     const params = await props.params;
     const { key } = params;
 
-    const itemResponse = await getCachedItem(key);
+    const itemResponse = await getCachedItemSmall(key);
 
     if (!itemResponse) {
 		return NextResponse.json({ error: "Item not found" }, { status: 404 });

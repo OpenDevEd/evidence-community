@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { authOptions, auth } from "../auth/[...nextauth]/config";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, InferSelectModel } from "drizzle-orm";
 import { cachedUserLikes } from "../cache";
 
 export async function GET() {
@@ -66,7 +66,7 @@ export async function POST(request: NextRequest) {
       .returning();
     
     const cachedLikes = cachedUserLikes.get(session.user.id) || [];
-    const cachedLike = cachedLikes.find(like => like.itemKey === itemKey);
+    const cachedLike = cachedLikes.find((like: InferSelectModel<typeof usersToLikes>) => like.itemKey === itemKey);
     if (cachedLike) {
       cachedLikes.splice(cachedLikes.indexOf(cachedLike), 1);
     }

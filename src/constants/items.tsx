@@ -74,15 +74,14 @@ export const SCOPE_OPTIONS = [
 		key: "fields",
 		name: "in fields",
 		attributesToSearchOn: ITEM_COLUMNS.filter(
-			(col) => col !== "fullTextPDF" && col !== "attachmentsData"
+			(col) => col !== "fullTextPDFs" && col !== "attachmentsData"
 		),
 	},
 	{
 		key: "documents",
 		name: "in documents",
 		attributesToSearchOn: [
-			"fullTextPDF",
-			"attachmentsData.fullTextPDF.text",
+			"fullTextPDFs.fullTextPDF.text",
 		],
 	},
 ];

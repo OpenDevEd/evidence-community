@@ -8,11 +8,12 @@ import { twMerge } from "tailwind-merge";
 import { style } from "@/../tailwind.config";
 import { getMessages } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
-import {getLangDir} from 'rtl-detect';
+import { getLangDir } from "rtl-detect";
 import { authOptions, auth } from "@/app/api/auth/[...nextauth]/config";
 import { db } from "@/db";
 import { status as statusTable } from "@/db/schema/tables/status";
 import { getCachedStatus } from "@/app/api/cache";
+import { Suspense } from "react";
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -42,9 +43,7 @@ export default async function Base({
 		<html lang={locale} dir={dir} suppressHydrationWarning>
 			<body
 				className={`${
-					style === "wide"
-						? montserrat.className
-						: ubuntu.className
+					style === "wide" ? montserrat.className : ubuntu.className
 				}`}
 			>
 				<NextIntlClientProvider messages={messages}>
