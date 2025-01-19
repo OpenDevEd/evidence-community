@@ -3,8 +3,6 @@ import { MetadataRoute } from "next";
 import { routing } from "@/i18n/routing";
 import config from "@/constants/config.json";
 
-const LIMIT_PER_SITEMAP = 10000;
-
 function getItems(
 	args: {
 		[key: string]: any;
@@ -14,43 +12,31 @@ function getItems(
 		.index(process.env.MEILI_INDEX || config.index)
 		.getDocuments({
 			limit: 1000000,
-			fields: ["key", "updatedAt"],
+			fields: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"],
 			...args,
 		});
 }
 
-export async function generateSitemaps() {
-	if (process.env.SHOULD_GENERATE_SITEMAP === "true") {
-		const items = await getItems();
-		return Array.from(
-			{ length: Math.ceil(items.total / LIMIT_PER_SITEMAP) },
-			(_, i) => ({ id: i })
-		);
-	}
-	return [];
-}
+export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
+	const items = await getItems();
 
-export default async function sitemap({
-	id,
-}: {
-	id: number;
-}): Promise<MetadataRoute.Sitemap> {
-	const itemsPerLocale = Math.ceil(LIMIT_PER_SITEMAP);
-	const offset = id * itemsPerLocale;
-
-	const items = await getItems({
-		limit: itemsPerLocale,
-		offset: offset,
-	});
-
-	const result = items.results.flatMap((item) => ({
+	return items.results.flatMap((item: any) => ({
 		url: `${process.env.BASE_URL}/lib/${item.key}`,
 		lastModified: item.updatedAt,
 		alternates: {
 			languages: Object.fromEntries(
-				routing.locales.map((locale) => [locale, `${process.env.BASE_URL}/${locale}/lib/${item.key}`])
+				routing.locales.map((locale) => [
+					locale,
+					`${process.env.BASE_URL}/${locale}/lib/${item.key}`,
+				])
 			),
 		},
+		images: item.attachmentsData
+			?.filter((attachment: any) => attachment.PDFCoverPageImage)
+			.map((attachment: any) => ({
+				url: attachment.PDFCoverPageImage,
+				alt: attachment.title,
+			})),
 	}));
-	return result;
 }
+
