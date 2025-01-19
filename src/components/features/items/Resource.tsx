@@ -169,8 +169,12 @@ export default function Resource({
 	return (
 		<div className="@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col">
 			<Link
-				href={`/lib/${itemData?.key}`}
+				href={`/lib/${itemData?.key ?? ""}`}
 				className="p-4 @[720px]:p-6 flex flex-col gap-4 hover:brightness-90 transition-all flex-1"
+				onClick={(e) => {
+					if (!itemData?.key)
+						e.preventDefault();
+				}}
 			>
 				<Skeleton
 					isLoaded={!isLoading}
