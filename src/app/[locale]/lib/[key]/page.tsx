@@ -120,7 +120,7 @@ export async function generateMetadata(props: {
 
             "citation_public_url": item.url ?? "",
             "citation_pdf_url": item.attachmentsData?.find((a: Item) => 
-                fullTextPDFs.find((f: any) => f.key === a.key)
+                a.PDFCoverPageImage
             )?.url ?? "",
         },
         openGraph: {
