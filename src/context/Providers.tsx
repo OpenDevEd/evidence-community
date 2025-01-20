@@ -6,7 +6,7 @@ import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/i18n/routing";
 import posthog from "posthog-js";
 import { PostHogProvider, usePostHog } from "posthog-js/react";
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "@/i18n/routing";
 import { createContext, useContext } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -17,6 +17,8 @@ import { SessionProvider, useSession } from "next-auth/react";
 import { Session } from "next-auth";
 import { InferSelectModel } from "drizzle-orm";
 import { status as statusTable } from "@/db/schema/tables/status";
+import { ItemsGetResponse } from "@/app/api/items/types";
+import { useLocalStorage } from "usehooks-ts";
 
 export type CacheContextType = {
 	status: InferSelectModel<typeof statusTable>;
@@ -26,6 +28,8 @@ export type CacheContextType = {
 	previousExpansionStates: any;
 	globalExpanded: any;
 	setGlobalExpanded: (globalExpanded: any) => void;
+	lastFetchedData: ItemsGetResponse | null;
+	setLastFetchedData: (lastFetchedData: ItemsGetResponse | null) => void;
 };
 
 export const CacheContext = createContext<any>({});
@@ -73,6 +77,7 @@ function CacheProvider({
 	const previousExpansionStates = useRef({});
 	const [globalExpanded, setGlobalExpanded] = useState({});
 	const [accordionGlobalExpanded, setAccordionGlobalExpanded] = useState(null);
+	const [lastFetchedData, setLastFetchedData] = useLocalStorage<ItemsGetResponse | null>("lastFetchedData", {} as ItemsGetResponse);
 
 	return (
 		<CacheContext.Provider
@@ -86,11 +91,34 @@ function CacheProvider({
 				accordionGlobalExpanded,
 				setAccordionGlobalExpanded,
 				status,
+				lastFetchedData,
+				setLastFetchedData,
 			}}
 		>
 			{children}
 		</CacheContext.Provider>
 	);
+}
+
+export function useLastFetchedData() {
+	const [lastFetchedData, setLastFetchedData] = useLocalStorage<ItemsGetResponse | null>("lastFetchedData", {} as ItemsGetResponse);
+
+	const setLastFetchedDataAsResponse = useCallback((data: ItemsGetResponse) => {
+		setLastFetchedData((prev) => {
+			const allItems = [...(prev?.items ?? []), ...data.items];
+			
+			const uniqueItems = allItems.reduce((acc, item) => {
+				acc.set(item.id, item);
+				return acc;
+			}, new Map());
+
+			return {
+				items: Array.from(uniqueItems.values()).slice(-100)
+			} as ItemsGetResponse;
+		});
+	}, [setLastFetchedData]);
+
+	return { lastFetchedData, setLastFetchedData: setLastFetchedDataAsResponse };
 }
 
 function LoadingScreen({
