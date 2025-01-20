@@ -1,7 +1,7 @@
 import { ReactNode, useRef, useMemo, memo } from "react";
 import { Item } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
-import { Button, CardBody, Link } from "@nextui-org/react";
+import { Button, CardBody, Divider, Link } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import Attachment from "@/components/features/items/Attachment";
 import { createFormatter, useTranslations } from "next-intl";
@@ -26,6 +26,18 @@ type Creator = {
 	firstName?: string;
 	lastName?: string;
 	name?: string;
+};
+
+type MatchWrapperProps = {
+	match: string;
+	index: number;
+	href?: string;
+};
+
+type WrapperConfig = {
+	regex: RegExp;
+	Wrapper: React.ComponentType<MatchWrapperProps>;
+	priority?: number;
 };
 
 function formatDate({ value, formatter }: FormatterProps) {
@@ -63,48 +75,116 @@ function Citation({ value }: FormatterProps) {
 	);
 }
 
-function Extra({ value }: { value: string }) {
-	const DOIRegex = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
-	const DOIs = useMemo(() => Array.from(value.matchAll(DOIRegex)), [value]);
+function createRegexParser(wrappers: WrapperConfig[]) {
+	const sortedWrappers = [...wrappers].sort((a, b) => 
+		(b.priority ?? 0) - (a.priority ?? 0)
+	);
 
-	const elements = useMemo(() => {
-		if (!DOIs.length) return [value];
+	return memo(function RegexParser({ value }: { value: string }) {
+		const allMatches = useMemo(() => {
+			if (!value) return [];
+			
+			const matchMap = new Map<number, {
+				match: RegExpMatchArray;
+				Wrapper: React.ComponentType<MatchWrapperProps>;
+				start: number;
+				end: number;
+				priority: number;
+			}>();
 
-		let lastIndex = 0;
-		const elements = [];
+			sortedWrappers.forEach(({ regex, Wrapper }, priority) => {
+				Array.from(value.matchAll(regex)).forEach(match => {
+					const start = match.index!;
+					const end = start + match[0].length;
 
-		DOIs.forEach((match, i) => {
-			const doi = match[0];
-			const startIndex = match.index!;
+					let hasOverlap = false;
+					matchMap.forEach((existing) => {
+						if (
+							start < existing.end && 
+							end > existing.start && 
+							priority >= existing.priority
+						) {
+							hasOverlap = true;
+						}
+					});
 
-			if (startIndex > lastIndex) {
-				elements.push(value.slice(lastIndex, startIndex));
+					if (!hasOverlap) {
+						matchMap.set(start, {
+							match,
+							Wrapper,
+							start,
+							end,
+							priority
+						});
+					}
+				});
+			});
+
+			return Array.from(matchMap.values()).sort((a, b) => a.start - b.start);
+		}, [value]);
+
+		const elements = useMemo(() => {
+			if (!allMatches.length) return [value];
+
+			const result: Array<string | ReactNode> = [];
+			let lastIndex = 0;
+
+			allMatches.forEach(({ match, Wrapper, start, end }, idx) => {
+				if (start > lastIndex) {
+					result.push(value.slice(lastIndex, start));
+				}
+
+				result.push(
+					<Wrapper
+						key={`${match[0]}-${idx}`}
+						match={match[0]}
+						index={idx}
+					/>
+				);
+
+				lastIndex = end;
+			});
+
+			if (lastIndex < value.length) {
+				result.push(value.slice(lastIndex));
 			}
 
-			elements.push(
-				<Link
-					key={i}
-					href={`https://doi.org/${doi}`}
-					className="text-accent text-lg"
-					showAnchorIcon
-				>
-					{doi}
-				</Link>
-			);
+			return result;
+		}, [allMatches, value]);
 
-			lastIndex = startIndex + doi.length;
-		});
-
-		if (lastIndex < value.length) {
-			elements.push(value.slice(lastIndex));
-		}
-
-		return elements;
-	}, [DOIs, value]);
-
-	return <>{elements}</>;
+		return <>{elements}</>;
+	});
 }
 
+const DOIWrapper = ({ match, index }: MatchWrapperProps) => (
+	<Link
+		key={index}
+		href={`https://doi.org/${match}`}
+		className="text-accent text-lg"
+		showAnchorIcon
+	>
+		{match}
+	</Link>
+);
+
+const URLWrapper = ({ match, index }: MatchWrapperProps) => (
+	<Link
+		key={index}
+		href={match}
+		className="text-accent text-lg"
+		showAnchorIcon
+	>
+		{match}
+	</Link>
+);
+
+const urlRegex = /https?:\/\/[^\s]+/gi;
+const doiRegex = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
+
+const Extra = createRegexParser([
+	{ regex: doiRegex, Wrapper: DOIWrapper, priority: 1 },
+	{ regex: urlRegex, Wrapper: URLWrapper, priority: 2 }
+]);
 
 function CollectionLevel({ collection }: { collection: Collection }) {
 	const ancestry = collection.ancestry || [];
@@ -113,11 +193,11 @@ function CollectionLevel({ collection }: { collection: Collection }) {
 	return (
 		<div className="text-black/60 dark:text-white/60 flex flex-col">
 			<Link
-			showAnchorIcon
-			href={href}
-			className="text-tertiary-400 gap-2 text-lg"
-			underline="hover"
-		>
+				showAnchorIcon
+				href={href}
+				className="text-tertiary-400 gap-2 text-lg"
+				underline="hover"
+			>
 				<span className="text-black/60 dark:text-white/60">
 					{collection.name}
 				</span>
@@ -137,7 +217,9 @@ export function CollectionsRow({ value }: { value: Collection[] }) {
 
 	return (
 		<ul className="flex flex-col gap-2">
-			{value.map((collection: Collection) => <CollectionLevel key={collection.id} collection={collection} />)}
+			{value.map((collection: Collection) => (
+				<CollectionLevel key={collection.id} collection={collection} />
+			))}
 		</ul>
 	);
 }
@@ -164,6 +246,12 @@ export const valueFormatter: Record<
 	itemType: ({ value, t }) => t("itemType." + value),
 	collections: () => false,
 	title: () => false,
+	note: ({ value }) => (
+		<div
+			dangerouslySetInnerHTML={{ __html: value }}
+			className="text-lg text-black/80 dark:text-white/80 font-medium break-words w-full"
+		/>
+	),
 	DOI: ({ value }) => <Extra value={value} />,
 	creators: ({ value, t }) => {
 		if (!value) return null;
@@ -202,7 +290,11 @@ export const valueFormatter: Record<
 	date: formatDate,
 	accessDate: formatDate,
 	url: ({ value }) => (
-		<Link href={value} className="text-accent break-all text-lg" showAnchorIcon>
+		<Link
+			href={value}
+			className="text-accent break-all text-lg"
+			showAnchorIcon
+		>
 			{value}
 		</Link>
 	),
@@ -231,20 +323,23 @@ export const valueFormatter: Record<
 		if (filteredValues.length === 0) return false;
 
 		return (
-			<div className="whitespace-pre-line space-y-2">
+			<div className="whitespace-pre-line space-y-2 bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl">
 				{filteredValues.map(([key, value], index) => {
 					const formattedValue = formatDate({ ...args, value });
 					return (
-						<div key={index} className="flex items-center xl:flex-nowrap flex-wrap">
-							<CopyButton
-								text={key}
-								content={formattedValue}
-								className="ltr:mr-2 rtl:ml-2 shrink-0"
-							/>
-							<span className="text-white/60 text-lg leading-none">
-								<Extra value={value} />
-							</span>
-						</div>
+							<div key={index} className="flex flex-col gap-2 group">
+								<div className="break-all">
+									<CopyButton
+										text={key}
+										content={formattedValue}
+										className="inline-flex ltr:mr-2 rtl:ml-2"
+									/>
+									<span>
+										<Extra value={value} />
+									</span>
+								</div>
+								<Divider className="my-2 group-last:hidden" />
+							</div>
 					);
 				})}
 			</div>

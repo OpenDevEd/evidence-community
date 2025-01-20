@@ -430,7 +430,7 @@ export default function ItemControls({
 			>
 				{t("return")}
 			</Button>
-			<AnimatePresence>
+			<AnimatePresence initial={false}>
 				{loading ? (
 					<motion.div
 						initial={{ opacity: 0 }}
