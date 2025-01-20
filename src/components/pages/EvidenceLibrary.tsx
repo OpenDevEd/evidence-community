@@ -29,7 +29,7 @@ import HelpModal from "@/components/features/modals/HelpModal";
 import { SectionTitle } from "@/components/typography/SectionTitle";
 import { buildItemsQuery } from "@/lib/utils";
 import { useFormatter, useTranslations } from "next-intl";
-import { CacheContext } from "@/context/Providers";
+import { CacheContext, useLastFetchedData } from "@/context/Providers";
 import { ResourcesView } from "../features/resources/ResourcesView";
 import { GiArchiveResearch } from "react-icons/gi";
 import { FaSort, FaThList } from "react-icons/fa";
@@ -37,6 +37,7 @@ import { IoMdListBox } from "react-icons/io";
 import { HiOutlineViewList } from "react-icons/hi";
 import { BiHelpCircle } from "react-icons/bi";
 import { twMerge } from "tailwind-merge";
+import { useLocalStorage } from "usehooks-ts";
 
 function DropDownIcon({Icon, className}: {Icon: any, className?: string}) {
 	return (
@@ -338,6 +339,8 @@ function MainContent({
 }: {
 	searchParams: { [key: string]: any };
 }) {
+	const { lastFetchedData, setLastFetchedData } = useLastFetchedData();
+
 	const { router, pathname, createQueryString } =
 		useParamsState(searchParams);
 	const { itemsCache } = useContext(CacheContext);
@@ -408,6 +411,7 @@ function MainContent({
 				if (data.totalPages < queryParams.page) {
 					handlePageChange(data.totalPages);
 				}
+				setLastFetchedData(data);
 			},
 		}
 	);

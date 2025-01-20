@@ -11,6 +11,7 @@ import {
 	DropdownTrigger,
 	DropdownMenu,
 	useDisclosure,
+	Spinner,
 } from "@nextui-org/react";
 import GenerativeModal from "../features/modals/GenerativeModal";
 import ChatModal from "../features/modals/ChatModal";
@@ -23,7 +24,7 @@ import { Skeleton } from "../nextui/Skeleton";
 import { useMemo, useRef } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
-import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useFeatureFlagEnabled, useLastFetchedData } from "@/context/Providers";
 import { AIHistory } from "@/types/ai";
 import ModelSelector from "../features/ai/ModelSelector";
 import { useAIFeature } from "@/hooks/useAIFeature";
@@ -31,6 +32,7 @@ import { AI_DROPDOWN_ITEMS } from "@/components/features/ai/AIDropdownItems";
 import { buildHierarchy } from "@/lib/collections";
 import { Collection } from "@/app/api/collections/types";
 import { CollectionsRow } from "@/lib/items";
+import { ItemsGetResponse } from "@/app/api/items/types";
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ai");
@@ -159,15 +161,25 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	);
 }
 
-export default function Item({ data }: { data: ItemGetResponse | undefined }) {
+export default function Item({ data, loading }: { data: ItemGetResponse | undefined, loading: boolean }) {
 	const router = useRouter();
 	const t = useTranslations("ui");
 	const isAIEnabled = useFeatureFlagEnabled("ai-features");
 	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources");
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
+	const { lastFetchedData, setLastFetchedData } = useLastFetchedData();
 	const { data: embeddings } = useSWR(
 		(isRelatedItemsEnabled && data?.item) ? `/ai/embeddings/${data?.item?.key}` : null,
-		fetcher
+		fetcher,
+		{
+			onSuccess: (data) => {
+				if (data) {
+					setLastFetchedData({
+						items: data.hits,
+					} as ItemsGetResponse);
+				}
+			}
+		}
 	);
 
 	const hierarchy = useMemo(() => {
@@ -210,6 +222,10 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 								))
 							)}
 						</>
+					) : loading ? (
+						<div className="flex items-center justify-center min-h-screen">
+							<Spinner />
+						</div>
 					) : (
 						<div className="text-center text-2xl text-black/80 dark:text-white/80 font-medium min-h-screen flex items-center justify-center">
 							{t("itemNotFound")}
@@ -217,7 +233,7 @@ export default function Item({ data }: { data: ItemGetResponse | undefined }) {
 					)}
 				</div>
 			</div>
-			{isAIEnabled && data?.item && <AiButton data={data} />}
+			{isAIEnabled && data?.item && !loading && <AiButton data={data} />}
 			{isRelatedItemsEnabled && data?.item && (
 				<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
 					<div className="flex xl:flex-row flex-col">
