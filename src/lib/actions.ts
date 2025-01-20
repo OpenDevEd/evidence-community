@@ -20,10 +20,11 @@ import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
 import { buildItemsQuery } from "@/lib/utils";
-import { getCachedUserLikes, setCachedItemSmall } from "@/app/api/cache";
+import { getCachedCollections, getCachedUserLikes, setCachedItemSmall } from "@/app/api/cache";
 import { getCachedUserCollectionKeys } from "@/app/api/cache";
 import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { revalidateTag, unstable_cache } from "next/cache";
+import { Collection } from "@/app/api/collections/types";
 
 export async function getItems(
 	searchParams: URLSearchParams | Record<string, any>
@@ -247,10 +248,11 @@ export async function searchIndex(
 
 			const allAttributes = await getMainAttributes();
 			
-			const searchResults = await searchIndex.search(search, {
-				offset: (pageNum - 1) * limitNum,
-				limit: limitNum,
-				attributesToSearchOn:
+			const [searchResults, collections] = await Promise.all([
+				searchIndex.search(search, {
+					offset: (pageNum - 1) * limitNum,
+					limit: limitNum,
+					attributesToSearchOn:
 					SCOPE_OPTIONS.find((option) => option.key === scope)
 						?.attributesToSearchOn ||
 					SCOPE_OPTIONS[0].attributesToSearchOn,
@@ -258,16 +260,32 @@ export async function searchIndex(
 				sort: [sortOption],
 				...extraProperties,
 				filter: finalFilters,
-			});
+			}),
+			getCachedCollections(),
+		]);
 
 			const items = searchResults.hits;
 			const totalCount = searchResults.estimatedTotalHits;
 			
 			for (const item of items) {
+				if (collections) {
+					item.collectionsData = item.collectionsAncestry
+						?.map((collection: string) => {
+							const collectionData = collections.find(
+								(c: Collection) => c.key === collection
+							);
+							return collectionData;
+						})
+						.filter(
+							(collectionData: Collection | undefined) => collectionData !== undefined
+						) as Collection[];
+				}
+
 				setCachedItemSmall(item.key, {
 					item: item as Item,
 				});
 			}
+			
 
 			return {
 				items: items as Item[],
