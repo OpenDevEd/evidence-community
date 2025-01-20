@@ -190,7 +190,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 	return (
 		<main className="w-full max-w-[96rem] px-4 xl:px-14 flex flex-col gap-4">
 			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
-				{data?.item && <ItemControls itemData={data?.item} router={router} />}
+				{data?.item && <ItemControls itemData={data?.item} router={router} loading={loading} />}
 				<div className="flex flex-col gap-8 p-4 xl:p-10">
 					{data?.item ? (
 						<>

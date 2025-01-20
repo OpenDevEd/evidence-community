@@ -1,6 +1,11 @@
 "use client";
 
-import { LuChevronLeft, LuDownload, LuExternalLink, LuPrinter } from "react-icons/lu";
+import {
+	LuChevronLeft,
+	LuDownload,
+	LuExternalLink,
+	LuPrinter,
+} from "react-icons/lu";
 import { Button } from "@/components/nextui/Button";
 import { TiDocumentText } from "react-icons/ti";
 import { PiSlidersHorizontalBold } from "react-icons/pi";
@@ -17,6 +22,7 @@ import {
 	DropdownTrigger,
 	ModalBody,
 	ModalContent,
+	Spinner,
 	useDisclosure,
 } from "@nextui-org/react";
 import { BsThreeDots } from "react-icons/bs";
@@ -29,6 +35,7 @@ import { convertItem } from "@/lib/actions";
 import { Switch } from "@/components/nextui/Switch";
 import { useLocalStorage } from "usehooks-ts";
 import { SiZotero } from "react-icons/si";
+import { AnimatePresence, motion } from "framer-motion";
 
 type Interaction =
 	| "readDocument"
@@ -280,9 +287,11 @@ function PreferencesButton({
 export default function ItemControls({
 	itemData,
 	router,
+	loading,
 }: {
 	itemData: Item | undefined;
 	router: ReturnType<typeof useRouter>;
+	loading: boolean;
 }) {
 	const t = useTranslations("ui");
 	const controlsRef = useRef<Record<Interaction, HTMLButtonElement | null>>({
@@ -421,52 +430,83 @@ export default function ItemControls({
 			>
 				{t("return")}
 			</Button>
-			{buttonConfigs
-				.filter(
-					({ key }) => config[key] !== false
-				)
-				.map(
-					({ key, Component, label, props, hideLabel }: any) => (
-						<Component
-							key={key}
-						ref={(el: HTMLButtonElement | null) => {
-							controlsRef.current[key as Interaction] = el;
-						}}
-						{...props}
+			<AnimatePresence>
+				{loading ? (
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						className="flex flex-row gap-4 flex-1"
 					>
-						{!hideLabel && label}
-					</Component>
-				)
-			)}
-			<Dropdown>
-				<DropdownTrigger>
-					<Button
-						className="ltr:ml-auto rtl:mr-auto flex xl:hidden"
-						size="sm"
-						isIconOnly
-						startContent={<BsThreeDots className="size-5" />}
-					></Button>
-				</DropdownTrigger>
-				<DropdownMenu
-					onAction={(key) => {
-						controlsRef.current[key as Interaction]?.click();
-					}}
-				>
-					{buttonConfigs
-						.filter(
-							({ hideFromDropdown, key }) =>
-								!hideFromDropdown && config[key] !== false
-						)
-						.map(({ key, label, props }) => (
-							<DropdownItem
-								key={key}
-								startContent={props.startContent}
+						<Spinner className="ml-auto opacity-60" />
+					</motion.div>
+				) : (
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						className="flex flex-row gap-4 flex-1"
+					>
+						{buttonConfigs
+							.filter(({ key }) => config[key] !== false)
+							.map(
+								({
+									key,
+									Component,
+									label,
+									props,
+									hideLabel,
+								}: any) => (
+									<Component
+										key={key}
+										ref={(el: HTMLButtonElement | null) => {
+											controlsRef.current[
+												key as Interaction
+											] = el;
+										}}
+										{...props}
+									>
+										{!hideLabel && label}
+									</Component>
+								)
+							)}
+						<Dropdown>
+							<DropdownTrigger>
+								<Button
+									className="ltr:ml-auto rtl:mr-auto flex xl:hidden"
+									size="sm"
+									isIconOnly
+									startContent={
+										<BsThreeDots className="size-5" />
+									}
+								></Button>
+							</DropdownTrigger>
+							<DropdownMenu
+								onAction={(key) => {
+									controlsRef.current[
+										key as Interaction
+									]?.click();
+								}}
 							>
-								{label}
-							</DropdownItem>
-						))}
-				</DropdownMenu>
-			</Dropdown>
+								{buttonConfigs
+									.filter(
+										({ hideFromDropdown, key }) =>
+											!hideFromDropdown &&
+											config[key] !== false
+									)
+									.map(({ key, label, props }) => (
+										<DropdownItem
+											key={key}
+											startContent={props.startContent}
+										>
+											{label}
+										</DropdownItem>
+									))}
+							</DropdownMenu>
+						</Dropdown>
+					</motion.div>
+				)}
+			</AnimatePresence>
 		</div>
 	);
 }
