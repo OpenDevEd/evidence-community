@@ -236,7 +236,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 			{isAIEnabled && data?.item && !loading && <AiButton data={data} />}
 			{isRelatedItemsEnabled && data?.item && (
 				<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
-					<div className="flex xl:flex-row flex-col">
+					<div className="flex xl:flex-row flex-col xl:gap-8 gap-2">
 						<div className="text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-full shrink-0 rounded xl:p-10 p-4 pb-0">
 							{t("relatedItems")}
 						</div>
