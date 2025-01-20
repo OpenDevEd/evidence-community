@@ -157,6 +157,6 @@ export default async function ItemPage(
 ) {
     const params = await props.params;
     const data = await getCurrentItem(params.key);
-    
-    return <ItemComponent data={data as ItemGetResponse} />;
+        
+    return <ItemComponent data={data as ItemGetResponse} loading={false} />;
 }

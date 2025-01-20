@@ -10,6 +10,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLangDir } from "rtl-detect";
 import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { getCachedStatus } from "@/app/api/cache";
+import { Suspense } from "react";
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -51,7 +52,9 @@ export default async function Base({
 							)}
 						>
 							<Navbar />
-							{children}
+							<Suspense>
+								{children}
+							</Suspense>
 							<Footer />
 						</div>
 					</Providers>
