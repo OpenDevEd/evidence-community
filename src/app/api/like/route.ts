@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authOptions, auth } from "../auth/[...nextauth]/config";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { eq, and, sql, InferSelectModel } from "drizzle-orm";
-import { cachedUserLikes } from "../cache";
+import { getCachedUserLikes, setCachedUserLikes } from "../cache";
 
 export async function GET() {
   const session = await auth();
@@ -65,13 +65,13 @@ export async function POST(request: NextRequest) {
       })
       .returning();
     
-    const cachedLikes = cachedUserLikes.get(session.user.id) || [];
+    const cachedLikes = await getCachedUserLikes(session.user.id);
     const cachedLike = cachedLikes.find((like: InferSelectModel<typeof usersToLikes>) => like.itemKey === itemKey);
     if (cachedLike) {
       cachedLikes.splice(cachedLikes.indexOf(cachedLike), 1);
     }
     cachedLikes.push(result[0]);
-    cachedUserLikes.set(session.user.id, cachedLikes);
+    setCachedUserLikes(session.user.id, cachedLikes);
 
     return NextResponse.json({ liked: !result[0].deleted });
   } catch (error) {

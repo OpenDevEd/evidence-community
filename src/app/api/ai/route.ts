@@ -23,7 +23,7 @@ export async function POST(req: Request) {
 
 	const item = await getCachedItem(key!);
 
-	if (!item) {
+	if (!item || !item.item) {
 		return new NextResponse("Item not found", { status: 404 });
 	}
 
@@ -34,10 +34,10 @@ export async function POST(req: Request) {
 	}
 
 	const {fullTextPDFs, ...cleanItem} = item.item;
-	for (const attachment of cleanItem.attachmentsData) {
+	for (const attachment of cleanItem.attachmentsData || []) {
 		const fullTextPDF = fullTextPDFs?.find((f: any) => f.key === attachment.key)?.fullTextPDF
 		if (fullTextPDF) {
-			attachment.fullTextPDF = fullTextPDF
+			attachment.fullTextPDF = fullTextPDF as any;
 		}
 	}
 

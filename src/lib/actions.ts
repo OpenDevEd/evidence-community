@@ -20,7 +20,7 @@ import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
 import { buildItemsQuery } from "@/lib/utils";
-import { cachedItemsSmall, getCachedUserLikes, setCachedItemSmall } from "@/app/api/cache";
+import { getCachedUserLikes, setCachedItemSmall } from "@/app/api/cache";
 import { getCachedUserCollectionKeys } from "@/app/api/cache";
 import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { revalidateTag, unstable_cache } from "next/cache";
@@ -55,7 +55,7 @@ export async function getProfileSearchFilter(
 		auth(),
 		collectionId ? getCachedUserCollectionKeys(collectionId, true) : null,
 		id && !collectionId ? getCachedUserLikes(id, true) : null,
-	]);
+	]) as [Session | null, any, any];
 
 	if (collectionKeys) {
 		if (!collectionKeys) {

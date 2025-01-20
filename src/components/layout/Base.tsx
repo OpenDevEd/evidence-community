@@ -1,4 +1,3 @@
-import type { Metadata } from "next";
 import Providers from "@/context/Providers";
 import { Montserrat, Ubuntu } from "next/font/google";
 import Navbar from "@/components/layout/Navbar";
@@ -9,11 +8,8 @@ import { style } from "@/../tailwind.config";
 import { getMessages } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
 import { getLangDir } from "rtl-detect";
-import { authOptions, auth } from "@/app/api/auth/[...nextauth]/config";
-import { db } from "@/db";
-import { status as statusTable } from "@/db/schema/tables/status";
+import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { getCachedStatus } from "@/app/api/cache";
-import { Suspense } from "react";
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
