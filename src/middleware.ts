@@ -47,6 +47,11 @@ function setRateLimitHeaders(response: NextResponse, rateLimit: RateLimit | null
 export default function middleware(request: NextRequest) {
   const rateLimit = generateRateLimitObject(request);
 
+  // Add root path redirect
+  if (request.nextUrl.pathname === '/') {
+    return NextResponse.redirect(new URL('/lib', request.url));
+  }
+
   const supportedFormats = ['ris', 'bibtex'];
   
   const exportMatch = request.nextUrl.pathname.match(/\/lib\/(.+?)\/export\/(ris|bibtex)$/);
