@@ -77,6 +77,15 @@
     "@types/react-dom": "19.0.2",
     "usehooks-ts": {
       "react": "^19"
+    },
+    "@vercel/analytics": {
+      "next": "$next"
+    },
+    "next-auth": {
+      "next": "$next"
+    },
+    "next-intl": {
+      "next": "$next"
     }
   }
 }
