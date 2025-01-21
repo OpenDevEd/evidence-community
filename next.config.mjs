@@ -9,6 +9,7 @@ const nextConfig = {
 		staleTimes: {
 			dynamic: 30,
 		},
+		streamingMetadata: true,
 	},
 	images: {
 		remotePatterns: [

@@ -13,7 +13,7 @@ import ResourceData from "./ResourceData";
 import { Link, useRouter } from "@/i18n/routing";
 import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
@@ -24,6 +24,7 @@ import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
 import { Session } from "next-auth";
 import { useStatus } from "@/context/Providers";
+import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 
 function AddButton({
 	itemData,
@@ -160,16 +161,38 @@ export default function Resource({
 }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
+	const router = useRouter();
 
 	const abstractText =
 		itemData && firstNonNullOrEmpty(itemData, ["abstractNote"]);
 
-	const router = useRouter();
+	const href = `/lib/${itemData?.key ?? ""}`;
+
+	useEffect(() => {
+		if (!itemData?.key) return;
+
+		const observer = new IntersectionObserver((entries) => {
+			entries.forEach((entry) => {
+				if (entry.isIntersecting) {
+					console.log("prefetching", href);
+					router.prefetch(href, {kind: PrefetchKind.AUTO});
+					observer.disconnect();
+				}
+			});
+		});
+
+		const linkElement = document.querySelector(`a[href="${href}"]`);
+		if (linkElement) {
+			observer.observe(linkElement);
+		}
+
+		return () => observer.disconnect();
+	}, [href, router, itemData?.key]);
 
 	return (
 		<div className="@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col">
 			<Link
-				href={`/lib/${itemData?.key ?? ""}`}
+				href={href}
 				className="p-4 @[720px]:p-6 flex flex-col gap-4 hover:brightness-90 transition-all flex-1"
 				onClick={(e) => {
 					if (!itemData?.key)

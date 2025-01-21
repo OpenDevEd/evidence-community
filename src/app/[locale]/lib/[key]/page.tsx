@@ -6,6 +6,9 @@ import { getCachedItem, getCachedItemSmall, getCachedStatus } from "@/app/api/ca
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
 import { getExtraValues } from "@/lib/utils";
+import ServerComponent from "./ServerComponent";
+import { Suspense } from "react";
+import LoadingComponent from "./LoadingComponent";
 
 // export async function generateStaticParams() {
 // 	if (process.env.SHOULD_GENERATE_STATIC_PAGES === "true") {
@@ -26,7 +29,7 @@ import { getExtraValues } from "@/lib/utils";
 // }
 
 
-async function getCurrentItem(key: string) {
+export async function getCurrentItem(key: string) {
     const data = await getCachedItemSmall(key).catch(() => ({ item: undefined }));
     return data;
 }
@@ -156,7 +159,7 @@ export default async function ItemPage(
     }
 ) {
     const params = await props.params;
-    const data = await getCurrentItem(params.key);
-        
-    return <ItemComponent data={data as ItemGetResponse} loading={false} />;
+    return <Suspense fallback={<LoadingComponent itemKey={params.key} />}>
+        <ServerComponent params={props.params} />
+    </Suspense>
 }
