@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ItemsGetResponse } from "@/app/api/items/types";
-import { getProfileSearchFilter, searchIndex } from "@/lib/actions";
+import { getItems, getProfileSearchFilter, searchIndex } from "@/lib/actions";
 import { z } from "zod";
 import { defaultParams } from "@/lib/utils";
 
@@ -24,19 +24,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 
 	const queryParams = defaultParams(searchParams);
 
-	const { filter, status } = await getProfileSearchFilter(id, queryParams.collectionId);
-	
-	if (status) {
-		return NextResponse.json<ItemsGetResponse>(
-			EMPTY_ITEMS_RESPONSE,
-			{ status }
-		);
-	}
-
-
-	const res = filter 
-		? await searchIndex(new URLSearchParams(searchParams), {}, filter)
-		: EMPTY_ITEMS_RESPONSE;
+	const res = await getItems(queryParams, id);
 
 	return NextResponse.json<ItemsGetResponse>(res);
 }

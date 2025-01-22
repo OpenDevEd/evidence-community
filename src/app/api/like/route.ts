@@ -4,6 +4,7 @@ import { authOptions, auth } from "../auth/[...nextauth]/config";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { eq, and, sql, InferSelectModel } from "drizzle-orm";
 import { getCachedUserLikes, setCachedUserLikes } from "../cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 
 export async function GET() {
   const session = await auth();
@@ -19,6 +20,8 @@ export async function GET() {
         item: true,
       },
     });
+
+    revalidatePath("/profile/" + session.user.id);
 
     return NextResponse.json({ likes });
   } catch (error) {
