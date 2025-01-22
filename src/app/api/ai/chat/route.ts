@@ -7,6 +7,7 @@ import { getCachedItem } from "../../cache";
 import { NextResponse } from "next/server";
 import { getModel, trackUsage } from "@/lib/ai";
 import { routing } from "@/i18n/routing";
+import { isAIAllowed } from "@/lib/utils";
 
 export async function POST(req: Request) {
 	const { distinctId, messages, key, modelIndex } = await req.json();
@@ -32,6 +33,10 @@ export async function POST(req: Request) {
 		if (fullTextPDF) {
 			attachment.fullTextPDF = fullTextPDF as any;
 		}
+	}
+
+	if (!isAIAllowed(cleanItem)) {
+		return new NextResponse("AI not allowed", { status: 403 });
 	}
 	
 	messages.unshift({

@@ -1,3 +1,4 @@
+import { Item } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
@@ -81,4 +82,16 @@ export function getExtraValues(extraUnsplit: string) {
 	}
 
 	return finalMap;
+}
+
+export function isAIAllowed(item: Item | undefined) {
+	if (!item) return false;
+	const allowedInstitutions = ["EdTech Hub", "Open Development & Education", "eEkitabu"];
+	const allowedTags = ["_ai_enabled"]
+
+	if (item.attachmentsData?.some(attachment => attachment.PDFCoverPageImage) || allowedInstitutions.includes(item.institution || "") || allowedTags.some(tag => item.tags?.includes(tag))) {
+		return true;
+	}
+
+	return false;
 }

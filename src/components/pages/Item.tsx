@@ -181,6 +181,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 			}
 		}
 	);
+	const aiAllowed = isAIAllowed(data?.item);
 
 	const hierarchy = useMemo(() => {
 		if (!data?.item?.collectionsData) return null;
@@ -233,7 +234,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 					)}
 				</div>
 			</div>
-			{isAIEnabled && data?.item && !loading && <AiButton data={data} />}
+			{isAIEnabled && data?.item && !loading && aiAllowed && <AiButton data={data} />}
 			{isRelatedItemsEnabled && data?.item && (
 				<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
 					<div className="flex xl:flex-row flex-col xl:gap-8 gap-2">

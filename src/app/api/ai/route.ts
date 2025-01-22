@@ -4,6 +4,7 @@ import { getCachedItem } from "../cache";
 import { generateText, streamText } from 'ai';
 import { getModel, trackUsage } from "@/lib/ai";
 import { routing } from "@/i18n/routing";
+import { isAIAllowed } from "@/lib/utils";
 
 export const maxDuration = 60;
 
@@ -34,6 +35,11 @@ export async function POST(req: Request) {
 	}
 
 	const {fullTextPDFs, ...cleanItem} = item.item;
+
+	if (!isAIAllowed(cleanItem)) {
+		return new NextResponse("AI not allowed", { status: 403 });
+	}
+	
 	for (const attachment of cleanItem.attachmentsData || []) {
 		const fullTextPDF = fullTextPDFs?.find((f: any) => f.key === attachment.key)?.fullTextPDF
 		if (fullTextPDF) {
