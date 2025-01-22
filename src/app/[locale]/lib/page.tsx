@@ -4,9 +4,10 @@ import { Metadata, ResolvingMetadata } from "next";
 import { buildItemsQuery, defaultParams } from "@/lib/utils";
 import { routing } from "@/i18n/routing";
 
-export async function generateMetadata(props: {
-  params: Promise<{ key: string, locale: string }>;
+export async function libraryMetadata(props: {
+  params: Promise<{ locale: string }>;
   searchParams: Promise<URLSearchParams>;
+  pathname: string;
 }, parent: ResolvingMetadata): Promise<Metadata> {
   const searchParams = await props.searchParams;
   const params = await props.params;
@@ -15,7 +16,7 @@ export async function generateMetadata(props: {
   const locale = params.locale;
   
   const queryParams = defaultParams(searchParams);
-  const builtUrl = buildItemsQuery(queryParams, "/lib");
+  const builtUrl = buildItemsQuery(queryParams, props.pathname);
   const items = await getItems(queryParams);
   
   const page = items.currentPage;
@@ -55,6 +56,16 @@ export async function generateMetadata(props: {
       ]
     }
   }
+}
+
+export async function generateMetadata(props: {
+  params: Promise<{ locale: string }>;
+  searchParams: Promise<URLSearchParams>;
+}, parent: ResolvingMetadata): Promise<Metadata> {
+  return libraryMetadata({
+    ...props,
+    pathname: "/lib"
+  }, parent);
 }
 
 export default async function Lib(
