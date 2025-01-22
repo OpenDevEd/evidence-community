@@ -52,9 +52,7 @@ export default async function Base({
 							)}
 						>
 							<Navbar />
-							<Suspense>
-								{children}
-							</Suspense>
+							{children}
 							<Footer />
 						</div>
 					</Providers>
