@@ -3,6 +3,7 @@
 import ChatGPT from "@/components/icons/ChatGPT";
 import Gemini from "@/components/icons/Gemini";
 import Claude from "@/components/icons/Claude";
+import Mistral from "@/components/icons/Mistral";
 
 export const models = [
 	{
@@ -23,6 +24,12 @@ export const models = [
         model: process.env.NEXT_PUBLIC_ANTHROPIC_MODEL,
 		icon: Claude,
 	},
+	{
+		name: "Mistral",
+		company: "Mistral",
+        model: process.env.NEXT_PUBLIC_MISTRAL_MODEL,
+		icon: Mistral,
+	}
 ];
 
 const MILLION = 1000000
@@ -56,4 +63,8 @@ export const pricings = {
 		input: 0.8 / MILLION,
 		output: 4 / MILLION,
 	},
+	"mistral-large-latest": {
+		input: 2 / MILLION,
+		output: 6 / MILLION,
+	}
 }
