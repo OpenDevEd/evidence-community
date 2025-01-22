@@ -1,18 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { defaultParams, getExtraValues } from "@/lib/utils";
+import { defaultParams, escapeXml, getExtraValues } from "@/lib/utils";
 import { getItems } from "@/lib/actions";
 import { create } from "xmlbuilder2";
-import { getCachedStatus } from "../cache";
-import { ITEMS_PER_PAGE } from "@/constants/items";
-
-function escapeXml(unsafe: string) {
-	return unsafe
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&apos;");
-}
+import { getCachedStatus } from "../../cache";
 
 function changeEveryValueInJSON(json: any) {
 	for (const key in json) {
@@ -28,11 +18,15 @@ function changeEveryValueInJSON(json: any) {
 	}
 }
 
-export async function GET(request: NextRequest) {
+export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+	const params = await props.params;
+
+	const { id } = params;
+
 	const status = await getCachedStatus();
 	const url = new URL(request.url);
 	const queryParams = defaultParams(url.searchParams);
-	const res = await getItems(queryParams);
+	const res = await getItems(queryParams, id === "main" ? undefined : id);
 
 	changeEveryValueInJSON(res);
 
@@ -57,7 +51,7 @@ export async function GET(request: NextRequest) {
 		rel: "alternate",
 		type: "text/html",
 		href: escapeXml(
-			`${process.env.BASE_URL}/lib?${url.searchParams.toString()}`
+			`${url.origin}${url.pathname.replace("/atom.xml", "")}?${url.searchParams.toString()}`
 		),
 	});
 
