@@ -4,7 +4,7 @@ import type { Item } from "@/app/api/item/types";
 import { useFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 
-export default function ItemRow({ item, row, router, value, customRowName }: { item: Item; row?: string; router: ReturnType<typeof useRouter>, value?: any, customRowName?: string }) {
+export default function ItemRow({ item, row, router, value, customRowName, loading }: { item: Item; row?: string; router: ReturnType<typeof useRouter>, value?: any, customRowName?: string, loading: boolean }) {
 	const t = useTranslations();
 	const formatter = useFormatter();
 	const originalValue = value ?? item[row as keyof Item];
@@ -13,7 +13,7 @@ export default function ItemRow({ item, row, router, value, customRowName }: { i
 			case !!customRowName:
 				return originalValue;
 			case !!valueFormatter[row as keyof typeof valueFormatter]:
-				return valueFormatter[row as keyof typeof valueFormatter]!({value: originalValue, item, formatter, t, router});
+				return valueFormatter[row as keyof typeof valueFormatter]!({value: originalValue, item, formatter, t, router, loading});
 			case !!originalValue:
 				return String(originalValue);
 			default:

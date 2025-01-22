@@ -12,6 +12,7 @@ import { INSTITUTION_LOGOS } from "@/constants/items";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { getExtraValues } from "./utils";
 import { buildHierarchy } from "./collections";
+import { Skeleton } from "@/components/nextui/Skeleton";
 
 type FormatterProps = {
 	value: any;
@@ -19,6 +20,7 @@ type FormatterProps = {
 	router: ReturnType<typeof useRouter>;
 	formatter: ReturnType<typeof createFormatter>;
 	t: ReturnType<typeof useTranslations>;
+	loading: boolean;
 };
 
 type Creator = {
@@ -62,46 +64,51 @@ function formatDate({ value, formatter }: FormatterProps) {
 	return returnedDate;
 }
 
-function Citation({ value }: FormatterProps) {
+function Citation({ value, loading }: FormatterProps) {
 	const contentRef = useRef(null);
 	return (
-		<div className="flex gap-4 w-full bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between break-all">
-			<div
-				ref={contentRef}
-				dangerouslySetInnerHTML={{ __html: value.trim() }}
-			/>
-			<CopyButton isIconOnly contentRef={contentRef} />
-		</div>
+		<Skeleton isLoaded={true} className="w-fit h-fit rounded-2xl">
+			<div className="flex gap-4 w-full bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between break-all">
+				<div
+					ref={contentRef}
+					dangerouslySetInnerHTML={{ __html: value.trim() }}
+				/>
+				<CopyButton isIconOnly contentRef={contentRef} />
+			</div>
+		</Skeleton>
 	);
 }
 
 function createRegexParser(wrappers: WrapperConfig[]) {
-	const sortedWrappers = [...wrappers].sort((a, b) => 
-		(b.priority ?? 0) - (a.priority ?? 0)
+	const sortedWrappers = [...wrappers].sort(
+		(a, b) => (b.priority ?? 0) - (a.priority ?? 0)
 	);
 
 	return memo(function RegexParser({ value }: { value: string }) {
 		const allMatches = useMemo(() => {
 			if (!value) return [];
-			
-			const matchMap = new Map<number, {
-				match: RegExpMatchArray;
-				Wrapper: React.ComponentType<MatchWrapperProps>;
-				start: number;
-				end: number;
-				priority: number;
-			}>();
+
+			const matchMap = new Map<
+				number,
+				{
+					match: RegExpMatchArray;
+					Wrapper: React.ComponentType<MatchWrapperProps>;
+					start: number;
+					end: number;
+					priority: number;
+				}
+			>();
 
 			sortedWrappers.forEach(({ regex, Wrapper }, priority) => {
-				Array.from(value.matchAll(regex)).forEach(match => {
+				Array.from(value.matchAll(regex)).forEach((match) => {
 					const start = match.index!;
 					const end = start + match[0].length;
 
 					let hasOverlap = false;
 					matchMap.forEach((existing) => {
 						if (
-							start < existing.end && 
-							end > existing.start && 
+							start < existing.end &&
+							end > existing.start &&
 							priority >= existing.priority
 						) {
 							hasOverlap = true;
@@ -114,13 +121,15 @@ function createRegexParser(wrappers: WrapperConfig[]) {
 							Wrapper,
 							start,
 							end,
-							priority
+							priority,
 						});
 					}
 				});
 			});
 
-			return Array.from(matchMap.values()).sort((a, b) => a.start - b.start);
+			return Array.from(matchMap.values()).sort(
+				(a, b) => a.start - b.start
+			);
 		}, [value]);
 
 		const elements = useMemo(() => {
@@ -160,7 +169,7 @@ const DOIWrapper = ({ match, index }: MatchWrapperProps) => (
 	<Link
 		key={index}
 		href={`https://doi.org/${match}`}
-		className="text-accent text-lg"
+		className="dark:text-doi text-doi_light text-lg"
 		showAnchorIcon
 	>
 		{match}
@@ -171,7 +180,7 @@ const URLWrapper = ({ match, index }: MatchWrapperProps) => (
 	<Link
 		key={index}
 		href={match}
-		className="text-accent text-lg"
+		className="dark:text-link text-link_light text-lg"
 		showAnchorIcon
 	>
 		{match}
@@ -183,7 +192,7 @@ const doiRegex = /10\.\d{4,9}\/[-._;()/:\w-]+/gi;
 
 const Extra = createRegexParser([
 	{ regex: doiRegex, Wrapper: DOIWrapper, priority: 1 },
-	{ regex: urlRegex, Wrapper: URLWrapper, priority: 2 }
+	{ regex: urlRegex, Wrapper: URLWrapper, priority: 2 },
 ]);
 
 function CollectionLevel({ collection }: { collection: Collection }) {
@@ -191,14 +200,14 @@ function CollectionLevel({ collection }: { collection: Collection }) {
 	const href = `/lib?collections=${[...ancestry, collection.key].join(",")}`;
 
 	return (
-		<div className="text-black/60 dark:text-white/60 flex flex-col">
+		<div className="flex flex-col">
 			<Link
 				showAnchorIcon
 				href={href}
-				className="text-tertiary-400 gap-2 text-lg"
+				className="dark:text-collection text-collection_light text-lg"
 				underline="hover"
 			>
-				<span className="text-black/60 dark:text-white/60">
+				<span className="dark:text-collection text-collection_light">
 					{collection.name}
 				</span>
 			</Link>
@@ -256,21 +265,21 @@ export const valueFormatter: Record<
 	creators: ({ value, t }) => {
 		if (!value) return null;
 		if (value.length === 0) return null;
+
 		return (
 			<ul className="flex flex-col xl:gap-2">
 				{value.map((creator: Creator, index: number) => {
 					const creatorTypeLabel = t(
 						"creatorType." + creator.creatorType
 					);
+					const { creatorType, ...rest } = creator;
 					return (
 						<li
 							className="flex gap-2 rtl:flex-row-reverse max-w-fit"
 							key={index}
 						>
 							<span className="font-medium text-accent">
-								{creator.firstName
-									? `${creator.firstName}, ${creator.lastName}`
-									: creator.name}
+								{Object.values(rest).filter(Boolean).join(", ")}
 							</span>
 							<span
 								className={twMerge(
@@ -292,7 +301,7 @@ export const valueFormatter: Record<
 	url: ({ value }) => (
 		<Link
 			href={value}
-			className="text-accent break-all text-lg"
+			className="dark:text-link text-link_light break-all text-lg"
 			showAnchorIcon
 		>
 			{value}
@@ -327,19 +336,19 @@ export const valueFormatter: Record<
 				{filteredValues.map(([key, value], index) => {
 					const formattedValue = formatDate({ ...args, value });
 					return (
-							<div key={index} className="flex flex-col gap-2 group">
-								<div className="break-all">
-									<CopyButton
-										text={key}
-										content={formattedValue}
-										className="inline-flex ltr:mr-2 rtl:ml-2"
-									/>
-									<span>
-										<Extra value={value} />
-									</span>
-								</div>
-								<Divider className="my-2 group-last:hidden" />
+						<div key={index} className="flex flex-col gap-2 group">
+							<div className="break-all">
+								<CopyButton
+									text={key}
+									content={formattedValue}
+									className="inline-flex ltr:mr-2 rtl:ml-2"
+								/>
+								<span>
+									<Extra value={value} />
+								</span>
 							</div>
+							<Divider className="my-2 group-last:hidden" />
+						</div>
 					);
 				})}
 			</div>
