@@ -20,18 +20,31 @@ import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
 import { buildItemsQuery } from "@/lib/utils";
-import { getCachedCollections, getCachedUserLikes, setCachedItemSmall } from "@/app/api/cache";
+import {
+	getCachedCollections,
+	getCachedUserLikes,
+	setCachedItemSmall,
+} from "@/app/api/cache";
 import { getCachedUserCollectionKeys } from "@/app/api/cache";
 import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { revalidateTag, unstable_cache } from "next/cache";
 import { Collection } from "@/app/api/collections/types";
 
 export async function getItems(
-	searchParams: URLSearchParams | Record<string, any>
+	searchParams: URLSearchParams | Record<string, any>,
+	userId: string | null = null
 ) {
-	const collections = searchParams instanceof URLSearchParams
-		? searchParams.get("collections") || []
-		: searchParams.collections || [];
+	const collections =
+		searchParams instanceof URLSearchParams
+			? searchParams.get("collections") || []
+			: searchParams.collections || [];
+
+	const userFilters = await getProfileSearchFilter(
+		userId,
+		searchParams instanceof URLSearchParams
+			? searchParams.get("collectionId") || ""
+			: searchParams.collectionId || ""
+	);
 
 	return searchIndex(
 		searchParams instanceof URLSearchParams
@@ -40,7 +53,12 @@ export async function getItems(
 		{
 			facets: ["collectionsAncestry"],
 		},
-		collections.map((collection: string) => `collectionsAncestry = "${collection}"`)
+		[
+			...collections.map(
+				(collection: string) => `collectionsAncestry = "${collection}"`
+			),
+			...(userFilters?.filter ? userFilters.filter : []),
+		]
 	);
 }
 
@@ -48,15 +66,17 @@ export async function getProfileSearchFilter(
 	id: string | null,
 	collectionId: string | null
 ) {
+	console.log("collectionId", collectionId);
+	console.log("id", id);
 	if (!collectionId && !id) {
 		return { filter: null };
 	}
 
-	const [session, collectionKeys, likes] = await Promise.all([
+	const [session, collectionKeys, likes] = (await Promise.all([
 		auth(),
 		collectionId ? getCachedUserCollectionKeys(collectionId, true) : null,
 		id && !collectionId ? getCachedUserLikes(id, true) : null,
-	]) as [Session | null, any, any];
+	])) as [Session | null, any, any];
 
 	if (collectionKeys) {
 		if (!collectionKeys) {
@@ -88,8 +108,14 @@ export async function getProfileSearchFilter(
 		return {
 			filter: [
 				`key IN [${likes
-					.filter((like: InferSelectModel<typeof usersToLikes>) => !like.deleted)
-					.map((like: InferSelectModel<typeof usersToLikes>) => `"${like.itemKey}"`)
+					.filter(
+						(like: InferSelectModel<typeof usersToLikes>) =>
+							!like.deleted
+					)
+					.map(
+						(like: InferSelectModel<typeof usersToLikes>) =>
+							`"${like.itemKey}"`
+					)
 					.join(",")}]`,
 			],
 		};
@@ -197,9 +223,9 @@ function formatRange(range: string | null) {
 export async function getMainAttributes() {
 	const getCachedResults = unstable_cache(
 		async () => {
-			const attributes = await meilisearchClient.index(
-				process.env.MEILI_INDEX || config.index
-			).getDisplayedAttributes();
+			const attributes = await meilisearchClient
+				.index(process.env.MEILI_INDEX || config.index)
+				.getDisplayedAttributes();
 
 			return attributes;
 		},
@@ -209,9 +235,10 @@ export async function getMainAttributes() {
 
 	const attributes = await getCachedResults();
 
-	return attributes.filter((attribute) => !attribute.endsWith("fullTextPDFs"))
+	return attributes.filter(
+		(attribute) => !attribute.endsWith("fullTextPDFs")
+	);
 }
-
 
 export async function searchIndex(
 	searchParams: URLSearchParams,
@@ -222,37 +249,38 @@ export async function searchIndex(
 		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
 	>["filter"] = []
 ) {
-	const getCachedResults = unstable_cache(
-		async () => {
-			const pageNum = Math.max(1, Number(searchParams.get("page")) || 1);
-			const limitNum = Math.min(
-				100,
-				Math.max(1, Number(searchParams.get("limit")) || ITEMS_PER_PAGE)
-			);
-			const sort = searchParams.get("sort") || SORT_OPTIONS[0].key;
-			const search = searchParams.get("search") || "";
-			const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
-			const range = searchParams.get("range") || null;
-			const searchIndex = meilisearchClient.index(
-				process.env.MEILI_INDEX || config.index
-			);
-			const sortOption =
-				SORT_OPTIONS.find((option) => option.key === sort)?.sort ||
-				SORT_OPTIONS[0].sort;
+	const cacheKey = `${searchParams.toString()}-${extraFilters.toString()}`;
 
-			const finalFilters = [
-				`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
-				range ? formatRange(range) : null,
-				...(Array.isArray(extraFilters) ? extraFilters : []),
-			].filter((f): f is string => f !== null);
+	const items = unstable_cache(async () => {
+		const pageNum = Math.max(1, Number(searchParams.get("page")) || 1);
+		const limitNum = Math.min(
+			100,
+			Math.max(1, Number(searchParams.get("limit")) || ITEMS_PER_PAGE)
+		);
+		const sort = searchParams.get("sort") || SORT_OPTIONS[0].key;
+		const search = searchParams.get("search") || "";
+		const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
+		const range = searchParams.get("range") || null;
+		const searchIndex = meilisearchClient.index(
+			process.env.MEILI_INDEX || config.index
+		);
+		const sortOption =
+			SORT_OPTIONS.find((option) => option.key === sort)?.sort ||
+			SORT_OPTIONS[0].sort;
 
-			const allAttributes = await getMainAttributes();
-			
-			const [searchResults, collections] = await Promise.all([
-				searchIndex.search(search, {
-					offset: (pageNum - 1) * limitNum,
-					limit: limitNum,
-					attributesToSearchOn:
+		const finalFilters = [
+			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
+			range ? formatRange(range) : null,
+			...(Array.isArray(extraFilters) ? extraFilters : []),
+		].filter((f): f is string => f !== null);
+
+		const allAttributes = await getMainAttributes();
+
+		const [searchResults, collections] = await Promise.all([
+			searchIndex.search(search, {
+				offset: (pageNum - 1) * limitNum,
+				limit: limitNum,
+				attributesToSearchOn:
 					SCOPE_OPTIONS.find((option) => option.key === scope)
 						?.attributesToSearchOn ||
 					SCOPE_OPTIONS[0].attributesToSearchOn,
@@ -264,46 +292,48 @@ export async function searchIndex(
 			getCachedCollections(),
 		]);
 
-			const items = searchResults.hits;
-			const totalCount = searchResults.estimatedTotalHits;
-			
-			for (const item of items) {
-				if (collections) {
-					item.collectionsData = item.collectionsAncestry
-						?.map((collection: string) => {
-							const collectionData = collections.find(
-								(c: Collection) => c.key === collection
-							);
-							return collectionData;
-						})
-						.filter(
-							(collectionData: Collection | undefined) => collectionData !== undefined
-						) as Collection[];
-				}
+		const items = searchResults.hits;
+		const totalCount = searchResults.estimatedTotalHits;
 
-				setCachedItemSmall(item.key, {
-					item: item as Item,
-				});
+		const itemPromises = items.map(async (item) => {
+			if (collections) {
+				item.collectionsData = item.collectionsAncestry
+					?.map((collection: string) => {
+						const collectionData = collections.find(
+							(c: Collection) => c.key === collection
+						);
+						return collectionData;
+					})
+					.filter(
+						(collectionData: Collection | undefined) =>
+							collectionData !== undefined
+					) as Collection[];
 			}
-			
 
-			return {
-				items: items as Item[],
-				currentPage: pageNum,
-				totalItems: totalCount,
-				perPage: limitNum,
-				totalPages: Math.ceil(totalCount / limitNum),
-				facetDistribution: searchResults.facetDistribution,
-			};
-		},
-		[searchParams.toString()],
-		{
-			tags: ["searchIndex"],
-			revalidate: 60 * 60,
-		}
-	);
+			// if (item) {
+			// 	item.citation = await convertItem(item as Item, "citation");
+			// }
 
-	return getCachedResults();
+			await setCachedItemSmall(item.key, {
+				item: item as Item,
+			});
+
+			return item;
+		});
+
+		await Promise.all(itemPromises);
+
+		return {
+			items: items as Item[],
+			currentPage: pageNum,
+			totalItems: totalCount,
+			perPage: limitNum,
+			totalPages: Math.ceil(totalCount / limitNum),
+			facetDistribution: searchResults.facetDistribution,
+		};
+	}, [cacheKey], { tags: ["searchIndex"] });
+
+	return items();
 }
 
 export async function getProfile(
