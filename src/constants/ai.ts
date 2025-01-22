@@ -4,6 +4,7 @@ import ChatGPT from "@/components/icons/ChatGPT";
 import Gemini from "@/components/icons/Gemini";
 import Claude from "@/components/icons/Claude";
 import Mistral from "@/components/icons/Mistral";
+import DeepSeek from "@/components/icons/DeepSeek";
 
 export const models = [
 	{
@@ -29,6 +30,12 @@ export const models = [
 		company: "Mistral",
         model: process.env.NEXT_PUBLIC_MISTRAL_MODEL,
 		icon: Mistral,
+	},
+	{
+		name: "DeepSeek",
+		company: "DeepSeek",
+        model: process.env.NEXT_PUBLIC_DEEPSEEK_MODEL,
+		icon: DeepSeek,
 	}
 ];
 
@@ -66,5 +73,10 @@ export const pricings = {
 	"mistral-large-latest": {
 		input: 2 / MILLION,
 		output: 6 / MILLION,
+	},
+	"deepseek-chat": {
+		input: 0.14 / MILLION,
+		output: 0.28 / MILLION,
 	}
+
 }

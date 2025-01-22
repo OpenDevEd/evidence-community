@@ -2,10 +2,11 @@ import { openai } from "@ai-sdk/openai";
 import { google } from "@ai-sdk/google";
 import { anthropic } from "@ai-sdk/anthropic";
 import { mistral } from "@ai-sdk/mistral";
+import { deepseek } from "@ai-sdk/deepseek";
 import { models, pricings } from "@/constants/ai";
 import posthogClient from "./posthog";
 
-export const providers = [openai, google, anthropic, mistral];
+export const providers = [openai, google, anthropic, mistral, deepseek];
 
 export function getModel(modelIndex: number) {
 	const model = models[modelIndex];
