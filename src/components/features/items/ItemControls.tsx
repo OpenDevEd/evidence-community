@@ -420,7 +420,7 @@ export default function ItemControls({
 					<LuChevronLeft className="size-5 rtl:rotate-180" />
 				}
 				className="ltr:pl-1.5 rtl:pr-1.5"
-				onPress={() => {
+				onPressStart={() => {
 					if (window.history.length > 1) {
 						router.back();
 					} else {

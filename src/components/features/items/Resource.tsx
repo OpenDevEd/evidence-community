@@ -5,7 +5,8 @@ import { Skeleton } from "@/components/nextui/Skeleton";
 import {
 	ModalBody,
 	ModalContent,
-	Link as NextUILink, useDisclosure
+	Link as NextUILink,
+	useDisclosure,
 } from "@nextui-org/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
@@ -66,9 +67,14 @@ function AddButton({
 								<div className="flex flex-col gap-4">
 									<CollectionsList
 										isLoading={loading}
-										highlightedCollections={
-											Object.keys(itemData ? (session?.user.itemsCollections[itemData.key] ?? {}) : {})
-										}
+										highlightedCollections={Object.keys(
+											itemData
+												? session?.user
+														.itemsCollections[
+														itemData.key
+												  ] ?? {}
+												: {}
+										)}
 										data={session?.user}
 										classNames={{
 											container: "grid-cols-2 gap-3",
@@ -88,7 +94,7 @@ function AddButton({
 	);
 }
 
-function FixURL( url: string | null ) {
+function FixURL(url: string | null) {
 	if (!url) return null;
 	if (!url.startsWith("https://")) {
 		return `https://${url}`;
@@ -112,23 +118,23 @@ function ResourceInteractions({
 
 	const url = FixURL(status?.docsLink);
 
-
 	return (
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
 			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
 				<div className="w-full rounded-2xl flex flex-row items-center">
-					{(url && itemData?.key) && (
+					{url && itemData?.key && (
 						<NextUILink
 							showAnchorIcon
 							href={url + "/lib/" + itemData?.key}
 							className="font-medium text-tertiary-400 shrink-1 px-2"
-					>
-						<span className="text-black/60 dark:text-white/60 ">
-							{t("viewOnDocs", {
-								site: url.split("/")[2],
-							})}
-						</span>
-					</NextUILink>)}
+						>
+							<span className="text-black/60 dark:text-white/60 ">
+								{t("viewOnDocs", {
+									site: url.split("/")[2],
+								})}
+							</span>
+						</NextUILink>
+					)}
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
 						<AddButton itemData={itemData} userData={userData} />
 						<LikeButton itemData={itemData} />
@@ -175,7 +181,7 @@ export default function Resource({
 			entries.forEach((entry) => {
 				if (entry.isIntersecting) {
 					console.log("prefetching", href);
-					router.prefetch(href, {kind: PrefetchKind.AUTO});
+					router.prefetch(href, { kind: PrefetchKind.AUTO });
 					observer.disconnect();
 				}
 			});
@@ -194,9 +200,22 @@ export default function Resource({
 			<Link
 				href={href}
 				className="p-4 @[720px]:p-6 flex flex-col gap-4 hover:brightness-90 transition-all flex-1"
-				onClick={(e) => {
-					if (!itemData?.key)
+				onMouseDown={(e) => {
+					const url = new URL(
+						href,
+						window.location.href
+					);
+					if (
+						url.origin === window.location.origin &&
+						e.button === 0 &&
+						!e.altKey &&
+						!e.ctrlKey &&
+						!e.metaKey &&
+						!e.shiftKey
+					) {
 						e.preventDefault();
+						router.push(href);
+					}
 				}}
 			>
 				<Skeleton
@@ -253,7 +272,11 @@ export default function Resource({
 					</Skeleton>
 				)}
 			</Link>
-			<ResourceInteractions itemData={itemData} isLoading={isLoading} userData={userData} />
+			<ResourceInteractions
+				itemData={itemData}
+				isLoading={isLoading}
+				userData={userData}
+			/>
 		</div>
 	);
 }
