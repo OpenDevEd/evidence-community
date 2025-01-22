@@ -36,6 +36,7 @@ import { Switch } from "@/components/nextui/Switch";
 import { useLocalStorage } from "usehooks-ts";
 import { SiZotero } from "react-icons/si";
 import { AnimatePresence, motion } from "framer-motion";
+import { useFeatureFlagEnabled } from "@/context/Providers";
 
 type Interaction =
 	| "readDocument"
@@ -305,6 +306,8 @@ export default function ItemControls({
 		viewOnZotero: null,
 	});
 
+	const isPrintingEnabled = useFeatureFlagEnabled("print-button");
+
 	const [config, setConfig] = useLocalStorage(
 		"item-controls",
 		CONFIG_LABELS.reduce((acc, label) => {
@@ -367,6 +370,7 @@ export default function ItemControls({
 				label: t("printRecord"),
 				props: {
 					size: "sm",
+					isDisabled: !isPrintingEnabled,
 					className: "hidden xl:flex",
 					startContent: <LuPrinter className="size-5" />,
 				},
