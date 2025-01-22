@@ -43,6 +43,27 @@ export const INSTITUTION_LOGOS: Record<string, any> = {
 			alt="UK National Commission to UNESCO"
 		/>
 	),
+	"eEkitabu": (props: React.ComponentProps<typeof InstitutionLogo>) => (
+		<InstitutionLogo
+			{...props}
+			src="/institutions/eEkitabu.png"
+			alt="eEkitabu"
+		/>
+	),
+	"United Nations": (props: React.ComponentProps<typeof InstitutionLogo>) => (
+		<InstitutionLogo
+			{...props}
+			src="/institutions/UN.png"
+			alt="United Nations"
+		/>
+	),
+	"UNICEF": (props: React.ComponentProps<typeof InstitutionLogo>) => (
+		<InstitutionLogo
+			{...props}
+			src="/institutions/UNICEF.png"
+			alt="UNICEF"
+		/>
+	),
 };
 
 export const ITEMS_PER_PAGE = 20;
