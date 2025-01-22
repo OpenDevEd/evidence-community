@@ -88,7 +88,7 @@ export async function getCachedUserLikes(userId: string, ignoreCache: boolean = 
 	let likes: InferSelectModel<typeof usersToLikes>[] | undefined = global?.cacheUser?.get("userLikes" + userId);
 	if (!likes || ignoreCache) {
 		likes = await db.query.usersToLikes.findMany({
-			where: eq(usersToLikes.userId, userId),
+			where: and(eq(usersToLikes.userId, userId), eq(usersToLikes.deleted, false)),
 		});
 		global?.cacheUser?.set("userLikes" + userId, likes);
 	}
