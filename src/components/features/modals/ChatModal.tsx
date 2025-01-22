@@ -36,6 +36,7 @@ export default function ChatModal({
 }) {
 	const t = useTranslations("ai");
 	const locale = useLocale();
+	const inputRef = useRef<HTMLInputElement>(null);
 
 	const {
 		messages,
@@ -59,6 +60,9 @@ export default function ChatModal({
 		headers: {
 			"Accept-Language": locale,
 		},
+		onFinish(message, options) {
+			inputRef?.current?.focus();
+		},
 		onError: (e) => {
 			const isRateLimited = e.message.includes("Rate limit exceeded");
 			if (!isRateLimited) {
@@ -77,7 +81,6 @@ export default function ChatModal({
 		},
 	});
 
-	const inputRef = useRef<HTMLInputElement>(null);
 	const messageListRef = useRef<HTMLDivElement>(null);
 
 	const appendMessage = (message: Message) => {
