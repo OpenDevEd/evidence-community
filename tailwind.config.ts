@@ -3,7 +3,10 @@ import { nextui } from "@nextui-org/react";
 import jsonConfig from "./src/constants/config.json";
 
 export const style = process.env.NEXT_PUBLIC_STYLE || jsonConfig?.style || "small";
-export const accent = process.env.NEXT_PUBLIC_ACCENT || jsonConfig?.accent || "opendeved";
+export const accent = process.env.NEXT_PUBLIC_ACCENT_COLOR || jsonConfig?.accent || "opendeved";
+export const link = process.env.NEXT_PUBLIC_LINK_COLOR || accent || "opendeved";
+export const collection = process.env.NEXT_PUBLIC_COLLECTION_COLOR || accent || "opendeved";
+export const doi = process.env.NEXT_PUBLIC_DOI_COLOR || accent || "opendeved";
 
 const accentColors = {
   "opendeved": "#e68124",
@@ -11,11 +14,26 @@ const accentColors = {
   "ekitabu": "#ed1c24",
 }
 
-function generateColorVariants(baseColor: string) {
+function generateColorVariants(baseColor: string, light: boolean = false) {
+  // Split the baseColor into dark and light variants if separator exists
+  const [darkColor, lightColor] = baseColor.split('|').map(c => c.trim());
+  const colorToUse = light && lightColor ? lightColor : darkColor;
+
   const normalizeHex = (hex: string) => hex.replace('#', '');
 
-  const hexToRgb = (hex: string): [number, number, number] => {
-    const normalized = normalizeHex(hex);
+  const parseColor = (color: string): [number, number, number] => {
+    // Check if color is in RGB format
+    const rgbMatch = color.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+    if (rgbMatch) {
+      return [
+        parseInt(rgbMatch[1]),
+        parseInt(rgbMatch[2]),
+        parseInt(rgbMatch[3])
+      ];
+    }
+    
+    // Otherwise treat as hex
+    const normalized = normalizeHex(color);
     return [
       parseInt(normalized.slice(0, 2), 16),
       parseInt(normalized.slice(2, 4), 16),
@@ -36,15 +54,15 @@ function generateColorVariants(baseColor: string) {
     );
   };
 
-  const rgb = hexToRgb(baseColor);
+  const rgb = parseColor(colorToUse);
   
   const variations = {
-    DEFAULT: baseColor,
+    DEFAULT: colorToUse,
     100: adjustBrightness(rgb, 0.2),
     200: adjustBrightness(rgb, 0.4),
     300: adjustBrightness(rgb, 0.6),
     400: adjustBrightness(rgb, 0.8),
-    500: baseColor,
+    500: colorToUse,
     600: adjustBrightness(rgb, 1.15),
     700: adjustBrightness(rgb, 1.3),
     800: adjustBrightness(rgb, 1.45),
@@ -116,7 +134,14 @@ const colors = {
     800: "#bedefe",
     900: "#dfefff",
   },
-  accent: generateColorVariants(accentColors[accent as keyof typeof accentColors]),
+  accent: generateColorVariants(accentColors[accent as keyof typeof accentColors] ?? accent, false),
+  accent_light: generateColorVariants(accentColors[accent as keyof typeof accentColors] ?? accent, true),
+  link: generateColorVariants(accentColors[link as keyof typeof accentColors] ?? link, false),
+  link_light: generateColorVariants(accentColors[link as keyof typeof accentColors] ?? link, true),
+  collection: generateColorVariants(accentColors[collection as keyof typeof accentColors] ?? collection, false),
+  collection_light: generateColorVariants(accentColors[collection as keyof typeof accentColors] ?? collection, true),
+  doi: generateColorVariants(accentColors[doi as keyof typeof accentColors] ?? doi, false),
+  doi_light: generateColorVariants(accentColors[doi as keyof typeof accentColors] ?? doi, true),
   card: {
     DEFAULT: "#141414",
     100: "#040404",
