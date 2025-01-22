@@ -1,6 +1,7 @@
 import createMiddleware from 'next-intl/middleware';
 import {routing} from './i18n/routing';
 import { NextRequest, NextResponse } from 'next/server';
+import { unescapeXML } from './lib/utils';
 
 export type RateLimit = {
   count: number;
@@ -17,8 +18,11 @@ function generateRateLimitObject(request: NextRequest) {
   if (cookie) {
     const distinctId = JSON.parse(cookie.value).distinct_id;
     const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.headers.get("cf-connecting-ip") || request.headers.get("x-envoy-external-address");
-    const rateLimit = rateLimits.get(distinctId || ip!) || { count: 0, firstRequest: 0 };
+    const rateLimitId = rateLimits.get(distinctId) || { count: 0, firstRequest: 0 };
+    const ipRateLimit = rateLimits.get(ip!) || { count: 0, firstRequest: 0 };
 
+    const rateLimit = rateLimitId.count > ipRateLimit.count ? rateLimitId : ipRateLimit;
+    
     rateLimits.set(distinctId, rateLimit);
     if (ip) {
       rateLimits.set(ip, rateLimit);
@@ -26,6 +30,7 @@ function generateRateLimitObject(request: NextRequest) {
 
     return rateLimit;
   }
+
   return null;
 }
 
@@ -40,6 +45,7 @@ function setRateLimitHeaders(response: NextResponse, rateLimit: RateLimit | null
       response.headers.set('Retry-After', retryAfter.toString());
     }
   }
+  
   return response;
 }
 
@@ -47,7 +53,6 @@ function setRateLimitHeaders(response: NextResponse, rateLimit: RateLimit | null
 export default function middleware(request: NextRequest) {
   const rateLimit = generateRateLimitObject(request);
 
-  // Add root path redirect
   if (request.nextUrl.pathname === '/') {
     return NextResponse.redirect(new URL('/lib', request.url));
   }
@@ -66,8 +71,9 @@ export default function middleware(request: NextRequest) {
     const format = exportMatch[2];
     const finalURL = new URL(`/api/item/${key}/export/${format}`, request.url);
     return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
-  } else if (request.nextUrl.pathname === "/lib/atom.xml") {
-    const finalURL = new URL(`/api/feed`, request.url);
+  } else if (request.nextUrl.pathname === "/lib/atom.xml" || (request.nextUrl.pathname.startsWith("/profile/") && request.nextUrl.pathname.endsWith("/atom.xml"))) {
+    const id = request.nextUrl.pathname.startsWith("/profile/") ? request.nextUrl.pathname.split("/")[2] : "main";
+    const finalURL = new URL(`/api/feed/${id}`, request.url);
     request.nextUrl.searchParams.forEach((value, key) => {
       finalURL.searchParams.set(key, value);
     });
@@ -112,6 +118,7 @@ export const config = {
     // Updated matchers for new export URL format
     '/([\\w-]+)?/lib/:path*/export/ris',
     '/([\\w-]+)?/lib/:path*/export/bibtex',
-    '/([\\w-]+)?/lib/atom.xml'
+    '/([\\w-]+)?/lib/atom.xml',
+    '/([\\w-]+)?/profile/:id/atom.xml'
   ]
 };
