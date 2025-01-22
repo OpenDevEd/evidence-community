@@ -7,24 +7,27 @@ import { useSession } from "next-auth/react";
 import { setter } from "@/lib/utils";
 import { twMerge } from "tailwind-merge";
 import { BsBookmarkCheckFill, BsBookmarkFill } from "react-icons/bs";
+import { useSWRConfig } from "swr";
 
 const LikeButton = forwardRef<
   any,
-  { itemData: Item | undefined; className?: any }
->(function LikeButton({ itemData, className }, ref) {
+  { itemData: Item | undefined; className?: any, revalidateResults?: any }
+>(function LikeButton({ itemData, className, revalidateResults }, ref) {
   const [mutationLoading, setMutationLoading] = useState(false);
   const { trigger } = useSWRMutation(`/like`, setter);
   const { data: session, update } = useSession();
   const isLiked = itemData && session?.user.likes[itemData.key];
 
   const handleLike = async (e: any) => {
-    e.preventDefault();
     setMutationLoading(true);
     try {
       await trigger({
         itemKey: itemData?.key,
       });
-      await update();
+      await Promise.all([
+        revalidateResults && revalidateResults(),
+        update(),
+      ]);
     } catch (error) {
       console.error(error);
     }

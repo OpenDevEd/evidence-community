@@ -12,6 +12,7 @@ import {
 	Modal,
 	ModalContent,
 	ModalHeader,
+	Spinner,
 	useDisclosure,
 } from "@nextui-org/react";
 import useSWR from "swr";
@@ -69,6 +70,7 @@ export function ContentInteractions({
 	handleRangeChange,
 	header,
 	countLabel,
+	isItemsFetching,
 }: {
 	data: ItemsGetResponse | undefined;
 	sort: string;
@@ -88,6 +90,7 @@ export function ContentInteractions({
 	handleRangeChange: (start: string | null, end: string | null) => void;
 	header?: ReactNode;
 	countLabel?: ReactNode;
+	isItemsFetching?: boolean;
 } & Partial<ReturnType<typeof useHierarchy>>) {
 	const {
 		isOpen: isExploreOpen,
@@ -293,6 +296,7 @@ export function ContentInteractions({
 									</span>
 								),
 							})}
+					{isItemsFetching && <Spinner size="sm" className="opacity-60 ltr:ml-2 rtl:mr-2" />}
 					</h2>
 				</Skeleton>
 				<div className="xl:min-w-72 flex gap-4">
@@ -402,6 +406,7 @@ function MainContent({
 		data: fetchedItemsData,
 		error: itemsError,
 		isLoading: isItemsLoading,
+		isValidating: isItemsFetching,
 	} = useSWR<ItemsGetResponse>(
 		itemsURL,
 		fetcher,
@@ -467,6 +472,7 @@ function MainContent({
 				handlePageChange={handlePageChange}
 				queryParams={queryParams}
 				searchParams={searchParams}
+				isItemsFetching={isItemsFetching}
 			/>
 		</>
 	);

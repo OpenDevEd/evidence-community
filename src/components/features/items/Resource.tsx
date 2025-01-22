@@ -106,10 +106,12 @@ function ResourceInteractions({
 	itemData,
 	isLoading,
 	userData,
+	revalidateResults,
 }: {
 	itemData: Item | undefined;
 	isLoading: boolean;
 	userData?: Session["user"];
+	revalidateResults?: any;
 }) {
 	const t = useTranslations("ui");
 	const { data } = useSession();
@@ -137,7 +139,7 @@ function ResourceInteractions({
 					)}
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
 						<AddButton itemData={itemData} userData={userData} />
-						<LikeButton itemData={itemData} />
+						<LikeButton itemData={itemData} revalidateResults={revalidateResults}/>
 						<CopyButton
 							itemData={itemData}
 							text={t("copyLink")}
@@ -159,11 +161,13 @@ export default function Resource({
 	abstract,
 	isLoading,
 	userData,
+	revalidateResults,
 }: {
 	itemData: Item | undefined;
 	abstract: boolean;
 	isLoading: boolean;
 	userData?: Session["user"];
+	revalidateResults?: any;
 }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
@@ -276,6 +280,7 @@ export default function Resource({
 				itemData={itemData}
 				isLoading={isLoading}
 				userData={userData}
+				revalidateResults={revalidateResults}
 			/>
 		</div>
 	);

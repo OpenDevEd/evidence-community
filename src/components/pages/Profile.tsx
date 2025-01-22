@@ -311,6 +311,8 @@ function ItemsList({
 		data: itemsData,
 		error: itemsError,
 		isLoading: isItemsLoading,
+		isValidating: isItemsFetching,
+		mutate: revalidateResults,
 	} = useSWR<ItemsGetResponse>(
 		itemsQuery,
 		fetcher,
@@ -340,6 +342,8 @@ function ItemsList({
 			pageNumber={queryParams.page}
 			handlePageChange={handlePageChange}
 			searchParams={searchParams}
+			isItemsFetching={isItemsFetching}
+			revalidateResults={revalidateResults}
 			countLabel={
 				<div>
 					{collectionId

@@ -18,7 +18,7 @@ import ChatModal from "../features/modals/ChatModal";
 import { useRouter } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 import useSWR from "swr";
-import { fetcher } from "@/lib/utils";
+import { fetcher, isAIAllowed } from "@/lib/utils";
 import Resource from "../features/items/Resource";
 import { Skeleton } from "../nextui/Skeleton";
 import { useMemo, useRef } from "react";
@@ -169,7 +169,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
 	const { lastFetchedData, setLastFetchedData } = useLastFetchedData();
 	const { data: embeddings } = useSWR(
-		(isRelatedItemsEnabled && data?.item) ? `/ai/embeddings/${data?.item?.key}` : null,
+		(isRelatedItemsEnabled && data?.item && !loading) ? `/ai/embeddings/${data?.item?.key}` : null,
 		fetcher,
 		{
 			onSuccess: (data) => {
@@ -207,6 +207,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 												key={row}
 												row={row}
 												router={router}
+												loading={loading}
 											/>
 										)
 									)}
@@ -219,6 +220,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 										router={router}
 										customRowName={collection.title}
 										value={<CollectionsRow value={collection.children!} />}
+										loading={loading}
 									/>
 								))
 							)}

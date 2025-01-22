@@ -1,5 +1,5 @@
 "use client";
-import { ReactNode, useContext, useRef, useState } from "react";
+import { ReactNode, useContext, useMemo, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { CollectionsGetResponse } from "@/app/api/collections/types";
@@ -16,11 +16,11 @@ import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import Resource from "../items/Resource";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
-import { CacheContext, CacheContextType } from "@/context/Providers";
+import { CacheContext, CacheContextType, useFeatureFlagEnabled } from "@/context/Providers";
 import { DownloadModal } from "../items/ItemControls";
 import { useDisclosure } from "@nextui-org/react";
 import { downloadItems, searchIndex } from "@/lib/actions";
-import { routing, useRouter } from "@/i18n/routing";
+import { routing, usePathname, useRouter } from "@/i18n/routing";
 
 
 interface ResourcesViewProps {
@@ -46,6 +46,8 @@ interface ResourcesViewProps {
 	queryParams?: Record<string, any>;
 	params?: Record<string, any>;
 	searchParams?: Record<string, any>;
+	isItemsFetching?: boolean;
+	revalidateResults?: any;
 }
 
 function Chip({
@@ -160,12 +162,14 @@ function ResourcesList({
 	isLoading,
 	abstract,
 	view,
+	revalidateResults,
 }: {
 	data: ItemsGetResponse | undefined;
 	error: any;
 	isLoading: boolean;
 	abstract: boolean;
 	view: string;
+	revalidateResults?: any;
 }) {
 	const t = useTranslations("ui");
 	const actuallyNoData =
@@ -187,6 +191,7 @@ function ResourcesList({
 									itemData={data?.items[index]}
 									abstract={abstract}
 									isLoading={isLoading}
+									revalidateResults={revalidateResults}
 								/>
 							)
 					)
@@ -202,6 +207,8 @@ function ContentActions({ data, queryParams, params, searchParams }: { data: Ite
 	const totalItems = data?.totalItems || 0;
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const router = useRouter();
+	const isPrintingEnabled = useFeatureFlagEnabled("print-button");
+	const pathName = usePathname();
 
 	return (
 		<div className="xl:flex xl:justify-end grid gap-4 flex-wrap">
@@ -221,13 +228,13 @@ function ContentActions({ data, queryParams, params, searchParams }: { data: Ite
 			<Button endContent={<HiOutlineDownload className="size-6" />} onPress={onOpen}>
 				{t("downloadRecords", { count: format.number(totalItems) })}
 			</Button>
-			<Button endContent={<HiOutlinePrinter className="size-6" />}>
+			<Button isDisabled={!isPrintingEnabled} endContent={<HiOutlinePrinter className="size-6" />}>
 				{t("printCitations", { count: format.number(totalItems) })}
 			</Button>
 			<Button
 				onClick={() => {
 					router.push({
-						pathname: "/lib/atom.xml",
+						pathname: pathName + "/atom.xml",
 						query: searchParams,
 					}, {
 						locale: routing.defaultLocale
@@ -292,6 +299,7 @@ export function ResourcesView({
     itemsData,
     itemsError,
     isItemsLoading,
+	isItemsFetching,
     selectedCollections,
     handleCheckboxChange,
     collectionsData,
@@ -304,6 +312,7 @@ export function ResourcesView({
 	queryParams,
 	params,
 	searchParams,
+	revalidateResults,
 }: ResourcesViewProps) {
     const t = useTranslations("ui");
 	const format = useFormatter();
@@ -335,6 +344,7 @@ export function ResourcesView({
 				view={view}
 				setView={setView}
 				countLabel={countLabel}
+				isItemsFetching={isItemsFetching}
             />
             <FilterChips
                 collections={selectedCollections!}
@@ -347,6 +357,7 @@ export function ResourcesView({
                 isLoading={isItemsLoading}
                 abstract={abstract}
 				view={view}
+				revalidateResults={revalidateResults}
             />
             <PaginationControls
                 page={pageNumber}
