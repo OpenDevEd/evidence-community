@@ -1,11 +1,11 @@
 import { db } from "@/db";
 import { users } from "@/db/schema/tables/user";
 import { userCollection } from "@/db/schema/tables/userCollection";
-import { getProfile } from "@/lib/actions";
+import { authorize, createUser, getProfile, getUser } from "@/lib/actions";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import bcrypt from "bcrypt";
 import { eq, InferSelectModel } from "drizzle-orm";
-import NextAuth, { NextAuthConfig, User } from "next-auth";
+import NextAuth, { CredentialsSignin, NextAuthConfig, User } from "next-auth";
 import { encode as defaultEncode } from "next-auth/jwt";
 import CredentialsProvider from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
@@ -13,31 +13,20 @@ import { z } from "zod";
 import { fromError } from "zod-validation-error";
 
 export const credentialsSchema = z.object({
-	email: z.string().email(),
-	password: z.string().min(8),
+	email: z.string().email({
+		message: "invalidEmail"
+	}),
+	password: z.string().min(8, {
+		message: "invalidPassword"
+	}),
 	register: z
-		.string()
+		.union([z.boolean(), z.string()])
 		.optional()
-		.transform((value) => value === "true"),
+		.transform((value) => {
+			if (typeof value === 'boolean') return value;
+			return value === 'true';
+		}),
 });
-
-export const getUser = async (email: string) => {
-	return await db.query.users.findFirst({
-		where: eq(users.email, email),
-	});
-};
-
-export const createUser = async (email: string, password: string) => {
-	const hashedPassword = await bcrypt.hash(password, 10);
-	const [newUser] = await db
-		.insert(users)
-		.values({
-			email,
-			password: hashedPassword,
-		})
-		.returning();
-	return newUser;
-};
 
 declare module "next-auth" {
 	interface Session {
@@ -65,6 +54,14 @@ declare module "next-auth" {
 
 const adapter = DrizzleAdapter(db);
 
+export class InvalidLoginError extends CredentialsSignin {
+	constructor(message: string) {
+		super(message);
+		this.message = message;
+	}
+	message: string;
+}
+
 export const authOptions: NextAuthConfig = {
 	trustHost: true,
 	adapter,
@@ -82,37 +79,7 @@ export const authOptions: NextAuthConfig = {
 			},
 			type: "credentials",
 			async authorize(credentials, req) {
-				console.log("Authorizing credentials", credentials);
-
-				const parsedCredentials =
-					credentialsSchema.safeParse(credentials);
-
-				console.log("Parsed credentials", parsedCredentials);
-
-				if (!parsedCredentials.success)
-					throw new Error(
-						fromError(parsedCredentials.error).toString()
-					);
-
-				const { email, password, register } = parsedCredentials.data;
-
-				const existingUser = await getUser(email);
-
-				if (register && existingUser)
-					throw new Error("User already exists");
-
-				if (!existingUser && register)
-					return await createUser(email, password);
-
-				if (existingUser) {
-					const passwordsMatch = await bcrypt.compare(
-						password,
-						existingUser.password ?? ""
-					);
-					if (passwordsMatch) return existingUser;
-				}
-
-				throw new Error("Invalid credentials");
+				return await authorize(credentials as z.infer<typeof credentialsSchema>);
 			},
 		}),
 	],
