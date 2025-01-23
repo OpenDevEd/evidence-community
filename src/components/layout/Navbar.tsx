@@ -333,6 +333,7 @@ function LoginModal({
 	onClose: () => void;
 }) {
 	const router = useRouter();
+	const [loading, setLoading] = useState(false);
 	const {
 		displayOnError,
 		errorClassName,
@@ -351,19 +352,26 @@ function LoginModal({
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		const formData = new FormData(e.target as HTMLFormElement);
-		const email = formData.get("email") as string;
-		const password = formData.get("password") as string;
-		const submitButton = document.activeElement as HTMLButtonElement;
-		const isRegister = submitButton.hasAttribute("data-register");
+		setLoading(true);
+		try {
+			const formData = new FormData(e.target as HTMLFormElement);
+			const email = formData.get("email") as string;
+			const password = formData.get("password") as string;
+			const submitButton = document.activeElement as HTMLButtonElement;
+			const isRegister = submitButton.hasAttribute("data-register");
 
-		const result = await authenticate({
-			email,
-			password,
-			register: isRegister,
-		});
-		if (!displayOnError(result?.error)) {
-			onClose();
+			const result = await authenticate({
+				email,
+				password,
+				register: isRegister,
+			});
+			if (!displayOnError(result?.error)) {
+				onClose();
+			}
+		} catch (error: any) {
+			console.error(error);
+		} finally {
+			setLoading(false);
 		}
 	};
 
@@ -400,6 +408,7 @@ function LoginModal({
 								/>
 								<div className="flex items-center gap-2 h-10">
 									<Button
+										isDisabled={loading}
 										color="accent"
 										className="w-full h-full"
 										type="submit"
@@ -407,6 +416,7 @@ function LoginModal({
 										Login
 									</Button>
 									<Button
+										isDisabled={loading}
 										color="secondary"
 										className="w-full h-full"
 										data-register
