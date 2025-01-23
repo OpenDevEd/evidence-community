@@ -59,7 +59,11 @@
 		"viewOnZoteroToggleLabel": "\"Ver no Zotero.org\" botão",
 		"openInZoteroToggleDescription": "Mostrar ou esconder o botão \"Abrir no Zotero\" nas páginas de registros bibliográficos completos. Este botão permite abrir o registro no aplicativo Zotero. Pode ser útil apenas se você tem o aplicativo Zotero instalado em seu dispositivo e se você foi concedido acesso à biblioteca Zotero que contém o registro.",
 		"viewOnZoteroToggleDescription": "Mostrar ou esconder o botão \"Ver no Zotero.org\" nas páginas de registros bibliográficos completos. Este botão permite ver o registro no site Zotero.org. Pode ser útil se você quiser ver o registro em um navegador web.",
-		"customFeed": "Feed personalizado"
+		"customFeed": "Feed personalizado",
+		"login": "Login",
+		"register": "Registrar",
+		"continueWithGoogle": "Continuar com Google",
+		"or": "Ou"
 	},
 	"ai": {
 		"summarize": "Resumir",

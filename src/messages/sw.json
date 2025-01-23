@@ -60,7 +60,11 @@
 		"viewOnZoteroToggleLabel": "\"Tazama kwenye Zotero.org\" Button",
 		"openInZoteroToggleDescription": "Ongeza au kuzuia \"Tumia Zotero\" Button kwenye ukurasa wa rekodi kabisa. Button hii inaweza kuwa muhimu kwa kuwa unaweza kufungua rekodi katika programu Zotero. Inawezekanavyo kwa kuwa unaweza kuweka programu Zotero kwenye kifaa chako, na kuwa na uwezo wa kufikia rekodi katika makusanyo yako.",
 		"viewOnZoteroToggleDescription": "Ongeza au kuzuia \"Tazama kwenye Zotero.org\" Button kwenye ukurasa wa rekodi kabisa. Button hii inaweza kuwa muhimu kwa kuwa unaweza kuona rekodi kwenye ukurasa Zotero.org. Inawezekanavyo kwa kuwa unaweza kuona rekodi katika kifaa cha mtandao.",
-		"customFeed": "Taarifa Kuu"
+		"customFeed": "Taarifa Kuu",
+		"login": "Ingia",
+		"register": "Jisajili",
+		"continueWithGoogle": "Endelea na Google",
+		"or": "Au"
 	},
 	"ai": {
 		"summarize": "Fupisha",

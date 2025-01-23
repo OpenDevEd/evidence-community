@@ -332,7 +332,7 @@ function LoginModal({
 	onOpenChange: (open: boolean) => void;
 	onClose: () => void;
 }) {
-	const router = useRouter();
+	const t = useTranslations("ui");
 	const [loading, setLoading] = useState(false);
 	const {
 		displayOnError,
@@ -413,7 +413,7 @@ function LoginModal({
 										className="w-full h-full"
 										type="submit"
 									>
-										Login
+										{t("login")}
 									</Button>
 									<Button
 										isDisabled={loading}
@@ -422,7 +422,7 @@ function LoginModal({
 										data-register
 										type="submit"
 									>
-										Register
+										{t("register")}
 									</Button>
 								</div>
 							</form>
@@ -433,7 +433,7 @@ function LoginModal({
 						<div className="flex items-center gap-4 my-4">
 							<div className="flex-1 h-[0.0625rem] bg-black/10 dark:bg-white/10" />
 							<span className="text-black/60 dark:text-white/60">
-								Or
+								{t("or")}
 							</span>
 							<div className="flex-1 h-[0.0625rem] bg-black/10 dark:bg-white/10" />
 						</div>
@@ -443,7 +443,7 @@ function LoginModal({
 							className="w-full dark:bg-white dark:text-black"
 							startContent={<FaGoogle className="size-5" />}
 						>
-							Continue with Google
+							{t("continueWithGoogle")}
 						</Button>
 					</div>
 				</ModalBody>
@@ -453,6 +453,7 @@ function LoginModal({
 }
 
 export default function Navbar() {
+	const t = useTranslations("ui");
 	const pathname = usePathname();
 	const [isMounted, setIsMounted] = useState(false);
 	const { theme, setTheme } = useTheme();
@@ -508,7 +509,7 @@ export default function Navbar() {
 							onPress={onLoginModalOpen}
 							isIconOnly={style === "small"}
 						>
-							{style === "wide" ? "Login" : ""}
+							{style === "wide" ? t("login") : ""}
 					</Button>)
 				) : (
 					<UserButton />
