@@ -65,6 +65,12 @@
 		"continueWithGoogle": "使用 Google 继续",
 		"or": "或"
 	},
+	"auth": {
+		"invalidEmail": "请输入有效的电子邮件地址",
+		"invalidPassword": "密码必须至少为 8 个字符",
+		"userAlreadyExists": "用户已存在",
+		"invalidCredentials": "无效的凭证"
+	},
 	"ai": {
 		"summarize": "总结",
 		"summarizeDescription": "用尽可能少的词总结此资源",

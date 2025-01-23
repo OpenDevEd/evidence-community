@@ -333,6 +333,7 @@ function LoginModal({
 	onClose: () => void;
 }) {
 	const t = useTranslations("ui");
+	const tAuth = useTranslations("auth");
 	const [loading, setLoading] = useState(false);
 	const {
 		displayOnError,
@@ -365,7 +366,7 @@ function LoginModal({
 				password,
 				register: isRegister,
 			});
-			if (!displayOnError(result?.error)) {
+			if (!displayOnError(result?.error ? tAuth(result?.error) : "")) {
 				onClose();
 			}
 		} catch (error: any) {

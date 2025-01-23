@@ -65,6 +65,12 @@
 		"continueWithGoogle": "المتابعة بالجوجل",
 		"or": "أو"
 	},
+	"auth": {
+		"invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
+		"invalidPassword": "يجب أن يكون عدد الأحرف أكثر من 8",
+		"userAlreadyExists": "المستخدم موجود بالفعل",
+		"invalidCredentials": "البيانات غير صالحة"
+	},
 	"ai": {
 		"summarize": "تلخيص",
 		"summarizeDescription": "تلخيص هذا المصدر بأقل عدد ممكن من الكلمات",

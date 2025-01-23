@@ -65,6 +65,12 @@
 		"continueWithGoogle": "गूगल के साथ जारी रखें",
 		"or": "या"
 	},
+	"auth": {
+		"invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",
+		"invalidPassword": "पासवर्ड कम से कम 8 अक्षरों का होना चाहिए",
+		"userAlreadyExists": "उपयोगकर्ता पहले से मौजूद है",
+		"invalidCredentials": "अमान्य विवरण"
+	},
 	"ai": {
 		"summarize": "सारांश",
 		"summarizeDescription": "इस संसाधन का सारांश कम से कम शब्दों में करें।",

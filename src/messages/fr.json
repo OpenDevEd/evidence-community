@@ -65,6 +65,12 @@
 		"continueWithGoogle": "Continuer avec Google",
 		"or": "Ou"
 	},
+	"auth": {
+		"invalidEmail": "Veuillez entrer une adresse e-mail valide",
+		"invalidPassword": "Le mot de passe doit contenir au moins 8 caractères",
+		"userAlreadyExists": "L'utilisateur existe déjà",
+		"invalidCredentials": "Informations d'identification invalides"
+	},
 	"ai": {
 		"summarize": "Résumer",
 		"summarizeDescription": "Résumer cette ressource en aussi peu de mots que possible.",

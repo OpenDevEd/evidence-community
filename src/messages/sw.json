@@ -66,6 +66,12 @@
 		"continueWithGoogle": "Endelea na Google",
 		"or": "Au"
 	},
+	"auth": {
+		"invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
+		"invalidPassword": "Neno la nenosiri lazima iwe 8 karakter",
+		"userAlreadyExists": "Mfano hufanya kazi",
+		"invalidCredentials": "Umbali wa kusafiri haijulikana"
+	},
 	"ai": {
 		"summarize": "Fupisha",
 		"summarizeDescription": "Fupisha rasilimali hii kwa maneno machache iwezekanavyo.",
