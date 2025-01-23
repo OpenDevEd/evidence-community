@@ -26,9 +26,65 @@ import {
 	setCachedItemSmall,
 } from "@/app/api/cache";
 import { getCachedUserCollectionKeys } from "@/app/api/cache";
-import { auth } from "@/app/api/auth/[...nextauth]/config";
+import { auth, credentialsSchema } from "@/app/api/auth/[...nextauth]/config";
 import { revalidateTag, unstable_cache } from "next/cache";
 import { Collection } from "@/app/api/collections/types";
+import { z } from "zod";
+import bcrypt from "bcrypt";
+
+export const getUser = async (email: string) => {
+	return await db.query.users.findFirst({
+		where: eq(users.email, email),
+	});
+};
+
+export const createUser = async (email: string, password: string) => {
+	const hashedPassword = await bcrypt.hash(password, 10);
+	const [newUser] = await db
+		.insert(users)
+		.values({
+			email,
+			password: hashedPassword,
+		})
+		.returning();
+	return newUser;
+};
+
+
+export async function authorize(props: z.infer<typeof credentialsSchema>) {
+	console.log("Authorizing credentials", props);
+
+	const parsedCredentials = credentialsSchema.safeParse(props);
+
+	console.log("Parsed credentials", parsedCredentials);
+
+	if (!parsedCredentials.success) {
+		const errorMessages = parsedCredentials.error.errors
+			.map(err => err.message)
+			.join(", ");
+		throw new Error(errorMessages);
+	}
+
+	const { email, password, register } = parsedCredentials.data;
+
+	const existingUser = await getUser(email);
+
+	if (register && existingUser)
+		throw new Error("userAlreadyExists");
+
+	if (!existingUser && register)
+		return await createUser(email, password);
+
+	if (existingUser) {
+		const passwordsMatch = await bcrypt.compare(
+			password,
+			existingUser.password ?? ""
+		);
+		if (passwordsMatch) return existingUser;
+	}
+
+	throw new Error("invalidCredentials");
+}
 
 export async function getItems(
 	searchParams: URLSearchParams | Record<string, any>,
