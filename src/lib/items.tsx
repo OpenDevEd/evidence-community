@@ -169,6 +169,7 @@ const DOIWrapper = ({ match, index }: MatchWrapperProps) => (
 	<Link
 		key={index}
 		href={`https://doi.org/${match}`}
+		underline="always"
 		className="dark:text-doi text-doi_light text-lg"
 		showAnchorIcon
 	>
@@ -180,6 +181,7 @@ const URLWrapper = ({ match, index }: MatchWrapperProps) => (
 	<Link
 		key={index}
 		href={match}
+		underline="always"
 		className="dark:text-link text-link_light text-lg"
 		showAnchorIcon
 	>
@@ -205,7 +207,7 @@ function CollectionLevel({ collection }: { collection: Collection }) {
 				showAnchorIcon
 				href={href}
 				className="dark:text-collection text-collection_light text-lg"
-				underline="hover"
+				underline="always"
 			>
 				<span className="dark:text-collection text-collection_light">
 					{collection.name}
@@ -301,6 +303,7 @@ export const valueFormatter: Record<
 	url: ({ value }) => (
 		<Link
 			href={value}
+			underline="always"
 			className="dark:text-link text-link_light break-all text-lg"
 			showAnchorIcon
 		>
