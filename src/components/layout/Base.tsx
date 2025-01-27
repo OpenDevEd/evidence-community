@@ -5,12 +5,13 @@ import Footer from "@/components/layout/Footer";
 import { Analytics } from "@vercel/analytics/react";
 import { twMerge } from "tailwind-merge";
 import { style } from "@/../tailwind.config";
-import { getMessages } from "next-intl/server";
+import { getMessages, getTranslations } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
 import { getLangDir } from "rtl-detect";
 import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { getCachedStatus } from "@/app/api/cache";
 import { Suspense } from "react";
+import { Link } from "@/i18n/routing";
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -35,6 +36,7 @@ export default async function Base({
 	const messages = await getMessages();
 	const dir = getLangDir(locale);
 	const session = await auth();
+	const t = await getTranslations({ locale, namespace: "ui" });
 
 	return (
 		<html lang={locale} dir={dir} suppressHydrationWarning>
@@ -47,10 +49,22 @@ export default async function Base({
 					<Providers session={session} status={status}>
 						<div
 							className={twMerge(
-								"h-full w-full bg-background_light dark:bg-background flex flex-col xl:grid xl:grid-rows-[6.5rem_1fr_32rem] gap-4 xl:gap-14 items-center justify-items-center min-h-screen",
+								"h-full w-full bg-background_light dark:bg-background flex flex-col xl:grid xl:grid-rows-[6.5rem_1fr_32rem] items-center justify-items-center min-h-screen",
 								style === "small" && "xl:pt-14"
 							)}
 						>
+							<Link
+								href="#main-content"
+								className="p-4 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100"
+							>
+								{t("skipToContent")}
+							</Link>
+							<Link
+								href="#footer"
+								className="p-4 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100"
+							>
+								{t("skipToFooter")}
+							</Link>
 							<Navbar />
 							{children}
 							<Footer />
