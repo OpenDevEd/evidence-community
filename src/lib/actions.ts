@@ -286,7 +286,7 @@ export async function getMainAttributes() {
 			return attributes;
 		},
 		[],
-		{ tags: ["attributes"] }
+		{ tags: ["attributes"], revalidate: 60 }
 	);
 
 	const attributes = await getCachedResults();
@@ -387,7 +387,7 @@ export async function searchIndex(
 			totalPages: Math.ceil(totalCount / limitNum),
 			facetDistribution: searchResults.facetDistribution,
 		};
-	}, [cacheKey], { tags: ["searchIndex"] });
+	}, [cacheKey], { tags: ["searchIndex"], revalidate: 60 });
 
 	return items();
 }
