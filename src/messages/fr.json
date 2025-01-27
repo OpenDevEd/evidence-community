@@ -63,7 +63,18 @@
 		"login": "Connexion",
 		"register": "Inscription",
 		"continueWithGoogle": "Continuer avec Google",
-		"or": "Ou"
+		"or": "Ou",
+		"skipToContent": "Passer au contenu",
+		"skipToFooter": "Passer au bas de la page",
+		"collectionDescription": "Une collection est un groupe de ressources que vous souhaitez conserver ensemble.",
+		"collectionName": "Nom de la collection",
+		"collectionDescriptionDescription": "Description de la collection",
+		"collectionVisibility": "Visibilité de la collection",
+		"collectionVisibilityDescription": "Choisir qui peut voir cette collection",
+		"collectionVisibilityPrivate": "Privé",
+		"collectionVisibilityPrivateDescription": "Seulement vous pouvez voir cette collection",
+		"collectionVisibilityPublic": "Public",
+		"collectionVisibilityPublicDescription": "Tout le monde peut voir cette collection"
 	},
 	"auth": {
 		"invalidEmail": "Veuillez entrer une adresse e-mail valide",

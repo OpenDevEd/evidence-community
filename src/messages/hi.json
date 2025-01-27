@@ -63,7 +63,18 @@
 		"login": "लॉग इन",
 		"register": "रजिस्टर",
 		"continueWithGoogle": "गूगल के साथ जारी रखें",
-		"or": "या"
+		"or": "या",
+		"skipToContent": "सामग्री छोड़ें",
+		"skipToFooter": "फ़ुटर पर जाएं",
+		"collectionDescription": "एक संग्रह आप एक साथ रखना चाहते हैं वे संसाधन हैं।",
+		"collectionName": "संग्रह का नाम",
+		"collectionDescriptionDescription": "संग्रह का वर्णन",
+		"collectionVisibility": "संग्रह की दृश्यता",
+		"collectionVisibilityDescription": "इस संग्रह को किस दर्शक को देखने का विकल्प दें",
+		"collectionVisibilityPrivate": "छुपा",
+		"collectionVisibilityPrivateDescription": "केवल आप इस संग्रह को देख सकते हैं",
+		"collectionVisibilityPublic": "सार्वजनिक",
+		"collectionVisibilityPublicDescription": "हर कोई इस संग्रह को देख सकता है"
 	},
 	"auth": {
 		"invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

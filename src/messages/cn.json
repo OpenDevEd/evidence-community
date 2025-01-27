@@ -63,7 +63,18 @@
 		"login": "登录",
 		"register": "注册",
 		"continueWithGoogle": "使用 Google 继续",
-		"or": "或"
+		"or": "或",
+		"skipToContent": "跳到内容",
+		"skipToFooter": "跳到底部",
+		"collectionDescription": "收藏集是您想要一起保存的资源组。",
+		"collectionName": "收藏集名称",
+		"collectionDescriptionDescription": "收藏集描述",
+		"collectionVisibility": "收藏集可见性",
+		"collectionVisibilityDescription": "选择谁可以查看此收藏集",
+		"collectionVisibilityPrivate": "私密",
+		"collectionVisibilityPrivateDescription": "只有您可以查看此收藏集",
+		"collectionVisibilityPublic": "公开",
+		"collectionVisibilityPublicDescription": "任何人都可以查看此收藏集"
 	},
 	"auth": {
 		"invalidEmail": "请输入有效的电子邮件地址",
@@ -95,7 +106,16 @@
 		"exportAsPlainText": "导出为 .txt",
 		"delete": "删除",
 		"history": "历史记录",
-		"rateLimitedMessage": "您已达到速率限制。请稍后再试。"
+		"rateLimitedMessage": "您已达到速率限制。请稍后再试。",
+		"collectionDescription": "收藏集是您想要一起保存的资源组。",
+		"collectionName": "收藏集名称",
+		"collectionDescriptionDescription": "收藏集描述",
+		"collectionVisibility": "收藏集可见性",
+		"collectionVisibilityDescription": "选择谁可以查看此收藏集",
+		"collectionVisibilityPrivate": "私密",
+		"collectionVisibilityPrivateDescription": "只有您可以查看此收藏集",
+		"collectionVisibilityPublic": "公开",
+		"collectionVisibilityPublicDescription": "任何人都可以查看此收藏集"
 	},
 	"sorts": {
 		"desc": "最新",

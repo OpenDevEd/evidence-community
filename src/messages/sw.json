@@ -64,7 +64,18 @@
 		"login": "Ingia",
 		"register": "Jisajili",
 		"continueWithGoogle": "Endelea na Google",
-		"or": "Au"
+		"or": "Au",
+		"skipToContent": "Pasa kwa maelezo",
+		"skipToFooter": "Pasa kwa mwisho",
+		"collectionDescription": "Makusanyo ni kumpa vyanzo vilivyotengenezwa kwa kukusanya pamoja.",
+		"collectionName": "Jina la Makusanyo",
+		"collectionDescriptionDescription": "Maelezo ya Makusanyo",
+		"collectionVisibility": "Uwezo wa Makusanyo",
+		"collectionVisibilityDescription": "Chagua nani anapaswa kuona makusanyo hii",
+		"collectionVisibilityPrivate": "Private",
+		"collectionVisibilityPrivateDescription": "Hunaweza kuona makusanyo hii",
+		"collectionVisibilityPublic": "Public",
+		"collectionVisibilityPublicDescription": "Kila mtu anapaswa kuona makusanyo hii"
 	},
 	"auth": {
 		"invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

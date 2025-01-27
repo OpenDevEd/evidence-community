@@ -63,7 +63,18 @@
 		"login": "تسجيل الدخول",
 		"register": "التسجيل",
 		"continueWithGoogle": "المتابعة بالجوجل",
-		"or": "أو"
+		"or": "أو",
+		"skipToContent": "تخطي إلى المحتوى",
+		"skipToFooter": "تخطي إلى الأسفل",
+		"collectionDescription": "مجموعة من المصادر التي تريد الاحتفاظ بها معًا.",
+		"collectionName": "اسم المجموعة",
+		"collectionDescriptionDescription": "وصف المجموعة",
+		"collectionVisibility": "عرض المجموعة",
+		"collectionVisibilityDescription": "اختر من يمكنه عرض هذه المجموعة",
+		"collectionVisibilityPrivate": "عامة",
+		"collectionVisibilityPrivateDescription": "فقط يمكنك عرض هذه المجموعة",
+		"collectionVisibilityPublic": "عامة",
+		"collectionVisibilityPublicDescription": "يمكن أن يرى أي شخص هذه المجموعة"
 	},
 	"auth": {
 		"invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
