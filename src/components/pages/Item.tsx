@@ -33,6 +33,7 @@ import { buildHierarchy } from "@/lib/collections";
 import { Collection } from "@/app/api/collections/types";
 import { CollectionsRow } from "@/lib/items";
 import { ItemsGetResponse } from "@/app/api/items/types";
+import PageContainer from "../layout/PageContainer";
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ai");
@@ -189,7 +190,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 	}, [data?.item?.collectionsData]);
 
 	return (
-		<main className="w-full max-w-[96rem] px-4 xl:px-14 flex flex-col gap-4">
+		<PageContainer className="flex flex-col gap-4">
 			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
 				{data?.item && <ItemControls itemData={data?.item} router={router} loading={loading} />}
 				<div className="flex flex-col gap-8 p-4 xl:p-10">
@@ -263,6 +264,6 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 					</div>
 				</div>
 			)}
-		</main>
+		</PageContainer>
 	);
 }

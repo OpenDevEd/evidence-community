@@ -55,6 +55,7 @@ import { SCOPE_OPTIONS } from "@/constants/items";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import useSWR from "swr";
 import { IconType } from "react-icons/lib";
+import PageContainer from "../layout/PageContainer";
 
 function Pen() {
 	return (
@@ -606,7 +607,7 @@ export default function Profile({
 	);
 
 	return (
-		<div className="w-full max-w-[96rem] px-4 xl:px-14 flex gap-[40px] items-start">
+		<PageContainer className="flex gap-[40px] items-start">
 			<CreateCollectionModal
 				onClose={onClose}
 				isOpen={isOpen}
@@ -718,6 +719,6 @@ export default function Profile({
 					collectionId={selectedCollection}
 				/>
 			</div>
-		</div>
+		</PageContainer>
 	);
 }

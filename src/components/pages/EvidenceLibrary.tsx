@@ -39,6 +39,7 @@ import { HiOutlineViewList } from "react-icons/hi";
 import { BiHelpCircle } from "react-icons/bi";
 import { twMerge } from "tailwind-merge";
 import { useLocalStorage } from "usehooks-ts";
+import PageContainer from "../layout/PageContainer";
 
 function DropDownIcon({Icon, className}: {Icon: any, className?: string}) {
 	return (
@@ -484,10 +485,10 @@ export default function EvidenceLibrary({
 	searchParams: { [key: string]: any };
 }) {
 	return (
-		<main className="w-full max-w-[96rem] px-4 xl:px-14">
+		<PageContainer>
 			<div className="flex gap-[40px] flex-col xl:flex-row">
 				<MainContent searchParams={searchParams} />
 			</div>
-		</main>
+		</PageContainer>
 	);
 }
