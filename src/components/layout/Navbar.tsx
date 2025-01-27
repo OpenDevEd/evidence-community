@@ -1,7 +1,13 @@
 "use client";
 
 import Image from "next/image";
-import { localesNames, routing, shortLocalesNames, usePathname, useRouter } from "@/i18n/routing";
+import {
+	localesNames,
+	routing,
+	shortLocalesNames,
+	usePathname,
+	useRouter,
+} from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
 import { links, NAVBAR_ICONS } from "@/constants/links";
 import { useTheme } from "next-themes";
@@ -61,14 +67,21 @@ function ThemeSwitcher({
 				"h-6 w-6 rounded-lg",
 				isMobile ? "xl:hidden block w-full" : "xl:block hidden"
 			)}
-			
 		>
-			<Button className="flex items-center justify-center gap-2 !w-full" variant="invisible" onPress={() => {
-				setTheme(theme === "dark" ? "light" : "dark");
-			}}>
+			<li>
+				<Button
+					className="flex items-center justify-center gap-2 !w-full"
+					variant="invisible"
+					onPress={() => {
+						setTheme(theme === "dark" ? "light" : "dark");
+					}}
+					aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+				>
 					{[IoMdSunny, HiOutlineMoon].map((Icon, index) => (
 						<Icon
+							suppressHydrationWarning
 							key={index}
+							aria-hidden={["dark", "light"].indexOf(theme ?? "light") !== index}
 							className={twMerge(
 								"size-5 xl:size-6 cursor-pointer select-none active:scale-95 transition-all",
 								"dark:stroke-accent fill-accent dark:fill-none",
@@ -81,7 +94,9 @@ function ThemeSwitcher({
 						<span className="text-sm text-accent">
 							{["dark", "light"].map((themeToMatch) => (
 								<span
+									suppressHydrationWarning
 									key={themeToMatch}
+									aria-hidden={themeToMatch !== theme}
 									className={twMerge(
 										themeToMatch === "dark"
 											? "dark:hidden"
@@ -93,7 +108,8 @@ function ThemeSwitcher({
 							))}
 						</span>
 					)}
-			</Button>
+				</Button>
+			</li>
 		</Skeleton>
 	);
 }
@@ -101,7 +117,7 @@ function ThemeSwitcher({
 function Logo({ interactive = true }: { interactive?: boolean }) {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const status = useStatus();
-
+	const { theme } = useTheme();
 	const logoContent = (
 		<div
 			className={twMerge(
@@ -112,20 +128,22 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 		>
 			{["dark", "light"].map((themeToMatch) => (
 				<Image
+					suppressHydrationWarning
 					key={themeToMatch}
+					aria-hidden={themeToMatch !== theme}
 					onLoad={() => setIsLoaded(true)}
 					src={
 						themeToMatch === "dark"
 							? `/logos/${status?.companyName?.toLowerCase()}/logo.png`
 							: `/logos/${status?.companyName?.toLowerCase()}/logo_light.png`
 					}
-					alt="logo"
 					className={twMerge(
 						"pointer-events-none",
 						themeToMatch === "light"
 							? "dark:hidden"
 							: "hidden dark:block"
 					)}
+					alt={`${status?.companyName} full company logo with text in ${themeToMatch} mode`}
 					height={40}
 					width={171}
 				/>
@@ -168,7 +186,7 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 	}, [timeoutRef, onOpen]);
 
 	return (
-		<div
+		<li
 			onMouseEnter={clearTimeoutOpen}
 			onMouseLeave={debouncedOnClose}
 			className={twMerge(
@@ -185,17 +203,18 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 					style === "wide" && "uppercase font-base"
 				)}
 			>
-				{link.icon && (
-					Object.entries(NAVBAR_ICONS).filter(([key]) => key === link.icon).map(([key, Value]) => (
-						<Value
-							key={key}
-							className={twMerge(
-								"fill-current size-6 shrink-0",
-								style === "wide" && "size-5"
-							)}
-						/>
-					))
-				)}
+				{link.icon &&
+					Object.entries(NAVBAR_ICONS)
+						.filter(([key]) => key === link.icon)
+						.map(([key, Value]) => (
+							<Value
+								key={key}
+								className={twMerge(
+									"fill-current size-6 shrink-0",
+									style === "wide" && "size-5"
+								)}
+							/>
+						))}
 				<span className="line-clamp-1">{t(link.label)}</span>
 			</Link>
 			{link.dropdown && (
@@ -206,9 +225,13 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 					offset={12}
 				>
 					<DropdownTrigger>
-						<div className="relative">
+						<Button
+							variant="invisible"
+							className="relative text-current dark:text-current"
+							aria-label={`${link.label} dropdown`}
+						>
 							<ChevronDownIcon className="size-4" />
-						</div>
+						</Button>
 					</DropdownTrigger>
 					<DropdownMenu
 						itemClasses={{
@@ -224,7 +247,7 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 					</DropdownMenu>
 				</Dropdown>
 			)}
-		</div>
+		</li>
 	);
 }
 
@@ -240,9 +263,9 @@ function LinksList({
 	const links: LinkObject[] = status.links || [];
 
 	return (
-		<div
+		<ul
 			className={twMerge(
-				"flex flex-1 items-center justify-end gap-6",
+				"flex items-center justify-end gap-6",
 				isMobile && "flex-col gap-8",
 				!isMobile && "hidden xl:flex"
 			)}
@@ -253,7 +276,7 @@ function LinksList({
 						<LinkItem link={link} pathname={pathname} key={index} />
 					)
 			)}
-		</div>
+		</ul>
 	);
 }
 
@@ -267,15 +290,19 @@ function LanguageSwitcher({ className }: { className?: string }) {
 			<DropdownTrigger
 				className={twMerge("cursor-pointer select-none", className)}
 			>
-				<div
+				<li
 					data-style={style}
 					className="relative flex items-center gap-2 data-[style=wide]:uppercase"
 				>
 					<span className="text-lg font-medium">
-						{shortLocalesNames[locale as keyof typeof shortLocalesNames]}
+						{
+							shortLocalesNames[
+								locale as keyof typeof shortLocalesNames
+							]
+						}
 					</span>
 					<ChevronDownIcon className="size-4" />
-				</div>
+				</li>
 			</DropdownTrigger>
 			<DropdownMenu
 				onAction={(locale) => {
@@ -300,7 +327,7 @@ function UserButton() {
 	return (
 		<Dropdown>
 			<DropdownTrigger>
-				<Avatar src={session?.user?.image ?? ""} />
+				<Avatar src={session?.user?.image ?? ""} alt={`${session?.user?.name || session?.user?.email || "User"}'s avatar`} />
 			</DropdownTrigger>
 			<DropdownMenu
 				onAction={(key) => {
@@ -472,7 +499,7 @@ export default function Navbar() {
 	}, []);
 
 	return (
-		<nav
+		<header
 			className={twMerge(
 				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0",
 				style === "wide" && "bg-white dark:bg-secondary max-w-none"
@@ -486,13 +513,19 @@ export default function Navbar() {
 				)}
 			>
 				<Logo />
-				<LinksList pathname={pathname} />
-				<LanguageSwitcher className="!hidden xl:!flex" />
-				<ThemeSwitcher
-					theme={theme}
-					setTheme={setTheme}
-					isMounted={isMounted}
-				/>
+				<nav className="flex-1">
+					<LinksList pathname={pathname} />
+				</nav>
+				<nav>
+					<ul className="flex items-center gap-4">
+						<LanguageSwitcher className="!hidden xl:!flex" />
+						<ThemeSwitcher
+							theme={theme}
+							setTheme={setTheme}
+							isMounted={isMounted}
+						/>
+					</ul>
+				</nav>
 				<LoginModal
 					isOpen={isLoginModalOpen}
 					onOpenChange={onLoginModalOpenChange}
@@ -501,17 +534,22 @@ export default function Navbar() {
 				{!session ? (
 					isLoginEnabled && (
 						<Button
-							startContent={<IoIosLogIn className="size-5 shrink-0" />}
+							startContent={
+								<IoIosLogIn className="size-5 shrink-0" />
+							}
 							color={"accent"}
 							className={twMerge(
 								"h-full xl:min-w-0 xl:pl-4",
-								style === "small" && "!p-0 rounded-full !size-10"
+								style === "small" &&
+									"!p-0 rounded-full !size-10"
 							)}
 							onPress={onLoginModalOpen}
 							isIconOnly={style === "small"}
+							aria-label={"Login/Register button"}
 						>
 							{style === "wide" ? t("login") : ""}
-					</Button>)
+						</Button>
+					)
 				) : (
 					<UserButton />
 				)}
@@ -528,18 +566,20 @@ export default function Navbar() {
 							transition={{ duration: 0.15 }}
 							className="xl:hidden block ml-auto rtl:ml-0 rtl:mr-auto"
 						>
-							<Button variant="invisible" onPress={() => {
-								setIsMobileMenuOpen(!isMobileMenuOpen)
-							}}>
-								<Icon
-									className="size-8 !fill-accent !stroke-accent cursor-pointer transition-transform active:scale-80 delay-0"
-								/>
+							<Button
+								variant="invisible"
+								aria-label={"Open hamburger menu"}
+								onPress={() => {
+									setIsMobileMenuOpen(!isMobileMenuOpen);
+								}}
+							>
+								<Icon className="size-8 !fill-accent !stroke-accent cursor-pointer transition-transform active:scale-80 delay-0" />
 							</Button>
 						</motion.div>
 					))}
 				</AnimatePresence>
 			</div>
-			<div
+			<ul
 				className={twMerge(
 					"xl:hidden bg-[#EAE9E5] dark:bg-secondary-400 rounded-2xl rounded-t-none relative duration-300 overflow-y-hidden -z-10 flex flex-col gap-8",
 					isMobileMenuOpen
@@ -547,7 +587,9 @@ export default function Navbar() {
 						: "max-h-0 opacity-0"
 				)}
 			>
-				<LinksList pathname={pathname} isMobile={true} />
+				<li>
+					<LinksList pathname={pathname} isMobile={true} />
+				</li>
 				<LanguageSwitcher className="w-full flex justify-center" />
 				<ThemeSwitcher
 					theme={theme}
@@ -555,7 +597,7 @@ export default function Navbar() {
 					isMounted={isMounted}
 					isMobile={true}
 				/>
-			</div>
-		</nav>
+			</ul>
+		</header>
 	);
 }
