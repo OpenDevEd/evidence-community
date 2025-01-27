@@ -30,6 +30,7 @@ export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, o
             isIconOnly
             variant="transparent"
             className="xl:px-0 px-0 translate-x-2"
+            aria-label={"Close this popup"}
             startContent={
               <LuX className="size-6 text-black dark:text-white/80" />
             }

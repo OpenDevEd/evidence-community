@@ -128,6 +128,7 @@ export default function CollectionCategory({
 								/>
 							}
 							onPress={() => setExpanded(!expanded)}
+							aria-label={`${collection.name} ${expanded ? "see less" : "see more"} button`}
 						>
 							{expanded ? t("seeLess") : t("seeMore")}
 						</Button>

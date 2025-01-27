@@ -483,6 +483,7 @@ export default function ItemControls({
 									startContent={
 										<BsThreeDots className="size-5" />
 									}
+									aria-label={"More options dropdown"}
 								></Button>
 							</DropdownTrigger>
 							<DropdownMenu

@@ -160,6 +160,8 @@ function LoadingScreen({
 						>
 							{["dark", "light"].map((themeToMatch) => (
 								<Image
+									suppressHydrationWarning
+									aria-hidden={themeToMatch !== theme}
 									key={themeToMatch}
 									src={
 										themeToMatch === "dark"
@@ -172,7 +174,7 @@ function LoadingScreen({
 											? "dark:hidden"
 											: "hidden dark:block"
 									)}
-									alt="logo"
+									alt={`${statusTable?.companyName} logo in ${themeToMatch} mode`}
 									width={171}
 									height={40}
 								/>

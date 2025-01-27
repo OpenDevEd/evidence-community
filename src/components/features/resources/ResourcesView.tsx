@@ -139,6 +139,8 @@ function FilterChips({
 					className="w-7 flex justify-end"
 				>
 					<Button
+aria-hidden={collections?.length == 0}
+						aria-label={"Clear all filters"}
 						onPress={() => {
 							handleCheckboxChange?.("");
 						}}

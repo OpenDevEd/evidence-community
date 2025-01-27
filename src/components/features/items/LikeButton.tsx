@@ -45,6 +45,7 @@ const LikeButton = forwardRef<
       size="sm"
       onPress={handleLike}
       className={twMerge(className)}
+      aria-label={`${isLiked ? "Remove from Bookmarks" : "Bookmark"}`}
     >
       {!isLiked ? <BsBookmarkFill /> : <BsBookmarkCheckFill />}
     </Button>

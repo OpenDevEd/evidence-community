@@ -33,6 +33,7 @@ export default function UserCollection({
 			)}
 			onPress={onPress}
 			isDisabled={isLoading}
+			aria-label={`${collection?.name} collection button`}
 		>
 			{!!collection && (
 				<div className="flex flex-col items-start justify-start w-full h-full gap-1">

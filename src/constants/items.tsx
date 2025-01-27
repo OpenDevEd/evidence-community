@@ -7,7 +7,7 @@ import { twMerge } from "tailwind-merge";
 const InstitutionLogo = ({ src, alt, className, ...props }: { src: string; alt: string; className?: string } & React.ComponentProps<typeof Image>) => (
 	<Image
 		src={src}
-		alt={alt}
+		alt={`${alt} institution logo`}
 		width={24}
 		height={24}
 		className={twMerge("size-6 object-contain dark:bg-white/80 p-0.5 rounded-md", className)}
@@ -16,7 +16,7 @@ const InstitutionLogo = ({ src, alt, className, ...props }: { src: string; alt: 
 );
 
 const OpenDevLogo = ({ className, ...props }: { className: string } & React.HTMLAttributes<HTMLDivElement>) => (
-	<div className={twMerge("flex justify-center items-center dark:bg-white/80 text-accent p-0.5 rounded-md size-6", className)} {...props}>
+	<div aria-label="Open Development & Education institution logo" className={twMerge("flex justify-center items-center dark:bg-white/80 text-accent p-0.5 rounded-md size-6", className)} {...props}>
 		<AboutUs className="fill-current size-full" />
 	</div>
 );

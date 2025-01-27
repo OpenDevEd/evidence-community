@@ -176,13 +176,13 @@ function CreateCollectionModal({
 							<Input
 								autoComplete="off"
 								autoFocus
-								label="Name"
+								label={t("collectionName")}
 								name="name"
 								placeholder="Collection Name"
 							/>
 							<Textarea
 								autoComplete="off"
-								label="Description"
+								label={t("collectionDescriptionDescription")}
 								name="description"
 								color="secondary"
 								placeholder="Collection Description"
@@ -190,7 +190,7 @@ function CreateCollectionModal({
 							<Select
 								name="private"
 								placement="left"
-								label="Visibility"
+								label={t("collectionVisibility")}
 								color="tertiary"
 								className="min-w-full"
 								items={COLLECTION_VISIBILITY_OPTIONS}
@@ -621,7 +621,7 @@ export default function Profile({
 							{displayData.image ? (
 								<Image
 									src={displayData.image}
-									alt={displayData.name ?? "Profile Picture"}
+									alt={`${displayData.name ?? displayData.email}'s profile picture`}
 									width={256}
 									height={256}
 									objectFit="cover"

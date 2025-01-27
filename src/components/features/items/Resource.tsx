@@ -86,7 +86,7 @@ function AddButton({
 						</ModalBody>
 					</ModalContent>
 				</AIModal>
-				<Button isIconOnly size="sm" onPress={onOpen}>
+				<Button isIconOnly size="sm" onPress={onOpen} aria-label={"Add Resource to Collection"}>
 					<BsPlus className="size-5" />
 				</Button>
 			</>

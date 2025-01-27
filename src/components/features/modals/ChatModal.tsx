@@ -192,6 +192,7 @@ export default function ChatModal({
 												type="submit"
 												isIconOnly
 												className="flex items-center justify-center h-full aspect-square !p-0"
+												aria-label={"Send message"}
 											>
 												{isLoading ? (
 													<ImSpinner8 className="animate-spin" />

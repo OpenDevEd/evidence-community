@@ -59,6 +59,7 @@ const CopyButton = forwardRef<
 			onPress={handleCopy}
 			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square xl:aspect-auto xl:px-3", classNames?.button, className)}
 			isIconOnly={isIconOnly}
+			aria-label={`${isCopied ? textOnCopy || t("copied") : text || t("copy")}`}
 		>
 			{!isIconOnly && <span className={twMerge(shrinkOnMobile && "hidden xl:block", classNames?.text)}>
 				{isCopied ? textOnCopy || t("copied") : text || t("copy")}

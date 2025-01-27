@@ -41,7 +41,7 @@ import { twMerge } from "tailwind-merge";
 import { useLocalStorage } from "usehooks-ts";
 import PageContainer from "../layout/PageContainer";
 
-function DropDownIcon({Icon, className}: {Icon: any, className?: string}) {
+function DropDownIcon({ Icon, className }: { Icon: any; className?: string }) {
 	return (
 		<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
 			<Icon className={twMerge("w-full h-full", className)} />
@@ -113,29 +113,30 @@ export function ContentInteractions({
 
 	const SortComponent = useMemo(() => {
 		return (
-			<Select
-				startContent={<DropDownIcon Icon={FaSort} />}
-				selectedKeys={sort && [sort]}
-				onSelectionChange={onSortChange}
-				items={SORT_OPTIONS}
-				selectorIcon={<div className="hidden"></div>}
-				classNames={
-					handleCheckboxChange
-						? {
-								mainWrapper: "h-full",
-								base: "flex-1 max-w-full xl:max-w-56 shrink-0",
-						  }
-						: {}
-				}
-			>
-				{(item: any) => {
-					return (
-						<SelectItem key={item.key}>
-							{tSorts(item.key)}
-						</SelectItem>
-					);
-				}}
-			</Select>
+				<Select
+					startContent={<DropDownIcon Icon={FaSort} />}
+					selectedKeys={sort && [sort]}
+					onSelectionChange={onSortChange}
+					items={SORT_OPTIONS}
+					aria-label={"Sort by"}
+					selectorIcon={<div className="hidden"></div>}
+					classNames={
+						handleCheckboxChange
+							? {
+									mainWrapper: "h-full",
+									base: "flex-1 max-w-full xl:max-w-56 shrink-0",
+							  }
+							: {}
+					}
+				>
+					{(item: any) => {
+						return (
+							<SelectItem key={item.key}>
+								{tSorts(item.key)}
+							</SelectItem>
+						);
+					}}
+				</Select>
 		);
 	}, [sort, onSortChange, handleCheckboxChange]);
 
@@ -147,6 +148,7 @@ export function ContentInteractions({
 				selectedKeys={scope && [scope]}
 				onSelectionChange={onScopeChange}
 				items={SCOPE_OPTIONS}
+				aria-label={"Search scope"}
 				selectorIcon={<div className="hidden"></div>}
 				classNames={
 					handleCheckboxChange
@@ -208,6 +210,7 @@ export function ContentInteractions({
 												startContent={
 													<LuX className="size-6 text-black dark:text-white/80" />
 												}
+												aria-label={"Close this popup"}
 											/>
 										</ModalHeader>
 										{handleCheckboxChange && (
@@ -242,6 +245,7 @@ export function ContentInteractions({
 									className="h-full font-medium text-base !p-0"
 									isIconOnly
 									onPress={onHelpOpen}
+									aria-label={"Help"}
 								>
 									<BiHelpCircle className="size-6" />
 								</Button>
@@ -255,7 +259,7 @@ export function ContentInteractions({
 					</div>
 				</div>
 			)}
-			<div className="flex flex-col xl:flex-row gap-4">
+			<section role="search" className="flex flex-col xl:flex-row gap-4">
 				<Input
 					autoComplete="false"
 					defaultValue={search}
@@ -273,8 +277,8 @@ export function ContentInteractions({
 				/>
 				{ScopeComponent}
 				{!handleCheckboxChange && SortComponent}
-			</div>
-			<div className="flex justify-between h-10 xl:h-12 gap-4">
+			</section>
+			<section className="flex justify-between h-10 xl:h-12 gap-4">
 				<Skeleton
 					isLoaded={!!data}
 					className="flex items-center flex-1 rounded-2xl"
@@ -297,10 +301,15 @@ export function ContentInteractions({
 									</span>
 								),
 							})}
-					{isItemsFetching && <Spinner size="sm" className="opacity-60 ltr:ml-2 rtl:mr-2" />}
+						{isItemsFetching && (
+							<Spinner
+								size="sm"
+								className="opacity-60 ltr:ml-2 rtl:mr-2"
+							/>
+						)}
 					</h2>
 				</Skeleton>
-				<div className="xl:min-w-72 flex gap-4">
+				<section className="xl:min-w-72 flex gap-4">
 					<Card className="h-full flex items-center justify-center flex-1 min-w-0 px-0">
 						<div className="px-3">
 							<Switch
@@ -321,6 +330,7 @@ export function ContentInteractions({
 							isIconOnly
 							className="!p-0 rounded-r-none flex-1"
 							onPress={() => setView("list")}
+							aria-label={"View as list"}
 						>
 							<HiOutlineViewList className="size-6" />
 						</Button>
@@ -329,12 +339,13 @@ export function ContentInteractions({
 							isIconOnly
 							className="!p-0 rounded-l-none flex-1"
 							onPress={() => setView("grid")}
+							aria-label={"View as grid"}
 						>
 							<IoGrid className="size-4" />
 						</Button>
 					</div>
-				</div>
-			</div>
+				</section>
+			</section>
 		</>
 	);
 }
@@ -408,19 +419,15 @@ function MainContent({
 		error: itemsError,
 		isLoading: isItemsLoading,
 		isValidating: isItemsFetching,
-	} = useSWR<ItemsGetResponse>(
-		itemsURL,
-		fetcher,
-		{
-			keepPreviousData: true,
-			onSuccess: (data) => {
-				if (data.totalPages < queryParams.page) {
-					handlePageChange(data.totalPages);
-				}
-				setLastFetchedData(data);
-			},
-		}
-	);
+	} = useSWR<ItemsGetResponse>(itemsURL, fetcher, {
+		keepPreviousData: true,
+		onSuccess: (data) => {
+			if (data.totalPages < queryParams.page) {
+				handlePageChange(data.totalPages);
+			}
+			setLastFetchedData(data);
+		},
+	});
 
 	if (fetchedItemsData) {
 		itemsCache.current = fetchedItemsData;
