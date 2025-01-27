@@ -4,7 +4,6 @@ import { LuX } from "react-icons/lu";
 import { SectionTitle } from "@/components/typography/SectionTitle";
 import { twMerge } from "tailwind-merge";
 
-
 export default function GenericHeader({ onClose, children, startContent, classNames }: { onClose: () => void, children?: React.ReactNode, startContent?: React.ReactNode, classNames?: { base?: string, title?: string, titleSpan?: string, button?: string, buttonIcon?: string } }) {
 	return (
 		<ModalHeader className={twMerge("flex items-center justify-between gap-2", classNames?.base)}>

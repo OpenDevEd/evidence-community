@@ -139,7 +139,7 @@ function FilterChips({
 					className="w-7 flex justify-end"
 				>
 					<Button
-aria-hidden={collections?.length == 0}
+						aria-hidden={collections?.length == 0}
 						aria-label={"Clear all filters"}
 						onPress={() => {
 							handleCheckboxChange?.("");
@@ -179,7 +179,7 @@ function ResourcesList({
 
 	return (
 		<>
-			<div className={twMerge("gap-6 -mt-4", (view === "list" || actuallyNoData) ? "flex flex-col" : "grid grid-cols-2")}>
+			<ul className={twMerge("gap-6 -mt-4", (view === "list" || actuallyNoData) ? "flex flex-col" : "grid grid-cols-2")}>
 				{actuallyNoData ? (
 					<div className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
 						{t("noResourcesFound")}
@@ -198,7 +198,7 @@ function ResourcesList({
 							)
 					)
 				)}
-			</div>
+			</ul>
 		</>
 	);
 }
@@ -323,7 +323,7 @@ export function ResourcesView({
 	const { status } = useContext(CacheContext) as CacheContextType;
 
     return (
-        <div className="w-full flex flex-col gap-4">
+        <section className="w-full flex flex-col gap-4">
             <ContentInteractions
                 header={header}
                 sort={sort}
@@ -378,6 +378,6 @@ export function ResourcesView({
 					minute: "2-digit",
 				}) })}
             </div>
-        </div>
+        </section>
     );
 } 
