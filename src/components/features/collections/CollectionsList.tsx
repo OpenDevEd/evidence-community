@@ -194,7 +194,7 @@ export default function CollectionsList({
 	}, [range]);
 
 	return (
-		<div
+		<aside
 			className={twMerge(
 				"w-full xl:w-[28.5rem] shrink-0 z-20",
 				isModal ? "block" : "hidden xl:block"
@@ -205,7 +205,7 @@ export default function CollectionsList({
 				className="w-full data-[collections=true]:xl:min-h-screen rounded-2xl"
 				isLoaded={!!data && !!facetDistribution}
 			>
-				<div className="w-full bg-black/[4%] dark:bg-secondary rounded-t-2xl last:rounded-b-2xl flex flex-col gap-4 p-6">
+				<section className="w-full bg-black/[4%] dark:bg-secondary rounded-t-2xl last:rounded-b-2xl flex flex-col gap-4 p-6">
 					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 						<span>{t("publicationYear")}</span>
 						<div className="flex gap-4 items-center flex-1 justify-end">
@@ -287,17 +287,20 @@ export default function CollectionsList({
 							)}
 						</AnimatePresence>
 					</div>
-				</div>
+				</section>
+				<section className="w-full">
+
 				{isCollectionsEnabled && (
 					<InnerCollectionList
-						data={data}
-						facetDistribution={facetDistribution}
-						handleCheckboxChange={handleCheckboxChange}
-						selectedCollections={selectedCollections}
-						hierarchy={hierarchy}
+					data={data}
+					facetDistribution={facetDistribution}
+					handleCheckboxChange={handleCheckboxChange}
+					selectedCollections={selectedCollections}
+					hierarchy={hierarchy}
 					/>
 				)}
+				</section>
 			</Skeleton>
-		</div>
+		</aside>
 	);
 }
