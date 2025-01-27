@@ -25,15 +25,18 @@ export default function ResourceData({
 			)}
 		>
 			{startContent}
-			{React.createElement(element || 'span', {
-				dateTime: datetime,
-				className: twMerge(
-					"text-black/60 dark:text-white/60 font-medium text-lg line-clamp-1",
-					classNames?.text,
-					!text && "!w-24"
-				),
-				children: text
-			})}
+			{React.createElement(
+				element || 'span',
+				{
+					dateTime: datetime,
+					className: twMerge(
+						"text-black/60 dark:text-white/60 font-medium text-lg line-clamp-1",
+						classNames?.text,
+						!text && "!w-24"
+					)
+				},
+				text
+			)}
 		</div>
 	);
 }
