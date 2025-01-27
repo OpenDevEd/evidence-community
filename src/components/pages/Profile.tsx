@@ -132,6 +132,7 @@ function CreateCollectionModal({
 		exit: { height: 0, opacity: 0, y: 0, marginTop: -12 },
 	});
 	const { trigger } = useSWRMutation(`/user/collections`, setter);
+	const t = useTranslations("ui");
 
 	const handleSubmit = async (e: any) => {
 		e.preventDefault();
@@ -161,13 +162,12 @@ function CreateCollectionModal({
 		<AIModal size="sm" isOpen={isOpen} onOpenChange={onOpenChange}>
 			<ModalContent className={errorClassName}>
 				<GenericHeader onClose={onClose}>
-					Create Collection
+					{t("createCollection")}
 				</GenericHeader>
 				<ModalBody className="pb-6 pt-0">
 					<div ref={containerRef} className="flex flex-col w-full">
 						<p className="text-sm text-black/60 dark:text-white/60 mb-6 text-center">
-							A collection is a group of resources that you want
-							to keep together.
+							{t("collectionDescription")}
 						</p>
 						<form
 							onSubmit={handleSubmit}
@@ -178,14 +178,14 @@ function CreateCollectionModal({
 								autoFocus
 								label={t("collectionName")}
 								name="name"
-								placeholder="Collection Name"
+								placeholder={t("collectionName")}
 							/>
 							<Textarea
 								autoComplete="off"
 								label={t("collectionDescriptionDescription")}
 								name="description"
 								color="secondary"
-								placeholder="Collection Description"
+								placeholder={t("collectionDescriptionDescription")}
 							/>
 							<Select
 								name="private"
@@ -193,7 +193,10 @@ function CreateCollectionModal({
 								label={t("collectionVisibility")}
 								color="tertiary"
 								className="min-w-full"
-								items={COLLECTION_VISIBILITY_OPTIONS}
+								items={COLLECTION_VISIBILITY_OPTIONS.map((item) => ({
+									...item,
+									name: t("collectionVisibility"+item.name),
+								}))}
 								disallowEmptySelection
 								defaultSelectedKeys={[
 									COLLECTION_VISIBILITY_OPTIONS[0].key,
@@ -214,7 +217,7 @@ function CreateCollectionModal({
 								type="submit"
 								isLoading={loading}
 							>
-								Create
+								{t("createCollection")}
 							</Button>
 						</form>
 					</div>
