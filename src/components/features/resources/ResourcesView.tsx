@@ -131,12 +131,13 @@ function FilterChips({
 				)}
 			</div>
 			<AnimatePresence initial={false}>
-				<motion.div
-					initial={{ opacity: 0, y: 10 }}
-					animate={{ opacity: 1, y: 0 }}
-					exit={{ opacity: 0, y: -10 }}
-					transition={{ duration: 0.2 }}
-					className="w-7 flex justify-end"
+				{collections && collections.length > 0 && (
+					<motion.div
+						initial={{ opacity: 0, y: 10 }}
+						animate={{ opacity: 1, y: 0 }}
+						exit={{ opacity: 0, y: -10 }}
+						transition={{ duration: 0.2 }}
+						className="w-7 flex justify-end"
 				>
 					<Button
 						aria-hidden={collections?.length == 0}
@@ -151,8 +152,9 @@ function FilterChips({
 						className="h-7 w-7 min-w-7"
 					>
 						<FaTrash className="text-white size-3" />
-					</Button>
-				</motion.div>
+						</Button>
+					</motion.div>
+				)}
 			</AnimatePresence>
 		</div>
 	);
