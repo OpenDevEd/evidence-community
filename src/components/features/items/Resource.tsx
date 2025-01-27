@@ -139,7 +139,10 @@ function ResourceInteractions({
 					)}
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
 						<AddButton itemData={itemData} userData={userData} />
-						<LikeButton itemData={itemData} revalidateResults={revalidateResults}/>
+						<LikeButton
+							itemData={itemData}
+							revalidateResults={revalidateResults}
+						/>
 						<CopyButton
 							itemData={itemData}
 							text={t("copyLink")}
@@ -200,15 +203,12 @@ export default function Resource({
 	}, [href, router, itemData?.key]);
 
 	return (
-		<div className="@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col">
+		<li className="@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col">
 			<Link
 				href={href}
-				className="p-4 @[720px]:p-6 flex flex-col gap-4 hover:brightness-90 transition-all flex-1"
+				className="p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1"
 				onMouseDown={(e) => {
-					const url = new URL(
-						href,
-						window.location.href
-					);
+					const url = new URL(href, window.location.href);
 					if (
 						url.origin === window.location.origin &&
 						e.button === 0 &&
@@ -222,59 +222,63 @@ export default function Resource({
 					}
 				}}
 			>
-				<Skeleton
-					isLoaded={!isLoading}
-					className="w-full min-h-8 rounded-2xl"
-				>
-					<h1 className="capitalize text-2xl text-black/80 dark:text-white/80 line-clamp-2">
-						{itemData?.title}
-					</h1>
-				</Skeleton>
-				<Skeleton
-					isLoaded={!isLoading}
-					className="w-full min-h-8 rounded-2xl"
-				>
-					<div className="flex w-full gap-2 items-center flex-wrap">
-						<ResourceAuthors itemData={itemData} />
-						<ResourceDivider />
-						{itemData?.date &&
-							!isNaN(new Date(itemData.date).getTime()) && (
-								<>
-									<ResourceData
-										text={format.dateTime(
-											new Date(itemData.date),
-											{
-												dateStyle: "medium",
-											}
-										)}
-										classNames={{
-											text: "text-black/60 dark:text-white/60 font-normal",
-										}}
-									/>
-									<ResourceDivider />
-								</>
-							)}
-
-						{itemData?.tags?.includes("_comingsoon") && (
-							<div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full @[720px]:w-auto text-center">
-								{t("inProgress")}
-							</div>
-						)}
-					</div>
-				</Skeleton>
-				{abstract && (abstractText || !itemData) && (
+				<article className="flex flex-col gap-4">
 					<Skeleton
 						isLoaded={!isLoading}
-						className={twMerge(
-							"w-full min-h-0 rounded-2xl ",
-							!itemData ? "min-h-20" : "min-h-0"
-						)}
+						className="w-full min-h-8 rounded-2xl"
 					>
-						<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full break-all">
-							{abstractText}
-						</p>
+						<h2 className="capitalize text-2xl text-black/80 dark:text-white/80 line-clamp-2">
+							{itemData?.title}
+						</h2>
 					</Skeleton>
-				)}
+					<Skeleton
+						isLoaded={!isLoading}
+						className="w-full min-h-8 rounded-2xl"
+					>
+						<div className="flex w-full gap-2 items-center flex-wrap">
+							<ResourceAuthors itemData={itemData} />
+							<ResourceDivider />
+							{itemData?.date &&
+								!isNaN(new Date(itemData.date).getTime()) && (
+									<>
+										<ResourceData
+											element="time"
+											datetime={new Date(itemData.date).toISOString()}
+											text={format.dateTime(
+												new Date(itemData.date),
+												{
+													dateStyle: "medium",
+												}
+											)}
+											classNames={{
+												text: "text-black/60 dark:text-white/60 font-normal",
+											}}
+										/>
+										<ResourceDivider />
+									</>
+								)}
+
+							{itemData?.tags?.includes("_comingsoon") && (
+								<div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full @[720px]:w-auto text-center">
+									{t("inProgress")}
+								</div>
+							)}
+						</div>
+					</Skeleton>
+					{abstract && (abstractText || !itemData) && (
+						<Skeleton
+							isLoaded={!isLoading}
+							className={twMerge(
+								"w-full min-h-0 rounded-2xl ",
+								!itemData ? "min-h-20" : "min-h-0"
+							)}
+						>
+							<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full break-all">
+								{abstractText}
+							</p>
+						</Skeleton>
+					)}
+				</article>
 			</Link>
 			<ResourceInteractions
 				itemData={itemData}
@@ -282,6 +286,6 @@ export default function Resource({
 				userData={userData}
 				revalidateResults={revalidateResults}
 			/>
-		</div>
+		</li>
 	);
 }
