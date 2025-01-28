@@ -27,23 +27,43 @@ import { Session } from "next-auth";
 import { useStatus } from "@/context/Providers";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 
-function AddButton({
+export function AddButton({
 	itemData,
 	userData,
+	revalidateResults,
+	collectionId,
 }: {
 	itemData: Item | undefined;
 	userData?: Session["user"];
+	revalidateResults?: any;
+	collectionId?: string;
 }) {
+
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const [loading, setLoading] = useState(false);
 	const { trigger } = useSWRMutation(`/user/item/${itemData?.key}`, setter);
 	const { data: session, update } = useSession();
 	const t = useTranslations("ui");
-	const onCollectionSelect = async (collectionId: string) => {
+	const highlightedCollections = Object.keys(
+		itemData
+			? session?.user
+					.itemsCollections[
+					itemData.key
+			  ] ?? {}
+			: {}
+	)
+	const onCollectionSelect = async (pressedCollectionId: string) => {
 		setLoading(true);
 		try {
-			await trigger({ collectionId });
-			await update();
+			const willClose = pressedCollectionId === collectionId && highlightedCollections.includes(pressedCollectionId);
+			await trigger({ collectionId: pressedCollectionId });
+			await Promise.allSettled([
+				revalidateResults && revalidateResults(),
+				update(),
+			]);
+			if (willClose) {
+				onClose();
+			}
 		} catch (error) {
 			console.error(error);
 		} finally {
@@ -67,14 +87,7 @@ function AddButton({
 								<div className="flex flex-col gap-4">
 									<CollectionsList
 										isLoading={loading}
-										highlightedCollections={Object.keys(
-											itemData
-												? session?.user
-														.itemsCollections[
-														itemData.key
-												  ] ?? {}
-												: {}
-										)}
+										highlightedCollections={highlightedCollections}
 										data={session?.user}
 										classNames={{
 											container: "grid-cols-2 gap-3",
@@ -86,7 +99,12 @@ function AddButton({
 						</ModalBody>
 					</ModalContent>
 				</AIModal>
-				<Button isIconOnly size="sm" onPress={onOpen} aria-label={"Add Resource to Collection"}>
+				<Button
+					isIconOnly
+					size="sm"
+					onPress={onOpen}
+					aria-label={"Add Resource to Collection"}
+				>
 					<BsPlus className="size-5" />
 				</Button>
 			</>
@@ -107,11 +125,13 @@ function ResourceInteractions({
 	isLoading,
 	userData,
 	revalidateResults,
+	collectionId,
 }: {
 	itemData: Item | undefined;
 	isLoading: boolean;
 	userData?: Session["user"];
 	revalidateResults?: any;
+	collectionId?: string;
 }) {
 	const t = useTranslations("ui");
 	const { data } = useSession();
@@ -138,7 +158,12 @@ function ResourceInteractions({
 						</NextUILink>
 					)}
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
-						<AddButton itemData={itemData} userData={userData} />
+						<AddButton
+							itemData={itemData}
+							userData={userData}
+							revalidateResults={revalidateResults}
+							collectionId={collectionId}
+						/>
 						<LikeButton
 							itemData={itemData}
 							revalidateResults={revalidateResults}
@@ -165,12 +190,14 @@ export default function Resource({
 	isLoading,
 	userData,
 	revalidateResults,
+	collectionId,
 }: {
 	itemData: Item | undefined;
 	abstract: boolean;
 	isLoading: boolean;
 	userData?: Session["user"];
 	revalidateResults?: any;
+	collectionId?: string;
 }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
@@ -243,7 +270,9 @@ export default function Resource({
 									<>
 										<ResourceData
 											element="time"
-											datetime={new Date(itemData.date).toISOString()}
+											datetime={new Date(
+												itemData.date
+											).toISOString()}
 											text={format.dateTime(
 												new Date(itemData.date),
 												{
@@ -285,6 +314,7 @@ export default function Resource({
 				isLoading={isLoading}
 				userData={userData}
 				revalidateResults={revalidateResults}
+				collectionId={collectionId}
 			/>
 		</li>
 	);

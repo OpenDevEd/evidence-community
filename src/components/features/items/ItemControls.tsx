@@ -37,6 +37,7 @@ import { useLocalStorage } from "usehooks-ts";
 import { SiZotero } from "react-icons/si";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFeatureFlagEnabled } from "@/context/Providers";
+import { AddButton } from "./Resource";
 
 type Interaction =
 	| "readDocument"
@@ -46,7 +47,8 @@ type Interaction =
 	| "preferences"
 	| "like"
 	| "openInZotero"
-	| "viewOnZotero";
+	| "viewOnZotero"
+	| "add";
 
 type ButtonConfig = {
 	key: Interaction;
@@ -55,7 +57,8 @@ type ButtonConfig = {
 		| typeof CopyButton
 		| typeof LikeButton
 		| typeof DownloadButton
-		| typeof PreferencesButton;
+		| typeof PreferencesButton
+		| typeof AddButton;
 	label: string;
 	props: Record<string, any>;
 	hideFromDropdown?: boolean;
@@ -304,6 +307,7 @@ export default function ItemControls({
 		like: null,
 		openInZotero: null,
 		viewOnZotero: null,
+		add: null,
 	});
 
 	const isPrintingEnabled = useFeatureFlagEnabled("print-button");
@@ -385,6 +389,15 @@ export default function ItemControls({
 					text: t("copyLink"),
 					textOnCopy: t("linkCopied"),
 					startContent: <FaClipboard className="size-5" />,
+				},
+			},
+			{
+				key: "add",
+				Component: AddButton,
+				label: "",
+				hideFromDropdown: true,
+				props: {
+					itemData: itemData,
 				},
 			},
 			{

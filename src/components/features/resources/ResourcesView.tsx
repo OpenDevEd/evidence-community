@@ -167,6 +167,7 @@ function ResourcesList({
 	abstract,
 	view,
 	revalidateResults,
+	collectionId,
 }: {
 	data: ItemsGetResponse | undefined;
 	error: any;
@@ -174,6 +175,7 @@ function ResourcesList({
 	abstract: boolean;
 	view: string;
 	revalidateResults?: any;
+	collectionId?: string;
 }) {
 	const t = useTranslations("ui");
 	const actuallyNoData =
@@ -196,6 +198,7 @@ function ResourcesList({
 									abstract={abstract}
 									isLoading={isLoading}
 									revalidateResults={revalidateResults}
+									collectionId={collectionId}
 								/>
 							)
 					)
@@ -362,6 +365,7 @@ export function ResourcesView({
                 abstract={abstract}
 				view={view}
 				revalidateResults={revalidateResults}
+				collectionId={searchParams?.collectionId}
             />
             <PaginationControls
                 page={pageNumber}
