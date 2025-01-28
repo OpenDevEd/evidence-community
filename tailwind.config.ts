@@ -169,6 +169,10 @@ const config: Config = {
       colors: {
         ...colors,
       },
+      screens: {
+        print: { raw: 'print' },
+        screen: { raw: 'screen' },
+      },
     },
   },
   darkMode: "class",
