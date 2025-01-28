@@ -18,7 +18,7 @@ export default function ResourceData({
 	datetime?: string;
 }) {
 	return (
-		<div
+		<span
 			className={twMerge(
 				"flex gap-2 items-center",
 				classNames?.container
@@ -37,6 +37,6 @@ export default function ResourceData({
 				},
 				text
 			)}
-		</div>
+		</span>
 	);
 }

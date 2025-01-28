@@ -3,11 +3,12 @@ import { twMerge } from "tailwind-merge";
 import type { Item } from "@/app/api/item/types";
 import { useFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
-
+import React from "react";
 export default function ItemRow({ item, row, router, value, customRowName, loading }: { item: Item; row?: string; router: ReturnType<typeof useRouter>, value?: any, customRowName?: string, loading: boolean }) {
 	const t = useTranslations();
 	const formatter = useFormatter();
 	const originalValue = value ?? item[row as keyof Item];
+	let element = "div";
 	const rowValue: any = (() => {
 		switch (true) {
 			case !!customRowName:
@@ -15,6 +16,7 @@ export default function ItemRow({ item, row, router, value, customRowName, loadi
 			case !!valueFormatter[row as keyof typeof valueFormatter]:
 				return valueFormatter[row as keyof typeof valueFormatter]!({value: originalValue, item, formatter, t, router, loading});
 			case !!originalValue:
+				element = "p"
 				return String(originalValue);
 			default:
 				return "N/A";
@@ -34,9 +36,10 @@ export default function ItemRow({ item, row, router, value, customRowName, loadi
 			>
 				{rowName || row}
 			</h3>
-			<div suppressHydrationWarning className="text-lg text-black/80 dark:text-white/80 font-medium break-words w-full">
-				{rowValue ? rowValue : "N/A"}
-			</div>
+			{React.createElement(element, {
+				suppressHydrationWarning: true,
+				className: "text-lg text-black/80 dark:text-white/80 font-medium break-words w-full"
+			}, rowValue ? rowValue : "N/A")}
 		</div>
 	);
 }

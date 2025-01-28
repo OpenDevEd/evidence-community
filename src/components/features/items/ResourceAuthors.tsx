@@ -21,14 +21,14 @@ export default function ResourceAuthors({
 
 	if (itemData && itemData.creators && itemData.creators.length > 0)
 		return (
-			<div className="max-w-64 truncate overflow-hidden">
+			<span className="max-w-64 truncate overflow-hidden">
 				{itemData?.creators
 					?.map((creator: any) => (creator.firstName || creator.lastName)
 						? [creator.firstName, creator.lastName].filter(Boolean).join(" ")
 						: creator.name || null
 					)
 					.join(", ")}
-			</div>
+			</span>
 		);
 
 	return null;

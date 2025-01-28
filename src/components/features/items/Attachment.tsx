@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Item } from "@/app/api/item/types";
-import { Skeleton } from "@nextui-org/react";
+import { Link, Skeleton } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import Image from "next/image";
 import { LuDownload } from "react-icons/lu";
@@ -30,12 +30,12 @@ export default function Attachment({ data }: { data: Item }) {
 	const canHover = loaded || !data?.PDFCoverPageImage;
 	const imageRef = useRef<HTMLImageElement>(null);
 	const imageHeight = imageRef.current?.height;
-	const parentRef = useRef<HTMLDivElement>(null);
+	const parentRef = useRef<HTMLLIElement>(null);
 	const parentHeight = parentRef.current?.clientHeight;
 	const t = useTranslations("ui");
 
 	return (
-		<div
+		<li
 			ref={parentRef}
 			className=" flex gap-4 bg-black/[4%] border-2 border-white/10 p-4 rounded-2xl relative w-full"
 			key={data.id}
@@ -71,7 +71,11 @@ export default function Attachment({ data }: { data: Item }) {
 				)}
 			</div>
 			<div className="flex flex-col gap-2 h-full xl:ltr:ml-52 xl:rtl:mr-52 ltr:ml-28 rtl:mr-28">
-				<h1 className="text-lg font-medium xl:line-clamp-none line-clamp-2">{data.filename}</h1>
+				<h4 className="text-lg font-medium xl:line-clamp-none line-clamp-2">
+					<Link href={data.url || ""} className="dark:text-current text-current break-all text-lg">
+						{data.filename}
+					</Link>
+				</h4>
 				<div className="flex gap-2">
 					<Button
 						size="sm"
@@ -98,6 +102,6 @@ export default function Attachment({ data }: { data: Item }) {
 					</Button>
 				</div>
 			</div>
-		</div>
+		</li>
 	);
 }

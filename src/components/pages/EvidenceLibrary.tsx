@@ -285,7 +285,7 @@ export function ContentInteractions({
 				>
 					<h2
 						suppressHydrationWarning
-						className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center gap-2"
+						className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center whitespace-pre"
 					>
 						{countLabel ||
 							t.rich("resourcesCount", {
@@ -297,14 +297,14 @@ export function ContentInteractions({
 										suppressHydrationWarning
 										className="text-2xl leading-6"
 									>
-										{chunks}
+										{chunks}{" "}
 									</span>
 								),
 							})}
 						{isItemsFetching && (
 							<Spinner
 								size="sm"
-								className="opacity-60 ltr:ml-2 rtl:mr-2"
+								className="opacity-60 ltr:ml-3 rtl:mr-3"
 							/>
 						)}
 					</h2>

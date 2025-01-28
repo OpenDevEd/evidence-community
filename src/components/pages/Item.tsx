@@ -83,7 +83,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 
 	return (
 		<motion.div
-			className="fixed bottom-0 right-0 z-40"
+			className="fixed bottom-0 right-0 z-40 print:hidden"
 			initial={{ opacity: 0, x: 100 }}
 			animate={{ opacity: 1, x: 0 }}
 		>
@@ -242,9 +242,9 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 			{isRelatedItemsEnabled && data?.item && (
 				<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden">
 					<div className="flex xl:flex-row flex-col xl:gap-8 gap-2">
-						<div className="text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-full shrink-0 rounded xl:p-10 p-4 pb-0">
+						<h3 className="text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-full shrink-0 rounded xl:p-10 p-4 pb-0">
 							{t("relatedItems")}
-						</div>
+						</h3>
 						<div className="w-full">
 							<Skeleton
 								isLoaded={!!embeddings}

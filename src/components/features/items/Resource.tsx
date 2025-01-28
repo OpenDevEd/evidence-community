@@ -227,15 +227,15 @@ export default function Resource({
 						isLoaded={!isLoading}
 						className="w-full min-h-8 rounded-2xl"
 					>
-						<h2 className="capitalize text-2xl text-black/80 dark:text-white/80 line-clamp-2">
+						<h3 className="capitalize text-2xl text-black/80 dark:text-white/80 line-clamp-2">
 							{itemData?.title}
-						</h2>
+						</h3>
 					</Skeleton>
 					<Skeleton
 						isLoaded={!isLoading}
 						className="w-full min-h-8 rounded-2xl"
 					>
-						<div className="flex w-full gap-2 items-center flex-wrap">
+						<div className="flex w-full gap-1 items-center flex-wrap">
 							<ResourceAuthors itemData={itemData} />
 							<ResourceDivider />
 							{itemData?.date &&
@@ -259,9 +259,9 @@ export default function Resource({
 								)}
 
 							{itemData?.tags?.includes("_comingsoon") && (
-								<div className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full @[720px]:w-auto text-center">
+								<span className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full @[720px]:w-auto text-center">
 									{t("inProgress")}
-								</div>
+								</span>
 							)}
 						</div>
 					</Skeleton>

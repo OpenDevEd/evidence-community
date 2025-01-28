@@ -13,6 +13,7 @@ import { useFeatureFlagEnabled } from "@/context/Providers";
 import { getExtraValues } from "./utils";
 import { buildHierarchy } from "./collections";
 import { Skeleton } from "@/components/nextui/Skeleton";
+import React from "react";
 
 type FormatterProps = {
 	value: any;
@@ -61,17 +62,18 @@ function formatDate({ value, formatter }: FormatterProps) {
 		}),
 	});
 
-	return returnedDate;
+	return <p>{returnedDate}</p>;
 }
 
 function Citation({ value, loading }: FormatterProps) {
 	const contentRef = useRef(null);
+	const sanitizedHtml = value.trim().replace(/<\/?div/g, '<p');
 	return (
 		<Skeleton isLoaded={true} className="w-fit h-fit rounded-2xl">
 			<div className="flex gap-4 w-full bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between break-all">
-				<div
+				<p
 					ref={contentRef}
-					dangerouslySetInnerHTML={{ __html: value.trim() }}
+					dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
 				/>
 				<CopyButton isIconOnly contentRef={contentRef} />
 			</div>
@@ -79,7 +81,7 @@ function Citation({ value, loading }: FormatterProps) {
 	);
 }
 
-function createRegexParser(wrappers: WrapperConfig[]) {
+function createRegexParser(wrappers: WrapperConfig[], tag: string = "p") {
 	const sortedWrappers = [...wrappers].sort(
 		(a, b) => (b.priority ?? 0) - (a.priority ?? 0)
 	);
@@ -161,7 +163,7 @@ function createRegexParser(wrappers: WrapperConfig[]) {
 			return result;
 		}, [allMatches, value]);
 
-		return <>{elements}</>;
+		return !tag ? <>{elements}</> : React.createElement(tag, {}, elements);
 	});
 }
 
@@ -254,11 +256,11 @@ export const valueFormatter: Record<
 	year: () => false,
 	collectionsAncestry: () => false,
 	fullNames: () => false,
-	itemType: ({ value, t }) => t("itemType." + value),
+	itemType: ({ value, t }) => <p>{t("itemType." + value)}</p>,
 	collections: () => false,
 	title: () => false,
 	note: ({ value }) => (
-		<div
+		<p
 			dangerouslySetInnerHTML={{ __html: value }}
 			className="text-lg text-black/80 dark:text-white/80 font-medium break-words w-full"
 		/>
@@ -277,20 +279,23 @@ export const valueFormatter: Record<
 					const { creatorType, ...rest } = creator;
 					return (
 						<li
-							className="flex gap-2 rtl:flex-row-reverse max-w-fit"
 							key={index}
 						>
-							<span className="font-medium text-accent">
-								{Object.values(rest).filter(Boolean).join(", ")}
-							</span>
-							<span
-								className={twMerge(
-									"text-black/80 dark:text-white/80 capitalize",
-									!creatorTypeLabel && "!text-red-500"
-								)}
-							>
-								({creatorTypeLabel || creator.creatorType})
-							</span>
+							<p className="space-x-1">
+								<span className="font-medium text-accent">
+									{Object.values(rest)
+										.filter(Boolean)
+										.join(", ")}
+								</span>
+								<span
+									className={twMerge(
+										"text-black/80 dark:text-white/80 capitalize",
+										!creatorTypeLabel && "!text-red-500"
+									)}
+								>
+									({creatorTypeLabel || creator.creatorType})
+								</span>
+							</p>
 						</li>
 					);
 				})}
@@ -318,13 +323,13 @@ export const valueFormatter: Record<
 		if (filteredValue.length === 0) return false;
 
 		return (
-			<div className="flex flex-col gap-2 xl:w-2/3 w-full">
+			<ul className="flex flex-col gap-2 xl:w-2/3 w-full">
 				{value
 					.filter((data: any) => data.PDFCoverPageImage)
 					.map((data: Item, index: number) => (
 						<Attachment data={data} key={index} />
 					))}
-			</div>
+			</ul>
 		);
 	},
 	extra: (args) => {
@@ -332,29 +337,36 @@ export const valueFormatter: Record<
 		const values = getExtraValues(finalValue);
 		const filteredValues = Array.from(values.entries());
 
+		const ExtraSpan = createRegexParser([
+			{ regex: doiRegex, Wrapper: DOIWrapper, priority: 1 },
+			{ regex: urlRegex, Wrapper: URLWrapper, priority: 2 },
+		], "span");
+
 		if (filteredValues.length === 0) return false;
 
 		return (
-			<div className="whitespace-pre-line space-y-2 bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl">
+			<ul className="whitespace-pre-line space-y-2 bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl">
 				{filteredValues.map(([key, value], index) => {
 					const formattedValue = formatDate({ ...args, value });
 					return (
-						<div key={index} className="flex flex-col gap-2 group">
-							<div className="break-all">
+						<li key={index} className="flex flex-col gap-2 group">
+							<div className="break-all flex gap-4">
+								<p className="flex-1">
+									<strong className="text-black/60 dark:text-white/60">{key}</strong>
+									<span className="whitespace-pre">{" "}</span>
+									<ExtraSpan value={value} />
+								</p>
 								<CopyButton
-									text={key}
+									isIconOnly
 									content={formattedValue}
-									className="inline-flex ltr:mr-2 rtl:ml-2"
+									className="shrink-0"
 								/>
-								<span>
-									<Extra value={value} />
-								</span>
 							</div>
 							<Divider className="my-2 group-last:hidden" />
-						</div>
+						</li>
 					);
 				})}
-			</div>
+			</ul>
 		);
 	},
 	citation: (args) => {
