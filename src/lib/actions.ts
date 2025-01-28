@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema/tables/user";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { eq, and, InferSelectModel } from "drizzle-orm";
-import { Session } from "next-auth";
+import { Session, User } from "next-auth";
 import { userToFollow } from "@/db/schema/tables/userToFollow";
 import { userCollection } from "@/db/schema/tables/userCollection";
 import { NextRequest } from "next/server";
@@ -51,7 +51,7 @@ export const createUser = async (email: string, password: string) => {
 };
 
 
-export async function authorize(props: z.infer<typeof credentialsSchema>) {
+export async function authorize(props: z.infer<typeof credentialsSchema>): Promise<{ error: string } | User> {
 	console.log("Authorizing credentials", props);
 
 	const parsedCredentials = credentialsSchema.safeParse(props);
@@ -62,7 +62,7 @@ export async function authorize(props: z.infer<typeof credentialsSchema>) {
 		const errorMessages = parsedCredentials.error.errors
 			.map(err => err.message)
 			.join(", ");
-		throw new Error(errorMessages);
+		return { error: errorMessages };
 	}
 
 	const { email, password, register } = parsedCredentials.data;
@@ -70,7 +70,7 @@ export async function authorize(props: z.infer<typeof credentialsSchema>) {
 	const existingUser = await getUser(email);
 
 	if (register && existingUser)
-		throw new Error("userAlreadyExists");
+		return { error: "userAlreadyExists" };
 
 	if (!existingUser && register)
 		return await createUser(email, password);
@@ -83,7 +83,7 @@ export async function authorize(props: z.infer<typeof credentialsSchema>) {
 		if (passwordsMatch) return existingUser;
 	}
 
-	throw new Error("invalidCredentials");
+	return { error: "invalidCredentials" };
 }
 
 export async function getItems(

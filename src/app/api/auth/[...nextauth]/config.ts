@@ -79,7 +79,11 @@ export const authOptions: NextAuthConfig = {
 			},
 			type: "credentials",
 			async authorize(credentials, req) {
-				return await authorize(credentials as z.infer<typeof credentialsSchema>);
+				const user = await authorize(credentials as z.infer<typeof credentialsSchema>);
+				if ("error" in user) {
+					return null;
+				}
+				return user;
 			},
 		}),
 	],

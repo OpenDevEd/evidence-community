@@ -12,11 +12,14 @@ export async function authenticate({
 }): Promise<{ error: string } | any> {
 	try {
 		const user = await authorize({ email, password, register });
+		if ("error" in user) {
+			return { error: user.error };
+		}
 		if (user) {
 			return signIn("credentials", {
 				email,
 				password,
-				register,
+				register: false,
 				redirect: false,
 			});
 		}
