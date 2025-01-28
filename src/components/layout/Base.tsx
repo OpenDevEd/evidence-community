@@ -53,18 +53,18 @@ export default async function Base({
 								style === "small" && "xl:pt-14"
 							)}
 						>
-							<Link
+							<a
 								href="#main-content"
 								className="p-4 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100"
 							>
 								{t("skipToContent")}
-							</Link>
-							<Link
+							</a>
+							<a
 								href="#footer"
 								className="p-4 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100"
 							>
 								{t("skipToFooter")}
-							</Link>
+							</a>
 							<Navbar />
 							{children}
 							<Footer />
