@@ -417,7 +417,7 @@ export default function ItemControls({
 	);
 
 	return (
-		<div className="flex justify-start gap-4 w-full bg-black/[4%] dark:bg-secondary p-4 rounded-t-2xl">
+		<div className="flex justify-start gap-4 w-full bg-black/[4%] dark:bg-secondary p-4 rounded-t-2xl print:hidden">
 			<Button
 				size="sm"
 				startContent={

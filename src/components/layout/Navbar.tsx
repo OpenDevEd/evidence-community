@@ -501,7 +501,7 @@ export default function Navbar() {
 	return (
 		<header
 			className={twMerge(
-				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0",
+				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden",
 				style === "wide" && "bg-white dark:bg-secondary max-w-none"
 			)}
 		>

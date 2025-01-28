@@ -82,7 +82,7 @@ export default function Footer() {
 	}, []);
 
 	return (
-		<footer id="footer" className="row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 xl:gap-14 py-12 xl:py-0">
+		<footer id="footer" className="row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 xl:gap-14 py-12 xl:py-0 print:hidden">
 			<div className="max-w-[96rem] px-14 flex w-full justify-between xl:items-start items-center flex-col gap-6 xl:gap-14 xl:flex-row">
 				<div className="flex flex-col gap-6 h-full items-center xl:items-start">
 					<Logo />
