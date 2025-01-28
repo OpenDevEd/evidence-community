@@ -204,7 +204,7 @@ function CollectionLevel({ collection }: { collection: Collection }) {
 	const href = `/lib?collections=${[...ancestry, collection.key].join(",")}`;
 
 	return (
-		<div className="flex flex-col">
+		<li className="flex flex-col">
 			<Link
 				showAnchorIcon
 				href={href}
@@ -215,12 +215,12 @@ function CollectionLevel({ collection }: { collection: Collection }) {
 					{collection.name}
 				</span>
 			</Link>
-			<div className="ml-8">
+			<ul className="ml-8">
 				{collection.children?.map((child) => (
 					<CollectionLevel key={child.id} collection={child} />
 				))}
-			</div>
-		</div>
+			</ul>
+		</li>
 	);
 }
 
