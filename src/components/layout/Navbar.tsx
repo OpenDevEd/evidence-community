@@ -393,7 +393,10 @@ function LoginModal({
 				password,
 				register: isRegister,
 			});
-			if (!displayOnError(result?.error ? tAuth(result?.error) : "")) {
+
+			const errors = (result?.error ? result.error.split(", ").map((error: string) => tAuth(error)) : []).join("\n");
+
+			if (!displayOnError(errors)) {
 				onClose();
 			}
 		} catch (error: any) {

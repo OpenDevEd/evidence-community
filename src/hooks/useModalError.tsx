@@ -62,7 +62,7 @@ export function useModalError({
 			>
 				<div className="p-2 grid grid-cols-[auto_1fr] gap-2">
 					<BiErrorCircle className="size-8 p-1 aspect-square bg-black/50 rounded-full" />
-					<span className="text-sm flex items-center">
+					<span className="text-sm flex items-center whitespace-pre-wrap">
 						{errorMessage}
 					</span>
 				</div>
