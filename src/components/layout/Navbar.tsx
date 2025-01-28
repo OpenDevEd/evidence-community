@@ -61,56 +61,59 @@ function ThemeSwitcher({
 	isMobile?: boolean;
 }) {
 	return (
-		<Skeleton
-			isLoaded={isMounted}
+		<li
 			className={twMerge(
 				"h-6 w-6 rounded-lg",
 				isMobile ? "xl:hidden block w-full" : "xl:block hidden"
 			)}
 		>
-			<li>
-				<Button
-					className="flex items-center justify-center gap-2 !w-full"
-					variant="invisible"
-					onPress={() => {
-						setTheme(theme === "dark" ? "light" : "dark");
-					}}
-					aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-				>
-					{[IoMdSunny, HiOutlineMoon].map((Icon, index) => (
-						<Icon
-							suppressHydrationWarning
-							key={index}
-							aria-hidden={["dark", "light"].indexOf(theme ?? "light") !== index}
-							className={twMerge(
-								"size-5 xl:size-6 cursor-pointer select-none active:scale-95 transition-all",
-								"dark:stroke-accent fill-accent dark:fill-none",
-								index === 0 && "dark:hidden",
-								index === 1 && "hidden dark:block"
-							)}
-						/>
-					))}
-					{isMobile && (
-						<span className="text-sm text-accent">
-							{["dark", "light"].map((themeToMatch) => (
-								<span
-									suppressHydrationWarning
-									key={themeToMatch}
-									aria-hidden={themeToMatch !== theme}
-									className={twMerge(
-										themeToMatch === "dark"
-											? "dark:hidden"
-											: "hidden dark:block"
-									)}
-								>
-									{`Switch to ${themeToMatch} mode`}
-								</span>
-							))}
-						</span>
-					)}
-				</Button>
-			</li>
-		</Skeleton>
+			<Button
+				className="flex items-center justify-center gap-2 !w-full"
+				variant="invisible"
+				disableRipple
+				onPress={() => {
+					setTheme(theme === "dark" ? "light" : "dark");
+				}}
+				aria-label={`Switch to ${
+					theme === "dark" ? "light" : "dark"
+				} mode`}
+			>
+				{[IoMdSunny, HiOutlineMoon].map((Icon, index) => (
+					<Icon
+						suppressHydrationWarning
+						key={index}
+						aria-hidden={
+							["dark", "light"].indexOf(theme ?? "light") !==
+							index
+						}
+						className={twMerge(
+							"size-5 xl:size-6 cursor-pointer select-none active:scale-95 transition-all",
+							"dark:stroke-accent fill-accent dark:fill-none",
+							index === 0 && "dark:hidden",
+							index === 1 && "hidden dark:block"
+						)}
+					/>
+				))}
+				{isMobile && (
+					<span className="text-sm text-accent">
+						{["dark", "light"].map((themeToMatch) => (
+							<span
+								suppressHydrationWarning
+								key={themeToMatch}
+								aria-hidden={themeToMatch !== theme}
+								className={twMerge(
+									themeToMatch === "dark"
+										? "dark:hidden"
+										: "hidden dark:block"
+								)}
+							>
+								{`Switch to ${themeToMatch} mode`}
+							</span>
+						))}
+					</span>
+				)}
+			</Button>
+		</li>
 	);
 }
 
@@ -286,22 +289,23 @@ function LanguageSwitcher({ className }: { className?: string }) {
 	const pathname = usePathname();
 
 	return (
-		<Dropdown>
+		<Dropdown >
 			<DropdownTrigger
 				className={twMerge("cursor-pointer select-none", className)}
 			>
 				<li
+					tabIndex={0}
 					data-style={style}
 					className="relative flex items-center gap-2 data-[style=wide]:uppercase"
 				>
-					<span className="text-lg font-medium">
-						{
-							shortLocalesNames[
-								locale as keyof typeof shortLocalesNames
-							]
-						}
-					</span>
-					<ChevronDownIcon className="size-4" />
+						<span className="text-lg font-medium">
+							{
+								shortLocalesNames[
+									locale as keyof typeof shortLocalesNames
+								]
+							}
+						</span>
+						<ChevronDownIcon className="size-4" />
 				</li>
 			</DropdownTrigger>
 			<DropdownMenu
@@ -327,7 +331,12 @@ function UserButton() {
 	return (
 		<Dropdown>
 			<DropdownTrigger>
-				<Avatar src={session?.user?.image ?? ""} alt={`${session?.user?.name || session?.user?.email || "User"}'s avatar`} />
+				<Avatar
+					src={session?.user?.image ?? ""}
+					alt={`${
+						session?.user?.name || session?.user?.email || "User"
+					}'s avatar`}
+				/>
 			</DropdownTrigger>
 			<DropdownMenu
 				onAction={(key) => {
@@ -394,7 +403,13 @@ function LoginModal({
 				register: isRegister,
 			});
 
-			const errors = (result?.error ? result.error.split(", ").map((error: string) => tAuth(error)) : []).join("\n");
+			const errors = (
+				result?.error
+					? result.error
+							.split(", ")
+							.map((error: string) => tAuth(error))
+					: []
+			).join("\n");
 
 			if (!displayOnError(errors)) {
 				onClose();
