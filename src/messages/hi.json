@@ -74,7 +74,8 @@
 		"collectionVisibilityPrivate": "छुपा",
 		"collectionVisibilityPrivateDescription": "केवल आप इस संग्रह को देख सकते हैं",
 		"collectionVisibilityPublic": "सार्वजनिक",
-		"collectionVisibilityPublicDescription": "हर कोई इस संग्रह को देख सकता है"
+		"collectionVisibilityPublicDescription": "हर कोई इस संग्रह को देख सकता है",
+		"goToFilters": "फ़िल्टर पर जाएं"
 	},
 	"auth": {
 		"invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

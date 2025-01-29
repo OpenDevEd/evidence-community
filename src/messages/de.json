@@ -74,7 +74,8 @@
 		"collectionVisibilityPrivate": "Privat",
 		"collectionVisibilityPrivateDescription": "Nur Sie können diese Sammlung sehen",
 		"collectionVisibilityPublic": "Öffentlich",
-		"collectionVisibilityPublicDescription": "Jeder kann diese Sammlung sehen"
+		"collectionVisibilityPublicDescription": "Jeder kann diese Sammlung sehen",
+		"goToFilters": "Zu den Filtern gehen"
 	},
 	"auth": {
 		"invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

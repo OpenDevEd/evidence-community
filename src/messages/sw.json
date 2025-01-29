@@ -75,7 +75,8 @@
 		"collectionVisibilityPrivate": "Private",
 		"collectionVisibilityPrivateDescription": "Hunaweza kuona makusanyo hii",
 		"collectionVisibilityPublic": "Public",
-		"collectionVisibilityPublicDescription": "Kila mtu anapaswa kuona makusanyo hii"
+		"collectionVisibilityPublicDescription": "Kila mtu anapaswa kuona makusanyo hii",
+		"goToFilters": "Kuja kwenye vipengele"
 	},
 	"auth": {
 		"invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

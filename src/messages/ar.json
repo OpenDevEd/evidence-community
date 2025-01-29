@@ -74,7 +74,8 @@
 		"collectionVisibilityPrivate": "عامة",
 		"collectionVisibilityPrivateDescription": "فقط يمكنك عرض هذه المجموعة",
 		"collectionVisibilityPublic": "عامة",
-		"collectionVisibilityPublicDescription": "يمكن أن يرى أي شخص هذه المجموعة"
+		"collectionVisibilityPublicDescription": "يمكن أن يرى أي شخص هذه المجموعة",
+		"goToFilters": "الذهاب إلى التصفيات"
 	},
 	"auth": {
 		"invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

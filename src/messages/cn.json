@@ -74,7 +74,8 @@
 		"collectionVisibilityPrivate": "私密",
 		"collectionVisibilityPrivateDescription": "只有您可以查看此收藏集",
 		"collectionVisibilityPublic": "公开",
-		"collectionVisibilityPublicDescription": "任何人都可以查看此收藏集"
+		"collectionVisibilityPublicDescription": "任何人都可以查看此收藏集",
+		"goToFilters": "转到过滤器"
 	},
 	"auth": {
 		"invalidEmail": "请输入有效的电子邮件地址",
