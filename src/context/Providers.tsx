@@ -131,7 +131,7 @@ function LoadingScreen({
 	featureFlags: Set<string> | null;
 }) {
 	const { theme } = useTheme();
-	const { data: session } = useSession();
+	const { data: session, status } = useSession();
 	const statusTable = useStatus();
 
 	return (
