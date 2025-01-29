@@ -41,10 +41,10 @@ import { twMerge } from "tailwind-merge";
 import { useLocalStorage } from "usehooks-ts";
 import PageContainer from "../layout/PageContainer";
 
-function DropDownIcon({ Icon, className }: { Icon: any; className?: string }) {
+function DropDownIcon({ Icon, className, label }: { Icon: any; className?: string, label?: string }) {
 	return (
 		<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
-			<Icon className={twMerge("w-full h-full", className)} />
+			<Icon className={twMerge("w-full h-full", className)} aria-label={label} />
 		</div>
 	);
 }
@@ -114,7 +114,7 @@ export function ContentInteractions({
 	const SortComponent = useMemo(() => {
 		return (
 				<Select
-					startContent={<DropDownIcon Icon={FaSort} />}
+					startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
 					selectedKeys={sort && [sort]}
 					onSelectionChange={onSortChange}
 					items={SORT_OPTIONS}
@@ -143,7 +143,7 @@ export function ContentInteractions({
 	const ScopeComponent = useMemo(() => {
 		return (
 			<Select
-				startContent={<DropDownIcon Icon={GiArchiveResearch} />}
+				startContent={<DropDownIcon label="Scope icon" Icon={GiArchiveResearch} />}
 				color="tertiary"
 				selectedKeys={scope && [scope]}
 				onSelectionChange={onScopeChange}
