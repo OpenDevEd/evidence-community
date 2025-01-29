@@ -288,7 +288,7 @@ export default function Resource({
 								)}
 
 							{itemData?.tags?.includes("_comingsoon") && (
-								<span className="bg-accent rounded-lg px-4 py-1 text-white/80 font-medium w-full @[720px]:w-auto text-center">
+								<span className="bg-black/10 border border-accent rounded-lg px-4 py-1 text-accent font-medium w-full @[720px]:w-auto text-center">
 									{t("inProgress")}
 								</span>
 							)}
