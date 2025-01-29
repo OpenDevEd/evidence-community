@@ -48,7 +48,7 @@ export default function CollectionHierarchy({
 					<div className="">
 						{collectionData.name}
 						{!isSelected && (
-							<span className="opacity-75 ltr:ml-1 rtl:mr-1">
+							<span className="dark:opacity-75 ltr:ml-1 rtl:mr-1">
 								(
 								{facetDistribution?.collectionsAncestry[
 									collectionData.key
@@ -57,7 +57,7 @@ export default function CollectionHierarchy({
 							</span>
 						)}
 						{hasChildren && (
-							<div className="opacity-75 ltr:ml-2 rtl:mr-2 inline-block translate-y-0.5">
+							<div className="dark:opacity-75 ltr:ml-2 rtl:mr-2 inline-block translate-y-0.5">
 								<IoIosArrowDown className="size-4" />
 							</div>
 						)}
