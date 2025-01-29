@@ -125,7 +125,7 @@ export default function Footer() {
 					}
 				/>
 				<div className="flex flex-col h-full gap-6 w-full xl:w-auto">
-					<FooterFieldColumn
+					{false &&<FooterFieldColumn
 						title={t("stayConnected")}
 						content={
 							<div className="flex mt-6 gap-8">
@@ -136,7 +136,7 @@ export default function Footer() {
 								))}
 							</div>
 						}
-					/>
+					/>}
 					<FooterFieldColumn
 						title={t("contactUs")}
 						content={
