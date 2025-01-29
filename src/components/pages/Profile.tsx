@@ -610,7 +610,7 @@ export default function Profile({
 	);
 
 	return (
-		<PageContainer className="flex gap-[40px] items-start">
+		<PageContainer id="main-content" className="flex gap-[40px] items-start">
 			<CreateCollectionModal
 				onClose={onClose}
 				isOpen={isOpen}

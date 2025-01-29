@@ -506,7 +506,7 @@ export default function EvidenceLibrary({
 	searchParams: { [key: string]: any };
 }) {
 	return (
-		<PageContainer id="">
+		<PageContainer>
 			<div className="flex gap-[40px] flex-col xl:flex-row">
 				<MainContent searchParams={searchParams} />
 			</div>
