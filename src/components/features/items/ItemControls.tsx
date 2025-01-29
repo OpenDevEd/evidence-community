@@ -232,9 +232,10 @@ function PreferencesModal({
 				>
 					{t("preferences")}
 				</GenericHeader>
-				<ModalBody className="p-6 pt-0 space-y-3">
+				<ModalBody className="p-6 pt-0">
+					<ul className="space-y-3">
 					{CONFIG_LABELS.map((configLabel: any, index: number) => (
-						<div key={index} className="flex flex-col gap-2">
+						<li key={index} className="flex flex-col gap-2">
 							<div
 								key={configLabel.key}
 								className="flex flex-col gap-2"
@@ -249,8 +250,9 @@ function PreferencesModal({
 									{t(`${configLabel.key}ToggleDescription`)}
 								</p>
 							</div>
-						</div>
+						</li>
 					))}
+</ul>
 				</ModalBody>
 			</ModalContent>
 		</AIModal>
