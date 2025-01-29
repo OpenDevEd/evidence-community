@@ -234,9 +234,9 @@ function PreferencesModal({
 				</GenericHeader>
 				<ModalBody className="p-6 pt-0">
 					<ul className="space-y-3">
-					{CONFIG_LABELS.map((configLabel: any, index: number) => (
-						<li key={index} className="flex flex-col gap-2">
-							<div
+						{CONFIG_LABELS.map((configLabel: any, index: number) => (
+							<li key={index} className="flex flex-col gap-2">
+								<div
 								key={configLabel.key}
 								className="flex flex-col gap-2"
 							>
@@ -249,10 +249,10 @@ function PreferencesModal({
 								<p className="text-sm text-black/80 dark:text-white/80">
 									{t(`${configLabel.key}ToggleDescription`)}
 								</p>
-							</div>
-						</li>
-					))}
-</ul>
+								</div>
+							</li>
+						))}
+					</ul>
 				</ModalBody>
 			</ModalContent>
 		</AIModal>
@@ -423,6 +423,7 @@ export default function ItemControls({
 					startContent: (
 						<PiSlidersHorizontalBold className="size-5" />
 					),
+					"aria-label": t("preferences"),
 					config,
 					setConfig,
 				},
