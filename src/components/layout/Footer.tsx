@@ -108,20 +108,22 @@ export default function Footer() {
 				<FooterFieldColumn
 					title={t("quickLinks")}
 					content={
-						<div className="flex flex-col gap-4 mt-6 items-center xl:items-start">
+						<ul className="flex flex-col gap-4 mt-6 items-center xl:items-start">
 							{links.map(
 								(link) =>
 									!link.footerExclude && (
-										<Link
-											href={link.href}
-											key={link.label}
-											className="text-black/60 dark:text-white/60 text-xl"
+										<li key={link.label}>
+											<Link
+												href={link.href}
+												key={link.label}
+												className="text-black/60 dark:text-white/60 text-xl"
 										>
-											{tNav(link.label)}
-										</Link>
+												{tNav(link.label)}
+											</Link>
+										</li>
 									)
 							)}
-						</div>
+						</ul>
 					}
 				/>
 				<div className="flex flex-col h-full gap-6 w-full xl:w-auto">
