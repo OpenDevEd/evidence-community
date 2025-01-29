@@ -375,7 +375,7 @@ export function ResourcesView({
                 isLoading={isItemsLoading}
             />
 		<ContentActions data={itemsData} queryParams={queryParams} params={params} searchParams={searchParams}/>
-            <div className="text-center xl:text-end text-black/40 dark:text-white/40 text-sm">
+            <div className="text-center xl:text-end text-black/60 dark:text-white/60 text-sm">
                 {t("lastUpdate", { date: format.dateTime(status.databaseUpdatedAt!, {
 					day: "2-digit",
 					month: "2-digit",
