@@ -212,6 +212,7 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 						.map(([key, Value]) => (
 							<Value
 								key={key}
+								aria-label={`Icon for ${t(link.label)} link`}
 								className={twMerge(
 									"fill-current size-6 shrink-0",
 									style === "wide" && "size-5"
@@ -545,7 +546,7 @@ export default function Navbar() {
 					<LinksList pathname={pathname} />
 				</nav>
 				<nav aria-label="Secondary navigation">
-					<ul className="flex items-center gap-4">
+					<ul className="flex items-center gap-3">
 						<LanguageSwitcher className="!hidden xl:!flex" />
 						<ThemeSwitcher
 							theme={theme}
