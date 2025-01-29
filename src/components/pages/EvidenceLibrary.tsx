@@ -177,9 +177,19 @@ export function ContentInteractions({
 	return (
 		<>
 			{(handleCheckboxChange || header) && (
-				<div className="flex w-full flex-col xl:flex-row xl:justify-between xl:items-end h-24 xl:h-12 gap-4">
+				<div className="flex w-full flex-col xl:flex-row xl:justify-between xl:items-end h-24 xl:h-12 gap-4 relative">
 					<h1 className="text-black dark:text-white/60 font-medium text-2xl xl:text-3xl w-full xl:w-auto h-10 xl:h-12 flex justify-between items-end">
-						{header || t("searchTitle")}
+						{header || (
+							<>
+								<a
+									href="#collections"
+									className="p-3 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100 bg-background_light dark:bg-background"
+								>
+									{t("goToFilters")}
+								</a>
+								{t("searchTitle")}
+							</>
+						)}
 						<Button
 							startContent={
 								<AiOutlineCompass className="size-6" />
@@ -496,7 +506,7 @@ export default function EvidenceLibrary({
 	searchParams: { [key: string]: any };
 }) {
 	return (
-		<PageContainer>
+		<PageContainer id="">
 			<div className="flex gap-[40px] flex-col xl:flex-row">
 				<MainContent searchParams={searchParams} />
 			</div>

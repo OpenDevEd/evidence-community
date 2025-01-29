@@ -195,6 +195,7 @@ export default function CollectionsList({
 
 	return (
 		<aside
+			id="collections"
 			aria-label="Filters and collections"
 			className={twMerge(
 				"w-full xl:w-[28.5rem] shrink-0 z-20",
