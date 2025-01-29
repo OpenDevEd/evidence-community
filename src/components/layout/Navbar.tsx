@@ -289,39 +289,49 @@ function LanguageSwitcher({ className }: { className?: string }) {
 	const pathname = usePathname();
 
 	return (
-		<Dropdown >
-			<DropdownTrigger
-				className={twMerge("cursor-pointer select-none", className)}
-			>
-				<li
-					tabIndex={0}
-					data-style={style}
-					className="relative flex items-center gap-2 data-[style=wide]:uppercase"
+		<li
+			data-style={style}
+			className="relative flex items-center gap-2 data-[style=wide]:uppercase"
+		>
+			<Dropdown>
+				<DropdownTrigger
+					className={twMerge("cursor-pointer select-none", className)}
 				>
-						<span className="text-lg font-medium">
+					<Button
+						variant="invisible"
+						tabIndex={0}
+						disableRipple
+						className="flex items-center gap-2 !px-2"
+					>
+						<div className="text-lg font-medium">
 							{
 								shortLocalesNames[
 									locale as keyof typeof shortLocalesNames
 								]
 							}
-						</span>
+						</div>
 						<ChevronDownIcon className="size-4" />
-				</li>
-			</DropdownTrigger>
-			<DropdownMenu
-				onAction={(locale) => {
-					router.push(pathname, { locale: locale as string });
-				}}
-			>
-				{routing.locales
-					.filter((currentLocale) => currentLocale !== locale)
-					.map((locale) => (
-						<DropdownItem key={locale}>
-							{localesNames[locale as keyof typeof localesNames]}
-						</DropdownItem>
-					))}
-			</DropdownMenu>
-		</Dropdown>
+					</Button>
+				</DropdownTrigger>
+				<DropdownMenu
+					onAction={(locale) => {
+						router.push(pathname, { locale: locale as string });
+					}}
+				>
+					{routing.locales
+						.filter((currentLocale) => currentLocale !== locale)
+						.map((locale) => (
+							<DropdownItem key={locale}>
+								{
+									localesNames[
+										locale as keyof typeof localesNames
+									]
+								}
+							</DropdownItem>
+						))}
+				</DropdownMenu>
+			</Dropdown>
+		</li>
 	);
 }
 
