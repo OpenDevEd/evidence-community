@@ -253,7 +253,7 @@ export function ContentInteractions({
 									onPress={onHelpOpen}
 									aria-label={"Help"}
 								>
-									<BiHelpCircle className="size-6" />
+									<BiHelpCircle aria-label="Help icon" className="size-6" />
 								</Button>
 								<HelpModal
 									isOpen={isHelpOpen}
