@@ -41,6 +41,9 @@ export default function CollectionHierarchy({
 					onValueChange={() => onCheckboxChange(collectionData.key)}
 					style={{ marginLeft: `${(level - 1) * 16}px` }}
 					className="collection"
+					classNames={{
+						label: "text-black/60 dark:text-white/60",
+					}}
 				>
 					<div className="">
 						{collectionData.name}
