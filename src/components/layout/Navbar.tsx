@@ -68,6 +68,7 @@ function ThemeSwitcher({
 			)}
 		>
 			<Button
+				suppressHydrationWarning
 				className="flex items-center justify-center gap-2 !w-full"
 				variant="invisible"
 				disableRipple
@@ -566,9 +567,8 @@ export default function Navbar() {
 							startContent={
 								<IoIosLogIn className="size-5 shrink-0" />
 							}
-							color={"accent"}
 							className={twMerge(
-								"h-full xl:min-w-0 xl:pl-4",
+								"h-full xl:min-w-0 xl:pl-4  text-accent dark:text-accent",
 								style === "small" &&
 									"!p-0 rounded-full !size-10"
 							)}
