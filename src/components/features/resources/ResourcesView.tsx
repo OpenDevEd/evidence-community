@@ -239,7 +239,7 @@ function ContentActions({ data, queryParams, params, searchParams }: { data: Ite
 				{t("printCitations", { count: format.number(totalItems) })}
 			</Button>
 			<Button
-				onClick={() => {
+				onPress={() => {
 					router.push({
 						pathname: pathName + "/atom.xml",
 						query: searchParams,
@@ -328,7 +328,7 @@ export function ResourcesView({
 	const { status } = useContext(CacheContext) as CacheContextType;
 
     return (
-        <section className="w-full flex flex-col gap-4">
+        <section id="main-content" className="w-full flex flex-col gap-4">
             <ContentInteractions
                 header={header}
                 sort={sort}
