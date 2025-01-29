@@ -262,15 +262,17 @@ function formatRange(range: string | null) {
 	const [start, end] = range.includes("-")
 		? range.split("-")
 		: [range, range];
-	const startYear = Number(start);
-	const endYear = Number(end);
+	const startYear = start ? Number(start) : null;
+	const endYear = end ? Number(end) : null;
 
-	if (isNaN(startYear) && isNaN(endYear)) return null;
-	if (startYear === endYear) return `year = ${startYear}`;
+	if ((startYear === null || isNaN(startYear)) && 
+		(endYear === null || isNaN(endYear))) return null;
+
+	if (startYear === endYear && startYear !== null) return `year = ${startYear}`;
 
 	return [
-		startYear > 0 && `year >= ${startYear}`,
-		endYear > 0 && `year <= ${endYear}`,
+		startYear !== null && startYear > 0 && `year >= ${startYear}`,
+		endYear !== null && endYear > 0 && `year <= ${endYear}`,
 	]
 		.filter(Boolean)
 		.join(" AND ");
@@ -323,6 +325,8 @@ export async function searchIndex(
 		const sortOption =
 			SORT_OPTIONS.find((option) => option.key === sort)?.sort ||
 			SORT_OPTIONS[0].sort;
+
+		console.log(formatRange(range));
 
 		const finalFilters = [
 			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
