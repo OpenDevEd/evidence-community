@@ -124,10 +124,13 @@ export function ContentInteractions({
 						handleCheckboxChange
 							? {
 									mainWrapper: "h-full",
-									base: "flex-1 max-w-full xl:max-w-56 shrink-0",
+									base: "flex-1 max-w-full xl:max-w-56 shrink-0 !mt-0",
+									label: "hidden"
 							  }
 							: {}
 					}
+					label={"Sort by"}
+					labelPlacement="outside"
 				>
 					{(item: any) => {
 						return (
@@ -153,11 +156,14 @@ export function ContentInteractions({
 				classNames={
 					handleCheckboxChange
 						? {
-								base: "xl:max-w-72 w-full max-w-full",
+								base: "xl:max-w-72 w-full max-w-full !mt-0",
 								mainWrapper: "h-10 xl:h-full",
+								label: "hidden"
 						  }
 						: {}
 				}
+				label={"Search scope"}
+				labelPlacement="outside"
 			>
 				{(item: any) => {
 					return (
