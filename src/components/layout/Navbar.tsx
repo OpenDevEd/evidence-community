@@ -537,14 +537,14 @@ export default function Navbar() {
 				className={twMerge(
 					"xl:h-[6.5rem] bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10",
 					style === "wide" &&
-						"bg-transparent max-w-[96rem] mx-auto xl:px-14 gap-9"
+						"bg-transparent max-w-[96rem] mx-auto xl:px-14 gap-6"
 				)}
 			>
 				<Logo />
-				<nav className="flex-1">
+				<nav aria-label="Main navigation" className="flex-1">
 					<LinksList pathname={pathname} />
 				</nav>
-				<nav>
+				<nav aria-label="Secondary navigation">
 					<ul className="flex items-center gap-4">
 						<LanguageSwitcher className="!hidden xl:!flex" />
 						<ThemeSwitcher
