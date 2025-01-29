@@ -338,7 +338,7 @@ export function ContentInteractions({
 							onPress={() => setView("list")}
 							aria-label={"View as list"}
 						>
-							<HiOutlineViewList className="size-6" />
+							<HiOutlineViewList aria-label="View as list" className="size-6" />
 						</Button>
 						<Button
 							color={view === "grid" ? "tertiary" : "secondary"}
@@ -347,7 +347,7 @@ export function ContentInteractions({
 							onPress={() => setView("grid")}
 							aria-label={"View as grid"}
 						>
-							<IoGrid className="size-4" />
+							<IoGrid aria-label="View as grid" className="size-4" />
 						</Button>
 					</div>
 				</section>
