@@ -267,7 +267,7 @@ export function ContentInteractions({
 			)}
 			<section role="search" className="flex flex-col xl:flex-row gap-4">
 				<Input
-					autoComplete="false"
+					autoCorrect="off"
 					defaultValue={search}
 					onChange={(e) => debouncedSearch(e.target.value)}
 					onClear={() => debouncedSearch("")}
@@ -278,7 +278,7 @@ export function ContentInteractions({
 					}}
 					isClearable
 					startContent={
-						<IoSearch className="size-6 fill-current text-black/60 dark:text-white/40" />
+						<IoSearch aria-label="Search icon" className="size-6 fill-current text-black/60 dark:text-white/40" />
 					}
 				/>
 				{ScopeComponent}
