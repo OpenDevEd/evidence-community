@@ -118,7 +118,6 @@ export function ContentInteractions({
 					selectedKeys={sort && [sort]}
 					onSelectionChange={onSortChange}
 					items={SORT_OPTIONS}
-					aria-label={"Sort by"}
 					selectorIcon={<div className="hidden"></div>}
 					classNames={
 						handleCheckboxChange
@@ -151,7 +150,6 @@ export function ContentInteractions({
 				selectedKeys={scope && [scope]}
 				onSelectionChange={onScopeChange}
 				items={SCOPE_OPTIONS}
-				aria-label={"Search scope"}
 				selectorIcon={<div className="hidden"></div>}
 				classNames={
 					handleCheckboxChange
