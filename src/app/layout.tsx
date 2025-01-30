@@ -10,7 +10,7 @@ export const viewport: Viewport = {
 	]
 }
 
-export async function generateMetadata() {
+export async function generateMetadata(): Promise<Metadata> {
 	const status = await getCachedStatus();
 
 	const companyName = status.companyName;
@@ -18,6 +18,9 @@ export async function generateMetadata() {
 	return {
 		title: `${companyName} - Evidence Library`,
 		description: `${companyName} - Evidence Library`,
+		viewport: {
+			userScalable: false
+		}
 	};
 }
 

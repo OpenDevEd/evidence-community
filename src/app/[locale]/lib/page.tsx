@@ -54,6 +54,9 @@ export async function libraryMetadata(props: {
         ...(parentResolved.icons?.other ?? []),
         ...appendedObject,
       ]
+    },
+    viewport: {
+      userScalable: false
     }
   }
 }
