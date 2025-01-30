@@ -319,10 +319,12 @@ export function ContentInteractions({
 								),
 							})}
 						{isItemsFetching && (
-							<Spinner
-								size="sm"
-								className="opacity-60 ltr:ml-3 rtl:mr-3"
-							/>
+							<div className="relative ltr:ml-3 rtl:mr-3 flex items-center">
+								<Spinner
+									size="sm"
+									className="opacity-60 absolute"
+								/>
+							</div>
 						)}
 					</h2>
 				</Skeleton>
