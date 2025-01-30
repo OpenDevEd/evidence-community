@@ -7,7 +7,7 @@ export const Textarea = extendVariants(NextUITextarea, {
 		color: {
 			secondary: {
 				inputWrapper:
-					"bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%]",
+					"bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
 				input: "placeholder:text-black/60 dark:placeholder:text-white/40",
 			},
 		},
