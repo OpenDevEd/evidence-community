@@ -1,6 +1,6 @@
 import { Modal, ModalProps } from "@nextui-org/react";
 
-export default function AIModal(props: ModalProps) {
+export default function FullScreenModal(props: ModalProps) {
 	return (
 		<Modal
 			backdrop="blur"
@@ -17,3 +17,4 @@ export default function AIModal(props: ModalProps) {
 		</Modal>
 	);
 }
+
