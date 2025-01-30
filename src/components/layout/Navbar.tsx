@@ -48,6 +48,7 @@ import { Router } from "next/router";
 import { useModalError } from "@/hooks/useModalError";
 import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
 import { LinkObject } from "@/db/schema/tables/status";
+import DialogModal from "../nextui/DialogModal";
 
 function ThemeSwitcher({
 	theme,
@@ -434,7 +435,7 @@ function LoginModal({
 	};
 
 	return (
-		<AIModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
+		<DialogModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
 			<ModalContent className={errorClassName}>
 				<GenericHeader onClose={onClose}>
 					<Logo interactive={false} />
@@ -506,7 +507,7 @@ function LoginModal({
 					</div>
 				</ModalBody>
 			</ModalContent>
-		</AIModal>
+		</DialogModal>
 	);
 }
 

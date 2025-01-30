@@ -28,7 +28,7 @@ import {
 import { BsThreeDots } from "react-icons/bs";
 import { FaClipboard } from "react-icons/fa";
 import LikeButton from "./LikeButton";
-import AIModal from "@/components/nextui/AIModal";
+import FullScreenModal from "@/components/nextui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
 import { ListModalBody } from "@/components/nextui/ListModalBody";
 import { convertItem } from "@/lib/actions";
@@ -38,6 +38,7 @@ import { SiZotero } from "react-icons/si";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { AddButton } from "./Resource";
+import DialogModal from "@/components/nextui/DialogModal";
 
 type Interaction =
 	| "readDocument"
@@ -93,7 +94,7 @@ export function DownloadModal({
 	const [loading, setLoading] = useState(false);
 
 	return (
-		<AIModal
+		<DialogModal
 			size="md"
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
@@ -147,7 +148,7 @@ export function DownloadModal({
 					]}
 				/>
 			</ModalContent>
-		</AIModal>
+		</DialogModal>
 	);
 }
 
@@ -217,7 +218,7 @@ function PreferencesModal({
 	const t = useTranslations("ui");
 
 	return (
-		<AIModal
+		<DialogModal
 			size="md"
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
@@ -255,7 +256,7 @@ function PreferencesModal({
 					</ul>
 				</ModalBody>
 			</ModalContent>
-		</AIModal>
+		</DialogModal>
 	);
 }
 

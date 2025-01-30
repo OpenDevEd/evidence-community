@@ -56,6 +56,9 @@ import { ItemsGetResponse } from "@/app/api/items/types";
 import useSWR from "swr";
 import { IconType } from "react-icons/lib";
 import PageContainer from "../layout/PageContainer";
+import { IoSearch } from "react-icons/io5";
+import { Autocomplete } from "../nextui/Autocomplete";
+import DialogModal from "../nextui/DialogModal";
 
 function Pen() {
 	return (
@@ -159,7 +162,7 @@ function CreateCollectionModal({
 	};
 
 	return (
-		<AIModal size="sm" isOpen={isOpen} onOpenChange={onOpenChange}>
+		<DialogModal isOpen={isOpen} onOpenChange={onOpenChange}>
 			<ModalContent className={errorClassName}>
 				<GenericHeader onClose={onClose}>
 					{t("createCollection")}
@@ -223,7 +226,7 @@ function CreateCollectionModal({
 					</div>
 				</ModalBody>
 			</ModalContent>
-		</AIModal>
+		</DialogModal>
 	);
 }
 

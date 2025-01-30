@@ -8,7 +8,7 @@ import {
 import { ModalContent } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import AIHeader from "../ai/AIHeader";
-import AIModal from "@/components/nextui/AIModal";
+import FullScreenModal from "@/components/nextui/FullScreenModal";
 import { useMemo, useRef, useState } from "react";
 import {
 	BiCopy,
@@ -74,7 +74,7 @@ export default function GenerativeModal({
 	}, [selectedHistoryItem, currentItem, content]);
 
 	return (
-		<AIModal
+		<FullScreenModal
 			className="max-w-6xl"
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
@@ -344,6 +344,6 @@ export default function GenerativeModal({
 					</>
 				)}
 			</ModalContent>
-		</AIModal>
+		</FullScreenModal>
 	);
 }

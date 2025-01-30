@@ -18,7 +18,7 @@ import { IoSend } from "react-icons/io5";
 import { useLocale, useTranslations } from "next-intl";
 import { Message, useChat } from "ai/react";
 import AIHeader from "../ai/AIHeader";
-import AIModal from "@/components/nextui/AIModal";
+import FullScreenModal from "@/components/nextui/FullScreenModal";
 import { models } from "@/constants/ai";
 import { AIMarkdown } from "../markdown/Markdown";
 import posthog from "posthog-js";
@@ -106,7 +106,7 @@ export default function ChatModal({
 	}, [messages]);
 
 	return (
-		<AIModal
+		<FullScreenModal
 			size="4xl"
 			scrollBehavior="inside"
 			placement="top-center"
@@ -212,6 +212,6 @@ export default function ChatModal({
 					</>
 				)}
 			</ModalContent>
-		</AIModal>
+		</FullScreenModal>
 	);
 }

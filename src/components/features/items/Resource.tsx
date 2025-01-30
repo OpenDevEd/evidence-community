@@ -20,7 +20,7 @@ import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
 import LikeButton from "./LikeButton";
 import { BsPlus } from "react-icons/bs";
-import AIModal from "@/components/nextui/AIModal";
+import FullScreenModal from "@/components/nextui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
 import { Session } from "next-auth";
@@ -74,7 +74,7 @@ export function AddButton({
 	return (
 		session && (
 			<>
-				<AIModal size="lg" isOpen={isOpen} onOpenChange={onOpenChange}>
+				<FullScreenModal size="lg" isOpen={isOpen} onOpenChange={onOpenChange}>
 					<ModalContent>
 						<GenericHeader onClose={onClose}>
 							{t("selectCollection")}
@@ -98,7 +98,7 @@ export function AddButton({
 							</Skeleton>
 						</ModalBody>
 					</ModalContent>
-				</AIModal>
+				</FullScreenModal>
 				<Button
 					isIconOnly
 					size="sm"

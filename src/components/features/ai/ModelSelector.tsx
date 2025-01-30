@@ -2,8 +2,9 @@ import { models } from "@/constants/ai";
 import { useTranslations } from "next-intl";
 import { ModalContent } from "@nextui-org/react";
 import AIHeader from "../ai/AIHeader";
-import AIModal from "../../nextui/AIModal";
+import FullScreenModal from "../../nextui/FullScreenModal";
 import { ListModalBody, ListModalBodyItem } from "@/components/nextui/ListModalBody";
+import DialogModal from "@/components/nextui/DialogModal";
 
 interface ModelSelectorProps {
   isOpen: boolean;
@@ -21,7 +22,7 @@ export default function ModelSelector({
   const t = useTranslations("ai");
 
   return (
-    <AIModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
+    <DialogModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
       <ModalContent>
         <AIHeader onClose={onOpenChange}>{t("change")}</AIHeader>
         <ListModalBody
@@ -40,6 +41,6 @@ export default function ModelSelector({
           }))}
         />
       </ModalContent>
-    </AIModal>
+    </DialogModal>
   );
 } 
