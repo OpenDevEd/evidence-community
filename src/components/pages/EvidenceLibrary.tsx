@@ -9,6 +9,7 @@ import { SelectItem } from "@/components/nextui/SelectItem";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
 import {
+	AutocompleteItem,
 	Modal,
 	ModalContent,
 	ModalHeader,
@@ -40,14 +41,32 @@ import { BiHelpCircle } from "react-icons/bi";
 import { twMerge } from "tailwind-merge";
 import { useLocalStorage } from "usehooks-ts";
 import PageContainer from "../layout/PageContainer";
+import { Autocomplete } from "../nextui/Autocomplete";
 
-function DropDownIcon({ Icon, className, label }: { Icon: any; className?: string, label?: string }) {
+function DropDownIcon({
+	Icon,
+	className,
+	label,
+}: {
+	Icon: any;
+	className?: string;
+	label?: string;
+}) {
 	return (
 		<div className="size-8 bg-white/10 rounded-full p-2 aspect-square shrink-0">
-			<Icon className={twMerge("w-full h-full", className)} aria-label={label} />
+			<Icon
+				className={twMerge("w-full h-full", className)}
+				aria-label={label}
+			/>
 		</div>
 	);
 }
+
+const genericSelectClassNames = {
+	base: "!mt-0",
+	mainWrapper: "h-10 xl:h-full",
+	label: "hidden",
+};
 
 export function ContentInteractions({
 	data,
@@ -115,39 +134,63 @@ export function ContentInteractions({
 
 	const SortComponent = useMemo(() => {
 		return (
-				<Select
-					startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
-					selectedKeys={sort && [sort]}
-					onSelectionChange={onSortChange}
-					items={SORT_OPTIONS}
-					selectorIcon={<div className="hidden"></div>}
-					classNames={
-						handleCheckboxChange
-							? {
-									mainWrapper: "h-full",
-									base: "flex-1 max-w-full xl:max-w-56 shrink-0 !mt-0",
-									label: "hidden"
-							  }
-							: {}
-					}
-					label={"Sort by"}
-					labelPlacement="outside"
-				>
-					{(item: any) => {
-						return (
-							<SelectItem key={item.key}>
-								{tSorts(item.key)}
-							</SelectItem>
-						);
-					}}
-				</Select>
+			<Select
+				startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
+				selectedKeys={sort && [sort]}
+				onSelectionChange={onSortChange}
+				items={SORT_OPTIONS}
+				selectorIcon={<div className="hidden"></div>}
+				classNames={
+					handleCheckboxChange
+						? {
+								base: twMerge(
+									"flex-1 max-w-full xl:max-w-56 shrink-0",
+									genericSelectClassNames.base
+								),
+								mainWrapper: twMerge(
+									"h-full",
+									genericSelectClassNames.mainWrapper
+								),
+								label: twMerge(
+									"",
+									genericSelectClassNames.label
+								),
+						  }
+						: {
+								base: twMerge(
+									"flex-1 max-w-full min-w-0 xl:min-w-56",
+									genericSelectClassNames.base
+								),
+								mainWrapper: twMerge(
+									"",
+									genericSelectClassNames.mainWrapper
+								),
+								label: twMerge(
+									"",
+									genericSelectClassNames.label
+								),
+						  }
+				}
+				label={"Sort by"}
+				labelPlacement="outside"
+			>
+				{(item: any) => {
+					return (
+						<SelectItem aria-label={tSorts(item.key)} key={item.key}>
+							{tSorts(item.key)}
+						</SelectItem>
+					);
+				}}
+			</Select>
 		);
 	}, [sort, onSortChange, handleCheckboxChange]);
 
 	const ScopeComponent = useMemo(() => {
 		return (
 			<Select
-				startContent={<DropDownIcon label="Scope icon" Icon={GiArchiveResearch} />}
+				startContent={
+					<DropDownIcon label="Scope icon" Icon={GiArchiveResearch} />
+				}
 				color="tertiary"
 				selectedKeys={scope && [scope]}
 				onSelectionChange={onScopeChange}
@@ -156,18 +199,40 @@ export function ContentInteractions({
 				classNames={
 					handleCheckboxChange
 						? {
-								base: "xl:max-w-72 w-full max-w-full !mt-0",
-								mainWrapper: "h-10 xl:h-full",
-								label: "hidden"
+								base: twMerge(
+									"xl:max-w-72 w-full max-w-full",
+									genericSelectClassNames.base
+								),
+								mainWrapper: twMerge(
+									"h-10 xl:h-full",
+									genericSelectClassNames.mainWrapper
+								),
+								label: twMerge(
+									"",
+									genericSelectClassNames.label
+								),
 						  }
-						: {}
+						: {
+								base: twMerge(
+									"flex-1 max-w-full min-w-0 xl:min-w-56",
+									genericSelectClassNames.base
+								),
+								mainWrapper: twMerge(
+									"",
+									genericSelectClassNames.mainWrapper
+								),
+								label: twMerge(
+									"",
+									genericSelectClassNames.label
+								),
+						  }
 				}
 				label={"Search scope"}
 				labelPlacement="outside"
 			>
 				{(item: any) => {
 					return (
-						<SelectItem key={item.key}>
+						<SelectItem aria-label={tScopes(item.key)} key={item.key}>
 							{tScopes(item.key)}
 						</SelectItem>
 					);
@@ -263,7 +328,10 @@ export function ContentInteractions({
 									onPress={onHelpOpen}
 									aria-label={"Help"}
 								>
-									<BiHelpCircle aria-label="Help icon" className="size-6" />
+									<BiHelpCircle
+										aria-label="Help icon"
+										className="size-6"
+									/>
 								</Button>
 								<HelpModal
 									isOpen={isHelpOpen}
@@ -361,7 +429,10 @@ export function ContentInteractions({
 							onPress={() => setView("list")}
 							aria-label={"View as list"}
 						>
-							<HiOutlineViewList aria-label="View as list" className="size-6" />
+							<HiOutlineViewList
+								aria-label="View as list"
+								className="size-6"
+							/>
 						</Button>
 						<Button
 							color={view === "grid" ? "tertiary" : "secondary"}
@@ -370,7 +441,10 @@ export function ContentInteractions({
 							onPress={() => setView("grid")}
 							aria-label={"View as grid"}
 						>
-							<IoGrid aria-label="View as grid" className="size-4" />
+							<IoGrid
+								aria-label="View as grid"
+								className="size-4"
+							/>
 						</Button>
 					</div>
 				</section>
