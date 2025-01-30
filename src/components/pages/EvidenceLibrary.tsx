@@ -72,6 +72,7 @@ export function ContentInteractions({
 	header,
 	countLabel,
 	isItemsFetching,
+	extraFilters,
 }: {
 	data: ItemsGetResponse | undefined;
 	sort: string;
@@ -92,6 +93,7 @@ export function ContentInteractions({
 	header?: ReactNode;
 	countLabel?: ReactNode;
 	isItemsFetching?: boolean;
+	extraFilters?: ReactNode;
 } & Partial<ReturnType<typeof useHierarchy>>) {
 	const {
 		isOpen: isExploreOpen,
@@ -291,6 +293,7 @@ export function ContentInteractions({
 				/>
 				{ScopeComponent}
 				{!handleCheckboxChange && SortComponent}
+				{extraFilters}
 			</section>
 			<section className="flex justify-between h-10 xl:h-12 gap-4">
 				<Skeleton
