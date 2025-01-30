@@ -575,9 +575,9 @@ export default function Navbar() {
 								<IoIosLogIn className="size-5 shrink-0" />
 							}
 							className={twMerge(
-								"h-full xl:min-w-0 xl:pl-4  text-accent dark:text-accent",
-								style === "small" &&
-									"!p-0 rounded-full !size-10"
+								"h-full xl:min-w-0 xl:pl-4  text-accent dark:text-accent py-1 xl:py-0",
+								style === "small" ?
+									"!p-0 rounded-full !size-10" : "uppercase"
 							)}
 							onPress={onLoginModalOpen}
 							isIconOnly={style === "small"}
