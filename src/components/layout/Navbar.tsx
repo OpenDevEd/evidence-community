@@ -65,12 +65,12 @@ function ThemeSwitcher({
 		<li
 			className={twMerge(
 				"h-6 w-6 rounded-lg",
-				isMobile ? "xl:hidden block w-full" : "xl:block hidden"
+				isMobile ? "xl:hidden w-full justify-center flex items-center" : "xl:block hidden"
 			)}
 		>
 			<Button
 				suppressHydrationWarning
-				className="flex items-center justify-center gap-2 !w-full"
+				className="flex items-center justify-center gap-2"
 				variant="invisible"
 				disableRipple
 				onPress={() => {
@@ -97,7 +97,7 @@ function ThemeSwitcher({
 					/>
 				))}
 				{isMobile && (
-					<span className="text-sm text-accent">
+					<span className={twMerge("text-lg text-accent", style === "wide" ? "uppercase" : "")}>
 						{["dark", "light"].map((themeToMatch) => (
 							<span
 								suppressHydrationWarning
