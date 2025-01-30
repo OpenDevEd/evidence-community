@@ -56,7 +56,7 @@ function YearPicker({
 				isVirtualized={true}
 			>
 				{years.map((year) => (
-					<AutocompleteItem key={year}>{year}</AutocompleteItem>
+					<AutocompleteItem aria-label={year} key={year}>{year}</AutocompleteItem>
 				))}
 			</Autocomplete>
 		);
