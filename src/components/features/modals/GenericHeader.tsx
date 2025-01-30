@@ -16,6 +16,7 @@ export default function GenericHeader({ onClose, children, startContent, classNa
 				</span>
 			</SectionTitle>
 			<Button
+				aria-hidden="true"
 				onPress={onClose}
 				isIconOnly
 				variant="transparent"
