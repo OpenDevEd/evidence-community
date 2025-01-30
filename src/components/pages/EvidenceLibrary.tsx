@@ -275,7 +275,13 @@ export function ContentInteractions({
 					</div>
 				</div>
 			)}
-			<section role="search" className="flex flex-col xl:flex-row gap-4">
+			<section
+				role="search"
+				className={twMerge(
+					"xl:flex xl:flex-row gap-4",
+					handleCheckboxChange ? "flex flex-col" : "grid grid-cols-2"
+				)}
+			>
 				<Input
 					autoCorrect="off"
 					defaultValue={search}
@@ -285,10 +291,14 @@ export function ContentInteractions({
 					size={"lg"}
 					classNames={{
 						inputWrapper: "h-10 xl:h-12 min-h-10 xl:min-h-12",
+						base: "col-span-2",
 					}}
 					isClearable
 					startContent={
-						<IoSearch aria-label="Search icon" className="size-6 fill-current text-black/60 dark:text-white/40" />
+						<IoSearch
+							aria-label="Search icon"
+							className="size-6 fill-current text-black/60 dark:text-white/40"
+						/>
 					}
 				/>
 				{ScopeComponent}
