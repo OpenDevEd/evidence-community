@@ -294,7 +294,7 @@ function LanguageSwitcher({ className }: { className?: string }) {
 	return (
 		<li
 			data-style={style}
-			className="relative flex items-center gap-2 data-[style=wide]:uppercase"
+			className="relative flex justify-center items-center gap-2 data-[style=wide]:uppercase"
 		>
 			<Dropdown>
 				<DropdownTrigger
@@ -304,7 +304,7 @@ function LanguageSwitcher({ className }: { className?: string }) {
 						variant="invisible"
 						tabIndex={0}
 						disableRipple
-						className="flex items-center gap-2 !px-2"
+						className="flex items-center gap-2 !px-2 justify-center"
 					>
 						<div className="text-lg font-medium">
 							{
