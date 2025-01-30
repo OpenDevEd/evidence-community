@@ -40,7 +40,7 @@ import { Button } from "../nextui/Button";
 import { BiError, BiErrorCircle, BiLogIn, BiLogOut } from "react-icons/bi";
 import { signIn, signOut, useSession } from "next-auth/react";
 import { Input } from "../nextui/Input";
-import AIModal from "../nextui/AIModal";
+import FullScreenModal from "../nextui/FullScreenModal";
 import GenericHeader from "../features/modals/GenericHeader";
 import { FaGoogle, FaEnvelope, FaLock } from "react-icons/fa";
 import { authenticate } from "@/lib/auth";
@@ -158,7 +158,7 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 
 	return (
 		<Skeleton
-			isLoaded={isLoaded}
+			isLoaded={true}
 			className="w-[10.6875rem] h-[2.5rem] rounded-lg "
 		>
 			{interactive ? (
