@@ -24,6 +24,7 @@ import { twMerge } from "tailwind-merge";
 import { Textarea } from "../nextui/Textarea";
 import { Input } from "../nextui/Input";
 import {
+	AutocompleteItem,
 	Divider,
 	Listbox,
 	ListboxItem,
@@ -36,7 +37,7 @@ import {
 } from "@nextui-org/react";
 import { Modal, useDisclosure } from "@nextui-org/react";
 import GenericHeader from "../features/modals/GenericHeader";
-import AIModal from "../nextui/AIModal";
+import FullScreenModal from "../nextui/FullScreenModal";
 import { Select } from "../nextui/Select";
 import {
 	COLLECTION_PER_PAGE,
@@ -188,7 +189,9 @@ function CreateCollectionModal({
 								label={t("collectionDescriptionDescription")}
 								name="description"
 								color="secondary"
-								placeholder={t("collectionDescriptionDescription")}
+								placeholder={t(
+									"collectionDescriptionDescription"
+								)}
 							/>
 							<Select
 								name="private"
@@ -196,17 +199,22 @@ function CreateCollectionModal({
 								label={t("collectionVisibility")}
 								color="tertiary"
 								className="min-w-full"
-								items={COLLECTION_VISIBILITY_OPTIONS.map((item) => ({
-									...item,
-									name: t("collectionVisibility"+item.name),
-								}))}
+								items={COLLECTION_VISIBILITY_OPTIONS.map(
+									(item) => ({
+										...item,
+										name: t(
+											"collectionVisibility" + item.name
+										),
+									})
+								)}
+								isDisabled
 								disallowEmptySelection
 								defaultSelectedKeys={[
 									COLLECTION_VISIBILITY_OPTIONS[0].key,
 								]}
 							>
 								{(item: any) => (
-									<SelectItem key={item.key}>
+									<SelectItem aria-label={item.name} key={item.key}>
 										{item.name}
 									</SelectItem>
 								)}
@@ -250,10 +258,12 @@ function ItemsList({
 	searchParams,
 	data,
 	collectionId,
+	extraFilters,
 }: {
 	searchParams: { [key: string]: any };
 	data: any;
 	collectionId: string | null;
+	extraFilters?: ReactNode;
 }) {
 	const { router, pathname, createQueryString } =
 		useParamsState(searchParams);
@@ -320,18 +330,14 @@ function ItemsList({
 		isLoading: isItemsLoading,
 		isValidating: isItemsFetching,
 		mutate: revalidateResults,
-	} = useSWR<ItemsGetResponse>(
-		itemsQuery,
-		fetcher,
-		{
-			keepPreviousData: true,
-			onSuccess: (data) => {
-				if (data.totalPages < queryParams.page) {
-					handlePageChange(data.totalPages);
-				}
-			},
-		}
-	);
+	} = useSWR<ItemsGetResponse>(itemsQuery, fetcher, {
+		keepPreviousData: true,
+		onSuccess: (data) => {
+			if (data.totalPages < queryParams.page) {
+				handlePageChange(data.totalPages);
+			}
+		},
+	});
 
 	return (
 		<ResourcesView
@@ -351,6 +357,7 @@ function ItemsList({
 			searchParams={searchParams}
 			isItemsFetching={isItemsFetching}
 			revalidateResults={revalidateResults}
+			extraFilters={extraFilters}
 			countLabel={
 				<div>
 					{collectionId
@@ -395,6 +402,8 @@ type ProfileListItem = {
 	className?: string;
 	index: number;
 	id?: string;
+	count?: any;
+	textValue?: string;
 } & Omit<ListboxItemProps, "children">;
 
 function ProfileListbox({
@@ -411,14 +420,17 @@ function ProfileListbox({
 			variant="flat"
 			selectionMode="single"
 			className={twMerge("flex flex-col py-6", className)}
+			aria-label={"Bookmarks and collections list"}
 			{...props}
 		>
 			{listItems.map(
-				({ label, icon: Icon, className, index, ...itemProps }) => (
+				({ label, icon: Icon, className, index, textValue, count, ...itemProps }) => (
 					<ListboxItem
 						inlist={false}
 						key={String(index)}
 						shouldHighlightOnFocus
+						textValue={textValue}
+						aria-label={textValue}
 						startContent={<Icon className="shrink-0" />}
 						className={twMerge(
 							"text-xl gap-4",
@@ -436,27 +448,16 @@ function ProfileListbox({
 	);
 }
 
-function ProfileCollectionsList({
-	displayData,
-	selectedTab,
-	setSelectedTab,
-	handleCollectionSelect,
-	onOpen,
-	selectedCollection,
-}: {
-	displayData: any;
-	selectedTab: Set<string>;
-	setSelectedTab: any;
-	onOpen: any;
-	handleCollectionSelect: any;
-	selectedCollection?: string;
-}) {
-	const [search, setSearch] = useState("");
-	const t = useTranslations("ui");
+function useProfileCollectionsList(displayData: any, selectedTab: Set<string>, setSelectedTab: any, handleCollectionSelect: any, search: string, selectedCollection: any): [ProfileListItem[], number] {
 	const formatter = useFormatter();
+	const t = useTranslations("ui");
 	const [mainListboxList, selectedCollectionIndex] = useMemo(() => {
-		const collectionsItems = Object.keys(displayData.itemsCollections).reduce((acc: { [key: string]: string[] }, itemKey) => {
-			for (const collectionId of Object.keys(displayData.itemsCollections[itemKey])) {
+		const collectionsItems = Object.keys(
+			displayData.itemsCollections
+		).reduce((acc: { [key: string]: string[] }, itemKey) => {
+			for (const collectionId of Object.keys(
+				displayData.itemsCollections[itemKey]
+			)) {
 				if (!acc[collectionId]) {
 					acc[collectionId] = [];
 				}
@@ -471,28 +472,44 @@ function ProfileCollectionsList({
 					<span>
 						{t("likedItemsLabel")}
 						<span className="text-sm ltr:ml-2 rtl:mr-2 opacity-60">
-							({formatter.number(Object.keys(displayData.likes).length)})
+							(
+							{formatter.number(
+								Object.keys(displayData.likes).length
+							)}
+							)
 						</span>
 					</span>
 				),
+				textValue: t("likedItemsLabel"),
+				count: formatter.number(Object.keys(displayData.likes).length),
 				description: t("likedItemsDescription"),
 				icon: BsBookmark,
 				index: 0,
 			},
-			...displayData.collections.map((collection: any): ProfileListItem => ({
-				label: (
-					<span>
-						{collection.name}
-						<span className="text-sm ltr:ml-2 rtl:mr-2 opacity-60">
-							({formatter.number(collectionsItems[collection.id]?.length || 0)})
+			...displayData.collections.map(
+				(collection: any): ProfileListItem => ({
+					label: (
+						<span>
+							{collection.name}
+							<span className="text-sm ltr:ml-2 rtl:mr-2 opacity-60">
+								(
+								{formatter.number(
+									collectionsItems[collection.id]?.length || 0
+								)}
+								)
+							</span>
 						</span>
-					</span>
-				),
-				description: collection.description,
-				icon: BsCollection,
-				id: collection.id,
-				index: 0,
-			})),
+					),
+					textValue: collection.name,
+					count: formatter.number(
+						collectionsItems[collection.id]?.length || 0
+					),
+					description: collection.description,
+					icon: BsCollection,
+					id: collection.id,
+					index: 0,
+				})
+			),
 		];
 
 		const dataListIndexed = dataList.map((item, index) => ({
@@ -520,13 +537,44 @@ function ProfileCollectionsList({
 						.includes(search.toLowerCase()))
 		);
 
-		return [filteredDataList, dataListIndexed.findIndex((item) => item.id === selectedCollection)];
+		return [
+			filteredDataList,
+			dataListIndexed.findIndex((item) => item.id === selectedCollection),
+		];
 	}, [displayData, search]);
+
+	return [mainListboxList, selectedCollectionIndex];
+}
+
+function ProfileCollectionsList({
+	displayData,
+	selectedTab,
+	setSelectedTab,
+	onOpen,
+	selectedCollection,
+	mainListboxList,
+	selectedCollectionIndex,
+	setSearch,
+}: {
+	displayData: any;
+	selectedTab: Set<string>;
+	setSelectedTab: any;
+	onOpen: any;
+	selectedCollection?: string;
+	mainListboxList: ProfileListItem[];
+	selectedCollectionIndex: number;
+	setSearch: any;
+}) {
+	const t = useTranslations("ui");
 
 	return (
 		<ProfileListbox
 			disallowEmptySelection
-			selectedKeys={selectedCollection ? [String(selectedCollectionIndex)] : selectedTab}
+			selectedKeys={
+				selectedCollection
+					? [String(selectedCollectionIndex)]
+					: selectedTab
+			}
 			onSelectionChange={setSelectedTab as any}
 			data={displayData}
 			className="flex-1 z-10"
@@ -576,6 +624,7 @@ export default function Profile({
 	const t = useTranslations("ui");
 	const selectedCollection = searchParams["collectionId"] || "";
 	const isCurrentUser = session?.user.id == data.id;
+	const [search, setSearch] = useState("");
 
 	const displayData: Session["user"] = useMemo(() => {
 		const displayData = {
@@ -612,22 +661,33 @@ export default function Profile({
 		[router, pathname, createQueryString]
 	);
 
+	const [mainListboxList, selectedCollectionIndex] = useProfileCollectionsList(displayData, selectedTab, setSelectedTab, handleCollectionSelect, search, selectedCollection);
+
+	const selectedKey = selectedCollection
+	? String(selectedCollectionIndex)
+	: Array.from(selectedTab)[0];
+
 	return (
-		<PageContainer id="main-content" className="flex gap-[40px] items-start">
+		<PageContainer
+			id="main-content"
+			className="flex xl:gap-[40px] gap-4 items-start xl:flex-row flex-col"
+		>
 			<CreateCollectionModal
 				onClose={onClose}
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
 				update={update}
 			/>
-			<div className="w-96 flex flex-col gap-6 shrink-0">
+			<div className="xl:w-96 w-full flex-col gap-6 shrink-0">
 				<div className="w-full dark:bg-secondary bg-black/[4%] rounded-2xl flex flex-col">
 					<div className="w-full dark:bg-card bg-white rounded-2xl rounded-b-none overflow-hidden flex">
 						<div className="w-1/4 aspect-square">
 							{displayData.image ? (
 								<Image
 									src={displayData.image}
-									alt={`${displayData.name ?? displayData.email}'s profile picture`}
+									alt={`${
+										displayData.name ?? displayData.email
+									}'s profile picture`}
 									width={256}
 									height={256}
 									objectFit="cover"
@@ -640,9 +700,11 @@ export default function Profile({
 							)}
 						</div>
 						<div className="w-3/4 flex flex-col p-4 justify-center">
-							{displayData.name && <div className="text-xl font-medium text-black/80 dark:text-white/80 flex items-center gap-2">
-								{displayData.name}
-							</div>}
+							{displayData.name && (
+								<div className="text-xl font-medium text-black/80 dark:text-white/80 flex items-center gap-2">
+									{displayData.name}
+								</div>
+							)}
 							<div className="text-sm text-black/60 dark:text-white/60">
 								{displayData.email}
 							</div>
@@ -681,15 +743,17 @@ export default function Profile({
 							</div>
 						))}
 					</div>
-					<div className="px-6 flex flex-col flex-1">
+					<div className="hidden px-6 xl:flex flex-col flex-1">
 						<Divider className="" />
 						<ProfileCollectionsList
-							handleCollectionSelect={handleCollectionSelect}
 							displayData={displayData}
 							selectedTab={selectedTab}
 							setSelectedTab={setSelectedTab}
 							onOpen={onOpen}
 							selectedCollection={selectedCollection}
+							mainListboxList={mainListboxList}
+							selectedCollectionIndex={selectedCollectionIndex}
+							setSearch={setSearch}
 						/>
 						{isCurrentUser && (
 							<>
@@ -723,6 +787,32 @@ export default function Profile({
 					data={displayData}
 					searchParams={searchParams}
 					collectionId={selectedCollection}
+					extraFilters={
+						<div className="flex w-full gap-4 col-span-2 xl:hidden">
+							<Autocomplete
+								startContent={
+									selectedKey === "0" ? <BsBookmark /> : <BsCollection />
+								}
+								selectedKey={selectedKey}
+								inputProps={{
+									classNames: {
+										inputWrapper:
+											"bg-white dark:bg-secondary border-small border-black/10 dark:border-white/10 rounded-2xl",
+										input: "placeholder:text-black/60 dark:placeholder:text-white/40",
+									},
+								}}
+							>
+								{mainListboxList.map(({icon: Icon, label, index, textValue, onPress}) => (
+									<AutocompleteItem onPress={() => {
+										(onPress as () => void)();
+									}} textValue={textValue} startContent={<Icon />} key={index}>{label}</AutocompleteItem>
+								))}
+							</Autocomplete>
+							<Button onPress={onOpen} aria-label={t("createCollection")} isIconOnly className="h-full">
+								<BsPlus />
+							</Button>
+						</div>
+					}
 				/>
 			</div>
 		</PageContainer>
