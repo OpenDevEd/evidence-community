@@ -16,38 +16,42 @@ import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import Resource from "../items/Resource";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
-import { CacheContext, CacheContextType, useFeatureFlagEnabled } from "@/context/Providers";
+import {
+	CacheContext,
+	CacheContextType,
+	useFeatureFlagEnabled,
+} from "@/context/Providers";
 import { DownloadModal } from "../items/ItemControls";
 import { useDisclosure } from "@nextui-org/react";
 import { downloadItems, searchIndex } from "@/lib/actions";
 import { routing, usePathname, useRouter } from "@/i18n/routing";
 
-
 interface ResourcesViewProps {
-    sort: string;
-    search: string;
-    scope: string;
-    handleSearchChange: (text: string) => void;
-    handleScopeChange: (scope: Set<string>) => void;
-    handleSortChange: (sort: Set<string>) => void;
-    itemsData: ItemsGetResponse | undefined;
-    itemsError: any;
-    isItemsLoading: boolean;
-    selectedCollections?: string[];
-    handleCheckboxChange?: (key: string) => void;
-    collectionsData?: CollectionsGetResponse | undefined;
-    hierarchy?: any;
-    range: string;
-    handleRangeChange: (start: string | null, end: string | null) => void;
-    pageNumber: number;
-    handlePageChange: (newPage: number) => void;
-    header?: ReactNode;
+	sort: string;
+	search: string;
+	scope: string;
+	handleSearchChange: (text: string) => void;
+	handleScopeChange: (scope: Set<string>) => void;
+	handleSortChange: (sort: Set<string>) => void;
+	itemsData: ItemsGetResponse | undefined;
+	itemsError: any;
+	isItemsLoading: boolean;
+	selectedCollections?: string[];
+	handleCheckboxChange?: (key: string) => void;
+	collectionsData?: CollectionsGetResponse | undefined;
+	hierarchy?: any;
+	range: string;
+	handleRangeChange: (start: string | null, end: string | null) => void;
+	pageNumber: number;
+	handlePageChange: (newPage: number) => void;
+	header?: ReactNode;
 	countLabel?: ReactNode;
 	queryParams?: Record<string, any>;
 	params?: Record<string, any>;
 	searchParams?: Record<string, any>;
 	isItemsFetching?: boolean;
 	revalidateResults?: any;
+	extraFilters?: ReactNode;
 }
 
 function Chip({
@@ -98,7 +102,6 @@ function Chip({
 	);
 }
 
-
 function FilterChips({
 	collections,
 	handleCheckboxChange,
@@ -112,7 +115,9 @@ function FilterChips({
 		<div
 			className={twMerge(
 				"flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0",
-				collections && collections.length > 0 && "max-h-[32rem] mb-4 opacity-100"
+				collections &&
+					collections.length > 0 &&
+					"max-h-[32rem] mb-4 opacity-100"
 			)}
 		>
 			<div className="flex-1 flex gap-2 flex-wrap">
@@ -124,9 +129,9 @@ function FilterChips({
 									key={collection}
 									collection={collection}
 									handleCheckboxChange={handleCheckboxChange}
-								collectionsData={collectionsData}
-							/>
-						))}
+									collectionsData={collectionsData}
+								/>
+							))}
 					</AnimatePresence>
 				)}
 			</div>
@@ -138,20 +143,23 @@ function FilterChips({
 						exit={{ opacity: 0, y: -10 }}
 						transition={{ duration: 0.2 }}
 						className="w-7 flex justify-end"
-				>
-					<Button
-						aria-hidden={collections?.length == 0}
-						aria-label={"Clear all filters"}
-						onPress={() => {
-							handleCheckboxChange?.("");
-						}}
-						isIconOnly
-						size="sm"
-						variant="solid"
-						color="accent"
-						className="h-7 w-7 min-w-7"
 					>
-						<FaTrash className="text-white size-3" />
+						<Button
+							aria-hidden={collections?.length == 0}
+							aria-label={"Clear all filters"}
+							onPress={() => {
+								handleCheckboxChange?.("");
+							}}
+							isIconOnly
+							size="sm"
+							variant="solid"
+							color="accent"
+							className="h-7 w-7 min-w-7"
+						>
+							<FaTrash
+								aria-hidden="true"
+								className="text-white size-3"
+							/>
 						</Button>
 					</motion.div>
 				)}
@@ -183,7 +191,14 @@ function ResourcesList({
 
 	return (
 		<>
-			<ul className={twMerge("gap-6 -mt-4", (view === "list" || actuallyNoData) ? "flex flex-col" : "grid grid-cols-2")}>
+			<ul
+				className={twMerge(
+					"gap-6 -mt-4",
+					view === "list" || actuallyNoData
+						? "flex flex-col"
+						: "grid grid-cols-2"
+				)}
+			>
 				{actuallyNoData ? (
 					<div className="text-center text-black/40 dark:text-white/40 text-sm mb-4 py-12">
 						{t("noResourcesFound")}
@@ -208,7 +223,17 @@ function ResourcesList({
 	);
 }
 
-function ContentActions({ data, queryParams, params, searchParams }: { data: ItemsGetResponse | undefined, queryParams?: Record<string, any>, params?: Record<string, any>, searchParams?: Record<string, any> }) {
+function ContentActions({
+	data,
+	queryParams,
+	params,
+	searchParams,
+}: {
+	data: ItemsGetResponse | undefined;
+	queryParams?: Record<string, any>;
+	params?: Record<string, any>;
+	searchParams?: Record<string, any>;
+}) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const totalItems = data?.totalItems || 0;
@@ -224,32 +249,51 @@ function ContentActions({ data, queryParams, params, searchParams }: { data: Ite
 				onOpenChange={onOpenChange}
 				onClose={onClose}
 				action={async (format: "ris" | "bibtex") => {
-					return await downloadItems(queryParams || {}, params || {}, format);
+					return await downloadItems(
+						queryParams || {},
+						params || {},
+						format
+					);
 				}}
-				fileName={format.number(totalItems) + " " + format.dateTime(new Date(), {
-					day: "2-digit",
-					month: "2-digit",
-					year: "numeric",
-				})}
+				fileName={
+					format.number(totalItems) +
+					" " +
+					format.dateTime(new Date(), {
+						day: "2-digit",
+						month: "2-digit",
+						year: "numeric",
+					})
+				}
 			/>
-			<Button endContent={<HiOutlineDownload className="size-6" />} onPress={onOpen}>
+			<Button
+				endContent={<HiOutlineDownload className="size-6" />}
+				onPress={onOpen}
+			>
 				{t("downloadRecords", { count: format.number(totalItems) })}
 			</Button>
-			<Button isDisabled={!isPrintingEnabled} endContent={<HiOutlinePrinter className="size-6" />}>
+			<Button
+				isDisabled={!isPrintingEnabled}
+				endContent={<HiOutlinePrinter className="size-6" />}
+			>
 				{t("printCitations", { count: format.number(totalItems) })}
 			</Button>
 			<Button
 				onPress={() => {
-					router.push({
-						pathname: pathName + "/atom.xml",
-						query: searchParams,
-					}, {
-						locale: routing.defaultLocale
-					})
+					router.push(
+						{
+							pathname: pathName + "/atom.xml",
+							query: searchParams,
+						},
+						{
+							locale: routing.defaultLocale,
+						}
+					);
 				}}
 				endContent={<HiOutlineCodeBracketSquare className="size-6" />}
 			>
-				{JSON.stringify(searchParams) == "{}" ? t("mainFeed") : t("customFeed")}
+				{JSON.stringify(searchParams) == "{}"
+					? t("mainFeed")
+					: t("customFeed")}
 			</Button>
 		</div>
 	);
@@ -296,94 +340,103 @@ function PaginationControls({
 }
 
 export function ResourcesView({
-    header,
-    sort,
-    search,
-    scope,
-    handleSearchChange,
-    handleScopeChange,
-    handleSortChange,
-    itemsData,
-    itemsError,
-    isItemsLoading,
+	header,
+	sort,
+	search,
+	scope,
+	handleSearchChange,
+	handleScopeChange,
+	handleSortChange,
+	itemsData,
+	itemsError,
+	isItemsLoading,
 	isItemsFetching,
-    selectedCollections,
-    handleCheckboxChange,
-    collectionsData,
-    hierarchy,
-    range,
-    handleRangeChange,
-    pageNumber,
-    handlePageChange,
+	selectedCollections,
+	handleCheckboxChange,
+	collectionsData,
+	hierarchy,
+	range,
+	handleRangeChange,
+	pageNumber,
+	handlePageChange,
 	countLabel,
 	queryParams,
 	params,
 	searchParams,
 	revalidateResults,
+	extraFilters,
 }: ResourcesViewProps) {
-    const t = useTranslations("ui");
+	const t = useTranslations("ui");
 	const format = useFormatter();
-    const [abstract, setAbstract] = useState(true);
+	const [abstract, setAbstract] = useState(true);
 	const [view, setView] = useState("list");
 	const { status } = useContext(CacheContext) as CacheContextType;
 
-    return (
-        <section id="main-content" className="w-full flex flex-col gap-4">
-            <ContentInteractions
-                header={header}
-                sort={sort}
-                search={search}
-                scope={scope}
-                onSearchChange={handleSearchChange}
-                onScopeChange={handleScopeChange}
-                onSortChange={handleSortChange}
-                data={itemsData}
-                abstract={abstract}
-                onAbstractChange={setAbstract}
-                selectedCollections={selectedCollections}
-                handleCheckboxChange={handleCheckboxChange}
-                collectionsData={collectionsData}
-                hierarchy={hierarchy}
-                isLoading={isItemsLoading}
-                error={itemsError}
-                range={range}
-                handleRangeChange={handleRangeChange}
+	return (
+		<section id="main-content" className="w-full flex flex-col gap-4">
+			<ContentInteractions
+				header={header}
+				sort={sort}
+				search={search}
+				scope={scope}
+				onSearchChange={handleSearchChange}
+				onScopeChange={handleScopeChange}
+				onSortChange={handleSortChange}
+				data={itemsData}
+				abstract={abstract}
+				onAbstractChange={setAbstract}
+				selectedCollections={selectedCollections}
+				handleCheckboxChange={handleCheckboxChange}
+				collectionsData={collectionsData}
+				hierarchy={hierarchy}
+				isLoading={isItemsLoading}
+				error={itemsError}
+				range={range}
+				handleRangeChange={handleRangeChange}
 				view={view}
 				setView={setView}
 				countLabel={countLabel}
 				isItemsFetching={isItemsFetching}
-            />
-            <FilterChips
-                collections={selectedCollections!}
-                handleCheckboxChange={handleCheckboxChange}
-                collectionsData={collectionsData}
-            />
-            <ResourcesList
-                data={itemsData}
-                error={itemsError}
-                isLoading={isItemsLoading}
-                abstract={abstract}
+				extraFilters={extraFilters}
+			/>
+			<FilterChips
+				collections={selectedCollections!}
+				handleCheckboxChange={handleCheckboxChange}
+				collectionsData={collectionsData}
+			/>
+			<ResourcesList
+				data={itemsData}
+				error={itemsError}
+				isLoading={isItemsLoading}
+				abstract={abstract}
 				view={view}
 				revalidateResults={revalidateResults}
 				collectionId={searchParams?.collectionId}
-            />
-            <PaginationControls
-                page={pageNumber}
-                setPage={handlePageChange}
-                data={itemsData}
-                error={itemsError}
-                isLoading={isItemsLoading}
-            />
-		<ContentActions data={itemsData} queryParams={queryParams} params={params} searchParams={searchParams}/>
-            <div className="text-center xl:text-end text-black/60 dark:text-white/60 text-sm">
-                {t("lastUpdate", { date: format.dateTime(status.databaseUpdatedAt!, {
-					day: "2-digit",
-					month: "2-digit",
-					year: "numeric",
-					hour: "2-digit",
-					minute: "2-digit",
-				}) })}
-            </div>
-        </section>
-    );
-} 
+			/>
+			<PaginationControls
+				page={pageNumber}
+				setPage={handlePageChange}
+				data={itemsData}
+				error={itemsError}
+				isLoading={isItemsLoading}
+			/>
+			<ContentActions
+				data={itemsData}
+				queryParams={queryParams}
+				params={params}
+				searchParams={searchParams}
+			/>
+			<div className="text-center xl:text-end text-black/60 dark:text-white/60 text-sm">
+				{t("lastUpdate", {
+					date: format.dateTime(status.databaseUpdatedAt!, {
+						day: "2-digit",
+						month: "2-digit",
+						year: "numeric",
+						hour: "2-digit",
+						minute: "2-digit",
+					}),
+				})}
+			</div>
+		</section>
+	);
+}
