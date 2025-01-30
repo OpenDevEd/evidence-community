@@ -452,14 +452,20 @@ function LoginModal({
 							>
 								<Input
 									startContent={
-										<FaEnvelope className="size-5 ltr:mr-1 rtl:ml-1 fill-black dark:fill-white/40" />
+										<FaEnvelope 
+											aria-hidden="true" 
+											className="size-5 ltr:mr-1 rtl:ml-1 fill-black dark:fill-white/40" 
+										/>
 									}
 									name="email"
 									placeholder="Email"
 								/>
 								<Input
 									startContent={
-										<FaLock className="size-5 ltr:mr-1 rtl:ml-1 fill-black dark:fill-white/40" />
+										<FaLock 
+											aria-hidden="true" 
+											className="size-5 ltr:mr-1 rtl:ml-1 fill-black dark:fill-white/40" 
+										/>
 									}
 									type="password"
 									name="password"
