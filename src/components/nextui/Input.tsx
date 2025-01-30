@@ -15,6 +15,9 @@ export const Input = extendVariants(NextUIInput, {
       },
     },
     size: {
+      md: {
+        input: "text-base xl:text-small"
+      },
     },
     custom: {
       default: {
@@ -26,5 +29,6 @@ export const Input = extendVariants(NextUIInput, {
     color: "secondary",
     custom: "default",
     variant: "default",
+    size: "md",
   },
 });

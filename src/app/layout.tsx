@@ -17,10 +17,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 	return {
 		title: `${companyName} - Evidence Library`,
-		description: `${companyName} - Evidence Library`,
-		viewport: {
-			userScalable: false
-		}
+		description: `${companyName} - Evidence Library`
 	};
 }
 

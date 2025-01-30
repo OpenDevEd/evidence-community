@@ -16,6 +16,11 @@ export const Textarea = extendVariants(NextUITextarea, {
 				inputWrapper: "border",
 			},
 		},
+		size: {
+			md: {
+				input: "text-base xl:text-small"
+			}
+		},
 		custom: {
 			default: {
 				inputWrapper: "rounded-2xl",
@@ -26,5 +31,6 @@ export const Textarea = extendVariants(NextUITextarea, {
 		color: "secondary",
 		custom: "default",
 		variant: "default",
+		size: "md"
 	},
 });

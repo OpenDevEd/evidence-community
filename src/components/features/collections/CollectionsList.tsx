@@ -50,7 +50,7 @@ function YearPicker({
 					classNames: {
 						inputWrapper:
 							"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
-						input: "placeholder:text-black/60 dark:placeholder:text-white/40",
+						input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
 					},
 				}}
 				isVirtualized={true}
