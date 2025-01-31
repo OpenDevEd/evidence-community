@@ -43,6 +43,8 @@ import { useLocalStorage } from "usehooks-ts";
 import PageContainer from "../layout/PageContainer";
 import { Autocomplete } from "../nextui/Autocomplete";
 import DialogModal from "../nextui/DialogModal";
+import FullScreenModal from "../nextui/FullScreenModal";
+import GenericHeader from "../features/modals/GenericHeader";
 
 function DropDownIcon({
 	Icon,
@@ -267,7 +269,7 @@ export function ContentInteractions({
 						>
 							{t("explore")}
 						</Button>
-						<DialogModal
+						<FullScreenModal
 							scrollBehavior="outside"
 							isOpen={isExploreOpen}
 							onOpenChange={onExploreOpenChange}
@@ -275,21 +277,9 @@ export function ContentInteractions({
 							<ModalContent>
 								{(onClose: any) => (
 									<>
-										<ModalHeader className="flex items-center justify-between gap-2 sticky top-0 bg-background_light dark:bg-background z-30">
-											<SectionTitle>
-												{t("explore")}
-											</SectionTitle>
-											<Button
-												onPress={onClose}
-												isIconOnly
-												variant="transparent"
-												className="xl:px-0 px-0 translate-x-2"
-												startContent={
-													<LuX className="size-6 text-black dark:text-white/80" />
-												}
-												aria-label={"Close this popup"}
-											/>
-										</ModalHeader>
+										<GenericHeader onClose={onClose}>
+											{t("explore")}
+										</GenericHeader>
 										{handleCheckboxChange && (
 											<CollectionsList
 												data={collectionsData}
@@ -313,7 +303,7 @@ export function ContentInteractions({
 									</>
 								)}
 							</ModalContent>
-						</DialogModal>
+						</FullScreenModal>
 					</h1>
 					<div className="flex gap-4 h-10 xl:h-12 flex-1 justify-end">
 						{handleCheckboxChange && (
