@@ -163,7 +163,7 @@ function CreateCollectionModal({
 	};
 
 	return (
-		<DialogModal isOpen={isOpen} onOpenChange={onOpenChange}>
+		<DialogModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
 			<ModalContent className={errorClassName}>
 				<GenericHeader onClose={onClose}>
 					{t("createCollection")}
