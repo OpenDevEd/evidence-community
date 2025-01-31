@@ -3,7 +3,6 @@
 import { Button } from "@/components/nextui/Button";
 import {
 	ModalContent,
-	Input,
 	ModalBody,
 	ModalFooter,
 	ScrollShadow
@@ -22,6 +21,7 @@ import FullScreenModal from "@/components/nextui/FullScreenModal";
 import { models } from "@/constants/ai";
 import { AIMarkdown } from "../markdown/Markdown";
 import posthog from "posthog-js";
+import { Input } from "@/components/nextui/Input";
 
 export default function ChatModal({
 	isOpen,
@@ -36,7 +36,7 @@ export default function ChatModal({
 }) {
 	const t = useTranslations("ai");
 	const locale = useLocale();
-	const inputRef = useRef<HTMLInputElement>(null);
+	const inputRef = useRef<any>(null);
 
 	const {
 		messages,
@@ -111,9 +111,6 @@ export default function ChatModal({
 			scrollBehavior="inside"
 			placement="top-center"
 			hideCloseButton
-			classNames={{
-				base: "bg-background_light/80 dark:bg-card/80 backdrop-blur-xl xl:border border-black/10 dark:border-white/10 mx-0 my-0 rounded-none xl:rounded-large min-h-dvh xl:min-h-0 shadow-[0_0_10px_0_rgba(0,0,0,0.1)] shadow-accent outline-none",
-			}}
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
 		>
@@ -175,7 +172,7 @@ export default function ChatModal({
 								))}
 							</ScrollShadow>
 						</ModalBody>
-						<ModalFooter className="p-0">
+						<ModalFooter className="p-0 sticky bottom-0">
 							<div className="w-full">
 								<form
 									className="w-full p-2"
