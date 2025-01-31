@@ -26,6 +26,7 @@ import CollectionsList from "../user/CollectionsList";
 import { Session } from "next-auth";
 import { useStatus } from "@/context/Providers";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
+import DialogModal from "@/components/nextui/DialogModal";
 
 export function AddButton({
 	itemData,
@@ -74,7 +75,7 @@ export function AddButton({
 	return (
 		session && (
 			<>
-				<FullScreenModal size="lg" isOpen={isOpen} onOpenChange={onOpenChange}>
+				<DialogModal size="lg" isOpen={isOpen} onOpenChange={onOpenChange}>
 					<ModalContent>
 						<GenericHeader onClose={onClose}>
 							{t("selectCollection")}
@@ -98,7 +99,7 @@ export function AddButton({
 							</Skeleton>
 						</ModalBody>
 					</ModalContent>
-				</FullScreenModal>
+				</DialogModal>
 				<Button
 					isIconOnly
 					size="sm"

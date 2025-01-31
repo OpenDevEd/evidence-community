@@ -42,6 +42,7 @@ import { twMerge } from "tailwind-merge";
 import { useLocalStorage } from "usehooks-ts";
 import PageContainer from "../layout/PageContainer";
 import { Autocomplete } from "../nextui/Autocomplete";
+import DialogModal from "../nextui/DialogModal";
 
 function DropDownIcon({
 	Icon,
@@ -266,12 +267,7 @@ export function ContentInteractions({
 						>
 							{t("explore")}
 						</Button>
-						<Modal
-							hideCloseButton
-							classNames={{
-								base: "bg-background_light dark:bg-background my-0 mx-0 min-h-dvh",
-								wrapper: "no-scrollbar",
-							}}
+						<DialogModal
 							scrollBehavior="outside"
 							isOpen={isExploreOpen}
 							onOpenChange={onExploreOpenChange}
@@ -317,7 +313,7 @@ export function ContentInteractions({
 									</>
 								)}
 							</ModalContent>
-						</Modal>
+						</DialogModal>
 					</h1>
 					<div className="flex gap-4 h-10 xl:h-12 flex-1 justify-end">
 						{handleCheckboxChange && (

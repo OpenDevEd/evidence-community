@@ -198,8 +198,8 @@ export default function CollectionsList({
 			id="collections"
 			aria-label="Filters and collections"
 			className={twMerge(
-				"w-full xl:w-[28.5rem] shrink-0 z-20",
-				isModal ? "block" : "hidden xl:block"
+				"w-full shrink-0 z-20",
+				isModal ? "block" : "hidden xl:block xl:w-[28.5rem]",
 			)}
 		>
 			<Skeleton
