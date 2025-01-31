@@ -9,7 +9,8 @@ export default function FullScreenModal(props: ModalProps) {
 			placement="top-center"
 			hideCloseButton
 			classNames={{
-				base: "bg-background_light/80 dark:bg-card/80 backdrop-blur-xl xl:border border-black/10 dark:border-white/10 mx-0 my-0 rounded-none outline-none xl:rounded-large min-h-dvh xl:min-h-0 shadow-[0_0_10px_0_rgba(0,0,0,0.1)] shadow-none",
+				backdrop: "max-sm:bg-background_light-400 max-sm:dark:bg-background-400",
+				base: "bg-background_light/80 dark:bg-card/80 backdrop-blur-xl sm:border border-black/10 dark:border-white/10 mx-0 my-0 rounded-none outline-none sm:rounded-large min-h-dvh xl:min-h-0",
 			}}
 			{...props}
 		>
