@@ -20,6 +20,7 @@ import { FacetDistribution } from "meilisearch";
 import { LuX } from "react-icons/lu";
 import { useTranslations } from "next-intl";
 import { CacheContext, useFeatureFlagEnabled } from "@/context/Providers";
+import useBreakpoint from "@/hooks/useBreakpoint";
 
 function YearPicker({
 	label,
@@ -56,7 +57,9 @@ function YearPicker({
 				isVirtualized={true}
 			>
 				{years.map((year) => (
-					<AutocompleteItem aria-label={year} key={year}>{year}</AutocompleteItem>
+					<AutocompleteItem aria-label={year} key={year}>
+						{year}
+					</AutocompleteItem>
 				))}
 			</Autocomplete>
 		);
@@ -86,7 +89,8 @@ export function InnerCollectionList({
 	selectedCollections: string[];
 	hierarchy: Collection[];
 }) {
-	const { accordionGlobalExpanded, setAccordionGlobalExpanded } = useContext(CacheContext);
+	const { accordionGlobalExpanded, setAccordionGlobalExpanded } =
+		useContext(CacheContext);
 
 	const t = useTranslations("ui");
 	const filteredFacetDistribution = useMemo(() => {
@@ -96,8 +100,8 @@ export function InnerCollectionList({
 
 		return {
 			collectionsAncestry: Object.fromEntries(
-				Object.entries(facetDistribution.collectionsAncestry).filter(([key]) =>
-					data.collections.some((c) => c.key === key)
+				Object.entries(facetDistribution.collectionsAncestry).filter(
+					([key]) => data.collections.some((c) => c.key === key)
 				)
 			),
 		};
@@ -121,12 +125,21 @@ export function InnerCollectionList({
 			data?.collections.find((c) => c.key === key)
 		).length > 0 ? (
 		<Accordion
-			defaultSelectedKeys={accordionGlobalExpanded ? Object.keys(accordionGlobalExpanded) : hierarchy.map((c) => c.key)}
+			defaultSelectedKeys={
+				accordionGlobalExpanded
+					? Object.keys(accordionGlobalExpanded)
+					: hierarchy.map((c) => c.key)
+			}
 			onSelectionChange={(keys) => {
-				setAccordionGlobalExpanded(Array.from(keys as Set<string>).reduce((acc: Record<string, boolean>, key: string) => ({
-					...acc,
-					[key]: !acc[key],
-				}), {} as Record<string, boolean>));
+				setAccordionGlobalExpanded(
+					Array.from(keys as Set<string>).reduce(
+						(acc: Record<string, boolean>, key: string) => ({
+							...acc,
+							[key]: !acc[key],
+						}),
+						{} as Record<string, boolean>
+					)
+				);
 			}}
 			selectionMode="multiple"
 			fullWidth={false}
@@ -199,7 +212,7 @@ export default function CollectionsList({
 			aria-label="Filters and collections"
 			className={twMerge(
 				"w-full shrink-0 z-20",
-				isModal ? "block" : "hidden xl:block xl:w-[28.5rem]",
+				isModal ? "block" : "hidden xl:block xl:w-[28.5rem]"
 			)}
 		>
 			<Skeleton
@@ -207,101 +220,104 @@ export default function CollectionsList({
 				className="w-full data-[collections=true]:xl:min-h-screen rounded-2xl"
 				isLoaded={!!data && !!facetDistribution}
 			>
-				<section className="w-full bg-black/[4%] dark:bg-secondary rounded-t-2xl last:rounded-b-2xl flex flex-col gap-4 p-6">
-					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-						<span>{t("publicationYear")}</span>
-						<div className="flex gap-4 items-center flex-1 justify-end">
-							<Switch
-								isSelected={!sameYear}
-								onValueChange={(value) =>
-									handleRangeChange(
-										start,
-										sameYear ? end : null
-									)
-								}
-								classNames={{
-									label: "text-sm font-normal",
-								}}
-							>
-								{t("yearRange")}
-							</Switch>
+					<section className="w-full bg-white dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-4 p-6 sticky top-0 xl:static z-20">
+						<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+							<span>{t("publicationYear")}</span>
+							<div className="flex gap-4 items-center flex-1 justify-end">
+								<Switch
+									isSelected={!sameYear}
+									onValueChange={(value) =>
+										handleRangeChange(
+											start,
+											sameYear ? end : null
+										)
+									}
+									classNames={{
+										label: "text-sm font-normal",
+									}}
+								>
+									{t("yearRange")}
+								</Switch>
+							</div>
 						</div>
-					</div>
-					<div>
-						<AnimatePresence mode="popLayout" initial={false}>
-							{sameYear ? (
-								<motion.div
-									initial={{ opacity: 0, y: 10 }}
-									animate={{ opacity: 1, y: 0 }}
-									exit={{ opacity: 0, y: 10 }}
-									key="same-year"
-									layout
-									className="w-full"
-								>
-									<YearPicker
-										label={t("year")}
-										placeholder={t("year")}
-										selectedKey={start}
-										onSelectionChange={(key) =>
-											handleRangeChange(key, null)
-										}
-									/>
-								</motion.div>
-							) : (
-								<motion.div
-									initial={{ opacity: 0, y: 10 }}
-									animate={{ opacity: 1, y: 0 }}
-									exit={{ opacity: 0, y: 10 }}
-									key="year-range"
-									layout
-									className="flex gap-4 w-full"
-								>
-									{[
-										{
-											label: t("from"),
-											placeholder: t("year"),
-										},
-										{
-											label: t("to"),
-											placeholder: t("year"),
-										},
-									].map(({ label, placeholder }, index) => (
+						<div className="">
+							<AnimatePresence mode="popLayout" initial={false}>
+								{sameYear ? (
+									<motion.div
+										initial={{ opacity: 0, y: 10 }}
+										animate={{ opacity: 1, y: 0 }}
+										exit={{ opacity: 0, y: 10 }}
+										key="same-year"
+										layout
+										className="w-full"
+									>
 										<YearPicker
-											key={label}
-											label={label}
-											placeholder={placeholder}
-											selectedKey={
-												index === 0 ? start : end
-											}
+											label={t("year")}
+											placeholder={t("year")}
+											selectedKey={start}
 											onSelectionChange={(key) =>
-												handleRangeChange(
-													index === 0
-														? key || ""
-														: start,
-													index === 1
-														? key || ""
-														: end
-												)
+												handleRangeChange(key, null)
 											}
 										/>
-									))}
-								</motion.div>
-							)}
-						</AnimatePresence>
-					</div>
-				</section>
-				<section className="w-full">
-
-				{isCollectionsEnabled && (
-					<InnerCollectionList
-					data={data}
-					facetDistribution={facetDistribution}
-					handleCheckboxChange={handleCheckboxChange}
-					selectedCollections={selectedCollections}
-					hierarchy={hierarchy}
-					/>
-				)}
-				</section>
+									</motion.div>
+								) : (
+									<motion.div
+										initial={{ opacity: 0, y: 10 }}
+										animate={{ opacity: 1, y: 0 }}
+										exit={{ opacity: 0, y: 10 }}
+										key="year-range"
+										layout
+										className="flex gap-4 w-full"
+									>
+										{[
+											{
+												label: t("from"),
+												placeholder: t("year"),
+											},
+											{
+												label: t("to"),
+												placeholder: t("year"),
+											},
+										].map(
+											({ label, placeholder }, index) => (
+												<YearPicker
+													key={label}
+													label={label}
+													placeholder={placeholder}
+													selectedKey={
+														index === 0
+															? start
+															: end
+													}
+													onSelectionChange={(key) =>
+														handleRangeChange(
+															index === 0
+																? key || ""
+																: start,
+															index === 1
+																? key || ""
+																: end
+														)
+													}
+												/>
+											)
+										)}
+									</motion.div>
+								)}
+							</AnimatePresence>
+						</div>
+					</section>
+					<section className="w-full">
+						{isCollectionsEnabled && (
+							<InnerCollectionList
+								data={data}
+								facetDistribution={facetDistribution}
+								handleCheckboxChange={handleCheckboxChange}
+								selectedCollections={selectedCollections}
+								hierarchy={hierarchy}
+							/>
+						)}
+					</section>
 			</Skeleton>
 		</aside>
 	);
