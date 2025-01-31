@@ -44,6 +44,7 @@ export default function CollectionCategory({
 		];
 	}, [globalExpanded, collection.key]);
 	const [showMore, setShowMore] = useState(false);
+	const scrollHeight = ref.current?.scrollHeight ?? 0;
 
 	useEffect(() => {
 		const apply = () => {
@@ -92,7 +93,7 @@ export default function CollectionCategory({
 					facetDistribution={facetDistribution}
 				/>
 			</div>
-			{ref.current?.scrollHeight && (
+			{scrollHeight > 0 && (
 				<div
 					className={twMerge(
 						"transition-all duration-200 pb-0",
@@ -101,7 +102,7 @@ export default function CollectionCategory({
 				></div>
 			)}
 			<AnimatePresence mode="wait" initial={false}>
-				{showMore && ref.current?.scrollHeight && (
+				{(showMore && scrollHeight > 0) && (
 					<motion.div
 						initial={
 							previousExpansionStates.current[collection.key] !==
