@@ -214,7 +214,10 @@ function CreateCollectionModal({
 								]}
 							>
 								{(item: any) => (
-									<SelectItem aria-label={item.name} key={item.key}>
+									<SelectItem
+										aria-label={item.name}
+										key={item.key}
+									>
 										{item.name}
 									</SelectItem>
 								)}
@@ -424,7 +427,15 @@ function ProfileListbox({
 			{...props}
 		>
 			{listItems.map(
-				({ label, icon: Icon, className, index, textValue, count, ...itemProps }) => (
+				({
+					label,
+					icon: Icon,
+					className,
+					index,
+					textValue,
+					count,
+					...itemProps
+				}) => (
 					<ListboxItem
 						inlist={false}
 						key={String(index)}
@@ -448,7 +459,14 @@ function ProfileListbox({
 	);
 }
 
-function useProfileCollectionsList(displayData: any, selectedTab: Set<string>, setSelectedTab: any, handleCollectionSelect: any, search: string, selectedCollection: any): [ProfileListItem[], number] {
+function useProfileCollectionsList(
+	displayData: any,
+	selectedTab: Set<string>,
+	setSelectedTab: any,
+	handleCollectionSelect: any,
+	search: string,
+	selectedCollection: any
+): [ProfileListItem[], number] {
 	const formatter = useFormatter();
 	const t = useTranslations("ui");
 	const [mainListboxList, selectedCollectionIndex] = useMemo(() => {
@@ -661,11 +679,19 @@ export default function Profile({
 		[router, pathname, createQueryString]
 	);
 
-	const [mainListboxList, selectedCollectionIndex] = useProfileCollectionsList(displayData, selectedTab, setSelectedTab, handleCollectionSelect, search, selectedCollection);
+	const [mainListboxList, selectedCollectionIndex] =
+		useProfileCollectionsList(
+			displayData,
+			selectedTab,
+			setSelectedTab,
+			handleCollectionSelect,
+			search,
+			selectedCollection
+		);
 
 	const selectedKey = selectedCollection
-	? String(selectedCollectionIndex)
-	: Array.from(selectedTab)[0];
+		? String(selectedCollectionIndex)
+		: Array.from(selectedTab)[0];
 
 	return (
 		<PageContainer
@@ -681,23 +707,23 @@ export default function Profile({
 			<div className="xl:w-96 w-full flex-col gap-6 shrink-0">
 				<div className="w-full dark:bg-secondary bg-black/[4%] rounded-2xl flex flex-col">
 					<div className="w-full dark:bg-card bg-white rounded-2xl rounded-b-none overflow-hidden flex">
-						<div className="w-1/4 aspect-square">
-							{displayData.image ? (
-								<Image
-									src={displayData.image}
-									alt={`${
-										displayData.name ?? displayData.email
-									}'s profile picture`}
-									width={256}
-									height={256}
-									objectFit="cover"
-									className="w-full h-full object-cover rounded-r-full"
-								/>
-							) : (
-								<div className="w-full h-full bg-primary dark:bg-secondary flex items-center justify-center rounded-r-full">
-									<AboutUs className="size-1/2 fill-white" />
-								</div>
+						<div
+							className={twMerge(
+								"w-1/4 aspect-square",
+								!displayData.image &&
+									"bg-primary dark:bg-secondary rounded-r-full p-4"
 							)}
+						>
+							<Image
+								src={displayData.image ?? `/icons/profile.png`}
+								alt={`${
+									displayData.name ?? displayData.email
+								}'s profile picture`}
+								width={256}
+								height={256}
+								objectFit="cover"
+								className="w-full h-full object-cover rounded-r-full"
+							/>
 						</div>
 						<div className="w-3/4 flex flex-col p-4 justify-center">
 							{displayData.name && (
@@ -791,7 +817,11 @@ export default function Profile({
 						<div className="flex w-full gap-4 col-span-2 xl:hidden">
 							<Autocomplete
 								startContent={
-									selectedKey === "0" ? <BsBookmark /> : <BsCollection />
+									selectedKey === "0" ? (
+										<BsBookmark />
+									) : (
+										<BsCollection />
+									)
 								}
 								selectedKey={selectedKey}
 								inputProps={{
@@ -802,13 +832,33 @@ export default function Profile({
 									},
 								}}
 							>
-								{mainListboxList.map(({icon: Icon, label, index, textValue, onPress}) => (
-									<AutocompleteItem onPress={() => {
-										(onPress as () => void)();
-									}} textValue={textValue} startContent={<Icon />} key={index}>{label}</AutocompleteItem>
-								))}
+								{mainListboxList.map(
+									({
+										icon: Icon,
+										label,
+										index,
+										textValue,
+										onPress,
+									}) => (
+										<AutocompleteItem
+											onPress={() => {
+												(onPress as () => void)();
+											}}
+											textValue={textValue}
+											startContent={<Icon />}
+											key={index}
+										>
+											{label}
+										</AutocompleteItem>
+									)
+								)}
 							</Autocomplete>
-							<Button onPress={onOpen} aria-label={t("createCollection")} isIconOnly className="h-full">
+							<Button
+								onPress={onOpen}
+								aria-label={t("createCollection")}
+								isIconOnly
+								className="h-full"
+							>
 								<BsPlus />
 							</Button>
 						</div>

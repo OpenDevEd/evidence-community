@@ -341,11 +341,12 @@ function LanguageSwitcher({ className }: { className?: string }) {
 function UserButton() {
 	const { data: session } = useSession();
 	const router = useRouter();
+
 	return (
 		<Dropdown>
 			<DropdownTrigger>
 				<Avatar
-					src={session?.user?.image ?? ""}
+					src={session?.user?.image ?? `/icons/profile.png` ?? ""}
 					alt={`${
 						session?.user?.name || session?.user?.email || "User"
 					}'s avatar`}
