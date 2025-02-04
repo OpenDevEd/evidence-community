@@ -27,9 +27,9 @@ function FooterFieldColumn({
 }) {
 	return (
 		<div className="flex flex-col w-full xl:w-auto items-center xl:items-start">
-			<span className="text-black/80 dark:text-white/80 font-bold text-xl">
+			<h3 className="text-black/80 dark:text-white/80 font-bold text-xl">
 				{title}
-			</span>
+			</h3>
 			{content}
 		</div>
 	);
