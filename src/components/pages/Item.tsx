@@ -34,6 +34,7 @@ import { Collection } from "@/app/api/collections/types";
 import { CollectionsRow } from "@/lib/items";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import PageContainer from "../layout/PageContainer";
+import { models } from "@/constants/ai";
 
 function randomUUID() {
 	return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
@@ -42,8 +43,10 @@ function randomUUID() {
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const t = useTranslations("ai");
 
-	const [selectedModel, setSelectedModel] = useLocalStorage("ai-model", 0);
+	const [selectedModelValue, setSelectedModel] = useLocalStorage("ai-model", 0);
 	const id = useRef(randomUUID());
+
+	const selectedModel = selectedModelValue > models.length ? 0 : selectedModelValue;
 
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
