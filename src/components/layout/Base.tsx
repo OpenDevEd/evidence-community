@@ -55,7 +55,7 @@ export default async function Base({
 						>
 							<nav
 								aria-label={"Skip navigation"}
-								className="absolute top-0 left-0 w-full h-full"
+								className="absolute top-0 left-0 w-64 h-0"
 							>
 								<a
 									href="#main-content"
