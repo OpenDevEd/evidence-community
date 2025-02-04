@@ -130,11 +130,11 @@ export default function GenerativeModal({
 														key={index}
 														startContent={
 															<div className="size-8 aspect-square shrink-0 p-2 bg-accent rounded-full group icon-container">
-																{React.createElement(
+																{models[item.modelIndex]?.icon && React.createElement(
 																	models[
 																		item
 																			.modelIndex
-																	].icon,
+																	]?.icon,
 																	{
 																		className:
 																			"h-full fill-white group-[.icon-container:hover]:scale-90 transition-all duration-300",

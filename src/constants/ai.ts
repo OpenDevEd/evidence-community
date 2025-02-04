@@ -8,35 +8,38 @@ import DeepSeek from "@/components/icons/DeepSeek";
 
 export const models = [
 	{
+		name: "Gemini",
+		company: "Google",
+		model: process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_MODEL,
+		icon: Gemini,
+	},
+	{
 		name: "ChatGPT",
 		company: "OpenAI",
         model: process.env.NEXT_PUBLIC_OPENAI_MODEL,
 		icon: ChatGPT,
 	},
-	{
-		name: "Gemini",
-		company: "Google",
-        model: process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_MODEL,
-		icon: Gemini,
-	},
-	{
-		name: "Claude",
-		company: "Anthropic",
-        model: process.env.NEXT_PUBLIC_ANTHROPIC_MODEL,
-		icon: Claude,
-	},
-	{
-		name: "Mistral",
-		company: "Mistral",
-        model: process.env.NEXT_PUBLIC_MISTRAL_MODEL,
-		icon: Mistral,
-	},
-	{
-		name: "DeepSeek",
-		company: "DeepSeek",
-        model: process.env.NEXT_PUBLIC_DEEPSEEK_MODEL,
-		icon: DeepSeek,
-	}
+	// {
+	// 	name: "Claude",
+	// 	company: "Anthropic",
+    //     model: process.env.NEXT_PUBLIC_ANTHROPIC_MODEL,
+	// 	icon: Claude,
+	// 	disabled: true,
+	// },
+	// {
+	// 	name: "Mistral",
+	// 	company: "Mistral",
+    //     model: process.env.NEXT_PUBLIC_MISTRAL_MODEL,
+	// 	icon: Mistral,
+	// 	disabled: true
+	// },
+	// {
+	// 	name: "DeepSeek",
+	// 	company: "DeepSeek",
+    //     model: process.env.NEXT_PUBLIC_DEEPSEEK_MODEL,
+	// 	icon: DeepSeek,
+	// 	disabled: true,
+	// }
 ];
 
 const MILLION = 1000000
