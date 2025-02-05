@@ -1,13 +1,17 @@
 import config from "@/constants/config.json";
 import {
 	convertToCoreMessages,
-	streamText
+	streamText,
+	tool
 } from "ai";
 import { getCachedItem } from "../../cache";
 import { NextResponse } from "next/server";
-import { getModel, trackUsage } from "@/lib/ai";
+import { createResource, findRelevantContent, getModel, trackUsage } from "@/lib/ai";
 import { routing } from "@/i18n/routing";
 import { isAIAllowed } from "@/lib/utils";
+import { z } from "zod";
+
+const EmbeddedItems = new Set<string>();
 
 export async function POST(req: Request) {
 	const { distinctId, messages, key, modelIndex } = await req.json();
@@ -21,19 +25,20 @@ export async function POST(req: Request) {
 		return new NextResponse("Item not found", { status: 404 });
 	}
 
+	if (!EmbeddedItems.has(item.item.key)) {
+		await createResource(item.item);
+		EmbeddedItems.add(item.item.key);
+	}
+
+	console.log("created resource for item", item.item.key);
+
 	const { provider, modelName, error } = getModel(modelIndex);
 
 	if (error) {
 		return new NextResponse(error, { status: 404 });
 	}
 
-	const {fullTextPDFs, ...cleanItem} = item.item;
-	for (const attachment of cleanItem.attachmentsData || []) {
-		const fullTextPDF = fullTextPDFs?.find((f: any) => f.key === attachment.key)?.fullTextPDF
-		if (fullTextPDF) {
-			attachment.fullTextPDF = fullTextPDF as any;
-		}
-	}
+	const {fullTextPDFs: _, ...cleanItem} = item.item;
 
 	if (!isAIAllowed(cleanItem)) {
 		return new NextResponse("AI not allowed", { status: 403 });
@@ -63,9 +68,28 @@ export async function POST(req: Request) {
 			`LOCALE: ${locale}\n`,
 			systemPrompt,
 			sharedRules,
-			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? pdfRules : "",
 		].join("\n"),
 		messages: coreMessages,
+		maxSteps: 10,
+		tools: {
+			getInformation: tool({
+				description: `If the user asks for specific information that is not present in the JSON, or references a page or a PDF, ` +
+				`use this tool to access PDF pages and content without asking for confirmation. ` +
+				`The data you receive will most likely not be coherent, so you should make it human readable before returning it to the user.`,
+				parameters: z.object({
+					userQuery: z.string().describe("The user's query"),
+					userSpecifiedPage: z.number()
+						.describe("The page number specified by the user. 0 if no specific page is requested."),
+					userToolCallInformation: z.string().describe("Something to tell the user while the tool is being executed with ellipsises at the end."),
+				}),
+				execute: async ({ userQuery, userSpecifiedPage }) => {
+					console.log("userQuery", userQuery);
+					console.log("userSpecifiedPage", userSpecifiedPage);
+					const relevantContent = await findRelevantContent(userQuery, cleanItem.key, userSpecifiedPage);
+					return relevantContent;
+				}
+			}),
+		},
 		onFinish(event) {
 			trackUsage("chat_completion", event, distinctId, messages.at(-1)?.content);
 		},

@@ -5,7 +5,7 @@ import {
 	ModalContent,
 	ModalBody,
 	ModalFooter,
-	ScrollShadow
+	ScrollShadow,
 } from "@nextui-org/react";
 import { LuUser } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
@@ -19,6 +19,7 @@ import { Message, useChat } from "ai/react";
 import AIHeader from "../ai/AIHeader";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
 import { models } from "@/constants/ai";
+import { FaTools } from "react-icons/fa";
 import { AIMarkdown } from "../markdown/Markdown";
 import posthog from "posthog-js";
 import { Input } from "@/components/nextui/Input";
@@ -56,7 +57,11 @@ export default function ChatModal({
 				id: "start",
 			},
 		],
-		body: { key: data?.item?.key, modelIndex, distinctId: posthog.get_distinct_id() },
+		body: {
+			key: data?.item?.key,
+			modelIndex,
+			distinctId: posthog.get_distinct_id(),
+		},
 		headers: {
 			"Accept-Language": locale,
 		},
@@ -104,6 +109,8 @@ export default function ChatModal({
 		apply();
 		return () => observer.disconnect();
 	}, [messages]);
+
+	console.log(messages);
 
 	return (
 		<FullScreenModal
@@ -157,16 +164,40 @@ export default function ChatModal({
 												message.role !== "user" &&
 													"bg-accent dark:bg-accent-300",
 												message.id.includes("error") &&
-													"bg-red-500 dark:bg-red-500"
+													"bg-red-500 dark:bg-red-500",
+												message.toolInvocations && "p-1"
 											)}
 										>
-											{message.content.length === 0 ? (
-												<ImSpinner8 className="animate-spin" />
-											) : (
-												<AIMarkdown>
-													{message.content}
-												</AIMarkdown>
-											)}
+											{message.toolInvocations &&
+												message.toolInvocations.length >
+													0 && (
+													<div className="flex items-center gap-2 pl-2">
+														<FaTools className="size-4 dark:invert" />
+														<div className="flex flex-col dark:bg-secondary bg-white rounded-xl p-0 text-wrap max-w-full overflow-hidden break-words text-lg opacity-80 divide-y-2 divide-accent dark:divide-accent-300">
+															{message.toolInvocations.map(
+																(
+																	toolInvocation
+																) => (
+																	<div
+																	className="p-1 px-4"
+																		key={
+																			toolInvocation.toolCallId
+																		}
+																	>
+																		{
+																			toolInvocation
+																				.args
+																				.userToolCallInformation
+																		}
+																	</div>
+																)
+															)}
+														</div>
+													</div>
+												)}
+											<AIMarkdown>
+												{message.content}
+											</AIMarkdown>
 										</div>
 									</div>
 								))}
