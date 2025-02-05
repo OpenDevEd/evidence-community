@@ -6,6 +6,7 @@ import {
 	ModalBody,
 	ModalFooter,
 	ScrollShadow,
+	Spinner,
 } from "@nextui-org/react";
 import { LuUser } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
@@ -160,44 +161,68 @@ export default function ChatModal({
 										</div>
 										<div
 											className={twMerge(
-												"bg-white dark:bg-secondary rounded-xl p-4 text-wrap max-w-full overflow-hidden break-words text-lg",
+												"bg-white dark:bg-secondary rounded-xl p-0 text-wrap max-w-full overflow-hidden break-words text-lg",
 												message.role !== "user" &&
 													"bg-accent dark:bg-accent-300",
 												message.id.includes("error") &&
-													"bg-red-500 dark:bg-red-500",
-												message.toolInvocations && "p-1"
+													"bg-red-500 dark:bg-red-500"
 											)}
 										>
-											{message.toolInvocations &&
-												message.toolInvocations.length >
-													0 && (
-													<div className="flex items-center gap-2 pl-2">
-														<FaTools className="size-4 dark:invert" />
-														<div className="flex flex-col dark:bg-secondary bg-white rounded-xl p-0 text-wrap max-w-full overflow-hidden break-words text-lg opacity-80 divide-y-2 divide-accent dark:divide-accent-300">
-															{message.toolInvocations.map(
+											{message.parts.find(
+												(part) =>
+													part.type ===
+													"tool-invocation"
+											) && (
+												<div className="flex items-center gap-2">
+													<div className="w-full flex flex-col dark:bg-secondary bg-white rounded-t-xl p-0 text-wrap max-w-full overflow-hidden break-words text-lg opacity-80 divide-accent dark:divide-accent-300">
+														{message.parts
+															.filter(
+																(part) =>
+																	part.type ===
+																	"tool-invocation"
+															)
+															.map(
 																(
-																	toolInvocation
+																	part,
+																	index
 																) => (
 																	<div
-																	className="p-1 px-4"
+																		className="p-1 px-4 flex items-center gap-2"
 																		key={
-																			toolInvocation.toolCallId
+																			part
+																				.toolInvocation
+																				.toolCallId
 																		}
 																	>
+																		<FaTools
+																			className={twMerge(
+																				"size-4",
+																				index !==
+																					0 &&
+																					"opacity-0"
+																			)}
+																		/>
 																		{
-																			toolInvocation
+																			part
+																				.toolInvocation
 																				.args
 																				.userToolCallInformation
 																		}
 																	</div>
 																)
 															)}
-														</div>
 													</div>
-												)}
-											<AIMarkdown>
-												{message.content}
-											</AIMarkdown>
+												</div>
+											)}
+											{message.content.length === 0 ? (
+												<div className="p-4 flex justify-center items-center opacity-60">
+													<Spinner />
+												</div>
+											) : (
+												<AIMarkdown className="p-4">
+													{message.content}
+												</AIMarkdown>
+											)}
 										</div>
 									</div>
 								))}
