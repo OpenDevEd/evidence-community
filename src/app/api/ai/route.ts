@@ -13,7 +13,6 @@ export async function POST(req: Request) {
 	const prompt = searchParams.get("prompt") || "summarize";
 	const locale = req.headers.get("Accept-Language") || routing.defaultLocale;
 	const systemPrompt = config.prompts[prompt as keyof typeof config.prompts]?.join("\n")
-	const proofReaderPrompt = config.proofreader?.join("\n")
 	const sharedRules = config.shared_rules.join("\n")
 	const pdfRules = config.pdf_rules.join("\n")
 	const { prompt: key, modelIndex, distinctId } = await req.json();
