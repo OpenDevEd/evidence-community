@@ -156,7 +156,7 @@ export const generateEmbedding = async (value: string): Promise<number[]> => {
 	  : baseCondition;
 	  
 	const similarGuides = await db
-	  .select({ name: embeddings.content, similarity })
+	  .select({ name: embeddings.content, similarity, page: embeddings.page })
 	  .from(embeddings)
 	  .where(whereCondition)
 	  .orderBy(t => desc(t.similarity))
