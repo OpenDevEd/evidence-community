@@ -46,7 +46,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const [selectedModelValue, setSelectedModel] = useLocalStorage("ai-model", 0);
 	const id = useRef(randomUUID());
 
-	const selectedModel = selectedModelValue > models.length ? 0 : selectedModelValue;
+	const selectedModel = selectedModelValue >= models.length ? 0 : selectedModelValue;
 
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
