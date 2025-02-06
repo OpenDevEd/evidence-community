@@ -49,7 +49,7 @@ export async function POST(req: Request) {
 		content: [
 			{
 				type: "text",
-				text: "This is the data for the item, please use it to answer the user's question.",
+				text: "This is the data for the item, please use it to answer my questions, if something is not within your knowledge base and I ask for information from a PDF or a page, use the tools to get the information without asking for confirmation.",
 			},
 			{
 				type: "text",
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
 		maxSteps: 10,
 		tools: {
 			getInformation: tool({
-				description: `If the user asks for specific information that is not present in the JSON, or references a page or a PDF, ` +
+				description: `If the user asks for specific information that is not present in your knowledge base, or references a page or a PDF, ` +
 				`use this tool to access PDF pages and content without asking for confirmation. ` +
 				`The data you receive will most likely not be coherent, so you should make it human readable before returning it to the user.`,
 				parameters: z.object({
