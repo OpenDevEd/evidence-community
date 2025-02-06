@@ -18,7 +18,6 @@ export async function POST(req: Request) {
 	const locale = req.headers.get("Accept-Language") || routing.defaultLocale;
 	const systemPrompt = config.prompts.chat.join("\n");
 	const sharedRules = config.shared_rules.join("\n")
-	const pdfRules = config.pdf_rules.join("\n")
 	const item = await getCachedItem(key);
 
 	if (!item || !item.item) {
@@ -38,26 +37,12 @@ export async function POST(req: Request) {
 		return new NextResponse(error, { status: 404 });
 	}
 
-	const {fullTextPDFs: _, ...cleanItem} = item.item;
+	const {fullTextPDFs, ...cleanItem} = item.item;
 
 	if (!isAIAllowed(cleanItem)) {
 		return new NextResponse("AI not allowed", { status: 403 });
 	}
 	
-	messages.unshift({
-		role: "user",
-		content: [
-			{
-				type: "text",
-				text: "This is the data for the item, please use it to answer my questions, if something is not within your knowledge base and I ask for information from a PDF or a page, use the tools to get the information without asking for confirmation.",
-			},
-			{
-				type: "text",
-				text: item ? JSON.stringify(cleanItem) : undefined,
-			},
-		],
-	});
-
 	const coreMessages = convertToCoreMessages(messages).filter(
 		(message) => message.content.length > 0
 	);
@@ -66,8 +51,10 @@ export async function POST(req: Request) {
 		model: provider!(modelName!),
 		system: [
 			`LOCALE: ${locale}\n`,
-			systemPrompt,
-			sharedRules,
+			"You are a helpful assistant that can answer questions about the item, if the user asks for information that is not present in your knowledge base, or references a page or a PDF, use the tools to get the information without asking for confirmation.",
+			"Even if you think a question is not related to the item, use the tools to get the information without asking for confirmation, only then can you say that you don't know.",
+			"Always use the tools to get the information without asking for confirmation, even if the information seems unlikely.",
+			`ITEM: ${JSON.stringify(cleanItem)}\n`,
 		].join("\n"),
 		messages: coreMessages,
 		maxSteps: 10,
@@ -83,10 +70,15 @@ export async function POST(req: Request) {
 					userToolCallInformation: z.string().describe("Something to tell the user while the tool is being executed with ellipsises at the end."),
 				}),
 				execute: async ({ userQuery, userSpecifiedPage }) => {
-					console.log("userQuery", userQuery);
-					console.log("userSpecifiedPage", userSpecifiedPage);
-					const relevantContent = await findRelevantContent(userQuery, cleanItem.key, userSpecifiedPage);
-					return relevantContent;
+					if (fullTextPDFs && fullTextPDFs.length > 0) {
+						console.log("userQuery", userQuery);
+						console.log("userSpecifiedPage", userSpecifiedPage);
+						const relevantContent = await findRelevantContent(userQuery, cleanItem.key, userSpecifiedPage);
+						console.log("relevantContent", relevantContent);
+						return relevantContent;
+					} else {
+						return "There is no PDF attached to this item.";
+					}
 				}
 			}),
 		},

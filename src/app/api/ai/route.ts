@@ -15,6 +15,7 @@ export async function POST(req: Request) {
 	const systemPrompt = config.prompts[prompt as keyof typeof config.prompts]?.join("\n")
 	const sharedRules = config.shared_rules.join("\n")
 	const pdfRules = config.pdf_rules.join("\n")
+	const structureRules = config.structure_rules.join("\n")
 	const { prompt: key, modelIndex, distinctId } = await req.json();
 
 	if (!systemPrompt || prompt === "chat") {
@@ -53,6 +54,7 @@ export async function POST(req: Request) {
 			systemPrompt,
 			sharedRules,
 			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? pdfRules : "",
+			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? structureRules : "",
 		].join("\n"),
 		prompt: JSON.stringify(cleanItem),
 		onFinish(event) {
