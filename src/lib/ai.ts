@@ -17,7 +17,7 @@ import { sql } from "drizzle-orm";
 
 const embeddingModel = openai.embedding("text-embedding-ada-002");
 
-export const providers = [openai, google, deepseek, anthropic, mistral];
+export const providers = [google, openai, deepseek, anthropic, mistral];
 
 export function getModel(modelIndex: number) {
 	const model = models[modelIndex];

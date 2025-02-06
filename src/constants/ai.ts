@@ -8,16 +8,16 @@ import DeepSeek from "@/components/icons/DeepSeek";
 
 export const models = [
 	{
-		name: "ChatGPT",
-		company: "OpenAI",
-		model: process.env.NEXT_PUBLIC_OPENAI_MODEL,
-		icon: ChatGPT,
-	},
-	{
 		name: "Gemini",
 		company: "Google",
 		model: process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_MODEL,
 		icon: Gemini,
+	},
+	{
+		name: "ChatGPT",
+		company: "OpenAI",
+		model: process.env.NEXT_PUBLIC_OPENAI_MODEL,
+		icon: ChatGPT,
 	},
 	// {
 	// 	name: "DeepSeek",
