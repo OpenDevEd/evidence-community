@@ -180,12 +180,16 @@ export default function ChatModal({
 																(part) =>
 																	part.type ===
 																	"tool-invocation"
+															).filter(
+																(part, idx, arr) =>
+																	arr.findIndex(
+																		(p) =>
+																			p.toolInvocation.args.userToolCallInformation ===
+																				part.toolInvocation.args.userToolCallInformation
+																	) === idx
 															)
 															.map(
-																(
-																	part,
-																	index
-																) => (
+																(part, index) => (
 																	<div
 																		className="p-1 px-4 flex items-center gap-2"
 																		key={
