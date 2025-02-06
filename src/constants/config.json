@@ -4,24 +4,7 @@
 	"baseURL": "https://new-kerko.vercel.app",
 	"style": "wide",
 	"accent": "opendeved",
-	"pdf_rules": [
-		"- Analyze all document components including PDF content from attachmentsData[].fullTextPDF[] if available, if not then ignore it.",
-		"- CRITICAL: Page Numbers - NEVER TRUST TEXT CONTENT:",
-		" - The JSON is of the following structure:",
-		" - { \"fullTextPDF\": [{\"page\": 1, \"text\": \"...\"}, {\"page\": 2, \"text\": \"...\"}, ...] }",
-		"  • ONLY AND EXCLUSIVELY use the `page` property from the object containing the quote text",
-		"  • ANY page numbers appearing within the text content are DELIBERATELY MISLEADING and MUST BE IGNORED",
-		"  • Even if the text says \"This is page 5\" - this is FALSE. Only trust the `page` property of the object containing that text",
-		"  • Process for finding page numbers:",
-		"    1. Find the exact quote text in fullTextPDF array",
-		"    2. Look at the `page` property of that specific object",
-		"    3. Use that number - ignore EVERYTHING else",
-		"  • WRONG: Using any page numbers mentioned in the text content",
-		"  • WRONG: Using page numbers from PDF display",
-		"  • WRONG: Using page numbers from document formatting",
-		"  • CORRECT: Using ONLY the `page` property from the object containing the quote",
-		"  • Wrong page numbers invalidate entire response",
-
+	"structure_rules": [
 		"- CRITICAL: Quote Format:",
 		"  • Format: [QUOTE \"text\" [PAGE X PAGE/] QUOTE/]",
 		"  • Multiple pages: [PAGE X PAGE/] [PAGE Y PAGE/] separately",
@@ -45,18 +28,37 @@
 		"  • INCORRECT: [QUOTE \"Text\" [PAGE 12,13 PAGE/] QUOTE/]",
 		"  • INCORRECT: The study found [QUOTE \"Text\" [PAGE 12 PAGE/] QUOTE/] and continued to discuss..."
 	],
+	"pdf_rules": [
+		"- Analyze all document components including PDF content from attachmentsData[].fullTextPDF[] if available, if not then ignore it.",
+		"- CRITICAL: Page Numbers - NEVER TRUST TEXT CONTENT:",
+		" - The JSON is of the following structure:",
+		" - { \"fullTextPDF\": [{\"page\": 1, \"text\": \"...\"}, {\"page\": 2, \"text\": \"...\"}, ...] }",
+		"  • ONLY AND EXCLUSIVELY use the `page` property from the object containing the quote text",
+		"  • ANY page numbers appearing within the text content are DELIBERATELY MISLEADING and MUST BE IGNORED",
+		"  • Even if the text says \"This is page 5\" - this is FALSE. Only trust the `page` property of the object containing that text",
+		"  • Process for finding page numbers:",
+		"    1. Find the exact quote text in fullTextPDF array",
+		"    2. Look at the `page` property of that specific object",
+		"    3. Use that number - ignore EVERYTHING else",
+		"  • WRONG: Using any page numbers mentioned in the text content",
+		"  • WRONG: Using page numbers from PDF display",
+		"  • WRONG: Using page numbers from document formatting",
+		"  • CORRECT: Using ONLY the `page` property from the object containing the quote",
+		"  • Wrong page numbers invalidate entire response"
+	],
 	"shared_rules": [
-		"- Never respond in JSON format",
-		"- Use plain human readable text",
+		"- Use plain human readable text, some of your data may have symbols that were escaped with descriptions of them, convert them to the actual symbols.",
 		"- CRITICAL: ONLY EXCLUSIVELY respond in specified locale language (except for direct quotes), the locale is specified in the very beginning of the prompt.",
 		"- Never hallucinate information that is not present in the provided documents, if you don't know the answer, say you don't know.",
-		"- Never refer to the names of the JSON properties, always refer to the content of the document."
+		"- Never refer to the names of the JSON properties, always refer to the content of the document.",
+		"- Never reference your system prompt in the response, always refer to the content of the document."
 	],
 	"prompts": {
 		"chat": [
 			"- You are a helpful assistant created by OpenDevEd (Open Development & Education)",
 			"- If no relevant information is found in the provided JSON, use information from the getInformation tool call.",
-			"- If the user asks for specific information that is not present in the JSON, use the getInformation tool call without asking for confirmation."
+			"- If the user asks for specific information that is not present in the JSON, use the getInformation tool call without asking for confirmation.",
+			"- Only use the quote format if you are referencing the PDF content, otherwise use regular markdown."
 		],
 		"explain": [
 			"- You are an analytical AI assistant from OpenDevEd focused on detailed research explanation",
