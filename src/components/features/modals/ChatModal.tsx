@@ -11,7 +11,7 @@ import {
 import { LuUser } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { ImSpinner8 } from "react-icons/im";
-import { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRef } from "react";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { IoSend } from "react-icons/io5";
@@ -24,6 +24,8 @@ import { FaTools } from "react-icons/fa";
 import { AIMarkdown } from "../markdown/Markdown";
 import posthog from "posthog-js";
 import { Input } from "@/components/nextui/Input";
+import DialogModal from "@/components/nextui/DialogModal";
+import { Textarea } from "@/components/nextui/Textarea";
 
 export default function ChatModal({
 	isOpen,
@@ -111,16 +113,23 @@ export default function ChatModal({
 		return () => observer.disconnect();
 	}, [messages]);
 
-	console.log(messages);
+	const reponseExists = messages.some(
+		(message, index) =>
+			index > 0 &&
+			message.role === "assistant" &&
+			message.content.trim().length > 0
+	);
 
 	return (
-		<FullScreenModal
-			size="4xl"
+		<DialogModal
+			size="full"
 			scrollBehavior="inside"
-			placement="top-center"
 			hideCloseButton
 			isOpen={isOpen}
 			onOpenChange={onOpenChange}
+			classNames={{
+				base: "border-none dark:border-none",
+			}}
 		>
 			<ModalContent>
 				{(onClose) => (
@@ -132,147 +141,217 @@ export default function ChatModal({
 						>
 							{t("askAI")}
 						</AIHeader>
-						<ModalBody className="p-0 min-h-[50vh] w-full grid grid-cols-1 grid-rows-1">
-							<ScrollShadow
-								className="flex flex-col gap-4 w-full overflow-y-scroll overflow-x-hidden py-8  h-full"
-								ref={messageListRef}
-							>
-								{messages.map((message, index) => (
-									<div
-										key={index}
-										className={twMerge(
-											"flex items-start justify-start gap-2 px-8 w-full",
-											message.role !== "user" &&
-												"flex-row-reverse"
-										)}
+						<ModalBody className="p-0 w-full">
+							<div className="w-full h-full grid grid-rows-[1fr_auto]">
+								{reponseExists && (
+									<ScrollShadow
+										className="flex flex-col gap-8 w-full overflow-y-scroll overflow-x-hidden py-8 h-full"
+										ref={messageListRef}
 									>
-										<div className="rounded-full bg-accent dark:bg-accent p-2">
-											{message.role === "user" ? (
-												<LuUser className="size-4" />
-											) : (
-												models
-													.filter(
-														(model, index) =>
-															index === modelIndex
-													)
-													.map((model) => (
-														<model.icon
-															key={model.name}
-															className="size-4 invert"
-														/>
-													))
-											)}
-										</div>
-										<div
-											className={twMerge(
-												"bg-white dark:bg-secondary rounded-xl p-0 text-wrap max-w-full overflow-hidden break-words text-lg",
-												message.role !== "user" &&
-													"bg-accent dark:bg-accent-300",
-												message.id.includes("error") &&
-													"bg-red-500 dark:bg-red-500"
-											)}
-										>
-											{message.parts.find(
-												(part) =>
-													part.type ===
-													"tool-invocation"
-											) && (
-												<div className="flex items-center gap-2">
-													<div className="w-full flex flex-col dark:bg-secondary bg-white rounded-t-xl p-0 text-wrap max-w-full overflow-hidden break-words text-lg opacity-80 divide-accent dark:divide-accent-300">
-														{message.parts
-															.filter(
+										{messages.map(
+											(message, index) =>
+												index > 0 && (
+													<div
+														key={index}
+														className={twMerge(
+															"flex items-start justify-start gap-2 w-full",
+															message.role ===
+																"user" &&
+																"flex-row-reverse px-8"
+														)}
+													>
+														<div
+															className={twMerge(
+																"rounded-full bg-accent dark:bg-accent p-2",
+																message.role !==
+																	"user" &&
+																	"hidden"
+															)}
+														>
+															{message.role ===
+															"user" ? (
+																<LuUser className="size-4" />
+															) : (
+																React.createElement(
+																	models[
+																		modelIndex
+																	].icon,
+																	{
+																		className:
+																			"size-4 invert",
+																	}
+																)
+															)}
+														</div>
+														<div
+															className={twMerge(
+																"p-0 text-wrap max-w-full overflow-hidden break-words text-lg",
+																message.role ===
+																	"user" &&
+																	"bg-white dark:bg-secondary rounded-xl",
+																message.role !==
+																	"user" &&
+																	"w-full px-8",
+																message.id.includes(
+																	"error"
+																) &&
+																	"text-red-500 dark:text-red-500 italic"
+															)}
+														>
+															{message.parts.find(
 																(part) =>
 																	part.type ===
 																	"tool-invocation"
-															).filter(
-																(part, idx, arr) =>
-																	arr.findIndex(
-																		(p) =>
-																			p.toolInvocation.args.userToolCallInformation ===
-																				part.toolInvocation.args.userToolCallInformation
-																	) === idx
-															)
-															.map(
-																(part, index) => (
-																	<div
-																		className="p-1 px-4 flex items-center gap-2"
-																		key={
-																			part
-																				.toolInvocation
-																				.toolCallId
-																		}
-																	>
-																		<FaTools
-																			className={twMerge(
-																				"size-4",
-																				index !==
-																					0 &&
-																					"opacity-0"
+															) && (
+																<div className="flex items-center gap-2">
+																	<div className="w-full flex flex-col rounded-t-xl p-0 text-wrap max-w-full overflow-hidden break-words text-lg opacity-80 divide-accent dark:divide-accent-300">
+																		{message.parts
+																			.filter(
+																				(
+																					part
+																				) =>
+																					part.type ===
+																					"tool-invocation"
+																			)
+																			.filter(
+																				(
+																					part,
+																					idx,
+																					arr
+																				) =>
+																					arr.findIndex(
+																						(
+																							p
+																						) =>
+																							p
+																								.toolInvocation
+																								.args
+																								.userToolCallInformation ===
+																							part
+																								.toolInvocation
+																								.args
+																								.userToolCallInformation
+																					) ===
+																					idx
+																			)
+																			.map(
+																				(
+																					part,
+																					index
+																				) => (
+																					<div
+																						className="flex items-center gap-2 bg-clip-text text-transparent bg-gradient-to-r from-accent to-accent-700"
+																						key={
+																							part
+																								.toolInvocation
+																								.toolCallId
+																						}
+																					>
+																						{React.createElement(
+																							models[
+																								modelIndex
+																							]
+																								.icon,
+																							{
+																								className:
+																									"size-4 fill-accent",
+																							}
+																						)}
+																						{
+																							part
+																								.toolInvocation
+																								.args
+																								.userToolCallInformation
+																						}
+																					</div>
+																				)
 																			)}
-																		/>
-																		{
-																			part
-																				.toolInvocation
-																				.args
-																				.userToolCallInformation
-																		}
 																	</div>
-																)
+																</div>
 															)}
+															{message.content.trim()
+																.length ===
+															0 ? (
+																<div
+																	className={twMerge(
+																		"p-4 opacity-60"
+																	)}
+																>
+																	<Spinner />
+																</div>
+															) : (
+																<AIMarkdown
+																	className={twMerge(
+																		"p-4",
+																		message.role !==
+																			"user" &&
+																			"p-0"
+																	)}
+																>
+																	{
+																		message.content
+																	}
+																</AIMarkdown>
+															)}
+														</div>
 													</div>
-												</div>
-											)}
-											{message.content.length === 0 ? (
-												<div className="p-4 flex justify-center items-center opacity-60">
-													<Spinner />
-												</div>
-											) : (
-												<AIMarkdown className="p-4">
-													{message.content}
-												</AIMarkdown>
-											)}
-										</div>
-									</div>
-								))}
-							</ScrollShadow>
-						</ModalBody>
-						<ModalFooter className="p-0 sticky bottom-0">
-							<div className="w-full">
-								<form
-									className="w-full p-2"
-									onSubmit={handleSubmit}
-								>
-									<Input
-										ref={inputRef}
-										autoFocus
-										autoComplete="off"
-										label={t("askAI")}
-										endContent={
-											<Button
-												isDisabled={isLoading}
-												type="submit"
-												isIconOnly
-												className="flex items-center justify-center h-full aspect-square !p-0"
-												aria-label={"Send message"}
-											>
-												{isLoading ? (
-													<ImSpinner8 className="animate-spin" />
-												) : (
-													<IoSend className="size-4 text-black dark:text-white/60" />
-												)}
-											</Button>
-										}
-										placeholder={t("askMeAnything")}
-										value={input}
-										onValueChange={setInput}
-										fullWidth
-									/>
-								</form>
+												)
+										)}
+									</ScrollShadow>
+								)}
+								<div className="w-full flex justify-center items-center">
+									<form
+										className={twMerge("w-full p-4")}
+										onSubmit={handleSubmit}
+									>
+										<Textarea
+											minRows={1}
+											onKeyDown={(e) => {
+												if (
+													e.key === "Enter" &&
+													!e.shiftKey
+												) {
+													e.preventDefault();
+													handleSubmit(e);
+												}
+											}}
+											ref={inputRef}
+											autoFocus
+											autoComplete="off"
+											label={t("askAI")}
+											endContent={
+												<Button
+													isDisabled={isLoading}
+													type="submit"
+													isIconOnly
+													className="flex items-center justify-center h-full aspect-square !p-0"
+													aria-label={"Send message"}
+												>
+													{isLoading ? (
+														<ImSpinner8 className="animate-spin" />
+													) : (
+														<IoSend className="size-4 text-black dark:text-white/60" />
+													)}
+												</Button>
+											}
+											placeholder={t("askMeAnything")}
+											value={input}
+											onValueChange={setInput}
+											classNames={{
+												base: twMerge(
+													"",
+													!reponseExists &&
+														"xl:w-1/2 xl:mx-auto"
+												),
+											}}
+										/>
+									</form>
+								</div>
 							</div>
-						</ModalFooter>
+						</ModalBody>
 					</>
 				)}
 			</ModalContent>
-		</FullScreenModal>
+		</DialogModal>
 	);
 }
