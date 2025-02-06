@@ -125,7 +125,11 @@ export default function ChatModal({
 			<ModalContent>
 				{(onClose) => (
 					<>
-						<AIHeader isLoading={isLoading} onClose={onClose}>
+						<AIHeader
+							isLoading={isLoading}
+							onClose={onClose}
+							className="sticky top-0"
+						>
 							{t("askAI")}
 						</AIHeader>
 						<ModalBody className="p-0 min-h-[50vh] w-full grid grid-cols-1 grid-rows-1">
