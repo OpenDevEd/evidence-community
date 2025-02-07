@@ -64,7 +64,7 @@ function ThemeSwitcher({
 	return (
 		<li
 			className={twMerge(
-				"h-6 w-6 rounded-lg",
+				"size-6 rounded-lg",
 				isMobile ? "xl:hidden w-full justify-center flex items-center" : "xl:block hidden"
 			)}
 		>
@@ -178,7 +178,7 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 	);
 }
 
-function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
+function LinkItem({ link, pathname, isMobile }: { link: LinkObject; pathname: string; isMobile: boolean }) {
 	const t = useTranslations("nav");
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const [debouncedOnClose, timeoutRef] = useDebounce(onClose, 250);
@@ -203,8 +203,9 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 			<Link
 				href={link.href}
 				key={link.label}
+				data-is-mobile={isMobile}
 				className={twMerge(
-					"flex  gap-2 text-lg items-center justify-center font-medium",
+					"flex gap-2 text-sm 2xl:text-lg data-[is-mobile=true]:text-lg items-center justify-center font-medium",
 					style === "wide" && "uppercase font-base"
 				)}
 			>
@@ -214,10 +215,11 @@ function LinkItem({ link, pathname }: { link: LinkObject; pathname: string }) {
 						.map(([key, Value]) => (
 							<Value
 								key={key}
+								data-is-mobile={isMobile}
 								aria-label={`Icon for ${t(link.label)} link`}
 								className={twMerge(
-									"fill-current size-6 shrink-0",
-									style === "wide" && "size-5"
+									"fill-current size-4 2xl:size-6 data-[is-mobile=true]:size-6 shrink-0",
+									style === "wide" && "size-4 2xl:size-5 data-[is-mobile=true]:size-5"
 								)}
 							/>
 						))}
@@ -273,20 +275,20 @@ function LinksList({
 			className={twMerge(
 				"flex items-center justify-end gap-6",
 				isMobile && "flex-col gap-8",
-				!isMobile && "hidden xl:flex"
+				!isMobile && "hidden xl:flex",
 			)}
 		>
 			{links.map(
 				(link, index) =>
 					!link.navExclude && (
-						<LinkItem link={link} pathname={pathname} key={index} />
+						<LinkItem link={link} pathname={pathname} key={index} isMobile={isMobile} />
 					)
 			)}
 		</ul>
 	);
 }
 
-function LanguageSwitcher({ className }: { className?: string }) {
+function LanguageSwitcher({ className, isMobile = false }: { className?: string; isMobile?: boolean }) {
 	const router = useRouter();
 	const locale = useLocale();
 	const pathname = usePathname();
@@ -306,7 +308,7 @@ function LanguageSwitcher({ className }: { className?: string }) {
 						disableRipple
 						className="flex items-center gap-2 !px-2 justify-center"
 					>
-						<div className="text-lg font-medium">
+						<div data-is-mobile={isMobile} className="text-sm 2xl:text-lg data-[is-mobile=true]:text-lg font-medium">
 							{
 								shortLocalesNames[
 									locale as keyof typeof shortLocalesNames
@@ -545,9 +547,9 @@ export default function Navbar() {
 		>
 			<div
 				className={twMerge(
-					"xl:h-[6.5rem] bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10",
+					"xl:h-[6.5rem] bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-3 2xl:gap-6 z-10",
 					style === "wide" &&
-						"bg-transparent max-w-[96rem] mx-auto xl:px-14 gap-6"
+						"bg-transparent max-w-[96rem] mx-auto xl:px-14"
 				)}
 			>
 				<Logo />
@@ -555,8 +557,8 @@ export default function Navbar() {
 					<LinksList pathname={pathname} />
 				</nav>
 				<nav aria-label="Secondary navigation">
-					<ul className="flex items-center gap-3">
-						<LanguageSwitcher className="!hidden xl:!flex" />
+					<ul className="flex items-center gap-2 2xl:gap-3">
+						<LanguageSwitcher className="!hidden xl:!flex" isMobile={false} />
 						<ThemeSwitcher
 							theme={theme}
 							setTheme={setTheme}
@@ -627,7 +629,7 @@ export default function Navbar() {
 				<li>
 					<LinksList pathname={pathname} isMobile={true} />
 				</li>
-				<LanguageSwitcher className="w-full flex justify-center" />
+				<LanguageSwitcher className="w-full flex justify-center" isMobile={true} />
 				<ThemeSwitcher
 					theme={theme}
 					setTheme={setTheme}
