@@ -178,6 +178,9 @@ const config: Config = {
         'max-md': {'max': '767px'},
         'max-sm': {'max': '639px'},
       },
+      transitionTimingFunction: {
+        'spring': 'cubic-bezier(0.68, -0.6, 0.32, 1.6)',
+      }
     },
   },
   darkMode: "class",
