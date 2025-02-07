@@ -67,7 +67,7 @@ export async function POST(req: Request) {
 					userQuery: z.string().describe("The user's query"),
 					userSpecifiedPage: z.number()
 						.describe("The page number specified by the user. 0 if no specific page is requested."),
-					userToolCallInformation: z.string().describe("Something to tell the user while the tool is being executed with ellipsises at the end."),
+					userToolCallInformation: z.string().describe(`Something to tell the user while the tool is being executed with ellipsises at the end in ${locale} language.`),
 				}),
 				execute: async ({ userQuery, userSpecifiedPage }) => {
 					if (fullTextPDFs && fullTextPDFs.length > 0) {
