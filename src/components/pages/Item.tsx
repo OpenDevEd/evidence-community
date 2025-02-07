@@ -16,9 +16,9 @@ import {
 import GenerativeModal from "../features/modals/GenerativeModal";
 import ChatModal from "../features/modals/ChatModal";
 import { useRouter } from "@/i18n/routing";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
-import { fetcher, isAIAllowed } from "@/lib/utils";
+import { fetcher, fetcherPOST, isAIAllowed, setter } from "@/lib/utils";
 import Resource from "../features/items/Resource";
 import { Skeleton } from "../nextui/Skeleton";
 import { useMemo, useRef } from "react";
@@ -35,18 +35,38 @@ import { CollectionsRow } from "@/lib/items";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import PageContainer from "../layout/PageContainer";
 import { models } from "@/constants/ai";
+import posthog from "posthog-js";
 
 function randomUUID() {
 	return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
+	const [selectedModelValue, setSelectedModel] = useLocalStorage("ai-model", 0);
+	const selectedModel = selectedModelValue >= models.length ? 0 : selectedModelValue;
+	const body = {
+		prompt: data?.item?.key,
+		modelIndex: selectedModel,
+		distinctId: posthog.get_distinct_id(),
+	}
+	const locale = useLocale();
+	const { data: questions } = useSWR(
+		[`/ai/questions`, body, {
+			"Accept-Language": locale,
+		}],
+		fetcherPOST,
+		{
+			onSuccess: (data) => {
+				console.log(data);
+			},
+			revalidateOnFocus: false,
+			revalidateOnReconnect: false,
+			revalidateIfStale: false,
+		}
+	);
+	const id = useRef(randomUUID());
 	const t = useTranslations("ai");
 
-	const [selectedModelValue, setSelectedModel] = useLocalStorage("ai-model", 0);
-	const id = useRef(randomUUID());
-
-	const selectedModel = selectedModelValue >= models.length ? 0 : selectedModelValue;
 
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
@@ -77,6 +97,8 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 		});
 	};
 
+	console.log(questions);
+
 	const summaryFeature = useAIFeature("summarize", id.current, updateHistory, data, selectedModel);
 	const explainFeature = useAIFeature("explain", id.current, updateHistory, data, selectedModel);
 
@@ -106,6 +128,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 					onOpenChange={onChatOpenChange}
 					data={data}
 					modelIndex={selectedModel}
+					questions={questions}
 				/>
 				{[summaryFeature, explainFeature].map((feature) => (
 					<GenerativeModal
@@ -245,7 +268,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 					)}
 				</div>
 			</div>
-			{isAIEnabled && data?.item && !loading && aiAllowed && <AiButton data={data} />}
+			{isAIEnabled && data?.item && !loading && aiAllowed && <AiButton data={data}  />}
 			{isRelatedItemsEnabled && data?.item && (
 				<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden">
 					<div className="flex xl:flex-row flex-col xl:gap-8 gap-2">

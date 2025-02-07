@@ -6,10 +6,11 @@ import { SORT_OPTIONS } from "@/constants/items";
 export const fetcher = (url: string) =>
 	fetch(`/api${url}`).then((res) => res.json());
 
-export const fetcherPOST = ([url, payload]: [string, any]) =>
+export const fetcherPOST = ([url, payload, headers]: [string, any, any]) =>
 	fetch(`/api${url}`, {
 		method: "POST",
 		body: JSON.stringify(payload),
+		headers: headers,
 	}).then((res) => res.json());
 
 export const setter = (url: string, { arg }: { arg: any }) =>
