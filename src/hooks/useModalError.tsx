@@ -5,6 +5,7 @@ import { twMerge } from "tailwind-merge";
 import { animate as animateFramer, AnimatePresence, AnimationProps, motion } from "framer-motion";
 import { useDebounce } from "@/hooks/useDebounce";
 import { BiErrorCircle } from "react-icons/bi";
+import { useTranslations } from "next-intl";
 
 interface UseModalErrorProps {
 	animationDuration?: number;
@@ -25,7 +26,7 @@ export function useModalError({
 		animationDuration * 5 * 1000
 	);
 	const containerRef = useRef<HTMLDivElement>(null);
-
+	const t = useTranslations("ui");
 	const errorClassName = useMemo(
 		() =>
 			twMerge(
@@ -56,7 +57,7 @@ export function useModalError({
 		() => (
 			<motion.div
 				role="alert"
-				aria-label={errorMessage || "Error message"}
+				aria-label={errorMessage || t("errorMessageAriaLabel")}
 				initial={initial}
 				animate={animate}
 				exit={exit}

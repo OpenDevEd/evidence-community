@@ -39,6 +39,8 @@ function Logo() {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const status = useStatus();
 	const { theme } = useTheme();
+	const t = useTranslations("ui");
+
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
@@ -48,7 +50,10 @@ function Logo() {
 				<Image
 					key={themeToMatch}
 					aria-hidden={themeToMatch !== theme}
-					alt={`${status?.companyName} full company logo with text in ${themeToMatch} mode`}
+					alt={t("logoAlt", { 
+						company: status?.companyName,
+						theme: themeToMatch 
+					})}
 					onLoad={() => setIsLoaded(true)}
 					className={twMerge(
 						themeToMatch === "light"

@@ -104,7 +104,7 @@ export function AddButton({
 					isIconOnly
 					size="sm"
 					onPress={onOpen}
-					aria-label={"Add Resource to Collection"}
+					aria-label={t("addResourceAriaLabel")}
 				>
 					<BsPlus className="size-5" />
 				</Button>
@@ -151,7 +151,7 @@ function ResourceInteractions({
 							href={url + "/lib/" + itemData?.key}
 							className="font-medium text-tertiary-400 shrink-1 px-2"
 						>
-							<span className="text-black/60 dark:text-white/60 ">
+							<span className="text-black/60 dark:text-white/60 xl:text-base text-sm">
 								{t("viewOnDocs", {
 									site: url.split("/")[2],
 								})}

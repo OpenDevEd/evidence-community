@@ -312,10 +312,10 @@ export function ContentInteractions({
 									className="h-full font-medium text-base !p-0"
 									isIconOnly
 									onPress={onHelpOpen}
-									aria-label={"Help"}
+									aria-label={t("helpAriaLabel")}
 								>
 									<BiHelpCircle
-										aria-label="Help icon"
+										aria-label={t("helpIconAriaLabel")}
 										className="size-6"
 									/>
 								</Button>
@@ -350,7 +350,7 @@ export function ContentInteractions({
 					isClearable
 					startContent={
 						<IoSearch
-							aria-label="Search icon"
+							aria-label={t("searchIconAriaLabel")}
 							className="size-6 fill-current text-black/60 dark:text-white/40"
 						/>
 					}
@@ -413,10 +413,10 @@ export function ContentInteractions({
 							isIconOnly
 							className="!p-0 rounded-r-none flex-1"
 							onPress={() => setView("list")}
-							aria-label={"View as list"}
+							aria-label={t("viewAsListAriaLabel")}
 						>
 							<HiOutlineViewList
-								aria-label="View as list"
+								aria-label={t("viewAsListAriaLabel")}
 								className="size-6"
 							/>
 						</Button>
@@ -425,10 +425,10 @@ export function ContentInteractions({
 							isIconOnly
 							className="!p-0 rounded-l-none flex-1"
 							onPress={() => setView("grid")}
-							aria-label={"View as grid"}
+							aria-label={t("viewAsGridAriaLabel")}
 						>
 							<IoGrid
-								aria-label="View as grid"
+								aria-label={t("viewAsGridAriaLabel")}
 								className="size-4"
 							/>
 						</Button>

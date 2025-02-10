@@ -61,6 +61,8 @@ function ThemeSwitcher({
 	isMounted: boolean;
 	isMobile?: boolean;
 }) {
+	const t = useTranslations("ui");
+
 	return (
 		<li
 			className={twMerge(
@@ -76,9 +78,9 @@ function ThemeSwitcher({
 				onPress={() => {
 					setTheme(theme === "dark" ? "light" : "dark");
 				}}
-				aria-label={`Switch to ${
-					theme === "dark" ? "light" : "dark"
-				} mode`}
+				aria-label={t("switchThemeAriaLabel", {
+					theme: theme === "dark" ? t("lightTheme") : t("darkTheme")
+				})}
 			>
 				{[IoMdSunny, HiOutlineMoon].map((Icon, index) => (
 					<Icon
@@ -123,6 +125,8 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const status = useStatus();
 	const { theme } = useTheme();
+	const t = useTranslations("ui");
+	
 	const logoContent = (
 		<div
 			className={twMerge(
@@ -148,7 +152,10 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 							? "dark:hidden"
 							: "hidden dark:block"
 					)}
-					alt={`${status?.companyName} full company logo with text in ${themeToMatch} mode`}
+					alt={t("logoAlt", { 
+						company: status?.companyName,
+						theme: themeToMatch 
+					})}
 					height={40}
 					width={171}
 				/>
@@ -180,6 +187,7 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 
 function LinkItem({ link, pathname, isMobile }: { link: LinkObject; pathname: string; isMobile: boolean }) {
 	const t = useTranslations("nav");
+	const tUI = useTranslations("ui");
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const [debouncedOnClose, timeoutRef] = useDebounce(onClose, 250);
 
@@ -216,7 +224,9 @@ function LinkItem({ link, pathname, isMobile }: { link: LinkObject; pathname: st
 							<Value
 								key={key}
 								data-is-mobile={isMobile}
-								aria-label={`Icon for ${t(link.label)} link`}
+								aria-label={tUI("dropdownAriaLabel", {
+									label: t(link.label)
+								})}
 								className={twMerge(
 									"fill-current size-4 2xl:size-6 data-[is-mobile=true]:size-6 shrink-0",
 									style === "wide" && "size-4 2xl:size-5 data-[is-mobile=true]:size-5"
@@ -236,7 +246,9 @@ function LinkItem({ link, pathname, isMobile }: { link: LinkObject; pathname: st
 						<Button
 							variant="invisible"
 							className="relative text-current dark:text-current"
-							aria-label={`${link.label} dropdown`}
+							aria-label={tUI("dropdownAriaLabel", {
+								label: link.label
+							})}
 						>
 							<ChevronDownIcon className="size-4" />
 						</Button>
@@ -343,15 +355,16 @@ function LanguageSwitcher({ className, isMobile = false }: { className?: string;
 function UserButton() {
 	const { data: session } = useSession();
 	const router = useRouter();
+	const t = useTranslations("ui");
 
 	return (
 		<Dropdown>
 			<DropdownTrigger>
 				<Avatar
 					src={session?.user?.image ?? `/icons/profile.png` ?? ""}
-					alt={`${
-						session?.user?.name || session?.user?.email || "User"
-					}'s avatar`}
+					alt={t("userAvatarAlt", { 
+						name: session?.user?.name || session?.user?.email || t("genericUser")
+					})}
 				/>
 			</DropdownTrigger>
 			<DropdownMenu
@@ -365,10 +378,10 @@ function UserButton() {
 					}
 				}}
 			>
-				<DropdownItem key="profile">Profile</DropdownItem>
-				<DropdownItem key="settings">Settings</DropdownItem>
+				<DropdownItem key="profile">{t("profileMenuItem")}</DropdownItem>
+				<DropdownItem key="settings">{t("settingsMenuItem")}</DropdownItem>
 				<DropdownItem key="logout" color="danger">
-					Logout
+					{t("logout")}
 				</DropdownItem>
 			</DropdownMenu>
 		</Dropdown>
@@ -553,10 +566,10 @@ export default function Navbar() {
 				)}
 			>
 				<Logo />
-				<nav aria-label="Main navigation" className="flex-1">
+				<nav aria-label={t("mainNavAriaLabel")} className="flex-1">
 					<LinksList pathname={pathname} />
 				</nav>
-				<nav aria-label="Secondary navigation">
+				<nav aria-label={t("secondaryNavAriaLabel")}>
 					<ul className="flex items-center gap-2 2xl:gap-3">
 						<LanguageSwitcher className="!hidden xl:!flex" isMobile={false} />
 						<ThemeSwitcher
@@ -584,7 +597,7 @@ export default function Navbar() {
 							)}
 							onPress={onLoginModalOpen}
 							isIconOnly={style === "small"}
-							aria-label={"Login/Register button"}
+							aria-label={t("loginButtonAriaLabel")}
 						>
 							{style === "wide" ? t("login") : ""}
 						</Button>
@@ -607,7 +620,7 @@ export default function Navbar() {
 						>
 							<Button
 								variant="invisible"
-								aria-label={"Open hamburger menu"}
+								aria-label={t("openMenuAriaLabel")}
 								onPress={() => {
 									setIsMobileMenuOpen(!isMobileMenuOpen);
 								}}

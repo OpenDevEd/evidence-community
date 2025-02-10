@@ -59,7 +59,9 @@ export default function Attachment({ data }: { data: Item }) {
 						<Image
 							ref={imageRef}
 							src={data?.PDFCoverPageImage || ""}
-							alt={`PDF preview for ${data?.filename || 'document'}`}
+							alt={t("pdfPreviewAlt", {
+								filename: data?.filename || t("document")
+							})}
 							width={512}
 							height={512}
 							onLoad={() => setLoaded(true)}

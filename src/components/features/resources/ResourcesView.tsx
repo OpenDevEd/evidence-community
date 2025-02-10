@@ -111,6 +111,8 @@ function FilterChips({
 	handleCheckboxChange?: (key: string) => void;
 	collectionsData: CollectionsGetResponse | undefined;
 }) {
+	const t = useTranslations("ui");
+
 	return (
 		<div
 			className={twMerge(
@@ -146,7 +148,7 @@ function FilterChips({
 					>
 						<Button
 							aria-hidden={collections?.length == 0}
-							aria-label={"Clear all filters"}
+							aria-label={t("clearFiltersAriaLabel")}
 							onPress={() => {
 								handleCheckboxChange?.("");
 							}}

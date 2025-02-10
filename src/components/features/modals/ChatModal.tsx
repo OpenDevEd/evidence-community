@@ -43,6 +43,7 @@ export default function ChatModal({
 	questions: undefined | string[];
 }) {
 	const t = useTranslations("ai");
+	const tUI = useTranslations("ui");
 	const locale = useLocale();
 	const inputRef = useRef<any>(null);
 
@@ -149,13 +150,13 @@ export default function ChatModal({
 								variant="light"
 								size="sm"
 								className="ml-4"
-								aria-label="Reset"
+								aria-label={tUI("resetAriaLabel")}
 								isDisabled={isLoading}
 								onClick={() => {
 									setMessages([...messages.slice(0, 1)]);
 								}}
 							>
-								Reset Chat
+								{tUI("resetChat")}
 							</Button>
 						</AIHeader>
 						<ModalBody className="p-0 w-full overflow-hidden">
@@ -432,7 +433,7 @@ export default function ChatModal({
 														isIconOnly
 														className="flex items-center justify-center h-full aspect-square !p-0"
 														aria-label={
-															"Send message"
+															tUI("sendMessageAriaLabel")
 														}
 													>
 														{isLoading ? (

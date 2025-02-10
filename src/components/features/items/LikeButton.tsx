@@ -8,6 +8,7 @@ import { setter } from "@/lib/utils";
 import { twMerge } from "tailwind-merge";
 import { BsBookmarkCheckFill, BsBookmarkFill } from "react-icons/bs";
 import { useSWRConfig } from "swr";
+import { useTranslations } from "next-intl";
 
 const LikeButton = forwardRef<
   any,
@@ -17,6 +18,7 @@ const LikeButton = forwardRef<
   const { trigger } = useSWRMutation(`/like`, setter);
   const { data: session, update } = useSession();
   const isLiked = itemData && session?.user.likes[itemData.key];
+  const t = useTranslations("ui");
 
   const handleLike = async (e: any) => {
     setMutationLoading(true);
@@ -45,7 +47,7 @@ const LikeButton = forwardRef<
       size="sm"
       onPress={handleLike}
       className={twMerge(className)}
-      aria-label={`${isLiked ? "Remove from Bookmarks" : "Bookmark"}`}
+      aria-label={isLiked ? t("removeBookmarkAction") : t("bookmarkAction")}
     >
       {!isLiked ? <BsBookmarkFill /> : <BsBookmarkCheckFill />}
     </Button>

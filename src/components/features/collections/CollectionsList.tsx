@@ -209,7 +209,7 @@ export default function CollectionsList({
 	return (
 		<aside
 			id="collections"
-			aria-label="Filters and collections"
+			aria-label={t("filtersAndCollectionsAriaLabel")}
 			className={twMerge(
 				"w-full shrink-0 z-20",
 				isModal ? "block" : "hidden xl:block xl:w-[28.5rem]"

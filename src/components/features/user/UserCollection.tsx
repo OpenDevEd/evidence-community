@@ -7,6 +7,7 @@ import { Tooltip } from "@nextui-org/react";
 import { BsPlus } from "react-icons/bs";
 import { Button } from "@/components/nextui/Button";
 import { BiSolidBookBookmark } from "react-icons/bi";
+import { useTranslations } from "next-intl";
 
 export default function UserCollection({
 	collection,
@@ -19,6 +20,8 @@ export default function UserCollection({
 	onPress?: () => void;
 	isLoading?: boolean;
 }) {
+	const t = useTranslations("ui");
+
 	return (
 		<Button
 			color={collection ? "secondary" : "card"}
@@ -33,7 +36,9 @@ export default function UserCollection({
 			)}
 			onPress={onPress}
 			isDisabled={isLoading}
-			aria-label={`${collection?.name} collection button`}
+			aria-label={t("collectionButtonAriaLabel", {
+				name: collection?.name
+			})}
 		>
 			{!!collection && (
 				<div className="flex flex-col items-start justify-start w-full h-full gap-1">

@@ -278,7 +278,7 @@ export default function GenerativeModal({
 														);
 													}
 												}}
-												aria-label={"Delete history item"}
+												aria-label={t("deleteHistoryItemAriaLabel")}
 											>
 												<span className="hidden xl:block">
 													{t("delete")}

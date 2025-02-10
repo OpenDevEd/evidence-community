@@ -3,23 +3,30 @@ import { getTableColumns } from "drizzle-orm";
 import Image from "next/image";
 import AboutUs from "@/components/icons/AboutUs";
 import { twMerge } from "tailwind-merge";
+import { useTranslations } from "next-intl";
 
-const InstitutionLogo = ({ src, alt, className, ...props }: { src: string; alt: string; className?: string } & React.ComponentProps<typeof Image>) => (
-	<Image
-		src={src}
-		alt={`${alt} institution logo`}
-		width={24}
-		height={24}
-		className={twMerge("size-6 object-contain dark:bg-white/80 p-0.5 rounded-md", className)}
-		{...props}
-	/>
-);
+const InstitutionLogo = ({ src, alt, className,  ...props }: { src: string; alt: string; className?: string } & React.ComponentProps<typeof Image>) => {
+	const t = useTranslations("ui");
+	return (
+		<Image
+			src={src}
+			alt={t("institutionLogoAlt", { name: alt })}
+			width={24}
+			height={24}
+			className={twMerge("size-6 object-contain dark:bg-white/80 p-0.5 rounded-md", className)}
+			{...props}
+		/>
+	);
+};
 
-const OpenDevLogo = ({ className, ...props }: { className: string } & React.HTMLAttributes<HTMLDivElement>) => (
-	<div aria-label="Open Development & Education institution logo" className={twMerge("flex justify-center items-center dark:bg-white/80 text-accent p-0.5 rounded-md size-6", className)} {...props}>
-		<AboutUs className="fill-current size-full" />
-	</div>
-);
+const OpenDevLogo = ({ className, ...props }: { className: string } & React.HTMLAttributes<HTMLDivElement>) => {
+	const t = useTranslations("ui");
+	return (
+		<div aria-label={t("institutionLogoAlt", { name: "Open Development & Education" })} className={twMerge("flex justify-center items-center dark:bg-white/80 text-accent p-0.5 rounded-md size-6", className)} {...props}>
+			<AboutUs className="fill-current size-full" />
+		</div>
+	);
+};
 
 export const INSTITUTION_LOGOS: Record<string, any> = {
 	"EdTech Hub": (props: React.ComponentProps<typeof InstitutionLogo>) => (

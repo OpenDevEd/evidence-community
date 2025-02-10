@@ -19,6 +19,7 @@ import { InferSelectModel } from "drizzle-orm";
 import { status as statusTable } from "@/db/schema/tables/status";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { useLocalStorage } from "usehooks-ts";
+import { useTranslations } from "next-intl";
 
 export type CacheContextType = {
 	status: InferSelectModel<typeof statusTable>;
@@ -133,7 +134,8 @@ function LoadingScreen({
 	const { theme } = useTheme();
 	const { data: session, status } = useSession();
 	const statusTable = useStatus();
-
+	const t = useTranslations("ui");
+	
 	return (
 		<AnimatePresence mode="popLayout">
 			{featureFlags && (status !== "loading" || !!session) ? (
@@ -174,7 +176,10 @@ function LoadingScreen({
 											? "dark:hidden"
 											: "hidden dark:block"
 									)}
-									alt={`${statusTable?.companyName} logo in ${themeToMatch} mode`}
+									alt={t("logoAlt", { 
+										company: statusTable?.companyName,
+										theme: themeToMatch 
+									})}
 									width={171}
 									height={40}
 								/>

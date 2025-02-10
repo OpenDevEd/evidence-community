@@ -418,12 +418,14 @@ function ProfileListbox({
 	data: any;
 	listItems: ProfileListItem[];
 } & Omit<ListboxProps, "children">) {
+	const t = useTranslations("ui");
+
 	return (
 		<Listbox
 			variant="flat"
 			selectionMode="single"
 			className={twMerge("flex flex-col py-6", className)}
-			aria-label={"Bookmarks and collections list"}
+			aria-label={t("bookmarksListAriaLabel")}
 			{...props}
 		>
 			{listItems.map(
@@ -716,9 +718,9 @@ export default function Profile({
 						>
 							<Image
 								src={displayData.image ?? `/icons/profile.png`}
-								alt={`${
-									displayData.name ?? displayData.email
-								}'s profile picture`}
+								alt={t("userAvatarAlt", { 
+									name: displayData.name || displayData.email || t("genericUser")
+								})}
 								width={256}
 								height={256}
 								objectFit="cover"

@@ -54,7 +54,7 @@ export default async function Base({
 							)}
 						>
 							<nav
-								aria-label={"Skip navigation"}
+								aria-label={t("skipNavAriaLabel")}
 								className="absolute top-0 left-0 w-64 h-0"
 							>
 								<a

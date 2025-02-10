@@ -7,8 +7,11 @@ import { Paragraph } from "../../typography/Paragraph";
 import { Highlight } from "../../typography/Highlight";
 import { ListItem } from "../../typography/ListItem";
 import { Button } from "../../nextui/Button";
+import { useTranslations } from "next-intl";
 
 export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, onOpenChange: (open: boolean) => void }) {
+  const t = useTranslations("ui");
+
   return <Modal
   size="4xl"
   scrollBehavior="inside"
@@ -30,7 +33,7 @@ export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, o
             isIconOnly
             variant="transparent"
             className="xl:px-0 px-0 translate-x-2"
-            aria-label={"Close this popup"}
+            aria-label={t("closePopupAriaLabel")}
             startContent={
               <LuX className="size-6 text-black dark:text-white/80" />
             }

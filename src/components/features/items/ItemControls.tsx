@@ -500,7 +500,7 @@ export default function ItemControls({
 									startContent={
 										<BsThreeDots className="size-5" />
 									}
-									aria-label={"More options dropdown"}
+									aria-label={t("moreOptionsAriaLabel")}
 								></Button>
 							</DropdownTrigger>
 							<DropdownMenu
