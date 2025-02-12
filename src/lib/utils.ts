@@ -13,6 +13,11 @@ export const fetcherPOST = ([url, payload, headers]: [string, any, any]) =>
 		headers: headers,
 	}).then((res) => res.json());
 
+export const fetcherDELETE = (url: string) =>
+	fetch(`/api${url}`, {
+		method: "DELETE",
+	}).then((res) => res.json());
+
 export const setter = (url: string, { arg }: { arg: any }) =>
 	fetch(`/api${url}`, {
 		method: "POST",
