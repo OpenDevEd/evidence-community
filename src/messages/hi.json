@@ -113,7 +113,8 @@
     "dropdownAriaLabel": "चुनें",
     "resetChat": "चैट रीसेट करें",
     "profileMenuItem": "प्रोफ़ाइल",
-    "settingsMenuItem": "सेटिंग्स"
+    "settingsMenuItem": "सेटिंग्स",
+    "noCollections": "आपके पास अभी तक कोई संग्रह नहीं है।"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

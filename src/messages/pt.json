@@ -113,7 +113,8 @@
     "dropdownAriaLabel": "Selecionar",
     "resetChat": "Redefinir chat",
     "profileMenuItem": "Perfil",
-    "settingsMenuItem": "Definições"
+    "settingsMenuItem": "Definições",
+    "noCollections": "Você ainda não tem nenhuma coleção."
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

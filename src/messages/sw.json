@@ -114,7 +114,8 @@
     "dropdownAriaLabel": "Chagua",
     "resetChat": "Weka upya gumzo",
     "profileMenuItem": "Wasifu",
-    "settingsMenuItem": "Mipangilio"
+    "settingsMenuItem": "Mipangilio",
+    "noCollections": "Huna hauna makusanyo yoyote bado."
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

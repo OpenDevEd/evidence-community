@@ -113,7 +113,8 @@
     "dropdownAriaLabel": "تحديد",
     "resetChat": "إعادة تعيين الدردشة",
     "profileMenuItem": "الملف الشخصي",
-    "settingsMenuItem": "إعدادات"
+    "settingsMenuItem": "إعدادات",
+    "noCollections": "ليس لديك أي مجموعات بعد."
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
