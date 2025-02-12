@@ -11,8 +11,19 @@ import { userCollection } from "@/db/schema/tables/userCollection";
 import UserCollection from "./UserCollection";
 import { useTranslations } from "next-intl";
 
-
-export default function CollectionsList({ data, highlightedCollections, classNames, onCollectionSelect, isLoading }: { data: Session["user"], highlightedCollections?: string[], classNames?: { container?: string, pagination?: string }, onCollectionSelect?: (collectionId: string) => void, isLoading?: boolean	 }) {
+export default function CollectionsList({
+	data,
+	highlightedCollections,
+	classNames,
+	onCollectionSelect,
+	isLoading,
+}: {
+	data: Session["user"];
+	highlightedCollections?: string[];
+	classNames?: { container?: string; pagination?: string };
+	onCollectionSelect?: (collectionId: string) => void;
+	isLoading?: boolean;
+}) {
 	const [page, setPage] = useState(1);
 	const [search, setSearch] = useState("");
 	const t = useTranslations("ui");
@@ -28,12 +39,22 @@ export default function CollectionsList({ data, highlightedCollections, classNam
 			// if (aItems !== bItems) {
 			// 	return bItems - aItems;
 			// }
-			return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+			return (
+				new Date(b.createdAt).getTime() -
+				new Date(a.createdAt).getTime()
+			);
 		});
 		const filteredCollections = sortedCollections.filter((collection) => {
-			return collection.name.toLowerCase().includes(search.toLowerCase()) || collection.description?.toLowerCase().includes(search.toLowerCase());
+			return (
+				collection.name.toLowerCase().includes(search.toLowerCase()) ||
+				collection.description
+					?.toLowerCase()
+					.includes(search.toLowerCase())
+			);
 		});
-		const totalPages = Math.ceil(filteredCollections.length / COLLECTION_PER_PAGE);
+		const totalPages = Math.ceil(
+			filteredCollections.length / COLLECTION_PER_PAGE
+		);
 		const currentPage = page <= totalPages ? page : totalPages;
 		return [
 			filteredCollections.slice(
@@ -45,13 +66,41 @@ export default function CollectionsList({ data, highlightedCollections, classNam
 		];
 	}, [data.collections, page, search]);
 
+	console.log("data.collections", data.collections);
+
 	return (
 		<>
-			<Input placeholder={t("searchCollections")} onChange={(e) => setSearch(e.target.value)} onClear={() => setSearch("")} />
-			<div className={twMerge("w-full grid grid-cols-2 gap-2", classNames?.container)}>
-				{collectionsPage.map((collection: any, index: number) => (
-					<UserCollection isLoading={isLoading} isHighlighted={highlightedCollections?.includes(collection.id)} onPress={() => onCollectionSelect?.(collection.id)} key={index} collection={collection} />
-				))}
+			<Input
+				placeholder={t("searchCollections")}
+				onChange={(e) => setSearch(e.target.value)}
+				onClear={() => setSearch("")}
+			/>
+			<div
+				className={twMerge(
+					"w-full grid grid-cols-2 gap-2",
+					data.collections.length === 0 && "grid-cols-1",
+					classNames?.container
+				)}
+			>
+				{data.collections.length === 0 ? (
+					<div className="w-full flex justify-center items-center my-12">
+						<p className="text-sm dark:text-white/60 text-black/60">
+							{t("noCollections")}
+						</p>
+					</div>
+				) : (
+					collectionsPage.map((collection: any, index: number) => (
+						<UserCollection
+							isLoading={isLoading}
+							isHighlighted={highlightedCollections?.includes(
+								collection.id
+							)}
+							onPress={() => onCollectionSelect?.(collection.id)}
+							key={index}
+							collection={collection}
+						/>
+					))
+				)}
 			</div>
 			<div
 				className={twMerge(
