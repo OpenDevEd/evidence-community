@@ -116,7 +116,8 @@
     "settingsMenuItem": "सेटिंग्स",
     "noCollections": "आपके पास अभी तक कोई संग्रह नहीं है।",
     "createdLabel": "बनाया गया",
-    "deleteAction": "मिटाएँ"
+    "deleteAction": "मिटाएँ",
+    "editAction": "संपादित करें"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

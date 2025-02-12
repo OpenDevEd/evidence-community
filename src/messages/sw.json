@@ -117,7 +117,8 @@
     "settingsMenuItem": "Mipangilio",
     "noCollections": "Huna hauna makusanyo yoyote bado.",
     "createdLabel": "Imeundwa",
-    "deleteAction": "Futa"
+    "deleteAction": "Futa",
+    "editAction": "Hariri"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

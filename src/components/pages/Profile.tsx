@@ -671,7 +671,7 @@ function CollectionDropdown({
 					</DropdownItem>
 				</DropdownSection>
 				<DropdownItem key="editCollection" startContent={<BsPencil />}>
-					Edit
+					{t("editAction")}
 				</DropdownItem>
 				<DropdownItem
 					startContent={<BiTrash />}
@@ -712,7 +712,7 @@ function ProfileCollectionsList({
 }) {
 	const t = useTranslations("ui");
 	const { trigger } = useSWRMutation(
-		`/user/collections/${selectedCollection}`,
+		selectedCollection ? `/user/collections/${selectedCollection}` : null,
 		fetcherDELETE
 	);
 
@@ -923,7 +923,7 @@ export default function Profile({
 								label: t("likedItemsLabel"),
 								count:
 									"+" +
-										Object.keys(displayData.likes).length ||
+									Object.keys(displayData.likes).length ||
 									0,
 							},
 							{

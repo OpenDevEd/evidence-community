@@ -116,7 +116,8 @@
     "settingsMenuItem": "Definições",
     "noCollections": "Você ainda não tem nenhuma coleção.",
     "createdLabel": "Criado",
-    "deleteAction": "Apagar"
+    "deleteAction": "Apagar",
+    "editAction": "Editar"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

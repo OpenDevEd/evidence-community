@@ -116,7 +116,8 @@
     "settingsMenuItem": "إعدادات",
     "noCollections": "ليس لديك أي مجموعات بعد.",
     "createdLabel": "تم الإنشاء",
-    "deleteAction": "حذف"
+    "deleteAction": "حذف",
+    "editAction": "تعديل"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
