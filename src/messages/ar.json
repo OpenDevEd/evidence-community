@@ -115,7 +115,8 @@
     "profileMenuItem": "الملف الشخصي",
     "settingsMenuItem": "إعدادات",
     "noCollections": "ليس لديك أي مجموعات بعد.",
-    "createdLabel": "تم الإنشاء"
+    "createdLabel": "تم الإنشاء",
+    "deleteAction": "حذف"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

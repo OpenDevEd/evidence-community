@@ -115,7 +115,8 @@
     "profileMenuItem": "Profil",
     "settingsMenuItem": "Einstellungen",
     "noCollections": "Du hast noch keine Sammlungen.",
-    "createdLabel": "Erstellt"
+    "createdLabel": "Erstellt",
+    "deleteAction": "Löschen"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

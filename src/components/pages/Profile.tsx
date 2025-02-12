@@ -678,7 +678,7 @@ function CollectionDropdown({
 					key="deleteCollection"
 					color="danger"
 				>
-					Delete
+					{t("deleteAction")}
 				</DropdownItem>
 			</DropdownMenu>
 		</Dropdown>
