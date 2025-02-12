@@ -473,7 +473,7 @@ export async function getProfile(
 				),
 			})
 			.then((items) =>
-				items.reduce((acc, item) => {
+				items.filter((item) => collections.some((collection) => collection.id === item.userCollectionId)).reduce((acc, item) => {
 					acc[item.itemKey] = acc[item.itemKey] || {};
 					acc[item.itemKey][item.userCollectionId] = item.updatedAt;
 					return acc;
