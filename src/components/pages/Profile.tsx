@@ -805,13 +805,7 @@ export default function Profile({
 	);
 
 	const handleCollectionSelect = (collectionId: string) => {
-		console.log("got", collectionId);
 		if (collectionId === selectedCollection) {
-			console.log(
-				"collectionId === selectedCollection",
-				collectionId,
-				selectedCollection
-			);
 			router.push(createQueryString(pathname, [["collectionId", ""]]));
 		} else {
 			router.push(
