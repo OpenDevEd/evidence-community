@@ -7,7 +7,9 @@ import {
 	BsCollection,
 	BsGear,
 	BsPen,
+	BsPencil,
 	BsPlus,
+	BsThreeDotsVertical,
 } from "react-icons/bs";
 import AboutUs from "../icons/AboutUs";
 import { Button } from "../nextui/Button";
@@ -18,7 +20,13 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
 import { useSession } from "next-auth/react";
 import { Session } from "next-auth";
-import { fetcher, buildItemsQuery, setter, defaultParams } from "@/lib/utils";
+import {
+	fetcher,
+	buildItemsQuery,
+	setter,
+	defaultParams,
+	fetcherDELETE,
+} from "@/lib/utils";
 import useSWRMutation from "swr/mutation";
 import { twMerge } from "tailwind-merge";
 import { Textarea } from "../nextui/Textarea";
@@ -26,6 +34,10 @@ import { Input } from "../nextui/Input";
 import {
 	AutocompleteItem,
 	Divider,
+	DropdownItem,
+	DropdownMenu,
+	DropdownSection,
+	DropdownTrigger,
 	Listbox,
 	ListboxItem,
 	ListboxItemProps,
@@ -33,6 +45,7 @@ import {
 	ModalBody,
 	ModalContent,
 	SelectItem,
+	Spinner,
 	Tooltip,
 } from "@nextui-org/react";
 import { Modal, useDisclosure } from "@nextui-org/react";
@@ -60,6 +73,9 @@ import PageContainer from "../layout/PageContainer";
 import { IoSearch } from "react-icons/io5";
 import { Autocomplete } from "../nextui/Autocomplete";
 import DialogModal from "../nextui/DialogModal";
+import { BiTrash } from "react-icons/bi";
+import { useRouter } from "next/navigation";
+import { Dropdown } from "../nextui/Dropdown";
 
 function Pen() {
 	return (
@@ -407,6 +423,8 @@ type ProfileListItem = {
 	id?: string;
 	count?: any;
 	textValue?: string;
+	createdAt?: Date;
+	updatedAt?: Date;
 } & Omit<ListboxItemProps, "children">;
 
 function ProfileListbox({
@@ -467,14 +485,14 @@ function useProfileCollectionsList(
 	setSelectedTab: any,
 	handleCollectionSelect: any,
 	search: string,
-	selectedCollection: any
+	selectedCollection: any,
+	disabledKeys: Set<string>
 ): [ProfileListItem[], number] {
 	const formatter = useFormatter();
 	const t = useTranslations("ui");
-	const [mainListboxList, selectedCollectionIndex] = useMemo(() => {
-		const collectionsItems = Object.keys(
-			displayData.itemsCollections
-		).reduce((acc: { [key: string]: string[] }, itemKey) => {
+
+	const collectionsItems = Object.keys(displayData.itemsCollections).reduce(
+		(acc: { [key: string]: string[] }, itemKey) => {
 			for (const collectionId of Object.keys(
 				displayData.itemsCollections[itemKey]
 			)) {
@@ -484,149 +502,282 @@ function useProfileCollectionsList(
 				acc[collectionId].push(itemKey);
 			}
 			return acc;
-		}, {});
+		},
+		{}
+	);
 
-		const dataList: ProfileListItem[] = [
-			{
+	const dataList: ProfileListItem[] = [
+		{
+			label: (
+				<span>
+					{t("likedItemsLabel")}
+					<span className="text-sm ltr:ml-2 rtl:mr-2 opacity-60">
+						(
+						{formatter.number(
+							Object.keys(displayData.likes).length
+						)}
+						)
+					</span>
+				</span>
+			),
+			textValue: t("likedItemsLabel"),
+			count: formatter.number(Object.keys(displayData.likes).length),
+			description: t("likedItemsDescription"),
+			icon: BsBookmark,
+			index: 0,
+		},
+		...displayData.collections.map(
+			(collection: any): ProfileListItem => ({
 				label: (
 					<span>
-						{t("likedItemsLabel")}
+						{collection.name}
 						<span className="text-sm ltr:ml-2 rtl:mr-2 opacity-60">
 							(
 							{formatter.number(
-								Object.keys(displayData.likes).length
+								collectionsItems[collection.id]?.length || 0
 							)}
 							)
 						</span>
 					</span>
 				),
-				textValue: t("likedItemsLabel"),
-				count: formatter.number(Object.keys(displayData.likes).length),
-				description: t("likedItemsDescription"),
-				icon: BsBookmark,
+				textValue: collection.name,
+				count: formatter.number(
+					collectionsItems[collection.id]?.length || 0
+				),
+				description: collection.description,
+				icon: BsCollection,
+				id: collection.id,
 				index: 0,
-			},
-			...displayData.collections.map(
-				(collection: any): ProfileListItem => ({
-					label: (
-						<span>
-							{collection.name}
-							<span className="text-sm ltr:ml-2 rtl:mr-2 opacity-60">
-								(
-								{formatter.number(
-									collectionsItems[collection.id]?.length || 0
-								)}
-								)
-							</span>
-						</span>
-					),
-					textValue: collection.name,
-					count: formatter.number(
-						collectionsItems[collection.id]?.length || 0
-					),
-					description: collection.description,
-					icon: BsCollection,
-					id: collection.id,
-					index: 0,
-				})
-			),
-		];
+				createdAt: collection.createdAt,
+				updatedAt: collection.updatedAt,
+			})
+		),
+	];
 
-		const dataListIndexed = dataList.map((item, index) => ({
-			...item,
-			onPress: () => {
-				if (item.id && !selectedTab.has(String(index))) {
-					handleCollectionSelect(item.id);
-				} else {
-					handleCollectionSelect("");
-					if (item.id) {
-						setSelectedTab(new Set([String(0)]));
-					}
+	const dataListIndexed = dataList.map((item, index) => ({
+		...item,
+		onPress: () => {
+			if (item.id && !selectedTab.has(String(index))) {
+				handleCollectionSelect(item.id);
+			} else {
+				handleCollectionSelect("");
+				if (item.id) {
+					setSelectedTab(new Set([String(0)]));
 				}
-			},
-			index,
-		}));
+			}
+		},
+		index,
+	}));
 
-		const filteredDataList = dataListIndexed.filter(
-			(item) =>
-				(typeof item.label === "string" &&
-					item.label.toLowerCase().includes(search.toLowerCase())) ||
-				(typeof item.description === "string" &&
-					item.description
-						.toLowerCase()
-						.includes(search.toLowerCase()))
-		);
+	const filteredDataList = dataListIndexed.filter(
+		(item) =>
+			(typeof item.label === "string" &&
+				item.label.toLowerCase().includes(search.toLowerCase())) ||
+			(typeof item.description === "string" &&
+				item.description.toLowerCase().includes(search.toLowerCase()))
+	).filter(
+		(item) => !disabledKeys.has(String(item.id))
+	);
 
-		return [
-			filteredDataList,
-			dataListIndexed.findIndex((item) => item.id === selectedCollection),
-		];
-	}, [displayData, search]);
+	return [
+		filteredDataList,
+		dataListIndexed.findIndex((item) => item.id === selectedCollection),
+	];
+}
 
-	return [mainListboxList, selectedCollectionIndex];
+function CollectionDropdown({
+	selectedCollection,
+	loading,
+	handleDelete,
+	selectedCollectionData,
+}: {
+	selectedCollection: string;
+	loading: boolean;
+	handleDelete: any;
+	selectedCollectionData: any;
+}) {
+	const t = useTranslations("ui");
+	const formatter = useFormatter();
+
+	return (
+		<Dropdown>
+			<DropdownTrigger>
+				<Button
+					isDisabled={!selectedCollection || loading}
+					isIconOnly
+					size="md"
+					className="!p-0"
+				>
+					<BsThreeDotsVertical />
+				</Button>
+			</DropdownTrigger>
+			<DropdownMenu
+				disabledKeys={new Set(["collectionInfo", "editCollection"])}
+				onAction={(key) => {
+					if (key === "deleteCollection") {
+						handleDelete({});
+					}
+				}}
+			>
+				<DropdownSection>
+					<DropdownItem
+						key="collectionInfo"
+						isReadOnly
+						className="opacity-100"
+					>
+						{selectedCollectionData && (
+							<div className="w-full flex flex-col gap-3">
+								<div>
+									<div className="text-xs text-black/40 dark:text-white/40 mb-1">
+										{t("collectionName")}
+									</div>
+									<div className="text-sm text-black/80 dark:text-white/80 font-medium">
+										{selectedCollectionData?.textValue}
+									</div>
+								</div>
+								<div>
+									<div className="text-xs text-black/40 dark:text-white/40 mb-1">
+										{t("collectionDescriptionDescription")}
+									</div>
+									<div className="text-sm text-black/80 dark:text-white/80">
+										{selectedCollectionData?.description ||
+											t("noDescription")}
+									</div>
+								</div>
+								<div>
+									<div className="text-xs text-black/40 dark:text-white/40 mb-1">
+										{t("savedItemsLabel")}
+									</div>
+									<div className="text-sm text-black/80 dark:text-white/80">
+										{selectedCollectionData?.count}
+									</div>
+								</div>
+								<div className="flex flex-col gap-0.5 border-t border-black/10 dark:border-white/10 pt-3 mt-1">
+									<div className="flex items-center gap-1 text-[11px] text-black/40 dark:text-white/40">
+										<span>Created</span>
+										<span>
+											{formatter.relativeTime(
+												new Date(
+													selectedCollectionData?.createdAt ||
+														Date.now()
+												),
+												Date.now()
+											)}
+										</span>
+									</div>
+								</div>
+							</div>
+						)}
+					</DropdownItem>
+				</DropdownSection>
+				<DropdownItem key="editCollection" startContent={<BsPencil />}>
+					Edit
+				</DropdownItem>
+				<DropdownItem
+					startContent={<BiTrash />}
+					key="deleteCollection"
+					color="danger"
+				>
+					Delete
+				</DropdownItem>
+			</DropdownMenu>
+		</Dropdown>
+	);
 }
 
 function ProfileCollectionsList({
 	displayData,
-	selectedTab,
+	selectedKey,
 	setSelectedTab,
 	onOpen,
 	selectedCollection,
 	mainListboxList,
 	selectedCollectionIndex,
 	setSearch,
+	update,
+	handleCollectionSelect,
+	appendContent,
 }: {
 	displayData: any;
-	selectedTab: Set<string>;
+	selectedKey: string;
 	setSelectedTab: any;
 	onOpen: any;
 	selectedCollection?: string;
 	mainListboxList: ProfileListItem[];
 	selectedCollectionIndex: number;
 	setSearch: any;
+	update: any;
+	handleCollectionSelect: any;
+	appendContent: ReactNode;
 }) {
 	const t = useTranslations("ui");
+	const { trigger } = useSWRMutation(
+		`/user/collections/${selectedCollection}`,
+		fetcherDELETE
+	);
 
 	return (
 		<ProfileListbox
 			disallowEmptySelection
-			selectedKeys={
-				selectedCollection
-					? [String(selectedCollectionIndex)]
-					: selectedTab
-			}
-			onSelectionChange={setSelectedTab as any}
+			selectedKeys={selectedKey ? [selectedKey] : []}
 			data={displayData}
 			className="flex-1 z-10"
 			classNames={{
-				list: "min-h-80 max-h-80 overflow-y-auto xl:scrollbar-hide hover:scrollbar-default overflow-x-hidden",
+				list: "min-h-80 max-h-80 overflow-y-auto xl:scrollbar-hide hover:scrollbar-default overflow-x-hidden px-6 py-2",
 			}}
 			itemClasses={{
+				base: "px-4",
 				wrapper: "overflow-x-hidden",
 				description: "truncate",
 			}}
 			listItems={mainListboxList}
 			topContent={
-				<Input
-					placeholder={t("searchCollections")}
-					className="w-full mb-2"
-					onChange={(e) => setSearch(e.target.value)}
-				/>
+				<div className="px-6">
+					<Input
+						placeholder={t("searchCollections")}
+						className="w-full mb-2"
+						onChange={(e) => setSearch(e.target.value)}
+					/>
+				</div>
 			}
 			bottomContent={
-				<Button
-					className="mt-2"
-					startContent={<BsPlus />}
-					size="md"
-					onPress={onOpen}
-				>
-					{t("createCollection")}
-				</Button>
+				<div className="flex w-full mt-2 gap-2 px-6">
+					<Button
+						className="flex-1"
+						startContent={<BsPlus className="shrink-0" />}
+						size="md"
+						onPress={onOpen}
+					>
+						{t("createCollection")}
+					</Button>
+					{appendContent}
+				</div>
 			}
 		/>
 	);
 }
 
+function useDisplayedData(
+	data: any,
+	session: Session | null,
+	isCurrentUser: boolean
+) {
+	const displayData = {
+		...data,
+		...(isCurrentUser ? session?.user : {}),
+	};
+
+	if (session?.user) {
+		if (session?.user?.following[data.id]) {
+			displayData.followers[session.user.id] =
+				session.user.following[data.id];
+		} else {
+			delete displayData.followers[session.user.id];
+		}
+	}
+
+	return displayData;
+}
 export default function Profile({
 	data,
 	likedPosts,
@@ -637,6 +788,7 @@ export default function Profile({
 	searchParams: { [key: string]: any };
 }) {
 	const { data: session, update } = useSession();
+	const [loading, setLoading] = useState(false);
 	const [selectedTab, setSelectedTab] = useState(new Set(["0"]));
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const { router, pathname, createQueryString } =
@@ -645,41 +797,28 @@ export default function Profile({
 	const selectedCollection = searchParams["collectionId"] || "";
 	const isCurrentUser = session?.user.id == data.id;
 	const [search, setSearch] = useState("");
-
-	const displayData: Session["user"] = useMemo(() => {
-		const displayData = {
-			...data,
-			...(isCurrentUser ? session?.user : {}),
-		};
-
-		if (session?.user) {
-			if (session?.user?.following[data.id]) {
-				displayData.followers[session.user.id] =
-					session.user.following[data.id];
-			} else {
-				delete displayData.followers[session.user.id];
-			}
-		}
-
-		return displayData;
-	}, [data, session]);
-
-	const handleCollectionSelect = useCallback(
-		(collectionId: string) => {
-			if (collectionId === selectedCollection) {
-				router.push(
-					createQueryString(pathname, [["collectionId", ""]])
-				);
-			} else {
-				router.push(
-					createQueryString(pathname, [
-						["collectionId", collectionId],
-					])
-				);
-			}
-		},
-		[router, pathname, createQueryString]
+	const [disabledKeys, setDisabledKeys] = useState<Set<string>>(new Set());
+	const displayData: Session["user"] = useDisplayedData(
+		data,
+		session,
+		isCurrentUser
 	);
+
+	const handleCollectionSelect = (collectionId: string) => {
+		console.log("got", collectionId);
+		if (collectionId === selectedCollection) {
+			console.log(
+				"collectionId === selectedCollection",
+				collectionId,
+				selectedCollection
+			);
+			router.push(createQueryString(pathname, [["collectionId", ""]]));
+		} else {
+			router.push(
+				createQueryString(pathname, [["collectionId", collectionId]])
+			);
+		}
+	};
 
 	const [mainListboxList, selectedCollectionIndex] =
 		useProfileCollectionsList(
@@ -688,13 +827,50 @@ export default function Profile({
 			setSelectedTab,
 			handleCollectionSelect,
 			search,
-			selectedCollection
+			selectedCollection,
+			disabledKeys
 		);
 
-	const selectedKey = selectedCollection
-		? String(selectedCollectionIndex)
-		: Array.from(selectedTab)[0];
+	const { trigger } = useSWRMutation(
+		selectedCollection ? `/user/collections/${selectedCollection}` : null,
+		fetcherDELETE
+	);
 
+	const handleDelete = async (e: any) => {
+		setLoading(true);
+		try {
+			handleCollectionSelect("");
+			setDisabledKeys((prev) => {
+				const newSet = new Set(prev);
+				newSet.add(String(selectedCollection));
+				return newSet;
+			});
+			await trigger();
+			await update();
+		} catch (error) {
+			console.error(error);
+		} finally {
+			setLoading(false);
+		}
+	};
+
+	const selectedCollectionData = mainListboxList.find(
+		(item) => item.id === selectedCollection
+	);
+
+	const selectedKey =
+		(selectedCollection && !disabledKeys.has(selectedCollection))
+			? String(selectedCollectionIndex)
+			: "0"
+
+	const appendContent = (
+		<CollectionDropdown
+			selectedCollection={selectedCollection || ""}
+			loading={loading}
+			handleDelete={handleDelete}
+			selectedCollectionData={selectedCollectionData}
+		/>
+	);
 	return (
 		<PageContainer
 			id="main-content"
@@ -718,8 +894,11 @@ export default function Profile({
 						>
 							<Image
 								src={displayData.image ?? `/icons/profile.png`}
-								alt={t("userAvatarAlt", { 
-									name: displayData.name || displayData.email || t("genericUser")
+								alt={t("userAvatarAlt", {
+									name:
+										displayData.name ||
+										displayData.email ||
+										t("genericUser"),
 								})}
 								width={256}
 								height={256}
@@ -771,20 +950,25 @@ export default function Profile({
 							</div>
 						))}
 					</div>
-					<div className="hidden px-6 xl:flex flex-col flex-1">
-						<Divider className="" />
+					<div className="hidden xl:flex flex-col flex-1">
+						<div className="px-6">
+							<Divider />
+						</div>
 						<ProfileCollectionsList
 							displayData={displayData}
-							selectedTab={selectedTab}
+							selectedKey={selectedKey}
 							setSelectedTab={setSelectedTab}
 							onOpen={onOpen}
 							selectedCollection={selectedCollection}
 							mainListboxList={mainListboxList}
 							selectedCollectionIndex={selectedCollectionIndex}
 							setSearch={setSearch}
+							update={update}
+							handleCollectionSelect={handleCollectionSelect}
+							appendContent={appendContent}
 						/>
 						{isCurrentUser && (
-							<>
+							<div className="px-6">
 								<Divider className="" />
 								<ProfileListbox
 									selectionMode="none"
@@ -805,7 +989,7 @@ export default function Profile({
 										index,
 									}))}
 								/>
-							</>
+							</div>
 						)}
 					</div>
 				</div>
@@ -863,6 +1047,7 @@ export default function Profile({
 							>
 								<BsPlus />
 							</Button>
+							{appendContent}
 						</div>
 					}
 				/>
