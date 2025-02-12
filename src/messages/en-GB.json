@@ -114,7 +114,8 @@
     "resetChat": "Reset Chat",
     "profileMenuItem": "Profile",
     "settingsMenuItem": "Settings",
-    "noCollections": "You don't have any collections yet."
+    "noCollections": "You don't have any collections yet.",
+    "createdLabel": "Created"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

@@ -654,7 +654,7 @@ function CollectionDropdown({
 								</div>
 								<div className="flex flex-col gap-0.5 border-t border-black/10 dark:border-white/10 pt-3 mt-1">
 									<div className="flex items-center gap-1 text-[11px] text-black/40 dark:text-white/40">
-										<span>Created</span>
+										<span>{t("createdLabel")}</span>
 										<span>
 											{formatter.relativeTime(
 												new Date(

@@ -114,7 +114,8 @@
     "resetChat": "重置聊天",
     "profileMenuItem": "个人资料",
     "settingsMenuItem": "设置",
-    "noCollections": "您还没有任何收藏。"
+    "noCollections": "您还没有任何收藏。",
+    "createdLabel": "已创建"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

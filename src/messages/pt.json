@@ -114,7 +114,8 @@
     "resetChat": "Redefinir chat",
     "profileMenuItem": "Perfil",
     "settingsMenuItem": "Definições",
-    "noCollections": "Você ainda não tem nenhuma coleção."
+    "noCollections": "Você ainda não tem nenhuma coleção.",
+    "createdLabel": "Criado"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

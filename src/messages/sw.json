@@ -115,7 +115,8 @@
     "resetChat": "Weka upya gumzo",
     "profileMenuItem": "Wasifu",
     "settingsMenuItem": "Mipangilio",
-    "noCollections": "Huna hauna makusanyo yoyote bado."
+    "noCollections": "Huna hauna makusanyo yoyote bado.",
+    "createdLabel": "Imeundwa"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

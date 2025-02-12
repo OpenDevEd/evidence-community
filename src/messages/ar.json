@@ -114,7 +114,8 @@
     "resetChat": "إعادة تعيين الدردشة",
     "profileMenuItem": "الملف الشخصي",
     "settingsMenuItem": "إعدادات",
-    "noCollections": "ليس لديك أي مجموعات بعد."
+    "noCollections": "ليس لديك أي مجموعات بعد.",
+    "createdLabel": "تم الإنشاء"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
