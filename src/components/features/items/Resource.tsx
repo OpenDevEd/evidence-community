@@ -91,7 +91,7 @@ export function AddButton({
 										highlightedCollections={highlightedCollections}
 										data={session?.user}
 										classNames={{
-											container: "grid-cols-2 gap-3",
+											container: "gap-3",
 										}}
 										onCollectionSelect={onCollectionSelect}
 									/>
