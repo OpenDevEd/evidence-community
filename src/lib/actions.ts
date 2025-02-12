@@ -432,7 +432,7 @@ export async function getProfile(
 			);
 
 		const collections = await tx.query.userCollection.findMany({
-			where: eq(userCollection.userId, id),
+			where: and(eq(userCollection.userId, id), eq(userCollection.deleted, false)),
 		});
 
 		const likes = await tx.query.usersToLikes
