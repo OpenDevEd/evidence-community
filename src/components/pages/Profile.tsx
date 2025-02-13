@@ -711,11 +711,7 @@ function ProfileCollectionsList({
 	appendContent: ReactNode;
 }) {
 	const t = useTranslations("ui");
-	const { trigger } = useSWRMutation(
-		selectedCollection ? `/user/collections/${selectedCollection}` : null,
-		fetcherDELETE
-	);
-
+	
 	return (
 		<ProfileListbox
 			disallowEmptySelection
