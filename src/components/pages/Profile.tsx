@@ -470,6 +470,7 @@ function ProfileListbox({
 							className
 						)}
 						{...itemProps}
+						description={""}
 					>
 						<div className="text-xl">{label}</div>
 					</ListboxItem>
