@@ -74,7 +74,7 @@ function CacheProvider({
 	status: InferSelectModel<typeof statusTable>;
 }) {
 	const [cache, setCache] = useState({});
-	const itemsCache = useRef(undefined);
+	const itemsCache = useRef({});
 	const previousExpansionStates = useRef({});
 	const [globalExpanded, setGlobalExpanded] = useState({});
 	const [accordionGlobalExpanded, setAccordionGlobalExpanded] = useState(null);

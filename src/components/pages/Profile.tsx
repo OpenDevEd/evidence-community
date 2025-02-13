@@ -11,11 +11,8 @@ import {
 	BsPlus,
 	BsThreeDotsVertical,
 } from "react-icons/bs";
-import AboutUs from "../icons/AboutUs";
 import { Button } from "../nextui/Button";
-import Resource from "../features/items/Resource";
 import { ReactNode, useCallback, useContext, useMemo, useState } from "react";
-import { Skeleton } from "../nextui/Skeleton";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
 import { useSession } from "next-auth/react";
@@ -44,38 +41,30 @@ import {
 	ListboxProps,
 	ModalBody,
 	ModalContent,
-	SelectItem,
-	Spinner,
-	Tooltip,
+	SelectItem
 } from "@nextui-org/react";
-import { Modal, useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@nextui-org/react";
 import GenericHeader from "../features/modals/GenericHeader";
-import FullScreenModal from "../nextui/FullScreenModal";
 import { Select } from "../nextui/Select";
 import {
-	COLLECTION_PER_PAGE,
-	COLLECTION_VISIBILITY_OPTIONS,
+	COLLECTION_VISIBILITY_OPTIONS
 } from "@/constants/user";
 import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence } from "framer-motion";
-import { Pagination } from "../nextui/Pagination";
-import CollectionsList from "../features/user/CollectionsList";
-import UserCollection from "../features/user/UserCollection";
 import { ResourcesView } from "../features/resources/ResourcesView";
-import { CacheContext } from "@/context/Providers";
-import { ITEMS_PER_PAGE, SORT_OPTIONS } from "@/constants/items";
+import { CacheContext, useLastFetchedData } from "@/context/Providers";
 import { useParamsState } from "@/hooks/useParamsState";
-import { SCOPE_OPTIONS } from "@/constants/items";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import useSWR from "swr";
 import { IconType } from "react-icons/lib";
 import PageContainer from "../layout/PageContainer";
-import { IoSearch } from "react-icons/io5";
 import { Autocomplete } from "../nextui/Autocomplete";
 import DialogModal from "../nextui/DialogModal";
 import { BiTrash } from "react-icons/bi";
-import { useRouter } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { Dropdown } from "../nextui/Dropdown";
+import { CollectionsGetResponse } from "@/app/api/collections/types";
+import { useHierarchy } from "@/hooks/useHierarchy";
 
 function Pen() {
 	return (
@@ -273,26 +262,23 @@ function CollectionWrapper({ children }: { children: ReactNode }) {
 	);
 }
 
-function ItemsList({
-	searchParams,
-	data,
-	collectionId,
-	extraFilters,
-}: {
-	searchParams: { [key: string]: any };
-	data: any;
-	collectionId: string | null;
-	extraFilters?: ReactNode;
-}) {
+export function useItemsList(userData?: any) {
+	const searchParamsFromParams = useSearchParams()
+
+	const pathName = usePathname()
+
+	const searchParams = Object.fromEntries(searchParamsFromParams.entries()) as any
+
+	const { setLastFetchedData } = useLastFetchedData();
+
+	const { itemsCache } = useContext(CacheContext);
+
 	const { router, pathname, createQueryString } =
-		useParamsState(searchParams);
+		useParamsState(searchParams );
 
-	const t = useTranslations("ui");
-	const formatter = useFormatter();
+	const queryParams = defaultParams(searchParams );
 
-	const queryParams = defaultParams(searchParams);
-
-	const itemsQuery = buildItemsQuery(queryParams, `/user/items/${data.id}`);
+	const itemsQuery = buildItemsQuery(queryParams, userData ? `/user/items/${userData.id}` : "/items");
 
 	const handlePageChange = useCallback(
 		(newPage: number) => {
@@ -343,8 +329,18 @@ function ItemsList({
 		[router, pathname, createQueryString]
 	);
 
+	const handleCollectionSelect = (collectionId: string) => {
+		if (collectionId === queryParams.collectionId) {
+			router.push(createQueryString(pathname, [["collectionId", ""]]));
+		} else {
+			router.push(
+				createQueryString(pathname, [["collectionId", collectionId]])
+			);
+		}
+	};
+
 	const {
-		data: itemsData,
+		data: fetchedItemsData,
 		error: itemsError,
 		isLoading: isItemsLoading,
 		isValidating: isItemsFetching,
@@ -355,41 +351,108 @@ function ItemsList({
 			if (data.totalPages < queryParams.page) {
 				handlePageChange(data.totalPages);
 			}
+			setLastFetchedData(data);
 		},
 	});
 
+	if (fetchedItemsData) {
+		itemsCache.current[pathName] = fetchedItemsData;
+	}
+
+	const itemsData = itemsCache.current[pathName]
+
+	const {
+		data: collectionsData,
+		error: collectionsError,
+		isLoading: isCollectionsLoading,
+	} = useSWR<CollectionsGetResponse>("/collections", fetcher, {
+		keepPreviousData: true,
+	});
+
+	const { hierarchy, handleCheckboxChange, selectedCollections } =
+		useHierarchy({
+			data: collectionsData,
+			searchParams
+		});
+
+
+	return {
+		itemsData,
+		itemsError,
+		isItemsLoading,
+		isItemsFetching,
+		revalidateResults,
+		handlePageChange,
+		handleSortChange,
+		handleScopeChange,
+		handleSearchChange,
+		handleRangeChange,
+		queryParams,
+		collectionsData,
+		collectionsError,
+		isCollectionsLoading,
+		hierarchy,
+		handleCheckboxChange,
+		selectedCollections,
+		searchParams,
+		handleCollectionSelect,
+		pathName
+	};
+}
+
+export function ItemsList({
+	userData,
+	extraFilters,
+	props,
+}: {
+	userData?: any;
+	extraFilters?: ReactNode;
+	props: ReturnType<typeof useItemsList>;
+}) {
+	const t = useTranslations("ui");
+	const formatter = useFormatter();
+
 	return (
 		<ResourcesView
-			sort={queryParams.sort}
-			search={queryParams.search}
-			scope={queryParams.scope}
-			handleSearchChange={handleSearchChange}
-			handleScopeChange={handleScopeChange}
-			handleSortChange={handleSortChange}
-			itemsData={itemsData}
-			itemsError={itemsError}
-			isItemsLoading={isItemsLoading}
-			range={queryParams.range}
-			handleRangeChange={handleRangeChange}
-			pageNumber={queryParams.page}
-			handlePageChange={handlePageChange}
-			searchParams={searchParams}
-			isItemsFetching={isItemsFetching}
-			revalidateResults={revalidateResults}
+			sort={props.queryParams.sort}
+			search={props.queryParams.search}
+			scope={props.queryParams.scope}
+			handleSearchChange={props.handleSearchChange}
+			handleScopeChange={props.handleScopeChange}
+			handleSortChange={props.handleSortChange}
+			itemsData={props.itemsData}
+			itemsError={props.itemsError}
+			isItemsLoading={props.isItemsLoading}
+			range={props.queryParams.range}
+			handleRangeChange={props.handleRangeChange}
+			pageNumber={props.queryParams.page}
+			handlePageChange={props.handlePageChange}
+			searchParams={props.searchParams}
+			isItemsFetching={props.isItemsFetching}
+			revalidateResults={props.revalidateResults}
 			extraFilters={extraFilters}
-			countLabel={
-				<div>
-					{collectionId
+			queryParams={props.queryParams}
+			{...(!userData ? {
+				collectionsData: props.collectionsData,
+				hierarchy: props.hierarchy,
+				handleCheckboxChange: props.handleCheckboxChange,
+				selectedCollections: props.selectedCollections,
+			} : {
+				params: {
+					id: userData.id,
+				},
+				countLabel: (<div>
+					{props.queryParams.collectionId
 						? t.rich("itemsInCollection", {
 								count: formatter.number(
-									itemsData?.totalItems || 0
+									props.itemsData?.totalItems || 0
 								),
 								number: (chunks) => (
 									<NumberWrapper>{chunks}</NumberWrapper>
 								),
-								collection: data.collections.find(
+								collection: userData.collections.find(
 									(collection: any) =>
-										collection.id === collectionId
+										collection.id === props.queryParams.collectionId
 								)?.name,
 								collections: (chunks) => (
 									<CollectionWrapper>
@@ -399,18 +462,14 @@ function ItemsList({
 						  })
 						: t.rich("likedItemsCount", {
 								count: formatter.number(
-									itemsData?.totalItems || 0
+									props.itemsData?.totalItems || 0
 								),
 								number: (chunks) => (
 									<NumberWrapper>{chunks}</NumberWrapper>
 								),
 						  })}
-				</div>
-			}
-			queryParams={queryParams}
-			params={{
-				id: data.id,
-			}}
+				</div>)
+			})}
 		/>
 	);
 }
@@ -712,7 +771,7 @@ function ProfileCollectionsList({
 	appendContent: ReactNode;
 }) {
 	const t = useTranslations("ui");
-	
+
 	return (
 		<ProfileListbox
 			disallowEmptySelection
@@ -777,21 +836,14 @@ function useDisplayedData(
 }
 export default function Profile({
 	data,
-	likedPosts,
-	searchParams,
 }: {
 	data: any;
-	likedPosts: any[];
-	searchParams: { [key: string]: any };
 }) {
 	const { data: session, update } = useSession();
 	const [loading, setLoading] = useState(false);
 	const [selectedTab, setSelectedTab] = useState(new Set(["0"]));
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
-	const { router, pathname, createQueryString } =
-		useParamsState(searchParams);
 	const t = useTranslations("ui");
-	const selectedCollection = searchParams["collectionId"] || "";
 	const isCurrentUser = session?.user.id == data.id;
 	const [search, setSearch] = useState("");
 	const [disabledKeys, setDisabledKeys] = useState<Set<string>>(new Set());
@@ -801,22 +853,15 @@ export default function Profile({
 		isCurrentUser
 	);
 
-	const handleCollectionSelect = (collectionId: string) => {
-		if (collectionId === selectedCollection) {
-			router.push(createQueryString(pathname, [["collectionId", ""]]));
-		} else {
-			router.push(
-				createQueryString(pathname, [["collectionId", collectionId]])
-			);
-		}
-	};
+	const props = useItemsList(data);
+	const { queryParams: { collectionId: selectedCollection }, handleCollectionSelect } = props;
 
 	const [mainListboxList, selectedCollectionIndex] =
 		useProfileCollectionsList(
 			displayData,
 			selectedTab,
 			setSelectedTab,
-			handleCollectionSelect,
+			props.handleCollectionSelect,
 			search,
 			selectedCollection,
 			disabledKeys
@@ -987,9 +1032,8 @@ export default function Profile({
 			</div>
 			<div className="w-full flex flex-col gap-4">
 				<ItemsList
-					data={displayData}
-					searchParams={searchParams}
-					collectionId={selectedCollection}
+					userData={data}
+					props={props}
 					extraFilters={
 						<div className="flex w-full gap-4 col-span-2 xl:hidden">
 							<Autocomplete
