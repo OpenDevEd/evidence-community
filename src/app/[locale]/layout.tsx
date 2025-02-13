@@ -7,7 +7,7 @@ import { setRequestLocale } from "next-intl/server";
 export default async function RootLayout(
     props: Readonly<{
         children: React.ReactNode;
-        params: { [key: string]: any };
+        params: Promise<{ [key: string]: any }>;
     }>
 ) {
     const params = await props.params;

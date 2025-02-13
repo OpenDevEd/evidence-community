@@ -68,11 +68,8 @@ export async function generateMetadata(props: {
   }, parent);
 }
 
-export default async function Lib(
-  props: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }
-) {
-  const searchParams = await props.searchParams;
+export default async function Lib() {
   return (
-    <EvidenceLibrary searchParams={searchParams} />
+    <EvidenceLibrary />
   );
 }

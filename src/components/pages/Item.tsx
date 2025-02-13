@@ -18,7 +18,7 @@ import ChatModal from "../features/modals/ChatModal";
 import { useRouter } from "@/i18n/routing";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
-import { fetcher, fetcherPOST, isAIAllowed, setter } from "@/lib/utils";
+import { fetcher, fetcherPOST, isAIAllowed } from "@/lib/utils";
 import Resource from "../features/items/Resource";
 import { Skeleton } from "../nextui/Skeleton";
 import { useMemo, useRef } from "react";
