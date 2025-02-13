@@ -29,7 +29,8 @@ import { twMerge } from "tailwind-merge";
 import PageContainer from "../layout/PageContainer";
 import FullScreenModal from "../nextui/FullScreenModal";
 import GenericHeader from "../features/modals/GenericHeader";
-import { ItemsList, useItemsList } from "./Profile";
+import { useItemsList } from "@/hooks/useItemsList";
+import ItemsList from "../features/items/ItemsList";
 
 function DropDownIcon({
 	Icon,

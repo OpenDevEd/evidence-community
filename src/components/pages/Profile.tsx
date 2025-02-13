@@ -12,17 +12,13 @@ import {
 	BsThreeDotsVertical,
 } from "react-icons/bs";
 import { Button } from "../nextui/Button";
-import { ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import { ReactNode, useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
 import { useSession } from "next-auth/react";
 import { Session } from "next-auth";
 import {
-	fetcher,
-	buildItemsQuery,
-	setter,
-	defaultParams,
-	fetcherDELETE,
+	setter, fetcherDELETE
 } from "@/lib/utils";
 import useSWRMutation from "swr/mutation";
 import { twMerge } from "tailwind-merge";
@@ -52,67 +48,14 @@ import {
 import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence } from "framer-motion";
 import { ResourcesView } from "../features/resources/ResourcesView";
-import { CacheContext, useLastFetchedData } from "@/context/Providers";
-import { useParamsState } from "@/hooks/useParamsState";
-import { ItemsGetResponse } from "@/app/api/items/types";
-import useSWR from "swr";
 import { IconType } from "react-icons/lib";
 import PageContainer from "../layout/PageContainer";
 import { Autocomplete } from "../nextui/Autocomplete";
 import DialogModal from "../nextui/DialogModal";
 import { BiTrash } from "react-icons/bi";
-import { usePathname, useSearchParams } from "next/navigation";
 import { Dropdown } from "../nextui/Dropdown";
-import { CollectionsGetResponse } from "@/app/api/collections/types";
-import { useHierarchy } from "@/hooks/useHierarchy";
-
-function Pen() {
-	return (
-		<div className="rounded-full bg-primary dark:bg-secondary flex items-center justify-center p-1.5 size-6">
-			<BsPen className="size-full fill-black/60 dark:fill-white/60 " />
-		</div>
-	);
-}
-
-function FollowButton({
-	displayData,
-	session,
-	update,
-}: {
-	displayData: any;
-	session: Session | null;
-	update: any;
-}) {
-	const [loading, setLoading] = useState(false);
-	const { trigger } = useSWRMutation(`/user/follows`, setter);
-
-	const isFollowing = useMemo(() => {
-		return session?.user.following[displayData.id] ?? false;
-	}, [displayData, session]);
-
-	const handleClick = useCallback(async () => {
-		setLoading(true);
-		try {
-			await trigger({ id: displayData.id });
-			await update();
-		} catch (error) {
-			console.error(error);
-		} finally {
-			setLoading(false);
-		}
-	}, [trigger, displayData, update]);
-
-	return (
-		<Button
-			color={isFollowing ? "danger" : "accent"}
-			onPress={handleClick}
-			isLoading={loading}
-			className={twMerge(!session && "hidden")}
-		>
-			{isFollowing ? "Unfollow" : "Follow"}
-		</Button>
-	);
-}
+import { useItemsList } from "@/hooks/useItemsList";
+import ItemsList from "../features/items/ItemsList";
 
 function CreateCollectionModal({
 	update,
@@ -246,233 +189,6 @@ function CreateCollectionModal({
 	);
 }
 
-function NumberWrapper({ children }: { children: ReactNode }) {
-	return (
-		<span className="text-xl font-medium text-black/80 dark:text-white/80">
-			{children}
-		</span>
-	);
-}
-
-function CollectionWrapper({ children }: { children: ReactNode }) {
-	return (
-		<span className="text-sm text-black/60 dark:text-white/60">
-			{children}
-		</span>
-	);
-}
-
-export function useItemsList(userData?: any) {
-	const searchParamsFromParams = useSearchParams()
-
-	const pathName = usePathname()
-
-	const searchParams = Object.fromEntries(searchParamsFromParams.entries()) as any
-
-	const { setLastFetchedData } = useLastFetchedData();
-
-	const { itemsCache } = useContext(CacheContext);
-
-	const { router, pathname, createQueryString } =
-		useParamsState(searchParams );
-
-	const queryParams = defaultParams(searchParams );
-
-	const itemsQuery = buildItemsQuery(queryParams, userData ? `/user/items/${userData.id}` : "/items");
-
-	const handlePageChange = useCallback(
-		(newPage: number) => {
-			router.push(
-				createQueryString(pathname, [["page", String(newPage)]])
-			);
-		},
-		[router, pathname, createQueryString]
-	);
-
-	const handleSortChange = useCallback(
-		(sort: Set<string>) => {
-			const value = sort.values().next().value;
-			if (value)
-				router.push(createQueryString(pathname, [["sort", value]]));
-		},
-		[router, pathname, createQueryString]
-	);
-
-	const handleScopeChange = useCallback(
-		(scope: Set<string>) => {
-			const value = scope.values().next().value;
-			if (value)
-				router.push(createQueryString(pathname, [["scope", value]]));
-		},
-		[router, pathname, createQueryString]
-	);
-
-	const handleSearchChange = useCallback(
-		(text: string) =>
-			router.push(
-				createQueryString(pathname, [
-					["search", text],
-					["page", "1"],
-				])
-			),
-		[router, pathname, createQueryString]
-	);
-
-	const handleRangeChange = useCallback(
-		(start: string | null, end: string | null) => {
-			router.push(
-				createQueryString(pathname, [
-					["range", [start, end].join(end !== null ? "-" : "")],
-				])
-			);
-		},
-		[router, pathname, createQueryString]
-	);
-
-	const handleCollectionSelect = (collectionId: string) => {
-		if (collectionId === queryParams.collectionId) {
-			router.push(createQueryString(pathname, [["collectionId", ""]]));
-		} else {
-			router.push(
-				createQueryString(pathname, [["collectionId", collectionId]])
-			);
-		}
-	};
-
-	const {
-		data: fetchedItemsData,
-		error: itemsError,
-		isLoading: isItemsLoading,
-		isValidating: isItemsFetching,
-		mutate: revalidateResults,
-	} = useSWR<ItemsGetResponse>(itemsQuery, fetcher, {
-		keepPreviousData: true,
-		onSuccess: (data) => {
-			if (data.totalPages < queryParams.page) {
-				handlePageChange(data.totalPages);
-			}
-			setLastFetchedData(data);
-		},
-	});
-
-	if (fetchedItemsData) {
-		itemsCache.current[pathName] = fetchedItemsData;
-	}
-
-	const itemsData = itemsCache.current[pathName]
-
-	const {
-		data: collectionsData,
-		error: collectionsError,
-		isLoading: isCollectionsLoading,
-	} = useSWR<CollectionsGetResponse>("/collections", fetcher, {
-		keepPreviousData: true,
-	});
-
-	const { hierarchy, handleCheckboxChange, selectedCollections } =
-		useHierarchy({
-			data: collectionsData,
-			searchParams
-		});
-
-
-	return {
-		itemsData,
-		itemsError,
-		isItemsLoading,
-		isItemsFetching,
-		revalidateResults,
-		handlePageChange,
-		handleSortChange,
-		handleScopeChange,
-		handleSearchChange,
-		handleRangeChange,
-		queryParams,
-		collectionsData,
-		collectionsError,
-		isCollectionsLoading,
-		hierarchy,
-		handleCheckboxChange,
-		selectedCollections,
-		searchParams,
-		handleCollectionSelect,
-		pathName
-	};
-}
-
-export function ItemsList({
-	userData,
-	extraFilters,
-	props,
-}: {
-	userData?: any;
-	extraFilters?: ReactNode;
-	props: ReturnType<typeof useItemsList>;
-}) {
-	const t = useTranslations("ui");
-	const formatter = useFormatter();
-
-	return (
-		<ResourcesView
-			sort={props.queryParams.sort}
-			search={props.queryParams.search}
-			scope={props.queryParams.scope}
-			handleSearchChange={props.handleSearchChange}
-			handleScopeChange={props.handleScopeChange}
-			handleSortChange={props.handleSortChange}
-			itemsData={props.itemsData}
-			itemsError={props.itemsError}
-			isItemsLoading={props.isItemsLoading}
-			range={props.queryParams.range}
-			handleRangeChange={props.handleRangeChange}
-			pageNumber={props.queryParams.page}
-			handlePageChange={props.handlePageChange}
-			searchParams={props.searchParams}
-			isItemsFetching={props.isItemsFetching}
-			revalidateResults={props.revalidateResults}
-			extraFilters={extraFilters}
-			queryParams={props.queryParams}
-			{...(!userData ? {
-				collectionsData: props.collectionsData,
-				hierarchy: props.hierarchy,
-				handleCheckboxChange: props.handleCheckboxChange,
-				selectedCollections: props.selectedCollections,
-			} : {
-				params: {
-					id: userData.id,
-				},
-				countLabel: (<div>
-					{props.queryParams.collectionId
-						? t.rich("itemsInCollection", {
-								count: formatter.number(
-									props.itemsData?.totalItems || 0
-								),
-								number: (chunks) => (
-									<NumberWrapper>{chunks}</NumberWrapper>
-								),
-								collection: userData.collections.find(
-									(collection: any) =>
-										collection.id === props.queryParams.collectionId
-								)?.name,
-								collections: (chunks) => (
-									<CollectionWrapper>
-										{chunks}
-									</CollectionWrapper>
-								),
-						  })
-						: t.rich("likedItemsCount", {
-								count: formatter.number(
-									props.itemsData?.totalItems || 0
-								),
-								number: (chunks) => (
-									<NumberWrapper>{chunks}</NumberWrapper>
-								),
-						  })}
-				</div>)
-			})}
-		/>
-	);
-}
 
 type ProfileListItem = {
 	label: any;
