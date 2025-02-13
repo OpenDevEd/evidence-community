@@ -2,49 +2,34 @@
 import { Button } from "@/components/nextui/Button";
 import CollectionsList from "@/components/features/collections/CollectionsList";
 import { IoGrid, IoSearch } from "react-icons/io5";
-import { LuChevronDown, LuX } from "react-icons/lu";
 import { Select } from "@/components/nextui/Select";
 import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
 import {
-	AutocompleteItem,
-	Modal,
-	ModalContent,
-	ModalHeader,
-	Spinner,
-	useDisclosure,
+	ModalContent, Spinner,
+	useDisclosure
 } from "@nextui-org/react";
-import useSWR from "swr";
-import { defaultParams, fetcher } from "@/lib/utils";
-import { ReactNode, useCallback, useContext, useMemo, useState } from "react";
+import { ReactNode, Suspense, useMemo } from "react";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { CollectionsGetResponse } from "@/app/api/collections/types";
-import { useParamsState } from "@/hooks/useParamsState";
 import { AiOutlineCompass } from "react-icons/ai";
 import { useHierarchy } from "@/hooks/useHierarchy";
 import { useDebounce } from "@/hooks/useDebounce";
 import { SORT_OPTIONS, SCOPE_OPTIONS } from "@/constants/items";
 import HelpModal from "@/components/features/modals/HelpModal";
-import { SectionTitle } from "@/components/typography/SectionTitle";
-import { buildItemsQuery } from "@/lib/utils";
 import { useFormatter, useTranslations } from "next-intl";
-import { CacheContext, useLastFetchedData } from "@/context/Providers";
-import { ResourcesView } from "../features/resources/ResourcesView";
 import { GiArchiveResearch } from "react-icons/gi";
-import { FaSort, FaThList } from "react-icons/fa";
-import { IoMdListBox } from "react-icons/io";
+import { FaSort } from "react-icons/fa";
 import { HiOutlineViewList } from "react-icons/hi";
 import { BiHelpCircle } from "react-icons/bi";
 import { twMerge } from "tailwind-merge";
-import { useLocalStorage } from "usehooks-ts";
 import PageContainer from "../layout/PageContainer";
-import { Autocomplete } from "../nextui/Autocomplete";
-import DialogModal from "../nextui/DialogModal";
 import FullScreenModal from "../nextui/FullScreenModal";
 import GenericHeader from "../features/modals/GenericHeader";
+import { ItemsList, useItemsList } from "./Profile";
 
 function DropDownIcon({
 	Icon,
@@ -439,151 +424,32 @@ export function ContentInteractions({
 	);
 }
 
-function MainContent({
-	searchParams,
-}: {
-	searchParams: { [key: string]: any };
-}) {
-	const { lastFetchedData, setLastFetchedData } = useLastFetchedData();
-
-	const { router, pathname, createQueryString } =
-		useParamsState(searchParams);
-	const { itemsCache } = useContext(CacheContext);
-
-	const queryParams = defaultParams(searchParams);
-
-	const itemsURL = buildItemsQuery(queryParams);
-
-	const handlePageChange = useCallback(
-		(newPage: number) => {
-			router.push(
-				createQueryString(pathname, [["page", String(newPage)]])
-			);
-		},
-		[router, pathname, createQueryString]
-	);
-
-	const handleSortChange = useCallback(
-		(sort: Set<string>) => {
-			const value = sort.values().next().value;
-			if (value)
-				router.push(createQueryString(pathname, [["sort", value]]));
-		},
-		[router, pathname, createQueryString]
-	);
-
-	const handleScopeChange = useCallback(
-		(scope: Set<string>) => {
-			const value = scope.values().next().value;
-			if (value)
-				router.push(createQueryString(pathname, [["scope", value]]));
-		},
-		[router, pathname, createQueryString]
-	);
-
-	const handleSearchChange = useCallback(
-		(text: string) =>
-			router.push(
-				createQueryString(pathname, [
-					["search", text],
-					["page", "1"],
-				])
-			),
-		[router, pathname, createQueryString]
-	);
-
-	const handleRangeChange = useCallback(
-		(start: string | null, end: string | null) => {
-			router.push(
-				createQueryString(pathname, [
-					["range", [start, end].join(end !== null ? "-" : "")],
-				])
-			);
-		},
-		[router, pathname, createQueryString]
-	);
-
-	const {
-		data: fetchedItemsData,
-		error: itemsError,
-		isLoading: isItemsLoading,
-		isValidating: isItemsFetching,
-	} = useSWR<ItemsGetResponse>(itemsURL, fetcher, {
-		keepPreviousData: true,
-		onSuccess: (data) => {
-			if (data.totalPages < queryParams.page) {
-				handlePageChange(data.totalPages);
-			}
-			setLastFetchedData(data);
-		},
-	});
-
-	if (fetchedItemsData) {
-		itemsCache.current = fetchedItemsData;
-	}
-
-	const itemsData = itemsCache.current;
-
-	const {
-		data: collectionsData,
-		error: collectionsError,
-		isLoading: isCollectionsLoading,
-	} = useSWR<CollectionsGetResponse>("/collections", fetcher, {
-		keepPreviousData: true,
-	});
-
-	const { hierarchy, handleCheckboxChange, selectedCollections } =
-		useHierarchy({
-			data: collectionsData,
-			searchParams,
-		});
+function MainContent() {
+	const props = useItemsList();
 
 	return (
 		<>
 			<CollectionsList
-				data={collectionsData}
-				handleCheckboxChange={handleCheckboxChange}
-				selectedCollections={selectedCollections}
-				hierarchy={hierarchy}
-				range={queryParams.range}
-				handleRangeChange={handleRangeChange}
-				facetDistribution={itemsData?.facetDistribution}
+				data={props.collectionsData}
+				handleCheckboxChange={props.handleCheckboxChange}
+				selectedCollections={props.selectedCollections}
+				hierarchy={props.hierarchy}
+				range={props.queryParams.range}
+				handleRangeChange={props.handleRangeChange}
+				facetDistribution={props.itemsData?.facetDistribution}
 			/>
-			<ResourcesView
-				sort={queryParams.sort}
-				search={queryParams.search}
-				scope={queryParams.scope}
-				handleSearchChange={handleSearchChange}
-				handleScopeChange={handleScopeChange}
-				handleSortChange={handleSortChange}
-				itemsData={itemsData}
-				itemsError={itemsError}
-				isItemsLoading={isItemsLoading}
-				selectedCollections={selectedCollections}
-				handleCheckboxChange={handleCheckboxChange}
-				collectionsData={collectionsData}
-				hierarchy={hierarchy}
-				range={queryParams.range}
-				handleRangeChange={handleRangeChange}
-				pageNumber={queryParams.page}
-				handlePageChange={handlePageChange}
-				queryParams={queryParams}
-				searchParams={searchParams}
-				isItemsFetching={isItemsFetching}
+			<ItemsList
+				props={props}
 			/>
 		</>
 	);
 }
 
-export default function EvidenceLibrary({
-	searchParams,
-}: {
-	searchParams: { [key: string]: any };
-}) {
+export default function EvidenceLibrary() {
 	return (
 		<PageContainer>
 			<div className="flex gap-[40px] flex-col xl:flex-row">
-				<MainContent searchParams={searchParams} />
+				<MainContent />
 			</div>
 		</PageContainer>
 	);
