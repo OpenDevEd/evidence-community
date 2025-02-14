@@ -88,6 +88,27 @@ export function useItemsList(userData?: any) {
 		}
 	};
 
+	const handleAuthorSelect = (author: string) => {
+		if (author === queryParams.author) {
+			router.push(createQueryString(pathname, [["author", ""]]));
+		} else {
+			router.push(createQueryString(pathname, [["author", author]]));
+		}
+	}
+
+	const handleInstitutionSelect = (institution: string) => {
+		if (institution === queryParams.institution) {
+			router.push(createQueryString(pathname, [["institution", ""]]));
+		} else {
+			router.push(createQueryString(pathname, [["institution", institution]]));
+		}
+	}
+
+	const handleClearFilters = () => {
+		console.log("handleClearFilters")
+		router.push(createQueryString(pathname, [["author", ""], ["institution", ""], ["collections", ""]]));
+	}
+
 	const {
 		data: fetchedItemsData,
 		error: itemsError,
@@ -146,6 +167,9 @@ export function useItemsList(userData?: any) {
 		selectedCollections,
 		searchParams,
 		handleCollectionSelect,
-		pathName
+		handleAuthorSelect,
+		handleInstitutionSelect,
+		pathName,
+		handleClearFilters
 	};
 }
