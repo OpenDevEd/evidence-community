@@ -19,7 +19,7 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
-import { buildItemsQuery } from "@/lib/utils";
+import { buildItemsQuery, defaultParams } from "@/lib/utils";
 import {
 	getCachedCollections,
 	getCachedUserLikes,
@@ -122,8 +122,7 @@ export async function getProfileSearchFilter(
 	id: string | null,
 	collectionId: string | null
 ) {
-	console.log("collectionId", collectionId);
-	console.log("id", id);
+
 	if (!collectionId && !id) {
 		return { filter: null };
 	}
@@ -223,8 +222,7 @@ export async function downloadItems(
 ) {
 	const url = buildItemsQuery(queryParams, "https://www.example.com");
 	const { searchParams } = new URL(url);
-	const collections = searchParams.get("collections")?.split(",") || [];
-	const collectionId = searchParams.get("collectionId");
+	const { collections, collectionId } = defaultParams(searchParams);
 	const id = params.id;
 	const { filter, status } = await getProfileSearchFilter(id, collectionId);
 
@@ -319,6 +317,8 @@ export async function searchIndex(
 		const search = searchParams.get("search") || "";
 		const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
 		const range = searchParams.get("range") || null;
+		const institution = searchParams.get("institution") || "";
+		const author = searchParams.get("author") || "";
 		const searchIndex = meilisearchClient.index(
 			process.env.MEILI_INDEX || config.index
 		);
@@ -331,6 +331,8 @@ export async function searchIndex(
 		const finalFilters = [
 			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
 			range ? formatRange(range) : null,
+			institution ? `institution = "${institution}"` : null,
+			author ? `fullNames = "${author}"` : null,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
 		].filter((f): f is string => f !== null);
 
