@@ -277,12 +277,14 @@ export const valueFormatter: Record<
 						"creatorType." + creator.creatorType
 					);
 					const { creatorType, ...rest } = creator;
+					const fullName = creator.name ? creator.name : `${creator.firstName} ${creator.lastName}`
 					return (
 						<li
 							key={index}
 						>
-							<p className="space-x-1">
-								<span className="font-medium text-accent">
+							<Link href={`/lib?author=${fullName}`} className="text-lg">
+								<p className="space-x-1">
+									<span className="font-medium text-accent underline">
 									{Object.values(rest)
 										.filter(Boolean)
 										.join(", ")}
@@ -294,8 +296,9 @@ export const valueFormatter: Record<
 									)}
 								>
 									({creatorTypeLabel || creator.creatorType})
-								</span>
-							</p>
+									</span>
+								</p>
+							</Link>
 						</li>
 					);
 				})}
@@ -381,7 +384,7 @@ export const valueFormatter: Record<
 		)?.[1];
 
 		return (
-			<div>
+			<Link href={`/lib?institution=${value}`}>
 				<Card className="max-w-fit p-2 rounded-2xl" color="accent">
 					<div
 						className={twMerge(
@@ -397,7 +400,7 @@ export const valueFormatter: Record<
 						</h3>
 					</div>
 				</Card>
-			</div>
+			</Link>
 		);
 	},
 };
