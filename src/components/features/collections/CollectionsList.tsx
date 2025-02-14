@@ -220,7 +220,7 @@ export default function CollectionsList({
 				className="w-full data-[collections=true]:xl:min-h-screen rounded-2xl"
 				isLoaded={!!data && !!facetDistribution}
 			>
-					<section className="w-full bg-white dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-4 p-6 sticky top-0 xl:static z-20">
+					<section className="w-full bg-black/[4%] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-4 p-6 sticky top-0 xl:static z-20">
 						<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 							<span>{t("publicationYear")}</span>
 							<div className="flex gap-4 items-center flex-1 justify-end">
