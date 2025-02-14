@@ -54,6 +54,9 @@ export default function ItemsList({
 			revalidateResults={props.revalidateResults}
 			extraFilters={extraFilters}
 			queryParams={props.queryParams}
+			handleAuthorSelect={props.handleAuthorSelect}
+			handleInstitutionSelect={props.handleInstitutionSelect}
+			handleClearFilters={props.handleClearFilters}
 			{...(!userData ? {
 				collectionsData: props.collectionsData,
 				hierarchy: props.hierarchy,

@@ -52,20 +52,28 @@ interface ResourcesViewProps {
 	isItemsFetching?: boolean;
 	revalidateResults?: any;
 	extraFilters?: ReactNode;
+	handleAuthorSelect?: (author: string) => void;
+	handleInstitutionSelect?: (institution: string) => void;
+	handleClearFilters?: () => void;
 }
 
 function Chip({
-	collection,
-	handleCheckboxChange,
-	collectionsData,
+	group,
+	title,
+	divKey,
+	callback,
+	classNames = {},
 }: {
-	collection: string;
-	handleCheckboxChange: (key: string) => void;
-	collectionsData: CollectionsGetResponse | undefined;
+	group: string | undefined;
+	title: string | undefined;
+	divKey: string;
+	callback: () => void;
+	classNames?: {
+		group?: string;
+		title?: string;
+		button?: string;
+	};
 }) {
-	const collectionData = collectionsData?.collections.find(
-		(c) => c.key === collection
-	);
 	const canClick = useRef(true);
 	const [debounceCanClick] = useDebounce(() => {
 		canClick.current = true;
@@ -73,7 +81,7 @@ function Chip({
 
 	return (
 		<motion.div
-			key={collection}
+			key={divKey}
 			initial={{ opacity: 0, y: 10 }}
 			animate={{ opacity: 1, y: 0 }}
 			exit={{ opacity: 0, y: -10 }}
@@ -82,60 +90,125 @@ function Chip({
 			<Button
 				size="xs"
 				variant="solid"
-				className="shrink-0 p-1 h-auto ltr:pr-2 rtl:pl-2"
+				className={twMerge(
+					"shrink-0 p-1 h-auto ltr:pr-2 rtl:pl-2",
+					classNames.button
+				)}
 				onPress={() => {
 					if (canClick.current) {
-						handleCheckboxChange(collection);
+						callback();
 						canClick.current = false;
 					}
 					debounceCanClick();
 				}}
 			>
-				<span className="text-white dark:text-white/40 font-medium text-xs leading-3 dark:bg-black/50 bg-black/50 p-1 px-2 rounded-md">
-					{collectionData?.title}
+				<span
+					className={twMerge(
+						"text-white dark:text-white/40 font-medium text-xs leading-3 dark:bg-black/50 bg-black/50 p-1 px-2 rounded-md",
+						classNames.group
+					)}
+				>
+					{group}
 				</span>
-				<span className="truncate text-wrap">
-					{collectionData?.name}
+				<span
+					className={twMerge("truncate text-wrap", classNames.title)}
+				>
+					{title}
 				</span>
 			</Button>
 		</motion.div>
 	);
 }
 
+function useFilterChips(queryParams: Record<string, any>, handleClearFilters?: () => void) {
+	const filtersCount = (queryParams.collections?.length || 0) + (queryParams.institution ? 1 : 0) + (queryParams.author ? 1 : 0);
+	const clearButton = () => {
+		handleClearFilters?.();
+	}
+ 
+	return {
+		filtersCount,
+		clearButton,
+	}
+}
+
 function FilterChips({
 	collections,
 	handleCheckboxChange,
 	collectionsData,
+	queryParams,
+	handleAuthorSelect,
+	handleInstitutionSelect,
+	handleClearFilters,
 }: {
 	collections?: string[];
 	handleCheckboxChange?: (key: string) => void;
 	collectionsData: CollectionsGetResponse | undefined;
+	queryParams: Record<string, any>;
+	handleAuthorSelect?: (author: string) => void;
+	handleInstitutionSelect?: (institution: string) => void;
+	handleClearFilters?: () => void;
 }) {
 	const t = useTranslations("ui");
+	const { filtersCount, clearButton } = useFilterChips(queryParams!, handleClearFilters);
 
 	return (
 		<div
 			className={twMerge(
 				"flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0",
-				collections &&
-					collections.length > 0 &&
+				filtersCount > 0 &&
 					"max-h-[32rem] mb-4 opacity-100"
 			)}
 		>
 			<div className="flex-1 flex gap-2 flex-wrap">
-				{handleCheckboxChange && (
-					<AnimatePresence initial={false}>
-						{collectionsData &&
-							collections?.map((collection: string, index) => (
+				<AnimatePresence initial={false}>
+					{queryParams?.institution && (
+						<Chip
+							group={"Institution"}
+							title={queryParams.institution}
+							divKey={queryParams.institution}
+							callback={() =>
+								handleInstitutionSelect?.(queryParams.institution)
+							}
+							classNames={{
+								button: "bg-accent/80 dark:bg-accent/80",
+								title: "text-white dark:text-white",
+							}}
+						/>
+					)}
+					{queryParams?.author && (
+						<Chip
+							group={"Author"}
+							title={queryParams.author}
+							divKey={queryParams.author}
+							callback={() =>
+								handleAuthorSelect?.(queryParams.author)
+							}
+							classNames={{
+								button: "bg-tertiary dark:bg-tertiary/40",
+								title: "text-white dark:text-white",
+							}}
+						/>
+					)}
+					{collectionsData &&
+						collections?.map((collection: string, index) => {
+							const collectionData =
+								collectionsData?.collections.find(
+									(c) => c.key === collection
+								);
+							return (
 								<Chip
 									key={collection}
-									collection={collection}
-									handleCheckboxChange={handleCheckboxChange}
-									collectionsData={collectionsData}
+									group={collectionData?.title}
+									title={collectionData?.name!}
+									divKey={collection}
+									callback={() =>
+										handleCheckboxChange?.(collection)
+									}
 								/>
-							))}
-					</AnimatePresence>
-				)}
+							);
+						})}
+				</AnimatePresence>
 			</div>
 			<AnimatePresence initial={false}>
 				{collections && collections.length > 0 && (
@@ -149,9 +222,7 @@ function FilterChips({
 						<Button
 							aria-hidden={collections?.length == 0}
 							aria-label={t("clearFiltersAriaLabel")}
-							onPress={() => {
-								handleCheckboxChange?.("");
-							}}
+							onPress={clearButton}
 							isIconOnly
 							size="sm"
 							variant="solid"
@@ -361,12 +432,15 @@ export function ResourcesView({
 	handleRangeChange,
 	pageNumber,
 	handlePageChange,
+	handleAuthorSelect,
+	handleInstitutionSelect,
 	countLabel,
 	queryParams,
 	params,
 	searchParams,
 	revalidateResults,
 	extraFilters,
+	handleClearFilters,
 }: ResourcesViewProps) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
@@ -405,6 +479,10 @@ export function ResourcesView({
 				collections={selectedCollections!}
 				handleCheckboxChange={handleCheckboxChange}
 				collectionsData={collectionsData}
+				queryParams={queryParams!}
+				handleAuthorSelect={handleAuthorSelect}
+				handleInstitutionSelect={handleInstitutionSelect}
+				handleClearFilters={handleClearFilters}
 			/>
 			<ResourcesList
 				data={itemsData}
