@@ -22,8 +22,8 @@ export function useItemsList(userData?: any) {
 
 	const { itemsCache } = useContext(CacheContext);
 
-	const { router, pathname, createQueryString } =
-		useParamsState(searchParams );
+	const paramsState = useParamsState(searchParams );
+	const { router, pathname, createQueryString } = paramsState;
 
 	const queryParams = defaultParams(searchParams );
 
@@ -121,7 +121,8 @@ export function useItemsList(userData?: any) {
 	const { hierarchy, handleCheckboxChange, selectedCollections } =
 		useHierarchy({
 			data: collectionsData,
-			searchParams
+			queryParams,
+			...paramsState
 		});
 
 

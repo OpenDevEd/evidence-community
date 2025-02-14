@@ -6,15 +6,13 @@ import { Collection, CollectionsGetResponse } from "@/app/api/collections/types"
 
 export function useHierarchy({
   data,
-	searchParams,
+  queryParams,
+  ...paramsState
 }: {
   data: CollectionsGetResponse | undefined;
-	searchParams: { [key: string]: any };
-}) {
-  const { router, pathname, createQueryString } =
-    useParamsState(searchParams);
-
-  const selectedCollections = searchParams["collections"]?.split(",") || [];
+  queryParams: { [key: string]: any };
+} & ReturnType<typeof useParamsState>) {
+  const selectedCollections = queryParams.collections;
 
   const hierarchy = useMemo(() => {
     if (!data) return [];
@@ -43,8 +41,8 @@ export function useHierarchy({
       }
     }
 
-    router.push(
-      createQueryString(pathname, [
+    paramsState.router.push(
+      paramsState.createQueryString(paramsState.pathname, [
         ["collections", newSelectedCollections.join(",")],
         ["page", "1"],
       ])
