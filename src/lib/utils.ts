@@ -39,6 +39,8 @@ export function defaultParams(searchParams: Record<string, string> | URLSearchPa
 	const scope = getParam("scope") || SCOPE_OPTIONS[0].key;
 	const range = getParam("range") || "";
 	const collectionId = getParam("collectionId") || "";
+	const institution = getParam("institution") || "";
+	const author = getParam("author") || "";
 
 	return {
 		page,
@@ -48,6 +50,8 @@ export function defaultParams(searchParams: Record<string, string> | URLSearchPa
 		scope,
 		range,
 		collectionId,
+		institution,
+		author,
 	};
 }
 
@@ -60,6 +64,8 @@ export function buildItemsQuery(params: any, url: string = "/items"): string {
 		scope,
 		range,
 		collectionId,
+		institution,
+		author,
 	} = params;
 
 	const queryParts = [
@@ -70,6 +76,8 @@ export function buildItemsQuery(params: any, url: string = "/items"): string {
 		scope !== SCOPE_OPTIONS[0].key && `scope=${scope}`,
 		range && `range=${range}`,
 		collectionId && `collectionId=${collectionId}`,
+		institution && `institution=${institution}`,
+		author && `author=${author}`,
 	];
 
 	return `${url}?${queryParts.filter(Boolean).join("&")}`;
