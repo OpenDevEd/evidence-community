@@ -11,12 +11,9 @@ import {
 	ModalContent, Spinner,
 	useDisclosure
 } from "@nextui-org/react";
-import { ReactNode, Suspense, useMemo } from "react";
-import { ItemsGetResponse } from "@/app/api/items/types";
+import { ReactNode, use } from "react";
 import { Skeleton } from "@/components/nextui/Skeleton";
-import { CollectionsGetResponse } from "@/app/api/collections/types";
 import { AiOutlineCompass } from "react-icons/ai";
-import { useHierarchy } from "@/hooks/useHierarchy";
 import { useDebounce } from "@/hooks/useDebounce";
 import { SORT_OPTIONS, SCOPE_OPTIONS } from "@/constants/items";
 import HelpModal from "@/components/features/modals/HelpModal";
@@ -30,7 +27,7 @@ import PageContainer from "../layout/PageContainer";
 import FullScreenModal from "../nextui/FullScreenModal";
 import GenericHeader from "../features/modals/GenericHeader";
 import { useItemsList } from "@/hooks/useItemsList";
-import ItemsList from "../features/items/ItemsList";
+import ItemsList, { ItemsContext } from "../features/items/ItemsList";
 
 function DropDownIcon({
 	Icon,
@@ -58,51 +55,23 @@ const genericSelectClassNames = {
 };
 
 export function ContentInteractions({
-	data,
-	sort,
-	onSortChange,
-	scope,
-	onScopeChange,
-	search,
-	onSearchChange,
 	abstract,
 	onAbstractChange,
-	collectionsData,
-	selectedCollections,
-	handleCheckboxChange,
-	hierarchy,
-	isLoading,
-	error,
-	range,
 	view,
 	setView,
-	handleRangeChange,
-	header,
 	countLabel,
-	isItemsFetching,
 	extraFilters,
+	header,
 }: {
-	data: ItemsGetResponse | undefined;
-	sort: string;
-	onSortChange: (sort: any) => void;
-	search: string;
-	onSearchChange: (search: string) => void;
-	scope: string;
-	onScopeChange: (scope: any) => void;
 	abstract: boolean;
 	onAbstractChange: (abstract: boolean) => void;
-	collectionsData: CollectionsGetResponse | undefined;
-	isLoading: boolean;
-	error: any;
-	range: string;
 	view: string;
 	setView: (view: string) => void;
-	handleRangeChange: (start: string | null, end: string | null) => void;
+	countLabel: ReactNode;
+	extraFilters: ReactNode;
 	header?: ReactNode;
-	countLabel?: ReactNode;
-	isItemsFetching?: boolean;
-	extraFilters?: ReactNode;
-} & Partial<ReturnType<typeof useHierarchy>>) {
+}) {
+	const itemsContext = use(ItemsContext)
 	const {
 		isOpen: isExploreOpen,
 		onOpen: onExploreOpen,
@@ -113,24 +82,24 @@ export function ContentInteractions({
 		onOpen: onHelpOpen,
 		onOpenChange: onHelpOpenChange,
 	} = useDisclosure();
-	const [debouncedSearch, _] = useDebounce(onSearchChange, 0);
+	const [debouncedSearch, _] = useDebounce(itemsContext.handleSearchChange, 0);
 	const actuallyNoData =
-		(!isLoading && data && data.items.length === 0) || error;
+		(!itemsContext.isItemsLoading && itemsContext.itemsData && itemsContext.itemsData.items.length === 0) || itemsContext.itemsError;
 	const t = useTranslations("ui");
 	const tSorts = useTranslations("sorts");
 	const tScopes = useTranslations("scopes");
 	const formatter = useFormatter();
 
-	const SortComponent = useMemo(() => {
+	function SortComponent() {
 		return (
 			<Select
 				startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
-				selectedKeys={sort && [sort]}
-				onSelectionChange={onSortChange}
+				selectedKeys={itemsContext.queryParams.sort && [itemsContext.queryParams.sort]}
+				onSelectionChange={itemsContext.handleSortChange as any}
 				items={SORT_OPTIONS}
 				selectorIcon={<div className="hidden"></div>}
 				classNames={
-					handleCheckboxChange
+					!itemsContext.userData
 						? {
 								base: twMerge(
 									"flex-1 max-w-full xl:max-w-56 shrink-0",
@@ -172,21 +141,21 @@ export function ContentInteractions({
 				}}
 			</Select>
 		);
-	}, [sort, onSortChange, handleCheckboxChange]);
+	};
 
-	const ScopeComponent = useMemo(() => {
+	function ScopeComponent() {
 		return (
 			<Select
 				startContent={
 					<DropDownIcon label="Scope icon" Icon={GiArchiveResearch} />
 				}
 				color="tertiary"
-				selectedKeys={scope && [scope]}
-				onSelectionChange={onScopeChange}
+				selectedKeys={itemsContext.queryParams.scope && [itemsContext.queryParams.scope]}
+				onSelectionChange={itemsContext.handleScopeChange as any}
 				items={SCOPE_OPTIONS}
 				selectorIcon={<div className="hidden"></div>}
 				classNames={
-					handleCheckboxChange
+					!itemsContext.userData
 						? {
 								base: twMerge(
 									"xl:max-w-72 w-full max-w-full",
@@ -228,11 +197,11 @@ export function ContentInteractions({
 				}}
 			</Select>
 		);
-	}, [scope, onScopeChange, handleCheckboxChange]);
+	};
 
 	return (
 		<>
-			{(handleCheckboxChange || header) && (
+			{(!itemsContext.userData || header) && (
 				<div className="flex w-full flex-col xl:flex-row xl:justify-between xl:items-end h-24 xl:h-12 gap-4 relative">
 					<h1 className="text-black dark:text-white/60 font-medium text-2xl xl:text-3xl w-full xl:w-auto h-10 xl:h-12 flex justify-between items-end">
 						{header || (
@@ -266,23 +235,23 @@ export function ContentInteractions({
 										<GenericHeader onClose={onClose}>
 											{t("explore")}
 										</GenericHeader>
-										{handleCheckboxChange && (
+										{itemsContext.handleCheckboxChange && (
 											<CollectionsList
-												data={collectionsData}
+												data={itemsContext.collectionsData}
 												handleCheckboxChange={
-													handleCheckboxChange
+													itemsContext.handleCheckboxChange
 												}
 												selectedCollections={
-													selectedCollections
+													itemsContext.selectedCollections
 												}
-												hierarchy={hierarchy!}
+												hierarchy={itemsContext.hierarchy!}
 												isModal
-												range={range}
+												range={itemsContext.queryParams.range}
 												handleRangeChange={
-													handleRangeChange
+													itemsContext.handleRangeChange
 												}
 												facetDistribution={
-													data?.facetDistribution
+													itemsContext.itemsData?.facetDistribution
 												}
 											/>
 										)}
@@ -292,7 +261,7 @@ export function ContentInteractions({
 						</FullScreenModal>
 					</h1>
 					<div className="flex gap-4 h-10 xl:h-12 flex-1 justify-end">
-						{handleCheckboxChange && (
+						{!itemsContext.userData && (
 							<>
 								<Button
 									className="h-full font-medium text-base !p-0"
@@ -309,7 +278,7 @@ export function ContentInteractions({
 									isOpen={isHelpOpen}
 									onOpenChange={onHelpOpenChange}
 								/>
-								{SortComponent}
+								{<SortComponent/>}
 							</>
 						)}
 					</div>
@@ -319,12 +288,12 @@ export function ContentInteractions({
 				role="search"
 				className={twMerge(
 					"xl:flex xl:flex-row gap-4",
-					handleCheckboxChange ? "flex flex-col" : "grid grid-cols-2"
+					!itemsContext.userData ? "flex flex-col" : "grid grid-cols-2"
 				)}
 			>
 				<Input
 					autoCorrect="off"
-					defaultValue={search}
+					defaultValue={itemsContext.queryParams.search}
 					onChange={(e) => debouncedSearch(e.target.value)}
 					onClear={() => debouncedSearch("")}
 					placeholder={t("search")}
@@ -341,13 +310,13 @@ export function ContentInteractions({
 						/>
 					}
 				/>
-				{ScopeComponent}
-				{!handleCheckboxChange && SortComponent}
+				{<ScopeComponent/>}
+				{!itemsContext.handleCheckboxChange && <SortComponent/>}
 				{extraFilters}
 			</section>
 			<section className="flex justify-between h-10 xl:h-12 gap-4">
 				<Skeleton
-					isLoaded={!!data}
+					isLoaded={!!itemsContext.itemsData}
 					className="flex items-center flex-1 rounded-2xl"
 				>
 					<h2
@@ -357,7 +326,7 @@ export function ContentInteractions({
 						{countLabel ||
 							t.rich("resourcesCount", {
 								count: formatter.number(
-									actuallyNoData ? 0 : data?.totalItems || 0
+									actuallyNoData ? 0 : itemsContext.itemsData?.totalItems || 0
 								),
 								number: (chunks) => (
 									<span
@@ -368,7 +337,7 @@ export function ContentInteractions({
 									</span>
 								),
 							})}
-						{isItemsFetching && (
+						{itemsContext.isItemsFetching && (
 							<div className="relative ltr:ml-3 rtl:mr-3 flex items-center">
 								<Spinner
 									size="sm"

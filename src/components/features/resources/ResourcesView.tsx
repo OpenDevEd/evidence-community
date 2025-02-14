@@ -1,8 +1,6 @@
 "use client";
-import { ReactNode, useContext, useMemo, useRef, useState } from "react";
+import { ReactNode, use, useContext, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
-import { ItemsGetResponse } from "@/app/api/items/types";
-import { CollectionsGetResponse } from "@/app/api/collections/types";
 import { twMerge } from "tailwind-merge";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -23,39 +21,9 @@ import {
 } from "@/context/Providers";
 import { DownloadModal } from "../items/ItemControls";
 import { useDisclosure } from "@nextui-org/react";
-import { downloadItems, searchIndex } from "@/lib/actions";
+import { downloadItems } from "@/lib/actions";
 import { routing, usePathname, useRouter } from "@/i18n/routing";
-
-interface ResourcesViewProps {
-	sort: string;
-	search: string;
-	scope: string;
-	handleSearchChange: (text: string) => void;
-	handleScopeChange: (scope: Set<string>) => void;
-	handleSortChange: (sort: Set<string>) => void;
-	itemsData: ItemsGetResponse | undefined;
-	itemsError: any;
-	isItemsLoading: boolean;
-	selectedCollections?: string[];
-	handleCheckboxChange?: (key: string) => void;
-	collectionsData?: CollectionsGetResponse | undefined;
-	hierarchy?: any;
-	range: string;
-	handleRangeChange: (start: string | null, end: string | null) => void;
-	pageNumber: number;
-	handlePageChange: (newPage: number) => void;
-	header?: ReactNode;
-	countLabel?: ReactNode;
-	queryParams?: Record<string, any>;
-	params?: Record<string, any>;
-	searchParams?: Record<string, any>;
-	isItemsFetching?: boolean;
-	revalidateResults?: any;
-	extraFilters?: ReactNode;
-	handleAuthorSelect?: (author: string) => void;
-	handleInstitutionSelect?: (institution: string) => void;
-	handleClearFilters?: () => void;
-}
+import { ItemsContext } from "../items/ItemsList";
 
 function Chip({
 	group,
@@ -120,55 +88,50 @@ function Chip({
 	);
 }
 
-function useFilterChips(queryParams: Record<string, any>, handleClearFilters?: () => void) {
-	const filtersCount = (queryParams.collections?.length || 0) + (queryParams.institution ? 1 : 0) + (queryParams.author ? 1 : 0);
+function useFilterChips(
+	queryParams: Record<string, any>,
+	handleClearFilters?: () => void
+) {
+	const filtersCount =
+		(queryParams.collections?.length || 0) +
+		(queryParams.institution ? 1 : 0) +
+		(queryParams.author ? 1 : 0);
 	const clearButton = () => {
 		handleClearFilters?.();
-	}
- 
+	};
+
 	return {
 		filtersCount,
 		clearButton,
-	}
+	};
 }
 
-function FilterChips({
-	collections,
-	handleCheckboxChange,
-	collectionsData,
-	queryParams,
-	handleAuthorSelect,
-	handleInstitutionSelect,
-	handleClearFilters,
-}: {
-	collections?: string[];
-	handleCheckboxChange?: (key: string) => void;
-	collectionsData: CollectionsGetResponse | undefined;
-	queryParams: Record<string, any>;
-	handleAuthorSelect?: (author: string) => void;
-	handleInstitutionSelect?: (institution: string) => void;
-	handleClearFilters?: () => void;
-}) {
+function FilterChips() {
+	const itemsContext = use(ItemsContext)
 	const t = useTranslations("ui");
-	const { filtersCount, clearButton } = useFilterChips(queryParams!, handleClearFilters);
+	const { filtersCount, clearButton } = useFilterChips(
+		itemsContext.queryParams,
+		itemsContext.handleClearFilters
+	);
 
 	return (
 		<div
 			className={twMerge(
 				"flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0",
-				filtersCount > 0 &&
-					"max-h-[32rem] mb-4 opacity-100"
+				filtersCount > 0 && "max-h-[32rem] mb-4 opacity-100"
 			)}
 		>
 			<div className="flex-1 flex gap-2 flex-wrap">
 				<AnimatePresence initial={false}>
-					{queryParams?.institution && (
+					{itemsContext.queryParams?.institution && (
 						<Chip
 							group={"Institution"}
-							title={queryParams.institution}
-							divKey={queryParams.institution}
+							title={itemsContext.queryParams.institution}
+							divKey={itemsContext.queryParams.institution}
 							callback={() =>
-								handleInstitutionSelect?.(queryParams.institution)
+								itemsContext.handleInstitutionSelect?.(
+									itemsContext.queryParams.institution
+								)
 							}
 							classNames={{
 								button: "bg-accent/80 dark:bg-accent/80",
@@ -176,13 +139,15 @@ function FilterChips({
 							}}
 						/>
 					)}
-					{queryParams?.author && (
+					{itemsContext.queryParams?.author && (
 						<Chip
 							group={"Author"}
-							title={queryParams.author}
-							divKey={queryParams.author}
+							title={itemsContext.queryParams.author}
+							divKey={itemsContext.queryParams.author}
 							callback={() =>
-								handleAuthorSelect?.(queryParams.author)
+								itemsContext.handleAuthorSelect?.(
+									itemsContext.queryParams.author
+								)
 							}
 							classNames={{
 								button: "bg-tertiary dark:bg-tertiary/40",
@@ -190,20 +155,20 @@ function FilterChips({
 							}}
 						/>
 					)}
-					{collectionsData &&
-						collections?.map((collection: string, index) => {
+					{itemsContext.collectionsData &&
+						itemsContext.selectedCollections?.map((collection: string) => {
 							const collectionData =
-								collectionsData?.collections.find(
+								itemsContext.collectionsData?.collections.find(
 									(c) => c.key === collection
 								);
 							return (
 								<Chip
 									key={collection}
 									group={collectionData?.title}
-									title={collectionData?.name!}
+									title={collectionData?.name ?? ""}
 									divKey={collection}
 									callback={() =>
-										handleCheckboxChange?.(collection)
+										itemsContext.handleCheckboxChange?.(collection)
 									}
 								/>
 							);
@@ -211,7 +176,7 @@ function FilterChips({
 				</AnimatePresence>
 			</div>
 			<AnimatePresence initial={false}>
-				{collections && collections.length > 0 && (
+				{itemsContext.selectedCollections && itemsContext.selectedCollections.length > 0 && (
 					<motion.div
 						initial={{ opacity: 0, y: 10 }}
 						animate={{ opacity: 1, y: 0 }}
@@ -220,7 +185,7 @@ function FilterChips({
 						className="w-7 flex justify-end"
 					>
 						<Button
-							aria-hidden={collections?.length == 0}
+							aria-hidden={itemsContext.selectedCollections.length == 0}
 							aria-label={t("clearFiltersAriaLabel")}
 							onPress={clearButton}
 							isIconOnly
@@ -242,25 +207,16 @@ function FilterChips({
 }
 
 function ResourcesList({
-	data,
-	error,
-	isLoading,
 	abstract,
 	view,
-	revalidateResults,
-	collectionId,
 }: {
-	data: ItemsGetResponse | undefined;
-	error: any;
-	isLoading: boolean;
 	abstract: boolean;
 	view: string;
-	revalidateResults?: any;
-	collectionId?: string;
 }) {
+	const itemsContext = use(ItemsContext)
 	const t = useTranslations("ui");
 	const actuallyNoData =
-		(!isLoading && data && data.items.length === 0) || error;
+		(!itemsContext.isItemsLoading && itemsContext.itemsData && itemsContext.itemsData.items.length === 0) || itemsContext.itemsError;
 
 	return (
 		<>
@@ -279,14 +235,14 @@ function ResourcesList({
 				) : (
 					Array.from({ length: ITEMS_PER_PAGE }).map(
 						(_, index) =>
-							(!data || (data && data.items[index])) && (
+							(!itemsContext.itemsData || (itemsContext.itemsData && itemsContext.itemsData.items[index])) && (
 								<Resource
 									key={index}
-									itemData={data?.items[index]}
+									itemData={itemsContext.itemsData?.items[index]}
 									abstract={abstract}
-									isLoading={isLoading}
-									revalidateResults={revalidateResults}
-									collectionId={collectionId}
+									isLoading={itemsContext.isItemsLoading}
+									revalidateResults={itemsContext.revalidateResults}
+									collectionId={itemsContext.queryParams.collectionId}
 								/>
 							)
 					)
@@ -297,19 +253,14 @@ function ResourcesList({
 }
 
 function ContentActions({
-	data,
-	queryParams,
 	params,
-	searchParams,
 }: {
-	data: ItemsGetResponse | undefined;
-	queryParams?: Record<string, any>;
 	params?: Record<string, any>;
-	searchParams?: Record<string, any>;
 }) {
+	const itemsContext = use(ItemsContext)
 	const t = useTranslations("ui");
 	const format = useFormatter();
-	const totalItems = data?.totalItems || 0;
+	const totalItems = itemsContext.itemsData?.totalItems || 0;
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const router = useRouter();
 	const isPrintingEnabled = useFeatureFlagEnabled("print-button");
@@ -323,7 +274,7 @@ function ContentActions({
 				onClose={onClose}
 				action={async (format: "ris" | "bibtex") => {
 					return await downloadItems(
-						queryParams || {},
+						itemsContext.queryParams,
 						params || {},
 						format
 					);
@@ -355,7 +306,7 @@ function ContentActions({
 					router.push(
 						{
 							pathname: pathName + "/atom.xml",
-							query: searchParams,
+							query: itemsContext.searchParams,
 						},
 						{
 							locale: routing.defaultLocale,
@@ -364,7 +315,7 @@ function ContentActions({
 				}}
 				endContent={<HiOutlineCodeBracketSquare className="size-6" />}
 			>
-				{JSON.stringify(searchParams) == "{}"
+				{JSON.stringify(itemsContext.searchParams) == "{}"
 					? t("mainFeed")
 					: t("customFeed")}
 			</Button>
@@ -372,22 +323,11 @@ function ContentActions({
 	);
 }
 
-function PaginationControls({
-	page,
-	setPage,
-	data,
-	isLoading,
-	error,
-}: {
-	page: number;
-	setPage: (page: number) => void;
-	data: ItemsGetResponse | undefined;
-	isLoading: boolean;
-	error: any;
-}) {
-	const totalPages = data?.totalPages || 0;
+function PaginationControls() {
+	const itemsContext = use(ItemsContext)
+	const totalPages = itemsContext.itemsData?.totalPages || 0;
 	const actuallyNoData =
-		(!isLoading && data && data.items.length === 0) || error;
+		(!itemsContext.isItemsLoading && itemsContext.itemsData && itemsContext.itemsData.items.length === 0) || itemsContext.itemsError;
 	const isDesktop = useBreakpoint("xl");
 
 	return (
@@ -400,8 +340,8 @@ function PaginationControls({
 					{totalPages > 0 && (
 						<Pagination
 							showControls
-							page={page}
-							onChange={setPage}
+							page={itemsContext.queryParams.page}
+							onChange={itemsContext.handlePageChange}
 							siblings={isDesktop ? 3 : 0}
 							total={totalPages}
 						/>
@@ -413,35 +353,16 @@ function PaginationControls({
 }
 
 export function ResourcesView({
-	header,
-	sort,
-	search,
-	scope,
-	handleSearchChange,
-	handleScopeChange,
-	handleSortChange,
-	itemsData,
-	itemsError,
-	isItemsLoading,
-	isItemsFetching,
-	selectedCollections,
-	handleCheckboxChange,
-	collectionsData,
-	hierarchy,
-	range,
-	handleRangeChange,
-	pageNumber,
-	handlePageChange,
-	handleAuthorSelect,
-	handleInstitutionSelect,
-	countLabel,
-	queryParams,
-	params,
-	searchParams,
-	revalidateResults,
 	extraFilters,
-	handleClearFilters,
-}: ResourcesViewProps) {
+	params,
+	countLabel,
+	header,
+}: {
+	extraFilters: ReactNode;
+	params?: Record<string, any>;
+	countLabel?: ReactNode;
+	header?: ReactNode;
+}) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const [abstract, setAbstract] = useState(true);
@@ -452,60 +373,17 @@ export function ResourcesView({
 		<section id="main-content" className="w-full flex flex-col gap-4">
 			<ContentInteractions
 				header={header}
-				sort={sort}
-				search={search}
-				scope={scope}
-				onSearchChange={handleSearchChange}
-				onScopeChange={handleScopeChange}
-				onSortChange={handleSortChange}
-				data={itemsData}
 				abstract={abstract}
 				onAbstractChange={setAbstract}
-				selectedCollections={selectedCollections}
-				handleCheckboxChange={handleCheckboxChange}
-				collectionsData={collectionsData}
-				hierarchy={hierarchy}
-				isLoading={isItemsLoading}
-				error={itemsError}
-				range={range}
-				handleRangeChange={handleRangeChange}
 				view={view}
 				setView={setView}
 				countLabel={countLabel}
-				isItemsFetching={isItemsFetching}
 				extraFilters={extraFilters}
 			/>
-			<FilterChips
-				collections={selectedCollections!}
-				handleCheckboxChange={handleCheckboxChange}
-				collectionsData={collectionsData}
-				queryParams={queryParams!}
-				handleAuthorSelect={handleAuthorSelect}
-				handleInstitutionSelect={handleInstitutionSelect}
-				handleClearFilters={handleClearFilters}
-			/>
-			<ResourcesList
-				data={itemsData}
-				error={itemsError}
-				isLoading={isItemsLoading}
-				abstract={abstract}
-				view={view}
-				revalidateResults={revalidateResults}
-				collectionId={searchParams?.collectionId}
-			/>
-			<PaginationControls
-				page={pageNumber}
-				setPage={handlePageChange}
-				data={itemsData}
-				error={itemsError}
-				isLoading={isItemsLoading}
-			/>
-			<ContentActions
-				data={itemsData}
-				queryParams={queryParams}
-				params={params}
-				searchParams={searchParams}
-			/>
+			<FilterChips />
+			<ResourcesList abstract={abstract} view={view} />
+			<PaginationControls />
+			<ContentActions params={params} />
 			<div className="text-center xl:text-end text-black/60 dark:text-white/60 text-sm">
 				{t("lastUpdate", {
 					date: format.dateTime(status.databaseUpdatedAt!, {

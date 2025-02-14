@@ -170,6 +170,7 @@ export function useItemsList(userData?: any) {
 		handleAuthorSelect,
 		handleInstitutionSelect,
 		pathName,
-		handleClearFilters
+		handleClearFilters,
+		userData
 	};
 }
