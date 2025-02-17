@@ -2,7 +2,6 @@
 
 import { Accordion, AccordionItem, AutocompleteItem } from "@nextui-org/react";
 import { Skeleton } from "../../nextui/Skeleton";
-import { useHierarchy } from "@/hooks/useHierarchy";
 import { twMerge } from "tailwind-merge";
 import CollectionCategory from "./CollectionCategory";
 import {
@@ -194,7 +193,8 @@ export default function CollectionsList({
 	isModal?: boolean;
 	range: string;
 	handleRangeChange: (start: string | null, end: string | null) => void;
-} & ReturnType<typeof useHierarchy>) {
+	hierarchy: Collection[];
+}) {
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
 

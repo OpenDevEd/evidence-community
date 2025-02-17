@@ -1,33 +1,40 @@
-import { useCallback, useContext } from "react";
-import {
-    fetcher,
-    buildItemsQuery, defaultParams
-} from "@/lib/utils";
+import { useCallback, useContext, useMemo } from "react";
+import { fetcher, buildItemsQuery, defaultParams } from "@/lib/utils";
 import { CacheContext, useLastFetchedData } from "@/context/Providers";
 import { useParamsState } from "@/hooks/useParamsState";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import useSWR from "swr";
 import { usePathname, useSearchParams } from "next/navigation";
-import { CollectionsGetResponse } from "@/app/api/collections/types";
-import { useHierarchy } from "@/hooks/useHierarchy";
+import {
+	Collection,
+	CollectionsGetResponse,
+} from "@/app/api/collections/types";
+import { getDescendantKeys } from "@/lib/collections";
+import { recursiveFind } from "@/lib/collections";
+import { buildHierarchy } from "@/lib/collections";
 
 export function useItemsList(userData?: any) {
-	const searchParamsFromParams = useSearchParams()
+	const searchParamsFromParams = useSearchParams();
 
-	const pathName = usePathname()
+	const pathName = usePathname();
 
-	const searchParams = Object.fromEntries(searchParamsFromParams.entries()) as any
+	const searchParams = Object.fromEntries(
+		searchParamsFromParams.entries()
+	) as any;
 
 	const { setLastFetchedData } = useLastFetchedData();
 
 	const { itemsCache } = useContext(CacheContext);
 
-	const paramsState = useParamsState(searchParams );
+	const paramsState = useParamsState(searchParams);
 	const { router, pathname, createQueryString } = paramsState;
 
-	const queryParams = defaultParams(searchParams );
+	const queryParams = defaultParams(searchParams);
 
-	const itemsQuery = buildItemsQuery(queryParams, userData ? `/user/items/${userData.id}` : "/items");
+	const itemsQuery = buildItemsQuery(
+		queryParams,
+		userData ? `/user/items/${userData.id}` : "/items"
+	);
 
 	const handlePageChange = useCallback(
 		(newPage: number) => {
@@ -94,20 +101,28 @@ export function useItemsList(userData?: any) {
 		} else {
 			router.push(createQueryString(pathname, [["author", author]]));
 		}
-	}
+	};
 
 	const handleInstitutionSelect = (institution: string) => {
 		if (institution === queryParams.institution) {
 			router.push(createQueryString(pathname, [["institution", ""]]));
 		} else {
-			router.push(createQueryString(pathname, [["institution", institution]]));
+			router.push(
+				createQueryString(pathname, [["institution", institution]])
+			);
 		}
-	}
+	};
 
 	const handleClearFilters = () => {
-		console.log("handleClearFilters")
-		router.push(createQueryString(pathname, [["author", ""], ["institution", ""], ["collections", ""]]));
-	}
+		console.log("handleClearFilters");
+		router.push(
+			createQueryString(pathname, [
+				["author", ""],
+				["institution", ""],
+				["collections", ""],
+			])
+		);
+	};
 
 	const {
 		data: fetchedItemsData,
@@ -129,7 +144,7 @@ export function useItemsList(userData?: any) {
 		itemsCache.current[pathName] = fetchedItemsData;
 	}
 
-	const itemsData = itemsCache.current[pathName]
+	const itemsData = itemsCache.current[pathName];
 
 	const {
 		data: collectionsData,
@@ -139,13 +154,42 @@ export function useItemsList(userData?: any) {
 		keepPreviousData: true,
 	});
 
-	const { hierarchy, handleCheckboxChange, selectedCollections } =
-		useHierarchy({
-			data: collectionsData,
-			queryParams,
-			...paramsState
-		});
+	const selectedCollections = queryParams.collections;
 
+	const hierarchy = useMemo(() => {
+		if (!collectionsData) return [];
+		return buildHierarchy(collectionsData.collections as Collection[]);
+	}, [collectionsData]);
+
+	const handleCheckboxChange = (key: string) => {
+		let newSelectedCollections: string[];
+
+		if (key === "") {
+			newSelectedCollections = [];
+		} else {
+			const alreadySelected = selectedCollections.includes(key);
+
+			if (alreadySelected) {
+				const collectionToDeselect = recursiveFind(key, hierarchy);
+
+				const descendantKeys = collectionToDeselect
+					? getDescendantKeys(collectionToDeselect)
+					: [];
+				newSelectedCollections = selectedCollections.filter(
+					(k: string) => k !== key && !descendantKeys.includes(k)
+				);
+			} else {
+				newSelectedCollections = [...selectedCollections, key];
+			}
+		}
+
+		router.push(
+			createQueryString(pathname, [
+				["collections", newSelectedCollections.join(",")],
+				["page", "1"],
+			])
+		);
+	};
 
 	return {
 		itemsData,
@@ -171,6 +215,6 @@ export function useItemsList(userData?: any) {
 		handleInstitutionSelect,
 		pathName,
 		handleClearFilters,
-		userData
+		userData,
 	};
 }
