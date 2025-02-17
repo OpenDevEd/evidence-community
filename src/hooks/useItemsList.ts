@@ -12,11 +12,15 @@ import {
 import { getDescendantKeys } from "@/lib/collections";
 import { recursiveFind } from "@/lib/collections";
 import { buildHierarchy } from "@/lib/collections";
+import { searchParamsLoader } from "@/lib/searchParams";
+import { useQueryStates } from 'nuqs'
 
 export function useItemsList(userData?: any) {
+	const [params, setParams] = useQueryStates(searchParamsLoader);
+
 	const searchParamsFromParams = useSearchParams();
 
-	const pathName = usePathname();
+	const pathname = usePathname();
 
 	const searchParams = Object.fromEntries(
 		searchParamsFromParams.entries()
@@ -25,9 +29,6 @@ export function useItemsList(userData?: any) {
 	const { setLastFetchedData } = useLastFetchedData();
 
 	const { itemsCache } = useContext(CacheContext);
-
-	const paramsState = useParamsState(searchParams);
-	const { router, pathname, createQueryString } = paramsState;
 
 	const queryParams = defaultParams(searchParams);
 
@@ -38,90 +39,96 @@ export function useItemsList(userData?: any) {
 
 	const handlePageChange = useCallback(
 		(newPage: number) => {
-			router.push(
-				createQueryString(pathname, [["page", String(newPage)]])
-			);
+			setParams({
+				page: newPage,
+			});
 		},
-		[router, pathname, createQueryString]
+		[setParams]
 	);
 
 	const handleSortChange = useCallback(
 		(sort: Set<string>) => {
 			const value = sort.values().next().value;
 			if (value)
-				router.push(createQueryString(pathname, [["sort", value]]));
+				setParams({
+					sort: value,
+				});
 		},
-		[router, pathname, createQueryString]
+		[setParams]
 	);
 
 	const handleScopeChange = useCallback(
 		(scope: Set<string>) => {
 			const value = scope.values().next().value;
 			if (value)
-				router.push(createQueryString(pathname, [["scope", value]]));
+				setParams({
+					scope: value,
+				});
 		},
-		[router, pathname, createQueryString]
+		[setParams]
 	);
 
 	const handleSearchChange = useCallback(
 		(text: string) =>
-			router.push(
-				createQueryString(pathname, [
-					["search", text],
-					["page", "1"],
-				])
-			),
-		[router, pathname, createQueryString]
+			setParams({
+				search: text,
+				page: 1,
+			}),
+		[setParams]
 	);
 
 	const handleRangeChange = useCallback(
 		(start: string | null, end: string | null) => {
-			router.push(
-				createQueryString(pathname, [
-					["range", [start, end].join(end !== null ? "-" : "")],
-				])
-			);
+			setParams({
+				range: [start, end].join(end !== null ? "-" : ""),
+			});
 		},
-		[router, pathname, createQueryString]
+		[setParams]
 	);
 
 	const handleCollectionSelect = (collectionId: string) => {
 		if (collectionId === queryParams.collectionId) {
-			router.push(createQueryString(pathname, [["collectionId", ""]]));
+			setParams({
+				collectionId: "",
+			});
 		} else {
-			router.push(
-				createQueryString(pathname, [["collectionId", collectionId]])
-			);
+			setParams({
+				collectionId: collectionId,
+			});
 		}
 	};
 
 	const handleAuthorSelect = (author: string) => {
 		if (author === queryParams.author) {
-			router.push(createQueryString(pathname, [["author", ""]]));
+			setParams({
+				author: "",
+			});
 		} else {
-			router.push(createQueryString(pathname, [["author", author]]));
+			setParams({
+				author: author,
+			});
 		}
 	};
 
 	const handleInstitutionSelect = (institution: string) => {
 		if (institution === queryParams.institution) {
-			router.push(createQueryString(pathname, [["institution", ""]]));
+			setParams({
+				institution: "",
+			});
 		} else {
-			router.push(
-				createQueryString(pathname, [["institution", institution]])
-			);
+			setParams({
+				institution: institution,
+			});
 		}
 	};
 
 	const handleClearFilters = () => {
 		console.log("handleClearFilters");
-		router.push(
-			createQueryString(pathname, [
-				["author", ""],
-				["institution", ""],
-				["collections", ""],
-			])
-		);
+		setParams({
+			author: "",
+			institution: "",
+			collections: [],
+		});
 	};
 
 	const {
@@ -141,10 +148,10 @@ export function useItemsList(userData?: any) {
 	});
 
 	if (fetchedItemsData) {
-		itemsCache.current[pathName] = fetchedItemsData;
+		itemsCache.current[pathname] = fetchedItemsData;
 	}
 
-	const itemsData = itemsCache.current[pathName];
+	const itemsData = itemsCache.current[pathname];
 
 	const {
 		data: collectionsData,
@@ -183,12 +190,10 @@ export function useItemsList(userData?: any) {
 			}
 		}
 
-		router.push(
-			createQueryString(pathname, [
-				["collections", newSelectedCollections.join(",")],
-				["page", "1"],
-			])
-		);
+		setParams({
+			collections: newSelectedCollections,
+			page: 1,
+		});
 	};
 
 	return {
@@ -202,7 +207,7 @@ export function useItemsList(userData?: any) {
 		handleScopeChange,
 		handleSearchChange,
 		handleRangeChange,
-		queryParams,
+		queryParams: params,
 		collectionsData,
 		collectionsError,
 		isCollectionsLoading,
@@ -213,7 +218,7 @@ export function useItemsList(userData?: any) {
 		handleCollectionSelect,
 		handleAuthorSelect,
 		handleInstitutionSelect,
-		pathName,
+		pathName: pathname,
 		handleClearFilters,
 		userData,
 	};
