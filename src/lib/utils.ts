@@ -2,6 +2,7 @@ import { Item } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
+import { loadSearchParams, serializeSearchParams } from "./searchParams";
 
 export const fetcher = (url: string) =>
 	fetch(`/api${url}`).then((res) => res.json());
@@ -25,62 +26,15 @@ export const setter = (url: string, { arg }: { arg: any }) =>
 	});
 
 export function defaultParams(searchParams: Record<string, string> | URLSearchParams) {
-	const getParam = (key: string): string => {
-		return searchParams instanceof URLSearchParams
-			? searchParams.get(key) || ""
-			: searchParams[key] || "";
-	};
+	const defaults = loadSearchParams(searchParams);
 
-	const collectionsParam = getParam("collections");
-	const collections = collectionsParam ? collectionsParam.split(",") : [];
-	const page = Number(getParam("page")) || 1;
-	const sort = getParam("sort") || SORT_OPTIONS[0].key;
-	const search = getParam("search") || "";
-	const scope = getParam("scope") || SCOPE_OPTIONS[0].key;
-	const range = getParam("range") || "";
-	const collectionId = getParam("collectionId") || "";
-	const institution = getParam("institution") || "";
-	const author = getParam("author") || "";
-
-	return {
-		page,
-		sort,
-		collections,
-		search,
-		scope,
-		range,
-		collectionId,
-		institution,
-		author,
-	};
+	return defaults;
 }
 
 export function buildItemsQuery(params: any, url: string = "/items"): string {
-	const {
-		page,
-		sort,
-		collections,
-		search,
-		scope,
-		range,
-		collectionId,
-		institution,
-		author,
-	} = params;
+	const serializedParams = serializeSearchParams(params);
 
-	const queryParts = [
-		`page=${page}`,
-		`sort=${sort}`,
-		collections?.length > 0 && `collections=${collections.join(",")}`,
-		search?.length > 0 && `search=${search}`,
-		scope !== SCOPE_OPTIONS[0].key && `scope=${scope}`,
-		range && `range=${range}`,
-		collectionId && `collectionId=${collectionId}`,
-		institution && `institution=${institution}`,
-		author && `author=${author}`,
-	];
-
-	return `${url}?${queryParts.filter(Boolean).join("&")}`;
+	return `${url}${serializedParams}`;
 }
 
 export function firstNonNullOrEmpty<T>(
