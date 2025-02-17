@@ -1,7 +1,7 @@
 import { ReactNode, useRef, useMemo, memo } from "react";
 import { Item } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
-import { Button, CardBody, Divider, Link } from "@nextui-org/react";
+import { Divider, Link } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import Attachment from "@/components/features/items/Attachment";
 import { createFormatter, useTranslations } from "next-intl";
@@ -9,10 +9,9 @@ import { useRouter } from "@/i18n/routing";
 import CopyButton from "@/components/features/items/CopyButton";
 import { Card } from "@/components/nextui/Card";
 import { INSTITUTION_LOGOS } from "@/constants/items";
-import { useFeatureFlagEnabled } from "@/context/Providers";
 import { getExtraValues } from "./utils";
-import { buildHierarchy } from "./collections";
 import { Skeleton } from "@/components/nextui/Skeleton";
+import LinkWithParams from "@/components/features/LinkWithParams";
 import React from "react";
 
 type FormatterProps = {
@@ -282,7 +281,7 @@ export const valueFormatter: Record<
 						<li
 							key={index}
 						>
-							<Link href={`/lib?author=${fullName}`} className="text-lg">
+							<LinkWithParams href="/lib" params={{ author: fullName }} className="text-lg">
 								<p className="space-x-1">
 									<span className="font-medium text-accent underline">
 									{Object.values(rest)
@@ -298,7 +297,7 @@ export const valueFormatter: Record<
 									({creatorTypeLabel || creator.creatorType})
 									</span>
 								</p>
-							</Link>
+							</LinkWithParams>
 						</li>
 					);
 				})}
@@ -384,7 +383,7 @@ export const valueFormatter: Record<
 		)?.[1];
 
 		return (
-			<Link href={`/lib?institution=${value}`}>
+			<LinkWithParams href="/lib" params={{ institution: value }}>
 				<Card className="max-w-fit p-2 rounded-2xl" color="accent">
 					<div
 						className={twMerge(
@@ -400,7 +399,7 @@ export const valueFormatter: Record<
 						</h3>
 					</div>
 				</Card>
-			</Link>
+			</LinkWithParams>
 		);
 	},
 };
