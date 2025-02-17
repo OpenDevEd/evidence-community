@@ -90,6 +90,9 @@
     },
     "next-intl": {
       "next": "$next"
+    },
+    "nuqs": {
+      "next": "$next"
     }
   }
 }
