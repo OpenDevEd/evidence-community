@@ -20,6 +20,8 @@ import { status as statusTable } from "@/db/schema/tables/status";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { useLocalStorage } from "usehooks-ts";
 import { useTranslations } from "next-intl";
+import { NuqsAdapter } from 'nuqs/adapters/next/app'
+
 
 export type CacheContextType = {
 	status: InferSelectModel<typeof statusTable>;
@@ -226,9 +228,10 @@ export default function Providers({
 			defaultTheme="dark"
 			disableTransitionOnChange
 		>
-			<SessionProvider session={session}>
-				<PostHogProvider client={posthog}>
-					<FeatureFlagsContext.Provider value={{ featureFlags }}>
+			<NuqsAdapter>
+				<SessionProvider session={session}>
+					<PostHogProvider client={posthog}>
+						<FeatureFlagsContext.Provider value={{ featureFlags }}>
 						<CacheProvider status={status}>
 							<NextUIProvider navigate={router.push}>
 								<Suspense>
@@ -245,6 +248,7 @@ export default function Providers({
 					</FeatureFlagsContext.Provider>
 				</PostHogProvider>
 			</SessionProvider>
+			</NuqsAdapter>
 		</ThemeProvider>
 	);
 }
