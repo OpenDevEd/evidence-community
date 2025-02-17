@@ -382,23 +382,22 @@ export default function ChatModal({
 													exit={{ opacity: 0, y: -100 }}
 													className="w-full flex flex-col xl:flex-row gap-4 max-w-[96rem] xl:px-14 mx-auto"
 												>
-													{(questions ?? []).map(
+													{(Array.isArray(questions) ? questions : []).map(
 														(question, index) => (
 															<li key={index}>
 																<Button
 																	className="text-wrap h-auto p-4 bg-transparent dark:bg-transparent"
 																	size="sm"
 																	onClick={() => {
-																	setInput(
-																		question
-																	);
-																	inputRef.current.focus();
-																}}
-															>
-																{question}
-															</Button>
-														</li>
-													))}
+																		setInput(question);
+																		inputRef.current.focus();
+																	}}
+																>
+																	{question}
+																</Button>
+															</li>
+														)
+													)}
 												</motion.ul>
 											)}
 											<motion.div
