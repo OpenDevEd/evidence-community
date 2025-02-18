@@ -36,14 +36,14 @@ import { ItemsGetResponse } from "@/app/api/items/types";
 import PageContainer from "../layout/PageContainer";
 import { models } from "@/constants/ai";
 import posthog from "posthog-js";
+import { useSelectedModel } from "@/hooks/useSelectedModel";
 
 function randomUUID() {
 	return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 }
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
-	const [selectedModelValue, setSelectedModel] = useLocalStorage("ai-model", 0);
-	const selectedModel = selectedModelValue >= models.length ? 0 : selectedModelValue;
+	const { selectedModel, setSelectedModel } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
 		modelIndex: selectedModel,
