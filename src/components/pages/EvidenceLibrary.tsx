@@ -235,7 +235,7 @@ export function ContentInteractions({
 										<GenericHeader onClose={onClose}>
 											{t("explore")}
 										</GenericHeader>
-										{itemsContext.handleCheckboxChange && (
+										{!itemsContext.userData && (
 											<CollectionsList
 												data={itemsContext.collectionsData}
 												handleCheckboxChange={
@@ -310,8 +310,8 @@ export function ContentInteractions({
 						/>
 					}
 				/>
-				{<ScopeComponent/>}
-				{!itemsContext.handleCheckboxChange && <SortComponent/>}
+				{<ScopeComponent />}
+				{itemsContext.userData && <SortComponent />}
 				{extraFilters}
 			</section>
 			<section className="flex justify-between h-10 xl:h-12 gap-4">
