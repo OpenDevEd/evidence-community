@@ -11,7 +11,7 @@ import { embed, embedMany } from "ai";
 import { Item } from "@/app/api/item/types";
 import { db } from "@/db";
 import { embeddings, embeddings as embeddingsTable } from "@/db/schema/tables/embeddings";
-import { desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt } from "drizzle-orm";
 import { cosineDistance } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -138,28 +138,35 @@ export const createResource = async (item: Item) => {
 export const generateEmbedding = async (value: string): Promise<number[]> => {
 	const input = value.replaceAll('\\n', ' ');
 	const { embedding } = await embed({
-	  model: embeddingModel,
-	  value: input,
+		model: embeddingModel,
+		value: input,
 	});
 	return embedding;
-  };
-  
-  export const findRelevantContent = async (userQuery: string, itemKey: string, userSpecifiedPage: number) => {
+};
+
+export const findRelevantContent = async (userQuery: string, itemKey: string | null, userSpecifiedPage: number) => {
 	const userQueryEmbedded = await generateEmbedding(userQuery);
 	const similarity = sql<number>`1 - (${cosineDistance(
-	  embeddings.embedding,
-	  userQueryEmbedded,
+		embeddings.embedding,
+		userQueryEmbedded,
 	)})`;
-	const baseCondition = gt(similarity, 0.5) && eq(embeddings.itemKey, itemKey);
-	const whereCondition = userSpecifiedPage !== 0
-	  ? baseCondition && eq(embeddings.page, userSpecifiedPage)
-	  : baseCondition;
-	  
+	
+	const baseCondition = [
+		gt(similarity, 0.5),
+		itemKey ? eq(embeddings.parentKey, itemKey) : undefined,
+		userSpecifiedPage !== 0 ? eq(embeddings.page, userSpecifiedPage) : undefined,
+	].filter(Boolean);
+	const whereCondition = and(...baseCondition);
+
 	const similarGuides = await db
-	  .select({ name: embeddings.content, similarity, page: embeddings.page })
-	  .from(embeddings)
-	  .where(whereCondition)
-	  .orderBy(t => desc(t.similarity))
-	  .limit(100);
-	return similarGuides;
-  };
+		.select({ name: embeddings.content, similarity, page: embeddings.page, itemKey: embeddings.itemKey, parentKey: embeddings.parentKey })
+		.from(embeddings)
+		.where(whereCondition)
+		.orderBy(t => desc(t.similarity))
+		.limit(100);
+	
+	return similarGuides.map(guide => ({
+		...guide,
+		url: process.env.BASE_URL + `/lib/${guide.parentKey}`,
+	}));
+};
