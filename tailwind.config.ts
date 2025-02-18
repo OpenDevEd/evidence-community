@@ -180,7 +180,11 @@ const config: Config = {
       },
       transitionTimingFunction: {
         'spring': 'cubic-bezier(0.68, -0.6, 0.32, 1.6)',
-      }
+        'bounce-custom': 'cubic-bezier(0.68, -0.55, 0.265, 1.55)',
+      },
+      boxShadow: {
+        'accent-glow': '0 0 15px theme(colors.accent.DEFAULT / 0.25)',
+      },
     },
   },
   darkMode: "class",
