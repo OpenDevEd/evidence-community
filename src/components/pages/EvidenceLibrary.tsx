@@ -7,11 +7,8 @@ import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Card } from "@/components/nextui/Card";
 import { Switch } from "@/components/nextui/Switch";
-import {
-	ModalContent, Spinner,
-	useDisclosure
-} from "@nextui-org/react";
-import { ReactNode, use } from "react";
+import { ModalContent, Spinner, useDisclosure } from "@nextui-org/react";
+import React, { ReactNode, use, useRef, useState } from "react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { AiOutlineCompass } from "react-icons/ai";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -28,6 +25,9 @@ import FullScreenModal from "../nextui/FullScreenModal";
 import GenericHeader from "../features/modals/GenericHeader";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList, { ItemsContext } from "../features/items/ItemsList";
+import { useSelectedModel } from "@/hooks/useSelectedModel";
+import ChatModal from "../features/modals/ChatModal";
+import ModelSelector from "../features/ai/ModelSelector";
 
 function DropDownIcon({
 	Icon,
@@ -71,7 +71,7 @@ export function ContentInteractions({
 	extraFilters: ReactNode;
 	header?: ReactNode;
 }) {
-	const itemsContext = use(ItemsContext)
+	const itemsContext = use(ItemsContext);
 	const {
 		isOpen: isExploreOpen,
 		onOpen: onExploreOpen,
@@ -82,9 +82,15 @@ export function ContentInteractions({
 		onOpen: onHelpOpen,
 		onOpenChange: onHelpOpenChange,
 	} = useDisclosure();
-	const [debouncedSearch, _] = useDebounce(itemsContext.handleSearchChange, 0);
+	const [debouncedSearch, _] = useDebounce(
+		itemsContext.handleSearchChange,
+		0
+	);
 	const actuallyNoData =
-		(!itemsContext.isItemsLoading && itemsContext.itemsData && itemsContext.itemsData.items.length === 0) || itemsContext.itemsError;
+		(!itemsContext.isItemsLoading &&
+			itemsContext.itemsData &&
+			itemsContext.itemsData.items.length === 0) ||
+		itemsContext.itemsError;
 	const t = useTranslations("ui");
 	const tSorts = useTranslations("sorts");
 	const tScopes = useTranslations("scopes");
@@ -94,7 +100,11 @@ export function ContentInteractions({
 		return (
 			<Select
 				startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
-				selectedKeys={itemsContext.queryParams.sort && [itemsContext.queryParams.sort]}
+				selectedKeys={
+					itemsContext.queryParams.sort && [
+						itemsContext.queryParams.sort,
+					]
+				}
 				onSelectionChange={itemsContext.handleSortChange as any}
 				items={SORT_OPTIONS}
 				selectorIcon={<div className="hidden"></div>}
@@ -134,14 +144,17 @@ export function ContentInteractions({
 			>
 				{(item: any) => {
 					return (
-						<SelectItem aria-label={tSorts(item.key)} key={item.key}>
+						<SelectItem
+							aria-label={tSorts(item.key)}
+							key={item.key}
+						>
 							{tSorts(item.key)}
 						</SelectItem>
 					);
 				}}
 			</Select>
 		);
-	};
+	}
 
 	function ScopeComponent() {
 		return (
@@ -150,7 +163,11 @@ export function ContentInteractions({
 					<DropDownIcon label="Scope icon" Icon={GiArchiveResearch} />
 				}
 				color="tertiary"
-				selectedKeys={itemsContext.queryParams.scope && [itemsContext.queryParams.scope]}
+				selectedKeys={
+					itemsContext.queryParams.scope && [
+						itemsContext.queryParams.scope,
+					]
+				}
 				onSelectionChange={itemsContext.handleScopeChange as any}
 				items={SCOPE_OPTIONS}
 				selectorIcon={<div className="hidden"></div>}
@@ -190,14 +207,17 @@ export function ContentInteractions({
 			>
 				{(item: any) => {
 					return (
-						<SelectItem aria-label={tScopes(item.key)} key={item.key}>
+						<SelectItem
+							aria-label={tScopes(item.key)}
+							key={item.key}
+						>
 							{tScopes(item.key)}
 						</SelectItem>
 					);
 				}}
 			</Select>
 		);
-	};
+	}
 
 	return (
 		<>
@@ -237,21 +257,29 @@ export function ContentInteractions({
 										</GenericHeader>
 										{!itemsContext.userData && (
 											<CollectionsList
-												data={itemsContext.collectionsData}
+												data={
+													itemsContext.collectionsData
+												}
 												handleCheckboxChange={
 													itemsContext.handleCheckboxChange
 												}
 												selectedCollections={
 													itemsContext.selectedCollections
 												}
-												hierarchy={itemsContext.hierarchy!}
+												hierarchy={
+													itemsContext.hierarchy!
+												}
 												isModal
-												range={itemsContext.queryParams.range}
+												range={
+													itemsContext.queryParams
+														.range
+												}
 												handleRangeChange={
 													itemsContext.handleRangeChange
 												}
 												facetDistribution={
-													itemsContext.itemsData?.facetDistribution
+													itemsContext.itemsData
+														?.facetDistribution
 												}
 											/>
 										)}
@@ -278,7 +306,7 @@ export function ContentInteractions({
 									isOpen={isHelpOpen}
 									onOpenChange={onHelpOpenChange}
 								/>
-								{<SortComponent/>}
+								{<SortComponent />}
 							</>
 						)}
 					</div>
@@ -288,7 +316,9 @@ export function ContentInteractions({
 				role="search"
 				className={twMerge(
 					"xl:flex xl:flex-row gap-4",
-					!itemsContext.userData ? "flex flex-col" : "grid grid-cols-2"
+					!itemsContext.userData
+						? "flex flex-col"
+						: "grid grid-cols-2"
 				)}
 			>
 				<Input
@@ -326,7 +356,10 @@ export function ContentInteractions({
 						{countLabel ||
 							t.rich("resourcesCount", {
 								count: formatter.number(
-									actuallyNoData ? 0 : itemsContext.itemsData?.totalItems || 0
+									actuallyNoData
+										? 0
+										: itemsContext.itemsData?.totalItems ||
+												0
 								),
 								number: (chunks) => (
 									<span
@@ -408,19 +441,48 @@ function MainContent() {
 				handleRangeChange={props.handleRangeChange}
 				facetDistribution={props.itemsData?.facetDistribution}
 			/>
-			<ItemsList
-				props={props}
-			/>
+			<ItemsList props={props} />
 		</>
 	);
 }
 
 export default function EvidenceLibrary() {
+	const t = useTranslations("ai");
+	const { modelObject: { icon: Icon }, selectedModel, setSelectedModel } = useSelectedModel();
+	const { isOpen: isChatOpen, onOpen: onChatOpen, onOpenChange: onChatOpenChange } = useDisclosure();
+	const { isOpen: isModelOpen, onOpen: onModelOpen, onOpenChange: onModelOpenChange } = useDisclosure();
+	const [externalInput, setExternalInput] = useState<string>("");
+	
+	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault();
+		onChatOpen();
+	}
+
 	return (
 		<PageContainer>
+			<ModelSelector isOpen={isModelOpen} onOpenChange={onModelOpenChange} selectedModel={selectedModel} onModelChange={setSelectedModel} />
+			<ChatModal isOpen={isChatOpen} onOpenChange={onChatOpenChange} modelIndex={selectedModel} externalInput={externalInput} setExternalInput={setExternalInput} />
 			<div className="flex gap-[40px] flex-col xl:flex-row">
 				<MainContent />
 			</div>
+			<form onSubmit={handleSubmit} className="fixed bottom-0 left-0 right-0 flex justify-center p-4 items-center z-50 group fill-white">
+				<Input
+					autoComplete="off"
+					value={externalInput}
+					onValueChange={setExternalInput}
+					startContent={
+					<Button isIconOnly variant="invisible" className="shrink-0" onPress={onModelOpen}>
+						<Icon className="size-6 bg-accent rounded-full p-1 aspect-square shrink-0" />
+					</Button>
+					}
+					placeholder={t("askAI")}
+					classNames={{
+						inputWrapper: "p-2 xl:p-2 backdrop-blur-xl shadow-accent-glow data-[hover]:scale-105 max-w-64 data-[focus]:max-w-[28rem] !transition-all !duration-500 ease-bounce-custom mx-auto",
+					}}
+				/>
+				<div className="size-96 bg-accent/50 opacity-0 group-hover:opacity-75 rounded-full blur-3xl absolute translate-y-1/2 -z-10 transition-all duration-1000 ease-spring">
+				</div>
+			</form>
 		</PageContainer>
 	);
 }
