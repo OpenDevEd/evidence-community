@@ -35,18 +35,21 @@ export default function ChatModal({
 	data,
 	modelIndex,
 	questions,
+	externalInput,
+	setExternalInput,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
-	data: ItemGetResponse | undefined;
+	data?: ItemGetResponse | undefined;
 	modelIndex: number;
-	questions: undefined | string[];
+	questions?: undefined | string[];
+	externalInput?: string;
+	setExternalInput?: (input: string) => void;
 }) {
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
 	const locale = useLocale();
 	const inputRef = useRef<any>(null);
-
 	const {
 		messages,
 		handleSubmit,
@@ -117,6 +120,16 @@ export default function ChatModal({
 		apply();
 		return () => observer.disconnect();
 	}, [messages]);
+
+	useEffect(() => {
+		if (externalInput && isOpen) {
+			append({
+				role: "user",
+				content: externalInput,
+			});
+			setExternalInput?.("");
+		}
+	}, [externalInput, isOpen]);
 
 	const reponseExists = messages.some(
 		(message, index) =>
@@ -374,83 +387,110 @@ export default function ChatModal({
 										onSubmit={handleSubmit}
 									>
 										<AnimatePresence mode="popLayout">
-											{(questions && !isLoading && !reponseExists) && (
-												<motion.ul
-													key="questions"
-													initial={{ opacity: 0, y: 100 }}
-													animate={{ opacity: 1, y: 0 }}
-													exit={{ opacity: 0, y: -100 }}
-													className="w-full flex flex-col xl:flex-row gap-4 max-w-[96rem] xl:px-14 mx-auto"
-												>
-													{(Array.isArray(questions) ? questions : []).map(
-														(question, index) => (
-															<li key={index}>
-																<Button
-																	className="text-wrap h-auto p-4 bg-transparent dark:bg-transparent"
-																	size="sm"
-																	onClick={() => {
-																		setInput(question);
-																		inputRef.current.focus();
-																	}}
-																>
-																	{question}
-																</Button>
-															</li>
+											{questions &&
+												!isLoading &&
+												!reponseExists && (
+													<motion.ul
+														key="questions"
+														initial={{
+															opacity: 0,
+															y: 100,
+														}}
+														animate={{
+															opacity: 1,
+															y: 0,
+														}}
+														exit={{
+															opacity: 0,
+															y: -100,
+														}}
+														className="w-full flex flex-col xl:flex-row gap-4 max-w-[96rem] xl:px-14 mx-auto"
+													>
+														{(Array.isArray(
+															questions
 														)
-													)}
-												</motion.ul>
-											)}
+															? questions
+															: []
+														).map(
+															(
+																question,
+																index
+															) => (
+																<li key={index}>
+																	<Button
+																		className="text-wrap h-auto p-4 bg-transparent dark:bg-transparent"
+																		size="sm"
+																		onClick={() => {
+																			setInput(
+																				question
+																			);
+																			inputRef.current.focus();
+																		}}
+																	>
+																		{
+																			question
+																		}
+																	</Button>
+																</li>
+															)
+														)}
+													</motion.ul>
+												)}
 											<motion.div
 												key="textarea"
 												layout
 												transition={{
 													type: "spring",
 													bounce: 0.25,
-													duration: 0.5
+													duration: 0.5,
 												}}
 												className="w-full z-10"
 											>
 												<Textarea
 													minRows={1}
-												onKeyDown={(e) => {
-													if (
-														e.key === "Enter" &&
-														!e.shiftKey
-													) {
-														e.preventDefault();
-														handleSubmit(e);
-													}
-												}}
-												ref={inputRef}
-												autoFocus
-												autoComplete="off"
-												label={t("askAI")}
-												endContent={
-													<Button
-														isDisabled={isLoading}
-														type="submit"
-														isIconOnly
-														className="flex items-center justify-center h-full aspect-square !p-0"
-														aria-label={
-															tUI("sendMessageAriaLabel")
+													onKeyDown={(e) => {
+														if (
+															e.key === "Enter" &&
+															!e.shiftKey
+														) {
+															e.preventDefault();
+															handleSubmit(e);
 														}
-													>
-														{isLoading ? (
-															<ImSpinner8 className="animate-spin" />
-														) : (
-															<IoSend className="size-4 text-black dark:text-white/60" />
-														)}
-													</Button>
-												}
-												placeholder={t("askMeAnything")}
-												value={input}
-												onValueChange={setInput}
-												classNames={{
-													base: twMerge(
-														"xl:w-1/3 xl:mx-auto data-[focus=true]:xl:w-2/5 active:xl:scale-90 data-[focus]:active:xl:scale-100 transition-all duration-500 ease-spring data-[focus=true]:opacity-100"
-													),
-												}}
-											/>
+													}}
+													ref={inputRef}
+													autoFocus
+													autoComplete="off"
+													label={t("askAI")}
+													endContent={
+														<Button
+															isDisabled={
+																isLoading
+															}
+															type="submit"
+															isIconOnly
+															className="flex items-center justify-center h-full aspect-square !p-0"
+															aria-label={tUI(
+																"sendMessageAriaLabel"
+															)}
+														>
+															{isLoading ? (
+																<ImSpinner8 className="animate-spin" />
+															) : (
+																<IoSend className="size-4 text-black dark:text-white/60" />
+															)}
+														</Button>
+													}
+													placeholder={t(
+														"askMeAnything"
+													)}
+													value={input}
+													onValueChange={setInput}
+													classNames={{
+														base: twMerge(
+															"xl:w-1/3 xl:mx-auto data-[focus=true]:xl:w-2/5 active:xl:scale-90 data-[focus]:active:xl:scale-100 transition-all duration-500 ease-spring data-[focus=true]:opacity-100"
+														),
+													}}
+												/>
 											</motion.div>
 										</AnimatePresence>
 									</form>
