@@ -1,7 +1,7 @@
 "use client";
 import { Button } from "@/components/nextui/Button";
 import CollectionsList from "@/components/features/collections/CollectionsList";
-import { IoGrid, IoSearch } from "react-icons/io5";
+import { IoChatbubblesOutline, IoGrid, IoSearch, IoSend } from "react-icons/io5";
 import { Select } from "@/components/nextui/Select";
 import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
@@ -28,6 +28,7 @@ import ItemsList, { ItemsContext } from "../features/items/ItemsList";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import ChatModal from "../features/modals/ChatModal";
 import ModelSelector from "../features/ai/ModelSelector";
+import { useFeatureFlagEnabled } from "@/context/Providers";
 
 function DropDownIcon({
 	Icon,
@@ -446,7 +447,7 @@ function MainContent() {
 	);
 }
 
-export default function EvidenceLibrary() {
+function AIChat() {
 	const t = useTranslations("ai");
 	const { modelObject: { icon: Icon }, selectedModel, setSelectedModel } = useSelectedModel();
 	const { isOpen: isChatOpen, onOpen: onChatOpen, onOpenChange: onChatOpenChange } = useDisclosure();
@@ -459,30 +460,63 @@ export default function EvidenceLibrary() {
 	}
 
 	return (
-		<PageContainer>
-			<ModelSelector isOpen={isModelOpen} onOpenChange={onModelOpenChange} selectedModel={selectedModel} onModelChange={setSelectedModel} />
-			<ChatModal isOpen={isChatOpen} onOpenChange={onChatOpenChange} modelIndex={selectedModel} externalInput={externalInput} setExternalInput={setExternalInput} />
-			<div className="flex gap-[40px] flex-col xl:flex-row">
-				<MainContent />
-			</div>
-			<form onSubmit={handleSubmit} className="fixed bottom-0 left-0 right-0 flex justify-center p-4 items-center z-50 group fill-white">
+		<>
+			<ModelSelector
+				isOpen={isModelOpen}
+				onOpenChange={onModelOpenChange}
+				selectedModel={selectedModel}
+				onModelChange={setSelectedModel}
+			/>
+			<ChatModal
+				isOpen={isChatOpen}
+				onOpenChange={onChatOpenChange}
+				modelIndex={selectedModel}
+				externalInput={externalInput}
+				setExternalInput={setExternalInput}
+			/>
+			<form
+				onSubmit={handleSubmit}
+				className="fixed bottom-0 left-1/2 -translate-x-1/2 flex justify-center p-4 items-center z-50 group fill-white"
+			>
 				<Input
 					autoComplete="off"
 					value={externalInput}
 					onValueChange={setExternalInput}
 					startContent={
-					<Button isIconOnly variant="invisible" className="shrink-0" onPress={onModelOpen}>
-						<Icon className="size-6 bg-accent rounded-full p-1 aspect-square shrink-0" />
-					</Button>
+						<Button
+							isIconOnly
+							variant="invisible"
+							className="shrink-0"
+							onPress={onModelOpen}
+						>
+							<Icon className="size-6 bg-accent rounded-full p-1 aspect-square shrink-0" />
+						</Button>
+					}
+					endContent={
+						<Button type="submit" isIconOnly variant="invisible" className="shrink-0 !p-1" onPress={onChatOpen}>
+							<IoSend className="size-4" />
+						</Button>
 					}
 					placeholder={t("askAI")}
 					classNames={{
-						inputWrapper: "p-2 xl:p-2 backdrop-blur-xl shadow-accent-glow data-[hover]:scale-105 max-w-64 data-[focus]:max-w-[28rem] !transition-all !duration-500 ease-bounce-custom mx-auto",
+						inputWrapper:
+							"p-2 xl:p-2 backdrop-blur-xl shadow-accent-glow data-[hover]:scale-105 w-64 data-[focus]:w-[28rem] !transition-all !duration-500 ease-bounce-custom",
 					}}
 				/>
-				<div className="size-96 bg-accent/50 opacity-0 group-hover:opacity-75 rounded-full blur-3xl absolute translate-y-1/2 -z-10 transition-all duration-1000 ease-spring">
-				</div>
+				<div className="size-96 bg-accent/50 opacity-0 group-hover:opacity-75 rounded-full blur-3xl absolute translate-y-1/2 -z-10 transition-all duration-1000 ease-spring"></div>
 			</form>
+		</>
+	);
+}
+
+export default function EvidenceLibrary() {
+	const isAIEnabled = useFeatureFlagEnabled("ai-features");
+	return (
+		<PageContainer>
+			<div className="flex gap-[40px] flex-col xl:flex-row">
+				<MainContent />
+			</div>
+			{isAIEnabled && <AIChat />}
 		</PageContainer>
 	);
 }
