@@ -11,7 +11,7 @@ import { embed, embedMany } from "ai";
 import { Item } from "@/app/api/item/types";
 import { db } from "@/db";
 import { embeddings, embeddings as embeddingsTable } from "@/db/schema/tables/embeddings";
-import { and, desc, eq, gt } from "drizzle-orm";
+import { and, desc, eq, gt, or } from "drizzle-orm";
 import { cosineDistance } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
@@ -93,31 +93,26 @@ export const generateEmbeddings = async (
 	return embeddings.map((e, i) => ({ content: chunks[i], embedding: e }));
 };
 
-export const createResource = async (item: Item) => {
+export const createResource = async (item: NonNullable<Item["fullTextPDFs"]>[0], parentKey: string) => {
 	try {
-		const itemKey = item.key;
-
-		const existingEmbeddings = await db.select().from(embeddings).where(eq(embeddings.itemKey, itemKey)).limit(1);
-		const embeddingsAlreadyExistOrItemHasNoPDFs = item.fullTextPDFs?.length === 0 || existingEmbeddings.length > 0;
+		const existingEmbeddings = await db.select().from(embeddings).where(eq(embeddings.itemKey, item.key)).limit(1);
+		const embeddingsAlreadyExistOrItemHasNoPDFs = item.fullTextPDF.length === 0 || existingEmbeddings.length > 0;
 		if (embeddingsAlreadyExistOrItemHasNoPDFs) {
 			return "Embeddings already exist for this item.";
 		}
 
-		const fullTextPDF = item.fullTextPDFs;
-
-		const allPDFPromises = (fullTextPDF || []).flatMap((pdf) =>
-			pdf.fullTextPDF.map(async (page) => {
-				const embeddings = await generateEmbeddings(page.text);
-				return db.insert(embeddingsTable).values(
-					embeddings.map((embedding) => ({
-						content: embedding.content,
-						page: page.page,
-						embedding: embedding.embedding,
-						itemKey: item.key,
-					}))
-				);
-			})
-		);
+		const allPDFPromises = item.fullTextPDF.map(async (page) => {
+			const embeddings = await generateEmbeddings(page.text);
+			return db.insert(embeddingsTable).values(
+				embeddings.map((embedding) => ({
+					content: embedding.content,
+					page: page.page,
+					embedding: embedding.embedding,
+					itemKey: item.key,
+					parentKey: parentKey,
+				}))
+			);
+		});
 
 		const results = await Promise.allSettled(allPDFPromises);
 
@@ -153,13 +148,13 @@ export const findRelevantContent = async (userQuery: string, itemKey: string | n
 	
 	const baseCondition = [
 		gt(similarity, 0.5),
-		itemKey ? eq(embeddings.parentKey, itemKey) : undefined,
+		itemKey ? or(eq(embeddings.parentKey, itemKey), eq(embeddings.itemKey, itemKey)) : undefined,
 		userSpecifiedPage !== 0 ? eq(embeddings.page, userSpecifiedPage) : undefined,
 	].filter(Boolean);
 	const whereCondition = and(...baseCondition);
 
 	const similarGuides = await db
-		.select({ name: embeddings.content, similarity, page: embeddings.page, itemKey: embeddings.itemKey, parentKey: embeddings.parentKey })
+		.select({ name: embeddings.content, similarity, page: embeddings.page, parentKey: embeddings.parentKey })
 		.from(embeddings)
 		.where(whereCondition)
 		.orderBy(t => desc(t.similarity))
