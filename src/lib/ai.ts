@@ -15,7 +15,7 @@ import { and, desc, eq, gt, or } from "drizzle-orm";
 import { cosineDistance } from "drizzle-orm";
 import { sql } from "drizzle-orm";
 
-const embeddingModel = openai.embedding("text-embedding-ada-002");
+const embeddingModel = openai.embedding("text-embedding-3-small");
 
 export const providers = [google, openai, deepseek, anthropic, mistral];
 
