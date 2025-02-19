@@ -7,6 +7,7 @@ import { PropsWithChildren, ReactNode } from "react";
 import { BiSolidBookBookmark, BiSolidBookContent } from "react-icons/bi";
 import { twMerge } from "tailwind-merge";
 import ReactMarkdown from "react-markdown";
+import Link from "next/link";
 
 function createRehypeWrapper(pattern: RegExp, className: string) {
 	return () => (tree: Node) => {
@@ -123,8 +124,8 @@ export function AIMarkdown({
 			remarkPlugins={[remarkGfm]}
 			rehypePlugins={[
 				rehypeQuoteWrapper,
-					rehypePageWrapper,
-					rehypeSectionWrapper,
+				rehypePageWrapper,
+				rehypeSectionWrapper,
 			]}
 			components={{
 				span: ({ children, className }) =>
@@ -136,10 +137,16 @@ export function AIMarkdown({
 					) : (
 						<span>{children}</span>
 					),
+				a: ({ href, children }) => 
+					href?.startsWith('/') ? (
+						<Link className="text-link underline" href={href}>{children}</Link>
+					) : (
+						<a href={href} className="text-link underline" target="_blank" rel="noopener noreferrer">
+							{children}
+						</a>
+					),
 			}}
-			className={twMerge(
-				className
-			)}
+			className={twMerge(className)}
 			{...props}
 		>
 			{children as string}
