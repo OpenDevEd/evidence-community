@@ -53,6 +53,8 @@ export default function GenerativeModal({
 	id: string;
 }) {
 	const t = useTranslations("ai");
+	const tUI = useTranslations("ui");
+	
 	const format = useFormatter();
 	const [selectedHistoryIndex, setSelectedHistoryIndex] = useState(0);
 	const selectedHistoryItem = history[selectedHistoryIndex];
@@ -278,7 +280,7 @@ export default function GenerativeModal({
 														);
 													}
 												}}
-												aria-label={t("deleteHistoryItemAriaLabel")}
+												aria-label={tUI("deleteHistoryItemAriaLabel")}
 											>
 												<span className="hidden xl:block">
 													{t("delete")}
