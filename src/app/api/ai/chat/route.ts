@@ -12,6 +12,8 @@ import { isAIAllowed } from "@/lib/utils";
 import { z } from "zod";
 import client from "@/lib/meilisearch";
 
+export const maxDuration = 60;
+
 const EmbeddedItems = new Set<string>();
 
 export async function POST(req: Request) {
@@ -138,7 +140,7 @@ export async function POST(req: Request) {
 								embedder: "openai",
 								semanticRatio: 0.7,
 							},
-							limit: 100,
+							limit: 50,
 						});
 
 					const hitsWithUrls = result.hits.map(item => ({
