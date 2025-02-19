@@ -500,7 +500,7 @@ function AIChat() {
 					placeholder={t("askAI")}
 					classNames={{
 						inputWrapper:
-							"p-2 xl:p-2 backdrop-blur-xl shadow-accent-glow data-[hover]:scale-105 w-64 data-[focus]:w-[28rem] !transition-all !duration-500 ease-bounce-custom",
+							"p-2 xl:p-2 backdrop-blur-xl shadow-accent-glow data-[hover]:scale-105 w-64 data-[focus]:w-[28rem] !max-w-[calc(100vw-2rem)] !transition-all !duration-500 ease-bounce-custom",
 					}}
 				/>
 				<div className="size-96 bg-accent/50 opacity-0 group-hover:opacity-75 rounded-full blur-3xl absolute translate-y-1/2 -z-10 transition-all duration-1000 ease-spring"></div>
