@@ -24,9 +24,11 @@ export async function POST(req: Request) {
 		return new NextResponse("Item not found", { status: 404 });
 	}
 
-	if (!EmbeddedItems.has(item.item.key)) {
-		await createResource(item.item);
-		EmbeddedItems.add(item.item.key);
+	for (const pdf of item.item.fullTextPDFs || []) {
+		if (!EmbeddedItems.has(pdf.key)) {
+			await createResource(pdf, key);
+			EmbeddedItems.add(pdf.key);
+		}
 	}
 
 	console.log("created resource for item", item.item.key);
