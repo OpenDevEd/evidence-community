@@ -134,8 +134,7 @@ export default function ChatModal({
 	const reponseExists = messages.some(
 		(message, index) =>
 			index > 0 &&
-			message.role === "assistant" &&
-			message.content.trim().length > 0
+			message.role === "assistant"
 	);
 
 	return (
