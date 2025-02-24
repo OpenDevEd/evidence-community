@@ -27,6 +27,8 @@ import * as embeddingsTable from './schema/tables/embeddings';
 
 import * as statusTable from './schema/tables/status';
 
+import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+
 export const schema = {
     ...itemTable,
     ...collectionTable,
@@ -52,4 +54,21 @@ export const schema = {
     ...embeddingsTable,
 }
 
-export const db = drizzle(process.env.DATABASE_URL_POST!, { schema });
+type DBType = PostgresJsDatabase<typeof schema>;
+
+// Fix for "sorry, too many clients already"
+declare global {
+    // eslint-disable-next-line no-var -- only var works here
+    var db: DBType | undefined;
+}
+
+let db: DBType;
+
+if (process.env.NODE_ENV === "production") {
+    db = drizzle(process.env.DATABASE_URL_POST!, { schema });
+} else {
+    if (!global.db) global.db = drizzle(process.env.DATABASE_URL_POST!, { schema });
+    db = global.db;
+  }
+  
+  export { db };
