@@ -150,7 +150,9 @@ export function AIMarkdown({
 					) : className === "QuoteHighlight" ? (
 						<QuoteHighlight>{children}</QuoteHighlight>
 					) : className === "ResourceWrapper" ? (
-						<ResourceWrapper children={children} />
+						<ResourceWrapper>
+							{children}
+						</ResourceWrapper>
 					) : (
 						<span>{children}</span>
 					),
