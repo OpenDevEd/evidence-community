@@ -233,7 +233,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 							</h1>
 							<div className="flex flex-col gap-8">
 								{data?.item &&
-									Object.keys(data.item).map(
+									Object.keys(data.item).filter((key) => key !== "citation").map(
 										(row: string) => (
 											<ItemRow
 												item={data.item!}
@@ -244,6 +244,13 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 											/>
 										)
 									)}
+									<ItemRow
+										item={data.item!}
+										key="citation"
+										row="citation"
+										router={router}
+										loading={loading}
+									/>
 							</div>
 							{(isCollectionsEnabled && hierarchy) && (
 								hierarchy.filter((collection: Collection) => collection.children?.length && collection.children?.length > 0).map((collection: Collection) => (

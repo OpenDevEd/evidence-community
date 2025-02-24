@@ -1,4 +1,4 @@
-import { ReactNode, useRef, useMemo, memo } from "react";
+import { ReactNode, useRef, useMemo, memo, useState, useEffect } from "react";
 import { Item } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
 import { Divider, Link } from "@nextui-org/react";
@@ -13,6 +13,7 @@ import { getExtraValues } from "./utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import LinkWithParams from "@/components/features/LinkWithParams";
 import React from "react";
+import { motion } from "framer-motion";
 
 type FormatterProps = {
 	value: any;
@@ -66,16 +67,31 @@ function formatDate({ value, formatter }: FormatterProps) {
 
 function Citation({ value, loading }: FormatterProps) {
 	const contentRef = useRef(null);
+	const [showSkeleton, setShowSkeleton] = useState(true);
 	const sanitizedHtml = value.trim().replace(/<\/?div/g, '<p');
+
+	useEffect(() => {
+		const timer = setTimeout(() => {
+			setShowSkeleton(false);
+		}, 250);
+
+		return () => clearTimeout(timer);
+	}, []);
+
 	return (
-		<Skeleton isLoaded={true} className="w-fit h-fit rounded-2xl">
-			<div className="flex gap-4 w-full bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between break-all">
+		<Skeleton isLoaded={!loading && !showSkeleton} className="w-full min-h-20 rounded-2xl">
+			<motion.div 
+				initial={{ height: "5rem" }}
+				animate={loading ? { height: "5rem" } : { height: "auto" }}
+				transition={{ duration: 0.2, ease: "easeOut" }}
+				className="flex gap-4 w-full bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between break-all"
+			>
 				<p
 					ref={contentRef}
 					dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
 				/>
 				<CopyButton isIconOnly contentRef={contentRef} />
-			</div>
+			</motion.div>
 		</Skeleton>
 	);
 }
@@ -372,7 +388,6 @@ export const valueFormatter: Record<
 		);
 	},
 	citation: (args) => {
-		if (!args.value) return false;
 		return <Citation {...args} />;
 	},
 	institution: ({ value }) => {

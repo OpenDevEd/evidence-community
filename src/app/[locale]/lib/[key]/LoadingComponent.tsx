@@ -13,6 +13,7 @@ export default function LoadingComponent({ itemKey }: { itemKey: string }) {
             return item.key === itemKey;
         });
         if (!theItem) return undefined;
+        theItem.citation = theItem.citation ?? "<div>Loading...</div>";
         return {
             item: theItem,
         } as ItemGetResponse;
