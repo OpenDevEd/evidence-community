@@ -11,8 +11,13 @@ import { routing } from "@/i18n/routing";
 import { isAIAllowed } from "@/lib/utils";
 import { z } from "zod";
 import client from "@/lib/meilisearch";
+import { SORT_OPTIONS } from "@/constants/items";
+import { formatRange } from "@/lib/utils";
+import { SearchResponse } from "meilisearch";
+import { Item } from "../../item/types";
+// import fs from "fs";
 
-export const maxDuration = 60;
+export const maxDuration = 120;
 
 const EmbeddedItems = new Set<string>();
 
@@ -29,7 +34,9 @@ export async function POST(req: Request) {
 
 		for (const pdf of item.item.fullTextPDFs || []) {
 			if (!EmbeddedItems.has(pdf.key)) {
+				console.log("Creating resource for", pdf.key);
 				await createResource(pdf, key);
+				console.log("Resource created for", pdf.key);
 				EmbeddedItems.add(pdf.key);
 			}
 		}
@@ -53,52 +60,34 @@ export async function POST(req: Request) {
 	const result = streamText({
 		model: provider!(modelName!),
 		system: [
-			`ROLE: You are a knowledgeable AI assistant with expertise across multiple disciplines. You help users find answers to their questions by leveraging your knowledge and the available database of resources.\n`,
-
-			`EXPERTISE: You are capable of understanding and explaining complex topics from various fields. You use the database search tool to find relevant resources and synthesize information to provide comprehensive, accurate answers.\n`,
-
-			`APPROACH: You approach questions thoughtfully and systematically:
-1. Understand the user's question and its context
-2. Search the database for relevant resources when needed
-3. Synthesize information from multiple sources
-4. Provide clear, well-reasoned explanations
-5. Support your answers with references to relevant resources\n`,
-
-			`TOOL USAGE: Use available tools directly when needed without asking the user for confirmation.\n`,
-
-			`LOCALE: ${locale}\n`,
-
-			cleanItem
-				? [ // Item Analysis mode remains unchanged
-					`MODE: Item Analysis\n`, // Clear mode identification
-
-					`INSTRUCTIONS:\n`,
-					`1. ANALYZE the ITEM: Thoroughly examine the ITEM provided. Identify its features, intended purpose, and potential educational applications.\n`, // Emphasize analysis of the item itself
-					`2. RESEARCH & EVIDENCE: Utilize the tools available to research the ITEM and related concepts. Focus on finding evidence-based information, research studies, pedagogical frameworks, and expert opinions relevant to the ITEM and its educational use.\n`, // Shifts tool usage to research and evidence gathering
-					`3. CRITICAL EVALUATION: Critically evaluate the information gathered. Consider the source, methodology (if applicable), potential biases, and the strength of the evidence. Don't just accept information at face value – analyze its validity and relevance.\n`, // Introduces critical evaluation of information
-					`4. PEDAGOGICAL IMPLICATIONS:  Analyze the ITEM's pedagogical implications. How might it impact teaching and learning? What are its potential benefits and drawbacks in different educational contexts? Consider relevant learning theories (e.g., constructivism, cognitivism, connectivism).\n`, // Focuses on pedagogical analysis and connection to learning theories
-					`5. EVIDENCE-BASED ANSWERS: When responding to user questions about the ITEM, provide answers grounded in the research and evidence you've gathered. Clearly state your reasoning and cite (implicitly or explicitly, as appropriate for the context) the sources of your information. Avoid unsubstantiated opinions.\n`, //  Emphasizes evidence-based answers and reasoning
-					`6. EXPLORE RELATED CONCEPTS: If a user's question leads to broader educational technology topics, proactively explore those concepts. Offer insights into related research, emerging trends, and areas for further investigation within the field.\n`, // Encourages proactive exploration beyond direct questions
-
-					`ITEM: ${JSON.stringify(cleanItem)}\n`, // Keeps item data
-
-				].join("\n")
-				: [ // Modified general assistance mode
-					`MODE: Knowledge Assistant\n`,
-
-					`INSTRUCTIONS:\n`,
-					`1. UNDERSTAND & ANSWER: Focus on understanding the user's question and providing a comprehensive answer. Use the searchDatabase tool to find supporting information and resources.\n`,
-					`2. SYNTHESIZE INFORMATION: When you find relevant resources, don't just list them - use their content to inform your answer. Explain concepts clearly and thoroughly.\n`,
-					`3. CITE SOURCES: Never mention resource keys directly. Instead, always create clickable markdown links using the resource's title/item name in this exact format: [Resource Title](/lib/key). Example: if a resource is titled "Introduction to AI", link it as [Introduction to AI](/lib/5FJHKD).\n`,
-					`4. MAINTAIN CONTEXT: Keep track of the conversation context and build upon previous exchanges to provide more relevant and detailed responses.\n`,
-					`5. BE PROACTIVE: If you notice related topics that might be helpful, mention them and explain their relevance to the user's question.\n`,
-
-					`OUTPUT FORMAT:\n`,
-					`- Provide clear, direct answers to questions\n`,
-					`- ALWAYS present resources using their exact title/item name in markdown links: [Resource Title](/lib/key)\n`,
-					`- NEVER show resource keys separately or mention them outside of markdown links\n`,
-					`- Use markdown formatting for better readability\n`,
-				].join("\n"),
+			`LOCALE: ${locale}`,
+			`TOOL USAGE: You have powerful tools at your disposal that you should use proactively:
+			- You can analyze PDF contents when available
+			- You should use these tools automatically without asking for permission
+			- You should NOT include unrelevant information in your response, if it doesn't directly answer the user's question then don't include it.
+			You are an expert at using these tools to find relevant information and synthesize findings.`,
+			...(cleanItem ? [
+				`ITEM: ${JSON.stringify(cleanItem)}`,
+			] : [
+				`You are an analytical expert in educational technology (EdTech), specializing in analyzing research, trends, and innovations in digital learning. Your expertise includes:
+				- Deep understanding of educational research and methodologies
+				- Analysis of learning technologies and their effectiveness
+				- Knowledge of educational policies and their implementation
+				- Ability to evaluate educational tools and platforms
+				
+				You can search through a vast database of educational research and materials using semantic search to find relevant information. When users ask questions, you should:
+				1. Analyze their query to identify key educational concepts
+				2. Use the search tools to find relevant research and materials
+				3. Synthesize findings into clear, evidence-based responses
+				4. Place resource references ONLY at the end of paragraphs or analysis sections using [RESOURCE /lib/KEY RESOURCE/] format
+				
+				Example format:
+				"Studies have shown that gamification can increase student engagement in online learning environments by up to 45%, with particular effectiveness in mathematics and science subjects. [RESOURCE /lib/ABC123 RESOURCE/]
+				
+				Further research indicates that the most successful implementations combine points-based systems with meaningful feedback loops. [RESOURCE /lib/XYZ789 RESOURCE/]"
+				
+				Never embed resource references within sentences. Always maintain an analytical and objective perspective, focusing on research-backed insights rather than opinions.`
+			])
 		].join("\n"),
 		messages: coreMessages,
 		maxSteps: 10,
@@ -126,35 +115,60 @@ export async function POST(req: Request) {
 						}
 					}
 				}),
-			} : {}),
-			searchDatabase: tool({
-				description: "Search the database for relevant items based on the user's query",
-				parameters: z.object({
-					q: z.string().describe("The search query"),
-					userToolCallInformation: z.string().describe(`Something to tell the user while the tool is being executed with ellipsises at the end in ${locale} language.`),
+			} : {
+				searchDatabase: tool({
+					description: "Search the database for relevant items based on the user's query, this tool may return multiple results, you should analyze them and select the most relevant ones and if there are no relevant results, you should just say that there are no relevant results.",
+					parameters: z.object({
+						q: z.string().describe("The search query"),
+						userToolCallInformation: z.string().describe(`Something to tell the user while the tool is being executed with ellipsises at the end in ${locale} language.`),
+						userSpecifiedYearOrRange: z.string().describe("The year or year range specified by the user. Format: single year (e.g., '2020') or year range (e.g., '1991-2001'). '0' if no year is specified."),
+						userSpecifiedSort: z.string().describe("Infer the sort option from user's intent. For example, if they mention 'newest' or 'recent', use 'desc', or if they mention 'alphabetical', use 'authorAZ'. Available options: " +
+							SORT_OPTIONS.map(opt => `${opt.key} (${opt.name})`).join(', ')),
+					}),
+					execute: async ({ q, userSpecifiedYearOrRange, userSpecifiedSort }) => {
+						console.log("userSpecifiedYearOrRange", userSpecifiedYearOrRange);
+						console.log("userSpecifiedSort", userSpecifiedSort);
+						console.log("q", q);
+
+						let result: SearchResponse<Item>;
+						try {
+							result = await client
+								.index(process.env.MEILI_INDEX! || "items")
+								.search("", {
+									q: q,
+									hybrid: {
+										embedder: "openai",
+										semanticRatio: 1,
+									},
+									filter: [
+										userSpecifiedYearOrRange === "0" ? null : formatRange(userSpecifiedYearOrRange)
+									].filter(Boolean) as string[],
+									limit: 50,
+								});
+						}
+						catch (e) {
+							result = { hits: [], processingTimeMs: 0, query: q, totalHits: 0, hitsPerPage: 0 };
+							console.error(e);
+						}
+
+						const hitsWithUrls = result.hits.map((item: any) => ({
+							...item,
+							anchor: `/lib/${item.key}`,
+							fullTextPDFs: undefined,
+							tags: undefined
+						}));
+
+						// if (!fs.existsSync("temp")) {
+						// 	fs.mkdirSync("temp");
+						// }
+						// fs.writeFileSync(`temp/result-${Date.now()}.json`, JSON.stringify(result, null, 2));
+
+						return {
+							hits: hitsWithUrls,
+							totalHits: result.totalHits
+						}
+					}
 				}),
-				execute: async ({ q }) => {
-					console.log("q", q);
-
-					const result = await client
-						.index(process.env.MEILI_INDEX! || "items")
-						.search("", {
-							q: q,
-							hybrid: {
-								embedder: "openai",
-								semanticRatio: 0.7,
-							},
-							limit: 50,
-						});
-
-					const hitsWithUrls = result.hits.map(item => ({
-						...item,
-						anchor: `/lib/${item.key}`,
-						fullTextPDFs: undefined
-					}));
-
-					return hitsWithUrls;
-				}
 			}),
 		},
 		onFinish(event) {
