@@ -417,7 +417,7 @@ function CollectionDropdown({
 									</div>
 									<div className="text-sm text-black/80 dark:text-white/80">
 										{selectedCollectionData?.description ||
-											t("noDescription")}
+											"___________________"}
 									</div>
 								</div>
 								<div>
