@@ -31,6 +31,9 @@ import { revalidateTag, unstable_cache } from "next/cache";
 import { Collection } from "@/app/api/collections/types";
 import { z } from "zod";
 import bcrypt from "bcrypt";
+import { inferParserType } from "nuqs";
+import { searchParamsLoader } from "./searchParams";
+import { formatRange } from "@/lib/utils";
 
 export const getUser = async (email: string) => {
 	return await db.query.users.findFirst({
@@ -87,25 +90,18 @@ export async function authorize(props: z.infer<typeof credentialsSchema>): Promi
 }
 
 export async function getItems(
-	searchParams: URLSearchParams | Record<string, any>,
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	userId: string | null = null
 ) {
-	const collections =
-		searchParams instanceof URLSearchParams
-			? searchParams.get("collections") || []
-			: searchParams.collections || [];
+	const collections = searchParams.collections || [];
 
 	const userFilters = await getProfileSearchFilter(
 		userId,
-		searchParams instanceof URLSearchParams
-			? searchParams.get("collectionId") || ""
-			: searchParams.collectionId || ""
+		searchParams.collectionId || ""
 	);
 
 	return searchIndex(
-		searchParams instanceof URLSearchParams
-			? searchParams
-			: new URLSearchParams(searchParams),
+		searchParams,
 		{
 			facets: ["collectionsAncestry"],
 		},
@@ -220,9 +216,8 @@ export async function downloadItems(
 	params: Record<string, any>,
 	format: "ris" | "bibtex"
 ) {
-	const url = buildItemsQuery(queryParams, "https://www.example.com");
-	const { searchParams } = new URL(url);
-	const { collections, collectionId } = defaultParams(searchParams);
+	const searchParams = defaultParams(queryParams);
+	const { collections, collectionId } = searchParams;
 	const id = params.id;
 	const { filter, status } = await getProfileSearchFilter(id, collectionId);
 
@@ -254,28 +249,6 @@ export async function getLikedPosts(likes: Session["user"]["likes"]) {
 	return res.results;
 }
 
-function formatRange(range: string | null) {
-	if (!range) return null;
-
-	const [start, end] = range.includes("-")
-		? range.split("-")
-		: [range, range];
-	const startYear = start ? Number(start) : null;
-	const endYear = end ? Number(end) : null;
-
-	if ((startYear === null || isNaN(startYear)) && 
-		(endYear === null || isNaN(endYear))) return null;
-
-	if (startYear === endYear && startYear !== null) return `year = ${startYear}`;
-
-	return [
-		startYear !== null && startYear > 0 && `year >= ${startYear}`,
-		endYear !== null && endYear > 0 && `year <= ${endYear}`,
-	]
-		.filter(Boolean)
-		.join(" AND ");
-}
-
 export async function getMainAttributes() {
 	const getCachedResults = unstable_cache(
 		async () => {
@@ -297,7 +270,7 @@ export async function getMainAttributes() {
 }
 
 export async function searchIndex(
-	searchParams: URLSearchParams,
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	extraProperties: Parameters<
 		ReturnType<typeof meilisearchClient.index>["search"]
 	>[1] = {},
@@ -305,28 +278,23 @@ export async function searchIndex(
 		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
 	>["filter"] = []
 ) {
-	const cacheKey = `${searchParams.toString()}-${extraFilters.toString()}`;
+	const cacheKey = `${buildItemsQuery(searchParams)}-${extraFilters.toString()}`;
 
 	const items = unstable_cache(async () => {
-		const pageNum = Math.max(1, Number(searchParams.get("page")) || 1);
-		const limitNum = Math.min(
-			100,
-			Math.max(1, Number(searchParams.get("limit")) || ITEMS_PER_PAGE)
-		);
-		const sort = searchParams.get("sort") || SORT_OPTIONS[0].key;
-		const search = searchParams.get("search") || "";
-		const scope = searchParams.get("scope") || SCOPE_OPTIONS[0].key;
-		const range = searchParams.get("range") || null;
-		const institution = searchParams.get("institution") || "";
-		const author = searchParams.get("author") || "";
+		const pageNum = Math.max(1, Number(searchParams.page || 1));
+		const limitNum = ITEMS_PER_PAGE;
+		const sort = searchParams.sort || SORT_OPTIONS[0].key;
+		const search = searchParams.search || "";
+		const scope = searchParams.scope || SCOPE_OPTIONS[0].key;
+		const range = searchParams.range || null;
+		const institution = searchParams.institution || "";
+		const author = searchParams.author || "";
 		const searchIndex = meilisearchClient.index(
 			process.env.MEILI_INDEX || config.index
 		);
 		const sortOption =
 			SORT_OPTIONS.find((option) => option.key === sort)?.sort ||
 			SORT_OPTIONS[0].sort;
-
-		console.log(formatRange(range));
 
 		const finalFilters = [
 			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
@@ -371,10 +339,6 @@ export async function searchIndex(
 							collectionData !== undefined
 					) as Collection[];
 			}
-
-			// if (item) {
-			// 	item.citation = await convertItem(item as Item, "citation");
-			// }
 
 			await setCachedItemSmall(item.key, {
 				item: item as Item,
