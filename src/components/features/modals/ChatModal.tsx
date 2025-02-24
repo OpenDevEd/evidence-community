@@ -381,7 +381,7 @@ export default function ChatModal({
 								>
 									<form
 										className={twMerge(
-											"w-full p-8 flex flex-col gap-4 relative"
+											"w-full p-8 flex flex-col gap-8 relative"
 										)}
 										onSubmit={handleSubmit}
 									>
@@ -417,7 +417,7 @@ export default function ChatModal({
 															) => (
 																<li key={index}>
 																	<Button
-																		className="text-wrap h-auto p-4 bg-transparent dark:bg-transparent"
+																		className="text-wrap p-4 bg-transparent dark:bg-transparent min-h-fit h-full"
 																		size="sm"
 																		onClick={() => {
 																			setInput(
