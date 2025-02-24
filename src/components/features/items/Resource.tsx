@@ -1,6 +1,6 @@
 import { twMerge } from "tailwind-merge";
-import { Item } from "@/app/api/item/types";
-import { firstNonNullOrEmpty, setter } from "@/lib/utils";
+import { Item, ItemGetResponse } from "@/app/api/item/types";
+import { fetcher, firstNonNullOrEmpty, setter } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import {
 	ModalBody,
@@ -27,6 +27,7 @@ import { Session } from "next-auth";
 import { useStatus } from "@/context/Providers";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/nextui/DialogModal";
+import useSWR from "swr";
 
 export function AddButton({
 	itemData,
@@ -188,29 +189,39 @@ function ResourceInteractions({
 export default function Resource({
 	itemData,
 	abstract,
-	isLoading,
+	isLoading = false,
 	userData,
 	revalidateResults,
 	collectionId,
+	itemKey,
+	className,
 }: {
-	itemData: Item | undefined;
+	itemData?: Item | undefined;
 	abstract: boolean;
-	isLoading: boolean;
+	isLoading?: boolean;
 	userData?: Session["user"];
 	revalidateResults?: any;
 	collectionId?: string;
+	itemKey?: string;
+	className?: string;
 }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const router = useRouter();
 
-	const abstractText =
-		itemData && firstNonNullOrEmpty(itemData, ["abstractNote"]);
+	const { data: fetchedItemData, isLoading: fetchedItemDataLoading } = useSWR<ItemGetResponse>(itemKey ? `/item/${itemKey}` : null, fetcher);
 
-	const href = `/lib/${itemData?.key ?? ""}`;
+	
+	const finalItemData = itemData ?? fetchedItemData?.item;
+	const finalIsLoading = itemData ? isLoading : fetchedItemDataLoading;
+
+	const abstractText =
+		finalItemData && firstNonNullOrEmpty(finalItemData, ["abstractNote"]);
+
+	const href = `/lib/${finalItemData?.key ?? ""}`;
 
 	useEffect(() => {
-		if (!itemData?.key) return;
+		if (!finalItemData?.key) return;
 
 		const observer = new IntersectionObserver((entries) => {
 			entries.forEach((entry) => {
@@ -228,10 +239,10 @@ export default function Resource({
 		}
 
 		return () => observer.disconnect();
-	}, [href, router, itemData?.key]);
+	}, [href, router, finalItemData?.key]);
 
 	return (
-		<li className="@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col">
+		<li className={twMerge("@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col", className)}>
 			<Link
 				href={href}
 				className="p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1"
@@ -252,30 +263,30 @@ export default function Resource({
 			>
 				<article className="flex flex-col gap-4">
 					<Skeleton
-						isLoaded={!isLoading}
+						isLoaded={!finalIsLoading}
 						className="w-full min-h-8 rounded-2xl"
 					>
 						<h3 className="capitalize text-2xl text-black/80 dark:text-white/80 line-clamp-2">
-							{itemData?.title}
+							{finalItemData?.title}
 						</h3>
 					</Skeleton>
 					<Skeleton
-						isLoaded={!isLoading}
+						isLoaded={!finalIsLoading}
 						className="w-full min-h-8 rounded-2xl"
 					>
 						<div className="flex w-full gap-1 items-center flex-wrap">
-							<ResourceAuthors itemData={itemData} />
+							<ResourceAuthors itemData={finalItemData} />
 							<ResourceDivider />
-							{itemData?.date &&
-								!isNaN(new Date(itemData.date).getTime()) && (
+							{finalItemData?.date &&
+								!isNaN(new Date(finalItemData.date).getTime()) && (
 									<>
 										<ResourceData
 											element="time"
 											datetime={new Date(
-												itemData.date
+												finalItemData.date
 											).toISOString()}
 											text={format.dateTime(
-												new Date(itemData.date),
+												new Date(finalItemData.date),
 												{
 													dateStyle: "medium",
 												}
@@ -288,19 +299,19 @@ export default function Resource({
 									</>
 								)}
 
-							{itemData?.tags?.includes("_comingsoon") && (
+							{finalItemData?.tags?.includes("_comingsoon") && (
 								<span className="bg-black/10 border border-accent rounded-lg px-4 py-1 text-accent font-medium w-full @[720px]:w-auto text-center">
 									{t("inProgress")}
 								</span>
 							)}
 						</div>
 					</Skeleton>
-					{abstract && (abstractText || !itemData) && (
+					{abstract && (abstractText || !finalItemData) && (
 						<Skeleton
-							isLoaded={!isLoading}
+							isLoaded={!finalIsLoading}
 							className={twMerge(
 								"w-full min-h-0 rounded-2xl ",
-								!itemData ? "min-h-20" : "min-h-0"
+								!finalItemData ? "min-h-20" : "min-h-0"
 							)}
 						>
 							<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full break-all">
@@ -311,8 +322,8 @@ export default function Resource({
 				</article>
 			</Link>
 			<ResourceInteractions
-				itemData={itemData}
-				isLoading={isLoading}
+				itemData={finalItemData}
+				isLoading={finalIsLoading}
 				userData={userData}
 				revalidateResults={revalidateResults}
 				collectionId={collectionId}

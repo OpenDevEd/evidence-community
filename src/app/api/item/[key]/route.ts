@@ -58,15 +58,15 @@ export async function getItem(
 }
 
 export async function GET(
-    request: NextRequest,
-    props: { params: Promise<{ key: string; source: "db" | "meilisearch" }> }
+	request: NextRequest,
+	props: { params: Promise<{ key: string; source: "db" | "meilisearch" }> }
 ) {
-    const params = await props.params;
-    const { searchParams } = new URL(request.url);
-    const source = searchParams.get("source") || "meilisearch";
-    const { key } = params;
+	const params = await props.params;
+	const { searchParams } = new URL(request.url);
+	const source = searchParams.get("source") || "meilisearch";
+	const { key } = params;
 
-    const result = await getItem(key, source as "db" | "meilisearch");
+	const result = await getItem(key, source as "db" | "meilisearch");
 
-    return NextResponse.json(result);
+	return NextResponse.json(result);
 }
