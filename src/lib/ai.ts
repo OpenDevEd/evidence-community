@@ -98,12 +98,17 @@ export const createResource = async (item: NonNullable<Item["fullTextPDFs"]>[0],
 		const existingEmbeddings = await db.select().from(embeddings).where(eq(embeddings.itemKey, item.key)).limit(1);
 		const embeddingsAlreadyExistOrItemHasNoPDFs = item.fullTextPDF.length === 0 || existingEmbeddings.length > 0;
 		if (embeddingsAlreadyExistOrItemHasNoPDFs) {
+			console.log("Embeddings already exist for this item.", item.key);
 			return "Embeddings already exist for this item.";
 		}
 
+		let totalChunks = 0;
+		let insertedChunks = 0;
+
 		const allPDFPromises = item.fullTextPDF.map(async (page) => {
 			const embeddings = await generateEmbeddings(page.text);
-			return db.insert(embeddingsTable).values(
+			totalChunks += embeddings.length;
+			const insertion = await db.insert(embeddingsTable).values(
 				embeddings.map((embedding) => ({
 					content: embedding.content,
 					page: page.page,
@@ -112,9 +117,15 @@ export const createResource = async (item: NonNullable<Item["fullTextPDFs"]>[0],
 					parentKey: parentKey,
 				}))
 			);
+			insertedChunks += embeddings.length;
+			console.log("Inserted", embeddings.length, "embeddings for", item.key, `(${insertedChunks}/${totalChunks})`);
+			return insertion;
 		});
 
+
 		const results = await Promise.allSettled(allPDFPromises);
+
+		console.log("Inserted", insertedChunks, "embeddings for", item.key, `(${insertedChunks}/${totalChunks})`);
 
 		results.forEach((result, index) => {
 			if (result.status === 'rejected') {
