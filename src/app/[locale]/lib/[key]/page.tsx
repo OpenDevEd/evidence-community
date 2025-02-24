@@ -31,6 +31,9 @@ import LoadingComponent from "./LoadingComponent";
 
 export async function getCurrentItem(key: string) {
     const data = await getCachedItemSmall(key).catch(() => ({ item: undefined }));
+    if (data?.item && !data?.item?.citation) {
+        return await getCachedItemSmall(key, true).catch(() => ({ item: undefined }));
+    }
     return data;
 }
 
