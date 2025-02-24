@@ -79,7 +79,7 @@ function Citation({ value, loading }: FormatterProps) {
 	}, []);
 
 	return (
-		<Skeleton isLoaded={!loading && !showSkeleton} className="w-full min-h-20 rounded-2xl">
+		<Skeleton isLoaded={!loading && !showSkeleton} className="w-full min-h-16 rounded-2xl">
 			<motion.div 
 				initial={{ height: "5rem" }}
 				animate={loading ? { height: "5rem" } : { height: "auto" }}

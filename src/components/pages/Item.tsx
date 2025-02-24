@@ -12,6 +12,7 @@ import {
 	DropdownMenu,
 	useDisclosure,
 	Spinner,
+	Divider,
 } from "@nextui-org/react";
 import GenerativeModal from "../features/modals/GenerativeModal";
 import ChatModal from "../features/modals/ChatModal";
@@ -233,7 +234,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 							</h1>
 							<div className="flex flex-col gap-8">
 								{data?.item &&
-									Object.keys(data.item).filter((key) => key !== "citation").map(
+									Object.keys(data.item).filter((key) => key !== "citation").toSorted((a, b) => a.localeCompare(b)).map(
 										(row: string) => (
 											<ItemRow
 												item={data.item!}
@@ -244,6 +245,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 											/>
 										)
 									)}
+									<Divider />
 									<ItemRow
 										item={data.item!}
 										key="citation"
