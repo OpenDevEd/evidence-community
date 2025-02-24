@@ -8,6 +8,8 @@ import { BiSolidBookBookmark, BiSolidBookContent } from "react-icons/bi";
 import { twMerge } from "tailwind-merge";
 import ReactMarkdown from "react-markdown";
 import Link from "next/link";
+import Resource from "../items/Resource";
+import React from "react";
 
 function createRehypeWrapper(pattern: RegExp, className: string) {
 	return () => (tree: Node) => {
@@ -75,6 +77,10 @@ export const rehypeSectionWrapper = createRehypeWrapperForTag(
 	"SECTION",
 	"SectionHighlight"
 );
+export const rehypeResourceWrapper = createRehypeWrapperForTag(
+	"RESOURCE",
+	"ResourceWrapper"
+);
 
 function Highlight({
 	children,
@@ -114,6 +120,14 @@ function QuoteHighlight({ children }: { children: ReactNode }) {
 	);
 }
 
+function ResourceWrapper({ children }: { children: ReactNode }) {
+	const key = children?.toString().split('/').pop();
+
+	return <ul>
+		<Resource itemKey={key} abstract={true} className="my-2" />
+	</ul>
+}
+
 export function AIMarkdown({
 	children,
 	className,
@@ -126,6 +140,7 @@ export function AIMarkdown({
 				rehypeQuoteWrapper,
 				rehypePageWrapper,
 				rehypeSectionWrapper,
+				rehypeResourceWrapper,
 			]}
 			components={{
 				span: ({ children, className }) =>
@@ -134,13 +149,13 @@ export function AIMarkdown({
 						<Highlight className={className}>{children}</Highlight>
 					) : className === "QuoteHighlight" ? (
 						<QuoteHighlight>{children}</QuoteHighlight>
+					) : className === "ResourceWrapper" ? (
+						<ResourceWrapper children={children} />
 					) : (
 						<span>{children}</span>
 					),
 				a: ({ href, children }) => 
-					href?.startsWith('/') ? (
-						<Link className="text-link underline" href={href}>{children}</Link>
-					) : (
+					(
 						<a href={href} className="text-link underline" target="_blank" rel="noopener noreferrer">
 							{children}
 						</a>
