@@ -4,6 +4,26 @@ import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
 
+export function formatRange(range: string | null) {
+	if (!range) return null;
+
+	const [start, end] = range.includes("-")
+		? range.split("-")
+		: [range, range];
+	const startYear = start ? Number(start) : null;
+	const endYear = end ? Number(end) : null;
+
+	if ((startYear === null || isNaN(startYear)) &&
+		(endYear === null || isNaN(endYear))) return null;
+
+	if (startYear === endYear && startYear !== null) return `year = ${startYear}`;
+
+	return [
+		startYear !== null && startYear > 0 && `year >= ${startYear}`,
+		endYear !== null && endYear > 0 && `year <= ${endYear}`,
+	].filter(Boolean).join(" AND ");
+}
+
 export const fetcher = (url: string) =>
 	fetch(`/api${url}`).then((res) => res.json());
 
