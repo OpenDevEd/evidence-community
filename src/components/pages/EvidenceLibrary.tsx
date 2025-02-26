@@ -510,13 +510,13 @@ function AIChat() {
 }
 
 export default function EvidenceLibrary() {
-	const isAIEnabled = useFeatureFlagEnabled("ai-features");
+	const isAISearchEnabled = useFeatureFlagEnabled("ai-search");
 	return (
 		<PageContainer>
 			<div className="flex gap-[40px] flex-col xl:flex-row">
 				<MainContent />
 			</div>
-			{isAIEnabled && <AIChat />}
+			{isAISearchEnabled && <AIChat />}
 		</PageContainer>
 	);
 }
