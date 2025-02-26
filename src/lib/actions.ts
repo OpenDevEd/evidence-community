@@ -99,7 +99,7 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
         }, {} as Record<string, z.ZodObject<{ screeningFields: typeof screeningFieldsSchema }>>) // Explicitly type the accumulator
     );
     
-    let result = await generateObject({
+    const result = await generateObject({
             model: provider!(modelName!),
             schema: responseSchema,
         system: `You are an AI assistant that answers questions about the provided content.
