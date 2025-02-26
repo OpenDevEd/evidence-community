@@ -14,7 +14,7 @@ import {
 	SCOPE_OPTIONS,
 	SORT_OPTIONS,
 } from "@/constants/items";
-import { Item } from "@/app/api/item/types";
+import { Item, ItemGetResponse } from "@/app/api/item/types";
 import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
@@ -22,6 +22,7 @@ import { BibTeXExporter } from "@/lib/formatAsBibTeX";
 import { buildItemsQuery, defaultParams } from "@/lib/utils";
 import {
 	getCachedCollections,
+	getCachedItemSmall,
 	getCachedUserLikes,
 	setCachedItemSmall,
 } from "@/app/api/cache";
@@ -34,6 +35,89 @@ import bcrypt from "bcrypt";
 import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "@/lib/utils";
+import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
+import { generateObject } from "ai";
+import { getModel } from "./ai";
+// import fs from "fs";
+
+export async function runScreening(keys: string[], modelIndex: number, smartScreeningFields: SmartScreeningField[], distinctId: string) {
+    const { provider, modelName, error } = getModel(modelIndex);
+    if (error) {
+        return { error: error };
+    }
+
+    if (!provider || !modelName) {
+        return { error: "Model not found" };
+    }
+
+    if (!keys || keys.length === 0) {
+        return { error: "No keys provided" };
+    }
+
+    const allItems = await Promise.allSettled(keys.map(async (key: string): Promise<ItemGetResponse["item"] | null> => {
+        const item = await getCachedItemSmall(key);
+        if (!item || !item.item) {
+            return null;
+        }
+        return {
+            ...item.item,
+            fullTextPDFs: undefined,
+        }
+    }));
+
+	const items = allItems.filter(result => result.status === "fulfilled" && result.value).map(result => (result as PromiseFulfilledResult<any>).value).filter((item: Item) => item.abstractNote && item.abstractNote.length > 0);
+
+	// fs.writeFileSync("items.json", JSON.stringify(items, null, 2));
+
+    const screeningFieldsSchema = z.object(
+        smartScreeningFields.reduce((acc: Record<string, z.ZodTypeAny>, field: SmartScreeningField) => {
+            switch (field.type.trim()) {
+                case 'number':
+                    acc[field.label.trim()] = z.number().describe(field.description);
+                    break;
+                case 'boolean':
+                    acc[field.label.trim()] = z.boolean().describe(field.description);
+                    break;
+                case 'string':
+                default:
+                    acc[field.label.trim()] = z.string().describe(field.description);
+                    break;
+            }
+            return acc;
+        }, {} as Record<string, z.ZodTypeAny>) // Use ZodTypeAny to allow different types
+    );
+
+    // Dynamically create the main schema
+    const responseSchema = z.object(
+        keys.reduce((acc: Record<string, z.ZodObject<{ screeningFields: typeof screeningFieldsSchema }>>, key: string) => {
+			if (items.find(item => item.key === key)) {
+				acc[key] = z.object({
+					screeningFields: screeningFieldsSchema,
+				});
+			}
+            return acc;
+        }, {} as Record<string, z.ZodObject<{ screeningFields: typeof screeningFieldsSchema }>>) // Explicitly type the accumulator
+    );
+    
+    let result = await generateObject({
+            model: provider!(modelName!),
+            schema: responseSchema,
+        system: `You are an AI assistant that answers questions about the provided content.
+                For each item, you will answer questions according to the specified screening fields.
+                Return values in the appropriate type (string, number, or boolean) as specified in each field's type.`,
+        prompt: `Answer questions about the following items based on these screening fields:
+                ${JSON.stringify(smartScreeningFields)}
+                
+                Items to analyze:
+                ${JSON.stringify(items)}
+                
+                For each item, provide answers for all the screening fields. You must answer every question. 
+                If a question is not applicable to an item, respond with "N/A". Return values in the appropriate type as specified.`
+        });
+
+
+	return result.object;
+}
 
 export const getUser = async (email: string) => {
 	return await db.query.users.findFirst({
