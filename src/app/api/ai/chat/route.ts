@@ -15,6 +15,7 @@ import { SORT_OPTIONS } from "@/constants/items";
 import { formatRange } from "@/lib/utils";
 import { SearchResponse } from "meilisearch";
 import { Item } from "../../item/types";
+import { ItemsGetResponse } from "../../items/types";
 // import fs from "fs";
 
 export const maxDuration = 120;
@@ -22,8 +23,10 @@ export const maxDuration = 120;
 const EmbeddedItems = new Set<string>();
 
 export async function POST(req: Request) {
-	const { distinctId, messages, key, modelIndex } = await req.json();
+	const { distinctId, messages, key, modelIndex, smartScreeningFields } = await req.json();
 	const locale = req.headers.get("Accept-Language") || routing.defaultLocale;
+
+	console.log("smartScreeningFields", smartScreeningFields);
 
 	let item = null;
 	if (key) {
@@ -69,24 +72,18 @@ export async function POST(req: Request) {
 			...(cleanItem ? [
 				`ITEM: ${JSON.stringify(cleanItem)}`,
 			] : [
-				`You are an analytical expert in educational technology (EdTech), specializing in analyzing research, trends, and innovations in digital learning. Your expertise includes:
-				- Deep understanding of educational research and methodologies
-				- Analysis of learning technologies and their effectiveness
-				- Knowledge of educational policies and their implementation
-				- Ability to evaluate educational tools and platforms
-				
-				You can search through a vast database of educational research and materials using semantic search to find relevant information. When users ask questions, you should:
-				1. Analyze their query to identify key educational concepts
-				2. Use the search tools to find relevant research and materials
-				3. Synthesize findings into clear, evidence-based responses
-				4. Place resource references ONLY at the end of paragraphs or analysis sections using [RESOURCE /lib/KEY RESOURCE/] format
-				
-				Example format:
-				"Studies have shown that gamification can increase student engagement in online learning environments by up to 45%, with particular effectiveness in mathematics and science subjects. [RESOURCE /lib/ABC123 RESOURCE/]
-				
-				Further research indicates that the most successful implementations combine points-based systems with meaningful feedback loops. [RESOURCE /lib/XYZ789 RESOURCE/]"
-				
-				Never embed resource references within sentences. Always maintain an analytical and objective perspective, focusing on research-backed insights rather than opinions.`
+				`You are an AI research assistant specializing in educational technology (EdTech). Your primary role is to analyze and synthesize research findings into well-formatted responses.
+
+				When responding:
+				- Write in clear, cohesive paragraphs
+				- End each paragraph with a citation link: [📚](/lib/KEY)
+				- Focus on evidence-based insights
+				- Maintain an objective, analytical tone
+
+				EXAMPLE:
+				"Research has demonstrated that adaptive learning technologies can improve student performance by an average of 0.5 standard deviations in mathematics courses, with the strongest gains observed among struggling students. These systems use real-time data to adjust difficulty levels and provide personalized feedback, creating more engaging learning experiences. [📚](/lib/XYZ789)"
+
+				Remember: Your responses should read like a coherent research summary that synthesizes findings from the available research.`
 			])
 		].join("\n"),
 		messages: coreMessages,
@@ -124,8 +121,9 @@ export async function POST(req: Request) {
 						userSpecifiedYearOrRange: z.string().describe("The year or year range specified by the user. Format: single year (e.g., '2020') or year range (e.g., '1991-2001'). '0' if no year is specified."),
 						userSpecifiedSort: z.string().describe("Infer the sort option from user's intent. For example, if they mention 'newest' or 'recent', use 'desc', or if they mention 'alphabetical', use 'authorAZ'. Available options: " +
 							SORT_OPTIONS.map(opt => `${opt.key} (${opt.name})`).join(', ')),
+						userSpecifiedAmountOfResults: z.number().describe("The amount of results the user wants to see. Default is 10.").max(50).min(1).default(10),
 					}),
-					execute: async ({ q, userSpecifiedYearOrRange, userSpecifiedSort }) => {
+					execute: async ({ q, userSpecifiedYearOrRange, userSpecifiedSort, userSpecifiedAmountOfResults }) => {
 						console.log("userSpecifiedYearOrRange", userSpecifiedYearOrRange);
 						console.log("userSpecifiedSort", userSpecifiedSort);
 						console.log("q", q);
@@ -143,7 +141,7 @@ export async function POST(req: Request) {
 									filter: [
 										userSpecifiedYearOrRange === "0" ? null : formatRange(userSpecifiedYearOrRange)
 									].filter(Boolean) as string[],
-									limit: 50,
+									limit: userSpecifiedAmountOfResults,
 								});
 						}
 						catch (e) {
@@ -151,17 +149,29 @@ export async function POST(req: Request) {
 							console.error(e);
 						}
 
-						const hitsWithUrls = result.hits.map((item: any) => ({
+						const hitsWithUrls = result.hits.map((item: ItemsGetResponse['items'][number]) => ({
 							...item,
 							anchor: `/lib/${item.key}`,
 							fullTextPDFs: undefined,
-							tags: undefined
+							tags: undefined,
+							collectionsAncestry: undefined,
+							fullNames: undefined,
+							collections: undefined,
+							collectionsData: item.collectionsData?.map(({name, title}) => ([title, name].filter(Boolean).join(" > "))),
+							attachmentsData: item.attachmentsData?.map(({filename, url}) => ({
+								filename,
+								url,
+							})),
 						}));
+
 
 						// if (!fs.existsSync("temp")) {
 						// 	fs.mkdirSync("temp");
 						// }
-						// fs.writeFileSync(`temp/result-${Date.now()}.json`, JSON.stringify(result, null, 2));
+						// fs.writeFileSync(`temp/result-${Date.now()}.json`, JSON.stringify({
+						// 	...result,
+						// 	hits: hitsWithUrls,
+						// }, null, 2));
 
 						return {
 							hits: hitsWithUrls,
