@@ -8,7 +8,7 @@ import { getCachedItem } from "../../cache";
 import { NextResponse } from "next/server";
 import { createResource, findRelevantContent, getModel, trackUsage } from "@/lib/ai";
 import { routing } from "@/i18n/routing";
-import { isAIAllowed } from "@/lib/utils";
+import { cleanItemForAI, isAIAllowed } from "@/lib/utils";
 import { z } from "zod";
 import client from "@/lib/meilisearch";
 import { SORT_OPTIONS } from "@/constants/items";
@@ -150,18 +150,8 @@ export async function POST(req: Request) {
 						}
 
 						const hitsWithUrls = result.hits.map((item: ItemsGetResponse['items'][number]) => ({
-							...item,
+							...cleanItemForAI(item),
 							anchor: `/lib/${item.key}`,
-							fullTextPDFs: undefined,
-							tags: undefined,
-							collectionsAncestry: undefined,
-							fullNames: undefined,
-							collections: undefined,
-							collectionsData: item.collectionsData?.map(({name, title}) => ([title, name].filter(Boolean).join(" > "))),
-							attachmentsData: item.attachmentsData?.map(({filename, url}) => ({
-								filename,
-								url,
-							})),
 						}));
 
 

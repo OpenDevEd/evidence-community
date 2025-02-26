@@ -1,8 +1,25 @@
-import { Item } from "@/app/api/item/types";
+import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
+
+export function cleanItemForAI(item: ItemGetResponse["item"] | undefined) {
+	if (!item) return null;
+	return {
+		...item,
+		fullTextPDFs: undefined,
+		tags: undefined,
+		collectionsAncestry: undefined,
+		fullNames: undefined,
+		collections: undefined,
+		collectionsData: item.collectionsData?.map(({ name, title }) => ([title, name].filter(Boolean).join(" > "))),
+		attachmentsData: item.attachmentsData?.map(({ filename, url }) => ({
+			filename,
+			url,
+		})),
+	}
+}
 
 export function formatRange(range: string | null) {
 	if (!range) return null;
@@ -88,6 +105,10 @@ export function isAIAllowed(item: Item | undefined) {
 	}
 
 	return false;
+}
+
+export function generateRandomID(length: number = 12) {
+	return Math.random().toString(36).substring(2, 2 + length);
 }
 
 export function escapeXml(unsafe: string) {
