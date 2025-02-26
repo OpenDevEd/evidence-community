@@ -7,6 +7,7 @@ import {
 	ModalFooter,
 	ScrollShadow,
 	Spinner,
+	Tooltip,
 } from "@nextui-org/react";
 import { LuUser } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
@@ -28,6 +29,62 @@ import DialogModal from "@/components/nextui/DialogModal";
 import { Textarea } from "@/components/nextui/Textarea";
 import { AnimatePresence, motion } from "framer-motion";
 import { RiResetLeftFill } from "react-icons/ri";
+import { useLocalStorage } from "usehooks-ts";
+import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
+import useSWRMutation from "swr/mutation";
+import { fetcher, setter } from "@/lib/utils";
+import { runScreening } from "@/lib/actions";
+import Resource from "../items/Resource";
+import { GiStarSwirl } from "react-icons/gi";
+
+interface ScreeningResults {
+	result: {
+		[resourceId: string]: {
+			screeningFields: {
+				[key: string]: string;
+			};
+		};
+	};
+	fields: SmartScreeningField[];
+}
+
+function ScreeningResults({ results }: { results: ScreeningResults }) {
+	return (
+		<div className="w-full space-y-6">
+			{Object.entries(results.result).map(([resourceId, value]) => (
+				<div
+					key={resourceId}
+					className="border border-white dark:border-secondary-600 rounded-2xl overflow-hidden"
+				>
+					<Resource itemKey={resourceId} abstract={true} />
+					<div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-4">
+						{Object.entries(value.screeningFields).map(
+							([fieldKey, fieldValue]) => {
+								const fieldInfo = results.fields.find(
+									(field) => field.label === fieldKey
+								);
+
+								return (
+									<div
+										key={fieldKey}
+										className="border-b pb-2 border-white dark:border-secondary-600"
+									>
+										<h3 className="font-medium text-sm text-black/60 dark:text-white/60">
+											{`${fieldKey} (${fieldInfo?.type})`}
+										</h3>
+										<div className="mt-1">
+											{String(fieldValue)}
+										</div>
+									</div>
+								);
+							}
+						)}
+					</div>
+				</div>
+			))}
+		</div>
+	);
+}
 
 export default function ChatModal({
 	isOpen,
@@ -46,6 +103,10 @@ export default function ChatModal({
 	externalInput?: string;
 	setExternalInput?: (input: string) => void;
 }) {
+	const [smartScreeningFields, setSmartScreeningFields] = useLocalStorage<
+		SmartScreeningField[]
+	>("smart-screening-fields", []);
+
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
 	const locale = useLocale();
@@ -72,6 +133,7 @@ export default function ChatModal({
 			key: data?.item?.key,
 			modelIndex,
 			distinctId: posthog.get_distinct_id(),
+			smartScreeningFields,
 		},
 		headers: {
 			"Accept-Language": locale,
@@ -96,6 +158,8 @@ export default function ChatModal({
 			}
 		},
 	});
+
+	const [isMutating, setIsMutating] = useState(false);
 
 	const messageListRef = useRef<HTMLDivElement>(null);
 
@@ -132,10 +196,40 @@ export default function ChatModal({
 	}, [externalInput, isOpen]);
 
 	const reponseExists = messages.some(
-		(message, index) =>
-			index > 0 &&
-			message.role === "assistant"
+		(message, index) => index > 0 && message.role === "assistant"
 	);
+
+	const handleScreening = async (content: string) => {
+		// get all keys from all "/lib/KEY" occurences in content
+		const keys = content.match(/lib\/(\w+)/g);
+		if (!keys) {
+			return;
+		}
+		const keysArray = keys.map((key) => key.replace("lib/", ""));
+		setIsMutating(true);
+		try {
+			const result = await runScreening(
+				keysArray,
+				modelIndex,
+				smartScreeningFields,
+				posthog.get_distinct_id()
+			);
+			appendMessage({
+				role: "data",
+				content: JSON.stringify({
+					result: result,
+					fields: smartScreeningFields,
+				}),
+				id: "screening-" + Date.now(),
+			});
+		} catch (error) {
+			console.error(error);
+		} finally {
+			setIsMutating(false);
+		}
+	};
+
+	const isWaiting = isLoading || isMutating;
 
 	return (
 		<DialogModal
@@ -152,7 +246,7 @@ export default function ChatModal({
 				{(onClose) => (
 					<>
 						<AIHeader
-							isLoading={isLoading}
+							isLoading={isWaiting}
 							onClose={onClose}
 							className="sticky top-0 bg-white dark:bg-secondary-400 z-20"
 						>
@@ -163,7 +257,7 @@ export default function ChatModal({
 								size="sm"
 								className="ml-4"
 								aria-label={tUI("resetAriaLabel")}
-								isDisabled={isLoading}
+								isDisabled={isWaiting}
 								onClick={() => {
 									setMessages([...messages.slice(0, 1)]);
 								}}
@@ -347,19 +441,52 @@ export default function ChatModal({
 																		>
 																			<Spinner />
 																		</div>
-																	) : (
-																		<AIMarkdown
-																			className={twMerge(
-																				"p-4",
-																				message.role !==
-																					"user" &&
-																					"p-0"
-																			)}
-																		>
-																			{
+																	) : message.role ===
+																	  "data" ? (
+																		<ScreeningResults
+																			results={JSON.parse(
 																				message.content
-																			}
-																		</AIMarkdown>
+																			)}
+																		/>
+																	) : (
+																		<>
+																			<AIMarkdown
+																				className={twMerge(
+																					"p-4",
+																					message.role !==
+																						"user" &&
+																						"p-0"
+																				)}
+																			>
+																				{
+																					message.content
+																				}
+																			</AIMarkdown>
+																			{message.role ===
+																				"assistant" &&
+																				message.content.includes(
+																					"/lib/"
+																				) && (
+																					<div className="flex items-center gap-2 mt-8">
+																						<Button
+																							isDisabled={
+																								isWaiting
+																							}
+																							startContent={isMutating ? <ImSpinner8 className="animate-spin" /> : <GiStarSwirl />}
+																							size="sm"
+																							color="accent"
+																							onClick={() =>
+																								handleScreening(
+																									message.content
+																								)
+																							}
+																						>
+																							Smart
+																							Screening
+																						</Button>
+																					</div>
+																				)}
+																		</>
 																	)}
 																</div>
 															</motion.div>
@@ -387,7 +514,7 @@ export default function ChatModal({
 									>
 										<AnimatePresence mode="popLayout">
 											{questions &&
-												!isLoading &&
+												!isWaiting &&
 												!reponseExists && (
 													<motion.ul
 														key="questions"
@@ -463,7 +590,7 @@ export default function ChatModal({
 													endContent={
 														<Button
 															isDisabled={
-																isLoading
+																isWaiting
 															}
 															type="submit"
 															isIconOnly
@@ -472,7 +599,7 @@ export default function ChatModal({
 																"sendMessageAriaLabel"
 															)}
 														>
-															{isLoading ? (
+															{isWaiting ? (
 																<ImSpinner8 className="animate-spin" />
 															) : (
 																<IoSend className="size-4 text-black dark:text-white/60" />
