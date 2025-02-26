@@ -37,6 +37,8 @@ import { runScreening } from "@/lib/actions";
 import Resource from "../items/Resource";
 import { GiStarSwirl } from "react-icons/gi";
 
+export const maxDuration = 240
+
 interface ScreeningResults {
 	result: {
 		[resourceId: string]: {
