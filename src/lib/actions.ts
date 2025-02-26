@@ -19,7 +19,7 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
-import { buildItemsQuery, defaultParams } from "@/lib/utils";
+import { buildItemsQuery, defaultParams, generateRandomID } from "@/lib/utils";
 import {
 	getCachedCollections,
 	getCachedItemSmall,
@@ -38,85 +38,135 @@ import { formatRange } from "@/lib/utils";
 import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
 import { generateObject } from "ai";
 import { getModel } from "./ai";
-// import fs from "fs";
+import { google } from "@ai-sdk/google";
 
 export async function runScreening(keys: string[], modelIndex: number, smartScreeningFields: SmartScreeningField[], distinctId: string) {
-    const { provider, modelName, error } = getModel(modelIndex);
-    if (error) {
-        return { error: error };
-    }
+	const { provider, modelName, error } = getModel(modelIndex);
+	if (error) {
+		return { error: error };
+	}
 
-    if (!provider || !modelName) {
-        return { error: "Model not found" };
-    }
+	if (!provider || !modelName) {
+		return { error: "Model not found" };
+	}
 
-    if (!keys || keys.length === 0) {
-        return { error: "No keys provided" };
-    }
+	if (!keys || keys.length === 0) {
+		return { error: "No keys provided" };
+	}
 
-    const allItems = await Promise.allSettled(keys.map(async (key: string): Promise<ItemGetResponse["item"] | null> => {
-        const item = await getCachedItemSmall(key);
-        if (!item || !item.item) {
-            return null;
-        }
-        return {
-            ...item.item,
-            fullTextPDFs: undefined,
-        }
-    }));
+	const allItems = await Promise.allSettled(keys.map(async (key: string): Promise<ItemGetResponse["item"] | null> => {
+		const item = await getCachedItemSmall(key);
+		if (!item || !item.item) {
+			return null;
+		}
+		return {
+			...item.item,
+			fullTextPDFs: undefined,
+		}
+	}));
 
-	const items = allItems.filter(result => result.status === "fulfilled" && result.value).map(result => (result as PromiseFulfilledResult<any>).value).filter((item: Item) => item.abstractNote && item.abstractNote.length > 0);
+	const items = allItems.filter(result => result.status === "fulfilled" && result.value).map(result => (result as PromiseFulfilledResult<any>).value).filter((item) => item.abstractNote && item.abstractNote.length > 0)
+		.map((item: ItemGetResponse["item"]) => ({
+			title: item?.title,
+			abstractNote: item?.abstractNote,
+			key: item?.key,
+		}));
 
 	// fs.writeFileSync("items.json", JSON.stringify(items, null, 2));
+	const fieldMaps = new Map<string, string>();
 
-    const screeningFieldsSchema = z.object(
-        smartScreeningFields.reduce((acc: Record<string, z.ZodTypeAny>, field: SmartScreeningField) => {
-            switch (field.type.trim()) {
-                case 'number':
-                    acc[field.label.trim()] = z.number().describe(field.description);
-                    break;
-                case 'boolean':
-                    acc[field.label.trim()] = z.boolean().describe(field.description);
-                    break;
-                case 'string':
-                default:
-                    acc[field.label.trim()] = z.string().describe(field.description);
-                    break;
-            }
-            return acc;
-        }, {} as Record<string, z.ZodTypeAny>) // Use ZodTypeAny to allow different types
-    );
-
-    // Dynamically create the main schema
-    const responseSchema = z.object(
-        keys.reduce((acc: Record<string, z.ZodObject<{ screeningFields: typeof screeningFieldsSchema }>>, key: string) => {
-			if (items.find(item => item.key === key)) {
-				acc[key] = z.object({
-					screeningFields: screeningFieldsSchema,
-				});
+	const screeningFieldsSchema = z.object(
+		smartScreeningFields.reduce((acc: Record<string, z.ZodTypeAny>, field: SmartScreeningField) => {
+			const fieldKey = field.label.trim();
+			const randomKey = generateRandomID();
+			fieldMaps.set(randomKey, fieldKey);
+			switch (field.type.trim()) {
+				case 'number':
+					acc[randomKey] = z.number().describe(field.description);
+					break;
+				case 'boolean':
+					acc[randomKey] = z.boolean().describe(field.description);
+					break;
+				case 'string':
+				default:
+					acc[randomKey] = z.string().describe(field.description);
+					break;
 			}
-            return acc;
-        }, {} as Record<string, z.ZodObject<{ screeningFields: typeof screeningFieldsSchema }>>) // Explicitly type the accumulator
-    );
-    
-    const result = await generateObject({
-            model: provider!(modelName!),
-            schema: responseSchema,
-        system: `You are an AI assistant that answers questions about the provided content.
-                For each item, you will answer questions according to the specified screening fields.
-                Return values in the appropriate type (string, number, or boolean) as specified in each field's type.`,
-        prompt: `Answer questions about the following items based on these screening fields:
-                ${JSON.stringify(smartScreeningFields)}
-                
-                Items to analyze:
-                ${JSON.stringify(items)}
-                
-                For each item, provide answers for all the screening fields. You must answer every question. 
-                If a question is not applicable to an item, respond with "N/A". Return values in the appropriate type as specified.`
-        });
+			return acc;
+		}, {} as Record<string, z.ZodTypeAny>) // Use ZodTypeAny to allow different types
+	);
 
+	// Process items in parallel chunks of 10
+	const resultObject: Record<string, any> = {};
+	const CHUNK_SIZE = 25;
+	
+	// Split items into chunks
+	const chunks = [];
+	for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+		chunks.push(items.slice(i, i + CHUNK_SIZE));
+	}
+	
+	// Process each chunk in parallel
+	for (const chunk of chunks) {
+		const chunkPromises = chunk.map(async (item) => {
+			try {
+				// Create schema for a single item
+				const singleItemSchema = z.object({
+					screeningFields: screeningFieldsSchema
+				});
+				
+				const start = Date.now();
+				const result = await generateObject({
+					model: provider!(modelName!),
+					schema: singleItemSchema,
+					system: `You are an AI assistant that answers questions about the provided content.
+							You will answer questions according to the specified screening fields.
+							Return values in the appropriate type (string, number, or boolean) as specified in each field's type.`,
+					prompt: `Answer questions about the following item based on these screening fields:
+							${JSON.stringify(smartScreeningFields)}
+							
+							Item to analyze:
+							${JSON.stringify(item)}
+							
+							Provide answers for all the screening fields. You must answer every question.
+							If a question is not applicable to this item, respond with "N/A". Return values in the appropriate type as specified.`
+				});
+				const end = Date.now();
 
-	return result.object;
+				console.log(`processed ${item.key} in ${end - start}ms`)
+				
+				// Map the random keys back to the original field names
+				const newObject: Record<string, any> = {};
+				for (const fieldKey of Object.keys(result.object.screeningFields)) {
+					const mappedKey = fieldMaps.get(fieldKey);
+					if (mappedKey) {
+						newObject[mappedKey] = result.object.screeningFields[fieldKey];
+					}
+				}
+				
+				// Return the result for this item
+				return {
+					key: item.key,
+					result: { screeningFields: newObject }
+				};
+			} catch (error) {
+				console.error(`Error processing item ${item.key}:`, error);
+				return { key: item.key, error };
+			}
+		});
+		
+		// Wait for all items in the current chunk to complete
+		const chunkResults = await Promise.all(chunkPromises);
+		
+		// Add results to the result object
+		for (const result of chunkResults) {
+			if (result.key && result.result) {
+				resultObject[result.key] = result.result;
+			}
+		}
+	}
+
+	return resultObject;
 }
 
 export const getUser = async (email: string) => {
@@ -506,14 +556,14 @@ export async function getProfile(
 		const profile = isCurrentUser
 			? session?.user
 			: await db.query.users.findFirst({
-					where: eq(users.id, id),
-					columns: {
-						name: true,
-						image: true,
-						email: true,
-						createdAt: true,
-					},
-			  });
+				where: eq(users.id, id),
+				columns: {
+					name: true,
+					image: true,
+					email: true,
+					createdAt: true,
+				},
+			});
 
 		const itemsCollections = await tx.query.itemToUserCollection
 			.findMany({
