@@ -158,7 +158,7 @@ export const findRelevantContent = async (userQuery: string, itemKey: string | n
 	)})`;
 	
 	const baseCondition = [
-		gt(similarity, 0.5),
+		gt(similarity, 0),
 		itemKey ? or(eq(embeddings.parentKey, itemKey), eq(embeddings.itemKey, itemKey)) : undefined,
 		userSpecifiedPage !== 0 ? eq(embeddings.page, userSpecifiedPage) : undefined,
 	].filter(Boolean);
