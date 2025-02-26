@@ -169,7 +169,7 @@ export const findRelevantContent = async (userQuery: string, itemKey: string | n
 		.from(embeddings)
 		.where(whereCondition)
 		.orderBy(t => desc(t.similarity))
-		.limit(100);
+		.limit(200);
 	
 	return similarGuides.map(guide => ({
 		...guide,
