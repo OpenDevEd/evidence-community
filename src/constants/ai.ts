@@ -65,6 +65,10 @@ export const pricings = {
 		input: 0.0375 / MILLION,
 		output: 0.15 / MILLION,
 	},
+	"gemini-2.0-flash-001": {
+		input: 0.10	/ MILLION,
+		output: 0.40 / MILLION,
+	},
 	"claude-3-5-sonnet-20241022": {
 		input: 3 / MILLION,
 		output: 15 / MILLION,
