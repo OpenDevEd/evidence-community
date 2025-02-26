@@ -209,7 +209,9 @@ export default function Resource({
 	const format = useFormatter();
 	const router = useRouter();
 
-	const { data: fetchedItemData, isLoading: fetchedItemDataLoading } = useSWR<ItemGetResponse>(itemKey ? `/item/${itemKey}` : null, fetcher);
+	const { data: fetchedItemData, isLoading: fetchedItemDataLoading } = useSWR<ItemGetResponse>(itemKey ? `/item/${itemKey}` : null, fetcher, {
+		revalidateOnFocus: false,
+	});
 
 	
 	const finalItemData = itemData ?? fetchedItemData?.item;
