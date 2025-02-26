@@ -20,8 +20,8 @@ import { status as statusTable } from "@/db/schema/tables/status";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import { useLocalStorage } from "usehooks-ts";
 import { useTranslations } from "next-intl";
-import { NuqsAdapter } from 'nuqs/adapters/next/app'
-
+import { NuqsAdapter } from "nuqs/adapters/next/app";
+import { Toaster } from "sonner";
 
 export type CacheContextType = {
 	status: InferSelectModel<typeof statusTable>;
@@ -79,8 +79,13 @@ function CacheProvider({
 	const itemsCache = useRef({});
 	const previousExpansionStates = useRef({});
 	const [globalExpanded, setGlobalExpanded] = useState({});
-	const [accordionGlobalExpanded, setAccordionGlobalExpanded] = useState(null);
-	const [lastFetchedData, setLastFetchedData] = useLocalStorage<ItemsGetResponse | null>("lastFetchedData", {} as ItemsGetResponse);
+	const [accordionGlobalExpanded, setAccordionGlobalExpanded] =
+		useState(null);
+	const [lastFetchedData, setLastFetchedData] =
+		useLocalStorage<ItemsGetResponse | null>(
+			"lastFetchedData",
+			{} as ItemsGetResponse
+		);
 
 	return (
 		<CacheContext.Provider
@@ -104,24 +109,34 @@ function CacheProvider({
 }
 
 export function useLastFetchedData() {
-	const [lastFetchedData, setLastFetchedData] = useLocalStorage<ItemsGetResponse | null>("lastFetchedData", {} as ItemsGetResponse);
+	const [lastFetchedData, setLastFetchedData] =
+		useLocalStorage<ItemsGetResponse | null>(
+			"lastFetchedData",
+			{} as ItemsGetResponse
+		);
 
-	const setLastFetchedDataAsResponse = useCallback((data: ItemsGetResponse) => {
-		setLastFetchedData((prev) => {
-			const allItems = [...(prev?.items ?? []), ...data.items];
-			
-			const uniqueItems = allItems.reduce((acc, item) => {
-				acc.set(item.id, item);
-				return acc;
-			}, new Map());
+	const setLastFetchedDataAsResponse = useCallback(
+		(data: ItemsGetResponse) => {
+			setLastFetchedData((prev) => {
+				const allItems = [...(prev?.items ?? []), ...data.items];
 
-			return {
-				items: Array.from(uniqueItems.values()).slice(-100)
-			} as ItemsGetResponse;
-		});
-	}, [setLastFetchedData]);
+				const uniqueItems = allItems.reduce((acc, item) => {
+					acc.set(item.id, item);
+					return acc;
+				}, new Map());
 
-	return { lastFetchedData, setLastFetchedData: setLastFetchedDataAsResponse };
+				return {
+					items: Array.from(uniqueItems.values()).slice(-100),
+				} as ItemsGetResponse;
+			});
+		},
+		[setLastFetchedData]
+	);
+
+	return {
+		lastFetchedData,
+		setLastFetchedData: setLastFetchedDataAsResponse,
+	};
 }
 
 function LoadingScreen({
@@ -137,11 +152,11 @@ function LoadingScreen({
 	const { data: session, status } = useSession();
 	const statusTable = useStatus();
 	const t = useTranslations("ui");
-	
+
 	return (
 		<AnimatePresence mode="popLayout">
 			{featureFlags && (status !== "loading" || !!session) ? (
-				children
+					children
 			) : (
 				<motion.div
 					key="loading"
@@ -178,9 +193,9 @@ function LoadingScreen({
 											? "dark:hidden"
 											: "hidden dark:block"
 									)}
-									alt={t("logoAlt", { 
+									alt={t("logoAlt", {
 										company: statusTable?.companyName,
-										theme: themeToMatch 
+										theme: themeToMatch,
 									})}
 									width={171}
 									height={40}
@@ -193,6 +208,19 @@ function LoadingScreen({
 		</AnimatePresence>
 	);
 }
+
+
+function ToastAdapter({
+	children,
+}: {
+	children: React.ReactNode;
+}) {
+	return <>
+		{children}
+		<Toaster />
+	</>
+}
+
 
 export default function Providers({
 	children,
@@ -229,25 +257,27 @@ export default function Providers({
 			disableTransitionOnChange
 		>
 			<NuqsAdapter>
-				<SessionProvider session={session}>
-					<PostHogProvider client={posthog}>
-						<FeatureFlagsContext.Provider value={{ featureFlags }}>
-						<CacheProvider status={status}>
-							<NextUIProvider navigate={router.push}>
-								<Suspense>
-									<PageView />
-								</Suspense>
-								<LoadingScreen
-									isMounted={isMounted}
-									featureFlags={featureFlags}
-								>
-									{children}
-								</LoadingScreen>
-							</NextUIProvider>
-						</CacheProvider>
-					</FeatureFlagsContext.Provider>
-				</PostHogProvider>
-			</SessionProvider>
+				<ToastAdapter>
+					<SessionProvider session={session}>
+						<PostHogProvider client={posthog}>
+							<FeatureFlagsContext.Provider value={{ featureFlags }}>
+							<CacheProvider status={status}>
+								<NextUIProvider navigate={router.push}>
+									<Suspense>
+										<PageView />
+									</Suspense>
+									<LoadingScreen
+										isMounted={isMounted}
+										featureFlags={featureFlags}
+									>
+										{children}
+									</LoadingScreen>
+								</NextUIProvider>
+							</CacheProvider>
+						</FeatureFlagsContext.Provider>
+					</PostHogProvider>
+				</SessionProvider>
+			</ToastAdapter>
 			</NuqsAdapter>
 		</ThemeProvider>
 	);
