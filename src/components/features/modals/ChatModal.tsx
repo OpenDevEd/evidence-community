@@ -32,12 +32,12 @@ import { RiResetLeftFill } from "react-icons/ri";
 import { useLocalStorage } from "usehooks-ts";
 import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
 import useSWRMutation from "swr/mutation";
-import { fetcher, setter } from "@/lib/utils";
+import { cleanAIResponse, fetcher, setter } from "@/lib/utils";
 import { runScreening } from "@/lib/actions";
 import Resource from "../items/Resource";
 import { GiStarSwirl } from "react-icons/gi";
 
-export const maxDuration = 240
+export const maxDuration = 240;
 
 interface ScreeningResults {
 	result: {
@@ -216,14 +216,23 @@ export default function ChatModal({
 				smartScreeningFields,
 				posthog.get_distinct_id()
 			);
-			appendMessage({
-				role: "data",
-				content: JSON.stringify({
-					result: result,
-					fields: smartScreeningFields,
-				}),
-				id: "screening-" + Date.now(),
-			});
+			if (Object.keys(result).length > 0) {
+				appendMessage({
+					role: "data",
+					content: JSON.stringify({
+						result: result,
+						fields: smartScreeningFields,
+					}),
+					id: "screening-" + Date.now(),
+				});
+			} else {
+				appendMessage({
+					role: "assistant",
+					content:
+						"No resources found for screening, an abstract is required to perform a screening.",
+					id: "screening-" + Date.now(),
+				});
+			}
 		} catch (error) {
 			console.error(error);
 		} finally {
@@ -460,9 +469,9 @@ export default function ChatModal({
 																						"p-0"
 																				)}
 																			>
-																				{
+																				{cleanAIResponse(
 																					message.content
-																				}
+																				)}
 																			</AIMarkdown>
 																			{message.role ===
 																				"assistant" &&
@@ -474,7 +483,13 @@ export default function ChatModal({
 																							isDisabled={
 																								isWaiting
 																							}
-																							startContent={isMutating ? <ImSpinner8 className="animate-spin" /> : <GiStarSwirl />}
+																							startContent={
+																								isMutating ? (
+																									<ImSpinner8 className="animate-spin" />
+																								) : (
+																									<GiStarSwirl />
+																								)
+																							}
 																							size="sm"
 																							color="accent"
 																							onClick={() =>
