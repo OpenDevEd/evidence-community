@@ -140,7 +140,6 @@ export function AIMarkdown({
 				rehypeQuoteWrapper,
 				rehypePageWrapper,
 				rehypeSectionWrapper,
-				rehypeResourceWrapper,
 			]}
 			components={{
 				span: ({ children, className }) =>
@@ -157,11 +156,18 @@ export function AIMarkdown({
 						<span>{children}</span>
 					),
 				a: ({ href, children }) => 
-					(
+					href?.startsWith("/") ? (
+						<ResourceWrapper>{href}</ResourceWrapper>
+					) : (
 						<a href={href} className="text-link underline" target="_blank" rel="noopener noreferrer">
 							{children}
 						</a>
 					),
+				p: ({ children, ...props }) => (
+					<div {...props}>
+						{children}
+					</div>
+				),
 			}}
 			className={twMerge(className)}
 			{...props}
