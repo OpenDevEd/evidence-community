@@ -412,7 +412,7 @@ export async function searchIndex(
 		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
 	>["filter"] = []
 ) {
-	const cacheKey = `${buildItemsQuery(searchParams)}-${extraFilters.toString()}`;
+	const cacheKey = `${buildItemsQuery(searchParams)}-${extraFilters.toString()}-${extraProperties.toString()}`;
 
 	const items = unstable_cache(async () => {
 		const pageNum = Math.max(1, Number(searchParams.page || 1));
