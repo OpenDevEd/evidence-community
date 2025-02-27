@@ -12,7 +12,7 @@ const accentColors = {
   "opendeved": "#e68124",
   "edtechhub": "#ff5c00",
   "ekitabu": "#ed1c24",
-  "openalex": "#4169E1",
+  "openalex": "#1976d2",
 }
 
 function generateColorVariants(baseColor: string, light: boolean = false) {
