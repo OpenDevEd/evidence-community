@@ -86,6 +86,12 @@
 		]
 	},
 	"collections": {
+		"itemsOpenAlex": {
+			"OpenAlex": {
+				"title": "OpenAlex",
+				"enabled": true
+			}
+		},
 		"itemsOpenDeved": {
 			"JUDM2WBF": {
 				"title": "Our programmes",
