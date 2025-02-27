@@ -78,8 +78,10 @@ export const ITEMS_PER_PAGE = 20;
 export const EXCLUDED_ITEM_TYPES = ["Note", "Attachment"];
 
 export const SORT_OPTIONS = [
-	{ key: "desc", name: "Newest", sort: "dateAdded:desc" },
-	{ key: "asc", name: "Oldest", sort: "dateAdded:asc" },
+	{ key: "desc", name: "Newest", sort: "datePublished:desc" },
+	{ key: "asc", name: "Oldest", sort: "datePublished:asc" },
+	// { key: "dateAddedDesc", name: "Date Added (Newest)", sort: "dateAdded:desc" },
+	// { key: "dateAddedAsc", name: "Date Added (Oldest)", sort: "dateAdded:asc" },
 	{ key: "authorAZ", name: "Author A-Z", sort: "fullNames:asc" },
 	{ key: "authorZA", name: "Author Z-A", sort: "fullNames:desc" },
 	{ key: "titleAZ", name: "Title A-Z", sort: "title:asc" },
