@@ -285,8 +285,8 @@ function LinksList({
 	return (
 		<ul
 			className={twMerge(
-				"flex items-center justify-end gap-6 px-8",
-				isMobile && "flex-col gap-8",
+				"flex items-center justify-end gap-6",
+				isMobile && "flex-col gap-8 px-8",
 				!isMobile && "hidden xl:flex",
 			)}
 		>
