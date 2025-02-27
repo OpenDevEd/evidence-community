@@ -478,11 +478,12 @@ export default function ChatModal({
 																				message.content.includes(
 																					"/lib/"
 																				) && (
-																					<div className="flex items-center gap-2 mt-8">
+																					smartScreeningFields.length > 0 && <div className="flex items-center gap-2 mt-8">
 																						<Button
 																							isDisabled={
 																								isWaiting
 																							}
+
 																							startContent={
 																								isMutating ? (
 																									<ImSpinner8 className="animate-spin" />
@@ -501,6 +502,7 @@ export default function ChatModal({
 																							Smart
 																							Screening
 																						</Button>
+							
 																					</div>
 																				)}
 																		</>
