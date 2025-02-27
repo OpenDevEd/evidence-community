@@ -614,11 +614,13 @@ function SmartScreeningModal({
 				const [type, parentheses] =
 					typeWithParentheses?.split(")") || [];
 				const description = rest.join(":").trim();
-				localFields.push({
-					label: label?.trim(),
-					type: type?.trim() as (typeof smartScreeningFieldTypes)[number],
-					description: description?.trim(),
-				});
+				if (line.length > 0) {
+					localFields.push({
+						label: label?.trim(),
+						type: type?.trim() as (typeof smartScreeningFieldTypes)[number],
+						description: description?.trim(),
+					});
+				}
 			});
 		}
 		validatorFunction(localFields);
@@ -635,7 +637,7 @@ function SmartScreeningModal({
 				{(onClose) => (
 					<>
 						<AIHeader onClose={onClose}>Smart Screening</AIHeader>
-						<div className="flex gap-0 px-6 dark:bg-secondary py-2">
+						<div className="flex gap-0 px-6  py-2">
 							{tabs.map((t, i) => (
 								<Button
 									key={t}
@@ -653,266 +655,298 @@ function SmartScreeningModal({
 							))}
 						</div>
 						<ModalBody className="p-0 relative">
-							{tab === "fields" ? (
-								<form
-									key="fields"
-									onSubmit={handleFieldsSubmit}
-									className="flex flex-col gap-6"
-								>
-									<AnimatePresence mode="sync">
-										<div
-											key="fields"
-											className="p-6 flex flex-col gap-6"
-										>
-											{localFields.length === 0 && (
-												<p
-													key="empty"
-													className="text-center text-black/60 dark:text-white/40 my-12 mt-14"
-												>
-													No fields added yet
-												</p>
-											)}
-											{localFields.map((field, index) => (
-												<motion.div
-													key={index}
-													initial={{
-														opacity: 0,
-														y: 10,
-													}}
-													animate={{
-														opacity: 1,
-														y: 0,
-													}}
-													transition={{
-														duration: 0.3,
-													}}
-													className="flex flex-col gap-2"
-												>
-													<Input
-														isRequired
-														placeholder="Label"
-														label="Label"
-														value={field.label}
-														isInvalid={
-															!!fieldErrors[
-																index
-															] && !field.label
-														}
-														errorMessage={
-															fieldErrors[
-																index
-															] && !field.label
-																? fieldErrors[
-																		index
-																  ]
-																: undefined
-														}
-														onChange={(e) =>
-															setLocalFields(
-																localFields.map(
-																	(f, i) =>
-																		i ===
-																		index
-																			? {
-																					...f,
-																					label: e
-																						.target
-																						.value,
-																			  }
-																			: f
-																)
-															)
-														}
-													/>
-													<Textarea
-														placeholder="Description"
-														label="Description"
-														value={
-															field.description
-														}
-														isRequired={true}
-														isInvalid={
-															!!fieldErrors[
-																index
-															] &&
-															!field.description
-														}
-														errorMessage={
-															fieldErrors[
-																index
-															] &&
-															!field.description
-																? fieldErrors[
-																		index
-																  ]
-																: undefined
-														}
-														onChange={(e) =>
-															setLocalFields(
-																localFields.map(
-																	(f, i) =>
-																		i ===
-																		index
-																			? {
-																					...f,
-																					description:
-																						e
-																							.target
-																							.value,
-																			  }
-																			: f
-																)
-															)
-														}
-														classNames={{
-															inputWrapper:
-																"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-															input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
-														}}
-													/>
-													<div className="flex justify-between">
-														<Select
-															color="tertiary"
-															label="Type"
-															placement="left"
-															disallowEmptySelection={
-																true
-															}
-															selectedKeys={
-																field.type
-																	? [
-																			field.type,
-																	  ]
-																	: undefined
-															}
-															isInvalid={
-																!!fieldErrors[
-																	index
-																] && !field.type
-															}
-															errorMessage={
-																fieldErrors[
-																	index
-																] && !field.type
-																	? fieldErrors[
-																			index
-																	  ]
-																	: undefined
-															}
-															onSelectionChange={(
-																value
-															) => {
-																const selectedType =
-																	Array.from(
-																		value
-																	)[0] as (typeof smartScreeningFieldTypes)[number];
-																setLocalFields(
-																	localFields.map(
-																		(
-																			f,
-																			i
-																		) =>
-																			i ===
-																			index
-																				? {
-																						...f,
-																						type: selectedType,
-																				  }
-																				: f
-																	)
-																);
+							<ScrollShadow className="h-full">
+								{tab === "fields" ? (
+									<form
+										id="fields-form"
+										key="fields"
+										onSubmit={handleFieldsSubmit}
+										className="flex flex-col gap-6"
+									>
+										<AnimatePresence mode="sync">
+											<div
+												key="fields"
+												className="p-6 flex flex-col gap-6"
+											>
+												{localFields.length === 0 && (
+													<p
+														key="empty"
+														className="text-center text-black/60 dark:text-white/40 my-12 mt-14"
+													>
+														No fields added yet
+													</p>
+												)}
+												{localFields.map(
+													(field, index) => (
+														<motion.div
+															key={index}
+															initial={{
+																opacity: 0,
+																y: 10,
 															}}
+															animate={{
+																opacity: 1,
+																y: 0,
+															}}
+															transition={{
+																duration: 0.3,
+															}}
+															className="flex flex-col gap-2"
 														>
-															{smartScreeningFieldTypes.map(
-																(type) => (
-																	<SelectItem
-																		key={
-																			type
-																		}
-																		value={
-																			type
-																		}
-																	>
-																		{type}
-																	</SelectItem>
-																)
-															)}
-														</Select>
-														<Button
-															isIconOnly
-															color="danger"
-															onPress={() =>
-																setLocalFields(
-																	localFields.filter(
-																		(
-																			_,
-																			i
-																		) =>
-																			i !==
-																			index
+															<Input
+																isRequired
+																placeholder="Label"
+																label="Label"
+																value={
+																	field.label
+																}
+																isInvalid={
+																	!!fieldErrors[
+																		index
+																	] &&
+																	!field.label
+																}
+																errorMessage={
+																	fieldErrors[
+																		index
+																	] &&
+																	!field.label
+																		? fieldErrors[
+																				index
+																		  ]
+																		: undefined
+																}
+																onChange={(e) =>
+																	setLocalFields(
+																		localFields.map(
+																			(
+																				f,
+																				i
+																			) =>
+																				i ===
+																				index
+																					? {
+																							...f,
+																							label: e
+																								.target
+																								.value,
+																					  }
+																					: f
+																		)
 																	)
-																)
-															}
-															className="!p-0"
-														>
-															<BiTrash className="size-4" />
-														</Button>
-													</div>
-												</motion.div>
-											))}
-										</div>
-										<div
-											key="fields-footer"
-											className="flex justify-end gap-4 sticky bottom-0 bg-white dark:bg-secondary z-10 p-2"
-										>
-											<Button
-												size="md"
-												onPress={() =>
-													setLocalFields([
-														...localFields,
-														{
-															label: "",
-															type: "string",
-															description: "",
-														},
-													])
-												}
-											>
-												Add Field
-											</Button>
-											<Button
-												type="submit"
-												color="accent"
-												size="md"
-											>
-												Save Fields
-											</Button>
-										</div>
-									</AnimatePresence>
-								</form>
-							) : (
-								<form
-									key="text"
-									onSubmit={handleSubmit}
-									className="flex flex-col gap-6 p-6"
-								>
-									<AnimatePresence mode="sync">
-										<Textarea
-											name="text"
-											defaultValue={convertedText}
-											classNames={{
-												inputWrapper:
-													"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-												input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
-											}}
-											placeholder={placeholderExample}
-											label="Text"
-										/>
-									</AnimatePresence>
-									<Button type="submit">Save</Button>
-								</form>
-							)}
+																}
+															/>
+															<Textarea
+																placeholder="Description"
+																label="Description"
+																value={
+																	field.description
+																}
+																isRequired={
+																	true
+																}
+																isInvalid={
+																	!!fieldErrors[
+																		index
+																	] &&
+																	!field.description
+																}
+																errorMessage={
+																	fieldErrors[
+																		index
+																	] &&
+																	!field.description
+																		? fieldErrors[
+																				index
+																		  ]
+																		: undefined
+																}
+																onChange={(e) =>
+																	setLocalFields(
+																		localFields.map(
+																			(
+																				f,
+																				i
+																			) =>
+																				i ===
+																				index
+																					? {
+																							...f,
+																							description:
+																								e
+																									.target
+																									.value,
+																					  }
+																					: f
+																		)
+																	)
+																}
+																classNames={{
+																	inputWrapper:
+																		"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
+																	input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+																}}
+															/>
+															<div className="flex justify-between">
+																<Select
+																	color="tertiary"
+																	label="Type"
+																	placement="left"
+																	disallowEmptySelection={
+																		true
+																	}
+																	selectedKeys={
+																		field.type
+																			? [
+																					field.type,
+																			  ]
+																			: undefined
+																	}
+																	isInvalid={
+																		!!fieldErrors[
+																			index
+																		] &&
+																		!field.type
+																	}
+																	errorMessage={
+																		fieldErrors[
+																			index
+																		] &&
+																		!field.type
+																			? fieldErrors[
+																					index
+																			  ]
+																			: undefined
+																	}
+																	onSelectionChange={(
+																		value
+																	) => {
+																		const selectedType =
+																			Array.from(
+																				value
+																			)[0] as (typeof smartScreeningFieldTypes)[number];
+																		setLocalFields(
+																			localFields.map(
+																				(
+																					f,
+																					i
+																				) =>
+																					i ===
+																					index
+																						? {
+																								...f,
+																								type: selectedType,
+																						  }
+																						: f
+																			)
+																		);
+																	}}
+																>
+																	{smartScreeningFieldTypes.map(
+																		(
+																			type
+																		) => (
+																			<SelectItem
+																				key={
+																					type
+																				}
+																				value={
+																					type
+																				}
+																			>
+																				{
+																					type
+																				}
+																			</SelectItem>
+																		)
+																	)}
+																</Select>
+																<Button
+																	isIconOnly
+																	color="danger"
+																	onPress={() =>
+																		setLocalFields(
+																			localFields.filter(
+																				(
+																					_,
+																					i
+																				) =>
+																					i !==
+																					index
+																			)
+																		)
+																	}
+																	className="!p-0"
+																>
+																	<BiTrash className="size-4" />
+																</Button>
+															</div>
+														</motion.div>
+													)
+												)}
+											</div>
+										</AnimatePresence>
+									</form>
+								) : (
+									<form
+										id="text-form"
+										key="text"
+										onSubmit={handleSubmit}
+										className="flex flex-col gap-6 p-6"
+									>
+										<AnimatePresence mode="sync">
+											<Textarea
+												name="text"
+												defaultValue={convertedText}
+												classNames={{
+													inputWrapper:
+														"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
+													input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+												}}
+												placeholder={placeholderExample}
+												label="Text"
+											/>
+										</AnimatePresence>
+									</form>
+								)}
+							</ScrollShadow>
 						</ModalBody>
+						<div
+							key="fields-footer"
+							className="flex justify-end gap-4 z-10 p-2 rounded-b-2xl"
+						>
+							{tab === "fields" ? (
+								<>
+									<Button
+										size="md"
+										onPress={() =>
+											setLocalFields([
+												...localFields,
+												{
+													label: "",
+													type: "string",
+													description: "",
+												},
+											])
+										}
+									>
+										Add Field
+									</Button>
+									<Button
+										type="submit"
+										form="fields-form"
+										color="accent"
+										size="md"
+									>
+										Save Fields
+									</Button>
+								</>
+							) : (
+								<Button type="submit" form="text-form">
+									Save
+								</Button>
+							)}
+						</div>
 					</>
 				)}
 			</ModalContent>
@@ -973,15 +1007,15 @@ function AIChat() {
 				className="fixed bottom-0 left-1/2 -translate-x-1/2 flex justify-center p-4 items-center z-50 group fill-white"
 			>
 				<div className="flex gap-4">
-						<Tooltip content="Open Chat">
-							<Button
-								isIconOnly
-								startContent={<IoChatboxOutline />}
-								size="md"
-								className="!p-0"
-								onPress={onChatOpen}
-							></Button>
-						</Tooltip>
+					<Tooltip content="Open Chat">
+						<Button
+							isIconOnly
+							startContent={<IoChatboxOutline />}
+							size="md"
+							className="!p-0"
+							onPress={onChatOpen}
+						></Button>
+					</Tooltip>
 					<div className="relative">
 						<Input
 							autoComplete="off"
