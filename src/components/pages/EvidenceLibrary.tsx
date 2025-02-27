@@ -2,6 +2,7 @@
 import { Button } from "@/components/nextui/Button";
 import CollectionsList from "@/components/features/collections/CollectionsList";
 import {
+	IoChatboxOutline,
 	IoChatbubblesOutline,
 	IoGrid,
 	IoSearch,
@@ -21,6 +22,7 @@ import {
 	ScrollShadow,
 	Spinner,
 	Textarea,
+	Tooltip,
 	useDisclosure,
 } from "@nextui-org/react";
 import React, { ReactNode, use, useRef, useState, useEffect } from "react";
@@ -30,7 +32,11 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { SORT_OPTIONS, SCOPE_OPTIONS } from "@/constants/items";
 import HelpModal from "@/components/features/modals/HelpModal";
 import { useFormatter, useTranslations } from "next-intl";
-import { GiArchiveResearch, GiConsoleController, GiStarSwirl } from "react-icons/gi";
+import {
+	GiArchiveResearch,
+	GiConsoleController,
+	GiStarSwirl,
+} from "react-icons/gi";
 import { FaSort } from "react-icons/fa";
 import { HiOutlineViewList } from "react-icons/hi";
 import { BiHelpCircle, BiTrash } from "react-icons/bi";
@@ -506,15 +512,25 @@ function SmartScreeningModal({
 		}
 	}, [isOpen, fields]);
 
-
 	const fieldSchema = z.object({
-		label: z.string().min(1, "Label is required").max(64, "Label must be less than 64 characters"),
+		label: z
+			.string()
+			.min(1, "Label is required")
+			.max(64, "Label must be less than 64 characters"),
 		type: z.enum(["string", "number", "boolean"]),
-		description: z.string().min(1, "Description is required").max(1024, "Description must be less than 1024 characters"),
+		description: z
+			.string()
+			.min(1, "Description is required")
+			.max(1024, "Description must be less than 1024 characters"),
 	});
 
 	const convertedText = fields
-		.map((field) => `${field.label.trim()} (${field.type}): ${field.description.trim()}`)
+		.map(
+			(field) =>
+				`${field.label.trim()} (${
+					field.type
+				}): ${field.description.trim()}`
+		)
 		.join("\n");
 
 	const validatorFunction = (localFields: SmartScreeningField[]) => {
@@ -536,8 +552,10 @@ function SmartScreeningModal({
 		// Mark duplicate labels as errors
 		Object.entries(labelCounts).forEach(([label, indices]) => {
 			if (indices.length > 1) {
-				indices.forEach(index => {
-					newErrors[index] = `Field ${index + 1} ${label}: Duplicate label - must be unique`;
+				indices.forEach((index) => {
+					newErrors[index] = `Field ${
+						index + 1
+					} ${label}: Duplicate label - must be unique`;
 					hasErrors = true;
 				});
 			}
@@ -545,27 +563,30 @@ function SmartScreeningModal({
 
 		// Validate each field with Zod schema
 		localFields.forEach((field, index) => {
-			if (!newErrors[index]) { // Only validate if not already marked as duplicate
+			if (!newErrors[index]) {
+				// Only validate if not already marked as duplicate
 				try {
 					fieldSchema.parse(field);
 				} catch (error) {
 					if (error instanceof z.ZodError) {
-						const fieldError = error.errors[0]?.message || "Invalid field";
-						newErrors[index] = `Field ${index + 1} ${field.label}: ${fieldError}`;
+						const fieldError =
+							error.errors[0]?.message || "Invalid field";
+						newErrors[index] = `Field ${index + 1} ${
+							field.label
+						}: ${fieldError}`;
 						hasErrors = true;
 					}
 				}
 			}
 		});
-		
+
 		setFieldErrors(newErrors);
-		
+
 		if (!hasErrors) {
 			setFields(localFields);
 			toast({
 				title: "Fields saved successfully",
 				description: "Fields saved successfully",
-				
 			});
 		} else {
 			toast({
@@ -573,7 +594,7 @@ function SmartScreeningModal({
 				description: Object.values(newErrors).join("\n"),
 			});
 		}
-	}
+	};
 
 	const handleFieldsSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -590,7 +611,8 @@ function SmartScreeningModal({
 			lines.forEach((line) => {
 				const [key, ...rest] = line.split(":");
 				const [label, typeWithParentheses] = key?.split("(") || [];
-				const [type, parentheses] = typeWithParentheses?.split(")") || [];
+				const [type, parentheses] =
+					typeWithParentheses?.split(")") || [];
 				const description = rest.join(":").trim();
 				localFields.push({
 					label: label?.trim(),
@@ -631,213 +653,265 @@ function SmartScreeningModal({
 							))}
 						</div>
 						<ModalBody className="p-0 relative">
-								{tab === "fields" ? (
-									<form
-										key="fields"
-										onSubmit={handleFieldsSubmit}
-										className="flex flex-col gap-6"
-									>
-										<AnimatePresence mode="sync">
-											<div key="fields" className="p-6 flex flex-col gap-6">
-												{localFields.length === 0 && (
-													<p
-														key="empty"
-														className="text-center text-black/60 dark:text-white/40 my-12 mt-14"
-													>
-														No fields added yet
-													</p>
-												)}
-												{localFields.map((field, index) => (
-													<motion.div
-														key={index}
-														initial={{
-															opacity: 0,
-															y: 10,
-														}}
-														animate={{
-															opacity: 1,
-															y: 0,
-														}}
-														transition={{
-															duration: 0.3,
-														}}
-														className="flex flex-col gap-2"
-													>
-														<Input
-															isRequired
-															placeholder="Label"
-															label="Label"
-															value={field.label}
-															isInvalid={!!fieldErrors[index] && !field.label}
-															errorMessage={fieldErrors[index] && !field.label ? fieldErrors[index] : undefined}
-															onChange={(e) =>
-																setLocalFields(
-																	localFields.map(
-																		(f, i) =>
-																			i ===
-																			index
-																				? {
-																						...f,
-																						label: e
+							{tab === "fields" ? (
+								<form
+									key="fields"
+									onSubmit={handleFieldsSubmit}
+									className="flex flex-col gap-6"
+								>
+									<AnimatePresence mode="sync">
+										<div
+											key="fields"
+											className="p-6 flex flex-col gap-6"
+										>
+											{localFields.length === 0 && (
+												<p
+													key="empty"
+													className="text-center text-black/60 dark:text-white/40 my-12 mt-14"
+												>
+													No fields added yet
+												</p>
+											)}
+											{localFields.map((field, index) => (
+												<motion.div
+													key={index}
+													initial={{
+														opacity: 0,
+														y: 10,
+													}}
+													animate={{
+														opacity: 1,
+														y: 0,
+													}}
+													transition={{
+														duration: 0.3,
+													}}
+													className="flex flex-col gap-2"
+												>
+													<Input
+														isRequired
+														placeholder="Label"
+														label="Label"
+														value={field.label}
+														isInvalid={
+															!!fieldErrors[
+																index
+															] && !field.label
+														}
+														errorMessage={
+															fieldErrors[
+																index
+															] && !field.label
+																? fieldErrors[
+																		index
+																  ]
+																: undefined
+														}
+														onChange={(e) =>
+															setLocalFields(
+																localFields.map(
+																	(f, i) =>
+																		i ===
+																		index
+																			? {
+																					...f,
+																					label: e
+																						.target
+																						.value,
+																			  }
+																			: f
+																)
+															)
+														}
+													/>
+													<Textarea
+														placeholder="Description"
+														label="Description"
+														value={
+															field.description
+														}
+														isRequired={true}
+														isInvalid={
+															!!fieldErrors[
+																index
+															] &&
+															!field.description
+														}
+														errorMessage={
+															fieldErrors[
+																index
+															] &&
+															!field.description
+																? fieldErrors[
+																		index
+																  ]
+																: undefined
+														}
+														onChange={(e) =>
+															setLocalFields(
+																localFields.map(
+																	(f, i) =>
+																		i ===
+																		index
+																			? {
+																					...f,
+																					description:
+																						e
 																							.target
 																							.value,
-																				}
-																				: f
-																	)
+																			  }
+																			: f
 																)
+															)
+														}
+														classNames={{
+															inputWrapper:
+																"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
+															input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+														}}
+													/>
+													<div className="flex justify-between">
+														<Select
+															color="tertiary"
+															label="Type"
+															placement="left"
+															disallowEmptySelection={
+																true
 															}
-														/>
-														<Textarea
-															placeholder="Description"
-															label="Description"
-															value={
-																field.description
+															selectedKeys={
+																field.type
+																	? [
+																			field.type,
+																	  ]
+																	: undefined
 															}
-															isRequired={true}
-															isInvalid={!!fieldErrors[index] && !field.description}
-															errorMessage={fieldErrors[index] && !field.description ? fieldErrors[index] : undefined}
-															onChange={(e) =>
+															isInvalid={
+																!!fieldErrors[
+																	index
+																] && !field.type
+															}
+															errorMessage={
+																fieldErrors[
+																	index
+																] && !field.type
+																	? fieldErrors[
+																			index
+																	  ]
+																	: undefined
+															}
+															onSelectionChange={(
+																value
+															) => {
+																const selectedType =
+																	Array.from(
+																		value
+																	)[0] as (typeof smartScreeningFieldTypes)[number];
 																setLocalFields(
 																	localFields.map(
-																		(f, i) =>
+																		(
+																			f,
+																			i
+																		) =>
 																			i ===
 																			index
 																				? {
 																						...f,
-																						description:
-																							e
-																								.target
-																								.value,
-																				}
+																						type: selectedType,
+																				  }
 																				: f
+																	)
+																);
+															}}
+														>
+															{smartScreeningFieldTypes.map(
+																(type) => (
+																	<SelectItem
+																		key={
+																			type
+																		}
+																		value={
+																			type
+																		}
+																	>
+																		{type}
+																	</SelectItem>
+																)
+															)}
+														</Select>
+														<Button
+															isIconOnly
+															color="danger"
+															onPress={() =>
+																setLocalFields(
+																	localFields.filter(
+																		(
+																			_,
+																			i
+																		) =>
+																			i !==
+																			index
 																	)
 																)
 															}
-															classNames={{
-																inputWrapper:
-																	"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-																input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
-															}}
-														/>
-														<div className="flex justify-between">
-															<Select
-																color="tertiary"
-																label="Type"
-																placement="left"
-																disallowEmptySelection={true}
-																selectedKeys={field.type ? [field.type] : undefined}
-																isInvalid={!!fieldErrors[index] && !field.type}
-																errorMessage={fieldErrors[index] && !field.type ? fieldErrors[index] : undefined}
-																onSelectionChange={(
-																	value
-																) => {
-																	const selectedType =
-																		Array.from(
-																			value
-																		)[0] as (typeof smartScreeningFieldTypes)[number];
-																	setLocalFields(
-																		localFields.map(
-																			(
-																				f,
-																				i
-																			) =>
-																				i ===
-																				index
-																					? {
-																							...f,
-																							type: selectedType,
-																					}
-																					: f
-																		)
-																	);
-																}}
-															>
-																{smartScreeningFieldTypes.map(
-																	(type) => (
-																		<SelectItem
-																			key={
-																				type
-																			}
-																			value={
-																				type
-																			}
-																		>
-																			{type}
-																		</SelectItem>
-																	)
-																)}
-															</Select>
-															<Button
-																isIconOnly
-																color="danger"
-																onPress={() =>
-																	setLocalFields(
-																		localFields.filter(
-																			(
-																				_,
-																				i
-																			) =>
-																				i !==
-																				index
-																		)
-																	)
-																}
-																className="!p-0"
-															>
-																<BiTrash className="size-4" />
-															</Button>
-														</div>
-													</motion.div>
-												))}
-											</div>
-											<div key="fields-footer" className="flex justify-end gap-4 sticky bottom-0 bg-white dark:bg-secondary z-10 p-2">
-												<Button
-													size="md"
-													onPress={() =>
-														setLocalFields([
-															...localFields,
-															{
-																label: "",
-																type: "string",
-																description: "",
-															},
-														])
-													}
-												>
-													Add Field
-												</Button>
-												<Button 
-													type="submit" 
-													color="accent"
-													size="md"
-												>
-													Save Fields
-												</Button>
-											</div>
-										</AnimatePresence>
-									</form>
-								) : (
-									<form
-										key="text"
-										onSubmit={handleSubmit}
-										className="flex flex-col gap-6 p-6"
-									>
-										<AnimatePresence mode="sync">
-											<Textarea
-												name="text"
-												defaultValue={convertedText}
-												classNames={{
-													inputWrapper:
-														"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-													input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
-												}}
-												placeholder={placeholderExample}
-												label="Text"
-											/>
-										</AnimatePresence>
-										<Button type="submit">Save</Button>
-									</form>
-								)}
+															className="!p-0"
+														>
+															<BiTrash className="size-4" />
+														</Button>
+													</div>
+												</motion.div>
+											))}
+										</div>
+										<div
+											key="fields-footer"
+											className="flex justify-end gap-4 sticky bottom-0 bg-white dark:bg-secondary z-10 p-2"
+										>
+											<Button
+												size="md"
+												onPress={() =>
+													setLocalFields([
+														...localFields,
+														{
+															label: "",
+															type: "string",
+															description: "",
+														},
+													])
+												}
+											>
+												Add Field
+											</Button>
+											<Button
+												type="submit"
+												color="accent"
+												size="md"
+											>
+												Save Fields
+											</Button>
+										</div>
+									</AnimatePresence>
+								</form>
+							) : (
+								<form
+									key="text"
+									onSubmit={handleSubmit}
+									className="flex flex-col gap-6 p-6"
+								>
+									<AnimatePresence mode="sync">
+										<Textarea
+											name="text"
+											defaultValue={convertedText}
+											classNames={{
+												inputWrapper:
+													"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
+												input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+											}}
+											placeholder={placeholderExample}
+											label="Text"
+										/>
+									</AnimatePresence>
+									<Button type="submit">Save</Button>
+								</form>
+							)}
 						</ModalBody>
 					</>
 				)}
@@ -899,6 +973,15 @@ function AIChat() {
 				className="fixed bottom-0 left-1/2 -translate-x-1/2 flex justify-center p-4 items-center z-50 group fill-white"
 			>
 				<div className="flex gap-4">
+						<Tooltip content="Open Chat">
+							<Button
+								isIconOnly
+								startContent={<IoChatboxOutline />}
+								size="md"
+								className="!p-0"
+								onPress={onChatOpen}
+							></Button>
+						</Tooltip>
 					<div className="relative">
 						<Input
 							autoComplete="off"
@@ -934,9 +1017,15 @@ function AIChat() {
 						/>
 						<div className="size-96 bg-accent/50 opacity-0 group-hover:opacity-75 rounded-full left-1/2 -translate-x-1/2 blur-3xl absolute -z-10 transition-all duration-1000 ease-spring"></div>
 					</div>
-					<Button startContent={<GiStarSwirl />} size="md" onPress={onSmartScreeningOpen}>
-						Smart Screening
-					</Button>
+					<Tooltip content="Smart Screening">
+						<Button
+							isIconOnly
+							startContent={<GiStarSwirl />}
+							size="md"
+							className="!p-0"
+							onPress={onSmartScreeningOpen}
+						></Button>
+					</Tooltip>
 				</div>
 			</form>
 		</>
