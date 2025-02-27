@@ -149,6 +149,8 @@ export default function Footer() {
 						content={
 							<div className="mt-6">
 								<Button
+									as={Link}
+									href={status.externalLinks?.contact || ""}
 									color={
 										isMounted && theme === "light"
 											? "accent"
