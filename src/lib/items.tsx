@@ -266,6 +266,7 @@ export const valueFormatter: Record<
 	dateAdded: () => false,
 	fullTextPDFs: () => false,
 	dateModified: () => false,
+	datePublished: () => false,
 	relations: () => false,
 	deleted: () => false,
 	year: () => false,
