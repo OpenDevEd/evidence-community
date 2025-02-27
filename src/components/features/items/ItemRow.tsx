@@ -35,10 +35,10 @@ export default function ItemRow({ item, row, router, value, customRowName, loadi
 				)}
 			>
 				{rowName || row}
-			</h3>
+			</h3>	
 			{React.createElement(element, {
 				suppressHydrationWarning: true,
-				className: "text-lg text-black/80 dark:text-white/80 font-medium break-words w-full"
+				className: "text-lg text-black/80 dark:text-white/80 font-medium whitespace-normal w-full [overflow-wrap:anywhere]"
 			}, rowValue ? rowValue : "N/A")}
 		</div>
 	);
