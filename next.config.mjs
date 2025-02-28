@@ -32,6 +32,10 @@ const nextConfig = {
 				source: "/ingest/decide",
 				destination: "https://us.i.posthog.com/decide",
 			},
+			{
+				source: "/images/:path*",
+				destination: "https://ocivvlhqiwtxvnycqnia.supabase.co/storage/v1/object/public/new-kerko/:path*"
+			}
 		];
 	},
 	skipTrailingSlashRedirect: true,

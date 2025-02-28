@@ -33,10 +33,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		},
 		images: item.attachmentsData
 			?.filter((attachment: any) => attachment.PDFCoverPageImage)
-			.map((attachment: any) => ({
-				url: attachment.PDFCoverPageImage,
-				alt: attachment.title,
-			})),
+			.map((attachment: any) => process.env.BASE_URL + "/images/" + attachment.PDFCoverPageImage.split("/").slice(8).join("/")),
 	}));
 }
 
