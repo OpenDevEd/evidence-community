@@ -14,6 +14,7 @@ import { Skeleton } from "@/components/nextui/Skeleton";
 import LinkWithParams from "@/components/features/LinkWithParams";
 import React from "react";
 import { motion } from "framer-motion";
+import Image from "next/image";
 
 type FormatterProps = {
 	value: any;
@@ -391,31 +392,67 @@ export const valueFormatter: Record<
 	citation: (args) => {
 		return <Citation {...args} />;
 	},
-	institution: ({ value }) => {
+	country: ({ value }) => {
 		if (!value) return false;
 
-		const InstitutionLogo = Object.entries(INSTITUTION_LOGOS).find(
-			([key]) => value.includes(key)
-		)?.[1];
+		const countries = Array.isArray(value) ? value : [value];
 
+		if (countries.length === 0) return false;
+
+		return <div className="flex flex-wrap gap-2">
+			{
+				countries.map((country, index) => {
+					return (
+						<Card key={index} className="flex gap-2 items-center px-4 py-0" color="tertiary">
+							<div className="flex gap-2 items-center">
+
+							<Image src={`https://flagcdn.com/16x12/${country.toLowerCase()}.png`} alt={country} width={16} height={12} />
+							<div>{country}</div>
+							</div>
+						</Card>
+					)
+				})
+			}
+		</div>
+	},
+	institution: ({ value }) => {
+		if (!value) return false;
+		
+		// Handle both string and array values
+		const institutions = Array.isArray(value) ? value : [value];
+
+		console.log("institution", value)
+		
+		if (institutions.length === 0) return false;
+		
 		return (
-			<LinkWithParams href="/lib" params={{ institution: value }}>
-				<Card className="max-w-fit p-2 rounded-2xl" color="accent">
-					<div
-						className={twMerge(
-							"flex gap-2 items-center",
-							!InstitutionLogo && "px-2"
-						)}
-					>
-						{InstitutionLogo && (
-							<InstitutionLogo className="bg-white/80" />
-						)}
-						<h3 className="text-black/80 dark:text-white/80">
-							{value}
-						</h3>
-					</div>
-				</Card>
-			</LinkWithParams>
+			<div className="flex flex-wrap gap-2">
+				{institutions.map((institution, index) => {
+					const InstitutionLogo = Object.entries(INSTITUTION_LOGOS).find(
+						([key]) => institution.includes(key)
+					)?.[1];
+					
+					return (
+						<LinkWithParams key={index} href="/lib" params={{ institution }}>
+							<Card className="max-w-fit p-2 rounded-2xl" color="accent">
+								<div
+									className={twMerge(
+										"flex gap-2 items-center",
+										!InstitutionLogo && "px-2"
+									)}
+								>
+									{InstitutionLogo && (
+										<InstitutionLogo className="bg-white/80" />
+									)}
+									<h3 className="text-black/80 dark:text-white/80">
+										{institution}
+									</h3>
+								</div>
+							</Card>
+						</LinkWithParams>
+					);
+				})}
+			</div>
 		);
 	},
 };
