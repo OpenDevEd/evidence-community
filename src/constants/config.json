@@ -89,6 +89,10 @@
 		"itemsOpenAlex": {
 			"OpenAlex": {
 				"title": "OpenAlex",
+				"enabled": false
+			},
+			"Domains": {
+				"title": "Topics",
 				"enabled": true
 			}
 		},
