@@ -8,15 +8,32 @@ export default function ResourceAuthors({
 	itemData: Item | undefined;
 }) {
 	if (itemData?.institution) {
-		const InstitutionLogo = Object.entries(INSTITUTION_LOGOS).find(
-			([key]) => itemData.institution?.includes(key)
-		)?.[1];
+		// Handle both string and array cases for institution
+		const institutions = Array.isArray(itemData.institution) 
+			? itemData.institution 
+			: [itemData.institution];
+		
+		if (institutions.length) {
+			// Find the first institution that has a matching logo
+			console.log("INSTITUTION", institutions);
 
-		return (
-			<ResourceData
-				startContent={InstitutionLogo ? <InstitutionLogo /> : null}
-				text={itemData?.institution} />
-		);
+			const institutionWithLogo = institutions.find(institution => 
+				Object.keys(INSTITUTION_LOGOS).some(key => institution.includes(key))
+			);
+			
+			// Use the institution with logo if found, otherwise use the first institution
+			const selectedInstitution = institutionWithLogo || institutions[0];
+			
+			const InstitutionLogo = Object.entries(INSTITUTION_LOGOS).find(
+				([key]) => selectedInstitution.includes(key)
+			)?.[1];
+
+			return (
+				<ResourceData
+					startContent={InstitutionLogo ? <InstitutionLogo /> : null}
+					text={selectedInstitution} />
+			);
+		}
 	}
 
 	if (itemData && itemData.creators && itemData.creators.length > 0)
