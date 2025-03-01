@@ -100,7 +100,11 @@ export function isAIAllowed(item: Item | undefined) {
 	const allowedInstitutions = ["EdTech Hub", "Open Development & Education", "eEkitabu"];
 	const allowedTags = ["_ai_enabled"]
 
-	if (item.attachmentsData?.some(attachment => attachment.PDFCoverPageImage) || allowedInstitutions.includes(item.institution || "") || allowedTags.some(tag => item.tags?.includes(tag))) {
+	if (item.attachmentsData?.some(attachment => attachment.PDFCoverPageImage) || 
+	    (Array.isArray(item.institution) 
+	      ? item.institution.some(inst => allowedInstitutions.includes(inst))
+	      : allowedInstitutions.includes(item.institution || "")) || 
+	    allowedTags.some(tag => item.tags?.includes(tag))) {
 		return true;
 	}
 
