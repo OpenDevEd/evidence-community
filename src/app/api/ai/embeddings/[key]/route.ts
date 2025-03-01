@@ -16,6 +16,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 
     const item: any = itemResponse.item;
 
+	const institution = Array.isArray(item.institution) ? item.institution.join(', ') : item.institution;
+
     const description = `This ${item.itemType || 'document'} ${
 		item.title ? `entitled '${item.title}'` : '(Untitled)'
 	} ${
@@ -23,7 +25,9 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 			? `was authored by ${item.fullNames.join(', ')}` 
 			: 'has unknown authors'
 	}${
-		item.institution ? ` while at ${item.institution}` : ''
+		institution?.length > 0 
+			? ` while at ${institution}` 
+			: ''
 	}. ${
 		item.date ? `It was published on ${item.date}` : ''
 	}${

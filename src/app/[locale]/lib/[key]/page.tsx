@@ -75,6 +75,8 @@ export async function generateMetadata(props: {
 
     const fullTextPDFs = item.fullTextPDFs ?? [];
 
+    const institution = Array.isArray(item.institution) ? item.institution.join(", ") : item.institution;
+
 	return {
 		title: item.title,
         description: item.abstractNote,
@@ -117,7 +119,7 @@ export async function generateMetadata(props: {
             "citation_conference_title": item.conferenceName ?? "",
             "citation_journal_title": item.publicationTitle ?? "",
             "citation_dissertation_institution": item.university ?? "",
-            "citation_technical_report_institution": item.institution ?? "",
+            "citation_technical_report_institution": institution ?? "",
             "citation_technical_report_number": item.reportNumber ?? "",
 
             "citation_isbn": item.ISBN ?? extraValues.get("ISBN") ?? "",
