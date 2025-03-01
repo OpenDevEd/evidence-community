@@ -237,7 +237,7 @@ export async function getItems(
 	return searchIndex(
 		searchParams,
 		{
-			facets: ["collectionsAncestry"],
+			facets: ["collectionsAncestry", "institution"],
 		},
 		[
 			...collections.map(
