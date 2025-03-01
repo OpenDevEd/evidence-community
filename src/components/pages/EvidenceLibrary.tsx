@@ -310,6 +310,12 @@ export function ContentInteractions({
 													itemsContext.itemsData
 														?.facetDistribution
 												}
+												queryParams={
+													itemsContext.queryParams
+												}
+												handleInstitutionSelect={
+													itemsContext.handleInstitutionSelect
+												}
 											/>
 										)}
 									</>
@@ -469,6 +475,8 @@ function MainContent() {
 				range={props.queryParams.range}
 				handleRangeChange={props.handleRangeChange}
 				facetDistribution={props.itemsData?.facetDistribution}
+				queryParams={props.queryParams}
+				handleInstitutionSelect={props.handleInstitutionSelect}
 			/>
 			<ItemsList props={props} />
 		</>

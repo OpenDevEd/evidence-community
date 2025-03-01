@@ -10,7 +10,7 @@ import {
 } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
 import { Switch } from "../../nextui/Switch";
-import { useContext, useMemo } from "react";
+import { use, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Input } from "../../nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -20,6 +20,10 @@ import { LuX } from "react-icons/lu";
 import { useTranslations } from "next-intl";
 import { CacheContext, useFeatureFlagEnabled } from "@/context/Providers";
 import useBreakpoint from "@/hooks/useBreakpoint";
+import { ItemsContext } from "../items/ItemsList";
+import { searchParamsLoader } from "@/lib/searchParams";
+import { inferParserType } from "nuqs";
+import { useInstitutionsList } from "@/hooks/useInstitutionsList";
 
 function YearPicker({
 	label,
@@ -73,6 +77,49 @@ function YearPicker({
 			onChange={(e) => debouncedOnSelectionChange(e.target.value)}
 		/>
 	);
+}
+
+function InstitutionPicker({
+	label,
+	placeholder,
+	selectedKey,
+	onSelectionChange,
+	list,
+	facetDistribution,
+}: {
+	label: string;
+	placeholder: string;
+	selectedKey: string | null;
+	onSelectionChange: (value: any | null) => void;
+	list: string[];
+	facetDistribution: FacetDistribution | undefined;
+}) {
+	return (
+		<Autocomplete
+				className="flex-1"
+				placeholder={placeholder}
+				label={label}
+				key={label}
+				fullWidth={true}
+				selectedKey={selectedKey}
+				onSelectionChange={onSelectionChange}
+				inputProps={{
+					classNames: {
+						inputWrapper:
+							"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+						input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+					},
+				}}
+				isVirtualized={true}
+			>
+				{list.map((item) => (
+					<AutocompleteItem aria-label={item} key={item}>
+						<span className="text-black dark:text-white">{item}</span>
+						<span className="text-black/60 dark:text-white/60"> ({facetDistribution?.institution?.[item] || 0})</span>
+					</AutocompleteItem>
+				))}
+			</Autocomplete>
+	)
 }
 
 export function InnerCollectionList({
@@ -184,7 +231,9 @@ export default function CollectionsList({
 	hierarchy,
 	range,
 	handleRangeChange,
+	handleInstitutionSelect,
 	isModal = false,
+	queryParams,
 }: {
 	data: CollectionsGetResponse | undefined;
 	facetDistribution: FacetDistribution | undefined;
@@ -193,10 +242,13 @@ export default function CollectionsList({
 	isModal?: boolean;
 	range: string;
 	handleRangeChange: (start: string | null, end: string | null) => void;
+	handleInstitutionSelect: (institution: string) => void;
 	hierarchy: Collection[];
+	queryParams: inferParserType<typeof searchParamsLoader>;
 }) {
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
+	const institutions = useInstitutionsList(facetDistribution!)
 
 	const [start, end, sameYear] = useMemo(() => {
 		const dashExists = range.includes("-");
@@ -305,6 +357,19 @@ export default function CollectionsList({
 									</motion.div>
 								)}
 							</AnimatePresence>
+						</div>
+						<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+							<span>Institutions</span>
+						</div>
+						<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+							<InstitutionPicker
+								label="Institution"
+								placeholder="Institution"
+								selectedKey={queryParams.institution}
+								onSelectionChange={handleInstitutionSelect}
+								facetDistribution={facetDistribution}
+								list={institutions}
+							/>
 						</div>
 					</section>
 					<section className="w-full">
