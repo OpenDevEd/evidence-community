@@ -16,6 +16,7 @@ const nextConfig = {
 			{ hostname: "tlxvwvgyaanqlmuyoguz.supabase.co" },
 			{ hostname: "lh3.googleusercontent.com" },
 			{ hostname: "ocivvlhqiwtxvnycqnia.supabase.co" },
+			{ hostname: "flagcdn.com" },
 		],
 	},
 	async rewrites() {
