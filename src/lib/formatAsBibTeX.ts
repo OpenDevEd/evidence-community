@@ -1424,8 +1424,9 @@ export class BibTeXExporter {
 		}
 
 		// handle institution
-		if (this.item.institution) {
-			this.writeField("institution", this.item.institution);
+		const institutionResult = Array.isArray(this.item.institution) ? this.item.institution.join(", ") : this.item.institution;
+		if (institutionResult) {
+			this.writeField("institution", institutionResult);
 		}
 
 		// Handle series
