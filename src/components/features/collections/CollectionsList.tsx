@@ -96,30 +96,36 @@ function InstitutionPicker({
 }) {
 	return (
 		<Autocomplete
-				className="flex-1"
-				placeholder={placeholder}
-				label={label}
-				key={label}
-				fullWidth={true}
-				selectedKey={selectedKey}
-				onSelectionChange={onSelectionChange}
-				inputProps={{
-					classNames: {
-						inputWrapper:
-							"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
-						input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
-					},
-				}}
-				isVirtualized={true}
-			>
-				{list.map((item) => (
-					<AutocompleteItem aria-label={item} key={item}>
-						<span className="text-black dark:text-white">{item}</span>
-						<span className="text-black/60 dark:text-white/60"> ({facetDistribution?.institution?.[item] || 0})</span>
-					</AutocompleteItem>
-				))}
-			</Autocomplete>
-	)
+			className="flex-1"
+			placeholder={placeholder}
+			label={label}
+			key={label}
+			fullWidth={true}
+			selectedKey={selectedKey}
+			onSelectionChange={onSelectionChange}
+			inputProps={{
+				classNames: {
+					inputWrapper:
+						"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+					input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+				},
+			}}
+			isVirtualized={true}
+			itemHeight={48}
+		>
+			{list.map((item) => (
+				<AutocompleteItem aria-label={item} key={item}>
+					<span className="text-black dark:text-white line-clamp-2">
+						<span className="text-black/60 dark:text-white/60">
+							({facetDistribution?.institution?.[item] || 0})
+							{" "}
+						</span>
+						{item}
+					</span>
+				</AutocompleteItem>
+			))}
+		</Autocomplete>
+	);
 }
 
 export function InnerCollectionList({
@@ -248,7 +254,7 @@ export default function CollectionsList({
 }) {
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
-	const institutions = useInstitutionsList(facetDistribution!)
+	const institutions = useInstitutionsList(facetDistribution!);
 
 	const [start, end, sameYear] = useMemo(() => {
 		const dashExists = range.includes("-");
@@ -272,117 +278,113 @@ export default function CollectionsList({
 				className="w-full data-[collections=true]:xl:min-h-screen rounded-2xl"
 				isLoaded={!!data && !!facetDistribution}
 			>
-					<section className="w-full bg-black/[4%] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-4 p-6 sticky top-0 xl:static z-20">
-						<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-							<span>{t("publicationYear")}</span>
-							<div className="flex gap-4 items-center flex-1 justify-end">
-								<Switch
-									isSelected={!sameYear}
-									onValueChange={(value) =>
-										handleRangeChange(
-											start,
-											sameYear ? end : null
-										)
-									}
-									classNames={{
-										label: "text-sm font-normal",
-									}}
-								>
-									{t("yearRange")}
-								</Switch>
-							</div>
+				<section className="w-full bg-black/[4%] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-4 p-6 sticky top-0 xl:static z-20">
+					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+						<span>{t("publicationYear")}</span>
+						<div className="flex gap-4 items-center flex-1 justify-end">
+							<Switch
+								isSelected={!sameYear}
+								onValueChange={(value) =>
+									handleRangeChange(
+										start,
+										sameYear ? end : null
+									)
+								}
+								classNames={{
+									label: "text-sm font-normal",
+								}}
+							>
+								{t("yearRange")}
+							</Switch>
 						</div>
-						<div className="">
-							<AnimatePresence mode="popLayout" initial={false}>
-								{sameYear ? (
-									<motion.div
-										initial={{ opacity: 0, y: 10 }}
-										animate={{ opacity: 1, y: 0 }}
-										exit={{ opacity: 0, y: 10 }}
-										key="same-year"
-										layout
-										className="w-full"
-									>
+					</div>
+					<div className="">
+						<AnimatePresence mode="popLayout" initial={false}>
+							{sameYear ? (
+								<motion.div
+									initial={{ opacity: 0, y: 10 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: 10 }}
+									key="same-year"
+									layout
+									className="w-full"
+								>
+									<YearPicker
+										label={t("year")}
+										placeholder={t("year")}
+										selectedKey={start}
+										onSelectionChange={(key) =>
+											handleRangeChange(key, null)
+										}
+									/>
+								</motion.div>
+							) : (
+								<motion.div
+									initial={{ opacity: 0, y: 10 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: 10 }}
+									key="year-range"
+									layout
+									className="flex gap-4 w-full"
+								>
+									{[
+										{
+											label: t("from"),
+											placeholder: t("year"),
+										},
+										{
+											label: t("to"),
+											placeholder: t("year"),
+										},
+									].map(({ label, placeholder }, index) => (
 										<YearPicker
-											label={t("year")}
-											placeholder={t("year")}
-											selectedKey={start}
+											key={label}
+											label={label}
+											placeholder={placeholder}
+											selectedKey={
+												index === 0 ? start : end
+											}
 											onSelectionChange={(key) =>
-												handleRangeChange(key, null)
+												handleRangeChange(
+													index === 0
+														? key || ""
+														: start,
+													index === 1
+														? key || ""
+														: end
+												)
 											}
 										/>
-									</motion.div>
-								) : (
-									<motion.div
-										initial={{ opacity: 0, y: 10 }}
-										animate={{ opacity: 1, y: 0 }}
-										exit={{ opacity: 0, y: 10 }}
-										key="year-range"
-										layout
-										className="flex gap-4 w-full"
-									>
-										{[
-											{
-												label: t("from"),
-												placeholder: t("year"),
-											},
-											{
-												label: t("to"),
-												placeholder: t("year"),
-											},
-										].map(
-											({ label, placeholder }, index) => (
-												<YearPicker
-													key={label}
-													label={label}
-													placeholder={placeholder}
-													selectedKey={
-														index === 0
-															? start
-															: end
-													}
-													onSelectionChange={(key) =>
-														handleRangeChange(
-															index === 0
-																? key || ""
-																: start,
-															index === 1
-																? key || ""
-																: end
-														)
-													}
-												/>
-											)
-										)}
-									</motion.div>
-								)}
-							</AnimatePresence>
-						</div>
-						<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-							<span>Institutions</span>
-						</div>
-						<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-							<InstitutionPicker
-								label="Institution"
-								placeholder="Institution"
-								selectedKey={queryParams.institution}
-								onSelectionChange={handleInstitutionSelect}
-								facetDistribution={facetDistribution}
-								list={institutions}
-							/>
-						</div>
-					</section>
-					<section className="w-full">
-						{isCollectionsEnabled && (
-							<InnerCollectionList
-								data={data}
-								facetDistribution={facetDistribution}
-								handleCheckboxChange={handleCheckboxChange}
-								selectedCollections={selectedCollections}
-								hierarchy={hierarchy}
-							/>
-						)}
-					</section>
+									))}
+								</motion.div>
+							)}
+						</AnimatePresence>
+					</div>
+					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+						<span>Institutions</span>
+					</div>
+					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+						<InstitutionPicker
+							label="Institution"
+							placeholder="Institution"
+							selectedKey={queryParams.institution}
+							onSelectionChange={handleInstitutionSelect}
+							facetDistribution={facetDistribution}
+							list={institutions}
+						/>
+					</div>
+				</section>
+				<section className="w-full">
+					{isCollectionsEnabled && (
+						<InnerCollectionList
+							data={data}
+							facetDistribution={facetDistribution}
+							handleCheckboxChange={handleCheckboxChange}
+							selectedCollections={selectedCollections}
+							hierarchy={hierarchy}
+						/>
+					)}
+				</section>
 			</Skeleton>
 		</aside>
 	);

@@ -7,7 +7,14 @@ export function useInstitutionsList(facetDistribution: FacetDistribution) {
     const facetInstitutions = Object.keys(facetDistribution?.institution || {})
 
     useEffect(() => {
-        setInstitutions((prev) => [...new Set([...prev, ...facetInstitutions])])
+        setInstitutions((prev) => {
+            const newInstitutions = [...new Set([...prev, ...facetInstitutions])]
+            return newInstitutions.sort((a, b) => {
+                const aInstitution = facetDistribution?.institution?.[a]
+                const bInstitution = facetDistribution?.institution?.[b]
+                return (bInstitution || 0) - (aInstitution || 0)
+            })
+        })
     }, [facetInstitutions])
 
     return institutions.length > 0 ? institutions : facetInstitutions
