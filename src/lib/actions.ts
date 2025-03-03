@@ -435,6 +435,7 @@ export async function searchIndex(
 			range ? formatRange(range) : null,
 			institution ? `institution = "${institution}"` : null,
 			author ? `fullNames = "${author}"` : null,
+			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
 		].filter((f): f is string => f !== null);
 
