@@ -117,8 +117,7 @@ function InstitutionPicker({
 				<AutocompleteItem aria-label={item} key={item}>
 					<span className="text-black dark:text-white line-clamp-2">
 						<span className="text-black/60 dark:text-white/60">
-							({facetDistribution?.institution?.[item] || 0})
-							{" "}
+							({facetDistribution?.institution?.[item] || 0}){" "}
 						</span>
 						{item}
 					</span>
@@ -254,6 +253,8 @@ export default function CollectionsList({
 }) {
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
+	const isInstitutionFilterEnabled =
+		useFeatureFlagEnabled("institution-filter");
 	const institutions = useInstitutionsList(facetDistribution!);
 
 	const [start, end, sameYear] = useMemo(() => {
@@ -360,19 +361,23 @@ export default function CollectionsList({
 							)}
 						</AnimatePresence>
 					</div>
-					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-						<span>Institutions</span>
-					</div>
-					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-						<InstitutionPicker
-							label="Institution"
-							placeholder="Institution"
-							selectedKey={queryParams.institution}
-							onSelectionChange={handleInstitutionSelect}
-							facetDistribution={facetDistribution}
-							list={institutions}
-						/>
-					</div>
+					{isInstitutionFilterEnabled && (
+						<>
+							<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+								<span>Institutions</span>
+							</div>
+							<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+								<InstitutionPicker
+									label="Institution"
+									placeholder="Institution"
+									selectedKey={queryParams.institution}
+									onSelectionChange={handleInstitutionSelect}
+									facetDistribution={facetDistribution}
+									list={institutions}
+								/>
+							</div>
+						</>
+					)}
 				</section>
 				<section className="w-full">
 					{isCollectionsEnabled && (
