@@ -412,7 +412,7 @@ export async function searchIndex(
 		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
 	>["filter"] = []
 ) {
-	const cacheKey = `${buildItemsQuery(searchParams)}-${extraFilters.toString()}-${extraProperties.toString()}`;
+	const cacheKey = `${buildItemsQuery(searchParams)}-${JSON.stringify(extraFilters)}-${JSON.stringify(extraProperties)}`;
 
 	const items = unstable_cache(async () => {
 		const pageNum = Math.max(1, Number(searchParams.page || 1));
@@ -429,6 +429,7 @@ export async function searchIndex(
 		const sortOption =
 			SORT_OPTIONS.find((option) => option.key === sort)?.sort ||
 			SORT_OPTIONS[0].sort;
+
 
 		const finalFilters = [
 			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
