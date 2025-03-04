@@ -172,7 +172,7 @@ export function InnerCollectionList({
 	return hierarchy &&
 		hierarchy.length > 0 &&
 		facetDistribution &&
-		Object.keys(facetDistribution.collectionsAncestry).filter((key) =>
+		Object.keys(facetDistribution.collectionsAncestry || {}).filter((key) =>
 			data?.collections.find((c) => c.key === key)
 		).length > 0 ? (
 		<Accordion
