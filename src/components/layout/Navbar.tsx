@@ -166,7 +166,7 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 	return (
 		<Skeleton
 			isLoaded={true}
-			className="w-[10.6875rem] h-[2.5rem] rounded-lg "
+			className="w-[10.6875rem] h-[2.5rem] rounded-lg flex justify-center items-center"
 		>
 			{interactive ? (
 				<Link
@@ -454,7 +454,10 @@ function LoginModal({
 		<DialogModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
 			<ModalContent className={errorClassName}>
 				<GenericHeader onClose={onClose}>
+					<div className="scale-75 origin-bottom-left">
+						
 					<Logo interactive={false} />
+					</div>
 				</GenericHeader>
 				<ModalBody>
 					<div
