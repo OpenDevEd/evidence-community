@@ -123,6 +123,8 @@ export const item = pgTable('item', {
   md5: varchar(),
   mtime: varchar(),
   charset: varchar(),
+  apc_list: jsonb(),
+  apc_paid: jsonb(),
 
   // identifier: varchar(),
   // type: varchar(),
@@ -148,7 +150,7 @@ export const item = pgTable('item', {
 
   deleted: integer('deleted').default(0),
 
-  languageName: varchar('languageName').references(() => language.name),
+  languageName: varchar('languageName'),
   groupExternalId: integer('groupExternalId').references(() => group.externalId),
   parentItem: varchar('parentItem'),
 
