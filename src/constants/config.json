@@ -86,6 +86,28 @@
 		]
 	},
 	"collections": {
+		"itemsPrograma": {
+			"6EJRSALT": {
+				"title": "Themes / Temas",
+				"enabled": true
+			},
+			"QF4LVX4E": {
+				"title": "Sectors / Setores",
+				"enabled": true
+			},
+			"KILNEYQI": {
+				"title": "Geography / Geografia",
+				"enabled": true
+			},
+			"5JQNB4AN": {
+				"title": "Methods / Métodos",
+				"enabled": true
+			},
+			"T2TX5CJA": {
+				"title": "Language / Linguagem",
+				"enabled": true
+			}
+		},
 		"itemsOpenAlex": {
 			"OpenAlex": {
 				"title": "OpenAlex",
