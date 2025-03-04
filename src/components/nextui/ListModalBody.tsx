@@ -22,7 +22,7 @@ export function ListModalBody({ description, onAction, highlightedIndexes, child
         {isLoading && <div className="flex items-center justify-center absolute inset-0 ">
           <Spinner />
         </div>}
-        <p className="text-base text-black/80 dark:text-white/80 font-medium p-2 text-center dark:bg-secondary bg-white">
+        <p className="text-base text-black/80 dark:text-white/80 font-medium p-4 text-center dark:bg-secondary bg-white">
           {description}
         </p>
         <Listbox

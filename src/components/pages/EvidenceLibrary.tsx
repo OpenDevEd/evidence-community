@@ -485,9 +485,6 @@ function MainContent() {
 
 const smartScreeningFieldTypes = ["string", "number", "boolean"] as const;
 
-const placeholderExample = `title (${smartScreeningFieldTypes.join(
-	" | "
-)}): description`;
 
 export type SmartScreeningField = {
 	label: string;
@@ -495,8 +492,6 @@ export type SmartScreeningField = {
 	type: (typeof smartScreeningFieldTypes)[number];
 };
 
-const tabs = ["fields", "text"] as const;
-const labels = ["Fields", "Text"] as const;
 
 function SmartScreeningModal({
 	isOpen,
@@ -505,6 +500,9 @@ function SmartScreeningModal({
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 }) {
+	const t = useTranslations("ui");
+	const tabs = ["fields", "text"] as const;
+	const labels = [t("fields"), t("textLabel")] as const;
 	const [tab, setTab] = useState<(typeof tabs)[number]>(tabs[0]);
 	const [fields, setFields] = useLocalStorage<SmartScreeningField[]>(
 		"smart-screening-fields",
@@ -512,6 +510,9 @@ function SmartScreeningModal({
 	);
 	const [localFields, setLocalFields] = useState<SmartScreeningField[]>([]);
 	const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({});
+	const placeholderExample = `${t("label")} (${smartScreeningFieldTypes.join(
+		" | "
+	)}): ${t("description")}`;	
 
 	useEffect(() => {
 		if (isOpen) {
@@ -523,13 +524,13 @@ function SmartScreeningModal({
 	const fieldSchema = z.object({
 		label: z
 			.string()
-			.min(1, "Label is required")
-			.max(64, "Label must be less than 64 characters"),
+			.min(1, t("labelRequired"))
+			.max(64, t("labelTooLong")),
 		type: z.enum(["string", "number", "boolean"]),
 		description: z
 			.string()
-			.min(1, "Description is required")
-			.max(1024, "Description must be less than 1024 characters"),
+			.min(1, t("descriptionRequired"))
+			.max(1024, t("descriptionTooLong")),
 	});
 
 	const convertedText = fields
@@ -561,9 +562,9 @@ function SmartScreeningModal({
 		Object.entries(labelCounts).forEach(([label, indices]) => {
 			if (indices.length > 1) {
 				indices.forEach((index) => {
-					newErrors[index] = `Field ${
+					newErrors[index] = `${t("fieldPrefix")} ${
 						index + 1
-					} ${label}: Duplicate label - must be unique`;
+					} ${label}: ${t("duplicateLabelError")}`;
 					hasErrors = true;
 				});
 			}
@@ -578,10 +579,10 @@ function SmartScreeningModal({
 				} catch (error) {
 					if (error instanceof z.ZodError) {
 						const fieldError =
-							error.errors[0]?.message || "Invalid field";
-						newErrors[index] = `Field ${index + 1} ${
-							field.label
-						}: ${fieldError}`;
+							error.errors[0]?.message || t("invalidField");
+						newErrors[index] = `${t("fieldPrefix")} ${
+							index + 1
+						} ${field.label}: ${fieldError}`;
 						hasErrors = true;
 					}
 				}
@@ -593,8 +594,8 @@ function SmartScreeningModal({
 		if (!hasErrors) {
 			setFields(localFields);
 			toast({
-				title: "Fields saved successfully",
-				description: "Fields saved successfully",
+				title: t("fieldsSavedSuccess"),
+				description: t("fieldsSavedSuccess"),
 			});
 		} else {
 			toast({
@@ -644,7 +645,7 @@ function SmartScreeningModal({
 			<ModalContent>
 				{(onClose) => (
 					<>
-						<AIHeader onClose={onClose}>Smart Screening</AIHeader>
+						<AIHeader onClose={onClose}>{t("smartScreening")}</AIHeader>
 						<div className="flex gap-0 px-6  py-2">
 							{tabs.map((t, i) => (
 								<Button
@@ -681,7 +682,7 @@ function SmartScreeningModal({
 														key="empty"
 														className="text-center text-black/60 dark:text-white/40 my-12 mt-14"
 													>
-														No fields added yet
+														{t("noFieldsAdded")}
 													</p>
 												)}
 												{localFields.map(
@@ -703,8 +704,8 @@ function SmartScreeningModal({
 														>
 															<Input
 																isRequired
-																placeholder="Label"
-																label="Label"
+																placeholder={t("label")}
+																label={t("label")}
 																value={
 																	field.label
 																}
@@ -745,8 +746,8 @@ function SmartScreeningModal({
 																}
 															/>
 															<Textarea
-																placeholder="Description"
-																label="Description"
+																placeholder={t("description")}
+																label={t("description")}
 																value={
 																	field.description
 																}
@@ -798,7 +799,7 @@ function SmartScreeningModal({
 															<div className="flex justify-between">
 																<Select
 																	color="tertiary"
-																	label="Type"
+																	label={t("typeLabel")}
 																	placement="left"
 																	disallowEmptySelection={
 																		true
@@ -912,7 +913,7 @@ function SmartScreeningModal({
 													input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
 												}}
 												placeholder={placeholderExample}
-												label="Text"
+												label={t("textLabel")}
 											/>
 										</AnimatePresence>
 									</form>
@@ -938,7 +939,7 @@ function SmartScreeningModal({
 											])
 										}
 									>
-										Add Field
+										{t("addField")}
 									</Button>
 									<Button
 										type="submit"
@@ -946,12 +947,12 @@ function SmartScreeningModal({
 										color="accent"
 										size="md"
 									>
-										Save Fields
+										{t("saveFields")}
 									</Button>
 								</>
 							) : (
 								<Button type="submit" form="text-form">
-									Save
+									{t("save")}
 								</Button>
 							)}
 						</div>
@@ -964,6 +965,7 @@ function SmartScreeningModal({
 
 function AIChat() {
 	const t = useTranslations("ai");
+	const tUI = useTranslations("ui");
 	const {
 		modelObject: { icon: Icon },
 		selectedModel,
@@ -1015,7 +1017,7 @@ function AIChat() {
 				className="fixed bottom-0 left-1/2 -translate-x-1/2 flex justify-center p-4 items-center z-50 group fill-white"
 			>
 				<div className="flex gap-4">
-					<Tooltip content="Open Chat">
+					<Tooltip content={tUI("openChatTooltip")}>
 						<Button
 							isIconOnly
 							startContent={<IoChatboxOutline />}
@@ -1059,7 +1061,7 @@ function AIChat() {
 						/>
 						<div className="size-96 bg-accent/50 opacity-0 group-hover:opacity-75 rounded-full left-1/2 -translate-x-1/2 blur-3xl absolute -z-10 transition-all duration-1000 ease-spring"></div>
 					</div>
-					<Tooltip content="Smart Screening">
+					<Tooltip content={tUI("smartScreening")}>
 						<Button
 							isIconOnly
 							startContent={<GiStarSwirl />}

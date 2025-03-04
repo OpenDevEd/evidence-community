@@ -364,12 +364,12 @@ export default function CollectionsList({
 					{isInstitutionFilterEnabled && (
 						<>
 							<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-								<span>Institutions</span>
+								<span>{t("institution")}</span>
 							</div>
 							<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 								<InstitutionPicker
-									label="Institution"
-									placeholder="Institution"
+									label={t("institution")}
+									placeholder={t("institution")}
 									selectedKey={queryParams.institution}
 									onSelectionChange={handleInstitutionSelect}
 									facetDistribution={facetDistribution}

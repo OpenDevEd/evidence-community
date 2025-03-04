@@ -228,8 +228,7 @@ export default function ChatModal({
 			} else {
 				appendMessage({
 					role: "assistant",
-					content:
-						"No resources found for screening, an abstract is required to perform a screening.",
+					content: tUI("noResourcesForScreening"),
 					id: "screening-" + Date.now(),
 				});
 			}
@@ -499,8 +498,7 @@ export default function ChatModal({
 																								)
 																							}
 																						>
-																							Smart
-																							Screening
+																							{tUI("smartScreening")}
 																						</Button>
 							
 																					</div>
