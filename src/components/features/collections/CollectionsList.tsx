@@ -124,7 +124,7 @@ function FacetPicker({
 							list.find((item) => item.key === selectedKey)
 								?.startContent
 						) : (
-							<LuFilter />
+							undefined
 						)
 					}
 					itemHeight={48}
@@ -284,6 +284,8 @@ export default function CollectionsList({
 	const [search, setSearch] = useState("");
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
+	const isCountryEnabled = process.env.NEXT_PUBLIC_DISABLE_COUNTRY !== "true";
+	const isFiltersEnabled = isCollectionsEnabled || isCountryEnabled;
 	const isInstitutionFilterEnabled =
 		useFeatureFlagEnabled("institution-filter");
 	const institutions = useFacetList(facetDistribution!, "institution");
@@ -412,7 +414,7 @@ export default function CollectionsList({
 							)}
 						</AnimatePresence>
 					</div>
-					<Accordion
+					{isFiltersEnabled && <Accordion
 						defaultExpandedKeys={["More Filters"]}
 						className="p-0"
 					>
@@ -439,17 +441,19 @@ export default function CollectionsList({
 									/>
 								</>
 							)}
-							<FacetPicker
-								label={t("countryFilter")}
-								placeholder={t("countryFilter")}
-								selectedKey={queryParams.country}
-								onSelectionChange={handleCountrySelect}
-								facetDistribution={facetDistribution}
-								list={countries}
-								facetName="country"
-							/>
+							{isCountryEnabled && (
+								<FacetPicker
+									label={t("countryFilter")}
+									placeholder={t("countryFilter")}
+									selectedKey={queryParams.country}
+									onSelectionChange={handleCountrySelect}
+									facetDistribution={facetDistribution}
+									list={countries}
+									facetName="country"
+								/>
+							)}
 						</AccordionItem>
-					</Accordion>
+					</Accordion>}
 				</section>
 				<section className="w-full">
 					{/* <div className="p-4 pt-6 pb-0 bg-white dark:bg-card">
