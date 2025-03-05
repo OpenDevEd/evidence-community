@@ -237,7 +237,7 @@ export async function getItems(
 	return searchIndex(
 		searchParams,
 		{
-			facets: ["collectionsAncestry", "institution"],
+			facets: ["collectionsAncestry", "institution", "country"],
 		},
 		[
 			...collections.map(
@@ -422,6 +422,7 @@ export async function searchIndex(
 		const scope = searchParams.scope || SCOPE_OPTIONS[0].key;
 		const range = searchParams.range || null;
 		const institution = searchParams.institution || "";
+		const country = searchParams.country || "";
 		const author = searchParams.author || "";
 		const searchIndex = meilisearchClient.index(
 			process.env.MEILI_INDEX || config.index
@@ -435,6 +436,7 @@ export async function searchIndex(
 			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
 			range ? formatRange(range) : null,
 			institution ? `institution = "${institution}"` : null,
+			country ? `country = "${country}"` : null,
 			author ? `fullNames = "${author}"` : null,
 			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
