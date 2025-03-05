@@ -69,7 +69,7 @@ function formatDate({ value, formatter }: FormatterProps) {
 function Citation({ value, loading }: FormatterProps) {
 	const contentRef = useRef(null);
 	const [showSkeleton, setShowSkeleton] = useState(true);
-	const sanitizedHtml = value.trim().replace(/<\/?div/g, '<p');
+	const sanitizedHtml = value.trim().replace(/<\/?div/g, "<p");
 
 	useEffect(() => {
 		const timer = setTimeout(() => {
@@ -80,8 +80,11 @@ function Citation({ value, loading }: FormatterProps) {
 	}, []);
 
 	return (
-		<Skeleton isLoaded={!loading && !showSkeleton} className="w-full min-h-16 rounded-2xl">
-			<motion.div 
+		<Skeleton
+			isLoaded={!loading && !showSkeleton}
+			className="w-full min-h-16 rounded-2xl"
+		>
+			<motion.div
 				initial={{ height: "5rem" }}
 				animate={loading ? { height: "5rem" } : { height: "auto" }}
 				transition={{ duration: 0.2, ease: "easeOut" }}
@@ -253,17 +256,28 @@ export function CollectionsRow({ value }: { value: Collection[] }) {
 	);
 }
 
-function ObjectView({ value, args }: { value: Map<string, any> | Record<string, any>, args: FormatterProps }) {
+function ObjectView({
+	value,
+	args,
+}: {
+	value: Map<string, any> | Record<string, any>;
+	args: FormatterProps;
+}) {
 	if (!(value instanceof Map)) {
-		value = new Map(Object.entries(value).map(([key, value]) => [key, String(value)]));
+		value = new Map(
+			Object.entries(value).map(([key, value]) => [key, String(value)])
+		);
 	}
 
 	const filteredValues: [string, string][] = Array.from(value.entries());
 
-	const ExtraSpan = createRegexParser([
-		{ regex: doiRegex, Wrapper: DOIWrapper, priority: 1 },
-		{ regex: urlRegex, Wrapper: URLWrapper, priority: 2 },
-	], "span");
+	const ExtraSpan = createRegexParser(
+		[
+			{ regex: doiRegex, Wrapper: DOIWrapper, priority: 1 },
+			{ regex: urlRegex, Wrapper: URLWrapper, priority: 2 },
+		],
+		"span"
+	);
 
 	if (filteredValues.length === 0) return false;
 
@@ -275,8 +289,10 @@ function ObjectView({ value, args }: { value: Map<string, any> | Record<string, 
 					<li key={index} className="flex flex-col gap-2 group">
 						<div className="break-all flex gap-4">
 							<p className="flex-1">
-								<strong className="text-black/60 dark:text-white/60">{key}</strong>
-								<span className="whitespace-pre">{" "}</span>
+								<strong className="text-black/60 dark:text-white/60">
+									{key}
+								</strong>
+								<span className="whitespace-pre"> </span>
 								<ExtraSpan value={value} />
 							</p>
 							<CopyButton
@@ -334,25 +350,32 @@ export const valueFormatter: Record<
 						"creatorType." + creator.creatorType
 					);
 					const { creatorType, ...rest } = creator;
-					const fullName = creator.name ? creator.name : `${creator.firstName} ${creator.lastName}`
+					const fullName = creator.name
+						? creator.name
+						: `${creator.firstName} ${creator.lastName}`;
 					return (
-						<li
-							key={index}
-						>
-							<LinkWithParams href="/lib" params={{ author: fullName }} className="text-lg">
+						<li key={index}>
+							<LinkWithParams
+								href="/lib"
+								params={{ author: fullName }}
+								className="text-lg"
+							>
 								<p className="space-x-1">
 									<span className="font-medium text-accent underline">
-									{Object.values(rest)
-										.filter(Boolean)
-										.join(", ")}
-								</span>
-								<span
-									className={twMerge(
-										"text-black/80 dark:text-white/80 capitalize",
-										!creatorTypeLabel && "!text-red-500"
-									)}
-								>
-									({creatorTypeLabel || creator.creatorType})
+										{Object.values(rest)
+											.filter(Boolean)
+											.join(", ")}
+									</span>
+									<span
+										className={twMerge(
+											"text-black/80 dark:text-white/80 capitalize",
+											!creatorTypeLabel && "!text-red-500"
+										)}
+									>
+										(
+										{creatorTypeLabel ||
+											creator.creatorType}
+										)
 									</span>
 								</p>
 							</LinkWithParams>
@@ -417,42 +440,63 @@ export const valueFormatter: Record<
 
 		if (countries.length === 0) return false;
 
-		return <div className="flex flex-wrap gap-2">
-			{
-				countries.map((country, index) => {
+		return (
+			<div className="flex flex-wrap gap-2">
+				{countries.map((country, index) => {
 					return (
-						<Card key={index} className="flex gap-2 items-center px-4 py-0" color="tertiary">
-							<div className="flex gap-2 items-center">
-
-							<Image src={`https://flagcdn.com/16x12/${country.toLowerCase()}.png`} alt={country} width={16} height={12} />
-							<div>{country}</div>
-							</div>
-						</Card>
-					)
-				})
-			}
-		</div>
+						<LinkWithParams
+							key={index}
+							href="/lib"
+							params={{ country }}
+						>
+							<Card
+								key={index}
+								className="flex gap-2 items-center px-4 py-1"
+								color="tertiary"
+							>
+								<div className="flex gap-2 items-center">
+									<Image
+										src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
+										alt={country}
+										width={16}
+										height={12}
+									/>
+									<div>{country}</div>
+								</div>
+							</Card>
+						</LinkWithParams>
+					);
+				})}
+			</div>
+		);
 	},
 	institution: ({ value }) => {
 		if (!value) return false;
-		
+
 		// Handle both string and array values
 		const institutions = Array.isArray(value) ? value : [value];
 
-		console.log("institution", value)
-		
+		console.log("institution", value);
+
 		if (institutions.length === 0) return false;
-		
+
 		return (
 			<div className="flex flex-wrap gap-2">
 				{institutions.map((institution, index) => {
-					const InstitutionLogo = Object.entries(INSTITUTION_LOGOS).find(
-						([key]) => institution.includes(key)
-					)?.[1];
-					
+					const InstitutionLogo = Object.entries(
+						INSTITUTION_LOGOS
+					).find(([key]) => institution.includes(key))?.[1];
+
 					return (
-						<LinkWithParams key={index} href="/lib" params={{ institution }}>
-							<Card className="max-w-fit p-2 rounded-2xl" color="accent">
+						<LinkWithParams
+							key={index}
+							href="/lib"
+							params={{ institution }}
+						>
+							<Card
+								className="max-w-fit p-2 rounded-2xl"
+								color="accent"
+							>
 								<div
 									className={twMerge(
 										"flex gap-2 items-center",
