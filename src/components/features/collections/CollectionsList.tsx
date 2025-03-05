@@ -14,16 +14,17 @@ import { use, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Input } from "../../nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
-import { years } from "@/constants/misc";
+import { COUNTRIES, years } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
-import { LuX } from "react-icons/lu";
+import { LuFilter, LuX } from "react-icons/lu";
 import { useTranslations } from "next-intl";
 import { CacheContext, useFeatureFlagEnabled } from "@/context/Providers";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { ItemsContext } from "../items/ItemsList";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { inferParserType } from "nuqs";
-import { useInstitutionsList } from "@/hooks/useInstitutionsList";
+import { FacetListItem, useFacetList } from "@/hooks/useFacetList";
+import Image from "next/image";
 
 function YearPicker({
 	label,
@@ -79,51 +80,76 @@ function YearPicker({
 	);
 }
 
-function InstitutionPicker({
+function FacetPicker({
 	label,
 	placeholder,
 	selectedKey,
 	onSelectionChange,
 	list,
 	facetDistribution,
+	facetName,
 }: {
 	label: string;
 	placeholder: string;
 	selectedKey: string | null;
 	onSelectionChange: (value: any | null) => void;
-	list: string[];
+	list: FacetListItem[];
 	facetDistribution: FacetDistribution | undefined;
+	facetName: string;
 }) {
 	return (
-		<Autocomplete
-			className="flex-1"
-			placeholder={placeholder}
-			label={label}
-			key={label}
-			fullWidth={true}
-			selectedKey={selectedKey}
-			onSelectionChange={onSelectionChange}
-			inputProps={{
-				classNames: {
-					inputWrapper:
-						"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
-					input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
-				},
-			}}
-			isVirtualized={true}
-			itemHeight={48}
-		>
-			{list.map((item) => (
-				<AutocompleteItem aria-label={item} key={item}>
-					<span className="text-black dark:text-white line-clamp-2">
-						<span className="text-black/60 dark:text-white/60">
-							({facetDistribution?.institution?.[item] || 0}){" "}
-						</span>
-						{item}
-					</span>
-				</AutocompleteItem>
-			))}
-		</Autocomplete>
+		<div className="w-full flex flex-col gap-2">
+			{/* <div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+				<span>{label}</span>
+			</div> */}
+			<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+				<Autocomplete
+					className="flex-1"
+					placeholder={placeholder}
+					label={label}
+					key={label}
+					fullWidth={true}
+					selectedKey={selectedKey}
+					onSelectionChange={onSelectionChange}
+					inputProps={{
+						classNames: {
+							inputWrapper:
+								"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+							input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+						},
+					}}
+					isVirtualized={true}
+					startContent={
+						list.length > 0 ? (
+							list.find((item) => item.key === selectedKey)
+								?.startContent
+						) : (
+							<LuFilter />
+						)
+					}
+					itemHeight={48}
+				>
+					{list.map((item) => (
+						<AutocompleteItem
+							startContent={item.startContent}
+							aria-label={item.label}
+							key={item.key}
+						>
+							<span className="text-black dark:text-white line-clamp-2">
+								<span className="text-black/60 dark:text-white/60">
+									(
+									{facetDistribution?.[facetName]?.[
+										item.key
+									] || 0}
+									){" "}
+								</span>
+								{item.label}
+							</span>
+						</AutocompleteItem>
+					))}
+				</Autocomplete>
+			</div>
+		</div>
 	);
 }
 
@@ -131,12 +157,14 @@ export function InnerCollectionList({
 	data,
 	facetDistribution,
 	handleCheckboxChange,
+	handleCountrySelect,
 	selectedCollections,
 	hierarchy,
 }: {
 	data: CollectionsGetResponse | undefined;
 	facetDistribution: FacetDistribution | undefined;
 	handleCheckboxChange: (key: string) => void;
+	handleCountrySelect: (country: string) => void;
 	selectedCollections: string[];
 	hierarchy: Collection[];
 }) {
@@ -237,12 +265,14 @@ export default function CollectionsList({
 	range,
 	handleRangeChange,
 	handleInstitutionSelect,
+	handleCountrySelect,
 	isModal = false,
 	queryParams,
 }: {
 	data: CollectionsGetResponse | undefined;
 	facetDistribution: FacetDistribution | undefined;
 	handleCheckboxChange: (key: string) => void;
+	handleCountrySelect: (country: string) => void;
 	selectedCollections: string[];
 	isModal?: boolean;
 	range: string;
@@ -251,11 +281,32 @@ export default function CollectionsList({
 	hierarchy: Collection[];
 	queryParams: inferParserType<typeof searchParamsLoader>;
 }) {
+	const [search, setSearch] = useState("");
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
 	const isInstitutionFilterEnabled =
 		useFeatureFlagEnabled("institution-filter");
-	const institutions = useInstitutionsList(facetDistribution!);
+	const institutions = useFacetList(facetDistribution!, "institution");
+	const countries = useFacetList(
+		facetDistribution!,
+		"country",
+		(country) => ({
+			key: country,
+			label: `${COUNTRIES[country]} (${country})`,
+			startContent: (
+				<div className="flex size-5 aspect-square justify-center items-center gap-2">
+					<Image
+						src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
+						alt={country}
+						width={20}
+						height={20}
+						className="size-full object-contain"
+						objectFit="contain"
+					/>
+				</div>
+			),
+		})
+	);
 
 	const [start, end, sameYear] = useMemo(() => {
 		const dashExists = range.includes("-");
@@ -279,7 +330,7 @@ export default function CollectionsList({
 				className="w-full data-[collections=true]:xl:min-h-screen rounded-2xl"
 				isLoaded={!!data && !!facetDistribution}
 			>
-				<section className="w-full bg-black/[4%] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-4 p-6 sticky top-0 xl:static z-20">
+				<section className="w-full bg-black/[4%] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-2 p-6 sticky top-0 xl:static z-20">
 					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 						<span>{t("publicationYear")}</span>
 						<div className="flex gap-4 items-center flex-1 justify-end">
@@ -361,30 +412,59 @@ export default function CollectionsList({
 							)}
 						</AnimatePresence>
 					</div>
-					{isInstitutionFilterEnabled && (
-						<>
-							<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-								<span>{t("institution")}</span>
-							</div>
-							<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-								<InstitutionPicker
-									label={t("institution")}
-									placeholder={t("institution")}
-									selectedKey={queryParams.institution}
-									onSelectionChange={handleInstitutionSelect}
-									facetDistribution={facetDistribution}
-									list={institutions}
-								/>
-							</div>
-						</>
-					)}
+					<Accordion
+						defaultExpandedKeys={["More Filters"]}
+						className="p-0"
+					>
+						<AccordionItem
+							key={"More Filters"}
+							title={t("moreFilters")}
+							classNames={{
+								content: "p-0 flex flex-col gap-2 pt-2",
+								trigger: "pb-0 pt-2",
+							}}
+						>
+							{isInstitutionFilterEnabled && (
+								<>
+									<FacetPicker
+										label={t("institution")}
+										placeholder={t("institution")}
+										selectedKey={queryParams.institution}
+										onSelectionChange={
+											handleInstitutionSelect
+										}
+										facetDistribution={facetDistribution}
+										list={institutions}
+										facetName="institution"
+									/>
+								</>
+							)}
+							<FacetPicker
+								label={t("countryFilter")}
+								placeholder={t("countryFilter")}
+								selectedKey={queryParams.country}
+								onSelectionChange={handleCountrySelect}
+								facetDistribution={facetDistribution}
+								list={countries}
+								facetName="country"
+							/>
+						</AccordionItem>
+					</Accordion>
 				</section>
 				<section className="w-full">
+					{/* <div className="p-4 pt-6 pb-0 bg-white dark:bg-card">
+						<Input
+							placeholder={t("searchCollections")}
+							value={search}
+							onChange={(e) => setSearch(e.target.value)}
+						/>
+					</div> */}
 					{isCollectionsEnabled && (
 						<InnerCollectionList
 							data={data}
 							facetDistribution={facetDistribution}
 							handleCheckboxChange={handleCheckboxChange}
+							handleCountrySelect={handleCountrySelect}
 							selectedCollections={selectedCollections}
 							hierarchy={hierarchy}
 						/>
