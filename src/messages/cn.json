@@ -402,6 +402,8 @@
     "studio": "工作室",
     "websiteTitle": "网站标题",
     "attachmentsData": "附件",
-    "citation": "引用"
+    "citation": "引用",
+    "apc_list": "文章处理费",
+    "apc_paid": "文章处理费支付状态"
   }
 }

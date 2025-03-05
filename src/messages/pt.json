@@ -402,6 +402,8 @@
     "studio": "Estúdio",
     "websiteTitle": "Título do Website",
     "attachmentsData": "Anexos",
-    "citation": "Citação"
+    "citation": "Citação",
+    "apc_list": "Taxa de Processamento de Artigo",
+    "apc_paid": "Status do Pagamento da Taxa de Processamento do Artigo"
   }
 }

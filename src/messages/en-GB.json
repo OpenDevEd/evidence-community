@@ -402,6 +402,8 @@
     "studio": "Studio",
     "websiteTitle": "Website Title",
     "attachmentsData": "Attachments",
-    "citation": "Citation"
+    "citation": "Citation",
+    "apc_list": "Article Processing Charge",
+    "apc_paid": "Article Processing Charge Payment Status"
   }
 }
