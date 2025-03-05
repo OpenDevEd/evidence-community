@@ -8,6 +8,7 @@ function getItems(
 		[key: string]: any;
 	} = {}
 ) {
+
 	return meilisearchClient
 		.index(process.env.MEILI_INDEX || config.index)
 		.getDocuments({
@@ -19,6 +20,10 @@ function getItems(
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 	const items = await getItems();
+
+	if (process.env.SHOULD_GENERATE_SITEMAP !== "true") {
+		return [];
+	}
 
 	return items.results.flatMap((item: any) => ({
 		url: `${process.env.BASE_URL}/lib/${item.key}`,
