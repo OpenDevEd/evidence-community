@@ -140,7 +140,7 @@
     "openChatTooltip": "打开聊天",
     "noResourcesForScreening": "未找到用于筛查的资源，需要摘要才能进行筛查。",
     "moreFilters": "更多筛选",
-    "countryFilter": "国家"
+    "countryFilter": "国家重点"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",
@@ -379,7 +379,7 @@
     "codeNumber": "法典编号",
     "publicLawNumber": "公法编号",
     "dateEnacted": "生效日期",
-    "country": "国家",
+    "country": "国家焦点",
     "assignee": "受让人",
     "issuingAuthority": "发证机构",
     "patentNumber": "专利号",

@@ -140,7 +140,7 @@
     "openChatTooltip": "चैट खोलें",
     "noResourcesForScreening": "स्क्रीनिंग के लिए कोई संसाधन नहीं मिला, स्क्रीनिंग करने के लिए एक सार की आवश्यकता है।",
     "moreFilters": "अधिक फ़िल्टर",
-    "countryFilter": "देश"
+    "countryFilter": "देश फोकस"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",
@@ -379,7 +379,7 @@
     "codeNumber": "कोड संख्या",
     "publicLawNumber": "सार्वजनिक कानून संख्या",
     "dateEnacted": "लागू होने की तिथि",
-    "country": "देश",
+    "country": "देश फोकस",
     "assignee": "समनुदेशिती",
     "issuingAuthority": "जारी करने वाला प्राधिकरण",
     "patentNumber": "पेटेंट संख्या",

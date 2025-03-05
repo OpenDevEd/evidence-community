@@ -140,7 +140,7 @@
     "openChatTooltip": "فتح الدردشة",
     "noResourcesForScreening": "لم يتم العثور على موارد للفحص، الملخص مطلوب لإجراء الفحص.",
     "moreFilters": "المزيد من المرشحات",
-    "countryFilter": "دولة"
+    "countryFilter": "التركيز القطري"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
@@ -379,7 +379,7 @@
     "codeNumber": "رقم الرمز",
     "publicLawNumber": "رقم القانون العام",
     "dateEnacted": "تاريخ السن",
-    "country": "البلد",
+    "country": "التركيز على البلد",
     "assignee": "المتنازل له",
     "issuingAuthority": "جهة الإصدار",
     "patentNumber": "رقم براءة الاختراع",

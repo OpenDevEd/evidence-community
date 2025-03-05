@@ -140,7 +140,7 @@
     "openChatTooltip": "Ouvrir le chat",
     "noResourcesForScreening": "Aucune ressource trouvée pour le dépistage, un résumé est requis pour effectuer un dépistage.",
     "moreFilters": "Plus de filtres",
-    "countryFilter": "Pays"
+    "countryFilter": "Concentration géographique"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",
@@ -379,7 +379,7 @@
     "codeNumber": "Numéro de code",
     "publicLawNumber": "Numéro de loi publique",
     "dateEnacted": "Date d'adoption",
-    "country": "Pays",
+    "country": "Concentration sur le pays",
     "assignee": "Cessionnaire",
     "issuingAuthority": "Autorité émettrice",
     "patentNumber": "Numéro de brevet",

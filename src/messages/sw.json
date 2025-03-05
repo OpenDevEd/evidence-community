@@ -141,7 +141,7 @@
     "openChatTooltip": "Fungua Gumzo",
     "noResourcesForScreening": "Hakuna rasilimali zilizopatikana za uchunguzi, muhtasari unahitajika ili kufanya uchunguzi.",
     "moreFilters": "Vichungi Zaidi",
-    "countryFilter": "Nchi"
+    "countryFilter": "Lengo la Nchi"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
@@ -379,7 +379,7 @@
     "codeNumber": "Namba ya Msimbo",
     "publicLawNumber": "Namba ya Sheria ya Umma",
     "dateEnacted": "Tarehe ya Kutekelezwa",
-    "country": "Nchi",
+    "country": "Lengo la Nchi",
     "assignee": "Mteule",
     "issuingAuthority": "Mamlaka ya Utoaji",
     "patentNumber": "Namba ya Hataza",

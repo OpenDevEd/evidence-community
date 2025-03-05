@@ -140,7 +140,7 @@
     "openChatTooltip": "Open Chat",
     "noResourcesForScreening": "No resources found for screening, an abstract is required to perform a screening.",
     "moreFilters": "More Filters",
-    "countryFilter": "Country"
+    "countryFilter": "Country Focus"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",
@@ -379,7 +379,7 @@
     "codeNumber": "Code Number",
     "publicLawNumber": "Public Law Number",
     "dateEnacted": "Date Enacted",
-    "country": "Country",
+    "country": "Country Focus",
     "assignee": "Assignee",
     "issuingAuthority": "Issuing Authority",
     "patentNumber": "Patent Number",
