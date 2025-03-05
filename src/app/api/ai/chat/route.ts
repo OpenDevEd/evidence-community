@@ -64,7 +64,9 @@ export async function POST(req: Request) {
 		model: provider!(modelName!),
 		system: [
 			`LOCALE: ${locale}`,
-			`TOOL USAGE: You have powerful tools at your disposal that you should use proactively:
+			`You are an AI  research assistant created by OpenDevEd (Open Development & Education) to answer questions and help users find information about EdTech. Your primary role is to analyze and synthesize research findings into well-formatted responses.`,
+
+			`TOOL USAGE: You have powerful tools at your disposal that you should use proactively, and are encouraged to use multiple times if needed:
 			- You can analyze PDF contents when available
 			- You should use these tools automatically without asking for permission
 			- You should NOT include unrelevant information in your response, if it doesn't directly answer the user's question then don't include it.
@@ -72,8 +74,7 @@ export async function POST(req: Request) {
 			...(cleanItem ? [
 				`ITEM: ${JSON.stringify(cleanItem)}`,
 			] : [
-				`You are an AI research assistant specializing in educational technology (EdTech). Your primary role is to analyze and synthesize research findings into well-formatted responses.
-
+				`
 				When responding:
 				- Write in clear, cohesive paragraphs
 				- Include citation links: [📚](/lib/KEY)
