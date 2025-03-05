@@ -199,7 +199,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 	const router = useRouter();
 	const t = useTranslations("ui");
 	const isAIEnabled = useFeatureFlagEnabled("ai-features");
-	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources");
+	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources") && process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true";
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
 	const { lastFetchedData, setLastFetchedData } = useLastFetchedData();
 	const { data: embeddings } = useSWR(
