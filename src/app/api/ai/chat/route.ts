@@ -133,6 +133,13 @@ export async function POST(req: Request) {
 					userSpecifiedAmountOfResults: z.number().describe("The amount of results the user wants to see. Default is 10.").max(50).min(1).default(10),
 				}),
 				execute: async ({ q, userSpecifiedYearOrRange, userSpecifiedSort, userSpecifiedAmountOfResults }) => {
+					if (process.env.NEXT_PUBLIC_NEXT_PUBLIC_DISABLE_EMBEDDINGS === "true") {
+						return {
+							hits: [],
+							totalHits: 0
+						}
+					}
+
 					console.log("userSpecifiedYearOrRange", userSpecifiedYearOrRange);
 					console.log("userSpecifiedSort", userSpecifiedSort);
 					console.log("q", q);
