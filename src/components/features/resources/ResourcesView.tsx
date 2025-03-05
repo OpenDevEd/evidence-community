@@ -200,7 +200,10 @@ function FilterChips() {
 								}
 								group={"Country"}
 								title={
-									COUNTRIES[itemsContext.queryParams.country]
+									COUNTRIES[itemsContext.queryParams.country] +
+									" (" +
+									itemsContext.queryParams.country +
+									")"
 								}
 								startContent={
 									<Image
@@ -208,6 +211,7 @@ function FilterChips() {
 										alt={itemsContext.queryParams.country}
 										width={16}
 										height={12}
+										className="ml-0.5"
 									/>
 								}
 								callback={() =>
