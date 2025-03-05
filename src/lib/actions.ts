@@ -234,10 +234,15 @@ export async function getItems(
 		searchParams.collectionId || ""
 	);
 
+	const facets = ["collectionsAncestry", "institution"];
+	if (process.env.NEXT_PUBLIC_DISABLE_COUNTRY !== "true") {
+		facets.push("country");
+	}
+
 	return searchIndex(
 		searchParams,
 		{
-			facets: ["collectionsAncestry", "institution", "country"],
+			facets,
 		},
 		[
 			...collections.map(
