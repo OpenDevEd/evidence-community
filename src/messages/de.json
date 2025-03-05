@@ -138,7 +138,9 @@
     "invalidField": "Ungültiges Feld",
     "fieldsSavedSuccess": "Felder erfolgreich gespeichert",
     "openChatTooltip": "Chat öffnen",
-    "noResourcesForScreening": "Keine Ressourcen für das Screening gefunden, ein Abstract ist erforderlich, um ein Screening durchzuführen."
+    "noResourcesForScreening": "Keine Ressourcen für das Screening gefunden, ein Abstract ist erforderlich, um ein Screening durchzuführen.",
+    "moreFilters": "Weitere Filter",
+    "countryFilter": "Land"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

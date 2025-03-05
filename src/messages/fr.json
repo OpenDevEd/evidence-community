@@ -138,7 +138,9 @@
     "invalidField": "Champ non valide",
     "fieldsSavedSuccess": "Champs enregistrés avec succès",
     "openChatTooltip": "Ouvrir le chat",
-    "noResourcesForScreening": "Aucune ressource trouvée pour le dépistage, un résumé est requis pour effectuer un dépistage."
+    "noResourcesForScreening": "Aucune ressource trouvée pour le dépistage, un résumé est requis pour effectuer un dépistage.",
+    "moreFilters": "Plus de filtres",
+    "countryFilter": "Pays"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",

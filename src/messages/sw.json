@@ -139,7 +139,9 @@
     "invalidField": "Sehemu batili",
     "fieldsSavedSuccess": "Sehemu zimehifadhiwa kwa ufanisi",
     "openChatTooltip": "Fungua Gumzo",
-    "noResourcesForScreening": "Hakuna rasilimali zilizopatikana za uchunguzi, muhtasari unahitajika ili kufanya uchunguzi."
+    "noResourcesForScreening": "Hakuna rasilimali zilizopatikana za uchunguzi, muhtasari unahitajika ili kufanya uchunguzi.",
+    "moreFilters": "Vichungi Zaidi",
+    "countryFilter": "Nchi"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

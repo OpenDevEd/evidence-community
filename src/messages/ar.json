@@ -138,7 +138,9 @@
     "invalidField": "حقل غير صالح",
     "fieldsSavedSuccess": "تم حفظ الحقول بنجاح",
     "openChatTooltip": "فتح الدردشة",
-    "noResourcesForScreening": "لم يتم العثور على موارد للفحص، الملخص مطلوب لإجراء الفحص."
+    "noResourcesForScreening": "لم يتم العثور على موارد للفحص، الملخص مطلوب لإجراء الفحص.",
+    "moreFilters": "المزيد من المرشحات",
+    "countryFilter": "دولة"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

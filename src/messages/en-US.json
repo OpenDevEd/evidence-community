@@ -138,7 +138,9 @@
     "invalidField": "Invalid field",
     "fieldsSavedSuccess": "Fields saved successfully",
     "openChatTooltip": "Open Chat",
-    "noResourcesForScreening": "No resources found for screening, an abstract is required to perform a screening."
+    "noResourcesForScreening": "No resources found for screening, an abstract is required to perform a screening.",
+    "moreFilters": "More Filters",
+    "countryFilter": "Country"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

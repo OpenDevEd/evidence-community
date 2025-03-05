@@ -138,7 +138,9 @@
     "invalidField": "无效字段",
     "fieldsSavedSuccess": "字段保存成功",
     "openChatTooltip": "打开聊天",
-    "noResourcesForScreening": "未找到用于筛查的资源，需要摘要才能进行筛查。"
+    "noResourcesForScreening": "未找到用于筛查的资源，需要摘要才能进行筛查。",
+    "moreFilters": "更多筛选",
+    "countryFilter": "国家"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

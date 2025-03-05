@@ -138,7 +138,9 @@
     "invalidField": "Campo inválido",
     "fieldsSavedSuccess": "Campos salvos com sucesso",
     "openChatTooltip": "Abrir chat",
-    "noResourcesForScreening": "Nenhum recurso encontrado para triagem, um resumo é necessário para realizar uma triagem."
+    "noResourcesForScreening": "Nenhum recurso encontrado para triagem, um resumo é necessário para realizar uma triagem.",
+    "moreFilters": "Mais Filtros",
+    "countryFilter": "País"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

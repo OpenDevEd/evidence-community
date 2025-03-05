@@ -138,7 +138,9 @@
     "invalidField": "अमान्य फ़ील्ड",
     "fieldsSavedSuccess": "फ़ील्ड सफलतापूर्वक सहेजे गए",
     "openChatTooltip": "चैट खोलें",
-    "noResourcesForScreening": "स्क्रीनिंग के लिए कोई संसाधन नहीं मिला, स्क्रीनिंग करने के लिए एक सार की आवश्यकता है।"
+    "noResourcesForScreening": "स्क्रीनिंग के लिए कोई संसाधन नहीं मिला, स्क्रीनिंग करने के लिए एक सार की आवश्यकता है।",
+    "moreFilters": "अधिक फ़िल्टर",
+    "countryFilter": "देश"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",
