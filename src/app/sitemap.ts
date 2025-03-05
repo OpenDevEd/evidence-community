@@ -19,11 +19,11 @@ function getItems(
 }
 
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-	const items = await getItems();
-
 	if (process.env.SHOULD_GENERATE_SITEMAP !== "true") {
 		return [];
 	}
+	
+	const items = await getItems();
 
 	return items.results.flatMap((item: any) => ({
 		url: `${process.env.BASE_URL}/lib/${item.key}`,
