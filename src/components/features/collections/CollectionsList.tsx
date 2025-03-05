@@ -422,7 +422,7 @@ export default function CollectionsList({
 							key={"More Filters"}
 							title={t("moreFilters")}
 							classNames={{
-								content: "p-0 flex flex-col gap-2 pt-2",
+								content: "p-0 flex flex-col gap-4 pt-4",
 								trigger: "pb-0 pt-2",
 							}}
 						>
