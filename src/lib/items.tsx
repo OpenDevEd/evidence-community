@@ -253,6 +253,46 @@ export function CollectionsRow({ value }: { value: Collection[] }) {
 	);
 }
 
+function ObjectView({ value, args }: { value: Map<string, any> | Record<string, any>, args: FormatterProps }) {
+	if (!(value instanceof Map)) {
+		value = new Map(Object.entries(value).map(([key, value]) => [key, String(value)]));
+	}
+
+	const filteredValues: [string, string][] = Array.from(value.entries());
+
+	const ExtraSpan = createRegexParser([
+		{ regex: doiRegex, Wrapper: DOIWrapper, priority: 1 },
+		{ regex: urlRegex, Wrapper: URLWrapper, priority: 2 },
+	], "span");
+
+	if (filteredValues.length === 0) return false;
+
+	return (
+		<ul className="whitespace-pre-line space-y-2 bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl">
+			{filteredValues.map(([key, value], index) => {
+				const formattedValue = formatDate({ ...args, value });
+				return (
+					<li key={index} className="flex flex-col gap-2 group">
+						<div className="break-all flex gap-4">
+							<p className="flex-1">
+								<strong className="text-black/60 dark:text-white/60">{key}</strong>
+								<span className="whitespace-pre">{" "}</span>
+								<ExtraSpan value={value} />
+							</p>
+							<CopyButton
+								isIconOnly
+								content={formattedValue}
+								className="shrink-0"
+							/>
+						</div>
+						<Divider className="my-2 group-last:hidden" />
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+
 export const valueFormatter: Record<
 	any,
 	(props: FormatterProps) => ReactNode | boolean
@@ -355,39 +395,17 @@ export const valueFormatter: Record<
 	extra: (args) => {
 		const finalValue = args.value;
 		const values = getExtraValues(finalValue);
-		const filteredValues = Array.from(values.entries());
-
-		const ExtraSpan = createRegexParser([
-			{ regex: doiRegex, Wrapper: DOIWrapper, priority: 1 },
-			{ regex: urlRegex, Wrapper: URLWrapper, priority: 2 },
-		], "span");
-
-		if (filteredValues.length === 0) return false;
-
-		return (
-			<ul className="whitespace-pre-line space-y-2 bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl">
-				{filteredValues.map(([key, value], index) => {
-					const formattedValue = formatDate({ ...args, value });
-					return (
-						<li key={index} className="flex flex-col gap-2 group">
-							<div className="break-all flex gap-4">
-								<p className="flex-1">
-									<strong className="text-black/60 dark:text-white/60">{key}</strong>
-									<span className="whitespace-pre">{" "}</span>
-									<ExtraSpan value={value} />
-								</p>
-								<CopyButton
-									isIconOnly
-									content={formattedValue}
-									className="shrink-0"
-								/>
-							</div>
-							<Divider className="my-2 group-last:hidden" />
-						</li>
-					);
-				})}
-			</ul>
-		);
+		return <ObjectView value={values} args={args} />;
+	},
+	apc_list: (args) => {
+		const finalValue = args.value;
+		return false;
+		return <ObjectView value={finalValue} args={args} />;
+	},
+	apc_paid: (args) => {
+		const finalValue = args.value;
+		return false;
+		return <ObjectView value={finalValue} args={args} />;
 	},
 	citation: (args) => {
 		return <Citation {...args} />;
