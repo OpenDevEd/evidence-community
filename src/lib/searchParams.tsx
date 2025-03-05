@@ -19,6 +19,9 @@ export const searchParamsLoader = {
 	institution: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),
+	country: parseAsString.withDefault("").withOptions({
+		scroll: true,
+	}),
 	author: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),
