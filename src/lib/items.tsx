@@ -445,9 +445,11 @@ export const valueFormatter: Record<
 				{countries.map((country, index) => {
 					return (
 						<LinkWithParams
+							isDisabled={process.env.NEXT_PUBLIC_DISABLE_COUNTRY === "true"}
 							key={index}
 							href="/lib"
 							params={{ country }}
+							className="opacity-100"
 						>
 							<Card
 								key={index}
