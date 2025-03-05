@@ -122,11 +122,24 @@ export function useItemsList(userData?: any) {
 		}
 	};
 
+	const handleCountrySelect = (country: string) => {
+		if (country === queryParams.country) {
+			setParams({
+				country: "",
+			});
+		} else {
+			setParams({
+				country: country,
+			});
+		}
+	}
+
 	const handleClearFilters = () => {
 		console.log("handleClearFilters");
 		setParams({
 			author: "",
 			institution: "",
+			country: "",
 			collections: [],
 		});
 	};
@@ -220,6 +233,7 @@ export function useItemsList(userData?: any) {
 		handleInstitutionSelect,
 		pathName: pathname,
 		handleClearFilters,
+		handleCountrySelect,
 		userData,
 	};
 }

@@ -24,13 +24,15 @@ import { useDisclosure } from "@nextui-org/react";
 import { downloadItems } from "@/lib/actions";
 import { routing, usePathname, useRouter } from "@/i18n/routing";
 import { ItemsContext } from "../items/ItemsList";
-
+import { COUNTRIES } from "@/constants/misc";
+import Image from "next/image";
 function Chip({
 	group,
 	title,
 	divKey,
 	callback,
 	classNames = {},
+	startContent,
 }: {
 	group: string | undefined;
 	title: string | undefined;
@@ -41,6 +43,7 @@ function Chip({
 		title?: string;
 		button?: string;
 	};
+	startContent?: ReactNode;
 }) {
 	const canClick = useRef(true);
 	const [debounceCanClick] = useDebounce(() => {
@@ -48,43 +51,34 @@ function Chip({
 	}, 1000);
 
 	return (
-		<motion.div
-			key={divKey}
-			initial={{ opacity: 0, y: 10 }}
-			animate={{ opacity: 1, y: 0 }}
-			exit={{ opacity: 0, y: -10 }}
-			transition={{ duration: 0.2 }}
+		<Button
+			size="xs"
+			variant="solid"
+			className={twMerge(
+				"shrink-0 p-1 h-auto ltr:pr-2 rtl:pl-2",
+				classNames.button
+			)}
+			onPress={() => {
+				if (canClick.current) {
+					callback();
+					canClick.current = false;
+				}
+				debounceCanClick();
+			}}
 		>
-			<Button
-				size="xs"
-				variant="solid"
+			<span
 				className={twMerge(
-					"shrink-0 p-1 h-auto ltr:pr-2 rtl:pl-2",
-					classNames.button
+					"text-white dark:text-white/40 font-medium text-xs leading-3 dark:bg-black/50 bg-black/50 p-1 px-2 rounded-md",
+					classNames.group
 				)}
-				onPress={() => {
-					if (canClick.current) {
-						callback();
-						canClick.current = false;
-					}
-					debounceCanClick();
-				}}
 			>
-				<span
-					className={twMerge(
-						"text-white dark:text-white/40 font-medium text-xs leading-3 dark:bg-black/50 bg-black/50 p-1 px-2 rounded-md",
-						classNames.group
-					)}
-				>
-					{group}
-				</span>
-				<span
-					className={twMerge("truncate text-wrap", classNames.title)}
-				>
-					{title}
-				</span>
-			</Button>
-		</motion.div>
+				{group}
+			</span>
+			{startContent}
+			<span className={twMerge("truncate text-wrap", classNames.title)}>
+				{title}
+			</span>
+		</Button>
 	);
 }
 
@@ -95,6 +89,7 @@ function useFilterChips(
 	const filtersCount =
 		(queryParams.collections?.length || 0) +
 		(queryParams.institution ? 1 : 0) +
+		(queryParams.country ? 1 : 0) +
 		(queryParams.author ? 1 : 0);
 	const clearButton = () => {
 		handleClearFilters?.();
@@ -107,7 +102,7 @@ function useFilterChips(
 }
 
 function FilterChips() {
-	const itemsContext = use(ItemsContext)
+	const itemsContext = use(ItemsContext);
 	const t = useTranslations("ui");
 	const { filtersCount, clearButton } = useFilterChips(
 		itemsContext.queryParams,
@@ -121,86 +116,173 @@ function FilterChips() {
 				filtersCount > 0 && "max-h-[32rem] mb-4 opacity-100"
 			)}
 		>
-			<div className="flex-1 flex gap-2 flex-wrap">
-				<AnimatePresence initial={false}>
+			<div className="flex-1 flex gap-2 flex-wrap relative">
+				<AnimatePresence initial={false} mode="popLayout">
 					{itemsContext.queryParams?.institution && (
-						<Chip
-							group={"Institution"}
-							title={itemsContext.queryParams.institution}
-							divKey={itemsContext.queryParams.institution}
-							callback={() =>
-								itemsContext.handleInstitutionSelect?.(
-									itemsContext.queryParams.institution
-								)
+						<motion.div
+							key={
+								"institution-" +
+								itemsContext.queryParams.institution
 							}
-							classNames={{
-								button: "bg-accent/80 dark:bg-accent/80",
-								title: "text-white dark:text-white",
-							}}
-						/>
+							initial={{ opacity: 0, y: 10 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: -10 }}
+							transition={{ duration: 0.2 }}
+						>
+							<Chip
+								key={
+									"institution-" +
+									itemsContext.queryParams.institution
+								}
+								group={"Institution"}
+								title={itemsContext.queryParams.institution}
+								divKey={
+									"institution-" +
+									itemsContext.queryParams.institution
+								}
+								callback={() =>
+									itemsContext.handleInstitutionSelect?.(
+										itemsContext.queryParams.institution
+									)
+								}
+								classNames={{
+									button: "bg-accent/80 dark:bg-accent/80",
+									title: "text-white dark:text-white",
+								}}
+							/>
+						</motion.div>
 					)}
 					{itemsContext.queryParams?.author && (
-						<Chip
-							group={"Author"}
-							title={itemsContext.queryParams.author}
-							divKey={itemsContext.queryParams.author}
-							callback={() =>
-								itemsContext.handleAuthorSelect?.(
-									itemsContext.queryParams.author
-								)
-							}
-							classNames={{
-								button: "bg-tertiary dark:bg-tertiary/40",
-								title: "text-white dark:text-white",
-							}}
-						/>
+						<motion.div
+							key={"author-" + itemsContext.queryParams.author}
+							initial={{ opacity: 0, y: 10 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: -10 }}
+							transition={{ duration: 0.2 }}
+						>
+							<Chip
+								key={
+									"author-" + itemsContext.queryParams.author
+								}
+								divKey={
+									"author-" + itemsContext.queryParams.author
+								}
+								group={"Author"}
+								title={itemsContext.queryParams.author}
+								callback={() =>
+									itemsContext.handleAuthorSelect?.(
+										itemsContext.queryParams.author
+									)
+								}
+								classNames={{
+									button: "bg-tertiary dark:bg-tertiary/40",
+									title: "text-white dark:text-white",
+								}}
+							/>
+						</motion.div>
+					)}
+					{itemsContext.queryParams?.country && (
+						<motion.div
+							key={"country-" + itemsContext.queryParams.country}
+							initial={{ opacity: 0, y: 10 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: -10 }}
+							transition={{ duration: 0.2 }}
+						>
+							<Chip
+								key={
+									"country-" +
+									itemsContext.queryParams.country
+								}
+								divKey={
+									"country-" +
+									itemsContext.queryParams.country
+								}
+								group={"Country"}
+								title={
+									COUNTRIES[itemsContext.queryParams.country]
+								}
+								startContent={
+									<Image
+										src={`https://flagcdn.com/w40/${itemsContext.queryParams.country.toLowerCase()}.png`}
+										alt={itemsContext.queryParams.country}
+										width={16}
+										height={12}
+									/>
+								}
+								callback={() =>
+									itemsContext.handleCountrySelect?.(
+										itemsContext.queryParams.country
+									)
+								}
+								classNames={{
+									button: "bg-primary dark:bg-primary/40",
+									title: "text-black dark:text-white",
+								}}
+							/>
+						</motion.div>
 					)}
 					{itemsContext.collectionsData &&
-						itemsContext.selectedCollections?.map((collection: string) => {
-							const collectionData =
-								itemsContext.collectionsData?.collections.find(
-									(c) => c.key === collection
+						itemsContext.selectedCollections?.map(
+							(collection: string) => {
+								const collectionData =
+									itemsContext.collectionsData?.collections.find(
+										(c) => c.key === collection
+									);
+								return (
+									<motion.div
+										key={"collection-" + collection}
+										initial={{ opacity: 0, y: 10 }}
+										animate={{ opacity: 1, y: 0 }}
+										exit={{ opacity: 0, y: -10 }}
+										transition={{ duration: 0.2 }}
+									>
+										<Chip
+											key={"collection-" + collection}
+											group={collectionData?.title}
+											title={collectionData?.name ?? ""}
+											divKey={collection}
+											callback={() =>
+												itemsContext.handleCheckboxChange?.(
+													collection
+												)
+											}
+										/>
+									</motion.div>
 								);
-							return (
-								<Chip
-									key={collection}
-									group={collectionData?.title}
-									title={collectionData?.name ?? ""}
-									divKey={collection}
-									callback={() =>
-										itemsContext.handleCheckboxChange?.(collection)
-									}
-								/>
-							);
-						})}
+							}
+						)}
 				</AnimatePresence>
 			</div>
 			<AnimatePresence initial={false}>
-				{itemsContext.selectedCollections && itemsContext.selectedCollections.length > 0 && (
-					<motion.div
-						initial={{ opacity: 0, y: 10 }}
-						animate={{ opacity: 1, y: 0 }}
-						exit={{ opacity: 0, y: -10 }}
-						transition={{ duration: 0.2 }}
-						className="w-7 flex justify-end"
-					>
-						<Button
-							aria-hidden={itemsContext.selectedCollections.length == 0}
-							aria-label={t("clearFiltersAriaLabel")}
-							onPress={clearButton}
-							isIconOnly
-							size="sm"
-							variant="solid"
-							color="accent"
-							className="h-7 w-7 min-w-7"
+				{itemsContext.selectedCollections &&
+					itemsContext.selectedCollections.length > 0 && (
+						<motion.div
+							initial={{ opacity: 0, y: 10 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: -10 }}
+							transition={{ duration: 0.2 }}
+							className="w-7 flex justify-end"
 						>
-							<FaTrash
-								aria-hidden="true"
-								className="text-white size-3"
-							/>
-						</Button>
-					</motion.div>
-				)}
+							<Button
+								aria-hidden={
+									itemsContext.selectedCollections.length == 0
+								}
+								aria-label={t("clearFiltersAriaLabel")}
+								onPress={clearButton}
+								isIconOnly
+								size="sm"
+								variant="solid"
+								color="accent"
+								className="h-7 w-7 min-w-7"
+							>
+								<FaTrash
+									aria-hidden="true"
+									className="text-white size-3"
+								/>
+							</Button>
+						</motion.div>
+					)}
 			</AnimatePresence>
 		</div>
 	);
@@ -213,10 +295,13 @@ function ResourcesList({
 	abstract: boolean;
 	view: string;
 }) {
-	const itemsContext = use(ItemsContext)
+	const itemsContext = use(ItemsContext);
 	const t = useTranslations("ui");
 	const actuallyNoData =
-		(!itemsContext.isItemsLoading && itemsContext.itemsData && itemsContext.itemsData.items.length === 0) || itemsContext.itemsError;
+		(!itemsContext.isItemsLoading &&
+			itemsContext.itemsData &&
+			itemsContext.itemsData.items.length === 0) ||
+		itemsContext.itemsError;
 
 	return (
 		<>
@@ -235,14 +320,22 @@ function ResourcesList({
 				) : (
 					Array.from({ length: ITEMS_PER_PAGE }).map(
 						(_, index) =>
-							(!itemsContext.itemsData || (itemsContext.itemsData && itemsContext.itemsData.items[index])) && (
+							(!itemsContext.itemsData ||
+								(itemsContext.itemsData &&
+									itemsContext.itemsData.items[index])) && (
 								<Resource
 									key={index}
-									itemData={itemsContext.itemsData?.items[index]}
+									itemData={
+										itemsContext.itemsData?.items[index]
+									}
 									abstract={abstract}
 									isLoading={itemsContext.isItemsLoading}
-									revalidateResults={itemsContext.revalidateResults}
-									collectionId={itemsContext.queryParams.collectionId}
+									revalidateResults={
+										itemsContext.revalidateResults
+									}
+									collectionId={
+										itemsContext.queryParams.collectionId
+									}
 								/>
 							)
 					)
@@ -252,12 +345,8 @@ function ResourcesList({
 	);
 }
 
-function ContentActions({
-	params,
-}: {
-	params?: Record<string, any>;
-}) {
-	const itemsContext = use(ItemsContext)
+function ContentActions({ params }: { params?: Record<string, any> }) {
+	const itemsContext = use(ItemsContext);
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const totalItems = itemsContext.itemsData?.totalItems || 0;
@@ -324,10 +413,13 @@ function ContentActions({
 }
 
 function PaginationControls() {
-	const itemsContext = use(ItemsContext)
+	const itemsContext = use(ItemsContext);
 	const totalPages = itemsContext.itemsData?.totalPages || 0;
 	const actuallyNoData =
-		(!itemsContext.isItemsLoading && itemsContext.itemsData && itemsContext.itemsData.items.length === 0) || itemsContext.itemsError;
+		(!itemsContext.isItemsLoading &&
+			itemsContext.itemsData &&
+			itemsContext.itemsData.items.length === 0) ||
+		itemsContext.itemsError;
 	const isDesktop = useBreakpoint("xl");
 
 	return (

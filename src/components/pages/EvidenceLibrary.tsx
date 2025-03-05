@@ -316,6 +316,9 @@ export function ContentInteractions({
 												handleInstitutionSelect={
 													itemsContext.handleInstitutionSelect
 												}
+												handleCountrySelect={
+													itemsContext.handleCountrySelect
+												}
 											/>
 										)}
 									</>
@@ -434,7 +437,7 @@ export function ContentInteractions({
 						<Button
 							color={view === "list" ? "tertiary" : "secondary"}
 							isIconOnly
-							className="!p-0 rounded-r-none flex-1"
+							className="!p-0 ltr:rounded-r-none rtl:rounded-l-none flex-1"
 							onPress={() => setView("list")}
 							aria-label={t("viewAsListAriaLabel")}
 						>
@@ -446,7 +449,7 @@ export function ContentInteractions({
 						<Button
 							color={view === "grid" ? "tertiary" : "secondary"}
 							isIconOnly
-							className="!p-0 rounded-l-none flex-1"
+							className="!p-0 ltr:rounded-l-none rtl:rounded-r-none flex-1"
 							onPress={() => setView("grid")}
 							aria-label={t("viewAsGridAriaLabel")}
 						>
@@ -477,6 +480,7 @@ function MainContent() {
 				facetDistribution={props.itemsData?.facetDistribution}
 				queryParams={props.queryParams}
 				handleInstitutionSelect={props.handleInstitutionSelect}
+				handleCountrySelect={props.handleCountrySelect}
 			/>
 			<ItemsList props={props} />
 		</>
