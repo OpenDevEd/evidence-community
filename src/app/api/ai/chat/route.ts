@@ -26,8 +26,6 @@ export async function POST(req: Request) {
 	const { distinctId, messages, key, modelIndex, smartScreeningFields } = await req.json();
 	const locale = req.headers.get("Accept-Language") || routing.defaultLocale;
 
-	console.log("smartScreeningFields", smartScreeningFields);
-
 	let item = null;
 	if (key) {
 		item = await getCachedItem(key);
