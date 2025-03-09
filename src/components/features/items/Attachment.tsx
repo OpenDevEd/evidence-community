@@ -34,6 +34,8 @@ export default function Attachment({ data }: { data: Item }) {
 	const parentHeight = parentRef.current?.clientHeight;
 	const t = useTranslations("ui");
 
+	const downloadURL = `/lib/${data.parentItem}/download/${data.key}`;
+
 	return (
 		<li
 			ref={parentRef}
@@ -74,7 +76,7 @@ export default function Attachment({ data }: { data: Item }) {
 			</div>
 			<div className="flex flex-col gap-2 h-full xl:ltr:ml-52 xl:rtl:mr-52 ltr:ml-28 rtl:mr-28">
 				<h4 className="text-lg font-medium xl:line-clamp-none line-clamp-2">
-					<Link href={data.url || ""} className="dark:text-current text-current break-all text-lg">
+					<Link href={downloadURL} target="_blank" className="dark:text-current text-current break-all text-lg">
 						{data.filename}
 					</Link>
 				</h4>
@@ -82,7 +84,7 @@ export default function Attachment({ data }: { data: Item }) {
 					<Button
 						size="sm"
 						onPress={() => {
-							window.open(data.url || "", "_blank");
+							window.open(downloadURL, "_blank");
 							posthog.capture("view_attachment", {
 								key: data.key,
 								filename: data.filename,

@@ -2,6 +2,7 @@ import meilisearchClient from "@/lib/meilisearch";
 import { MetadataRoute } from "next";
 import { routing } from "@/i18n/routing";
 import config from "@/constants/config.json";
+import { convertToImageURL } from "@/lib/utils";
 
 function getItems(
 	args: {
@@ -38,7 +39,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 		},
 		images: item.attachmentsData
 			?.filter((attachment: any) => attachment.PDFCoverPageImage)
-			.map((attachment: any) => process.env.BASE_URL + "/images/" + attachment.PDFCoverPageImage.split("/").slice(8).join("/")),
+			.map((attachment: any) => convertToImageURL(attachment.PDFCoverPageImage)),
 	}));
 }
 
