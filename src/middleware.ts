@@ -2,6 +2,9 @@ import createMiddleware from 'next-intl/middleware';
 import {routing} from './i18n/routing';
 import { NextRequest, NextResponse } from 'next/server';
 import { unescapeXML } from './lib/utils';
+import { getCachedItemSmall } from './app/api/cache';
+import { ItemsGetResponse } from './app/api/items/types';
+import { ItemGetResponse } from './app/api/item/types';
 
 export type RateLimit = {
   count: number;
@@ -50,7 +53,7 @@ function setRateLimitHeaders(response: NextResponse, rateLimit: RateLimit | null
 }
 
 
-export default function middleware(request: NextRequest) {
+export default async function middleware(request: NextRequest) {
   const rateLimit = generateRateLimitObject(request);
 
   if (request.nextUrl.pathname === '/') {
@@ -70,6 +73,28 @@ export default function middleware(request: NextRequest) {
     const key = exportMatch[1];
     const format = exportMatch[2];
     const finalURL = new URL(`/api/item/${key}/export/${format}`, request.url);
+    return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
+  } 
+  
+  const downloadMatch = request.nextUrl.pathname.match(/\/lib\/(.+?)\/download\/([^\/]+)(.*)$/);
+  if (downloadMatch) {
+    const itemKey = downloadMatch[1];
+    const attachmentKey = downloadMatch[2];
+    console.log(itemKey, attachmentKey);
+    const itemUrl = new URL(`/api/item/${itemKey}`, request.url).toString();
+    const response = await fetch(itemUrl);
+    const item: ItemGetResponse = await response.json();
+    if (!item.item) {
+      return NextResponse.json({ error: "Item not found" }, { status: 404 });
+    }
+    if (!item.item.attachmentsData) {
+      return NextResponse.json({ error: "Item or attachments not found" }, { status: 404 });
+    }
+    const attachment = item.item.attachmentsData.find((attachment) => attachment.key === attachmentKey);
+    if (!attachment || !attachment.url) {
+      return NextResponse.json({ error: "Attachment URL not found" }, { status: 404 });
+    }
+    const finalURL = new URL(attachment.url, request.url);
     return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
   } else if (request.nextUrl.pathname === "/lib/atom.xml" || (request.nextUrl.pathname.startsWith("/profile/") && request.nextUrl.pathname.endsWith("/atom.xml"))) {
     const id = request.nextUrl.pathname.startsWith("/profile/") ? request.nextUrl.pathname.split("/")[2] : "main";
@@ -118,6 +143,7 @@ export const config = {
     // Updated matchers for new export URL format
     '/([\\w-]+)?/lib/:path*/export/ris',
     '/([\\w-]+)?/lib/:path*/export/bibtex',
+    '/([\\w-]+)?/lib/:path*/download/:path*',
     '/([\\w-]+)?/lib/atom.xml',
     '/([\\w-]+)?/profile/:id/atom.xml'
   ]

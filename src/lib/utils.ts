@@ -156,3 +156,7 @@ export function cleanAIResponse(response: string) {
 	console.log("response after cleaning:", result);
 	return result;
 }
+
+export function convertToImageURL(url: string) {
+	return process.env.BASE_URL + "/images/" + url.split("/").slice(8).join("/");
+}

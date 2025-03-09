@@ -69,6 +69,6 @@ if (process.env.NODE_ENV === "production") {
 } else {
     if (!global.db) global.db = drizzle(process.env.DATABASE_URL_POST!, { schema });
     db = global.db;
-  }
-  
-  export { db };
+}
+
+export { db };

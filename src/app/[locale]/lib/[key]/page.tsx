@@ -5,7 +5,7 @@ import { routing } from "@/i18n/routing";
 import { getCachedItem, getCachedItemSmall, getCachedStatus } from "@/app/api/cache";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
-import { getExtraValues } from "@/lib/utils";
+import { convertToImageURL, getExtraValues } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
 import { Suspense } from "react";
 import LoadingComponent from "./LoadingComponent";
@@ -77,6 +77,8 @@ export async function generateMetadata(props: {
 
     const institution = Array.isArray(item.institution) ? item.institution.join(", ") : item.institution;
 
+    const pdfWithImage = item.attachmentsData?.find((a: any) => a.PDFCoverPageImage);
+
 	return {
 		title: item.title,
         description: item.abstractNote,
@@ -92,8 +94,8 @@ export async function generateMetadata(props: {
                 "application/x-bibtex": `${process.env.BASE_URL!}/lib/${item.key}/export/bibtex`,
             },
             media: {
-                'image/jpeg': attachmentExists?.PDFCoverPageImage ?? null,
-                'application/pdf': attachmentExists?.url ?? null
+                'image/jpeg': pdfWithImage ? convertToImageURL(pdfWithImage.PDFCoverPageImage ?? "") : null,
+                'application/pdf': pdfWithImage ? `${process.env.BASE_URL!}/lib/${item.key}/download/${pdfWithImage.key}` : null
             },
         },
         other: {
@@ -127,9 +129,7 @@ export async function generateMetadata(props: {
             "citation_doi": item.DOI ?? extraValues.get("DOI") ?? "",
 
             "citation_public_url": item.url ?? "",
-            "citation_pdf_url": item.attachmentsData?.find((a: Item) => 
-                a.PDFCoverPageImage
-            )?.url ?? "",
+            "citation_pdf_url": pdfWithImage ? `${process.env.BASE_URL!}/lib/${item.key}/download/${pdfWithImage.key}` : ""
         },
         openGraph: {
             title: item.title ?? '',
@@ -138,9 +138,9 @@ export async function generateMetadata(props: {
             siteName: companyName,
             images: [
                 {
-                    url: attachmentExists?.PDFCoverPageImage ?? '',
-                    width: attachmentExists?.PDFCoverPageWidth ?? 1200,
-                    height: attachmentExists?.PDFCoverPageHeight ?? 630,
+                    url: pdfWithImage ? convertToImageURL(pdfWithImage.PDFCoverPageImage ?? "") : '',
+                    width: pdfWithImage?.PDFCoverPageWidth ?? 1200,
+                    height: pdfWithImage?.PDFCoverPageHeight ?? 630,
                     alt: item.title ?? ''
                 }
             ],
