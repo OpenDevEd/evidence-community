@@ -141,7 +141,8 @@
     "openChatTooltip": "Fungua Gumzo",
     "noResourcesForScreening": "Hakuna rasilimali zilizopatikana za uchunguzi, muhtasari unahitajika ili kufanya uchunguzi.",
     "moreFilters": "Vichungi Zaidi",
-    "countryFilter": "Lengo la Nchi"
+    "countryFilter": "Lengo la Nchi",
+    "close": "Funga"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
@@ -407,5 +408,40 @@
     "citation": "Nukuu",
     "apc_list": "Malipo ya Uchakataji Makala",
     "apc_paid": "Hali ya Malipo ya Ada ya Uchapishaji Makala"
+  },
+  "help": {
+    "intro1": "Kiolesura cha utafutaji kimeundwa na sehemu tatu: **Tafuta**, **Gundua**, na **Matokeo**. Hizi zinaelezewa kwa undani hapa chini.",
+    "intro2": "Unaweza kuanza kutafuta ama kutoka sehemu ya **Tafuta** au kutoka sehemu ya **Chunguza**.",
+    "searchTitle": "Tafuta",
+    "searchDesc": "Sehemu hii inaonyesha vigezo vyako vya sasa vya utafutaji na hukuruhusu kuwasilisha maneno muhimu ya kutafuta kwenye maktaba.",
+    "search1": "Kila uwasilishaji mpya huongeza maneno muhimu yaliyoingizwa kwenye orodha ya vigezo vya utafutaji.",
+    "search2": "Ili kuanzisha utafutaji mpya badala ya kuongeza maneno muhimu kwenye utafutaji wa sasa, tumia kitufe cha **Ondoa Kichujio**, kisha weka maneno yako muhimu mapya.",
+    "search3": "Ili kuchukua nafasi ya neno muhimu lililowasilishwa tayari, kwanza liondoe kwa kufuta kisanduku chake cha kuteua, kisha wasilisha neno muhimu jipya.",
+    "search4": "Unaweza kudhibiti upeo wa utafutaji wako kwa kuchagua mahali pa kutafuta. Chaguo ni:",
+    "search5": "**Katika Waandishi Au Wachangiaji:** Tafuta maneno yako muhimu katika majina ya mwandishi au mchangiaji.",
+    "search6": "**Katika Vichwa:** Tafuta maneno yako muhimu katika vichwa.",
+    "search7": "**Katika Sehemu Zote:** Tafuta maneno yako muhimu katika sehemu zote za rekodi ya bibliografia.",
+    "search8": "**Ndani ya Hati:** Tafuta maneno yako muhimu katika maudhui ya maandishi ya hati zinazopatikana.",
+    "search9": "Unaweza kutumia waendeshaji wa boolean na maneno yako muhimu. Kwa mfano:",
+    "search10": "**NA:** Hupata maingizo ambayo yana masharti yote yaliyobainishwa. Hii ndiyo uhusiano chaguomsingi kati ya masharti wakati hakuna opereta iliyobainishwa, kwa mfano, A B ni sawa na A NA B.",
+    "search11": "**AU:** Hupata maingizo ambayo yana mrefu wowote kati ya maneno yaliyobainishwa, mfano, A AU B.",
+    "search12": "**Sio:** Haizui",
+    "search13": "Waendeshaji wa Boolean lazima waingizwe kwa herufi kubwa.",
+    "search14": "Unaweza kutumia makundi ya kimantiki (yenye mabano) ili kuondoa utata wakati wa kutumia waendeshaji mantiki wengi, mfano, (A AU B) NA C.",
+    "search15": "Unaweza kuhitaji mlolongo kamili wa maneno (yenye alama za nukuu mbili), mfano, \"A B C\". Tofauti chaguomsingi kati ya nafasi za maneno ni 1, kumaanisha kuwa ingizo litafanana ikiwa lina maneno karibu na kila mmoja, lakini umbali tofauti wa juu unaweza kutajwa (na herufi ya tilde), mfano, \"Web Search\"~2 inaruhusu hadi neno 1 kati ya Web na Search, kumaanisha kuwa inaweza kulingana na utafutaji wa tovuti ya wavuti pamoja na utafutaji wa wavuti.",
+    "exploreTitle": "Chunguza",
+    "exploreDesc": "Sehemu hii hukuruhusu kuchunguza kategoria zinazohusiana na marejeleo.",
+    "explore1": "Kategoria zinaweza kutumika kuchuja utaftaji wako. Angalia kategoria ili kuiongeza kwenye vigezo vyako vya utaftaji na kupunguza utaftaji wako. Matokeo yako ya utaftaji yataonyesha tu maingizo ambayo yanahusishwa na kategoria hiyo.",
+    "explore2": "Ondoa alama kwenye kategoria ili kuiondoa kwenye vigezo vyako vya utafutaji na upanue matokeo yako ya utafutaji.",
+    "explore3": "Nambari zinazoonyeshwa karibu na kategoria zinaonyesha ni ngapi ingizo zinahusishwa na kila kategoria katika seti ya matokeo ya sasa. Nambari hizo zitatofautiana kulingana na vigezo vyako vya utafutaji ili kuelezea kila wakati seti ya matokeo ya sasa. Vivyo hivyo, kategoria na vipengele vyote vitatoweka wakati seti ya matokeo haina ingizo lolote linalohusishwa nazo.",
+    "explore4": "Aikoni ya mshale (v) inayoonekana karibu na kategoria inaonyesha kuwa kuna vikundi vidogo vinavyopatikana. Unaweza kuibonyeza ili kupanua orodha ya kategoria maalum zaidi. Unaweza kuibonyeza tena baadaye ili kufunga orodha. Kupanua au kufunga vikundi vidogo hakutabadilisha utafutaji wako wa sasa; hii hukuruhusu kuchunguza haraka uongozi wa kategoria ikiwa unataka.",
+    "resultsTitle": "Matokeo",
+    "resultsDesc": "Sehemu hii inaonyesha matokeo ya utafutaji. Wakati hakuna vigezo vya utafutaji vilivyopewa, inaonyesha maudhui kamili ya bibliografia (hadi viingilio 20 kwa kila ukurasa).",
+    "results1": "Kila ingizo la orodha ya matokeo ni kiungo cha rekodi yake kamili ya bibliografia. Kutoka kwa mtazamo wa rekodi ya bibliografia, unaweza kuendelea kuchunguza matokeo ya utafutaji kwa kwenda kwenye rekodi zilizotangulia au zifuatazo katika matokeo yako ya utafutaji, au unaweza kurudi kwenye orodha ya matokeo.",
+    "results2": "Soma hati",
+    "results3": "Kitufe cha **Abstracts** hukuruhusu kugeuza onyesho la muhtasari ndani ya orodha ya matokeo ya utafutaji. Hata hivyo, kuwezesha muhtasari hakutakuwa na athari yoyote kwa matokeo ambayo hakuna muhtasari unaopatikana.",
+    "results4": "**Umuhimu**",
+    "results5": "Uchambuzi wa **Umuhimu** unapatikana tu baada ya maneno muhimu kuwasilishwa kwa kutumia sehemu ya **Tafuta**.",
+    "results6": "Kategoria zilizochaguliwa katika sehemu ya **Gundua** hazina athari yoyote kwenye alama ya umuhimu. Athari yao pekee ni kuchuja orodha ya matokeo."
   }
 }

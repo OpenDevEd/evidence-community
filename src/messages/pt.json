@@ -140,7 +140,8 @@
     "openChatTooltip": "Abrir chat",
     "noResourcesForScreening": "Nenhum recurso encontrado para triagem, um resumo é necessário para realizar uma triagem.",
     "moreFilters": "Mais Filtros",
-    "countryFilter": "Foco no país"
+    "countryFilter": "Foco no país",
+    "close": "Fechar"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",
@@ -407,5 +408,40 @@
     "citation": "Citação",
     "apc_list": "Taxa de Processamento de Artigo",
     "apc_paid": "Status do Pagamento da Taxa de Processamento do Artigo"
+  },
+  "help": {
+    "intro1": "A interface de pesquisa é feita de três seções: **Pesquisar**, **Explorar** e **Resultados**. Estas são descritas em detalhes abaixo.",
+    "intro2": "Você pode começar a pesquisar na seção **Pesquisar** ou na seção **Explorar**.",
+    "searchTitle": "Pesquisar",
+    "searchDesc": "Esta seção mostra seus critérios de pesquisa atuais e permite que você envie palavras-chave para pesquisar na biblioteca.",
+    "search1": "Cada nova submissão adiciona as palavras-chave inseridas à lista de critérios de pesquisa.",
+    "search2": "Para iniciar uma nova pesquisa em vez de adicionar palavras-chave à pesquisa atual, use o botão **Remover Filtro** e, em seguida, insira suas novas palavras-chave.",
+    "search3": "Para substituir uma palavra-chave já enviada, primeiro remova-a desmarcando sua caixa de seleção e, em seguida, envie uma nova palavra-chave.",
+    "search4": "Você pode controlar a extensão da sua pesquisa selecionando onde pesquisar. As opções são:",
+    "search5": "**Em Autores Ou Colaboradores:** Pesquise suas palavras-chave em nomes de autores ou colaboradores.",
+    "search6": "**Em Títulos:** Pesquise suas palavras-chave em títulos.",
+    "search7": "**Em todos os campos:** Pesquise suas palavras-chave em todos os campos de registro bibliográfico.",
+    "search8": "**Em Documentos:** Pesquise suas palavras-chave no conteúdo de texto dos documentos disponíveis.",
+    "search9": "Você pode usar operadores booleanos com suas palavras-chave. Por exemplo:",
+    "search10": "**E:** Encontra entradas que contêm todos os termos especificados. Esta é a relação padrão entre os termos quando nenhum operador é especificado, por exemplo, A B é o mesmo que A E B.",
+    "search11": "**OU:** Encontra entradas que contêm qualquer um dos termos especificados, por exemplo, A OU B.",
+    "search12": "**NÃO:** Exclui",
+    "search13": "Os operadores booleanos devem ser inseridos em maiúsculas.",
+    "search14": "Você pode usar agrupamentos lógicos (com parênteses) para eliminar ambiguidades ao usar vários operadores booleanos, por exemplo, (A OU B) E C.",
+    "search15": "Você pode exigir sequências exatas de palavras (com aspas duplas), por exemplo, \"A B C\". A diferença padrão entre as posições das palavras é 1, o que significa que uma entrada corresponderá se contiver as palavras lado a lado, mas uma distância máxima diferente pode ser especificada (com o caractere til), por exemplo, \"Web Search\"~2 permite até 1 palavra entre Web e Search, o que significa que pode corresponder à pesquisa no site da Web, bem como à pesquisa na Web.",
+    "exploreTitle": "Explorar",
+    "exploreDesc": "Esta seção permite que você explore categorias associadas às referências.",
+    "explore1": "As categorias podem ser usadas para filtrar sua pesquisa. Marque uma categoria para adicioná-la aos seus critérios de pesquisa e refinar sua pesquisa. Seus resultados de pesquisa mostrarão apenas as entradas que estão associadas a essa categoria.",
+    "explore2": "Desmarque uma categoria para removê-la dos seus critérios de pesquisa e ampliar seus resultados de pesquisa.",
+    "explore3": "Os números exibidos ao lado das categorias indicam quantas entradas estão associadas a cada categoria no conjunto de resultados atual. Esses números variam com base nos seus critérios de pesquisa para sempre descrever o conjunto de resultados atual. Da mesma forma, as categorias e facetas inteiras desaparecerão quando o conjunto de resultados não tiver entradas associadas a elas.",
+    "explore4": "Um ícone de seta (v) que aparece ao lado de uma categoria indica que subcategorias estão disponíveis. Você pode pressioná-lo para expandir uma lista de categorias mais específicas. Você pode pressioná-lo novamente mais tarde para recolher a lista. Expandir ou recolher subcategorias não alterará sua pesquisa atual; isso permite que você explore rapidamente uma hierarquia de categorias, se desejar.",
+    "resultsTitle": "Resultados",
+    "resultsDesc": "Esta seção mostra os resultados da pesquisa. Quando nenhum critério de pesquisa foi fornecido, ela mostra o conteúdo completo da bibliografia (até 20 entradas por página).",
+    "results1": "Cada entrada da lista de resultados é um link para seu registro bibliográfico completo. Na visualização do registro bibliográfico, você pode continuar explorando os resultados da pesquisa, acessando os registros anteriores ou seguintes em seus resultados de pesquisa, ou pode retornar à lista de resultados.",
+    "results2": "Ler documento",
+    "results3": "O botão **Abstracts** permite que você alterne a exibição de resumos dentro da lista de resultados da pesquisa. No entanto, a ativação de resumos não terá efeito sobre os resultados para os quais nenhum resumo está disponível.",
+    "results4": "**Relevância**",
+    "results5": "A ordenação por **Relevância** só está disponível depois que as palavras-chave foram enviadas usando a seção **Pesquisar**.",
+    "results6": "As categorias selecionadas na seção **Explorar** não têm efeito sobre a pontuação de relevância. Seu único efeito é filtrar a lista de resultados."
   }
 }

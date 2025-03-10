@@ -140,7 +140,8 @@
     "openChatTooltip": "Chat öffnen",
     "noResourcesForScreening": "Keine Ressourcen für das Screening gefunden, ein Abstract ist erforderlich, um ein Screening durchzuführen.",
     "moreFilters": "Weitere Filter",
-    "countryFilter": "Länderschwerpunkt"
+    "countryFilter": "Länderschwerpunkt",
+    "close": "Schließen"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
@@ -407,5 +408,40 @@
     "citation": "Zitation",
     "apc_list": "Artikelbearbeitungsgebühr",
     "apc_paid": "Status der Gebührenzahlung für die Artikelbearbeitung"
+  },
+  "help": {
+    "intro1": "Die Suchoberfläche besteht aus drei Abschnitten: **Suche**, **Entdecken** und **Ergebnisse**. Diese werden im Folgenden ausführlich beschrieben.",
+    "intro2": "Sie können entweder im Bereich **Suchen** oder im Bereich **Entdecken** mit der Suche beginnen.",
+    "searchTitle": "Suche",
+    "searchDesc": "Dieser Abschnitt zeigt Ihre aktuellen Suchkriterien und ermöglicht es Ihnen, Suchbegriffe zum Suchen in der Bibliothek einzureichen.",
+    "search1": "Jede neue Einreichung fügt die eingegebenen Schlüsselwörter zur Liste der Suchkriterien hinzu.",
+    "search2": "Um eine neue Suche zu starten, anstatt Schlüsselwörter zur aktuellen Suche hinzuzufügen, verwenden Sie die Schaltfläche **Filter entfernen** und geben Sie dann Ihre neuen Schlüsselwörter ein.",
+    "search3": "Um ein bereits übermitteltes Keyword zu ersetzen, entfernen Sie es zuerst, indem Sie das Kontrollkästchen deaktivieren, und übermitteln Sie dann ein neues Keyword.",
+    "search4": "Sie können den Umfang Ihrer Suche steuern, indem Sie auswählen, wo Sie suchen möchten. Die Optionen sind:",
+    "search5": "**In Autoren oder Mitwirkenden:** Suchen Sie Ihre Schlüsselwörter in Autoren- oder Mitwirkenden-Namen.",
+    "search6": "**In Titeln:** Suchen Sie Ihre Schlüsselwörter in Titeln.",
+    "search7": "**In allen Feldern:** Suchen Sie Ihre Schlüsselwörter in allen bibliografischen Feldern.",
+    "search8": "**In Dokumenten:** Suchen Sie Ihre Schlüsselwörter im Textinhalt der verfügbaren Dokumente.",
+    "search9": "Sie können boolesche Operatoren mit Ihren Suchbegriffen verwenden. Zum Beispiel:",
+    "search10": "**UND:** Findet Einträge, die alle angegebenen Begriffe enthalten. Dies ist die Standardbeziehung zwischen Begriffen, wenn kein Operator angegeben ist, z. B. ist A B dasselbe wie A UND B.",
+    "search11": "**ODER:** Findet Einträge, die einen der angegebenen Begriffe enthalten, z. B. A ODER B.",
+    "search12": "**NICHT:** Schließt aus",
+    "search13": "Boolesche Operatoren müssen in Großbuchstaben eingegeben werden.",
+    "search14": "Sie können logische Gruppierungen (mit Klammern) verwenden, um Mehrdeutigkeiten bei der Verwendung mehrerer boolescher Operatoren zu beseitigen, z. B. (A ODER B) UND C.",
+    "search15": "Sie können exakte Wortfolgen (mit doppelten Anführungszeichen) benötigen, z. B. \"A B C\". Der Standardunterschied zwischen Wortpositionen beträgt 1, was bedeutet, dass ein Eintrag übereinstimmt, wenn er die Wörter nebeneinander enthält, aber ein unterschiedlicher maximaler Abstand kann angegeben werden (mit dem Tilde-Zeichen), z. B. \"Web Search\"~2 erlaubt bis zu 1 Wort zwischen Web und Search, was bedeutet, dass es sowohl mit Web Site Search als auch mit Web Search übereinstimmen kann.",
+    "exploreTitle": "Entdecken",
+    "exploreDesc": "In diesem Abschnitt können Sie Kategorien erkunden, die mit den Referenzen verknüpft sind.",
+    "explore1": "Kategorien können verwendet werden, um Ihre Suche zu filtern. Aktivieren Sie eine Kategorie, um sie Ihren Suchkriterien hinzuzufügen und Ihre Suche einzugrenzen. Ihre Suchergebnisse zeigen dann nur Einträge an, die dieser Kategorie zugeordnet sind.",
+    "explore2": "Deaktivieren Sie eine Kategorie, um sie aus Ihren Suchkriterien zu entfernen und Ihre Suchergebnisse zu erweitern.",
+    "explore3": "Die neben den Kategorien angezeigten Zahlen geben an, wie viele Einträge jeder Kategorie im aktuellen Ergebnissatz zugeordnet sind. Diese Zahlen variieren je nach Ihren Suchkriterien, um den aktuellen Ergebnissatz immer zu beschreiben. Ebenso verschwinden Kategorien und ganze Facetten, wenn der Ergebnissatz keine zugehörigen Einträge hat.",
+    "explore4": "Ein Pfeilsymbol (v) neben einer Kategorie weist darauf hin, dass Unterkategorien verfügbar sind. Sie können es drücken, um eine Liste mit spezifischeren Kategorien zu erweitern. Sie können es später erneut drücken, um die Liste zu reduzieren. Durch das Erweitern oder Reduzieren von Unterkategorien ändert sich Ihre aktuelle Suche nicht; dies ermöglicht es Ihnen, bei Bedarf schnell eine Hierarchie von Kategorien zu erkunden.",
+    "resultsTitle": "Ergebnisse",
+    "resultsDesc": "Dieser Abschnitt zeigt die Suchergebnisse. Wenn keine Suchkriterien angegeben wurden, werden die vollständigen Inhalte der Bibliografie angezeigt (bis zu 20 Einträge pro Seite).",
+    "results1": "Jeder Eintrag der Ergebnisliste ist ein Link zu seinem vollständigen bibliografischen Datensatz. Von der bibliografischen Datensatzansicht aus können Sie die Suchergebnisse weiterhin erkunden, indem Sie zu vorherigen oder folgenden Datensätzen in Ihren Suchergebnissen gehen, oder Sie können zur Ergebnisliste zurückkehren.",
+    "results2": "Dokument lesen",
+    "results3": "Die Schaltfläche **Abstracts** ermöglicht das Umschalten der Anzeige von Abstracts innerhalb der Suchergebnisliste. Das Aktivieren von Abstracts hat jedoch keine Auswirkungen auf Ergebnisse, für die kein Abstract verfügbar ist.",
+    "results4": "**Relevanz**",
+    "results5": "Die **Relevanz**-Sortierung ist nur verfügbar, nachdem Keywords über den Abschnitt **Suche** übermittelt wurden.",
+    "results6": "Ausgewählte Kategorien im Bereich **Entdecken** haben keinen Einfluss auf den Relevanz-Score. Ihre einzige Wirkung ist das Filtern der Ergebnisliste."
   }
 }

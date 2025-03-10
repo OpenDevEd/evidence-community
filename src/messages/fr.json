@@ -140,7 +140,8 @@
     "openChatTooltip": "Ouvrir le chat",
     "noResourcesForScreening": "Aucune ressource trouvée pour le dépistage, un résumé est requis pour effectuer un dépistage.",
     "moreFilters": "Plus de filtres",
-    "countryFilter": "Concentration géographique"
+    "countryFilter": "Concentration géographique",
+    "close": "Fermer"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",
@@ -407,5 +408,40 @@
     "citation": "Citation",
     "apc_list": "Frais de traitement des articles",
     "apc_paid": "Statut du paiement des frais de traitement d'article"
+  },
+  "help": {
+    "intro1": "L'interface de recherche est composée de trois sections : **Recherche**, **Explorer** et **Résultats**. Celles-ci sont décrites en détail ci-dessous.",
+    "intro2": "Vous pouvez commencer votre recherche à partir de la section **Rechercher** ou de la section **Explorer**.",
+    "searchTitle": "Recherche",
+    "searchDesc": "Cette section affiche vos critères de recherche actuels et vous permet de soumettre des mots-clés pour effectuer une recherche dans la bibliothèque.",
+    "search1": "Chaque nouvelle soumission ajoute les mots-clés saisis à la liste des critères de recherche.",
+    "search2": "Pour lancer une nouvelle recherche au lieu d'ajouter des mots-clés à la recherche actuelle, utilisez le bouton **Supprimer le filtre**, puis entrez vos nouveaux mots-clés.",
+    "search3": "Pour remplacer un mot-clé déjà soumis, commencez par le supprimer en décochant sa case, puis soumettez un nouveau mot-clé.",
+    "search4": "Vous pouvez contrôler l'étendue de votre recherche en sélectionnant l'endroit où effectuer la recherche. Les options sont :",
+    "search5": "**Dans Auteurs Ou Contributeurs :** Recherchez vos mots-clés dans les noms des auteurs ou des contributeurs.",
+    "search6": "**Dans les titres :** Recherchez vos mots-clés dans les titres.",
+    "search7": "**Dans tous les champs :** Recherchez vos mots-clés dans tous les champs d’enregistrement bibliographique.",
+    "search8": "**Dans les documents :** Recherchez vos mots-clés dans le contenu textuel des documents disponibles.",
+    "search9": "Vous pouvez utiliser des opérateurs booléens avec vos mots-clés. Par exemple :",
+    "search10": "**ET :** Trouve les entrées qui contiennent tous les termes spécifiés. Il s'agit de la relation par défaut entre les termes lorsqu'aucun opérateur n'est spécifié, par exemple, A B est la même chose que A ET B.",
+    "search11": "**OU:** Trouve les entrées qui contiennent l'un des termes spécifiés, par exemple, A OU B.",
+    "search12": "**NON :** Exclut",
+    "search13": "Les opérateurs booléens doivent être saisis en majuscules.",
+    "search14": "Vous pouvez utiliser des groupements logiques (avec des parenthèses) pour éliminer les ambiguïtés lors de l'utilisation de plusieurs opérateurs booléens, par exemple, (A OU B) ET C.",
+    "search15": "Vous pouvez avoir besoin de séquences exactes de mots (avec des guillemets doubles), par exemple, \"A B C\". La différence par défaut entre les positions des mots est de 1, ce qui signifie qu'une entrée correspondra si elle contient les mots côte à côte, mais une distance maximale différente peut être spécifiée (avec le caractère tilde), par exemple, \"Web Search\"~2 autorise jusqu'à 1 mot entre Web et Search, ce qui signifie qu'il pourrait correspondre à la recherche de site Web ainsi qu'à la recherche Web.",
+    "exploreTitle": "Explorer",
+    "exploreDesc": "Cette section vous permet d'explorer les catégories associées aux références.",
+    "explore1": "Les catégories peuvent être utilisées pour filtrer votre recherche. Cochez une catégorie pour l'ajouter à vos critères de recherche et affiner votre recherche. Vos résultats de recherche n'afficheront alors que les entrées associées à cette catégorie.",
+    "explore2": "Décochez une catégorie pour la supprimer de vos critères de recherche et élargir vos résultats de recherche.",
+    "explore3": "Les chiffres affichés à côté des catégories indiquent le nombre d'entrées associées à chaque catégorie dans l'ensemble de résultats actuel. Ces chiffres varient en fonction de vos critères de recherche pour toujours décrire l'ensemble de résultats actuel. De même, les catégories et les facettes entières disparaîtront lorsque l'ensemble de résultats n'aura aucune entrée qui leur est associée.",
+    "explore4": "Une icône de flèche (v) apparaissant à côté d'une catégorie indique que des sous-catégories sont disponibles. Vous pouvez appuyer dessus pour développer une liste de catégories plus spécifiques. Vous pouvez appuyer à nouveau dessus plus tard pour réduire la liste. L'expansion ou la réduction des sous-catégories ne modifiera pas votre recherche actuelle ; cela vous permet d'explorer rapidement une hiérarchie de catégories si vous le souhaitez.",
+    "resultsTitle": "Résultats",
+    "resultsDesc": "Cette section affiche les résultats de la recherche. Lorsqu'aucun critère de recherche n'a été donné, elle affiche le contenu complet de la bibliographie (jusqu'à 20 entrées par page).",
+    "results1": "Chaque entrée de la liste de résultats est un lien vers sa notice bibliographique complète. À partir de la vue de la notice bibliographique, vous pouvez continuer à explorer les résultats de la recherche en accédant aux notices précédentes ou suivantes dans vos résultats de recherche, ou vous pouvez revenir à la liste des résultats.",
+    "results2": "Lire le document",
+    "results3": "Le bouton **Abstracts** vous permet d'activer ou de désactiver l'affichage des résumés dans la liste des résultats de recherche. L'activation des résumés n'aura cependant aucun effet sur les résultats pour lesquels aucun résumé n'est disponible.",
+    "results4": "**Pertinence**",
+    "results5": "Le tri par **Pertinence** n'est disponible qu'après la soumission des mots-clés via la section **Recherche**.",
+    "results6": "Les catégories sélectionnées dans la section **Explorer** n'ont aucun effet sur le score de pertinence. Leur seul effet est de filtrer la liste des résultats."
   }
 }
