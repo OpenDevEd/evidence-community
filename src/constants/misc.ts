@@ -258,4 +258,4 @@ export const COUNTRIES: Record<string, string> = {
 };
 
 
-export const SITEMAP_SIZE = 25000;
+export const SITEMAP_SIZE = 10000;

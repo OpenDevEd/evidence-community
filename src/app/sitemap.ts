@@ -10,7 +10,8 @@ export async function generateSitemaps() {
 	const total = await getTotalItems();
 	const totalPages = Math.ceil(total / SITEMAP_SIZE);
 
-	console.log("totalSitemaps:", totalPages);
+	console.log("\ntotalItems:", total);
+	console.log("totalSitemaps:\n", totalPages);
 
 	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));
 }
@@ -24,12 +25,16 @@ export default async function sitemap({
 	let attempt = 0;
 	let items;
 
+	const identifier = Number(id);
+
+	console.log(`fetching the page id ${identifier}`);
+
 	while (attempt < maxRetries) {
 		try {
 			items = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments({
 				limit: SITEMAP_SIZE,
 				fields: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"],
-				offset: id * SITEMAP_SIZE,
+				offset: identifier * SITEMAP_SIZE,
 			});
 			break; // Success - exit the loop
 		} catch (error) {
@@ -46,6 +51,7 @@ export default async function sitemap({
 	if (!items) {
 		return [];
 	}
+
 
 	return items.results.flatMap((item: any) => ({
 		url: `${process.env.BASE_URL}/lib/${item.key}`,
