@@ -256,4 +256,6 @@ export const COUNTRIES: Record<string, string> = {
 	ZW: 'Zimbabwe',
 	AX: 'Åland Islands',
 };
-  
+
+
+export const SITEMAP_SIZE = 25000;

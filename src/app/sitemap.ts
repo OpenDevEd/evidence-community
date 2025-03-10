@@ -1,30 +1,30 @@
-import meilisearchClient from "@/lib/meilisearch";
 import { MetadataRoute } from "next";
-import { routing } from "@/i18n/routing";
+import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
+import { routing } from "@/i18n/routing";
 import { convertToImageURL } from "@/lib/utils";
+import { SITEMAP_SIZE } from "@/constants/misc";
+import { getTotalItems } from "@/lib/actions";
 
-function getItems(
-	args: {
-		[key: string]: any;
-	} = {}
-) {
+export async function generateSitemaps() {
+	const total = await getTotalItems();
+	const totalPages = Math.ceil(total / SITEMAP_SIZE);
 
-	return meilisearchClient
-		.index(process.env.MEILI_INDEX || config.index)
-		.getDocuments({
-			limit: 1000000,
-			fields: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"],
-			...args,
-		});
+	console.log("totalSitemaps:", totalPages);
+
+	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));
 }
 
-export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
-	if (process.env.SHOULD_GENERATE_SITEMAP !== "true") {
-		return [];
-	}
-	
-	const items = await getItems();
+export default async function sitemap({
+	id,
+}: {
+	id: number
+}): Promise<MetadataRoute.Sitemap> {
+	const items = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments({
+		limit: SITEMAP_SIZE,
+		fields: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"],
+		offset: id * SITEMAP_SIZE,
+	});
 
 	return items.results.flatMap((item: any) => ({
 		url: `${process.env.BASE_URL}/lib/${item.key}`,
@@ -42,4 +42,3 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 			.map((attachment: any) => convertToImageURL(attachment.PDFCoverPageImage)),
 	}));
 }
-
