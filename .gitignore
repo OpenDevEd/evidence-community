@@ -45,3 +45,6 @@ usage.json
 
 # drizzle
 drizzle
+
+# sitemap
+public/sitemap.xml

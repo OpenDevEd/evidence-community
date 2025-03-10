@@ -3,7 +3,7 @@
 import { db } from "@/db";
 import { users } from "@/db/schema/tables/user";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
-import { eq, and, InferSelectModel } from "drizzle-orm";
+import { eq, and, InferSelectModel, notInArray, count, ne } from "drizzle-orm";
 import { Session, User } from "next-auth";
 import { userToFollow } from "@/db/schema/tables/userToFollow";
 import { userCollection } from "@/db/schema/tables/userCollection";
@@ -39,6 +39,7 @@ import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
 import { generateObject } from "ai";
 import { getModel } from "./ai";
 import { google } from "@ai-sdk/google";
+import { item } from "@/db/schema/tables/item";
 
 export async function runScreening(keys: string[], modelIndex: number, smartScreeningFields: SmartScreeningField[], distinctId: string) {
 	const { provider, modelName, error } = getModel(modelIndex);
@@ -608,4 +609,10 @@ export async function getProfile(
 	}
 
 	return session ? session.user : data;
+}
+
+
+export async function getTotalItems() {
+	const total = await db.select({ count: count() }).from(item).where(and(ne(item.deleted, 1), notInArray(item.itemType, EXCLUDED_ITEM_TYPES as any)));
+	return total[0].count;
 }
