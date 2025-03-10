@@ -20,11 +20,32 @@ export default async function sitemap({
 }: {
 	id: number
 }): Promise<MetadataRoute.Sitemap> {
-	const items = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments({
-		limit: SITEMAP_SIZE,
-		fields: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"],
-		offset: id * SITEMAP_SIZE,
-	});
+	const maxRetries = 10;
+	let attempt = 0;
+	let items;
+
+	while (attempt < maxRetries) {
+		try {
+			items = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments({
+				limit: SITEMAP_SIZE,
+				fields: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"],
+				offset: id * SITEMAP_SIZE,
+			});
+			break; // Success - exit the loop
+		} catch (error) {
+			attempt++;
+			if (attempt === maxRetries) {
+				console.error(`Failed to fetch documents after ${maxRetries} attempts:`, error);
+				throw error; // Re-throw if all retries failed
+			}
+			// Wait for 1 second before retrying (exponential backoff)
+			await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
+		}
+	}
+
+	if (!items) {
+		return [];
+	}
 
 	return items.results.flatMap((item: any) => ({
 		url: `${process.env.BASE_URL}/lib/${item.key}`,
