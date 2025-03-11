@@ -37,8 +37,8 @@ export const Button = extendVariants(NextUIButton, {
     },
 
     size: {
-      lg: "px-3 gap-2 lg:px-6 lg:gap-3",
-      md: "px-3 gap-2 lg:px-6 lg:gap-3 h-10",
+      lg: "px-3 gap-2 xl:px-6 xl:gap-3",
+      md: "px-3 gap-2 xl:px-6 xl:gap-3 h-10",
       xs: "text-xs px-3 h-8 gap-1",
     },
   },

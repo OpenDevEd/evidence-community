@@ -16,7 +16,7 @@ export const Input = extendVariants(NextUIInput, {
     },
     size: {
       md: {
-        input: "text-base lg:text-small"
+        input: "text-base xl:text-small"
       },
     },
     custom: {
