@@ -24,7 +24,7 @@ import FullScreenModal from "@/components/nextui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
 import { Session } from "next-auth";
-import { useStatus } from "@/context/Providers";
+import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
@@ -45,6 +45,7 @@ export function AddButton({
 	const [loading, setLoading] = useState(false);
 	const { trigger } = useSWRMutation(`/user/item/${itemData?.key}`, setter);
 	const { data: session, update } = useSession();
+	const isUserCollectionsEnabled = useFeatureFlagEnabled("user-collections");
 	const t = useTranslations("ui");
 	const highlightedCollections = Object.keys(
 		itemData
@@ -74,7 +75,7 @@ export function AddButton({
 	};
 
 	return (
-		session && (
+		session && isUserCollectionsEnabled && (
 			<>
 				<DialogModal size="lg" isOpen={isOpen} onOpenChange={onOpenChange}>
 					<ModalContent>
