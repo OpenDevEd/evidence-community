@@ -48,3 +48,16 @@ drizzle
 
 # sitemap
 public/sitemap.xml
+
+*.Identifier
+
+public/*.png
+src/app/*.png
+src/app/*.ico
+src/app/*.svg
+src/app/*.webp
+src/app/*.jpg
+src/app/*.jpeg
+src/app/*.gif
+src/app/*.bmp
+src/app/manifest.json
