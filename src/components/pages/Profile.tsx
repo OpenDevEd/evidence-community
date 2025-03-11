@@ -624,7 +624,7 @@ export default function Profile({ data }: { data: any }) {
 	return (
 		<PageContainer
 			id="main-content"
-			className="flex lg:gap-[2.5rem] gap-4 items-start lg:flex-row flex-col"
+			className="flex xl:gap-[2.5rem] lg:gap-8 gap-4 items-start lg:flex-row flex-col"
 		>
 			<CreateCollectionModal
 				onClose={onClose}
@@ -632,12 +632,12 @@ export default function Profile({ data }: { data: any }) {
 				onOpenChange={onOpenChange}
 				update={update}
 			/>
-			<div className="lg:w-96 w-full flex-col gap-6 shrink-0">
+			<div className="lg:w-80 xl:w-96 w-full flex-col gap-6 shrink-0">
 				<div className="w-full dark:bg-secondary bg-black/[4%] rounded-2xl flex flex-col">
 					<div className="w-full dark:bg-card bg-white rounded-2xl rounded-b-none overflow-hidden flex">
 						<div
 							className={twMerge(
-								"w-1/4 aspect-square",
+								"size-32 shrink-0",
 								!displayData.image &&
 									"bg-primary dark:bg-secondary rounded-r-full p-4"
 							)}
