@@ -79,7 +79,7 @@ function DropDownIcon({
 
 const genericSelectClassNames = {
 	base: "!mt-0",
-	mainWrapper: "h-10 xl:h-full",
+	mainWrapper: "h-10 lg:h-full",
 	label: "hidden",
 };
 
@@ -141,7 +141,7 @@ export function ContentInteractions({
 					!itemsContext.userData
 						? {
 								base: twMerge(
-									"flex-1 max-w-full xl:max-w-56 shrink-0",
+									"flex-1 max-w-full lg:max-w-56 shrink-0",
 									genericSelectClassNames.base
 								),
 								mainWrapper: twMerge(
@@ -155,7 +155,7 @@ export function ContentInteractions({
 						  }
 						: {
 								base: twMerge(
-									"flex-1 max-w-full min-w-0 xl:min-w-56",
+									"flex-1 max-w-full min-w-0 lg:min-w-56",
 									genericSelectClassNames.base
 								),
 								mainWrapper: twMerge(
@@ -204,11 +204,11 @@ export function ContentInteractions({
 					!itemsContext.userData
 						? {
 								base: twMerge(
-									"xl:max-w-72 w-full max-w-full",
+									"lg:max-w-72 w-full max-w-full",
 									genericSelectClassNames.base
 								),
 								mainWrapper: twMerge(
-									"h-10 xl:h-full",
+									"h-10 lg:h-full",
 									genericSelectClassNames.mainWrapper
 								),
 								label: twMerge(
@@ -218,7 +218,7 @@ export function ContentInteractions({
 						  }
 						: {
 								base: twMerge(
-									"flex-1 max-w-full min-w-0 xl:min-w-56",
+									"flex-1 max-w-full min-w-0 lg:min-w-56",
 									genericSelectClassNames.base
 								),
 								mainWrapper: twMerge(
@@ -251,8 +251,8 @@ export function ContentInteractions({
 	return (
 		<>
 			{(!itemsContext.userData || header) && (
-				<div className="flex w-full flex-col xl:flex-row xl:justify-between xl:items-end h-24 xl:h-12 gap-4 relative">
-					<h1 className="text-black dark:text-white/60 font-medium text-2xl xl:text-3xl w-full xl:w-auto h-10 xl:h-12 flex justify-between items-end">
+				<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
+					<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl w-full lg:w-auto h-10 lg:h-12 flex justify-between items-end">
 						{header || (
 							<>
 								<a
@@ -268,7 +268,7 @@ export function ContentInteractions({
 							startContent={
 								<AiOutlineCompass className="size-6" />
 							}
-							className="xl:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
+							className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
 							onPress={onExploreOpen}
 						>
 							{t("explore")}
@@ -326,7 +326,7 @@ export function ContentInteractions({
 							</ModalContent>
 						</FullScreenModal>
 					</h1>
-					<div className="flex gap-4 h-10 xl:h-12 flex-1 justify-end">
+					<div className="flex gap-4 h-10 lg:h-12 flex-1 justify-end">
 						{!itemsContext.userData && (
 							<>
 								<Button
@@ -353,7 +353,7 @@ export function ContentInteractions({
 			<section
 				role="search"
 				className={twMerge(
-					"xl:flex xl:flex-row gap-4",
+					"lg:flex lg:flex-row gap-4",
 					!itemsContext.userData
 						? "flex flex-col"
 						: "grid grid-cols-2"
@@ -367,7 +367,7 @@ export function ContentInteractions({
 					placeholder={t("search")}
 					size={"lg"}
 					classNames={{
-						inputWrapper: "h-10 xl:h-12 min-h-10 xl:min-h-12",
+						inputWrapper: "h-10 lg:h-12 min-h-10 lg:min-h-12",
 						base: "col-span-2",
 					}}
 					isClearable
@@ -382,7 +382,7 @@ export function ContentInteractions({
 				{itemsContext.userData && <SortComponent />}
 				{extraFilters}
 			</section>
-			<section className="flex justify-between h-10 xl:h-12 gap-4">
+			<section className="flex justify-between h-10 lg:h-12 gap-4">
 				<Skeleton
 					isLoaded={!!itemsContext.itemsData}
 					className="flex items-center flex-1 rounded-2xl"
@@ -418,7 +418,7 @@ export function ContentInteractions({
 						)}
 					</h2>
 				</Skeleton>
-				<section className="xl:min-w-72 flex gap-4">
+				<section className="lg:min-w-72 flex gap-4">
 					<Card className="h-full flex items-center justify-center flex-1 min-w-0 px-0">
 						<div className="px-3">
 							<Switch
@@ -433,7 +433,7 @@ export function ContentInteractions({
 							</Switch>
 						</div>
 					</Card>
-					<div className="hidden xl:flex gap-0 w-28">
+					<div className="hidden lg:flex gap-0 w-28">
 						<Button
 							color={view === "list" ? "tertiary" : "secondary"}
 							isIconOnly
@@ -797,7 +797,7 @@ function SmartScreeningModal({
 																classNames={{
 																	inputWrapper:
 																		"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-																	input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+																	input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 																}}
 															/>
 															<div className="flex justify-between">
@@ -914,7 +914,7 @@ function SmartScreeningModal({
 												classNames={{
 													inputWrapper:
 														"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-													input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+													input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 												}}
 												placeholder={placeholderExample}
 												label={t("textLabel")}
@@ -1060,7 +1060,7 @@ function AIChat() {
 							className="w-auto"
 							classNames={{
 								inputWrapper:
-									"p-2 xl:p-2 backdrop-blur-xl shadow-accent-glow data-[hover]:scale-105 w-64 data-[focus]:w-[28rem] !max-w-[calc(100vw-2rem)] !transition-all !duration-500 ease-bounce-custom",
+									"p-2 lg:p-2 backdrop-blur-xl shadow-accent-glow data-[hover]:scale-105 w-64 data-[focus]:w-[28rem] !max-w-[calc(100vw-2rem)] !transition-all !duration-500 ease-bounce-custom",
 							}}
 						/>
 						<div className="size-96 bg-accent/50 opacity-0 group-hover:opacity-75 rounded-full left-1/2 -translate-x-1/2 blur-3xl absolute -z-10 transition-all duration-1000 ease-spring"></div>
@@ -1084,7 +1084,7 @@ export default function EvidenceLibrary() {
 	const isAISearchEnabled = useFeatureFlagEnabled("ai-search");
 	return (
 		<PageContainer>
-			<div className="flex gap-[40px] flex-col xl:flex-row">
+			<div className="flex xl:gap-[2.5rem] gap-8 flex-col lg:flex-row">
 				<MainContent />
 			</div>
 			{isAISearchEnabled && <AIChat />}

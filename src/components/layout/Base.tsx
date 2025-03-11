@@ -49,7 +49,7 @@ export default async function Base({
 					<Providers session={session} status={status}>
 						<div
 							className={twMerge(
-								"h-full w-full bg-background_light dark:bg-background flex flex-col xl:grid xl:grid-rows-[6.5rem_1fr_32rem] items-center justify-items-center min-h-screen",
+								"h-full w-full bg-background_light dark:bg-background flex flex-col items-center justify-items-center min-h-screen",
 								style === "small" && "xl:pt-14"
 							)}
 						>

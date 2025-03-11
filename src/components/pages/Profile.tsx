@@ -493,7 +493,7 @@ function ProfileCollectionsList({
 			data={displayData}
 			className="flex-1 z-10"
 			classNames={{
-				list: "min-h-80 max-h-80 overflow-y-auto xl:scrollbar-hide hover:scrollbar-default overflow-x-hidden px-6 py-2",
+				list: "min-h-80 max-h-80 overflow-y-auto lg:scrollbar-hide hover:scrollbar-default overflow-x-hidden px-6 py-2",
 			}}
 			itemClasses={{
 				base: "px-4",
@@ -624,7 +624,7 @@ export default function Profile({ data }: { data: any }) {
 	return (
 		<PageContainer
 			id="main-content"
-			className="flex xl:gap-[40px] gap-4 items-start xl:flex-row flex-col"
+			className="flex lg:gap-[2.5rem] gap-4 items-start lg:flex-row flex-col"
 		>
 			<CreateCollectionModal
 				onClose={onClose}
@@ -632,7 +632,7 @@ export default function Profile({ data }: { data: any }) {
 				onOpenChange={onOpenChange}
 				update={update}
 			/>
-			<div className="xl:w-96 w-full flex-col gap-6 shrink-0">
+			<div className="lg:w-96 w-full flex-col gap-6 shrink-0">
 				<div className="w-full dark:bg-secondary bg-black/[4%] rounded-2xl flex flex-col">
 					<div className="w-full dark:bg-card bg-white rounded-2xl rounded-b-none overflow-hidden flex">
 						<div
@@ -704,7 +704,7 @@ export default function Profile({ data }: { data: any }) {
 								</div>
 							))}
 					</div>
-					<div className="hidden xl:flex flex-col flex-1">
+					<div className="hidden lg:flex flex-col flex-1">
 						{isUserCollectionsEnabled && (
 							<>
 								<div className="px-6">
@@ -761,7 +761,7 @@ export default function Profile({ data }: { data: any }) {
 					userData={data}
 					props={props}
 					extraFilters={
-						<div className="flex w-full gap-4 col-span-2 xl:hidden">
+						<div className="flex w-full gap-4 col-span-2 lg:hidden">
 							<Autocomplete
 								startContent={
 									selectedKey === "0" ? (
@@ -775,7 +775,7 @@ export default function Profile({ data }: { data: any }) {
 									classNames: {
 										inputWrapper:
 											"bg-white dark:bg-secondary border-small border-black/10 dark:border-white/10 rounded-2xl",
-										input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+										input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 									},
 								}}
 							>

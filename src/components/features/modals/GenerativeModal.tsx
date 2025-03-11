@@ -88,7 +88,7 @@ export default function GenerativeModal({
 						<AIHeader isLoading={false} onClose={onClose}>
 							{title}
 						</AIHeader>
-						<ModalBody className="w-full h-full p-0 xl:grid grid-cols-12 overflow-hidden">
+						<ModalBody className="w-full h-full p-0 lg:grid grid-cols-12 overflow-hidden">
 							<AnimatePresence mode="popLayout">
 								{(isHistoryOpen || isDesktop) && (
 									<motion.div
@@ -106,7 +106,7 @@ export default function GenerativeModal({
 									>
 										<ScrollShadow
 											className={twMerge(
-												"w-full gap-2 p-2 dark:bg-secondary bg-white xl:rounded-tr-3xl xl:rounded-bl-xl h-full"
+												"w-full gap-2 p-2 dark:bg-secondary bg-white lg:rounded-tr-3xl lg:rounded-bl-xl h-full"
 											)}
 										>
 											<Listbox
@@ -145,7 +145,7 @@ export default function GenerativeModal({
 																)}
 															</div>
 														}
-														className="data-[selected]:opacity-100 xl:opacity-50 p-2 pr-4 rounded-full"
+														className="data-[selected]:opacity-100 lg:opacity-50 p-2 pr-4 rounded-full"
 													>
 														<div className="text-base font-medium line-clamp-1 leading-5">
 															{item.title}
@@ -177,7 +177,7 @@ export default function GenerativeModal({
 											"w-full col-span-9 flex flex-col h-full overflow-y-hidden"
 										)}
 									>
-										<div className="w-full dark:bg-secondary bg-white xl:rounded-tl-3xl p-2 flex gap-1 shrink-0">
+										<div className="w-full dark:bg-secondary bg-white lg:rounded-tl-3xl p-2 flex gap-1 shrink-0">
 											<Button
 												size="sm"
 												startContent={
@@ -186,7 +186,7 @@ export default function GenerativeModal({
 												onPress={() =>
 													setIsHistoryOpen(true)
 												}
-												className="xl:hidden"
+												className="lg:hidden"
 											>
 												{t("history")}
 											</Button>
@@ -283,7 +283,7 @@ export default function GenerativeModal({
 												}}
 												aria-label={tUI("deleteHistoryItemAriaLabel")}
 											>
-												<span className="hidden xl:block">
+												<span className="hidden lg:block">
 													{t("delete")}
 												</span>
 											</Button>

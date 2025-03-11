@@ -331,7 +331,7 @@ export default function ItemControls({
 				label: t("openInZotero"),
 				props: {
 					size: "sm",
-					className: "hidden xl:flex",
+					className: "hidden lg:flex",
 					startContent: <SiZotero className="size-3" />,
 					onPress: () => {
 						window.open(
@@ -347,7 +347,7 @@ export default function ItemControls({
 				label: t("viewOnZotero"),
 				props: {
 					size: "sm",
-					className: "hidden xl:flex",
+					className: "hidden lg:flex",
 					startContent: <SiZotero className="size-3" />,
 					onPress: () => {
 						window.open(
@@ -367,7 +367,7 @@ export default function ItemControls({
 					},
 					fileName: itemData!.key,
 					size: "sm",
-					className: "hidden xl:flex ml-auto rtl:ml-0 rtl:mr-auto",
+					className: "hidden lg:flex ml-auto rtl:ml-0 rtl:mr-auto",
 					startContent: <LuDownload className="size-5" />,
 				},
 			},
@@ -378,7 +378,7 @@ export default function ItemControls({
 				props: {
 					size: "sm",
 					isDisabled: !isPrintingEnabled,
-					className: "hidden xl:flex",
+					className: "hidden lg:flex",
 					startContent: <LuPrinter className="size-5" />,
 				},
 			},
@@ -387,7 +387,7 @@ export default function ItemControls({
 				Component: CopyButton,
 				label: t("copyLink"),
 				props: {
-					className: "hidden xl:flex",
+					className: "hidden lg:flex",
 					itemData: itemData,
 					text: t("copyLink"),
 					textOnCopy: t("linkCopied"),
@@ -419,7 +419,7 @@ export default function ItemControls({
 				hideLabel: true,
 				props: {
 					size: "sm",
-					className: "rounded-full hidden xl:flex",
+					className: "rounded-full hidden lg:flex",
 					isIconOnly: true,
 					startContent: (
 						<PiSlidersHorizontalBold className="size-5" />
@@ -494,7 +494,7 @@ export default function ItemControls({
 						<Dropdown>
 							<DropdownTrigger>
 								<Button
-									className="ltr:ml-auto rtl:mr-auto flex xl:hidden"
+									className="ltr:ml-auto rtl:mr-auto flex lg:hidden"
 									size="sm"
 									isIconOnly
 									startContent={

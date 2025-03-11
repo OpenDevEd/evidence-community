@@ -55,7 +55,7 @@ function YearPicker({
 					classNames: {
 						inputWrapper:
 							"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
-						input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+						input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 					},
 				}}
 				isVirtualized={true}
@@ -115,7 +115,7 @@ function FacetPicker({
 						classNames: {
 							inputWrapper:
 								"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
-							input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+							input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 						},
 					}}
 					isVirtualized={true}
@@ -324,15 +324,15 @@ export default function CollectionsList({
 			aria-label={t("filtersAndCollectionsAriaLabel")}
 			className={twMerge(
 				"w-full shrink-0 z-20",
-				isModal ? "block" : "hidden xl:block xl:w-[28.5rem]"
+				isModal ? "block" : "hidden lg:block lg:w-[24rem] xl:w-[28.5rem]"
 			)}
 		>
 			<Skeleton
 				data-collections={isCollectionsEnabled}
-				className="w-full data-[collections=true]:xl:min-h-screen rounded-2xl"
+				className="w-full data-[collections=true]:lg:min-h-screen rounded-2xl"
 				isLoaded={!!data && !!facetDistribution}
 			>
-				<section className="w-full bg-black/[4%] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-2 p-6 sticky top-0 xl:static z-20">
+				<section className="w-full bg-black/[4%] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20">
 					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 						<span>{t("publicationYear")}</span>
 						<div className="flex gap-4 items-center flex-1 justify-end">

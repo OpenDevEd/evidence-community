@@ -4,7 +4,7 @@ import { extendVariants, Checkbox as NextUICheckbox } from "@nextui-org/react";
 export const Checkbox = extendVariants(NextUICheckbox, {
   variants: {
     size: {
-      xl: {
+      lg: {
         label: "text-xl",
         wrapper: [
           "w-7 h-7 mr-3 rtl:ml-2 rtl:mr-[unset]",

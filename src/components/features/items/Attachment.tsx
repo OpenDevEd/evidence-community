@@ -52,7 +52,7 @@ export default function Attachment({ data }: { data: Item }) {
 					} as any
 				}
 				className={twMerge(
-					"w-24 xl:w-48 bottom-0 top-4 absolute overflow-hidden transition-all",
+					"w-24 lg:w-48 bottom-0 top-4 absolute overflow-hidden transition-all",
 					canHover && "hover:top-[var(--image-height)]"
 				)}
 			>
@@ -74,8 +74,8 @@ export default function Attachment({ data }: { data: Item }) {
 					<div className="rounded-xl bg-accent w-full aspect-[9/12]" />
 				)}
 			</div>
-			<div className="flex flex-col gap-2 h-full xl:ltr:ml-52 xl:rtl:mr-52 ltr:ml-28 rtl:mr-28">
-				<h4 className="text-lg font-medium xl:line-clamp-none line-clamp-2">
+			<div className="flex flex-col gap-2 h-full lg:ltr:ml-52 lg:rtl:mr-52 ltr:ml-28 rtl:mr-28">
+				<h4 className="text-lg font-medium lg:line-clamp-none line-clamp-2">
 					<Link href={downloadURL} target="_blank" className="dark:text-current text-current break-all text-lg">
 						{data.filename}
 					</Link>

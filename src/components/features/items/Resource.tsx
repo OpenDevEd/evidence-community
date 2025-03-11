@@ -153,7 +153,7 @@ function ResourceInteractions({
 							href={url + "/lib/" + itemData?.key}
 							className="font-medium text-tertiary-400 shrink-1 px-2"
 						>
-							<span className="text-black/60 dark:text-white/60 xl:text-base text-sm">
+							<span className="text-black/60 dark:text-white/60 lg:text-base text-sm">
 								{t("viewOnDocs", {
 									site: url.split("/")[2],
 								})}

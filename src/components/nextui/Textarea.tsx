@@ -18,7 +18,7 @@ export const Textarea = extendVariants(NextUITextarea, {
 		},
 		size: {
 			md: {
-				input: "text-base xl:text-small"
+				input: "text-base lg:text-small"
 			}
 		},
 		custom: {

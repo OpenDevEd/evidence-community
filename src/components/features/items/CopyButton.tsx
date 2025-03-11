@@ -57,11 +57,11 @@ const CopyButton = forwardRef<
 			startContent={isCopied ? <FaClipboardCheck className={classNames?.icon} /> : <FaClipboard className={classNames?.icon} />}
 			size="sm"
 			onPress={handleCopy}
-			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square xl:aspect-auto xl:px-3", classNames?.button, className)}
+			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square lg:aspect-auto lg:px-3", classNames?.button, className)}
 			isIconOnly={isIconOnly}
 			aria-label={`${isCopied ? textOnCopy || t("copied") : text || t("copy")}`}
 		>
-			{!isIconOnly && <span className={twMerge(shrinkOnMobile && "hidden xl:block", classNames?.text)}>
+			{!isIconOnly && <span className={twMerge(shrinkOnMobile && "hidden lg:block", classNames?.text)}>
 				{isCopied ? textOnCopy || t("copied") : text || t("copy")}
 			</span>}
 		</Button>

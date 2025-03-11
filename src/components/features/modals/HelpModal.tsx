@@ -83,7 +83,7 @@ export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, o
   isOpen={isOpen}
   onOpenChange={onOpenChange}
   classNames={{
-    base: "bg-background_light dark:bg-card xl:border border-black/10 dark:border-white/10 mx-0 my-0 rounded-none xl:rounded-large min-h-dvh xl:min-h-0",
+    base: "bg-background_light dark:bg-card lg:border border-black/10 dark:border-white/10 mx-0 my-0 rounded-none lg:rounded-large min-h-dvh lg:min-h-0",
   }}
 >
   <ModalContent>
@@ -95,7 +95,7 @@ export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, o
             onPress={onClose}
             isIconOnly
             variant="transparent"
-            className="xl:px-0 px-0 translate-x-2"
+            className="lg:px-0 px-0 translate-x-2"
             aria-label={t("closePopupAriaLabel")}
             startContent={
               <LuX className="size-6 text-black dark:text-white/80" />

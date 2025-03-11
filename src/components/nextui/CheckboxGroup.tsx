@@ -5,7 +5,7 @@ import { extendVariants, CheckboxGroup as NextUICheckboxGroup } from "@nextui-or
 export const CheckboxGroup = extendVariants(NextUICheckboxGroup, {
   variants: {
     size: {
-      xl: {
+      lg: {
         base: "text-white/80",
         
       },

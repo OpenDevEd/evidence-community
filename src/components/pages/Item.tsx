@@ -221,7 +221,7 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 		<PageContainer id="main-content" className="flex flex-col gap-4">
 			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
 				{data?.item && <ItemControls itemData={data?.item} router={router} loading={loading} />}
-				<div className="flex flex-col gap-8 p-4 xl:p-10">
+				<div className="flex flex-col gap-8 p-4 lg:p-10">
 					{data?.item ? (
 						<>
 							<h1 className="text-4xl text-black/80 dark:text-white/80 font-medium">
@@ -276,8 +276,8 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 			{isAIEnabled && data?.item && !loading && aiAllowed && <AiButton data={data}  />}
 			{isRelatedItemsEnabled && data?.item && (
 				<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden">
-					<div className="flex xl:flex-row flex-col xl:gap-8 gap-2">
-						<h3 className="text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-full shrink-0 rounded xl:p-10 p-4 pb-0">
+					<div className="flex lg:flex-row flex-col lg:gap-8 gap-2">
+						<h3 className="text-xl font-medium text-black/60 dark:text-white/60 lg:w-64 w-full shrink-0 rounded lg:p-10 p-4 pb-0">
 							{t("relatedItems")}
 						</h3>
 						<div className="w-full">
