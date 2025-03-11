@@ -228,7 +228,6 @@ export default function Resource({
 		const observer = new IntersectionObserver((entries) => {
 			entries.forEach((entry) => {
 				if (entry.isIntersecting) {
-					console.log("prefetching", href);
 					router.prefetch(href, { kind: PrefetchKind.AUTO });
 					observer.disconnect();
 				}

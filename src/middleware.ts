@@ -80,7 +80,6 @@ export default async function middleware(request: NextRequest) {
   if (downloadMatch) {
     const itemKey = downloadMatch[1];
     const attachmentKey = downloadMatch[2];
-    console.log(itemKey, attachmentKey);
     const itemUrl = new URL(`/api/item/${itemKey}`, request.url).toString();
     const response = await fetch(itemUrl);
     const item: ItemGetResponse = await response.json();

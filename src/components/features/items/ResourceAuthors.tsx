@@ -15,7 +15,6 @@ export default function ResourceAuthors({
 		
 		if (institutions.length) {
 			// Find the first institution that has a matching logo
-			console.log("INSTITUTION", institutions);
 
 			const institutionWithLogo = institutions.find(institution => 
 				Object.keys(INSTITUTION_LOGOS).some(key => institution.includes(key))

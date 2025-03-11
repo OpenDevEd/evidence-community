@@ -135,7 +135,6 @@ export function useItemsList(userData?: any) {
 	}
 
 	const handleClearFilters = () => {
-		console.log("handleClearFilters");
 		setParams({
 			author: "",
 			institution: "",

@@ -134,8 +134,7 @@ export function unescapeXML(safe: string) {
 }
 
 export function cleanAIResponse(response: string) {
-	console.log("response before cleaning:", response);
-	
+		
 	// General regex to match any characters in brackets followed by /lib/ paths
 	const linkRegex = /\[(.*?)\](?:\(|\[)(\/lib\/[^)\]]+)(?:\)|\])([.,;:!?]*)/g;
 	
@@ -153,7 +152,6 @@ export function cleanAIResponse(response: string) {
 		return ''; // Remove duplicate links
 	});
 	
-	console.log("response after cleaning:", result);
 	return result;
 }
 
