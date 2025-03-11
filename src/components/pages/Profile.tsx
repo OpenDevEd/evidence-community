@@ -138,7 +138,7 @@ function CreateCollectionModal({
 									"collectionDescriptionDescription"
 								)}
 							/>
-							<Select
+							{/* <Select
 								name="private"
 								placement="left"
 								label={t("collectionVisibility")}
@@ -166,7 +166,7 @@ function CreateCollectionModal({
 										{item.name}
 									</SelectItem>
 								)}
-							</Select>
+							</Select> */}
 							<AnimatePresence mode="sync">
 								{errorMessage && <ErrorField />}
 							</AnimatePresence>
