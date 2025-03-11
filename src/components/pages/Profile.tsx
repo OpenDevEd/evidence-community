@@ -17,9 +17,7 @@ import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
 import { useSession } from "next-auth/react";
 import { Session } from "next-auth";
-import {
-	setter, fetcherDELETE
-} from "@/lib/utils";
+import { setter, fetcherDELETE } from "@/lib/utils";
 import useSWRMutation from "swr/mutation";
 import { twMerge } from "tailwind-merge";
 import { Textarea } from "../nextui/Textarea";
@@ -37,14 +35,12 @@ import {
 	ListboxProps,
 	ModalBody,
 	ModalContent,
-	SelectItem
+	SelectItem,
 } from "@nextui-org/react";
 import { useDisclosure } from "@nextui-org/react";
 import GenericHeader from "../features/modals/GenericHeader";
 import { Select } from "../nextui/Select";
-import {
-	COLLECTION_VISIBILITY_OPTIONS
-} from "@/constants/user";
+import { COLLECTION_VISIBILITY_OPTIONS } from "@/constants/user";
 import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence } from "framer-motion";
 import { ResourcesView } from "../features/resources/ResourcesView";
@@ -56,6 +52,7 @@ import { BiTrash } from "react-icons/bi";
 import { Dropdown } from "../nextui/Dropdown";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList from "../features/items/ItemsList";
+import { useFeatureFlagEnabled } from "posthog-js/react";
 
 function CreateCollectionModal({
 	update,
@@ -141,7 +138,7 @@ function CreateCollectionModal({
 									"collectionDescriptionDescription"
 								)}
 							/>
-							<Select
+							{/* <Select
 								name="private"
 								placement="left"
 								label={t("collectionVisibility")}
@@ -169,7 +166,7 @@ function CreateCollectionModal({
 										{item.name}
 									</SelectItem>
 								)}
-							</Select>
+							</Select> */}
 							<AnimatePresence mode="sync">
 								{errorMessage && <ErrorField />}
 							</AnimatePresence>
@@ -188,7 +185,6 @@ function CreateCollectionModal({
 		</DialogModal>
 	);
 }
-
 
 type ProfileListItem = {
 	label: any;
@@ -345,15 +341,17 @@ function useProfileCollectionsList(
 		index,
 	}));
 
-	const filteredDataList = dataListIndexed.filter(
-		(item) =>
-			(typeof item.label === "string" &&
-				item.label.toLowerCase().includes(search.toLowerCase())) ||
-			(typeof item.description === "string" &&
-				item.description.toLowerCase().includes(search.toLowerCase()))
-	).filter(
-		(item) => !disabledKeys.has(String(item.id))
-	);
+	const filteredDataList = dataListIndexed
+		.filter(
+			(item) =>
+				(typeof item.label === "string" &&
+					item.label.toLowerCase().includes(search.toLowerCase())) ||
+				(typeof item.description === "string" &&
+					item.description
+						.toLowerCase()
+						.includes(search.toLowerCase()))
+		)
+		.filter((item) => !disabledKeys.has(String(item.id)));
 
 	return [
 		filteredDataList,
@@ -495,7 +493,7 @@ function ProfileCollectionsList({
 			data={displayData}
 			className="flex-1 z-10"
 			classNames={{
-				list: "min-h-80 max-h-80 overflow-y-auto xl:scrollbar-hide hover:scrollbar-default overflow-x-hidden px-6 py-2",
+				list: "min-h-80 max-h-80 overflow-y-auto lg:scrollbar-hide hover:scrollbar-default overflow-x-hidden px-6 py-2",
 			}}
 			itemClasses={{
 				base: "px-4",
@@ -550,11 +548,7 @@ function useDisplayedData(
 
 	return displayData;
 }
-export default function Profile({
-	data,
-}: {
-	data: any;
-}) {
+export default function Profile({ data }: { data: any }) {
 	const { data: session, update } = useSession();
 	const [loading, setLoading] = useState(false);
 	const [selectedTab, setSelectedTab] = useState(new Set(["0"]));
@@ -568,9 +562,13 @@ export default function Profile({
 		session,
 		isCurrentUser
 	);
+	const isUserCollectionsEnabled = useFeatureFlagEnabled("user-collections");
 
 	const props = useItemsList(data);
-	const { queryParams: { collectionId: selectedCollection }, handleCollectionSelect } = props;
+	const {
+		queryParams: { collectionId: selectedCollection },
+		handleCollectionSelect,
+	} = props;
 
 	const [mainListboxList, selectedCollectionIndex] =
 		useProfileCollectionsList(
@@ -611,9 +609,9 @@ export default function Profile({
 	);
 
 	const selectedKey =
-		(selectedCollection && !disabledKeys.has(selectedCollection))
+		selectedCollection && !disabledKeys.has(selectedCollection)
 			? String(selectedCollectionIndex)
-			: "0"
+			: "0";
 
 	const appendContent = (
 		<CollectionDropdown
@@ -626,7 +624,7 @@ export default function Profile({
 	return (
 		<PageContainer
 			id="main-content"
-			className="flex xl:gap-[40px] gap-4 items-start xl:flex-row flex-col"
+			className="flex xl:gap-[2.5rem] lg:gap-8 gap-4 items-start lg:flex-row flex-col"
 		>
 			<CreateCollectionModal
 				onClose={onClose}
@@ -634,12 +632,12 @@ export default function Profile({
 				onOpenChange={onOpenChange}
 				update={update}
 			/>
-			<div className="xl:w-96 w-full flex-col gap-6 shrink-0">
+			<div className="lg:w-80 xl:w-96 w-full flex-col gap-6 shrink-0">
 				<div className="w-full dark:bg-secondary bg-black/[4%] rounded-2xl flex flex-col">
 					<div className="w-full dark:bg-card bg-white rounded-2xl rounded-b-none overflow-hidden flex">
 						<div
 							className={twMerge(
-								"w-1/4 aspect-square",
+								"size-32 shrink-0",
 								!displayData.image &&
 									"bg-primary dark:bg-secondary rounded-r-full p-4"
 							)}
@@ -675,7 +673,7 @@ export default function Profile({
 								label: t("likedItemsLabel"),
 								count:
 									"+" +
-									Object.keys(displayData.likes).length ||
+										Object.keys(displayData.likes).length ||
 									0,
 							},
 							{
@@ -683,43 +681,55 @@ export default function Profile({
 								count:
 									Object.keys(displayData.itemsCollections)
 										.length || 0,
+								disabled: !isUserCollectionsEnabled,
 							},
 							{
 								label: t("collections"),
 								count: displayData.collections.length || 0,
+								disabled: !isUserCollectionsEnabled,
 							},
-						].map((item) => (
-							<div
-								key={item.label}
-								className="flex flex-col justify-center flex-1"
-							>
-								<div className="text-2xl font-medium text-black/80 dark:text-white/80">
-									{item.count}
+						]
+							.filter((item) => !item.disabled)
+							.map((item) => (
+								<div
+									key={item.label}
+									className="flex flex-col justify-center flex-1"
+								>
+									<div className="text-2xl font-medium text-black/80 dark:text-white/80">
+										{item.count}
+									</div>
+									<div className="text-sm text-black/60 dark:text-white/60 line-clamp-1">
+										{item.label}
+									</div>
 								</div>
-								<div className="text-sm text-black/60 dark:text-white/60 line-clamp-1">
-									{item.label}
-								</div>
-							</div>
-						))}
+							))}
 					</div>
-					<div className="hidden xl:flex flex-col flex-1">
-						<div className="px-6">
-							<Divider />
-						</div>
-						<ProfileCollectionsList
-							displayData={displayData}
-							selectedKey={selectedKey}
-							setSelectedTab={setSelectedTab}
-							onOpen={onOpen}
-							selectedCollection={selectedCollection}
-							mainListboxList={mainListboxList}
-							selectedCollectionIndex={selectedCollectionIndex}
-							setSearch={setSearch}
-							update={update}
-							handleCollectionSelect={handleCollectionSelect}
-							appendContent={appendContent}
-						/>
-						{isCurrentUser && (
+					<div className="hidden lg:flex flex-col flex-1">
+						{isUserCollectionsEnabled && (
+							<>
+								<div className="px-6">
+									<Divider />
+								</div>
+								<ProfileCollectionsList
+									displayData={displayData}
+									selectedKey={selectedKey}
+									setSelectedTab={setSelectedTab}
+									onOpen={onOpen}
+									selectedCollection={selectedCollection}
+									mainListboxList={mainListboxList}
+									selectedCollectionIndex={
+										selectedCollectionIndex
+									}
+									setSearch={setSearch}
+									update={update}
+									handleCollectionSelect={
+										handleCollectionSelect
+									}
+									appendContent={appendContent}
+								/>
+							</>
+						)}
+						{/* {isCurrentUser && (
 							<div className="px-6">
 								<Divider className="" />
 								<ProfileListbox
@@ -742,7 +752,7 @@ export default function Profile({
 									}))}
 								/>
 							</div>
-						)}
+						)} */}
 					</div>
 				</div>
 			</div>
@@ -751,7 +761,7 @@ export default function Profile({
 					userData={data}
 					props={props}
 					extraFilters={
-						<div className="flex w-full gap-4 col-span-2 xl:hidden">
+						<div className="flex w-full gap-4 col-span-2 lg:hidden">
 							<Autocomplete
 								startContent={
 									selectedKey === "0" ? (
@@ -765,7 +775,7 @@ export default function Profile({
 									classNames: {
 										inputWrapper:
 											"bg-white dark:bg-secondary border-small border-black/10 dark:border-white/10 rounded-2xl",
-										input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base xl:text-small",
+										input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 									},
 								}}
 							>

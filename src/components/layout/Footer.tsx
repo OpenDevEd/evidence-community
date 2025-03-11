@@ -26,7 +26,7 @@ function FooterFieldColumn({
 	content: React.ReactNode;
 }) {
 	return (
-		<div className="flex flex-col w-full xl:w-auto items-center xl:items-start">
+		<div className="flex flex-col w-full lg:w-auto items-center lg:items-start">
 			<h3 className="text-black/80 dark:text-white/80 font-bold text-xl">
 				{title}
 			</h3>
@@ -87,9 +87,9 @@ export default function Footer() {
 	}, []);
 
 	return (
-		<footer id="footer" className="row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 xl:gap-14 py-12 xl:py-0 print:hidden">
-			<div className="max-w-[96rem] px-14 flex w-full justify-between xl:items-start items-center flex-col gap-6 xl:gap-14 xl:flex-row">
-				<div className="flex flex-col gap-6 h-full items-center xl:items-start">
+		<footer id="footer" className="row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 lg:gap-14 py-12 min-h-[32rem] lg:py-0 print:hidden">
+			<div className="max-w-[96rem] px-14 flex w-full justify-between lg:items-start items-center flex-col gap-6 lg:gap-14 lg:flex-row">
+				<div className="flex flex-col gap-6 h-full items-center lg:items-start">
 					<Logo />
 					<div className="flex flex-col gap-[0.875rem]">
 						{Object.entries(footerInfo).map(
@@ -97,7 +97,7 @@ export default function Footer() {
 								footer[key] && (
 									<div
 										key={key}
-										className="flex gap-2 justify-center xl:justify-start"
+										className="flex gap-2 justify-center lg:justify-start"
 									>
 										<span className="text-black/60 dark:text-white/60">
 											{t(key)}
@@ -113,7 +113,7 @@ export default function Footer() {
 				<FooterFieldColumn
 					title={t("quickLinks")}
 					content={
-						<ul className="flex flex-col gap-4 mt-6 items-center xl:items-start">
+						<ul className="flex flex-col gap-4 mt-6 items-center lg:items-start">
 							{links.map(
 								(link) =>
 									!link.footerExclude && (
@@ -131,7 +131,7 @@ export default function Footer() {
 						</ul>
 					}
 				/>
-				<div className="flex flex-col h-full gap-6 w-full xl:w-auto">
+				<div className="flex flex-col h-full gap-6 w-full lg:w-auto">
 					{false &&<FooterFieldColumn
 						title={t("stayConnected")}
 						content={

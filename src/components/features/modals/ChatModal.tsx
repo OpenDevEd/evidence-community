@@ -302,7 +302,7 @@ export default function ChatModal({
 											className="w-full overflow-y-scroll overflow-x-hidden py-8 h-full"
 											ref={messageListRef}
 										>
-											<div className="max-w-[96rem] xl:px-24 mx-auto flex flex-col gap-8 ">
+											<div className="max-w-[96rem] lg:px-24 mx-auto flex flex-col gap-8 ">
 												{messages.map(
 													(message, index) =>
 														index > 0 && (
@@ -524,7 +524,7 @@ export default function ChatModal({
 										bounce: 0.25,
 										duration: 0.5,
 									}}
-									className="w-full flex justify-center xl:items-center items-end h-full"
+									className="w-full flex justify-center lg:items-center items-end h-full"
 								>
 									<form
 										className={twMerge(
@@ -550,7 +550,7 @@ export default function ChatModal({
 															opacity: 0,
 															y: -100,
 														}}
-														className="w-full flex flex-col xl:flex-row gap-4 max-w-[96rem] xl:px-14 mx-auto"
+														className="w-full flex flex-col lg:flex-row gap-4 max-w-[96rem] lg:px-14 mx-auto"
 													>
 														{(Array.isArray(
 															questions
@@ -633,7 +633,7 @@ export default function ChatModal({
 													onValueChange={setInput}
 													classNames={{
 														base: twMerge(
-															"xl:w-1/3 xl:mx-auto data-[focus=true]:xl:w-2/5 active:xl:scale-90 data-[focus]:active:xl:scale-100 transition-all duration-500 ease-spring data-[focus=true]:opacity-100"
+															"lg:w-1/3 lg:mx-auto data-[focus=true]:lg:w-2/5 active:lg:scale-90 data-[focus]:active:lg:scale-100 transition-all duration-500 ease-spring data-[focus=true]:opacity-100"
 														),
 													}}
 												/>

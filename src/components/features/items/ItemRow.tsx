@@ -26,10 +26,10 @@ export default function ItemRow({ item, row, router, value, customRowName, loadi
 	const rowName = customRowName || t("article." + row);
 
 	return (
-		<div className="flex xl:flex-row flex-col xl:gap-4">
+		<div className="flex lg:flex-row flex-col lg:gap-4">
 			<h3
 				className={twMerge(
-					"text-xl font-medium text-black/60 dark:text-white/60 xl:w-64 w-full shrink-0 rounded",
+					"text-xl font-medium text-black/60 dark:text-white/60 lg:w-64 w-full shrink-0 rounded",
 					!rowName && "!text-red-500",
 					rowValue === undefined && "bg-red-500 text-center"
 				)}

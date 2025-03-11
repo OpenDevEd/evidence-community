@@ -344,7 +344,7 @@ export const valueFormatter: Record<
 		if (value.length === 0) return null;
 
 		return (
-			<ul className="flex flex-col xl:gap-2">
+			<ul className="flex flex-col lg:gap-2">
 				{value.map((creator: Creator, index: number) => {
 					const creatorTypeLabel = t(
 						"creatorType." + creator.creatorType
@@ -406,7 +406,7 @@ export const valueFormatter: Record<
 		if (filteredValue.length === 0) return false;
 
 		return (
-			<ul className="flex flex-col gap-2 xl:w-2/3 w-full">
+			<ul className="flex flex-col gap-2 lg:w-2/3 w-full">
 				{value
 					.filter((data: any) => data.PDFCoverPageImage)
 					.map((data: Item, index: number) => (

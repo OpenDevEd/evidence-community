@@ -360,7 +360,7 @@ function ContentActions({ params }: { params?: Record<string, any> }) {
 	const pathName = usePathname();
 
 	return (
-		<div className="xl:flex xl:justify-end grid gap-4 flex-wrap">
+		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap">
 			<DownloadModal
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
@@ -428,7 +428,7 @@ function PaginationControls() {
 
 	return (
 		!actuallyNoData && (
-			<div className="w-full flex justify-center bg-background_light dark:bg-background py-2 xl:py-6 z-10">
+			<div className="w-full flex justify-center bg-background_light dark:bg-background py-2 lg:py-6 z-10">
 				<Skeleton
 					isLoaded={totalPages > 0}
 					className="w-full h-14 rounded-2xl flex items-center justify-center"
@@ -480,7 +480,7 @@ export function ResourcesView({
 			<ResourcesList abstract={abstract} view={view} />
 			<PaginationControls />
 			<ContentActions params={params} />
-			<div className="text-center xl:text-end text-black/60 dark:text-white/60 text-sm">
+			<div className="text-center lg:text-end text-black/60 dark:text-white/60 text-sm">
 				{t("lastUpdate", {
 					date: format.dateTime(status.databaseUpdatedAt!, {
 						day: "2-digit",
