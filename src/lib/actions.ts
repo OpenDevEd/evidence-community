@@ -40,6 +40,22 @@ import { generateObject } from "ai";
 import { getModel } from "./ai";
 import { google } from "@ai-sdk/google";
 import { item } from "@/db/schema/tables/item";
+import { headers } from "next/headers";
+
+export async function getRateLimits() {
+	const headersList = await headers();
+	const retryAt = headersList.get("X-RateLimit-Reset");
+	const remaining = headersList.get("X-RateLimit-Remaining");
+	const limit = headersList.get("X-RateLimit-Limit");
+	const retryAfter = headersList.get("Retry-After");
+
+	return {
+		retryAt: retryAt ? parseInt(retryAt) : null,
+		remaining: remaining ? parseInt(remaining) : null,
+		limit: limit ? parseInt(limit) : null,
+		retryAfter: retryAfter ? parseInt(retryAfter) : null,
+	}
+}
 
 export async function runScreening(keys: string[], modelIndex: number, smartScreeningFields: SmartScreeningField[], distinctId: string) {
 	const { provider, modelName, error } = getModel(modelIndex);
