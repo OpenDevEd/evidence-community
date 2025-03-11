@@ -478,8 +478,6 @@ export const valueFormatter: Record<
 		// Handle both string and array values
 		const institutions = Array.isArray(value) ? value : [value];
 
-		console.log("institution", value);
-
 		if (institutions.length === 0) return false;
 
 		return (

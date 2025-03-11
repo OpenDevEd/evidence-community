@@ -11,6 +11,7 @@ export function toast(toast: Omit<ToastProps, 'id'>) {
       id={id}
       title={toast.title}
       description={toast.description}
+      type={toast.type}
       button={toast.button ? {
         label: toast.button.label,
         onClick: toast.button.onClick || (() => console.log('Button clicked')),
@@ -21,14 +22,14 @@ export function toast(toast: Omit<ToastProps, 'id'>) {
 
 /** A fully custom toast that still maintains the animations and interactions. */
 function Toast(props: ToastProps) {
-  const { title, description, button, id } = props;
+  const { title, description, button, id, type } = props;
 
   return (
-    <div className="flex rounded-lg bg-background_light dark:bg-secondary text-black dark:text-white shadow-lg ring-1 ring-black/5 w-96  items-center p-4">
+    <div data-type={type} className={`flex rounded-lg bg-background_light dark:bg-secondary data-[type=error]:!bg-red-500 text-black dark:text-white shadow-lg ring-1 ring-black/5 w-96  items-center p-4`}>
       <div className="flex flex-1 items-center">
         <div className="w-full">
           <p className="text-sm font-medium ">{title}</p>
-          <p className="mt-1 text-sm opacity-80 whitespace-pre-wrap">{description}</p>
+          {description && <p className="mt-1 text-sm opacity-80 whitespace-pre-wrap">{description}</p>}
         </div>
       </div>
       {button && (
@@ -71,7 +72,8 @@ export default function Headless() {
 interface ToastProps {
   id: string | number;
   title: string;
-  description: string;
+  description?: string;
+  type?: "success" | "error";
   button?: {
     label: string;
     onClick: () => void;

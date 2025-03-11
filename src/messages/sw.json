@@ -173,7 +173,8 @@
     "exportAsHTML": "Hamisha kama .html",
     "exportAsPlainText": "Hamisha kama .txt",
     "delete": "Futa",
-    "history": "Historia"
+    "history": "Historia",
+    "rateLimitedMessage": "Umefikia kikomo cha matumizi. Tafadhali jaribu tena baada ya sekunde {seconds}."
   },
   "sorts": {
     "desc": "Mpya Zaidi",

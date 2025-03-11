@@ -173,7 +173,7 @@
     "exportAsPlainText": "Als .txt exportieren",
     "delete": "Löschen",
     "history": "Verlauf",
-    "rateLimitedMessage": "Sie haben die Rate-Limit erreicht. Bitte versuchen Sie es später erneut."
+    "rateLimitedMessage": "Sie wurden durch die Ratenbegrenzung eingeschränkt. Bitte versuchen Sie es in {seconds} Sekunden erneut."
   },
   "sorts": {
     "desc": "Neueste",

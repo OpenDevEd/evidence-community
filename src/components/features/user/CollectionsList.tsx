@@ -66,8 +66,6 @@ export default function CollectionsList({
 		];
 	}, [data.collections, page, search]);
 
-	console.log("data.collections", data.collections);
-
 	return (
 		<>
 			<Input

@@ -1,10 +1,14 @@
+import { toast } from "@/components/layout/Toast";
+import { getRateLimits } from "@/lib/actions";
 import { useCompletion } from "ai/react";
-import { useLocale } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import posthog from "posthog-js";
 import { useCallback } from "react";
 
+
 export default function useAIStream(endpoint: string, onFinish: (completion: string, id: string) => void, id: string) {
     const locale = useLocale();
+    const t = useTranslations("ai");
     const { completion, complete, isLoading, error, setCompletion } = useCompletion({
         api: endpoint,
         headers: {
@@ -14,6 +18,17 @@ export default function useAIStream(endpoint: string, onFinish: (completion: str
         body: {
             distinctId: posthog.get_distinct_id()
         },
+        onError: (e) => {
+            (async () => {
+                const rateLimits = await getRateLimits();
+                if (e.message.includes("Rate limit exceeded")) {
+                    toast({
+                        title: t("rateLimitedMessage", { seconds: rateLimits.retryAfter }),
+                        type: "error",
+                    });
+                }
+            })();
+        }
     })
 
     const debouncedComplete = useCallback((...args: Parameters<typeof complete>) => {
@@ -21,7 +36,6 @@ export default function useAIStream(endpoint: string, onFinish: (completion: str
         onFinish(completion, id);
         complete(...args).then((completion) => {
             if (completion) {
-                console.log("Completion created", id);
                 onFinish(completion, id);
             }
         });

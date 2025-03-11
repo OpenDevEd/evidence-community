@@ -57,9 +57,6 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 		}],
 		fetcherPOST,
 		{
-			onSuccess: (data) => {
-				console.log(data);
-			},
 			revalidateOnFocus: false,
 			revalidateOnReconnect: false,
 			revalidateIfStale: false,
@@ -98,8 +95,6 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 			return { ...prev, [prompt]: newHistory };
 		});
 	};
-
-	console.log(questions);
 
 	const summaryFeature = useAIFeature("summarize", id.current, updateHistory, data, selectedModel);
 	const explainFeature = useAIFeature("explain", id.current, updateHistory, data, selectedModel);

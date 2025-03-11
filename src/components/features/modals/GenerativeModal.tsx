@@ -32,6 +32,7 @@ import {
 import { AIControls } from "./AIControls";
 import { twMerge } from "tailwind-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
+import { RiErrorWarningFill } from "react-icons/ri";
 
 export default function GenerativeModal({
 	history,
@@ -322,9 +323,7 @@ export default function GenerativeModal({
 																	delay: 0.5,
 																}}
 															>
-																{t(
-																	"errorMessage"
-																)}
+																<RiErrorWarningFill className="size-32 opacity-50" />
 															</motion.div>
 														</div>
 													) : (
