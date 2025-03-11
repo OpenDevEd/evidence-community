@@ -33,7 +33,7 @@ import { useLocalStorage } from "usehooks-ts";
 import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
 import useSWRMutation from "swr/mutation";
 import { cleanAIResponse, fetcher, setter } from "@/lib/utils";
-import { runScreening } from "@/lib/actions";
+import { getRateLimits, runScreening } from "@/lib/actions";
 import Resource from "../items/Resource";
 import { GiStarSwirl } from "react-icons/gi";
 
@@ -146,17 +146,20 @@ export default function ChatModal({
 		onError: (e) => {
 			const isRateLimited = e.message.includes("Rate limit exceeded");
 			if (!isRateLimited) {
-				appendMessage({
-					role: "assistant",
-					content: t("errorMessage"),
-					id: "error-" + Date.now(),
-				});
+					appendMessage({
+						role: "assistant",
+						content: t("errorMessage"),
+						id: "error-" + Date.now(),
+					});
 			} else {
-				appendMessage({
-					role: "assistant",
-					content: t("rateLimitedMessage"),
-					id: "error-" + Date.now(),
-				});
+				(async () => {
+					const rateLimits = await getRateLimits();
+					appendMessage({
+						role: "assistant",
+						content: t("rateLimitedMessage", { seconds: rateLimits.retryAfter }),
+						id: "error-" + Date.now(),
+					});
+				})();
 			}
 		},
 	});
