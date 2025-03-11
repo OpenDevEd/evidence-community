@@ -173,7 +173,7 @@
     "exportAsPlainText": "Exporter en .txt",
     "delete": "Supprimer",
     "history": "Historique",
-    "rateLimitedMessage": "Vous avez atteint la limite de taux. Veuillez réessayer plus tard."
+    "rateLimitedMessage": "Vous avez été limité en débit. Veuillez réessayer dans {seconds} secondes."
   },
   "sorts": {
     "desc": "Plus récent",

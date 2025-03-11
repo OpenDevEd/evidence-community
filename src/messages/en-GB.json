@@ -173,7 +173,7 @@
     "exportAsPlainText": "Export as .txt",
     "delete": "Delete",
     "history": "History",
-    "rateLimitedMessage": "You have reached the rate limit. Please try again later."
+    "rateLimitedMessage": "You have been rate limited. Please try again in {seconds} seconds."
   },
   "sorts": {
     "desc": "Newest",

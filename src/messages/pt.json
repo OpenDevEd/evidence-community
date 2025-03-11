@@ -173,7 +173,7 @@
     "exportAsPlainText": "Exportar como .txt",
     "delete": "Excluir",
     "history": "Histórico",
-    "rateLimitedMessage": "Você atingiu o limite de taxa. Por favor, tente novamente mais tarde."
+    "rateLimitedMessage": "Você foi limitado pela taxa. Por favor, tente novamente em {seconds} segundos."
   },
   "sorts": {
     "desc": "Mais recentes",

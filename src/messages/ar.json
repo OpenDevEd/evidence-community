@@ -173,7 +173,7 @@
     "exportAsPlainText": "تصدير كـ .txt",
     "delete": "حذف",
     "history": "السجل",
-    "rateLimitedMessage": "لقد تجاوزت الحد المسموح به. يرجى المحاولة مرة أخرى لاحقاً."
+    "rateLimitedMessage": "لقد تم تحديد معدل استخدامك. يرجى المحاولة مرة أخرى في {seconds} ثانية."
   },
   "sorts": {
     "desc": "الأحدث",
