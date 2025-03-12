@@ -141,7 +141,8 @@
     "noResourcesForScreening": "Nenhum recurso encontrado para triagem, um resumo é necessário para realizar uma triagem.",
     "moreFilters": "Mais Filtros",
     "countryFilter": "Foco no país",
-    "close": "Fechar"
+    "close": "Fechar",
+    "etAl": "et al."
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

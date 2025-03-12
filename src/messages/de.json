@@ -141,7 +141,8 @@
     "noResourcesForScreening": "Keine Ressourcen für das Screening gefunden, ein Abstract ist erforderlich, um ein Screening durchzuführen.",
     "moreFilters": "Weitere Filter",
     "countryFilter": "Länderschwerpunkt",
-    "close": "Schließen"
+    "close": "Schließen",
+    "etAl": "et al."
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

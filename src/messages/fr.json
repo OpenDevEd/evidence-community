@@ -141,7 +141,8 @@
     "noResourcesForScreening": "Aucune ressource trouvée pour le dépistage, un résumé est requis pour effectuer un dépistage.",
     "moreFilters": "Plus de filtres",
     "countryFilter": "Concentration géographique",
-    "close": "Fermer"
+    "close": "Fermer",
+    "etAl": "et al."
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",

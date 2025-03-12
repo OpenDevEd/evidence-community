@@ -1,6 +1,40 @@
 import { Item } from "@/app/api/item/types";
 import { INSTITUTION_LOGOS } from "@/constants/items";
 import ResourceData from "./ResourceData";
+import { useTranslations } from "next-intl";
+
+export type Author = {
+	firstName: string;
+	lastName: string;
+	institution: string;
+	name: string;
+};
+
+function toInitials(name: string) {
+	if (!name) return '';
+	return name.split(' ').map(n => n[0]).join('. ') + ".";
+}
+
+function formatAPAAuthor(authors: Author[]) {
+	const t = useTranslations("ui");
+
+	function authorString(author: Author) {
+		if (author.name) return author.name;
+		return [author.lastName, toInitials(author.firstName)].filter(Boolean).join(", ")
+	}
+
+	if (!authors || authors.length === 0) return '';
+	
+	if (authors.length <= 2) {
+		return authors
+			.map(authorString)
+			.join(' & ');
+	}
+	
+	const firstAuthor = authors.find(author => author.lastName);
+	if (!firstAuthor) return '';
+	return authorString(firstAuthor) + " " + t("etAl");
+}
 
 export default function ResourceAuthors({
 	itemData,
@@ -27,23 +61,18 @@ export default function ResourceAuthors({
 				([key]) => selectedInstitution.includes(key)
 			)?.[1];
 
-			return (
-				<ResourceData
-					startContent={InstitutionLogo ? <InstitutionLogo /> : null}
-					text={selectedInstitution} />
-			);
+			// return (
+			// 	<ResourceData
+			// 		startContent={InstitutionLogo ? <InstitutionLogo /> : null}
+			// 		text={selectedInstitution} />
+			// );
 		}
 	}
 
 	if (itemData && itemData.creators && itemData.creators.length > 0)
 		return (
 			<span className="max-w-64 truncate overflow-hidden">
-				{itemData?.creators
-					?.map((creator: any) => (creator.firstName || creator.lastName)
-						? [creator.firstName, creator.lastName].filter(Boolean).join(" ")
-						: creator.name || null
-					)
-					.join(", ")}
+				{formatAPAAuthor(itemData?.creators as Author[])}
 			</span>
 		);
 

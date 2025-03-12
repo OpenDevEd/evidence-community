@@ -141,7 +141,8 @@
     "noResourcesForScreening": "No resources found for screening, an abstract is required to perform a screening.",
     "moreFilters": "More Filters",
     "countryFilter": "Country Focus",
-    "close": "Close"
+    "close": "Close",
+    "etAl": "et al."
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

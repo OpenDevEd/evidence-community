@@ -142,7 +142,8 @@
     "noResourcesForScreening": "Hakuna rasilimali zilizopatikana za uchunguzi, muhtasari unahitajika ili kufanya uchunguzi.",
     "moreFilters": "Vichungi Zaidi",
     "countryFilter": "Lengo la Nchi",
-    "close": "Funga"
+    "close": "Funga",
+    "etAl": "na wengine"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
