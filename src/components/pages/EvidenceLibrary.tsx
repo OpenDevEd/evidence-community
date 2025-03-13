@@ -19,6 +19,7 @@ import {
 	ModalBody,
 	ModalContent,
 	ModalFooter,
+	PropsOf,
 	ScrollShadow,
 	Spinner,
 	Textarea,
@@ -56,6 +57,7 @@ import { useLocalStorage } from "usehooks-ts";
 import { AnimatePresence, motion } from "framer-motion";
 import { useModalError } from "@/hooks/useModalError";
 import { z } from "zod";
+import { Props } from "next/script";
 import { toast } from "@/components/layout/Toast";
 
 function DropDownIcon({
@@ -82,6 +84,35 @@ const genericSelectClassNames = {
 	mainWrapper: "h-10 lg:h-full",
 	label: "hidden",
 };
+
+export function SearchBar({ handleSearchChange, search, classNames }: { handleSearchChange: (search: string) => void, search: string, classNames?: PropsOf<typeof Input>["classNames"] }) {
+	const [debouncedSearch, _] = useDebounce(
+		handleSearchChange,
+		0
+	);
+	const t = useTranslations("ui");
+
+	return <Input
+					autoCorrect="off"
+					defaultValue={search}
+					onChange={(e) => debouncedSearch(e.target.value)}
+					onClear={() => debouncedSearch("")}
+					placeholder={t("search")}
+					size={"lg"}
+					classNames={{
+						...classNames,
+						inputWrapper: twMerge("h-10 lg:h-12 min-h-10 lg:min-h-12", classNames?.inputWrapper),
+						base: twMerge("col-span-2", classNames?.base),
+					}}
+					isClearable
+					startContent={
+						<IoSearch
+							aria-label={t("searchIconAriaLabel")}
+							className="size-6 fill-current text-black/60 dark:text-white/40"
+						/>
+					}
+				/>
+}
 
 export function ContentInteractions({
 	abstract,
@@ -111,10 +142,7 @@ export function ContentInteractions({
 		onOpen: onHelpOpen,
 		onOpenChange: onHelpOpenChange,
 	} = useDisclosure();
-	const [debouncedSearch, _] = useDebounce(
-		itemsContext.handleSearchChange,
-		0
-	);
+
 	const actuallyNoData =
 		(!itemsContext.isItemsLoading &&
 			itemsContext.itemsData &&
@@ -138,7 +166,7 @@ export function ContentInteractions({
 				items={SORT_OPTIONS}
 				selectorIcon={<div className="hidden"></div>}
 				classNames={
-					!itemsContext.userData
+					(!itemsContext.userData && itemsContext.config.interactionsStyle !== "one-line")
 						? {
 								base: twMerge(
 									"flex-1 max-w-full lg:max-w-56 shrink-0",
@@ -250,7 +278,7 @@ export function ContentInteractions({
 
 	return (
 		<>
-			{(!itemsContext.userData || header) && (
+			{((!itemsContext.userData || header) && itemsContext.config.interactionsStyle !== "one-line") && (
 				<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
 					<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl w-full lg:w-auto h-10 lg:h-12 flex justify-between items-end">
 						{header || (
@@ -350,39 +378,25 @@ export function ContentInteractions({
 					</div>
 				</div>
 			)}
-			<section
-				role="search"
-				className={twMerge(
-					"lg:flex lg:flex-row gap-4",
+			{itemsContext.config.interactionsStyle === "one-line" ? <div className="flex gap-4">
+				 <ScopeComponent />
+				 <SortComponent />
+				</div> :
+				<section
+					role="search"
+					className={twMerge(
+						"lg:flex lg:flex-row gap-4",
 					!itemsContext.userData
 						? "flex flex-col"
 						: "grid grid-cols-2"
 				)}
 			>
-				<Input
-					autoCorrect="off"
-					defaultValue={itemsContext.queryParams.search}
-					onChange={(e) => debouncedSearch(e.target.value)}
-					onClear={() => debouncedSearch("")}
-					placeholder={t("search")}
-					size={"lg"}
-					classNames={{
-						inputWrapper: "h-10 lg:h-12 min-h-10 lg:min-h-12",
-						base: "col-span-2",
-					}}
-					isClearable
-					startContent={
-						<IoSearch
-							aria-label={t("searchIconAriaLabel")}
-							className="size-6 fill-current text-black/60 dark:text-white/40"
-						/>
-					}
-				/>
+				<SearchBar handleSearchChange={itemsContext.handleSearchChange} search={itemsContext.queryParams.search} />
 				{<ScopeComponent />}
 				{itemsContext.userData && <SortComponent />}
 				{extraFilters}
-			</section>
-			<section className="flex justify-between h-10 lg:h-12 gap-4">
+			</section>}
+			<section className="flex justify-between h-10 lg:h-12 gap-8">
 				<Skeleton
 					isLoaded={!!itemsContext.itemsData}
 					className="flex items-center flex-1 rounded-2xl"
@@ -409,7 +423,7 @@ export function ContentInteractions({
 								),
 							})}
 						{itemsContext.isItemsFetching && (
-							<div className="relative ltr:ml-3 rtl:mr-3 flex items-center">
+							<div className="relative ltr:ml-3 rtl:mr-3 flex items-center size-0">
 								<Spinner
 									size="sm"
 									className="opacity-60 absolute"
@@ -418,7 +432,7 @@ export function ContentInteractions({
 						)}
 					</h2>
 				</Skeleton>
-				<section className="lg:min-w-72 flex gap-4">
+				<section className={twMerge("flex gap-4", itemsContext.config.interactionsStyle === "multi-line" ? "lg:min-w-72" : "flex-1")}>
 					<Card className="h-full flex items-center justify-center flex-1 min-w-0 px-0">
 						<div className="px-3">
 							<Switch
@@ -433,13 +447,14 @@ export function ContentInteractions({
 							</Switch>
 						</div>
 					</Card>
-					<div className="hidden lg:flex gap-0 w-28">
-						<Button
-							color={view === "list" ? "tertiary" : "secondary"}
-							isIconOnly
-							className="!p-0 ltr:rounded-r-none rtl:rounded-l-none flex-1"
-							onPress={() => setView("list")}
-							aria-label={t("viewAsListAriaLabel")}
+					{!itemsContext.config.disableViewSwitch && (
+						<div className="hidden lg:flex gap-0 w-28">
+							<Button
+								color={view === "list" ? "tertiary" : "secondary"}
+								isIconOnly
+								className="!p-0 ltr:rounded-r-none rtl:rounded-l-none flex-1"
+								onPress={() => setView("list")}
+								aria-label={t("viewAsListAriaLabel")}
 						>
 							<HiOutlineViewList
 								aria-label={t("viewAsListAriaLabel")}
@@ -458,7 +473,7 @@ export function ContentInteractions({
 								className="size-4"
 							/>
 						</Button>
-					</div>
+					</div>)}
 				</section>
 			</section>
 		</>
