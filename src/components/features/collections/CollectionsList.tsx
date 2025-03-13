@@ -288,8 +288,8 @@ export default function CollectionsList({
 	const isFiltersEnabled = isCollectionsEnabled || isCountryEnabled;
 	const isInstitutionFilterEnabled =
 		useFeatureFlagEnabled("institution-filter");
-	const institutions = useFacetList(facetDistribution!, "institution");
-	const countries = useFacetList(
+	const [institutions] = useFacetList(facetDistribution!, "institution");
+	const [countries] = useFacetList(
 		facetDistribution!,
 		"country",
 		(country) => ({

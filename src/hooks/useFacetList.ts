@@ -1,7 +1,7 @@
 import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { useEffect, useState } from "react";
-import { FacetDistribution } from "meilisearch";
+import { CategoriesDistribution, FacetDistribution } from "meilisearch";
 
 export type FacetListItem = {
 	key: string;
@@ -11,9 +11,13 @@ export type FacetListItem = {
 	endContent?: React.ReactNode;
 };
 
-export function useFacetList(facetDistribution: FacetDistribution, facetName: string, mappingFunction?: (value: string) => FacetListItem) {
+export function useFacetList(facetDistribution: FacetDistribution, facetName: string, mappingFunction?: (value: string) => FacetListItem): [FacetListItem[], CategoriesDistribution] {
     const [facetList, setFacetList] = useState<string[]>([])
-    const facet = Object.keys(facetDistribution?.[facetName] || {})
+    const [facetCount, setFacetCount] = useState<CategoriesDistribution | null>(null)
+    const facetObject = facetDistribution?.[facetName] || {}
+    const facet = Object.keys(facetObject)
+
+    const mappedFacetList = (facetList.length > 0 ? facetList : facet).map(mappingFunction || ((value) => ({key: value, label: value})))
 
     useEffect(() => {
         setFacetList((prev) => {
@@ -24,7 +28,10 @@ export function useFacetList(facetDistribution: FacetDistribution, facetName: st
                 return (bFacet || 0) - (aFacet || 0)
             })
         })
+        if (!facetCount || Object.keys(facetCount).length === 0 || Math.max(...Object.values(facetCount)) < Math.max(...Object.values(facetObject))) {
+            setFacetCount(facetObject);
+        }
     }, [facet])
 
-    return (facetList.length > 0 ? facetList : facet).map(mappingFunction || ((value) => ({key: value, label: value})))
+    return [mappedFacetList || [], facetCount || {}]
 }
