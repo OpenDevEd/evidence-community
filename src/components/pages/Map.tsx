@@ -1,0 +1,263 @@
+"use client";
+
+import {
+	ComposableMap,
+	Geographies,
+	Geography,
+	ZoomableGroup,
+} from "react-simple-maps";
+import tailwindConfig from "../../../tailwind.config";
+import resolveConfig from "tailwindcss/resolveConfig";
+import { ReactNode, useEffect, useRef, useState, memo } from "react";
+import { Tooltip } from "@nextui-org/react";
+import { useMouse } from "@uidotdev/usehooks";
+import { useItemsList } from "@/hooks/useItemsList";
+import { A3ToA2, COUNTRIES } from "@/constants/misc";
+import ItemsList from "../features/items/ItemsList";
+import { AnimatePresence, motion } from "framer-motion";
+import { useFacetList } from "@/hooks/useFacetList";
+import { Input } from "../nextui/Input";
+import { SearchBar } from "./EvidenceLibrary";
+import { SCOPE_OPTIONS, SORT_OPTIONS } from "@/constants/items";
+
+export type FeatureCollection = {
+	type: "FeatureCollection";
+	transform: {
+		scale: [number, number];
+		translate: [number, number];
+	};
+	objects: {
+		world: {
+			type: "GeometryCollection";
+			geometries: FeatureGeometry[];
+		};
+	};
+	arcs: number[][];
+};
+
+export type FeatureGeometry = {
+	type: "Polygon" | "MultiPolygon";
+	arcs: number[][];
+	id: string;
+	properties: { name: string };
+};
+
+// URL to the world map GeoJSON data
+const geoUrl = "/features.json";
+
+const fullConfig = resolveConfig(tailwindConfig);
+
+export type ExtendedTheme = typeof fullConfig & {
+	theme: {
+		colors: {
+			accent: string;
+		};
+	};
+};
+
+function MouseTooltip({
+	content,
+	zoomData,
+}: {
+	content: ReactNode | null;
+	zoomData: any;
+}) {
+	const [mouse] = useMouse();
+	const dragging = zoomData?.dragging;
+
+	return (
+		<Tooltip
+			updatePositionDeps={[mouse, zoomData]}
+			isOpen={!!content}
+			content={content}
+			className="select-none"
+		>
+			<div
+				style={{
+					position: "fixed",
+					top: dragging ? dragging.y : mouse.y,
+					left: dragging ? dragging.x : mouse.x,
+					pointerEvents: "none",
+				}}
+				className="size-0"
+			></div>
+		</Tooltip>
+	);
+}
+
+function linearColor(
+	start: [number, number, number],
+	end: [number, number, number],
+	ratio: number
+) {
+	const r = Math.round(start[0] + ratio * (end[0] - start[0]));
+	const g = Math.round(start[1] + ratio * (end[1] - start[1]));
+	const b = Math.round(start[2] + ratio * (end[2] - start[2]));
+	return `rgb(${r}, ${g}, ${b})`;
+}
+
+function HEXToRGB(hex: string): [number, number, number] {
+	const r = parseInt(hex.slice(1, 3), 16);
+	const g = parseInt(hex.slice(3, 5), 16);
+	const b = parseInt(hex.slice(5, 7), 16);
+	return [r, g, b];
+}
+
+function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
+	return (
+		<AnimatePresence>
+			{props.queryParams.country && (
+				<motion.div
+					className="fixed right-0 inset-y-0 pt-[calc(7.5rem-2rem)] pr-4 pb-4"
+					initial={{ opacity: 0, x: 100 }}
+					animate={{ opacity: 1, x: 0 }}
+					exit={{ opacity: 0, x: 100 }}
+					transition={{ duration: 0.3 }}
+				>
+					<div className="w-[32rem] h-full rounded-2xl overflow-y-scroll overflow-x-hidden no-scrollbar">
+						<div className="bg-white dark:bg-secondary-400 p-4">
+							<ItemsList props={props} />
+						</div>
+					</div>
+				</motion.div>
+			)}
+		</AnimatePresence>
+	);
+}
+
+const MemoizedItemView = memo(ItemView, (prevProps, nextProps) => {
+	return prevProps.props === nextProps.props;
+});
+
+function Search({ props }: { props: ReturnType<typeof useItemsList> }) {
+	return (
+		<div className="fixed bottom-0 left-0">
+			<div className="w-[32rem] p-4">
+				<div className="bg-white dark:bg-secondary-400 rounded-2xl">
+					<SearchBar handleSearchChange={props.handleSearchChange} search={props.queryParams.search} />
+				</div>
+			</div>
+		</div>
+	);
+}
+
+export default function Map() {
+	const tailwindAccentColor = (fullConfig as ExtendedTheme).theme.colors
+		.accent[500];
+	const RGBAccent = HEXToRGB(tailwindAccentColor);
+	const [tooltipContent, setTooltipContent] = useState<ReactNode | null>(
+		null
+	);
+	const [zoomData, setZoomData] = useState<any>(null);
+	const props = useItemsList(undefined, {
+		paginationSiblings: 1,
+		disableViewSwitch: true,
+		interactionsStyle: "one-line",
+	});
+	const countriesFacet = props?.itemsData?.facetDistribution?.country;
+	const [countries] = useFacetList(
+		props?.itemsData?.facetDistribution,
+		"country"
+	);
+	const maxItems = Math.max(
+		...Object.values(countriesFacet || {}).map(Number)
+	);
+
+	useEffect(() => {
+		const country = props.queryParams.country;
+		if (!country) {
+			if (props.queryParams.sort) {
+				props.handleSortChange(new Set([SORT_OPTIONS[0].key]));
+			}
+			if (props.queryParams.scope) {
+				props.handleScopeChange(new Set([SCOPE_OPTIONS[0].key]));
+			}
+			if (props.queryParams.page) {
+				props.handlePageChange(1);
+			}
+			console.log("resetting");
+		}
+	}, [props.queryParams.country])
+
+	return (
+		<div className="w-full h-screen overflow-hidden">
+			<MouseTooltip content={tooltipContent} zoomData={zoomData} />
+			<ComposableMap>
+				<ZoomableGroup
+					onMoveEnd={() => setZoomData(null)}
+					onMove={(data) => setZoomData(data)}
+				>
+					<Geographies geography={geoUrl}>
+						{({
+							geographies,
+						}: {
+							geographies: FeatureGeometry[];
+						}) =>
+							geographies.map((geo: FeatureGeometry) => {
+								const countryCode = A3ToA2[geo.id];
+								const inFacet = countriesFacet?.[countryCode];
+
+								return (
+									<Geography
+										key={geo.id}
+										geography={geo}
+										fill={
+											countryCode
+												? linearColor(
+														[255, 255, 255],
+														RGBAccent,
+														inFacet
+															? inFacet / maxItems
+															: 0
+												  )
+												: "rgb(255,0,0)"
+										}
+										onClick={() => {
+											props.handleCountrySelect(
+												countryCode
+											);
+										}}
+										onMouseEnter={() =>
+											setTooltipContent(
+												<div className="flex flex-col justify-center items-center">
+													<div className="text-sm font-bold">
+														{COUNTRIES[
+															countryCode
+														] ||
+															geo.properties.name}
+													</div>
+													<div className="text-xs">
+														{inFacet || 0}
+													</div>
+												</div>
+											)
+										}
+										onMouseLeave={() =>
+											setTooltipContent(null)
+										}
+										className="transition-colors duration-100"
+										style={{
+											default: {
+												outline: "none",
+											},
+											hover: {
+												fill: tailwindAccentColor,
+												outline: "none",
+											},
+											pressed: {
+												fill: tailwindAccentColor,
+												outline: "none",
+											},
+										}}
+									/>
+								);
+							})
+						}
+					</Geographies>
+				</ZoomableGroup>
+			</ComposableMap>
+			<Search props={props} />
+			<MemoizedItemView props={props} />
+		</div>
+	);
+}
