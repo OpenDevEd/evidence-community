@@ -15,7 +15,13 @@ import { buildHierarchy } from "@/lib/collections";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { useQueryStates } from 'nuqs'
 
-export function useItemsList(userData?: any) {
+export function useItemsList(userData?: any, config: {
+	paginationSiblings?: number,
+	disableViewSwitch?: boolean,
+	interactionsStyle?: "one-line" | "multi-line",
+} = {
+	interactionsStyle: "multi-line",
+}) {
 	const [params, setParams] = useQueryStates(searchParamsLoader);
 
 	const searchParamsFromParams = useSearchParams();
@@ -234,5 +240,6 @@ export function useItemsList(userData?: any) {
 		handleClearFilters,
 		handleCountrySelect,
 		userData,
+		config,
 	};
 }
