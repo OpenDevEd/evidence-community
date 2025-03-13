@@ -422,7 +422,7 @@ export function ContentInteractions({
 				>
 					<h2
 						suppressHydrationWarning
-						className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center whitespace-pre gap-1"
+						className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center whitespace-pre relative"
 					>
 						<div className="flex flex-col md:flex-row md:items-center items-start md:gap-2 whitespace-normal">
 							{countLabel ||
@@ -444,7 +444,7 @@ export function ContentInteractions({
 								})}
 						</div>
 						{itemsContext.isItemsFetching && (
-							<div className="relative flex items-center !size-0">
+							<div className="flex items-center !size-0 absolute -right-4 translate-x-full">
 								<Spinner
 									size="sm"
 									className="opacity-60 absolute"
