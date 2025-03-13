@@ -424,7 +424,7 @@ export function ContentInteractions({
 						suppressHydrationWarning
 						className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center whitespace-pre gap-1"
 					>
-						<div className="flex flex-col">
+						<div className="flex flex-col md:flex-row md:items-center items-start md:gap-2 whitespace-normal">
 							{countLabel ||
 								t.rich("resourcesCount", {
 									count: formatter.number(
