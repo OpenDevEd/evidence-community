@@ -15,9 +15,7 @@ function toInitials(name: string) {
 	return name.split(' ').map(n => n[0]).join('. ') + ".";
 }
 
-function formatAPAAuthor(authors: Author[]) {
-	const t = useTranslations("ui");
-
+function formatAPAAuthor(authors: Author[], t: ReturnType<typeof useTranslations>) {
 	function authorString(author: Author) {
 		if (author.name) return author.name;
 		return [author.lastName, toInitials(author.firstName)].filter(Boolean).join(", ")
@@ -41,6 +39,8 @@ export default function ResourceAuthors({
 }: {
 	itemData: Item | undefined;
 }) {
+	const t = useTranslations("ui");
+
 	if (itemData?.institution) {
 		// Handle both string and array cases for institution
 		const institutions = Array.isArray(itemData.institution) 
@@ -72,7 +72,7 @@ export default function ResourceAuthors({
 	if (itemData && itemData.creators && itemData.creators.length > 0)
 		return (
 			<span className="max-w-64 truncate overflow-hidden">
-				{formatAPAAuthor(itemData?.creators as Author[])}
+				{formatAPAAuthor(itemData?.creators as Author[], t)}
 			</span>
 		);
 

@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/nextui/Skeleton";
 import { Link } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
 import { useStatus } from "@/context/Providers";
-
+import { usePathname } from "next/navigation";
 const footerInfo = {
 	email: "opendeved@gmail.com",
 	phone: "+1-123-456-7890",
@@ -78,16 +78,17 @@ export default function Footer() {
 	const [isMounted, setIsMounted] = useState(false);
 	const { theme } = useTheme();
 	const status = useStatus();
-
+	const pathname = usePathname();
 	const links = status.links || [];
 	const footer = status.companyFooter || {};
+	const isMapPage = pathname.includes("/map");
 
 	useEffect(() => {
 		setIsMounted(true);
 	}, []);
 
 	return (
-		<footer id="footer" className="row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 lg:gap-14 py-12 min-h-[32rem] lg:py-0 print:hidden">
+		!isMapPage && <footer id="footer" className="row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 lg:gap-14 py-12 min-h-[32rem] lg:py-0 print:hidden">
 			<div className="max-w-[96rem] px-14 flex w-full justify-between lg:items-start items-center flex-col gap-6 lg:gap-14 lg:flex-row">
 				<div className="flex flex-col gap-6 h-full items-center lg:items-start">
 					<Logo />

@@ -428,7 +428,7 @@ function PaginationControls() {
 
 	return (
 		!actuallyNoData && (
-			<div className="w-full flex justify-center bg-background_light dark:bg-background py-2 lg:py-6 z-10">
+			<div className="w-full flex justify-center py-2 lg:py-6 z-10">
 				<Skeleton
 					isLoaded={totalPages > 0}
 					className="w-full h-14 rounded-2xl flex items-center justify-center"
@@ -438,7 +438,7 @@ function PaginationControls() {
 							showControls
 							page={itemsContext.queryParams.page}
 							onChange={itemsContext.handlePageChange}
-							siblings={isDesktop ? 3 : 0}
+							siblings={itemsContext.config.paginationSiblings || (isDesktop ? 3 : 0)}
 							total={totalPages}
 						/>
 					)}
