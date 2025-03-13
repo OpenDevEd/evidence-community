@@ -550,6 +550,7 @@ export default function Navbar() {
 		onOpenChange: onLoginModalOpenChange,
 		onClose: onLoginModalClose,
 	} = useDisclosure();
+	const isMapPage = pathname.includes("/map");
 	useEffect(() => {
 		setIsMounted(true);
 	}, []);
@@ -557,8 +558,9 @@ export default function Navbar() {
 	return (
 		<header
 			className={twMerge(
-				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden",
-				style === "wide" && "bg-white dark:bg-secondary max-w-none"
+				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-transform",
+				style === "wide" && "bg-white dark:bg-secondary max-w-none w-[200vw]",
+				(isMapPage) && (style !== "wide" ? "xl:absolute xl:top-2 scale-75" : "xl:absolute xl:-top-4 scale-75"),
 			)}
 		>
 			<div

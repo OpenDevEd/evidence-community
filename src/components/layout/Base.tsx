@@ -11,7 +11,8 @@ import { getLangDir } from "rtl-detect";
 import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { getCachedStatus } from "@/app/api/cache";
 import { Suspense } from "react";
-import { Link } from "@/i18n/routing";
+import { Link, usePathname } from "@/i18n/routing";
+import MainWrapper from "./MainWrapper";
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -47,12 +48,7 @@ export default async function Base({
 			>
 				<NextIntlClientProvider messages={messages}>
 					<Providers session={session} status={status}>
-						<div
-							className={twMerge(
-								"h-full w-full bg-background_light dark:bg-background flex flex-col items-center justify-items-center min-h-screen",
-								style === "small" && "xl:pt-14"
-							)}
-						>
+						<MainWrapper>
 							<nav
 								aria-label={t("skipNavAriaLabel")}
 								className="absolute top-0 left-0 w-64 h-0"
@@ -73,7 +69,7 @@ export default async function Base({
 							<Navbar />
 							{children}
 							<Footer />
-						</div>
+						</MainWrapper>
 					</Providers>
 				</NextIntlClientProvider>
 				<Analytics />
