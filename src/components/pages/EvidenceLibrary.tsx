@@ -85,33 +85,43 @@ const genericSelectClassNames = {
 	label: "hidden",
 };
 
-export function SearchBar({ handleSearchChange, search, classNames }: { handleSearchChange: (search: string) => void, search: string, classNames?: PropsOf<typeof Input>["classNames"] }) {
-	const [debouncedSearch, _] = useDebounce(
-		handleSearchChange,
-		0
-	);
+export function SearchBar({
+	handleSearchChange,
+	search,
+	classNames,
+}: {
+	handleSearchChange: (search: string) => void;
+	search: string;
+	classNames?: PropsOf<typeof Input>["classNames"];
+}) {
+	const [debouncedSearch, _] = useDebounce(handleSearchChange, 0);
 	const t = useTranslations("ui");
 
-	return <Input
-					autoCorrect="off"
-					defaultValue={search}
-					onChange={(e) => debouncedSearch(e.target.value)}
-					onClear={() => debouncedSearch("")}
-					placeholder={t("search")}
-					size={"lg"}
-					classNames={{
-						...classNames,
-						inputWrapper: twMerge("h-10 lg:h-12 min-h-10 lg:min-h-12", classNames?.inputWrapper),
-						base: twMerge("col-span-2", classNames?.base),
-					}}
-					isClearable
-					startContent={
-						<IoSearch
-							aria-label={t("searchIconAriaLabel")}
-							className="size-6 fill-current text-black/60 dark:text-white/40"
-						/>
-					}
+	return (
+		<Input
+			autoCorrect="off"
+			defaultValue={search}
+			onChange={(e) => debouncedSearch(e.target.value)}
+			onClear={() => debouncedSearch("")}
+			placeholder={t("search")}
+			size={"lg"}
+			classNames={{
+				...classNames,
+				inputWrapper: twMerge(
+					"h-10 lg:h-12 min-h-10 lg:min-h-12",
+					classNames?.inputWrapper
+				),
+				base: twMerge("col-span-2", classNames?.base),
+			}}
+			isClearable
+			startContent={
+				<IoSearch
+					aria-label={t("searchIconAriaLabel")}
+					className="size-6 fill-current text-black/60 dark:text-white/40"
 				/>
+			}
+		/>
+	);
 }
 
 export function ContentInteractions({
@@ -166,7 +176,8 @@ export function ContentInteractions({
 				items={SORT_OPTIONS}
 				selectorIcon={<div className="hidden"></div>}
 				classNames={
-					(!itemsContext.userData && itemsContext.config.interactionsStyle !== "one-line")
+					!itemsContext.userData &&
+					itemsContext.config.interactionsStyle !== "one-line"
 						? {
 								base: twMerge(
 									"flex-1 max-w-full lg:max-w-56 shrink-0",
@@ -184,7 +195,7 @@ export function ContentInteractions({
 						: {
 								base: twMerge(
 									"flex-1 max-w-full min-w-0 lg:min-w-56",
-									genericSelectClassNames.base
+									genericSelectClassNames.base,
 								),
 								mainWrapper: twMerge(
 									"",
@@ -232,7 +243,8 @@ export function ContentInteractions({
 					!itemsContext.userData
 						? {
 								base: twMerge(
-									"lg:max-w-72 w-full max-w-full",
+									"lg:max-w-72 max-w-full",
+									itemsContext.config.interactionsStyle === "one-line" && "flex-1",
 									genericSelectClassNames.base
 								),
 								mainWrapper: twMerge(
@@ -278,124 +290,131 @@ export function ContentInteractions({
 
 	return (
 		<>
-			{((!itemsContext.userData || header) && itemsContext.config.interactionsStyle !== "one-line") && (
-				<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
-					<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl w-full lg:w-auto h-10 lg:h-12 flex justify-between items-end">
-						{header || (
-							<>
-								<a
-									href="#collections"
-									className="p-3 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100 bg-background_light dark:bg-background"
-								>
-									{t("goToFilters")}
-								</a>
-								{t("searchTitle")}
-							</>
-						)}
-						<Button
-							startContent={
-								<AiOutlineCompass className="size-6" />
-							}
-							className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
-							onPress={onExploreOpen}
-						>
-							{t("explore")}
-						</Button>
-						<FullScreenModal
-							scrollBehavior="outside"
-							isOpen={isExploreOpen}
-							onOpenChange={onExploreOpenChange}
-						>
-							<ModalContent>
-								{(onClose: any) => (
-									<>
-										<GenericHeader onClose={onClose}>
-											{t("explore")}
-										</GenericHeader>
-										{!itemsContext.userData && (
-											<CollectionsList
-												data={
-													itemsContext.collectionsData
-												}
-												handleCheckboxChange={
-													itemsContext.handleCheckboxChange
-												}
-												selectedCollections={
-													itemsContext.selectedCollections
-												}
-												hierarchy={
-													itemsContext.hierarchy!
-												}
-												isModal
-												range={
-													itemsContext.queryParams
-														.range
-												}
-												handleRangeChange={
-													itemsContext.handleRangeChange
-												}
-												facetDistribution={
-													itemsContext.itemsData
-														?.facetDistribution
-												}
-												queryParams={
-													itemsContext.queryParams
-												}
-												handleInstitutionSelect={
-													itemsContext.handleInstitutionSelect
-												}
-												handleCountrySelect={
-													itemsContext.handleCountrySelect
-												}
-											/>
-										)}
-									</>
-								)}
-							</ModalContent>
-						</FullScreenModal>
-					</h1>
-					<div className="flex gap-4 h-10 lg:h-12 flex-1 justify-end">
-						{!itemsContext.userData && (
-							<>
-								<Button
-									className="h-full font-medium text-base !p-0"
-									isIconOnly
-									onPress={onHelpOpen}
-									aria-label={t("helpAriaLabel")}
-								>
-									<BiHelpCircle
-										aria-label={t("helpIconAriaLabel")}
-										className="size-6"
+			{(!itemsContext.userData || header) &&
+				itemsContext.config.interactionsStyle !== "one-line" && (
+					<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
+						<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl w-full lg:w-auto h-10 lg:h-12 flex justify-between items-end">
+							{header || (
+								<>
+									<a
+										href="#collections"
+										className="p-3 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100 bg-background_light dark:bg-background"
+									>
+										{t("goToFilters")}
+									</a>
+									{t("searchTitle")}
+								</>
+							)}
+							<Button
+								startContent={
+									<AiOutlineCompass className="size-6" />
+								}
+								className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
+								onPress={onExploreOpen}
+							>
+								{t("explore")}
+							</Button>
+							<FullScreenModal
+								scrollBehavior="outside"
+								isOpen={isExploreOpen}
+								onOpenChange={onExploreOpenChange}
+							>
+								<ModalContent>
+									{(onClose: any) => (
+										<>
+											<GenericHeader onClose={onClose}>
+												{t("explore")}
+											</GenericHeader>
+											{!itemsContext.userData && (
+												<CollectionsList
+													data={
+														itemsContext.collectionsData
+													}
+													handleCheckboxChange={
+														itemsContext.handleCheckboxChange
+													}
+													selectedCollections={
+														itemsContext.selectedCollections
+													}
+													hierarchy={
+														itemsContext.hierarchy!
+													}
+													isModal
+													range={
+														itemsContext.queryParams
+															.range
+													}
+													handleRangeChange={
+														itemsContext.handleRangeChange
+													}
+													facetDistribution={
+														itemsContext.itemsData
+															?.facetDistribution
+													}
+													queryParams={
+														itemsContext.queryParams
+													}
+													handleInstitutionSelect={
+														itemsContext.handleInstitutionSelect
+													}
+													handleCountrySelect={
+														itemsContext.handleCountrySelect
+													}
+												/>
+											)}
+										</>
+									)}
+								</ModalContent>
+							</FullScreenModal>
+						</h1>
+						<div className="flex gap-4 h-10 lg:h-12 flex-1 justify-end">
+							{!itemsContext.userData && (
+								<>
+									<Button
+										className="h-full font-medium text-base !p-0"
+										isIconOnly
+										onPress={onHelpOpen}
+										aria-label={t("helpAriaLabel")}
+									>
+										<BiHelpCircle
+											aria-label={t("helpIconAriaLabel")}
+											className="size-6"
+										/>
+									</Button>
+									<HelpModal
+										isOpen={isHelpOpen}
+										onOpenChange={onHelpOpenChange}
 									/>
-								</Button>
-								<HelpModal
-									isOpen={isHelpOpen}
-									onOpenChange={onHelpOpenChange}
-								/>
-								{<SortComponent />}
-							</>
-						)}
+									{<SortComponent />}
+								</>
+							)}
+						</div>
 					</div>
+				)}
+			{itemsContext.config.interactionsStyle === "one-line" ? (
+				<div className="flex gap-4">
+					<ScopeComponent />
+					<SortComponent />
 				</div>
-			)}
-			{itemsContext.config.interactionsStyle === "one-line" ? <div className="flex gap-4">
-				 <ScopeComponent />
-				 <SortComponent />
-				</div> :
+			) : (
 				<section
 					role="search"
 					className={twMerge(
 						"lg:flex lg:flex-row gap-4",
-					!itemsContext.userData
-						? "flex flex-col"
-						: "grid grid-cols-2"
-				)}
-			>
-				<SearchBar handleSearchChange={itemsContext.handleSearchChange} search={itemsContext.queryParams.search} />
-				{<ScopeComponent />}
-				{itemsContext.userData && <SortComponent />}
-				{extraFilters}
-			</section>}
+						!itemsContext.userData
+							? "flex flex-col"
+							: "grid grid-cols-2"
+					)}
+				>
+					<SearchBar
+						handleSearchChange={itemsContext.handleSearchChange}
+						search={itemsContext.queryParams.search}
+					/>
+					{<ScopeComponent />}
+					{itemsContext.userData && <SortComponent />}
+					{extraFilters}
+				</section>
+			)}
 			<section className="flex justify-between h-10 lg:h-12 gap-8">
 				<Skeleton
 					isLoaded={!!itemsContext.itemsData}
@@ -403,27 +422,29 @@ export function ContentInteractions({
 				>
 					<h2
 						suppressHydrationWarning
-						className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center whitespace-pre"
+						className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center whitespace-pre gap-1"
 					>
-						{countLabel ||
-							t.rich("resourcesCount", {
-								count: formatter.number(
-									actuallyNoData
-										? 0
-										: itemsContext.itemsData?.totalItems ||
-												0
-								),
-								number: (chunks) => (
-									<span
-										suppressHydrationWarning
-										className="text-2xl leading-6"
-									>
-										{chunks}{" "}
-									</span>
-								),
-							})}
+						<div className="flex flex-col">
+							{countLabel ||
+								t.rich("resourcesCount", {
+									count: formatter.number(
+										actuallyNoData
+											? 0
+											: itemsContext.itemsData
+													?.totalItems || 0
+									),
+									number: (chunks) => (
+										<span
+											suppressHydrationWarning
+											className="text-2xl leading-6"
+										>
+											{chunks}{" "}
+										</span>
+									),
+								})}
+						</div>
 						{itemsContext.isItemsFetching && (
-							<div className="relative ltr:ml-3 rtl:mr-3 flex items-center size-0">
+							<div className="relative flex items-center !size-0">
 								<Spinner
 									size="sm"
 									className="opacity-60 absolute"
@@ -432,7 +453,14 @@ export function ContentInteractions({
 						)}
 					</h2>
 				</Skeleton>
-				<section className={twMerge("flex gap-4", itemsContext.config.interactionsStyle === "multi-line" ? "lg:min-w-72" : "flex-1")}>
+				<section
+					className={twMerge(
+						"flex gap-4",
+						itemsContext.config.interactionsStyle === "multi-line"
+							? "lg:min-w-72"
+							: "flex-1"
+					)}
+				>
 					<Card className="h-full flex items-center justify-center flex-1 min-w-0 px-0">
 						<div className="px-3">
 							<Switch
@@ -450,30 +478,35 @@ export function ContentInteractions({
 					{!itemsContext.config.disableViewSwitch && (
 						<div className="hidden lg:flex gap-0 w-28">
 							<Button
-								color={view === "list" ? "tertiary" : "secondary"}
+								color={
+									view === "list" ? "tertiary" : "secondary"
+								}
 								isIconOnly
 								className="!p-0 ltr:rounded-r-none rtl:rounded-l-none flex-1"
 								onPress={() => setView("list")}
 								aria-label={t("viewAsListAriaLabel")}
-						>
-							<HiOutlineViewList
-								aria-label={t("viewAsListAriaLabel")}
-								className="size-6"
-							/>
-						</Button>
-						<Button
-							color={view === "grid" ? "tertiary" : "secondary"}
-							isIconOnly
-							className="!p-0 ltr:rounded-l-none rtl:rounded-r-none flex-1"
-							onPress={() => setView("grid")}
-							aria-label={t("viewAsGridAriaLabel")}
-						>
-							<IoGrid
+							>
+								<HiOutlineViewList
+									aria-label={t("viewAsListAriaLabel")}
+									className="size-6"
+								/>
+							</Button>
+							<Button
+								color={
+									view === "grid" ? "tertiary" : "secondary"
+								}
+								isIconOnly
+								className="!p-0 ltr:rounded-l-none rtl:rounded-r-none flex-1"
+								onPress={() => setView("grid")}
 								aria-label={t("viewAsGridAriaLabel")}
-								className="size-4"
-							/>
-						</Button>
-					</div>)}
+							>
+								<IoGrid
+									aria-label={t("viewAsGridAriaLabel")}
+									className="size-4"
+								/>
+							</Button>
+						</div>
+					)}
 				</section>
 			</section>
 		</>
@@ -504,13 +537,11 @@ function MainContent() {
 
 const smartScreeningFieldTypes = ["string", "number", "boolean"] as const;
 
-
 export type SmartScreeningField = {
 	label: string;
 	description: string;
 	type: (typeof smartScreeningFieldTypes)[number];
 };
-
 
 function SmartScreeningModal({
 	isOpen,
@@ -531,7 +562,7 @@ function SmartScreeningModal({
 	const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({});
 	const placeholderExample = `${t("label")} (${smartScreeningFieldTypes.join(
 		" | "
-	)}): ${t("description")}`;	
+	)}): ${t("description")}`;
 
 	useEffect(() => {
 		if (isOpen) {
@@ -541,10 +572,7 @@ function SmartScreeningModal({
 	}, [isOpen, fields]);
 
 	const fieldSchema = z.object({
-		label: z
-			.string()
-			.min(1, t("labelRequired"))
-			.max(64, t("labelTooLong")),
+		label: z.string().min(1, t("labelRequired")).max(64, t("labelTooLong")),
 		type: z.enum(["string", "number", "boolean"]),
 		description: z
 			.string()
@@ -599,9 +627,9 @@ function SmartScreeningModal({
 					if (error instanceof z.ZodError) {
 						const fieldError =
 							error.errors[0]?.message || t("invalidField");
-						newErrors[index] = `${t("fieldPrefix")} ${
-							index + 1
-						} ${field.label}: ${fieldError}`;
+						newErrors[index] = `${t("fieldPrefix")} ${index + 1} ${
+							field.label
+						}: ${fieldError}`;
 						hasErrors = true;
 					}
 				}
@@ -664,7 +692,9 @@ function SmartScreeningModal({
 			<ModalContent>
 				{(onClose) => (
 					<>
-						<AIHeader onClose={onClose}>{t("smartScreening")}</AIHeader>
+						<AIHeader onClose={onClose}>
+							{t("smartScreening")}
+						</AIHeader>
 						<div className="flex gap-0 px-6  py-2">
 							{tabs.map((t, i) => (
 								<Button
@@ -723,8 +753,12 @@ function SmartScreeningModal({
 														>
 															<Input
 																isRequired
-																placeholder={t("label")}
-																label={t("label")}
+																placeholder={t(
+																	"label"
+																)}
+																label={t(
+																	"label"
+																)}
 																value={
 																	field.label
 																}
@@ -765,8 +799,12 @@ function SmartScreeningModal({
 																}
 															/>
 															<Textarea
-																placeholder={t("description")}
-																label={t("description")}
+																placeholder={t(
+																	"description"
+																)}
+																label={t(
+																	"description"
+																)}
 																value={
 																	field.description
 																}
@@ -818,7 +856,9 @@ function SmartScreeningModal({
 															<div className="flex justify-between">
 																<Select
 																	color="tertiary"
-																	label={t("typeLabel")}
+																	label={t(
+																		"typeLabel"
+																	)}
 																	placement="left"
 																	disallowEmptySelection={
 																		true

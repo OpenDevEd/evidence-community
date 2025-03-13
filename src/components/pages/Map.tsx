@@ -6,11 +6,11 @@ import {
 	Geography,
 	ZoomableGroup,
 } from "react-simple-maps";
-import tailwindConfig from "../../../tailwind.config";
+import tailwindConfig, { style } from "../../../tailwind.config";
 import resolveConfig from "tailwindcss/resolveConfig";
 import { ReactNode, useEffect, useRef, useState, memo } from "react";
 import { Tooltip } from "@nextui-org/react";
-import { useMouse } from "@uidotdev/usehooks";
+import { useMouse, useWindowSize } from "@uidotdev/usehooks";
 import { useItemsList } from "@/hooks/useItemsList";
 import { A3ToA2, COUNTRIES } from "@/constants/misc";
 import ItemsList from "../features/items/ItemsList";
@@ -19,6 +19,8 @@ import { useFacetList } from "@/hooks/useFacetList";
 import { Input } from "../nextui/Input";
 import { SearchBar } from "./EvidenceLibrary";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "@/constants/items";
+import { twMerge } from "tailwind-merge";
+import useBreakpoint from "@/hooks/useBreakpoint";
 
 export type FeatureCollection = {
 	type: "FeatureCollection";
@@ -64,6 +66,11 @@ function MouseTooltip({
 }) {
 	const [mouse] = useMouse();
 	const dragging = zoomData?.dragging;
+	const isDesktop = useBreakpoint("md");
+
+	if (!isDesktop) {
+		return null;
+	}
 
 	return (
 		<Tooltip
@@ -108,14 +115,14 @@ function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 		<AnimatePresence>
 			{props.queryParams.country && (
 				<motion.div
-					className="fixed right-0 inset-y-0 pt-[calc(7.5rem-2rem)] pr-4 pb-4"
+					className={twMerge("fixed right-0 inset-y-0 top-44 md:top-0  md:pt-[calc(7.5rem-1.5rem)] md:pr-4 md:pb-4", style === "small" && "md:pt-[calc(7.5rem)]")}
 					initial={{ opacity: 0, x: 100 }}
 					animate={{ opacity: 1, x: 0 }}
 					exit={{ opacity: 0, x: 100 }}
 					transition={{ duration: 0.3 }}
 				>
-					<div className="w-[32rem] h-full rounded-2xl overflow-y-scroll overflow-x-hidden no-scrollbar">
-						<div className="bg-white dark:bg-secondary-400 p-4">
+					<div className="w-screen md:w-[32rem] h-full rounded-2xl overflow-y-scroll overflow-x-hidden no-scrollbar">
+						<div className="bg-white dark:bg-secondary-400 p-4 min-h-full">
 							<ItemsList props={props} />
 						</div>
 					</div>
@@ -131,8 +138,8 @@ const MemoizedItemView = memo(ItemView, (prevProps, nextProps) => {
 
 function Search({ props }: { props: ReturnType<typeof useItemsList> }) {
 	return (
-		<div className="fixed bottom-0 left-0">
-			<div className="w-[32rem] p-4">
+		<div className="fixed top-24 md:bottom-0 md:top-auto left-0">
+			<div className="w-screen md:w-[32rem] p-4">
 				<div className="bg-white dark:bg-secondary-400 rounded-2xl">
 					<SearchBar handleSearchChange={props.handleSearchChange} search={props.queryParams.search} />
 				</div>
@@ -162,6 +169,7 @@ export default function Map() {
 	const maxItems = Math.max(
 		...Object.values(countriesFacet || {}).map(Number)
 	);
+	const size = useWindowSize();
 
 	useEffect(() => {
 		const country = props.queryParams.country;
@@ -175,14 +183,13 @@ export default function Map() {
 			if (props.queryParams.page) {
 				props.handlePageChange(1);
 			}
-			console.log("resetting");
 		}
 	}, [props.queryParams.country])
 
 	return (
 		<div className="w-full h-screen overflow-hidden">
 			<MouseTooltip content={tooltipContent} zoomData={zoomData} />
-			<ComposableMap>
+			<ComposableMap width={size.width ?? undefined} height={size.height ?? undefined}>
 				<ZoomableGroup
 					onMoveEnd={() => setZoomData(null)}
 					onMove={(data) => setZoomData(data)}
