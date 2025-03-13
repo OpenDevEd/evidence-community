@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "npm run icons:generate && FORCE_COLOR=1 next build && npm run sitemap:generate",
     "start": "next start",
     "lint": "next lint",
@@ -24,6 +24,7 @@
     "@google/generative-ai": "^0.21.0",
     "@nextui-org/react": "^2.6.11",
     "@uidotdev/usehooks": "^2.4.1",
+    "@sentry/nextjs": "^9.5.0",
     "@vercel/analytics": "^1.4.1",
     "ai": "^4.1.21",
     "babel-plugin-react-compiler": "^19.0.0-beta-e552027-20250112",

@@ -138,7 +138,7 @@ export const config = {
     // Match all pathnames except for
     // - … if they start with `/api`, `/_next`, `/_vercel`, or `/ingest`
     // - … the ones containing a dot (e.g. `favicon.ico`)
-    '/((?!_next|_vercel|ingest|.*\\..*).*)',
+    '/((?!_next|_vercel|ingest|sentry-example-page|monitoring|.*\\..*).*)',
     // Updated matchers for new export URL format
     '/([\\w-]+)?/lib/:path*/export/ris',
     '/([\\w-]+)?/lib/:path*/export/bibtex',

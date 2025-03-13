@@ -61,3 +61,5 @@ src/app/*.jpeg
 src/app/*.gif
 src/app/*.bmp
 src/app/manifest.json
+# Sentry Config File
+.env.sentry-build-plugin
