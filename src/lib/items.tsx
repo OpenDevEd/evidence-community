@@ -448,7 +448,7 @@ export const valueFormatter: Record<
 							isDisabled={process.env.NEXT_PUBLIC_DISABLE_COUNTRY === "true"}
 							key={index}
 							href="/lib"
-							params={{ country }}
+							params={{ country: [country] }}
 							className="opacity-100"
 						>
 							<Card

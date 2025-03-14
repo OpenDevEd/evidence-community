@@ -95,11 +95,16 @@ function MouseTooltip({
 function linearColor(
 	start: [number, number, number],
 	end: [number, number, number],
+	none: [number, number, number],
 	ratio: number
 ) {
-	const r = Math.round(start[0] + ratio * (end[0] - start[0]));
-	const g = Math.round(start[1] + ratio * (end[1] - start[1]));
-	const b = Math.round(start[2] + ratio * (end[2] - start[2]));
+	if (ratio === 0) {
+		return `rgb(${none[0]}, ${none[1]}, ${none[2]})`;
+	}
+	const adjustedRatio = Math.pow(ratio, 0.5);
+	const r = Math.round(start[0] + adjustedRatio * (end[0] - start[0]));
+	const g = Math.round(start[1] + adjustedRatio * (end[1] - start[1]));
+	const b = Math.round(start[2] + adjustedRatio * (end[2] - start[2]));
 	return `rgb(${r}, ${g}, ${b})`;
 }
 
@@ -113,7 +118,7 @@ function HEXToRGB(hex: string): [number, number, number] {
 function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 	return (
 		<AnimatePresence>
-			{props.queryParams.country && (
+			{props.queryParams.country.length > 0 && (
 				<motion.div
 					className={twMerge("fixed right-0 inset-y-0 top-44 md:top-0  md:pt-[calc(7.5rem-1.5rem)] md:pr-4 md:pb-4", style === "small" && "md:pt-[calc(7.5rem)]")}
 					initial={{ opacity: 0, x: 100 }}
@@ -149,9 +154,10 @@ function Search({ props }: { props: ReturnType<typeof useItemsList> }) {
 }
 
 export default function Map() {
-	const tailwindAccentColor = (fullConfig as ExtendedTheme).theme.colors
-		.accent[500];
+	const tailwindAccentColor = (fullConfig as ExtendedTheme).theme.colors.accent[600];
+	const lightAccentColor = (fullConfig as ExtendedTheme).theme.colors.accent[100];
 	const RGBAccent = HEXToRGB(tailwindAccentColor);
+	const RGBLightAccent = HEXToRGB(lightAccentColor);
 	const [tooltipContent, setTooltipContent] = useState<ReactNode | null>(
 		null
 	);
@@ -172,8 +178,8 @@ export default function Map() {
 	const size = useWindowSize();
 
 	useEffect(() => {
-		const country = props.queryParams.country;
-		if (!country) {
+		const country = props.queryParams.country
+		if (country.length === 0) {
 			if (props.queryParams.sort) {
 				props.handleSortChange(new Set([SORT_OPTIONS[0].key]));
 			}
@@ -189,7 +195,10 @@ export default function Map() {
 	return (
 		<div className="w-full h-screen overflow-hidden">
 			<MouseTooltip content={tooltipContent} zoomData={zoomData} />
-			<ComposableMap width={size.width ?? undefined} height={size.height ?? undefined}>
+			{size.width && size.height && <ComposableMap projection="geoEqualEarth" projectionConfig={{
+				center: [0, 150],
+				scale: 600,
+			}} width={size.width ?? undefined} height={size.height ?? undefined}>
 				<ZoomableGroup
 					onMoveEnd={() => setZoomData(null)}
 					onMove={(data) => setZoomData(data)}
@@ -211,13 +220,14 @@ export default function Map() {
 										fill={
 											countryCode
 												? linearColor(
-														[255, 255, 255],
+														RGBLightAccent,
 														RGBAccent,
+														[100, 100, 100],
 														inFacet
 															? inFacet / maxItems
 															: 0
 												  )
-												: "rgb(255,0,0)"
+												: "rgb(255,200,200)"
 										}
 										onClick={() => {
 											props.handleCountrySelect(
@@ -262,7 +272,7 @@ export default function Map() {
 						}
 					</Geographies>
 				</ZoomableGroup>
-			</ComposableMap>
+			</ComposableMap>}
 			<Search props={props} />
 			<MemoizedItemView props={props} />
 		</div>

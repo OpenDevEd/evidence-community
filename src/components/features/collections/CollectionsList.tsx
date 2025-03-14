@@ -16,7 +16,7 @@ import { Input } from "../../nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
 import { COUNTRIES, years } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
-import { LuFilter, LuX } from "react-icons/lu";
+import { LuCheck, LuFilter, LuX } from "react-icons/lu";
 import { useTranslations } from "next-intl";
 import { CacheContext, useFeatureFlagEnabled } from "@/context/Providers";
 import useBreakpoint from "@/hooks/useBreakpoint";
@@ -91,12 +91,14 @@ function FacetPicker({
 }: {
 	label: string;
 	placeholder: string;
-	selectedKey: string | null;
+	selectedKey: string | null | string[];
 	onSelectionChange: (value: any | null) => void;
 	list: FacetListItem[];
 	facetDistribution: FacetDistribution | undefined;
 	facetName: string;
 }) {
+	const isMultiSelect = Array.isArray(selectedKey);
+
 	return (
 		<div className="w-full flex flex-col gap-2">
 			{/* <div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
@@ -105,27 +107,34 @@ function FacetPicker({
 			<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 				<Autocomplete
 					className="flex-1"
-					placeholder={placeholder}
+					placeholder={(isMultiSelect && selectedKey.length > 0) ? selectedKey.map((key) => list.find((item) => item.key === key)?.label).join(", ") : placeholder}
 					label={label}
 					key={label}
 					fullWidth={true}
-					selectedKey={selectedKey}
+					selectedKey={isMultiSelect ? null : selectedKey}
 					onSelectionChange={onSelectionChange}
 					inputProps={{
 						classNames: {
 							inputWrapper:
 								"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
-							input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
+							input: twMerge("placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small", isMultiSelect && selectedKey.length > 0 && "placeholder:text-black dark:placeholder:text-white")
 						},
 					}}
 					isVirtualized={true}
 					startContent={
-						list.length > 0 ? (
-							list.find((item) => item.key === selectedKey)
-								?.startContent
-						) : (
-							undefined
-						)
+						isMultiSelect && selectedKey.length > 0 ? (
+							<div className="flex gap-2">
+								{
+									selectedKey.map((key) => (
+										<div key={key}>
+											{
+												list.find((item) => item.key === key)?.startContent
+											}
+										</div>
+									))
+								}
+							</div>
+						) : list.find((item) => item.key === selectedKey)?.startContent
 					}
 					itemHeight={48}
 				>
@@ -134,6 +143,7 @@ function FacetPicker({
 							startContent={item.startContent}
 							aria-label={item.label}
 							key={item.key}
+							selectedIcon={isMultiSelect && selectedKey.includes(item.key) ? <LuCheck /> : undefined}
 						>
 							<span className="text-black dark:text-white line-clamp-2">
 								<span className="text-black/60 dark:text-white/60">
