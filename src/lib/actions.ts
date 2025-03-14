@@ -444,7 +444,7 @@ export async function searchIndex(
 		const scope = searchParams.scope || SCOPE_OPTIONS[0].key;
 		const range = searchParams.range || null;
 		const institution = searchParams.institution || "";
-		const country = searchParams.country || "";
+		const country = searchParams.country || [];
 		const author = searchParams.author || "";
 		const searchIndex = meilisearchClient.index(
 			process.env.MEILI_INDEX || config.index
@@ -458,7 +458,7 @@ export async function searchIndex(
 			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
 			range ? formatRange(range) : null,
 			institution ? `institution = "${institution}"` : null,
-			country ? `country = "${country}"` : null,
+			...(country.length > 0 ? country.map((c) => `country = "${c}"`) : []),
 			author ? `fullNames = "${author}"` : null,
 			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
@@ -629,6 +629,6 @@ export async function getProfile(
 
 
 export async function getTotalItems() {
-	const total = await db.select({ count: count() }).from(item).where(and(ne(item.deleted, 1), notInArray(item.itemType, EXCLUDED_ITEM_TYPES as any)));
-	return total[0].count;
+	const stats = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getStats();
+	return stats.numberOfDocuments;
 }

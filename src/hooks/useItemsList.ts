@@ -129,13 +129,13 @@ export function useItemsList(userData?: any, config: {
 	};
 
 	const handleCountrySelect = (country: string) => {
-		if (country === queryParams.country) {
+		if (queryParams.country.includes(country)) {
 			setParams({
-				country: "",
+				country: queryParams.country.filter((c) => c !== country),
 			});
 		} else {
 			setParams({
-				country: country,
+				country: [...queryParams.country, country],
 			});
 		}
 	}
@@ -144,7 +144,7 @@ export function useItemsList(userData?: any, config: {
 		setParams({
 			author: "",
 			institution: "",
-			country: "",
+			country: [],
 			collections: [],
 		});
 	};

@@ -89,7 +89,7 @@ function useFilterChips(
 	const filtersCount =
 		(queryParams.collections?.length || 0) +
 		(queryParams.institution ? 1 : 0) +
-		(queryParams.country ? 1 : 0) +
+		(queryParams.country?.length || 0) +
 		(queryParams.author ? 1 : 0);
 	const clearButton = () => {
 		handleClearFilters?.();
@@ -181,51 +181,52 @@ function FilterChips() {
 							/>
 						</motion.div>
 					)}
-					{itemsContext.queryParams?.country && (
-						<motion.div
-							key={"country-" + itemsContext.queryParams.country}
-							initial={{ opacity: 0, y: 10 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0, y: -10 }}
-							transition={{ duration: 0.2 }}
-						>
-							<Chip
-								key={
-									"country-" +
-									itemsContext.queryParams.country
-								}
-								divKey={
-									"country-" +
-									itemsContext.queryParams.country
-								}
-								group={"Country"}
-								title={
-									COUNTRIES[itemsContext.queryParams.country] +
-									" (" +
-									itemsContext.queryParams.country +
-									")"
-								}
-								startContent={
-									<Image
-										src={`https://flagcdn.com/w40/${itemsContext.queryParams.country.toLowerCase()}.png`}
-										alt={itemsContext.queryParams.country}
-										width={16}
-										height={12}
-										className="ml-0.5"
-									/>
-								}
-								callback={() =>
-									itemsContext.handleCountrySelect?.(
+					{itemsContext.queryParams?.country &&
+						itemsContext.queryParams.country.map((country) => (
+							<motion.div
+								key={"country-" + country}
+								initial={{ opacity: 0, y: 10 }}
+								animate={{ opacity: 1, y: 0 }}
+								exit={{ opacity: 0, y: -10 }}
+								transition={{ duration: 0.2 }}
+							>
+								<Chip
+									key={
+										"country-" +
 										itemsContext.queryParams.country
-									)
-								}
-								classNames={{
-									button: "bg-primary dark:bg-primary/40",
-									title: "text-black dark:text-white",
-								}}
-							/>
-						</motion.div>
-					)}
+									}
+									divKey={
+										"country-" +
+										itemsContext.queryParams.country
+									}
+									group={"Country"}
+									title={
+										COUNTRIES[country] +
+										" (" +
+										country +
+										")"
+									}
+									startContent={
+										<Image
+											src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
+											alt={country}
+											width={16}
+											height={12}
+											className="ml-0.5"
+										/>
+									}
+									callback={() =>
+										itemsContext.handleCountrySelect?.(
+											country
+										)
+									}
+									classNames={{
+										button: "bg-primary dark:bg-primary/40",
+										title: "text-black dark:text-white",
+									}}
+								/>
+							</motion.div>
+						))}
 					{itemsContext.collectionsData &&
 						itemsContext.selectedCollections?.map(
 							(collection: string) => {
@@ -259,8 +260,7 @@ function FilterChips() {
 				</AnimatePresence>
 			</div>
 			<AnimatePresence initial={false}>
-				{itemsContext.selectedCollections &&
-					itemsContext.selectedCollections.length > 0 && (
+				{filtersCount > 0 && (
 						<motion.div
 							initial={{ opacity: 0, y: 10 }}
 							animate={{ opacity: 1, y: 0 }}
@@ -438,7 +438,10 @@ function PaginationControls() {
 							showControls
 							page={itemsContext.queryParams.page}
 							onChange={itemsContext.handlePageChange}
-							siblings={itemsContext.config.paginationSiblings || (isDesktop ? 3 : 0)}
+							siblings={
+								itemsContext.config.paginationSiblings ||
+								(isDesktop ? 3 : 0)
+							}
 							total={totalPages}
 						/>
 					)}
