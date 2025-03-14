@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --turbo",
     "build": "npm run icons:generate && FORCE_COLOR=1 next build && npm run sitemap:generate",
     "start": "next start",
     "lint": "next lint",
