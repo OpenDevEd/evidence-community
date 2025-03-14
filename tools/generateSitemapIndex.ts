@@ -1,20 +1,17 @@
 import dotenv from 'dotenv';
-dotenv.config();
 import { promises as fs } from 'fs';
 import path from 'path';
 import { SITEMAP_SIZE } from '@/constants/misc';
-import { and, ne, notInArray, count } from 'drizzle-orm';
-import { item } from '@/db/schema/tables/item';
-import { EXCLUDED_ITEM_TYPES } from '@/constants/items';
+import config from '@/constants/config.json';
+dotenv.config();
 
 const SITEMAP_INDEX_PATH = path.join(process.cwd(), 'public', 'sitemap.xml');
 
 async function main() {
-  const { db } = await import('@/db');
-  
+  const { default: meilisearchClient } = await import('@/lib/meilisearch');
   let totalPages = 0;
-  const totalItems = await db.select({ count: count() }).from(item).where(and(ne(item.deleted, 1), notInArray(item.itemType, EXCLUDED_ITEM_TYPES as any)));
-  totalPages = Math.ceil(totalItems[0].count / SITEMAP_SIZE);
+  const stats = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getStats();
+  totalPages = Math.ceil(stats.numberOfDocuments / SITEMAP_SIZE);
 
   if (totalPages <= 0) {
     console.error('Could not determine total number of sitemaps');
