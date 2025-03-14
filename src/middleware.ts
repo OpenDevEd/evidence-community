@@ -52,12 +52,17 @@ function setRateLimitHeaders(response: NextResponse, rateLimit: RateLimit | null
   return response;
 }
 
+function fixRequestUrl(request: NextRequest) {
+  const url = request.url.toString();
+  return process.env.REPLACE_HTTPS === "true" ? url.replace("https://", "http://") : url;
+}
+
 
 export default async function middleware(request: NextRequest) {
   const rateLimit = generateRateLimitObject(request);
 
   if (request.nextUrl.pathname === '/') {
-    return NextResponse.redirect(new URL('/lib', request.url));
+    return NextResponse.redirect(new URL('/lib', fixRequestUrl(request)));
   }
 
   const supportedFormats = ['ris', 'bibtex'];
@@ -72,7 +77,7 @@ export default async function middleware(request: NextRequest) {
     }
     const key = exportMatch[1];
     const format = exportMatch[2];
-    const finalURL = new URL(`/api/item/${key}/export/${format}`, request.url);
+    const finalURL = new URL(`/api/item/${key}/export/${format}`, fixRequestUrl(request));
     return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
   } 
   
@@ -80,7 +85,7 @@ export default async function middleware(request: NextRequest) {
   if (downloadMatch) {
     const itemKey = downloadMatch[1];
     const attachmentKey = downloadMatch[2];
-    const itemUrl = new URL(`/api/item/${itemKey}`, request.url).toString();
+    const itemUrl = new URL(`/api/item/${itemKey}`, fixRequestUrl(request)).toString().replace("https://", "http://");
     const response = await fetch(itemUrl);
     const item: ItemGetResponse = await response.json();
     if (!item.item) {
@@ -93,11 +98,11 @@ export default async function middleware(request: NextRequest) {
     if (!attachment || !attachment.url) {
       return NextResponse.json({ error: "Attachment URL not found" }, { status: 404 });
     }
-    const finalURL = new URL(attachment.url, request.url);
+    const finalURL = new URL(attachment.url, fixRequestUrl(request));
     return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
   } else if (request.nextUrl.pathname === "/lib/atom.xml" || (request.nextUrl.pathname.startsWith("/profile/") && request.nextUrl.pathname.endsWith("/atom.xml"))) {
     const id = request.nextUrl.pathname.startsWith("/profile/") ? request.nextUrl.pathname.split("/")[2] : "main";
-    const finalURL = new URL(`/api/feed/${id}`, request.url);
+    const finalURL = new URL(`/api/feed/${id}`, fixRequestUrl(request));
     request.nextUrl.searchParams.forEach((value, key) => {
       finalURL.searchParams.set(key, value);
     });
