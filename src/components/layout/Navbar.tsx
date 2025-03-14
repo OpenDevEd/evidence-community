@@ -304,6 +304,14 @@ function LanguageSwitcher({ className, isMobile = false }: { className?: string;
 	const router = useRouter();
 	const locale = useLocale();
 	const pathname = usePathname();
+	const localesPriority = process.env.NEXT_PUBLIC_LOCALES_PRIORITY?.split(",") || [];
+	const localesList = routing.locales.filter((currentLocale) => currentLocale !== locale).toSorted((a, b) => {
+		const aIndex = localesPriority.indexOf(a);
+		const bIndex = localesPriority.indexOf(b);
+		if (aIndex === -1) return 1;
+		if (bIndex === -1) return -1;
+		return aIndex - bIndex;
+	});
 
 	return (
 		<li
@@ -335,10 +343,8 @@ function LanguageSwitcher({ className, isMobile = false }: { className?: string;
 						router.push(pathname, { locale: locale as string });
 					}}
 				>
-					{routing.locales
-						.filter((currentLocale) => currentLocale !== locale)
-						.map((locale) => (
-							<DropdownItem key={locale}>
+					{localesList.map((locale) => (
+						<DropdownItem key={locale}>
 								{
 									localesNames[
 										locale as keyof typeof localesNames
