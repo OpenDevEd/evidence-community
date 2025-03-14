@@ -566,7 +566,7 @@ export default function Navbar() {
 			className={twMerge(
 				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-transform origin-top",
 				style === "wide" && "bg-white dark:bg-secondary max-w-none",
-				(isMapPage) && (style !== "wide" ? "xl:absolute xl:top-2 xl:scale-75" : "xl:absolute xl:scale-75"),
+				(isMapPage) && (style !== "wide" ? "xl:absolute xl:top-6 xl:scale-75" : "xl:absolute xl:scale-75"),
 			)}
 		>
 	
