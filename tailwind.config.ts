@@ -13,7 +13,8 @@ const accentColors = {
   "edtechhub": "#ff5c00",
   "ekitabu": "#ed1c24",
   "openalex": "#1976d2",
-  "jacob": "#FFDE2D"
+  "jacob": "#FFDE2D",
+  "kaleidoscopio": "#ef4129"
 }
 
 function generateColorVariants(baseColor: string, light: boolean = false) {
