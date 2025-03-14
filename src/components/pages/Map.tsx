@@ -200,10 +200,16 @@ export default function Map() {
 				scale: 600,
 			}} width={size.width ?? undefined} height={size.height ?? undefined}>
 				<ZoomableGroup
+					minZoom={0.35}
+					maxZoom={20}
 					onMoveEnd={() => setZoomData(null)}
 					onMove={(data) => setZoomData(data)}
 				>
-					<Geographies geography={geoUrl}>
+					<Geographies
+					
+						stroke={"black"}
+						strokeWidth={0.25}
+					geography={geoUrl}>
 						{({
 							geographies,
 						}: {
