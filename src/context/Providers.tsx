@@ -253,7 +253,7 @@ export default function Providers({
 	return (
 		<ThemeProvider
 			attribute={"class"}
-			defaultTheme="dark"
+			defaultTheme={process.env.NEXT_PUBLIC_DEFAULT_THEME || "dark"}
 			disableTransitionOnChange
 		>
 			<NuqsAdapter>
