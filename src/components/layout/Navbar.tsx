@@ -564,9 +564,9 @@ export default function Navbar() {
 	return (
 		<header
 			className={twMerge(
-				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-transform origin-top",
+				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-[transform,border-radius] origin-top",
 				style === "wide" && "bg-white dark:bg-secondary max-w-none",
-				(isMapPage) && (style !== "wide" ? "xl:absolute xl:top-6 xl:scale-75" : "xl:absolute xl:scale-75"),
+				(isMapPage) && (style !== "wide" ? "xl:absolute xl:top-6 xl:scale-75" : "xl:absolute xl:scale-75 xl:rounded-b-2xl"),
 			)}
 		>
 	
@@ -662,8 +662,8 @@ export default function Navbar() {
 					isMobile={true}
 				/>
 			</ul>
-			{style === "wide" && <div className="absolute inset-0 scale-x-[200] bg-white dark:bg-secondary -z-10">
-			</div>}
+			{/* {style === "wide" && <div className={twMerge("absolute hidden xl:flex inset-0 scale-x-[100] bg-white dark:bg-secondary -z-10", (isMapPage) && "scale-x-[200]")}>
+			</div>} */}
 		</header>
 	);
 }
