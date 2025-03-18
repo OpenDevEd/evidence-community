@@ -5,6 +5,7 @@ import { unescapeXML } from './lib/utils';
 import { getCachedItemSmall } from './app/api/cache';
 import { ItemsGetResponse } from './app/api/items/types';
 import { ItemGetResponse } from './app/api/item/types';
+import redirections from './constants/redirections.json';
 
 export type RateLimit = {
   count: number;
@@ -65,8 +66,26 @@ export default async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL('/lib', fixRequestUrl(request)));
   }
 
+  // Check for redirections for item keys in URLs like /lib/{key}
+  const libItemMatch = request.nextUrl.pathname.match(/\/lib\/([^\/]+)(.*)/);
+  if (libItemMatch) {
+    const key = libItemMatch[1] as keyof typeof redirections;
+    const rest = libItemMatch[2] || ''; // Everything after the key
+    
+    if (redirections[key]) {
+      // Create new URL with redirected key, keeping everything else the same
+      const newUrl = new URL(`/lib/${redirections[key]}${rest}`, fixRequestUrl(request));
+      request.nextUrl.searchParams.forEach((value, paramKey) => {
+        newUrl.searchParams.set(paramKey, value);
+      });
+      return NextResponse.redirect(newUrl);
+    }
+  }
+
   const supportedFormats = ['ris', 'bibtex'];
-  
+
+ 
+
   const exportMatch = request.nextUrl.pathname.match(/\/lib\/(.+?)\/export\/(ris|bibtex)$/);
   if (exportMatch) {
     if (!supportedFormats.includes(exportMatch[2])) {
