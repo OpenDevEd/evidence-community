@@ -462,6 +462,7 @@ export async function searchIndex(
 			author ? `fullNames = "${author}"` : null,
 			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
+			"deleted != 1"
 		].filter((f): f is string => f !== null);
 
 		const allAttributes = await getMainAttributes();
