@@ -142,7 +142,8 @@
     "moreFilters": "Weitere Filter",
     "countryFilter": "Länderschwerpunkt",
     "close": "Schließen",
-    "etAl": "et al."
+    "etAl": "et al.",
+    "recommendedItems": "Empfohlene Ressourcen"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
@@ -408,7 +409,8 @@
     "attachmentsData": "Anhänge",
     "citation": "Zitation",
     "apc_list": "Artikelbearbeitungsgebühr",
-    "apc_paid": "Status der Gebührenzahlung für die Artikelbearbeitung"
+    "apc_paid": "Status der Gebührenzahlung für die Artikelbearbeitung",
+    "relations": "Verwandte Ressourcen"
   },
   "help": {
     "intro1": "Die Suchoberfläche besteht aus drei Abschnitten: **Suche**, **Entdecken** und **Ergebnisse**. Diese werden im Folgenden ausführlich beschrieben.",

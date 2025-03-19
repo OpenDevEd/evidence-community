@@ -142,7 +142,8 @@
     "moreFilters": "Plus de filtres",
     "countryFilter": "Concentration géographique",
     "close": "Fermer",
-    "etAl": "et al."
+    "etAl": "et al.",
+    "recommendedItems": "Ressources recommandées"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",
@@ -408,7 +409,8 @@
     "attachmentsData": "Pièces jointes",
     "citation": "Citation",
     "apc_list": "Frais de traitement des articles",
-    "apc_paid": "Statut du paiement des frais de traitement d'article"
+    "apc_paid": "Statut du paiement des frais de traitement d'article",
+    "relations": "Ressources connexes"
   },
   "help": {
     "intro1": "L'interface de recherche est composée de trois sections : **Recherche**, **Explorer** et **Résultats**. Celles-ci sont décrites en détail ci-dessous.",

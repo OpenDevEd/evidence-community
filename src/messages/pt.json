@@ -142,7 +142,8 @@
     "moreFilters": "Mais Filtros",
     "countryFilter": "Foco no país",
     "close": "Fechar",
-    "etAl": "et al."
+    "etAl": "et al.",
+    "recommendedItems": "Recursos Recomendados"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",
@@ -408,7 +409,8 @@
     "attachmentsData": "Anexos",
     "citation": "Citação",
     "apc_list": "Taxa de Processamento de Artigo",
-    "apc_paid": "Status do Pagamento da Taxa de Processamento do Artigo"
+    "apc_paid": "Status do Pagamento da Taxa de Processamento do Artigo",
+    "relations": "Recursos Relacionados"
   },
   "help": {
     "intro1": "A interface de pesquisa é feita de três seções: **Pesquisar**, **Explorar** e **Resultados**. Estas são descritas em detalhes abaixo.",

@@ -142,7 +142,8 @@
     "moreFilters": "More Filters",
     "countryFilter": "Country Focus",
     "close": "Close",
-    "etAl": "et al."
+    "etAl": "et al.",
+    "recommendedItems": "Recommended Resources"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",
@@ -408,7 +409,8 @@
     "attachmentsData": "Attachments",
     "citation": "Citation",
     "apc_list": "Article Processing Charge",
-    "apc_paid": "Article Processing Charge Payment Status"
+    "apc_paid": "Article Processing Charge Payment Status",
+    "relations": "Related Resources"
   },
   "help": {
     "intro1": "The search interface is made of three sections: **Search**, **Explore**, and **Results**. These are described in detail below.",

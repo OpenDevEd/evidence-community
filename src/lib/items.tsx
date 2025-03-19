@@ -1,7 +1,7 @@
 import { ReactNode, useRef, useMemo, memo, useState, useEffect } from "react";
-import { Item } from "@/app/api/item/types";
+import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
-import { Divider, Link } from "@nextui-org/react";
+import { Accordion, AccordionItem, Divider, Link } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import Attachment from "@/components/features/items/Attachment";
 import { createFormatter, useTranslations } from "next-intl";
@@ -9,12 +9,17 @@ import { useRouter } from "@/i18n/routing";
 import CopyButton from "@/components/features/items/CopyButton";
 import { Card } from "@/components/nextui/Card";
 import { INSTITUTION_LOGOS } from "@/constants/items";
-import { getExtraValues } from "./utils";
+import { fetcher, getExtraValues } from "./utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import LinkWithParams from "@/components/features/LinkWithParams";
 import React from "react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
+import { RelationsType } from "@/types/item";
+import Resource from "@/components/features/items/Resource";
+import useSWR from "swr";
+import { MdSearchOff } from "react-icons/md";
+
 
 type FormatterProps = {
 	value: any;
@@ -309,6 +314,83 @@ function ObjectView({
 	);
 }
 
+function Relation({ value }: { value: string }) {
+	const keyFromValue = value.split("/").pop() || "";
+
+	const { data: fetchedItemData, isLoading: fetchedItemDataLoading } =
+		useSWR<ItemGetResponse>(
+			keyFromValue ? `/item/${keyFromValue}` : null,
+			fetcher,
+			{
+				revalidateOnFocus: false,
+				revalidateIfStale: false,
+				revalidateOnReconnect: false,
+				shouldRetryOnError: false,
+			}
+		);
+
+	const hasData = !(!fetchedItemData?.item && !fetchedItemDataLoading);
+
+	return (
+		<AnimatePresence>
+			{hasData && (
+				<motion.li
+					initial={{ opacity: 0 }}
+					animate={{
+						opacity: 1,
+					}}
+					exit={{ opacity: 0 }}
+					transition={{ duration: 0.3 }}
+					key={keyFromValue}
+					layout
+				>
+					<Resource
+						as="div"
+						itemData={fetchedItemData?.item}
+						isLoading={fetchedItemDataLoading}
+						abstract={false}
+					/>
+				</motion.li>
+			)}
+		</AnimatePresence>
+	);
+}
+
+function Relations({ value }: { value: RelationsType }) {
+	const obj = value as RelationsType;
+	if (!obj) return false;
+	const relationsObject = {
+		"dc:relation": obj["dc:relation"] || [],
+		"owl:sameAs": obj["owl:sameAs"] || [],
+		related_works: obj["related_works"] || [],
+	};
+	return (
+		<div>
+			<ul className="flex flex-col gap-4">
+				<AnimatePresence mode="popLayout">
+					{Object.entries(relationsObject).map(
+						([key, value], index) => {
+							const valueArray = Array.isArray(value)
+								? value
+								: [value];
+							return valueArray.map((v, i) => (
+								<Relation key={key + "-" + i} value={v} />
+							));
+						}
+					)}
+				</AnimatePresence>
+				<div className="first:block hidden">
+					<div className="flex justify-center items-center gap-2 ">
+						<MdSearchOff className="size-6" />
+						There are no relations found for this item in this
+						database.
+					</div>
+				</div>
+			</ul>
+		</div>
+	);
+}
+
 export const valueFormatter: Record<
 	any,
 	(props: FormatterProps) => ReactNode | boolean
@@ -324,7 +406,6 @@ export const valueFormatter: Record<
 	fullTextPDFs: () => false,
 	dateModified: () => false,
 	datePublished: () => false,
-	relations: () => false,
 	deleted: () => false,
 	year: () => false,
 	collectionsAncestry: () => false,
@@ -332,6 +413,7 @@ export const valueFormatter: Record<
 	itemType: ({ value, t }) => <p>{t("itemType." + value)}</p>,
 	collections: () => false,
 	title: () => false,
+	relations: ({ value }) => <Relations value={value} />,
 	note: ({ value }) => (
 		<p
 			dangerouslySetInnerHTML={{ __html: value }}
@@ -445,7 +527,10 @@ export const valueFormatter: Record<
 				{countries.map((country, index) => {
 					return (
 						<LinkWithParams
-							isDisabled={process.env.NEXT_PUBLIC_DISABLE_COUNTRY === "true"}
+							isDisabled={
+								process.env.NEXT_PUBLIC_DISABLE_COUNTRY ===
+								"true"
+							}
 							key={index}
 							href="/lib"
 							params={{ country: [country] }}

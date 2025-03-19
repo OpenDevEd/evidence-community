@@ -142,7 +142,8 @@
     "moreFilters": "更多筛选",
     "countryFilter": "国家重点",
     "close": "关闭",
-    "etAl": "等"
+    "etAl": "等",
+    "recommendedItems": "推荐资源"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",
@@ -408,7 +409,8 @@
     "attachmentsData": "附件",
     "citation": "引用",
     "apc_list": "文章处理费",
-    "apc_paid": "文章处理费支付状态"
+    "apc_paid": "文章处理费支付状态",
+    "relations": "相关资源"
   },
   "help": {
     "intro1": "搜索界面由三个部分组成：**搜索**、**探索**和**结果**。这些在下面有详细描述。",
