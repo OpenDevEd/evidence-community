@@ -196,6 +196,7 @@ export default function Resource({
 	collectionId,
 	itemKey,
 	className,
+	as = "li",
 }: {
 	itemData?: Item | undefined;
 	abstract: boolean;
@@ -205,6 +206,7 @@ export default function Resource({
 	collectionId?: string;
 	itemKey?: string;
 	className?: string;
+	as?: "li" | "div";
 }) {
 	const t = useTranslations("ui");
 	const format = useFormatter();
@@ -214,10 +216,9 @@ export default function Resource({
 		revalidateOnFocus: false,
 	});
 
-	
 	const finalItemData = itemData ?? fetchedItemData?.item;
-	const finalIsLoading = itemData ? isLoading : fetchedItemDataLoading;
-
+	const finalIsLoading = !itemKey ? isLoading : fetchedItemDataLoading;
+	
 	const abstractText =
 		finalItemData && firstNonNullOrEmpty(finalItemData, ["abstractNote"]);
 
@@ -243,8 +244,12 @@ export default function Resource({
 		return () => observer.disconnect();
 	}, [href, router, finalItemData?.key]);
 
+
 	return (
-		<li className={twMerge("@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col", className)}>
+		<ResourceWrapper 
+			as={as} 
+			className={twMerge("@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col", className)}
+		>
 			<Link
 				href={href}
 				className="p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1"
@@ -330,6 +335,19 @@ export default function Resource({
 				revalidateResults={revalidateResults}
 				collectionId={collectionId}
 			/>
-		</li>
+		</ResourceWrapper>
 	);
+}
+
+function ResourceWrapper({ 
+	as,
+	children, 
+	className 
+}: { 
+	as: "li" | "div"; 
+	children: React.ReactNode; 
+	className?: string;
+}) {
+	const Component = as;
+	return <Component className={className}>{children}</Component>;
 }
