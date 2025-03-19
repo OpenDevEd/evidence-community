@@ -19,7 +19,8 @@ export default function CollectionHierarchy({
 }) {
 	const childrenUnsorted = collectionData.children || [];
 	const children = useMemo(() => {
-		return childrenUnsorted.toSorted((a: Collection, b: Collection) =>
+		const newArray = [...childrenUnsorted];
+		return newArray.sort((a: Collection, b: Collection) =>
 			(a.name || "").localeCompare(b.name || "")
 		);
 	}, [childrenUnsorted]);

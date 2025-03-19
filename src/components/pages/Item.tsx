@@ -289,7 +289,7 @@ export default function Item({
 										.filter(
 											(key) => !skippedRows.includes(key)
 										)
-										.toSorted((a, b) => a.localeCompare(b))
+										.sort((a, b) => a.localeCompare(b))
 										.map((row: string) => (
 											<ItemRow
 												item={data.item!}
