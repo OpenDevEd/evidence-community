@@ -345,8 +345,8 @@ export default function Item({
 			{isAIEnabled && data?.item && !loading && aiAllowed && (
 				<AiButton data={data} />
 			)}
-			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden">
-				<div className="gap-8 p-4 lg:p-10">
+			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden  p-4 lg:p-10 gap-10 flex flex-col">
+				<div className="gap-8">
 					{isRelatedItemsEnabled && data?.item && (
 						<RowContainer title={t("recommendedItems")}>
 							<Skeleton
@@ -367,11 +367,8 @@ export default function Item({
 						</RowContainer>
 					)}
 				</div>
-				<div className="flex flex-col gap-8 px-4 lg:px-10">
-					<Divider />
-				</div>
-				<div className="flex flex-col gap-8 p-4 lg:p-10">
-					{data?.item && data.item.relations ? (
+				{(data?.item && data.item.relations) ? <div className="flex flex-col gap-10">
+					
 						<ItemRow
 							item={data.item!}
 							key="relations"
@@ -380,8 +377,8 @@ export default function Item({
 							loading={loading}
 							tooltip="Only items available in the current database are displayed. Some related resources are only available externally."
 						/>
-					) : null}
-				</div>
+					
+				</div> : null}
 			</div>
 		</PageContainer>
 	);
