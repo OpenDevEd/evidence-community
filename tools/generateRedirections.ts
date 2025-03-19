@@ -3,16 +3,11 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { eq } from 'drizzle-orm';
 import { item } from '@/db/schema/tables/item';
+import { RelationsType } from '@/types/item';
 
 dotenv.config();
 
 const REDIRECTIONS_PATH = path.join(process.cwd(), 'src', 'constants', 'redirections.json');
-
-export type RelationsType = {
-    "dc:relation": string | string[];
-    "dc:replaces": string | string[];
-    "owl:sameAs": string | string[];
-}
 
 function getKey(url: string) {
     return url.split('/').pop() || '';
