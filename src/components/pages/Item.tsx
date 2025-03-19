@@ -40,7 +40,10 @@ import posthog from "posthog-js";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 
 function randomUUID() {
-	return Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+	return (
+		Math.random().toString(36).substring(2, 15) +
+		Math.random().toString(36).substring(2, 15)
+	);
 }
 
 function AiButton({ data }: { data: ItemGetResponse | undefined }) {
@@ -49,12 +52,16 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 		prompt: data?.item?.key,
 		modelIndex: selectedModel,
 		distinctId: posthog.get_distinct_id(),
-	}
+	};
 	const locale = useLocale();
 	const { data: questions } = useSWR(
-		[`/ai/questions`, body, {
-			"Accept-Language": locale,
-		}],
+		[
+			`/ai/questions`,
+			body,
+			{
+				"Accept-Language": locale,
+			},
+		],
 		fetcherPOST,
 		{
 			revalidateOnFocus: false,
@@ -65,7 +72,6 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	const id = useRef(randomUUID());
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
-
 
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
@@ -96,8 +102,20 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 		});
 	};
 
-	const summaryFeature = useAIFeature("summarize", id.current, updateHistory, data, selectedModel);
-	const explainFeature = useAIFeature("explain", id.current, updateHistory, data, selectedModel);
+	const summaryFeature = useAIFeature(
+		"summarize",
+		id.current,
+		updateHistory,
+		data,
+		selectedModel
+	);
+	const explainFeature = useAIFeature(
+		"explain",
+		id.current,
+		updateHistory,
+		data,
+		selectedModel
+	);
 
 	const handleModelChange = (modelIndex: number) => {
 		setSelectedModel(modelIndex);
@@ -166,7 +184,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 							onChangeOpenChange,
 							summaryFeature,
 							explainFeature,
-							onChatOpenChange,
+							onChatOpenChange
 						)}
 						itemClasses={{
 							base: "data-[hover]:bg-accent dark:data-[hover]:bg-accent data-[hover]:text-white dark:data-[hover]:text-white",
@@ -190,15 +208,44 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	);
 }
 
-export default function Item({ data, loading }: { data: ItemGetResponse | undefined, loading: boolean }) {
+const skippedRows = ["relations", "citation"];
+
+function RowContainer({
+	title,
+	children,
+}: {
+	title: string;
+	children: React.ReactNode;
+}) {
+	return (
+		<div className="flex lg:flex-row flex-col lg:gap-4">
+			<h3 className="text-xl font-medium text-black/60 dark:text-white/60 lg:w-64 w-full shrink-0 rounded">
+				{title}
+			</h3>
+			<div className="w-full">{children}</div>
+		</div>
+	);
+}
+
+export default function Item({
+	data,
+	loading,
+}: {
+	data: ItemGetResponse | undefined;
+	loading: boolean;
+}) {
 	const router = useRouter();
 	const t = useTranslations("ui");
 	const isAIEnabled = useFeatureFlagEnabled("ai-features");
-	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources") && process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true";
+	const isRelatedItemsEnabled =
+		useFeatureFlagEnabled("related-resources") &&
+		process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true";
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
 	const { lastFetchedData, setLastFetchedData } = useLastFetchedData();
 	const { data: embeddings } = useSWR(
-		(isRelatedItemsEnabled && data?.item && !loading) ? `/ai/embeddings/${data?.item?.key}` : null,
+		isRelatedItemsEnabled && data?.item && !loading
+			? `/ai/embeddings/${data?.item?.key}`
+			: null,
 		fetcher,
 		{
 			onSuccess: (data) => {
@@ -207,7 +254,10 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 						items: data.hits,
 					} as ItemsGetResponse);
 				}
-			}
+			},
+			revalidateOnFocus: false,
+			revalidateOnReconnect: false,
+			revalidateIfStale: false,
 		}
 	);
 	const aiAllowed = isAIAllowed(data?.item);
@@ -220,7 +270,13 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 	return (
 		<PageContainer id="main-content" className="flex flex-col gap-4">
 			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
-				{data?.item && <ItemControls itemData={data?.item} router={router} loading={loading} />}
+				{data?.item && (
+					<ItemControls
+						itemData={data?.item}
+						router={router}
+						loading={loading}
+					/>
+				)}
 				<div className="flex flex-col gap-8 p-4 lg:p-10">
 					{data?.item ? (
 						<>
@@ -229,8 +285,12 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 							</h1>
 							<div className="flex flex-col gap-8">
 								{data?.item &&
-									Object.keys(data.item).filter((key) => key !== "citation").toSorted((a, b) => a.localeCompare(b)).map(
-										(row: string) => (
+									Object.keys(data.item)
+										.filter(
+											(key) => !skippedRows.includes(key)
+										)
+										.toSorted((a, b) => a.localeCompare(b))
+										.map((row: string) => (
 											<ItemRow
 												item={data.item!}
 												key={row}
@@ -238,29 +298,38 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 												router={router}
 												loading={loading}
 											/>
-										)
-									)}
-									<Divider />
-									<ItemRow
-										item={data.item!}
-										key="citation"
-										row="citation"
-										router={router}
-										loading={loading}
-									/>
+										))}
+								<Divider />
+								<ItemRow
+									item={data.item!}
+									key="citation"
+									row="citation"
+									router={router}
+									loading={loading}
+								/>
 							</div>
-							{(isCollectionsEnabled && hierarchy) && (
-								hierarchy.filter((collection: Collection) => collection.children?.length && collection.children?.length > 0).map((collection: Collection) => (
-									<ItemRow
-										item={data.item!}
-										key={collection.id}
-										router={router}
-										customRowName={collection.title}
-										value={<CollectionsRow value={collection.children!} />}
-										loading={loading}
-									/>
-								))
-							)}
+							{isCollectionsEnabled &&
+								hierarchy &&
+								hierarchy
+									.filter(
+										(collection: Collection) =>
+											collection.children?.length &&
+											collection.children?.length > 0
+									)
+									.map((collection: Collection) => (
+										<ItemRow
+											item={data.item!}
+											key={collection.id}
+											router={router}
+											customRowName={collection.title}
+											value={
+												<CollectionsRow
+													value={collection.children!}
+												/>
+											}
+											loading={loading}
+										/>
+									))}
 						</>
 					) : loading ? (
 						<div className="flex items-center justify-center min-h-screen">
@@ -273,17 +342,16 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 					)}
 				</div>
 			</div>
-			{isAIEnabled && data?.item && !loading && aiAllowed && <AiButton data={data}  />}
-			{isRelatedItemsEnabled && data?.item && (
-				<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden">
-					<div className="flex lg:flex-row flex-col lg:gap-8 gap-2">
-						<h3 className="text-xl font-medium text-black/60 dark:text-white/60 lg:w-64 w-full shrink-0 rounded lg:p-10 p-4 pb-0">
-							{t("relatedItems")}
-						</h3>
-						<div className="w-full">
+			{isAIEnabled && data?.item && !loading && aiAllowed && (
+				<AiButton data={data} />
+			)}
+			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden">
+				<div className="gap-8 p-4 lg:p-10">
+					{isRelatedItemsEnabled && data?.item && (
+						<RowContainer title={t("recommendedItems")}>
 							<Skeleton
 								isLoaded={!!embeddings}
-								className="data-[loaded]:min-h-0 min-h-screen rounded-2xl rounded-l-none p-4 w-full"
+								className="data-[loaded]:min-h-0 min-h-screen rounded-2xl w-full"
 							>
 								<ul className="grid grid-cols-1 gap-4">
 									{embeddings?.hits.map((hit: any) => (
@@ -296,10 +364,25 @@ export default function Item({ data, loading }: { data: ItemGetResponse | undefi
 									))}
 								</ul>
 							</Skeleton>
-						</div>
-					</div>
+						</RowContainer>
+					)}
 				</div>
-			)}
+				<div className="flex flex-col gap-8 px-4 lg:px-10">
+					<Divider />
+				</div>
+				<div className="flex flex-col gap-8 p-4 lg:p-10">
+					{data?.item && data.item.relations ? (
+						<ItemRow
+							item={data.item!}
+							key="relations"
+							row="relations"
+							router={router}
+							loading={loading}
+							tooltip="Only items available in the current database are displayed. Some related resources are only available externally."
+						/>
+					) : null}
+				</div>
+			</div>
 		</PageContainer>
 	);
 }
