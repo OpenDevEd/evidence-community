@@ -78,7 +78,7 @@ export default async function middleware(request: NextRequest) {
       request.nextUrl.searchParams.forEach((value, paramKey) => {
         newUrl.searchParams.set(paramKey, value);
       });
-      return NextResponse.redirect(newUrl);
+      return NextResponse.redirect(newUrl, 301);
     }
   }
 
