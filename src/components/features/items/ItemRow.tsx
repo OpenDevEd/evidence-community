@@ -4,7 +4,9 @@ import type { Item } from "@/app/api/item/types";
 import { useFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import React from "react";
-export default function ItemRow({ item, row, router, value, customRowName, loading }: { item: Item; row?: string; router: ReturnType<typeof useRouter>, value?: any, customRowName?: string, loading: boolean }) {
+import { Tooltip } from "@nextui-org/react";
+import { AiFillQuestionCircle } from "react-icons/ai";
+export default function ItemRow({ item, row, router, value, customRowName, loading, tooltip }: { item: Item; row?: string; router: ReturnType<typeof useRouter>, value?: any, customRowName?: string, loading: boolean, tooltip?: string }) {
 	const t = useTranslations();
 	const formatter = useFormatter();
 	const originalValue = value ?? item[row as keyof Item];
@@ -29,12 +31,13 @@ export default function ItemRow({ item, row, router, value, customRowName, loadi
 		<div className="flex lg:flex-row flex-col lg:gap-4">
 			<h3
 				className={twMerge(
-					"text-xl font-medium text-black/60 dark:text-white/60 lg:w-64 w-full shrink-0 rounded",
+					"text-xl font-medium text-black/60 dark:text-white/60 lg:w-64 w-full shrink-0 rounded flex gap-2",
 					!rowName && "!text-red-500",
 					rowValue === undefined && "bg-red-500 text-center"
 				)}
 			>
 				{rowName || row}
+				{tooltip && <Tooltip content={tooltip}><AiFillQuestionCircle className="size-6 hover:opacity-100 opacity-50 transition-opacity" /></Tooltip>}
 			</h3>	
 			{React.createElement(element, {
 				suppressHydrationWarning: true,
