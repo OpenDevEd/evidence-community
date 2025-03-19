@@ -12,10 +12,14 @@ import { getCachedCollections } from "../../cache";
 import { convertItem } from "@/lib/actions";
 
 async function getMeilisearchItem(key: string) {
-	const result = await (
-		await meilisearchClient.getIndex(process.env.MEILI_INDEX || config.index)
-	).getDocument(key);
-	return result as Item;
+	try {
+		const result = await (
+			await meilisearchClient.getIndex(process.env.MEILI_INDEX || config.index)
+		).getDocument(key);
+		return result as Item;
+	} catch (error) {
+		return null;
+	}
 }
 
 async function getDatabaseItem(key: string) {
@@ -33,6 +37,12 @@ export async function getItem(
 		source === "db" ? getDatabaseItem(key) : getMeilisearchItem(key),
 		getCachedCollections(),
 	]));
+
+	if (!result) {
+		return {
+			item: null,
+		};
+	}
 
 	if (collections) {
 		result.collectionsData = result.collectionsAncestry
