@@ -20,10 +20,11 @@ export async function getCachedCollections(ignoreCache: boolean = false) {
 export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 	let item: ItemGetResponse | undefined = global?.cacheUser?.get("item" + key);
 	if (!item || ignoreCache) {
-		item = await getItem(key);
-		if (!item || !item.item) {
-			return null;
+		const result = await getItem(key);
+		if (!result || !result.item) {
+			return null as unknown as ItemGetResponse;
 		}
+		item = result as ItemGetResponse;
 		global?.cacheUser?.set("item" + key, item);
 	}
 	return item;
@@ -33,10 +34,11 @@ export async function getCachedItemSmall(key: string, ignoreCache: boolean = fal
 	let item: ItemGetResponse | undefined = global?.cacheUser?.get("itemSmall" + key);
 	if (!item || ignoreCache) {
 		console.log("getting item small", key);
-		item = await getItem(key);
-		if (!item || !item.item) {
-			return null;
+		const result = await getItem(key);
+		if (!result || !result.item) {
+			return null as unknown as ItemGetResponse;
 		}
+		item = result as ItemGetResponse;
 		global?.cacheUser?.set("itemSmall" + key, item);
 	} else {
 		console.log("cached item size in mb", JSON.stringify(item).length / 1024 / 1024);
