@@ -84,8 +84,6 @@ export default async function middleware(request: NextRequest) {
 
   const supportedFormats = ['ris', 'bibtex'];
 
- 
-
   const exportMatch = request.nextUrl.pathname.match(/\/lib\/(.+?)\/export\/(ris|bibtex)$/);
   if (exportMatch) {
     if (!supportedFormats.includes(exportMatch[2])) {
@@ -105,20 +103,47 @@ export default async function middleware(request: NextRequest) {
     const itemKey = downloadMatch[1];
     const attachmentKey = downloadMatch[2];
     const itemUrl = new URL(`/api/item/${itemKey}`, fixRequestUrl(request)).toString().replace("https://", "http://");
-    const response = await fetch(itemUrl);
-    const item: ItemGetResponse = await response.json();
-    if (!item.item) {
-      return NextResponse.json({ error: "Item not found" }, { status: 404 });
+
+    try {
+      const response = await fetch(itemUrl);
+      
+      if (!response.ok) {
+        return NextResponse.json(
+          { error: `Failed to fetch item: ${response.statusText}` }, 
+          { status: response.status }
+        );
+      }
+      
+      let item: ItemGetResponse;
+      try {
+        item = await response.json();
+      } catch (jsonError) {
+        console.error("Error parsing JSON response:", jsonError);
+        return NextResponse.json(
+          { error: "Failed to parse item data" }, 
+          { status: 500 }
+        );
+      }
+      
+      if (!item.item) {
+        return NextResponse.json({ error: "Item not found" }, { status: 404 });
+      }
+      if (!item.item.attachmentsData) {
+        return NextResponse.json({ error: "Item or attachments not found" }, { status: 404 });
+      }
+      const attachment = item.item.attachmentsData.find((attachment) => attachment.key === attachmentKey);
+      if (!attachment || !attachment.url) {
+        return NextResponse.json({ error: "Attachment URL not found" }, { status: 404 });
+      }
+      const finalURL = new URL(attachment.url, fixRequestUrl(request));
+      return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
+    } catch (fetchError) {
+      console.error("Fetch error:", fetchError);
+      return NextResponse.json(
+        { error: "Failed to retrieve item data" }, 
+        { status: 500 }
+      );
     }
-    if (!item.item.attachmentsData) {
-      return NextResponse.json({ error: "Item or attachments not found" }, { status: 404 });
-    }
-    const attachment = item.item.attachmentsData.find((attachment) => attachment.key === attachmentKey);
-    if (!attachment || !attachment.url) {
-      return NextResponse.json({ error: "Attachment URL not found" }, { status: 404 });
-    }
-    const finalURL = new URL(attachment.url, fixRequestUrl(request));
-    return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
   } else if (request.nextUrl.pathname === "/lib/atom.xml" || (request.nextUrl.pathname.startsWith("/profile/") && request.nextUrl.pathname.endsWith("/atom.xml"))) {
     const id = request.nextUrl.pathname.startsWith("/profile/") ? request.nextUrl.pathname.split("/")[2] : "main";
     const finalURL = new URL(`/api/feed/${id}`, fixRequestUrl(request));
