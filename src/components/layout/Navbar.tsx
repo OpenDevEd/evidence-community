@@ -305,13 +305,14 @@ function LanguageSwitcher({ className, isMobile = false }: { className?: string;
 	const locale = useLocale();
 	const pathname = usePathname();
 	const localesPriority = process.env.NEXT_PUBLIC_LOCALES_PRIORITY?.split(",") || [];
-	const localesList = routing.locales.filter((currentLocale) => currentLocale !== locale).toSorted((a, b) => {
-		const aIndex = localesPriority.indexOf(a);
-		const bIndex = localesPriority.indexOf(b);
-		if (aIndex === -1) return 1;
-		if (bIndex === -1) return -1;
-		return aIndex - bIndex;
-	});
+	const localesList = routing.locales.filter((currentLocale) => currentLocale !== locale)
+		.sort((a, b) => {
+			const aIndex = localesPriority.indexOf(a);
+			const bIndex = localesPriority.indexOf(b);
+			if (aIndex === -1) return 1;
+			if (bIndex === -1) return -1;
+			return aIndex - bIndex;
+		});
 
 	return (
 		<li
