@@ -10,34 +10,34 @@ import { z } from "zod";
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-	const { searchParams } = new URL(req.url);
-	const locale = req.headers.get("Accept-Language") || routing.defaultLocale;
-	const systemPrompt = config.prompts.questions?.join("\n")
-	const sharedRules = config.shared_rules.join("\n")
-	const pdfRules = config.pdf_rules.join("\n")
-	const structureRules = config.structure_rules.join("\n")
-	const { prompt: key, modelIndex, distinctId } = await req.json();
+    const { searchParams } = new URL(req.url);
+    const locale = req.headers.get("Accept-Language") || routing.defaultLocale;
+    const systemPrompt = config.prompts.questions?.join("\n")
+    const sharedRules = config.shared_rules.join("\n")
+    const pdfRules = config.pdf_rules.join("\n")
+    const structureRules = config.structure_rules.join("\n")
+    const { prompt: key, modelIndex, distinctId } = await req.json();
     const prompt = "questions"
 
     console.log(key, modelIndex, distinctId)
 
-	const item = await getCachedItem(key!);
+    const item = await getCachedItem(key!);
 
-	if (!item || !item.item) {
-		return new NextResponse("Item not found", { status: 404 });
-	}
+    if (!item || !item.item) {
+        return new NextResponse("Item not found", { status: 404 });
+    }
 
-	const { provider, modelName, error } = getModel(modelIndex);
+    const { provider, modelName, error } = getModel(modelIndex);
 
-	if (error) {
-		return new NextResponse(error, { status: 404 });
-	}
+    if (error) {
+        return new NextResponse(error, { status: 404 });
+    }
 
-	const {fullTextPDFs, ...cleanItem} = item.item;
+    const { fullTextPDFs, ...cleanItem } = item.item;
 
-	if (!isAIAllowed(cleanItem)) {
-		return new NextResponse("AI not allowed", { status: 403 });
-	}
+    if (!isAIAllowed(cleanItem)) {
+        return new NextResponse("AI not allowed", { status: 403 });
+    }
 
     if (fullTextPDFs?.length === 0) {
         return new NextResponse("No PDF attachments found", { status: 404 });
@@ -48,28 +48,30 @@ export async function POST(req: Request) {
         delete f.key;
     });
 
-    const result = await generateObject({
-        model: provider!(modelName!),
-        system: [
-            `LOCALE: ${locale}\n`,
-            "You are a helpful assistant created by OpenDevEd (Open Development & Education)",
-            "You are given a PDF document in the following JSON format:",
-            "{ \"title\": \"PDF Title\", \"fullTextPDF\": Array<{ text: string; page: number; }> }[]",
-            "You need to generate 5 questions about the PDF content.",
-            "The questions should be related to the text in fullTextPDF.text",
-            "The questions should be in the same language as the locale.",
-        ].join("\n"),
-        schema: z.object({
-            questions: z.array(z.string().describe("A question to be answered by the AI regarding the PDF content"))
-                .min(5).max(5).describe("5 questions about the PDF content"),
-        }),
-        prompt: JSON.stringify(fullTextPDFs),
-    })
+    try {
+        const result = await generateObject({
+            model: provider!(modelName!),
+            system: [
+                `LOCALE: ${locale}\n`,
+                "You are a helpful assistant created by OpenDevEd (Open Development & Education)",
+                "You are given a PDF document in the following JSON format:",
+                "{ \"title\": \"PDF Title\", \"fullTextPDF\": Array<{ text: string; page: number; }> }[]",
+                "You need to generate 5 questions about the PDF content.",
+                "The questions should be related to the text in fullTextPDF.text",
+                "The questions should be in the same language as the locale.",
+            ].join("\n"),
+            schema: z.object({
+                questions: z.array(z.string().describe("A question to be answered by the AI regarding the PDF content"))
+                    .min(5).max(5).describe("5 questions about the PDF content"),
+            }),
+            prompt: JSON.stringify(fullTextPDFs)
+        })
 
-    
-    trackUsage("ai_" + prompt, result, distinctId, prompt);
+        trackUsage("ai_" + prompt, result, distinctId, prompt);
 
-    console.log(result.object)
-   
-    return NextResponse.json(result.object.questions);
+        return NextResponse.json(result.object.questions);
+    } catch (error) {
+        console.error(error)
+        return new NextResponse("Error generating questions", { status: 500 });
+    }
 }
