@@ -595,7 +595,7 @@ export const valueFormatter: Record<
 									{InstitutionLogo && (
 										<InstitutionLogo className="bg-white/80" />
 									)}
-									<h3 className="text-black/80 dark:text-white/80">
+									<h3 className="text-white/80">
 										{institution}
 									</h3>
 								</div>

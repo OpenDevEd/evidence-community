@@ -15,7 +15,7 @@ const accentColors = {
   "openalex": "#1976d2",
   "jacob": "#FFDE2D",
   "kaleidoscopio": "#ef4129",
-  "jimma": "#0067b8"
+  "jimma": "#4a94d6"
 }
 
 function generateColorVariants(baseColor: string, light: boolean = false) {
