@@ -4,6 +4,41 @@ import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
 
+export function convertStringFromDatabaseToObject(string: string) {
+	if (!string) return {};
+
+	const companyLogoStyleObject = string.split(",").reduce((acc: Record<string, string>, curr: string) => {
+		const [key, value] = curr.split("|").map(s => s.trim());
+		acc[key] = value;
+		return acc;
+	}, {});
+	
+	return companyLogoStyleObject || {}
+}
+
+export function getDynamicStyles(cssString: string): React.CSSProperties {
+	if (!cssString) return {};
+	
+	// Handle CSS string like "width: 100px; height: 50px;"
+	const styleObj: Record<string, string> = {};
+	const styles = cssString.split(';');
+	
+	styles.forEach(style => {
+		const [property, value] = style.split(':').map(s => s.trim());
+		if (property && value) {
+			// Convert kebab-case to camelCase for React
+			const camelProperty = property.replace(/-([a-z])/g, (_, letter) => 
+				letter.toUpperCase()
+			);
+			styleObj[camelProperty] = value;
+		}
+	});
+
+	console.log(styleObj);
+	
+	return styleObj as React.CSSProperties;
+}
+
 export function cleanItemForAI(item: ItemGetResponse["item"] | undefined) {
 	if (!item) return null;
 	return {
