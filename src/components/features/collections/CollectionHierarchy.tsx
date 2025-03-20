@@ -37,7 +37,7 @@ export default function CollectionHierarchy({
 		<>
 			{show && (
 				<Checkbox
-					size={collectionData.level !== 1 ? "lg" : undefined}
+					size={collectionData.parentCollection === collectionData.originalFacet ? "lg" : undefined}
 					isSelected={isSelected}
 					onValueChange={() => onCheckboxChange(collectionData.key)}
 					style={{ marginLeft: `${(level - 1) * 16}px` }}
