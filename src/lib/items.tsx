@@ -19,6 +19,7 @@ import { RelationsType } from "@/types/item";
 import Resource from "@/components/features/items/Resource";
 import useSWR from "swr";
 import { MdSearchOff } from "react-icons/md";
+import { serializeSearchParams } from "./searchParams";
 
 
 type FormatterProps = {
@@ -35,6 +36,7 @@ type Creator = {
 	firstName?: string;
 	lastName?: string;
 	name?: string;
+	institutions?: {id: string, display_name: string, country_code: string}[];
 };
 
 type MatchWrapperProps = {
@@ -225,7 +227,9 @@ const Extra = createRegexParser([
 
 function CollectionLevel({ collection }: { collection: Collection }) {
 	const ancestry = collection.ancestry || [];
-	const href = `/lib?collections=${[...ancestry, collection.key].join(",")}`;
+	const href = serializeSearchParams(`/lib`, {
+		collections: [...ancestry, collection.key]
+	});
 
 	return (
 		<li className="flex flex-col">
@@ -431,7 +435,7 @@ export const valueFormatter: Record<
 					const creatorTypeLabel = t(
 						"creatorType." + creator.creatorType
 					);
-					const { creatorType, ...rest } = creator;
+					const { creatorType, institutions, ...rest } = creator;
 					const fullName = creator.name
 						? creator.name
 						: `${creator.firstName} ${creator.lastName}`;
