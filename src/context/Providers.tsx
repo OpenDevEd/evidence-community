@@ -22,6 +22,7 @@ import { useLocalStorage } from "usehooks-ts";
 import { useTranslations } from "next-intl";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Toaster } from "sonner";
+import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils";
 
 export type CacheContextType = {
 	status: InferSelectModel<typeof statusTable>;
@@ -152,6 +153,7 @@ function LoadingScreen({
 	const { data: session, status } = useSession();
 	const statusTable = useStatus();
 	const t = useTranslations("ui");
+	const companyLogoStyle = convertStringFromDatabaseToObject(statusTable.companyLogo || "")["splash"];
 
 	return (
 		<AnimatePresence mode="popLayout">
@@ -191,7 +193,8 @@ function LoadingScreen({
 										"pointer-events-none",
 										themeToMatch === "light"
 											? "dark:hidden"
-											: "hidden dark:block"
+											: "hidden dark:block",
+										companyLogoStyle
 									)}
 									alt={t("logoAlt", {
 										company: statusTable?.companyName,
@@ -199,6 +202,7 @@ function LoadingScreen({
 									})}
 									width={171}
 									height={40}
+									style={{ ...getDynamicStyles(companyLogoStyle) }}
 								/>
 							))}
 						</motion.div>

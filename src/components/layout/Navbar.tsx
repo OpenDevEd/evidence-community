@@ -49,6 +49,7 @@ import { useModalError } from "@/hooks/useModalError";
 import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
 import { LinkObject } from "@/db/schema/tables/status";
 import DialogModal from "../nextui/DialogModal";
+import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils";
 
 function ThemeSwitcher({
 	theme,
@@ -126,6 +127,9 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 	const status = useStatus();
 	const { theme } = useTheme();
 	const t = useTranslations("ui");
+	const companyLogoStyle = status.companyLogo || "";
+	
+	const navbarStyle = convertStringFromDatabaseToObject(companyLogoStyle)["navbar"];
 	
 	const logoContent = (
 		<div
@@ -137,6 +141,7 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 		>
 			{["dark", "light"].map((themeToMatch) => (
 				<Image
+					data-component="navbar"
 					suppressHydrationWarning
 					key={themeToMatch}
 					aria-hidden={themeToMatch !== theme}
@@ -156,6 +161,7 @@ function Logo({ interactive = true }: { interactive?: boolean }) {
 						company: status?.companyName,
 						theme: themeToMatch 
 					})}
+					style={{ ...getDynamicStyles(navbarStyle) }}
 					height={40}
 					width={171}
 				/>

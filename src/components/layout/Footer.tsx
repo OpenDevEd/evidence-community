@@ -12,6 +12,7 @@ import { Link } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
 import { useStatus } from "@/context/Providers";
 import { usePathname } from "next/navigation";
+import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils";
 const footerInfo = {
 	email: "opendeved@gmail.com",
 	phone: "+1-123-456-7890",
@@ -40,11 +41,15 @@ function Logo() {
 	const status = useStatus();
 	const { theme } = useTheme();
 	const t = useTranslations("ui");
+	const companyLogoStyle = convertStringFromDatabaseToObject(status.companyLogo || "")["footer"];
 
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className="w-[14.5rem] h-[3.375rem] rounded-lg"
+			className={twMerge(
+				"w-[14.5rem] h-[3.375rem] rounded-lg",
+				companyLogoStyle
+			)}
 		>
 			{["dark", "light"].map((themeToMatch) => (
 				<Image
@@ -66,6 +71,7 @@ function Logo() {
 					}.png`}
 					width={232}
 					height={54}
+					style={{ ...getDynamicStyles(companyLogoStyle) }}
 				/>
 			))}
 		</Skeleton>
