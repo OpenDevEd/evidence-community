@@ -14,7 +14,8 @@ const accentColors = {
   "ekitabu": "#ed1c24",
   "openalex": "#1976d2",
   "jacob": "#FFDE2D",
-  "kaleidoscopio": "#ef4129"
+  "kaleidoscopio": "#ef4129",
+  "jimma": "#0067b8"
 }
 
 function generateColorVariants(baseColor: string, light: boolean = false) {
