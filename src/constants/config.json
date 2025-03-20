@@ -124,6 +124,12 @@
 				"enabled": true
 			}
 		},
+		"itemsEthiopia": {
+			"Domains": {
+				"title": "Topics",
+				"enabled": true
+			}
+		},
 		"itemsOpenDeved": {
 			"JUDM2WBF": {
 				"title": "Our programmes",
