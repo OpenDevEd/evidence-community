@@ -450,7 +450,7 @@ export function ContentInteractions({
 								})}
 						</div>
 						{itemsContext.isItemsFetching && (
-							<div className="flex items-center !size-0 absolute -right-4 translate-x-full">
+							<div className="flex items-center !size-0 absolute ltr:-right-4 rtl:-left-4 translate-x-full">
 								<Spinner
 									size="sm"
 									className="opacity-60 absolute"
