@@ -144,7 +144,8 @@
     "countryFilter": "Lengo la Nchi",
     "close": "Funga",
     "etAl": "na wengine",
-    "recommendedItems": "Rasilimali Zilizopendekezwa"
+    "recommendedItems": "Rasilimali Zilizopendekezwa",
+    "authorCountries": "Nchi za Waandishi"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

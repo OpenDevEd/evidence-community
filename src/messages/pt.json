@@ -143,7 +143,8 @@
     "countryFilter": "Foco no país",
     "close": "Fechar",
     "etAl": "et al.",
-    "recommendedItems": "Recursos Recomendados"
+    "recommendedItems": "Recursos Recomendados",
+    "authorCountries": "Países dos Autores"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

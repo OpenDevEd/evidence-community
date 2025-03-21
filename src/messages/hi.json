@@ -143,7 +143,8 @@
     "countryFilter": "देश फोकस",
     "close": "बंद करें",
     "etAl": "और अन्य",
-    "recommendedItems": "अनुशंसित संसाधन"
+    "recommendedItems": "अनुशंसित संसाधन",
+    "authorCountries": "लेखक देश"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",
