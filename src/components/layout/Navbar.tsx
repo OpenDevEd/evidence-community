@@ -579,7 +579,7 @@ export default function Navbar() {
 	
 			<div
 				className={twMerge(
-					"xl:h-[6.5rem] bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-3 2xl:gap-6 z-10",
+					"xl:h-[6.5rem] h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-3 2xl:gap-6 z-10",
 					style === "wide" &&
 						"bg-transparent max-w-[96rem] mx-auto xl:px-14"
 				)}
