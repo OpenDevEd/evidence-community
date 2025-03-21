@@ -266,6 +266,25 @@ export function InnerCollectionList({
 	);
 }
 
+function CountryParser(country: string) {
+	return ({
+		key: country,
+		label: `${COUNTRIES[country]} (${country})`,
+		startContent: (
+			<div className="flex size-5 aspect-square justify-center items-center gap-2">
+				<Image
+					src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
+					alt={country}
+					width={20}
+					height={20}
+					className="size-full object-contain"
+					objectFit="contain"
+				/>
+			</div>
+		),
+	})
+}
+
 export default function CollectionsList({
 	data,
 	facetDistribution,
@@ -276,6 +295,7 @@ export default function CollectionsList({
 	handleRangeChange,
 	handleInstitutionSelect,
 	handleCountrySelect,
+	handleAuthorCountrySelect,
 	isModal = false,
 	queryParams,
 }: {
@@ -283,6 +303,7 @@ export default function CollectionsList({
 	facetDistribution: FacetDistribution | undefined;
 	handleCheckboxChange: (key: string) => void;
 	handleCountrySelect: (country: string) => void;
+	handleAuthorCountrySelect: (country: string) => void;
 	selectedCollections: string[];
 	isModal?: boolean;
 	range: string;
@@ -295,6 +316,7 @@ export default function CollectionsList({
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
 	const isCountryEnabled = process.env.NEXT_PUBLIC_DISABLE_COUNTRY !== "true";
+	const isAuthorCountryEnabled = process.env.NEXT_PUBLIC_DISABLE_AUTHOR_COUNTRY !== "true";
 	const isFiltersEnabled = isCollectionsEnabled || isCountryEnabled;
 	const isInstitutionFilterEnabled =
 		useFeatureFlagEnabled("institution-filter");
@@ -302,22 +324,12 @@ export default function CollectionsList({
 	const [countries] = useFacetList(
 		facetDistribution!,
 		"country",
-		(country) => ({
-			key: country,
-			label: `${COUNTRIES[country]} (${country})`,
-			startContent: (
-				<div className="flex size-5 aspect-square justify-center items-center gap-2">
-					<Image
-						src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
-						alt={country}
-						width={20}
-						height={20}
-						className="size-full object-contain"
-						objectFit="contain"
-					/>
-				</div>
-			),
-		})
+		CountryParser
+	);
+	const [author_countries] = useFacetList(
+		facetDistribution!,
+		"creators.institutions.country_code",
+		CountryParser
 	);
 
 	const [start, end, sameYear] = useMemo(() => {
@@ -437,7 +449,6 @@ export default function CollectionsList({
 							}}
 						>
 							{isInstitutionFilterEnabled && (
-								<>
 									<FacetPicker
 										label={t("institution")}
 										placeholder={t("institution")}
@@ -449,7 +460,6 @@ export default function CollectionsList({
 										list={institutions}
 										facetName="institution"
 									/>
-								</>
 							)}
 							{isCountryEnabled && (
 								<FacetPicker
@@ -460,6 +470,17 @@ export default function CollectionsList({
 									facetDistribution={facetDistribution}
 									list={countries}
 									facetName="country"
+								/>
+							)}
+							{isAuthorCountryEnabled && (
+								<FacetPicker
+									label={t("authorCountries")}
+									placeholder={t("authorCountries")}
+									selectedKey={queryParams.author_country}
+									onSelectionChange={handleAuthorCountrySelect}
+									facetDistribution={facetDistribution}
+									list={author_countries}
+									facetName="creators.institutions.country_code"
 								/>
 							)}
 						</AccordionItem>

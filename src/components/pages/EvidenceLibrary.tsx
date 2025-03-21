@@ -89,10 +89,12 @@ export function SearchBar({
 	handleSearchChange,
 	search,
 	classNames,
+	endContent,
 }: {
 	handleSearchChange: (search: string) => void;
 	search: string;
 	classNames?: PropsOf<typeof Input>["classNames"];
+	endContent?: ReactNode;
 }) {
 	const [debouncedSearch, _] = useDebounce(handleSearchChange, 0);
 	const t = useTranslations("ui");
@@ -120,6 +122,7 @@ export function SearchBar({
 					className="size-6 fill-current text-black/60 dark:text-white/40"
 				/>
 			}
+			endContent={endContent}
 		/>
 	);
 }
@@ -360,6 +363,9 @@ export function ContentInteractions({
 													handleCountrySelect={
 														itemsContext.handleCountrySelect
 													}
+													handleAuthorCountrySelect={
+														itemsContext.handleAuthorCountrySelect
+													}
 												/>
 											)}
 										</>
@@ -529,6 +535,7 @@ function MainContent() {
 				queryParams={props.queryParams}
 				handleInstitutionSelect={props.handleInstitutionSelect}
 				handleCountrySelect={props.handleCountrySelect}
+				handleAuthorCountrySelect={props.handleAuthorCountrySelect}
 			/>
 			<ItemsList props={props} />
 		</>
