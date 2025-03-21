@@ -24,7 +24,7 @@ import { useDisclosure } from "@nextui-org/react";
 import { downloadItems } from "@/lib/actions";
 import { routing, usePathname, useRouter } from "@/i18n/routing";
 import { ItemsContext } from "../items/ItemsList";
-import { COUNTRIES } from "@/constants/misc";
+import { COUNTRIES, countryFacetOptions } from "@/constants/misc";
 import Image from "next/image";
 function Chip({
 	group,
@@ -89,8 +89,7 @@ function useFilterChips(
 	const filtersCount =
 		(queryParams.collections?.length || 0) +
 		(queryParams.institution ? 1 : 0) +
-		(queryParams.country?.length || 0) +
-		(queryParams.author ? 1 : 0);
+		(queryParams.author ? 1 : 0) + countryFacetOptions.reduce((acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0), 0);
 	const clearButton = () => {
 		handleClearFilters?.();
 	};
@@ -181,44 +180,38 @@ function FilterChips() {
 							/>
 						</motion.div>
 					)}
-					{itemsContext.queryParams?.country &&
-						itemsContext.queryParams.country.map((country) => (
+					{countryFacetOptions.map((facet) => {
+						const values = itemsContext.queryParams[
+							facet.queryParam
+						] as string[];
+						if (!values) return null;
+
+						return values.map((value) => (
 							<motion.div
-								key={"country-" + country}
+								key={`${facet.queryParam}-${value}`}
 								initial={{ opacity: 0, y: 10 }}
 								animate={{ opacity: 1, y: 0 }}
 								exit={{ opacity: 0, y: -10 }}
 								transition={{ duration: 0.2 }}
 							>
 								<Chip
-									key={
-										"country-" +
-										itemsContext.queryParams.country
-									}
-									divKey={
-										"country-" +
-										itemsContext.queryParams.country
-									}
-									group={"Country"}
+									key={`${facet.queryParam}-${value}`}
+									divKey={`${facet.queryParam}-${value}`}
+									group={t(facet.label)}
 									title={
-										COUNTRIES[country] +
-										" (" +
-										country +
-										")"
+										COUNTRIES[value] + " (" + value + ")"
 									}
 									startContent={
 										<Image
-											src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
-											alt={country}
+											src={`https://flagcdn.com/w40/${value.toLowerCase()}.png`}
+											alt={value}
 											width={16}
 											height={12}
 											className="ml-0.5"
 										/>
 									}
 									callback={() =>
-										itemsContext.handleCountrySelect?.(
-											country
-										)
+										itemsContext[facet.action](value)
 									}
 									classNames={{
 										button: "bg-primary dark:bg-primary/40",
@@ -226,7 +219,8 @@ function FilterChips() {
 									}}
 								/>
 							</motion.div>
-						))}
+						));
+					})}
 					{itemsContext.collectionsData &&
 						itemsContext.selectedCollections?.map(
 							(collection: string) => {
@@ -261,32 +255,32 @@ function FilterChips() {
 			</div>
 			<AnimatePresence initial={false}>
 				{filtersCount > 0 && (
-						<motion.div
-							initial={{ opacity: 0, y: 10 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0, y: -10 }}
-							transition={{ duration: 0.2 }}
-							className="w-7 flex justify-end"
+					<motion.div
+						initial={{ opacity: 0, y: 10 }}
+						animate={{ opacity: 1, y: 0 }}
+						exit={{ opacity: 0, y: -10 }}
+						transition={{ duration: 0.2 }}
+						className="w-7 flex justify-end"
+					>
+						<Button
+							aria-hidden={
+								itemsContext.selectedCollections.length == 0
+							}
+							aria-label={t("clearFiltersAriaLabel")}
+							onPress={clearButton}
+							isIconOnly
+							size="sm"
+							variant="solid"
+							color="accent"
+							className="h-7 w-7 min-w-7"
 						>
-							<Button
-								aria-hidden={
-									itemsContext.selectedCollections.length == 0
-								}
-								aria-label={t("clearFiltersAriaLabel")}
-								onPress={clearButton}
-								isIconOnly
-								size="sm"
-								variant="solid"
-								color="accent"
-								className="h-7 w-7 min-w-7"
-							>
-								<FaTrash
-									aria-hidden="true"
-									className="text-white size-3"
-								/>
-							</Button>
-						</motion.div>
-					)}
+							<FaTrash
+								aria-hidden="true"
+								className="text-white size-3"
+							/>
+						</Button>
+					</motion.div>
+				)}
 			</AnimatePresence>
 		</div>
 	);
