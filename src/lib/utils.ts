@@ -33,8 +33,6 @@ export function getDynamicStyles(cssString: string): React.CSSProperties {
 			styleObj[camelProperty] = value;
 		}
 	});
-
-	console.log(styleObj);
 	
 	return styleObj as React.CSSProperties;
 }
