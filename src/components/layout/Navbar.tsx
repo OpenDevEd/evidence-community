@@ -635,7 +635,7 @@ export default function Navbar() {
 							animate={{ opacity: 1, scale: 1 }}
 							exit={{ opacity: 0, scale: 0.8 }}
 							transition={{ duration: 0.15 }}
-							className="xl:hidden block ml-auto rtl:ml-0 rtl:mr-auto"
+							className="xl:hidden ml-auto rtl:ml-0 rtl:mr-auto flex justify-center items-center"
 						>
 							<Button
 								variant="invisible"
