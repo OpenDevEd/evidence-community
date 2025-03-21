@@ -255,6 +255,9 @@ export async function getItems(
 	if (process.env.NEXT_PUBLIC_DISABLE_COUNTRY !== "true") {
 		facets.push("country");
 	}
+	if (process.env.NEXT_PUBLIC_DISABLE_AUTHOR_COUNTRY !== "true") {
+		facets.push("creators.institutions.country_code");
+	}
 
 	return searchIndex(
 		searchParams,
@@ -445,6 +448,7 @@ export async function searchIndex(
 		const range = searchParams.range || null;
 		const institution = searchParams.institution || "";
 		const country = searchParams.country || [];
+		const author_country = searchParams.author_country || [];
 		const author = searchParams.author || "";
 		const searchIndex = meilisearchClient.index(
 			process.env.MEILI_INDEX || config.index
@@ -459,6 +463,7 @@ export async function searchIndex(
 			range ? formatRange(range) : null,
 			institution ? `institution = "${institution}"` : null,
 			...(country.length > 0 ? country.map((c) => `country = "${c}"`) : []),
+			...(author_country.length > 0 ? author_country.map((c) => `creators.institutions.country_code = "${c}"`) : []),
 			author ? `fullNames = "${author}"` : null,
 			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
 			...(Array.isArray(extraFilters) ? extraFilters : []),

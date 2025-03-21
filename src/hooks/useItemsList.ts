@@ -140,12 +140,25 @@ export function useItemsList(userData?: any, config: {
 		}
 	}
 
+	const handleAuthorCountrySelect = (country: string) => {
+		if (queryParams.author_country.includes(country)) {
+			setParams({
+				author_country: queryParams.author_country.filter((c) => c !== country),
+			});
+		} else {
+			setParams({
+				author_country: [...queryParams.author_country, country],
+			});
+		}
+	}
+
 	const handleClearFilters = () => {
 		setParams({
 			author: "",
 			institution: "",
 			country: [],
 			collections: [],
+			author_country: [],
 		});
 	};
 
@@ -239,6 +252,7 @@ export function useItemsList(userData?: any, config: {
 		pathName: pathname,
 		handleClearFilters,
 		handleCountrySelect,
+		handleAuthorCountrySelect,
 		userData,
 		config,
 	};

@@ -1,8 +1,30 @@
+import { useItemsList } from "@/hooks/useItemsList";
+import { searchParamsLoader } from "@/lib/searchParams";
+
+import { inferParserType } from "nuqs/server";
+
 export const currentYear = new Date().getFullYear();
 
 export const years = Array.from({ length: currentYear - 1900 }).map((_, i) =>
 	String(currentYear - i)
 );
+
+export const countryFacetOptions: {
+	key: string;
+	label: string;
+	action: keyof ReturnType<typeof useItemsList>;
+	queryParam: keyof inferParserType<typeof searchParamsLoader>;
+}[] = [{
+	key: "country",
+	label: "countryFilter",
+	action: "handleCountrySelect",
+	queryParam: "country"
+}, {
+	key: "creators.institutions.country_code",
+	label: "authorCountries",
+	action: "handleAuthorCountrySelect",
+	queryParam: "author_country"
+}]
 
 export const COUNTRIES: Record<string, string> = {
 	AF: 'Afghanistan',
