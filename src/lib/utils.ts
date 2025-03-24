@@ -3,6 +3,22 @@ import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
+import { COUNTRIES } from "@/constants/misc";
+
+export function getCountryInfo(country: string) {
+	const parts = country.split(" > ");
+	const lastPart = parts.pop() || "";
+	const countryName = COUNTRIES[lastPart];
+	const numberOfParts = parts.length;
+	const label = countryName ? `${countryName} (${lastPart})` : lastPart;
+
+	return {
+		countryName: countryName,
+		countryCode: lastPart,
+		label: label,
+		numberOfParts: numberOfParts,
+	}
+}
 
 export function convertStringFromDatabaseToObject(string: string) {
 	if (!string) return {};
