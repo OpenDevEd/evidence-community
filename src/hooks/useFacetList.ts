@@ -4,20 +4,30 @@ import { useEffect, useState } from "react";
 import { CategoriesDistribution, FacetDistribution } from "meilisearch";
 
 export type FacetListItem = {
-	key: string;
-	label: string;
-	description?: string;
-	startContent?: React.ReactNode;
-	endContent?: React.ReactNode;
+    key: string;
+    label: string;
+    description?: string;
+    startContent?: React.ReactNode;
+    endContent?: React.ReactNode;
+    style?: React.CSSProperties;
 };
 
+export function useFacetListRaw(facetDistribution: FacetDistribution, facetName: string, mappingFunction?: (value: string) => FacetListItem): [FacetListItem[], CategoriesDistribution] {
+    const facetObject = facetDistribution?.[facetName] || {}
+    const facet = Object.keys(facetObject)
+    const mappedFacetList = facet.sort((a, b) => {
+        return a.localeCompare(b)
+    }).map(mappingFunction || ((value) => ({ key: value, label: value })))
+
+    return [mappedFacetList, facetObject]
+}
 export function useFacetList(facetDistribution: FacetDistribution, facetName: string, mappingFunction?: (value: string) => FacetListItem): [FacetListItem[], CategoriesDistribution] {
     const [facetList, setFacetList] = useState<string[]>([])
     const [facetCount, setFacetCount] = useState<CategoriesDistribution | null>(null)
     const facetObject = facetDistribution?.[facetName] || {}
     const facet = Object.keys(facetObject)
 
-    const mappedFacetList = (facetList.length > 0 ? facetList : facet).map(mappingFunction || ((value) => ({key: value, label: value})))
+    const mappedFacetList = (facetList.length > 0 ? facetList : facet).map(mappingFunction || ((value) => ({ key: value, label: value })))
 
     useEffect(() => {
         setFacetList((prev) => {
