@@ -10,21 +10,20 @@ import {
 } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
 import { Switch } from "../../nextui/Switch";
-import { use, useContext, useMemo, useState } from "react";
+import { useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Input } from "../../nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
 import { COUNTRIES, years } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
-import { LuCheck, LuFilter, LuX } from "react-icons/lu";
+import { LuCheck, LuX } from "react-icons/lu";
 import { useTranslations } from "next-intl";
 import { CacheContext, useFeatureFlagEnabled } from "@/context/Providers";
-import useBreakpoint from "@/hooks/useBreakpoint";
-import { ItemsContext } from "../items/ItemsList";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { inferParserType } from "nuqs";
-import { FacetListItem, useFacetList } from "@/hooks/useFacetList";
+import { FacetListItem, useFacetList, useFacetListRaw } from "@/hooks/useFacetList";
 import Image from "next/image";
+import { getCountryInfo } from "@/lib/utils";
 
 function YearPicker({
 	label,
@@ -123,15 +122,17 @@ function FacetPicker({
 					isVirtualized={true}
 					startContent={
 						isMultiSelect && selectedKey.length > 0 ? (
-							<div className="flex gap-2">
+							<div className="flex gap-2 has-[div]:mr-0 has-[div]:ml-0 ltr:-ml-1 rtl:-mr-1">
 								{
-									selectedKey.map((key) => (
-										<div key={key}>
+									selectedKey.map((key) => {
+										const startContent = list.find((item) => item.key === key)?.startContent
+										if (!startContent) return null;
+										return <div className="" key={key}>
 											{
-												list.find((item) => item.key === key)?.startContent
+												startContent
 											}
 										</div>
-									))
+									}).filter((item) => item !== null)
 								}
 							</div>
 						) : list.find((item) => item.key === selectedKey)?.startContent
@@ -143,6 +144,7 @@ function FacetPicker({
 							startContent={item.startContent}
 							aria-label={item.label}
 							key={item.key}
+							style={item.style}
 							selectedIcon={isMultiSelect && selectedKey.includes(item.key) ? <LuCheck /> : undefined}
 						>
 							<span className="text-black dark:text-white line-clamp-2">
@@ -267,14 +269,16 @@ export function InnerCollectionList({
 }
 
 function CountryParser(country: string) {
+	const { countryName, label, numberOfParts, countryCode } = getCountryInfo(country);
+
 	return ({
 		key: country,
-		label: `${COUNTRIES[country]} (${country})`,
+		label,
 		startContent: (
-			<div className="flex size-5 aspect-square justify-center items-center gap-2">
+			countryName && <div className="flex size-5 aspect-square justify-center items-center gap-2">
 				<Image
-					src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
-					alt={country}
+					src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
+					alt={countryCode}
 					width={20}
 					height={20}
 					className="size-full object-contain"
@@ -282,6 +286,9 @@ function CountryParser(country: string) {
 				/>
 			</div>
 		),
+		style: {
+			paddingLeft: `${(numberOfParts * 1.5)+0.5}rem`,
+		}
 	})
 }
 
@@ -321,12 +328,12 @@ export default function CollectionsList({
 	const isInstitutionFilterEnabled =
 		useFeatureFlagEnabled("institution-filter");
 	const [institutions] = useFacetList(facetDistribution!, "institution");
-	const [countries] = useFacetList(
+	const [countries] = useFacetListRaw(
 		facetDistribution!,
 		"country",
 		CountryParser
 	);
-	const [author_countries] = useFacetList(
+	const [author_countries] = useFacetListRaw(
 		facetDistribution!,
 		"creators.institutions.country_code",
 		CountryParser
