@@ -24,8 +24,10 @@ import { useDisclosure } from "@nextui-org/react";
 import { downloadItems } from "@/lib/actions";
 import { routing, usePathname, useRouter } from "@/i18n/routing";
 import { ItemsContext } from "../items/ItemsList";
-import { COUNTRIES, countryFacetOptions } from "@/constants/misc";
+import { countryFacetOptions } from "@/constants/misc";
 import Image from "next/image";
+import { getCountryInfo } from "@/lib/utils";
+
 function Chip({
 	group,
 	title,
@@ -89,7 +91,11 @@ function useFilterChips(
 	const filtersCount =
 		(queryParams.collections?.length || 0) +
 		(queryParams.institution ? 1 : 0) +
-		(queryParams.author ? 1 : 0) + countryFacetOptions.reduce((acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0), 0);
+		(queryParams.author ? 1 : 0) +
+		countryFacetOptions.reduce(
+			(acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0),
+			0
+		);
 	const clearButton = () => {
 		handleClearFilters?.();
 	};
@@ -186,40 +192,46 @@ function FilterChips() {
 						] as string[];
 						if (!values) return null;
 
-						return values.map((value) => (
-							<motion.div
-								key={`${facet.queryParam}-${value}`}
-								initial={{ opacity: 0, y: 10 }}
-								animate={{ opacity: 1, y: 0 }}
-								exit={{ opacity: 0, y: -10 }}
-								transition={{ duration: 0.2 }}
-							>
-								<Chip
+						return values.map((value) => {
+							const {
+								countryName,
+								label,
+								numberOfParts,
+								countryCode,
+							} = getCountryInfo(value);
+							return (
+								<motion.div
 									key={`${facet.queryParam}-${value}`}
-									divKey={`${facet.queryParam}-${value}`}
-									group={t(facet.label)}
-									title={
-										COUNTRIES[value] + " (" + value + ")"
-									}
-									startContent={
-										<Image
-											src={`https://flagcdn.com/w40/${value.toLowerCase()}.png`}
-											alt={value}
-											width={16}
-											height={12}
-											className="ml-0.5"
-										/>
-									}
-									callback={() =>
-										itemsContext[facet.action](value)
-									}
-									classNames={{
-										button: "bg-primary dark:bg-primary/40",
-										title: "text-black dark:text-white",
-									}}
-								/>
-							</motion.div>
-						));
+									initial={{ opacity: 0, y: 10 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -10 }}
+									transition={{ duration: 0.2 }}
+								>
+									<Chip
+										key={`${facet.queryParam}-${value}`}
+										divKey={`${facet.queryParam}-${value}`}
+										group={t(facet.label)}
+										title={label}
+										startContent={
+											countryName && <Image
+												src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
+												alt={value}
+												width={16}
+												height={12}
+												className="ml-0.5"
+											/>
+										}
+										callback={() =>
+											itemsContext[facet.action](value)
+										}
+										classNames={{
+											button: "bg-primary dark:bg-primary/40",
+											title: "text-black dark:text-white",
+										}}
+									/>
+								</motion.div>
+							);
+						});
 					})}
 					{itemsContext.collectionsData &&
 						itemsContext.selectedCollections?.map(
