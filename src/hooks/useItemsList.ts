@@ -130,9 +130,16 @@ export function useItemsList(userData?: any, config: {
 
 	const handleCountrySelect = (country: string | string[]) => {
 		if (Array.isArray(country)) {
-			setParams({
-				country: Array.from(new Set([...queryParams.country, ...country]))
-			});
+			const lastOne = country[country.length - 1];
+			if (queryParams.country.includes(lastOne)) {
+				setParams({
+					country: queryParams.country.filter((c) => c !== lastOne && !c.startsWith(lastOne))
+				});
+			} else {
+				setParams({
+					country: Array.from(new Set([...queryParams.country, ...country]))
+				});
+			}
 		} else if (queryParams.country.includes(country)) {
 			setParams({
 				country: queryParams.country.filter((c) => {
