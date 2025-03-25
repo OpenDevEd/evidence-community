@@ -937,4 +937,24 @@ export const COUNTRY_HIERARCHY: Entry = {
 	],
 };
 
+export const COUNTRY_PARAMS: Record<string, string> = (() => {
+	const result: Record<string, string> = {};
+	
+	function traverse(node: Entry, path: string[] = []) {
+		if (!node.children) {
+			result[node.label] = [...path, node.label].join(" > ");
+			return;
+		}
+		
+		const currentPath = node.label === "World" ? [] : [...path, node.label];
+		
+		for (const child of node.children) {
+			traverse(child, currentPath);
+		}
+	}
+	
+	traverse(COUNTRY_HIERARCHY);
+	return result;
+})();
+
 export const SITEMAP_SIZE = 10000;

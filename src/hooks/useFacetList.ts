@@ -5,19 +5,29 @@ import { CategoriesDistribution, FacetDistribution } from "meilisearch";
 
 export type FacetListItem = {
     key: string;
+    countKey?: string;
     label: string;
     description?: string;
     startContent?: React.ReactNode;
     endContent?: React.ReactNode;
     style?: React.CSSProperties;
+    showArrow?: boolean;
+    hideCount?: boolean;
+    count?: number;
+    query?: string | string[];
 };
 
 export function useFacetListRaw(facetDistribution: FacetDistribution, facetName: string, mappingFunction?: (value: string) => FacetListItem): [FacetListItem[], CategoriesDistribution] {
     const facetObject = facetDistribution?.[facetName] || {}
     const facet = Object.keys(facetObject)
+    const facetHasAncestry = facet.some((value) => value.includes(" > "))
     const mappedFacetList = facet.sort((a, b) => {
         return a.localeCompare(b)
-    }).map(mappingFunction || ((value) => ({ key: value, label: value })))
+    }).map(mappingFunction || ((value) => ({ key: value, label: value }))).map((item: FacetListItem) => ({
+        ...item,
+        showArrow: facetObject[item.key] > 0 && item.key.split(" > ").length < 3 && facetHasAncestry,
+        count: item.countKey ? facetObject[item.countKey] : facetObject[item.key]
+    }))
 
     return [mappedFacetList, facetObject]
 }
