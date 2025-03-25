@@ -3,7 +3,7 @@ import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
-import { COUNTRIES } from "@/constants/misc";
+import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 
 export function getCountryInfo(country: string) {
 	const parts = country.split(" > ");
@@ -28,28 +28,28 @@ export function convertStringFromDatabaseToObject(string: string) {
 		acc[key] = value;
 		return acc;
 	}, {});
-	
+
 	return companyLogoStyleObject || {}
 }
 
 export function getDynamicStyles(cssString: string): React.CSSProperties {
 	if (!cssString) return {};
-	
+
 	// Handle CSS string like "width: 100px; height: 50px;"
 	const styleObj: Record<string, string> = {};
 	const styles = cssString.split(';');
-	
+
 	styles.forEach(style => {
 		const [property, value] = style.split(':').map(s => s.trim());
 		if (property && value) {
 			// Convert kebab-case to camelCase for React
-			const camelProperty = property.replace(/-([a-z])/g, (_, letter) => 
+			const camelProperty = property.replace(/-([a-z])/g, (_, letter) =>
 				letter.toUpperCase()
 			);
 			styleObj[camelProperty] = value;
 		}
 	});
-	
+
 	return styleObj as React.CSSProperties;
 }
 
@@ -149,11 +149,11 @@ export function isAIAllowed(item: Item | undefined) {
 	const allowedInstitutions = ["EdTech Hub", "Open Development & Education", "eEkitabu"];
 	const allowedTags = ["_ai_enabled"]
 
-	if (item.attachmentsData?.some(attachment => attachment.PDFCoverPageImage) || 
-	    (Array.isArray(item.institution) 
-	      ? item.institution.some(inst => allowedInstitutions.includes(inst))
-	      : allowedInstitutions.includes(item.institution || "")) || 
-	    allowedTags.some(tag => item.tags?.includes(tag))) {
+	if (item.attachmentsData?.some(attachment => attachment.PDFCoverPageImage) ||
+		(Array.isArray(item.institution)
+			? item.institution.some(inst => allowedInstitutions.includes(inst))
+			: allowedInstitutions.includes(item.institution || "")) ||
+		allowedTags.some(tag => item.tags?.includes(tag))) {
 		return true;
 	}
 
@@ -183,15 +183,15 @@ export function unescapeXML(safe: string) {
 }
 
 export function cleanAIResponse(response: string) {
-		
+
 	// General regex to match any characters in brackets followed by /lib/ paths
 	const linkRegex = /\[(.*?)\](?:\(|\[)(\/lib\/[^)\]]+)(?:\)|\])([.,;:!?]*)/g;
-	
+
 	// If no links, return the original response
 	if (!response.match(linkRegex)) return response;
-	
+
 	const seenPaths = new Set();
-	
+
 	// Replace links based on their path component
 	const result = response.replace(linkRegex, (match, label, path, punctuation) => {
 		if (!seenPaths.has(path)) {
@@ -200,10 +200,22 @@ export function cleanAIResponse(response: string) {
 		}
 		return ''; // Remove duplicate links
 	});
-	
+
 	return result;
 }
 
 export function convertToImageURL(url: string) {
 	return process.env.BASE_URL + "/images/" + url.split("/").slice(8).join("/");
+}
+
+export function getCountryAncestry(country: string) {
+	const ancestry: string[] = [];
+	const countryParams = country.includes(" > ") ? country : COUNTRY_PARAMS[country] || country;
+	const parts = countryParams.split(" > ");
+
+	for (let i = 0; i < parts.length; i++) {
+		ancestry.push(parts.slice(0, i + 1).join(" > "));
+	}
+
+	return ancestry;
 }

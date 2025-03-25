@@ -38,6 +38,7 @@ import PageContainer from "../layout/PageContainer";
 import { models } from "@/constants/ai";
 import posthog from "posthog-js";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
+import { useQueryState } from "nuqs";
 
 function randomUUID() {
 	return (
@@ -234,6 +235,8 @@ export default function Item({
 	data: ItemGetResponse | undefined;
 	loading: boolean;
 }) {
+	const [referrerState, setReferrer] = useQueryState("referrer");
+	const referrer = "/" + (referrerState ?? "lib");
 	const router = useRouter();
 	const t = useTranslations("ui");
 	const isAIEnabled = useFeatureFlagEnabled("ai-features");
@@ -297,6 +300,7 @@ export default function Item({
 												row={row}
 												router={router}
 												loading={loading}
+												pathname={referrer}
 											/>
 										))}
 								<Divider />
@@ -306,6 +310,7 @@ export default function Item({
 									row="citation"
 									router={router}
 									loading={loading}
+									pathname={referrer}
 								/>
 							</div>
 							{isCollectionsEnabled &&
@@ -325,9 +330,11 @@ export default function Item({
 											value={
 												<CollectionsRow
 													value={collection.children!}
+													pathname={referrer}
 												/>
 											}
 											loading={loading}
+											pathname={referrer}
 										/>
 									))}
 						</>
@@ -376,6 +383,7 @@ export default function Item({
 							router={router}
 							loading={loading}
 							tooltip="Only items available in the current database are displayed. Some related resources are only available externally."
+							pathname={referrer}
 						/>
 					
 				</div> : null}
