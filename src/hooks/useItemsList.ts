@@ -128,10 +128,18 @@ export function useItemsList(userData?: any, config: {
 		}
 	};
 
-	const handleCountrySelect = (country: string) => {
-		if (queryParams.country.includes(country)) {
+	const handleCountrySelect = (country: string | string[]) => {
+		if (Array.isArray(country)) {
 			setParams({
-				country: queryParams.country.filter((c) => c !== country),
+				country: Array.from(new Set([...queryParams.country, ...country]))
+			});
+		} else if (queryParams.country.includes(country)) {
+			setParams({
+				country: queryParams.country.filter((c) => {
+					const sameCountry = c === country;
+					const isDescendant = !sameCountry && c.startsWith(country);
+					return !sameCountry && !isDescendant;
+				})
 			});
 		} else {
 			setParams({
@@ -140,8 +148,12 @@ export function useItemsList(userData?: any, config: {
 		}
 	}
 
-	const handleAuthorCountrySelect = (country: string) => {
-		if (queryParams.author_country.includes(country)) {
+	const handleAuthorCountrySelect = (country: string | string[]) => {
+		if (Array.isArray(country)) {
+			setParams({
+				author_country: Array.from(new Set([...queryParams.author_country, ...country]))
+			});
+		} else if (queryParams.author_country.includes(country)) {
 			setParams({
 				author_country: queryParams.author_country.filter((c) => c !== country),
 			});
