@@ -6,6 +6,9 @@ export const searchParamsLoader = {
     collections: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
 		scroll: true,
 	}),
+	referrer: parseAsString.withDefault("").withOptions({
+		scroll: true,
+	}),
 	page: parseAsInteger.withDefault(1).withOptions({
 		scroll: true,
 	}),
@@ -28,6 +31,7 @@ export const searchParamsLoader = {
 	author: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),
+	
 }
 
 export const serializeSearchParams = createSerializer(searchParamsLoader);
