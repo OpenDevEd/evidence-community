@@ -38,7 +38,7 @@ import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
 import { generateObject } from "ai";
 import { getModel } from "./ai";
 import { headers } from "next/headers";
-import { COUNTRY_HIERARCHY, Entry } from "@/constants/misc";
+import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 
 export async function getRateLimits() {
@@ -850,7 +850,13 @@ export async function searchIndex(
 			perPage: limitNum,
 			totalPages: Math.ceil(totalCount / limitNum),
 			facetDistribution: addRegionsToFacetDistribution(
-				searchResults.facetDistribution || {}, 
+				{
+					...searchResults.facetDistribution,
+					...(countryFacetOptions.reduce((acc, facet) => ({
+						[facet.key + "_uncategorized"]: searchResults.facetDistribution?.[facet.key] || {},
+						...acc
+					}), {} as FacetDistribution)),
+				}, 
 				{ 
 					country: country,
 					author_country: author_country 
