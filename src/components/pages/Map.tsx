@@ -12,7 +12,7 @@ import { ReactNode, useEffect, useRef, useState, memo } from "react";
 import {Tooltip } from "@nextui-org/react";
 import { useLocalStorage, useMouse, useWindowSize } from "@uidotdev/usehooks";
 import { useItemsList } from "@/hooks/useItemsList";
-import { A3ToA2, COUNTRIES, countryFacetOptions } from "@/constants/misc";
+import { A3ToA2, COUNTRIES, COUNTRY_PARAMS, countryFacetOptions } from "@/constants/misc";
 import ItemsList from "../features/items/ItemsList";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFacetList } from "@/hooks/useFacetList";
@@ -187,7 +187,7 @@ export default function Map() {
 	});
 	const [mapFacetValue, setMapFacet] = useLocalStorage("mapFacet", 0);
 	const mapFacet = countryFacetOptions[mapFacetValue] ? mapFacetValue : 0;
-	const countriesFacet = props?.itemsData?.facetDistribution?.[countryFacetOptions[mapFacet].key];
+	const countriesFacet = props?.itemsData?.facetDistribution?.[countryFacetOptions[mapFacet].key + "_uncategorized"];
 	const maxItems = Math.max(
 		...Object.values(countriesFacet || {}).map(Number)
 	);
@@ -234,6 +234,7 @@ export default function Map() {
 							geographies.map((geo: FeatureGeometry) => {
 								const countryCode = A3ToA2[geo.id];
 								const inFacet = countriesFacet?.[countryCode];
+								const fullLocation = COUNTRY_PARAMS[countryCode];
 
 								return (
 									<Geography
@@ -253,7 +254,7 @@ export default function Map() {
 										}
 										onClick={() => {
 											props[countryFacetOptions[mapFacet].action](
-												countryCode
+												fullLocation
 											);
 										}}
 										onMouseEnter={() =>
