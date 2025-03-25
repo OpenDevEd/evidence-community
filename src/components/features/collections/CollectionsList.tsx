@@ -105,7 +105,7 @@ function FacetPicker({
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
 	const displayedList =
-		search.length > 0
+		(search.length > 0 && searchList)
 			? searchList?.filter((item) =>
 					item.label.toLowerCase().includes(search.toLowerCase())
 			  )
