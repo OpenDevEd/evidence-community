@@ -835,13 +835,14 @@ export async function searchIndex(
 			perPage: limitNum,
 			totalPages: Math.ceil(totalCount / limitNum),
 			facetDistribution: addRegionsToFacetDistribution(
-				{
-					...searchResults.facetDistribution,
-					...(countryFacetOptions.reduce((acc, facet) => ({
-						[facet.key + "_uncategorized"]: searchResults.facetDistribution?.[facet.key] || {},
-						...acc
-					}), {} as FacetDistribution)),
-				}, 
+				Object.assign(
+					{},
+					searchResults.facetDistribution,
+					countryFacetOptions.reduce((acc, facet) => {
+						acc[facet.key + "_uncategorized"] = searchResults.facetDistribution?.[facet.key] || {};
+						return acc;
+					}, {} as FacetDistribution)
+				),
 				{ 
 					country: country,
 					author_country: author_country 
