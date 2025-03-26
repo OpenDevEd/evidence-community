@@ -41,6 +41,7 @@ import { getModel } from "./ai";
 import { google } from "@ai-sdk/google";
 import { item } from "@/db/schema/tables/item";
 import { headers } from "next/headers";
+import { blockedTags } from "@/constants/misc";
 
 export async function getRateLimits() {
 	const headersList = await headers();
@@ -462,7 +463,8 @@ export async function searchIndex(
 			author ? `fullNames = "${author}"` : null,
 			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
-			"deleted != 1"
+			"deleted != 1",
+			...(blockedTags.map((tag) => `tags != "${tag}"`))
 		].filter((f): f is string => f !== null);
 
 		const allAttributes = await getMainAttributes();

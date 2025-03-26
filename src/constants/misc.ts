@@ -4,6 +4,8 @@ export const years = Array.from({ length: currentYear - 1900 }).map((_, i) =>
 	String(currentYear - i)
 );
 
+export const blockedTags = ["hide", "internal"]
+
 export const COUNTRIES: Record<string, string> = {
 	AF: 'Afghanistan',
 	AL: 'Albania',
