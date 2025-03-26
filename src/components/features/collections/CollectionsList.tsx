@@ -15,7 +15,7 @@ import {
 } from "@/app/api/collections/types";
 import { Autocomplete } from "../../nextui/Autocomplete";
 import { Switch } from "../../nextui/Switch";
-import { useContext, useMemo, useState } from "react";
+import { Fragment, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Input } from "../../nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -219,7 +219,7 @@ function FacetPicker({
 				>
 					{Object.entries(groupedBySection).map(
 						([section, items]) => (
-							<>
+							<Fragment key={`section-group-${section}`}>
 								{allSectionNames.length > 1 && (
 									<AutocompleteItem
 										startContent={
@@ -282,7 +282,7 @@ function FacetPicker({
 										);
 									})
 									.filter((item) => item !== null)}
-							</>
+							</Fragment>
 						)
 					)}
 				</Autocomplete>
