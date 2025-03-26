@@ -15,9 +15,21 @@ export type FacetListItem = {
     hideCount?: boolean;
     count?: number;
     query?: string | string[];
+    onSelectionChange?: (value: any | null) => void;
+    section?: string;
+    hide?: boolean;
+    isSelected?: boolean;
 };
 
-export function useFacetListRaw(facetDistribution: FacetDistribution, facetName: string, mappingFunction?: (value: string) => FacetListItem): [FacetListItem[], CategoriesDistribution] {
+type useFacetListReturn = [FacetListItem[], CategoriesDistribution]
+
+export function useMultipleFacetLists(...args: useFacetListReturn[]): useFacetListReturn {
+    const allItems = args.map((item) => item[0]).flat()
+    const allFacetCounts = args.map((item) => item[1]).reduce((acc, curr) => ({ ...acc, ...curr }), {})
+    return [allItems, allFacetCounts]
+}
+
+export function useFacetListRaw(facetDistribution: FacetDistribution, facetName: string, mappingFunction?: (value: string) => FacetListItem): useFacetListReturn {
     const facetObject = facetDistribution?.[facetName] || {}
     const facet = Object.keys(facetObject)
     const facetHasAncestry = facet.some((value) => value.includes(" > "))
@@ -31,13 +43,19 @@ export function useFacetListRaw(facetDistribution: FacetDistribution, facetName:
 
     return [mappedFacetList, facetObject]
 }
-export function useFacetList(facetDistribution: FacetDistribution, facetName: string, mappingFunction?: (value: string) => FacetListItem): [FacetListItem[], CategoriesDistribution] {
+
+export function useFacetList(facetDistribution: FacetDistribution, facetName: string, mappingFunction?: (value: string) => FacetListItem): useFacetListReturn {
     const [facetList, setFacetList] = useState<string[]>([])
     const [facetCount, setFacetCount] = useState<CategoriesDistribution | null>(null)
     const facetObject = facetDistribution?.[facetName] || {}
     const facet = Object.keys(facetObject)
+    const facetHasAncestry = facet.some((value) => value.includes(" > "))
 
-    const mappedFacetList = (facetList.length > 0 ? facetList : facet).map(mappingFunction || ((value) => ({ key: value, label: value })))
+    const mappedFacetList = (facetList.length > 0 ? facetList : facet).map(mappingFunction || ((value) => ({ key: value, label: value }))).map((item: FacetListItem) => ({
+        ...item,
+        showArrow: facetObject[item.key] > 0 && item.key.split(" > ").length < 3 && facetHasAncestry,
+        count: item.countKey ? facetObject[item.countKey] : facetObject[item.key]
+    }))
 
     useEffect(() => {
         setFacetList((prev) => {
