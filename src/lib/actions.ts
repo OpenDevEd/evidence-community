@@ -464,7 +464,7 @@ export async function searchIndex(
 			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
 			"deleted != 1",
-			...(blockedTags.map((tag) => `tags != "${tag}"`))
+			`tags NOT IN ${JSON.stringify(blockedTags)}`
 		].filter((f): f is string => f !== null);
 
 		const allAttributes = await getMainAttributes();
