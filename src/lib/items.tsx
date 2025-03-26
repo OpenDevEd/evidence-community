@@ -584,7 +584,7 @@ export const valueFormatter: Record<
 						<LinkWithParams
 							key={index}
 							href={pathname}
-							params={{ institution }}
+							params={{ institution: [institution] }}
 						>
 							<Card
 								className="max-w-fit p-2 rounded-2xl"
