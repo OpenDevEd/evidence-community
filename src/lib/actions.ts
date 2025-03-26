@@ -772,7 +772,7 @@ export async function searchIndex(
 		const search = searchParams.search || "";
 		const scope = searchParams.scope || SCOPE_OPTIONS[0].key;
 		const range = searchParams.range || null;
-		const institution = searchParams.institution || "";
+		const institution = searchParams.institution || [];
 		const country = searchParams.country || [];
 		const author_country = searchParams.author_country || [];
 		const author = searchParams.author || "";
@@ -789,7 +789,7 @@ export async function searchIndex(
 		const finalFilters = [
 			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
 			range ? formatRange(range) : null,
-			institution ? `institution = "${institution}"` : null,
+			...(Array.isArray(institution) ? institution.map((i) => `institution = "${i}"`) : []),
 			...countryFilters, // Replace the old country filters with our hierarchical ones
 			author ? `fullNames = "${author}"` : null,
 			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,

@@ -19,7 +19,7 @@ export const searchParamsLoader = {
 	collectionId: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),
-	institution: parseAsString.withDefault("").withOptions({
+	institution: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
 		scroll: true,
 	}),
 	country: parseAsArrayOf(parseAsString).withDefault([]).withOptions({

@@ -90,7 +90,7 @@ function useFilterChips(
 ) {
 	const filtersCount =
 		(queryParams.collections?.length || 0) +
-		(queryParams.institution ? 1 : 0) +
+		(queryParams.institution?.length || 0) +
 		(queryParams.author ? 1 : 0) +
 		countryFacetOptions.reduce(
 			(acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0),
@@ -123,40 +123,34 @@ function FilterChips() {
 		>
 			<div className="flex-1 flex gap-2 flex-wrap relative">
 				<AnimatePresence initial={false} mode="popLayout">
-					{itemsContext.queryParams?.institution && (
-						<motion.div
-							key={
-								"institution-" +
-								itemsContext.queryParams.institution
-							}
-							initial={{ opacity: 0, y: 10 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0, y: -10 }}
-							transition={{ duration: 0.2 }}
-						>
-							<Chip
-								key={
-									"institution-" +
-									itemsContext.queryParams.institution
-								}
-								group={"Institution"}
-								title={itemsContext.queryParams.institution}
-								divKey={
-									"institution-" +
-									itemsContext.queryParams.institution
-								}
-								callback={() =>
-									itemsContext.handleInstitutionSelect?.(
-										itemsContext.queryParams.institution
-									)
-								}
-								classNames={{
-									button: "bg-accent/80 dark:bg-accent/80",
-									title: "text-white dark:text-white",
-								}}
-							/>
-						</motion.div>
-					)}
+					{itemsContext.queryParams.institution.length > 0 &&
+						itemsContext.queryParams.institution.map(
+							(institution) => (
+								<motion.div
+									key={"institution-" + institution}
+									initial={{ opacity: 0, y: 10 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -10 }}
+									transition={{ duration: 0.2 }}
+								>
+									<Chip
+										key={"institution-" + institution}
+										group={"Institution"}
+										title={institution}
+										divKey={"institution-" + institution}
+										callback={() =>
+											itemsContext.handleInstitutionSelect?.(
+												institution
+											)
+										}
+										classNames={{
+											button: "bg-accent/80 dark:bg-accent/80",
+											title: "text-white dark:text-white",
+										}}
+									/>
+								</motion.div>
+							)
+						)}
 					{itemsContext.queryParams?.author && (
 						<motion.div
 							key={"author-" + itemsContext.queryParams.author}
@@ -213,13 +207,15 @@ function FilterChips() {
 										group={t(facet.label)}
 										title={label}
 										startContent={
-											countryName && <Image
-												src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
-												alt={value}
-												width={16}
-												height={12}
-												className="ml-0.5"
-											/>
+											countryName && (
+												<Image
+													src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
+													alt={value}
+													width={16}
+													height={12}
+													className="ml-0.5"
+												/>
+											)
 										}
 										callback={() =>
 											itemsContext[facet.action](value)

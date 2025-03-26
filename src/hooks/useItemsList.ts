@@ -116,14 +116,18 @@ export function useItemsList(userData?: any, config: {
 		}
 	};
 
-	const handleInstitutionSelect = (institution: string) => {
-		if (institution === queryParams.institution) {
+	const handleInstitutionSelect = (institution: string | string[]) => {
+		if (Array.isArray(institution)) {
 			setParams({
-				institution: "",
+				institution: Array.from(new Set([...queryParams.institution, ...institution]))
+			});
+		} else if (queryParams.institution.includes(institution)) {
+			setParams({
+				institution: queryParams.institution.filter((i) => i !== institution),
 			});
 		} else {
 			setParams({
-				institution: institution,
+				institution: [...queryParams.institution, institution],
 			});
 		}
 	};
