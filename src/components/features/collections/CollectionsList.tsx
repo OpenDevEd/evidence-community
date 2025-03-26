@@ -139,16 +139,7 @@ function FacetPicker({
 				<Autocomplete
 					className="flex-1"
 					placeholder={
-						isMultiSelect && selectedKey.length > 0
-							? selectedKey
-									.map(
-										(key) =>
-											list.find(
-												(item) => item.key === key
-											)?.label
-									)
-									.join(", ")
-							: placeholder
+						placeholder
 					}
 					label={label}
 					key={label}
@@ -193,28 +184,28 @@ function FacetPicker({
 					disabledKeys={allSectionNames.map(
 						(name) => `section-${name}`
 					)}
-					startContent={
-						isMultiSelect && selectedKey.length > 0 ? (
-							<div className="flex gap-2 has-[div]:mr-0 has-[div]:ml-0 ltr:-ml-1 rtl:-mr-1">
-								{selectedKey
-									.map((key) => {
-										const startContent = list.find(
-											(item) => item.key === key
-										)?.startContent;
-										if (!startContent) return null;
-										return (
-											<div className="" key={key}>
-												{startContent}
-											</div>
-										);
-									})
-									.filter((item) => item !== null)}
-							</div>
-						) : (
-							list.find((item) => item.key === selectedKey)
-								?.startContent
-						)
-					}
+					// startContent={
+					// 	isMultiSelect && selectedKey.length > 0 ? (
+					// 		<div className="flex gap-2 has-[div]:mr-0 has-[div]:ml-0 ltr:-ml-1 rtl:-mr-1">
+					// 			{selectedKey
+					// 				.map((key) => {
+					// 					const startContent = list.find(
+					// 						(item) => item.key === key
+					// 					)?.startContent;
+					// 					if (!startContent) return null;
+					// 					return (
+					// 						<div className="" key={key}>
+					// 							{startContent}
+					// 						</div>
+					// 					);
+					// 				})
+					// 				.filter((item) => item !== null)}
+					// 		</div>
+					// 	) : (
+					// 		list.find((item) => item.key === selectedKey)
+					// 			?.startContent
+					// 	)
+					// }
 					itemHeight={48}
 				>
 					{Object.entries(groupedBySection).map(
@@ -510,7 +501,7 @@ export default function CollectionsList({
 			InstitutionParser(institution, queryParams, handleInstitutionSelect)
 	);
 
-	const [countries] = useFacetListRaw(
+	const [countries] = useFacetList(
 		facetDistribution!,
 		"country",
 		(country) =>
@@ -520,16 +511,18 @@ export default function CollectionsList({
 				false,
 				"country",
 				handleCountrySelect
-			)
+			),
+		(a, b) => a.localeCompare(b)
 	);
-	const [countries_uncategorized] = useFacetListRaw(
+	const [countries_uncategorized] = useFacetList(
 		facetDistribution!,
 		"country_uncategorized",
-		(country) => CountryParser(queryParams, country, true, "country", handleCountrySelect)
+		(country) => CountryParser(queryParams, country, true, "country", handleCountrySelect),
+		(a, b) => a.localeCompare(b)
 	);
 
 	const [author_countries] = useMultipleFacetLists(
-		useFacetListRaw(
+		useFacetList(
 			facetDistribution!,
 			"creators.institutions.country_code",
 			(country) =>
@@ -539,15 +532,17 @@ export default function CollectionsList({
 					false,
 					"author_country",
 					handleAuthorCountrySelect
-				)
+				),
+			(a, b) => a.localeCompare(b)
 		),
 		[institutions, institutionsFacetDistribution]
 	);
 	const [author_countries_uncategorized] = useMultipleFacetLists(
-		useFacetListRaw(
+		useFacetList(
 			facetDistribution!,
 			"creators.institutions.country_code_uncategorized",
-			(country) => CountryParser(queryParams, country, true, "author_country", handleAuthorCountrySelect)
+			(country) => CountryParser(queryParams, country, true, "author_country", handleAuthorCountrySelect),
+			(a, b) => a.localeCompare(b)
 		),
 		[institutions, institutionsFacetDistribution]
 	);
