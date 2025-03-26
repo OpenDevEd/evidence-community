@@ -570,7 +570,7 @@ export default function CollectionsList({
 								{isCountryEnabled && (
 									<FacetPicker
 										label={t("countryFilter")}
-										placeholder={t("countryFilter")}
+										placeholder={t("countryFilterDescription")}
 										selectedKey={queryParams.country}
 										onSelectionChange={handleCountrySelect}
 										facetDistribution={facetDistribution}
@@ -582,7 +582,7 @@ export default function CollectionsList({
 								{isAuthorCountryEnabled && (
 									<FacetPicker
 										label={t("authorCountries")}
-										placeholder={t("authorCountries")}
+										placeholder={t("authorCountriesDescription")}
 										selectedKey={queryParams.author_country}
 										onSelectionChange={
 											handleAuthorCountrySelect

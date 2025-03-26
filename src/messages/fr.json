@@ -144,7 +144,9 @@
     "close": "Fermer",
     "etAl": "et al.",
     "recommendedItems": "Ressources recommandées",
-    "authorCountries": "Pays des auteurs"
+    "authorCountries": "Lieu de l'auteur",
+    "authorCountriesDescription": "Sélectionnez les régions, les pays, les institutions",
+    "countryFilterDescription": "Sélectionner les régions, les pays"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",

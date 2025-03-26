@@ -144,7 +144,9 @@
     "close": "إغلاق",
     "etAl": "وآخرون",
     "recommendedItems": "الموارد الموصى بها",
-    "authorCountries": "دول المؤلف"
+    "authorCountries": "موقع المؤلف",
+    "authorCountriesDescription": "اختر المناطق والبلدان والمؤسسات",
+    "countryFilterDescription": "حدد المناطق والبلدان"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

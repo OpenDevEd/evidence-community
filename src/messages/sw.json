@@ -145,7 +145,9 @@
     "close": "Funga",
     "etAl": "na wengine",
     "recommendedItems": "Rasilimali Zilizopendekezwa",
-    "authorCountries": "Nchi za Waandishi"
+    "authorCountries": "Mahali pa Mwandishi",
+    "authorCountriesDescription": "Chagua mikoa, nchi, taasisi",
+    "countryFilterDescription": "Chagua mikoa, nchi"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

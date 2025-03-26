@@ -144,7 +144,9 @@
     "close": "关闭",
     "etAl": "等",
     "recommendedItems": "推荐资源",
-    "authorCountries": "作者国家"
+    "authorCountries": "作者所在地",
+    "authorCountriesDescription": "选择地区、国家、机构",
+    "countryFilterDescription": "选择地区、国家"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",
