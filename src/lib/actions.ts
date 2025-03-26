@@ -558,20 +558,8 @@ function addHierarchyToFacet(facetDistribution: FacetDistribution, facetName: st
 			total += processEntry(child, currentPath);
 		}
 		
-		let shouldInclude = false;
-		
-		if (parentPath === '') {
-			shouldInclude = true;
-		} 
-		else if (!entry.children[0].children) {
-			const continent = parentPath;
-			shouldInclude = selectedContinents.has(continent);
-		} 
-		else {
-			shouldInclude = selectedRegions.has(parentPath);
-		}
-		
-		if (total > 0 && shouldInclude) {
+		// Always include entries with counts, regardless of selection
+		if (total > 0) {
 			facetDistribution[facetName][currentPath] = total;
 		}
 		
@@ -580,14 +568,11 @@ function addHierarchyToFacet(facetDistribution: FacetDistribution, facetName: st
 	
 	processEntry(COUNTRY_HIERARCHY);
 	
+	// Always include all country-level entries that have counts
 	for (const countryCode in originalDistribution) {
 		if (countryPaths[countryCode]) {
 			const fullPath = countryPaths[countryCode];
-			const pathParts = fullPath.split(' > ');
-			const continent = pathParts[0];
-			const region = pathParts.slice(0, 2).join(' > ');
-			
-			if (selectedRegions.has(region)) {
+			if (originalDistribution[countryCode] > 0) {
 				facetDistribution[facetName][fullPath] = originalDistribution[countryCode];
 			}
 		}
