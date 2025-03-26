@@ -1,6 +1,11 @@
 "use client";
 
-import { Accordion, AccordionItem, AutocompleteItem } from "@nextui-org/react";
+import {
+	Accordion,
+	AccordionItem,
+	AutocompleteItem,
+	AutocompleteSection,
+} from "@nextui-org/react";
 import { Skeleton } from "../../nextui/Skeleton";
 import { twMerge } from "tailwind-merge";
 import CollectionCategory from "./CollectionCategory";
@@ -25,9 +30,11 @@ import {
 	FacetListItem,
 	useFacetList,
 	useFacetListRaw,
+	useMultipleFacetLists,
 } from "@/hooks/useFacetList";
 import Image from "next/image";
 import { getCountryAncestry, getCountryInfo } from "@/lib/utils";
+import { BsList } from "react-icons/bs";
 
 function YearPicker({
 	label,
@@ -83,6 +90,8 @@ function YearPicker({
 	);
 }
 
+const UNCATEGORIZED_SECTION = "Uncategorized";
+
 function FacetPicker({
 	label,
 	placeholder,
@@ -96,20 +105,30 @@ function FacetPicker({
 	label: string;
 	placeholder: string;
 	selectedKey: string | null | string[];
-	onSelectionChange: (value: any | null) => void;
 	list: FacetListItem[];
-	facetDistribution: FacetDistribution | undefined;
-	facetName: string;
+	onSelectionChange?: (value: any | null) => void;
+	facetDistribution?: FacetDistribution | undefined;
+	facetName?: string;
 	searchList?: FacetListItem[];
 }) {
 	const isMultiSelect = Array.isArray(selectedKey);
 	const [search, setSearch] = useState("");
 	const displayedList =
-		(search.length > 0 && searchList)
-			? searchList?.filter((item) =>
+		search.length > 0 && searchList
+			? searchList.filter((item) =>
 					item.label.toLowerCase().includes(search.toLowerCase())
 			  )
 			: list;
+
+	const groupedBySection = displayedList.reduce((acc, item) => {
+		if (!acc[item.section || UNCATEGORIZED_SECTION]) {
+			acc[item.section || UNCATEGORIZED_SECTION] = [];
+		}
+		acc[item.section || UNCATEGORIZED_SECTION].push(item);
+		return acc;
+	}, {} as Record<string, FacetListItem[]>);
+
+	const allSectionNames = Object.keys(groupedBySection);
 
 	return (
 		<div className="w-full flex flex-col gap-2">
@@ -139,14 +158,21 @@ function FacetPicker({
 						const item = displayedList!.find(
 							(item) => item.key === key
 						);
-						console.log("item", item);
-						if (item?.query) {
-							onSelectionChange(item.query);
-						} else {
-							onSelectionChange(key);
+						const functionToCall =
+							item?.onSelectionChange || onSelectionChange;
+						console.log({
+							functionToCallExists: !!functionToCall,
+							key,
+							query: item?.query,
+						})
+						if (functionToCall) {
+							if (item?.query) {
+								functionToCall(item.query);
+							} else {
+								functionToCall(key);
+							}
 						}
 					}}
-					items={displayedList}
 					inputProps={{
 						classNames: {
 							inputWrapper:
@@ -159,8 +185,14 @@ function FacetPicker({
 							),
 						},
 					}}
+					defaultFilter={(textValue, inputValue) => {
+						return true;
+					}}
 					onInputChange={(string) => setSearch(string)}
 					isVirtualized={true}
+					disabledKeys={allSectionNames.map(
+						(name) => `section-${name}`
+					)}
 					startContent={
 						isMultiSelect && selectedKey.length > 0 ? (
 							<div className="flex gap-2 has-[div]:mr-0 has-[div]:ml-0 ltr:-ml-1 rtl:-mr-1">
@@ -185,42 +217,74 @@ function FacetPicker({
 					}
 					itemHeight={48}
 				>
-					{(itemAny: any) => {
-						const item = itemAny as FacetListItem;
-						return (
-							<AutocompleteItem
-								startContent={item.startContent}
-								aria-label={item.label}
-								key={item.key}
-								style={item.style}
-								selectedIcon={
-									isMultiSelect &&
-									selectedKey.includes(item.key) ? (
-										<LuCheck />
-									) : undefined
-								}
-							>
-								<span className="text-black dark:text-white line-clamp-2 flex items-center gap-2">
-									<span
-										className={twMerge(
-											"text-black/60 dark:text-white/60",
-											item.hideCount && "hidden"
-										)}
+					{Object.entries(groupedBySection).map(
+						([section, items]) => (
+							<>
+								{allSectionNames.length > 1 && (
+									<AutocompleteItem
+										startContent={
+											<BsList className="size-8" />
+										}
+										key={`section-${section}`}
+										className="opacity-100"
+										description={`${items.length} items`}
+										isReadOnly
 									>
-										(
-										{item.count ||
-											facetDistribution?.[facetName]?.[
-												item.key
-											] ||
-											0}
-										)
-									</span>
-									{item.label}
-									{item.showArrow && <LuChevronDown />}
-								</span>
-							</AutocompleteItem>
-						);
-					}}
+										{section}
+									</AutocompleteItem>
+								)}
+								{items
+									.map((itemAny: any) => {
+										const item = itemAny as FacetListItem;
+										if (item.hide) return null;
+										return (
+											<AutocompleteItem
+												startContent={item.startContent}
+												aria-label={item.label}
+												key={item.key}
+												style={item.style}
+												selectedIcon={
+													isMultiSelect &&
+													(item.isSelected !==
+													undefined
+														? item.isSelected
+														: selectedKey.includes(
+																item.key
+														  )) ? (
+														<LuCheck />
+													) : undefined
+												}
+											>
+												<span className="text-black dark:text-white line-clamp-2 flex items-center gap-2">
+													<span
+														className={twMerge(
+															"text-black/60 dark:text-white/60",
+															item.hideCount &&
+																"hidden"
+														)}
+													>
+														{`(${item.count !==
+															undefined
+															? item.count
+															: facetDistribution &&
+															  facetName
+															? facetDistribution?.[
+																	facetName!
+															  ]?.[item.key] || 0
+															: "0"})`}
+													</span>
+													{item.label}
+													{item.showArrow && (
+														<LuChevronDown />
+													)}
+												</span>
+											</AutocompleteItem>
+										);
+									})
+									.filter((item) => item !== null)}
+							</>
+						)
+					)}
 				</Autocomplete>
 			</div>
 		</div>
@@ -334,7 +398,8 @@ function CountryParser(
 	queryParams: inferParserType<typeof searchParamsLoader>,
 	countryCanditate: string,
 	appendPath: boolean = false,
-	queryParam?: keyof inferParserType<typeof searchParamsLoader>
+	queryParam?: keyof inferParserType<typeof searchParamsLoader>,
+	onSelectionChange?: (value: any | null) => void
 ): FacetListItem {
 	const country = appendPath
 		? COUNTRY_PARAMS[countryCanditate]
@@ -343,13 +408,15 @@ function CountryParser(
 		getCountryInfo(country);
 	const ancestry = getCountryAncestry(country);
 	const queryParamValue = queryParams[queryParam || "country"];
-
-
-	if (countryCanditate === "Africa" && queryParam === "author_country") {
-		console.log("queryParams", queryParams);
-		console.log("queryParam", queryParam);
-		console.log("queryParamValue", queryParamValue);
-	}
+	const parent = ancestry[ancestry.length - 2];
+	const isSelected =
+		queryParamValue && Array.isArray(queryParamValue)
+			? queryParamValue.includes(country)
+			: false;
+	const isParentSelected =
+		parent && queryParamValue && Array.isArray(queryParamValue)
+			? queryParamValue.includes(parent)
+			: true;
 
 	return {
 		key: country,
@@ -371,10 +438,32 @@ function CountryParser(
 			paddingLeft: `${numberOfParts * 1.5 + 0.5}rem`,
 		},
 		hideCount:
-			queryParamValue && Array.isArray(queryParamValue)
+			ancestry.length <= 2
+				? true
+				: queryParamValue && Array.isArray(queryParamValue)
 				? queryParamValue.includes(country)
 				: false,
+		hide: !isParentSelected,
 		query: ancestry,
+		onSelectionChange,
+		section: "Countries",
+		isSelected,
+	};
+}
+
+function InstitutionParser(
+	institution: string,
+	queryParams: inferParserType<typeof searchParamsLoader>,
+	onSelectionChange?: (value: any | null) => void
+): FacetListItem {
+	const isSelected = queryParams.institution.includes(institution);
+
+	return {
+		key: institution,
+		label: institution,
+		onSelectionChange,
+		section: "Institutions",
+		isSelected,
 	};
 }
 
@@ -413,26 +502,54 @@ export default function CollectionsList({
 	const isFiltersEnabled = isCollectionsEnabled || isCountryEnabled;
 	const isInstitutionFilterEnabled =
 		useFeatureFlagEnabled("institution-filter");
-	const [institutions] = useFacetList(facetDistribution!, "institution");
+		
+	const [institutions, institutionsFacetDistribution] = useFacetList(
+		facetDistribution!,
+		"institution",
+		(institution) =>
+			InstitutionParser(institution, queryParams, handleInstitutionSelect)
+	);
+
 	const [countries] = useFacetListRaw(
 		facetDistribution!,
 		"country",
-		(country) => CountryParser(queryParams, country, false, "country")
-	);
-	const [author_countries] = useFacetListRaw(
-		facetDistribution!,
-		"creators.institutions.country_code",
-		(country) => CountryParser(queryParams, country, false, "author_country")
+		(country) =>
+			CountryParser(
+				queryParams,
+				country,
+				false,
+				"country",
+				handleCountrySelect
+			)
 	);
 	const [countries_uncategorized] = useFacetListRaw(
 		facetDistribution!,
 		"country_uncategorized",
-		(country) => CountryParser(queryParams, country, true)
+		(country) => CountryParser(queryParams, country, true, "country", handleCountrySelect)
 	);
-	const [author_countries_uncategorized] = useFacetListRaw(
-		facetDistribution!,
-		"creators.institutions.country_code_uncategorized",
-		(country) => CountryParser(queryParams, country, true)
+
+	const [author_countries] = useMultipleFacetLists(
+		useFacetListRaw(
+			facetDistribution!,
+			"creators.institutions.country_code",
+			(country) =>
+				CountryParser(
+					queryParams,
+					country,
+					false,
+					"author_country",
+					handleAuthorCountrySelect
+				)
+		),
+		[institutions, institutionsFacetDistribution]
+	);
+	const [author_countries_uncategorized] = useMultipleFacetLists(
+		useFacetListRaw(
+			facetDistribution!,
+			"creators.institutions.country_code_uncategorized",
+			(country) => CountryParser(queryParams, country, true, "author_country", handleAuthorCountrySelect)
+		),
+		[institutions, institutionsFacetDistribution]
 	);
 
 	const [start, end, sameYear] = useMemo(() => {
@@ -554,19 +671,6 @@ export default function CollectionsList({
 									trigger: "pb-0 pt-2",
 								}}
 							>
-								{isInstitutionFilterEnabled && (
-									<FacetPicker
-										label={t("institution")}
-										placeholder={t("institution")}
-										selectedKey={queryParams.institution}
-										onSelectionChange={
-											handleInstitutionSelect
-										}
-										facetDistribution={facetDistribution}
-										list={institutions}
-										facetName="institution"
-									/>
-								)}
 								{isCountryEnabled && (
 									<FacetPicker
 										label={t("countryFilter")}
@@ -579,19 +683,20 @@ export default function CollectionsList({
 										searchList={countries_uncategorized}
 									/>
 								)}
-								{isAuthorCountryEnabled && (
+								{(isAuthorCountryEnabled && isInstitutionFilterEnabled) && (
 									<FacetPicker
 										label={t("authorCountries")}
 										placeholder={t("authorCountriesDescription")}
-										selectedKey={queryParams.author_country}
-										onSelectionChange={
-											handleAuthorCountrySelect
-										}
-										facetDistribution={facetDistribution}
+										selectedKey={[
+											...queryParams.author_country,
+											...queryParams.institution,
+										]}
 										list={author_countries}
-										facetName="creators.institutions.country_code"
 										searchList={
-											author_countries_uncategorized
+											author_countries_uncategorized.map((item) => ({
+												...item,
+												hide: false,
+											}))
 										}
 									/>
 								)}
