@@ -40,6 +40,7 @@ import { getModel } from "./ai";
 import { headers } from "next/headers";
 import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
+import { blockedTags } from "@/constants/misc";
 
 export async function getRateLimits() {
 	const headersList = await headers();
@@ -779,7 +780,8 @@ export async function searchIndex(
 			author ? `fullNames = "${author}"` : null,
 			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
-			"deleted != 1"
+			"deleted != 1",
+			`tags NOT IN ${JSON.stringify(blockedTags)}`
 		].filter((f): f is string => f !== null);
 
 		const allAttributes = await getMainAttributes();

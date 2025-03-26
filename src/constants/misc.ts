@@ -26,6 +26,8 @@ export const countryFacetOptions: {
 	queryParam: "author_country"
 }]
 
+export const blockedTags = ["hide", "internal"]
+
 export const COUNTRIES: Record<string, string> = {
 	AF: 'Afghanistan',
 	AL: 'Albania',

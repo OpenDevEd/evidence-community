@@ -10,6 +10,7 @@ import { Collection } from "../../collections/types";
 import config from "@/constants/config.json"
 import { getCachedCollections } from "../../cache";
 import { convertItem } from "@/lib/actions";
+import { blockedTags } from "@/constants/misc";
 
 async function getMeilisearchItem(key: string) {
 	try {
@@ -38,7 +39,7 @@ export async function getItem(
 		getCachedCollections(),
 	]));
 
-	if (!result) {
+	if (!result || result?.tags?.some((tag) => blockedTags.includes(tag.toLowerCase()))) {
 		return {
 			item: null,
 		};
