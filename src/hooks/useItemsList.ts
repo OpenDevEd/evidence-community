@@ -132,21 +132,22 @@ export function useItemsList(userData?: any, config: {
 		}
 	};
 
-	const handleCountrySelect = (country: string | string[]) => {
+	function genericCountrySelect(country: string | string[], key: keyof typeof queryParams) {
+		const queryParam = queryParams[key] as string[];
 		if (Array.isArray(country)) {
 			const lastOne = country[country.length - 1];
-			if (queryParams.country.includes(lastOne)) {
+			if (queryParam.includes(lastOne)) {
 				setParams({
-					country: queryParams.country.filter((c) => c !== lastOne && !c.startsWith(lastOne))
+					[key]: queryParam.filter((c) => c !== lastOne && !c.startsWith(lastOne))
 				});
 			} else {
 				setParams({
-					country: Array.from(new Set([...queryParams.country, ...country]))
+					[key]: Array.from(new Set([...queryParam, ...country]))
 				});
 			}
-		} else if (queryParams.country.includes(country)) {
+		} else if (queryParam.includes(country)) {
 			setParams({
-				country: queryParams.country.filter((c) => {
+				[key]: queryParam.filter((c) => {
 					const sameCountry = c === country;
 					const isDescendant = !sameCountry && c.startsWith(country);
 					return !sameCountry && !isDescendant;
@@ -154,31 +155,23 @@ export function useItemsList(userData?: any, config: {
 			});
 		} else {
 			setParams({
-				country: [...queryParams.country, country],
+				[key]: [...queryParam, country],
 			});
 		}
 	}
 
+	const handleCountrySelect = (country: string | string[]) => {
+		genericCountrySelect(country, "country");
+	}
+
 	const handleAuthorCountrySelect = (country: string | string[]) => {
-		if (Array.isArray(country)) {
-			setParams({
-				author_country: Array.from(new Set([...queryParams.author_country, ...country]))
-			});
-		} else if (queryParams.author_country.includes(country)) {
-			setParams({
-				author_country: queryParams.author_country.filter((c) => c !== country),
-			});
-		} else {
-			setParams({
-				author_country: [...queryParams.author_country, country],
-			});
-		}
+		genericCountrySelect(country, "author_country");
 	}
 
 	const handleClearFilters = () => {
 		setParams({
 			author: "",
-			institution: "",
+			institution: [],
 			country: [],
 			collections: [],
 			author_country: [],
