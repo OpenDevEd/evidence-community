@@ -15,7 +15,22 @@ const accentColors = {
   "openalex": "#1976d2",
   "jacob": "#FFDE2D",
   "kaleidoscopio": "#ef4129",
-  "jimma": "#4a94d6"
+  "jimma": "#4a94d6",
+  "fcdo": "#CC0000"
+}
+
+const tertiary = {
+  DEFAULT: "#5cacfd",
+  50: "#161F27",
+  100: "#012345",
+  200: "#014589",
+  300: "#0268ce",
+  400: "#198bfd",
+  500: "#5cacfd",
+  600: "#7ebefe",
+  700: "#9ecefe",
+  800: "#bedefe",
+  900: "#dfefff",
 }
 
 function generateColorVariants(baseColor: string, light: boolean = false) {
@@ -35,7 +50,7 @@ function generateColorVariants(baseColor: string, light: boolean = false) {
         parseInt(rgbMatch[3])
       ];
     }
-    
+
     // Otherwise treat as hex
     const normalized = normalizeHex(color);
     return [
@@ -59,7 +74,7 @@ function generateColorVariants(baseColor: string, light: boolean = false) {
   };
 
   const rgb = parseColor(colorToUse);
-  
+
   const variations = {
     DEFAULT: colorToUse,
     100: adjustBrightness(rgb, 0.2),
@@ -125,19 +140,8 @@ const colors = {
     800: "#a5a5a5",
     900: "#d2d2d2",
   },
-  tertiary: {
-    DEFAULT: "#5cacfd",
-    50: "#161F27",
-    100: "#012345",
-    200: "#014589",
-    300: "#0268ce",
-    400: "#198bfd",
-    500: "#5cacfd",
-    600: "#7ebefe",
-    700: "#9ecefe",
-    800: "#bedefe",
-    900: "#dfefff",
-  },
+  tertiary: process.env.NEXT_PUBLIC_TERTIARY_COLOR ? generateColorVariants(process.env.NEXT_PUBLIC_TERTIARY_COLOR, false) : tertiary,
+  tertiary_light: process.env.NEXT_PUBLIC_TERTIARY_COLOR ? generateColorVariants(process.env.NEXT_PUBLIC_TERTIARY_COLOR, true) : tertiary,
   accent: generateColorVariants(accentColors[accent as keyof typeof accentColors] ?? accent, false),
   accent_light: generateColorVariants(accentColors[accent as keyof typeof accentColors] ?? accent, true),
   link: generateColorVariants(accentColors[link as keyof typeof accentColors] ?? link, false),
@@ -176,11 +180,11 @@ const config: Config = {
       screens: {
         print: { raw: 'print' },
         screen: { raw: 'screen' },
-        'max-2xl': {'max': '1535px'},
-        'max-xl': {'max': '1279px'},
-        'max-lg': {'max': '1023px'},
-        'max-md': {'max': '767px'},
-        'max-sm': {'max': '639px'},
+        'max-2xl': { 'max': '1535px' },
+        'max-xl': { 'max': '1279px' },
+        'max-lg': { 'max': '1023px' },
+        'max-md': { 'max': '767px' },
+        'max-sm': { 'max': '639px' },
       },
       transitionTimingFunction: {
         'spring': 'cubic-bezier(0.68, -0.6, 0.32, 1.6)',
