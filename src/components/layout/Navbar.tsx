@@ -122,14 +122,14 @@ function ThemeSwitcher({
 	);
 }
 
-function Logo({ interactive = true }: { interactive?: boolean }) {
+export function Logo({ interactive = true, dbStyle = "navbar" }: { interactive?: boolean, dbStyle?: string }) {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const status = useStatus();
 	const { theme } = useTheme();
 	const t = useTranslations("ui");
 	const companyLogoStyle = status.companyLogo || "";
 	
-	const navbarStyle = convertStringFromDatabaseToObject(companyLogoStyle)["navbar"];
+	const navbarStyle = dbStyle ? convertStringFromDatabaseToObject(companyLogoStyle)[dbStyle] : "";
 	
 	const logoContent = (
 		<div
