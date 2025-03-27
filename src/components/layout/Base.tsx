@@ -13,6 +13,7 @@ import { getCachedStatus } from "@/app/api/cache";
 import { Suspense } from "react";
 import { Link, usePathname } from "@/i18n/routing";
 import MainWrapper from "./MainWrapper";
+import Banner from "./Banner";
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -69,6 +70,7 @@ export default async function Base({
 							<Navbar />
 							{children}
 							<Footer />
+							<Banner />
 						</MainWrapper>
 					</Providers>
 				</NextIntlClientProvider>

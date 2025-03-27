@@ -23,6 +23,7 @@ import { useTranslations } from "next-intl";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Toaster } from "sonner";
 import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils";
+import { getPersistence } from "@/components/layout/Banner";
 
 export type CacheContextType = {
 	status: InferSelectModel<typeof statusTable>;
@@ -248,6 +249,7 @@ export default function Providers({
 				capture_pageleave: true,
 				api_host: "/ingest",
 				ui_host: "https://us.posthog.com",
+				persistence: getPersistence(),
 			})
 			?.onFeatureFlags((featureFlags) => {
 				setFeatureFlags(new Set(featureFlags));
