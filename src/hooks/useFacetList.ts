@@ -25,7 +25,7 @@ type useFacetListReturn = [FacetListItem[], CategoriesDistribution]
 
 export function useMultipleFacetLists(...args: useFacetListReturn[]): useFacetListReturn {
     const allItems = args.map((item) => item[0]).flat()
-    const allFacetCounts = args.map((item) => item[1]).reduce((acc, curr) => ({ ...acc, ...curr }), {})
+    const allFacetCounts = Object.assign({}, ...args.map(item => item[1]))
     return [allItems, allFacetCounts]
 }
 
