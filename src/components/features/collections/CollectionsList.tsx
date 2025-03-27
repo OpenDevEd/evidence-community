@@ -391,10 +391,15 @@ function CountryParser(
 	appendPath: boolean = false,
 	queryParam?: keyof inferParserType<typeof searchParamsLoader>,
 	onSelectionChange?: (value: any | null) => void
-): FacetListItem {
+): FacetListItem | null {
 	const country = appendPath
 		? COUNTRY_PARAMS[countryCanditate]
 		: countryCanditate;
+
+	if (!country) {
+		return null;
+	}
+	
 	const { countryName, label, numberOfParts, countryCode } =
 		getCountryInfo(country);
 	const ancestry = getCountryAncestry(country);
