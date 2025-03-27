@@ -76,11 +76,11 @@ export default function Banner() {
 				</GenericHeader>
 				<ModalBody>
 					<p className="text-center text-default-500 mx-auto max-w-md mb-6">
-						We'd love your help in making our site better! With your
+						{`We'd love your help in making our site better! With your
 						permission, we'll collect anonymous usage data using
 						analytics tools like PostHog to enhance your experience.
 						Your privacy matters to us, and we handle all data
-						according to our Privacy Policy.
+						according to our Privacy Policy.`}
 					</p>
 					<div className="mb-4">
 						<h4 className="text-center font-medium mb-5 text-sm uppercase tracking-wide text-default-600">
