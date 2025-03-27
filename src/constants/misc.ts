@@ -555,6 +555,7 @@ export const COUNTRY_HIERARCHY: Entry = {
 						{ label: "DJ" }, // Djibouti
 						{ label: "ER" }, // Eritrea
 						{ label: "ET" }, // Ethiopia
+						{ label: "IO" }, // British Indian Ocean Territory (Added)
 						{ label: "KE" }, // Kenya
 						{ label: "MG" }, // Madagascar
 						{ label: "MW" }, // Malawi
@@ -656,6 +657,7 @@ export const COUNTRY_HIERARCHY: Entry = {
 						{ label: "JM" }, // Jamaica
 						{ label: "MQ" }, // Martinique
 						{ label: "MS" }, // Montserrat
+						{ label: "AN" }, // Netherlands Antilles (Added - Dissolved)
 						{ label: "PR" }, // Puerto Rico
 						{ label: "BL" }, // Saint Barthelemy
 						{ label: "KN" }, // Saint Kitts and Nevis
@@ -927,7 +929,7 @@ export const COUNTRY_HIERARCHY: Entry = {
 		{
 			label: "Antarctica",
 			children: [{
-				label: "Antarctica",
+				label: "Antarctica", // Note: This intermediate label might be redundant
 				children: [
 					{ label: "AQ" }, // Antarctica
 					{ label: "BV" }, // Bouvet Island
