@@ -147,7 +147,18 @@
     "authorCountries": "लेखक का स्थान",
     "authorCountriesDescription": "क्षेत्र, देश, संस्थान चुनें",
     "countryFilterDescription": "क्षेत्र, देश चुनें",
-    "authorInstitutionsDescription": "संस्थान चुनें"
+    "authorInstitutionsDescription": "संस्थान चुनें",
+    "cookieConsentMessage": "हमें अपनी साइट को बेहतर बनाने में आपकी मदद चाहिए! आपकी अनुमति से, हम आपके अनुभव को बेहतर बनाने के लिए एनालिटिक्स टूल का उपयोग करके अनाम उपयोग डेटा एकत्र करेंगे। आपकी गोपनीयता हमारे लिए महत्वपूर्ण है, और हम अपनी गोपनीयता नीति के अनुसार सभी डेटा को संभालते हैं।",
+    "cookieConsentTitle": "हमें आपके अनुभव को बेहतर बनाने में मदद करें",
+    "cookieDataUsageTitle": "हम आपका डेटा क्यों उपयोग करते हैं",
+    "dataUsageImprove": "उपयोगिता में सुधार करें",
+    "dataUsagePreferences": "प्राथमिकताओं को समझें",
+    "dataUsageFeatures": "नई सुविधाएँ बनाएँ",
+    "dataUsagePersonalize": "अनुभव को निजीकृत करें",
+    "dataUsageBugs": "कीड़ों को तेजी से ठीक करें",
+    "cookieAccept": "स्वीकार करें और जारी रखें",
+    "cookieDecline": "अस्वीकार करें",
+    "helpTitle": "सहायता"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

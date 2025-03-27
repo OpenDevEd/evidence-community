@@ -148,7 +148,18 @@
     "authorCountries": "Mahali pa Mwandishi",
     "authorCountriesDescription": "Chagua mikoa, nchi, taasisi",
     "countryFilterDescription": "Chagua mikoa, nchi",
-    "authorInstitutionsDescription": "Chagua taasisi"
+    "authorInstitutionsDescription": "Chagua taasisi",
+    "cookieConsentMessage": "Tunapenda msaada wako katika kuboresha tovuti yetu! Kwa ruhusa yako, tutakusanya data ya matumizi isiyo na jina kwa kutumia zana za uchanganuzi ili kuboresha matumizi yako. Faragha yako ni muhimu kwetu, na tunashughulikia data zote kulingana na Sera yetu ya Faragha.",
+    "cookieConsentTitle": "Tusaidie Kuboresha Matumizi Yako",
+    "cookieDataUsageTitle": "Kwa nini tunatumia data yako",
+    "dataUsageImprove": "Boresha urahisi wa matumizi",
+    "dataUsagePreferences": "Kuelewa mapendeleo",
+    "dataUsageFeatures": "Unda vipengele vipya",
+    "dataUsagePersonalize": "Kubina uzoefu",
+    "dataUsageBugs": "Rekebisha hitilafu haraka",
+    "cookieAccept": "Kubali na Uendelee",
+    "cookieDecline": "Kataa",
+    "helpTitle": "Msaada"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

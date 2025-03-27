@@ -147,7 +147,18 @@
     "authorCountries": "موقع المؤلف",
     "authorCountriesDescription": "اختر المناطق والبلدان والمؤسسات",
     "countryFilterDescription": "حدد المناطق والبلدان",
-    "authorInstitutionsDescription": "اختر المؤسسات"
+    "authorInstitutionsDescription": "اختر المؤسسات",
+    "cookieConsentMessage": "نود الحصول على مساعدتك في تحسين موقعنا! بموافقتك، سنجمع بيانات الاستخدام المجهولة المصدر باستخدام أدوات التحليل لتحسين تجربتك. تهمنا خصوصيتك، ونتعامل مع جميع البيانات وفقًا لسياسة الخصوصية الخاصة بنا.",
+    "cookieConsentTitle": "ساعدنا في تحسين تجربتك",
+    "cookieDataUsageTitle": "لماذا نستخدم بياناتك",
+    "dataUsageImprove": "تحسين سهولة الاستخدام",
+    "dataUsagePreferences": "فهم التفضيلات",
+    "dataUsageFeatures": "إنشاء ميزات جديدة",
+    "dataUsagePersonalize": "إضفاء الطابع الشخصي على التجربة",
+    "dataUsageBugs": "إصلاح الأخطاء بشكل أسرع",
+    "cookieAccept": "قبول والمتابعة",
+    "cookieDecline": "رفض",
+    "helpTitle": "مساعدة"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

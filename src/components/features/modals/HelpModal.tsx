@@ -90,7 +90,7 @@ export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, o
     {(onClose) => (
       <>
         <ModalHeader className="flex items-center justify-between gap-2">
-          <SectionTitle>Help</SectionTitle>
+          <SectionTitle>{t("helpTitle")}</SectionTitle>
           <Button
             onPress={onClose}
             isIconOnly
