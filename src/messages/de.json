@@ -146,7 +146,8 @@
     "recommendedItems": "Empfohlene Ressourcen",
     "authorCountries": "Autorenstandort",
     "authorCountriesDescription": "Regionen, Länder, Institutionen auswählen",
-    "countryFilterDescription": "Regionen, Länder auswählen"
+    "countryFilterDescription": "Regionen, Länder auswählen",
+    "authorInstitutionsDescription": "Institutionen auswählen"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

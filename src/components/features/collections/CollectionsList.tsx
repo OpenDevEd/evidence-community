@@ -681,7 +681,10 @@ export default function CollectionsList({
 								{(isAuthorCountryEnabled && isInstitutionFilterEnabled) && (
 									<FacetPicker
 										label={t("authorCountries")}
-										placeholder={t("authorCountriesDescription")}
+										placeholder={
+											author_countries.find((item) => item.section === "Countries")?.label ?
+											t("authorCountriesDescription") : t("authorInstitutionsDescription")
+										}
 										selectedKey={[
 											...queryParams.author_country,
 											...queryParams.institution,

@@ -147,7 +147,8 @@
     "recommendedItems": "Rasilimali Zilizopendekezwa",
     "authorCountries": "Mahali pa Mwandishi",
     "authorCountriesDescription": "Chagua mikoa, nchi, taasisi",
-    "countryFilterDescription": "Chagua mikoa, nchi"
+    "countryFilterDescription": "Chagua mikoa, nchi",
+    "authorInstitutionsDescription": "Chagua taasisi"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

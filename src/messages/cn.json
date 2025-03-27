@@ -146,7 +146,8 @@
     "recommendedItems": "推荐资源",
     "authorCountries": "作者所在地",
     "authorCountriesDescription": "选择地区、国家、机构",
-    "countryFilterDescription": "选择地区、国家"
+    "countryFilterDescription": "选择地区、国家",
+    "authorInstitutionsDescription": "选择机构"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

@@ -146,7 +146,8 @@
     "recommendedItems": "الموارد الموصى بها",
     "authorCountries": "موقع المؤلف",
     "authorCountriesDescription": "اختر المناطق والبلدان والمؤسسات",
-    "countryFilterDescription": "حدد المناطق والبلدان"
+    "countryFilterDescription": "حدد المناطق والبلدان",
+    "authorInstitutionsDescription": "اختر المؤسسات"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
