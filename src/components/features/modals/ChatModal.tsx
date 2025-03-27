@@ -342,7 +342,7 @@ export default function ChatModal({
 																>
 																	{message.role ===
 																	"user" ? (
-																		<LuUser className="size-4" />
+																		<LuUser className="size-4 text-white" />
 																	) : (
 																		React.createElement(
 																			models[
