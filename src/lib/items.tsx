@@ -66,10 +66,6 @@ function formatDate({ value, formatter }: FormatterProps) {
 		year: "numeric",
 		month: "long",
 		day: "numeric",
-		...(hasTime && {
-			hour: "numeric",
-			minute: "numeric",
-		}),
 	});
 
 	return <p>{returnedDate}</p>;
