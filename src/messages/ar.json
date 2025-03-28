@@ -158,7 +158,9 @@
     "dataUsageBugs": "إصلاح الأخطاء بشكل أسرع",
     "cookieAccept": "قبول والمتابعة",
     "cookieDecline": "رفض",
-    "helpTitle": "مساعدة"
+    "helpTitle": "مساعدة",
+    "preparingDocuments": "إعداد مستنداتك",
+    "documentProcessingInfo": "ما زلنا نعالج ملفات PDF الخاصة بك. قد تستغرق إجابتك الأولى وقتًا أطول قليلاً."
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

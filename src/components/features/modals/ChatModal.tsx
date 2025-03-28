@@ -36,6 +36,7 @@ import { cleanAIResponse, fetcher, setter } from "@/lib/utils";
 import { getRateLimits, runScreening } from "@/lib/actions";
 import Resource from "../items/Resource";
 import { GiStarSwirl } from "react-icons/gi";
+import { FaExclamationTriangle } from "react-icons/fa";
 
 export const maxDuration = 240;
 
@@ -96,6 +97,8 @@ export default function ChatModal({
 	questions,
 	externalInput,
 	setExternalInput,
+	isEmbedded,
+	setIsEmbedded,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -104,6 +107,8 @@ export default function ChatModal({
 	questions?: undefined | string[];
 	externalInput?: string;
 	setExternalInput?: (input: string) => void;
+	isEmbedded?: boolean | null;
+	setIsEmbedded?: React.Dispatch<React.SetStateAction<boolean | null>>;
 }) {
 	const [smartScreeningFields, setSmartScreeningFields] = useLocalStorage<
 		SmartScreeningField[]
@@ -143,20 +148,27 @@ export default function ChatModal({
 		onFinish(message, options) {
 			inputRef?.current?.focus();
 		},
+		onResponse() {
+			if (isEmbedded === false) {
+				setIsEmbedded?.(true);
+			}
+		},
 		onError: (e) => {
 			const isRateLimited = e.message.includes("Rate limit exceeded");
 			if (!isRateLimited) {
-					appendMessage({
-						role: "assistant",
-						content: t("errorMessage"),
-						id: "error-" + Date.now(),
-					});
+				appendMessage({
+					role: "assistant",
+					content: t("errorMessage"),
+					id: "error-" + Date.now(),
+				});
 			} else {
 				(async () => {
 					const rateLimits = await getRateLimits();
 					appendMessage({
 						role: "assistant",
-						content: t("rateLimitedMessage", { seconds: rateLimits.retryAfter }),
+						content: t("rateLimitedMessage", {
+							seconds: rateLimits.retryAfter,
+						}),
 						id: "error-" + Date.now(),
 					});
 				})();
@@ -244,6 +256,10 @@ export default function ChatModal({
 
 	const isWaiting = isLoading || isMutating;
 
+	const hasPDFs = data?.item?.attachmentsData?.some((attachment) => attachment.PDFCoverPageImage);
+
+	console.log(hasPDFs, isEmbedded);
+
 	return (
 		<DialogModal
 			size="full"
@@ -281,7 +297,7 @@ export default function ChatModal({
 						<ModalBody className="p-0 w-full overflow-hidden">
 							<div
 								className={twMerge(
-									"w-full h-full",
+									"w-full h-full relative",
 									reponseExists
 										? "grid grid-rows-[1fr_auto]"
 										: "flex justify-center items-center"
@@ -479,13 +495,14 @@ export default function ChatModal({
 																				"assistant" &&
 																				message.content.includes(
 																					"/lib/"
-																				) && (
-																					smartScreeningFields.length > 0 && <div className="flex items-center gap-2 mt-8">
+																				) &&
+																				smartScreeningFields.length >
+																					0 && (
+																					<div className="flex items-center gap-2 mt-8">
 																						<Button
 																							isDisabled={
 																								isWaiting
 																							}
-
 																							startContent={
 																								isMutating ? (
 																									<ImSpinner8 className="animate-spin" />
@@ -501,9 +518,10 @@ export default function ChatModal({
 																								)
 																							}
 																						>
-																							{tUI("smartScreening")}
+																							{tUI(
+																								"smartScreening"
+																							)}
 																						</Button>
-							
 																					</div>
 																				)}
 																		</>
@@ -516,6 +534,36 @@ export default function ChatModal({
 										</ScrollShadow>
 									</motion.div>
 								)}
+								<AnimatePresence>
+									{(isEmbedded === false && hasPDFs) && (
+										<motion.div 
+											className="absolute top-0 left-0 w-full h-auto z-10"
+											initial={{ opacity: 0, y: -100 }}
+											animate={{ opacity: 1, y: 0 }}
+											exit={{ opacity: 0, y: -100 }}
+											transition={{ 
+												duration: 0.4,
+												ease: "easeInOut" 
+											}}
+										>
+											<div className="max-w-3xl mx-auto mt-4 px-4">
+												<div className="flex items-center gap-3 text-black/80 dark:text-white/80 bg-white/90 dark:bg-secondary/90 rounded-xl p-3 backdrop-blur-sm">
+													<div className="flex-shrink-0 bg-accent-900/40 p-2 rounded-lg">
+														<FaExclamationTriangle className="size-4 text-accent" />
+													</div>
+													<div className="flex-1">
+														<p className="font-medium">
+															{tUI("preparingDocuments")}
+														</p>
+														<p className="text-sm text-black/60 dark:text-white/60">
+															{tUI("documentProcessingInfo")}
+														</p>
+													</div>
+												</div>
+											</div>
+										</motion.div>
+									)}
+								</AnimatePresence>
 								<motion.div
 									layoutId="chat-input"
 									layout="position"

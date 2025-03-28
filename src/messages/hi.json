@@ -158,7 +158,9 @@
     "dataUsageBugs": "कीड़ों को तेजी से ठीक करें",
     "cookieAccept": "स्वीकार करें और जारी रखें",
     "cookieDecline": "अस्वीकार करें",
-    "helpTitle": "सहायता"
+    "helpTitle": "सहायता",
+    "preparingDocuments": "आपके दस्तावेज़ तैयार हो रहे हैं",
+    "documentProcessingInfo": "हम अभी भी आपके पीडीएफ प्रोसेस कर रहे हैं। आपके पहले उत्तर में थोड़ा अधिक समय लग सकता है।"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

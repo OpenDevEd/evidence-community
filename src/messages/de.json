@@ -158,7 +158,9 @@
     "dataUsageBugs": "Fehler schneller beheben",
     "cookieAccept": "Akzeptieren & Fortfahren",
     "cookieDecline": "Ablehnen",
-    "helpTitle": "Hilfe"
+    "helpTitle": "Hilfe",
+    "preparingDocuments": "Ihre Dokumente werden vorbereitet",
+    "documentProcessingInfo": "Wir verarbeiten Ihre PDFs noch. Ihre erste Antwort könnte etwas länger dauern."
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

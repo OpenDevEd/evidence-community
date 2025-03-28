@@ -22,7 +22,7 @@ import useSWR from "swr";
 import { fetcher, fetcherPOST, getExtraValues, isAIAllowed } from "@/lib/utils";
 import Resource from "../features/items/Resource";
 import { Skeleton } from "../nextui/Skeleton";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
 import { useFeatureFlagEnabled, useLastFetchedData } from "@/context/Providers";
@@ -47,7 +47,7 @@ function randomUUID() {
 	);
 }
 
-function AiButton({ data }: { data: ItemGetResponse | undefined }) {
+function AiButton({ data, isEmbedded, setIsEmbedded }: { data: ItemGetResponse | undefined, isEmbedded: boolean | null, setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>> }) {
 	const { selectedModel, setSelectedModel } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
@@ -145,6 +145,8 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 					data={data}
 					modelIndex={selectedModel}
 					questions={questions}
+					isEmbedded={isEmbedded}
+					setIsEmbedded={setIsEmbedded}
 				/>
 				{[summaryFeature, explainFeature].map((feature) => (
 					<GenerativeModal
@@ -235,6 +237,7 @@ export default function Item({
 	data: ItemGetResponse | undefined;
 	loading: boolean;
 }) {
+	const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
 	const [referrerState, setReferrer] = useQueryState("referrer");
 	const referrer = "/" + (referrerState ?? "lib");
 	const router = useRouter();
@@ -264,6 +267,19 @@ export default function Item({
 			revalidateIfStale: false,
 		}
 	);
+	const { data: embedded } = useSWR(
+		data?.item && !loading
+			? `/item/${data?.item?.key}/embedded`
+			: null,
+		fetcher,
+		{
+			onSuccess: (data) => {
+				setIsEmbedded(data);
+				console.log("isEmbedded", data);
+			},
+		}
+	);
+
 	const aiAllowed = isAIAllowed(data?.item);
 
 	const hierarchy = useMemo(() => {
@@ -360,7 +376,7 @@ export default function Item({
 				</div>
 			</div>
 			{isAIEnabled && data?.item && !loading && aiAllowed && (
-				<AiButton data={data} />
+				<AiButton data={data} isEmbedded={isEmbedded} setIsEmbedded={setIsEmbedded} />
 			)}
 			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden  p-4 lg:p-10 gap-10 flex flex-col">
 				<div className="gap-8">

@@ -158,7 +158,9 @@
     "dataUsageBugs": "更快地修复错误",
     "cookieAccept": "接受并继续",
     "cookieDecline": "拒绝",
-    "helpTitle": "帮助"
+    "helpTitle": "帮助",
+    "preparingDocuments": "正在准备您的文档",
+    "documentProcessingInfo": "我们仍在处理您的 PDF。您的第一个答案可能需要更长的时间。"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

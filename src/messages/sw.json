@@ -159,7 +159,9 @@
     "dataUsageBugs": "Rekebisha hitilafu haraka",
     "cookieAccept": "Kubali na Uendelee",
     "cookieDecline": "Kataa",
-    "helpTitle": "Msaada"
+    "helpTitle": "Msaada",
+    "preparingDocuments": "Kuandaa Hati Zako",
+    "documentProcessingInfo": "Bado tunachakata PDF zako. Jibu lako la kwanza linaweza kuchukua muda kidogo."
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
