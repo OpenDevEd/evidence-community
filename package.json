@@ -23,6 +23,7 @@
     "@citation-js/plugin-csl": "^0.7.14",
     "@citation-js/plugin-ris": "^0.7.16",
     "@google/generative-ai": "^0.21.0",
+    "@next/third-parties": "^15.2.4",
     "@nextui-org/react": "^2.6.11",
     "@sentry/nextjs": "^9.5.0",
     "@uidotdev/usehooks": "^2.4.1",

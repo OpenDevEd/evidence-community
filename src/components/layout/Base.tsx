@@ -14,6 +14,7 @@ import { Suspense } from "react";
 import { Link, usePathname } from "@/i18n/routing";
 import MainWrapper from "./MainWrapper";
 import Banner from "./Banner";
+import { GoogleAnalytics } from '@next/third-parties/google'
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -71,6 +72,7 @@ export default async function Base({
 							{children}
 							<Footer />
 							<Banner />
+							<GoogleAnalytics gaId={process.env.GOOGLE_ANALYTICS_ID || ""} />
 						</MainWrapper>
 					</Providers>
 				</NextIntlClientProvider>
