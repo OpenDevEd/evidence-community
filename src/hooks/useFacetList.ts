@@ -51,8 +51,6 @@ export function useFacetList(facetDistribution: FacetDistribution, facetName: st
     const facet = Object.keys(facetObject)
     const facetHasAncestry = facet.some((value) => value.includes(" > "))
 
-    console.log("facetList", facetList.length > 0 ? facetList : facet)
-
     const mappedFacetList = (facetList.length > 0 ? facetList : facet).map(mappingFunction || ((value) => ({ key: value, label: value }))).filter((item) => item !== null).map((item: FacetListItem) => ({
         ...item,
         showArrow: facetObject[item.key] > 0 && item.key.split(" > ").length < 3 && facetHasAncestry,
