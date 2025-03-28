@@ -151,11 +151,6 @@ function FacetPicker({
 						);
 						const functionToCall =
 							item?.onSelectionChange || onSelectionChange;
-						console.log({
-							functionToCallExists: !!functionToCall,
-							key,
-							query: item?.query,
-						})
 						if (functionToCall) {
 							if (item?.query) {
 								functionToCall(item.query);
