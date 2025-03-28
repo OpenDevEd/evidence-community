@@ -19,7 +19,7 @@ import ChatModal from "../features/modals/ChatModal";
 import { useRouter } from "@/i18n/routing";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
-import { fetcher, fetcherPOST, isAIAllowed } from "@/lib/utils";
+import { fetcher, fetcherPOST, getExtraValues, isAIAllowed } from "@/lib/utils";
 import Resource from "../features/items/Resource";
 import { Skeleton } from "../nextui/Skeleton";
 import { useMemo, useRef } from "react";
@@ -209,7 +209,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	);
 }
 
-const skippedRows = ["relations", "citation"];
+const skippedRows = ["relations", "citation", "DOI"];
 
 function RowContainer({
 	title,
@@ -239,6 +239,7 @@ export default function Item({
 	const referrer = "/" + (referrerState ?? "lib");
 	const router = useRouter();
 	const t = useTranslations("ui");
+	const tArticle = useTranslations("article");
 	const isAIEnabled = useFeatureFlagEnabled("ai-features");
 	const isRelatedItemsEnabled =
 		useFeatureFlagEnabled("related-resources") &&
@@ -311,6 +312,15 @@ export default function Item({
 									router={router}
 									loading={loading}
 									pathname={referrer}
+								/>
+								<ItemRow
+									item={data.item!}
+									key="DOI"
+									row="DOI"
+									router={router}
+									loading={loading}
+									pathname={referrer}
+									value={data.item!.DOI || getExtraValues(data.item!.extra || "").get("DOI")}
 								/>
 							</div>
 							{isCollectionsEnabled &&

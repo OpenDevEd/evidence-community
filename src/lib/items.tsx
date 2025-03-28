@@ -426,7 +426,11 @@ export const valueFormatter: Record<
 			className="text-lg text-black/80 dark:text-white/80 font-medium break-words w-full"
 		/>
 	),
-	DOI: ({ value }) => <Extra value={value} />,
+	callNumber: () => false,
+	DOI: ({ value }) => {
+		if (!value) return false;
+		return <Extra value={value} />;
+	},
 	creators: ({ value, t, pathname }) => {
 		if (!value) return null;
 		if (value.length === 0) return null;
@@ -504,6 +508,7 @@ export const valueFormatter: Record<
 		);
 	},
 	extra: (args) => {
+		return false;
 		const finalValue = args.value;
 		const values = getExtraValues(finalValue);
 		return <ObjectView value={values} args={args} />;
@@ -597,7 +602,7 @@ export const valueFormatter: Record<
 									)}
 								>
 									{InstitutionLogo && (
-										<InstitutionLogo className="bg-white/80" />
+										<InstitutionLogo className="bg-white" />
 									)}
 									<h3 className="text-white/80">
 										{institution}
