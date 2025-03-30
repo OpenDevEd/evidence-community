@@ -465,10 +465,12 @@ export default function ChatModal({
 																	0 ? (
 																		<div
 																			className={twMerge(
-																				"p-4 opacity-60"
+																				"p-4 opacity-60 "
 																			)}
 																		>
+																			<div className="w-fit bg-black flex items-center justify-center rounded-full p-2">
 																			<Spinner />
+																				</div>
 																		</div>
 																	) : message.role ===
 																	  "data" ? (
