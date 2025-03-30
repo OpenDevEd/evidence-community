@@ -18,10 +18,10 @@ import posthog from "posthog-js";
 import { useTranslations } from "next-intl";
 
 export function cookieConsentGiven() {
-	if (!localStorage.getItem("cookie_consent")) {
+	if (!localStorage.getItem("posthog-opted")) {
 		return "undecided";
 	}
-	return localStorage.getItem("cookie_consent");
+	return localStorage.getItem("posthog-opted");
 }
 
 export function getPersistence() {

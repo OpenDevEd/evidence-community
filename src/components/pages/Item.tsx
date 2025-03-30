@@ -275,7 +275,6 @@ export default function Item({
 		{
 			onSuccess: (data) => {
 				setIsEmbedded(data);
-				console.log("isEmbedded", data);
 			},
 		}
 	);

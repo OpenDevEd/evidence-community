@@ -35,11 +35,11 @@ function createRehypeWrapper(pattern: RegExp, className: string) {
 					type: "element",
 					tagName: "span",
 					properties: { className: [className] },
-					children: [{ 
-						type: "text", 
-						value: className === "QuoteHighlight" 
-							? captured.replace(/\\n/g, '\n') 
-							: captured 
+					children: [{
+						type: "text",
+						value: className === "QuoteHighlight"
+							? captured.replace(/\\n/g, '\n')
+							: captured
 					}],
 				});
 
@@ -94,7 +94,7 @@ function Highlight({
 		return (
 			<Card className="inline-flex flex-row items-center gap-0.5 px-2 py-0 h-fit">
 				<BiSolidBookBookmark className="text-accent-400 size-3" />
-				<span className=" text-xs font-normal">P.</span>
+				<span className="text-xs font-normal">P.</span>
 				<span className="text-sm font-medium">
 					{children}
 				</span>
@@ -145,7 +145,7 @@ export function AIMarkdown({
 			components={{
 				span: ({ children, className }) =>
 					className === "PageHighlight" ||
-					className === "SectionHighlight" ? (
+						className === "SectionHighlight" ? (
 						<Highlight className={className}>{children}</Highlight>
 					) : className === "QuoteHighlight" ? (
 						<QuoteHighlight>{children}</QuoteHighlight>
@@ -156,7 +156,7 @@ export function AIMarkdown({
 					) : (
 						<span>{children}</span>
 					),
-				a: ({ href, children }) => 
+				a: ({ href, children }) =>
 					href?.startsWith("/") ? (
 						<ResourceWrapper>{href}</ResourceWrapper>
 					) : (

@@ -258,8 +258,6 @@ export default function ChatModal({
 
 	const hasPDFs = data?.item?.attachmentsData?.some((attachment) => attachment.PDFCoverPageImage);
 
-	console.log(hasPDFs, isEmbedded);
-
 	return (
 		<DialogModal
 			size="full"
