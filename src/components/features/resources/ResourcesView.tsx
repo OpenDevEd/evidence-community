@@ -24,8 +24,10 @@ import { useDisclosure } from "@nextui-org/react";
 import { downloadItems } from "@/lib/actions";
 import { routing, usePathname, useRouter } from "@/i18n/routing";
 import { ItemsContext } from "../items/ItemsList";
-import { COUNTRIES } from "@/constants/misc";
+import { countryFacetOptions } from "@/constants/misc";
 import Image from "next/image";
+import { getCountryInfo } from "@/lib/utils";
+
 function Chip({
 	group,
 	title,
@@ -88,9 +90,12 @@ function useFilterChips(
 ) {
 	const filtersCount =
 		(queryParams.collections?.length || 0) +
-		(queryParams.institution ? 1 : 0) +
-		(queryParams.country?.length || 0) +
-		(queryParams.author ? 1 : 0);
+		(queryParams.institution?.length || 0) +
+		(queryParams.author ? 1 : 0) +
+		countryFacetOptions.reduce(
+			(acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0),
+			0
+		);
 	const clearButton = () => {
 		handleClearFilters?.();
 	};
@@ -118,40 +123,34 @@ function FilterChips() {
 		>
 			<div className="flex-1 flex gap-2 flex-wrap relative">
 				<AnimatePresence initial={false} mode="popLayout">
-					{itemsContext.queryParams?.institution && (
-						<motion.div
-							key={
-								"institution-" +
-								itemsContext.queryParams.institution
-							}
-							initial={{ opacity: 0, y: 10 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0, y: -10 }}
-							transition={{ duration: 0.2 }}
-						>
-							<Chip
-								key={
-									"institution-" +
-									itemsContext.queryParams.institution
-								}
-								group={"Institution"}
-								title={itemsContext.queryParams.institution}
-								divKey={
-									"institution-" +
-									itemsContext.queryParams.institution
-								}
-								callback={() =>
-									itemsContext.handleInstitutionSelect?.(
-										itemsContext.queryParams.institution
-									)
-								}
-								classNames={{
-									button: "bg-accent/80 dark:bg-accent/80",
-									title: "text-white dark:text-white",
-								}}
-							/>
-						</motion.div>
-					)}
+					{itemsContext.queryParams.institution.length > 0 &&
+						itemsContext.queryParams.institution.map(
+							(institution) => (
+								<motion.div
+									key={"institution-" + institution}
+									initial={{ opacity: 0, y: 10 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -10 }}
+									transition={{ duration: 0.2 }}
+								>
+									<Chip
+										key={"institution-" + institution}
+										group={"Institution"}
+										title={institution}
+										divKey={"institution-" + institution}
+										callback={() =>
+											itemsContext.handleInstitutionSelect?.(
+												institution
+											)
+										}
+										classNames={{
+											button: "bg-accent/80 dark:bg-accent/80",
+											title: "text-white dark:text-white",
+										}}
+									/>
+								</motion.div>
+							)
+						)}
 					{itemsContext.queryParams?.author && (
 						<motion.div
 							key={"author-" + itemsContext.queryParams.author}
@@ -181,52 +180,55 @@ function FilterChips() {
 							/>
 						</motion.div>
 					)}
-					{itemsContext.queryParams?.country &&
-						itemsContext.queryParams.country.map((country) => (
-							<motion.div
-								key={"country-" + country}
-								initial={{ opacity: 0, y: 10 }}
-								animate={{ opacity: 1, y: 0 }}
-								exit={{ opacity: 0, y: -10 }}
-								transition={{ duration: 0.2 }}
-							>
-								<Chip
-									key={
-										"country-" +
-										itemsContext.queryParams.country
-									}
-									divKey={
-										"country-" +
-										itemsContext.queryParams.country
-									}
-									group={"Country"}
-									title={
-										COUNTRIES[country] +
-										" (" +
-										country +
-										")"
-									}
-									startContent={
-										<Image
-											src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
-											alt={country}
-											width={16}
-											height={12}
-											className="ml-0.5"
-										/>
-									}
-									callback={() =>
-										itemsContext.handleCountrySelect?.(
-											country
-										)
-									}
-									classNames={{
-										button: "bg-primary dark:bg-primary/40",
-										title: "text-black dark:text-white",
-									}}
-								/>
-							</motion.div>
-						))}
+					{countryFacetOptions.map((facet) => {
+						const values = itemsContext.queryParams[
+							facet.queryParam
+						] as string[];
+						if (!values) return null;
+
+						return values.map((value) => {
+							const {
+								countryName,
+								label,
+								numberOfParts,
+								countryCode,
+							} = getCountryInfo(value);
+							return (
+								<motion.div
+									key={`${facet.queryParam}-${value}`}
+									initial={{ opacity: 0, y: 10 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -10 }}
+									transition={{ duration: 0.2 }}
+								>
+									<Chip
+										key={`${facet.queryParam}-${value}`}
+										divKey={`${facet.queryParam}-${value}`}
+										group={t(facet.label)}
+										title={label}
+										startContent={
+											countryName && (
+												<Image
+													src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
+													alt={value}
+													width={16}
+													height={12}
+													className="ml-0.5"
+												/>
+											)
+										}
+										callback={() =>
+											itemsContext[facet.action](value)
+										}
+										classNames={{
+											button: "bg-primary dark:bg-primary/40",
+											title: "text-black dark:text-white",
+										}}
+									/>
+								</motion.div>
+							);
+						});
+					})}
 					{itemsContext.collectionsData &&
 						itemsContext.selectedCollections?.map(
 							(collection: string) => {
@@ -261,32 +263,32 @@ function FilterChips() {
 			</div>
 			<AnimatePresence initial={false}>
 				{filtersCount > 0 && (
-						<motion.div
-							initial={{ opacity: 0, y: 10 }}
-							animate={{ opacity: 1, y: 0 }}
-							exit={{ opacity: 0, y: -10 }}
-							transition={{ duration: 0.2 }}
-							className="w-7 flex justify-end"
+					<motion.div
+						initial={{ opacity: 0, y: 10 }}
+						animate={{ opacity: 1, y: 0 }}
+						exit={{ opacity: 0, y: -10 }}
+						transition={{ duration: 0.2 }}
+						className="w-7 flex justify-end"
+					>
+						<Button
+							aria-hidden={
+								itemsContext.selectedCollections.length == 0
+							}
+							aria-label={t("clearFiltersAriaLabel")}
+							onPress={clearButton}
+							isIconOnly
+							size="sm"
+							variant="solid"
+							color="accent"
+							className="h-7 w-7 min-w-7"
 						>
-							<Button
-								aria-hidden={
-									itemsContext.selectedCollections.length == 0
-								}
-								aria-label={t("clearFiltersAriaLabel")}
-								onPress={clearButton}
-								isIconOnly
-								size="sm"
-								variant="solid"
-								color="accent"
-								className="h-7 w-7 min-w-7"
-							>
-								<FaTrash
-									aria-hidden="true"
-									className="text-white size-3"
-								/>
-							</Button>
-						</motion.div>
-					)}
+							<FaTrash
+								aria-hidden="true"
+								className="text-white size-3"
+							/>
+						</Button>
+					</motion.div>
+				)}
 			</AnimatePresence>
 		</div>
 	);

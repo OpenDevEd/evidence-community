@@ -89,10 +89,12 @@ export function SearchBar({
 	handleSearchChange,
 	search,
 	classNames,
+	endContent,
 }: {
 	handleSearchChange: (search: string) => void;
 	search: string;
 	classNames?: PropsOf<typeof Input>["classNames"];
+	endContent?: ReactNode;
 }) {
 	const [debouncedSearch, _] = useDebounce(handleSearchChange, 0);
 	const t = useTranslations("ui");
@@ -120,6 +122,7 @@ export function SearchBar({
 					className="size-6 fill-current text-black/60 dark:text-white/40"
 				/>
 			}
+			endContent={endContent}
 		/>
 	);
 }
@@ -360,6 +363,9 @@ export function ContentInteractions({
 													handleCountrySelect={
 														itemsContext.handleCountrySelect
 													}
+													handleAuthorCountrySelect={
+														itemsContext.handleAuthorCountrySelect
+													}
 												/>
 											)}
 										</>
@@ -444,7 +450,7 @@ export function ContentInteractions({
 								})}
 						</div>
 						{itemsContext.isItemsFetching && (
-							<div className="flex items-center !size-0 absolute -right-4 translate-x-full">
+							<div className="flex items-center !size-0 absolute ltr:-right-4 rtl:-left-4 translate-x-full">
 								<Spinner
 									size="sm"
 									className="opacity-60 absolute"
@@ -529,6 +535,7 @@ function MainContent() {
 				queryParams={props.queryParams}
 				handleInstitutionSelect={props.handleInstitutionSelect}
 				handleCountrySelect={props.handleCountrySelect}
+				handleAuthorCountrySelect={props.handleAuthorCountrySelect}
 			/>
 			<ItemsList props={props} />
 		</>

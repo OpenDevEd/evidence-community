@@ -9,7 +9,7 @@ import { useRouter } from "@/i18n/routing";
 import CopyButton from "@/components/features/items/CopyButton";
 import { Card } from "@/components/nextui/Card";
 import { INSTITUTION_LOGOS } from "@/constants/items";
-import { fetcher, getExtraValues } from "./utils";
+import { fetcher, getCountryAncestry, getExtraValues } from "./utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import LinkWithParams from "@/components/features/LinkWithParams";
 import React from "react";
@@ -20,6 +20,7 @@ import Resource from "@/components/features/items/Resource";
 import useSWR from "swr";
 import { MdSearchOff } from "react-icons/md";
 import { serializeSearchParams } from "./searchParams";
+import { COUNTRY_PARAMS } from "@/constants/misc";
 
 
 type FormatterProps = {
@@ -29,6 +30,7 @@ type FormatterProps = {
 	formatter: ReturnType<typeof createFormatter>;
 	t: ReturnType<typeof useTranslations>;
 	loading: boolean;
+	pathname: string;
 };
 
 type Creator = {
@@ -64,10 +66,6 @@ function formatDate({ value, formatter }: FormatterProps) {
 		year: "numeric",
 		month: "long",
 		day: "numeric",
-		...(hasTime && {
-			hour: "numeric",
-			minute: "numeric",
-		}),
 	});
 
 	return <p>{returnedDate}</p>;
@@ -225,9 +223,9 @@ const Extra = createRegexParser([
 	{ regex: urlRegex, Wrapper: URLWrapper, priority: 2 },
 ]);
 
-function CollectionLevel({ collection }: { collection: Collection }) {
+function CollectionLevel({ collection, pathname }: { collection: Collection, pathname: string }) {
 	const ancestry = collection.ancestry || [];
-	const href = serializeSearchParams(`/lib`, {
+	const href = serializeSearchParams(pathname, {
 		collections: [...ancestry, collection.key]
 	});
 
@@ -245,21 +243,21 @@ function CollectionLevel({ collection }: { collection: Collection }) {
 			</Link>
 			<ul className="ml-8">
 				{collection.children?.map((child) => (
-					<CollectionLevel key={child.id} collection={child} />
+					<CollectionLevel key={child.id} collection={child} pathname={pathname} />
 				))}
 			</ul>
 		</li>
 	);
 }
 
-export function CollectionsRow({ value }: { value: Collection[] }) {
+export function CollectionsRow({ value, pathname }: { value: Collection[], pathname: string }) {
 	if (!value) return false;
 	if (value.length === 0) return false;
 
 	return (
 		<ul className="flex flex-col gap-2">
 			{value.map((collection: Collection) => (
-				<CollectionLevel key={collection.id} collection={collection} />
+				<CollectionLevel key={collection.id} collection={collection} pathname={pathname} />
 			))}
 		</ul>
 	);
@@ -424,8 +422,12 @@ export const valueFormatter: Record<
 			className="text-lg text-black/80 dark:text-white/80 font-medium break-words w-full"
 		/>
 	),
-	DOI: ({ value }) => <Extra value={value} />,
-	creators: ({ value, t }) => {
+	callNumber: () => false,
+	DOI: ({ value }) => {
+		if (!value) return false;
+		return <Extra value={value} />;
+	},
+	creators: ({ value, t, pathname }) => {
 		if (!value) return null;
 		if (value.length === 0) return null;
 
@@ -442,7 +444,7 @@ export const valueFormatter: Record<
 					return (
 						<li key={index}>
 							<LinkWithParams
-								href="/lib"
+								href={pathname}
 								params={{ author: fullName }}
 								className="text-lg"
 							>
@@ -502,6 +504,7 @@ export const valueFormatter: Record<
 		);
 	},
 	extra: (args) => {
+		return false;
 		const finalValue = args.value;
 		const values = getExtraValues(finalValue);
 		return <ObjectView value={values} args={args} />;
@@ -519,7 +522,7 @@ export const valueFormatter: Record<
 	citation: (args) => {
 		return <Citation {...args} />;
 	},
-	country: ({ value }) => {
+	country: ({ value, pathname }) => {
 		if (!value) return false;
 
 		const countries = Array.isArray(value) ? value : [value];
@@ -529,6 +532,8 @@ export const valueFormatter: Record<
 		return (
 			<div className="flex flex-wrap gap-2">
 				{countries.map((country, index) => {
+					const ancestry = getCountryAncestry(country);
+				
 					return (
 						<LinkWithParams
 							isDisabled={
@@ -536,8 +541,8 @@ export const valueFormatter: Record<
 								"true"
 							}
 							key={index}
-							href="/lib"
-							params={{ country: [country] }}
+							href={pathname}
+							params={{ country: ancestry }}
 							className="opacity-100"
 						>
 							<Card
@@ -561,7 +566,7 @@ export const valueFormatter: Record<
 			</div>
 		);
 	},
-	institution: ({ value }) => {
+	institution: ({ value, pathname }) => {
 		if (!value) return false;
 
 		// Handle both string and array values
@@ -579,8 +584,8 @@ export const valueFormatter: Record<
 					return (
 						<LinkWithParams
 							key={index}
-							href="/lib"
-							params={{ institution }}
+							href={pathname}
+							params={{ institution: [institution] }}
 						>
 							<Card
 								className="max-w-fit p-2 rounded-2xl"
@@ -593,7 +598,7 @@ export const valueFormatter: Record<
 									)}
 								>
 									{InstitutionLogo && (
-										<InstitutionLogo className="bg-white/80" />
+										<InstitutionLogo className="bg-white" />
 									)}
 									<h3 className="text-white/80">
 										{institution}

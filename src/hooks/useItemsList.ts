@@ -116,36 +116,65 @@ export function useItemsList(userData?: any, config: {
 		}
 	};
 
-	const handleInstitutionSelect = (institution: string) => {
-		if (institution === queryParams.institution) {
+	const handleInstitutionSelect = (institution: string | string[]) => {
+		if (Array.isArray(institution)) {
 			setParams({
-				institution: "",
+				institution: Array.from(new Set([...queryParams.institution, ...institution]))
+			});
+		} else if (queryParams.institution.includes(institution)) {
+			setParams({
+				institution: queryParams.institution.filter((i) => i !== institution),
 			});
 		} else {
 			setParams({
-				institution: institution,
+				institution: [...queryParams.institution, institution],
 			});
 		}
 	};
 
-	const handleCountrySelect = (country: string) => {
-		if (queryParams.country.includes(country)) {
+	function genericCountrySelect(country: string | string[], key: keyof typeof queryParams) {
+		const queryParam = queryParams[key] as string[];
+		if (Array.isArray(country)) {
+			const lastOne = country[country.length - 1];
+			if (queryParam.includes(lastOne)) {
+				setParams({
+					[key]: queryParam.filter((c) => c !== lastOne && !c.startsWith(lastOne))
+				});
+			} else {
+				setParams({
+					[key]: Array.from(new Set([...queryParam, ...country]))
+				});
+			}
+		} else if (queryParam.includes(country)) {
 			setParams({
-				country: queryParams.country.filter((c) => c !== country),
+				[key]: queryParam.filter((c) => {
+					const sameCountry = c === country;
+					const isDescendant = !sameCountry && c.startsWith(country);
+					return !sameCountry && !isDescendant;
+				})
 			});
 		} else {
 			setParams({
-				country: [...queryParams.country, country],
+				[key]: [...queryParam, country],
 			});
 		}
+	}
+
+	const handleCountrySelect = (country: string | string[]) => {
+		genericCountrySelect(country, "country");
+	}
+
+	const handleAuthorCountrySelect = (country: string | string[]) => {
+		genericCountrySelect(country, "author_country");
 	}
 
 	const handleClearFilters = () => {
 		setParams({
 			author: "",
-			institution: "",
+			institution: [],
 			country: [],
 			collections: [],
+			author_country: [],
 		});
 	};
 
@@ -239,6 +268,7 @@ export function useItemsList(userData?: any, config: {
 		pathName: pathname,
 		handleClearFilters,
 		handleCountrySelect,
+		handleAuthorCountrySelect,
 		userData,
 		config,
 	};

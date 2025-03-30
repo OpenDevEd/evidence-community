@@ -5,7 +5,7 @@ import { SectionTitle } from "@/components/typography/SectionTitle";
 import { twMerge } from "tailwind-merge";
 import { useTranslations } from "next-intl";
 
-export default function GenericHeader({ onClose, children, startContent, classNames }: { onClose: () => void, children?: React.ReactNode, startContent?: React.ReactNode, classNames?: { base?: string, title?: string, titleSpan?: string, button?: string, buttonIcon?: string } }) {
+export default function GenericHeader({ onClose, children, startContent, classNames }: { onClose?: () => void, children?: React.ReactNode, startContent?: React.ReactNode, classNames?: { base?: string, title?: string, titleSpan?: string, button?: string, buttonIcon?: string } }) {
 	const t = useTranslations("ui");
 
 	return (
@@ -18,17 +18,19 @@ export default function GenericHeader({ onClose, children, startContent, classNa
 					{children}
 				</span>
 			</SectionTitle>
-			<Button
-				aria-hidden="true"
-				onPress={onClose}
-				isIconOnly
-				variant="transparent"
-				className={twMerge("lg:px-0 px-0 translate-x-2 rtl:-translate-x-2", classNames?.button)}
-				aria-label={t("closePopupAriaLabel")}
+			{onClose && (
+				<Button
+					aria-hidden="true"
+					onPress={onClose}
+					isIconOnly
+					variant="transparent"
+					className={twMerge("lg:px-0 px-0 translate-x-2 rtl:-translate-x-2", classNames?.button)}
+					aria-label={t("closePopupAriaLabel")}
 				startContent={
 					<LuX className={twMerge("size-6", classNames?.buttonIcon)} />
 				}
 			/>
+			)}
 		</ModalHeader>
 	)
 }

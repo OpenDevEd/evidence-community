@@ -11,7 +11,7 @@ import {
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
-import { Link, useRouter } from "@/i18n/routing";
+import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
 import { useState, useEffect } from "react";
@@ -28,6 +28,8 @@ import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
+import { serializeSearchParams } from "@/lib/searchParams";
+import { useQueryState } from "nuqs";
 
 export function AddButton({
 	itemData,
@@ -208,9 +210,11 @@ export default function Resource({
 	className?: string;
 	as?: "li" | "div";
 }) {
+	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const router = useRouter();
+	const currentPath = usePathname();
 
 	const { data: fetchedItemData, isLoading: fetchedItemDataLoading } = useSWR<ItemGetResponse>(itemKey ? `/item/${itemKey}` : null, fetcher, {
 		revalidateOnFocus: false,
@@ -251,7 +255,9 @@ export default function Resource({
 			className={twMerge("@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col", className)}
 		>
 			<Link
-				href={href}
+				href={serializeSearchParams(href, {
+					referrer: referrer ?? currentPath.split("/")[1],
+				})}
 				className="p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1"
 				onMouseDown={(e) => {
 					const url = new URL(href, window.location.href);

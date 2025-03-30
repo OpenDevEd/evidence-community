@@ -4,6 +4,18 @@
 
 :root {
 	font-size: 100%;
+	--select-popover-tertiary-color-mixed-bg: color-mix(in srgb, theme("colors.tertiary.500") 10%, theme("colors.background.500") 90%);
+	--select-popover-tertiary-color-mixed-bg-light: theme("colors.tertiary.500");
+}
+
+.select-popover-tertiary {
+	background-color: var(--select-popover-tertiary-color-mixed-bg-light);
+}
+
+.dark {
+	.select-popover-tertiary {
+		background-color: var(--select-popover-tertiary-color-mixed-bg);
+	}
 }
 
 @media screen and (max-width: 767px) {

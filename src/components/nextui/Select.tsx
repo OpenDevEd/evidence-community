@@ -12,7 +12,7 @@ export const Select = extendVariants(NextUISelect, {
       tertiary: {
         trigger: "bg-tertiary dark:bg-tertiary/10 text-white dark:text-white/60 border-white/10 data-[hover]:bg-tertiary-600 dark:data-[hover]:bg-tertiary/20 data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
         value: "text-white dark:text-white/60 font-medium text-base",
-        popoverContent: "bg-tertiary dark:bg-tertiary-50 text-white dark:text-white/60 border-white/10 ",
+        popoverContent: "select-popover-tertiary text-white dark:text-white/60 border-white/10",
         label: "text-white dark:text-white/60",
       }
     },

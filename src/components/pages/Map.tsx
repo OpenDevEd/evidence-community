@@ -9,10 +9,10 @@ import {
 import tailwindConfig, { style } from "../../../tailwind.config";
 import resolveConfig from "tailwindcss/resolveConfig";
 import { ReactNode, useEffect, useRef, useState, memo } from "react";
-import { Tooltip } from "@nextui-org/react";
-import { useMouse, useWindowSize } from "@uidotdev/usehooks";
+import {Tooltip } from "@nextui-org/react";
+import { useLocalStorage, useMouse, useWindowSize } from "@uidotdev/usehooks";
 import { useItemsList } from "@/hooks/useItemsList";
-import { A3ToA2, COUNTRIES } from "@/constants/misc";
+import { A3ToA2, COUNTRIES, COUNTRY_PARAMS, countryFacetOptions } from "@/constants/misc";
 import ItemsList from "../features/items/ItemsList";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFacetList } from "@/hooks/useFacetList";
@@ -21,6 +21,12 @@ import { SearchBar } from "./EvidenceLibrary";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "tailwind-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
+import { createPortal } from "react-dom";
+import { Select } from "../nextui/Select";
+import { SelectItem } from "../nextui/SelectItem";
+import { useTranslations } from "next-intl";
+import { searchParamsLoader } from "@/lib/searchParams";
+import { inferParserType } from "nuqs/server";
 
 export type FeatureCollection = {
 	type: "FeatureCollection";
@@ -116,11 +122,13 @@ function HEXToRGB(hex: string): [number, number, number] {
 }
 
 function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
+	const isCountrySelected = countryFacetOptions.some(facet => (props.queryParams[facet.queryParam] as string[]).length > 0);
+
 	return (
 		<AnimatePresence>
-			{props.queryParams.country.length > 0 && (
+			{isCountrySelected && (
 				<motion.div
-					className={twMerge("fixed right-0 inset-y-0 top-44 md:top-0  md:pt-[calc(7.5rem-1.5rem)] md:pr-4 md:pb-4", style === "small" && "md:pt-[calc(7.5rem)]")}
+					className={twMerge("fixed right-0 inset-y-0 top-36 md:top-0 md:pt-[calc(7.5rem-1.5rem)] md:pr-4 md:pb-4", style === "small" && "md:pt-[calc(7.5rem)]")}
 					initial={{ opacity: 0, x: 100 }}
 					animate={{ opacity: 1, x: 0 }}
 					exit={{ opacity: 0, x: 100 }}
@@ -141,17 +149,27 @@ const MemoizedItemView = memo(ItemView, (prevProps, nextProps) => {
 	return prevProps.props === nextProps.props;
 });
 
-function Search({ props }: { props: ReturnType<typeof useItemsList> }) {
+function Search({ props, setMapFacet, mapFacet }: { props: ReturnType<typeof useItemsList>, setMapFacet: (facet: number) => void, mapFacet: number }) {
+	const t = useTranslations("ui");
+
 	return (
-		<div className="fixed top-24 md:bottom-0 md:top-auto left-0">
-			<div className="w-screen md:w-[32rem] p-4">
-				<div className="bg-white dark:bg-secondary-400 rounded-2xl">
-					<SearchBar handleSearchChange={props.handleSearchChange} search={props.queryParams.search} />
+		<div className="fixed top-20 md:bottom-0 md:top-auto left-0">
+			<div className="w-screen md:w-[42rem] md:p-4">
+				<div className="bg-white dark:bg-secondary-400 md:rounded-2xl flex gap-4 p-2 shadow-[0_-10px_10px_0_theme(colors.accent.500)] md:shadow-none">
+					<SearchBar handleSearchChange={props.handleSearchChange} search={props.queryParams.search}/>
+					<Select classNames={{
+						trigger: "h-10 lg:h-12"
+					}} placement="left" color="tertiary" label="Facet" selectedKeys={[String(mapFacet)]} onSelectionChange={(keys) => setMapFacet(Number(keys.currentKey))}>
+						{countryFacetOptions.map((facet, index) => (
+							<SelectItem key={String(index)} value={String(index)}>{t(facet.label)}</SelectItem>
+						))}
+					</Select>
 				</div>
 			</div>
 		</div>
 	);
 }
+
 
 export default function Map() {
 	const tailwindAccentColor = (fullConfig as ExtendedTheme).theme.colors.accent[600];
@@ -167,11 +185,9 @@ export default function Map() {
 		disableViewSwitch: true,
 		interactionsStyle: "one-line",
 	});
-	const countriesFacet = props?.itemsData?.facetDistribution?.country;
-	const [countries] = useFacetList(
-		props?.itemsData?.facetDistribution,
-		"country"
-	);
+	const [mapFacetValue, setMapFacet] = useLocalStorage("mapFacet", 0);
+	const mapFacet = countryFacetOptions[mapFacetValue] ? mapFacetValue : 0;
+	const countriesFacet = props?.itemsData?.facetDistribution?.[countryFacetOptions[mapFacet].key + "_uncategorized"];
 	const maxItems = Math.max(
 		...Object.values(countriesFacet || {}).map(Number)
 	);
@@ -218,6 +234,7 @@ export default function Map() {
 							geographies.map((geo: FeatureGeometry) => {
 								const countryCode = A3ToA2[geo.id];
 								const inFacet = countriesFacet?.[countryCode];
+								const fullLocation = COUNTRY_PARAMS[countryCode];
 
 								return (
 									<Geography
@@ -236,8 +253,8 @@ export default function Map() {
 												: "rgb(255,200,200)"
 										}
 										onClick={() => {
-											props.handleCountrySelect(
-												countryCode
+											props[countryFacetOptions[mapFacet].action](
+												fullLocation
 											);
 										}}
 										onMouseEnter={() =>
@@ -279,7 +296,7 @@ export default function Map() {
 					</Geographies>
 				</ZoomableGroup>
 			</ComposableMap>}
-			<Search props={props} />
+			<Search props={props} setMapFacet={setMapFacet} mapFacet={mapFacet} />
 			<MemoizedItemView props={props} />
 		</div>
 	);

@@ -10,6 +10,7 @@ import ReactMarkdown from "react-markdown";
 import Link from "next/link";
 import Resource from "../items/Resource";
 import React from "react";
+import { Card } from "@/components/nextui/Card";
 
 function createRehypeWrapper(pattern: RegExp, className: string) {
 	return () => (tree: Node) => {
@@ -34,11 +35,11 @@ function createRehypeWrapper(pattern: RegExp, className: string) {
 					type: "element",
 					tagName: "span",
 					properties: { className: [className] },
-					children: [{ 
-						type: "text", 
-						value: className === "QuoteHighlight" 
-							? captured.replace(/\\n/g, '\n') 
-							: captured 
+					children: [{
+						type: "text",
+						value: className === "QuoteHighlight"
+							? captured.replace(/\\n/g, '\n')
+							: captured
 					}],
 				});
 
@@ -91,30 +92,30 @@ function Highlight({
 }) {
 	if (className === "PageHighlight") {
 		return (
-			<span className="font-medium inline-flex items-center gap-1 bg-black/50 text-white border border-white/20 rounded-md px-2 py-0.5 text-xs ml-1">
-				<BiSolidBookBookmark className="text-tertiary-400" />
-				<span className="text-white/60 text-xs font-normal">Page</span>
-				<span className="text-white text-sm font-medium">
+			<Card className="inline-flex flex-row items-center gap-0.5 px-2 py-0 h-fit">
+				<BiSolidBookBookmark className="text-accent-400 size-3" />
+				<span className="text-xs font-normal">P.</span>
+				<span className="text-sm font-medium">
 					{children}
 				</span>
-			</span>
+			</Card>
 		);
 	}
 
 	return (
-		<span className="font-medium inline-flex items-center gap-1 bg-black/50 text-white border border-white/20 rounded-md px-2 py-0.5 text-xs ml-1">
+		<Card className="inline-flex flex-row items-center gap-0.5 px-2 py-0 h-fit">
 			<BiSolidBookContent className="text-accent-400" />
-			<span className="text-white/60 text-xs font-normal">Section</span>
-			<span className="text-white text-sm font-medium">
+			<span className="dark:text-white/60 text-black/60 text-xs font-normal">Section</span>
+			<span className="dark:text-white text-black text-sm font-medium">
 				{children}
 			</span>
-		</span>
+		</Card>
 	);
 }
 
 function QuoteHighlight({ children }: { children: ReactNode }) {
 	return (
-		<span className="italic font-normal text-white border-l-4 border-tertiary-400/50 pl-3 py-1 my-1 block bg-black/10 rounded-lg">
+		<span className="italic font-normal text-black dark:text-white border-l-4 border-tertiary-400/50 pl-3 py-1 my-1 block bg-black/10 rounded-lg">
 			{children}
 		</span>
 	);
@@ -144,7 +145,7 @@ export function AIMarkdown({
 			components={{
 				span: ({ children, className }) =>
 					className === "PageHighlight" ||
-					className === "SectionHighlight" ? (
+						className === "SectionHighlight" ? (
 						<Highlight className={className}>{children}</Highlight>
 					) : className === "QuoteHighlight" ? (
 						<QuoteHighlight>{children}</QuoteHighlight>
@@ -155,7 +156,7 @@ export function AIMarkdown({
 					) : (
 						<span>{children}</span>
 					),
-				a: ({ href, children }) => 
+				a: ({ href, children }) =>
 					href?.startsWith("/") ? (
 						<ResourceWrapper>{href}</ResourceWrapper>
 					) : (

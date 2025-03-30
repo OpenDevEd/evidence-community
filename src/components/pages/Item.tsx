@@ -19,10 +19,10 @@ import ChatModal from "../features/modals/ChatModal";
 import { useRouter } from "@/i18n/routing";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
-import { fetcher, fetcherPOST, isAIAllowed } from "@/lib/utils";
+import { fetcher, fetcherPOST, getExtraValues, isAIAllowed } from "@/lib/utils";
 import Resource from "../features/items/Resource";
 import { Skeleton } from "../nextui/Skeleton";
-import { useMemo, useRef } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
 import { useFeatureFlagEnabled, useLastFetchedData } from "@/context/Providers";
@@ -38,6 +38,7 @@ import PageContainer from "../layout/PageContainer";
 import { models } from "@/constants/ai";
 import posthog from "posthog-js";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
+import { useQueryState } from "nuqs";
 
 function randomUUID() {
 	return (
@@ -46,7 +47,7 @@ function randomUUID() {
 	);
 }
 
-function AiButton({ data }: { data: ItemGetResponse | undefined }) {
+function AiButton({ data, isEmbedded, setIsEmbedded }: { data: ItemGetResponse | undefined, isEmbedded: boolean | null, setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>> }) {
 	const { selectedModel, setSelectedModel } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
@@ -144,6 +145,8 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 					data={data}
 					modelIndex={selectedModel}
 					questions={questions}
+					isEmbedded={isEmbedded}
+					setIsEmbedded={setIsEmbedded}
 				/>
 				{[summaryFeature, explainFeature].map((feature) => (
 					<GenerativeModal
@@ -208,7 +211,7 @@ function AiButton({ data }: { data: ItemGetResponse | undefined }) {
 	);
 }
 
-const skippedRows = ["relations", "citation"];
+const skippedRows = ["relations", "citation", "DOI"];
 
 function RowContainer({
 	title,
@@ -234,8 +237,12 @@ export default function Item({
 	data: ItemGetResponse | undefined;
 	loading: boolean;
 }) {
+	const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
+	const [referrerState, setReferrer] = useQueryState("referrer");
+	const referrer = "/" + (referrerState ?? "lib");
 	const router = useRouter();
 	const t = useTranslations("ui");
+	const tArticle = useTranslations("article");
 	const isAIEnabled = useFeatureFlagEnabled("ai-features");
 	const isRelatedItemsEnabled =
 		useFeatureFlagEnabled("related-resources") &&
@@ -260,6 +267,18 @@ export default function Item({
 			revalidateIfStale: false,
 		}
 	);
+	const { data: embedded } = useSWR(
+		data?.item && !loading
+			? `/item/${data?.item?.key}/embedded`
+			: null,
+		fetcher,
+		{
+			onSuccess: (data) => {
+				setIsEmbedded(data);
+			},
+		}
+	);
+
 	const aiAllowed = isAIAllowed(data?.item);
 
 	const hierarchy = useMemo(() => {
@@ -297,6 +316,7 @@ export default function Item({
 												row={row}
 												router={router}
 												loading={loading}
+												pathname={referrer}
 											/>
 										))}
 								<Divider />
@@ -306,6 +326,16 @@ export default function Item({
 									row="citation"
 									router={router}
 									loading={loading}
+									pathname={referrer}
+								/>
+								<ItemRow
+									item={data.item!}
+									key="DOI"
+									row="DOI"
+									router={router}
+									loading={loading}
+									pathname={referrer}
+									value={data.item!.DOI || getExtraValues(data.item!.extra || "").get("DOI")}
 								/>
 							</div>
 							{isCollectionsEnabled &&
@@ -325,9 +355,11 @@ export default function Item({
 											value={
 												<CollectionsRow
 													value={collection.children!}
+													pathname={referrer}
 												/>
 											}
 											loading={loading}
+											pathname={referrer}
 										/>
 									))}
 						</>
@@ -343,7 +375,7 @@ export default function Item({
 				</div>
 			</div>
 			{isAIEnabled && data?.item && !loading && aiAllowed && (
-				<AiButton data={data} />
+				<AiButton data={data} isEmbedded={isEmbedded} setIsEmbedded={setIsEmbedded} />
 			)}
 			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden  p-4 lg:p-10 gap-10 flex flex-col">
 				<div className="gap-8">
@@ -376,6 +408,7 @@ export default function Item({
 							router={router}
 							loading={loading}
 							tooltip="Only items available in the current database are displayed. Some related resources are only available externally."
+							pathname={referrer}
 						/>
 					
 				</div> : null}
