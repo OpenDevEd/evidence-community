@@ -2,13 +2,7 @@ import { Item } from "@/app/api/item/types";
 import { INSTITUTION_LOGOS } from "@/constants/items";
 import ResourceData from "./ResourceData";
 import { useTranslations } from "next-intl";
-
-export type Author = {
-	firstName: string;
-	lastName: string;
-	institution: string;
-	name: string;
-};
+import { Author } from "@/app/api/item/types";
 
 function toInitials(name: string) {
 	if (!name) return '';

@@ -9,8 +9,17 @@ export type Item = InferSelectModel<typeof item> & {
   year?: string;
   fullTextPDFs?: Array<{ key: string; fullTextPDF: Array<{ text: string, page: number }> }>;
   institution?: string[];
+  fullNames?: string[];
 };
 
 export type ItemGetResponse = {
   item: Item | undefined;
+};
+
+export type Author = {
+	firstName: string;
+	lastName: string;
+	institution: string;
+	name: string;
+	creatorType: string;
 };
