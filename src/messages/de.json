@@ -428,7 +428,11 @@
     "citation": "Zitation",
     "apc_list": "Artikelbearbeitungsgebühr",
     "apc_paid": "Status der Gebührenzahlung für die Artikelbearbeitung",
-    "relations": "Verwandte Ressourcen"
+    "relations": "Verwandte Ressourcen",
+    "year": "Jahr",
+    "datePublished": "Veröffentlichungsdatum",
+    "createdAt": "Erstellt am",
+    "updatedAt": "Aktualisiert am"
   },
   "help": {
     "intro1": "Die Suchoberfläche besteht aus drei Abschnitten: **Suche**, **Entdecken** und **Ergebnisse**. Diese werden im Folgenden ausführlich beschrieben.",

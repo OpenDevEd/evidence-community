@@ -428,7 +428,11 @@
     "citation": "Citação",
     "apc_list": "Taxa de Processamento de Artigo",
     "apc_paid": "Status do Pagamento da Taxa de Processamento do Artigo",
-    "relations": "Recursos Relacionados"
+    "relations": "Recursos Relacionados",
+    "year": "Ano",
+    "datePublished": "Data de publicação",
+    "createdAt": "Criado em",
+    "updatedAt": "Atualizado em"
   },
   "help": {
     "intro1": "A interface de pesquisa é feita de três seções: **Pesquisar**, **Explorar** e **Resultados**. Estas são descritas em detalhes abaixo.",

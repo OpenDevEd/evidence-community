@@ -428,7 +428,11 @@
     "citation": "引用",
     "apc_list": "文章处理费",
     "apc_paid": "文章处理费支付状态",
-    "relations": "相关资源"
+    "relations": "相关资源",
+    "year": "年",
+    "datePublished": "出版日期",
+    "createdAt": "创建于",
+    "updatedAt": "更新于"
   },
   "help": {
     "intro1": "搜索界面由三个部分组成：**搜索**、**探索**和**结果**。这些在下面有详细描述。",

@@ -428,7 +428,11 @@
     "citation": "Citation",
     "apc_list": "Article Processing Charge",
     "apc_paid": "Article Processing Charge Payment Status",
-    "relations": "Related Resources"
+    "relations": "Related Resources",
+    "year": "Year",
+    "datePublished": "Publication Date",
+    "createdAt": "Created At",
+    "updatedAt": "Updated At"
   },
   "help": {
     "intro1": "The search interface is made of three sections: **Search**, **Explore**, and **Results**. These are described in detail below.",
