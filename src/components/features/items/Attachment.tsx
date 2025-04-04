@@ -129,7 +129,7 @@ export default function Attachment({ data }: { data: Item }) {
 
 	return isDesktop ? (
 		<Card
-			// @ts-expect-error
+			// @ts-expect-error temporary
 			ref={parentRef}
 			className="flex flex-col gap-4 p-4 rounded-2xl relative w-full overflow-visible dark:bg-background"
 			key={data.id}
