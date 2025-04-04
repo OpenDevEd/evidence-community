@@ -7,6 +7,7 @@ import { FaClipboard, FaClipboardCheck } from "react-icons/fa";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 import { routing } from "@/i18n/routing";
+import { FiCheck, FiCopy } from "react-icons/fi";
 
 const CopyButton = forwardRef<
 	any,
@@ -53,8 +54,8 @@ const CopyButton = forwardRef<
 	return (
 		<Button
 			ref={ref}
-			color={isCopied ? "success" : "secondary"}
-			startContent={isCopied ? <FaClipboardCheck className={classNames?.icon} /> : <FaClipboard className={classNames?.icon} />}
+			color={"secondary"}
+			startContent={isCopied ? <FiCheck className={twMerge("text-success", classNames?.icon)} /> : <FiCopy className={twMerge(classNames?.icon)} />}
 			size="sm"
 			onPress={handleCopy}
 			className={twMerge(shrinkOnMobile && "px-0 min-w-0 aspect-square lg:aspect-auto lg:px-3", classNames?.button, className)}
