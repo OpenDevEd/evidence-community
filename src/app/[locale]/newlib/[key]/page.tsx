@@ -282,8 +282,7 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 
 // make sure dates are formatted as such
 
-function formatDate(value: string) {
-	const formatter = useFormatter();
+function formatDate(value: string, formatter: ReturnType<typeof useFormatter>) {
 	if (!value) return false;
 	if (isNaN(new Date(value).getTime())) {
 		return value;
@@ -301,9 +300,9 @@ function formatDate(value: string) {
 	return <p>{returnedDate}</p>;
 }
 
-function formatValue(key: keyof Item, value: any) {
+function formatValue(key: keyof Item, value: any, formatter: ReturnType<typeof useFormatter>) {
 	if (key.toLowerCase().includes("date") || ["createdAt", "updatedAt"].includes(key)) {
-		return formatDate(value);
+		return formatDate(value, formatter);
 	}
 
 	return value;
@@ -311,9 +310,11 @@ function formatValue(key: keyof Item, value: any) {
 
 function ItemDetailsRow({ detail }: { detail: { label: string; value: any } }) {
 	const t = useTranslations("article");
+	const formatter = useFormatter();
 	const formattedValue = formatValue(
 		detail.label as keyof Item,
-		detail.value
+		detail.value,
+		formatter
 	);
 
 	return (
