@@ -555,9 +555,11 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 				The following attachments are available for this publication.
 			</p>
 			<div className="flex flex-col gap-4">
-				{item?.attachmentsData?.map((attachment) => (
-					<Attachment key={attachment.id} data={attachment} />
-				))}
+				{item?.attachmentsData
+					?.filter((attachment) => attachment.PDFCoverPageImage)
+					.map((attachment) => (
+						<Attachment key={attachment.id} data={attachment} />
+					))}
 			</div>
 		</ItemPropertyRowWrapper>
 	);
