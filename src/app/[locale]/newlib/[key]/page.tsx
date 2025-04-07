@@ -607,8 +607,13 @@ export async function ItemPage({ data }: { data: ItemGetResponse }) {
 				</div>
 				<div className="grid grid-cols-12 gap-8">
 					<div className="col-span-9 flex flex-col gap-12">
-						<ItemAbstract item={item} />
-						<Divider />
+						{item?.abstractNote &&
+							item?.abstractNote.length > 0 && (
+								<>
+									<ItemAbstract item={item} />
+									<Divider />
+								</>
+							)}
 						<ItemCitation item={item} />
 						<ItemCollections item={item} />
 						<ItemCountry item={item} />
