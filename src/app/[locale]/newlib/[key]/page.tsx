@@ -52,6 +52,24 @@ function ItemHeaderInstitution({ item }: { item: Item | undefined }) {
 	);
 }
 
+interface ItemRowProps {
+	icon: React.ReactNode;
+	title: string;
+	subtitle?: React.ReactNode;
+}
+
+function ItemRow({ icon, title, subtitle }: ItemRowProps) {
+	return (
+		<div className="flex items-center gap-3 px-4">
+			{icon}
+			<div className="flex flex-col">
+				<div className="text-base font-medium">{title}</div>
+				{subtitle}
+			</div>
+		</div>
+	);
+}
+
 function ItemHeader({ item }: { item: Item | undefined }) {
 	const tItemType = useTranslations("itemType");
 	const url = process.env.NEXT_PUBLIC_BASE_URL + "/newlib/" + item?.key;
