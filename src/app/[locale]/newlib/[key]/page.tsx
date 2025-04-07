@@ -22,7 +22,9 @@ import Attachment from "@/components/features/items/Attachment";
 import VectorRelations from "@/components/features/newlib/VectorRelations";
 import { getExtraValues } from "@/lib/utils";
 import Relations from "@/components/features/newlib/Relations";
-import ItemRow from "@/components/features/newlib/ItemRow";
+import { DownloadButton } from "@/components/features/newlib/DownloadModal";
+import AiWrapper from "@/components/features/newlib/AiWrapper";
+import { SiZotero } from "react-icons/si";
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -72,20 +74,21 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 
 function ItemHeader({ item }: { item: Item | undefined }) {
 	const tItemType = useTranslations("itemType");
-	const url = process.env.NEXT_PUBLIC_BASE_URL + "/newlib/" + item?.key;
+	const url = process.env.BASE_URL + "/newlib/" + item?.key;
 
 	return (
 		<div className="w-full flex items-center gap-4 flex-wrap">
 			<Button
 				variant="transparent"
 				size="sm"
+				className="rounded-2xl"
 				startContent={<IoChevronBack />}
 			>
 				Back
 			</Button>
-			<div className="text-black/60 dark:text-white/60">/</div>
+			{/* <div className="text-black/60 dark:text-white/60">/</div> */}
 			<ItemHeaderInstitution item={item} />
-			<div className="flex items-center gap-2 flex-wrap">
+			<div className="flex items-center gap-4 flex-wrap">
 				<HeaderSection>
 					<FaCalendar className="size-4" />
 					{item?.year}
@@ -100,21 +103,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 				</HeaderSection>
 			</div>
 
-			<div className="ml-auto flex items-center gap-2">
-				{/* <Button size="sm" startContent={<SiZotero />}>
-					Open in Zotero
-				</Button>
-				<Button size="sm" startContent={<SiZotero />}>
-					View on Zotero.org
-				</Button> */}
-				<Button
-					size="sm"
-					isIconOnly
-					startContent={<IoDownloadOutline />}
-				></Button>
-				<CopyButton textToCopy={url}>
-					<Button isIconOnly size="sm"></Button>
-				</CopyButton>
+			<div className="ml-auto flex flex-row-reverse items-center gap-2 flex-wrap">
 				{item?.url && (
 					<a href={item.url} target="_blank">
 						<Button
@@ -126,6 +115,22 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 						</Button>
 					</a>
 				)}
+				<CopyButton textToCopy={url}>
+					<Button isIconOnly size="sm"></Button>
+				</CopyButton>
+				<DownloadButton
+					size="sm"
+					fileName={item?.key || ""}
+					isIconOnly
+					itemData={item}
+					startContent={<IoDownloadOutline />}
+				/>
+				<Button size="sm" startContent={<SiZotero />}>
+					View on Zotero.org
+				</Button>
+				<Button size="sm" startContent={<SiZotero />}>
+					Open in Zotero
+				</Button>
 			</div>
 		</div>
 	);
@@ -230,7 +235,7 @@ function ItemAuthor({ author }: { author: Author }) {
 				<Avatar
 					name={formatAuthor(author).charAt(0)}
 					size="sm"
-					className="text-lg text-accent bg-accent/10 brightness-150"
+					className="text-lg text-accent bg-accent/10 brightness-150 shrink-0"
 				/>
 			}
 			title={formatAuthor(author)}
@@ -255,8 +260,9 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 function ItemInstitution({ institution }: { institution: string }) {
 	return (
 		<ItemRow
+			key={institution}
 			icon={
-				<div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg text-accent bg-accent/10 brightness-150">
+				<div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg text-accent bg-accent/10 brightness-150 shrink-0">
 					<HiAcademicCap />
 				</div>
 			}
@@ -271,22 +277,12 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 
 	return (
 		<SidebarCard title="Institutions" count={institutions.length}>
-			{institutions?.map((institution: string, index: number) => (
-				<ItemInstitution key={index} institution={institution} />
+			{Array.from(new Set(institutions)).map((institution: string) => (
+				<ItemInstitution key={institution} institution={institution} />
 			))}
 		</SidebarCard>
 	);
 }
-
-// to implement:
-//URL
-//DOI
-//country
-//relations
-//createdAt
-//updatedAt
-
-// make sure dates are formatted as such
 
 function formatDate(value: string, formatter: ReturnType<typeof useFormatter>) {
 	if (!value) return false;
@@ -619,6 +615,7 @@ export async function ItemPage({ data }: { data: ItemGetResponse }) {
 	return (
 		<PageContainer>
 			<div className="flex flex-col gap-6 lg:gap-14">
+			<AiWrapper data={data} />
 				<div className="flex flex-col gap-4">
 					<ItemHeader item={item} />
 					<ItemTitle item={item} />
