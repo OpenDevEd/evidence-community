@@ -61,7 +61,7 @@ export default function Relations({ value }: { value: RelationsType }) {
 	};
 	return (
 		<div>
-			<ul className="flex flex-col gap-4">
+			<ul className="flex flex-col md:grid grid-cols-2 gap-4">
 				<AnimatePresence mode="popLayout">
 					{Object.entries(relationsObject).map(
 						([key, value], index) => {
