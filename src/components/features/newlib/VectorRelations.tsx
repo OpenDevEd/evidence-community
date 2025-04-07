@@ -29,8 +29,10 @@ export default function VectorRelations({ item }: { item: Item | undefined }) {
 		}
 	);
 
+	if (!isRelatedItemsEnabled) return null;
+
 	return (
-		<div className="grid grid-cols-2 gap-4">
+		<div id="vector-relations" className="grid grid-cols-2 gap-4">
 			{embeddings?.hits.map((hit: any) => (
 				<Resource
 					key={hit.id}

@@ -560,9 +560,13 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 
 function ItemVectorRelations({ item }: { item: Item | undefined }) {
 	return (
-		<ItemPropertyRowWrapper title="Recommended Resources">
+		<ItemPropertyRowWrapper
+			className="[&:not(:has(#vector-relations))]:hidden"
+			title="Recommended Resources"
+		>
 			<p className="text-black/60 dark:text-white/60">
-				Based on the content of this publication, we recommend the following resources.
+				Based on the content of this publication, we recommend the
+				following resources.
 			</p>
 			<VectorRelations item={item} />
 		</ItemPropertyRowWrapper>
