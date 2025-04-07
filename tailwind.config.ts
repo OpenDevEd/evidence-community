@@ -197,6 +197,15 @@ const config: Config = {
   },
   darkMode: "class",
   plugins: [
+    function ({ addUtilities }: { addUtilities: (utilities: Record<string, any>) => void }) {
+      addUtilities({
+        '.text-wrap-anywhere': {
+          whiteSpace: 'normal',
+          overflowWrap: 'anywhere',
+          wordBreak: 'break-word',
+        }
+      });
+    },
     require('@tailwindcss/container-queries'),
     require('@tailwindcss/typography'),
     nextui({

@@ -171,7 +171,7 @@ function SidebarCard({
 					wordBreak: 'break-word',
 				}}
 				className={twMerge(
-					"flex flex-col gap-4 max-h-96 overflow-y-auto pb-4 overflow-x-hidden",
+					"flex flex-col gap-4 max-h-96 overflow-y-auto pb-4 overflow-x-hidden text-wrap-anywhere",
 					classNames?.content
 				)}
 			>
@@ -483,7 +483,7 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 		>
 			<p
 				dangerouslySetInnerHTML={{ __html: item?.citation || "" }}
-				className="text-base text-black/60 dark:text-white/60"
+				className="text-base text-black/60 dark:text-white/60 text-wrap-anywhere"
 			/>
 		</ItemPropertyRowWrapper>
 	);
