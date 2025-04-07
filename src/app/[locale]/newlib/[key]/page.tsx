@@ -425,13 +425,15 @@ function ItemPropertyRowWrapper({
 	children,
 	title,
 	copyText,
+	className,
 }: {
 	children: React.ReactNode;
 	title: string;
 	copyText?: string;
+	className?: string;
 }) {
 	return (
-		<div className="flex flex-col gap-4">
+		<div className={twMerge("flex flex-col gap-4", className)}>
 			<div className="flex items-center justify-between">
 				<h3 className="text-xl font-medium">{title}</h3>
 				{copyText && <CopyButton textToCopy={copyText} />}
@@ -499,6 +501,8 @@ function ItemCollections({ item }: { item: Item | undefined }) {
 		acc[title].push(collection);
 		return acc;
 	}, {} as Record<string, Collection[]>);
+
+	if (!Object.keys(groupedCollections).length) return null;
 
 	return (
 		<ItemPropertyRowWrapper title="Topics & Collections">
