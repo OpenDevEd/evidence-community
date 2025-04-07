@@ -25,7 +25,7 @@ import { SiZotero } from "react-icons/si";
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
 	const relations = item.relations as RelationsType;
-	return relations.cited_by;
+	return relations?.cited_by || 0;
 }
 
 function formatInstitutions(institutions: string[] | undefined) {
