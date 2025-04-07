@@ -581,10 +581,14 @@ function ItemVectorRelations({ item }: { item: Item | undefined }) {
 }
 
 function ItemRelations({ item }: { item: Item | undefined }) {
+	const relations = item?.relations as RelationsType;
+	if (!relations) return null;
+
 	return (
 		<ItemPropertyRowWrapper title="Related Resources">
 			<p className="text-black/60 dark:text-white/60">
-				The following resources are related to this publication by citation.
+				The following resources are related to this publication by
+				citation.
 			</p>
 			<Relations value={item?.relations as RelationsType} />
 		</ItemPropertyRowWrapper>
