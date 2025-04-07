@@ -1,5 +1,4 @@
 import { Item, ItemGetResponse, Author } from "@/app/api/item/types";
-import { getCurrentItem } from "@/app/[locale]/lib/[key]/page";
 import PageContainer from "@/components/layout/PageContainer";
 import { Card } from "@/components/nextui/Card";
 import { FaCalendar } from "react-icons/fa";
@@ -25,10 +24,18 @@ import VectorRelations from "@/components/features/newlib/VectorRelations";
 import { getExtraValues } from "@/lib/utils";
 import Relations from "@/components/features/newlib/Relations";
 import { DownloadButton } from "@/components/features/newlib/DownloadModal";
-import { SiZotero } from "react-icons/si";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
+import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
+import { getCachedItemSmall } from "@/app/api/cache";
+
+async function getCurrentItem(key: string) {
+    const data = await getCachedItemSmall(key).catch(() => ({ item: undefined }));
+    if (data?.item && !data?.item?.citation) {
+        return await getCachedItemSmall(key, true).catch(() => ({ item: undefined }));
+    }
+    return data;
+}
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -130,12 +137,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 					itemData={item}
 					startContent={<IoDownloadOutline />}
 				/>
-				<Button size="sm" startContent={<SiZotero />}>
-					View on Zotero.org
-				</Button>
-				<Button size="sm" startContent={<SiZotero />}>
-					Open in Zotero
-				</Button>
+				<ZoteroDropdown item={item} />
 			</div>
 		</div>
 	);
@@ -617,7 +619,7 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 	);
 }
 
-export async function ItemPage({ data }: { data: ItemGetResponse }) {
+async function ItemPage({ data }: { data: ItemGetResponse }) {
 	const item = data?.item;
 
 	return (
