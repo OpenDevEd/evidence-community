@@ -178,11 +178,11 @@ const CountryCard = ({ country, isHovered, onHover, onLeave }: {
                 <div className="relative flex items-center gap-4 z-[5]">
                     <FlagImage country={country} isLight={isLight} isHovered={isHovered} />
 
-                    <div className="flex-1 relative z-[6]">
-                        <div className="flex items-center gap-2 mb-1">
+                    <div className="flex-1 min-w-0 relative z-[6] pr-6">
+                        <div className="flex items-center gap-2 mb-1 w-full">
                             <motion.span
                                 className={twMerge(
-                                    "text-sm font-mono font-bold",
+                                    "text-sm font-mono font-bold shrink-0",
                                     isLight ? "text-accent/90" : "text-accent"
                                 )}
                                 animate={{
@@ -193,7 +193,7 @@ const CountryCard = ({ country, isHovered, onHover, onLeave }: {
                             </motion.span>
                             <motion.h3
                                 className={twMerge(
-                                    "text-lg font-semibold truncate",
+                                    "text-lg font-semibold truncate flex-1",
                                     isLight && "text-black/90"
                                 )}
                                 animate={{
