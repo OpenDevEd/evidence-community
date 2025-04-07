@@ -7,7 +7,9 @@ import { RelationsType } from "@/types/item";
 import {
 	IoBook,
 	IoDocumentText,
-	IoOpenOutline, IoDownloadOutline, IoChevronBack
+	IoOpenOutline,
+	IoDownloadOutline,
+	IoChevronBack,
 } from "react-icons/io5";
 import { Avatar } from "@nextui-org/avatar";
 import { HiAcademicCap } from "react-icons/hi2";
@@ -23,8 +25,10 @@ import VectorRelations from "@/components/features/newlib/VectorRelations";
 import { getExtraValues } from "@/lib/utils";
 import Relations from "@/components/features/newlib/Relations";
 import { DownloadButton } from "@/components/features/newlib/DownloadModal";
-import AiWrapper from "@/components/features/newlib/AiWrapper";
 import { SiZotero } from "react-icons/si";
+import AiWrapper from "@/components/features/newlib/AiWrapper";
+import { notFound } from "next/navigation";
+import { Suspense } from "react";
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -47,6 +51,7 @@ function HeaderSection({ children }: { children: React.ReactNode }) {
 }
 
 function ItemHeaderInstitution({ item }: { item: Item | undefined }) {
+	if (!item?.institution?.length) return null;
 	return (
 		<Card className="p-1 px-3 text-sm bg-default-100">
 			{formatInstitutions(item?.institution as string[])}
@@ -147,7 +152,7 @@ function ItemTitle({ item }: { item: Item | undefined }) {
 
 function formatAuthor(author: Author) {
 	if (author.name) return author.name;
-	return `${author.lastName}, ${author.firstName}`;
+	return [author.lastName, author.firstName].filter(Boolean).join(", ");
 }
 
 interface SidebarCardProps {
@@ -171,7 +176,10 @@ function SidebarCard({
 	color = "card",
 }: SidebarCardProps) {
 	return (
-		<Card color={color} className={twMerge("p-4 px-0 pb-0", classNames?.card)}>
+		<Card
+			color={color}
+			className={twMerge("p-4 px-0 pb-0", classNames?.card)}
+		>
 			<div
 				className={twMerge(
 					"flex justify-between items-center gap-2 mb-4 px-4",
@@ -209,18 +217,12 @@ function SidebarCard({
 	);
 }
 
-
 function ItemAuthor({ author }: { author: Author }) {
 	const t = useTranslations("creatorType");
 	const creatorTypeLabel = t(author.creatorType);
 
 	const subtitle = (
 		<>
-			{author.institution && (
-				<div className="text-xs text-black/60 dark:text-white/60">
-					{author.institution}
-				</div>
-			)}
 			{creatorTypeLabel && (
 				<div className="text-xs text-black/60 dark:text-white/60">
 					{creatorTypeLabel}
@@ -299,7 +301,7 @@ function formatDate(value: string, formatter: ReturnType<typeof useFormatter>) {
 		day: "numeric",
 	});
 
-	return <p>{returnedDate}</p>;
+	return returnedDate;
 }
 
 function formatValue(
@@ -383,10 +385,12 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 	const ExtraValues = getExtraValues(item.extra || "");
 	item.DOI = item.DOI || ExtraValues.get("DOI") || null;
 
-	const details = Object.entries(item).map(([key, value]) => ({
-		label: key,
-		value: String(value),
-	}));
+	const details = Object.entries(item)
+		.filter(([key, value]) => value !== null)
+		.map(([key, value]) => ({
+			label: key,
+			value: String(value),
+		}));
 
 	return (
 		<SidebarCard title="Publication Details">
@@ -563,17 +567,21 @@ function ItemCountry({ item }: { item: Item | undefined }) {
 }
 
 function ItemAttachments({ item }: { item: Item | undefined }) {
+	const validAttachments = item?.attachmentsData?.filter(
+		(attachment) => attachment.PDFCoverPageImage
+	);
+
+	if (!validAttachments?.length) return null;
+
 	return (
 		<ItemPropertyRowWrapper title="Attachments">
 			<p className="text-black/60 dark:text-white/60">
 				The following attachments are available for this publication.
 			</p>
 			<div className="flex flex-col gap-4">
-				{item?.attachmentsData
-					?.filter((attachment) => attachment.PDFCoverPageImage)
-					.map((attachment) => (
-						<Attachment key={attachment.id} data={attachment} />
-					))}
+				{validAttachments.map((attachment) => (
+					<Attachment key={attachment.id} data={attachment} />
+				))}
 			</div>
 		</ItemPropertyRowWrapper>
 	);
@@ -615,7 +623,7 @@ export async function ItemPage({ data }: { data: ItemGetResponse }) {
 	return (
 		<PageContainer>
 			<div className="flex flex-col gap-6 lg:gap-14">
-			<AiWrapper data={data} />
+				<AiWrapper data={data} />
 				<div className="flex flex-col gap-4">
 					<ItemHeader item={item} />
 					<ItemTitle item={item} />
@@ -631,8 +639,8 @@ export async function ItemPage({ data }: { data: ItemGetResponse }) {
 							)}
 						<ItemCitation item={item} />
 						<ItemCollections item={item} />
-						<ItemCountry item={item} />
 						<ItemAttachments item={item} />
+						<ItemCountry item={item} />
 						<ItemVectorRelations item={item} />
 						<ItemRelations item={item} />
 					</div>
@@ -657,5 +665,9 @@ export default async function NewLibPage({
 }) {
 	const { key } = await params;
 	const data = await getCurrentItem(key);
+
+	if (!data) {
+		return notFound();
+	}
 	return <ItemPage data={data} />;
 }

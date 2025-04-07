@@ -4,11 +4,11 @@ import { ItemGetResponse } from "@/app/api/item/types";
 import { BsStars } from "react-icons/bs";
 import { Button } from "@/components/nextui/Button";
 import {
-    Dropdown,
-    DropdownItem,
-    DropdownTrigger,
-    DropdownMenu,
-    useDisclosure
+	Dropdown,
+	DropdownItem,
+	DropdownTrigger,
+	DropdownMenu,
+	useDisclosure,
 } from "@nextui-org/react";
 import GenerativeModal from "@/components/features/modals/GenerativeModal";
 import ChatModal from "@/components/features/modals/ChatModal";
@@ -33,7 +33,15 @@ function randomUUID() {
 	);
 }
 
-function AiButton({ data, isEmbedded, setIsEmbedded }: { data: ItemGetResponse | undefined, isEmbedded: boolean | null, setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>> }) {
+function AiButton({
+	data,
+	isEmbedded,
+	setIsEmbedded,
+}: {
+	data: ItemGetResponse | undefined;
+	isEmbedded: boolean | null;
+	setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>>;
+}) {
 	const { selectedModel, setSelectedModel } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
@@ -197,13 +205,15 @@ function AiButton({ data, isEmbedded, setIsEmbedded }: { data: ItemGetResponse |
 	);
 }
 
-export default function AiWrapper({ data }: { data: ItemGetResponse | undefined }) {
-    const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
+export default function AiWrapper({
+	data,
+}: {
+	data: ItemGetResponse | undefined;
+}) {
+	const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
 
-    const { data: embedded } = useSWR(
-		data?.item
-			? `/item/${data?.item?.key}/embedded`
-			: null,
+	const { data: embedded } = useSWR(
+		data?.item ? `/item/${data?.item?.key}/embedded` : null,
 		fetcher,
 		{
 			onSuccess: (data) => {
@@ -212,10 +222,16 @@ export default function AiWrapper({ data }: { data: ItemGetResponse | undefined 
 		}
 	);
 
-    const aiAllowed = isAIAllowed(data?.item);
-    const isAIEnabled = useFeatureFlagEnabled("ai-features");
+	const aiAllowed = isAIAllowed(data?.item);
+	const isAIEnabled = useFeatureFlagEnabled("ai-features");
 
-    if (!isAIEnabled || !aiAllowed) return null;
+	if (!isAIEnabled || !aiAllowed) return null;
 
-    return <AiButton data={data} isEmbedded={isEmbedded} setIsEmbedded={setIsEmbedded} />;
+	return (
+		<AiButton
+			data={data}
+			isEmbedded={isEmbedded}
+			setIsEmbedded={setIsEmbedded}
+		/>
+	);
 }
