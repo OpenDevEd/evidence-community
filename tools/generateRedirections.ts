@@ -31,6 +31,7 @@ function getKey(url: string) {
 
     for (const item of allItems) {
         const relations = (item.relations || {}) as RelationsType;
+        if (!relations) continue;
         const value = relations['dc:replaces'];
         if (value) {
             console.log(`got ${value}`);
