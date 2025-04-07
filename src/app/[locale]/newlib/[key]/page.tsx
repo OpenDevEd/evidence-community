@@ -362,7 +362,8 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"apc_list",
 		"apc_paid",
 		"attachmentsData",
-		"fullTextPDFs"
+		"fullTextPDFs",
+		"tags",
 	];
 
 	const t = useTranslations("article");
