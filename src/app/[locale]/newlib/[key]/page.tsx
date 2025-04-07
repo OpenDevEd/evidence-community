@@ -4,23 +4,25 @@ import PageContainer from "@/components/layout/PageContainer";
 import { Card } from "@/components/nextui/Card";
 import { FaCalendar } from "react-icons/fa";
 import { RelationsType } from "@/types/item";
-import { IoBook, IoDocumentText, IoOpenOutline, IoGlobeOutline, IoDownloadOutline, IoArrowBackOutline, IoChevronBack } from "react-icons/io5";
+import {
+	IoBook,
+	IoDocumentText,
+	IoOpenOutline, IoDownloadOutline, IoChevronBack
+} from "react-icons/io5";
 import { Avatar } from "@nextui-org/avatar";
 import { HiAcademicCap } from "react-icons/hi2";
 import { useFormatter, useTranslations } from "next-intl";
-import { Divider, Link, ScrollShadow } from "@nextui-org/react";
+import { Divider } from "@nextui-org/react";
 import CopyButton from "@/components/features/newlib/CopyButton";
 import { Button } from "@/components/nextui/Button";
 import { Collection } from "@/app/api/collections/types";
 import { twMerge } from "tailwind-merge";
-import { motion, AnimatePresence } from "framer-motion";
 import { CountryDisplay } from "@/components/features/newlib/CountryDisplay";
 import Attachment from "@/components/features/items/Attachment";
 import VectorRelations from "@/components/features/newlib/VectorRelations";
-import { MdSearchOff } from "react-icons/md";
-import { fetcher } from "@/lib/utils";
+import { getExtraValues } from "@/lib/utils";
 import Relations from "@/components/features/newlib/Relations";
-import { SiZotero } from "react-icons/si";
+import ItemRow from "@/components/features/newlib/ItemRow";
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -55,26 +57,31 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 	const url = process.env.NEXT_PUBLIC_BASE_URL + "/newlib/" + item?.key;
 
 	return (
-		<div className="w-full flex items-center gap-4">
-			<Button variant="transparent" size="sm" startContent={<IoChevronBack />}>
+		<div className="w-full flex items-center gap-4 flex-wrap">
+			<Button
+				variant="transparent"
+				size="sm"
+				startContent={<IoChevronBack />}
+			>
 				Back
 			</Button>
-			<div className="text-black/60 dark:text-white/60">
-			/
-			</div>
+			<div className="text-black/60 dark:text-white/60">/</div>
 			<ItemHeaderInstitution item={item} />
-			<HeaderSection>
-				<FaCalendar className="size-4" />
-				{item?.year}
-			</HeaderSection>
-			<HeaderSection>
-				<IoBook className="size-4" />
-				{getCitationCount(item)} citations
-			</HeaderSection>
-			<HeaderSection>
-				<IoDocumentText className="size-4" />
-				{tItemType(item?.itemType)}
-			</HeaderSection>
+			<div className="flex items-center gap-2 flex-wrap">
+				<HeaderSection>
+					<FaCalendar className="size-4" />
+					{item?.year}
+				</HeaderSection>
+				<HeaderSection>
+					<IoBook className="size-4" />
+					{getCitationCount(item)} citations
+				</HeaderSection>
+				<HeaderSection>
+					<IoDocumentText className="size-4" />
+					{tItemType(item?.itemType)}
+				</HeaderSection>
+			</div>
+
 			<div className="ml-auto flex items-center gap-2">
 				{/* <Button size="sm" startContent={<SiZotero />}>
 					Open in Zotero
@@ -82,8 +89,11 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 				<Button size="sm" startContent={<SiZotero />}>
 					View on Zotero.org
 				</Button> */}
-				<Button size="sm" isIconOnly startContent={<IoDownloadOutline />}>
-				</Button>
+				<Button
+					size="sm"
+					isIconOnly
+					startContent={<IoDownloadOutline />}
+				></Button>
 				<CopyButton textToCopy={url}>
 					<Button isIconOnly size="sm"></Button>
 				</CopyButton>
@@ -93,10 +103,10 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 							size="sm"
 							color="accent"
 							startContent={<IoOpenOutline />}
-					>
-						View Original
-					</Button>
-				</a>
+						>
+							View Original
+						</Button>
+					</a>
 				)}
 			</div>
 		</div>
@@ -138,10 +148,10 @@ function SidebarCard({
 	color = "card",
 }: SidebarCardProps) {
 	return (
-		<Card color={color} className={twMerge("p-4 pb-0", classNames?.card)}>
+		<Card color={color} className={twMerge("p-4 px-0 pb-0", classNames?.card)}>
 			<div
 				className={twMerge(
-					"flex justify-between items-center gap-2 mb-4",
+					"flex justify-between items-center gap-2 mb-4 px-4",
 					classNames?.titleWrapper
 				)}
 			>
@@ -165,11 +175,6 @@ function SidebarCard({
 				)}
 			</div>
 			<div
-				style={{
-					whiteSpace: 'normal',
-					overflowWrap: 'anywhere',
-					wordBreak: 'break-word',
-				}}
 				className={twMerge(
 					"flex flex-col gap-4 max-h-96 overflow-y-auto pb-4 overflow-x-hidden text-wrap-anywhere",
 					classNames?.content
@@ -181,23 +186,6 @@ function SidebarCard({
 	);
 }
 
-interface ItemRowProps {
-	icon: React.ReactNode;
-	title: string;
-	subtitle?: React.ReactNode;
-}
-
-function ItemRow({ icon, title, subtitle }: ItemRowProps) {
-	return (
-		<div className="flex items-center gap-3">
-			{icon}
-			<div className="flex flex-col">
-				<div className="text-base font-medium">{title}</div>
-				{subtitle}
-			</div>
-		</div>
-	);
-}
 
 function ItemAuthor({ author }: { author: Author }) {
 	const t = useTranslations("creatorType");
@@ -300,8 +288,15 @@ function formatDate(value: string, formatter: ReturnType<typeof useFormatter>) {
 	return <p>{returnedDate}</p>;
 }
 
-function formatValue(key: keyof Item, value: any, formatter: ReturnType<typeof useFormatter>) {
-	if (key.toLowerCase().includes("date") || ["createdAt", "updatedAt"].includes(key)) {
+function formatValue(
+	key: keyof Item,
+	value: any,
+	formatter: ReturnType<typeof useFormatter>
+) {
+	if (
+		key.toLowerCase().includes("date") ||
+		["createdAt", "updatedAt"].includes(key)
+	) {
 		return formatDate(value, formatter);
 	}
 
@@ -318,7 +313,7 @@ function ItemDetailsRow({ detail }: { detail: { label: string; value: any } }) {
 	);
 
 	return (
-		<div className="flex justify-between gap-2">
+		<div className="flex justify-between gap-2 px-4">
 			<div key={detail.label} className="text-base font-medium flex-1">
 				<div className="text-sm text-black/60 dark:text-white/60">
 					{t(detail.label)}
@@ -364,10 +359,15 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"attachmentsData",
 		"fullTextPDFs",
 		"tags",
+		"extra",
+		"callNumber",
 	];
 
 	const t = useTranslations("article");
 	if (!item) return null;
+
+	const ExtraValues = getExtraValues(item.extra || "");
+	item.DOI = item.DOI || ExtraValues.get("DOI") || null;
 
 	const details = Object.entries(item).map(([key, value]) => ({
 		label: key,
@@ -600,13 +600,13 @@ export async function ItemPage({ data }: { data: ItemGetResponse }) {
 
 	return (
 		<PageContainer>
-			<div className="flex flex-col gap-14">
+			<div className="flex flex-col gap-6 lg:gap-14">
 				<div className="flex flex-col gap-4">
 					<ItemHeader item={item} />
 					<ItemTitle item={item} />
 				</div>
-				<div className="grid grid-cols-12 gap-8">
-					<div className="col-span-9 flex flex-col gap-12">
+				<div className="flex flex-col lg:grid grid-cols-12 gap-8">
+					<div className="col-span-8 xl:col-span-9 flex flex-col gap-12">
 						{item?.abstractNote &&
 							item?.abstractNote.length > 0 && (
 								<>
@@ -621,12 +621,12 @@ export async function ItemPage({ data }: { data: ItemGetResponse }) {
 						<ItemVectorRelations item={item} />
 						<ItemRelations item={item} />
 					</div>
-					<div className="col-span-3">
+					<div className="col-span-4 xl:col-span-3">
 						<div className="flex flex-col gap-8">
 							<ItemAuthors item={item} />
 							<ItemInstitutions item={item} />
 							<ItemDetails item={item} />
-							<ItemTechnical item={item} />
+							{/* <ItemTechnical item={item} /> */}
 						</div>
 					</div>
 				</div>
