@@ -437,6 +437,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 }
 
 function ItemTechnical({ item }: { item: Item | undefined }) {
+	if (!item || item.groupExternalId !== 1) return null;
 	const relations = item?.relations as RelationsType;
 
 	const keyValues = {
@@ -446,9 +447,6 @@ function ItemTechnical({ item }: { item: Item | undefined }) {
 
 	return (
 		<SidebarCard
-			// classNames={{
-			// 	card: "pt-0 -mt-2 opacity-50 rounded-none shadow-none",
-			// }}
 			title="Technical Details"
 			color="card"
 		>
