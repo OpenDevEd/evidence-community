@@ -87,7 +87,7 @@ export default function Attachment({ data }: { data: Item }) {
 			<Link
 				href={downloadURL}
 				target="_blank"
-				className="dark:text-current text-current break-all text-lg"
+				className="dark:text-current text-current text-wrap-anywhere text-lg"
 			>
 				{data.filename}
 			</Link>
