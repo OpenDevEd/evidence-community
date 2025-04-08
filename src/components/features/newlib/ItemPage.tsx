@@ -705,8 +705,8 @@ function ItemCountry({ item }: { item: Item | undefined }) {
 }
 
 function ItemAttachments({ item }: { item: Item | undefined }) {
-	const validAttachments: Item["attachmentsData"] = item?.attachmentsData?.filter(
-		(attachment) => true || attachment.PDFCoverPageImage
+	const validAttachments = item?.attachmentsData?.filter(
+		(attachment) => attachment.PDFCoverPageImage
 	);
 
 	if (!validAttachments?.length) return null;
@@ -717,16 +717,9 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 				The following attachments are available for this publication.
 			</p>
 			<div className="flex flex-col gap-4">
-				{validAttachments.map((attachment) => {
-					const attachmentData = attachment;
-					return ( 
-						<>
-							{attachmentData.title}
-							{attachmentData.url}
-							<Attachment key={attachment.id} data={attachmentData} />
-						</>
-					);
-				})}
+				{validAttachments.map((attachment) => (
+					<Attachment key={attachment.id} data={attachment} />
+				))}
 			</div>
 		</ItemPropertyRowWrapper>
 	);
