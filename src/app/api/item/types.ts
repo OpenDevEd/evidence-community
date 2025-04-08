@@ -22,4 +22,5 @@ export type Author = {
 	institution: string;
 	name: string;
 	creatorType: string;
+	institutions?: any;
 };
