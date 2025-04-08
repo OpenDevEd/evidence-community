@@ -8,6 +8,8 @@ import { Item } from "@/app/api/item/types";
 import { useTheme } from "next-themes";
 import { twMerge } from "tailwind-merge";
 import { COUNTRIES } from "@/constants/misc";
+import LinkWithParams from "../LinkWithParams";
+import { getCountryAncestry } from "@/lib/utils";
 
 interface CountryDisplayProps {
     countries: string[];
@@ -157,7 +159,7 @@ const CountryCard = ({ country, isHovered, onHover, onLeave }: {
             whileHover={{ scale: 1.05 }}
             onHoverStart={onHover}
             onHoverEnd={onLeave}
-            className="relative"
+            className="relative w-full"
         >
             <motion.div
                 className={twMerge(
@@ -249,15 +251,23 @@ export function CountryDisplay({ countries, onCountryClick }: CountryDisplayProp
             className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6"
         >
             <AnimatePresence>
-                {countries.map((country) => (
-                    <CountryCard
-                        key={country}
-                        country={country}
-                        isHovered={hoveredCountry === country}
-                        onHover={() => setHoveredCountry(country)}
-                        onLeave={() => setHoveredCountry(null)}
-                    />
-                ))}
+                {countries.map((country) => {
+                    const ancestry = getCountryAncestry(country);
+                    return (
+                        <LinkWithParams
+                            href={`/lib`}
+                            params={{ country: ancestry }}
+                            key={country}
+                    >
+                        <CountryCard
+                            country={country}
+                            isHovered={hoveredCountry === country}
+                            onHover={() => setHoveredCountry(country)}
+                            onLeave={() => setHoveredCountry(null)}
+                        />
+                        </LinkWithParams>
+                    );
+                })}
             </AnimatePresence>
         </motion.div>
     );
