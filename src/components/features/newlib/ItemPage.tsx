@@ -32,6 +32,7 @@ import LinkWithParams from "../LinkWithParams";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { Tooltip } from "@nextui-org/react";
 import { motion } from "framer-motion";
+import { useRouter } from "next/navigation";
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -81,6 +82,7 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 }
 
 function ItemHeader({ item }: { item: Item | undefined }) {
+	const router = useRouter();
 	const tItemType = useTranslations("itemType");
 	const url =  process.env.BASE_URL;
 
@@ -97,6 +99,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 				variant="transparent"
 				size="sm"
 				className="rounded-2xl"
+				onPressStart={() => router.back()}
 				startContent={<IoChevronBack />}
 			>
 				Back
