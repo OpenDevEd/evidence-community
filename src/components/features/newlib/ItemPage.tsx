@@ -403,9 +403,6 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 	const t = useTranslations("article");
 	if (!item) return null;
 
-	const ExtraValues = getExtraValues(item.extra || "");
-	item.DOI = item.DOI || ExtraValues.get("DOI") || null;
-
 	const details = Object.entries(item)
 		.filter(([key, value]) => value !== null)
 		.map(([key, value]) => ({
@@ -430,28 +427,28 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 }
 
 function ItemTechnical({ item }: { item: Item | undefined }) {
-	const technicalFields: (keyof Item)[] = [
-		"id",
-		"key",
-		"createdAt",
-		"updatedAt",
-	];
+	const relations = item?.relations as RelationsType;
+
+	const keyValues = {
+		"citedBy": relations?.cited_by || 0,
+		"cites": relations?.referenced_works?.length || 0,
+	}
 
 	return (
 		<SidebarCard
-			classNames={{
-				card: "pt-0 -mt-2 opacity-50 rounded-none shadow-none",
-			}}
+			// classNames={{
+			// 	card: "pt-0 -mt-2 opacity-50 rounded-none shadow-none",
+			// }}
 			title="Technical Details"
-			color="transparent"
+			color="card"
 		>
 			<div className="flex flex-col gap-2">
-				{technicalFields.map((field) => (
+				{Object.entries(keyValues).map(([key, value]) => (
 					<ItemDetailsRow
-						key={field}
+						key={key}
 						detail={{
-							label: field,
-							value: item?.[field as keyof Item] as string,
+							label: key,
+							value: value,
 						}}
 					/>
 				))}
@@ -532,7 +529,6 @@ function ItemCollection({ collection, item }: { collection: Collection, item: It
 	const ancestry = collection.ancestry || [];
 	const collectionsData = item?.collectionsData as Collection[];
 
-	// Get the full hierarchy names by matching ancestry keys with collectionsData
 	const hierarchyNames = ancestry.map(ancestorKey => {
 		const ancestorCollection = collectionsData.find(c => c.key === ancestorKey);
 		return {
@@ -541,7 +537,6 @@ function ItemCollection({ collection, item }: { collection: Collection, item: It
 		};
 	});
 
-	// Add current collection to hierarchy
 	const fullHierarchy = [
 		...hierarchyNames,
 		{ name: collection.name, key: collection.key }
@@ -803,7 +798,7 @@ export default function ItemPage({ data }: { data: ItemGetResponse }) {
 							<ItemAuthors item={item} />
 							<ItemInstitutions item={item} />
 							<ItemDetails item={item} />
-							{/* <ItemTechnical item={item} /> */}
+							<ItemTechnical item={item} />
 						</div>
 					</div>
 				</div>

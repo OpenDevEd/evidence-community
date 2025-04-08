@@ -432,7 +432,9 @@
     "year": "Année",
     "datePublished": "Date de publication",
     "createdAt": "Créé le",
-    "updatedAt": "Mis à jour le"
+    "updatedAt": "Mis à jour le",
+    "citedBy": "Cité par",
+    "cites": "Cite"
   },
   "help": {
     "intro1": "L'interface de recherche est composée de trois sections : **Recherche**, **Explorer** et **Résultats**. Celles-ci sont décrites en détail ci-dessous.",

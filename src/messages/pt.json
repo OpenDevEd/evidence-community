@@ -432,7 +432,9 @@
     "year": "Ano",
     "datePublished": "Data de publicação",
     "createdAt": "Criado em",
-    "updatedAt": "Atualizado em"
+    "updatedAt": "Atualizado em",
+    "citedBy": "Citado por",
+    "cites": "Cita"
   },
   "help": {
     "intro1": "A interface de pesquisa é feita de três seções: **Pesquisar**, **Explorar** e **Resultados**. Estas são descritas em detalhes abaixo.",

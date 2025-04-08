@@ -432,7 +432,9 @@
     "year": "Year",
     "datePublished": "Publication Date",
     "createdAt": "Created At",
-    "updatedAt": "Updated At"
+    "updatedAt": "Updated At",
+    "citedBy": "Cited by",
+    "cites": "Cites"
   },
   "help": {
     "intro1": "The search interface is made of three sections: **Search**, **Explore**, and **Results**. These are described in detail below.",

@@ -433,7 +433,9 @@
     "year": "Mwaka",
     "datePublished": "Tarehe ya Kuchapishwa",
     "createdAt": "Imeundwa saa",
-    "updatedAt": "Imesasishwa saa"
+    "updatedAt": "Imesasishwa saa",
+    "citedBy": "Iliyenukuliwa na",
+    "cites": "Inanuku"
   },
   "help": {
     "intro1": "Kiolesura cha utafutaji kimeundwa na sehemu tatu: **Tafuta**, **Gundua**, na **Matokeo**. Hizi zinaelezewa kwa undani hapa chini.",

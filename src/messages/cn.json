@@ -432,7 +432,9 @@
     "year": "年",
     "datePublished": "出版日期",
     "createdAt": "创建于",
-    "updatedAt": "更新于"
+    "updatedAt": "更新于",
+    "citedBy": "被引用",
+    "cites": "引用"
   },
   "help": {
     "intro1": "搜索界面由三个部分组成：**搜索**、**探索**和**结果**。这些在下面有详细描述。",
