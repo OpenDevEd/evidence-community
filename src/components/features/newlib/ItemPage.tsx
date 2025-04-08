@@ -11,6 +11,7 @@ import {
 	IoOpenOutline,
 	IoDownloadOutline,
 	IoChevronBack,
+	IoDownload,
 } from "react-icons/io5";
 import { Avatar } from "@nextui-org/avatar";
 import { HiAcademicCap } from "react-icons/hi2";
@@ -33,6 +34,10 @@ import { serializeSearchParams } from "@/lib/searchParams";
 import { Tooltip } from "@nextui-org/react";
 import { motion } from "framer-motion";
 import { useRouter } from "next/navigation";
+import LikeButton from "../items/LikeButton";
+import { AddButton } from "../items/Resource";
+import { BiDownload } from "react-icons/bi";
+import { LuDownload } from "react-icons/lu";
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -140,8 +145,10 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 					fileName={item?.key || ""}
 					isIconOnly
 					itemData={item}
-					startContent={<IoDownloadOutline />}
+					startContent={<LuDownload />}
 				/>
+				<LikeButton itemData={item} />
+				<AddButton itemData={item} />
 				<ZoteroDropdown item={item} />
 			</div>
 		</div>
