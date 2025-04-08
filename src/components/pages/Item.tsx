@@ -47,7 +47,15 @@ function randomUUID() {
 	);
 }
 
-function AiButton({ data, isEmbedded, setIsEmbedded }: { data: ItemGetResponse | undefined, isEmbedded: boolean | null, setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>> }) {
+function AiButton({
+	data,
+	isEmbedded,
+	setIsEmbedded,
+}: {
+	data: ItemGetResponse | undefined;
+	isEmbedded: boolean | null;
+	setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>>;
+}) {
 	const { selectedModel, setSelectedModel } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
@@ -268,9 +276,7 @@ export default function Item({
 		}
 	);
 	const { data: embedded } = useSWR(
-		data?.item && !loading
-			? `/item/${data?.item?.key}/embedded`
-			: null,
+		data?.item && !loading ? `/item/${data?.item?.key}/embedded` : null,
 		fetcher,
 		{
 			onSuccess: (data) => {
@@ -335,7 +341,12 @@ export default function Item({
 									router={router}
 									loading={loading}
 									pathname={referrer}
-									value={data.item!.DOI || getExtraValues(data.item!.extra || "").get("DOI")}
+									value={
+										data.item!.DOI ||
+										getExtraValues(
+											data.item!.extra || ""
+										).get("DOI")
+									}
 								/>
 							</div>
 							{isCollectionsEnabled &&
@@ -375,11 +386,15 @@ export default function Item({
 				</div>
 			</div>
 			{isAIEnabled && data?.item && !loading && aiAllowed && (
-				<AiButton data={data} isEmbedded={isEmbedded} setIsEmbedded={setIsEmbedded} />
+				<AiButton
+					data={data}
+					isEmbedded={isEmbedded}
+					setIsEmbedded={setIsEmbedded}
+				/>
 			)}
-			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden  p-4 lg:p-10 gap-10 flex flex-col">
-				<div className="gap-8">
-					{isRelatedItemsEnabled && data?.item && (
+			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden p-4 lg:p-10 gap-10 flex flex-col empty:hidden">
+				{isRelatedItemsEnabled && data?.item && (
+					<div className="gap-8">
 						<RowContainer title={t("recommendedItems")}>
 							<Skeleton
 								isLoaded={!!embeddings}
@@ -397,10 +412,10 @@ export default function Item({
 								</ul>
 							</Skeleton>
 						</RowContainer>
-					)}
-				</div>
-				{(data?.item && data.item.relations) ? <div className="flex flex-col gap-10">
-					
+					</div>
+				)}
+				{data?.item && data.item.relations ? (
+					<div className="flex flex-col gap-10">
 						<ItemRow
 							item={data.item!}
 							key="relations"
@@ -410,8 +425,8 @@ export default function Item({
 							tooltip="Only items available in the current database are displayed. Some related resources are only available externally."
 							pathname={referrer}
 						/>
-					
-				</div> : null}
+					</div>
+				) : null}
 			</div>
 		</PageContainer>
 	);
