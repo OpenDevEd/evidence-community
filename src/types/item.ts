@@ -4,5 +4,5 @@ export type RelationsType = {
     "owl:sameAs"?: string | string[];
     "related_works"?: string | string[];
     "cited_by"?: number;
-    "referenced_works"?: number;
+    "referenced_works"?: string[];
 } | undefined;
