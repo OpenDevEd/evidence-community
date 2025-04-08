@@ -89,14 +89,14 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 function ItemHeader({ item }: { item: Item | undefined }) {
 	const router = useRouter();
 	const tItemType = useTranslations("itemType");
-	const url =  process.env.BASE_URL;
+	const url = process.env.BASE_URL;
 
 	const getUrl = () => {
 		if (typeof window !== "undefined") {
 			return window.location.href;
 		}
 		return url;
-	}
+	};
 
 	return (
 		<div className="w-full flex items-center gap-4 flex-wrap">
@@ -369,8 +369,13 @@ function transformItem(item: Item | undefined) {
 	if (!item) return null;
 	const ExtraValues = getExtraValues(item.extra || "");
 
-	item.DOI = (item.DOI || ExtraValues.get("DOI") || null);
-	item.url = item.attachmentsData?.find(attachment => attachment.title?.includes("📝View Google Doc and download alternative formats"))?.url || item.url;
+	item.DOI = item.DOI || ExtraValues.get("DOI") || null;
+	item.url =
+		item.attachmentsData?.find((attachment) =>
+			attachment.title?.includes(
+				"📝View Google Doc and download alternative formats"
+			)
+		)?.url || item.url;
 	return item;
 }
 
@@ -441,15 +446,12 @@ function ItemTechnical({ item }: { item: Item | undefined }) {
 	const relations = item?.relations as RelationsType;
 
 	const keyValues = {
-		"citedBy": relations?.cited_by || 0,
-		"cites": relations?.referenced_works?.length || 0,
-	}
+		citedBy: relations?.cited_by || 0,
+		cites: relations?.referenced_works?.length || 0,
+	};
 
 	return (
-		<SidebarCard
-			title="Technical Details"
-			color="card"
-		>
+		<SidebarCard title="Technical Details" color="card">
 			<div className="flex flex-col gap-2">
 				{Object.entries(keyValues).map(([key, value]) => (
 					<ItemDetailsRow
@@ -533,90 +535,103 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 	);
 }
 
-function ItemCollection({ collection, item }: { collection: Collection, item: Item | undefined }) {
+function ItemCollection({
+	collection,
+	item,
+}: {
+	collection: Collection;
+	item: Item | undefined;
+}) {
 	const ancestry = collection.ancestry || [];
 	const collectionsData = item?.collectionsData as Collection[];
 
-	const hierarchyNames = ancestry.map(ancestorKey => {
-		const ancestorCollection = collectionsData.find(c => c.key === ancestorKey);
+	const hierarchyNames = ancestry.map((ancestorKey) => {
+		const ancestorCollection = collectionsData.find(
+			(c) => c.key === ancestorKey
+		);
 		return {
 			name: ancestorCollection?.name || ancestorKey,
-			key: ancestorKey
+			key: ancestorKey,
 		};
 	});
 
 	const fullHierarchy = [
 		...hierarchyNames,
-		{ name: collection.name, key: collection.key }
+		{ name: collection.name, key: collection.key },
 	];
 
 	return (
 		<li key={collection.id}>
 			<Tooltip
 				content={
-					<motion.div 
+					<motion.div
 						className="px-2 py-1 min-w-[200px]"
 						initial={{ opacity: 0, scale: 0.95 }}
 						animate={{ opacity: 1, scale: 1 }}
 						transition={{
 							type: "spring",
 							stiffness: 300,
-							damping: 30
+							damping: 30,
 						}}
 					>
 						{fullHierarchy.map((item, index) => (
-							<motion.div 
-								key={index} 
+							<motion.div
+								key={index}
 								className="flex items-center gap-2 py-0.5"
 								style={{
-									paddingLeft: `${index * 12}px`
+									paddingLeft: `${index * 12}px`,
 								}}
 								initial={{ opacity: 0, x: -20 }}
 								animate={{ opacity: 1, x: 0 }}
 								transition={{
 									duration: 0.3,
 									delay: index * 0.1,
-									ease: [0.23, 1, 0.32, 1]
+									ease: [0.23, 1, 0.32, 1],
 								}}
 							>
 								{index > 0 && (
-									<motion.div 
+									<motion.div
 										className="text-white/40"
 										initial={{ opacity: 0, scaleX: 0 }}
 										animate={{ opacity: 1, scaleX: 1 }}
 										transition={{
 											duration: 0.3,
 											delay: index * 0.1 + 0.1,
-											ease: "anticipate"
+											ease: "anticipate",
 										}}
 									>
 										└─
 									</motion.div>
 								)}
-								<LinkWithParams 
-									href="/lib" 
-									params={{ 
+								<LinkWithParams
+									href="/lib"
+									params={{
 										collections: fullHierarchy
 											.slice(0, index + 1)
-											.map(h => h.key) 
+											.map((h) => h.key),
 									}}
 								>
-									<motion.span 
+									<motion.span
 										className="text-sm whitespace-nowrap overflow-hidden text-ellipsis relative group"
 										whileHover={{ scale: 1.02 }}
-										transition={{ type: "spring", stiffness: 400, damping: 10 }}
+										transition={{
+											type: "spring",
+											stiffness: 400,
+											damping: 10,
+										}}
 									>
-										<motion.span
-											className="relative z-10"
-										>
+										<motion.span className="relative z-10">
 											{item.name}
 										</motion.span>
 										<motion.div
 											className="absolute inset-0 bg-accent/20 rounded-sm -z-0"
 											initial={{ scaleX: 0 }}
-											whileHover={{ 
+											whileHover={{
 												scaleX: 1,
-												transition: { duration: 0.2, ease: "circOut" }
+												transition: {
+													duration: 0.2,
+													ease: "circOut",
+												},
 											}}
 											style={{ originX: 0 }}
 										/>
@@ -644,18 +659,21 @@ function ItemCollection({ collection, item }: { collection: Collection, item: It
 						"backdrop-blur-md",
 						"border border-white/10",
 						"shadow-[0_0_20px_rgba(0,0,0,0.1)]",
-						"dark:shadow-[0_0_20px_rgba(255,255,255,0.1)]"
-					].join(" ")
+						"dark:shadow-[0_0_20px_rgba(255,255,255,0.1)]",
+					].join(" "),
 				}}
 			>
-				<LinkWithParams href={"/lib"} params={{ collections: [...ancestry, collection.key] }}>
+				<LinkWithParams
+					href={"/lib"}
+					params={{ collections: [...ancestry, collection.key] }}
+				>
 					<motion.div
 						whileHover={{ scale: 1.02 }}
 						whileTap={{ scale: 0.98 }}
 						transition={{
 							type: "spring",
 							stiffness: 400,
-							damping: 10
+							damping: 10,
 						}}
 					>
 						<Card className="py-1 px-3" color="card">
@@ -692,13 +710,17 @@ function ItemCollections({ item }: { item: Item | undefined }) {
 								{title}
 							</h4>
 							<ul className="text-base text-black/60 dark:text-white/60 flex flex-wrap gap-2">
-								{collections.map((collection) => (
-									<ItemCollection
-										key={collection.id}
-										collection={collection}
-										item={item}
-									/>
-								))}
+								{collections
+									.filter(
+										(collection) => collection.originalFacet
+									)
+									.map((collection) => (
+										<ItemCollection
+											key={collection.id}
+											collection={collection}
+											item={item}
+										/>
+									))}
 							</ul>
 						</div>
 					)
