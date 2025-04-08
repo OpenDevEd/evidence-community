@@ -355,6 +355,15 @@ function ItemDetailsRow({ detail }: { detail: { label: string; value: any } }) {
 	);
 }
 
+function transformItem(item: Item | undefined) {
+	if (!item) return null;
+	const ExtraValues = getExtraValues(item.extra || "");
+
+	item.DOI = (item.DOI || ExtraValues.get("DOI") || null);
+	item.url = item.attachmentsData?.find(attachment => attachment.title?.includes("📝View Google Doc and download alternative formats"))?.url || item.url;
+	return item;
+}
+
 function ItemDetails({ item }: { item: Item | undefined }) {
 	const excludedFields: (keyof Item)[] = [
 		"title",
@@ -763,12 +772,12 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 }
 
 export default function ItemPage({ data }: { data: ItemGetResponse }) {
-	const item = data?.item;
+	const item = transformItem(data?.item)!;
 
 	return (
 		<PageContainer>
 			<div className="flex flex-col gap-6 lg:gap-14">
-				<AiWrapper data={data} />
+				<AiWrapper data={{ item: item }} />
 				<div className="flex flex-col gap-4">
 					<ItemHeader item={item} />
 					<ItemTitle item={item} />
