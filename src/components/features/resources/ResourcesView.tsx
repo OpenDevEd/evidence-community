@@ -358,11 +358,12 @@ function ContentActions({ params }: { params?: Record<string, any> }) {
 	const totalItems = itemsContext.itemsData?.totalItems || 0;
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const router = useRouter();
-	const isPrintingEnabled = useFeatureFlagEnabled("print-button");
 	const pathName = usePathname();
-
+	const isDownloadEnabled = useFeatureFlagEnabled("download-button");
+	const isAtomFeedEnabled = useFeatureFlagEnabled("atom-feed");
+	
 	return (
-		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap">
+		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
 			<DownloadModal
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
@@ -384,22 +385,25 @@ function ContentActions({ params }: { params?: Record<string, any> }) {
 					})
 				}
 			/>
-			<Button
-				endContent={<HiOutlineDownload className="size-6" />}
-				onPress={onOpen}
+			{isDownloadEnabled && (
+				<Button
+					endContent={<HiOutlineDownload className="size-6" />}
+					onPress={onOpen}
 			>
-				{t("downloadRecords", { count: format.number(totalItems) })}
-			</Button>
-			<Button
+					{t("downloadRecords", { count: format.number(totalItems) })}
+				</Button>
+			)}
+			{/* <Button
 				isDisabled={!isPrintingEnabled}
 				endContent={<HiOutlinePrinter className="size-6" />}
 			>
 				{t("printCitations", { count: format.number(totalItems) })}
-			</Button>
-			<Button
-				onPress={() => {
-					router.push(
-						{
+			</Button> */}
+			{isAtomFeedEnabled && (
+				<Button
+					onPress={() => {
+						router.push(
+							{
 							pathname: pathName + "/atom.xml",
 							query: itemsContext.searchParams,
 						},
@@ -413,7 +417,8 @@ function ContentActions({ params }: { params?: Record<string, any> }) {
 				{JSON.stringify(itemsContext.searchParams) == "{}"
 					? t("mainFeed")
 					: t("customFeed")}
-			</Button>
+				</Button>
+			)}
 		</div>
 	);
 }
