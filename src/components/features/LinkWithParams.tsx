@@ -1,3 +1,5 @@
+"use client";
+
 import { ComponentProps } from "react";
 import { Link } from "@nextui-org/react";
 import { inferParserType } from "nuqs";
