@@ -82,7 +82,14 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 
 function ItemHeader({ item }: { item: Item | undefined }) {
 	const tItemType = useTranslations("itemType");
-	const url = process.env.BASE_URL + "/newlib/" + item?.key;
+	const url =  process.env.BASE_URL;
+
+	const getUrl = () => {
+		if (typeof window !== "undefined") {
+			return window.location.href;
+		}
+		return url;
+	}
 
 	return (
 		<div className="w-full flex items-center gap-4 flex-wrap">
@@ -122,7 +129,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 						</Button>
 					</a>
 				)}
-				<CopyButton textToCopy={url}>
+				<CopyButton textToCopy={getUrl() + "/newlib/" + item?.key}>
 					<Button isIconOnly size="sm"></Button>
 				</CopyButton>
 				<DownloadButton
