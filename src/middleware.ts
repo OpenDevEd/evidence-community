@@ -19,7 +19,7 @@ const RESET_TIME = 60000;
 
 function generateRateLimitObject(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.headers.get("cf-connecting-ip") || request.headers.get("x-envoy-external-address");
-  let ipRateLimit = ip ? (rateLimits.get(ip) || { count: 0, firstRequest: 0 }) : null;
+  const ipRateLimit = ip ? (rateLimits.get(ip) || { count: 0, firstRequest: 0 }) : null;
 
   const cookie = request.cookies.get(`ph_${process.env.NEXT_PUBLIC_POSTHOG_KEY}_posthog`);
   let cookieRateLimit = null;
