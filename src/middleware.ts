@@ -18,24 +18,32 @@ const AMOUNT_OF_REQUESTS = 10;
 const RESET_TIME = 60000;
 
 function generateRateLimitObject(request: NextRequest) {
+  const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.headers.get("cf-connecting-ip") || request.headers.get("x-envoy-external-address");
+  let ipRateLimit = ip ? (rateLimits.get(ip) || { count: 0, firstRequest: 0 }) : null;
+
   const cookie = request.cookies.get(`ph_${process.env.NEXT_PUBLIC_POSTHOG_KEY}_posthog`);
+  let cookieRateLimit = null;
   if (cookie) {
-    const distinctId = JSON.parse(cookie.value).distinct_id;
-    const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.headers.get("cf-connecting-ip") || request.headers.get("x-envoy-external-address");
-    const rateLimitId = rateLimits.get(distinctId) || { count: 0, firstRequest: 0 };
-    const ipRateLimit = rateLimits.get(ip!) || { count: 0, firstRequest: 0 };
-
-    const rateLimit = rateLimitId.count > ipRateLimit.count ? rateLimitId : ipRateLimit;
-    
-    rateLimits.set(distinctId, rateLimit);
-    if (ip) {
-      rateLimits.set(ip, rateLimit);
+    try {
+      const distinctId = JSON.parse(cookie.value).distinct_id;
+      cookieRateLimit = rateLimits.get(distinctId) || { count: 0, firstRequest: 0 };
+      rateLimits.set(distinctId, cookieRateLimit);
+    } catch (e) {
     }
-
-    return rateLimit;
   }
 
-  return null;
+  let rateLimit = null;
+  if (ipRateLimit && cookieRateLimit) {
+    rateLimit = ipRateLimit.count > cookieRateLimit.count ? ipRateLimit : cookieRateLimit;
+  } else {
+    rateLimit = ipRateLimit || cookieRateLimit || { count: 0, firstRequest: 0 };
+  }
+
+  if (ip) {
+    rateLimits.set(ip, rateLimit);
+  }
+
+  return rateLimit;
 }
 
 function setRateLimitHeaders(response: NextResponse, rateLimit: RateLimit | null) {
