@@ -25,7 +25,8 @@ export function cookieConsentGiven() {
 }
 
 export function getPersistence() {
-	if (cookieConsentGiven() === "opted-in") {
+	const cookieConsent = cookieConsentGiven();
+	if (cookieConsent === "\"opted-in\"") {
 		return "localStorage+cookie";
 	}
 	return "memory";
