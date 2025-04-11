@@ -19,7 +19,7 @@ const RESET_TIME = 60000;
 
 function generateRateLimitObject(request: NextRequest) {
   const ip = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || request.headers.get("cf-connecting-ip") || request.headers.get("x-envoy-external-address");
-  let ipRateLimit = ip ? (rateLimits.get(ip) || { count: 0, firstRequest: 0 }) : null;
+  const ipRateLimit = ip ? (rateLimits.get(ip) || { count: 0, firstRequest: 0 }) : null;
 
   const cookie = request.cookies.get(`ph_${process.env.NEXT_PUBLIC_POSTHOG_KEY}_posthog`);
   let cookieRateLimit = null;
@@ -28,12 +28,9 @@ function generateRateLimitObject(request: NextRequest) {
       const distinctId = JSON.parse(cookie.value).distinct_id;
       cookieRateLimit = rateLimits.get(distinctId) || { count: 0, firstRequest: 0 };
       rateLimits.set(distinctId, cookieRateLimit);
-    } catch (e) {
-      // Invalid cookie, ignore it
-    }
+    } catch (e) {}
   }
 
-  // Use the rate limit with the higher count, or fallback to either one
   let rateLimit = null;
   if (ipRateLimit && cookieRateLimit) {
     rateLimit = ipRateLimit.count > cookieRateLimit.count ? ipRateLimit : cookieRateLimit;
@@ -41,7 +38,6 @@ function generateRateLimitObject(request: NextRequest) {
     rateLimit = ipRateLimit || cookieRateLimit || { count: 0, firstRequest: 0 };
   }
 
-  // Always store the final rate limit against the IP if we have one
   if (ip) {
     rateLimits.set(ip, rateLimit);
   }
