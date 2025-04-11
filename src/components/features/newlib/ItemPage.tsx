@@ -89,6 +89,7 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 function ItemHeader({ item }: { item: Item | undefined }) {
 	const router = useRouter();
 	const tItemType = useTranslations("itemType");
+	const t = useTranslations("ui");
 	const url = process.env.BASE_URL;
 
 	const getUrl = () => {
@@ -105,9 +106,10 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 				size="sm"
 				className="rounded-2xl"
 				onPressStart={() => router.back()}
-				startContent={<IoChevronBack />}
+				startContent={<IoChevronBack className="rtl:rotate-180" />}
+				aria-label={t("itemBackAriaLabel")}
 			>
-				Back
+				{t("itemBack")}
 			</Button>
 			<ItemHeaderInstitution item={item} />
 			<div className="flex items-center gap-4 flex-wrap">
@@ -117,7 +119,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 				</HeaderSection>
 				<HeaderSection>
 					<IoBook className="size-4" />
-					{getCitationCount(item)} citations
+					{getCitationCount(item)} {t("itemCitationsCount")}
 				</HeaderSection>
 				<HeaderSection>
 					<IoDocumentText className="size-4" />
@@ -125,20 +127,21 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 				</HeaderSection>
 			</div>
 
-			<div className="ml-auto flex flex-row-reverse items-center gap-2 flex-wrap">
+			<div className="ltr:ml-auto rtl:mr-auto flex flex-row-reverse items-center gap-2 flex-wrap">
 				{item?.url && (
 					<a href={item.url} target="_blank">
 						<Button
 							size="sm"
 							color="accent"
 							startContent={<IoOpenOutline />}
+							aria-label={t("itemViewOriginalAriaLabel")}
 						>
-							View Original
+							{t("itemViewOriginal")}
 						</Button>
 					</a>
 				)}
 				<CopyButton textToCopy={getUrl() + "/newlib/" + item?.key}>
-					<Button isIconOnly size="sm"></Button>
+					<Button isIconOnly size="sm" aria-label={t("itemCopyUrlAriaLabel")}></Button>
 				</CopyButton>
 				<DownloadButton
 					size="sm"
@@ -146,10 +149,11 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 					isIconOnly
 					itemData={item}
 					startContent={<LuDownload />}
+					aria-label={t("itemDownloadAriaLabel")}
 				/>
-				<LikeButton itemData={item} />
-				<AddButton itemData={item} />
-				<ZoteroDropdown item={item} />
+				<LikeButton itemData={item} aria-label={t("itemLikeAriaLabel")} />
+				<AddButton itemData={item} aria-label={t("itemAddToCollectionAriaLabel")} />
+				<ZoteroDropdown item={item} aria-label={t("itemZoteroOptionsAriaLabel")} />
 			</div>
 		</div>
 	);
@@ -267,11 +271,12 @@ function ItemAuthor({ author }: { author: Author }) {
 }
 
 function ItemAuthors({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	const authors = item?.creators as Author[];
 	if (!authors?.length) return null;
 
 	return (
-		<SidebarCard title="Authors" count={authors.length}>
+		<SidebarCard title={t("itemAuthorsTitle")} count={authors.length}>
 			{authors?.map((author: Author, index: number) => (
 				<ItemAuthor key={index} author={author} />
 			))}
@@ -296,11 +301,12 @@ function ItemInstitution({ institution }: { institution: string }) {
 }
 
 function ItemInstitutions({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	const institutions = item?.institution as string[];
 	if (!institutions?.length) return null;
 
 	return (
-		<SidebarCard title="Institutions" count={institutions.length}>
+		<SidebarCard title={t("itemInstitutionsTitle")} count={institutions.length}>
 			{Array.from(new Set(institutions)).map((institution: string) => (
 				<ItemInstitution key={institution} institution={institution} />
 			))}
@@ -343,6 +349,7 @@ function formatValue(
 
 function ItemDetailsRow({ detail }: { detail: { label: string; value: any } }) {
 	const t = useTranslations("article");
+	const tUI = useTranslations("ui");
 	const formatter = useFormatter();
 	const formattedValue = formatValue(
 		detail.label as keyof Item,
@@ -360,7 +367,7 @@ function ItemDetailsRow({ detail }: { detail: { label: string; value: any } }) {
 					<div className="text-base">{formattedValue}</div>
 				</div>
 			</div>
-			<CopyButton textToCopy={formattedValue} />
+			<CopyButton textToCopy={formattedValue} aria-label={tUI("itemCopyCitationAriaLabel")} />
 		</div>
 	);
 }
@@ -380,6 +387,7 @@ function transformItem(item: Item | undefined) {
 }
 
 function ItemDetails({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	const excludedFields: (keyof Item)[] = [
 		"title",
 		"creators",
@@ -415,7 +423,6 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"callNumber",
 	];
 
-	const t = useTranslations("article");
 	if (!item) return null;
 
 	const details = Object.entries(item)
@@ -426,7 +433,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		}));
 
 	return (
-		<SidebarCard title="Publication Details">
+		<SidebarCard title={t("itemPublicationDetailsTitle")}>
 			<div className="flex flex-col gap-2">
 				{details
 					.filter(
@@ -442,6 +449,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 }
 
 function ItemTechnical({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	if (!item || item.groupExternalId !== 1) return null;
 	const relations = item?.relations as RelationsType;
 
@@ -451,7 +459,7 @@ function ItemTechnical({ item }: { item: Item | undefined }) {
 	};
 
 	return (
-		<SidebarCard title="Technical Details" color="card">
+		<SidebarCard title={t("itemTechnicalDetailsTitle")} color="card">
 			<div className="flex flex-col gap-2">
 				{Object.entries(keyValues).map(([key, value]) => (
 					<ItemDetailsRow
@@ -478,11 +486,12 @@ function ItemPropertyRowWrapper({
 	copyText?: string;
 	className?: string;
 }) {
+	const tUI = useTranslations("ui");
 	return (
 		<div className={twMerge("flex flex-col gap-4", className)}>
 			<div className="flex items-center justify-between">
 				<h3 className="text-xl font-medium">{title}</h3>
-				{copyText && <CopyButton textToCopy={copyText} />}
+				{copyText && <CopyButton textToCopy={copyText} aria-label={tUI("itemCopyCitationAriaLabel")} />}
 			</div>
 			{children}
 		</div>
@@ -490,11 +499,9 @@ function ItemPropertyRowWrapper({
 }
 
 function ItemAbstract({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	return (
-		<ItemPropertyRowWrapper
-			title="Abstract"
-			copyText={item?.abstractNote || undefined}
-		>
+		<ItemPropertyRowWrapper title={t("itemAbstractTitle")}>
 			<p className="text-base text-black/60 dark:text-white/60">
 				{item?.abstractNote}
 			</p>
@@ -503,6 +510,7 @@ function ItemAbstract({ item }: { item: Item | undefined }) {
 }
 
 function ItemCitation({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	const citationText = item?.citation?.replace(/<[^>]+>/g, "") || undefined;
 
 	const decodeHTMLEntities = (text: string) => {
@@ -523,10 +531,7 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 		: undefined;
 
 	return (
-		<ItemPropertyRowWrapper
-			title="Citation"
-			copyText={citationTextWithSymbols}
-		>
+		<ItemPropertyRowWrapper title={t("itemCitationTitle")} copyText={citationTextWithSymbols}>
 			<p
 				dangerouslySetInnerHTML={{ __html: item?.citation || "" }}
 				className="text-base text-black/60 dark:text-white/60 text-wrap-anywhere"
@@ -687,6 +692,7 @@ function ItemCollection({
 }
 
 function ItemCollections({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	const collectionsAncestry = item?.collectionsData as Collection[];
 
 	const groupedCollections = collectionsAncestry.reduce((acc, collection) => {
@@ -701,7 +707,7 @@ function ItemCollections({ item }: { item: Item | undefined }) {
 	if (!Object.keys(groupedCollections).length) return null;
 
 	return (
-		<ItemPropertyRowWrapper title="Topics & Collections">
+		<ItemPropertyRowWrapper title={t("itemTopicsCollectionsTitle")}>
 			<div className="flex flex-col gap-4">
 				{Object.entries(groupedCollections).map(
 					([title, collections]) => (
@@ -731,14 +737,15 @@ function ItemCollections({ item }: { item: Item | undefined }) {
 }
 
 function ItemCountry({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	const countries = Array.isArray(item?.country) ? item.country : [];
 
 	if (!countries.length) return null;
 
 	return (
-		<ItemPropertyRowWrapper title="Country Focus">
+		<ItemPropertyRowWrapper title={t("itemCountryFocusTitle")}>
 			<p className="text-black/60 dark:text-white/60">
-				This publication is focused on the following countries.
+				{t("itemCountryFocusDescription")}
 			</p>
 			<CountryDisplay countries={countries} />
 		</ItemPropertyRowWrapper>
@@ -746,6 +753,7 @@ function ItemCountry({ item }: { item: Item | undefined }) {
 }
 
 function ItemAttachments({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	const validAttachments = item?.attachmentsData?.filter(
 		(attachment) => attachment.PDFCoverPageImage
 	);
@@ -753,9 +761,9 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 	if (!validAttachments?.length) return null;
 
 	return (
-		<ItemPropertyRowWrapper title="Attachments">
+		<ItemPropertyRowWrapper title={t("itemAttachmentsTitle")}>
 			<p className="text-black/60 dark:text-white/60">
-				The following attachments are available for this publication.
+				{t("itemAttachmentsDescription")}
 			</p>
 			<div className="flex flex-col gap-4">
 				{validAttachments.map((attachment) => (
@@ -767,14 +775,14 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 }
 
 function ItemVectorRelations({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	return (
 		<ItemPropertyRowWrapper
 			className="[&:not(:has(#vector-relations))]:hidden"
-			title="Recommended Resources"
+			title={t("recommendedResources")}
 		>
 			<p className="text-black/60 dark:text-white/60">
-				Based on the content of this publication, we recommend the
-				following resources.
+				{t("recommendedResourcesDescription")}
 			</p>
 			<VectorRelations item={item} />
 		</ItemPropertyRowWrapper>
@@ -782,14 +790,14 @@ function ItemVectorRelations({ item }: { item: Item | undefined }) {
 }
 
 function ItemRelations({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	const relations = item?.relations as RelationsType;
 	if (!relations) return null;
 
 	return (
-		<ItemPropertyRowWrapper title="Related Resources">
+		<ItemPropertyRowWrapper title={t("relatedResources")}>
 			<p className="text-black/60 dark:text-white/60">
-				The following resources are related to this publication by
-				citation.
+				{t("relatedResourcesByCitation")}
 			</p>
 			<Relations value={item?.relations as RelationsType} />
 		</ItemPropertyRowWrapper>

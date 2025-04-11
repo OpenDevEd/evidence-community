@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { MdSearchOff } from "react-icons/md";
 import { ItemGetResponse } from "@/app/api/item/types";
 import Resource from "../items/Resource";
+import { useTranslations } from "next-intl";
 
 function Relation({ value }: { value: string }) {
 	const keyFromValue = value.split("/").pop() || "";
@@ -52,6 +53,7 @@ function Relation({ value }: { value: string }) {
 
 
 export default function Relations({ value }: { value: RelationsType }) {
+	const t = useTranslations("ui");
 	const obj = value as RelationsType;
 	if (!obj) return false;
 	const relationsObject = {
@@ -77,8 +79,7 @@ export default function Relations({ value }: { value: RelationsType }) {
 				<div className="first:block hidden">
 					<div className="flex gap-2 ">
 						<MdSearchOff className="size-6" />
-						There are no relations found for this item in this
-						database.
+						{t("noRelationsFound")}
 					</div>
 				</div>
 			</ul>
