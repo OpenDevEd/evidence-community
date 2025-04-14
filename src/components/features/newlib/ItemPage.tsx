@@ -16,7 +16,8 @@ import {
 import { Avatar } from "@nextui-org/avatar";
 import { HiAcademicCap } from "react-icons/hi2";
 import { useFormatter, useTranslations } from "next-intl";
-import { Divider } from "@nextui-org/react";
+import { Divider, Spinner } from "@nextui-org/react";
+import { Skeleton } from "@/components/nextui/Skeleton";
 import CopyButton from "@/components/features/newlib/CopyButton";
 import { Button } from "@/components/nextui/Button";
 import { Collection } from "@/app/api/collections/types";
@@ -32,12 +33,31 @@ import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import LinkWithParams from "../LinkWithParams";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { Tooltip } from "@nextui-org/react";
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import LikeButton from "../items/LikeButton";
 import { AddButton } from "../items/Resource";
 import { BiDownload } from "react-icons/bi";
 import { LuDownload } from "react-icons/lu";
+import { createContext, use, useEffect, useState } from "react";
+
+export const LoadingContext = createContext<{ loading: boolean }>({
+	loading: false,
+});
+
+const decodeHTMLEntities = (text: string) => {
+	return text
+		.replace(/&amp;/g, "&")
+		.replace(/&quot;/g, '"')
+		.replace(/&apos;/g, "'")
+		.replace(/&lt;/g, "<")
+		.replace(/&gt;/g, ">")
+		.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
+		.replace(/&#x([0-9A-F]+);/gi, (_, hex) =>
+			String.fromCharCode(parseInt(hex, 16))
+		)
+		.replace(/<[^>]*>?/g, "");
+};
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -70,24 +90,33 @@ function ItemHeaderInstitution({ item }: { item: Item | undefined }) {
 
 interface ItemRowProps {
 	icon: React.ReactNode;
-	title: string;
+	title?: string;
 	subtitle?: React.ReactNode;
 }
 
 function ItemRow({ icon, title, subtitle }: ItemRowProps) {
+	const showSkeleton = !title;
+
 	return (
-		<div className="flex items-center gap-3 px-4">
-			{icon}
-			<div className="flex flex-col">
-				<div className="text-base font-medium">{title}</div>
-				{subtitle}
-			</div>
+		<div className="px-4 w-full">
+			<Skeleton isLoaded={!showSkeleton} className="rounded-2xl w-full">
+				<div className="flex items-center gap-3">
+					{icon}
+					<div className="flex flex-col">
+						<div className="text-base font-medium">
+							{title || "-"}
+						</div>
+						{subtitle}
+					</div>
+				</div>
+			</Skeleton>
 		</div>
 	);
 }
 
 function ItemHeader({ item }: { item: Item | undefined }) {
 	const router = useRouter();
+	const { loading } = use(LoadingContext);
 	const tItemType = useTranslations("itemType");
 	const t = useTranslations("ui");
 	const url = process.env.BASE_URL;
@@ -101,70 +130,93 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 
 	return (
 		<div className="w-full flex items-center gap-4 flex-wrap">
-			<Button
-				variant="transparent"
-				size="sm"
-				className="rounded-2xl"
-				onPressStart={() => router.back()}
-				startContent={<IoChevronBack className="rtl:rotate-180" />}
-				aria-label={t("itemBackAriaLabel")}
-			>
-				{t("itemBack")}
-			</Button>
-			<ItemHeaderInstitution item={item} />
-			<div className="flex items-center gap-4 flex-wrap">
-				<HeaderSection>
-					<FaCalendar className="size-4" />
-					{item?.year}
-				</HeaderSection>
-				<HeaderSection>
-					<IoBook className="size-4" />
-					{getCitationCount(item)} {t("itemCitationsCount")}
-				</HeaderSection>
-				<HeaderSection>
-					<IoDocumentText className="size-4" />
-					{tItemType(item?.itemType)}
-				</HeaderSection>
-			</div>
-
-			<div className="ltr:ml-auto rtl:mr-auto flex flex-row-reverse items-center gap-2 flex-wrap">
-				{item?.url && (
-					<a href={item.url} target="_blank">
-						<Button
-							size="sm"
-							color="accent"
-							startContent={<IoOpenOutline />}
-							aria-label={t("itemViewOriginalAriaLabel")}
+			<Skeleton isLoaded={!loading} className="rounded-2xl w-full">
+				<div className="flex items-center gap-4 flex-wrap">
+					<Button
+						variant="transparent"
+						size="sm"
+						className="rounded-2xl"
+						onPressStart={() => router.back()}
+						startContent={
+							<IoChevronBack className="rtl:rotate-180" />
+						}
+						aria-label={t("itemBackAriaLabel")}
+					>
+						{t("itemBack")}
+					</Button>
+					<ItemHeaderInstitution item={item} />
+					<div className="flex items-center gap-4 flex-wrap">
+						<HeaderSection>
+							<FaCalendar className="size-4" />
+							{item?.year}
+						</HeaderSection>
+						<HeaderSection>
+							<IoBook className="size-4" />
+							{getCitationCount(item)} {t("itemCitationsCount")}
+						</HeaderSection>
+						<HeaderSection>
+							<IoDocumentText className="size-4" />
+							{item?.itemType ? tItemType(item?.itemType) : "-"}
+						</HeaderSection>
+					</div>
+					<div className="ltr:ml-auto rtl:mr-auto flex flex-row-reverse items-center gap-2 flex-wrap">
+						{item?.url && (
+							<a href={item.url} target="_blank">
+								<Button
+									size="sm"
+									color="accent"
+									startContent={<IoOpenOutline />}
+									aria-label={t("itemViewOriginalAriaLabel")}
+								>
+									{t("itemViewOriginal")}
+								</Button>
+							</a>
+						)}
+						<CopyButton
+							textToCopy={getUrl() + "/newlib/" + item?.key}
 						>
-							{t("itemViewOriginal")}
-						</Button>
-					</a>
-				)}
-				<CopyButton textToCopy={getUrl() + "/newlib/" + item?.key}>
-					<Button isIconOnly size="sm" aria-label={t("itemCopyUrlAriaLabel")}></Button>
-				</CopyButton>
-				<DownloadButton
-					size="sm"
-					fileName={item?.key || ""}
-					isIconOnly
-					itemData={item}
-					startContent={<LuDownload />}
-					aria-label={t("itemDownloadAriaLabel")}
-				/>
-				<LikeButton itemData={item} aria-label={t("itemLikeAriaLabel")} />
-				<AddButton itemData={item} aria-label={t("itemAddToCollectionAriaLabel")} />
-				<ZoteroDropdown item={item} aria-label={t("itemZoteroOptionsAriaLabel")} />
-			</div>
+							<Button
+								isIconOnly
+								size="sm"
+								aria-label={t("itemCopyUrlAriaLabel")}
+							></Button>
+						</CopyButton>
+						<DownloadButton
+							size="sm"
+							fileName={item?.key || ""}
+							isIconOnly
+							itemData={item}
+							startContent={<LuDownload />}
+							aria-label={t("itemDownloadAriaLabel")}
+						/>
+						<LikeButton
+							itemData={item}
+							aria-label={t("itemLikeAriaLabel")}
+						/>
+						<AddButton
+							itemData={item}
+							aria-label={t("itemAddToCollectionAriaLabel")}
+						/>
+						<ZoteroDropdown
+							item={item}
+							aria-label={t("itemZoteroOptionsAriaLabel")}
+						/>
+					</div>
+				</div>
+			</Skeleton>
 		</div>
 	);
 }
 
 function ItemTitle({ item }: { item: Item | undefined }) {
+	const { loading } = use(LoadingContext);
+
+	const escapedTitle = decodeHTMLEntities(item?.title || "");
+
 	return (
-		<h1
-			dangerouslySetInnerHTML={{ __html: item?.title || "" }}
-			className="text-3xl font-medium"
-		></h1>
+		<Skeleton isLoaded={!loading} className="rounded-2xl w-full min-h-9">
+			<h1 className="text-3xl font-medium">{escapedTitle || "-"}</h1>
+		</Skeleton>
 	);
 }
 
@@ -235,13 +287,15 @@ function SidebarCard({
 	);
 }
 
-function ItemAuthor({ author }: { author: Author }) {
+function ItemAuthor({ author }: { author?: Author }) {
 	const t = useTranslations("creatorType");
-	const creatorTypeLabel = t(author.creatorType);
-	const { creatorType, institutions, ...rest } = author;
-	const fullName = author.name
-		? author.name
-		: `${author.firstName} ${author.lastName}`;
+	const creatorTypeLabel = author ? t(author?.creatorType) : undefined;
+	const { creatorType, institutions, ...rest } = author || {};
+	const fullName = author
+		? author?.name
+			? author.name
+			: `${author?.firstName} ${author?.lastName}`
+		: undefined;
 
 	const subtitle = (
 		<>
@@ -254,16 +308,20 @@ function ItemAuthor({ author }: { author: Author }) {
 	);
 
 	return (
-		<LinkWithParams href={`/lib`} params={{ author: fullName }}>
+		<LinkWithParams
+			href={`/lib`}
+			params={fullName ? { author: fullName } : {}}
+			className="opacity-100"
+		>
 			<ItemRow
 				icon={
 					<Avatar
-						name={formatAuthor(author).charAt(0)}
+						name={author ? formatAuthor(author).charAt(0) : "-"}
 						size="sm"
 						className="text-lg text-accent bg-accent/10 brightness-150 shrink-0"
 					/>
 				}
-				title={formatAuthor(author)}
+				title={author && formatAuthor(author)}
 				subtitle={subtitle}
 			/>
 		</LinkWithParams>
@@ -271,22 +329,31 @@ function ItemAuthor({ author }: { author: Author }) {
 }
 
 function ItemAuthors({ item }: { item: Item | undefined }) {
+	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
 	const authors = item?.creators as Author[];
-	if (!authors?.length) return null;
+	if (!authors?.length && !loading) return null;
 
 	return (
-		<SidebarCard title={t("itemAuthorsTitle")} count={authors.length}>
-			{authors?.map((author: Author, index: number) => (
-				<ItemAuthor key={index} author={author} />
-			))}
+		<SidebarCard title={t("itemAuthorsTitle")} count={authors?.length}>
+			{loading
+				? Array.from({ length: 3 }).map((_, index) => (
+						<ItemAuthor key={index} author={undefined} />
+				  ))
+				: authors?.map((author: Author, index: number) => (
+						<ItemAuthor key={index} author={author} />
+				  ))}
 		</SidebarCard>
 	);
 }
 
-function ItemInstitution({ institution }: { institution: string }) {
+function ItemInstitution({ institution }: { institution?: string }) {
 	return (
-		<LinkWithParams href={`/lib`} params={{ institution: [institution] }}>
+		<LinkWithParams
+			href={`/lib`}
+			params={institution ? { institution: [institution] } : {}}
+			className="opacity-100"
+		>
 			<ItemRow
 				key={institution}
 				icon={
@@ -301,15 +368,28 @@ function ItemInstitution({ institution }: { institution: string }) {
 }
 
 function ItemInstitutions({ item }: { item: Item | undefined }) {
+	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
 	const institutions = item?.institution as string[];
-	if (!institutions?.length) return null;
+	if (!institutions?.length && !loading) return null;
 
 	return (
-		<SidebarCard title={t("itemInstitutionsTitle")} count={institutions.length}>
-			{Array.from(new Set(institutions)).map((institution: string) => (
-				<ItemInstitution key={institution} institution={institution} />
-			))}
+		<SidebarCard
+			title={t("itemInstitutionsTitle")}
+			count={institutions?.length}
+		>
+			{loading
+				? Array.from({ length: 3 }).map((_, index) => (
+						<ItemInstitution key={index} institution={undefined} />
+				  ))
+				: Array.from(new Set(institutions)).map(
+						(institution: string) => (
+							<ItemInstitution
+								key={institution}
+								institution={institution}
+							/>
+						)
+				  )}
 		</SidebarCard>
 	);
 }
@@ -347,27 +427,39 @@ function formatValue(
 	return value;
 }
 
-function ItemDetailsRow({ detail }: { detail: { label: string; value: any } }) {
+function ItemDetailsRow({
+	detail,
+}: {
+	detail?: { label: string; value: any };
+}) {
+	const { loading } = use(LoadingContext);
 	const t = useTranslations("article");
 	const tUI = useTranslations("ui");
 	const formatter = useFormatter();
-	const formattedValue = formatValue(
-		detail.label as keyof Item,
-		detail.value,
-		formatter
-	);
+	const formattedValue = detail
+		? formatValue(detail.label as keyof Item, detail.value, formatter)
+		: undefined;
 
 	return (
-		<div className="flex justify-between gap-2 px-4">
-			<div key={detail.label} className="text-base font-medium flex-1">
-				<div className="text-sm text-black/60 dark:text-white/60">
-					{t(detail.label)}
+		<div className="px-4">
+			<Skeleton className="rounded-2xl w-full" isLoaded={!loading}>
+				<div className="flex justify-between gap-2">
+					<div className="text-base font-medium flex-1">
+						<div className="text-sm text-black/60 dark:text-white/60">
+							{detail?.label ? t(detail?.label) : "-"}
+						</div>
+						<div className="flex justify-between">
+							<div className="text-base">
+								{formattedValue || "-"}
+							</div>
+						</div>
+					</div>
+					<CopyButton
+						textToCopy={formattedValue}
+						ariaLabel={tUI("itemCopyCitationAriaLabel")}
+					/>
 				</div>
-				<div className="flex justify-between">
-					<div className="text-base">{formattedValue}</div>
-				</div>
-			</div>
-			<CopyButton textToCopy={formattedValue} ariaLabel={tUI("itemCopyCitationAriaLabel")} />
+			</Skeleton>
 		</div>
 	);
 }
@@ -387,6 +479,7 @@ function transformItem(item: Item | undefined) {
 }
 
 function ItemDetails({ item }: { item: Item | undefined }) {
+	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
 	const excludedFields: (keyof Item)[] = [
 		"title",
@@ -423,9 +516,9 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"callNumber",
 	];
 
-	if (!item) return null;
+	if (!item && !loading) return null;
 
-	const details = Object.entries(item)
+	const details = Object.entries(item || {})
 		.filter(([key, value]) => value !== null)
 		.map(([key, value]) => ({
 			label: key,
@@ -434,23 +527,31 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 
 	return (
 		<SidebarCard title={t("itemPublicationDetailsTitle")}>
-			<div className="flex flex-col gap-2">
-				{details
-					.filter(
-						(detail) =>
-							!excludedFields.includes(detail.label as keyof Item)
-					)
-					.map((detail) => (
-						<ItemDetailsRow key={detail.label} detail={detail} />
-					))}
-			</div>
+			{loading
+				? Array.from({ length: 3 }).map((_, index) => (
+						<ItemDetailsRow key={index} detail={undefined} />
+				  ))
+				: details
+						.filter(
+							(detail) =>
+								!excludedFields.includes(
+									detail.label as keyof Item
+								)
+						)
+						.map((detail) => (
+							<ItemDetailsRow
+								key={detail.label}
+								detail={detail}
+							/>
+						))}
 		</SidebarCard>
 	);
 }
 
 function ItemTechnical({ item }: { item: Item | undefined }) {
+	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
-	if (!item || item.groupExternalId !== 1) return null;
+	if ((!item || item.groupExternalId !== 1) && !loading) return null;
 	const relations = item?.relations as RelationsType;
 
 	const keyValues = {
@@ -460,17 +561,19 @@ function ItemTechnical({ item }: { item: Item | undefined }) {
 
 	return (
 		<SidebarCard title={t("itemTechnicalDetailsTitle")} color="card">
-			<div className="flex flex-col gap-2">
-				{Object.entries(keyValues).map(([key, value]) => (
-					<ItemDetailsRow
-						key={key}
-						detail={{
-							label: key,
-							value: value,
-						}}
-					/>
-				))}
-			</div>
+			{loading
+				? Array.from({ length: 3 }).map((_, index) => (
+						<ItemDetailsRow key={index} detail={undefined} />
+				  ))
+				: Object.entries(keyValues).map(([key, value]) => (
+						<ItemDetailsRow
+							key={key}
+							detail={{
+								label: key,
+								value: value,
+							}}
+						/>
+				  ))}
 		</SidebarCard>
 	);
 }
@@ -491,7 +594,12 @@ function ItemPropertyRowWrapper({
 		<div className={twMerge("flex flex-col gap-4", className)}>
 			<div className="flex items-center justify-between">
 				<h3 className="text-xl font-medium">{title}</h3>
-				{copyText && <CopyButton textToCopy={copyText} ariaLabel={tUI("itemCopyCitationAriaLabel")} />}
+				{copyText && (
+					<CopyButton
+						textToCopy={copyText}
+						ariaLabel={tUI("itemCopyCitationAriaLabel")}
+					/>
+				)}
 			</div>
 			{children}
 		</div>
@@ -513,29 +621,44 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const citationText = item?.citation?.replace(/<[^>]+>/g, "") || undefined;
 
-	const decodeHTMLEntities = (text: string) => {
-		return text
-			.replace(/&amp;/g, "&")
-			.replace(/&quot;/g, '"')
-			.replace(/&apos;/g, "'")
-			.replace(/&lt;/g, "<")
-			.replace(/&gt;/g, ">")
-			.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
-			.replace(/&#x([0-9A-F]+);/gi, (_, hex) =>
-				String.fromCharCode(parseInt(hex, 16))
-			);
-	};
-
 	const citationTextWithSymbols = citationText
 		? decodeHTMLEntities(citationText)
 		: undefined;
 
 	return (
-		<ItemPropertyRowWrapper title={t("itemCitationTitle")} copyText={citationTextWithSymbols}>
-			<p
-				dangerouslySetInnerHTML={{ __html: item?.citation || "" }}
-				className="text-base text-black/60 dark:text-white/60 text-wrap-anywhere"
-			/>
+		<ItemPropertyRowWrapper
+			title={t("itemCitationTitle")}
+			copyText={citationTextWithSymbols}
+		>
+			<AnimatePresence>
+				{item?.citation === "<div>Loading...</div>" ? (
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						transition={{ duration: 0.3 }}
+					>
+						<Skeleton
+							isLoaded={false}
+							className="rounded-2xl w-full min-h-10"
+						/>
+					</motion.div>
+				) : (
+					<motion.div
+						initial={{ opacity: 0 }}
+						animate={{ opacity: 1 }}
+						exit={{ opacity: 0 }}
+						transition={{ duration: 0.3 }}
+					>
+						<p
+							dangerouslySetInnerHTML={{
+								__html: item?.citation || "",
+							}}
+							className="text-base text-black/60 dark:text-white/60 text-wrap-anywhere"
+						/>
+					</motion.div>
+				)}
+			</AnimatePresence>
 		</ItemPropertyRowWrapper>
 	);
 }
@@ -693,7 +816,7 @@ function ItemCollection({
 
 function ItemCollections({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
-	const collectionsAncestry = item?.collectionsData as Collection[];
+	const collectionsAncestry = (item?.collectionsData as Collection[]) || [];
 
 	const groupedCollections = collectionsAncestry.reduce((acc, collection) => {
 		const title = collection.title || "Unknown";
@@ -804,43 +927,68 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 	);
 }
 
-export default function ItemPage({ data }: { data: ItemGetResponse }) {
-	const item = transformItem(data?.item)!;
+export default function ItemPage({
+	data,
+	loading: loadingProp,
+}: {
+	data: ItemGetResponse;
+	loading: boolean;
+}) {
+	const loading = data?.item ? false : loadingProp;
+	const item = transformItem(loading ? undefined : data?.item)!;
 
 	return (
 		<PageContainer>
-			<div className="flex flex-col gap-6 lg:gap-14">
-				<AiWrapper data={{ item: item }} />
-				<div className="flex flex-col gap-4">
-					<ItemHeader item={item} />
-					<ItemTitle item={item} />
-				</div>
-				<div className="flex flex-col lg:grid grid-cols-12 gap-8">
-					<div className="col-span-8 xl:col-span-9 flex flex-col gap-12">
-						{item?.abstractNote &&
-							item?.abstractNote.length > 0 && (
-								<>
-									<ItemAbstract item={item} />
-									<Divider />
-								</>
-							)}
-						<ItemCitation item={item} />
-						<ItemCollections item={item} />
-						<ItemAttachments item={item} />
-						<ItemCountry item={item} />
-						<ItemVectorRelations item={item} />
-						<ItemRelations item={item} />
+			<LoadingContext.Provider value={{ loading }}>
+				<div className="flex flex-col gap-8">
+					<AiWrapper data={{ item: item }} />
+					<div className="flex flex-col gap-4">
+						<ItemHeader item={item} />
+						<ItemTitle item={item} />
 					</div>
-					<div className="col-span-4 xl:col-span-3">
-						<div className="flex flex-col gap-8">
-							<ItemAuthors item={item} />
-							<ItemInstitutions item={item} />
-							<ItemDetails item={item} />
-							<ItemTechnical item={item} />
+					<div className="flex flex-col lg:grid grid-cols-12 gap-8">
+						<div className="col-span-8 xl:col-span-9 ">
+							<AnimatePresence>
+								{loading ? (
+									<motion.div className="flex justify-center items-center min-h-screen">
+										<Spinner />
+									</motion.div>
+								) : (
+									<motion.div
+										initial={loadingProp ? { opacity: 0, y: 32 } : { opacity: 1, y: 0 }}
+										animate={{ opacity: 1, y: 0 }}
+										exit={{ opacity: 0, y: -10 }}
+										transition={{ duration: 0.3, type: "spring" }}
+										className="flex flex-col gap-12"
+									>
+										{item?.abstractNote &&
+											item?.abstractNote.length > 0 && (
+												<>
+													<ItemAbstract item={item} />
+													<Divider />
+												</>
+											)}
+										<ItemCitation item={item} />
+										<ItemCollections item={item} />
+										<ItemAttachments item={item} />
+										<ItemCountry item={item} />
+										<ItemVectorRelations item={item} />
+										<ItemRelations item={item} />
+									</motion.div>
+								)}
+							</AnimatePresence>
+						</div>
+						<div className="col-span-4 xl:col-span-3">
+							<div className="flex flex-col gap-8">
+								<ItemAuthors item={item} />
+								<ItemInstitutions item={item} />
+								<ItemDetails item={item} />
+								<ItemTechnical item={item} />
+							</div>
 						</div>
 					</div>
 				</div>
-			</div>
+			</LoadingContext.Provider>
 		</PageContainer>
 	);
 }
