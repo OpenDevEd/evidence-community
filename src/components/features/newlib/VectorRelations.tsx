@@ -33,7 +33,7 @@ export default function VectorRelations({ item }: { item: Item | undefined }) {
 
 	return (
 		<div id="vector-relations" className="flex flex-col md:grid grid-cols-2 gap-4">
-			{isLoading ? Array.from({ length: 3 }).map((_, index) => (
+			{isLoading ? Array.from({ length: 5 }).map((_, index) => (
 				<Resource
 					key={index}
 					itemData={undefined}
