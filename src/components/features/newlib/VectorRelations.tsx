@@ -30,6 +30,7 @@ export default function VectorRelations({ item }: { item: Item | undefined }) {
 	);
 
 	if (!isRelatedItemsEnabled) return null;
+	if (!embeddings?.hits?.length && !isLoading) return null;
 
 	return (
 		<div id="vector-relations" className="flex flex-col md:grid grid-cols-2 gap-4">
