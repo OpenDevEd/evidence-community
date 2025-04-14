@@ -11,6 +11,7 @@ interface CopyButtonProps {
     textToCopy: string;
     className?: string;
     children?: ReactElement<any>;
+    ariaLabel?: string;
 }
 
 function CopyIcon({ copied }: { copied: boolean }) {
@@ -53,7 +54,7 @@ function CopyIcon({ copied }: { copied: boolean }) {
     );
 }
 
-export default function CopyButton({ textToCopy, className, children }: CopyButtonProps) {
+export default function CopyButton({ textToCopy, className, children, ariaLabel }: CopyButtonProps) {
     const [copied, setCopied] = useState(false);
 
     const handleCopy = async () => {
@@ -70,7 +71,8 @@ export default function CopyButton({ textToCopy, className, children }: CopyButt
         return cloneElement(children, {
             onPress: handleCopy,
             startContent: <CopyIcon copied={copied} />,
-            ...(children.props as object)
+            ...(children.props as object),
+            ariaLabel: ariaLabel
         });
     }
 
@@ -81,6 +83,7 @@ export default function CopyButton({ textToCopy, className, children }: CopyButt
             size="sm"
             className={twMerge("rounded-full", className)}
             onPress={handleCopy}
+            aria-label={ariaLabel}
         >
             <CopyIcon copied={copied} />
         </Button>

@@ -367,7 +367,7 @@ function ItemDetailsRow({ detail }: { detail: { label: string; value: any } }) {
 					<div className="text-base">{formattedValue}</div>
 				</div>
 			</div>
-			<CopyButton textToCopy={formattedValue} aria-label={tUI("itemCopyCitationAriaLabel")} />
+			<CopyButton textToCopy={formattedValue} ariaLabel={tUI("itemCopyCitationAriaLabel")} />
 		</div>
 	);
 }
@@ -491,7 +491,7 @@ function ItemPropertyRowWrapper({
 		<div className={twMerge("flex flex-col gap-4", className)}>
 			<div className="flex items-center justify-between">
 				<h3 className="text-xl font-medium">{title}</h3>
-				{copyText && <CopyButton textToCopy={copyText} aria-label={tUI("itemCopyCitationAriaLabel")} />}
+				{copyText && <CopyButton textToCopy={copyText} ariaLabel={tUI("itemCopyCitationAriaLabel")} />}
 			</div>
 			{children}
 		</div>
