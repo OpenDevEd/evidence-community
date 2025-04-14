@@ -461,7 +461,8 @@
     "createdAt": "Created At",
     "updatedAt": "Updated At",
     "citedBy": "Cited by",
-    "cites": "Cites"
+    "cites": "Cites",
+    "linkMode": "Link Mode"
   },
   "help": {
     "intro1": "The search interface is made of three sections: **Search**, **Explore**, and **Results**. These are described in detail below.",

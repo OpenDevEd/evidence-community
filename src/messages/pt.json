@@ -461,7 +461,8 @@
     "createdAt": "Criado em",
     "updatedAt": "Atualizado em",
     "citedBy": "Citado por",
-    "cites": "Cita"
+    "cites": "Cita",
+    "linkMode": "Modo de Ligação"
   },
   "help": {
     "intro1": "A interface de pesquisa é feita de três seções: **Pesquisar**, **Explorar** e **Resultados**. Estas são descritas em detalhes abaixo.",

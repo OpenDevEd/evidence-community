@@ -461,7 +461,8 @@
     "createdAt": "Erstellt am",
     "updatedAt": "Aktualisiert am",
     "citedBy": "Zitiert von",
-    "cites": "Zitate"
+    "cites": "Zitate",
+    "linkMode": "Verknüpfungsmodus"
   },
   "help": {
     "intro1": "Die Suchoberfläche besteht aus drei Abschnitten: **Suche**, **Entdecken** und **Ergebnisse**. Diese werden im Folgenden ausführlich beschrieben.",
