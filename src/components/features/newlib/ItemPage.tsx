@@ -40,6 +40,7 @@ import { AddButton } from "../items/Resource";
 import { BiDownload } from "react-icons/bi";
 import { LuDownload } from "react-icons/lu";
 import { createContext, use, useEffect, useState } from "react";
+import { useFeatureFlagEnabled } from "@/context/Providers";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -297,6 +298,8 @@ function ItemAuthor({ author }: { author?: Author }) {
 			: `${author?.firstName} ${author?.lastName}`
 		: undefined;
 
+	const isAuthorFilterEnabled = useFeatureFlagEnabled("author-filter");
+
 	const subtitle = (
 		<>
 			{creatorTypeLabel && (
@@ -309,8 +312,8 @@ function ItemAuthor({ author }: { author?: Author }) {
 
 	return (
 		<LinkWithParams
-			href={`/lib`}
-			params={fullName ? { author: fullName } : {}}
+			href={isAuthorFilterEnabled ? `/lib` : undefined}
+			params={(fullName && isAuthorFilterEnabled) ? { author: fullName } : {}}
 			className="opacity-100"
 		>
 			<ItemRow
@@ -348,10 +351,12 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 }
 
 function ItemInstitution({ institution }: { institution?: string }) {
+	const isAuthorLocationEnabled = useFeatureFlagEnabled("author-location");
+
 	return (
 		<LinkWithParams
-			href={`/lib`}
-			params={institution ? { institution: [institution] } : {}}
+			href={isAuthorLocationEnabled ? `/lib` : undefined}
+			params={(institution && isAuthorLocationEnabled) ? { institution: [institution] } : {}}
 			className="opacity-100"
 		>
 			<ItemRow
@@ -376,7 +381,7 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 	return (
 		<SidebarCard
 			title={t("itemInstitutionsTitle")}
-			count={institutions?.length}
+			count={item?.institution?.length}
 		>
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
@@ -640,7 +645,7 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 					>
 						<Skeleton
 							isLoaded={false}
-							className="rounded-2xl w-full min-h-10"
+							className="rounded-2xl w-full min-h-16"
 						/>
 					</motion.div>
 				) : (
@@ -815,7 +820,11 @@ function ItemCollection({
 }
 
 function ItemCollections({ item }: { item: Item | undefined }) {
+	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
 	const t = useTranslations("ui");
+
+	if (!isCollectionsEnabled) return null;
+
 	const collectionsAncestry = (item?.collectionsData as Collection[]) || [];
 
 	const groupedCollections = collectionsAncestry.reduce((acc, collection) => {
@@ -899,6 +908,7 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 
 function ItemVectorRelations({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
+	
 	return (
 		<ItemPropertyRowWrapper
 			className="[&:not(:has(#vector-relations))]:hidden"
