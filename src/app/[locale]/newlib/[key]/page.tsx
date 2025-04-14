@@ -22,5 +22,5 @@ export default async function NewLibPage({
 	if (!data) {
 		return notFound();
 	}
-	return <ItemPage data={data} />;
+	return <ItemPage data={data} loading={false} />;
 }

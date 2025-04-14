@@ -1,9 +1,9 @@
 "use client";
 
-import ItemComponent from "@/components/pages/Item";
 import { useLayoutEffect, useMemo } from "react";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { useLastFetchedData } from "@/context/Providers";
+import ItemPage from "@/components/features/newlib/ItemPage";
 
 export default function LoadingComponent({ itemKey }: { itemKey: string }) {
     const { lastFetchedData } = useLastFetchedData();
@@ -24,5 +24,5 @@ export default function LoadingComponent({ itemKey }: { itemKey: string }) {
         window.scrollTo(0, 0);
     }, []);
 
-    return <ItemComponent loading={true} data={itemAsResponse} />
+    return <ItemPage data={itemAsResponse as ItemGetResponse} loading={true} />
 }
