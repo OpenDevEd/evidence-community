@@ -6,7 +6,7 @@ import { inferParserType } from "nuqs";
 import { searchParamsLoader, serializeSearchParams } from "@/lib/searchParams";
 
 function LinkWithParams({ href, params, children, ...props}: { params: Partial<inferParserType<typeof searchParamsLoader>>} & ComponentProps<typeof Link>) {
-	return <Link href={href + serializeSearchParams(params)} {...props}>
+	return <Link isDisabled={!href || Object.keys(params).length === 0} href={href + serializeSearchParams(params)} {...props}>
 		{children}	
 	</Link>
 }
