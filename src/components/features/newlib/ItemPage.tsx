@@ -370,7 +370,7 @@ function ItemInstitution({ institution }: { institution?: string }) {
 function ItemInstitutions({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
-	const institutions = item?.institution as string[];
+	const institutions = item?.institution as string[] || [];
 	if (!institutions?.length && !loading) return null;
 
 	return (
