@@ -609,7 +609,7 @@ function ItemPropertyRowWrapper({
 function ItemAbstract({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	return (
-		<ItemPropertyRowWrapper title={t("itemAbstractTitle")}>
+		<ItemPropertyRowWrapper title={t("itemAbstractTitle")} copyText={item?.abstractNote || undefined}>
 			<p className="text-base text-black/60 dark:text-white/60">
 				{item?.abstractNote}
 			</p>
