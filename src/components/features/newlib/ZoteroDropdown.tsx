@@ -10,10 +10,12 @@ import { DropdownTrigger } from "@nextui-org/react";
 import { BiChevronDown } from "react-icons/bi";
 import { Key } from "react";
 import { Item } from "@/app/api/item/types";
+import { useTranslations } from "next-intl";
 
 
 
 export default function ZoteroDropdown({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
 	if (!item || item.groupExternalId === 1) return null;
 
 	const handleAction = (key: Key) => {
@@ -36,10 +38,10 @@ export default function ZoteroDropdown({ item }: { item: Item | undefined }) {
 			</DropdownTrigger>
 			<DropdownMenu onAction={handleAction}>
 				<DropdownItem key="view" startContent={<SiZotero />} href="#">
-					View on Zotero.org
+					{t("viewOnZotero")}
 				</DropdownItem>
 				<DropdownItem key="open" startContent={<SiZotero />} href="#">
-					Open in Zotero
+					{t("openInZotero")}
 				</DropdownItem>
 			</DropdownMenu>
 		</Dropdown>
