@@ -247,7 +247,7 @@ export default function Item({
 }) {
 	const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
 	const [referrerState, setReferrer] = useQueryState("referrer");
-	const referrer = "/" + (referrerState ?? "lib");
+	const referrer = (referrerState ?? "/lib");
 	const router = useRouter();
 	const t = useTranslations("ui");
 	const tArticle = useTranslations("article");

@@ -42,6 +42,7 @@ import { LuDownload } from "react-icons/lu";
 import { createContext, use, useEffect, useState } from "react";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { useQueryState } from "nuqs";
+import ItemOld from "@/components/pages/Item";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -951,6 +952,12 @@ export default function ItemPage({
 	loading: boolean;
 }) {
 	const loading = data?.item ? false : loadingProp;
+	const isNewResourcePageEnabled = useFeatureFlagEnabled("new-resource-page");
+
+	if (!isNewResourcePageEnabled) {
+		return <ItemOld data={data} loading={loading} />
+	}
+	
 	const item = transformItem(loading ? undefined : data?.item)!;
 
 	return (
