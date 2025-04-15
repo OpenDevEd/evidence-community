@@ -106,7 +106,7 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 				<div className="flex items-center gap-3">
 					{icon}
 					<div className="flex flex-col">
-						<div className="text-base font-medium">
+						<div className="text-base font-medium text-black/80 dark:text-white/80">
 							{title || "-"}
 						</div>
 						{subtitle}
