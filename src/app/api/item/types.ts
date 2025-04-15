@@ -2,6 +2,12 @@ import { InferSelectModel } from "drizzle-orm";
 import { item } from "@/db/schema/tables/item";
 import { Collection } from "../collections/types";
 
+interface Institution {
+  id: string;
+  country_code: string;
+  display_name: string;
+}
+
 export type Item = InferSelectModel<typeof item> & {
   attachmentsData?: Item[];
   collectionsData?: Collection[];
@@ -22,5 +28,5 @@ export type Author = {
 	institution: string;
 	name: string;
 	creatorType: string;
-	institutions?: any;
+	institutions?: Institution[];
 };
