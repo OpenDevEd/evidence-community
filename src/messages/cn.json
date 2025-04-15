@@ -187,7 +187,8 @@
     "itemLikeAriaLabel": "喜欢出版物",
     "itemAddToCollectionAriaLabel": "添加到收藏",
     "itemViewOriginalAriaLabel": "查看原始出版物",
-    "itemZoteroOptionsAriaLabel": "Zotero 选项"
+    "itemZoteroOptionsAriaLabel": "Zotero 选项",
+    "itemFilterByCountryAriaLabel": "按国家筛选"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

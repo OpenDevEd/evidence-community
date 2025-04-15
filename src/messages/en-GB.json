@@ -187,7 +187,8 @@
     "itemLikeAriaLabel": "Like publication",
     "itemAddToCollectionAriaLabel": "Add to collection",
     "itemViewOriginalAriaLabel": "View original publication",
-    "itemZoteroOptionsAriaLabel": "Zotero options"
+    "itemZoteroOptionsAriaLabel": "Zotero options",
+    "itemFilterByCountryAriaLabel": "Filter by country"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

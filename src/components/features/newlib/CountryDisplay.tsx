@@ -11,6 +11,7 @@ import { COUNTRIES } from "@/constants/misc";
 import LinkWithParams from "../LinkWithParams";
 import { getCountryAncestry } from "@/lib/utils";
 import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useTranslations } from "next-intl";
 
 interface CountryDisplayProps {
 	countries: string[];
@@ -169,7 +170,8 @@ const CountryCard = ({
 	const { theme } = useTheme();
 	const isLight = theme === "light";
 	const countryName = COUNTRIES[country] || country;
-
+	const t = useTranslations("ui");
+	
 	return (
 		<motion.div
 			variants={itemVariants}
@@ -253,7 +255,7 @@ const CountryCard = ({
 											: "text-accent"
 									}
 								/>
-								View details
+								{t("itemFilterByCountryAriaLabel")}
 							</div>
 						</motion.div>
 					</div>
