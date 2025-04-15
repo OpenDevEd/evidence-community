@@ -188,7 +188,8 @@
     "itemAddToCollectionAriaLabel": "संग्रह में जोड़ें",
     "itemViewOriginalAriaLabel": "मूल प्रकाशन देखें",
     "itemZoteroOptionsAriaLabel": "ज़ोटेरो विकल्प",
-    "itemFilterByCountryAriaLabel": "देश के अनुसार फ़िल्टर करें"
+    "itemFilterByCountryAriaLabel": "देश के अनुसार फ़िल्टर करें",
+    "itemAffiliationsCount": "संबद्धता(एँ)"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

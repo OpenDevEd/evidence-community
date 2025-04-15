@@ -188,7 +188,8 @@
     "itemAddToCollectionAriaLabel": "Add to collection",
     "itemViewOriginalAriaLabel": "View original publication",
     "itemZoteroOptionsAriaLabel": "Zotero options",
-    "itemFilterByCountryAriaLabel": "Filter by country"
+    "itemFilterByCountryAriaLabel": "Filter by country",
+    "itemAffiliationsCount": "affiliation(s)"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

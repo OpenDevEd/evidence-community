@@ -43,6 +43,7 @@ import { createContext, use, useEffect, useState } from "react";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { useQueryState } from "nuqs";
 import ItemOld from "@/components/pages/Item";
+import { COUNTRIES } from "@/constants/misc";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -293,6 +294,7 @@ function SidebarCard({
 function ItemAuthor({ author }: { author?: Author }) {
 	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("creatorType");
+	const tUI = useTranslations("ui");
 	const creatorTypeLabel = author ? t(author?.creatorType) : undefined;
 	const { creatorType, institutions, ...rest } = author || {};
 	const fullName = author
@@ -302,35 +304,112 @@ function ItemAuthor({ author }: { author?: Author }) {
 		: undefined;
 
 	const isAuthorFilterEnabled = useFeatureFlagEnabled("author-filter");
+	const affiliationCount = author?.institutions?.length || 0;
 
 	const subtitle = (
 		<>
-			{creatorTypeLabel && (
-				<div className="text-xs text-black/60 dark:text-white/60">
-					{creatorTypeLabel}
-				</div>
-			)}
+			<div className="flex items-center gap-2">
+				{creatorTypeLabel && (
+					<div className="text-xs text-black/60 dark:text-white/60">
+						{creatorTypeLabel}
+					</div>
+				)}
+				{affiliationCount > 0 && (
+					<div className="text-xs text-black/40 dark:text-white/40">
+						{affiliationCount} {tUI("itemAffiliationsCount")}
+					</div>
+				)}
+			</div>
 		</>
 	);
 
 	return (
-		<LinkWithParams
-			href={isAuthorFilterEnabled ? (referrer ?? `/lib`) : undefined}
-			params={(fullName && isAuthorFilterEnabled) ? { author: fullName, referrer: referrer ?? undefined } : {}}
-			className="opacity-100"
+		<Tooltip
+			closeDelay={0}
+			isDisabled={affiliationCount === 0}
+			key={author?.name}
+			className="rounded-2xl"
+			content={
+				<div className="py-2 px-1 min-w-[300px]">
+					{/* Author Header */}
+					<div className="flex items-center gap-3 mb-4">
+						<Avatar
+							name={author ? formatAuthor(author).charAt(0) : "-"}
+							size="lg"
+							className="text-xl text-accent bg-accent/10 brightness-150"
+						/>
+						<div>
+							<h3 className="font-medium text-lg text-black dark:text-white">
+								{author?.firstName} {author?.lastName}
+							</h3>
+							<p className="text-sm text-black/60 dark:text-white/60">
+								{author?.creatorType
+									? t(author?.creatorType)
+									: "-"}
+							</p>
+						</div>
+					</div>
+
+					{/* Institutions List */}
+					{author?.institutions &&
+						author?.institutions?.length > 0 && (
+							<div className="space-y-2">
+								<h4 className="text-sm font-medium text-black/70 dark:text-white/70 mb-2">
+									Affiliations
+								</h4>
+								{author.institutions.map((institution, idx) => (
+									<div
+										key={idx}
+										className="flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+									>
+										<div className="flex-1">
+											<p className="text-sm text-black dark:text-white">
+												{institution.display_name}
+											</p>
+											<div className="flex items-center gap-1 mt-1">
+												<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
+													<img
+														src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
+														alt={
+															institution.country_code
+														}
+														className="w-full h-full object-cover"
+													/>
+												</div>
+												<span className="text-xs text-black/60 dark:text-white/60">
+													{`${COUNTRIES[institution.country_code]} (${institution.country_code})`}
+												</span>
+											</div>
+										</div>
+									</div>
+								))}
+							</div>
+						)}
+				</div>
+			}
 		>
-			<ItemRow
-				icon={
-					<Avatar
-						name={author ? formatAuthor(author).charAt(0) : "-"}
-						size="sm"
-						className="text-lg text-accent bg-accent/10 brightness-150 shrink-0"
-					/>
+			<LinkWithParams
+				href={isAuthorFilterEnabled ? referrer ?? `/lib` : undefined}
+				params={
+					fullName && isAuthorFilterEnabled
+						? { author: fullName, referrer: referrer ?? undefined }
+						: {}
 				}
-				title={author && formatAuthor(author)}
-				subtitle={subtitle}
-			/>
-		</LinkWithParams>
+				className="opacity-100"
+			>
+				<ItemRow
+					icon={
+						<Avatar
+							name={author ? formatAuthor(author).charAt(0) : "-"}
+							size="sm"
+							className="text-lg text-accent bg-accent/10 brightness-150 shrink-0"
+						/>
+					}
+					title={author && formatAuthor(author)}
+					subtitle={subtitle}
+				/>
+			</LinkWithParams>
+		</Tooltip>
 	);
 }
 
@@ -339,6 +418,8 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const authors = item?.creators as Author[];
 	if (!authors?.length && !loading) return null;
+
+	console.log(JSON.stringify(authors, null, 2));
 
 	return (
 		<SidebarCard title={t("itemAuthorsTitle")} count={authors?.length}>
@@ -359,8 +440,15 @@ function ItemInstitution({ institution }: { institution?: string }) {
 
 	return (
 		<LinkWithParams
-			href={isAuthorLocationEnabled ? (referrer ?? `/lib`) : undefined}
-			params={(institution && isAuthorLocationEnabled) ? { institution: [institution], referrer: referrer ?? undefined } : {}}
+			href={isAuthorLocationEnabled ? referrer ?? `/lib` : undefined}
+			params={
+				institution && isAuthorLocationEnabled
+					? {
+							institution: [institution],
+							referrer: referrer ?? undefined,
+					  }
+					: {}
+			}
 			className="opacity-100"
 		>
 			<ItemRow
@@ -379,7 +467,7 @@ function ItemInstitution({ institution }: { institution?: string }) {
 function ItemInstitutions({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
-	const institutions = item?.institution as string[] || [];
+	const institutions = (item?.institution as string[]) || [];
 	if (!institutions?.length && !loading) return null;
 
 	return (
@@ -618,7 +706,10 @@ function ItemPropertyRowWrapper({
 function ItemAbstract({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	return (
-		<ItemPropertyRowWrapper title={t("itemAbstractTitle")} copyText={item?.abstractNote || undefined}>
+		<ItemPropertyRowWrapper
+			title={t("itemAbstractTitle")}
+			copyText={item?.abstractNote || undefined}
+		>
 			<p className="text-base text-black/60 dark:text-white/60">
 				{item?.abstractNote}
 			</p>
@@ -804,7 +895,10 @@ function ItemCollection({
 			>
 				<LinkWithParams
 					href={referrer ?? "/lib"}
-					params={{ collections: [...ancestry, collection.key], referrer: referrer ?? undefined }}
+					params={{
+						collections: [...ancestry, collection.key],
+						referrer: referrer ?? undefined,
+					}}
 				>
 					<motion.div
 						whileHover={{ scale: 1.02 }}
@@ -915,7 +1009,7 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 function ItemVectorRelations({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
-	
+
 	return (
 		<ItemPropertyRowWrapper
 			className="[&:not(:has(#vector-relations))]:hidden"
@@ -955,9 +1049,9 @@ export default function ItemPage({
 	const isNewResourcePageEnabled = useFeatureFlagEnabled("new-resource-page");
 
 	if (!isNewResourcePageEnabled) {
-		return <ItemOld data={data} loading={loading} />
+		return <ItemOld data={data} loading={loading} />;
 	}
-	
+
 	const item = transformItem(loading ? undefined : data?.item)!;
 
 	return (
@@ -978,10 +1072,17 @@ export default function ItemPage({
 									</motion.div>
 								) : (
 									<motion.div
-										initial={loadingProp ? { opacity: 0, y: 32 } : { opacity: 1, y: 0 }}
+										initial={
+											loadingProp
+												? { opacity: 0, y: 32 }
+												: { opacity: 1, y: 0 }
+										}
 										animate={{ opacity: 1, y: 0 }}
 										exit={{ opacity: 0, y: -10 }}
-										transition={{ duration: 0.3, type: "spring" }}
+										transition={{
+											duration: 0.3,
+											type: "spring",
+										}}
 										className="flex flex-col gap-12"
 									>
 										{item?.abstractNote &&

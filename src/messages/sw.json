@@ -189,7 +189,8 @@
     "itemAddToCollectionAriaLabel": "Ongeza kwenye mkusanyiko",
     "itemViewOriginalAriaLabel": "Tazama chapisho asili",
     "itemZoteroOptionsAriaLabel": "Chaguzi za Zotero",
-    "itemFilterByCountryAriaLabel": "Chuja kwa nchi"
+    "itemFilterByCountryAriaLabel": "Chuja kwa nchi",
+    "itemAffiliationsCount": "vyama"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

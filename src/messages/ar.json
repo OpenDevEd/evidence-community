@@ -188,7 +188,8 @@
     "itemAddToCollectionAriaLabel": "إضافة إلى المجموعة",
     "itemViewOriginalAriaLabel": "عرض المنشور الأصلي",
     "itemZoteroOptionsAriaLabel": "خيارات Zotero",
-    "itemFilterByCountryAriaLabel": "تصفية حسب البلد"
+    "itemFilterByCountryAriaLabel": "تصفية حسب البلد",
+    "itemAffiliationsCount": "الانتماءات"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
