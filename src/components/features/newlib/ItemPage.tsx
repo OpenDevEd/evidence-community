@@ -907,6 +907,7 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 }
 
 function ItemVectorRelations({ item }: { item: Item | undefined }) {
+	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
 	
 	return (
@@ -917,7 +918,7 @@ function ItemVectorRelations({ item }: { item: Item | undefined }) {
 			<p className="text-black/60 dark:text-white/60">
 				{t("recommendedResourcesDescription")}
 			</p>
-			<VectorRelations item={item} />
+			<VectorRelations item={item} loading={loading} />
 		</ItemPropertyRowWrapper>
 	);
 }

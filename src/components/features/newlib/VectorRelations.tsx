@@ -7,11 +7,11 @@ import { fetcher } from "@/lib/utils";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import Resource from "../items/Resource";
 
-export default function VectorRelations({ item }: { item: Item | undefined }) {
+export default function VectorRelations({ item, loading }: { item: Item | undefined, loading: boolean }) {
 	const { lastFetchedData, setLastFetchedData } = useLastFetchedData();
 	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources");
 	const { data: embeddings, isLoading } = useSWR(
-		isRelatedItemsEnabled && item?.key
+		isRelatedItemsEnabled && item?.key && !loading
 			? `/ai/embeddings/${item?.key}`
 			: null,
 		fetcher,
@@ -30,11 +30,11 @@ export default function VectorRelations({ item }: { item: Item | undefined }) {
 	);
 
 	if (!isRelatedItemsEnabled) return null;
-	if (!embeddings?.hits?.length && !isLoading) return null;
+	if (!embeddings?.hits?.length && !isLoading && !loading) return null;
 
 	return (
 		<div id="vector-relations" className="flex flex-col md:grid grid-cols-2 gap-4">
-			{isLoading ? Array.from({ length: 5 }).map((_, index) => (
+			{(isLoading || loading) ? Array.from({ length: 6 }).map((_, index) => (
 				<Resource
 					key={index}
 					itemData={undefined}
