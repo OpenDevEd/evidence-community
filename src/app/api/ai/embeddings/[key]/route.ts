@@ -56,7 +56,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 				"deleted != 1",
 				`tags NOT IN ${JSON.stringify(blockedTags)}`
 			],
-			limit: 5,
+			limit: 6,
 		});
 
 	return NextResponse.json(result);
