@@ -301,6 +301,7 @@ export function CountryDisplay({
 									: {}
 							}
 							key={country}
+							className="opacity-100"
 						>
 							<CountryCard
 								country={country}
