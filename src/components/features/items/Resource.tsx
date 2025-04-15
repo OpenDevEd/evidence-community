@@ -42,7 +42,6 @@ export function AddButton({
 	revalidateResults?: any;
 	collectionId?: string;
 }) {
-
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const [loading, setLoading] = useState(false);
 	const { trigger } = useSWRMutation(`/user/item/${itemData?.key}`, setter);
@@ -50,17 +49,14 @@ export function AddButton({
 	const isUserCollectionsEnabled = useFeatureFlagEnabled("user-collections");
 	const t = useTranslations("ui");
 	const highlightedCollections = Object.keys(
-		itemData
-			? session?.user
-					.itemsCollections[
-					itemData.key
-			  ] ?? {}
-			: {}
-	)
+		itemData ? session?.user.itemsCollections[itemData.key] ?? {} : {}
+	);
 	const onCollectionSelect = async (pressedCollectionId: string) => {
 		setLoading(true);
 		try {
-			const willClose = pressedCollectionId === collectionId && highlightedCollections.includes(pressedCollectionId);
+			const willClose =
+				pressedCollectionId === collectionId &&
+				highlightedCollections.includes(pressedCollectionId);
 			await trigger({ collectionId: pressedCollectionId });
 			await Promise.allSettled([
 				revalidateResults && revalidateResults(),
@@ -77,9 +73,14 @@ export function AddButton({
 	};
 
 	return (
-		session && isUserCollectionsEnabled && (
+		session &&
+		isUserCollectionsEnabled && (
 			<>
-				<DialogModal size="lg" isOpen={isOpen} onOpenChange={onOpenChange}>
+				<DialogModal
+					size="lg"
+					isOpen={isOpen}
+					onOpenChange={onOpenChange}
+				>
 					<ModalContent>
 						<GenericHeader onClose={onClose}>
 							{t("selectCollection")}
@@ -92,7 +93,9 @@ export function AddButton({
 								<div className="flex flex-col gap-4">
 									<CollectionsList
 										isLoading={loading}
-										highlightedCollections={highlightedCollections}
+										highlightedCollections={
+											highlightedCollections
+										}
 										data={session?.user}
 										classNames={{
 											container: "gap-3",
@@ -216,13 +219,14 @@ export default function Resource({
 	const router = useRouter();
 	const currentPath = usePathname();
 
-	const { data: fetchedItemData, isLoading: fetchedItemDataLoading } = useSWR<ItemGetResponse>(itemKey ? `/item/${itemKey}` : null, fetcher, {
-		revalidateOnFocus: false,
-	});
+	const { data: fetchedItemData, isLoading: fetchedItemDataLoading } =
+		useSWR<ItemGetResponse>(itemKey ? `/item/${itemKey}` : null, fetcher, {
+			revalidateOnFocus: false,
+		});
 
 	const finalItemData = itemData ?? fetchedItemData?.item;
 	const finalIsLoading = !itemKey ? isLoading : fetchedItemDataLoading;
-	
+
 	const abstractText =
 		finalItemData && firstNonNullOrEmpty(finalItemData, ["abstractNote"]);
 
@@ -248,15 +252,22 @@ export default function Resource({
 		return () => observer.disconnect();
 	}, [href, router, finalItemData?.key]);
 
-
 	return (
-		<ResourceWrapper 
-			as={as} 
-			className={twMerge("@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col", className)}
+		<ResourceWrapper
+			as={as}
+			className={twMerge(
+				"@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col",
+				className
+			)}
 		>
 			<Link
 				href={serializeSearchParams(href, {
-					referrer: referrer ?? currentPath.split("/")[1],
+					referrer:
+						referrer ??
+						"/" +
+							(currentPath.startsWith("/lib")
+								? "lib"
+								: currentPath.split("/").slice(1).join("/")),
 				})}
 				className="p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1"
 				onMouseDown={(e) => {
@@ -279,8 +290,12 @@ export default function Resource({
 						isLoaded={!finalIsLoading}
 						className="w-full min-h-8 rounded-2xl"
 					>
-						<h3 dangerouslySetInnerHTML={{ __html: finalItemData?.title ?? "" }} className="text-2xl text-black/80 dark:text-white/80 line-clamp-2">
-						</h3>
+						<h3
+							dangerouslySetInnerHTML={{
+								__html: finalItemData?.title ?? "",
+							}}
+							className="text-2xl text-black/80 dark:text-white/80 line-clamp-2"
+						></h3>
 					</Skeleton>
 					<Skeleton
 						isLoaded={!finalIsLoading}
@@ -290,7 +305,9 @@ export default function Resource({
 							<ResourceAuthors itemData={finalItemData} />
 							<ResourceDivider />
 							{finalItemData?.date &&
-								!isNaN(new Date(finalItemData.date).getTime()) && (
+								!isNaN(
+									new Date(finalItemData.date).getTime()
+								) && (
 									<>
 										<ResourceData
 											element="time"
@@ -344,13 +361,13 @@ export default function Resource({
 	);
 }
 
-function ResourceWrapper({ 
+function ResourceWrapper({
 	as,
-	children, 
-	className 
-}: { 
-	as: "li" | "div"; 
-	children: React.ReactNode; 
+	children,
+	className,
+}: {
+	as: "li" | "div";
+	children: React.ReactNode;
 	className?: string;
 }) {
 	const Component = as;

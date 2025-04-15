@@ -3,8 +3,6 @@
 import { motion, AnimatePresence, Variants } from "framer-motion";
 import { useState } from "react";
 import { IoGlobeOutline } from "react-icons/io5";
-import { Card } from "@/components/nextui/Card";
-import { Item } from "@/app/api/item/types";
 import { useTheme } from "next-themes";
 import { twMerge } from "tailwind-merge";
 import { COUNTRIES } from "@/constants/misc";
@@ -12,6 +10,7 @@ import LinkWithParams from "../LinkWithParams";
 import { getCountryAncestry } from "@/lib/utils";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { useTranslations } from "next-intl";
+import { useQueryState } from "nuqs";
 
 interface CountryDisplayProps {
 	countries: string[];
@@ -279,6 +278,7 @@ export function CountryDisplay({
 	countries,
 	onCountryClick,
 }: CountryDisplayProps) {
+	const [referrer, setReferrer] = useQueryState("referrer");
 	const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
 	const isCountryFocusEnabled = useFeatureFlagEnabled("country-focus");
 
@@ -294,10 +294,10 @@ export function CountryDisplay({
 					const ancestry = getCountryAncestry(country);
 					return (
 						<LinkWithParams
-							href={isCountryFocusEnabled ? `/lib` : undefined}
+							href={isCountryFocusEnabled ? (referrer ?? "/lib") : undefined}
 							params={
 								ancestry && isCountryFocusEnabled
-									? { country: ancestry }
+									? { country: ancestry, referrer: referrer ?? undefined }
 									: {}
 							}
 							key={country}

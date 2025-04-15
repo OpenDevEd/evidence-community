@@ -41,6 +41,7 @@ import { BiDownload } from "react-icons/bi";
 import { LuDownload } from "react-icons/lu";
 import { createContext, use, useEffect, useState } from "react";
 import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useQueryState } from "nuqs";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -289,6 +290,7 @@ function SidebarCard({
 }
 
 function ItemAuthor({ author }: { author?: Author }) {
+	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("creatorType");
 	const creatorTypeLabel = author ? t(author?.creatorType) : undefined;
 	const { creatorType, institutions, ...rest } = author || {};
@@ -312,8 +314,8 @@ function ItemAuthor({ author }: { author?: Author }) {
 
 	return (
 		<LinkWithParams
-			href={isAuthorFilterEnabled ? `/lib` : undefined}
-			params={(fullName && isAuthorFilterEnabled) ? { author: fullName } : {}}
+			href={isAuthorFilterEnabled ? (referrer ?? `/lib`) : undefined}
+			params={(fullName && isAuthorFilterEnabled) ? { author: fullName, referrer: referrer ?? undefined } : {}}
 			className="opacity-100"
 		>
 			<ItemRow
@@ -351,12 +353,13 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 }
 
 function ItemInstitution({ institution }: { institution?: string }) {
+	const [referrer, setReferrer] = useQueryState("referrer");
 	const isAuthorLocationEnabled = useFeatureFlagEnabled("author-location");
 
 	return (
 		<LinkWithParams
-			href={isAuthorLocationEnabled ? `/lib` : undefined}
-			params={(institution && isAuthorLocationEnabled) ? { institution: [institution] } : {}}
+			href={isAuthorLocationEnabled ? (referrer ?? `/lib`) : undefined}
+			params={(institution && isAuthorLocationEnabled) ? { institution: [institution], referrer: referrer ?? undefined } : {}}
 			className="opacity-100"
 		>
 			<ItemRow
@@ -675,6 +678,7 @@ function ItemCollection({
 	collection: Collection;
 	item: Item | undefined;
 }) {
+	const [referrer, setReferrer] = useQueryState("referrer");
 	const ancestry = collection.ancestry || [];
 	const collectionsData = item?.collectionsData as Collection[];
 
@@ -737,11 +741,12 @@ function ItemCollection({
 									</motion.div>
 								)}
 								<LinkWithParams
-									href="/lib"
+									href={referrer ?? "/lib"}
 									params={{
 										collections: fullHierarchy
 											.slice(0, index + 1)
 											.map((h) => h.key),
+										referrer: referrer ?? undefined,
 									}}
 								>
 									<motion.span
@@ -797,8 +802,8 @@ function ItemCollection({
 				}}
 			>
 				<LinkWithParams
-					href={"/lib"}
-					params={{ collections: [...ancestry, collection.key] }}
+					href={referrer ?? "/lib"}
+					params={{ collections: [...ancestry, collection.key], referrer: referrer ?? undefined }}
 				>
 					<motion.div
 						whileHover={{ scale: 1.02 }}
