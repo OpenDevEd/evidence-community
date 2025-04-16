@@ -5,6 +5,8 @@ import {
 	AccordionItem,
 	AutocompleteItem,
 	AutocompleteSection,
+	Listbox,
+	ListboxItem,
 } from "@nextui-org/react";
 import { Skeleton } from "../../nextui/Skeleton";
 import { twMerge } from "tailwind-merge";
@@ -35,7 +37,7 @@ import {
 import Image from "next/image";
 import { getCountryAncestry, getCountryInfo } from "@/lib/utils";
 import { BsList } from "react-icons/bs";
-
+import { Button } from "../../nextui/Button";
 function YearPicker({
 	label,
 	placeholder,
@@ -151,7 +153,7 @@ function FacetPicker({
 					scrollShadowProps={{
 						isEnabled: false,
 						size: 0,
-					  }}
+					}}
 					selectedKey={isMultiSelect ? null : selectedKey}
 					onSelectionChange={(key) => {
 						const item = displayedList!.find(
@@ -486,7 +488,10 @@ function FiltersList({
 	const isCountryFocusEnabled = useFeatureFlagEnabled("country-focus");
 	const isAuthorLocationEnabled = useFeatureFlagEnabled("author-location");
 
-	const enabledCount = [isCountryFocusEnabled, isAuthorLocationEnabled].filter(Boolean).length;
+	const enabledCount = [
+		isCountryFocusEnabled,
+		isAuthorLocationEnabled,
+	].filter(Boolean).length;
 
 	const t = useTranslations("ui");
 
@@ -557,74 +562,93 @@ function FiltersList({
 		[institutions, institutionsFacetDistribution]
 	);
 
-	const CountryFocusFilter = () => {
+	const countryFocusFilter = useMemo(() => {
 		return (
-			isCountryFocusEnabled && <FacetPicker
-				label={t("countryFilter")}
-				placeholder={t("countryFilterDescription")}
-				selectedKey={queryParams.country}
-				onSelectionChange={handleCountrySelect}
-				facetDistribution={facetDistribution}
-				list={countries}
-				facetName="country"
-				searchList={countries_uncategorized.map((item) => ({
-					...item,
-					hide: false,
-				}))}
-			/>
+			isCountryFocusEnabled && (
+				<FacetPicker
+					key={"country-focus-filter"}
+					label={t("countryFilter")}
+					placeholder={t("countryFilterDescription")}
+					selectedKey={queryParams.country}
+					onSelectionChange={handleCountrySelect}
+					facetDistribution={facetDistribution}
+					list={countries}
+					facetName="country"
+					searchList={countries_uncategorized.map((item) => ({
+						...item,
+						hide: false,
+					}))}
+				/>
+			)
 		);
-	};
+	}, [
+		isCountryFocusEnabled,
+		t,
+		queryParams.country,
+		handleCountrySelect,
+		facetDistribution,
+		countries,
+		countries_uncategorized,
+	]);
 
-	const AuthorLocationFilter = () => {
+	const authorLocationFilter = useMemo(() => {
 		return (
-			isAuthorLocationEnabled && <FacetPicker
-				label={t("authorCountries")}
-				placeholder={
-					author_countries.find(
-						(item) => item.section === "Countries"
-					)?.label
-						? t("authorCountriesDescription")
-						: t("authorInstitutionsDescription")
-				}
-				selectedKey={[
-					...queryParams.author_country,
-					...queryParams.institution,
-				]}
-				list={author_countries}
-				searchList={author_countries_uncategorized.map((item) => ({
-					...item,
-					hide: false,
-				}))}
-			/>
+			isAuthorLocationEnabled && (
+				<FacetPicker
+					key={"author-location-filter"}
+					label={t("authorCountries")}
+					placeholder={
+						author_countries.find(
+							(item) => item.section === "Countries"
+						)?.label
+							? t("authorCountriesDescription")
+							: t("authorInstitutionsDescription")
+					}
+					selectedKey={[
+						...queryParams.author_country,
+						...queryParams.institution,
+					]}
+					list={author_countries}
+					searchList={author_countries_uncategorized.map((item) => ({
+						...item,
+						hide: false,
+					}))}
+				/>
+			)
 		);
-	};
+	}, [
+		isAuthorLocationEnabled,
+		t,
+		author_countries,
+		queryParams.author_country,
+		queryParams.institution,
+		author_countries_uncategorized,
+	]);
 
-	const MoreFilters = () => {
+	const moreFilters = useMemo(() => {
 		return (
 			<>
-				<CountryFocusFilter />		
-				<AuthorLocationFilter />
+				{countryFocusFilter}
+				{authorLocationFilter}
 			</>
-		)
-	}
+		);
+	}, [countryFocusFilter, authorLocationFilter]);
 
-	return (
-		enabledCount > 1 ? (
-			<Accordion defaultExpandedKeys={["More Filters"]} className="p-0">
-				<AccordionItem
-					key={"More Filters"}
-					title={t("moreFilters")}
-					classNames={{
-						content: "p-0 flex flex-col gap-4 pt-4",
-						trigger: "pb-0 pt-2",
-					}}
-				>
-					<MoreFilters />
-				</AccordionItem>
-			</Accordion>
-		) : (
-			<MoreFilters />
-		)
+	return enabledCount > 1 ? (
+		<Accordion defaultExpandedKeys={["More Filters"]} className="p-0">
+			<AccordionItem
+				key={"More Filters"}
+				title={t("moreFilters")}
+				classNames={{
+					content: "p-0 flex flex-col gap-4 pt-4",
+					trigger: "pb-0 pt-2",
+				}}
+			>
+				{moreFilters}
+			</AccordionItem>
+		</Accordion>
+	) : (
+		moreFilters
 	);
 }
 
