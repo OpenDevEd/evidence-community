@@ -567,7 +567,10 @@ function FiltersList({
 				facetDistribution={facetDistribution}
 				list={countries}
 				facetName="country"
-				searchList={countries_uncategorized}
+				searchList={countries_uncategorized.map((item) => ({
+					...item,
+					hide: false,
+				}))}
 			/>
 		);
 	};
