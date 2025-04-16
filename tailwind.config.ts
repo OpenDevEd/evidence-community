@@ -1,5 +1,5 @@
 import type { Config } from "tailwindcss";
-import { nextui } from "@nextui-org/react";
+import { heroui } from "@heroui/react";
 import jsonConfig from "./src/constants/config.json";
 
 export const style = process.env.NEXT_PUBLIC_STYLE || jsonConfig?.style || "small";
@@ -169,7 +169,7 @@ const config: Config = {
     "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
-    "./node_modules/@nextui-org/theme/dist/**/*.{js,ts,jsx,tsx}",
+    "./node_modules/@heroui/theme/dist/**/*.{js,ts,jsx,tsx}",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
@@ -208,7 +208,7 @@ const config: Config = {
     },
     require('@tailwindcss/container-queries'),
     require('@tailwindcss/typography'),
-    nextui({
+    heroui({
       themes: {
         dark: {
           colors: {
