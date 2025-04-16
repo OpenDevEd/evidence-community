@@ -1,4 +1,4 @@
-import { Modal, ModalProps } from "@nextui-org/react";
+import { Modal, ModalProps } from "@heroui/react";
 
 export default function FullScreenModal(props: ModalProps) {
 	return (

@@ -1,4 +1,4 @@
-import { ModalHeader } from "@nextui-org/react";
+import { ModalHeader } from "@heroui/react";
 import { Button } from "@/components/nextui/Button";
 import { LuX } from "react-icons/lu";
 import { SectionTitle } from "@/components/typography/SectionTitle";

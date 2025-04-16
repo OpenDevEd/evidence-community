@@ -1,5 +1,5 @@
 "use client";
-import { extendVariants, Select as NextUISelect } from "@nextui-org/react";
+import { extendVariants, Select as NextUISelect } from "@heroui/react";
 
 export const Select = extendVariants(NextUISelect, {
   variants: {

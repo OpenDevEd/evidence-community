@@ -1,4 +1,4 @@
-import { Modal, ModalProps } from "@nextui-org/react";
+import { Modal, ModalProps } from "@heroui/react";
 import { twMerge } from "tailwind-merge";
 
 export default function DialogModal({classNames, ...props}: ModalProps) {

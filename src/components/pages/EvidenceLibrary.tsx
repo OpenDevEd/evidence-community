@@ -25,7 +25,7 @@ import {
 	Textarea,
 	Tooltip,
 	useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import React, { ReactNode, use, useRef, useState, useEffect } from "react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { AiOutlineCompass } from "react-icons/ai";
@@ -103,7 +103,7 @@ export function SearchBar({
 		<Input
 			autoCorrect="off"
 			defaultValue={search}
-			onChange={(e) => debouncedSearch(e.target.value)}
+			onChange={(e: any) => debouncedSearch(e.target.value)}
 			onClear={() => debouncedSearch("")}
 			placeholder={t("search")}
 			size={"lg"}
@@ -697,7 +697,7 @@ function SmartScreeningModal({
 			onOpenChange={onOpenChange}
 		>
 			<ModalContent>
-				{(onClose) => (
+				{(onClose: any) => (
 					<>
 						<AIHeader onClose={onClose}>
 							{t("smartScreening")}
@@ -785,7 +785,7 @@ function SmartScreeningModal({
 																		  ]
 																		: undefined
 																}
-																onChange={(e) =>
+																onChange={(e: any) =>
 																	setLocalFields(
 																		localFields.map(
 																			(
@@ -834,7 +834,7 @@ function SmartScreeningModal({
 																		  ]
 																		: undefined
 																}
-																onChange={(e) =>
+																onChange={(e: any) =>
 																	setLocalFields(
 																		localFields.map(
 																			(
@@ -894,7 +894,7 @@ function SmartScreeningModal({
 																			: undefined
 																	}
 																	onSelectionChange={(
-																		value
+																		value: any
 																	) => {
 																		const selectedType =
 																			Array.from(
@@ -923,9 +923,6 @@ function SmartScreeningModal({
 																		) => (
 																			<SelectItem
 																				key={
-																					type
-																				}
-																				value={
 																					type
 																				}
 																			>

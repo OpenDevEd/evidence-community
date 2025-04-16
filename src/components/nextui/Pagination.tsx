@@ -2,7 +2,7 @@
 import {
   extendVariants,
   Pagination as NextUIPagination,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 export const Pagination = extendVariants(NextUIPagination, {
   variants: {

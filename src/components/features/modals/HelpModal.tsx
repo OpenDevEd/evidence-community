@@ -1,6 +1,6 @@
 "use client";
 
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@nextui-org/react";
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
 import { LuX } from "react-icons/lu";
 import { SectionTitle } from "../../typography/SectionTitle";
 import { Paragraph } from "../../typography/Paragraph";

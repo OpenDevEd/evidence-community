@@ -2,7 +2,7 @@
 import {
   extendVariants,
   SelectItem as NextUISelectItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 export const SelectItem = extendVariants(NextUISelectItem, {
   variants: {

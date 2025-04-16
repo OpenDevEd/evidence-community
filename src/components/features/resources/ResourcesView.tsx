@@ -20,7 +20,7 @@ import {
 	useFeatureFlagEnabled,
 } from "@/context/Providers";
 import { DownloadModal } from "../items/ItemControls";
-import { useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@heroui/react";
 import { downloadItems } from "@/lib/actions";
 import { routing, usePathname, useRouter } from "@/i18n/routing";
 import { ItemsContext } from "../items/ItemsList";

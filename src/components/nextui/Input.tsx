@@ -1,5 +1,5 @@
 "use client";
-import { extendVariants, Input as NextUIInput } from "@nextui-org/react";
+import { extendVariants, Input as NextUIInput } from "@heroui/react";
 
 export const Input = extendVariants(NextUIInput, {
 	variants: {

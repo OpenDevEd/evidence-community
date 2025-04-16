@@ -1,5 +1,5 @@
 "use client";
-import { extendVariants, Switch as NextUISwitch } from "@nextui-org/react";
+import { extendVariants, Switch as NextUISwitch } from "@heroui/react";
 
 export const Switch = extendVariants(NextUISwitch, {
   variants: {

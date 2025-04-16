@@ -1,12 +1,12 @@
 "use client";
 
 import { Button } from "@/components/nextui/Button";
-import { DropdownMenu } from "@nextui-org/react";
+import { DropdownMenu } from "@heroui/react";
 import { SiZotero } from "react-icons/si";
-import { DropdownItem } from "@nextui-org/react";
+import { DropdownItem } from "@heroui/react";
 
 import { Dropdown } from "@/components/nextui/Dropdown";
-import { DropdownTrigger } from "@nextui-org/react";
+import { DropdownTrigger } from "@heroui/react";
 import { BiChevronDown } from "react-icons/bi";
 import { Key } from "react";
 import { Item } from "@/app/api/item/types";

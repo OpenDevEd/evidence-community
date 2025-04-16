@@ -7,7 +7,7 @@ import {
 	AutocompleteSection,
 	Listbox,
 	ListboxItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { Skeleton } from "../../nextui/Skeleton";
 import { twMerge } from "tailwind-merge";
 import CollectionCategory from "./CollectionCategory";

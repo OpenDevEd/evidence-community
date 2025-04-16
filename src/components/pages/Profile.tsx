@@ -36,8 +36,8 @@ import {
 	ModalBody,
 	ModalContent,
 	SelectItem,
-} from "@nextui-org/react";
-import { useDisclosure } from "@nextui-org/react";
+} from "@heroui/react";
+import { useDisclosure } from "@heroui/react";
 import GenericHeader from "../features/modals/GenericHeader";
 import { Select } from "../nextui/Select";
 import { COLLECTION_VISIBILITY_OPTIONS } from "@/constants/user";

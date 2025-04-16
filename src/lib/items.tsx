@@ -1,7 +1,7 @@
 import { ReactNode, useRef, useMemo, memo, useState, useEffect } from "react";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
-import { Accordion, AccordionItem, Divider, Link } from "@nextui-org/react";
+import { Accordion, AccordionItem, Divider, Link } from "@heroui/react";
 import { twMerge } from "tailwind-merge";
 import Attachment from "@/components/features/items/Attachment";
 import { createFormatter, useTranslations } from "next-intl";

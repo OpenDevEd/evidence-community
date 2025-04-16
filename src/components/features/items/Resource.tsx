@@ -7,7 +7,7 @@ import {
 	ModalContent,
 	Link as NextUILink,
 	useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";

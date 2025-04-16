@@ -30,8 +30,8 @@ import {
 	ModalHeader,
 	useDisclosure,
 	ModalBody,
-} from "@nextui-org/react";
-import { ChevronDownIcon } from "@nextui-org/shared-icons";
+} from "@heroui/react";
+import { ChevronDownIcon } from "@heroui/shared-icons";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useLocale, useTranslations } from "next-intl";
 import { Dropdown } from "@/components/nextui/Dropdown";

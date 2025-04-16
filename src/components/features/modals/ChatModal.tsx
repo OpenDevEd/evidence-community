@@ -8,7 +8,7 @@ import {
 	ScrollShadow,
 	Spinner,
 	Tooltip,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { LuUser } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { ImSpinner8 } from "react-icons/im";

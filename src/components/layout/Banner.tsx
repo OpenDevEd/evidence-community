@@ -9,7 +9,7 @@ import {
 	ModalContent,
 	ModalFooter,
 	useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { useLocalStorage } from "@uidotdev/usehooks";
 import { useEffect } from "react";
 import { MdPrivacyTip } from "react-icons/md";

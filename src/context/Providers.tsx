@@ -1,6 +1,6 @@
 "use client";
 
-import { NextUIProvider, Spinner } from "@nextui-org/react";
+import { HeroUIProvider, Spinner } from "@heroui/react";
 import { ThemeProvider, useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/i18n/routing";
@@ -22,8 +22,12 @@ import { useLocalStorage } from "usehooks-ts";
 import { useTranslations } from "next-intl";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Toaster } from "sonner";
-import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils";
+import {
+	convertStringFromDatabaseToObject,
+	getDynamicStyles,
+} from "@/lib/utils";
 import { getPersistence } from "@/components/layout/Banner";
+import { useRouter as useNextRouter } from "next/navigation";
 
 export type CacheContextType = {
 	status: InferSelectModel<typeof statusTable>;
@@ -154,12 +158,14 @@ function LoadingScreen({
 	const { data: session, status } = useSession();
 	const statusTable = useStatus();
 	const t = useTranslations("ui");
-	const companyLogoStyle = convertStringFromDatabaseToObject(statusTable.companyLogo || "")["splash"];
+	const companyLogoStyle = convertStringFromDatabaseToObject(
+		statusTable.companyLogo || ""
+	)["splash"];
 
 	return (
 		<AnimatePresence mode="popLayout">
 			{featureFlags && (status !== "loading" || !!session) ? (
-					children
+				children
 			) : (
 				<motion.div
 					key="loading"
@@ -203,7 +209,9 @@ function LoadingScreen({
 									})}
 									width={171}
 									height={40}
-									style={{ ...getDynamicStyles(companyLogoStyle) }}
+									style={{
+										...getDynamicStyles(companyLogoStyle),
+									}}
 								/>
 							))}
 						</motion.div>
@@ -214,18 +222,14 @@ function LoadingScreen({
 	);
 }
 
-
-function ToastAdapter({
-	children,
-}: {
-	children: React.ReactNode;
-}) {
-	return <>
-		{children}
-		<Toaster />
-	</>
+function ToastAdapter({ children }: { children: React.ReactNode }) {
+	return (
+		<>
+			{children}
+			<Toaster />
+		</>
+	);
 }
-
 
 export default function Providers({
 	children,
@@ -257,34 +261,36 @@ export default function Providers({
 	}, []);
 
 	return (
-		<ThemeProvider
-			attribute={"class"}
-			defaultTheme={process.env.NEXT_PUBLIC_DEFAULT_THEME || "dark"}
-			disableTransitionOnChange
-		>
-			<NuqsAdapter>
-				<ToastAdapter>
-					<SessionProvider session={session}>
-						<PostHogProvider client={posthog}>
-							<FeatureFlagsContext.Provider value={{ featureFlags }}>
-							<CacheProvider status={status}>
-								<NextUIProvider navigate={router.push}>
-									<Suspense>
-										<PageView />
-									</Suspense>
-									<LoadingScreen
-										isMounted={isMounted}
-										featureFlags={featureFlags}
-									>
-										{children}
-									</LoadingScreen>
-								</NextUIProvider>
-							</CacheProvider>
-						</FeatureFlagsContext.Provider>
-					</PostHogProvider>
-				</SessionProvider>
-			</ToastAdapter>
-			</NuqsAdapter>
-		</ThemeProvider>
+		<HeroUIProvider navigate={router.push}>
+			<ThemeProvider
+				attribute={"class"}
+				defaultTheme={process.env.NEXT_PUBLIC_DEFAULT_THEME || "dark"}
+				disableTransitionOnChange
+			>
+				<NuqsAdapter>
+					<ToastAdapter>
+						<SessionProvider session={session}>
+							<PostHogProvider client={posthog}>
+								<FeatureFlagsContext.Provider
+									value={{ featureFlags }}
+								>
+									<CacheProvider status={status}>
+										<Suspense>
+											<PageView />
+										</Suspense>
+										<LoadingScreen
+											isMounted={isMounted}
+											featureFlags={featureFlags}
+										>
+											{children}
+										</LoadingScreen>
+									</CacheProvider>
+								</FeatureFlagsContext.Provider>
+							</PostHogProvider>
+						</SessionProvider>
+					</ToastAdapter>
+				</NuqsAdapter>
+			</ThemeProvider>
+		</HeroUIProvider>
 	);
 }

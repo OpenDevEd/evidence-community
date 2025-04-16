@@ -4,8 +4,8 @@ import {
 	ModalBody,
 	ScrollShadow,
 	Tooltip
-} from "@nextui-org/react";
-import { ModalContent } from "@nextui-org/react";
+} from "@heroui/react";
+import { ModalContent } from "@heroui/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import AIHeader from "../ai/AIHeader";
 import FullScreenModal from "@/components/nextui/FullScreenModal";

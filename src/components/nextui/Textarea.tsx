@@ -1,6 +1,6 @@
 "use client";
 
-import { extendVariants, Textarea as NextUITextarea } from "@nextui-org/react";
+import { extendVariants, Textarea as NextUITextarea } from "@heroui/react";
 
 export const Textarea = extendVariants(NextUITextarea, {
 	variants: {

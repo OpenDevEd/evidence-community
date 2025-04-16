@@ -4,7 +4,7 @@ import type { Item } from "@/app/api/item/types";
 import { useFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import React from "react";
-import { Tooltip } from "@nextui-org/react";
+import { Tooltip } from "@heroui/react";
 import { AiFillQuestionCircle } from "react-icons/ai";
 import { useQueryState } from "nuqs";
 export default function ItemRow({ item, row, router, value, customRowName, loading, tooltip, pathname }: { item: Item; row?: string; router: ReturnType<typeof useRouter>, value?: any, customRowName?: string, loading: boolean, tooltip?: string, pathname: string }) {

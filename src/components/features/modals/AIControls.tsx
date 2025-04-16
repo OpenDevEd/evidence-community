@@ -1,6 +1,6 @@
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Button } from "@/components/nextui/Button";
-import { DropdownTrigger, DropdownMenu, DropdownItem } from "@nextui-org/react";
+import { DropdownTrigger, DropdownMenu, DropdownItem } from "@heroui/react";
 import { BiChevronDown } from "react-icons/bi";
 import { ReactNode } from "react";
 

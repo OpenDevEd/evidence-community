@@ -9,7 +9,7 @@ import {
 	DropdownTrigger,
 	DropdownMenu,
 	useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import GenerativeModal from "@/components/features/modals/GenerativeModal";
 import ChatModal from "@/components/features/modals/ChatModal";
 import { useLocale, useTranslations } from "next-intl";

@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { Item } from "@/app/api/item/types";
-import { Link, Skeleton } from "@nextui-org/react";
+import { Link, Skeleton } from "@heroui/react";
 import { twMerge } from "tailwind-merge";
 import Image from "next/image";
 import { LuDownload } from "react-icons/lu";

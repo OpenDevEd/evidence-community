@@ -13,10 +13,10 @@ import {
 	IoChevronBack,
 	IoDownload,
 } from "react-icons/io5";
-import { Avatar } from "@nextui-org/avatar";
+import { Avatar } from "@heroui/avatar";
 import { HiAcademicCap } from "react-icons/hi2";
 import { useFormatter, useTranslations } from "next-intl";
-import { Divider, Spinner } from "@nextui-org/react";
+import { Divider, Spinner } from "@heroui/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import CopyButton from "@/components/features/newlib/CopyButton";
 import { Button } from "@/components/nextui/Button";
@@ -32,7 +32,7 @@ import AiWrapper from "@/components/features/newlib/AiWrapper";
 import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import LinkWithParams from "../LinkWithParams";
 import { serializeSearchParams } from "@/lib/searchParams";
-import { Tooltip } from "@nextui-org/react";
+import { Tooltip } from "@heroui/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import LikeButton from "../items/LikeButton";
@@ -325,74 +325,128 @@ function ItemAuthor({ author }: { author?: Author }) {
 
 	return (
 		<Tooltip
-			closeDelay={0}
 			isDisabled={affiliationCount === 0}
 			key={author?.name}
-			className="rounded-2xl"
+			className="rounded-2xl bg-white dark:bg-card"
+			placement="left"
 			content={
 				<div className="py-2 px-1 min-w-[300px]">
 					{/* Author Header */}
-					<div className="flex items-center gap-3 mb-4">
+					<motion.div
+						className="flex items-center gap-3 mb-4"
+						initial={{ opacity: 0, y: -10 }}
+						animate={{ opacity: 1, y: 0 }}
+						transition={{ duration: 0.2 }}
+					>
 						<Avatar
 							name={author ? formatAuthor(author).charAt(0) : "-"}
 							size="lg"
 							className="text-xl text-accent bg-accent/10 brightness-150"
 						/>
 						<div>
-							<h3 className="font-medium text-lg text-black dark:text-white">
+							<motion.h3
+								className="font-medium text-lg text-black dark:text-white"
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								transition={{ delay: 0.1 }}
+							>
 								{author?.firstName} {author?.lastName}
-							</h3>
-							<p className="text-sm text-black/60 dark:text-white/60">
+							</motion.h3>
+							<motion.p
+								className="text-sm text-black/60 dark:text-white/60"
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								transition={{ delay: 0.2 }}
+							>
 								{author?.creatorType
 									? t(author?.creatorType)
 									: "-"}
-							</p>
+							</motion.p>
 						</div>
-					</div>
+					</motion.div>
 
 					{/* Institutions List */}
 					{author?.institutions &&
 						author?.institutions?.length > 0 && (
-							<div className="space-y-2">
-								<h4 className="text-sm font-medium text-black/70 dark:text-white/70 mb-2">
+							<motion.div
+								className="flex flex-col gap-2"
+								initial={{ opacity: 0, y: 10 }}
+								animate={{ opacity: 1, y: 0 }}
+								transition={{ delay: 0.3 }}
+							>
+								<h4 className="text-sm font-medium text-black/70 dark:text-white/70">
 									Affiliations
 								</h4>
 								{author.institutions.map((institution, idx) => (
-									<div
+									<LinkWithParams
 										key={idx}
-										className="flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+										href={
+											isAuthorFilterEnabled
+												? referrer ?? `/lib`
+												: undefined
+										}
+										params={{
+											institution: [
+												institution.display_name || "",
+											],
+											referrer: referrer ?? undefined,
+										}}
 									>
-										<div className="flex-1">
-											<p className="text-sm text-black dark:text-white">
-												{institution.display_name}
-											</p>
-											{institution.country_code && (
-												<div className="flex items-center gap-1 mt-1">
-													<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
-														<img
-															src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
-															alt={
+										<motion.div
+											key={idx}
+											className="flex items-center gap-2 p-2 rounded-xl bg-black/5 dark:bg-white/5 hover:bg-black/10 dark:hover:bg-white/10 transition-colors"
+											initial={{ opacity: 0, x: -20 }}
+											animate={{ opacity: 1, x: 0 }}
+											transition={{
+												delay: 0.4 + idx * 0.1,
+												type: "spring",
+												stiffness: 100,
+											}}
+										>
+											<div className="flex-1">
+												<p className="text-sm text-black dark:text-white">
+													{institution.display_name}
+												</p>
+												{institution.country_code && (
+													<motion.div
+														className="flex items-center gap-1 mt-1"
+														initial={{
+															opacity: 0,
+														}}
+														animate={{
+															opacity: 1,
+														}}
+														transition={{
+															delay:
+																0.5 + idx * 0.1,
+														}}
+													>
+														<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
+															<img
+																src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
+																alt={
+																	institution.country_code
+																}
+																className="w-full h-full object-cover"
+															/>
+														</div>
+														<span className="text-xs text-black/60 dark:text-white/60">
+															{`${
+																COUNTRIES[
+																	institution
+																		.country_code
+																]
+															} (${
 																institution.country_code
-															}
-															className="w-full h-full object-cover"
-														/>
-													</div>
-													<span className="text-xs text-black/60 dark:text-white/60">
-														{`${
-															COUNTRIES[
-																institution
-																	.country_code
-															]
-														} (${
-															institution.country_code
-														})`}
-													</span>
-												</div>
-											)}
-										</div>
-									</div>
+															})`}
+														</span>
+													</motion.div>
+												)}
+											</div>
+										</motion.div>
+									</LinkWithParams>
 								))}
-							</div>
+							</motion.div>
 						)}
 				</div>
 			}

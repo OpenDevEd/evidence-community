@@ -15,8 +15,8 @@ import CopyButton from "./CopyButton";
 import { Item } from "@/app/api/item/types";
 import React, { PropsWithChildren, useMemo, useRef, useState } from "react";
 import { Dropdown } from "@/components/nextui/Dropdown";
-import { DropdownItem } from "@nextui-org/dropdown";
-import { DropdownMenu } from "@nextui-org/dropdown";
+import { DropdownItem } from "@heroui/dropdown";
+import { DropdownMenu } from "@heroui/dropdown";
 import {
 	ButtonProps,
 	DropdownTrigger,
@@ -24,7 +24,7 @@ import {
 	ModalContent,
 	Spinner,
 	useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { BsThreeDots } from "react-icons/bs";
 import { FaClipboard } from "react-icons/fa";
 import LikeButton from "./LikeButton";

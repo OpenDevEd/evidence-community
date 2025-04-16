@@ -9,7 +9,7 @@ import {
 	ModalContent,
 	PropsOf,
 	useDisclosure
-} from "@nextui-org/react";
+} from "@heroui/react";
 import GenericHeader from "../modals/GenericHeader";
 import { ListModalBody } from "@/components/nextui/ListModalBody";
 import DialogModal from "@/components/nextui/DialogModal";

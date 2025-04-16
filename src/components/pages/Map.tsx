@@ -9,7 +9,7 @@ import {
 import tailwindConfig, { style } from "../../../tailwind.config";
 import resolveConfig from "tailwindcss/resolveConfig";
 import { ReactNode, useEffect, useRef, useState, memo } from "react";
-import {Tooltip } from "@nextui-org/react";
+import {Tooltip } from "@heroui/react";
 import { useLocalStorage, useMouse, useWindowSize } from "@uidotdev/usehooks";
 import { useItemsList } from "@/hooks/useItemsList";
 import { A3ToA2, COUNTRIES, COUNTRY_PARAMS, countryFacetOptions } from "@/constants/misc";
@@ -161,7 +161,7 @@ function Search({ props, setMapFacet, mapFacet }: { props: ReturnType<typeof use
 						trigger: "h-10 lg:h-12"
 					}} placement="left" color="tertiary" label="Facet" selectedKeys={[String(mapFacet)]} onSelectionChange={(keys) => setMapFacet(Number(keys.currentKey))}>
 						{countryFacetOptions.map((facet, index) => (
-							<SelectItem key={String(index)} value={String(index)}>{t(facet.label)}</SelectItem>
+							<SelectItem key={String(index)}>{t(facet.label)}</SelectItem>
 						))}
 					</Select>
 				</div>

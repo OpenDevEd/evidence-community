@@ -13,7 +13,7 @@ import {
 	useDisclosure,
 	Spinner,
 	Divider,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import GenerativeModal from "../features/modals/GenerativeModal";
 import ChatModal from "../features/modals/ChatModal";
 import { useRouter } from "@/i18n/routing";
