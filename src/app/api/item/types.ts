@@ -3,9 +3,9 @@ import { item } from "@/db/schema/tables/item";
 import { Collection } from "../collections/types";
 
 interface Institution {
-  id: string;
-  country_code: string;
-  display_name: string;
+  id?: string;
+  country_code?: string;
+  display_name?: string;
 }
 
 export type Item = InferSelectModel<typeof item> & {

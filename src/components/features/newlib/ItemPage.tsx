@@ -366,20 +366,29 @@ function ItemAuthor({ author }: { author?: Author }) {
 											<p className="text-sm text-black dark:text-white">
 												{institution.display_name}
 											</p>
-											<div className="flex items-center gap-1 mt-1">
-												<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
-													<img
-														src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
-														alt={
+											{institution.country_code && (
+												<div className="flex items-center gap-1 mt-1">
+													<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
+														<img
+															src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
+															alt={
+																institution.country_code
+															}
+															className="w-full h-full object-cover"
+														/>
+													</div>
+													<span className="text-xs text-black/60 dark:text-white/60">
+														{`${
+															COUNTRIES[
+																institution
+																	.country_code
+															]
+														} (${
 															institution.country_code
-														}
-														className="w-full h-full object-cover"
-													/>
+														})`}
+													</span>
 												</div>
-												<span className="text-xs text-black/60 dark:text-white/60">
-													{`${COUNTRIES[institution.country_code]} (${institution.country_code})`}
-												</span>
-											</div>
+											)}
 										</div>
 									</div>
 								))}
