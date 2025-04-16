@@ -19,15 +19,9 @@ export const searchParamsLoader = {
 	collectionId: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),
-	institution: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
-		scroll: true,
-	}),
-	country: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
-		scroll: true,
-	}),
-	author_country: parseAsArrayOf(parseAsString).withDefault([]).withOptions({
-		scroll: true,
-	}),
+	institution: parseAsArrayOf(parseAsString).withDefault([]),
+	country: parseAsArrayOf(parseAsString).withDefault([]),
+	author_country: parseAsArrayOf(parseAsString).withDefault([]),
 	author: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),
