@@ -28,8 +28,7 @@ function generateRateLimitObject(request: NextRequest) {
       const distinctId = JSON.parse(cookie.value).distinct_id;
       cookieRateLimit = rateLimits.get(distinctId) || { count: 0, firstRequest: 0 };
       rateLimits.set(distinctId, cookieRateLimit);
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   let rateLimit = null;

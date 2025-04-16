@@ -162,12 +162,15 @@ export function DownloadButton({
 }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const t = useTranslations("ui");
+	const isDownloadEnabled = useFeatureFlagEnabled("download-button");
 
 	return (
 		<>
-			<Button {...props} onPress={onOpen}>
-				{props.children}
-			</Button>
+			{isDownloadEnabled && (
+				<Button {...props} onPress={onOpen}>
+					{props.children}
+				</Button>
+			)}
 			<DownloadModal
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
@@ -313,7 +316,7 @@ export default function ItemControls({
 		add: null,
 	});
 
-	const isPrintingEnabled = useFeatureFlagEnabled("print-button");
+	const isDownloadEnabled = useFeatureFlagEnabled("download-button");
 
 	const [config, setConfig] = useLocalStorage(
 		"item-controls",
@@ -361,27 +364,28 @@ export default function ItemControls({
 				key: "downloadRecord",
 				Component: DownloadButton,
 				label: t("downloadRecord"),
+				hideFromDropdown: !isDownloadEnabled,
 				props: {
 					action: async (format: "ris" | "bibtex") => {
 						return await convertItem(itemData!, format);
 					},
 					fileName: itemData!.key,
 					size: "sm",
-					className: "hidden lg:flex ml-auto rtl:ml-0 rtl:mr-auto",
+					className: "hidden lg:flex",
 					startContent: <LuDownload className="size-5" />,
 				},
 			},
-			{
-				key: "printRecord",
-				Component: Button,
-				label: t("printRecord"),
-				props: {
-					size: "sm",
-					isDisabled: !isPrintingEnabled,
-					className: "hidden lg:flex",
-					startContent: <LuPrinter className="size-5" />,
-				},
-			},
+			// {
+			// 	key: "printRecord",
+			// 	Component: Button,
+			// 	label: t("printRecord"),
+			// 	props: {
+			// 		size: "sm",
+			// 		isDisabled: !isPrintingEnabled,
+			// 		className: "hidden lg:flex",
+			// 		startContent: <LuPrinter className="size-5" />,
+			// 	},
+			// },
 			{
 				key: "copyLink",
 				Component: CopyButton,
@@ -466,7 +470,7 @@ export default function ItemControls({
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0 }}
-						className="flex flex-row gap-4 flex-1"
+						className="flex flex-row gap-4 flex-1 justify-end"
 					>
 						{buttonConfigs
 							.filter(({ key }) => config[key] !== false)

@@ -6,7 +6,7 @@ import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
 import { setter } from "@/lib/utils";
 import { twMerge } from "tailwind-merge";
-import { BsBookmarkCheckFill, BsBookmarkFill } from "react-icons/bs";
+import { BsBookmark, BsBookmarkCheck, BsBookmarkCheckFill, BsBookmarkFill } from "react-icons/bs";
 import { useSWRConfig } from "swr";
 import { useTranslations } from "next-intl";
 
@@ -49,7 +49,7 @@ const LikeButton = forwardRef<
       className={twMerge(className)}
       aria-label={isLiked ? t("removeBookmarkAction") : t("bookmarkAction")}
     >
-      {!isLiked ? <BsBookmarkFill /> : <BsBookmarkCheckFill />}
+      {!isLiked ? <BsBookmark /> : <BsBookmarkCheck />}
     </Button>
   );
 });

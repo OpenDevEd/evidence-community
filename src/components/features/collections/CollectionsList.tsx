@@ -86,6 +86,12 @@ function YearPicker({
 			placeholder={placeholder}
 			defaultValue={selectedKey || ""}
 			onChange={(e) => debouncedOnSelectionChange(e.target.value)}
+			classNames={{
+				inputWrapper:
+					"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+				input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
+				label: "text-black/80 dark:text-white/80",
+			}}
 		/>
 	);
 }
@@ -138,9 +144,7 @@ function FacetPicker({
 			<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 				<Autocomplete
 					className="flex-1"
-					placeholder={
-						placeholder
-					}
+					placeholder={placeholder}
 					label={label}
 					key={label}
 					fullWidth={true}
@@ -249,15 +253,19 @@ function FacetPicker({
 																"hidden"
 														)}
 													>
-														{`(${item.count !==
+														{`(${
+															item.count !==
 															undefined
-															? item.count
-															: facetDistribution &&
-															  facetName
-															? facetDistribution?.[
-																	facetName!
-															  ]?.[item.key] || 0
-															: "0"})`}
+																? item.count
+																: facetDistribution &&
+																  facetName
+																? facetDistribution?.[
+																		facetName!
+																  ]?.[
+																		item.key
+																  ] || 0
+																: "0"
+														})`}
 													</span>
 													{item.label}
 													{item.showArrow && (
@@ -394,7 +402,7 @@ function CountryParser(
 	if (!country) {
 		return null;
 	}
-	
+
 	const { countryName, label, numberOfParts, countryCode } =
 		getCountryInfo(country);
 	const ancestry = getCountryAncestry(country);
@@ -458,6 +466,161 @@ function InstitutionParser(
 	};
 }
 
+function FiltersList({
+	queryParams,
+	handleCountrySelect,
+	handleAuthorCountrySelect,
+	handleInstitutionSelect,
+	facetDistribution,
+}: {
+	queryParams: inferParserType<typeof searchParamsLoader>;
+	handleCountrySelect: (country: string) => void;
+	handleAuthorCountrySelect: (country: string) => void;
+	handleInstitutionSelect: (institution: string) => void;
+	facetDistribution: FacetDistribution | undefined;
+}) {
+	const isCountryFocusEnabled = useFeatureFlagEnabled("country-focus");
+	const isAuthorLocationEnabled = useFeatureFlagEnabled("author-location");
+
+	const enabledCount = [isCountryFocusEnabled, isAuthorLocationEnabled].filter(Boolean).length;
+
+	const t = useTranslations("ui");
+
+	const [institutions, institutionsFacetDistribution] = useFacetList(
+		facetDistribution!,
+		"institution",
+		(institution) =>
+			InstitutionParser(institution, queryParams, handleInstitutionSelect)
+	);
+
+	const [countries] = useFacetList(
+		facetDistribution!,
+		"country",
+		(country) =>
+			CountryParser(
+				queryParams,
+				country,
+				false,
+				"country",
+				handleCountrySelect
+			),
+		(a, b) => a.localeCompare(b)
+	);
+	const [countries_uncategorized] = useFacetList(
+		facetDistribution!,
+		"country_uncategorized",
+		(country) =>
+			CountryParser(
+				queryParams,
+				country,
+				true,
+				"country",
+				handleCountrySelect
+			),
+		(a, b) => a.localeCompare(b)
+	);
+
+	const [author_countries] = useMultipleFacetLists(
+		useFacetList(
+			facetDistribution!,
+			"creators.institutions.country_code",
+			(country) =>
+				CountryParser(
+					queryParams,
+					country,
+					false,
+					"author_country",
+					handleAuthorCountrySelect
+				),
+			(a, b) => a.localeCompare(b)
+		),
+		[institutions, institutionsFacetDistribution]
+	);
+	const [author_countries_uncategorized] = useMultipleFacetLists(
+		useFacetList(
+			facetDistribution!,
+			"creators.institutions.country_code_uncategorized",
+			(country) =>
+				CountryParser(
+					queryParams,
+					country,
+					true,
+					"author_country",
+					handleAuthorCountrySelect
+				),
+			(a, b) => a.localeCompare(b)
+		),
+		[institutions, institutionsFacetDistribution]
+	);
+
+	const CountryFocusFilter = () => {
+		return (
+			isCountryFocusEnabled && <FacetPicker
+				label={t("countryFilter")}
+				placeholder={t("countryFilterDescription")}
+				selectedKey={queryParams.country}
+				onSelectionChange={handleCountrySelect}
+				facetDistribution={facetDistribution}
+				list={countries}
+				facetName="country"
+				searchList={countries_uncategorized}
+			/>
+		);
+	};
+
+	const AuthorLocationFilter = () => {
+		return (
+			isAuthorLocationEnabled && <FacetPicker
+				label={t("authorCountries")}
+				placeholder={
+					author_countries.find(
+						(item) => item.section === "Countries"
+					)?.label
+						? t("authorCountriesDescription")
+						: t("authorInstitutionsDescription")
+				}
+				selectedKey={[
+					...queryParams.author_country,
+					...queryParams.institution,
+				]}
+				list={author_countries}
+				searchList={author_countries_uncategorized.map((item) => ({
+					...item,
+					hide: false,
+				}))}
+			/>
+		);
+	};
+
+	const MoreFilters = () => {
+		return (
+			<>
+				<CountryFocusFilter />		
+				<AuthorLocationFilter />
+			</>
+		)
+	}
+
+	return (
+		enabledCount > 1 ? (
+			<Accordion defaultExpandedKeys={["More Filters"]} className="p-0">
+				<AccordionItem
+					key={"More Filters"}
+					title={t("moreFilters")}
+					classNames={{
+						content: "p-0 flex flex-col gap-4 pt-4",
+						trigger: "pb-0 pt-2",
+					}}
+				>
+					<MoreFilters />
+				</AccordionItem>
+			</Accordion>
+		) : (
+			<MoreFilters />
+		)
+	);
+}
+
 export default function CollectionsList({
 	data,
 	facetDistribution,
@@ -487,65 +650,6 @@ export default function CollectionsList({
 }) {
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
-	const isCountryEnabled = process.env.NEXT_PUBLIC_DISABLE_COUNTRY !== "true";
-	const isAuthorCountryEnabled =
-		process.env.NEXT_PUBLIC_DISABLE_AUTHOR_COUNTRY !== "true";
-	const isFiltersEnabled = isCollectionsEnabled || isCountryEnabled;
-	const isInstitutionFilterEnabled =
-		useFeatureFlagEnabled("institution-filter");
-		
-	const [institutions, institutionsFacetDistribution] = useFacetList(
-		facetDistribution!,
-		"institution",
-		(institution) =>
-			InstitutionParser(institution, queryParams, handleInstitutionSelect)
-	);
-
-	const [countries] = useFacetList(
-		facetDistribution!,
-		"country",
-		(country) =>
-			CountryParser(
-				queryParams,
-				country,
-				false,
-				"country",
-				handleCountrySelect
-			),
-		(a, b) => a.localeCompare(b)
-	);
-	const [countries_uncategorized] = useFacetList(
-		facetDistribution!,
-		"country_uncategorized",
-		(country) => CountryParser(queryParams, country, true, "country", handleCountrySelect),
-		(a, b) => a.localeCompare(b)
-	);
-
-	const [author_countries] = useMultipleFacetLists(
-		useFacetList(
-			facetDistribution!,
-			"creators.institutions.country_code",
-			(country) =>
-				CountryParser(
-					queryParams,
-					country,
-					false,
-					"author_country",
-					handleAuthorCountrySelect
-				),
-			(a, b) => a.localeCompare(b)
-		),
-		[institutions, institutionsFacetDistribution]
-	);
-	const [author_countries_uncategorized] = useMultipleFacetLists(
-		useFacetList(
-			facetDistribution!,
-			"creators.institutions.country_code_uncategorized",
-			(country) => CountryParser(queryParams, country, true, "author_country", handleAuthorCountrySelect),
-			(a, b) => a.localeCompare(b)
-		),
-		[institutions, institutionsFacetDistribution]
-	);
 
 	const [start, end, sameYear] = useMemo(() => {
 		const dashExists = range.includes("-");
@@ -653,64 +757,24 @@ export default function CollectionsList({
 							)}
 						</AnimatePresence>
 					</div>
-					{isFiltersEnabled && (
-						<Accordion
-							defaultExpandedKeys={["More Filters"]}
-							className="p-0"
-						>
-							<AccordionItem
-								key={"More Filters"}
-								title={t("moreFilters")}
-								classNames={{
-									content: "p-0 flex flex-col gap-4 pt-4",
-									trigger: "pb-0 pt-2",
-								}}
-							>
-								{isCountryEnabled && (
-									<FacetPicker
-										label={t("countryFilter")}
-										placeholder={t("countryFilterDescription")}
-										selectedKey={queryParams.country}
-										onSelectionChange={handleCountrySelect}
-										facetDistribution={facetDistribution}
-										list={countries}
-										facetName="country"
-										searchList={countries_uncategorized}
-									/>
-								)}
-								{(isAuthorCountryEnabled && isInstitutionFilterEnabled) && (
-									<FacetPicker
-										label={t("authorCountries")}
-										placeholder={
-											author_countries.find((item) => item.section === "Countries")?.label ?
-											t("authorCountriesDescription") : t("authorInstitutionsDescription")
-										}
-										selectedKey={[
-											...queryParams.author_country,
-											...queryParams.institution,
-										]}
-										list={author_countries}
-										searchList={
-											author_countries_uncategorized.map((item) => ({
-												...item,
-												hide: false,
-											}))
-										}
-									/>
-								)}
-							</AccordionItem>
-						</Accordion>
-					)}
+					<FiltersList
+						queryParams={queryParams}
+						handleCountrySelect={handleCountrySelect}
+						handleAuthorCountrySelect={handleAuthorCountrySelect}
+						handleInstitutionSelect={handleInstitutionSelect}
+						facetDistribution={facetDistribution}
+					/>
 				</section>
-				<section className="w-full">
-					{/* <div className="p-4 pt-6 pb-0 bg-white dark:bg-card">
+				{isCollectionsEnabled && (
+					<section className="w-full">
+						{/* <div className="p-4 pt-6 pb-0 bg-white dark:bg-card">
 						<Input
 							placeholder={t("searchCollections")}
 							value={search}
 							onChange={(e) => setSearch(e.target.value)}
 						/>
 					</div> */}
-					{isCollectionsEnabled && (
+
 						<InnerCollectionList
 							data={data}
 							facetDistribution={facetDistribution}
@@ -719,8 +783,8 @@ export default function CollectionsList({
 							selectedCollections={selectedCollections}
 							hierarchy={hierarchy}
 						/>
-					)}
-				</section>
+					</section>
+				)}
 			</Skeleton>
 		</aside>
 	);

@@ -62,9 +62,11 @@ function ThemeSwitcher({
 	isMounted: boolean;
 	isMobile?: boolean;
 }) {
+	const isThemeSwitcherEnabled = useFeatureFlagEnabled("theme-switcher");
 	const t = useTranslations("ui");
 
 	return (
+		isThemeSwitcherEnabled && (
 		<li
 			className={twMerge(
 				"size-6 rounded-lg",
@@ -118,7 +120,8 @@ function ThemeSwitcher({
 					</span>
 				)}
 			</Button>
-		</li>
+			</li>
+		)
 	);
 }
 
@@ -307,6 +310,7 @@ function LinksList({
 }
 
 function LanguageSwitcher({ className, isMobile = false }: { className?: string; isMobile?: boolean }) {
+	const isLanguageSwitcherEnabled = useFeatureFlagEnabled("language-switcher");
 	const router = useRouter();
 	const locale = useLocale();
 	const pathname = usePathname();
@@ -321,6 +325,7 @@ function LanguageSwitcher({ className, isMobile = false }: { className?: string;
 		});
 
 	return (
+		isLanguageSwitcherEnabled && (
 		<li
 			data-style={style}
 			className="relative flex justify-center items-center gap-2 data-[style=wide]:uppercase"
@@ -359,9 +364,10 @@ function LanguageSwitcher({ className, isMobile = false }: { className?: string;
 								}
 							</DropdownItem>
 						))}
-				</DropdownMenu>
-			</Dropdown>
-		</li>
+					</DropdownMenu>
+				</Dropdown>
+			</li>
+		)
 	);
 }
 
@@ -588,8 +594,8 @@ export default function Navbar() {
 				<nav aria-label={t("mainNavAriaLabel")} className="flex-1">
 					<LinksList pathname={pathname} />
 				</nav>
-				<nav aria-label={t("secondaryNavAriaLabel")}>
-					<ul className="flex items-center gap-2 2xl:gap-3">
+				<nav className="[&:has(>ul:empty)]:hidden" aria-label={t("secondaryNavAriaLabel")}>
+					<ul className="flex items-center gap-2 2xl:gap-3 ">
 						<LanguageSwitcher className="!hidden xl:!flex" isMobile={false} />
 						<ThemeSwitcher
 							theme={theme}

@@ -21,7 +21,7 @@ import useSWR from "swr";
 import { MdSearchOff } from "react-icons/md";
 import { serializeSearchParams } from "./searchParams";
 import { COUNTRY_PARAMS } from "@/constants/misc";
-
+import { useFeatureFlagEnabled } from "@/context/Providers";
 
 type FormatterProps = {
 	value: any;
@@ -38,7 +38,7 @@ type Creator = {
 	firstName?: string;
 	lastName?: string;
 	name?: string;
-	institutions?: {id: string, display_name: string, country_code: string}[];
+	institutions?: { id: string; display_name: string; country_code: string }[];
 };
 
 type MatchWrapperProps = {
@@ -223,10 +223,16 @@ const Extra = createRegexParser([
 	{ regex: urlRegex, Wrapper: URLWrapper, priority: 2 },
 ]);
 
-function CollectionLevel({ collection, pathname }: { collection: Collection, pathname: string }) {
+function CollectionLevel({
+	collection,
+	pathname,
+}: {
+	collection: Collection;
+	pathname: string;
+}) {
 	const ancestry = collection.ancestry || [];
 	const href = serializeSearchParams(pathname, {
-		collections: [...ancestry, collection.key]
+		collections: [...ancestry, collection.key],
 	});
 
 	return (
@@ -243,21 +249,35 @@ function CollectionLevel({ collection, pathname }: { collection: Collection, pat
 			</Link>
 			<ul className="ml-8">
 				{collection.children?.map((child) => (
-					<CollectionLevel key={child.id} collection={child} pathname={pathname} />
+					<CollectionLevel
+						key={child.id}
+						collection={child}
+						pathname={pathname}
+					/>
 				))}
 			</ul>
 		</li>
 	);
 }
 
-export function CollectionsRow({ value, pathname }: { value: Collection[], pathname: string }) {
+export function CollectionsRow({
+	value,
+	pathname,
+}: {
+	value: Collection[];
+	pathname: string;
+}) {
 	if (!value) return false;
 	if (value.length === 0) return false;
 
 	return (
 		<ul className="flex flex-col gap-2">
 			{value.map((collection: Collection) => (
-				<CollectionLevel key={collection.id} collection={collection} pathname={pathname} />
+				<CollectionLevel
+					key={collection.id}
+					collection={collection}
+					pathname={pathname}
+				/>
 			))}
 		</ul>
 	);
@@ -393,6 +413,170 @@ function Relations({ value }: { value: RelationsType }) {
 	);
 }
 
+function ItemCountry({
+	value,
+	pathname,
+}: {
+	value: string | string[];
+	pathname: string;
+}) {
+	const isCountryFocusEnabled = useFeatureFlagEnabled("country-focus");
+
+	if (!isCountryFocusEnabled) return false;
+
+	if (!value) return false;
+
+	const countries = Array.isArray(value) ? value : [value];
+
+	if (countries.length === 0) return false;
+
+	return (
+		<div className="flex flex-wrap gap-2">
+			{countries.map((country, index) => {
+				const ancestry = getCountryAncestry(country);
+
+				return (
+					<LinkWithParams
+						isDisabled={
+							process.env.NEXT_PUBLIC_DISABLE_COUNTRY === "true"
+						}
+						key={index}
+						href={pathname}
+						params={{ country: ancestry }}
+						className="opacity-100"
+					>
+						<Card
+							key={index}
+							className="flex gap-2 items-center px-4 py-1"
+							color="tertiary"
+						>
+							<div className="flex gap-2 items-center">
+								<Image
+									src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
+									alt={country}
+									width={16}
+									height={12}
+								/>
+								<div>{country}</div>
+							</div>
+						</Card>
+					</LinkWithParams>
+				);
+			})}
+		</div>
+	);
+}
+
+function ItemCreators({ value, t, pathname }: FormatterProps) {
+	const isAuthorFilterEnabled = useFeatureFlagEnabled("author-filter");
+	if (!value) return null;
+	if (value.length === 0) return null;
+
+	return (
+		<ul className="flex flex-col lg:gap-2">
+			{value.map((creator: Creator, index: number) => {
+				const creatorTypeLabel = t(
+					"creatorType." + creator.creatorType
+				);
+				const { creatorType, institutions, ...rest } = creator;
+				const fullName = creator.name
+					? creator.name
+					: `${creator.firstName} ${creator.lastName}`;
+
+				const AuthorContent = () => {
+					return (
+						<p className="space-x-1">
+							<span className={twMerge(
+								"font-medium text-accent",
+								isAuthorFilterEnabled && "underline"
+							)}
+							>
+								{Object.values(rest).filter(Boolean).join(", ")}
+							</span>
+							<span
+								className={twMerge(
+									"text-black/80 dark:text-white/80 capitalize",
+									!creatorTypeLabel && "!text-red-500",
+								)}
+							>
+								({creatorTypeLabel || creator.creatorType})
+							</span>
+						</p>
+					);
+				};
+				return (
+					<li key={index}>
+						{isAuthorFilterEnabled ? (
+							<LinkWithParams
+								href={pathname}
+								params={{ author: fullName }}
+								className="text-lg"
+							>
+								<AuthorContent />
+							</LinkWithParams>
+						) : (
+							<AuthorContent />
+						)}
+					</li>
+				);
+			})}
+		</ul>
+	);
+}
+
+function ItemInstitution({ value, t, pathname }: FormatterProps) {
+	const isAuthorLocationEnabled = useFeatureFlagEnabled("author-location");
+	if (!value) return false;
+
+	// Handle both string and array values
+	const institutions = Array.isArray(value) ? value : [value];
+
+	if (institutions.length === 0) return false;
+
+	return (
+		<div className="flex flex-wrap gap-2">
+			{institutions.map((institution, index) => {
+				const InstitutionLogo = Object.entries(INSTITUTION_LOGOS).find(
+					([key]) => institution.includes(key)
+				)?.[1];
+
+				const InstitutionContent = () => {
+					return (
+						<Card
+							className="max-w-fit p-2 rounded-2xl"
+							color="accent"
+						>
+							<div
+								className={twMerge(
+									"flex gap-2 items-center",
+									!InstitutionLogo && "px-2"
+								)}
+							>
+								{InstitutionLogo && (
+									<InstitutionLogo className="bg-white" />
+								)}
+								<h3 className="text-white/80">{institution}</h3>
+							</div>
+						</Card>
+					);
+				};
+
+				return isAuthorLocationEnabled ? (
+					<LinkWithParams
+						key={index}
+						href={pathname}
+						params={{ institution: [institution] }}
+					>
+						<InstitutionContent key={index} />
+					</LinkWithParams>
+				) : (
+					<InstitutionContent key={index} />
+				);
+			})}
+		</div>
+	);
+}
+
 export const valueFormatter: Record<
 	any,
 	(props: FormatterProps) => ReactNode | boolean
@@ -427,52 +611,7 @@ export const valueFormatter: Record<
 		if (!value) return false;
 		return <Extra value={value} />;
 	},
-	creators: ({ value, t, pathname }) => {
-		if (!value) return null;
-		if (value.length === 0) return null;
-
-		return (
-			<ul className="flex flex-col lg:gap-2">
-				{value.map((creator: Creator, index: number) => {
-					const creatorTypeLabel = t(
-						"creatorType." + creator.creatorType
-					);
-					const { creatorType, institutions, ...rest } = creator;
-					const fullName = creator.name
-						? creator.name
-						: `${creator.firstName} ${creator.lastName}`;
-					return (
-						<li key={index}>
-							<LinkWithParams
-								href={pathname}
-								params={{ author: fullName }}
-								className="text-lg"
-							>
-								<p className="space-x-1">
-									<span className="font-medium text-accent underline">
-										{Object.values(rest)
-											.filter(Boolean)
-											.join(", ")}
-									</span>
-									<span
-										className={twMerge(
-											"text-black/80 dark:text-white/80 capitalize",
-											!creatorTypeLabel && "!text-red-500"
-										)}
-									>
-										(
-										{creatorTypeLabel ||
-											creator.creatorType}
-										)
-									</span>
-								</p>
-							</LinkWithParams>
-						</li>
-					);
-				})}
-			</ul>
-		);
-	},
+	creators: ItemCreators,
 	collectionsData: () => false,
 	date: formatDate,
 	accessDate: formatDate,
@@ -522,93 +661,6 @@ export const valueFormatter: Record<
 	citation: (args) => {
 		return <Citation {...args} />;
 	},
-	country: ({ value, pathname }) => {
-		if (!value) return false;
-
-		const countries = Array.isArray(value) ? value : [value];
-
-		if (countries.length === 0) return false;
-
-		return (
-			<div className="flex flex-wrap gap-2">
-				{countries.map((country, index) => {
-					const ancestry = getCountryAncestry(country);
-				
-					return (
-						<LinkWithParams
-							isDisabled={
-								process.env.NEXT_PUBLIC_DISABLE_COUNTRY ===
-								"true"
-							}
-							key={index}
-							href={pathname}
-							params={{ country: ancestry }}
-							className="opacity-100"
-						>
-							<Card
-								key={index}
-								className="flex gap-2 items-center px-4 py-1"
-								color="tertiary"
-							>
-								<div className="flex gap-2 items-center">
-									<Image
-										src={`https://flagcdn.com/w40/${country.toLowerCase()}.png`}
-										alt={country}
-										width={16}
-										height={12}
-									/>
-									<div>{country}</div>
-								</div>
-							</Card>
-						</LinkWithParams>
-					);
-				})}
-			</div>
-		);
-	},
-	institution: ({ value, pathname }) => {
-		if (!value) return false;
-
-		// Handle both string and array values
-		const institutions = Array.isArray(value) ? value : [value];
-
-		if (institutions.length === 0) return false;
-
-		return (
-			<div className="flex flex-wrap gap-2">
-				{institutions.map((institution, index) => {
-					const InstitutionLogo = Object.entries(
-						INSTITUTION_LOGOS
-					).find(([key]) => institution.includes(key))?.[1];
-
-					return (
-						<LinkWithParams
-							key={index}
-							href={pathname}
-							params={{ institution: [institution] }}
-						>
-							<Card
-								className="max-w-fit p-2 rounded-2xl"
-								color="accent"
-							>
-								<div
-									className={twMerge(
-										"flex gap-2 items-center",
-										!InstitutionLogo && "px-2"
-									)}
-								>
-									{InstitutionLogo && (
-										<InstitutionLogo className="bg-white" />
-									)}
-									<h3 className="text-white/80">
-										{institution}
-									</h3>
-								</div>
-							</Card>
-						</LinkWithParams>
-					);
-				})}
-			</div>
-		);
-	},
+	country: ItemCountry,
+	institution: ItemInstitution,
 };

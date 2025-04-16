@@ -1,3 +1,5 @@
+"use client";
+
 import { useRef, useState, useEffect } from "react";
 import { Item } from "@/app/api/item/types";
 import { Link, Skeleton } from "@nextui-org/react";
@@ -9,6 +11,7 @@ import { FaEye } from "react-icons/fa";
 import posthog from "posthog-js";
 import { useTranslations } from "next-intl";
 import useBreakpoint from "@/hooks/useBreakpoint";
+import { Card } from "@/components/nextui/Card";
 
 function downloadLink(url: string, filename: string, key: string) {
 	fetch(url)
@@ -84,7 +87,7 @@ export default function Attachment({ data }: { data: Item }) {
 			<Link
 				href={downloadURL}
 				target="_blank"
-				className="dark:text-current text-current break-all text-lg"
+				className="dark:text-current text-current text-wrap-anywhere text-lg"
 			>
 				{data.filename}
 			</Link>
@@ -125,10 +128,12 @@ export default function Attachment({ data }: { data: Item }) {
 	);
 
 	return isDesktop ? (
-		<li
+		<Card
+			// @ts-expect-error temporary
 			ref={parentRef}
-			className="flex flex-col gap-4 bg-black/[4%] border-2 border-white/10 p-4 rounded-2xl relative w-full"
+			className="flex flex-col gap-4 p-4 rounded-2xl relative w-full overflow-visible dark:bg-background"
 			key={data.id}
+			color="card"
 		>
 			<div
 				data-height={imageHeight}
@@ -150,10 +155,10 @@ export default function Attachment({ data }: { data: Item }) {
 				<AttachmentTitle className="lg:line-clamp-none line-clamp-2" />
 				<AttachmentButtons />
 			</div>
-		</li>
+		</Card>
 	) : (
-		<li
-			className="flex flex-col gap-4 bg-black/[4%] border-2 border-white/10 p-4 rounded-2xl w-full"
+		<Card
+			className="flex flex-col gap-4 p-4 rounded-2xl w-full dark:bg-background"
 			key={data.id}
 		>
 			<div className="w-full max-w-[200px] mx-auto">
@@ -163,6 +168,6 @@ export default function Attachment({ data }: { data: Item }) {
 				<AttachmentTitle className="line-clamp-2" />
 				<AttachmentButtons className="flex-wrap" />
 			</div>
-		</li>
+		</Card>
 	);
 }
