@@ -94,7 +94,7 @@ export default function Footer() {
 	}, []);
 
 	return (
-		!isMapPage && <footer id="footer" className="row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 lg:gap-14 py-12 min-h-[32rem] lg:py-0 print:hidden">
+		!isMapPage && <footer id="footer" className="relative row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 lg:gap-14 py-12 min-h-[32rem] lg:py-0 print:hidden">
 			<div className="max-w-[96rem] px-14 flex w-full justify-between lg:items-start items-center flex-col gap-6 lg:gap-14 lg:flex-row">
 				<div className="flex flex-col gap-6 h-full items-center lg:items-start">
 					<Logo />
@@ -195,6 +195,9 @@ export default function Footer() {
 					)}
 				</div>
 			)}
+			<div className="absolute bottom-0 right-0 p-2 z-50 text-xs text-black/60 dark:text-white/60">
+					0.2.3
+			</div>
 		</footer>
 	);
 }
