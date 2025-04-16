@@ -150,6 +150,7 @@ function FacetPicker({
 					fullWidth={true}
 					scrollShadowProps={{
 						isEnabled: false,
+						size: 0,
 					  }}
 					selectedKey={isMultiSelect ? null : selectedKey}
 					onSelectionChange={(key) => {
