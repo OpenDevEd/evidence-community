@@ -148,6 +148,9 @@ function FacetPicker({
 					label={label}
 					key={label}
 					fullWidth={true}
+					scrollShadowProps={{
+						isEnabled: false,
+					  }}
 					selectedKey={isMultiSelect ? null : selectedKey}
 					onSelectionChange={(key) => {
 						const item = displayedList!.find(
