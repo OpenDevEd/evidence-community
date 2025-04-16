@@ -1,6 +1,6 @@
 {
   "name": "test",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
@@ -24,7 +24,7 @@
     "@citation-js/plugin-ris": "^0.7.16",
     "@google/generative-ai": "^0.21.0",
     "@next/third-parties": "^15.2.4",
-    "@nextui-org/react": "^2.6.11",
+    "@heroui/react": "2.7.6",
     "@sentry/nextjs": "^9.5.0",
     "@uidotdev/usehooks": "^2.4.1",
     "@vercel/analytics": "^1.4.1",
