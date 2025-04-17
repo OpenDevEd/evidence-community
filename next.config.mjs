@@ -1,16 +1,20 @@
+// @ts-check
+
 import { withSentryConfig } from "@sentry/nextjs";
 /** @type {import('next').NextConfig} */
 import createNextIntlPlugin from "next-intl/plugin";
 
 const withNextIntl = createNextIntlPlugin();
 
+/**
+ * @type {import('next').NextConfig}
+ */
 const nextConfig = {
 	experimental: {
 		reactCompiler: true,
 		staleTimes: {
 			dynamic: 30,
 		},
-		streamingMetadata: true,
 	},
 	images: {
 		remotePatterns: [
