@@ -38,6 +38,8 @@ import Image from "next/image";
 import { getCountryAncestry, getCountryInfo } from "@/lib/utils";
 import { BsList } from "react-icons/bs";
 import { Button } from "../../nextui/Button";
+import { CollectedMetadata } from "next/dist/build/webpack/loaders/metadata/types";
+import { MdCollectionsBookmark } from "react-icons/md";
 function YearPicker({
 	label,
 	placeholder,
@@ -652,6 +654,113 @@ function FiltersList({
 	);
 }
 
+function CollectionPicker({
+	data,
+	queryParams,
+	handleCheckboxChange,
+	facetDistribution,
+}: {
+	data: CollectionsGetResponse | undefined;
+	queryParams: inferParserType<typeof searchParamsLoader>;
+	handleCheckboxChange: (key: string | string[], scroll?: boolean) => void;
+	facetDistribution: FacetDistribution | undefined;
+}) {
+	const [searchValue, setSearchValue] = useState("");
+
+	const filteredCollections = useMemo(() => {
+		return data?.collections.filter((collection) =>
+			collection.name?.toLowerCase().includes(searchValue.toLowerCase())
+		);
+	}, [data?.collections, searchValue]);
+
+	return (
+		<div className="bg-white dark:bg-card p-6 pb-0">
+			<Autocomplete
+				isVirtualized
+				label="Collection"
+				placeholder={`Search ${data?.collections.length} collections`}
+				listboxProps={{
+					virtualization: {
+						itemHeight: 64,
+						maxListboxHeight: 256,
+					},
+				}}
+				onInputChange={(value) => {
+					setSearchValue(value);
+				}}
+				onSelectionChange={(key) => {
+					const item = data?.collections.find(
+						(collection) => collection.key === key
+					);
+					if (!item) return;
+					if (queryParams.collections.includes(item.key)) {
+						handleCheckboxChange(item.key, false)
+					} else {
+						const ancestry = item.ancestry;
+						if (!ancestry) return;
+						handleCheckboxChange([...ancestry, item.key], false);
+					}
+				}}
+				inputProps={{
+					classNames: {
+						inputWrapper:
+							"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+						input: twMerge(
+							"placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
+							queryParams.collections.length > 0 &&
+								"placeholder:text-black dark:placeholder:text-white"
+						),
+					},
+				}}
+				selectedKey={null}
+			>
+				{filteredCollections?.filter((collection) => collection.originalFacet).map((collection) => {
+					const isSelected = queryParams.collections.includes(
+						collection.key
+					);
+					if (isSelected) {
+						console.log(collection.key, "is selected because of", queryParams.collections);
+					}
+					return (
+						<AutocompleteItem
+							textValue={collection.name!}
+							key={collection.key}
+							selectedIcon={
+								queryParams.collections.includes(
+									collection.key
+								) ? (
+									<LuCheck />
+								) : undefined
+							}
+						>
+							<span className="opacity-60">
+								{collection.ancestry?.map((key) => {
+									const parent = data?.collections.find(
+										(collection) => collection.key === key
+									);
+									if (!parent) return null;
+									const name = parent.name?.slice(0, 10);
+									const suffix =
+										name === parent.name ? "" : "...";
+									return `${name}${suffix} > `;
+								})}
+							</span>
+							{collection.name}
+							<span className="text-sm text-black/60 dark:text-white/60 ltr:ml-1 rtl:mr-1">
+								(
+								{facetDistribution?.collectionsAncestry?.[
+									collection.key
+								] || 0}
+								)
+							</span>
+						</AutocompleteItem>
+					);
+				})}
+			</Autocomplete>
+		</div>
+	);
+}
+
 export default function CollectionsList({
 	data,
 	facetDistribution,
@@ -668,7 +777,7 @@ export default function CollectionsList({
 }: {
 	data: CollectionsGetResponse | undefined;
 	facetDistribution: FacetDistribution | undefined;
-	handleCheckboxChange: (key: string) => void;
+	handleCheckboxChange: (key: string | string[]) => void;
 	handleCountrySelect: (country: string) => void;
 	handleAuthorCountrySelect: (country: string) => void;
 	selectedCollections: string[];
@@ -805,7 +914,12 @@ export default function CollectionsList({
 							onChange={(e) => setSearch(e.target.value)}
 						/>
 					</div> */}
-
+						<CollectionPicker
+							data={data}
+							queryParams={queryParams}
+							handleCheckboxChange={handleCheckboxChange}
+							facetDistribution={facetDistribution}
+						/>
 						<InnerCollectionList
 							data={data}
 							facetDistribution={facetDistribution}
