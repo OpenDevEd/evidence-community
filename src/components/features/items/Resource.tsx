@@ -343,7 +343,7 @@ export default function Resource({
 								!finalItemData ? "min-h-20" : "min-h-0"
 							)}
 						>
-							<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full break-all">
+							<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full">
 								{abstractText}
 							</p>
 						</Skeleton>
