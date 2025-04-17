@@ -674,6 +674,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"tags",
 		"extra",
 		"callNumber",
+		"dateTimestamp"
 	];
 
 	if (!item && !loading) return null;
