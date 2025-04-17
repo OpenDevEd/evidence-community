@@ -12,7 +12,7 @@ import {
     RiToolsFill,
     RiTwitterXFill,
 } from "react-icons/ri";
-import { BsChatRightDotsFill } from "react-icons/bs";
+import { BsChatRightDotsFill, BsMapFill } from "react-icons/bs";
 import { GiBookshelf } from "react-icons/gi";
 import { LinkObject, LinksList } from "@/db/schema/tables/status";
 
@@ -28,6 +28,7 @@ export const NAVBAR_ICONS = {
     "BookOpenFill": RiBookOpenFill,
     "Bookshelf": GiBookshelf,
     "ChatRightDotsFill": BsChatRightDotsFill,
+    "BsMapFill": BsMapFill
 }
 
 export const links: {
