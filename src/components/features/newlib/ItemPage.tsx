@@ -32,7 +32,7 @@ import AiWrapper from "@/components/features/newlib/AiWrapper";
 import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import LinkWithParams from "../LinkWithParams";
 import { serializeSearchParams } from "@/lib/searchParams";
-import { Tooltip } from "@heroui/react";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import LikeButton from "../items/LikeButton";
@@ -856,6 +856,7 @@ function ItemCollection({
 	return (
 		<li key={collection.id}>
 			<Tooltip
+				className="bg-white dark:bg-card border border-white/10"
 				content={
 					<motion.div
 						className="px-2 py-1 min-w-[200px]"
@@ -936,26 +937,6 @@ function ItemCollection({
 					</motion.div>
 				}
 				placement="top"
-				classNames={{
-					base: [
-						"before:bg-secondary-100",
-						"data-[showing=true]:animate-in",
-						"data-[showing=true]:fade-in-0",
-						"data-[showing=true]:zoom-in-95",
-						"data-[showing=false]:animate-out",
-						"data-[showing=false]:fade-out-0",
-						"data-[showing=false]:zoom-out-95",
-						"data-[showing=true]:slide-in-from-bottom-1",
-						"data-[showing=false]:slide-out-to-bottom-1",
-					].join(" "),
-					content: [
-						"bg-secondary-100/80",
-						"backdrop-blur-md",
-						"border border-white/10",
-						"shadow-[0_0_20px_rgba(0,0,0,0.1)]",
-						"dark:shadow-[0_0_20px_rgba(255,255,255,0.1)]",
-					].join(" "),
-				}}
 			>
 				<LinkWithParams
 					href={referrer ?? "/lib"}
