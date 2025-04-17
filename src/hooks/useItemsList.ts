@@ -215,32 +215,44 @@ export function useItemsList(userData?: any, config: {
 		return buildHierarchy(collectionsData.collections as Collection[]);
 	}, [collectionsData]);
 
-	const handleCheckboxChange = (key: string) => {
-		let newSelectedCollections: string[];
+	const handleCheckboxChange = (key: string | string[], scroll?: boolean) => {
+		let newSelectedCollections: string[] | undefined;
 
-		if (key === "") {
+		if (key === "" || key === null || key.length === 0) {
 			newSelectedCollections = [];
-		} else {
-			const alreadySelected = selectedCollections.includes(key);
+		} else if (!Array.isArray(key) || key.length === 1) {
+			const singleKey = Array.isArray(key) ? key[0] : key;
+			const alreadySelected = selectedCollections.includes(singleKey);
 
 			if (alreadySelected) {
-				const collectionToDeselect = recursiveFind(key, hierarchy);
+				const collectionToDeselect = recursiveFind(singleKey, hierarchy);
 
 				const descendantKeys = collectionToDeselect
 					? getDescendantKeys(collectionToDeselect)
 					: [];
 				newSelectedCollections = selectedCollections.filter(
-					(k: string) => k !== key && !descendantKeys.includes(k)
+					(k: string) => k !== singleKey && !descendantKeys.includes(k)
 				);
 			} else {
-				newSelectedCollections = [...selectedCollections, key];
+				newSelectedCollections = [...selectedCollections, singleKey];
+			}
+		} else if (Array.isArray(key)) {
+			const allKeysIn = key.every((k) => selectedCollections.includes(k));
+			if (allKeysIn) {
+				newSelectedCollections = selectedCollections.filter(
+					(k: string) => !key.includes(k)
+				);
+			} else {
+				newSelectedCollections = Array.from(new Set([...selectedCollections, ...key]));
 			}
 		}
 
 		setParams({
 			collections: newSelectedCollections,
 			page: 1,
-		});
+		}, scroll !== undefined ? {
+			scroll,
+		} : undefined);
 	};
 
 	return {
