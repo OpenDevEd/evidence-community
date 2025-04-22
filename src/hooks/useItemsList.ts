@@ -203,21 +203,21 @@ export function useItemsList(userData?: any, config: {
 
 	const itemsData = itemsCache.current[pathname];
 
-	// const {
-	// 	data: collectionsData,
-	// 	error: collectionsError,
-	// 	isLoading: isCollectionsLoading,
-	// } = useSWR<CollectionsGetResponse>("/collections", fetcher, {
-	// 	keepPreviousData: true,
-	// });
+	const {
+		collectionsData,
+		hierarchy,
+		collectionsError,
+		isCollectionsLoading
+	} = useMemo(() => ({
+		collectionsData: {
+			collections: collectionsDataJSON as Collection[],
+		},
+		hierarchy: hierarchyDataJSON as Collection[],
+		collectionsError: undefined,
+		isCollectionsLoading: false
+	}), []);
 
-	const collectionsData: CollectionsGetResponse = {
-		collections: collectionsDataJSON as Collection[],
-	}
 	const selectedCollections = queryParams.collections;
-	const hierarchy = hierarchyDataJSON as Collection[];
-	const collectionsError = undefined;
-	const isCollectionsLoading = false;
 
 	const handleCheckboxChange = (key: string | string[], scroll?: boolean) => {
 		let newSelectedCollections: string[] | undefined;
