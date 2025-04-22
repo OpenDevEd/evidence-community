@@ -219,3 +219,8 @@ export function getCountryAncestry(country: string) {
 
 	return ancestry;
 }
+
+export function isPathSmallNavbar(path: string) {
+	const smallNavbarPaths = ["/", "/map"];
+	return smallNavbarPaths.some(p => p === path);
+}

@@ -49,7 +49,7 @@ import { useModalError } from "@/hooks/useModalError";
 import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
 import { LinkObject } from "@/db/schema/tables/status";
 import DialogModal from "../nextui/DialogModal";
-import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils";
+import { convertStringFromDatabaseToObject, getDynamicStyles, isPathSmallNavbar } from "@/lib/utils";
 
 function ThemeSwitcher({
 	theme,
@@ -569,7 +569,7 @@ export default function Navbar() {
 		onOpenChange: onLoginModalOpenChange,
 		onClose: onLoginModalClose,
 	} = useDisclosure();
-	const isMapPage = pathname.includes("/map");
+	const isMapPage = isPathSmallNavbar(pathname);
 	useEffect(() => {
 		setIsMounted(true);
 	}, []);

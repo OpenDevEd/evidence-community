@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { style } from "../../../tailwind.config";
 
 import { twMerge } from "tailwind-merge";
+import { isPathSmallNavbar } from "@/lib/utils";
 
 export default function MainWrapper({
 	children,
@@ -11,7 +12,7 @@ export default function MainWrapper({
 	children: React.ReactNode;
 }) {
 	const pathname = usePathname();
-	const isMapPage = pathname.includes("/map");
+	const isMapPage = isPathSmallNavbar(pathname);
     
 	return (
 		<div
