@@ -63,3 +63,8 @@ src/app/*.bmp
 src/app/manifest.json
 # Sentry Config File
 .env.sentry-build-plugin
+
+
+# collections
+/public/collections.json
+/public/hierarchy.json

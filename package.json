@@ -4,12 +4,13 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "npm run icons:generate && npm run redirections:generate && FORCE_COLOR=1 next build && npm run sitemap:generate",
+    "build": "npm run icons:generate && npm run redirections:generate && npm run collections:generate && FORCE_COLOR=1 next build && npm run sitemap:generate",
     "start": "next start",
     "lint": "next lint",
     "sitemap:generate": "npx tsx ./tools/generateSitemapIndex.ts",
     "icons:generate": "npx tsx ./tools/generateIcons.ts",
-    "redirections:generate": "npx tsx ./tools/generateRedirections.ts"
+    "redirections:generate": "npx tsx ./tools/generateRedirections.ts",
+    "collections:generate": "npx tsx ./tools/generateCollections.ts"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.0.5",
