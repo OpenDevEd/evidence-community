@@ -27,7 +27,8 @@ export default function CollectionCategory({
 	handleCheckboxChange: (key: string) => void;
 	facetDistribution: FacetDistribution | undefined;
 }) {
-	const [searchValue, setSearchValue] = useQueryState("collectionsSearch");
+	// const [searchValue, setSearchValue] = useQueryState("collectionsSearch");
+	const searchValue = "";
 	const t = useTranslations("ui");
 	const ref = useRef<HTMLDivElement>(null);
 	const { previousExpansionStates, globalExpanded, setGlobalExpanded } =

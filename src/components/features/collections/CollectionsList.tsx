@@ -674,6 +674,48 @@ function CollectionPicker({
 		);
 	}, [data?.collections, searchValue]);
 
+	const memoizedItems = useMemo(() => {
+		return filteredCollections?.filter((collection) => collection.originalFacet).map((collection) => {
+			const isSelected = queryParams.collections.includes(
+				collection.key
+			);
+			return (
+				<AutocompleteItem
+					textValue={collection.name!}
+					key={collection.key}
+					selectedIcon={
+						queryParams.collections.includes(
+							collection.key
+						) ? (
+							<LuCheck />
+						) : undefined
+					}
+				>
+					<span className="opacity-60">
+						{collection.ancestry?.map((key) => {
+							const parent = data?.collections.find(
+								(collection) => collection.key === key
+							);
+							if (!parent) return null;
+							const name = parent.name?.slice(0, 10);
+							const suffix =
+								name === parent.name ? "" : "...";
+							return `${name}${suffix} > `;
+						})}
+					</span>
+					{collection.name}
+					<span className="text-sm text-black/60 dark:text-white/60 ltr:ml-1 rtl:mr-1">
+						(
+						{facetDistribution?.collectionsAncestry?.[
+							collection.key
+						] || 0}
+						)
+					</span>
+				</AutocompleteItem>
+			);
+		});
+	}, [filteredCollections, queryParams.collections, data?.collections, facetDistribution?.collectionsAncestry]);
+
 	return (
 		<div className="bg-white dark:bg-card p-6 pb-0">
 			<Autocomplete
@@ -715,48 +757,7 @@ function CollectionPicker({
 				}}
 				selectedKey={null}
 			>
-				{filteredCollections?.filter((collection) => collection.originalFacet).map((collection) => {
-					const isSelected = queryParams.collections.includes(
-						collection.key
-					);
-					if (isSelected) {
-						console.log(collection.key, "is selected because of", queryParams.collections);
-					}
-					return (
-						<AutocompleteItem
-							textValue={collection.name!}
-							key={collection.key}
-							selectedIcon={
-								queryParams.collections.includes(
-									collection.key
-								) ? (
-									<LuCheck />
-								) : undefined
-							}
-						>
-							<span className="opacity-60">
-								{collection.ancestry?.map((key) => {
-									const parent = data?.collections.find(
-										(collection) => collection.key === key
-									);
-									if (!parent) return null;
-									const name = parent.name?.slice(0, 10);
-									const suffix =
-										name === parent.name ? "" : "...";
-									return `${name}${suffix} > `;
-								})}
-							</span>
-							{collection.name}
-							<span className="text-sm text-black/60 dark:text-white/60 ltr:ml-1 rtl:mr-1">
-								(
-								{facetDistribution?.collectionsAncestry?.[
-									collection.key
-								] || 0}
-								)
-							</span>
-						</AutocompleteItem>
-					);
-				})}
+				{memoizedItems}
 			</Autocomplete>
 			{/* <Input
 				color="card"
@@ -921,12 +922,12 @@ export default function CollectionsList({
 							onChange={(e) => setSearch(e.target.value)}
 						/>
 					</div> */}
-						<CollectionPicker
+						{/* <CollectionPicker
 							data={data}
 							queryParams={queryParams}
 							handleCheckboxChange={handleCheckboxChange}
 							facetDistribution={facetDistribution}
-						/>
+						/> */}
 						<InnerCollectionList
 							data={data}
 							facetDistribution={facetDistribution}
