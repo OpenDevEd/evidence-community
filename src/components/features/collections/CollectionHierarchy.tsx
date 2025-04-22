@@ -18,7 +18,8 @@ export default function CollectionHierarchy({
 	onCheckboxChange: (key: string) => void;
 	facetDistribution: FacetDistribution | undefined;
 }) {
-	const [searchValue, setSearchValue] = useQueryState("collectionsSearch");
+	// const [searchValue, setSearchValue] = useQueryState("collectionsSearch");
+	const searchValue: string | undefined = "";
 	const childrenUnsorted = collectionData.children || [];
 	const children = useMemo(() => {
 		const newArray = [...childrenUnsorted];
@@ -34,15 +35,12 @@ export default function CollectionHierarchy({
 			collectionData.descendantsNames?.some((name) =>
 				name.toLowerCase().includes(searchValue.toLowerCase())
 			));
-	console.log(collectionData.name, collectionData, isSearchMatch, searchValue);
 	const isSelected = selectedCollections.includes(collectionData.key);
 	const isChecked =
 		facetDistribution?.collectionsAncestry[collectionData.key] &&
 		facetDistribution?.collectionsAncestry[collectionData.key] > 0;
 	const show = isSelected || (collectionData.level !== 0 && isChecked);
 	const hasChildren = children.length > 0;
-
-	console.log(collectionData);
 
 	return (
 		<>
