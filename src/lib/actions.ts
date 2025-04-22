@@ -751,6 +751,7 @@ export async function searchIndex(
 ) {
 	const cacheKey = `${buildItemsQuery(searchParams)}-${JSON.stringify(extraFilters)}-${JSON.stringify(extraProperties)}`;
 
+
 	const items = unstable_cache(async () => {
 		const pageNum = Math.max(1, Number(searchParams.page || 1));
 		const limitNum = ITEMS_PER_PAGE;
@@ -808,11 +809,17 @@ export async function searchIndex(
 		const itemPromises = items.map(async (item) => {
 			if (collections) {
 				item.collectionsData = item.collectionsAncestry
-					?.map((collection: string) => {
+					?.map((collection: string): Collection | undefined => {
 						const collectionData = collections.find(
 							(c: Collection) => c.key === collection
 						);
-						return collectionData;
+						if (collectionData) {
+							return {
+								...collectionData,
+								descendantsNames: undefined,
+							};
+						}
+						return undefined;
 					})
 					.filter(
 						(collectionData: Collection | undefined) =>
