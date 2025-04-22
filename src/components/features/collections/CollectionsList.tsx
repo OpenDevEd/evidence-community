@@ -27,7 +27,7 @@ import { LuCheck, LuChevronDown, LuChevronRight, LuX } from "react-icons/lu";
 import { useTranslations } from "next-intl";
 import { CacheContext, useFeatureFlagEnabled } from "@/context/Providers";
 import { searchParamsLoader } from "@/lib/searchParams";
-import { inferParserType } from "nuqs";
+import { inferParserType, useQueryState } from "nuqs";
 import {
 	FacetListItem,
 	useFacetList,
@@ -665,6 +665,7 @@ function CollectionPicker({
 	handleCheckboxChange: (key: string | string[], scroll?: boolean) => void;
 	facetDistribution: FacetDistribution | undefined;
 }) {
+	// const [searchValue, setSearchValue] = useQueryState("collectionsSearch");
 	const [searchValue, setSearchValue] = useState("");
 
 	const filteredCollections = useMemo(() => {
@@ -757,6 +758,12 @@ function CollectionPicker({
 					);
 				})}
 			</Autocomplete>
+			{/* <Input
+				color="card"
+				placeholder={`Search ${data?.collections.length} collections`}
+				onChange={(e) => setSearchValue(e.target.value)}
+				defaultValue={queryParams.collectionsSearch}
+			/> */}
 		</div>
 	);
 }

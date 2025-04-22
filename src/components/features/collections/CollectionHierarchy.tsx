@@ -1,6 +1,7 @@
 import { Collection } from "@/app/api/collections/types";
 import { Checkbox } from "@/components/nextui/Checkbox";
 import { FacetDistribution } from "meilisearch";
+import { useQueryState } from "nuqs";
 import { useMemo } from "react";
 import { IoIosArrowDown } from "react-icons/io";
 
@@ -17,6 +18,7 @@ export default function CollectionHierarchy({
 	onCheckboxChange: (key: string) => void;
 	facetDistribution: FacetDistribution | undefined;
 }) {
+	const [searchValue, setSearchValue] = useQueryState("collectionsSearch");
 	const childrenUnsorted = collectionData.children || [];
 	const children = useMemo(() => {
 		const newArray = [...childrenUnsorted];
@@ -25,19 +27,33 @@ export default function CollectionHierarchy({
 		);
 	}, [childrenUnsorted]);
 	const level = collectionData.level || 0;
+	const isSearchMatch = searchValue &&
+		(collectionData.name
+			?.toLowerCase()
+			.includes(searchValue.toLowerCase()) ||
+			collectionData.descendantsNames?.some((name) =>
+				name.toLowerCase().includes(searchValue.toLowerCase())
+			));
+	console.log(collectionData.name, collectionData, isSearchMatch, searchValue);
 	const isSelected = selectedCollections.includes(collectionData.key);
-	const show =
-		isSelected ||
-		(collectionData.level !== 0 &&
-			facetDistribution?.collectionsAncestry[collectionData.key] &&
-			facetDistribution?.collectionsAncestry[collectionData.key] > 0);
+	const isChecked =
+		facetDistribution?.collectionsAncestry[collectionData.key] &&
+		facetDistribution?.collectionsAncestry[collectionData.key] > 0;
+	const show = isSelected || (collectionData.level !== 0 && isChecked);
 	const hasChildren = children.length > 0;
+
+	console.log(collectionData);
 
 	return (
 		<>
-			{show && (
+			{((searchValue && collectionData.level !== 0) ? isSearchMatch : show) && (
 				<Checkbox
-					size={collectionData.parentCollection === collectionData.originalFacet ? "lg" : undefined}
+					size={
+						collectionData.parentCollection ===
+						collectionData.originalFacet
+							? "lg"
+							: undefined
+					}
 					isSelected={isSelected}
 					onValueChange={() => onCheckboxChange(collectionData.key)}
 					style={{ marginLeft: `${(level - 1) * 16}px` }}
@@ -65,7 +81,7 @@ export default function CollectionHierarchy({
 					</div>
 				</Checkbox>
 			)}
-			{(isSelected || level === 0) &&
+			{(searchValue ? isSearchMatch : (isSelected || level === 0)) &&
 				children.map((child) => (
 					<CollectionHierarchy
 						key={child.key}

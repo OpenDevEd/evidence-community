@@ -12,6 +12,7 @@ import CollectionHierarchy from "./CollectionHierarchy";
 import { FacetDistribution } from "meilisearch";
 import { useTranslations } from "next-intl";
 import { CacheContext } from "@/context/Providers";
+import { useQueryState } from "nuqs";
 
 export default function CollectionCategory({
 	collection,
@@ -26,11 +27,12 @@ export default function CollectionCategory({
 	handleCheckboxChange: (key: string) => void;
 	facetDistribution: FacetDistribution | undefined;
 }) {
+	const [searchValue, setSearchValue] = useQueryState("collectionsSearch");
 	const t = useTranslations("ui");
 	const ref = useRef<HTMLDivElement>(null);
 	const { previousExpansionStates, globalExpanded, setGlobalExpanded } =
 		useContext(CacheContext);
-	const [expanded, setExpanded] = useMemo(() => {
+	const [expandedValue, setExpanded] = useMemo(() => {
 		const currentValue = globalExpanded[collection.key] ?? false;
 		return [
 			currentValue,
@@ -43,7 +45,9 @@ export default function CollectionCategory({
 			},
 		];
 	}, [globalExpanded, collection.key]);
-	const [showMore, setShowMore] = useState(false);
+	const expanded = (searchValue || "").length > 0 || expandedValue;
+	const [showMoreValue, setShowMore] = useState(false);
+	const showMore = (searchValue || "").length > 0 || showMoreValue;
 	const scrollHeight = ref.current?.scrollHeight ?? 0;
 
 	useEffect(() => {
@@ -97,12 +101,12 @@ export default function CollectionCategory({
 				<div
 					className={twMerge(
 						"transition-all duration-200 pb-0",
-						expanded && showMore && "pb-14"
+						expanded && showMore && !searchValue && "pb-14"
 					)}
 				></div>
 			)}
 			<AnimatePresence mode="wait" initial={false}>
-				{(showMore && scrollHeight > 0) && (
+				{(showMore && scrollHeight > 0 && !searchValue) && (
 					<motion.div
 						initial={
 							previousExpansionStates.current[collection.key] !==

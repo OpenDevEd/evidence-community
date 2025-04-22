@@ -25,7 +25,7 @@ export const searchParamsLoader = {
 	author: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),
-	
+	collectionsSearch: parseAsString.withDefault("")
 }
 
 export const serializeSearchParams = createSerializer(searchParamsLoader);
