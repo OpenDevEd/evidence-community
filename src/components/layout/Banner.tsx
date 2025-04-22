@@ -10,7 +10,7 @@ import {
 	ModalFooter,
 	useDisclosure,
 } from "@heroui/react";
-import { useLocalStorage } from "@uidotdev/usehooks";
+import { useLocalStorage } from "usehooks-ts";
 import { useEffect } from "react";
 import { MdPrivacyTip } from "react-icons/md";
 import { Logo } from "./Navbar";
