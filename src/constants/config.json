@@ -86,6 +86,12 @@
 		]
 	},
 	"collections": {
+		"itemsFCDO": {
+			"BBN8BK5J": {
+				"title": "Themes",
+				"enabled": true
+			}
+		},
 		"itemsPrograma": {
 			"6EJRSALT": {
 				"title": "Themes / Temas",
