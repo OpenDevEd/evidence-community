@@ -31,11 +31,17 @@ export const Input = extendVariants(NextUIInput, {
 				inputWrapper: "rounded-2xl",
 			},
 		},
+		isInvalid: {
+			true: {
+				inputWrapper: "outline-medium outline-danger dark:outline-danger",
+			},
+		},
 	},
 	defaultVariants: {
 		color: "secondary",
 		custom: "default",
 		variant: "default",
 		size: "md",
+		isInvalid: false,
 	},
 });
