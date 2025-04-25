@@ -15,6 +15,7 @@ import { Spinner } from "@nextui-org/react";
 import { toast } from "@/components/layout/Toast";
 import { takedownRequestSchema } from "@/lib/utils";
 import { MdEmail } from "react-icons/md";
+import { useTranslations } from "next-intl";
 
 const LINK_SEPARATOR = "\t• ";
 
@@ -30,8 +31,8 @@ function formatLinkErrors(
 	}));
 
 	if (invalidLinks.length > 0) {
-		return `${errorType} link(s):\n${LINK_SEPARATOR}${invalidLinks
-			.map((v) => `${v.url} (line ${v.index})`)
+		return `${errorType}\n${LINK_SEPARATOR}${invalidLinks
+			.map((v) => `${v.url} (${v.index})`)
 			.join(`\n${LINK_SEPARATOR}`)}`;
 	}
 
@@ -40,6 +41,7 @@ function formatLinkErrors(
 
 function FieldInfo({ field }: { field: AnyFieldApi }) {
 	"use no memo";
+	const t = useTranslations("ui");
 
 	const {
 		displayOnError,
@@ -96,7 +98,7 @@ function FieldInfo({ field }: { field: AnyFieldApi }) {
 							>
 								<Card className="p-4 flex items-center flex-row gap-2">
 									<Spinner size="sm" />
-									<p className="text-sm">Validating...</p>
+									<p className="text-sm">{t("validating")}</p>
 								</Card>
 							</motion.div>
 						) : null}
@@ -161,6 +163,7 @@ function TextareaField({
 
 export default function Takedown() {
 	"use no memo";
+	const t = useTranslations("ui");
 
 	const form = useForm({
 		defaultValues: {
@@ -168,7 +171,7 @@ export default function Takedown() {
 			links: "",
 			description: "",
 		},
-		onSubmit: async ({ value }) => {
+		onSubmit: async ({ value, formApi }) => {
 			console.log("got takedown request", value);
 			const result = await sendTakedownRequest(
 				value.email,
@@ -176,19 +179,20 @@ export default function Takedown() {
 				value.description
 			);
 			if (result.success) {
+				formApi.reset();
 				toast({
-					title: "Takedown request sent",
-					description:
-						"We will review your request and get back to you as soon as possible.",
+					title: t("requestSent"),
+					description: t("requestSentDesc"),
 					type: "success",
 				});
 			} else {
 				toast({
-					title: "Failed to send takedown request",
-					description: "Please try again later.",
+					title: t("requestFailed"),
+					description: t("tryAgainLater"),
 					type: "error",
 				});
 			}
+
 		},
 	});
 
@@ -206,16 +210,16 @@ export default function Takedown() {
 					}}
 					className="w-full max-w-2xl flex flex-col gap-4 items-center"
 				>
-					<h1 className="text-2xl font-bold">Takedown Request</h1>
+					<h1 className="text-2xl font-bold">{t("takedownRequest")}</h1>
 					<form.Field
 						name="email"
 						validators={{
-							onChange: z.string().email(),
+							onChange: z.string().email({ message: t("invalidEmail") }),
 						}}
 						children={(field) => (
 							<InputField
 								startContent={<MdEmail />}
-								label="Email"
+								label={t("email")}
 								field={field}
 							/>
 						)}
@@ -226,7 +230,7 @@ export default function Takedown() {
 							onChangeAsyncDebounceMs: 500,
 							onChangeAsync: async ({ value }) => {
 								if (!value) {
-									return "Please enter links";
+									return t("enterLinks");
 								}
 
 								const links = value.split("\n").filter(Boolean);
@@ -243,7 +247,8 @@ export default function Takedown() {
 								const zodErrorMessage = formatLinkErrors(
 									links,
 									invalidZodLinks,
-									(item) => linkErrors.indexOf(item)
+									(item) => linkErrors.indexOf(item),
+									t("invalidLinks")
 								);
 
 								// Only check server validation if all links are valid URLs
@@ -275,7 +280,7 @@ export default function Takedown() {
 										validUrls,
 										invalidUrls,
 										(item) => validity.indexOf(item),
-										"Invalid"
+										t("invalidLinks")
 									);
 
 									const nonExistingResourcesMessage =
@@ -283,7 +288,7 @@ export default function Takedown() {
 											validUrls,
 											nonExistingResources,
 											(item) => validity.indexOf(item),
-											"Resource doesn't exist"
+											t("resourceNotFound")
 										);
 
 									// Check if all links are valid (both format and existence)
@@ -319,7 +324,7 @@ export default function Takedown() {
 						children={(field) => (
 							<TextareaField
 								startContent={<BiLink />}
-								label="Links (one per line)"
+								label={t("linksPerLine")}
 								field={field}
 							/>
 						)}
@@ -327,12 +332,16 @@ export default function Takedown() {
 					<form.Field
 						name="description"
 						validators={{
-							onSubmit: takedownRequestSchema.shape.description,
+							onSubmit: ({ value}) => {
+								if (value.length < 20) {
+									return t("descriptionMin20");
+								}
+							},
 						}}
 						children={(field) => (
 							<TextareaField
 								startContent={<BiMessageSquare />}
-								label="Description (min 20 characters)"
+								label={t("description")}
 								field={field}
 							/>
 						)}
@@ -349,7 +358,7 @@ export default function Takedown() {
 								type="submit"
 								isDisabled={!canSubmit}
 							>
-								{isSubmitting ? "Sending..." : "Submit"}
+								{isSubmitting ? t("sending") : t("submit")}
 							</Button>
 						)}
 					/>
