@@ -18,10 +18,11 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
-import { buildItemsQuery, defaultParams, generateRandomID } from "@/lib/utils";
+import { buildItemsQuery, defaultParams, generateRandomID, validateTakedownRequest } from "@/lib/utils";
 import {
 	getCachedCollections,
 	getCachedItemSmall,
+	getCachedStatus,
 	getCachedUserLikes,
 	setCachedItemSmall,
 } from "@/app/api/cache";
@@ -41,6 +42,8 @@ import { headers } from "next/headers";
 import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { blockedTags } from "@/constants/misc";
+import transporter from "./nodemailer";
+
 
 export async function getRateLimits() {
 	const headersList = await headers();
@@ -56,6 +59,7 @@ export async function getRateLimits() {
 		retryAfter: retryAfter ? parseInt(retryAfter) : null,
 	}
 }
+
 export async function areLinksValid(links: string[]) {
 	const validity = await Promise.allSettled(links.map(async (link: string) => {
 		const asURL = new URL(link);
@@ -73,6 +77,33 @@ export async function areLinksValid(links: string[]) {
 		return true;
 	}));
 	return validity;
+}
+
+export async function sendTakedownRequest(email: string, links: string[], description: string) {
+
+	console.log("got takedown request", email, links, description);
+	const status = await getCachedStatus();
+
+	const companyName = status.companyName;
+	console.log("company name", companyName);
+	const validator = await validateTakedownRequest(email, links, description);
+	console.log("validator", validator);
+	if ("error" in validator) {
+		return { error: validator.error };
+	}
+
+	const mailOptions = {
+		from: email,
+		to: process.env.TAKEDOWN_EMAIL,
+		subject: `${companyName} - Takedown Request`,
+		text: `Email: ${email}\nLinks: ${links.join("\n")}\nDescription: ${description}`,
+	};
+
+	console.log("mailOptions", mailOptions);
+
+	const result = await transporter.sendMail(mailOptions);
+
+	return { success: result.accepted.length > 0 };
 }
 
 export async function runScreening(keys: string[], modelIndex: number, smartScreeningFields: SmartScreeningField[], distinctId: string) {
