@@ -310,7 +310,7 @@ function LinksList({
 }
 
 function LanguageSwitcher({ className, isMobile = false }: { className?: string; isMobile?: boolean }) {
-	const isLanguageSwitcherEnabled = useFeatureFlagEnabled("language-switcher");
+	const isLanguageSwitcherEnabled = useFeatureFlagEnabled("language-switcher") && routing.locales.length > 1;
 	const router = useRouter();
 	const locale = useLocale();
 	const pathname = usePathname();
