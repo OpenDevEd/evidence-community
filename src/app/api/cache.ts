@@ -5,20 +5,16 @@ import { ItemGetResponse } from "./item/types";
 import { and, eq, InferSelectModel } from "drizzle-orm";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { status as statusTable } from "@/db/schema/tables/status";
-import { Collection, CollectionsGetResponse } from "./collections/types";
+import { Collection } from "./collections/types";
 import { getCollections } from "./collections/route";
 
-import collectionsDataJSON from "@/../public/collections.json";
-
-export async function getCachedCollections(ignoreCache: boolean = false): Promise<CollectionsGetResponse["collections"]> {
-	// let collections: Collection[] | undefined = global?.cacheUser?.get("collections");
-	// if (!collections || ignoreCache) {
-	// 	collections = await getCollections();
-	// 	global?.cacheUser?.set("collections", collections);
-	// }
-	// return collections;
-
-	return collectionsDataJSON as unknown as CollectionsGetResponse["collections"];
+export async function getCachedCollections(ignoreCache: boolean = false) {
+	let collections: Collection[] | undefined = global?.cacheUser?.get("collections");
+	if (!collections || ignoreCache) {
+		collections = await getCollections();
+		global?.cacheUser?.set("collections", collections);
+	}
+	return collections;
 }
 
 export async function getCachedItem(key: string, ignoreCache: boolean = false) {

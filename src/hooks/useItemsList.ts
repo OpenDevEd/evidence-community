@@ -15,9 +15,6 @@ import { buildHierarchy } from "@/lib/collections";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { useQueryStates } from 'nuqs'
 
-import collectionsDataJSON from "@/../public/collections.json";
-import hierarchyDataJSON from "@/../public/hierarchy.json";
-
 export function useItemsList(userData?: any, config: {
 	paginationSiblings?: number,
 	disableViewSwitch?: boolean,
@@ -204,20 +201,19 @@ export function useItemsList(userData?: any, config: {
 	const itemsData = itemsCache.current[pathname];
 
 	const {
-		collectionsData,
-		hierarchy,
-		collectionsError,
-		isCollectionsLoading
-	} = useMemo(() => ({
-		collectionsData: {
-			collections: collectionsDataJSON as Collection[],
-		},
-		hierarchy: hierarchyDataJSON as Collection[],
-		collectionsError: undefined,
-		isCollectionsLoading: false
-	}), []);
+		data: collectionsData,
+		error: collectionsError,
+		isLoading: isCollectionsLoading,
+	} = useSWR<CollectionsGetResponse>("/collections", fetcher, {
+		keepPreviousData: true,
+	});
 
 	const selectedCollections = queryParams.collections;
+
+	const hierarchy = useMemo(() => {
+		if (!collectionsData) return [];
+		return buildHierarchy(collectionsData.collections as Collection[]);
+	}, [collectionsData]);
 
 	const handleCheckboxChange = (key: string | string[], scroll?: boolean) => {
 		let newSelectedCollections: string[] | undefined;
@@ -229,7 +225,7 @@ export function useItemsList(userData?: any, config: {
 			const alreadySelected = selectedCollections.includes(singleKey);
 
 			if (alreadySelected) {
-				const collectionToDeselect = recursiveFind(singleKey, hierarchy as Collection[]);
+				const collectionToDeselect = recursiveFind(singleKey, hierarchy);
 
 				const descendantKeys = collectionToDeselect
 					? getDescendantKeys(collectionToDeselect)

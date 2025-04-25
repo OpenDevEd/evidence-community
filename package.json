@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "npm run icons:generate && npm run redirections:generate && npm run collections:generate && FORCE_COLOR=1 next build && npm run sitemap:generate",
+    "build": "npm run icons:generate && npm run collections:generate && FORCE_COLOR=1 next build && npm run sitemap:generate",
     "start": "next start",
     "lint": "next lint",
     "sitemap:generate": "npx tsx ./tools/generateSitemapIndex.ts",
