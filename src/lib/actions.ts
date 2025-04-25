@@ -56,6 +56,24 @@ export async function getRateLimits() {
 		retryAfter: retryAfter ? parseInt(retryAfter) : null,
 	}
 }
+export async function areLinksValid(links: string[]) {
+	const validity = await Promise.allSettled(links.map(async (link: string) => {
+		const asURL = new URL(link);
+		const itemKey = asURL.pathname.split("/").pop();
+
+		if (!itemKey) {
+			return false;
+		}
+
+		const item = await getCachedItemSmall(itemKey);
+		if (!item || !item.item) {
+			return false;
+		}
+
+		return true;
+	}));
+	return validity;
+}
 
 export async function runScreening(keys: string[], modelIndex: number, smartScreeningFields: SmartScreeningField[], distinctId: string) {
 	const { provider, modelName, error } = getModel(modelIndex);
