@@ -4,6 +4,28 @@ import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
 import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
+import { z } from "zod";
+import { areLinksValid } from "./actions";
+
+export const takedownRequestSchema = z.object({
+	email: z.string().email(),
+	links: z.array(z.string().url()),
+	description: z.string().min(20),
+});
+
+export async function validateTakedownRequest(email: string, links: string[], description: string): Promise<{ error: string } | { success: boolean }> {
+	const result = takedownRequestSchema.safeParse({ email, links, description });
+	if (!result.success) {
+		return { error: result.error.message };
+	}
+
+	const linksValid = await areLinksValid(result.data.links);
+	if (!linksValid) {
+		return { error: "Invalid links" };
+	}
+
+	return { success: true };
+}
 
 export function getCountryInfo(country: string) {
 	const parts = country.split(" > ");
