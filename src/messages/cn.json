@@ -273,7 +273,8 @@
     "evidenceLibrarySDG4": "可持续发展目标 4：教育 - 证据库",
     "knowledgeBase": "知识库",
     "nationalEvidencePortal": "国家证据门户",
-    "map": "地图"
+    "map": "地图",
+    "takedown": "删除请求"
   },
   "footer": {
     "quickLinks": "快速链接",
