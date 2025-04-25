@@ -109,7 +109,15 @@ function FieldInfo({ field }: { field: AnyFieldApi }) {
 	);
 }
 
-function InputField({ label, field, startContent }: { label: string; field: AnyFieldApi; startContent?: React.ReactNode }) {
+function InputField({
+	label,
+	field,
+	startContent,
+}: {
+	label: string;
+	field: AnyFieldApi;
+	startContent?: React.ReactNode;
+}) {
 	"use no memo";
 
 	return (
@@ -192,7 +200,6 @@ export default function Takedown() {
 					type: "error",
 				});
 			}
-
 		},
 	});
 
@@ -210,20 +217,25 @@ export default function Takedown() {
 					}}
 					className="w-full max-w-2xl flex flex-col gap-4 items-center"
 				>
-					<h1 className="text-2xl font-bold">{t("takedownRequest")}</h1>
+					<h1 className="text-2xl font-bold">
+						{t("takedownRequest")}
+					</h1>
 					<form.Field
 						name="email"
 						validators={{
-							onChange: z.string().email({ message: t("invalidEmail") }),
+							onChange: z
+								.string()
+								.email({ message: t("invalidEmail") }),
 						}}
-						children={(field) => (
+					>
+						{(field) => (
 							<InputField
 								startContent={<MdEmail />}
 								label={t("email")}
 								field={field}
 							/>
 						)}
-					/>
+					</form.Field>
 					<form.Field
 						name="links"
 						validators={{
@@ -321,37 +333,40 @@ export default function Takedown() {
 								}
 							},
 						}}
-						children={(field) => (
+					>
+						{(field) => (
 							<TextareaField
 								startContent={<BiLink />}
 								label={t("linksPerLine")}
 								field={field}
 							/>
 						)}
-					/>
+					</form.Field>
 					<form.Field
 						name="description"
 						validators={{
-							onSubmit: ({ value}) => {
+							onSubmit: ({ value }) => {
 								if (value.length < 20) {
 									return t("descriptionMin20");
 								}
 							},
 						}}
-						children={(field) => (
+					>
+						{(field) => (
 							<TextareaField
 								startContent={<BiMessageSquare />}
 								label={t("description")}
 								field={field}
 							/>
 						)}
-					/>
+					</form.Field>
 					<form.Subscribe
 						selector={(state) => [
 							state.canSubmit,
 							state.isSubmitting,
 						]}
-						children={([canSubmit, isSubmitting]) => (
+					>
+						{([canSubmit, isSubmitting]) => (
 							<Button
 								color="accent"
 								endContent={<BiSolidSend />}
@@ -361,7 +376,7 @@ export default function Takedown() {
 								{isSubmitting ? t("sending") : t("submit")}
 							</Button>
 						)}
-					/>
+					</form.Subscribe>
 				</form>
 			</Card>
 		</PageContainer>
