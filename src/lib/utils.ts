@@ -20,6 +20,10 @@ export function getCountryInfo(country: string) {
 	}
 }
 
+export function localizeOrUseIfCapitalized(label: string, t: any) {
+	return label.charAt(0).toUpperCase() === label.charAt(0) ? label : t(label);
+}
+
 export function convertStringFromDatabaseToObject(string: string) {
 	if (!string) return {};
 
