@@ -78,14 +78,14 @@ export const ITEMS_PER_PAGE = 20;
 export const EXCLUDED_ITEM_TYPES = ["Note", "Attachment"];
 
 export const SORT_OPTIONS = [
-	{ key: "desc", name: "Newest", sort: "datePublished:desc" },
-	{ key: "asc", name: "Oldest", sort: "datePublished:asc" },
+	{ key: "desc", legacyKey: "date_desc", name: "Newest", sort: "datePublished:desc" },
+	{ key: "asc", legacyKey: "date_asc", name: "Oldest", sort: "datePublished:asc" },
 	// { key: "dateAddedDesc", name: "Date Added (Newest)", sort: "dateAdded:desc" },
 	// { key: "dateAddedAsc", name: "Date Added (Oldest)", sort: "dateAdded:asc" },
-	{ key: "authorAZ", name: "Author A-Z", sort: "fullNames:asc" },
-	{ key: "authorZA", name: "Author Z-A", sort: "fullNames:desc" },
-	{ key: "titleAZ", name: "Title A-Z", sort: "title:asc" },
-	{ key: "titleZA", name: "Title Z-A", sort: "title:desc" },
+	{ key: "authorAZ", legacyKey: "author_asc", name: "Author A-Z", sort: "fullNames:asc" },
+	{ key: "authorZA", legacyKey: "author_desc", name: "Author Z-A", sort: "fullNames:desc" },
+	{ key: "titleAZ", legacyKey: "title_asc", name: "Title A-Z", sort: "title:asc" },
+	{ key: "titleZA", legacyKey: "title_desc", name: "Title Z-A", sort: "title:desc" },
 ];
 
 export const ITEM_COLUMNS = Object.values(getTableColumns(item)).map(
@@ -93,15 +93,17 @@ export const ITEM_COLUMNS = Object.values(getTableColumns(item)).map(
 );
 
 export const SCOPE_OPTIONS = [
-	{ key: "everywhere", name: "Everywhere", attributesToSearchOn: ["*"] },
+	{ key: "everywhere", legacyKey: "all", name: "Everywhere", attributesToSearchOn: ["*"] },
 	{
 		key: "authors",
+		legacyKey: "creator",
 		name: "in authors or contributors",
 		attributesToSearchOn: ["fullNames"],
 	},
-	{ key: "title", name: "in title", attributesToSearchOn: ["title"] },
+	{ key: "title", legacyKey: "title", name: "in title", attributesToSearchOn: ["title"] },
 	{
 		key: "fields",
+		legacyKey: "metadata",
 		name: "in fields",
 		attributesToSearchOn: ITEM_COLUMNS.filter(
 			(col) => col !== "fullTextPDFs" && col !== "attachmentsData"
@@ -109,6 +111,7 @@ export const SCOPE_OPTIONS = [
 	},
 	{
 		key: "documents",
+		legacyKey: "fulltext",
 		name: "in documents",
 		attributesToSearchOn: [
 			"fullTextPDFs.fullTextPDF.text",
