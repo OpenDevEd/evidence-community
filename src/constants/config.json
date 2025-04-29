@@ -139,19 +139,23 @@
 		"itemsOpenDeved": {
 			"JUDM2WBF": {
 				"title": "Our programmes",
-				"enabled": true
+				"enabled": true,
+				"legacyKey": "featured"
 			},
 			"JHBN8UGK": {
 				"title": "Organisations, collaborators and clients",
-				"enabled": true
+				"enabled": true,
+				"legacyKey": "organisations"
 			},
 			"NEH6ARC4": {
 				"title": "Publication type",
-				"enabled": true
+				"enabled": true,
+				"legacyKey": "pubtype"
 			},
 			"QK8NXPKZ": {
 				"title": "Theme",
-				"enabled": true
+				"enabled": true,
+				"legacyKey": "theme"
 			}
 		},
 		"itemsEdtech": {
