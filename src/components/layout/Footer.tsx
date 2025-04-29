@@ -12,7 +12,7 @@ import { Link } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
 import { useStatus } from "@/context/Providers";
 import { usePathname } from "next/navigation";
-import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils";
+import { convertStringFromDatabaseToObject, getDynamicStyles, localizeOrUseIfCapitalized } from "@/lib/utils";
 const footerInfo = {
 	email: "opendeved@gmail.com",
 	phone: "+1-123-456-7890",
@@ -130,7 +130,7 @@ export default function Footer() {
 												key={link.label}
 												className="text-black/60 dark:text-white/60 text-xl"
 										>
-												{tNav(link.label)}
+												{localizeOrUseIfCapitalized(link.label, tNav)}
 											</Link>
 										</li>
 									)
