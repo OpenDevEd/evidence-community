@@ -17,6 +17,7 @@ export type Item = InferSelectModel<typeof item> & {
   institution?: string[];
   fullNames?: string[];
   dateTimestamp?: string;
+  datePublished?: string;
 };
 
 export type ItemGetResponse = {
