@@ -304,18 +304,18 @@ export default function Resource({
 						<div className="flex w-full gap-1 items-center flex-wrap">
 							<ResourceAuthors itemData={finalItemData} />
 							<ResourceDivider />
-							{finalItemData?.date &&
+							{finalItemData?.datePublished &&
 								!isNaN(
-									new Date(finalItemData.date).getTime()
+									new Date(finalItemData.datePublished).getTime()
 								) && (
 									<>
 										<ResourceData
 											element="time"
 											datetime={new Date(
-												finalItemData.date
+												finalItemData.datePublished
 											).toISOString()}
 											text={format.dateTime(
-												new Date(finalItemData.date),
+												new Date(finalItemData.datePublished),
 												{
 													dateStyle: "medium",
 												}
