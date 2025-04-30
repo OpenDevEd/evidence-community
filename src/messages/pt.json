@@ -124,7 +124,7 @@
     "saveFields": "Salvar Campos",
     "save": "Salvar",
     "label": "Rótulo",
-    "description": "Descrição",
+    "description": "Descrição (mínimo 20 caracteres)",
     "textLabel": "Texto",
     "noFieldsAdded": "Nenhum campo adicionado ainda",
     "fields": "Campos",
@@ -189,7 +189,26 @@
     "itemViewOriginalAriaLabel": "Ver publicação original",
     "itemZoteroOptionsAriaLabel": "Opções do Zotero",
     "itemFilterByCountryAriaLabel": "Filtrar por país",
-    "itemAffiliationsCount": "filiações"
+    "itemAffiliationsCount": "filiações",
+    "takedownRequest": "Pedido de remoção",
+    "email": "E-mail",
+    "enterLinks": "Por favor, insira os links",
+    "linksPerLine": "Links (um por linha)",
+    "sending": "Enviando...",
+    "submit": "Enviar",
+    "requestSent": "Pedido de remoção enviado",
+    "requestSentDesc": "Analisaremos sua solicitação e entraremos em contato o mais breve possível.",
+    "requestFailed": "Falha ao enviar a solicitação de remoção",
+    "tryAgainLater": "Por favor, tente novamente mais tarde.",
+    "invalidLinks": "Link(s) inválido(s):",
+    "resourceNotFound": "Recurso(s) não existe(m):",
+    "validating": "Validando...",
+    "invalidEmail": "Email inválido",
+    "descriptionMin20": "A descrição deve ter pelo menos 20 caracteres",
+    "fillFormBelow": "Por favor, forneça detalhes sobre sua solicitação de remoção",
+    "takedownRequestsExplanation": "As solicitações de remoção são envios formais usados para solicitar a remoção de conteúdo que viola direitos de propriedade intelectual, privacidade pessoal ou outras proteções legais. Cada solicitação é cuidadosamente revisada por nossa equipe para garantir que a ação apropriada seja tomada.",
+    "whenToSubmitTakedown": "Você deve enviar uma solicitação de remoção se identificou conteúdo que infringe seus direitos, viola nossos termos de serviço ou contém informações pessoais não autorizadas. Forneça o máximo de detalhes possível para nos ajudar a processar sua solicitação com eficiência.",
+    "learnMorePolicies": "Saiba mais sobre nossas políticas e procedimentos"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",
@@ -258,7 +277,8 @@
     "evidenceLibrarySDG4": "Objetivo de Desenvolvimento Sustentável 4: Educação - Biblioteca de Evidências",
     "knowledgeBase": "Base de Conhecimento",
     "nationalEvidencePortal": "Portal Nacional de Evidências",
-    "map": "Mapa"
+    "map": "Mapa",
+    "takedown": "Pedido de Remoção"
   },
   "footer": {
     "quickLinks": "Links Rápidos",

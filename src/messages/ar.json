@@ -124,7 +124,7 @@
     "saveFields": "حفظ الحقول",
     "save": "حفظ",
     "label": "ملصق",
-    "description": "وصف",
+    "description": "الوصف (20 حرفًا كحد أدنى)",
     "textLabel": "نص",
     "noFieldsAdded": "لم تتم إضافة حقول بعد",
     "fields": "الحقول",
@@ -189,7 +189,26 @@
     "itemViewOriginalAriaLabel": "عرض المنشور الأصلي",
     "itemZoteroOptionsAriaLabel": "خيارات Zotero",
     "itemFilterByCountryAriaLabel": "تصفية حسب البلد",
-    "itemAffiliationsCount": "الانتماءات"
+    "itemAffiliationsCount": "الانتماءات",
+    "takedownRequest": "طلب إزالة",
+    "email": "البريد الإلكتروني",
+    "enterLinks": "الرجاء إدخال الروابط",
+    "linksPerLine": "روابط (واحد لكل سطر)",
+    "sending": "إرسال...",
+    "submit": "إرسال",
+    "requestSent": "تم إرسال طلب إزالة",
+    "requestSentDesc": "سنراجع طلبك ونتصل بك في أقرب وقت ممكن.",
+    "requestFailed": "فشل إرسال طلب الإزالة",
+    "tryAgainLater": "يرجى المحاولة مرة أخرى لاحقًا.",
+    "invalidLinks": "روابط غير صالحة:",
+    "resourceNotFound": "المورد (الموارد) غير موجود:",
+    "validating": "التحقق من الصحة...",
+    "invalidEmail": "بريد إلكتروني غير صالح",
+    "descriptionMin20": "يجب أن يتكون الوصف من 20 حرفًا على الأقل",
+    "fillFormBelow": "يرجى تقديم تفاصيل حول طلب الإزالة الخاص بك",
+    "takedownRequestsExplanation": "طلبات الإزالة هي طلبات رسمية تستخدم لطلب إزالة المحتوى الذي ينتهك حقوق الملكية الفكرية أو الخصوصية الشخصية أو غيرها من الحماية القانونية. تتم مراجعة كل طلب بعناية من قبل فريقنا لضمان اتخاذ الإجراء المناسب.",
+    "whenToSubmitTakedown": "يجب عليك إرسال طلب إزالة إذا كنت قد حددت محتوى ينتهك حقوقك أو يخالف شروط الخدمة الخاصة بنا أو يحتوي على معلومات شخصية غير مصرح بها. يرجى تقديم أكبر قدر ممكن من التفاصيل لمساعدتنا في معالجة طلبك بكفاءة.",
+    "learnMorePolicies": "تعرف على المزيد حول سياساتنا وإجراءاتنا"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
@@ -258,7 +277,8 @@
     "evidenceLibrarySDG4": "الهدف 4 من أهداف التنمية المستدامة: التعليم - مكتبة الأدلة",
     "knowledgeBase": "قاعدة المعرفة",
     "nationalEvidencePortal": "بوابة الأدلة الوطنية",
-    "map": "خريطة"
+    "map": "خريطة",
+    "takedown": "طلب إزالة"
   },
   "footer": {
     "quickLinks": "روابط سريعة",

@@ -54,25 +54,25 @@ export function useModalError({
 	};
 
 	const ErrorField = useCallback(
-		() => (
+		({ customMessage }: { customMessage?: string }) => (
 			<motion.div
 				role="alert"
 				aria-label={errorMessage || t("errorMessageAriaLabel")}
 				initial={initial}
 				animate={animate}
 				exit={exit}
-				className="bg-red-800/50 rounded-2xl overflow-hidden"
+				className="bg-danger rounded-2xl overflow-hidden"
 			>
 				<div className="p-2 grid grid-cols-[auto_1fr] gap-2">
 					<BiErrorCircle 
-						className="size-8 p-1 aspect-square bg-black/50 rounded-full" 
+						className="size-8 p-1 aspect-square bg-black/50 rounded-full fill-white" 
 						aria-hidden="true"
 					/>
 					<span 
-						className="text-sm flex items-center whitespace-pre-wrap"
+						className="text-sm flex items-center whitespace-pre-wrap text-white"
 						aria-hidden="true"
 					>
-						{errorMessage}
+						{customMessage || errorMessage}
 					</span>
 				</div>
 			</motion.div>

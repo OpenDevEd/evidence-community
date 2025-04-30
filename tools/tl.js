@@ -7,7 +7,7 @@ const fs = require('fs');
 const path = require('path');
   
 const routingFile = fs.readFileSync(path.join(__dirname, '../src/i18n/routing.ts'), 'utf8');
-const localesMatch = routingFile.match(/locales:\s*(\[.*?\])/);
+const localesMatch = routingFile.match(/const\s+defaultLocales\s*=\s*(\[.*?\])/);
 const locales = JSON.parse(
   localesMatch[1].replace(/'/g, '"')
 );
