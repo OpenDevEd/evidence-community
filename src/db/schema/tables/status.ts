@@ -9,6 +9,7 @@ export type LinkObject = {
 	dropdown?: LinkObject[];
 	navExclude?: boolean;
 	footerExclude?: boolean;
+	help?: any;
 };
 
 export type LinksList = Record<string, LinkObject[]>;

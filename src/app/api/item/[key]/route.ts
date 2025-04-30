@@ -39,7 +39,7 @@ export async function getItem(
 		getCachedCollections(),
 	]));
 
-	if (!result || result?.tags?.some((tag) => blockedTags.includes(tag.toLowerCase()))) {
+	if (!result || result.deleted || result?.tags?.some((tag) => blockedTags.includes(tag.toLowerCase()))) {
 		return {
 			item: null,
 		};

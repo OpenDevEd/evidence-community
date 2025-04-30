@@ -620,7 +620,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"tags",
 		"extra",
 		"callNumber",
-		"dateTimestamp"
+		"dateTimestamp",
 	];
 
 	if (!item && !loading) return null;
@@ -1048,6 +1048,42 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 	);
 }
 
+function ItemNotes({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
+	const notes = item?.attachmentsData?.filter(
+		(attachment) =>
+			attachment.itemType === "Note" &&
+			attachment.note &&
+			attachment.tags?.includes("_publish")
+	);
+
+	if (!notes?.length) return null;
+
+	return (
+		<ItemPropertyRowWrapper title={"Notes"}>
+			<p className="text-black/60 dark:text-white/60">
+				The following notes were added to the associated record.
+			</p>
+			<div className="flex flex-col gap-4">
+				{notes.map((note) => (
+					<Card key={note.id} color="card" className="flex flex-col">
+						<div
+							className="[&_a]:text-link_light dark:[&_a]:text-link"
+							dangerouslySetInnerHTML={{
+								__html:
+									note.note?.replaceAll(
+										"background-color: rgb(255, 255, 255)",
+										""
+									) ?? "",
+							}}
+						/>
+					</Card>
+				))}
+			</div>
+		</ItemPropertyRowWrapper>
+	);
+}
+
 export default function ItemPage({
 	data,
 	loading: loadingProp,
@@ -1104,6 +1140,7 @@ export default function ItemPage({
 											)}
 										<ItemCitation item={item} />
 										<ItemCollections item={item} />
+										<ItemNotes item={item} />
 										<ItemAttachments item={item} />
 										<ItemCountry item={item} />
 										<ItemVectorRelations item={item} />

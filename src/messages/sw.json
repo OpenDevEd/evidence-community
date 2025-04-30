@@ -125,7 +125,7 @@
     "saveFields": "Hifadhi Sehemu",
     "save": "Hifadhi",
     "label": "Lebo",
-    "description": "Maelezo",
+    "description": "Maelezo (angalau herufi 20)",
     "textLabel": "Nakala",
     "noFieldsAdded": "Hakuna sehemu zilizoongezwa bado",
     "fields": "Sehemu",
@@ -190,7 +190,26 @@
     "itemViewOriginalAriaLabel": "Tazama chapisho asili",
     "itemZoteroOptionsAriaLabel": "Chaguzi za Zotero",
     "itemFilterByCountryAriaLabel": "Chuja kwa nchi",
-    "itemAffiliationsCount": "vyama"
+    "itemAffiliationsCount": "vyama",
+    "takedownRequest": "Ombi la kuondolewa",
+    "email": "Barua pepe",
+    "enterLinks": "Tafadhali weka viungo",
+    "linksPerLine": "Viungo (kimoja kwa kila mstari)",
+    "sending": "Inatuma...",
+    "submit": "Wasilisha",
+    "requestSent": "Ombi la kuondolewa limetumwa",
+    "requestSentDesc": "Tutapitia ombi lako na tutawasiliana nawe haraka iwezekanavyo.",
+    "requestFailed": "Imeshindwa kutuma ombi la kuondoa",
+    "tryAgainLater": "Tafadhali jaribu tena baadaye.",
+    "invalidLinks": "Viungo(s) batili:",
+    "resourceNotFound": "Rasilimali haipo:",
+    "validating": "Inathibitisha...",
+    "invalidEmail": "Barua pepe batili",
+    "descriptionMin20": "Maelezo lazima yawe na angalau herufi 20",
+    "fillFormBelow": "Tafadhali toa maelezo kuhusu ombi lako la kuondoa",
+    "takedownRequestsExplanation": "Maombi ya kuondolewa ni mawasilisho rasmi yanayotumika kuomba kuondolewa kwa maudhui ambayo yanakiuka haki za uvumbuzi, faragha ya kibinafsi, au ulinzi mwingine wa kisheria. Kila ombi linakaguliwa kwa uangalifu na timu yetu ili kuhakikisha kuwa hatua zinazofaa zinachukuliwa.",
+    "whenToSubmitTakedown": "Unapaswa kuwasilisha ombi la kuondoa ikiwa umetambua maudhui ambayo yanakiuka haki zako, yanakiuka masharti yetu ya huduma, au yana taarifa za kibinafsi zisizoidhinishwa. Tafadhali toa maelezo mengi iwezekanavyo ili kutusaidia kuchakata ombi lako kwa ufanisi.",
+    "learnMorePolicies": "Pata maelezo zaidi kuhusu sera na taratibu zetu"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
@@ -259,7 +278,8 @@
     "evidenceLibrarySDG4": "Lengo la Maendeleo Endelevu 4: Elimu - Maktaba ya Ushahidi",
     "knowledgeBase": "Hifadhi ya Maarifa",
     "nationalEvidencePortal": "Tovuti ya Ushahidi wa Kitaifa",
-    "map": "Ramani"
+    "map": "Ramani",
+    "takedown": "Ombi la Kuondolewa"
   },
   "footer": {
     "quickLinks": "Viungo vya Haraka",

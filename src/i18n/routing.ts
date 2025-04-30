@@ -1,7 +1,8 @@
 import {defineRouting} from 'next-intl/routing';
 import {createNavigation} from 'next-intl/navigation';
 
-const locales = process.env.NEXT_PUBLIC_ONLY_LOCALE ? [process.env.NEXT_PUBLIC_ONLY_LOCALE] : ["en-GB", "en-US", "de", "ar", "hi", "fr", "cn", "sw", "pt"];
+const defaultLocales = ["en-GB", "en-US", "de", "ar", "hi", "fr", "cn", "sw", "pt"];
+const locales = process.env.NEXT_PUBLIC_ONLY_LOCALE ? [process.env.NEXT_PUBLIC_ONLY_LOCALE] : defaultLocales;
 const localeDetection = process.env.NEXT_PUBLIC_LOCALE_DETECTION !== undefined ? process.env.NEXT_PUBLIC_LOCALE_DETECTION === "true" : false;
 const defaultLocale = process.env.NEXT_PUBLIC_DEFAULT_LOCALE as any || 'en-GB';
 

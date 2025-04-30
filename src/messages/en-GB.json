@@ -124,7 +124,7 @@
     "saveFields": "Save Fields",
     "save": "Save",
     "label": "Label",
-    "description": "Description",
+    "description": "Description (min 20 characters)",
     "textLabel": "Text",
     "noFieldsAdded": "No fields added yet",
     "fields": "Fields",
@@ -189,7 +189,26 @@
     "itemViewOriginalAriaLabel": "View original publication",
     "itemZoteroOptionsAriaLabel": "Zotero options",
     "itemFilterByCountryAriaLabel": "Filter by country",
-    "itemAffiliationsCount": "affiliation(s)"
+    "itemAffiliationsCount": "affiliation(s)",
+    "takedownRequest": "Takedown Request",
+    "email": "Email",
+    "enterLinks": "Please enter links",
+    "linksPerLine": "Links (one per line)",
+    "sending": "Sending...",
+    "submit": "Submit",
+    "requestSent": "Takedown request sent",
+    "requestSentDesc": "We will review your request and get back to you as soon as possible.",
+    "requestFailed": "Failed to send takedown request",
+    "tryAgainLater": "Please try again later.",
+    "invalidLinks": "Invalid link(s):",
+    "resourceNotFound": "Resource(s) doesn't exist:",
+    "validating": "Validating...",
+    "invalidEmail": "Invalid email",
+    "descriptionMin20": "Description must be at least 20 characters",
+    "fillFormBelow": "Please provide details about your takedown request",
+    "takedownRequestsExplanation": "Takedown requests are formal submissions used to request the removal of content that violates intellectual property rights, personal privacy, or other legal protections. Each request is carefully reviewed by our team to ensure appropriate action is taken.",
+    "whenToSubmitTakedown": "You should submit a takedown request if you've identified content that infringes on your rights, violates our terms of service, or contains unauthorized personal information. Please provide as much detail as possible to help us process your request efficiently.",
+    "learnMorePolicies": "Learn more about our policies and procedures"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",
@@ -258,7 +277,8 @@
     "evidenceLibrarySDG4": "Sustainable Development Goal 4: Education - Evidence Library",
     "knowledgeBase": "Knowledge Base",
     "nationalEvidencePortal": "National Evidence Portal",
-    "map": "Map"
+    "map": "Map",
+    "takedown": "Takedown Request"
   },
   "footer": {
     "quickLinks": "Quick Links",
