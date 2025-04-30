@@ -173,17 +173,44 @@ function mapLegacySearchParams(request: NextRequest) {
 	return null;
 }
 
-
 async function fetchMeilisearch(key: string) {
-	const url = new URL(`${process.env.MEILISEARCH_HOST}indexes/redirects/documents/${key}`);
-	const response = await fetch(url, {
-		headers: {
-			"Authorization": "Bearer " + process.env.MASTER_KEY || ""
+	try {
+		console.log(`[Meilisearch] Attempting to fetch document with key: ${key}`);
+		
+		if (!process.env.MEILISEARCH_HOST) {
+			throw new Error('MEILISEARCH_HOST environment variable is not defined');
 		}
-	});
-	return response.json();
-}
 
+		const url = new URL(`${process.env.MEILISEARCH_HOST}indexes/redirects/documents/${key}`);
+		console.log(`[Meilisearch] Making request to: ${url.toString()}`);
+
+		const response = await fetch(url, {
+			headers: {
+				"Authorization": "Bearer " + process.env.MASTER_KEY || ""
+			}
+		});
+
+		console.log(`[Meilisearch] Response status: ${response.status}`);
+
+		if (!response.ok) {
+			throw new Error(`Meilisearch request failed with status: ${response.status}`);
+		}
+
+		const data = await response.json();
+		console.log(`[Meilisearch] Successfully retrieved data for key: ${key}`);
+		
+		return data;
+	} catch (error) {
+		console.error('[Meilisearch] Error in fetchMeilisearch:', {
+			key,
+			error: error instanceof Error ? error.message : 'Unknown error',
+			stack: error instanceof Error ? error.stack : undefined
+		});
+		
+		// Return null instead of throwing to handle the error gracefully
+		return null;
+	}
+}
 
 export default async function middleware(request: NextRequest) {
 	const rateLimit = generateRateLimitObject(request);
