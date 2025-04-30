@@ -16,6 +16,7 @@ import { toast } from "@/components/layout/Toast";
 import { takedownRequestSchema } from "@/lib/utils";
 import { MdEmail } from "react-icons/md";
 import { useTranslations } from "next-intl";
+import Link from "next/link";
 
 const LINK_SEPARATOR = "\t• ";
 
@@ -207,7 +208,7 @@ export default function Takedown() {
 		<PageContainer id="main-content" className="flex gap-4 items-start">
 			<Card
 				color="card"
-				className="w-full p-16 flex items-center justify-center"
+				className="w-full p-8 md:p-16 flex items-center justify-center"
 			>
 				<form
 					onSubmit={(e) => {
@@ -215,151 +216,161 @@ export default function Takedown() {
 						e.stopPropagation();
 						void form.handleSubmit();
 					}}
-					className="w-full max-w-2xl flex flex-col gap-4 items-center"
+					className="w-full max-w-2xl flex flex-col gap-6 items-center"
 				>
-					<h1 className="text-2xl font-bold">
-						{t("takedownRequest")}
-					</h1>
-					<form.Field
-						name="email"
-						validators={{
-							onChange: z
-								.string()
-								.email({ message: t("invalidEmail") }),
-						}}
-					>
-						{(field) => (
-							<InputField
-								startContent={<MdEmail />}
-								label={t("email")}
-								field={field}
-							/>
-						)}
-					</form.Field>
-					<form.Field
-						name="links"
-						validators={{
-							onChangeAsyncDebounceMs: 500,
-							onChangeAsync: async ({ value }) => {
-								if (!value) {
-									return t("enterLinks");
-								}
+					<div className="flex flex-col items-center gap-2 mb-4">
+						<BiMessageSquare className="w-12 h-12 text-accent" />
+						<h1 className="text-3xl font-bold text-center">
+							{t("takedownRequest")}
+						</h1>
+						<p className="text-sm opacity-80 text-center max-w-md">
+							{t("fillFormBelow")}
+						</p>
+					</div>
 
-								const links = value.split("\n").filter(Boolean);
-								// zod link validation
-								const linkSchema = z.string().url();
-								const linkErrors = links.map((link) =>
-									linkSchema.safeParse(link)
-								);
-								const invalidZodLinks = linkErrors.filter(
-									(error) => !error.success
-								);
+					<div className="w-full space-y-6">
+						<form.Field
+							name="email"
+							validators={{
+								onChange: z
+									.string()
+									.email({ message: t("invalidEmail") }),
+							}}
+						>
+							{(field) => (
+								<InputField
+									startContent={<MdEmail className="text-accent/80" />}
+									label={t("email")}
+									field={field}
+								/>
+							)}
+						</form.Field>
+						<form.Field
+							name="links"
+							validators={{
+								onChangeAsyncDebounceMs: 500,
+								onChangeAsync: async ({ value }) => {
+									if (!value) {
+										return t("enterLinks");
+									}
 
-								// Continue validation even if there are invalid URLs
-								const zodErrorMessage = formatLinkErrors(
-									links,
-									invalidZodLinks,
-									(item) => linkErrors.indexOf(item),
-									t("invalidLinks")
-								);
-
-								// Only check server validation if all links are valid URLs
-								if (
-									invalidZodLinks.length === 0 ||
-									invalidZodLinks.length < links.length
-								) {
-									// Get valid URLs to check against server
-									const validUrls = links.filter(
-										(_, index) => linkErrors[index].success
+									const links = value.split("\n").filter(Boolean);
+									// zod link validation
+									const linkSchema = z.string().url();
+									const linkErrors = links.map((link) =>
+										linkSchema.safeParse(link)
+									);
+									const invalidZodLinks = linkErrors.filter(
+										(error) => !error.success
 									);
 
-									const validity = await areLinksValid(
-										validUrls
-									);
-
-									// Group errors by type: invalid URLs vs non-existing resources
-									const invalidUrls = validity.filter(
-										(v) => v.status === "rejected"
-									);
-									const nonExistingResources =
-										validity.filter(
-											(v) =>
-												v.status === "fulfilled" &&
-												v.value === false
-										);
-
-									const invalidUrlsMessage = formatLinkErrors(
-										validUrls,
-										invalidUrls,
-										(item) => validity.indexOf(item),
+									// Continue validation even if there are invalid URLs
+									const zodErrorMessage = formatLinkErrors(
+										links,
+										invalidZodLinks,
+										(item) => linkErrors.indexOf(item),
 										t("invalidLinks")
 									);
 
-									const nonExistingResourcesMessage =
-										formatLinkErrors(
-											validUrls,
-											nonExistingResources,
-											(item) => validity.indexOf(item),
-											t("resourceNotFound")
+									// Only check server validation if all links are valid URLs
+									if (
+										invalidZodLinks.length === 0 ||
+										invalidZodLinks.length < links.length
+									) {
+										// Get valid URLs to check against server
+										const validUrls = links.filter(
+											(_, index) => linkErrors[index].success
 										);
 
-									// Check if all links are valid (both format and existence)
-									const allUrlsValid =
-										invalidZodLinks.length === 0 &&
-										invalidUrls.length === 0 &&
-										nonExistingResources.length === 0;
+										const validity = await areLinksValid(
+											validUrls
+										);
 
-									if (allUrlsValid) {
-										return; // All links are valid, return success
+										// Group errors by type: invalid URLs vs non-existing resources
+										const invalidUrls = validity.filter(
+											(v) => v.status === "rejected"
+										);
+										const nonExistingResources =
+											validity.filter(
+												(v) =>
+													v.status === "fulfilled" &&
+													v.value === false
+											);
+
+										const invalidUrlsMessage = formatLinkErrors(
+											validUrls,
+											invalidUrls,
+											(item) => validity.indexOf(item),
+											t("invalidLinks")
+										);
+
+										const nonExistingResourcesMessage =
+											formatLinkErrors(
+												validUrls,
+												nonExistingResources,
+												(item) => validity.indexOf(item),
+												t("resourceNotFound")
+											);
+
+										// Check if all links are valid (both format and existence)
+										const allUrlsValid =
+											invalidZodLinks.length === 0 &&
+											invalidUrls.length === 0 &&
+											nonExistingResources.length === 0;
+
+										if (allUrlsValid) {
+											return; // All links are valid, return success
+										}
+
+										// Combine error messages
+										const errorMessages: string[] = [];
+										if (zodErrorMessage)
+											errorMessages.push(zodErrorMessage);
+										if (invalidUrlsMessage)
+											errorMessages.push(invalidUrlsMessage);
+										if (nonExistingResourcesMessage)
+											errorMessages.push(
+												nonExistingResourcesMessage
+											);
+
+										return errorMessages.join("\n");
 									}
 
-									// Combine error messages
-									const errorMessages: string[] = [];
-									if (zodErrorMessage)
-										errorMessages.push(zodErrorMessage);
-									if (invalidUrlsMessage)
-										errorMessages.push(invalidUrlsMessage);
-									if (nonExistingResourcesMessage)
-										errorMessages.push(
-											nonExistingResourcesMessage
-										);
+									// If all links are invalid URLs, just return the Zod error
+									if (zodErrorMessage) {
+										return zodErrorMessage;
+									}
+								},
+							}}
+						>
+							{(field) => (
+								<TextareaField
+									startContent={<BiLink className="text-accent/80" />}
+									label={t("linksPerLine")}
+									field={field}
+								/>
+							)}
+						</form.Field>
+						<form.Field
+							name="description"
+							validators={{
+								onSubmit: ({ value }) => {
+									if (value.length < 20) {
+										return t("descriptionMin20");
+									}
+								},
+							}}
+						>
+							{(field) => (
+								<TextareaField
+									startContent={<BiMessageSquare className="text-accent/80" />}
+									label={t("description")}
+									field={field}
+								/>
+							)}
+						</form.Field>
+					</div>
 
-									return errorMessages.join("\n");
-								}
-
-								// If all links are invalid URLs, just return the Zod error
-								if (zodErrorMessage) {
-									return zodErrorMessage;
-								}
-							},
-						}}
-					>
-						{(field) => (
-							<TextareaField
-								startContent={<BiLink />}
-								label={t("linksPerLine")}
-								field={field}
-							/>
-						)}
-					</form.Field>
-					<form.Field
-						name="description"
-						validators={{
-							onSubmit: ({ value }) => {
-								if (value.length < 20) {
-									return t("descriptionMin20");
-								}
-							},
-						}}
-					>
-						{(field) => (
-							<TextareaField
-								startContent={<BiMessageSquare />}
-								label={t("description")}
-								field={field}
-							/>
-						)}
-					</form.Field>
 					<form.Subscribe
 						selector={(state) => [
 							state.canSubmit,
@@ -369,7 +380,9 @@ export default function Takedown() {
 						{([canSubmit, isSubmitting]) => (
 							<Button
 								color="accent"
-								endContent={<BiSolidSend />}
+								size="lg"
+								className="mt-4 w-full max-w-xs font-semibold"
+								endContent={isSubmitting ? <Spinner size="sm" /> : <BiSolidSend className="text-lg" />}
 								type="submit"
 								isDisabled={!canSubmit}
 							>
@@ -378,6 +391,27 @@ export default function Takedown() {
 						)}
 					</form.Subscribe>
 				</form>
+
+				<div className="mt-12 w-full max-w-2xl border-t border-white/10 pt-8">
+					<div className="space-y-4 text-sm">
+						<h2 className="text-lg font-semibold">About Takedown Requests</h2>
+						<p className="opacity-80">
+							{t("takedownRequestsExplanation")}
+						</p>
+						<p className="opacity-80">
+							{t("whenToSubmitTakedown")}
+						</p>
+						<div className="flex items-center gap-2 text-accent">
+							<Link 
+								href="/about" 
+								className="inline-flex items-center gap-2 hover:underline"
+							>
+								{t("learnMorePolicies")}
+								<BiLink className="text-lg" />
+							</Link>
+						</div>
+					</div>
+				</div>
 			</Card>
 		</PageContainer>
 	);

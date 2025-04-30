@@ -204,7 +204,11 @@
     "resourceNotFound": "La/les ressource(s) n'existe(nt) pas :",
     "validating": "Validation en cours...",
     "invalidEmail": "Email non valide",
-    "descriptionMin20": "La description doit comporter au moins 20 caractères"
+    "descriptionMin20": "La description doit comporter au moins 20 caractères",
+    "fillFormBelow": "Veuillez fournir des détails sur votre demande de retrait",
+    "takedownRequestsExplanation": "Les demandes de retrait sont des soumissions formelles utilisées pour demander la suppression de contenu qui viole les droits de propriété intellectuelle, la vie privée ou d'autres protections légales. Chaque demande est soigneusement examinée par notre équipe afin de garantir que les mesures appropriées sont prises.",
+    "whenToSubmitTakedown": "Vous devez soumettre une demande de suppression si vous avez identifié du contenu qui porte atteinte à vos droits, viole nos conditions d'utilisation ou contient des informations personnelles non autorisées. Veuillez fournir autant de détails que possible pour nous aider à traiter votre demande efficacement.",
+    "learnMorePolicies": "En savoir plus sur nos politiques et procédures"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",

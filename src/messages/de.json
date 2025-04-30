@@ -204,7 +204,11 @@
     "resourceNotFound": "Ressource(n) existiert nicht:",
     "validating": "Wird validiert...",
     "invalidEmail": "Ungültige E-Mail",
-    "descriptionMin20": "Die Beschreibung muss mindestens 20 Zeichen lang sein"
+    "descriptionMin20": "Die Beschreibung muss mindestens 20 Zeichen lang sein",
+    "fillFormBelow": "Bitte geben Sie Einzelheiten zu Ihrer Anfrage zur Entfernung an",
+    "takedownRequestsExplanation": "Takedown-Anfragen sind formelle Einreichungen, mit denen die Entfernung von Inhalten beantragt wird, die gegen geistige Eigentumsrechte, die persönliche Privatsphäre oder andere rechtliche Schutzbestimmungen verstoßen. Jede Anfrage wird von unserem Team sorgfältig geprüft, um sicherzustellen, dass geeignete Maßnahmen ergriffen werden.",
+    "whenToSubmitTakedown": "Sie sollten eine Takedown-Anfrage einreichen, wenn Sie Inhalte identifiziert haben, die Ihre Rechte verletzen, gegen unsere Nutzungsbedingungen verstoßen oder unbefugte personenbezogene Daten enthalten. Bitte geben Sie so viele Details wie möglich an, damit wir Ihre Anfrage effizient bearbeiten können.",
+    "learnMorePolicies": "Erfahren Sie mehr über unsere Richtlinien und Verfahren"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
