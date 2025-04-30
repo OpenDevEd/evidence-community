@@ -11,33 +11,11 @@ export type RateLimit = {
 	firstRequest: number;
 }
 
-function encodeKey(key: string): string {
-	return key.split('').map(char => {
-		const code = char.charCodeAt(0);
-		return code.toString(36); // Use base36 (0-9 and a-z)
-	}).join('n'); // Use 'n' as separator since it's not used in base36
-}
-
-function decodeKey(encoded: string): string {
-	return encoded.split('n').map(num => {
-		const code = parseInt(num, 36);
-		return String.fromCharCode(code);
-	}).join('');
-}
 
 export const rateLimits = new Map<string, RateLimit>();
 
 const AMOUNT_OF_REQUESTS = 10;
 const RESET_TIME = 60000;
-
-function appendPathToHost(host: string, path: string) {
-	// Remove trailing slash from host if present
-	const cleanHost = host.endsWith('/') ? host.slice(0, -1) : host;
-	// Remove leading slash from path if present
-	const cleanPath = path.startsWith('/') ? path.slice(1) : path;
-	// Join with a single slash
-	return `${cleanHost}/${cleanPath}`;
-}
 
 function handleLegacyScope(request: NextRequest, scope: string, variables: Record<string, any>) {
 	variables.scopes = variables.scopes || [];
@@ -182,46 +160,6 @@ function mapLegacySearchParams(request: NextRequest) {
 	return null;
 }
 
-async function fetchMeilisearch(key: string) {
-	try {
-		console.log(`[Meilisearch] Attempting to fetch document with key: ${key}`);
-		
-		if (!process.env.MEILISEARCH_HOST) {
-			throw new Error('MEILISEARCH_HOST environment variable is not defined');
-		}
-
-		const url = new URL(appendPathToHost(process.env.MEILISEARCH_HOST, `indexes/redirects/documents/${key}`));
-		console.log(`[Meilisearch] Making request to: ${url}`);
-
-		const response = await fetch(url, {
-			headers: {
-				"Authorization": "Bearer " + process.env.MASTER_KEY || ""
-			}
-		});
-
-		console.log(`[Meilisearch] Response status: ${response.status}`);
-
-		if (!response.ok) {
-			const errorBody = await response.text();
-			console.error('[Meilisearch] Error response body:', errorBody);
-			throw new Error(`Meilisearch request failed with status: ${response.status}`);
-		}
-
-		const data = await response.json();
-		console.log(`[Meilisearch] Successfully retrieved data for key: ${key}`);
-		
-		return data;
-	} catch (error) {
-		console.error('[Meilisearch] Error in fetchMeilisearch:', {
-			key,
-			error: error instanceof Error ? error.message : 'Unknown error',
-			stack: error instanceof Error ? error.stack : undefined
-		});
-		
-		return null;
-	}
-}
-
 export default async function middleware(request: NextRequest) {
 	const rateLimit = generateRateLimitObject(request);
 
@@ -239,21 +177,23 @@ export default async function middleware(request: NextRequest) {
 	const libItemMatch = request.nextUrl.pathname.match(/\/lib\/([^\/]+)(.*)/);
 	if (libItemMatch) {
 		const key = libItemMatch[1] as keyof typeof redirections;
-		const rest = libItemMatch[2] || ''; // Everything after the key
+		const rest = libItemMatch[2] || ''; 
+		
+		try {
+			const url = new URL(`/api/item/${encodeURIComponent(key + rest)}/redirects`, fixRequestUrl(request));
+			
+			const response = await fetch(url);
+			const redirects = await response.json();
 
-		const everything = key + rest;
-		const encodedKey = encodeKey(process.env.MEILI_INDEX + "|" + everything);
-		const meilisearchResponse = await fetchMeilisearch(encodedKey);
-
-		if (meilisearchResponse) {
-			const value = meilisearchResponse.value;
-			if (value && value !== key) {
-				const newUrl = new URL(`/lib/${value}`, fixRequestUrl(request));
+			if (redirects?.value && redirects.value !== key) {
+				const newUrl = new URL(`/lib/${redirects.value}`, fixRequestUrl(request));
 				request.nextUrl.searchParams.forEach((value, paramKey) => {
 					newUrl.searchParams.set(paramKey, value);
 				});
 				return NextResponse.redirect(newUrl, 301);
 			}
+		} catch (error) {
+			console.error("Error checking redirects:", error);
 		}
 	}
 
