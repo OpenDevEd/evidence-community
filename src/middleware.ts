@@ -47,7 +47,7 @@ const scopeMaps: Record<string, KeyMap> = Object.values(SCOPE_OPTIONS).reduce((a
 		mapper: (value: string, request: NextRequest, variables: Record<string, any>) => {
 			handleLegacyScope(request, option.legacyKey, variables);
 			const oldSearch = request.nextUrl.searchParams.get("search") || "";
-			const newSearch = oldSearch ? `${oldSearch} ${value}` : value;
+			const newSearch = oldSearch ? `${oldSearch} "${value}"` : `"${value}"`;
 			request.nextUrl.searchParams.set("search", newSearch);
 		}
 	}
