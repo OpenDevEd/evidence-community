@@ -153,7 +153,9 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 			delete names.creatorType;
 			entry.ele("dc:creator").txt(Object.values(names).join(", "));
 		});
+		
 		const date = [
+			item.datePublished,
 			item.date,
 			item.dateDecided,
 			item.dateEnacted,
