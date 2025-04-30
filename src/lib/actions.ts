@@ -80,6 +80,9 @@ export async function areLinksValid(links: string[]) {
 }
 
 export async function sendTakedownRequest(email: string, links: string[], description: string) {
+	if (!transporter) {
+		return { error: "Transporter not found" };
+	}
 
 	console.log("got takedown request", email, links, description);
 	const status = await getCachedStatus();
