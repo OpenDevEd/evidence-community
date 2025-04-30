@@ -30,6 +30,15 @@ export const rateLimits = new Map<string, RateLimit>();
 const AMOUNT_OF_REQUESTS = 10;
 const RESET_TIME = 60000;
 
+function appendPathToHost(host: string, path: string) {
+	// Remove trailing slash from host if present
+	const cleanHost = host.endsWith('/') ? host.slice(0, -1) : host;
+	// Remove leading slash from path if present
+	const cleanPath = path.startsWith('/') ? path.slice(1) : path;
+	// Join with a single slash
+	return `${cleanHost}/${cleanPath}`;
+}
+
 function handleLegacyScope(request: NextRequest, scope: string, variables: Record<string, any>) {
 	variables.scopes = variables.scopes || [];
 	variables.scopes.push(scope);
@@ -181,7 +190,7 @@ async function fetchMeilisearch(key: string) {
 			throw new Error('MEILISEARCH_HOST environment variable is not defined');
 		}
 
-		const url = `${process.env.MEILISEARCH_HOST}indexes/redirects/documents/${key}`;
+		const url = new URL(appendPathToHost(process.env.MEILISEARCH_HOST, `indexes/redirects/documents/${key}`));
 		console.log(`[Meilisearch] Making request to: ${url}`);
 
 		const response = await fetch(url, {
