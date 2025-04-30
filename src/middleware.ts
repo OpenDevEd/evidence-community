@@ -202,6 +202,8 @@ async function fetchMeilisearch(key: string) {
 		console.log(`[Meilisearch] Response status: ${response.status}`);
 
 		if (!response.ok) {
+			const errorBody = await response.text();
+			console.error('[Meilisearch] Error response body:', errorBody);
 			throw new Error(`Meilisearch request failed with status: ${response.status}`);
 		}
 
@@ -216,7 +218,6 @@ async function fetchMeilisearch(key: string) {
 			stack: error instanceof Error ? error.stack : undefined
 		});
 		
-		// Return null instead of throwing to handle the error gracefully
 		return null;
 	}
 }
