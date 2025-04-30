@@ -181,8 +181,8 @@ async function fetchMeilisearch(key: string) {
 			throw new Error('MEILISEARCH_HOST environment variable is not defined');
 		}
 
-		const url = new URL(`${process.env.MEILISEARCH_HOST}indexes/redirects/documents/${key}`);
-		console.log(`[Meilisearch] Making request to: ${url.toString()}`);
+		const url = `${process.env.MEILISEARCH_HOST}indexes/redirects/documents/${key}`;
+		console.log(`[Meilisearch] Making request to: ${url}`);
 
 		const response = await fetch(url, {
 			headers: {
