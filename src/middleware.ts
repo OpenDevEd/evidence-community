@@ -11,6 +11,20 @@ export type RateLimit = {
 	firstRequest: number;
 }
 
+function encodeKey(key: string): string {
+	return key.split('').map(char => {
+		const code = char.charCodeAt(0);
+		return code.toString(36); // Use base36 (0-9 and a-z)
+	}).join('n'); // Use 'n' as separator since it's not used in base36
+}
+
+function decodeKey(encoded: string): string {
+	return encoded.split('n').map(num => {
+		const code = parseInt(num, 36);
+		return String.fromCharCode(code);
+	}).join('');
+}
+
 export const rateLimits = new Map<string, RateLimit>();
 
 const AMOUNT_OF_REQUESTS = 10;
@@ -160,6 +174,17 @@ function mapLegacySearchParams(request: NextRequest) {
 }
 
 
+async function fetchMeilisearch(key: string) {
+	const url = new URL(`${process.env.MEILISEARCH_HOST}indexes/redirects/documents/${key}`);
+	const response = await fetch(url, {
+		headers: {
+			"Authorization": "Bearer " + process.env.MASTER_KEY || ""
+		}
+	});
+	return response.json();
+}
+
+
 export default async function middleware(request: NextRequest) {
 	const rateLimit = generateRateLimitObject(request);
 
@@ -179,13 +204,19 @@ export default async function middleware(request: NextRequest) {
 		const key = libItemMatch[1] as keyof typeof redirections;
 		const rest = libItemMatch[2] || ''; // Everything after the key
 
-		if (redirections[key]) {
-			// Create new URL with redirected key, keeping everything else the same
-			const newUrl = new URL(`/lib/${redirections[key]}${rest}`, fixRequestUrl(request));
-			request.nextUrl.searchParams.forEach((value, paramKey) => {
-				newUrl.searchParams.set(paramKey, value);
-			});
-			return NextResponse.redirect(newUrl, 301);
+		const everything = key + rest;
+		const encodedKey = encodeKey(process.env.MEILI_INDEX + "|" + everything);
+		const meilisearchResponse = await fetchMeilisearch(encodedKey);
+
+		if (meilisearchResponse) {
+			const value = meilisearchResponse.value;
+			if (value && value !== key) {
+				const newUrl = new URL(`/lib/${value}`, fixRequestUrl(request));
+				request.nextUrl.searchParams.forEach((value, paramKey) => {
+					newUrl.searchParams.set(paramKey, value);
+				});
+				return NextResponse.redirect(newUrl, 301);
+			}
 		}
 	}
 
@@ -291,15 +322,15 @@ export const config = {
 	// Matcher entries are linked with a logical "or", therefore
 	// if one of them matches, the middleware will be invoked.
 	matcher: [
-		// Match all pathnames except for
-		// - … if they start with `/api`, `/_next`, `/_vercel`, or `/ingest`
-		// - … the ones containing a dot (e.g. `favicon.ico`)
+		// Match all pathnames except for specific prefixes and file extensions
 		'/((?!_next|_vercel|ingest|sentry-example-page|monitoring|.*\\..*).*)',
 		// Updated matchers for new export URL format
 		'/([\\w-]+)?/lib/:path*/export/ris',
 		'/([\\w-]+)?/lib/:path*/export/bibtex',
 		'/([\\w-]+)?/lib/:path*/download/:path*',
 		'/([\\w-]+)?/lib/atom.xml',
-		'/([\\w-]+)?/profile/:id/atom.xml'
+		'/([\\w-]+)?/profile/:id/atom.xml',
+		// Add specific matcher for DOI URLs - using Next.js path matching syntax
+		'/lib/:doi/:rest*'
 	]
 };
