@@ -49,7 +49,11 @@ import { useModalError } from "@/hooks/useModalError";
 import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
 import { LinkObject } from "@/db/schema/tables/status";
 import DialogModal from "../nextui/DialogModal";
-import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils";
+import {
+	convertStringFromDatabaseToObject,
+	getDynamicStyles,
+	localizeOrUseIfCapitalized,
+} from "@/lib/utils";
 
 function ThemeSwitcher({
 	theme,
@@ -67,73 +71,89 @@ function ThemeSwitcher({
 
 	return (
 		isThemeSwitcherEnabled && (
-		<li
-			className={twMerge(
-				"size-6 rounded-lg",
-				isMobile ? "xl:hidden w-full justify-center flex items-center" : "xl:block hidden"
-			)}
-		>
-			<Button
-				suppressHydrationWarning
-				className="flex items-center justify-center gap-2"
-				variant="invisible"
-				disableRipple
-				onPress={() => {
-					setTheme(theme === "dark" ? "light" : "dark");
-				}}
-				aria-label={t("switchThemeAriaLabel", {
-					theme: theme === "dark" ? t("lightTheme") : t("darkTheme")
-				})}
-			>
-				{[IoMdSunny, HiOutlineMoon].map((Icon, index) => (
-					<Icon
-						suppressHydrationWarning
-						key={index}
-						aria-hidden={
-							["dark", "light"].indexOf(theme ?? "light") !==
-							index
-						}
-						className={twMerge(
-							"size-5 xl:size-6 cursor-pointer select-none active:scale-95 transition-all",
-							"dark:stroke-accent fill-accent dark:fill-none",
-							index === 0 && "dark:hidden",
-							index === 1 && "hidden dark:block"
-						)}
-					/>
-				))}
-				{isMobile && (
-					<span className={twMerge("text-lg text-accent", style === "wide" ? "uppercase" : "")}>
-						{["dark", "light"].map((themeToMatch) => (
-							<span
-								suppressHydrationWarning
-								key={themeToMatch}
-								aria-hidden={themeToMatch !== theme}
-								className={twMerge(
-									themeToMatch === "dark"
-										? "dark:hidden"
-										: "hidden dark:block"
-								)}
-							>
-								{`Switch to ${themeToMatch} mode`}
-							</span>
-						))}
-					</span>
+			<li
+				className={twMerge(
+					"size-6 rounded-lg",
+					isMobile
+						? "xl:hidden w-full justify-center flex items-center"
+						: "xl:block hidden"
 				)}
-			</Button>
+			>
+				<Button
+					suppressHydrationWarning
+					className="flex items-center justify-center gap-2"
+					variant="invisible"
+					disableRipple
+					onPress={() => {
+						setTheme(theme === "dark" ? "light" : "dark");
+					}}
+					aria-label={t("switchThemeAriaLabel", {
+						theme:
+							theme === "dark" ? t("lightTheme") : t("darkTheme"),
+					})}
+				>
+					{[IoMdSunny, HiOutlineMoon].map((Icon, index) => (
+						<Icon
+							suppressHydrationWarning
+							key={index}
+							aria-hidden={
+								["dark", "light"].indexOf(theme ?? "light") !==
+								index
+							}
+							className={twMerge(
+								"size-5 xl:size-6 cursor-pointer select-none active:scale-95 transition-all",
+								"dark:stroke-accent fill-accent dark:fill-none",
+								index === 0 && "dark:hidden",
+								index === 1 && "hidden dark:block"
+							)}
+						/>
+					))}
+					{isMobile && (
+						<span
+							className={twMerge(
+								"text-lg text-accent",
+								style === "wide" ? "uppercase" : ""
+							)}
+						>
+							{["dark", "light"].map((themeToMatch) => (
+								<span
+									suppressHydrationWarning
+									key={themeToMatch}
+									aria-hidden={themeToMatch !== theme}
+									className={twMerge(
+										themeToMatch === "dark"
+											? "dark:hidden"
+											: "hidden dark:block"
+									)}
+								>
+									{`Switch to ${themeToMatch} mode`}
+								</span>
+							))}
+						</span>
+					)}
+				</Button>
 			</li>
 		)
 	);
 }
 
-export function Logo({ interactive = true, dbStyle = "navbar" }: { interactive?: boolean, dbStyle?: string }) {
+export function Logo({
+	interactive = true,
+	dbStyle = "navbar",
+}: {
+	interactive?: boolean;
+	dbStyle?: string;
+}) {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const status = useStatus();
 	const { theme } = useTheme();
 	const t = useTranslations("ui");
 	const companyLogoStyle = status.companyLogo || "";
-	
-	const navbarStyle = dbStyle ? convertStringFromDatabaseToObject(companyLogoStyle)[dbStyle] : "";
-	
+
+	const navbarStyle = dbStyle
+		? convertStringFromDatabaseToObject(companyLogoStyle)[dbStyle]
+		: "";
+
 	const logoContent = (
 		<div
 			className={twMerge(
@@ -160,9 +180,9 @@ export function Logo({ interactive = true, dbStyle = "navbar" }: { interactive?:
 							? "dark:hidden"
 							: "hidden dark:block"
 					)}
-					alt={t("logoAlt", { 
+					alt={t("logoAlt", {
 						company: status?.companyName,
-						theme: themeToMatch 
+						theme: themeToMatch,
 					})}
 					style={{ ...getDynamicStyles(navbarStyle) }}
 					height={40}
@@ -194,7 +214,15 @@ export function Logo({ interactive = true, dbStyle = "navbar" }: { interactive?:
 	);
 }
 
-function LinkItem({ link, pathname, isMobile }: { link: LinkObject; pathname: string; isMobile: boolean }) {
+function LinkItem({
+	link,
+	pathname,
+	isMobile,
+}: {
+	link: LinkObject;
+	pathname: string;
+	isMobile: boolean;
+}) {
 	const t = useTranslations("nav");
 	const tUI = useTranslations("ui");
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
@@ -234,15 +262,18 @@ function LinkItem({ link, pathname, isMobile }: { link: LinkObject; pathname: st
 								key={key}
 								data-is-mobile={isMobile}
 								aria-label={tUI("dropdownAriaLabel", {
-									label: t(link.label)
+									label: localizeOrUseIfCapitalized(link.label, t),
 								})}
 								className={twMerge(
 									"fill-current size-4 2xl:size-6 data-[is-mobile=true]:size-6 shrink-0",
-									style === "wide" && "size-4 2xl:size-5 data-[is-mobile=true]:size-5"
+									style === "wide" &&
+										"size-4 2xl:size-5 data-[is-mobile=true]:size-5"
 								)}
 							/>
 						))}
-				<span className="line-clamp-1">{t(link.label)}</span>
+				<span className="line-clamp-1">
+					{localizeOrUseIfCapitalized(link.label, t)}
+				</span>
 			</Link>
 			{link.dropdown && (
 				<Dropdown
@@ -256,7 +287,7 @@ function LinkItem({ link, pathname, isMobile }: { link: LinkObject; pathname: st
 							variant="invisible"
 							className="relative text-current dark:text-current"
 							aria-label={tUI("dropdownAriaLabel", {
-								label: link.label
+								label: link.label,
 							})}
 						>
 							<ChevronDownIcon className="size-4" />
@@ -296,26 +327,41 @@ function LinksList({
 			className={twMerge(
 				"flex items-center justify-end gap-6",
 				isMobile && "flex-col gap-8 px-8",
-				!isMobile && "hidden xl:flex",
+				!isMobile && "hidden xl:flex"
 			)}
 		>
 			{links.map(
 				(link, index) =>
 					!link.navExclude && (
-						<LinkItem link={link} pathname={pathname} key={index} isMobile={isMobile} />
+						<LinkItem
+							link={link}
+							pathname={pathname}
+							key={index}
+							isMobile={isMobile}
+						/>
 					)
 			)}
 		</ul>
 	);
 }
 
-function LanguageSwitcher({ className, isMobile = false }: { className?: string; isMobile?: boolean }) {
-	const isLanguageSwitcherEnabled = useFeatureFlagEnabled("language-switcher") && routing.locales.length > 1;
+function LanguageSwitcher({
+	className,
+	isMobile = false,
+}: {
+	className?: string;
+	isMobile?: boolean;
+}) {
+	const isLanguageSwitcherEnabled =
+		useFeatureFlagEnabled("language-switcher") &&
+		routing.locales.length > 1;
 	const router = useRouter();
 	const locale = useLocale();
 	const pathname = usePathname();
-	const localesPriority = process.env.NEXT_PUBLIC_LOCALES_PRIORITY?.split(",") || [];
-	const localesList = routing.locales.filter((currentLocale) => currentLocale !== locale)
+	const localesPriority =
+		process.env.NEXT_PUBLIC_LOCALES_PRIORITY?.split(",") || [];
+	const localesList = routing.locales
+		.filter((currentLocale) => currentLocale !== locale)
 		.sort((a, b) => {
 			const aIndex = localesPriority.indexOf(a);
 			const bIndex = localesPriority.indexOf(b);
@@ -326,37 +372,43 @@ function LanguageSwitcher({ className, isMobile = false }: { className?: string;
 
 	return (
 		isLanguageSwitcherEnabled && (
-		<li
-			data-style={style}
-			className="relative flex justify-center items-center gap-2 data-[style=wide]:uppercase"
-		>
-			<Dropdown>
-				<DropdownTrigger
-					className={twMerge("cursor-pointer select-none", className)}
-				>
-					<Button
-						variant="invisible"
-						tabIndex={0}
-						disableRipple
-						className="flex items-center gap-2 !px-2 justify-center"
+			<li
+				data-style={style}
+				className="relative flex justify-center items-center gap-2 data-[style=wide]:uppercase"
+			>
+				<Dropdown>
+					<DropdownTrigger
+						className={twMerge(
+							"cursor-pointer select-none",
+							className
+						)}
 					>
-						<div data-is-mobile={isMobile} className="text-sm 2xl:text-lg data-[is-mobile=true]:text-lg font-medium">
-							{
-								shortLocalesNames[
-									locale as keyof typeof shortLocalesNames
-								]
-							}
-						</div>
-						<ChevronDownIcon className="size-4" />
-					</Button>
-				</DropdownTrigger>
-				<DropdownMenu
-					onAction={(locale) => {
-						router.push(pathname, { locale: locale as string });
-					}}
-				>
-					{localesList.map((locale) => (
-						<DropdownItem key={locale}>
+						<Button
+							variant="invisible"
+							tabIndex={0}
+							disableRipple
+							className="flex items-center gap-2 !px-2 justify-center"
+						>
+							<div
+								data-is-mobile={isMobile}
+								className="text-sm 2xl:text-lg data-[is-mobile=true]:text-lg font-medium"
+							>
+								{
+									shortLocalesNames[
+										locale as keyof typeof shortLocalesNames
+									]
+								}
+							</div>
+							<ChevronDownIcon className="size-4" />
+						</Button>
+					</DropdownTrigger>
+					<DropdownMenu
+						onAction={(locale) => {
+							router.push(pathname, { locale: locale as string });
+						}}
+					>
+						{localesList.map((locale) => (
+							<DropdownItem key={locale}>
 								{
 									localesNames[
 										locale as keyof typeof localesNames
@@ -381,8 +433,11 @@ function UserButton() {
 			<DropdownTrigger>
 				<Avatar
 					src={session?.user?.image ?? `/icons/profile.png` ?? ""}
-					alt={t("userAvatarAlt", { 
-						name: session?.user?.name || session?.user?.email || t("genericUser")
+					alt={t("userAvatarAlt", {
+						name:
+							session?.user?.name ||
+							session?.user?.email ||
+							t("genericUser"),
 					})}
 				/>
 			</DropdownTrigger>
@@ -397,8 +452,12 @@ function UserButton() {
 					}
 				}}
 			>
-				<DropdownItem key="profile">{t("profileMenuItem")}</DropdownItem>
-				<DropdownItem key="settings">{t("settingsMenuItem")}</DropdownItem>
+				<DropdownItem key="profile">
+					{t("profileMenuItem")}
+				</DropdownItem>
+				<DropdownItem key="settings">
+					{t("settingsMenuItem")}
+				</DropdownItem>
 				<DropdownItem key="logout" color="danger">
 					{t("logout")}
 				</DropdownItem>
@@ -474,8 +533,7 @@ function LoginModal({
 			<ModalContent className={errorClassName}>
 				<GenericHeader onClose={onClose}>
 					<div className="scale-75 origin-bottom-left">
-						
-					<Logo interactive={false} />
+						<Logo interactive={false} />
 					</div>
 				</GenericHeader>
 				<ModalBody>
@@ -490,9 +548,9 @@ function LoginModal({
 							>
 								<Input
 									startContent={
-										<FaEnvelope 
-											aria-hidden="true" 
-											className="size-5 ltr:mr-1 rtl:ml-1 fill-black dark:fill-white/40" 
+										<FaEnvelope
+											aria-hidden="true"
+											className="size-5 ltr:mr-1 rtl:ml-1 fill-black dark:fill-white/40"
 										/>
 									}
 									name="email"
@@ -500,9 +558,9 @@ function LoginModal({
 								/>
 								<Input
 									startContent={
-										<FaLock 
-											aria-hidden="true" 
-											className="size-5 ltr:mr-1 rtl:ml-1 fill-black dark:fill-white/40" 
+										<FaLock
+											aria-hidden="true"
+											className="size-5 ltr:mr-1 rtl:ml-1 fill-black dark:fill-white/40"
 										/>
 									}
 									type="password"
@@ -579,10 +637,12 @@ export default function Navbar() {
 			className={twMerge(
 				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-[transform,border-radius] origin-top",
 				style === "wide" && "bg-white dark:bg-secondary max-w-none",
-				(isMapPage) && (style !== "wide" ? "xl:absolute xl:top-6 xl:scale-75" : "xl:absolute xl:scale-75 xl:rounded-b-2xl"),
+				isMapPage &&
+					(style !== "wide"
+						? "xl:absolute xl:top-6 xl:scale-75"
+						: "xl:absolute xl:scale-75 xl:rounded-b-2xl")
 			)}
 		>
-	
 			<div
 				className={twMerge(
 					"xl:h-[6.5rem] h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-3 2xl:gap-6 z-10",
@@ -594,9 +654,15 @@ export default function Navbar() {
 				<nav aria-label={t("mainNavAriaLabel")} className="flex-1">
 					<LinksList pathname={pathname} />
 				</nav>
-				<nav className="[&:has(>ul:empty)]:hidden" aria-label={t("secondaryNavAriaLabel")}>
+				<nav
+					className="[&:has(>ul:empty)]:hidden"
+					aria-label={t("secondaryNavAriaLabel")}
+				>
 					<ul className="flex items-center gap-2 2xl:gap-3 ">
-						<LanguageSwitcher className="!hidden xl:!flex" isMobile={false} />
+						<LanguageSwitcher
+							className="!hidden xl:!flex"
+							isMobile={false}
+						/>
 						<ThemeSwitcher
 							theme={theme}
 							setTheme={setTheme}
@@ -617,8 +683,9 @@ export default function Navbar() {
 							}
 							className={twMerge(
 								"h-full xl:min-w-0 xl:pl-4  text-accent dark:text-accent py-1 xl:py-0",
-								style === "small" ?
-									"!p-0 rounded-full !size-10" : "uppercase"
+								style === "small"
+									? "!p-0 rounded-full !size-10"
+									: "uppercase"
 							)}
 							onPress={onLoginModalOpen}
 							isIconOnly={style === "small"}
@@ -667,7 +734,10 @@ export default function Navbar() {
 				<li>
 					<LinksList pathname={pathname} isMobile={true} />
 				</li>
-				<LanguageSwitcher className="w-full flex justify-center" isMobile={true} />
+				<LanguageSwitcher
+					className="w-full flex justify-center"
+					isMobile={true}
+				/>
 				<ThemeSwitcher
 					theme={theme}
 					setTheme={setTheme}

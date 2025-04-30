@@ -16,6 +16,7 @@ import { BsChatRightDotsFill, BsMapFill } from "react-icons/bs";
 import { GiBookshelf } from "react-icons/gi";
 import { LinkObject, LinksList } from "@/db/schema/tables/status";
 import { LuX } from "react-icons/lu";
+import { FaQuestionCircle } from "react-icons/fa";
 
 export const NAVBAR_ICONS = {
     "AboutUs": AboutUs,
@@ -30,7 +31,8 @@ export const NAVBAR_ICONS = {
     "Bookshelf": GiBookshelf,
     "ChatRightDotsFill": BsChatRightDotsFill,
     "BsMapFill": BsMapFill,
-    "LuX": LuX
+    "LuX": LuX,
+    "FaQuestionCircle": FaQuestionCircle,
 }
 
 export const links: {
