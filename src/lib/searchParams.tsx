@@ -31,7 +31,8 @@ export const searchParamsLoader = {
 	author: parseAsString.withDefault("").withOptions({
 		scroll: true,
 	}),
-	
+	error: parseAsString.withDefault(""),
+	message: parseAsString.withDefault(""),
 }
 
 export const serializeSearchParams = createSerializer(searchParamsLoader);
