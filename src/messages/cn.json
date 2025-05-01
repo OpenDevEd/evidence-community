@@ -282,7 +282,8 @@
     "knowledgeBase": "知识库",
     "nationalEvidencePortal": "国家证据门户",
     "map": "地图",
-    "takedown": "删除请求"
+    "takedown": "删除请求",
+    "acknowledgements": "鸣谢"
   },
   "footer": {
     "quickLinks": "快速链接",

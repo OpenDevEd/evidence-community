@@ -282,7 +282,8 @@
     "knowledgeBase": "Wissensdatenbank",
     "nationalEvidencePortal": "Nationales Beweisportal",
     "map": "Karte",
-    "takedown": "Antrag auf Entfernung"
+    "takedown": "Antrag auf Entfernung",
+    "acknowledgements": "Danksagungen"
   },
   "footer": {
     "quickLinks": "Schnelllinks",
