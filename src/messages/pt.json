@@ -208,7 +208,11 @@
     "fillFormBelow": "Por favor, forneça detalhes sobre sua solicitação de remoção",
     "takedownRequestsExplanation": "As solicitações de remoção são envios formais usados para solicitar a remoção de conteúdo que viola direitos de propriedade intelectual, privacidade pessoal ou outras proteções legais. Cada solicitação é cuidadosamente revisada por nossa equipe para garantir que a ação apropriada seja tomada.",
     "whenToSubmitTakedown": "Você deve enviar uma solicitação de remoção se identificou conteúdo que infringe seus direitos, viola nossos termos de serviço ou contém informações pessoais não autorizadas. Forneça o máximo de detalhes possível para nos ajudar a processar sua solicitação com eficiência.",
-    "learnMorePolicies": "Saiba mais sobre nossas políticas e procedimentos"
+    "learnMorePolicies": "Saiba mais sobre nossas políticas e procedimentos",
+    "error": "Erro",
+    "alert": "Alerta",
+    "selectPDF": "Por favor, selecione um PDF abaixo",
+    "PDFNotFound": "PDF não encontrado, por favor selecione um PDF abaixo"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",
@@ -278,7 +282,8 @@
     "knowledgeBase": "Base de Conhecimento",
     "nationalEvidencePortal": "Portal Nacional de Evidências",
     "map": "Mapa",
-    "takedown": "Pedido de Remoção"
+    "takedown": "Pedido de Remoção",
+    "acknowledgements": "Agradecimentos"
   },
   "footer": {
     "quickLinks": "Links Rápidos",

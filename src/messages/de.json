@@ -208,7 +208,11 @@
     "fillFormBelow": "Bitte geben Sie Einzelheiten zu Ihrer Anfrage zur Entfernung an",
     "takedownRequestsExplanation": "Takedown-Anfragen sind formelle Einreichungen, mit denen die Entfernung von Inhalten beantragt wird, die gegen geistige Eigentumsrechte, die persönliche Privatsphäre oder andere rechtliche Schutzbestimmungen verstoßen. Jede Anfrage wird von unserem Team sorgfältig geprüft, um sicherzustellen, dass geeignete Maßnahmen ergriffen werden.",
     "whenToSubmitTakedown": "Sie sollten eine Takedown-Anfrage einreichen, wenn Sie Inhalte identifiziert haben, die Ihre Rechte verletzen, gegen unsere Nutzungsbedingungen verstoßen oder unbefugte personenbezogene Daten enthalten. Bitte geben Sie so viele Details wie möglich an, damit wir Ihre Anfrage effizient bearbeiten können.",
-    "learnMorePolicies": "Erfahren Sie mehr über unsere Richtlinien und Verfahren"
+    "learnMorePolicies": "Erfahren Sie mehr über unsere Richtlinien und Verfahren",
+    "error": "Fehler",
+    "alert": "Meldung",
+    "selectPDF": "Bitte wähle unten eine PDF-Datei aus",
+    "PDFNotFound": "PDF nicht gefunden, bitte wähle eine PDF-Datei unten aus"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
@@ -278,7 +282,8 @@
     "knowledgeBase": "Wissensdatenbank",
     "nationalEvidencePortal": "Nationales Beweisportal",
     "map": "Karte",
-    "takedown": "Antrag auf Entfernung"
+    "takedown": "Antrag auf Entfernung",
+    "acknowledgements": "Danksagungen"
   },
   "footer": {
     "quickLinks": "Schnelllinks",

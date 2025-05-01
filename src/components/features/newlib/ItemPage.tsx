@@ -428,8 +428,6 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 	const authors = item?.creators as Author[];
 	if (!authors?.length && !loading) return null;
 
-	console.log(JSON.stringify(authors, null, 2));
-
 	return (
 		<SidebarCard title={t("itemAuthorsTitle")} count={authors?.length}>
 			{loading

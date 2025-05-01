@@ -208,7 +208,11 @@
     "fillFormBelow": "Please provide details about your takedown request",
     "takedownRequestsExplanation": "Takedown requests are formal submissions used to request the removal of content that violates intellectual property rights, personal privacy, or other legal protections. Each request is carefully reviewed by our team to ensure appropriate action is taken.",
     "whenToSubmitTakedown": "You should submit a takedown request if you've identified content that infringes on your rights, violates our terms of service, or contains unauthorized personal information. Please provide as much detail as possible to help us process your request efficiently.",
-    "learnMorePolicies": "Learn more about our policies and procedures"
+    "learnMorePolicies": "Learn more about our policies and procedures",
+    "error": "Error",
+    "alert": "Alert",
+    "selectPDF": "Please select a PDF below",
+    "PDFNotFound": "PDF not found, please select a PDF below"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",
@@ -278,7 +282,8 @@
     "knowledgeBase": "Knowledge Base",
     "nationalEvidencePortal": "National Evidence Portal",
     "map": "Map",
-    "takedown": "Takedown Request"
+    "takedown": "Takedown Request",
+    "acknowledgements": "Acknowledgements"
   },
   "footer": {
     "quickLinks": "Quick Links",

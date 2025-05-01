@@ -230,6 +230,7 @@ export default function Resource({
 	const abstractText =
 		finalItemData && firstNonNullOrEmpty(finalItemData, ["abstractNote"]);
 
+
 	const href = `/lib/${finalItemData?.key ?? ""}`;
 
 	useEffect(() => {
@@ -252,6 +253,15 @@ export default function Resource({
 		return () => observer.disconnect();
 	}, [href, router, finalItemData?.key]);
 
+	const targetHref = serializeSearchParams(href, {
+		referrer:
+			referrer ??
+			"/" +
+				(currentPath.startsWith("/lib")
+					? "lib"
+					: currentPath.split("/").slice(1).join("/")),
+	});
+
 	return (
 		<ResourceWrapper
 			as={as}
@@ -261,16 +271,14 @@ export default function Resource({
 			)}
 		>
 			<Link
-				href={serializeSearchParams(href, {
-					referrer:
-						referrer ??
-						"/" +
-							(currentPath.startsWith("/lib")
-								? "lib"
-								: currentPath.split("/").slice(1).join("/")),
-				})}
-				className="p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1"
+				href={finalItemData?.key ? targetHref : ""}
+				className={twMerge(
+					"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
+					!finalItemData?.key && "!pointer-events-none"
+				)}
 				onMouseDown={(e) => {
+					if (!finalItemData?.key) return;
+
 					const url = new URL(href, window.location.href);
 					if (
 						url.origin === window.location.origin &&
@@ -281,7 +289,7 @@ export default function Resource({
 						!e.shiftKey
 					) {
 						e.preventDefault();
-						router.push(href);
+						router.push(targetHref);
 					}
 				}}
 			>
@@ -306,7 +314,9 @@ export default function Resource({
 							<ResourceDivider />
 							{finalItemData?.datePublished &&
 								!isNaN(
-									new Date(finalItemData.datePublished).getTime()
+									new Date(
+										finalItemData.datePublished
+									).getTime()
 								) && (
 									<>
 										<ResourceData
@@ -315,7 +325,9 @@ export default function Resource({
 												finalItemData.datePublished
 											).toISOString()}
 											text={format.dateTime(
-												new Date(finalItemData.datePublished),
+												new Date(
+													finalItemData.datePublished
+												),
 												{
 													dateStyle: "medium",
 												}

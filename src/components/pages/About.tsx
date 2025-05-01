@@ -259,13 +259,13 @@ const ContentRenderer = ({
 			);
 		case "image":
 			return (
-				<Skeleton isLoaded={imageLoadStates[content.uri]} className="w-full rounded-xl">
+				<Skeleton isLoaded={imageLoadStates[content.uri]} className="w-full">
 					<Image
 						src={content.uri}
 						alt={content.alt}
 						width={content.width || 800}
 						height={content.height || 400}
-						className="w-full h-auto rounded-xl"
+						className="w-full h-auto rounded-2xl"
 						onLoad={() => handleImageLoad(content.uri)}
 					/>
 				</Skeleton>
@@ -289,7 +289,7 @@ const ContentRenderer = ({
 											alt={image.alt}
 											width={image.width || 400}
 											height={image.height || 300}
-											className="w-full h-full object-contain"
+											className="w-full h-full object-contain rounded-2xl overflow-hidden"
 											onLoad={() => handleImageLoad(image.uri)}
 										/>
 									</div>
@@ -489,7 +489,13 @@ export default function About({ faqData }: { faqData: FAQSection }) {
 															key={contentIndex}
 															className={`${
 																content.type === 'image-row' 
-																	? 'my-6' 
+																	? contentIndex > 0 && contentIndex < item.contents.length - 1
+																		? 'my-6'  // Items both above and below
+																		: contentIndex > 0
+																			? 'mt-6'  // Only items above
+																			: contentIndex < item.contents.length - 1
+																				? 'mb-6'  // Only items below
+																				: ''      // No items above or below
 																	: ''
 															}`}
 														>

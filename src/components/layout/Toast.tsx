@@ -17,7 +17,9 @@ export function toast(toast: Omit<ToastProps, 'id'>) {
         onClick: toast.button.onClick || (() => console.log('Button clicked')),
       } : undefined}
     />
-  ));
+  ), {
+    position: "bottom-left"
+  });
 }
 
 /** A fully custom toast that still maintains the animations and interactions. */

@@ -213,10 +213,17 @@ export default async function middleware(request: NextRequest) {
 		return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
 	}
 
-	const downloadMatch = request.nextUrl.pathname.match(/\/lib\/(.+?)\/download\/([^\/]+)(.*)$/);
+	const downloadMatch = request.nextUrl.pathname.match(/\/lib\/(.+?)\/download\/?(?:([^\/]+)(.*))?$/);
 	if (downloadMatch) {
 		const itemKey = downloadMatch[1];
 		const attachmentKey = downloadMatch[2];
+
+		if (!attachmentKey) {
+			const itemPageUrl = new URL(`/lib/${itemKey}`, fixRequestUrl(request));
+			itemPageUrl.searchParams.set('message', 'selectPDF');
+			return NextResponse.redirect(itemPageUrl);
+		}
+
 		const itemUrl = new URL(`/api/item/${itemKey}`, fixRequestUrl(request)).toString().replace("https://", "http://");
 
 		try {
@@ -248,7 +255,9 @@ export default async function middleware(request: NextRequest) {
 			}
 			const attachment = item.item.attachmentsData.find((attachment) => attachment.key === attachmentKey);
 			if (!attachment || !attachment.url) {
-				return NextResponse.json({ error: "Attachment URL not found" }, { status: 404 });
+				const itemPageUrl = new URL(`/lib/${itemKey}`, fixRequestUrl(request));
+				itemPageUrl.searchParams.set('error', 'PDFNotFound');
+				return NextResponse.redirect(itemPageUrl);
 			}
 			const finalURL = new URL(attachment.url, fixRequestUrl(request));
 			return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
