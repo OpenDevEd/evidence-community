@@ -181,7 +181,6 @@ export default function Takedown() {
 			description: "",
 		},
 		onSubmit: async ({ value, formApi }) => {
-			console.log("got takedown request", value);
 			const result = await sendTakedownRequest(
 				value.email,
 				value.links.split("\n").filter(Boolean),
