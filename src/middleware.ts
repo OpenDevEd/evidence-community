@@ -188,6 +188,8 @@ export default async function middleware(request: NextRequest) {
 			console.log("Fetching redirects for", url.toString());
 			
 			const response = await fetch(url);
+			console.log("Response:", response);
+			console.log("Response Text:", await response.text());
 			const redirects = await response.json();
 
 			if (redirects?.value && redirects.value !== key) {
