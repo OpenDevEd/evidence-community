@@ -326,7 +326,8 @@
     "TvBroadcast": "TV-Sendung",
     "Thesis": "Abschlussarbeit",
     "VideoRecording": "Videoaufnahme",
-    "Webpage": "Webseite"
+    "Webpage": "Webseite",
+    "Preprint": "Vorabdruck"
   },
   "creatorType": {
     "artist": "Künstler",

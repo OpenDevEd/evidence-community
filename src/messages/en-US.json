@@ -326,7 +326,8 @@
     "TvBroadcast": "TV Broadcast",
     "Thesis": "Thesis",
     "VideoRecording": "Video Recording",
-    "Webpage": "Webpage"
+    "Webpage": "Webpage",
+    "Preprint": "Preprint"
   },
   "creatorType": {
     "artist": "Artist",
