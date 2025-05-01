@@ -180,16 +180,9 @@ export default async function middleware(request: NextRequest) {
 		const rest = libItemMatch[2] || ''; 
 		
 		try {
-			const expectedURL = request.nextUrl.pathname + `/api/item/${encodeURIComponent(key + rest)}/redirects`;
-
-			console.log("Expected URL:", expectedURL);
-
 			const url = new URL(`/api/item/${encodeURIComponent(key + rest)}/redirects`, fixRequestUrl(request));
-			console.log("Fetching redirects for", url.toString());
 			
 			const response = await fetch(url);
-			console.log("Response:", response);
-			console.log("Response Text:", await response.text());
 			const redirects = await response.json();
 
 			if (redirects?.value && redirects.value !== key) {
