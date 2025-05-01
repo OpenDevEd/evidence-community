@@ -14,6 +14,7 @@ export const itemType = pgEnum("itemType", [
 	"DictionaryEntry",
 	"Document",
 	"Email",
+	"Preprint",
 	"EncyclopediaArticle",
 	"Film",
 	"ForumPost",
