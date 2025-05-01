@@ -209,7 +209,11 @@
     "fillFormBelow": "Tafadhali toa maelezo kuhusu ombi lako la kuondoa",
     "takedownRequestsExplanation": "Maombi ya kuondolewa ni mawasilisho rasmi yanayotumika kuomba kuondolewa kwa maudhui ambayo yanakiuka haki za uvumbuzi, faragha ya kibinafsi, au ulinzi mwingine wa kisheria. Kila ombi linakaguliwa kwa uangalifu na timu yetu ili kuhakikisha kuwa hatua zinazofaa zinachukuliwa.",
     "whenToSubmitTakedown": "Unapaswa kuwasilisha ombi la kuondoa ikiwa umetambua maudhui ambayo yanakiuka haki zako, yanakiuka masharti yetu ya huduma, au yana taarifa za kibinafsi zisizoidhinishwa. Tafadhali toa maelezo mengi iwezekanavyo ili kutusaidia kuchakata ombi lako kwa ufanisi.",
-    "learnMorePolicies": "Pata maelezo zaidi kuhusu sera na taratibu zetu"
+    "learnMorePolicies": "Pata maelezo zaidi kuhusu sera na taratibu zetu",
+    "error": "Kosa",
+    "alert": "Tahadhari",
+    "selectPDF": "Tafadhali chagua PDF hapa chini",
+    "PDFNotFound": "PDF haipatikani, tafadhali chagua PDF hapa chini"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

@@ -21,9 +21,11 @@ import { ItemsGetResponse } from "@/app/api/items/types";
 import { useLocalStorage } from "usehooks-ts";
 import { useTranslations } from "next-intl";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
-import { Toaster } from "sonner";
+import { toast, Toaster } from "sonner";
 import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils";
 import { getPersistence } from "@/components/layout/Banner";
+import { useQueryState } from "nuqs";
+import { toast as toastComponent } from "@/components/layout/Toast";
 
 export type CacheContextType = {
 	status: InferSelectModel<typeof statusTable>;
@@ -226,6 +228,35 @@ function ToastAdapter({
 	</>
 }
 
+function PramNotificationProvider({
+	children,
+}: {
+	children: React.ReactNode;
+}) {
+	const [error, setError] = useQueryState("error");
+	const [message, setMessage] = useQueryState("message");
+	const t = useTranslations("ui");
+
+	useEffect(() => {
+		if (error) {
+			toastComponent({
+				title: t("error"),
+				description: t(error),
+				type: "error",
+			});
+			setError(null);
+		}
+		if (message) {
+			toastComponent({
+				title: t("alert"),
+				description: t(message),
+			});
+			setMessage(null);
+		}
+	}, [error, message]);
+
+	return <>{children}</>;
+}
 
 export default function Providers({
 	children,
@@ -270,7 +301,9 @@ export default function Providers({
 							<CacheProvider status={status}>
 								<NextUIProvider navigate={router.push}>
 									<Suspense>
-										<PageView />
+										<PramNotificationProvider>
+											<PageView />
+										</PramNotificationProvider>
 									</Suspense>
 									<LoadingScreen
 										isMounted={isMounted}
