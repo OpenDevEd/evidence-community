@@ -485,7 +485,8 @@
     "updatedAt": "Mis à jour le",
     "citedBy": "Cité par",
     "cites": "Cite",
-    "linkMode": "Mode de liaison"
+    "linkMode": "Mode de liaison",
+    "Preprint": "Préimpression"
   },
   "help": {
     "intro1": "L'interface de recherche est composée de trois sections : **Recherche**, **Explorer** et **Résultats**. Celles-ci sont décrites en détail ci-dessous.",
