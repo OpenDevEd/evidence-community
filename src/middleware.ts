@@ -213,7 +213,7 @@ export default async function middleware(request: NextRequest) {
 		return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
 	}
 
-	const downloadMatch = request.nextUrl.pathname.match(/\/lib\/(.+?)\/download(?:\/([^\/]+)(.*))?$/);
+	const downloadMatch = request.nextUrl.pathname.match(/\/lib\/(.+?)\/download\/?(?:([^\/]+)(.*))?$/);
 	if (downloadMatch) {
 		const itemKey = downloadMatch[1];
 		const attachmentKey = downloadMatch[2];
