@@ -11,19 +11,6 @@ export type RateLimit = {
 	firstRequest: number;
 }
 
-function encodeKey(key: string): string {
-	return key.split('').map(char => {
-		const code = char.charCodeAt(0);
-		return code.toString(36); // Use base36 (0-9 and a-z)
-	}).join('n'); // Use 'n' as separator since it's not used in base36
-}
-
-function decodeKey(encoded: string): string {
-	return encoded.split('n').map(num => {
-		const code = parseInt(num, 36);
-		return String.fromCharCode(code);
-	}).join('');
-}
 
 export const rateLimits = new Map<string, RateLimit>();
 
@@ -173,18 +160,6 @@ function mapLegacySearchParams(request: NextRequest) {
 	return null;
 }
 
-
-async function fetchMeilisearch(key: string) {
-	const url = new URL(`${process.env.MEILISEARCH_HOST}indexes/redirects/documents/${key}`);
-	const response = await fetch(url, {
-		headers: {
-			"Authorization": "Bearer " + process.env.MASTER_KEY || ""
-		}
-	});
-	return response.json();
-}
-
-
 export default async function middleware(request: NextRequest) {
 	const rateLimit = generateRateLimitObject(request);
 
@@ -202,21 +177,23 @@ export default async function middleware(request: NextRequest) {
 	const libItemMatch = request.nextUrl.pathname.match(/\/lib\/([^\/]+)(.*)/);
 	if (libItemMatch) {
 		const key = libItemMatch[1] as keyof typeof redirections;
-		const rest = libItemMatch[2] || ''; // Everything after the key
+		const rest = libItemMatch[2] || ''; 
+		
+		try {
+			const url = new URL(`/api/item/${encodeURIComponent(key + rest)}/redirects`, fixRequestUrl(request));
+			
+			const response = await fetch(url);
+			const redirects = await response.json();
 
-		const everything = key + rest;
-		const encodedKey = encodeKey(process.env.MEILI_INDEX + "|" + everything);
-		const meilisearchResponse = await fetchMeilisearch(encodedKey);
-
-		if (meilisearchResponse) {
-			const value = meilisearchResponse.value;
-			if (value && value !== key) {
-				const newUrl = new URL(`/lib/${value}`, fixRequestUrl(request));
+			if (redirects?.value && redirects.value !== key) {
+				const newUrl = new URL(`/lib/${redirects.value}`, fixRequestUrl(request));
 				request.nextUrl.searchParams.forEach((value, paramKey) => {
 					newUrl.searchParams.set(paramKey, value);
 				});
 				return NextResponse.redirect(newUrl, 301);
 			}
+		} catch (error) {
+			console.error("Error checking redirects:", error);
 		}
 	}
 
