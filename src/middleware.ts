@@ -181,6 +181,7 @@ export default async function middleware(request: NextRequest) {
 		
 		try {
 			const url = new URL(`/api/item/${encodeURIComponent(key + rest)}/redirects`, fixRequestUrl(request));
+			console.log("Fetching redirects for", url);
 			
 			const response = await fetch(url);
 			const redirects = await response.json();
