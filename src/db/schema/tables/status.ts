@@ -10,6 +10,7 @@ export type LinkObject = {
 	navExclude?: boolean;
 	footerExclude?: boolean;
 	help?: any;
+    id?: string;
 };
 
 export type LinksList = Record<string, LinkObject[]>;
