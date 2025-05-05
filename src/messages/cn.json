@@ -205,7 +205,7 @@
     "validating": "正在验证...",
     "invalidEmail": "无效的电子邮件",
     "descriptionMin20": "描述必须至少包含 20 个字符",
-    "fillFormBelow": "请提供有关您删除请求的详细信息",
+    "fillFormBelow": "请填写下面的表格与我们联系。",
     "takedownRequestsExplanation": "删除请求是正式提交，用于请求删除侵犯知识产权、个人隐私或其他法律保护的内容。我们的团队会仔细审查每个请求，以确保采取适当的行动。",
     "whenToSubmitTakedown": "如果您发现内容侵犯您的权利、违反我们的服务条款或包含未经授权的个人信息，则应提交删除请求。请提供尽可能多的详细信息，以帮助我们高效地处理您的请求。",
     "learnMorePolicies": "详细了解我们的政策和程序",
@@ -215,7 +215,9 @@
     "PDFNotFound": "未找到PDF，请在下方选择PDF",
     "emailSent": "电子邮件已发送",
     "emailSentDesc": "我们将尽快给您回复",
-    "emailNotSent": "电子邮件未发送"
+    "emailNotSent": "电子邮件未发送",
+    "contactViaEmail": "您也可以通过电子邮件联系我们：",
+    "contactUs": "联系我们"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",
