@@ -44,6 +44,7 @@ function Relation({ value }: { value: string }) {
 						itemData={fetchedItemData?.item}
 						isLoading={fetchedItemDataLoading}
 						abstract={false}
+						className="h-full"
 					/>
 				</motion.li>
 			)}
