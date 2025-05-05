@@ -199,7 +199,7 @@
     "requestSent": "下架请求已发送",
     "requestSentDesc": "我们将审核您的请求，并尽快给您答复。",
     "requestFailed": "未能发送下架请求",
-    "tryAgainLater": "请稍后再试。",
+    "tryAgainLater": "请稍后再试",
     "invalidLinks": "无效链接：",
     "resourceNotFound": "资源不存在:",
     "validating": "正在验证...",
@@ -212,7 +212,10 @@
     "error": "错误",
     "alert": "提示",
     "selectPDF": "请在下方选择一个 PDF",
-    "PDFNotFound": "未找到PDF，请在下方选择PDF"
+    "PDFNotFound": "未找到PDF，请在下方选择PDF",
+    "emailSent": "电子邮件已发送",
+    "emailSentDesc": "我们将尽快给您回复",
+    "emailNotSent": "电子邮件未发送"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",
@@ -283,7 +286,8 @@
     "nationalEvidencePortal": "国家证据门户",
     "map": "地图",
     "takedown": "删除请求",
-    "acknowledgements": "鸣谢"
+    "acknowledgements": "鸣谢",
+    "feedback": "反馈"
   },
   "footer": {
     "quickLinks": "快速链接",

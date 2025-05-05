@@ -200,7 +200,7 @@
     "requestSent": "Ombi la kuondolewa limetumwa",
     "requestSentDesc": "Tutapitia ombi lako na tutawasiliana nawe haraka iwezekanavyo.",
     "requestFailed": "Imeshindwa kutuma ombi la kuondoa",
-    "tryAgainLater": "Tafadhali jaribu tena baadaye.",
+    "tryAgainLater": "Tafadhali jaribu tena baadaye",
     "invalidLinks": "Viungo(s) batili:",
     "resourceNotFound": "Rasilimali haipo:",
     "validating": "Inathibitisha...",
@@ -213,7 +213,10 @@
     "error": "Kosa",
     "alert": "Tahadhari",
     "selectPDF": "Tafadhali chagua PDF hapa chini",
-    "PDFNotFound": "PDF haipatikani, tafadhali chagua PDF hapa chini"
+    "PDFNotFound": "PDF haipatikani, tafadhali chagua PDF hapa chini",
+    "emailSent": "Barua pepe imetumwa",
+    "emailSentDesc": "Tutarudi kwako haraka iwezekanavyo",
+    "emailNotSent": "Barua pepe haikutumwa"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
@@ -284,7 +287,8 @@
     "nationalEvidencePortal": "Tovuti ya Ushahidi wa Kitaifa",
     "map": "Ramani",
     "takedown": "Ombi la Kuondolewa",
-    "acknowledgements": "Shukrani"
+    "acknowledgements": "Shukrani",
+    "feedback": "Maoni"
   },
   "footer": {
     "quickLinks": "Viungo vya Haraka",

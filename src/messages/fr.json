@@ -199,7 +199,7 @@
     "requestSent": "Requête de suppression envoyée",
     "requestSentDesc": "Nous examinerons votre demande et vous répondrons dès que possible.",
     "requestFailed": "Échec de l'envoi de la demande de retrait",
-    "tryAgainLater": "Veuillez réessayer plus tard.",
+    "tryAgainLater": "Veuillez réessayer plus tard",
     "invalidLinks": "Lien(s) non valide(s) :",
     "resourceNotFound": "La/les ressource(s) n'existe(nt) pas :",
     "validating": "Validation en cours...",
@@ -212,7 +212,10 @@
     "error": "Erreur",
     "alert": "Alerte",
     "selectPDF": "Veuillez sélectionner un PDF ci-dessous",
-    "PDFNotFound": "PDF non trouvé, veuillez sélectionner un PDF ci-dessous"
+    "PDFNotFound": "PDF non trouvé, veuillez sélectionner un PDF ci-dessous",
+    "emailSent": "E-mail envoyé",
+    "emailSentDesc": "Nous vous répondrons dès que possible",
+    "emailNotSent": "E-mail non envoyé"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",
@@ -283,7 +286,8 @@
     "nationalEvidencePortal": "Portail national des preuves",
     "map": "Carte",
     "takedown": "Demande de retrait",
-    "acknowledgements": "Remerciements"
+    "acknowledgements": "Remerciements",
+    "feedback": "Commentaires"
   },
   "footer": {
     "quickLinks": "Liens rapides",

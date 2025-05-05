@@ -199,7 +199,7 @@
     "requestSent": "Takedown request sent",
     "requestSentDesc": "We will review your request and get back to you as soon as possible.",
     "requestFailed": "Failed to send takedown request",
-    "tryAgainLater": "Please try again later.",
+    "tryAgainLater": "Please try again later",
     "invalidLinks": "Invalid link(s):",
     "resourceNotFound": "Resource(s) does not exist:",
     "validating": "Validating...",
@@ -212,7 +212,10 @@
     "error": "Error",
     "alert": "Alert",
     "selectPDF": "Please select a PDF below",
-    "PDFNotFound": "PDF not found, please select a PDF below"
+    "PDFNotFound": "PDF not found, please select a PDF below",
+    "emailSent": "Email sent",
+    "emailSentDesc": "We will get back to you as soon as possible",
+    "emailNotSent": "Email not sent"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",
@@ -283,7 +286,8 @@
     "nationalEvidencePortal": "National Evidence Portal",
     "map": "Map",
     "takedown": "Takedown Request",
-    "acknowledgements": "Acknowledgements"
+    "acknowledgements": "Acknowledgements",
+    "feedback": "Feedback"
   },
   "footer": {
     "quickLinks": "Quick Links",

@@ -199,7 +199,7 @@
     "requestSent": "Pedido de remoção enviado",
     "requestSentDesc": "Analisaremos sua solicitação e entraremos em contato o mais breve possível.",
     "requestFailed": "Falha ao enviar a solicitação de remoção",
-    "tryAgainLater": "Por favor, tente novamente mais tarde.",
+    "tryAgainLater": "Por favor, tente novamente mais tarde",
     "invalidLinks": "Link(s) inválido(s):",
     "resourceNotFound": "Recurso(s) não existe(m):",
     "validating": "Validando...",
@@ -212,7 +212,10 @@
     "error": "Erro",
     "alert": "Alerta",
     "selectPDF": "Por favor, selecione um PDF abaixo",
-    "PDFNotFound": "PDF não encontrado, por favor selecione um PDF abaixo"
+    "PDFNotFound": "PDF não encontrado, por favor selecione um PDF abaixo",
+    "emailSent": "E-mail enviado",
+    "emailSentDesc": "Entraremos em contato o mais breve possível",
+    "emailNotSent": "E-mail não enviado"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",
@@ -283,7 +286,8 @@
     "nationalEvidencePortal": "Portal Nacional de Evidências",
     "map": "Mapa",
     "takedown": "Pedido de Remoção",
-    "acknowledgements": "Agradecimentos"
+    "acknowledgements": "Agradecimentos",
+    "feedback": "Comentários"
   },
   "footer": {
     "quickLinks": "Links Rápidos",

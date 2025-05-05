@@ -199,7 +199,7 @@
     "requestSent": "Entfernungsanfrage gesendet",
     "requestSentDesc": "Wir werden Ihre Anfrage prüfen und uns so bald wie möglich bei Ihnen melden.",
     "requestFailed": "Fehler beim Senden der Takedown-Anfrage",
-    "tryAgainLater": "Bitte versuchen Sie es später erneut.",
+    "tryAgainLater": "Bitte versuchen Sie es später erneut",
     "invalidLinks": "Ungültige Verknüpfung(en):",
     "resourceNotFound": "Ressource(n) existiert nicht:",
     "validating": "Wird validiert...",
@@ -212,7 +212,10 @@
     "error": "Fehler",
     "alert": "Meldung",
     "selectPDF": "Bitte wähle unten eine PDF-Datei aus",
-    "PDFNotFound": "PDF nicht gefunden, bitte wähle eine PDF-Datei unten aus"
+    "PDFNotFound": "PDF nicht gefunden, bitte wähle eine PDF-Datei unten aus",
+    "emailSent": "E-Mail gesendet",
+    "emailSentDesc": "Wir werden uns so bald wie möglich bei Ihnen melden",
+    "emailNotSent": "E-Mail nicht gesendet"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
@@ -283,7 +286,8 @@
     "nationalEvidencePortal": "Nationales Beweisportal",
     "map": "Karte",
     "takedown": "Antrag auf Entfernung",
-    "acknowledgements": "Danksagungen"
+    "acknowledgements": "Danksagungen",
+    "feedback": "Feedback"
   },
   "footer": {
     "quickLinks": "Schnelllinks",

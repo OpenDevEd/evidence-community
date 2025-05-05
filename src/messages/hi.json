@@ -199,7 +199,7 @@
     "requestSent": "टेकडाउन अनुरोध भेजा गया",
     "requestSentDesc": "हम आपके अनुरोध की समीक्षा करेंगे और जल्द से जल्द आपसे संपर्क करेंगे।",
     "requestFailed": "टेकडाउन अनुरोध भेजने में विफल",
-    "tryAgainLater": "कृपया बाद में पुन: प्रयास करें।",
+    "tryAgainLater": "कृपया बाद में पुन: प्रयास करें",
     "invalidLinks": "अमान्य लिंक:",
     "resourceNotFound": "संसाधन मौजूद नहीं है:",
     "validating": "सत्यापित हो रहा है...",
@@ -212,7 +212,10 @@
     "error": "त्रुटि",
     "alert": "चेतावनी",
     "selectPDF": "कृपया नीचे एक PDF चुनें",
-    "PDFNotFound": "PDF नहीं मिला, कृपया नीचे एक PDF चुनें"
+    "PDFNotFound": "PDF नहीं मिला, कृपया नीचे एक PDF चुनें",
+    "emailSent": "ईमेल भेजा गया",
+    "emailSentDesc": "हम जल्द से जल्द आपसे संपर्क करेंगे",
+    "emailNotSent": "ईमेल नहीं भेजा गया"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",
@@ -283,7 +286,8 @@
     "nationalEvidencePortal": "राष्ट्रीय साक्ष्य पोर्टल",
     "map": "नक्शा",
     "takedown": "टेakedown अनुरोध",
-    "acknowledgements": "स्वीकृति"
+    "acknowledgements": "स्वीकृति",
+    "feedback": "प्रतिक्रिया"
   },
   "footer": {
     "quickLinks": "त्वरित लिंक",
