@@ -99,7 +99,9 @@ function Citation({ value, loading }: FormatterProps) {
 					ref={contentRef}
 					dangerouslySetInnerHTML={{ __html: sanitizedHtml }}
 				/>
-				<CopyButton isIconOnly contentRef={contentRef} />
+				<div className="shrink-0">
+					<CopyButton isIconOnly contentRef={contentRef} />
+				</div>
 			</motion.div>
 		</Skeleton>
 	);
