@@ -27,6 +27,20 @@ export async function validateTakedownRequest(email: string, links: string[], de
 	return { success: true };
 }
 
+export const contactRequestSchema = z.object({
+	email: z.string().email(),
+	description: z.string().min(20),
+});
+
+export async function validateContactRequest(email: string, description: string): Promise<{ error: string } | { success: boolean }> {
+	const result = contactRequestSchema.safeParse({ email, description });
+	if (!result.success) {
+		return { error: result.error.message };
+	}
+
+	return { success: true };
+}
+
 export function getCountryInfo(country: string) {
 	const parts = country.split(" > ");
 	const lastPart = parts.pop() || "";
