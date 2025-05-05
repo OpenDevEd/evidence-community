@@ -43,7 +43,7 @@ export default function Contact() {
 				footer={
 					<div className="mt-12 w-full max-w-2xl border-t border-white/10 pt-8 flex flex-col gap-8 items-center">
 						{contactEmail && (
-							<p>
+							<p className="text-center">
 								{t("contactViaEmail")}{" "}
 								<Link
 									className="text-link_light dark:text-link"
