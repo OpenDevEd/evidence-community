@@ -488,6 +488,8 @@ function FiltersList({
 	const isCountryFocusEnabled = useFeatureFlagEnabled("country-focus");
 	const isAuthorLocationEnabled = useFeatureFlagEnabled("author-location");
 
+	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
+
 	const enabledCount = [
 		isCountryFocusEnabled,
 		isAuthorLocationEnabled,
@@ -634,19 +636,63 @@ function FiltersList({
 		);
 	}, [countryFocusFilter, authorLocationFilter]);
 
+	const isMoreFiltersOpen = globalExpanded["more-filters"] ?? true;
+	const setIsMoreFiltersOpen = (value: boolean) => {
+		setGlobalExpanded((prev: Record<string, boolean>) => ({
+			...prev,
+			["more-filters"]: value,
+		}));
+	};
+
 	return enabledCount > 1 ? (
-		<Accordion defaultExpandedKeys={["More Filters"]} className="p-0">
-			<AccordionItem
-				key={"More Filters"}
-				title={t("moreFilters")}
-				classNames={{
-					content: "p-0 flex flex-col gap-4 pt-4",
-					trigger: "pb-0 pt-2",
-				}}
-			>
-				{moreFilters}
-			</AccordionItem>
-		</Accordion>
+		<>
+			<div className="flex flex-col">
+				<div className="flex justify-between items-center gap-4 pt-4">
+					<h4 className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+						{t("moreFilters")}
+					</h4>
+					<Button
+						isIconOnly
+						variant="light"
+						size="sm"
+						radius="full"
+						className={twMerge(
+							"text-black/80 dark:text-white/80",
+							isMoreFiltersOpen && "rotate-180"
+						)}
+						onClick={() => setIsMoreFiltersOpen(!isMoreFiltersOpen)}
+					>
+						<LuChevronDown />
+					</Button>
+				</div>
+				<AnimatePresence initial={false}>
+					{isMoreFiltersOpen && (
+						<motion.div
+							initial={{ height: 0 }}
+							animate={{ height: "auto" }}
+							exit={{ height: 0 }}
+							className="flex flex-col gap-4 overflow-hidden"
+						>
+							<div className="flex flex-col gap-4 pt-4">
+								{moreFilters}
+							</div>
+						</motion.div>
+					)}
+				</AnimatePresence>
+			</div>
+			{/* <Accordion defaultExpandedKeys={["More Filters"]} className="p-0">
+				<AccordionItem
+					key={"More Filters"}
+					title={t("moreFilters")}
+					classNames={{
+						content: "p-0 flex flex-col gap-4 pt-4",
+						trigger: "pb-0 pt-2",
+					}}
+				>
+					{moreFilters}
+				</AccordionItem>
+			</Accordion> */}
+		</>
 	) : (
 		moreFilters
 	);
