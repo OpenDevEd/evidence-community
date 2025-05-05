@@ -18,8 +18,8 @@ export default function Contact() {
 		<PageContainer>
 			<EmailForm
 				fields={["email", "description"]}
-				header="Contact Us"
-				subtitle="Please fill out the form below to contact us."
+				header={t("contactUs")}
+				subtitle={t("fillFormBelow")}
 				onSubmit={async (value, reset) => {
 					const result = await sendContactRequest(
 						value.email,
@@ -44,7 +44,7 @@ export default function Contact() {
 					<div className="mt-12 w-full max-w-2xl border-t border-white/10 pt-8 flex flex-col gap-8 items-center">
 						{contactEmail && (
 							<p>
-								You can also contact us via email at{" "}
+								{t("contactViaEmail")}{" "}
 								<Link
 									className="text-link_light dark:text-link"
 									href={`mailto:${contactEmail}`}
