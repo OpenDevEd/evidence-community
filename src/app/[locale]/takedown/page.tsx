@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 
 export default function Page() {
 
-	if (!transporter) {
+	if (!transporter || !process.env.TAKEDOWN_EMAIL) {
 		return notFound();
 	}
 	
