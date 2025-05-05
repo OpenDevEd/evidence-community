@@ -646,9 +646,9 @@ function FiltersList({
 
 	return enabledCount > 1 ? (
 		<>
-			<div className="flex flex-col">
+			<div className="flex flex-col" role="region" aria-label={t("moreFilters")}>
 				<div className="flex justify-between items-center gap-4 pt-4">
-					<h4 className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+					<h4 className="text-lg font-medium text-black/80 dark:text-white/80 flex" id="more-filters-heading">
 						{t("moreFilters")}
 					</h4>
 					<Button
@@ -661,8 +661,14 @@ function FiltersList({
 							isMoreFiltersOpen && "rotate-180"
 						)}
 						onClick={() => setIsMoreFiltersOpen(!isMoreFiltersOpen)}
+						aria-expanded={isMoreFiltersOpen}
+						aria-controls="more-filters-content"
+						aria-labelledby="more-filters-heading"
 					>
-						<LuChevronDown />
+						<LuChevronDown aria-hidden="true" />
+						<span className="sr-only">
+							{isMoreFiltersOpen ? t("collapseFilters") : t("expandFilters")}
+						</span>
 					</Button>
 				</div>
 				<AnimatePresence initial={false}>
@@ -672,6 +678,9 @@ function FiltersList({
 							animate={{ height: "auto" }}
 							exit={{ height: 0 }}
 							className="flex flex-col gap-4 overflow-hidden"
+							id="more-filters-content"
+							role="region"
+							aria-labelledby="more-filters-heading"
 						>
 							<div className="flex flex-col gap-4 pt-4">
 								{moreFilters}
