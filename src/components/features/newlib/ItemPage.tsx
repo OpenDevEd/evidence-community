@@ -325,6 +325,7 @@ function ItemAuthor({ author }: { author?: Author }) {
 
 	return (
 		<Tooltip
+			placement="left"
 			closeDelay={0}
 			isDisabled={affiliationCount === 0}
 			key={author?.name}
