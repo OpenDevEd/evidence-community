@@ -435,7 +435,7 @@ export default function About({ faqData }: { faqData: FAQSection }) {
 					<div className="flex-1 min-w-0">
 						<section>
 							{faqData.title && (
-								<div className="mb-16">
+								<div className="mb-8 lg:mb-16">
 									<div className="flex flex-col gap-6">
 										<div className="flex items-start gap-6">
 											<div className="flex flex-col items-start gap-1">
@@ -445,7 +445,7 @@ export default function About({ faqData }: { faqData: FAQSection }) {
 														{faqData.label || "FAQ"}
 													</span>
 												</div>
-												<h1 className="text-5xl font-bold tracking-tight">
+												<h1 className="text-3xl lg:text-4xl xl:text-5xl font-bold tracking-tight">
 													{faqData.title}
 												</h1>
 											</div>
