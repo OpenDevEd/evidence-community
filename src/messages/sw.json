@@ -218,7 +218,9 @@
     "emailSentDesc": "Tutarudi kwako haraka iwezekanavyo",
     "emailNotSent": "Barua pepe haikutumwa",
     "contactViaEmail": "Unaweza pia kuwasiliana nasi kupitia barua pepe kwa:",
-    "contactUs": "Wasiliana nasi"
+    "contactUs": "Wasiliana nasi",
+    "collapseFilters": "Funga Vichujio",
+    "expandFilters": "Panua Vichujio"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

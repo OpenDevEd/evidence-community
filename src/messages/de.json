@@ -217,7 +217,9 @@
     "emailSentDesc": "Wir werden uns so bald wie möglich bei Ihnen melden",
     "emailNotSent": "E-Mail nicht gesendet",
     "contactViaEmail": "Sie können uns auch per E-Mail kontaktieren unter:",
-    "contactUs": "Kontakt"
+    "contactUs": "Kontakt",
+    "collapseFilters": "Filter einklappen",
+    "expandFilters": "Filter erweitern"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
