@@ -199,20 +199,27 @@
     "requestSent": "Takedown request sent",
     "requestSentDesc": "We will review your request and get back to you as soon as possible.",
     "requestFailed": "Failed to send takedown request",
-    "tryAgainLater": "Please try again later.",
+    "tryAgainLater": "Please try again later",
     "invalidLinks": "Invalid link(s):",
     "resourceNotFound": "Resource(s) does not exist:",
     "validating": "Validating...",
     "invalidEmail": "Invalid email",
     "descriptionMin20": "Description must be at least 20 characters",
-    "fillFormBelow": "Please provide details about your takedown request",
+    "fillFormBelow": "Please fill out the form below to contact us.",
     "takedownRequestsExplanation": "Takedown requests are formal submissions used to request the removal of content that violates intellectual property rights, personal privacy, or other legal protections. Each request is carefully reviewed by our team to ensure appropriate action is taken.",
     "whenToSubmitTakedown": "You should submit a takedown request if you've identified content that infringes on your rights, violates our terms of service, or contains unauthorized personal information. Please provide as much detail as possible to help us process your request efficiently.",
     "learnMorePolicies": "Learn more about our policies and procedures",
     "error": "Error",
     "alert": "Alert",
     "selectPDF": "Please select a PDF below",
-    "PDFNotFound": "PDF not found, please select a PDF below"
+    "PDFNotFound": "PDF not found, please select a PDF below",
+    "emailSent": "Email sent",
+    "emailSentDesc": "We will get back to you as soon as possible",
+    "emailNotSent": "Email not sent",
+    "contactViaEmail": "You can also contact us via email at:",
+    "contactUs": "Contact Us",
+    "collapseFilters": "Collapse Filters",
+    "expandFilters": "Expand Filters"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",
@@ -283,7 +290,8 @@
     "nationalEvidencePortal": "National Evidence Portal",
     "map": "Map",
     "takedown": "Takedown Request",
-    "acknowledgements": "Acknowledgements"
+    "acknowledgements": "Acknowledgements",
+    "feedback": "Feedback"
   },
   "footer": {
     "quickLinks": "Quick Links",

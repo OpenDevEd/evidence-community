@@ -18,7 +18,7 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
-import { buildItemsQuery, defaultParams, generateRandomID, validateTakedownRequest } from "@/lib/utils";
+import { buildItemsQuery, defaultParams, generateRandomID, validateContactRequest, validateTakedownRequest } from "@/lib/utils";
 import {
 	getCachedCollections,
 	getCachedItemSmall,
@@ -109,6 +109,30 @@ export async function sendTakedownRequest(email: string, links: string[], descri
 	return { success: result.accepted.length > 0 };
 }
 
+export async function sendContactRequest(email: string, description: string) {
+	if (!transporter) {
+		return { error: "Transporter not found" };
+	}
+
+
+	const status = await getCachedStatus();
+	const validator = await validateContactRequest(email, description);
+
+	if ("error" in validator) {
+		return { error: validator.error };
+	}
+
+	const mailOptions = {
+		from: email,
+		to: process.env.CONTACT_EMAIL,
+		subject: `${status.companyName} - Feedback`,
+		text: `Email: ${email}\nDescription: ${description}`,
+	};
+
+	const result = await transporter.sendMail(mailOptions);
+
+	return { success: result.accepted.length > 0 };
+}
 export async function runScreening(keys: string[], modelIndex: number, smartScreeningFields: SmartScreeningField[], distinctId: string) {
 	const { provider, modelName, error } = getModel(modelIndex);
 	if (error) {

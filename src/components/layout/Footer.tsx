@@ -93,6 +93,8 @@ export default function Footer() {
 		setIsMounted(true);
 	}, []);
 
+	const contactData = links.find((link) => link.id === "contact");
+
 	return (
 		!isMapPage && <footer id="footer" className="relative row-start-3 bg-white dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 lg:gap-14 py-12 min-h-[32rem] lg:py-0 print:hidden">
 			<div className="max-w-[96rem] px-14 flex w-full justify-between lg:items-start items-center flex-col gap-6 lg:gap-14 lg:flex-row">
@@ -157,7 +159,7 @@ export default function Footer() {
 							<div className="mt-6">
 								<Button
 									as={Link}
-									href={status.externalLinks?.contact || ""}
+									href={contactData?.href || ""}
 									color={
 										isMounted && theme === "light"
 											? "accent"
@@ -165,7 +167,7 @@ export default function Footer() {
 									}
 									className="px-12"
 								>
-									{tNav("contactUs")}
+									{contactData?.label ? localizeOrUseIfCapitalized(contactData.label, tNav) : t("contactUs")}
 								</Button>
 							</div>
 						}

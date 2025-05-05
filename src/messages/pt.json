@@ -199,20 +199,27 @@
     "requestSent": "Pedido de remoção enviado",
     "requestSentDesc": "Analisaremos sua solicitação e entraremos em contato o mais breve possível.",
     "requestFailed": "Falha ao enviar a solicitação de remoção",
-    "tryAgainLater": "Por favor, tente novamente mais tarde.",
+    "tryAgainLater": "Por favor, tente novamente mais tarde",
     "invalidLinks": "Link(s) inválido(s):",
     "resourceNotFound": "Recurso(s) não existe(m):",
     "validating": "Validando...",
     "invalidEmail": "Email inválido",
     "descriptionMin20": "A descrição deve ter pelo menos 20 caracteres",
-    "fillFormBelow": "Por favor, forneça detalhes sobre sua solicitação de remoção",
+    "fillFormBelow": "Por favor, preencha o formulário abaixo para entrar em contato conosco.",
     "takedownRequestsExplanation": "As solicitações de remoção são envios formais usados para solicitar a remoção de conteúdo que viola direitos de propriedade intelectual, privacidade pessoal ou outras proteções legais. Cada solicitação é cuidadosamente revisada por nossa equipe para garantir que a ação apropriada seja tomada.",
     "whenToSubmitTakedown": "Você deve enviar uma solicitação de remoção se identificou conteúdo que infringe seus direitos, viola nossos termos de serviço ou contém informações pessoais não autorizadas. Forneça o máximo de detalhes possível para nos ajudar a processar sua solicitação com eficiência.",
     "learnMorePolicies": "Saiba mais sobre nossas políticas e procedimentos",
     "error": "Erro",
     "alert": "Alerta",
     "selectPDF": "Por favor, selecione um PDF abaixo",
-    "PDFNotFound": "PDF não encontrado, por favor selecione um PDF abaixo"
+    "PDFNotFound": "PDF não encontrado, por favor selecione um PDF abaixo",
+    "emailSent": "E-mail enviado",
+    "emailSentDesc": "Entraremos em contato o mais breve possível",
+    "emailNotSent": "E-mail não enviado",
+    "contactViaEmail": "Você também pode nos contatar por e-mail em:",
+    "contactUs": "Contacte-nos",
+    "collapseFilters": "Recolher Filtros",
+    "expandFilters": "Expandir Filtros"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",
@@ -283,7 +290,8 @@
     "nationalEvidencePortal": "Portal Nacional de Evidências",
     "map": "Mapa",
     "takedown": "Pedido de Remoção",
-    "acknowledgements": "Agradecimentos"
+    "acknowledgements": "Agradecimentos",
+    "feedback": "Comentários"
   },
   "footer": {
     "quickLinks": "Links Rápidos",
