@@ -1,10 +1,10 @@
 {
   "name": "test",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "private": true,
   "scripts": {
     "dev": "next dev --turbo",
-    "build": "npm run icons:generate && FORCE_COLOR=1 next build && npm run sitemap:generate",
+    "build": "npm run icons:generate && FORCE_COLOR=1 NODE_OPTIONS='--max_old_space_size=8192' next build && npm run sitemap:generate",
     "start": "next start",
     "lint": "next lint",
     "sitemap:generate": "npx tsx ./tools/generateSitemapIndex.ts",
