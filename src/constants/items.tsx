@@ -105,9 +105,7 @@ export const SCOPE_OPTIONS = [
 		key: "fields",
 		legacyKey: "metadata",
 		name: "in fields",
-		attributesToSearchOn: ITEM_COLUMNS.filter(
-			(col) => col !== "fullTextPDFs" && col !== "attachmentsData"
-		),
+		attributesToSearchOn: ["title", "abstractNote", "fullNames"],
 	},
 	{
 		key: "documents",
