@@ -180,7 +180,7 @@ export default async function middleware(request: NextRequest) {
 		const rest = libItemMatch[2] || ''; 
 		
 		try {
-			const url = new URL(`/api/item/${encodeURIComponent(key + rest)}/redirects`, fixRequestUrl(request));
+			const url = new URL(`/api/item/${encodeURIComponent(key + rest)}/redirects`, fixRequestUrl(request)).toString().replace("https://", "http://");
 			
 			const response = await fetch(url);
 			const redirects = await response.json();
