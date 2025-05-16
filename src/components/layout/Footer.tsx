@@ -178,7 +178,7 @@ export default function Footer() {
 				>
 					<div className="max-w-[96rem] px-14 flex w-full flex-col py-28 gap-52">
 						<div className="flex flex-col gap-6">
-							<div className="grid grid-cols-3 w-full">
+							<div className="grid grid-cols-1 gap-6 lg:grid-cols-3 w-full">
 								{footerItemsSorted.map(([section, links]) => (
 									<div
 										key={section}
@@ -205,7 +205,7 @@ export default function Footer() {
 									</div>
 								))}
 							</div>
-							<div className="grid grid-cols-3 w-full">
+							<div className="flex lg:grid grid-cols-3 w-full">
 								<div></div>
 								<div></div>
 								<div className="flex gap-4">
@@ -228,7 +228,7 @@ export default function Footer() {
 								</div>
 							</div>
 						</div>
-						<div className="w-full flex justify-between items-center gap-8 overflow-hidden">
+						<div className="w-full flex lg:flex-row flex-col justify-between items-end lg:items-center gap-8 overflow-hidden">
 							<div className="text-black/60 dark:text-white/60 text-2xl font-bold shrink-0">
 								EdTech Hub is supported by
 							</div>
@@ -250,11 +250,11 @@ export default function Footer() {
 							the Executive Directors of the World Bank, or the
 							governments they represent.
 						</div>
-						<div className="w-full flex justify-center items-center">
-							<Link href="https://edtechhub.org" className="text-accent underline">
+						<div className="w-full text-center">
+							<a href="https://edtechhub.org" className="text-accent underline">
 								EDTECH HUB 2025
-							</Link>
-							{". Creative Commons Attribution 4.0 International License."}
+							</a>
+							. Creative Commons Attribution 4.0 International License.
 						</div>
 					</div>
 				</footer>
