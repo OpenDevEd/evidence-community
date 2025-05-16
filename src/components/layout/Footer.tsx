@@ -205,7 +205,7 @@ export default function Footer() {
 									</div>
 								))}
 							</div>
-							<div className="flex lg:grid grid-cols-3 w-full">
+							<div className="flex lg:grid grid-cols-3 gap-6 w-full">
 								<div></div>
 								<div></div>
 								<div className="flex gap-4">
