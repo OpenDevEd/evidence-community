@@ -10,7 +10,7 @@ export const doi = process.env.NEXT_PUBLIC_DOI_COLOR || accent || "opendeved";
 
 const accentColors = {
   "opendeved": "#e68124",
-  "edtechhub": "#ff5c00",
+  "edtechhub": "#DC3900",
   "ekitabu": "#ed1c24",
   "openalex": "#1976d2",
   "jacob": "#FFDE2D",
