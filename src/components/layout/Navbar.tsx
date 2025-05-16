@@ -153,6 +153,8 @@ export function Logo({
 	const navbarStyle = dbStyle
 		? convertStringFromDatabaseToObject(companyLogoStyle)[dbStyle]
 		: "";
+	
+	const links = status.links || [];
 
 	const logoContent = (
 		<div
@@ -200,7 +202,7 @@ export function Logo({
 			{interactive ? (
 				<Link
 					href={
-						links[style as keyof typeof links].find(
+						links.find(
 							(link) => link.label === "home"
 						)?.href ?? "/"
 					}
