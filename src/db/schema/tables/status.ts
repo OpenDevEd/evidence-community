@@ -11,6 +11,7 @@ export type LinkObject = {
 	footerExclude?: boolean;
 	help?: any;
     id?: string;
+	section?: string;
 };
 
 export type LinksList = Record<string, LinkObject[]>;
