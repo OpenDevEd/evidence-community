@@ -219,7 +219,8 @@
     "contactViaEmail": "Você também pode nos contatar por e-mail em:",
     "contactUs": "Contacte-nos",
     "collapseFilters": "Recolher Filtros",
-    "expandFilters": "Expandir Filtros"
+    "expandFilters": "Expandir Filtros",
+    "internal": "Interno"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

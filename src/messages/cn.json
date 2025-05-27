@@ -219,7 +219,8 @@
     "contactViaEmail": "您也可以通过电子邮件联系我们：",
     "contactUs": "联系我们",
     "collapseFilters": "折叠筛选器",
-    "expandFilters": "展开筛选器"
+    "expandFilters": "展开筛选器",
+    "internal": "内部的"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",
