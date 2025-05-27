@@ -154,10 +154,12 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 							<FaCalendar className="size-4" />
 							{item?.year}
 						</HeaderSection>
-						<HeaderSection>
-							<IoBook className="size-4" />
-							{getCitationCount(item)} {t("itemCitationsCount")}
-						</HeaderSection>
+						{getCitationCount(item) > 0 && (
+							<HeaderSection>
+								<IoBook className="size-4" />
+								{getCitationCount(item)} {t("itemCitationsCount")}
+							</HeaderSection>
+						)}
 						<HeaderSection>
 							<IoDocumentText className="size-4" />
 							{item?.itemType ? tItemType(item?.itemType) : "-"}
