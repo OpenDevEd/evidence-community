@@ -816,6 +816,14 @@ function createCountryFilters(
 	return filters;
 }
 
+function cleanTheAttributesToSearchOn(fields: string[]) {
+	if (process.env.NEXT_PUBLIC_DISABLE_FULLTEXT === "true") {
+		return fields.filter(field => !field.includes("fullTextPDF"));
+	}
+
+	return fields;
+}
+
 export async function searchIndex(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	extraProperties: Parameters<
@@ -866,10 +874,11 @@ export async function searchIndex(
 			searchIndex.search(search, {
 				offset: (pageNum - 1) * limitNum,
 				limit: limitNum,
-				attributesToSearchOn:
+				attributesToSearchOn: cleanTheAttributesToSearchOn(
 					SCOPE_OPTIONS.find((option) => option.key === scope)
 						?.attributesToSearchOn ||
 					SCOPE_OPTIONS[0].attributesToSearchOn,
+				),
 				attributesToRetrieve: allAttributes,
 				sort: [sortOption],
 				...extraProperties,
