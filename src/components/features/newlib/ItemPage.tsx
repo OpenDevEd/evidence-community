@@ -998,7 +998,9 @@ function ItemCountry({ item }: { item: Item | undefined }) {
 function ItemAttachments({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const validAttachments = item?.attachmentsData?.filter(
-		(attachment) => attachment.PDFCoverPageImage
+		(attachment) =>
+			attachment.PDFCoverPageImage ||
+			attachment.tags?.some((tag) => tag.toLowerCase() === "_auto-process")
 	);
 
 	if (!validAttachments?.length) return null;
