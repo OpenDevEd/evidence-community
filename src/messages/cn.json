@@ -220,7 +220,8 @@
     "contactUs": "联系我们",
     "collapseFilters": "折叠筛选器",
     "expandFilters": "展开筛选器",
-    "internal": "内部的"
+    "internal": "内部的",
+    "openDocument": "打开文档"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

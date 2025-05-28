@@ -220,7 +220,8 @@
     "contactUs": "Contacte-nos",
     "collapseFilters": "Recolher Filtros",
     "expandFilters": "Expandir Filtros",
-    "internal": "Interno"
+    "internal": "Interno",
+    "openDocument": "Abrir Documento"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

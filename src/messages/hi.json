@@ -220,7 +220,8 @@
     "contactUs": "हमसे संपर्क करें",
     "collapseFilters": "फ़िल्टरों को बंद करें",
     "expandFilters": "फ़िल्टर विस्तृत करें",
-    "internal": "आंतरिक"
+    "internal": "आंतरिक",
+    "openDocument": "दस्तावेज़ खोलें"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

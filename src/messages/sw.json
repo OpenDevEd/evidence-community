@@ -221,7 +221,8 @@
     "contactUs": "Wasiliana nasi",
     "collapseFilters": "Funga Vichujio",
     "expandFilters": "Panua Vichujio",
-    "internal": "Ndani"
+    "internal": "Ndani",
+    "openDocument": "Fungua Hati"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
