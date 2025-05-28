@@ -219,7 +219,8 @@
     "contactViaEmail": "You can also contact us via email at:",
     "contactUs": "Contact Us",
     "collapseFilters": "Collapse Filters",
-    "expandFilters": "Expand Filters"
+    "expandFilters": "Expand Filters",
+    "internal": "Internal"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

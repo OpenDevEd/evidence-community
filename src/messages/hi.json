@@ -219,7 +219,8 @@
     "contactViaEmail": "आप हमें ईमेल के माध्यम से भी संपर्क कर सकते हैं:",
     "contactUs": "हमसे संपर्क करें",
     "collapseFilters": "फ़िल्टरों को बंद करें",
-    "expandFilters": "फ़िल्टर विस्तृत करें"
+    "expandFilters": "फ़िल्टर विस्तृत करें",
+    "internal": "आंतरिक"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

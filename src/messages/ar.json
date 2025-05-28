@@ -219,7 +219,8 @@
     "contactViaEmail": "يمكنك أيضًا الاتصال بنا عبر البريد الإلكتروني على:",
     "contactUs": "اتصل بنا",
     "collapseFilters": "طي عوامل التصفية",
-    "expandFilters": "توسيع عوامل التصفية"
+    "expandFilters": "توسيع عوامل التصفية",
+    "internal": "داخلي"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

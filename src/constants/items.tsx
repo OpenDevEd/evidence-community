@@ -116,3 +116,8 @@ export const SCOPE_OPTIONS = [
 		],
 	},
 ];
+
+
+export const COMING_SOON_TAG = process.env.NEXT_PUBLIC_COMING_SOON_TAG || "_comingsoon"
+export const INTERNAL_TAG = process.env.NEXT_PUBLIC_INTERNAL_TAG || "internal"
+export const HIDE_TAG = process.env.NEXT_PUBLIC_HIDE_TAG || "hide"

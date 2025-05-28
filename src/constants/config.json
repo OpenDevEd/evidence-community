@@ -124,6 +124,12 @@
 				"enabled": true
 			}
 		},
+		"itemsFull": {
+			"Domains": {
+				"title": "Topics",
+				"enabled": true
+			}
+		},
 		"itemsJacob": {
 			"Domains": {
 				"title": "Topics",

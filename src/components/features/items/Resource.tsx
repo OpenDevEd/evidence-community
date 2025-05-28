@@ -30,6 +30,7 @@ import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { useQueryState } from "nuqs";
+import { COMING_SOON_TAG, INTERNAL_TAG } from "@/constants/items";
 
 export function AddButton({
 	itemData,
@@ -340,9 +341,15 @@ export default function Resource({
 									</>
 								)}
 
-							{finalItemData?.tags?.includes("_comingsoon") && (
+							{finalItemData?.tags?.includes(COMING_SOON_TAG)  && (
 								<span className="bg-black/10 border border-accent rounded-lg px-4 py-1 text-accent font-medium w-full @[720px]:w-auto text-center">
 									{t("inProgress")}
+								</span>
+							)}
+
+							{(finalItemData?.tags?.includes(INTERNAL_TAG)) && (
+								<span className="bg-black/10 border border-danger rounded-lg px-4 py-1 text-danger font-medium w-full @[720px]:w-auto text-center">
+									{t("internal")}
 								</span>
 							)}
 						</div>

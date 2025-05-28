@@ -2,6 +2,7 @@ import { useItemsList } from "@/hooks/useItemsList";
 import { searchParamsLoader } from "@/lib/searchParams";
 
 import { inferParserType } from "nuqs/server";
+import { HIDE_TAG } from "./items";
 
 export const currentYear = new Date().getFullYear();
 
@@ -26,7 +27,7 @@ export const countryFacetOptions: {
 	queryParam: "author_country"
 }]
 
-export const blockedTags = ["hide", "internal"]
+export const blockedTags = [HIDE_TAG]
 
 export const COUNTRIES: Record<string, string> = {
 	AF: 'Afghanistan',

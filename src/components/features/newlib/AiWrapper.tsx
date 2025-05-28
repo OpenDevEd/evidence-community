@@ -213,7 +213,7 @@ export default function AiWrapper({
 	const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
 
 	const { data: embedded } = useSWR(
-		data?.item ? `/item/${data?.item?.key}/embedded` : null,
+		(data?.item && process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true") ? `/item/${data?.item?.key}/embedded` : null,
 		fetcher,
 		{
 			onSuccess: (data) => {
