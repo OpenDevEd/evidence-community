@@ -276,7 +276,7 @@ export default function Item({
 		}
 	);
 	const { data: embedded } = useSWR(
-		data?.item && !loading ? `/item/${data?.item?.key}/embedded` : null,
+		(data?.item && process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true") ? `/item/${data?.item?.key}/embedded` : null,
 		fetcher,
 		{
 			onSuccess: (data) => {
