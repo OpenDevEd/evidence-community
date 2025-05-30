@@ -24,7 +24,6 @@ import {
 	getCachedItemSmall,
 	getCachedStatus,
 	getCachedUserLikes,
-	setCachedItemSmall,
 } from "@/app/api/cache";
 import { getCachedUserCollectionKeys } from "@/app/api/cache";
 import { auth, credentialsSchema } from "@/app/api/auth/[...nextauth]/config";
@@ -905,9 +904,9 @@ export async function searchIndex(
 					) as Collection[];
 			}
 
-			await setCachedItemSmall(item.key, {
-				item: item as Item,
-			});
+			// await setCachedItemSmall(item.key, {
+			// 	item: item as Item,
+			// });
 
 			return item;
 		});
