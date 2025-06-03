@@ -268,7 +268,8 @@
     "authors": "em autores ou contribuidores",
     "title": "no título",
     "fields": "nos campos",
-    "documents": "nos documentos"
+    "documents": "nos documentos",
+    "title_and_abstract": "no título e resumo"
   },
   "nav": {
     "home": "Início",

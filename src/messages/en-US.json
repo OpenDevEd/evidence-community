@@ -268,7 +268,8 @@
     "authors": "in authors or contributors",
     "title": "in title",
     "fields": "in fields",
-    "documents": "in documents"
+    "documents": "in documents",
+    "title_and_abstract": "in title and abstract"
   },
   "nav": {
     "home": "Home",

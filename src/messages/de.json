@@ -268,7 +268,8 @@
     "authors": "in Autoren oder Mitwirkenden",
     "title": "im Titel",
     "fields": "in Feldern",
-    "documents": "in Dokumenten"
+    "documents": "in Dokumenten",
+    "title_and_abstract": "im Titel und Abstract"
   },
   "nav": {
     "home": "Startseite",

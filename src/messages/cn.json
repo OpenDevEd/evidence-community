@@ -268,7 +268,8 @@
     "authors": "在作者或贡献者中",
     "title": "在标题中",
     "fields": "在字段中",
-    "documents": "在文档中"
+    "documents": "在文档中",
+    "title_and_abstract": "在标题和摘要中"
   },
   "nav": {
     "home": "首页",

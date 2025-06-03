@@ -268,7 +268,8 @@
     "authors": "dans les auteurs ou contributeurs",
     "title": "dans le titre",
     "fields": "dans les champs",
-    "documents": "dans les documents"
+    "documents": "dans les documents",
+    "title_and_abstract": "dans le titre et le résumé"
   },
   "nav": {
     "home": "Accueil",

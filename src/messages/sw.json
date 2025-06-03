@@ -269,7 +269,8 @@
     "authors": "katika waandishi au wachangiaji",
     "title": "katika kichwa",
     "fields": "katika nyanja",
-    "documents": "katika nyaraka"
+    "documents": "katika nyaraka",
+    "title_and_abstract": "katika kichwa na muhtasari"
   },
   "nav": {
     "home": "Nyumbani",
