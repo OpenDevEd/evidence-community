@@ -35,6 +35,8 @@ export default function ResourceAuthors({
 }) {
 	const t = useTranslations("ui");
 
+	// Get institution logo if available
+	let InstitutionLogo = null;
 	if (itemData?.institution) {
 		// Handle both string and array cases for institution
 		const institutions = Array.isArray(itemData.institution) 
@@ -43,7 +45,6 @@ export default function ResourceAuthors({
 		
 		if (institutions.length) {
 			// Find the first institution that has a matching logo
-
 			const institutionWithLogo = institutions.find(institution => 
 				Object.keys(INSTITUTION_LOGOS).some(key => institution.includes(key))
 			);
@@ -51,24 +52,22 @@ export default function ResourceAuthors({
 			// Use the institution with logo if found, otherwise use the first institution
 			const selectedInstitution = institutionWithLogo || institutions[0];
 			
-			const InstitutionLogo = Object.entries(INSTITUTION_LOGOS).find(
+			InstitutionLogo = Object.entries(INSTITUTION_LOGOS).find(
 				([key]) => selectedInstitution.includes(key)
 			)?.[1];
-
-			// return (
-			// 	<ResourceData
-			// 		startContent={InstitutionLogo ? <InstitutionLogo /> : null}
-			// 		text={selectedInstitution} />
-			// );
 		}
 	}
 
-	if (itemData && itemData.creators && itemData.creators.length > 0)
+	if (itemData && itemData.creators && itemData.creators.length > 0) {
+		const authorText = formatAPAAuthor(itemData?.creators as Author[], t);
+		
 		return (
-			<span className="max-w-64 truncate overflow-hidden">
-				{formatAPAAuthor(itemData?.creators as Author[], t)}
+			<span className="max-w-64 truncate overflow-hidden flex items-center gap-2">
+				{InstitutionLogo && <InstitutionLogo />}
+				{authorText}
 			</span>
 		);
+	}
 
 	return null;
 }
