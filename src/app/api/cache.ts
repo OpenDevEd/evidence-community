@@ -14,7 +14,7 @@ export async function getCachedCollections(ignoreCache: boolean = false) {
 	}
 
 	const cache = unstable_cache(getData, ["collections"], {
-		revalidate: 60,
+		revalidate: 60 * 60,
 	});
 	
 	return cache();
