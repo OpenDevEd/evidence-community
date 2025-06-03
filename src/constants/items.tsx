@@ -93,6 +93,12 @@ export const ITEM_COLUMNS = Object.values(getTableColumns(item)).map(
 );
 
 export const SCOPE_OPTIONS = [
+	{
+		key: "title_and_abstract",
+		legacyKey: "title_and_abstract",
+		name: "in title and abstract",
+		attributesToSearchOn: ["title", "abstractNote"],
+	},
 	{ key: "everywhere", legacyKey: "all", name: "Everywhere", attributesToSearchOn: ["*"] },
 	{
 		key: "authors",
@@ -114,7 +120,7 @@ export const SCOPE_OPTIONS = [
 		attributesToSearchOn: [
 			"fullTextPDFs.fullTextPDF.text",
 		],
-	},
+	}
 ];
 
 
