@@ -166,7 +166,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 						</HeaderSection>
 					</div>
 					<div className="ltr:ml-auto rtl:mr-auto flex flex-row-reverse items-center gap-2 flex-wrap">
-						{item?.url && (
+						{/* {item?.url && (
 							<a href={item.url} target="_blank">
 								<Button
 									size="sm"
@@ -177,7 +177,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 									{t("itemViewOriginal")}
 								</Button>
 							</a>
-						)}
+						)} */}
 						<CopyButton
 							textToCopy={getUrl() + "/newlib/" + item?.key}
 						>
@@ -600,7 +600,6 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"id",
 		"itemType",
 		"version",
-		"url",
 		"country",
 		"institution",
 		"dateAdded",
