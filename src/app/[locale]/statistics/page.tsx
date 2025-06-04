@@ -9,6 +9,8 @@ import { getCachedStatus } from "@/app/api/cache";
 import { PiLinkSimpleDuotone } from "react-icons/pi";
 import { notFound } from "next/navigation";
 
+export const maxDuration = 300;
+
 type InstitutionStats = {
 	institution: string;
 	countryCode: string;
@@ -500,5 +502,6 @@ export default async function Statistics() {
 	}
 
 	const stats = await getComprehensiveStats(false);
+	
 	return <StatisticsPage stats={stats} />;
 }

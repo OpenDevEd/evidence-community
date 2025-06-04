@@ -980,7 +980,6 @@ export async function searchIndex(
 						(collectionData: Collection | undefined) =>
 							collectionData !== undefined
 					) as Collection[];
-			} else {
 			}
 
 			// await setCachedItemSmall(item.key, {
