@@ -22,7 +22,7 @@ const InstitutionLogo = ({ src, alt, className,  ...props }: { src: string; alt:
 const OpenDevLogo = ({ className, ...props }: { className: string } & React.HTMLAttributes<HTMLDivElement>) => {
 	const t = useTranslations("ui");
 	return (
-		<div aria-label={t("institutionLogoAlt", { name: "Open Development & Education" })} className={twMerge("flex justify-center items-center dark:bg-white/80 text-accent p-0.5 rounded-md size-6", className)} {...props}>
+		<div aria-label={t("institutionLogoAlt", { name: "Open Development & Education" })} className={twMerge("flex justify-center items-center dark:bg-white/80 text-accent p-0.5 rounded-md size-6 shrink-0", className)} {...props}>
 			<AboutUs className="fill-current size-full" />
 		</div>
 	);
