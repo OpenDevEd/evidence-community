@@ -92,36 +92,84 @@ export const ITEM_COLUMNS = Object.values(getTableColumns(item)).map(
 	(col: any) => col.name
 );
 
+// export const SCOPE_OPTIONS = [
+// 	{
+// 		key: "title_and_abstract",
+// 		legacyKey: "title_and_abstract",
+// 		name: "in title and abstract",
+// 		attributesToSearchOn: ["title", "abstractNote"],
+// 	},
+// 	{ key: "everywhere", legacyKey: "all", name: "Everywhere", attributesToSearchOn: ["*"] },
+// 	{
+// 		key: "authors",
+// 		legacyKey: "creator",
+// 		name: "in authors or contributors",
+// 		attributesToSearchOn: ["fullNames"],
+// 	},
+// 	{ key: "title", legacyKey: "title", name: "in title", attributesToSearchOn: ["title"] },
+// 	{
+// 		key: "fields",
+// 		legacyKey: "metadata",
+// 		name: "in fields",
+// 		attributesToSearchOn: ["title", "abstractNote", "fullNames"],
+// 	},
+// 	{
+// 		key: "documents",
+// 		legacyKey: "fulltext",
+// 		name: "in documents",
+// 		attributesToSearchOn: [
+// 			"fullTextPDFs.fullTextPDF.text",
+// 		],
+// 	}
+// ];
+
 export const SCOPE_OPTIONS = [
+	{
+		key: "title_abstract_and_keywords",
+		legacyKey: "title_and_abstract",
+		name: "Title, abstract and keywords",
+		attributesToSearchOn: ["title", "abstractNote", "tags"],
+	},
 	{
 		key: "title_and_abstract",
 		legacyKey: "title_and_abstract",
-		name: "in title and abstract",
+		name: "Title and abstract",
 		attributesToSearchOn: ["title", "abstractNote"],
 	},
-	{ key: "everywhere", legacyKey: "all", name: "Everywhere", attributesToSearchOn: ["*"] },
+	{
+		key: "title",
+		legacyKey: "title",
+		name: "Title only",
+		attributesToSearchOn: ["title"],
+	},
 	{
 		key: "authors",
 		legacyKey: "creator",
-		name: "in authors or contributors",
+		name: "Authors and contributors",
 		attributesToSearchOn: ["fullNames"],
 	},
-	{ key: "title", legacyKey: "title", name: "in title", attributesToSearchOn: ["title"] },
 	{
 		key: "fields",
 		legacyKey: "metadata",
-		name: "in fields",
-		attributesToSearchOn: ["title", "abstractNote", "fullNames"],
+		name: "All metadata",
+		attributesToSearchOn: ["title", "abstractNote", "fullNames", "tags"],
 	},
 	{
 		key: "documents",
 		legacyKey: "fulltext",
-		name: "in documents",
+		name: "Full text only",
 		attributesToSearchOn: [
 			"fullTextPDFs.fullTextPDF.text",
 		],
-	}
-];
+	},
+	{
+		key: "everywhere",
+		legacyKey: "all",
+		name: "Everywhere",
+		attributesToSearchOn: ["*"],
+	},
+]
+
 
 
 export const COMING_SOON_TAG = process.env.NEXT_PUBLIC_COMING_SOON_TAG || "_comingsoon"
