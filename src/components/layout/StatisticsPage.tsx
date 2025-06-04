@@ -294,6 +294,7 @@ function ProgressItem({
 }
 
 export default function StatisticsPage({ stats }: StatisticsPageProps) {
+	"use no memo";
 	const formatter = useFormatter();
 	const t = useTranslations("ui");
 	const tItemType = useTranslations("itemType");
