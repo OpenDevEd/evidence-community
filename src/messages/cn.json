@@ -270,7 +270,18 @@
     "authorsLabel": "作者：",
     "coAuthorCountriesStatsAriaLabel": "合著国家统计",
     "topJournalsTableAriaLabel": "顶级期刊表",
-    "of": "的"
+    "of": "的",
+    "topCountriesByItems": "按项目划分的国家/地区",
+    "authorsVsItems": "作者与项目",
+    "distribution": "分布",
+    "topCountries": "顶级国家",
+    "topCountriesLeaderboard": "国家排行榜",
+    "productivity": "生产力",
+    "totalCountries": "国家总数",
+    "totalAuthors": "总作者数",
+    "avgAuthorsPerCountry": "每个国家/地区的平均作者数",
+    "maxHIndex": "最大H指数",
+    "allCountries": "所有国家"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

@@ -270,7 +270,18 @@
     "authorsLabel": "المؤلفون:",
     "coAuthorCountriesStatsAriaLabel": "إحصائيات دول المشاركة في التأليف",
     "topJournalsTableAriaLabel": "جدول المجلات الأولى",
-    "of": "من"
+    "of": "من",
+    "topCountriesByItems": "أفضل البلدان حسب العناصر",
+    "authorsVsItems": "المؤلفون مقابل العناصر",
+    "distribution": "توزيع",
+    "topCountries": "أفضل البلدان",
+    "topCountriesLeaderboard": "أفضل قائمة الدول",
+    "productivity": "الإنتاجية",
+    "totalCountries": "إجمالي الدول",
+    "totalAuthors": "إجمالي المؤلفين",
+    "avgAuthorsPerCountry": "متوسط ​​المؤلفين لكل بلد",
+    "maxHIndex": "الحد الأقصى لمؤشر H",
+    "allCountries": "كل الدول"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

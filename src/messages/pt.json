@@ -270,7 +270,18 @@
     "authorsLabel": "Autores:",
     "coAuthorCountriesStatsAriaLabel": "Estatísticas dos países co-autores",
     "topJournalsTableAriaLabel": "Tabela dos principais periódicos",
-    "of": "de"
+    "of": "de",
+    "topCountriesByItems": "Principais Países por Itens",
+    "authorsVsItems": "Autores vs. Itens",
+    "distribution": "Distribuição",
+    "topCountries": "Países Principais",
+    "topCountriesLeaderboard": "Ranking dos Melhores Países",
+    "productivity": "Produtividade",
+    "totalCountries": "Total de Países",
+    "totalAuthors": "Total de Autores",
+    "avgAuthorsPerCountry": "Média de Autores por País",
+    "maxHIndex": "Índice H Máximo",
+    "allCountries": "Todos os países"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

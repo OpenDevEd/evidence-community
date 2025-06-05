@@ -270,7 +270,18 @@
     "authorsLabel": "Autoren:",
     "coAuthorCountriesStatsAriaLabel": "Statistiken der Co-Autorenländer",
     "topJournalsTableAriaLabel": "Top-Journals-Tabelle",
-    "of": "von"
+    "of": "von",
+    "topCountriesByItems": "Top-Länder nach Artikeln",
+    "authorsVsItems": "Autoren vs. Artikel",
+    "distribution": "Verteilung",
+    "topCountries": "Top-Länder",
+    "topCountriesLeaderboard": "Top Länder Bestenliste",
+    "productivity": "Produktivität",
+    "totalCountries": "Gesamtanzahl der Länder",
+    "totalAuthors": "Gesamtanzahl der Autoren",
+    "avgAuthorsPerCountry": "Durchschnittliche Autoren pro Land",
+    "maxHIndex": "Max H-Index",
+    "allCountries": "Alle Länder"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

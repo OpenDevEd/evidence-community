@@ -270,7 +270,18 @@
     "authorsLabel": "लेखक:",
     "coAuthorCountriesStatsAriaLabel": "सह-लेखक देशों के आँकड़े",
     "topJournalsTableAriaLabel": "शीर्ष जर्नल तालिका",
-    "of": "का"
+    "of": "का",
+    "topCountriesByItems": "आइटम के अनुसार शीर्ष देश",
+    "authorsVsItems": "लेखक बनाम आइटम",
+    "distribution": "वितरण",
+    "topCountries": "शीर्ष देश",
+    "topCountriesLeaderboard": "शीर्ष देश लीडरबोर्ड",
+    "productivity": "उत्पादकता",
+    "totalCountries": "कुल देश",
+    "totalAuthors": "कुल लेखक",
+    "avgAuthorsPerCountry": "प्रति देश औसत लेखक",
+    "maxHIndex": "अधिकतम एच-इंडेक्स",
+    "allCountries": "सभी देश"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

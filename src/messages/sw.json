@@ -271,7 +271,18 @@
     "authorsLabel": "Waandishi:",
     "coAuthorCountriesStatsAriaLabel": "Takwimu za nchi washirika",
     "topJournalsTableAriaLabel": "Jedwali la majarida bora",
-    "of": "ya"
+    "of": "ya",
+    "topCountriesByItems": "Nchi Bora kwa Vitu",
+    "authorsVsItems": "Waandishi vs. Vitu",
+    "distribution": "Usambazaji",
+    "topCountries": "Nchi Bora",
+    "topCountriesLeaderboard": "Orodha ya Viongozi wa Nchi Bora",
+    "productivity": "Uzalishaji",
+    "totalCountries": "Jumla ya Nchi",
+    "totalAuthors": "Jumla ya Waandishi",
+    "avgAuthorsPerCountry": "Wastani wa Waandishi kwa Kila Nchi",
+    "maxHIndex": "Kiwango cha Juu cha H",
+    "allCountries": "Nchi Zote"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
