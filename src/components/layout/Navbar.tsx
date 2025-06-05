@@ -183,7 +183,7 @@ export function Logo({
 							: "hidden dark:block"
 					)}
 					alt={t("logoAlt", {
-						company: status?.companyName,
+						company: status?.companyName ?? "",
 						theme: themeToMatch,
 					})}
 					style={{ ...getDynamicStyles(navbarStyle) }}
