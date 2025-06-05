@@ -66,7 +66,7 @@ function Logo() {
 					key={themeToMatch}
 					aria-hidden={themeToMatch !== theme}
 					alt={t("logoAlt", {
-						company: status?.companyName,
+						company: status?.companyName || "",
 						theme: themeToMatch,
 					})}
 					onLoad={() => setIsLoaded(true)}
