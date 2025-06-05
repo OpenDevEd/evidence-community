@@ -152,7 +152,7 @@ function LoadingScreen({
 	isMounted: boolean;
 	featureFlags: Set<string> | null;
 }) {
-	const { theme } = useTheme();
+	const { resolvedTheme: theme } = useTheme();
 	const { data: session, status } = useSession();
 	const statusTable = useStatus();
 	const t = useTranslations("ui");
@@ -200,7 +200,7 @@ function LoadingScreen({
 										companyLogoStyle
 									)}
 									alt={t("logoAlt", {
-										company: statusTable?.companyName,
+										company: statusTable?.companyName || "",
 										theme: themeToMatch,
 									})}
 									width={171}

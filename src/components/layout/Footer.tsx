@@ -47,7 +47,7 @@ function FooterFieldColumn({
 function Logo() {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const status = useStatus();
-	const { theme } = useTheme();
+	const { resolvedTheme: theme } = useTheme();
 	const t = useTranslations("ui");
 	const companyLogoStyle = convertStringFromDatabaseToObject(
 		status.companyLogo || ""
@@ -134,7 +134,7 @@ export default function Footer() {
 	const t = useTranslations("footer");
 	const tNav = useTranslations("nav");
 	const [isMounted, setIsMounted] = useState(false);
-	const { theme } = useTheme();
+	const { resolvedTheme: theme } = useTheme();
 	const status = useStatus();
 	const pathname = usePathname();
 	const links = status.links || [];
