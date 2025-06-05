@@ -23,7 +23,7 @@ export default function useAIStream(endpoint: string, onFinish: (completion: str
                 const rateLimits = await getRateLimits();
                 if (e.message.includes("Rate limit exceeded")) {
                     toast({
-                        title: t("rateLimitedMessage", { seconds: rateLimits.retryAfter }),
+                        title: t("rateLimitedMessage", { seconds: rateLimits.retryAfter ?? 0 }),
                         type: "error",
                     });
                 }
