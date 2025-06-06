@@ -7,9 +7,7 @@ import {
 	recursiveFind,
 } from "@/lib/collections";
 import { Collection, CollectionsGetResponse } from "./types";
-import { revalidateTag, unstable_cache } from "next/cache";
 import config from "@/constants/config.json";
-import fs from "fs";
 import { getCachedCollections } from "../cache";
 
 export async function getCollections() {
