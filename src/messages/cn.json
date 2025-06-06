@@ -331,7 +331,7 @@
     "avgItemsPerTopic": "平均项目/主题",
     "distributionAcrossTopics": "跨主题分布",
     "topicLevelDistribution": "主题级别分布",
-    "levelNumber": "等级 {number}",
+    "levelNumber": "级别 {number}",
     "topicsLowercase": "主题",
     "topTopicsByImpact": "按影响排序的热门主题 (H指数)",
     "topLevelResearchAreas": "顶级研究领域",
@@ -385,7 +385,12 @@
     "totalItemsCount": "{count} 总项目",
     "internationalCollaboration": "国际合作",
     "authorsLowercase": "作者",
-    "subtopicsLowercase": "子主题"
+    "subtopicsLowercase": "子主题",
+    "nationalInstitutions": "国家机构",
+    "nationalInstitutionsDescription": "选择 {country} 机构",
+    "coauthorCountries": "合著者国家",
+    "topAuthorsInTopics": "按研究主题划分的领先作者",
+    "topInstitutionsInTopics": "按研究主题划分的领先机构"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

@@ -254,7 +254,7 @@
     "languageDistribution": "Répartition des langues",
     "countries": "Pays",
     "uniqueAuthors": "Auteurs uniques",
-    "itemsLowercase": "articles",
+    "itemsLowercase": "éléments",
     "authorCountriesTable": "Tableau des pays des auteurs",
     "uniqueAuthorsColumn": "AUTEURS UNIQUES",
     "avgItemsPerAuthorColumn": "MOY. ARTICLES/AUTEUR",
@@ -385,7 +385,12 @@
     "totalItemsCount": "{count} articles au total",
     "internationalCollaboration": "Collaboration internationale",
     "authorsLowercase": "auteurs",
-    "subtopicsLowercase": "sous-thèmes"
+    "subtopicsLowercase": "sous-thèmes",
+    "nationalInstitutions": "Institution nationale",
+    "nationalInstitutionsDescription": "Sélectionnez les institutions {country}",
+    "coauthorCountries": "Pays des co-auteurs",
+    "topAuthorsInTopics": "Principaux auteurs par sujet de recherche",
+    "topInstitutionsInTopics": "Principales institutions par sujet de recherche"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",

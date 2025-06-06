@@ -254,7 +254,7 @@
     "languageDistribution": "भाषा वितरण",
     "countries": "देशों",
     "uniqueAuthors": "अद्वितीय लेखक",
-    "itemsLowercase": "आइटम",
+    "itemsLowercase": "मदें",
     "authorCountriesTable": "लेखक देश तालिका",
     "uniqueAuthorsColumn": "अद्वितीय लेखक",
     "avgItemsPerAuthorColumn": "लेखक प्रति औसत आइटम",
@@ -385,7 +385,12 @@
     "totalItemsCount": "{count} कुल आइटम",
     "internationalCollaboration": "अंतर्राष्ट्रीय सहयोग",
     "authorsLowercase": "लेखक",
-    "subtopicsLowercase": "उपविषय"
+    "subtopicsLowercase": "उपविषय",
+    "nationalInstitutions": "राष्ट्रीय संस्थान",
+    "nationalInstitutionsDescription": "{country} संस्थानों का चयन करें",
+    "coauthorCountries": "सह-लेखक देश",
+    "topAuthorsInTopics": "अनुसंधान विषय के अनुसार प्रमुख लेखक",
+    "topInstitutionsInTopics": "अनुसंधान विषय के अनुसार अग्रणी संस्थान"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

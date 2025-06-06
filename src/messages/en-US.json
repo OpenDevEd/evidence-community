@@ -385,7 +385,12 @@
     "totalItemsCount": "{count} total items",
     "internationalCollaboration": "International Collaboration",
     "authorsLowercase": "authors",
-    "subtopicsLowercase": "subtopics"
+    "subtopicsLowercase": "subtopics",
+    "nationalInstitutions": "National Institution",
+    "nationalInstitutionsDescription": "Select {country} institutions",
+    "coauthorCountries": "Co-author countries",
+    "topAuthorsInTopics": "Leading Authors by Research Topic",
+    "topInstitutionsInTopics": "Leading Institutions by Research Topic"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

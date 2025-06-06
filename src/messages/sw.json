@@ -386,7 +386,12 @@
     "totalItemsCount": "{count} jumla ya vitu",
     "internationalCollaboration": "Ushirikiano wa Kimataifa",
     "authorsLowercase": "waandishi",
-    "subtopicsLowercase": "mada ndogo"
+    "subtopicsLowercase": "mada ndogo",
+    "nationalInstitutions": "Taasisi ya Kitaifa",
+    "nationalInstitutionsDescription": "Chagua taasisi za {country}",
+    "coauthorCountries": "Nchi za waandishi",
+    "topAuthorsInTopics": "Waandishi Wakuu kulingana na Mada ya Utafiti",
+    "topInstitutionsInTopics": "Taasisi Zinazoongoza Kulingana na Mada ya Utafiti"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

@@ -311,7 +311,7 @@
     "globalAuthorProductivityDistribution": "توزيع إنتاجية المؤلفين العالميين",
     "count": "عدد",
     "topResearchersFromDetailed": "أفضل الباحثين (من {count} تفصيلي)",
-    "citationsLowercase": "استشهادات",
+    "citationsLowercase": "الاستشهادات",
     "countriesLowercase": "بلدان",
     "detailedAuthorStatistics": "إحصائيات المؤلف التفصيلية (أعلى {count})",
     "note": "ملاحظة",
@@ -348,7 +348,7 @@
     "level": "مستوى",
     "parentTopic": "أصل",
     "unknownCountry": "دولة مجهولة",
-    "unknown": "غير معروف",
+    "unknown": "مجهول",
     "unknownAuthor": "مؤلف غير معروف",
     "countriesWithInternationalCollaborations": "دول ذات تعاون دولي",
     "ofTotalCountries": "من بين {count} إجمالي البلدان",
@@ -385,7 +385,12 @@
     "totalItemsCount": "{count} عنصرًا إجمالياً",
     "internationalCollaboration": "التعاون الدولي",
     "authorsLowercase": "مؤلفون",
-    "subtopicsLowercase": "مواضيع فرعية"
+    "subtopicsLowercase": "مواضيع فرعية",
+    "nationalInstitutions": "مؤسسة وطنية",
+    "nationalInstitutionsDescription": "اختر مؤسسات {country}",
+    "coauthorCountries": "دول المؤلفين المشاركين",
+    "topAuthorsInTopics": "كبار المؤلفين حسب موضوع البحث",
+    "topInstitutionsInTopics": "المؤسسات الرائدة حسب موضوع البحث"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

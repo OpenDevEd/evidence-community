@@ -254,7 +254,7 @@
     "languageDistribution": "Sprachverteilung",
     "countries": "Länder",
     "uniqueAuthors": "Eindeutige Autoren",
-    "itemsLowercase": "Artikel",
+    "itemsLowercase": "Elemente",
     "authorCountriesTable": "Autorenländer Tabelle",
     "uniqueAuthorsColumn": "EINZIGARTIGE AUTOREN",
     "avgItemsPerAuthorColumn": "DURCHSCHN. ARTIKEL/AUTOR",
@@ -331,7 +331,7 @@
     "avgItemsPerTopic": "Dursch. Artikel/Thema",
     "distributionAcrossTopics": "Verteilung über Themen",
     "topicLevelDistribution": "Themenniveau-Verteilung",
-    "levelNumber": "Level {number}",
+    "levelNumber": "Ebene {number}",
     "topicsLowercase": "Themen",
     "topTopicsByImpact": "Top-Themen nach Einfluss (H-Index)",
     "topLevelResearchAreas": "Wichtigste Forschungsbereiche",
@@ -385,7 +385,12 @@
     "totalItemsCount": "{count} Artikel insgesamt",
     "internationalCollaboration": "Internationale Zusammenarbeit",
     "authorsLowercase": "autoren",
-    "subtopicsLowercase": "Unterthemen"
+    "subtopicsLowercase": "Unterthemen",
+    "nationalInstitutions": "Nationale Einrichtung",
+    "nationalInstitutionsDescription": "Wählen Sie {country} Institutionen aus",
+    "coauthorCountries": "Mitautor-Länder",
+    "topAuthorsInTopics": "Führende Autoren nach Forschungsthema",
+    "topInstitutionsInTopics": "Führende Institutionen nach Forschungsthema"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
