@@ -21,10 +21,11 @@ import { Fragment, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Input } from "../../nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
-import { COUNTRIES, COUNTRY_PARAMS, years } from "@/constants/misc";
+import { COUNTRIES, COUNTRY_PARAMS, IS_COUNTRY_LIBRARY, years } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { LuCheck, LuChevronDown, LuChevronRight, LuX } from "react-icons/lu";
 import { useTranslations } from "next-intl";
+import useSWR from "swr";
 import { CacheContext, useFeatureFlagEnabled } from "@/context/Providers";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { inferParserType } from "nuqs";
@@ -35,9 +36,10 @@ import {
 	useMultipleFacetLists,
 } from "@/hooks/useFacetList";
 import Image from "next/image";
-import { getCountryAncestry, getCountryInfo } from "@/lib/utils";
+import { fetcher, getCountryAncestry, getCountryInfo } from "@/lib/utils";
 import { BsList } from "react-icons/bs";
 import { Button } from "../../nextui/Button";
+import { InstitutionsData } from "@/app/api/institutions/types";
 function YearPicker({
 	label,
 	placeholder,
@@ -487,6 +489,14 @@ function FiltersList({
 }) {
 	const isCountryFocusEnabled = useFeatureFlagEnabled("country-focus");
 	const isAuthorLocationEnabled = useFeatureFlagEnabled("author-location");
+	const isNationalityFocusEnabled = IS_COUNTRY_LIBRARY;
+
+	console.log(isNationalityFocusEnabled);
+
+	const { data: nationalInstitutionsData } = useSWR<InstitutionsData>(
+		isNationalityFocusEnabled ? `/institutions` : null,
+		fetcher
+	)
 
 	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
 
@@ -564,6 +574,10 @@ function FiltersList({
 		[institutions, institutionsFacetDistribution]
 	);
 
+	const nationalInstitutions = useMemo(() => {
+		return institutions.filter((item) => nationalInstitutionsData?.institutions.some((institution) => institution.institution === item.key));
+	}, [institutions, nationalInstitutionsData]);
+
 	const countryFocusFilter = useMemo(() => {
 		return (
 			isCountryFocusEnabled && (
@@ -593,12 +607,42 @@ function FiltersList({
 		countries_uncategorized,
 	]);
 
+	const nationalInstitutionsFilter = useMemo(() => {
+		return (
+			isNationalityFocusEnabled && (
+			<FacetPicker
+				key={"national-institutions-filter"}
+				label={t("nationalInstitutions")}
+				placeholder={t("nationalInstitutionsDescription", {
+					country: nationalInstitutionsData?.topCountryCode ? COUNTRIES[nationalInstitutionsData.topCountryCode] : "",
+				})}
+				selectedKey={queryParams.institution}
+				onSelectionChange={handleInstitutionSelect}
+				facetDistribution={facetDistribution}
+				list={nationalInstitutions}
+				facetName="institution"
+				searchList={nationalInstitutions.map((item) => ({
+					...item,
+					hide: false,
+				}))}
+			/>
+		))
+	}, [
+		isNationalityFocusEnabled,
+		t,
+		queryParams.institution,
+		handleInstitutionSelect,
+		facetDistribution,
+		nationalInstitutionsData,
+		institutions,
+	]);
+
 	const authorLocationFilter = useMemo(() => {
 		return (
 			isAuthorLocationEnabled && (
 				<FacetPicker
 					key={"author-location-filter"}
-					label={t("authorCountries")}
+					label={IS_COUNTRY_LIBRARY ? t("coauthorCountries") : t("authorCountries")}
 					placeholder={
 						author_countries.find(
 							(item) => item.section === "Countries"
@@ -631,6 +675,7 @@ function FiltersList({
 		return (
 			<>
 				{countryFocusFilter}
+				{nationalInstitutionsFilter}
 				{authorLocationFilter}
 			</>
 		);
