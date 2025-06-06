@@ -181,6 +181,31 @@ type CollaborationStats = {
 	};
 };
 
+type TopicStats = {
+	topic: string;
+	level: number;
+	parentTopic?: string;
+	fullPath: string;
+	itemCount: number;
+	totalCitations: number;
+	avgCitationsPerItem: number;
+	hIndex: number;
+	isLeaf: boolean;
+	children: string[];
+};
+
+type TopicOverview = {
+	totalTopics: number;
+	maxDepth: number;
+	topLevelTopics: number;
+	avgItemsPerTopic: number;
+	topicDistribution: {
+		level: number;
+		count: number;
+		percentage: number;
+	}[];
+};
+
 type ComprehensiveStats = {
 	institutions: InstitutionStats[];
 	institutionsByYear: InstitutionYearStats[];
@@ -200,6 +225,8 @@ type ComprehensiveStats = {
 	topJournals: { journal: string; count: number }[];
 	languageDistribution: { language: string; count: number }[];
 	recentActivity: { date: string; count: number }[];
+	topicStats: TopicStats[];
+	topicOverview: TopicOverview;
 };
 
 async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStats> {
@@ -221,17 +248,17 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 		const indexCreation = await meilisearch.createIndex(index);
 		await meilisearch.waitForTask(indexCreation.taskUid);
 
-		// Get institution stats with citation data for H-Index calculation (fixed to avoid double-counting)
+		// Get institution stats with citation data for H-Index calculation (FIXED: proper citation aggregation)
 		console.log("🏛️  Query 1/15: Fetching institution statistics...");
 		const startTime1 = Date.now();
 		const institutionStatsResult = await db
 			.select({
 				institution: sql<string>`institution_name`,
 				countryCode: sql<string>`country_code`,
-				itemCount: sql<number>`count(distinct item_key)`,
-				totalCitations: sql<number>`coalesce(sum(distinct_item_citations), 0)`,
-				avgCitationsPerItem: sql<number>`coalesce(avg(distinct_item_citations), 0)`,
-				citationCounts: sql<number[]>`array_agg(distinct_item_citations)`,
+				itemCount: sql<number>`count(*)`,
+				totalCitations: sql<number>`coalesce(sum(item_citations), 0)`,
+				avgCitationsPerItem: sql<number>`coalesce(avg(item_citations), 0)`,
+				citationCounts: sql<number[]>`array_agg(item_citations)`,
 			})
 			.from(sql`(
 				SELECT DISTINCT
@@ -242,7 +269,7 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 						when ${item.relations}::jsonb ? 'cited_by' 
 						then (${item.relations}::jsonb->>'cited_by')::int 
 						else 0 
-					end as distinct_item_citations
+					end as item_citations
 				FROM ${item},
 				LATERAL unnest(${item.creators}) as creator_data,
 				LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
@@ -256,13 +283,13 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 				AND institution_data ? 'display_name'
 				AND institution_data->>'display_name' IS NOT NULL
 				AND institution_data->>'display_name' != ''
-			) as institution_stats`)
+			) as institution_items`)
 			.where(sql`institution_name IS NOT NULL AND institution_name != ''`)
 			.groupBy(sql`institution_name, country_code`)
-			.orderBy(desc(sql`count(distinct item_key)`));
+			.orderBy(desc(sql`count(*)`));
 		console.log(`✅ Query 1 completed in ${Date.now() - startTime1}ms (${institutionStatsResult.length} institutions)`);
 
-		// Get institution stats by year for client-side filtering (fixed to avoid double-counting)
+		// Get institution stats by year for client-side filtering (FIXED: proper citation aggregation)
 		console.log("📅 Query 2/15: Fetching institution statistics by year...");
 		const startTime2 = Date.now();
 		const institutionsByYearResult = await db
@@ -271,37 +298,52 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 				countryCode: sql<string>`country_code`,
 				year: sql<string>`year_extracted`,
 				itemCount: sql<number>`count(distinct item_key)`,
-				totalCitations: sql<number>`coalesce(sum(distinct_item_citations), 0)`,
-				avgCitationsPerItem: sql<number>`coalesce(avg(distinct_item_citations), 0)`,
-				citationCounts: sql<number[]>`array_agg(distinct_item_citations)`,
+				totalCitations: sql<number>`coalesce(sum(item_citations), 0)`,
+				avgCitationsPerItem: sql<number>`coalesce(avg(item_citations), 0)`,
+				citationCounts: sql<number[]>`array_agg(item_citations)`,
 			})
 			.from(sql`(
-				SELECT DISTINCT
+				SELECT
 					institution_data->>'display_name' as institution_name,
 					institution_data->>'country_code' as country_code,
-					extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text as year_extracted,
-					${item.key} as item_key,
+					extract(year from 
+						case 
+							when item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
+							then to_date(item_date, 'YYYY-MM-DD')
+							else null
+						end
+					)::text as year_extracted,
+					item_key,
 					case 
-						when ${item.relations}::jsonb ? 'cited_by' 
-						then (${item.relations}::jsonb->>'cited_by')::int 
+						when item_relations::jsonb ? 'cited_by' 
+						then (item_relations::jsonb->>'cited_by')::int 
 						else 0 
-					end as distinct_item_citations
-				FROM ${item},
-				LATERAL unnest(${item.creators}) as creator_data,
-				LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
-				WHERE ${item.deleted} = 0 
-				AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
-				AND ${item.creators} IS NOT NULL
-				AND array_length(${item.creators}, 1) > 0
-				AND creator_data ? 'institutions'
-				AND jsonb_typeof(creator_data->'institutions') = 'array'
-				AND jsonb_array_length(creator_data->'institutions') > 0
-				AND institution_data ? 'display_name'
-				AND institution_data->>'display_name' IS NOT NULL
-				AND institution_data->>'display_name' != ''
-				AND ${item.date} IS NOT NULL
-				AND ${item.date} != ''
-			) as institution_year_stats`)
+					end as item_citations
+				FROM (
+					SELECT DISTINCT
+						${item.key} as item_key,
+						${item.date} as item_date,
+						${item.relations} as item_relations,
+						creator_data,
+						institution_data
+					FROM ${item},
+					LATERAL unnest(${item.creators}) as creator_data,
+					LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
+					WHERE ${item.deleted} = 0 
+					AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
+					AND ${item.creators} IS NOT NULL
+					AND array_length(${item.creators}, 1) > 0
+					AND creator_data ? 'institutions'
+					AND jsonb_typeof(creator_data->'institutions') = 'array'
+					AND jsonb_array_length(creator_data->'institutions') > 0
+					AND institution_data ? 'display_name'
+					AND institution_data->>'display_name' IS NOT NULL
+					AND institution_data->>'display_name' != ''
+					AND ${item.date} IS NOT NULL
+					AND ${item.date} != ''
+					AND ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'
+				) as items_with_institutions
+			) as institution_year_items`)
 			.where(sql`institution_name IS NOT NULL AND institution_name != '' AND year_extracted IS NOT NULL`)
 			.groupBy(sql`institution_name, country_code, year_extracted`)
 			.orderBy(desc(sql`year_extracted::int`), desc(sql`count(distinct item_key)`));
@@ -312,7 +354,13 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 		const startTime3 = Date.now();
 		const availableYearsResult = await db
 			.select({
-				year: sql<string>`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
+				year: sql<string>`extract(year from 
+					case 
+						when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
+						then to_date(${item.date}, 'YYYY-MM-DD')
+						else null
+					end
+				)::text`,
 				count: sql<number>`count(*)`
 			})
 			.from(item)
@@ -321,12 +369,25 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 					eq(item.deleted, 0),
 					isNotNull(item.date),
 					ne(item.date, ''),
-					sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`
+					sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+					sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'` // Only valid date format
 				)
 			)
-			.groupBy(sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))`)
+			.groupBy(sql`extract(year from 
+				case 
+					when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
+					then to_date(${item.date}, 'YYYY-MM-DD')
+					else null
+				end
+			)`)
 			.having(sql`count(*) >= 10`) // Only include years with at least 10 publications
-			.orderBy(desc(sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))`))
+			.orderBy(desc(sql`extract(year from 
+				case 
+					when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
+					then to_date(${item.date}, 'YYYY-MM-DD')
+					else null
+				end
+			)`))
 			.limit(20); // Limit to last 20 years with data
 		console.log(`✅ Query 3 completed in ${Date.now() - startTime3}ms (${availableYearsResult.length} years with data)`);
 
@@ -375,7 +436,13 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 		const startTime6 = Date.now();
 		const yearStatsResult = await db
 			.select({
-				year: sql<string>`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
+				year: sql<string>`extract(year from 
+					case 
+						when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
+						then to_date(${item.date}, 'YYYY-MM-DD')
+						else null
+					end
+				)::text`,
 				count: sql<number>`count(*)`
 			})
 			.from(item)
@@ -384,11 +451,24 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 					eq(item.deleted, 0),
 					isNotNull(item.date),
 					ne(item.date, ''),
-					sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`
+					sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+					sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'` // Only valid date format
 				)
 			)
-			.groupBy(sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))`)
-			.orderBy(desc(sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))`))
+			.groupBy(sql`extract(year from 
+				case 
+					when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
+					then to_date(${item.date}, 'YYYY-MM-DD')
+					else null
+				end
+			)`)
+			.orderBy(desc(sql`extract(year from 
+				case 
+					when ${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
+					then to_date(${item.date}, 'YYYY-MM-DD')
+					else null
+				end
+			)`))
 			.limit(20);
 		console.log(`✅ Query 6 completed in ${Date.now() - startTime6}ms (${yearStatsResult.length} years)`);
 
@@ -486,15 +566,23 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 			})
 			.from(sql`(
 				SELECT DISTINCT
-					trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) as author_name
+					coalesce(
+						nullif(trim(
+							coalesce(creator_data->>'firstName', '') || 
+							case when creator_data->>'firstName' is not null and creator_data->>'lastName' is not null then ' ' else '' end ||
+							coalesce(creator_data->>'lastName', '')
+						), ''),
+						nullif(trim(creator_data->>'name'), ''),
+						'Unknown Author'
+					) as author_name
 				FROM ${item},
 				LATERAL unnest(${item.creators}) as creator_data
 				WHERE ${item.deleted} = 0 
 				AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 				AND ${item.creators} IS NOT NULL
 				AND array_length(${item.creators}, 1) > 0
-				AND trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) != ''
-			) as all_authors`);
+			) as all_authors`)
+			.where(sql`author_name IS NOT NULL AND author_name != '' AND author_name != 'Unknown Author'`);
 
 		const creatorStats = {
 			totalCreators: Number(creatorStatsResult[0]?.totalCreators || 0),
@@ -542,7 +630,7 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 			{ field: 'pages', filledCount: Number(fieldStats?.pagesFilled || 0), percentage: Number(((Number(fieldStats?.pagesFilled || 0) / totalItems) * 100).toFixed(2)) },
 			{ field: 'volume', filledCount: Number(fieldStats?.volumeFilled || 0), percentage: Number(((Number(fieldStats?.volumeFilled || 0) / totalItems) * 100).toFixed(2)) },
 			{ field: 'issue', filledCount: Number(fieldStats?.issueFilled || 0), percentage: Number(((Number(fieldStats?.issueFilled || 0) / totalItems) * 100).toFixed(2)) },
-			{ field: 'collectionsData', filledCount: Number(fieldStats?.collectionsFilled || 0), percentage: Number(((Number(fieldStats?.collectionsFilled || 0) / totalItems) * 100).toFixed(2)) },
+			{ field: 'collections', filledCount: Number(fieldStats?.collectionsFilled || 0), percentage: Number(((Number(fieldStats?.collectionsFilled || 0) / totalItems) * 100).toFixed(2)) },
 			{ field: 'languageName', filledCount: Number(fieldStats?.languageFilled || 0), percentage: Number(((Number(fieldStats?.languageFilled || 0) / totalItems) * 100).toFixed(2)) }
 		];
 		console.log(`✅ Query 11 completed in ${Date.now() - startTime11}ms (${fieldCompleteness.length} fields analyzed)`);
@@ -664,7 +752,15 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 			.from(sql`(
 				SELECT DISTINCT
 					institution_data->>'country_code' as country_code,
-					trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) as author_name,
+					coalesce(
+						nullif(trim(
+							coalesce(creator_data->>'firstName', '') || 
+							case when creator_data->>'firstName' is not null and creator_data->>'lastName' is not null then ' ' else '' end ||
+							coalesce(creator_data->>'lastName', '')
+						), ''),
+						nullif(trim(creator_data->>'name'), ''),
+						'Unknown Author'
+					) as author_name,
 					${item.key} as item_key,
 					${item.relations} as item_relations
 				FROM ${item},
@@ -680,9 +776,8 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 				AND institution_data ? 'country_code'
 				AND institution_data->>'country_code' IS NOT NULL
 				AND institution_data->>'country_code' != ''
-				AND trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) != ''
 			) as country_author_items`)
-			.where(sql`country_code IS NOT NULL AND country_code != ''`)
+			.where(sql`country_code IS NOT NULL AND country_code != '' AND author_name IS NOT NULL AND author_name != '' AND author_name != 'Unknown Author'`)
 			.groupBy(sql`country_code`)
 			.orderBy(desc(sql`count(distinct item_key)`))
 			.limit(50);
@@ -771,7 +866,7 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 			};
 		});
 
-		// Calculate top collaborations between countries (excluding base country pairs)
+		// Calculate top collaborations between countries (including base country collaborations)
 		const collaborationPairs = new Map<string, number>();
 		collaborativeItems.forEach(item => {
 			const countries = item.countries.sort();
@@ -779,11 +874,6 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 				for (let j = i + 1; j < countries.length; j++) {
 					const country1 = countries[i];
 					const country2 = countries[j];
-					
-					// Skip pairs involving the base country when both countries are not the base
-					if (country1 === baseCountryCode || country2 === baseCountryCode) {
-						continue;
-					}
 					
 					const pairKey = `${country1}-${country2}`;
 					collaborationPairs.set(pairKey, (collaborationPairs.get(pairKey) || 0) + 1);
@@ -864,7 +954,15 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 			})
 			.from(sql`(
 				SELECT 
-					trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) as author_name,
+					coalesce(
+						nullif(trim(
+							coalesce(creator_data->>'firstName', '') || 
+							case when creator_data->>'firstName' is not null and creator_data->>'lastName' is not null then ' ' else '' end ||
+							coalesce(creator_data->>'lastName', '')
+						), ''),
+						nullif(trim(creator_data->>'name'), ''),
+						'Unknown Author'
+					) as author_name,
 					count(distinct ${item.key}) as item_count
 				FROM ${item},
 				LATERAL unnest(${item.creators}) as creator_data
@@ -872,10 +970,9 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 				AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 				AND ${item.creators} IS NOT NULL
 				AND array_length(${item.creators}, 1) > 0
-				AND trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) != ''
 				GROUP BY author_name
 			) as author_productivity`)
-			.where(sql`author_name IS NOT NULL AND author_name != ''`);
+			.where(sql`author_name IS NOT NULL AND author_name != '' AND author_name != 'Unknown Author'`);
 
 		// Calculate TRUE global collaboration rate (ALL authors)
 		console.log("🤝 Calculating REAL global collaboration rate...");
@@ -888,7 +985,15 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 			})
 			.from(sql`(
 				SELECT 
-					trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) as author_name,
+					coalesce(
+						nullif(trim(
+							coalesce(creator_data->>'firstName', '') || 
+							case when creator_data->>'firstName' is not null and creator_data->>'lastName' is not null then ' ' else '' end ||
+							coalesce(creator_data->>'lastName', '')
+						), ''),
+						nullif(trim(creator_data->>'name'), ''),
+						'Unknown Author'
+					) as author_name,
 					max(array_length(${item.creators}, 1) - 1) as max_collaborators
 				FROM ${item},
 				LATERAL unnest(${item.creators}) as creator_data
@@ -896,10 +1001,9 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 				AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 				AND ${item.creators} IS NOT NULL
 				AND array_length(${item.creators}, 1) > 0
-				AND trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) != ''
 				GROUP BY author_name
 			) as author_collaboration`)
-			.where(sql`author_name IS NOT NULL AND author_name != ''`);
+			.where(sql`author_name IS NOT NULL AND author_name != '' AND author_name != 'Unknown Author'`);
 
 		// Calculate simplified detailed author statistics for top authors (for the table display)  
 		console.log("📊 Calculating detailed author statistics (top 200)...");
@@ -928,13 +1032,39 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 				creatorTypes: sql<string[]>`array_agg(distinct creator_type)`,
 				countries: sql<string[]>`array_agg(distinct country_code)`,
 				institutions: sql<string[]>`array_agg(distinct institution_name)`,
-				firstPublicationYear: sql<number>`min(extract(year from to_date(item_date, 'YYYY-MM-DD')))`,
-				lastPublicationYear: sql<number>`max(extract(year from to_date(item_date, 'YYYY-MM-DD')))`,
-				mostRecentYear: sql<number>`max(extract(year from to_date(item_date, 'YYYY-MM-DD')))`
+				firstPublicationYear: sql<number>`min(extract(year from 
+					case 
+						when item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
+						then to_date(item_date, 'YYYY-MM-DD')
+						else null
+					end
+				))`,
+				lastPublicationYear: sql<number>`max(extract(year from 
+					case 
+						when item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
+						then to_date(item_date, 'YYYY-MM-DD')
+						else null
+					end
+				))`,
+				mostRecentYear: sql<number>`max(extract(year from 
+					case 
+						when item_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$' 
+						then to_date(item_date, 'YYYY-MM-DD')
+						else null
+					end
+				))`
 			})
 			.from(sql`(
 				SELECT DISTINCT
-					trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) as author_name,
+					coalesce(
+						nullif(trim(
+							coalesce(creator_data->>'firstName', '') || 
+							case when creator_data->>'firstName' is not null and creator_data->>'lastName' is not null then ' ' else '' end ||
+							coalesce(creator_data->>'lastName', '')
+						), ''),
+						nullif(trim(creator_data->>'name'), ''),
+						'Unknown Author'
+					) as author_name,
 					creator_data->>'firstName' as first_name,
 					creator_data->>'lastName' as last_name,
 					creator_data->>'creatorType' as creator_type,
@@ -958,7 +1088,7 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 				AND array_length(${item.creators}, 1) > 0
 				AND trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) != ''
 			) as author_details`)
-			.where(sql`author_name IS NOT NULL AND author_name != ''`)
+			.where(sql`author_name IS NOT NULL AND author_name != '' AND author_name != 'Unknown Author'`)
 			.groupBy(sql`author_name, first_name, last_name`)
 			.having(sql`count(distinct item_key) >= 2`) // Only prolific authors
 			.orderBy(desc(sql`count(distinct item_key)`))
@@ -1043,8 +1173,133 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 		
 		const endTime15 = Date.now();
 		console.log(`✅ Query 15 completed in ${endTime15 - startTime15}ms`);
-		console.log(`🎉 All statistics calculated! Total time: ${endTime15 - startTime1}ms`);
-		console.log(`📈 Final stats: ${authorStats.length} detailed authors, ${authorProductivityStats.totalAuthors.toLocaleString()} total authors, ${authorCollaborationStats.collaborationRate}% collaboration rate`);
+
+		// Get topic/collection statistics with hierarchical analysis
+		console.log("📚 Query 16/16: Analyzing topic/collection statistics...");
+		const startTime16 = Date.now();
+		const topicStatsResult = await db
+			.select({
+				collections: item.collections,
+				itemKey: item.key,
+				citationCount: sql<number>`case 
+					when ${item.relations}::jsonb ? 'cited_by' 
+					then (${item.relations}::jsonb->>'cited_by')::int 
+					else 0 
+				end`
+			})
+			.from(item)
+			.where(
+				and(
+					eq(item.deleted, 0),
+					sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
+					isNotNull(item.collections),
+					sql`array_length(${item.collections}, 1) > 0`
+				)
+			);
+
+		// Process hierarchical topic structure
+		const topicMap = new Map<string, {
+			fullPath: string;
+			level: number;
+			parentTopic?: string;
+			itemKeys: Set<string>;
+			citationCounts: number[];
+			children: Set<string>;
+		}>();
+
+		// Extract all topics and their hierarchy
+		topicStatsResult.forEach((row) => {
+			if (!row.collections || row.collections.length === 0) return;
+			
+			row.collections.forEach((collection: string) => {
+				if (!collection || collection.trim() === '') return;
+				
+				const parts = collection.split('/').map(part => part.trim()).filter(part => part !== '');
+				
+				// Build hierarchical paths
+				for (let i = 0; i < parts.length; i++) {
+					const currentPath = parts.slice(0, i + 1).join('/');
+					const currentTopic = parts[i];
+					const parentPath = i > 0 ? parts.slice(0, i).join('/') : undefined;
+					
+					if (!topicMap.has(currentPath)) {
+						topicMap.set(currentPath, {
+							fullPath: currentPath,
+							level: i + 1,
+							parentTopic: parentPath,
+							itemKeys: new Set(),
+							citationCounts: [],
+							children: new Set()
+						});
+					}
+					
+					const topicData = topicMap.get(currentPath)!;
+					topicData.itemKeys.add(row.itemKey);
+					topicData.citationCounts.push(row.citationCount || 0);
+					
+					// Add child relationship
+					if (parentPath && topicMap.has(parentPath)) {
+						topicMap.get(parentPath)!.children.add(currentPath);
+					}
+				}
+			});
+		});
+
+		// Calculate statistics for each topic
+		const topicStats: TopicStats[] = Array.from(topicMap.entries()).map(([path, data]) => {
+			const uniqueItemKeys = Array.from(data.itemKeys);
+			const uniqueCitationCounts = data.citationCounts; // Already filtered to unique items per topic
+			const totalCitations = uniqueCitationCounts.reduce((sum, count) => sum + count, 0);
+			const avgCitations = uniqueItemKeys.length > 0 ? totalCitations / uniqueItemKeys.length : 0;
+			const hIndex = calculateHIndex(uniqueCitationCounts);
+			
+			const topicName = path.split('/').pop() || path;
+			
+			return {
+				topic: topicName,
+				level: data.level,
+				parentTopic: data.parentTopic ? data.parentTopic.split('/').pop() : undefined,
+				fullPath: path,
+				itemCount: uniqueItemKeys.length,
+				totalCitations,
+				avgCitationsPerItem: Number(avgCitations.toFixed(2)),
+				hIndex,
+				isLeaf: data.children.size === 0,
+				children: Array.from(data.children).map(childPath => childPath.split('/').pop() || childPath)
+			};
+		}).sort((a, b) => b.itemCount - a.itemCount);
+
+		// Calculate topic overview statistics
+		const maxDepth = Math.max(...Array.from(topicMap.values()).map(t => t.level));
+		const topLevelTopics = Array.from(topicMap.values()).filter(t => t.level === 1).length;
+		const totalUniqueItems = new Set();
+		topicStatsResult.forEach(row => totalUniqueItems.add(row.itemKey));
+		const avgItemsPerTopic = topicStats.length > 0 ? totalUniqueItems.size / topicStats.length : 0;
+
+		// Calculate distribution by level
+		const levelCounts = new Map<number, number>();
+		for (let level = 1; level <= maxDepth; level++) {
+			levelCounts.set(level, Array.from(topicMap.values()).filter(t => t.level === level).length);
+		}
+
+		const topicDistribution = Array.from(levelCounts.entries()).map(([level, count]) => ({
+			level,
+			count,
+			percentage: Number(((count / topicStats.length) * 100).toFixed(1))
+		}));
+
+		const topicOverview: TopicOverview = {
+			totalTopics: topicStats.length,
+			maxDepth,
+			topLevelTopics,
+			avgItemsPerTopic: Number(avgItemsPerTopic.toFixed(1)),
+			topicDistribution
+		};
+
+		const endTime16 = Date.now();
+		console.log(`✅ Query 16 completed in ${endTime16 - startTime16}ms (${topicStats.length} topics, max depth: ${maxDepth})`);
+		console.log(`🎉 All statistics calculated! Total time: ${endTime16 - startTime1}ms`);
+		console.log(`📈 Final stats: ${authorStats.length} detailed authors, ${authorProductivityStats.totalAuthors.toLocaleString()} total authors, ${authorCollaborationStats.collaborationRate}% collaboration rate, ${topicStats.length} topics`);
 
 		const comprehensiveStats: ComprehensiveStats = {
 			institutions: institutionStatsResult.map(stat => ({
@@ -1094,7 +1349,9 @@ async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStat
 			recentActivity: recentActivityResult.map(stat => ({
 				date: stat.date || '',
 				count: Number(stat.count)
-			}))
+			})),
+			topicStats,
+			topicOverview
 		};
 
 		console.log("💾 Caching statistics to Meilisearch...");
