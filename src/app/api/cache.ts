@@ -7,17 +7,15 @@ import { status as statusTable } from "@/db/schema/tables/status";
 import { getCollections } from "./collections/route";
 import { unstable_cache } from "next/cache";
 import { ItemGetResponse } from "./item/types";
+import { withCache } from "@/lib/cache-utils";
 
 export async function getCachedCollections(ignoreCache: boolean = false) {
-	const getData = async () => {
-		return await getCollections();
-	}
-
-	const cache = unstable_cache(getData, ["collections"], {
-		revalidate: 60 * 60,
+	const collections = await withCache(getCollections, {
+		cacheKey: "collections",
+		expirationMinutes: 10,
 	});
-	
-	return cache();
+
+	return collections;
 }
 
 export async function getCachedItem(key: string, ignoreCache: boolean = false) {
