@@ -37,6 +37,9 @@ import {
 	BsDiagram3,
 	BsShare,
 	BsInfo,
+	BsBookmark,
+	BsLayers,
+	BsTags,
 } from "react-icons/bs";
 import { motion } from "framer-motion";
 import {
@@ -201,6 +204,31 @@ type CollaborationStats = {
 	};
 };
 
+type TopicStats = {
+	topic: string;
+	level: number;
+	parentTopic?: string;
+	fullPath: string;
+	itemCount: number;
+	totalCitations: number;
+	avgCitationsPerItem: number;
+	hIndex: number;
+	isLeaf: boolean;
+	children: string[];
+};
+
+type TopicOverview = {
+	totalTopics: number;
+	maxDepth: number;
+	topLevelTopics: number;
+	avgItemsPerTopic: number;
+	topicDistribution: {
+		level: number;
+		count: number;
+		percentage: number;
+	}[];
+};
+
 type ComprehensiveStats = {
 	institutions: InstitutionStats[];
 	institutionsByYear: InstitutionYearStats[];
@@ -220,6 +248,8 @@ type ComprehensiveStats = {
 	topJournals: { journal: string; count: number }[];
 	languageDistribution: { language: string; count: number }[];
 	recentActivity: { date: string; count: number }[];
+	topicStats: TopicStats[];
+	topicOverview: TopicOverview;
 };
 
 type StatisticsPageProps = {
@@ -249,7 +279,7 @@ function CountryFlag({ countryCode, className = "w-6 h-4" }: { countryCode: stri
 			</div>
 		);
 	}
-	
+
 	return (
 		<div className={`${className} rounded-sm overflow-hidden shadow-sm flex-shrink-0`}>
 			<img
@@ -262,15 +292,17 @@ function CountryFlag({ countryCode, className = "w-6 h-4" }: { countryCode: stri
 }
 
 function CountryDisplay({ countryCode, countryName, showCode = false }: { countryCode: string; countryName: string; showCode?: boolean }) {
+	const t = useTranslations("ui");
+	
 	if (!countryCode || countryCode.trim() === '') {
 		return (
 			<div className="flex items-center gap-2">
 				<CountryFlag countryCode="" />
-				<span className="text-sm font-medium text-black/60 dark:text-white/60">Unknown Country</span>
+				<span className="text-sm font-medium text-black/60 dark:text-white/60">{t("unknownCountry")}</span>
 			</div>
 		);
 	}
-	
+
 	return (
 		<div className="flex items-center gap-2">
 			<CountryFlag countryCode={countryCode} />
@@ -305,26 +337,24 @@ function StatCard({
 			>
 				<div className="flex items-center gap-4 w-full justify-center">
 					<div
-						className={`p-3 rounded-2xl ${
-							color === "accent"
+						className={`p-3 rounded-2xl ${color === "accent"
 								? "bg-accent/20"
 								: color === "success"
-								? "bg-success/20"
-								: color === "tertiary"
-								? "bg-tertiary/20"
-								: "bg-white/10 dark:bg-white/5"
-						}`}
+									? "bg-success/20"
+									: color === "tertiary"
+										? "bg-tertiary/20"
+										: "bg-white/10 dark:bg-white/5"
+							}`}
 					>
 						<Icon
-							className={`size-6 ${
-								color === "accent"
+							className={`size-6 ${color === "accent"
 									? "text-accent"
 									: color === "success"
-									? "text-success"
-									: color === "tertiary"
-									? "text-tertiary"
-									: "text-black/60 dark:text-white/60"
-							}`}
+										? "text-success"
+										: color === "tertiary"
+											? "text-tertiary"
+											: "text-black/60 dark:text-white/60"
+								}`}
 						/>
 					</div>
 					<div className="flex-1">
@@ -434,23 +464,27 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 	const rowsPerPage = 10;
 
 	// Sorting states for all tables
-	const [institutionsSortDescriptor, setInstitutionsSortDescriptor] = useState<{column: string, direction: "ascending" | "descending"}>({
+	const [institutionsSortDescriptor, setInstitutionsSortDescriptor] = useState<{ column: string, direction: "ascending" | "descending" }>({
 		column: "itemCount",
 		direction: "descending"
 	});
-	const [journalsSortDescriptor, setJournalsSortDescriptor] = useState<{column: string, direction: "ascending" | "descending"}>({
+	const [journalsSortDescriptor, setJournalsSortDescriptor] = useState<{ column: string, direction: "ascending" | "descending" }>({
 		column: "count",
 		direction: "descending"
 	});
-	const [countriesSortDescriptor, setCountriesSortDescriptor] = useState<{column: string, direction: "ascending" | "descending"}>({
+	const [countriesSortDescriptor, setCountriesSortDescriptor] = useState<{ column: string, direction: "ascending" | "descending" }>({
 		column: "itemCount",
 		direction: "descending"
 	});
-	const [collaborationSortDescriptor, setCollaborationSortDescriptor] = useState<{column: string, direction: "ascending" | "descending"}>({
+	const [collaborationSortDescriptor, setCollaborationSortDescriptor] = useState<{ column: string, direction: "ascending" | "descending" }>({
 		column: "totalItems",
 		direction: "descending"
 	});
-	const [authorsSortDescriptor, setAuthorsSortDescriptor] = useState<{column: string, direction: "ascending" | "descending"}>({
+	const [authorsSortDescriptor, setAuthorsSortDescriptor] = useState<{ column: string, direction: "ascending" | "descending" }>({
+		column: "itemCount",
+		direction: "descending"
+	});
+	const [topicsSortDescriptor, setTopicsSortDescriptor] = useState<{ column: string, direction: "ascending" | "descending" }>({
 		column: "itemCount",
 		direction: "descending"
 	});
@@ -458,6 +492,11 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 	// Author pagination and search state
 	const [authorsPage, setAuthorsPage] = useState(1);
 	const [authorsSearch, setAuthorsSearch] = useState("");
+
+	// Topic pagination and search state
+	const [topicsPage, setTopicsPage] = useState(1);
+	const [topicsSearch, setTopicsSearch] = useState("");
+	const [selectedTopicLevel, setSelectedTopicLevel] = useState<string>("all");
 
 	// Find the country with the most items
 	const topCountry = useMemo(() => {
@@ -726,6 +765,67 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 		setAuthorsPage(1);
 	}, [authorsSearch]);
 
+	// Reset topics page when search or filters change
+	useEffect(() => {
+		setTopicsPage(1);
+	}, [topicsSearch, selectedTopicLevel]);
+
+	// Topic filtering and sorting
+	const filteredTopics = useMemo(() => {
+		let filtered = stats.topicStats;
+
+		// Filter by level
+		if (selectedTopicLevel !== "all") {
+			const level = parseInt(selectedTopicLevel);
+			filtered = filtered.filter((topic) => topic.level === level);
+		}
+
+		// Filter by search term
+		if (topicsSearch.trim()) {
+			filtered = filtered.filter((topic) =>
+				topic.topic.toLowerCase().includes(topicsSearch.toLowerCase()) ||
+				topic.fullPath.toLowerCase().includes(topicsSearch.toLowerCase())
+			);
+		}
+
+		// Apply sorting
+		const sorted = [...filtered].sort((a, b) => {
+			let aValue: any = a[topicsSortDescriptor.column as keyof TopicStats];
+			let bValue: any = b[topicsSortDescriptor.column as keyof TopicStats];
+
+			// Handle array sorting (for children)
+			if (Array.isArray(aValue)) {
+				aValue = aValue.length;
+				bValue = Array.isArray(bValue) ? bValue.length : 0;
+			}
+
+			// Handle string sorting
+			if (typeof aValue === "string") {
+				aValue = aValue.toLowerCase();
+				bValue = typeof bValue === "string" ? bValue.toLowerCase() : "";
+			}
+
+			let comparison = 0;
+			if (aValue < bValue) {
+				comparison = -1;
+			} else if (aValue > bValue) {
+				comparison = 1;
+			}
+
+			return topicsSortDescriptor.direction === "descending" ? -comparison : comparison;
+		});
+
+		return sorted;
+	}, [stats.topicStats, topicsSearch, selectedTopicLevel, topicsSortDescriptor]);
+
+	const paginatedTopics = useMemo(() => {
+		const start = (topicsPage - 1) * rowsPerPage;
+		const end = start + rowsPerPage;
+		return filteredTopics.slice(start, end);
+	}, [filteredTopics, topicsPage]);
+
+	const topicsPages = Math.ceil(filteredTopics.length / rowsPerPage);
+
 	const chartData = stats.yearDistribution.slice(0, 15).map((year) => ({
 		year: year.year,
 		publications: year.count,
@@ -769,60 +869,58 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				<div className="space-y-6">
 					{/* Primary Stats */}
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-					<StatCard
-						title={t("totalItems")}
-						value={stats.citationStats.totalItems}
-						subtitle={t("inDatabase")}
-						icon={BsFileText}
-						color="accent"
-					/>
-					<StatCard
-						title={t("totalCitations")}
-						value={stats.citationStats.totalCitations}
-						subtitle={`${
-							stats.citationStats.citationPercentage
-						}% ${t("haveCitations")}`}
-						icon={BsGraphUp}
-						color="success"
-					/>
+						<StatCard
+							title={t("totalItems")}
+							value={stats.citationStats.totalItems}
+							subtitle={t("inDatabase")}
+							icon={BsFileText}
+							color="accent"
+						/>
+						<StatCard
+							title={t("totalCitations")}
+							value={stats.citationStats.totalCitations}
+							subtitle={`${stats.citationStats.citationPercentage
+								}% ${t("haveCitations")}`}
+							icon={BsGraphUp}
+							color="success"
+						/>
 						<StatCard
 							title="H-Index"
 							value={stats.citationStats.hIndex}
-							subtitle="Global impact metric"
+							subtitle={t("globalImpactMetric")}
 							icon={BsActivity}
 							color="tertiary"
 						/>
-					<StatCard
-						title={t("uniqueCreators")}
-						value={stats.creatorStats.uniqueCreators}
-						subtitle={`${t(
-							"avg"
-						)} ${stats.creatorStats.avgCreatorsPerItem.toFixed(
-							1
-						)} ${t("perItem")}`}
-						icon={BsPeople}
+						<StatCard
+							title={t("uniqueCreators")}
+							value={stats.creatorStats.uniqueCreators}
+							subtitle={`${t(
+								"avg"
+							)} ${stats.creatorStats.avgCreatorsPerItem.toFixed(
+								1
+							)} ${t("perItem")}`}
+							icon={BsPeople}
 							color="card"
-					/>
+						/>
 					</div>
 
 					{/* Secondary Stats */}
 					<div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-					<StatCard
-						title={t("institutions")}
-						value={stats.institutions.length}
-						subtitle={t("uniqueInstitutions")}
-						icon={BsBuilding}
+						<StatCard
+							title={t("institutions")}
+							value={stats.institutions.length}
+							subtitle={t("uniqueInstitutions")}
+							icon={BsBuilding}
 							color="accent"
-					/>
-					<StatCard
-						title={t("attachments")}
-						value={stats.attachmentStats.totalAttachments}
-						subtitle={`${
-							stats.attachmentStats.attachmentPercentage
-						}% ${t("ofItemsHaveAttachments")}`}
-						icon={BsPaperclip}
+						/>
+						<StatCard
+							title={t("attachments")}
+							value={stats.attachmentStats.totalAttachments}
+							subtitle={`${stats.attachmentStats.attachmentPercentage
+								}% ${t("ofItemsHaveAttachments")}`}
+							icon={BsPaperclip}
 							color="success"
-					/>
+						/>
 					</div>
 				</div>
 
@@ -905,11 +1003,10 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 												theme === "dark"
 													? "#1a1a1a"
 													: "#ffffff",
-											border: `1px solid ${
-												theme === "dark"
+											border: `1px solid ${theme === "dark"
 													? "rgba(255, 255, 255, 0.1)"
 													: "rgba(0, 0, 0, 0.1)"
-											}`,
+												}`,
 											borderRadius: "8px",
 											boxShadow:
 												"0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
@@ -932,9 +1029,9 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 										}
 										formatter={(value: number) => [
 											value.toLocaleString() +
-												` ${t(
-													"publicationsLowercase"
-												)}`,
+											` ${t(
+												"publicationsLowercase"
+											)}`,
 											t("publications"),
 										]}
 									/>
@@ -990,20 +1087,20 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</SectionCard>
 
 				{/* International Collaboration */}
-				<SectionCard title="International Collaboration" icon={BsShare}>
+				<SectionCard title={t("internationalCollaboration")} icon={BsShare}>
 					<div className="space-y-8">
 						{/* Explanation */}
 						<motion.div variants={itemVariants} className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 rounded-xl p-4">
 							<h4 className="font-semibold text-blue-900 dark:text-blue-100 mb-2 flex items-center gap-2">
 								<BsInfo className="w-4 h-4" />
-								Understanding Collaboration Types
+								{t("understandingCollaborationTypes")}
 							</h4>
 							<div className="text-sm text-blue-800 dark:text-blue-200 space-y-1">
-								<div><strong>International:</strong> All publications with multiple countries (including {stats.collaborationStats.baseCountry.countryName})</div>
-								<div><strong>Independent:</strong> International collaborations excluding {stats.collaborationStats.baseCountry.countryName} (true diversity)</div>
-								<div><strong>Domestic:</strong> Publications from a single country only (no international collaboration)</div>
+															<div><strong>{t("international")}:</strong> {t("internationalCollabDescription", { country: stats.collaborationStats.baseCountry.countryName })}</div>
+							<div><strong>{t("independent")}:</strong> {t("independentCollabDescription", { country: stats.collaborationStats.baseCountry.countryName })}</div>
+							<div><strong>{t("domestic")}:</strong> {t("domesticCollabDescription")}</div>
 								<div className="text-xs text-blue-600 dark:text-blue-300 mt-2 italic">
-									Independent rates show true international diversity by excluding the dominant base country.
+									{t("independentRatesNote")}
 								</div>
 							</div>
 						</motion.div>
@@ -1014,10 +1111,13 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 									{stats.collaborationStats.overallCollaborationRate}%
 								</div>
 								<div className="text-sm font-medium text-black/60 dark:text-white/60">
-									Overall Collaboration Rate
+									{t("overallCollaborationRate")}
 								</div>
 								<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-									{stats.collaborationStats.collaborativeItems.toLocaleString()} of {stats.collaborationStats.totalItems.toLocaleString()} items
+									{t("collaborativeItemsCount", { 
+								collaborative: stats.collaborationStats.collaborativeItems.toLocaleString(),
+								total: stats.collaborationStats.totalItems.toLocaleString()
+							})}
 								</div>
 							</motion.div>
 							<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20">
@@ -1026,10 +1126,13 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 								</div>
 								<div className="text-sm font-medium text-black/60 dark:text-white/60 flex items-center justify-center gap-2">
 									<CountryFlag countryCode={stats.collaborationStats.baseCountry.countryCode} className="w-4 h-3" />
-									{stats.collaborationStats.baseCountry.countryName || 'Unknown Country'}
+									{stats.collaborationStats.baseCountry.countryName || t("unknownCountry")}
 								</div>
 								<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-									{stats.collaborationStats.baseCountry.collaborativeItems.toLocaleString()} of {stats.collaborationStats.baseCountry.totalItems.toLocaleString()} items
+									{t("collaborativeItemsCount", { 
+								collaborative: stats.collaborationStats.baseCountry.collaborativeItems.toLocaleString(),
+								total: stats.collaborationStats.baseCountry.totalItems.toLocaleString()
+							})}
 								</div>
 							</motion.div>
 							<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20">
@@ -1037,10 +1140,10 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 									{stats.collaborationStats.countryCollaborationRates.filter(c => c.internationalItems > 0).length}
 								</div>
 								<div className="text-sm font-medium text-black/60 dark:text-white/60">
-									Countries with International Collaborations
+									{t("countriesWithInternationalCollaborations")}
 								</div>
 								<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-									Of {stats.collaborationStats.countryCollaborationRates.length} total countries
+									{t("ofTotalCountries", { count: stats.collaborationStats.countryCollaborationRates.length })}
 								</div>
 							</motion.div>
 						</div>
@@ -1051,7 +1154,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							<motion.div variants={itemVariants} className="space-y-4">
 								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
 									<BsBarChart className="text-accent" />
-									Country Collaboration Rates
+									{t("countryCollaborationRates")}
 								</h3>
 								<Card color="card" className="p-6">
 									<div className="h-96">
@@ -1109,36 +1212,36 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 															}}>
 																<div className="flex items-center gap-2 mb-2">
 																	<CountryFlag countryCode={data.countryCode} className="w-4 h-3" />
-																	<span className="font-medium" style={{ color: theme === "dark" ? "#ffffff" : "#000000" }}>
-																		{data.fullName || 'Unknown Country'}
-																	</span>
+																															<span className="font-medium" style={{ color: theme === "dark" ? "#ffffff" : "#000000" }}>
+															{data.fullName || t("unknownCountry")}
+														</span>
 																</div>
 																<div className="text-sm space-y-1">
 																	<div style={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}>
-																		International: <span className="font-medium text-blue-600 dark:text-blue-400">{data.international}%</span>
+																		{t("international")}: <span className="font-medium text-blue-600 dark:text-blue-400">{data.international}%</span>
 																	</div>
 																	<div style={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}>
-																		Independent: <span className="font-medium text-emerald-600 dark:text-emerald-400">{data.independent}%</span>
+																		{t("independent")}: <span className="font-medium text-emerald-600 dark:text-emerald-400">{data.independent}%</span>
 																	</div>
 																	<div style={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}>
-																		Domestic: <span className="font-medium text-amber-600 dark:text-amber-400">{data.domestic}%</span>
+																		{t("domestic")}: <span className="font-medium text-amber-600 dark:text-amber-400">{data.domestic}%</span>
 																	</div>
 																	<div style={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}>
-																		{data.totalItems.toLocaleString()} total items
+																		{t("totalItemsCount", { count: data.totalItems.toLocaleString() })}
 																	</div>
 																	<div style={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.6)" : "rgba(0, 0, 0, 0.6)" }} className="text-xs">
-																		<div>International: all international collaborations</div>
-																		<div>Independent: excludes base country collaborations</div>
-																		<div>Domestic: no international collaboration</div>
+																		<div>{t("international")}: {t("internationalTooltip")}</div>
+																		<div>{t("independent")}: {t("independentTooltip")}</div>
+																		<div>{t("domestic")}: {t("domesticTooltip")}</div>
 																	</div>
 																</div>
 															</div>
 														);
 													}}
 												/>
-												<Bar dataKey="international" fill="#3B82F6" radius={[4, 4, 0, 0]} name="International (incl. base)" />
-												<Bar dataKey="independent" fill="#10B981" radius={[4, 4, 0, 0]} name="Independent (excl. base)" />
-												<Bar dataKey="domestic" fill="#F59E0B" radius={[4, 4, 0, 0]} name="Domestic (no intl.)" />
+																				<Bar dataKey="international" fill="#3B82F6" radius={[4, 4, 0, 0]} name={t("internationalInclBase")} />
+								<Bar dataKey="independent" fill="#10B981" radius={[4, 4, 0, 0]} name={t("independentExclBase")} />
+								<Bar dataKey="domestic" fill="#F59E0B" radius={[4, 4, 0, 0]} name={t("domesticNoIntl")} />
 											</BarChart>
 										</ResponsiveContainer>
 									</div>
@@ -1149,7 +1252,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							<motion.div variants={itemVariants} className="space-y-4">
 								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
 									<BsDiagram3 className="text-accent" />
-									Top Country Pairs
+									{t("topCountryPairs")}
 								</h3>
 								<Card color="card" className="p-6">
 									<div className="space-y-4 h-96 overflow-y-auto">
@@ -1161,11 +1264,10 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 											>
 												<div className="flex items-start justify-between gap-3">
 													<div className="flex items-center gap-2 flex-shrink-0">
-														<div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-															index < 3
+														<div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${index < 3
 																? "bg-gradient-to-r from-amber-400 to-amber-600 text-white"
 																: "bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60"
-														}`}>
+															}`}>
 															{index + 1}
 														</div>
 													</div>
@@ -1174,9 +1276,9 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 															<div className="flex items-center gap-2 min-w-0">
 																<CountryFlag countryCode={collab.country1} className="w-5 h-3 flex-shrink-0" />
 																<span className="text-sm font-medium truncate">
-																	{(collab.country1Name || collab.country1 || 'Unknown').length > 15 
-																		? (collab.country1Name || collab.country1 || 'Unknown').substring(0, 15) + "..." 
-																		: (collab.country1Name || collab.country1 || 'Unknown')
+																	{(collab.country1Name || collab.country1 || t("unknown")).length > 15
+																		? (collab.country1Name || collab.country1 || t("unknown")).substring(0, 15) + "..."
+																		: (collab.country1Name || collab.country1 || t("unknown"))
 																	}
 																</span>
 															</div>
@@ -1186,9 +1288,9 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 															<div className="flex items-center gap-2 min-w-0">
 																<CountryFlag countryCode={collab.country2} className="w-5 h-3 flex-shrink-0" />
 																<span className="text-sm font-medium truncate">
-																	{(collab.country2Name || collab.country2 || 'Unknown').length > 15 
-																		? (collab.country2Name || collab.country2 || 'Unknown').substring(0, 15) + "..." 
-																		: (collab.country2Name || collab.country2 || 'Unknown')
+																	{(collab.country2Name || collab.country2 || t("unknown")).length > 15
+																		? (collab.country2Name || collab.country2 || t("unknown")).substring(0, 15) + "..."
+																		: (collab.country2Name || collab.country2 || t("unknown"))
 																	}
 																</span>
 															</div>
@@ -1199,7 +1301,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 															{collab.collaborationCount}
 														</div>
 														<div className="text-xs text-black/60 dark:text-white/60">
-															collaborations
+															{t("collaborations")}
 														</div>
 													</div>
 												</div>
@@ -1214,76 +1316,74 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						<motion.div variants={itemVariants} className="space-y-4">
 							<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
 								<BsFlag className="text-accent" />
-								Country Collaboration Details
+								{t("countryCollaborationDetails")}
 							</h3>
-							<Card color="card">
-								<Table 
-									color="statistics" 
-									aria-label="Country collaboration rates table"
-									sortDescriptor={collaborationSortDescriptor}
-									onSortChange={(descriptor: any) => setCollaborationSortDescriptor(descriptor)}
-								>
-									<TableHeader>
-										<TableColumn key="countryName" allowsSorting>Country</TableColumn>
-										<TableColumn key="totalItems" allowsSorting>Total Items</TableColumn>
-										<TableColumn key="internationalItems" allowsSorting>International</TableColumn>
-										<TableColumn key="internationalRate" allowsSorting>International (%)</TableColumn>
-										<TableColumn key="independentItems" allowsSorting>Independent</TableColumn>
-										<TableColumn key="independentRate" allowsSorting>Independent (%)</TableColumn>
-										<TableColumn key="domesticItems" allowsSorting>Domestic</TableColumn>
-										<TableColumn key="domesticRate" allowsSorting>Domestic (%)</TableColumn>
-									</TableHeader>
-									<TableBody>
-										{paginatedCollaborationCountries.map((country, index) => (
-											<TableRow key={index}>
-												<TableCell>
-													<div className="flex items-center gap-3">
-														<CountryFlag countryCode={country.countryCode} />
-														<div>
-															<div className="font-medium">{country.countryName || country.countryCode || 'Unknown Country'}</div>
-															{country.countryCode && (
-																<div className="text-xs text-black/60 dark:text-white/60">{country.countryCode}</div>
-															)}
-														</div>
+							<Table
+								color="statistics"
+								aria-label={t("countryCollaborationRatesTable")}
+								sortDescriptor={collaborationSortDescriptor}
+								onSortChange={(descriptor: any) => setCollaborationSortDescriptor(descriptor)}
+							>
+								<TableHeader>
+									<TableColumn key="countryName" allowsSorting>{t("countryColumn")}</TableColumn>
+									<TableColumn key="totalItems" allowsSorting>{t("totalItems")}</TableColumn>
+									<TableColumn key="internationalItems" allowsSorting>{t("international")}</TableColumn>
+									<TableColumn key="internationalRate" allowsSorting>{t("internationalPercent")}</TableColumn>
+									<TableColumn key="independentItems" allowsSorting>{t("independent")}</TableColumn>
+									<TableColumn key="independentRate" allowsSorting>{t("independentPercent")}</TableColumn>
+									<TableColumn key="domesticItems" allowsSorting>{t("domestic")}</TableColumn>
+									<TableColumn key="domesticRate" allowsSorting>{t("domesticPercent")}</TableColumn>
+								</TableHeader>
+								<TableBody>
+									{paginatedCollaborationCountries.map((country, index) => (
+										<TableRow key={index}>
+											<TableCell>
+												<div className="flex items-center gap-3">
+													<CountryFlag countryCode={country.countryCode} />
+													<div>
+														<div className="font-medium">{country.countryName || country.countryCode || t("unknownCountry")}</div>
+														{country.countryCode && (
+															<div className="text-xs text-black/60 dark:text-white/60">{country.countryCode}</div>
+														)}
 													</div>
-												</TableCell>
-												<TableCell>
-													<span className="font-bold text-accent">{country.totalItems.toLocaleString()}</span>
-												</TableCell>
-												<TableCell>
-													<span className="font-bold text-blue-600 dark:text-blue-400">{country.internationalItems.toLocaleString()}</span>
-												</TableCell>
-												<TableCell>
-													<span className="font-bold text-blue-600 dark:text-blue-400">{country.internationalRate}%</span>
-												</TableCell>
-												<TableCell>
-													<span className="font-bold text-emerald-600 dark:text-emerald-400">{country.independentItems.toLocaleString()}</span>
-												</TableCell>
-												<TableCell>
-													<span className="font-bold text-emerald-600 dark:text-emerald-400">{country.independentRate}%</span>
-												</TableCell>
-												<TableCell>
-													<span className="font-bold text-amber-600 dark:text-amber-400">{country.domesticItems.toLocaleString()}</span>
-												</TableCell>
-												<TableCell>
-													<span className="font-bold text-amber-600 dark:text-amber-400">{country.domesticRate}%</span>
-												</TableCell>
-											</TableRow>
-										))}
-									</TableBody>
-								</Table>
-								{collaborationPages > 1 && (
-									<div className="flex justify-center mt-4">
-										<Pagination
-											total={collaborationPages}
-											page={countriesPage}
-											onChange={setCountriesPage}
-											showControls
-											size="sm"
-										/>
-									</div>
-								)}
-							</Card>
+												</div>
+											</TableCell>
+											<TableCell>
+												<span className="font-bold text-accent">{country.totalItems.toLocaleString()}</span>
+											</TableCell>
+											<TableCell>
+												<span className="font-bold text-blue-600 dark:text-blue-400">{country.internationalItems.toLocaleString()}</span>
+											</TableCell>
+											<TableCell>
+												<span className="font-bold text-blue-600 dark:text-blue-400">{country.internationalRate}%</span>
+											</TableCell>
+											<TableCell>
+												<span className="font-bold text-emerald-600 dark:text-emerald-400">{country.independentItems.toLocaleString()}</span>
+											</TableCell>
+											<TableCell>
+												<span className="font-bold text-emerald-600 dark:text-emerald-400">{country.independentRate}%</span>
+											</TableCell>
+											<TableCell>
+												<span className="font-bold text-amber-600 dark:text-amber-400">{country.domesticItems.toLocaleString()}</span>
+											</TableCell>
+											<TableCell>
+												<span className="font-bold text-amber-600 dark:text-amber-400">{country.domesticRate}%</span>
+											</TableCell>
+										</TableRow>
+									))}
+								</TableBody>
+							</Table>
+							{collaborationPages > 1 && (
+								<div className="flex justify-center mt-4">
+									<Pagination
+										total={collaborationPages}
+										page={countriesPage}
+										onChange={setCountriesPage}
+										showControls
+										size="sm"
+									/>
+								</div>
+							)}
 						</motion.div>
 					</div>
 				</SectionCard>
@@ -1304,8 +1404,8 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 								}
 							/>
 							<Select
-								label="Filter by Year"
-								placeholder="Select year"
+								label={t("filterByYear")}
+								placeholder={t("selectYear")}
 								placement="left"
 								selectedKeys={[selectedYear]}
 								onSelectionChange={(keys) => {
@@ -1319,7 +1419,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 									trigger: "h-full",
 								}}
 								items={[
-									{ key: "all", name: "All Years" },
+									{ key: "all", name: t("allYears") },
 									...stats.availableYears.map((year) => ({
 										key: year,
 										name: year,
@@ -1333,28 +1433,28 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 								)}
 							</Select>
 						</div>
-							<Card color="card">
-								{topCountry && (
-									<div className="flex items-center gap-2 mb-2">
-										<CountryFlag countryCode={topCountry.countryCode} className="w-5 h-3" />
-										<span className="text-sm font-medium text-black dark:text-white">
-											{topCountry.countryName || topCountry.countryCode || 'Unknown Country'} (
-											{topCountry.itemCount.toLocaleString()}{" "}
-											{t("itemsLowercase")})
-										</span>
-									</div>
-								)}
-								<Switch
-									isSelected={showTopCountryOnly}
-									onValueChange={setShowTopCountryOnly}
-									isDisabled={!topCountry}
-								>
-									<span className="text-sm text-black dark:text-white">
-										{t("showOnly")}{" "}
-									{topCountry?.countryName || t("topCountry")}{" "}
+						<Card color="card">
+							{topCountry && (
+								<div className="flex items-center gap-2 mb-2">
+									<CountryFlag countryCode={topCountry.countryCode} className="w-5 h-3" />
+									<span className="text-sm font-medium text-black dark:text-white">
+										{topCountry.countryName || topCountry.countryCode || t("unknownCountry")} (
+										{topCountry.itemCount.toLocaleString()}{" "}
+										{t("itemsLowercase")})
 									</span>
-								</Switch>
-							</Card>
+								</div>
+							)}
+							<Switch
+								isSelected={showTopCountryOnly}
+								onValueChange={setShowTopCountryOnly}
+								isDisabled={!topCountry}
+							>
+								<span className="text-sm text-black dark:text-white">
+									{t("showOnly")}{" "}
+									{topCountry?.countryName || t("topCountry")}{" "}
+								</span>
+							</Switch>
+						</Card>
 						<Table
 							color="statistics"
 							aria-label={t("institutionsTableAriaLabel")}
@@ -1386,7 +1486,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 												<div className="flex items-center gap-2">
 													<CountryFlag countryCode={institution.countryCode} />
 													<span className="text-sm font-medium">
-														{institution.countryCode || 'Unknown'}
+														{institution.countryCode || t("unknown")}
 													</span>
 												</div>
 											</TableCell>
@@ -1508,8 +1608,8 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							</motion.div>
 						</div>
 
-												{/* Charts Section */}
-					<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+						{/* Charts Section */}
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
 							{/* Authors vs Items Combined Chart */}
 							<motion.div
 								variants={itemVariants}
@@ -1533,9 +1633,9 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 															country.countryName
 																.length > 10
 																? country.countryName.substring(
-																		0,
-																		10
-																  ) + "..."
+																	0,
+																	10
+																) + "..."
 																: country.countryName,
 														fullName:
 															country.countryName,
@@ -1581,24 +1681,23 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 												<Tooltip
 													contentStyle={{
 														backgroundColor:
-												theme === "dark"
-													? "#1a1a1a"
-													: "#ffffff",
-														border: `1px solid ${
 															theme === "dark"
+																? "#1a1a1a"
+																: "#ffffff",
+														border: `1px solid ${theme === "dark"
 																? "rgba(255, 255, 255, 0.1)"
 																: "rgba(0, 0, 0, 0.1)"
-														}`,
+															}`,
 														borderRadius: "12px",
 														boxShadow:
 															"0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
 														padding: "12px",
 													}}
 													labelStyle={{
-											color:
-												theme === "dark"
-													? "#ffffff"
-													: "#000000",
+														color:
+															theme === "dark"
+																? "#ffffff"
+																: "#000000",
 														fontWeight: "600",
 														marginBottom: "8px",
 													}}
@@ -1611,9 +1710,9 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 													}}
 													content={({ active, payload, label }) => {
 														if (!active || !payload || !payload.length) return null;
-														
+
 														const data = payload[0].payload;
-														
+
 														return (
 															<div
 																className="space-y-1"
@@ -1622,11 +1721,10 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 																		theme === "dark"
 																			? "#1a1a1a"
 																			: "#ffffff",
-																	border: `1px solid ${
-																		theme === "dark"
+																	border: `1px solid ${theme === "dark"
 																			? "rgba(255, 255, 255, 0.1)"
 																			: "rgba(0, 0, 0, 0.1)"
-																	}`,
+																		}`,
 																	borderRadius: "12px",
 																	boxShadow:
 																		"0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
@@ -1635,7 +1733,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 															>
 																<div className="flex items-center gap-2 mb-2">
 																	<CountryFlag countryCode={data.countryCode} className="w-4 h-3" />
-																	<span 
+																	<span
 																		className="font-medium"
 																		style={{
 																			color:
@@ -1644,7 +1742,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 																					: "#000000",
 																		}}
 																	>
-																		{data.fullName || 'Unknown Country'}
+																		{data.fullName || t("unknownCountry")}
 																	</span>
 																</div>
 																<div className="text-sm space-y-1">
@@ -1686,7 +1784,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 																		<span className="font-medium text-amber-600 dark:text-amber-400">
 																			{data.productivity}
 																		</span>{" "}
-																		items/author
+																		{t("itemsPerAuthor")}
 																	</div>
 																	<div
 																		style={{
@@ -1729,194 +1827,193 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 								variants={itemVariants}
 								className="space-y-4"
 							>
-							<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
-								<BsGraphUp className="text-accent" />
-								H-Index {t("distribution")} -{" "}
-								{t("topCountries")}
-							</h3>
-							<Card color="card" className="p-6">
-								<div className="h-96">
-									<ResponsiveContainer
-										width="100%"
-										height="100%"
-									>
-										<PieChart>
-											<Pie
-												data={stats.authorCountries
-													.slice(0, 8)
-													.map((country, index) => ({
-														name: country.countryName,
-														value: country.hIndex,
-														itemCount:
-															country.itemCount,
-														authorCount:
-															country.authorCount,
-														countryCode:
-															country.countryCode,
-														color: pieColors[
-															index %
+								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
+									<BsGraphUp className="text-accent" />
+									H-Index {t("distribution")} -{" "}
+									{t("topCountries")}
+								</h3>
+								<Card color="card" className="p-6">
+									<div className="h-96">
+										<ResponsiveContainer
+											width="100%"
+											height="100%"
+										>
+											<PieChart>
+												<Pie
+													data={stats.authorCountries
+														.slice(0, 8)
+														.map((country, index) => ({
+															name: country.countryName,
+															value: country.hIndex,
+															itemCount:
+																country.itemCount,
+															authorCount:
+																country.authorCount,
+															countryCode:
+																country.countryCode,
+															color: pieColors[
+																index %
 																pieColors.length
-														],
-													}))}
-												cx="50%"
-												cy="50%"
-												innerRadius={80}
-												outerRadius={140}
-												paddingAngle={2}
-												dataKey="value"
-												stroke={
-													theme === "dark"
-														? "rgba(255, 255, 255, 0.1)"
-														: "rgba(0, 0, 0, 0.1)"
-												}
-												strokeWidth={1}
-											>
-												{stats.authorCountries
-													.slice(0, 8)
-													.map((entry, index) => (
-														<Cell
-															key={`cell-${index}`}
-															fill={
-																pieColors[
+															],
+														}))}
+													cx="50%"
+													cy="50%"
+													innerRadius={80}
+													outerRadius={140}
+													paddingAngle={2}
+													dataKey="value"
+													stroke={
+														theme === "dark"
+															? "rgba(255, 255, 255, 0.1)"
+															: "rgba(0, 0, 0, 0.1)"
+													}
+													strokeWidth={1}
+												>
+													{stats.authorCountries
+														.slice(0, 8)
+														.map((entry, index) => (
+															<Cell
+																key={`cell-${index}`}
+																fill={
+																	pieColors[
 																	index %
-																		pieColors.length
-																]
-															}
-															stroke={
-																theme === "dark"
-																	? "rgba(255, 255, 255, 0.1)"
-																	: "rgba(0, 0, 0, 0.1)"
-															}
-															strokeWidth={1}
-														/>
-													))}
-											</Pie>
-																						<Tooltip
-												content={({ active, payload }) => {
-													if (!active || !payload || !payload.length) return null;
-													
-													const data = payload[0].payload;
-													
-													return (
-														<div
-															className="space-y-2"
-															style={{
-																backgroundColor:
-																	theme === "dark"
-																		? "#1a1a1a"
-																		: "#ffffff",
-																border: `1px solid ${
+																	pieColors.length
+																	]
+																}
+																stroke={
 																	theme === "dark"
 																		? "rgba(255, 255, 255, 0.1)"
 																		: "rgba(0, 0, 0, 0.1)"
-																}`,
-																borderRadius: "12px",
-																boxShadow:
-																	theme === "dark"
-																		? "0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)"
-																		: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-																padding: "12px",
-															}}
-														>
-															<div className="flex items-center gap-2">
-																<CountryFlag countryCode={data.countryCode} className="w-4 h-3" />
-																<span
-																	className="font-medium"
-																	style={{
-																		color:
-																			theme === "dark"
-																				? "#ffffff"
-																				: "#000000",
-																	}}
-																>
-																	{data.name || 'Unknown Country'}
-																</span>
-															</div>
-															<div className="text-sm space-y-1">
-																<div
-																	style={{
-																		color:
-																			theme === "dark"
-																				? "rgba(255, 255, 255, 0.8)"
-																				: "rgba(0, 0, 0, 0.8)",
-																	}}
-																>
-																	H-Index:{" "}
-																	<span className="font-bold text-purple-600 dark:text-purple-400">
-																		{data.value}
+																}
+																strokeWidth={1}
+															/>
+														))}
+												</Pie>
+												<Tooltip
+													content={({ active, payload }) => {
+														if (!active || !payload || !payload.length) return null;
+
+														const data = payload[0].payload;
+
+														return (
+															<div
+																className="space-y-2"
+																style={{
+																	backgroundColor:
+																		theme === "dark"
+																			? "#1a1a1a"
+																			: "#ffffff",
+																	border: `1px solid ${theme === "dark"
+																			? "rgba(255, 255, 255, 0.1)"
+																			: "rgba(0, 0, 0, 0.1)"
+																		}`,
+																	borderRadius: "12px",
+																	boxShadow:
+																		theme === "dark"
+																			? "0 10px 25px -5px rgba(0, 0, 0, 0.3), 0 10px 10px -5px rgba(0, 0, 0, 0.2)"
+																			: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+																	padding: "12px",
+																}}
+															>
+																<div className="flex items-center gap-2">
+																	<CountryFlag countryCode={data.countryCode} className="w-4 h-3" />
+																	<span
+																		className="font-medium"
+																		style={{
+																			color:
+																				theme === "dark"
+																					? "#ffffff"
+																					: "#000000",
+																		}}
+																	>
+																		{data.name || t("unknownCountry")}
 																	</span>
 																</div>
-																<div
-																	style={{
-																		color:
-																			theme === "dark"
-																				? "rgba(255, 255, 255, 0.8)"
-																				: "rgba(0, 0, 0, 0.8)",
-																	}}
-																>
-																	<span className="font-medium text-blue-600 dark:text-blue-400">
-																		{data.itemCount.toLocaleString()}
-																	</span>{" "}
-																	{t("itemsLowercase")}
-																</div>
-																<div
-																	style={{
-																		color:
-																			theme === "dark"
-																				? "rgba(255, 255, 255, 0.8)"
-																				: "rgba(0, 0, 0, 0.8)",
-																	}}
-																>
-																	<span className="font-medium text-emerald-600 dark:text-emerald-400">
-																		{data.authorCount.toLocaleString()}
-																	</span>{" "}
-																	{t("authorsLabel").toLowerCase()}
+																<div className="text-sm space-y-1">
+																	<div
+																		style={{
+																			color:
+																				theme === "dark"
+																					? "rgba(255, 255, 255, 0.8)"
+																					: "rgba(0, 0, 0, 0.8)",
+																		}}
+																	>
+																		H-Index:{" "}
+																		<span className="font-bold text-purple-600 dark:text-purple-400">
+																			{data.value}
+																		</span>
+																	</div>
+																	<div
+																		style={{
+																			color:
+																				theme === "dark"
+																					? "rgba(255, 255, 255, 0.8)"
+																					: "rgba(0, 0, 0, 0.8)",
+																		}}
+																	>
+																		<span className="font-medium text-blue-600 dark:text-blue-400">
+																			{data.itemCount.toLocaleString()}
+																		</span>{" "}
+																		{t("itemsLowercase")}
+																	</div>
+																	<div
+																		style={{
+																			color:
+																				theme === "dark"
+																					? "rgba(255, 255, 255, 0.8)"
+																					: "rgba(0, 0, 0, 0.8)",
+																		}}
+																	>
+																		<span className="font-medium text-emerald-600 dark:text-emerald-400">
+																			{data.authorCount.toLocaleString()}
+																		</span>{" "}
+																		{t("authorsLabel").toLowerCase()}
+																	</div>
 																</div>
 															</div>
-														</div>
-													);
-												}}
-											/>
-											<Legend
-												verticalAlign="bottom"
-												height={36}
-												iconType="circle"
-												wrapperStyle={{
-													paddingTop: "20px",
-													fontSize: "12px",
-													color:
-														theme === "dark"
-															? "rgba(255, 255, 255, 0.8)"
-															: "rgba(0, 0, 0, 0.8)",
-												}}
-												formatter={(
-													value: string,
-													entry: any
-												) => (
-													<span
-														style={{
-															color:
-																theme === "dark"
-																	? "rgba(255, 255, 255, 0.8)"
-																	: "rgba(0, 0, 0, 0.8)",
-															fontSize: "12px",
-														}}
-													>
-														{value.length > 15
-															? value.substring(
+														);
+													}}
+												/>
+												<Legend
+													verticalAlign="bottom"
+													height={36}
+													iconType="circle"
+													wrapperStyle={{
+														paddingTop: "20px",
+														fontSize: "12px",
+														color:
+															theme === "dark"
+																? "rgba(255, 255, 255, 0.8)"
+																: "rgba(0, 0, 0, 0.8)",
+													}}
+													formatter={(
+														value: string,
+														entry: any
+													) => (
+														<span
+															style={{
+																color:
+																	theme === "dark"
+																		? "rgba(255, 255, 255, 0.8)"
+																		: "rgba(0, 0, 0, 0.8)",
+																fontSize: "12px",
+															}}
+														>
+															{value.length > 15
+																? value.substring(
 																	0,
 																	15
-															  ) + "..."
-															: value}
-													</span>
-												)}
-											/>
-										</PieChart>
-									</ResponsiveContainer>
-								</div>
-							</Card>
-						</motion.div>
-							</div>
+																) + "..."
+																: value}
+														</span>
+													)}
+												/>
+											</PieChart>
+										</ResponsiveContainer>
+									</div>
+								</Card>
+							</motion.div>
+						</div>
 
 						{/* Top Countries Leaderboard */}
 						<motion.div
@@ -1939,46 +2036,45 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 											<div className="flex items-center gap-3">
 												<div className="flex items-center gap-2 flex-shrink-0">
 													<div
-														className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-															index < 3
+														className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${index < 3
 																? "bg-gradient-to-r from-amber-400 to-amber-600 text-white"
 																: "bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60"
-														}`}
+															}`}
 													>
 														{index + 1}
 													</div>
 													<CountryFlag countryCode={country.countryCode} />
-											</div>
-											<div className="flex-1 min-w-0">
-													<div className="font-semibold text-black dark:text-white text-sm truncate group-hover:text-accent transition-colors">
-													{country.countryName}
 												</div>
+												<div className="flex-1 min-w-0">
+													<div className="font-semibold text-black dark:text-white text-sm truncate group-hover:text-accent transition-colors">
+														{country.countryName}
+													</div>
 													<div className="text-xs text-black/60 dark:text-white/60 space-x-2">
 														<span className="text-blue-600 dark:text-blue-400 font-medium">
 															{country.itemCount.toLocaleString()}
 														</span>
 														<span>•</span>
 														<span className="text-emerald-600 dark:text-emerald-400 font-medium">
-													{country.authorCount.toLocaleString()}
+															{country.authorCount.toLocaleString()}
 														</span>
 														<span>•</span>
 														<span className="text-purple-600 dark:text-purple-400 font-medium">
 															H:{country.hIndex}
 														</span>
+													</div>
 												</div>
-											</div>
 												<div className="text-right flex-shrink-0">
 													<div className="text-sm font-bold text-accent">
 														{(
 															country.itemCount /
 															country.authorCount
 														).toFixed(1)}
+													</div>
+																									<div className="text-xs text-black/40 dark:text-white/40">
+													{t("perAuthor")}
 												</div>
-													<div className="text-xs text-black/40 dark:text-white/40">
-														per author
 												</div>
 											</div>
-										</div>
 										</motion.div>
 									))}
 							</div>
@@ -2020,7 +2116,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 												<CountryFlag countryCode={country.countryCode} />
 												<div>
 													<div className="font-medium">
-														{country.countryName || country.countryCode || 'Unknown Country'}
+														{country.countryName || country.countryCode || t("unknownCountry")}
 													</div>
 													{country.countryCode && (
 														<div className="text-xs text-black/60 dark:text-white/60">
@@ -2072,55 +2168,55 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</SectionCard>
 
 				{/* Author Analytics */}
-				<SectionCard title="Author Analytics" icon={BsPeople}>
+				<SectionCard title={t("authorAnalytics")} icon={BsPeople}>
 					<div className="space-y-8">
-										{/* Author Overview Stats */}
-				<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-					<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20">
-						<div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
-							{stats.authorProductivityStats.totalAuthors.toLocaleString()}
+						{/* Author Overview Stats */}
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+							<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20">
+								<div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
+									{stats.authorProductivityStats.totalAuthors.toLocaleString()}
+								</div>
+								<div className="text-sm font-medium text-black/60 dark:text-white/60">
+									{t("totalAuthors")}
+								</div>
+								<div className="text-xs text-black/40 dark:text-white/40 mt-1">
+									{t("allUniqueResearchers")}
+								</div>
+							</motion.div>
+							<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20">
+								<div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mb-2">
+									{stats.authorProductivityStats.authorsWithMultipleWorks.toLocaleString()}
+								</div>
+								<div className="text-sm font-medium text-black/60 dark:text-white/60">
+									{t("prolificAuthors")}
+								</div>
+								<div className="text-xs text-black/40 dark:text-white/40 mt-1">
+									{t("multiplePublications")}
+								</div>
+							</motion.div>
+							<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20">
+								<div className="text-3xl font-bold text-amber-600 dark:text-amber-400 mb-2">
+									{stats.authorCollaborationStats.collaborationRate}%
+								</div>
+								<div className="text-sm font-medium text-black/60 dark:text-white/60">
+									{t("collaborationRate")}
+								</div>
+								<div className="text-xs text-black/40 dark:text-white/40 mt-1">
+									{t("authorsWhoCollaborate")}
+								</div>
+							</motion.div>
+							<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20">
+								<div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-2">
+									{stats.authorProductivityStats.avgItemsPerAuthor}
+								</div>
+								<div className="text-sm font-medium text-black/60 dark:text-white/60">
+									{t("avgPerAuthor")}
+								</div>
+								<div className="text-xs text-black/40 dark:text-white/40 mt-1">
+									{t("publicationsPerResearcher")}
+								</div>
+							</motion.div>
 						</div>
-						<div className="text-sm font-medium text-black/60 dark:text-white/60">
-							Total Authors
-						</div>
-						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-							All unique researchers
-						</div>
-					</motion.div>
-					<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20">
-						<div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mb-2">
-							{stats.authorProductivityStats.authorsWithMultipleWorks.toLocaleString()}
-						</div>
-						<div className="text-sm font-medium text-black/60 dark:text-white/60">
-							Prolific Authors
-						</div>
-						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-							Multiple publications
-						</div>
-					</motion.div>
-					<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20">
-						<div className="text-3xl font-bold text-amber-600 dark:text-amber-400 mb-2">
-							{stats.authorCollaborationStats.collaborationRate}%
-						</div>
-						<div className="text-sm font-medium text-black/60 dark:text-white/60">
-							Collaboration Rate
-						</div>
-						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-							Authors who collaborate
-						</div>
-					</motion.div>
-					<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20">
-						<div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-2">
-							{stats.authorProductivityStats.avgItemsPerAuthor}
-						</div>
-						<div className="text-sm font-medium text-black/60 dark:text-white/60">
-							Avg per Author
-						</div>
-						<div className="text-xs text-black/40 dark:text-white/40 mt-1">
-							Publications per researcher
-						</div>
-					</motion.div>
-				</div>
 
 						{/* Charts Section */}
 						<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -2128,7 +2224,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							<motion.div variants={itemVariants} className="space-y-4">
 								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
 									<BsBarChart className="text-accent" />
-									Global Author Productivity Distribution
+																						{t("globalAuthorProductivityDistribution")}
 								</h3>
 								<Card color="card" className="p-6">
 									<div className="h-96">
@@ -2163,9 +2259,9 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 													}}
 													labelStyle={{ color: theme === "dark" ? "#ffffff" : "#000000", fontWeight: "500" }}
 													itemStyle={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}
-													formatter={(value: number, name: string, props: any) => [
-														`${value.toLocaleString()} authors (${props.payload.percentage}%)`,
-														'Count'
+																															formatter={(value: number, name: string, props: any) => [
+														`${value.toLocaleString()} ${t("authorsLowercase")} (${props.payload.percentage}%)`,
+														t("count")
 													]}
 												/>
 												<Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} />
@@ -2179,7 +2275,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							<motion.div variants={itemVariants} className="space-y-4">
 								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
 									<BsGraphUp className="text-accent" />
-									Top Researchers (from {stats.authorStats.length} detailed)
+									{t("topResearchers", { count: stats.authorStats.length })}
 								</h3>
 								<Card color="card" className="p-6">
 									<div className="space-y-4 h-96 overflow-y-auto">
@@ -2190,28 +2286,27 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 												className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-all duration-300"
 											>
 												<div className="flex items-center gap-3 flex-1 min-w-0">
-													<div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-														index < 3
+													<div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${index < 3
 															? "bg-gradient-to-r from-amber-400 to-amber-600 text-white"
 															: "bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60"
-													}`}>
+														}`}>
 														{index + 1}
 													</div>
 													<div className="flex-1 min-w-0">
 														<div className="font-semibold text-black dark:text-white text-sm truncate">
-															{author.displayName || 'Unknown Author'}
+															{author.displayName || t("unknownAuthor")}
 														</div>
 														<div className="text-xs text-black/60 dark:text-white/60 space-x-2">
 															<span className="text-blue-600 dark:text-blue-400 font-medium">
-																{author.itemCount.toLocaleString()} items
+																{author.itemCount.toLocaleString()} {t("itemsLowercase")}
 															</span>
 															<span>•</span>
 															<span className="text-emerald-600 dark:text-emerald-400 font-medium">
-																{author.totalCitations.toLocaleString()} citations
+																{author.totalCitations.toLocaleString()} {t("citationsLowercase")}
 															</span>
 															<span>•</span>
 															<span className="text-amber-600 dark:text-amber-400 font-medium">
-																{author.countryCount} countries
+																{author.countryCount} {t("countriesLowercase")}
 															</span>
 														</div>
 													</div>
@@ -2235,45 +2330,45 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						<motion.div variants={itemVariants} className="space-y-4">
 							<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
 								<BsPeople className="text-accent" />
-								Detailed Author Statistics (Top {stats.authorStats.length})
+								{t("detailedAuthorStatistics", { count: stats.authorStats.length })}
 							</h3>
 							<div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800/30 rounded-xl p-4 mb-4">
 								<div className="text-sm text-blue-800 dark:text-blue-200">
-									<strong>Note:</strong> This table shows detailed statistics for only the top {stats.authorStats.length} most productive authors (2+ publications). 
-									Global statistics above represent all {stats.authorProductivityStats.totalAuthors.toLocaleString()} authors in the database.
+									<strong>{t("note")}:</strong> {t("authorTableNote", { count: stats.authorStats.length })}
+									{t("globalStatsNote", { total: stats.authorProductivityStats.totalAuthors.toLocaleString() })}
 								</div>
 							</div>
 							<div className="space-y-4">
 								<Input
-									label="Search Authors"
+									label={t("searchAuthors")}
 									value={authorsSearch}
 									onChange={(e) => setAuthorsSearch(e.target.value)}
-									placeholder="Search by author name"
+									placeholder={t("searchByAuthorName")}
 									startContent={<BsSearch className="text-black/40 dark:text-white/40" />}
 								/>
 								<Table
 									color="statistics"
-									aria-label="Author statistics table"
+									aria-label={t("authorStatisticsTable")}
 									sortDescriptor={authorsSortDescriptor}
 									onSortChange={(descriptor: any) => setAuthorsSortDescriptor(descriptor)}
 								>
 									<TableHeader>
-										<TableColumn key="displayName" allowsSorting>Author</TableColumn>
-										<TableColumn key="itemCount" allowsSorting>Items</TableColumn>
-										<TableColumn key="totalCitations" allowsSorting>Citations</TableColumn>
-										<TableColumn key="avgCitationsPerItem" allowsSorting>Avg/Item</TableColumn>
-										<TableColumn key="hIndex" allowsSorting>H-Index</TableColumn>
-										<TableColumn key="countryCount" allowsSorting>Countries</TableColumn>
-										<TableColumn key="yearSpan" allowsSorting>Active Years</TableColumn>
+																		<TableColumn key="displayName" allowsSorting>{t("authorColumn")}</TableColumn>
+								<TableColumn key="itemCount" allowsSorting>{t("itemsColumn")}</TableColumn>
+								<TableColumn key="totalCitations" allowsSorting>{t("citationsColumn")}</TableColumn>
+								<TableColumn key="avgCitationsPerItem" allowsSorting>{t("avgPerItemColumn")}</TableColumn>
+								<TableColumn key="hIndex" allowsSorting>H-Index</TableColumn>
+								<TableColumn key="countryCount" allowsSorting>{t("countriesColumn")}</TableColumn>
+								<TableColumn key="yearSpan" allowsSorting>{t("activeYearsColumn")}</TableColumn>
 									</TableHeader>
 									<TableBody>
 										{paginatedAuthors.map((author, index) => (
 											<TableRow key={index}>
 												<TableCell>
 													<div>
-														<div className="font-medium">
-															{author.displayName || 'Unknown Author'}
-														</div>
+																									<div className="font-medium">
+												{author.displayName || t("unknownAuthor")}
+											</div>
 														<div className="text-xs text-black/60 dark:text-white/60">
 															{author.mostCommonCreatorType}
 														</div>
@@ -2306,8 +2401,8 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 												</TableCell>
 												<TableCell>
 													<span className="font-bold text-amber-600 dark:text-amber-400">
-														{author.firstPublicationYear === author.lastPublicationYear 
-															? author.firstPublicationYear 
+														{author.firstPublicationYear === author.lastPublicationYear
+															? author.firstPublicationYear
 															: `${author.firstPublicationYear}-${author.lastPublicationYear}`
 														}
 													</span>
@@ -2322,6 +2417,376 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 											total={authorsPages}
 											page={authorsPage}
 											onChange={setAuthorsPage}
+											showControls
+											size="sm"
+										/>
+									</div>
+								)}
+							</div>
+						</motion.div>
+					</div>
+				</SectionCard>
+
+				{/* Research Topics Analysis */}
+				<SectionCard title={t("researchTopics")} icon={BsTags}>
+					<div className="space-y-8">
+						{/* Topic Overview Stats */}
+						<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+							<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20">
+								<div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
+									{stats.topicOverview.totalTopics.toLocaleString()}
+								</div>
+								<div className="text-sm font-medium text-black/60 dark:text-white/60">
+									{t("totalTopics")}
+								</div>
+								<div className="text-xs text-black/40 dark:text-white/40 mt-1">
+									{t("allHierarchicalLevels")}
+								</div>
+							</motion.div>
+							<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20">
+								<div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mb-2">
+									{stats.topicOverview.topLevelTopics.toLocaleString()}
+								</div>
+								<div className="text-sm font-medium text-black/60 dark:text-white/60">
+									{t("topLevelTopics")}
+								</div>
+								<div className="text-xs text-black/40 dark:text-white/40 mt-1">
+									{t("mainResearchAreas")}
+								</div>
+							</motion.div>
+							<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20">
+								<div className="text-3xl font-bold text-amber-600 dark:text-amber-400 mb-2">
+									{stats.topicOverview.maxDepth}
+								</div>
+								<div className="text-sm font-medium text-black/60 dark:text-white/60">
+									{t("maxDepth")}
+								</div>
+								<div className="text-xs text-black/40 dark:text-white/40 mt-1">
+									{t("hierarchicalLevels")}
+								</div>
+							</motion.div>
+							<motion.div variants={itemVariants} className="text-center p-6 rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20">
+								<div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-2">
+									{stats.topicOverview.avgItemsPerTopic}
+								</div>
+								<div className="text-sm font-medium text-black/60 dark:text-white/60">
+									{t("avgItemsPerTopic")}
+								</div>
+								<div className="text-xs text-black/40 dark:text-white/40 mt-1">
+									{t("publicationsPerTopic")}
+								</div>
+							</motion.div>
+						</div>
+
+						{/* Charts Section */}
+						<div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+							{/* Topic Distribution by Level */}
+							<motion.div variants={itemVariants} className="space-y-4">
+								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
+									<BsLayers className="text-accent" />
+									{t("topicDistributionByLevel")}
+								</h3>
+								<Card color="card" className="p-6">
+									<div className="h-96">
+										<ResponsiveContainer width="100%" height="100%">
+											<BarChart
+												data={stats.topicOverview.topicDistribution}
+												margin={{ top: 0, right: 0, left: 0, bottom: 0 }}
+											>
+												<CartesianGrid strokeDasharray="3 3" className="stroke-black/10 dark:stroke-white/10" />
+												<XAxis
+													dataKey="level"
+													className="text-black/60 dark:text-white/60"
+													tick={{ fontSize: 12 }}
+													axisLine={false}
+													tickFormatter={(value) => `Level ${value}`}
+												/>
+												<YAxis
+													className="text-black/60 dark:text-white/60"
+													tick={{ fontSize: 12 }}
+													axisLine={false}
+													tickFormatter={(value) => value.toLocaleString()}
+												/>
+												<Tooltip
+													contentStyle={{
+														backgroundColor: theme === "dark" ? "#1a1a1a" : "#ffffff",
+														border: `1px solid ${theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}`,
+														borderRadius: "12px",
+														boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+														padding: "12px",
+													}}
+													labelStyle={{ color: theme === "dark" ? "#ffffff" : "#000000", fontWeight: "500" }}
+													itemStyle={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}
+													formatter={(value: number, name: string, props: any) => [
+														`${value.toLocaleString()} ${t("topicsLowercase")} (${props.payload.percentage}%)`,
+														t("levelNumber", { number: props.payload.level })
+													]}
+												/>
+												<Bar dataKey="count" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+											</BarChart>
+										</ResponsiveContainer>
+									</div>
+								</Card>
+							</motion.div>
+
+							{/* Top Topics by H-Index */}
+							<motion.div variants={itemVariants} className="space-y-4">
+								<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
+									<BsGraphUp className="text-accent" />
+									{t("topTopicsByImpact")}
+								</h3>
+								<Card color="card" className="p-6">
+									<div className="space-y-4 h-96 overflow-y-auto">
+										{stats.topicStats.slice(0, 20).map((topic, index) => (
+											<motion.div
+												key={index}
+												variants={itemVariants}
+												className="flex items-center justify-between p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-all duration-300"
+											>
+												<div className="flex items-center gap-3 flex-1 min-w-0">
+													<div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${index < 3
+															? "bg-gradient-to-r from-amber-400 to-amber-600 text-white"
+															: "bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60"
+														}`}>
+														{index + 1}
+													</div>
+													<div className="flex items-center gap-2">
+														<div className={`w-2 h-2 rounded-full ${topic.level === 1
+																? "bg-blue-500"
+																: topic.level === 2
+																	? "bg-emerald-500"
+																	: topic.level === 3
+																		? "bg-amber-500"
+																		: "bg-purple-500"
+															}`} />
+													</div>
+													<div className="flex-1 min-w-0">
+														<div className="font-semibold text-black dark:text-white text-sm truncate">
+															{topic.topic}
+														</div>
+														<div className="text-xs text-black/60 dark:text-white/60 space-x-2 truncate">
+															<span className="text-blue-600 dark:text-blue-400 font-medium">
+																{t("levelNumber", { number: topic.level })}
+															</span>
+															<span>•</span>
+															<span className="text-emerald-600 dark:text-emerald-400 font-medium">
+																{topic.itemCount.toLocaleString()} {t("itemsLowercase")}
+															</span>
+															<span>•</span>
+															<span className="text-amber-600 dark:text-amber-400 font-medium">
+																{topic.totalCitations.toLocaleString()} {t("citationsLowercase")}
+															</span>
+														</div>
+													</div>
+												</div>
+												<div className="text-right flex-shrink-0">
+													<div className="text-lg font-bold text-purple-600 dark:text-purple-400">
+														{topic.hIndex}
+													</div>
+													<div className="text-xs text-black/60 dark:text-white/60">
+														H-Index
+													</div>
+												</div>
+											</motion.div>
+										))}
+									</div>
+								</Card>
+							</motion.div>
+						</div>
+
+						{/* Topic Hierarchy Visualization */}
+						<motion.div variants={itemVariants} className="space-y-4">
+							<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
+								<BsBookmark className="text-accent" />
+								{t("topLevelResearchAreas")}
+							</h3>
+							<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+								{stats.topicStats.filter(topic => topic.level === 1).slice(0, 12).map((topic, index) => (
+									<motion.div
+										key={index}
+										variants={itemVariants}
+										className="relative p-4 rounded-xl bg-gradient-to-r from-black/5 to-transparent dark:from-white/5 border border-black/10 dark:border-white/10 hover:border-accent/30 transition-all duration-300 hover:scale-[1.02] group"
+									>
+										<div className="flex items-center gap-3">
+											<div className="flex items-center gap-2 flex-shrink-0">
+												<div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${index < 3
+														? "bg-gradient-to-r from-amber-400 to-amber-600 text-white"
+														: "bg-black/10 dark:bg-white/10 text-black/60 dark:text-white/60"
+													}`}>
+													{index + 1}
+												</div>
+												<div className="w-3 h-3 rounded-full bg-blue-500" />
+											</div>
+											<div className="flex-1 min-w-0">
+												<div className="font-semibold text-black dark:text-white text-sm truncate group-hover:text-accent transition-colors">
+													{topic.topic}
+												</div>
+												<div className="text-xs text-black/60 dark:text-white/60 space-x-2">
+													<span className="text-blue-600 dark:text-blue-400 font-medium">
+														{topic.itemCount.toLocaleString()}
+													</span>
+													<span>•</span>
+													<span className="text-emerald-600 dark:text-emerald-400 font-medium">
+														{topic.children.length} {t("subtopicsLowercase")}
+													</span>
+													<span>•</span>
+													<span className="text-purple-600 dark:text-purple-400 font-medium">
+														H:{topic.hIndex}
+													</span>
+												</div>
+											</div>
+											<div className="text-right flex-shrink-0">
+												<div className="text-sm font-bold text-accent">
+													{topic.avgCitationsPerItem.toFixed(1)}
+												</div>
+												<div className="text-xs text-black/40 dark:text-white/40">
+													{t("avgCitations")}
+												</div>
+											</div>
+										</div>
+									</motion.div>
+								))}
+							</div>
+						</motion.div>
+
+						{/* Detailed Topics Table */}
+						<motion.div variants={itemVariants} className="space-y-4">
+							<h3 className="text-lg font-semibold text-black dark:text-white flex items-center gap-2">
+								<BsTags className="text-accent" />
+								{t("allResearchTopics")}
+							</h3>
+							<div className="space-y-4">
+								<div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+									<Input
+										label={t("searchTopics")}
+										value={topicsSearch}
+										onChange={(e) => setTopicsSearch(e.target.value)}
+										placeholder={t("searchByTopicNameOrPath")}
+										startContent={<BsSearch className="text-black/40 dark:text-white/40" />}
+									/>
+									<Select
+										label={t("filterByLevel")}
+										placeholder={t("selectLevel")}
+										placement="left"
+										selectedKeys={[selectedTopicLevel]}
+										onSelectionChange={(keys) => {
+											const selected = Array.from(keys)[0] as string;
+											setSelectedTopicLevel(selected || "all");
+										}}
+										classNames={{
+											base: "flex-1 max-w-full",
+											trigger: "h-full",
+										}}
+										items={[
+											{ key: "all", name: t("allLevels") },
+											...Array.from({ length: stats.topicOverview.maxDepth }, (_, i) => ({
+												key: (i + 1).toString(),
+												name: t("levelNumber", { number: i + 1 }),
+											})),
+										]}
+									>
+										{(item: any) => (
+											<SelectItem key={item.key}>
+												{item.name}
+											</SelectItem>
+										)}
+									</Select>
+								</div>
+								<Table
+									color="statistics"
+									aria-label={t("topicsStatisticsTable")}
+									sortDescriptor={topicsSortDescriptor}
+									onSortChange={(descriptor: any) => setTopicsSortDescriptor(descriptor)}
+								>
+									<TableHeader>
+																		<TableColumn key="topic" allowsSorting>{t("topicColumn")}</TableColumn>
+								<TableColumn key="level" allowsSorting>{t("levelColumn")}</TableColumn>
+								<TableColumn key="itemCount" allowsSorting>{t("itemsColumn")}</TableColumn>
+								<TableColumn key="totalCitations" allowsSorting>{t("citationsColumn")}</TableColumn>
+								<TableColumn key="avgCitationsPerItem" allowsSorting>{t("avgPerItemColumn")}</TableColumn>
+								<TableColumn key="hIndex" allowsSorting>H-Index</TableColumn>
+								<TableColumn key="children" allowsSorting>{t("subtopicsColumn")}</TableColumn>
+									</TableHeader>
+									<TableBody>
+										{paginatedTopics.map((topic, index) => (
+											<TableRow key={index}>
+												<TableCell>
+													<div className="space-y-1">
+														<div className="flex items-center gap-2">
+															<div className={`w-2 h-2 rounded-full flex-shrink-0 ${topic.level === 1
+																	? "bg-blue-500"
+																	: topic.level === 2
+																		? "bg-emerald-500"
+																		: topic.level === 3
+																			? "bg-amber-500"
+																			: "bg-purple-500"
+																}`} />
+															<span className="font-medium truncate">
+																{topic.topic}
+															</span>
+														</div>
+														<div className="text-xs text-black/60 dark:text-white/60 truncate">
+															{topic.fullPath}
+														</div>
+														{topic.parentTopic && (
+															<div className="text-xs text-black/40 dark:text-white/40">
+																{t("parent")}: {topic.parentTopic}
+															</div>
+														)}
+													</div>
+												</TableCell>
+												<TableCell>
+													<span className={`px-2 py-1 rounded-full text-xs font-medium ${topic.level === 1
+															? "bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200"
+															: topic.level === 2
+																? "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-800 dark:text-emerald-200"
+																: topic.level === 3
+																	? "bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-200"
+																	: "bg-purple-100 dark:bg-purple-900/30 text-purple-800 dark:text-purple-200"
+														}`}>
+														{t("levelNumber", { number: topic.level })}
+													</span>
+												</TableCell>
+												<TableCell>
+													<span className="font-bold text-accent">
+														{topic.itemCount.toLocaleString()}
+													</span>
+												</TableCell>
+												<TableCell>
+													<span className="font-bold text-success">
+														{topic.totalCitations.toLocaleString()}
+													</span>
+												</TableCell>
+												<TableCell>
+													<span className="font-bold text-tertiary">
+														{topic.avgCitationsPerItem.toFixed(1)}
+													</span>
+												</TableCell>
+												<TableCell>
+													<span className="font-bold text-purple-600 dark:text-purple-400">
+														{topic.hIndex}
+													</span>
+												</TableCell>
+												<TableCell>
+													<div className="flex items-center gap-1">
+														<span className="font-bold text-emerald-600 dark:text-emerald-400">
+															{topic.children.length}
+														</span>
+														{topic.isLeaf && (
+															<span className="text-xs text-black/40 dark:text-white/40">({t("leaf")})</span>
+														)}
+													</div>
+												</TableCell>
+											</TableRow>
+										))}
+									</TableBody>
+								</Table>
+								{topicsPages > 1 && (
+									<div className="flex justify-center">
+										<Pagination
+											total={topicsPages}
+											page={topicsPage}
+											onChange={setTopicsPage}
 											showControls
 											size="sm"
 										/>
