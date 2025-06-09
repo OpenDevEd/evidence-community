@@ -578,27 +578,6 @@ function FiltersList({
 		return institutions.filter((item) => nationalInstitutionsData?.institutions.some((institution) => institution.institution === item.key));
 	}, [institutions, nationalInstitutionsData]);
 
-	const countriesUncategorizedSearchList = useMemo(() => {
-		return countries_uncategorized.map((item) => ({
-			...item,
-			hide: false,
-		}));
-	}, [countries_uncategorized]);
-
-	const authorCountriesUncategorizedSearchList = useMemo(() => {
-		return author_countries_uncategorized.map((item) => ({
-			...item,
-			hide: false,
-		}));
-	}, [author_countries_uncategorized]);
-
-	const nationalInstitutionsSearchList = useMemo(() => {
-		return nationalInstitutions.map((item) => ({
-			...item,
-			hide: false,
-		}));
-	}, [nationalInstitutions]);
-
 	const countryFocusFilter = useMemo(() => {
 		return (
 			isCountryFocusEnabled && (
@@ -611,7 +590,10 @@ function FiltersList({
 					facetDistribution={facetDistribution}
 					list={countries}
 					facetName="country"
-					searchList={countriesUncategorizedSearchList}
+					searchList={countries_uncategorized.map((item) => ({
+						...item,
+						hide: false,
+					}))}
 				/>
 			)
 		);
@@ -622,7 +604,7 @@ function FiltersList({
 		handleCountrySelect,
 		facetDistribution,
 		countries,
-		countriesUncategorizedSearchList,
+		countries_uncategorized,
 	]);
 
 	const nationalInstitutionsFilter = useMemo(() => {
@@ -639,7 +621,10 @@ function FiltersList({
 				facetDistribution={facetDistribution}
 				list={nationalInstitutions}
 				facetName="institution"
-				searchList={nationalInstitutionsSearchList}
+				searchList={nationalInstitutions.map((item) => ({
+					...item,
+					hide: false,
+				}))}
 			/>
 		))
 	}, [
@@ -649,8 +634,7 @@ function FiltersList({
 		handleInstitutionSelect,
 		facetDistribution,
 		nationalInstitutionsData,
-		nationalInstitutions,
-		nationalInstitutionsSearchList,
+		institutions,
 	]);
 
 	const authorLocationFilter = useMemo(() => {
@@ -671,7 +655,10 @@ function FiltersList({
 						...queryParams.institution,
 					]}
 					list={author_countries}
-					searchList={authorCountriesUncategorizedSearchList}
+					searchList={author_countries_uncategorized.map((item) => ({
+						...item,
+						hide: false,
+					}))}
 				/>
 			)
 		);
@@ -681,7 +668,7 @@ function FiltersList({
 		author_countries,
 		queryParams.author_country,
 		queryParams.institution,
-		authorCountriesUncategorizedSearchList,
+		author_countries_uncategorized,
 	]);
 
 	const moreFilters = useMemo(() => {
@@ -692,7 +679,7 @@ function FiltersList({
 				{authorLocationFilter}
 			</>
 		);
-	}, [countryFocusFilter, nationalInstitutionsFilter, authorLocationFilter]);
+	}, [countryFocusFilter, authorLocationFilter]);
 
 	const isMoreFiltersOpen = globalExpanded["more-filters"] ?? true;
 	const setIsMoreFiltersOpen = (value: boolean) => {

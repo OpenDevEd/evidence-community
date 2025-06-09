@@ -1,6 +1,6 @@
 import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "@/lib/searchParams";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { CategoriesDistribution, FacetDistribution } from "meilisearch";
 
 export type FacetListItem = {
@@ -29,6 +29,29 @@ export function useMultipleFacetLists(...args: useFacetListReturn[]): useFacetLi
     return [allItems, allFacetCounts]
 }
 
+// Utility function to efficiently find max value in an object
+function getMaxValue(obj: Record<string, number>): number {
+    let max = 0;
+    for (const value of Object.values(obj)) {
+        if (value > max) max = value;
+    }
+    return max;
+}
+
+// Utility function to efficiently merge and deduplicate arrays
+function mergeUnique(arr1: string[], arr2: string[]): string[] {
+    const seen = new Set(arr1);
+    const result = [...arr1];
+    
+    for (const item of arr2) {
+        if (!seen.has(item)) {
+            seen.add(item);
+            result.push(item);
+        }
+    }
+    return result;
+}
+
 /**
  * Unified facet list hook that handles both stateful and stateless behaviors
  * @param facetDistribution - The facet distribution data from search results
@@ -49,100 +72,144 @@ function useFacetListUnified(
 ): useFacetListReturn {
     const { stateful = false, defaultSortByCount = false } = options;
     
-    // Current facet data
-    const facetObject = facetDistribution?.[facetName] || {}
-    const currentFacetKeys = Object.keys(facetObject)
+    // State for stateful behavior
+    const [facetList, setFacetList] = useState<string[]>([])
+    const [facetCount, setFacetCount] = useState<CategoriesDistribution | null>(null)
     
-    // State for accumulated facets (only for stateful behavior)
-    const [accumulatedState, setAccumulatedState] = useState<{
-        facetList: string[];
-        facetCount: CategoriesDistribution;
-    }>(() => ({
-        facetList: [],
-        facetCount: {}
-    }));
+    // Refs to track previous values for optimization
+    const prevFacetKeysRef = useRef<string[]>([]);
+    const prevFacetObjectRef = useRef<CategoriesDistribution>({});
     
-    // Update accumulated state when new facets arrive (only for stateful behavior)
-    const updatedAccumulatedState = useMemo(() => {
-        if (!stateful) {
-            return { facetList: currentFacetKeys, facetCount: facetObject };
-        }
-        
-        // Check if we need to update the accumulated state
-        const hasNewFacets = currentFacetKeys.some(key => !accumulatedState.facetList.includes(key));
-        const currentMaxCount = currentFacetKeys.length > 0 ? Math.max(...Object.values(facetObject)) : 0;
-        const existingMaxCount = Object.keys(accumulatedState.facetCount).length > 0 ? Math.max(...Object.values(accumulatedState.facetCount)) : 0;
-        const shouldUpdateCount = Object.keys(accumulatedState.facetCount).length === 0 || existingMaxCount < currentMaxCount;
-        
-        if (hasNewFacets || shouldUpdateCount) {
-            const newState = {
-                facetList: hasNewFacets ? [...new Set([...accumulatedState.facetList, ...currentFacetKeys])] : accumulatedState.facetList,
-                facetCount: shouldUpdateCount ? facetObject : accumulatedState.facetCount
-            };
-            
-            // Update state asynchronously to avoid infinite loops
-            setTimeout(() => setAccumulatedState(newState), 0);
-            
-            return newState;
-        }
-        
-        return accumulatedState;
-    }, [stateful, currentFacetKeys, facetObject, accumulatedState]);
-    
-    // Determine which facet keys and counts to use
-    const { facetKeys, activeFacetCount } = useMemo(() => {
-        if (!stateful) {
-            return {
-                facetKeys: currentFacetKeys,
-                activeFacetCount: facetObject
-            };
-        }
-        
-        const keys = updatedAccumulatedState.facetList.length > 0 ? updatedAccumulatedState.facetList : currentFacetKeys;
-        const counts = updatedAccumulatedState.facetCount;
-        
-        return {
-            facetKeys: keys,
-            activeFacetCount: counts
-        };
-    }, [stateful, currentFacetKeys, facetObject, updatedAccumulatedState]);
-    
-    // Check if facets have hierarchical structure
-    const facetHasAncestry = useMemo(() => 
-        currentFacetKeys.some((value) => value.includes(" > ")), 
-        [currentFacetKeys]
+    // Current facet data - memoized to prevent unnecessary recalculations
+    const facetObject = useMemo(() => 
+        facetDistribution?.[facetName] || {}, 
+        [facetDistribution, facetName]
     );
     
-    // Default sort function based on behavior
-    const defaultSortFunction = useMemo(() => {
-        if (sortFunction) return sortFunction;
+    const currentFacetKeys = useMemo(() => 
+        Object.keys(facetObject), 
+        [facetObject]
+    );
+    
+    // Early return optimization - check if facet keys actually changed
+    const facetKeysChanged = useMemo(() => {
+        const prev = prevFacetKeysRef.current;
+        const current = currentFacetKeys;
         
-        if (defaultSortByCount) {
-            return (a: string, b: string) => {
-                const aFacet = facetDistribution?.[facetName]?.[a] || 0;
-                const bFacet = facetDistribution?.[facetName]?.[b] || 0;
-                return bFacet - aFacet;
-            };
+        if (prev.length !== current.length) return true;
+        
+        for (let i = 0; i < current.length; i++) {
+            if (prev[i] !== current[i]) return true;
         }
         
-        return (a: string, b: string) => a.localeCompare(b);
-    }, [sortFunction, defaultSortByCount, facetDistribution, facetName]);
+        return false;
+    }, [currentFacetKeys]);
     
-    // Process and map facet list
+    // Determine which facet keys to use - optimized to avoid unnecessary computations
+    const facetKeys = useMemo(() => {
+        if (!stateful) {
+            return currentFacetKeys;
+        }
+        return facetList.length > 0 ? facetList : currentFacetKeys;
+    }, [stateful, facetList, currentFacetKeys]);
+    
+    // Determine the facet count object to use
+    const activeFacetCount = useMemo(() => {
+        if (!stateful) {
+            return facetObject;
+        }
+        return facetCount || facetObject;
+    }, [stateful, facetCount, facetObject]);
+    
+    // Check if facets have hierarchical structure - only recalculate when keys change
+    const facetHasAncestry = useMemo(() => {
+        if (!facetKeysChanged && prevFacetKeysRef.current.length > 0) {
+            // Use cached result if keys haven't changed
+            return currentFacetKeys.some((value) => value.includes(" > "));
+        }
+        return currentFacetKeys.some((value) => value.includes(" > "));
+    }, [currentFacetKeys, facetKeysChanged]);
+    
+    // Memoized sort functions to avoid recreation
+    const alphabeticalSort = useCallback((a: string, b: string) => a.localeCompare(b), []);
+    
+    const countSort = useCallback((a: string, b: string) => {
+        const aFacet = facetObject[a] || 0;
+        const bFacet = facetObject[b] || 0;
+        return bFacet - aFacet;
+    }, [facetObject]);
+    
+    // Default sort function based on behavior - avoid recreation
+    const defaultSortFunction = useMemo(() => {
+        if (sortFunction) return sortFunction;
+        return defaultSortByCount ? countSort : alphabeticalSort;
+    }, [sortFunction, defaultSortByCount, countSort, alphabeticalSort]);
+    
+         // Default mapping function - memoized to avoid recreation
+     const defaultMappingFunction = useCallback(
+         (value: string): FacetListItem => ({ key: value, label: value }), 
+         []
+     );
+    
+    // Process and map facet list - optimized to reduce object creation
     const mappedFacetList = useMemo(() => {
-        const sortedKeys = [...facetKeys].sort(defaultSortFunction);
+        if (facetKeys.length === 0) return [];
         
-        return sortedKeys
-            .map(mappingFunction || ((value) => ({ key: value, label: value })))
-            .filter((item): item is FacetListItem => item !== null)
-            .map((item: FacetListItem) => ({
-                ...item,
-                showArrow: facetObject[item.key] > 0 && 
-                          item.key.split(" > ").length < 3 && 
-                          facetHasAncestry,
-                count: item.countKey ? facetObject[item.countKey] : facetObject[item.key]
-            }));
-    }, [facetKeys, defaultSortFunction, mappingFunction, facetObject, facetHasAncestry]);
+        // Pre-sort the keys to avoid sorting twice
+        const sortedKeys = [...facetKeys].sort(defaultSortFunction);
+        const mapper = mappingFunction || defaultMappingFunction;
+        
+        // Single pass through the data to reduce iterations
+        const result: FacetListItem[] = [];
+        
+        for (const key of sortedKeys) {
+            const mapped = mapper(key);
+            if (mapped === null) continue;
+            
+            const count = mapped.countKey ? facetObject[mapped.countKey] : facetObject[mapped.key];
+            const shouldShowArrow = count > 0 && 
+                                  mapped.key.split(" > ").length < 3 && 
+                                  facetHasAncestry;
+            
+            result.push({
+                ...mapped,
+                showArrow: shouldShowArrow,
+                count
+            });
+        }
+        
+        return result;
+    }, [facetKeys, defaultSortFunction, mappingFunction, defaultMappingFunction, facetObject, facetHasAncestry]);
+    
+    // Handle stateful updates - optimized with early returns and efficient comparisons
+    useEffect(() => {
+        if (!stateful) return;
+        
+        // Only update if facet keys actually changed
+        if (facetKeysChanged) {
+            setFacetList((prev) => {
+                const merged = mergeUnique(prev, currentFacetKeys);
+                merged.sort(defaultSortFunction);
+                return merged;
+            });
+            
+            prevFacetKeysRef.current = [...currentFacetKeys];
+        }
+        
+        // Optimized facet count update with efficient max value comparison
+        const hasExistingCount = facetCount && Object.keys(facetCount).length > 0;
+        const hasCurrentCount = Object.keys(facetObject).length > 0;
+        
+        if (!hasExistingCount || 
+            (hasCurrentCount && getMaxValue(facetObject) > (hasExistingCount ? getMaxValue(facetCount) : 0))) {
+            
+            // Only update if the object actually changed
+            if (prevFacetObjectRef.current !== facetObject) {
+                setFacetCount(facetObject);
+                prevFacetObjectRef.current = facetObject;
+            }
+        }
+    }, [stateful, facetKeysChanged, currentFacetKeys, facetObject, defaultSortFunction, facetCount]);
     
     return [mappedFacetList, activeFacetCount];
 }
