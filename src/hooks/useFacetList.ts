@@ -91,19 +91,11 @@ function useFacetListUnified(
         [facetObject]
     );
     
-    // Early return optimization - check if facet keys actually changed
-    const facetKeysChanged = useMemo(() => {
-        const prev = prevFacetKeysRef.current;
-        const current = currentFacetKeys;
-        
-        if (prev.length !== current.length) return true;
-        
-        for (let i = 0; i < current.length; i++) {
-            if (prev[i] !== current[i]) return true;
-        }
-        
-        return false;
-    }, [currentFacetKeys]);
+    // Create a stable string representation for comparison
+    const facetKeysString = useMemo(() => 
+        currentFacetKeys.join('|'), 
+        [currentFacetKeys]
+    );
     
     // Determine which facet keys to use - optimized to avoid unnecessary computations
     const facetKeys = useMemo(() => {
@@ -121,14 +113,11 @@ function useFacetListUnified(
         return facetCount || facetObject;
     }, [stateful, facetCount, facetObject]);
     
-    // Check if facets have hierarchical structure - only recalculate when keys change
-    const facetHasAncestry = useMemo(() => {
-        if (!facetKeysChanged && prevFacetKeysRef.current.length > 0) {
-            // Use cached result if keys haven't changed
-            return currentFacetKeys.some((value) => value.includes(" > "));
-        }
-        return currentFacetKeys.some((value) => value.includes(" > "));
-    }, [currentFacetKeys, facetKeysChanged]);
+    // Check if facets have hierarchical structure
+    const facetHasAncestry = useMemo(() => 
+        currentFacetKeys.some((value) => value.includes(" > ")), 
+        [currentFacetKeys]
+    );
     
     // Memoized sort functions to avoid recreation
     const alphabeticalSort = useCallback((a: string, b: string) => a.localeCompare(b), []);
@@ -185,8 +174,9 @@ function useFacetListUnified(
     useEffect(() => {
         if (!stateful) return;
         
-        // Only update if facet keys actually changed
-        if (facetKeysChanged) {
+        // Check if facet keys actually changed using string comparison
+        const prevFacetKeysString = prevFacetKeysRef.current.join('|');
+        if (facetKeysString !== prevFacetKeysString) {
             setFacetList((prev) => {
                 const merged = mergeUnique(prev, currentFacetKeys);
                 merged.sort(defaultSortFunction);
@@ -209,7 +199,7 @@ function useFacetListUnified(
                 prevFacetObjectRef.current = facetObject;
             }
         }
-    }, [stateful, facetKeysChanged, currentFacetKeys, facetObject, defaultSortFunction, facetCount]);
+    }, [stateful, facetKeysString, facetObject, defaultSortFunction, facetCount]);
     
     return [mappedFacetList, activeFacetCount];
 }
