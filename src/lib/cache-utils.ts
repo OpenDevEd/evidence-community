@@ -11,7 +11,7 @@ export interface CacheConfig {
 async function ensureCacheIndexExists(index: string) {
 	try {
 		const indexCreation = await meilisearch.createIndex(index);
-		await meilisearch.waitForTask(indexCreation.taskUid);
+		await meilisearch.tasks.waitForTask(indexCreation.taskUid);
 	} catch (indexError) {
 		// Index might already exist, continue
 	}

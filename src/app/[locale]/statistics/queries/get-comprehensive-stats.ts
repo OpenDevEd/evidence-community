@@ -40,7 +40,7 @@ export async function getComprehensiveStats(ignore: boolean): Promise<Comprehens
 	} catch (error) {
 		console.log("🔄 No cached statistics found, generating fresh data...");
 		const indexCreation = await meilisearch.createIndex(index);
-		await meilisearch.waitForTask(indexCreation.taskUid);
+		await meilisearch.tasks.waitForTask(indexCreation.taskUid);
 
 		const startTime = Date.now();
 
