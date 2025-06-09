@@ -1,6 +1,6 @@
 import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "@/lib/searchParams";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { CategoriesDistribution, FacetDistribution } from "meilisearch";
 
 export type FacetListItem = {
@@ -29,47 +29,150 @@ export function useMultipleFacetLists(...args: useFacetListReturn[]): useFacetLi
     return [allItems, allFacetCounts]
 }
 
-export function useFacetListRaw(facetDistribution: FacetDistribution, facetName: string, mappingFunction?: (value: string) => FacetListItem | null, sortFunction?: (a: string, b: string) => number): useFacetListReturn {
+/**
+ * Unified facet list hook that handles both stateful and stateless behaviors
+ * @param facetDistribution - The facet distribution data from search results
+ * @param facetName - The name of the facet to process
+ * @param options - Configuration options for behavior
+ * @param mappingFunction - Optional function to transform facet values to FacetListItem
+ * @param sortFunction - Optional custom sorting function
+ */
+function useFacetListUnified(
+    facetDistribution: FacetDistribution, 
+    facetName: string, 
+    options: {
+        stateful?: boolean;
+        defaultSortByCount?: boolean;
+    } = {},
+    mappingFunction?: (value: string) => FacetListItem | null, 
+    sortFunction?: (a: string, b: string) => number
+): useFacetListReturn {
+    const { stateful = false, defaultSortByCount = false } = options;
+    
+    // Current facet data
     const facetObject = facetDistribution?.[facetName] || {}
-    const facet = Object.keys(facetObject)
-    const facetHasAncestry = facet.some((value) => value.includes(" > "))
-    const mappedFacetList = facet.sort(sortFunction || ((a, b) => {
-        return a.localeCompare(b)
-    })).map(mappingFunction || ((value) => ({ key: value, label: value }))).filter((item) => item !== null).map((item: FacetListItem) => ({
-        ...item,
-        showArrow: facetObject[item.key] > 0 && item.key.split(" > ").length < 3 && facetHasAncestry,
-        count: item.countKey ? facetObject[item.countKey] : facetObject[item.key]
-    }))
-
-    return [mappedFacetList, facetObject]
+    const currentFacetKeys = Object.keys(facetObject)
+    
+    // State for accumulated facets (only for stateful behavior)
+    const [accumulatedState, setAccumulatedState] = useState<{
+        facetList: string[];
+        facetCount: CategoriesDistribution;
+    }>(() => ({
+        facetList: [],
+        facetCount: {}
+    }));
+    
+    // Update accumulated state when new facets arrive (only for stateful behavior)
+    const updatedAccumulatedState = useMemo(() => {
+        if (!stateful) {
+            return { facetList: currentFacetKeys, facetCount: facetObject };
+        }
+        
+        // Check if we need to update the accumulated state
+        const hasNewFacets = currentFacetKeys.some(key => !accumulatedState.facetList.includes(key));
+        const currentMaxCount = currentFacetKeys.length > 0 ? Math.max(...Object.values(facetObject)) : 0;
+        const existingMaxCount = Object.keys(accumulatedState.facetCount).length > 0 ? Math.max(...Object.values(accumulatedState.facetCount)) : 0;
+        const shouldUpdateCount = Object.keys(accumulatedState.facetCount).length === 0 || existingMaxCount < currentMaxCount;
+        
+        if (hasNewFacets || shouldUpdateCount) {
+            const newState = {
+                facetList: hasNewFacets ? [...new Set([...accumulatedState.facetList, ...currentFacetKeys])] : accumulatedState.facetList,
+                facetCount: shouldUpdateCount ? facetObject : accumulatedState.facetCount
+            };
+            
+            // Update state asynchronously to avoid infinite loops
+            setTimeout(() => setAccumulatedState(newState), 0);
+            
+            return newState;
+        }
+        
+        return accumulatedState;
+    }, [stateful, currentFacetKeys, facetObject, accumulatedState]);
+    
+    // Determine which facet keys and counts to use
+    const { facetKeys, activeFacetCount } = useMemo(() => {
+        if (!stateful) {
+            return {
+                facetKeys: currentFacetKeys,
+                activeFacetCount: facetObject
+            };
+        }
+        
+        const keys = updatedAccumulatedState.facetList.length > 0 ? updatedAccumulatedState.facetList : currentFacetKeys;
+        const counts = updatedAccumulatedState.facetCount;
+        
+        return {
+            facetKeys: keys,
+            activeFacetCount: counts
+        };
+    }, [stateful, currentFacetKeys, facetObject, updatedAccumulatedState]);
+    
+    // Check if facets have hierarchical structure
+    const facetHasAncestry = useMemo(() => 
+        currentFacetKeys.some((value) => value.includes(" > ")), 
+        [currentFacetKeys]
+    );
+    
+    // Default sort function based on behavior
+    const defaultSortFunction = useMemo(() => {
+        if (sortFunction) return sortFunction;
+        
+        if (defaultSortByCount) {
+            return (a: string, b: string) => {
+                const aFacet = facetDistribution?.[facetName]?.[a] || 0;
+                const bFacet = facetDistribution?.[facetName]?.[b] || 0;
+                return bFacet - aFacet;
+            };
+        }
+        
+        return (a: string, b: string) => a.localeCompare(b);
+    }, [sortFunction, defaultSortByCount, facetDistribution, facetName]);
+    
+    // Process and map facet list
+    const mappedFacetList = useMemo(() => {
+        const sortedKeys = [...facetKeys].sort(defaultSortFunction);
+        
+        return sortedKeys
+            .map(mappingFunction || ((value) => ({ key: value, label: value })))
+            .filter((item): item is FacetListItem => item !== null)
+            .map((item: FacetListItem) => ({
+                ...item,
+                showArrow: facetObject[item.key] > 0 && 
+                          item.key.split(" > ").length < 3 && 
+                          facetHasAncestry,
+                count: item.countKey ? facetObject[item.countKey] : facetObject[item.key]
+            }));
+    }, [facetKeys, defaultSortFunction, mappingFunction, facetObject, facetHasAncestry]);
+    
+    return [mappedFacetList, activeFacetCount];
 }
 
-export function useFacetList(facetDistribution: FacetDistribution, facetName: string, mappingFunction?: (value: string) => FacetListItem | null, sortFunction?: (a: string, b: string) => number): useFacetListReturn {
-    const [facetList, setFacetList] = useState<string[]>([])
-    const [facetCount, setFacetCount] = useState<CategoriesDistribution | null>(null)
-    const facetObject = facetDistribution?.[facetName] || {}
-    const facet = Object.keys(facetObject)
-    const facetHasAncestry = facet.some((value) => value.includes(" > "))
+export function useFacetListRaw(
+    facetDistribution: FacetDistribution, 
+    facetName: string, 
+    mappingFunction?: (value: string) => FacetListItem | null, 
+    sortFunction?: (a: string, b: string) => number
+): useFacetListReturn {
+    return useFacetListUnified(
+        facetDistribution, 
+        facetName, 
+        { stateful: false, defaultSortByCount: false }, 
+        mappingFunction, 
+        sortFunction
+    );
+}
 
-    const mappedFacetList = (facetList.length > 0 ? facetList : facet).map(mappingFunction || ((value) => ({ key: value, label: value }))).filter((item) => item !== null).map((item: FacetListItem) => ({
-        ...item,
-        showArrow: facetObject[item.key] > 0 && item.key.split(" > ").length < 3 && facetHasAncestry,
-        count: item.countKey ? facetObject[item.countKey] : facetObject[item.key]
-    }))
-
-    useEffect(() => {
-        setFacetList((prev) => {
-            const newFacetList = [...new Set([...prev, ...facet])]
-            return newFacetList.sort(sortFunction || ((a, b) => {
-                const aFacet = facetDistribution?.[facetName]?.[a]
-                const bFacet = facetDistribution?.[facetName]?.[b]
-                return (bFacet || 0) - (aFacet || 0)
-            }))
-        })
-        if (!facetCount || Object.keys(facetCount).length === 0 || Math.max(...Object.values(facetCount)) < Math.max(...Object.values(facetObject))) {
-            setFacetCount(facetObject);
-        }
-    }, [facet])
-
-    return [mappedFacetList || [], facetCount || {}]
+export function useFacetList(
+    facetDistribution: FacetDistribution, 
+    facetName: string, 
+    mappingFunction?: (value: string) => FacetListItem | null, 
+    sortFunction?: (a: string, b: string) => number
+): useFacetListReturn {
+    return useFacetListUnified(
+        facetDistribution, 
+        facetName, 
+        { stateful: true, defaultSortByCount: true }, 
+        mappingFunction, 
+        sortFunction
+    );
 }
