@@ -1551,7 +1551,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</SectionCard>
 
 				{/* Author Countries */}
-				<SectionCard title={t("authorCountries")} icon={BsFlag}>
+				<SectionCard title={t("coauthorCountries")} icon={BsFlag}>
 					<div className="space-y-8">
 						{/* Hero Stats Row */}
 						<div className="grid grid-cols-2 md:grid-cols-4 gap-4">
