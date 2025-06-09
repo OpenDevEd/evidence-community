@@ -1,5 +1,13 @@
 "use client";
-import { extendVariants, Table as NextUITable } from "@nextui-org/react";
+import { 
+  extendVariants, 
+  Table as NextUITable,
+  TableHeader as NextUITableHeader,
+  TableColumn as NextUITableColumn,
+  TableBody as NextUITableBody,
+  TableRow as NextUITableRow,
+  TableCell as NextUITableCell,
+} from "@nextui-org/react";
 
 export const Table = extendVariants(NextUITable, {
   variants: {
@@ -19,4 +27,11 @@ export const Table = extendVariants(NextUITable, {
   defaultVariants: {
     variant: "default",
   },
-}); 
+});
+
+// Export the table components as-is since they don't need custom variants
+export const TableHeader = NextUITableHeader;
+export const TableColumn = NextUITableColumn;
+export const TableBody = NextUITableBody;
+export const TableRow = NextUITableRow;
+export const TableCell = NextUITableCell; 
