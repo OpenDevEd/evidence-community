@@ -8,6 +8,13 @@ export interface CacheConfig {
 	expirationMinutes?: number;
 }
 
+// Helper function to log only in development
+const devLog = (...args: any[]) => {
+	if (process.env.NODE_ENV === 'development') {
+		console.log(...args);
+	}
+};
+
 async function ensureCacheIndexExists(index: string) {
 	try {
 		const indexCreation = await meilisearch.createIndex(index);
@@ -20,7 +27,7 @@ async function ensureCacheIndexExists(index: string) {
 async function getCachedData<T>(index: string, contentDocumentId: string): Promise<T | null> {
 	try {
 		const cachedResult = await meilisearch.index(index).getDocument(contentDocumentId);
-        console.log(`💾 Received cached data size: ${cachedResult.content.length} bytes`);
+        devLog(`💾 Received cached data size: ${cachedResult.content.length} bytes`);
 		return JSON.parse(cachedResult.content);
 	} catch (error) {
 		return null;
@@ -48,8 +55,8 @@ async function saveCacheData<T>(
 	
     // print data size
     const dataSize = JSON.stringify(data).length;
-    console.log(`💾 Data size: ${dataSize} bytes`);
-	console.log(`💾 ${prefix}Caching data for ${contentDocumentId}...`);
+    devLog(`💾 Data size: ${dataSize} bytes`);
+	devLog(`💾 ${prefix}Caching data for ${contentDocumentId}...`);
 	await meilisearch.index(index).addDocuments([
 		{
 			id: contentDocumentId,
@@ -60,7 +67,7 @@ async function saveCacheData<T>(
 			content: now,
 		},
 	]);
-	console.log(`✅ ${prefix}Data cached successfully for ${contentDocumentId}`);
+	devLog(`✅ ${prefix}Data cached successfully for ${contentDocumentId}`);
 }
 
 async function updateCacheInBackground<T>(
@@ -70,7 +77,7 @@ async function updateCacheInBackground<T>(
 	fetchDataFunction: () => Promise<T>
 ) {
 	try {
-		console.log(`🔄 Background: Fetching fresh data for ${contentDocumentId}...`);
+		devLog(`🔄 Background: Fetching fresh data for ${contentDocumentId}...`);
 		
 		await ensureCacheIndexExists(index);
 		const freshData = await fetchDataFunction();
@@ -99,14 +106,14 @@ export async function withCache<T, R = T>(
 	// Calculate expiration in minutes - prioritize expirationMinutes if provided
 	const expirationMinutes = config.expirationMinutes ?? (config.expirationHours ?? 24) * 60;
 
-	console.log(`📊 Checking cache timestamp for ${config.cacheKey}...`);
+	devLog(`📊 Checking cache timestamp for ${config.cacheKey}...`);
 	
 	// First, only check if we have a valid timestamp
 	const lastUpdated = await getCacheTimestamp(index, timestampDocumentId);
 
 	// If no timestamp exists, skip cache entirely
 	if (!lastUpdated) {
-		console.log(`🔄 No cache timestamp found for ${config.cacheKey}, fetching fresh data...`);
+		devLog(`🔄 No cache timestamp found for ${config.cacheKey}, fetching fresh data...`);
 		// Jump to fresh data fetch
 	} else {
 		// We have a timestamp, check if cache is valid
@@ -118,9 +125,9 @@ export async function withCache<T, R = T>(
 			: `${hoursDiff.toFixed(1)} hours old`;
 
 		if (minutesDiff < expirationMinutes) {
-			console.log(`✅ Cache is fresh (${ageDisplay}) for ${config.cacheKey}, fetching cached data...`);
+			devLog(`✅ Cache is fresh (${ageDisplay}) for ${config.cacheKey}, fetching cached data...`);
 		} else {
-			console.log(`⏰ Cache is stale (${ageDisplay}) for ${config.cacheKey}, fetching stale data and refreshing in background...`);
+			devLog(`⏰ Cache is stale (${ageDisplay}) for ${config.cacheKey}, fetching stale data and refreshing in background...`);
 		}
 
 		// Only now fetch the cached data since we know we'll use it
@@ -137,12 +144,12 @@ export async function withCache<T, R = T>(
 			const responseData = responseTransformer ? responseTransformer(cachedData) : cachedData;
 			return responseData as R;
 		} else {
-			console.log(`❌ Cache timestamp exists but data is missing for ${config.cacheKey}, fetching fresh data...`);
+			devLog(`❌ Cache timestamp exists but data is missing for ${config.cacheKey}, fetching fresh data...`);
 		}
 	}
 
 	// No valid cache found, fetch fresh data synchronously
-	console.log(`🔄 Fetching fresh data synchronously for ${config.cacheKey}...`);
+	devLog(`🔄 Fetching fresh data synchronously for ${config.cacheKey}...`);
 	
 	try {
 		await ensureCacheIndexExists(index);
@@ -168,7 +175,7 @@ export async function invalidateCache(cacheKey: string): Promise<void> {
 
 	try {
 		await meilisearch.index(index).deleteDocuments([contentDocumentId, timestampDocumentId]);
-		console.log(`🗑️ Cache invalidated for ${cacheKey}`);
+		devLog(`🗑️ Cache invalidated for ${cacheKey}`);
 	} catch (error) {
 		console.error(`❌ Error invalidating cache for ${cacheKey}:`, error);
 	}
