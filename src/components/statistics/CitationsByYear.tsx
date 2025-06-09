@@ -1,9 +1,8 @@
-import { useMemo, useState, Fragment, useCallback, memo } from "react";
+import { useMemo, useState, memo, Fragment } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
-import { BsBarChart, BsFilter, BsX, BsBuilding, BsFolder } from "react-icons/bs";
-import { useDebounce } from "@/hooks/useDebounce";
+import { BsBarChart, BsFilter, BsX, BsBuilding, BsFolder, BsFileText, BsCalculator } from "react-icons/bs";
 import {
 	LineChart,
 	Line,
@@ -40,188 +39,141 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 	const { resolvedTheme: theme } = useTheme();
 	const [selectedInstitution, setSelectedInstitution] = useState<string>("all");
 	const [selectedTopic, setSelectedTopic] = useState<string>("all");
-	const [isFiltering, setIsFiltering] = useState(false);
-	const [institutionSearchTerm, setInstitutionSearchTerm] = useState<string>("");
-	const [topicSearchTerm, setTopicSearchTerm] = useState<string>("");
-
-	// Pre-compute institution aggregations for better performance
-	const institutionAggregations = useMemo(() => {
+	
+	// Get all institutions with their counts (don't limit here)
+	const allInstitutions = useMemo(() => {
 		const institutionCounts = new Map<string, number>();
-		const institutionByYearMap = new Map<string, Map<string, { totalCitations: number; itemCount: number }>>();
-		
 		institutionsByYear.forEach(item => {
-			// Count totals
 			const current = institutionCounts.get(item.institution) || 0;
 			institutionCounts.set(item.institution, current + item.itemCount);
-			
-			// Organize by institution -> year
-			if (!institutionByYearMap.has(item.institution)) {
-				institutionByYearMap.set(item.institution, new Map());
-			}
-			const yearMap = institutionByYearMap.get(item.institution)!;
-			const existing = yearMap.get(item.year) || { totalCitations: 0, itemCount: 0 };
-			yearMap.set(item.year, {
-				totalCitations: existing.totalCitations + item.totalCitations,
-				itemCount: existing.itemCount + item.itemCount
-			});
 		});
 		
-		return { institutionCounts, institutionByYearMap };
+		return Array.from(institutionCounts.entries())
+			.map(([name, count]) => ({ value: name, label: `${name} (${count.toLocaleString()})`, count }))
+			.sort((a, b) => b.count - a.count);
 	}, [institutionsByYear]);
 
-	// Pre-compute topic aggregations for better performance
-	const topicAggregations = useMemo(() => {
+	// Get all topics with their counts (don't limit here)
+	const allTopics = useMemo(() => {
 		const topicCounts = new Map<string, number>();
-		const topicByYearMap = new Map<string, Map<string, { totalCitations: number; itemCount: number }>>();
-		
 		topicsByYear.forEach(item => {
-			// Count totals
 			const current = topicCounts.get(item.fullPath) || 0;
 			topicCounts.set(item.fullPath, current + item.itemCount);
-			
-			// Organize by topic -> year
-			if (!topicByYearMap.has(item.fullPath)) {
-				topicByYearMap.set(item.fullPath, new Map());
-			}
-			const yearMap = topicByYearMap.get(item.fullPath)!;
-			const existing = yearMap.get(item.year) || { totalCitations: 0, itemCount: 0 };
-			yearMap.set(item.year, {
-				totalCitations: existing.totalCitations + item.totalCitations,
-				itemCount: existing.itemCount + item.itemCount
-			});
 		});
 		
-		return { topicCounts, topicByYearMap };
-	}, [topicsByYear]);
-
-	// Get all institutions and topics for searching
-	const allInstitutionsData = useMemo(() => {
-		return Array.from(institutionAggregations.institutionCounts.entries())
-			.map(([name, count]) => ({ value: name, label: `${name} (${count.toLocaleString()})`, count }));
-	}, [institutionAggregations.institutionCounts]);
-
-	const allTopicsData = useMemo(() => {
-		return Array.from(topicAggregations.topicCounts.entries())
+		return Array.from(topicCounts.entries())
 			.map(([path, count]) => ({ 
 				value: path, 
 				label: `${path.split('/').pop() || path} (${count.toLocaleString()})`, 
 				count 
-			}));
-	}, [topicAggregations.topicCounts]);
+			}))
+			.sort((a, b) => b.count - a.count);
+	}, [topicsByYear]);
 
-	// Filter and limit institutions based on search term
+	// Filter institutions based on search, then limit to 200
+	const [institutionSearchTerm, setInstitutionSearchTerm] = useState("");
+	const [topicSearchTerm, setTopicSearchTerm] = useState("");
+
 	const filteredInstitutions = useMemo(() => {
-		let filtered = allInstitutionsData;
+		let filtered = allInstitutions;
 		
 		if (institutionSearchTerm.trim()) {
 			const searchLower = institutionSearchTerm.toLowerCase();
-			filtered = allInstitutionsData.filter(inst => 
+			filtered = allInstitutions.filter(inst => 
 				inst.value.toLowerCase().includes(searchLower)
 			);
 		}
 		
-		// Sort by count (descending) and limit to top 200
-		return filtered
-			.sort((a, b) => b.count - a.count)
-			.slice(0, 200);
-	}, [allInstitutionsData, institutionSearchTerm]);
+		return filtered.slice(0, 200); // Limit to 200 after filtering
+	}, [allInstitutions, institutionSearchTerm]);
 
-	// Filter and limit topics based on search term
+	// Filter topics based on search, then limit to 200
 	const filteredTopics = useMemo(() => {
-		let filtered = allTopicsData;
+		let filtered = allTopics;
 		
 		if (topicSearchTerm.trim()) {
 			const searchLower = topicSearchTerm.toLowerCase();
-			filtered = allTopicsData.filter(topic => 
+			filtered = allTopics.filter(topic => 
 				topic.value.toLowerCase().includes(searchLower) ||
 				topic.label.toLowerCase().includes(searchLower)
 			);
 		}
 		
-		// Sort by count (descending) and limit to top 200
-		return filtered
-			.sort((a, b) => b.count - a.count)
-			.slice(0, 200);
-	}, [allTopicsData, topicSearchTerm]);
+		return filtered.slice(0, 200); // Limit to 200 after filtering
+	}, [allTopics, topicSearchTerm]);
 
-	// Debounced filter handlers for better performance
-	const [debouncedSetInstitution] = useDebounce((institution: string) => {
-		setSelectedInstitution(institution);
-		setIsFiltering(false);
-	}, 300);
-
-	const [debouncedSetTopic] = useDebounce((topic: string) => {
-		setSelectedTopic(topic);
-		setIsFiltering(false);
-	}, 300);
-
-	const handleInstitutionChange = useCallback((key: Key | null) => {
-		const selected = key as string;
-		setIsFiltering(true);
-		debouncedSetInstitution(selected || "all");
-		if (selected !== "all") setSelectedTopic("all");
-	}, [debouncedSetInstitution]);
-
-	const handleTopicChange = useCallback((key: Key | null) => {
-		const selected = key as string;
-		setIsFiltering(true);
-		debouncedSetTopic(selected || "all");
-		if (selected !== "all") setSelectedInstitution("all");
-	}, [debouncedSetTopic]);
-
-	// Process data for the chart based on selected filters - optimized with pre-computed data
+	// Process chart data based on filters
 	const chartData = useMemo(() => {
+		let data = citationsByYear;
+		
 		if (selectedInstitution !== "all") {
-			// Use pre-computed institution data
-			const yearMap = institutionAggregations.institutionByYearMap.get(selectedInstitution);
-			if (!yearMap) return [];
+			// Filter and aggregate by institution
+			const filtered = institutionsByYear.filter(item => item.institution === selectedInstitution);
+			const yearMap = new Map<string, { totalCitations: number; itemCount: number }>();
 			
-			return Array.from(yearMap.entries()).map(([year, data]) => ({
+			filtered.forEach(item => {
+				const existing = yearMap.get(item.year) || { totalCitations: 0, itemCount: 0 };
+				yearMap.set(item.year, {
+					totalCitations: existing.totalCitations + item.totalCitations,
+					itemCount: existing.itemCount + item.itemCount
+				});
+			});
+			
+			data = Array.from(yearMap.entries()).map(([year, stats]) => ({
 				year,
-				totalCitations: data.totalCitations,
-				itemCount: data.itemCount,
-				avgCitationsPerItem: data.itemCount > 0 
-					? Number((data.totalCitations / data.itemCount).toFixed(2))
-					: 0
-			})).filter(item => item.year && !isNaN(parseInt(item.year)))
-			.sort((a, b) => parseInt(a.year) - parseInt(b.year));
+				totalCitations: stats.totalCitations,
+				itemCount: stats.itemCount,
+				avgCitationsPerItem: stats.itemCount > 0 ? stats.totalCitations / stats.itemCount : 0
+			}));
+		} else if (selectedTopic !== "all") {
+			// Filter and aggregate by topic
+			const filtered = topicsByYear.filter(item => item.fullPath === selectedTopic);
+			const yearMap = new Map<string, { totalCitations: number; itemCount: number }>();
+			
+			filtered.forEach(item => {
+				const existing = yearMap.get(item.year) || { totalCitations: 0, itemCount: 0 };
+				yearMap.set(item.year, {
+					totalCitations: existing.totalCitations + item.totalCitations,
+					itemCount: existing.itemCount + item.itemCount
+				});
+			});
+			
+			data = Array.from(yearMap.entries()).map(([year, stats]) => ({
+				year,
+				totalCitations: stats.totalCitations,
+				itemCount: stats.itemCount,
+				avgCitationsPerItem: stats.itemCount > 0 ? stats.totalCitations / stats.itemCount : 0
+			}));
 		}
 		
-		if (selectedTopic !== "all") {
-			// Use pre-computed topic data
-			const yearMap = topicAggregations.topicByYearMap.get(selectedTopic);
-			if (!yearMap) return [];
-			
-			return Array.from(yearMap.entries()).map(([year, data]) => ({
-				year,
-				totalCitations: data.totalCitations,
-				itemCount: data.itemCount,
-				avgCitationsPerItem: data.itemCount > 0 
-					? Number((data.totalCitations / data.itemCount).toFixed(2))
-					: 0
-			})).filter(item => item.year && !isNaN(parseInt(item.year)))
+		return data
+			.filter(item => item.year && !isNaN(parseInt(item.year)))
 			.sort((a, b) => parseInt(a.year) - parseInt(b.year));
-		}
-		
-		// Use the original unfiltered data
-		return citationsByYear
-			.filter(item => item.year && item.year !== '' && !isNaN(parseInt(item.year)))
-			.sort((a, b) => parseInt(a.year) - parseInt(b.year));
-	}, [citationsByYear, institutionAggregations.institutionByYearMap, topicAggregations.topicByYearMap, selectedInstitution, selectedTopic]);
+	}, [citationsByYear, institutionsByYear, topicsByYear, selectedInstitution, selectedTopic]);
 
-	// Calculate overall stats for the filtered data
-	const overallStats = useMemo(() => {
+	// Calculate stats
+	const stats = useMemo(() => {
 		const totalCitations = chartData.reduce((sum, item) => sum + item.totalCitations, 0);
 		const totalItems = chartData.reduce((sum, item) => sum + item.itemCount, 0);
-		const avgCitationsPerItem = totalItems > 0 ? Number((totalCitations / totalItems).toFixed(2)) : 0;
+		const avgCitationsPerItem = totalItems > 0 ? totalCitations / totalItems : 0;
 
 		return {
 			totalCitations,
 			totalItems,
-			avgCitationsPerItem,
+			avgCitationsPerItem: Number(avgCitationsPerItem.toFixed(2)),
 			yearsCovered: chartData.length,
 		};
 	}, [chartData]);
+
+	const handleInstitutionChange = (key: Key | null) => {
+		setSelectedInstitution(key as string || "all");
+		if (key !== "all") setSelectedTopic("all");
+	};
+
+	const handleTopicChange = (key: Key | null) => {
+		setSelectedTopic(key as string || "all");
+		if (key !== "all") setSelectedInstitution("all");
+	};
 
 	const clearFilters = () => {
 		setSelectedInstitution("all");
@@ -260,7 +212,8 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 							placeholder={t("selectInstitution")}
 							selectedKey={selectedInstitution}
 							onSelectionChange={handleInstitutionChange}
-							onInputChange={(value) => setInstitutionSearchTerm(value)}
+							onInputChange={setInstitutionSearchTerm}
+							itemHeight={48}
 							inputProps={{
 								classNames: {
 									inputWrapper:
@@ -269,43 +222,37 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 								},
 							}}
 							className="flex-1 max-w-full"
-							isVirtualized={true}
-							itemHeight={64}
 						>
-							{[
+							<Fragment>
 								<AutocompleteItem 
 									key="all"
 									startContent={<BsBuilding className="text-black/40 dark:text-white/40" />}
 								>
 									{t("allInstitutions")}
-								</AutocompleteItem>,
-								...filteredInstitutions.map((institution) => {
-								// Find the institution data to get country code
-								const institutionData = institutionsByYear.find(inst => inst.institution === institution.value);
-								const countryCode = institutionData?.countryCode;
-								const countryName = countryCode ? COUNTRIES[countryCode] : undefined;
-								
-								return (
-									<AutocompleteItem 
-										key={institution.value}
-										startContent={
-											<div className="flex items-center gap-2">
-												{countryCode && (
-													<CountryFlag countryCode={countryCode} className="w-5 h-3" />
-												)}
-												<BsBuilding className="text-black/40 dark:text-white/40" />
-											</div>
-										}
-										description={countryName ? `${countryName} • ${institution.count.toLocaleString()} items` : `${institution.count.toLocaleString()} items`}
-										textValue={`${institution.value} ${countryName || ''}`}
-									>
-										<div className="flex flex-col">
-											<span className="font-medium">{institution.value}</span>
-										</div>
-									</AutocompleteItem>
-								);
-							})
-							]}
+								</AutocompleteItem>
+								{filteredInstitutions.map((institution) => {
+									const institutionData = institutionsByYear.find(inst => inst.institution === institution.value);
+									const countryCode = institutionData?.countryCode;
+									const countryName = countryCode ? COUNTRIES[countryCode] : undefined;
+									
+									return (
+										<AutocompleteItem 
+											key={institution.value}
+											startContent={
+												<div className="flex items-center gap-2">
+													{countryCode && (
+														<CountryFlag countryCode={countryCode} className="w-5 h-3" />
+													)}
+													<BsBuilding className="text-black/40 dark:text-white/40" />
+												</div>
+											}
+											description={countryName ? `${countryName} • ${institution.count.toLocaleString()} items` : `${institution.count.toLocaleString()} items`}
+										>
+											{institution.value}
+										</AutocompleteItem>
+									);
+								})}
+							</Fragment>
 						</Autocomplete>
 
 						{/* Topic Filter */}
@@ -314,7 +261,8 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 							placeholder={t("selectTopic")}
 							selectedKey={selectedTopic}
 							onSelectionChange={handleTopicChange}
-							onInputChange={(value) => setTopicSearchTerm(value)}
+							onInputChange={setTopicSearchTerm}
+							itemHeight={48}
 							inputProps={{
 								classNames: {
 									inputWrapper:
@@ -323,63 +271,48 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 								},
 							}}
 							className="flex-1 max-w-full"
-							isVirtualized={true}
-							itemHeight={64}
 						>
-							{[
+							<Fragment>
 								<AutocompleteItem 
 									key="all"
 									startContent={<BsFolder className="text-black/40 dark:text-white/40" />}
 								>
 									{t("allTopics")}
-								</AutocompleteItem>,
-								...filteredTopics.map((topic) => {
-								const pathParts = topic.value.split('/');
-								const level = pathParts.length;
-								const topLevelTopic = pathParts[0];
-								const displayName = pathParts[pathParts.length - 1];
-								
-								return (
-									<AutocompleteItem 
-										key={topic.value}
-										startContent={
-											<div className="flex items-center gap-2">
-												<BsFolder className="text-black/40 dark:text-white/40" />
-												{level > 1 && (
-													<span className="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
-														L{level}
-													</span>
-												)}
-											</div>
-										}
-										description={
-											level > 1 
-												? `${topLevelTopic} → ${topic.count.toLocaleString()} items`
-												: `${topic.count.toLocaleString()} items`
-										}
-										textValue={`${displayName} ${topic.value}`}
-									>
-										<div className="flex flex-col">
-											<span className="font-medium">{displayName}</span>
-											{level > 1 && (
-												<span className="text-xs text-black/50 dark:text-white/50 truncate">
-													{topic.value}
-												</span>
-											)}
-										</div>
-									</AutocompleteItem>
-								);
-							})
-							]}
+								</AutocompleteItem>
+								{filteredTopics.map((topic) => {
+									const pathParts = topic.value.split('/');
+									const level = pathParts.length;
+									const displayName = pathParts[pathParts.length - 1];
+									
+									return (
+										<AutocompleteItem 
+											key={topic.value}
+											startContent={
+												<div className="flex items-center gap-2">
+													<BsFolder className="text-black/40 dark:text-white/40" />
+													{level > 1 && (
+														<span className="text-xs px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded">
+															L{level}
+														</span>
+													)}
+												</div>
+											}
+											description={`${topic.count.toLocaleString()} items`}
+										>
+											{displayName}
+										</AutocompleteItem>
+									);
+								})}
+							</Fragment>
 						</Autocomplete>
 					</div>
 				</motion.div>
 
-				{/* Overall Stats */}
+				{/* Stats */}
 				<motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-4 gap-6">
 					<div className="text-center p-6 rounded-2xl bg-gradient-to-br from-blue-500/10 to-blue-600/5 border border-blue-500/20">
 						<div className="text-3xl font-bold text-blue-600 dark:text-blue-400 mb-2">
-							{overallStats.totalCitations.toLocaleString()}
+							{stats.totalCitations.toLocaleString()}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
 							{t("totalCitations")}
@@ -387,7 +320,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 					</div>
 					<div className="text-center p-6 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-emerald-600/5 border border-emerald-500/20">
 						<div className="text-3xl font-bold text-emerald-600 dark:text-emerald-400 mb-2">
-							{overallStats.totalItems.toLocaleString()}
+							{stats.totalItems.toLocaleString()}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
 							{t("totalItems")}
@@ -395,7 +328,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 					</div>
 					<div className="text-center p-6 rounded-2xl bg-gradient-to-br from-amber-500/10 to-amber-600/5 border border-amber-500/20">
 						<div className="text-3xl font-bold text-amber-600 dark:text-amber-400 mb-2">
-							{overallStats.avgCitationsPerItem}
+							{stats.avgCitationsPerItem}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
 							{t("avgCitationsPerItem")}
@@ -403,7 +336,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 					</div>
 					<div className="text-center p-6 rounded-2xl bg-gradient-to-br from-purple-500/10 to-purple-600/5 border border-purple-500/20">
 						<div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-2">
-							{overallStats.yearsCovered}
+							{stats.yearsCovered}
 						</div>
 						<div className="text-sm font-medium text-black/60 dark:text-white/60">
 							{t("yearsCovered")}
@@ -416,17 +349,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 					<h3 className="text-lg font-semibold text-black dark:text-white">
 						{t("citationTrendsOverTime")}
 					</h3>
-					<Card color="card" className="p-6 relative">
-						{isFiltering && (
-							<div className="absolute inset-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm rounded-2xl flex items-center justify-center z-10">
-								<div className="flex items-center gap-3">
-									<div className="w-5 h-5 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-									<span className="text-sm font-medium text-black/80 dark:text-white/80">
-										{t("loadingData")}
-									</span>
-								</div>
-							</div>
-						)}
+					<Card color="card" className="p-6">
 						<div className="h-96">
 							<ResponsiveContainer width="100%" height="100%">
 								<LineChart
@@ -456,25 +379,87 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 										axisLine={false}
 										tickFormatter={(value) => value.toFixed(1)}
 									/>
+									<YAxis
+										yAxisId="items"
+										orientation="right"
+										className="text-black/60 dark:text-white/60"
+										tick={{ fontSize: 12 }}
+										axisLine={false}
+										tickFormatter={(value) => value.toLocaleString()}
+									/>
 									<Tooltip
 										contentStyle={{
 											backgroundColor: theme === "dark" ? "#1a1a1a" : "#ffffff",
 											border: `1px solid ${theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}`,
-											borderRadius: "12px",
-											boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
-											padding: "12px",
+											borderRadius: "16px",
+											boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
+											padding: "16px",
+											minWidth: "200px",
 										}}
-										labelStyle={{ color: theme === "dark" ? "#ffffff" : "#000000", fontWeight: "500" }}
-										itemStyle={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}
-										formatter={(value: number, name: string) => {
-											if (name === t("totalCitations")) {
-												return [value.toLocaleString(), t("totalCitations")];
-											} else if (name === t("avgCitationsPerItem")) {
-												return [value.toFixed(2), t("avgCitationsPerItem")];
-											}
-											return [value, name];
+										labelStyle={{ display: "none" }}
+										itemStyle={{ display: "none" }}
+										content={({ active, payload, label }) => {
+											if (!active || !payload || !payload.length) return null;
+											
+											const data = payload[0].payload;
+											const totalCitations = data.totalCitations;
+											const avgCitations = data.avgCitationsPerItem;
+											const itemCount = data.itemCount;
+											
+											return (
+												<div className="bg-white dark:bg-[#1a1a1a] border border-black/10 dark:border-white/10 rounded-2xl shadow-lg p-4 min-w-[200px] space-y-3">
+													{/* Header */}
+													<div className="flex items-center gap-2 pb-2 border-b border-black/10 dark:border-white/10">
+														<BsBarChart className="text-accent w-4 h-4" />
+														<span className="font-semibold text-black dark:text-white">
+															{t("year")} {label}
+														</span>
+													</div>
+													
+													{/* Stats */}
+													<div className="space-y-2">
+														{/* Total Citations */}
+														<div className="flex items-center justify-between gap-3">
+															<div className="flex items-center gap-2">
+																<div className="w-3 h-3 rounded-full bg-blue-500"></div>
+																<span className="text-sm font-medium text-black/80 dark:text-white/80">
+																	{t("totalCitations")}
+																</span>
+															</div>
+															<span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+																{totalCitations?.toLocaleString() || 0}
+															</span>
+														</div>
+														
+														{/* Average Citations */}
+														<div className="flex items-center justify-between gap-3">
+															<div className="flex items-center gap-2">
+																<div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+																<span className="text-sm font-medium text-black/80 dark:text-white/80">
+																	{t("avgCitationsPerItem")}
+																</span>
+															</div>
+															<span className="text-sm font-bold text-yellow-600 dark:text-yellow-400">
+																{avgCitations?.toFixed(2) || "0.00"}
+															</span>
+														</div>
+														
+														{/* Total Items */}
+														<div className="flex items-center justify-between gap-3">
+															<div className="flex items-center gap-2">
+																<div className="w-3 h-3 rounded-full bg-emerald-500"></div>
+																<span className="text-sm font-medium text-black/80 dark:text-white/80">
+																	{t("totalItems")}
+																</span>
+															</div>
+															<span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">
+																{itemCount?.toLocaleString() || 0}
+															</span>
+														</div>
+													</div>
+												</div>
+											);
 										}}
-										labelFormatter={(label) => `${t("year")} ${label}`}
 									/>
 									<Legend />
 									<Line
@@ -491,11 +476,21 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 										yAxisId="avg"
 										type="monotone"
 										dataKey="avgCitationsPerItem"
+										stroke="#F59E0B"
+										strokeWidth={3}
+										dot={{ fill: "#F59E0B", strokeWidth: 2, r: 4 }}
+										activeDot={{ r: 6, stroke: "#F59E0B", strokeWidth: 2 }}
+										name={t("avgCitationsPerItem")}
+									/>
+									<Line
+										yAxisId="items"
+										type="monotone"
+										dataKey="itemCount"
 										stroke="#10B981"
 										strokeWidth={3}
 										dot={{ fill: "#10B981", strokeWidth: 2, r: 4 }}
 										activeDot={{ r: 6, stroke: "#10B981", strokeWidth: 2 }}
-										name={t("avgCitationsPerItem")}
+										name={t("totalItems")}
 									/>
 								</LineChart>
 							</ResponsiveContainer>
