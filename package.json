@@ -3,7 +3,7 @@
   "version": "0.4.4",
   "private": true,
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev",
     "build": "npm run icons:generate && FORCE_COLOR=1 NODE_OPTIONS='--max_old_space_size=8192' next build --turbopack && npm run sitemap:generate",
     "start": "next start",
     "lint": "next lint",
