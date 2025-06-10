@@ -234,26 +234,6 @@ export default function Resource({
 
 	const href = `/lib/${finalItemData?.key ?? ""}`;
 
-	useEffect(() => {
-		if (!finalItemData?.key) return;
-
-		const observer = new IntersectionObserver((entries) => {
-			entries.forEach((entry) => {
-				if (entry.isIntersecting) {
-					router.prefetch(href, { kind: PrefetchKind.AUTO });
-					observer.disconnect();
-				}
-			});
-		});
-
-		const linkElement = document.querySelector(`a[href="${href}"]`);
-		if (linkElement) {
-			observer.observe(linkElement);
-		}
-
-		return () => observer.disconnect();
-	}, [href, router, finalItemData?.key]);
-
 	const targetHref = serializeSearchParams(href, {
 		referrer:
 			referrer ??
@@ -277,6 +257,7 @@ export default function Resource({
 					"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
 					!finalItemData?.key && "!pointer-events-none"
 				)}
+				prefetch={true}
 				onMouseDown={(e) => {
 					if (!finalItemData?.key) return;
 
