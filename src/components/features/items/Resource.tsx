@@ -31,6 +31,7 @@ import useSWR from "swr";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { useQueryState } from "nuqs";
 import { COMING_SOON_TAG, INTERNAL_TAG } from "@/constants/items";
+import PrefetchLink from "../PrefetchLink";
 
 export function AddButton({
 	itemData,
@@ -231,7 +232,6 @@ export default function Resource({
 	const abstractText =
 		finalItemData && firstNonNullOrEmpty(finalItemData, ["abstractNote"]);
 
-
 	const href = `/lib/${finalItemData?.key ?? ""}`;
 
 	const targetHref = serializeSearchParams(href, {
@@ -251,29 +251,12 @@ export default function Resource({
 				className
 			)}
 		>
-			<Link
+			<PrefetchLink
 				href={finalItemData?.key ? targetHref : ""}
 				className={twMerge(
 					"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
 					!finalItemData?.key && "!pointer-events-none"
 				)}
-				prefetch={true}
-				onMouseDown={(e) => {
-					if (!finalItemData?.key) return;
-
-					const url = new URL(href, window.location.href);
-					if (
-						url.origin === window.location.origin &&
-						e.button === 0 &&
-						!e.altKey &&
-						!e.ctrlKey &&
-						!e.metaKey &&
-						!e.shiftKey
-					) {
-						e.preventDefault();
-						router.push(targetHref);
-					}
-				}}
 			>
 				<article className="flex flex-col gap-4">
 					<Skeleton
@@ -322,13 +305,13 @@ export default function Resource({
 									</>
 								)}
 
-							{finalItemData?.tags?.includes(COMING_SOON_TAG)  && (
+							{finalItemData?.tags?.includes(COMING_SOON_TAG) && (
 								<span className="bg-black/10 border border-accent rounded-lg px-4 py-1 text-accent font-medium w-full @[720px]:w-auto text-center">
 									{t("inProgress")}
 								</span>
 							)}
 
-							{(finalItemData?.tags?.includes(INTERNAL_TAG)) && (
+							{finalItemData?.tags?.includes(INTERNAL_TAG) && (
 								<span className="bg-black/10 border border-danger rounded-lg px-4 py-1 text-danger font-medium w-full @[720px]:w-auto text-center">
 									{t("internal")}
 								</span>
@@ -349,7 +332,7 @@ export default function Resource({
 						</Skeleton>
 					)}
 				</article>
-			</Link>
+			</PrefetchLink>
 			<ResourceInteractions
 				itemData={finalItemData}
 				isLoading={finalIsLoading}
