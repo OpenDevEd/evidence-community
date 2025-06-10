@@ -576,12 +576,13 @@ function transformItem(item: Item | undefined) {
 	const ExtraValues = getExtraValues(item.extra || "");
 
 	item.DOI = item.DOI || ExtraValues.get("DOI") || null;
-	item.url =
-		item.attachmentsData?.find((attachment) =>
-			attachment.title?.includes(
-				"📝View Google Doc and download alternative formats"
-			)
-		)?.url || item.url;
+	// item.url =
+	// 	item.attachmentsData?.find((attachment) =>
+	// 		attachment.title?.includes(
+	// 			"📝View Google Doc and download alternative formats"
+	// 		)
+	// 	)?.url ||
+	// 	item.url;
 	return item;
 }
 
