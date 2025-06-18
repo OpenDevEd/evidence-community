@@ -146,7 +146,7 @@ export function Logo({
 }) {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const status = useStatus();
-	const { theme } = useTheme();
+	const { resolvedTheme: theme } = useTheme();
 	const t = useTranslations("ui");
 	const companyLogoStyle = status.companyLogo || "";
 
@@ -183,7 +183,7 @@ export function Logo({
 							: "hidden dark:block"
 					)}
 					alt={t("logoAlt", {
-						company: status?.companyName,
+						company: status?.companyName ?? "",
 						theme: themeToMatch,
 					})}
 					style={{ ...getDynamicStyles(navbarStyle) }}
@@ -619,7 +619,7 @@ export default function Navbar() {
 	const t = useTranslations("ui");
 	const pathname = usePathname();
 	const [isMounted, setIsMounted] = useState(false);
-	const { theme, setTheme } = useTheme();
+	const { resolvedTheme: theme, setTheme } = useTheme();
 	const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 	const { data: session } = useSession();
 	const isLoginEnabled = useFeatureFlagEnabled("login");

@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect } from "react";
 import { Item } from "@/app/api/item/types";
-import { Link, Skeleton } from "@nextui-org/react";
+import { Link, Skeleton, Spinner } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import Image from "next/image";
 import { LuDownload } from "react-icons/lu";
@@ -12,6 +12,8 @@ import posthog from "posthog-js";
 import { useTranslations } from "next-intl";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { Card } from "@/components/nextui/Card";
+import useSWR from "swr";
+import { fetcher, fetcherExternal } from "@/lib/utils";
 
 function downloadLink(url: string, filename: string, key: string) {
 	fetch(url)
@@ -29,15 +31,47 @@ function downloadLink(url: string, filename: string, key: string) {
 		.catch(console.error);
 }
 
+function getAttachmentFromOpenAlex(work: any) {
+	const potentialLocations = [
+		work.locations?.find((location: any) => location.pdf_url),
+		work.locations?.find((location: any) => location.landing_page_url),
+		work.locations?.[0],
+	];
+
+	const pdfUrl = potentialLocations.find(
+		(location) => location?.pdf_url && location.is_oa
+	)?.pdf_url;
+
+	return pdfUrl;
+}
+
 export default function Attachment({ data }: { data: Item }) {
 	const [loaded, setLoaded] = useState(false);
 	const canHover = loaded || !data?.PDFCoverPageImage;
 	const imageRef = useRef<HTMLImageElement>(null);
 	const parentRef = useRef<HTMLLIElement>(null);
-	const [imageHeight, setImageHeight] = useState<number | undefined>(undefined);
-	const [parentHeight, setParentHeight] = useState<number | undefined>(undefined);
+	const [imageHeight, setImageHeight] = useState<number | undefined>(
+		undefined
+	);
+	const [parentHeight, setParentHeight] = useState<number | undefined>(
+		undefined
+	);
 	const t = useTranslations("ui");
 	const isDesktop = useBreakpoint("md");
+	const hasImage = data.PDFCoverPageImage;
+
+	const isExternal = data.tags?.some(
+		(tag: string) => tag.toLowerCase() === "_auto-process"
+	);
+	const { data: itemFromOpenAlex, isLoading: isLoadingOpenAlex } = useSWR(
+		isExternal ? "https://api.openalex.org/works/" + data.parentItem : null,
+		fetcherExternal
+	);
+	const pdfUrl =
+		(isExternal && !isLoadingOpenAlex && itemFromOpenAlex)
+			? getAttachmentFromOpenAlex(itemFromOpenAlex)
+			: null;
+	const shouldShowLoading = isExternal && isLoadingOpenAlex;
 
 	// Update height measurements when window resizes
 	useEffect(() => {
@@ -48,12 +82,12 @@ export default function Attachment({ data }: { data: Item }) {
 
 		// Initial measurement
 		updateHeights();
-		
+
 		// Add resize listener
-		window.addEventListener('resize', updateHeights);
-		
+		window.addEventListener("resize", updateHeights);
+
 		// Clean up
-		return () => window.removeEventListener('resize', updateHeights);
+		return () => window.removeEventListener("resize", updateHeights);
 	}, [loaded]); // Re-run when image is loaded
 
 	const downloadURL = `/lib/${data.parentItem}/download/${data.key}`;
@@ -72,11 +106,19 @@ export default function Attachment({ data }: { data: Item }) {
 						width={512}
 						height={512}
 						onLoad={() => setLoaded(true)}
-						className={twMerge("rounded-xl bg-accent w-full", className)}
+						className={twMerge(
+							"rounded-xl bg-accent w-full",
+							className
+						)}
 					/>
 				</Skeleton>
 			) : (
-				<div className={twMerge("rounded-xl bg-accent w-full aspect-[9/12]", className)} />
+				<div
+					className={twMerge(
+						"rounded-xl bg-accent w-full aspect-[9/12]",
+						className
+					)}
+				/>
 			)}
 		</>
 	);
@@ -85,11 +127,11 @@ export default function Attachment({ data }: { data: Item }) {
 	const AttachmentTitle = ({ className }: { className?: string }) => (
 		<h4 className={twMerge("text-lg font-medium", className)}>
 			<Link
-				href={downloadURL}
+				href={isExternal ? pdfUrl : downloadURL}
 				target="_blank"
 				className="dark:text-current text-current text-wrap-anywhere text-lg"
 			>
-				{data.filename}
+				{isExternal ? itemFromOpenAlex?.title : data.filename}
 			</Link>
 		</h4>
 	);
@@ -97,33 +139,52 @@ export default function Attachment({ data }: { data: Item }) {
 	// Shared component for rendering the action buttons
 	const AttachmentButtons = ({ className }: { className?: string }) => (
 		<div className={twMerge("flex gap-2", className)}>
-			<Button
-				size="sm"
-				onPress={() => {
-					window.open(downloadURL, "_blank");
-					posthog.capture("view_attachment", {
-						key: data.key,
-						filename: data.filename,
-					});
-				}}
-				startContent={<FaEye className="size-5" />}
-			>
-				{t("viewAttachment")}
-			</Button>
-			<Button
-				size="sm"
-				color="accent"
-				startContent={<LuDownload className="size-5" />}
-				onPress={() => {
-					downloadLink(
-						data.url || "",
-						data.filename || "",
-						data.key || ""
-					);
-				}}
-			>
-				{t("downloadAttachment")}
-			</Button>
+			{!isExternal ? (
+				<>
+					<Button
+						size="sm"
+						onPress={() => {
+							window.open(downloadURL, "_blank");
+							posthog.capture("view_attachment", {
+								key: data.key,
+								filename: data.filename,
+							});
+						}}
+						startContent={<FaEye className="size-5" />}
+					>
+						{t("viewAttachment")}
+					</Button>
+					<Button
+						size="sm"
+						color="accent"
+						startContent={<LuDownload className="size-5" />}
+						onPress={() => {
+							downloadLink(
+								data.url || "",
+								data.filename || "",
+								data.key || ""
+							);
+						}}
+					>
+						{t("downloadAttachment")}
+					</Button>
+				</>
+			) : (
+				<Button
+					size="sm"
+					color="accent"
+					startContent={<LuDownload className="size-5" />}
+					onPress={() => {
+						window.open(pdfUrl, "_blank");
+						posthog.capture("view_attachment", {
+							key: data.key,
+							filename: data.filename,
+						});
+					}}
+				>
+					{t("openDocument")}
+				</Button>
+			)}
 		</div>
 	);
 
@@ -135,23 +196,38 @@ export default function Attachment({ data }: { data: Item }) {
 			key={data.id}
 			color="card"
 		>
+			{shouldShowLoading && <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+				<Spinner />
+			</div>}
+			{hasImage && (
+				<div
+					data-height={imageHeight}
+					style={
+						{
+							"--image-height": `${
+								-(imageHeight ?? 0) +
+								(parentHeight ?? 0) -
+								4 * 4
+							}px`,
+						} as any
+					}
+					className={twMerge(
+						"w-24 lg:w-48 bottom-0 top-4 absolute overflow-hidden transition-all",
+						canHover && "hover:top-[var(--image-height)]"
+					)}
+				>
+					<AttachmentImage />
+				</div>
+			)}
 			<div
-				data-height={imageHeight}
-				style={
-					{
-						"--image-height": `${
-							-(imageHeight ?? 0) + (parentHeight ?? 0) - 4 * 4
-						}px`,
-					} as any
-				}
 				className={twMerge(
-					"w-24 lg:w-48 bottom-0 top-4 absolute overflow-hidden transition-all",
-					canHover && "hover:top-[var(--image-height)]"
+					"flex flex-col gap-2 h-full",
+					hasImage
+						? "lg:ltr:ml-52 lg:rtl:mr-52 ltr:ml-28 rtl:mr-28"
+						: "",
+					shouldShowLoading && "opacity-0"
 				)}
 			>
-				<AttachmentImage />
-			</div>
-			<div className="flex flex-col gap-2 h-full lg:ltr:ml-52 lg:rtl:mr-52 ltr:ml-28 rtl:mr-28">
 				<AttachmentTitle className="lg:line-clamp-none line-clamp-2" />
 				<AttachmentButtons />
 			</div>
@@ -161,9 +237,11 @@ export default function Attachment({ data }: { data: Item }) {
 			className="flex flex-col gap-4 p-4 rounded-2xl w-full dark:bg-background"
 			key={data.id}
 		>
-			<div className="w-full max-w-[200px] mx-auto">
-				<AttachmentImage />
-			</div>
+			{hasImage && (
+				<div className="w-full max-w-[200px] mx-auto">
+					<AttachmentImage />
+				</div>
+			)}
 			<div className="flex flex-col gap-2">
 				<AttachmentTitle className="line-clamp-2" />
 				<AttachmentButtons className="flex-wrap" />

@@ -11,7 +11,6 @@ export type RateLimit = {
 	firstRequest: number;
 }
 
-
 export const rateLimits = new Map<string, RateLimit>();
 
 const AMOUNT_OF_REQUESTS = 10;
@@ -309,7 +308,7 @@ export const config = {
 	// if one of them matches, the middleware will be invoked.
 	matcher: [
 		// Match all pathnames except for specific prefixes and file extensions
-		'/((?!_next|_vercel|ingest|sentry-example-page|monitoring|.*\\..*).*)',
+		'/((?!_next|_vercel|ingest|.*\\..*).*)',
 		// Updated matchers for new export URL format
 		'/([\\w-]+)?/lib/:path*/export/ris',
 		'/([\\w-]+)?/lib/:path*/export/bibtex',

@@ -132,7 +132,7 @@ export default function ChatModal({
 		initialMessages: [
 			{
 				role: "assistant",
-				content: t("chatPlaceholder", { title: data?.item?.title }),
+				content: t("chatPlaceholder", { title: data?.item?.title || "" }),
 				id: "start",
 			},
 		],
@@ -167,7 +167,7 @@ export default function ChatModal({
 					appendMessage({
 						role: "assistant",
 						content: t("rateLimitedMessage", {
-							seconds: rateLimits.retryAfter,
+							seconds: rateLimits.retryAfter || 0,
 						}),
 						id: "error-" + Date.now(),
 					});

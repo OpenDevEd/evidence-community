@@ -37,7 +37,7 @@ export default function UserCollection({
 			onPress={onPress}
 			isDisabled={isLoading}
 			aria-label={t("collectionButtonAriaLabel", {
-				name: collection?.name
+				name: collection?.name || ""
 			})}
 		>
 			{!!collection && (

@@ -963,3 +963,5 @@ export const COUNTRY_PARAMS: Record<string, string> = (() => {
 })();
 
 export const SITEMAP_SIZE = 10000;
+
+export const IS_COUNTRY_LIBRARY = process.env.NEXT_PUBLIC_IS_COUNTRY_LIBRARY === "true";

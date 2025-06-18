@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { authOptions, auth } from "../auth/[...nextauth]/config";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { eq, and, sql, InferSelectModel } from "drizzle-orm";
-import { getCachedUserLikes, setCachedUserLikes } from "../cache";
+import { getCachedUserLikes } from "../cache";
 import { revalidatePath, revalidateTag } from "next/cache";
 
 export async function GET() {
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       cachedLikes.splice(cachedLikes.indexOf(cachedLike), 1);
     }
     cachedLikes.push(result[0]);
-    setCachedUserLikes(session.user.id, cachedLikes);
+    // setCachedUserLikes(session.user.id, cachedLikes);
 
     return NextResponse.json({ liked: !result[0].deleted });
   } catch (error) {

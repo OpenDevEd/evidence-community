@@ -166,7 +166,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 						</HeaderSection>
 					</div>
 					<div className="ltr:ml-auto rtl:mr-auto flex flex-row-reverse items-center gap-2 flex-wrap">
-						{item?.url && (
+						{/* {item?.url && (
 							<a href={item.url} target="_blank">
 								<Button
 									size="sm"
@@ -177,7 +177,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 									{t("itemViewOriginal")}
 								</Button>
 							</a>
-						)}
+						)} */}
 						<CopyButton
 							textToCopy={getUrl() + "/newlib/" + item?.key}
 						>
@@ -576,12 +576,13 @@ function transformItem(item: Item | undefined) {
 	const ExtraValues = getExtraValues(item.extra || "");
 
 	item.DOI = item.DOI || ExtraValues.get("DOI") || null;
-	item.url =
-		item.attachmentsData?.find((attachment) =>
-			attachment.title?.includes(
-				"📝View Google Doc and download alternative formats"
-			)
-		)?.url || item.url;
+	// item.url =
+	// 	item.attachmentsData?.find((attachment) =>
+	// 		attachment.title?.includes(
+	// 			"📝View Google Doc and download alternative formats"
+	// 		)
+	// 	)?.url ||
+	// 	item.url;
 	return item;
 }
 
@@ -600,7 +601,6 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"id",
 		"itemType",
 		"version",
-		"url",
 		"country",
 		"institution",
 		"dateAdded",
@@ -998,7 +998,9 @@ function ItemCountry({ item }: { item: Item | undefined }) {
 function ItemAttachments({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const validAttachments = item?.attachmentsData?.filter(
-		(attachment) => attachment.PDFCoverPageImage
+		(attachment) =>
+			attachment.PDFCoverPageImage ||
+			attachment.tags?.some((tag) => tag.toLowerCase() === "_auto-process")
 	);
 
 	if (!validAttachments?.length) return null;

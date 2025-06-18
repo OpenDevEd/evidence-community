@@ -24,7 +24,6 @@ import {
 	getCachedItemSmall,
 	getCachedStatus,
 	getCachedUserLikes,
-	setCachedItemSmall,
 } from "@/app/api/cache";
 import { getCachedUserCollectionKeys } from "@/app/api/cache";
 import { auth, credentialsSchema } from "@/app/api/auth/[...nextauth]/config";
@@ -824,6 +823,84 @@ function cleanTheAttributesToSearchOn(fields: string[]) {
 	return fields;
 }
 
+function isEmptyValue(value: any): boolean {
+	return value === null || 
+		   value === undefined || 
+		   value === "" || 
+		   (Array.isArray(value) && value.length === 0);
+}
+
+function filterEmptyValues<T extends Record<string, any>>(obj: T): Record<string, any> {
+	return Object.entries(obj).reduce((acc, [key, value]) => {
+		if (!isEmptyValue(value)) {
+			acc[key] = value;
+		}
+		return acc;
+	}, {} as Record<string, any>);
+}
+
+function serializeWithoutQuotes(obj: any): string {
+	if (Array.isArray(obj)) {
+		return `[${obj.map(serializeWithoutQuotes).join(',')}]`;
+	}
+	if (typeof obj === 'object' && obj !== null) {
+		const entries = Object.entries(obj)
+			.map(([key, value]) => `${key}:${serializeWithoutQuotes(value)}`)
+			.join(',');
+		return `{${entries}}`;
+	}
+	if (typeof obj === 'string') {
+		return obj;
+	}
+	return String(obj);
+}
+
+function cleanCacheKey(
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
+	extraFilters: NonNullable<
+		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
+	>["filter"] = [],
+	extraProperties: Parameters<
+		ReturnType<typeof meilisearchClient.index>["search"]
+	>[1] = {}
+) {
+	// Remove default values that don't affect search results
+	const cleanedSearchParams = filterEmptyValues({
+		...searchParams,
+		// Remove defaults
+		page: searchParams.page !== 1 ? searchParams.page : undefined,
+		sort: searchParams.sort !== SORT_OPTIONS[0].key ? searchParams.sort : undefined,
+		scope: searchParams.scope !== SCOPE_OPTIONS[0].key ? searchParams.scope : undefined,
+	});
+
+	// Remove redundant collection filters since they're already in searchParams.collections
+	const cleanedExtraFilters = Array.isArray(extraFilters) 
+		? extraFilters.filter(filter => 
+			filter && !filter.includes('collectionsAncestry = ')
+		) 
+		: [];
+
+	// Remove standard facets that are always the same
+	const standardFacets = ["collectionsAncestry", "institution", "country", "creators.institutions.country_code"];
+	const cleanedExtraProperties = filterEmptyValues({
+		...extraProperties,
+		facets: Array.isArray(extraProperties.facets) && 
+			JSON.stringify(extraProperties.facets) !== JSON.stringify(standardFacets)
+			? extraProperties.facets 
+			: undefined,
+	});
+
+	const keyParts = [
+		cleanedSearchParams,
+		cleanedExtraFilters,
+		cleanedExtraProperties
+	]
+		.filter(part => Array.isArray(part) ? part.length > 0 : Object.keys(part).length > 0)
+		.map(part => serializeWithoutQuotes(part));
+
+	return keyParts.join('-') || 'default';
+}
+
 export async function searchIndex(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	extraProperties: Parameters<
@@ -833,7 +910,7 @@ export async function searchIndex(
 		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
 	>["filter"] = []
 ) {
-	const cacheKey = `${buildItemsQuery(searchParams)}-${JSON.stringify(extraFilters)}-${JSON.stringify(extraProperties)}`;
+	const cacheKey = cleanCacheKey(searchParams, extraFilters, extraProperties);
 
 	const items = unstable_cache(async () => {
 		const pageNum = Math.max(1, Number(searchParams.page || 1));
@@ -905,9 +982,9 @@ export async function searchIndex(
 					) as Collection[];
 			}
 
-			await setCachedItemSmall(item.key, {
-				item: item as Item,
-			});
+			// await setCachedItemSmall(item.key, {
+			// 	item: item as Item,
+			// });
 
 			return item;
 		});

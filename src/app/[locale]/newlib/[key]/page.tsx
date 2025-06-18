@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { getCachedItemSmall } from "@/app/api/cache";
 import ItemPage from "@/components/features/newlib/ItemPage";
+import { ItemGetResponse } from "@/app/api/item/types";
 
 async function getCurrentItem(key: string) {
     const data = await getCachedItemSmall(key).catch(() => ({ item: undefined }));
@@ -22,5 +23,5 @@ export default async function NewLibPage({
 	if (!data) {
 		return notFound();
 	}
-	return <ItemPage data={data} loading={false} />;
+	return <ItemPage data={data as ItemGetResponse} loading={false} />;
 }

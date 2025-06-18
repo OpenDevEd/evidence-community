@@ -133,6 +133,9 @@ export function formatRange(range: string | null) {
 export const fetcher = (url: string) =>
 	fetch(`/api${url}`).then((res) => res.json());
 
+export const fetcherExternal = (url: string) =>
+	fetch(url).then((res) => res.json());
+
 export const fetcherPOST = ([url, payload, headers]: [string, any, any]) =>
 	fetch(`/api${url}`, {
 		method: "POST",
