@@ -201,11 +201,8 @@ export default async function ItemPage(props: {
 }) {
 	const params = await props.params;
 	return (
-		<div>
-			<Suspense fallback={<LoadingComponent itemKey={params.key} />}>
-				<ServerComponent params={props.params} />
-			</Suspense>
-			<span className="opacity-0">evlib2</span>
-		</div>
+		<Suspense fallback={<LoadingComponent itemKey={params.key} />}>
+			<ServerComponent params={props.params} />
+		</Suspense>
 	);
 }
