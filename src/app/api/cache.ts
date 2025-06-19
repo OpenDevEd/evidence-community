@@ -46,7 +46,9 @@ export async function getCachedItemSmall(key: string, ignoreCache: boolean = fal
 		};
 	}
 
-	const cache = unstable_cache(getData, ["itemSmall" + key]);
+	const cache = unstable_cache(getData, ["itemSmall" + key], {
+		revalidate: 60,
+	});
 	
 	return cache();
 }
