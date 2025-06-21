@@ -44,19 +44,6 @@ import { blockedTags } from "@/constants/misc";
 import transporter from "./nodemailer";
 import { Engine, CiteProcSys, CSLItem, CitationCluster } from 'citeproc'
 
-const citeprocSys: CiteProcSys = {
-	retrieveLocale: (lang: string) => {
-		// This function must be sync, but fetch is async.
-		// So, for SSR/edge, you should cache the locale string and reference it here.
-		throw new Error("retrieveLocale must be implemented with a cached value or using sync fs read for local files.");
-	},
-	retrieveItem: (id: string): CSLItem => {
-		// This will be replaced at runtime
-		throw new Error("retrieveItem must be overridden per-run.");
-	}
-};
-
-
 export async function getStyle() {
 	const cached = unstable_cache(async () => {
 		const url = new URL("https://raw.githubusercontent.com/citation-style-language/styles/master/apa.csl");

@@ -270,7 +270,7 @@ export function getCountryAncestry(country: string) {
 type ZoteroItem = Omit<InferSelectModel<typeof itemTable>, "itemType"> & { language: string | null, itemType: string };
 
 export function ItemToZoteroJSON(item: Item): ZoteroItem {
-	const { attachmentsData, languageName, citation, createdAt, updatedAt, deleted, collectionsData, collectionsAncestry, fullTextPDFs, institution: institutionArray, fullNames, dateTimestamp, year, datePublished, groupExternalId, tags, collections, version, id, ...rest } = item;
+	const { attachmentsData, languageName, citation, reportType, createdAt, updatedAt, deleted, collectionsData, collectionsAncestry, fullTextPDFs, institution: institutionArray, fullNames, dateTimestamp, year, datePublished, groupExternalId, tags, collections, version, id, ...rest } = item;
 
 	const finalCountry = Array.isArray(item.country) ? item.country.join("|") : item.country;
 	const finalInstitution = Array.isArray(item.institution) ? item.institution.join("|") : item.institution;
