@@ -922,6 +922,10 @@ function cleanTheAttributesToSearchOn(fields: string[]) {
 		return fields.filter(field => !field.includes("fullTextPDF"));
 	}
 
+	if (process.env.NEXT_PUBLIC_DISABLE_TAGS === "true") {
+		return fields.filter(field => !field.includes("tags"));
+	}
+
 	return fields;
 }
 
