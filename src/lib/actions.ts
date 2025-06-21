@@ -18,7 +18,7 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
-import { buildItemsQuery, defaultParams, generateRandomID, validateContactRequest, validateTakedownRequest } from "@/lib/utils";
+import { buildItemsQuery, defaultParams, ensureNoBlankItems, generateRandomID, ItemToZoteroJSON, processSentenceCaseAPAItems, validateContactRequest, validateTakedownRequest } from "@/lib/utils";
 import {
 	getCachedCollections,
 	getCachedItemSmall,
@@ -42,6 +42,108 @@ import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc"
 import { FacetDistribution } from "meilisearch";
 import { blockedTags } from "@/constants/misc";
 import transporter from "./nodemailer";
+import { Engine, CiteProcSys, CSLItem, CitationCluster } from 'citeproc'
+
+const citeprocSys: CiteProcSys = {
+	retrieveLocale: (lang: string) => {
+		// This function must be sync, but fetch is async.
+		// So, for SSR/edge, you should cache the locale string and reference it here.
+		throw new Error("retrieveLocale must be implemented with a cached value or using sync fs read for local files.");
+	},
+	retrieveItem: (id: string): CSLItem => {
+		// This will be replaced at runtime
+		throw new Error("retrieveItem must be overridden per-run.");
+	}
+};
+
+
+export async function getStyle() {
+	const cached = unstable_cache(async () => {
+		const url = new URL("https://raw.githubusercontent.com/citation-style-language/styles/master/apa.csl");
+		const res = await fetch(url.toString());
+		const data = await res.text();
+		return data;
+	}, ["apa.csl"], {
+		revalidate: 60 * 60 * 24,
+	})
+
+	return cached();
+}
+
+async function getLocaleXML(lang: string = "en-GB"): Promise<string> {
+	const cached = unstable_cache(async () => {
+		const url = `https://raw.githubusercontent.com/citation-style-language/locales/master/locales-${lang}.xml`;
+		const res = await fetch(url);
+		if (!res.ok) throw new Error("Failed to fetch locale");
+		return res.text();
+	}, ["locale", lang], {
+		revalidate: 60 * 60 * 24,
+	})
+
+	return cached();
+}
+
+export async function getCitationFromCSL(csl: any, lang: string = "en-GB") {
+	const [style, locale] = await Promise.all([
+		getStyle(),
+		getLocaleXML(lang)
+	]);
+
+	// Set up an items map for this run
+	const items: Record<string, CSLItem> = { [csl.id]: csl };
+
+	// We have to provide a sys object with access to our locale and item
+	const sys: CiteProcSys = {
+		retrieveLocale: (_lang: string) => {
+			// Ignore lang argument for this single-locale case
+			return locale;
+		},
+		retrieveItem: (id: string) => {
+			return items[id];
+		},
+	};
+
+	const citeproc = new Engine(sys, style, lang);
+
+	// Generate the bibliography (full reference format)
+	// First, we need to register the item with the processor
+	citeproc.updateItems([csl.id]);
+	
+	// Generate bibliography
+	const [, bibliography] = citeproc.makeBibliography();
+	const citation = bibliography && bibliography.length > 0 ? bibliography[0] : '';
+
+
+	return citation;
+}
+
+export async function getCSL(item: Item) {
+	const cached = unstable_cache(async () => {
+		const zoteroItem = processSentenceCaseAPAItems(ItemToZoteroJSON(item));
+		try {
+			const url = new URL(process.env.ZOTERO_TRANSLATION_SERVER_URL!);
+			url.pathname = "export";
+			url.searchParams.set("format", "csljson");
+			const res = await fetch(url.toString(), {
+				method: "POST",
+				headers: {
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify([zoteroItem]),
+			});
+			const data = await res.json();
+			const cslData = data ? ensureNoBlankItems(data[0]) : null;	
+			return cslData;
+		} catch (error) {
+			console.error(error);
+			return null;
+		}
+	}, ["csl", item.id], {
+		revalidate: 60,
+	})
+
+	return cached();
+}
 
 
 export async function getRateLimits() {
@@ -191,13 +293,13 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 	// Process items in parallel chunks of 10
 	const resultObject: Record<string, any> = {};
 	const CHUNK_SIZE = 25;
-	
+
 	// Split items into chunks
 	const chunks = [];
 	for (let i = 0; i < items.length; i += CHUNK_SIZE) {
 		chunks.push(items.slice(i, i + CHUNK_SIZE));
 	}
-	
+
 	// Process each chunk in parallel
 	for (const chunk of chunks) {
 		const chunkPromises = chunk.map(async (item) => {
@@ -206,7 +308,7 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 				const singleItemSchema = z.object({
 					screeningFields: screeningFieldsSchema
 				});
-				
+
 				const start = Date.now();
 				const result = await generateObject({
 					model: provider!(modelName!),
@@ -226,7 +328,7 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 				const end = Date.now();
 
 				console.log(`processed ${item.key} in ${end - start}ms`)
-				
+
 				// Map the random keys back to the original field names
 				const newObject: Record<string, any> = {};
 				for (const fieldKey of Object.keys(result.object.screeningFields)) {
@@ -235,7 +337,7 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 						newObject[mappedKey] = result.object.screeningFields[fieldKey];
 					}
 				}
-				
+
 				// Return the result for this item
 				return {
 					key: item.key,
@@ -246,10 +348,10 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 				return { key: item.key, error };
 			}
 		});
-		
+
 		// Wait for all items in the current chunk to complete
 		const chunkResults = await Promise.all(chunkPromises);
-		
+
 		// Add results to the result object
 		for (const result of chunkResults) {
 			if (result.key && result.result) {
@@ -503,27 +605,27 @@ export async function getMainAttributes() {
 	);
 }
 
-function addRegionsToFacetDistribution(facetDistribution: FacetDistribution, queryParams: {country: string[], author_country: string[]}) {
+function addRegionsToFacetDistribution(facetDistribution: FacetDistribution, queryParams: { country: string[], author_country: string[] }) {
 	if (facetDistribution && facetDistribution['country']) {
 		addHierarchyToFacet(facetDistribution, 'country', queryParams.country);
 	}
-	
+
 	if (facetDistribution && facetDistribution['creators.institutions.country_code']) {
 		addHierarchyToFacet(facetDistribution, 'creators.institutions.country_code', queryParams.author_country);
 	}
-	
+
 	return facetDistribution;
 }
 
 function addHierarchyToFacet(facetDistribution: FacetDistribution, facetName: string, queryParams: string[] = []) {
 	if (!facetDistribution || !facetDistribution[facetName]) return;
-	
+
 	const countryPaths: Record<string, string> = {};
 	const pathToCountry: Record<string, string> = {};
-	
+
 	const continentPaths: Set<string> = new Set();
 	const regionPaths: Record<string, Set<string>> = {};
-	
+
 	const buildCountryPaths = (entry: Entry, parentPath: string = '') => {
 		if (entry.label === "World" && !parentPath) {
 			entry.children?.forEach(child => {
@@ -531,9 +633,9 @@ function addHierarchyToFacet(facetDistribution: FacetDistribution, facetName: st
 			});
 			return;
 		}
-		
+
 		const currentPath = parentPath ? `${parentPath} > ${entry.label}` : entry.label;
-		
+
 		if (parentPath === '') {
 			continentPaths.add(currentPath);
 			regionPaths[currentPath] = new Set();
@@ -544,31 +646,31 @@ function addHierarchyToFacet(facetDistribution: FacetDistribution, facetName: st
 			const continentPath = parentPath.split(' > ')[0];
 			regionPaths[continentPath].add(currentPath);
 		}
-		
+
 		if (!entry.children) return;
-		
+
 		for (const child of entry.children) {
 			buildCountryPaths(child, currentPath);
 		}
 	};
-	
+
 	buildCountryPaths(COUNTRY_HIERARCHY);
-	
+
 	const originalDistribution = { ...facetDistribution[facetName] };
-	
+
 	const selectedContinents = new Set<string>();
 	const selectedRegions = new Set<string>();
 	const selectedCountries = new Set<string>();
-	
+
 	for (const param of queryParams) {
 		if (param.includes(' > ')) {
 			const parts = param.split(' > ');
 			if (parts.length >= 1) {
 				selectedContinents.add(parts[0]);
-				
+
 				if (parts.length >= 2) {
 					const prefix = parts.slice(0, 2).join(' > ');
-					
+
 					for (const continent of continentPaths) {
 						for (const region of regionPaths[continent]) {
 							if (region.startsWith(prefix)) {
@@ -576,11 +678,11 @@ function addHierarchyToFacet(facetDistribution: FacetDistribution, facetName: st
 							}
 						}
 					}
-					
+
 					if (parts.length === 2 && regionPaths[parts[0]]?.has(param)) {
 						selectedRegions.add(param);
 					}
-					
+
 					if (parts.length === 3 || (parts.length === 2 && parts[1].length === 2)) {
 						selectedCountries.add(param);
 					}
@@ -611,9 +713,9 @@ function addHierarchyToFacet(facetDistribution: FacetDistribution, facetName: st
 			}
 		}
 	}
-	
+
 	facetDistribution[facetName] = {};
-	
+
 	const processEntry = (entry: Entry, parentPath: string = ''): number => {
 		if (entry.label === "World" && !parentPath) {
 			let total = 0;
@@ -622,28 +724,28 @@ function addHierarchyToFacet(facetDistribution: FacetDistribution, facetName: st
 			});
 			return total;
 		}
-		
+
 		let total = 0;
 		const currentPath = parentPath ? `${parentPath} > ${entry.label}` : entry.label;
-		
+
 		if (!entry.children) {
 			return originalDistribution[entry.label] || 0;
 		}
-		
+
 		for (const child of entry.children) {
 			total += processEntry(child, currentPath);
 		}
-		
+
 		// Always include entries with counts, regardless of selection
 		if (total > 0) {
 			facetDistribution[facetName][currentPath] = total;
 		}
-		
+
 		return total;
 	};
-	
+
 	processEntry(COUNTRY_HIERARCHY);
-	
+
 	// Always include all country-level entries that have counts
 	for (const countryCode in originalDistribution) {
 		if (countryPaths[countryCode]) {
@@ -659,14 +761,14 @@ function extractCountryCodes(entry: Entry): string[] {
 	if (!entry.children) {
 		return [entry.label];
 	}
-	
+
 	return entry.children.flatMap(child => extractCountryCodes(child));
 }
 
 function findEntryByPath(path: string): Entry | null {
 	const parts = path.split(' > ');
 	let currentEntry = COUNTRY_HIERARCHY;
-	
+
 	if (parts[0] !== currentEntry.label) {
 		const continentMatch = currentEntry.children?.find(child => child.label === parts[0]);
 		if (!continentMatch) return null;
@@ -675,13 +777,13 @@ function findEntryByPath(path: string): Entry | null {
 	} else {
 		parts.shift();
 	}
-	
+
 	for (const part of parts) {
 		const matchingChild = currentEntry.children?.find(child => child.label === part);
 		if (!matchingChild) return null;
 		currentEntry = matchingChild;
 	}
-	
+
 	return currentEntry;
 }
 
@@ -699,18 +801,18 @@ function buildAuthorCountryFilters(selections: string[]): string | null {
 }
 
 function buildHierarchicalFilters(
-	selections: string[], 
+	selections: string[],
 	filterAttribute: string
 ): string | null {
 	if (!selections.length) return null;
-	
+
 	const continentSelections = new Set<string>();
 	const regionSelections: Record<string, Set<string>> = {};
 	const countrySelections: Record<string, Set<string>> = {};
-	
+
 	for (const selection of selections) {
 		const parts = selection.split(' > ');
-		
+
 		if (parts.length === 1) {
 			if (parts[0].length === 2) {
 				if (!countrySelections['direct']) {
@@ -723,7 +825,7 @@ function buildHierarchicalFilters(
 		} else if (parts.length === 2) {
 			const continent = parts[0];
 			const second = parts[1];
-			
+
 			if (second.length === 2) {
 				if (!countrySelections[continent]) {
 					countrySelections[continent] = new Set();
@@ -739,25 +841,25 @@ function buildHierarchicalFilters(
 			const continent = parts[0];
 			const region = `${parts[0]} > ${parts[1]}`;
 			const country = parts[2];
-			
+
 			if (!countrySelections[region]) {
 				countrySelections[region] = new Set();
 			}
 			countrySelections[region].add(country);
 		}
 	}
-	
+
 	const filterParts: string[] = [];
-	
+
 	if (countrySelections['direct'] && countrySelections['direct'].size > 0) {
 		const countries = Array.from(countrySelections['direct']);
 		filterParts.push(...countries.map(c => `${filterAttribute} = "${c}"`));
 	}
-	
+
 	for (const continent of continentSelections) {
 		const hasRegions = regionSelections[continent] && regionSelections[continent].size > 0;
 		const hasCountries = countrySelections[continent] && countrySelections[continent].size > 0;
-		
+
 		if (!hasRegions && !hasCountries) {
 			const entry = findEntryByPath(continent);
 			if (entry) {
@@ -769,11 +871,11 @@ function buildHierarchicalFilters(
 			}
 		}
 	}
-	
+
 	for (const continent in regionSelections) {
 		for (const region of regionSelections[continent]) {
 			const hasCountries = countrySelections[region] && countrySelections[region].size > 0;
-			
+
 			if (!hasCountries) {
 				const entry = findEntryByPath(region);
 				if (entry) {
@@ -786,32 +888,32 @@ function buildHierarchicalFilters(
 			}
 		}
 	}
-	
+
 	for (const parent in countrySelections) {
 		if (parent === 'direct') continue;
-		
+
 		const countries = Array.from(countrySelections[parent]);
 		filterParts.push(...countries.map(c => `${filterAttribute} = "${c}"`));
 	}
-	
+
 	if (filterParts.length === 0) return null;
 	if (filterParts.length === 1) return filterParts[0];
-	
+
 	return filterParts.join(' AND ');
 }
 
 function createCountryFilters(
-	countrySelections: string[] = [], 
+	countrySelections: string[] = [],
 	authorCountrySelections: string[] = []
 ): string[] {
 	const filters: string[] = [];
-	
+
 	const countryFilter = buildCountryFilters(countrySelections);
 	if (countryFilter) filters.push(countryFilter);
-	
+
 	const authorCountryFilter = buildAuthorCountryFilters(authorCountrySelections);
 	if (authorCountryFilter) filters.push(authorCountryFilter);
-	
+
 	return filters;
 }
 
@@ -824,10 +926,10 @@ function cleanTheAttributesToSearchOn(fields: string[]) {
 }
 
 function isEmptyValue(value: any): boolean {
-	return value === null || 
-		   value === undefined || 
-		   value === "" || 
-		   (Array.isArray(value) && value.length === 0);
+	return value === null ||
+		value === undefined ||
+		value === "" ||
+		(Array.isArray(value) && value.length === 0);
 }
 
 function filterEmptyValues<T extends Record<string, any>>(obj: T): Record<string, any> {
@@ -874,19 +976,19 @@ function cleanCacheKey(
 	});
 
 	// Remove redundant collection filters since they're already in searchParams.collections
-	const cleanedExtraFilters = Array.isArray(extraFilters) 
-		? extraFilters.filter(filter => 
+	const cleanedExtraFilters = Array.isArray(extraFilters)
+		? extraFilters.filter(filter =>
 			filter && !filter.includes('collectionsAncestry = ')
-		) 
+		)
 		: [];
 
 	// Remove standard facets that are always the same
 	const standardFacets = ["collectionsAncestry", "institution", "country", "creators.institutions.country_code"];
 	const cleanedExtraProperties = filterEmptyValues({
 		...extraProperties,
-		facets: Array.isArray(extraProperties.facets) && 
+		facets: Array.isArray(extraProperties.facets) &&
 			JSON.stringify(extraProperties.facets) !== JSON.stringify(standardFacets)
-			? extraProperties.facets 
+			? extraProperties.facets
 			: undefined,
 	});
 
@@ -1007,9 +1109,9 @@ export async function searchIndex(
 						return acc;
 					}, {} as FacetDistribution)
 				),
-				{ 
+				{
 					country: country,
-					author_country: author_country 
+					author_country: author_country
 				}
 			),
 		};
