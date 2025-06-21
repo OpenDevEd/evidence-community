@@ -919,11 +919,11 @@ function createCountryFilters(
 
 function cleanTheAttributesToSearchOn(fields: string[]) {
 	if (process.env.NEXT_PUBLIC_DISABLE_FULLTEXT === "true") {
-		return fields.filter(field => !field.includes("fullTextPDF"));
+		fields = fields.filter(field => !field.includes("fullTextPDF"));
 	}
 
 	if (process.env.NEXT_PUBLIC_DISABLE_TAGS === "true") {
-		return fields.filter(field => !field.includes("tags"));
+		fields = fields.filter(field => !field.includes("tags"));
 	}
 
 	return fields;
