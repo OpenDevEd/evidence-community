@@ -9,7 +9,6 @@ import { areLinksValid } from "./actions";
 import { InferSelectModel } from "drizzle-orm";
 import { item, item as itemTable } from "@/db/schema/tables/item";
 import schema from "../../public/schema.json";
-// @ts-expect-error no types
 import balanced from "balanced-match";
 
 export const takedownRequestSchema = z.object({
@@ -296,10 +295,11 @@ export function ItemToZoteroJSON(item: Item): ZoteroItem {
 }
 
 export function isSentenceCase(val: any) {
-	let matches = val.match(/^\W*(\w+)(.*?)$/);
+	const matches = val.match(/^\W*(\w+)(.*?)$/);
 	if (matches && matches.length > 2) {
-		let [_, firstWord, remainingWords] = matches; // eslint-disable-line no-unused-vars
-		let firstLetter = firstWord.substr(0, 1);
+		const [_, firstWord] = matches; // eslint-disable-line no-unused-vars
+		let remainingWords = matches[2];
+		const firstLetter = firstWord.substr(0, 1);
 		if (firstLetter.toUpperCase() !== firstLetter) {
 			// first letter of first word is not uppercase
 			return false;
@@ -313,13 +313,13 @@ export function isSentenceCase(val: any) {
 				.filter((word: string) => word.length >= 4 || !CSL_SKIP_WORDS.includes(word))
 				.forEach((word: string) => {
 					totalWords++;
-					let firstLetter = word.substr(0, 1);
+					const firstLetter = word.substr(0, 1);
 					if (firstLetter.toLowerCase() === firstLetter) {
 						lowerCaseWords++;
 					}
 				});
 		}
-		let ratio = lowerCaseWords / totalWords;
+		const ratio = lowerCaseWords / totalWords;
 		return ratio >= 0.5;
 	}
 }
@@ -328,7 +328,7 @@ export function processSentenceCase(val: any) {
 	if (isSentenceCase(val)) {
 		return val;
 	}
-	let matches = val.match(/(([^.!?]+)[.!?]+)|([^.!?]+$)/g);
+	const matches = val.match(/(([^.!?]+)[.!?]+)|([^.!?]+$)/g);
 	if (matches) {
 		return matches.map((s: string) => {
 			// skip special characters at the beginning of the sentence
@@ -364,8 +364,8 @@ export function processSentenceCaseAPAField(value: string): string {
 	// re-insert content from parentheses at correct indexes
 	var pointer = 0;
 	sentencesInBrackets.forEach(sentenceInBrackets => {
-		let pre = rootSentences.substr(0, pointer + sentenceInBrackets.start);
-		let post = rootSentences.substr(pointer + sentenceInBrackets.start);
+		const pre = rootSentences.substr(0, pointer + sentenceInBrackets.start);
+		const post = rootSentences.substr(pointer + sentenceInBrackets.start);
 
 		rootSentences = `${pre}(${sentenceInBrackets.body})${post}`;
 		pointer += sentenceInBrackets.end + 1;
