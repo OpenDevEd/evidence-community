@@ -9,7 +9,7 @@ import { eq } from "drizzle-orm";
 import { Collection } from "../../collections/types";
 import config from "@/constants/config.json"
 import { getCachedCollections } from "../../cache";
-import { convertItem } from "@/lib/actions";
+import { convertItem, getCitationFromCSL, getCSL } from "@/lib/actions";
 import { blockedTags } from "@/constants/misc";
 
 async function getMeilisearchItem(key: string) {
@@ -59,8 +59,10 @@ export async function getItem(
 	}
 
 	if (result) {
-		const citation = await convertItem(result, "citation");
+		const csl = await getCSL(result);
+		const citation = await getCitationFromCSL(csl);
 		result.citation = citation;
+		// result.citation = await convertItem(result, "citation");
 	}
 
 	return {
