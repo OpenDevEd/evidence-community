@@ -119,7 +119,7 @@ export async function getCitationFromCSL(csl: any, lang: string = "en-GB") {
 
 export async function getCSL(item: Item) {
 	const cached = unstable_cache(async () => {
-		const zoteroItem = processSentenceCaseAPAItems(ItemToZoteroJSON(item));
+		const zoteroItem = ItemToZoteroJSON(item);
 		try {
 			const url = new URL(process.env.ZOTERO_TRANSLATION_SERVER_URL!);
 			url.pathname = "export";
