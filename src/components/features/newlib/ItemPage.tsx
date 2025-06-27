@@ -178,15 +178,6 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 								</Button>
 							</a>
 						)} */}
-						<CopyButton
-							textToCopy={getUrl() + "/newlib/" + item?.key}
-						>
-							<Button
-								isIconOnly
-								size="sm"
-								aria-label={t("itemCopyUrlAriaLabel")}
-							></Button>
-						</CopyButton>
 						<DownloadButton
 							size="sm"
 							fileName={item?.key || ""}
@@ -195,6 +186,17 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 							startContent={<LuDownload />}
 							aria-label={t("itemDownloadAriaLabel")}
 						/>
+												<CopyButton
+							textToCopy={getUrl() + "/newlib/" + item?.key}
+							label={t("copyLink")}
+						>
+							<Button
+								size="sm"
+								aria-label={t("itemCopyUrlAriaLabel")}
+							>
+								{t("copyLink")}
+							</Button>
+						</CopyButton>
 						<LikeButton
 							itemData={item}
 							aria-label={t("itemLikeAriaLabel")}
@@ -728,6 +730,16 @@ function ItemAbstract({ item }: { item: Item | undefined }) {
 	);
 }
 
+function ProcessHTML(html: string) {
+	// Regular expression to match URLs
+	const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
+	
+	// Replace URLs with anchor tags that have text-accent class
+	return html.replace(urlRegex, (url) => {
+		return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">${url}</a>`;
+	});
+}
+
 function ItemCitation({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const citationText = item?.citation?.replace(/<[^>]+>/g, "") || undefined;
@@ -763,7 +775,7 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 					>
 						<p
 							dangerouslySetInnerHTML={{
-								__html: item?.citation || "",
+								__html: ProcessHTML(item?.citation || ""),
 							}}
 							className="text-base text-black/60 dark:text-white/60 text-wrap-anywhere"
 						/>
@@ -1142,9 +1154,9 @@ export default function ItemPage({
 												</>
 											)}
 										<ItemCitation item={item} />
-										<ItemCollections item={item} />
 										<ItemNotes item={item} />
 										<ItemAttachments item={item} />
+										<ItemCollections item={item} />
 										<ItemCountry item={item} />
 										<ItemVectorRelations item={item} />
 										<ItemRelations item={item} />

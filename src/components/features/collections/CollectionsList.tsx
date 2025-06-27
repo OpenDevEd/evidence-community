@@ -308,6 +308,7 @@ export function InnerCollectionList({
 	selectedCollections: string[];
 	hierarchy: Collection[];
 }) {
+	const defaultExpanded = !process.env.NEXT_PUBLIC_DEFAULT_EXPANDED_COLLECTIONS || process.env.NEXT_PUBLIC_DEFAULT_EXPANDED_COLLECTIONS === "true";
 	const { accordionGlobalExpanded, setAccordionGlobalExpanded } =
 		useContext(CacheContext);
 
@@ -347,7 +348,7 @@ export function InnerCollectionList({
 			defaultSelectedKeys={
 				accordionGlobalExpanded
 					? Object.keys(accordionGlobalExpanded)
-					: hierarchy.map((c) => c.key)
+					: defaultExpanded ? hierarchy.map((c) => c.key) : []
 			}
 			onSelectionChange={(keys) => {
 				setAccordionGlobalExpanded(
