@@ -187,7 +187,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 							aria-label={t("itemDownloadAriaLabel")}
 						/>
 												<CopyButton
-							textToCopy={getUrl() + "/newlib/" + item?.key}
+							textToCopy={getUrl() + "/" + item?.key}
 							label={t("copyLink")}
 						>
 							<Button
