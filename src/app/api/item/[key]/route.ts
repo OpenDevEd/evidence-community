@@ -11,6 +11,7 @@ import config from "@/constants/config.json"
 import { getCachedCollections } from "../../cache";
 import { convertItem, getCitationFromCSL, getCSL } from "@/lib/actions";
 import { blockedTags } from "@/constants/misc";
+import { transformItem } from "@/lib/utils";
 
 async function getMeilisearchItem(key: string) {
 	try {
@@ -59,7 +60,7 @@ export async function getItem(
 	}
 
 	if (result) {
-		const csl = await getCSL(result);
+		const csl = await getCSL(transformItem(result) as Item);
 		const citation = await getCitationFromCSL(csl);
 		result.citation = citation;
 		// result.citation = await convertItem(result, "citation");
