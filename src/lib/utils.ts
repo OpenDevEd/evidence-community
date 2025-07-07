@@ -402,3 +402,18 @@ export function ensureNoBlankItems(itemCSL: any) {
 		return itemCSL;
 	}
 }
+
+export function transformItem(item: Item | undefined) {
+	if (!item) return null;
+	const ExtraValues = getExtraValues(item.extra || "");
+
+	item.DOI = item.DOI || ExtraValues.get("DOI") || null;
+	// item.url =
+	// 	item.attachmentsData?.find((attachment) =>
+	// 		attachment.title?.includes(
+	// 			"📝View Google Doc and download alternative formats"
+	// 		)
+	// 	)?.url ||
+	// 	item.url;
+	return item;
+}
