@@ -44,6 +44,7 @@ import { useFeatureFlagEnabled } from "@/context/Providers";
 import { useQueryState } from "nuqs";
 import ItemOld from "@/components/pages/Item";
 import { COUNTRIES } from "@/constants/misc";
+import { transformItem } from "@/lib/utils";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -573,20 +574,7 @@ function ItemDetailsRow({
 	);
 }
 
-function transformItem(item: Item | undefined) {
-	if (!item) return null;
-	const ExtraValues = getExtraValues(item.extra || "");
 
-	item.DOI = item.DOI || ExtraValues.get("DOI") || null;
-	// item.url =
-	// 	item.attachmentsData?.find((attachment) =>
-	// 		attachment.title?.includes(
-	// 			"📝View Google Doc and download alternative formats"
-	// 		)
-	// 	)?.url ||
-	// 	item.url;
-	return item;
-}
 
 function ItemDetails({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
