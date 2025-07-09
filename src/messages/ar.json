@@ -521,7 +521,12 @@
     "whereWeWork": "أين نعمل",
     "ourTeam": "فريقنا",
     "strategicAdvisoryBoardAndExecutiveCommittee": "المجلس الاستشاري الاستراتيجي واللجنة التنفيذية",
-    "specialistNetwork": "شبكة المتخصصين"
+    "specialistNetwork": "شبكة المتخصصين",
+    "joiningCommunityOfPractice": "الانضمام إلى مجتمع الممارسة",
+    "steeringGroup": "المجموعة التوجيهية",
+    "members": "أعضاء",
+    "blogs": "مدونات",
+    "resources": "موارد"
   },
   "footer": {
     "quickLinks": "روابط سريعة",

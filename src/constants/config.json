@@ -92,6 +92,16 @@
 				"enabled": true
 			}
 		},
+		"itemsUnlockingData": {
+			"BACNAH7J": {
+				"title": "Organisations",
+				"enabled": true
+			},
+			"WRSNEEVZ": {
+				"title": "Publication type",
+				"enabled": true
+			}
+		},
 		"itemsPrograma": {
 			"6EJRSALT": {
 				"title": "Themes / Temas",

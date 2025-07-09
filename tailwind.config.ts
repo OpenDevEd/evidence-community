@@ -16,7 +16,8 @@ const accentColors = {
   "jacob": "#FFDE2D",
   "kaleidoscopio": "#ef4129",
   "jimma": "#4a94d6",
-  "fcdo": "#CC0000"
+  "fcdo": "#CC0000",
+  "unlockingdata": "#009900",
 }
 
 const tertiary = {
