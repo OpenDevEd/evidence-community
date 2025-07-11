@@ -31,6 +31,7 @@ export async function GET(
         const redirects = await meilisearch.index("redirects").getDocument(encoding);
         return NextResponse.json(redirects);
     } catch (error) {
+        console.error(error);
         return NextResponse.json({ error: "Redirect not found" }, { status: 404 });
     }
 }
