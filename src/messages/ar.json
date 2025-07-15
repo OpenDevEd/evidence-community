@@ -430,7 +430,9 @@
     "citationTrendsOverTime": "اتجاهات الاستشهاد بمرور الوقت",
     "available": "متاح",
     "inYear": "في سنة {year}",
-    "coauthorCountriesTable": "جدول دول المؤلفين المشاركين"
+    "coauthorCountriesTable": "جدول دول المؤلفين المشاركين",
+    "researchPartner": "شريك بحثي",
+    "fundingPartner": "شريك التمويل"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

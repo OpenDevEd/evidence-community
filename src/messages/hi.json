@@ -430,7 +430,9 @@
     "citationTrendsOverTime": "समय के साथ उद्धरण रुझान",
     "available": "उपलब्ध",
     "inYear": "वर्ष {year} में",
-    "coauthorCountriesTable": "सह-लेखक देश तालिका"
+    "coauthorCountriesTable": "सह-लेखक देश तालिका",
+    "researchPartner": "अनुसंधान भागीदार",
+    "fundingPartner": "फंडिंग पार्टनर"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

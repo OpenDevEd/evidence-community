@@ -1102,4 +1102,8 @@ export const CSL_SKIP_WORDS = [
 
 export const SITEMAP_SIZE = 10000;
 
+export const INSTITUTIONS_NAME = process.env.NEXT_PUBLIC_INSTITUTIONS_NAME;
+
 export const IS_COUNTRY_LIBRARY = process.env.NEXT_PUBLIC_IS_COUNTRY_LIBRARY === "true";
+
+export const FUNDING_PARTNER = process.env.NEXT_PUBLIC_FUNDING_PARTNER;

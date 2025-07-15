@@ -431,7 +431,9 @@
     "citationTrendsOverTime": "Mwelekeo wa Kunukuu Baada ya Muda",
     "available": "zinapatikana",
     "inYear": "Katika Mwaka {year}",
-    "coauthorCountriesTable": "Jedwali la Nchi za Waandishi"
+    "coauthorCountriesTable": "Jedwali la Nchi za Waandishi",
+    "researchPartner": "Mshirika wa Utafiti",
+    "fundingPartner": "Mshirika wa Ufadhili"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

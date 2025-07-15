@@ -430,7 +430,9 @@
     "citationTrendsOverTime": "Zitier-Trends im Zeitverlauf",
     "available": "verfügbar",
     "inYear": "Im Jahr {year}",
-    "coauthorCountriesTable": "Koautor-Länder-Tabelle"
+    "coauthorCountriesTable": "Koautor-Länder-Tabelle",
+    "researchPartner": "Forschungspartner",
+    "fundingPartner": "Finanzierungspartner"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

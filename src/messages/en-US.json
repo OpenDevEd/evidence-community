@@ -419,7 +419,9 @@
     "citationTrendsOverTime": "Citation Trends Over Time",
     "available": "available",
     "inYear": "In Year {year}",
-    "coauthorCountriesTable": "Co-author Countries Table"
+    "coauthorCountriesTable": "Co-author Countries Table",
+    "researchPartner": "Research Partner",
+    "fundingPartner": "Funding Partner"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

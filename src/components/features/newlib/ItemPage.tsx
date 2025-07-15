@@ -43,7 +43,7 @@ import { createContext, use, useEffect, useState } from "react";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { useQueryState } from "nuqs";
 import ItemOld from "@/components/pages/Item";
-import { COUNTRIES } from "@/constants/misc";
+import { COUNTRIES, FUNDING_PARTNER, INSTITUTIONS_NAME } from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
@@ -158,7 +158,8 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 						{getCitationCount(item) > 0 && (
 							<HeaderSection>
 								<IoBook className="size-4" />
-								{getCitationCount(item)} {t("itemCitationsCount")}
+								{getCitationCount(item)}{" "}
+								{t("itemCitationsCount")}
 							</HeaderSection>
 						)}
 						<HeaderSection>
@@ -187,7 +188,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 							startContent={<LuDownload />}
 							aria-label={t("itemDownloadAriaLabel")}
 						/>
-												<CopyButton
+						<CopyButton
 							textToCopy={getUrl() + "/" + item?.key}
 							label={t("copyLink")}
 						>
@@ -485,7 +486,10 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 
 	return (
 		<SidebarCard
-			title={t("itemInstitutionsTitle")}
+			title={t(
+				INSTITUTIONS_NAME ||
+					"itemInstitutionsTitle"
+			)}
 			count={item?.institution?.length}
 		>
 			{loading
@@ -500,6 +504,30 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 							/>
 						)
 				  )}
+		</SidebarCard>
+	);
+}
+
+function ItemResearchPartner({ item }: { item: Item | undefined }) {
+	const { loading } = use(LoadingContext);
+	const t = useTranslations("ui");
+
+	return (
+		<SidebarCard
+			title={t("fundingPartner")}
+			count={1}
+		>
+			{loading ? (
+				<ItemInstitution
+					key={0}
+					institution={undefined}
+				/>
+			) : (
+				<ItemInstitution
+					key={0}
+					institution={FUNDING_PARTNER}
+				/>
+			)}
 		</SidebarCard>
 	);
 }
@@ -573,8 +601,6 @@ function ItemDetailsRow({
 		</div>
 	);
 }
-
-
 
 function ItemDetails({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
@@ -721,7 +747,7 @@ function ItemAbstract({ item }: { item: Item | undefined }) {
 function ProcessHTML(html: string) {
 	// Regular expression to match URLs
 	const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
-	
+
 	// Replace URLs with anchor tags that have text-accent class
 	return html.replace(urlRegex, (url) => {
 		return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">${url}</a>`;
@@ -1000,7 +1026,9 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 	const validAttachments = item?.attachmentsData?.filter(
 		(attachment) =>
 			attachment.PDFCoverPageImage ||
-			attachment.tags?.some((tag) => tag.toLowerCase() === "_auto-process")
+			attachment.tags?.some(
+				(tag) => tag.toLowerCase() === "_auto-process"
+			)
 	);
 
 	if (!validAttachments?.length) return null;
@@ -1156,6 +1184,9 @@ export default function ItemPage({
 							<div className="flex flex-col gap-8">
 								<ItemAuthors item={item} />
 								<ItemInstitutions item={item} />
+								{FUNDING_PARTNER && (
+									<ItemResearchPartner item={item} />
+								)}
 								<ItemDetails item={item} />
 								<ItemTechnical item={item} />
 							</div>

@@ -430,7 +430,9 @@
     "citationTrendsOverTime": "引文趋势随时间变化",
     "available": "可用的",
     "inYear": "在 {year} 年",
-    "coauthorCountriesTable": "合著者国家表"
+    "coauthorCountriesTable": "合著者国家表",
+    "researchPartner": "研究伙伴",
+    "fundingPartner": "出资方"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

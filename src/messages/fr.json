@@ -430,7 +430,9 @@
     "citationTrendsOverTime": "Tendances de Citation au fil du Temps",
     "available": "disponible",
     "inYear": "En année {year}",
-    "coauthorCountriesTable": "Tableau des pays co-auteurs"
+    "coauthorCountriesTable": "Tableau des pays co-auteurs",
+    "researchPartner": "Partenaire de recherche",
+    "fundingPartner": "Partenaire financier"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",
