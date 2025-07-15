@@ -59,6 +59,8 @@ export async function getItem(
 			) as Collection[];
 	}
 
+	result.attachmentsData = result.attachmentsData?.filter((attachment: any) => attachment.deleted === 0);
+
 	if (result) {
 		const csl = await getCSL(transformItem(result) as Item);
 		const citation = await getCitationFromCSL(csl);

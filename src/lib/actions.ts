@@ -1075,6 +1075,8 @@ export async function searchIndex(
 					) as Collection[];
 			}
 
+			item.attachmentsData = item.attachmentsData?.filter((attachment: any) => attachment.deleted === 0);
+
 			// await setCachedItemSmall(item.key, {
 			// 	item: item as Item,
 			// });
