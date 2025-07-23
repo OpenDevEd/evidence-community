@@ -60,9 +60,10 @@ export default function Attachment({ data }: { data: Item }) {
 	const isDesktop = useBreakpoint("md");
 	const hasImage = data.PDFCoverPageImage;
 
-	const isExternal = data.tags?.some(
-		(tag: string) => tag.toLowerCase() === "_auto-process"
-	);
+	const isExternal =
+		!data.PDFCoverPageImage &&
+		data.tags?.some((tag: string) => tag.toLowerCase() === "_auto-process");
+		
 	const { data: itemFromOpenAlex, isLoading: isLoadingOpenAlex } = useSWR(
 		isExternal ? "https://api.openalex.org/works/" + data.parentItem : null,
 		fetcherExternal
