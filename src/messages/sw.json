@@ -433,7 +433,8 @@
     "inYear": "Katika Mwaka {year}",
     "coauthorCountriesTable": "Jedwali la Nchi za Waandishi",
     "researchPartner": "Mshirika wa Utafiti",
-    "fundingPartner": "Mshirika wa Ufadhili"
+    "fundingPartner": "Mshirika wa Ufadhili",
+    "availableOnRequest": "Inapatikana kwa ombi"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

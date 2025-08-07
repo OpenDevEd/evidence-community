@@ -432,7 +432,8 @@
     "inYear": "في سنة {year}",
     "coauthorCountriesTable": "جدول دول المؤلفين المشاركين",
     "researchPartner": "شريك بحثي",
-    "fundingPartner": "شريك التمويل"
+    "fundingPartner": "شريك التمويل",
+    "availableOnRequest": "متوفر عند الطلب"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

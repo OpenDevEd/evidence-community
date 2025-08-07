@@ -45,6 +45,7 @@ import { useQueryState } from "nuqs";
 import ItemOld from "@/components/pages/Item";
 import { COUNTRIES, FUNDING_PARTNER, INSTITUTIONS_NAME } from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
+import { INTERNAL_TAG } from "@/constants/items";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -89,6 +90,16 @@ function ItemHeaderInstitution({ item }: { item: Item | undefined }) {
 	return (
 		<Card className="p-1 px-3 text-sm bg-default-100 select-none">
 			{formatInstitutions(item?.institution as string[])}
+		</Card>
+	);
+}
+
+function ItemHeaderInternal({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
+	if (!item?.tags?.includes(INTERNAL_TAG)) return null;
+	return (
+		<Card className="p-1 px-3 text-sm bg-default-100 select-none">
+			{"Available on request"}
 		</Card>
 	);
 }
@@ -150,6 +161,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 						{t("itemBack")}
 					</Button>
 					<ItemHeaderInstitution item={item} />
+					<ItemHeaderInternal item={item} />
 					<div className="flex items-center gap-4 flex-wrap">
 						<HeaderSection>
 							<FaCalendar className="size-4" />

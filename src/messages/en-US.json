@@ -421,7 +421,8 @@
     "inYear": "In Year {year}",
     "coauthorCountriesTable": "Co-author Countries Table",
     "researchPartner": "Research Partner",
-    "fundingPartner": "Funding Partner"
+    "fundingPartner": "Funding Partner",
+    "availableOnRequest": "Available on request"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",
