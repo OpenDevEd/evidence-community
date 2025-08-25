@@ -14,15 +14,21 @@ import useBreakpoint from "@/hooks/useBreakpoint";
 import { Card } from "@/components/nextui/Card";
 import useSWR from "swr";
 import { fetcher, fetcherExternal } from "@/lib/utils";
+import { trackPDFDownload, trackPDFView } from "@/lib/analytics";
 
 function downloadLink(url: string, filename: string, key: string) {
 	fetch(url)
 		.then((response) => response.blob())
 		.then((blob) => {
+			// Track download in PostHog
 			posthog.capture("download_attachment", {
 				key,
 				filename,
 			});
+
+			// Track download in Google Analytics
+			trackPDFDownload(key, filename);
+
 			const link = document.createElement("a");
 			link.href = URL.createObjectURL(blob);
 			link.download = filename;
@@ -146,10 +152,13 @@ export default function Attachment({ data }: { data: Item }) {
 						size="sm"
 						onPress={() => {
 							window.open(downloadURL, "_blank");
+							// Track view in PostHog
 							posthog.capture("view_attachment", {
 								key: data.key,
 								filename: data.filename,
 							});
+							// Track view in Google Analytics
+							trackPDFView(data.key || "", data.filename || "");
 						}}
 						startContent={<FaEye className="size-5" />}
 					>
@@ -177,10 +186,13 @@ export default function Attachment({ data }: { data: Item }) {
 					startContent={<LuDownload className="size-5" />}
 					onPress={() => {
 						window.open(pdfUrl, "_blank");
+						// Track view in PostHog
 						posthog.capture("view_attachment", {
 							key: data.key,
 							filename: data.filename,
 						});
+						// Track view in Google Analytics
+						trackPDFView(data.key || "", data.filename || "");
 					}}
 				>
 					{t("openDocument")}
