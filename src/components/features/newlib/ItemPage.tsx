@@ -43,7 +43,11 @@ import { createContext, use, useEffect, useState } from "react";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { useQueryState } from "nuqs";
 import ItemOld from "@/components/pages/Item";
-import { COUNTRIES, FUNDING_PARTNER, INSTITUTIONS_NAME } from "@/constants/misc";
+import {
+	COUNTRIES,
+	FUNDING_PARTNER,
+	INSTITUTIONS_NAME,
+} from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
 import { INTERNAL_TAG } from "@/constants/items";
 
@@ -144,6 +148,14 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 		return url;
 	};
 
+	const handleBack = () => {
+		if (window.history.length <= 1) {
+			router.push("/");
+		} else {
+			router.back();
+		}
+	};
+
 	return (
 		<div className="w-full flex items-center gap-4 flex-wrap">
 			<Skeleton isLoaded={!loading} className="rounded-2xl w-full">
@@ -152,7 +164,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 						variant="transparent"
 						size="sm"
 						className="rounded-2xl"
-						onPressStart={() => router.back()}
+						onPressStart={handleBack}
 						startContent={
 							<IoChevronBack className="rtl:rotate-180" />
 						}
@@ -498,10 +510,7 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 
 	return (
 		<SidebarCard
-			title={t(
-				INSTITUTIONS_NAME ||
-					"itemInstitutionsTitle"
-			)}
+			title={t(INSTITUTIONS_NAME || "itemInstitutionsTitle")}
 			count={item?.institution?.length}
 		>
 			{loading
@@ -525,20 +534,11 @@ function ItemResearchPartner({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 
 	return (
-		<SidebarCard
-			title={t("fundingPartner")}
-			count={1}
-		>
+		<SidebarCard title={t("fundingPartner")} count={1}>
 			{loading ? (
-				<ItemInstitution
-					key={0}
-					institution={undefined}
-				/>
+				<ItemInstitution key={0} institution={undefined} />
 			) : (
-				<ItemInstitution
-					key={0}
-					institution={FUNDING_PARTNER}
-				/>
+				<ItemInstitution key={0} institution={FUNDING_PARTNER} />
 			)}
 		</SidebarCard>
 	);
