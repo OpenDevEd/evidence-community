@@ -434,7 +434,7 @@ function UserButton() {
 		<Dropdown>
 			<DropdownTrigger>
 				<Avatar
-					src={session?.user?.image ?? `/icons/profile.png` ?? ""}
+					src={session?.user?.image ?? `/icons/profile.png`}
 					alt={t("userAvatarAlt", {
 						name:
 							session?.user?.name ||
