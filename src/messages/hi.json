@@ -433,7 +433,8 @@
     "coauthorCountriesTable": "सह-लेखक देश तालिका",
     "researchPartner": "अनुसंधान भागीदार",
     "fundingPartner": "फंडिंग पार्टनर",
-    "availableOnRequest": "अनुरोध पर उपलब्ध"
+    "availableOnRequest": "अनुरोध पर उपलब्ध",
+    "itemNotesDescription": "निम्नलिखित नोट्स संबद्ध रिकॉर्ड में जोड़े गए थे।"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

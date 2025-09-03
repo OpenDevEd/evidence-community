@@ -47,6 +47,7 @@ import {
 	COUNTRIES,
 	FUNDING_PARTNER,
 	INSTITUTIONS_NAME,
+	NOTES_DESCRIPTION,
 } from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
 import { INTERNAL_TAG } from "@/constants/items";
@@ -1091,6 +1092,20 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 	);
 }
 
+function useNotesDescription() {
+	const t = useTranslations("ui");
+
+	if (!NOTES_DESCRIPTION) return t("itemNotesDescription");
+	if (NOTES_DESCRIPTION === "false") return null;
+	if (
+		NOTES_DESCRIPTION.charAt(0).toUpperCase() ===
+		NOTES_DESCRIPTION.charAt(0)
+	) {
+		return NOTES_DESCRIPTION;
+	}
+	return t(NOTES_DESCRIPTION);
+}
+
 function ItemNotes({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const notes = item?.attachmentsData?.filter(
@@ -1099,14 +1114,15 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 			attachment.note &&
 			attachment.tags?.includes("_publish")
 	);
+	const notesDescription = useNotesDescription();
 
 	if (!notes?.length) return null;
 
 	return (
 		<ItemPropertyRowWrapper title={"Notes"}>
-			<p className="text-black/60 dark:text-white/60">
-				The following notes were added to the associated record.
-			</p>
+			{notesDescription && <p className="text-black/60 dark:text-white/60">
+				{notesDescription}
+			</p>}
 			<div className="flex flex-col gap-4">
 				{notes.map((note) => (
 					<Card key={note.id} color="card" className="flex flex-col">

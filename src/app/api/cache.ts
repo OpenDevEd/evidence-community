@@ -24,7 +24,7 @@ export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 	}
 
 	const cache = unstable_cache(getData, ["item" + key], {
-		revalidate: 60,
+		revalidate: 5,
 	});
 	
 	return cache();
@@ -47,7 +47,7 @@ export async function getCachedItemSmall(key: string, ignoreCache: boolean = fal
 	}
 
 	const cache = unstable_cache(getData, ["itemSmall" + key], {
-		revalidate: 60,
+		revalidate: 5,
 	});
 	
 	return cache();
@@ -84,7 +84,7 @@ export async function getCachedUserCollectionKeys(collectionId: string, ignoreCa
 	}
 
 	const cache = unstable_cache(getData, ["userCollectionKeys" + collectionId], {
-		revalidate: 60,
+		revalidate: 5,
 	});
 
 	return cache();
@@ -103,7 +103,7 @@ export async function getCachedUserLikes(userId: string, ignoreCache: boolean = 
 	}
 
 	const cache = unstable_cache(getData, ["userLikes" + userId], {
-		revalidate: 60,
+		revalidate: 5,
 	});
 
 	return cache();
@@ -123,7 +123,7 @@ export async function getCachedStatus(ignoreCache: boolean = false): Promise<Inf
 	}
 
 	const cache = unstable_cache(getData, ["status"], {
-		revalidate: 60,
+		revalidate: 5,
 	});
 
 	return cache();

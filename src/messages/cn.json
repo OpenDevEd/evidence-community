@@ -433,7 +433,8 @@
     "coauthorCountriesTable": "合著者国家表",
     "researchPartner": "研究伙伴",
     "fundingPartner": "出资方",
-    "availableOnRequest": "可根据要求提供"
+    "availableOnRequest": "可根据要求提供",
+    "itemNotesDescription": "以下笔记已添加到相关记录中。"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

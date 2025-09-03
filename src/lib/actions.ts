@@ -1108,7 +1108,7 @@ export async function searchIndex(
 				}
 			),
 		};
-	}, [cacheKey], { tags: ["searchIndex"], revalidate: 60 });
+	}, [cacheKey], { tags: ["searchIndex"], revalidate: 5 });
 
 	return items();
 }

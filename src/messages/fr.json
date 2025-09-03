@@ -433,7 +433,8 @@
     "coauthorCountriesTable": "Tableau des pays co-auteurs",
     "researchPartner": "Partenaire de recherche",
     "fundingPartner": "Partenaire financier",
-    "availableOnRequest": "Disponible sur demande"
+    "availableOnRequest": "Disponible sur demande",
+    "itemNotesDescription": "Les notes suivantes ont été ajoutées à l'enregistrement associé."
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",

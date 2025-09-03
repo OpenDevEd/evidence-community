@@ -422,7 +422,8 @@
     "coauthorCountriesTable": "Co-author Countries Table",
     "researchPartner": "Research Partner",
     "fundingPartner": "Funding Partner",
-    "availableOnRequest": "Available on request"
+    "availableOnRequest": "Available on request",
+    "itemNotesDescription": "The following notes were added to the associated record."
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

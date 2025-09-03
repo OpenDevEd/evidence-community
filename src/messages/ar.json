@@ -433,7 +433,8 @@
     "coauthorCountriesTable": "جدول دول المؤلفين المشاركين",
     "researchPartner": "شريك بحثي",
     "fundingPartner": "شريك التمويل",
-    "availableOnRequest": "متوفر عند الطلب"
+    "availableOnRequest": "متوفر عند الطلب",
+    "itemNotesDescription": "تمت إضافة الملاحظات التالية إلى السجل المرتبط."
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
