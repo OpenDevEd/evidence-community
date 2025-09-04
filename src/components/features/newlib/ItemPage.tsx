@@ -1198,8 +1198,8 @@ export default function ItemPage({
 												</>
 											)}
 										<ItemCitation item={item} />
-										<ItemNotes item={item} />
 										<ItemAttachments item={item} />
+										<ItemNotes item={item} />
 										<ItemCollections item={item} />
 										<ItemCountry item={item} />
 										<ItemVectorRelations item={item} />
