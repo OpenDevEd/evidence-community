@@ -22,6 +22,7 @@ import {
 	getTopicStatsByYear,
 	getCitationsByYear
 } from "./index";
+import { ensureCacheIndexExists } from "@/lib/cache-utils";
 
 export async function getComprehensiveStats(ignore: boolean): Promise<ComprehensiveStats> {
 	const index = "cache";
@@ -39,8 +40,7 @@ export async function getComprehensiveStats(ignore: boolean): Promise<Comprehens
 		return JSON.parse(statsResult.content);
 	} catch (error) {
 		console.log("🔄 No cached statistics found, generating fresh data...");
-		const indexCreation = await meilisearch.createIndex(index);
-		await meilisearch.tasks.waitForTask(indexCreation.taskUid);
+		await ensureCacheIndexExists(index);
 
 		const startTime = Date.now();
 

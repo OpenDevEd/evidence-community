@@ -15,10 +15,10 @@ const devLog = (...args: any[]) => {
 	}
 };
 
-async function ensureCacheIndexExists(index: string) {
+export async function ensureCacheIndexExists(index: string) {
 	try {
-		const indexCreation = await meilisearch.createIndex(index);
-		await meilisearch.tasks.waitForTask(indexCreation.taskUid);
+		// const indexCreation = await meilisearch.createIndex(index);
+		// await meilisearch.tasks.waitForTask(indexCreation.taskUid);
 	} catch (indexError) {
 		// Index might already exist, continue
 	}
