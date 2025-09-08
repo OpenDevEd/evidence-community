@@ -24,8 +24,9 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 	}
 
 	const item: any = itemResponse.item;
+	const institutionValue = item.institution || "";
 
-	const institution = Array.isArray(item.institution) ? item.institution.join(', ') : item.institution;
+	const institution = Array.isArray(institutionValue) ? institutionValue.join(', ') : institutionValue;
 
 	const description = `This ${item.itemType || 'document'} ${item.title ? `entitled '${item.title}'` : '(Untitled)'
 		} ${item.fullNames?.length > 0
