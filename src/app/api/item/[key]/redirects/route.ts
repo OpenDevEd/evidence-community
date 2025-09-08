@@ -23,7 +23,9 @@ export async function GET(
     const params = await props.params;
     const { key: URIkey } = params;
 
-    const key = process.env.MEILI_INDEX + "|" + decodeURIComponent(URIkey);
+    const itemKey = decodeURIComponent(URIkey);
+
+    const key = process.env.MEILI_INDEX + "|" + itemKey;
 
     const encoding = encodeKey(key);
 
@@ -31,6 +33,7 @@ export async function GET(
         const redirects = await meilisearch.index("redirects").getDocument(encoding);
         return NextResponse.json(redirects);
     } catch (error) {
-        return NextResponse.json({ error: "Redirect not found" }, { status: 404 });
+        return NextResponse.json({ value: itemKey }, { status: 200 });
+        // return NextResponse.json({ error: "Redirect not found" }, { status: 404 });
     }
 }
