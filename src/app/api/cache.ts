@@ -26,8 +26,14 @@ export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 	const cache = unstable_cache(getData, ["item" + key], {
 		revalidate: 5,
 	});
+
+	const result = await cache();
+
+	if (!result || result.item) {
+		return await getData();
+	}
 	
-	return cache();
+	return result;
 }
 
 export async function getCachedItemSmall(key: string, ignoreCache: boolean = false) {
@@ -50,7 +56,13 @@ export async function getCachedItemSmall(key: string, ignoreCache: boolean = fal
 		revalidate: 5,
 	});
 	
-	return cache();
+	const result = await cache();
+
+	if (!result || result.item) {
+		return await getData();
+	}
+
+	return result;
 }
 
 // export async function setCachedItemSmall(key: string, item: ItemGetResponse) {
