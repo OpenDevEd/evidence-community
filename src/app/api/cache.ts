@@ -29,7 +29,7 @@ export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 
 	const result = await cache();
 
-	if (!result || result.item) {
+	if (!result || !result.item) {
 		return await getData();
 	}
 	
@@ -58,7 +58,7 @@ export async function getCachedItemSmall(key: string, ignoreCache: boolean = fal
 	
 	const result = await cache();
 
-	if (!result || result.item) {
+	if (!result || !result.item) {
 		return await getData();
 	}
 

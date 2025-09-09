@@ -20,6 +20,7 @@ async function getMeilisearchItem(key: string) {
 		).getDocument(key);
 		return result as Item;
 	} catch (error) {
+		console.error("Error fetching item from meilisearch:", error);
 		return null;
 	}
 }
