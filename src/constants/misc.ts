@@ -942,6 +942,23 @@ export const COUNTRY_HIERARCHY: Entry = {
 	],
 };
 
+export const ALL_LABELS_IN_COUNTRY_HIERARCHY = (() => {
+	const result: string[] = [];
+
+	function collectLabels(entry: Entry) {
+		result.push(entry.label);
+
+		if (entry.children?.length) {
+			for (const child of entry.children) {
+				collectLabels(child);
+			}
+		}
+	}
+
+	collectLabels(COUNTRY_HIERARCHY);
+	return result;
+})();
+
 export const COUNTRY_PARAMS: Record<string, string> = (() => {
 	const result: Record<string, string> = {};
 	

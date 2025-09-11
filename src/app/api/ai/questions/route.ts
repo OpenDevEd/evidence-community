@@ -64,6 +64,12 @@ export async function POST(req: Request) {
                 questions: z.array(z.string().describe("A question to be answered by the AI regarding the PDF content"))
                     .min(5).max(5).describe("5 questions about the PDF content"),
             }),
+            temperature: 1,
+            providerOptions: {
+                openai: {
+                    reasoningEffort: "minimal",
+                }
+            },
             prompt: JSON.stringify(fullTextPDFs)
         })
 

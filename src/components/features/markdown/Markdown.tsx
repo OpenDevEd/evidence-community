@@ -124,7 +124,7 @@ function QuoteHighlight({ children }: { children: ReactNode }) {
 function ResourceWrapper({ children }: { children: ReactNode }) {
 	const key = children?.toString().split('/').pop();
 
-	return <ul>
+	return <ul className="[&:has(_.no-data)]:hidden">
 		<Resource itemKey={key} abstract={true} className="my-2" />
 	</ul>
 }

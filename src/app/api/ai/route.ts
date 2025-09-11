@@ -57,6 +57,12 @@ export async function POST(req: Request) {
 			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? structureRules : "",
 		].join("\n"),
 		prompt: JSON.stringify(cleanItem),
+		temperature: 1,
+		providerOptions: {
+			openai: {
+				reasoningEffort: "minimal",
+			},
+		},
 		onFinish(event) {
 			trackUsage("ai_" + prompt, event, distinctId, prompt);
 		},

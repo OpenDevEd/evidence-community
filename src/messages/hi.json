@@ -434,7 +434,9 @@
     "researchPartner": "अनुसंधान भागीदार",
     "fundingPartner": "फंडिंग पार्टनर",
     "availableOnRequest": "अनुरोध पर उपलब्ध",
-    "itemNotesDescription": "निम्नलिखित नोट्स संबद्ध रिकॉर्ड में जोड़े गए थे।"
+    "itemNotesDescription": "निम्नलिखित नोट्स संबद्ध रिकॉर्ड में जोड़े गए थे।",
+    "researchMode": "अनुसंधान मोड",
+    "researchModeTooltip": "अनुसंधान मोड धीमा है, लेकिन अधिक विस्तृत उत्तर प्रदान करता है।"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",
@@ -466,7 +468,8 @@
     "exportAsPlainText": ".txt के रूप में निर्यात करें",
     "delete": "हटाएं",
     "history": "इतिहास",
-    "rateLimitedMessage": "आपको दर सीमित कर दिया गया है। कृपया {seconds} सेकंड में पुनः प्रयास करें।"
+    "rateLimitedMessage": "आपको दर सीमित कर दिया गया है। कृपया {seconds} सेकंड में पुनः प्रयास करें।",
+    "aiDescription": "इस साक्ष्य पुस्तकालय की सामग्री के बारे में प्रश्न पूछें, शोध सहायता प्राप्त करें, या हमारे एआई सहायक के साथ डेटा अंतर्दृष्टि का पता लगाएं।"
   },
   "sorts": {
     "desc": "नवीनतम",
@@ -474,7 +477,8 @@
     "authorAZ": "लेखक A-Z",
     "authorZA": "लेखक Z-A",
     "titleAZ": "शीर्षक A-Z",
-    "titleZA": "शीर्षक Z-A"
+    "titleZA": "शीर्षक Z-A",
+    "relevance": "प्रासंगिकता"
   },
   "scopes": {
     "everywhere": "हर जगह",

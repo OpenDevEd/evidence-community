@@ -7,12 +7,11 @@ import {
 	ModalFooter,
 	ScrollShadow,
 	Spinner,
-	Tooltip,
 } from "@nextui-org/react";
 import { LuUser } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { ImSpinner8 } from "react-icons/im";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useRef } from "react";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { IoSend } from "react-icons/io5";
@@ -37,6 +36,10 @@ import { getRateLimits, runScreening } from "@/lib/actions";
 import Resource from "../items/Resource";
 import { GiStarSwirl } from "react-icons/gi";
 import { FaExclamationTriangle } from "react-icons/fa";
+import { Switch } from "@/components/nextui/Switch";
+import { BsQuestionCircleFill } from "react-icons/bs";
+import { Card } from "@/components/nextui/Card";
+import { Tooltip } from "@/components/nextui/Tooltip";
 
 export const maxDuration = 240;
 
@@ -89,6 +92,160 @@ function ScreeningResults({ results }: { results: ScreeningResults }) {
 	);
 }
 
+function MessageComponent({
+	message,
+	modelIndex,
+	isMutating,
+	isWaiting,
+	handleScreening,
+	smartScreeningFields,
+}: {
+	message: Message;
+	modelIndex: number;
+	isMutating: boolean;
+	isWaiting: boolean;
+	handleScreening: (content: string) => void;
+	smartScreeningFields: SmartScreeningField[];
+}) {
+	const tUI = useTranslations("ui");
+
+	const annotations = useMemo(() => {
+		const toolCalls = message?.parts
+			?.filter((part) => part.type === "tool-invocation")
+			?.filter(
+				(part, idx, arr) =>
+					arr.findIndex(
+						(p) =>
+							p.toolInvocation.args.userToolCallInformation ===
+							part.toolInvocation.args.userToolCallInformation
+					) === idx
+			)
+			.map((part) => ({
+				message: part.toolInvocation.args.userToolCallInformation,
+				id: part.toolInvocation.toolCallId,
+			}));
+
+		const annotations = message?.annotations?.map((annotation: any) => ({
+			message: annotation?.message,
+			id: annotation?.id,
+		}));
+
+		console.log("annotations", annotations);
+
+		return [...(toolCalls || []), ...(annotations || [])];
+	}, [message]);
+
+	return (
+		<>
+			<div
+				className={twMerge(
+					"rounded-full bg-accent dark:bg-accent p-2",
+					message.role !== "user" && "hidden"
+				)}
+			>
+				{message.role === "user" ? (
+					<LuUser className="size-4 text-white" />
+				) : (
+					React.createElement(models[modelIndex].icon, {
+						className: "size-4 invert shrink-0",
+					})
+				)}
+			</div>
+			<div
+				className={twMerge(
+					"p-0 text-wrap max-w-full overflow-hidden break-words text-lg",
+					message.role === "user" &&
+						"bg-white dark:bg-secondary rounded-xl",
+					message.role !== "user" && "w-full px-8",
+					message.id.includes("error") &&
+						"text-red-500 dark:text-red-500 italic"
+				)}
+			>
+				{annotations.length > 0 && (
+					<div className="flex items-center gap-2">
+						<div className="w-full flex flex-col rounded-t-xl p-0 text-wrap max-w-full overflow-hidden break-words text-lg opacity-80 divide-accent dark:divide-accent-300 relative">
+							<AnimatePresence mode="popLayout">
+								{annotations.length > 0 && (
+									<motion.div
+										key={
+											annotations[annotations.length - 1]
+												.id || annotations.length - 1
+										}
+										initial={{ opacity: 0, x: -20 }}
+										animate={{ opacity: 1, x: 0 }}
+										exit={{ opacity: 0, x: 20 }}
+										transition={{ duration: 0.3 }}
+										className={twMerge(
+											"flex items-center gap-2 bg-clip-text text-transparent",
+											isWaiting
+												? "bg-gradient-to-r from-accent via-accent-700 to-accent animate-gradient-x"
+												: "bg-gradient-to-r from-accent to-accent-700"
+										)}
+									>
+										{React.createElement(
+											models[modelIndex].icon,
+											{
+												className: "size-4 fill-accent shrink-0",
+											}
+										)}
+										{
+											annotations[annotations.length - 1]
+												.message
+										}
+									</motion.div>
+								)}
+							</AnimatePresence>
+						</div>
+					</div>
+				)}
+				{message.content.trim().length === 0 ? (
+					<div className={twMerge("p-4 opacity-60 ")}>
+						<div className="w-fit bg-black flex items-center justify-center rounded-full p-2">
+							<Spinner />
+						</div>
+					</div>
+				) : message.role === "data" ? (
+					<ScreeningResults results={JSON.parse(message.content)} />
+				) : (
+					<>
+						<AIMarkdown
+							className={twMerge(
+								"p-4 prose dark:prose-invert space-y-4 w-full max-w-full",
+								message.role !== "user" && "p-0 mt-6"
+							)}
+						>
+							{cleanAIResponse(message.content)}
+						</AIMarkdown>
+						{message.role === "assistant" &&
+							message.content.includes("/lib/") &&
+							smartScreeningFields.length > 0 && (
+								<div className="flex items-center gap-2 mt-8">
+									<Button
+										isDisabled={isWaiting}
+										startContent={
+											isMutating ? (
+												<ImSpinner8 className="animate-spin" />
+											) : (
+												<GiStarSwirl />
+											)
+										}
+										size="sm"
+										color="accent"
+										onClick={() =>
+											handleScreening(message.content)
+										}
+									>
+										{tUI("smartScreening")}
+									</Button>
+								</div>
+							)}
+					</>
+				)}
+			</div>
+		</>
+	);
+}
+
 export default function ChatModal({
 	isOpen,
 	onOpenChange,
@@ -99,6 +256,7 @@ export default function ChatModal({
 	setExternalInput,
 	isEmbedded,
 	setIsEmbedded,
+	mode: externalMode,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -109,10 +267,14 @@ export default function ChatModal({
 	setExternalInput?: (input: string) => void;
 	isEmbedded?: boolean | null;
 	setIsEmbedded?: React.Dispatch<React.SetStateAction<boolean | null>>;
+	mode?: string;
 }) {
 	const [smartScreeningFields, setSmartScreeningFields] = useLocalStorage<
 		SmartScreeningField[]
 	>("smart-screening-fields", []);
+	const [internalMode, setInternalMode] = useLocalStorage("chat-mode", "full");
+	const mode = externalMode || internalMode;
+	const setMode = externalMode ? () => {} : setInternalMode; // No-op if external mode is provided
 
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
@@ -141,6 +303,7 @@ export default function ChatModal({
 			modelIndex,
 			distinctId: posthog.get_distinct_id(),
 			smartScreeningFields,
+			mode,
 		},
 		headers: {
 			"Accept-Language": locale,
@@ -175,6 +338,8 @@ export default function ChatModal({
 			}
 		},
 	});
+
+	console.log(messages);
 
 	const [isMutating, setIsMutating] = useState(false);
 
@@ -256,7 +421,9 @@ export default function ChatModal({
 
 	const isWaiting = isLoading || isMutating;
 
-	const hasPDFs = data?.item?.attachmentsData?.some((attachment) => attachment.PDFCoverPageImage);
+	const hasPDFs = data?.item?.attachmentsData?.some(
+		(attachment) => attachment.PDFCoverPageImage
+	);
 
 	return (
 		<DialogModal
@@ -346,187 +513,26 @@ export default function ChatModal({
 																		"flex-row-reverse px-8"
 																)}
 															>
-																<div
-																	className={twMerge(
-																		"rounded-full bg-accent dark:bg-accent p-2",
-																		message.role !==
-																			"user" &&
-																			"hidden"
-																	)}
-																>
-																	{message.role ===
-																	"user" ? (
-																		<LuUser className="size-4 text-white" />
-																	) : (
-																		React.createElement(
-																			models[
-																				modelIndex
-																			]
-																				.icon,
-																			{
-																				className:
-																					"size-4 invert",
-																			}
-																		)
-																	)}
-																</div>
-																<div
-																	className={twMerge(
-																		"p-0 text-wrap max-w-full overflow-hidden break-words text-lg",
-																		message.role ===
-																			"user" &&
-																			"bg-white dark:bg-secondary rounded-xl",
-																		message.role !==
-																			"user" &&
-																			"w-full px-8",
-																		message.id.includes(
-																			"error"
-																		) &&
-																			"text-red-500 dark:text-red-500 italic"
-																	)}
-																>
-																	{message.parts.find(
-																		(
-																			part
-																		) =>
-																			part.type ===
-																			"tool-invocation"
-																	) && (
-																		<div className="flex items-center gap-2">
-																			<div className="w-full flex flex-col rounded-t-xl p-0 text-wrap max-w-full overflow-hidden break-words text-lg opacity-80 divide-accent dark:divide-accent-300">
-																				{message.parts
-																					.filter(
-																						(
-																							part
-																						) =>
-																							part.type ===
-																							"tool-invocation"
-																					)
-																					.filter(
-																						(
-																							part,
-																							idx,
-																							arr
-																						) =>
-																							arr.findIndex(
-																								(
-																									p
-																								) =>
-																									p
-																										.toolInvocation
-																										.args
-																										.userToolCallInformation ===
-																									part
-																										.toolInvocation
-																										.args
-																										.userToolCallInformation
-																							) ===
-																							idx
-																					)
-																					.map(
-																						(
-																							part,
-																							index
-																						) => (
-																							<div
-																								className="flex items-center gap-2 bg-clip-text text-transparent bg-gradient-to-r from-accent to-accent-700"
-																								key={
-																									part
-																										.toolInvocation
-																										.toolCallId
-																								}
-																							>
-																								{React.createElement(
-																									models[
-																										modelIndex
-																									]
-																										.icon,
-																									{
-																										className:
-																											"size-4 fill-accent",
-																									}
-																								)}
-																								{
-																									part
-																										.toolInvocation
-																										.args
-																										.userToolCallInformation
-																								}
-																							</div>
-																						)
-																					)}
-																			</div>
-																		</div>
-																	)}
-																	{message.content.trim()
-																		.length ===
-																	0 ? (
-																		<div
-																			className={twMerge(
-																				"p-4 opacity-60 "
-																			)}
-																		>
-																			<div className="w-fit bg-black flex items-center justify-center rounded-full p-2">
-																			<Spinner />
-																				</div>
-																		</div>
-																	) : message.role ===
-																	  "data" ? (
-																		<ScreeningResults
-																			results={JSON.parse(
-																				message.content
-																			)}
-																		/>
-																	) : (
-																		<>
-																			<AIMarkdown
-																				className={twMerge(
-																					"p-4",
-																					message.role !==
-																						"user" &&
-																						"p-0"
-																				)}
-																			>
-																				{cleanAIResponse(
-																					message.content
-																				)}
-																			</AIMarkdown>
-																			{message.role ===
-																				"assistant" &&
-																				message.content.includes(
-																					"/lib/"
-																				) &&
-																				smartScreeningFields.length >
-																					0 && (
-																					<div className="flex items-center gap-2 mt-8">
-																						<Button
-																							isDisabled={
-																								isWaiting
-																							}
-																							startContent={
-																								isMutating ? (
-																									<ImSpinner8 className="animate-spin" />
-																								) : (
-																									<GiStarSwirl />
-																								)
-																							}
-																							size="sm"
-																							color="accent"
-																							onClick={() =>
-																								handleScreening(
-																									message.content
-																								)
-																							}
-																						>
-																							{tUI(
-																								"smartScreening"
-																							)}
-																						</Button>
-																					</div>
-																				)}
-																		</>
-																	)}
-																</div>
+																<MessageComponent
+																	message={
+																		message
+																	}
+																	modelIndex={
+																		modelIndex
+																	}
+																	isMutating={
+																		isMutating
+																	}
+																	isWaiting={
+																		isWaiting
+																	}
+																	handleScreening={
+																		handleScreening
+																	}
+																	smartScreeningFields={
+																		smartScreeningFields
+																	}
+																/>
 															</motion.div>
 														)
 												)}
@@ -535,15 +541,15 @@ export default function ChatModal({
 									</motion.div>
 								)}
 								<AnimatePresence>
-									{(isEmbedded === false && hasPDFs) && (
-										<motion.div 
+									{isEmbedded === false && hasPDFs && (
+										<motion.div
 											className="absolute top-0 left-0 w-full h-auto z-10"
 											initial={{ opacity: 0, y: -100 }}
 											animate={{ opacity: 1, y: 0 }}
 											exit={{ opacity: 0, y: -100 }}
-											transition={{ 
+											transition={{
 												duration: 0.4,
-												ease: "easeInOut" 
+												ease: "easeInOut",
 											}}
 										>
 											<div className="max-w-3xl mx-auto mt-4 px-4">
@@ -553,10 +559,14 @@ export default function ChatModal({
 													</div>
 													<div className="flex-1">
 														<p className="font-medium">
-															{tUI("preparingDocuments")}
+															{tUI(
+																"preparingDocuments"
+															)}
 														</p>
 														<p className="text-sm text-black/60 dark:text-white/60">
-															{tUI("documentProcessingInfo")}
+															{tUI(
+																"documentProcessingInfo"
+															)}
 														</p>
 													</div>
 												</div>
@@ -685,6 +695,35 @@ export default function ChatModal({
 														),
 													}}
 												/>
+												<div className={twMerge("flex items-center gap-2 justify-center mt-8 transition-all duration-500 ease-spring", reponseExists && "mt-4")}>
+													<Card color="card" className={twMerge("flex flex-row p-4 py-3 rounded-2xl items-center gap-4 !transition-all duration-600", mode === "quick" && "opacity-50 hover:opacity-100")}>
+														<Switch
+															isSelected={
+																mode === "full"
+															}
+															onValueChange={(
+																value: boolean
+															) => {
+																setMode(
+																	value
+																		? "full"
+																		: "quick"
+																);
+															}}
+															color="accent"
+															size="sm"
+															classNames={{
+																label: twMerge("text-sm transition-colors duration-300", mode === "full" && "!text-accent"),
+																base: "gap-4"
+															}}
+														>
+															{tUI("researchMode")}
+														</Switch>
+														<Tooltip content={tUI("researchModeTooltip")}>
+															<BsQuestionCircleFill className={twMerge("text-black/60 dark:text-white/60 transition-colors duration-300", mode === "full" && "!text-accent")} />
+														</Tooltip>
+													</Card>
+												</div>
 											</motion.div>
 										</AnimatePresence>
 									</form>

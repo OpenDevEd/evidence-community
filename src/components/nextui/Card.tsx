@@ -16,6 +16,9 @@ export const Card = extendVariants(NextUICard, {
       transparent: {
         base: "bg-transparent border-transparent",
       },
+      danger: {
+        base: "bg-danger border-danger dark:bg-danger/20 dark:border-white/10",
+      },
     },
     variant: {
       default: {

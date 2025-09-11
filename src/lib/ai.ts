@@ -41,6 +41,8 @@ export function getModel(modelIndex: number) {
 	return {
 		provider,
 		modelName,
+		largeModel: model.largeModel,
+		smallModel: model.smallModel,
 	};
 }
 
@@ -150,28 +152,54 @@ export const generateEmbedding = async (value: string): Promise<number[]> => {
 	return embedding;
 };
 
-export const findRelevantContent = async (userQuery: string, itemKey: string | null, userSpecifiedPage: number) => {
+export interface RAGResult {
+	name: string; // This is the content snippet
+	similarity: number;
+	page: number;
+	parentKey: string | null;
+	url?: string; // Optional, as per your function's output
+}
+
+export const findRelevantContent = async (
+	userQuery: string,
+	itemKey: string | null,
+	userSpecifiedPage: number,
+): Promise<RAGResult[]> => {
+	if (!itemKey) {
+		console.warn("findRelevantContent called without an itemKey. Returning empty.");
+		return [];
+	}
 	const userQueryEmbedded = await generateEmbedding(userQuery);
 	const similarity = sql<number>`1 - (${cosineDistance(
 		embeddings.embedding,
 		userQueryEmbedded,
 	)})`;
-	
-	const baseCondition = [
-		gt(similarity, 0),
-		itemKey ? or(eq(embeddings.parentKey, itemKey), eq(embeddings.itemKey, itemKey)) : undefined,
-		userSpecifiedPage !== 0 ? eq(embeddings.page, userSpecifiedPage) : undefined,
-	].filter(Boolean);
-	const whereCondition = and(...baseCondition);
 
-	const similarGuides = await db
-		.select({ name: embeddings.content, similarity, page: embeddings.page, parentKey: embeddings.parentKey })
+	const conditions = [
+		gt(similarity, 0.3), // Added a minimum similarity threshold, adjust as needed
+		or(eq(embeddings.parentKey, itemKey), eq(embeddings.itemKey, itemKey)),
+	];
+
+	if (userSpecifiedPage !== 0) {
+		conditions.push(eq(embeddings.page, userSpecifiedPage));
+	}
+
+	const whereCondition = and(...conditions.filter(Boolean));
+
+	// Ensure your actual db query is typed correctly if possible
+	const similarGuidesFromDb = await db
+		.select({
+			name: embeddings.content,
+			similarity,
+			page: embeddings.page,
+			parentKey: embeddings.parentKey,
+		})
 		.from(embeddings)
 		.where(whereCondition)
-		.orderBy(t => desc(t.similarity))
-		.limit(200);
-	
-	return similarGuides.map(guide => ({
+		.orderBy((t: any) => desc(t.similarity)) // t might need specific typing from your ORM
+		.limit(10); // Reduced limit for agent processing, adjust as needed
+
+	return similarGuidesFromDb.map((guide: any) => ({
 		...guide,
 		url: process.env.BASE_URL + `/lib/${guide.parentKey}`,
 	}));

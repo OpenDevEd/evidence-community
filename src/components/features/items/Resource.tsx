@@ -247,7 +247,7 @@ export default function Resource({
 		<ResourceWrapper
 			as={as}
 			className={twMerge(
-				"@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col",
+				"@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col not-prose",
 				className
 			)}
 		>
@@ -255,7 +255,8 @@ export default function Resource({
 				href={finalItemData?.key ? targetHref : ""}
 				className={twMerge(
 					"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
-					!finalItemData?.key && "!pointer-events-none"
+					!finalItemData?.key && "!pointer-events-none",
+					!finalIsLoading && !finalItemData?.key && "no-data"
 				)}
 			>
 				<article className="flex flex-col gap-4">

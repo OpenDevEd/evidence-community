@@ -7,6 +7,9 @@ export const Switch = extendVariants(NextUISwitch, {
       tertiary: {
         wrapper: "group-data-[selected]:bg-tertiary ring-white/60",
       },
+      accent: {
+        wrapper: "group-data-[selected]:bg-accent ring-white/60",
+      },
     },
     custom: {
       default: {

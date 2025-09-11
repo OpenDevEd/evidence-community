@@ -135,7 +135,7 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 	);
 }
 
-function ItemHeader({ item }: { item: Item | undefined }) {
+function ItemHeader({ item, loadingProp }: { item: Item | undefined, loadingProp: boolean }) {
 	const router = useRouter();
 	const { loading } = use(LoadingContext);
 	const tItemType = useTranslations("itemType");
@@ -236,6 +236,7 @@ function ItemHeader({ item }: { item: Item | undefined }) {
 							item={item}
 							aria-label={t("itemZoteroOptionsAriaLabel")}
 						/>
+						{!loadingProp && <AiWrapper data={{ item: item }} variant="inline" />}
 					</div>
 				</div>
 			</Skeleton>
@@ -1217,9 +1218,8 @@ export default function ItemPage({
 		<PageContainer>
 			<LoadingContext.Provider value={{ loading }}>
 				<div className="flex flex-col gap-8">
-					<AiWrapper data={{ item: item }} />
 					<div className="flex flex-col gap-4">
-						<ItemHeader item={item} />
+						<ItemHeader item={item} loadingProp={loadingProp} />
 						<ItemTitle item={item} />
 					</div>
 					<div className="flex flex-col lg:grid grid-cols-12 gap-8">

@@ -27,6 +27,7 @@ import {
 	useDisclosure,
 } from "@nextui-org/react";
 import React, { ReactNode, use, useRef, useState, useEffect } from "react";
+import { Tabs, Tab } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { AiOutlineCompass } from "react-icons/ai";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -59,6 +60,7 @@ import { useModalError } from "@/hooks/useModalError";
 import { z } from "zod";
 import { Props } from "next/script";
 import { toast } from "@/components/layout/Toast";
+import { Formatter } from "recharts/types/component/DefaultTooltipContent";
 
 function DropDownIcon({
 	Icon,
@@ -127,24 +129,167 @@ export function SearchBar({
 	);
 }
 
-export function ContentInteractions({
+function SortComponent({
+	itemsContext,
+}: {
+	itemsContext: ReturnType<typeof useItemsList>;
+}) {
+	const tSorts = useTranslations("sorts");
+
+	return (
+		<Select
+			startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
+			selectedKeys={
+				itemsContext.queryParams.sort && [
+					itemsContext.queryParams.sort,
+				]
+			}
+			onSelectionChange={itemsContext.handleSortChange as any}
+			items={SORT_OPTIONS}
+			selectorIcon={<div className="hidden"></div>}
+			classNames={
+				!itemsContext.userData &&
+				itemsContext.config.interactionsStyle !== "one-line"
+					? {
+							base: twMerge(
+								"flex-1 max-w-full lg:max-w-56 shrink-0",
+								genericSelectClassNames.base
+							),
+							mainWrapper: twMerge(
+								"h-full",
+								genericSelectClassNames.mainWrapper
+							),
+							label: twMerge(
+								"",
+								genericSelectClassNames.label
+							),
+					  }
+					: {
+							base: twMerge(
+								"flex-1 max-w-full min-w-0 lg:min-w-56",
+								genericSelectClassNames.base
+							),
+							mainWrapper: twMerge(
+								"",
+								genericSelectClassNames.mainWrapper
+							),
+							label: twMerge(
+								"",
+								genericSelectClassNames.label
+							),
+					  }
+			}
+			label={"Sort by"}
+			labelPlacement="outside"
+		>
+			{(item: any) => {
+				return (
+					<SelectItem
+						aria-label={tSorts(item.key)}
+						key={item.key}
+					>
+						{tSorts(item.key)}
+					</SelectItem>
+				);
+			}}
+		</Select>
+	);
+}
+
+function ScopeComponent({
+	itemsContext,
+}: {
+	itemsContext: ReturnType<typeof useItemsList>;
+}) {
+	const tScopes = useTranslations("scopes");
+
+	return (
+		<Select
+			startContent={
+				<DropDownIcon label="Scope icon" Icon={GiArchiveResearch} />
+			}
+			color="tertiary"
+			selectedKeys={
+				itemsContext.queryParams.scope && [
+					itemsContext.queryParams.scope,
+				]
+			}
+			onSelectionChange={itemsContext.handleScopeChange as any}
+			items={SCOPE_OPTIONS}
+			selectorIcon={<div className="hidden"></div>}
+			classNames={
+				!itemsContext.userData
+					? {
+							base: twMerge(
+								"lg:max-w-72 max-w-full",
+								itemsContext.config.interactionsStyle ===
+									"one-line" && "flex-1",
+								genericSelectClassNames.base
+							),
+							mainWrapper: twMerge(
+								"h-10 lg:h-full",
+								genericSelectClassNames.mainWrapper
+							),
+							label: twMerge(
+								"",
+								genericSelectClassNames.label
+							),
+					  }
+					: {
+							base: twMerge(
+								"flex-1 max-w-full min-w-0 lg:min-w-56",
+								genericSelectClassNames.base
+							),
+							mainWrapper: twMerge(
+								"",
+								genericSelectClassNames.mainWrapper
+							),
+							label: twMerge(
+								"",
+								genericSelectClassNames.label
+							),
+					  }
+			}
+			label={"Search scope"}
+			labelPlacement="outside"
+		>
+			{(item: any) => {
+				return (
+					<SelectItem
+						aria-label={tScopes(item.key)}
+						key={item.key}
+					>
+						{tScopes(item.key)}
+					</SelectItem>
+				);
+			}}
+		</Select>
+	);
+}
+
+function SearchTabContent({
+	header,
+	itemsContext,
+	extraFilters,
+	countLabel,
 	abstract,
 	onAbstractChange,
 	view,
 	setView,
-	countLabel,
-	extraFilters,
-	header,
 }: {
+	header: ReactNode;
+	itemsContext: ReturnType<typeof useItemsList>;
+	extraFilters: ReactNode;
+	countLabel: ReactNode;
 	abstract: boolean;
 	onAbstractChange: (abstract: boolean) => void;
 	view: string;
 	setView: (view: string) => void;
-	countLabel: ReactNode;
-	extraFilters: ReactNode;
-	header?: ReactNode;
 }) {
-	const itemsContext = use(ItemsContext);
+	const t = useTranslations("ui");
+	const formatter = useFormatter();
+
+
 	const {
 		isOpen: isExploreOpen,
 		onOpen: onExploreOpen,
@@ -161,246 +306,117 @@ export function ContentInteractions({
 			itemsContext.itemsData &&
 			itemsContext.itemsData.items.length === 0) ||
 		itemsContext.itemsError;
-	const t = useTranslations("ui");
-	const tSorts = useTranslations("sorts");
-	const tScopes = useTranslations("scopes");
-	const formatter = useFormatter();
-
-	function SortComponent() {
-		return (
-			<Select
-				startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
-				selectedKeys={
-					itemsContext.queryParams.sort && [
-						itemsContext.queryParams.sort,
-					]
-				}
-				onSelectionChange={itemsContext.handleSortChange as any}
-				items={SORT_OPTIONS}
-				selectorIcon={<div className="hidden"></div>}
-				classNames={
-					!itemsContext.userData &&
-					itemsContext.config.interactionsStyle !== "one-line"
-						? {
-								base: twMerge(
-									"flex-1 max-w-full lg:max-w-56 shrink-0",
-									genericSelectClassNames.base
-								),
-								mainWrapper: twMerge(
-									"h-full",
-									genericSelectClassNames.mainWrapper
-								),
-								label: twMerge(
-									"",
-									genericSelectClassNames.label
-								),
-						  }
-						: {
-								base: twMerge(
-									"flex-1 max-w-full min-w-0 lg:min-w-56",
-									genericSelectClassNames.base,
-								),
-								mainWrapper: twMerge(
-									"",
-									genericSelectClassNames.mainWrapper
-								),
-								label: twMerge(
-									"",
-									genericSelectClassNames.label
-								),
-						  }
-				}
-				label={"Sort by"}
-				labelPlacement="outside"
-			>
-				{(item: any) => {
-					return (
-						<SelectItem
-							aria-label={tSorts(item.key)}
-							key={item.key}
-						>
-							{tSorts(item.key)}
-						</SelectItem>
-					);
-				}}
-			</Select>
-		);
-	}
-
-	function ScopeComponent() {
-		return (
-			<Select
-				startContent={
-					<DropDownIcon label="Scope icon" Icon={GiArchiveResearch} />
-				}
-				color="tertiary"
-				selectedKeys={
-					itemsContext.queryParams.scope && [
-						itemsContext.queryParams.scope,
-					]
-				}
-				onSelectionChange={itemsContext.handleScopeChange as any}
-				items={SCOPE_OPTIONS}
-				selectorIcon={<div className="hidden"></div>}
-				classNames={
-					!itemsContext.userData
-						? {
-								base: twMerge(
-									"lg:max-w-72 max-w-full",
-									itemsContext.config.interactionsStyle === "one-line" && "flex-1",
-									genericSelectClassNames.base
-								),
-								mainWrapper: twMerge(
-									"h-10 lg:h-full",
-									genericSelectClassNames.mainWrapper
-								),
-								label: twMerge(
-									"",
-									genericSelectClassNames.label
-								),
-						  }
-						: {
-								base: twMerge(
-									"flex-1 max-w-full min-w-0 lg:min-w-56",
-									genericSelectClassNames.base
-								),
-								mainWrapper: twMerge(
-									"",
-									genericSelectClassNames.mainWrapper
-								),
-								label: twMerge(
-									"",
-									genericSelectClassNames.label
-								),
-						  }
-				}
-				label={"Search scope"}
-				labelPlacement="outside"
-			>
-				{(item: any) => {
-					return (
-						<SelectItem
-							aria-label={tScopes(item.key)}
-							key={item.key}
-						>
-							{tScopes(item.key)}
-						</SelectItem>
-					);
-				}}
-			</Select>
-		);
-	}
 
 	return (
-		<>
-			{(!itemsContext.userData || header) &&
-				itemsContext.config.interactionsStyle !== "one-line" && (
-					<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
-						<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl w-full lg:w-auto h-10 lg:h-12 flex justify-between items-end">
-							{header || (
-								<>
-									<a
-										href="#collections"
-										className="p-3 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100 bg-background_light dark:bg-background"
-									>
-										{t("goToFilters")}
-									</a>
-									{t("searchTitle")}
-								</>
-							)}
-							<Button
-								startContent={
-									<AiOutlineCompass className="size-6" />
-								}
-								className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
-								onPress={onExploreOpen}
+		<div className="flex flex-col gap-4">
+			{/* Header with title and explore button */}
+			<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
+				<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl w-full lg:w-auto h-10 lg:h-12 flex justify-between items-end">
+					{header || (
+						<>
+							<a
+								href="#collections"
+								className="p-3 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100 bg-background_light dark:bg-background"
 							>
-								{t("explore")}
-							</Button>
-							<FullScreenModal
-								scrollBehavior="outside"
-								isOpen={isExploreOpen}
-								onOpenChange={onExploreOpenChange}
-							>
-								<ModalContent>
-									{(onClose: any) => (
-										<>
-											<GenericHeader onClose={onClose}>
-												{t("explore")}
-											</GenericHeader>
-											{!itemsContext.userData && (
-												<CollectionsList
-													data={
-														itemsContext.collectionsData
-													}
-													handleCheckboxChange={
-														itemsContext.handleCheckboxChange
-													}
-													selectedCollections={
-														itemsContext.selectedCollections
-													}
-													hierarchy={
-														itemsContext.hierarchy!
-													}
-													isModal
-													range={
-														itemsContext.queryParams
-															.range
-													}
-													handleRangeChange={
-														itemsContext.handleRangeChange
-													}
-													facetDistribution={
-														itemsContext.itemsData
-															?.facetDistribution
-													}
-													queryParams={
-														itemsContext.queryParams
-													}
-													handleInstitutionSelect={
-														itemsContext.handleInstitutionSelect
-													}
-													handleCountrySelect={
-														itemsContext.handleCountrySelect
-													}
-													handleAuthorCountrySelect={
-														itemsContext.handleAuthorCountrySelect
-													}
-												/>
-											)}
-										</>
-									)}
-								</ModalContent>
-							</FullScreenModal>
-						</h1>
-						<div className="flex gap-4 h-10 lg:h-12 flex-1 justify-end">
-							{!itemsContext.userData && (
+								{t("goToFilters")}
+							</a>
+							{t("searchTitle")}
+						</>
+					)}
+					<Button
+						startContent={
+							<AiOutlineCompass className="size-6" />
+						}
+						className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
+						onPress={onExploreOpen}
+					>
+						{t("explore")}
+					</Button>
+					<FullScreenModal
+						scrollBehavior="outside"
+						isOpen={isExploreOpen}
+						onOpenChange={onExploreOpenChange}
+					>
+						<ModalContent>
+							{(onClose: any) => (
 								<>
-									<Button
-										className="h-full font-medium text-base !p-0"
-										isIconOnly
-										onPress={onHelpOpen}
-										aria-label={t("helpAriaLabel")}
-									>
-										<BiHelpCircle
-											aria-label={t("helpIconAriaLabel")}
-											className="size-6"
+									<GenericHeader onClose={onClose}>
+										{t("explore")}
+									</GenericHeader>
+									{!itemsContext.userData && (
+										<CollectionsList
+											data={
+												itemsContext.collectionsData
+											}
+											handleCheckboxChange={
+												itemsContext.handleCheckboxChange
+											}
+											selectedCollections={
+												itemsContext.selectedCollections
+											}
+											hierarchy={
+												itemsContext.hierarchy!
+											}
+											isModal
+											range={
+												itemsContext.queryParams
+													.range
+											}
+											handleRangeChange={
+												itemsContext.handleRangeChange
+											}
+											facetDistribution={
+												itemsContext.itemsData
+													?.facetDistribution
+											}
+											queryParams={
+												itemsContext.queryParams
+											}
+											handleInstitutionSelect={
+												itemsContext.handleInstitutionSelect
+											}
+											handleCountrySelect={
+												itemsContext.handleCountrySelect
+											}
+											handleAuthorCountrySelect={
+												itemsContext.handleAuthorCountrySelect
+											}
 										/>
-									</Button>
-									<HelpModal
-										isOpen={isHelpOpen}
-										onOpenChange={onHelpOpenChange}
-									/>
-									{<SortComponent />}
+									)}
 								</>
 							)}
-						</div>
-					</div>
-				)}
+						</ModalContent>
+					</FullScreenModal>
+				</h1>
+				<div className="flex gap-4 h-10 lg:h-12 flex-1 justify-end">
+					{!itemsContext.userData && (
+						<>
+							<Button
+								className="h-full font-medium text-base !p-0"
+								isIconOnly
+								onPress={onHelpOpen}
+								aria-label={t("helpAriaLabel")}
+							>
+								<BiHelpCircle
+									aria-label={t("helpIconAriaLabel")}
+									className="size-6"
+								/>
+							</Button>
+							<HelpModal
+								isOpen={isHelpOpen}
+								onOpenChange={onHelpOpenChange}
+							/>
+							{<SortComponent itemsContext={itemsContext} />}
+						</>
+					)}
+				</div>
+			</div>
+
+			{/* Search and filters */}
 			{itemsContext.config.interactionsStyle === "one-line" ? (
 				<div className="flex gap-4">
-					<ScopeComponent />
-					<SortComponent />
+					<ScopeComponent itemsContext={itemsContext} 	/>
+					<SortComponent itemsContext={itemsContext} />
 				</div>
 			) : (
 				<section
@@ -416,11 +432,13 @@ export function ContentInteractions({
 						handleSearchChange={itemsContext.handleSearchChange}
 						search={itemsContext.queryParams.search}
 					/>
-					{<ScopeComponent />}
-					{itemsContext.userData && <SortComponent />}
+					{<ScopeComponent itemsContext={itemsContext} />}
+					{itemsContext.userData && <SortComponent itemsContext={itemsContext} />}
 					{extraFilters}
 				</section>
 			)}
+
+			{/* Results count and view controls */}
 			<section className="flex justify-between h-10 lg:h-12 gap-8">
 				<Skeleton
 					isLoaded={!!itemsContext.itemsData}
@@ -462,7 +480,8 @@ export function ContentInteractions({
 				<section
 					className={twMerge(
 						"flex gap-4",
-						itemsContext.config.interactionsStyle === "multi-line"
+						itemsContext.config.interactionsStyle ===
+							"multi-line"
 							? "lg:min-w-72"
 							: "flex-1"
 					)}
@@ -485,7 +504,9 @@ export function ContentInteractions({
 						<div className="hidden lg:flex gap-0 w-28">
 							<Button
 								color={
-									view === "list" ? "tertiary" : "secondary"
+									view === "list"
+										? "tertiary"
+										: "secondary"
 								}
 								isIconOnly
 								className="!p-0 ltr:rounded-r-none rtl:rounded-l-none flex-1"
@@ -499,7 +520,9 @@ export function ContentInteractions({
 							</Button>
 							<Button
 								color={
-									view === "grid" ? "tertiary" : "secondary"
+									view === "grid"
+										? "tertiary"
+										: "secondary"
 								}
 								isIconOnly
 								className="!p-0 ltr:rounded-l-none rtl:rounded-r-none flex-1"
@@ -515,7 +538,246 @@ export function ContentInteractions({
 					)}
 				</section>
 			</section>
-		</>
+		</div>
+	);
+}
+
+function AITabContent() {
+	const {
+		modelObject: { icon: Icon },
+		selectedModel,
+		setSelectedModel,
+	} = useSelectedModel();
+	const {
+		isOpen: isChatOpen,
+		onOpen: onChatOpen,
+		onOpenChange: onChatOpenChange,
+	} = useDisclosure();
+	const {
+		isOpen: isModelOpen,
+		onOpen: onModelOpen,
+		onOpenChange: onModelOpenChange,
+	} = useDisclosure();
+	const {
+		isOpen: isSmartScreeningOpen,
+		onOpen: onSmartScreeningOpen,
+		onOpenChange: onSmartScreeningOpenChange,
+	} = useDisclosure();
+	const [externalInput, setExternalInput] = useState<string>("");
+	const [mode, setMode] = useLocalStorage("chat-mode", "full");
+
+	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+		e.preventDefault();
+		onChatOpen();
+	};
+
+	const tAI = useTranslations("ai");
+	const tUI = useTranslations("ui");
+	const t = useTranslations("ui");
+
+	return (
+		<div className="flex flex-col gap-6 p-6 lg:pb-1 lg:pt-0 py-12">
+			<ModelSelector
+				isOpen={isModelOpen}
+				onOpenChange={onModelOpenChange}
+				selectedModel={selectedModel}
+				onModelChange={setSelectedModel}
+			/>
+			<ChatModal
+				isOpen={isChatOpen}
+				onOpenChange={onChatOpenChange}
+				modelIndex={selectedModel}
+				externalInput={externalInput}
+				setExternalInput={setExternalInput}
+				mode={mode}
+			/>
+			<SmartScreeningModal
+				isOpen={isSmartScreeningOpen}
+				onOpenChange={onSmartScreeningOpenChange}
+			/>
+
+			<div className="flex items-center justify-center">
+				<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
+					{tAI("askAI") || "Ask AI"}
+				</h1>
+			</div>
+
+			<form
+				onSubmit={handleSubmit}
+				className="flex justify-center items-center gap-4"
+			>
+				<div className="flex gap-4 w-full items-center">
+					<Tooltip content={t("openChatTooltip")}>
+						<Button
+							isIconOnly
+							startContent={<IoChatboxOutline />}
+							size="md"
+							className="!p-0"
+							onPress={onChatOpen}
+						></Button>
+					</Tooltip>
+					<div className="relative flex-1">
+						<Input
+							autoComplete="off"
+							value={externalInput}
+							onValueChange={setExternalInput}
+							startContent={
+								<Button
+									isIconOnly
+									variant="invisible"
+									className="shrink-0"
+									onPress={onModelOpen}
+								>
+									<Icon className="size-6 bg-accent rounded-full p-1 aspect-square shrink-0 fill-white" />
+								</Button>
+							}
+							endContent={
+								<div className="flex items-center gap-1">
+									<Tooltip content={tUI("researchModeTooltip")}>
+										<Button
+											isIconOnly
+											variant="invisible"
+											className="shrink-0 !p-0"
+											onPress={() => setMode(mode === "research" ? "full" : "research")}
+											aria-label={tUI("researchMode")}
+										>
+											<GiArchiveResearch
+												className={twMerge(
+													"size-5",
+													mode === "full"
+														? "text-accent"
+														: "text-black/60 dark:text-white/60"
+												)}
+											/>
+										</Button>
+									</Tooltip>
+									<Button
+										type="submit"
+										isIconOnly
+										variant="invisible"
+										className="shrink-0 !p-1"
+										onPress={onChatOpen}
+									>
+										<IoSend className="size-4" />
+									</Button>
+								</div>
+							}
+							placeholder={tAI("askMeAnything")}
+							className="w-full"
+							classNames={{
+								inputWrapper:
+									"h-12 p-3 rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
+								input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base",
+							}}
+						/>
+					</div>
+					<Tooltip content={t("smartScreening")}>
+						<Button
+							isIconOnly
+							startContent={<GiStarSwirl />}
+							size="md"
+							className="!p-0"
+							onPress={onSmartScreeningOpen}
+						></Button>
+					</Tooltip>
+				</div>
+			</form>
+
+			<div className="text-center text-sm text-black/60 dark:text-white/40 max-w-lg mx-auto">
+				{tAI("aiDescription") ||
+					"Ask questions about the evidence library or get help with your research."}
+			</div>
+		</div>
+	);
+}
+
+
+export function ContentInteractions({
+	abstract,
+	onAbstractChange,
+	view,
+	setView,
+	countLabel,
+	extraFilters,
+	header,
+}: {
+	abstract: boolean;
+	onAbstractChange: (abstract: boolean) => void;
+	view: string;
+	setView: (view: string) => void;
+	countLabel: ReactNode;
+	extraFilters: ReactNode;
+	header?: ReactNode;
+}) {
+	const isAISearchEnabled = useFeatureFlagEnabled("ai-search");
+	const itemsContext = use(ItemsContext);
+	
+	const t = useTranslations("ui");
+	const tAI = useTranslations("ai");
+	const tUI = useTranslations("ui");
+
+	const [selectedTabOriginal, setSelectedTab] = useLocalStorage(
+		"selectedSearchTab",
+		"search"
+	);
+	const selectedTab = isAISearchEnabled ? selectedTabOriginal : "search";
+
+	return (
+		<div className="w-full">
+			{isAISearchEnabled && (
+				<Tabs
+					aria-label="Search and AI tabs"
+					selectedKey={selectedTab}
+					onSelectionChange={(key) => setSelectedTab(key as string)}
+					classNames={{
+						tabList: "bg-white/10 dark:bg-black/10 p-1 rounded-2xl",
+						cursor: "bg-accent dark:bg-accent rounded-xl",
+						tab: "px-4 py-2 text-sm font-medium",
+						tabContent: "text-black dark:text-white/80 group-data-[selected=true]:text-white",
+					}}
+					size="lg"
+				>
+					<Tab key="search" title={<div className="flex items-center gap-2"><IoSearch className="size-4" />{t("search") || "Search"}</div>}  />
+					<Tab key="ai" title={<div className="flex items-center gap-2"><IoChatboxOutline className="size-4" />{tAI("askAI") || "Ask AI"}</div>} />
+				</Tabs>
+			)}
+
+			{/* Animated Tab Content */}
+			<div className="relative">
+				<AnimatePresence mode="wait">
+					{selectedTab === "search" && (
+						<motion.div
+							key="search-content"
+							initial={{ opacity: 0, x: -20, scale: 0.95 }}
+							animate={{ opacity: 1, x: 0, scale: 1 }}
+							exit={{ opacity: 0, x: 20, scale: 0.95 }}
+							transition={{
+								duration: 0.4,
+								ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
+							}}
+							className="w-full"
+						>
+							<SearchTabContent header={header} itemsContext={itemsContext} extraFilters={extraFilters} countLabel={countLabel} abstract={abstract} onAbstractChange={onAbstractChange} view={view} setView={setView} />
+						</motion.div>
+					)}
+					{selectedTab === "ai" && (
+						<motion.div
+							key="ai-content"
+							initial={{ opacity: 0, x: 20, scale: 0.95 }}
+							animate={{ opacity: 1, x: 0, scale: 1 }}
+							exit={{ opacity: 0, x: -20, scale: 0.95 }}
+							transition={{
+								duration: 0.4,
+								ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
+							}}
+							className="w-full"
+						>
+							<AITabContent />
+						</motion.div>
+					)}
+				</AnimatePresence>
+			</div>
+		</div>
 	);
 }
 
@@ -702,7 +964,7 @@ function SmartScreeningModal({
 						<AIHeader onClose={onClose}>
 							{t("smartScreening")}
 						</AIHeader>
-						<div className="flex gap-0 px-6  py-2">
+						<div className="flex gap-0 px-6 py-2">
 							{tabs.map((t, i) => (
 								<Button
 									key={t}
@@ -1029,127 +1291,12 @@ function SmartScreeningModal({
 	);
 }
 
-function AIChat() {
-	const t = useTranslations("ai");
-	const tUI = useTranslations("ui");
-	const {
-		modelObject: { icon: Icon },
-		selectedModel,
-		setSelectedModel,
-	} = useSelectedModel();
-	const {
-		isOpen: isChatOpen,
-		onOpen: onChatOpen,
-		onOpenChange: onChatOpenChange,
-	} = useDisclosure();
-	const {
-		isOpen: isModelOpen,
-		onOpen: onModelOpen,
-		onOpenChange: onModelOpenChange,
-	} = useDisclosure();
-	const {
-		isOpen: isSmartScreeningOpen,
-		onOpen: onSmartScreeningOpen,
-		onOpenChange: onSmartScreeningOpenChange,
-	} = useDisclosure();
-	const [externalInput, setExternalInput] = useState<string>("");
-
-	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		onChatOpen();
-	};
-
-	return (
-		<>
-			<ModelSelector
-				isOpen={isModelOpen}
-				onOpenChange={onModelOpenChange}
-				selectedModel={selectedModel}
-				onModelChange={setSelectedModel}
-			/>
-			<ChatModal
-				isOpen={isChatOpen}
-				onOpenChange={onChatOpenChange}
-				modelIndex={selectedModel}
-				externalInput={externalInput}
-				setExternalInput={setExternalInput}
-			/>
-			<SmartScreeningModal
-				isOpen={isSmartScreeningOpen}
-				onOpenChange={onSmartScreeningOpenChange}
-			/>
-			<form
-				onSubmit={handleSubmit}
-				className="fixed bottom-0 left-1/2 -translate-x-1/2 flex justify-center p-4 items-center z-50 group fill-white"
-			>
-				<div className="flex gap-4">
-					<Tooltip content={tUI("openChatTooltip")}>
-						<Button
-							isIconOnly
-							startContent={<IoChatboxOutline />}
-							size="md"
-							className="!p-0"
-							onPress={onChatOpen}
-						></Button>
-					</Tooltip>
-					<div className="relative">
-						<Input
-							autoComplete="off"
-							value={externalInput}
-							onValueChange={setExternalInput}
-							startContent={
-								<Button
-									isIconOnly
-									variant="invisible"
-									className="shrink-0"
-									onPress={onModelOpen}
-								>
-									<Icon className="size-6 bg-accent rounded-full p-1 aspect-square shrink-0" />
-								</Button>
-							}
-							endContent={
-								<Button
-									type="submit"
-									isIconOnly
-									variant="invisible"
-									className="shrink-0 !p-1"
-									onPress={onChatOpen}
-								>
-									<IoSend className="size-4" />
-								</Button>
-							}
-							placeholder={t("askAI")}
-							className="w-auto"
-							classNames={{
-								inputWrapper:
-									"p-2 lg:p-2 backdrop-blur-xl shadow-accent-glow data-[hover]:scale-105 w-64 data-[focus]:w-[28rem] !max-w-[calc(100vw-2rem)] !transition-all !duration-500 ease-bounce-custom",
-							}}
-						/>
-						<div className="size-96 bg-accent/50 opacity-0 group-hover:opacity-75 rounded-full left-1/2 -translate-x-1/2 blur-3xl absolute -z-10 transition-all duration-1000 ease-spring"></div>
-					</div>
-					<Tooltip content={tUI("smartScreening")}>
-						<Button
-							isIconOnly
-							startContent={<GiStarSwirl />}
-							size="md"
-							className="!p-0"
-							onPress={onSmartScreeningOpen}
-						></Button>
-					</Tooltip>
-				</div>
-			</form>
-		</>
-	);
-}
-
 export default function EvidenceLibrary() {
-	const isAISearchEnabled = useFeatureFlagEnabled("ai-search");
 	return (
 		<PageContainer>
 			<div className="flex xl:gap-[2.5rem] gap-8 flex-col lg:flex-row">
 				<MainContent />
 			</div>
-			{isAISearchEnabled && <AIChat />}
 		</PageContainer>
 	);
 }

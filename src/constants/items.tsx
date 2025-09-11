@@ -78,6 +78,7 @@ export const ITEMS_PER_PAGE = 20;
 export const EXCLUDED_ITEM_TYPES = ["Note", "Attachment"];
 
 export const SORT_OPTIONS = [
+	{ key: "relevance", legacyKey: "relevance", name: "Relevance" },
 	{ key: "desc", legacyKey: "date_desc", name: "Newest", sort: "datePublished:desc" },
 	{ key: "asc", legacyKey: "date_asc", name: "Oldest", sort: "datePublished:asc" },
 	// { key: "dateAddedDesc", name: "Date Added (Newest)", sort: "dateAdded:desc" },

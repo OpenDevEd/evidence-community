@@ -25,6 +25,7 @@ import { AI_DROPDOWN_ITEMS } from "@/components/features/ai/AIDropdownItems";
 import posthog from "posthog-js";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { useFeatureFlagEnabled } from "@/context/Providers";
+import { twMerge } from "tailwind-merge";
 
 function randomUUID() {
 	return (
@@ -37,10 +38,12 @@ function AiButton({
 	data,
 	isEmbedded,
 	setIsEmbedded,
+	variant,
 }: {
 	data: ItemGetResponse | undefined;
 	isEmbedded: boolean | null;
 	setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>>;
+	variant?: "default" | "inline";
 }) {
 	const { selectedModel, setSelectedModel } = useSelectedModel();
 	const body = {
@@ -122,11 +125,13 @@ function AiButton({
 
 	return (
 		<motion.div
-			className="fixed bottom-0 right-0 z-40 print:hidden"
+			className={twMerge("", variant === "default" && "fixed bottom-0 right-0 z-40 print:hidden")}
 			initial={{ opacity: 0, x: 100 }}
 			animate={{ opacity: 1, x: 0 }}
 		>
-			<div className="flex items-center justify-center p-4">
+			<div className={twMerge(
+				"flex items-center justify-center",
+				variant === "default" && " p-4")}>
 				<ModelSelector
 					isOpen={isChangeOpen}
 					onOpenChange={onChangeOpenChange}
@@ -167,11 +172,16 @@ function AiButton({
 				>
 					<DropdownTrigger>
 						<Button
-							isIconOnly
+							isIconOnly={variant === "default"}
 							aria-label={tUI("aiMenuAriaLabel")}
-							className="!p-0 rounded-full bg-gradient-to-r from-accent-400 to-accent-700 !text-white !outline-0 border-0 shadow-[0_0_12px_4px_rgba(255,255,255,0.1)] shadow-accent"
+							className={twMerge(
+								"bg-gradient-to-r from-accent-400 to-accent-700 !text-white !outline-0 border-0 shadow-[0_0_12px_4px_rgba(255,255,255,0.1)] shadow-accent",
+								variant === "default" && "!p-0 rounded-full "
+							)}
+							size={variant === "inline" ? "sm" : "lg"}
 						>
 							<BsStars />
+							{variant === "inline" && t("askAI")}
 						</Button>
 					</DropdownTrigger>
 					<DropdownMenu
@@ -207,8 +217,10 @@ function AiButton({
 
 export default function AiWrapper({
 	data,
+	variant = "default",
 }: {
 	data: ItemGetResponse | undefined;
+	variant?: "default" | "inline";
 }) {
 	const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
 
@@ -232,6 +244,7 @@ export default function AiWrapper({
 			data={data}
 			isEmbedded={isEmbedded}
 			setIsEmbedded={setIsEmbedded}
+			variant={variant}
 		/>
 	);
 }

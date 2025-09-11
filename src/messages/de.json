@@ -434,7 +434,9 @@
     "researchPartner": "Forschungspartner",
     "fundingPartner": "Finanzierungspartner",
     "availableOnRequest": "Auf Anfrage erhältlich",
-    "itemNotesDescription": "Die folgenden Notizen wurden dem zugehörigen Datensatz hinzugefügt."
+    "itemNotesDescription": "Die folgenden Notizen wurden dem zugehörigen Datensatz hinzugefügt.",
+    "researchMode": "Forschungsmodus",
+    "researchModeTooltip": "Der Forschungsmodus ist langsamer, liefert aber detailliertere Antworten."
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
@@ -466,7 +468,8 @@
     "exportAsPlainText": "Als .txt exportieren",
     "delete": "Löschen",
     "history": "Verlauf",
-    "rateLimitedMessage": "Sie wurden durch die Ratenbegrenzung eingeschränkt. Bitte versuchen Sie es in {seconds} Sekunden erneut."
+    "rateLimitedMessage": "Sie wurden durch die Ratenbegrenzung eingeschränkt. Bitte versuchen Sie es in {seconds} Sekunden erneut.",
+    "aiDescription": "Stellen Sie Fragen zum Inhalt dieser Evidenzbibliothek, erhalten Sie Forschungshilfe oder erkunden Sie Dateneinblicke mit unserem KI-Assistenten."
   },
   "sorts": {
     "desc": "Neueste",
@@ -474,7 +477,8 @@
     "authorAZ": "Autor A-Z",
     "authorZA": "Autor Z-A",
     "titleAZ": "Titel A-Z",
-    "titleZA": "Titel Z-A"
+    "titleZA": "Titel Z-A",
+    "relevance": "Relevanz"
   },
   "scopes": {
     "everywhere": "Überall",

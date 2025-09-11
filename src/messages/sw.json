@@ -435,7 +435,9 @@
     "researchPartner": "Mshirika wa Utafiti",
     "fundingPartner": "Mshirika wa Ufadhili",
     "availableOnRequest": "Inapatikana kwa ombi",
-    "itemNotesDescription": "Vidokezo vifuatavyo viliongezwa kwenye rekodi husika."
+    "itemNotesDescription": "Vidokezo vifuatavyo viliongezwa kwenye rekodi husika.",
+    "researchMode": "Hali ya Utafiti",
+    "researchModeTooltip": "Hali ya utafiti ni polepole zaidi, lakini hutoa majibu ya kina zaidi."
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
@@ -467,7 +469,8 @@
     "exportAsPlainText": "Hamisha kama .txt",
     "delete": "Futa",
     "history": "Historia",
-    "rateLimitedMessage": "Umefikia kikomo cha matumizi. Tafadhali jaribu tena baada ya sekunde {seconds}."
+    "rateLimitedMessage": "Umefikia kikomo cha matumizi. Tafadhali jaribu tena baada ya sekunde {seconds}.",
+    "aiDescription": "Uliza maswali kuhusu maudhui ya maktaba hii ya ushahidi, pata usaidizi wa utafiti, au chunguza maarifa ya data ukitumia msaidizi wetu wa AI."
   },
   "sorts": {
     "desc": "Mpya Zaidi",
@@ -475,7 +478,8 @@
     "authorAZ": "Mwandishi A-Z",
     "authorZA": "Mwandishi Z-A",
     "titleAZ": "Kichwa A-Z",
-    "titleZA": "Kichwa Z-A"
+    "titleZA": "Kichwa Z-A",
+    "relevance": "Umuhimu"
   },
   "scopes": {
     "everywhere": "Kila mahali",

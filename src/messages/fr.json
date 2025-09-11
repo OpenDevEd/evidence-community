@@ -434,7 +434,9 @@
     "researchPartner": "Partenaire de recherche",
     "fundingPartner": "Partenaire financier",
     "availableOnRequest": "Disponible sur demande",
-    "itemNotesDescription": "Les notes suivantes ont été ajoutées à l'enregistrement associé."
+    "itemNotesDescription": "Les notes suivantes ont été ajoutées à l'enregistrement associé.",
+    "researchMode": "Mode Recherche",
+    "researchModeTooltip": "Le mode recherche est plus lent, mais fournit des réponses plus détaillées."
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",
@@ -466,7 +468,8 @@
     "exportAsPlainText": "Exporter en .txt",
     "delete": "Supprimer",
     "history": "Historique",
-    "rateLimitedMessage": "Vous avez été limité en débit. Veuillez réessayer dans {seconds} secondes."
+    "rateLimitedMessage": "Vous avez été limité en débit. Veuillez réessayer dans {seconds} secondes.",
+    "aiDescription": "Posez des questions sur le contenu de cette bibliothèque de preuves, obtenez de l'aide à la recherche ou explorez les informations de données avec notre assistant IA."
   },
   "sorts": {
     "desc": "Plus récent",
@@ -474,7 +477,8 @@
     "authorAZ": "Auteur A-Z",
     "authorZA": "Auteur Z-A",
     "titleAZ": "Titre A-Z",
-    "titleZA": "Titre Z-A"
+    "titleZA": "Titre Z-A",
+    "relevance": "Pertinence"
   },
   "scopes": {
     "everywhere": "Partout",

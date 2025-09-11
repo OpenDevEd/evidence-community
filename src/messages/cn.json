@@ -434,7 +434,9 @@
     "researchPartner": "研究伙伴",
     "fundingPartner": "出资方",
     "availableOnRequest": "可根据要求提供",
-    "itemNotesDescription": "以下笔记已添加到相关记录中。"
+    "itemNotesDescription": "以下笔记已添加到相关记录中。",
+    "researchMode": "研究模式",
+    "researchModeTooltip": "研究模式较慢，但提供更详细的答案。"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",
@@ -466,7 +468,8 @@
     "exportAsPlainText": "导出为 .txt",
     "delete": "删除",
     "history": "历史记录",
-    "rateLimitedMessage": "您已达到速率限制。请在 {seconds} 秒后重试。"
+    "rateLimitedMessage": "您已达到速率限制。请在 {seconds} 秒后重试。",
+    "aiDescription": "询问有关此证据库内容的问题，获得研究协助，或通过我们的人工智能助手探索数据见解。"
   },
   "sorts": {
     "desc": "最新",
@@ -474,7 +477,8 @@
     "authorAZ": "作者 A-Z",
     "authorZA": "作者 Z-A",
     "titleAZ": "标题 A-Z",
-    "titleZA": "标题 Z-A"
+    "titleZA": "标题 Z-A",
+    "relevance": "相关性"
   },
   "scopes": {
     "everywhere": "到处",

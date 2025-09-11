@@ -76,6 +76,11 @@ export function convertStringFromDatabaseToObject(string: string) {
 	return companyLogoStyleObject || {}
 }
 
+export function getTimeDuration(startTime: number): string {
+	const duration = (Date.now() - startTime) / 1000; // in seconds
+	return `[${duration.toFixed(1)}s] `;
+}
+
 export function getDynamicStyles(cssString: string): React.CSSProperties {
 	if (!cssString) return {};
 

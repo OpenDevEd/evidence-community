@@ -434,7 +434,9 @@
     "researchPartner": "Parceiro de Pesquisa",
     "fundingPartner": "Parceiro Financiador",
     "availableOnRequest": "Disponível mediante pedido",
-    "itemNotesDescription": "As seguintes notas foram adicionadas ao registo associado."
+    "itemNotesDescription": "As seguintes notas foram adicionadas ao registo associado.",
+    "researchMode": "Modo de Pesquisa",
+    "researchModeTooltip": "O modo de pesquisa é mais lento, mas fornece respostas mais detalhadas."
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",
@@ -466,7 +468,8 @@
     "exportAsPlainText": "Exportar como .txt",
     "delete": "Excluir",
     "history": "Histórico",
-    "rateLimitedMessage": "Você foi limitado pela taxa. Por favor, tente novamente em {seconds} segundos."
+    "rateLimitedMessage": "Você foi limitado pela taxa. Por favor, tente novamente em {seconds} segundos.",
+    "aiDescription": "Faça perguntas sobre o conteúdo desta biblioteca de evidências, obtenha assistência em pesquisa ou explore insights de dados com nosso assistente de IA."
   },
   "sorts": {
     "desc": "Mais recentes",
@@ -474,7 +477,8 @@
     "authorAZ": "Autor A-Z",
     "authorZA": "Autor Z-A",
     "titleAZ": "Título A-Z",
-    "titleZA": "Título Z-A"
+    "titleZA": "Título Z-A",
+    "relevance": "Relevância"
   },
   "scopes": {
     "everywhere": "Em todo lugar",

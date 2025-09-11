@@ -10,14 +10,20 @@ export const models = [
 	{
 		name: "Gemini",
 		company: "Google",
-		model: process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_MODEL,
+		// model: process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_MODEL,
+		model: "gemini-2.5-flash",
 		icon: Gemini,
+		largeModel: "gemini-2.5-pro",
+		smallModel: "gemini-2.5-flash",
 	},
 	{
 		name: "ChatGPT",
 		company: "OpenAI",
-		model: process.env.NEXT_PUBLIC_OPENAI_MODEL,
+		// model: process.env.NEXT_PUBLIC_OPENAI_MODEL,
+		model: "gpt-5",
 		icon: ChatGPT,
+		largeModel: "gpt-5",
+		smallModel: "gpt-5-mini",
 	},
 	// {
 	// 	name: "DeepSeek",

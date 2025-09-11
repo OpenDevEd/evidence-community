@@ -434,7 +434,9 @@
     "researchPartner": "Research Partner",
     "fundingPartner": "Funding Partner",
     "availableOnRequest": "Available on request",
-    "itemNotesDescription": "The following notes were added to the associated record."
+    "itemNotesDescription": "The following notes were added to the associated record.",
+    "researchMode": "Research Mode",
+    "researchModeTooltip": "Research mode is slower, but provides more detailed answers."
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",
@@ -466,7 +468,8 @@
     "exportAsPlainText": "Export as .txt",
     "delete": "Delete",
     "history": "History",
-    "rateLimitedMessage": "You have been rate limited. Please try again in {seconds} seconds."
+    "rateLimitedMessage": "You have been rate limited. Please try again in {seconds} seconds.",
+    "aiDescription": "Ask questions about the content of this evidence library, get research assistance, or explore data insights with our AI assistant."
   },
   "sorts": {
     "desc": "Newest",
@@ -474,7 +477,8 @@
     "authorAZ": "Author A-Z",
     "authorZA": "Author Z-A",
     "titleAZ": "Title A-Z",
-    "titleZA": "Title Z-A"
+    "titleZA": "Title Z-A",
+    "relevance": "Relevance"
   },
   "scopes": {
     "everywhere": "Everywhere",
