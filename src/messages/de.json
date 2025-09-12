@@ -438,7 +438,12 @@
     "researchMode": "Forschungsmodus",
     "researchModeTooltip": "Der Forschungsmodus ist langsamer, liefert aber detailliertere Antworten.",
     "switchToAI": "Zu KI wechseln",
-    "switchToSearch": "Wechseln zur Suche"
+    "switchToSearch": "Wechseln zur Suche",
+    "quickAnswer": "Schnelle Antwort",
+    "deepResearch": "Gründliche Recherche",
+    "searchTooltip": "Finden Sie Dokumente und Beweise in der Bibliothek.",
+    "quickAnswerTooltip": "Erhalten Sie eine schnelle, KI-generierte Antwort aus der Evidenzbibliothek.",
+    "deepResearchTooltip": "Führen Sie eine langsamere, eingehende KI-Analyse für umfassende Erkenntnisse durch."
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",
@@ -453,7 +458,7 @@
     "explainDescription": "Diese Ressource detailliert erklären.",
     "askAI": "KI fragen",
     "chatDescription": "Mit dieser Ressource chatten.",
-    "askMeAnything": "Fragen Sie mich alles!",
+    "askMeAnything": "Fragen Sie mich nach dieser Veröffentlichung.",
     "chatPlaceholder": "Hallo! Wie kann ich Ihnen heute helfen? Sie können mir Fragen zu \"{title}\" oder anderen verwandten Themen stellen.",
     "errorMessage": "Entschuldigung, aber es ist ein Fehler aufgetreten. Bitte versuchen Sie es später erneut.",
     "change": "KI-Modell ändern",
@@ -471,7 +476,8 @@
     "delete": "Löschen",
     "history": "Verlauf",
     "rateLimitedMessage": "Sie wurden durch die Ratenbegrenzung eingeschränkt. Bitte versuchen Sie es in {seconds} Sekunden erneut.",
-    "aiDescription": "Stellen Sie Fragen zum Inhalt dieser Evidenzbibliothek, erhalten Sie Forschungshilfe oder erkunden Sie Dateneinblicke mit unserem KI-Assistenten."
+    "aiDescription": "Stellen Sie Fragen zur Evidenzbibliothek, holen Sie sich Forschungshilfe oder erkunden Sie Daten mit unserem KI-Assistenten. KI kann Fehler machen – bitte überprüfen Sie die Ergebnisse immer sorgfältig.",
+    "askMeAnythingPublications": "Fragen Sie mich nach den Veröffentlichungen in dieser Evidenzbibliothek."
   },
   "sorts": {
     "desc": "Neueste",

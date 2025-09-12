@@ -175,7 +175,7 @@ function AiButton({
 							isIconOnly={variant === "default"}
 							aria-label={tUI("aiMenuAriaLabel")}
 							className={twMerge(
-								"bg-gradient-to-r from-accent-400 to-accent-700 !text-white !outline-0 border-0 shadow-[0_0_12px_4px_rgba(255,255,255,0.1)] shadow-accent",
+								// "bg-gradient-to-r from-accent-400 to-accent-700 !text-white !outline-0 border-0 shadow-[0_0_12px_4px_rgba(255,255,255,0.1)] shadow-accent",
 								variant === "default" && "!p-0 rounded-full "
 							)}
 							size={variant === "inline" ? "sm" : "lg"}

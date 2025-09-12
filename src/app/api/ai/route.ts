@@ -62,6 +62,11 @@ export async function POST(req: Request) {
 			openai: {
 				reasoningEffort: "minimal",
 			},
+			google: {
+				thinkingConfig: {
+					thinkingBudget: 0,
+				},
+			},
 		},
 		onFinish(event) {
 			trackUsage("ai_" + prompt, event, distinctId, prompt);

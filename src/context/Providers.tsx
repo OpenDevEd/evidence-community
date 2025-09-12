@@ -283,7 +283,14 @@ export default function Providers({
 				persistence: getPersistence(),
 			})
 			?.onFeatureFlags((featureFlags) => {
-				setFeatureFlags(new Set(featureFlags));
+				const newFeatureFlags = new Set(featureFlags);
+
+				// // TODO: Remove this once we have a way to test feature flags
+				// newFeatureFlags.delete("ai-search");
+				// newFeatureFlags.add("deep-research");
+
+
+				setFeatureFlags(newFeatureFlags);
 			});
 	}, []);
 

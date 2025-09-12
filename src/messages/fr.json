@@ -438,7 +438,12 @@
     "researchMode": "Mode Recherche",
     "researchModeTooltip": "Le mode recherche est plus lent, mais fournit des réponses plus détaillées.",
     "switchToAI": "Passer à l'IA",
-    "switchToSearch": "Passer à la recherche"
+    "switchToSearch": "Passer à la recherche",
+    "quickAnswer": "Réponse rapide",
+    "deepResearch": "Recherche approfondie",
+    "searchTooltip": "Trouvez des documents et des preuves dans toute la bibliothèque.",
+    "quickAnswerTooltip": "Obtenez une réponse rapide générée par l'IA à partir de la bibliothèque de preuves.",
+    "deepResearchTooltip": "Exécutez une analyse d'IA plus lente et approfondie pour des informations complètes."
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",
@@ -453,7 +458,7 @@
     "explainDescription": "Expliquer cette ressource en détail.",
     "askAI": "Demander à l'IA",
     "chatDescription": "Discuter avec cette ressource.",
-    "askMeAnything": "Posez-moi n'importe quelle question !",
+    "askMeAnything": "Renseignez-vous sur cette publication.",
     "chatPlaceholder": "Bonjour ! Comment puis-je vous aider aujourd'hui ? Vous pouvez me poser des questions sur \"{title}\" ou tout autre sujet lié aux données.",
     "errorMessage": "Je suis désolé, mais j'ai rencontré une erreur. Veuillez réessayer plus tard.",
     "change": "Changer de modèle d'IA",
@@ -471,7 +476,8 @@
     "delete": "Supprimer",
     "history": "Historique",
     "rateLimitedMessage": "Vous avez été limité en débit. Veuillez réessayer dans {seconds} secondes.",
-    "aiDescription": "Posez des questions sur le contenu de cette bibliothèque de preuves, obtenez de l'aide à la recherche ou explorez les informations de données avec notre assistant IA."
+    "aiDescription": "Posez des questions sur la bibliothèque de preuves, obtenez de l'aide à la recherche ou explorez des données avec notre assistant IA. L'IA peut faire des erreurs - veuillez toujours vérifier attentivement les résultats.",
+    "askMeAnythingPublications": "Renseignez-vous sur les publications de cette bibliothèque de preuves."
   },
   "sorts": {
     "desc": "Plus récent",

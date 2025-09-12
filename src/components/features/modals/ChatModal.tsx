@@ -29,7 +29,7 @@ import { Textarea } from "@/components/nextui/Textarea";
 import { AnimatePresence, motion } from "framer-motion";
 import { RiResetLeftFill } from "react-icons/ri";
 import { useLocalStorage } from "usehooks-ts";
-import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
+import { SmartScreeningField, useIsAISearchEnabled } from "@/components/pages/EvidenceLibrary";
 import useSWRMutation from "swr/mutation";
 import { cleanAIResponse, fetcher, setter } from "@/lib/utils";
 import { getRateLimits, runScreening } from "@/lib/actions";
@@ -258,7 +258,6 @@ export default function ChatModal({
 	setExternalInput,
 	isEmbedded,
 	setIsEmbedded,
-	mode: externalMode,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -274,9 +273,9 @@ export default function ChatModal({
 	const [smartScreeningFields, setSmartScreeningFields] = useLocalStorage<
 		SmartScreeningField[]
 	>("smart-screening-fields", []);
-	const [internalMode, setInternalMode] = useLocalStorage("chat-mode", "full");
-	const mode = externalMode || internalMode;
-	const setMode = externalMode ? () => {} : setInternalMode; // No-op if external mode is provided
+	const { isDeepResearchEnabled } = useIsAISearchEnabled();
+	const [internalMode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
+	const mode: ChatMode = isDeepResearchEnabled ? internalMode : "quick";
 
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
@@ -687,7 +686,7 @@ export default function ChatModal({
 														</Button>
 													}
 													placeholder={t(
-														"askMeAnything"
+														data?.item?.title ? "askMeAnything" : "askMeAnythingPublications"
 													)}
 													value={input}
 													onValueChange={setInput}
@@ -697,7 +696,7 @@ export default function ChatModal({
 														),
 													}}
 												/>
-												<div className={twMerge("flex items-center gap-2 justify-center mt-8 transition-all duration-500 ease-spring", reponseExists && "mt-4")}>
+												{isDeepResearchEnabled && <div className={twMerge("flex items-center gap-2 justify-center mt-8 transition-all duration-500 ease-spring", reponseExists && "mt-4")}>
 													<Card color="card" className={twMerge("flex flex-row p-4 py-3 rounded-2xl items-center gap-4 !transition-all duration-600", mode === "quick" && "opacity-50 hover:opacity-100")}>
 														<Switch
 															isSelected={
@@ -725,7 +724,7 @@ export default function ChatModal({
 															<BsQuestionCircleFill className={twMerge("text-black/60 dark:text-white/60 transition-colors duration-300", mode === "full" && "!text-accent")} />
 														</Tooltip>
 													</Card>
-												</div>
+												</div>}
 											</motion.div>
 										</AnimatePresence>
 									</form>

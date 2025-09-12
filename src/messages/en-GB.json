@@ -438,7 +438,12 @@
     "researchMode": "Research Mode",
     "researchModeTooltip": "Research mode is slower, but provides more detailed answers.",
     "switchToAI": "Switch to AI",
-    "switchToSearch": "Switch to Search"
+    "switchToSearch": "Switch to Search",
+    "quickAnswer": "Quick Answer",
+    "deepResearch": "Deep Research",
+    "searchTooltip": "Find documents and evidence across the library.",
+    "quickAnswerTooltip": "Get a fast AI-generated response from the evidence library.",
+    "deepResearchTooltip": "Run a slower, in-depth AI analysis for comprehensive insights."
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",
@@ -453,7 +458,7 @@
     "explainDescription": "Explain this resource in detail.",
     "askAI": "Ask AI",
     "chatDescription": "Chat with this resource.",
-    "askMeAnything": "Ask me anything!",
+    "askMeAnything": "Ask me about this publication.",
     "chatPlaceholder": "Hello! How can I assist you today? You can ask me questions about \"{title}\" or anything else related to the data.",
     "errorMessage": "I'm sorry, but I encountered an error. Please try again later.",
     "change": "Change AI Model",
@@ -471,7 +476,8 @@
     "delete": "Delete",
     "history": "History",
     "rateLimitedMessage": "You have been rate limited. Please try again in {seconds} seconds.",
-    "aiDescription": "Ask questions about the content of this evidence library, get research assistance, or explore data insights with our AI assistant."
+    "aiDescription": "Ask questions about the evidence library, get research help, or explore data with our AI assistant. AI can make mistakes – please always check the results carefully.",
+    "askMeAnythingPublications": "Ask me about the publications in this evidence library."
   },
   "sorts": {
     "desc": "Newest",

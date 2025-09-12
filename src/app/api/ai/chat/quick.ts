@@ -246,6 +246,11 @@ Before you answer, classify the user’s intent into one of two categories:
 			openai: {
 				reasoningEffort: "minimal",
 			},
+			google: {
+				thinkingConfig: {
+					thinkingBudget: 0,
+				},
+			},
 		},
 		onFinish(event) {
 			trackUsage(

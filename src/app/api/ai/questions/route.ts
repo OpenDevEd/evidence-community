@@ -68,7 +68,12 @@ export async function POST(req: Request) {
             providerOptions: {
                 openai: {
                     reasoningEffort: "minimal",
-                }
+                },
+                google: {
+                    thinkingConfig: {
+                        thinkingBudget: 0,
+                    },
+                },
             },
             prompt: JSON.stringify(fullTextPDFs)
         })

@@ -439,7 +439,12 @@
     "researchMode": "Hali ya Utafiti",
     "researchModeTooltip": "Hali ya utafiti ni polepole zaidi, lakini hutoa majibu ya kina zaidi.",
     "switchToAI": "Badili kwa AI",
-    "switchToSearch": "Badili kwa Utafutaji"
+    "switchToSearch": "Badili kwa Utafutaji",
+    "quickAnswer": "Jibu la haraka",
+    "deepResearch": "Utafiti wa kina",
+    "searchTooltip": "Pata hati na ushahidi katika maktaba.",
+    "quickAnswerTooltip": "Pata majibu ya haraka yanayozalishwa na AI kutoka kwa maktaba ya ushahidi.",
+    "deepResearchTooltip": "Endesha uchambuzi wa AI wa polepole na wa kina kwa maarifa kamili."
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
@@ -454,7 +459,7 @@
     "explainDescription": "Eleza rasilimali hii kwa undani.",
     "askAI": "Uliza AI",
     "chatDescription": "Ongea na rasilimali hii.",
-    "askMeAnything": "Niulize chochote!",
+    "askMeAnything": "Niulize kuhusu chapisho hili.",
     "chatPlaceholder": "Hujambo! Nawezaje kukusaidia leo? Unaweza kuniuliza maswali kuhusu \"{title}\" au chochote kinachohusiana na data.",
     "errorMessage": "Samahani, nimekumbana na hitilafu. Tafadhali jaribu tena baadaye.",
     "change": "Badilisha Modeli ya AI",
@@ -472,7 +477,8 @@
     "delete": "Futa",
     "history": "Historia",
     "rateLimitedMessage": "Umefikia kikomo cha matumizi. Tafadhali jaribu tena baada ya sekunde {seconds}.",
-    "aiDescription": "Uliza maswali kuhusu maudhui ya maktaba hii ya ushahidi, pata usaidizi wa utafiti, au chunguza maarifa ya data ukitumia msaidizi wetu wa AI."
+    "aiDescription": "Uliza maswali kuhusu maktaba ya ushahidi, pata usaidizi wa utafiti, au chunguza data na msaidizi wetu wa AI. AI inaweza kufanya makosa - tafadhali angalia matokeo kwa makini kila wakati.",
+    "askMeAnythingPublications": "Niulize kuhusu machapisho katika maktaba hii ya ushahidi."
   },
   "sorts": {
     "desc": "Mpya Zaidi",

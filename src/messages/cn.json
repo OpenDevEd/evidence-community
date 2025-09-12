@@ -438,7 +438,12 @@
     "researchMode": "研究模式",
     "researchModeTooltip": "研究模式较慢，但提供更详细的答案。",
     "switchToAI": "切换到人工智能",
-    "switchToSearch": "切换到搜索"
+    "switchToSearch": "切换到搜索",
+    "quickAnswer": "快速回答",
+    "deepResearch": "深入研究",
+    "searchTooltip": "在图书馆中查找文件和证据。",
+    "quickAnswerTooltip": "从证据库中获取快速的 AI 生成的响应。",
+    "deepResearchTooltip": "进行更慢、更深入的 AI 分析，以获得全面的见解。"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",
@@ -453,7 +458,7 @@
     "explainDescription": "详细解释此资源",
     "askAI": "询问 AI",
     "chatDescription": "与此资源对话",
-    "askMeAnything": "问我任何问题！",
+    "askMeAnything": "问我关于这份出版物。",
     "chatPlaceholder": "你好！我能如何帮助你？你可以询问我关于\"{title}\"的问题或任何相关数据。",
     "errorMessage": "抱歉，我遇到了错误。请稍后重试。",
     "change": "更换 AI 模型",
@@ -471,7 +476,8 @@
     "delete": "删除",
     "history": "历史记录",
     "rateLimitedMessage": "您已达到速率限制。请在 {seconds} 秒后重试。",
-    "aiDescription": "询问有关此证据库内容的问题，获得研究协助，或通过我们的人工智能助手探索数据见解。"
+    "aiDescription": "询问关于证据库的问题，获得研究帮助，或使用我们的人工智能助手探索数据。 人工智能可能会出错——请务必仔细检查结果。",
+    "askMeAnythingPublications": "询问我关于这个证据库中的出版物。"
   },
   "sorts": {
     "desc": "最新",

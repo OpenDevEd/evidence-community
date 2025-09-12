@@ -305,7 +305,12 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 					providerOptions: {
 						openai: {
 							reasoningEffort: "minimal",
-						}
+						},
+						google: {
+                            thinkingConfig: {
+                                thinkingBudget: 0,
+                            },
+                        },
 					},
 					system: `You are an AI assistant that answers questions about the provided content.
 							You will answer questions according to the specified screening fields.

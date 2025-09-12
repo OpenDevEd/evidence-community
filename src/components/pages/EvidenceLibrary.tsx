@@ -141,9 +141,7 @@ function SortComponent({
 		<Select
 			startContent={<DropDownIcon label="Sort icon" Icon={FaSort} />}
 			selectedKeys={
-				itemsContext.queryParams.sort && [
-					itemsContext.queryParams.sort,
-				]
+				itemsContext.queryParams.sort && [itemsContext.queryParams.sort]
 			}
 			onSelectionChange={itemsContext.handleSortChange as any}
 			items={SORT_OPTIONS}
@@ -160,10 +158,7 @@ function SortComponent({
 								"h-full",
 								genericSelectClassNames.mainWrapper
 							),
-							label: twMerge(
-								"",
-								genericSelectClassNames.label
-							),
+							label: twMerge("", genericSelectClassNames.label),
 					  }
 					: {
 							base: twMerge(
@@ -174,10 +169,7 @@ function SortComponent({
 								"",
 								genericSelectClassNames.mainWrapper
 							),
-							label: twMerge(
-								"",
-								genericSelectClassNames.label
-							),
+							label: twMerge("", genericSelectClassNames.label),
 					  }
 			}
 			label={"Sort by"}
@@ -185,10 +177,7 @@ function SortComponent({
 		>
 			{(item: any) => {
 				return (
-					<SelectItem
-						aria-label={tSorts(item.key)}
-						key={item.key}
-					>
+					<SelectItem aria-label={tSorts(item.key)} key={item.key}>
 						{tSorts(item.key)}
 					</SelectItem>
 				);
@@ -231,10 +220,7 @@ function ScopeComponent({
 								"h-10 lg:h-full",
 								genericSelectClassNames.mainWrapper
 							),
-							label: twMerge(
-								"",
-								genericSelectClassNames.label
-							),
+							label: twMerge("", genericSelectClassNames.label),
 					  }
 					: {
 							base: twMerge(
@@ -245,10 +231,7 @@ function ScopeComponent({
 								"",
 								genericSelectClassNames.mainWrapper
 							),
-							label: twMerge(
-								"",
-								genericSelectClassNames.label
-							),
+							label: twMerge("", genericSelectClassNames.label),
 					  }
 			}
 			label={"Search scope"}
@@ -256,10 +239,7 @@ function ScopeComponent({
 		>
 			{(item: any) => {
 				return (
-					<SelectItem
-						aria-label={tScopes(item.key)}
-						key={item.key}
-					>
+					<SelectItem aria-label={tScopes(item.key)} key={item.key}>
 						{tScopes(item.key)}
 					</SelectItem>
 				);
@@ -277,7 +257,7 @@ function SearchTabContent({
 	onAbstractChange,
 	view,
 	setView,
-	onSwitchToAI,
+	showHeader,
 }: {
 	header: ReactNode;
 	itemsContext: ReturnType<typeof useItemsList>;
@@ -287,12 +267,11 @@ function SearchTabContent({
 	onAbstractChange: (abstract: boolean) => void;
 	view: string;
 	setView: (view: string) => void;
-	onSwitchToAI: () => void;
+	showHeader: boolean;
 }) {
 	const t = useTranslations("ui");
 	const tAI = useTranslations("ai");
 	const formatter = useFormatter();
-
 
 	const {
 		isOpen: isExploreOpen,
@@ -325,24 +304,13 @@ function SearchTabContent({
 								>
 									{t("goToFilters")}
 								</a>
-								{t("searchTitle")}
+								{showHeader && t("searchTitle")}
 							</>
 						)}
-						<Tooltip content={t("switchToAI")}>
-							<Button
-								startContent={<BsStars className="size-5" />}
-								className="h-8 lg:h-10 px-3 bg-gradient-to-r from-accent-400 to-accent-700 !text-white !outline-0 border-0 shadow-[0_0_12px_4px_rgba(255,255,255,0.1)] shadow-accent"
-								variant="light"
-								onPress={onSwitchToAI}
-							>
-								{tAI("askAI") || "Ask AI"}
-							</Button>
-						</Tooltip>
+						{!showHeader && <SearchModeSwitch mode={"search"} />}
 					</div>
 					<Button
-						startContent={
-							<AiOutlineCompass className="size-6" />
-						}
+						startContent={<AiOutlineCompass className="size-6" />}
 						className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
 						onPress={onExploreOpen}
 					>
@@ -361,22 +329,17 @@ function SearchTabContent({
 									</GenericHeader>
 									{!itemsContext.userData && (
 										<CollectionsList
-											data={
-												itemsContext.collectionsData
-											}
+											data={itemsContext.collectionsData}
 											handleCheckboxChange={
 												itemsContext.handleCheckboxChange
 											}
 											selectedCollections={
 												itemsContext.selectedCollections
 											}
-											hierarchy={
-												itemsContext.hierarchy!
-											}
+											hierarchy={itemsContext.hierarchy!}
 											isModal
 											range={
-												itemsContext.queryParams
-													.range
+												itemsContext.queryParams.range
 											}
 											handleRangeChange={
 												itemsContext.handleRangeChange
@@ -431,7 +394,7 @@ function SearchTabContent({
 			{/* Search and filters */}
 			{itemsContext.config.interactionsStyle === "one-line" ? (
 				<div className="flex gap-4">
-					<ScopeComponent itemsContext={itemsContext} 	/>
+					<ScopeComponent itemsContext={itemsContext} />
 					<SortComponent itemsContext={itemsContext} />
 				</div>
 			) : (
@@ -449,7 +412,9 @@ function SearchTabContent({
 						search={itemsContext.queryParams.search}
 					/>
 					{<ScopeComponent itemsContext={itemsContext} />}
-					{itemsContext.userData && <SortComponent itemsContext={itemsContext} />}
+					{itemsContext.userData && (
+						<SortComponent itemsContext={itemsContext} />
+					)}
 					{extraFilters}
 				</section>
 			)}
@@ -496,8 +461,7 @@ function SearchTabContent({
 				<section
 					className={twMerge(
 						"flex gap-4",
-						itemsContext.config.interactionsStyle ===
-							"multi-line"
+						itemsContext.config.interactionsStyle === "multi-line"
 							? "lg:min-w-72"
 							: "flex-1"
 					)}
@@ -520,9 +484,7 @@ function SearchTabContent({
 						<div className="hidden lg:flex gap-0 w-28">
 							<Button
 								color={
-									view === "list"
-										? "tertiary"
-										: "secondary"
+									view === "list" ? "tertiary" : "secondary"
 								}
 								isIconOnly
 								className="!p-0 ltr:rounded-r-none rtl:rounded-l-none flex-1"
@@ -536,9 +498,7 @@ function SearchTabContent({
 							</Button>
 							<Button
 								color={
-									view === "grid"
-										? "tertiary"
-										: "secondary"
+									view === "grid" ? "tertiary" : "secondary"
 								}
 								isIconOnly
 								className="!p-0 ltr:rounded-l-none rtl:rounded-r-none flex-1"
@@ -558,21 +518,13 @@ function SearchTabContent({
 	);
 }
 
-function AITabContent({
-	onSwitchToSearch,
-}: {
-	onSwitchToSearch: () => void;
-}) {
+function AITabContent({ onSwitchToSearch, onChatOpen, externalInput, setExternalInput }: { onSwitchToSearch: () => void, onChatOpen: () => void, externalInput: string, setExternalInput: (input: string) => void }) {
 	const {
 		modelObject: { icon: Icon },
 		selectedModel,
 		setSelectedModel,
 	} = useSelectedModel();
-	const {
-		isOpen: isChatOpen,
-		onOpen: onChatOpen,
-		onOpenChange: onChatOpenChange,
-	} = useDisclosure();
+	
 	const {
 		isOpen: isModelOpen,
 		onOpen: onModelOpen,
@@ -583,13 +535,13 @@ function AITabContent({
 		onOpen: onSmartScreeningOpen,
 		onOpenChange: onSmartScreeningOpenChange,
 	} = useDisclosure();
-	const [externalInput, setExternalInput] = useState<string>("");
 	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
-
+	const { isDeepResearchEnabled } = useIsAISearchEnabled();
 	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		onChatOpen();
 	};
+	
 
 	const tAI = useTranslations("ai");
 	const tUI = useTranslations("ui");
@@ -603,13 +555,7 @@ function AITabContent({
 				selectedModel={selectedModel}
 				onModelChange={setSelectedModel}
 			/>
-			<ChatModal
-				isOpen={isChatOpen}
-				onOpenChange={onChatOpenChange}
-				modelIndex={selectedModel}
-				externalInput={externalInput}
-				setExternalInput={setExternalInput}
-			/>
+
 			<SmartScreeningModal
 				isOpen={isSmartScreeningOpen}
 				onOpenChange={onSmartScreeningOpenChange}
@@ -617,19 +563,10 @@ function AITabContent({
 
 			<div className="flex items-end justify-start h-12">
 				<div className="flex items-end gap-4">
-					<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
+					{/* <h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
 						{tAI("askAI") || "Ask AI"}
-					</h1>
-					<Tooltip content={t("switchToSearch")}>
-						<Button
-							startContent={<IoSearch className="size-5" />}
-							className="h-8 lg:h-10 px-3"
-							variant="light"
-							onPress={onSwitchToSearch}
-						>
-							{t("search") || "Search"}
-						</Button>
-					</Tooltip>
+					</h1> */}
+					<SearchModeSwitch mode={"ai"} />
 				</div>
 			</div>
 
@@ -664,13 +601,21 @@ function AITabContent({
 							}
 							endContent={
 								<div className="flex items-center gap-1">
-									<Tooltip content={tUI("researchModeTooltip")}>
+									{isDeepResearchEnabled && <Tooltip
+										content={tUI("researchModeTooltip")}
+									>
 										<Button
 											isIconOnly
 											size="sm"
 											variant="default"
 											className="shrink-0"
-											onPress={() => setMode(mode === "full" ? "quick" : "full")}
+											onPress={() =>
+												setMode(
+													mode === "full"
+														? "quick"
+														: "full"
+												)
+											}
 											aria-label={tUI("researchMode")}
 										>
 											<GiArchiveResearch
@@ -682,7 +627,7 @@ function AITabContent({
 												)}
 											/>
 										</Button>
-									</Tooltip>
+									</Tooltip>}
 									<Button
 										type="submit"
 										isIconOnly
@@ -695,7 +640,7 @@ function AITabContent({
 									</Button>
 								</div>
 							}
-							placeholder={tAI("askMeAnything")}
+							placeholder={tAI("askMeAnythingPublications")}
 							className="w-full"
 							classNames={{
 								inputWrapper:
@@ -716,14 +661,106 @@ function AITabContent({
 				</div>
 			</form>
 
-			<div className="text-start text-sm text-black/60 dark:text-white/40 max-w-lg mr-auto">
+			<div className="text-start text-sm text-black/60 dark:text-white/40 mr-auto">
 				{tAI("aiDescription") ||
-					"Ask questions about the evidence library or get help with your research."}
+					"Ask questions about the evidence library or get help with your research. "}
 			</div>
 		</div>
 	);
 }
 
+export type SearchMode = "search" | "ai" | "research";
+
+export function useIsAISearchEnabled() {
+	const isAISearchEnabled = useFeatureFlagEnabled("ai-search");
+	const isDeepResearchEnabled = useFeatureFlagEnabled("deep-research");
+	return { isAISearchEnabled, isDeepResearchEnabled: isAISearchEnabled && isDeepResearchEnabled };
+}
+
+function useSelectedSearchMode(mode: ChatMode, selectedTab: SearchMode, isAISearchEnabled: boolean) {
+	if (selectedTab === "search" || !isAISearchEnabled)
+		return "search";
+	if (selectedTab === "ai")
+		return mode === "full" ? "research" : "ai";
+	return "search";
+}
+
+export function useSearchMode() {
+	const t = useTranslations("ui");
+	const tAI = useTranslations("ai");
+	const [selectedTabOriginal, setSelectedTab] = useLocalStorage<SearchMode>(
+		"selectedSearchTab",
+		"search"
+	);
+	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
+	const { isAISearchEnabled, isDeepResearchEnabled } = useIsAISearchEnabled();
+
+
+	const selectedTab = useSelectedSearchMode(mode, selectedTabOriginal, isAISearchEnabled);
+
+	const tabData: Record<
+		SearchMode,
+		{ text: string; tooltip: string; icon: ReactNode; action: () => void; disabled: boolean }
+	> = {
+		search: {
+			text: t("search"),
+			tooltip: t("searchTooltip"),
+			icon: <IoSearch className="size-5" />,
+			action: () => setSelectedTab("search"),
+			disabled: false,
+		},
+		ai: {
+			text: t("quickAnswer"),
+			tooltip: t("quickAnswerTooltip"),
+			icon: <BsStars className="size-5" />,
+			action: () => {
+				setMode("quick");
+				setSelectedTab("ai");
+			},
+			disabled: !isAISearchEnabled,
+		},
+		research: {
+			text: t("deepResearch"),
+			tooltip: t("deepResearchTooltip"),
+			icon: <GiArchiveResearch className="size-5" />,
+			action: () => {
+				setMode("full");
+				setSelectedTab("ai");
+			},
+			disabled: !isDeepResearchEnabled,
+		},
+	};
+
+	const activeCount = Object.keys(tabData).filter((mode) => !tabData[mode as SearchMode].disabled).length;
+
+	console.log(activeCount);
+
+	return { selectedTab, tabData, setSelectedTab, activeCount };
+}
+
+function SearchModeSwitch({ mode }: { mode: SearchMode }) {
+	const t = useTranslations("ui");
+	const { selectedTab, tabData } = useSearchMode();
+
+	return (
+		<div className="flex gap-2">
+			{Object.keys(tabData).map((mode) => (
+				<Tooltip content={tabData[mode as SearchMode].tooltip} key={mode}>
+					{!tabData[mode as SearchMode].disabled && <Button
+						key={mode}
+						startContent={tabData[mode as SearchMode].icon}
+						className="h-8 lg:h-10 px-3"
+						variant="light"
+						color={mode === selectedTab ? "accent" : "secondary"}
+						onPress={() => tabData[mode as SearchMode].action()}
+					>
+						{tabData[mode as SearchMode].text}
+					</Button>}
+				</Tooltip>
+			))}
+		</div>
+	);
+}
 
 export function ContentInteractions({
 	abstract,
@@ -742,18 +779,29 @@ export function ContentInteractions({
 	extraFilters: ReactNode;
 	header?: ReactNode;
 }) {
-	const isAISearchEnabled = useFeatureFlagEnabled("ai-search");
 	const itemsContext = use(ItemsContext);
+	const { selectedTab, setSelectedTab, activeCount } = useSearchMode();
+	const {
+		isOpen: isChatOpen,
+		onOpen: onChatOpen,
+		onOpenChange: onChatOpenChange,
+	} = useDisclosure();
+	const {
+		modelObject: { icon: Icon },
+		selectedModel,
+		setSelectedModel,
+	} = useSelectedModel();
+	const [externalInput, setExternalInput] = useState<string>("");
 
-	const [selectedTabOriginal, setSelectedTab] = useLocalStorage(
-		"selectedSearchTab",
-		"search"
-	);
-	const selectedTab = isAISearchEnabled ? selectedTabOriginal : "search";
-
-	{/* Animated Content */}
 	return (
 		<div className="relative">
+			<ChatModal
+				isOpen={isChatOpen}
+				onOpenChange={onChatOpenChange}
+				modelIndex={selectedModel}
+				externalInput={externalInput}
+				setExternalInput={setExternalInput}
+			/>
 			<AnimatePresence mode="wait">
 				{selectedTab === "search" && (
 					<motion.div
@@ -776,7 +824,7 @@ export function ContentInteractions({
 							onAbstractChange={onAbstractChange}
 							view={view}
 							setView={setView}
-							onSwitchToAI={() => setSelectedTab("ai")}
+							showHeader={activeCount === 1}
 						/>
 					</motion.div>
 				)}
@@ -792,7 +840,33 @@ export function ContentInteractions({
 						}}
 						className="w-full"
 					>
-						<AITabContent onSwitchToSearch={() => setSelectedTab("search")} />
+						<AITabContent
+							onSwitchToSearch={() => setSelectedTab("search")}
+							onChatOpen={onChatOpen}
+							externalInput={externalInput}
+							setExternalInput={setExternalInput}
+						/>
+					</motion.div>
+				)}
+
+				{selectedTab === "research" && (
+					<motion.div
+						key="research-content"
+						initial={{ opacity: 0, x: 20, scale: 0.95 }}
+						animate={{ opacity: 1, x: 0, scale: 1 }}
+						exit={{ opacity: 0, x: -20, scale: 0.95 }}
+						transition={{
+							duration: 0.4,
+							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
+						}}
+						className="w-full"
+					>
+						<AITabContent
+							onSwitchToSearch={() => setSelectedTab("search")}
+							onChatOpen={onChatOpen}
+							externalInput={externalInput}
+							setExternalInput={setExternalInput}
+						/>
 					</motion.div>
 				)}
 			</AnimatePresence>
