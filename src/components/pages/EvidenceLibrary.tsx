@@ -49,7 +49,7 @@ import GenericHeader from "../features/modals/GenericHeader";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList, { ItemsContext } from "../features/items/ItemsList";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
-import ChatModal from "../features/modals/ChatModal";
+import ChatModal, { ChatMode } from "../features/modals/ChatModal";
 import ModelSelector from "../features/ai/ModelSelector";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import DialogModal from "../nextui/DialogModal";
@@ -61,6 +61,7 @@ import { z } from "zod";
 import { Props } from "next/script";
 import { toast } from "@/components/layout/Toast";
 import { Formatter } from "recharts/types/component/DefaultTooltipContent";
+import { BsStars } from "react-icons/bs";
 
 function DropDownIcon({
 	Icon,
@@ -276,6 +277,7 @@ function SearchTabContent({
 	onAbstractChange,
 	view,
 	setView,
+	onSwitchToAI,
 }: {
 	header: ReactNode;
 	itemsContext: ReturnType<typeof useItemsList>;
@@ -285,8 +287,10 @@ function SearchTabContent({
 	onAbstractChange: (abstract: boolean) => void;
 	view: string;
 	setView: (view: string) => void;
+	onSwitchToAI: () => void;
 }) {
 	const t = useTranslations("ui");
+	const tAI = useTranslations("ai");
 	const formatter = useFormatter();
 
 
@@ -312,17 +316,29 @@ function SearchTabContent({
 			{/* Header with title and explore button */}
 			<div className="flex w-full flex-col lg:flex-row lg:justify-between lg:items-end h-24 lg:h-12 gap-4 relative">
 				<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl w-full lg:w-auto h-10 lg:h-12 flex justify-between items-end">
-					{header || (
-						<>
-							<a
-								href="#collections"
-								className="p-3 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100 bg-background_light dark:bg-background"
+					<div className="flex items-end gap-4">
+						{header || (
+							<>
+								<a
+									href="#collections"
+									className="p-3 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100 bg-background_light dark:bg-background"
+								>
+									{t("goToFilters")}
+								</a>
+								{t("searchTitle")}
+							</>
+						)}
+						<Tooltip content={t("switchToAI")}>
+							<Button
+								startContent={<BsStars className="size-5" />}
+								className="h-8 lg:h-10 px-3 bg-gradient-to-r from-accent-400 to-accent-700 !text-white !outline-0 border-0 shadow-[0_0_12px_4px_rgba(255,255,255,0.1)] shadow-accent"
+								variant="light"
+								onPress={onSwitchToAI}
 							>
-								{t("goToFilters")}
-							</a>
-							{t("searchTitle")}
-						</>
-					)}
+								{tAI("askAI") || "Ask AI"}
+							</Button>
+						</Tooltip>
+					</div>
 					<Button
 						startContent={
 							<AiOutlineCompass className="size-6" />
@@ -542,7 +558,11 @@ function SearchTabContent({
 	);
 }
 
-function AITabContent() {
+function AITabContent({
+	onSwitchToSearch,
+}: {
+	onSwitchToSearch: () => void;
+}) {
 	const {
 		modelObject: { icon: Icon },
 		selectedModel,
@@ -564,7 +584,7 @@ function AITabContent() {
 		onOpenChange: onSmartScreeningOpenChange,
 	} = useDisclosure();
 	const [externalInput, setExternalInput] = useState<string>("");
-	const [mode, setMode] = useLocalStorage("chat-mode", "full");
+	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
 
 	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -576,7 +596,7 @@ function AITabContent() {
 	const t = useTranslations("ui");
 
 	return (
-		<div className="flex flex-col gap-6 p-6 lg:pb-1 lg:pt-0 py-12">
+		<div className="flex flex-col gap-4 lg:pb-2 lg:pt-0 py-[2.375rem]">
 			<ModelSelector
 				isOpen={isModelOpen}
 				onOpenChange={onModelOpenChange}
@@ -589,17 +609,28 @@ function AITabContent() {
 				modelIndex={selectedModel}
 				externalInput={externalInput}
 				setExternalInput={setExternalInput}
-				mode={mode}
 			/>
 			<SmartScreeningModal
 				isOpen={isSmartScreeningOpen}
 				onOpenChange={onSmartScreeningOpenChange}
 			/>
 
-			<div className="flex items-center justify-center">
-				<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
-					{tAI("askAI") || "Ask AI"}
-				</h1>
+			<div className="flex items-end justify-start h-12">
+				<div className="flex items-end gap-4">
+					<h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
+						{tAI("askAI") || "Ask AI"}
+					</h1>
+					<Tooltip content={t("switchToSearch")}>
+						<Button
+							startContent={<IoSearch className="size-5" />}
+							className="h-8 lg:h-10 px-3"
+							variant="light"
+							onPress={onSwitchToSearch}
+						>
+							{t("search") || "Search"}
+						</Button>
+					</Tooltip>
+				</div>
 			</div>
 
 			<form
@@ -638,7 +669,7 @@ function AITabContent() {
 											isIconOnly
 											variant="invisible"
 											className="shrink-0 !p-0"
-											onPress={() => setMode(mode === "research" ? "full" : "research")}
+											onPress={() => setMode(mode === "full" ? "quick" : "full")}
 											aria-label={tUI("researchMode")}
 										>
 											<GiArchiveResearch
@@ -683,7 +714,7 @@ function AITabContent() {
 				</div>
 			</form>
 
-			<div className="text-center text-sm text-black/60 dark:text-white/40 max-w-lg mx-auto">
+			<div className="text-start text-sm text-black/60 dark:text-white/40 max-w-lg mr-auto">
 				{tAI("aiDescription") ||
 					"Ask questions about the evidence library or get help with your research."}
 			</div>
@@ -711,10 +742,6 @@ export function ContentInteractions({
 }) {
 	const isAISearchEnabled = useFeatureFlagEnabled("ai-search");
 	const itemsContext = use(ItemsContext);
-	
-	const t = useTranslations("ui");
-	const tAI = useTranslations("ai");
-	const tUI = useTranslations("ui");
 
 	const [selectedTabOriginal, setSelectedTab] = useLocalStorage(
 		"selectedSearchTab",
@@ -722,61 +749,51 @@ export function ContentInteractions({
 	);
 	const selectedTab = isAISearchEnabled ? selectedTabOriginal : "search";
 
+	{/* Animated Content */}
 	return (
-		<div className="w-full">
-			{isAISearchEnabled && (
-				<Tabs
-					aria-label="Search and AI tabs"
-					selectedKey={selectedTab}
-					onSelectionChange={(key) => setSelectedTab(key as string)}
-					classNames={{
-						tabList: "bg-white/10 dark:bg-black/10 p-1 rounded-2xl",
-						cursor: "bg-accent dark:bg-accent rounded-xl",
-						tab: "px-4 py-2 text-sm font-medium",
-						tabContent: "text-black dark:text-white/80 group-data-[selected=true]:text-white",
-					}}
-					size="lg"
-				>
-					<Tab key="search" title={<div className="flex items-center gap-2"><IoSearch className="size-4" />{t("search") || "Search"}</div>}  />
-					<Tab key="ai" title={<div className="flex items-center gap-2"><IoChatboxOutline className="size-4" />{tAI("askAI") || "Ask AI"}</div>} />
-				</Tabs>
-			)}
-
-			{/* Animated Tab Content */}
-			<div className="relative">
-				<AnimatePresence mode="wait">
-					{selectedTab === "search" && (
-						<motion.div
-							key="search-content"
-							initial={{ opacity: 0, x: -20, scale: 0.95 }}
-							animate={{ opacity: 1, x: 0, scale: 1 }}
-							exit={{ opacity: 0, x: 20, scale: 0.95 }}
-							transition={{
-								duration: 0.4,
-								ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
-							}}
-							className="w-full"
-						>
-							<SearchTabContent header={header} itemsContext={itemsContext} extraFilters={extraFilters} countLabel={countLabel} abstract={abstract} onAbstractChange={onAbstractChange} view={view} setView={setView} />
-						</motion.div>
-					)}
-					{selectedTab === "ai" && (
-						<motion.div
-							key="ai-content"
-							initial={{ opacity: 0, x: 20, scale: 0.95 }}
-							animate={{ opacity: 1, x: 0, scale: 1 }}
-							exit={{ opacity: 0, x: -20, scale: 0.95 }}
-							transition={{
-								duration: 0.4,
-								ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
-							}}
-							className="w-full"
-						>
-							<AITabContent />
-						</motion.div>
-					)}
-				</AnimatePresence>
-			</div>
+		<div className="relative">
+			<AnimatePresence mode="wait">
+				{selectedTab === "search" && (
+					<motion.div
+						key="search-content"
+						initial={{ opacity: 0, x: -20, scale: 0.95 }}
+						animate={{ opacity: 1, x: 0, scale: 1 }}
+						exit={{ opacity: 0, x: 20, scale: 0.95 }}
+						transition={{
+							duration: 0.4,
+							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
+						}}
+						className="w-full"
+					>
+						<SearchTabContent
+							header={header}
+							itemsContext={itemsContext}
+							extraFilters={extraFilters}
+							countLabel={countLabel}
+							abstract={abstract}
+							onAbstractChange={onAbstractChange}
+							view={view}
+							setView={setView}
+							onSwitchToAI={() => setSelectedTab("ai")}
+						/>
+					</motion.div>
+				)}
+				{selectedTab === "ai" && (
+					<motion.div
+						key="ai-content"
+						initial={{ opacity: 0, x: 20, scale: 0.95 }}
+						animate={{ opacity: 1, x: 0, scale: 1 }}
+						exit={{ opacity: 0, x: -20, scale: 0.95 }}
+						transition={{
+							duration: 0.4,
+							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
+						}}
+						className="w-full"
+					>
+						<AITabContent onSwitchToSearch={() => setSelectedTab("search")} />
+					</motion.div>
+				)}
+			</AnimatePresence>
 		</div>
 	);
 }

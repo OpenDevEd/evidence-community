@@ -246,6 +246,8 @@ function MessageComponent({
 	);
 }
 
+export type ChatMode = "full" | "quick";
+
 export default function ChatModal({
 	isOpen,
 	onOpenChange,

@@ -436,7 +436,9 @@
     "availableOnRequest": "Disponível mediante pedido",
     "itemNotesDescription": "As seguintes notas foram adicionadas ao registo associado.",
     "researchMode": "Modo de Pesquisa",
-    "researchModeTooltip": "O modo de pesquisa é mais lento, mas fornece respostas mais detalhadas."
+    "researchModeTooltip": "O modo de pesquisa é mais lento, mas fornece respostas mais detalhadas.",
+    "switchToAI": "Mudar para IA",
+    "switchToSearch": "Mudar para Pesquisar"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

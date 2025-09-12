@@ -436,7 +436,9 @@
     "availableOnRequest": "अनुरोध पर उपलब्ध",
     "itemNotesDescription": "निम्नलिखित नोट्स संबद्ध रिकॉर्ड में जोड़े गए थे।",
     "researchMode": "अनुसंधान मोड",
-    "researchModeTooltip": "अनुसंधान मोड धीमा है, लेकिन अधिक विस्तृत उत्तर प्रदान करता है।"
+    "researchModeTooltip": "अनुसंधान मोड धीमा है, लेकिन अधिक विस्तृत उत्तर प्रदान करता है।",
+    "switchToAI": "एआई पर स्विच करें",
+    "switchToSearch": "खोज पर स्विच करें"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

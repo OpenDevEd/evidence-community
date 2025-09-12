@@ -437,7 +437,9 @@
     "availableOnRequest": "Inapatikana kwa ombi",
     "itemNotesDescription": "Vidokezo vifuatavyo viliongezwa kwenye rekodi husika.",
     "researchMode": "Hali ya Utafiti",
-    "researchModeTooltip": "Hali ya utafiti ni polepole zaidi, lakini hutoa majibu ya kina zaidi."
+    "researchModeTooltip": "Hali ya utafiti ni polepole zaidi, lakini hutoa majibu ya kina zaidi.",
+    "switchToAI": "Badili kwa AI",
+    "switchToSearch": "Badili kwa Utafutaji"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

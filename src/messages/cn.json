@@ -436,7 +436,9 @@
     "availableOnRequest": "可根据要求提供",
     "itemNotesDescription": "以下笔记已添加到相关记录中。",
     "researchMode": "研究模式",
-    "researchModeTooltip": "研究模式较慢，但提供更详细的答案。"
+    "researchModeTooltip": "研究模式较慢，但提供更详细的答案。",
+    "switchToAI": "切换到人工智能",
+    "switchToSearch": "切换到搜索"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

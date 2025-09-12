@@ -436,7 +436,9 @@
     "availableOnRequest": "Auf Anfrage erhältlich",
     "itemNotesDescription": "Die folgenden Notizen wurden dem zugehörigen Datensatz hinzugefügt.",
     "researchMode": "Forschungsmodus",
-    "researchModeTooltip": "Der Forschungsmodus ist langsamer, liefert aber detailliertere Antworten."
+    "researchModeTooltip": "Der Forschungsmodus ist langsamer, liefert aber detailliertere Antworten.",
+    "switchToAI": "Zu KI wechseln",
+    "switchToSearch": "Wechseln zur Suche"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

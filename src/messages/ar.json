@@ -436,7 +436,9 @@
     "availableOnRequest": "متوفر عند الطلب",
     "itemNotesDescription": "تمت إضافة الملاحظات التالية إلى السجل المرتبط.",
     "researchMode": "وضع البحث",
-    "researchModeTooltip": "وضع البحث أبطأ، ولكنه يقدم إجابات أكثر تفصيلاً."
+    "researchModeTooltip": "وضع البحث أبطأ، ولكنه يقدم إجابات أكثر تفصيلاً.",
+    "switchToAI": "التبديل إلى الذكاء الاصطناعي",
+    "switchToSearch": "التبديل إلى البحث"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",

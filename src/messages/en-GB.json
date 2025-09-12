@@ -436,7 +436,9 @@
     "availableOnRequest": "Available on request",
     "itemNotesDescription": "The following notes were added to the associated record.",
     "researchMode": "Research Mode",
-    "researchModeTooltip": "Research mode is slower, but provides more detailed answers."
+    "researchModeTooltip": "Research mode is slower, but provides more detailed answers.",
+    "switchToAI": "Switch to AI",
+    "switchToSearch": "Switch to Search"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",
