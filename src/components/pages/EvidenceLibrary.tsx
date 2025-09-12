@@ -667,14 +667,15 @@ function AITabContent({
 									<Tooltip content={tUI("researchModeTooltip")}>
 										<Button
 											isIconOnly
-											variant="invisible"
-											className="shrink-0 !p-0"
+											size="sm"
+											variant="default"
+											className="shrink-0"
 											onPress={() => setMode(mode === "full" ? "quick" : "full")}
 											aria-label={tUI("researchMode")}
 										>
 											<GiArchiveResearch
 												className={twMerge(
-													"size-5",
+													"size-4",
 													mode === "full"
 														? "text-accent"
 														: "text-black/60 dark:text-white/60"
@@ -685,8 +686,9 @@ function AITabContent({
 									<Button
 										type="submit"
 										isIconOnly
-										variant="invisible"
-										className="shrink-0 !p-1"
+										variant="default"
+										className="shrink-0"
+										size="sm"
 										onPress={onChatOpen}
 									>
 										<IoSend className="size-4" />
