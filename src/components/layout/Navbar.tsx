@@ -187,8 +187,8 @@ export function Logo({
 						theme: themeToMatch,
 					})}
 					style={{ ...getDynamicStyles(navbarStyle) }}
-					height={40}
-					width={171}
+					height={300}
+					width={300}
 				/>
 			))}
 		</div>
