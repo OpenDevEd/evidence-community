@@ -8,15 +8,6 @@ import DeepSeek from "@/components/icons/DeepSeek";
 
 export const models = [
 	{
-		name: "ChatGPT",
-		company: "OpenAI",
-		// model: process.env.NEXT_PUBLIC_OPENAI_MODEL,
-		model: "gpt-5",
-		icon: ChatGPT,
-		largeModel: "gpt-5",
-		smallModel: "gpt-5-mini",
-	},
-	{
 		name: "Gemini",
 		company: "Google",
 		// model: process.env.NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_MODEL,
@@ -24,7 +15,16 @@ export const models = [
 		icon: Gemini,
 		largeModel: "gemini-2.5-pro",
 		smallModel: "gemini-2.5-flash",
-	}
+	},
+	{
+		name: "ChatGPT",
+		company: "OpenAI",
+		// model: process.env.NEXT_PUBLIC_OPENAI_MODEL,
+		model: "gpt-5-mini",
+		icon: ChatGPT,
+		largeModel: "gpt-5-mini",
+		smallModel: "gpt-5-mini",
+	},
 	// {
 	// 	name: "DeepSeek",
 	// 	company: "DeepSeek",
