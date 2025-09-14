@@ -27,7 +27,7 @@ import { Input } from "@/components/nextui/Input";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Textarea } from "@/components/nextui/Textarea";
 import { AnimatePresence, motion } from "framer-motion";
-import { RiResetLeftFill } from "react-icons/ri";
+import { RiRefreshLine, RiResetLeftFill } from "react-icons/ri";
 import { useLocalStorage } from "usehooks-ts";
 import { SmartScreeningField, useIsAISearchEnabled } from "@/components/pages/EvidenceLibrary";
 import useSWRMutation from "swr/mutation";
@@ -287,6 +287,8 @@ export default function ChatModal({
 		input,
 		setInput,
 		append,
+		error,
+		reload,
 		isLoading,
 		stop,
 		setMessages,
@@ -320,11 +322,11 @@ export default function ChatModal({
 		onError: (e) => {
 			const isRateLimited = e.message.includes("Rate limit exceeded");
 			if (!isRateLimited) {
-				appendMessage({
-					role: "assistant",
-					content: t("errorMessage"),
-					id: "error-" + Date.now(),
-				});
+				// appendMessage({
+				// 	role: "assistant",
+				// 	content: t("errorMessage"),
+				// 	id: "error-" + Date.now(),
+				// });
 			} else {
 				(async () => {
 					const rateLimits = await getRateLimits();
@@ -420,7 +422,7 @@ export default function ChatModal({
 		}
 	};
 
-	const isWaiting = isLoading || isMutating;
+	const isWaiting = (isLoading || isMutating) && !error;
 
 	const hasPDFs = data?.item?.attachmentsData?.some(
 		(attachment) => attachment.PDFCoverPageImage
@@ -536,6 +538,27 @@ export default function ChatModal({
 																/>
 															</motion.div>
 														)
+												)}
+												{error && (
+													<motion.div
+														initial={{ opacity: 0, y: -100 }}
+														animate={{ opacity: 1, y: 0 }}
+														exit={{ opacity: 0, y: -100 }}
+														className="flex justify-center items-center gap-2 w-full"
+													>
+														{t("errorMessage")}
+														<Button
+															color="accent"
+															isIconOnly
+															onClick={() => {
+																reload()
+															}}
+														>
+															<RiRefreshLine
+																className="size-4"
+															/>
+														</Button>
+													</motion.div>
 												)}
 											</div>
 										</ScrollShadow>
