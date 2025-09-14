@@ -152,6 +152,11 @@ export const generateEmbedding = async (value: string): Promise<number[]> => {
 	return embedding;
 };
 
+export const doEmbeddingsExistForPDFs = async (itemKey: string) => {
+	const existingEmbeddings = await db.select().from(embeddings).where(or(eq(embeddings.itemKey, itemKey), eq(embeddings.parentKey, itemKey))).limit(1);
+	return existingEmbeddings.length > 0;
+};
+
 export interface RAGResult {
 	name: string; // This is the content snippet
 	similarity: number;

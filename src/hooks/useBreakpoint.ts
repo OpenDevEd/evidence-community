@@ -14,3 +14,10 @@ export default function useBreakpoint(query: keyof typeof screens): boolean {
 
   return matches
 }
+
+export function useBreakpointBelow(query: keyof typeof screens | null, value?: string): boolean {
+  const mediaQuery = `(max-width: ${query ? screens[query] : value})`;
+  const matches = useMediaQuery(mediaQuery);
+
+  return matches
+}

@@ -62,6 +62,7 @@ import { Props } from "next/script";
 import { toast } from "@/components/layout/Toast";
 import { Formatter } from "recharts/types/component/DefaultTooltipContent";
 import { BsStars } from "react-icons/bs";
+import useBreakpoint, { useBreakpointBelow } from "@/hooks/useBreakpoint";
 
 function DropDownIcon({
 	Icon,
@@ -310,7 +311,7 @@ function SearchTabContent({
 						{!showHeader && <SearchModeSwitch mode={"search"} />}
 					</div>
 					<Button
-						startContent={<AiOutlineCompass className="size-6" />}
+						startContent={<AiOutlineCompass className="size-6 shrink-0" />}
 						className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
 						onPress={onExploreOpen}
 					>
@@ -518,13 +519,23 @@ function SearchTabContent({
 	);
 }
 
-function AITabContent({ onSwitchToSearch, onChatOpen, externalInput, setExternalInput }: { onSwitchToSearch: () => void, onChatOpen: () => void, externalInput: string, setExternalInput: (input: string) => void }) {
+function AITabContent({
+	onSwitchToSearch,
+	onChatOpen,
+	externalInput,
+	setExternalInput,
+}: {
+	onSwitchToSearch: () => void;
+	onChatOpen: () => void;
+	externalInput: string;
+	setExternalInput: (input: string) => void;
+}) {
 	const {
 		modelObject: { icon: Icon },
 		selectedModel,
 		setSelectedModel,
 	} = useSelectedModel();
-	
+
 	const {
 		isOpen: isModelOpen,
 		onOpen: onModelOpen,
@@ -541,7 +552,6 @@ function AITabContent({ onSwitchToSearch, onChatOpen, externalInput, setExternal
 		e.preventDefault();
 		onChatOpen();
 	};
-	
 
 	const tAI = useTranslations("ai");
 	const tUI = useTranslations("ui");
@@ -601,33 +611,35 @@ function AITabContent({ onSwitchToSearch, onChatOpen, externalInput, setExternal
 							}
 							endContent={
 								<div className="flex items-center gap-1">
-									{isDeepResearchEnabled && <Tooltip
-										content={tUI("researchModeTooltip")}
-									>
-										<Button
-											isIconOnly
-											size="sm"
-											variant="default"
-											className="shrink-0"
-											onPress={() =>
-												setMode(
-													mode === "full"
-														? "quick"
-														: "full"
-												)
-											}
-											aria-label={tUI("researchMode")}
+									{isDeepResearchEnabled && (
+										<Tooltip
+											content={tUI("researchModeTooltip")}
 										>
-											<GiArchiveResearch
-												className={twMerge(
-													"size-4",
-													mode === "full"
-														? "text-accent"
-														: "text-black/60 dark:text-white/60"
-												)}
-											/>
-										</Button>
-									</Tooltip>}
+											<Button
+												isIconOnly
+												size="sm"
+												variant="default"
+												className="shrink-0"
+												onPress={() =>
+													setMode(
+														mode === "full"
+															? "quick"
+															: "full"
+													)
+												}
+												aria-label={tUI("researchMode")}
+											>
+												<GiArchiveResearch
+													className={twMerge(
+														"size-4",
+														mode === "full"
+															? "text-accent"
+															: "text-black/60 dark:text-white/60"
+													)}
+												/>
+											</Button>
+										</Tooltip>
+									)}
 									<Button
 										type="submit"
 										isIconOnly
@@ -674,14 +686,19 @@ export type SearchMode = "search" | "ai" | "research";
 export function useIsAISearchEnabled() {
 	const isAISearchEnabled = useFeatureFlagEnabled("ai-search");
 	const isDeepResearchEnabled = useFeatureFlagEnabled("deep-research");
-	return { isAISearchEnabled, isDeepResearchEnabled: isAISearchEnabled && isDeepResearchEnabled };
+	return {
+		isAISearchEnabled,
+		isDeepResearchEnabled: isAISearchEnabled && isDeepResearchEnabled,
+	};
 }
 
-function useSelectedSearchMode(mode: ChatMode, selectedTab: SearchMode, isAISearchEnabled: boolean) {
-	if (selectedTab === "search" || !isAISearchEnabled)
-		return "search";
-	if (selectedTab === "ai")
-		return mode === "full" ? "research" : "ai";
+function useSelectedSearchMode(
+	mode: ChatMode,
+	selectedTab: SearchMode,
+	isAISearchEnabled: boolean
+) {
+	if (selectedTab === "search" || !isAISearchEnabled) return "search";
+	if (selectedTab === "ai") return mode === "full" ? "research" : "ai";
 	return "search";
 }
 
@@ -695,12 +712,21 @@ export function useSearchMode() {
 	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
 	const { isAISearchEnabled, isDeepResearchEnabled } = useIsAISearchEnabled();
 
-
-	const selectedTab = useSelectedSearchMode(mode, selectedTabOriginal, isAISearchEnabled);
+	const selectedTab = useSelectedSearchMode(
+		mode,
+		selectedTabOriginal,
+		isAISearchEnabled
+	);
 
 	const tabData: Record<
 		SearchMode,
-		{ text: string; tooltip: string; icon: ReactNode; action: () => void; disabled: boolean }
+		{
+			text: string;
+			tooltip: string;
+			icon: ReactNode;
+			action: () => void;
+			disabled: boolean;
+		}
 	> = {
 		search: {
 			text: t("search"),
@@ -731,31 +757,53 @@ export function useSearchMode() {
 		},
 	};
 
-	const activeCount = Object.keys(tabData).filter((mode) => !tabData[mode as SearchMode].disabled).length;
+	const activeCount = Object.keys(tabData).filter(
+		(mode) => !tabData[mode as SearchMode].disabled
+	).length;
 
 	console.log(activeCount);
 
 	return { selectedTab, tabData, setSelectedTab, activeCount };
 }
 
-function SearchModeSwitch({ mode }: { mode: SearchMode }) {
+function SearchModeSwitch({ mode: selectedTab }: { mode: SearchMode }) {
 	const t = useTranslations("ui");
-	const { selectedTab, tabData } = useSearchMode();
+	const { tabData } = useSearchMode();
+	const isMobile = useBreakpointBelow("lg");
+	const isReallySmall = useBreakpointBelow(null, "400px");
 
 	return (
 		<div className="flex gap-2">
 			{Object.keys(tabData).map((mode) => (
-				<Tooltip content={tabData[mode as SearchMode].tooltip} key={mode}>
-					{!tabData[mode as SearchMode].disabled && <Button
-						key={mode}
-						startContent={tabData[mode as SearchMode].icon}
-						className="h-8 lg:h-10 px-3"
-						variant="light"
-						color={mode === selectedTab ? "accent" : "secondary"}
-						onPress={() => tabData[mode as SearchMode].action()}
-					>
-						{tabData[mode as SearchMode].text}
-					</Button>}
+				<Tooltip
+					content={tabData[mode as SearchMode].tooltip}
+					key={mode}
+				>
+					{!tabData[mode as SearchMode].disabled && (
+						<Button
+							key={mode}
+							startContent={tabData[mode as SearchMode].icon}
+							className={twMerge(
+								"h-10",
+								isMobile &&
+									(mode === selectedTab || isReallySmall) &&
+									"!min-w-0 !aspect-square !p-0"
+							)}
+							variant="light"
+							color={
+								mode === selectedTab ? "accent" : "secondary"
+							}
+							onPress={() => tabData[mode as SearchMode].action()}
+						>
+							<span
+								className={twMerge(
+									isMobile && (mode === selectedTab || isReallySmall) && "hidden"
+								)}
+							>
+								{tabData[mode as SearchMode].text}
+							</span>
+						</Button>
+					)}
 				</Tooltip>
 			))}
 		</div>

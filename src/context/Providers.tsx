@@ -278,7 +278,7 @@ export default function Providers({
 				person_profiles: "always",
 				capture_pageview: false,
 				capture_pageleave: true,
-				api_host: "/ingest",
+				api_host: "/backend",
 				ui_host: "https://us.posthog.com",
 				persistence: getPersistence(),
 			})
