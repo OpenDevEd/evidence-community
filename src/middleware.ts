@@ -310,7 +310,7 @@ export const config = {
 	// if one of them matches, the middleware will be invoked.
 	matcher: [
 		// Match all pathnames except for specific prefixes and file extensions
-		'/((?!_next|_vercel|ingest|.*\\..*).*)',
+		'/((?!_next|_vercel|backend|.*\\..*).*)',
 		// Updated matchers for new export URL format
 		'/([\\w-]+)?/lib/:path*/export/ris',
 		'/([\\w-]+)?/lib/:path*/export/bibtex',
