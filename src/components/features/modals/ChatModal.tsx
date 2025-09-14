@@ -99,6 +99,7 @@ function MessageComponent({
 	isWaiting,
 	handleScreening,
 	smartScreeningFields,
+	error,
 }: {
 	message: Message;
 	modelIndex: number;
@@ -106,6 +107,7 @@ function MessageComponent({
 	isWaiting: boolean;
 	handleScreening: (content: string) => void;
 	smartScreeningFields: SmartScreeningField[];
+	error: boolean;
 }) {
 	const tUI = useTranslations("ui");
 
@@ -198,7 +200,7 @@ function MessageComponent({
 						</div>
 					</div>
 				)}
-				{message.content.trim().length === 0 ? (
+				{message.content.trim().length === 0 && !error ? (
 					<div className={twMerge("p-4 opacity-60 ")}>
 						<div className="w-fit bg-black flex items-center justify-center rounded-full p-2">
 							<Spinner />
@@ -535,6 +537,7 @@ export default function ChatModal({
 																	smartScreeningFields={
 																		smartScreeningFields
 																	}
+																	error={!!error}
 																/>
 															</motion.div>
 														)

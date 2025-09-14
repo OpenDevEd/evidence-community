@@ -101,11 +101,14 @@ Before you answer, classify the user’s intent into one of two categories:
 						),
 					userSpecifiedPage: z
 						.number()
+						.optional()
+						.default(0)
 						.describe(
 							"The page number specified by the user. Use 0 if the user didn’t specify."
 						),
 					userToolCallInformation: z
 						.string()
+						.default("Analyzing content...")
 						.describe(
 							`A short localized (${locale}) progress message shown while the tool is working, ending with ellipses.`
 						),
@@ -121,6 +124,10 @@ Before you answer, classify the user’s intent into one of two categories:
 					userSpecifiedPage,
 					itemKey: userDefinedKey,
 				}) => {
+					console.log("userSpecifiedPage", userSpecifiedPage);
+					console.log("fullTextPDFs", fullTextPDFs);
+					console.log("cleanItem", cleanItem);
+					console.log("userDefinedKey", userDefinedKey);
 					if (
 						(fullTextPDFs && fullTextPDFs.length > 0) ||
 						!cleanItem
@@ -134,6 +141,10 @@ Before you answer, classify the user’s intent into one of two categories:
 							if (!canLookUp) {
 								try {
 									const item = await getCachedItem(userDefinedKey);
+									const hasPDF = item?.item?.fullTextPDFs?.length && item?.item?.fullTextPDFs?.length > 0;
+									if (!hasPDF) {
+										return "There is no PDF attached to this item.";
+									}
 									if (item && item.item) {
 										return item.item.fullTextPDFs?.[0]?.fullTextPDF;
 									}
@@ -143,12 +154,10 @@ Before you answer, classify the user’s intent into one of two categories:
 							}
 						}
 
-						console.log("userQuery", userQuery);
-						console.log("userSpecifiedPage", userSpecifiedPage);
 						const relevantContent = await findRelevantContent(
 							userQuery,
 							cleanItem?.key || userDefinedKey || null,
-							userSpecifiedPage
+							userSpecifiedPage || 0
 						);
 						console.log("relevantContent", relevantContent);
 						return relevantContent;
