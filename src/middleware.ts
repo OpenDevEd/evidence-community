@@ -5,6 +5,7 @@ import { ItemGetResponse } from './app/api/item/types';
 import redirections from './constants/redirections.json';
 import { SCOPE_OPTIONS, SORT_OPTIONS } from './constants/items';
 import configJSON from './constants/config.json';
+import { ConsoleLogWriter } from 'drizzle-orm';
 
 export type RateLimit = {
 	count: number;
@@ -179,15 +180,17 @@ export default async function middleware(request: NextRequest) {
 		const rest = libItemMatch[2] || ''; 
 		
 		try {
-			const url = new URL(`/api/item/${encodeURIComponent(key + rest)}/redirects`, fixRequestUrl(request)).toString().replace("https://", "http://");
+			const url = new URL(`/api/item/${encodeURIComponent(key)}/redirects`, fixRequestUrl(request)).toString().replace("https://", "http://");
 
 			console.log(url.toString());
 			
 			const response = await fetch(url);
 			const redirects = await response.json();
 
+			console.log("Got response", redirects);
+
 			if (redirects?.value && redirects.value !== key) {
-				const newUrl = new URL(`/lib/${redirects.value}`, fixRequestUrl(request));
+				const newUrl = new URL(`/lib/${redirects.value}${rest}`, fixRequestUrl(request));
 				request.nextUrl.searchParams.forEach((value, paramKey) => {
 					newUrl.searchParams.set(paramKey, value);
 				});
