@@ -627,7 +627,7 @@ export const valueFormatter: Record<
 			{value}
 		</Link>
 	),
-	attachmentsData: ({ value }) => {
+	attachmentsData: ({ value, item }) => {
 		const filteredValue = value.filter(
 			(data: any) => data.PDFCoverPageImage
 		);
@@ -639,7 +639,7 @@ export const valueFormatter: Record<
 				{value
 					.filter((data: any) => data.PDFCoverPageImage)
 					.map((data: Item, index: number) => (
-						<Attachment data={data} key={index} />
+						<Attachment data={data} key={index} item={item!} />
 					))}
 			</ul>
 		);
