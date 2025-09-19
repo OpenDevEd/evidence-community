@@ -14,21 +14,19 @@ import useBreakpoint from "@/hooks/useBreakpoint";
 import { Card } from "@/components/nextui/Card";
 import useSWR from "swr";
 import { fetcher, fetcherExternal } from "@/lib/utils";
-import { trackPDFDownload, trackPDFView } from "@/lib/analytics";
+import {
+	payloadToPosthog,
+	PdfEventParams,
+	trackPDFDownload,
+	trackPDFView,
+} from "@/lib/analytics";
+import { useSession } from "next-auth/react";
+import { Session } from "next-auth";
 
-function downloadLink(url: string, filename: string, key: string) {
+function downloadLink(url: string, filename: string) {
 	fetch(url)
 		.then((response) => response.blob())
 		.then((blob) => {
-			// Track download in PostHog
-			posthog.capture("download_attachment", {
-				key,
-				filename,
-			});
-
-			// Track download in Google Analytics
-			trackPDFDownload(key, filename);
-
 			const link = document.createElement("a");
 			link.href = URL.createObjectURL(blob);
 			link.download = filename;
@@ -51,7 +49,35 @@ function getAttachmentFromOpenAlex(work: any) {
 	return pdfUrl;
 }
 
-export default function Attachment({ data }: { data: Item }) {
+function getPayload(
+	data: Item,
+	item: Item,
+	session: Session | null,
+	method: PdfEventParams["method"],
+	link_text: string
+): PdfEventParams {
+	const posthog_distinct_id = posthog?.get_distinct_id();
+
+	return {
+		file_id: data.key,
+		filename: data.filename || "",
+		file_title: data.title || "",
+		parent_id: item.key,
+		parent_title: item.title || "",
+		parent_type: item.itemType || "",
+		file_mime_type: data.contentType || "",
+		file_md5: data.md5 || "",
+		posthog_distinct_id: posthog_distinct_id,
+		user_id: session?.user.id || "",
+		method: method,
+		link_text: link_text,
+		link_url: data.url || "",
+	};
+}
+
+export default function Attachment({ data, item }: { data: Item; item: Item }) {
+	const { data: session, update } = useSession();
+
 	const [loaded, setLoaded] = useState(false);
 	const canHover = loaded || !data?.PDFCoverPageImage;
 	const imageRef = useRef<HTMLImageElement>(null);
@@ -69,13 +95,13 @@ export default function Attachment({ data }: { data: Item }) {
 	const isExternal =
 		!data.PDFCoverPageImage &&
 		data.tags?.some((tag: string) => tag.toLowerCase() === "_auto-process");
-		
+
 	const { data: itemFromOpenAlex, isLoading: isLoadingOpenAlex } = useSWR(
 		isExternal ? "https://api.openalex.org/works/" + data.parentItem : null,
 		fetcherExternal
 	);
 	const pdfUrl =
-		(isExternal && !isLoadingOpenAlex && itemFromOpenAlex)
+		isExternal && !isLoadingOpenAlex && itemFromOpenAlex
 			? getAttachmentFromOpenAlex(itemFromOpenAlex)
 			: null;
 	const shouldShowLoading = isExternal && isLoadingOpenAlex;
@@ -151,14 +177,20 @@ export default function Attachment({ data }: { data: Item }) {
 					<Button
 						size="sm"
 						onPress={() => {
+							const payload = getPayload(
+								data,
+								item,
+								session,
+								"view",
+								t("viewAttachment")
+							);
+							trackPDFView(payload);
+							posthog.capture(
+								"view_attachment",
+								payloadToPosthog(payload)
+							);
+
 							window.open(downloadURL, "_blank");
-							// Track view in PostHog
-							posthog.capture("view_attachment", {
-								key: data.key,
-								filename: data.filename,
-							});
-							// Track view in Google Analytics
-							trackPDFView(data.key || "", data.filename || "");
 						}}
 						startContent={<FaEye className="size-5" />}
 					>
@@ -169,11 +201,20 @@ export default function Attachment({ data }: { data: Item }) {
 						color="accent"
 						startContent={<LuDownload className="size-5" />}
 						onPress={() => {
-							downloadLink(
-								data.url || "",
-								data.filename || "",
-								data.key || ""
+							const payload = getPayload(
+								data,
+								item,
+								session,
+								"download",
+								t("downloadAttachment")
 							);
+							trackPDFDownload(payload);
+							posthog.capture(
+								"download_attachment",
+								payloadToPosthog(payload)
+							);
+
+							downloadLink(data.url || "", data.filename || "");
 						}}
 					>
 						{t("downloadAttachment")}
@@ -185,14 +226,18 @@ export default function Attachment({ data }: { data: Item }) {
 					color="accent"
 					startContent={<LuDownload className="size-5" />}
 					onPress={() => {
+						const payload = getPayload(
+							data,
+							item,
+							session,
+							"open",
+							t("openDocument")
+						);
+						trackPDFView(payload);
+						posthog.capture("view_attachment", payloadToPosthog(payload));
+
+						
 						window.open(pdfUrl, "_blank");
-						// Track view in PostHog
-						posthog.capture("view_attachment", {
-							key: data.key,
-							filename: data.filename,
-						});
-						// Track view in Google Analytics
-						trackPDFView(data.key || "", data.filename || "");
 					}}
 				>
 					{t("openDocument")}
@@ -209,9 +254,11 @@ export default function Attachment({ data }: { data: Item }) {
 			key={data.id}
 			color="card"
 		>
-			{shouldShowLoading && <div className="absolute inset-0 bg-background/50 flex items-center justify-center">
-				<Spinner />
-			</div>}
+			{shouldShowLoading && (
+				<div className="absolute inset-0 bg-background/50 flex items-center justify-center">
+					<Spinner />
+				</div>
+			)}
 			{hasImage && (
 				<div
 					data-height={imageHeight}

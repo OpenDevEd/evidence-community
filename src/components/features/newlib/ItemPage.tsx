@@ -1108,7 +1108,7 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 			</p>
 			<div className="flex flex-col gap-4">
 				{validAttachments.map((attachment) => (
-					<Attachment key={attachment.id} data={attachment} />
+					<Attachment key={attachment.id} data={attachment} item={item!} />
 				))}
 			</div>
 		</ItemPropertyRowWrapper>

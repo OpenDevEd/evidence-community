@@ -1,51 +1,51 @@
-// Google Analytics utility functions for event tracking
-// This complements the existing PostHog tracking
+import { sendGAEvent } from "@next/third-parties/google";
 
-declare global {
-	interface Window {
-		gtag: (...args: any[]) => void;
-	}
-}
-
-// Google Analytics event tracking function
-export function trackGAEvent(
-	eventName: string,
-	parameters: Record<string, any> = {}
-) {
-	if (typeof window !== "undefined" && window.gtag) {
-		window.gtag("event", eventName, parameters);
-	}
-}
+export type PdfEventParams = {
+	file_id: string;
+	filename: string;
+	file_title?: string;
+	parent_type?: string;
+	parent_id?: string;
+	parent_title?: string;
+	file_size_bytes?: number;
+	file_mime_type?: string;
+	link_url?: string;
+	link_text?: string;
+	method?: "view" | "download" | "open";
+	file_md5?: string;
+	posthog_distinct_id?: string;
+	user_id?: string;
+};
 
 // Specific functions for PDF-related events
-export function trackPDFDownload(key: string, filename: string) {
-	trackGAEvent("pdf_download", {
-		event_category: "engagement",
-		event_label: filename,
-		item_key: key,
-		file_name: filename,
+export function trackPDFDownload(params: PdfEventParams) {
+	sendGAEvent("event", "pdf_download", {
+		engagement_time_msec: 1,
+		method: "download",
+		...params,
 	});
 }
 
-export function trackPDFView(key: string, filename: string) {
-	trackGAEvent("pdf_view", {
-		event_category: "engagement",
-		event_label: filename,
-		item_key: key,
-		file_name: filename,
+export function trackPDFView(params: PdfEventParams) {
+	sendGAEvent("event", "pdf_view", {
+		engagement_time_msec: 1,
+		method: "view",
+		...params,
 	});
 }
 
-// General analytics tracking function that can be used for other events
-export function trackCustomEvent(
-	eventName: string,
-	category: string,
-	label?: string,
-	value?: number
-) {
-	trackGAEvent(eventName, {
-		event_category: category,
-		event_label: label,
-		value: value,
-	});
+export function payloadToPosthog(params: PdfEventParams) {
+	return {
+		key: params.file_id,
+		filename: params.filename,
+		fileTitle: params.file_title,
+		parentKey: params.parent_id,
+		parentTitle: params.parent_title,
+		parentType: params.parent_type,
+		fileMimeType: params.file_mime_type,
+		fileMd5: params.file_md5,
+		linkText: params.link_text,
+		linkUrl: params.link_url,
+		userId: params.user_id,
+	};
 }
