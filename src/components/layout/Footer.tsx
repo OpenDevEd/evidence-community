@@ -242,7 +242,7 @@ export default function Footer() {
 								/>
 							</div>
 						</div>
-						<div className="w-full flex justify-center items-center text-[8px]">
+						<div className="w-full flex justify-center items-center text-[0.65rem] text-center">
 							The findings, interpretations, and conclusions
 							expressed in the content on this site do not
 							necessarily reflect the views of The UK government,
@@ -251,11 +251,38 @@ export default function Footer() {
 							governments they represent.
 						</div>
 						<div className="w-full text-center">
-							<a href="https://edtechhub.org" className="text-accent underline">
+							<a
+								href="https://edtechhub.org"
+								className="text-accent underline"
+							>
 								EDTECH HUB 2025
 							</a>
-							. Creative Commons Attribution 4.0 International License.
+							. Creative Commons Attribution 4.0 International
+							License.
 						</div>
+						<Link
+							href="https://opendeved.org"
+						>
+							<div className="flex w-full justify-center items-center gap-4">
+								Powered by
+								<div>
+									<Image
+										src="/logos/opendeved/logo_light.png"
+										className="dark:hidden"
+										alt="EdTech Hub"
+										width={128}
+										height={32}
+									/>
+									<Image
+										src="/logos/opendeved/logo.png"
+										className="hidden dark:block"
+										alt="EdTech Hub"
+										width={128}
+										height={32}
+									/>
+								</div>
+							</div>
+						</Link>
 					</div>
 				</footer>
 			)
