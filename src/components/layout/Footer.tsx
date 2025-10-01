@@ -176,8 +176,8 @@ export default function Footer() {
 					id="footer"
 					className="relative row-start-3 bg-white dark:bg-card w-full print:hidden flex justify-center items-center"
 				>
-					<div className="max-w-[96rem] px-14 flex w-full flex-col py-28 gap-52">
-						<div className="flex flex-col gap-6">
+					<div className="max-w-[96rem] px-0 flex w-full flex-col py-28 gap-52">
+						<div className="flex flex-col gap-6 px-14">
 							<div className="grid grid-cols-1 gap-6 lg:grid-cols-3 w-full">
 								{footerItemsSorted.map(([section, links]) => (
 									<div
@@ -228,7 +228,7 @@ export default function Footer() {
 								</div>
 							</div>
 						</div>
-						<div className="w-full flex lg:flex-row flex-col justify-between items-end lg:items-center gap-8 overflow-hidden">
+						<div className="w-full flex lg:flex-row flex-col justify-between items-end lg:items-center gap-8 overflow-hidden px-14">
 							<div className="text-black/60 dark:text-white/60 text-2xl font-bold shrink-0">
 								EdTech Hub is supported by
 							</div>
@@ -242,7 +242,7 @@ export default function Footer() {
 								/>
 							</div>
 						</div>
-						<div className="w-full flex justify-center items-center text-[0.65rem] text-center">
+						<div className="w-full flex justify-center items-center text-[11px] text-center px-4">
 							The findings, interpretations, and conclusions
 							expressed in the content on this site do not
 							necessarily reflect the views of The UK government,
@@ -250,7 +250,7 @@ export default function Footer() {
 							the Executive Directors of the World Bank, or the
 							governments they represent.
 						</div>
-						<div className="w-full text-center">
+						<div className="w-full text-center px-4">
 							<a
 								href="https://edtechhub.org"
 								className="text-accent underline"
