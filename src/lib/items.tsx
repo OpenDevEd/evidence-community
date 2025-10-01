@@ -389,7 +389,7 @@ function Relations({ value }: { value: RelationsType }) {
 		related_works: obj["related_works"] || [],
 	};
 	return (
-		<div>
+		<div className="hidden [&:has(.has-data)]:block">
 			<ul className="flex flex-col gap-4">
 				<AnimatePresence mode="popLayout">
 					{Object.entries(relationsObject).map(

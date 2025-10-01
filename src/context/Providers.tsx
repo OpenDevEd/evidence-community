@@ -122,10 +122,12 @@ export function useLastFetchedData() {
 	const setLastFetchedDataAsResponse = useCallback(
 		(data: ItemsGetResponse) => {
 			setLastFetchedData((prev) => {
+				// replace all citations with <div>Loading...</div>
 				const allItems = [...(prev?.items ?? []), ...data.items];
 
 				const uniqueItems = allItems.reduce((acc, item) => {
 					acc.set(item.id, item);
+					item.citation = "<div>Loading...</div>";
 					return acc;
 				}, new Map());
 

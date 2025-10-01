@@ -256,7 +256,9 @@ export default function Resource({
 				className={twMerge(
 					"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
 					!finalItemData?.key && "!pointer-events-none",
-					!finalIsLoading && !finalItemData?.key && "no-data"
+					(!finalIsLoading && !finalItemData?.key) && "no-data",
+					(!finalIsLoading && finalItemData?.key) && "has-data",
+					
 				)}
 			>
 				<article className="flex flex-col gap-4">

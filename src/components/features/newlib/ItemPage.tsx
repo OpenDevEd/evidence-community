@@ -1138,7 +1138,7 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 	if (!relations) return null;
 
 	return (
-		<ItemPropertyRowWrapper title={t("relatedResources")}>
+		<ItemPropertyRowWrapper className="hidden [&:has(.has-data)]:flex" title={t("relatedResources")}>
 			<p className="text-black/60 dark:text-white/60">
 				{t("relatedResourcesByCitation")}
 			</p>
