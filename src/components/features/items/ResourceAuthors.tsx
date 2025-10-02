@@ -62,7 +62,7 @@ export default function ResourceAuthors({
 		const authorText = formatAPAAuthor(itemData?.creators as Author[], t);
 		
 		return (
-			<span className="max-w-64 truncate overflow-hidden flex items-center gap-2">
+			(InstitutionLogo || authorText) && <span className="max-w-64 truncate overflow-hidden flex items-center gap-2">
 				{InstitutionLogo && <InstitutionLogo />}
 				{authorText}
 			</span>
