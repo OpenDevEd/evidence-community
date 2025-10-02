@@ -656,7 +656,16 @@ function ItemDetailsRow({
 						</div>
 						<div className="flex justify-between">
 							<div className="text-base">
-								{formattedValue || "-"}
+								{formattedValue ? (
+									<span
+										dangerouslySetInnerHTML={{
+											__html: ProcessHTML(formattedValue || ""),
+										}}
+										className="text-black/60 dark:text-white/60 text-wrap-anywhere"
+									/>
+								) : (
+									"-"
+								)}
 							</div>
 						</div>
 					</div>
@@ -816,11 +825,12 @@ function ProcessHTML(html: string) {
 	// Regular expression to match URLs
 	const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
 
-	// Replace URLs with anchor tags that have text-accent class
+	// Replace URLs with anchor tags that have proper link styling
 	return html.replace(urlRegex, (url) => {
-		return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">${url}</a>`;
+		return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-link_light dark:text-link hover:underline">${url}</a>`;
 	});
 }
+
 
 function ItemCitation({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
@@ -1135,10 +1145,10 @@ function ItemVectorRelations({ item }: { item: Item | undefined }) {
 function ItemRelations({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const relations = item?.relations as RelationsType;
-	if (!relations) return null;
+	// if (!relations) return null;
 
 	return (
-		<ItemPropertyRowWrapper className="hidden [&:has(.has-data)]:flex" title={t("relatedResources")}>
+		<ItemPropertyRowWrapper title={t("relatedResources")}>
 			<p className="text-black/60 dark:text-white/60">
 				{t("relatedResourcesByCitation")}
 			</p>
