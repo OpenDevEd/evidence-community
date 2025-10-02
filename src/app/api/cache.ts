@@ -12,7 +12,7 @@ import { withCache } from "@/lib/cache-utils";
 export async function getCachedCollections(ignoreCache: boolean = false) {
 	const collections = await withCache(getCollections, {
 		cacheKey: "collections",
-		expirationMinutes: 10,
+		expirationMinutes: 3,
 	});
 
 	return collections;
