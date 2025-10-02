@@ -381,15 +381,15 @@ function Relation({ value }: { value: string }) {
 }
 
 function Relations({ value }: { value: RelationsType }) {
-	const obj = value as RelationsType;
-	if (!obj) return false;
+	const obj = (value as RelationsType) || {};
+	// if (!obj) return false;
 	const relationsObject = {
 		"dc:relation": obj["dc:relation"] || [],
 		"owl:sameAs": obj["owl:sameAs"] || [],
 		related_works: obj["related_works"] || [],
 	};
 	return (
-		<div className="hidden [&:has(.has-data)]:block">
+		<div className="">
 			<ul className="flex flex-col gap-4">
 				<AnimatePresence mode="popLayout">
 					{Object.entries(relationsObject).map(
