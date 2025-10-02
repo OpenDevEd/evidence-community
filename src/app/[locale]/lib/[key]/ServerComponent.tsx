@@ -18,7 +18,7 @@ export default async function ServerComponent( props: {
     const params = await props.params;
     const data = await getCurrentItem(params.key);
 
-    if (!data || data.item === undefined) {
+    if (!data || !data.item) {
         return notFound();
     }
 
