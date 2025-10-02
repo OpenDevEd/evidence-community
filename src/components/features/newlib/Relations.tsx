@@ -55,8 +55,7 @@ function Relation({ value }: { value: string }) {
 
 export default function Relations({ value }: { value: RelationsType }) {
 	const t = useTranslations("ui");
-	const obj = value as RelationsType;
-	if (!obj) return false;
+	const obj = (value as RelationsType) || {};
 	const relationsObject = {
 		"dc:relation": obj["dc:relation"] || [],
 		"owl:sameAs": obj["owl:sameAs"] || [],
