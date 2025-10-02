@@ -166,8 +166,8 @@ const CountryCard = ({
 	onHover: () => void;
 	onLeave: () => void;
 }) => {
-	const { resolvedTheme: theme } = useTheme();
-	const isLight = theme === "light";
+	const { resolvedTheme: theme, forcedTheme } = useTheme();
+	const isLight = (theme === "light" || forcedTheme === "light");
 	const countryName = COUNTRIES[country] || country;
 	const t = useTranslations("ui");
 	
