@@ -410,7 +410,7 @@ export default function Footer() {
 					</div>
 				)}
 				<div className="absolute bottom-0 left-0 p-2 z-50 text-xs text-black/60 dark:text-white/60">
-					0.4.9
+					0.5.3
 				</div>
 			</footer>
 		)
