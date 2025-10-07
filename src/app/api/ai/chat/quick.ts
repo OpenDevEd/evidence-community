@@ -271,9 +271,9 @@ Before you answer, classify the user’s intent into one of two categories:
 				},
 			}),
 		},
-		onError: (e) => {
-			console.error("Error in quickChat stream:", e);
-		},
+		// onError: (e) => {
+		// 	console.error("Error in quickChat stream:", e);
+		// },
 		temperature: 1,
 		providerOptions: {
 			openai: { reasoningEffort: "minimal" },
