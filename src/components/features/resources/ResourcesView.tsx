@@ -532,16 +532,16 @@ export function NoteView() {
 					<Card color="card">
 						<CardBody>
 							<div className="flex flex-col gap-4">
-								<h3 className="xl:text-2xl text-xl text-black/80 dark:text-white/80 font-medium flex xl:items-center gap-2">
-									<AiOutlineCompass className="size-8 xl:size-6 shrink-0" />
-									<div className="flex flex-col xl:gap-2 xl:flex-row xl:items-center">
-										<span className="text-black/40 dark:text-white/40">
-											{collectionData?.name}
-										</span>
-										<span className="xl:text-lg text-base text-black/80 dark:text-white/80">
+								<h3 className="text-xl text-black/80 dark:text-white/80 font-medium flex flex-col">
+									<div className="flex gap-2 items-center">
+									<AiOutlineCompass className="size-4 shrink-0" />
+										<span className="text-base text-black/80 dark:text-white/80">
 											{collectionData?.title}
 										</span>
 									</div>
+										<span className="text-black/40 dark:text-white/40">
+											{collectionData?.name}
+										</span>
 								</h3>
 								<Divider />
 								<p
