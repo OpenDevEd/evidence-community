@@ -5,7 +5,7 @@ import { twMerge } from "tailwind-merge";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDebounce } from "@/hooks/useDebounce";
 import { Button } from "@/components/nextui/Button";
-import { FaTrash } from "react-icons/fa";
+import { FaCompass, FaTrash } from "react-icons/fa";
 import { ContentInteractions } from "@/components/pages/EvidenceLibrary";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -20,13 +20,17 @@ import {
 	useFeatureFlagEnabled,
 } from "@/context/Providers";
 import { DownloadModal } from "../items/ItemControls";
-import { useDisclosure } from "@nextui-org/react";
+import { CardBody, useDisclosure } from "@nextui-org/react";
 import { downloadItems } from "@/lib/actions";
 import { routing, usePathname, useRouter } from "@/i18n/routing";
 import { ItemsContext } from "../items/ItemsList";
 import { countryFacetOptions } from "@/constants/misc";
 import Image from "next/image";
 import { getCountryInfo } from "@/lib/utils";
+import { Item } from "@/app/api/item/types";
+import { Card } from "@/components/nextui/Card";
+import { Divider } from "@/components/nextui/Divider";
+import { AiOutlineCompass } from "react-icons/ai";
 
 function Chip({
 	group,
@@ -361,7 +365,7 @@ function ContentActions({ params }: { params?: Record<string, any> }) {
 	const pathName = usePathname();
 	const isDownloadEnabled = useFeatureFlagEnabled("download-button");
 	const isAtomFeedEnabled = useFeatureFlagEnabled("atom-feed");
-	
+
 	return (
 		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
 			<DownloadModal
@@ -389,7 +393,7 @@ function ContentActions({ params }: { params?: Record<string, any> }) {
 				<Button
 					endContent={<HiOutlineDownload className="size-6" />}
 					onPress={onOpen}
-			>
+				>
 					{t("downloadRecords", { count: format.number(totalItems) })}
 				</Button>
 			)}
@@ -404,19 +408,21 @@ function ContentActions({ params }: { params?: Record<string, any> }) {
 					onPress={() => {
 						router.push(
 							{
-							pathname: pathName + "/atom.xml",
-							query: itemsContext.searchParams,
-						},
-						{
-							locale: routing.defaultLocale,
-						}
-					);
-				}}
-				endContent={<HiOutlineCodeBracketSquare className="size-6" />}
-			>
-				{JSON.stringify(itemsContext.searchParams) == "{}"
-					? t("mainFeed")
-					: t("customFeed")}
+								pathname: pathName + "/atom.xml",
+								query: itemsContext.searchParams,
+							},
+							{
+								locale: routing.defaultLocale,
+							}
+						);
+					}}
+					endContent={
+						<HiOutlineCodeBracketSquare className="size-6" />
+					}
+				>
+					{JSON.stringify(itemsContext.searchParams) == "{}"
+						? t("mainFeed")
+						: t("customFeed")}
 				</Button>
 			)}
 		</div>
@@ -458,6 +464,102 @@ function PaginationControls() {
 	);
 }
 
+/**
+ * Removes trailing empty elements (no meaningful text content)
+ * from the given HTML string, starting from the bottom of the DOM tree.
+ * Stops when it reaches an element containing text content.
+ *
+ * Works exclusively in the browser (Next.js client-side components).
+ */
+export function removeTrailingEmptyElements(html: string): string {
+	if (!html.trim()) return html;
+  
+	const document = new DOMParser().parseFromString(html, "text/html");
+	const root = document.body;
+  
+	/**
+	 * Check if an element has any actual text content
+	 * (ignoring children that are empty or whitespace).
+	 */
+	const isEmpty = (el: Element): boolean => {
+	  const text = el.textContent?.trim() ?? "";
+	  const hasNonEmptyChild = Array.from(el.children).some(
+		(child) => !isEmpty(child)
+	  );
+	  return text === "" && !hasNonEmptyChild;
+	};
+  
+	/**
+	 * Walk bottom-up and remove empty nodes until reaching the last non-empty one.
+	 */
+	const cleanBottomUp = (node: Element): boolean => {
+	  const children = Array.from(node.children);
+	  for (const child of children) {
+		const empty = cleanBottomUp(child);
+		if (empty && node.contains(child)) {
+		  node.removeChild(child);
+		}
+	  }
+	  return isEmpty(node);
+	};
+  
+	cleanBottomUp(root);
+  
+	return root.innerHTML.trim();
+  }
+
+export function NoteView() {
+	const itemsContext = use(ItemsContext);
+	const selectedCollection = itemsContext.selectedCollections[0];
+	const collectionData = itemsContext.collectionsData?.collections.find(
+		(c) => c.key === selectedCollection
+	);
+	const isCollectionNoteEnabled = useFeatureFlagEnabled("collection-note");
+
+	return (
+		isCollectionNoteEnabled && <AnimatePresence>
+			{itemsContext.noteData?.note && (
+				<motion.div
+					className="w-full"
+					initial={{ opacity: 0, y: 20, height: 0, scale: 0.75, }}
+					animate={{ opacity: 1, y: 0 , height: "auto", scale: 1 }}
+					exit={{ opacity: 0, y: -20, height: 0, scale: 0.7, }}
+					transition={{
+						duration: 0.2,
+						ease: "easeOut"
+					}}
+				>
+					<Card color="card">
+						<CardBody>
+							<div className="flex flex-col gap-4">
+								<h3 className="xl:text-2xl text-xl text-black/80 dark:text-white/80 font-medium flex xl:items-center gap-2">
+									<AiOutlineCompass className="size-8 xl:size-6 shrink-0" />
+									<div className="flex flex-col xl:gap-2 xl:flex-row xl:items-center">
+										<span className="text-black/40 dark:text-white/40">
+											{collectionData?.name}
+										</span>
+										<span className="xl:text-lg text-base text-black/80 dark:text-white/80">
+											{collectionData?.title}
+										</span>
+									</div>
+								</h3>
+								<Divider />
+								<p
+									className="prose max-w-full dark:prose-invert [&_*:last-child]:mb-0 leading-tight"
+									dangerouslySetInnerHTML={{
+										__html:
+											removeTrailingEmptyElements(itemsContext.noteData?.note.note ?? ""),
+									}}
+								/>
+							</div>
+						</CardBody>
+					</Card>
+				</motion.div>
+			)}
+		</AnimatePresence>
+	);
+}
+
 export function ResourcesView({
 	extraFilters,
 	params,
@@ -476,7 +578,11 @@ export function ResourcesView({
 	const { status } = useContext(CacheContext) as CacheContextType;
 
 	return (
-		<section id="main-content" className="w-full flex flex-col gap-4">
+		<section
+			id="main-content"
+			className="w-full flex flex-col gap-4 overflow-hidden"
+		>
+			<NoteView />
 			<ContentInteractions
 				header={header}
 				abstract={abstract}
