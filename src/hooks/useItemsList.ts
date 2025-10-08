@@ -13,15 +13,20 @@ import { getDescendantKeys } from "@/lib/collections";
 import { recursiveFind } from "@/lib/collections";
 import { buildHierarchy } from "@/lib/collections";
 import { searchParamsLoader } from "@/lib/searchParams";
-import { useQueryStates } from 'nuqs'
+import { useQueryStates } from "nuqs";
+import { Item } from "@/app/api/item/types";
+import { CollectionNoteGetResponse } from "@/app/api/collections/[id]/note/types";
 
-export function useItemsList(userData?: any, config: {
-	paginationSiblings?: number,
-	disableViewSwitch?: boolean,
-	interactionsStyle?: "one-line" | "multi-line",
-} = {
-	interactionsStyle: "multi-line",
-}) {
+export function useItemsList(
+	userData?: any,
+	config: {
+		paginationSiblings?: number;
+		disableViewSwitch?: boolean;
+		interactionsStyle?: "one-line" | "multi-line";
+	} = {
+		interactionsStyle: "multi-line",
+	}
+) {
 	const [params, setParams] = useQueryStates(searchParamsLoader);
 
 	const searchParamsFromParams = useSearchParams();
@@ -41,6 +46,13 @@ export function useItemsList(userData?: any, config: {
 	const itemsQuery = buildItemsQuery(
 		queryParams,
 		userData ? `/user/items/${userData.id}` : "/items"
+	);
+
+	const { data: noteData, isLoading: isNoteLoading } = useSWR<CollectionNoteGetResponse>(
+		queryParams.collections.length === 1
+			? `/collections/${queryParams.collections[0]}/note`
+			: null,
+		fetcher
 	);
 
 	const handlePageChange = useCallback(
@@ -119,11 +131,15 @@ export function useItemsList(userData?: any, config: {
 	const handleInstitutionSelect = (institution: string | string[]) => {
 		if (Array.isArray(institution)) {
 			setParams({
-				institution: Array.from(new Set([...queryParams.institution, ...institution]))
+				institution: Array.from(
+					new Set([...queryParams.institution, ...institution])
+				),
 			});
 		} else if (queryParams.institution.includes(institution)) {
 			setParams({
-				institution: queryParams.institution.filter((i) => i !== institution),
+				institution: queryParams.institution.filter(
+					(i) => i !== institution
+				),
 			});
 		} else {
 			setParams({
@@ -132,17 +148,22 @@ export function useItemsList(userData?: any, config: {
 		}
 	};
 
-	function genericCountrySelect(country: string | string[], key: keyof typeof queryParams) {
+	function genericCountrySelect(
+		country: string | string[],
+		key: keyof typeof queryParams
+	) {
 		const queryParam = queryParams[key] as string[];
 		if (Array.isArray(country)) {
 			const lastOne = country[country.length - 1];
 			if (queryParam.includes(lastOne)) {
 				setParams({
-					[key]: queryParam.filter((c) => c !== lastOne && !c.startsWith(lastOne))
+					[key]: queryParam.filter(
+						(c) => c !== lastOne && !c.startsWith(lastOne)
+					),
 				});
 			} else {
 				setParams({
-					[key]: Array.from(new Set([...queryParam, ...country]))
+					[key]: Array.from(new Set([...queryParam, ...country])),
 				});
 			}
 		} else if (queryParam.includes(country)) {
@@ -151,7 +172,7 @@ export function useItemsList(userData?: any, config: {
 					const sameCountry = c === country;
 					const isDescendant = !sameCountry && c.startsWith(country);
 					return !sameCountry && !isDescendant;
-				})
+				}),
 			});
 		} else {
 			setParams({
@@ -162,11 +183,11 @@ export function useItemsList(userData?: any, config: {
 
 	const handleCountrySelect = (country: string | string[]) => {
 		genericCountrySelect(country, "country");
-	}
+	};
 
 	const handleAuthorCountrySelect = (country: string | string[]) => {
 		genericCountrySelect(country, "author_country");
-	}
+	};
 
 	const handleClearFilters = () => {
 		setParams({
@@ -271,5 +292,7 @@ export function useItemsList(userData?: any, config: {
 		handleAuthorCountrySelect,
 		userData,
 		config,
+		noteData,
+		isNoteLoading,
 	};
 }
