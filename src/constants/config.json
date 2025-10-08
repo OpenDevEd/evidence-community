@@ -246,25 +246,17 @@
 				"enabled": true
 			}
 		},
-		"itemsTest": {
-			"GJX4SBYM": {
-				"title": "Theme",
-				"enabled": true
-			},
-			"7XAM9PEM": {
-				"title": "Our programmes",
-				"enabled": true
-			},
-			"VPIKW9C7": {
+		"itemsTesting": {
+			"65N8WDF8": {
 				"title": "Publication type",
 				"enabled": true
 			},
-			"36S77JVF": {
-				"title": "Organisations, collaborators and clients",
+			"GVAGGV6F": {
+				"title": "Research methods",
 				"enabled": true
 			},
-			"94GNF2EB": {
-				"title": "Location",
+			"MIHK9XAM": {
+				"title": "Subject areas",
 				"enabled": true
 			}
 		}
