@@ -26,6 +26,7 @@ import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils
 import { getPersistence } from "@/components/layout/Banner";
 import { useQueryState } from "nuqs";
 import { toast as toastComponent } from "@/components/layout/Toast";
+import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 
 export type CacheContextType = {
 	status: InferSelectModel<typeof statusTable>;
@@ -315,6 +316,7 @@ export default function Providers({
 											<PageView />
 										</PramNotificationProvider>
 									</Suspense>
+									<UtmAttributionProvider />
 									<LoadingScreen
 										isMounted={isMounted}
 										featureFlags={featureFlags}
