@@ -158,6 +158,10 @@
 				"enabled": true,
 				"legacyKey": "featured"
 			},
+			"4X9FE6I4": {
+				"title": "Our researchers and collaborators",
+				"enabled": true
+			},
 			"JHBN8UGK": {
 				"title": "Organisations, collaborators and clients",
 				"enabled": true,
@@ -235,6 +239,10 @@
 			},
 			"QPKFSP99": {
 				"title": "Publication type",
+				"enabled": true
+			},
+			"2XEHIFXX": {
+				"title": "Our researchers and collaborators",
 				"enabled": true
 			},
 			"MB72ER4U": {
