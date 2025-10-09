@@ -661,7 +661,7 @@ function ItemDetailsRow({
 										dangerouslySetInnerHTML={{
 											__html: ProcessHTML(formattedValue || ""),
 										}}
-										className="text-black/60 dark:text-white/60 text-wrap-anywhere"
+										className="text-black/80 dark:text-white/80 text-wrap-anywhere"
 									/>
 								) : (
 									"-"
