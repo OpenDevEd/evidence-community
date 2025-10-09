@@ -22,6 +22,8 @@ import {
 } from "@/lib/analytics";
 import { useSession } from "next-auth/react";
 import { Session } from "next-auth";
+import { useUtm } from "@/hooks/useUtm";
+import { StoredUtm } from "../UtmProvider";
 
 function downloadLink(url: string, filename: string) {
 	fetch(url)
@@ -54,7 +56,8 @@ function getPayload(
 	item: Item,
 	session: Session | null,
 	method: PdfEventParams["method"],
-	link_text: string
+	link_text: string,
+	utm: StoredUtm | null
 ): PdfEventParams {
 	const posthog_distinct_id = posthog?.get_distinct_id();
 
@@ -72,11 +75,13 @@ function getPayload(
 		method: method,
 		link_text: link_text,
 		link_url: data.url || "",
+		...utm?.utm,
 	};
 }
 
 export default function Attachment({ data, item }: { data: Item; item: Item }) {
 	const { data: session, update } = useSession();
+	const utm = useUtm();
 
 	const [loaded, setLoaded] = useState(false);
 	const canHover = loaded || !data?.PDFCoverPageImage;
@@ -182,7 +187,8 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 								item,
 								session,
 								"view",
-								t("viewAttachment")
+								t("viewAttachment"),
+								utm
 							);
 							trackPDFView(payload);
 							posthog.capture(
@@ -206,7 +212,8 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 								item,
 								session,
 								"download",
-								t("downloadAttachment")
+								t("downloadAttachment"),
+								utm
 							);
 							trackPDFDownload(payload);
 							posthog.capture(
@@ -231,7 +238,8 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 							item,
 							session,
 							"open",
-							t("openDocument")
+							t("openDocument"),
+							utm
 						);
 						trackPDFView(payload);
 						posthog.capture("view_attachment", payloadToPosthog(payload));

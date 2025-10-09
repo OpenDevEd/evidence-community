@@ -473,131 +473,137 @@ function PaginationControls() {
  */
 export function removeTrailingEmptyElements(html: string): string {
 	if (!html.trim()) return html;
-  
+
 	const document = new DOMParser().parseFromString(html, "text/html");
 	const root = document.body;
-  
+
 	// Get only the direct (immediate) text content of an element (no descendants)
 	const getDirectText = (el: Element): string =>
-	  Array.from(el.childNodes)
-		.filter((n) => n.nodeType === Node.TEXT_NODE)
-		.map((n) => n.textContent ?? "")
-		.join("");
-  
+		Array.from(el.childNodes)
+			.filter((n) => n.nodeType === Node.TEXT_NODE)
+			.map((n) => n.textContent ?? "")
+			.join("");
+
 	/**
 	 * True if the element's direct text starts with:
 	 * (optional whitespace) + (zero or more underscores) + %% + anything
 	 */
 	const startsWithDirective = (el: Element): boolean =>
-	  /^\s*_*\%\%/.test(getDirectText(el));
-  
+		/^\s*_*\%\%/.test(getDirectText(el));
+
 	// Checks if an element has neither non-whitespace text nor non-empty child elements
 	const isEmpty = (el: Element): boolean => {
-	  const hasNonWhitespaceDirectText = Array.from(el.childNodes).some(
-		(n) => n.nodeType === Node.TEXT_NODE && (n.textContent?.trim() ?? "") !== ""
-	  );
-	  const hasElementChildren = el.children.length > 0;
-	  return !hasNonWhitespaceDirectText && !hasElementChildren;
+		const hasNonWhitespaceDirectText = Array.from(el.childNodes).some(
+			(n) =>
+				n.nodeType === Node.TEXT_NODE &&
+				(n.textContent?.trim() ?? "") !== ""
+		);
+		const hasElementChildren = el.children.length > 0;
+		return !hasNonWhitespaceDirectText && !hasElementChildren;
 	};
-  
+
 	/**
 	 * Bottom-up recursive cleaner:
 	 * - Cleans children first
 	 * - Removes node if it’s empty or starts with `_*%%`
 	 */
 	const cleanBottomUp = (node: Element): boolean => {
-	  const children = Array.from(node.children);
-	  for (const child of children) {
-		const removable = cleanBottomUp(child);
-		if (removable && node.contains(child)) {
-		  node.removeChild(child);
+		const children = Array.from(node.children);
+		for (const child of children) {
+			const removable = cleanBottomUp(child);
+			if (removable && node.contains(child)) {
+				node.removeChild(child);
+			}
 		}
-	  }
-	  return isEmpty(node) || startsWithDirective(node);
+		return isEmpty(node) || startsWithDirective(node);
 	};
-  
+
 	/**
 	 * Remove leading/trailing empty or directive elements among siblings
 	 */
 	const cleanEdges = (parent: Element) => {
-	  const children = Array.from(parent.children);
-	  // remove leading empties
-	  for (const child of children) {
-		if (isEmpty(child) || startsWithDirective(child)) parent.removeChild(child);
-		else break;
-	  }
-	  // remove trailing empties
-	  const revChildren = Array.from(parent.children).reverse();
-	  for (const child of revChildren) {
-		if (isEmpty(child) || startsWithDirective(child)) parent.removeChild(child);
-		else break;
-	  }
-	  // recurse into remaining children
-	  Array.from(parent.children).forEach(cleanEdges);
+		const children = Array.from(parent.children);
+		// remove leading empties
+		for (const child of children) {
+			if (isEmpty(child) || startsWithDirective(child))
+				parent.removeChild(child);
+			else break;
+		}
+		// remove trailing empties
+		const revChildren = Array.from(parent.children).reverse();
+		for (const child of revChildren) {
+			if (isEmpty(child) || startsWithDirective(child))
+				parent.removeChild(child);
+			else break;
+		}
+		// recurse into remaining children
+		Array.from(parent.children).forEach(cleanEdges);
 	};
-  
+
 	// First pass – remove inner empties
 	cleanBottomUp(root);
 	// Second pass – remove leading/trailing empties at all levels
 	cleanEdges(root);
-  
+
 	return root.innerHTML.trim();
-  }
-  
-  export function NoteView() {
+}
+
+export function NoteView() {
 	const itemsContext = use(ItemsContext);
 	const selectedCollection = itemsContext.selectedCollections[0];
 	const collectionData = itemsContext.collectionsData?.collections.find(
-	  (c) => c.key === selectedCollection
+		(c) => c.key === selectedCollection
 	);
 	const isCollectionNoteEnabled = useFeatureFlagEnabled("collection-note");
-  
+
 	return (
-	  isCollectionNoteEnabled && (
-		<AnimatePresence>
-		  {itemsContext.noteData?.note && (
-			<motion.div
-			  className="w-full"
-			  initial={{ opacity: 0, y: 20, height: 0, scale: 0.75 }}
-			  animate={{ opacity: 1, y: 0, height: "auto", scale: 1 }}
-			  exit={{ opacity: 0, y: -20, height: 0, scale: 0.7 }}
-			  transition={{
-				duration: 0.2,
-				ease: "easeOut",
-			  }}
-			>
-			  <Card color="card">
-				<CardBody>
-				  <div className="flex flex-col gap-4">
-					<h3 className="text-xl text-black/80 dark:text-white/80 font-medium flex flex-col">
-					  <div className="flex gap-2 items-center">
-						<AiOutlineCompass className="size-4 shrink-0" />
-						<span className="text-base text-black/80 dark:text-white/80">
-						  {collectionData?.title}
-						</span>
-					  </div>
-					  <span className="text-black/40 dark:text-white/40">
-						{collectionData?.name}
-					  </span>
-					</h3>
-					<Divider />
-					<p
-					  className="prose max-w-full dark:prose-invert [&_*:last-child]:mb-0 [&_*:first-child]:mt-0 leading-tight"
-					  dangerouslySetInnerHTML={{
-						__html: removeTrailingEmptyElements(
-						  itemsContext.noteData?.note.note ?? ""
-						),
-					  }}
-					/>
-				  </div>
-				</CardBody>
-			  </Card>
-			</motion.div>
-		  )}
-		</AnimatePresence>
-	  )
+		isCollectionNoteEnabled && (
+			<AnimatePresence>
+				{itemsContext.noteData?.note && (
+					<motion.div
+						className="w-full"
+						initial={{ opacity: 0, y: 20, height: 0, scale: 0.75 }}
+						animate={{ opacity: 1, y: 0, height: "auto", scale: 1 }}
+						exit={{ opacity: 0, y: -20, height: 0, scale: 0.7 }}
+						transition={{
+							duration: 0.2,
+							ease: "easeOut",
+						}}
+					>
+						<Card color="card">
+							<CardBody>
+								<div className="flex flex-col gap-4">
+									<h3 className="text-xl text-black/80 dark:text-white/80 font-medium flex flex-col">
+										<div className="flex gap-2 items-center">
+											<AiOutlineCompass className="size-4 shrink-0" />
+											<span className="text-base text-black/80 dark:text-white/80">
+												{collectionData?.title}
+											</span>
+										</div>
+										<span className="text-black/40 dark:text-white/40">
+											{collectionData?.name}
+										</span>
+									</h3>
+									<Divider />
+									<p
+										className="prose max-w-full dark:prose-invert [&_*:last-child]:mb-0 [&_*:first-child]:mt-0 leading-tight"
+										dangerouslySetInnerHTML={{
+											__html: removeTrailingEmptyElements(
+												itemsContext.noteData?.note
+													.note ?? ""
+											),
+										}}
+									/>
+								</div>
+							</CardBody>
+						</Card>
+					</motion.div>
+				)}
+			</AnimatePresence>
+		)
 	);
-  }
+}
+
 export function ResourcesView({
 	extraFilters,
 	params,
