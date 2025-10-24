@@ -267,6 +267,12 @@
 				"title": "Subject areas",
 				"enabled": true
 			}
+		},
+		"itemsMaths": {
+			"Domains": {
+				"title": "Topics",
+				"enabled": true
+			}
 		}
 	}
 }
