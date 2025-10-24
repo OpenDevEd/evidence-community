@@ -294,6 +294,7 @@ export default function Item({
 
 	return (
 		<PageContainer id="main-content" className="flex flex-col gap-4">
+			<abbr className="unapi-id" title={data?.item?.key}></abbr>
 			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
 				{data?.item && (
 					<ItemControls
