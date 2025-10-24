@@ -212,6 +212,7 @@ export function useItemsList(
 				handlePageChange(data.totalPages);
 			}
 			setLastFetchedData(data);
+			document.dispatchEvent(new Event('ZoteroItemUpdated', { bubbles: true, cancelable: true }))
 		},
 	});
 
