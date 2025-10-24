@@ -254,7 +254,6 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 			key: item?.key,
 		}));
 
-	// fs.writeFileSync("items.json", JSON.stringify(items, null, 2));
 	const fieldMaps = new Map<string, string>();
 
 	const screeningFieldsSchema = z.object(
@@ -705,7 +704,7 @@ export async function searchIndex(
 ) {
 	const cacheKey = cleanCacheKey(searchParams, extraFilters, extraProperties);
 
-	const items = unstable_cache(async () => {
+	const items = async () => {
 		const pageNum = Math.max(1, Number(searchParams.page || 1));
 		const limitNum = ITEMS_PER_PAGE;
 		const sort = searchParams.sort || SORT_OPTIONS[0].key;
@@ -808,7 +807,7 @@ export async function searchIndex(
 				}
 			),
 		};
-	}, [cacheKey], { tags: ["searchIndex"], revalidate: 5 });
+	};
 
 	return items();
 }
