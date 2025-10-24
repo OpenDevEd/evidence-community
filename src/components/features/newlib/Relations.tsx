@@ -45,6 +45,7 @@ function Relation({ value }: { value: string }) {
 						isLoading={fetchedItemDataLoading}
 						abstract={false}
 						className="h-full"
+						hideUnapi={true}
 					/>
 				</motion.li>
 			)}
