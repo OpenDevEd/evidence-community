@@ -40,6 +40,7 @@ export default function VectorRelations({ item, loading }: { item: Item | undefi
 					itemData={undefined}
 					abstract={false}
 					isLoading={true}
+					hideUnapi={true}
 				/>
 			)) : embeddings?.hits.map((hit: any, index: number) => (
 				<Resource
@@ -47,6 +48,7 @@ export default function VectorRelations({ item, loading }: { item: Item | undefi
 					itemData={hit}
 					abstract={false}
 					isLoading={false}
+					hideUnapi={true}
 				/>
 			))}
 		</div>

@@ -1,6 +1,6 @@
 import { twMerge } from "tailwind-merge";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
-import { fetcher, firstNonNullOrEmpty, setter } from "@/lib/utils";
+import { fetcher, firstNonNullOrEmpty, setter, transformItem } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import {
 	ModalBody,
@@ -32,6 +32,7 @@ import { serializeSearchParams } from "@/lib/searchParams";
 import { useQueryState } from "nuqs";
 import { COMING_SOON_TAG, INTERNAL_TAG } from "@/constants/items";
 import PrefetchLink from "../PrefetchLink";
+import { generateCOinS } from "@/lib/coins";
 
 export function AddButton({
 	itemData,
@@ -204,6 +205,7 @@ export default function Resource({
 	itemKey,
 	className,
 	as = "li",
+	hideUnapi,
 }: {
 	itemData?: Item | undefined;
 	abstract: boolean;
@@ -214,6 +216,7 @@ export default function Resource({
 	itemKey?: string;
 	className?: string;
 	as?: "li" | "div";
+	hideUnapi?: boolean;
 }) {
 	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("ui");
@@ -251,6 +254,12 @@ export default function Resource({
 				className
 			)}
 		>
+			{/* add COINs here */}
+			{finalItemData && <div className="hidden" dangerouslySetInnerHTML={{ __html: generateCOinS(transformItem(finalItemData) as Item) }} />}
+			{/* unAPI id marker for Zotero */}
+			{finalItemData?.key && !hideUnapi && (
+				<abbr className="unapi-id" title={finalItemData.key}></abbr>
+			)}
 			<PrefetchLink
 				href={finalItemData?.key ? targetHref : ""}
 				className={twMerge(

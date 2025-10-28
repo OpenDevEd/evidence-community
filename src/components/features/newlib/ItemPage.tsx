@@ -1218,6 +1218,10 @@ export default function ItemPage({
 	const loading = data?.item ? false : loadingProp;
 	const isNewResourcePageEnabled = useFeatureFlagEnabled("new-resource-page");
 
+	useEffect(() => {
+		document.dispatchEvent(new Event('ZoteroItemUpdated', { bubbles: true, cancelable: true }))
+	}, [data?.item]);
+
 	if (!isNewResourcePageEnabled) {
 		return <ItemOld data={data} loading={loading} />;
 	}
@@ -1226,6 +1230,7 @@ export default function ItemPage({
 
 	return (
 		<PageContainer>
+			{item && <abbr className="unapi-id" title={item.key}></abbr>}
 			<LoadingContext.Provider value={{ loading }}>
 				<div className="flex flex-col gap-8">
 					<div className="flex flex-col gap-4">

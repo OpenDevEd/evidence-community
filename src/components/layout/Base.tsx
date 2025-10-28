@@ -43,6 +43,9 @@ export default async function Base({
 
 	return (
 		<html lang={locale} dir={dir} suppressHydrationWarning>
+			<head>
+				<link rel="unapi-server" type="application/xml" title="unAPI" href="/api/unapi" />
+			</head>
 			<body
 				className={`${
 					style === "wide" ? montserrat.className : ubuntu.className
