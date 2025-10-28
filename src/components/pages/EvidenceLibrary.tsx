@@ -861,7 +861,7 @@ export function ContentInteractions({
 							duration: 0.4,
 							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
 						}}
-						className="w-full"
+						className="w-full p-1"
 					>
 						<SearchTabContent
 							header={header}
@@ -886,7 +886,7 @@ export function ContentInteractions({
 							duration: 0.4,
 							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
 						}}
-						className="w-full"
+						className="w-full p-1"
 					>
 						<AITabContent
 							onSwitchToSearch={() => setSelectedTab("search")}
@@ -907,7 +907,7 @@ export function ContentInteractions({
 							duration: 0.4,
 							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
 						}}
-						className="w-full"
+						className="w-full p-1"
 					>
 						<AITabContent
 							onSwitchToSearch={() => setSelectedTab("search")}
