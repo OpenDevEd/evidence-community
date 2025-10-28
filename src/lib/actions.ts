@@ -702,7 +702,7 @@ export async function searchIndex(
 		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
 	>["filter"] = []
 ) {
-	const cacheKey = cleanCacheKey(searchParams, extraFilters, extraProperties);
+	// const cacheKey = cleanCacheKey(searchParams, extraFilters, extraProperties);
 
 	const items = async () => {
 		const pageNum = Math.max(1, Number(searchParams.page || 1));
@@ -719,8 +719,10 @@ export async function searchIndex(
 			process.env.MEILI_INDEX || config.index
 		);
 		const sortOption =
-			SORT_OPTIONS.find((option) => option.key === sort)?.sort ||
+			SORT_OPTIONS.find((option) => search.trim().length > 0 ? option.key === sort : option.key === SORT_OPTIONS[1].key)?.sort ||
 			SORT_OPTIONS[0].sort;
+
+		console.log("sortOption", sortOption);
 
 		// Generate hierarchical country filters
 		const countryFilters = createCountryFilters(country, author_country);
