@@ -39,7 +39,7 @@ import LikeButton from "../items/LikeButton";
 import { AddButton } from "../items/Resource";
 import { BiDownload } from "react-icons/bi";
 import { LuDownload } from "react-icons/lu";
-import { createContext, use, useEffect, useState } from "react";
+import { createContext, use, useCallback, useEffect, useState } from "react";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { useQueryState } from "nuqs";
 import ItemOld from "@/components/pages/Item";
@@ -135,18 +135,25 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 	);
 }
 
-function ItemHeader({ item, loadingProp }: { item: Item | undefined, loadingProp: boolean }) {
+function ItemHeader({
+	item,
+	loadingProp,
+}: {
+	item: Item | undefined;
+	loadingProp: boolean;
+}) {
 	const router = useRouter();
 	const { loading } = use(LoadingContext);
 	const tItemType = useTranslations("itemType");
 	const t = useTranslations("ui");
 	const url = process.env.BASE_URL;
 
-	const getUrl = () => {
-		const finalURL = new URL(typeof window !== "undefined" ? window.location.href : url + "/lib/" + item?.key);
+	const getUrl = useCallback(() => {
+		const baseUrl = typeof window !== "undefined" ? window.location.origin : url ?? "";
+		const finalURL = new URL(baseUrl + "/lib/" + item?.key);
 		finalURL.search = "";
 		return finalURL.toString();
-	};
+	}, [item?.key, url]);
 
 	const handleBack = () => {
 		if (window.history.length <= 1) {
@@ -212,10 +219,7 @@ function ItemHeader({ item, loadingProp }: { item: Item | undefined, loadingProp
 							startContent={<LuDownload />}
 							aria-label={t("itemDownloadAriaLabel")}
 						/>
-						<CopyButton
-							textToCopy={getUrl()}
-							label={t("copyLink")}
-						>
+						<CopyButton textToCopy={getUrl()} label={t("copyLink")}>
 							<Button
 								size="sm"
 								aria-label={t("itemCopyUrlAriaLabel")}
@@ -235,7 +239,9 @@ function ItemHeader({ item, loadingProp }: { item: Item | undefined, loadingProp
 							item={item}
 							aria-label={t("itemZoteroOptionsAriaLabel")}
 						/>
-						{!loadingProp && <AiWrapper data={{ item: item }} variant="inline" />}
+						{!loadingProp && (
+							<AiWrapper data={{ item: item }} variant="inline" />
+						)}
 					</div>
 				</div>
 			</Skeleton>
@@ -658,7 +664,9 @@ function ItemDetailsRow({
 								{formattedValue ? (
 									<span
 										dangerouslySetInnerHTML={{
-											__html: ProcessHTML(String(formattedValue) || ""),
+											__html: ProcessHTML(
+												String(formattedValue) || ""
+											),
 										}}
 										className="text-black/80 dark:text-white/80 text-wrap-anywhere"
 									/>
@@ -829,7 +837,6 @@ function ProcessHTML(html: string) {
 		return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-link_light dark:text-link hover:underline">${url}</a>`;
 	});
 }
-
 
 function ItemCitation({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
@@ -1117,7 +1124,11 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 			</p>
 			<div className="flex flex-col gap-4">
 				{validAttachments.map((attachment) => (
-					<Attachment key={attachment.id} data={attachment} item={item!} />
+					<Attachment
+						key={attachment.id}
+						data={attachment}
+						item={item!}
+					/>
 				))}
 			</div>
 		</ItemPropertyRowWrapper>
@@ -1184,9 +1195,11 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 
 	return (
 		<ItemPropertyRowWrapper title={"Notes"}>
-			{notesDescription && <p className="text-black/60 dark:text-white/60">
-				{notesDescription}
-			</p>}
+			{notesDescription && (
+				<p className="text-black/60 dark:text-white/60">
+					{notesDescription}
+				</p>
+			)}
 			<div className="flex flex-col gap-4">
 				{notes.map((note) => (
 					<Card key={note.id} color="card" className="flex flex-col">
@@ -1218,7 +1231,9 @@ export default function ItemPage({
 	const isNewResourcePageEnabled = useFeatureFlagEnabled("new-resource-page");
 
 	useEffect(() => {
-		document.dispatchEvent(new Event('ZoteroItemUpdated', { bubbles: true, cancelable: true }))
+		document.dispatchEvent(
+			new Event("ZoteroItemUpdated", { bubbles: true, cancelable: true })
+		);
 	}, [data?.item]);
 
 	if (!isNewResourcePageEnabled) {
