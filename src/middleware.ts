@@ -6,6 +6,7 @@ import redirections from './constants/redirections.json';
 import { SCOPE_OPTIONS, SORT_OPTIONS } from './constants/items';
 import configJSON from './constants/config.json';
 import { ConsoleLogWriter } from 'drizzle-orm';
+import { PDFDocument } from 'pdf-lib';
 
 export type RateLimit = {
 	count: number;
@@ -133,6 +134,34 @@ function setRateLimitHeaders(response: NextResponse, rateLimit: RateLimit | null
 function fixRequestUrl(request: NextRequest) {
 	const url = request.url.toString();
 	return process.env.REPLACE_HTTPS === "true" ? url.replace("https://", "http://") : url;
+}
+
+async function modifyPDFMetadata(pdfUrl: string, title: string | null): Promise<Uint8Array | null> {
+	try {
+		// Fetch the PDF from the URL
+		const pdfResponse = await fetch(pdfUrl);
+		
+		if (!pdfResponse.ok) {
+			console.error(`Failed to fetch PDF: ${pdfResponse.statusText}`);
+			return null;
+		}
+
+		const pdfBuffer = await pdfResponse.arrayBuffer();
+		
+		// Load the PDF document
+		const pdfDoc = await PDFDocument.load(pdfBuffer);
+		
+		// Set the title in metadata if provided
+		pdfDoc.setTitle(title || "");
+		
+		
+		// Save and return the modified PDF
+		const modifiedPdfBytes = await pdfDoc.save();
+		return modifiedPdfBytes;
+	} catch (error) {
+		console.error("Error modifying PDF metadata:", error);
+		return null;
+	}
 }
 
 function mapLegacySearchParams(request: NextRequest) {
@@ -263,8 +292,35 @@ export default async function middleware(request: NextRequest) {
 				itemPageUrl.searchParams.set('error', 'PDFNotFound');
 				return NextResponse.redirect(itemPageUrl);
 			}
-			const finalURL = new URL(attachment.url, fixRequestUrl(request));
-			return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
+			
+			// Check if this is a PDF by content type
+			const isPDF = attachment.contentType?.toLowerCase().includes('pdf');
+			
+			if (isPDF) {
+				// Modify PDF metadata with attachment title
+				const modifiedPdf = await modifyPDFMetadata(attachment.url, attachment.title);
+				
+				if (modifiedPdf) {
+					// Return the modified PDF - convert Uint8Array to Buffer
+					const response = new NextResponse(Buffer.from(modifiedPdf), {
+						status: 200,
+						headers: {
+							'Content-Type': 'application/pdf',
+							'Content-Disposition': `inline; filename="${attachment.title || 'document'}.pdf"`,
+						},
+					});
+					return setRateLimitHeaders(response, rateLimit);
+				} else {
+					// If modification failed, fall back to rewriting to the original URL
+					console.warn("PDF modification failed, falling back to original URL");
+					const finalURL = new URL(attachment.url, fixRequestUrl(request));
+					return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
+				}
+			} else {
+				// For non-PDF attachments, just rewrite to the original URL
+				const finalURL = new URL(attachment.url, fixRequestUrl(request));
+				return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
+			}
 		} catch (fetchError) {
 			console.error("Fetch error:", fetchError);
 			return NextResponse.json(
