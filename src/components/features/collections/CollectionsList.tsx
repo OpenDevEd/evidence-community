@@ -21,9 +21,11 @@ import { Fragment, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Input } from "../../nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
-import { COUNTRIES, COUNTRY_PARAMS, IS_COUNTRY_LIBRARY, years } from "@/constants/misc";
+import { COUNTRIES, COUNTRY_PARAMS, CUSTOM_FILTER_INSTITUTION, IS_COUNTRY_LIBRARY, years } from "@/constants/misc";
+import { INSTITUTION_LOGOS } from "@/constants/items";
 import { FacetDistribution } from "meilisearch";
 import { LuCheck, LuChevronDown, LuChevronRight, LuX } from "react-icons/lu";
+import { IoFilter } from "react-icons/io5";
 import { useTranslations } from "next-intl";
 import useSWR from "swr";
 import { CacheContext, useFeatureFlagEnabled } from "@/context/Providers";
@@ -643,7 +645,13 @@ function FiltersList({
 			isAuthorLocationEnabled && (
 				<FacetPicker
 					key={"author-location-filter"}
-					label={IS_COUNTRY_LIBRARY ? t("coauthorCountries") : t("authorCountries")}
+					label={
+						author_countries.find(
+							(item) => item.section === "Countries"
+						)?.label
+							? IS_COUNTRY_LIBRARY ? t("coauthorCountries") : t("authorCountries")
+							: t("institutions")
+					}
 					placeholder={
 						author_countries.find(
 							(item) => item.section === "Countries"
@@ -680,7 +688,7 @@ function FiltersList({
 				{authorLocationFilter}
 			</>
 		);
-	}, [countryFocusFilter, authorLocationFilter]);
+	}, [countryFocusFilter, nationalInstitutionsFilter, authorLocationFilter]);
 
 	const isMoreFiltersOpen = globalExpanded["more-filters"] ?? true;
 	const setIsMoreFiltersOpen = (value: boolean) => {
@@ -782,6 +790,7 @@ export default function CollectionsList({
 }) {
 	const t = useTranslations("ui");
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
+	const customFilterInstitution = CUSTOM_FILTER_INSTITUTION;
 
 	const [start, end, sameYear] = useMemo(() => {
 		const dashExists = range.includes("-");
@@ -790,6 +799,29 @@ export default function CollectionsList({
 		const endNumber = end || "";
 		return [startNumber, endNumber, !dashExists];
 	}, [range]);
+
+	const customFilter = useMemo(() => {
+		if (!customFilterInstitution) return null;
+		const isCustomFilterInstitutionSelected = queryParams.institution.includes(customFilterInstitution || "");
+		return (
+			<Button
+				color={isCustomFilterInstitutionSelected ? "tertiary" : "secondary"}
+				variant={isCustomFilterInstitutionSelected ? "solid" : "flat"}
+				onPress={() => handleInstitutionSelect(customFilterInstitution)}
+				className="w-full justify-start mb-4"
+				startContent={
+					INSTITUTION_LOGOS[customFilterInstitution]({
+						className: "h-6 w-auto",
+						width: 24,
+						height: 24,
+					})
+				}
+				endContent={<IoFilter className="size-5 ml-auto" />}
+			>
+				{t("filterBy")} {customFilterInstitution}
+			</Button>
+		);
+	}, [queryParams.institution, handleInstitutionSelect, t]);
 
 	return (
 		<aside
@@ -807,6 +839,11 @@ export default function CollectionsList({
 				className="w-full data-[collections=true]:lg:min-h-screen rounded-2xl"
 				isLoaded={!!data && !!facetDistribution}
 			>
+				{customFilter && (
+					<div className={twMerge("w-full", isModal && "px-6")}>
+						{customFilter}
+					</div>
+				)}
 				<section className="w-full bg-black/[4%] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20">
 					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 						<span>{t("publicationYear")}</span>
