@@ -143,10 +143,9 @@ function ItemHeader({ item, loadingProp }: { item: Item | undefined, loadingProp
 	const url = process.env.BASE_URL;
 
 	const getUrl = () => {
-		if (typeof window !== "undefined") {
-			return window.location.href;
-		}
-		return url;
+		const finalURL = new URL(typeof window !== "undefined" ? window.location.href : url + "/lib/" + item?.key);
+		finalURL.search = "";
+		return finalURL.toString();
 	};
 
 	const handleBack = () => {
@@ -214,7 +213,7 @@ function ItemHeader({ item, loadingProp }: { item: Item | undefined, loadingProp
 							aria-label={t("itemDownloadAriaLabel")}
 						/>
 						<CopyButton
-							textToCopy={getUrl() + "/" + item?.key}
+							textToCopy={getUrl()}
 							label={t("copyLink")}
 						>
 							<Button
