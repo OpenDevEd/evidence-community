@@ -63,14 +63,17 @@ function AiButton({
 		distinctId: posthog.get_distinct_id(),
 	};
 	const locale = useLocale();
+	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
+		useDisclosure();
+
 	const { data: questions } = useSWR(
-		[
+		isChatOpen ? [
 			`/ai/questions`,
 			body,
 			{
 				"Accept-Language": locale,
 			},
-		],
+		] : null,
 		fetcherPOST,
 		{
 			revalidateOnFocus: false,
@@ -82,8 +85,6 @@ function AiButton({
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
 
-	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
-		useDisclosure();
 	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
 		useDisclosure();
 

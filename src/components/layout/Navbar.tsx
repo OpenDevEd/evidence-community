@@ -149,6 +149,7 @@ export function Logo({
 	const { resolvedTheme: theme } = useTheme();
 	const t = useTranslations("ui");
 	const companyLogoStyle = status.companyLogo || "";
+	console.log(status);
 
 	const navbarStyle = dbStyle
 		? convertStringFromDatabaseToObject(companyLogoStyle)[dbStyle]
