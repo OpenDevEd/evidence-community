@@ -299,6 +299,7 @@ export default async function middleware(request: NextRequest) {
 			if (isPDF) {
 				// Modify PDF metadata with attachment title
 				const modifiedPdf = await modifyPDFMetadata(attachment.url, attachment.title);
+				console.log("filename", attachment.title || 'document');
 				
 				if (modifiedPdf) {
 					// Return the modified PDF - convert Uint8Array to Buffer
@@ -306,7 +307,9 @@ export default async function middleware(request: NextRequest) {
 						status: 200,
 						headers: {
 							'Content-Type': 'application/pdf',
-							'Content-Disposition': `inline; filename="${attachment.title || 'document'}.pdf"`,
+							'Content-Disposition': `inline;`,
+							'Item-Key': itemKey,
+							'Attachment-Key': attachmentKey,
 						},
 					});
 					return setRateLimitHeaders(response, rateLimit);
