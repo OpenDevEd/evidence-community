@@ -190,8 +190,13 @@ export async function generateMetadata(props: {
 							.map(([_, value]) => value)
 							.join(", ")
 					) ?? [],
-			publishedTime: item.date?.toString() ?? "",
-			modifiedTime: (item.dateModified ?? item.date)?.toString() ?? "",
+			publishedTime: item.date
+				? new Date(item.date).toISOString()
+				: undefined,
+			modifiedTime: (() => {
+				const dateToUse = item.dateModified ?? item.date;
+				return dateToUse ? new Date(dateToUse).toISOString() : undefined;
+			})(),
 		},
 	};
 }
