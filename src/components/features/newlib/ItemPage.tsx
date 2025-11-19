@@ -48,6 +48,7 @@ import {
 	FUNDING_PARTNER,
 	INSTITUTIONS_NAME,
 	NOTES_DESCRIPTION,
+	SHOW_URL_IN_CITATION,
 } from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
 import { INTERNAL_TAG } from "@/constants/items";
@@ -469,14 +470,12 @@ function ItemAuthor({ author }: { author?: Author }) {
 															/>
 														</div>
 														<span className="text-xs text-black/60 dark:text-white/60">
-															{`${
-																COUNTRIES[
-																	institution
-																		.country_code
-																]
-															} (${
-																institution.country_code
-															})`}
+															{`${COUNTRIES[
+																institution
+																	.country_code
+															]
+																} (${institution.country_code
+																})`}
 														</span>
 													</motion.div>
 												)}
@@ -524,11 +523,11 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 		<SidebarCard title={t("itemAuthorsTitle")} count={authors?.length}>
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
-						<ItemAuthor key={index} author={undefined} />
-				  ))
+					<ItemAuthor key={index} author={undefined} />
+				))
 				: authors?.map((author: Author, index: number) => (
-						<ItemAuthor key={index} author={author} />
-				  ))}
+					<ItemAuthor key={index} author={author} />
+				))}
 		</SidebarCard>
 	);
 }
@@ -543,9 +542,9 @@ function ItemInstitution({ institution }: { institution?: string }) {
 			params={
 				institution && isAuthorLocationEnabled
 					? {
-							institution: [institution],
-							referrer: referrer ?? undefined,
-					  }
+						institution: [institution],
+						referrer: referrer ?? undefined,
+					}
 					: {}
 			}
 			className="opacity-100"
@@ -576,16 +575,16 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 		>
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
-						<ItemInstitution key={index} institution={undefined} />
-				  ))
+					<ItemInstitution key={index} institution={undefined} />
+				))
 				: Array.from(new Set(institutions)).map(
-						(institution: string) => (
-							<ItemInstitution
-								key={institution}
-								institution={institution}
-							/>
-						)
-				  )}
+					(institution: string) => (
+						<ItemInstitution
+							key={institution}
+							institution={institution}
+						/>
+					)
+				)}
 		</SidebarCard>
 	);
 }
@@ -737,21 +736,21 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		<SidebarCard title={t("itemPublicationDetailsTitle")}>
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
-						<ItemDetailsRow key={index} detail={undefined} />
-				  ))
+					<ItemDetailsRow key={index} detail={undefined} />
+				))
 				: details
-						.filter(
-							(detail) =>
-								!excludedFields.includes(
-									detail.label as keyof Item
-								)
-						)
-						.map((detail) => (
-							<ItemDetailsRow
-								key={detail.label}
-								detail={detail}
-							/>
-						))}
+					.filter(
+						(detail) =>
+							!excludedFields.includes(
+								detail.label as keyof Item
+							)
+					)
+					.map((detail) => (
+						<ItemDetailsRow
+							key={detail.label}
+							detail={detail}
+						/>
+					))}
 		</SidebarCard>
 	);
 }
@@ -771,17 +770,17 @@ function ItemTechnical({ item }: { item: Item | undefined }) {
 		<SidebarCard title={t("itemTechnicalDetailsTitle")} color="card">
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
-						<ItemDetailsRow key={index} detail={undefined} />
-				  ))
+					<ItemDetailsRow key={index} detail={undefined} />
+				))
 				: Object.entries(keyValues).map(([key, value]) => (
-						<ItemDetailsRow
-							key={key}
-							detail={{
-								label: key,
-								value: value,
-							}}
-						/>
-				  ))}
+					<ItemDetailsRow
+						key={key}
+						detail={{
+							label: key,
+							value: value,
+						}}
+					/>
+				))}
 		</SidebarCard>
 	);
 }
@@ -842,9 +841,18 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const citationText = item?.citation?.replace(/<[^>]+>/g, "") || undefined;
 
-	const citationTextWithSymbols = citationText
+	let citationTextWithSymbols = citationText
 		? decodeHTMLEntities(citationText)
 		: undefined;
+
+	if (SHOW_URL_IN_CITATION && item?.key && citationTextWithSymbols) {
+		const url = typeof window !== "undefined" ? window.location.origin : "";
+		const finalURL = new URL(url + "/lib/" + item.key);
+		if (!citationTextWithSymbols.endsWith(".")) {
+			citationTextWithSymbols += ".";
+		}
+		citationTextWithSymbols += ` Available at ${finalURL}`;
+	}
 
 	return (
 		<ItemPropertyRowWrapper
@@ -873,7 +881,23 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 					>
 						<p
 							dangerouslySetInnerHTML={{
-								__html: ProcessHTML(item?.citation || ""),
+								__html: ProcessHTML(
+									(() => {
+										let html = (item?.citation || "").trim();
+										if (SHOW_URL_IN_CITATION && item?.key) {
+											const url = typeof window !== "undefined" ? window.location.origin : "";
+											const finalURL = new URL(url + "/lib/" + item.key);
+											const link = ` Available at ${finalURL}`;
+
+											if (/<\/div>\s*$/.test(html)) {
+												html = html.replace(/(?:\.\s*)?<\/div>\s*$/, `.${link}</div>`);
+											} else {
+												html = html.replace(/(?:\.\s*)?$/, `.${link}`);
+											}
+										}
+										return html;
+									})()
+								),
 							}}
 							className="text-base text-black/60 dark:text-white/60 text-wrap-anywhere"
 						/>

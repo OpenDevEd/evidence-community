@@ -20,7 +20,7 @@ import Resource from "@/components/features/items/Resource";
 import useSWR from "swr";
 import { MdSearchOff } from "react-icons/md";
 import { serializeSearchParams } from "./searchParams";
-import { COUNTRY_PARAMS } from "@/constants/misc";
+import { COUNTRY_PARAMS, SHOW_URL_IN_CITATION } from "@/constants/misc";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 
 type FormatterProps = {
@@ -71,10 +71,24 @@ function formatDate({ value, formatter }: FormatterProps) {
 	return <p>{returnedDate}</p>;
 }
 
-function Citation({ value, loading }: FormatterProps) {
+function Citation({ value, loading, item }: FormatterProps) {
 	const contentRef = useRef(null);
 	const [showSkeleton, setShowSkeleton] = useState(true);
-	const sanitizedHtml = value.trim().replace(/<\/?div/g, "<p");
+	let sanitizedHtml = value.trim();
+
+	if (SHOW_URL_IN_CITATION && item?.key) {
+		const url = typeof window !== "undefined" ? window.location.origin : "";
+		const finalURL = new URL(url + "/lib/" + item.key);
+		const link = ` Available at <a href="${finalURL}" target="_blank" rel="noopener noreferrer">${finalURL}</a>`;
+
+		if (/<\/div>\s*$/.test(sanitizedHtml)) {
+			sanitizedHtml = sanitizedHtml.replace(/(?:\.\s*)?<\/div>\s*$/, `.${link}</div>`);
+		} else {
+			sanitizedHtml = sanitizedHtml.replace(/(?:\.\s*)?$/, `.${link}`);
+		}
+	}
+
+	sanitizedHtml = sanitizedHtml.replace(/<\/?div/g, "<p");
 
 	useEffect(() => {
 		const timer = setTimeout(() => {
