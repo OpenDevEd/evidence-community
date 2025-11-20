@@ -51,7 +51,7 @@ import {
 	SHOW_URL_IN_CITATION,
 } from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
-import { INTERNAL_TAG } from "@/constants/items";
+import { INTERNAL_TAG, PUBLISH_TAGS } from "@/constants/items";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -1211,11 +1211,18 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 		(attachment) =>
 			attachment.itemType === "Note" &&
 			attachment.note &&
-			attachment.tags?.includes("_publish")
+			PUBLISH_TAGS.some((tag) => attachment.tags?.includes(tag))
 	);
+	const links = item?.attachmentsData?.filter(
+		(attachment) =>
+			attachment.linkMode === "linked_url" &&
+			attachment.url &&
+			PUBLISH_TAGS.some((tag) => attachment.tags?.includes(tag))
+	);
+
 	const notesDescription = useNotesDescription();
 
-	if (!notes?.length) return null;
+	if (!notes?.length && !links?.length) return null;
 
 	return (
 		<ItemPropertyRowWrapper title={"Notes"}>
@@ -1225,7 +1232,7 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 				</p>
 			)}
 			<div className="flex flex-col gap-4">
-				{notes.map((note) => (
+				{notes?.map((note) => (
 					<Card key={note.id} color="card" className="flex flex-col">
 						<div
 							className="[&_a]:text-link_light dark:[&_a]:text-link"
@@ -1238,6 +1245,29 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 							}}
 						/>
 					</Card>
+				))}
+				{links?.map((link) => (
+					<a
+						key={link.id}
+						href={link.url || ""}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="no-underline group"
+					>
+						<Card
+							color="card"
+							className="flex flex-col p-4 transition-colors hover:bg-accent/5 group-hover:border-accent/50"
+						>
+							<div className="flex items-center gap-2 text-link_light dark:text-link font-medium">
+								{link.title || link.url}
+							</div>
+							{link.title && link.url && (
+								<div className="text-sm text-black/60 dark:text-white/60 break-all mt-1">
+									{link.url}
+								</div>
+							)}
+						</Card>
+					</a>
 				))}
 			</div>
 		</ItemPropertyRowWrapper>

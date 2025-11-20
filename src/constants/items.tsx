@@ -180,3 +180,4 @@ export const COMING_SOON_TAG = process.env.NEXT_PUBLIC_COMING_SOON_TAG || "_comi
 export const INTERNAL_TAG = process.env.NEXT_PUBLIC_INTERNAL_TAG || "internal"
 export const HIDE_TAG = process.env.NEXT_PUBLIC_HIDE_TAG || "hide"
 export const DESCRIPTION_TAG = process.env.NEXT_PUBLIC_DESCRIPTION_TAG || "_category_description"
+export const PUBLISH_TAGS = (process.env.NEXT_PUBLIC_PUBLISH_TAGS || "_publish,publishPDF").split(",")
