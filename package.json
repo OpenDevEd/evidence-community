@@ -1,6 +1,6 @@
 {
   "name": "test",
-  "version": "0.5.9",
+  "version": "0.6.0",
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
@@ -22,7 +22,6 @@
     "@citation-js/plugin-bibtex": "^0.7.17",
     "@citation-js/plugin-csl": "^0.7.14",
     "@citation-js/plugin-ris": "^0.7.16",
-    "@google/generative-ai": "^0.21.0",
     "@next/third-parties": "^15.2.4",
     "@nextui-org/react": "^2.6.11",
     "@tanstack/react-form": "^1.6.3",
@@ -73,6 +72,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
+    "@google/generative-ai": "^0.24.1",
     "@tailwindcss/container-queries": "^0.1.1",
     "@tailwindcss/typography": "^0.5.15",
     "@types/balanced-match": "^3.0.2",

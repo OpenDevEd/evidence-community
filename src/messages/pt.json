@@ -495,7 +495,8 @@
     "fields": "Todos os metadados",
     "documents": "Somente texto completo",
     "title_and_abstract": "Título e resumo",
-    "title_abstract_and_keywords": "Título, resumo e palavras-chave"
+    "title_abstract_and_keywords": "Título, resumo e palavras-chave",
+    "title_abstract_author_and_keywords": "Título, resumo, autores e palavras-chave"
   },
   "nav": {
     "home": "Início",

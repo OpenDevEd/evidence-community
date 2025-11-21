@@ -495,7 +495,8 @@
     "fields": "सभी मेटाडेटा",
     "documents": "सिर्फ़ पूरा पाठ",
     "title_and_abstract": "शीर्षक और सार",
-    "title_abstract_and_keywords": "शीर्षक, सार और कीवर्ड"
+    "title_abstract_and_keywords": "शीर्षक, सार और कीवर्ड",
+    "title_abstract_author_and_keywords": "शीर्षक, सार, लेखक और कीवर्ड"
   },
   "nav": {
     "home": "होम",

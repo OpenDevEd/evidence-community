@@ -496,7 +496,8 @@
     "fields": "Data zote za metadata",
     "documents": "Nakala kamili tu",
     "title_and_abstract": "Kichwa na muhtasari",
-    "title_abstract_and_keywords": "Kichwa, muhtasari na maneno muhimu"
+    "title_abstract_and_keywords": "Kichwa, muhtasari na maneno muhimu",
+    "title_abstract_author_and_keywords": "Kichwa, muhtasari, waandishi na maneno muhimu"
   },
   "nav": {
     "home": "Nyumbani",

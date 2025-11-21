@@ -495,7 +495,8 @@
     "fields": "Toutes les métadonnées",
     "documents": "Texte intégral seulement",
     "title_and_abstract": "Titre et résumé",
-    "title_abstract_and_keywords": "Titre, résumé et mots-clés"
+    "title_abstract_and_keywords": "Titre, résumé et mots-clés",
+    "title_abstract_author_and_keywords": "Titre, résumé, auteurs et mots-clés"
   },
   "nav": {
     "home": "Accueil",

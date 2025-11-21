@@ -495,7 +495,8 @@
     "fields": "Alle Metadaten",
     "documents": "Nur vollständiger Text",
     "title_and_abstract": "Titel und Zusammenfassung",
-    "title_abstract_and_keywords": "Titel, Zusammenfassung und Schlüsselwörter"
+    "title_abstract_and_keywords": "Titel, Zusammenfassung und Schlüsselwörter",
+    "title_abstract_author_and_keywords": "Titel, Abstract, Autoren und Stichwörter"
   },
   "nav": {
     "home": "Startseite",

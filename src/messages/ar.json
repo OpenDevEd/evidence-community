@@ -495,7 +495,8 @@
     "fields": "كل البيانات الوصفية",
     "documents": "النص الكامل فقط",
     "title_and_abstract": "العنوان والملخص",
-    "title_abstract_and_keywords": "عنوان، ملخص و كلمات مفتاحية"
+    "title_abstract_and_keywords": "عنوان، ملخص و كلمات مفتاحية",
+    "title_abstract_author_and_keywords": "العنوان، الملخص، المؤلفون والكلمات المفتاحية"
   },
   "nav": {
     "home": "الرئيسية",

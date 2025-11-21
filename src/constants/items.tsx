@@ -129,6 +129,12 @@ export const ITEM_COLUMNS = Object.values(getTableColumns(item)).map(
 
 export const SCOPE_OPTIONS = [
 	{
+		key: "title_abstract_author_and_keywords",
+		legacyKey: "title_and_abstract",
+		name: "Title, abstract, authors and keywords",
+		attributesToSearchOn: ["title", "abstractNote", "tags", "fullNames"],
+	},
+	{
 		key: "title_abstract_and_keywords",
 		legacyKey: "title_and_abstract",
 		name: "Title, abstract and keywords",

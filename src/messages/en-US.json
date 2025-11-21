@@ -484,7 +484,8 @@
     "fields": "All metadata",
     "documents": "Full text only",
     "title_and_abstract": "Title and abstract",
-    "title_abstract_and_keywords": "Title, abstract and keywords"
+    "title_abstract_and_keywords": "Title, abstract and keywords",
+    "title_abstract_author_and_keywords": "Title, abstract, authors, and keywords"
   },
   "nav": {
     "home": "Home",

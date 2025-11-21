@@ -495,7 +495,8 @@
     "fields": "所有元数据",
     "documents": "仅全文",
     "title_and_abstract": "标题和摘要",
-    "title_abstract_and_keywords": "标题、摘要和关键词"
+    "title_abstract_and_keywords": "标题、摘要和关键词",
+    "title_abstract_author_and_keywords": "标题、摘要、作者和关键词"
   },
   "nav": {
     "home": "首页",
