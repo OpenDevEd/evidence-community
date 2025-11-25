@@ -718,8 +718,13 @@ export async function searchIndex(
 		const searchIndex = meilisearchClient.index(
 			process.env.MEILI_INDEX || config.index
 		);
+		// If no search query and relevance is selected, default to desc (newest)
+		// Otherwise, use the selected sort
+		const effectiveSort = search.trim().length === 0 && sort === SORT_OPTIONS[0].key
+			? SORT_OPTIONS[1].key
+			: sort;
 		const sortOption =
-			SORT_OPTIONS.find((option) => search.trim().length > 0 ? option.key === sort : option.key === SORT_OPTIONS[1].key)?.sort ||
+			SORT_OPTIONS.find((option) => option.key === effectiveSort)?.sort ||
 			SORT_OPTIONS[0].sort;
 
 		console.log("sortOption", sortOption);
