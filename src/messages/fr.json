@@ -443,7 +443,12 @@
     "deepResearch": "Recherche approfondie",
     "searchTooltip": "Trouvez des documents et des preuves dans toute la bibliothèque.",
     "quickAnswerTooltip": "Obtenez une réponse rapide générée par l'IA à partir de la bibliothèque de preuves.",
-    "deepResearchTooltip": "Exécutez une analyse d'IA plus lente et approfondie pour des informations complètes."
+    "deepResearchTooltip": "Exécutez une analyse d'IA plus lente et approfondie pour des informations complètes.",
+    "citesResource": "Les ressources suivantes sont citées par cette publication.",
+    "citedByResource": "Les ressources suivantes citent cette publication.",
+    "cites": "Ressources citées",
+    "citedBy": "Citer des ressources",
+    "references": "références"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",

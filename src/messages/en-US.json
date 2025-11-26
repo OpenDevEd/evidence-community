@@ -432,7 +432,12 @@
     "deepResearch": "Deep Research",
     "searchTooltip": "Find documents and evidence across the library.",
     "quickAnswerTooltip": "Get a fast AI-generated response from the evidence library.",
-    "deepResearchTooltip": "Run a slower, in-depth AI analysis for comprehensive insights."
+    "deepResearchTooltip": "Run a slower, in-depth AI analysis for comprehensive insights.",
+    "citesResource": "The following resources are cited by this publication.",
+    "citedByResource": "The following resources cite this publication.",
+    "cites": "Cited Resources",
+    "citedBy": "Citing Resources",
+    "references": "references"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

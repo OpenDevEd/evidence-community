@@ -443,7 +443,12 @@
     "deepResearch": "Pesquisa aprofundada",
     "searchTooltip": "Encontre documentos e evidências em toda a biblioteca.",
     "quickAnswerTooltip": "Obtenha uma resposta rápida gerada por IA da biblioteca de evidências.",
-    "deepResearchTooltip": "Execute uma análise de IA mais lenta e aprofundada para obter informações abrangentes."
+    "deepResearchTooltip": "Execute uma análise de IA mais lenta e aprofundada para obter informações abrangentes.",
+    "citesResource": "Os seguintes recursos são citados por esta publicação.",
+    "citedByResource": "Os seguintes recursos citam esta publicação.",
+    "cites": "Recursos Citados",
+    "citedBy": "Citando Recursos",
+    "references": "referências"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

@@ -444,7 +444,12 @@
     "deepResearch": "Utafiti wa kina",
     "searchTooltip": "Pata hati na ushahidi katika maktaba.",
     "quickAnswerTooltip": "Pata majibu ya haraka yanayozalishwa na AI kutoka kwa maktaba ya ushahidi.",
-    "deepResearchTooltip": "Endesha uchambuzi wa AI wa polepole na wa kina kwa maarifa kamili."
+    "deepResearchTooltip": "Endesha uchambuzi wa AI wa polepole na wa kina kwa maarifa kamili.",
+    "citesResource": "Rasilimali zifuatazo zimetajwa na chapisho hili.",
+    "citedByResource": "Rasilimali zifuatazo zinataja chapisho hili.",
+    "cites": "Rasilimali Zilizotajwa",
+    "citedBy": "Kutaja Rasilimali",
+    "references": "marejeleo"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
