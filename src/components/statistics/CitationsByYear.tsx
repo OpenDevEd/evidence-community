@@ -2,7 +2,7 @@ import { useMemo, useState, memo, Fragment } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
-import { BsBarChart, BsFilter, BsX, BsBuilding, BsFolder, BsFileText, BsCalculator } from "react-icons/bs";
+import { BsBarChart, BsFilter, BsX, BsBuilding, BsFolder, BsFileText, BsCalculator, BsQuote } from "react-icons/bs";
 import {
 	LineChart,
 	Line,
@@ -183,7 +183,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 	const hasActiveFilters = selectedInstitution !== "all" || selectedTopic !== "all";
 
 	return (
-		<SectionCard title={t("citationsByYear")} icon={BsBarChart}>
+		<SectionCard title={t("citationsByYear")} icon={BsQuote}>
 			<div className="space-y-8">
 				{/* Filter Controls */}
 				<motion.div variants={itemVariants} className="space-y-4">

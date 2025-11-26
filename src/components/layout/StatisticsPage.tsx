@@ -31,6 +31,7 @@ import {
 	BsActivity,
 	BsCheckCircle,
 	BsGraphUp,
+	BsQuote,
 	BsPaperclip,
 	BsFlag,
 	BsSearch,
@@ -881,7 +882,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 						value={stats.citationStats.totalCitations}
 							subtitle={`${stats.citationStats.citationPercentage
 						}% ${t("haveCitations")}`}
-						icon={BsGraphUp}
+						icon={BsQuote}
 						color="success"
 					/>
 						<StatCard
@@ -1047,7 +1048,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 				</div>
 
 				{/* Citation Analysis */}
-				<SectionCard title={t("citationAnalysis")} icon={BsGraphUp}>
+				<SectionCard title={t("citationAnalysis")} icon={BsQuote}>
 					<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
 						<div className="text-center p-6 rounded-xl bg-success/10">
 							<div className="text-3xl font-bold text-success mb-2">
