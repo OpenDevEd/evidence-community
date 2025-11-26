@@ -13,6 +13,7 @@ import {
 	IoChevronBack,
 	IoDownload,
 } from "react-icons/io5";
+import { BsQuote } from "react-icons/bs";
 import { Avatar } from "@nextui-org/avatar";
 import { HiAcademicCap } from "react-icons/hi2";
 import { useFormatter, useTranslations } from "next-intl";
@@ -74,7 +75,12 @@ const decodeHTMLEntities = (text: string) => {
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
 	const relations = item.relations as RelationsType;
-	return relations?.cited_by || 0;
+	if (!relations) return 0;
+	
+	const citedByCount = relations.cited_by || 0;
+	const citedByArrayCount = Array.isArray(relations.citedBy) ? relations.citedBy.length : 0;
+	
+	return citedByCount + citedByArrayCount;
 }
 
 function formatInstitutions(institutions: string[] | undefined) {
@@ -189,7 +195,7 @@ function ItemHeader({
 						</HeaderSection>
 						{getCitationCount(item) > 0 && (
 							<HeaderSection>
-								<IoBook className="size-4" />
+								<BsQuote className="size-4" />
 								{getCitationCount(item)}{" "}
 								{t("itemCitationsCount")}
 							</HeaderSection>
@@ -1179,15 +1185,36 @@ function ItemVectorRelations({ item }: { item: Item | undefined }) {
 function ItemRelations({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const relations = item?.relations as RelationsType;
+	const [selectedTab, setSelectedTab] = useState("general");
+
+	const descriptions: Record<string, string> = {
+		general: t("relatedResourcesByCitation"),
+		cites: t("citesResource"),
+		citedBy: t("citedByResource"),
+	};
+
 	// if (!relations) return null;
 
 	return (
-		<ItemPropertyRowWrapper title={t("relatedResources")}>
+		<div className="flex flex-col gap-4">
+			<div className="w-full">
+				<Relations
+					value={item?.relations as RelationsType}
+					selectedTab={selectedTab}
+					onTabChange={setSelectedTab}
+					showTabsOnly={true}
+				/>
+			</div>
 			<p className="text-black/60 dark:text-white/60">
-				{t("relatedResourcesByCitation")}
+				{descriptions[selectedTab] || descriptions.general}
 			</p>
-			<Relations value={item?.relations as RelationsType} />
-		</ItemPropertyRowWrapper>
+			<Relations
+				value={item?.relations as RelationsType}
+				selectedTab={selectedTab}
+				onTabChange={setSelectedTab}
+				showContentOnly={true}
+			/>
+		</div>
 	);
 }
 
