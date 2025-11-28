@@ -449,7 +449,15 @@
     "citedByResource": "Rasilimali zifuatazo zinataja chapisho hili.",
     "cites": "Rasilimali Zilizotajwa",
     "citedBy": "Kutaja Rasilimali",
-    "references": "marejeleo"
+    "references": "marejeleo",
+    "citingResources": "Kutaja Rasilimali",
+    "noCitingResources": "Hakuna rasilimali za kunukuu zilizopatikana kwenye hifadhidata",
+    "avgCitationsPerYear": "Wastani wa Nukuu/Mwaka",
+    "peakYear": "Mwaka wa Kilele",
+    "previous": "Iliyopita",
+    "next": "Ifuatayo",
+    "citationsByCountryFocus": "Nukuu kwa Kuzingatia Nchi",
+    "percentOfTotal": "{percentage}% ya jumla"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",

@@ -21,6 +21,7 @@ import { useSession } from "next-auth/react";
 import LikeButton from "./LikeButton";
 import { BsPlus, BsQuote } from "react-icons/bs";
 import { TbBlockquote } from "react-icons/tb";
+import { IoChevronForward } from "react-icons/io5";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
@@ -142,13 +143,17 @@ function CitationCounts({ itemData }: { itemData: Item | undefined }) {
 	if (citesCount === 0 && citedByCount === 0) return null;
 	
 	return (
-		<div className="flex items-center gap-2">
+		<div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
 			{citedByCount > 0 && (
-				<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium">
+				<Link
+					href={`/citation/${itemData?.key}`}
+					className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
+				>
 					<BsQuote className="size-3.5" />
 					<span>{citedByCount}</span>
 					<span className="text-accent/70 hidden @[480px]:inline">{t("citationsLowercase")}</span>
-				</span>
+					<IoChevronForward className="size-3 opacity-50 ml-0.5" />
+				</Link>
 			)}
 			{citesCount > 0 && (
 				<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/70 text-xs font-medium">

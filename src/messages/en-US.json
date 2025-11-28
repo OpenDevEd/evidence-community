@@ -437,7 +437,15 @@
     "citedByResource": "The following resources cite this publication.",
     "cites": "Cited Resources",
     "citedBy": "Citing Resources",
-    "references": "references"
+    "references": "references",
+    "citingResources": "Citing Resources",
+    "noCitingResources": "No citing resources found in the database",
+    "avgCitationsPerYear": "Avg Citations/Year",
+    "peakYear": "Peak Year",
+    "previous": "Previous",
+    "next": "Next",
+    "citationsByCountryFocus": "Citations by Country Focus",
+    "percentOfTotal": "{percentage}% of total"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

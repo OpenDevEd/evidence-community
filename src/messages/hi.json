@@ -252,7 +252,7 @@
     "citationsColumn": "उद्धरण",
     "avgPerItemColumn": "औसत/आइटम",
     "languageDistribution": "भाषा वितरण",
-    "countries": "देशों",
+    "countries": "देश",
     "uniqueAuthors": "अद्वितीय लेखक",
     "itemsLowercase": "मदें",
     "authorCountriesTable": "लेखक देश तालिका",
@@ -448,7 +448,15 @@
     "citedByResource": "निम्नलिखित संसाधन इस प्रकाशन का हवाला देते हैं।",
     "cites": "उद्धृत संसाधन",
     "citedBy": "संसाधनों का हवाला देना",
-    "references": "संदर्भ"
+    "references": "संदर्भ",
+    "citingResources": "संसाधनों का हवाला देते हुए",
+    "noCitingResources": "डेटाबेस में कोई उद्धरण संसाधन नहीं मिला",
+    "avgCitationsPerYear": "औसत उद्धरण/वर्ष",
+    "peakYear": "चरम वर्ष",
+    "previous": "पिछला",
+    "next": "अगला",
+    "citationsByCountryFocus": "देश फोकस द्वारा उद्धरण",
+    "percentOfTotal": "{percentage}% कुल का"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",

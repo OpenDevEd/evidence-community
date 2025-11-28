@@ -32,6 +32,7 @@ import { DownloadButton } from "@/components/features/newlib/DownloadModal";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
 import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import LinkWithParams from "../LinkWithParams";
+import { Link } from "@/i18n/routing";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { Tooltip } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -44,12 +45,15 @@ import { createContext, use, useCallback, useEffect, useState } from "react";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { useQueryState } from "nuqs";
 import ItemOld from "@/components/pages/Item";
+import ItemHeader from "@/components/features/newlib/ItemHeader";
+import ItemTitle from "@/components/features/newlib/ItemTitle";
 import {
 	COUNTRIES,
 	FUNDING_PARTNER,
 	INSTITUTIONS_NAME,
 	NOTES_DESCRIPTION,
 	SHOW_URL_IN_CITATION,
+	getSafeReferrer,
 } from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
 import { INTERNAL_TAG, PUBLISH_TAGS } from "@/constants/items";
@@ -72,49 +76,7 @@ const decodeHTMLEntities = (text: string) => {
 		.replace(/<[^>]*>?/g, "");
 };
 
-function getCitationCount(item: Item | undefined) {
-	if (!item) return 0;
-	const relations = item.relations as RelationsType;
-	if (!relations) return 0;
-	
-	const citedByCount = relations.cited_by || 0;
-	const citedByArrayCount = Array.isArray(relations.citedBy) ? relations.citedBy.length : 0;
-	
-	return citedByCount + citedByArrayCount;
-}
 
-function formatInstitutions(institutions: string[] | undefined) {
-	if (!institutions || institutions.length === 0) return "";
-	if (institutions.length === 1) return institutions[0];
-	return `${institutions[0]} +${institutions.length - 1} others`;
-}
-
-function HeaderSection({ children }: { children: React.ReactNode }) {
-	return (
-		<div className="flex items-center gap-2 text-black/60 dark:text-white/60">
-			{children}
-		</div>
-	);
-}
-
-function ItemHeaderInstitution({ item }: { item: Item | undefined }) {
-	if (!item?.institution?.length) return null;
-	return (
-		<Card className="p-1 px-3 text-sm bg-default-100 select-none">
-			{formatInstitutions(item?.institution as string[])}
-		</Card>
-	);
-}
-
-function ItemHeaderInternal({ item }: { item: Item | undefined }) {
-	const t = useTranslations("ui");
-	if (!item?.tags?.includes(INTERNAL_TAG)) return null;
-	return (
-		<Card className="p-1 px-3 text-sm bg-default-100 select-none">
-			{"Available on request"}
-		</Card>
-	);
-}
 
 interface ItemRowProps {
 	icon: React.ReactNode;
@@ -142,131 +104,9 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 	);
 }
 
-function ItemHeader({
-	item,
-	loadingProp,
-}: {
-	item: Item | undefined;
-	loadingProp: boolean;
-}) {
-	const router = useRouter();
-	const { loading } = use(LoadingContext);
-	const tItemType = useTranslations("itemType");
-	const t = useTranslations("ui");
-	const url = process.env.BASE_URL;
 
-	const getUrl = useCallback(() => {
-		const baseUrl = typeof window !== "undefined" ? window.location.origin : url ?? "";
-		const finalURL = new URL(baseUrl + "/lib/" + item?.key);
-		finalURL.search = "";
-		return finalURL.toString();
-	}, [item?.key, url]);
 
-	const handleBack = () => {
-		if (window.history.length <= 1) {
-			router.push("/");
-		} else {
-			router.back();
-		}
-	};
 
-	return (
-		<div className="w-full flex items-center gap-4 flex-wrap">
-			<Skeleton isLoaded={!loading} className="rounded-2xl w-full">
-				<div className="flex items-center gap-4 flex-wrap">
-					<Button
-						variant="transparent"
-						size="sm"
-						className="rounded-2xl"
-						onPressStart={handleBack}
-						startContent={
-							<IoChevronBack className="rtl:rotate-180" />
-						}
-						aria-label={t("itemBackAriaLabel")}
-					>
-						{t("itemBack")}
-					</Button>
-					<ItemHeaderInstitution item={item} />
-					<ItemHeaderInternal item={item} />
-					<div className="flex items-center gap-4 flex-wrap">
-						<HeaderSection>
-							<FaCalendar className="size-4" />
-							{item?.year}
-						</HeaderSection>
-						{getCitationCount(item) > 0 && (
-							<HeaderSection>
-								<BsQuote className="size-4" />
-								{getCitationCount(item)}{" "}
-								{t("itemCitationsCount")}
-							</HeaderSection>
-						)}
-						<HeaderSection>
-							<IoDocumentText className="size-4" />
-							{item?.itemType ? tItemType(item?.itemType) : "-"}
-						</HeaderSection>
-					</div>
-					<div className="ltr:ml-auto rtl:mr-auto flex flex-row-reverse items-center gap-2 flex-wrap">
-						{/* {item?.url && (
-							<a href={item.url} target="_blank">
-								<Button
-									size="sm"
-									color="accent"
-									startContent={<IoOpenOutline />}
-									aria-label={t("itemViewOriginalAriaLabel")}
-								>
-									{t("itemViewOriginal")}
-								</Button>
-							</a>
-						)} */}
-						<DownloadButton
-							size="sm"
-							fileName={item?.key || ""}
-							isIconOnly
-							itemData={item}
-							startContent={<LuDownload />}
-							aria-label={t("itemDownloadAriaLabel")}
-						/>
-						<CopyButton textToCopy={getUrl()} label={t("copyLink")}>
-							<Button
-								size="sm"
-								aria-label={t("itemCopyUrlAriaLabel")}
-							>
-								{t("copyLink")}
-							</Button>
-						</CopyButton>
-						<LikeButton
-							itemData={item}
-							aria-label={t("itemLikeAriaLabel")}
-						/>
-						<AddButton
-							itemData={item}
-							aria-label={t("itemAddToCollectionAriaLabel")}
-						/>
-						<ZoteroDropdown
-							item={item}
-							aria-label={t("itemZoteroOptionsAriaLabel")}
-						/>
-						{!loadingProp && (
-							<AiWrapper data={{ item: item }} variant="inline" />
-						)}
-					</div>
-				</div>
-			</Skeleton>
-		</div>
-	);
-}
-
-function ItemTitle({ item }: { item: Item | undefined }) {
-	const { loading } = use(LoadingContext);
-
-	const escapedTitle = decodeHTMLEntities(item?.title || "");
-
-	return (
-		<Skeleton isLoaded={!loading} className="rounded-2xl w-full min-h-9">
-			<h1 className="text-3xl font-medium">{escapedTitle || "-"}</h1>
-		</Skeleton>
-	);
-}
 
 function formatAuthor(author: Author) {
 	if (author.name) return author.name;
@@ -426,7 +266,7 @@ function ItemAuthor({ author }: { author?: Author }) {
 										key={idx}
 										href={
 											isAuthorFilterEnabled
-												? referrer ?? `/lib`
+												? getSafeReferrer(referrer)
 												: undefined
 										}
 										params={{
@@ -495,7 +335,7 @@ function ItemAuthor({ author }: { author?: Author }) {
 			}
 		>
 			<LinkWithParams
-				href={isAuthorFilterEnabled ? referrer ?? `/lib` : undefined}
+				href={isAuthorFilterEnabled ? getSafeReferrer(referrer) : undefined}
 				params={
 					fullName && isAuthorFilterEnabled
 						? { author: fullName, referrer: referrer ?? undefined }
@@ -544,7 +384,7 @@ function ItemInstitution({ institution }: { institution?: string }) {
 
 	return (
 		<LinkWithParams
-			href={isAuthorLocationEnabled ? referrer ?? `/lib` : undefined}
+			href={isAuthorLocationEnabled ? getSafeReferrer(referrer) : undefined}
 			params={
 				institution && isAuthorLocationEnabled
 					? {
@@ -984,7 +824,7 @@ function ItemCollection({
 									</motion.div>
 								)}
 								<LinkWithParams
-									href={referrer ?? "/lib"}
+									href={getSafeReferrer(referrer)}
 									params={{
 										collections: fullHierarchy
 											.slice(0, index + 1)
@@ -1045,7 +885,7 @@ function ItemCollection({
 				}}
 			>
 				<LinkWithParams
-					href={referrer ?? "/lib"}
+					href={getSafeReferrer(referrer)}
 					params={{
 						collections: [...ancestry, collection.key],
 						referrer: referrer ?? undefined,
@@ -1329,7 +1169,7 @@ export default function ItemPage({
 			<LoadingContext.Provider value={{ loading }}>
 				<div className="flex flex-col gap-8">
 					<div className="flex flex-col gap-4">
-						<ItemHeader item={item} loadingProp={loadingProp} />
+						<ItemHeader item={item} isLoading={loading} />
 						<ItemTitle item={item} />
 					</div>
 					<div className="flex flex-col lg:grid grid-cols-12 gap-8">

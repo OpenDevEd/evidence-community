@@ -448,7 +448,15 @@
     "citedByResource": "Les ressources suivantes citent cette publication.",
     "cites": "Ressources citées",
     "citedBy": "Citer des ressources",
-    "references": "références"
+    "references": "références",
+    "citingResources": "Citer les ressources",
+    "noCitingResources": "Aucune ressource de citation trouvée dans la base de données",
+    "avgCitationsPerYear": "Citations moyennes/an",
+    "peakYear": "Année de pointe",
+    "previous": "Précédent",
+    "next": "Suivant",
+    "citationsByCountryFocus": "Citations par pays de focalisation",
+    "percentOfTotal": "{percentage}% du total"
   },
   "auth": {
     "invalidEmail": "Veuillez entrer une adresse e-mail valide",
