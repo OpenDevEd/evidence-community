@@ -5,9 +5,9 @@ import { Skeleton } from "@/components/nextui/Skeleton";
 import {
 	ModalBody,
 	ModalContent,
-	Link as NextUILink,
 	useDisclosure,
 } from "@nextui-org/react";
+import { RelationsType } from "@/types/item";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
@@ -19,7 +19,9 @@ import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
 import LikeButton from "./LikeButton";
-import { BsPlus } from "react-icons/bs";
+import { BsPlus, BsQuote } from "react-icons/bs";
+import { TbBlockquote } from "react-icons/tb";
+import { IoChevronForward } from "react-icons/io5";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
@@ -131,6 +133,39 @@ function FixURL(url: string | null) {
 	return url;
 }
 
+function CitationCounts({ itemData }: { itemData: Item | undefined }) {
+	const t = useTranslations("ui");
+	const relations = itemData?.relations as RelationsType;
+	
+	const citesCount = Array.isArray(relations?.cites) ? relations.cites.length : 0;
+	const citedByCount = (relations?.cited_by || 0) + (Array.isArray(relations?.citedBy) ? relations.citedBy.length : 0);
+	
+	if (citesCount === 0 && citedByCount === 0) return null;
+	
+	return (
+		<div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+			{citedByCount > 0 && (
+				<Link
+					href={`/citation/${itemData?.key}`}
+					className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
+				>
+					<BsQuote className="size-3.5" />
+					<span>{citedByCount}</span>
+					<span className="text-accent/70 hidden @[480px]:inline">{t("citationsLowercase")}</span>
+					<IoChevronForward className="size-3 opacity-50 ml-0.5" />
+				</Link>
+			)}
+			{citesCount > 0 && (
+				<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/70 text-xs font-medium">
+					<TbBlockquote className="size-3.5" />
+					<span>{citesCount}</span>
+					<span className="opacity-70 hidden @[480px]:inline">{t("references").toLowerCase()}</span>
+				</span>
+			)}
+		</div>
+	);
+}
+
 function ResourceInteractions({
 	itemData,
 	isLoading,
@@ -145,29 +180,12 @@ function ResourceInteractions({
 	collectionId?: string;
 }) {
 	const t = useTranslations("ui");
-	const { data } = useSession();
-	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
-	const status = useStatus();
-
-	const url = FixURL(status?.docsLink);
 
 	return (
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
 			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
 				<div className="w-full rounded-2xl flex flex-row items-center">
-					{url && itemData?.key && (
-						<NextUILink
-							showAnchorIcon
-							href={url + "/lib/" + itemData?.key}
-							className="font-medium text-tertiary-400 shrink-1 px-2"
-						>
-							<span className="text-black/60 dark:text-white/60 lg:text-base text-sm">
-								{t("viewOnDocs", {
-									site: url.split("/")[2],
-								})}
-							</span>
-						</NextUILink>
-					)}
+					<CitationCounts itemData={itemData} />
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
 						<AddButton
 							itemData={itemData}

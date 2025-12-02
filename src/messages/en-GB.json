@@ -443,7 +443,20 @@
     "deepResearch": "Deep Research",
     "searchTooltip": "Find documents and evidence across the library.",
     "quickAnswerTooltip": "Get a fast AI-generated response from the evidence library.",
-    "deepResearchTooltip": "Run a slower, in-depth AI analysis for comprehensive insights."
+    "deepResearchTooltip": "Run a slower, in-depth AI analysis for comprehensive insights.",
+    "citesResource": "The following resources are cited by this publication.",
+    "citedByResource": "The following resources cite this publication.",
+    "cites": "Cited Resources",
+    "citedBy": "Citing Resources",
+    "references": "references",
+    "citingResources": "Citing Resources",
+    "noCitingResources": "No citing resources found in the database",
+    "avgCitationsPerYear": "Avg Citations/Year",
+    "peakYear": "Peak Year",
+    "previous": "Previous",
+    "next": "Next",
+    "citationsByCountryFocus": "Citations by Country Focus",
+    "percentOfTotal": "{percentage}% of total"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",

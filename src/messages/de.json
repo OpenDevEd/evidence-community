@@ -443,7 +443,20 @@
     "deepResearch": "Gründliche Recherche",
     "searchTooltip": "Finden Sie Dokumente und Beweise in der Bibliothek.",
     "quickAnswerTooltip": "Erhalten Sie eine schnelle, KI-generierte Antwort aus der Evidenzbibliothek.",
-    "deepResearchTooltip": "Führen Sie eine langsamere, eingehende KI-Analyse für umfassende Erkenntnisse durch."
+    "deepResearchTooltip": "Führen Sie eine langsamere, eingehende KI-Analyse für umfassende Erkenntnisse durch.",
+    "citesResource": "Die folgenden Ressourcen werden in dieser Publikation zitiert.",
+    "citedByResource": "Die folgenden Ressourcen zitieren diese Veröffentlichung.",
+    "cites": "Zitierte Ressourcen",
+    "citedBy": "Ressourcen zitieren",
+    "references": "Referenzen",
+    "citingResources": "Ressourcen zitieren",
+    "noCitingResources": "Keine zitierenden Ressourcen in der Datenbank gefunden",
+    "avgCitationsPerYear": "Durchschnittliche Zitationen/Jahr",
+    "peakYear": "Spitzenjahr",
+    "previous": "Vorherige",
+    "next": "Nächste",
+    "citationsByCountryFocus": "Zitationen nach Länderfokus",
+    "percentOfTotal": "{percentage}% des Gesamten"
   },
   "auth": {
     "invalidEmail": "Bitte geben Sie eine gültige E-Mail-Adresse ein",

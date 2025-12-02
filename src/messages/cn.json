@@ -443,7 +443,20 @@
     "deepResearch": "深入研究",
     "searchTooltip": "在图书馆中查找文件和证据。",
     "quickAnswerTooltip": "从证据库中获取快速的 AI 生成的响应。",
-    "deepResearchTooltip": "进行更慢、更深入的 AI 分析，以获得全面的见解。"
+    "deepResearchTooltip": "进行更慢、更深入的 AI 分析，以获得全面的见解。",
+    "citesResource": "本出版物引用了以下资源。",
+    "citedByResource": "以下资源引用了此出版物。",
+    "cites": "引用资源",
+    "citedBy": "引用资源",
+    "references": "参考文献",
+    "citingResources": "引用资源",
+    "noCitingResources": "数据库中未找到引用资源",
+    "avgCitationsPerYear": "平均引用次数/年",
+    "peakYear": "峰年",
+    "previous": "以前的",
+    "next": "下一个",
+    "citationsByCountryFocus": "按国家焦点引文",
+    "percentOfTotal": "{percentage}% 总计"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",

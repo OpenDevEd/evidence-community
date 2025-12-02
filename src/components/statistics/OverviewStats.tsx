@@ -1,5 +1,5 @@
 import { useTranslations } from "next-intl";
-import { BsFileText, BsGraphUp, BsActivity, BsPeople, BsBuilding, BsPaperclip } from "react-icons/bs";
+import { BsFileText, BsQuote, BsActivity, BsPeople, BsBuilding, BsPaperclip } from "react-icons/bs";
 import { StatCard } from "./StatCard";
 import { ComprehensiveStats } from "./types";
 
@@ -25,7 +25,7 @@ export function OverviewStats({ stats }: OverviewStatsProps) {
 					title={t("totalCitations")}
 					value={stats.citationStats.totalCitations}
 					subtitle={`${stats.citationStats.citationPercentage}% ${t("haveCitations")}`}
-					icon={BsGraphUp}
+					icon={BsQuote}
 					color="success"
 				/>
 				<StatCard

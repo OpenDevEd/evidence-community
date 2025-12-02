@@ -443,7 +443,20 @@
     "deepResearch": "Pesquisa aprofundada",
     "searchTooltip": "Encontre documentos e evidências em toda a biblioteca.",
     "quickAnswerTooltip": "Obtenha uma resposta rápida gerada por IA da biblioteca de evidências.",
-    "deepResearchTooltip": "Execute uma análise de IA mais lenta e aprofundada para obter informações abrangentes."
+    "deepResearchTooltip": "Execute uma análise de IA mais lenta e aprofundada para obter informações abrangentes.",
+    "citesResource": "Os seguintes recursos são citados por esta publicação.",
+    "citedByResource": "Os seguintes recursos citam esta publicação.",
+    "cites": "Recursos Citados",
+    "citedBy": "Citando Recursos",
+    "references": "referências",
+    "citingResources": "Citar Recursos",
+    "noCitingResources": "Nenhum recurso de citação encontrado no banco de dados",
+    "avgCitationsPerYear": "Média de Citações/Ano",
+    "peakYear": "Ano de pico",
+    "previous": "Anterior",
+    "next": "Próximo",
+    "citationsByCountryFocus": "Citações por Foco de País",
+    "percentOfTotal": "{percentage}% do total"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",

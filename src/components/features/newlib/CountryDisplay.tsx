@@ -5,7 +5,7 @@ import { useState } from "react";
 import { IoGlobeOutline } from "react-icons/io5";
 import { useTheme } from "next-themes";
 import { twMerge } from "tailwind-merge";
-import { COUNTRIES } from "@/constants/misc";
+import { COUNTRIES, getSafeReferrer } from "@/constants/misc";
 import LinkWithParams from "../LinkWithParams";
 import { getCountryAncestry } from "@/lib/utils";
 import { useFeatureFlagEnabled } from "@/context/Providers";
@@ -294,7 +294,7 @@ export function CountryDisplay({
 					const ancestry = getCountryAncestry(country);
 					return (
 						<LinkWithParams
-							href={isCountryFocusEnabled ? (referrer ?? "/lib") : undefined}
+							href={isCountryFocusEnabled ? getSafeReferrer(referrer) : undefined}
 							params={
 								ancestry && isCountryFocusEnabled
 									? { country: ancestry, referrer: referrer ?? undefined }
