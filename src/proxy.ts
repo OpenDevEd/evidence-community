@@ -267,7 +267,7 @@ function mapLegacySearchParams(request: NextRequest) {
 	return null;
 }
 
-export default async function middleware(request: NextRequest) {
+export default async function proxy(request: NextRequest) {
 	const rateLimit = generateRateLimitObject(request);
 
 	if (request.nextUrl.pathname === "/") {
