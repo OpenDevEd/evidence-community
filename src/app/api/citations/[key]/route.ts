@@ -165,6 +165,13 @@ export async function GET(
 		.map(([country, count]) => ({ country, count }))
 		.sort((a, b) => b.count - a.count);
 
+	// Calculate items without country focus
+	const itemsWithCountry = Object.values(rawCountryDistribution).reduce((sum, count) => sum + count, 0);
+	const itemsWithoutCountry = totalCitations - itemsWithCountry;
+	if (itemsWithoutCountry > 0) {
+		countryDistribution.push({ country: "UNKNOWN", count: itemsWithoutCountry });
+	}
+
 	const totalPages = Math.ceil(totalCitations / perPage);
 
 	const response: CitationsResponse = {

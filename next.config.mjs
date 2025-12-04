@@ -5,11 +5,11 @@ const withNextIntl = createNextIntlPlugin();
 
 const nextConfig = {
 	experimental: {
-		reactCompiler: true,
 		staleTimes: {
 			dynamic: 30,
 		},
 	},
+	reactCompiler: true,
 	images: {
 		remotePatterns: [
 			{ hostname: "tlxvwvgyaanqlmuyoguz.supabase.co" },

@@ -16,16 +16,14 @@ export async function generateSitemaps() {
 	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));
 }
 
-export default async function sitemap({
-	id,
-}: {
-	id: number
+export default async function sitemap(props: {
+	id: Promise<number>
 }): Promise<MetadataRoute.Sitemap> {
 	const maxRetries = 10;
 	let attempt = 0;
 	let items;
 
-	const identifier = Number(id);
+	const identifier = await props.id;
 
 	console.log(`fetching the page id ${identifier}`);
 

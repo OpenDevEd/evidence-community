@@ -1413,4 +1413,5 @@ export const COUNTRY_COLORS: Record<string, string> = {
 	ZA: "#d82633",
 	ZM: "#d8262e",
 	ZW: "#d8262a",
+	UNKNOWN: "#9ca3af", // Gray for unknown/global
 };

@@ -522,9 +522,13 @@ function CitationsCountryChart({
 									>
 										<div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-default-200 dark:border-default-100 shadow-xl rounded-xl p-3 min-w-[140px]">
 											<div className="flex items-center gap-2 mb-1">
-												<CountryFlag countryCode={tooltipState.country} className="w-4 h-3 shadow-sm" />
+												{tooltipState.country === "UNKNOWN" ? (
+													<FaGlobeAmericas className="w-4 h-3 text-gray-400" />
+												) : (
+													<CountryFlag countryCode={tooltipState.country} className="w-4 h-3 shadow-sm" />
+												)}
 												<span className="text-tiny font-bold uppercase tracking-wider text-default-500 truncate max-w-[150px]">
-													{COUNTRIES[tooltipState.country] || tooltipState.country}
+													{tooltipState.country === "UNKNOWN" ? t("globalOrUnspecified") : (COUNTRIES[tooltipState.country] || tooltipState.country)}
 												</span>
 											</div>
 											<div className="flex items-center gap-2">
@@ -552,7 +556,8 @@ function CitationsCountryChart({
 						<div className="flex flex-col gap-3 max-h-full overflow-y-auto pr-2 custom-scrollbar">
 							{countryDistribution.map((item, index) => {
 								const percentage = ((item.count / totalCitations) * 100).toFixed(1);
-								const countryName = COUNTRIES[item.country] || item.country;
+								const isUnknown = item.country === "UNKNOWN";
+								const countryName = isUnknown ? t("globalOrUnspecified") : (COUNTRIES[item.country] || item.country);
 								return (
 									<div key={item.country} className="flex items-center justify-between p-2 rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
 										<div className="flex items-center gap-3">
@@ -562,7 +567,11 @@ function CitationsCountryChart({
 											/>
 											<div className="flex flex-col">
 												<div className="flex items-center gap-2">
-													<CountryFlag countryCode={item.country} className="w-4 h-3 shadow-sm" />
+													{isUnknown ? (
+														<FaGlobeAmericas className="w-4 h-3 text-gray-400" />
+													) : (
+														<CountryFlag countryCode={item.country} className="w-4 h-3 shadow-sm" />
+													)}
 													<span className="font-bold text-black/80 dark:text-white/80 truncate max-w-[120px]" title={countryName}>
 														{countryName || t("unknownCountry")}
 													</span>
