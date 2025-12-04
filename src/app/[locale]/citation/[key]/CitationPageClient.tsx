@@ -503,7 +503,7 @@ function CitationsCountryChart({
 								{/* Center Text for Donut */}
 								<div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
 									<span className="text-3xl font-bold text-black dark:text-white">
-										{countryDistribution.length}
+										{countryDistribution.filter(d => d.country !== "UNKNOWN").length}
 									</span>
 									<span className="text-xs uppercase tracking-wider font-medium text-black/50 dark:text-white/50">
 										{t("countries")}
