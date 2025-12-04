@@ -17,6 +17,7 @@ const nextConfig = {
 			{ hostname: "ocivvlhqiwtxvnycqnia.supabase.co" },
 			{ hostname: "flagcdn.com" },
 		],
+		dangerouslyAllowLocalIP: true,
 	},
 	async rewrites() {
 		return [

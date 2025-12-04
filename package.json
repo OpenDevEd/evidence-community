@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "npm run icons:generate && npm run schema:generate && FORCE_COLOR=1 NODE_OPTIONS='--max_old_space_size=8192' next build",
+    "build": "npm run icons:generate && npm run schema:generate && FORCE_COLOR=1 NODE_OPTIONS='--max_old_space_size=8192' next build --webpack",
     "start": "next start",
     "lint": "eslint .",
     "sitemap:generate": "npx tsx ./tools/generateSitemapIndex.ts",
