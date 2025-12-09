@@ -103,9 +103,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
         href: escapeXml(firstUrl.toString()),
     });
 
-	// Add feed metadata
 	feed.ele("updated").txt(
-		status.databaseUpdatedAt?.toISOString() || new Date().toISOString()
+		new Date(status.databaseUpdatedAt || new Date()).toISOString()
 	);
 	feed.ele("id").txt(escapeXml(url.toString()));
 	feed.ele("generator")
