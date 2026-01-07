@@ -44,12 +44,10 @@ import { Button } from "../../nextui/Button";
 import { InstitutionsData } from "@/app/api/institutions/types";
 function YearPicker({
 	label,
-	placeholder,
 	selectedKey,
 	onSelectionChange,
 }: {
 	label?: string;
-	placeholder: string;
 	selectedKey: string | null;
 	onSelectionChange: (value: any | null) => void;
 }) {
@@ -61,7 +59,6 @@ function YearPicker({
 		return (
 			<Autocomplete
 				className="flex-1"
-				placeholder={placeholder}
 				label={label}
 				key={label}
 				fullWidth={true}
@@ -89,7 +86,6 @@ function YearPicker({
 		<Input
 			type="number"
 			label={label}
-			placeholder={placeholder}
 			defaultValue={selectedKey || ""}
 			onChange={(e) => debouncedOnSelectionChange(e.target.value)}
 			classNames={{
@@ -808,12 +804,10 @@ export default function CollectionsList({
 				color={isCustomFilterInstitutionSelected ? "tertiary" : "secondary"}
 				variant={isCustomFilterInstitutionSelected ? "solid" : "flat"}
 				onPress={() => handleInstitutionSelect(customFilterInstitution)}
-				className="w-full justify-start mb-4"
+				className="w-full flex justify-start mb-4"
 				startContent={
 					INSTITUTION_LOGOS[customFilterInstitution]({
-						className: "h-6 w-auto",
-						width: 24,
-						height: 24,
+						className: "h-6",
 					})
 				}
 				endContent={<IoFilter className="size-5 ml-auto" />}
@@ -875,10 +869,9 @@ export default function CollectionsList({
 									layout
 									className="w-full"
 								>
-									<YearPicker
-										label={t("year")}
-										placeholder={t("year")}
-										selectedKey={start}
+								<YearPicker
+									label={t("year")}
+									selectedKey={start}
 										onSelectionChange={(key) =>
 											handleRangeChange(key, null)
 										}
@@ -893,20 +886,17 @@ export default function CollectionsList({
 									layout
 									className="flex gap-4 w-full"
 								>
-									{[
-										{
-											label: t("from"),
-											placeholder: t("year"),
-										},
-										{
-											label: t("to"),
-											placeholder: t("year"),
-										},
-									].map(({ label, placeholder }, index) => (
-										<YearPicker
-											key={label}
-											label={label}
-											placeholder={placeholder}
+								{[
+									{
+										label: t("from"),
+									},
+									{
+										label: t("to"),
+									},
+								].map(({ label }, index) => (
+									<YearPicker
+										key={label}
+										label={label}
 											selectedKey={
 												index === 0 ? start : end
 											}
