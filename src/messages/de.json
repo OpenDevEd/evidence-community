@@ -111,6 +111,8 @@
     "bookmarksListAriaLabel": "Lesezeichen- und Sammlungsliste",
     "errorMessageAriaLabel": "Fehlermeldung",
     "dropdownAriaLabel": "Auswählen",
+    "actionsMenuAriaLabel": "Aktionsmenü",
+    "languageSectionTitle": "Sprache",
     "resetChat": "Chat zurücksetzen",
     "profileMenuItem": "Profil",
     "settingsMenuItem": "Einstellungen",

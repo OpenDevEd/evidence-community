@@ -111,6 +111,8 @@
     "bookmarksListAriaLabel": "Bookmarks and collections list",
     "errorMessageAriaLabel": "Error message",
     "dropdownAriaLabel": "Select",
+    "actionsMenuAriaLabel": "Actions menu",
+    "languageSectionTitle": "Language",
     "resetChat": "Reset Chat",
     "profileMenuItem": "Profile",
     "settingsMenuItem": "Settings",

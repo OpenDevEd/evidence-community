@@ -111,6 +111,8 @@
     "bookmarksListAriaLabel": "书签和收藏列表",
     "errorMessageAriaLabel": "错误消息",
     "dropdownAriaLabel": "选择",
+    "actionsMenuAriaLabel": "操作菜单",
+    "languageSectionTitle": "语言",
     "resetChat": "重置聊天",
     "profileMenuItem": "个人资料",
     "settingsMenuItem": "设置",

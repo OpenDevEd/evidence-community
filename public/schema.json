@@ -165,6 +165,9 @@
     "chapter-number": [
       "session"
     ],
+    "citation-key": [
+      "citationKey"
+    ],
     "collection-number": [
       "seriesNumber"
     ],
@@ -233,8 +236,20 @@
     "number-of-volumes": [
       "numberOfVolumes"
     ],
+    "part-number": [
+      "partNumber"
+    ],
+    "part-title": [
+      "partTitle"
+    ],
     "page": [
       "pages"
+    ],
+    "PMID": [
+      "PMID"
+    ],
+    "PMCID": [
+      "PMCID"
     ],
     "publisher": [
       "publisher"
@@ -287,16 +302,25 @@
   "CSL_NAME_MAPPINGS": {
     "author": "author",
     "bookAuthor": "container-author",
+    "chair": "chair",
     "castMember": "performer",
     "composer": "composer",
     "contributor": "contributor",
+    "creator": "author",
     "director": "director",
     "editor": "editor",
+    "executiveProducer": "executive-producer",
     "guest": "guest",
+    "host": "host",
     "interviewer": "interviewer",
+    "narrator": "narrator",
+    "originalCreator": "original-author",
+    "organizer": "organizer",
+    "podcaster": "host",
     "producer": "producer",
     "recipient": "recipient",
     "reviewedAuthor": "reviewed-author",
+    "seriesCreator": "series-creator",
     "seriesEditor": "collection-editor",
     "scriptwriter": "script-writer",
     "translator": "translator"
@@ -309,6 +333,7 @@
     "callNumber": "call-number",
     "applicationNumber": "call-number",
     "session": "chapter-number",
+    "citationKey": "citation-key",
     "seriesNumber": "collection-number",
     "seriesTitle": "collection-title",
     "series": "collection-title",
@@ -337,7 +362,11 @@
     "number": "number",
     "numPages": "number-of-pages",
     "numberOfVolumes": "number-of-volumes",
+    "partNumber": "part-number",
+    "partTitle": "part-title",
     "pages": "page",
+    "PMID": "PMID",
+    "PMCID": "PMCID",
     "publisher": "publisher",
     "history": "references",
     "references": "references",

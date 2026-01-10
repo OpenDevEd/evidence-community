@@ -1,6 +1,6 @@
 import Providers from "@/context/Providers";
 import { Montserrat, Ubuntu } from "next/font/google";
-import Navbar from "@/components/layout/Navbar";
+import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/Footer";
 import { Analytics } from "@vercel/analytics/react";
 import { twMerge } from "tailwind-merge";

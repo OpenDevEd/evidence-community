@@ -6,7 +6,7 @@ import { sendContactRequest } from "@/lib/actions";
 import { toast } from "../layout/Toast";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
-import { Logo } from "../layout/Navbar";
+import { Logo } from "../layout/navbar";
 import { Spacer } from "@nextui-org/react";
 
 export default function Contact() {

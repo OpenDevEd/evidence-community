@@ -111,6 +111,8 @@
     "bookmarksListAriaLabel": "قائمة الإشارات المرجعية والمجموعات",
     "errorMessageAriaLabel": "رسالة خطأ",
     "dropdownAriaLabel": "تحديد",
+    "actionsMenuAriaLabel": "قائمة الإجراءات",
+    "languageSectionTitle": "اللغة",
     "resetChat": "إعادة تعيين الدردشة",
     "profileMenuItem": "الملف الشخصي",
     "settingsMenuItem": "إعدادات",

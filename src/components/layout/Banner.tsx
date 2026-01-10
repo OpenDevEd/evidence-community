@@ -13,7 +13,7 @@ import {
 import { useLocalStorage } from "@uidotdev/usehooks";
 import { useEffect } from "react";
 import { MdPrivacyTip } from "react-icons/md";
-import { Logo } from "./Navbar";
+import { Logo } from "./navbar";
 import posthog from "posthog-js";
 import { useTranslations } from "next-intl";
 

@@ -125,6 +125,9 @@
       "chapter-number": [
         "session"
       ],
+      "citation-key": [
+        "citationKey"
+      ],
       "collection-number": [
         "seriesNumber"
       ],
@@ -193,8 +196,20 @@
       "number-of-volumes": [
         "numberOfVolumes"
       ],
+      "part-number": [
+        "partNumber"
+      ],
+      "part-title": [
+        "partTitle"
+      ],
       "page": [
         "pages"
+      ],
+      "PMID": [
+        "PMID"
+      ],
+      "PMCID": [
+        "PMCID"
       ],
       "publisher": [
         "publisher"
@@ -248,16 +263,25 @@
   "names": {
     "author": "author",
     "bookAuthor": "container-author",
+    "chair": "chair",
     "castMember": "performer",
     "composer": "composer",
     "contributor": "contributor",
+    "creator": "author",
     "director": "director",
     "editor": "editor",
+    "executiveProducer": "executive-producer",
     "guest": "guest",
+    "host": "host",
     "interviewer": "interviewer",
+    "narrator": "narrator",
+    "originalCreator": "original-author",
+    "organizer": "organizer",
+    "podcaster": "host",
     "producer": "producer",
     "recipient": "recipient",
     "reviewedAuthor": "reviewed-author",
+    "seriesCreator": "series-creator",
     "seriesEditor": "collection-editor",
     "scriptwriter": "script-writer",
     "translator": "translator"
