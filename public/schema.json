@@ -191,7 +191,7 @@
       "edition"
     ],
     "event-place": [
-      "place"
+      "eventPlace"
     ],
     "event-title": [
       "meetingName",
@@ -235,6 +235,12 @@
     ],
     "number-of-volumes": [
       "numberOfVolumes"
+    ],
+    "original-publisher": [
+      "originalPublisher"
+    ],
+    "original-publisher-place": [
+      "originalPlace"
     ],
     "part-number": [
       "partNumber"
@@ -297,7 +303,8 @@
   "CSL_DATE_MAPPINGS": {
     "accessed": "accessDate",
     "issued": "date",
-    "submitted": "filingDate"
+    "submitted": "filingDate",
+    "original-date": "originalDate"
   },
   "CSL_NAME_MAPPINGS": {
     "author": "author",
@@ -344,7 +351,7 @@
     "runningTime": "dimensions",
     "DOI": "DOI",
     "edition": "edition",
-    "place": "publisher-place",
+    "eventPlace": "event-place",
     "meetingName": "event-title",
     "conferenceName": "event-title",
     "type": "genre",
@@ -362,12 +369,15 @@
     "number": "number",
     "numPages": "number-of-pages",
     "numberOfVolumes": "number-of-volumes",
+    "originalPublisher": "original-publisher",
+    "originalPlace": "original-publisher-place",
     "partNumber": "part-number",
     "partTitle": "part-title",
     "pages": "page",
     "PMID": "PMID",
     "PMCID": "PMCID",
     "publisher": "publisher",
+    "place": "publisher-place",
     "history": "references",
     "references": "references",
     "scale": "scale",
@@ -383,7 +393,8 @@
     "codeNumber": "volume",
     "accessDate": "accessed",
     "date": "issued",
-    "filingDate": "submitted"
+    "filingDate": "submitted",
+    "originalDate": "original-date"
   },
   "COLUMN_TO_ZOTERO_TYPE_MAPPINGS": {
     "Preprint": "preprint",

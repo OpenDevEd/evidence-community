@@ -1,6 +1,6 @@
 import { toast } from "@/components/layout/Toast";
 import { getRateLimits } from "@/lib/actions";
-import { useCompletion } from "ai/react";
+import { useCompletion } from "@ai-sdk/react";
 import { useLocale, useTranslations } from "next-intl";
 import posthog from "posthog-js";
 import { useCallback } from "react";
@@ -39,7 +39,7 @@ export default function useAIStream(endpoint: string, onFinish: (completion: str
                 onFinish(completion, id);
             }
         });
-    }, [isLoading, completion, complete, onFinish]);
+    }, [isLoading, completion, complete, onFinish, id]);
 
 	return { response: completion, stream: debouncedComplete, error, setCompletion };
 }

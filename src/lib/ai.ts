@@ -89,7 +89,7 @@ export const generateEmbeddings = async (
 ): Promise<Array<{ embedding: number[]; content: string }>> => {
 	const chunks = generateChunks(value);
 	const { embeddings } = await embedMany({
-		model: embeddingModel,
+		model: embeddingModel as any,
 		values: chunks,
 	});
 	return embeddings.map((e, i) => ({ content: chunks[i], embedding: e }));
@@ -146,7 +146,7 @@ export const createResource = async (item: NonNullable<Item["fullTextPDFs"]>[0],
 export const generateEmbedding = async (value: string): Promise<number[]> => {
 	const input = value.replaceAll('\\n', ' ');
 	const { embedding } = await embed({
-		model: embeddingModel,
+		model: embeddingModel as any,
 		value: input,
 	});
 	return embedding;

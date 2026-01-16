@@ -1,13 +1,14 @@
 import {
     generateObject,
     streamText,
-    createDataStreamResponse,
-    generateId
+    generateId,
+    createUIMessageStream,
+    createUIMessageStreamResponse,
+    ModelMessage
 } from "ai";
 import { findRelevantContent, RAGResult } from "@/lib/ai";
 import { z } from "zod";
 import { google } from "@ai-sdk/google";
-import { CoreMessage } from "ai";
 import { getTimeDuration } from "@/lib/utils";
 
 const Agent0Schema = z.object({
@@ -43,28 +44,28 @@ export async function getAnswerFromPdfAgentic(
     smallModel: string,
     userQuestion: string,
     itemKey: string | null,
-    messagesHistory: CoreMessage[],
+    messagesHistory: ModelMessage[],
 ) {
 
-    return createDataStreamResponse({
-        headers: {
-            'Content-Type': 'text/event-stream'
-        },
-        execute: async (dataStream) => {
+    const stream = createUIMessageStream({
+        execute: async ({ writer }) => {
             console.log("Starting agentic workflow with page inference and streaming...");
             const startTime = Date.now();
 
-            dataStream.writeMessageAnnotation({
-                type: "event",
+            writer.write({
+                type: "data-status",
                 id: generateId(),
-                message: getTimeDuration(startTime) + "Starting PDF analysis workflow...",
+                data: {
+                    type: "event",
+                    message: getTimeDuration(startTime) + "Starting PDF analysis workflow...",
+                }
             });
 
             if (!itemKey) {
                 throw new Error("ItemKey is required to search for an answer.");
             }
 
-            const currentMessages: CoreMessage[] = [
+            const currentMessages: ModelMessage[] = [
                 ...messagesHistory,
                 { role: 'user', content: userQuestion }
             ];
@@ -72,10 +73,13 @@ export async function getAnswerFromPdfAgentic(
 
             let inferredPage: number = 0;
             try {
-                dataStream.writeMessageAnnotation({
-                    type: "event",
+                writer.write({
+                    type: "data-status",
                     id: generateId(),
-                    message: getTimeDuration(startTime) + "Analyzing question for page references...",
+                    data: {
+                        type: "event",
+                        message: getTimeDuration(startTime) + "Analyzing question for page references...",
+                    }
                 });
 
                 const agent0SystemPrompt = `You are an AI assistant that specializes in identifying page numbers from user queries and conversation history.
@@ -110,18 +114,25 @@ export async function getAnswerFromPdfAgentic(
                 console.log("Agent 0 (Flash) Inferred Page:", inferredPage);
 
                 if (inferredPage > 0) {
-                    dataStream.writeMessageAnnotation({
+                writer.write({
+                    type: "data-status",
+                    id: generateId(),
+                    data: {
                         type: "event",
-                        id: generateId(),
                         message: getTimeDuration(startTime) + `Found reference to page ${inferredPage}`,
-                    });
+                    }
+                });
                 }
             } catch (error) {
                 console.error("Error in Agent 0 (Page Inference - Flash):", error);
-                dataStream.writeMessageAnnotation({
-                    type: "event",
+                writer.write({
+                    type: "data-status",
                     id: generateId(),
-                    message: getTimeDuration(startTime) + "Error analyzing page references.",
+                    data: {
+                        type: "event",
+                        message: getTimeDuration(startTime) + "Error analyzing page references.",
+                
+                    }
                 });
 
             }
@@ -129,10 +140,14 @@ export async function getAnswerFromPdfAgentic(
 
             let plan: Agent1Response;
             try {
-                dataStream.writeMessageAnnotation({
-                    type: "event",
+                writer.write({
+                    type: "data-status",
                     id: generateId(),
-                    message: getTimeDuration(startTime) + "Analyzing question and planning search strategy...",
+                    data: {
+                        type: "event",
+                        message: getTimeDuration(startTime) + "Analyzing question and planning search strategy...",
+                
+                    }
                 });
 
                 const agent1SystemPrompt = `You are a helpful AI assistant with excellent conversational skills. Your task is to analyze the user's most recent question about a document in the context of the entire conversation history, and prepare it for information retrieval.
@@ -182,18 +197,25 @@ You must output an object that conforms to the provided schema.`;
                 }
                 console.log("Agent 1 (Flash) Parsed Plan:", plan);
 
-                dataStream.writeMessageAnnotation({
-                    type: "event",
+                writer.write({
+                    type: "data-status",
                     id: generateId(),
-                    message: getTimeDuration(startTime) + `Generated ${plan.search_queries.length} search queries${plan.sub_questions.length > 0 ? ` and identified ${plan.sub_questions.length} sub-questions` : ''}`,
+                    data: {
+                        type: "event",
+                        message: getTimeDuration(startTime) + `Generated ${plan.search_queries.length} search queries${plan.sub_questions.length > 0 ? ` and identified ${plan.sub_questions.length} sub-questions` : ''}`,
+                    }
                 });
 
             } catch (error) {
                 console.error("Error in Agent 1 (Flash):", error);
-                dataStream.writeMessageAnnotation({
-                    type: "event",
+                writer.write({
+                    type: "data-status",
                     id: generateId(),
-                    message: getTimeDuration(startTime) + "Error during question analysis. Using simplified search approach.",
+                    data: {
+                        type: "event",
+                        message: getTimeDuration(startTime) + "Error during question analysis. Using simplified search approach.",
+                
+                    }
                 });
                 plan = {
                     original_question: userQuestion,
@@ -205,21 +227,28 @@ You must output an object that conforms to the provided schema.`;
 
             console.log(`Agent 2: Retrieving content using findRelevantContent (inferred page: ${inferredPage})...`);
 
-            dataStream.writeMessageAnnotation({
-                type: "event",
-                id: generateId(),
-                message: getTimeDuration(startTime) + "Searching through document content...",
-            });
+            writer.write({
+                    type: "data-status",
+                    id: generateId(),
+                    data: {
+                        type: "event",
+                        message: getTimeDuration(startTime) + "Searching through document content...",
+            
+                    }
+                });
 
             const retrievedContentGroups: RetrievedContentGroup[] = [];
             const MAX_EXTRACTS_PER_QUERY = 7;
 
             for (const searchQueryInstruction of plan.search_queries) {
                 try {
-                    dataStream.writeMessageAnnotation({
-                        type: "event",
+                    writer.write({
+                        type: "data-status",
                         id: generateId(),
-                        message: getTimeDuration(startTime) + `Searching for: ${searchQueryInstruction.query}`,
+                        data: {
+                            type: "event",
+                            message: getTimeDuration(startTime) + `Searching for: ${searchQueryInstruction.query}`,
+                        }
                     });
 
                     const ragResults: RAGResult[] = await findRelevantContent(
@@ -238,25 +267,36 @@ You must output an object that conforms to the provided schema.`;
                             document_extracts: extractsForThisQuery,
                         });
 
-                        dataStream.writeMessageAnnotation({
-                            type: "event",
+                        writer.write({
+                            type: "data-status",
                             id: generateId(),
-                            message: getTimeDuration(startTime) + `Found ${extractsForThisQuery.length} relevant passages`,
+                            data: {
+                                type: "event",
+                                message: getTimeDuration(startTime) + `Found ${extractsForThisQuery.length} relevant passages`,
+                            }
                         });
                     } else {
-                        dataStream.writeMessageAnnotation({
-                            type: "event",
-                            id: generateId(),
-                            message: getTimeDuration(startTime) + "No relevant content found for this query",
-                        });
+                        writer.write({
+                    type: "data-status",
+                    id: generateId(),
+                    data: {
+                        type: "event",
+                        message: getTimeDuration(startTime) + "No relevant content found for this query",
+                        
+                    }
+                });
                     }
                 } catch (ragError) {
                     console.error(`Error calling findRelevantContent for query "${searchQueryInstruction.query}":`, ragError);
-                    dataStream.writeMessageAnnotation({
+                    writer.write({
+                    type: "data-status",
+                    id: generateId(),
+                    data: {
                         type: "event",
-                        id: generateId(),
                         message: getTimeDuration(startTime) + "Error searching document content",
-                    });
+                    
+                    }
+                });
                 }
             }
             console.log("Agent 2 Retrieved Content Groups:", retrievedContentGroups.length);
@@ -278,11 +318,15 @@ You must output an object that conforms to the provided schema.`;
             }
 
 
-            dataStream.writeMessageAnnotation({
-                type: "event",
-                id: generateId(),
-                message: getTimeDuration(startTime) + "Analyzing findings and composing detailed answer...",
-            });
+            writer.write({
+                    type: "data-status",
+                    id: generateId(),
+                    data: {
+                        type: "event",
+                        message: getTimeDuration(startTime) + "Analyzing findings and composing detailed answer...",
+            
+                    }
+                });
 
             const subQuestionsContext =
                 plan.sub_questions && plan.sub_questions.length > 0
@@ -336,42 +380,54 @@ You must output an object that conforms to the provided schema.`;
             let finishedThinking = false;
 
             try {
-                const stream = streamText({
+                const result = streamText({
                     model: provider(largeModel),
                     system: agent3SystemPrompt,
                     messages: currentMessages,
                     onChunk: (chunk) => {
                         if (!finishedThinking) {
-                            dataStream.writeMessageAnnotation({
-                                type: "event",
-                                id: generateId(),
-                                message: "Analyzing findings and composing detailed answer...",
-                            });
+                            writer.write({
+                    type: "data-status",
+                    id: generateId(),
+                    data: {
+                        type: "event",
+                        message: "Analyzing findings and composing detailed answer...",
+                            
+                    }
+                });
                             finishedThinking = true;
                         }
                     },
                     temperature: 1,
                     onFinish: (response) => {
-                        dataStream.writeMessageAnnotation({
-                            type: "event",
-                            id: generateId(),
-                            message: getTimeDuration(startTime) + "Answer synthesis complete.",
-                        });
+                        writer.write({
+                    type: "data-status",
+                    id: generateId(),
+                    data: {
+                        type: "event",
+                        message: getTimeDuration(startTime) + "Answer synthesis complete.",
+                        
+                    }
+                });
                     }
                 });
 
-                stream.mergeIntoDataStream(dataStream);
+                writer.merge(result.toUIMessageStream());
             } catch (error) {
                 console.error("Error in Agent 3 (Pro) streaming:", error);
-                dataStream.writeMessageAnnotation({
-                    type: "event",
+                writer.write({
+                    type: "data-status",
                     id: generateId(),
-                    message: getTimeDuration(startTime) + "Error generating the answer. Please try again.",
+                    data: {
+                        type: "event",
+                        message: getTimeDuration(startTime) + "Error generating the answer. Please try again.",
+                
+                    }
                 });
                 throw new Error("The AI encountered an issue while generating the detailed answer.");
             }
         }
-    })
+    });
 
-
+    return createUIMessageStreamResponse({ stream });
 }

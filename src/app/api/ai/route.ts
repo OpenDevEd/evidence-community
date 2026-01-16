@@ -48,7 +48,7 @@ export async function POST(req: Request) {
 	}
 
 	const result = streamText({
-		model: provider!(modelName!),
+		model: provider!(modelName!) as any,
 		system: [
 			`LOCALE: ${locale}\n`,
 			systemPrompt,
@@ -73,7 +73,7 @@ export async function POST(req: Request) {
 		},
 	})
 
-	return result.toDataStreamResponse({
+	return result.toTextStreamResponse({
 		headers: {
 			'Content-Type': 'text/event-stream',
 		},

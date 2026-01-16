@@ -298,7 +298,7 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 
 				const start = Date.now();
 				const result = await generateObject({
-					model: provider!(modelName!),
+					model: provider!(modelName!) as any,
 					schema: singleItemSchema,
 					temperature: 1,
 					providerOptions: {

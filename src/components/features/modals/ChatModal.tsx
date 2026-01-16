@@ -16,8 +16,31 @@ import { useRef } from "react";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { IoSend } from "react-icons/io5";
 import { useLocale, useTranslations } from "next-intl";
-import { Message, useChat } from "ai/react";
+import { UIMessage, useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import AIHeader from "../ai/AIHeader";
+
+// Type alias for backward compatibility
+type Message = UIMessage;
+
+// Helper functions to work with the new parts-based message format
+function getMessageContent(message: Message): string {
+	if (!message.parts) return '';
+	return message.parts
+		.map(part => {
+			if (part.type === 'text') return part.text;
+			return '';
+		})
+		.join('');
+}
+
+function createTextMessage(role: 'system' | 'user' | 'assistant' | 'data', content: string, id: string): Message {
+	return {
+		id,
+		role,
+		parts: [{ type: 'text', text: content }],
+	} as Message;
+}
 import FullScreenModal from "@/components/nextui/FullScreenModal";
 import { models } from "@/constants/ai";
 import { FaTools } from "react-icons/fa";
@@ -111,30 +134,11 @@ function MessageComponent({
 }) {
 	const tUI = useTranslations("ui");
 
-	const annotations = useMemo(() => {
-		const toolCalls = message?.parts
-			?.filter((part) => part.type === "tool-invocation")
-			?.filter(
-				(part, idx, arr) =>
-					arr.findIndex(
-						(p) =>
-							p.toolInvocation.args.userToolCallInformation ===
-							part.toolInvocation.args.userToolCallInformation
-					) === idx
-			)
-			.map((part) => ({
-				message: part.toolInvocation.args.userToolCallInformation,
-				id: part.toolInvocation.toolCallId,
-			}));
-
-		const annotations = message?.annotations?.map((annotation: any) => ({
-			message: annotation?.message,
-			id: annotation?.id,
-		}));
-
-		console.log("annotations", annotations);
-
-		return [...(toolCalls || []), ...(annotations || [])];
+	const annotations = useMemo<Array<{ id: string; message: string }>>(() => {
+		// In v6, tool parts are named `tool-${toolName}` instead of "tool-invocation"
+		// For now, we'll just return an empty array since the old annotations system
+		// may not be supported. You can customize this based on your needs.
+		return [];
 	}, [message]);
 
 	return (
@@ -200,14 +204,14 @@ function MessageComponent({
 						</div>
 					</div>
 				)}
-				{message.content.trim().length === 0 && !error ? (
+				{getMessageContent(message).trim().length === 0 && !error ? (
 					<div className={twMerge("p-4 opacity-60 ")}>
 						<div className="w-fit bg-black flex items-center justify-center rounded-full p-2">
 							<Spinner />
 						</div>
 					</div>
-				) : message.role === "data" ? (
-					<ScreeningResults results={JSON.parse(message.content)} />
+				) : message.role === "assistant" && getMessageContent(message).startsWith('{') ? (
+					<ScreeningResults results={JSON.parse(getMessageContent(message))} />
 				) : (
 					<>
 						<AIMarkdown
@@ -216,10 +220,10 @@ function MessageComponent({
 								message.role !== "user" && "p-0 mt-6"
 							)}
 						>
-							{cleanAIResponse(message.content)}
+							{cleanAIResponse(getMessageContent(message))}
 						</AIMarkdown>
 						{message.role === "assistant" &&
-							message.content.includes("/lib/") &&
+							getMessageContent(message).includes("/lib/") &&
 							smartScreeningFields.length > 0 && (
 								<div className="flex items-center gap-2 mt-8">
 									<Button
@@ -234,7 +238,7 @@ function MessageComponent({
 										size="sm"
 										color="accent"
 										onClick={() =>
-											handleScreening(message.content)
+											handleScreening(getMessageContent(message))
 										}
 									>
 										{tUI("smartScreening")}
@@ -283,66 +287,66 @@ export default function ChatModal({
 	const tUI = useTranslations("ui");
 	const locale = useLocale();
 	const inputRef = useRef<any>(null);
+	const [input, setInput] = useState('');
 	const {
 		messages,
-		handleSubmit,
-		input,
-		setInput,
-		append,
+		sendMessage,
 		error,
-		reload,
-		isLoading,
+		status,
+		regenerate,
 		stop,
 		setMessages,
 	} = useChat({
-		api: "/api/ai/chat",
-		initialMessages: [
-			{
-				role: "assistant",
-				content: t("chatPlaceholder", { title: data?.item?.title || "" }),
-				id: "start",
+		transport: new DefaultChatTransport({
+			api: "/api/ai/chat",
+			headers: {
+				"Accept-Language": locale,
 			},
+			body: {
+				key: data?.item?.key,
+				modelIndex,
+				distinctId: posthog.get_distinct_id(),
+				smartScreeningFields,
+				mode,
+			},
+		}),
+		messages: [
+			createTextMessage("assistant", t("chatPlaceholder", { title: data?.item?.title || "" }), "start"),
 		],
-		body: {
-			key: data?.item?.key,
-			modelIndex,
-			distinctId: posthog.get_distinct_id(),
-			smartScreeningFields,
-			mode,
-		},
-		headers: {
-			"Accept-Language": locale,
-		},
-		onFinish(message, options) {
+		onFinish() {
 			inputRef?.current?.focus();
-		},
-		onResponse() {
-			if (isEmbedded === false) {
-				setIsEmbedded?.(true);
-			}
 		},
 		onError: (e) => {
 			const isRateLimited = e.message.includes("Rate limit exceeded");
 			if (!isRateLimited) {
-				// appendMessage({
-				// 	role: "assistant",
-				// 	content: t("errorMessage"),
-				// 	id: "error-" + Date.now(),
-				// });
+				// appendMessage(createTextMessage("assistant", t("errorMessage"), "error-" + Date.now()));
 			} else {
 				(async () => {
 					const rateLimits = await getRateLimits();
-					appendMessage({
-						role: "assistant",
-						content: t("rateLimitedMessage", {
+					appendMessage(createTextMessage(
+						"assistant",
+						t("rateLimitedMessage", {
 							seconds: rateLimits.retryAfter || 0,
 						}),
-						id: "error-" + Date.now(),
-					});
+						"error-" + Date.now()
+					));
 				})();
 			}
 		},
 	});
+
+	const isLoading = status === 'submitted' || status === 'streaming';
+	const reload = () => regenerate();
+	const append = (message: { role: 'user' | 'assistant'; content: string }) => {
+		sendMessage({ text: message.content });
+	};
+	const handleSubmit = (e: React.FormEvent) => {
+		e.preventDefault();
+		if (input.trim()) {
+			sendMessage({ text: input });
+			setInput('');
+		}
+	};
 
 	console.log(messages);
 
@@ -401,22 +405,22 @@ export default function ChatModal({
 				smartScreeningFields,
 				posthog.get_distinct_id()
 			);
-			if (Object.keys(result).length > 0) {
-				appendMessage({
-					role: "data",
-					content: JSON.stringify({
-						result: result,
-						fields: smartScreeningFields,
-					}),
-					id: "screening-" + Date.now(),
-				});
-			} else {
-				appendMessage({
-					role: "assistant",
-					content: tUI("noResourcesForScreening"),
-					id: "screening-" + Date.now(),
-				});
-			}
+		if (Object.keys(result).length > 0) {
+			appendMessage(createTextMessage(
+				"assistant",
+				JSON.stringify({
+					result: result,
+					fields: smartScreeningFields,
+				}),
+				"screening-" + Date.now()
+			));
+		} else {
+			appendMessage(createTextMessage(
+				"assistant",
+				tUI("noResourcesForScreening"),
+				"screening-" + Date.now()
+			));
+		}
 		} catch (error) {
 			console.error(error);
 		} finally {

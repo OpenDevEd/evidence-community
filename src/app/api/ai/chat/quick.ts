@@ -1,4 +1,4 @@
-import { CoreMessage, streamText, tool } from "ai";
+import { ModelMessage, streamText, tool } from "ai";
 import { Item } from "../../item/types";
 import { z } from "zod";
 import {
@@ -19,7 +19,7 @@ export async function quickChat(
 	modelName: string,
 	locale: string,
 	cleanItem: Item | null,
-	coreMessages: CoreMessage[],
+	coreMessages: ModelMessage[],
 	fullTextPDFs: any,
 	distinctId: string,
 	messages: any[]
@@ -34,7 +34,7 @@ export async function quickChat(
 	});
 
 	const result = streamText({
-		model: provider!(modelName!),
+		model: provider!(modelName!) as any,
 		system: [
 			`LOCALE: ${locale}`,
 			`You are an AI research assistant created by OpenDevEd (Open Development & Education) to answer questions and help users find information about EdTech. Your primary role is to analyze and synthesize research findings into well-formatted responses.`,
@@ -86,14 +86,13 @@ Before you answer, classify the user’s intent into one of two categories:
 				  ]),
 		].join("\n"),
 		messages: coreMessages,
-		maxSteps: 10,
 		tools: {
 			getInformation: tool({
 				description: `Use this tool to retrieve specific passages of research from PDFs or other sources.
 - Appropriate when a user asks a direct factual question or when you need supporting evidence.
 - The output may contain raw OCR/text fragments, so you must clean, summarize, and make them human-readable before returning to the user.
 - You may call this tool multiple times, especially after finding potential sources with searchDatabase.`,
-				parameters: z.object({
+				inputSchema: z.object({
 					userQuery: z
 						.string()
 						.describe(
@@ -123,6 +122,10 @@ Before you answer, classify the user’s intent into one of two categories:
 					userQuery,
 					userSpecifiedPage,
 					itemKey: userDefinedKey,
+				}: {
+					userQuery: string;
+					userSpecifiedPage?: number;
+					itemKey?: string;
 				}) => {
 					console.log("userSpecifiedPage", userSpecifiedPage);
 					console.log("fullTextPDFs", fullTextPDFs);
@@ -171,7 +174,7 @@ Before you answer, classify the user’s intent into one of two categories:
 - Always transform the user’s request into a clear, semantic research query before calling this.
 - Results may be multiple. You must analyze them, select the most relevant, and follow up with getInformation to extract details if needed.
 - If there are no relevant results, state that explicitly.`,
-				parameters: z.object({
+				inputSchema: z.object({
 					q: z
 						.string()
 						.describe(
@@ -289,7 +292,7 @@ Before you answer, classify the user’s intent into one of two categories:
 		},
 	});
 
-	return result.toDataStreamResponse({
+	return result.toTextStreamResponse({
 		headers: { "Content-Type": "text/event-stream" },
 	});
 

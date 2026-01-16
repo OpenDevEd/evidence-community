@@ -3,7 +3,7 @@ import { getCachedItem } from "../../cache";
 import { NextResponse } from "next/server";
 import { createResource, findRelevantContent, getModel, RAGResult } from "@/lib/ai";
 import { isAIAllowed } from "@/lib/utils";
-import { convertToCoreMessages } from "ai";
+import { convertToModelMessages } from "ai";
 import { getAnswerFromPdfAgentic } from "./questions";
 import { getAnswerFromSearchAgentic } from "./search";
 import { quickChat } from "./quick";
@@ -45,7 +45,8 @@ export async function POST(req: Request) {
 		return new NextResponse("AI not allowed", { status: 403 });
 	}
 
-	const coreMessages = convertToCoreMessages(messages.slice(1)).filter(
+	const modelMessages = await convertToModelMessages(messages.slice(1));
+	const coreMessages = modelMessages.filter(
 		(message) => message.content.length > 0
 	);
 

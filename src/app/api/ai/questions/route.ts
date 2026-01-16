@@ -50,7 +50,7 @@ export async function POST(req: Request) {
 
     try {
         const result = await generateObject({
-            model: provider!(modelName!),
+            model: provider!(modelName!) as any,
             system: [
                 `LOCALE: ${locale}\n`,
                 "You are a helpful assistant created by OpenDevEd (Open Development & Education)",

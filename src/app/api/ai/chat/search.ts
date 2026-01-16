@@ -1,11 +1,12 @@
 import {
 	streamText,
 	generateObject,
-	createDataStreamResponse,
 	generateId,
+	ModelMessage,
+	createUIMessageStream,
+	createUIMessageStreamResponse,
 } from "ai";
 import { google } from "@ai-sdk/google";
-import { CoreMessage } from "ai";
 import { z } from "zod";
 import { cleanItemForAI, formatRange, getTimeDuration } from "@/lib/utils";
 import client from "@/lib/meilisearch";
@@ -126,28 +127,27 @@ export async function getAnswerFromSearchAgentic(
 	largeModel: string,
 	smallModel: string,
 	userQuestion: string,
-	messagesHistory: CoreMessage[],
+	messagesHistory: ModelMessage[],
 	locale: string
 ) {
 	console.log("Starting ADVANCED search-based agentic workflow...");
 	const startTime = Date.now();
 
-	return createDataStreamResponse({
-		headers: {
-			"Content-Type": "text/event-stream",
-		},
-		execute: async (dataStream) => {
-			const currentMessages: CoreMessage[] = [
+	const stream = createUIMessageStream({
+		execute: async ({ writer }) => {
+			const currentMessages: ModelMessage[] = [
 				...messagesHistory,
 				{ role: "user", content: userQuestion },
 			];
 
-			dataStream.writeMessageAnnotation({
-				type: "event",
+			writer.write({
+				type: "data-status",
 				id: generateId(),
-				message:
-					getTimeDuration(startTime) +
-					"Starting advanced research workflow...",
+				data: {
+					type: "event",
+					message: getTimeDuration(startTime) +
+					"Starting advanced research workflow..."
+				}
 			});
 
 			let researchPlan: Agent1Response = {
@@ -160,13 +160,15 @@ export async function getAnswerFromSearchAgentic(
 			};
 
 			try {
-				dataStream.writeMessageAnnotation({
+				writer.write({
+				type: "data-status",
+				id: generateId(),
+				data: {
 					type: "event",
-					id: generateId(),
-					message:
-						getTimeDuration(startTime) +
-						"Generating research plan...",
-				});
+					message: getTimeDuration(startTime) +
+						"Generating research plan..."
+				}
+			});
 
 				const agent1SystemPrompt = `You are an expert research assistant with excellent conversational skills. Your task is to analyze the user's most recent question in the context of the entire conversation history, and develop a research plan for finding relevant information in a document database.
 
@@ -208,12 +210,14 @@ You must output an object conforming to the provided schema.`;
 					temperature: 1,
 				});
 
-				dataStream.writeMessageAnnotation({
+				writer.write({
+				type: "data-status",
+				id: generateId(),
+				data: {
 					type: "event",
-					id: generateId(),
-					message:
-						getTimeDuration(startTime) + "Research plan generated",
-				});
+					message: getTimeDuration(startTime) + "Research plan generated"
+				}
+			});
 
 				researchPlan = { ...researchPlan, ...parsedPlan };
 
@@ -233,13 +237,15 @@ You must output an object conforming to the provided schema.`;
 				);
 			} catch (error) {
 				console.error("Error in Agent 1 (Flash):", error);
-				dataStream.writeMessageAnnotation({
+				writer.write({
+				type: "data-status",
+				id: generateId(),
+				data: {
 					type: "event",
-					id: generateId(),
-					message:
-						getTimeDuration(startTime) +
-						"Error generating research plan.",
-				});
+					message: getTimeDuration(startTime) +
+						"Error generating research plan."
+				}
+			});
 			}
 
 			console.log(
@@ -289,12 +295,15 @@ You must output an object conforming to the provided schema.`;
 
 			for (const searchQueryInstruction of researchPlan.search_queries) {
 				try {
-					dataStream.writeMessageAnnotation({
-						type: "event",
+					writer.write({
+						type: "data-status",
 						id: generateId(),
-						message:
-							getTimeDuration(startTime) +
-							`Searching for: ${searchQueryInstruction.query}`,
+						data: {
+							type: "event",
+							message:
+								getTimeDuration(startTime) +
+								`Searching for: ${searchQueryInstruction.query}`,
+						}
 					});
 
 					const inferredYearRange = "0";
@@ -320,12 +329,15 @@ You must output an object conforming to the provided schema.`;
 							limit: inferredAmount,
 						});
 
-					dataStream.writeMessageAnnotation({
-						type: "event",
+					writer.write({
+						type: "data-status",
 						id: generateId(),
-						message:
-							getTimeDuration(startTime) +
-							`Found ${result.hits.length} items for query: ${searchQueryInstruction.query}`,
+						data: {
+							type: "event",
+							message:
+								getTimeDuration(startTime) +
+								`Found ${result.hits.length} items for query: ${searchQueryInstruction.query}`,
+						}
 					});
 
 					const itemsForThisQuery = result.hits.map((item: Item) => ({
@@ -347,12 +359,15 @@ You must output an object conforming to the provided schema.`;
 						`Error in Agent 2 - Search for query "${searchQueryInstruction.query}":`,
 						searchError
 					);
-					dataStream.writeMessageAnnotation({
-						type: "event",
+					writer.write({
+						type: "data-status",
 						id: generateId(),
-						message:
-							getTimeDuration(startTime) +
-							`Search failed for query: ${searchQueryInstruction.query}`,
+						data: {
+							type: "event",
+							message:
+								getTimeDuration(startTime) +
+								`Search failed for query: ${searchQueryInstruction.query}`,
+						}
 					});
 				}
 			}
@@ -368,13 +383,15 @@ You must output an object conforming to the provided schema.`;
 
 			if (retrievedDatabaseItemsGroups.length === 0) {
 				console.warn("Agent 2 - No items found for any search query.");
-				dataStream.writeMessageAnnotation({
+				writer.write({
+				type: "data-status",
+				id: generateId(),
+				data: {
 					type: "event",
-					id: generateId(),
-					message:
-						getTimeDuration(startTime) +
-						"No relevant items found in search.",
-				});
+					message: getTimeDuration(startTime) +
+						"No relevant items found in search."
+				}
+			});
 			}
 
 			let allAssessedEvidence: Agent2Point5Response = {
@@ -382,13 +399,15 @@ You must output an object conforming to the provided schema.`;
 			};
 			try {
 				if (retrievedDatabaseItemsGroups.length > 0) {
-					dataStream.writeMessageAnnotation({
-						type: "event",
-						id: generateId(),
-						message:
-							getTimeDuration(startTime) +
-							"Assessing relevance of retrieved items...",
-					});
+					writer.write({
+				type: "data-status",
+				id: generateId(),
+				data: {
+					type: "event",
+					message: getTimeDuration(startTime) +
+							"Assessing relevance of retrieved items..."
+				}
+			});
 
 					const agent2Point5SystemPrompt = `You are a meticulous research assistant with a critical eye for relevance. Your task is to strictly assess retrieved document snippets and summarize *only* those highly relevant to specific research questions.\nFor each provided "Retrieved Item Group" which contains items retrieved for a "Question Context":\n1.  For each individual "Item" within that group:\n    a.  Critically evaluate the item's 'title' and 'description' (and potentially other fields if available in the raw item) against the "Question Context".\n    b.  Determine if the item is *highly and directly relevant* to the specific question context. Avoid including tangentially related or background information unless it directly supports a relevant point.\n    c.  If the item is *highly relevant*:\n        i.  Identify its 'title' and 'citationKey'.\n        ii. Write a concise 'relevance_summary' (1-2 sentences) clearly stating the key information, fact, or argument the item provides *in relation to the 'Question Context'*. Be specific about its contribution.\n        iii. (Optional) Provide 'analytical_notes' (1 sentence) if you spot any immediate connections to potential broader themes, very obvious strengths/weaknesses of this piece of evidence for the question, or if it directly corroborates/contradicts a general idea (without needing to cross-reference other items yet).\n    d.  If the item is *not highly relevant*, completely **exclude** it from your output for this group.\n2.  Construct your output object using the 'Agent2Point5OutputSchema'. For each input "Retrieved Item Group", create a corresponding group in your 'assessed_evidence_groups'. Include *only* the items that you assessed as highly relevant in the 'items' array for that group.\n    If, after assessment, *no* items from an input group are found highly relevant, include that group in your output with an empty 'items' array.
 
@@ -449,37 +468,44 @@ You MUST output an object conforming to the 'Agent2Point5OutputSchema'.\nEnsure 
 						"Agent 2.5 (Flash) - Assessed Evidence:",
 						JSON.stringify(allAssessedEvidence, null, 2)
 					);
-					dataStream.writeMessageAnnotation({
-						type: "event",
+					writer.write({
+						type: "data-status",
 						id: generateId(),
-						message:
-							getTimeDuration(startTime) +
-							`Assessment complete. ${allAssessedEvidence.assessed_evidence_groups.reduce(
-								(count, group) => count + group.items.length,
-								0
-							)} items deemed relevant.`,
+						data: {
+							type: "event",
+							message:
+								getTimeDuration(startTime) +
+								`Assessment complete. ${allAssessedEvidence.assessed_evidence_groups.reduce(
+									(count, group) => count + group.items.length,
+									0
+								)} items deemed relevant.`,
+						}
 					});
 				} else {
 					console.log(
 						"Agent 2.5 - Skipping assessment as no items were retrieved."
 					);
-					dataStream.writeMessageAnnotation({
-						type: "event",
-						id: generateId(),
-						message:
-							getTimeDuration(startTime) +
-							"Skipping assessment - no items retrieved.",
-					});
+					writer.write({
+				type: "data-status",
+				id: generateId(),
+				data: {
+					type: "event",
+					message: getTimeDuration(startTime) +
+							"Skipping assessment - no items retrieved."
+				}
+			});
 				}
 			} catch (error) {
 				console.error("Error in Agent 2.5 (Evidence Assessor):", error);
-				dataStream.writeMessageAnnotation({
+				writer.write({
+				type: "data-status",
+				id: generateId(),
+				data: {
 					type: "event",
-					id: generateId(),
-					message:
-						getTimeDuration(startTime) +
-						"Error during relevance assessment.",
-				});
+					message: getTimeDuration(startTime) +
+						"Error during relevance assessment."
+				}
+			});
 			}
 
 			let synthesisContextForAI = "";
@@ -554,10 +580,13 @@ You MUST output an object conforming to the 'Agent2Point5OutputSchema'.\nEnsure 
 					"No relevant items were found or assessed from the database for the generated search queries. The database might not contain information relevant to the user's question.";
 			}
 
-			dataStream.writeMessageAnnotation({
-				type: "event",
+			writer.write({
+				type: "data-status",
 				id: generateId(),
-				message: getTimeDuration(startTime) + "Thinking...",
+				data: {
+					type: "event",
+					message: getTimeDuration(startTime) + "Thinking..."
+				}
 			});
 
 			const subQuestionsContext =
@@ -630,12 +659,14 @@ Generate the detailed, analytical answer with citations now, making extensive us
 					"Agent 3 (Pro) - Output generated. Passing to Agent 4 for final review & streaming."
 				);
 
-				dataStream.writeMessageAnnotation({
+				writer.write({
+				type: "data-status",
+				id: generateId(),
+				data: {
 					type: "event",
-					id: generateId(),
-					message:
-						getTimeDuration(startTime) + "Synthesizing answer...",
-				});
+					message: getTimeDuration(startTime) + "Synthesizing answer..."
+				}
+			});
 
 				const agent4SystemPrompt = `You are a meticulous formatting assistant. Your primary task is to ensure all citations in the provided text strictly follow the format: [📚](/lib/CITATION_KEY) while preserving all markdown formatting.\nYou will be given a text generated by another AI. Review it ONLY for citation formatting.\n
 Original Answer Text:\n"""\n${agent3OutputText}\n"""\n
@@ -680,29 +711,33 @@ Output the entire text with ONLY the citation formats corrected, ensuring all ma
 					],
 					temperature: 1,
 					onFinish: (response) => {
-						dataStream.writeMessageAnnotation({
-							type: "event",
-							id: generateId(),
-							message:
-								getTimeDuration(startTime) +
-								"Answer synthesis complete.",
-						});
+						writer.write({
+				type: "data-status",
+				id: generateId(),
+				data: {
+					type: "event",
+					message: getTimeDuration(startTime) +
+								"Answer synthesis complete."
+				}
+			});
 					},
 				});
 
-				stream.mergeIntoDataStream(dataStream);
+				writer.merge(stream.toUIMessageStream());
 			} catch (error) {
 				console.error(
 					"Error in Agent 3 (Pro) or Agent 4 (Flash) workflow:",
 					error
 				);
-				dataStream.writeMessageAnnotation({
+				writer.write({
+				type: "data-status",
+				id: generateId(),
+				data: {
 					type: "event",
-					id: generateId(),
-					message:
-						getTimeDuration(startTime) +
-						"Error during answer synthesis or formatting.",
-				});
+					message: getTimeDuration(startTime) +
+						"Error during answer synthesis or formatting."
+				}
+			});
 				throw new Error(
 					"The AI encountered an issue while generating or formatting the final answer."
 				);

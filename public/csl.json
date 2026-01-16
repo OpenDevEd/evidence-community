@@ -151,7 +151,7 @@
         "edition"
       ],
       "event-place": [
-        "place"
+        "eventPlace"
       ],
       "event-title": [
         "meetingName",
@@ -195,6 +195,12 @@
       ],
       "number-of-volumes": [
         "numberOfVolumes"
+      ],
+      "original-publisher": [
+        "originalPublisher"
+      ],
+      "original-publisher-place": [
+        "originalPlace"
       ],
       "part-number": [
         "partNumber"
@@ -257,7 +263,8 @@
     "date": {
       "accessed": "accessDate",
       "issued": "date",
-      "submitted": "filingDate"
+      "submitted": "filingDate",
+      "original-date": "originalDate"
     }
   },
   "names": {
