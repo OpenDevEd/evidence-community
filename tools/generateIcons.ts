@@ -68,7 +68,6 @@ async function main() {
                 const [keep, ...remove] = sortedByPreference;
                 remove.forEach(f => filesToCopy.delete(f));
                 
-                console.log(`⚠️  Multiple ${baseName} files found. Keeping ${keep}, removing ${remove.join(', ')}`);
             }
         });
         
@@ -89,7 +88,6 @@ async function main() {
         });
     }
 
-    console.log('Icons generated successfully');
 }
 
 main();

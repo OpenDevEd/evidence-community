@@ -49,7 +49,6 @@ export async function getAnswerFromPdfAgentic(
 
     const stream = createUIMessageStream({
         execute: async ({ writer }) => {
-            console.log("Starting agentic workflow with page inference and streaming...");
             const startTime = Date.now();
 
             writer.write({
@@ -92,7 +91,6 @@ export async function getAnswerFromPdfAgentic(
   - If no page number is explicitly mentioned or clearly implied, output 0.
   You must output an object that conforms to the provided schema.`;
 
-                console.log("Agent 0 (Flash) System Prompt for page inference being used.");
                 const { object: pageInferenceResponse } = await generateObject({
                     model: provider(smallModel),
                     providerOptions: {
@@ -111,7 +109,6 @@ export async function getAnswerFromPdfAgentic(
                     messages: currentMessages,
                 });
                 inferredPage = pageInferenceResponse.inferred_page;
-                console.log("Agent 0 (Flash) Inferred Page:", inferredPage);
 
                 if (inferredPage > 0) {
                 writer.write({
@@ -173,7 +170,6 @@ Based on this contextual understanding:
 
 You must output an object that conforms to the provided schema.`;
 
-                console.log("Agent 1 (Flash) System Prompt for query generation being used.");
                 const { object: parsedPlan } = await generateObject({
                     model: provider(smallModel),
                     providerOptions: {
@@ -195,7 +191,6 @@ You must output an object that conforms to the provided schema.`;
                 if (!plan.original_question && userQuestion) {
                     plan.original_question = userQuestion;
                 }
-                console.log("Agent 1 (Flash) Parsed Plan:", plan);
 
                 writer.write({
                     type: "data-status",
@@ -224,8 +219,6 @@ You must output an object that conforms to the provided schema.`;
                 };
             }
 
-
-            console.log(`Agent 2: Retrieving content using findRelevantContent (inferred page: ${inferredPage})...`);
 
             writer.write({
                     type: "data-status",
@@ -299,7 +292,6 @@ You must output an object that conforms to the provided schema.`;
                 });
                 }
             }
-            console.log("Agent 2 Retrieved Content Groups:", retrievedContentGroups.length);
 
 
             let documentContextForAI = "";
@@ -374,9 +366,7 @@ You must output an object that conforms to the provided schema.`;
   8. IMPORTANT: Do NOT wrap your entire response in triple backticks (\`\`\`). Use markdown formatting within your text, but never enclose the whole response in code blocks.
   
   Generate the detailed, analytical answer now, making extensive use of markdown formatting to enhance readability and structure.`;
-
-            console.log("Agent 3 (Pro) System Prompt for streaming answer synthesis being used.");
-
+            
             let finishedThinking = false;
 
             try {

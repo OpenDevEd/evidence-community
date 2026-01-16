@@ -130,7 +130,6 @@ export async function getAnswerFromSearchAgentic(
 	messagesHistory: ModelMessage[],
 	locale: string
 ) {
-	console.log("Starting ADVANCED search-based agentic workflow...");
 	const startTime = Date.now();
 
 	const stream = createUIMessageStream({
@@ -195,9 +194,6 @@ Based on this contextual understanding:
 Focus on creating queries that will yield precise results.
 You must output an object conforming to the provided schema.`;
 
-				console.log(
-					"Agent 1 (Flash) - Research Planner: Generating research plan."
-				);
 				const { object: parsedPlan } = await generateObject({
 					model: provider(smallModel),
 					providerOptions: {
@@ -231,12 +227,7 @@ You must output an object conforming to the provided schema.`;
 				if (!researchPlan.original_question && userQuestion) {
 					researchPlan.original_question = userQuestion;
 				}
-				console.log(
-					"Agent 1 (Flash) - Research Plan:",
-					JSON.stringify(researchPlan, null, 2)
-				);
 			} catch (error) {
-				console.error("Error in Agent 1 (Flash):", error);
 				writer.write({
 				type: "data-status",
 				id: generateId(),
@@ -248,9 +239,6 @@ You must output an object conforming to the provided schema.`;
 			});
 			}
 
-			console.log(
-				`Agent 2 - Database Search: Executing ${researchPlan.search_queries.length} search queries.`
-			);
 			const retrievedDatabaseItemsGroups: RetrievedDatabaseItem[] = [];
 
 			const requestedLimitPerQuery = researchPlan.requested_result_count
@@ -276,19 +264,7 @@ You must output an object conforming to the provided schema.`;
 						researchPlan.geographical_region,
 						[]
 					);
-					console.log(
-						`Generated geographical filters for ${researchPlan.geographical_region.join(
-							", "
-						)}:`,
-						geoFilters
-					);
 				} catch (filterError) {
-					console.error(
-						`Error generating geographical filters for ${researchPlan.geographical_region.join(
-							", "
-						)}:`,
-						filterError
-					);
 					geoFilters = [];
 				}
 			}
@@ -355,10 +331,6 @@ You must output an object conforming to the provided schema.`;
 						});
 					}
 				} catch (searchError) {
-					console.error(
-						`Error in Agent 2 - Search for query "${searchQueryInstruction.query}":`,
-						searchError
-					);
 					writer.write({
 						type: "data-status",
 						id: generateId(),
@@ -371,10 +343,6 @@ You must output an object conforming to the provided schema.`;
 					});
 				}
 			}
-			console.log(
-				"Agent 2 - Retrieved Database Items Groups:",
-				retrievedDatabaseItemsGroups.length
-			);
 
 			const totalRetrievedItems = retrievedDatabaseItemsGroups.reduce(
 				(count, group) => count + group.items.length,
@@ -382,7 +350,6 @@ You must output an object conforming to the provided schema.`;
 			);
 
 			if (retrievedDatabaseItemsGroups.length === 0) {
-				console.warn("Agent 2 - No items found for any search query.");
 				writer.write({
 				type: "data-status",
 				id: generateId(),
@@ -441,9 +408,6 @@ You MUST output an object conforming to the 'Agent2Point5OutputSchema'.\nEnsure 
 									.join("\n")}\n`
 						)
 						.join("\n---\n")}\n`;
-					console.log(
-						"Agent 2.5 (Flash) - Evidence Assessor: Assessing retrieved items."
-					);
 					const { object: assessedEvidenceResult } =
 						await generateObject({
 							model: provider(smallModel),
@@ -464,10 +428,6 @@ You MUST output an object conforming to the 'Agent2Point5OutputSchema'.\nEnsure 
 							temperature: 1,
 						});
 					allAssessedEvidence = assessedEvidenceResult;
-					console.log(
-						"Agent 2.5 (Flash) - Assessed Evidence:",
-						JSON.stringify(allAssessedEvidence, null, 2)
-					);
 					writer.write({
 						type: "data-status",
 						id: generateId(),
@@ -482,9 +442,6 @@ You MUST output an object conforming to the 'Agent2Point5OutputSchema'.\nEnsure 
 						}
 					});
 				} else {
-					console.log(
-						"Agent 2.5 - Skipping assessment as no items were retrieved."
-					);
 					writer.write({
 				type: "data-status",
 				id: generateId(),
@@ -496,7 +453,6 @@ You MUST output an object conforming to the 'Agent2Point5OutputSchema'.\nEnsure 
 			});
 				}
 			} catch (error) {
-				console.error("Error in Agent 2.5 (Evidence Assessor):", error);
 				writer.write({
 				type: "data-status",
 				id: generateId(),
@@ -633,10 +589,6 @@ Your Analytical Task:
 
 Generate the detailed, analytical answer with citations now, making extensive use of markdown formatting to enhance readability and structure. Ensure the output is a single block of text representing the answer.`;
 
-			console.log(
-				"Agent 3 (Pro) - Synthesizer: Generating analytical answer."
-			);
-
 			try {
 				const { object: agent3OutputObject } = await generateObject({
 					model: provider(largeModel),
@@ -655,9 +607,6 @@ Generate the detailed, analytical answer with citations now, making extensive us
 				});
 				const agent3OutputText =
 					agent3OutputObject.analytical_answer_text;
-				console.log(
-					"Agent 3 (Pro) - Output generated. Passing to Agent 4 for final review & streaming."
-				);
 
 				writer.write({
 				type: "data-status",

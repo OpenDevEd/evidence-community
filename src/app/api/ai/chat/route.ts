@@ -26,9 +26,7 @@ export async function POST(req: Request) {
 
 		for (const pdf of item.item.fullTextPDFs || []) {
 			if (!EmbeddedItems.has(pdf.key)) {
-				console.log("Creating resource for", pdf.key);
 				await createResource(pdf, key);
-				console.log("Resource created for", pdf.key);
 				EmbeddedItems.add(pdf.key);
 			}
 		}
@@ -56,10 +54,8 @@ export async function POST(req: Request) {
 
 	try {
 		const response = cleanItem ? await getAnswerFromPdfAgentic(provider, modelName, largeModel, smallModel, messages.at(-1)?.content || "", cleanItem?.key || null, coreMessages) : await getAnswerFromSearchAgentic(provider, modelName, largeModel, smallModel, messages.at(-1)?.content || "", coreMessages, locale);
-		console.log("Response:", response);
 		return response;
 	} catch (error) {
-		console.error("Error in getAnswerFromPdfAgentic:", error);
 		return new NextResponse("An error occurred while generating the answer.", { status: 500 });
 	}
 }

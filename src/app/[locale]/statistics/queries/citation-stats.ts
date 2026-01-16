@@ -20,10 +20,7 @@ export type CreatorStats = {
 	maxCreatorsPerItem: number;
 };
 
-export async function getCitationStats(): Promise<CitationStats> {
-	console.log("📊 Query 11/16: Calculating citation statistics...");
-	const startTime = Date.now();
-	
+export async function getCitationStats(): Promise<CitationStats> {	
 	const citationStatsResult = await db
 		.select({
 			totalItems: sql<number>`count(*)`,
@@ -41,7 +38,6 @@ export async function getCitationStats(): Promise<CitationStats> {
 		);
 
 	// Get all citation counts for global H-Index calculation
-	console.log("🏆 Fetching citation counts for global H-Index...");
 	const globalCitationCountsResult = await db
 		.select({
 			citationCount: sql<number>`case when ${item.relations}::jsonb ? 'cited_by' then (${item.relations}::jsonb->>'cited_by')::int else 0 end`
@@ -68,15 +64,11 @@ export async function getCitationStats(): Promise<CitationStats> {
 		hIndex: globalHIndex
 	};
 	
-	console.log(`✅ Query 11 completed in ${Date.now() - startTime}ms (Global H-Index: ${globalHIndex})`);
 	
 	return citationStats;
 }
 
-export async function getCreatorStats(): Promise<CreatorStats> {
-	console.log("👥 Query 12/16: Calculating creator statistics...");
-	const startTime = Date.now();
-	
+export async function getCreatorStats(): Promise<CreatorStats> {	
 	const creatorStatsResult = await db
 		.select({
 			totalCreators: sql<number>`sum(
@@ -110,7 +102,6 @@ export async function getCreatorStats(): Promise<CreatorStats> {
 		);
 
 	// Calculate global unique authors count
-	console.log("🔢 Counting unique authors globally...");
 	const globalUniqueAuthorsResult = await db
 		.select({
 			uniqueAuthors: sql<number>`count(distinct author_name)`
@@ -141,8 +132,6 @@ export async function getCreatorStats(): Promise<CreatorStats> {
 		avgCreatorsPerItem: Number(creatorStatsResult[0]?.avgCreators || 0),
 		maxCreatorsPerItem: Number(creatorStatsResult[0]?.maxCreators || 0)
 	};
-	
-	console.log(`✅ Query 12 completed in ${Date.now() - startTime}ms (${creatorStats.uniqueCreators.toLocaleString()} unique authors)`);
 	
 	return creatorStats;
 } 

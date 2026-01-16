@@ -100,7 +100,6 @@ export const createResource = async (item: NonNullable<Item["fullTextPDFs"]>[0],
 		const existingEmbeddings = await db.select().from(embeddings).where(eq(embeddings.itemKey, item.key)).limit(1);
 		const embeddingsAlreadyExistOrItemHasNoPDFs = item.fullTextPDF.length === 0 || existingEmbeddings.length > 0;
 		if (embeddingsAlreadyExistOrItemHasNoPDFs) {
-			console.log("Embeddings already exist for this item.", item.key);
 			return "Embeddings already exist for this item.";
 		}
 
@@ -120,18 +119,14 @@ export const createResource = async (item: NonNullable<Item["fullTextPDFs"]>[0],
 				}))
 			);
 			insertedChunks += embeddings.length;
-			console.log("Inserted", embeddings.length, "embeddings for", item.key, `(${insertedChunks}/${totalChunks})`);
 			return insertion;
 		});
 
 
 		const results = await Promise.allSettled(allPDFPromises);
 
-		console.log("Inserted", insertedChunks, "embeddings for", item.key, `(${insertedChunks}/${totalChunks})`);
-
 		results.forEach((result, index) => {
 			if (result.status === 'rejected') {
-				console.error(`Failed to process document ${index}:`, result.reason);
 			}
 		});
 
@@ -171,7 +166,6 @@ export const findRelevantContent = async (
 	userSpecifiedPage: number,
 ): Promise<RAGResult[]> => {
 	if (!itemKey) {
-		console.warn("findRelevantContent called without an itemKey. Returning empty.");
 		return [];
 	}
 	const userQueryEmbedded = await generateEmbedding(userQuery);
@@ -201,8 +195,8 @@ export const findRelevantContent = async (
 		})
 		.from(embeddings)
 		.where(whereCondition)
-		.orderBy((t: any) => desc(t.similarity)) // t might need specific typing from your ORM
-		.limit(10); // Reduced limit for agent processing, adjust as needed
+		.orderBy((t: any) => desc(t.similarity))
+		.limit(10);
 
 	return similarGuidesFromDb.map((guide: any) => ({
 		...guide,

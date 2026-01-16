@@ -32,20 +32,14 @@ export async function getComprehensiveStats(ignore: boolean): Promise<Comprehens
 		if (ignore) {
 			throw new Error("Ignore");
 		}
-		console.log("📊 Checking cached statistics...");
 		const statsResult = await meilisearch
 			.index(index)
 			.getDocument(documentId);
-		console.log("✅ Found cached statistics");
 		return JSON.parse(statsResult.content);
 	} catch (error) {
-		console.log("🔄 No cached statistics found, generating fresh data...");
 		await ensureCacheIndexExists(index);
 
-		const startTime = Date.now();
-
 		// Execute all queries in parallel where possible
-		console.log("🚀 Starting comprehensive statistics generation...");
 
 		// Basic stats that other queries depend on
 		const totalItems = await getTotalItems();
@@ -119,19 +113,12 @@ export async function getComprehensiveStats(ignore: boolean): Promise<Comprehens
 			citationsByYear
 		};
 
-		const totalTime = Date.now() - startTime;
-		console.log(`🎉 All statistics calculated! Total time: ${totalTime}ms`);
-		console.log(`📈 Final stats: ${detailedAuthorStats.length} detailed authors, ${authorProductivityStats.totalAuthors.toLocaleString()} total authors, ${authorCollaborationStats.collaborationRate}% collaboration rate, ${topicData.topicStats.length} topics`);
-
-		console.log("💾 Caching statistics to Meilisearch...");
-		const cacheStart = Date.now();
 		await meilisearch.index(index).addDocuments([
 			{
 				id: documentId,
 				content: JSON.stringify(comprehensiveStats),
 			},
 		]);
-		console.log(`✅ Statistics cached in ${Date.now() - cacheStart}ms`);
 		
 		return comprehensiveStats;
 	}

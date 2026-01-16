@@ -3,8 +3,6 @@ import { join } from "path";
 import { columns } from "../src/db/schema/views/columns";
 
 (async () => {
-    console.log("Fetching Zotero schema...");
-    
     // Fetch the Zotero schema.json from GitHub
     const zoteroSchemaUrl = "https://raw.githubusercontent.com/zotero/zotero-schema/master/schema.json";
     const response = await fetch(zoteroSchemaUrl);
@@ -19,14 +17,9 @@ import { columns } from "../src/db/schema/views/columns";
         throw new Error("No CSL property found in Zotero schema");
     }
     
-    console.log("Updating local csl.json...");
-    
     // Update the local csl.json file with the CSL data from Zotero schema
     const cslPath = join(process.cwd(), "public", "csl.json");
     writeFileSync(cslPath, JSON.stringify(zoteroSchema.csl, null, 2));
-    console.log(`CSL data updated at ${cslPath}`);
-    
-    console.log("Fetching APA CSL style...");
     
     // Fetch the APA CSL style file
     const apaCslUrl = "https://raw.githubusercontent.com/citation-style-language/styles/master/apa.csl";
@@ -41,7 +34,6 @@ import { columns } from "../src/db/schema/views/columns";
     // Save APA CSL style to public folder
     const apaCslPath = join(process.cwd(), "public", "apa.csl");
     writeFileSync(apaCslPath, apaCslContent);
-    console.log(`APA CSL style saved at ${apaCslPath}`);
     
     // Now use the updated CSL data to generate schema
     const csl = zoteroSchema.csl;
@@ -97,5 +89,4 @@ import { columns } from "../src/db/schema/views/columns";
     // Write schema to JSON file
     const schemaPath = join(process.cwd(), "public", "schema.json");
     writeFileSync(schemaPath, JSON.stringify(schema, null, 2));
-    console.log(`Schema generated successfully at ${schemaPath}`);
 })();

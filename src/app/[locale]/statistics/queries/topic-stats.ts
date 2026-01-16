@@ -39,9 +39,6 @@ export type TopicYearStats = {
 };
 
 export async function getTopicStats(): Promise<{ topicStats: TopicStats[]; topicOverview: TopicOverview }> {
-	console.log("📚 Query: Analyzing topic/collection statistics...");
-	const startTime = Date.now();
-	
 	const topicStatsResult = await db
 		.select({
 			collections: item.collections,
@@ -161,15 +158,10 @@ export async function getTopicStats(): Promise<{ topicStats: TopicStats[]; topic
 		topicDistribution
 	};
 
-	console.log(`✅ Topic analysis completed in ${Date.now() - startTime}ms (${topicStats.length} topics, max depth: ${maxDepth})`);
-
 	return { topicStats, topicOverview };
 }
 
 export async function getTopicStatsByYear(): Promise<TopicYearStats[]> {
-	console.log("📅 Query: Fetching topic statistics by year...");
-	const startTime = Date.now();
-	
 	const topicsByYearResult = await db
 		.select({
 			collections: item.collections,
@@ -257,8 +249,6 @@ export async function getTopicStatsByYear(): Promise<TopicYearStats[]> {
 		if (yearCompare !== 0) return yearCompare;
 		return b.itemCount - a.itemCount;
 	});
-
-	console.log(`✅ Topic by year analysis completed in ${Date.now() - startTime}ms (${topicYearStats.length} topic-year combinations)`);
 
 	return topicYearStats;
 } 

@@ -761,8 +761,6 @@ export function useSearchMode() {
 		(mode) => !tabData[mode as SearchMode].disabled
 	).length;
 
-	console.log(activeCount);
-
 	return { selectedTab, tabData, setSelectedTab, activeCount };
 }
 

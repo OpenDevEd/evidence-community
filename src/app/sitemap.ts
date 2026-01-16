@@ -10,9 +10,6 @@ export async function generateSitemaps() {
 	const total = await getTotalItems();
 	const totalPages = Math.ceil(total / SITEMAP_SIZE);
 
-	console.log("\ntotalItems:", total);
-	console.log("totalSitemaps:\n", totalPages);
-
 	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));
 }
 
@@ -24,8 +21,6 @@ export default async function sitemap(props: {
 	let items;
 
 	const identifier = await props.id;
-
-	console.log(`fetching the page id ${identifier}`);
 
 	while (attempt < maxRetries) {
 		try {

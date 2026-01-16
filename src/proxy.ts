@@ -294,12 +294,8 @@ export default async function proxy(request: NextRequest) {
 				.toString()
 				.replace("https://", "http://");
 
-			// console.log(url.toString());
-
 			const response = await fetch(url);
 			const redirects = await response.json();
-
-			// console.log("Got response", redirects);
 
 			if (redirects?.value && redirects.value !== key) {
 				const newUrl = new URL(
@@ -415,7 +411,6 @@ export default async function proxy(request: NextRequest) {
 					attachment.url,
 					attachment.title
 				);
-				console.log("filename", attachment.title || "document");
 
 				if (modifiedPdf) {
 					// Return the modified PDF - convert Uint8Array to Buffer

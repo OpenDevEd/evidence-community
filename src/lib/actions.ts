@@ -173,13 +173,10 @@ export async function sendTakedownRequest(email: string, links: string[], descri
 		return { error: "Transporter not found" };
 	}
 
-	console.log("got takedown request", email, links, description);
 	const status = await getCachedStatus();
 
 	const companyName = status.companyName;
-	console.log("company name", companyName);
 	const validator = await validateTakedownRequest(email, links, description);
-	console.log("validator", validator);
 	if ("error" in validator) {
 		return { error: validator.error };
 	}
@@ -190,8 +187,6 @@ export async function sendTakedownRequest(email: string, links: string[], descri
 		subject: `${companyName} - Takedown Request`,
 		text: `Email: ${email}\nLinks: ${links.join("\n")}\nDescription: ${description}`,
 	};
-
-	console.log("mailOptions", mailOptions);
 
 	const result = await transporter.sendMail(mailOptions);
 
@@ -325,8 +320,6 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 				});
 				const end = Date.now();
 
-				console.log(`processed ${item.key} in ${end - start}ms`)
-
 				// Map the random keys back to the original field names
 				const newObject: Record<string, any> = {};
 				for (const fieldKey of Object.keys(result.object.screeningFields)) {
@@ -342,7 +335,6 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 					result: { screeningFields: newObject }
 				};
 			} catch (error) {
-				console.error(`Error processing item ${item.key}:`, error);
 				return { key: item.key, error };
 			}
 		});
@@ -381,11 +373,8 @@ export const createUser = async (email: string, password: string) => {
 
 
 export async function authorize(props: z.infer<typeof credentialsSchema>): Promise<{ error: string } | User> {
-	console.log("Authorizing credentials", props);
 
 	const parsedCredentials = credentialsSchema.safeParse(props);
-
-	console.log("Parsed credentials", parsedCredentials);
 
 	if (!parsedCredentials.success) {
 		const errorMessages = parsedCredentials.error.errors
@@ -535,8 +524,6 @@ export async function convertItem(
 				texts.push(ret);
 			}
 		} catch (error) {
-			console.log("Error converting item", item.key);
-			console.log(error);
 		}
 	});
 
@@ -702,8 +689,6 @@ export async function searchIndex(
 		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
 	>["filter"] = []
 ) {
-	// const cacheKey = cleanCacheKey(searchParams, extraFilters, extraProperties);
-
 	const items = async () => {
 		const pageNum = Math.max(1, Number(searchParams.page || 1));
 		const limitNum = ITEMS_PER_PAGE;
@@ -726,8 +711,6 @@ export async function searchIndex(
 		const sortOption =
 			SORT_OPTIONS.find((option) => option.key === effectiveSort)?.sort ||
 			SORT_OPTIONS[0].sort;
-
-		console.log("sortOption", sortOption);
 
 		// Generate hierarchical country filters
 		const countryFilters = createCountryFilters(country, author_country);

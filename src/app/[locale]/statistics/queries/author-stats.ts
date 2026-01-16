@@ -54,9 +54,6 @@ export type AuthorCollaborationStats = {
 };
 
 export async function getAuthorCountries(): Promise<AuthorCountryStats[]> {
-	console.log("🌍 Query 13/16: Calculating author countries statistics...");
-	const startTime = Date.now();
-	
 	const authorCountriesResult = await db
 		.select({
 			countryCode: sql<string>`country_code`,
@@ -111,15 +108,11 @@ export async function getAuthorCountries(): Promise<AuthorCountryStats[]> {
 		hIndex: calculateHIndex(stat.citationCounts?.map(c => Number(c)) || [])
 	}));
 	
-	console.log(`✅ Query 13 completed in ${Date.now() - startTime}ms (${authorCountries.length} countries)`);
 	
 	return authorCountries;
 }
 
 export async function getAuthorProductivityStats(): Promise<AuthorProductivityStats> {
-	console.log("👨‍🎓 Query 14/16: Calculating global author productivity stats...");
-	const startTime = Date.now();
-	
 	const globalAuthorProductivityResult = await db
 		.select({
 			totalAuthors: sql<number>`count(distinct author_name)`,
@@ -175,15 +168,11 @@ export async function getAuthorProductivityStats(): Promise<AuthorProductivitySt
 		productivityDistribution
 	};
 	
-	console.log(`✅ Query 14 completed in ${Date.now() - startTime}ms (${authorProductivityStats.totalAuthors.toLocaleString()} total authors)`);
 	
 	return authorProductivityStats;
 }
 
-export async function getAuthorCollaborationStats(): Promise<AuthorCollaborationStats> {
-	console.log("🤝 Query 15/16: Calculating global collaboration rate...");
-	const startTime = Date.now();
-	
+export async function getAuthorCollaborationStats(): Promise<AuthorCollaborationStats> {	
 	const globalCollaborationResult = await db
 		.select({
 			soloAuthors: sql<number>`count(distinct case when max_collaborators = 0 then author_name end)`,
@@ -225,15 +214,11 @@ export async function getAuthorCollaborationStats(): Promise<AuthorCollaboration
 		collaborationRate: Number(collaborationRate.toFixed(2))
 	};
 	
-	console.log(`✅ Query 15 completed in ${Date.now() - startTime}ms (${authorCollaborationStats.collaborationRate}% collaboration rate)`);
 	
 	return authorCollaborationStats;
 }
 
 export async function getDetailedAuthorStats(): Promise<AuthorStats[]> {
-	console.log("📊 Query 16/16: Calculating detailed author statistics (top 200)...");
-	const startTime = Date.now();
-	
 	const detailedAuthorStatsResult = await db
 		.select({
 			authorName: sql<string>`author_name`,
@@ -361,7 +346,6 @@ export async function getDetailedAuthorStats(): Promise<AuthorStats[]> {
 		};
 	});
 	
-	console.log(`✅ Query 16 completed in ${Date.now() - startTime}ms (${authorStats.length} detailed authors)`);
 	
 	return authorStats;
 } 

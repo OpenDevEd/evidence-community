@@ -14,7 +14,7 @@ export function toast(toast: Omit<ToastProps, 'id'>) {
       type={toast.type}
       button={toast.button ? {
         label: toast.button.label,
-        onClick: toast.button.onClick || (() => console.log('Button clicked')),
+        onClick: toast.button.onClick,
       } : undefined}
     />
   ), {

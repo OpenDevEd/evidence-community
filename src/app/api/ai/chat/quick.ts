@@ -24,15 +24,6 @@ export async function quickChat(
 	distinctId: string,
 	messages: any[]
 ) {
-	console.log("quickChat", {
-		provider,
-		modelName,
-		locale,
-		cleanItem,
-		distinctId,
-		messages,
-	});
-
 	const result = streamText({
 		model: provider!(modelName!) as any,
 		system: [
@@ -48,7 +39,7 @@ export async function quickChat(
 			...(cleanItem
 				? [`ITEM: ${JSON.stringify(cleanItem)}`]
 				: [
-						`== DECISION PROCESS ==
+					`== DECISION PROCESS ==
 Before you answer, classify the user’s intent into one of two categories:
 
 1. LIST REQUEST
@@ -83,7 +74,7 @@ Before you answer, classify the user’s intent into one of two categories:
 - Do not include irrelevant or filler information.
 - Always include citation links [📚](/lib/KEY).
 - Responses should read like research summaries, not tool logs.`,
-				  ]),
+				]),
 		].join("\n"),
 		messages: coreMessages,
 		tools: {
@@ -127,10 +118,6 @@ Before you answer, classify the user’s intent into one of two categories:
 					userSpecifiedPage?: number;
 					itemKey?: string;
 				}) => {
-					console.log("userSpecifiedPage", userSpecifiedPage);
-					console.log("fullTextPDFs", fullTextPDFs);
-					console.log("cleanItem", cleanItem);
-					console.log("userDefinedKey", userDefinedKey);
 					if (
 						(fullTextPDFs && fullTextPDFs.length > 0) ||
 						!cleanItem
@@ -139,7 +126,7 @@ Before you answer, classify the user’s intent into one of two categories:
 						if (isGlobalChat && userDefinedKey) {
 							const canLookUp =
 								await doEmbeddingsExistForPDFs(
-									 userDefinedKey
+									userDefinedKey
 								);
 							if (!canLookUp) {
 								try {
@@ -162,7 +149,6 @@ Before you answer, classify the user’s intent into one of two categories:
 							cleanItem?.key || userDefinedKey || null,
 							userSpecifiedPage || 0
 						);
-						console.log("relevantContent", relevantContent);
 						return relevantContent;
 					} else {
 						return "There is no PDF attached to this item.";
@@ -220,13 +206,6 @@ Before you answer, classify the user’s intent into one of two categories:
 						return { hits: [], totalHits: 0 };
 					}
 
-					console.log(
-						"userSpecifiedYearOrRange",
-						userSpecifiedYearOrRange
-					);
-					console.log("userSpecifiedSort", userSpecifiedSort);
-					console.log("q", q);
-
 					let result: SearchResponse<Item>;
 					try {
 						result = await client
@@ -241,14 +220,13 @@ Before you answer, classify the user’s intent into one of two categories:
 									userSpecifiedYearOrRange === "0"
 										? null
 										: formatRange(
-												userSpecifiedYearOrRange
-										  ),
+											userSpecifiedYearOrRange
+										),
 								].filter(Boolean) as string[],
 								limit: userSpecifiedAmountOfResults,
 							});
 
 						const resultIds = result.hits.map((item: ItemsGetResponse["items"][number]) => item.key);
-						console.log("resultIds", resultIds);
 					} catch (e) {
 						console.error(e);
 						result = {

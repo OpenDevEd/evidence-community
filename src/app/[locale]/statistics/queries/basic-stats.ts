@@ -33,9 +33,6 @@ export type CitationYearStats = {
 };
 
 export async function getTotalItems(): Promise<number> {
-	console.log("📊 Query 3/16: Counting total items...");
-	const startTime = Date.now();
-	
 	const totalItemsResult = await db
 		.select({ count: sql<number>`count(*)` })
 		.from(item)
@@ -47,15 +44,11 @@ export async function getTotalItems(): Promise<number> {
 		);
 	
 	const totalItems = totalItemsResult[0]?.count || 0;
-	console.log(`✅ Query 3 completed in ${Date.now() - startTime}ms (${totalItems.toLocaleString()} total items)`);
 	
 	return Number(totalItems);
 }
 
 export async function getAvailableYears(): Promise<string[]> {
-	console.log("🗓️  Query 4/16: Fetching available years...");
-	const startTime = Date.now();
-	
 	const availableYearsResult = await db
 		.select({
 			year: sql<string>`extract(year from 
@@ -94,15 +87,11 @@ export async function getAvailableYears(): Promise<string[]> {
 		)`))
 		.limit(20); // Limit to last 20 years with data
 	
-	console.log(`✅ Query 4 completed in ${Date.now() - startTime}ms (${availableYearsResult.length} years with data)`);
 	
 	return availableYearsResult.map(stat => stat.year || '');
 }
 
 export async function getItemTypeStats(totalItems: number): Promise<ItemTypeStats[]> {
-	console.log("📋 Query 5/16: Fetching item type distribution...");
-	const startTime = Date.now();
-	
 	const itemTypeStatsResult = await db
 		.select({
 			itemType: item.itemType,
@@ -124,15 +113,11 @@ export async function getItemTypeStats(totalItems: number): Promise<ItemTypeStat
 		percentage: totalItems > 0 ? Number(((Number(stat.count) / totalItems) * 100).toFixed(2)) : 0
 	}));
 	
-	console.log(`✅ Query 5 completed in ${Date.now() - startTime}ms (${itemTypes.length} item types)`);
 	
 	return itemTypes;
 }
 
 export async function getYearDistribution(): Promise<YearStats[]> {
-	console.log("📈 Query 6/16: Fetching year distribution...");
-	const startTime = Date.now();
-	
 	const yearStatsResult = await db
 		.select({
 			year: sql<string>`extract(year from 
@@ -170,7 +155,6 @@ export async function getYearDistribution(): Promise<YearStats[]> {
 		)`))
 		.limit(20);
 	
-	console.log(`✅ Query 6 completed in ${Date.now() - startTime}ms (${yearStatsResult.length} years)`);
 	
 	return yearStatsResult.map(stat => ({
 		year: stat.year || '',
@@ -179,9 +163,6 @@ export async function getYearDistribution(): Promise<YearStats[]> {
 }
 
 export async function getFieldCompleteness(totalItems: number): Promise<FieldStats[]> {
-	console.log("📝 Query 7/16: Analyzing field completeness...");
-	const startTime = Date.now();
-	
 	const fieldCompletenessResult = await db
 		.select({
 			titleFilled: sql<number>`count(case when ${item.title} is not null and ${item.title} != '' then 1 end)`,
@@ -221,15 +202,11 @@ export async function getFieldCompleteness(totalItems: number): Promise<FieldSta
 		{ field: 'languageName', filledCount: Number(fieldStats?.languageFilled || 0), percentage: Number(((Number(fieldStats?.languageFilled || 0) / totalItems) * 100).toFixed(2)) }
 	];
 	
-	console.log(`✅ Query 7 completed in ${Date.now() - startTime}ms (${fieldCompleteness.length} fields analyzed)`);
 	
 	return fieldCompleteness;
 }
 
 export async function getAttachmentStats(totalItems: number): Promise<AttachmentStats> {
-	console.log("📎 Query 8/16: Calculating attachment statistics...");
-	const startTime = Date.now();
-	
 	const attachmentStatsResult = await db
 		.select({
 			totalAttachments: sql<number>`count(case when ${item.parentItem} is not null and ${item.parentItem} != '' then 1 end)`,
@@ -244,8 +221,6 @@ export async function getAttachmentStats(totalItems: number): Promise<Attachment
 		attachmentPercentage: totalItems > 0 ? Number(((Number(attachmentStatsResult[0]?.itemsWithAttachments || 0) / totalItems) * 100).toFixed(2)) : 0
 	};
 	
-	console.log(`✅ Query 8 completed in ${Date.now() - startTime}ms (${attachmentStats.totalAttachments.toLocaleString()} attachments)`);
-	
 	return attachmentStats;
 }
 
@@ -254,9 +229,6 @@ export async function getPublishersAndJournals(): Promise<{
 	topJournals: { journal: string; count: number }[];
 	languageDistribution: { language: string; count: number }[];
 }> {
-	console.log("📚 Query 9/16: Fetching publishers and journals...");
-	const startTime = Date.now();
-	
 	const topPublishersResult = await db
 		.select({
 			publisher: item.publisher,
@@ -313,8 +285,6 @@ export async function getPublishersAndJournals(): Promise<{
 		.orderBy(desc(sql`count(*)`))
 		.limit(10);
 	
-	console.log(`✅ Query 9 completed in ${Date.now() - startTime}ms (${topPublishersResult.length} publishers, ${topJournalsResult.length} journals, ${languageDistributionResult.length} languages)`);
-	
 	return {
 		topPublishers: topPublishersResult.map(stat => ({
 			publisher: stat.publisher || '',
@@ -332,9 +302,6 @@ export async function getPublishersAndJournals(): Promise<{
 }
 
 export async function getRecentActivity(): Promise<{ date: string; count: number }[]> {
-	console.log("📈 Query 12/16: Analyzing recent activity...");
-	const startTime = Date.now();
-	
 	const recentActivityResult = await db
 		.select({
 			date: sql<string>`DATE(${item.dateAdded})`,
@@ -351,8 +318,6 @@ export async function getRecentActivity(): Promise<{ date: string; count: number
 		.groupBy(sql`DATE(${item.dateAdded})`)
 		.orderBy(desc(sql`DATE(${item.dateAdded})`));
 
-	console.log(`✅ Query 12 completed in ${Date.now() - startTime}ms (${recentActivityResult.length} activity days)`);
-	
 	return recentActivityResult.map(activity => ({
 		date: activity.date || '',
 		count: Number(activity.count)
@@ -360,9 +325,6 @@ export async function getRecentActivity(): Promise<{ date: string; count: number
 }
 
 export async function getCitationsByYear(): Promise<CitationYearStats[]> {
-	console.log("📊 Query: Fetching citation statistics by year...");
-	const startTime = Date.now();
-	
 	const citationsByYearResult = await db
 		.select({
 			year: sql<string>`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
@@ -390,8 +352,6 @@ export async function getCitationsByYear(): Promise<CitationYearStats[]> {
 		)
 		.groupBy(sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`)
 		.orderBy(desc(sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`));
-
-	console.log(`✅ Citation by year analysis completed in ${Date.now() - startTime}ms (${citationsByYearResult.length} years)`);
 
 	return citationsByYearResult.map(stat => ({
 		year: stat.year || '',

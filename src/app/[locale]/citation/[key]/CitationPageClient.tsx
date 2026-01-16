@@ -395,8 +395,6 @@ function CitationsCountryChart({
 }) {
 	const t = useTranslations("ui");
 	const { resolvedTheme: theme } = useTheme();
-
-	console.log("RESOLVED TRHEME", theme);
 	
 	const [tooltipState, setTooltipState] = useState({
 		visible: false,

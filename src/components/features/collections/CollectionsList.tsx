@@ -490,8 +490,6 @@ function FiltersList({
 	const isAuthorLocationEnabled = useFeatureFlagEnabled("author-location");
 	const isNationalityFocusEnabled = IS_COUNTRY_LIBRARY;
 
-	console.log(isNationalityFocusEnabled);
-
 	const { data: nationalInstitutionsData } = useSWR<InstitutionsData>(
 		isNationalityFocusEnabled ? `/institutions` : null,
 		fetcher

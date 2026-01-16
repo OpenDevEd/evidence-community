@@ -29,7 +29,6 @@ ${sitemaps.map((sitemap) => `<sitemap><loc>${sitemap}</loc></sitemap>`).join('\n
 </sitemapindex>`;
 
   await fs.writeFile(SITEMAP_INDEX_PATH, xmlString);
-  console.log(`Generated sitemap index with ${totalPages} sitemaps`);
 }
 
 main();

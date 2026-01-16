@@ -43,9 +43,6 @@ export type CollaborationStats = {
 };
 
 export async function getCollaborationStats(authorCountries: { countryCode: string; countryName: string; authorCount: number; itemCount: number; hIndex: number }[]): Promise<CollaborationStats> {
-	console.log("🤝 Calculating collaboration statistics...");
-	const startTime = Date.now();
-	
 	// First, get all items with their associated countries
 	const itemsWithCountriesResult = await db
 		.select({
@@ -188,8 +185,6 @@ export async function getCollaborationStats(authorCountries: { countryCode: stri
 		topCollaborations,
 		collaborationMatrix
 	};
-	
-	console.log(`✅ Collaboration statistics calculated in ${Date.now() - startTime}ms (${collaborationStats.totalItems.toLocaleString()} items, ${collaborationStats.overallCollaborationRate}% collaboration rate)`);
 	
 	return collaborationStats;
 } 

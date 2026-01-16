@@ -23,9 +23,6 @@ export type InstitutionYearStats = {
 };
 
 export async function getInstitutionStats(): Promise<InstitutionStats[]> {
-	console.log("🏛️  Query 1/16: Fetching institution statistics...");
-	const startTime = Date.now();
-	
 	const institutionStatsResult = await db
 		.select({
 			institution: sql<string>`institution_name`,
@@ -63,8 +60,6 @@ export async function getInstitutionStats(): Promise<InstitutionStats[]> {
 		.groupBy(sql`institution_name, country_code`)
 		.orderBy(desc(sql`count(*)`));
 	
-	console.log(`✅ Query 1 completed in ${Date.now() - startTime}ms (${institutionStatsResult.length} institutions)`);
-	
 	return institutionStatsResult.map(stat => ({
 		institution: stat.institution?.trim() || '',
 		countryCode: stat.countryCode || '',
@@ -76,9 +71,6 @@ export async function getInstitutionStats(): Promise<InstitutionStats[]> {
 }
 
 export async function getInstitutionStatsByYear(): Promise<InstitutionYearStats[]> {
-	console.log("📅 Query 2/16: Fetching institution statistics by year...");
-	const startTime = Date.now();
-	
 	const institutionsByYearResult = await db
 		.select({
 			institution: sql<string>`institution_name`,
@@ -134,8 +126,6 @@ export async function getInstitutionStatsByYear(): Promise<InstitutionYearStats[
 		.where(sql`institution_name IS NOT NULL AND institution_name != '' AND year_extracted IS NOT NULL`)
 		.groupBy(sql`institution_name, country_code, year_extracted`)
 		.orderBy(desc(sql`year_extracted::int`), desc(sql`count(distinct item_key)`));
-	
-	console.log(`✅ Query 2 completed in ${Date.now() - startTime}ms (${institutionsByYearResult.length} institution-year records)`);
 	
 	return institutionsByYearResult.map(stat => ({
 		institution: stat.institution?.trim() || '',

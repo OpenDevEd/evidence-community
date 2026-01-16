@@ -29,7 +29,6 @@ function calculateHIndex(citationCounts: number[]): number {
 }
 
 async function fetchInstitutionsData(): Promise<InstitutionsData> {
-	console.log("🔄 Fetching fresh institution data from database...");
 	
 	// Get institution stats with citation data for H-Index calculation
 	const institutionStatsResult = await db

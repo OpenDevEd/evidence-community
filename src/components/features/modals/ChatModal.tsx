@@ -348,8 +348,6 @@ export default function ChatModal({
 		}
 	};
 
-	console.log(messages);
-
 	const [isMutating, setIsMutating] = useState(false);
 
 	const messageListRef = useRef<HTMLDivElement>(null);
@@ -391,7 +389,6 @@ export default function ChatModal({
 	);
 
 	const handleScreening = async (content: string) => {
-		// get all keys from all "/lib/KEY" occurences in content
 		const keys = content.match(/lib\/(\w+)/g);
 		if (!keys) {
 			return;

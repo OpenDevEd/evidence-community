@@ -19,8 +19,6 @@ export async function POST(req: Request) {
     const { prompt: key, modelIndex, distinctId } = await req.json();
     const prompt = "questions"
 
-    console.log(key, modelIndex, distinctId)
-
     const item = await getCachedItem(key!);
 
     if (!item || !item.item) {

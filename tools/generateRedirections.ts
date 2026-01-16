@@ -27,30 +27,21 @@ function getKey(url: string) {
         }
      })
 
-     console.log(`got ${allItems.length} items`);
-
     for (const item of allItems) {
         const relations = (item.relations || {}) as RelationsType;
         if (!relations) continue;
         const value = relations['dc:replaces'];
         if (value) {
-            console.log(`got ${value}`);
             if (Array.isArray(value)) {
                 for (const v of value) {
                     reditectionsMap.set(getKey(v), item.key);
-                    console.log(`set ${getKey(v)} to ${item.key}`);
                 }
             } else {
                 reditectionsMap.set(getKey(value), item.key);
-                console.log(`set ${getKey(value)} to ${item.key}`);
             }
         }
     }
-
-    console.log(`got ${reditectionsMap.size} redirections`);
-
-    console.log(`writing to ${process.cwd()}/${REDIRECTIONS_PATH}`);
-
+    
     const mapToObject = Object.fromEntries(reditectionsMap);
 
     await fs.writeFile(REDIRECTIONS_PATH, JSON.stringify(mapToObject, null, 2));

@@ -282,8 +282,6 @@ export function ItemToZoteroJSON(item: Item): ZoteroItem {
 
 	const zoteroItem = rest as ZoteroItem;
 
-	// console.log(item);
-
 	const country = finalCountry?.split("|").map(c => c.trim());
 	zoteroItem.country = country ? country[0] : null;
 
@@ -413,12 +411,6 @@ export function transformItem(item: Item | undefined) {
 	const ExtraValues = getExtraValues(item.extra || "");
 
 	item.DOI = item.DOI || ExtraValues.get("DOI") || null;
-	// item.url =
-	// 	item.attachmentsData?.find((attachment) =>
-	// 		attachment.title?.includes(
-	// 			"📝View Google Doc and download alternative formats"
-	// 		)
-	// 	)?.url ||
-	// 	item.url;
+
 	return item;
 }
