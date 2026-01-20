@@ -41,7 +41,14 @@ import LikeButton from "../items/LikeButton";
 import { AddButton } from "../items/Resource";
 import { BiDownload } from "react-icons/bi";
 import { LuDownload } from "react-icons/lu";
-import { createContext, use, useCallback, useEffect, useState } from "react";
+import {
+	createContext,
+	use,
+	useCallback,
+	useEffect,
+	useState,
+	useMemo,
+} from "react";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { useQueryState } from "nuqs";
 import ItemOld from "@/components/pages/Item";
@@ -71,12 +78,10 @@ const decodeHTMLEntities = (text: string) => {
 		.replace(/&gt;/g, ">")
 		.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(dec))
 		.replace(/&#x([0-9A-F]+);/gi, (_, hex) =>
-			String.fromCharCode(parseInt(hex, 16))
+			String.fromCharCode(parseInt(hex, 16)),
 		)
 		.replace(/<[^>]*>?/g, "");
 };
-
-
 
 interface ItemRowProps {
 	icon: React.ReactNode;
@@ -103,10 +108,6 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 		</div>
 	);
 }
-
-
-
-
 
 function formatAuthor(author: Author) {
 	if (author.name) return author.name;
@@ -141,13 +142,13 @@ function SidebarCard({
 			<div
 				className={twMerge(
 					"flex justify-between items-center gap-2 mb-4 px-4",
-					classNames?.titleWrapper
+					classNames?.titleWrapper,
 				)}
 			>
 				<h3
 					className={twMerge(
 						"text-lg font-medium",
-						classNames?.title
+						classNames?.title,
 					)}
 				>
 					{title}
@@ -156,7 +157,7 @@ function SidebarCard({
 					<div
 						className={twMerge(
 							"text-sm text-black/60 dark:text-white/60",
-							classNames?.count
+							classNames?.count,
 						)}
 					>
 						{count}
@@ -166,7 +167,7 @@ function SidebarCard({
 			<div
 				className={twMerge(
 					"flex flex-col gap-4 max-h-96 overflow-y-auto pb-4 overflow-x-hidden text-wrap-anywhere",
-					classNames?.content
+					classNames?.content,
 				)}
 			>
 				{children}
@@ -316,12 +317,14 @@ function ItemAuthor({ author }: { author?: Author }) {
 															/>
 														</div>
 														<span className="text-xs text-black/60 dark:text-white/60">
-															{`${COUNTRIES[
-																institution
-																	.country_code
-															]
-																} (${institution.country_code
-																})`}
+															{`${
+																COUNTRIES[
+																	institution
+																		.country_code
+																]
+															} (${
+																institution.country_code
+															})`}
 														</span>
 													</motion.div>
 												)}
@@ -335,7 +338,11 @@ function ItemAuthor({ author }: { author?: Author }) {
 			}
 		>
 			<LinkWithParams
-				href={isAuthorFilterEnabled ? getSafeReferrer(referrer) : undefined}
+				href={
+					isAuthorFilterEnabled
+						? getSafeReferrer(referrer)
+						: undefined
+				}
 				params={
 					fullName && isAuthorFilterEnabled
 						? { author: fullName, referrer: referrer ?? undefined }
@@ -369,11 +376,11 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 		<SidebarCard title={t("itemAuthorsTitle")} count={authors?.length}>
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
-					<ItemAuthor key={index} author={undefined} />
-				))
+						<ItemAuthor key={index} author={undefined} />
+					))
 				: authors?.map((author: Author, index: number) => (
-					<ItemAuthor key={index} author={author} />
-				))}
+						<ItemAuthor key={index} author={author} />
+					))}
 		</SidebarCard>
 	);
 }
@@ -384,13 +391,15 @@ function ItemInstitution({ institution }: { institution?: string }) {
 
 	return (
 		<LinkWithParams
-			href={isAuthorLocationEnabled ? getSafeReferrer(referrer) : undefined}
+			href={
+				isAuthorLocationEnabled ? getSafeReferrer(referrer) : undefined
+			}
 			params={
 				institution && isAuthorLocationEnabled
 					? {
-						institution: [institution],
-						referrer: referrer ?? undefined,
-					}
+							institution: [institution],
+							referrer: referrer ?? undefined,
+						}
 					: {}
 			}
 			className="opacity-100"
@@ -421,16 +430,16 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 		>
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
-					<ItemInstitution key={index} institution={undefined} />
-				))
+						<ItemInstitution key={index} institution={undefined} />
+					))
 				: Array.from(new Set(institutions)).map(
-					(institution: string) => (
-						<ItemInstitution
-							key={institution}
-							institution={institution}
-						/>
-					)
-				)}
+						(institution: string) => (
+							<ItemInstitution
+								key={institution}
+								institution={institution}
+							/>
+						),
+					)}
 		</SidebarCard>
 	);
 }
@@ -471,7 +480,7 @@ function formatDate(value: string, formatter: ReturnType<typeof useFormatter>) {
 function formatValue(
 	key: keyof Item,
 	value: any,
-	formatter: ReturnType<typeof useFormatter>
+	formatter: ReturnType<typeof useFormatter>,
 ) {
 	if (
 		key.toLowerCase().includes("date") ||
@@ -510,7 +519,7 @@ function ItemDetailsRow({
 									<span
 										dangerouslySetInnerHTML={{
 											__html: ProcessHTML(
-												String(formattedValue) || ""
+												String(formattedValue) || "",
 											),
 										}}
 										className="text-black/80 dark:text-white/80 text-wrap-anywhere"
@@ -582,21 +591,21 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		<SidebarCard title={t("itemPublicationDetailsTitle")}>
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
-					<ItemDetailsRow key={index} detail={undefined} />
-				))
+						<ItemDetailsRow key={index} detail={undefined} />
+					))
 				: details
-					.filter(
-						(detail) =>
-							!excludedFields.includes(
-								detail.label as keyof Item
-							)
-					)
-					.map((detail) => (
-						<ItemDetailsRow
-							key={detail.label}
-							detail={detail}
-						/>
-					))}
+						.filter(
+							(detail) =>
+								!excludedFields.includes(
+									detail.label as keyof Item,
+								),
+						)
+						.map((detail) => (
+							<ItemDetailsRow
+								key={detail.label}
+								detail={detail}
+							/>
+						))}
 		</SidebarCard>
 	);
 }
@@ -616,17 +625,17 @@ function ItemTechnical({ item }: { item: Item | undefined }) {
 		<SidebarCard title={t("itemTechnicalDetailsTitle")} color="card">
 			{loading
 				? Array.from({ length: 3 }).map((_, index) => (
-					<ItemDetailsRow key={index} detail={undefined} />
-				))
+						<ItemDetailsRow key={index} detail={undefined} />
+					))
 				: Object.entries(keyValues).map(([key, value]) => (
-					<ItemDetailsRow
-						key={key}
-						detail={{
-							label: key,
-							value: value,
-						}}
-					/>
-				))}
+						<ItemDetailsRow
+							key={key}
+							detail={{
+								label: key,
+								value: value,
+							}}
+						/>
+					))}
 		</SidebarCard>
 	);
 }
@@ -685,28 +694,72 @@ function ProcessHTML(html: string) {
 
 function ItemCitation({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
-	const citationText = item?.citation?.replace(/<[^>]+>/g, "") || undefined;
+	const [origin, setOrigin] = useState("");
 
-	let citationTextWithSymbols = citationText
-		? decodeHTMLEntities(citationText)
-		: undefined;
-
-	if (SHOW_URL_IN_CITATION && item?.key && citationTextWithSymbols) {
-		const url = typeof window !== "undefined" ? window.location.origin : "";
-		const finalURL = new URL(url + "/lib/" + item.key);
-		if (!citationTextWithSymbols.endsWith(".")) {
-			citationTextWithSymbols += ".";
+	useEffect(() => {
+		if (typeof window !== "undefined") {
+			setOrigin(window.location.origin);
 		}
-		citationTextWithSymbols += ` Available at ${finalURL}`;
-	}
+	}, []);
+
+	const { citationCopy, citationHtml, isLoading } = useMemo(() => {
+		if (item?.citation === "<div>Loading...</div>") {
+			return { isLoading: true };
+		}
+
+		const rawCitation = item?.citation || "";
+		const cleanCitationText = rawCitation.replace(/<[^>]+>/g, "");
+		const decodedCitation = cleanCitationText
+			? decodeHTMLEntities(cleanCitationText)
+			: undefined;
+
+		if (!SHOW_URL_IN_CITATION || !item?.key || !decodedCitation) {
+			return {
+				citationCopy: decodedCitation,
+				citationHtml: ProcessHTML(rawCitation.trim()),
+				isLoading: false,
+			};
+		}
+
+		const urlStr = origin
+			? `${origin}/lib/${item.key}`
+			: `/lib/${item.key}`;
+		const linkHtml = `<a href="${urlStr}" target="_blank" rel="noopener noreferrer" class="text-link_light dark:text-link hover:underline">${urlStr}</a>`;
+
+		// Copy Text Logic
+		let copy = decodedCitation;
+		if (!copy.endsWith(".")) copy += ".";
+		copy += ` Available at ${urlStr}.`;
+
+		// Display HTML Logic
+		const html = rawCitation.trim();
+		const divRegex = /<\/div>\s*$/;
+		const hasDiv = divRegex.test(html);
+		const baseHtml = html.replace(divRegex, "");
+
+		const processedBase = ProcessHTML(baseHtml);
+
+		const separator = cleanCitationText.trim().endsWith(".") ? "" : ".";
+		let finalHtml = `${processedBase}${separator} Available at ${linkHtml}.`;
+
+		if (hasDiv) {
+			finalHtml = `${finalHtml}</div>`;
+		}
+
+		return {
+			citationCopy: copy,
+			citationHtml: finalHtml,
+			isLoading: false,
+		};
+	}, [item, origin, t]);
 
 	return (
 		<ItemPropertyRowWrapper
 			title={t("itemCitationTitle")}
-			copyText={citationTextWithSymbols}
+			copyText={citationCopy}
 		>
 			<AnimatePresence>
-				{item?.citation === "<div>Loading...</div>" ? (
+				{isLoading ? (
 					<motion.div
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
@@ -727,23 +780,7 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 					>
 						<p
 							dangerouslySetInnerHTML={{
-								__html: ProcessHTML(
-									(() => {
-										let html = (item?.citation || "").trim();
-										if (SHOW_URL_IN_CITATION && item?.key) {
-											const url = typeof window !== "undefined" ? window.location.origin : "";
-											const finalURL = new URL(url + "/lib/" + item.key);
-											const link = ` Available at ${finalURL}`;
-
-											if (/<\/div>\s*$/.test(html)) {
-												html = html.replace(/(?:\.\s*)?<\/div>\s*$/, `.${link}</div>`);
-											} else {
-												html = html.replace(/(?:\.\s*)?$/, `.${link}`);
-											}
-										}
-										return html;
-									})()
-								),
+								__html: citationHtml || "",
 							}}
 							className="text-base text-black/60 dark:text-white/60 text-wrap-anywhere"
 						/>
@@ -767,7 +804,7 @@ function ItemCollection({
 
 	const hierarchyNames = ancestry.map((ancestorKey) => {
 		const ancestorCollection = collectionsData.find(
-			(c) => c.key === ancestorKey
+			(c) => c.key === ancestorKey,
 		);
 		return {
 			name: ancestorCollection?.name || ancestorKey,
@@ -918,14 +955,17 @@ function ItemCollections({ item }: { item: Item | undefined }) {
 
 	const collectionsAncestry = (item?.collectionsData as Collection[]) || [];
 
-	const groupedCollections = collectionsAncestry.reduce((acc, collection) => {
-		const title = collection.title || "Unknown";
-		if (!acc[title]) {
-			acc[title] = [];
-		}
-		acc[title].push(collection);
-		return acc;
-	}, {} as Record<string, Collection[]>);
+	const groupedCollections = collectionsAncestry.reduce(
+		(acc, collection) => {
+			const title = collection.title || "Unknown";
+			if (!acc[title]) {
+				acc[title] = [];
+			}
+			acc[title].push(collection);
+			return acc;
+		},
+		{} as Record<string, Collection[]>,
+	);
 
 	if (!Object.keys(groupedCollections).length) return null;
 
@@ -941,7 +981,8 @@ function ItemCollections({ item }: { item: Item | undefined }) {
 							<ul className="text-base text-black/60 dark:text-white/60 flex flex-wrap gap-2">
 								{collections
 									.filter(
-										(collection) => collection.originalFacet
+										(collection) =>
+											collection.originalFacet,
 									)
 									.map((collection) => (
 										<ItemCollection
@@ -952,7 +993,7 @@ function ItemCollections({ item }: { item: Item | undefined }) {
 									))}
 							</ul>
 						</div>
-					)
+					),
 				)}
 			</div>
 		</ItemPropertyRowWrapper>
@@ -981,8 +1022,8 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 		(attachment) =>
 			attachment.PDFCoverPageImage ||
 			attachment.tags?.some(
-				(tag) => tag.toLowerCase() === "_auto-process"
-			)
+				(tag) => tag.toLowerCase() === "_auto-process",
+			),
 	);
 
 	if (!validAttachments?.length) return null;
@@ -1078,13 +1119,13 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 		(attachment) =>
 			attachment.itemType === "Note" &&
 			attachment.note &&
-			PUBLISH_TAGS.some((tag) => attachment.tags?.includes(tag))
+			PUBLISH_TAGS.some((tag) => attachment.tags?.includes(tag)),
 	);
 	const links = item?.attachmentsData?.filter(
 		(attachment) =>
 			attachment.linkMode === "linked_url" &&
 			attachment.url &&
-			PUBLISH_TAGS.some((tag) => attachment.tags?.includes(tag))
+			PUBLISH_TAGS.some((tag) => attachment.tags?.includes(tag)),
 	);
 
 	const notesDescription = useNotesDescription();
@@ -1107,7 +1148,7 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 								__html:
 									note.note?.replaceAll(
 										"background-color: rgb(255, 255, 255)",
-										""
+										"",
 									) ?? "",
 							}}
 						/>
@@ -1153,7 +1194,7 @@ export default function ItemPage({
 
 	useEffect(() => {
 		document.dispatchEvent(
-			new Event("ZoteroItemUpdated", { bubbles: true, cancelable: true })
+			new Event("ZoteroItemUpdated", { bubbles: true, cancelable: true }),
 		);
 	}, [data?.item]);
 
