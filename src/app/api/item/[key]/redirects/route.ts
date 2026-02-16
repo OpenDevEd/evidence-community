@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import meilisearch from "@/lib/meilisearch";
+import { unstable_cache } from "next/cache";
+import config from "@/constants/config.json";
+import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 
 function encodeKey(key: string): string {
 	return key.split('').map(char => {
@@ -8,32 +11,50 @@ function encodeKey(key: string): string {
 	}).join('n'); // Use 'n' as separator since it's not used in base36
 }
 
-function decodeKey(encoded: string): string {
-	return encoded.split('n').map(num => {
-		const code = parseInt(num, 36);
-		return String.fromCharCode(code);
-	}).join('');
-}
-
 export async function GET(
-	request: NextRequest,
+	_request: NextRequest,
 	props: { params: Promise<{ key: string }> }
 ) {
+	const params = await props.params;
+	const { key: URIkey } = params;
 
-    const params = await props.params;
-    const { key: URIkey } = params;
+	const itemKey = decodeURIComponent(URIkey);
+	const key = (process.env.MEILI_INDEX || config.index) + "|" + itemKey;
+	const encoding = encodeKey(key);
 
-    const itemKey = decodeURIComponent(URIkey);
+	const getRedirectData = unstable_cache(
+		async () => {
+			try {
+				const timeoutPromise = new Promise((_, reject) =>
+					setTimeout(() => reject(new Error("Redirect lookup timeout")), 350)
+				);
 
-    const key = process.env.MEILI_INDEX + "|" + itemKey;
+				const redirects = (await Promise.race([
+					meilisearch.index("redirects").getDocument(encoding),
+					timeoutPromise,
+				])) as Record<string, unknown>;
 
-    const encoding = encodeKey(key);
+				if (redirects?.value) {
+					return redirects;
+				}
+			} catch {
+				// Safe fallback below
+			}
 
-    try {
-        const redirects = await meilisearch.index("redirects").getDocument(encoding);
-        return NextResponse.json(redirects);
-    } catch (error) {
-        return NextResponse.json({ value: itemKey }, { status: 200 });
-        // return NextResponse.json({ error: "Redirect not found" }, { status: 404 });
-    }
+			return { value: itemKey };
+		},
+		["redirects", String(process.env.MEILI_INDEX || config.index), itemKey],
+		{
+			revalidate: 60,
+		}
+	);
+
+	const redirects = await getRedirectData();
+
+	return NextResponse.json(redirects, {
+		status: 200,
+		headers: {
+			"Cache-Control": PUBLIC_READ_CACHE_CONTROL,
+		},
+	});
 }

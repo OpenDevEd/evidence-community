@@ -1,4 +1,4 @@
-import { Item, ItemGetResponse } from "@/app/api/item/types";
+import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
@@ -102,7 +102,7 @@ export function getDynamicStyles(cssString: string): React.CSSProperties {
 	return styleObj as React.CSSProperties;
 }
 
-export function cleanItemForAI(item: ItemGetResponse["item"] | undefined) {
+export function cleanItemForAI(item: ItemGetResponse["item"] | ListItem | undefined) {
 	if (!item) return null;
 	return {
 		...item,
@@ -406,7 +406,9 @@ export function ensureNoBlankItems(itemCSL: any) {
 	}
 }
 
-export function transformItem(item: Item | undefined) {
+export function transformItem(item: Item | undefined): Item | null;
+export function transformItem(item: ListItem | undefined): ListItem | null;
+export function transformItem<T extends Item | ListItem>(item: T | undefined): T | null {
 	if (!item) return null;
 	const ExtraValues = getExtraValues(item.extra || "");
 

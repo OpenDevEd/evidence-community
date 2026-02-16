@@ -1,14 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { Item } from "@/app/api/item/types";
+import { ListItem } from "@/app/api/item/types";
 import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { blockedTags } from "@/constants/misc";
+import { LIST_ITEM_FIELDS } from "@/lib/search";
+import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 
 async function getPaginatedItems(
 	keys: string[],
 	page: number,
-	perPage: number
-): Promise<{ items: Item[]; total: number }> {
+	perPage: number,
+	includeHeavyFields: boolean
+): Promise<{ items: ListItem[]; total: number }> {
 	if (keys.length === 0) return { items: [], total: 0 };
 
 	try {
@@ -22,10 +25,11 @@ async function getPaginatedItems(
 			filter: `key IN [${keys.map((k) => `"${k}"`).join(", ")}]`,
 			limit: perPage,
 			offset: offset,
+			...(includeHeavyFields ? {} : { attributesToRetrieve: [...LIST_ITEM_FIELDS] }),
 		});
 
 		return {
-			items: result.hits as Item[],
+			items: result.hits as ListItem[],
 			total: result.estimatedTotalHits || result.hits.length,
 		};
 	} catch (error) {
@@ -35,7 +39,7 @@ async function getPaginatedItems(
 }
 
 export type ItemsBatchResponse = {
-	items: Item[];
+	items: ListItem[];
 	page: number;
 	perPage: number;
 	total: number;
@@ -47,18 +51,31 @@ export async function POST(request: NextRequest) {
 	const keys = body.keys;
 	const page = body.page || 1;
 	const perPage = body.perPage || 20;
+	const includeHeavyFields = body.includeHeavyFields === true;
 
 	if (!keys || !Array.isArray(keys) || keys.length === 0) {
-		return NextResponse.json<ItemsBatchResponse>({
-			items: [],
-			page,
-			perPage,
-			total: 0,
-			totalPages: 0,
-		});
+		return NextResponse.json<ItemsBatchResponse>(
+			{
+				items: [],
+				page,
+				perPage,
+				total: 0,
+				totalPages: 0,
+			},
+			{
+				headers: {
+					"Cache-Control": PUBLIC_READ_CACHE_CONTROL,
+				},
+			}
+		);
 	}
 
-	const { items, total } = await getPaginatedItems(keys, page, perPage);
+	const { items, total } = await getPaginatedItems(
+		keys,
+		page,
+		perPage,
+		includeHeavyFields
+	);
 
 	// Filter out deleted items and items with blocked tags
 	const filteredItems = items.filter(
@@ -69,11 +86,18 @@ export async function POST(request: NextRequest) {
 
 	const totalPages = Math.ceil(total / perPage);
 
-	return NextResponse.json<ItemsBatchResponse>({
-		items: filteredItems,
-		page,
-		perPage,
-		total,
-		totalPages,
-	});
+	return NextResponse.json<ItemsBatchResponse>(
+		{
+			items: filteredItems,
+			page,
+			perPage,
+			total,
+			totalPages,
+		},
+		{
+			headers: {
+				"Cache-Control": PUBLIC_READ_CACHE_CONTROL,
+			},
+		}
+	);
 }

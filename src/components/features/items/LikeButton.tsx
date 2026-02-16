@@ -1,5 +1,5 @@
 import { Button } from "@/components/nextui/Button";
-import { Item } from "@/app/api/item/types";
+import { Item, ListItem } from "@/app/api/item/types";
 import { FaHeart, FaHeartBroken } from "react-icons/fa";
 import { useState, forwardRef } from "react";
 import useSWRMutation from "swr/mutation";
@@ -12,7 +12,7 @@ import { useTranslations } from "next-intl";
 
 const LikeButton = forwardRef<
   any,
-  { itemData: Item | undefined; className?: any, revalidateResults?: any }
+  { itemData: Item | ListItem | undefined; className?: any, revalidateResults?: any }
 >(function LikeButton({ itemData, className, revalidateResults }, ref) {
   const [mutationLoading, setMutationLoading] = useState(false);
   const { trigger } = useSWRMutation(`/like`, setter);

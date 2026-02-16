@@ -5,7 +5,7 @@ import useSWR from "swr";
 import { fetcher, fetcherPOST } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { MdSearchOff } from "react-icons/md";
-import { Item } from "@/app/api/item/types";
+import { ListItem } from "@/app/api/item/types";
 import Resource from "../items/Resource";
 import { useTranslations } from "next-intl";
 import { ItemsBatchResponse } from "@/app/api/items/batch/route";
@@ -71,7 +71,7 @@ function RelationsList({
 }: {
 	keys: string[];
 	isLoading: boolean;
-	items: Item[];
+	items: ListItem[];
 	totalPages: number;
 	currentPage: number;
 	onPageChange: (page: number) => void;
@@ -104,7 +104,7 @@ function RelationsList({
 								</motion.li>
 						  ))
 						: // Show fetched items
-						  items.map((item: Item) => (
+						  items.map((item: ListItem) => (
 								<motion.li
 									initial={{ opacity: 0 }}
 									animate={{ opacity: 1 }}

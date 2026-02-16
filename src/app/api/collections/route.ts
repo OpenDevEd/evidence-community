@@ -9,6 +9,7 @@ import {
 import { Collection, CollectionsGetResponse } from "./types";
 import config from "@/constants/config.json";
 import { getCachedCollections } from "../cache";
+import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 
 export async function getCollections() {
 	const configCollections =
@@ -49,7 +50,14 @@ export async function getCollections() {
 export async function GET(request: NextRequest) {
 	const uniqueCollections = await getCachedCollections();
 
-	return NextResponse.json<CollectionsGetResponse>({
-		collections: uniqueCollections as Collection[],
-	});
+	return NextResponse.json<CollectionsGetResponse>(
+		{
+			collections: uniqueCollections as Collection[],
+		},
+		{
+			headers: {
+				"Cache-Control": PUBLIC_READ_CACHE_CONTROL,
+			},
+		}
+	);
 }

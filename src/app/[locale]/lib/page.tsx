@@ -1,8 +1,8 @@
 import EvidenceLibrary from "@/components/pages/EvidenceLibrary";
-import { getItems } from "@/lib/actions";
 import { Metadata, ResolvingMetadata } from "next";
 import { buildItemsQuery, defaultParams } from "@/lib/utils";
 import { routing } from "@/i18n/routing";
+import { getItemsPaginationMeta } from "@/lib/search";
 
 export async function libraryMetadata(props: {
   params: Promise<{ locale: string }>;
@@ -17,10 +17,10 @@ export async function libraryMetadata(props: {
   
   const queryParams = defaultParams(searchParams);
   const builtUrl = buildItemsQuery(queryParams, props.pathname);
-  const items = await getItems(queryParams);
-  
-  const page = items.currentPage;
-  const totalPages = items.totalPages;
+  const paginationMeta = await getItemsPaginationMeta(queryParams);
+
+  const page = paginationMeta.currentPage;
+  const totalPages = paginationMeta.totalPages;
 
   const builtURLObject = new URL(builtUrl, process.env.BASE_URL!);  
   const currentUrl = new URL((locale === routing.defaultLocale ? "" : `/${locale}`) + builtUrl, process.env.BASE_URL!);

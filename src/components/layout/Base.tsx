@@ -3,15 +3,11 @@ import { Montserrat, Ubuntu } from "next/font/google";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/Footer";
 import { Analytics } from "@vercel/analytics/react";
-import { twMerge } from "tailwind-merge";
 import { style } from "@/../tailwind.config";
 import { getMessages, getTranslations } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
 import { getLangDir } from "rtl-detect";
-import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { getCachedStatus } from "@/app/api/cache";
-import { Suspense } from "react";
-import { Link, usePathname } from "@/i18n/routing";
 import MainWrapper from "./MainWrapper";
 import Banner from "./Banner";
 import { GoogleAnalytics } from '@next/third-parties/google'
@@ -35,10 +31,9 @@ export default async function Base({
 	children: React.ReactNode;
 	locale: string;
 }>) {
-	const status = await getCachedStatus(true);
+	const status = await getCachedStatus();
 	const messages = await getMessages();
 	const dir = getLangDir(locale);
-	const session = await auth();
 	const t = await getTranslations({ locale, namespace: "ui" });
 
 	return (
@@ -50,9 +45,9 @@ export default async function Base({
 				className={`${
 					style === "wide" ? montserrat.className : ubuntu.className
 				}`}
-			>
+				>
 				<NextIntlClientProvider messages={messages}>
-					<Providers session={session} status={status}>
+					<Providers status={status}>
 						<MainWrapper>
 							<nav
 								aria-label={t("skipNavAriaLabel")}

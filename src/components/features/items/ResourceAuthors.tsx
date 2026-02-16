@@ -1,4 +1,4 @@
-import { Item } from "@/app/api/item/types";
+import { Item, ListItem } from "@/app/api/item/types";
 import { INSTITUTION_LOGOS } from "@/constants/items";
 import ResourceData from "./ResourceData";
 import { useTranslations } from "next-intl";
@@ -31,7 +31,7 @@ function formatAPAAuthor(authors: Author[], t: ReturnType<typeof useTranslations
 export default function ResourceAuthors({
 	itemData,
 }: {
-	itemData: Item | undefined;
+	itemData: Item | ListItem | undefined;
 }) {
 	const t = useTranslations("ui");
 

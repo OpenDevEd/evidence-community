@@ -6,16 +6,17 @@ import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { status as statusTable } from "@/db/schema/tables/status";
 import { getCollections } from "./collections/route";
 import { unstable_cache } from "next/cache";
-import { ItemGetResponse } from "./item/types";
-import { withCache } from "@/lib/cache-utils";
 
 export async function getCachedCollections(ignoreCache: boolean = false) {
-	const collections = await withCache(getCollections, {
-		cacheKey: "collections",
-		expirationMinutes: 3,
+	if (ignoreCache) {
+		return getCollections();
+	}
+
+	const cache = unstable_cache(getCollections, ["collections"], {
+		revalidate: 300,
 	});
 
-	return collections;
+	return cache();
 }
 
 export async function getCachedItem(key: string, ignoreCache: boolean = false) {
@@ -23,8 +24,12 @@ export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 		return await getItem(key);
 	}
 
+	if (ignoreCache) {
+		return getData();
+	}
+
 	const cache = unstable_cache(getData, ["item" + key], {
-		revalidate: 5,
+		revalidate: 60,
 	});
 
 	const result = await cache();
@@ -52,8 +57,12 @@ export async function getCachedItemSmall(key: string, ignoreCache: boolean = fal
 		};
 	}
 
+	if (ignoreCache) {
+		return getData();
+	}
+
 	const cache = unstable_cache(getData, ["itemSmall" + key], {
-		revalidate: 5,
+		revalidate: 60,
 	});
 	
 	const result = await cache();
@@ -96,8 +105,12 @@ export async function getCachedUserCollectionKeys(collectionId: string, ignoreCa
 	}
 
 	const cache = unstable_cache(getData, ["userCollectionKeys" + collectionId], {
-		revalidate: 5,
+		revalidate: 60,
 	});
+
+	if (ignoreCache) {
+		return getData();
+	}
 
 	return cache();
 }
@@ -115,8 +128,12 @@ export async function getCachedUserLikes(userId: string, ignoreCache: boolean = 
 	}
 
 	const cache = unstable_cache(getData, ["userLikes" + userId], {
-		revalidate: 5,
+		revalidate: 60,
 	});
+
+	if (ignoreCache) {
+		return getData();
+	}
 
 	return cache();
 }
@@ -135,8 +152,12 @@ export async function getCachedStatus(ignoreCache: boolean = false): Promise<Inf
 	}
 
 	const cache = unstable_cache(getData, ["status"], {
-		revalidate: 5,
+		revalidate: 60,
 	});
+
+	if (ignoreCache) {
+		return getData();
+	}
 
 	return cache();
 }

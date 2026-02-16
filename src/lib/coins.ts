@@ -1,4 +1,4 @@
-import type { Item } from '@/app/api/item/types';
+import type { Item, ListItem } from '@/app/api/item/types';
 
 interface Institution {
   id?: string;
@@ -21,7 +21,7 @@ export type Author = {
  * 
  * Note: Returns empty string for non-bibliographic item types (e.g., Attachment, Note)
  */
-export function generateCOinS(item: Item): string {
+export function generateCOinS(item: Item | ListItem): string {
   // COinS is only for bibliographic items, not attachments or notes
   if (item.itemType === 'Attachment' || item.itemType === 'Note') {
     return '';
@@ -367,7 +367,7 @@ function addCreators(params: URLSearchParams, creators?: Author[]) {
 /**
  * Adds journal-specific fields
  */
-function addJournalFields(params: URLSearchParams, item: Item) {
+function addJournalFields(params: URLSearchParams, item: Item | ListItem) {
   const journalTypes = ['JournalArticle', 'MagazineArticle', 'NewspaperArticle'];
   
   if (!journalTypes.includes(item.itemType || '')) return;
@@ -401,7 +401,7 @@ function addJournalFields(params: URLSearchParams, item: Item) {
 /**
  * Adds book-specific fields
  */
-function addBookFields(params: URLSearchParams, item: Item) {
+function addBookFields(params: URLSearchParams, item: Item | ListItem) {
   const bookTypes = ['Book', 'BookSection', 'DictionaryEntry', 'EncyclopediaArticle'];
   
   if (!bookTypes.includes(item.itemType || '')) return;
@@ -445,7 +445,7 @@ function addBookFields(params: URLSearchParams, item: Item) {
 /**
  * Adds dissertation/thesis fields
  */
-function addDissertationFields(params: URLSearchParams, item: Item) {
+function addDissertationFields(params: URLSearchParams, item: Item | ListItem) {
   if (item.itemType !== 'Thesis') return;
   
   if (item.university) params.append('rft.inst', item.university);
@@ -456,7 +456,7 @@ function addDissertationFields(params: URLSearchParams, item: Item) {
 /**
  * Adds patent-specific fields
  */
-function addPatentFields(params: URLSearchParams, item: Item) {
+function addPatentFields(params: URLSearchParams, item: Item | ListItem) {
   if (item.itemType !== 'Patent') return;
   
   if (item.patentNumber) params.append('rft.number', item.patentNumber);
@@ -471,7 +471,7 @@ function addPatentFields(params: URLSearchParams, item: Item) {
 /**
  * Adds conference-specific fields
  */
-function addConferenceFields(params: URLSearchParams, item: Item) {
+function addConferenceFields(params: URLSearchParams, item: Item | ListItem) {
   if (!['ConferencePaper', 'Presentation'].includes(item.itemType || '')) return;
   
   if (item.proceedingsTitle) {
@@ -485,7 +485,7 @@ function addConferenceFields(params: URLSearchParams, item: Item) {
 /**
  * Adds audio/visual fields
  */
-function addAudioVisualFields(params: URLSearchParams, item: Item) {
+function addAudioVisualFields(params: URLSearchParams, item: Item | ListItem) {
   const avTypes = ['AudioRecording', 'VideoRecording', 'Film', 'Podcast', 'TvBroadcast', 'RadioBroadcast'];
   
   if (!avTypes.includes(item.itemType || '')) return;
@@ -496,7 +496,7 @@ function addAudioVisualFields(params: URLSearchParams, item: Item) {
 /**
  * Adds legal document fields
  */
-function addLegalFields(params: URLSearchParams, item: Item) {
+function addLegalFields(params: URLSearchParams, item: Item | ListItem) {
   const legalTypes = ['Bill', 'Case', 'Hearing', 'Statute'];
   
   if (!legalTypes.includes(item.itemType || '')) return;
@@ -511,7 +511,7 @@ function addLegalFields(params: URLSearchParams, item: Item) {
 /**
  * Adds web document fields
  */
-function addWebFields(params: URLSearchParams, item: Item) {
+function addWebFields(params: URLSearchParams, item: Item | ListItem) {
   const webTypes = ['Webpage', 'BlogPost', 'ForumPost'];
   
   if (!webTypes.includes(item.itemType || '')) return;
@@ -533,7 +533,7 @@ export function generateMultipleCOinS(items: Item[]): string {
 /**
  * Extracts just the COinS query string without HTML wrapper
  */
-export function getCOinSQueryString(item: Item): string {
+export function getCOinSQueryString(item: Item | ListItem): string {
   const fullCOinS = generateCOinS(item);
   const match = fullCOinS.match(/title="([^"]+)"/);
   return match ? match[1] : '';
@@ -542,7 +542,7 @@ export function getCOinSQueryString(item: Item): string {
 /**
  * Generates a plain object representation of COinS parameters
  */
-export function getCOinSObject(item: Item): Record<string, string | string[]> {
+export function getCOinSObject(item: Item | ListItem): Record<string, string | string[]> {
   const queryString = getCOinSQueryString(item);
   const params = new URLSearchParams(queryString);
   const result: Record<string, string | string[]> = {};

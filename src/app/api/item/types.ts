@@ -20,6 +20,15 @@ export type Item = InferSelectModel<typeof item> & {
   datePublished?: string;
 };
 
+export type ListAttachment = Omit<
+	Item,
+	"attachmentsData" | "fullTextPDFs" | "fullTextPDF" | "PDFCoverPageImage" | "PDFCoverPageWidth" | "PDFCoverPageHeight"
+>;
+
+export type ListItem = Omit<Item, "attachmentsData"> & {
+	attachmentsData?: ListAttachment[];
+};
+
 export type ItemGetResponse = {
   item: Item | undefined;
 };

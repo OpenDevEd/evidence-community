@@ -1,6 +1,6 @@
 import { useDebounce } from "@/hooks/useDebounce";
 import { useLocale } from "next-intl";
-import { Item } from "@/app/api/item/types";
+import { Item, ListItem } from "@/app/api/item/types";
 import { useState, forwardRef } from "react";
 import { Button } from "@/components/nextui/Button";
 import { FaClipboard, FaClipboardCheck } from "react-icons/fa";
@@ -12,7 +12,7 @@ import { FiCheck, FiCopy } from "react-icons/fi";
 const CopyButton = forwardRef<
 	any,
 	{
-		itemData?: Item | undefined;
+		itemData?: Item | ListItem | undefined;
 		content?: string;
 		text?: string;
 		textOnCopy?: string;

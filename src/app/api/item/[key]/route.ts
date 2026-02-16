@@ -2,16 +2,14 @@ import { db } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { Item } from "../types";
-import { getCollections } from "../../collections/route";
 import meilisearchClient from "@/lib/meilisearch";
 import { item } from "@/db/schema/tables/item";
 import { eq } from "drizzle-orm";
 import { Collection } from "../../collections/types";
 import config from "@/constants/config.json"
 import { getCachedCollections } from "../../cache";
-import { convertItem, getCitationFromCSL, getCSL } from "@/lib/actions";
 import { blockedTags } from "@/constants/misc";
-import { transformItem } from "@/lib/utils";
+import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 
 async function getMeilisearchItem(key: string) {
 	try {
@@ -61,13 +59,7 @@ export async function getItem(
 	}
 
 	result.attachmentsData = result.attachmentsData?.filter((attachment: any) => attachment.deleted === 0);
-
-	if (result) {
-		const csl = await getCSL(transformItem(result) as Item);
-		const citation = await getCitationFromCSL(csl);
-		result.citation = citation;
-		// result.citation = await convertItem(result, "citation");
-	}
+	result.citation = null;
 
 	return {
 		item: result,
@@ -85,5 +77,9 @@ export async function GET(
 
 	const result = await getItem(key, source as "db" | "meilisearch");
 
-	return NextResponse.json(result);
+	return NextResponse.json(result, {
+		headers: {
+			"Cache-Control": PUBLIC_READ_CACHE_CONTROL,
+		},
+	});
 }
