@@ -114,6 +114,8 @@
     "dropdownAriaLabel": "Chagua",
     "actionsMenuAriaLabel": "Menyu ya vitendo",
     "languageSectionTitle": "Lugha",
+    "languageSwitcherAriaLabel": "Chagua lugha",
+    "languageMenuAriaLabel": "Menyu ya uchaguzi wa lugha",
     "resetChat": "Weka upya gumzo",
     "profileMenuItem": "Wasifu",
     "settingsMenuItem": "Mipangilio",

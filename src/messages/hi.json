@@ -113,6 +113,8 @@
     "dropdownAriaLabel": "चुनें",
     "actionsMenuAriaLabel": "क्रियाएं मेनू",
     "languageSectionTitle": "भाषा",
+    "languageSwitcherAriaLabel": "भाषा चुनें",
+    "languageMenuAriaLabel": "भाषा चयन मेनू",
     "resetChat": "चैट रीसेट करें",
     "profileMenuItem": "प्रोफ़ाइल",
     "settingsMenuItem": "सेटिंग्स",

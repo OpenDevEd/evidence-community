@@ -113,6 +113,8 @@
     "dropdownAriaLabel": "Auswählen",
     "actionsMenuAriaLabel": "Aktionsmenü",
     "languageSectionTitle": "Sprache",
+    "languageSwitcherAriaLabel": "Sprache auswählen",
+    "languageMenuAriaLabel": "Sprachauswahlmenü",
     "resetChat": "Chat zurücksetzen",
     "profileMenuItem": "Profil",
     "settingsMenuItem": "Einstellungen",
