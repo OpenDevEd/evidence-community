@@ -113,6 +113,8 @@
     "dropdownAriaLabel": "تحديد",
     "actionsMenuAriaLabel": "قائمة الإجراءات",
     "languageSectionTitle": "اللغة",
+    "languageSwitcherAriaLabel": "اختر اللغة",
+    "languageMenuAriaLabel": "قائمة اختيار اللغة",
     "resetChat": "إعادة تعيين الدردشة",
     "profileMenuItem": "الملف الشخصي",
     "settingsMenuItem": "إعدادات",

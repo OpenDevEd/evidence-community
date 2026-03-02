@@ -113,6 +113,8 @@
     "dropdownAriaLabel": "选择",
     "actionsMenuAriaLabel": "操作菜单",
     "languageSectionTitle": "语言",
+    "languageSwitcherAriaLabel": "选择语言",
+    "languageMenuAriaLabel": "语言选择菜单",
     "resetChat": "重置聊天",
     "profileMenuItem": "个人资料",
     "settingsMenuItem": "设置",
