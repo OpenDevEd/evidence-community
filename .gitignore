@@ -63,3 +63,5 @@ src/app/*.bmp
 src/app/manifest.json
 # Sentry Config File
 .env.sentry-build-plugin
+
+public/apa.csl

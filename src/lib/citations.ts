@@ -6,6 +6,41 @@ import { ItemToZoteroJSON, ensureNoBlankItems, transformItem } from "@/lib/utils
 import { unstable_cache } from "next/cache";
 import { CiteProcSys, CSLItem, Engine } from "citeproc";
 
+const DEFAULT_CITATION_LOCALE = "en-GB";
+const LOCALE_ALIASES: Record<string, string> = {
+	en: "en-GB",
+	de: "de-DE",
+	hi: "hi-IN",
+	fr: "fr-FR",
+	pt: "pt-PT",
+	zh: "zh-CN",
+	cn: "zh-CN",
+};
+
+function normalizeLocale(lang: string = DEFAULT_CITATION_LOCALE) {
+	const raw = lang.trim().replace(/_/g, "-");
+	if (!raw) {
+		return DEFAULT_CITATION_LOCALE;
+	}
+
+	const lower = raw.toLowerCase();
+	const directAlias = LOCALE_ALIASES[lower];
+	if (directAlias) {
+		return directAlias;
+	}
+
+	if (/^[a-z]{2}-[a-z]{2}$/i.test(raw)) {
+		const [base, region] = raw.split("-");
+		return `${base.toLowerCase()}-${region.toUpperCase()}`;
+	}
+
+	if (/^[a-z]{2}$/i.test(raw)) {
+		return raw.toLowerCase();
+	}
+
+	return DEFAULT_CITATION_LOCALE;
+}
+
 async function getStyle() {
 	const cached = unstable_cache(async () => {
 		const url = new URL("https://raw.githubusercontent.com/citation-style-language/styles/master/apa.csl");
@@ -18,17 +53,38 @@ async function getStyle() {
 	return cached();
 }
 
-async function getLocaleXML(lang: string = "en-GB"): Promise<string> {
+async function getLocaleXMLFor(locale: string): Promise<string> {
 	const cached = unstable_cache(async () => {
-		const url = `https://raw.githubusercontent.com/citation-style-language/locales/master/locales-${lang}.xml`;
+		const url = `https://raw.githubusercontent.com/citation-style-language/locales/master/locales-${locale}.xml`;
 		const res = await fetch(url);
 		if (!res.ok) throw new Error("Failed to fetch locale");
 		return res.text();
-	}, ["locale", lang], {
+	}, ["locale", locale], {
 		revalidate: 60 * 60 * 24,
 	});
 
 	return cached();
+}
+
+async function getLocaleXML(lang: string = DEFAULT_CITATION_LOCALE): Promise<{ locale: string; xml: string }> {
+	const normalizedLocale = normalizeLocale(lang);
+	const fallbackLocales = normalizedLocale === DEFAULT_CITATION_LOCALE
+		? [normalizedLocale]
+		: [normalizedLocale, DEFAULT_CITATION_LOCALE];
+
+	for (const locale of fallbackLocales) {
+		try {
+			const xml = await getLocaleXMLFor(locale);
+			return {
+				locale,
+				xml,
+			};
+		} catch {
+			// Try next fallback locale.
+		}
+	}
+
+	throw new Error("Failed to fetch citation locale");
 }
 
 export async function getCitationFromCSL(csl: any, lang: string = "en-GB") {
@@ -36,7 +92,10 @@ export async function getCitationFromCSL(csl: any, lang: string = "en-GB") {
 		return null;
 	}
 
-	const [style, locale] = await Promise.all([getStyle(), getLocaleXML(lang)]);
+	const [{ locale: resolvedLocale, xml: locale }, style] = await Promise.all([
+		getLocaleXML(lang),
+		getStyle(),
+	]);
 
 	const items: Record<string, CSLItem> = { [csl.id]: csl };
 
@@ -45,7 +104,7 @@ export async function getCitationFromCSL(csl: any, lang: string = "en-GB") {
 		retrieveItem: (id: string) => items[id],
 	};
 
-	const citeproc = new Engine(sys, style, lang);
+	const citeproc = new Engine(sys, style, resolvedLocale);
 	citeproc.updateItems([csl.id]);
 
 	const [, bibliography] = citeproc.makeBibliography();
@@ -98,6 +157,7 @@ async function getCitationSourceItem(key: string): Promise<Item | null> {
 }
 
 export async function getCitationForItemKey(key: string, lang: string = "en-GB") {
+	const normalizedLocale = normalizeLocale(lang);
 	const cached = unstable_cache(async () => {
 		const item = await getCitationSourceItem(key);
 		if (!item) {
@@ -109,8 +169,8 @@ export async function getCitationForItemKey(key: string, lang: string = "en-GB")
 			return null;
 		}
 
-		return getCitationFromCSL(csl, lang);
-	}, ["item-citation", String(process.env.MEILI_INDEX || config.index), key, lang], {
+		return getCitationFromCSL(csl, normalizedLocale);
+	}, ["item-citation", String(process.env.MEILI_INDEX || config.index), key, normalizedLocale], {
 		revalidate: 60,
 	});
 

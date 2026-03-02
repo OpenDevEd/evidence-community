@@ -12,7 +12,7 @@ export async function GET(
 ) {
 	const params = await props.params;
 	const localeHeader = request.headers.get("Accept-Language") || "en-GB";
-	const locale = localeHeader.split(",")[0] || "en-GB";
+	const locale = localeHeader.split(",")[0]?.split(";")[0]?.trim() || "en-GB";
 	const citation = await getCitationForItemKey(params.key, locale);
 
 	return NextResponse.json<ItemCitationResponse>(
