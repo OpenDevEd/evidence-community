@@ -5,8 +5,8 @@ import { ItemGetResponse } from "@/app/api/item/types";
 
 async function getCurrentItem(key: string) {
     const data = await getCachedItemSmall(key).catch(() => ({ item: undefined }));
-    if (data?.item && !data?.item?.citation) {
-        return await getCachedItemSmall(key, true).catch(() => ({ item: undefined }));
+    if (data?.item && !data.item.citation) {
+        data.item.citation = "<div>Loading...</div>";
     }
     return data;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { NextUIProvider, Spinner } from "@nextui-org/react";
+import { NextUIProvider } from "@nextui-org/react";
 import { ThemeProvider, useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/i18n/routing";
@@ -13,7 +13,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { style } from "../../tailwind.config";
 import Image from "next/image";
 import { twMerge } from "tailwind-merge";
-import { SessionProvider, useSession } from "next-auth/react";
+import { SessionProvider } from "next-auth/react";
 import { Session } from "next-auth";
 import { InferSelectModel } from "drizzle-orm";
 import { status as statusTable } from "@/db/schema/tables/status";
@@ -22,7 +22,7 @@ import { useLocalStorage } from "usehooks-ts";
 import { useTranslations } from "next-intl";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { toast, Toaster } from "sonner";
-import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils";
+import { convertStringFromDatabaseToObject, getDynamicStyles, parseCompanyName } from "@/lib/utils";
 import { getPersistence } from "@/components/layout/Banner";
 import { useQueryState } from "nuqs";
 import { toast as toastComponent } from "@/components/layout/Toast";
@@ -148,22 +148,20 @@ export function useLastFetchedData() {
 
 function LoadingScreen({
 	children,
-	isMounted,
 	featureFlags,
 }: {
 	children: React.ReactNode;
-	isMounted: boolean;
 	featureFlags: Set<string> | null;
 }) {
 	const { resolvedTheme: theme } = useTheme();
-	const { data: session, status } = useSession();
 	const statusTable = useStatus();
+	const { companyName } = parseCompanyName(statusTable?.companyName);
 	const t = useTranslations("ui");
 	const companyLogoStyle = convertStringFromDatabaseToObject(statusTable.companyLogo || "")["splash"];
 
 	return (
 		<AnimatePresence mode="popLayout">
-			{featureFlags && (status !== "loading" || !!session) ? (
+			{featureFlags ? (
 					children
 			) : (
 				<motion.div
@@ -192,8 +190,8 @@ function LoadingScreen({
 									key={themeToMatch}
 									src={
 										themeToMatch === "dark"
-											? `/logos/${statusTable?.companyName?.toLowerCase()}/logo.png`
-											: `/logos/${statusTable?.companyName?.toLowerCase()}/logo_light.png`
+											? `/logos/${companyName.toLowerCase()}/logo.png`
+											: `/logos/${companyName.toLowerCase()}/logo_light.png`
 									}
 									className={twMerge(
 										"pointer-events-none",
@@ -203,7 +201,7 @@ function LoadingScreen({
 										companyLogoStyle
 									)}
 									alt={t("logoAlt", {
-										company: statusTable?.companyName || "",
+										company: companyName,
 										theme: themeToMatch,
 									})}
 									width={171}
@@ -267,15 +265,13 @@ export default function Providers({
 	status,
 }: {
 	children: React.ReactNode;
-	session: Session | null;
+	session?: Session | null;
 	status: InferSelectModel<typeof statusTable>;
 }) {
 	const router = useRouter();
 	const [featureFlags, setFeatureFlags] = useState<Set<string> | null>(null);
-	const [isMounted, setIsMounted] = useState(false);
 
 	useEffect(() => {
-		setIsMounted(true);
 		posthog
 			.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
 				person_profiles: "always",
@@ -303,10 +299,10 @@ export default function Providers({
 			defaultTheme={process.env.NEXT_PUBLIC_DEFAULT_THEME || "dark"}
 			forcedTheme={process.env.NEXT_PUBLIC_FORCED_THEME || undefined}
 			disableTransitionOnChange
-		>
+	>
 			<NuqsAdapter>
 				<ToastAdapter>
-					<SessionProvider session={session}>
+					<SessionProvider session={session ?? undefined}>
 						<PostHogProvider client={posthog}>
 							<FeatureFlagsContext.Provider value={{ featureFlags }}>
 							<CacheProvider status={status}>
@@ -318,7 +314,6 @@ export default function Providers({
 									</Suspense>
 									<UtmAttributionProvider />
 									<LoadingScreen
-										isMounted={isMounted}
 										featureFlags={featureFlags}
 									>
 										{children}

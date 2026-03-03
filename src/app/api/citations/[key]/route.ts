@@ -4,6 +4,7 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { blockedTags } from "@/constants/misc";
 import { RelationsType } from "@/types/item";
+import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 
 export type CitationYearData = {
 	year: string;
@@ -185,5 +186,9 @@ export async function GET(
 		totalPages,
 	};
 
-	return NextResponse.json(response);
+	return NextResponse.json(response, {
+		headers: {
+			"Cache-Control": PUBLIC_READ_CACHE_CONTROL,
+		},
+	});
 }

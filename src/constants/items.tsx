@@ -34,9 +34,9 @@ export const INSTITUTION_LOGOS: Record<string, any> = {
 			{...props}
 			src="/institutions/EdTechHub.png"
 			alt="EdTech Hub"
-			className="h-auto w-16"
-			width={64}
-			height={64}
+			className="h-6 w-auto aspect-[4/1]"
+			width={96}
+			height={24}
 		/>
 	),
 	"Open Development & Education": (props: React.ComponentProps<typeof OpenDevLogo>) => <OpenDevLogo {...props} />,

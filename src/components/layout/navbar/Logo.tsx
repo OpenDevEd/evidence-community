@@ -11,6 +11,7 @@ import { useStatus } from "@/context/Providers";
 import {
 	convertStringFromDatabaseToObject,
 	getDynamicStyles,
+	parseCompanyName,
 } from "@/lib/utils";
 
 interface LogoProps {
@@ -21,6 +22,7 @@ interface LogoProps {
 export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const status = useStatus();
+	const { companyName } = parseCompanyName(status?.companyName);
 	const { resolvedTheme: theme } = useTheme();
 	const t = useTranslations("ui");
 	const companyLogoStyle = status.companyLogo || "";
@@ -49,15 +51,15 @@ export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 					onLoad={() => setIsLoaded(true)}
 					src={
 						themeToMatch === "dark"
-							? `/logos/${status?.companyName?.toLowerCase()}/logo.png`
-							: `/logos/${status?.companyName?.toLowerCase()}/logo_light.png`
+							? `/logos/${companyName.toLowerCase()}/logo.png`
+							: `/logos/${companyName.toLowerCase()}/logo_light.png`
 					}
 					className={twMerge(
 						"pointer-events-none",
 						themeToMatch === "light" ? "dark:hidden" : "hidden dark:block"
 					)}
 					alt={t("logoAlt", {
-						company: status?.companyName ?? "",
+						company: companyName,
 						theme: themeToMatch,
 					})}
 					style={{ ...getDynamicStyles(navbarStyle) }}

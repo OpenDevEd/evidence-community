@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { defaultParams, escapeXml, getExtraValues } from "@/lib/utils";
+import { defaultParams, escapeXml, getExtraValues, parseCompanyName } from "@/lib/utils";
 import { getItems } from "@/lib/actions";
 import { create } from "xmlbuilder2";
 import { getCachedStatus } from "../../cache";
@@ -43,7 +43,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 	feed.ele("title").att("type", "html").txt("");
 
 	const author = feed.ele("author");
-	author.ele("name").txt(escapeXml(status.companyName || ""));
+	const { companyName } = parseCompanyName(status.companyName);
+	author.ele("name").txt(escapeXml(companyName));
 	author.ele("uri").txt(escapeXml(`${process.env.BASE_URL}/lib/`));
 
 	// Add feed links

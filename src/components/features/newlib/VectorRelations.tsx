@@ -9,7 +9,7 @@ import Resource from "../items/Resource";
 
 export default function VectorRelations({ item, loading }: { item: Item | undefined, loading: boolean }) {
 	const { lastFetchedData, setLastFetchedData } = useLastFetchedData();
-	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources");
+	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources") && process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true";
 	const { data: embeddings, isLoading } = useSWR(
 		isRelatedItemsEnabled && item?.key && !loading
 			? `/ai/embeddings/${item?.key}`

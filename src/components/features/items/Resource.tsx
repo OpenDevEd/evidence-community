@@ -1,5 +1,5 @@
 import { twMerge } from "tailwind-merge";
-import { Item, ItemGetResponse } from "@/app/api/item/types";
+import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
 import { fetcher, firstNonNullOrEmpty, setter, transformItem } from "@/lib/utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import {
@@ -42,7 +42,7 @@ export function AddButton({
 	revalidateResults,
 	collectionId,
 }: {
-	itemData: Item | undefined;
+	itemData: Item | ListItem | undefined;
 	userData?: Session["user"];
 	revalidateResults?: any;
 	collectionId?: string;
@@ -133,27 +133,37 @@ function FixURL(url: string | null) {
 	return url;
 }
 
-function CitationCounts({ itemData }: { itemData: Item | undefined }) {
+function CitationCounts({ itemData }: { itemData: Item | ListItem | undefined }) {
 	const t = useTranslations("ui");
 	const relations = itemData?.relations as RelationsType;
-	
-	const citesCount = Array.isArray(relations?.cites) ? relations.cites.length : 0;
+	const isOpenAlex = itemData?.groupExternalId === 1;
+
+	const citesCount = (Array.isArray(relations?.cites) ? relations.cites.length : 0)
+		+ (Array.isArray(relations?.referenced_works) ? relations.referenced_works.length : 0);
 	const citedByCount = (relations?.cited_by || 0) + (Array.isArray(relations?.citedBy) ? relations.citedBy.length : 0);
-	
+
 	if (citesCount === 0 && citedByCount === 0) return null;
-	
+
 	return (
 		<div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
 			{citedByCount > 0 && (
-				<Link
-					href={`/citation/${itemData?.key}`}
-					className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
-				>
-					<BsQuote className="size-3.5" />
-					<span>{citedByCount}</span>
-					<span className="text-accent/70 hidden @[480px]:inline">{t("citationsLowercase")}</span>
-					<IoChevronForward className="size-3 opacity-50 ml-0.5" />
-				</Link>
+				isOpenAlex ? (
+					<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium">
+						<BsQuote className="size-3.5" />
+						<span>{citedByCount}</span>
+						<span className="text-accent/70 hidden @[480px]:inline">{t("citationsLowercase")}</span>
+					</span>
+				) : (
+					<Link
+						href={`/citation/${itemData?.key}`}
+						className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
+					>
+						<BsQuote className="size-3.5" />
+						<span>{citedByCount}</span>
+						<span className="text-accent/70 hidden @[480px]:inline">{t("citationsLowercase")}</span>
+						<IoChevronForward className="size-3 opacity-50 ml-0.5" />
+					</Link>
+				)
 			)}
 			{citesCount > 0 && (
 				<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/70 text-xs font-medium">
@@ -173,7 +183,7 @@ function ResourceInteractions({
 	revalidateResults,
 	collectionId,
 }: {
-	itemData: Item | undefined;
+	itemData: Item | ListItem | undefined;
 	isLoading: boolean;
 	userData?: Session["user"];
 	revalidateResults?: any;
@@ -225,7 +235,7 @@ export default function Resource({
 	as = "li",
 	hideUnapi,
 }: {
-	itemData?: Item | undefined;
+	itemData?: Item | ListItem | undefined;
 	abstract: boolean;
 	isLoading?: boolean;
 	userData?: Session["user"];
@@ -249,6 +259,7 @@ export default function Resource({
 
 	const finalItemData = itemData ?? fetchedItemData?.item;
 	const finalIsLoading = !itemKey ? isLoading : fetchedItemDataLoading;
+	const transformedItem = finalItemData ? transformItem(finalItemData) : null;
 
 	const abstractText =
 		finalItemData && firstNonNullOrEmpty(finalItemData, ["abstractNote"]);
@@ -273,7 +284,7 @@ export default function Resource({
 			)}
 		>
 			{/* add COINs here */}
-			{finalItemData && <div className="hidden" dangerouslySetInnerHTML={{ __html: generateCOinS(transformItem(finalItemData) as Item) }} />}
+			{transformedItem && <div className="hidden" dangerouslySetInnerHTML={{ __html: generateCOinS(transformedItem) }} />}
 			{/* unAPI id marker for Zotero */}
 			{finalItemData?.key && !hideUnapi && (
 				<abbr className="unapi-id" title={finalItemData.key}></abbr>

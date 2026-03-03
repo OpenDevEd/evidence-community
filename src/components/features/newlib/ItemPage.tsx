@@ -26,7 +26,7 @@ import { twMerge } from "tailwind-merge";
 import { CountryDisplay } from "@/components/features/newlib/CountryDisplay";
 import Attachment from "@/components/features/items/Attachment";
 import VectorRelations from "@/components/features/newlib/VectorRelations";
-import { getExtraValues } from "@/lib/utils";
+import { fetcher, getExtraValues } from "@/lib/utils";
 import Relations from "@/components/features/newlib/Relations";
 import { DownloadButton } from "@/components/features/newlib/DownloadModal";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
@@ -64,6 +64,7 @@ import {
 } from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
 import { INTERNAL_TAG, PUBLISH_TAGS } from "@/constants/items";
+import useSWR from "swr";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -695,6 +696,18 @@ function ProcessHTML(html: string) {
 function ItemCitation({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const [origin, setOrigin] = useState("");
+	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{
+		citation: string | null;
+	}>(
+		item?.key ? `/item/${item.key}/citation` : null,
+		fetcher,
+		{
+			revalidateOnFocus: false,
+			revalidateOnReconnect: false,
+			revalidateIfStale: false,
+		}
+	);
+	const resolvedCitation = citationResponse?.citation || item?.citation || "";
 
 	useEffect(() => {
 		if (typeof window !== "undefined") {
@@ -703,11 +716,11 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 	}, []);
 
 	const { citationCopy, citationHtml, isLoading } = useMemo(() => {
-		if (item?.citation === "<div>Loading...</div>") {
+		if (isCitationFetching || resolvedCitation === "<div>Loading...</div>") {
 			return { isLoading: true };
 		}
 
-		const rawCitation = item?.citation || "";
+		const rawCitation = resolvedCitation;
 		const cleanCitationText = rawCitation.replace(/<[^>]+>/g, "");
 		const decodedCitation = cleanCitationText
 			? decodeHTMLEntities(cleanCitationText)
@@ -751,7 +764,7 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 			citationHtml: finalHtml,
 			isLoading: false,
 		};
-	}, [item, origin, t]);
+	}, [isCitationFetching, item?.key, origin, resolvedCitation, t]);
 
 	return (
 		<ItemPropertyRowWrapper
@@ -818,7 +831,7 @@ function ItemCollection({
 	];
 
 	return (
-		<li key={collection.id}>
+		<li key={collection.key}>
 			<Tooltip
 				content={
 					<motion.div
@@ -986,7 +999,7 @@ function ItemCollections({ item }: { item: Item | undefined }) {
 									)
 									.map((collection) => (
 										<ItemCollection
-											key={collection.id}
+											key={collection.key}
 											collection={collection}
 											item={item}
 										/>
@@ -1074,7 +1087,7 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 		citedBy: t("citedByResource"),
 	};
 
-	// if (!relations) return null;
+	if (item?.groupExternalId === 1) return null;
 
 	return (
 		<div className="flex flex-col gap-4">

@@ -207,6 +207,9 @@ export function useItemsList(
 		mutate: revalidateResults,
 	} = useSWR<ItemsGetResponse>(itemsQuery, fetcher, {
 		keepPreviousData: true,
+		revalidateOnFocus: false,
+		revalidateOnReconnect: false,
+		revalidateIfStale: false,
 		onSuccess: (data) => {
 			if (data.totalPages < queryParams.page) {
 				handlePageChange(data.totalPages);
@@ -228,6 +231,9 @@ export function useItemsList(
 		isLoading: isCollectionsLoading,
 	} = useSWR<CollectionsGetResponse>("/collections", fetcher, {
 		keepPreviousData: true,
+		revalidateOnFocus: false,
+		revalidateOnReconnect: false,
+		revalidateIfStale: false,
 	});
 
 	const selectedCollections = queryParams.collections;

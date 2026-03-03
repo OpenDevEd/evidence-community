@@ -4,6 +4,10 @@ import { routing } from "@/i18n/routing";
 import { notFound } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 
+export function generateStaticParams() {
+    return routing.locales.map((locale) => ({ locale }));
+}
+
 export default async function RootLayout(
     props: Readonly<{
         children: React.ReactNode;

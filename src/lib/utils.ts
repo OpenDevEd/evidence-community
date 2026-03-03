@@ -1,4 +1,4 @@
-import { Item, ItemGetResponse } from "@/app/api/item/types";
+import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
@@ -102,7 +102,7 @@ export function getDynamicStyles(cssString: string): React.CSSProperties {
 	return styleObj as React.CSSProperties;
 }
 
-export function cleanItemForAI(item: ItemGetResponse["item"] | undefined) {
+export function cleanItemForAI(item: ItemGetResponse["item"] | ListItem | undefined) {
 	if (!item) return null;
 	return {
 		...item,
@@ -256,6 +256,17 @@ export function cleanAIResponse(response: string) {
 	return result;
 }
 
+export function parseCompanyName(raw: string | null | undefined): {
+	companyName: string;
+	siteName: string;
+} {
+	if (!raw) return { companyName: "Evidence Library", siteName: "Evidence Library" };
+	const parts = raw.split("|");
+	const companyName = parts[0].trim();
+	const siteName = parts[1]?.trim() || "Evidence Library";
+	return { companyName, siteName };
+}
+
 export function convertToImageURL(url: string) {
 	return process.env.BASE_URL + "/images/" + url.split("/").slice(8).join("/");
 }
@@ -406,7 +417,9 @@ export function ensureNoBlankItems(itemCSL: any) {
 	}
 }
 
-export function transformItem(item: Item | undefined) {
+export function transformItem(item: Item | undefined): Item | null;
+export function transformItem(item: ListItem | undefined): ListItem | null;
+export function transformItem<T extends Item | ListItem>(item: T | undefined): T | null {
 	if (!item) return null;
 	const ExtraValues = getExtraValues(item.extra || "");
 

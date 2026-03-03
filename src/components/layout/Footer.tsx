@@ -16,6 +16,7 @@ import {
 	convertStringFromDatabaseToObject,
 	getDynamicStyles,
 	localizeOrUseIfCapitalized,
+	parseCompanyName,
 } from "@/lib/utils";
 import { LinkObject } from "@/db/schema/tables/status";
 import { FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
@@ -47,6 +48,7 @@ function FooterFieldColumn({
 function Logo() {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const status = useStatus();
+	const { companyName } = parseCompanyName(status?.companyName);
 	const { resolvedTheme: theme } = useTheme();
 	const t = useTranslations("ui");
 	const companyLogoStyle = convertStringFromDatabaseToObject(
@@ -66,7 +68,7 @@ function Logo() {
 					key={themeToMatch}
 					aria-hidden={themeToMatch !== theme}
 					alt={t("logoAlt", {
-						company: status?.companyName || "",
+						company: companyName,
 						theme: themeToMatch,
 					})}
 					onLoad={() => setIsLoaded(true)}
@@ -76,7 +78,7 @@ function Logo() {
 							: "hidden dark:block"
 					)}
 					suppressHydrationWarning
-					src={`/logos/${status?.companyName?.toLowerCase()}/logo${
+					src={`/logos/${companyName.toLowerCase()}/logo${
 						themeToMatch === "light" ? "_light" : ""
 					}.png`}
 					width={232}
@@ -136,6 +138,7 @@ export default function Footer() {
 	const [isMounted, setIsMounted] = useState(false);
 	const { resolvedTheme: theme } = useTheme();
 	const status = useStatus();
+	const { companyName } = parseCompanyName(status?.companyName);
 	const pathname = usePathname();
 	const links = status.links || [];
 	const footer = status.companyFooter || {};
@@ -148,7 +151,7 @@ export default function Footer() {
 
 	const contactData = links.find((link) => link.id === "contact");
 
-	if (status.companyName === "EdTech Hub") {
+	if (companyName === "EdTech Hub") {
 		const footerItems = links.reduce(
 			(acc: Record<string, LinkObject[]>, link) => {
 				const section = link.section || "Site";

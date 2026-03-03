@@ -1,8 +1,8 @@
 import { FacetDistribution } from "meilisearch";
-import { Item } from "../item/types";
+import { ListItem } from "../item/types";
 
 export type ItemsGetResponse = {
-  items: Item[];
+  items: ListItem[];
   currentPage: number;
   totalItems: number;
   perPage: number;

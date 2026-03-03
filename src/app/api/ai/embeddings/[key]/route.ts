@@ -8,10 +8,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest, props: { params: Promise<{ key: string }> }) {
 	if (process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS === "true") {
-		return {
-			hits: [],
-			totalHits: 0
-		}
+		return NextResponse.json({ hits: [], totalHits: 0 });
 	}
 
 	const params = await props.params;

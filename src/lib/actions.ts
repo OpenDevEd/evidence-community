@@ -18,14 +18,14 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
-import { buildItemsQuery, defaultParams, ensureNoBlankItems, generateRandomID, ItemToZoteroJSON, processSentenceCaseAPAItems, validateContactRequest, validateTakedownRequest } from "@/lib/utils";
+import { buildItemsQuery, defaultParams, ensureNoBlankItems, generateRandomID, ItemToZoteroJSON, parseCompanyName, processSentenceCaseAPAItems, validateContactRequest, validateTakedownRequest } from "@/lib/utils";
 import {
 	getCachedCollections,
 	getCachedItemSmall,
 	getCachedStatus,
-	getCachedUserLikes,
+	getUserCollectionKeysDirect,
+	getUserLikesDirect,
 } from "@/app/api/cache";
-import { getCachedUserCollectionKeys } from "@/app/api/cache";
 import { auth, credentialsSchema } from "@/app/api/auth/[...nextauth]/config";
 import { unstable_cache } from "next/cache";
 import { Collection } from "@/app/api/collections/types";
@@ -175,7 +175,7 @@ export async function sendTakedownRequest(email: string, links: string[], descri
 
 	const status = await getCachedStatus();
 
-	const companyName = status.companyName;
+	const { companyName, siteName } = parseCompanyName(status.companyName);
 	const validator = await validateTakedownRequest(email, links, description);
 	if ("error" in validator) {
 		return { error: validator.error };
@@ -184,7 +184,7 @@ export async function sendTakedownRequest(email: string, links: string[], descri
 	const mailOptions = {
 		from: email,
 		to: process.env.TAKEDOWN_EMAIL,
-		subject: `${companyName} - Takedown Request`,
+		subject: `${companyName} - ${siteName} - Takedown Request`,
 		text: `Email: ${email}\nLinks: ${links.join("\n")}\nDescription: ${description}`,
 	};
 
@@ -200,6 +200,7 @@ export async function sendContactRequest(email: string, description: string) {
 
 
 	const status = await getCachedStatus();
+	const { companyName, siteName } = parseCompanyName(status.companyName);
 	const validator = await validateContactRequest(email, description);
 
 	if ("error" in validator) {
@@ -209,7 +210,7 @@ export async function sendContactRequest(email: string, description: string) {
 	const mailOptions = {
 		from: email,
 		to: process.env.CONTACT_EMAIL,
-		subject: `${status.companyName} - Feedback`,
+		subject: `${companyName} - ${siteName} - Feedback`,
 		text: `Email: ${email}\nDescription: ${description}`,
 	};
 
@@ -448,8 +449,8 @@ export async function getProfileSearchFilter(
 
 	const [session, collectionKeys, likes] = (await Promise.all([
 		auth(),
-		collectionId ? getCachedUserCollectionKeys(collectionId, true) : null,
-		id && !collectionId ? getCachedUserLikes(id, true) : null,
+		collectionId ? getUserCollectionKeysDirect(collectionId) : null,
+		id && !collectionId ? getUserLikesDirect(id) : null,
 	])) as [Session | null, any, any];
 
 	if (collectionKeys) {

@@ -267,6 +267,10 @@ function mapLegacySearchParams(request: NextRequest) {
 	return null;
 }
 
+function isLikelyZoteroKey(key: string) {
+	return /^[A-Z0-9]{8}$/.test(key);
+}
+
 export default async function proxy(request: NextRequest) {
 	const rateLimit = generateRateLimitObject(request);
 
@@ -285,30 +289,55 @@ export default async function proxy(request: NextRequest) {
 	if (libItemMatch) {
 		const key = libItemMatch[1] as keyof typeof redirections;
 		const rest = libItemMatch[2] || "";
+		const isZoteroKey = isLikelyZoteroKey(String(key));
 
-		try {
-			const url = new URL(
-				`/api/item/${encodeURIComponent(key)}/redirects`,
-				fixRequestUrl(request)
-			)
-				.toString()
-				.replace("https://", "http://");
-
-			const response = await fetch(url);
-			const redirects = await response.json();
-
-			if (redirects?.value && redirects.value !== key) {
-				const newUrl = new URL(
-					`/lib/${redirects.value}${rest}`,
+		if (isZoteroKey) {
+			try {
+				const url = new URL(
+					`/api/item/${encodeURIComponent(key)}/redirects`,
 					fixRequestUrl(request)
-				);
-				request.nextUrl.searchParams.forEach((value, paramKey) => {
-					newUrl.searchParams.set(paramKey, value);
-				});
-				return NextResponse.redirect(newUrl, 301);
+				)
+					.toString()
+					.replace("https://", "http://");
+
+				const controller = new AbortController();
+				const timeout = setTimeout(() => {
+					controller.abort();
+				}, 350);
+
+				try {
+					const response = await fetch(url, {
+						signal: controller.signal,
+						cache: "no-store",
+					});
+
+					const redirects = await response.json();
+
+					if (redirects?.value && redirects.value !== key) {
+						const newUrl = new URL(
+							`/lib/${redirects.value}${rest}`,
+							fixRequestUrl(request)
+						);
+						request.nextUrl.searchParams.forEach((value, paramKey) => {
+							newUrl.searchParams.set(paramKey, value);
+						});
+						return NextResponse.redirect(newUrl, 301);
+					}
+				} finally {
+					clearTimeout(timeout);
+				}
+			} catch (error) {
+				const isExpectedAbort =
+					error instanceof Error &&
+					(error.name === "AbortError" ||
+						// Node/DOM variants
+						(error as any).code === "ABORT_ERR" ||
+						(error as any).code === 20);
+
+				if (!isExpectedAbort) {
+					console.error("Error checking redirects:", error);
+				}
 			}
-		} catch (error) {
-			console.error("Error checking redirects:", error);
 		}
 	}
 
