@@ -73,10 +73,22 @@ function formatDate({ value, formatter }: FormatterProps) {
 
 function Citation({ value, loading, item }: FormatterProps) {
 	const contentRef = useRef(null);
-	const [showSkeleton, setShowSkeleton] = useState(true);
-	let sanitizedHtml = value.trim();
+	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{ citation: string | null }>(
+		item?.key ? `/item/${item.key}/citation` : null,
+		fetcher,
+		{
+			revalidateOnFocus: false,
+			revalidateOnReconnect: false,
+			revalidateIfStale: false,
+		}
+	);
 
-	if (SHOW_URL_IN_CITATION && item?.key) {
+	const resolvedCitation = citationResponse?.citation || value || "";
+	const isLoading = loading || isCitationFetching;
+
+	let sanitizedHtml = (resolvedCitation || "").trim();
+
+	if (SHOW_URL_IN_CITATION && item?.key && sanitizedHtml) {
 		const url = typeof window !== "undefined" ? window.location.origin : "";
 		const finalURL = new URL(url + "/lib/" + item.key);
 		const link = ` Available at <a href="${finalURL}" target="_blank" rel="noopener noreferrer">${finalURL}</a>`;
@@ -90,22 +102,14 @@ function Citation({ value, loading, item }: FormatterProps) {
 
 	sanitizedHtml = sanitizedHtml.replace(/<\/?div/g, "<p");
 
-	useEffect(() => {
-		const timer = setTimeout(() => {
-			setShowSkeleton(false);
-		}, 250);
-
-		return () => clearTimeout(timer);
-	}, []);
-
 	return (
 		<Skeleton
-			isLoaded={!loading && !showSkeleton}
+			isLoaded={!isLoading}
 			className="w-full min-h-16 rounded-2xl"
 		>
 			<motion.div
 				initial={{ height: "5rem" }}
-				animate={loading ? { height: "5rem" } : { height: "auto" }}
+				animate={isLoading ? { height: "5rem" } : { height: "auto" }}
 				transition={{ duration: 0.2, ease: "easeOut" }}
 				className="flex gap-4 w-full bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl justify-between break-all"
 			>

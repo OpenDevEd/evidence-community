@@ -684,12 +684,13 @@ function ItemAbstract({ item }: { item: Item | undefined }) {
 }
 
 function ProcessHTML(html: string) {
-	// Regular expression to match URLs
-	const urlRegex = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)/gi;
+	// Single pass: match URLs or bare DOIs
+	const combined = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)|(10\.\d{4,9}\/[-._;():\w]+)/gi;
+	const linkClass = "text-link_light dark:text-link hover:underline";
 
-	// Replace URLs with anchor tags that have proper link styling
-	return html.replace(urlRegex, (url) => {
-		return `<a href="${url}" target="_blank" rel="noopener noreferrer" class="text-link_light dark:text-link hover:underline">${url}</a>`;
+	return html.replace(combined, (match, url, doi) => {
+		const href = url || `https://doi.org/${doi}`;
+		return `<a href="${href}" target="_blank" rel="noopener noreferrer" class="${linkClass}">${match}</a>`;
 	});
 }
 
