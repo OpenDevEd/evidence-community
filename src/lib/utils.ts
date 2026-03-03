@@ -423,7 +423,8 @@ export function transformItem<T extends Item | ListItem>(item: T | undefined): T
 	if (!item) return null;
 	const ExtraValues = getExtraValues(item.extra || "");
 
-	item.DOI = item.DOI || ExtraValues.get("DOI") || null;
+	const rawDoi = item.DOI || ExtraValues.get("DOI") || null;
+	item.DOI = rawDoi?.replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, "") ?? null;
 
 	return item;
 }
