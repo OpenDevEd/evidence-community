@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { Metadata } from "next";
 import { getCachedItemSmall, getCachedStatus } from "@/app/api/cache";
 import { Item } from "@/app/api/item/types";
+import { parseCompanyName } from "@/lib/utils";
 import CitationPageClient from "./CitationPageClient";
 import { notFound } from "next/navigation";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -21,8 +22,8 @@ export async function generateMetadata(props: {
 	const data = await getSourceItem(params.key);
 	const status = await getCachedStatus();
 	
-	const companyName = status.companyName ?? "Evidence Library";
-	
+	const { companyName, siteName } = parseCompanyName(status.companyName);
+
 	if (!data || !data.item) {
 		return {
 			title: "404 - Not Found",
@@ -38,7 +39,7 @@ export async function generateMetadata(props: {
 		openGraph: {
 			title: `Citations - ${item.title}`,
 			description: `View citation statistics and citing resources for "${item.title}"`,
-			siteName: companyName,
+			siteName: `${companyName} - ${siteName}`,
 		},
 	};
 }

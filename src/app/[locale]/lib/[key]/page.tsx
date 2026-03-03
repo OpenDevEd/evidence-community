@@ -9,7 +9,7 @@ import {
 } from "@/app/api/cache";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
-import { convertToImageURL, getExtraValues } from "@/lib/utils";
+import { convertToImageURL, getExtraValues, parseCompanyName } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
 import { Suspense } from "react";
 import LoadingComponent from "./LoadingComponent";
@@ -64,7 +64,7 @@ export async function generateMetadata(props: {
 	const data = await getCurrentItem(params.key);
 	const status = await getCachedStatus();
 
-	const companyName = status.companyName ?? "Evidence Library";
+	const { companyName, siteName } = parseCompanyName(status.companyName);
 
 	if (!data || !data.item) {
 		return {
@@ -166,7 +166,7 @@ export async function generateMetadata(props: {
 			title: item.title ?? "",
 			description: item.abstractNote ?? "",
 			url: `${process.env.BASE_URL!}/lib/${item.key}`,
-			siteName: companyName,
+			siteName: `${companyName} - ${siteName}`,
 			images: [
 				{
 					url: pdfWithImage

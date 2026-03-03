@@ -8,7 +8,8 @@ async function main() {
 
     const status = await db.query.status.findFirst();
 
-    const companyName = status?.companyName || 'default';
+    const rawCompanyName = status?.companyName || 'default';
+    const companyName = rawCompanyName.split('|')[0].trim();
 
     // find /public/icons/[companyName] folder
     const iconsFolder = path.join(process.cwd(), 'public', 'logos', companyName.toLowerCase());

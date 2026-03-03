@@ -22,7 +22,7 @@ import { useLocalStorage } from "usehooks-ts";
 import { useTranslations } from "next-intl";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { toast, Toaster } from "sonner";
-import { convertStringFromDatabaseToObject, getDynamicStyles } from "@/lib/utils";
+import { convertStringFromDatabaseToObject, getDynamicStyles, parseCompanyName } from "@/lib/utils";
 import { getPersistence } from "@/components/layout/Banner";
 import { useQueryState } from "nuqs";
 import { toast as toastComponent } from "@/components/layout/Toast";
@@ -155,6 +155,7 @@ function LoadingScreen({
 }) {
 	const { resolvedTheme: theme } = useTheme();
 	const statusTable = useStatus();
+	const { companyName } = parseCompanyName(statusTable?.companyName);
 	const t = useTranslations("ui");
 	const companyLogoStyle = convertStringFromDatabaseToObject(statusTable.companyLogo || "")["splash"];
 
@@ -189,8 +190,8 @@ function LoadingScreen({
 									key={themeToMatch}
 									src={
 										themeToMatch === "dark"
-											? `/logos/${statusTable?.companyName?.toLowerCase()}/logo.png`
-											: `/logos/${statusTable?.companyName?.toLowerCase()}/logo_light.png`
+											? `/logos/${companyName.toLowerCase()}/logo.png`
+											: `/logos/${companyName.toLowerCase()}/logo_light.png`
 									}
 									className={twMerge(
 										"pointer-events-none",
@@ -200,7 +201,7 @@ function LoadingScreen({
 										companyLogoStyle
 									)}
 									alt={t("logoAlt", {
-										company: statusTable?.companyName || "",
+										company: companyName,
 										theme: themeToMatch,
 									})}
 									width={171}

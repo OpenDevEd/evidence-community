@@ -256,6 +256,17 @@ export function cleanAIResponse(response: string) {
 	return result;
 }
 
+export function parseCompanyName(raw: string | null | undefined): {
+	companyName: string;
+	siteName: string;
+} {
+	if (!raw) return { companyName: "Evidence Library", siteName: "Evidence Library" };
+	const parts = raw.split("|");
+	const companyName = parts[0].trim();
+	const siteName = parts[1]?.trim() || "Evidence Library";
+	return { companyName, siteName };
+}
+
 export function convertToImageURL(url: string) {
 	return process.env.BASE_URL + "/images/" + url.split("/").slice(8).join("/");
 }
