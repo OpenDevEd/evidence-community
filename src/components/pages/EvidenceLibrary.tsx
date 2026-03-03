@@ -100,7 +100,7 @@ export function SearchBar({
 	classNames?: PropsOf<typeof Input>["classNames"];
 	endContent?: ReactNode;
 }) {
-	const [debouncedSearch, _] = useDebounce(handleSearchChange, 300);
+	const [debouncedSearch, _] = useDebounce(handleSearchChange, 150);
 	const t = useTranslations("ui");
 
 	return (
@@ -115,7 +115,7 @@ export function SearchBar({
 				...classNames,
 				inputWrapper: twMerge(
 					"h-10 lg:h-12 min-h-10 lg:min-h-12",
-					classNames?.inputWrapper
+					classNames?.inputWrapper,
 				),
 				base: twMerge("col-span-2", classNames?.base),
 			}}
@@ -153,25 +153,25 @@ function SortComponent({
 					? {
 							base: twMerge(
 								"flex-1 max-w-full lg:max-w-56 shrink-0",
-								genericSelectClassNames.base
+								genericSelectClassNames.base,
 							),
 							mainWrapper: twMerge(
 								"h-full",
-								genericSelectClassNames.mainWrapper
+								genericSelectClassNames.mainWrapper,
 							),
 							label: twMerge("", genericSelectClassNames.label),
-					  }
+						}
 					: {
 							base: twMerge(
 								"flex-1 max-w-full min-w-0 lg:min-w-56",
-								genericSelectClassNames.base
+								genericSelectClassNames.base,
 							),
 							mainWrapper: twMerge(
 								"",
-								genericSelectClassNames.mainWrapper
+								genericSelectClassNames.mainWrapper,
 							),
 							label: twMerge("", genericSelectClassNames.label),
-					  }
+						}
 			}
 			label={"Sort by"}
 			labelPlacement="outside"
@@ -215,25 +215,25 @@ function ScopeComponent({
 								"lg:max-w-72 max-w-full",
 								itemsContext.config.interactionsStyle ===
 									"one-line" && "flex-1",
-								genericSelectClassNames.base
+								genericSelectClassNames.base,
 							),
 							mainWrapper: twMerge(
 								"h-10 lg:h-full",
-								genericSelectClassNames.mainWrapper
+								genericSelectClassNames.mainWrapper,
 							),
 							label: twMerge("", genericSelectClassNames.label),
-					  }
+						}
 					: {
 							base: twMerge(
 								"flex-1 max-w-full min-w-0 lg:min-w-56",
-								genericSelectClassNames.base
+								genericSelectClassNames.base,
 							),
 							mainWrapper: twMerge(
 								"",
-								genericSelectClassNames.mainWrapper
+								genericSelectClassNames.mainWrapper,
 							),
 							label: twMerge("", genericSelectClassNames.label),
-					  }
+						}
 			}
 			label={"Search scope"}
 			labelPlacement="outside"
@@ -311,7 +311,9 @@ function SearchTabContent({
 						{!showHeader && <SearchModeSwitch mode={"search"} />}
 					</div>
 					<Button
-						startContent={<AiOutlineCompass className="size-6 shrink-0" />}
+						startContent={
+							<AiOutlineCompass className="size-6 shrink-0" />
+						}
 						className="lg:hidden ml-auto rtl:ml-0 rtl:mr-auto h-full"
 						onPress={onExploreOpen}
 					>
@@ -405,7 +407,7 @@ function SearchTabContent({
 						"lg:flex lg:flex-row gap-4",
 						!itemsContext.userData
 							? "flex flex-col"
-							: "grid grid-cols-2"
+							: "grid grid-cols-2",
 					)}
 				>
 					<SearchBar
@@ -437,7 +439,7 @@ function SearchTabContent({
 										actuallyNoData
 											? 0
 											: itemsContext.itemsData
-													?.totalItems || 0
+													?.totalItems || 0,
 									),
 									number: (chunks) => (
 										<span
@@ -464,7 +466,7 @@ function SearchTabContent({
 						"flex gap-4",
 						itemsContext.config.interactionsStyle === "multi-line"
 							? "lg:min-w-72"
-							: "flex-1"
+							: "flex-1",
 					)}
 				>
 					<Card className="h-full flex items-center justify-center flex-1 min-w-0 px-0">
@@ -624,7 +626,7 @@ function AITabContent({
 													setMode(
 														mode === "full"
 															? "quick"
-															: "full"
+															: "full",
 													)
 												}
 												aria-label={tUI("researchMode")}
@@ -634,7 +636,7 @@ function AITabContent({
 														"size-4",
 														mode === "full"
 															? "text-accent"
-															: "text-black/60 dark:text-white/60"
+															: "text-black/60 dark:text-white/60",
 													)}
 												/>
 											</Button>
@@ -695,7 +697,7 @@ export function useIsAISearchEnabled() {
 function useSelectedSearchMode(
 	mode: ChatMode,
 	selectedTab: SearchMode,
-	isAISearchEnabled: boolean
+	isAISearchEnabled: boolean,
 ) {
 	if (selectedTab === "search" || !isAISearchEnabled) return "search";
 	if (selectedTab === "ai") return mode === "full" ? "research" : "ai";
@@ -707,7 +709,7 @@ export function useSearchMode() {
 	const tAI = useTranslations("ai");
 	const [selectedTabOriginal, setSelectedTab] = useLocalStorage<SearchMode>(
 		"selectedSearchTab",
-		"search"
+		"search",
 	);
 	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
 	const { isAISearchEnabled, isDeepResearchEnabled } = useIsAISearchEnabled();
@@ -715,7 +717,7 @@ export function useSearchMode() {
 	const selectedTab = useSelectedSearchMode(
 		mode,
 		selectedTabOriginal,
-		isAISearchEnabled
+		isAISearchEnabled,
 	);
 
 	const tabData: Record<
@@ -758,7 +760,7 @@ export function useSearchMode() {
 	};
 
 	const activeCount = Object.keys(tabData).filter(
-		(mode) => !tabData[mode as SearchMode].disabled
+		(mode) => !tabData[mode as SearchMode].disabled,
 	).length;
 
 	return { selectedTab, tabData, setSelectedTab, activeCount };
@@ -785,7 +787,7 @@ function SearchModeSwitch({ mode: selectedTab }: { mode: SearchMode }) {
 								"h-10",
 								isMobile &&
 									(mode === selectedTab || isReallySmall) &&
-									"!min-w-0 !aspect-square !p-0"
+									"!min-w-0 !aspect-square !p-0",
 							)}
 							variant="light"
 							color={
@@ -795,7 +797,10 @@ function SearchModeSwitch({ mode: selectedTab }: { mode: SearchMode }) {
 						>
 							<span
 								className={twMerge(
-									isMobile && (mode === selectedTab || isReallySmall) && "hidden"
+									isMobile &&
+										(mode === selectedTab ||
+											isReallySmall) &&
+										"hidden",
 								)}
 							>
 								{tabData[mode as SearchMode].text}
@@ -964,12 +969,12 @@ function SmartScreeningModal({
 	const [tab, setTab] = useState<(typeof tabs)[number]>(tabs[0]);
 	const [fields, setFields] = useLocalStorage<SmartScreeningField[]>(
 		"smart-screening-fields",
-		[]
+		[],
 	);
 	const [localFields, setLocalFields] = useState<SmartScreeningField[]>([]);
 	const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({});
 	const placeholderExample = `${t("label")} (${smartScreeningFieldTypes.join(
-		" | "
+		" | ",
 	)}): ${t("description")}`;
 
 	useEffect(() => {
@@ -993,7 +998,7 @@ function SmartScreeningModal({
 			(field) =>
 				`${field.label.trim()} (${
 					field.type
-				}): ${field.description.trim()}`
+				}): ${field.description.trim()}`,
 		)
 		.join("\n");
 
@@ -1112,7 +1117,7 @@ function SmartScreeningModal({
 									className={twMerge(
 										"rounded-none",
 										t === tabs[0] && "rounded-l-2xl",
-										t === tabs.at(-1) && "rounded-r-2xl"
+										t === tabs.at(-1) && "rounded-r-2xl",
 									)}
 									onPress={() => setTab(t)}
 								>
@@ -1162,10 +1167,10 @@ function SmartScreeningModal({
 															<Input
 																isRequired
 																placeholder={t(
-																	"label"
+																	"label",
 																)}
 																label={t(
-																	"label"
+																	"label",
 																)}
 																value={
 																	field.label
@@ -1183,7 +1188,7 @@ function SmartScreeningModal({
 																	!field.label
 																		? fieldErrors[
 																				index
-																		  ]
+																			]
 																		: undefined
 																}
 																onChange={(e) =>
@@ -1191,7 +1196,7 @@ function SmartScreeningModal({
 																		localFields.map(
 																			(
 																				f,
-																				i
+																				i,
 																			) =>
 																				i ===
 																				index
@@ -1200,18 +1205,18 @@ function SmartScreeningModal({
 																							label: e
 																								.target
 																								.value,
-																					  }
-																					: f
-																		)
+																						}
+																					: f,
+																		),
 																	)
 																}
 															/>
 															<Textarea
 																placeholder={t(
-																	"description"
+																	"description",
 																)}
 																label={t(
-																	"description"
+																	"description",
 																)}
 																value={
 																	field.description
@@ -1232,7 +1237,7 @@ function SmartScreeningModal({
 																	!field.description
 																		? fieldErrors[
 																				index
-																		  ]
+																			]
 																		: undefined
 																}
 																onChange={(e) =>
@@ -1240,7 +1245,7 @@ function SmartScreeningModal({
 																		localFields.map(
 																			(
 																				f,
-																				i
+																				i,
 																			) =>
 																				i ===
 																				index
@@ -1250,9 +1255,9 @@ function SmartScreeningModal({
 																								e
 																									.target
 																									.value,
-																					  }
-																					: f
-																		)
+																						}
+																					: f,
+																		),
 																	)
 																}
 																classNames={{
@@ -1265,7 +1270,7 @@ function SmartScreeningModal({
 																<Select
 																	color="tertiary"
 																	label={t(
-																		"typeLabel"
+																		"typeLabel",
 																	)}
 																	placement="left"
 																	disallowEmptySelection={
@@ -1275,7 +1280,7 @@ function SmartScreeningModal({
 																		field.type
 																			? [
 																					field.type,
-																			  ]
+																				]
 																			: undefined
 																	}
 																	isInvalid={
@@ -1291,36 +1296,36 @@ function SmartScreeningModal({
 																		!field.type
 																			? fieldErrors[
 																					index
-																			  ]
+																				]
 																			: undefined
 																	}
 																	onSelectionChange={(
-																		value
+																		value,
 																	) => {
 																		const selectedType =
 																			Array.from(
-																				value
+																				value,
 																			)[0] as (typeof smartScreeningFieldTypes)[number];
 																		setLocalFields(
 																			localFields.map(
 																				(
 																					f,
-																					i
+																					i,
 																				) =>
 																					i ===
 																					index
 																						? {
 																								...f,
 																								type: selectedType,
-																						  }
-																						: f
-																			)
+																							}
+																						: f,
+																			),
 																		);
 																	}}
 																>
 																	{smartScreeningFieldTypes.map(
 																		(
-																			type
+																			type,
 																		) => (
 																			<SelectItem
 																				key={
@@ -1334,7 +1339,7 @@ function SmartScreeningModal({
 																					type
 																				}
 																			</SelectItem>
-																		)
+																		),
 																	)}
 																</Select>
 																<Button
@@ -1345,11 +1350,11 @@ function SmartScreeningModal({
 																			localFields.filter(
 																				(
 																					_,
-																					i
+																					i,
 																				) =>
 																					i !==
-																					index
-																			)
+																					index,
+																			),
 																		)
 																	}
 																	className="!p-0"
@@ -1358,7 +1363,7 @@ function SmartScreeningModal({
 																</Button>
 															</div>
 														</motion.div>
-													)
+													),
 												)}
 											</div>
 										</AnimatePresence>
