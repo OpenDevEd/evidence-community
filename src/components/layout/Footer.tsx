@@ -52,7 +52,7 @@ function Logo() {
 	const { resolvedTheme: theme } = useTheme();
 	const t = useTranslations("ui");
 	const companyLogoStyle = convertStringFromDatabaseToObject(
-		status.companyLogo || ""
+		status.companyLogo || "",
 	)["footer"];
 
 	return (
@@ -60,7 +60,7 @@ function Logo() {
 			isLoaded={isLoaded}
 			className={twMerge(
 				"w-[14.5rem] h-[3.375rem] rounded-lg",
-				companyLogoStyle
+				companyLogoStyle,
 			)}
 		>
 			{["dark", "light"].map((themeToMatch) => (
@@ -75,7 +75,7 @@ function Logo() {
 					className={twMerge(
 						themeToMatch === "light"
 							? "dark:hidden"
-							: "hidden dark:block"
+							: "hidden dark:block",
 					)}
 					suppressHydrationWarning
 					src={`/logos/${companyName.toLowerCase()}/logo${
@@ -101,7 +101,7 @@ function SocialWrapper({
 		<div
 			className={twMerge(
 				"rounded-full  flex justify-center items-center p-3",
-				className
+				className,
 			)}
 		>
 			{children}
@@ -163,7 +163,7 @@ export default function Footer() {
 				}
 				return acc;
 			},
-			{}
+			{},
 		);
 		const footerItemsSorted = Object.entries(footerItems).sort((a, b) => {
 			// sort by their order of appearance in the links array
@@ -199,7 +199,7 @@ export default function Footer() {
 													>
 														{localizeOrUseIfCapitalized(
 															link.label,
-															tNav
+															tNav,
 														)}
 													</Link>
 												</li>
@@ -217,7 +217,7 @@ export default function Footer() {
 											([key]) =>
 												socials[
 													key as keyof typeof socials
-												]
+												],
 										)
 										.map(([key, value]) => (
 											<Link href={value} key={key}>
@@ -263,9 +263,7 @@ export default function Footer() {
 							. Creative Commons Attribution 4.0 International
 							License.
 						</div>
-						<Link
-							href="https://opendeved.org"
-						>
+						<Link href="https://opendeved.org">
 							<div className="flex w-full justify-center items-center gap-4">
 								Powered by
 								<div>
@@ -316,7 +314,7 @@ export default function Footer() {
 												{footer[key]}
 											</span>
 										</div>
-									)
+									),
 							)}
 						</div>
 					</div>
@@ -335,11 +333,11 @@ export default function Footer() {
 												>
 													{localizeOrUseIfCapitalized(
 														link.label,
-														tNav
+														tNav,
 													)}
 												</Link>
 											</li>
-										)
+										),
 								)}
 							</ul>
 						}
@@ -380,8 +378,8 @@ export default function Footer() {
 										{contactData?.label
 											? localizeOrUseIfCapitalized(
 													contactData.label,
-													tNav
-											  )
+													tNav,
+												)
 											: t("contactUs")}
 									</Button>
 								</div>
@@ -413,7 +411,7 @@ export default function Footer() {
 					</div>
 				)}
 				<div className="absolute bottom-0 left-0 p-2 z-50 text-xs text-black/60 dark:text-white/60">
-					0.7.1
+					0.7.5
 				</div>
 			</footer>
 		)
