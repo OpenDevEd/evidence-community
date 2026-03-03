@@ -30,20 +30,40 @@ async function getDatabaseItem(key: string) {
 	return result as Item;
 }
 
-export async function getItem(
+export async function getItemRaw(
 	key: string,
 	source: "db" | "meilisearch" = "meilisearch"
 ) {
-	const [result, collections] = (await Promise.all([
-		source === "db" ? getDatabaseItem(key) : getMeilisearchItem(key),
-		getCachedCollections(),
-	]));
+	const result = source === "db" ? await getDatabaseItem(key) : await getMeilisearchItem(key);
 
 	if (!result || result.deleted || result?.tags?.some((tag) => blockedTags.includes(tag.toLowerCase()))) {
 		return {
 			item: null,
 		};
 	}
+
+	result.attachmentsData = result.attachmentsData?.filter((attachment: any) => attachment.deleted === 0);
+	result.citation = null;
+
+	return {
+		item: result,
+	};
+}
+
+export async function getItem(
+	key: string,
+	source: "db" | "meilisearch" = "meilisearch"
+) {
+	const [rawResult, collections] = await Promise.all([
+		getItemRaw(key, source),
+		getCachedCollections(),
+	]);
+
+	if (!rawResult.item) {
+		return rawResult;
+	}
+
+	const result = rawResult.item;
 
 	if (collections) {
 		result.collectionsData = result.collectionsAncestry
@@ -57,9 +77,6 @@ export async function getItem(
 				(collectionData) => collectionData !== undefined
 			) as Collection[];
 	}
-
-	result.attachmentsData = result.attachmentsData?.filter((attachment: any) => attachment.deleted === 0);
-	result.citation = null;
 
 	return {
 		item: result,

@@ -157,17 +157,29 @@ export default function ItemHeader({
 							<AiWrapper data={{ item: item }} variant="inline" />
 						)}
 						{getCitationCount(item) > 0 && (
-							<Button
-								as={Link}
-								href={isCitationPage ? `/lib/${item?.key}` : `/citation/${item?.key}`}
-								size="sm"
-								color={isCitationPage ? "accent" : "secondary"}
-								startContent={<BsQuote className="size-4" />}
-								endContent={<IoChevronForward className={`size-3 opacity-50 ${isCitationPage ? "rotate-180" : ""}`} />}
-							>
-								<span className="font-bold">{getCitationCount(item)}</span>
-								<span className="opacity-80 font-normal">{t("itemCitationsCount")}</span>
-							</Button>
+							item?.groupExternalId === 1 ? (
+								<Button
+									size="sm"
+									color="secondary"
+									startContent={<BsQuote className="size-4" />}
+									className="pointer-events-none"
+								>
+									<span className="font-bold">{getCitationCount(item)}</span>
+									<span className="opacity-80 font-normal">{t("itemCitationsCount")}</span>
+								</Button>
+							) : (
+								<Button
+									as={Link}
+									href={isCitationPage ? `/lib/${item?.key}` : `/citation/${item?.key}`}
+									size="sm"
+									color={isCitationPage ? "accent" : "secondary"}
+									startContent={<BsQuote className="size-4" />}
+									endContent={<IoChevronForward className={`size-3 opacity-50 ${isCitationPage ? "rotate-180" : ""}`} />}
+								>
+									<span className="font-bold">{getCitationCount(item)}</span>
+									<span className="opacity-80 font-normal">{t("itemCitationsCount")}</span>
+								</Button>
+							)
 						)}
 					</div>
 				</div>

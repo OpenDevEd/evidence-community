@@ -266,7 +266,7 @@ function CollectionLevel({
 			<ul className="ml-8">
 				{collection.children?.map((child) => (
 					<CollectionLevel
-						key={child.id}
+						key={child.key}
 						collection={child}
 						pathname={pathname}
 					/>
@@ -290,7 +290,7 @@ export function CollectionsRow({
 		<ul className="flex flex-col gap-2">
 			{value.map((collection: Collection) => (
 				<CollectionLevel
-					key={collection.id}
+					key={collection.key}
 					collection={collection}
 					pathname={pathname}
 				/>

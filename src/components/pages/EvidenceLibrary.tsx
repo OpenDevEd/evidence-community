@@ -100,7 +100,7 @@ export function SearchBar({
 	classNames?: PropsOf<typeof Input>["classNames"];
 	endContent?: ReactNode;
 }) {
-	const [debouncedSearch, _] = useDebounce(handleSearchChange, 0);
+	const [debouncedSearch, _] = useDebounce(handleSearchChange, 300);
 	const t = useTranslations("ui");
 
 	return (

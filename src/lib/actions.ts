@@ -23,9 +23,9 @@ import {
 	getCachedCollections,
 	getCachedItemSmall,
 	getCachedStatus,
-	getCachedUserLikes,
+	getUserCollectionKeysDirect,
+	getUserLikesDirect,
 } from "@/app/api/cache";
-import { getCachedUserCollectionKeys } from "@/app/api/cache";
 import { auth, credentialsSchema } from "@/app/api/auth/[...nextauth]/config";
 import { unstable_cache } from "next/cache";
 import { Collection } from "@/app/api/collections/types";
@@ -449,8 +449,8 @@ export async function getProfileSearchFilter(
 
 	const [session, collectionKeys, likes] = (await Promise.all([
 		auth(),
-		collectionId ? getCachedUserCollectionKeys(collectionId, true) : null,
-		id && !collectionId ? getCachedUserLikes(id, true) : null,
+		collectionId ? getUserCollectionKeysDirect(collectionId) : null,
+		id && !collectionId ? getUserLikesDirect(id) : null,
 	])) as [Session | null, any, any];
 
 	if (collectionKeys) {

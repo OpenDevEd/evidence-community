@@ -69,10 +69,10 @@ async function ServerComponent(props: { params: Promise<{ key: string }> }) {
 	const params = await props.params;
 	const data = await getSourceItem(params.key);
 	
-	if (!data || !data.item) {
+	if (!data || !data.item || data.item.groupExternalId === 1) {
 		return notFound();
 	}
-	
+
 	return <CitationPageClient sourceItem={data.item} itemKey={params.key} />;
 }
 

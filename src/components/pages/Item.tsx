@@ -363,7 +363,7 @@ export default function Item({
 									.map((collection: Collection) => (
 										<ItemRow
 											item={data.item!}
-											key={collection.id}
+											key={collection.key}
 											router={router}
 											customRowName={collection.title}
 											value={

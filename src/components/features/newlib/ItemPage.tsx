@@ -831,7 +831,7 @@ function ItemCollection({
 	];
 
 	return (
-		<li key={collection.id}>
+		<li key={collection.key}>
 			<Tooltip
 				content={
 					<motion.div
@@ -999,7 +999,7 @@ function ItemCollections({ item }: { item: Item | undefined }) {
 									)
 									.map((collection) => (
 										<ItemCollection
-											key={collection.id}
+											key={collection.key}
 											collection={collection}
 											item={item}
 										/>
@@ -1087,7 +1087,7 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 		citedBy: t("citedByResource"),
 	};
 
-	// if (!relations) return null;
+	if (item?.groupExternalId === 1) return null;
 
 	return (
 		<div className="flex flex-col gap-4">
