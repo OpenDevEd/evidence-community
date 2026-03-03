@@ -1,4 +1,4 @@
-import { Link, usePathname, useRouter } from "@/i18n/routing";
+import { Link, useRouter } from "@/i18n/routing";
 
 export default function PrefetchLink({
 	href,
@@ -13,20 +13,27 @@ export default function PrefetchLink({
 		<Link
 			href={href}
 			onMouseDown={(e) => {
-				if (href) return;
+				if (!href) return;
 
-				const url = new URL(href, window.location.href);
 				if (
-					url.origin === window.location.origin &&
-					e.button === 0 &&
-					!e.altKey &&
-					!e.ctrlKey &&
-					!e.metaKey &&
-					!e.shiftKey
+					e.button !== 0 ||
+					e.metaKey ||
+					e.ctrlKey ||
+					e.shiftKey ||
+					e.altKey
 				) {
-					e.preventDefault();
-					router.push(href);
+					return;
 				}
+
+				try {
+					const url = new URL(href, window.location.href);
+					if (url.origin !== window.location.origin) return;
+				} catch {
+					return;
+				}
+
+				e.preventDefault();
+				router.push(href);
 			}}
 			prefetch={true}
 			{...props}
