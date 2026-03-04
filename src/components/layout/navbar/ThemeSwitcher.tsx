@@ -2,6 +2,7 @@
 
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
+import { useEffect, useState } from "react";
 import { HiOutlineMoon } from "react-icons/hi2";
 import { IoMdSunny } from "react-icons/io";
 import { DropdownItem } from "@heroui/react";
@@ -10,19 +11,31 @@ import { Button } from "@/components/heroui/Button";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import type { NavbarElementProps } from "@/types/navbar";
 
+const FALLBACK_THEME: "light" | "dark" =
+	process.env.NEXT_PUBLIC_DEFAULT_THEME === "light" ? "light" : "dark";
+
 export default function ThemeSwitcher({
 	variant,
 	styleVariant,
 	showLabel,
 }: NavbarElementProps) {
 	const { resolvedTheme: theme, setTheme } = useTheme();
+	const [mounted, setMounted] = useState(false);
 	const isEnabled = useFeatureFlagEnabled("theme-switcher");
 	const t = useTranslations("ui");
 
+	useEffect(() => {
+		setMounted(true);
+	}, []);
+
 	if (!isEnabled) return null;
 
-	const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
-	const isDark = theme === "dark";
+	const safeTheme =
+		mounted && (theme === "dark" || theme === "light")
+			? theme
+			: FALLBACK_THEME;
+	const isDark = safeTheme === "dark";
+	const toggleTheme = () => setTheme(isDark ? "light" : "dark");
 	const targetTheme = isDark ? t("lightTheme") : t("darkTheme");
 	const label = t("switchThemeAriaLabel", { theme: targetTheme });
 
@@ -83,14 +96,20 @@ export default function ThemeSwitcher({
 						<span
 							suppressHydrationWarning
 							key={themeToMatch}
-							aria-hidden={themeToMatch !== theme}
+							aria-hidden={themeToMatch !== safeTheme}
 							className={twMerge(
 								themeToMatch === "dark"
 									? "dark:hidden"
 									: "hidden dark:block"
 							)}
 						>
-							{`Switch to ${themeToMatch} mode`}
+							{t("switchThemeAriaLabel", {
+								theme: t(
+									themeToMatch === "dark"
+										? "darkTheme"
+										: "lightTheme"
+								),
+							})}
 						</span>
 					))}
 				</span>

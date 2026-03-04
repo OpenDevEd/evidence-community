@@ -30,7 +30,6 @@ import React, { ReactNode, use, useRef, useState, useEffect } from "react";
 import { Tabs, Tab } from "@heroui/react";
 import { Skeleton } from "@/components/heroui/Skeleton";
 import { AiOutlineCompass } from "react-icons/ai";
-import { useDebounce } from "@/hooks/useDebounce";
 import { SORT_OPTIONS, SCOPE_OPTIONS } from "@/constants/items";
 import HelpModal from "@/components/features/modals/HelpModal";
 import { useFormatter, useTranslations } from "next-intl";
@@ -100,15 +99,14 @@ export function SearchBar({
 	classNames?: PropsOf<typeof Input>["classNames"];
 	endContent?: ReactNode;
 }) {
-	const [debouncedSearch, _] = useDebounce(handleSearchChange, 150);
 	const t = useTranslations("ui");
 
 	return (
 		<Input
 			autoCorrect="off"
-			defaultValue={search}
-			onChange={(e) => debouncedSearch(e.target.value)}
-			onClear={() => debouncedSearch("")}
+			value={search}
+			onChange={(e) => handleSearchChange(e.target.value)}
+			onClear={() => handleSearchChange("")}
 			placeholder={t("search")}
 			size={"lg"}
 			classNames={{

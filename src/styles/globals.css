@@ -66,3 +66,36 @@ body {
 		scrollbar-width: none;
 	}
 }
+
+/* Match pre-upgrade border defaults, but keep dark mode subtle. */
+html:not(.dark) *,
+html:not(.dark) ::before,
+html:not(.dark) ::after,
+html:not(.dark) ::backdrop,
+html:not(.dark) ::file-selector-button,
+[data-theme="light"] *,
+[data-theme="light"] ::before,
+[data-theme="light"] ::after,
+[data-theme="light"] ::backdrop,
+[data-theme="light"] ::file-selector-button {
+	border-color: rgb(229 231 235);
+}
+
+.dark *,
+.dark ::before,
+.dark ::after,
+.dark ::backdrop,
+.dark ::file-selector-button,
+[data-theme="dark"] *,
+[data-theme="dark"] ::before,
+[data-theme="dark"] ::after,
+[data-theme="dark"] ::backdrop,
+[data-theme="dark"] ::file-selector-button {
+	border-color: hsl(var(--heroui-divider) / 0.15);
+}
+
+/* Match old NextUI focus-base behavior. */
+.outline-solid.outline-transparent {
+	--tw-outline-style: none;
+	outline-style: none;
+}

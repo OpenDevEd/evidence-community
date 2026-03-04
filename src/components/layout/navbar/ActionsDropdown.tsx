@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { GiHamburgerMenu } from "react-icons/gi";
@@ -29,13 +30,21 @@ interface ActionsDropdownProps {
 	context: NavbarContext;
 }
 
+const FALLBACK_THEME: "light" | "dark" =
+	process.env.NEXT_PUBLIC_DEFAULT_THEME === "light" ? "light" : "dark";
+
 export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 	const t = useTranslations("ui");
 	const { data: session } = useSession();
 	const { resolvedTheme: theme, setTheme } = useTheme();
+	const [mounted, setMounted] = useState(false);
 	const router = useRouter();
 	const pathname = usePathname();
 	const { sortedLocales, localesNames } = useSortedLocales();
+
+	useEffect(() => {
+		setMounted(true);
+	}, []);
 
 	const isThemeEnabled = useFeatureFlagEnabled("theme-switcher");
 	const isLanguageEnabled = useFeatureFlagEnabled("language-switcher");
@@ -50,6 +59,11 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 	// Languages always need dropdown, so we handle them separately
 	const singleActionItems = (hasTheme ? 1 : 0) + (hasLogin ? 1 : 0);
 	const totalItems = singleActionItems + (hasLanguages ? 1 : 0) + (hasUser ? 1 : 0);
+	const safeTheme =
+		mounted && (theme === "dark" || theme === "light")
+			? theme
+			: FALLBACK_THEME;
+	const isDark = safeTheme === "dark";
 
 	// If nothing to show, return null
 	if (totalItems === 0) return null;
@@ -96,7 +110,7 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 
 		switch (keyStr) {
 			case "theme":
-				setTheme(theme === "dark" ? "light" : "dark");
+				setTheme(isDark ? "light" : "dark");
 				break;
 			case "login":
 				context.onLoginModalOpen();
@@ -131,8 +145,6 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 			<GiHamburgerMenu className="size-5 fill-accent" />
 		</Button>
 	);
-
-	const isDark = theme === "dark";
 
 	// Render based on what sections are available
 	// Using conditional rendering within the children directly

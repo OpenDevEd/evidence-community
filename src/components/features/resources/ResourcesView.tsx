@@ -234,7 +234,7 @@ function FilterChips() {
 						});
 					})}
 					{itemsContext.collectionsData &&
-						itemsContext.selectedCollections?.map(
+						itemsContext.queryParams.collections?.map(
 							(collection: string) => {
 								const collectionData =
 									itemsContext.collectionsData?.collections.find(
@@ -276,7 +276,7 @@ function FilterChips() {
 					>
 						<Button
 							aria-hidden={
-								itemsContext.selectedCollections.length == 0
+								itemsContext.queryParams.collections.length == 0
 							}
 							aria-label={t("clearFiltersAriaLabel")}
 							onPress={clearButton}

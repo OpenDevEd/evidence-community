@@ -1,7 +1,6 @@
 import { useCallback, useContext, useMemo } from "react";
 import { fetcher, buildItemsQuery, defaultParams } from "@/lib/utils";
 import { CacheContext, useLastFetchedData } from "@/context/Providers";
-import { useParamsState } from "@/hooks/useParamsState";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import useSWR from "swr";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -13,7 +12,7 @@ import { getDescendantKeys } from "@/lib/collections";
 import { recursiveFind } from "@/lib/collections";
 import { buildHierarchy } from "@/lib/collections";
 import { searchParamsLoader } from "@/lib/searchParams";
-import { useQueryStates } from "nuqs";
+import { debounce, useQueryStates } from "nuqs";
 import { Item } from "@/app/api/item/types";
 import { CollectionNoteGetResponse } from "@/app/api/collections/[id]/note/types";
 
@@ -27,7 +26,7 @@ export function useItemsList(
 		interactionsStyle: "multi-line",
 	}
 ) {
-	const [params, setParams] = useQueryStates(searchParamsLoader);
+	const [queryParams, setParams] = useQueryStates(searchParamsLoader);
 
 	const searchParamsFromParams = useSearchParams();
 
@@ -36,21 +35,20 @@ export function useItemsList(
 	const searchParams = Object.fromEntries(
 		searchParamsFromParams.entries()
 	) as any;
+	const dataQueryParams = defaultParams(searchParamsFromParams);
 
 	const { setLastFetchedData } = useLastFetchedData();
 
 	const { itemsCache } = useContext(CacheContext);
 
-	const queryParams = defaultParams(searchParams);
-
 	const itemsQuery = buildItemsQuery(
-		queryParams,
+		dataQueryParams,
 		userData ? `/user/items/${userData.id}` : "/items"
 	);
 
 	const { data: noteData, isLoading: isNoteLoading } = useSWR<CollectionNoteGetResponse>(
-		queryParams.collections.length === 1
-			? `/collections/${queryParams.collections[0]}/note`
+		dataQueryParams.collections.length === 1
+			? `/collections/${dataQueryParams.collections[0]}/note`
 			: null,
 		fetcher
 	);
@@ -88,10 +86,16 @@ export function useItemsList(
 
 	const handleSearchChange = useCallback(
 		(text: string) =>
-			setParams({
-				search: text,
-				page: 1,
-			}),
+			setParams(
+				{
+					search: text,
+					page: 1,
+				},
+				{
+					limitUrlUpdates:
+						text === "" ? undefined : debounce(250),
+				}
+			),
 		[setParams]
 	);
 
@@ -211,7 +215,7 @@ export function useItemsList(
 		revalidateOnReconnect: false,
 		revalidateIfStale: false,
 		onSuccess: (data) => {
-			if (data.totalPages < queryParams.page) {
+			if (data.totalPages < dataQueryParams.page) {
 				handlePageChange(data.totalPages);
 			}
 			setLastFetchedData(data);
@@ -282,7 +286,7 @@ export function useItemsList(
 		handleScopeChange,
 		handleSearchChange,
 		handleRangeChange,
-		queryParams: params,
+		queryParams,
 		collectionsData,
 		collectionsError,
 		isCollectionsLoading,
