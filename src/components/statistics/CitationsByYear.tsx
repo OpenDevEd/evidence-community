@@ -13,10 +13,10 @@ import {
 	ResponsiveContainer,
 	Legend,
 } from "recharts";
-import { Button } from "@/components/nextui/Button";
-import { Card } from "@/components/nextui/Card";
-import { Autocomplete } from "@/components/nextui/Autocomplete";
-import { AutocompleteItem } from "@nextui-org/react";
+import { Button } from "@/components/heroui/Button";
+import { Card } from "@/components/heroui/Card";
+import { Autocomplete } from "@/components/heroui/Autocomplete";
+import { AutocompleteItem } from "@heroui/react";
 import { Key } from "react";
 import { SectionCard } from "./SectionCard";
 import { CountryFlag } from "./CountryFlag";

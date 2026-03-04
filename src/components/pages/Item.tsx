@@ -4,7 +4,7 @@ import { ItemGetResponse } from "@/app/api/item/types";
 import ItemRow from "@/components/features/items/ItemRow";
 import ItemControls from "@/components/features/items/ItemControls";
 import { BsStars } from "react-icons/bs";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import {
 	Dropdown,
 	DropdownItem,
@@ -13,7 +13,7 @@ import {
 	useDisclosure,
 	Spinner,
 	Divider,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import GenerativeModal from "../features/modals/GenerativeModal";
 import ChatModal from "../features/modals/ChatModal";
 import { useRouter } from "@/i18n/routing";
@@ -21,7 +21,7 @@ import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
 import { fetcher, fetcherPOST, getExtraValues, isAIAllowed } from "@/lib/utils";
 import Resource from "../features/items/Resource";
-import { Skeleton } from "../nextui/Skeleton";
+import { Skeleton } from "../heroui/Skeleton";
 import { useMemo, useRef, useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";

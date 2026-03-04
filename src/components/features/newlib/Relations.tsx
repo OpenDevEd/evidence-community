@@ -10,12 +10,12 @@ import Resource from "../items/Resource";
 import { useTranslations } from "next-intl";
 import { ItemsBatchResponse } from "@/app/api/items/batch/route";
 import { useMemo, useState, ReactNode, useRef } from "react";
-import { Tabs, Tab } from "@/components/nextui/Tabs";
-import { Pagination } from "@/components/nextui/Pagination";
-import { Select } from "@/components/nextui/Select";
-import { SelectItem } from "@/components/nextui/SelectItem";
+import { Tabs, Tab } from "@/components/heroui/Tabs";
+import { Pagination } from "@/components/heroui/Pagination";
+import { Select } from "@/components/heroui/Select";
+import { SelectItem } from "@/components/heroui/SelectItem";
 import { useBreakpointBelow } from "@/hooks/useBreakpoint";
-import { Spinner } from "@nextui-org/react";
+import { Spinner } from "@heroui/react";
 import { twMerge } from "tailwind-merge";
 
 function extractGeneralRelationKeys(relations: RelationsType): string[] {
@@ -300,8 +300,8 @@ export default function Relations({
 							);
 						}}
 					>
-						{tabs.map((tab) => (
-							<SelectItem key={tab.key} value={tab.key} textValue={`${tab.label} (${tab.count})`}>
+							{tabs.map((tab) => (
+								<SelectItem key={tab.key} textValue={`${tab.label} (${tab.count})`}>
 								<div className="flex items-center justify-between w-full">
 									<span>{tab.label}</span>
 									<CountBadge count={tab.count} isLoading={tab.isLoading} className="ml-2" />

@@ -2,13 +2,13 @@
 
 import PageContainer from "../layout/PageContainer";
 import { useEffect, useState } from "react";
-import { Card } from "../nextui/Card";
-import { Button } from "../nextui/Button";
+import { Card } from "../heroui/Card";
+import { Button } from "../heroui/Button";
 import Link from "next/link";
 import Image from "next/image";
-import { Skeleton } from "../nextui/Skeleton";
+import { Skeleton } from "../heroui/Skeleton";
 import { FaQuestionCircle, FaLightbulb, FaAngleRight, FaCompass } from "react-icons/fa";
-import { Divider } from "@nextui-org/react";
+import { Divider } from "@heroui/react";
 
 // Types for content structure
 type ContentType = "text" | "list" | "section" | "image" | "image-row";

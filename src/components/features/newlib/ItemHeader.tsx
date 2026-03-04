@@ -1,8 +1,8 @@
 "use client";
 
 import { Item } from "@/app/api/item/types";
-import { Button } from "@/components/nextui/Button";
-import { Skeleton } from "@/components/nextui/Skeleton";
+import { Button } from "@/components/heroui/Button";
+import { Skeleton } from "@/components/heroui/Skeleton";
 import { Link, usePathname } from "@/i18n/routing";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
@@ -13,7 +13,7 @@ import { IoChevronBack, IoChevronForward, IoDocumentText } from "react-icons/io5
 import { LuDownload } from "react-icons/lu";
 import { RelationsType } from "@/types/item";
 import { INTERNAL_TAG } from "@/constants/items";
-import { Card } from "@/components/nextui/Card";
+import { Card } from "@/components/heroui/Card";
 import { DownloadButton } from "@/components/features/newlib/DownloadModal";
 import CopyButton from "@/components/features/newlib/CopyButton";
 import LikeButton from "@/components/features/items/LikeButton";

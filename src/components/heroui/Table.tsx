@@ -1,15 +1,15 @@
 "use client";
 import { 
   extendVariants, 
-  Table as NextUITable,
-  TableHeader as NextUITableHeader,
-  TableColumn as NextUITableColumn,
-  TableBody as NextUITableBody,
-  TableRow as NextUITableRow,
-  TableCell as NextUITableCell,
-} from "@nextui-org/react";
+  Table as HeroUITable,
+  TableHeader as HeroUITableHeader,
+  TableColumn as HeroUITableColumn,
+  TableBody as HeroUITableBody,
+  TableRow as HeroUITableRow,
+  TableCell as HeroUITableCell,
+} from "@heroui/react";
 
-export const Table = extendVariants(NextUITable, {
+export const Table = extendVariants(HeroUITable, {
   variants: {
     color: {
       statistics: {
@@ -30,8 +30,8 @@ export const Table = extendVariants(NextUITable, {
 });
 
 // Export the table components as-is since they don't need custom variants
-export const TableHeader = NextUITableHeader;
-export const TableColumn = NextUITableColumn;
-export const TableBody = NextUITableBody;
-export const TableRow = NextUITableRow;
-export const TableCell = NextUITableCell; 
+export const TableHeader = HeroUITableHeader;
+export const TableColumn = HeroUITableColumn;
+export const TableBody = HeroUITableBody;
+export const TableRow = HeroUITableRow;
+export const TableCell = HeroUITableCell; 

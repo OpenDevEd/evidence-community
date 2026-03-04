@@ -6,27 +6,27 @@ import {
 	Geography,
 	ZoomableGroup,
 } from "react-simple-maps";
-import tailwindConfig, { style } from "../../../tailwind.config";
-import resolveConfig from "tailwindcss/resolveConfig";
+import { style, themeColors } from "../../../tailwind.config";
 import { ReactNode, useEffect, useRef, useState, memo } from "react";
-import {Tooltip } from "@nextui-org/react";
-import { useLocalStorage, useMouse, useWindowSize } from "@uidotdev/usehooks";
+import {Tooltip } from "@heroui/react";
+import { useLocalStorage, useWindowSize } from "usehooks-ts";
 import { useItemsList } from "@/hooks/useItemsList";
 import { A3ToA2, COUNTRIES, COUNTRY_PARAMS, countryFacetOptions } from "@/constants/misc";
 import ItemsList from "../features/items/ItemsList";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFacetList } from "@/hooks/useFacetList";
-import { Input } from "../nextui/Input";
+import { Input } from "../heroui/Input";
 import { SearchBar } from "./EvidenceLibrary";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "tailwind-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { createPortal } from "react-dom";
-import { Select } from "../nextui/Select";
-import { SelectItem } from "../nextui/SelectItem";
+import { Select } from "../heroui/Select";
+import { SelectItem } from "../heroui/SelectItem";
 import { useTranslations } from "next-intl";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { inferParserType } from "nuqs/server";
+import { useMousePosition } from "@/hooks/useMousePosition";
 
 export type FeatureCollection = {
 	type: "FeatureCollection";
@@ -53,16 +53,6 @@ export type FeatureGeometry = {
 // URL to the world map GeoJSON data
 const geoUrl = "/features.json";
 
-const fullConfig = resolveConfig(tailwindConfig);
-
-export type ExtendedTheme = typeof fullConfig & {
-	theme: {
-		colors: {
-			accent: string;
-		};
-	};
-};
-
 function MouseTooltip({
 	content,
 	zoomData,
@@ -70,7 +60,7 @@ function MouseTooltip({
 	content: ReactNode | null;
 	zoomData: any;
 }) {
-	const [mouse] = useMouse();
+	const mouse = useMousePosition();
 	const dragging = zoomData?.dragging;
 	const isDesktop = useBreakpoint("md");
 
@@ -159,11 +149,11 @@ function Search({ props, setMapFacet, mapFacet }: { props: ReturnType<typeof use
 					<SearchBar handleSearchChange={props.handleSearchChange} search={props.queryParams.search}/>
 					<Select classNames={{
 						trigger: "h-10 lg:h-12"
-					}} placement="left" color="tertiary" label="Facet" selectedKeys={[String(mapFacet)]} onSelectionChange={(keys) => setMapFacet(Number(keys.currentKey))}>
-						{countryFacetOptions.map((facet, index) => (
-							<SelectItem key={String(index)} value={String(index)}>{t(facet.label)}</SelectItem>
-						))}
-					</Select>
+						}} placement="left" color="tertiary" label="Facet" selectedKeys={[String(mapFacet)]} onSelectionChange={(keys) => setMapFacet(Number(keys.currentKey))}>
+							{countryFacetOptions.map((facet, index) => (
+								<SelectItem key={String(index)}>{t(facet.label)}</SelectItem>
+							))}
+						</Select>
 				</div>
 			</div>
 		</div>
@@ -172,8 +162,8 @@ function Search({ props, setMapFacet, mapFacet }: { props: ReturnType<typeof use
 
 
 export default function Map() {
-	const tailwindAccentColor = (fullConfig as ExtendedTheme).theme.colors.accent[600];
-	const lightAccentColor = (fullConfig as ExtendedTheme).theme.colors.accent[100];
+	const tailwindAccentColor = themeColors.accent[600];
+	const lightAccentColor = themeColors.accent[100];
 	const RGBAccent = HEXToRGB(tailwindAccentColor);
 	const RGBLightAccent = HEXToRGB(lightAccentColor);
 	const [tooltipContent, setTooltipContent] = useState<ReactNode | null>(

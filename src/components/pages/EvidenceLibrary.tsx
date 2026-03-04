@@ -1,5 +1,5 @@
 "use client";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import CollectionsList from "@/components/features/collections/CollectionsList";
 import {
 	IoChatboxOutline,
@@ -8,11 +8,11 @@ import {
 	IoSearch,
 	IoSend,
 } from "react-icons/io5";
-import { Select } from "@/components/nextui/Select";
-import { Input } from "@/components/nextui/Input";
-import { SelectItem } from "@/components/nextui/SelectItem";
-import { Card } from "@/components/nextui/Card";
-import { Switch } from "@/components/nextui/Switch";
+import { Select } from "@/components/heroui/Select";
+import { Input } from "@/components/heroui/Input";
+import { SelectItem } from "@/components/heroui/SelectItem";
+import { Card } from "@/components/heroui/Card";
+import { Switch } from "@/components/heroui/Switch";
 import {
 	Divider,
 	Modal,
@@ -25,10 +25,10 @@ import {
 	Textarea,
 	Tooltip,
 	useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import React, { ReactNode, use, useRef, useState, useEffect } from "react";
-import { Tabs, Tab } from "@nextui-org/react";
-import { Skeleton } from "@/components/nextui/Skeleton";
+import { Tabs, Tab } from "@heroui/react";
+import { Skeleton } from "@/components/heroui/Skeleton";
 import { AiOutlineCompass } from "react-icons/ai";
 import { useDebounce } from "@/hooks/useDebounce";
 import { SORT_OPTIONS, SCOPE_OPTIONS } from "@/constants/items";
@@ -44,7 +44,7 @@ import { HiOutlineViewList } from "react-icons/hi";
 import { BiHelpCircle, BiTrash } from "react-icons/bi";
 import { twMerge } from "tailwind-merge";
 import PageContainer from "../layout/PageContainer";
-import FullScreenModal from "../nextui/FullScreenModal";
+import FullScreenModal from "../heroui/FullScreenModal";
 import GenericHeader from "../features/modals/GenericHeader";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList, { ItemsContext } from "../features/items/ItemsList";
@@ -52,7 +52,7 @@ import { useSelectedModel } from "@/hooks/useSelectedModel";
 import ChatModal, { ChatMode } from "../features/modals/ChatModal";
 import ModelSelector from "../features/ai/ModelSelector";
 import { useFeatureFlagEnabled } from "@/context/Providers";
-import DialogModal from "../nextui/DialogModal";
+import DialogModal from "../heroui/DialogModal";
 import AIHeader from "../features/ai/AIHeader";
 import { useLocalStorage } from "usehooks-ts";
 import { AnimatePresence, motion } from "framer-motion";
@@ -1039,7 +1039,7 @@ function SmartScreeningModal({
 				} catch (error) {
 					if (error instanceof z.ZodError) {
 						const fieldError =
-							error.errors[0]?.message || t("invalidField");
+							error.issues[0]?.message || t("invalidField");
 						newErrors[index] = `${t("fieldPrefix")} ${index + 1} ${
 							field.label
 						}: ${fieldError}`;
@@ -1327,14 +1327,11 @@ function SmartScreeningModal({
 																		(
 																			type,
 																		) => (
-																			<SelectItem
-																				key={
-																					type
-																				}
-																				value={
-																					type
-																				}
-																			>
+																				<SelectItem
+																					key={
+																						type
+																					}
+																				>
 																				{
 																					type
 																				}

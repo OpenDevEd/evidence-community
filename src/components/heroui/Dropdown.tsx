@@ -1,7 +1,7 @@
-import { extendVariants } from "@nextui-org/react";
-import { Dropdown as NextUIDropdown } from "@nextui-org/react";
+import { extendVariants } from "@heroui/react";
+import { Dropdown as HeroUIDropdown } from "@heroui/react";
 
-export const Dropdown = extendVariants(NextUIDropdown, {
+export const Dropdown = extendVariants(HeroUIDropdown, {
 	variants: {
 		color: {
 			secondary: {

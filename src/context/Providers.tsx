@@ -1,6 +1,6 @@
 "use client";
 
-import { NextUIProvider } from "@nextui-org/react";
+import { HeroUIProvider } from "@heroui/react";
 import { ThemeProvider, useTheme } from "next-themes";
 import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/i18n/routing";
@@ -27,6 +27,11 @@ import { getPersistence } from "@/components/layout/Banner";
 import { useQueryState } from "nuqs";
 import { toast as toastComponent } from "@/components/layout/Toast";
 import { UtmAttributionProvider } from "@/components/features/UtmProvider";
+import {
+	FEATURE_FLAGS_COOKIE_MAX_AGE_SECONDS,
+	FEATURE_FLAGS_COOKIE_NAME,
+	serializeFeatureFlagsCookieValue,
+} from "@/lib/featureFlagsCookie";
 
 export type CacheContextType = {
 	status: InferSelectModel<typeof statusTable>;
@@ -263,13 +268,20 @@ export default function Providers({
 	children,
 	session,
 	status,
+	initialFeatureFlags,
 }: {
 	children: React.ReactNode;
 	session?: Session | null;
 	status: InferSelectModel<typeof statusTable>;
+	initialFeatureFlags?: string[] | null;
 }) {
 	const router = useRouter();
-	const [featureFlags, setFeatureFlags] = useState<Set<string> | null>(null);
+	const [featureFlags, setFeatureFlags] = useState<Set<string> | null>(
+		() =>
+			initialFeatureFlags === null || initialFeatureFlags === undefined
+				? null
+				: new Set(initialFeatureFlags)
+	);
 
 	useEffect(() => {
 		posthog
@@ -281,13 +293,19 @@ export default function Providers({
 				ui_host: "https://us.posthog.com",
 				persistence: getPersistence(),
 			})
-			?.onFeatureFlags((featureFlags) => {
-				const newFeatureFlags = new Set(featureFlags);
+			?.onFeatureFlags((updatedFeatureFlags) => {
+				const newFeatureFlags = new Set(updatedFeatureFlags);
 
 				// // TODO: Remove this once we have a way to test feature flags
 				// newFeatureFlags.delete("ai-search");
 				// newFeatureFlags.add("deep-research");
 
+				const serializedFlags =
+					serializeFeatureFlagsCookieValue(newFeatureFlags);
+				const secureCookie =
+					window.location.protocol === "https:" ? "; Secure" : "";
+
+				document.cookie = `${FEATURE_FLAGS_COOKIE_NAME}=${serializedFlags}; Max-Age=${FEATURE_FLAGS_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secureCookie}`;
 
 				setFeatureFlags(newFeatureFlags);
 			});
@@ -306,7 +324,7 @@ export default function Providers({
 						<PostHogProvider client={posthog}>
 							<FeatureFlagsContext.Provider value={{ featureFlags }}>
 							<CacheProvider status={status}>
-								<NextUIProvider navigate={router.push}>
+								<HeroUIProvider navigate={router.push}>
 									<Suspense>
 										<PramNotificationProvider>
 											<PageView />
@@ -318,7 +336,7 @@ export default function Providers({
 									>
 										{children}
 									</LoadingScreen>
-								</NextUIProvider>
+								</HeroUIProvider>
 							</CacheProvider>
 						</FeatureFlagsContext.Provider>
 					</PostHogProvider>

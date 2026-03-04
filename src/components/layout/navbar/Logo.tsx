@@ -5,7 +5,7 @@ import Image from "next/image";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
-import { Skeleton } from "@/components/nextui/Skeleton";
+import { Skeleton } from "@/components/heroui/Skeleton";
 import { Link } from "@/i18n/routing";
 import { useStatus } from "@/context/Providers";
 import {

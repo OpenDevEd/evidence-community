@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { Card } from "@/components/nextui/Card";
+import { Card } from "@/components/heroui/Card";
 
 type SectionCardProps = {
 	title: string;

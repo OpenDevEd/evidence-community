@@ -2,7 +2,7 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useLocale } from "next-intl";
 import { Item, ListItem } from "@/app/api/item/types";
 import { useState, forwardRef } from "react";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import { FaClipboard, FaClipboardCheck } from "react-icons/fa";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";

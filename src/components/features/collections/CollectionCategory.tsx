@@ -2,7 +2,7 @@
 
 import { useContext, useEffect, useMemo, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
-import { Button } from "../../nextui/Button";
+import { Button } from "../../heroui/Button";
 import { motion } from "framer-motion";
 import { AnimatePresence } from "framer-motion";
 import { LuChevronDown } from "react-icons/lu";

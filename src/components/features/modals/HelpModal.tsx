@@ -1,12 +1,12 @@
 "use client";
 
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@nextui-org/react";
+import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter } from "@heroui/react";
 import { LuX } from "react-icons/lu";
 import { SectionTitle } from "../../typography/SectionTitle";
 import { Paragraph } from "../../typography/Paragraph";
 import { Highlight } from "../../typography/Highlight";
 import { ListItem } from "../../typography/ListItem";
-import { Button } from "../../nextui/Button";
+import { Button } from "../../heroui/Button";
 import { useTranslations } from "next-intl";
 
 export default function HelpModal({ isOpen, onOpenChange }: { isOpen: boolean, onOpenChange: (open: boolean) => void }) {

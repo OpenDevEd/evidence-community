@@ -1,13 +1,13 @@
 "use client";
 
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import {
 	ModalContent,
 	ModalBody,
 	ModalFooter,
 	ScrollShadow,
 	Spinner,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { LuUser } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { ImSpinner8 } from "react-icons/im";
@@ -41,14 +41,14 @@ function createTextMessage(role: 'system' | 'user' | 'assistant' | 'data', conte
 		parts: [{ type: 'text', text: content }],
 	} as Message;
 }
-import FullScreenModal from "@/components/nextui/FullScreenModal";
+import FullScreenModal from "@/components/heroui/FullScreenModal";
 import { models } from "@/constants/ai";
 import { FaTools } from "react-icons/fa";
 import { AIMarkdown } from "../markdown/Markdown";
 import posthog from "posthog-js";
-import { Input } from "@/components/nextui/Input";
-import DialogModal from "@/components/nextui/DialogModal";
-import { Textarea } from "@/components/nextui/Textarea";
+import { Input } from "@/components/heroui/Input";
+import DialogModal from "@/components/heroui/DialogModal";
+import { Textarea } from "@/components/heroui/Textarea";
 import { AnimatePresence, motion } from "framer-motion";
 import { RiRefreshLine, RiResetLeftFill } from "react-icons/ri";
 import { useLocalStorage } from "usehooks-ts";
@@ -59,10 +59,10 @@ import { getRateLimits, runScreening } from "@/lib/actions";
 import Resource from "../items/Resource";
 import { GiStarSwirl } from "react-icons/gi";
 import { FaExclamationTriangle } from "react-icons/fa";
-import { Switch } from "@/components/nextui/Switch";
+import { Switch } from "@/components/heroui/Switch";
 import { BsQuestionCircleFill } from "react-icons/bs";
-import { Card } from "@/components/nextui/Card";
-import { Tooltip } from "@/components/nextui/Tooltip";
+import { Card } from "@/components/heroui/Card";
+import { Tooltip } from "@/components/heroui/Tooltip";
 
 export const maxDuration = 240;
 

@@ -378,8 +378,8 @@ export async function authorize(props: z.infer<typeof credentialsSchema>): Promi
 	const parsedCredentials = credentialsSchema.safeParse(props);
 
 	if (!parsedCredentials.success) {
-		const errorMessages = parsedCredentials.error.errors
-			.map(err => err.message)
+		const errorMessages = parsedCredentials.error.issues
+			.map((err) => err.message)
 			.join(", ");
 		return { error: errorMessages };
 	}

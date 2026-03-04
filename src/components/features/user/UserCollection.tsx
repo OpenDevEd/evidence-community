@@ -3,9 +3,9 @@
 import { Session } from "next-auth";
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
-import { Tooltip } from "@nextui-org/react";
+import { Tooltip } from "@heroui/react";
 import { BsPlus } from "react-icons/bs";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import { BiSolidBookBookmark } from "react-icons/bi";
 import { useTranslations } from "next-intl";
 

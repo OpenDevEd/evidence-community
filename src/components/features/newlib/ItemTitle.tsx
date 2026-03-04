@@ -1,8 +1,8 @@
 "use client";
 
 import { Item } from "@/app/api/item/types";
-import { Skeleton } from "@/components/nextui/Skeleton";
-import { use } from "react";
+import { Skeleton } from "@/components/heroui/Skeleton";
+import { useContext } from "react";
 import { LoadingContext } from "./ItemPage";
 
 const decodeHTMLEntities = (text: string) => {
@@ -20,22 +20,8 @@ const decodeHTMLEntities = (text: string) => {
 };
 
 export default function ItemTitle({ item, loadingProp }: { item: Item | undefined, loadingProp?: boolean }) {
-	// Try to use context, but fallback to prop if context is not available or fails
-	let loading = loadingProp;
-	
-	try {
-		// We need to handle the case where this component is used outside of ItemPage
-		// where LoadingContext might not be provided.
-		// However, since LoadingContext has a default value, use() should work.
-		// But to be safe and flexible, we allow passing loading as a prop.
-		if (loading === undefined) {
-			const context = use(LoadingContext);
-			loading = context.loading;
-		}
-	} catch (e) {
-		// Fallback if context usage fails (though unlikely with default value)
-		loading = loading ?? false;
-	}
+	const context = useContext(LoadingContext);
+	const loading = loadingProp ?? context.loading ?? false;
 
 	const escapedTitle = decodeHTMLEntities(item?.title || "");
 

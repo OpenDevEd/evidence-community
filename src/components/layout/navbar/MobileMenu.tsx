@@ -6,7 +6,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { GiHamburgerMenu } from "react-icons/gi";
 import { IoCloseSharp } from "react-icons/io5";
 import { twMerge } from "tailwind-merge";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import NavLinks from "./NavLinks";
 import type { NavbarElementConfig, NavbarContext } from "@/types/navbar";
 

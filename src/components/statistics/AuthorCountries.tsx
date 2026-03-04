@@ -16,9 +16,9 @@ import {
 	Cell,
 	Legend,
 } from "recharts";
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/nextui/Table";
-import { Pagination } from "@/components/nextui/Pagination";
-import { Card } from "@/components/nextui/Card";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/heroui/Table";
+import { Pagination } from "@/components/heroui/Pagination";
+import { Card } from "@/components/heroui/Card";
 import { SectionCard } from "./SectionCard";
 import { CountryFlag } from "./CountryFlag";
 import { AuthorCountryStats, CreatorStats } from "./types";

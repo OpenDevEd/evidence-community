@@ -1,8 +1,8 @@
 "use client";
 
-import { extendVariants, Tooltip as NextUITooltip } from "@nextui-org/react";
+import { extendVariants, Tooltip as HeroUITooltip } from "@heroui/react";
 
-export const Tooltip = extendVariants(NextUITooltip, {
+export const Tooltip = extendVariants(HeroUITooltip, {
 	variants: {
 		color: {
 			card: {

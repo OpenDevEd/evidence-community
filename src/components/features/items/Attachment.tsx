@@ -2,16 +2,16 @@
 
 import { useRef, useState, useEffect } from "react";
 import { Item } from "@/app/api/item/types";
-import { Link, Skeleton, Spinner } from "@nextui-org/react";
+import { Link, Skeleton, Spinner } from "@heroui/react";
 import { twMerge } from "tailwind-merge";
 import Image from "next/image";
 import { LuDownload } from "react-icons/lu";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import { FaEye } from "react-icons/fa";
 import posthog from "posthog-js";
 import { useTranslations } from "next-intl";
 import useBreakpoint from "@/hooks/useBreakpoint";
-import { Card } from "@/components/nextui/Card";
+import { Card } from "@/components/heroui/Card";
 import useSWR from "swr";
 import { fetcher, fetcherExternal } from "@/lib/utils";
 import {
@@ -256,7 +256,6 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 
 	return isDesktop ? (
 		<Card
-			// @ts-expect-error temporary
 			ref={parentRef}
 			className="flex flex-col gap-4 p-4 rounded-2xl relative w-full overflow-visible dark:bg-background"
 			key={data.id}

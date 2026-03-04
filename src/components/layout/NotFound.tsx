@@ -1,5 +1,5 @@
 import { Link } from "@/i18n/routing";
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import { useFormatter, useTranslations } from "next-intl";
 
 export default function NotFound() {

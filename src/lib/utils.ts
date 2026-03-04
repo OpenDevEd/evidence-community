@@ -9,7 +9,7 @@ import { areLinksValid } from "./actions";
 import { InferSelectModel } from "drizzle-orm";
 import { item, item as itemTable } from "@/db/schema/tables/item";
 import schema from "../../public/schema.json";
-import balanced from "balanced-match";
+import { balanced } from "balanced-match";
 
 export const takedownRequestSchema = z.object({
 	email: z.string().email(),

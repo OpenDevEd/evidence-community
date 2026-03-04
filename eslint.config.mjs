@@ -1,19 +1,21 @@
 import { defineConfig } from "eslint/config";
 import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
 import nextTypescript from "eslint-config-next/typescript";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 export default defineConfig([{
     extends: [...nextCoreWebVitals, ...nextTypescript],
 
-    rules: {
-        "@typescript-eslint/no-unused-vars": "off",
-        "@typescript-eslint/no-explicit-any": "off",
-        "react-hooks/exhaustive-deps": "off",
-        "no-var": "off",
-    },
+	rules: {
+		"@typescript-eslint/no-unused-vars": "off",
+		"@typescript-eslint/no-explicit-any": "off",
+		"@typescript-eslint/no-require-imports": "off",
+		"react-hooks/exhaustive-deps": "off",
+		"react-hooks/immutability": "off",
+		"react-hooks/preserve-manual-memoization": "off",
+		"react-hooks/purity": "off",
+		"react-hooks/refs": "off",
+		"react-hooks/set-state-in-effect": "off",
+		"react-hooks/static-components": "off",
+		"no-var": "off",
+	},
 }]);

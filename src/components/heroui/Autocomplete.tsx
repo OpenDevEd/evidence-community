@@ -1,7 +1,7 @@
-import { extendVariants } from "@nextui-org/react";
-import { Autocomplete as NextUIAutocomplete } from "@nextui-org/react";
+import { extendVariants } from "@heroui/react";
+import { Autocomplete as HeroUIAutocomplete } from "@heroui/react";
 
-export const Autocomplete = extendVariants(NextUIAutocomplete, {
+export const Autocomplete = extendVariants(HeroUIAutocomplete, {
   variants: {
     color: {
       secondary: {

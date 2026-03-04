@@ -1,7 +1,7 @@
 "use client";
 
-import { Card } from "@/components/nextui/Card";
-import { Table } from "@/components/nextui/Table";
+import { Card } from "@/components/heroui/Card";
+import { Table } from "@/components/heroui/Table";
 import {
 	Progress,
 	TableHeader,
@@ -9,13 +9,13 @@ import {
 	TableBody,
 	TableRow,
 	TableCell,
-} from "@nextui-org/react";
-import { Switch } from "@/components/nextui/Switch";
-import { Input } from "@/components/nextui/Input";
-import { Pagination } from "@/components/nextui/Pagination";
-import { Divider } from "@nextui-org/react";
-import { Select } from "@/components/nextui/Select";
-import { SelectItem } from "@/components/nextui/SelectItem";
+} from "@heroui/react";
+import { Switch } from "@/components/heroui/Switch";
+import { Input } from "@/components/heroui/Input";
+import { Pagination } from "@/components/heroui/Pagination";
+import { Divider } from "@heroui/react";
+import { Select } from "@/components/heroui/Select";
+import { SelectItem } from "@/components/heroui/SelectItem";
 import PageContainer from "./PageContainer";
 import { useMemo, useState, useEffect } from "react";
 import { useFormatter, useTranslations } from "next-intl";
@@ -1028,8 +1028,8 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 										labelFormatter={(label) =>
 											`${t("year")} ${label}`
 										}
-										formatter={(value: number) => [
-											value.toLocaleString() +
+										formatter={(value: number | undefined) => [
+											(value ?? 0).toLocaleString() +
 												` ${t(
 													"publicationsLowercase"
 												)}`,
@@ -2260,8 +2260,8 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 													}}
 													labelStyle={{ color: theme === "dark" ? "#ffffff" : "#000000", fontWeight: "500" }}
 													itemStyle={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}
-													formatter={(value: number, name: string, props: any) => [
-														`${value.toLocaleString()} ${t("authorsLowercase")} (${props.payload.percentage}%)`,
+													formatter={(value: number | undefined, name: string | undefined, props: any) => [
+														`${(value ?? 0).toLocaleString()} ${t("authorsLowercase")} (${props.payload.percentage}%)`,
 														t("count")
 													]}
 												/>
@@ -2518,8 +2518,8 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 													}}
 													labelStyle={{ color: theme === "dark" ? "#ffffff" : "#000000", fontWeight: "500" }}
 													itemStyle={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}
-													formatter={(value: number, name: string, props: any) => [
-														`${value.toLocaleString()} ${t("topicsLowercase")} (${props.payload.percentage}%)`,
+													formatter={(value: number | undefined, name: string | undefined, props: any) => [
+														`${(value ?? 0).toLocaleString()} ${t("topicsLowercase")} (${props.payload.percentage}%)`,
 														t("levelNumber", { number: props.payload.level })
 													]}
 												/>

@@ -1,10 +1,10 @@
 "use client";
 import {
   extendVariants,
-  Pagination as NextUIPagination,
-} from "@nextui-org/react";
+  Pagination as HeroUIPagination,
+} from "@heroui/react";
 
-export const Pagination = extendVariants(NextUIPagination, {
+export const Pagination = extendVariants(HeroUIPagination, {
   variants: {
     color: {
       primary: {

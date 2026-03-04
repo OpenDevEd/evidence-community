@@ -1,7 +1,7 @@
 "use client";
-import { extendVariants, Card as NextUICard } from "@nextui-org/react";
+import { extendVariants, Card as HeroUICard } from "@heroui/react";
 
-export const Card = extendVariants(NextUICard, {
+export const Card = extendVariants(HeroUICard, {
   variants: {
     color: {
       tertiary: {

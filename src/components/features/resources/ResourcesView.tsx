@@ -4,12 +4,12 @@ import { useFormatter, useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 import { AnimatePresence, motion } from "framer-motion";
 import { useDebounce } from "@/hooks/useDebounce";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import { FaCompass, FaTrash } from "react-icons/fa";
 import { ContentInteractions } from "@/components/pages/EvidenceLibrary";
 import useBreakpoint from "@/hooks/useBreakpoint";
-import { Skeleton } from "@/components/nextui/Skeleton";
-import { Pagination } from "@/components/nextui/Pagination";
+import { Skeleton } from "@/components/heroui/Skeleton";
+import { Pagination } from "@/components/heroui/Pagination";
 import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import Resource from "../items/Resource";
@@ -20,7 +20,7 @@ import {
 	useFeatureFlagEnabled,
 } from "@/context/Providers";
 import { DownloadModal } from "../items/ItemControls";
-import { CardBody, useDisclosure } from "@nextui-org/react";
+import { CardBody, useDisclosure } from "@heroui/react";
 import { downloadItems } from "@/lib/actions";
 import { routing, usePathname, useRouter } from "@/i18n/routing";
 import { ItemsContext } from "../items/ItemsList";
@@ -28,8 +28,8 @@ import { countryFacetOptions } from "@/constants/misc";
 import Image from "next/image";
 import { getCountryInfo } from "@/lib/utils";
 import { Item } from "@/app/api/item/types";
-import { Card } from "@/components/nextui/Card";
-import { Divider } from "@/components/nextui/Divider";
+import { Card } from "@/components/heroui/Card";
+import { Divider } from "@/components/heroui/Divider";
 import { AiOutlineCompass } from "react-icons/ai";
 
 function Chip({

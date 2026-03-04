@@ -1,8 +1,8 @@
 "use client";
 
-import { extendVariants, Skeleton as NextUISkeleton } from "@nextui-org/react";
+import { extendVariants, Skeleton as HeroUISkeleton } from "@heroui/react";
 
-export const Skeleton = extendVariants(NextUISkeleton, {
+export const Skeleton = extendVariants(HeroUISkeleton, {
   variants: {
     color: {
       default: {

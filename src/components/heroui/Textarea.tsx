@@ -1,8 +1,8 @@
 "use client";
 
-import { extendVariants, Textarea as NextUITextarea } from "@nextui-org/react";
+import { extendVariants, Textarea as HeroUITextarea } from "@heroui/react";
 
-export const Textarea = extendVariants(NextUITextarea, {
+export const Textarea = extendVariants(HeroUITextarea, {
 	variants: {
 		color: {
 			secondary: {

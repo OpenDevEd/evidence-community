@@ -1,3 +1,5 @@
+"use client";
+
 import { models } from "@/constants/ai";
 import { useLocalStorage } from "usehooks-ts";
 

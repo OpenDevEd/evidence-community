@@ -1,10 +1,10 @@
 import { models } from "@/constants/ai";
 import { useTranslations } from "next-intl";
-import { ModalContent } from "@nextui-org/react";
+import { ModalContent } from "@heroui/react";
 import AIHeader from "../ai/AIHeader";
-import FullScreenModal from "../../nextui/FullScreenModal";
-import { ListModalBody, ListModalBodyItem } from "@/components/nextui/ListModalBody";
-import DialogModal from "@/components/nextui/DialogModal";
+import FullScreenModal from "../../heroui/FullScreenModal";
+import { ListModalBody, ListModalBodyItem } from "@/components/heroui/ListModalBody";
+import DialogModal from "@/components/heroui/DialogModal";
 
 interface ModelSelectorProps {
   isOpen: boolean;

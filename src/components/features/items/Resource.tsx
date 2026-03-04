@@ -1,19 +1,19 @@
 import { twMerge } from "tailwind-merge";
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
 import { fetcher, firstNonNullOrEmpty, setter, transformItem } from "@/lib/utils";
-import { Skeleton } from "@/components/nextui/Skeleton";
+import { Skeleton } from "@/components/heroui/Skeleton";
 import {
 	ModalBody,
 	ModalContent,
 	useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { RelationsType } from "@/types/item";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { useFormatter, useTranslations } from "next-intl";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import { useState, useEffect } from "react";
 import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
@@ -22,13 +22,13 @@ import LikeButton from "./LikeButton";
 import { BsPlus, BsQuote } from "react-icons/bs";
 import { TbBlockquote } from "react-icons/tb";
 import { IoChevronForward } from "react-icons/io5";
-import FullScreenModal from "@/components/nextui/FullScreenModal";
+import FullScreenModal from "@/components/heroui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
 import { Session } from "next-auth";
 import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
-import DialogModal from "@/components/nextui/DialogModal";
+import DialogModal from "@/components/heroui/DialogModal";
 import useSWR from "swr";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { useQueryState } from "nuqs";

@@ -1,6 +1,6 @@
 "use client";
 
-import { Button } from "@nextui-org/react";
+import { Button } from "@heroui/react";
 import { FiCopy, FiCheck } from "react-icons/fi";
 import { useState } from "react";
 import { ReactElement, cloneElement } from "react";

@@ -2,7 +2,7 @@
 
 import { Item, ItemGetResponse, Author } from "@/app/api/item/types";
 import PageContainer from "@/components/layout/PageContainer";
-import { Card } from "@/components/nextui/Card";
+import { Card } from "@/components/heroui/Card";
 import { FaCalendar } from "react-icons/fa";
 import { RelationsType } from "@/types/item";
 import {
@@ -14,13 +14,12 @@ import {
 	IoDownload,
 } from "react-icons/io5";
 import { BsQuote } from "react-icons/bs";
-import { Avatar } from "@nextui-org/avatar";
 import { HiAcademicCap } from "react-icons/hi2";
 import { useFormatter, useTranslations } from "next-intl";
-import { Divider, Spinner } from "@nextui-org/react";
-import { Skeleton } from "@/components/nextui/Skeleton";
+import { Avatar, Divider, Spinner } from "@heroui/react";
+import { Skeleton } from "@/components/heroui/Skeleton";
 import CopyButton from "@/components/features/newlib/CopyButton";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import { Collection } from "@/app/api/collections/types";
 import { twMerge } from "tailwind-merge";
 import { CountryDisplay } from "@/components/features/newlib/CountryDisplay";
@@ -34,7 +33,7 @@ import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import LinkWithParams from "../LinkWithParams";
 import { Link } from "@/i18n/routing";
 import { serializeSearchParams } from "@/lib/searchParams";
-import { Tooltip } from "@nextui-org/react";
+import { Tooltip } from "@heroui/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useRouter } from "next/navigation";
 import LikeButton from "../items/LikeButton";

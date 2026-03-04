@@ -11,7 +11,7 @@ import {
 	BsPlus,
 	BsThreeDotsVertical,
 } from "react-icons/bs";
-import { Button } from "../nextui/Button";
+import { Button } from "../heroui/Button";
 import { ReactNode, useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormatter } from "next-intl";
@@ -20,8 +20,8 @@ import { Session } from "next-auth";
 import { setter, fetcherDELETE } from "@/lib/utils";
 import useSWRMutation from "swr/mutation";
 import { twMerge } from "tailwind-merge";
-import { Textarea } from "../nextui/Textarea";
-import { Input } from "../nextui/Input";
+import { Textarea } from "../heroui/Textarea";
+import { Input } from "../heroui/Input";
 import {
 	AutocompleteItem,
 	Divider,
@@ -36,20 +36,20 @@ import {
 	ModalBody,
 	ModalContent,
 	SelectItem,
-} from "@nextui-org/react";
-import { useDisclosure } from "@nextui-org/react";
+} from "@heroui/react";
+import { useDisclosure } from "@heroui/react";
 import GenericHeader from "../features/modals/GenericHeader";
-import { Select } from "../nextui/Select";
+import { Select } from "../heroui/Select";
 import { COLLECTION_VISIBILITY_OPTIONS } from "@/constants/user";
 import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence } from "framer-motion";
 import { ResourcesView } from "../features/resources/ResourcesView";
 import { IconType } from "react-icons/lib";
 import PageContainer from "../layout/PageContainer";
-import { Autocomplete } from "../nextui/Autocomplete";
-import DialogModal from "../nextui/DialogModal";
+import { Autocomplete } from "../heroui/Autocomplete";
+import DialogModal from "../heroui/DialogModal";
 import { BiTrash } from "react-icons/bi";
-import { Dropdown } from "../nextui/Dropdown";
+import { Dropdown } from "../heroui/Dropdown";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList from "../features/items/ItemsList";
 import { useFeatureFlagEnabled } from "posthog-js/react";

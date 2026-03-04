@@ -7,7 +7,7 @@ import { toast } from "../layout/Toast";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Logo } from "../layout/navbar";
-import { Spacer } from "@nextui-org/react";
+import { Spacer } from "@heroui/react";
 
 export default function Contact() {
 	const t = useTranslations("ui");

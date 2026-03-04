@@ -3,15 +3,15 @@
 
 import { AnyFieldApi, FormApi, useForm } from "@tanstack/react-form";
 import { z, ZodError } from "zod";
-import { Input } from "@/components/nextui/Input";
-import { Card } from "@/components/nextui/Card";
-import { Button } from "@/components/nextui/Button";
-import { Textarea } from "@/components/nextui/Textarea";
+import { Input } from "@/components/heroui/Input";
+import { Card } from "@/components/heroui/Card";
+import { Button } from "@/components/heroui/Button";
+import { Textarea } from "@/components/heroui/Textarea";
 import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence, motion } from "framer-motion";
 import { BiLink, BiMessageSquare, BiSolidSend, BiUser } from "react-icons/bi";
 import { areLinksValid, sendTakedownRequest } from "@/lib/actions";
-import { Spinner } from "@nextui-org/react";
+import { Spinner } from "@heroui/react";
 import { toast } from "@/components/layout/Toast";
 import { takedownRequestSchema } from "@/lib/utils";
 import { MdEmail } from "react-icons/md";

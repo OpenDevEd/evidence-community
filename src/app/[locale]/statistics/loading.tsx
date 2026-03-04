@@ -1,6 +1,6 @@
 "use client";
 import PageContainer from "@/components/layout/PageContainer";
-import { Spinner } from "@nextui-org/react";
+import { Spinner } from "@heroui/react";
 import { motion } from "framer-motion";
 
 export default function StatisticsLoading() {

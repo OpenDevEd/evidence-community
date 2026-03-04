@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { BsJournalText } from "react-icons/bs";
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/nextui/Table";
-import { Pagination } from "@/components/nextui/Pagination";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/heroui/Table";
+import { Pagination } from "@/components/heroui/Pagination";
 import { SectionCard } from "./SectionCard";
 
 type TopJournalsProps = {

@@ -1,7 +1,7 @@
 "use client";
-import { extendVariants, Progress as NextUIProgress } from "@nextui-org/react";
+import { extendVariants, Progress as HeroUIProgress } from "@heroui/react";
 
-export const Progress = extendVariants(NextUIProgress, {
+export const Progress = extendVariants(HeroUIProgress, {
   variants: {
     color: {
       primary: {

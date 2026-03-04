@@ -9,9 +9,9 @@ import {
 	DropdownMenu,
 	DropdownSection,
 	DropdownTrigger,
-} from "@nextui-org/react";
-import { Dropdown } from "@/components/nextui/Dropdown";
-import { Button } from "@/components/nextui/Button";
+} from "@heroui/react";
+import { Dropdown } from "@/components/heroui/Dropdown";
+import { Button } from "@/components/heroui/Button";
 import { useSortedLocales } from "@/hooks/useSortedLocales";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { useTheme } from "next-themes";

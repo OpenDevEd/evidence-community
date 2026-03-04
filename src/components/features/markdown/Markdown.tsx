@@ -10,7 +10,7 @@ import ReactMarkdown from "react-markdown";
 import Link from "next/link";
 import Resource from "../items/Resource";
 import React from "react";
-import { Card } from "@/components/nextui/Card";
+import { Card } from "@/components/heroui/Card";
 
 function createRehypeWrapper(pattern: RegExp, className: string) {
 	return () => (tree: Node) => {
@@ -135,45 +135,47 @@ export function AIMarkdown({
 	...props
 }: PropsWithChildren<{ className?: string }>) {
 	return (
-		<ReactMarkdown
-			remarkPlugins={[remarkGfm]}
-			rehypePlugins={[
-				rehypeQuoteWrapper,
-				rehypePageWrapper,
-				rehypeSectionWrapper,
-			]}
-			components={{
-				span: ({ children, className }) =>
-					className === "PageHighlight" ||
-						className === "SectionHighlight" ? (
-						<Highlight className={className}>{children}</Highlight>
-					) : className === "QuoteHighlight" ? (
-						<QuoteHighlight>{children}</QuoteHighlight>
-					) : className === "ResourceWrapper" ? (
-						<ResourceWrapper>
-							{children}
-						</ResourceWrapper>
-					) : (
-						<span>{children}</span>
+		<div className={twMerge(className)}>
+			<ReactMarkdown
+				remarkPlugins={[remarkGfm]}
+				rehypePlugins={[
+					rehypeQuoteWrapper,
+					rehypePageWrapper,
+					rehypeSectionWrapper,
+				]}
+				components={{
+					span: ({ children, className }) =>
+						className === "PageHighlight" ||
+							className === "SectionHighlight" ? (
+							<Highlight className={className}>{children}</Highlight>
+						) : className === "QuoteHighlight" ? (
+							<QuoteHighlight>{children}</QuoteHighlight>
+						) : className === "ResourceWrapper" ? (
+							<ResourceWrapper>{children}</ResourceWrapper>
+						) : (
+							<span>{children}</span>
+						),
+					a: ({ href, children }) =>
+						href?.startsWith("/") ? (
+							<ResourceWrapper>{href}</ResourceWrapper>
+						) : (
+							<a
+								href={href}
+								className="text-link underline"
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								{children}
+							</a>
+						),
+					p: ({ children, ...props }) => (
+						<div {...props}>{children}</div>
 					),
-				a: ({ href, children }) =>
-					href?.startsWith("/") ? (
-						<ResourceWrapper>{href}</ResourceWrapper>
-					) : (
-						<a href={href} className="text-link underline" target="_blank" rel="noopener noreferrer">
-							{children}
-						</a>
-					),
-				p: ({ children, ...props }) => (
-					<div {...props}>
-						{children}
-					</div>
-				),
-			}}
-			className={twMerge(className)}
-			{...props}
-		>
-			{children as string}
-		</ReactMarkdown>
+				}}
+				{...props}
+			>
+				{children as string}
+			</ReactMarkdown>
+		</div>
 	);
 }

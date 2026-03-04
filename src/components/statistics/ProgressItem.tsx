@@ -1,4 +1,4 @@
-import { Progress } from "@/components/nextui/Progress";
+import { Progress } from "@/components/heroui/Progress";
 import { useTranslations } from "next-intl";
 
 type ProgressItemProps = {

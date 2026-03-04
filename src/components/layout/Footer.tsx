@@ -1,13 +1,13 @@
 "use client";
 import Image from "next/image";
 import { socialLinks } from "@/constants/links";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import { useTheme } from "next-themes";
 import { useEffect } from "react";
 import { useState } from "react";
 import { style } from "@/../tailwind.config";
 import { useTranslations } from "next-intl";
-import { Skeleton } from "@/components/nextui/Skeleton";
+import { Skeleton } from "@/components/heroui/Skeleton";
 import { Link } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
 import { useStatus } from "@/context/Providers";

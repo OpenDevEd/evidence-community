@@ -4,11 +4,11 @@ import {
 	ModalBody,
 	ScrollShadow,
 	Tooltip
-} from "@nextui-org/react";
-import { ModalContent } from "@nextui-org/react";
-import { Skeleton } from "@/components/nextui/Skeleton";
+} from "@heroui/react";
+import { ModalContent } from "@heroui/react";
+import { Skeleton } from "@/components/heroui/Skeleton";
 import AIHeader from "../ai/AIHeader";
-import FullScreenModal from "@/components/nextui/FullScreenModal";
+import FullScreenModal from "@/components/heroui/FullScreenModal";
 import { useMemo, useRef, useState } from "react";
 import {
 	BiCopy,
@@ -21,7 +21,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
 import { models } from "@/constants/ai";
 import React from "react";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import { AIHistory } from "@/types/ai";
 import {
 	BsBodyText,

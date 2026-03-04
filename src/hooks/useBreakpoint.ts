@@ -1,23 +1,34 @@
-import resolveConfig from "tailwindcss/resolveConfig";
-import tailwindConfig from "@/../tailwind.config";
-import { useEffect, useState } from "react";
-import { useMediaQuery } from 'usehooks-ts'
+"use client";
 
-const fullConfig = resolveConfig(tailwindConfig);
-const {
-  theme: { screens },
-} = fullConfig;
+import { breakpoints } from "@/../tailwind.config";
+import { useMediaQuery } from "usehooks-ts";
 
-export default function useBreakpoint(query: keyof typeof screens): boolean {
-  const mediaQuery = `(min-width: ${screens[query]})`;
-  const matches = useMediaQuery(mediaQuery);
+type BreakpointKey = keyof typeof breakpoints;
 
-  return matches
+const getScreenValue = (query: BreakpointKey | null, value?: string) => {
+	if (!query) return value;
+
+	const screen = breakpoints[query];
+	if (typeof screen === "string") return screen;
+	if ("max" in screen) return screen.max;
+	return value;
+};
+
+export default function useBreakpoint(query: BreakpointKey): boolean {
+	const screen = breakpoints[query];
+	const mediaQuery =
+		typeof screen === "string"
+			? `(min-width: ${screen})`
+			: `(max-width: ${screen.max})`;
+
+	return useMediaQuery(mediaQuery);
 }
 
-export function useBreakpointBelow(query: keyof typeof screens | null, value?: string): boolean {
-  const mediaQuery = `(max-width: ${query ? screens[query] : value})`;
-  const matches = useMediaQuery(mediaQuery);
-
-  return matches
+export function useBreakpointBelow(
+	query: BreakpointKey | null,
+	value?: string
+): boolean {
+	const screen = getScreenValue(query, value);
+	const mediaQuery = screen ? `(max-width: ${screen})` : "(max-width: 0px)";
+	return useMediaQuery(mediaQuery);
 }

@@ -1,4 +1,4 @@
-import { ModalBody, ModalBodyProps, Listbox, ListboxItem, Spinner } from "@nextui-org/react";
+import { ModalBody, ModalBodyProps, Listbox, ListboxItem, Spinner } from "@heroui/react";
 import { FaCheck } from "react-icons/fa";
 import { Key } from "react";
 

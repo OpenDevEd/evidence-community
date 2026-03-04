@@ -2,14 +2,14 @@
 
 import { ItemGetResponse } from "@/app/api/item/types";
 import { BsStars } from "react-icons/bs";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import {
 	Dropdown,
 	DropdownItem,
 	DropdownTrigger,
 	DropdownMenu,
 	useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import GenerativeModal from "@/components/features/modals/GenerativeModal";
 import ChatModal from "@/components/features/modals/ChatModal";
 import { useLocale, useTranslations } from "next-intl";

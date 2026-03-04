@@ -8,6 +8,11 @@ import { getMessages, getTranslations } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
 import { getLangDir } from "rtl-detect";
 import { getCachedStatus } from "@/app/api/cache";
+import { cookies } from "next/headers";
+import {
+	FEATURE_FLAGS_COOKIE_NAME,
+	parseFeatureFlagsCookieValue,
+} from "@/lib/featureFlagsCookie";
 import MainWrapper from "./MainWrapper";
 import Banner from "./Banner";
 import { GoogleAnalytics } from '@next/third-parties/google'
@@ -35,10 +40,17 @@ async function BaseContent({
 	const status = await getCachedStatus();
 	const messages = await getMessages();
 	const t = await getTranslations({ locale, namespace: "ui" });
+	const cookieStore = await cookies();
+	const initialFeatureFlags = parseFeatureFlagsCookieValue(
+		cookieStore.get(FEATURE_FLAGS_COOKIE_NAME)?.value
+	);
 
 	return (
 		<NextIntlClientProvider messages={messages}>
-			<Providers status={status}>
+			<Providers
+				status={status}
+				initialFeatureFlags={initialFeatureFlags}
+			>
 				<MainWrapper>
 					<nav
 						aria-label={t("skipNavAriaLabel")}

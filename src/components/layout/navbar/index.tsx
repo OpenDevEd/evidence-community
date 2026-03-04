@@ -4,7 +4,7 @@ import { useContext } from "react";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
-import { useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@heroui/react";
 import { twMerge } from "tailwind-merge";
 import { usePathname } from "@/i18n/routing";
 import { style } from "@/../tailwind.config";

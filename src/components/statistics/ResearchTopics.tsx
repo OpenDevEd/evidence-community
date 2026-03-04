@@ -12,12 +12,12 @@ import {
 	Tooltip,
 	ResponsiveContainer,
 } from "recharts";
-import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/nextui/Table";
-import { Input } from "@/components/nextui/Input";
-import { Select } from "@/components/nextui/Select";
-import { SelectItem } from "@/components/nextui/SelectItem";
-import { Pagination } from "@/components/nextui/Pagination";
-import { Card } from "@/components/nextui/Card";
+import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/heroui/Table";
+import { Input } from "@/components/heroui/Input";
+import { Select } from "@/components/heroui/Select";
+import { SelectItem } from "@/components/heroui/SelectItem";
+import { Pagination } from "@/components/heroui/Pagination";
+import { Card } from "@/components/heroui/Card";
 import { SectionCard } from "./SectionCard";
 import { TopicStats, TopicOverview, TopicYearStats } from "./types";
 
@@ -299,8 +299,8 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 											}}
 											labelStyle={{ color: theme === "dark" ? "#ffffff" : "#000000", fontWeight: "500" }}
 											itemStyle={{ color: theme === "dark" ? "rgba(255, 255, 255, 0.8)" : "rgba(0, 0, 0, 0.8)" }}
-											formatter={(value: number, name: string, props: any) => [
-												`${value.toLocaleString()} ${t("topicsLowercase")} (${props.payload.percentage}%)`,
+											formatter={(value: number | undefined, name: string | undefined, props: any) => [
+												`${(value ?? 0).toLocaleString()} ${t("topicsLowercase")} (${props.payload.percentage}%)`,
 												t("levelNumber", { number: props.payload.level })
 											]}
 										/>

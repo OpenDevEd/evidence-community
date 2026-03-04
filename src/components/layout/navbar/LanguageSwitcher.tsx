@@ -1,12 +1,12 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { DropdownItem, DropdownTrigger } from "@nextui-org/react";
-import { ChevronDownIcon } from "@nextui-org/shared-icons";
+import { DropdownItem, DropdownTrigger } from "@heroui/react";
+import { ChevronDownIcon } from "@heroui/shared-icons";
 import { twMerge } from "tailwind-merge";
-import { Button } from "@/components/nextui/Button";
-import { Dropdown } from "@/components/nextui/Dropdown";
-import { DropdownMenu } from "@nextui-org/react";
+import { Button } from "@/components/heroui/Button";
+import { Dropdown } from "@/components/heroui/Dropdown";
+import { DropdownMenu } from "@heroui/react";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { useSortedLocales } from "@/hooks/useSortedLocales";
 import { useRouter, usePathname } from "@/i18n/routing";

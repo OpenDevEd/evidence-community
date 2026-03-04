@@ -1,5 +1,5 @@
 import { Collection } from "@/app/api/collections/types";
-import { Checkbox } from "@/components/nextui/Checkbox";
+import { Checkbox } from "@/components/heroui/Checkbox";
 import { FacetDistribution } from "meilisearch";
 import { useMemo, useCallback, memo } from "react";
 import { IoIosArrowDown } from "react-icons/io";

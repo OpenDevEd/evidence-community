@@ -3,9 +3,9 @@
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { IoIosLogIn } from "react-icons/io";
-import { DropdownItem } from "@nextui-org/react";
+import { DropdownItem } from "@heroui/react";
 import { twMerge } from "tailwind-merge";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import type { NavbarElementProps } from "@/types/navbar";
 

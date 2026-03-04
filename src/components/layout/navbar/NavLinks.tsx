@@ -3,12 +3,12 @@
 import { useCallback } from "react";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
-import { DropdownItem, DropdownMenu, DropdownTrigger } from "@nextui-org/react";
-import { ChevronDownIcon } from "@nextui-org/shared-icons";
-import { useDisclosure } from "@nextui-org/react";
+import { DropdownItem, DropdownMenu, DropdownTrigger } from "@heroui/react";
+import { ChevronDownIcon } from "@heroui/shared-icons";
+import { useDisclosure } from "@heroui/react";
 import { Link } from "@/i18n/routing";
-import { Button } from "@/components/nextui/Button";
-import { Dropdown } from "@/components/nextui/Dropdown";
+import { Button } from "@/components/heroui/Button";
+import { Dropdown } from "@/components/heroui/Dropdown";
 import { useDebounce } from "@/hooks/useDebounce";
 import { useStatus } from "@/context/Providers";
 import { NAVBAR_ICONS } from "@/constants/links";

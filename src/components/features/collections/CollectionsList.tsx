@@ -7,19 +7,19 @@ import {
 	AutocompleteSection,
 	Listbox,
 	ListboxItem,
-} from "@nextui-org/react";
-import { Skeleton } from "../../nextui/Skeleton";
+} from "@heroui/react";
+import { Skeleton } from "../../heroui/Skeleton";
 import { twMerge } from "tailwind-merge";
 import CollectionCategory from "./CollectionCategory";
 import {
 	Collection,
 	CollectionsGetResponse,
 } from "@/app/api/collections/types";
-import { Autocomplete } from "../../nextui/Autocomplete";
-import { Switch } from "../../nextui/Switch";
+import { Autocomplete } from "../../heroui/Autocomplete";
+import { Switch } from "../../heroui/Switch";
 import { Fragment, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Input } from "../../nextui/Input";
+import { Input } from "../../heroui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
 import { COUNTRIES, COUNTRY_PARAMS, CUSTOM_FILTER_INSTITUTION, IS_COUNTRY_LIBRARY, years } from "@/constants/misc";
 import { INSTITUTION_LOGOS } from "@/constants/items";
@@ -40,7 +40,7 @@ import {
 import Image from "next/image";
 import { fetcher, getCountryAncestry, getCountryInfo } from "@/lib/utils";
 import { BsList } from "react-icons/bs";
-import { Button } from "../../nextui/Button";
+import { Button } from "../../heroui/Button";
 import { InstitutionsData } from "@/app/api/institutions/types";
 function YearPicker({
 	label,

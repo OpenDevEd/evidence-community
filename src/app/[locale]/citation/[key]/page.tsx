@@ -5,7 +5,7 @@ import { Item } from "@/app/api/item/types";
 import { parseCompanyName } from "@/lib/utils";
 import CitationPageClient from "./CitationPageClient";
 import { notFound } from "next/navigation";
-import { Skeleton } from "@/components/nextui/Skeleton";
+import { Skeleton } from "@/components/heroui/Skeleton";
 import PageContainer from "@/components/layout/PageContainer";
 
 async function getSourceItem(key: string) {

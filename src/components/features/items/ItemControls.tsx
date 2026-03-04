@@ -6,7 +6,7 @@ import {
 	LuExternalLink,
 	LuPrinter,
 } from "react-icons/lu";
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import { TiDocumentText } from "react-icons/ti";
 import { PiSlidersHorizontalBold } from "react-icons/pi";
 import { useRouter } from "@/i18n/routing";
@@ -14,31 +14,31 @@ import { useTranslations } from "next-intl";
 import CopyButton from "./CopyButton";
 import { Item } from "@/app/api/item/types";
 import React, { PropsWithChildren, useMemo, useRef, useState } from "react";
-import { Dropdown } from "@/components/nextui/Dropdown";
-import { DropdownItem } from "@nextui-org/dropdown";
-import { DropdownMenu } from "@nextui-org/dropdown";
+import { Dropdown } from "@/components/heroui/Dropdown";
 import {
 	ButtonProps,
+	DropdownItem,
+	DropdownMenu,
 	DropdownTrigger,
 	ModalBody,
 	ModalContent,
 	Spinner,
 	useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import { BsThreeDots } from "react-icons/bs";
 import { FaClipboard } from "react-icons/fa";
 import LikeButton from "./LikeButton";
-import FullScreenModal from "@/components/nextui/FullScreenModal";
+import FullScreenModal from "@/components/heroui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
-import { ListModalBody } from "@/components/nextui/ListModalBody";
+import { ListModalBody } from "@/components/heroui/ListModalBody";
 import { convertItem } from "@/lib/actions";
-import { Switch } from "@/components/nextui/Switch";
+import { Switch } from "@/components/heroui/Switch";
 import { useLocalStorage } from "usehooks-ts";
 import { SiZotero } from "react-icons/si";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { AddButton } from "./Resource";
-import DialogModal from "@/components/nextui/DialogModal";
+import DialogModal from "@/components/heroui/DialogModal";
 
 type Interaction =
 	| "readDocument"

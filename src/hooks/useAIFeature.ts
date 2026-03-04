@@ -1,4 +1,4 @@
-import { useDisclosure } from "@nextui-org/react";
+import { useDisclosure } from "@heroui/react";
 import useAIStream from "./useAIStream";
 import { ItemGetResponse } from "@/app/api/item/types";
 

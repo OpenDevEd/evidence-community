@@ -1,16 +1,16 @@
 "use client";
 
-import { Button } from "../nextui/Button";
+import { Button } from "../heroui/Button";
 import { FaTimesCircle, FaCheckCircle } from "react-icons/fa";
-import DialogModal from "../nextui/DialogModal";
+import DialogModal from "../heroui/DialogModal";
 import GenericHeader from "../features/modals/GenericHeader";
 import {
 	ModalBody,
 	ModalContent,
 	ModalFooter,
 	useDisclosure,
-} from "@nextui-org/react";
-import { useLocalStorage } from "@uidotdev/usehooks";
+} from "@heroui/react";
+import { useLocalStorage } from "usehooks-ts";
 import { useEffect } from "react";
 import { MdPrivacyTip } from "react-icons/md";
 import { Logo } from "./navbar";

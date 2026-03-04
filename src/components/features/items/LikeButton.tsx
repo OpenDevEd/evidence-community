@@ -1,4 +1,4 @@
-import { Button } from "@/components/nextui/Button";
+import { Button } from "@/components/heroui/Button";
 import { Item, ListItem } from "@/app/api/item/types";
 import { FaHeart, FaHeartBroken } from "react-icons/fa";
 import { useState, forwardRef } from "react";

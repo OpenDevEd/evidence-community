@@ -1,3 +1,5 @@
+"use client";
+
 import { STORAGE_KEY, StoredUtm } from "@/components/features/UtmProvider";
 import { useLocalStorage } from "usehooks-ts";
 

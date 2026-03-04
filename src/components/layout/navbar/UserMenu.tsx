@@ -8,8 +8,8 @@ import {
 	DropdownItem,
 	DropdownMenu,
 	DropdownTrigger,
-} from "@nextui-org/react";
-import { Dropdown } from "@/components/nextui/Dropdown";
+} from "@heroui/react";
+import { Dropdown } from "@/components/heroui/Dropdown";
 import { useRouter } from "@/i18n/routing";
 import type { NavbarElementProps } from "@/types/navbar";
 

@@ -104,8 +104,8 @@ export function ItemTypesAndYears({ stats }: ItemTypesAndYearsProps) {
 											: "rgba(0, 0, 0, 0.8)",
 								}}
 								labelFormatter={(label) => `${t("year")} ${label}`}
-								formatter={(value: number) => [
-									value.toLocaleString() + ` ${t("publicationsLowercase")}`,
+								formatter={(value: number | undefined) => [
+									(value ?? 0).toLocaleString() + ` ${t("publicationsLowercase")}`,
 									t("publications"),
 								]}
 							/>

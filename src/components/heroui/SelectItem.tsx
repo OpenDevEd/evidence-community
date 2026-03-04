@@ -1,10 +1,10 @@
 "use client";
 import {
   extendVariants,
-  SelectItem as NextUISelectItem,
-} from "@nextui-org/react";
+  SelectItem as HeroUISelectItem,
+} from "@heroui/react";
 
-export const SelectItem = extendVariants(NextUISelectItem, {
+export const SelectItem = extendVariants(HeroUISelectItem, {
   variants: {
     color: {
       secondary: {

@@ -1,7 +1,7 @@
 "use client";
-import { extendVariants, Tabs as NextUITabs, Tab as NextUITab } from "@nextui-org/react";
+import { extendVariants, Tabs as HeroUITabs, Tab as HeroUITab } from "@heroui/react";
 
-export const Tabs = extendVariants(NextUITabs, {
+export const Tabs = extendVariants(HeroUITabs, {
 	variants: {
 		color: {
 			secondary: {
@@ -45,5 +45,5 @@ export const Tabs = extendVariants(NextUITabs, {
 	},
 });
 
-export const Tab = NextUITab;
+export const Tab = HeroUITab;
 
