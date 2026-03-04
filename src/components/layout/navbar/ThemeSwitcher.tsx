@@ -11,8 +11,7 @@ import { Button } from "@/components/heroui/Button";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import type { NavbarElementProps } from "@/types/navbar";
 
-const FALLBACK_THEME: "light" | "dark" =
-	process.env.NEXT_PUBLIC_DEFAULT_THEME === "light" ? "light" : "dark";
+const HYDRATION_SAFE_THEME: "light" | "dark" = "dark";
 
 export default function ThemeSwitcher({
 	variant,
@@ -33,7 +32,7 @@ export default function ThemeSwitcher({
 	const safeTheme =
 		mounted && (theme === "dark" || theme === "light")
 			? theme
-			: FALLBACK_THEME;
+			: HYDRATION_SAFE_THEME;
 	const isDark = safeTheme === "dark";
 	const toggleTheme = () => setTheme(isDark ? "light" : "dark");
 	const targetTheme = isDark ? t("lightTheme") : t("darkTheme");

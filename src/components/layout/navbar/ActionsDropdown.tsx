@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { GiHamburgerMenu } from "react-icons/gi";
@@ -15,11 +14,9 @@ import { Dropdown } from "@/components/heroui/Dropdown";
 import { Button } from "@/components/heroui/Button";
 import { useSortedLocales } from "@/hooks/useSortedLocales";
 import { useFeatureFlagEnabled } from "@/context/Providers";
-import { useTheme } from "next-themes";
 import { useRouter, usePathname } from "@/i18n/routing";
 import { signOut } from "next-auth/react";
-import { HiOutlineMoon } from "react-icons/hi2";
-import { IoMdSunny, IoIosLogIn } from "react-icons/io";
+import { IoIosLogIn } from "react-icons/io";
 import { User, LogOut } from "lucide-react";
 import ThemeSwitcher from "./ThemeSwitcher";
 import LoginButton from "./LoginButton";
@@ -30,21 +27,12 @@ interface ActionsDropdownProps {
 	context: NavbarContext;
 }
 
-const FALLBACK_THEME: "light" | "dark" =
-	process.env.NEXT_PUBLIC_DEFAULT_THEME === "light" ? "light" : "dark";
-
 export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 	const t = useTranslations("ui");
 	const { data: session } = useSession();
-	const { resolvedTheme: theme, setTheme } = useTheme();
-	const [mounted, setMounted] = useState(false);
 	const router = useRouter();
 	const pathname = usePathname();
 	const { sortedLocales, localesNames } = useSortedLocales();
-
-	useEffect(() => {
-		setMounted(true);
-	}, []);
 
 	const isThemeEnabled = useFeatureFlagEnabled("theme-switcher");
 	const isLanguageEnabled = useFeatureFlagEnabled("language-switcher");
@@ -59,11 +47,6 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 	// Languages always need dropdown, so we handle them separately
 	const singleActionItems = (hasTheme ? 1 : 0) + (hasLogin ? 1 : 0);
 	const totalItems = singleActionItems + (hasLanguages ? 1 : 0) + (hasUser ? 1 : 0);
-	const safeTheme =
-		mounted && (theme === "dark" || theme === "light")
-			? theme
-			: FALLBACK_THEME;
-	const isDark = safeTheme === "dark";
 
 	// If nothing to show, return null
 	if (totalItems === 0) return null;
@@ -109,9 +92,6 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 		}
 
 		switch (keyStr) {
-			case "theme":
-				setTheme(isDark ? "light" : "dark");
-				break;
 			case "login":
 				context.onLoginModalOpen();
 				break;
@@ -177,20 +157,10 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 					className={hasTheme || hasLogin ? "my-1 mt-1.5" : "hidden"}
 				>
 					{hasTheme ? (
-						<DropdownItem
-							key="theme"
-							startContent={
-								isDark ? (
-									<IoMdSunny className="size-5 fill-accent" />
-								) : (
-									<HiOutlineMoon className="size-5 stroke-accent" />
-								)
-							}
-						>
-							{t("switchThemeAriaLabel", {
-								theme: isDark ? t("lightTheme") : t("darkTheme"),
-							})}
-						</DropdownItem>
+						<ThemeSwitcher
+							variant="menuItem"
+							styleVariant={context.styleVariant}
+						/>
 					) : (
 						<DropdownItem key="theme-placeholder" className="hidden">
 							{" "}
