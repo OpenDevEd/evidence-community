@@ -17,12 +17,12 @@ export default function Banner() {
 	const { isPreferencesOpen, setConsentState } = useAnalyticsConsent();
 	const status = useStatus();
 	const pathname = usePathname();
-
-	if (isPolicyPage(pathname)) return null;
 	const t = useTranslations("ui");
 	const tFooter = useTranslations("footer");
 	const footer = status.companyFooter || {};
 	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
+
+	if (isPolicyPage(pathname)) return null;
 
 	return (
 		<DialogModal
