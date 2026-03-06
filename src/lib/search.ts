@@ -11,7 +11,7 @@ import {
 import { blockedTags, countryFacetOptions } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { inferParserType } from "nuqs";
-import { unstable_cache } from "next/cache";
+import { cacheLife } from "next/cache";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import meilisearchClient from "./meilisearch";
 import { searchParamsLoader } from "./searchParams";
@@ -79,21 +79,13 @@ function cleanTheAttributesToSearchOn(fields: string[]) {
 }
 
 export async function getMainAttributes() {
-	const getCachedResults = unstable_cache(
-		async () => {
-			const attributes = await meilisearchClient
-				.index(process.env.MEILI_INDEX || config.index)
-				.getDisplayedAttributes();
+	"use cache";
+	cacheLife({ revalidate: 60 });
+	const attributes = await meilisearchClient
+		.index(process.env.MEILI_INDEX || config.index)
+		.getDisplayedAttributes();
 
-			return attributes;
-		},
-		[],
-		{ tags: ["attributes"], revalidate: 60 }
-	);
-
-	const attributes = await getCachedResults();
-
-	return attributes.filter((attribute) => !attribute.endsWith("fullTextPDFs"));
+	return attributes.filter((attribute: string) => !attribute.endsWith("fullTextPDFs"));
 }
 
 function toLightweightItem(item: any): ListItem {

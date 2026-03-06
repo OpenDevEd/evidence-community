@@ -17,7 +17,7 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
-import { buildItemsQuery, defaultParams, ensureNoBlankItems, generateRandomID, ItemToZoteroJSON, parseCompanyName, processSentenceCaseAPAItems, validateContactRequest, validateTakedownRequest } from "@/lib/utils";
+import { buildItemsQuery, defaultParams, generateRandomID, parseCompanyName, validateContactRequest, validateTakedownRequest } from "@/lib/utils";
 import {
 	getCachedCollections,
 	getCachedItemSmall,
@@ -26,12 +26,12 @@ import {
 	getUserLikesDirect,
 } from "@/app/api/cache";
 import { getAuthenticatedDbUser } from "@/auth/server";
-import { unstable_cache } from "next/cache";
 import { Collection } from "@/app/api/collections/types";
 import { z } from "zod";
 import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "@/lib/utils";
+import { getMainAttributes } from "@/lib/search";
 import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
 import { generateObject } from "ai";
 import { getModel } from "./ai";
@@ -40,98 +40,8 @@ import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc"
 import { FacetDistribution } from "meilisearch";
 import { blockedTags } from "@/constants/misc";
 import transporter from "./nodemailer";
-import { Engine, CiteProcSys, CSLItem, CitationCluster } from 'citeproc'
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import type { AppSession, AppSessionUser } from "@/auth/types";
-
-export async function getStyle() {
-	const cached = unstable_cache(async () => {
-		const url = new URL("https://raw.githubusercontent.com/citation-style-language/styles/master/apa.csl");
-		const res = await fetch(url.toString());
-		const data = await res.text();
-		return data;
-	}, ["apa.csl"], {
-		revalidate: 60 * 60 * 24,
-	})
-
-	return cached();
-}
-
-async function getLocaleXML(lang: string = "en-GB"): Promise<string> {
-	const cached = unstable_cache(async () => {
-		const url = `https://raw.githubusercontent.com/citation-style-language/locales/master/locales-${lang}.xml`;
-		const res = await fetch(url);
-		if (!res.ok) throw new Error("Failed to fetch locale");
-		return res.text();
-	}, ["locale", lang], {
-		revalidate: 60 * 60 * 24,
-	})
-
-	return cached();
-}
-
-export async function getCitationFromCSL(csl: any, lang: string = "en-GB") {
-	const [style, locale] = await Promise.all([
-		getStyle(),
-		getLocaleXML(lang)
-	]);
-
-	// Set up an items map for this run
-	const items: Record<string, CSLItem> = { [csl.id]: csl };
-
-	// We have to provide a sys object with access to our locale and item
-	const sys: CiteProcSys = {
-		retrieveLocale: (_lang: string) => {
-			// Ignore lang argument for this single-locale case
-			return locale;
-		},
-		retrieveItem: (id: string) => {
-			return items[id];
-		},
-	};
-
-	const citeproc = new Engine(sys, style, lang);
-
-	// Generate the bibliography (full reference format)
-	// First, we need to register the item with the processor
-	citeproc.updateItems([csl.id]);
-	
-	// Generate bibliography
-	const [, bibliography] = citeproc.makeBibliography();
-	const citation = bibliography && bibliography.length > 0 ? bibliography[0] : '';
-
-
-	return citation;
-}
-
-export async function getCSL(item: Item) {
-	const cached = unstable_cache(async () => {
-		const zoteroItem = ItemToZoteroJSON(item);
-		try {
-			const url = new URL(process.env.ZOTERO_TRANSLATION_SERVER_URL!);
-			url.pathname = "export";
-			url.searchParams.set("format", "csljson");
-			const res = await fetch(url.toString(), {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify([zoteroItem]),
-			});
-			const data = await res.json();
-			const cslData = data ? ensureNoBlankItems(data[0]) : null;	
-			return cslData;
-		} catch (error) {
-			console.error(error);
-			return null;
-		}
-	}, ["csl", item.id], {
-		revalidate: 60,
-	})
-
-	return cached();
-}
-
 
 export async function getRateLimits() {
 	const headersList = await headers();
@@ -545,26 +455,6 @@ export async function getLikedPosts(likes: AppSessionUser["likes"]) {
 		});
 
 	return res.results;
-}
-
-export async function getMainAttributes() {
-	const getCachedResults = unstable_cache(
-		async () => {
-			const attributes = await meilisearchClient
-				.index(process.env.MEILI_INDEX || config.index)
-				.getDisplayedAttributes();
-
-			return attributes;
-		},
-		[],
-		{ tags: ["attributes"], revalidate: 60 }
-	);
-
-	const attributes = await getCachedResults();
-
-	return attributes.filter(
-		(attribute) => !attribute.endsWith("fullTextPDFs")
-	);
 }
 
 function cleanTheAttributesToSearchOn(fields: string[]) {

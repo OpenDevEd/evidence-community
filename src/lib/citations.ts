@@ -3,7 +3,7 @@ import { blockedTags } from "@/constants/misc";
 import config from "@/constants/config.json";
 import meilisearchClient from "@/lib/meilisearch";
 import { ItemToZoteroJSON, ensureNoBlankItems, transformItem } from "@/lib/utils";
-import { unstable_cache } from "next/cache";
+import { cacheLife } from "next/cache";
 import { CiteProcSys, CSLItem, Engine } from "citeproc";
 
 const DEFAULT_CITATION_LOCALE = "en-GB";
@@ -42,28 +42,20 @@ function normalizeLocale(lang: string = DEFAULT_CITATION_LOCALE) {
 }
 
 async function getStyle() {
-	const cached = unstable_cache(async () => {
-		const url = new URL("https://raw.githubusercontent.com/citation-style-language/styles/master/apa.csl");
-		const res = await fetch(url.toString());
-		return res.text();
-	}, ["apa.csl"], {
-		revalidate: 60 * 60 * 24,
-	});
-
-	return cached();
+	"use cache";
+	cacheLife({ revalidate: 60 * 60 * 24 });
+	const url = new URL("https://raw.githubusercontent.com/citation-style-language/styles/master/apa.csl");
+	const res = await fetch(url.toString());
+	return res.text();
 }
 
 async function getLocaleXMLFor(locale: string): Promise<string> {
-	const cached = unstable_cache(async () => {
-		const url = `https://raw.githubusercontent.com/citation-style-language/locales/master/locales-${locale}.xml`;
-		const res = await fetch(url);
-		if (!res.ok) throw new Error("Failed to fetch locale");
-		return res.text();
-	}, ["locale", locale], {
-		revalidate: 60 * 60 * 24,
-	});
-
-	return cached();
+	"use cache";
+	cacheLife({ revalidate: 60 * 60 * 24 });
+	const url = `https://raw.githubusercontent.com/citation-style-language/locales/master/locales-${locale}.xml`;
+	const res = await fetch(url);
+	if (!res.ok) throw new Error("Failed to fetch locale");
+	return res.text();
 }
 
 async function getLocaleXML(lang: string = DEFAULT_CITATION_LOCALE): Promise<{ locale: string; xml: string }> {
@@ -112,31 +104,27 @@ export async function getCitationFromCSL(csl: any, lang: string = "en-GB") {
 }
 
 export async function getCSL(item: Item) {
-	const cached = unstable_cache(async () => {
-		const zoteroItem = ItemToZoteroJSON(item);
-		const url = new URL(process.env.ZOTERO_TRANSLATION_SERVER_URL!);
-		url.pathname = "export";
-		url.searchParams.set("format", "csljson");
+	"use cache";
+	cacheLife({ revalidate: 60 });
+	const zoteroItem = ItemToZoteroJSON(item);
+	const url = new URL(process.env.ZOTERO_TRANSLATION_SERVER_URL!);
+	url.pathname = "export";
+	url.searchParams.set("format", "csljson");
 
-		const res = await fetch(url.toString(), {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify([zoteroItem]),
-		});
-
-		if (!res.ok) {
-			throw new Error(`Failed to generate CSL for item ${item.key}`);
-		}
-
-		const data = await res.json();
-		return data ? ensureNoBlankItems(data[0]) : null;
-	}, ["csl", String(item.id)], {
-		revalidate: 60,
+	const res = await fetch(url.toString(), {
+		method: "POST",
+		headers: {
+			"Content-Type": "application/json",
+		},
+		body: JSON.stringify([zoteroItem]),
 	});
 
-	return cached();
+	if (!res.ok) {
+		throw new Error(`Failed to generate CSL for item ${item.key}`);
+	}
+
+	const data = await res.json();
+	return data ? ensureNoBlankItems(data[0]) : null;
 }
 
 async function getCitationSourceItem(key: string): Promise<Item | null> {
@@ -157,22 +145,18 @@ async function getCitationSourceItem(key: string): Promise<Item | null> {
 }
 
 export async function getCitationForItemKey(key: string, lang: string = "en-GB") {
+	"use cache";
+	cacheLife({ revalidate: 60 });
 	const normalizedLocale = normalizeLocale(lang);
-	const cached = unstable_cache(async () => {
-		const item = await getCitationSourceItem(key);
-		if (!item) {
-			return null;
-		}
+	const item = await getCitationSourceItem(key);
+	if (!item) {
+		return null;
+	}
 
-		const csl = await getCSL(item);
-		if (!csl) {
-			return null;
-		}
+	const csl = await getCSL(item);
+	if (!csl) {
+		return null;
+	}
 
-		return getCitationFromCSL(csl, normalizedLocale);
-	}, ["item-citation", String(process.env.MEILI_INDEX || config.index), key, normalizedLocale], {
-		revalidate: 60,
-	});
-
-	return cached();
+	return getCitationFromCSL(csl, normalizedLocale);
 }
