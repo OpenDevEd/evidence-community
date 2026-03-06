@@ -209,6 +209,11 @@ function fixRequestUrl(request: NextRequest) {
 		: url;
 }
 
+function getInternalRequestUrl(request: NextRequest, pathname: string) {
+	// Preserve the incoming scheme for same-origin self-fetches.
+	return new URL(pathname, request.nextUrl.origin);
+}
+
 async function modifyPDFMetadata(
 	pdfUrl: string,
 	title: string | null
@@ -292,12 +297,10 @@ async function handleProxy(request: NextRequest, userId?: string | null) {
 
 		if (isZoteroKey) {
 			try {
-				const url = new URL(
-					`/api/item/${encodeURIComponent(key)}/redirects`,
-					fixRequestUrl(request)
-				)
-					.toString()
-					.replace("https://", "http://");
+				const url = getInternalRequestUrl(
+					request,
+					`/api/item/${encodeURIComponent(key)}/redirects`
+				).toString();
 
 				const controller = new AbortController();
 				const timeout = setTimeout(() => {
@@ -381,9 +384,10 @@ async function handleProxy(request: NextRequest, userId?: string | null) {
 			return NextResponse.redirect(itemPageUrl);
 		}
 
-		const itemUrl = new URL(`/api/item/${itemKey}`, fixRequestUrl(request))
-			.toString()
-			.replace("https://", "http://");
+		const itemUrl = getInternalRequestUrl(
+			request,
+			`/api/item/${itemKey}`
+		).toString();
 
 		try {
 			const response = await fetch(itemUrl);
@@ -548,8 +552,8 @@ export const config = {
 	// Matcher entries are linked with a logical "or", therefore
 	// if one of them matches, the middleware will be invoked.
 	matcher: [
-		// Match all pathnames except for specific prefixes and file extensions
-		"/((?!_next|_vercel|backend|.*\\..*).*)",
+		// Match all pathnames except for specific prefixes, the public redirect lookup API, and file extensions
+		"/((?!api/item/[^/]+/redirects|_next|_vercel|backend|.*\\..*).*)",
 		// Updated matchers for new export URL format
 		"/([\\w-]+)?/lib/:path*/export/ris",
 		"/([\\w-]+)?/lib/:path*/export/bibtex",
