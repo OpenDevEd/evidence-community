@@ -1,14 +1,10 @@
-import ItemComponent from "@/components/pages/Item";
-import { getItem } from "@/app/api/item/[key]/route";
-import { db } from "@/db";
 import { routing } from "@/i18n/routing";
 import {
-	getCachedItem,
 	getCachedItemSmall,
-	getCachedStatus,
 } from "@/app/api/cache";
-import { Item, ItemGetResponse } from "@/app/api/item/types";
+import { Item } from "@/app/api/item/types";
 import { Metadata } from "next";
+import { cacheLife } from "next/cache";
 import { convertToImageURL, getExtraValues, parseCompanyName } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
 import { Suspense } from "react";
@@ -60,11 +56,12 @@ function getPages(pages: string): { firstPage?: string; lastPage?: string } {
 export async function generateMetadata(props: {
 	params: Promise<{ key: string }>;
 }): Promise<Metadata> {
+	"use cache";
+	cacheLife({ revalidate: 60 });
 	const params = await props.params;
 	const data = await getCurrentItem(params.key);
-	const status = await getCachedStatus();
 
-	const { companyName, siteName } = parseCompanyName(status.companyName);
+	const { companyName, siteName } = parseCompanyName(process.env.NEXT_PUBLIC_COMPANY_NAME);
 
 	if (!data || !data.item) {
 		return {

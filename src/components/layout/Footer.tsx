@@ -19,7 +19,7 @@ import {
 	localizeOrUseIfCapitalized,
 	parseCompanyName,
 } from "@/lib/utils";
-import { resolveCompanyFooterPolicyLinks } from "@/lib/legal-links";
+import { resolveCompanyFooterPolicyLinks, isPolicyPage } from "@/lib/legal-links";
 import { LinkObject } from "@/db/schema/tables/status";
 import { FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
 import { RiBlueskyFill } from "react-icons/ri";
@@ -420,13 +420,15 @@ export default function Footer() {
 								{t("termsOfService")}
 							</Link>
 						)}
-						<Button
-							size="sm"
-							variant="light"
-							onPress={openPreferences}
-						>
-							{tUI("preferences")}
-						</Button>
+						{!isPolicyPage(pathname) && (
+							<Button
+								size="sm"
+								variant="light"
+								onPress={openPreferences}
+							>
+								{tUI("preferences")}
+							</Button>
+						)}
 					</div>
 				)}
 				<div className="absolute bottom-0 left-0 p-2 z-50 text-xs text-black/60 dark:text-white/60">

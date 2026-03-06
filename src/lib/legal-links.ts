@@ -5,6 +5,12 @@ export const INTERNAL_POLICY_ROUTES = {
 	cookiePolicy: "/cookie-policy",
 } as const;
 
+const POLICY_PATHS = Object.values(INTERNAL_POLICY_ROUTES);
+
+export function isPolicyPage(pathname: string) {
+	return POLICY_PATHS.some((p) => pathname === p || pathname.startsWith(p + "/"));
+}
+
 export function resolveCompanyFooterPolicyLinks(
 	footer?: CompanyFooter | null
 ) {

@@ -10,10 +10,15 @@ import { useStatus } from "@/context/Providers";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import { Link } from "@/i18n/routing";
 import { resolveCompanyFooterPolicyLinks } from "@/lib/legal-links";
+import { usePathname } from "@/i18n/routing";
+import { isPolicyPage } from "@/lib/legal-links";
 
 export default function Banner() {
 	const { isPreferencesOpen, setConsentState } = useAnalyticsConsent();
 	const status = useStatus();
+	const pathname = usePathname();
+
+	if (isPolicyPage(pathname)) return null;
 	const t = useTranslations("ui");
 	const tFooter = useTranslations("footer");
 	const footer = status.companyFooter || {};

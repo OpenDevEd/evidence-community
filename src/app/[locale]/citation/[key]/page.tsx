@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { Metadata } from "next";
-import { getCachedItemSmall, getCachedStatus } from "@/app/api/cache";
+import { cacheLife } from "next/cache";
+import { getCachedItemSmall } from "@/app/api/cache";
 import { Item } from "@/app/api/item/types";
 import { parseCompanyName } from "@/lib/utils";
 import CitationPageClient from "./CitationPageClient";
@@ -18,11 +19,12 @@ async function getSourceItem(key: string) {
 export async function generateMetadata(props: {
 	params: Promise<{ key: string }>;
 }): Promise<Metadata> {
+	"use cache";
+	cacheLife({ revalidate: 60 });
 	const params = await props.params;
 	const data = await getSourceItem(params.key);
-	const status = await getCachedStatus();
-	
-	const { companyName, siteName } = parseCompanyName(status.companyName);
+
+	const { companyName, siteName } = parseCompanyName(process.env.NEXT_PUBLIC_COMPANY_NAME);
 
 	if (!data || !data.item) {
 		return {
