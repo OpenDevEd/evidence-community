@@ -2,12 +2,12 @@ import createMiddleware from "next-intl/middleware";
 import { routing } from "./i18n/routing";
 import { NextRequest, NextResponse } from "next/server";
 import { clerkMiddleware } from "@clerk/nextjs/server";
-import { ItemGetResponse } from "./app/api/item/types";
 import redirections from "./constants/redirections.json";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "./constants/items";
 import configJSON from "./constants/config.json";
-import { ConsoleLogWriter } from "drizzle-orm";
 import { PDFDocument } from "pdf-lib";
+import { getRedirect, isLikelyZoteroKey } from "./lib/redirects";
+import { getItemRaw } from "./app/api/item/[key]/route";
 
 export type RateLimit = {
 	count: number;
@@ -209,11 +209,6 @@ function fixRequestUrl(request: NextRequest) {
 		: url;
 }
 
-function getInternalRequestUrl(request: NextRequest, pathname: string) {
-	// Preserve the incoming scheme for same-origin self-fetches.
-	return new URL(pathname, request.nextUrl.origin);
-}
-
 async function modifyPDFMetadata(
 	pdfUrl: string,
 	title: string | null
@@ -271,9 +266,6 @@ function mapLegacySearchParams(request: NextRequest) {
 	return null;
 }
 
-function isLikelyZoteroKey(key: string) {
-	return /^[A-Z0-9]{8}$/.test(key);
-}
 
 async function handleProxy(request: NextRequest, userId?: string | null) {
 	const rateLimit = generateRateLimitObject(request, userId);
@@ -293,52 +285,23 @@ async function handleProxy(request: NextRequest, userId?: string | null) {
 	if (libItemMatch) {
 		const key = libItemMatch[1] as keyof typeof redirections;
 		const rest = libItemMatch[2] || "";
-		const isZoteroKey = isLikelyZoteroKey(String(key));
 
-		if (isZoteroKey) {
+		if (isLikelyZoteroKey(String(key))) {
 			try {
-				const url = getInternalRequestUrl(
-					request,
-					`/api/item/${encodeURIComponent(key)}/redirects`
-				).toString();
+				const redirects = await getRedirect(String(key));
 
-				const controller = new AbortController();
-				const timeout = setTimeout(() => {
-					controller.abort();
-				}, 350);
-
-				try {
-					const response = await fetch(url, {
-						signal: controller.signal,
-						cache: "no-store",
+				if (redirects.value && redirects.value !== key) {
+					const newUrl = new URL(
+						`/lib/${redirects.value}${rest}`,
+						fixRequestUrl(request)
+					);
+					request.nextUrl.searchParams.forEach((value, paramKey) => {
+						newUrl.searchParams.set(paramKey, value);
 					});
-
-					const redirects = await response.json();
-
-					if (redirects?.value && redirects.value !== key) {
-						const newUrl = new URL(
-							`/lib/${redirects.value}${rest}`,
-							fixRequestUrl(request)
-						);
-						request.nextUrl.searchParams.forEach((value, paramKey) => {
-							newUrl.searchParams.set(paramKey, value);
-						});
-						return NextResponse.redirect(newUrl, 301);
-					}
-				} finally {
-					clearTimeout(timeout);
+					return NextResponse.redirect(newUrl, 301);
 				}
 			} catch (error) {
-				const isExpectedAbort =
-					error instanceof Error &&
-					(error.name === "AbortError" ||
-						// Node/DOM variants
-						(error as any).code === "ABORT_ERR" ||
-						(error as any).code === 20);
-
-				if (!isExpectedAbort) {
-					console.error("Error checking redirects:", error);
-				}
+				console.error("Error checking redirects:", error);
 			}
 		}
 	}
@@ -384,46 +347,23 @@ async function handleProxy(request: NextRequest, userId?: string | null) {
 			return NextResponse.redirect(itemPageUrl);
 		}
 
-		const itemUrl = getInternalRequestUrl(
-			request,
-			`/api/item/${itemKey}`
-		).toString();
-
 		try {
-			const response = await fetch(itemUrl);
+			const result = await getItemRaw(itemKey);
 
-			if (!response.ok) {
-				return NextResponse.json(
-					{ error: `Failed to fetch item: ${response.statusText}` },
-					{ status: response.status }
-				);
-			}
-
-			let item: ItemGetResponse;
-			try {
-				item = await response.json();
-			} catch (jsonError) {
-				console.error("Error parsing JSON response:", jsonError);
-				return NextResponse.json(
-					{ error: "Failed to parse item data" },
-					{ status: 500 }
-				);
-			}
-
-			if (!item.item) {
+			if (!result.item) {
 				return NextResponse.json(
 					{ error: "Item not found" },
 					{ status: 404 }
 				);
 			}
-			if (!item.item.attachmentsData) {
+			if (!result.item.attachmentsData) {
 				return NextResponse.json(
 					{ error: "Item or attachments not found" },
 					{ status: 404 }
 				);
 			}
-			const attachment = item.item.attachmentsData.find(
-				(attachment) => attachment.key === attachmentKey
+			const attachment = result.item.attachmentsData.find(
+				(attachment: any) => attachment.key === attachmentKey
 			);
 			if (!attachment || !attachment.url) {
 				const itemPageUrl = new URL(
@@ -485,7 +425,7 @@ async function handleProxy(request: NextRequest, userId?: string | null) {
 				);
 			}
 		} catch (fetchError) {
-			console.error("Fetch error:", fetchError);
+			console.error("Error retrieving item data:", fetchError);
 			return NextResponse.json(
 				{ error: "Failed to retrieve item data" },
 				{ status: 500 }
@@ -552,8 +492,8 @@ export const config = {
 	// Matcher entries are linked with a logical "or", therefore
 	// if one of them matches, the middleware will be invoked.
 	matcher: [
-		// Match all pathnames except for specific prefixes, the public redirect lookup API, and file extensions
-		"/((?!api/item/[^/]+/redirects|_next|_vercel|backend|.*\\..*).*)",
+		// Match all pathnames except for specific prefixes and file extensions
+		"/((?!_next|_vercel|backend|.*\\..*).*)",
 		// Updated matchers for new export URL format
 		"/([\\w-]+)?/lib/:path*/export/ris",
 		"/([\\w-]+)?/lib/:path*/export/bibtex",

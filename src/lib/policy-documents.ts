@@ -177,10 +177,9 @@ export const getPolicyLastModified = cache(
 
 export function getPolicyMetadata(
 	title: "Privacy Policy" | "Cookie Policy",
-	description: string,
-	rawCompanyName: string | null | undefined
+	description: string
 ) {
-	const { companyName, siteName } = parseCompanyName(rawCompanyName);
+	const { companyName, siteName } = parseCompanyName(process.env.NEXT_PUBLIC_COMPANY_NAME);
 
 	return {
 		title: `${title} | ${companyName} - ${siteName}`,

@@ -9,11 +9,12 @@ export function useSession() {
 	const { isLoaded, isSignedIn } = useUser();
 	const shouldFetchSession = isLoaded && isSignedIn;
 
-	const { data, isLoading, mutate } = useSWR<AppSession | null>(
+	const { data, isLoading, error, mutate } = useSWR<AppSession | null>(
 		shouldFetchSession ? "/auth/session" : null,
 		fetcher,
 		{
 			revalidateOnFocus: false,
+			errorRetryCount: 2,
 		}
 	);
 
@@ -22,6 +23,9 @@ export function useSession() {
 		status = "loading";
 	} else if (shouldFetchSession && data) {
 		status = "authenticated";
+	} else if (shouldFetchSession && error) {
+		status = "unauthenticated";
+		console.error("Session fetch failed:", error);
 	}
 
 	const update = async () => {

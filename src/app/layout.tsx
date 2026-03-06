@@ -1,8 +1,9 @@
 import { ReactNode } from "react";
 import "@/styles/globals.css";
 import { Metadata, Viewport } from "next";
-import { getCachedStatus } from "./api/cache";
 import { parseCompanyName } from "@/lib/utils";
+
+const { companyName, siteName } = parseCompanyName(process.env.NEXT_PUBLIC_COMPANY_NAME);
 
 export const viewport: Viewport = {
 	themeColor: [
@@ -11,16 +12,10 @@ export const viewport: Viewport = {
 	]
 }
 
-export async function generateMetadata(): Promise<Metadata> {
-	const status = await getCachedStatus();
-
-	const { companyName, siteName } = parseCompanyName(status.companyName);
-
-	return {
-		title: `${companyName} - ${siteName}`,
-		description: `${companyName} - ${siteName}`
-	};
-}
+export const metadata: Metadata = {
+	title: `${companyName} - ${siteName}`,
+	description: `${companyName} - ${siteName}`
+};
 
 export default function RootLayout({ children }: { children: ReactNode }) {
 	return children;

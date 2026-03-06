@@ -38,12 +38,21 @@ export function useNavbarAuthState() {
 				? createSessionStub(user)
 				: null;
 
+	// Only show a pending session stub when we *know* the user is signed in
+	// but session data is still loading. While Clerk itself is loading
+	// (!isLoaded), keep navbarSession null so the navbar doesn't render
+	// authenticated UI (skeleton avatar) for unauthenticated visitors.
+	const navbarSession =
+		isLoaded && isSignedIn && status === "loading"
+			? PENDING_NAVBAR_SESSION
+			: signedInSession;
+
 	return {
 		hasResolvedIdentity,
 		isAuthPending,
 		isLoaded,
 		isSignedIn,
-		navbarSession: isAuthPending ? PENDING_NAVBAR_SESSION : signedInSession,
+		navbarSession,
 		profileHref: session?.user?.id ? `/profile/${session.user.id}` : "/profile",
 		session,
 		user,

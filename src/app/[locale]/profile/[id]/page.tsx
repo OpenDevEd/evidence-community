@@ -1,27 +1,20 @@
 import Profile from "@/components/pages/Profile";
 import { getProfile } from "@/lib/actions";
 import { Metadata } from "next";
-import { ResolvingMetadata } from "next/dist/lib/metadata/types/metadata-interface";
 import { libraryMetadata } from "../../lib/page";
 import { notFound } from "next/navigation";
 
 export async function generateMetadata(
 	props: {
 		params: Promise<{ id: string; locale: string }>;
-		searchParams: Promise<URLSearchParams>;
-	},
-	parent: ResolvingMetadata
+	}
 ): Promise<Metadata> {
 	const params = await props.params;
-	const pathname = "/profile/" + params.id;   
+	const pathname = "/profile/" + params.id;
 
-	return libraryMetadata(
-		{
-			...props,
-			pathname: pathname,
-		},
-		parent
-	);
+	return libraryMetadata({
+		pathname,
+	});
 }
 
 export default async function ProfilePage(props: {

@@ -1,7 +1,7 @@
 import "server-only";
 
-import { cache } from "react";
 import { createHash } from "node:crypto";
+import { cacheLife } from "next/cache";
 import posthogClient from "@/lib/posthog";
 import {
 	FEATURE_FLAG_KEYS,
@@ -23,7 +23,10 @@ function getAnonymousFeatureFlagsDistinctId() {
 		.slice(0, 32)}`;
 }
 
-export const getServerFeatureFlags = cache(async () => {
+export async function getServerFeatureFlags() {
+	"use cache";
+	cacheLife({ revalidate: 300 });
+
 	if (
 		!process.env.NEXT_PUBLIC_POSTHOG_KEY ||
 		!process.env.NEXT_PUBLIC_POSTHOG_HOST
@@ -45,4 +48,4 @@ export const getServerFeatureFlags = cache(async () => {
 		console.error("Failed to fetch PostHog feature flags:", error);
 		return getFallbackFeatureFlags();
 	}
-});
+}

@@ -1,5 +1,5 @@
 import dotenv from 'dotenv';
-dotenv.config();
+dotenv.config({ quiet: true });
 import fs from 'fs';
 import path from 'path';
 
@@ -83,12 +83,14 @@ async function main() {
     // get public folder in iconsFolder and copy its contents to /public
     const publicFolder = path.join(iconsFolder, 'public');
     if (fs.existsSync(publicFolder)) {
-        fs.cpSync(publicFolder, path.join(process.cwd(), 'public'), { 
+        fs.cpSync(publicFolder, path.join(process.cwd(), 'public'), {
             recursive: true,
             force: true
         });
     }
 
+    // Output raw company name for downstream use (e.g. NEXT_PUBLIC_COMPANY_NAME)
+    process.stdout.write(rawCompanyName);
 }
 
 main();

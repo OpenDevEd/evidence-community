@@ -307,19 +307,3 @@ export async function getPublicItems(
 		}
 	);
 }
-
-export async function getItemsPaginationMeta(
-	searchParams: Partial<inferParserType<typeof searchParamsLoader>>
-) {
-	const collections = searchParams.collections || [];
-	return searchPublicIndex(
-		searchParams,
-		{},
-		[
-			...collections.map(
-				(collection: string) => `collectionsAncestry = "${collection}"`
-			),
-		],
-		{ countOnly: true }
-	);
-}
