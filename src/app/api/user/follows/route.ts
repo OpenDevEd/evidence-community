@@ -1,17 +1,17 @@
 import { z } from "zod";
 import { db } from "@/db";
-import { authOptions, auth } from "@/app/api/auth/[...nextauth]/config";
 import { userToFollow } from "@/db/schema/tables/userToFollow";
 import { and, eq, sql } from "drizzle-orm";
+import { getAuthenticatedDbUser } from "@/auth/server";
 
 export async function POST(request: Request) {
-  const session = await auth();
-  if (!session?.user) {
+  const user = await getAuthenticatedDbUser();
+  if (!user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const schema = z.object({
-    id: z.string().uuid().refine(id => id !== session.user.id, {
+    id: z.string().uuid().refine(id => id !== user.id, {
       message: "Cannot follow yourself"
     }),
   });
@@ -23,7 +23,7 @@ export async function POST(request: Request) {
     const result = await db
       .insert(userToFollow)
       .values({
-        userId: session.user.id,
+        userId: user.id,
         followingId: id,
       })
       .onConflictDoUpdate({
@@ -32,7 +32,7 @@ export async function POST(request: Request) {
           deleted: sql`NOT ${userToFollow.deleted}`
         },
         where: and(
-          eq(userToFollow.userId, session.user.id),
+          eq(userToFollow.userId, user.id),
           eq(userToFollow.followingId, id)
         )
       })

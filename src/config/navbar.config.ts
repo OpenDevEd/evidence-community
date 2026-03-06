@@ -1,4 +1,5 @@
 import type { NavbarElementConfig } from "@/types/navbar";
+import type { AppSession } from "@/auth/types";
 import { routing } from "@/i18n/routing";
 import ThemeSwitcher from "@/components/layout/navbar/ThemeSwitcher";
 import LanguageSwitcher from "@/components/layout/navbar/LanguageSwitcher";
@@ -70,7 +71,7 @@ export const navbarElements: NavbarElementConfig[] = [
  */
 export function getEnabledElements(
 	featureFlags: Set<string>,
-	session: any
+	session: AppSession | null
 ): NavbarElementConfig[] {
 	return navbarElements.filter((el) => el.enabled(featureFlags, session));
 }

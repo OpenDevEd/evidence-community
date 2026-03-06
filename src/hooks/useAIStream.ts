@@ -1,8 +1,8 @@
 import { toast } from "@/components/layout/Toast";
 import { getRateLimits } from "@/lib/actions";
+import { getAnalyticsDistinctId } from "@/lib/analytics";
 import { useCompletion } from "@ai-sdk/react";
 import { useLocale, useTranslations } from "next-intl";
-import posthog from "posthog-js";
 import { useCallback } from "react";
 
 
@@ -16,7 +16,7 @@ export default function useAIStream(endpoint: string, onFinish: (completion: str
             "Accept-Language": locale,
         },
         body: {
-            distinctId: posthog.get_distinct_id()
+            distinctId: getAnalyticsDistinctId()
         },
         onError: (e) => {
             (async () => {

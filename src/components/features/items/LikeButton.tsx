@@ -3,7 +3,7 @@ import { Item, ListItem } from "@/app/api/item/types";
 import { FaHeart, FaHeartBroken } from "react-icons/fa";
 import { useState, forwardRef } from "react";
 import useSWRMutation from "swr/mutation";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/auth/client";
 import { setter } from "@/lib/utils";
 import { twMerge } from "tailwind-merge";
 import { BsBookmark, BsBookmarkCheck, BsBookmarkCheckFill, BsBookmarkFill } from "react-icons/bs";
@@ -17,6 +17,7 @@ const LikeButton = forwardRef<
   const [mutationLoading, setMutationLoading] = useState(false);
   const { trigger } = useSWRMutation(`/like`, setter);
   const { data: session, update } = useSession();
+  const { mutate: mutateCache } = useSWRConfig();
   const isLiked = itemData && session?.user.likes[itemData.key];
   const t = useTranslations("ui");
 
@@ -26,6 +27,11 @@ const LikeButton = forwardRef<
       await trigger({
         itemKey: itemData?.key,
       });
+      await mutateCache(
+        (key) => typeof key === "string" && key.startsWith("/user/items/"),
+        undefined,
+        { revalidate: false }
+      );
       await Promise.all([
         revalidateResults && revalidateResults(),
         update(),

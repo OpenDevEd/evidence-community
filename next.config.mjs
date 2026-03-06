@@ -15,6 +15,7 @@ const nextConfig = {
 		remotePatterns: [
 			{ hostname: "tlxvwvgyaanqlmuyoguz.supabase.co" },
 			{ hostname: "lh3.googleusercontent.com" },
+			{ hostname: "img.clerk.com" },
 			{ hostname: "ocivvlhqiwtxvnycqnia.supabase.co" },
 			{ hostname: "flagcdn.com" },
 		],

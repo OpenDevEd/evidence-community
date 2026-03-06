@@ -8,22 +8,18 @@ import Image from "next/image";
 import { LuDownload } from "react-icons/lu";
 import { Button } from "@/components/heroui/Button";
 import { FaEye } from "react-icons/fa";
-import posthog from "posthog-js";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { Card } from "@/components/heroui/Card";
 import useSWR from "swr";
-import { fetcher, fetcherExternal } from "@/lib/utils";
+import { fetcherExternal } from "@/lib/utils";
 import {
-	payloadToPosthog,
-	PdfEventParams,
-	trackPDFDownload,
-	trackPDFView,
+	type AttachmentAnalyticsAction,
+	type AttachmentAnalyticsSource,
+	trackAttachmentInteraction,
 } from "@/lib/analytics";
-import { useSession } from "next-auth/react";
-import { Session } from "next-auth";
-import { useUtm } from "@/hooks/useUtm";
-import { StoredUtm } from "../UtmProvider";
+import { useSession } from "@/auth/client";
+import type { AppSession } from "@/auth/types";
 
 function downloadLink(url: string, filename: string) {
 	fetch(url)
@@ -52,36 +48,23 @@ function getAttachmentFromOpenAlex(work: any) {
 }
 
 function getPayload(
-	data: Item,
 	item: Item,
-	session: Session | null,
-	method: PdfEventParams["method"],
-	link_text: string,
-	utm: StoredUtm | null
-): PdfEventParams {
-	const posthog_distinct_id = posthog?.get_distinct_id();
-
+	session: AppSession | null,
+	locale: string,
+	source: AttachmentAnalyticsSource,
+	action: AttachmentAnalyticsAction
+) {
 	return {
-		file_id: data.key,
-		filename: data.filename || "",
-		file_title: data.title || "",
-		parent_id: item.key,
-		parent_title: item.title || "",
-		parent_type: item.itemType || "",
-		file_mime_type: data.contentType || "",
-		file_md5: data.md5 || "",
-		posthog_distinct_id: posthog_distinct_id,
-		user_id: session?.user.id || "",
-		method: method,
-		link_text: link_text,
-		link_url: data.url || "",
-		...utm?.utm,
+		action,
+		source,
+		parentType: item.itemType || "",
+		locale,
+		isAuthenticated: Boolean(session?.user.id),
 	};
 }
 
 export default function Attachment({ data, item }: { data: Item; item: Item }) {
-	const { data: session, update } = useSession();
-	const utm = useUtm();
+	const { data: session } = useSession();
 
 	const [loaded, setLoaded] = useState(false);
 	const canHover = loaded || !data?.PDFCoverPageImage;
@@ -94,6 +77,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 		undefined
 	);
 	const t = useTranslations("ui");
+	const locale = useLocale();
 	const isDesktop = useBreakpoint("md");
 	const hasImage = data.PDFCoverPageImage;
 
@@ -182,18 +166,14 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					<Button
 						size="sm"
 						onPress={() => {
-							const payload = getPayload(
-								data,
-								item,
-								session,
-								"view",
-								t("viewAttachment"),
-								utm
-							);
-							trackPDFView(payload);
-							posthog.capture(
-								"view_attachment",
-								payloadToPosthog(payload)
+							trackAttachmentInteraction(
+								getPayload(
+									item,
+									session,
+									locale,
+									"internal",
+									"view"
+								)
 							);
 
 							window.open(downloadURL, "_blank");
@@ -207,18 +187,14 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						color="accent"
 						startContent={<LuDownload className="size-5" />}
 						onPress={() => {
-							const payload = getPayload(
-								data,
-								item,
-								session,
-								"download",
-								t("downloadAttachment"),
-								utm
-							);
-							trackPDFDownload(payload);
-							posthog.capture(
-								"download_attachment",
-								payloadToPosthog(payload)
+							trackAttachmentInteraction(
+								getPayload(
+									item,
+									session,
+									locale,
+									"internal",
+									"download"
+								)
 							);
 
 							downloadLink(data.url || "", data.filename || "");
@@ -233,16 +209,15 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					color="accent"
 					startContent={<LuDownload className="size-5" />}
 					onPress={() => {
-						const payload = getPayload(
-							data,
-							item,
-							session,
-							"open",
-							t("openDocument"),
-							utm
+						trackAttachmentInteraction(
+							getPayload(
+								item,
+								session,
+								locale,
+								"external",
+								"open"
+							)
 						);
-						trackPDFView(payload);
-						posthog.capture("view_attachment", payloadToPosthog(payload));
 
 						
 						window.open(pdfUrl, "_blank");

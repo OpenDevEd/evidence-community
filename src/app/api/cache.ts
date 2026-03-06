@@ -3,6 +3,7 @@ import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { getItem, getItemRaw } from "./item/[key]/route";
 import { and, eq, InferSelectModel } from "drizzle-orm";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
+import { userCollection } from "@/db/schema/tables/userCollection";
 import { status as statusTable } from "@/db/schema/tables/status";
 import { getCollections } from "./collections/route";
 import { Collection } from "./collections/types";
@@ -11,6 +12,87 @@ import { cacheLife, cacheTag } from "next/cache";
 const IS_COUNTRY_LIBRARY = process.env.NEXT_PUBLIC_IS_COUNTRY_LIBRARY === "true";
 const REVALIDATE = IS_COUNTRY_LIBRARY ? 60 * 60 * 24 * 30 : 60;
 const REVALIDATE_COLLECTIONS = IS_COUNTRY_LIBRARY ? 60 * 60 * 24 * 30 : 300;
+const EMPTY_STATUS_ID = "00000000-0000-0000-0000-000000000000";
+
+const FALLBACK_STATUS: InferSelectModel<typeof statusTable> = {
+	id: EMPTY_STATUS_ID,
+	totalRecords: null,
+	totalItems: null,
+	databaseUpdatedAt: null,
+	companyName: null,
+	companyLogo: null,
+	companyFooter: {},
+	links: [],
+	externalLinks: {},
+	docsLink: null,
+	style: null,
+	allRISURL: null,
+	allBibTeXURL: null,
+	createdAt: null,
+	updatedAt: null,
+};
+
+function getErrorCode(error: unknown): string | null {
+	if (error && typeof error === "object" && "code" in error) {
+		const code = (error as { code?: unknown }).code;
+		return typeof code === "string" ? code : null;
+	}
+	return null;
+}
+
+function getErrorMessages(error: unknown): string[] {
+	const messages: string[] = [];
+
+	if (error instanceof Error) {
+		messages.push(error.message);
+		if ("cause" in error && error.cause) {
+			messages.push(...getErrorMessages(error.cause));
+		}
+	} else if (typeof error === "string") {
+		messages.push(error);
+	}
+
+	return messages;
+}
+
+function isTransientDbError(error: unknown): boolean {
+	const code = getErrorCode(error);
+	if (
+		code &&
+		["ECONNRESET", "ETIMEDOUT", "EPIPE", "57P01", "57P02", "57P03", "53300"].includes(code)
+	) {
+		return true;
+	}
+
+	const combinedMessage = getErrorMessages(error).join(" ").toLowerCase();
+	return [
+		"connection terminated unexpectedly",
+		"connection reset",
+		"connection closed",
+		"terminating connection",
+		"server closed the connection unexpectedly",
+		"too many clients already",
+	].some((snippet) => combinedMessage.includes(snippet));
+}
+
+async function withTransientDbRetry<T>(
+	operation: () => Promise<T>,
+	maxRetries: number = 2
+): Promise<T> {
+	let attempt = 0;
+	for (;;) {
+		try {
+			return await operation();
+		} catch (error) {
+			if (!isTransientDbError(error) || attempt >= maxRetries) {
+				throw error;
+			}
+			const backoffMs = 100 * 2 ** attempt;
+			await new Promise((resolve) => setTimeout(resolve, backoffMs));
+			attempt++;
+		}
+	}
+}
 
 // --- Collections ---
 
@@ -115,48 +197,39 @@ export async function getCachedUserCollectionKeys(collectionId: string) {
 	'use cache'
 	cacheLife({ revalidate: 60 })
 	cacheTag('userCollectionKeys-' + collectionId)
-	const res = await db.query.itemToUserCollection.findMany({
-		where: and(eq(itemToUserCollection.userCollectionId, collectionId), eq(itemToUserCollection.deleted, false)),
-		columns: {
-			itemKey: true,
-		},
-		with: {
-			userCollection: {
-				columns: {
-					private: true,
-					userId: true,
-				}
-			}
-		}
-	});
-
-	return {
-		private: res[0]?.userCollection.private ?? false,
-		userId: res[0]?.userCollection.userId ?? null,
-		itemKeys: res.map(item => item.itemKey)
-	};
+	return getUserCollectionKeysDirect(collectionId);
 }
 
 export async function getUserCollectionKeysDirect(collectionId: string) {
-	const res = await db.query.itemToUserCollection.findMany({
-		where: and(eq(itemToUserCollection.userCollectionId, collectionId), eq(itemToUserCollection.deleted, false)),
+	const collection = await db.query.userCollection.findFirst({
+		where: and(
+			eq(userCollection.id, collectionId),
+			eq(userCollection.deleted, false)
+		),
+		columns: {
+			private: true,
+			userId: true,
+		},
+	});
+
+	if (!collection) {
+		return null;
+	}
+
+	const itemKeys = await db.query.itemToUserCollection.findMany({
+		where: and(
+			eq(itemToUserCollection.userCollectionId, collectionId),
+			eq(itemToUserCollection.deleted, false)
+		),
 		columns: {
 			itemKey: true,
 		},
-		with: {
-			userCollection: {
-				columns: {
-					private: true,
-					userId: true,
-				}
-			}
-		}
 	});
 
 	return {
-		private: res[0]?.userCollection.private ?? false,
-		userId: res[0]?.userCollection.userId ?? null,
-		itemKeys: res.map(item => item.itemKey)
+		private: collection.private ?? false,
+		userId: collection.userId,
+		itemKeys: itemKeys.map((item) => item.itemKey),
 	};
 }
 
@@ -185,9 +258,16 @@ export async function getCachedStatus(): Promise<InferSelectModel<typeof statusT
 	'use cache'
 	cacheLife({ revalidate: 60 })
 	cacheTag('status')
-	const newStatus = await db.query.status.findFirst();
-	if (!newStatus) {
-		throw new Error('Status not found');
+
+	try {
+		const newStatus = await withTransientDbRetry(() => db.query.status.findFirst());
+		if (!newStatus) {
+			console.error("Status not found, using fallback status");
+			return FALLBACK_STATUS;
+		}
+		return newStatus;
+	} catch (error) {
+		console.error("Failed to load status, using fallback status:", error);
+		return FALLBACK_STATUS;
 	}
-	return newStatus;
 }

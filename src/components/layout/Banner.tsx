@@ -1,67 +1,32 @@
 "use client";
 
 import { Button } from "../heroui/Button";
-import { FaTimesCircle, FaCheckCircle } from "react-icons/fa";
 import DialogModal from "../heroui/DialogModal";
 import GenericHeader from "../features/modals/GenericHeader";
-import {
-	ModalBody,
-	ModalContent,
-	ModalFooter,
-	useDisclosure,
-} from "@heroui/react";
-import { useLocalStorage } from "usehooks-ts";
-import { useEffect } from "react";
-import { MdPrivacyTip } from "react-icons/md";
-import { Logo } from "./navbar";
-import posthog from "posthog-js";
+import { ModalBody, ModalContent, ModalFooter } from "@heroui/react";
 import { useTranslations } from "next-intl";
-
-export function cookieConsentGiven() {
-	if (!localStorage.getItem("posthog-opted")) {
-		return "undecided";
-	}
-	return localStorage.getItem("posthog-opted");
-}
-
-export function getPersistence() {
-	const cookieConsent = cookieConsentGiven();
-	if (cookieConsent === "\"opted-in\"") {
-		return "localStorage+cookie";
-	}
-	return "memory";
-}
-
-export type CookieConsent = "undecided" | "opted-in" | "opted-out";
+import { Logo } from "./navbar";
+import { useStatus } from "@/context/Providers";
+import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
+import { Link } from "@/i18n/routing";
+import { resolveCompanyFooterPolicyLinks } from "@/lib/legal-links";
 
 export default function Banner() {
-	const { isOpen, onOpenChange, onOpen, onClose } = useDisclosure();
-	const [optedStatus, setOptedStatus] = useLocalStorage(
-		"posthog-opted",
-		"undecided"
-	);
+	const { isPreferencesOpen, setConsentState } = useAnalyticsConsent();
+	const status = useStatus();
 	const t = useTranslations("ui");
-
-	useEffect(() => {
-		if (optedStatus === "undecided") {
-			onOpen();
-		}
-		if (optedStatus === "opted-in") {
-			posthog.set_config({
-				persistence: getPersistence(),
-			});
-		}
-	}, [optedStatus]);
+	const tFooter = useTranslations("footer");
+	const footer = status.companyFooter || {};
+	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
 
 	return (
 		<DialogModal
 			scrollBehavior="inside"
 			isDismissable={false}
-			isKeyboardDismissDisabled={true}
+			isKeyboardDismissDisabled
 			size="xl"
-			isOpen={isOpen}
+			isOpen={isPreferencesOpen}
 			backdrop="blur"
-			onOpenChange={onOpenChange}
 			classNames={{
 				base: "backdrop-blur-xl bg-background_light/60 dark:bg-card/60 border border-divider",
 			}}
@@ -113,25 +78,41 @@ export default function Banner() {
 							</div>
 						</div>
 					</div>
+					<div className="flex flex-wrap items-center justify-center gap-4 text-sm">
+						{resolvedFooterLinks.privacyPolicy ? (
+							<Link
+								href={resolvedFooterLinks.privacyPolicy}
+								className="text-black/70 dark:text-white/70 underline underline-offset-4"
+							>
+								{tFooter("privacyPolicy")}
+							</Link>
+						) : null}
+						{resolvedFooterLinks.cookiePolicy ? (
+							<Link
+								href={resolvedFooterLinks.cookiePolicy}
+								className="text-black/70 dark:text-white/70 underline underline-offset-4"
+							>
+								{tFooter("cookiePolicy")}
+							</Link>
+						) : null}
+					</div>
 				</ModalBody>
-				<ModalFooter className="justify-center items-center flex-col gap-2 pt-2">
+				<ModalFooter className="flex-row flex-wrap items-center justify-center gap-3 pt-2">
 					<Button
 						color="tertiary"
 						onPress={() => {
-							setOptedStatus("opted-in");
-							onClose();
+							setConsentState("granted");
 						}}
 						className="px-6 font-medium"
 					>
 						{t("cookieAccept")}
 					</Button>
 					<Button
-						size="sm"
-						variant="transparent"
+						color="tertiary"
 						onPress={() => {
-							setOptedStatus("opted-out");
-							onClose();
+							setConsentState("denied");
 						}}
+						className="px-6 font-medium"
 					>
 						{t("cookieDecline")}
 					</Button>

@@ -69,7 +69,7 @@ export async function POST(req: Request) {
 			},
 		},
 		onFinish(event) {
-			trackUsage("ai_" + prompt, event, distinctId, prompt);
+			trackUsage("ai_" + prompt, event, distinctId);
 		},
 	})
 

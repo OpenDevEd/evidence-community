@@ -22,10 +22,10 @@ import { AIHistory } from "@/types/ai";
 import ModelSelector from "@/components/features/ai/ModelSelector";
 import { useAIFeature } from "@/hooks/useAIFeature";
 import { AI_DROPDOWN_ITEMS } from "@/components/features/ai/AIDropdownItems";
-import posthog from "posthog-js";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { twMerge } from "tailwind-merge";
+import { getAnalyticsDistinctId } from "@/lib/analytics";
 
 function randomUUID() {
 	return (
@@ -49,7 +49,7 @@ function AiButton({
 	const body = {
 		prompt: data?.item?.key,
 		modelIndex: selectedModel,
-		distinctId: posthog.get_distinct_id(),
+		distinctId: getAnalyticsDistinctId(),
 	};
 	const locale = useLocale();
 	

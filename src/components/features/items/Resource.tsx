@@ -17,7 +17,7 @@ import { Button } from "@/components/heroui/Button";
 import { useState, useEffect } from "react";
 import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/auth/client";
 import LikeButton from "./LikeButton";
 import { BsPlus, BsQuote } from "react-icons/bs";
 import { TbBlockquote } from "react-icons/tb";
@@ -25,11 +25,12 @@ import { IoChevronForward } from "react-icons/io5";
 import FullScreenModal from "@/components/heroui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
-import { Session } from "next-auth";
+import type { AppSession } from "@/auth/types";
 import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/heroui/DialogModal";
 import useSWR from "swr";
+import { useSWRConfig } from "swr";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { useQueryState } from "nuqs";
 import { COMING_SOON_TAG, INTERNAL_TAG } from "@/constants/items";
@@ -43,13 +44,14 @@ export function AddButton({
 	collectionId,
 }: {
 	itemData: Item | ListItem | undefined;
-	userData?: Session["user"];
+	userData?: AppSession["user"];
 	revalidateResults?: any;
 	collectionId?: string;
 }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const [loading, setLoading] = useState(false);
 	const { trigger } = useSWRMutation(`/user/item/${itemData?.key}`, setter);
+	const { mutate: mutateCache } = useSWRConfig();
 	const { data: session, update } = useSession();
 	const isUserCollectionsEnabled = useFeatureFlagEnabled("user-collections");
 	const t = useTranslations("ui");
@@ -63,6 +65,12 @@ export function AddButton({
 				pressedCollectionId === collectionId &&
 				highlightedCollections.includes(pressedCollectionId);
 			await trigger({ collectionId: pressedCollectionId });
+			await mutateCache(
+				(key) =>
+					typeof key === "string" && key.startsWith("/user/items/"),
+				undefined,
+				{ revalidate: false }
+			);
 			await Promise.allSettled([
 				revalidateResults && revalidateResults(),
 				update(),
@@ -185,7 +193,7 @@ function ResourceInteractions({
 }: {
 	itemData: Item | ListItem | undefined;
 	isLoading: boolean;
-	userData?: Session["user"];
+	userData?: AppSession["user"];
 	revalidateResults?: any;
 	collectionId?: string;
 }) {
@@ -238,7 +246,7 @@ export default function Resource({
 	itemData?: Item | ListItem | undefined;
 	abstract: boolean;
 	isLoading?: boolean;
-	userData?: Session["user"];
+	userData?: AppSession["user"];
 	revalidateResults?: any;
 	collectionId?: string;
 	itemKey?: string;

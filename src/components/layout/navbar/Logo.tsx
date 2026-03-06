@@ -5,7 +5,6 @@ import Image from "next/image";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
-import { Skeleton } from "@/components/heroui/Skeleton";
 import { Link } from "@/i18n/routing";
 import { useStatus } from "@/context/Providers";
 import {
@@ -18,6 +17,9 @@ interface LogoProps {
 	interactive?: boolean;
 	dbStyle?: string;
 }
+
+const NAVBAR_LOGO_WIDTH = 171;
+const NAVBAR_LOGO_HEIGHT = 40;
 
 export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 	const [isLoaded, setIsLoaded] = useState(false);
@@ -49,13 +51,15 @@ export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 					key={themeToMatch}
 					aria-hidden={themeToMatch !== theme}
 					onLoad={() => setIsLoaded(true)}
+					onError={() => setIsLoaded(true)}
 					src={
 						themeToMatch === "dark"
 							? `/logos/${companyName.toLowerCase()}/logo.png`
 							: `/logos/${companyName.toLowerCase()}/logo_light.png`
 					}
 					className={twMerge(
-						"pointer-events-none",
+						"pointer-events-none transition-opacity duration-300 ease-out",
+						isLoaded ? "opacity-100" : "opacity-0",
 						themeToMatch === "light" ? "dark:hidden" : "hidden dark:block"
 					)}
 					alt={t("logoAlt", {
@@ -63,20 +67,17 @@ export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 						theme: themeToMatch,
 					})}
 					style={{ ...getDynamicStyles(navbarStyle) }}
-					height={300}
-					width={300}
+					height={NAVBAR_LOGO_HEIGHT}
+					width={NAVBAR_LOGO_WIDTH}
 				/>
 			))}
 		</div>
 	);
 
 	return (
-		<Skeleton
-			isLoaded={true}
-			className="w-[10.6875rem] h-[2.5rem] rounded-lg flex justify-center items-center"
-		>
+		<div className="w-[10.6875rem] h-[2.5rem] rounded-lg flex justify-center items-center">
 			{interactive ? <Link href={homeLink}>{logoContent}</Link> : logoContent}
-		</Skeleton>
+		</div>
 	);
 }
 

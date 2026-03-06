@@ -1,4 +1,5 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
+import { drizzle, type NodePgDatabase } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
 
 import * as itemTable from "./schema/tables/item";
 import * as collectionTable from "./schema/tables/collection";
@@ -27,8 +28,6 @@ import * as embeddingsTable from './schema/tables/embeddings';
 
 import * as statusTable from './schema/tables/status';
 
-import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-
 export const schema = {
     ...itemTable,
     ...collectionTable,
@@ -52,23 +51,47 @@ export const schema = {
     ...itemToUserCollectionRelations,
     ...statusTable,
     ...embeddingsTable,
-}
+};
 
-type DBType = PostgresJsDatabase<typeof schema>;
+type DBType = NodePgDatabase<typeof schema> & {
+	$client: Pool;
+};
 
 // Fix for "sorry, too many clients already"
 declare global {
-    // eslint-disable-next-line no-var -- only var works here
-    var db: DBType | undefined;
+	var db: DBType | undefined;
 }
 
 let db: DBType;
+const databaseUrl = process.env.DATABASE_URL_POST;
+
+if (!databaseUrl) {
+	throw new Error("DATABASE_URL_POST is not set");
+}
+
+const createDb = () => {
+	const pool = new Pool({
+		connectionString: databaseUrl,
+		max: process.env.NODE_ENV === "production" ? 20 : 10,
+		connectionTimeoutMillis: 5000,
+		idleTimeoutMillis: 30000,
+		keepAlive: true,
+	});
+
+	pool.on("error", (error) => {
+		console.error("Unexpected PostgreSQL pool error:", error);
+	});
+
+	return drizzle(pool, { schema });
+};
 
 if (process.env.NODE_ENV === "production") {
-    db = drizzle(process.env.DATABASE_URL_POST!, { schema });
+	db = createDb();
 } else {
-    if (!global.db) global.db = drizzle(process.env.DATABASE_URL_POST!, { schema });
-    db = global.db;
+	if (!global.db) {
+		global.db = createDb();
+	}
+	db = global.db;
 }
 
 export { db };

@@ -45,7 +45,6 @@ import FullScreenModal from "@/components/heroui/FullScreenModal";
 import { models } from "@/constants/ai";
 import { FaTools } from "react-icons/fa";
 import { AIMarkdown } from "../markdown/Markdown";
-import posthog from "posthog-js";
 import { Input } from "@/components/heroui/Input";
 import DialogModal from "@/components/heroui/DialogModal";
 import { Textarea } from "@/components/heroui/Textarea";
@@ -63,6 +62,7 @@ import { Switch } from "@/components/heroui/Switch";
 import { BsQuestionCircleFill } from "react-icons/bs";
 import { Card } from "@/components/heroui/Card";
 import { Tooltip } from "@/components/heroui/Tooltip";
+import { getAnalyticsDistinctId } from "@/lib/analytics";
 
 export const maxDuration = 240;
 
@@ -305,7 +305,7 @@ export default function ChatModal({
 			body: {
 				key: data?.item?.key,
 				modelIndex,
-				distinctId: posthog.get_distinct_id(),
+				distinctId: getAnalyticsDistinctId(),
 				smartScreeningFields,
 				mode,
 			},
@@ -399,8 +399,7 @@ export default function ChatModal({
 			const result = await runScreening(
 				keysArray,
 				modelIndex,
-				smartScreeningFields,
-				posthog.get_distinct_id()
+				smartScreeningFields
 			);
 		if (Object.keys(result).length > 0) {
 			appendMessage(createTextMessage(

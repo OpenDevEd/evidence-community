@@ -18,20 +18,18 @@
 		"@ai-sdk/mistral": "^3.0.22",
 		"@ai-sdk/openai": "^3.0.39",
 		"@ai-sdk/react": "^3.0.113",
-		"@auth/drizzle-adapter": "^1.11.1",
 		"@citation-js/core": "^0.7.21",
 		"@citation-js/plugin-bibtex": "^0.7.21",
 		"@citation-js/plugin-csl": "^0.7.22",
 		"@citation-js/plugin-ris": "^0.7.21",
+		"@clerk/nextjs": "^7.0.1",
 		"@heroui/react": "^2.8.9",
 		"@heroui/shared-icons": "^2.1.10",
 		"@next/third-parties": "^16.1.6",
 		"@tanstack/react-form": "^1.28.3",
-		"@vercel/analytics": "^1.6.1",
 		"ai": "^6.0.111",
 		"babel-plugin-react-compiler": "^1.0.0",
 		"balanced-match": "^4.0.4",
-		"bcrypt": "^6.0.0",
 		"chart.js": "^4.5.1",
 		"citation-js": "^0.7.22",
 		"citeproc": "^2.4.63",
@@ -46,7 +44,6 @@
 		"lucide-react": "^0.576.0",
 		"meilisearch": "^0.55.0",
 		"next": "^16.1.6",
-		"next-auth": "^5.0.0-beta.30",
 		"next-intl": "^4.8.3",
 		"next-themes": "^0.4.6",
 		"node-cache": "^5.1.2",
@@ -84,7 +81,6 @@
 		"@tailwindcss/postcss": "^4.2.1",
 		"@tailwindcss/typography": "^0.5.19",
 		"@types/balanced-match": "^3.0.2",
-		"@types/bcrypt": "^6.0.0",
 		"@types/node": "^25",
 		"@types/nodemailer": "^7.0.11",
 		"@types/pg": "^8.18.0",
@@ -109,12 +105,6 @@
 		"@types/react-dom": "19.2.3",
 		"usehooks-ts": {
 			"react": "^19"
-		},
-		"@vercel/analytics": {
-			"next": "$next"
-		},
-		"next-auth": {
-			"next": "$next"
 		},
 		"next-intl": {
 			"next": "$next"

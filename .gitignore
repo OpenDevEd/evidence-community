@@ -65,3 +65,6 @@ src/app/manifest.json
 .env.sentry-build-plugin
 
 public/apa.csl
+
+# clerk configuration (can include secrets)
+/.clerk/

@@ -157,6 +157,12 @@ export const fetcherDELETE = (url: string) =>
 		method: "DELETE",
 	}).then((res) => res.json());
 
+export const patcher = (url: string, { arg }: { arg: any }) =>
+	fetch(`/api${url}`, {
+		method: "PATCH",
+		body: JSON.stringify(arg),
+	});
+
 export const setter = (url: string, { arg }: { arg: any }) =>
 	fetch(`/api${url}`, {
 		method: "POST",

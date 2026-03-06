@@ -2,7 +2,7 @@
 
 import { use } from "react";
 import { redirect } from "@/i18n/routing";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/auth/client";
 import { notFound } from "next/navigation";
 
 export default function ProfilePage(props: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { Session } from "next-auth";
+import type { AppSession } from "@/auth/types";
 import { useMemo, useRef, useState } from "react";
 import { COLLECTION_PER_PAGE } from "@/constants/user";
 import { twMerge } from "tailwind-merge";
@@ -18,7 +18,7 @@ export default function CollectionsList({
 	onCollectionSelect,
 	isLoading,
 }: {
-	data: Session["user"];
+	data: AppSession["user"];
 	highlightedCollections?: string[];
 	classNames?: { container?: string; pagination?: string };
 	onCollectionSelect?: (collectionId: string) => void;
@@ -70,6 +70,7 @@ export default function CollectionsList({
 		<>
 			<Input
 				placeholder={t("searchCollections")}
+				aria-label={t("searchCollections")}
 				onChange={(e) => setSearch(e.target.value)}
 				onClear={() => setSearch("")}
 			/>

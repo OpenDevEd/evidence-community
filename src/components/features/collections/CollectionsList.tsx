@@ -430,14 +430,13 @@ function CountryParser(
 		label,
 		startContent: countryName && (
 			<div className="flex size-5 aspect-square justify-center items-center gap-2">
-				<Image
-					src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
-					alt={countryCode}
-					width={20}
-					height={20}
-					className="size-full object-contain"
-					objectFit="contain"
-				/>
+					<Image
+						src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
+						alt={countryCode}
+						width={20}
+						height={20}
+						className="size-full object-contain"
+					/>
 			</div>
 		),
 		style: {

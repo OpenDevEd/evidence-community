@@ -1,9 +1,7 @@
 "use client";
 
-import { Session } from "next-auth";
-import { useState } from "react";
+import type { AppSession } from "@/auth/types";
 import { twMerge } from "tailwind-merge";
-import { Tooltip } from "@heroui/react";
 import { BsPlus } from "react-icons/bs";
 import { Button } from "@/components/heroui/Button";
 import { BiSolidBookBookmark } from "react-icons/bi";
@@ -15,7 +13,7 @@ export default function UserCollection({
 	onPress,
 	isLoading,
 }: {
-	collection?: Session["user"]["collections"][number];
+	collection?: AppSession["user"]["collections"][number];
 	isHighlighted?: boolean;
 	onPress?: () => void;
 	isLoading?: boolean;
@@ -32,7 +30,7 @@ export default function UserCollection({
 			className={twMerge(
 				"flex items-center justify-center aspect-video min-h-0 max-h-auto h-full !p-3 whitespace-normal @container",
 				!collection && "h-8 ml-auto",
-				isHighlighted && "border-2 border-accent dark:border-accent"
+				isHighlighted && "!border-2 !border-accent dark:!border-accent"
 			)}
 			onPress={onPress}
 			isDisabled={isLoading}

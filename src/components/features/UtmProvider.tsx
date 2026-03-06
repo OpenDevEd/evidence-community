@@ -3,6 +3,7 @@
 import { useEffect, useMemo } from 'react';
 import { useQueryStates, parseAsString } from 'nuqs';
 import { useLocalStorage } from 'usehooks-ts';
+import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 
 type UTM = {
   utm_source?: string;
@@ -100,6 +101,7 @@ function utmEquals(a: UTM, b: UTM): boolean {
 
 
 export function UtmAttributionProvider() {
+  const { consentState } = useAnalyticsConsent();
   // Live UTMs from the URL (reactive)
   const [utmFromUrl] = useQueryStates({
     utm_source: parseAsString,
@@ -118,6 +120,13 @@ export function UtmAttributionProvider() {
   const durationMs = useMemo(() => getDurationMs(), []);
 
   useEffect(() => {
+    if (consentState !== "granted") {
+      if (stored) {
+        setStored(null);
+      }
+      return;
+    }
+
     const now = Date.now();
 
     // Build candidate from URL
@@ -154,8 +163,7 @@ export function UtmAttributionProvider() {
       startedAt: now,
       expiresAt: now + durationMs,
     });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [utmFromUrl, durationMs, setStored]); // intentionally exclude `stored` to avoid loops
+  }, [consentState, durationMs, setStored, stored, utmFromUrl]);
 
   return null;
 }

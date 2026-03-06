@@ -1,4 +1,4 @@
-import { Session } from "next-auth";
+import type { AppSession } from "@/auth/types";
 
 // Breakpoint definitions matching Tailwind config
 // mobile: < xl (< 1280px)
@@ -27,7 +27,7 @@ export interface NavbarElementProps {
 export interface NavbarElementConfig {
 	id: string;
 	// Function to determine if element should be rendered
-	enabled: (featureFlags: Set<string>, session: Session | null) => boolean;
+	enabled: (featureFlags: Set<string>, session: AppSession | null) => boolean;
 	// Where element appears at each breakpoint
 	placement: Record<NavbarBreakpoint, NavbarPlacement>;
 	// Component to render
@@ -39,11 +39,10 @@ export interface NavbarElementConfig {
 // Context passed to container components
 export interface NavbarContext {
 	featureFlags: Set<string>;
-	session: Session | null;
+	session: AppSession | null;
 	styleVariant: NavbarStyleVariant;
 	theme: string | undefined;
 	setTheme: (theme: string) => void;
-	onLoginModalOpen: () => void;
 }
 
 // Helper type for grouping elements by placement

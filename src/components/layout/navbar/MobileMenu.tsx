@@ -84,11 +84,6 @@ export default function MobileMenu({
 									variant="inline"
 									styleVariant={context.styleVariant}
 									showLabel={true}
-									onAction={
-										element.id === "login-button"
-											? context.onLoginModalOpen
-											: undefined
-									}
 								/>
 							</li>
 						);

@@ -36,10 +36,10 @@ import { CollectionsRow } from "@/lib/items";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import PageContainer from "../layout/PageContainer";
 import { models } from "@/constants/ai";
-import posthog from "posthog-js";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { useQueryState } from "nuqs";
 import { getSafeReferrer } from "@/constants/misc";
+import { getAnalyticsDistinctId } from "@/lib/analytics";
 
 function randomUUID() {
 	return (
@@ -61,7 +61,7 @@ function AiButton({
 	const body = {
 		prompt: data?.item?.key,
 		modelIndex: selectedModel,
-		distinctId: posthog.get_distinct_id(),
+		distinctId: getAnalyticsDistinctId(),
 	};
 	const locale = useLocale();
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =

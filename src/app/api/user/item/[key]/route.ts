@@ -1,21 +1,21 @@
 import { db } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
-import { authOptions, auth } from "../../../auth/[...nextauth]/config";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { userCollection } from "@/db/schema/tables/userCollection";
 import { updateCachedUserCollectionKeys } from "@/app/api/cache";
+import { getAuthenticatedDbUser } from "@/auth/server";
 
 const addToCollectionSchema = z.object({
 	collectionId: z.string().uuid(),
 });
 
-export async function GET(request: NextRequest, props: { params: Promise<{ key: string }> }) {
+export async function GET(_request: NextRequest, props: { params: Promise<{ key: string }> }) {
     const params = await props.params;
-    const session = await auth();
+    const user = await getAuthenticatedDbUser();
 
-    if (!session?.user) {
+    if (!user) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 		const collections = await db.query.itemToUserCollection.findMany({
 			where: and(
 				eq(itemToUserCollection.itemKey, key),
-				eq(itemToUserCollection.userId, session.user.id),
+				eq(itemToUserCollection.userId, user.id),
 				eq(itemToUserCollection.deleted, false)
 			),
 			columns: {
@@ -47,9 +47,9 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 
 export async function POST(request: NextRequest, props: { params: Promise<{ key: string }> }) {
     const params = await props.params;
-    const session = await auth();
+    const user = await getAuthenticatedDbUser();
 
-    if (!session?.user) {
+    if (!user) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
 
@@ -73,7 +73,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ key:
 			.values({
 				itemKey: key,
 				userCollectionId: collectionId,
-				userId: session.user.id,
+				userId: user.id,
 				deleted: false,
 			})
 			.onConflictDoUpdate({

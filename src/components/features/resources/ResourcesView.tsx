@@ -441,27 +441,28 @@ function PaginationControls() {
 
 	return (
 		!actuallyNoData && (
-			<div className="w-full flex justify-center py-2 lg:py-6 z-10">
-				<Skeleton
-					isLoaded={totalPages > 0}
-					className="w-full h-14 rounded-2xl flex items-center justify-center"
-				>
-					{totalPages > 0 && (
-						<Pagination
-							showControls
-							page={itemsContext.queryParams.page}
-							onChange={itemsContext.handlePageChange}
-							siblings={
-								itemsContext.config.paginationSiblings ||
-								(isDesktop ? 3 : 0)
-							}
-							total={totalPages}
-						/>
-					)}
-				</Skeleton>
-			</div>
-		)
-	);
+				<div className="w-full flex justify-center py-2 lg:py-6 z-10">
+					<Skeleton
+						isLoaded={totalPages > 0}
+						className="w-full h-14 rounded-2xl flex items-center justify-center"
+					>
+						{totalPages > 0 && (
+							<Pagination
+								showControls
+								aria-label="Pagination"
+								page={itemsContext.queryParams.page}
+								onChange={itemsContext.handlePageChange}
+								siblings={
+									itemsContext.config.paginationSiblings ||
+									(isDesktop ? 3 : 0)
+								}
+								total={totalPages}
+							/>
+						)}
+					</Skeleton>
+				</div>
+			)
+		);
 }
 
 /**
@@ -550,19 +551,28 @@ export function removeTrailingEmptyElements(html: string): string {
 
 export function NoteView() {
 	const itemsContext = use(ItemsContext);
-	const selectedCollection = itemsContext.selectedCollections[0];
+	const selectedCollection = itemsContext.queryParams.collections[0];
 	const collectionData = itemsContext.collectionsData?.collections.find(
 		(c) => c.key === selectedCollection
 	);
 	const isCollectionNoteEnabled = useFeatureFlagEnabled("collection-note");
+	const isSingleCollectionSelected =
+		itemsContext.queryParams.collections.length === 1;
+	const isNoteForSelectedCollection =
+		!!selectedCollection &&
+		(itemsContext.noteData?.note?.collections || []).includes(
+			selectedCollection
+		);
 
 	return (
 		isCollectionNoteEnabled && (
 			<AnimatePresence>
-				{itemsContext.noteData?.note && (
-					<motion.div
-						className="w-full"
-						initial={{ opacity: 0, y: 20, height: 0, scale: 0.75 }}
+				{isSingleCollectionSelected &&
+					isNoteForSelectedCollection &&
+					itemsContext.noteData?.note && (
+						<motion.div
+							className="w-full"
+							initial={{ opacity: 0, y: 20, height: 0, scale: 0.75 }}
 						animate={{ opacity: 1, y: 0, height: "auto", scale: 1 }}
 						exit={{ opacity: 0, y: -20, height: 0, scale: 0.7 }}
 						transition={{
@@ -598,7 +608,7 @@ export function NoteView() {
 							</CardBody>
 						</Card>
 					</motion.div>
-				)}
+					)}
 			</AnimatePresence>
 		)
 	);

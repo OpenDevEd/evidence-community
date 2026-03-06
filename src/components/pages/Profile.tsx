@@ -3,21 +3,17 @@
 import Image from "next/image";
 import {
 	BsBookmark,
-	BsBoxArrowRight,
 	BsCollection,
-	BsGear,
-	BsPen,
 	BsPencil,
 	BsPlus,
 	BsThreeDotsVertical,
 } from "react-icons/bs";
 import { Button } from "../heroui/Button";
-import { ReactNode, useCallback, useMemo, useState } from "react";
-import { useTranslations } from "next-intl";
-import { useFormatter } from "next-intl";
-import { useSession } from "next-auth/react";
-import { Session } from "next-auth";
-import { setter, fetcherDELETE } from "@/lib/utils";
+import { type FormEvent, type ReactNode, useMemo, useState } from "react";
+import { useFormatter, useTranslations } from "next-intl";
+import { useSession } from "@/auth/client";
+import type { AppSession } from "@/auth/types";
+import { fetcherDELETE, patcher, setter } from "@/lib/utils";
 import useSWRMutation from "swr/mutation";
 import { twMerge } from "tailwind-merge";
 import { Textarea } from "../heroui/Textarea";
@@ -31,19 +27,15 @@ import {
 	DropdownTrigger,
 	Listbox,
 	ListboxItem,
-	ListboxItemProps,
-	ListboxProps,
+	type ListboxItemProps,
+	type ListboxProps,
 	ModalBody,
 	ModalContent,
-	SelectItem,
 } from "@heroui/react";
 import { useDisclosure } from "@heroui/react";
 import GenericHeader from "../features/modals/GenericHeader";
-import { Select } from "../heroui/Select";
-import { COLLECTION_VISIBILITY_OPTIONS } from "@/constants/user";
 import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence } from "framer-motion";
-import { ResourcesView } from "../features/resources/ResourcesView";
 import { IconType } from "react-icons/lib";
 import PageContainer from "../layout/PageContainer";
 import { Autocomplete } from "../heroui/Autocomplete";
@@ -52,14 +44,48 @@ import { BiTrash } from "react-icons/bi";
 import { Dropdown } from "../heroui/Dropdown";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList from "../features/items/ItemsList";
-import { useFeatureFlagEnabled } from "posthog-js/react";
+import { useFeatureFlagEnabled } from "@/context/Providers";
 
-function CreateCollectionModal({
+type CollectionModalMode = "create" | "edit";
+
+type SelectedCollectionData = {
+	id: string;
+	textValue: string;
+	description: string | null;
+	count: number;
+	createdAt: AppSession["user"]["collections"][number]["createdAt"];
+	updatedAt: AppSession["user"]["collections"][number]["updatedAt"];
+};
+
+async function getMutationErrorMessage(response: Response, fallback: string) {
+	const error = await response.json().catch(() => null);
+
+	if (typeof error === "string") {
+		return error;
+	}
+
+	if (
+		error &&
+		typeof error === "object" &&
+		"error" in error &&
+		typeof error.error === "string"
+	) {
+		return error.error;
+	}
+
+	return fallback;
+}
+
+function CollectionModal({
+	mode,
+	selectedCollectionData,
 	update,
 	onClose,
 	isOpen,
 	onOpenChange,
 }: {
+	mode: CollectionModalMode;
+	selectedCollectionData?: SelectedCollectionData;
 	update: any;
 	onClose: any;
 	isOpen: boolean;
@@ -72,6 +98,7 @@ function CreateCollectionModal({
 		ErrorField,
 		containerRef,
 		errorMessage,
+		setErrorMessage,
 	} = useModalError({
 		initial: {
 			height: 0,
@@ -80,28 +107,61 @@ function CreateCollectionModal({
 		animate: { height: "auto", opacity: 1 },
 		exit: { height: 0, opacity: 0, y: 0, marginTop: -12 },
 	});
-	const { trigger } = useSWRMutation(`/user/collections`, setter);
+	const { trigger: createCollection } = useSWRMutation(
+		`/user/collections`,
+		setter
+	);
+	const { trigger: updateCollection } = useSWRMutation(
+		selectedCollectionData?.id
+			? `/user/collections/${selectedCollectionData.id}`
+			: null,
+		patcher
+	);
 	const t = useTranslations("ui");
+	const isEditMode = mode === "edit";
+	const modalTitle = isEditMode ? t("editAction") : t("createCollection");
+	const submitLabel = isEditMode ? t("save") : t("createCollection");
+	const formKey = `${mode}-${selectedCollectionData?.id ?? "new"}`;
 
-	const handleSubmit = async (e: any) => {
+	const handleClose = () => {
+		setErrorMessage(null);
+		onClose();
+	};
+
+	const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		const formData = new FormData(e.target);
+		const formData = new FormData(e.currentTarget);
 		const data = Object.fromEntries(formData.entries());
 		setLoading(true);
 		try {
-			const res = await trigger({
+			const payload = {
 				name: data.name as string,
 				description: data.description as string,
-				private: data.private === "private",
-			});
+			};
+			const res = isEditMode
+				? selectedCollectionData?.id
+					? await updateCollection(payload)
+					: null
+				: await createCollection({
+						...payload,
+						private: false,
+					});
+
+			if (!res) {
+				displayOnError(t("tryAgainLater"));
+				return;
+			}
+
 			if (!res.ok) {
-				const error = await res.json();
-				throw error;
+				displayOnError(
+					await getMutationErrorMessage(res, t("tryAgainLater"))
+				);
+				return;
 			}
 			await update();
-			onClose();
-		} catch (error: any) {
-			displayOnError(error);
+			handleClose();
+		} catch {
+			displayOnError(t("tryAgainLater"));
 		} finally {
 			setLoading(false);
 		}
@@ -110,27 +170,37 @@ function CreateCollectionModal({
 	return (
 		<DialogModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
 			<ModalContent className={errorClassName}>
-				<GenericHeader onClose={onClose}>
-					{t("createCollection")}
-				</GenericHeader>
+				<GenericHeader onClose={handleClose}>{modalTitle}</GenericHeader>
 				<ModalBody className="pb-6 pt-0">
 					<div ref={containerRef} className="flex flex-col w-full">
 						<p className="text-sm text-black/60 dark:text-white/60 mb-6 text-center">
 							{t("collectionDescription")}
 						</p>
 						<form
+							key={formKey}
 							onSubmit={handleSubmit}
 							className="flex flex-col gap-3"
 						>
 							<Input
 								autoComplete="off"
 								autoFocus
+								defaultValue={
+									isEditMode
+										? selectedCollectionData?.textValue ?? ""
+										: ""
+								}
 								label={t("collectionName")}
 								name="name"
 								placeholder={t("collectionName")}
 							/>
 							<Textarea
 								autoComplete="off"
+								defaultValue={
+									isEditMode
+										? selectedCollectionData?.description ??
+											""
+										: ""
+								}
 								label={t("collectionDescriptionDescription")}
 								name="description"
 								color="secondary"
@@ -138,35 +208,6 @@ function CreateCollectionModal({
 									"collectionDescriptionDescription"
 								)}
 							/>
-							{/* <Select
-								name="private"
-								placement="left"
-								label={t("collectionVisibility")}
-								color="tertiary"
-								className="min-w-full"
-								items={COLLECTION_VISIBILITY_OPTIONS.map(
-									(item) => ({
-										...item,
-										name: t(
-											"collectionVisibility" + item.name
-										),
-									})
-								)}
-								isDisabled
-								disallowEmptySelection
-								defaultSelectedKeys={[
-									COLLECTION_VISIBILITY_OPTIONS[0].key,
-								]}
-							>
-								{(item: any) => (
-									<SelectItem
-										aria-label={item.name}
-										key={item.key}
-									>
-										{item.name}
-									</SelectItem>
-								)}
-							</Select> */}
 							<AnimatePresence mode="sync">
 								{errorMessage && <ErrorField />}
 							</AnimatePresence>
@@ -176,7 +217,7 @@ function CreateCollectionModal({
 								type="submit"
 								isLoading={loading}
 							>
-								{t("createCollection")}
+								{submitLabel}
 							</Button>
 						</form>
 					</div>
@@ -199,12 +240,10 @@ type ProfileListItem = {
 } & Omit<ListboxItemProps, "children">;
 
 function ProfileListbox({
-	data,
 	listItems,
 	className,
 	...props
 }: {
-	data: any;
 	listItems: ProfileListItem[];
 } & Omit<ListboxProps, "children">) {
 	const t = useTranslations("ui");
@@ -224,7 +263,6 @@ function ProfileListbox({
 					className,
 					index,
 					textValue,
-					count,
 					...itemProps
 				}) => (
 					<ListboxItem
@@ -362,13 +400,15 @@ function useProfileCollectionsList(
 function CollectionDropdown({
 	selectedCollection,
 	loading,
+	onEdit,
 	handleDelete,
 	selectedCollectionData,
 }: {
 	selectedCollection: string;
 	loading: boolean;
-	handleDelete: any;
-	selectedCollectionData: any;
+	onEdit: () => void;
+	handleDelete: () => void;
+	selectedCollectionData?: SelectedCollectionData;
 }) {
 	const t = useTranslations("ui");
 	const formatter = useFormatter();
@@ -381,15 +421,22 @@ function CollectionDropdown({
 					isIconOnly
 					size="md"
 					className="!p-0"
+					aria-label={t("actionsMenuAriaLabel")}
 				>
 					<BsThreeDotsVertical />
 				</Button>
 			</DropdownTrigger>
 			<DropdownMenu
-				disabledKeys={new Set(["collectionInfo", "editCollection"])}
+				aria-label={t("actionsMenuAriaLabel")}
+				disabledKeys={new Set(["collectionInfo"])}
 				onAction={(key) => {
+					if (key === "editCollection") {
+						onEdit();
+						return;
+					}
+
 					if (key === "deleteCollection") {
-						handleDelete({});
+						handleDelete();
 					}
 				}}
 			>
@@ -430,13 +477,16 @@ function CollectionDropdown({
 									<div className="flex items-center gap-1 text-[11px] text-black/40 dark:text-white/40">
 										<span>{t("createdLabel")}</span>
 										<span>
-											{formatter.relativeTime(
-												new Date(
-													selectedCollectionData?.createdAt ||
-														Date.now()
-												),
-												Date.now()
-											)}
+											{selectedCollectionData?.createdAt
+												? formatter.dateTime(
+														new Date(
+															selectedCollectionData.createdAt
+														),
+														{
+															dateStyle: "medium",
+														}
+												  )
+												: "-"}
 										</span>
 									</div>
 								</div>
@@ -460,28 +510,16 @@ function CollectionDropdown({
 }
 
 function ProfileCollectionsList({
-	displayData,
 	selectedKey,
-	setSelectedTab,
-	onOpen,
-	selectedCollection,
+	onCreateCollection,
 	mainListboxList,
-	selectedCollectionIndex,
 	setSearch,
-	update,
-	handleCollectionSelect,
 	appendContent,
 }: {
-	displayData: any;
 	selectedKey: string;
-	setSelectedTab: any;
-	onOpen: any;
-	selectedCollection?: string;
+	onCreateCollection: () => void;
 	mainListboxList: ProfileListItem[];
-	selectedCollectionIndex: number;
 	setSearch: any;
-	update: any;
-	handleCollectionSelect: any;
 	appendContent: ReactNode;
 }) {
 	const t = useTranslations("ui");
@@ -490,7 +528,6 @@ function ProfileCollectionsList({
 		<ProfileListbox
 			disallowEmptySelection
 			selectedKeys={selectedKey ? [selectedKey] : []}
-			data={displayData}
 			className="flex-1 z-10"
 			classNames={{
 				list: "min-h-80 max-h-80 overflow-y-auto lg:scrollbar-hide hover:scrollbar-default overflow-x-hidden px-6 py-2",
@@ -505,6 +542,7 @@ function ProfileCollectionsList({
 				<div className="px-6">
 					<Input
 						placeholder={t("searchCollections")}
+						aria-label={t("searchCollections")}
 						className="w-full mb-2"
 						onChange={(e) => setSearch(e.target.value)}
 					/>
@@ -516,7 +554,7 @@ function ProfileCollectionsList({
 						className="flex-1"
 						startContent={<BsPlus className="shrink-0" />}
 						size="md"
-						onPress={onOpen}
+						onPress={onCreateCollection}
 					>
 						{t("createCollection")}
 					</Button>
@@ -529,7 +567,7 @@ function ProfileCollectionsList({
 
 function useDisplayedData(
 	data: any,
-	session: Session | null,
+	session: AppSession | null,
 	isCurrentUser: boolean
 ) {
 	const displayData = {
@@ -552,12 +590,19 @@ export default function Profile({ data }: { data: any }) {
 	const { data: session, update } = useSession();
 	const [loading, setLoading] = useState(false);
 	const [selectedTab, setSelectedTab] = useState(new Set(["0"]));
-	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
+	const [collectionModalMode, setCollectionModalMode] =
+		useState<CollectionModalMode>("create");
+	const {
+		isOpen: isCollectionModalOpen,
+		onOpen: onCollectionModalOpen,
+		onOpenChange: onCollectionModalOpenChange,
+		onClose: onCollectionModalClose,
+	} = useDisclosure();
 	const t = useTranslations("ui");
 	const isCurrentUser = session?.user.id == data.id;
 	const [search, setSearch] = useState("");
 	const [disabledKeys, setDisabledKeys] = useState<Set<string>>(new Set());
-	const displayData: Session["user"] = useDisplayedData(
+	const displayData: AppSession["user"] = useDisplayedData(
 		data,
 		session,
 		isCurrentUser
@@ -586,7 +631,7 @@ export default function Profile({ data }: { data: any }) {
 		fetcherDELETE
 	);
 
-	const handleDelete = async (e: any) => {
+	const handleDelete = async () => {
 		setLoading(true);
 		try {
 			handleCollectionSelect("");
@@ -604,9 +649,56 @@ export default function Profile({ data }: { data: any }) {
 		}
 	};
 
-	const selectedCollectionData = mainListboxList.find(
-		(item) => item.id === selectedCollection
+	const selectedCollectionData = useMemo<SelectedCollectionData | undefined>(
+		() => {
+			if (!selectedCollection) {
+				return undefined;
+			}
+
+			const collection = displayData.collections.find(
+				(item) => item.id === selectedCollection
+			);
+			if (!collection) {
+				return undefined;
+			}
+
+			const count = Object.values(displayData.itemsCollections).reduce(
+				(total, itemCollections) =>
+					total +
+					Number(
+						Object.prototype.hasOwnProperty.call(
+							itemCollections,
+							selectedCollection
+						)
+					),
+				0
+			);
+
+			return {
+				id: collection.id,
+				textValue: collection.name,
+				description: collection.description,
+				count,
+				createdAt: collection.createdAt,
+				updatedAt: collection.updatedAt,
+			};
+		},
+		[displayData.collections, displayData.itemsCollections, selectedCollection]
 	);
+
+	const openCreateCollectionModal = () => {
+		setCollectionModalMode("create");
+		onCollectionModalOpen();
+	};
+
+	const openEditCollectionModal = () => {
+		if (!selectedCollectionData) {
+			return;
+		}
+
+		setCollectionModalMode("edit");
+		onCollectionModalOpen();
+	};
 
 	const selectedKey =
 		selectedCollection && !disabledKeys.has(selectedCollection)
@@ -617,6 +709,7 @@ export default function Profile({ data }: { data: any }) {
 		<CollectionDropdown
 			selectedCollection={selectedCollection || ""}
 			loading={loading}
+			onEdit={openEditCollectionModal}
 			handleDelete={handleDelete}
 			selectedCollectionData={selectedCollectionData}
 		/>
@@ -626,10 +719,12 @@ export default function Profile({ data }: { data: any }) {
 			id="main-content"
 			className="flex xl:gap-[2.5rem] lg:gap-8 gap-4 items-start lg:flex-row flex-col"
 		>
-			<CreateCollectionModal
-				onClose={onClose}
-				isOpen={isOpen}
-				onOpenChange={onOpenChange}
+			<CollectionModal
+				mode={collectionModalMode}
+				selectedCollectionData={selectedCollectionData}
+				onClose={onCollectionModalClose}
+				isOpen={isCollectionModalOpen}
+				onOpenChange={onCollectionModalOpenChange}
 				update={update}
 			/>
 			<div className="lg:w-80 xl:w-96 w-full flex-col gap-6 shrink-0">
@@ -652,7 +747,6 @@ export default function Profile({ data }: { data: any }) {
 								})}
 								width={256}
 								height={256}
-								objectFit="cover"
 								className="w-full h-full object-cover rounded-r-full"
 							/>
 						</div>
@@ -711,20 +805,12 @@ export default function Profile({ data }: { data: any }) {
 									<Divider />
 								</div>
 								<ProfileCollectionsList
-									displayData={displayData}
 									selectedKey={selectedKey}
-									setSelectedTab={setSelectedTab}
-									onOpen={onOpen}
-									selectedCollection={selectedCollection}
+									onCreateCollection={
+										openCreateCollectionModal
+									}
 									mainListboxList={mainListboxList}
-									selectedCollectionIndex={
-										selectedCollectionIndex
-									}
 									setSearch={setSearch}
-									update={update}
-									handleCollectionSelect={
-										handleCollectionSelect
-									}
 									appendContent={appendContent}
 								/>
 							</>
@@ -763,6 +849,7 @@ export default function Profile({ data }: { data: any }) {
 					extraFilters={
 						<div className="flex w-full gap-4 col-span-2 lg:hidden">
 							<Autocomplete
+								aria-label={t("collections")}
 								startContent={
 									selectedKey === "0" ? (
 										<BsBookmark />
@@ -801,7 +888,7 @@ export default function Profile({ data }: { data: any }) {
 								)}
 							</Autocomplete>
 							<Button
-								onPress={onOpen}
+								onPress={openCreateCollectionModal}
 								aria-label={t("createCollection")}
 								isIconOnly
 								className="h-full"

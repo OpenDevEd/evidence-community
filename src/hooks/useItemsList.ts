@@ -45,11 +45,13 @@ export function useItemsList(
 		dataQueryParams,
 		userData ? `/user/items/${userData.id}` : "/items"
 	);
+	const noteCollectionId =
+		queryParams.collections.length === 1
+			? queryParams.collections[0]
+			: null;
 
 	const { data: noteData, isLoading: isNoteLoading } = useSWR<CollectionNoteGetResponse>(
-		dataQueryParams.collections.length === 1
-			? `/collections/${dataQueryParams.collections[0]}/note`
-			: null,
+		noteCollectionId ? `/collections/${noteCollectionId}/note` : null,
 		fetcher
 	);
 
@@ -213,10 +215,12 @@ export function useItemsList(
 		keepPreviousData: true,
 		revalidateOnFocus: false,
 		revalidateOnReconnect: false,
-		revalidateIfStale: false,
+		// Profile/user lists need to refresh when revisited after mutations done elsewhere.
+		revalidateIfStale: Boolean(userData),
 		onSuccess: (data) => {
-			if (data.totalPages < dataQueryParams.page) {
-				handlePageChange(data.totalPages);
+			const boundedTotalPages = Math.max(1, data.totalPages || 1);
+			if (boundedTotalPages < dataQueryParams.page) {
+				handlePageChange(boundedTotalPages);
 			}
 			setLastFetchedData(data);
 			document.dispatchEvent(new Event('ZoteroItemUpdated', { bubbles: true, cancelable: true }))
@@ -224,10 +228,10 @@ export function useItemsList(
 	});
 
 	if (fetchedItemsData) {
-		itemsCache.current[pathname] = fetchedItemsData;
+		itemsCache.current[itemsQuery] = fetchedItemsData;
 	}
 
-	const itemsData = itemsCache.current[pathname];
+	const itemsData = fetchedItemsData ?? itemsCache.current[itemsQuery];
 
 	const {
 		data: collectionsData,

@@ -76,7 +76,7 @@ export async function POST(req: Request) {
             prompt: JSON.stringify(fullTextPDFs)
         })
 
-        trackUsage("ai_" + prompt, result, distinctId, prompt);
+        trackUsage("ai_" + prompt, result, distinctId);
 
         return NextResponse.json(result.object.questions);
     } catch (error) {

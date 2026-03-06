@@ -5,10 +5,24 @@ import { routing } from "@/i18n/routing";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
 import { getTotalItems } from "@/lib/actions";
+import { getPolicyLastModified } from "@/lib/policy-documents";
+
+function getLocalizedUrl(pathname: string, locale: string) {
+	const localizedPath =
+		locale === routing.defaultLocale ? pathname : `/${locale}${pathname}`;
+
+	return `${process.env.BASE_URL}${localizedPath}`;
+}
+
+function getLanguageAlternates(pathname: string) {
+	return Object.fromEntries(
+		routing.locales.map((locale) => [locale, getLocalizedUrl(pathname, locale)])
+	);
+}
 
 export async function generateSitemaps() {
 	const total = await getTotalItems();
-	const totalPages = Math.ceil(total / SITEMAP_SIZE);
+	const totalPages = Math.max(1, Math.ceil(total / SITEMAP_SIZE));
 
 	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));
 }
@@ -45,20 +59,42 @@ export default async function sitemap(props: {
 		return [];
 	}
 
+	const policyEntries =
+		identifier === 0
+			? await Promise.all([
+					getPolicyLastModified("privacy"),
+					getPolicyLastModified("cookiePolicy"),
+			  ]).then(([privacyLastModified, cookiePolicyLastModified]) => [
+					{
+						url: getLocalizedUrl("/privacy", routing.defaultLocale),
+						lastModified: privacyLastModified,
+						alternates: {
+							languages: getLanguageAlternates("/privacy"),
+						},
+					},
+					{
+						url: getLocalizedUrl(
+							"/cookie-policy",
+							routing.defaultLocale
+						),
+						lastModified: cookiePolicyLastModified,
+						alternates: {
+							languages: getLanguageAlternates("/cookie-policy"),
+						},
+					},
+			  ])
+			: [];
 
-	return items.results.flatMap((item: any) => ({
-		url: `${process.env.BASE_URL}/lib/${item.key}`,
+	const itemEntries = items.results.map((item: any) => ({
+		url: getLocalizedUrl(`/lib/${item.key}`, routing.defaultLocale),
 		lastModified: item.updatedAt,
 		alternates: {
-			languages: Object.fromEntries(
-				routing.locales.map((locale) => [
-					locale,
-					`${process.env.BASE_URL}/${locale}/lib/${item.key}`,
-				])
-			),
+			languages: getLanguageAlternates(`/lib/${item.key}`),
 		},
 		images: item.attachmentsData
 			?.filter((attachment: any) => attachment.PDFCoverPageImage)
 			.map((attachment: any) => convertToImageURL(attachment.PDFCoverPageImage)),
 	}));
+
+	return [...policyEntries, ...itemEntries];
 }

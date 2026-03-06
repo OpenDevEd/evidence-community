@@ -1,27 +1,27 @@
 import { db } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
-import { authOptions, auth } from "../auth/[...nextauth]/config";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
-import { eq, and, sql, InferSelectModel } from "drizzle-orm";
+import { eq, sql, InferSelectModel } from "drizzle-orm";
 import { getCachedUserLikes } from "../cache";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath } from "next/cache";
+import { getAuthenticatedDbUser } from "@/auth/server";
 
 export async function GET() {
-  const session = await auth();
+  const user = await getAuthenticatedDbUser();
 
-  if (!session?.user?.email) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   try {
     const likes = await db.query.usersToLikes.findMany({
-      where: eq(usersToLikes.userId, session.user.id),
+      where: eq(usersToLikes.userId, user.id),
       with: {
         item: true,
       },
     });
 
-    revalidatePath("/profile/" + session.user.id);
+    revalidatePath("/profile/" + user.id);
 
     return NextResponse.json({ likes });
   } catch (error) {
@@ -34,9 +34,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await auth();
+  const user = await getAuthenticatedDbUser();
 
-  if (!session?.user?.email) {
+  if (!user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     const result = await db
       .insert(usersToLikes)
       .values({
-        userId: session.user.id,
+        userId: user.id,
         itemKey: itemKey,
         deleted: false,
         createdAt: new Date(),
@@ -68,13 +68,13 @@ export async function POST(request: NextRequest) {
       })
       .returning();
     
-    const cachedLikes = await getCachedUserLikes(session.user.id);
+    const cachedLikes = await getCachedUserLikes(user.id);
     const cachedLike = cachedLikes.find((like: InferSelectModel<typeof usersToLikes>) => like.itemKey === itemKey);
     if (cachedLike) {
       cachedLikes.splice(cachedLikes.indexOf(cachedLike), 1);
     }
     cachedLikes.push(result[0]);
-    // setCachedUserLikes(session.user.id, cachedLikes);
+    // setCachedUserLikes(user.id, cachedLikes);
 
     return NextResponse.json({ liked: !result[0].deleted });
   } catch (error) {

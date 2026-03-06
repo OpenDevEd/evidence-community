@@ -49,9 +49,12 @@ export function getModel(modelIndex: number) {
 export function trackUsage(
 	eventName: string,
 	event: any,
-	distinctId: string,
-	prompt: string
+	distinctId?: string | null
 ) {
+	if (!distinctId) {
+		return;
+	}
+
 	const modelName = event.response.modelId;
 	let costs = pricings[modelName as keyof typeof pricings];
 	if (!costs) {
@@ -63,9 +66,9 @@ export function trackUsage(
 	posthogClient.capture({
 		event: eventName,
 		distinctId: distinctId,
+		disableGeoip: true,
 		properties: {
 			model: modelName,
-			prompt: prompt,
 			prompt_tokens: event.usage?.promptTokens,
 			completion_tokens: event.usage?.completionTokens,
 			total_tokens: event.usage?.totalTokens,

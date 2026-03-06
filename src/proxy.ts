@@ -1,6 +1,7 @@
 import createMiddleware from "next-intl/middleware";
 import { routing } from "./i18n/routing";
 import { NextRequest, NextResponse } from "next/server";
+import { clerkMiddleware } from "@clerk/nextjs/server";
 import { ItemGetResponse } from "./app/api/item/types";
 import redirections from "./constants/redirections.json";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "./constants/items";
@@ -131,40 +132,38 @@ const keyMaps: Record<string, KeyMap> = Object.assign(
 	collectionsMaps
 );
 
-function generateRateLimitObject(request: NextRequest) {
+function generateRateLimitObject(
+	request: NextRequest,
+	userId?: string | null
+) {
 	const ip =
 		request.headers.get("x-forwarded-for") ||
 		request.headers.get("x-real-ip") ||
 		request.headers.get("cf-connecting-ip") ||
 		request.headers.get("x-envoy-external-address");
+	const userRateLimitKey = userId ? `user:${userId}` : null;
+	const userRateLimit = userRateLimitKey
+		? rateLimits.get(userRateLimitKey) || { count: 0, firstRequest: 0 }
+		: null;
 	const ipRateLimit = ip
 		? rateLimits.get(ip) || { count: 0, firstRequest: 0 }
 		: null;
 
-	const cookie = request.cookies.get(
-		`ph_${process.env.NEXT_PUBLIC_POSTHOG_KEY}_posthog`
-	);
-	let cookieRateLimit = null;
-	if (cookie) {
-		try {
-			const distinctId = JSON.parse(cookie.value).distinct_id;
-			cookieRateLimit = rateLimits.get(distinctId) || {
-				count: 0,
-				firstRequest: 0,
-			};
-			rateLimits.set(distinctId, cookieRateLimit);
-		} catch (e) {}
+	let rateLimit = null;
+	if (userRateLimit && ipRateLimit) {
+		rateLimit =
+			ipRateLimit.count > userRateLimit.count
+				? ipRateLimit
+				: userRateLimit;
+	} else {
+		rateLimit = userRateLimit || ipRateLimit || {
+			count: 0,
+			firstRequest: 0,
+		};
 	}
 
-	let rateLimit = null;
-	if (ipRateLimit && cookieRateLimit) {
-		rateLimit =
-			ipRateLimit.count > cookieRateLimit.count
-				? ipRateLimit
-				: cookieRateLimit;
-	} else {
-		rateLimit = ipRateLimit ||
-			cookieRateLimit || { count: 0, firstRequest: 0 };
+	if (userRateLimitKey) {
+		rateLimits.set(userRateLimitKey, rateLimit);
 	}
 
 	if (ip) {
@@ -271,8 +270,8 @@ function isLikelyZoteroKey(key: string) {
 	return /^[A-Z0-9]{8}$/.test(key);
 }
 
-export default async function proxy(request: NextRequest) {
-	const rateLimit = generateRateLimitObject(request);
+async function handleProxy(request: NextRequest, userId?: string | null) {
+	const rateLimit = generateRateLimitObject(request, userId);
 
 	if (request.nextUrl.pathname === "/") {
 		return NextResponse.redirect(new URL("/lib", fixRequestUrl(request)));
@@ -539,6 +538,11 @@ export default async function proxy(request: NextRequest) {
 
 	return setRateLimitHeaders(response, rateLimit);
 }
+
+export default clerkMiddleware(async (auth, request) => {
+	const { userId } = await auth();
+	return handleProxy(request, userId);
+});
 
 export const config = {
 	// Matcher entries are linked with a logical "or", therefore

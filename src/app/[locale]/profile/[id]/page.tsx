@@ -1,9 +1,9 @@
 import Profile from "@/components/pages/Profile";
 import { getProfile } from "@/lib/actions";
-import { getLikedPosts } from "@/lib/actions";
 import { Metadata } from "next";
 import { ResolvingMetadata } from "next/dist/lib/metadata/types/metadata-interface";
 import { libraryMetadata } from "../../lib/page";
+import { notFound } from "next/navigation";
 
 export async function generateMetadata(
 	props: {
@@ -29,6 +29,10 @@ export default async function ProfilePage(props: {
 }) {
 	const params = await props.params;
 	const profile = await getProfile(params.id, null);
+
+	if (!profile) {
+		notFound();
+	}
 	
 	return (
 		<Profile

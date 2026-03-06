@@ -1,32 +1,48 @@
 "use client";
 
 import { useTranslations } from "next-intl";
-import { useSession } from "next-auth/react";
+import { useClerk } from "@clerk/nextjs";
 import { IoIosLogIn } from "react-icons/io";
 import { DropdownItem } from "@heroui/react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/heroui/Button";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import type { NavbarElementProps } from "@/types/navbar";
+import { useNavbarAuthState } from "./useNavbarAuthState";
 
 export default function LoginButton({
 	variant,
 	styleVariant,
-	onAction,
 }: NavbarElementProps) {
 	const t = useTranslations("ui");
 	const isEnabled = useFeatureFlagEnabled("login");
-	const { data: session } = useSession();
+	const { openSignIn } = useClerk();
+	const { isLoaded, isSignedIn } = useNavbarAuthState();
+	const openSignInSafely = () => {
+		if (!isLoaded || isSignedIn) {
+			return;
+		}
 
-	// Don't render if login is disabled or user is already logged in
-	if (!isEnabled || session) return null;
+		try {
+			openSignIn();
+		} catch (error: any) {
+			const code = error?.errors?.[0]?.code;
+			if (code !== "cannot_render_single_session_enabled") {
+				throw error;
+			}
+		}
+	};
+
+	if (!isEnabled || !isLoaded || isSignedIn) return null;
 
 	// Menu item variant - for dropdowns
 	if (variant === "menuItem") {
 		return (
 			<DropdownItem
 				key="login"
-				onPress={onAction}
+				onPress={() => {
+					openSignInSafely();
+				}}
 				startContent={<IoIosLogIn className="size-5" />}
 			>
 				{t("login")}
@@ -40,7 +56,9 @@ export default function LoginButton({
 	return (
 		<Button
 			startContent={<IoIosLogIn className="size-5 shrink-0" />}
-			onPress={onAction}
+			onPress={() => {
+				openSignInSafely();
+			}}
 			isIconOnly={isSmall}
 			className={twMerge(
 				"text-accent dark:text-accent py-1",

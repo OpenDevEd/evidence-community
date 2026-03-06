@@ -4,7 +4,6 @@ import { db } from "@/db";
 import { users } from "@/db/schema/tables/user";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { eq, and, InferSelectModel } from "drizzle-orm";
-import { Session, User } from "next-auth";
 import { userToFollow } from "@/db/schema/tables/userToFollow";
 import { userCollection } from "@/db/schema/tables/userCollection";
 import {
@@ -26,11 +25,10 @@ import {
 	getUserCollectionKeysDirect,
 	getUserLikesDirect,
 } from "@/app/api/cache";
-import { auth, credentialsSchema } from "@/app/api/auth/[...nextauth]/config";
+import { getAuthenticatedDbUser } from "@/auth/server";
 import { unstable_cache } from "next/cache";
 import { Collection } from "@/app/api/collections/types";
 import { z } from "zod";
-import bcrypt from "bcrypt";
 import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "@/lib/utils";
@@ -44,6 +42,7 @@ import { blockedTags } from "@/constants/misc";
 import transporter from "./nodemailer";
 import { Engine, CiteProcSys, CSLItem, CitationCluster } from 'citeproc'
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
+import type { AppSession, AppSessionUser } from "@/auth/types";
 
 export async function getStyle() {
 	const cached = unstable_cache(async () => {
@@ -218,7 +217,11 @@ export async function sendContactRequest(email: string, description: string) {
 
 	return { success: result.accepted.length > 0 };
 }
-export async function runScreening(keys: string[], modelIndex: number, smartScreeningFields: SmartScreeningField[], distinctId: string) {
+export async function runScreening(
+	keys: string[],
+	modelIndex: number,
+	smartScreeningFields: SmartScreeningField[]
+) {
 	const { provider, modelName, error } = getModel(modelIndex);
 	if (error) {
 		return { error: error };
@@ -354,57 +357,6 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 	return resultObject;
 }
 
-export const getUser = async (email: string) => {
-	return await db.query.users.findFirst({
-		where: eq(users.email, email),
-	});
-};
-
-export const createUser = async (email: string, password: string) => {
-	const hashedPassword = await bcrypt.hash(password, 10);
-	const [newUser] = await db
-		.insert(users)
-		.values({
-			email,
-			password: hashedPassword,
-		})
-		.returning();
-	return newUser;
-};
-
-
-export async function authorize(props: z.infer<typeof credentialsSchema>): Promise<{ error: string } | User> {
-
-	const parsedCredentials = credentialsSchema.safeParse(props);
-
-	if (!parsedCredentials.success) {
-		const errorMessages = parsedCredentials.error.issues
-			.map((err) => err.message)
-			.join(", ");
-		return { error: errorMessages };
-	}
-
-	const { email, password, register } = parsedCredentials.data;
-
-	const existingUser = await getUser(email);
-
-	if (register && existingUser)
-		return { error: "userAlreadyExists" };
-
-	if (!existingUser && register)
-		return await createUser(email, password);
-
-	if (existingUser) {
-		const passwordsMatch = await bcrypt.compare(
-			password,
-			existingUser.password ?? ""
-		);
-		if (passwordsMatch) return existingUser;
-	}
-
-	return { error: "invalidCredentials" };
-}
-
 export async function getItems(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	userId: string | null = null
@@ -424,6 +376,17 @@ export async function getItems(
 		facets.push("creators.institutions.country_code");
 	}
 
+	if (userFilters?.status && userFilters.status >= 400) {
+		return {
+			items: [],
+			currentPage: 1,
+			totalItems: 0,
+			perPage: ITEMS_PER_PAGE,
+			totalPages: 1,
+			facetDistribution: {},
+		};
+	}
+
 	return searchIndex(
 		searchParams,
 		{
@@ -438,6 +401,24 @@ export async function getItems(
 	);
 }
 
+const EMPTY_PROFILE_FILTER = `key = "__profile_no_matches__"`;
+
+function createKeyFilter(keys: string[]) {
+	const uniqueKeys = Array.from(
+		new Set(keys.filter((key) => key.trim().length > 0))
+	);
+
+	if (uniqueKeys.length === 0) {
+		return [EMPTY_PROFILE_FILTER];
+	}
+
+	return [
+		`key IN [${uniqueKeys
+			.map((key) => `"${key.replace(/"/g, '\\"')}"`)
+			.join(",")}]`,
+	];
+}
+
 export async function getProfileSearchFilter(
 	id: string | null,
 	collectionId: string | null
@@ -447,52 +428,47 @@ export async function getProfileSearchFilter(
 		return { filter: null };
 	}
 
-	const [session, collectionKeys, likes] = (await Promise.all([
-		auth(),
+	const [authenticatedUser, collectionKeys, likes] = (await Promise.all([
+		getAuthenticatedDbUser(),
 		collectionId ? getUserCollectionKeysDirect(collectionId) : null,
 		id && !collectionId ? getUserLikesDirect(id) : null,
-	])) as [Session | null, any, any];
+	])) as [Awaited<ReturnType<typeof getAuthenticatedDbUser>>, any, any];
 
-	if (collectionKeys) {
+	if (collectionId) {
 		if (!collectionKeys) {
-			return { filter: null };
+			return { filter: createKeyFilter([]), status: 404 };
 		}
 
 		if (collectionKeys.private) {
-			const userId = session?.user?.id;
+			const userId = authenticatedUser?.id;
 
 			if (!id) {
-				return { filter: null, status: 401 };
+				return { filter: createKeyFilter([]), status: 401 };
 			}
 
 			if (collectionKeys.userId !== userId) {
-				return { filter: null, status: 403 };
+				return { filter: createKeyFilter([]), status: 403 };
 			}
 		}
 
 		return {
-			filter: [
-				`key IN [${collectionKeys.itemKeys
-					.map((key: string) => `"${key}"`)
-					.join(",")}]`,
-			],
+			filter: createKeyFilter(collectionKeys.itemKeys),
 		};
 	}
 
 	if (likes) {
+		const likeKeys = likes
+			.filter(
+				(like: InferSelectModel<typeof usersToLikes>) =>
+					!like.deleted
+			)
+			.map(
+				(like: InferSelectModel<typeof usersToLikes>) =>
+					like.itemKey
+			);
+
 		return {
-			filter: [
-				`key IN [${likes
-					.filter(
-						(like: InferSelectModel<typeof usersToLikes>) =>
-							!like.deleted
-					)
-					.map(
-						(like: InferSelectModel<typeof usersToLikes>) =>
-							`"${like.itemKey}"`
-					)
-					.join(",")}]`,
-			],
+			filter: createKeyFilter(likeKeys),
 		};
 	}
 
@@ -559,7 +535,7 @@ export async function downloadItems(
 	return await convertItem(items.items, format);
 }
 
-export async function getLikedPosts(likes: Session["user"]["likes"]) {
+export async function getLikedPosts(likes: AppSessionUser["likes"]) {
 	const res = await meilisearchClient
 		.index(process.env.MEILI_INDEX || config.index)
 		.getDocuments({
@@ -782,7 +758,7 @@ export async function searchIndex(
 			currentPage: pageNum,
 			totalItems: totalCount,
 			perPage: limitNum,
-			totalPages: Math.ceil(totalCount / limitNum),
+			totalPages: Math.max(1, Math.ceil(totalCount / limitNum)),
 			facetDistribution: addRegionsToFacetDistribution(
 				Object.assign(
 					{},
@@ -805,90 +781,140 @@ export async function searchIndex(
 
 export async function getProfile(
 	id: string,
-	session: Session | null
-): Promise<Session["user"]> {
+	session: AppSession | null
+): Promise<AppSessionUser | null> {
 	const isCurrentUser = session?.user.id === id;
 
-	const data = await db.transaction(async (tx) => {
-		const following = await tx.query.userToFollow
-			.findMany({
-				where: and(
-					eq(userToFollow.userId, id),
-					eq(userToFollow.deleted, false)
-				),
-			})
-			.then((following) =>
-				following.reduce((acc, follow) => {
-					acc[follow.followingId] = follow.createdAt;
-					return acc;
-				}, {} as Session["user"]["following"])
-			);
+	const getErrorCode = (error: unknown): string | null => {
+		if (error && typeof error === "object" && "code" in error) {
+			const code = (error as { code?: unknown }).code;
+			return typeof code === "string" ? code : null;
+		}
+		return null;
+	};
 
-		const followers = await tx.query.userToFollow
-			.findMany({
-				where: and(
-					eq(userToFollow.followingId, id),
-					eq(userToFollow.deleted, false)
-				),
-			})
-			.then((followers) =>
-				followers.reduce((acc, follower) => {
-					acc[follower.userId] = follower.createdAt;
-					return acc;
-				}, {} as Session["user"]["followers"])
-			);
+	const getErrorMessages = (error: unknown): string[] => {
+		const messages: string[] = [];
 
-		const collections = await tx.query.userCollection.findMany({
-			where: and(eq(userCollection.userId, id), eq(userCollection.deleted, false)),
-		});
+		if (error instanceof Error) {
+			messages.push(error.message);
+			if ("cause" in error && error.cause) {
+				messages.push(...getErrorMessages(error.cause));
+			}
+		} else if (typeof error === "string") {
+			messages.push(error);
+		}
 
-		const likes = await tx.query.usersToLikes
-			.findMany({
-				where: and(
-					eq(usersToLikes.userId, id),
-					eq(usersToLikes.deleted, false)
-				),
+		return messages;
+	};
+
+	const isTransientDbError = (error: unknown): boolean => {
+		const code = getErrorCode(error);
+		if (code && ["ECONNRESET", "ETIMEDOUT", "EPIPE", "57P01", "57P02", "57P03", "53300"].includes(code)) {
+			return true;
+		}
+
+		const combinedMessage = getErrorMessages(error).join(" ").toLowerCase();
+		return [
+			"connection terminated unexpectedly",
+			"connection reset",
+			"connection closed",
+			"terminating connection",
+			"server closed the connection unexpectedly",
+			"too many clients already",
+		].some((snippet) => combinedMessage.includes(snippet));
+	};
+
+	const withTransientDbRetry = async <T>(
+		operation: () => Promise<T>,
+		maxRetries: number = 2
+	): Promise<T> => {
+		let attempt = 0;
+		for (;;) {
+			try {
+				return await operation();
+			} catch (error) {
+				if (!isTransientDbError(error) || attempt >= maxRetries) {
+					throw error;
+				}
+				const backoffMs = 100 * 2 ** attempt;
+				await new Promise((resolve) => setTimeout(resolve, backoffMs));
+				attempt++;
+			}
+		}
+	};
+
+	const data = await withTransientDbRetry(async () => {
+		const [
+			followingRows,
+			followersRows,
+			collections,
+			likesRows,
+			profile,
+			itemCollectionRows,
+		] = await Promise.all([
+			db.query.userToFollow.findMany({
+				where: and(eq(userToFollow.userId, id), eq(userToFollow.deleted, false)),
+			}),
+			db.query.userToFollow.findMany({
+				where: and(eq(userToFollow.followingId, id), eq(userToFollow.deleted, false)),
+			}),
+			db.query.userCollection.findMany({
+				where: and(eq(userCollection.userId, id), eq(userCollection.deleted, false)),
+			}),
+			db.query.usersToLikes.findMany({
+				where: and(eq(usersToLikes.userId, id), eq(usersToLikes.deleted, false)),
 				columns: {
 					itemKey: true,
 					createdAt: true,
 				},
-			})
-			.then((likes) =>
-				likes.reduce((acc, like) => {
-					acc[like.itemKey] = like.createdAt;
-					return acc;
-				}, {} as Session["user"]["likes"])
-			);
+			}),
+			isCurrentUser
+				? Promise.resolve(session?.user ?? null)
+				: db.query.users.findFirst({
+					where: eq(users.id, id),
+					columns: {
+						name: true,
+						image: true,
+						email: true,
+						createdAt: true,
+					},
+				}),
+			db.query.itemToUserCollection.findMany({
+				where: and(eq(itemToUserCollection.userId, id), eq(itemToUserCollection.deleted, false)),
+			}),
+		]);
 
-		const profile = isCurrentUser
-			? session?.user
-			: await db.query.users.findFirst({
-				where: eq(users.id, id),
-				columns: {
-					name: true,
-					image: true,
-					email: true,
-					createdAt: true,
-				},
-			});
+		const following = followingRows.reduce((acc, follow) => {
+			acc[follow.followingId] = follow.createdAt;
+			return acc;
+		}, {} as AppSessionUser["following"]);
 
-		const itemsCollections = await tx.query.itemToUserCollection
-			.findMany({
-				where: and(
-					eq(itemToUserCollection.userId, id),
-					eq(itemToUserCollection.deleted, false)
-				),
-			})
-			.then((items) =>
-				items.filter((item) => collections.some((collection) => collection.id === item.userCollectionId)).reduce((acc, item) => {
-					acc[item.itemKey] = acc[item.itemKey] || {};
-					acc[item.itemKey][item.userCollectionId] = item.updatedAt;
-					return acc;
-				}, {} as Session["user"]["itemsCollections"])
-			);
+		const followers = followersRows.reduce((acc, follower) => {
+			acc[follower.userId] = follower.createdAt;
+			return acc;
+		}, {} as AppSessionUser["followers"]);
+
+		const likes = likesRows.reduce((acc, like) => {
+			acc[like.itemKey] = like.createdAt;
+			return acc;
+		}, {} as AppSessionUser["likes"]);
+
+		const allowedCollectionIds = new Set(collections.map((collection) => collection.id));
+		const itemsCollections = itemCollectionRows
+			.filter((item) => allowedCollectionIds.has(item.userCollectionId))
+			.reduce((acc, item) => {
+				acc[item.itemKey] = acc[item.itemKey] || {};
+				acc[item.itemKey][item.userCollectionId] = item.updatedAt;
+				return acc;
+			}, {} as AppSessionUser["itemsCollections"]);
+
+		if (!isCurrentUser && !profile) {
+			return null;
+		}
 
 		return {
-			...profile,
+			...(profile ?? {}),
 			following,
 			followers,
 			likes,
@@ -897,6 +923,10 @@ export async function getProfile(
 			itemsCollections,
 		};
 	});
+
+	if (!data) {
+		return null;
+	}
 
 	if (session) {
 		session.user = {

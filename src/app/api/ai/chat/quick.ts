@@ -21,7 +21,7 @@ export async function quickChat(
 	cleanItem: Item | null,
 	coreMessages: ModelMessage[],
 	fullTextPDFs: any,
-	distinctId: string,
+	distinctId: string | null | undefined,
 	messages: any[]
 ) {
 	const result = streamText({
@@ -264,8 +264,7 @@ Before you answer, classify the user’s intent into one of two categories:
 			trackUsage(
 				"chat_completion",
 				event,
-				distinctId,
-				messages.at(-1)?.content
+				distinctId
 			);
 		},
 	});

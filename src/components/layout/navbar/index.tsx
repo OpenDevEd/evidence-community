@@ -2,22 +2,19 @@
 
 import { useContext } from "react";
 import { useTranslations } from "next-intl";
-import { useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
-import { useDisclosure } from "@heroui/react";
 import { twMerge } from "tailwind-merge";
 import { usePathname } from "@/i18n/routing";
 import { style } from "@/../tailwind.config";
 import { FeatureFlagsContext } from "@/context/Providers";
+import { useNavbarAuthState } from "./useNavbarAuthState";
 
 import { Logo } from "./Logo";
 import NavLinks from "./NavLinks";
-import LoginModal from "./LoginModal";
 import MobileMenu from "./MobileMenu";
 import ActionsDropdown from "./ActionsDropdown";
 
 import {
-	navbarElements,
 	getEnabledElements,
 	getElementsByPlacement,
 } from "@/config/navbar.config";
@@ -31,23 +28,16 @@ export default function Navbar() {
 	const t = useTranslations("ui");
 	const pathname = usePathname();
 	const { resolvedTheme: theme, setTheme } = useTheme();
-	const { data: session } = useSession();
 	const { featureFlags } = useContext(FeatureFlagsContext);
+	const { navbarSession } = useNavbarAuthState();
 	const styleVariant = (style as NavbarStyleVariant) || "small";
-
-	const {
-		isOpen: isLoginModalOpen,
-		onOpen: onLoginModalOpen,
-		onOpenChange: onLoginModalOpenChange,
-		onClose: onLoginModalClose,
-	} = useDisclosure();
 
 	const isMapPage = pathname.includes("/map");
 
 	// Get enabled elements based on feature flags and session
 	const enabledElements = getEnabledElements(
 		featureFlags ?? new Set(),
-		session
+		navbarSession
 	);
 
 	// Get elements grouped by placement for each breakpoint
@@ -75,11 +65,10 @@ export default function Navbar() {
 	// Context passed to container components
 	const navbarContext: NavbarContextType = {
 		featureFlags: featureFlags ?? new Set(),
-		session,
+		session: navbarSession,
 		styleVariant,
 		theme,
 		setTheme,
-		onLoginModalOpen,
 	};
 
 	return (
@@ -117,9 +106,6 @@ export default function Navbar() {
 									key={element.id}
 									variant="inline"
 									styleVariant={styleVariant}
-									onAction={
-										element.id === "login-button" ? onLoginModalOpen : undefined
-									}
 								/>
 							);
 						})}
@@ -147,11 +133,6 @@ export default function Navbar() {
 										<Component
 											variant="inline"
 											styleVariant={styleVariant}
-											onAction={
-												element.id === "login-button"
-													? onLoginModalOpen
-													: undefined
-											}
 										/>
 									</li>
 								);
@@ -165,13 +146,6 @@ export default function Navbar() {
 					elements={mobileMenuElements}
 					context={navbarContext}
 					pathname={pathname}
-				/>
-
-				{/* Login modal */}
-				<LoginModal
-					isOpen={isLoginModalOpen}
-					onOpenChange={onLoginModalOpenChange}
-					onClose={onLoginModalClose}
 				/>
 			</div>
 		</header>

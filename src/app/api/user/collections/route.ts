@@ -1,21 +1,15 @@
-import { z } from "zod";
 import { db } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { authOptions, auth } from "../../auth/[...nextauth]/config";
 import { userCollection } from "@/db/schema/tables/userCollection";
 import { fromError } from "zod-validation-error";
-
-export const createCollectionSchema = z.object({
-  name: z.string().min(1).max(24),
-  private: z.boolean(),
-  description: z.string().min(0).max(200).optional(),
-});
+import { getAuthenticatedDbUser } from "@/auth/server";
+import { createCollectionSchema } from "./schema";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user) {
+    const user = await getAuthenticatedDbUser();
+    if (!user) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
@@ -36,7 +30,7 @@ export async function POST(req: NextRequest) {
       name: validatedData.data.name,
       description: validatedData.data.description,
       private: validatedData.data.private,
-      userId: session.user.id,
+      userId: user.id,
     }).returning();
 
     return NextResponse.json(newCollection[0], { status: 201 });
