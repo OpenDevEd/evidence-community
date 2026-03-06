@@ -11,7 +11,7 @@ import { RelationsType } from "@/types/item";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
 import ResourceData from "./ResourceData";
-import { Link, usePathname, useRouter } from "@/i18n/routing";
+import { Link, usePathname } from "@/i18n/routing";
 import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/heroui/Button";
 import { useState, useEffect } from "react";
@@ -27,7 +27,6 @@ import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
 import type { AppSession } from "@/auth/types";
 import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
-import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/heroui/DialogModal";
 import useSWR from "swr";
 import { useSWRConfig } from "swr";
@@ -257,7 +256,6 @@ export default function Resource({
 	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("ui");
 	const format = useFormatter();
-	const router = useRouter();
 	const currentPath = usePathname();
 
 	const { data: fetchedItemData, isLoading: fetchedItemDataLoading } =
