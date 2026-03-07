@@ -2,9 +2,9 @@ import { MetadataRoute } from "next";
 import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { routing } from "@/i18n/routing";
+import { getSitemapPageCount } from "@/lib/sitemap";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
-import { getTotalItems } from "@/lib/actions";
 import { getPolicyLastModified } from "@/lib/policy-documents";
 
 function getLocalizedUrl(pathname: string, locale: string) {
@@ -21,8 +21,7 @@ function getLanguageAlternates(pathname: string) {
 }
 
 export async function generateSitemaps() {
-	const total = await getTotalItems();
-	const totalPages = Math.max(1, Math.ceil(total / SITEMAP_SIZE));
+	const totalPages = await getSitemapPageCount();
 
 	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));
 }

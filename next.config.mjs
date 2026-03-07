@@ -25,6 +25,10 @@ const nextConfig = {
 	async rewrites() {
 		return [
 			{
+				source: "/sitemap.xml",
+				destination: "/sitemap-index.xml",
+			},
+			{
 				source: "/backend/static/:path*",
 				destination: "https://us-assets.i.posthog.com/static/:path*",
 			},

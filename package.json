@@ -8,7 +8,6 @@
 		"start": "next start",
 		"deploy:server": "bash ./deploy/deploy-server.sh",
 		"lint": "eslint .",
-		"sitemap:generate": "npx tsx ./tools/generateSitemapIndex.ts",
 		"icons:generate": "npx tsx ./tools/generateIcons.ts > /dev/null",
 		"schema:generate": "npx tsx ./tools/generateSchema.ts"
 	},
