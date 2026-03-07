@@ -48,6 +48,7 @@ export default function Contact() {
 								<Link
 									className="text-link_light dark:text-link"
 									href={`mailto:${contactEmail}`}
+									prefetch={false}
 								>
 									{contactEmail}
 								</Link>

@@ -355,6 +355,7 @@ const SidebarNav = ({
 												: "text-black/60 dark:text-white/60 hover:bg-black/[3%] dark:hover:bg-white/[3%]"
 										}`}
 										href={`#${itemId}`}
+										prefetch={false}
 									>
 										<FaAngleRight 
 											className={`w-3 h-3 transition-transform ${

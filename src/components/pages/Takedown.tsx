@@ -24,6 +24,7 @@ function Footer() {
 			<div className="flex items-center gap-2 text-accent">
 				<Link
 					href="/about"
+					prefetch={false}
 					className="inline-flex items-center gap-2 hover:underline"
 				>
 					{t("learnMorePolicies")}

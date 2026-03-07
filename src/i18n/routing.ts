@@ -1,3 +1,4 @@
+import { ComponentProps, ElementRef, createElement, forwardRef } from "react";
 import {defineRouting} from 'next-intl/routing';
 import {createNavigation} from 'next-intl/navigation';
 
@@ -38,5 +39,14 @@ export const shortLocalesNames = {
   pt: "PT",
 };
 
-export const {Link, getPathname, redirect, usePathname, useRouter} =
-  createNavigation(routing);
+const navigation = createNavigation(routing);
+const BaseLink = navigation.Link;
+
+export const Link = forwardRef<
+	ElementRef<typeof BaseLink>,
+	ComponentProps<typeof BaseLink>
+>(function Link(props, ref) {
+	return createElement(BaseLink, { ...props, prefetch: false, ref });
+});
+
+export const {getPathname, redirect, usePathname, useRouter} = navigation;

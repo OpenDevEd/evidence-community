@@ -7,7 +7,6 @@ import { PropsWithChildren, ReactNode } from "react";
 import { BiSolidBookBookmark, BiSolidBookContent } from "react-icons/bi";
 import { twMerge } from "tailwind-merge";
 import ReactMarkdown from "react-markdown";
-import Link from "next/link";
 import Resource from "../items/Resource";
 import React from "react";
 import { Card } from "@/components/heroui/Card";

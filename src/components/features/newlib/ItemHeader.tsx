@@ -169,6 +169,7 @@ export default function ItemHeader({
 								<Button
 									as={Link}
 									href={isCitationPage ? `/lib/${item?.key}` : `/citation/${item?.key}`}
+									prefetch={false}
 									size="sm"
 									color={isCitationPage ? "accent" : "secondary"}
 									startContent={<BsQuote className="size-4" />}

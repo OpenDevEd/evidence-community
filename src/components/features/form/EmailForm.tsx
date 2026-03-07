@@ -16,7 +16,6 @@ import { toast } from "@/components/layout/Toast";
 import { takedownRequestSchema } from "@/lib/utils";
 import { MdEmail } from "react-icons/md";
 import { useTranslations } from "next-intl";
-import Link from "next/link";
 import { useMemo } from "react";
 
 const LINK_SEPARATOR = "\t• ";

@@ -33,7 +33,6 @@ import { useSWRConfig } from "swr";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { useQueryState } from "nuqs";
 import { COMING_SOON_TAG, INTERNAL_TAG } from "@/constants/items";
-import PrefetchLink from "../PrefetchLink";
 import { generateCOinS } from "@/lib/coins";
 
 export function AddButton({
@@ -295,8 +294,9 @@ export default function Resource({
 			{finalItemData?.key && !hideUnapi && (
 				<abbr className="unapi-id" title={finalItemData.key}></abbr>
 			)}
-			<PrefetchLink
+			<Link
 				href={finalItemData?.key ? targetHref : ""}
+				prefetch={false}
 				className={twMerge(
 					"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
 					!finalItemData?.key && "!pointer-events-none",
@@ -379,7 +379,7 @@ export default function Resource({
 						</Skeleton>
 					)}
 				</article>
-			</PrefetchLink>
+			</Link>
 			<ResourceInteractions
 				itemData={finalItemData}
 				isLoading={finalIsLoading}
