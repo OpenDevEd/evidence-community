@@ -4,7 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        RUNTIME_IMAGE: ${RUNTIME_IMAGE:-platformatic/node-caged:25-slim}
+        RUNTIME_IMAGE: ${RUNTIME_IMAGE:-node:22-bookworm-slim}
     env_file:
       - .env
     environment:

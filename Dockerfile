@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG RUNTIME_IMAGE=platformatic/node-caged:25-slim
+ARG RUNTIME_IMAGE=node:22-bookworm-slim
 FROM node:22-bookworm-slim AS base
 
 ENV NEXT_TELEMETRY_DISABLED=1
