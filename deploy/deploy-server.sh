@@ -84,7 +84,7 @@ ssh "$REMOTE_HOST" "docker --version >/dev/null 2>&1 && docker compose version >
 }
 
 echo_step 4 "Resetting remote repo to origin/$CURRENT_BRANCH"
-ssh "$REMOTE_HOST" "bash -lc 'set -euo pipefail; cd \"$REMOTE_APP_DIR\"; git fetch origin \"$CURRENT_BRANCH\"; git checkout -B \"$CURRENT_BRANCH\" \"origin/$CURRENT_BRANCH\"; git reset --hard \"origin/$CURRENT_BRANCH\"; git clean -fdx'"
+ssh "$REMOTE_HOST" "bash -lc 'set -euo pipefail; cd \"$REMOTE_APP_DIR\"; git fetch origin \"$CURRENT_BRANCH\"; git reset --hard; git clean -fdx; git checkout -B \"$CURRENT_BRANCH\" \"origin/$CURRENT_BRANCH\"; git reset --hard \"origin/$CURRENT_BRANCH\"; git clean -fdx'"
 
 echo_step 5 "Uploading $LOCAL_ENV_FILE to $REMOTE_APP_DIR"
 scp "$TMP_DIR/$LOCAL_ENV_FILE" "$REMOTE_HOST:$REMOTE_APP_DIR/$LOCAL_ENV_FILE"
