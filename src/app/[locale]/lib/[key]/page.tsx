@@ -54,7 +54,7 @@ function getPages(pages: string): { firstPage?: string; lastPage?: string } {
 }
 
 export async function generateMetadata(props: {
-	params: Promise<{ key: string }>;
+	params: Promise<{ key: string; locale: string }>;
 }): Promise<Metadata> {
 	"use cache";
 	cacheLife({ revalidate: 60 });
@@ -195,8 +195,19 @@ export async function generateMetadata(props: {
 	};
 }
 
+async function renderCachedItemPage(locale: string, key: string) {
+	"use cache";
+	cacheLife({ revalidate: 60 });
+
+	void locale;
+
+	return <ServerComponent params={Promise.resolve({ key })} />;
+}
+
 export default async function ItemPage(props: {
-	params: Promise<{ key: string }>;
+	params: Promise<{ key: string; locale: string }>;
 }) {
-	return <ServerComponent params={props.params} />;
+	const params = await props.params;
+
+	return renderCachedItemPage(params.locale, params.key);
 }

@@ -10,6 +10,7 @@ export const routing = defineRouting({
   locales,
   defaultLocale,
   localeDetection,
+  localeCookie: false,
   localePrefix: "as-needed"
 });
 

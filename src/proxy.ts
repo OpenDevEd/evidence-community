@@ -8,6 +8,7 @@ import configJSON from "./constants/config.json";
 import { PDFDocument } from "pdf-lib";
 import { getRedirect, isLikelyZoteroKey } from "./lib/redirects";
 import { getItemRaw } from "./app/api/item/[key]/route";
+import { PUBLIC_READ_CACHE_CONTROL } from "./lib/http-cache";
 
 export type RateLimit = {
 	count: number;
@@ -18,6 +19,47 @@ export const rateLimits = new Map<string, RateLimit>();
 
 const AMOUNT_OF_REQUESTS = 10;
 const RESET_TIME = 60000;
+
+function stripLocalePrefix(pathname: string) {
+	const locales = [...routing.locales].sort((a, b) => b.length - a.length);
+
+	for (const locale of locales) {
+		if (pathname === `/${locale}`) {
+			return "/";
+		}
+
+		if (pathname.startsWith(`/${locale}/`)) {
+			return pathname.slice(locale.length + 1);
+		}
+	}
+
+	return pathname;
+}
+
+function isAiRateLimitedPath(pathname: string) {
+	return pathname.startsWith("/api/ai") && !pathname.includes("embeddings");
+}
+
+function isProtectedApiPath(pathname: string) {
+	return (
+		pathname === "/api/like" ||
+		pathname === "/api/auth/session" ||
+		pathname.startsWith("/api/user")
+	);
+}
+
+function shouldResolveAuth(pathname: string) {
+	return isAiRateLimitedPath(pathname) || isProtectedApiPath(pathname);
+}
+
+function isPublicItemPagePath(pathname: string) {
+	const normalizedPathname = stripLocalePrefix(pathname);
+
+	return (
+		normalizedPathname === "/lib" ||
+		normalizedPathname.startsWith("/lib/")
+	);
+}
 
 function handleLegacyScope(
 	request: NextRequest,
@@ -268,7 +310,10 @@ function mapLegacySearchParams(request: NextRequest) {
 
 
 async function handleProxy(request: NextRequest, userId?: string | null) {
-	const rateLimit = generateRateLimitObject(request, userId);
+	const pathname = request.nextUrl.pathname;
+	const rateLimit = isAiRateLimitedPath(pathname)
+		? generateRateLimitObject(request, userId)
+		: null;
 
 	if (request.nextUrl.pathname === "/") {
 		return NextResponse.redirect(new URL("/lib", fixRequestUrl(request)));
@@ -444,14 +489,11 @@ async function handleProxy(request: NextRequest, userId?: string | null) {
 			finalURL.searchParams.set(key, value);
 		});
 		return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
-	} else if (request.nextUrl.pathname.startsWith("/api/")) {
-		if (
-			request.nextUrl.pathname.startsWith("/api/ai") &&
-			!request.nextUrl.pathname.includes("embeddings")
-		) {
-			if (rateLimit) {
-				const timeSinceFirstRequest =
-					Date.now() - rateLimit.firstRequest;
+		} else if (pathname.startsWith("/api/")) {
+			if (isAiRateLimitedPath(pathname)) {
+				if (rateLimit) {
+					const timeSinceFirstRequest =
+						Date.now() - rateLimit.firstRequest;
 
 				if (timeSinceFirstRequest < RESET_TIME) {
 					rateLimit.count++;
@@ -475,16 +517,28 @@ async function handleProxy(request: NextRequest, userId?: string | null) {
 				);
 			}
 		}
-		return setRateLimitHeaders(NextResponse.next(), rateLimit);
-	}
+			return NextResponse.next();
+		}
 
-	const response = createMiddleware(routing)(request);
+		const response = createMiddleware(routing)(request);
 
-	return setRateLimitHeaders(response, rateLimit);
+		if (isPublicItemPagePath(pathname)) {
+			response.headers.set("Cache-Control", PUBLIC_READ_CACHE_CONTROL);
+			response.headers.delete("x-clerk-auth-reason");
+			response.headers.delete("x-clerk-auth-status");
+			response.headers.delete("X-RateLimit-Limit");
+			response.headers.delete("X-RateLimit-Remaining");
+			response.headers.delete("X-RateLimit-Reset");
+			response.headers.delete("Retry-After");
+		}
+
+		return response;
 }
 
 export default clerkMiddleware(async (auth, request) => {
-	const { userId } = await auth();
+	const userId = shouldResolveAuth(request.nextUrl.pathname)
+		? (await auth()).userId
+		: null;
 	return handleProxy(request, userId);
 });
 
