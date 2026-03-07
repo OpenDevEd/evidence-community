@@ -6,6 +6,7 @@
 		"dev": "next dev --turbopack",
 		"build": "export NEXT_PUBLIC_COMPANY_NAME=$(npx tsx ./tools/generateIcons.ts) && npm run schema:generate && FORCE_COLOR=1 NODE_OPTIONS='--max_old_space_size=8192' next build",
 		"start": "next start",
+		"deploy:server": "bash ./deploy/deploy-server.sh",
 		"lint": "eslint .",
 		"sitemap:generate": "npx tsx ./tools/generateSitemapIndex.ts",
 		"icons:generate": "npx tsx ./tools/generateIcons.ts > /dev/null",

@@ -5,6 +5,7 @@ const withNextIntl = createNextIntlPlugin();
 
 const nextConfig = {
 	cacheComponents: true,
+	output: "standalone",
 	experimental: {
 		staleTimes: {
 			dynamic: 30,

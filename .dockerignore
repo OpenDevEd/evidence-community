@@ -1,0 +1,12 @@
+.git
+.github
+.next
+.vercel
+node_modules
+coverage
+meili_data
+npm-debug.log*
+*.log
+*.tsbuildinfo
+docker-compose*
+Dockerfile*
