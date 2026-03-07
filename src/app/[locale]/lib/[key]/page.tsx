@@ -7,8 +7,7 @@ import { Metadata } from "next";
 import { cacheLife } from "next/cache";
 import { convertToImageURL, getExtraValues, parseCompanyName } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
-import { Suspense } from "react";
-import LoadingComponent from "./LoadingComponent";
+import { cache } from "react";
 
 // export async function generateStaticParams() {
 // 	if (process.env.SHOULD_GENERATE_STATIC_PAGES === "true") {
@@ -28,7 +27,7 @@ import LoadingComponent from "./LoadingComponent";
 // 	}
 // }
 
-export async function getCurrentItem(key: string) {
+export const getCurrentItem = cache(async (key: string) => {
 	const data = await getCachedItemSmall(key).catch(() => ({
 		item: undefined,
 	}));
@@ -38,7 +37,7 @@ export async function getCurrentItem(key: string) {
 	}
 
 	return data;
-}
+});
 
 function getPages(pages: string): { firstPage?: string; lastPage?: string } {
 	if (!pages) return {};
@@ -203,10 +202,5 @@ export async function generateMetadata(props: {
 export default async function ItemPage(props: {
 	params: Promise<{ key: string }>;
 }) {
-	const params = await props.params;
-	return (
-		<Suspense fallback={<LoadingComponent itemKey={params.key} />}>
-			<ServerComponent params={props.params} />
-		</Suspense>
-	);
+	return <ServerComponent params={props.params} />;
 }
