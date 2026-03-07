@@ -8,6 +8,7 @@ import { status as statusTable } from "@/db/schema/tables/status";
 import { getCollections } from "./collections/route";
 import { Collection } from "./collections/types";
 import { cacheLife, cacheTag } from "next/cache";
+import { createPerfTrace, getApproxJsonBytes } from "@/lib/perf-log";
 
 const IS_COUNTRY_LIBRARY = process.env.NEXT_PUBLIC_IS_COUNTRY_LIBRARY === "true";
 const REVALIDATE = IS_COUNTRY_LIBRARY ? 60 * 60 * 24 * 30 : 60;
@@ -168,25 +169,70 @@ async function _getItemSmallCached(key: string): Promise<ReturnType<typeof getIt
 }
 
 export async function getCachedItemSmall(key: string, ignoreCache: boolean = false) {
+	const trace = createPerfTrace("getCachedItemSmall", {
+		key,
+		ignoreCache,
+	});
+
 	if (ignoreCache) {
+		trace.step("fetching-uncached-item");
 		const item = await getItem(key);
+		trace.step("uncached-item-loaded", {
+			hasItem: Boolean(item.item),
+			bytes: getApproxJsonBytes(item.item),
+		});
 		if (!item.item) return item;
 		const { fullTextPDFs, ...rest } = item.item;
+		trace.end({
+			hasItem: true,
+			bytes: getApproxJsonBytes(rest),
+		});
 		return { item: stripNulls(rest) as typeof item.item };
 	}
 
 	const result = await _getItemSmallCached(key);
+	trace.step("small-cache-loaded", {
+		hasItem: Boolean(result?.item),
+		bytes: getApproxJsonBytes(result?.item),
+	});
 
 	if (!result || !result.item) {
+		trace.step("small-cache-miss-fallback");
 		const item = await getItem(key);
+		trace.step("fallback-item-loaded", {
+			hasItem: Boolean(item.item),
+			bytes: getApproxJsonBytes(item.item),
+		});
 		if (!item.item) return item;
+		trace.end({
+			hasItem: true,
+			bytes: getApproxJsonBytes(item.item),
+			usedFallback: true,
+		});
 		return { item: { ...item.item, fullTextPDFs: undefined } };
 	}
 
 	const collections = await getCachedCollections();
+	trace.step("collections-loaded", {
+		collectionsCount: Array.isArray(collections) ? collections.length : 0,
+	});
 	if (collections) {
 		hydrateCollections(result.item, collections as Collection[]);
 	}
+
+	trace.end({
+		hasItem: true,
+		bytes: getApproxJsonBytes(result.item),
+		attachmentsCount: result.item.attachmentsData?.length ?? 0,
+		collectionsCount: result.item.collectionsData?.length ?? 0,
+		creatorsCount: result.item.creators?.length ?? 0,
+		relationsCount:
+			Object.values(result.item.relations ?? {}).reduce(
+				(total, relationGroup) =>
+					total + (Array.isArray(relationGroup) ? relationGroup.length : 0),
+				0,
+			) ?? 0,
+	});
 
 	return result;
 }

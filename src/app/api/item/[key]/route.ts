@@ -10,6 +10,7 @@ import config from "@/constants/config.json"
 import { getCachedCollections } from "../../cache";
 import { blockedTags } from "@/constants/misc";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
+import { createPerfTrace, getApproxJsonBytes } from "@/lib/perf-log";
 
 function isMeilisearchDocumentMissingError(error: unknown) {
 	if (!error || typeof error !== "object") {
@@ -29,16 +30,33 @@ function isMeilisearchDocumentMissingError(error: unknown) {
 }
 
 async function getMeilisearchItem(key: string) {
+	const trace = createPerfTrace("getMeilisearchItem", { key });
 	try {
 		const result = await (
 			await meilisearchClient.getIndex(process.env.MEILI_INDEX || config.index)
 		).getDocument(key);
+		trace.end({
+			found: true,
+			bytes: getApproxJsonBytes(result),
+		});
 		return result as Item;
 	} catch (error) {
+		const isMissing = isMeilisearchDocumentMissingError(error);
 		if (!isMeilisearchDocumentMissingError(error)) {
 			console.error("Error fetching item from meilisearch:", {
 				key,
 				error,
+			});
+		}
+		if (isMissing) {
+			trace.end({
+				found: false,
+				missing: true,
+			});
+		} else {
+			trace.error("meilisearch-fetch-failed", error, {
+				found: false,
+				missing: false,
 			});
 		}
 		return null;

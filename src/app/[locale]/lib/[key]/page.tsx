@@ -9,6 +9,7 @@ import { convertToImageURL, getExtraValues, parseCompanyName } from "@/lib/utils
 import ServerComponent from "./ServerComponent";
 import { cache } from "react";
 import { buildSiteUrl } from "@/lib/site-url";
+import { createPerfTrace, getApproxJsonBytes } from "@/lib/perf-log";
 
 // export async function generateStaticParams() {
 // 	if (process.env.SHOULD_GENERATE_STATIC_PAGES === "true") {
@@ -29,13 +30,24 @@ import { buildSiteUrl } from "@/lib/site-url";
 // }
 
 export const getCurrentItem = cache(async (key: string) => {
+	const trace = createPerfTrace("getCurrentItem", { key });
 	const data = await getCachedItemSmall(key).catch(() => ({
 		item: undefined,
 	}));
+	trace.step("item-loaded", {
+		hasItem: Boolean(data?.item),
+		bytes: getApproxJsonBytes(data?.item),
+	});
 
 	if (data?.item && !data.item.citation) {
 		data.item.citation = "<div>Loading...</div>";
+		trace.step("citation-placeholder-added");
 	}
+
+	trace.end({
+		hasItem: Boolean(data?.item),
+		bytes: getApproxJsonBytes(data?.item),
+	});
 
 	return data;
 });
@@ -59,11 +71,20 @@ export async function generateMetadata(props: {
 	"use cache";
 	cacheLife({ revalidate: 60 });
 	const params = await props.params;
+	const trace = createPerfTrace("itemMetadata", params);
 	const data = await getCurrentItem(params.key);
+	trace.step("item-loaded", {
+		hasItem: Boolean(data?.item),
+		bytes: getApproxJsonBytes(data?.item),
+	});
 
 	const { companyName, siteName } = parseCompanyName(process.env.NEXT_PUBLIC_COMPANY_NAME);
 
 	if (!data || !data.item) {
+		trace.end({
+			hasItem: false,
+			outcome: "not-found",
+		});
 		return {
 			title: "404 - Not Found",
 			description: "404 - Not Found",
@@ -86,6 +107,21 @@ export async function generateMetadata(props: {
 	const pdfWithImage = item.attachmentsData?.find(
 		(a: any) => a.PDFCoverPageImage
 	);
+
+	trace.end({
+		hasItem: true,
+		bytes: getApproxJsonBytes(item),
+		attachmentsCount: item.attachmentsData?.length ?? 0,
+		fullTextPdfCount: fullTextPDFs.length,
+		creatorsCount: item.creators?.length ?? 0,
+		relationsCount:
+			Object.values(item.relations ?? {}).reduce(
+				(total, relationGroup) =>
+					total + (Array.isArray(relationGroup) ? relationGroup.length : 0),
+				0,
+			) ?? 0,
+		pdfWithImage: Boolean(pdfWithImage),
+	});
 
 	return {
 		title: item.title,
@@ -198,10 +234,13 @@ export async function generateMetadata(props: {
 async function renderCachedItemPage(locale: string, key: string) {
 	"use cache";
 	cacheLife({ revalidate: 60 });
+	const trace = createPerfTrace("renderCachedItemPage", { locale, key });
 
 	void locale;
 
-	return <ServerComponent params={Promise.resolve({ key })} />;
+	const page = <ServerComponent params={Promise.resolve({ key })} />;
+	trace.end();
+	return page;
 }
 
 export default async function ItemPage(props: {
