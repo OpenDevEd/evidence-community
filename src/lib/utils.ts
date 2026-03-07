@@ -10,6 +10,7 @@ import { InferSelectModel } from "drizzle-orm";
 import { item, item as itemTable } from "@/db/schema/tables/item";
 import schema from "../../public/schema.json";
 import { balanced } from "balanced-match";
+import { buildSiteUrl } from "./site-url";
 
 export const takedownRequestSchema = z.object({
 	email: z.string().email(),
@@ -274,7 +275,7 @@ export function parseCompanyName(raw: string | null | undefined): {
 }
 
 export function convertToImageURL(url: string) {
-	return process.env.BASE_URL + "/images/" + url.split("/").slice(8).join("/");
+	return buildSiteUrl(`/images/${url.split("/").slice(8).join("/")}`);
 }
 
 export function getCountryAncestry(country: string) {

@@ -20,6 +20,7 @@ import LikeButton from "@/components/features/items/LikeButton";
 import { AddButton } from "@/components/features/items/Resource";
 import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
+import { buildSiteUrl } from "@/lib/site-url";
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -75,14 +76,11 @@ export default function ItemHeader({
 	const router = useRouter();
 	const tItemType = useTranslations("itemType");
 	const t = useTranslations("ui");
-	const url = process.env.BASE_URL;
 
 	const getUrl = useCallback(() => {
-		const baseUrl = typeof window !== "undefined" ? window.location.origin : url ?? "";
-		const finalURL = new URL(baseUrl + "/lib/" + item?.key);
-		finalURL.search = "";
-		return finalURL.toString();
-	}, [item?.key, url]);
+		if (typeof window === "undefined" || !item?.key) return "";
+		return buildSiteUrl(`/lib/${item.key}`, window.location.origin);
+	}, [item?.key]);
 
 	const handleBack = () => {
 		if (window.history.length <= 1) {

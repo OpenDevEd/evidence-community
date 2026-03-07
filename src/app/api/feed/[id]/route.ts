@@ -3,6 +3,7 @@ import { defaultParams, escapeXml, getExtraValues, parseCompanyName } from "@/li
 import { getItems } from "@/lib/actions";
 import { create } from "xmlbuilder2";
 import { getCachedStatus } from "../../cache";
+import { buildSiteUrl } from "@/lib/site-url";
 
 function changeEveryValueInJSON(json: any) {
 	for (const key in json) {
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 	const author = feed.ele("author");
 	const { companyName } = parseCompanyName(status.companyName);
 	author.ele("name").txt(escapeXml(companyName));
-	author.ele("uri").txt(escapeXml(`${process.env.BASE_URL}/lib/`));
+	author.ele("uri").txt(escapeXml(buildSiteUrl("/lib/")));
 
 	// Add feed links
 	feed.ele("link", {
@@ -123,11 +124,11 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 		entry.ele("link", {
 			rel: "alternate",
 			type: "text/html",
-			href: escapeXml(`${process.env.BASE_URL}/lib/${item.key}`),
+			href: escapeXml(buildSiteUrl(`/lib/${item.key}`)),
 		});
 		entry
 			.ele("id")
-			.txt(escapeXml(`${process.env.BASE_URL}/lib/${item.key}`));
+			.txt(escapeXml(buildSiteUrl(`/lib/${item.key}`)));
 		entry
 			.ele("updated")
 			.txt(

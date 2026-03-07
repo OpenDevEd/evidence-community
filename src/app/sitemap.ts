@@ -3,6 +3,7 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { routing } from "@/i18n/routing";
 import { getSitemapPageCount } from "@/lib/sitemap";
+import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
 import { getPolicyLastModified } from "@/lib/policy-documents";
@@ -11,7 +12,7 @@ function getLocalizedUrl(pathname: string, locale: string) {
 	const localizedPath =
 		locale === routing.defaultLocale ? pathname : `/${locale}${pathname}`;
 
-	return `${process.env.BASE_URL}${localizedPath}`;
+	return buildSiteUrl(localizedPath);
 }
 
 function getLanguageAlternates(pathname: string) {

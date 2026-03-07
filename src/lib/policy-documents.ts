@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getSiteHost } from "@/lib/site-url";
 import { parseCompanyName } from "@/lib/utils";
 import { readFile, stat } from "fs/promises";
 import { join } from "path";
@@ -13,11 +14,6 @@ const POLICY_DOCUMENT_PATHS = {
 const DEFAULT_POLICY_SITE_HOST = "docs.opendeved.net";
 const POLICY_SITE_HOST_TOKEN = "{{SITE_HOST}}";
 const POLICY_CONDITIONAL_CLOSE_TOKEN = "{{::}}";
-const POLICY_SITE_URL_ENV_KEYS = [
-	"BASE_URL",
-	"VERCEL_PROJECT_PRODUCTION_URL",
-	"VERCEL_URL",
-] as const;
 const POLICY_VERCEL_ENV_KEYS = [
 	"VERCEL",
 	"VERCEL_ENV",
@@ -41,37 +37,8 @@ function hasEnvValue(rawValue: string | undefined) {
 	return Boolean(rawValue?.trim());
 }
 
-function normalizeSiteHost(rawValue: string | undefined) {
-	if (!rawValue) return null;
-
-	const trimmedValue = rawValue.trim();
-	if (!trimmedValue) return null;
-
-	try {
-		const normalizedUrl = new URL(
-			trimmedValue.includes("://")
-				? trimmedValue
-				: `https://${trimmedValue}`
-		);
-
-		return normalizedUrl.host || null;
-	} catch {
-		return (
-			trimmedValue
-				.replace(/^[a-z]+:\/\//i, "")
-				.replace(/\/.*$/, "")
-				.trim() || null
-		);
-	}
-}
-
 function getPolicySiteHost() {
-	for (const envKey of POLICY_SITE_URL_ENV_KEYS) {
-		const siteHost = normalizeSiteHost(process.env[envKey]);
-		if (siteHost) return siteHost;
-	}
-
-	return DEFAULT_POLICY_SITE_HOST;
+	return getSiteHost() ?? DEFAULT_POLICY_SITE_HOST;
 }
 
 function getPolicyConditionalTags() {

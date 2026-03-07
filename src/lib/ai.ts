@@ -14,6 +14,7 @@ import { embeddings, embeddings as embeddingsTable } from "@/db/schema/tables/em
 import { and, desc, eq, gt, or } from "drizzle-orm";
 import { cosineDistance } from "drizzle-orm";
 import { sql } from "drizzle-orm";
+import { buildSiteUrl } from "./site-url";
 
 const embeddingModel = openai.embedding("text-embedding-3-small");
 
@@ -203,6 +204,6 @@ export const findRelevantContent = async (
 
 	return similarGuidesFromDb.map((guide: any) => ({
 		...guide,
-		url: process.env.BASE_URL + `/lib/${guide.parentKey}`,
+		url: buildSiteUrl(`/lib/${guide.parentKey}`),
 	}));
 };

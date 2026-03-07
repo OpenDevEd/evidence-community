@@ -1,15 +1,16 @@
 import EvidenceLibrary from "@/components/pages/EvidenceLibrary";
 import { Metadata } from "next";
+import { buildSiteUrl } from "@/lib/site-url";
 
 export async function libraryMetadata(props: {
   pathname: string;
 }): Promise<Metadata> {
-  const atomUrl = new URL(`${props.pathname}/atom.xml`, process.env.BASE_URL!);
+  const atomUrl = buildSiteUrl(`${props.pathname}/atom.xml`);
   return {
     generator: "new-el",
     alternates: {
       types: {
-        "application/atom+xml": atomUrl.toString()
+        "application/atom+xml": atomUrl
       }
     }
   }

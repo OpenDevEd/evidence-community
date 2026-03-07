@@ -1,5 +1,6 @@
 import { SITEMAP_SIZE } from "@/constants/misc";
 import { getTotalItems } from "@/lib/actions";
+import { buildSiteUrl } from "@/lib/site-url";
 
 export async function getSitemapPageCount() {
 	const total = await getTotalItems();
@@ -7,5 +8,5 @@ export async function getSitemapPageCount() {
 }
 
 export function getSitemapShardUrl(id: number | string) {
-	return `${process.env.BASE_URL}/sitemap/${id}.xml`;
+	return buildSiteUrl(`/sitemap/${id}.xml`);
 }

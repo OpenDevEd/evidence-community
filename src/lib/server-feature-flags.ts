@@ -8,11 +8,11 @@ import {
 	getFallbackFeatureFlags,
 	normalizeFeatureFlags,
 } from "@/lib/feature-flags";
+import { getConfiguredSiteOrigin } from "@/lib/site-url";
 
 function getAnonymousFeatureFlagsDistinctId() {
 	const deploymentScope =
-		process.env.BASE_URL ||
-		process.env.VERCEL_PROJECT_PRODUCTION_URL ||
+		getConfiguredSiteOrigin() ||
 		process.env.VERCEL_URL ||
 		process.env.MEILI_INDEX ||
 		"default";

@@ -8,6 +8,7 @@ import { cacheLife } from "next/cache";
 import { convertToImageURL, getExtraValues, parseCompanyName } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
 import { cache } from "react";
+import { buildSiteUrl } from "@/lib/site-url";
 
 // export async function generateStaticParams() {
 // 	if (process.env.SHOULD_GENERATE_STATIC_PAGES === "true") {
@@ -91,30 +92,27 @@ export async function generateMetadata(props: {
 		description: item.abstractNote,
 		generator: "new-el",
 		alternates: {
-			canonical: `${process.env.BASE_URL!}/lib/${item.key}`,
+			canonical: buildSiteUrl(`/lib/${item.key}`),
 			languages: routing.locales
 				.filter((locale) => locale !== routing.defaultLocale)
 				.reduce((acc: { [locale: string]: string }, locale) => {
-					acc[locale] = `${process.env.BASE_URL!}/${locale}/lib/${
-						item.key
-					}`;
+					acc[locale] = buildSiteUrl(`/${locale}/lib/${item.key}`);
 					return acc;
 				}, {}),
 			types: {
-				"application/x-research-info-systems": `${process.env
-					.BASE_URL!}/lib/${item.key}/export/ris`,
-				"application/x-bibtex": `${process.env.BASE_URL!}/lib/${
-					item.key
-				}/export/bibtex`,
+				"application/x-research-info-systems": buildSiteUrl(
+					`/lib/${item.key}/export/ris`
+				),
+				"application/x-bibtex": buildSiteUrl(
+					`/lib/${item.key}/export/bibtex`
+				),
 			},
 			media: {
 				"image/jpeg": pdfWithImage
 					? convertToImageURL(pdfWithImage.PDFCoverPageImage ?? "")
 					: null,
 				"application/pdf": pdfWithImage
-					? `${process.env.BASE_URL!}/lib/${item.key}/download/${
-							pdfWithImage.key
-					  }`
+					? buildSiteUrl(`/lib/${item.key}/download/${pdfWithImage.key}`)
 					: null,
 			},
 		},
@@ -153,15 +151,13 @@ export async function generateMetadata(props: {
 
 			citation_public_url: item.url ?? "",
 			citation_pdf_url: pdfWithImage
-				? `${process.env.BASE_URL!}/lib/${item.key}/download/${
-						pdfWithImage.key
-				  }`
+				? buildSiteUrl(`/lib/${item.key}/download/${pdfWithImage.key}`)
 				: "",
 		},
 		openGraph: {
 			title: item.title ?? "",
 			description: item.abstractNote ?? "",
-			url: `${process.env.BASE_URL!}/lib/${item.key}`,
+			url: buildSiteUrl(`/lib/${item.key}`),
 			siteName: `${companyName} - ${siteName}`,
 			images: [
 				{
