@@ -11,6 +11,23 @@ import { getCachedCollections } from "../../cache";
 import { blockedTags } from "@/constants/misc";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 
+function isMeilisearchDocumentMissingError(error: unknown) {
+	if (!error || typeof error !== "object") {
+		return false;
+	}
+
+	if (
+		"response" in error &&
+		error.response &&
+		typeof error.response === "object" &&
+		"status" in error.response
+	) {
+		return error.response.status === 404;
+	}
+
+	return false;
+}
+
 async function getMeilisearchItem(key: string) {
 	try {
 		const result = await (
@@ -18,7 +35,12 @@ async function getMeilisearchItem(key: string) {
 		).getDocument(key);
 		return result as Item;
 	} catch (error) {
-		console.warn("Error fetching item from meilisearch:", error);
+		if (!isMeilisearchDocumentMissingError(error)) {
+			console.error("Error fetching item from meilisearch:", {
+				key,
+				error,
+			});
+		}
 		return null;
 	}
 }
