@@ -1,32 +1,42 @@
 "use client";
 
 import { NextUIProvider } from "@nextui-org/react";
-import { ThemeProvider, useTheme } from "next-themes";
+import { ThemeProvider } from "next-themes";
 import { useSearchParams } from "next/navigation";
-import { usePathname } from "@/i18n/routing";
-import posthog from "posthog-js";
-import { PostHogProvider, usePostHog } from "posthog-js/react";
-import { Suspense, useCallback, useEffect, useRef, useState } from "react";
-import { useRouter } from "@/i18n/routing";
-import { createContext, useContext } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { style } from "../../tailwind.config";
-import Image from "next/image";
-import { twMerge } from "tailwind-merge";
-import { SessionProvider } from "next-auth/react";
-import { Session } from "next-auth";
+import { usePathname, useRouter } from "@/i18n/routing";
+import {
+	createContext,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	Suspense,
+} from "react";
 import { InferSelectModel } from "drizzle-orm";
-import { status as statusTable } from "@/db/schema/tables/status";
-import { ItemsGetResponse } from "@/app/api/items/types";
 import { useLocalStorage } from "usehooks-ts";
 import { useTranslations } from "next-intl";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
-import { toast, Toaster } from "sonner";
-import { convertStringFromDatabaseToObject, getDynamicStyles, parseCompanyName } from "@/lib/utils";
-import { getPersistence } from "@/components/layout/Banner";
+import { Toaster } from "sonner";
 import { useQueryState } from "nuqs";
+import { ItemsGetResponse } from "@/app/api/items/types";
+import {
+	AnalyticsConsentProvider,
+	useAnalyticsConsent,
+} from "@/components/features/analytics/AnalyticsConsentProvider";
+import GoogleAnalyticsManager from "@/components/features/analytics/GoogleAnalyticsManager";
+import { status as statusTable } from "@/db/schema/tables/status";
 import { toast as toastComponent } from "@/components/layout/Toast";
 import { UtmAttributionProvider } from "@/components/features/UtmProvider";
+import type { AnalyticsConsentState } from "@/lib/analytics-consent";
+import { trackPageView } from "@/lib/analytics";
+import { SessionProvider } from "next-auth/react";
+import {
+	type RuntimeFeatureFlags,
+	isFeatureFlagEnabled,
+} from "@/lib/feature-flags";
 
 export type CacheContextType = {
 	status: InferSelectModel<typeof statusTable>;
@@ -41,11 +51,15 @@ export type CacheContextType = {
 };
 
 export const CacheContext = createContext<any>({});
-export const FeatureFlagsContext = createContext<any>({});
+export const FeatureFlagsContext = createContext<{
+	featureFlags: RuntimeFeatureFlags;
+}>({
+	featureFlags: {},
+});
 
 export function useFeatureFlagEnabled(flag: string) {
 	const { featureFlags } = useContext(FeatureFlagsContext);
-	return featureFlags?.has(flag);
+	return isFeatureFlagEnabled(featureFlags, flag);
 }
 
 export function useStatus(): CacheContextType["status"] {
@@ -56,28 +70,37 @@ export function useStatus(): CacheContextType["status"] {
 function PageView() {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
-	const posthog = usePostHog();
+	const { analyticsReady, consentState } = useAnalyticsConsent();
 
 	useEffect(() => {
-		if (pathname && posthog) {
-			let url = window.origin + pathname;
-			if (searchParams.toString()) {
-				url = url + `?${searchParams.toString()}`;
-			}
-			posthog.capture("$pageview", {
-				$current_url: url,
-			});
+		if (
+			consentState !== "granted" ||
+			!analyticsReady ||
+			!pathname
+		) {
+			return;
 		}
-	}, [pathname, searchParams, posthog]);
+
+		const query = searchParams.toString();
+		trackPageView(query ? `${pathname}?${query}` : pathname);
+	}, [analyticsReady, consentState, pathname, searchParams]);
 
 	return null;
+}
+
+function AnalyticsVendors({
+	googleAnalyticsId,
+}: {
+	googleAnalyticsId: string;
+}) {
+	return <GoogleAnalyticsManager gaId={googleAnalyticsId} />;
 }
 
 function CacheProvider({
 	children,
 	status,
 }: {
-	children: React.ReactNode;
+	children: ReactNode;
 	status: InferSelectModel<typeof statusTable>;
 }) {
 	const [cache, setCache] = useState({});
@@ -123,7 +146,6 @@ export function useLastFetchedData() {
 	const setLastFetchedDataAsResponse = useCallback(
 		(data: ItemsGetResponse) => {
 			setLastFetchedData((prev) => {
-				// replace all citations with <div>Loading...</div>
 				const allItems = [...(prev?.items ?? []), ...data.items];
 
 				const uniqueItems = allItems.reduce((acc, item) => {
@@ -146,93 +168,23 @@ export function useLastFetchedData() {
 	};
 }
 
-function LoadingScreen({
-	children,
-	featureFlags,
-}: {
-	children: React.ReactNode;
-	featureFlags: Set<string> | null;
-}) {
-	const { resolvedTheme: theme } = useTheme();
-	const statusTable = useStatus();
-	const { companyName } = parseCompanyName(statusTable?.companyName);
-	const t = useTranslations("ui");
-	const companyLogoStyle = convertStringFromDatabaseToObject(statusTable.companyLogo || "")["splash"];
-
-	return (
-		<AnimatePresence mode="popLayout">
-			{featureFlags ? (
-					children
-			) : (
-				<motion.div
-					key="loading"
-					initial={{ opacity: 1 }}
-					animate={{ opacity: 1 }}
-					exit={{ opacity: 0 }}
-					className="fixed inset-0 w-full bg-background_light dark:bg-background flex justify-center items-center gap-4 z-[999]"
-				>
-					<AnimatePresence mode="popLayout">
-						<motion.div
-							key="logo"
-							initial={{
-								opacity: 0,
-							}}
-							animate={{
-								opacity: 1,
-							}}
-							exit={{ opacity: 0, scale: 0 }}
-							className="flex flex-col items-center justify-center"
-						>
-							{["dark", "light"].map((themeToMatch) => (
-								<Image
-									suppressHydrationWarning
-									aria-hidden={themeToMatch !== theme}
-									key={themeToMatch}
-									src={
-										themeToMatch === "dark"
-											? `/logos/${companyName.toLowerCase()}/logo.png`
-											: `/logos/${companyName.toLowerCase()}/logo_light.png`
-									}
-									className={twMerge(
-										"pointer-events-none",
-										themeToMatch === "light"
-											? "dark:hidden"
-											: "hidden dark:block",
-										companyLogoStyle
-									)}
-									alt={t("logoAlt", {
-										company: companyName,
-										theme: themeToMatch,
-									})}
-									width={171}
-									height={40}
-									style={{ ...getDynamicStyles(companyLogoStyle) }}
-								/>
-							))}
-						</motion.div>
-					</AnimatePresence>
-				</motion.div>
-			)}
-		</AnimatePresence>
-	);
-}
-
-
 function ToastAdapter({
 	children,
 }: {
-	children: React.ReactNode;
+	children: ReactNode;
 }) {
-	return <>
-		{children}
-		<Toaster />
-	</>
+	return (
+		<>
+			{children}
+			<Toaster />
+		</>
+	);
 }
 
 function PramNotificationProvider({
 	children,
 }: {
-	children: React.ReactNode;
+	children: ReactNode;
 }) {
 	const [error, setError] = useQueryState("error");
 	const [message, setMessage] = useQueryState("message");
@@ -254,44 +206,26 @@ function PramNotificationProvider({
 			});
 			setMessage(null);
 		}
-	}, [error, message]);
+	}, [error, message, setError, setMessage, t]);
 
 	return <>{children}</>;
 }
 
 export default function Providers({
 	children,
-	session,
+	googleAnalyticsId,
 	status,
+	initialConsentState,
+	initialFeatureFlags,
 }: {
-	children: React.ReactNode;
-	session?: Session | null;
+	children: ReactNode;
+	googleAnalyticsId: string;
 	status: InferSelectModel<typeof statusTable>;
+	initialConsentState?: AnalyticsConsentState;
+	initialFeatureFlags: RuntimeFeatureFlags;
 }) {
 	const router = useRouter();
-	const [featureFlags, setFeatureFlags] = useState<Set<string> | null>(null);
-
-	useEffect(() => {
-		posthog
-			.init(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
-				person_profiles: "always",
-				capture_pageview: false,
-				capture_pageleave: true,
-				api_host: "/backend",
-				ui_host: "https://us.posthog.com",
-				persistence: getPersistence(),
-			})
-			?.onFeatureFlags((featureFlags) => {
-				const newFeatureFlags = new Set(featureFlags);
-
-				// // TODO: Remove this once we have a way to test feature flags
-				// newFeatureFlags.delete("ai-search");
-				// newFeatureFlags.add("deep-research");
-
-
-				setFeatureFlags(newFeatureFlags);
-			});
-	}, []);
+	const featureFlags = useMemo(() => initialFeatureFlags, [initialFeatureFlags]);
 
 	return (
 		<ThemeProvider
@@ -299,31 +233,32 @@ export default function Providers({
 			defaultTheme={process.env.NEXT_PUBLIC_DEFAULT_THEME || "dark"}
 			forcedTheme={process.env.NEXT_PUBLIC_FORCED_THEME || undefined}
 			disableTransitionOnChange
-	>
+		>
 			<NuqsAdapter>
 				<ToastAdapter>
-					<SessionProvider session={session ?? undefined}>
-						<PostHogProvider client={posthog}>
+					<SessionProvider>
+						<AnalyticsConsentProvider
+							initialConsentState={initialConsentState}
+						>
 							<FeatureFlagsContext.Provider value={{ featureFlags }}>
-							<CacheProvider status={status}>
-								<NextUIProvider navigate={router.push}>
-									<Suspense>
-										<PramNotificationProvider>
-											<PageView />
-										</PramNotificationProvider>
-									</Suspense>
-									<UtmAttributionProvider />
-									<LoadingScreen
-										featureFlags={featureFlags}
-									>
+								<CacheProvider status={status}>
+									<NextUIProvider navigate={router.push}>
+										<Suspense>
+											<PramNotificationProvider>
+												<PageView />
+											</PramNotificationProvider>
+										</Suspense>
+										<UtmAttributionProvider />
 										{children}
-									</LoadingScreen>
-								</NextUIProvider>
-							</CacheProvider>
-						</FeatureFlagsContext.Provider>
-					</PostHogProvider>
-				</SessionProvider>
-			</ToastAdapter>
+										<AnalyticsVendors
+											googleAnalyticsId={googleAnalyticsId}
+										/>
+									</NextUIProvider>
+								</CacheProvider>
+							</FeatureFlagsContext.Provider>
+						</AnalyticsConsentProvider>
+					</SessionProvider>
+				</ToastAdapter>
 			</NuqsAdapter>
 		</ThemeProvider>
 	);

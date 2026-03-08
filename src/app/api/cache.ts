@@ -185,6 +185,10 @@ export async function getCachedStatus(): Promise<InferSelectModel<typeof statusT
 	'use cache'
 	cacheLife({ revalidate: 60 })
 	cacheTag('status')
+	return getStatusDirect();
+}
+
+export async function getStatusDirect(): Promise<InferSelectModel<typeof statusTable>> {
 	const newStatus = await db.query.status.findFirst();
 	if (!newStatus) {
 		throw new Error('Status not found');

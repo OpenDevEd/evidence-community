@@ -52,7 +52,7 @@ import { BiTrash } from "react-icons/bi";
 import { Dropdown } from "../nextui/Dropdown";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList from "../features/items/ItemsList";
-import { useFeatureFlagEnabled } from "posthog-js/react";
+import { useFeatureFlagEnabled } from "@/context/Providers";
 
 function CreateCollectionModal({
 	update,
@@ -429,15 +429,16 @@ function CollectionDropdown({
 								<div className="flex flex-col gap-0.5 border-t border-black/10 dark:border-white/10 pt-3 mt-1">
 									<div className="flex items-center gap-1 text-[11px] text-black/40 dark:text-white/40">
 										<span>{t("createdLabel")}</span>
-										<span>
-											{formatter.relativeTime(
-												new Date(
-													selectedCollectionData?.createdAt ||
-														Date.now()
-												),
-												Date.now()
-											)}
-										</span>
+										{selectedCollectionData?.createdAt ? (
+											<span>
+												{formatter.relativeTime(
+													new Date(
+														selectedCollectionData.createdAt
+													),
+													new Date()
+												)}
+											</span>
+										) : null}
 									</div>
 								</div>
 							</div>

@@ -3,7 +3,6 @@ import Image from "next/image";
 import { socialLinks } from "@/constants/links";
 import { Button } from "@/components/nextui/Button";
 import { useTheme } from "next-themes";
-import { useEffect } from "react";
 import { useState } from "react";
 import { style } from "@/../tailwind.config";
 import { useTranslations } from "next-intl";
@@ -12,12 +11,14 @@ import { Link } from "@/i18n/routing";
 import { twMerge } from "tailwind-merge";
 import { useStatus } from "@/context/Providers";
 import { usePathname } from "next/navigation";
+import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import {
 	convertStringFromDatabaseToObject,
 	getDynamicStyles,
 	localizeOrUseIfCapitalized,
 	parseCompanyName,
 } from "@/lib/utils";
+import { resolveCompanyFooterPolicyLinks, isPolicyPage } from "@/lib/legal-links";
 import { LinkObject } from "@/db/schema/tables/status";
 import { FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
 import { RiBlueskyFill } from "react-icons/ri";
@@ -134,20 +135,18 @@ const socials = {
 
 export default function Footer() {
 	const t = useTranslations("footer");
+	const tUI = useTranslations("ui");
 	const tNav = useTranslations("nav");
-	const [isMounted, setIsMounted] = useState(false);
 	const { resolvedTheme: theme } = useTheme();
+	const { openPreferences } = useAnalyticsConsent();
 	const status = useStatus();
 	const { companyName } = parseCompanyName(status?.companyName);
 	const pathname = usePathname();
 	const links = status.links || [];
 	const footer = status.companyFooter || {};
+	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
 	const isMapPage = pathname.includes("/map");
 	const socialLinks = Object.entries(status.externalLinks || {});
-
-	useEffect(() => {
-		setIsMounted(true);
-	}, []);
 
 	const contactData = links.find((link) => link.id === "contact");
 
@@ -368,11 +367,7 @@ export default function Footer() {
 									<Button
 										as={Link}
 										href={contactData?.href || ""}
-										color={
-											isMounted && theme === "light"
-												? "accent"
-												: undefined
-										}
+										color={theme === "light" ? "accent" : undefined}
 										className="px-12"
 									>
 										{contactData?.label
@@ -387,31 +382,48 @@ export default function Footer() {
 						/>
 					</div>
 				</div>
-				{(footer.privacyPolicy || footer.termsOfService) && (
-					<div className="flex gap-4">
-						{footer.privacyPolicy && (
+				{(resolvedFooterLinks.privacyPolicy ||
+					resolvedFooterLinks.cookiePolicy ||
+					resolvedFooterLinks.termsOfService) && (
+					<div className="flex gap-4 flex-wrap items-center justify-center">
+						{resolvedFooterLinks.privacyPolicy && (
 							<Link
-								href={footer.privacyPolicy}
+								href={resolvedFooterLinks.privacyPolicy}
 								className="text-black/60 dark:text-white/60 font-medium"
 							>
 								{t("privacyPolicy")}
 							</Link>
 						)}
-						<span className="font-medium text-black/60 dark:text-white/60 first:hidden last:hidden">
-							|
-						</span>
-						{footer.termsOfService && (
+						{resolvedFooterLinks.cookiePolicy && (
 							<Link
-								href={footer.termsOfService}
+								href={resolvedFooterLinks.cookiePolicy}
+								className="text-black/60 dark:text-white/60 font-medium"
+							>
+								{t("cookiePolicy")}
+							</Link>
+						)}
+						{resolvedFooterLinks.termsOfService && (
+							<Link
+								href={resolvedFooterLinks.termsOfService}
 								className="text-black/60 dark:text-white/60 font-medium"
 							>
 								{t("termsOfService")}
 							</Link>
 						)}
+						{!isPolicyPage(pathname) && (
+							<Button
+								size="sm"
+								variant="transparent"
+								className="font-medium text-black/60 dark:text-white/60"
+								onPress={openPreferences}
+							>
+								{tUI("preferences")}
+							</Button>
+						)}
 					</div>
 				)}
 				<div className="absolute bottom-0 left-0 p-2 z-50 text-xs text-black/60 dark:text-white/60">
-					0.7.5
+					0.8.0
 				</div>
 			</footer>
 		)

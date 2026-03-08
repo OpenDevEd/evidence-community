@@ -46,7 +46,7 @@ export default function Navbar() {
 
 	// Get enabled elements based on feature flags and session
 	const enabledElements = getEnabledElements(
-		featureFlags ?? new Set(),
+		featureFlags ?? {},
 		session
 	);
 
@@ -74,7 +74,7 @@ export default function Navbar() {
 
 	// Context passed to container components
 	const navbarContext: NavbarContextType = {
-		featureFlags: featureFlags ?? new Set(),
+		featureFlags: featureFlags ?? {},
 		session,
 		styleVariant,
 		theme,

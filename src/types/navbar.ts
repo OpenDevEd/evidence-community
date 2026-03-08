@@ -1,4 +1,5 @@
 import { Session } from "next-auth";
+import { RuntimeFeatureFlags } from "@/lib/feature-flags";
 
 // Breakpoint definitions matching Tailwind config
 // mobile: < xl (< 1280px)
@@ -27,7 +28,10 @@ export interface NavbarElementProps {
 export interface NavbarElementConfig {
 	id: string;
 	// Function to determine if element should be rendered
-	enabled: (featureFlags: Set<string>, session: Session | null) => boolean;
+	enabled: (
+		featureFlags: RuntimeFeatureFlags,
+		session: Session | null
+	) => boolean;
 	// Where element appears at each breakpoint
 	placement: Record<NavbarBreakpoint, NavbarPlacement>;
 	// Component to render
@@ -38,7 +42,7 @@ export interface NavbarElementConfig {
 
 // Context passed to container components
 export interface NavbarContext {
-	featureFlags: Set<string>;
+	featureFlags: RuntimeFeatureFlags;
 	session: Session | null;
 	styleVariant: NavbarStyleVariant;
 	theme: string | undefined;

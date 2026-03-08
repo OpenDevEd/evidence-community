@@ -5,6 +5,7 @@ const withNextIntl = createNextIntlPlugin();
 
 const nextConfig = {
 	cacheComponents: true,
+	output: "standalone",
 	experimental: {
 		staleTimes: {
 			dynamic: 30,
@@ -22,14 +23,6 @@ const nextConfig = {
 	},
 	async rewrites() {
 		return [
-			{
-				source: "/backend/static/:path*",
-				destination: "https://us-assets.i.posthog.com/static/:path*",
-			},
-			{
-				source: "/backend/:path*",
-				destination: "https://us.i.posthog.com/:path*",
-			},
 			{
 				source: "/images/:path*",
 				destination:

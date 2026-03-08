@@ -4,6 +4,10 @@ import ThemeSwitcher from "@/components/layout/navbar/ThemeSwitcher";
 import LanguageSwitcher from "@/components/layout/navbar/LanguageSwitcher";
 import LoginButton from "@/components/layout/navbar/LoginButton";
 import UserMenu from "@/components/layout/navbar/UserMenu";
+import {
+	type RuntimeFeatureFlags,
+	isFeatureFlagEnabled,
+} from "@/lib/feature-flags";
 
 /**
  * Navbar Elements Configuration
@@ -21,7 +25,7 @@ import UserMenu from "@/components/layout/navbar/UserMenu";
 export const navbarElements: NavbarElementConfig[] = [
 	{
 		id: "theme-switcher",
-		enabled: (flags) => flags.has("theme-switcher"),
+		enabled: (flags) => isFeatureFlagEnabled(flags, "theme-switcher"),
 		placement: {
 			mobile: "mobileMenu", // In hamburger menu
 			tablet: "dropdown", // In condensed dropdown
@@ -32,7 +36,9 @@ export const navbarElements: NavbarElementConfig[] = [
 	},
 	{
 		id: "language-switcher",
-		enabled: (flags) => flags.has("language-switcher") && routing.locales.length > 1,
+		enabled: (flags) =>
+			isFeatureFlagEnabled(flags, "language-switcher") &&
+			routing.locales.length > 1,
 		placement: {
 			mobile: "mobileMenu", // In hamburger menu
 			tablet: "dropdown", // In condensed dropdown
@@ -43,7 +49,8 @@ export const navbarElements: NavbarElementConfig[] = [
 	},
 	{
 		id: "login-button",
-		enabled: (flags, session) => flags.has("login") && !session,
+		enabled: (flags, session) =>
+			isFeatureFlagEnabled(flags, "login") && !session,
 		placement: {
 			mobile: "inline", // Always visible on mobile (outside hamburger)
 			tablet: "dropdown", // In condensed dropdown
@@ -69,7 +76,7 @@ export const navbarElements: NavbarElementConfig[] = [
  * Helper function to filter enabled elements
  */
 export function getEnabledElements(
-	featureFlags: Set<string>,
+	featureFlags: RuntimeFeatureFlags,
 	session: any
 ): NavbarElementConfig[] {
 	return navbarElements.filter((el) => el.enabled(featureFlags, session));

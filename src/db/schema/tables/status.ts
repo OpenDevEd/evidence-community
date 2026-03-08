@@ -16,7 +16,13 @@ export type LinkObject = {
 
 export type LinksList = Record<string, LinkObject[]>;
 
-export type CompanyFooter = Record<string, string>;
+export type CompanyFooter = {
+	cookiePolicy?: string;
+	privacyPolicy?: string;
+	termsOfService?: string;
+	featureFlagsState?: string;
+	[key: string]: string | undefined;
+};
 
 export type ExternalLinks = Record<string, string>;
 
