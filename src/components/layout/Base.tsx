@@ -12,11 +12,6 @@ import Banner from "./Banner";
 import { Suspense } from "react";
 import Script from "next/script";
 import { getServerFeatureFlags } from "@/lib/server-feature-flags";
-import { cookies } from "next/headers";
-import {
-	ANALYTICS_CONSENT_COOKIE_NAME,
-	parseAnalyticsConsentState,
-} from "@/lib/analytics-consent";
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -41,18 +36,13 @@ async function BaseContent({
 	const messages = await getMessages();
 	const t = await getTranslations({ locale, namespace: "ui" });
 	const googleAnalyticsId = process.env.GOOGLE_ANALYTICS_ID || "";
-	const initialFeatureFlags = await getServerFeatureFlags();
-	const cookieStore = await cookies();
-	const initialConsentState = parseAnalyticsConsentState(
-		cookieStore.get(ANALYTICS_CONSENT_COOKIE_NAME)?.value
-	);
+	const initialFeatureFlags = getServerFeatureFlags(status.companyFooter);
 
 	return (
 		<NextIntlClientProvider messages={messages}>
 			<Providers
 				googleAnalyticsId={googleAnalyticsId}
 				status={status}
-				initialConsentState={initialConsentState}
 				initialFeatureFlags={initialFeatureFlags}
 			>
 				<MainWrapper>

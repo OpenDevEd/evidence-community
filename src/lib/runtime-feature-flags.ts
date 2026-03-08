@@ -1,11 +1,6 @@
-import "server-only";
-
-import { getStatusDirect } from "@/app/api/cache";
+import type { CompanyFooter } from "@/db/schema/tables/status";
 import { db } from "@/db";
-import {
-	type CompanyFooter,
-	status as statusTable,
-} from "@/db/schema/tables/status";
+import { status as statusTable } from "@/db/schema/tables/status";
 import posthogClient from "@/lib/posthog";
 import {
 	EMPTY_FEATURE_FLAGS,
@@ -16,7 +11,6 @@ import { eq, sql } from "drizzle-orm";
 
 const FEATURE_FLAGS_REVALIDATE_MS = 5 * 60 * 1000;
 const FEATURE_FLAGS_LOCK_NAMESPACE = 9062026;
-const featureFlagRefreshAttempts = new Map<string, number>();
 
 type RuntimeFeatureFlagsState = {
 	flags: RuntimeFeatureFlags;
@@ -40,14 +34,6 @@ function getFeatureFlagsDistinctId() {
 	return `runtime-feature-flags:${getFeatureFlagsScope()}`;
 }
 
-function getLastFeatureFlagRefreshAttempt(scope: string) {
-	return featureFlagRefreshAttempts.get(scope) ?? 0;
-}
-
-function markFeatureFlagRefreshAttempt(scope: string) {
-	featureFlagRefreshAttempts.set(scope, Date.now());
-}
-
 function getFeatureFlagsLockKey() {
 	const scope = getFeatureFlagsScope();
 	let hash = 0;
@@ -69,9 +55,7 @@ function isRuntimeFeatureFlagValue(
 	return typeof value === "boolean" || typeof value === "string";
 }
 
-function sanitizeFeatureFlags(
-	value: unknown
-): RuntimeFeatureFlags {
+export function sanitizeFeatureFlags(value: unknown): RuntimeFeatureFlags {
 	if (!isPlainObject(value)) {
 		return EMPTY_FEATURE_FLAGS;
 	}
@@ -118,9 +102,12 @@ export function serializeRuntimeFeatureFlagsState(
 	return JSON.stringify(state);
 }
 
-function isFeatureFlagsStateFresh(state: RuntimeFeatureFlagsState | null) {
-	return Boolean(
-		state && state.updatedAt >= Date.now() - FEATURE_FLAGS_REVALIDATE_MS
+export function readStoredRuntimeFeatureFlags(
+	companyFooter: CompanyFooter | null | undefined
+): RuntimeFeatureFlags {
+	return (
+		parseRuntimeFeatureFlagsState(companyFooter?.featureFlagsState)?.flags ??
+		EMPTY_FEATURE_FLAGS
 	);
 }
 
@@ -138,7 +125,7 @@ async function releaseFeatureFlagsRefreshLock() {
 	);
 }
 
-async function refreshFeatureFlagsFromPostHog() {
+async function fetchFeatureFlagsFromPostHog() {
 	if (
 		!process.env.NEXT_PUBLIC_POSTHOG_HOST ||
 		!process.env.NEXT_PUBLIC_POSTHOG_KEY
@@ -153,35 +140,31 @@ async function refreshFeatureFlagsFromPostHog() {
 	return sanitizeFeatureFlags(response?.featureFlags);
 }
 
-async function persistFeatureFlagsState(
-	companyFooter: CompanyFooter | null | undefined,
-	flags: RuntimeFeatureFlags,
-	statusId: string
-) {
-	const nextCompanyFooter: CompanyFooter = {
-		...(companyFooter || {}),
-		featureFlagsState: serializeRuntimeFeatureFlagsState({
-			flags,
-			updatedAt: Date.now(),
-		}),
-	};
-
-	await db
-		.update(statusTable)
-		.set({
-			companyFooter: nextCompanyFooter,
-			updatedAt: new Date(),
-		})
-		.where(eq(statusTable.id, statusId));
+async function getFeatureFlagsStatusRecord() {
+	return db.query.status.findFirst({
+		columns: {
+			id: true,
+			companyFooter: true,
+		},
+	});
 }
 
-export async function getRuntimeFeatureFlags(): Promise<RuntimeFeatureFlags> {
-	let status;
+function isFeatureFlagsStateFresh(state: RuntimeFeatureFlagsState | null) {
+	return Boolean(
+		state && state.updatedAt >= Date.now() - FEATURE_FLAGS_REVALIDATE_MS
+	);
+}
 
-	try {
-		status = await getStatusDirect();
-	} catch {
-		return EMPTY_FEATURE_FLAGS;
+export async function syncRuntimeFeatureFlags() {
+	const scope = getFeatureFlagsScope();
+	const status = await getFeatureFlagsStatusRecord();
+
+	if (!status) {
+		return {
+			flags: EMPTY_FEATURE_FLAGS,
+			refreshed: false,
+			reason: "missing-status" as const,
+		};
 	}
 
 	const storedState = parseRuntimeFeatureFlagsState(
@@ -189,55 +172,74 @@ export async function getRuntimeFeatureFlags(): Promise<RuntimeFeatureFlags> {
 	);
 
 	if (storedState && isFeatureFlagsStateFresh(storedState)) {
-		return storedState.flags;
-	}
-
-	const scope = getFeatureFlagsScope();
-	if (
-		getLastFeatureFlagRefreshAttempt(scope) >=
-		Date.now() - FEATURE_FLAGS_REVALIDATE_MS
-	) {
-		return storedState?.flags ?? EMPTY_FEATURE_FLAGS;
+		return {
+			flags: storedState.flags,
+			refreshed: false,
+			reason: "fresh" as const,
+		};
 	}
 
 	const hasLock = await tryAcquireFeatureFlagsRefreshLock();
 
 	if (!hasLock) {
 		console.info("Feature flag sync lock not acquired", { scope });
-		return storedState?.flags ?? EMPTY_FEATURE_FLAGS;
+		return {
+			flags: storedState?.flags ?? EMPTY_FEATURE_FLAGS,
+			refreshed: false,
+			reason: "lock-not-acquired" as const,
+		};
 	}
 
 	console.info("Feature flag sync lock acquired", { scope });
-	markFeatureFlagRefreshAttempt(scope);
 
 	try {
-		const freshFlags = await refreshFeatureFlagsFromPostHog();
+		const freshFlags = await fetchFeatureFlagsFromPostHog();
 
 		if (Object.keys(freshFlags).length === 0) {
 			console.warn("Feature flag sync skipped due to empty response", {
 				scope,
 			});
-			return storedState?.flags ?? EMPTY_FEATURE_FLAGS;
+			return {
+				flags: storedState?.flags ?? EMPTY_FEATURE_FLAGS,
+				refreshed: false,
+				reason: "empty-response" as const,
+			};
 		}
 
-		await persistFeatureFlagsState(
-			status.companyFooter,
-			freshFlags,
-			status.id
-		);
+		await db
+			.update(statusTable)
+			.set({
+				companyFooter: {
+					...(status.companyFooter || {}),
+					featureFlagsState: serializeRuntimeFeatureFlagsState({
+						flags: freshFlags,
+						updatedAt: Date.now(),
+					}),
+				},
+				updatedAt: new Date(),
+			})
+			.where(eq(statusTable.id, status.id));
 
 		console.info("Feature flag sync succeeded", {
 			scope,
 			count: Object.keys(freshFlags).length,
 		});
 
-		return freshFlags;
+		return {
+			flags: freshFlags,
+			refreshed: true,
+			reason: "updated" as const,
+		};
 	} catch (error) {
 		console.error("Feature flag sync failed", {
 			scope,
 			error,
 		});
-		return storedState?.flags ?? EMPTY_FEATURE_FLAGS;
+		return {
+			flags: storedState?.flags ?? EMPTY_FEATURE_FLAGS,
+			refreshed: false,
+			reason: "error" as const,
+		};
 	} finally {
 		await releaseFeatureFlagsRefreshLock();
 	}

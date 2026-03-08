@@ -59,27 +59,22 @@ function readConsentCookie() {
 
 export function AnalyticsConsentProvider({
 	children,
-	initialConsentState,
 }: {
 	children: React.ReactNode;
-	initialConsentState?: AnalyticsConsentState;
 }) {
-	const [consentState, setConsentStateValue] =
-		useState<AnalyticsConsentState>(
-			initialConsentState ?? DEFAULT_ANALYTICS_CONSENT_STATE
-		);
-	const [analyticsReady, setAnalyticsReady] = useState(false);
-	const [hasHydratedConsent, setHasHydratedConsent] = useState(
-		initialConsentState !== undefined
+	const [consentState, setConsentStateValue] = useState<AnalyticsConsentState>(
+		DEFAULT_ANALYTICS_CONSENT_STATE
 	);
+	const [analyticsReady, setAnalyticsReady] = useState(false);
+	const [hasHydratedConsent, setHasHydratedConsent] = useState(false);
 	const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
 
 	useEffect(() => {
-		const nextConsentState = initialConsentState ?? readConsentCookie();
+		const nextConsentState = readConsentCookie();
 		setConsentStateValue(nextConsentState);
 		setIsPreferencesOpen(nextConsentState === "pending");
 		setHasHydratedConsent(true);
-	}, [initialConsentState]);
+	}, []);
 
 	useEffect(() => {
 		if (!hasHydratedConsent) {

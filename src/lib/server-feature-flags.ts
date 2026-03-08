@@ -1,7 +1,10 @@
 import "server-only";
 
-import { getRuntimeFeatureFlags } from "@/lib/runtime-feature-flags";
+import type { CompanyFooter } from "@/db/schema/tables/status";
+import { readStoredRuntimeFeatureFlags } from "@/lib/runtime-feature-flags";
 
-export async function getServerFeatureFlags() {
-	return getRuntimeFeatureFlags();
+export function getServerFeatureFlags(
+	companyFooter: CompanyFooter | null | undefined
+) {
+	return readStoredRuntimeFeatureFlags(companyFooter);
 }

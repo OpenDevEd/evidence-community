@@ -30,7 +30,6 @@ import GoogleAnalyticsManager from "@/components/features/analytics/GoogleAnalyt
 import { status as statusTable } from "@/db/schema/tables/status";
 import { toast as toastComponent } from "@/components/layout/Toast";
 import { UtmAttributionProvider } from "@/components/features/UtmProvider";
-import type { AnalyticsConsentState } from "@/lib/analytics-consent";
 import { trackPageView } from "@/lib/analytics";
 import { SessionProvider } from "next-auth/react";
 import {
@@ -215,13 +214,11 @@ export default function Providers({
 	children,
 	googleAnalyticsId,
 	status,
-	initialConsentState,
 	initialFeatureFlags,
 }: {
 	children: ReactNode;
 	googleAnalyticsId: string;
 	status: InferSelectModel<typeof statusTable>;
-	initialConsentState?: AnalyticsConsentState;
 	initialFeatureFlags: RuntimeFeatureFlags;
 }) {
 	const router = useRouter();
@@ -237,9 +234,7 @@ export default function Providers({
 			<NuqsAdapter>
 				<ToastAdapter>
 					<SessionProvider>
-						<AnalyticsConsentProvider
-							initialConsentState={initialConsentState}
-						>
+						<AnalyticsConsentProvider>
 							<FeatureFlagsContext.Provider value={{ featureFlags }}>
 								<CacheProvider status={status}>
 									<NextUIProvider navigate={router.push}>

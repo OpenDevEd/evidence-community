@@ -4,9 +4,10 @@
 	"private": true,
 	"scripts": {
 		"dev": "next dev --turbopack",
-		"build": "npm run icons:generate && npm run schema:generate && FORCE_COLOR=1 NODE_OPTIONS='--max_old_space_size=8192' next build",
+		"build": "npm run icons:generate && npm run schema:generate && npm run feature-flags:sync && FORCE_COLOR=1 NODE_OPTIONS='--max_old_space_size=8192' next build",
 		"start": "next start",
 		"deploy:server": "bash ./deploy/deploy-server.sh",
+		"feature-flags:sync": "npx tsx ./tools/syncFeatureFlags.ts",
 		"lint": "eslint .",
 		"sitemap:generate": "npx tsx ./tools/generateSitemapIndex.ts",
 		"icons:generate": "npx tsx ./tools/generateIcons.ts",
