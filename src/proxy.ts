@@ -7,6 +7,7 @@ import { SCOPE_OPTIONS, SORT_OPTIONS } from "./constants/items";
 import configJSON from "./constants/config.json";
 import { ConsoleLogWriter } from "drizzle-orm";
 import { PDFDocument } from "pdf-lib";
+import { PUBLIC_READ_CACHE_CONTROL } from "./lib/http-cache";
 
 export type RateLimit = {
 	count: number;
@@ -203,6 +204,10 @@ function setRateLimitHeaders(
 	return response;
 }
 
+function isPublicLibraryPage(pathname: string) {
+	return /(?:^|\/)lib(?:\/[^/]+)?$/.test(pathname);
+}
+
 function fixRequestUrl(request: NextRequest) {
 	const url = request.url.toString();
 	return process.env.REPLACE_HTTPS === "true"
@@ -272,7 +277,9 @@ function isLikelyZoteroKey(key: string) {
 }
 
 export default async function proxy(request: NextRequest) {
-	const rateLimit = generateRateLimitObject(request);
+	const rateLimit = request.nextUrl.pathname.startsWith("/api/ai")
+		? generateRateLimitObject(request)
+		: null;
 
 	if (request.nextUrl.pathname === "/") {
 		return NextResponse.redirect(new URL("/lib", fixRequestUrl(request)));
@@ -308,7 +315,6 @@ export default async function proxy(request: NextRequest) {
 				try {
 					const response = await fetch(url, {
 						signal: controller.signal,
-						cache: "no-store",
 					});
 
 					const redirects = await response.json();
@@ -536,6 +542,10 @@ export default async function proxy(request: NextRequest) {
 	}
 
 	const response = createMiddleware(routing)(request);
+
+	if (isPublicLibraryPage(request.nextUrl.pathname)) {
+		response.headers.set("Cache-Control", PUBLIC_READ_CACHE_CONTROL);
+	}
 
 	return setRateLimitHeaders(response, rateLimit);
 }
