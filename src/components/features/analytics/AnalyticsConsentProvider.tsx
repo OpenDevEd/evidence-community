@@ -10,6 +10,7 @@ import {
 import {
 	clearAnalyticsStorage,
 	initializeClientAnalytics,
+	initializePostHog,
 	updateGoogleConsent,
 } from "@/lib/analytics";
 import {
@@ -70,6 +71,7 @@ export function AnalyticsConsentProvider({
 	const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
 
 	useEffect(() => {
+		initializePostHog();
 		const nextConsentState = readConsentCookie();
 		setConsentStateValue(nextConsentState);
 		setIsPreferencesOpen(nextConsentState === "pending");

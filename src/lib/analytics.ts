@@ -81,7 +81,7 @@ export type AttachmentAnalyticsPayload = {
 };
 
 let analyticsEnabled = false;
-let analyticsInitialized = false;
+let posthogInitialized = false;
 let googleAnalyticsMeasurementId: string | null = null;
 let googleAnalyticsReady = false;
 
@@ -179,18 +179,7 @@ function getGoogleConsentUpdate(granted: boolean) {
 	};
 }
 
-function clearCookie(name: string) {
-	if (typeof document === "undefined") {
-		return;
-	}
-
-	const base =
-		`${name}=; Max-Age=0; Path=/; SameSite=Lax; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-	document.cookie = base;
-	document.cookie = `${base}; Domain=${window.location.hostname}`;
-}
-
-function clearVendorCookies() {
+function clearGACookies() {
 	if (typeof document === "undefined") {
 		return;
 	}
@@ -204,38 +193,18 @@ function clearVendorCookies() {
 		if (
 			cookieName.startsWith("_ga") ||
 			cookieName.startsWith("_gid") ||
-			cookieName.startsWith("_gat") ||
-			cookieName.startsWith("ph_")
+			cookieName.startsWith("_gat")
 		) {
-			clearCookie(cookieName);
+			const base =
+				`${cookieName}=; Max-Age=0; Path=/; SameSite=Lax; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+			document.cookie = base;
+			document.cookie = `${base}; Domain=${window.location.hostname}`;
+			document.cookie = `${base}; Domain=.${window.location.hostname}`;
+			const parts = window.location.hostname.split(".");
+			if (parts.length > 2) {
+				document.cookie = `${base}; Domain=.${parts.slice(1).join(".")}`;
+			}
 		}
-	}
-}
-
-function clearVendorLocalStorage() {
-	if (typeof window === "undefined") {
-		return;
-	}
-
-	const keysToDelete: string[] = [];
-	for (let index = 0; index < window.localStorage.length; index++) {
-		const key = window.localStorage.key(index);
-		if (!key) {
-			continue;
-		}
-
-		if (
-			key.startsWith("ph_") ||
-			key.startsWith("posthog") ||
-			key === "posthog-opted" ||
-			key === "utm:active"
-		) {
-			keysToDelete.push(key);
-		}
-	}
-
-	for (const key of keysToDelete) {
-		window.localStorage.removeItem(key);
 	}
 }
 
@@ -246,15 +215,12 @@ export function clearAnalyticsStorage() {
 
 	resetGoogleAnalyticsState();
 
-	if (analyticsInitialized) {
+	if (posthogInitialized) {
 		posthog.opt_out_capturing();
-		posthog.reset();
 	}
 
 	analyticsEnabled = false;
-	analyticsInitialized = false;
-	clearVendorCookies();
-	clearVendorLocalStorage();
+	clearGACookies();
 }
 
 export function prepareGoogleAnalytics(measurementId: string) {
@@ -272,22 +238,14 @@ export function resetGoogleAnalytics() {
 	resetGoogleAnalyticsState();
 }
 
-export function initializeClientAnalytics() {
-	if (analyticsInitialized) {
-		analyticsEnabled = true;
-		posthog.opt_in_capturing({
-			captureEventName: false,
-		});
-		return true;
-	}
-
+export function initializePostHog() {
 	if (
+		posthogInitialized ||
 		typeof window === "undefined" ||
 		!process.env.NEXT_PUBLIC_POSTHOG_KEY ||
 		!getPostHogApiHost()
 	) {
-		analyticsEnabled = false;
-		return false;
+		return;
 	}
 
 	posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
@@ -296,27 +254,39 @@ export function initializeClientAnalytics() {
 		autocapture: false,
 		capture_pageleave: false,
 		capture_pageview: false,
+		cookieless_mode: "on_reject",
 		disable_session_recording: true,
 		mask_all_element_attributes: true,
 		mask_all_text: true,
 		mask_personal_data_properties: true,
-		opt_out_capturing_by_default: true,
 		person_profiles: "never",
-		persistence: "localStorage+cookie",
 		respect_dnt: true,
 		ui_host: "https://us.posthog.com",
 	});
+
+	posthogInitialized = true;
+}
+
+export function initializeClientAnalytics() {
+	if (!posthogInitialized) {
+		initializePostHog();
+	}
+
+	if (!posthogInitialized) {
+		analyticsEnabled = false;
+		return false;
+	}
+
 	posthog.opt_in_capturing({
 		captureEventName: false,
 	});
 
 	analyticsEnabled = true;
-	analyticsInitialized = true;
 	return true;
 }
 
 export function getAnalyticsDistinctId() {
-	if (!analyticsEnabled || !analyticsInitialized) {
+	if (!analyticsEnabled || !posthogInitialized) {
 		return null;
 	}
 
