@@ -186,7 +186,7 @@ For further information about the safeguards for any of the transfers below, ple
 
 **Category of recipient:** Analytics platform and data processor
 
-**Country where data is primarily processed:** Germany (EU). PostHog Inc. is headquartered in the United States.
+**Country where data is primarily processed:** United States. PostHog Inc. is headquartered in the United States.
 
 **How the transfer complies with UK data protection law:** 
 

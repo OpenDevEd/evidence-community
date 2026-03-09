@@ -10,19 +10,31 @@ import { useStatus } from "@/context/Providers";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import { Link } from "@/i18n/routing";
 import { resolveCompanyFooterPolicyLinks } from "@/lib/legal-links";
-import { usePathname } from "@/i18n/routing";
+import { usePathname, useRouter } from "@/i18n/routing";
 import { isPolicyPage } from "@/lib/legal-links";
+import type { AnalyticsConsentState } from "@/lib/analytics-consent";
+import { useCallback } from "react";
 
 export default function Banner() {
 	const { isPreferencesOpen, setConsentState } = useAnalyticsConsent();
 	const status = useStatus();
 	const pathname = usePathname();
+	const router = useRouter();
 	const t = useTranslations("ui");
 	const tFooter = useTranslations("footer");
 	const footer = status.companyFooter || {};
 	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
+	const onPolicyPage = isPolicyPage(pathname);
 
-	if (isPolicyPage(pathname)) return null;
+	const handleConsent = useCallback(
+		(state: AnalyticsConsentState) => {
+			setConsentState(state);
+			if (onPolicyPage) {
+				router.push("/");
+			}
+		},
+		[setConsentState, onPolicyPage, router],
+	);
 
 	return (
 		<DialogModal
@@ -105,18 +117,14 @@ export default function Banner() {
 				<ModalFooter className="flex-row flex-wrap items-center justify-center gap-3 pt-2">
 					<Button
 						color="tertiary"
-						onPress={() => {
-							setConsentState("granted");
-						}}
+						onPress={() => handleConsent("granted")}
 						className="px-6 font-medium"
 					>
 						{t("cookieAccept")}
 					</Button>
 					<Button
 						color="tertiary"
-						onPress={() => {
-							setConsentState("denied");
-						}}
+						onPress={() => handleConsent("denied")}
 						className="px-6 font-medium"
 					>
 						{t("cookieDecline")}
