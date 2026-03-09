@@ -18,7 +18,12 @@ import {
 	localizeOrUseIfCapitalized,
 	parseCompanyName,
 } from "@/lib/utils";
-import { resolveCompanyFooterPolicyLinks } from "@/lib/legal-links";
+import { resolveCompanyFooterPolicyLinks, isPolicyPage } from "@/lib/legal-links";
+import DialogModal from "@/components/nextui/DialogModal";
+import GenericHeader from "@/components/features/modals/GenericHeader";
+import { ModalBody, ModalContent, ModalFooter } from "@nextui-org/react";
+import { Logo as BannerLogo } from "./navbar";
+import { useRouter } from "@/i18n/routing";
 import { LinkObject } from "@/db/schema/tables/status";
 import { FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
 import { RiBlueskyFill } from "react-icons/ri";
@@ -138,15 +143,18 @@ export default function Footer() {
 	const tUI = useTranslations("ui");
 	const tNav = useTranslations("nav");
 	const { resolvedTheme: theme } = useTheme();
-	const { openPreferences } = useAnalyticsConsent();
+	const { openPreferences, setConsentState } = useAnalyticsConsent();
 	const status = useStatus();
 	const { companyName } = parseCompanyName(status?.companyName);
 	const pathname = usePathname();
+	const router = useRouter();
 	const links = status.links || [];
 	const footer = status.companyFooter || {};
 	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
 	const isMapPage = pathname.includes("/map");
 	const socialLinks = Object.entries(status.externalLinks || {});
+	const onPolicyPage = isPolicyPage(pathname);
+	const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
 
 	const contactData = links.find((link) => link.id === "contact");
 
@@ -414,11 +422,62 @@ export default function Footer() {
 							size="sm"
 							variant="transparent"
 							className="font-medium text-black/60 dark:text-white/60"
-							onPress={openPreferences}
+							onPress={onPolicyPage ? () => setPolicyDialogOpen(true) : openPreferences}
 						>
 							{tUI("preferences")}
 						</Button>
 					</div>
+				)}
+				{onPolicyPage && (
+					<DialogModal
+						scrollBehavior="inside"
+						isDismissable
+						size="xl"
+						isOpen={policyDialogOpen}
+						onClose={() => setPolicyDialogOpen(false)}
+						backdrop="blur"
+						classNames={{
+							base: "backdrop-blur-xl bg-background_light/60 dark:bg-card/60 border border-divider",
+						}}
+					>
+						<ModalContent className="p-6 pb-4">
+							<div className="flex justify-center p-4">
+								<BannerLogo dbStyle="splash" />
+							</div>
+							<GenericHeader classNames={{ base: "justify-center" }}>
+								{tUI("cookieConsentTitle")}
+							</GenericHeader>
+							<ModalBody>
+								<p className="text-center text-default-500 mx-auto max-w-md mb-6">
+									{tUI("cookieConsentMessage")}
+								</p>
+							</ModalBody>
+							<ModalFooter className="flex-row flex-wrap items-center justify-center gap-3 pt-2">
+								<Button
+									color="tertiary"
+									onPress={() => {
+										setPolicyDialogOpen(false);
+										setConsentState("granted");
+										router.push("/");
+									}}
+									className="px-6 font-medium"
+								>
+									{tUI("cookieAccept")}
+								</Button>
+								<Button
+									color="tertiary"
+									onPress={() => {
+										setPolicyDialogOpen(false);
+										setConsentState("denied");
+										router.push("/");
+									}}
+									className="px-6 font-medium"
+								>
+									{tUI("cookieDecline")}
+								</Button>
+							</ModalFooter>
+						</ModalContent>
+					</DialogModal>
 				)}
 				<div className="absolute bottom-0 left-0 p-2 z-50 text-xs text-black/60 dark:text-white/60">
 					0.8.0

@@ -12,11 +12,9 @@ import { Link } from "@/i18n/routing";
 import { resolveCompanyFooterPolicyLinks } from "@/lib/legal-links";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { isPolicyPage } from "@/lib/legal-links";
-import type { AnalyticsConsentState } from "@/lib/analytics-consent";
-import { useCallback, useEffect } from "react";
 
 export default function Banner() {
-	const { isPreferencesOpen, closePreferences, openPreferences, consentState, setConsentState } = useAnalyticsConsent();
+	const { isPreferencesOpen, setConsentState } = useAnalyticsConsent();
 	const status = useStatus();
 	const pathname = usePathname();
 	const router = useRouter();
@@ -26,29 +24,15 @@ export default function Banner() {
 	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
 	const onPolicyPage = isPolicyPage(pathname);
 
-	// Reopen banner when navigating away from policy pages while consent is still pending
-	useEffect(() => {
-		if (!onPolicyPage && consentState === "pending" && !isPreferencesOpen) {
-			openPreferences();
-		}
-	}, [onPolicyPage, consentState, isPreferencesOpen, openPreferences]);
-
-	const handleConsent = useCallback(
-		(state: AnalyticsConsentState) => {
-			setConsentState(state);
-			if (onPolicyPage) {
-				router.push("/");
-			}
-		},
-		[setConsentState, onPolicyPage, router],
-	);
+	// On policy pages: don't show the banner at all.
+	// The footer Preferences button handles policy pages separately.
+	if (onPolicyPage) return null;
 
 	return (
 		<DialogModal
 			scrollBehavior="inside"
-			isDismissable={onPolicyPage}
-			isKeyboardDismissDisabled={!onPolicyPage}
-			onClose={onPolicyPage ? closePreferences : undefined}
+			isDismissable={false}
+			isKeyboardDismissDisabled
 			size="xl"
 			isOpen={isPreferencesOpen}
 			backdrop="blur"
@@ -107,7 +91,6 @@ export default function Banner() {
 						{resolvedFooterLinks.privacyPolicy ? (
 							<Link
 								href={resolvedFooterLinks.privacyPolicy}
-								onClick={closePreferences}
 								className="text-black/70 dark:text-white/70 underline underline-offset-4"
 							>
 								{tFooter("privacyPolicy")}
@@ -116,7 +99,6 @@ export default function Banner() {
 						{resolvedFooterLinks.cookiePolicy ? (
 							<Link
 								href={resolvedFooterLinks.cookiePolicy}
-								onClick={closePreferences}
 								className="text-black/70 dark:text-white/70 underline underline-offset-4"
 							>
 								{tFooter("cookiePolicy")}
@@ -127,14 +109,14 @@ export default function Banner() {
 				<ModalFooter className="flex-row flex-wrap items-center justify-center gap-3 pt-2">
 					<Button
 						color="tertiary"
-						onPress={() => handleConsent("granted")}
+						onPress={() => setConsentState("granted")}
 						className="px-6 font-medium"
 					>
 						{t("cookieAccept")}
 					</Button>
 					<Button
 						color="tertiary"
-						onPress={() => handleConsent("denied")}
+						onPress={() => setConsentState("denied")}
 						className="px-6 font-medium"
 					>
 						{t("cookieDecline")}
