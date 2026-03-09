@@ -93,12 +93,12 @@ export function AnalyticsConsentProvider({
 	}, [consentState, hasHydratedConsent]);
 
 	const closePreferences = useCallback(() => {
-		if (!hasHydratedConsent || consentState === "pending") {
+		if (!hasHydratedConsent) {
 			return;
 		}
 
 		setIsPreferencesOpen(false);
-	}, [consentState, hasHydratedConsent]);
+	}, [hasHydratedConsent]);
 
 	const openPreferences = useCallback(() => {
 		setIsPreferencesOpen(true);

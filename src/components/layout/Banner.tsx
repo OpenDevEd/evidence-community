@@ -13,10 +13,10 @@ import { resolveCompanyFooterPolicyLinks } from "@/lib/legal-links";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { isPolicyPage } from "@/lib/legal-links";
 import type { AnalyticsConsentState } from "@/lib/analytics-consent";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 
 export default function Banner() {
-	const { isPreferencesOpen, closePreferences, consentState, setConsentState } = useAnalyticsConsent();
+	const { isPreferencesOpen, closePreferences, openPreferences, consentState, setConsentState } = useAnalyticsConsent();
 	const status = useStatus();
 	const pathname = usePathname();
 	const router = useRouter();
@@ -26,9 +26,12 @@ export default function Banner() {
 	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
 	const onPolicyPage = isPolicyPage(pathname);
 
-	// First visit (pending) on policy pages: hide banner so they can read the policy.
-	// The banner will reappear when they navigate to any non-policy page.
-	if (onPolicyPage && consentState === "pending") return null;
+	// Reopen banner when navigating away from policy pages while consent is still pending
+	useEffect(() => {
+		if (!onPolicyPage && consentState === "pending" && !isPreferencesOpen) {
+			openPreferences();
+		}
+	}, [onPolicyPage, consentState, isPreferencesOpen, openPreferences]);
 
 	const handleConsent = useCallback(
 		(state: AnalyticsConsentState) => {
@@ -104,6 +107,7 @@ export default function Banner() {
 						{resolvedFooterLinks.privacyPolicy ? (
 							<Link
 								href={resolvedFooterLinks.privacyPolicy}
+								onClick={closePreferences}
 								className="text-black/70 dark:text-white/70 underline underline-offset-4"
 							>
 								{tFooter("privacyPolicy")}
@@ -112,6 +116,7 @@ export default function Banner() {
 						{resolvedFooterLinks.cookiePolicy ? (
 							<Link
 								href={resolvedFooterLinks.cookiePolicy}
+								onClick={closePreferences}
 								className="text-black/70 dark:text-white/70 underline underline-offset-4"
 							>
 								{tFooter("cookiePolicy")}
