@@ -16,7 +16,7 @@ import type { AnalyticsConsentState } from "@/lib/analytics-consent";
 import { useCallback } from "react";
 
 export default function Banner() {
-	const { isPreferencesOpen, setConsentState } = useAnalyticsConsent();
+	const { isPreferencesOpen, closePreferences, consentState, setConsentState } = useAnalyticsConsent();
 	const status = useStatus();
 	const pathname = usePathname();
 	const router = useRouter();
@@ -25,6 +25,10 @@ export default function Banner() {
 	const footer = status.companyFooter || {};
 	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
 	const onPolicyPage = isPolicyPage(pathname);
+
+	// First visit (pending) on policy pages: hide banner so they can read the policy.
+	// The banner will reappear when they navigate to any non-policy page.
+	if (onPolicyPage && consentState === "pending") return null;
 
 	const handleConsent = useCallback(
 		(state: AnalyticsConsentState) => {
@@ -39,8 +43,9 @@ export default function Banner() {
 	return (
 		<DialogModal
 			scrollBehavior="inside"
-			isDismissable={false}
-			isKeyboardDismissDisabled
+			isDismissable={onPolicyPage}
+			isKeyboardDismissDisabled={!onPolicyPage}
+			onClose={onPolicyPage ? closePreferences : undefined}
 			size="xl"
 			isOpen={isPreferencesOpen}
 			backdrop="blur"
