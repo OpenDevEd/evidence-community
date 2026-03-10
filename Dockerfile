@@ -20,6 +20,12 @@ COPY . .
 RUN --mount=type=cache,target=/app/.next/cache \
 	npm run build
 
+FROM base AS prod-deps
+
+COPY package.json package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+	npm install --omit=dev --no-audit --no-fund
+
 FROM ${RUNTIME_IMAGE} AS runner
 
 ENV NODE_ENV=production
@@ -32,12 +38,14 @@ WORKDIR /app
 RUN groupadd --system --gid 1001 nodejs \
 	&& useradd --system --uid 1001 --gid nodejs nextjs
 
+COPY --from=prod-deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
+COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
+COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
 
 USER nextjs
 
 EXPOSE 3000
 
-CMD ["node", "server.js"]
+CMD ["node_modules/.bin/next", "start"]
