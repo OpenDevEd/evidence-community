@@ -1,23 +1,10 @@
 import createMiddleware from "next-intl/middleware";
 import { routing } from "./i18n/routing";
 import { NextRequest, NextResponse } from "next/server";
-import { ItemGetResponse } from "./app/api/item/types";
-import redirections from "./constants/redirections.json";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "./constants/items";
 import configJSON from "./constants/config.json";
-import { ConsoleLogWriter } from "drizzle-orm";
-import { PDFDocument } from "pdf-lib";
 import { PUBLIC_READ_CACHE_CONTROL } from "./lib/http-cache";
-
-export type RateLimit = {
-	count: number;
-	firstRequest: number;
-};
-
-export const rateLimits = new Map<string, RateLimit>();
-
-const AMOUNT_OF_REQUESTS = 10;
-const RESET_TIME = 60000;
+import meilisearch from "./lib/meilisearch";
 
 function handleLegacyScope(
 	request: NextRequest,
@@ -132,117 +119,15 @@ const keyMaps: Record<string, KeyMap> = Object.assign(
 	collectionsMaps
 );
 
-function generateRateLimitObject(request: NextRequest) {
-	const ip =
-		request.headers.get("x-forwarded-for") ||
-		request.headers.get("x-real-ip") ||
-		request.headers.get("cf-connecting-ip") ||
-		request.headers.get("x-envoy-external-address");
-	const ipRateLimit = ip
-		? rateLimits.get(ip) || { count: 0, firstRequest: 0 }
-		: null;
-
-	const cookie = request.cookies.get(
-		`ph_${process.env.NEXT_PUBLIC_POSTHOG_KEY}_posthog`
-	);
-	let cookieRateLimit = null;
-	if (cookie) {
-		try {
-			const distinctId = JSON.parse(cookie.value).distinct_id;
-			cookieRateLimit = rateLimits.get(distinctId) || {
-				count: 0,
-				firstRequest: 0,
-			};
-			rateLimits.set(distinctId, cookieRateLimit);
-		} catch (e) {}
-	}
-
-	let rateLimit = null;
-	if (ipRateLimit && cookieRateLimit) {
-		rateLimit =
-			ipRateLimit.count > cookieRateLimit.count
-				? ipRateLimit
-				: cookieRateLimit;
-	} else {
-		rateLimit = ipRateLimit ||
-			cookieRateLimit || { count: 0, firstRequest: 0 };
-	}
-
-	if (ip) {
-		rateLimits.set(ip, rateLimit);
-	}
-
-	return rateLimit;
-}
-
-function setRateLimitHeaders(
-	response: NextResponse,
-	rateLimit: RateLimit | null
-) {
-	if (rateLimit) {
-		response.headers.set(
-			"X-RateLimit-Limit",
-			AMOUNT_OF_REQUESTS.toString()
-		);
-		response.headers.set(
-			"X-RateLimit-Remaining",
-			(AMOUNT_OF_REQUESTS - rateLimit.count).toString()
-		);
-		response.headers.set(
-			"X-RateLimit-Reset",
-			(rateLimit.firstRequest + RESET_TIME).toString()
-		);
-
-		if (rateLimit.count >= AMOUNT_OF_REQUESTS) {
-			const retryAfter = Math.ceil(
-				(rateLimit.firstRequest + RESET_TIME - Date.now()) / 1000
-			);
-			response.headers.set("Retry-After", retryAfter.toString());
-		}
-	}
-
-	return response;
-}
-
 function isPublicLibraryPage(pathname: string) {
 	return /(?:^|\/)lib(?:\/[^/]+)?$/.test(pathname);
 }
 
-function fixRequestUrl(request: NextRequest) {
-	const url = request.url.toString();
-	return process.env.REPLACE_HTTPS === "true"
-		? url.replace("https://", "http://")
-		: url;
-}
-
-async function modifyPDFMetadata(
-	pdfUrl: string,
-	title: string | null
-): Promise<Uint8Array | null> {
-	try {
-		// Fetch the PDF from the URL
-		const pdfResponse = await fetch(pdfUrl);
-
-		if (!pdfResponse.ok) {
-			console.error(`Failed to fetch PDF: ${pdfResponse.statusText}`);
-			return null;
-		}
-
-		const pdfBuffer = await pdfResponse.arrayBuffer();
-
-		// Load the PDF document
-		const pdfDoc = await PDFDocument.load(pdfBuffer);
-
-		// Set the title in metadata if provided
-		pdfDoc.setTitle(title || "");
-
-		// Save and return the modified PDF
-		const modifiedPdfBytes = await pdfDoc.save();
-		return modifiedPdfBytes;
-	} catch (error) {
-		console.error("Error modifying PDF metadata:", error);
-		return null;
-	}
+function encodeKey(key: string): string {
+	return key
+		.split("")
+		.map((char) => char.charCodeAt(0).toString(36))
+		.join("n");
 }
 
 function mapLegacySearchParams(request: NextRequest) {
@@ -277,12 +162,10 @@ function isLikelyZoteroKey(key: string) {
 }
 
 export default async function proxy(request: NextRequest) {
-	const rateLimit = request.nextUrl.pathname.startsWith("/api/ai")
-		? generateRateLimitObject(request)
-		: null;
-
 	if (request.nextUrl.pathname === "/") {
-		return NextResponse.redirect(new URL("/lib", fixRequestUrl(request)));
+		const url = request.nextUrl.clone();
+		url.pathname = "/lib";
+		return NextResponse.redirect(url);
 	}
 
 	const newRequest = mapLegacySearchParams(request);
@@ -294,55 +177,32 @@ export default async function proxy(request: NextRequest) {
 	// Check for redirections for item keys in URLs like /lib/{key}
 	const libItemMatch = request.nextUrl.pathname.match(/\/lib\/([^\/]+)(.*)/);
 	if (libItemMatch) {
-		const key = libItemMatch[1] as keyof typeof redirections;
+		const key = libItemMatch[1];
 		const rest = libItemMatch[2] || "";
-		const isZoteroKey = isLikelyZoteroKey(String(key));
 
-		if (isZoteroKey) {
+		if (isLikelyZoteroKey(String(key))) {
 			try {
-				const url = new URL(
-					`/api/item/${encodeURIComponent(key)}/redirects`,
-					fixRequestUrl(request)
-				)
-					.toString()
-					.replace("https://", "http://");
+				const compositeKey =
+					(process.env.MEILI_INDEX || configJSON.index) + "|" + key;
+				const encoding = encodeKey(compositeKey);
 
-				const controller = new AbortController();
-				const timeout = setTimeout(() => {
-					controller.abort();
-				}, 350);
+				const redirects = (await Promise.race([
+					meilisearch.index("redirects").getDocument(encoding),
+					new Promise((_, reject) =>
+						setTimeout(
+							() => reject(new Error("timeout")),
+							350
+						)
+					),
+				])) as Record<string, unknown>;
 
-				try {
-					const response = await fetch(url, {
-						signal: controller.signal,
-					});
-
-					const redirects = await response.json();
-
-					if (redirects?.value && redirects.value !== key) {
-						const newUrl = new URL(
-							`/lib/${redirects.value}${rest}`,
-							fixRequestUrl(request)
-						);
-						request.nextUrl.searchParams.forEach((value, paramKey) => {
-							newUrl.searchParams.set(paramKey, value);
-						});
-						return NextResponse.redirect(newUrl, 301);
-					}
-				} finally {
-					clearTimeout(timeout);
+				if (redirects?.value && redirects.value !== key) {
+					const url = request.nextUrl.clone();
+					url.pathname = `/lib/${redirects.value}${rest}`;
+					return NextResponse.redirect(url, 301);
 				}
-			} catch (error) {
-				const isExpectedAbort =
-					error instanceof Error &&
-					(error.name === "AbortError" ||
-						// Node/DOM variants
-						(error as any).code === "ABORT_ERR" ||
-						(error as any).code === 20);
-
-				if (!isExpectedAbort) {
-					console.error("Error checking redirects:", error);
-				}
+			} catch {
+				// Timeout or not found - continue with original key
 			}
 		}
 	}
@@ -365,11 +225,9 @@ export default async function proxy(request: NextRequest) {
 		}
 		const key = exportMatch[1];
 		const format = exportMatch[2];
-		const finalURL = new URL(
-			`/api/item/${key}/export/${format}`,
-			fixRequestUrl(request)
-		);
-		return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
+		const url = request.nextUrl.clone();
+		url.pathname = `/api/item/${key}/export/${format}`;
+		return NextResponse.rewrite(url);
 	}
 
 	const downloadMatch = request.nextUrl.pathname.match(
@@ -380,120 +238,15 @@ export default async function proxy(request: NextRequest) {
 		const attachmentKey = downloadMatch[2];
 
 		if (!attachmentKey) {
-			const itemPageUrl = new URL(
-				`/lib/${itemKey}`,
-				fixRequestUrl(request)
-			);
-			itemPageUrl.searchParams.set("message", "selectPDF");
-			return NextResponse.redirect(itemPageUrl);
+			const url = request.nextUrl.clone();
+			url.pathname = `/lib/${itemKey}`;
+			url.searchParams.set("message", "selectPDF");
+			return NextResponse.redirect(url);
 		}
 
-		const itemUrl = new URL(`/api/item/${itemKey}`, fixRequestUrl(request))
-			.toString()
-			.replace("https://", "http://");
-
-		try {
-			const response = await fetch(itemUrl);
-
-			if (!response.ok) {
-				return NextResponse.json(
-					{ error: `Failed to fetch item: ${response.statusText}` },
-					{ status: response.status }
-				);
-			}
-
-			let item: ItemGetResponse;
-			try {
-				item = await response.json();
-			} catch (jsonError) {
-				console.error("Error parsing JSON response:", jsonError);
-				return NextResponse.json(
-					{ error: "Failed to parse item data" },
-					{ status: 500 }
-				);
-			}
-
-			if (!item.item) {
-				return NextResponse.json(
-					{ error: "Item not found" },
-					{ status: 404 }
-				);
-			}
-			if (!item.item.attachmentsData) {
-				return NextResponse.json(
-					{ error: "Item or attachments not found" },
-					{ status: 404 }
-				);
-			}
-			const attachment = item.item.attachmentsData.find(
-				(attachment) => attachment.key === attachmentKey
-			);
-			if (!attachment || !attachment.url) {
-				const itemPageUrl = new URL(
-					`/lib/${itemKey}`,
-					fixRequestUrl(request)
-				);
-				itemPageUrl.searchParams.set("error", "PDFNotFound");
-				return NextResponse.redirect(itemPageUrl);
-			}
-
-			// Check if this is a PDF by content type
-			const isPDF = attachment.contentType?.toLowerCase().includes("pdf");
-
-			if (isPDF) {
-				// Modify PDF metadata with attachment title
-				const modifiedPdf = await modifyPDFMetadata(
-					attachment.url,
-					attachment.title
-				);
-
-				if (modifiedPdf) {
-					// Return the modified PDF - convert Uint8Array to Buffer
-					const response = new NextResponse(
-						Buffer.from(modifiedPdf),
-						{
-							status: 200,
-							headers: {
-								"Content-Type": "application/pdf",
-								"Content-Disposition": `inline;`,
-								"Item-Key": itemKey,
-								"Attachment-Key": attachmentKey,
-							},
-						}
-					);
-					return setRateLimitHeaders(response, rateLimit);
-				} else {
-					// If modification failed, fall back to rewriting to the original URL
-					console.warn(
-						"PDF modification failed, falling back to original URL"
-					);
-					const finalURL = new URL(
-						attachment.url,
-						fixRequestUrl(request)
-					);
-					return setRateLimitHeaders(
-						NextResponse.rewrite(finalURL),
-						rateLimit
-					);
-				}
-			} else {
-				// For non-PDF attachments, just rewrite to the original URL
-				const finalURL = new URL(
-					attachment.url,
-					fixRequestUrl(request)
-				);
-				return setRateLimitHeaders(
-					NextResponse.rewrite(finalURL),
-					rateLimit
-				);
-			}
-		} catch (fetchError) {
-			console.error("Fetch error:", fetchError);
-			return NextResponse.json(
-				{ error: "Failed to retrieve item data" },
-				{ status: 500 }
-			);
-		}
+		const url = request.nextUrl.clone();
+		url.pathname = `/api/item/${itemKey}/download/${attachmentKey}`;
+		return NextResponse.rewrite(url);
 	} else if (
 		request.nextUrl.pathname === "/lib/atom.xml" ||
 		(request.nextUrl.pathname.startsWith("/profile/") &&
@@ -502,43 +255,11 @@ export default async function proxy(request: NextRequest) {
 		const id = request.nextUrl.pathname.startsWith("/profile/")
 			? request.nextUrl.pathname.split("/")[2]
 			: "main";
-		const finalURL = new URL(`/api/feed/${id}`, fixRequestUrl(request));
-		request.nextUrl.searchParams.forEach((value, key) => {
-			finalURL.searchParams.set(key, value);
-		});
-		return setRateLimitHeaders(NextResponse.rewrite(finalURL), rateLimit);
+		const url = request.nextUrl.clone();
+		url.pathname = `/api/feed/${id}`;
+		return NextResponse.rewrite(url);
 	} else if (request.nextUrl.pathname.startsWith("/api/")) {
-		if (
-			request.nextUrl.pathname.startsWith("/api/ai") &&
-			!request.nextUrl.pathname.includes("embeddings")
-		) {
-			if (rateLimit) {
-				const timeSinceFirstRequest =
-					Date.now() - rateLimit.firstRequest;
-
-				if (timeSinceFirstRequest < RESET_TIME) {
-					rateLimit.count++;
-				} else {
-					rateLimit.count = 1;
-					rateLimit.firstRequest = Date.now();
-				}
-
-				if (rateLimit.count >= AMOUNT_OF_REQUESTS) {
-					return NextResponse.json(
-						{ error: "Rate limit exceeded" },
-						{ status: 403 }
-					);
-				}
-
-				return setRateLimitHeaders(NextResponse.next(), rateLimit);
-			} else {
-				return NextResponse.json(
-					{ error: "Unauthorized" },
-					{ status: 401 }
-				);
-			}
-		}
-		return setRateLimitHeaders(NextResponse.next(), rateLimit);
+		return NextResponse.next();
 	}
 
 	const response = createMiddleware(routing)(request);
@@ -547,12 +268,12 @@ export default async function proxy(request: NextRequest) {
 		response.headers.set("Cache-Control", PUBLIC_READ_CACHE_CONTROL);
 	}
 
-	return setRateLimitHeaders(response, rateLimit);
+	return response;
 }
 
 export const config = {
 	// Matcher entries are linked with a logical "or", therefore
-	// if one of them matches, the middleware will be invoked.
+	// if one of them matches, the proxy will be invoked.
 	matcher: [
 		// Match all pathnames except for specific prefixes and file extensions
 		"/((?!_next|_vercel|backend|.*\\..*).*)",
