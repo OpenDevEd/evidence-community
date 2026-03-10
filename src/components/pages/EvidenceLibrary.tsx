@@ -101,12 +101,17 @@ export function SearchBar({
 	endContent?: ReactNode;
 }) {
 	const [localValue, setLocalValue] = useState(search);
-	const [debouncedSearch, debounceRef] = useDebounce(handleSearchChange, 150);
+	const [debouncedSearch, debounceRef] = useDebounce(handleSearchChange, 300);
 	const t = useTranslations("ui");
+	const lastDebouncedRef = useRef(search);
 
-	// Sync local state when URL param changes (navigation, clear filters, back button)
+	// Only sync when the URL param changes externally (back button, programmatic reset)
+	// Skip when the change came from our own debounced update
 	useEffect(() => {
-		setLocalValue(search);
+		if (search !== lastDebouncedRef.current) {
+			setLocalValue(search);
+		}
+		lastDebouncedRef.current = search;
 	}, [search]);
 
 	return (
@@ -114,11 +119,14 @@ export function SearchBar({
 			autoCorrect="off"
 			value={localValue}
 			onChange={(e) => {
-				setLocalValue(e.target.value);
-				debouncedSearch(e.target.value);
+				const value = e.target.value;
+				lastDebouncedRef.current = value;
+				setLocalValue(value);
+				debouncedSearch(value);
 			}}
 			onClear={() => {
 				if (debounceRef.current) clearTimeout(debounceRef.current);
+				lastDebouncedRef.current = "";
 				setLocalValue("");
 				handleSearchChange("");
 			}}

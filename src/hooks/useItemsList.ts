@@ -41,9 +41,9 @@ export function useItemsList(
 	const { itemsCache } = useContext(CacheContext);
 
 	// Use nuqs params as single source of truth for query building
-	const itemsQuery = buildItemsQuery(
-		params,
-		userData ? `/user/items/${userData.id}` : "/items"
+	const itemsQuery = useMemo(
+		() => buildItemsQuery(params, userData ? `/user/items/${userData.id}` : "/items"),
+		[params, userData]
 	);
 
 	const { data: noteData, isLoading: isNoteLoading } = useSWR<CollectionNoteGetResponse>(
