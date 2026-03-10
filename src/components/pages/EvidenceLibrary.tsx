@@ -100,15 +100,28 @@ export function SearchBar({
 	classNames?: PropsOf<typeof Input>["classNames"];
 	endContent?: ReactNode;
 }) {
-	const [debouncedSearch, _] = useDebounce(handleSearchChange, 150);
+	const [localValue, setLocalValue] = useState(search);
+	const [debouncedSearch, debounceRef] = useDebounce(handleSearchChange, 150);
 	const t = useTranslations("ui");
+
+	// Sync local state when URL param changes (navigation, clear filters, back button)
+	useEffect(() => {
+		setLocalValue(search);
+	}, [search]);
 
 	return (
 		<Input
 			autoCorrect="off"
-			defaultValue={search}
-			onChange={(e) => debouncedSearch(e.target.value)}
-			onClear={() => debouncedSearch("")}
+			value={localValue}
+			onChange={(e) => {
+				setLocalValue(e.target.value);
+				debouncedSearch(e.target.value);
+			}}
+			onClear={() => {
+				if (debounceRef.current) clearTimeout(debounceRef.current);
+				setLocalValue("");
+				handleSearchChange("");
+			}}
 			placeholder={t("search")}
 			size={"lg"}
 			classNames={{

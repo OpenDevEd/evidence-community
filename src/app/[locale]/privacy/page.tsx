@@ -26,7 +26,6 @@ export default async function PrivacyPage() {
 			title="Privacy Policy"
 			description="How this public library collects, uses, stores, and protects personal information across support, analytics, and site operations."
 			lastUpdated={lastUpdated}
-			variant="privacy"
 			otherPolicyLink={{
 				href: "/cookie-policy",
 				label: tFooter("cookiePolicy"),

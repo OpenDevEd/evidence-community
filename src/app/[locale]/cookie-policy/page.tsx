@@ -26,7 +26,6 @@ export default async function CookiePolicyPage() {
 			title="Cookie Policy"
 			description="Which cookies and local storage entries the site uses, which are essential, and which only activate after analytics consent is granted."
 			lastUpdated={lastUpdated}
-			variant="cookie"
 			otherPolicyLink={{
 				href: "/privacy",
 				label: tFooter("privacyPolicy"),

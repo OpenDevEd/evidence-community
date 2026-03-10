@@ -1,7 +1,6 @@
 import { useCallback, useContext, useMemo } from "react";
-import { fetcher, buildItemsQuery, defaultParams } from "@/lib/utils";
+import { fetcher, buildItemsQuery } from "@/lib/utils";
 import { CacheContext, useLastFetchedData } from "@/context/Providers";
-import { useParamsState } from "@/hooks/useParamsState";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import useSWR from "swr";
 import { usePathname, useSearchParams } from "next/navigation";
@@ -14,7 +13,6 @@ import { recursiveFind } from "@/lib/collections";
 import { buildHierarchy } from "@/lib/collections";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { useQueryStates } from "nuqs";
-import { Item } from "@/app/api/item/types";
 import { CollectionNoteGetResponse } from "@/app/api/collections/[id]/note/types";
 
 export function useItemsList(
@@ -29,28 +27,28 @@ export function useItemsList(
 ) {
 	const [params, setParams] = useQueryStates(searchParamsLoader);
 
-	const searchParamsFromParams = useSearchParams();
+	// Raw search params only needed for atom feed serialization
+	const rawSearchParams = useSearchParams();
+	const searchParams = useMemo(
+		() => Object.fromEntries(rawSearchParams.entries()) as Record<string, string>,
+		[rawSearchParams]
+	);
 
 	const pathname = usePathname();
-
-	const searchParams = Object.fromEntries(
-		searchParamsFromParams.entries()
-	) as any;
 
 	const { setLastFetchedData } = useLastFetchedData();
 
 	const { itemsCache } = useContext(CacheContext);
 
-	const queryParams = defaultParams(searchParams);
-
+	// Use nuqs params as single source of truth for query building
 	const itemsQuery = buildItemsQuery(
-		queryParams,
+		params,
 		userData ? `/user/items/${userData.id}` : "/items"
 	);
 
 	const { data: noteData, isLoading: isNoteLoading } = useSWR<CollectionNoteGetResponse>(
-		queryParams.collections.length === 1
-			? `/collections/${queryParams.collections[0]}/note`
+		params.collections.length === 1
+			? `/collections/${params.collections[0]}/note`
 			: null,
 		fetcher
 	);
@@ -104,71 +102,63 @@ export function useItemsList(
 		[setParams]
 	);
 
-	const handleCollectionSelect = (collectionId: string) => {
-		if (collectionId === queryParams.collectionId) {
-			setParams({
-				collectionId: "",
-			});
+	const handleCollectionSelect = useCallback((collectionId: string) => {
+		if (collectionId === params.collectionId) {
+			setParams({ collectionId: "" });
 		} else {
-			setParams({
-				collectionId: collectionId,
-			});
+			setParams({ collectionId });
 		}
-	};
+	}, [params.collectionId, setParams]);
 
-	const handleAuthorSelect = (author: string) => {
-		if (author === queryParams.author) {
-			setParams({
-				author: "",
-			});
+	const handleAuthorSelect = useCallback((author: string) => {
+		if (author === params.author) {
+			setParams({ author: "" });
 		} else {
-			setParams({
-				author: author,
-			});
+			setParams({ author });
 		}
-	};
+	}, [params.author, setParams]);
 
-	const handleInstitutionSelect = (institution: string | string[]) => {
+	const handleInstitutionSelect = useCallback((institution: string | string[]) => {
 		if (Array.isArray(institution)) {
 			setParams({
 				institution: Array.from(
-					new Set([...queryParams.institution, ...institution])
+					new Set([...params.institution, ...institution])
 				),
 			});
-		} else if (queryParams.institution.includes(institution)) {
+		} else if (params.institution.includes(institution)) {
 			setParams({
-				institution: queryParams.institution.filter(
+				institution: params.institution.filter(
 					(i) => i !== institution
 				),
 			});
 		} else {
 			setParams({
-				institution: [...queryParams.institution, institution],
+				institution: [...params.institution, institution],
 			});
 		}
-	};
+	}, [params.institution, setParams]);
 
-	function genericCountrySelect(
+	const genericCountrySelect = useCallback((
 		country: string | string[],
-		key: keyof typeof queryParams
-	) {
-		const queryParam = queryParams[key] as string[];
+		key: "country" | "author_country"
+	) => {
+		const currentValues = params[key];
 		if (Array.isArray(country)) {
 			const lastOne = country[country.length - 1];
-			if (queryParam.includes(lastOne)) {
+			if (currentValues.includes(lastOne)) {
 				setParams({
-					[key]: queryParam.filter(
+					[key]: currentValues.filter(
 						(c) => c !== lastOne && !c.startsWith(lastOne)
 					),
 				});
 			} else {
 				setParams({
-					[key]: Array.from(new Set([...queryParam, ...country])),
+					[key]: Array.from(new Set([...currentValues, ...country])),
 				});
 			}
-		} else if (queryParam.includes(country)) {
+		} else if (currentValues.includes(country)) {
 			setParams({
-				[key]: queryParam.filter((c) => {
+				[key]: currentValues.filter((c) => {
 					const sameCountry = c === country;
 					const isDescendant = !sameCountry && c.startsWith(country);
 					return !sameCountry && !isDescendant;
@@ -176,20 +166,20 @@ export function useItemsList(
 			});
 		} else {
 			setParams({
-				[key]: [...queryParam, country],
+				[key]: [...currentValues, country],
 			});
 		}
-	}
+	}, [params.country, params.author_country, setParams]);
 
-	const handleCountrySelect = (country: string | string[]) => {
+	const handleCountrySelect = useCallback((country: string | string[]) => {
 		genericCountrySelect(country, "country");
-	};
+	}, [genericCountrySelect]);
 
-	const handleAuthorCountrySelect = (country: string | string[]) => {
+	const handleAuthorCountrySelect = useCallback((country: string | string[]) => {
 		genericCountrySelect(country, "author_country");
-	};
+	}, [genericCountrySelect]);
 
-	const handleClearFilters = () => {
+	const handleClearFilters = useCallback(() => {
 		setParams({
 			author: "",
 			institution: [],
@@ -197,7 +187,7 @@ export function useItemsList(
 			collections: [],
 			author_country: [],
 		});
-	};
+	}, [setParams]);
 
 	const {
 		data: fetchedItemsData,
@@ -211,7 +201,7 @@ export function useItemsList(
 		revalidateOnReconnect: false,
 		revalidateIfStale: false,
 		onSuccess: (data) => {
-			if (data.totalPages < queryParams.page) {
+			if (data.totalPages < params.page) {
 				handlePageChange(data.totalPages);
 			}
 			setLastFetchedData(data);
@@ -236,14 +226,14 @@ export function useItemsList(
 		revalidateIfStale: false,
 	});
 
-	const selectedCollections = queryParams.collections;
+	const selectedCollections = params.collections;
 
 	const hierarchy = useMemo(() => {
 		if (!collectionsData) return [];
 		return buildHierarchy(collectionsData.collections as Collection[]);
 	}, [collectionsData]);
 
-	const handleCheckboxChange = (key: string) => {
+	const handleCheckboxChange = useCallback((key: string) => {
 		let newSelectedCollections: string[];
 
 		if (key === "") {
@@ -269,7 +259,7 @@ export function useItemsList(
 			collections: newSelectedCollections,
 			page: 1,
 		});
-	};
+	}, [selectedCollections, hierarchy, setParams]);
 
 	return {
 		itemsData,

@@ -4,10 +4,8 @@ import {
 	ArrowLeft,
 	CalendarDays,
 	ChevronRight,
-	Cookie,
 	FileText,
 	Mail,
-	ShieldCheck,
 } from "lucide-react";
 import { isValidElement } from "react";
 import type { ReactNode } from "react";
@@ -15,25 +13,6 @@ import type { Components } from "react-markdown";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { twMerge } from "tailwind-merge";
-
-type PolicyVariant = "privacy" | "cookie";
-
-const POLICY_VARIANTS: Record<
-	PolicyVariant,
-	{
-		eyebrow: string;
-		icon: typeof ShieldCheck;
-	}
-> = {
-	privacy: {
-		eyebrow: "Privacy Notice",
-		icon: ShieldCheck,
-	},
-	cookie: {
-		eyebrow: "Cookie Notice",
-		icon: Cookie,
-	},
-};
 
 function formatLastUpdated(lastUpdated: Date) {
 	return new Intl.DateTimeFormat("en-GB", {
@@ -146,7 +125,7 @@ const markdownComponents: Components = {
 	),
 	h2: createHeading(
 		"h2",
-		"group mb-5 mt-12 border-t border-black/8 pt-8 text-2xl font-semibold tracking-tight text-black dark:border-white/10 dark:text-white",
+		"group mb-5 mt-12 border-t border-black/8 pt-8 text-2xl font-semibold tracking-tight text-black first:mt-0 first:border-t-0 first:pt-0 dark:border-white/10 dark:text-white",
 	),
 	h3: createHeading(
 		"h3",
@@ -251,7 +230,6 @@ export default function PolicyPage({
 	title,
 	description,
 	lastUpdated,
-	variant,
 	otherPolicyLink,
 	homeLabel,
 	className,
@@ -260,7 +238,6 @@ export default function PolicyPage({
 	title: string;
 	description: string;
 	lastUpdated: Date;
-	variant: "privacy" | "cookie";
 	otherPolicyLink: {
 		href: "/privacy" | "/cookie-policy";
 		label: string;
@@ -268,22 +245,20 @@ export default function PolicyPage({
 	homeLabel: string;
 	className?: string;
 }) {
-	const variantConfig = POLICY_VARIANTS[variant];
-	const Icon = variantConfig.icon;
 	const articleContent = stripLeadingHeading(content);
 	const sections = extractSections(articleContent);
 
 	return (
 		<main
 			id="main-content"
-			className="relative min-h-screen w-full overflow-visible px-4 py-6 focus:outline-none sm:px-6 lg:px-8 lg:py-10 xl:px-12 xl:py-14"
+			className="relative min-h-screen w-full overflow-x-clip px-4 py-6 focus:outline-none sm:px-6 lg:px-8 lg:py-10 xl:px-12 xl:py-14"
 		>
 			<div className="pointer-events-none absolute inset-y-0 left-1/2 w-screen -translate-x-1/2">
 				<div className="absolute inset-x-0 -top-56 h-[42rem] bg-[radial-gradient(circle_at_top_left,rgba(230,129,36,0.18),transparent_38%),radial-gradient(circle_at_top_right,rgba(92,172,253,0.16),transparent_30%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(230,129,36,0.24),transparent_34%),radial-gradient(circle_at_top_right,rgba(92,172,253,0.16),transparent_26%)]" />
 				<div className="absolute inset-x-0 bottom-0 h-[18rem] bg-[linear-gradient(180deg,transparent,rgba(15,15,15,0.02))] dark:bg-[linear-gradient(180deg,transparent,rgba(15,15,15,0.3))]" />
 			</div>
 
-			<div className="relative mx-auto flex max-w-7xl flex-col gap-6">
+			<div className="relative mx-auto flex min-w-0 max-w-7xl flex-col gap-6">
 				<nav className="flex flex-wrap items-center gap-3 text-sm">
 					<Link
 						href="/"
@@ -304,19 +279,13 @@ export default function PolicyPage({
 					</Link>
 				</nav>
 
-				<section className="relative overflow-hidden rounded-[2rem] border border-black/10 bg-gradient-to-br from-white via-background_light/900 to-accent/10 px-6 py-8 shadow-[0_28px_90px_-46px_rgba(0,0,0,0.28)] dark:border-white/10 dark:from-secondary dark:via-card dark:to-accent/15 sm:px-8 lg:px-10 lg:py-10">
+				<section className="relative min-w-0 overflow-hidden rounded-[2rem] border border-black/10 bg-gradient-to-br from-white via-background_light/900 to-accent/10 px-6 py-8 shadow-[0_28px_90px_-46px_rgba(0,0,0,0.28)] dark:border-white/10 dark:from-secondary dark:via-card dark:to-accent/15 sm:px-8 lg:px-10 lg:py-10">
 					<div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.9),transparent_36%),radial-gradient(circle_at_bottom_right,rgba(230,129,36,0.16),transparent_34%)] dark:bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.07),transparent_30%),radial-gradient(circle_at_bottom_right,rgba(230,129,36,0.12),transparent_28%)]" />
 					<div className="relative">
 						<div className="space-y-5">
-							<div className="flex flex-wrap items-center gap-3">
-								<div className="inline-flex items-center gap-2 rounded-full border border-accent/20 bg-accent/10 px-4 py-2 text-xs font-semibold uppercase tracking-[0.24em] text-accent dark:border-accent/25 dark:bg-accent/15">
-									<Icon className="size-4" />
-									{variantConfig.eyebrow}
-								</div>
-								<div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-background_light/800 px-4 py-2 text-xs font-medium text-black/65 dark:border-white/10 dark:bg-card/80 dark:text-white/65">
-									<CalendarDays className="size-4" />
-									Updated {formatLastUpdated(lastUpdated)}
-								</div>
+							<div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-background_light/800 px-4 py-2 text-xs font-medium text-black/65 dark:border-white/10 dark:bg-card/80 dark:text-white/65">
+								<CalendarDays className="size-4" />
+								Updated {formatLastUpdated(lastUpdated)}
 							</div>
 
 							<div className="max-w-3xl space-y-4">
@@ -331,11 +300,11 @@ export default function PolicyPage({
 					</div>
 				</section>
 
-				<div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
-					<section className="rounded-[2rem] border border-black/10 bg-background_light/900 px-6 py-8 shadow-[0_24px_70px_-48px_rgba(0,0,0,0.45)] dark:border-white/10 dark:bg-secondary/88 sm:px-8 lg:px-12 lg:py-12">
+				<div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_19rem]">
+					<section className="min-w-0 overflow-x-hidden rounded-[2rem] border border-black/10 bg-background_light/900 px-6 py-8 shadow-[0_24px_70px_-48px_rgba(0,0,0,0.45)] dark:border-white/10 dark:bg-secondary/88 sm:px-8 lg:px-12 lg:py-12">
 						<article
 							className={twMerge(
-								"prose prose-slate max-w-none prose-headings:scroll-mt-28 prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-black prose-p:text-black/72 prose-li:text-black/72 prose-strong:text-black prose-a:no-underline prose-th:border-none prose-td:border-none dark:prose-invert dark:prose-headings:text-white dark:prose-p:text-white/72 dark:prose-li:text-white/72 dark:prose-strong:text-white",
+								"prose prose-slate max-w-3xl break-words prose-headings:scroll-mt-28 prose-headings:font-semibold prose-headings:tracking-tight prose-headings:text-black prose-p:text-black/72 prose-li:text-black/72 prose-strong:text-black prose-a:no-underline prose-th:border-none prose-td:border-none dark:prose-invert dark:prose-headings:text-white dark:prose-p:text-white/72 dark:prose-li:text-white/72 dark:prose-strong:text-white",
 								className,
 							)}
 						>
