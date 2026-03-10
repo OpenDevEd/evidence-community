@@ -59,31 +59,33 @@ export default async function sitemap(props: {
 		return [];
 	}
 
-	const policyEntries =
-		identifier === 0
-			? await Promise.all([
-					getPolicyLastModified("privacy"),
-					getPolicyLastModified("cookiePolicy"),
-			  ]).then(([privacyLastModified, cookiePolicyLastModified]) => [
-					{
-						url: getLocalizedUrl("/privacy", routing.defaultLocale),
-						lastModified: privacyLastModified,
-						alternates: {
-							languages: getLanguageAlternates("/privacy"),
-						},
+	let policyEntries: MetadataRoute.Sitemap = [];
+	if (identifier === 0) {
+		try {
+			const [privacyLastModified, cookiePolicyLastModified] = await Promise.all([
+				getPolicyLastModified("privacy"),
+				getPolicyLastModified("cookiePolicy"),
+			]);
+			policyEntries = [
+				{
+					url: getLocalizedUrl("/privacy", routing.defaultLocale),
+					lastModified: privacyLastModified,
+					alternates: {
+						languages: getLanguageAlternates("/privacy"),
 					},
-					{
-						url: getLocalizedUrl(
-							"/cookie-policy",
-							routing.defaultLocale
-						),
-						lastModified: cookiePolicyLastModified,
-						alternates: {
-							languages: getLanguageAlternates("/cookie-policy"),
-						},
+				},
+				{
+					url: getLocalizedUrl("/cookie-policy", routing.defaultLocale),
+					lastModified: cookiePolicyLastModified,
+					alternates: {
+						languages: getLanguageAlternates("/cookie-policy"),
 					},
-			  ])
-			: [];
+				},
+			];
+		} catch {
+			// Policy docs may not exist in all environments; skip gracefully.
+		}
+	}
 
 	const itemEntries = items.results.map((item: any) => ({
 		url: getLocalizedUrl(`/lib/${item.key}`, routing.defaultLocale),
