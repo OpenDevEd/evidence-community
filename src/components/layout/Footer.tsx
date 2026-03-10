@@ -424,7 +424,7 @@ export default function Footer() {
 							className="font-medium text-black/60 dark:text-white/60"
 							onPress={onPolicyPage ? () => setPolicyDialogOpen(true) : openPreferences}
 						>
-							{tUI("preferences")}
+							{tUI("cookieSettings")}
 						</Button>
 					</div>
 				)}
