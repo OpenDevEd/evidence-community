@@ -2,6 +2,7 @@ import { z } from "zod";
 import { db } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { authOptions, auth } from "../../auth/[...nextauth]/config";
 import { userCollection } from "@/db/schema/tables/userCollection";
 import { fromError } from "zod-validation-error";
@@ -38,6 +39,8 @@ export async function POST(req: NextRequest) {
       private: validatedData.data.private,
       userId: session.user.id,
     }).returning();
+
+    revalidateTag('collections', "max");
 
     return NextResponse.json(newCollection[0], { status: 201 });
   } catch (error) {

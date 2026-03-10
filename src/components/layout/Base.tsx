@@ -32,9 +32,11 @@ async function BaseContent({
 	children: React.ReactNode;
 	locale: string;
 }>) {
-	const status = await getCachedStatus();
-	const messages = await getMessages();
-	const t = await getTranslations({ locale, namespace: "ui" });
+	const [status, messages, t] = await Promise.all([
+		getCachedStatus(),
+		getMessages(),
+		getTranslations({ locale, namespace: "ui" }),
+	]);
 	const googleAnalyticsId = process.env.GOOGLE_ANALYTICS_ID || "";
 	const initialFeatureFlags = getServerFeatureFlags(status.companyFooter);
 

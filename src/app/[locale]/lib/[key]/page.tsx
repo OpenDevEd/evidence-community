@@ -9,6 +9,7 @@ import {
 } from "@/app/api/cache";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
+import { cacheLife, cacheTag } from "next/cache";
 import { convertToImageURL, getExtraValues, parseCompanyName } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
 import { Suspense } from "react";
@@ -60,9 +61,14 @@ function getPages(pages: string): { firstPage?: string; lastPage?: string } {
 export async function generateMetadata(props: {
 	params: Promise<{ key: string }>;
 }): Promise<Metadata> {
+	'use cache'
 	const params = await props.params;
-	const data = await getCurrentItem(params.key);
-	const status = await getCachedStatus();
+	cacheLife({ revalidate: 60 })
+	cacheTag('metadata-' + params.key)
+	const [data, status] = await Promise.all([
+		getCurrentItem(params.key),
+		getCachedStatus(),
+	]);
 
 	const { companyName, siteName } = parseCompanyName(status.companyName);
 

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { and, isNotNull, eq } from "drizzle-orm";
 import { embeddings } from "@/db/schema/tables/embeddings";
+import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 
 export async function GET(
 	request: NextRequest,
@@ -27,5 +28,7 @@ export async function GET(
         return result ? true : false;
     }));
 
-    return NextResponse.json(results.every((result) => result) && result.length > 0);
+    return NextResponse.json(results.every((result) => result) && result.length > 0, {
+        headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL },
+    });
 }

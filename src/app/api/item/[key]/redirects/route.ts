@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import meilisearch from "@/lib/meilisearch";
-import { unstable_cache } from "next/cache";
+import { cacheLife, cacheTag } from "next/cache";
 import config from "@/constants/config.json";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 
@@ -13,6 +13,26 @@ function encodeKey(key: string): string {
 
 function isLikelyZoteroKey(key: string) {
 	return /^[A-Z0-9]{8}$/.test(key);
+}
+
+async function getCachedRedirectData(encoding: string, indexKey: string, itemKey: string) {
+	'use cache'
+	cacheLife({ revalidate: 60 })
+	cacheTag('redirect-' + indexKey + '-' + itemKey)
+	const timeoutPromise = new Promise((_, reject) =>
+		setTimeout(() => reject(new Error("Redirect lookup timeout")), 350)
+	);
+
+	const redirects = (await Promise.race([
+		meilisearch.index("redirects").getDocument(encoding),
+		timeoutPromise,
+	])) as Record<string, unknown>;
+
+	if (!redirects?.value) {
+		throw new Error("Redirect not found");
+	}
+
+	return redirects;
 }
 
 export async function GET(
@@ -35,36 +55,14 @@ export async function GET(
 		);
 	}
 
-	const key = (process.env.MEILI_INDEX || config.index) + "|" + itemKey;
+	const indexKey = process.env.MEILI_INDEX || config.index;
+	const key = indexKey + "|" + itemKey;
 	const encoding = encodeKey(key);
-
-	const getCachedRedirectData = unstable_cache(
-		async () => {
-			const timeoutPromise = new Promise((_, reject) =>
-				setTimeout(() => reject(new Error("Redirect lookup timeout")), 350)
-			);
-
-			const redirects = (await Promise.race([
-				meilisearch.index("redirects").getDocument(encoding),
-				timeoutPromise,
-			])) as Record<string, unknown>;
-
-			if (!redirects?.value) {
-				throw new Error("Redirect not found");
-			}
-
-			return redirects;
-		},
-		["redirects", String(process.env.MEILI_INDEX || config.index), itemKey],
-		{
-			revalidate: 60,
-		}
-	);
 
 	let redirects: Record<string, unknown>;
 
 	try {
-		redirects = await getCachedRedirectData();
+		redirects = await getCachedRedirectData(encoding, indexKey, itemKey);
 	} catch {
 		// Keep timeout/not-found fallbacks uncached.
 		redirects = { value: itemKey };

@@ -1,5 +1,6 @@
 import { auth, authOptions } from "@/app/api/auth/[...nextauth]/config";
 import { eq } from "drizzle-orm";
+import { revalidateTag } from "next/cache";
 import { userCollection } from "@/db/schema/tables/userCollection";
 import { db } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
@@ -21,5 +22,9 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
 	}
 
 	await db.update(userCollection).set({ deleted: true }).where(eq(userCollection.id, id));
+
+	revalidateTag('collections', "max");
+	revalidateTag('userCollectionKeys-' + id, "max");
+
 	return NextResponse.json({ message: "Collection deleted" });
 }

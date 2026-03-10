@@ -1,5 +1,6 @@
 import { Suspense } from "react";
 import { Metadata } from "next";
+import { cacheLife, cacheTag } from "next/cache";
 import { getCachedItemSmall, getCachedStatus } from "@/app/api/cache";
 import { Item } from "@/app/api/item/types";
 import { parseCompanyName } from "@/lib/utils";
@@ -18,9 +19,14 @@ async function getSourceItem(key: string) {
 export async function generateMetadata(props: {
 	params: Promise<{ key: string }>;
 }): Promise<Metadata> {
+	'use cache'
 	const params = await props.params;
-	const data = await getSourceItem(params.key);
-	const status = await getCachedStatus();
+	cacheLife({ revalidate: 60 })
+	cacheTag('metadata-citation-' + params.key)
+	const [data, status] = await Promise.all([
+		getSourceItem(params.key),
+		getCachedStatus(),
+	]);
 	
 	const { companyName, siteName } = parseCompanyName(status.companyName);
 

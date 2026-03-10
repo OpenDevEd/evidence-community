@@ -3,6 +3,7 @@ import { item } from "@/db/schema/tables/item";
 import { desc, sql, and, eq, isNotNull, ne } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { withCache } from "@/lib/cache-utils";
+import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { InstitutionsData } from "./types";
 
 // Helper function to calculate H-Index from citation counts
@@ -104,7 +105,9 @@ export async function GET() {
 			fetchInstitutionsData,
 			{ cacheKey: "top-country-institutions" }
 		);
-		return NextResponse.json(data);
+		return NextResponse.json(data, {
+			headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL },
+		});
 	} catch (error) {
 		console.error("Error in institutions endpoint:", error);
 		return NextResponse.json(

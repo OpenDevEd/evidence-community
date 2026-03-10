@@ -4,11 +4,14 @@ import { Item } from "@/app/api/item/types";
 import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
 import { blockedTags } from "@/constants/misc";
 import client from "@/lib/meilisearch";
+import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest, props: { params: Promise<{ key: string }> }) {
 	if (process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS === "true") {
-		return NextResponse.json({ hits: [], totalHits: 0 });
+		return NextResponse.json({ hits: [], totalHits: 0 }, {
+			headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL },
+		});
 	}
 
 	const params = await props.params;
@@ -17,7 +20,9 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 	const itemResponse = await getCachedItemSmall(key);
 
 	if (!itemResponse) {
-		return NextResponse.json({ error: "Item not found" }, { status: 404 });
+		return NextResponse.json({ error: "Item not found" }, {
+			status: 404,
+		});
 	}
 
 	const item: any = itemResponse.item;
@@ -57,5 +62,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 			limit: 6,
 		});
 
-	return NextResponse.json(result);
+	return NextResponse.json(result, {
+		headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL },
+	});
 }

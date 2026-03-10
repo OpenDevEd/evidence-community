@@ -5,9 +5,17 @@ import { routing } from "@/i18n/routing";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
 import { getTotalItems } from "@/lib/actions";
+import { cacheLife, cacheTag } from "next/cache";
+
+async function getCachedTotalItems() {
+	'use cache'
+	cacheLife({ revalidate: 3600 })
+	cacheTag('sitemap-total')
+	return getTotalItems();
+}
 
 export async function generateSitemaps() {
-	const total = await getTotalItems();
+	const total = await getCachedTotalItems();
 	const totalPages = Math.ceil(total / SITEMAP_SIZE);
 
 	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));

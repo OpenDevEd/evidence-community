@@ -3,6 +3,13 @@ import { Metadata, ResolvingMetadata } from "next";
 import { buildItemsQuery, defaultParams } from "@/lib/utils";
 import { routing } from "@/i18n/routing";
 import { getItemsPaginationMeta } from "@/lib/search";
+import { cacheLife } from "next/cache";
+
+async function getCachedPaginationMeta(queryParams: Parameters<typeof getItemsPaginationMeta>[0]) {
+  'use cache'
+  cacheLife({ revalidate: 60 })
+  return getItemsPaginationMeta(queryParams);
+}
 
 export async function libraryMetadata(props: {
   params: Promise<{ locale: string }>;
@@ -17,7 +24,8 @@ export async function libraryMetadata(props: {
   
   const queryParams = defaultParams(searchParams);
   const builtUrl = buildItemsQuery(queryParams, props.pathname);
-  const paginationMeta = await getItemsPaginationMeta(queryParams);
+
+  const paginationMeta = await getCachedPaginationMeta(queryParams);
 
   const page = paginationMeta.currentPage;
   const totalPages = paginationMeta.totalPages;
