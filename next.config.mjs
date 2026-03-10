@@ -23,6 +23,10 @@ const nextConfig = {
 	async rewrites() {
 		return [
 			{
+				source: "/sitemap.xml",
+				destination: "/sitemap-index.xml",
+			},
+			{
 				source: "/images/:path*",
 				destination:
 					"https://ocivvlhqiwtxvnycqnia.supabase.co/storage/v1/object/public/new-kerko/:path*",

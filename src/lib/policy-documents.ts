@@ -1,5 +1,6 @@
 import "server-only";
 
+import { getSiteHost } from "@/lib/site-url";
 import { parseCompanyName } from "@/lib/utils";
 import { readFile, stat } from "fs/promises";
 import { join } from "path";
@@ -37,17 +38,7 @@ function hasEnvValue(rawValue: string | undefined) {
 }
 
 function getPolicySiteHost() {
-	const baseUrl = process.env.BASE_URL?.trim();
-
-	if (!baseUrl) {
-		return DEFAULT_POLICY_SITE_HOST;
-	}
-
-	try {
-		return new URL(baseUrl).host || DEFAULT_POLICY_SITE_HOST;
-	} catch {
-		return DEFAULT_POLICY_SITE_HOST;
-	}
+	return getSiteHost() ?? DEFAULT_POLICY_SITE_HOST;
 }
 
 function getPolicyConditionalTags() {
@@ -159,9 +150,7 @@ export function getPolicyMetadata(
 	title: "Privacy Policy" | "Cookie Policy",
 	description: string
 ) {
-	const { companyName, siteName } = parseCompanyName(
-		process.env.NEXT_PUBLIC_COMPANY_NAME
-	);
+	const { companyName, siteName } = parseCompanyName(process.env.NEXT_PUBLIC_COMPANY_NAME);
 
 	return {
 		title: `${title} | ${companyName} - ${siteName}`,

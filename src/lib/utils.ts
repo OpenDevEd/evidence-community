@@ -4,6 +4,7 @@ import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
 import { COUNTRIES, COUNTRY_PARAMS, CSL_SKIP_WORDS } from "@/constants/misc";
+import { getSiteOrigin } from "@/lib/site-url";
 import { z } from "zod";
 import { areLinksValid } from "./actions";
 import { InferSelectModel } from "drizzle-orm";
@@ -268,7 +269,7 @@ export function parseCompanyName(raw: string | null | undefined): {
 }
 
 export function convertToImageURL(url: string) {
-	return process.env.BASE_URL + "/images/" + url.split("/").slice(8).join("/");
+	return getSiteOrigin() + "/images/" + url.split("/").slice(8).join("/");
 }
 
 export function getCountryAncestry(country: string) {

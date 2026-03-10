@@ -7,6 +7,7 @@ import {
 	type RuntimeFeatureFlags,
 	type RuntimeFeatureFlagValue,
 } from "@/lib/feature-flags";
+import { getSiteHost } from "@/lib/site-url";
 import { eq, sql } from "drizzle-orm";
 
 const FEATURE_FLAGS_REVALIDATE_MS = 5 * 60 * 1000;
@@ -18,16 +19,7 @@ type RuntimeFeatureFlagsState = {
 };
 
 function getFeatureFlagsScope() {
-	const rawScope =
-		process.env.BASE_URL?.trim() ||
-		process.env.NEXT_PUBLIC_COMPANY_NAME?.trim() ||
-		"default";
-
-	try {
-		return new URL(rawScope).host || rawScope;
-	} catch {
-		return rawScope;
-	}
+	return getSiteHost() || process.env.NEXT_PUBLIC_COMPANY_NAME?.trim() || "default";
 }
 
 function getFeatureFlagsDistinctId() {

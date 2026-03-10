@@ -2,21 +2,27 @@ import { MetadataRoute } from "next";
 import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { routing } from "@/i18n/routing";
+import { getSitemapPageCount } from "@/lib/sitemap";
+import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
-import { getTotalItems } from "@/lib/actions";
-import { cacheLife, cacheTag } from "next/cache";
+import { getPolicyLastModified } from "@/lib/policy-documents";
 
-async function getCachedTotalItems() {
-	'use cache'
-	cacheLife({ revalidate: 3600 })
-	cacheTag('sitemap-total')
-	return getTotalItems();
+function getLocalizedUrl(pathname: string, locale: string) {
+	const localizedPath =
+		locale === routing.defaultLocale ? pathname : `/${locale}${pathname}`;
+
+	return buildSiteUrl(localizedPath);
+}
+
+function getLanguageAlternates(pathname: string) {
+	return Object.fromEntries(
+		routing.locales.map((locale) => [locale, getLocalizedUrl(pathname, locale)])
+	);
 }
 
 export async function generateSitemaps() {
-	const total = await getCachedTotalItems();
-	const totalPages = Math.ceil(total / SITEMAP_SIZE);
+	const totalPages = await getSitemapPageCount();
 
 	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));
 }
@@ -28,7 +34,7 @@ export default async function sitemap(props: {
 	let attempt = 0;
 	let items;
 
-	const identifier = await props.id;
+	const identifier = Number(await props.id);
 
 	while (attempt < maxRetries) {
 		try {
@@ -53,20 +59,42 @@ export default async function sitemap(props: {
 		return [];
 	}
 
+	const policyEntries =
+		identifier === 0
+			? await Promise.all([
+					getPolicyLastModified("privacy"),
+					getPolicyLastModified("cookiePolicy"),
+			  ]).then(([privacyLastModified, cookiePolicyLastModified]) => [
+					{
+						url: getLocalizedUrl("/privacy", routing.defaultLocale),
+						lastModified: privacyLastModified,
+						alternates: {
+							languages: getLanguageAlternates("/privacy"),
+						},
+					},
+					{
+						url: getLocalizedUrl(
+							"/cookie-policy",
+							routing.defaultLocale
+						),
+						lastModified: cookiePolicyLastModified,
+						alternates: {
+							languages: getLanguageAlternates("/cookie-policy"),
+						},
+					},
+			  ])
+			: [];
 
-	return items.results.flatMap((item: any) => ({
-		url: `${process.env.BASE_URL}/lib/${item.key}`,
+	const itemEntries = items.results.map((item: any) => ({
+		url: getLocalizedUrl(`/lib/${item.key}`, routing.defaultLocale),
 		lastModified: item.updatedAt,
 		alternates: {
-			languages: Object.fromEntries(
-				routing.locales.map((locale) => [
-					locale,
-					`${process.env.BASE_URL}/${locale}/lib/${item.key}`,
-				])
-			),
+			languages: getLanguageAlternates(`/lib/${item.key}`),
 		},
 		images: item.attachmentsData
 			?.filter((attachment: any) => attachment.PDFCoverPageImage)
 			.map((attachment: any) => convertToImageURL(attachment.PDFCoverPageImage)),
 	}));
+
+	return [...policyEntries, ...itemEntries];
 }

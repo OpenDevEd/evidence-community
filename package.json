@@ -9,7 +9,6 @@
 		"deploy:server": "bash ./deploy/deploy-server.sh",
 		"feature-flags:sync": "npx tsx ./tools/syncFeatureFlags.ts",
 		"lint": "eslint .",
-		"sitemap:generate": "npx tsx ./tools/generateSitemapIndex.ts",
 		"icons:generate": "npx tsx ./tools/generateIcons.ts",
 		"schema:generate": "npx tsx ./tools/generateSchema.ts"
 	},

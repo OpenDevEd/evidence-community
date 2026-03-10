@@ -11,6 +11,7 @@ import { embed, embedMany } from "ai";
 import { Item } from "@/app/api/item/types";
 import { db } from "@/db";
 import { embeddings, embeddings as embeddingsTable } from "@/db/schema/tables/embeddings";
+import { buildSiteUrl } from "@/lib/site-url";
 import { and, desc, eq, gt, or } from "drizzle-orm";
 import { cosineDistance } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -200,6 +201,6 @@ export const findRelevantContent = async (
 
 	return similarGuidesFromDb.map((guide: any) => ({
 		...guide,
-		url: process.env.BASE_URL + `/lib/${guide.parentKey}`,
+		url: buildSiteUrl(`/lib/${guide.parentKey}`),
 	}));
 };
