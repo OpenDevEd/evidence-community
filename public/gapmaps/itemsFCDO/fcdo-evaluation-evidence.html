@@ -1800,6 +1800,11 @@ a {
   let activeMainSearchTokens = [];
   let mainSearchDebounceTimer = null;
   let lastSearchStripHeight = 0;
+  let cellDescriptors = [];
+  let rowCellIndex = new Map();
+  let colCellIndex = new Map();
+  let tableInteractionsBound = false;
+  const segmentAttributeIdSet = new Set(segmentAttributes.map((segment) => Number(segment.attribute.AttributeId)));
 
   //On page load force focus
   $(".menu").focus();
@@ -3145,6 +3150,84 @@ function formatCodeDisplay(codePath) {
     });
 
     $('table tbody', $pivotBody).html(tableRowHtml);
+    buildCellIndexes();
+  }
+
+  function parseCellIdList(value) {
+    if (Array.isArray(value)) {
+      return value.map((id) => Number(id)).filter((id) => !Number.isNaN(id));
+    }
+
+    if (value === null || value === undefined || value === '') {
+      return [];
+    }
+
+    if (typeof value === 'number') {
+      return Number.isNaN(value) ? [] : [value];
+    }
+
+    return String(value)
+      .split(',')
+      .map((id) => Number(id))
+      .filter((id) => !Number.isNaN(id));
+  }
+
+  function buildCellIndexes() {
+    cellDescriptors = [];
+    rowCellIndex = new Map();
+    colCellIndex = new Map();
+
+    $('.cell', $pivotBody).each((index, cell) => {
+      const $cell = $(cell);
+      const rowIds = parseCellIdList($cell.attr('data-rowid'));
+      const colIds = parseCellIdList($cell.attr('data-colid'));
+      const counts = createInitialCounts(rowIds, colIds);
+      const countLookup = new Map(counts.map((count) => [Number(count.id), count]));
+      const descriptor = {
+        index: index,
+        element: cell,
+        $element: $cell,
+        rowIds: rowIds,
+        colIds: colIds,
+        counts: counts,
+        countLookup: countLookup,
+        totalCount: 0,
+        totalSize: 0,
+        maxCount: 0,
+        renderChartType: '',
+        renderStructureSignature: '',
+        renderStateSignature: '',
+        dataWrapper: null,
+        dataNodeMap: new Map(),
+        mosaicWrapper: null,
+        pieWrapper: null,
+        pieElement: null,
+        pieHoleElement: null
+      };
+
+      cellDescriptors.push(descriptor);
+      cell.cellDescriptorIndex = index;
+
+      for (const rowId of rowIds) {
+        if (!rowCellIndex.has(rowId)) {
+          rowCellIndex.set(rowId, []);
+        }
+
+        rowCellIndex.get(rowId).push(index);
+      }
+
+      for (const colId of colIds) {
+        if (!colCellIndex.has(colId)) {
+          colCellIndex.set(colId, []);
+        }
+
+        colCellIndex.get(colId).push(index);
+      }
+    });
+
+    if (searchableReferenceIndex.length > 0) {
+      rebuildReferenceCellMatches();
+    }
   }
 
   function normalizeSearchText(value) {
@@ -3289,6 +3372,8 @@ function formatCodeDisplay(codePath) {
           reference: reference,
           itemId: reference.ItemId,
           codeIdSet: codeIdSet,
+          segmentIds: codeIds.filter((codeId) => segmentAttributeIdSet.has(codeId)),
+          matchedCellIndexes: [],
           searchBlobs: {
             all: normalizeSearchText([metadataBlob, codeBlob].join(' ')),
             metadata: metadataBlob,
@@ -3301,6 +3386,33 @@ function formatCodeDisplay(codePath) {
           }
         };
       });
+  }
+
+  function getIntersectedCellIndexes(codeIdSet) {
+    const matchedRowIndexes = getMatchedCellIndexes(codeIdSet, rowCellIndex);
+    const matchedColIndexes = getMatchedCellIndexes(codeIdSet, colCellIndex);
+
+    if (matchedRowIndexes.size === 0 || matchedColIndexes.size === 0) {
+      return [];
+    }
+
+    const smallerIndexSet = matchedRowIndexes.size <= matchedColIndexes.size ? matchedRowIndexes : matchedColIndexes;
+    const largerIndexSet = smallerIndexSet === matchedRowIndexes ? matchedColIndexes : matchedRowIndexes;
+    const matchedCellIndexes = [];
+
+    for (const index of smallerIndexSet) {
+      if (largerIndexSet.has(index)) {
+        matchedCellIndexes.push(index);
+      }
+    }
+
+    return matchedCellIndexes;
+  }
+
+  function rebuildReferenceCellMatches() {
+    for (const indexEntry of searchableReferenceIndex) {
+      indexEntry.matchedCellIndexes = getIntersectedCellIndexes(indexEntry.codeIdSet);
+    }
   }
 
   function referenceMatchesSettingsFilters(indexEntry) {
@@ -3395,6 +3507,218 @@ function formatCodeDisplay(codePath) {
     activeGlobalReferencePool = searchableReferenceIndex.filter((indexEntry) => {
       return referenceMatchesSettingsFilters(indexEntry) && referenceMatchesMainSearch(indexEntry);
     });
+  }
+
+  function resetCellDescriptorCounts() {
+    for (const descriptor of cellDescriptors) {
+      descriptor.totalCount = 0;
+      descriptor.totalSize = 0;
+      descriptor.maxCount = 0;
+
+      for (const count of descriptor.counts) {
+        count.count = 0;
+        count.width = 0;
+        count.size = 0;
+      }
+    }
+  }
+
+  function getMatchedCellIndexes(codeIdSet, indexMap) {
+    const matchedIndexes = new Set();
+
+    for (const codeId of codeIdSet) {
+      const indexes = indexMap.get(codeId);
+
+      if (!indexes) {
+        continue;
+      }
+
+      for (const index of indexes) {
+        matchedIndexes.add(index);
+      }
+    }
+
+    return matchedIndexes;
+  }
+
+  function applyIndexEntryToCells(indexEntry) {
+    if (!Array.isArray(indexEntry.matchedCellIndexes) || indexEntry.matchedCellIndexes.length === 0) {
+      return;
+    }
+
+    for (const index of indexEntry.matchedCellIndexes) {
+      const descriptor = cellDescriptors[index];
+
+      if (!descriptor) {
+        continue;
+      }
+
+      if (descriptor.counts.length === 1 && descriptor.counts[0].attribute === null) {
+        descriptor.totalCount += 1;
+        descriptor.counts[0].count += 1;
+        continue;
+      }
+
+      for (const segmentId of indexEntry.segmentIds) {
+        const count = descriptor.countLookup.get(Number(segmentId));
+
+        if (!count) {
+          continue;
+        }
+
+        count.count += 1;
+        descriptor.totalCount += 1;
+      }
+    }
+  }
+
+  function getActiveCounts(counts) {
+    return counts.filter((count) => count.count > 0);
+  }
+
+  function getCountsStructureSignature(activeCounts) {
+    if (activeCounts.length === 0) {
+      return 'empty';
+    }
+
+    return activeCounts.map((count) => String(count.id)).join('|');
+  }
+
+  function getCountsStateSignature(activeCounts, totalSize, maxCount) {
+    if (activeCounts.length === 0) {
+      return 'empty|' + totalSize + '|' + maxCount;
+    }
+
+    return activeCounts
+      .map((count) => [count.id, count.count, count.width, count.size].join(':'))
+      .join('|') + '|' + totalSize + '|' + maxCount;
+  }
+
+  function createDataNode(count, isTextView) {
+    const dataElement = document.createElement('div');
+    dataElement.id = count.id;
+    dataElement.className = 'data';
+    dataElement.style.backgroundColor = count.color;
+    dataElement.style.color = count.isLight ? '' : '#ffffff';
+
+    let countElement = null;
+    let nameElement = null;
+
+    if (isTextView) {
+      countElement = document.createElement('span');
+      countElement.className = 'count';
+      dataElement.appendChild(countElement);
+
+      nameElement = document.createElement('span');
+      nameElement.className = 'name';
+      dataElement.appendChild(nameElement);
+    }
+
+    return {
+      element: dataElement,
+      countElement: countElement,
+      nameElement: nameElement
+    };
+  }
+
+  function getTextCountLabel(count) {
+    if (count.attribute !== null) {
+      return count.attribute.AttributeName;
+    }
+
+    return count.count > 1 ? 'Records' : 'Record';
+  }
+
+  function ensureDataWrapper(descriptor, activeCounts) {
+    const structureSignature = chartType + '|' + getCountsStructureSignature(activeCounts);
+
+    if (descriptor.renderChartType === chartType &&
+      descriptor.renderStructureSignature === structureSignature &&
+      descriptor.dataWrapper !== null) {
+      return descriptor.dataWrapper;
+    }
+
+    const dataWrapper = document.createElement('div');
+    dataWrapper.className = 'data-wrapper';
+    const dataNodeMap = new Map();
+    let counter = 1;
+    const isTextView = chartType === 'text';
+
+    for (const count of activeCounts) {
+      const nodeParts = createDataNode(count, isTextView);
+      dataWrapper.appendChild(nodeParts.element);
+      dataNodeMap.set(Number(count.id), nodeParts);
+
+      if (!isTextView && chartType !== 'heat' && counter % 2 === 0) {
+        const breakElement = document.createElement('div');
+        breakElement.className = 'break';
+        dataWrapper.appendChild(breakElement);
+      }
+
+      counter += 1;
+    }
+
+    descriptor.element.replaceChildren(dataWrapper);
+    descriptor.dataWrapper = dataWrapper;
+    descriptor.dataNodeMap = dataNodeMap;
+    descriptor.mosaicWrapper = null;
+    descriptor.pieWrapper = null;
+    descriptor.pieElement = null;
+    descriptor.pieHoleElement = null;
+    descriptor.renderChartType = chartType;
+    descriptor.renderStructureSignature = structureSignature;
+
+    return dataWrapper;
+  }
+
+  function ensureMosaicWrapper(descriptor) {
+    if (descriptor.renderChartType === 'mosaic' && descriptor.mosaicWrapper !== null) {
+      return descriptor.mosaicWrapper;
+    }
+
+    const mosaicWrapper = document.createElement('div');
+    mosaicWrapper.className = 'mosaic-wrapper';
+
+    descriptor.element.replaceChildren(mosaicWrapper);
+    descriptor.dataWrapper = null;
+    descriptor.dataNodeMap = new Map();
+    descriptor.mosaicWrapper = mosaicWrapper;
+    descriptor.pieWrapper = null;
+    descriptor.pieElement = null;
+    descriptor.pieHoleElement = null;
+    descriptor.renderChartType = 'mosaic';
+    descriptor.renderStructureSignature = 'mosaic';
+
+    return mosaicWrapper;
+  }
+
+  function ensurePieWrapper(descriptor) {
+    if (descriptor.renderChartType === 'donut' && descriptor.pieWrapper !== null) {
+      return descriptor.pieWrapper;
+    }
+
+    const pieWrapper = document.createElement('div');
+    pieWrapper.className = 'pie-wrapper';
+
+    const pieElement = document.createElement('div');
+    pieElement.className = 'pie';
+    pieWrapper.appendChild(pieElement);
+
+    const pieHoleElement = document.createElement('div');
+    pieHoleElement.className = 'pie-hole';
+    pieWrapper.appendChild(pieHoleElement);
+
+    descriptor.element.replaceChildren(pieWrapper);
+    descriptor.dataWrapper = null;
+    descriptor.dataNodeMap = new Map();
+    descriptor.mosaicWrapper = null;
+    descriptor.pieWrapper = pieWrapper;
+    descriptor.pieElement = pieElement;
+    descriptor.pieHoleElement = pieHoleElement;
+    descriptor.renderChartType = 'donut';
+    descriptor.renderStructureSignature = 'donut';
+
+    return pieWrapper;
   }
 
   /**
@@ -3544,157 +3868,59 @@ function formatCodeDisplay(codePath) {
   function updateReferenceCounts() {
     let maxCount = 0;
 
-    // Remove old html and detach events.
-    $('.cell', $pivotBody).off();
-    $('.pie-wrapper').off().detach().remove();
-    $('.data-wrapper').off().detach().remove();
+    resetCellDescriptorCounts();
 
-    $('.cell', $pivotBody).each((index, cell) => {
-      const $cell = $(cell);
-      let colIds = $cell.data('colid')
-      let rowIds = $cell.data('rowid');
+    for (const indexEntry of activeGlobalReferencePool) {
+      applyIndexEntryToCells(indexEntry);
+    }
 
-      if (isNaN(colIds)) {
-        colIds = colIds.split(',').map(id => parseInt(id));
-      } else {
-        colIds = [colIds]
+    for (const descriptor of cellDescriptors) {
+      if (descriptor.totalCount > maxCount) {
+        maxCount = descriptor.totalCount;
       }
+    }
 
-      if (isNaN(rowIds)) {
-        rowIds = rowIds.split(',').map(id => parseInt(id));
-      } else {
-        rowIds = [rowIds]
-      }
+    for (const descriptor of cellDescriptors) {
+      const $cell = descriptor.$element;
 
-      const references = getFilteredReferences(rowIds, colIds);
-      const counts = createInitialCounts(rowIds, colIds);
+      for (const count of descriptor.counts) {
+        count.width = descriptor.totalCount === 0 || count.count === 0 ? 0 : Math.round(count.count / descriptor.totalCount * 100);
 
-      let totalCount = 0;
-
-      for (const reference of references) {
-        for (const count of counts) {
-          if (count.attribute === null) {
-            totalCount += 1;
-            count.count += 1;
-            continue;
-          }
-
-          const countMatched = reference.Codes
-            .filter((code) => code.AttributeId === count.id).length > 0
-
-          if (countMatched) {
-            count.count += 1;
-            totalCount += 1;
-          }
+        if (count.width < 8 && count.count !== 0) {
+          count.width = 8;
         }
       }
 
-      if (totalCount === 0) {
+      descriptor.counts.sort(function(a, b) { return b.count - a.count });
+
+      for (const count of descriptor.counts) {
+        count.size = count.count === 0 || maxCount === 0 ? 0 : Math.round(count.count / maxCount * 100);
+
+        if (count.size < 8 && count.count !== 0) {
+          count.size = 8;
+        }
+      }
+
+      descriptor.totalSize = descriptor.totalCount === 0 || maxCount === 0 ? 0 : Math.round(descriptor.totalCount / maxCount * 100);
+
+      if (descriptor.totalSize < 8 && descriptor.totalCount !== 0) {
+        descriptor.totalSize = 8;
+      }
+
+      descriptor.maxCount = maxCount;
+
+      if (descriptor.totalCount === 0) {
         $cell.addClass('none');
       } else {
         $cell.removeClass('none');
       }
 
-      if (totalCount > maxCount) {
-        maxCount = totalCount
-      }
+      $cell.data('counts', descriptor.counts);
+      $cell.data('totalCount', descriptor.totalCount);
+      $cell.data('totalSize', descriptor.totalSize);
+      $cell.data('maxCount', descriptor.maxCount);
+    }
 
-      for (const count of counts) {
-        count.width = totalCount === 0 || count.count === 0 ? 0 : Math.round(count.count / totalCount * 100);
-
-        // Check if the count is a sane amount to see, if not, make it the minimum.
-        if (count.width < 8 && count.count !== 0) count.width = 8
-      }
-
-      // Sort counts descending.
-      counts.sort(function(a, b) { return b.count - a.count});
-
-      $cell.data('totalSize', 0);
-      $cell.data('totalCount', totalCount);
-      $cell.data('counts', counts);
-
-      let wrapper = '';
-
-      if (counts.length > 0) {
-        switch (chartType) {
-          case 'bubble':
-          case 'heat':
-          case 'text':
-            wrapper = '<div class="data-wrapper">'
-
-            let counter = 1;
-
-            for (const count of counts) {
-              if (count.count === 0) continue;
-
-              let style = 'background-color:' + count.color + ';';
-
-              if (!count.isLight) {
-                style += 'color:#ffffff;';
-              }
-
-              wrapper += '<div id="' + count.id + '" ' +
-                'class="data" ' +
-                'style="' + style + '">';
-
-              if (chartType === 'text') {
-                if (count.attribute !== null) {
-                  wrapper += `<span class="count">${count.count}</span><span class="name">${count.attribute.AttributeName}</span>`;
-                } else if (count.count > 1) {
-                  wrapper += `<span class="count">${count.count}</span><span class="name">Records</span>`;
-                } else {
-                  wrapper += `<span class="count">${count.count}</span><span class="name">Record</span>`;
-                }
-              }
-
-              wrapper += '</div>';
-
-              if (chartType !== 'text' && chartType !== 'heat' && counter % 2 === 0) {
-                wrapper += '<div class="break"></div>'
-              }
-
-              counter ++;
-            }
-
-            wrapper += '</div>'
-
-            break;
-          case 'mosaic':
-            wrapper = '<div class="mosaic-wrapper"></div>'
-            break;
-          case 'donut':
-            const png = createPiePng(counts);
-            const piePngStyle = png.length > 0 ? ' style="background-image: url(' + png + ')"' : '';
-            wrapper = `<div class="pie-wrapper"><div class="pie"${piePngStyle}></div><div class="pie-hole"></div></div>`
-            break;
-        }
-      }
-
-      $cell.html(wrapper);
-    });
-
-    // Update the size of the chart elements.
-    $('.cell', $pivotBody).each((index, cell) => {
-      const $cell = $(cell);
-      const totalCount = $cell.data('totalCount');
-      const counts = $cell.data('counts');
-
-      for (const count of counts) {
-        count.size = count.count === 0 ? 0 : Math.round(count.count / maxCount * 100);
-        // Check if the count is a sane amount to see, if not, make it the minimum.
-        if (count.size < 8 && count.count !== 0) count.size = 8
-      }
-
-      let totalSize = totalCount === 0 ? 0 : Math.round(totalCount / maxCount * 100);
-      // Check if the count is a sane amount to see, if not, make it the minimum.
-      if (totalSize < 8 && totalCount !== 0) totalSize = 8
-
-      $cell.data('counts', counts);
-      $cell.data('totalSize', totalSize);
-      $cell.data('maxCount', maxCount);
-    });
-
-    // Setup events.
     setupTooltips();
     handleTableClick();
   }
@@ -3703,90 +3929,112 @@ function formatCodeDisplay(codePath) {
    * Switches between the bubble and heat-map views.
    */
   function updateTableDataView() {
-    $('.cell', $pivotBody).each((index, cell) => {
-      const $cell = $(cell);
-      const counts = $cell.data('counts');
-      const totalSize = $cell.data('totalSize');
-      const totalWidth = $cell.data('totalWidth');
-      const maxCount = $cell.data('maxCount');
+    for (const descriptor of cellDescriptors) {
+      const counts = descriptor.counts;
+      const totalSize = descriptor.totalSize;
+      const maxCount = descriptor.maxCount;
       const blockSize = 100;
+      const activeCounts = getActiveCounts(counts);
+      const renderStateSignature = chartType + '|' + getCountsStateSignature(activeCounts, totalSize, maxCount);
+
+      if (descriptor.renderStateSignature === renderStateSignature &&
+        descriptor.renderChartType === chartType) {
+        continue;
+      }
 
       switch (chartType) {
         case 'bubble':
-          $('.data-wrapper', $cell).css({
-            'display': 'flex'
-          });
-          $('.data', $cell).css({
-            'border-radius': '100%'
-          });
-          break;
         case 'heat':
-          $('.data-wrapper', $cell).css({
-            'display': 'flex',
-            'opacity': (totalSize / 100)
-          });
+        case 'text': {
+          const dataWrapper = ensureDataWrapper(descriptor, activeCounts);
+
+          if (chartType === 'bubble') {
+            dataWrapper.style.display = 'flex';
+            dataWrapper.style.opacity = '';
+          } else if (chartType === 'heat') {
+            dataWrapper.style.display = 'flex';
+            dataWrapper.style.opacity = String(totalSize / 100);
+          } else {
+            dataWrapper.style.display = '';
+            dataWrapper.style.opacity = '';
+          }
+
+          let maxBlockSize = blockSize;
+
+          if (segmentAttributes.length > 1) {
+            maxBlockSize = blockSize / (segmentAttributes.length / 2);
+          }
+
+          for (const count of activeCounts) {
+            const nodeParts = descriptor.dataNodeMap.get(Number(count.id));
+
+            if (!nodeParts) {
+              continue;
+            }
+
+            const dataElement = nodeParts.element;
+            dataElement.style.backgroundColor = count.color;
+            dataElement.style.color = count.isLight ? '' : '#ffffff';
+
+            if (chartType === 'text') {
+              if (nodeParts.countElement !== null) {
+                nodeParts.countElement.textContent = count.count;
+              }
+
+              if (nodeParts.nameElement !== null) {
+                nodeParts.nameElement.textContent = getTextCountLabel(count);
+              }
+
+              continue;
+            }
+
+            let size = blockSize * count.size / 100;
+
+            if (size < 8 && count.count !== 0) {
+              size = 8;
+            } else if (size > maxBlockSize && count.count !== 0) {
+              size = maxBlockSize;
+            }
+
+            dataElement.style.borderRadius = chartType === 'bubble' ? '100%' : '';
+            dataElement.style.height = chartType === 'bubble' ? size + 'px' : '100%';
+            dataElement.style.width = chartType === 'bubble' ? size + 'px' : count.width + '%';
+          }
           break;
-        case 'mosaic':
-          $('.mosaic-wrapper', $cell).css({
-            'display': 'block'
-          });
+        }
+        case 'mosaic': {
+          const mosaicWrapper = ensureMosaicWrapper(descriptor);
+          mosaicWrapper.style.display = 'block';
           const dimension = getBlockSize(maxCount, 100);
-          // Get colours from segments
-          const referenceColours = counts.map(x => new Array(x.count).fill(x.color));
+          const referenceColours = counts.map((count) => new Array(count.count).fill(count.color));
           const references = [].concat.apply([], referenceColours);
-          let mosaic = createMosaic(dimension, references);
-          $('.mosaic-wrapper', $cell).html(mosaic)
+          const mosaic = createMosaic(dimension, references);
+          mosaicWrapper.innerHTML = mosaic;
           break;
-        case 'donut':
+        }
+        case 'donut': {
+          ensurePieWrapper(descriptor);
+
+          const png = createPiePng(counts);
           const circleSize = (blockSize * totalSize / 100);
           let holeSize = totalSize - (circleSize / blockSize * 24);
-          if (holeSize < 0) holeSize = 0;
 
-          $('.pie-wrapper', $cell).css({
-            'display': 'block'
-          });
+          if (holeSize < 0) {
+            holeSize = 0;
+          }
 
-          $('.pie', $cell).css({
-            'width': circleSize + '%',
-            'height': circleSize + '%'
-          });
-
-          $('.pie-hole', $cell).css({
-            'width': holeSize + '%',
-            'height': holeSize + '%'
-          });
+          descriptor.pieWrapper.style.display = 'block';
+          descriptor.pieElement.style.backgroundImage = png.length > 0 ? 'url(' + png + ')' : '';
+          descriptor.pieElement.style.width = circleSize + '%';
+          descriptor.pieElement.style.height = circleSize + '%';
+          descriptor.pieHoleElement.style.width = holeSize + '%';
+          descriptor.pieHoleElement.style.height = holeSize + '%';
           break;
-        case 'text':
-          break;
+        }
       }
 
-      if (chartType !== 'text') {
-        let maxBlockSize = blockSize;
-
-        if (segmentAttributes.length > 1) {
-          maxBlockSize = blockSize / (segmentAttributes.length / 2);
-        }
-
-        for (const [index, count] of counts.entries()) {
-          let size = blockSize * count.size / 100;
-
-          // Check if the count is a sane amount to see, if not, make it the minimum.
-          if (size < 8 && count.count !== 0) size = 8;
-          else if (size > maxBlockSize && count.count !== 0) size = maxBlockSize;
-
-          $('#' + count.id, $cell).css({
-            'height': chartType === 'bubble' ? size + 'px' : '100%',
-            'width': chartType === 'bubble' ? size + 'px' : count.width + '%'
-          });
-        }
-
-        setTimeout(function () {
-          $('.data-wrapper', $cell).css({
-            'opacity': chartType === 'heat' ? totalWidth / 100 : 1
-          });
-        }, 500);
-      }
-    });
+      descriptor.renderStateSignature = renderStateSignature;
+    }
   }
 
   /**
@@ -4439,23 +4687,7 @@ function formatCodeDisplay(codePath) {
    * Creates the tooltip for the cell as it's hovered over.
    */
   function setupTooltips() {
-    $('.cell').hover((e) => {
-      lastTooltipPointer = {
-        clientX: e.clientX,
-        clientY: e.clientY
-      };
-      showCellTooltip($(e.currentTarget), e.clientX, e.clientY);
-    }, (e) => {
-      // Hover out.
-      lastTooltipPointer = null;
-      removeCellTooltip();
-    }).mousemove((e) => {
-      lastTooltipPointer = {
-        clientX: e.clientX,
-        clientY: e.clientY
-      };
-      showCellTooltip($(e.currentTarget), e.clientX, e.clientY);
-    });
+    bindTableInteractions();
   }
 
   /**
@@ -5273,55 +5505,77 @@ function formatCodeDisplay(codePath) {
    * Handles the table click to show the reader dialog.
    */
   function handleTableClick() {
-    //#region Header Click shows popup
-    // when clicking the row (i.e - side headers)
-    $('.clickable-row').on('click', (e) => {
-      const $target = $(e.currentTarget);
-      const headerId = $target.data('id');
-      const createdPopup = createExtUrlPopup('row', headerId, e.clientX, e.clientY);
+    bindTableInteractions();
+  }
 
-      if (!createdPopup) {
-        toggleReader([headerId], []);
-      }
-    });
+  function bindTableInteractions() {
+    if (tableInteractionsBound) {
+      return;
+    }
 
-    // when clicking the column (i.e - top headers)
-    $('.clickable-col').on('click', (e) => {
-      const $target = $(e.currentTarget);
-      const headerId = $target.data('id');
-      const createdPopup = createExtUrlPopup('col', headerId, e.clientX, e.clientY);
+    tableInteractionsBound = true;
 
-      if (!createdPopup){
-        toggleReader([], [headerId]);
-      }
-    });
-    //#endregion
+    $pivotBody
+      .off('.tableInteractions')
+      .on('mouseenter.tableInteractions', '.cell', (e) => {
+        lastTooltipPointer = {
+          clientX: e.clientX,
+          clientY: e.clientY
+        };
+        showCellTooltip($(e.currentTarget), e.clientX, e.clientY);
+      })
+      .on('mouseleave.tableInteractions', '.cell', () => {
+        lastTooltipPointer = null;
+        removeCellTooltip();
+      })
+      .on('mousemove.tableInteractions', '.cell', (e) => {
+        lastTooltipPointer = {
+          clientX: e.clientX,
+          clientY: e.clientY
+        };
+        showCellTooltip($(e.currentTarget), e.clientX, e.clientY);
+      })
+      .on('click.tableInteractions', '.cell', (e) => {
+        const $target = $(e.currentTarget);
+        const totalCount = $target.data('totalCount');
 
-    $('.cell').on('click', (e) => {
-      const $target = $(e.currentTarget);
-      const totalCount = $target.data('totalCount');
+        if (totalCount === 0) {
+          return;
+        }
 
-      if (totalCount === 0) {
-        return;
-      }
+        const descriptorIndex = e.currentTarget.cellDescriptorIndex;
+        const descriptor = cellDescriptors[descriptorIndex];
 
-      let colIds = $target.data('colid');
-      let rowIds = $target.data('rowid');
+        if (!descriptor) {
+          return;
+        }
 
-      if (isNaN(colIds)) {
-        colIds = colIds.split(',').map(id => parseInt(id));
-      } else {
-        colIds = [colIds]
-      }
+        toggleReader(descriptor.rowIds, descriptor.colIds);
+      });
 
-      if (isNaN(rowIds)) {
-        rowIds = rowIds.split(',').map(id => parseInt(id));
-      } else {
-        rowIds = [rowIds]
-      }
+    $sideHead
+      .off('.tableInteractions')
+      .on('click.tableInteractions', '.clickable-row', (e) => {
+        const $target = $(e.currentTarget);
+        const headerId = $target.data('id');
+        const createdPopup = createExtUrlPopup('row', headerId, e.clientX, e.clientY);
 
-      toggleReader(rowIds, colIds);
-    });
+        if (!createdPopup) {
+          toggleReader([headerId], []);
+        }
+      });
+
+    $topHead
+      .off('.tableInteractions')
+      .on('click.tableInteractions', '.clickable-col', (e) => {
+        const $target = $(e.currentTarget);
+        const headerId = $target.data('id');
+        const createdPopup = createExtUrlPopup('col', headerId, e.clientX, e.clientY);
+
+        if (!createdPopup){
+          toggleReader([], [headerId]);
+        }
+      });
   }
 
   /**
@@ -5806,16 +6060,7 @@ function formatCodeDisplay(codePath) {
   function UpdateRecordCount() {
     if (!showRecordCount) return;
 
-    const colIdList = csvData.rows[csvData.totalColDepth - 1].map(item => item.id)
-    const rowIdList = []
-
-    for (let i = csvData.totalColDepth; i < csvData.rows.length; i++) {
-      const row = csvData.rows[i]
-      rowIdList.push(row[row.length - 1].id)
-    }
-
-    const references = getFilteredReferences(rowIdList, colIdList);
-    $recordCount.html('(' + references.length + ')');
+    $recordCount.html('(' + activeGlobalReferencePool.length + ')');
   }
 
   // Call all the methods to initialize the page.
