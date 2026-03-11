@@ -4,28 +4,34 @@
 <head>
   <meta charset="utf-8" />
   <title>EPPI Mapper</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <style>
     *, *:before, *:after {
   box-sizing: border-box;
 }
 *:focus-visible {
-  outline: 4px solid #000000;
+  outline: 3px solid #CC0000;
+  outline-offset: 2px;
 }
 html {
   box-sizing: border-box;
-  font-family: 'Roboto', sans-serif;
-  font-size: 14px;
+  font-family: 'Montserrat', 'Roboto', sans-serif;
+  font-size: 15px;
   text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  line-height: 1.5;
+  line-height: 1.6;
 }
 body {
-  background-color: #ffffff;
+  background-color: #F4F2EE;
   margin: 0;
   overflow: hidden;
+  color: rgba(0, 0, 0, 0.8);
 }
 a {
-  color: #0275d8;
+  color: #003399;
 }
 .clearfix:after {
   visibility: hidden;
@@ -42,20 +48,19 @@ a {
   zoom: 1;
 }
 .loader {
-  position: absolute;
+  position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
   left: 0;
-  background: #000000;
+  background: #1E1E1E;
   z-index: 1000;
-  transition: all 2s ease;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .loader span.spinner {
   animation: spin 1.2s linear infinite;
-  border: 5px solid #ffffff;
-  border-bottom-color: #000000;
-  border-top-color: #000000;
+  border: 4px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #CC0000;
   border-radius: 100%;
   display: inline-block;
   width: 40px;
@@ -69,13 +74,13 @@ a {
   padding: 0 18px;
 }
 .header-basic {
-  background: #ffffff;
+  background: #F4F2EE;
   padding: 0 18px;
   display: flex;
-  font-size: 1.5rem; 
-  font-weight: bold;
+  font-size: 1.5rem;
+  font-weight: 600;
   height: 108px;
-  padding: 8px 8px 0;
+  padding: 12px 12px 0;
   text-align: center;
 }
 .header-basic .header-title {
@@ -98,7 +103,7 @@ a {
   margin: 8px;
 }
 .pivot-table {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: normal;
   width: 100%;
 }
@@ -107,25 +112,41 @@ a {
   display: inline-block;
   overflow: hidden;
 }
+.pivot-table .top-head {
+  border-radius: 16px 16px 0 0;
+}
 .pivot-table .side-head, .pivot-table .body {
   float: left;
+}
+.pivot-table .side-head {
+  border-radius: 0 0 0 16px;
+}
+.pivot-table .body {
+  border-radius: 0 0 16px 0;
 }
 .pivot-table table {
   border: 0;
   border-collapse: collapse;
+  table-layout: fixed;
 }
 .pivot-table table thead th {
-  border: 1px solid #ffffff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
   color: #ffffff;
-  font-weight: normal;
+  font-weight: 500;
   max-width: 103px;
   min-width: 103px;
   width: 103px;
-  padding: 4px;
+  padding: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
   vertical-align: top;
   text-align: left;
+}
+.pivot-table .top-head table thead tr:first-child th:first-child {
+  border-top-left-radius: 16px;
+}
+.pivot-table .top-head table thead tr:first-child th:last-child {
+  border-top-right-radius: 16px;
 }
 .pivot-table.text-view table thead th:not(.collapsed) {
   max-width: 153px;
@@ -138,11 +159,17 @@ a {
   width: 203px;
 }
 .pivot-table table tbody th, .pivot-table table tbody td {
-  border: 1px solid #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+}
+.pivot-table .side-head table tbody tr:first-child th:first-child {
+  border-top-left-radius: 16px;
+}
+.pivot-table .body table tbody tr:last-child td:last-child {
+  border-bottom-right-radius: 16px;
 }
 .pivot-table table tbody th {
   color: #ffffff;
-  font-weight: normal;
+  font-weight: 500;
   min-height: 103px;
   height: 103px;
   max-width: 103px;
@@ -165,18 +192,22 @@ a {
   max-width: 203px;
 }
 .pivot-table table tbody td {
+  max-width: 103px;
   min-width: 103px;
   width: 103px;
   min-height: 103px;
   height: 103px;
+  overflow: hidden;
 }
 .pivot-table.text-view table tbody td {
+  max-width: 153px;
   min-width: 153px;
   width: 153px;
   min-height: 153px;
   height: 153px;
 }
 .pivot-table.text-view-large table tbody td {
+  max-width: 203px;
   min-width: 203px;
   width: 203px;
   min-height: 203px;
@@ -184,22 +215,18 @@ a {
 }
 .body table tbody td.cell div.data-wrapper {
   position: relative;
-  background-color: #eeeeee;
+  background-color: #E8E6E2;
   cursor: pointer;
   justify-items: center;
   align-items: center;
   width: 100%;
   height: 100%;
   overflow: hidden;
-  -webkit-transition: all 0.5s;
-  -moz-transition: all 0.5s;
-  -moz-transition: all 0.5s;
-  -ms-transition: all 0.5s;
-  -o-transition: all 0.5s;
-  transition: all 0.5s;
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), transform 0.15s ease;
   flex-wrap: wrap;
   align-items: center;
   justify-content: space-around;
+  border-radius: 4px;
 }
 .body table tbody td.cell div.data-wrapper div.break {
   flex-basis: 100%;
@@ -207,16 +234,17 @@ a {
 }
 .body table tbody td.cell div.pie-wrapper {
   position: relative;
-  background-color: #eeeeee;
+  background-color: #E8E6E2;
   cursor: pointer;
   display: none;
   width: 100%;
   height: 100%;
   overflow: hidden;
+  border-radius: 4px;
 }
 .body table tbody td.cell div.mosaic-wrapper {
   position: relative;
-  background-color: #eeeeee;
+  background-color: #E8E6E2;
   cursor: pointer;
   display: none;
   width: 100px;
@@ -224,6 +252,7 @@ a {
   max-width: 100px;
   max-height: 100px;
   overflow: hidden;
+  border-radius: 4px;
 }
 .body table tbody td.cell div.pie-wrapper div.pie,
 .body table tbody td.cell div.pie-wrapper div.pie-hole{
@@ -235,25 +264,42 @@ a {
   transform: translate(-50%, -50%);
 }
 .body table tbody td.cell div.pie-wrapper div.pie-hole{
-  background-color: #dddddd;
+  background-color: #E8E6E2;
 }
 .body table tbody td.cell.none div.data-wrapper,
 .body table tbody td.cell.none div.pie-wrapper,
 .body table tbody td.cell.none div.mosaic-wrapper {
   cursor: not-allowed !important;
 }
+.pivot-table.text-view .body table tbody td.cell div.data-wrapper {
+  display: block !important;
+  opacity: 1 !important;
+}
 .pivot-table.text-view .body table tbody td.cell div.data-wrapper div.data {
   display: flex;
-  gap: 4px;
+  width: 100%;
+  gap: 6px;
   align-items: center;
-  padding: 2px;
+  padding: 4px 6px;
 }
 .pivot-table.text-view .body table tbody td.cell div.data-wrapper div.data span.count {
-  background: #ffffff;
-  border: 1px solid #000000;
-  border-radius: 2px;
-  color: #000000;
-  padding: 2px;
+  background: rgba(255, 255, 255, 0.85);
+  border: none;
+  border-radius: 9999px;
+  color: rgba(0, 0, 0, 0.8);
+  padding: 2px 8px;
+  font-weight: 600;
+  font-size: 11px;
+  line-height: 1.4;
+  flex-shrink: 0;
+}
+.pivot-table.text-view .body table tbody td.cell div.data-wrapper div.data span.name {
+  font-size: 10px;
+  opacity: 0.9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.3;
 }
 .controls {
   display: inline-block;
@@ -261,28 +307,32 @@ a {
 }
 .ui-segment {
   background-color: #ffffff;
-  color: #0275d8;
-  border: 1px solid #0275d8;
-  border-radius: 4px;
+  color: #003399;
+  border: 1px solid rgba(0, 51, 153, 0.25);
+  border-radius: 12px;
   display: inline-block;
+  overflow: hidden;
 }
 .ui-segment span.option.active {
-  background-color: #0275d8;
+  background-color: #003399;
   color: #ffffff;
 }
 .ui-segment span.option {
   font-size: 13px;
-  padding-left: 23px;
-  padding-right: 23px;
-  height: 25px;
+  padding-left: 20px;
+  padding-right: 20px;
+  height: 30px;
   text-align: center;
   display: inline-block;
-  line-height: 25px;
+  line-height: 30px;
   margin: 0;
   float: left;
   cursor: pointer;
-  border-right: 1px solid #0275d8;
-  transition: all 0.5s ease;
+  border-right: 1px solid rgba(0, 51, 153, 0.15);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.ui-segment span.option:hover:not(.active) {
+  background-color: rgba(0, 51, 153, 0.06);
 }
 .ui-segment span.option:last-child {
   border-right: none;
@@ -293,8 +343,8 @@ a {
 .footer {
   position: absolute;
   bottom: 0;
-  background-color: #ffffff;
-  color: rgba(0, 0, 0, 0.87);
+  background-color: #F4F2EE;
+  color: rgba(0, 0, 0, 0.7);
   height: 36px;
   min-height: 36px;
   padding: 16px;
@@ -324,17 +374,15 @@ a {
   font-size: 1.0em;
 }
 .legend-tooltip {
-  border: 1px solid #cccccc;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   display: block;
   position: absolute;
   width: 300px;
   background: #ffffff;
-  color: #000000;
-  padding: 6px 8px;
-  border-radius: 4px;
-  -webkit-box-shadow: 0 2px 10px 2px rgba(0, 0, 0, 0.3);
-  -moz-box-shadow: 0 2px 10px 2px rgba(0, 0, 0, 0.3);
-  box-shadow: 0 2px 10px 2px rgba(0, 0, 0, 0.3);
+  color: rgba(0, 0, 0, 0.8);
+  padding: 10px 14px;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.06);
   z-index: 2;
 }
 .spacer {
@@ -348,37 +396,37 @@ a {
 .tooltip {
   display: none;
   position: absolute;
-  border: 1px solid #cccccc;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   background-color: #ffffff;
-  border-radius: 3px;
-  padding: 3px 6px 2px;
-  -webkit-box-shadow: 0 2px 10px 2px rgba(0, 0, 0, 0.3);
-  -moz-box-shadow: 0 2px 10px 2px rgba(0, 0, 0, 0.3);
-  box-shadow: 0 2px 10px 2px rgba(0, 0, 0, 0.3);
+  border-radius: 12px;
+  padding: 8px 14px;
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.06);
   z-index: 2;
 }
 .tooltip .count {
-  color: #0275d8;
-  margin: 2px 3px;
+  color: #003399;
+  margin: 3px 4px;
 }
 .tooltip .count span {
-  background-color: #0275d8;
-  -webkit-border-radius: 3px;
-  -moz-border-radius: 3px;
-  border-radius: 3px;
+  background-color: #003399;
+  border-radius: 9999px;
   color: #ffffff;
-  padding: 2px 4px;
+  padding: 3px 8px;
+  font-weight: 500;
+  font-size: 12px;
 }
 .refs {
   font-size:  12px;
-  color:  lightgrey;
+  color: rgba(0, 0, 0, 0.45);
   margin:  0;
   padding: 0 0 0 20px;
 }
 .veil {
-  background: rgba(0, 0, 0, 0.7);
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   display: none;
-  position: absolute;
+  position: fixed;
   top: 0;
   right: 0;
   bottom: 0;
@@ -393,57 +441,62 @@ a {
   top: 0;
   left: -600px;
   bottom: 0;
-  background: #fff;
-  color: #000000;
+  background: #FCFBFA;
+  color: rgba(0, 0, 0, 0.8);
   padding: 0;
   width: 360px;
   z-index: 100;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 .settings.open {
   left: 0;
 }
 .settings > div.title {
-  color: #000000;
-  font-size: 22px;
+  color: rgba(0, 0, 0, 0.8);
+  font-size: 20px;
+  font-weight: 600;
   padding: 20px;
-  margin: 0 0 10px 0;
+  margin: 0;
+  flex-shrink: 0;
 }
 .settings > div.title > button.btnSettings {
-  -webkit-border-radius: 36px;
-  -moz-border-radius: 36px;
-  border-radius: 36px;
-  border: 1px solid #000000;
-  background-color: inherit;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   color: #ffffff;
-  background-color: #000000;
+  background-color: #1E1E1E;
   display: inline-block;
   float: right;
   height: 36px;
-  transition: all 0.25s ease;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   text-align: center;
   line-height: 36px;
-  padding: 0 12px;
-  letter-spacing: 1px;
+  padding: 0 16px;
+  letter-spacing: 0.5px;
+  font-weight: 500;
 }
 .settings > div.title > button.btnSettings:hover {
-  background-color: #ffffff;
-  color: #000000;
+  background-color: #CC0000;
+  border-color: #CC0000;
+  color: #ffffff;
   cursor: pointer;
+  box-shadow: 0 0 12px rgba(204, 0, 0, 0.2);
 }
 .settings > div.title > button.btnSettings.busy{
-  border: 3px solid #000000 !important;
-  border-top-color: #ffffff !important;
-  border-bottom-color: #ffffff !important;
+  border: 3px solid rgba(0, 0, 0, 0.15);
+  border-top-color: #CC0000;
   text-indent: -99999px;
   width: 36px;
-  border-radius: 36px;
+  border-radius: 12px;
   animation: spin 1.2s linear infinite;
 }
 .settings > div.title > button.disabled {
   cursor: not-allowed;
   pointer-events: none;
   background: unset;
-  color: #000000;
+  color: rgba(0, 0, 0, 0.4);
   opacity: 0.3;
   text-decoration: none;
 }
@@ -457,22 +510,20 @@ a {
   border-top-right-radius: 0;
 }
 .settings div.filter-type-wrapper {
-  background-color: #efefef;
-  position: absolute;
-  top: 76px;
+  background-color: #F0EDE8;
   overflow: auto;
-  padding: 0 10px 0 0;
+  padding: 4px 10px 4px 0;
   width: 100%;
-  border-top: 1px solid #000000;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  flex-shrink: 0;
 }
 .settings div.filter-wrapper {
-  background-color: #efefef;
-  position: absolute;
-  top: 226px;
-  bottom: 0;
-  overflow: auto;
-  padding: 0 10px 0 0;
+  background-color: #F0EDE8;
+  overflow-y: auto;
+  padding: 4px 10px 4px 0;
   width: 100%;
+  flex: 1 1 0;
+  min-height: 0;
 }
 .settings div.filter-type-wrapper h2,
 .settings div.filter-wrapper h2 {
@@ -519,27 +570,43 @@ a {
 }
 .reader,
 .accessibility {
-  position: absolute;
+  position: fixed;
   top: 0;
-  right: -1000px;
+  right: 0;
   bottom: 0;
-  background: #fff;
-  color: #000;
+  background: #FCFBFA;
+  color: rgba(0, 0, 0, 0.8);
   padding: 0;
   width: 1000px;
+  max-width: 100%;
   z-index: 100;
+  box-shadow: -4px 0 24px rgba(0, 0, 0, 0.08);
+  transform: translate3d(100%, 0, 0);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  will-change: transform, opacity;
+  contain: layout paint;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease;
+}
+.reader.is-visible,
+.accessibility.is-visible {
+  visibility: visible;
+  pointer-events: auto;
 }
 .reader.open,
 .accessibility.open {
-  right: 0;
+  transform: translate3d(0, 0, 0);
+  opacity: 1;
 }
 .reader > div.title,
 .accessibility > div.title {
-  background-color: #ffffff;
-  color: #000000;
+  background-color: #FCFBFA;
+  color: rgba(0, 0, 0, 0.8);
   display: flex;
   justify-content: space-between;
-  font-size: 22px;
+  font-size: 20px;
+  font-weight: 600;
   padding: 20px;
 }
 .reader > div.title > div,
@@ -555,66 +622,73 @@ a {
   margin-right: 18px;
 }
 .reader > div.title > div > input {
-  border: 1px solid #000000;
+  border: 1px solid rgba(0, 0, 0, 0.12);
   background: #ffffff;
   padding: 8px 16px;
-  color: #000000;
+  color: rgba(0, 0, 0, 0.8);
   float: right;
-  font-size: 16px;
-  transition: all 0.5s ease;
+  font-size: 15px;
+  font-family: 'Montserrat', sans-serif;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   margin-right: 6px;
+  border-radius: 10px;
 }
 .reader > div.title > div > input:focus {
   background: #ffffff;
-  color: #000000;
-  box-shadow: 0 0 10px #719ECE;
+  color: rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 0 3px rgba(0, 51, 153, 0.15);
+  border-color: #003399;
 }
 .reader > div.title > div > input::-webkit-input-placeholder,
 .reader > div.title > div > input::-moz-placeholder,
 .reader > div.title > div > input:-ms-input-placeholder,
-.reader > div.title > div > input:-moz-placeholder { 
-  color: #595959;
+.reader > div.title > div > input:-moz-placeholder {
+  color: rgba(0, 0, 0, 0.4);
 }
 .reader > div.title > div > select {
-  border: 1px solid #000000;
+  border: 1px solid rgba(0, 0, 0, 0.12);
   background: #ffffff;
   padding: 7.5px 16px;
-  color: #595959;
-  font-size: 16px;
-  transition: all 0.5s ease;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 15px;
+  font-family: 'Montserrat', sans-serif;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   margin-right: 6px;
+  border-radius: 10px;
 }
 #filter-options option {
-  color: #000000;
+  color: rgba(0, 0, 0, 0.8);
 }
 #filter-options option[value=""][disabled] {
   display: none;
 }
 .reader > div.content,
 .accessibility > div.content {
-  background: #ffffff;
+  background: #FCFBFA;
   display: flex;
   align-content: stretch;
   align-items: stretch;
   height: 92.4%;
 }
 .reader > div.content > div.reader-filter {
-  background-color: #efefef;
-  border-right: 1px solid #ffffff;
+  background-color: #F0EDE8;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
   overflow: auto;
   width: 200px;
   min-width: 200px;
   max-width: 200px;
+  padding: 10px;
 }
 .reader > div.content > div.filter-opts {
-  background-color: #efefef;
-  border-right: 1px solid #ffffff;
+  background-color: #F0EDE8;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
   overflow: auto;
   width: 200px;
   min-width: 200px;
   max-width: 200px;
   float: right;
+  padding: 10px;
 }
 .settings > div.filter-wrapper > div.controlTainer {
   align-content: center;
@@ -664,31 +738,47 @@ a {
   display: inline-block;
 }
 .reader > div.content > div.nav {
-  background-color: #efefef;
-  border-right: 1px solid #ffffff;
+  background-color: #F0EDE8;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
   overflow: auto;
   width: 280px;
   min-width: 280px;
   max-width: 280px;
 }
 .reader > div.content > div.navTainer {
-  background-color: #efefef;
-  border-right: 1px solid #ffffff;
+  background-color: #F0EDE8;
+  border-right: 1px solid rgba(0, 0, 0, 0.06);
   overflow: auto;
   width: 280px;
   min-width: 280px;
   max-width: 280px;
 }
-.reader > div.content > div.navTainer .navGroupSelect {
-  color: #000000;
-  border-top: 1px solid #000000;
-  padding: 6px 10px 4px;
+.reader > div.content > div.navTainer .navGroupSelect,
+.reader > div.content > div.navTainer .ref-sort-order {
+  color: rgba(0, 0, 0, 0.8);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .reader > div.content > div.navTainer .ref-sort-order {
-  color: #000000;
-  border-top: 1px solid #000000;
-  border-bottom: 1px solid #000000;
-  padding: 6px 10px 4px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+.reader > div.content > div.navTainer .navGroupSelect label,
+.reader > div.content > div.navTainer .ref-sort-order label {
+  width: auto !important;
+  float: none !important;
+  display: inline !important;
+  flex-shrink: 0;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.reader > div.content > div.navTainer .navGroupSelect select,
+.reader > div.content > div.navTainer .ref-sort-order select {
+  flex: 1;
+  min-width: 0;
 }
 .reader > div.content > div.navTainer > div.nav > ul,
 .reader > div.content > div.navTainer > div.nav > ul.segmented,
@@ -702,19 +792,21 @@ a {
   margin: 0;
 }
 .refMenuItem > button {
-  color: #000000;
+  color: rgba(0, 0, 0, 0.8);
   background-color: transparent;
   border: 1px solid transparent;
-  border-bottom-color: #ffffff;
+  border-bottom-color: rgba(0, 0, 0, 0.06);
   display: block;
-  font-size: 1rem;
-  padding: 6px 16px 8px;
+  font-size: 0.95rem;
+  font-family: 'Montserrat', sans-serif;
+  padding: 8px 16px 10px;
   text-align: left;
   max-width: 280px;
+  transition: background-color 0.2s ease;
 }
 .refMenuItem > button:hover,
 .refMenuItem > button:focus-visible {
-  background-color: #ffffff;
+  background-color: rgba(0, 51, 153, 0.06);
   cursor: pointer;
 }
 .refMenuItem > button > div.title,
@@ -728,25 +820,26 @@ a {
 }
 .refMenuItem > button > div.auth,
 .refMenuItem > button > div.date {
-  color: #666666;
+  color: rgba(0, 0, 0, 0.5);
 }
 .refMenuItem > button > div.auth {
   font-style: italic;
 }
 .refMenuItem.selected > button {
-  background-color: #000000;
-  color: #ffffff;   
+  background-color: #003399;
+  color: #ffffff;
+  border-radius: 8px;
 }
 .refMenuItem.selected > button > div.auth,
 .refMenuItem.selected > button > div.date {
-  color: #cfcfcf;   
+  color: rgba(255, 255, 255, 0.7);
 }
 .reader > div.content > div.read,
 .accessibility > div.content > div.read {
   flex-grow: 1;
   overflow: auto;
-  padding: 10px 18px;
-  border-top: 1px solid #000000;
+  padding: 14px 22px;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 .reader > div.content > div.read > h2,
 .accessibility > div.content > div.read > h2 {
@@ -754,7 +847,7 @@ a {
 }
 .reader > div.content > div.read > hr,
 .accessibility > div.content > div.read > hr {
-  background-color: #efefef;
+  background-color: rgba(0, 0, 0, 0.08);
   border: 0;
   height: 1px;
 }
@@ -767,15 +860,19 @@ a {
   margin-top: 16px;
 }
 .reader > div.content > div.read > div.meta-data > div.meta-data-item > label {
-  color: #aaaaaa;
+  color: rgba(0, 0, 0, 0.45);
   display: block;
   float: left;
   width: 140px;
   margin: 0 0 3px 0;
   padding: 3px 6px;
+  font-weight: 500;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
 }
 .reader > div.content > div.read > div.meta-data > div.meta-data-item > span {
-  border: 1px solid #eeeeee;
+  border: 1px solid rgba(0, 0, 0, 0.06);
   display: block;
   float: left;
   margin: 0 0 3px -140px;
@@ -783,15 +880,15 @@ a {
   width: 100%;
 }
 .ref-sort-order {
-  padding: 4px 8px;
+  padding: 8px 10px;
 }
 .menu {
-  background-color: #000000;
-  border-bottom: 1px solid #000000;
+  background-color: #1E1E1E;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   display: block;
   list-style: none;
   margin: 0;
-  padding: 0;
+  padding: 2px 0;
 }
 .menu:after {
   content: "";
@@ -799,39 +896,41 @@ a {
   clear: both;
 }
 .menu .menu-item {
-  background-color: #000000;
+  background-color: transparent;
   border: 0;
-  color: #ffffff;
+  color: rgba(255, 255, 255, 0.8);
   display: flex;
   align-items: center;
-  padding: 8px 12px;
-  transition: all 0.2s ease-out;
+  padding: 10px 14px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   cursor: pointer;
   float: left;
-  border: 0;
+  border-radius: 8px;
+  margin: 2px;
+  font-weight: 500;
 }
 .menu .menu-item:active {
-  background-color: #ffffff;
-  color: #000000;
+  background-color: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
 }
 .menu .menu-item:active svg {
-  fill: #000000;
+  fill: #ffffff;
 }
 .menu .menu-item:hover, .menu .menu-item:focus {
-  background-color: #ffffff;
-  color: #000000;
+  background-color: rgba(255, 255, 255, 0.1);
+  color: #ffffff;
 }
 .menu .menu-item:hover svg, .menu .menu-item:focus svg {
-  fill: #000000;
+  fill: #ffffff;
 }
 .menu .menu-item span {
-  font-size: 14px;
-  margin-left: 4px;
+  font-size: 13px;
+  margin-left: 6px;
   overflow: hidden;
   word-break: keep-all;
 }
 .menu .menu-item svg {
-  fill: #ffffff;
+  fill: rgba(255, 255, 255, 0.8);
   display: inline-block;
   margin: 0 0 0 4px;
 }
@@ -848,16 +947,14 @@ a {
   display: block;
 }
 .menu .menu-item[aria-checked="true"] {
-  background-color: #ffffff;
-  color: #000000;
+  background-color: rgba(204, 0, 0, 0.15);
+  color: #ffffff;
 }
 .menu .menu-item[aria-checked="true"] svg {
-  fill: #000000;
+  fill: #CC0000;
 }
 .refMenuItemLegend {
-  -webkit-border-radius: 100%;
-  -moz-border-radius: 100%;
-  border: 1px solid #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   border-radius: 100%;
   display: inline-block;
   width: 10px;
@@ -878,7 +975,8 @@ a {
 .top-head th div svg,
 .side-head th div svg {
   display: none;
-  background: rgba(255, 255, 255, 0.8);
+  background: rgba(255, 255, 255, 0.6);
+  border-radius: 4px;
 }
 .top-head th div svg,
 .side-head th div svg {
@@ -955,7 +1053,7 @@ a {
 }
 .body td.collapsed-col,
 .body td.collapsed-row {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(0, 0, 0, 0.08);
 }
 .body td.collapsed-col .mosaic-wrapper,
 .body td.collapsed-row .mosaic-wrapper {
@@ -983,16 +1081,16 @@ a {
   border-width: 0;
 }
 .top-head th.collapsed.first:not(.level-1) {
-  border-left: 1px solid #ffffff !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
 .top-head th.collapsed.last:not(.level-1) {
-  border-right: 1px solid #ffffff !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
 .side-head th.collapsed.first:not(.level-1) {
-  border-top: 1px solid #ffffff !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
 .side-head th.collapsed.last:not(.level-1) {
-  border-bottom: 1px solid #ffffff !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.15) !important;
 }
 @keyframes spin {
   0% {
@@ -1004,17 +1102,15 @@ a {
 }
 .attribute-tooltip {
   position: absolute;
-  border: 1px solid #cccccc;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   background-color: #ffffff;
-  border-radius: 3px;
+  border-radius: 12px;
   display: none;
-  padding: 3px 6px 2px;
+  padding: 10px 14px;
   text-overflow: ellipsis;
   max-width: 350px !important;
   min-width: 200px !important;
-  -webkit-box-shadow: 0 2px 10px 2px rgba(0, 0, 0, 0.3);
-  -moz-box-shadow: 0 2px 10px 2px rgba(0, 0, 0, 0.3);
-  box-shadow: 0 2px 10px 2px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.06);
   z-index: 2;
 }
 .attribute-tooltip.show {
@@ -1034,7 +1130,7 @@ a {
   text-align: center;
 }
 .text-muted {
-  color: #6c757d !important;
+  color: rgba(0, 0, 0, 0.45) !important;
   font-size: 11px;
   margin: 10px 0 0 0;
 }
@@ -1046,21 +1142,24 @@ a {
   width: 100%;
 }
 .btn {
-  background-color: #000000;
-  border: 1px solid #000000;
+  background-color: #1E1E1E;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   color: #ffffff;
   display: block;
-  font-weight: 400;
-  padding: 8px 16px;
-  font-size: 16px;
+  font-weight: 500;
+  padding: 8px 18px;
+  font-size: 15px;
+  font-family: 'Montserrat', sans-serif;
   line-height: normal;
-  transition: color .15s ease-in-out,background-color .15s ease-in-out,border-color .15s ease-in-out,box-shadow .15s ease-in-out;
+  border-radius: 12px;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .btn:hover {
-  color: #000000;
-  background-color: inherit;
-  border-color: #000000;
+  color: #ffffff;
+  background-color: #CC0000;
+  border-color: #CC0000;
   cursor: pointer;
+  box-shadow: 0 0 12px rgba(204, 0, 0, 0.2);
 }
 #status {
   display: none;
@@ -1074,27 +1173,35 @@ a {
   left: -9999px;
 }
 .meta-data hr {
-  border-top: 1px solid #000000;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
 }
 #filterClearButton {
-  padding: 6px 12px;
-  border: 1px solid #000000;
-  transition: all 0.25s ease;
+  padding: 6px 14px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   color: #ffffff;
-  background-color: #000000;
+  background-color: #1E1E1E;
+  border-radius: 10px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  font-size: 13px;
 }
 #filterClearButton:hover {
-  color: #000000;
-  background-color: inherit;
+  color: #ffffff;
+  background-color: #CC0000;
+  border-color: #CC0000;
 }
 #sgroup,
 #RefSortOrder {
-  border: 1px solid black;
-  color: #595959;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.6);
+  border-radius: 8px;
+  font-family: 'Montserrat', sans-serif;
+  padding: 6px 10px;
 }
 #sgroup::placeholder,
 #RefSortOrder::placeholder {
-  color: #595959;
+  color: rgba(0, 0, 0, 0.4);
 }
 .style-picker {
   float: right !important;
@@ -1105,43 +1212,69 @@ a {
   width: 18.75rem;
 }
 .dropdown .dropdown-toggle {
-  background-color: #000000;
-  border: 0.07rem solid #000000;
+  background-color: #1E1E1E;
+  border: 1px solid rgba(0, 0, 0, 0.1);
   color: #ffffff;
-  padding: 0.57rem 1.14rem;
+  padding: 0.5rem 1rem;
   width: 100%;
   cursor: pointer;
-  transition: color .15s ease-in-out,background-color .15s ease-in-out,border-color .15s ease-in-out;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 12px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
 }
 .dropdown .dropdown-toggle:hover {
-  color: #000000;
-  background-color: inherit;
-  border-color: #000000;
+  background-color: #CC0000;
+  border-color: #CC0000;
+  color: #ffffff;
 }
 .dropdown .dropdown-content {
   display: none;
   position: absolute;
   background-color: #ffffff;
   min-width: 14.3rem;
-  box-shadow: 0 0.57rem 1.14rem 0 rgba(0,0,0,0.2);
+  box-shadow: 0 8px 24px -4px rgba(0, 0, 0, 0.12), 0 2px 6px -1px rgba(0, 0, 0, 0.06);
   z-index: 1;
-  border: 0.07rem solid #000000;
+  border: 1px solid rgba(0, 0, 0, 0.08);
   width: 100%;
+  border-radius: 12px;
+  margin-top: 4px;
+  overflow: hidden;
 }
 .dropdown .dropdown-content a {
-  color: #000000;
-  padding: 0.86rem 1.14rem;
+  color: rgba(0, 0, 0, 0.8);
+  padding: 0.75rem 1rem;
   text-decoration: none;
   display: block;
-  transition: background-color .15s ease-in-out;
-  font-size: 1rem;
+  transition: background-color 0.2s ease;
+  font-size: 0.95rem;
 }
 .dropdown .dropdown-content a:hover {
-  background-color: #efefef;
+  background-color: rgba(0, 51, 153, 0.06);
 }
 .dropdown:hover .dropdown-content {
   display: block;
 }
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-corner {
+  background: none;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(0, 0, 0, 0.15);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(0, 0, 0, 0.25);
+}
+::-webkit-scrollbar-track {
+  background-color: transparent;
+}
+
   </style>
   <script type="text/javascript">
     var isIE = false || !!document.documentMode;
@@ -1377,9 +1510,9 @@ a {
   <script src="https://unpkg.com/focus-trap/dist/focus-trap.umd.js"></script>
   <script type="text/javascript">
     $(window).on('load', function () {
-  const readerFocusTrap = focusTrap.createFocusTrap('#reader');
-  const settingsFocusTrap = focusTrap.createFocusTrap('#settings');
-  const accessibilityFocusTrap = focusTrap.createFocusTrap('#accessibility');
+  const readerFocusTrap = focusTrap.createFocusTrap('#reader', { preventScroll: true });
+  const settingsFocusTrap = focusTrap.createFocusTrap('#settings', { preventScroll: true });
+  const accessibilityFocusTrap = focusTrap.createFocusTrap('#accessibility', { preventScroll: true });
   let topColHeight = 'auto';
   let sideColWidth = 'auto';
   const csvData = {"rows":[[{"span":18,"isColumn":true,"id":18606563,"title":"EQuALS region","description":"","setDescription":"Regional classification under the EQuALS (Evaluation, Quality Assurance and Learning Services) framework","parentId":null}],[{"span":2,"isColumn":true,"id":18606565,"title":"Africa","description":"","setDescription":"","parentId":18606563},{"span":5,"isColumn":true,"id":18606570,"title":"Asia","description":"","setDescription":"","parentId":18606563},{"span":4,"isColumn":true,"id":18606566,"title":"Europe","description":"","setDescription":"","parentId":18606563},{"span":2,"isColumn":true,"id":18606567,"title":"North America & South America","description":"","setDescription":"","parentId":18606563},{"span":4,"isColumn":true,"id":18606569,"title":"Oceania","description":"","setDescription":"","parentId":18606563},{"span":1,"isColumn":true,"id":18606568,"title":"Other","description":"","setDescription":"","parentId":18606563}],[{"span":1,"isColumn":true,"id":18606576,"title":"Northern Africa","description":"","setDescription":"","parentId":18606565},{"span":1,"isColumn":true,"id":18606577,"title":"Sub-Saharan Africa","description":"","setDescription":"","parentId":18606565},{"span":1,"isColumn":true,"id":18606582,"title":"Central Asia","description":"","setDescription":"","parentId":18606570},{"span":1,"isColumn":true,"id":18606581,"title":"Eastern Asia","description":"","setDescription":"","parentId":18606570},{"span":1,"isColumn":true,"id":18606580,"title":"South-eastern Asia","description":"","setDescription":"","parentId":18606570},{"span":1,"isColumn":true,"id":18606579,"title":"Southern Asia","description":"","setDescription":"","parentId":18606570},{"span":1,"isColumn":true,"id":18606578,"title":"Western Asia","description":"","setDescription":"","parentId":18606570},{"span":1,"isColumn":true,"id":18606575,"title":"Eastern Europe","description":"","setDescription":"","parentId":18606566},{"span":1,"isColumn":true,"id":18606572,"title":"Northern Europe","description":"","setDescription":"","parentId":18606566},{"span":1,"isColumn":true,"id":18606573,"title":"Southern Europe","description":"","setDescription":"","parentId":18606566},{"span":1,"isColumn":true,"id":18606574,"title":"Western Europe","description":"","setDescription":"","parentId":18606566},{"span":1,"isColumn":true,"id":18606583,"title":"Northern America","description":"","setDescription":"","parentId":18606567},{"span":1,"isColumn":true,"id":18606584,"title":"Latin America and the Caribbean","description":"","setDescription":"","parentId":18606567},{"span":1,"isColumn":true,"id":18606586,"title":"Australia and New Zealand","description":"","setDescription":"","parentId":18606569},{"span":1,"isColumn":true,"id":18606587,"title":"Melanesia","description":"","setDescription":"","parentId":18606569},{"span":1,"isColumn":true,"id":18606588,"title":"Micronesia","description":"","setDescription":"","parentId":18606569},{"span":1,"isColumn":true,"id":18606589,"title":"Polynesia","description":"","setDescription":"","parentId":18606569},{"span":1,"isColumn":true,"id":18606591,"title":"Global","description":"","setDescription":"","parentId":18606568}],[{"span":3,"isColumn":false,"id":18606592,"title":"Evaluation outcomes","description":"","setDescription":"Evaluation outcomes have been aligned with the Sustainable Development Goals","parentId":null},{"span":6,"isColumn":false,"id":18606593,"title":"Social development","description":"","setDescription":"","parentId":18606592},{"span":1,"isColumn":false,"id":18606607,"title":"Education","description":"","setDescription":"Promote sustained, inclusive and sustainable economic growth, full and productive employment and decent work for all.","parentId":18606593}],[{"span":1,"isColumn":false,"id":18606608,"title":"Gender","description":"","setDescription":"Achieve gender equality and empower all women and girls","parentId":18606593}],[{"span":1,"isColumn":false,"id":18606606,"title":"Health and wellbeing","description":"","setDescription":"Ensure healthy lives and promote well-being for all at all ages.","parentId":18606593}],[{"span":1,"isColumn":false,"id":18606610,"title":"Inequality","description":"","setDescription":"Reduce inequality within and among countries","parentId":18606593}],[{"span":1,"isColumn":false,"id":18606605,"title":"Nutrition","description":"","setDescription":"End hunger, achieve food security and improved nutrition and promote sustainable agriculture.","parentId":18606593}],[{"span":1,"isColumn":false,"id":18606609,"title":"Peace and justice","description":"","setDescription":"Promote peaceful and inclusive societies for sustainable development, provide access to justice for all and build effective, accountable and inclusive institutions at all levels","parentId":18606593}],[{"span":6,"isColumn":false,"id":18606594,"title":"Infrastructure and economic development","description":"","setDescription":"","parentId":18606592},{"span":1,"isColumn":false,"id":18606597,"title":"Economic development","description":"","setDescription":"Promote sustained, inclusive and sustainable economic growth, full and productive employment and decent work for all","parentId":18606594}],[{"span":1,"isColumn":false,"id":18606601,"title":"Energy, industry and infrastructure provision","description":"","setDescription":"SDG 7 - Ensure access to affordable, reliable, sustainable and modern energy for all\nSDG 9  - Build resilient infrastructure, promote inclusive and sustainable industrialization and foster innovation","parentId":18606594}],[{"span":1,"isColumn":false,"id":18606603,"title":"Environmental sustainability","description":"","setDescription":"Protect, restore and promote sustainable use of terrestrial ecosystems, sustainably manage forests, combat desertification, and halt and reverse land degradation and halt biodiversity loss","parentId":18606594}],[{"span":1,"isColumn":false,"id":18606598,"title":"Sustainable agriculture","description":"","setDescription":"Ensure sustainable consumption and production patterns","parentId":18606594}],[{"span":1,"isColumn":false,"id":18606602,"title":"Urban development","description":"","setDescription":"Make cities and human settlements inclusive, safe, resilient and sustainable","parentId":18606594}],[{"span":1,"isColumn":false,"id":18606599,"title":"Water and sanitation","description":"","setDescription":"Ensure availability and sustainable management of water and sanitation for all","parentId":18606594}],[{"span":1,"isColumn":false,"id":18606595,"title":"Other","description":"","setDescription":"","parentId":18606592},{"span":1,"isColumn":false,"id":18606604,"title":"Global partnerships","description":"","setDescription":"Strengthen the means of implementation and revitalize the Global Partnership for Sustainable Development","parentId":18606595}]],"totalColBreadth":18,"totalColDepth":3,"totalRowBreadth":13,"totalRowDepth":1,"itemMap":{"18606563":{"span":18,"isColumn":true,"id":18606563,"title":"EQuALS region","description":"","setDescription":"Regional classification under the EQuALS (Evaluation, Quality Assurance and Learning Services) framework","parentId":null},"18606565":{"span":2,"isColumn":true,"id":18606565,"title":"Africa","description":"","setDescription":"","parentId":18606563},"18606566":{"span":4,"isColumn":true,"id":18606566,"title":"Europe","description":"","setDescription":"","parentId":18606563},"18606567":{"span":2,"isColumn":true,"id":18606567,"title":"North America & South America","description":"","setDescription":"","parentId":18606563},"18606568":{"span":1,"isColumn":true,"id":18606568,"title":"Other","description":"","setDescription":"","parentId":18606563},"18606569":{"span":4,"isColumn":true,"id":18606569,"title":"Oceania","description":"","setDescription":"","parentId":18606563},"18606570":{"span":5,"isColumn":true,"id":18606570,"title":"Asia","description":"","setDescription":"","parentId":18606563},"18606572":{"span":1,"isColumn":true,"id":18606572,"title":"Northern Europe","description":"","setDescription":"","parentId":18606566},"18606573":{"span":1,"isColumn":true,"id":18606573,"title":"Southern Europe","description":"","setDescription":"","parentId":18606566},"18606574":{"span":1,"isColumn":true,"id":18606574,"title":"Western Europe","description":"","setDescription":"","parentId":18606566},"18606575":{"span":1,"isColumn":true,"id":18606575,"title":"Eastern Europe","description":"","setDescription":"","parentId":18606566},"18606576":{"span":1,"isColumn":true,"id":18606576,"title":"Northern Africa","description":"","setDescription":"","parentId":18606565},"18606577":{"span":1,"isColumn":true,"id":18606577,"title":"Sub-Saharan Africa","description":"","setDescription":"","parentId":18606565},"18606578":{"span":1,"isColumn":true,"id":18606578,"title":"Western Asia","description":"","setDescription":"","parentId":18606570},"18606579":{"span":1,"isColumn":true,"id":18606579,"title":"Southern Asia","description":"","setDescription":"","parentId":18606570},"18606580":{"span":1,"isColumn":true,"id":18606580,"title":"South-eastern Asia","description":"","setDescription":"","parentId":18606570},"18606581":{"span":1,"isColumn":true,"id":18606581,"title":"Eastern Asia","description":"","setDescription":"","parentId":18606570},"18606582":{"span":1,"isColumn":true,"id":18606582,"title":"Central Asia","description":"","setDescription":"","parentId":18606570},"18606583":{"span":1,"isColumn":true,"id":18606583,"title":"Northern America","description":"","setDescription":"","parentId":18606567},"18606584":{"span":1,"isColumn":true,"id":18606584,"title":"Latin America and the Caribbean","description":"","setDescription":"","parentId":18606567},"18606586":{"span":1,"isColumn":true,"id":18606586,"title":"Australia and New Zealand","description":"","setDescription":"","parentId":18606569},"18606587":{"span":1,"isColumn":true,"id":18606587,"title":"Melanesia","description":"","setDescription":"","parentId":18606569},"18606588":{"span":1,"isColumn":true,"id":18606588,"title":"Micronesia","description":"","setDescription":"","parentId":18606569},"18606589":{"span":1,"isColumn":true,"id":18606589,"title":"Polynesia","description":"","setDescription":"","parentId":18606569},"18606591":{"span":1,"isColumn":true,"id":18606591,"title":"Global","description":"","setDescription":"","parentId":18606568},"18606592":{"span":3,"isColumn":false,"id":18606592,"title":"Evaluation outcomes","description":"","setDescription":"Evaluation outcomes have been aligned with the Sustainable Development Goals","parentId":null},"18606593":{"span":6,"isColumn":false,"id":18606593,"title":"Social development","description":"","setDescription":"","parentId":18606592},"18606594":{"span":6,"isColumn":false,"id":18606594,"title":"Infrastructure and economic development","description":"","setDescription":"","parentId":18606592},"18606595":{"span":1,"isColumn":false,"id":18606595,"title":"Other","description":"","setDescription":"","parentId":18606592},"18606597":{"span":1,"isColumn":false,"id":18606597,"title":"Economic development","description":"","setDescription":"Promote sustained, inclusive and sustainable economic growth, full and productive employment and decent work for all","parentId":18606594},"18606598":{"span":1,"isColumn":false,"id":18606598,"title":"Sustainable agriculture","description":"","setDescription":"Ensure sustainable consumption and production patterns","parentId":18606594},"18606599":{"span":1,"isColumn":false,"id":18606599,"title":"Water and sanitation","description":"","setDescription":"Ensure availability and sustainable management of water and sanitation for all","parentId":18606594},"18606601":{"span":1,"isColumn":false,"id":18606601,"title":"Energy, industry and infrastructure provision","description":"","setDescription":"SDG 7 - Ensure access to affordable, reliable, sustainable and modern energy for all\nSDG 9  - Build resilient infrastructure, promote inclusive and sustainable industrialization and foster innovation","parentId":18606594},"18606602":{"span":1,"isColumn":false,"id":18606602,"title":"Urban development","description":"","setDescription":"Make cities and human settlements inclusive, safe, resilient and sustainable","parentId":18606594},"18606603":{"span":1,"isColumn":false,"id":18606603,"title":"Environmental sustainability","description":"","setDescription":"Protect, restore and promote sustainable use of terrestrial ecosystems, sustainably manage forests, combat desertification, and halt and reverse land degradation and halt biodiversity loss","parentId":18606594},"18606604":{"span":1,"isColumn":false,"id":18606604,"title":"Global partnerships","description":"","setDescription":"Strengthen the means of implementation and revitalize the Global Partnership for Sustainable Development","parentId":18606595},"18606605":{"span":1,"isColumn":false,"id":18606605,"title":"Nutrition","description":"","setDescription":"End hunger, achieve food security and improved nutrition and promote sustainable agriculture.","parentId":18606593},"18606606":{"span":1,"isColumn":false,"id":18606606,"title":"Health and wellbeing","description":"","setDescription":"Ensure healthy lives and promote well-being for all at all ages.","parentId":18606593},"18606607":{"span":1,"isColumn":false,"id":18606607,"title":"Education","description":"","setDescription":"Promote sustained, inclusive and sustainable economic growth, full and productive employment and decent work for all.","parentId":18606593},"18606608":{"span":1,"isColumn":false,"id":18606608,"title":"Gender","description":"","setDescription":"Achieve gender equality and empower all women and girls","parentId":18606593},"18606609":{"span":1,"isColumn":false,"id":18606609,"title":"Peace and justice","description":"","setDescription":"Promote peaceful and inclusive societies for sustainable development, provide access to justice for all and build effective, accountable and inclusive institutions at all levels","parentId":18606593},"18606610":{"span":1,"isColumn":false,"id":18606610,"title":"Inequality","description":"","setDescription":"Reduce inequality within and among countries","parentId":18606593}}};
@@ -1863,15 +1996,16 @@ function generateCodingReport(references, selectedCodes, selectedKeywords) {
     <title>EPPI Mapper - Coding Report</title>
     <style>
         body { font-family: Arial, sans-serif; margin: 20px; }
-        table { border-collapse: collapse; width: 100%; margin-bottom: 30px; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; vertical-align: top; }
-        th { background-color: #f2f2f2; font-weight: bold; }
-        .record-header { background-color: #e8f4f8; font-weight: bold; }
-        .coding-section { background-color: #f9f9f9; }
-        .code-level-1 { margin-left: 0px; font-weight: bold; }
+        body { font-family: 'Montserrat', 'Roboto', sans-serif; color: rgba(0,0,0,0.8); background: #F4F2EE; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 30px; border-radius: 8px; overflow: hidden; }
+        th, td { border: 1px solid rgba(0,0,0,0.08); padding: 10px 12px; text-align: left; vertical-align: top; }
+        th { background-color: #F0EDE8; font-weight: 600; }
+        .record-header { background-color: rgba(0,51,153,0.08); font-weight: 600; }
+        .coding-section { background-color: #FAF9F7; }
+        .code-level-1 { margin-left: 0px; font-weight: 600; }
         .code-level-2 { margin-left: 20px; }
         .code-level-3 { margin-left: 40px; }
-        .no-coding { font-style: italic; color: #666; }
+        .no-coding { font-style: italic; color: rgba(0,0,0,0.45); }
     </style>
 </head>
 <body>
@@ -3543,7 +3677,7 @@ function formatCodeDisplay(codePath) {
     });
 
     $('.menu-settings').on('click', function () {
-      $filters.css({display: 'block'});
+      $filters.css({display: 'flex'});
       $filters.addClass('open');
       $veil.addClass('open');
       $filters.focus();
@@ -3616,7 +3750,7 @@ function formatCodeDisplay(codePath) {
 
     // Open filter if it should be auto open (moved to after HTML creation)
     if (autoOpenFilter) {
-      $filters.css({display: 'block'});
+      $filters.css({display: 'flex'});
       $filters.addClass('open');
       $veil.addClass('open');
       settingsFocusTrap.activate();
@@ -4302,12 +4436,93 @@ function formatCodeDisplay(codePath) {
     updateReferenceReader(searchReferences);
   }
 
+  function cancelDrawerClose($drawer) {
+    const drawer = $drawer[0];
+
+    if (!drawer) {
+      return;
+    }
+
+    if (drawer.closeTimer) {
+      window.clearTimeout(drawer.closeTimer);
+      drawer.closeTimer = null;
+    }
+
+    if (drawer.closeTransitionHandler) {
+      drawer.removeEventListener('transitionend', drawer.closeTransitionHandler);
+      drawer.closeTransitionHandler = null;
+    }
+  }
+
+  function openDrawer($drawer) {
+    const drawer = $drawer[0];
+
+    if (!drawer) {
+      return;
+    }
+
+    cancelDrawerClose($drawer);
+    $drawer.css({display: 'block'});
+    $drawer.addClass('is-visible');
+    $drawer.removeClass('open');
+
+    requestAnimationFrame(() => {
+      if (!document.body.contains(drawer) || $drawer.css('display') === 'none') {
+        return;
+      }
+
+      $drawer.addClass('open');
+    });
+  }
+
+  function closeDrawer($drawer, options) {
+    const drawer = $drawer[0];
+
+    if (!drawer) {
+      return;
+    }
+
+    const settings = Object.assign({
+      clearHtml: false,
+      onAfterClose: null
+    }, options);
+
+    cancelDrawerClose($drawer);
+
+    const finishClosing = () => {
+      drawer.removeEventListener('transitionend', handleTransitionEnd);
+      drawer.closeTransitionHandler = null;
+      cancelDrawerClose($drawer);
+      $drawer.removeClass('open is-visible');
+      $drawer.css({display: 'none'});
+
+      if (settings.clearHtml) {
+        $drawer.html('');
+      }
+
+      if (typeof settings.onAfterClose === 'function') {
+        settings.onAfterClose();
+      }
+    };
+
+    const handleTransitionEnd = (event) => {
+      if (event.target !== drawer || event.propertyName !== 'transform') {
+        return;
+      }
+
+      finishClosing();
+    };
+
+    drawer.closeTransitionHandler = handleTransitionEnd;
+    drawer.addEventListener('transitionend', handleTransitionEnd);
+    $drawer.removeClass('open');
+    drawer.closeTimer = window.setTimeout(finishClosing, 450);
+  }
+
   function closeReader() {
-    $reader.removeClass('open');
     $veil.removeClass('open');
-    $reader.css({display: 'none'});
-    $reader.html('');
     readerFocusTrap.deactivate();
+    closeDrawer($reader, { clearHtml: true });
   }
 
   /**
@@ -4321,11 +4536,6 @@ function formatCodeDisplay(codePath) {
     updateReferenceReader(references, true);
     const $readerFilter = $('.reader-filter');
     const $filterSelect = $('.filter-opts');
-
-    // autofocus on the input on opening
-    $reader.slideDown(function () {
-      $("#searchFilter").focus();
-    });
 
     $readerFilter.on('keydown', (e) => {
       doReaderSearch(e, references, $readerFilter, $filterSelect);
@@ -4396,9 +4606,8 @@ function formatCodeDisplay(codePath) {
       updateReferenceReader(references);
     });
 
-    $reader.css({display: 'block'});
     $veil.addClass('open');
-    $reader.addClass('open');
+    openDrawer($reader);
     readerFocusTrap.activate();
 
     // Close modal on escape key
@@ -4587,9 +4796,8 @@ function formatCodeDisplay(codePath) {
         $announce.html('About this map closed.');
       });
 
-      $reader.css({display: 'block'});
       $veil.addClass('open');
-      $reader.addClass('open');
+      openDrawer($reader);
       readerFocusTrap.activate();
 
       // Close modal on escape key
@@ -4609,25 +4817,22 @@ function formatCodeDisplay(codePath) {
   function handleAccessiblityClick() {
     $('.menu-accessibility').on('click', e => {
       $('.close', $accessibility).on('click', () => {
-        $accessibility.removeClass('open');
         $veil.removeClass('open');
-        $accessibility.css({display: 'none'});
         accessibilityFocusTrap.deactivate();
+        closeDrawer($accessibility);
         $announce.html('Accessibility closed.');
       });
 
-      $accessibility.css({display: 'block'});
       $veil.addClass('open');
-      $accessibility.addClass('open');
+      openDrawer($accessibility);
       accessibilityFocusTrap.activate();
 
       // Close modal on escape key
       $accessibility.on('keydown', function (event) {
         if (event.key === "Escape") {
-          $accessibility.removeClass('open');
           $veil.removeClass('open');
-          $accessibility.css({display: 'none'});
           accessibilityFocusTrap.deactivate();
+          closeDrawer($accessibility);
         }
       });
 
@@ -4656,9 +4861,8 @@ function formatCodeDisplay(codePath) {
         $announce.html('Submit a study closed.')
       });
 
-      $reader.css({display: 'block'});
       $veil.addClass('open');
-      $reader.addClass('open');
+      openDrawer($reader);
       readerFocusTrap.activate();
 
       // Close modal on escape key
@@ -5100,17 +5304,15 @@ function formatCodeDisplay(codePath) {
 
   $window.resize(adjustTable);
 
-  // Slide the up after all is done.
-  $loader
-    .css({
-      'top': -windowHeight,
-      'bottom': windowHeight
-    });
+  // Slide up after all is done.
+  $loader.css({
+    'transform': 'translateY(-100%)'
+  });
 
   // Removes the loader after the animation is complete.
   setTimeout(() => {
     $loader.remove();
-  }, 2000);
+  }, 700);
 });
 
   </script>
