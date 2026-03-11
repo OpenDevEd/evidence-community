@@ -43,6 +43,7 @@ export default function Navbar() {
 	} = useDisclosure();
 
 	const isMapPage = pathname.includes("/map");
+	const isGapMapPage = pathname.includes("/gapmap");
 
 	// Get enabled elements based on feature flags and session
 	const enabledElements = getEnabledElements(
@@ -90,7 +91,11 @@ export default function Navbar() {
 				isMapPage &&
 					(styleVariant !== "wide"
 						? "xl:absolute xl:top-6 xl:scale-75"
-						: "xl:absolute xl:scale-75 xl:rounded-b-2xl")
+						: "xl:absolute xl:scale-75 xl:rounded-b-2xl"),
+				isGapMapPage &&
+					(styleVariant !== "wide"
+						? "xl:scale-75"
+						: "xl:scale-75 xl:rounded-b-2xl")
 			)}
 		>
 			<div

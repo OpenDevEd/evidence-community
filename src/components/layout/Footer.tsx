@@ -151,7 +151,7 @@ export default function Footer() {
 	const links = status.links || [];
 	const footer = status.companyFooter || {};
 	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
-	const isMapPage = pathname.includes("/map");
+	const isMapPage = pathname.includes("/map") || pathname.includes("/gapmap");
 	const socialLinks = Object.entries(status.externalLinks || {});
 	const onPolicyPage = isPolicyPage(pathname);
 	const [policyDialogOpen, setPolicyDialogOpen] = useState(false);

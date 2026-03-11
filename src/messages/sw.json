@@ -563,7 +563,9 @@
     "steeringGroup": "Kundi la Uendeshaji",
     "members": "Wanachama",
     "blogs": "Blogu",
-    "resources": "Rasilimali"
+    "resources": "Rasilimali",
+    "gapMap": "Gap Map",
+    "gapMaps": "Gap Maps"
   },
   "footer": {
     "quickLinks": "Viungo vya Haraka",

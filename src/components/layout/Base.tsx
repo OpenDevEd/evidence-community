@@ -7,6 +7,7 @@ import { getMessages, getTranslations } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
 import { getLangDir } from "rtl-detect";
 import { getCachedStatus } from "@/app/api/cache";
+import { getGapMaps } from "@/lib/gapmaps";
 import MainWrapper from "./MainWrapper";
 import Banner from "./Banner";
 import { Suspense } from "react";
@@ -32,10 +33,11 @@ async function BaseContent({
 	children: React.ReactNode;
 	locale: string;
 }>) {
-	const [status, messages, t] = await Promise.all([
+	const [status, messages, t, gapmaps] = await Promise.all([
 		getCachedStatus(),
 		getMessages(),
 		getTranslations({ locale, namespace: "ui" }),
+		getGapMaps(),
 	]);
 	const googleAnalyticsId = process.env.GOOGLE_ANALYTICS_ID || "";
 	const initialFeatureFlags = getServerFeatureFlags(status.companyFooter);
@@ -46,6 +48,7 @@ async function BaseContent({
 				googleAnalyticsId={googleAnalyticsId}
 				status={status}
 				initialFeatureFlags={initialFeatureFlags}
+				gapmaps={gapmaps}
 			>
 				<MainWrapper>
 					<nav

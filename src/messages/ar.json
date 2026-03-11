@@ -562,7 +562,9 @@
     "steeringGroup": "المجموعة التوجيهية",
     "members": "أعضاء",
     "blogs": "مدونات",
-    "resources": "موارد"
+    "resources": "موارد",
+    "gapMap": "Gap Map",
+    "gapMaps": "Gap Maps"
   },
   "footer": {
     "quickLinks": "روابط سريعة",

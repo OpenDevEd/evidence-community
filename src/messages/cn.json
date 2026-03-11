@@ -562,7 +562,9 @@
     "steeringGroup": "指导小组",
     "members": "成员",
     "blogs": "博客",
-    "resources": "资源"
+    "resources": "资源",
+    "gapMap": "Gap Map",
+    "gapMaps": "Gap Maps"
   },
   "footer": {
     "quickLinks": "快速链接",

@@ -562,7 +562,9 @@
     "steeringGroup": "स्टियरिंग ग्रुप",
     "members": "सदस्य",
     "blogs": "ब्लॉग",
-    "resources": "संसाधन"
+    "resources": "संसाधन",
+    "gapMap": "Gap Map",
+    "gapMaps": "Gap Maps"
   },
   "footer": {
     "quickLinks": "त्वरित लिंक",

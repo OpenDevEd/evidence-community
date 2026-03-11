@@ -562,7 +562,9 @@
     "steeringGroup": "Lenkungsausschuss",
     "members": "Mitglieder",
     "blogs": "Blogs",
-    "resources": "Ressourcen"
+    "resources": "Ressourcen",
+    "gapMap": "Gap Map",
+    "gapMaps": "Gap Maps"
   },
   "footer": {
     "quickLinks": "Schnelllinks",

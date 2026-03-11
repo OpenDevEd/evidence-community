@@ -15,6 +15,7 @@ import { NAVBAR_ICONS } from "@/constants/links";
 import { localizeOrUseIfCapitalized } from "@/lib/utils";
 import { style } from "@/../tailwind.config";
 import type { LinkObject } from "@/db/schema/tables/status";
+import GapMapLinks from "./GapMapLinks";
 import type { NavbarStyleVariant } from "@/types/navbar";
 
 interface LinkItemProps {
@@ -150,6 +151,11 @@ export default function NavLinks({
 						/>
 					)
 			)}
+			<GapMapLinks
+				pathname={pathname}
+				isMobile={isMobile}
+				styleVariant={styleVariant}
+			/>
 		</ul>
 	);
 }

@@ -562,7 +562,9 @@
     "steeringGroup": "Grupo de Direção",
     "members": "Membros",
     "blogs": "Blogs",
-    "resources": "Recursos"
+    "resources": "Recursos",
+    "gapMap": "Gap Map",
+    "gapMaps": "Gap Maps"
   },
   "footer": {
     "quickLinks": "Links Rápidos",

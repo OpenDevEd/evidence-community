@@ -22,6 +22,7 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Toaster } from "sonner";
 import { useQueryState } from "nuqs";
 import { ItemsGetResponse } from "@/app/api/items/types";
+import type { GapMap } from "@/lib/gapmaps";
 import {
 	AnalyticsConsentProvider,
 	useAnalyticsConsent,
@@ -66,6 +67,11 @@ export function useStatus(): CacheContextType["status"] {
 	return status;
 }
 
+export function useGapMaps(): GapMap[] {
+	const { gapmaps } = useContext(CacheContext);
+	return gapmaps ?? [];
+}
+
 function PageView() {
 	const pathname = usePathname();
 	const searchParams = useSearchParams();
@@ -98,9 +104,11 @@ function AnalyticsVendors({
 function CacheProvider({
 	children,
 	status,
+	gapmaps,
 }: {
 	children: ReactNode;
 	status: InferSelectModel<typeof statusTable>;
+	gapmaps: GapMap[];
 }) {
 	const [cache, setCache] = useState({});
 	const itemsCache = useRef({});
@@ -126,6 +134,7 @@ function CacheProvider({
 				accordionGlobalExpanded,
 				setAccordionGlobalExpanded,
 				status,
+				gapmaps,
 				lastFetchedData,
 				setLastFetchedData,
 			}}
@@ -215,11 +224,13 @@ export default function Providers({
 	googleAnalyticsId,
 	status,
 	initialFeatureFlags,
+	gapmaps,
 }: {
 	children: ReactNode;
 	googleAnalyticsId: string;
 	status: InferSelectModel<typeof statusTable>;
 	initialFeatureFlags: RuntimeFeatureFlags;
+	gapmaps: GapMap[];
 }) {
 	const router = useRouter();
 	const featureFlags = useMemo(() => initialFeatureFlags, [initialFeatureFlags]);
@@ -236,7 +247,7 @@ export default function Providers({
 					<SessionProvider>
 						<AnalyticsConsentProvider>
 							<FeatureFlagsContext.Provider value={{ featureFlags }}>
-								<CacheProvider status={status}>
+								<CacheProvider status={status} gapmaps={gapmaps}>
 									<NextUIProvider navigate={router.push}>
 										<Suspense>
 											<PramNotificationProvider>

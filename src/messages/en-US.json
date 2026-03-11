@@ -551,7 +551,9 @@
     "steeringGroup": "Steering Group",
     "members": "Members",
     "blogs": "Blogs",
-    "resources": "Resources"
+    "resources": "Resources",
+    "gapMap": "Gap Map",
+    "gapMaps": "Gap Maps"
   },
   "footer": {
     "quickLinks": "Quick Links",
