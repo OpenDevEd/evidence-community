@@ -1,6 +1,5 @@
 "use client";
 import Image from "next/image";
-import { socialLinks } from "@/constants/links";
 import { Button } from "@/components/nextui/Button";
 import { useTheme } from "next-themes";
 import { useState } from "react";
@@ -27,6 +26,25 @@ import { useRouter } from "@/i18n/routing";
 import { LinkObject } from "@/db/schema/tables/status";
 import { FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
 import { RiBlueskyFill } from "react-icons/ri";
+
+function groupLinksBySection(
+	links: LinkObject[],
+	defaultSection: string,
+): [string, LinkObject[]][] {
+	const grouped = links.reduce<Record<string, LinkObject[]>>((acc, link) => {
+		if (link.footerExclude) return acc;
+		const section = link.section || defaultSection;
+		if (!acc[section]) acc[section] = [];
+		acc[section].push(link);
+		return acc;
+	}, {});
+
+	return Object.entries(grouped).sort(
+		(a, b) =>
+			links.findIndex((l) => l.section === a[0]) -
+			links.findIndex((l) => l.section === b[0]),
+	);
+}
 
 const footerInfo = {
 	email: "opendeved@gmail.com",
@@ -151,7 +169,7 @@ export default function Footer() {
 	const links = status.links || [];
 	const footer = status.companyFooter || {};
 	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
-	const isMapPage = pathname.includes("/map") || pathname.includes("/gapmap");
+	const isMapPage = pathname.includes("/map");
 	const socialLinks = Object.entries(status.externalLinks || {});
 	const onPolicyPage = isPolicyPage(pathname);
 	const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
@@ -159,26 +177,7 @@ export default function Footer() {
 	const contactData = links.find((link) => link.id === "contact");
 
 	if (companyName === "EdTech Hub") {
-		const footerItems = links.reduce(
-			(acc: Record<string, LinkObject[]>, link) => {
-				const section = link.section || "Site";
-				if (!acc[section]) {
-					acc[section] = [];
-				}
-				if (!link.footerExclude) {
-					acc[section].push(link);
-				}
-				return acc;
-			},
-			{},
-		);
-		const footerItemsSorted = Object.entries(footerItems).sort((a, b) => {
-			// sort by their order of appearance in the links array
-			return (
-				links.findIndex((link) => link.section === a[0]) -
-				links.findIndex((link) => link.section === b[0])
-			);
-		});
+		const footerItemsSorted = groupLinksBySection(links, "Site");
 
 		return (
 			!isMapPage && (
@@ -325,17 +324,17 @@ export default function Footer() {
 							)}
 						</div>
 					</div>
-					<FooterFieldColumn
-						title={t("quickLinks")}
-						content={
-							<ul className="flex flex-col gap-4 mt-6 items-center lg:items-start">
-								{links.map(
-									(link) =>
-										!link.footerExclude && (
+					{groupLinksBySection(links, t("quickLinks")).map(
+						([section, sectionLinks]) => (
+							<FooterFieldColumn
+								key={section}
+								title={section}
+								content={
+									<ul className="flex flex-col gap-4 mt-6 items-center lg:items-start">
+										{sectionLinks.map((link) => (
 											<li key={link.label}>
 												<Link
 													href={link.href}
-													key={link.label}
 													className="text-black/60 dark:text-white/60 text-xl"
 												>
 													{localizeOrUseIfCapitalized(
@@ -344,11 +343,12 @@ export default function Footer() {
 													)}
 												</Link>
 											</li>
-										),
-								)}
-							</ul>
-						}
-					/>
+										))}
+									</ul>
+								}
+							/>
+						),
+					)}
 					<div className="flex flex-col h-full gap-6 w-full lg:w-auto">
 						{socialLinks.length > 0 && (
 							<FooterFieldColumn

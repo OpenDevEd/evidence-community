@@ -77,7 +77,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 				</span>
 			</Link>
 
-			{link.dropdown && (
+			{link.dropdown && link.dropdown.length > 0 && (
 				<Dropdown color="accent" isOpen={isOpen} onOpenChange={onOpenChange} offset={12}>
 					<DropdownTrigger>
 						<Button
@@ -152,7 +152,6 @@ export default function NavLinks({
 					)
 			)}
 			<GapMapLinks
-				pathname={pathname}
 				isMobile={isMobile}
 				styleVariant={styleVariant}
 			/>

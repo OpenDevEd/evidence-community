@@ -8,6 +8,7 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLangDir } from "rtl-detect";
 import { getCachedStatus } from "@/app/api/cache";
 import { getGapMaps } from "@/lib/gapmaps";
+import { fetchExternalNav } from "@/lib/external-nav";
 import MainWrapper from "./MainWrapper";
 import Banner from "./Banner";
 import { Suspense } from "react";
@@ -39,14 +40,28 @@ async function BaseContent({
 		getTranslations({ locale, namespace: "ui" }),
 		getGapMaps(),
 	]);
+
+	const externalNav = await fetchExternalNav();
+	const finalStatus = externalNav
+		? {
+				...status,
+				links: externalNav.links,
+				externalLinks: externalNav.externalLinks,
+				companyFooter: {
+					...status.companyFooter,
+					...externalNav.companyFooter,
+				},
+			}
+		: status;
+
 	const googleAnalyticsId = process.env.GOOGLE_ANALYTICS_ID || "";
-	const initialFeatureFlags = getServerFeatureFlags(status.companyFooter);
+	const initialFeatureFlags = getServerFeatureFlags(finalStatus.companyFooter);
 
 	return (
 		<NextIntlClientProvider messages={messages}>
 			<Providers
 				googleAnalyticsId={googleAnalyticsId}
-				status={status}
+				status={finalStatus}
 				initialFeatureFlags={initialFeatureFlags}
 				gapmaps={gapmaps}
 			>
