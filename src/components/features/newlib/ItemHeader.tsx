@@ -20,6 +20,7 @@ import LikeButton from "@/components/features/items/LikeButton";
 import { AddButton } from "@/components/features/items/Resource";
 import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
+import GapMapAction from "@/components/features/gapmaps/GapMapAction";
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -133,6 +134,7 @@ export default function ItemHeader({
 							startContent={<LuDownload />}
 							aria-label={t("itemDownloadAriaLabel")}
 						/>
+						<GapMapAction tags={item?.tags} size="sm" />
 						<CopyButton textToCopy={getUrl()} label={t("copyLink")}>
 							<Button
 								size="sm"

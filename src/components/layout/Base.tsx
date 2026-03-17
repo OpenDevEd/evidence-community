@@ -84,7 +84,9 @@ async function BaseContent({
 						</a>
 					</nav>
 					<Navbar />
-					{children}
+					<div className="flex-1 w-full flex flex-col items-center">
+						{children}
+					</div>
 					<Footer />
 					<Banner />
 				</MainWrapper>

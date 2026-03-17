@@ -99,6 +99,38 @@ a {
 .header-basic img:nth-child(2) {
   float: right;
 }
+@media (max-height: 720px) {
+  .header-basic {
+    align-items: center;
+    font-size: 1rem;
+    height: 68px;
+    padding: 6px 8px 0;
+    gap: 8px;
+  }
+  .header-basic .header-title {
+    align-items: center;
+    display: flex;
+    justify-content: center;
+    min-width: 0;
+  }
+  .header-basic .header-title span {
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    display: -webkit-box;
+    line-height: 1.2;
+    overflow: hidden;
+    top: auto;
+  }
+  .header-basic img {
+    height: 52px;
+  }
+  .menu .menu-item span {
+    display: none;
+  }
+  .menu .menu-item svg {
+    margin: 0;
+  }
+}
 .wrapper {
   margin: 8px;
 }
@@ -372,6 +404,43 @@ a {
 }
 .footer .legend .label {
   font-size: 1.0em;
+}
+@media (max-height: 720px) {
+  .footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0;
+    height: auto;
+    min-height: 0;
+    padding: 0;
+    font-size: 12px;
+  }
+  .footer .legend {
+    width: 100%;
+  }
+  .footer .legend .dot {
+    height: 8px;
+    width: 8px;
+    margin: 1px 3px 0 5px;
+  }
+  .footer .legend .label {
+    font-size: 0.9em;
+  }
+  .footer .spacer {
+    display: none;
+  }
+  .footer .inner {
+    align-self: flex-end;
+    color: rgba(0, 0, 0, 0.52);
+    flex: 0 0 auto !important;
+    font-size: 10px;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  .footer .inner svg {
+    height: 18px;
+    width: 18px;
+  }
 }
 .legend-tooltip {
   border: 1px solid rgba(0, 0, 0, 0.08);
@@ -6109,15 +6178,17 @@ function formatCodeDisplay(codePath) {
 
   $window.resize(adjustTable);
 
-  // Slide up after all is done.
-  $loader.css({
-    'transform': 'translateY(-100%)'
-  });
-
-  // Removes the loader after the animation is complete.
+  // Slide up after a short delay so the spinner is visible.
   setTimeout(() => {
-    $loader.remove();
-  }, 700);
+    $loader.css({
+      'transform': 'translateY(-100%)'
+    });
+
+    // Removes the loader after the animation is complete.
+    setTimeout(() => {
+      $loader.remove();
+    }, 700);
+  }, 800);
 });
 
   </script>

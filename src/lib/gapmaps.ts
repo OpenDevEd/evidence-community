@@ -1,11 +1,8 @@
+import "server-only";
 import { readdir } from "fs/promises";
 import { join } from "path";
 import config from "@/constants/config.json";
-
-export type GapMap = {
-	slug: string;
-	label: string;
-};
+import type { GapMap } from "@/lib/gapmap-links";
 
 const GAPMAPS_DIR = join(process.cwd(), "public", "gapmaps");
 
@@ -25,10 +22,14 @@ export async function getGapMaps(): Promise<GapMap[]> {
 		const files = await readdir(dir);
 		return files
 			.filter((f) => f.endsWith(".html"))
-			.map((f) => ({
-				slug: f.replace(".html", ""),
-				label: LABEL_MAP[f.replace(".html", "")] ?? f.replace(".html", "").replace(/[_-]/g, " "),
-			}));
+			.map((f) => {
+				const slug = f.replace(".html", "");
+				return {
+					slug,
+					label: LABEL_MAP[slug] ?? slug.replace(/[_-]/g, " "),
+					href: `/gapmaps/${f}`,
+				};
+			});
 	} catch {
 		return [];
 	}

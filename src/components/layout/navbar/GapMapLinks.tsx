@@ -10,7 +10,6 @@ import {
 } from "@nextui-org/react";
 import { ChevronDownIcon } from "@nextui-org/shared-icons";
 import { useDisclosure } from "@nextui-org/react";
-import { Link } from "@/i18n/routing";
 import { Button } from "@/components/nextui/Button";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { useDebounce } from "@/hooks/useDebounce";
@@ -56,8 +55,8 @@ export default function GapMapLinks({
 				isActive && "text-accent dark:text-accent"
 			)}
 		>
-			<Link
-				href={`/gapmap/${latest.slug}`}
+			<a
+				href={latest.href}
 				data-is-mobile={isMobile}
 				className={twMerge(
 					"flex gap-2 text-lg items-center justify-center font-medium",
@@ -66,7 +65,7 @@ export default function GapMapLinks({
 			>
 				<BsMapFill className={twMerge("fill-current size-6 shrink-0", styleVariant === "wide" && "size-5")} />
 				<span className="line-clamp-1">{t("gapMaps")}</span>
-			</Link>
+			</a>
 
 			<Dropdown
 				color="accent"
@@ -90,7 +89,7 @@ export default function GapMapLinks({
 					}}
 				>
 					{gapmaps.map((gm) => (
-						<DropdownItem key={gm.slug} href={`/gapmap/${gm.slug}`}>
+						<DropdownItem key={gm.slug} href={gm.href}>
 							{gm.label}
 						</DropdownItem>
 					))}

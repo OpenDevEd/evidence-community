@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { HiOutlineMoon } from "react-icons/hi2";
@@ -15,16 +16,23 @@ export default function ThemeSwitcher({
 	styleVariant,
 	showLabel,
 }: NavbarElementProps) {
-	const { resolvedTheme: theme, setTheme } = useTheme();
+	const [mounted, setMounted] = useState(false);
+	const { resolvedTheme, setTheme } = useTheme();
 	const isEnabled = useFeatureFlagEnabled("theme-switcher");
 	const t = useTranslations("ui");
 
+	useEffect(() => setMounted(true), []);
+
 	if (!isEnabled) return null;
 
-	const toggleTheme = () => setTheme(theme === "dark" ? "light" : "dark");
-	const isDark = theme === "dark";
+	const toggleTheme = () =>
+		setTheme(resolvedTheme === "dark" ? "light" : "dark");
+
+	const isDark = mounted && resolvedTheme === "dark";
 	const targetTheme = isDark ? t("lightTheme") : t("darkTheme");
-	const label = t("switchThemeAriaLabel", { theme: targetTheme });
+	const label = mounted
+		? t("switchThemeAriaLabel", { theme: targetTheme })
+		: "Toggle theme";
 
 	// Menu item variant - for dropdowns and mobile menu
 	if (variant === "menuItem") {
@@ -48,30 +56,24 @@ export default function ThemeSwitcher({
 	// Inline variant - standalone button
 	return (
 		<Button
-			suppressHydrationWarning
 			variant="invisible"
 			disableRipple
 			onPress={toggleTheme}
 			aria-label={label}
 			className="flex items-center justify-center gap-2"
 		>
-			{/* Sun icon for dark mode (click to switch to light) */}
 			<IoMdSunny
-				suppressHydrationWarning
 				className={twMerge(
 					"size-5 fill-accent transition-all",
 					"dark:block hidden"
 				)}
 			/>
-			{/* Moon icon for light mode (click to switch to dark) */}
 			<HiOutlineMoon
-				suppressHydrationWarning
 				className={twMerge(
 					"size-5 stroke-accent transition-all",
 					"dark:hidden block"
 				)}
 			/>
-			{/* Show label text in mobile menu */}
 			{showLabel && (
 				<span
 					className={twMerge(
@@ -81,9 +83,12 @@ export default function ThemeSwitcher({
 				>
 					{["dark", "light"].map((themeToMatch) => (
 						<span
-							suppressHydrationWarning
 							key={themeToMatch}
-							aria-hidden={themeToMatch !== theme}
+							aria-hidden={
+								mounted
+									? themeToMatch !== resolvedTheme
+									: undefined
+							}
 							className={twMerge(
 								themeToMatch === "dark"
 									? "dark:hidden"

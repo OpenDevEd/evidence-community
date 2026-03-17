@@ -7,6 +7,7 @@ import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
 import { getPolicyLastModified } from "@/lib/policy-documents";
+import { getGapMaps } from "@/lib/gapmaps";
 
 function getLocalizedUrl(pathname: string, locale: string) {
 	const localizedPath =
@@ -60,6 +61,7 @@ export default async function sitemap(props: {
 	}
 
 	let policyEntries: MetadataRoute.Sitemap = [];
+	let gapmapEntries: MetadataRoute.Sitemap = [];
 	if (identifier === 0) {
 		try {
 			const [privacyLastModified, cookiePolicyLastModified] = await Promise.all([
@@ -85,6 +87,15 @@ export default async function sitemap(props: {
 		} catch {
 			// Policy docs may not exist in all environments; skip gracefully.
 		}
+
+		try {
+			const gapmaps = await getGapMaps();
+			gapmapEntries = gapmaps.map((gm) => ({
+				url: buildSiteUrl(gm.href),
+			}));
+		} catch {
+			// Gap maps may not exist in all environments; skip gracefully.
+		}
 	}
 
 	const itemEntries = items.results.map((item: any) => ({
@@ -98,5 +109,5 @@ export default async function sitemap(props: {
 			.map((attachment: any) => convertToImageURL(attachment.PDFCoverPageImage)),
 	}));
 
-	return [...policyEntries, ...itemEntries];
+	return [...policyEntries, ...gapmapEntries, ...itemEntries];
 }

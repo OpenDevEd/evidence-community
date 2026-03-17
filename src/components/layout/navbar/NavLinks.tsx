@@ -152,6 +152,7 @@ export default function NavLinks({
 					)
 			)}
 			<GapMapLinks
+				pathname={pathname}
 				isMobile={isMobile}
 				styleVariant={styleVariant}
 			/>
