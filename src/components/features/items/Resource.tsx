@@ -14,12 +14,12 @@ import ResourceData from "./ResourceData";
 import { Link, usePathname, useRouter } from "@/i18n/routing";
 import { useFormatter, useTranslations } from "next-intl";
 import { Button } from "@/components/nextui/Button";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import CopyButton from "./CopyButton";
 import useSWRMutation from "swr/mutation";
 import { useSession } from "next-auth/react";
 import LikeButton from "./LikeButton";
-import { BsPlus, BsQuote } from "react-icons/bs";
+import { BsMapFill, BsPlus, BsQuote } from "react-icons/bs";
 import { TbBlockquote } from "react-icons/tb";
 import { IoChevronForward } from "react-icons/io5";
 import FullScreenModal from "@/components/nextui/FullScreenModal";
@@ -35,6 +35,8 @@ import { useQueryState } from "nuqs";
 import { COMING_SOON_TAG, INTERNAL_TAG } from "@/constants/items";
 import PrefetchLink from "../PrefetchLink";
 import { generateCOinS } from "@/lib/coins";
+import { resolveGapMapsByTags } from "@/lib/gapmap-links";
+import { useGapMaps } from "@/context/Providers";
 
 export function AddButton({
 	itemData,
@@ -182,12 +184,14 @@ function ResourceInteractions({
 	userData,
 	revalidateResults,
 	collectionId,
+	itemHref,
 }: {
 	itemData: Item | ListItem | undefined;
 	isLoading: boolean;
 	userData?: Session["user"];
 	revalidateResults?: any;
 	collectionId?: string;
+	itemHref?: string;
 }) {
 	const t = useTranslations("ui");
 
@@ -197,6 +201,16 @@ function ResourceInteractions({
 				<div className="w-full rounded-2xl flex flex-row items-center">
 					<CitationCounts itemData={itemData} />
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
+						{itemHref && (
+							<Button
+								as={Link}
+								href={itemHref}
+								size="sm"
+								startContent={<IoChevronForward className="size-3.5" />}
+							>
+								{t("viewDetails")}
+							</Button>
+						)}
 						<AddButton
 							itemData={itemData}
 							userData={userData}
@@ -220,6 +234,109 @@ function ResourceInteractions({
 				</div>
 			</Skeleton>
 		</div>
+	);
+}
+
+function ResourceArticle({
+	finalItemData,
+	finalIsLoading,
+	gapMapHref,
+	abstract,
+	abstractText,
+	t,
+	tNav,
+	format,
+}: {
+	finalItemData: Item | ListItem | undefined;
+	finalIsLoading: boolean;
+	gapMapHref: string | null;
+	abstract: boolean;
+	abstractText: string | false | null | undefined;
+	t: ReturnType<typeof useTranslations<"ui">>;
+	tNav: ReturnType<typeof useTranslations<"nav">>;
+	format: ReturnType<typeof useFormatter>;
+}) {
+	return (
+		<article className="flex flex-col gap-4">
+			<Skeleton
+				isLoaded={!finalIsLoading}
+				className="w-full min-h-8 rounded-2xl"
+			>
+				<h3
+					dangerouslySetInnerHTML={{
+						__html: finalItemData?.title ?? "",
+					}}
+					className="text-2xl text-black/80 dark:text-white/80 line-clamp-2"
+				></h3>
+			</Skeleton>
+			<Skeleton
+				isLoaded={!finalIsLoading}
+				className="w-full min-h-8 rounded-2xl"
+			>
+				<div className="flex w-full gap-1 items-center flex-wrap">
+					{gapMapHref && (
+						<span className="inline-flex items-center gap-1.5 text-accent font-medium">
+							<BsMapFill className="size-3.5 shrink-0" />
+							<span>{tNav("gapMap")}</span>
+						</span>
+					)}
+					<ResourceAuthors itemData={finalItemData} />
+					<ResourceDivider />
+					{finalItemData?.datePublished &&
+						!isNaN(
+							new Date(
+								finalItemData.datePublished
+							).getTime()
+						) && (
+							<>
+								<ResourceData
+									element="time"
+									datetime={new Date(
+										finalItemData.datePublished
+									).toISOString()}
+									text={format.dateTime(
+										new Date(
+											finalItemData.datePublished
+										),
+										{
+											dateStyle: "medium",
+										}
+									)}
+									classNames={{
+										text: "text-black/60 dark:text-white/60 font-normal",
+									}}
+								/>
+								<ResourceDivider />
+							</>
+						)}
+
+					{finalItemData?.tags?.includes(COMING_SOON_TAG) && (
+						<span className="bg-black/10 border border-accent rounded-lg px-4 py-1 text-accent font-medium w-full @[720px]:w-auto text-center">
+							{t("inProgress")}
+						</span>
+					)}
+
+					{finalItemData?.tags?.includes(INTERNAL_TAG) && (
+						<span className="bg-black/10 border border-danger rounded-lg px-4 py-1 text-danger font-medium w-full @[720px]:w-auto text-center">
+							{t("internal")}
+						</span>
+					)}
+				</div>
+			</Skeleton>
+			{abstract && (abstractText || !finalItemData) && (
+				<Skeleton
+					isLoaded={!finalIsLoading}
+					className={twMerge(
+						"w-full min-h-0 rounded-2xl ",
+						!finalItemData ? "min-h-20" : "min-h-0"
+					)}
+				>
+					<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full">
+						{abstractText}
+					</p>
+				</Skeleton>
+			)}
+		</article>
 	);
 }
 
@@ -248,6 +365,7 @@ export default function Resource({
 }) {
 	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("ui");
+	const tNav = useTranslations("nav");
 	const format = useFormatter();
 	const router = useRouter();
 	const currentPath = usePathname();
@@ -263,10 +381,16 @@ export default function Resource({
 
 	const abstractText =
 		finalItemData && firstNonNullOrEmpty(finalItemData, ["abstractNote"]);
+	const gapmaps = useGapMaps();
+	const matchedGapMaps = useMemo(
+		() => resolveGapMapsByTags(finalItemData?.tags, gapmaps),
+		[finalItemData?.tags, gapmaps],
+	);
+	const gapMapHref = matchedGapMaps[0]?.href ?? null;
 
-	const href = `/lib/${finalItemData?.key ?? ""}`;
+	const itemHref = `/lib/${finalItemData?.key ?? ""}`;
 
-	const targetHref = serializeSearchParams(href, {
+	const itemTargetHref = serializeSearchParams(itemHref, {
 		referrer:
 			referrer ??
 			"/" +
@@ -289,97 +413,58 @@ export default function Resource({
 			{finalItemData?.key && !hideUnapi && (
 				<abbr className="unapi-id" title={finalItemData.key}></abbr>
 			)}
-			<PrefetchLink
-				href={finalItemData?.key ? targetHref : ""}
-				className={twMerge(
-					"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
-					!finalItemData?.key && "!pointer-events-none",
-					(!finalIsLoading && !finalItemData?.key) && "no-data",
-					(!finalIsLoading && finalItemData?.key) && "has-data",
-					
-				)}
-			>
-				<article className="flex flex-col gap-4">
-					<Skeleton
-						isLoaded={!finalIsLoading}
-						className="w-full min-h-8 rounded-2xl"
-					>
-						<h3
-							dangerouslySetInnerHTML={{
-								__html: finalItemData?.title ?? "",
-							}}
-							className="text-2xl text-black/80 dark:text-white/80 line-clamp-2"
-						></h3>
-					</Skeleton>
-					<Skeleton
-						isLoaded={!finalIsLoading}
-						className="w-full min-h-8 rounded-2xl"
-					>
-						<div className="flex w-full gap-1 items-center flex-wrap">
-							<ResourceAuthors itemData={finalItemData} />
-							<ResourceDivider />
-							{finalItemData?.datePublished &&
-								!isNaN(
-									new Date(
-										finalItemData.datePublished
-									).getTime()
-								) && (
-									<>
-										<ResourceData
-											element="time"
-											datetime={new Date(
-												finalItemData.datePublished
-											).toISOString()}
-											text={format.dateTime(
-												new Date(
-													finalItemData.datePublished
-												),
-												{
-													dateStyle: "medium",
-												}
-											)}
-											classNames={{
-												text: "text-black/60 dark:text-white/60 font-normal",
-											}}
-										/>
-										<ResourceDivider />
-									</>
-								)}
-
-							{finalItemData?.tags?.includes(COMING_SOON_TAG) && (
-								<span className="bg-black/10 border border-accent rounded-lg px-4 py-1 text-accent font-medium w-full @[720px]:w-auto text-center">
-									{t("inProgress")}
-								</span>
-							)}
-
-							{finalItemData?.tags?.includes(INTERNAL_TAG) && (
-								<span className="bg-black/10 border border-danger rounded-lg px-4 py-1 text-danger font-medium w-full @[720px]:w-auto text-center">
-									{t("internal")}
-								</span>
-							)}
-						</div>
-					</Skeleton>
-					{abstract && (abstractText || !finalItemData) && (
-						<Skeleton
-							isLoaded={!finalIsLoading}
-							className={twMerge(
-								"w-full min-h-0 rounded-2xl ",
-								!finalItemData ? "min-h-20" : "min-h-0"
-							)}
-						>
-							<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full">
-								{abstractText}
-							</p>
-						</Skeleton>
+			{gapMapHref ? (
+				<a
+					href={gapMapHref}
+					target="_blank"
+					rel="noopener noreferrer"
+					className={twMerge(
+						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
+						!finalItemData?.key && "!pointer-events-none",
+						(!finalIsLoading && !finalItemData?.key) && "no-data",
+						(!finalIsLoading && finalItemData?.key) && "has-data",
 					)}
-				</article>
-			</PrefetchLink>
+				>
+					<ResourceArticle
+						finalItemData={finalItemData}
+						finalIsLoading={finalIsLoading}
+						gapMapHref={gapMapHref}
+						abstract={abstract}
+						abstractText={abstractText}
+						t={t}
+						tNav={tNav}
+						format={format}
+					/>
+				</a>
+			) : (
+				<PrefetchLink
+					href={finalItemData?.key ? itemTargetHref : ""}
+					className={twMerge(
+						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
+						!finalItemData?.key && "!pointer-events-none",
+						(!finalIsLoading && !finalItemData?.key) && "no-data",
+						(!finalIsLoading && finalItemData?.key) && "has-data",
+					)}
+				>
+					<ResourceArticle
+						finalItemData={finalItemData}
+						finalIsLoading={finalIsLoading}
+						gapMapHref={gapMapHref}
+						abstract={abstract}
+						abstractText={abstractText}
+						t={t}
+						tNav={tNav}
+						format={format}
+					/>
+				</PrefetchLink>
+			)}
 			<ResourceInteractions
 				itemData={finalItemData}
 				isLoading={finalIsLoading}
 				userData={userData}
 				revalidateResults={revalidateResults}
 				collectionId={collectionId}
+				itemHref={gapMapHref ? itemTargetHref : undefined}
 			/>
 		</ResourceWrapper>
 	);

@@ -462,7 +462,10 @@
     "previous": "以前的",
     "next": "下一个",
     "citationsByCountryFocus": "按国家焦点引文",
-    "percentOfTotal": "{percentage}% 总计"
+    "percentOfTotal": "{percentage}% 总计",
+    "viewDetails": "查看详情",
+    "openGapMap": "打开证据缺口图谱",
+    "openGapMapAriaLabel": "打开{label}证据缺口图谱"
   },
   "auth": {
     "invalidEmail": "请输入有效的电子邮件地址",
@@ -563,8 +566,8 @@
     "members": "成员",
     "blogs": "博客",
     "resources": "资源",
-    "gapMap": "Gap Map",
-    "gapMaps": "Gap Maps"
+    "gapMap": "证据缺口图谱",
+    "gapMaps": "证据缺口图谱"
   },
   "footer": {
     "quickLinks": "快速链接",

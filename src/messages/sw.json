@@ -463,7 +463,10 @@
     "previous": "Iliyopita",
     "next": "Ifuatayo",
     "citationsByCountryFocus": "Nukuu kwa Kuzingatia Nchi",
-    "percentOfTotal": "{percentage}% ya jumla"
+    "percentOfTotal": "{percentage}% ya jumla",
+    "viewDetails": "Tazama maelezo",
+    "openGapMap": "Fungua ramani ya mapengo",
+    "openGapMapAriaLabel": "Fungua ramani ya mapengo {label}"
   },
   "auth": {
     "invalidEmail": "Tafadhali ingiza aina ya barua pepe ya kawaida",
@@ -564,8 +567,8 @@
     "members": "Wanachama",
     "blogs": "Blogu",
     "resources": "Rasilimali",
-    "gapMap": "Gap Map",
-    "gapMaps": "Gap Maps"
+    "gapMap": "Ramani ya mapengo",
+    "gapMaps": "Ramani za mapengo"
   },
   "footer": {
     "quickLinks": "Viungo vya Haraka",

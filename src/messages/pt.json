@@ -462,7 +462,10 @@
     "previous": "Anterior",
     "next": "Próximo",
     "citationsByCountryFocus": "Citações por Foco de País",
-    "percentOfTotal": "{percentage}% do total"
+    "percentOfTotal": "{percentage}% do total",
+    "viewDetails": "Ver detalhes",
+    "openGapMap": "Abrir mapa de lacunas",
+    "openGapMapAriaLabel": "Abrir mapa de lacunas {label}"
   },
   "auth": {
     "invalidEmail": "Por favor, insira um endereço de e-mail válido",
@@ -563,8 +566,8 @@
     "members": "Membros",
     "blogs": "Blogs",
     "resources": "Recursos",
-    "gapMap": "Gap Map",
-    "gapMaps": "Gap Maps"
+    "gapMap": "Mapa de lacunas",
+    "gapMaps": "Mapas de lacunas"
   },
   "footer": {
     "quickLinks": "Links Rápidos",

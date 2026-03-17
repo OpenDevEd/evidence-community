@@ -462,7 +462,10 @@
     "previous": "पिछला",
     "next": "अगला",
     "citationsByCountryFocus": "देश फोकस द्वारा उद्धरण",
-    "percentOfTotal": "{percentage}% कुल का"
+    "percentOfTotal": "{percentage}% कुल का",
+    "viewDetails": "विवरण देखें",
+    "openGapMap": "गैप मैप खोलें",
+    "openGapMapAriaLabel": "गैप मैप {label} खोलें"
   },
   "auth": {
     "invalidEmail": "कृपया एक वैध ईमेल पता दर्ज करें",
@@ -563,8 +566,8 @@
     "members": "सदस्य",
     "blogs": "ब्लॉग",
     "resources": "संसाधन",
-    "gapMap": "Gap Map",
-    "gapMaps": "Gap Maps"
+    "gapMap": "गैप मैप",
+    "gapMaps": "गैप मैप्स"
   },
   "footer": {
     "quickLinks": "त्वरित लिंक",

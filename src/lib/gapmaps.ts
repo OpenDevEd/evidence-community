@@ -3,6 +3,7 @@ import { readdir } from "fs/promises";
 import { join } from "path";
 import config from "@/constants/config.json";
 import type { GapMap } from "@/lib/gapmap-links";
+export type { GapMap };
 
 const GAPMAPS_DIR = join(process.cwd(), "public", "gapmaps");
 

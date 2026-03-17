@@ -462,7 +462,10 @@
     "previous": "سابق",
     "next": "التالي",
     "citationsByCountryFocus": "الاستشهادات حسب التركيز القطري",
-    "percentOfTotal": "{percentage}% من الإجمالي"
+    "percentOfTotal": "{percentage}% من الإجمالي",
+    "viewDetails": "عرض التفاصيل",
+    "openGapMap": "فتح خريطة الفجوات",
+    "openGapMapAriaLabel": "فتح خريطة الفجوات {label}"
   },
   "auth": {
     "invalidEmail": "يرجى إدخال عنوان بريد إلكتروني صالح",
@@ -563,8 +566,8 @@
     "members": "أعضاء",
     "blogs": "مدونات",
     "resources": "موارد",
-    "gapMap": "Gap Map",
-    "gapMaps": "Gap Maps"
+    "gapMap": "خريطة الفجوات",
+    "gapMaps": "خرائط الفجوات"
   },
   "footer": {
     "quickLinks": "روابط سريعة",

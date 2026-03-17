@@ -451,7 +451,10 @@
     "previous": "Previous",
     "next": "Next",
     "citationsByCountryFocus": "Citations by Country Focus",
-    "percentOfTotal": "{percentage}% of total"
+    "percentOfTotal": "{percentage}% of total",
+    "viewDetails": "View Details",
+    "openGapMap": "Open Gap Map",
+    "openGapMapAriaLabel": "Open {label} gap map"
   },
   "auth": {
     "invalidEmail": "Please enter a valid email address",
