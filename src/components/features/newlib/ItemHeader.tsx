@@ -104,7 +104,7 @@ export default function ItemHeader({
 						variant="transparent"
 						size="sm"
 						className="rounded-2xl"
-						onPressStart={handleBack}
+						onPress={handleBack}
 						startContent={
 							<IoChevronBack className="rtl:rotate-180" />
 						}

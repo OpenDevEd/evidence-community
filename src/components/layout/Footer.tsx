@@ -349,6 +349,55 @@ export default function Footer() {
 							/>
 						),
 					)}
+					{(resolvedFooterLinks.privacyPolicy ||
+						resolvedFooterLinks.cookiePolicy ||
+						resolvedFooterLinks.termsOfService) && (
+						<FooterFieldColumn
+							title={t("legal")}
+							content={
+								<ul className="flex flex-col gap-4 mt-6 items-center lg:items-start">
+									{resolvedFooterLinks.privacyPolicy && (
+										<li>
+											<Link
+												href={resolvedFooterLinks.privacyPolicy}
+												className="text-black/60 dark:text-white/60 text-xl"
+											>
+												{t("privacyPolicy")}
+											</Link>
+										</li>
+									)}
+									{resolvedFooterLinks.cookiePolicy && (
+										<li>
+											<Link
+												href={resolvedFooterLinks.cookiePolicy}
+												className="text-black/60 dark:text-white/60 text-xl"
+											>
+												{t("cookiePolicy")}
+											</Link>
+										</li>
+									)}
+									{resolvedFooterLinks.termsOfService && (
+										<li>
+											<Link
+												href={resolvedFooterLinks.termsOfService}
+												className="text-black/60 dark:text-white/60 text-xl"
+											>
+												{t("termsOfService")}
+											</Link>
+										</li>
+									)}
+									<li>
+										<button
+											onClick={onPolicyPage ? () => setPolicyDialogOpen(true) : openPreferences}
+											className="text-black/60 dark:text-white/60 text-xl text-left"
+										>
+											{tUI("cookieSettings")}
+										</button>
+									</li>
+								</ul>
+							}
+						/>
+					)}
 					<div className="flex flex-col h-full gap-6 w-full lg:w-auto">
 						{socialLinks.length > 0 && (
 							<FooterFieldColumn
@@ -390,44 +439,6 @@ export default function Footer() {
 						/>
 					</div>
 				</div>
-				{(resolvedFooterLinks.privacyPolicy ||
-					resolvedFooterLinks.cookiePolicy ||
-					resolvedFooterLinks.termsOfService) && (
-					<div className="flex gap-4 flex-wrap items-center justify-center">
-						{resolvedFooterLinks.privacyPolicy && (
-							<Link
-								href={resolvedFooterLinks.privacyPolicy}
-								className="text-black/60 dark:text-white/60 font-medium"
-							>
-								{t("privacyPolicy")}
-							</Link>
-						)}
-						{resolvedFooterLinks.cookiePolicy && (
-							<Link
-								href={resolvedFooterLinks.cookiePolicy}
-								className="text-black/60 dark:text-white/60 font-medium"
-							>
-								{t("cookiePolicy")}
-							</Link>
-						)}
-						{resolvedFooterLinks.termsOfService && (
-							<Link
-								href={resolvedFooterLinks.termsOfService}
-								className="text-black/60 dark:text-white/60 font-medium"
-							>
-								{t("termsOfService")}
-							</Link>
-						)}
-						<Button
-							size="sm"
-							variant="transparent"
-							className="font-medium text-black/60 dark:text-white/60"
-							onPress={onPolicyPage ? () => setPolicyDialogOpen(true) : openPreferences}
-						>
-							{tUI("cookieSettings")}
-						</Button>
-					</div>
-				)}
 				{onPolicyPage && (
 					<DialogModal
 						scrollBehavior="inside"

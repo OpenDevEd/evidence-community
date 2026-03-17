@@ -578,7 +578,8 @@
     "contactUs": "联系我们",
     "cookiePolicy": "Cookie 政策",
     "privacyPolicy": "隐私政策",
-    "termsOfService": "服务条款"
+    "termsOfService": "服务条款",
+    "legal": "法律信息"
   },
   "itemType": {
     "Artwork": "艺术作品",

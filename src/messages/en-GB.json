@@ -578,7 +578,8 @@
     "contactUs": "Contact Us",
     "cookiePolicy": "Cookie Policy",
     "privacyPolicy": "Privacy Policy",
-    "termsOfService": "Terms of Service"
+    "termsOfService": "Terms of Service",
+    "legal": "Legal"
   },
   "itemType": {
     "Artwork": "Artwork",
