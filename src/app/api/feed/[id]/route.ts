@@ -179,6 +179,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 	return new NextResponse(feed.end({ prettyPrint: true }), {
 		headers: {
 			"Content-Type": "application/atom+xml",
+			"Cache-Control": "public, s-maxage=60, stale-while-revalidate=59",
 		},
 	});
 }

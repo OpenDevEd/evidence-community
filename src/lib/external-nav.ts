@@ -1,4 +1,5 @@
 import type { LinkObject, ExternalLinks, CompanyFooter } from "@/db/schema/tables/status";
+import { cacheLife, cacheTag } from "next/cache";
 
 type ExternalNavResponse = {
 	links: LinkObject[];
@@ -22,11 +23,15 @@ type ExternalNavResult = {
 };
 
 export async function fetchExternalNav(): Promise<ExternalNavResult | null> {
+	'use cache'
+	cacheLife({ revalidate: 60 })
+	cacheTag('external-nav')
+
 	const url = process.env.EXTERNAL_NAV_SOURCE_URL;
 	if (!url) return null;
 
 	try {
-		const res = await fetch(url, { next: { revalidate: 60, tags: ["external-nav"] } });
+		const res = await fetch(url);
 
 		if (!res.ok) {
 			console.warn(`[external-nav] Failed to fetch from ${url}: ${res.status} ${res.statusText}`);

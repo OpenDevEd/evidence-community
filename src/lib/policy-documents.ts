@@ -4,7 +4,7 @@ import { getSiteHost } from "@/lib/site-url";
 import { parseCompanyName } from "@/lib/utils";
 import { readFile, stat } from "fs/promises";
 import { join } from "path";
-import { cache } from "react";
+import { cacheLife, cacheTag } from "next/cache";
 
 const POLICY_DOCUMENT_PATHS = {
 	privacy: join(process.cwd(), "docs/privacy-policy.md"),
@@ -134,17 +134,21 @@ function populatePolicyDocument(content: string) {
 		.join("");
 }
 
-export const readPolicyDocument = cache(
-	async (document: keyof typeof POLICY_DOCUMENT_PATHS) =>
-		populatePolicyDocument(
-			await readFile(POLICY_DOCUMENT_PATHS[document], "utf-8")
-		)
-);
+export async function readPolicyDocument(document: keyof typeof POLICY_DOCUMENT_PATHS) {
+	'use cache'
+	cacheLife({ revalidate: 3600 })
+	cacheTag('policy-doc-' + document)
+	return populatePolicyDocument(
+		await readFile(POLICY_DOCUMENT_PATHS[document], "utf-8")
+	);
+}
 
-export const getPolicyLastModified = cache(
-	async (document: keyof typeof POLICY_DOCUMENT_PATHS) =>
-		(await stat(POLICY_DOCUMENT_PATHS[document])).mtime
-);
+export async function getPolicyLastModified(document: keyof typeof POLICY_DOCUMENT_PATHS) {
+	'use cache'
+	cacheLife({ revalidate: 3600 })
+	cacheTag('policy-modified-' + document)
+	return (await stat(POLICY_DOCUMENT_PATHS[document])).mtime;
+}
 
 export function getPolicyMetadata(
 	title: "Privacy Policy" | "Cookie Policy",

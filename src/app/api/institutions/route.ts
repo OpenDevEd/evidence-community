@@ -1,8 +1,8 @@
 import { db } from "@/db";
 import { item } from "@/db/schema/tables/item";
-import { desc, sql, and, eq, isNotNull, ne } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { withCache } from "@/lib/cache-utils";
+import { cacheLife, cacheTag } from "next/cache";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { InstitutionsData } from "./types";
 
@@ -99,12 +99,16 @@ async function fetchInstitutionsData(): Promise<InstitutionsData> {
 	};
 }
 
+async function getCachedInstitutionsData(): Promise<InstitutionsData> {
+	'use cache'
+	cacheLife({ revalidate: 3600 })
+	cacheTag('institutions')
+	return fetchInstitutionsData();
+}
+
 export async function GET() {
 	try {
-		const data = await withCache(
-			fetchInstitutionsData,
-			{ cacheKey: "top-country-institutions" }
-		);
+		const data = await getCachedInstitutionsData();
 		return NextResponse.json(data, {
 			headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL },
 		});

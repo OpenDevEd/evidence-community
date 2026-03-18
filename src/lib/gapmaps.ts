@@ -3,6 +3,7 @@ import { readdir } from "fs/promises";
 import { join } from "path";
 import config from "@/constants/config.json";
 import type { GapMap } from "@/lib/gapmap-links";
+import { cacheLife, cacheTag } from "next/cache";
 export type { GapMap };
 
 const GAPMAPS_DIR = join(process.cwd(), "public", "gapmaps");
@@ -16,6 +17,10 @@ function getIndex(): string {
 }
 
 export async function getGapMaps(): Promise<GapMap[]> {
+	'use cache'
+	cacheLife({ revalidate: 3600 })
+	cacheTag('gapmaps')
+
 	const index = getIndex();
 	const dir = join(GAPMAPS_DIR, index);
 

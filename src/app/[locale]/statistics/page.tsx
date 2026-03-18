@@ -15,7 +15,7 @@ export default async function Statistics() {
 		return notFound();
 	}
 
-	const stats = await getComprehensiveStats(false);
+	const stats = await getComprehensiveStats();
 	
 	return <StatisticsPage stats={stats} />;
 }
