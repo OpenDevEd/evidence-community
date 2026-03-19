@@ -16,6 +16,6 @@ export default async function Statistics() {
 	}
 
 	const stats = await getComprehensiveStats();
-	
+
 	return <StatisticsPage stats={stats} />;
 }

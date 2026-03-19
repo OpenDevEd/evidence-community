@@ -2,36 +2,32 @@ import { db } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { desc, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
-import { cacheLife, cacheTag } from "next/cache";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { InstitutionsData } from "./types";
+import { withMeilisearchCache } from "@/lib/cache-utils";
 
 // Helper function to calculate H-Index from citation counts
 function calculateHIndex(citationCounts: number[]): number {
 	if (citationCounts.length === 0) return 0;
-	
-	// Sort citation counts in descending order
+
 	const sortedCitations = citationCounts.sort((a, b) => b - a);
-	
+
 	let hIndex = 0;
 	for (let i = 0; i < sortedCitations.length; i++) {
-		// H-Index is the largest number h such that h publications have at least h citations each
-		const currentRank = i + 1; // 1-indexed rank
+		const currentRank = i + 1;
 		const currentCitations = sortedCitations[i];
-		
+
 		if (currentCitations >= currentRank) {
 			hIndex = currentRank;
 		} else {
 			break;
 		}
 	}
-	
+
 	return hIndex;
 }
 
 async function fetchInstitutionsData(): Promise<InstitutionsData> {
-	
-	// Get institution stats with citation data for H-Index calculation
 	const institutionStatsResult = await db
 		.select({
 			institution: sql<string>`institution_name`,
@@ -46,15 +42,15 @@ async function fetchInstitutionsData(): Promise<InstitutionsData> {
 				institution_data->>'display_name' as institution_name,
 				institution_data->>'country_code' as country_code,
 				${item.key} as item_key,
-				case 
-					when ${item.relations}::jsonb ? 'cited_by' 
-					then (${item.relations}::jsonb->>'cited_by')::int 
-					else 0 
+				case
+					when ${item.relations}::jsonb ? 'cited_by'
+					then (${item.relations}::jsonb->>'cited_by')::int
+					else 0
 				end as item_citations
 			FROM ${item},
 			LATERAL unnest(${item.creators}) as creator_data,
 			LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
-			WHERE ${item.deleted} = 0 
+			WHERE ${item.deleted} = 0
 			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 			AND ${item.creators} IS NOT NULL
 			AND array_length(${item.creators}, 1) > 0
@@ -73,14 +69,12 @@ async function fetchInstitutionsData(): Promise<InstitutionsData> {
 		throw new Error("No institutions found");
 	}
 
-	// Get the top country (country with the most productive institution)
 	const topCountryCode = institutionStatsResult[0]?.countryCode;
 
 	if (!topCountryCode) {
 		throw new Error("No top country found");
 	}
 
-	// Filter institutions from the top country only
 	const topCountryInstitutions = institutionStatsResult
 		.filter(stat => stat.countryCode === topCountryCode)
 		.map(stat => ({
@@ -99,16 +93,9 @@ async function fetchInstitutionsData(): Promise<InstitutionsData> {
 	};
 }
 
-async function getCachedInstitutionsData(): Promise<InstitutionsData> {
-	'use cache'
-	cacheLife({ revalidate: 3600 })
-	cacheTag('institutions')
-	return fetchInstitutionsData();
-}
-
 export async function GET() {
 	try {
-		const data = await getCachedInstitutionsData();
+		const data = await withMeilisearchCache("institutions", fetchInstitutionsData);
 		return NextResponse.json(data, {
 			headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL },
 		});

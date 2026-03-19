@@ -7,8 +7,8 @@ import { join } from "path";
 import { cacheLife, cacheTag } from "next/cache";
 
 const POLICY_DOCUMENT_PATHS = {
-	privacy: join(process.cwd(), "docs/privacy-policy.md"),
-	cookiePolicy: join(process.cwd(), "docs/cookie-policy.md"),
+	privacy: join(process.cwd(), "docs", "privacy-policy.md"),
+	cookiePolicy: join(process.cwd(), "docs", "cookie-policy.md"),
 } as const;
 
 const DEFAULT_POLICY_SITE_HOST = "docs.opendeved.net";
@@ -139,7 +139,7 @@ export async function readPolicyDocument(document: keyof typeof POLICY_DOCUMENT_
 	cacheLife({ revalidate: 3600 })
 	cacheTag('policy-doc-' + document)
 	return populatePolicyDocument(
-		await readFile(POLICY_DOCUMENT_PATHS[document], "utf-8")
+		await readFile(/* turbopackIgnore: true */ POLICY_DOCUMENT_PATHS[document], "utf-8")
 	);
 }
 
@@ -147,7 +147,7 @@ export async function getPolicyLastModified(document: keyof typeof POLICY_DOCUME
 	'use cache'
 	cacheLife({ revalidate: 3600 })
 	cacheTag('policy-modified-' + document)
-	return (await stat(POLICY_DOCUMENT_PATHS[document])).mtime;
+	return (await stat(/* turbopackIgnore: true */ POLICY_DOCUMENT_PATHS[document])).mtime;
 }
 
 export function getPolicyMetadata(
