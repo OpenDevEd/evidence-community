@@ -40,8 +40,10 @@ async function getSourceItem(key: string): Promise<Item | null> {
 		}
 
 		return result as Item;
-	} catch (error) {
-		console.warn("Error fetching source item from meilisearch:", error);
+	} catch (error: any) {
+		if (error?.response?.status !== 404) {
+			console.warn("Error fetching source item from meilisearch:", error);
+		}
 		return null;
 	}
 }
@@ -103,8 +105,10 @@ async function getCitingItems(
 			yearDistribution: result.facetDistribution?.["year"] || {},
 			totalHits: result.estimatedTotalHits || result.hits.length,
 		};
-	} catch (error) {
-		console.warn("Error fetching citing items from meilisearch:", error);
+	} catch (error: any) {
+		if (error?.response?.status !== 404) {
+			console.warn("Error fetching citing items from meilisearch:", error);
+		}
 		return {
 			items: [],
 			countryDistribution: {},

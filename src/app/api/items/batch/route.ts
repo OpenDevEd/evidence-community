@@ -32,8 +32,10 @@ async function getPaginatedItems(
 			items: result.hits as ListItem[],
 			total: result.estimatedTotalHits || result.hits.length,
 		};
-	} catch (error) {
-		console.warn("Error fetching items from meilisearch:", error);
+	} catch (error: any) {
+		if (error?.response?.status !== 404) {
+			console.warn("Error fetching items from meilisearch:", error);
+		}
 		return { items: [], total: 0 };
 	}
 }

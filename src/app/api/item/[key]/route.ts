@@ -17,8 +17,10 @@ async function getMeilisearchItem(key: string) {
 			await meilisearchClient.getIndex(process.env.MEILI_INDEX || config.index)
 		).getDocument(key);
 		return result as Item;
-	} catch (error) {
-		console.warn("Error fetching item from meilisearch:", error);
+	} catch (error: any) {
+		if (error?.response?.status !== 404) {
+			console.warn("Error fetching item from meilisearch:", error);
+		}
 		return null;
 	}
 }

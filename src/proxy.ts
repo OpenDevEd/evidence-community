@@ -161,6 +161,10 @@ function isLikelyZoteroKey(key: string) {
 	return /^[A-Z0-9]{8}$/.test(key);
 }
 
+function isLikelyBrokenKey(key: string) {
+	return /^\d+:[A-Z0-9]{8}$/.test(key);
+}
+
 export default async function proxy(request: NextRequest) {
 	if (request.nextUrl.pathname === "/") {
 		const url = request.nextUrl.clone();
@@ -180,10 +184,14 @@ export default async function proxy(request: NextRequest) {
 		const key = libItemMatch[1];
 		const rest = libItemMatch[2] || "";
 
-		if (isLikelyZoteroKey(String(key))) {
+		const resolvedKey = isLikelyBrokenKey(String(key))
+			? String(key).split(":")[1]
+			: String(key);
+
+		if (isLikelyZoteroKey(resolvedKey)) {
 			try {
 				const compositeKey =
-					(process.env.MEILI_INDEX || configJSON.index) + "|" + key;
+					(process.env.MEILI_INDEX || configJSON.index) + "|" + resolvedKey;
 				const encoding = encodeKey(compositeKey);
 
 				const redirects = (await Promise.race([
@@ -196,13 +204,22 @@ export default async function proxy(request: NextRequest) {
 					),
 				])) as Record<string, unknown>;
 
-				if (redirects?.value && redirects.value !== key) {
+				const finalKey = redirects?.value && redirects.value !== resolvedKey
+					? String(redirects.value)
+					: resolvedKey;
+
+				if (finalKey !== key) {
 					const url = request.nextUrl.clone();
-					url.pathname = `/lib/${redirects.value}${rest}`;
+					url.pathname = `/lib/${finalKey}${rest}`;
 					return NextResponse.redirect(url, 301);
 				}
 			} catch {
-				// Timeout or not found - continue with original key
+				// Timeout or not found - still redirect broken keys to cleaned version
+				if (resolvedKey !== key) {
+					const url = request.nextUrl.clone();
+					url.pathname = `/lib/${resolvedKey}${rest}`;
+					return NextResponse.redirect(url, 301);
+				}
 			}
 		}
 	}
