@@ -10,10 +10,9 @@ import { Button } from "@/components/nextui/Button";
 import { FaEye } from "react-icons/fa";
 import posthog from "posthog-js";
 import { useTranslations } from "next-intl";
-import useBreakpoint from "@/hooks/useBreakpoint";
 import { Card } from "@/components/nextui/Card";
 import useSWR from "swr";
-import { fetcher, fetcherExternal } from "@/lib/utils";
+import { fetcherExternal } from "@/lib/utils";
 import {
 	payloadToPosthog,
 	PdfEventParams,
@@ -94,7 +93,6 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 		undefined
 	);
 	const t = useTranslations("ui");
-	const isDesktop = useBreakpoint("md");
 	const hasImage = data.PDFCoverPageImage;
 
 	const isExternal =
@@ -254,11 +252,14 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 		</div>
 	);
 
-	return isDesktop ? (
+	return (
 		<Card
 			// @ts-expect-error temporary
 			ref={parentRef}
-			className="flex flex-col gap-4 p-4 rounded-2xl relative w-full overflow-visible dark:bg-background"
+			className={twMerge(
+				"flex flex-col gap-4 p-4 rounded-2xl w-full dark:bg-background",
+				hasImage && "md:relative md:overflow-visible"
+			)}
 			key={data.id}
 			color="card"
 		>
@@ -280,8 +281,9 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						} as any
 					}
 					className={twMerge(
-						"w-24 lg:w-48 bottom-0 top-4 absolute overflow-hidden transition-all",
-						canHover && "hover:top-[var(--image-height)]"
+						"w-full max-w-[200px] mx-auto",
+						"md:w-24 lg:w-48 md:max-w-none md:mx-0 md:bottom-0 md:top-4 md:absolute md:overflow-hidden md:transition-all",
+						canHover && "md:hover:top-[var(--image-height)]"
 					)}
 				>
 					<AttachmentImage />
@@ -289,30 +291,15 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 			)}
 			<div
 				className={twMerge(
-					"flex flex-col gap-2 h-full",
+					"flex flex-col gap-2",
 					hasImage
-						? "lg:ltr:ml-52 lg:rtl:mr-52 ltr:ml-28 rtl:mr-28"
+						? "md:h-full md:ltr:ml-28 md:rtl:mr-28 lg:ltr:ml-52 lg:rtl:mr-52"
 						: "",
 					shouldShowLoading && "opacity-0"
 				)}
 			>
-				<AttachmentTitle className="lg:line-clamp-none line-clamp-2" />
-				<AttachmentButtons />
-			</div>
-		</Card>
-	) : (
-		<Card
-			className="flex flex-col gap-4 p-4 rounded-2xl w-full dark:bg-background"
-			key={data.id}
-		>
-			{hasImage && (
-				<div className="w-full max-w-[200px] mx-auto">
-					<AttachmentImage />
-				</div>
-			)}
-			<div className="flex flex-col gap-2">
-				<AttachmentTitle className="line-clamp-2" />
-				<AttachmentButtons className="flex-wrap" />
+				<AttachmentTitle className="line-clamp-2 lg:line-clamp-none" />
+				<AttachmentButtons className="flex-wrap md:flex-nowrap" />
 			</div>
 		</Card>
 	);
