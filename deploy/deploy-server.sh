@@ -62,6 +62,7 @@ trap cleanup EXIT
 echo_step 2 "Pulling Vercel env for $APP_NAME into a temp directory"
 (
 	cd "$TMP_DIR"
+	export NO_UPDATE_NOTIFIER=1
 	npx "vercel@${VERCEL_CLI_VERSION}" link --scope "$VERCEL_SCOPE" --project "$APP_NAME" -y
 	npx "vercel@${VERCEL_CLI_VERSION}" env pull "$LOCAL_ENV_FILE" --yes --environment="$VERCEL_ENVIRONMENT"
 )
