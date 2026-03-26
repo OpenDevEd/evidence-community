@@ -818,5 +818,10 @@
   },
   "A table listing information about co-authors and their countries": {
     "coAuthorCountriesTable": "Tableau des pays co-auteurs"
+  },
+  "gapmapsPage": {
+    "title": "Cartes des lacunes",
+    "subtitle": "Explorez des visualisations interactives qui cartographient les preuves de recherche par thème, identifiant où les preuves existent et où subsistent des lacunes.",
+    "empty": "Aucune carte des lacunes disponible."
   }
 }

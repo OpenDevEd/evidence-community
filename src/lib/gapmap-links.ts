@@ -2,6 +2,7 @@ export type GapMap = {
 	slug: string;
 	label: string;
 	href: string;
+	description?: string;
 };
 
 const GAPMAP_TAG_PREFIX = /^gapmaps?:/i;

@@ -818,5 +818,10 @@
   },
   "A table listing information about co-authors and their countries": {
     "coAuthorCountriesTable": "Co-author Countries Table"
+  },
+  "gapmapsPage": {
+    "title": "Evidence Gap Maps",
+    "subtitle": "Explore interactive visualisations that map research evidence across topics, identifying where evidence exists and where gaps remain.",
+    "empty": "No gap maps available yet."
   }
 }

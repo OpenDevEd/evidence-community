@@ -10,6 +10,17 @@ const GAPMAPS_DIR = join(process.cwd(), "public", "gapmaps");
 
 const LABEL_MAP: Record<string, string> = {
 	"fcdo-evaluation-evidence": "FCDO Evaluation Evidence",
+	"redd-rq-op-intervention-type": "REDD+ RQ-OP-Intervention Type",
+	"redd-egm-outcomes-scale-ca": "REDD+ EGM Outcomes Scale CA",
+};
+
+const DESCRIPTION_MAP: Record<string, string> = {
+	"fcdo-evaluation-evidence":
+		"An interactive evidence gap map covering FCDO evaluation evidence across sectors and themes.",
+	"redd-rq-op-intervention-type":
+		"Maps REDD+ research questions and operational intervention types to identify evidence gaps.",
+	"redd-egm-outcomes-scale-ca":
+		"Visualises REDD+ evidence by outcomes, scale, and causal assumptions.",
 };
 
 function getIndex(): string {
@@ -34,6 +45,7 @@ export async function getGapMaps(): Promise<GapMap[]> {
 					slug,
 					label: LABEL_MAP[slug] ?? slug.replace(/[_-]/g, " "),
 					href: `/gapmaps/${f}`,
+					description: DESCRIPTION_MAP[slug],
 				};
 			});
 	} catch {

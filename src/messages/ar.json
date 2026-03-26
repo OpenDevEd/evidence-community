@@ -818,5 +818,10 @@
   },
   "A table listing information about co-authors and their countries": {
     "coAuthorCountriesTable": "جدول دول المتعاونين"
+  },
+  "gapmapsPage": {
+    "title": "خرائط فجوات الأدلة",
+    "subtitle": "استكشف التصورات التفاعلية التي ترسم خريطة أدلة البحث عبر المواضيع، وتحدد أين توجد الأدلة وأين تبقى الفجوات.",
+    "empty": "لا توجد خرائط فجوات متاحة بعد."
   }
 }

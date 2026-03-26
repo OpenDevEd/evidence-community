@@ -818,5 +818,10 @@
   },
   "A table listing information about co-authors and their countries": {
     "coAuthorCountriesTable": "Tabela de Países Coautores"
+  },
+  "gapmapsPage": {
+    "title": "Mapas de lacunas de evidências",
+    "subtitle": "Explore visualizações interativas que mapeiam evidências de pesquisa por temas, identificando onde existem evidências e onde permanecem lacunas.",
+    "empty": "Nenhum mapa de lacunas disponível."
   }
 }

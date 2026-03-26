@@ -819,5 +819,10 @@
   },
   "A table listing information about co-authors and their countries": {
     "coAuthorCountriesTable": "Jedwali la Nchi za Waandishi"
+  },
+  "gapmapsPage": {
+    "title": "Ramani za mapengo ya ushahidi",
+    "subtitle": "Chunguza taswira shirikishi zinazopanga ushahidi wa utafiti kwa mada, zikitambua mahali ushahidi upo na mahali mapengo yalipo.",
+    "empty": "Hakuna ramani za mapengo bado."
   }
 }
