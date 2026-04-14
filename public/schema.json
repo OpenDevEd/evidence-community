@@ -10,7 +10,7 @@
     "TvBroadcast": "broadcast",
     "RadioBroadcast": "broadcast",
     "BookSection": "chapter",
-    "dataset": "dataset",
+    "Dataset": "dataset",
     "Document": "document",
     "Attachment": "document",
     "Note": "document",
@@ -36,7 +36,7 @@
     "ComputerProgram": "software",
     "AudioRecording": "song",
     "Presentation": "speech",
-    "standard": "standard",
+    "Standard": "standard",
     "Thesis": "thesis",
     "Webpage": "webpage"
   },
@@ -407,6 +407,7 @@
     "TvBroadcast": "tvBroadcast",
     "RadioBroadcast": "radioBroadcast",
     "BookSection": "bookSection",
+    "Dataset": "dataset",
     "Document": "document",
     "Attachment": "attachment",
     "Note": "note",
@@ -432,6 +433,7 @@
     "ComputerProgram": "computerProgram",
     "AudioRecording": "audioRecording",
     "Presentation": "presentation",
+    "Standard": "standard",
     "Thesis": "thesis",
     "Webpage": "webpage"
   }

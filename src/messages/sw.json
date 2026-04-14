@@ -619,7 +619,10 @@
     "Thesis": "Tasnifu",
     "VideoRecording": "Rekodi ya Video",
     "Webpage": "Ukurasa wa Tovuti",
-    "Preprint": "Chapisho la awali"
+    "Preprint": "Chapisho la awali",
+    "Annotation": "Ufafanuzi",
+    "Dataset": "Seti ya Data",
+    "Standard": "Kiwango"
   },
   "creatorType": {
     "artist": "Msanii",

@@ -78,7 +78,7 @@ export const INSTITUTION_LOGOS: Record<string, any> = {
 
 export const ITEMS_PER_PAGE = 20;
 
-export const EXCLUDED_ITEM_TYPES = ["Note", "Attachment"];
+export const EXCLUDED_ITEM_TYPES = ["Note", "Attachment", "Annotation"];
 
 export const SORT_OPTIONS = [
 	{ key: "relevance", legacyKey: "relevance", name: "Relevance" },

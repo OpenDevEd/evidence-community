@@ -618,7 +618,10 @@
     "Thesis": "Thèse",
     "VideoRecording": "Enregistrement vidéo",
     "Webpage": "Page web",
-    "Preprint": "Préimpression"
+    "Preprint": "Préimpression",
+    "Annotation": "Annotation",
+    "Dataset": "Jeu de données",
+    "Standard": "Norme"
   },
   "creatorType": {
     "artist": "Artiste",

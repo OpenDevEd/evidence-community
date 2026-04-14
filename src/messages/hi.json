@@ -618,7 +618,10 @@
     "Thesis": "थीसिस",
     "VideoRecording": "वीडियो रिकॉर्डिंग",
     "Webpage": "वेबपेज",
-    "Preprint": "प्रीप्रिंट"
+    "Preprint": "प्रीप्रिंट",
+    "Annotation": "एनोटेशन",
+    "Dataset": "डेटासेट",
+    "Standard": "मानक"
   },
   "creatorType": {
     "artist": "कलाकार",

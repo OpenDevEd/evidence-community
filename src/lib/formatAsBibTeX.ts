@@ -20,6 +20,8 @@ const zotero2bibtexTypeMap = {
 	Webpage: "misc",
 	ConferencePaper: "inproceedings",
 	Report: "techreport",
+	Dataset: "misc",
+	Standard: "misc",
 };
 
 const fieldMap = {
@@ -1195,7 +1197,11 @@ export class BibTeXExporter {
 	}
 
 	format() {
-		if (this.item.itemType == "Note" || this.item.itemType == "Attachment")
+		if (
+			this.item.itemType == "Note" ||
+			this.item.itemType == "Attachment" ||
+			this.item.itemType == "Annotation"
+		)
 			return null;
 
 		const type =

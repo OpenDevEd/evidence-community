@@ -618,7 +618,10 @@
     "Thesis": "Abschlussarbeit",
     "VideoRecording": "Videoaufnahme",
     "Webpage": "Webseite",
-    "Preprint": "Vorabdruck"
+    "Preprint": "Vorabdruck",
+    "Annotation": "Anmerkung",
+    "Dataset": "Datensatz",
+    "Standard": "Norm"
   },
   "creatorType": {
     "artist": "Künstler",

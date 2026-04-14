@@ -618,7 +618,10 @@
     "Thesis": "Tese",
     "VideoRecording": "Gravação de Vídeo",
     "Webpage": "Página Web",
-    "Preprint": "Pré-impressão"
+    "Preprint": "Pré-impressão",
+    "Annotation": "Anotação",
+    "Dataset": "Base de dados",
+    "Standard": "Padrão"
   },
   "creatorType": {
     "artist": "Artista",

@@ -22,8 +22,12 @@ export type Author = {
  * Note: Returns empty string for non-bibliographic item types (e.g., Attachment, Note)
  */
 export function generateCOinS(item: Item | ListItem): string {
-  // COinS is only for bibliographic items, not attachments or notes
-  if (item.itemType === 'Attachment' || item.itemType === 'Note') {
+  // COinS is only for bibliographic items, not attachments, notes, or annotations
+  if (
+    item.itemType === 'Attachment' ||
+    item.itemType === 'Note' ||
+    item.itemType === 'Annotation'
+  ) {
     return '';
   }
   
@@ -259,11 +263,19 @@ function getFormatAndGenre(itemType?: string): { format: string; genre?: string 
       format: 'info:ofi/fmt:kev:mtx:book', 
       genre: 'bookitem' 
     },
-    'EncyclopediaArticle': { 
-      format: 'info:ofi/fmt:kev:mtx:book', 
-      genre: 'bookitem' 
+    'EncyclopediaArticle': {
+      format: 'info:ofi/fmt:kev:mtx:book',
+      genre: 'bookitem'
+    },
+    'Dataset': {
+      format: 'info:ofi/fmt:kev:mtx:dc',
+      genre: 'dataset'
+    },
+    'Standard': {
+      format: 'info:ofi/fmt:kev:mtx:dc',
+      genre: 'standard'
     }
-    // Note: 'Note' and 'Attachment' are excluded - they are not bibliographic items
+    // Note: 'Note', 'Attachment', and 'Annotation' are excluded - they are not bibliographic items
     // and should not generate COinS metadata
   };
   

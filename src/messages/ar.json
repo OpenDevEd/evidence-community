@@ -618,7 +618,10 @@
     "Thesis": "أطروحة",
     "VideoRecording": "تسجيل فيديو",
     "Webpage": "صفحة ويب",
-    "Preprint": "نسخة أولية"
+    "Preprint": "نسخة أولية",
+    "Annotation": "التعليق التوضيحي",
+    "Dataset": "مجموعة البيانات",
+    "Standard": "قياسي"
   },
   "creatorType": {
     "artist": "فنان",

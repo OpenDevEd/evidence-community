@@ -618,7 +618,10 @@
     "Thesis": "论文",
     "VideoRecording": "视频录像",
     "Webpage": "网页",
-    "Preprint": "预印本"
+    "Preprint": "预印本",
+    "Annotation": "注释",
+    "Dataset": "数据集",
+    "Standard": "标准"
   },
   "creatorType": {
     "artist": "艺术家",

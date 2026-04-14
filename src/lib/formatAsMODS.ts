@@ -88,6 +88,8 @@ export function formatItemAsMODS(item: Item): string {
         Artwork: "still image",
         Map: "cartographic",
         ComputerProgram: "software, multimedia",
+        Dataset: "software, multimedia",
+        Standard: "text",
     };
     const typeOfResource = typeOfResourceMap[item.itemType as keyof typeof typeOfResourceMap];
     if (typeOfResource) {
@@ -116,6 +118,8 @@ export function formatItemAsMODS(item: Item): string {
         Map: "map",
         Letter: "letter",
         Interview: "interview",
+        Dataset: "dataset",
+        Standard: "standard",
     };
     const g = genreMap[item.itemType as keyof typeof genreMap];
     if (g) {
