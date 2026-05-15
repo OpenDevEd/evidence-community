@@ -14,10 +14,10 @@ RUN --mount=type=cache,target=/root/.npm \
 
 FROM base AS builder
 
-# Next.js inlines NEXT_PUBLIC_* into the client bundle at build time, and
-# next.config.mjs reads MEILI_INDEX when generating route rewrites. Coolify
-# must pass these as build args (Service → Build → Build Arguments). Anything
-# server-only (API keys, DB URLs, AUTH_SECRET, …) stays runtime-only.
+# Next.js inlines NEXT_PUBLIC_* into the client bundle and next.config.mjs
+# reads MEILI_INDEX for route rewrites. Build is otherwise hermetic — all
+# DB/secret-touching work happens at container start (see CMD below).
+# Coolify must pass these as build args (Service → Env vars → Available at Build).
 ARG MEILI_INDEX
 ARG NEXT_PUBLIC_ACCENT_COLOR
 ARG NEXT_PUBLIC_ANTHROPIC_MODEL

@@ -4,11 +4,10 @@ import fs from 'fs';
 import path from 'path';
 
 async function main() {
-    const { db } = await import('@/db');
-
-    const status = await db.query.status.findFirst();
-
-    const rawCompanyName = status?.companyName || 'default';
+    // Icons are discovered by the Next.js app router at compile time, so this
+    // script has to run before `next build`. Reading companyName from the env
+    // (set per-tenant in Coolify) keeps the build hermetic — no DB needed.
+    const rawCompanyName = process.env.NEXT_PUBLIC_COMPANY_NAME || 'default';
     const companyName = rawCompanyName.split('|')[0].trim();
 
     // find /public/icons/[companyName] folder
