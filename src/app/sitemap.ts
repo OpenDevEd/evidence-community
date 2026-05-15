@@ -9,6 +9,11 @@ import { SITEMAP_SIZE } from "@/constants/misc";
 import { getPolicyLastModified } from "@/lib/policy-documents";
 import { getGapMaps } from "@/lib/gapmaps";
 
+// Sitemap shards render per-request so MeiliSearch is queried with the
+// runtime env, not the empty build env. generateSitemaps still runs at build
+// to enumerate shard ids — guarded below.
+export const dynamic = "force-dynamic";
+
 function getLocalizedUrl(pathname: string, locale: string) {
 	const localizedPath =
 		locale === routing.defaultLocale ? pathname : `/${locale}${pathname}`;
@@ -23,6 +28,9 @@ function getLanguageAlternates(pathname: string) {
 }
 
 export async function generateSitemaps() {
+	if (!process.env.MEILISEARCH_HOST) {
+		return [{ id: 0 }];
+	}
 	const totalPages = await getSitemapPageCount();
 
 	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));
@@ -31,6 +39,9 @@ export async function generateSitemaps() {
 export default async function sitemap(props: {
 	id: Promise<number>
 }): Promise<MetadataRoute.Sitemap> {
+	if (!process.env.MEILISEARCH_HOST) {
+		return [];
+	}
 	const maxRetries = 10;
 	let attempt = 0;
 	let items;
