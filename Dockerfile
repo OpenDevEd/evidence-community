@@ -14,10 +14,17 @@ RUN --mount=type=cache,target=/root/.npm \
 
 FROM base AS builder
 
-# Next.js inlines NEXT_PUBLIC_* into the client bundle and next.config.mjs
-# reads MEILI_INDEX for route rewrites. Build is otherwise hermetic — all
-# DB/secret-touching work happens at container start (see CMD below).
+# Build args. Two categories:
+#   1. Inlined into the client bundle by Next.js (NEXT_PUBLIC_*) or read by
+#      next.config.mjs for route rewrites (MEILI_INDEX).
+#   2. Required at build time by Next.js 16's cacheComponents static
+#      pre-render of `'use cache'` routes (DATABASE_URL_POST, MEILISEARCH_HOST,
+#      MASTER_KEY). The build container reaches these via Coolify's internal
+#      Docker network — see `connect_to_docker_network: true` on the app.
 # Coolify must pass these as build args (Service → Env vars → Available at Build).
+ARG DATABASE_URL_POST
+ARG MASTER_KEY
+ARG MEILISEARCH_HOST
 ARG MEILI_INDEX
 ARG NEXT_PUBLIC_ACCENT_COLOR
 ARG NEXT_PUBLIC_ANTHROPIC_MODEL
@@ -59,7 +66,10 @@ ARG NEXT_PUBLIC_STYLE
 ARG NEXT_PUBLIC_TERTIARY_COLOR
 ARG NEXT_PUBLIC_UTM_DURATION
 
-ENV MEILI_INDEX=$MEILI_INDEX \
+ENV DATABASE_URL_POST=$DATABASE_URL_POST \
+	MASTER_KEY=$MASTER_KEY \
+	MEILISEARCH_HOST=$MEILISEARCH_HOST \
+	MEILI_INDEX=$MEILI_INDEX \
 	NEXT_PUBLIC_ACCENT_COLOR=$NEXT_PUBLIC_ACCENT_COLOR \
 	NEXT_PUBLIC_ANTHROPIC_MODEL=$NEXT_PUBLIC_ANTHROPIC_MODEL \
 	NEXT_PUBLIC_COLLECTION_COLOR=$NEXT_PUBLIC_COLLECTION_COLOR \
