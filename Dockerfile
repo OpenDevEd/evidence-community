@@ -22,6 +22,7 @@ FROM base AS builder
 #      MASTER_KEY). The build container reaches these via Coolify's internal
 #      Docker network — see `connect_to_docker_network: true` on the app.
 # Coolify must pass these as build args (Service → Env vars → Available at Build).
+ARG BASE_URL
 ARG DATABASE_URL_POST
 ARG MASTER_KEY
 ARG MEILISEARCH_HOST
@@ -66,7 +67,8 @@ ARG NEXT_PUBLIC_STYLE
 ARG NEXT_PUBLIC_TERTIARY_COLOR
 ARG NEXT_PUBLIC_UTM_DURATION
 
-ENV DATABASE_URL_POST=$DATABASE_URL_POST \
+ENV BASE_URL=$BASE_URL \
+	DATABASE_URL_POST=$DATABASE_URL_POST \
 	MASTER_KEY=$MASTER_KEY \
 	MEILISEARCH_HOST=$MEILISEARCH_HOST \
 	MEILI_INDEX=$MEILI_INDEX \
