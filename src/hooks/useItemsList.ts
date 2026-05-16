@@ -1,7 +1,8 @@
 import { useCallback, useContext, useMemo } from "react";
-import { fetcher, buildItemsQuery } from "@/lib/utils";
+import { fetcher, buildItemsQuery, buildFacetsQuery } from "@/lib/utils";
 import { CacheContext, useLastFetchedData } from "@/context/Providers";
 import { ItemsGetResponse } from "@/app/api/items/types";
+import { FacetsGetResponse } from "@/app/api/facets/types";
 import useSWR from "swr";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
@@ -43,6 +44,12 @@ export function useItemsList(
 	// Use nuqs params as single source of truth for query building
 	const itemsQuery = useMemo(
 		() => buildItemsQuery(params, userData ? `/user/items/${userData.id}` : "/items"),
+		[params, userData]
+	);
+
+	// Facets are only rendered on public pages; profile pages skip the request.
+	const facetsQuery = useMemo(
+		() => (userData ? null : buildFacetsQuery(params)),
 		[params, userData]
 	);
 
@@ -215,6 +222,13 @@ export function useItemsList(
 
 	const itemsData = itemsCache.current[pathname];
 
+	const { data: facetsData } = useSWR<FacetsGetResponse>(facetsQuery, fetcher, {
+		keepPreviousData: true,
+		revalidateOnFocus: false,
+		revalidateOnReconnect: false,
+		revalidateIfStale: false,
+	});
+
 	const {
 		data: collectionsData,
 		error: collectionsError,
@@ -263,6 +277,7 @@ export function useItemsList(
 
 	return {
 		itemsData,
+		facetDistribution: facetsData?.facetDistribution,
 		itemsError,
 		isItemsLoading,
 		isItemsFetching,

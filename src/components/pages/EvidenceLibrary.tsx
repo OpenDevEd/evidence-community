@@ -368,10 +368,7 @@ function SearchTabContent({
 											handleRangeChange={
 												itemsContext.handleRangeChange
 											}
-											facetDistribution={
-												itemsContext.itemsData
-													?.facetDistribution
-											}
+											facetDistribution={itemsContext.facetDistribution}
 											queryParams={
 												itemsContext.queryParams
 											}
@@ -958,7 +955,7 @@ function MainContent() {
 				hierarchy={props.hierarchy}
 				range={props.queryParams.range}
 				handleRangeChange={props.handleRangeChange}
-				facetDistribution={props.itemsData?.facetDistribution}
+				facetDistribution={props.facetDistribution}
 				queryParams={props.queryParams}
 				handleInstitutionSelect={props.handleInstitutionSelect}
 				handleCountrySelect={props.handleCountrySelect}

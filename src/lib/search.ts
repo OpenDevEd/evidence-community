@@ -61,6 +61,9 @@ type SearchCountOnlyResult = {
 
 type SearchItemsResult = SearchCountOnlyResult & {
 	items: ListItem[];
+};
+
+type SearchFacetsResult = {
 	facetDistribution: FacetDistribution;
 };
 
@@ -129,39 +132,9 @@ function applyCollectionsData(items: ListItem[], collections: Collection[]) {
 	}
 }
 
-export async function searchPublicIndex(
-	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	extraProperties: Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1] | undefined,
-	extraFilters: NonNullable<
-		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
-	>["filter"],
-	options: {
-		includeHeavyFields?: boolean;
-		countOnly: true;
-	}
-): Promise<SearchCountOnlyResult>;
-export async function searchPublicIndex(
-	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	extraProperties?: Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1],
-	extraFilters?: NonNullable<
-		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
-	>["filter"],
-	options?: {
-		includeHeavyFields?: boolean;
-		countOnly?: false;
-	}
-): Promise<SearchItemsResult>;
-export async function searchPublicIndex(
-	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	extraProperties: Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1] = {},
-	extraFilters: NonNullable<
-		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
-	>["filter"] = [],
-	options: {
-		includeHeavyFields?: boolean;
-		countOnly?: boolean;
-	} = {}
-): Promise<SearchItemsResult | SearchCountOnlyResult> {
+function resolveSearchRequest(
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>
+) {
 	const pageNum = Math.max(1, Number(searchParams.page || 1));
 	const limitNum = ITEMS_PER_PAGE;
 	const sort = searchParams.sort || SORT_OPTIONS[0].key;
@@ -172,10 +145,7 @@ export async function searchPublicIndex(
 	const country = searchParams.country || [];
 	const author_country = searchParams.author_country || [];
 	const author = searchParams.author || "";
-	const includeHeavyFields = options.includeHeavyFields === true;
-	const countOnly = options.countOnly === true;
-
-	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
+	const collections = searchParams.collections || [];
 
 	const effectiveSort =
 		search.trim().length === 0 && sort === SORT_OPTIONS[0].key
@@ -185,18 +155,16 @@ export async function searchPublicIndex(
 		SORT_OPTIONS.find((option) => option.key === effectiveSort)?.sort ||
 		SORT_OPTIONS[0].sort;
 
-	const countryFilters = createCountryFilters(country, author_country);
-
 	const finalFilters = [
 		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
 		range ? formatRange(range) : null,
 		...(Array.isArray(institution)
 			? institution.map((institutionValue) => `institution = "${institutionValue}"`)
 			: []),
-		...countryFilters,
+		...createCountryFilters(country, author_country),
 		author ? `fullNames = "${author}"` : null,
 		scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
-		...(Array.isArray(extraFilters) ? extraFilters : []),
+		...collections.map((collection) => `collectionsAncestry = "${collection}"`),
 		"deleted != 1",
 		`tags NOT IN ${JSON.stringify(blockedTags)}`,
 	].filter((filter): filter is string => filter !== null);
@@ -206,25 +174,33 @@ export async function searchPublicIndex(
 			SCOPE_OPTIONS[0].attributesToSearchOn
 	);
 
-	if (countOnly) {
-		const searchResults = await index.search(search, {
-			offset: 0,
-			limit: 0,
-			attributesToSearchOn,
-			...(sortOption ? { sort: [sortOption] } : {}),
-			filter: finalFilters,
-		});
+	return {
+		search,
+		pageNum,
+		limitNum,
+		sortOption,
+		finalFilters,
+		attributesToSearchOn,
+		country,
+		author_country,
+	};
+}
 
-		const totalItems = searchResults.estimatedTotalHits || searchResults.hits.length;
-		return {
-			currentPage: pageNum,
-			perPage: limitNum,
-			totalItems,
-			totalPages: Math.ceil(totalItems / limitNum),
-		};
-	}
+export async function getPublicItems(
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
+	options: {
+		includeHeavyFields?: boolean;
+	} = {}
+): Promise<SearchItemsResult> {
+	const { search, pageNum, limitNum, sortOption, finalFilters, attributesToSearchOn } =
+		resolveSearchRequest(searchParams);
 
-	const attributesToRetrieve = includeHeavyFields ? await getMainAttributes() : [...LIST_ITEM_FIELDS];
+	const includeHeavyFields = options.includeHeavyFields === true;
+	const attributesToRetrieve = includeHeavyFields
+		? await getMainAttributes()
+		: [...LIST_ITEM_FIELDS];
+
+	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
 
 	const [searchResults, collections] = await Promise.all([
 		index.search(search, {
@@ -233,7 +209,6 @@ export async function searchPublicIndex(
 			attributesToSearchOn,
 			attributesToRetrieve,
 			...(sortOption ? { sort: [sortOption] } : {}),
-			...extraProperties,
 			filter: finalFilters,
 		}),
 		getCachedCollections(),
@@ -253,6 +228,34 @@ export async function searchPublicIndex(
 		totalItems: totalCount,
 		perPage: limitNum,
 		totalPages: Math.ceil(totalCount / limitNum),
+	};
+}
+
+export async function getPublicFacets(
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>
+): Promise<SearchFacetsResult> {
+	const { search, finalFilters, attributesToSearchOn, country, author_country } =
+		resolveSearchRequest(searchParams);
+
+	const facets = [...DEFAULT_FACETS];
+	if (process.env.NEXT_PUBLIC_DISABLE_COUNTRY !== "true") {
+		facets.push("country");
+	}
+	if (process.env.NEXT_PUBLIC_DISABLE_AUTHOR_COUNTRY !== "true") {
+		facets.push("creators.institutions.country_code");
+	}
+
+	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
+
+	const searchResults = await index.search(search, {
+		offset: 0,
+		limit: 0,
+		attributesToSearchOn,
+		facets,
+		filter: finalFilters,
+	});
+
+	return {
 		facetDistribution: addRegionsToFacetDistribution(
 			Object.assign(
 				{},
@@ -271,51 +274,28 @@ export async function searchPublicIndex(
 	};
 }
 
-export async function getPublicItems(
-	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	options: {
-		includeHeavyFields?: boolean;
-	} = {}
-): Promise<SearchItemsResult> {
-	const facets = [...DEFAULT_FACETS];
-
-	if (process.env.NEXT_PUBLIC_DISABLE_COUNTRY !== "true") {
-		facets.push("country");
-	}
-	if (process.env.NEXT_PUBLIC_DISABLE_AUTHOR_COUNTRY !== "true") {
-		facets.push("creators.institutions.country_code");
-	}
-
-	const collections = searchParams.collections || [];
-	return searchPublicIndex(
-		searchParams,
-		{
-			facets,
-		},
-		[
-			...collections.map(
-				(collection: string) => `collectionsAncestry = "${collection}"`
-			),
-		],
-		{
-			...options,
-			countOnly: false,
-		}
-	);
-}
-
 export async function getItemsPaginationMeta(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>
-) {
-	const collections = searchParams.collections || [];
-	return searchPublicIndex(
-		searchParams,
-		{},
-		[
-			...collections.map(
-				(collection: string) => `collectionsAncestry = "${collection}"`
-			),
-		],
-		{ countOnly: true }
-	);
+): Promise<SearchCountOnlyResult> {
+	const { search, pageNum, limitNum, sortOption, finalFilters, attributesToSearchOn } =
+		resolveSearchRequest(searchParams);
+
+	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
+
+	const searchResults = await index.search(search, {
+		offset: 0,
+		limit: 0,
+		attributesToSearchOn,
+		...(sortOption ? { sort: [sortOption] } : {}),
+		filter: finalFilters,
+	});
+
+	const totalItems = searchResults.estimatedTotalHits || searchResults.hits.length;
+
+	return {
+		currentPage: pageNum,
+		perPage: limitNum,
+		totalItems,
+		totalPages: Math.ceil(totalItems / limitNum),
+	};
 }

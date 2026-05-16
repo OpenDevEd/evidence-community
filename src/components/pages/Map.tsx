@@ -187,7 +187,7 @@ export default function Map() {
 	});
 	const [mapFacetValue, setMapFacet] = useLocalStorage("mapFacet", 0);
 	const mapFacet = countryFacetOptions[mapFacetValue] ? mapFacetValue : 0;
-	const countriesFacet = props?.itemsData?.facetDistribution?.[countryFacetOptions[mapFacet].key + "_uncategorized"];
+	const countriesFacet = props?.facetDistribution?.[countryFacetOptions[mapFacet].key + "_uncategorized"];
 	const maxItems = Math.max(
 		...Object.values(countriesFacet || {}).map(Number)
 	);

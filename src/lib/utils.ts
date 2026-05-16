@@ -176,6 +176,13 @@ export function buildItemsQuery(params: any, url: string = "/items"): string {
 	return `${url}${serializedParams}`;
 }
 
+export function buildFacetsQuery(params: any): string {
+	// Facets depend on the filters, not on page/sort — dropping them keeps the
+	// SWR key stable across pagination and sorting so the request edge-caches.
+	const { page, sort, ...facetParams } = params;
+	return `/facets${serializeSearchParams(facetParams)}`;
+}
+
 export function firstNonNullOrEmpty<T>(
 	obj: T,
 	keys: (keyof T)[]
