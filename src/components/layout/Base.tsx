@@ -27,6 +27,14 @@ const montserrat = Montserrat({
 	variable: "--font-montserrat",
 });
 
+function BaseFallback() {
+	return (
+		<div className="min-h-screen w-full bg-background_light dark:bg-background flex items-center justify-center">
+			<div className="h-10 w-10 rounded-full border-2 border-black/10 border-t-black/50 dark:border-white/10 dark:border-t-white/50 motion-safe:animate-spin" />
+		</div>
+	);
+}
+
 async function BaseContent({
 	children,
 	locale,
@@ -132,7 +140,7 @@ export default async function Base({
 						`}
 					</Script>
 				) : null}
-				<Suspense fallback={null}>
+				<Suspense fallback={<BaseFallback />}>
 					<BaseContent locale={locale}>{children}</BaseContent>
 				</Suspense>
 			</body>

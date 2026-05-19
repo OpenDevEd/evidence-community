@@ -37,7 +37,8 @@ export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 	const logoContent = (
 		<div
 			className={twMerge(
-				"transition-all select-none",
+				"select-none opacity-0 motion-safe:transition-[opacity,filter,transform] motion-safe:duration-500 motion-safe:ease-out motion-reduce:transition-none",
+				isLoaded && "opacity-100",
 				interactive &&
 					"cursor-pointer hover:brightness-90 hover:scale-95 active:scale-105"
 			)}
