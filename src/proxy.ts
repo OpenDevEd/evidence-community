@@ -5,6 +5,7 @@ import { SCOPE_OPTIONS, SORT_OPTIONS } from "./constants/items";
 import configJSON from "./constants/config.json";
 import { PUBLIC_READ_CACHE_CONTROL } from "./lib/http-cache";
 import meilisearch from "./lib/meilisearch";
+import { getConfiguredSiteOrigin } from "./lib/site-url";
 
 function handleLegacyScope(
 	request: NextRequest,
@@ -201,12 +202,10 @@ async function getNoteRedirectDestination(request: NextRequest) {
 	const lookupPath = getRedirectLookupPath(request.nextUrl.pathname);
 	if (!lookupPath) return null;
 
-	const apiUrl = request.nextUrl.clone();
-	apiUrl.pathname = `/api/redirects/${lookupPath
-		.split("/")
-		.map(encodeURIComponent)
-		.join("/")}`;
-	apiUrl.search = "";
+	const apiUrl = new URL(
+		`/api/redirects/${lookupPath.split("/").map(encodeURIComponent).join("/")}`,
+		getConfiguredSiteOrigin() ?? request.nextUrl.origin
+	);
 
 	try {
 		const response = await Promise.race([
