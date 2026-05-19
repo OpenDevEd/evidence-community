@@ -166,6 +166,7 @@ function isLikelyBrokenKey(key: string) {
 }
 
 const RESERVED_ROUTE_SEGMENTS = new Set([
+	"404",
 	"about",
 	"api",
 	"citation",
@@ -235,6 +236,22 @@ async function getNoteRedirectDestination(request: NextRequest) {
 	} catch {
 		return null;
 	}
+}
+
+function getPathLocale(pathname: string) {
+	const firstSegment = pathname.split("/").filter(Boolean)[0];
+	return routing.locales.includes(firstSegment as any) ? firstSegment : null;
+}
+
+function redirectUnknownPathToNotFoundPage(request: NextRequest) {
+	if (!getRedirectLookupPath(request.nextUrl.pathname)) return null;
+
+	const url = request.nextUrl.clone();
+	const locale = getPathLocale(request.nextUrl.pathname);
+	url.pathname = locale ? `/${locale}/404` : "/404";
+	url.search = "";
+
+	return NextResponse.redirect(url, 307);
 }
 
 export default async function proxy(request: NextRequest) {
@@ -354,6 +371,11 @@ export default async function proxy(request: NextRequest) {
 	const noteRedirectDestination = await getNoteRedirectDestination(request);
 	if (noteRedirectDestination) {
 		return NextResponse.redirect(noteRedirectDestination, 307);
+	}
+
+	const notFoundPageRedirect = redirectUnknownPathToNotFoundPage(request);
+	if (notFoundPageRedirect) {
+		return notFoundPageRedirect;
 	}
 
 	const response = createMiddleware(routing)(request);
