@@ -165,6 +165,78 @@ function isLikelyBrokenKey(key: string) {
 	return /^\d+:[A-Z0-9]{8}$/.test(key);
 }
 
+const RESERVED_ROUTE_SEGMENTS = new Set([
+	"about",
+	"api",
+	"citation",
+	"contact",
+	"cookie-policy",
+	"gapmaps",
+	"lib",
+	"map",
+	"newlib",
+	"privacy",
+	"profile",
+	"statistics",
+	"takedown",
+]);
+
+function getRedirectLookupPath(pathname: string) {
+	const segments = pathname.split("/").filter(Boolean);
+	if (segments.length === 0) return null;
+
+	const firstSegment = segments[0];
+	const pathSegments = routing.locales.includes(firstSegment as any)
+		? segments.slice(1)
+		: segments;
+
+	if (pathSegments.length === 0) return null;
+	if (RESERVED_ROUTE_SEGMENTS.has(pathSegments[0])) return null;
+
+	return pathSegments.join("/");
+}
+
+async function getNoteRedirectDestination(request: NextRequest) {
+	const lookupPath = getRedirectLookupPath(request.nextUrl.pathname);
+	if (!lookupPath) return null;
+
+	const apiUrl = request.nextUrl.clone();
+	apiUrl.pathname = `/api/redirects/${lookupPath
+		.split("/")
+		.map(encodeURIComponent)
+		.join("/")}`;
+	apiUrl.search = "";
+
+	try {
+		const response = await Promise.race([
+			fetch(apiUrl, {
+				headers: {
+					"x-redirect-lookup": "1",
+				},
+			}),
+			new Promise<never>((_, reject) =>
+				setTimeout(() => reject(new Error("timeout")), 350)
+			),
+		]);
+
+		if (!response.ok) return null;
+
+		const data = (await response.json()) as {
+			destination?: unknown;
+		};
+		if (typeof data.destination !== "string" || !data.destination) {
+			return null;
+		}
+
+		const destination = new URL(data.destination, request.url);
+		if (!["http:", "https:"].includes(destination.protocol)) return null;
+
+		return destination;
+	} catch {
+		return null;
+	}
+}
+
 export default async function proxy(request: NextRequest) {
 	if (request.nextUrl.pathname === "/") {
 		const url = request.nextUrl.clone();
@@ -277,6 +349,11 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.rewrite(url);
 	} else if (request.nextUrl.pathname.startsWith("/api/")) {
 		return NextResponse.next();
+	}
+
+	const noteRedirectDestination = await getNoteRedirectDestination(request);
+	if (noteRedirectDestination) {
+		return NextResponse.redirect(noteRedirectDestination, 307);
 	}
 
 	const response = createMiddleware(routing)(request);
