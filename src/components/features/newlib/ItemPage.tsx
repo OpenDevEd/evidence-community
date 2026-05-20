@@ -64,6 +64,7 @@ import {
 } from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
 import { INTERNAL_TAG, PUBLISH_TAGS } from "@/constants/items";
+import { hasAnyTag } from "@/lib/tags";
 import useSWR from "swr";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
@@ -1133,13 +1134,13 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 		(attachment) =>
 			attachment.itemType === "Note" &&
 			attachment.note &&
-			PUBLISH_TAGS.some((tag) => attachment.tags?.includes(tag)),
+			hasAnyTag(attachment.tags, PUBLISH_TAGS),
 	);
 	const links = item?.attachmentsData?.filter(
 		(attachment) =>
 			attachment.linkMode === "linked_url" &&
 			attachment.url &&
-			PUBLISH_TAGS.some((tag) => attachment.tags?.includes(tag)),
+			hasAnyTag(attachment.tags, PUBLISH_TAGS),
 	);
 
 	const notesDescription = useNotesDescription();

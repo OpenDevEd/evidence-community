@@ -33,6 +33,7 @@ import useSWR from "swr";
 import { serializeSearchParams } from "@/lib/searchParams";
 import { useQueryState } from "nuqs";
 import { COMING_SOON_TAG, INTERNAL_TAG } from "@/constants/items";
+import { hasTag } from "@/lib/tags";
 import PrefetchLink from "../PrefetchLink";
 import { generateCOinS } from "@/lib/coins";
 import { resolveGapMapsByTags } from "@/lib/gapmap-links";
@@ -310,13 +311,13 @@ function ResourceArticle({
 							</>
 						)}
 
-					{finalItemData?.tags?.includes(COMING_SOON_TAG) && (
+					{hasTag(finalItemData?.tags, COMING_SOON_TAG) && (
 						<span className="bg-black/10 border border-accent rounded-lg px-4 py-1 text-accent font-medium w-full @[720px]:w-auto text-center">
 							{t("inProgress")}
 						</span>
 					)}
 
-					{finalItemData?.tags?.includes(INTERNAL_TAG) && (
+					{hasTag(finalItemData?.tags, INTERNAL_TAG) && (
 						<span className="bg-black/10 border border-danger rounded-lg px-4 py-1 text-danger font-medium w-full @[720px]:w-auto text-center">
 							{t("internal")}
 						</span>

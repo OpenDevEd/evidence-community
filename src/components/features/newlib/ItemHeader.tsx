@@ -20,6 +20,7 @@ import LikeButton from "@/components/features/items/LikeButton";
 import { AddButton } from "@/components/features/items/Resource";
 import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
+import { hasTag } from "@/lib/tags";
 import GapMapAction from "@/components/features/gapmaps/GapMapAction";
 
 function getCitationCount(item: Item | undefined) {
@@ -58,7 +59,7 @@ function ItemHeaderInstitution({ item }: { item: Item | undefined }) {
 
 function ItemHeaderInternal({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
-	if (!item?.tags?.includes(INTERNAL_TAG)) return null;
+	if (!hasTag(item?.tags, INTERNAL_TAG)) return null;
 	return (
 		<Card className="p-1 px-3 text-sm bg-default-100 select-none">
 			{"Available on request"}
