@@ -321,6 +321,127 @@
 				"enabled": true,
 				"legacyKey": "featured"
 			}
+		},
+		"itemsEef": {
+			"GM79T584": {
+				"title": "Outcome measure",
+				"enabled": true,
+				"legacyKey": "outcome_measure"
+			},
+			"WS8W94SN": {
+				"title": "Instructional domain (subject)",
+				"enabled": true,
+				"legacyKey": "instructional_domain"
+			},
+			"R23G8DWQ": {
+				"title": "Education Level and Type",
+				"enabled": true,
+				"legacyKey": "education_level_and_type"
+			},
+			"HFUWZ2HG": {
+				"title": "Groups of students",
+				"enabled": true,
+				"legacyKey": "groups"
+			},
+			"7EUZ6F5B": {
+				"title": "School or home",
+				"enabled": true,
+				"legacyKey": "school_or_home"
+			},
+			"TGF48A5K": {
+				"title": "Moderating variables",
+				"enabled": true,
+				"legacyKey": "moderating_variables"
+			},
+			"54D5S6B4": {
+				"title": "Tech Hardware",
+				"enabled": true,
+				"legacyKey": "tech_hardware"
+			},
+			"XU6BVKWJ": {
+				"title": "Tech Software",
+				"enabled": true,
+				"legacyKey": "tech_software"
+			},
+			"39GD6S2M": {
+				"title": "Tech mechanism",
+				"enabled": true,
+				"legacyKey": "tech_mechanism"
+			},
+			"PHCF769D": {
+				"title": "Learning Approach",
+				"enabled": true,
+				"legacyKey": "learning_approach"
+			},
+			"TPADRUD7": {
+				"title": "Teacher Pedagogy",
+				"enabled": true,
+				"legacyKey": "teacher_pedagogy"
+			},
+			"TMBGUV3T": {
+				"title": "Research methods",
+				"enabled": true,
+				"legacyKey": "research_methods"
+			},
+			"H8KRJNSQ": {
+				"title": "Effect size/heterogeneity",
+				"enabled": true,
+				"legacyKey": "effect_size"
+			},
+			"6MMPBGS9": {
+				"title": "HIC/LMIC",
+				"enabled": true,
+				"legacyKey": "hic_lmic"
+			},
+			"4U3VJWPN": {
+				"title": "Quality of research",
+				"enabled": true,
+				"legacyKey": "quality_of_research"
+			}
+		},
+		"itemsIs": {
+			"XWXU8XAB": {
+				"title": "Our proposal",
+				"enabled": true,
+				"legacyKey": "proposal"
+			},
+			"Z27MIXI7": {
+				"title": "Theme",
+				"enabled": true,
+				"legacyKey": "theme"
+			},
+			"5JVH374W": {
+				"title": "Location",
+				"enabled": true,
+				"legacyKey": "location"
+			}
+		},
+		"itemsMalawi": {
+			"4K2WTMCH": {
+				"title": "Topic",
+				"enabled": true,
+				"legacyKey": "topic"
+			},
+			"FKBBFMGT": {
+				"title": "Publisher",
+				"enabled": true,
+				"legacyKey": "publisher"
+			},
+			"XBX6HUI3": {
+				"title": "Type",
+				"enabled": true,
+				"legacyKey": "type"
+			},
+			"9LTKXKAP": {
+				"title": "Education Level",
+				"enabled": true,
+				"legacyKey": "education_level"
+			},
+			"PZG53966": {
+				"title": "Country",
+				"enabled": true,
+				"legacyKey": "country"
+			}
 		}
 	}
 }
