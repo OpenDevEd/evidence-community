@@ -283,6 +283,44 @@
 				"title": "Topics",
 				"enabled": true
 			}
+		},
+		"itemsAdaptdev": {
+			"Z7A9H37R": {
+				"title": "Theme",
+				"enabled": true,
+				"legacyKey": "theme"
+			}
+		},
+		"itemsAime": {
+			"93FIW7A4": {
+				"title": "Empirical studies",
+				"enabled": true,
+				"legacyKey": "empirical"
+			},
+			"3DUXL8D5": {
+				"title": "Empirical studies",
+				"enabled": true,
+				"legacyKey": "conceptual"
+			},
+			"CSL5G5P6": {
+				"title": "Technical methods",
+				"enabled": true,
+				"legacyKey": "technical"
+			}
+		},
+		"itemsClimate": {
+			"AI5BCRZ8": {
+				"title": "Theme",
+				"enabled": true,
+				"legacyKey": "theme"
+			}
+		},
+		"itemsMathlib": {
+			"VQ8AKG3J": {
+				"title": "Country",
+				"enabled": true,
+				"legacyKey": "featured"
+			}
 		}
 	}
 }
