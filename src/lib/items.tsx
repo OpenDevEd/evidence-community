@@ -53,6 +53,33 @@ type WrapperConfig = {
 	priority?: number;
 };
 
+const ALLOWED_CITATION_TAGS = new Set(["p", "em", "i", "strong", "b", "span", "a", "br"]);
+
+function sanitizeCitationHtml(input: string) {
+	if (!input) return "";
+
+	const withoutDangerousBlocks = input
+		.replace(/<\s*(script|style|iframe|object|embed|svg|math)[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi, "")
+		.replace(/<\s*(script|style|iframe|object|embed|svg|math)[^>]*\/\s*>/gi, "");
+
+	return withoutDangerousBlocks.replace(/<\/?([a-z0-9-]+)([^>]*)>/gi, (fullMatch, tagName: string, rawAttrs: string) => {
+		const normalizedTag = tagName.toLowerCase();
+		if (!ALLOWED_CITATION_TAGS.has(normalizedTag)) return "";
+
+		const isClosingTag = fullMatch.startsWith("</");
+		if (isClosingTag) return `</${normalizedTag}>`;
+		if (normalizedTag === "br") return "<br>";
+		if (normalizedTag !== "a") return `<${normalizedTag}>`;
+
+		const hrefMatch = rawAttrs.match(/\shref\s*=\s*("([^"]*)"|'([^']*)'|([^\s>]+))/i);
+		const hrefValue = hrefMatch?.[2] ?? hrefMatch?.[3] ?? hrefMatch?.[4] ?? "";
+		const trimmedHrefValue = hrefValue.trim();
+		const safeHref = /^(https?:|mailto:|\/)/i.test(trimmedHrefValue) ? trimmedHrefValue : "#";
+
+		return `<a href="${safeHref}" target="_blank" rel="noopener noreferrer">`;
+	});
+}
+
 function formatDate({ value, formatter }: FormatterProps) {
 	if (!value) return false;
 	if (isNaN(new Date(value).getTime())) {
@@ -101,6 +128,7 @@ function Citation({ value, loading, item }: FormatterProps) {
 	}
 
 	sanitizedHtml = sanitizedHtml.replace(/<\/?div/g, "<p");
+	sanitizedHtml = sanitizeCitationHtml(sanitizedHtml);
 
 	return (
 		<Skeleton
