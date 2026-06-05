@@ -8,11 +8,11 @@ import { RelationsType } from "@/types/item";
 import {
 	IoBook,
 	IoDocumentText,
-	IoOpenOutline,
 	IoDownloadOutline,
 	IoChevronBack,
 	IoDownload,
 } from "react-icons/io5";
+import { SiZenodo } from "react-icons/si";
 import { BsQuote } from "react-icons/bs";
 import { Avatar } from "@nextui-org/avatar";
 import { HiAcademicCap } from "react-icons/hi2";
@@ -66,6 +66,12 @@ import { transformItem } from "@/lib/utils";
 import { INTERNAL_TAG, PUBLISH_TAGS } from "@/constants/items";
 import { hasAnyTag } from "@/lib/tags";
 import useSWR from "swr";
+import {
+	buildDoiDisplayLinks,
+	type DoiDisplayAttachment,
+	type DoiDisplayLink,
+	type DoiDisplayProvider,
+} from "@opendeved/doi-sync-core/display";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -99,8 +105,8 @@ function ItemRow({ icon, title, subtitle }: ItemRowProps) {
 			<Skeleton isLoaded={!showSkeleton} className="rounded-2xl w-full">
 				<div className="flex items-center gap-3">
 					{icon}
-					<div className="flex flex-col">
-						<div className="text-base font-medium text-black/80 dark:text-white/80">
+					<div className="flex min-w-0 flex-col">
+						<div className="text-base font-medium text-black/80 dark:text-white/80 text-wrap-anywhere">
 							{title || "-"}
 						</div>
 						{subtitle}
@@ -578,12 +584,19 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"extra",
 		"callNumber",
 		"dateTimestamp",
+		"DOI",
 	];
 
 	if (!item && !loading) return null;
 
+	const isCurrentEvidenceLibraryUrl = item
+		? buildCanonicalWebsiteLink(item) !== null
+		: false;
 	const details = Object.entries(item || {})
 		.filter(([key, value]) => value !== null)
+		.filter(
+			([key]) => key !== "url" || !isCurrentEvidenceLibraryUrl,
+		)
 		.map(([key, value]) => ({
 			label: key,
 			value: String(value),
@@ -803,6 +816,208 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 				)}
 			</AnimatePresence>
 		</ItemPropertyRowWrapper>
+	);
+}
+
+function toDoiDisplayAttachment(attachment: Item): DoiDisplayAttachment {
+	return {
+		linkMode: attachment.linkMode,
+		title: attachment.title,
+		url: attachment.url,
+		tags: attachment.tags,
+	};
+}
+
+function CrossrefLogo({ className }: { className?: string }) {
+	return (
+		<svg
+			viewBox="0 0 65.4 95.2"
+			role="img"
+			aria-label="Crossref"
+			className={className}
+		>
+			<g transform="translate(-111.8 -0.3)">
+				<polygon
+					fill="#3EB1C8"
+					points="111.8,95.5 111.8,66.8 135.4,59 177.2,73.3"
+				/>
+				<polygon
+					fill="#D8D2C4"
+					points="153.6,36.8 111.8,51.2 135.4,59 177.2,44.6"
+				/>
+				<polygon
+					fill="#4F5858"
+					points="135.4,59 177.2,44.6 177.2,73.3"
+				/>
+				<polygon
+					fill="#FFC72C"
+					points="177.2,0.3 177.2,29 153.6,36.8 111.8,22.5"
+				/>
+				<polygon
+					fill="#EF3340"
+					points="153.6,36.8 111.8,51.2 111.8,22.5"
+				/>
+			</g>
+		</svg>
+	);
+}
+
+type CanonicalWebsiteLink = {
+	provider: "website";
+	kind: "canonical";
+	label: string;
+	value: string;
+	url: string;
+	iconUrl: string;
+};
+
+type IdentifierDisplayLink = DoiDisplayLink | CanonicalWebsiteLink;
+
+function parseUrl(value: string | null | undefined) {
+	if (!value) return null;
+
+	try {
+		return new URL(value);
+	} catch {
+		return null;
+	}
+}
+
+function normaliseCanonicalPath(pathname: string) {
+	const parts = pathname.split("/").filter(Boolean);
+	const libIndex = parts.indexOf("lib");
+	if (libIndex === -1) return null;
+
+	const key = parts[libIndex + 1];
+	if (!key) return null;
+	return `/lib/${key}`;
+}
+
+function normaliseCanonicalHost(host: string) {
+	return host.toLowerCase().replace(/^www\./, "");
+}
+
+function buildCanonicalWebsiteLink(item: Item): CanonicalWebsiteLink | null {
+	const itemUrl = parseUrl(item.url);
+	const canonicalBaseUrl = parseUrl(process.env.NEXT_PUBLIC_CANONICAL_BASE_URL);
+	if (!itemUrl || !canonicalBaseUrl) return null;
+	if (
+		normaliseCanonicalHost(itemUrl.host) !==
+		normaliseCanonicalHost(canonicalBaseUrl.host)
+	) {
+		return null;
+	}
+	if (normaliseCanonicalPath(itemUrl.pathname) !== `/lib/${item.key}`) return null;
+
+	return {
+		provider: "website",
+		kind: "canonical",
+		label: "itemIdentifierEvidenceLibrary",
+		value: `${itemUrl.host}${itemUrl.pathname}`,
+		url: itemUrl.toString(),
+		iconUrl: new URL("/favicon.ico", canonicalBaseUrl).toString(),
+	};
+}
+
+function IdentifierLogo({ link }: { link: IdentifierDisplayLink }) {
+	return (
+		<div className="flex size-9 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-black/10 bg-white shadow-sm dark:border-white/10 dark:bg-white">
+			{link.provider === "website" ? (
+				<span
+					role="img"
+					aria-label={link.label}
+					className="size-5 bg-contain bg-center bg-no-repeat"
+					style={{ backgroundImage: `url("${link.iconUrl}")` }}
+				/>
+			) : link.provider === "crossref" ? (
+				<CrossrefLogo className="h-6 w-4" />
+			) : (
+				<SiZenodo
+					className="size-5 text-[#1682D4]"
+					aria-label="Zenodo"
+				/>
+			)}
+		</div>
+	);
+}
+
+function getIdentifierDisplayTitle(
+	link: IdentifierDisplayLink,
+	t: ReturnType<typeof useTranslations>,
+) {
+	if (link.provider === "website") return t("itemIdentifierEvidenceLibrary");
+	if (link.provider !== "zenodo") return link.label;
+	if (link.kind === "record") return t("itemIdentifierArchiveRecord");
+	if (link.kind === "concept-record") return t("itemIdentifierConceptRecord");
+	if (link.label.toLowerCase().includes("concept")) {
+		return t("itemIdentifierConceptDoi");
+	}
+	return t("itemIdentifierVersionDoi");
+}
+
+function ItemIdentifierRow({ link }: { link: IdentifierDisplayLink }) {
+	const t = useTranslations("ui");
+
+	return (
+		<div className="px-4">
+			<div className="flex items-center gap-3">
+				<IdentifierLogo link={link} />
+				<div className="flex min-w-0 flex-1 flex-col gap-0.5">
+					<div className="truncate text-sm font-medium leading-tight text-black/80 dark:text-white/80">
+						{getIdentifierDisplayTitle(link, t)}
+					</div>
+					<div className="relative min-w-0 overflow-hidden">
+						<a
+							href={link.url}
+							target="_blank"
+							rel="noopener noreferrer"
+							className="block overflow-hidden whitespace-nowrap pr-5 text-xs leading-tight text-link_light transition-colors hover:underline dark:text-link"
+						>
+							{link.value}
+						</a>
+						<div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white via-white/80 to-transparent dark:from-card dark:via-card/80" />
+					</div>
+				</div>
+				<div className="flex shrink-0 items-center">
+					<Tooltip content={t("copy")} placement="top">
+						<CopyButton
+							textToCopy={link.value}
+							ariaLabel={`${t("copy")} ${getIdentifierDisplayTitle(link, t)}`}
+							className="size-8 min-w-8 text-black/60 hover:text-accent dark:text-white/60"
+						/>
+					</Tooltip>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+function ItemIdentifiers({ item }: { item: Item | undefined }) {
+	const t = useTranslations("ui");
+	const links = useMemo(() => {
+		if (!item) return [];
+
+		const doiLinks = buildDoiDisplayLinks({
+			DOI: item.DOI,
+			extra: item.extra,
+			attachmentsData: item.attachmentsData?.map(toDoiDisplayAttachment),
+		}).links;
+
+		const canonicalLink = buildCanonicalWebsiteLink(item);
+		return canonicalLink ? [...doiLinks, canonicalLink] : doiLinks;
+	}, [item]);
+
+	if (!links.length) return null;
+
+	return (
+		<SidebarCard title={t("itemIdentifiersTitle")} count={links.length}>
+			{links.map((link) => (
+				<ItemIdentifierRow
+					key={`${link.provider}-${link.kind}-${link.value}`}
+					link={link}
+				/>
+			))}
+		</SidebarCard>
 	);
 }
 
@@ -1275,6 +1490,7 @@ export default function ItemPage({
 								{FUNDING_PARTNER && (
 									<ItemResearchPartner item={item} />
 								)}
+								<ItemIdentifiers item={item} />
 								<ItemDetails item={item} />
 								<ItemTechnical item={item} />
 							</div>

@@ -6,7 +6,13 @@ FROM node:22-bookworm-slim AS base
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 
-FROM base AS deps
+FROM base AS npm-deps-base
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends git \
+	&& rm -rf /var/lib/apt/lists/*
+
+FROM npm-deps-base AS deps
 
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \
@@ -118,7 +124,7 @@ COPY . .
 RUN --mount=type=cache,target=/app/.next/cache \
 	npm run build
 
-FROM base AS prod-deps
+FROM npm-deps-base AS prod-deps
 
 COPY package.json package-lock.json ./
 RUN --mount=type=cache,target=/root/.npm \

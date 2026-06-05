@@ -6,6 +6,10 @@ const withNextIntl = createNextIntlPlugin();
 
 const nextConfig = {
 	cacheComponents: true,
+	env: {
+		NEXT_PUBLIC_CANONICAL_BASE_URL:
+			process.env.NEXT_PUBLIC_CANONICAL_BASE_URL ?? process.env.BASE_URL ?? "",
+	},
 	experimental: {
 		staleTimes: {
 			dynamic: 30,
