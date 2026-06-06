@@ -1,4 +1,6 @@
-import { drizzle } from 'drizzle-orm/node-postgres';
+import { attachDatabasePool } from '@vercel/functions';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { Pool } from 'pg';
 
 import * as itemTable from "./schema/tables/item";
 import * as collectionTable from "./schema/tables/collection";
@@ -27,8 +29,6 @@ import * as embeddingsTable from './schema/tables/embeddings';
 
 import * as statusTable from './schema/tables/status';
 
-import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-
 export const schema = {
     ...itemTable,
     ...collectionTable,
@@ -54,21 +54,40 @@ export const schema = {
     ...embeddingsTable,
 }
 
-type DBType = PostgresJsDatabase<typeof schema>;
+type DBType = NodePgDatabase<typeof schema>;
 
-// Fix for "sorry, too many clients already"
 declare global {
-    // eslint-disable-next-line no-var -- only var works here
     var db: DBType | undefined;
+    var dbPool: Pool | undefined;
 }
 
-let db: DBType;
+function readPoolMax() {
+    const rawValue = process.env.POSTGRES_POOL_MAX;
+    if (!rawValue) return 3;
 
-if (process.env.NODE_ENV === "production") {
-    db = drizzle(process.env.DATABASE_URL_POST!, { schema });
-} else {
-    if (!global.db) global.db = drizzle(process.env.DATABASE_URL_POST!, { schema });
-    db = global.db;
+    const parsedValue = Number(rawValue);
+    if (!Number.isInteger(parsedValue) || parsedValue < 1) return 3;
+
+    return parsedValue;
 }
+
+function createPool() {
+    const pool = new Pool({
+        connectionString: process.env.DATABASE_URL_POST!,
+        max: readPoolMax(),
+        idleTimeoutMillis: 5_000,
+        connectionTimeoutMillis: 5_000,
+    });
+
+    attachDatabasePool(pool);
+
+    return pool;
+}
+
+const pool = global.dbPool ?? createPool();
+global.dbPool = pool;
+
+const db = global.db ?? drizzle(pool, { schema });
+global.db = db;
 
 export { db };

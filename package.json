@@ -1,6 +1,6 @@
 {
 	"name": "test",
-	"version": "0.8.4",
+	"version": "0.8.5",
 	"private": true,
 	"scripts": {
 		"dev": "next dev --turbopack",
@@ -30,6 +30,7 @@
 		"@tanstack/react-form": "^1.6.3",
 		"@uidotdev/usehooks": "^2.4.1",
 		"@vercel/analytics": "^1.4.1",
+		"@vercel/functions": "^3.6.2",
 		"ai": "^6.0.38",
 		"babel-plugin-react-compiler": "^1.0.0",
 		"balanced-match": "^3.0.1",

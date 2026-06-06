@@ -491,7 +491,7 @@ export default function Footer() {
 					</DialogModal>
 				)}
 				<div className="absolute bottom-0 left-0 p-2 z-50 text-xs text-black/60 dark:text-white/60">
-					0.8.4
+					0.8.5
 				</div>
 			</footer>
 		)
