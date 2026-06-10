@@ -25,6 +25,33 @@ interface LinkItemProps {
 	styleVariant: NavbarStyleVariant;
 }
 
+
+function getActiveHrefPath(href: string) {
+	if (href.startsWith("http://") || href.startsWith("https://")) {
+		try {
+			return new URL(href).pathname || "/";
+		} catch {
+			return href;
+		}
+	}
+
+	const queryIndex = href.indexOf("?");
+	const hashIndex = href.indexOf("#");
+	const endIndex =
+		queryIndex === -1
+			? hashIndex
+			: hashIndex === -1
+				? queryIndex
+				: Math.min(queryIndex, hashIndex);
+
+	return endIndex === -1 ? href : href.slice(0, endIndex);
+}
+
+function isActiveHref(pathname: string, href: string) {
+	const activeHrefPath = getActiveHrefPath(href);
+
+	return `${pathname}/`.includes(`${activeHrefPath}/`);
+}
 function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 	const t = useTranslations("nav");
 	const tUI = useTranslations("ui");
@@ -38,7 +65,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 		onOpen();
 	}, [timeoutRef, onOpen]);
 
-	const isActive = (pathname + "/").includes(link.href + "/");
+	const isActive = isActiveHref(pathname, link.href);
 	const IconComponent = link.icon
 		? NAVBAR_ICONS[link.icon as keyof typeof NAVBAR_ICONS]
 		: null;
