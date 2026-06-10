@@ -1,4 +1,4 @@
-import type { LinkObject, ExternalLinks, CompanyFooter } from "@/db/schema/tables/status";
+import type { CompanyFooter, ExternalLinks, FooterLinkSection, LinkObject } from "@/db/schema/tables/status";
 import { cacheLife, cacheTag } from "next/cache";
 
 type ExternalNavResponse = {
@@ -14,13 +14,36 @@ type ExternalNavResponse = {
 		privacyPolicy?: string;
 		termsOfService?: string;
 	};
+	policyLinks?: {
+		label: string;
+		url: string;
+	}[];
 };
 
-type ExternalNavResult = {
+export type ExternalNavResult = {
 	links: LinkObject[];
+	footerSections: FooterLinkSection[];
 	externalLinks: ExternalLinks;
 	companyFooter: Partial<CompanyFooter>;
 };
+
+function mapPolicyLinks(policyLinks: ExternalNavResponse["policyLinks"]): Partial<CompanyFooter> {
+	const companyFooter: Partial<CompanyFooter> = {};
+
+	for (const link of policyLinks ?? []) {
+		const label = link.label.toLowerCase();
+
+		if (label.includes("privacy")) {
+			companyFooter.privacyPolicy = link.url;
+		} else if (label.includes("terms")) {
+			companyFooter.termsOfService = link.url;
+		} else if (label.includes("cookie")) {
+			companyFooter.cookiePolicy = link.url;
+		}
+	}
+
+	return companyFooter;
+}
 
 export async function fetchExternalNav(): Promise<ExternalNavResult | null> {
 	'use cache'
@@ -40,19 +63,22 @@ export async function fetchExternalNav(): Promise<ExternalNavResult | null> {
 
 		const data: ExternalNavResponse = await res.json();
 
-		const footerLinks: LinkObject[] = data.footerSections.flatMap((section) =>
-			section.links.map((link) => ({
+		const footerSections: FooterLinkSection[] = data.footerSections.map((section) => ({
+			title: section.title,
+			links: section.links.map((link) => ({
 				label: link.label,
 				href: link.href,
-				section: section.title,
-				navExclude: true,
 			})),
-		);
+		}));
 
 		return {
-			links: [...data.links, ...footerLinks],
+			links: data.links,
+			footerSections,
 			externalLinks: data.externalLinks,
-			companyFooter: data.companyFooter,
+			companyFooter: {
+				...mapPolicyLinks(data.policyLinks),
+				...data.companyFooter,
+			},
 		};
 	} catch (error) {
 		console.warn("[external-nav] Error fetching external nav:", error);

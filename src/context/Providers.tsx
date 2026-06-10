@@ -15,7 +15,7 @@ import {
 	useState,
 	Suspense,
 } from "react";
-import { InferSelectModel } from "drizzle-orm";
+import type { InferSelectModel } from "drizzle-orm";
 import { useLocalStorage } from "usehooks-ts";
 import { useTranslations } from "next-intl";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
@@ -29,6 +29,7 @@ import {
 } from "@/components/features/analytics/AnalyticsConsentProvider";
 import GoogleAnalyticsManager from "@/components/features/analytics/GoogleAnalyticsManager";
 import { status as statusTable } from "@/db/schema/tables/status";
+import type { FooterLinkSection } from "@/db/schema/tables/status";
 import { toast as toastComponent } from "@/components/layout/Toast";
 import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 import { trackPageView } from "@/lib/analytics";
@@ -38,8 +39,12 @@ import {
 	isFeatureFlagEnabled,
 } from "@/lib/feature-flags";
 
+
+type RuntimeStatus = InferSelectModel<typeof statusTable> & {
+	footerSections?: FooterLinkSection[];
+};
 export type CacheContextType = {
-	status: InferSelectModel<typeof statusTable>;
+	status: RuntimeStatus;
 	cache: any;
 	setCache: (cache: any) => void;
 	itemsCache: any;
@@ -107,7 +112,7 @@ function CacheProvider({
 	gapmaps,
 }: {
 	children: ReactNode;
-	status: InferSelectModel<typeof statusTable>;
+	status: RuntimeStatus;
 	gapmaps: GapMap[];
 }) {
 	const [cache, setCache] = useState({});
@@ -228,7 +233,7 @@ export default function Providers({
 }: {
 	children: ReactNode;
 	googleAnalyticsId: string;
-	status: InferSelectModel<typeof statusTable>;
+	status: RuntimeStatus;
 	initialFeatureFlags: RuntimeFeatureFlags;
 	gapmaps: GapMap[];
 }) {

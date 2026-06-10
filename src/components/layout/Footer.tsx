@@ -23,8 +23,8 @@ import GenericHeader from "@/components/features/modals/GenericHeader";
 import { ModalBody, ModalContent, ModalFooter } from "@nextui-org/react";
 import { Logo as BannerLogo } from "./navbar";
 import { useRouter } from "@/i18n/routing";
-import { LinkObject } from "@/db/schema/tables/status";
-import { FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
+import type { FooterLinkSection, LinkObject } from "@/db/schema/tables/status";
+import { FaGithub, FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
 import { RiBlueskyFill } from "react-icons/ri";
 
 function groupLinksBySection(
@@ -43,6 +43,30 @@ function groupLinksBySection(
 		(a, b) =>
 			links.findIndex((l) => l.section === a[0]) -
 			links.findIndex((l) => l.section === b[0]),
+	);
+}
+
+function getFooterLinkSections(
+	footerSections: FooterLinkSection[] | undefined,
+	fallbackLinks: LinkObject[],
+	defaultSection: string,
+): [string, LinkObject[]][] {
+	if (footerSections?.length) {
+		return footerSections.map((section) => [
+			section.title,
+			section.links.filter((link) => !link.footerExclude),
+		]);
+	}
+
+	return groupLinksBySection(fallbackLinks, defaultSection);
+}
+
+function isContactLink(link: LinkObject) {
+	return (
+		link.id === "contact" ||
+		link.label === "contactUs" ||
+		link.label === "Contact Us" ||
+		link.href.includes("/contact-us")
 	);
 }
 
@@ -134,6 +158,11 @@ function SocialWrapper({
 }
 
 const socials = {
+	github: (
+		<SocialWrapper className="bg-black dark:bg-white">
+			<FaGithub className="fill-white dark:fill-black" />
+		</SocialWrapper>
+	),
 	twitter: (
 		<SocialWrapper className="bg-[rgb(29,161,242)]">
 			<FaTwitter className="fill-white" />
@@ -170,15 +199,21 @@ export default function Footer() {
 	const footer = status.companyFooter || {};
 	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
 	const isMapPage = pathname.includes("/map");
-	const socialLinks = Object.entries(status.externalLinks || {});
+	const socialLinks = Object.entries(status.externalLinks || {}).filter(
+		([key]) => socials[key as keyof typeof socials],
+	);
 	const onPolicyPage = isPolicyPage(pathname);
 	const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
 
-	const contactData = links.find((link) => link.id === "contact");
+	const contactData =
+		links.find((link) => link.id === "contact") ?? links.find(isContactLink);
 
 	if (companyName === "EdTech Hub") {
-		const footerItemsSorted = groupLinksBySection(links, "Site");
-
+		const footerItemsSorted = getFooterLinkSections(
+			status.footerSections,
+			links,
+			"Site",
+		);
 		return (
 			!isMapPage && (
 				<footer
@@ -324,7 +359,11 @@ export default function Footer() {
 							)}
 						</div>
 					</div>
-					{groupLinksBySection(links, t("quickLinks")).map(
+					{getFooterLinkSections(
+						status.footerSections,
+						links,
+						t("quickLinks"),
+					).map(
 						([section, sectionLinks]) => (
 							<FooterFieldColumn
 								key={section}

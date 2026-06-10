@@ -46,6 +46,7 @@ async function BaseContent({
 		? {
 				...status,
 				links: externalNav.links,
+				footerSections: externalNav.footerSections,
 				externalLinks: externalNav.externalLinks,
 				companyFooter: {
 					...status.companyFooter,

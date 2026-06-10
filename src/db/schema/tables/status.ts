@@ -10,11 +10,16 @@ export type LinkObject = {
 	navExclude?: boolean;
 	footerExclude?: boolean;
 	help?: any;
-    id?: string;
+	id?: string;
 	section?: string;
 };
 
 export type LinksList = Record<string, LinkObject[]>;
+
+export type FooterLinkSection = {
+	title: string;
+	links: LinkObject[];
+};
 
 export type CompanyFooter = {
 	cookiePolicy?: string;
