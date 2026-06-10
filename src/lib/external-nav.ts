@@ -27,18 +27,59 @@ export type ExternalNavResult = {
 	companyFooter: Partial<CompanyFooter>;
 };
 
-function mapPolicyLinks(policyLinks: ExternalNavResponse["policyLinks"]): Partial<CompanyFooter> {
+function normalizeExternalHref(href: string, sourceOrigin: string) {
+	if (!href) return href;
+
+	try {
+		return new URL(href, sourceOrigin).href;
+	} catch {
+		return href;
+	}
+}
+
+function normalizeLinkObject(link: LinkObject, sourceOrigin: string): LinkObject {
+	return {
+		...link,
+		href: normalizeExternalHref(link.href, sourceOrigin),
+		dropdown: link.dropdown?.map((child) => normalizeLinkObject(child, sourceOrigin)),
+	};
+}
+
+function normalizeCompanyFooter(
+	companyFooter: ExternalNavResponse["companyFooter"],
+	sourceOrigin: string,
+) {
+	const normalizedCompanyFooter: Partial<CompanyFooter> = { ...companyFooter };
+
+	if (companyFooter.privacyPolicy) {
+		normalizedCompanyFooter.privacyPolicy = normalizeExternalHref(
+			companyFooter.privacyPolicy,
+			sourceOrigin,
+		);
+	}
+
+	if (companyFooter.termsOfService) {
+		normalizedCompanyFooter.termsOfService = normalizeExternalHref(
+			companyFooter.termsOfService,
+			sourceOrigin,
+		);
+	}
+
+	return normalizedCompanyFooter;
+}
+
+function mapPolicyLinks(policyLinks: ExternalNavResponse["policyLinks"], sourceOrigin: string): Partial<CompanyFooter> {
 	const companyFooter: Partial<CompanyFooter> = {};
 
 	for (const link of policyLinks ?? []) {
 		const label = link.label.toLowerCase();
 
 		if (label.includes("privacy")) {
-			companyFooter.privacyPolicy = link.url;
+			companyFooter.privacyPolicy = normalizeExternalHref(link.url, sourceOrigin);
 		} else if (label.includes("terms")) {
-			companyFooter.termsOfService = link.url;
+			companyFooter.termsOfService = normalizeExternalHref(link.url, sourceOrigin);
 		} else if (label.includes("cookie")) {
-			companyFooter.cookiePolicy = link.url;
+			companyFooter.cookiePolicy = normalizeExternalHref(link.url, sourceOrigin);
 		}
 	}
 
@@ -54,6 +95,7 @@ export async function fetchExternalNav(): Promise<ExternalNavResult | null> {
 	if (!url) return null;
 
 	try {
+		const sourceOrigin = new URL(url).origin;
 		const res = await fetch(url);
 
 		if (!res.ok) {
@@ -67,17 +109,17 @@ export async function fetchExternalNav(): Promise<ExternalNavResult | null> {
 			title: section.title,
 			links: section.links.map((link) => ({
 				label: link.label,
-				href: link.href,
+				href: normalizeExternalHref(link.href, sourceOrigin),
 			})),
 		}));
 
 		return {
-			links: data.links,
+			links: data.links.map((link) => normalizeLinkObject(link, sourceOrigin)),
 			footerSections,
 			externalLinks: data.externalLinks,
 			companyFooter: {
-				...mapPolicyLinks(data.policyLinks),
-				...data.companyFooter,
+				...mapPolicyLinks(data.policyLinks, sourceOrigin),
+				...normalizeCompanyFooter(data.companyFooter, sourceOrigin),
 			},
 		};
 	} catch (error) {
