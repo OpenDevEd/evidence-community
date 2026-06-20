@@ -24,6 +24,7 @@ import { CardBody, useDisclosure } from "@nextui-org/react";
 import { downloadItems } from "@/lib/actions";
 import { routing, usePathname, useRouter } from "@/i18n/routing";
 import { ItemsContext } from "../items/ItemsList";
+import { useFiltersContext } from "@/context/FiltersProvider";
 import { countryFacetOptions } from "@/constants/misc";
 import Image from "next/image";
 import { getCountryInfo } from "@/lib/utils";
@@ -72,20 +73,41 @@ function Chip({
 				debounceCanClick();
 			}}
 		>
+			{group && (
+				<span
+					className={twMerge(
+						"text-white dark:text-white/40 font-medium text-xs leading-3 dark:bg-black/50 bg-black/50 p-1 px-2 rounded-md",
+						classNames.group
+					)}
+				>
+					{group}
+				</span>
+			)}
+			{startContent}
 			<span
 				className={twMerge(
-					"text-white dark:text-white/40 font-medium text-xs leading-3 dark:bg-black/50 bg-black/50 p-1 px-2 rounded-md",
-					classNames.group
+					"block max-w-[16rem] truncate",
+					classNames.title
 				)}
 			>
-				{group}
-			</span>
-			{startContent}
-			<span className={twMerge("truncate text-wrap", classNames.title)}>
 				{title}
 			</span>
 		</Button>
 	);
+}
+
+// Concise label for the publication-year (`range`) chip — e.g. "2015",
+// "2010–2020", "2010+", "–2020".
+function yearChipTitle(range: string): string {
+	const [rawStart, rawEnd] = range.includes("-")
+		? range.split("-")
+		: [range, range];
+	const start = (rawStart || "").trim();
+	const end = (rawEnd || "").trim();
+	if (start && end) return start === end ? start : `${start}–${end}`;
+	if (start) return `${start}+`;
+	if (end) return `–${end}`;
+	return range;
 }
 
 function useFilterChips(
@@ -96,6 +118,7 @@ function useFilterChips(
 		(queryParams.collections?.length || 0) +
 		(queryParams.institution?.length || 0) +
 		(queryParams.author ? 1 : 0) +
+		(queryParams.range ? 1 : 0) +
 		countryFacetOptions.reduce(
 			(acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0),
 			0
@@ -110,8 +133,10 @@ function useFilterChips(
 	};
 }
 
-function FilterChips() {
-	const itemsContext = use(ItemsContext);
+export function FilterChips() {
+	// Reads the shared, app-level filter state so the navbar chips and the
+	// library chips are the exact same resident instance (no remount flash).
+	const itemsContext = useFiltersContext();
 	const t = useTranslations("ui");
 	const { filtersCount, clearButton } = useFilterChips(
 		itemsContext.queryParams,
@@ -125,60 +150,31 @@ function FilterChips() {
 				filtersCount > 0 && "max-h-[32rem] mb-4 opacity-100"
 			)}
 		>
-			<div className="flex-1 flex gap-2 flex-wrap relative">
+			{/* On mobile the chips scroll horizontally inside their own track so a
+			    long chip can't push the whole row (and the clear button) off-screen;
+			    on sm+ they wrap as before. */}
+			<div className="relative flex min-w-0 flex-1 gap-2 overflow-x-auto [&>div]:shrink-0 [scrollbar-width:none] sm:flex-wrap sm:overflow-x-visible [&::-webkit-scrollbar]:hidden">
 				<AnimatePresence initial={false} mode="popLayout">
-					{itemsContext.queryParams.institution.length > 0 &&
-						itemsContext.queryParams.institution.map(
-							(institution) => (
-								<motion.div
-									key={"institution-" + institution}
-									initial={{ opacity: 0, y: 10 }}
-									animate={{ opacity: 1, y: 0 }}
-									exit={{ opacity: 0, y: -10 }}
-									transition={{ duration: 0.2 }}
-								>
-									<Chip
-										key={"institution-" + institution}
-										group={"Institution"}
-										title={institution}
-										divKey={"institution-" + institution}
-										callback={() =>
-											itemsContext.handleInstitutionSelect?.(
-												institution
-											)
-										}
-										classNames={{
-											button: "bg-accent/80 dark:bg-accent/80",
-											title: "text-white dark:text-white",
-										}}
-									/>
-								</motion.div>
-							)
-						)}
-					{itemsContext.queryParams?.author && (
+					{itemsContext.queryParams?.range && (
 						<motion.div
-							key={"author-" + itemsContext.queryParams.author}
+							key={"year-" + itemsContext.queryParams.range}
 							initial={{ opacity: 0, y: 10 }}
 							animate={{ opacity: 1, y: 0 }}
 							exit={{ opacity: 0, y: -10 }}
 							transition={{ duration: 0.2 }}
 						>
 							<Chip
-								key={
-									"author-" + itemsContext.queryParams.author
-								}
-								divKey={
-									"author-" + itemsContext.queryParams.author
-								}
-								group={"Author"}
-								title={itemsContext.queryParams.author}
+								key={"year-" + itemsContext.queryParams.range}
+								divKey={"year-" + itemsContext.queryParams.range}
+								group={t("year")}
+								title={yearChipTitle(
+									itemsContext.queryParams.range
+								)}
 								callback={() =>
-									itemsContext.handleAuthorSelect?.(
-										itemsContext.queryParams.author
-									)
+									itemsContext.handleRangeChange?.(null, null)
 								}
 								classNames={{
-									button: "bg-tertiary dark:bg-tertiary/40",
+									button: "bg-success/80 dark:bg-success/80",
 									title: "text-white dark:text-white",
 								}}
 							/>
@@ -222,7 +218,9 @@ function FilterChips() {
 											)
 										}
 										callback={() =>
-											itemsContext[facet.action](value)
+											(itemsContext as any)[facet.action](
+												value
+											)
 										}
 										classNames={{
 											button: "bg-primary dark:bg-primary/40",
@@ -233,6 +231,34 @@ function FilterChips() {
 							);
 						});
 					})}
+					{itemsContext.queryParams.institution.length > 0 &&
+						itemsContext.queryParams.institution.map(
+							(institution) => (
+								<motion.div
+									key={"institution-" + institution}
+									initial={{ opacity: 0, y: 10 }}
+									animate={{ opacity: 1, y: 0 }}
+									exit={{ opacity: 0, y: -10 }}
+									transition={{ duration: 0.2 }}
+								>
+									<Chip
+										key={"institution-" + institution}
+										group={"Institution"}
+										title={institution}
+										divKey={"institution-" + institution}
+										callback={() =>
+											itemsContext.handleInstitutionSelect?.(
+												institution
+											)
+										}
+										classNames={{
+											button: "bg-accent/80 dark:bg-accent/80",
+											title: "text-white dark:text-white",
+										}}
+									/>
+								</motion.div>
+							)
+						)}
 					{itemsContext.collectionsData &&
 						itemsContext.selectedCollections?.map(
 							(collection: string) => {
@@ -251,7 +277,13 @@ function FilterChips() {
 										<Chip
 											key={"collection-" + collection}
 											group={collectionData?.title}
-											title={collectionData?.name ?? ""}
+											// Fall back to the raw key when the
+											// collection isn't in the loaded tree,
+											// so the chip still reads sensibly.
+											title={
+												collectionData?.name ||
+												collection
+											}
 											divKey={collection}
 											callback={() =>
 												itemsContext.handleCheckboxChange?.(
@@ -263,7 +295,36 @@ function FilterChips() {
 								);
 							}
 						)}
-				</AnimatePresence>
+									{itemsContext.queryParams?.author && (
+						<motion.div
+							key={"author-" + itemsContext.queryParams.author}
+							initial={{ opacity: 0, y: 10 }}
+							animate={{ opacity: 1, y: 0 }}
+							exit={{ opacity: 0, y: -10 }}
+							transition={{ duration: 0.2 }}
+						>
+							<Chip
+								key={
+									"author-" + itemsContext.queryParams.author
+								}
+								divKey={
+									"author-" + itemsContext.queryParams.author
+								}
+								group={"Author"}
+								title={itemsContext.queryParams.author}
+								callback={() =>
+									itemsContext.handleAuthorSelect?.(
+										itemsContext.queryParams.author
+									)
+								}
+								classNames={{
+									button: "bg-tertiary dark:bg-tertiary/40",
+									title: "text-white dark:text-white",
+								}}
+							/>
+						</motion.div>
+					)}
+</AnimatePresence>
 			</div>
 			<AnimatePresence initial={false}>
 				{filtersCount > 0 && (
@@ -272,7 +333,7 @@ function FilterChips() {
 						animate={{ opacity: 1, y: 0 }}
 						exit={{ opacity: 0, y: -10 }}
 						transition={{ duration: 0.2 }}
-						className="w-7 flex justify-end"
+						className="w-7 shrink-0 flex justify-end"
 					>
 						<Button
 							aria-hidden={
@@ -549,7 +610,7 @@ export function removeTrailingEmptyElements(html: string): string {
 }
 
 export function NoteView() {
-	const itemsContext = use(ItemsContext);
+	const itemsContext = useFiltersContext();
 	const selectedCollection = itemsContext.selectedCollections[0];
 	const collectionData = itemsContext.collectionsData?.collections.find(
 		(c) => c.key === selectedCollection

@@ -1,4 +1,5 @@
 import Providers from "@/context/Providers";
+import { FiltersProvider } from "@/context/FiltersProvider";
 import { Montserrat, Ubuntu } from "next/font/google";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/Footer";
@@ -66,6 +67,10 @@ async function BaseContent({
 				initialFeatureFlags={initialFeatureFlags}
 				gapmaps={gapmaps}
 			>
+				{/* Single shared filter state for the whole app — lives above the
+				    navbar AND the page so collections/params stay resident across
+				    navigation (no chip flash, no duplicate fetches). */}
+				<FiltersProvider>
 				<MainWrapper>
 					<nav
 						aria-label={t("skipNavAriaLabel")}
@@ -91,6 +96,7 @@ async function BaseContent({
 					<Footer />
 					<Banner />
 				</MainWrapper>
+				</FiltersProvider>
 			</Providers>
 		</NextIntlClientProvider>
 	);

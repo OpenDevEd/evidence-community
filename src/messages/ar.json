@@ -1,5 +1,6 @@
 {
   "ui": {
+    "noAbstract": "لا يوجد ملخص",
     "return": "عودة",
     "readDocument": "قراءة المستند",
     "downloadRecord": "تحميل هذا السجل",

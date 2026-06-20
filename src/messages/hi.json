@@ -1,5 +1,6 @@
 {
   "ui": {
+    "noAbstract": "कोई सारांश नहीं",
     "return": "वापस जाएं",
     "readDocument": "दस्तावेज़ पढ़ें",
     "downloadRecord": "यह रिकॉर्ड डाउनलोड करें",

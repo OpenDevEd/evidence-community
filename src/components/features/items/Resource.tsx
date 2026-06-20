@@ -30,8 +30,8 @@ import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
-import { serializeSearchParams } from "@/lib/searchParams";
 import { useQueryState } from "nuqs";
+import { useResourceHref } from "@/hooks/useResourceHref";
 import { COMING_SOON_TAG, INTERNAL_TAG } from "@/constants/items";
 import { hasTag } from "@/lib/tags";
 import PrefetchLink from "../PrefetchLink";
@@ -138,6 +138,7 @@ function FixURL(url: string | null) {
 
 function CitationCounts({ itemData }: { itemData: Item | ListItem | undefined }) {
 	const t = useTranslations("ui");
+	const resourceHref = useResourceHref();
 	const relations = itemData?.relations as RelationsType;
 	const isOpenAlex = itemData?.groupExternalId === 1;
 
@@ -158,7 +159,7 @@ function CitationCounts({ itemData }: { itemData: Item | ListItem | undefined })
 					</span>
 				) : (
 					<Link
-						href={`/citation/${itemData?.key}`}
+						href={resourceHref(itemData?.key ?? "", { base: "/citation" })}
 						className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
 					>
 						<BsQuote className="size-3.5" />
@@ -389,16 +390,20 @@ export default function Resource({
 	);
 	const gapMapHref = matchedGapMaps[0]?.href ?? null;
 
-	const itemHref = `/lib/${finalItemData?.key ?? ""}`;
+	const resourceHref = useResourceHref();
 
-	const itemTargetHref = serializeSearchParams(itemHref, {
-		referrer:
-			referrer ??
-			"/" +
-				(currentPath.startsWith("/lib")
-					? "lib"
-					: currentPath.split("/").slice(1).join("/")),
-	});
+	const itemTargetHref = finalItemData?.key
+		? resourceHref(finalItemData.key, {
+				set: {
+					referrer:
+						referrer ??
+						"/" +
+							(currentPath.startsWith("/lib")
+								? "lib"
+								: currentPath.split("/").slice(1).join("/")),
+				},
+			})
+		: "";
 
 	return (
 		<ResourceWrapper

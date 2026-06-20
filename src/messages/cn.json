@@ -1,5 +1,6 @@
 {
   "ui": {
+    "noAbstract": "无摘要",
     "return": "返回",
     "readDocument": "阅读文档",
     "downloadRecord": "下载此记录",

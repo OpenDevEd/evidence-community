@@ -4,6 +4,7 @@ import { Item } from "@/app/api/item/types";
 import { Button } from "@/components/nextui/Button";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Link, usePathname } from "@/i18n/routing";
+import { useResourceHref } from "@/hooks/useResourceHref";
 import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useCallback } from "react";
@@ -96,6 +97,7 @@ export default function ItemHeader({
 
 	const pathname = usePathname();
 	const isCitationPage = pathname.includes(`/citation/${item?.key}`);
+	const resourceHref = useResourceHref();
 
 	return (
 		<div className="w-full flex items-center gap-4 flex-wrap">
@@ -173,7 +175,9 @@ export default function ItemHeader({
 							) : (
 								<Button
 									as={Link}
-									href={isCitationPage ? `/lib/${item?.key}` : `/citation/${item?.key}`}
+									href={resourceHref(item?.key ?? "", {
+										base: isCitationPage ? "/lib" : "/citation",
+									})}
 									size="sm"
 									color={isCitationPage ? "accent" : "secondary"}
 									startContent={<BsQuote className="size-4" />}

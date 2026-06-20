@@ -1,5 +1,6 @@
 {
   "ui": {
+    "noAbstract": "Kein Abstract",
     "return": "Zurück",
     "readDocument": "Dokument lesen",
     "downloadRecord": "Diesen Eintrag herunterladen",

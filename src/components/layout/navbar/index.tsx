@@ -12,6 +12,7 @@ import { FeatureFlagsContext } from "@/context/Providers";
 
 import { Logo } from "./Logo";
 import NavLinks from "./NavLinks";
+import NavbarSearch from "./NavbarSearch";
 import LoginModal from "./LoginModal";
 import MobileMenu from "./MobileMenu";
 import ActionsDropdown from "./ActionsDropdown";
@@ -21,6 +22,7 @@ import {
 	getEnabledElements,
 	getElementsByPlacement,
 } from "@/config/navbar.config";
+import { isFeatureFlagEnabled } from "@/lib/feature-flags";
 
 import type {
 	NavbarContext as NavbarContextType,
@@ -43,6 +45,16 @@ export default function Navbar() {
 	} = useDisclosure();
 
 	const isMapPage = pathname.includes("/map");
+
+	// The navbar search routes to the library listing, so hide it on pages that
+	// already own a search bar (the listing, the map, and a user's profile).
+	const isSearchOwningPath =
+		pathname === "/lib" ||
+		pathname.startsWith("/map") ||
+		pathname.startsWith("/profile");
+	const showNavbarSearch =
+		isFeatureFlagEnabled(featureFlags ?? {}, "navbar-search") &&
+		!isSearchOwningPath;
 
 	// Get enabled elements based on feature flags and session
 	const enabledElements = getEnabledElements(
@@ -83,6 +95,7 @@ export default function Navbar() {
 	};
 
 	return (
+		<>
 		<header
 			className={twMerge(
 				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-[transform,border-radius] origin-top",
@@ -97,7 +110,12 @@ export default function Navbar() {
 				className={twMerge(
 					"xl:h-[6.5rem] h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10",
 					styleVariant === "wide" &&
-						"bg-transparent max-w-[96rem] mx-auto xl:px-14"
+						"bg-transparent max-w-[96rem] mx-auto xl:px-14",
+					// When the search bar is docked beneath the navbar (non-wide
+					// style), square the bottom so the two read as one unit.
+					styleVariant !== "wide" &&
+						showNavbarSearch &&
+						"xl:rounded-b-none"
 				)}
 			>
 				<Logo />
@@ -175,6 +193,18 @@ export default function Navbar() {
 				/>
 			</div>
 		</header>
+
+		{/* Secondary search bar — rendered on the page background (outside the
+		    navbar container) so it reads as a separate panel rather than sharing
+		    the navbar's surface, especially in the wide style variant where the
+		    header itself is a full-bleed colored band. Aligned to the navbar's
+		    content width. */}
+		{showNavbarSearch && (
+			<div className="w-full max-w-[96rem] px-0 xl:px-14">
+				<NavbarSearch />
+			</div>
+		)}
+		</>
 	);
 }
 

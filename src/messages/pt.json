@@ -1,5 +1,6 @@
 {
   "ui": {
+    "noAbstract": "Sem resumo",
     "return": "Voltar",
     "readDocument": "Ler Documento",
     "downloadRecord": "Baixar Este Registro",

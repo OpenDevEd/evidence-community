@@ -1,5 +1,6 @@
 {
   "ui": {
+    "noAbstract": "Aucun résumé",
     "return": "Retour",
     "readDocument": "Lire le document",
     "downloadRecord": "Télécharger cet enregistrement",

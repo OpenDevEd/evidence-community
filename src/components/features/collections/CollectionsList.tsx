@@ -8,8 +8,8 @@ import {
 	Listbox,
 	ListboxItem,
 } from "@nextui-org/react";
-import { Skeleton } from "../../nextui/Skeleton";
 import { twMerge } from "tailwind-merge";
+import { Skeleton } from "../../nextui/Skeleton";
 import CollectionCategory from "./CollectionCategory";
 import {
 	Collection,
@@ -836,7 +836,7 @@ export default function CollectionsList({
 						{customFilter}
 					</div>
 				)}
-				<section className="w-full bg-black/[4%] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20">
+				<section className="w-full bg-[#E8E6E1] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20">
 					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
 						<span>{t("publicationYear")}</span>
 						<div className="flex gap-4 items-center flex-1 justify-end">

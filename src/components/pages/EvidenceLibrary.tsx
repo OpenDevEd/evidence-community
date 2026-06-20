@@ -1,6 +1,7 @@
 "use client";
 import { Button } from "@/components/nextui/Button";
 import CollectionsList from "@/components/features/collections/CollectionsList";
+import ExploreModal from "@/components/features/collections/ExploreModal";
 import {
 	IoChatboxOutline,
 	IoChatbubblesOutline,
@@ -48,6 +49,7 @@ import FullScreenModal from "../nextui/FullScreenModal";
 import GenericHeader from "../features/modals/GenericHeader";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList, { ItemsContext } from "../features/items/ItemsList";
+import { SearchBar } from "@/components/features/SearchBar";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import ChatModal, { ChatMode } from "../features/modals/ChatModal";
 import ModelSelector from "../features/ai/ModelSelector";
@@ -89,68 +91,9 @@ const genericSelectClassNames = {
 	label: "hidden",
 };
 
-export function SearchBar({
-	handleSearchChange,
-	search,
-	classNames,
-	endContent,
-}: {
-	handleSearchChange: (search: string) => void;
-	search: string;
-	classNames?: PropsOf<typeof Input>["classNames"];
-	endContent?: ReactNode;
-}) {
-	const [localValue, setLocalValue] = useState(search);
-	const [debouncedSearch, debounceRef] = useDebounce(handleSearchChange, 300);
-	const t = useTranslations("ui");
-	const lastDebouncedRef = useRef(search);
-
-	// Only sync when the URL param changes externally (back button, programmatic reset)
-	// Skip when the change came from our own debounced update
-	useEffect(() => {
-		if (search !== lastDebouncedRef.current) {
-			setLocalValue(search);
-		}
-		lastDebouncedRef.current = search;
-	}, [search]);
-
-	return (
-		<Input
-			autoCorrect="off"
-			value={localValue}
-			onChange={(e) => {
-				const value = e.target.value;
-				lastDebouncedRef.current = value;
-				setLocalValue(value);
-				debouncedSearch(value);
-			}}
-			onClear={() => {
-				if (debounceRef.current) clearTimeout(debounceRef.current);
-				lastDebouncedRef.current = "";
-				setLocalValue("");
-				handleSearchChange("");
-			}}
-			placeholder={t("search")}
-			size={"lg"}
-			classNames={{
-				...classNames,
-				inputWrapper: twMerge(
-					"h-10 lg:h-12 min-h-10 lg:min-h-12",
-					classNames?.inputWrapper,
-				),
-				base: twMerge("col-span-2", classNames?.base),
-			}}
-			isClearable
-			startContent={
-				<IoSearch
-					aria-label={t("searchIconAriaLabel")}
-					className="size-6 fill-current text-black/60 dark:text-white/40"
-				/>
-			}
-			endContent={endContent}
-		/>
-	);
-}
+// SearchBar now lives in "@/components/features/SearchBar".
+// Re-exported here so existing consumers (e.g. Map) can keep importing it from this module.
+export { SearchBar };
 
 function SortComponent({
 	itemsContext,
@@ -340,53 +283,10 @@ function SearchTabContent({
 					>
 						{t("explore")}
 					</Button>
-					<FullScreenModal
-						scrollBehavior="outside"
+					<ExploreModal
 						isOpen={isExploreOpen}
 						onOpenChange={onExploreOpenChange}
-					>
-						<ModalContent>
-							{(onClose: any) => (
-								<>
-									<GenericHeader onClose={onClose}>
-										{t("explore")}
-									</GenericHeader>
-									{!itemsContext.userData && (
-										<CollectionsList
-											data={itemsContext.collectionsData}
-											handleCheckboxChange={
-												itemsContext.handleCheckboxChange
-											}
-											selectedCollections={
-												itemsContext.selectedCollections
-											}
-											hierarchy={itemsContext.hierarchy!}
-											isModal
-											range={
-												itemsContext.queryParams.range
-											}
-											handleRangeChange={
-												itemsContext.handleRangeChange
-											}
-											facetDistribution={itemsContext.facetDistribution}
-											queryParams={
-												itemsContext.queryParams
-											}
-											handleInstitutionSelect={
-												itemsContext.handleInstitutionSelect
-											}
-											handleCountrySelect={
-												itemsContext.handleCountrySelect
-											}
-											handleAuthorCountrySelect={
-												itemsContext.handleAuthorCountrySelect
-											}
-										/>
-									)}
-								</>
-							)}
-						</ModalContent>
-					</FullScreenModal>
+					/>
 				</h1>
 				<div className="flex gap-4 h-10 lg:h-12 flex-1 justify-end">
 					{!itemsContext.userData && (
