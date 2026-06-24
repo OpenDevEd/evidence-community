@@ -23,6 +23,7 @@ import {
 	getElementsByPlacement,
 } from "@/config/navbar.config";
 import { isFeatureFlagEnabled } from "@/lib/feature-flags";
+import { normalizePathname } from "@/lib/path";
 
 import type {
 	NavbarContext as NavbarContextType,
@@ -44,14 +45,15 @@ export default function Navbar() {
 		onClose: onLoginModalClose,
 	} = useDisclosure();
 
-	const isMapPage = pathname.includes("/map");
+	const normalizedPathname = normalizePathname(pathname);
+	const isMapPage = normalizedPathname.includes("/map");
 
 	// The navbar search routes to the library listing, so hide it on pages that
 	// already own a search bar (the listing, the map, and a user's profile).
 	const isSearchOwningPath =
-		pathname === "/lib" ||
-		pathname.startsWith("/map") ||
-		pathname.startsWith("/profile");
+		normalizedPathname === "/lib" ||
+		normalizedPathname.startsWith("/map") ||
+		normalizedPathname.startsWith("/profile");
 	const showNavbarSearch =
 		isFeatureFlagEnabled(featureFlags ?? {}, "navbar-search") &&
 		!isSearchOwningPath;

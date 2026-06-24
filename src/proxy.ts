@@ -6,6 +6,7 @@ import configJSON from "./constants/config.json";
 import { PUBLIC_READ_CACHE_CONTROL } from "./lib/http-cache";
 import meilisearch from "./lib/meilisearch";
 import { getConfiguredSiteOrigin } from "./lib/site-url";
+import { normalizePathname } from "./lib/path";
 
 function handleLegacyScope(
 	request: NextRequest,
@@ -121,7 +122,7 @@ const keyMaps: Record<string, KeyMap> = Object.assign(
 );
 
 function isPublicLibraryPage(pathname: string) {
-	return /(?:^|\/)lib(?:\/[^/]+)?$/.test(pathname);
+	return /(?:^|\/)lib(?:\/[^/]+)?$/.test(normalizePathname(pathname));
 }
 
 function encodeKey(key: string): string {

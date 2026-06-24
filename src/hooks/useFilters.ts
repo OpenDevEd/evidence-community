@@ -18,6 +18,7 @@ import {
 } from "@/lib/collections";
 import { FeatureFlagsContext } from "@/context/Providers";
 import { isFeatureFlagEnabled } from "@/lib/feature-flags";
+import { normalizePathname } from "@/lib/path";
 
 const SWR_OPTIONS = {
 	keepPreviousData: true,
@@ -58,6 +59,7 @@ export function useFilters() {
 	);
 
 	const pathname = usePathname();
+	const normalizedPathname = normalizePathname(pathname);
 	const { featureFlags } = useContext(FeatureFlagsContext);
 
 	// Facets are only meaningful where a filtering surface exists: the library
@@ -65,8 +67,8 @@ export function useFilters() {
 	// is shown. Everywhere else we skip the request so lifting this provider to
 	// the whole app doesn't fan facet queries out across every page.
 	const filterSurfaceEnabled =
-		pathname === "/lib" ||
-		pathname.startsWith("/map") ||
+		normalizedPathname === "/lib" ||
+		normalizedPathname.startsWith("/map") ||
 		isFeatureFlagEnabled(featureFlags ?? {}, "navbar-search");
 
 	const { data: noteData, isLoading: isNoteLoading } =
