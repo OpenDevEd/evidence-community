@@ -2,19 +2,18 @@
 
 import { RelationsType } from "@/types/item";
 import useSWR from "swr";
-import { fetcher, fetcherPOST } from "@/lib/utils";
+import { fetcherPOST } from "@/lib/utils";
 import { AnimatePresence, motion } from "framer-motion";
 import { MdSearchOff } from "react-icons/md";
 import { ListItem } from "@/app/api/item/types";
 import Resource from "../items/Resource";
 import { useTranslations } from "next-intl";
 import { ItemsBatchResponse } from "@/app/api/items/batch/route";
-import { useMemo, useState, ReactNode, useRef } from "react";
+import { useMemo, useState } from "react";
 import { Tabs, Tab } from "@/components/nextui/Tabs";
 import { Pagination } from "@/components/nextui/Pagination";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
-import { useBreakpointBelow } from "@/hooks/useBreakpoint";
 import { Spinner } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 
@@ -147,6 +146,95 @@ function RelationsList({
 	);
 }
 
+type RelationTab = {
+	key: string;
+	label: string;
+	keys: string[];
+	items: ListItem[];
+	isLoading: boolean;
+	count: number;
+	totalPages: number;
+	currentPage: number;
+	onPageChange: (page: number) => void;
+};
+
+function RelationsSelectTabs({
+	tabs,
+	activeTab,
+	onTabChange,
+}: {
+	tabs: RelationTab[];
+	activeTab: string;
+	onTabChange: (key: string) => void;
+}) {
+	return (
+		<Select
+			selectedKeys={activeTab ? [activeTab] : []}
+			onSelectionChange={(keys) => {
+				const selectedKey = Array.from(keys)[0] as string;
+				if (selectedKey) onTabChange(selectedKey);
+			}}
+			aria-label="Relations selector"
+			classNames={{
+				base: "w-full max-w-full",
+				trigger: "w-full",
+				mainWrapper: "w-full",
+				value: "flex items-center gap-2 text-black/80 dark:text-white/60 px-2",
+				selectorIcon: "!size-6 text-black/60 dark:text-white/60",
+			}}
+			renderValue={(items) => {
+				const selected = items[0];
+				const tab = tabs.find((t) => t.key === selected?.key) || tabs[0];
+				return (
+					<div className="flex items-center gap-2">
+						<span>{tab.label}</span>
+						<CountBadge count={tab.count} isLoading={tab.isLoading} />
+					</div>
+				);
+			}}
+		>
+			{tabs.map((tab) => (
+				<SelectItem key={tab.key} value={tab.key} textValue={`${tab.label} (${tab.count})`}>
+					<div className="flex items-center justify-between w-full">
+						<span>{tab.label}</span>
+						<CountBadge count={tab.count} isLoading={tab.isLoading} className="ml-2" />
+					</div>
+				</SelectItem>
+			))}
+		</Select>
+	);
+}
+
+function RelationsDesktopTabs({
+	tabs,
+	activeTab,
+	onTabChange,
+}: {
+	tabs: RelationTab[];
+	activeTab: string;
+	onTabChange: (key: string) => void;
+}) {
+	return (
+		<Tabs
+			selectedKey={activeTab}
+			onSelectionChange={(key) => onTabChange(key as string)}
+			aria-label="Relations tabs"
+		>
+			{tabs.map((tab) => (
+				<Tab
+					key={tab.key}
+					title={
+						<div className="flex items-center gap-2">
+							<span>{tab.label}</span>
+							<CountBadge count={tab.count} isLoading={tab.isLoading} />
+						</div>
+					}
+				/>
+			))}
+		</Tabs>
+	);
+}
+
 export default function Relations({
 	value,
 	selectedTab,
@@ -161,7 +249,6 @@ export default function Relations({
 	showContentOnly?: boolean;
 }) {
 	const t = useTranslations("ui");
-	const isMobile = useBreakpointBelow("md");
 	const [internalSelectedTab, setInternalSelectedTab] = useState("general");
 	const activeTab = selectedTab ?? internalSelectedTab;
 	const handleTabChange = onTabChange ?? setInternalSelectedTab;
@@ -233,7 +320,7 @@ export default function Relations({
 	const citesItems = citesData?.items ?? [];
 	const citedByItems = citedByData?.items ?? [];
 
-	const tabs = [
+	const tabs: RelationTab[] = [
 		{
 			key: "general",
 			label: t("relatedResources"),
@@ -270,68 +357,22 @@ export default function Relations({
 	];
 
 	if (showTabsOnly) {
-		if (isMobile) {
-			const selectedTabData = tabs.find((tab) => tab.key === activeTab) || tabs[0];
-			
-			return (
-				<div id="relations-tabs" className="scroll-mt-24">
-					<Select
-						selectedKeys={activeTab ? [activeTab] : []}
-						onSelectionChange={(keys) => {
-							const selectedKey = Array.from(keys)[0] as string;
-							if (selectedKey) handleTabChange(selectedKey);
-						}}
-						aria-label="Relations selector"
-						classNames={{
-							base: "w-full max-w-full",
-							trigger: "w-full",
-							mainWrapper: "w-full",
-							value: "flex items-center gap-2 text-black/80 dark:text-white/60 px-2",
-							selectorIcon: "!size-6 text-black/60 dark:text-white/60",
-						}}
-						renderValue={(items) => {
-							const selected = items[0];
-							const tab = tabs.find((t) => t.key === selected?.key) || tabs[0];
-							return (
-								<div className="flex items-center gap-2">
-									<span>{tab.label}</span>
-									<CountBadge count={tab.count} isLoading={tab.isLoading} />
-								</div>
-							);
-						}}
-					>
-						{tabs.map((tab) => (
-							<SelectItem key={tab.key} value={tab.key} textValue={`${tab.label} (${tab.count})`}>
-								<div className="flex items-center justify-between w-full">
-									<span>{tab.label}</span>
-									<CountBadge count={tab.count} isLoading={tab.isLoading} className="ml-2" />
-								</div>
-							</SelectItem>
-						))}
-					</Select>
-				</div>
-			);
-		}
-		
 		return (
-			<div id="relations-tabs" className="scroll-mt-6">
-				<Tabs
-					selectedKey={activeTab}
-					onSelectionChange={(key) => handleTabChange(key as string)}
-					aria-label="Relations tabs"
-				>
-					{tabs.map((tab) => (
-						<Tab
-							key={tab.key}
-							title={
-								<div className="flex items-center gap-2">
-									<span>{tab.label}</span>
-									<CountBadge count={tab.count} isLoading={tab.isLoading} />
-								</div>
-							}
-						/>
-					))}
-				</Tabs>
+			<div id="relations-tabs" className="scroll-mt-24 md:scroll-mt-6">
+				<div className="md:hidden">
+					<RelationsSelectTabs
+						tabs={tabs}
+						activeTab={activeTab}
+						onTabChange={handleTabChange}
+					/>
+				</div>
+				<div className="hidden md:block">
+					<RelationsDesktopTabs
+						tabs={tabs}
+						activeTab={activeTab}
+						onTabChange={handleTabChange}
+					/>
+				</div>
 			</div>
 		);
 	}

@@ -2,7 +2,6 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -23,7 +22,6 @@ export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const status = useStatus();
 	const { companyName } = parseCompanyName(status?.companyName);
-	const { resolvedTheme: theme } = useTheme();
 	const t = useTranslations("ui");
 	const companyLogoStyle = status.companyLogo || "";
 
@@ -46,9 +44,7 @@ export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 			{["dark", "light"].map((themeToMatch) => (
 				<Image
 					data-component="navbar"
-					suppressHydrationWarning
 					key={themeToMatch}
-					aria-hidden={themeToMatch !== theme}
 					onLoad={() => setIsLoaded(true)}
 					src={
 						themeToMatch === "dark"
@@ -63,7 +59,7 @@ export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 						company: companyName,
 						theme: themeToMatch,
 					})}
-					style={{ ...getDynamicStyles(navbarStyle) }}
+					style={getDynamicStyles(navbarStyle)}
 					height={300}
 					width={300}
 				/>

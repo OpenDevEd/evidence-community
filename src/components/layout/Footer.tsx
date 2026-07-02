@@ -1,7 +1,6 @@
 "use client";
 import Image from "next/image";
 import { Button } from "@/components/nextui/Button";
-import { useTheme } from "next-themes";
 import { useState } from "react";
 import { style } from "@/../tailwind.config";
 import { useTranslations } from "next-intl";
@@ -97,7 +96,6 @@ function Logo() {
 	const [isLoaded, setIsLoaded] = useState(false);
 	const status = useStatus();
 	const { companyName } = parseCompanyName(status?.companyName);
-	const { resolvedTheme: theme } = useTheme();
 	const t = useTranslations("ui");
 	const companyLogoStyle = convertStringFromDatabaseToObject(
 		status.companyLogo || "",
@@ -114,7 +112,6 @@ function Logo() {
 			{["dark", "light"].map((themeToMatch) => (
 				<Image
 					key={themeToMatch}
-					aria-hidden={themeToMatch !== theme}
 					alt={t("logoAlt", {
 						company: companyName,
 						theme: themeToMatch,
@@ -125,13 +122,12 @@ function Logo() {
 							? "dark:hidden"
 							: "hidden dark:block",
 					)}
-					suppressHydrationWarning
 					src={`/logos/${companyName.toLowerCase()}/logo${
 						themeToMatch === "light" ? "_light" : ""
 					}.png`}
 					width={232}
 					height={54}
-					style={{ ...getDynamicStyles(companyLogoStyle) }}
+					style={getDynamicStyles(companyLogoStyle)}
 				/>
 			))}
 		</Skeleton>
@@ -189,7 +185,6 @@ export default function Footer() {
 	const t = useTranslations("footer");
 	const tUI = useTranslations("ui");
 	const tNav = useTranslations("nav");
-	const { resolvedTheme: theme } = useTheme();
 	const { openPreferences, setConsentState } = useAnalyticsConsent();
 	const status = useStatus();
 	const { companyName } = parseCompanyName(status?.companyName);
@@ -463,7 +458,7 @@ export default function Footer() {
 									<Button
 										as={Link}
 										href={contactData?.href || ""}
-										color={theme === "light" ? "accent" : undefined}
+										color="accent"
 										className="px-12"
 									>
 										{contactData?.label
