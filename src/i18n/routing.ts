@@ -11,7 +11,8 @@ export const routing = defineRouting({
   defaultLocale,
   localeDetection,
   localeCookie: false,
-  localePrefix: "as-needed"
+  localePrefix: "as-needed",
+  alternateLinks: false
 });
 
 export const localesNames = {

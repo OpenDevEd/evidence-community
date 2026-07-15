@@ -1,7 +1,10 @@
 import EvidenceLibrary from "@/components/pages/EvidenceLibrary";
-import { Metadata, ResolvingMetadata } from "next";
+import { Metadata } from "next";
 import { buildItemsQuery, defaultParams } from "@/lib/utils";
-import { routing } from "@/i18n/routing";
+import {
+  buildLanguageAlternates,
+  buildLocalizedSiteUrl,
+} from "@/lib/language-alternates";
 import { getSiteOrigin } from "@/lib/site-url";
 import { getItemsPaginationMeta } from "@/lib/search";
 import { cacheLife } from "next/cache";
@@ -16,13 +19,12 @@ export async function libraryMetadata(props: {
   params: Promise<{ locale: string }>;
   searchParams: Promise<URLSearchParams>;
   pathname: string;
-}, parent: ResolvingMetadata): Promise<Metadata> {
+}): Promise<Metadata> {
   const searchParams = await props.searchParams;
   const params = await props.params;
-  const parentResolved = await parent;
-  
+
   const locale = params.locale;
-  
+
   const queryParams = defaultParams(searchParams);
   const builtUrl = buildItemsQuery(queryParams, props.pathname);
 
@@ -33,49 +35,45 @@ export async function libraryMetadata(props: {
 
   const siteOrigin = getSiteOrigin();
   const builtURLObject = new URL(builtUrl, siteOrigin);
-  const currentUrl = new URL((locale === routing.defaultLocale ? "" : `/${locale}`) + builtUrl, siteOrigin);
+  const currentUrl = new URL(buildLocalizedSiteUrl(builtUrl, locale));
   const atomUrl = new URL(builtURLObject.pathname + "/atom.xml?" + builtURLObject.searchParams.toString(), siteOrigin);
 
-  const appendedObject = []
+  let previous: string | null = null;
+  let next: string | null = null;
 
   if (page > 1) {
     const prevUrl = new URL(currentUrl);
     prevUrl.searchParams.set("page", String(page - 1));
-    const stringifiedPrevUrl = prevUrl.toString();
-    appendedObject.push({ rel: "prev", url: stringifiedPrevUrl });
+    previous = prevUrl.toString();
   }
-  
+
   if (page < totalPages) {
     const nextUrl = new URL(currentUrl);
     nextUrl.searchParams.set("page", String(page + 1));
-    const stringifiedNextUrl = nextUrl.toString();
-    appendedObject.push({ rel: "next", url: stringifiedNextUrl });
+    next = nextUrl.toString();
   }
 
   return {
     generator: "new-el",
     alternates: {
+      canonical: currentUrl,
+      languages: buildLanguageAlternates(builtUrl),
       types: {
         "application/atom+xml": atomUrl.toString()
       }
     },
-    icons: {
-      other: [
-        ...(parentResolved.icons?.other ?? []),
-        ...appendedObject,
-      ]
-    }
+    pagination: { previous, next }
   }
 }
 
 export async function generateMetadata(props: {
   params: Promise<{ locale: string }>;
   searchParams: Promise<URLSearchParams>;
-}, parent: ResolvingMetadata): Promise<Metadata> {
+}): Promise<Metadata> {
   return libraryMetadata({
     ...props,
     pathname: "/lib"
-  }, parent);
+  });
 }
 
 export default async function Lib() {

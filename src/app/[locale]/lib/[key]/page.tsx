@@ -1,7 +1,6 @@
 import ItemComponent from "@/components/pages/Item";
 import { getItem } from "@/app/api/item/[key]/route";
 import { db } from "@/db";
-import { routing } from "@/i18n/routing";
 import {
 	getCachedItem,
 	getCachedItemSmall,
@@ -10,6 +9,7 @@ import {
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
 import { cacheLife, cacheTag } from "next/cache";
+import { buildLanguageAlternates } from "@/lib/language-alternates";
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL, getExtraValues, parseCompanyName } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
@@ -103,12 +103,7 @@ export async function generateMetadata(props: {
 		generator: "new-el",
 		alternates: {
 			canonical: buildSiteUrl(`/lib/${item.key}`),
-			languages: routing.locales
-				.filter((locale) => locale !== routing.defaultLocale)
-				.reduce((acc: { [locale: string]: string }, locale) => {
-					acc[locale] = buildSiteUrl(`/${locale}/lib/${item.key}`);
-					return acc;
-				}, {}),
+			languages: buildLanguageAlternates(`/lib/${item.key}`),
 			types: {
 				"application/x-research-info-systems": buildSiteUrl(`/lib/${item.key}/export/ris`),
 				"application/x-bibtex": buildSiteUrl(`/lib/${item.key}/export/bibtex`),

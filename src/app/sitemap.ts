@@ -3,6 +3,10 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { routing } from "@/i18n/routing";
 import { getSitemapPageCount } from "@/lib/sitemap";
+import {
+	buildLanguageAlternates,
+	buildLocalizedSiteUrl,
+} from "@/lib/language-alternates";
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
@@ -13,19 +17,6 @@ import { getGapMaps } from "@/lib/gapmaps";
 // runtime env, not the empty build env. generateSitemaps still runs at build
 // to enumerate shard ids — guarded below.
 export const dynamic = "force-dynamic";
-
-function getLocalizedUrl(pathname: string, locale: string) {
-	const localizedPath =
-		locale === routing.defaultLocale ? pathname : `/${locale}${pathname}`;
-
-	return buildSiteUrl(localizedPath);
-}
-
-function getLanguageAlternates(pathname: string) {
-	return Object.fromEntries(
-		routing.locales.map((locale) => [locale, getLocalizedUrl(pathname, locale)])
-	);
-}
 
 export async function generateSitemaps() {
 	if (!process.env.MEILISEARCH_HOST) {
@@ -81,17 +72,17 @@ export default async function sitemap(props: {
 			]);
 			policyEntries = [
 				{
-					url: getLocalizedUrl("/privacy", routing.defaultLocale),
+					url: buildLocalizedSiteUrl("/privacy", routing.defaultLocale),
 					lastModified: privacyLastModified,
 					alternates: {
-						languages: getLanguageAlternates("/privacy"),
+						languages: buildLanguageAlternates("/privacy"),
 					},
 				},
 				{
-					url: getLocalizedUrl("/cookie-policy", routing.defaultLocale),
+					url: buildLocalizedSiteUrl("/cookie-policy", routing.defaultLocale),
 					lastModified: cookiePolicyLastModified,
 					alternates: {
-						languages: getLanguageAlternates("/cookie-policy"),
+						languages: buildLanguageAlternates("/cookie-policy"),
 					},
 				},
 			];
@@ -110,10 +101,10 @@ export default async function sitemap(props: {
 	}
 
 	const itemEntries = items.results.map((item: any) => ({
-		url: getLocalizedUrl(`/lib/${item.key}`, routing.defaultLocale),
+		url: buildLocalizedSiteUrl(`/lib/${item.key}`, routing.defaultLocale),
 		lastModified: item.updatedAt,
 		alternates: {
-			languages: getLanguageAlternates(`/lib/${item.key}`),
+			languages: buildLanguageAlternates(`/lib/${item.key}`),
 		},
 		images: item.attachmentsData
 			?.filter((attachment: any) => attachment.PDFCoverPageImage)
