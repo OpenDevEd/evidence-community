@@ -1,5 +1,11 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Architecture
+
+The deployed multi-tenant evidence-library architecture, data services, and
+Zotero synchronization flow are documented in
+[`docs/evidence-library-architecture.md`](docs/evidence-library-architecture.md).
+
 ## Getting Started
 
 First, run the development server:
