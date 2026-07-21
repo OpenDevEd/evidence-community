@@ -1,8 +1,8 @@
 # Deployed as a Coolify application (compose build pack, base directory
 # ops/library-shield/forwardauth). The container is internal-only: Traefik
-# reaches it on the coolify network as http://shield-<app-uuid>:8080.
+# reaches it on the coolify network as http://library-shield:8080 (stable network alias = compose service name).
 services:
-  shield:
+  library-shield:
     build: .
     restart: unless-stopped
     healthcheck:

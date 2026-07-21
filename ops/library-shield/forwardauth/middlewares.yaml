@@ -9,7 +9,7 @@ http:
   middlewares:
     ode-library-shield:
       forwardAuth:
-        address: "http://ode-shield-forwardauth-canary:8080/decide"
+        address: "http://library-shield:8080/decide"
     # Cloudflare-proxied hostnames must only receive traffic from Cloudflare,
     # otherwise CF-Connecting-IP is forgeable and the rate limit is bypassable.
     ode-shield-cf-origin:
