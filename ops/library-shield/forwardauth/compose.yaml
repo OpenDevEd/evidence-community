@@ -1,0 +1,12 @@
+# Deployed as a Coolify application (compose build pack, base directory
+# ops/library-shield/forwardauth). The container is internal-only: Traefik
+# reaches it on the coolify network as http://shield-<app-uuid>:8080.
+services:
+  shield:
+    build: .
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:8080/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
