@@ -140,23 +140,37 @@ export function formatRange(range: string | null) {
 	].filter(Boolean).join(" AND ");
 }
 
+// Non-JSON here means the request never reached the API route (proxy or CDN
+// error page, browser-check challenge, rate limit) — surface a controlled
+// error instead of letting res.json() crash on HTML. JSON error payloads on
+// non-2xx responses still parse as before.
+const parseJsonResponse = (res: Response) => {
+	const contentType = res.headers.get("content-type") ?? "";
+	if (!contentType.includes("application/json")) {
+		throw new Error(
+			`Expected JSON from ${res.url} but got ${res.status} ${contentType || "(no content type)"}`
+		);
+	}
+	return res.json();
+};
+
 export const fetcher = (url: string) =>
-	fetch(`/api${url}`).then((res) => res.json());
+	fetch(`/api${url}`).then(parseJsonResponse);
 
 export const fetcherExternal = (url: string) =>
-	fetch(url).then((res) => res.json());
+	fetch(url).then(parseJsonResponse);
 
 export const fetcherPOST = ([url, payload, headers]: [string, any, any]) =>
 	fetch(`/api${url}`, {
 		method: "POST",
 		body: JSON.stringify(payload),
 		headers: headers,
-	}).then((res) => res.json());
+	}).then(parseJsonResponse);
 
 export const fetcherDELETE = (url: string) =>
 	fetch(`/api${url}`, {
 		method: "DELETE",
-	}).then((res) => res.json());
+	}).then(parseJsonResponse);
 
 export const setter = (url: string, { arg }: { arg: any }) =>
 	fetch(`/api${url}`, {
