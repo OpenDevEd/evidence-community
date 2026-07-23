@@ -65,7 +65,7 @@ function isContactLink(link: LinkObject) {
 		link.id === "contact" ||
 		link.label === "contactUs" ||
 		link.label === "Contact Us" ||
-		link.href.includes("/contact-us")
+		(typeof link.href === "string" && link.href.includes("/contact-us"))
 	);
 }
 
@@ -202,6 +202,7 @@ export default function Footer() {
 
 	const contactData =
 		links.find((link) => link.id === "contact") ?? links.find(isContactLink);
+	const contactHref = contactData?.href?.trim() || null;
 
 	if (companyName === "EdTech Hub") {
 		const footerItemsSorted = getFooterLinkSections(
@@ -432,46 +433,50 @@ export default function Footer() {
 							}
 						/>
 					)}
-					<div className="flex flex-col h-full gap-6 w-full lg:w-auto">
-						{socialLinks.length > 0 && (
-							<FooterFieldColumn
-								title={t("stayConnected")}
-								content={
-									<div className="flex mt-6 gap-8">
-										{socialLinks.map((link) => (
-											<Link href={link[1]} key={link[0]}>
-												{
-													socials[
-														link[0] as keyof typeof socials
-													]
-												}
-											</Link>
-										))}
-									</div>
-								}
-							/>
-						)}
-						<FooterFieldColumn
-							title={t("contactUs")}
-							content={
-								<div className="mt-6">
-									<Button
-										as={Link}
-										href={contactData?.href || ""}
-										color="accent"
-										className="px-12"
-									>
-										{contactData?.label
-											? localizeOrUseIfCapitalized(
-													contactData.label,
-													tNav,
-												)
-											: t("contactUs")}
-									</Button>
-								</div>
-							}
-						/>
-					</div>
+					{(socialLinks.length > 0 || contactHref) && (
+						<div className="flex flex-col h-full gap-6 w-full lg:w-auto">
+							{socialLinks.length > 0 && (
+								<FooterFieldColumn
+									title={t("stayConnected")}
+									content={
+										<div className="flex mt-6 gap-8">
+											{socialLinks.map((link) => (
+												<Link href={link[1]} key={link[0]}>
+													{
+														socials[
+															link[0] as keyof typeof socials
+														]
+													}
+												</Link>
+											))}
+										</div>
+									}
+								/>
+							)}
+							{contactHref && (
+								<FooterFieldColumn
+									title={t("contactUs")}
+									content={
+										<div className="mt-6">
+											<Button
+												as={Link}
+												href={contactHref}
+												color="accent"
+												className="px-12"
+											>
+												{contactData?.label
+													? localizeOrUseIfCapitalized(
+															contactData.label,
+															tNav,
+														)
+													: t("contactUs")}
+											</Button>
+										</div>
+									}
+								/>
+							)}
+						</div>
+					)}
 				</div>
 				{onPolicyPage && (
 					<DialogModal
