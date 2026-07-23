@@ -134,6 +134,61 @@ function populatePolicyDocument(content: string) {
 		.join("");
 }
 
+const POLICY_LAST_UPDATED_PATTERN = /^[#*\s]*last\s+updated[*\s]*:?\s*(.*)$/i;
+const POLICY_MONTH_NAMES = [
+	"january",
+	"february",
+	"march",
+	"april",
+	"may",
+	"june",
+	"july",
+	"august",
+	"september",
+	"october",
+	"november",
+	"december",
+];
+
+function parsePolicyDate(rawValue: string) {
+	const value = rawValue.replace(/[*_`#]/g, "").replace(/,/g, " ").trim();
+	const monthFirst = value.match(/^([A-Za-z]+)\s+(\d{1,2})\s+(\d{4})$/);
+	const dayFirst = value.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+
+	if (!monthFirst && !dayFirst) return null;
+
+	const [monthName, day, year] = monthFirst
+		? [monthFirst[1], monthFirst[2], monthFirst[3]]
+		: [dayFirst![2], dayFirst![1], dayFirst![3]];
+
+	const monthIndex = POLICY_MONTH_NAMES.indexOf(monthName.toLowerCase());
+	if (monthIndex === -1) return null;
+
+	// UTC so the rendered date cannot shift a day based on server timezone.
+	return new Date(Date.UTC(Number(year), monthIndex, Number(day)));
+}
+
+function parsePolicyLastUpdated(content: string) {
+	const lines = content.split("\n");
+
+	// Search from the end: both policies close with their "Last updated" line,
+	// and the privacy notice mentions the phrase earlier in prose.
+	for (let index = lines.length - 1; index >= 0; index--) {
+		const match = lines[index].match(POLICY_LAST_UPDATED_PATTERN);
+		if (!match) continue;
+
+		const inlineDate = parsePolicyDate(match[1]);
+		if (inlineDate) return inlineDate;
+
+		// Heading form: the date sits in the next non-empty line.
+		const nextLine = lines.slice(index + 1).find((line) => line.trim());
+		const followingDate = nextLine ? parsePolicyDate(nextLine) : null;
+		if (followingDate) return followingDate;
+	}
+
+	return null;
+}
+
 export async function readPolicyDocument(document: keyof typeof POLICY_DOCUMENT_PATHS) {
 	'use cache'
 	cacheLife({ revalidate: 3600 })
@@ -147,7 +202,15 @@ export async function getPolicyLastModified(document: keyof typeof POLICY_DOCUME
 	'use cache'
 	cacheLife({ revalidate: 3600 })
 	cacheTag('policy-modified-' + document)
-	return (await stat(/* turbopackIgnore: true */ POLICY_DOCUMENT_PATHS[document])).mtime;
+
+	const path = POLICY_DOCUMENT_PATHS[document];
+	const statedLastUpdated = parsePolicyLastUpdated(
+		await readFile(/* turbopackIgnore: true */ path, "utf-8")
+	);
+
+	// The document's own "Last updated" line is authoritative. File mtime only
+	// records when the image was built, so it drifts on every redeploy.
+	return statedLastUpdated ?? (await stat(/* turbopackIgnore: true */ path)).mtime;
 }
 
 export function getPolicyMetadata(

@@ -19,6 +19,7 @@ function formatLastUpdated(lastUpdated: Date) {
 		day: "2-digit",
 		month: "long",
 		year: "numeric",
+		timeZone: "UTC",
 	}).format(lastUpdated);
 }
 
