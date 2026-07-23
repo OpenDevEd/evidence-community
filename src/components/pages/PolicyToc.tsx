@@ -110,14 +110,9 @@ export default function PolicyToc({
 
 	return (
 		<div className="flex min-h-0 flex-1 flex-col rounded-[1.75rem] border border-black/10 bg-background_light/900 p-5 shadow-[0_20px_55px_-40px_rgba(0,0,0,0.35)] dark:border-white/10 dark:bg-card/78">
-			<div className="mb-4 flex items-center justify-between gap-3">
-				<div className="flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-black/45 dark:text-white/45">
-					<ScrollText className="size-4 text-accent" />
-					On this page
-				</div>
-				<div className="rounded-full border border-black/8 px-2.5 py-1 text-[0.68rem] font-medium uppercase tracking-[0.16em] text-black/45 dark:border-white/10 dark:text-white/45">
-					{sections.length} sections
-				</div>
+			<div className="mb-4 flex items-center gap-2 text-[0.72rem] font-semibold uppercase tracking-[0.22em] text-black/45 dark:text-white/45">
+				<ScrollText className="size-4 text-accent" />
+				On this page
 			</div>
 
 			<nav
