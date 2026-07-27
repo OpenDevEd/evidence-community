@@ -7,6 +7,10 @@ import {
 } from "react";
 
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
+import {
+	isLibraryFeatureEnabled,
+	type LibraryFeatureId,
+} from "@/config/library-config/features";
 
 const LibraryConfigContext = createContext<LibraryPublicConfig | null>(
 	null,
@@ -36,4 +40,11 @@ export function useLibraryConfig() {
 		);
 	}
 	return config;
+}
+
+export function useLibraryFeature(feature: LibraryFeatureId) {
+	return isLibraryFeatureEnabled(
+		useLibraryConfig().features,
+		feature,
+	);
 }
