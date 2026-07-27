@@ -17,12 +17,13 @@ import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
 import {
 	CacheContext,
 	CacheContextType,
-	useFeatureFlagEnabled,
 } from "@/context/Providers";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { DownloadModal } from "../items/ItemControls";
 import { CardBody, useDisclosure } from "@nextui-org/react";
 import { downloadItems } from "@/lib/actions";
-import { routing, usePathname, useRouter } from "@/i18n/routing";
+import { usePathname, useRouter } from "@/i18n/routing";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { ItemsContext } from "../items/ItemsList";
 import { useFiltersContext } from "@/context/FiltersProvider";
 import { countryFacetOptions } from "@/constants/misc";
@@ -424,8 +425,9 @@ function ContentActions({ params }: { params?: Record<string, any> }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const router = useRouter();
 	const pathName = usePathname();
-	const isDownloadEnabled = useFeatureFlagEnabled("download-button");
-	const isAtomFeedEnabled = useFeatureFlagEnabled("atom-feed");
+	const { localization } = useLibraryConfig();
+	const isDownloadEnabled = useLibraryFeature("downloads");
+	const isAtomFeedEnabled = useLibraryFeature("atomFeed");
 
 	return (
 		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
@@ -473,7 +475,7 @@ function ContentActions({ params }: { params?: Record<string, any> }) {
 								query: itemsContext.searchParams,
 							},
 							{
-								locale: routing.defaultLocale,
+								locale: localization.defaultLocale,
 							}
 						);
 					}}
@@ -615,7 +617,8 @@ export function NoteView() {
 	const collectionData = itemsContext.collectionsData?.collections.find(
 		(c) => c.key === selectedCollection
 	);
-	const isCollectionNoteEnabled = useFeatureFlagEnabled("collection-note");
+	const isCollectionNoteEnabled =
+		useLibraryFeature("collectionNotes");
 
 	return (
 		isCollectionNoteEnabled && (

@@ -1,20 +1,20 @@
 import type { NavbarElementConfig } from "@/types/navbar";
-import { routing } from "@/i18n/routing";
 import ThemeSwitcher from "@/components/layout/navbar/ThemeSwitcher";
 import LanguageSwitcher from "@/components/layout/navbar/LanguageSwitcher";
 import LoginButton from "@/components/layout/navbar/LoginButton";
 import UserMenu from "@/components/layout/navbar/UserMenu";
 import {
-	type RuntimeFeatureFlags,
-	isFeatureFlagEnabled,
-} from "@/lib/feature-flags";
+	isLibraryFeatureEnabled,
+	type LibraryFeatures,
+} from "@/config/library-config/features";
 
 /**
  * Navbar Elements Configuration
  *
  * Each element defines:
  * - id: Unique identifier
- * - enabled: Function to check if element should render (based on feature flags and session)
+ * - enabled: Function to check if an element should render from runtime
+ *   features and session state
  * - placement: Where element appears at each breakpoint
  *   - mobile (<xl): 'inline' = visible outside hamburger, 'mobileMenu' = inside hamburger
  *   - tablet (xl-2xl): 'inline' = visible, 'dropdown' = inside condensed dropdown
@@ -25,7 +25,8 @@ import {
 export const navbarElements: NavbarElementConfig[] = [
 	{
 		id: "theme-switcher",
-		enabled: (flags) => isFeatureFlagEnabled(flags, "theme-switcher"),
+		enabled: (features) =>
+			isLibraryFeatureEnabled(features, "themeSwitcher"),
 		placement: {
 			mobile: "mobileMenu", // In hamburger menu
 			tablet: "dropdown", // In condensed dropdown
@@ -36,9 +37,8 @@ export const navbarElements: NavbarElementConfig[] = [
 	},
 	{
 		id: "language-switcher",
-		enabled: (flags) =>
-			isFeatureFlagEnabled(flags, "language-switcher") &&
-			routing.locales.length > 1,
+		enabled: (features) =>
+			isLibraryFeatureEnabled(features, "languageSwitcher"),
 		placement: {
 			mobile: "mobileMenu", // In hamburger menu
 			tablet: "dropdown", // In condensed dropdown
@@ -49,8 +49,8 @@ export const navbarElements: NavbarElementConfig[] = [
 	},
 	{
 		id: "login-button",
-		enabled: (flags, session) =>
-			isFeatureFlagEnabled(flags, "login") && !session,
+		enabled: (features, session) =>
+			isLibraryFeatureEnabled(features, "login") && !session,
 		placement: {
 			mobile: "inline", // Always visible on mobile (outside hamburger)
 			tablet: "dropdown", // In condensed dropdown
@@ -76,10 +76,10 @@ export const navbarElements: NavbarElementConfig[] = [
  * Helper function to filter enabled elements
  */
 export function getEnabledElements(
-	featureFlags: RuntimeFeatureFlags,
+	features: LibraryFeatures,
 	session: any
 ): NavbarElementConfig[] {
-	return navbarElements.filter((el) => el.enabled(featureFlags, session));
+	return navbarElements.filter((el) => el.enabled(features, session));
 }
 
 /**

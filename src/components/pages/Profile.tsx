@@ -52,7 +52,7 @@ import { BiTrash } from "react-icons/bi";
 import { Dropdown } from "../nextui/Dropdown";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList from "../features/items/ItemsList";
-import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 
 function CreateCollectionModal({
 	update,
@@ -563,7 +563,8 @@ export default function Profile({ data }: { data: any }) {
 		session,
 		isCurrentUser
 	);
-	const isUserCollectionsEnabled = useFeatureFlagEnabled("user-collections");
+	const isUserCollectionsEnabled =
+		useLibraryFeature("userCollections");
 
 	const props = useItemsList(data);
 	const {

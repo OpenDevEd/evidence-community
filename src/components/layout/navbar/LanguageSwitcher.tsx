@@ -7,32 +7,25 @@ import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { DropdownMenu } from "@nextui-org/react";
-import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
+import { useRuntimeLocaleNavigation } from "@/hooks/useRuntimeLocaleNavigation";
 import { useSortedLocales } from "@/hooks/useSortedLocales";
-import { useRouter, usePathname } from "@/i18n/routing";
 import type { NavbarElementProps } from "@/types/navbar";
 
 export default function LanguageSwitcher({
 	variant,
 	styleVariant,
 }: NavbarElementProps) {
-	const router = useRouter();
-	const pathname = usePathname();
+	const changeLocale = useRuntimeLocaleNavigation();
 	const {
 		currentLocaleName,
 		sortedLocales,
 		localesNames,
-		hasMultipleLocales,
 	} = useSortedLocales();
-	const isEnabled =
-		useFeatureFlagEnabled("language-switcher") && hasMultipleLocales;
+	const isEnabled = useLibraryFeature("languageSwitcher");
 	const t = useTranslations("ui");
 
 	if (!isEnabled) return null;
-
-	const changeLocale = (locale: string) => {
-		router.push(pathname, { locale });
-	};
 
 	// Menu item variant - returns individual items for each locale
 	if (variant === "menuItem") {
@@ -66,7 +59,12 @@ export default function LanguageSwitcher({
 				</Button>
 			</DropdownTrigger>
 			<DropdownMenu
-				onAction={(key) => changeLocale(String(key))}
+				onAction={(key) => {
+					const locale = sortedLocales.find(
+						(candidate) => candidate === String(key),
+					);
+					if (locale) changeLocale(locale);
+				}}
 				aria-label={t("languageMenuAriaLabel")}
 			>
 				{sortedLocales.map((locale) => (

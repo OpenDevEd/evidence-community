@@ -1,4 +1,4 @@
-import { routing } from "@/i18n/routing";
+import { getRuntimeRequestLocale } from "@/i18n/server";
 import { getCachedItem } from "../../cache";
 import { NextResponse } from "next/server";
 import { createResource, findRelevantContent, getModel, RAGResult } from "@/lib/ai";
@@ -8,6 +8,11 @@ import { getAnswerFromPdfAgentic } from "./questions";
 import { getAnswerFromSearchAgentic } from "./search";
 import { quickChat } from "./quick";
 import { Item } from "../../item/types";
+import { getLibraryConfig } from "@/config/library-config/server";
+import {
+	isLibraryFeatureEnabled,
+	type LibraryFeatureId,
+} from "@/config/library-config/features";
 
 export const maxDuration = 240;
 
@@ -15,7 +20,23 @@ const EmbeddedItems = new Set<string>();
 
 export async function POST(req: Request) {
 	const { distinctId, messages, key, modelIndex, smartScreeningFields, mode } = await req.json();
-	const locale = req.headers.get("Accept-Language") || routing.defaultLocale;
+	const locale = await getRuntimeRequestLocale(req);
+	const config = await getLibraryConfig();
+	const requiredFeature: LibraryFeatureId = key
+		? "ai"
+		: mode === "quick"
+			? "aiSearch"
+			: "deepResearch";
+	if (!isLibraryFeatureEnabled(config.features, requiredFeature)) {
+		return new NextResponse(`${requiredFeature} is disabled`, {
+			status: 403,
+		});
+	}
+	if (!key && !config.search.embeddings) {
+		return new NextResponse("Semantic search is disabled", {
+			status: 403,
+		});
+	}
 
 	let item = null;
 	if (key) {

@@ -7,12 +7,10 @@ import { NextIntlClientProvider } from "next-intl";
 import { getLangDir } from "rtl-detect";
 import { getCachedStatus } from "@/app/api/cache";
 import { getGapMaps } from "@/lib/gapmaps";
-import { fetchExternalNav } from "@/lib/external-nav";
 import MainWrapper from "./MainWrapper";
 import Banner from "./Banner";
 import { Suspense } from "react";
 import Script from "next/script";
-import { getServerFeatureFlags } from "@/lib/server-feature-flags";
 import { connection } from "next/server";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
@@ -34,29 +32,12 @@ async function BaseContent({
 		getGapMaps(),
 	]);
 
-	const externalNav = await fetchExternalNav();
-	const finalStatus = externalNav
-		? {
-				...status,
-				links: externalNav.links,
-				footerSections: externalNav.footerSections,
-				externalLinks: externalNav.externalLinks,
-				companyFooter: {
-					...status.companyFooter,
-					...externalNav.companyFooter,
-				},
-			}
-		: status;
-
 	const googleAnalyticsId = process.env.GOOGLE_ANALYTICS_ID || "";
-	const initialFeatureFlags = getServerFeatureFlags(finalStatus.companyFooter);
-
 	return (
 		<NextIntlClientProvider messages={messages}>
 			<Providers
 				googleAnalyticsId={googleAnalyticsId}
-				status={finalStatus}
-				initialFeatureFlags={initialFeatureFlags}
+				status={status}
 				gapmaps={gapmaps}
 			>
 				{/* Single shared filter state for the whole app — lives above the

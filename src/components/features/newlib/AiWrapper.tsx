@@ -24,7 +24,10 @@ import { useAIFeature } from "@/hooks/useAIFeature";
 import { AI_DROPDOWN_ITEMS } from "@/components/features/ai/AIDropdownItems";
 import posthog from "posthog-js";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
-import { useFeatureFlagEnabled } from "@/context/Providers";
+import {
+	useLibraryConfig,
+	useLibraryFeature,
+} from "@/context/LibraryConfigProvider";
 import { twMerge } from "tailwind-merge";
 
 function randomUUID() {
@@ -224,9 +227,12 @@ export default function AiWrapper({
 	variant?: "default" | "inline";
 }) {
 	const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
+	const { search } = useLibraryConfig();
 
 	const { data: embedded } = useSWR(
-		(data?.item && process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true") ? `/item/${data?.item?.key}/embedded` : null,
+		data?.item && search.embeddings
+			? `/item/${data.item.key}/embedded`
+			: null,
 		fetcher,
 		{
 			onSuccess: (data) => {
@@ -236,7 +242,7 @@ export default function AiWrapper({
 	);
 
 	const aiAllowed = isAIAllowed(data?.item);
-	const isAIEnabled = useFeatureFlagEnabled("ai-features");
+	const isAIEnabled = useLibraryFeature("ai");
 
 	if (!isAIEnabled || !aiAllowed) return null;
 

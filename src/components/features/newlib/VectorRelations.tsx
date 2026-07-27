@@ -2,14 +2,15 @@
 
 import { Item } from "@/app/api/item/types";
 import useSWR from "swr";
-import { useFeatureFlagEnabled, useLastFetchedData } from "@/context/Providers";
+import { useLastFetchedData } from "@/context/Providers";
 import { fetcher } from "@/lib/utils";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import Resource from "../items/Resource";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 
 export default function VectorRelations({ item, loading }: { item: Item | undefined, loading: boolean }) {
 	const { lastFetchedData, setLastFetchedData } = useLastFetchedData();
-	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources") && process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true";
+	const isRelatedItemsEnabled = useLibraryFeature("relatedResources");
 	const { data: embeddings, isLoading } = useSWR(
 		isRelatedItemsEnabled && item?.key && !loading
 			? `/ai/embeddings/${item?.key}`

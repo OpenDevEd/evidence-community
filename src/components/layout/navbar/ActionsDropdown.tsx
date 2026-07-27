@@ -13,9 +13,9 @@ import {
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Button } from "@/components/nextui/Button";
 import { useSortedLocales } from "@/hooks/useSortedLocales";
-import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useRuntimeLocaleNavigation } from "@/hooks/useRuntimeLocaleNavigation";
 import { useTheme } from "next-themes";
-import { useRouter, usePathname } from "@/i18n/routing";
+import { useRouter } from "@/i18n/routing";
 import { signOut } from "next-auth/react";
 import { HiOutlineMoon } from "react-icons/hi2";
 import { IoMdSunny, IoIosLogIn } from "react-icons/io";
@@ -24,7 +24,7 @@ import ThemeSwitcher from "./ThemeSwitcher";
 import LoginButton from "./LoginButton";
 import LanguageSwitcher from "./LanguageSwitcher";
 import type { NavbarContext } from "@/types/navbar";
-import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 
 interface ActionsDropdownProps {
 	context: NavbarContext;
@@ -35,16 +35,12 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 	const { data: session } = useSession();
 	const { resolvedTheme: theme, setTheme } = useTheme();
 	const router = useRouter();
-	const pathname = usePathname();
+	const changeLocale = useRuntimeLocaleNavigation();
 	const { sortedLocales, localesNames } = useSortedLocales();
-	const libraryConfig = useLibraryConfig();
-
-	const isThemeEnabled =
-		useFeatureFlagEnabled("theme-switcher") &&
-		libraryConfig.features.themeSwitcher &&
-		!libraryConfig.theme.forcedMode;
-	const isLanguageEnabled = useFeatureFlagEnabled("language-switcher");
-	const isLoginEnabled = useFeatureFlagEnabled("login");
+	const isThemeEnabled = useLibraryFeature("themeSwitcher");
+	const isLanguageEnabled =
+		useLibraryFeature("languageSwitcher");
+	const isLoginEnabled = useLibraryFeature("login");
 
 	const hasLanguages = isLanguageEnabled && sortedLocales.length > 0;
 	const hasTheme = isThemeEnabled;
@@ -94,8 +90,11 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 		const keyStr = String(key);
 
 		// Check if it's a locale key
-		if (sortedLocales.includes(keyStr)) {
-			router.push(pathname, { locale: keyStr });
+		const selectedLocale = sortedLocales.find(
+			(locale) => locale === keyStr,
+		);
+		if (selectedLocale) {
+			changeLocale(selectedLocale);
 			return;
 		}
 

@@ -12,6 +12,7 @@ import client from "@/lib/meilisearch";
 import { cleanItemForAI, formatRange } from "@/lib/utils";
 import { ItemsGetResponse } from "../../items/types";
 import { getCachedItem } from "../../cache";
+import { getLibraryConfig } from "@/config/library-config/server";
 
 export async function quickChat(
 	req: Request,
@@ -24,6 +25,7 @@ export async function quickChat(
 	distinctId: string,
 	messages: any[]
 ) {
+	const config = await getLibraryConfig();
 	const result = streamText({
 		model: provider!(modelName!) as any,
 		system: [
@@ -198,11 +200,7 @@ Before you answer, classify the user’s intent into one of two categories:
 					userSpecifiedSort,
 					userSpecifiedAmountOfResults,
 				}) => {
-					if (
-						process.env
-							.NEXT_PUBLIC_NEXT_PUBLIC_DISABLE_EMBEDDINGS ===
-						"true"
-					) {
+					if (!config.search.embeddings) {
 						return { hits: [], totalHits: 0 };
 					}
 

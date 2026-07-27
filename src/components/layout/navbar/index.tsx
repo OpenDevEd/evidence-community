@@ -1,13 +1,11 @@
 "use client";
 
-import { useContext } from "react";
 import { useTranslations } from "next-intl";
 import { useSession } from "next-auth/react";
 import { useTheme } from "next-themes";
 import { useDisclosure } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import { usePathname } from "@/i18n/routing";
-import { FeatureFlagsContext } from "@/context/Providers";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 import { Logo } from "./Logo";
@@ -22,7 +20,7 @@ import {
 	getEnabledElements,
 	getElementsByPlacement,
 } from "@/config/navbar.config";
-import { isFeatureFlagEnabled } from "@/lib/feature-flags";
+import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import { normalizePathname } from "@/lib/path";
 
 import type {
@@ -35,7 +33,6 @@ export default function Navbar() {
 	const pathname = usePathname();
 	const { resolvedTheme: theme, setTheme } = useTheme();
 	const { data: session } = useSession();
-	const { featureFlags } = useContext(FeatureFlagsContext);
 	const libraryConfig = useLibraryConfig();
 	const styleVariant =
 		libraryConfig.theme.layout as NavbarStyleVariant;
@@ -57,18 +54,16 @@ export default function Navbar() {
 		normalizedPathname.startsWith("/map") ||
 		normalizedPathname.startsWith("/profile");
 	const showNavbarSearch =
-		isFeatureFlagEnabled(featureFlags ?? {}, "navbar-search") &&
+		isLibraryFeatureEnabled(
+			libraryConfig.features,
+			"navbarSearch",
+		) &&
 		!isSearchOwningPath;
 
-	// Get enabled elements based on feature flags and session
+	// Get enabled elements based on runtime configuration and session.
 	const enabledElements = getEnabledElements(
-		featureFlags ?? {},
+		libraryConfig.features,
 		session,
-	).filter(
-		(element) =>
-			element.id !== "theme-switcher" ||
-			(libraryConfig.features.themeSwitcher &&
-				!libraryConfig.theme.forcedMode),
 	);
 
 	// Get elements grouped by placement for each breakpoint
@@ -95,7 +90,6 @@ export default function Navbar() {
 
 	// Context passed to container components
 	const navbarContext: NavbarContextType = {
-		featureFlags: featureFlags ?? {},
 		session,
 		styleVariant,
 		theme,

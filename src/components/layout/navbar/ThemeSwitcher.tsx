@@ -8,8 +8,7 @@ import { IoMdSunny } from "react-icons/io";
 import { DropdownItem } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
-import { useFeatureFlagEnabled } from "@/context/Providers";
-import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import type { NavbarElementProps } from "@/types/navbar";
 
 const subscribeToHydration = () => () => {};
@@ -25,17 +24,10 @@ export default function ThemeSwitcher({
 		() => false,
 	);
 	const { resolvedTheme, setTheme } = useTheme();
-	const isEnabled = useFeatureFlagEnabled("theme-switcher");
-	const { features, theme } = useLibraryConfig();
+	const isEnabled = useLibraryFeature("themeSwitcher");
 	const t = useTranslations("ui");
 
-	if (
-		!isEnabled ||
-		!features.themeSwitcher ||
-		theme.forcedMode
-	) {
-		return null;
-	}
+	if (!isEnabled) return null;
 
 	const toggleTheme = () =>
 		setTheme(resolvedTheme === "dark" ? "light" : "dark");

@@ -36,7 +36,7 @@ import { Switch } from "@/components/nextui/Switch";
 import { useLocalStorage } from "usehooks-ts";
 import { SiZotero } from "react-icons/si";
 import { AnimatePresence, motion } from "framer-motion";
-import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { AddButton } from "./Resource";
 import DialogModal from "@/components/nextui/DialogModal";
 
@@ -162,7 +162,7 @@ export function DownloadButton({
 }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const t = useTranslations("ui");
-	const isDownloadEnabled = useFeatureFlagEnabled("download-button");
+	const isDownloadEnabled = useLibraryFeature("downloads");
 
 	return (
 		<>
@@ -316,7 +316,7 @@ export default function ItemControls({
 		add: null,
 	});
 
-	const isDownloadEnabled = useFeatureFlagEnabled("download-button");
+	const isDownloadEnabled = useLibraryFeature("downloads");
 
 	const [config, setConfig] = useLocalStorage(
 		"item-controls",

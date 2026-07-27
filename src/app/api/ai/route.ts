@@ -1,17 +1,24 @@
 import { NextResponse } from "next/server";
 import config from "@/constants/config.json";
 import { getCachedItem } from "../cache";
-import { generateText, streamText } from 'ai';
+import { streamText } from 'ai';
 import { getModel, trackUsage } from "@/lib/ai";
-import { routing } from "@/i18n/routing";
+import { getRuntimeRequestLocale } from "@/i18n/server";
 import { isAIAllowed } from "@/lib/utils";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
+	const libraryConfig = await getLibraryConfig();
+	if (!isLibraryFeatureEnabled(libraryConfig.features, "ai")) {
+		return new NextResponse("AI is disabled", { status: 403 });
+	}
+
 	const { searchParams } = new URL(req.url);
 	const prompt = searchParams.get("prompt") || "summarize";
-	const locale = req.headers.get("Accept-Language") || routing.defaultLocale;
+	const locale = await getRuntimeRequestLocale(req);
 	const systemPrompt = config.prompts[prompt as keyof typeof config.prompts]?.join("\n")
 	const sharedRules = config.shared_rules.join("\n")
 	const pdfRules = config.pdf_rules.join("\n")

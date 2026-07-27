@@ -28,6 +28,6 @@ export default defineConfig({
 					"LIBRARY_CONFIG_PATH=config/library.example.json npm run dev -- --hostname 127.0.0.1 --port 3100",
 				reuseExistingServer: false,
 				timeout: 120_000,
-				url: `${baseURL}/icons/evidence-library.svg`,
+				url: `${baseURL}/api/library-config/health`,
 			},
 });

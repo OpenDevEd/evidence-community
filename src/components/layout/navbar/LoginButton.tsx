@@ -6,7 +6,7 @@ import { IoIosLogIn } from "react-icons/io";
 import { DropdownItem } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
-import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import type { NavbarElementProps } from "@/types/navbar";
 
 export default function LoginButton({
@@ -15,7 +15,7 @@ export default function LoginButton({
 	onAction,
 }: NavbarElementProps) {
 	const t = useTranslations("ui");
-	const isEnabled = useFeatureFlagEnabled("login");
+	const isEnabled = useLibraryFeature("login");
 	const { data: session } = useSession();
 
 	// Don't render if login is disabled or user is already logged in
@@ -44,11 +44,13 @@ export default function LoginButton({
 			isIconOnly={isSmall}
 			className={twMerge(
 				"text-accent dark:text-accent py-1",
-				isSmall ? "!p-0 rounded-full !size-10" : "uppercase"
+				isSmall
+					? "!p-0 rounded-full !size-10"
+					: "!min-w-10 !px-0 sm:!min-w-24 sm:!px-4 uppercase"
 			)}
 			aria-label={t("loginButtonAriaLabel")}
 		>
-			{!isSmall && t("login")}
+			{!isSmall && <span className="hidden sm:inline">{t("login")}</span>}
 		</Button>
 	);
 }

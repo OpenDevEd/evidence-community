@@ -10,7 +10,6 @@ import {
 	useCallback,
 	useContext,
 	useEffect,
-	useMemo,
 	useRef,
 	useState,
 	Suspense,
@@ -29,21 +28,14 @@ import {
 } from "@/components/features/analytics/AnalyticsConsentProvider";
 import GoogleAnalyticsManager from "@/components/features/analytics/GoogleAnalyticsManager";
 import { status as statusTable } from "@/db/schema/tables/status";
-import type { FooterLinkSection } from "@/db/schema/tables/status";
 import { toast as toastComponent } from "@/components/layout/Toast";
 import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 import { trackPageView } from "@/lib/analytics";
 import { SessionProvider } from "next-auth/react";
-import {
-	type RuntimeFeatureFlags,
-	isFeatureFlagEnabled,
-} from "@/lib/feature-flags";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 
-type RuntimeStatus = InferSelectModel<typeof statusTable> & {
-	footerSections?: FooterLinkSection[];
-};
+type RuntimeStatus = InferSelectModel<typeof statusTable>;
 export type CacheContextType = {
 	status: RuntimeStatus;
 	cache: any;
@@ -56,16 +48,6 @@ export type CacheContextType = {
 };
 
 export const CacheContext = createContext<any>({});
-export const FeatureFlagsContext = createContext<{
-	featureFlags: RuntimeFeatureFlags;
-}>({
-	featureFlags: {},
-});
-
-export function useFeatureFlagEnabled(flag: string) {
-	const { featureFlags } = useContext(FeatureFlagsContext);
-	return isFeatureFlagEnabled(featureFlags, flag);
-}
 
 export function useStatus(): CacheContextType["status"] {
 	const { status } = useContext(CacheContext);
@@ -226,17 +208,14 @@ export default function Providers({
 	children,
 	googleAnalyticsId,
 	status,
-	initialFeatureFlags,
 	gapmaps,
 }: {
 	children: ReactNode;
 	googleAnalyticsId: string;
 	status: RuntimeStatus;
-	initialFeatureFlags: RuntimeFeatureFlags;
 	gapmaps: GapMap[];
 }) {
 	const router = useRouter();
-	const featureFlags = useMemo(() => initialFeatureFlags, [initialFeatureFlags]);
 	const { theme } = useLibraryConfig();
 
 	return (
@@ -250,22 +229,20 @@ export default function Providers({
 				<ToastAdapter>
 					<SessionProvider>
 						<AnalyticsConsentProvider>
-							<FeatureFlagsContext.Provider value={{ featureFlags }}>
-								<CacheProvider status={status} gapmaps={gapmaps}>
-									<NextUIProvider navigate={router.push}>
-										<Suspense>
-											<PramNotificationProvider>
-												<PageView />
-											</PramNotificationProvider>
-										</Suspense>
-										<UtmAttributionProvider />
-										{children}
-										<AnalyticsVendors
-											googleAnalyticsId={googleAnalyticsId}
-										/>
-									</NextUIProvider>
-								</CacheProvider>
-							</FeatureFlagsContext.Provider>
+							<CacheProvider status={status} gapmaps={gapmaps}>
+								<NextUIProvider navigate={router.push}>
+									<Suspense>
+										<PramNotificationProvider>
+											<PageView />
+										</PramNotificationProvider>
+									</Suspense>
+									<UtmAttributionProvider />
+									{children}
+									<AnalyticsVendors
+										googleAnalyticsId={googleAnalyticsId}
+									/>
+								</NextUIProvider>
+							</CacheProvider>
 						</AnalyticsConsentProvider>
 					</SessionProvider>
 				</ToastAdapter>

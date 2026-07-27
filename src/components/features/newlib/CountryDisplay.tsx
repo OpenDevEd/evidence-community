@@ -7,7 +7,7 @@ import { twMerge } from "tailwind-merge";
 import { COUNTRIES, getSafeReferrer } from "@/constants/misc";
 import LinkWithParams from "../LinkWithParams";
 import { getCountryAncestry } from "@/lib/utils";
-import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import { useTranslations } from "next-intl";
 import { useQueryState } from "nuqs";
 import Image from "next/image";
@@ -234,7 +234,8 @@ export function CountryDisplay({
 }: CountryDisplayProps) {
 	const [referrer] = useQueryState("referrer");
 	const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
-	const isCountryFocusEnabled = useFeatureFlagEnabled("country-focus");
+	const isCountryFocusEnabled =
+		useLibraryFeature("countryFocus");
 
 	return (
 		<motion.div
