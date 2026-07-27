@@ -8,7 +8,12 @@ import { createFormatter, useTranslations } from "next-intl";
 import { useRouter } from "@/i18n/routing";
 import CopyButton from "@/components/features/items/CopyButton";
 import { Card } from "@/components/nextui/Card";
-import { INSTITUTION_LOGOS } from "@/constants/items";
+import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { findInstitutionWithLogo } from "@/config/library-config/institutions";
+import {
+	useLibraryConfig,
+	useLibraryFeature,
+} from "@/context/LibraryConfigProvider";
 import { fetcher, getCountryAncestry, getExtraValues } from "./utils";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import LinkWithParams from "@/components/features/LinkWithParams";
@@ -20,8 +25,7 @@ import Resource from "@/components/features/items/Resource";
 import useSWR from "swr";
 import { MdSearchOff } from "react-icons/md";
 import { serializeSearchParams } from "./searchParams";
-import { COUNTRY_PARAMS, SHOW_URL_IN_CITATION } from "@/constants/misc";
-import { useFeatureFlagEnabled } from "@/context/Providers";
+import { COUNTRY_PARAMS } from "@/constants/misc";
 
 type FormatterProps = {
 	value: any;
@@ -73,6 +77,7 @@ function formatDate({ value, formatter }: FormatterProps) {
 
 function Citation({ value, loading, item }: FormatterProps) {
 	const contentRef = useRef(null);
+	const { citations } = useLibraryConfig();
 	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{ citation: string | null }>(
 		item?.key ? `/item/${item.key}/citation` : null,
 		fetcher,
@@ -88,7 +93,7 @@ function Citation({ value, loading, item }: FormatterProps) {
 
 	let sanitizedHtml = (resolvedCitation || "").trim();
 
-	if (SHOW_URL_IN_CITATION && item?.key && sanitizedHtml) {
+	if (citations.showUrl && item?.key && sanitizedHtml) {
 		const url = typeof window !== "undefined" ? window.location.origin : "";
 		const finalURL = new URL(url + "/lib/" + item.key);
 		const link = ` Available at <a href="${finalURL}" target="_blank" rel="noopener noreferrer">${finalURL}</a>`;
@@ -440,7 +445,7 @@ function ItemCountry({
 	value: string | string[];
 	pathname: string;
 }) {
-	const isCountryFocusEnabled = useFeatureFlagEnabled("country-focus");
+	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
 
 	if (!isCountryFocusEnabled) return false;
 
@@ -457,9 +462,6 @@ function ItemCountry({
 
 				return (
 					<LinkWithParams
-						isDisabled={
-							process.env.NEXT_PUBLIC_DISABLE_COUNTRY === "true"
-						}
 						key={index}
 						href={pathname}
 						params={{ country: ancestry }}
@@ -488,7 +490,7 @@ function ItemCountry({
 }
 
 function ItemCreators({ value, t, pathname }: FormatterProps) {
-	const isAuthorFilterEnabled = useFeatureFlagEnabled("author-filter");
+	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
 	if (!value) return null;
 	if (value.length === 0) return null;
 
@@ -545,7 +547,9 @@ function ItemCreators({ value, t, pathname }: FormatterProps) {
 }
 
 function ItemInstitution({ value, t, pathname }: FormatterProps) {
-	const isAuthorLocationEnabled = useFeatureFlagEnabled("author-location");
+	const isAuthorLocationEnabled =
+		useLibraryFeature("authorLocation");
+	const { institutions: configuredInstitutions } = useLibraryConfig();
 	if (!value) return false;
 
 	// Handle both string and array values
@@ -556,24 +560,26 @@ function ItemInstitution({ value, t, pathname }: FormatterProps) {
 	return (
 		<div className="flex flex-wrap gap-2">
 			{institutions.map((institution, index) => {
-				const InstitutionLogo = Object.entries(INSTITUTION_LOGOS).find(
-					([key]) => institution.includes(key)
-				)?.[1];
+				const configuredInstitution = findInstitutionWithLogo(
+					configuredInstitutions,
+					institution,
+				);
 
 				const InstitutionContent = () => {
 					return (
-						<Card
-							className="max-w-fit p-2 rounded-2xl"
-							color="accent"
-						>
+						<Card className="max-w-fit p-2 rounded-2xl" color="accent">
 							<div
 								className={twMerge(
 									"flex gap-2 items-center",
-									!InstitutionLogo && "px-2"
+									!configuredInstitution && "px-2"
 								)}
 							>
-								{InstitutionLogo && (
-									<InstitutionLogo className="bg-white" />
+								{configuredInstitution?.logoUrl && (
+									<RuntimeAsset
+										reference={configuredInstitution.logoUrl}
+										alt=""
+										className="size-6 shrink-0 rounded-md bg-white object-contain p-0.5"
+									/>
 								)}
 								<h3 className="text-white/80">{institution}</h3>
 							</div>

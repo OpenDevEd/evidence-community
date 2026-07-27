@@ -13,7 +13,6 @@ import { FaCalendar } from "react-icons/fa";
 import { IoChevronBack, IoChevronForward, IoDocumentText } from "react-icons/io5";
 import { LuDownload } from "react-icons/lu";
 import { RelationsType } from "@/types/item";
-import { INTERNAL_TAG } from "@/constants/items";
 import { Card } from "@/components/nextui/Card";
 import { DownloadButton } from "@/components/features/newlib/DownloadModal";
 import CopyButton from "@/components/features/newlib/CopyButton";
@@ -21,8 +20,9 @@ import LikeButton from "@/components/features/items/LikeButton";
 import { AddButton } from "@/components/features/items/Resource";
 import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
-import { hasTag } from "@/lib/tags";
+import { hasAnyTag } from "@/lib/tags";
 import GapMapAction from "@/components/features/gapmaps/GapMapAction";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 function getCitationCount(item: Item | undefined) {
 	if (!item) return 0;
@@ -59,8 +59,8 @@ function ItemHeaderInstitution({ item }: { item: Item | undefined }) {
 }
 
 function ItemHeaderInternal({ item }: { item: Item | undefined }) {
-	const t = useTranslations("ui");
-	if (!hasTag(item?.tags, INTERNAL_TAG)) return null;
+	const { content } = useLibraryConfig();
+	if (!hasAnyTag(item?.tags, content.tags.internal)) return null;
 	return (
 		<Card className="p-1 px-3 text-sm bg-default-100 select-none">
 			{"Available on request"}

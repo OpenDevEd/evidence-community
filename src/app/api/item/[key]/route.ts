@@ -8,8 +8,9 @@ import { eq } from "drizzle-orm";
 import { Collection } from "../../collections/types";
 import config from "@/constants/config.json"
 import { getCachedCollections } from "../../cache";
-import { blockedTags } from "@/constants/misc";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { hasAnyTag } from "@/lib/tags";
 
 async function getMeilisearchItem(key: string) {
 	try {
@@ -37,8 +38,13 @@ export async function getItemRaw(
 	source: "db" | "meilisearch" = "meilisearch"
 ) {
 	const result = source === "db" ? await getDatabaseItem(key) : await getMeilisearchItem(key);
+	const { content } = await getLibraryConfig();
 
-	if (!result || result.deleted || result?.tags?.some((tag) => blockedTags.includes(tag.toLowerCase()))) {
+	if (
+		!result ||
+		result.deleted ||
+		hasAnyTag(result.tags, content.tags.hidden)
+	) {
 		return {
 			item: null,
 		};

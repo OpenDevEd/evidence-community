@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { ListItem } from "@/app/api/item/types";
 import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
-import { blockedTags } from "@/constants/misc";
 import { LIST_ITEM_FIELDS } from "@/lib/search";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { hasAnyTag } from "@/lib/tags";
 
 async function getPaginatedItems(
 	keys: string[],
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest) {
 	const page = body.page || 1;
 	const perPage = body.perPage || 20;
 	const includeHeavyFields = body.includeHeavyFields === true;
+	const { content } = await getLibraryConfig();
 
 	if (!keys || !Array.isArray(keys) || keys.length === 0) {
 		return NextResponse.json<ItemsBatchResponse>(
@@ -83,7 +85,7 @@ export async function POST(request: NextRequest) {
 	const filteredItems = items.filter(
 		(item) =>
 			!item.deleted &&
-			!item.tags?.some((tag) => blockedTags.includes(tag.toLowerCase()))
+			!hasAnyTag(item.tags, content.tags.hidden)
 	);
 
 	const totalPages = Math.ceil(total / perPage);

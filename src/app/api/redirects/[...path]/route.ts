@@ -1,23 +1,31 @@
-import { and, arrayContains, eq } from "drizzle-orm";
+import { and, arrayContains, eq, or } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { item } from "@/db/schema/tables/item";
-import { REDIRECTS_TAG } from "@/constants/items";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
+import { getLibraryConfig } from "@/config/library-config/server";
 
 type RedirectsResponse = {
 	destination: string | null;
 };
 
-async function getCachedRedirectsNote() {
+async function getCachedRedirectsNote(
+	configRevision: string,
+	redirectTags: readonly string[],
+) {
 	"use cache";
 	cacheLife({ revalidate: 300 });
 	cacheTag("redirects-note");
+	if (!redirectTags.length) return null;
 
 	return db.query.item.findFirst({
 		where: and(
-			arrayContains(item.tags, [REDIRECTS_TAG]),
+			or(
+				...redirectTags.map((tag) =>
+					arrayContains(item.tags, [tag]),
+				),
+			),
 			eq(item.itemType, "Note"),
 			eq(item.deleted, 0)
 		),
@@ -119,7 +127,11 @@ export async function GET(
 ) {
 	const params = await props.params;
 	const requestedPath = params.path.join("/");
-	const note = await getCachedRedirectsNote();
+	const config = await getLibraryConfig();
+	const note = await getCachedRedirectsNote(
+		config.revision,
+		config.content.tags.redirects,
+	);
 	const destination = note?.note
 		? parseRedirects(note.note).get(requestedPath) ?? null
 		: null;

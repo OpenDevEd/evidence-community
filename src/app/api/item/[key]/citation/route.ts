@@ -1,4 +1,5 @@
 import { getCitationForItemKey } from "@/lib/citations";
+import { getRuntimeRequestLocale } from "@/i18n/server";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { NextRequest, NextResponse } from "next/server";
 
@@ -11,8 +12,7 @@ export async function GET(
 	props: { params: Promise<{ key: string }> }
 ) {
 	const params = await props.params;
-	const localeHeader = request.headers.get("Accept-Language") || "en-GB";
-	const locale = localeHeader.split(",")[0]?.split(";")[0]?.trim() || "en-GB";
+	const locale = await getRuntimeRequestLocale(request);
 	const citation = await getCitationForItemKey(params.key, locale);
 
 	return NextResponse.json<ItemCitationResponse>(

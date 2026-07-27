@@ -1,4 +1,4 @@
-import { useCallback, useContext, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import useSWR from "swr";
 import { useSearchParams } from "next/navigation";
 import { usePathname } from "@/i18n/routing";
@@ -16,9 +16,13 @@ import {
 	getDescendantKeys,
 	recursiveFind,
 } from "@/lib/collections";
-import { FeatureFlagsContext } from "@/context/Providers";
-import { isFeatureFlagEnabled } from "@/lib/feature-flags";
 import { normalizePathname } from "@/lib/path";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { isLibraryFeatureEnabled } from "@/config/library-config/features";
+import {
+	normalizeRuntimeYearRange,
+	resolveRuntimeSearchScope,
+} from "@/config/library-config/search";
 
 const SWR_OPTIONS = {
 	keepPreviousData: true,
@@ -46,6 +50,23 @@ const SWR_OPTIONS = {
  */
 export function useFilters() {
 	const [params, setParams] = useQueryStates(searchParamsLoader);
+	const { features, filters, search } = useLibraryConfig();
+	const runtimeParams = useMemo(
+		() => ({
+			...params,
+			scope: resolveRuntimeSearchScope(params.scope, search),
+			range: normalizeRuntimeYearRange(params.range, filters),
+			institution:
+				filters.institution.mode === "hidden"
+					? []
+					: params.institution,
+			country: search.country ? params.country : [],
+			author_country: search.authorCountry
+				? params.author_country
+				: [],
+		}),
+		[filters, params, search],
+	);
 
 	// Raw search params, only needed downstream for atom-feed serialization.
 	const rawSearchParams = useSearchParams();
@@ -60,8 +81,6 @@ export function useFilters() {
 
 	const pathname = usePathname();
 	const normalizedPathname = normalizePathname(pathname);
-	const { featureFlags } = useContext(FeatureFlagsContext);
-
 	// Facets are only meaningful where a filtering surface exists: the library
 	// and map listings, or anywhere the navbar search (with its Explore button)
 	// is shown. Everywhere else we skip the request so lifting this provider to
@@ -69,12 +88,12 @@ export function useFilters() {
 	const filterSurfaceEnabled =
 		normalizedPathname === "/lib" ||
 		normalizedPathname.startsWith("/map") ||
-		isFeatureFlagEnabled(featureFlags ?? {}, "navbar-search");
+		isLibraryFeatureEnabled(features, "navbarSearch");
 
 	const { data: noteData, isLoading: isNoteLoading } =
 		useSWR<CollectionNoteGetResponse>(
-			params.collections.length === 1
-				? `/collections/${params.collections[0]}/note`
+			runtimeParams.collections.length === 1
+				? `/collections/${runtimeParams.collections[0]}/note`
 				: null,
 			fetcher
 		);
@@ -190,7 +209,7 @@ export function useFilters() {
 				setParams({ [key]: [...currentValues, country] });
 			}
 		},
-		[params.country, params.author_country, setParams]
+		[params, setParams]
 	);
 
 	const handleCountrySelect = useCallback(
@@ -219,7 +238,9 @@ export function useFilters() {
 	}, [setParams]);
 
 	const { data: facetsData } = useSWR<FacetsGetResponse>(
-		filterSurfaceEnabled ? buildFacetsQuery(params) : null,
+		filterSurfaceEnabled
+			? buildFacetsQuery(runtimeParams)
+			: null,
 		fetcher,
 		SWR_OPTIONS
 	);
@@ -230,7 +251,7 @@ export function useFilters() {
 		isLoading: isCollectionsLoading,
 	} = useSWR<CollectionsGetResponse>("/collections", fetcher, SWR_OPTIONS);
 
-	const selectedCollections = params.collections;
+	const selectedCollections = runtimeParams.collections;
 
 	const hierarchy = useMemo(() => {
 		if (!collectionsData) return [];
@@ -266,7 +287,7 @@ export function useFilters() {
 	);
 
 	return {
-		queryParams: params,
+		queryParams: runtimeParams,
 		searchParams,
 		pathName: pathname,
 		handlePageChange,

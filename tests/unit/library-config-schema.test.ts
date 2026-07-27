@@ -258,6 +258,12 @@ describe("cross-field activation rules", () => {
 			},
 		],
 		[
+			"deep research without AI search",
+			(config: any) => {
+				config.features.aiSearch = false;
+			},
+		],
+		[
 			"related resources without embeddings",
 			(config: any) => {
 				config.search.embeddings = false;
@@ -677,6 +683,34 @@ describe("manifest-wide activation", () => {
 			"Indexed Institution Without Branding";
 
 		expect(catalogSchema.safeParse(config).success).toBe(true);
+	});
+
+	it("rejects document scopes when full-text search is disabled", () => {
+		const config: any = cloneLibraryConfig();
+		config.search.fullText = false;
+		config.search.scopes = ["documents", "title"];
+		config.search.defaultScope = "title";
+
+		const result = catalogSchema.safeParse(config);
+
+		expect(result.success).toBe(false);
+		expect(
+			result.error?.issues.some(
+				(issue: any) =>
+					issue.path.join(".") === "search.scopes.0" &&
+					issue.message.includes("full-text"),
+			),
+		).toBe(true);
+	});
+
+	it("omits the default document scope when full-text search is disabled", () => {
+		const config: any = cloneLibraryConfig(minimalLibraryConfig);
+		config.search = { fullText: false };
+
+		const result = catalogSchema.safeParse(config);
+
+		expect(result.success).toBe(true);
+		expect(result.data?.search.scopes).not.toContain("documents");
 	});
 
 	it("defaults omitted processing priority to list order", () => {

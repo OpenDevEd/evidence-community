@@ -26,18 +26,21 @@ import FullScreenModal from "@/components/nextui/FullScreenModal";
 import GenericHeader from "../modals/GenericHeader";
 import CollectionsList from "../user/CollectionsList";
 import { Session } from "next-auth";
-import { useFeatureFlagEnabled, useStatus } from "@/context/Providers";
+import { useStatus } from "@/context/Providers";
 import { PrefetchKind } from "next/dist/client/components/router-reducer/router-reducer-types";
 import DialogModal from "@/components/nextui/DialogModal";
 import useSWR from "swr";
 import { useQueryState } from "nuqs";
 import { useResourceHref } from "@/hooks/useResourceHref";
-import { COMING_SOON_TAG, INTERNAL_TAG } from "@/constants/items";
-import { hasTag } from "@/lib/tags";
+import { hasAnyTag } from "@/lib/tags";
 import PrefetchLink from "../PrefetchLink";
 import { generateCOinS } from "@/lib/coins";
 import { resolveGapMapsByTags } from "@/lib/gapmap-links";
 import { useGapMaps } from "@/context/Providers";
+import {
+	useLibraryConfig,
+	useLibraryFeature,
+} from "@/context/LibraryConfigProvider";
 
 export function AddButton({
 	itemData,
@@ -54,7 +57,8 @@ export function AddButton({
 	const [loading, setLoading] = useState(false);
 	const { trigger } = useSWRMutation(`/user/item/${itemData?.key}`, setter);
 	const { data: session, update } = useSession();
-	const isUserCollectionsEnabled = useFeatureFlagEnabled("user-collections");
+	const isUserCollectionsEnabled =
+		useLibraryFeature("userCollections");
 	const t = useTranslations("ui");
 	const highlightedCollections = Object.keys(
 		itemData ? session?.user.itemsCollections[itemData.key] ?? {} : {}
@@ -258,6 +262,8 @@ function ResourceArticle({
 	tNav: ReturnType<typeof useTranslations<"nav">>;
 	format: ReturnType<typeof useFormatter>;
 }) {
+	const { content } = useLibraryConfig();
+
 	return (
 		<article className="flex flex-col gap-4">
 			<Skeleton
@@ -312,13 +318,19 @@ function ResourceArticle({
 							</>
 						)}
 
-					{hasTag(finalItemData?.tags, COMING_SOON_TAG) && (
+					{hasAnyTag(
+						finalItemData?.tags,
+						content.tags.comingSoon,
+					) && (
 						<span className="bg-black/10 border border-accent rounded-lg px-4 py-1 text-accent font-medium w-full @[720px]:w-auto text-center">
 							{t("inProgress")}
 						</span>
 					)}
 
-					{hasTag(finalItemData?.tags, INTERNAL_TAG) && (
+					{hasAnyTag(
+						finalItemData?.tags,
+						content.tags.internal,
+					) && (
 						<span className="bg-black/10 border border-danger rounded-lg px-4 py-1 text-danger font-medium w-full @[720px]:w-auto text-center">
 							{t("internal")}
 						</span>

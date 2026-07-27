@@ -2,13 +2,18 @@ import { getCachedItem, getCachedItemSmall } from "@/app/api/cache";
 import { getItem } from "@/app/api/item/[key]/route";
 import { Item } from "@/app/api/item/types";
 import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
-import { blockedTags } from "@/constants/misc";
 import client from "@/lib/meilisearch";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { NextRequest, NextResponse } from "next/server";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 
 export async function GET(request: NextRequest, props: { params: Promise<{ key: string }> }) {
-	if (process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS === "true") {
+	const config = await getLibraryConfig();
+	if (
+		!config.search.embeddings ||
+		!isLibraryFeatureEnabled(config.features, "relatedResources")
+	) {
 		return NextResponse.json({ hits: [], totalHits: 0 }, {
 			headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL },
 		});
@@ -57,8 +62,10 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 				`key != ${key}`,
 				`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
 				"deleted != 1",
-				`tags NOT IN ${JSON.stringify(blockedTags)}`
-			],
+				config.content.tags.hidden.length
+					? `tags NOT IN ${JSON.stringify(config.content.tags.hidden)}`
+					: null,
+			].filter(Boolean) as string[],
 			limit: 6,
 		});
 

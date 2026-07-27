@@ -2,13 +2,6 @@ import { useItemsList } from "@/hooks/useItemsList";
 import { searchParamsLoader } from "@/lib/searchParams";
 
 import { inferParserType } from "nuqs/server";
-import { HIDE_TAG } from "./items";
-
-export const currentYear = new Date().getFullYear();
-
-export const years = Array.from({ length: currentYear - 1900 }).map((_, i) =>
-	String(currentYear - i)
-);
 
 export const countryFacetOptions: {
 	key: string;
@@ -29,8 +22,6 @@ export const countryFacetOptions: {
 		queryParam: "author_country",
 	},
 ];
-
-export const blockedTags = [HIDE_TAG];
 
 export const COUNTRIES: Record<string, string> = {
 	AF: "Afghanistan",
@@ -1126,18 +1117,7 @@ export const SITEMAP_SIZE = 10000;
 
 export const INSTITUTIONS_NAME = process.env.NEXT_PUBLIC_INSTITUTIONS_NAME;
 
-export const IS_COUNTRY_LIBRARY =
-	process.env.NEXT_PUBLIC_IS_COUNTRY_LIBRARY === "true";
-
 export const FUNDING_PARTNER = process.env.NEXT_PUBLIC_FUNDING_PARTNER;
-
-export const NOTES_DESCRIPTION = process.env.NEXT_PUBLIC_ITEM_NOTES_DESCRIPTION;
-
-export const CUSTOM_FILTER_INSTITUTION =
-	process.env.NEXT_PUBLIC_CUSTOM_FILTER_INSTITUTION;
-
-export const SHOW_URL_IN_CITATION =
-	process.env.NEXT_PUBLIC_SHOW_URL_IN_CITATION === "true";
 
 /**
  * Acceptable referrer paths that users can navigate back to.

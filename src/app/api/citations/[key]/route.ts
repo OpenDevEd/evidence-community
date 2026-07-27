@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { Item } from "@/app/api/item/types";
 import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
-import { blockedTags } from "@/constants/misc";
 import { RelationsType } from "@/types/item";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { hasAnyTag } from "@/lib/tags";
 
 export type CitationYearData = {
 	year: string;
@@ -22,7 +23,10 @@ export type CitationsResponse = {
 	totalPages: number;
 };
 
-async function getSourceItem(key: string): Promise<Item | null> {
+async function getSourceItem(
+	key: string,
+	hiddenTags: readonly string[],
+): Promise<Item | null> {
 	try {
 		const index = await meilisearchClient.getIndex(
 			process.env.MEILI_INDEX || config.index
@@ -32,9 +36,7 @@ async function getSourceItem(key: string): Promise<Item | null> {
 		if (
 			!result ||
 			result.deleted ||
-			result?.tags?.some((tag: string) =>
-				blockedTags.includes(tag.toLowerCase())
-			)
+			hasAnyTag(result.tags, hiddenTags)
 		) {
 			return null;
 		}
@@ -57,7 +59,8 @@ function extractCitedByKeys(relations: RelationsType): string[] {
 async function getCitingItems(
 	keys: string[],
 	page: number,
-	perPage: number
+	perPage: number,
+	hiddenTags: readonly string[],
 ): Promise<{
 	items: Item[];
 	countryDistribution: Record<string, number>;
@@ -86,17 +89,10 @@ async function getCitingItems(
 			facets: ["country", "year"],
 		});
 
-		// Filter out deleted items and items with blocked tags
-		// Note: Filtering after search might reduce page size slightly below perPage if many items are blocked.
-		// Ideally, blocked tags should be filtered in the Meilisearch query if possible,
-		// but blockedTags logic here involves checking array inclusion which is complex in Meilisearch filter string without a loop.
-		// For now, we keep post-filtering but acknowledge it might affect exact page size.
 		const filteredItems = (result.hits as Item[]).filter(
 			(item) =>
 				!item.deleted &&
-				!item.tags?.some((tag) =>
-					blockedTags.includes(tag.toLowerCase())
-				)
+				!hasAnyTag(item.tags, hiddenTags)
 		);
 
 		return {
@@ -128,9 +124,11 @@ export async function GET(
 
 	const page = parseInt(searchParams.get("page") || "1");
 	const perPage = parseInt(searchParams.get("perPage") || "20");
+	const { content } = await getLibraryConfig();
+	const hiddenTags = content.tags.hidden;
 
 	// Get the source item first
-	const sourceItem = await getSourceItem(key);
+	const sourceItem = await getSourceItem(key, hiddenTags);
 
 	if (!sourceItem) {
 		return NextResponse.json<CitationsResponse>({
@@ -158,7 +156,12 @@ export async function GET(
 		items: paginatedItems,
 		countryDistribution: rawCountryDistribution,
 		yearDistribution: rawYearDistribution,
-	} = await getCitingItems(citedByKeys, page, perPage);
+	} = await getCitingItems(
+		citedByKeys,
+		page,
+		perPage,
+		hiddenTags,
+	);
 
 	// Format year distribution
 	const yearDistribution = Object.entries(rawYearDistribution)

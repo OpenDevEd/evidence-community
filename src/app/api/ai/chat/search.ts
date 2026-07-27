@@ -12,9 +12,10 @@ import { cleanItemForAI, formatRange, getTimeDuration } from "@/lib/utils";
 import client from "@/lib/meilisearch";
 import { SearchResponse } from "meilisearch";
 import { Item } from "../../item/types";
-import { ALL_LABELS_IN_COUNTRY_HIERARCHY, blockedTags } from "@/constants/misc";
+import { ALL_LABELS_IN_COUNTRY_HIERARCHY } from "@/constants/misc";
 import { createCountryFilters } from "@/lib/country";
 import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
+import { getLibraryConfig } from "@/config/library-config/server";
 
 const Agent1Schema = z.object({
 	original_question: z
@@ -131,6 +132,10 @@ export async function getAnswerFromSearchAgentic(
 	locale: string
 ) {
 	const startTime = Date.now();
+	const config = await getLibraryConfig();
+	if (!config.search.embeddings) {
+		throw new Error("Semantic search is disabled");
+	}
 
 	const stream = createUIMessageStream({
 		execute: async ({ writer }) => {
@@ -299,7 +304,9 @@ You must output an object conforming to the provided schema.`;
 									EXCLUDED_ITEM_TYPES
 								)}`,
 								"deleted != 1",
-								`tags NOT IN ${JSON.stringify(blockedTags)}`,
+								config.content.tags.hidden.length
+									? `tags NOT IN ${JSON.stringify(config.content.tags.hidden)}`
+									: null,
 								...geoFilters,
 							].filter(Boolean) as string[],
 							limit: inferredAmount,

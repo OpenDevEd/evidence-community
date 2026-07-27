@@ -1,6 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useQueryStates } from "nuqs";
 import dynamic from "next/dynamic";
 import { useRouter, Link, usePathname } from "@/i18n/routing";
@@ -21,15 +27,17 @@ import { ItemsGetResponse } from "@/app/api/items/types";
 import { searchParamsLoader, serializeSearchParams } from "@/lib/searchParams";
 import { buildItemsQuery, buildFacetsQuery, fetcher } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
-import {
-	SORT_OPTIONS,
-	SCOPE_OPTIONS,
-	INSTITUTION_LOGOS,
-	COMING_SOON_TAG,
-	INTERNAL_TAG,
-} from "@/constants/items";
-import { hasTag } from "@/lib/tags";
+import { SORT_OPTIONS } from "@/constants/items";
+import { hasAnyTag } from "@/lib/tags";
 import { countryFacetOptions } from "@/constants/misc";
+import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { findInstitutionWithLogo } from "@/config/library-config/institutions";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import {
+	getRuntimeSearchScopeOptions,
+	normalizeRuntimeYearRange,
+	resolveRuntimeSearchScope,
+} from "@/config/library-config/search";
 
 // Lazily loaded so the heavy collections/filters graph stays out of the
 // always-present navbar bundle until the user opens Explore.
@@ -47,7 +55,7 @@ const NavbarFilterChips = dynamic(() => import("./NavbarFilterChips"), {
  * a dropdown. Clicking a suggestion opens that item; pressing Enter or the
  * "see all" row opens the full library results (`/lib?…`).
  *
- * Visibility (feature flag + hiding on pages that own their own search) is
+ * Visibility (runtime feature + hiding on pages that own their own search) is
  * decided by the navbar.
  */
 
@@ -134,25 +142,6 @@ function formatAuthors(item: any, etAl: string): string {
 	return first ? `${authorString(first)} ${etAl}` : "";
 }
 
-// Matches an institution to its logo the same way the results card does.
-function getOrgLogo(item: any): any {
-	const raw = Array.isArray(item?.institution)
-		? item.institution
-		: item?.institution
-			? [item.institution]
-			: [];
-	const institutions = raw.filter(Boolean) as string[];
-	if (!institutions.length) return null;
-	const withLogo = institutions.find((inst) =>
-		Object.keys(INSTITUTION_LOGOS).some((key) => inst.includes(key)),
-	);
-	const selected = withLogo || institutions[0];
-	const entry = Object.entries(INSTITUTION_LOGOS).find(([key]) =>
-		selected.includes(key),
-	);
-	return entry?.[1] ?? null;
-}
-
 // Status badges (coming soon / internal), styled like the results card.
 function StatusBadges({
 	comingSoon,
@@ -201,6 +190,12 @@ export default function NavbarSearch() {
 	const tSorts = useTranslations("sorts");
 	const tScopes = useTranslations("scopes");
 	const formatter = useFormatter();
+	const {
+		content,
+		filters,
+		institutions: configuredInstitutions,
+		search,
+	} = useLibraryConfig();
 
 	// The item currently being viewed (when the bar is on an item/citation page),
 	// so we can mark its row in the suggestions list.
@@ -211,19 +206,41 @@ export default function NavbarSearch() {
 	// Shared URL state — the same nuqs params the /lib page uses. Every control
 	// reads/writes these, and submitting carries them to /lib unchanged.
 	const [params, setParams] = useQueryStates(searchParamsLoader);
-	const scope = params.scope;
+	const scopeOptions = useMemo(
+		() => getRuntimeSearchScopeOptions(search),
+		[search],
+	);
+	const scope = resolveRuntimeSearchScope(params.scope, search);
 	const sort = params.sort;
+	const runtimeParams = useMemo(
+		() => ({
+			...params,
+			scope,
+			range: normalizeRuntimeYearRange(params.range, filters),
+			institution:
+				filters.institution.mode === "hidden"
+					? []
+					: params.institution,
+			country: search.country ? params.country : [],
+			author_country: search.authorCountry
+				? params.author_country
+				: [],
+		}),
+		[filters, params, scope, search],
+	);
 
 	// How many library filters (collections / institutions / author / countries)
 	// are active — drives whether the filter-chips row appears.
 	const activeFilterCount =
-		(params.collections?.length || 0) +
-		(params.institution?.length || 0) +
-		(params.author ? 1 : 0) +
-		(params.range ? 1 : 0) +
+		(runtimeParams.collections?.length || 0) +
+		(runtimeParams.institution?.length || 0) +
+		(runtimeParams.author ? 1 : 0) +
+		(runtimeParams.range ? 1 : 0) +
 		countryFacetOptions.reduce(
 			(acc, facet) =>
-				acc + ((params as any)[facet.queryParam]?.length || 0),
+				acc +
+				((runtimeParams as any)[facet.queryParam]?.length ||
+					0),
 			0,
 		);
 
@@ -266,7 +283,9 @@ export default function NavbarSearch() {
 	// An empty search is a valid query (it just browses everything matching the
 	// current scope/filters), so we gate the fetch on the dropdown being open
 	// rather than on there being search text — only fetching when it's shown.
-	const query = isOpen ? buildItemsQuery(params, "/items") : null;
+	const query = isOpen
+		? buildItemsQuery(runtimeParams, "/items")
+		: null;
 
 	const { data, isLoading, isValidating } = useSWR<ItemsGetResponse>(query, fetcher, {
 		keepPreviousData: true,
@@ -296,7 +315,7 @@ export default function NavbarSearch() {
 	// current query, so opening Explore doesn't hit a loading skeleton. Warms
 	// the same SWR cache keys useItemsList reads (collections is static; facets
 	// re-warm whenever the query changes).
-	const facetsKey = buildFacetsQuery(params);
+	const facetsKey = buildFacetsQuery(runtimeParams);
 	useEffect(() => {
 		preload("/collections", fetcher);
 		preload(facetsKey, fetcher);
@@ -326,11 +345,11 @@ export default function NavbarSearch() {
 		const trimmed = searchInput.trim();
 		const searchChanged = trimmed !== params.search.trim();
 		return {
-			...params,
+			...runtimeParams,
 			search: trimmed,
 			page: searchChanged ? 1 : params.page,
 		};
-	}, [params, searchInput]);
+	}, [params.page, params.search, runtimeParams, searchInput]);
 
 	const goToLibrary = useCallback(() => {
 		setIsOpen(false);
@@ -463,10 +482,20 @@ export default function NavbarSearch() {
 								results.map((item: any, index: number) => {
 									const abstract = abstractPreview(item);
 									const authors = formatAuthors(item, t("etAl"));
-									const OrgLogo = getOrgLogo(item);
+									const configuredInstitution =
+										findInstitutionWithLogo(
+											configuredInstitutions,
+											item?.institution,
+										);
 									const fullDate = formatFullDate(item, formatter);
-									const isComingSoon = hasTag(item?.tags, COMING_SOON_TAG);
-									const isInternal = hasTag(item?.tags, INTERNAL_TAG);
+									const isComingSoon = hasAnyTag(
+										item?.tags,
+										content.tags.comingSoon,
+									);
+									const isInternal = hasAnyTag(
+										item?.tags,
+										content.tags.internal,
+									);
 									const isCurrent =
 										!!currentItemKey &&
 										item.key === currentItemKey;
@@ -504,13 +533,21 @@ export default function NavbarSearch() {
 											>
 												{item.title || "-"}
 											</span>
-											{(OrgLogo ||
+											{(configuredInstitution ||
 												authors ||
 												isComingSoon ||
 												isInternal) && (
 												<span className="flex items-center gap-1.5 text-xs text-black/50 dark:text-white/50">
-													{OrgLogo && (
-														<OrgLogo className="size-4 shrink-0" />
+													{configuredInstitution?.logoUrl && (
+														<RuntimeAsset
+															reference={
+																configuredInstitution.logoUrl
+															}
+															alt={t("institutionLogoAlt", {
+																name: configuredInstitution.name,
+															})}
+															className="size-4 shrink-0 rounded bg-white/80 object-contain p-0.5"
+														/>
 													)}
 													{authors && (
 														<span className="min-w-0 truncate">
@@ -555,16 +592,29 @@ export default function NavbarSearch() {
 														}}
 													/>
 													{(authors ||
-														OrgLogo ||
+														configuredInstitution ||
 														fullDate ||
 														isComingSoon ||
 														isInternal) && (
 														<div className="flex flex-col gap-1.5 text-xs">
-															{(OrgLogo ||
+															{(configuredInstitution ||
 																authors ||
 																fullDate) && (
 																<div className="flex items-center gap-1.5">
-																	{OrgLogo && <OrgLogo />}
+																	{configuredInstitution?.logoUrl && (
+																		<RuntimeAsset
+																			reference={
+																				configuredInstitution.logoUrl
+																			}
+																			alt={t(
+																				"institutionLogoAlt",
+																				{
+																					name: configuredInstitution.name,
+																				},
+																			)}
+																			className="size-6 shrink-0 rounded-md bg-white/80 object-contain p-0.5"
+																		/>
+																	)}
 																	{authors && (
 																		<span className="min-w-0 truncate font-medium text-black/70 dark:text-white/70">
 																			{authors}
@@ -656,7 +706,7 @@ export default function NavbarSearch() {
 				color="tertiary"
 				selectedKeys={[scope]}
 				onSelectionChange={handleScopeChange}
-				items={SCOPE_OPTIONS}
+				items={scopeOptions}
 				selectorIcon={<div className="hidden"></div>}
 				classNames={scopeSelectClassNames}
 				label="Search scope"

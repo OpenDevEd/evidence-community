@@ -1,12 +1,23 @@
 import createMiddleware from "next-intl/middleware";
-import { routing } from "./i18n/routing";
 import { NextRequest, NextResponse } from "next/server";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "./constants/items";
+import { loadLibraryConfig } from "./config/library-config/source";
 import configJSON from "./constants/config.json";
-import { PUBLIC_READ_CACHE_CONTROL } from "./lib/http-cache";
+import {
+	getDisabledLocaleRedirectPathname,
+	getOrderedRuntimeLocales,
+	getPlatformPathLocale,
+	RUNTIME_LOCALE_COOKIE,
+} from "./i18n/runtime";
+import {
+	PRIVATE_NO_STORE_CACHE_CONTROL,
+	PUBLIC_READ_CACHE_CONTROL,
+} from "./lib/http-cache";
 import meilisearch from "./lib/meilisearch";
 import { getConfiguredSiteOrigin } from "./lib/site-url";
 import { normalizePathname } from "./lib/path";
+import { resolveRuntimeSearchScope } from "./config/library-config/search";
+import type { LibraryPublicConfig } from "./config/library-config/schema";
 
 function handleLegacyScope(
 	request: NextRequest,
@@ -17,13 +28,22 @@ function handleLegacyScope(
 	variables.scopes.push(scope);
 
 	if (variables.scopes.length > 1) {
-		request.nextUrl.searchParams.set("scope", SCOPE_OPTIONS[0].key);
+		request.nextUrl.searchParams.set(
+			"scope",
+			variables.runtimeSearch.defaultScope,
+		);
 	} else {
 		const newScopeValue = Object.values(SCOPE_OPTIONS).find(
 			(option) => option.legacyKey === scope
 		)?.key;
 		if (newScopeValue) {
-			request.nextUrl.searchParams.set("scope", newScopeValue);
+			request.nextUrl.searchParams.set(
+				"scope",
+				resolveRuntimeSearchScope(
+					newScopeValue,
+					variables.runtimeSearch,
+				),
+			);
 		}
 	}
 }
@@ -132,11 +152,14 @@ function encodeKey(key: string): string {
 		.join("n");
 }
 
-function mapLegacySearchParams(request: NextRequest) {
+function mapLegacySearchParams(
+	request: NextRequest,
+	runtimeSearch: LibraryPublicConfig["search"],
+) {
 	const originalSearchParams = new URLSearchParams(
 		request.nextUrl.searchParams
 	);
-	const variables: Record<string, any> = {};
+	const variables: Record<string, any> = { runtimeSearch };
 	const entries = Array.from(request.nextUrl.searchParams.entries());
 
 	for (const [key, value] of entries) {
@@ -189,7 +212,7 @@ function getRedirectLookupPath(pathname: string) {
 	if (segments.length === 0) return null;
 
 	const firstSegment = segments[0];
-	const pathSegments = routing.locales.includes(firstSegment as any)
+	const pathSegments = getPlatformPathLocale(pathname)
 		? segments.slice(1)
 		: segments;
 
@@ -238,16 +261,11 @@ async function getNoteRedirectDestination(request: NextRequest) {
 	}
 }
 
-function getPathLocale(pathname: string) {
-	const firstSegment = pathname.split("/").filter(Boolean)[0];
-	return routing.locales.includes(firstSegment as any) ? firstSegment : null;
-}
-
 function redirectUnknownPathToNotFoundPage(request: NextRequest) {
 	if (!getRedirectLookupPath(request.nextUrl.pathname)) return null;
 
 	const url = request.nextUrl.clone();
-	const locale = getPathLocale(request.nextUrl.pathname);
+	const locale = getPlatformPathLocale(request.nextUrl.pathname);
 	url.pathname = locale ? `/${locale}/404` : "/404";
 	url.search = "";
 
@@ -261,7 +279,11 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.redirect(url);
 	}
 
-	const newRequest = mapLegacySearchParams(request);
+	const libraryConfig = await loadLibraryConfig();
+	const newRequest = mapLegacySearchParams(
+		request,
+		libraryConfig.search,
+	);
 
 	if (newRequest) {
 		return newRequest;
@@ -368,6 +390,17 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.next();
 	}
 
+	const disabledLocaleRedirectPathname =
+		getDisabledLocaleRedirectPathname(
+			request.nextUrl.pathname,
+			libraryConfig.localization,
+		);
+	if (disabledLocaleRedirectPathname) {
+		const url = request.nextUrl.clone();
+		url.pathname = disabledLocaleRedirectPathname;
+		return NextResponse.redirect(url, 307);
+	}
+
 	const noteRedirectDestination = await getNoteRedirectDestination(request);
 	if (noteRedirectDestination) {
 		return NextResponse.redirect(noteRedirectDestination, 307);
@@ -378,10 +411,44 @@ export default async function proxy(request: NextRequest) {
 		return notFoundPageRedirect;
 	}
 
-	const response = createMiddleware(routing)(request);
+	const hasLocaleRewriteHeader = request.headers.has(
+		"x-next-intl-locale",
+	);
+	const isInternalLocaleRewrite =
+		hasLocaleRewriteHeader &&
+		getPlatformPathLocale(request.nextUrl.pathname) !== null;
+	const response = createMiddleware({
+		locales: getOrderedRuntimeLocales(libraryConfig.localization),
+		defaultLocale: libraryConfig.localization.defaultLocale,
+		localeDetection: libraryConfig.localization.detectLocale,
+		// Next.js can pass an internal next-intl rewrite through the proxy a
+		// second time. Preserve the already-resolved locale on that internal
+		// request instead of canonicalizing it back to the public unprefixed
+		// URL and creating a redirect loop.
+		localePrefix: isInternalLocaleRewrite
+			? "always"
+			: "as-needed",
+		localeCookie: RUNTIME_LOCALE_COOKIE,
+		alternateLinks: false,
+	})(request);
 
 	if (isPublicLibraryPage(request.nextUrl.pathname)) {
-		response.headers.set("Cache-Control", PUBLIC_READ_CACHE_CONTROL);
+		const isRedirect =
+			response.status >= 300 && response.status < 400;
+		const setsLocaleCookie = response.headers.has("set-cookie");
+		const variesByLocaleDetection =
+			libraryConfig.localization.detectLocale &&
+			(!getPlatformPathLocale(request.nextUrl.pathname) ||
+				isInternalLocaleRewrite);
+		response.headers.set(
+			"Cache-Control",
+			isRedirect ||
+				setsLocaleCookie ||
+				hasLocaleRewriteHeader ||
+				variesByLocaleDetection
+				? PRIVATE_NO_STORE_CACHE_CONTROL
+				: PUBLIC_READ_CACHE_CONTROL,
+		);
 	}
 
 	return response;

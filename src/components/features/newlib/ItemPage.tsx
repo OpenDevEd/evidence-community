@@ -49,22 +49,20 @@ import {
 	useState,
 	useMemo,
 } from "react";
-import { useFeatureFlagEnabled } from "@/context/Providers";
-import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import {
+	useLibraryConfig,
+	useLibraryFeature,
+} from "@/context/LibraryConfigProvider";
 import { useQueryState } from "nuqs";
-import ItemOld from "@/components/pages/Item";
 import ItemHeader from "@/components/features/newlib/ItemHeader";
 import ItemTitle from "@/components/features/newlib/ItemTitle";
 import {
 	COUNTRIES,
 	FUNDING_PARTNER,
 	INSTITUTIONS_NAME,
-	NOTES_DESCRIPTION,
-	SHOW_URL_IN_CITATION,
 	getSafeReferrer,
 } from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
-import { INTERNAL_TAG, PUBLISH_TAGS } from "@/constants/items";
 import { hasAnyTag } from "@/lib/tags";
 import useSWR from "swr";
 import {
@@ -73,6 +71,8 @@ import {
 	type DoiDisplayLink,
 	type DoiDisplayProvider,
 } from "@opendeved/doi-sync-core/display";
+import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -197,7 +197,7 @@ function ItemAuthor({ author }: { author?: Author }) {
 			: `${author?.firstName} ${author?.lastName}`
 		: undefined;
 
-	const isAuthorFilterEnabled = useFeatureFlagEnabled("author-filter");
+	const isAuthorFilterEnabled = useLibraryFeature("authorFilter");
 	const affiliationCount = author?.institutions?.length || 0;
 
 	const subtitle = (
@@ -396,7 +396,13 @@ function ItemAuthors({ item }: { item: Item | undefined }) {
 
 function ItemInstitution({ institution }: { institution?: string }) {
 	const [referrer, setReferrer] = useQueryState("referrer");
-	const isAuthorLocationEnabled = useFeatureFlagEnabled("author-location");
+	const isAuthorLocationEnabled =
+		useLibraryFeature("authorLocation");
+	const { institutions: configuredInstitutions } = useLibraryConfig();
+	const configuredInstitution = findInstitutionWithLogo(
+		configuredInstitutions,
+		institution,
+	);
 
 	return (
 		<LinkWithParams
@@ -417,7 +423,17 @@ function ItemInstitution({ institution }: { institution?: string }) {
 				key={institution}
 				icon={
 					<div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg text-accent bg-accent/10 brightness-150 shrink-0">
-						<HiAcademicCap />
+						{configuredInstitution?.logoUrl ? (
+							<RuntimeAsset
+								reference={configuredInstitution.logoUrl}
+								alt=""
+								className="size-full rounded-lg bg-white object-contain p-1"
+								width={32}
+								height={32}
+							/>
+						) : (
+							<HiAcademicCap />
+						)}
 					</div>
 				}
 				title={institution}
@@ -711,6 +727,7 @@ function ProcessHTML(html: string) {
 
 function ItemCitation({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
+	const { citations } = useLibraryConfig();
 	const [origin, setOrigin] = useState("");
 	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{
 		citation: string | null;
@@ -742,7 +759,7 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 			? decodeHTMLEntities(cleanCitationText)
 			: undefined;
 
-		if (!SHOW_URL_IN_CITATION || !item?.key || !decodedCitation) {
+		if (!citations.showUrl || !item?.key || !decodedCitation) {
 			return {
 				citationCopy: decodedCitation,
 				citationHtml: ProcessHTML(rawCitation.trim()),
@@ -780,7 +797,13 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 			citationHtml: finalHtml,
 			isLoading: false,
 		};
-	}, [isCitationFetching, item?.key, origin, resolvedCitation, t]);
+	}, [
+		citations.showUrl,
+		isCitationFetching,
+		item?.key,
+		origin,
+		resolvedCitation,
+	]);
 
 	return (
 		<ItemPropertyRowWrapper
@@ -1190,7 +1213,7 @@ function ItemCollection({
 }
 
 function ItemCollections({ item }: { item: Item | undefined }) {
-	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
+	const isCollectionsEnabled = useLibraryFeature("collections");
 	const t = useTranslations("ui");
 
 	if (!isCollectionsEnabled) return null;
@@ -1343,31 +1366,22 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 
 function useNotesDescription() {
 	const t = useTranslations("ui");
-
-	if (!NOTES_DESCRIPTION) return t("itemNotesDescription");
-	if (NOTES_DESCRIPTION === "false") return null;
-	if (
-		NOTES_DESCRIPTION.charAt(0).toUpperCase() ===
-		NOTES_DESCRIPTION.charAt(0)
-	) {
-		return NOTES_DESCRIPTION;
-	}
-	return t(NOTES_DESCRIPTION);
+	return t("itemNotesDescription");
 }
 
 function ItemNotes({ item }: { item: Item | undefined }) {
-	const t = useTranslations("ui");
+	const { content } = useLibraryConfig();
 	const notes = item?.attachmentsData?.filter(
 		(attachment) =>
 			attachment.itemType === "Note" &&
 			attachment.note &&
-			hasAnyTag(attachment.tags, PUBLISH_TAGS),
+			hasAnyTag(attachment.tags, content.tags.publish),
 	);
 	const links = item?.attachmentsData?.filter(
 		(attachment) =>
 			attachment.linkMode === "linked_url" &&
 			attachment.url &&
-			hasAnyTag(attachment.tags, PUBLISH_TAGS),
+			hasAnyTag(attachment.tags, content.tags.publish),
 	);
 
 	const notesDescription = useNotesDescription();
@@ -1432,17 +1446,12 @@ export default function ItemPage({
 	loading: boolean;
 }) {
 	const loading = data?.item ? false : loadingProp;
-	const isNewResourcePageEnabled = useFeatureFlagEnabled("new-resource-page");
 
 	useEffect(() => {
 		document.dispatchEvent(
 			new Event("ZoteroItemUpdated", { bubbles: true, cancelable: true }),
 		);
 	}, [data?.item]);
-
-	if (!isNewResourcePageEnabled) {
-		return <ItemOld data={data} loading={loading} />;
-	}
 
 	const item = transformItem(loading ? undefined : data?.item)!;
 

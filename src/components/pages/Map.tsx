@@ -16,7 +16,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useFacetList } from "@/hooks/useFacetList";
 import { Input } from "../nextui/Input";
 import { SearchBar } from "./EvidenceLibrary";
-import { SCOPE_OPTIONS, SORT_OPTIONS } from "@/constants/items";
+import { SORT_OPTIONS } from "@/constants/items";
 import { twMerge } from "tailwind-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { createPortal } from "react-dom";
@@ -159,7 +159,7 @@ function Search({ props, setMapFacet, mapFacet }: { props: ReturnType<typeof use
 
 
 export default function Map() {
-	const { theme } = useLibraryConfig();
+	const { search, theme } = useLibraryConfig();
 	const accentRamp = generateColorRamp(theme.colors.accent);
 	const tailwindAccentColor = formatCssColor(accentRamp[600]);
 	const RGBAccent = accentRamp[600].slice(0, 3) as [
@@ -196,13 +196,15 @@ export default function Map() {
 				props.handleSortChange(new Set([SORT_OPTIONS[0].key]));
 			}
 			if (props.queryParams.scope) {
-				props.handleScopeChange(new Set([SCOPE_OPTIONS[0].key]));
+				props.handleScopeChange(
+					new Set([search.defaultScope]),
+				);
 			}
 			if (props.queryParams.page) {
 				props.handlePageChange(1);
 			}
 		}
-	}, [props.queryParams.country])
+	}, [props.queryParams.country, search.defaultScope])
 
 	return (
 		<div className="w-full h-screen overflow-hidden">

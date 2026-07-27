@@ -10,7 +10,6 @@ import { userCollection } from "@/db/schema/tables/userCollection";
 import {
 	EXCLUDED_ITEM_TYPES,
 	ITEMS_PER_PAGE,
-	SCOPE_OPTIONS,
 	SORT_OPTIONS,
 } from "@/constants/items";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
@@ -39,11 +38,17 @@ import { getModel } from "./ai";
 import { headers } from "next/headers";
 import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
-import { blockedTags } from "@/constants/misc";
 import transporter from "./nodemailer";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import { getCitationFromCSL, getCSL } from "@/lib/citations";
 import { getMainAttributes } from "@/lib/search";
+import { getLibraryConfig } from "@/config/library-config/server";
+import {
+	getRuntimeSearchAttributes,
+	getRuntimeSearchFacets,
+	normalizeRuntimeYearRange,
+	resolveRuntimeSearchScope,
+} from "@/config/library-config/search";
 
 export { getCitationFromCSL, getCSL };
 
@@ -323,19 +328,17 @@ export async function getItems(
 	userId: string | null = null
 ) {
 	const collections = searchParams.collections || [];
+	const libraryConfig = await getLibraryConfig();
 
 	const userFilters = await getProfileSearchFilter(
 		userId,
 		searchParams.collectionId || ""
 	);
 
-	const facets = ["collectionsAncestry", "institution"];
-	if (process.env.NEXT_PUBLIC_DISABLE_COUNTRY !== "true") {
-		facets.push("country");
-	}
-	if (process.env.NEXT_PUBLIC_DISABLE_AUTHOR_COUNTRY !== "true") {
-		facets.push("creators.institutions.country_code");
-	}
+	const facets = getRuntimeSearchFacets(
+		libraryConfig.search,
+		libraryConfig.filters,
+	);
 
 	return searchIndex(
 		searchParams,
@@ -483,99 +486,6 @@ export async function getLikedPosts(likes: Session["user"]["likes"]) {
 
 	return res.results;
 }
-
-
-
-function cleanTheAttributesToSearchOn(fields: string[]) {
-	if (process.env.NEXT_PUBLIC_DISABLE_FULLTEXT === "true") {
-		fields = fields.filter(field => !field.includes("fullTextPDF"));
-	}
-
-	if (process.env.NEXT_PUBLIC_DISABLE_TAGS === "true") {
-		fields = fields.filter(field => !field.includes("tags"));
-	}
-
-	return fields;
-}
-
-function isEmptyValue(value: any): boolean {
-	return value === null ||
-		value === undefined ||
-		value === "" ||
-		(Array.isArray(value) && value.length === 0);
-}
-
-function filterEmptyValues<T extends Record<string, any>>(obj: T): Record<string, any> {
-	return Object.entries(obj).reduce((acc, [key, value]) => {
-		if (!isEmptyValue(value)) {
-			acc[key] = value;
-		}
-		return acc;
-	}, {} as Record<string, any>);
-}
-
-function serializeWithoutQuotes(obj: any): string {
-	if (Array.isArray(obj)) {
-		return `[${obj.map(serializeWithoutQuotes).join(',')}]`;
-	}
-	if (typeof obj === 'object' && obj !== null) {
-		const entries = Object.entries(obj)
-			.map(([key, value]) => `${key}:${serializeWithoutQuotes(value)}`)
-			.join(',');
-		return `{${entries}}`;
-	}
-	if (typeof obj === 'string') {
-		return obj;
-	}
-	return String(obj);
-}
-
-function cleanCacheKey(
-	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	extraFilters: NonNullable<
-		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
-	>["filter"] = [],
-	extraProperties: Parameters<
-		ReturnType<typeof meilisearchClient.index>["search"]
-	>[1] = {}
-) {
-	// Remove default values that don't affect search results
-	const cleanedSearchParams = filterEmptyValues({
-		...searchParams,
-		// Remove defaults
-		page: searchParams.page !== 1 ? searchParams.page : undefined,
-		sort: searchParams.sort !== SORT_OPTIONS[0].key ? searchParams.sort : undefined,
-		scope: searchParams.scope !== SCOPE_OPTIONS[0].key ? searchParams.scope : undefined,
-	});
-
-	// Remove redundant collection filters since they're already in searchParams.collections
-	const cleanedExtraFilters = Array.isArray(extraFilters)
-		? extraFilters.filter(filter =>
-			filter && !filter.includes('collectionsAncestry = ')
-		)
-		: [];
-
-	// Remove standard facets that are always the same
-	const standardFacets = ["collectionsAncestry", "institution", "country", "creators.institutions.country_code"];
-	const cleanedExtraProperties = filterEmptyValues({
-		...extraProperties,
-		facets: Array.isArray(extraProperties.facets) &&
-			JSON.stringify(extraProperties.facets) !== JSON.stringify(standardFacets)
-			? extraProperties.facets
-			: undefined,
-	});
-
-	const keyParts = [
-		cleanedSearchParams,
-		cleanedExtraFilters,
-		cleanedExtraProperties
-	]
-		.filter(part => Array.isArray(part) ? part.length > 0 : Object.keys(part).length > 0)
-		.map(part => serializeWithoutQuotes(part));
-
-	return keyParts.join('-') || 'default';
-}
-
 export async function searchIndex(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	extraProperties: Parameters<
@@ -586,16 +496,31 @@ export async function searchIndex(
 	>["filter"] = []
 ) {
 	const items = async () => {
+		const libraryConfig = await getLibraryConfig();
 		const pageNum = Math.max(1, Number(searchParams.page || 1));
 		const limitNum = ITEMS_PER_PAGE;
 		const sort = searchParams.sort || SORT_OPTIONS[0].key;
 		const search = searchParams.search || "";
-		const scope = searchParams.scope || SCOPE_OPTIONS[0].key;
-		const range = searchParams.range || null;
-		const institution = searchParams.institution || [];
-		const country = searchParams.country || [];
-		const author_country = searchParams.author_country || [];
+		const scope = resolveRuntimeSearchScope(
+			searchParams.scope,
+			libraryConfig.search,
+		);
+		const range = normalizeRuntimeYearRange(
+			searchParams.range,
+			libraryConfig.filters,
+		);
+		const institution =
+			libraryConfig.filters.institution.mode === "hidden"
+				? []
+				: searchParams.institution || [];
+		const country = libraryConfig.search.country
+			? searchParams.country || []
+			: [];
+		const author_country = libraryConfig.search.authorCountry
+			? searchParams.author_country || []
+			: [];
 		const author = searchParams.author || "";
+		const hiddenTags = libraryConfig.content.tags.hidden;
 		const searchIndex = meilisearchClient.index(
 			process.env.MEILI_INDEX || config.index
 		);
@@ -620,7 +545,9 @@ export async function searchIndex(
 			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
 			"deleted != 1",
-			`tags NOT IN ${JSON.stringify(blockedTags)}`
+			hiddenTags.length
+				? `tags NOT IN ${JSON.stringify(hiddenTags)}`
+				: null,
 		].filter((f): f is string => f !== null);
 
 		const allAttributes = await getMainAttributes();
@@ -629,10 +556,9 @@ export async function searchIndex(
 			searchIndex.search(search, {
 				offset: (pageNum - 1) * limitNum,
 				limit: limitNum,
-				attributesToSearchOn: cleanTheAttributesToSearchOn(
-					SCOPE_OPTIONS.find((option) => option.key === scope)
-						?.attributesToSearchOn ||
-					SCOPE_OPTIONS[0].attributesToSearchOn,
+				attributesToSearchOn: getRuntimeSearchAttributes(
+					scope,
+					libraryConfig.search,
 				),
 				attributesToRetrieve: allAttributes,
 				...(sortOption ? { sort: [sortOption] } : {}),
@@ -682,10 +608,19 @@ export async function searchIndex(
 				Object.assign(
 					{},
 					searchResults.facetDistribution,
-					countryFacetOptions.reduce((acc, facet) => {
-						acc[facet.key + "_uncategorized"] = searchResults.facetDistribution?.[facet.key] || {};
-						return acc;
-					}, {} as FacetDistribution)
+					countryFacetOptions
+						.filter(
+							(facet) =>
+								Array.isArray(extraProperties.facets) &&
+								extraProperties.facets.includes(facet.key),
+						)
+						.reduce((acc, facet) => {
+							acc[facet.key + "_uncategorized"] =
+								searchResults.facetDistribution?.[
+									facet.key
+								] || {};
+							return acc;
+						}, {} as FacetDistribution)
 				),
 				{
 					country: country,

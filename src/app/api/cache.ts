@@ -7,18 +7,30 @@ import { status as statusTable } from "@/db/schema/tables/status";
 import { getCollections } from "./collections/route";
 import { Collection } from "./collections/types";
 import { cacheLife, cacheTag } from "next/cache";
-
-const IS_COUNTRY_LIBRARY = process.env.NEXT_PUBLIC_IS_COUNTRY_LIBRARY === "true";
-const REVALIDATE = IS_COUNTRY_LIBRARY ? 60 * 60 * 24 * 30 : 60;
-const REVALIDATE_COLLECTIONS = IS_COUNTRY_LIBRARY ? 60 * 60 * 24 * 30 : 300;
+import { getLibraryConfig } from "@/config/library-config/server";
 
 // --- Collections ---
 
-export async function getCachedCollections() {
+async function _getCollectionsCached(
+	configRevision: string,
+	countryLibrary: boolean,
+) {
 	'use cache'
-	cacheLife({ revalidate: REVALIDATE_COLLECTIONS })
+	cacheLife({
+		revalidate: countryLibrary
+			? 60 * 60 * 24 * 30
+			: 300,
+	})
 	cacheTag('collections')
 	return getCollections();
+}
+
+export async function getCachedCollections() {
+	const config = await getLibraryConfig();
+	return _getCollectionsCached(
+		config.revision,
+		config.filters.countryLibrary,
+	);
 }
 
 // --- Hydrate helper (unchanged) ---
@@ -32,9 +44,17 @@ function hydrateCollections(item: NonNullable<Awaited<ReturnType<typeof getItemR
 
 // --- Items (revalidate: 60s) ---
 
-async function _getItemRawCached(key: string) {
+async function _getItemRawCached(
+	key: string,
+	configRevision: string,
+	countryLibrary: boolean,
+) {
 	'use cache'
-	cacheLife({ revalidate: REVALIDATE })
+	cacheLife({
+		revalidate: countryLibrary
+			? 60 * 60 * 24 * 30
+			: 60,
+	})
 	cacheTag('item-' + key)
 	return getItemRaw(key);
 }
@@ -44,7 +64,12 @@ export async function getCachedItem(key: string, ignoreCache: boolean = false) {
 		return getItem(key);
 	}
 
-	const result = await _getItemRawCached(key);
+	const config = await getLibraryConfig();
+	const result = await _getItemRawCached(
+		key,
+		config.revision,
+		config.filters.countryLibrary,
+	);
 
 	if (!result || !result.item) {
 		return await getItem(key);
@@ -68,9 +93,17 @@ function stripNulls<T extends Record<string, unknown>>(obj: T): Partial<T> {
 	return result;
 }
 
-async function _getItemSmallCached(key: string): Promise<ReturnType<typeof getItemRaw>> {
+async function _getItemSmallCached(
+	key: string,
+	configRevision: string,
+	countryLibrary: boolean,
+): Promise<ReturnType<typeof getItemRaw>> {
 	'use cache'
-	cacheLife({ revalidate: REVALIDATE })
+	cacheLife({
+		revalidate: countryLibrary
+			? 60 * 60 * 24 * 30
+			: 60,
+	})
 	cacheTag('item-small-' + key)
 	const item = await getItemRaw(key);
 
@@ -93,7 +126,12 @@ export async function getCachedItemSmall(key: string, ignoreCache: boolean = fal
 		return { item: stripNulls(rest) as typeof item.item };
 	}
 
-	const result = await _getItemSmallCached(key);
+	const config = await getLibraryConfig();
+	const result = await _getItemSmallCached(
+		key,
+		config.revision,
+		config.filters.countryLibrary,
+	);
 
 	if (!result || !result.item) {
 		const item = await getItem(key);

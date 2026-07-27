@@ -1,5 +1,4 @@
 import { ItemGetResponse } from "@/app/api/item/types";
-import ItemComponent from "@/components/pages/Item";
 import ItemPage from "@/components/features/newlib/ItemPage";
 import { notFound } from "next/navigation";
 import { getCachedItemSmall } from "@/app/api/cache";

@@ -27,12 +27,19 @@ import {
 	Tooltip,
 	useDisclosure,
 } from "@nextui-org/react";
-import React, { ReactNode, use, useRef, useState, useEffect } from "react";
+import React, {
+	ReactNode,
+	use,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { Tabs, Tab } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { AiOutlineCompass } from "react-icons/ai";
 import { useDebounce } from "@/hooks/useDebounce";
-import { SORT_OPTIONS, SCOPE_OPTIONS } from "@/constants/items";
+import { SORT_OPTIONS } from "@/constants/items";
 import HelpModal from "@/components/features/modals/HelpModal";
 import { useFormatter, useTranslations } from "next-intl";
 import {
@@ -53,7 +60,6 @@ import { SearchBar } from "@/components/features/SearchBar";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import ChatModal, { ChatMode } from "../features/modals/ChatModal";
 import ModelSelector from "../features/ai/ModelSelector";
-import { useFeatureFlagEnabled } from "@/context/Providers";
 import DialogModal from "../nextui/DialogModal";
 import AIHeader from "../features/ai/AIHeader";
 import { useLocalStorage } from "usehooks-ts";
@@ -65,6 +71,11 @@ import { toast } from "@/components/layout/Toast";
 import { Formatter } from "recharts/types/component/DefaultTooltipContent";
 import { BsStars } from "react-icons/bs";
 import useBreakpoint, { useBreakpointBelow } from "@/hooks/useBreakpoint";
+import {
+	useLibraryConfig,
+	useLibraryFeature,
+} from "@/context/LibraryConfigProvider";
+import { getRuntimeSearchScopeOptions } from "@/config/library-config/search";
 
 function DropDownIcon({
 	Icon,
@@ -157,6 +168,11 @@ function ScopeComponent({
 	itemsContext: ReturnType<typeof useItemsList>;
 }) {
 	const tScopes = useTranslations("scopes");
+	const { search } = useLibraryConfig();
+	const scopeOptions = useMemo(
+		() => getRuntimeSearchScopeOptions(search),
+		[search],
+	);
 
 	return (
 		<Select
@@ -170,7 +186,7 @@ function ScopeComponent({
 				]
 			}
 			onSelectionChange={itemsContext.handleScopeChange as any}
-			items={SCOPE_OPTIONS}
+			items={scopeOptions}
 			selectorIcon={<div className="hidden"></div>}
 			classNames={
 				!itemsContext.userData
@@ -604,11 +620,12 @@ function AITabContent({
 export type SearchMode = "search" | "ai" | "research";
 
 export function useIsAISearchEnabled() {
-	const isAISearchEnabled = useFeatureFlagEnabled("ai-search");
-	const isDeepResearchEnabled = useFeatureFlagEnabled("deep-research");
+	const isAISearchEnabled = useLibraryFeature("aiSearch");
+	const isDeepResearchEnabled =
+		useLibraryFeature("deepResearch");
 	return {
 		isAISearchEnabled,
-		isDeepResearchEnabled: isAISearchEnabled && isDeepResearchEnabled,
+		isDeepResearchEnabled,
 	};
 }
 

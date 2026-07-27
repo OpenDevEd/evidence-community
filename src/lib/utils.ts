@@ -1,6 +1,5 @@
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
-import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
 import { COUNTRIES, COUNTRY_PARAMS, CSL_SKIP_WORDS } from "@/constants/misc";

@@ -21,14 +21,13 @@ import { Fragment, useContext, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Input } from "../../nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
-import { COUNTRIES, COUNTRY_PARAMS, CUSTOM_FILTER_INSTITUTION, IS_COUNTRY_LIBRARY, years } from "@/constants/misc";
-import { INSTITUTION_LOGOS } from "@/constants/items";
+import { COUNTRIES, COUNTRY_PARAMS } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
 import { LuCheck, LuChevronDown, LuChevronRight, LuX } from "react-icons/lu";
 import { IoFilter } from "react-icons/io5";
 import { useTranslations } from "next-intl";
 import useSWR from "swr";
-import { CacheContext, useFeatureFlagEnabled } from "@/context/Providers";
+import { CacheContext } from "@/context/Providers";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { inferParserType } from "nuqs";
 import {
@@ -38,22 +37,37 @@ import {
 	useMultipleFacetLists,
 } from "@/hooks/useFacetList";
 import Image from "next/image";
-import { fetcher, getCountryAncestry, getCountryInfo } from "@/lib/utils";
+import {
+	fetcher,
+	getCountryAncestry,
+	getCountryInfo,
+	localizeOrUseIfCapitalized,
+} from "@/lib/utils";
 import { BsList } from "react-icons/bs";
 import { Button } from "../../nextui/Button";
 import { InstitutionsData } from "@/app/api/institutions/types";
+import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { findInstitutionWithLogo } from "@/config/library-config/institutions";
+import {
+	useLibraryConfig,
+	useLibraryFeature,
+} from "@/context/LibraryConfigProvider";
+import { getRuntimeYears } from "@/config/library-config/search";
 function YearPicker({
 	label,
 	selectedKey,
 	onSelectionChange,
+	years,
 }: {
 	label?: string;
 	selectedKey: string | null;
 	onSelectionChange: (value: any | null) => void;
+	years: readonly string[];
 }) {
 	const [debouncedOnSelectionChange, _] = useDebounce(onSelectionChange, 500);
 
-	const isYearsDropDownEnabled = useFeatureFlagEnabled("years-dropdown");
+	const isYearsDropDownEnabled =
+		useLibraryFeature("yearsDropdown");
 
 	if (isYearsDropDownEnabled) {
 		return (
@@ -306,7 +320,8 @@ export function InnerCollectionList({
 	selectedCollections: string[];
 	hierarchy: Collection[];
 }) {
-	const defaultExpanded = !process.env.NEXT_PUBLIC_DEFAULT_EXPANDED_COLLECTIONS || process.env.NEXT_PUBLIC_DEFAULT_EXPANDED_COLLECTIONS === "true";
+	const { filters } = useLibraryConfig();
+	const defaultExpanded = filters.collectionsExpanded;
 	const { accordionGlobalExpanded, setAccordionGlobalExpanded } =
 		useContext(CacheContext);
 
@@ -486,9 +501,14 @@ function FiltersList({
 	handleInstitutionSelect: (institution: string) => void;
 	facetDistribution: FacetDistribution | undefined;
 }) {
-	const isCountryFocusEnabled = useFeatureFlagEnabled("country-focus");
-	const isAuthorLocationEnabled = useFeatureFlagEnabled("author-location");
-	const isNationalityFocusEnabled = IS_COUNTRY_LIBRARY;
+	const { filters } = useLibraryConfig();
+	const isInstitutionEnabled =
+		filters.institution.mode !== "hidden";
+	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
+	const isAuthorLocationEnabled =
+		useLibraryFeature("authorLocation");
+	const isNationalityFocusEnabled =
+		filters.countryLibrary && isInstitutionEnabled;
 
 	const { data: nationalInstitutionsData } = useSWR<InstitutionsData>(
 		isNationalityFocusEnabled ? `/institutions` : null,
@@ -498,7 +518,9 @@ function FiltersList({
 	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
 
 	const enabledCount = [
+		isInstitutionEnabled,
 		isCountryFocusEnabled,
+		isNationalityFocusEnabled,
 		isAuthorLocationEnabled,
 	].filter(Boolean).length;
 
@@ -509,6 +531,10 @@ function FiltersList({
 		"institution",
 		(institution) =>
 			InstitutionParser(institution, queryParams, handleInstitutionSelect)
+	);
+	const institutionLabel = localizeOrUseIfCapitalized(
+		filters.institution.label,
+		t,
 	);
 
 	const [countries] = useFacetList(
@@ -604,6 +630,30 @@ function FiltersList({
 		countries_uncategorized,
 	]);
 
+	const institutionFilter = useMemo(() => {
+		return (
+			isInstitutionEnabled && (
+				<FacetPicker
+					key="institution-filter"
+					label={institutionLabel}
+					placeholder={institutionLabel}
+					selectedKey={queryParams.institution}
+					onSelectionChange={handleInstitutionSelect}
+					facetDistribution={facetDistribution}
+					list={institutions}
+					facetName="institution"
+				/>
+			)
+		);
+	}, [
+		facetDistribution,
+		handleInstitutionSelect,
+		institutionLabel,
+		institutions,
+		isInstitutionEnabled,
+		queryParams.institution,
+	]);
+
 	const nationalInstitutionsFilter = useMemo(() => {
 		return (
 			isNationalityFocusEnabled && (
@@ -643,7 +693,9 @@ function FiltersList({
 						author_countries.find(
 							(item) => item.section === "Countries"
 						)?.label
-							? IS_COUNTRY_LIBRARY ? t("coauthorCountries") : t("authorCountries")
+							? filters.countryLibrary
+								? t("coauthorCountries")
+								: t("authorCountries")
 							: t("institutions")
 					}
 					placeholder={
@@ -667,6 +719,7 @@ function FiltersList({
 		);
 	}, [
 		isAuthorLocationEnabled,
+		filters.countryLibrary,
 		t,
 		author_countries,
 		queryParams.author_country,
@@ -677,12 +730,18 @@ function FiltersList({
 	const moreFilters = useMemo(() => {
 		return (
 			<>
+				{institutionFilter}
 				{countryFocusFilter}
 				{nationalInstitutionsFilter}
 				{authorLocationFilter}
 			</>
 		);
-	}, [countryFocusFilter, nationalInstitutionsFilter, authorLocationFilter]);
+	}, [
+		authorLocationFilter,
+		countryFocusFilter,
+		institutionFilter,
+		nationalInstitutionsFilter,
+	]);
 
 	const isMoreFiltersOpen = globalExpanded["more-filters"] ?? true;
 	const setIsMoreFiltersOpen = (value: boolean) => {
@@ -783,8 +842,20 @@ export default function CollectionsList({
 	queryParams: inferParserType<typeof searchParamsLoader>;
 }) {
 	const t = useTranslations("ui");
-	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
-	const customFilterInstitution = CUSTOM_FILTER_INSTITUTION;
+	const isCollectionsEnabled = useLibraryFeature("collections");
+	const {
+		filters,
+		institutions: configuredInstitutions,
+	} = useLibraryConfig();
+	const configuredYears = useMemo(
+		() => getRuntimeYears(filters),
+		[filters],
+	);
+	const customFilterInstitution =
+		filters.institution.mode ===
+		"facet-with-featured-value"
+			? filters.institution.featuredValue
+			: undefined;
 
 	const [start, end, sameYear] = useMemo(() => {
 		const dashExists = range.includes("-");
@@ -797,6 +868,10 @@ export default function CollectionsList({
 	const customFilter = useMemo(() => {
 		if (!customFilterInstitution) return null;
 		const isCustomFilterInstitutionSelected = queryParams.institution.includes(customFilterInstitution || "");
+		const configuredInstitution = findInstitutionWithLogo(
+			configuredInstitutions,
+			customFilterInstitution,
+		);
 		return (
 			<Button
 				color={isCustomFilterInstitutionSelected ? "tertiary" : "secondary"}
@@ -804,16 +879,26 @@ export default function CollectionsList({
 				onPress={() => handleInstitutionSelect(customFilterInstitution)}
 				className="w-full flex justify-start mb-4"
 				startContent={
-					INSTITUTION_LOGOS[customFilterInstitution]({
-						className: "h-6",
-					})
+					configuredInstitution?.logoUrl ? (
+						<RuntimeAsset
+							reference={configuredInstitution.logoUrl}
+							alt=""
+							className="size-6 shrink-0 rounded-md bg-white/80 object-contain p-0.5"
+						/>
+					) : undefined
 				}
 				endContent={<IoFilter className="size-5 ml-auto" />}
 			>
 				{t("filterBy")} {customFilterInstitution}
 			</Button>
 		);
-	}, [queryParams.institution, handleInstitutionSelect, t]);
+	}, [
+		configuredInstitutions,
+		customFilterInstitution,
+		queryParams.institution,
+		handleInstitutionSelect,
+		t,
+	]);
 
 	return (
 		<aside
@@ -837,83 +922,137 @@ export default function CollectionsList({
 					</div>
 				)}
 				<section className="w-full bg-[#E8E6E1] dark:bg-secondary sm:rounded-t-2xl last:rounded-b-2xl flex flex-col gap-2 p-6 sticky top-0 lg:static z-20">
-					<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
-						<span>{t("publicationYear")}</span>
-						<div className="flex gap-4 items-center flex-1 justify-end">
-							<Switch
-								isSelected={!sameYear}
-								onValueChange={(value) =>
-									handleRangeChange(
-										start,
-										sameYear ? end : null
-									)
-								}
-								classNames={{
-									label: "text-sm font-normal",
-								}}
-							>
-								{t("yearRange")}
-							</Switch>
-						</div>
-					</div>
-					<div className="">
-						<AnimatePresence mode="popLayout" initial={false}>
-							{sameYear ? (
-								<motion.div
-									initial={{ opacity: 0, y: 10 }}
-									animate={{ opacity: 1, y: 0 }}
-									exit={{ opacity: 0, y: 10 }}
-									key="same-year"
-									layout
-									className="w-full"
-								>
-								<YearPicker
-									label={t("year")}
-									selectedKey={start}
-										onSelectionChange={(key) =>
-											handleRangeChange(key, null)
+					{filters.years.enabled && (
+						<>
+							<div className="text-lg font-medium text-black/80 dark:text-white/80 flex">
+								<span>{t("publicationYear")}</span>
+								<div className="flex gap-4 items-center flex-1 justify-end">
+									<Switch
+										isSelected={!sameYear}
+										onValueChange={() =>
+											handleRangeChange(
+												start,
+												sameYear
+													? end
+													: null,
+											)
 										}
-									/>
-								</motion.div>
-							) : (
-								<motion.div
-									initial={{ opacity: 0, y: 10 }}
-									animate={{ opacity: 1, y: 0 }}
-									exit={{ opacity: 0, y: 10 }}
-									key="year-range"
-									layout
-									className="flex gap-4 w-full"
+										classNames={{
+											label: "text-sm font-normal",
+										}}
+									>
+										{t("yearRange")}
+									</Switch>
+								</div>
+							</div>
+							<div>
+								<AnimatePresence
+									mode="popLayout"
+									initial={false}
 								>
-								{[
-									{
-										label: t("from"),
-									},
-									{
-										label: t("to"),
-									},
-								].map(({ label }, index) => (
-									<YearPicker
-										key={label}
-										label={label}
-											selectedKey={
-												index === 0 ? start : end
-											}
-											onSelectionChange={(key) =>
-												handleRangeChange(
-													index === 0
-														? key || ""
-														: start,
-													index === 1
-														? key || ""
-														: end
-												)
-											}
-										/>
-									))}
-								</motion.div>
-							)}
-						</AnimatePresence>
-					</div>
+									{sameYear ? (
+										<motion.div
+											initial={{
+												opacity: 0,
+												y: 10,
+											}}
+											animate={{
+												opacity: 1,
+												y: 0,
+											}}
+											exit={{
+												opacity: 0,
+												y: 10,
+											}}
+											key="same-year"
+											layout
+											className="w-full"
+										>
+											<YearPicker
+												label={t("year")}
+												selectedKey={start}
+												onSelectionChange={(
+													key,
+												) =>
+													handleRangeChange(
+														key,
+														null,
+													)
+												}
+												years={
+													configuredYears
+												}
+											/>
+										</motion.div>
+									) : (
+										<motion.div
+											initial={{
+												opacity: 0,
+												y: 10,
+											}}
+											animate={{
+												opacity: 1,
+												y: 0,
+											}}
+											exit={{
+												opacity: 0,
+												y: 10,
+											}}
+											key="year-range"
+											layout
+											className="flex gap-4 w-full"
+										>
+											{[
+												{
+													label: t("from"),
+												},
+												{
+													label: t("to"),
+												},
+											].map(
+												(
+													{ label },
+													index,
+												) => (
+													<YearPicker
+														key={label}
+														label={
+															label
+														}
+														selectedKey={
+															index ===
+															0
+																? start
+																: end
+														}
+														onSelectionChange={(
+															key,
+														) =>
+															handleRangeChange(
+																index ===
+																	0
+																	? key ||
+																			""
+																	: start,
+																index ===
+																	1
+																	? key ||
+																			""
+																	: end,
+															)
+														}
+														years={
+															configuredYears
+														}
+													/>
+												),
+											)}
+										</motion.div>
+									)}
+								</AnimatePresence>
+							</div>
+						</>
+					)}
 					<FiltersList
 						queryParams={queryParams}
 						handleCountrySelect={handleCountrySelect}

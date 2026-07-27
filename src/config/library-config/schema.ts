@@ -689,24 +689,44 @@ const searchSchema = z
 			.array(scopeSchema)
 			.min(1)
 			.max(PLATFORM_SEARCH_SCOPES.length)
-			.default([...PLATFORM_SEARCH_SCOPES])
 			.superRefine((scopes, context) =>
 				addDuplicateIssues(scopes, context, (scope) => scope),
-			),
+			)
+			.optional(),
 		defaultScope: scopeSchema.optional(),
 	})
 	.strict()
 	.default({})
-	.transform((search) => ({
-		...search,
-		defaultScope: search.defaultScope ?? search.scopes[0],
-	}))
+	.transform((search) => {
+		const scopes =
+			search.scopes ??
+			PLATFORM_SEARCH_SCOPES.filter(
+				(scope) => search.fullText || scope !== "documents",
+			);
+		return {
+			...search,
+			scopes,
+			defaultScope: search.defaultScope ?? scopes[0],
+		};
+	})
 	.superRefine((search, context) => {
 		if (!search.scopes.includes(search.defaultScope)) {
 			context.addIssue({
 				code: z.ZodIssueCode.custom,
 				message: "Default scope must be enabled",
 				path: ["defaultScope"],
+			});
+		}
+		if (!search.fullText) {
+			search.scopes.forEach((scope, index) => {
+				if (scope === "documents") {
+					context.addIssue({
+						code: z.ZodIssueCode.custom,
+						message:
+							"Documents scope requires full-text search",
+						path: ["scopes", index],
+					});
+				}
 			});
 		}
 	});
@@ -1344,6 +1364,13 @@ export function createLibraryConfigSchema(
 					context,
 					["features", "deepResearch"],
 					"Deep research requires AI features",
+				);
+			}
+			if (!config.features.aiSearch) {
+				addRequiredIssue(
+					context,
+					["features", "deepResearch"],
+					"Deep research requires AI search",
 				);
 			}
 			if (!enabledProviders.some((provider) => provider.largeModel)) {

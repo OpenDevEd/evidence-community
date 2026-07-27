@@ -5,10 +5,17 @@ import config from "@/constants/config.json";
 import {
 	EXCLUDED_ITEM_TYPES,
 	ITEMS_PER_PAGE,
-	SCOPE_OPTIONS,
 	SORT_OPTIONS,
 } from "@/constants/items";
-import { blockedTags, countryFacetOptions } from "@/constants/misc";
+import { countryFacetOptions } from "@/constants/misc";
+import { getLibraryConfig } from "@/config/library-config/server";
+import {
+	getRuntimeSearchAttributes,
+	getRuntimeSearchFacets,
+	normalizeRuntimeYearRange,
+	resolveRuntimeSearchScope,
+} from "@/config/library-config/search";
+import type { LibraryPublicConfig } from "@/config/library-config/schema";
 import { FacetDistribution } from "meilisearch";
 import { inferParserType } from "nuqs";
 import { cacheLife, cacheTag } from "next/cache";
@@ -50,8 +57,6 @@ export const LIST_ITEM_FIELDS = [
 	"libraryCatalog",
 ] as const;
 
-const DEFAULT_FACETS = ["collectionsAncestry", "institution"];
-
 type SearchCountOnlyResult = {
 	currentPage: number;
 	perPage: number;
@@ -66,20 +71,6 @@ type SearchItemsResult = SearchCountOnlyResult & {
 type SearchFacetsResult = {
 	facetDistribution: FacetDistribution;
 };
-
-function cleanTheAttributesToSearchOn(fields: string[]) {
-	let nextFields = fields;
-
-	if (process.env.NEXT_PUBLIC_DISABLE_FULLTEXT === "true") {
-		nextFields = nextFields.filter((field) => !field.includes("fullTextPDF"));
-	}
-
-	if (process.env.NEXT_PUBLIC_DISABLE_TAGS === "true") {
-		nextFields = nextFields.filter((field) => !field.includes("tags"));
-	}
-
-	return nextFields;
-}
 
 async function getCachedDisplayedAttributes() {
 	'use cache'
@@ -133,19 +124,37 @@ function applyCollectionsData(items: ListItem[], collections: Collection[]) {
 }
 
 function resolveSearchRequest(
-	searchParams: Partial<inferParserType<typeof searchParamsLoader>>
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
+	libraryConfig: Pick<
+		LibraryPublicConfig,
+		"content" | "filters" | "search"
+	>,
 ) {
 	const pageNum = Math.max(1, Number(searchParams.page || 1));
 	const limitNum = ITEMS_PER_PAGE;
 	const sort = searchParams.sort || SORT_OPTIONS[0].key;
 	const search = searchParams.search || "";
-	const scope = searchParams.scope || SCOPE_OPTIONS[0].key;
-	const range = searchParams.range || null;
-	const institution = searchParams.institution || [];
-	const country = searchParams.country || [];
-	const author_country = searchParams.author_country || [];
+	const scope = resolveRuntimeSearchScope(
+		searchParams.scope,
+		libraryConfig.search,
+	);
+	const range = normalizeRuntimeYearRange(
+		searchParams.range,
+		libraryConfig.filters,
+	);
+	const institution =
+		libraryConfig.filters.institution.mode === "hidden"
+			? []
+			: searchParams.institution || [];
+	const country = libraryConfig.search.country
+		? searchParams.country || []
+		: [];
+	const author_country = libraryConfig.search.authorCountry
+		? searchParams.author_country || []
+		: [];
 	const author = searchParams.author || "";
 	const collections = searchParams.collections || [];
+	const hiddenTags = libraryConfig.content.tags.hidden;
 
 	const effectiveSort =
 		search.trim().length === 0 && sort === SORT_OPTIONS[0].key
@@ -166,12 +175,14 @@ function resolveSearchRequest(
 		scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
 		...collections.map((collection) => `collectionsAncestry = "${collection}"`),
 		"deleted != 1",
-		`tags NOT IN ${JSON.stringify(blockedTags)}`,
+		hiddenTags.length
+			? `tags NOT IN ${JSON.stringify(hiddenTags)}`
+			: null,
 	].filter((filter): filter is string => filter !== null);
 
-	const attributesToSearchOn = cleanTheAttributesToSearchOn(
-		SCOPE_OPTIONS.find((option) => option.key === scope)?.attributesToSearchOn ||
-			SCOPE_OPTIONS[0].attributesToSearchOn
+	const attributesToSearchOn = getRuntimeSearchAttributes(
+		scope,
+		libraryConfig.search,
 	);
 
 	return {
@@ -192,12 +203,19 @@ export async function getPublicItems(
 		includeHeavyFields?: boolean;
 	} = {}
 ): Promise<SearchItemsResult> {
+	const [libraryConfig, displayedAttributes] = await Promise.all([
+		getLibraryConfig(),
+		getMainAttributes(),
+	]);
 	const { search, pageNum, limitNum, sortOption, finalFilters, attributesToSearchOn } =
-		resolveSearchRequest(searchParams);
+		resolveSearchRequest(
+			searchParams,
+			libraryConfig,
+		);
 
 	const includeHeavyFields = options.includeHeavyFields === true;
 	const attributesToRetrieve = includeHeavyFields
-		? await getMainAttributes()
+		? displayedAttributes
 		: [...LIST_ITEM_FIELDS];
 
 	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
@@ -234,16 +252,17 @@ export async function getPublicItems(
 export async function getPublicFacets(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>
 ): Promise<SearchFacetsResult> {
+	const libraryConfig = await getLibraryConfig();
 	const { search, finalFilters, attributesToSearchOn, country, author_country } =
-		resolveSearchRequest(searchParams);
+		resolveSearchRequest(
+			searchParams,
+			libraryConfig,
+		);
 
-	const facets = [...DEFAULT_FACETS];
-	if (process.env.NEXT_PUBLIC_DISABLE_COUNTRY !== "true") {
-		facets.push("country");
-	}
-	if (process.env.NEXT_PUBLIC_DISABLE_AUTHOR_COUNTRY !== "true") {
-		facets.push("creators.institutions.country_code");
-	}
+	const facets = getRuntimeSearchFacets(
+		libraryConfig.search,
+		libraryConfig.filters,
+	);
 
 	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
 
@@ -260,11 +279,13 @@ export async function getPublicFacets(
 			Object.assign(
 				{},
 				searchResults.facetDistribution,
-				countryFacetOptions.reduce((acc, facet) => {
-					acc[facet.key + "_uncategorized"] =
-						searchResults.facetDistribution?.[facet.key] || {};
-					return acc;
-				}, {} as FacetDistribution)
+				countryFacetOptions
+					.filter((facet) => facets.includes(facet.key))
+					.reduce((acc, facet) => {
+						acc[facet.key + "_uncategorized"] =
+							searchResults.facetDistribution?.[facet.key] || {};
+						return acc;
+					}, {} as FacetDistribution)
 			),
 			{
 				country,
@@ -277,8 +298,12 @@ export async function getPublicFacets(
 export async function getItemsPaginationMeta(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>
 ): Promise<SearchCountOnlyResult> {
+	const libraryConfig = await getLibraryConfig();
 	const { search, pageNum, limitNum, sortOption, finalFilters, attributesToSearchOn } =
-		resolveSearchRequest(searchParams);
+		resolveSearchRequest(
+			searchParams,
+			libraryConfig,
+		);
 
 	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
 

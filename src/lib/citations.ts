@@ -1,10 +1,11 @@
 import { Item } from "@/app/api/item/types";
-import { blockedTags } from "@/constants/misc";
 import config from "@/constants/config.json";
 import meilisearchClient from "@/lib/meilisearch";
 import { ItemToZoteroJSON, ensureNoBlankItems, transformItem } from "@/lib/utils";
 import { cacheLife, cacheTag } from "next/cache";
 import { CiteProcSys, CSLItem, Engine } from "citeproc";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { hasAnyTag } from "@/lib/tags";
 
 const DEFAULT_CITATION_LOCALE = "en-GB";
 const LOCALE_ALIASES: Record<string, string> = {
@@ -131,14 +132,17 @@ export async function getCSL(item: Item) {
 	return fetchCSL(zoteroItem, String(item.id));
 }
 
-async function getCitationSourceItem(key: string): Promise<Item | null> {
+async function getCitationSourceItem(
+	key: string,
+	hiddenTags: readonly string[],
+): Promise<Item | null> {
 	try {
 		const result = await meilisearchClient
 			.index(process.env.MEILI_INDEX || config.index)
 			.getDocument(key);
 
 		const item = result as Item;
-		if (!item || item.deleted || item?.tags?.some((tag: string) => blockedTags.includes(tag.toLowerCase()))) {
+		if (!item || item.deleted || hasAnyTag(item.tags, hiddenTags)) {
 			return null;
 		}
 
@@ -148,11 +152,17 @@ async function getCitationSourceItem(key: string): Promise<Item | null> {
 	}
 }
 
-async function getCitationForItemKeyCached(indexKey: string, key: string, normalizedLocale: string) {
+async function getCitationForItemKeyCached(
+	indexKey: string,
+	key: string,
+	normalizedLocale: string,
+	configRevision: string,
+	hiddenTags: readonly string[],
+) {
 	'use cache'
 	cacheLife({ revalidate: 60 })
 	cacheTag('item-citation-' + key + '-' + normalizedLocale)
-	const item = await getCitationSourceItem(key);
+	const item = await getCitationSourceItem(key, hiddenTags);
 	if (!item) {
 		return null;
 	}
@@ -168,5 +178,12 @@ async function getCitationForItemKeyCached(indexKey: string, key: string, normal
 export async function getCitationForItemKey(key: string, lang: string = "en-GB") {
 	const normalizedLocale = normalizeLocale(lang);
 	const indexKey = String(process.env.MEILI_INDEX || config.index);
-	return getCitationForItemKeyCached(indexKey, key, normalizedLocale);
+	const libraryConfig = await getLibraryConfig();
+	return getCitationForItemKeyCached(
+		indexKey,
+		key,
+		normalizedLocale,
+		libraryConfig.revision,
+		libraryConfig.content.tags.hidden,
+	);
 }
