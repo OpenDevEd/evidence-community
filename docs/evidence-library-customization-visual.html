@@ -1,0 +1,721 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Interactive map of every runtime-configurable Evidence Library field and its validation constraints.">
+  <title>Evidence Library Runtime Configuration</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --background: #f6f8fb;
+      --surface: #ffffff;
+      --surface-subtle: #f8fafc;
+      --text: #172033;
+      --muted: #667085;
+      --border: #dfe4ec;
+      --accent: #2457d6;
+      --accent-soft: #edf3ff;
+      --success: #087f5b;
+    }
+
+    * { box-sizing: border-box; }
+
+    html {
+      scroll-behavior: smooth;
+      background: var(--background);
+    }
+
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--text);
+      font-family: "Geist", ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    ::selection { background: #cddcff; }
+
+    .site-header {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(12px);
+    }
+
+    .container {
+      width: min(100% - 2rem, 1480px);
+      margin-inline: auto;
+    }
+
+    .summary-card {
+      border: 1px solid var(--border);
+      border-radius: 0.75rem;
+      padding: 1.1rem;
+      background: var(--surface);
+    }
+
+    .toolbar {
+      position: sticky;
+      top: 4.2rem;
+      z-index: 40;
+      border: 1px solid var(--border);
+      border-radius: 0.9rem;
+      padding: 0.85rem;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 8px 28px rgba(16, 24, 40, 0.08);
+      backdrop-filter: blur(12px);
+    }
+
+    .category-card {
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 0.9rem;
+      background: var(--surface);
+    }
+
+    .category-toggle {
+      width: 100%;
+      padding: 1.1rem 1.25rem;
+      border: 0;
+      background: var(--surface);
+      color: var(--text);
+      cursor: pointer;
+      text-align: left;
+    }
+
+    .category-toggle:hover { background: var(--surface-subtle); }
+
+    .table-head,
+    .field-row {
+      display: grid;
+      grid-template-columns:
+        minmax(12rem, 1.05fr)
+        minmax(7rem, 0.55fr)
+        minmax(15rem, 1.25fr)
+        minmax(16rem, 1.35fr)
+        minmax(12rem, 0.85fr);
+      gap: 1.25rem;
+      align-items: start;
+      padding: 1rem 1.25rem;
+    }
+
+    .table-head {
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: var(--surface-subtle);
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .field-row {
+      border-bottom: 1px solid var(--border);
+    }
+
+    .field-row:last-child { border-bottom: 0; }
+
+    .field-row code {
+      color: #1f4bb8;
+      font-size: 0.84rem;
+      font-weight: 600;
+      overflow-wrap: anywhere;
+    }
+
+    .control-chip,
+    .option-chip {
+      display: inline-flex;
+      align-items: center;
+      width: fit-content;
+      border-radius: 999px;
+      padding: 0.3rem 0.62rem;
+      font-size: 0.73rem;
+      font-weight: 600;
+    }
+
+    .control-chip {
+      border: 1px solid #d0d5dd;
+      color: #475467;
+      background: #f9fafb;
+    }
+
+    .option-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+    }
+
+    .option-chip {
+      border: 1px solid #b9ccff;
+      color: #1e429f;
+      background: var(--accent-soft);
+    }
+
+    .no-options {
+      color: #98a2b3;
+      font-size: 0.85rem;
+    }
+
+    .filter-button[aria-pressed="true"] {
+      border-color: var(--accent);
+      color: #ffffff;
+      background: var(--accent);
+    }
+
+    button:focus-visible,
+    a:focus-visible,
+    input:focus-visible {
+      outline: 3px solid #9db7ff;
+      outline-offset: 2px;
+    }
+
+    @media (max-width: 1050px) {
+      .table-head { display: none; }
+
+      .field-row {
+        grid-template-columns: 1fr;
+        gap: 0.65rem;
+        padding: 1.15rem;
+      }
+
+      .field-cell::before {
+        display: block;
+        margin-bottom: 0.3rem;
+        color: var(--muted);
+        content: attr(data-label);
+        font-size: 0.68rem;
+        font-weight: 700;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .container { width: min(100% - 1rem, 1480px); }
+      .toolbar { top: 3.7rem; }
+      .category-toggle { padding: 1rem; }
+      .field-row { padding: 1rem; }
+
+      .mobile-scroll {
+        scrollbar-width: none;
+      }
+
+      .mobile-scroll::-webkit-scrollbar { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container flex h-16 items-center justify-between gap-4">
+      <div class="flex min-w-0 items-center gap-3">
+        <span class="grid size-9 shrink-0 place-items-center rounded-lg bg-[#2457d6] text-sm font-bold text-white">EL</span>
+        <div class="min-w-0">
+          <p class="truncate font-semibold">Evidence Library configuration</p>
+          <p class="hidden text-xs text-[#667085] sm:block">Runtime manifest reference</p>
+        </div>
+      </div>
+      <a href="./evidence-library-customization-map.md" class="shrink-0 rounded-lg border border-[#d0d5dd] bg-white px-3 py-2 text-sm font-semibold text-[#344054] hover:bg-[#f8fafc]">
+        Source document
+      </a>
+    </div>
+  </header>
+
+  <main class="container pb-20 pt-10">
+    <section class="max-w-4xl">
+      <h1 class="text-3xl font-semibold tracking-[-0.035em] text-[#172033] md:text-5xl">
+        Runtime configuration fields
+      </h1>
+      <p class="mt-4 max-w-3xl text-base leading-7 text-[#667085] md:text-lg">
+        Every current customization, its actual selectable options, validation
+        constraints, default, and activation dependencies.
+      </p>
+    </section>
+
+    <section class="mt-8 grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div class="summary-card">
+        <p class="text-xs font-semibold uppercase tracking-wide text-[#667085]">Fields</p>
+        <p id="total-fields" class="mt-2 text-2xl font-semibold">0</p>
+      </div>
+      <div class="summary-card">
+        <p class="text-xs font-semibold uppercase tracking-wide text-[#667085]">Groups</p>
+        <p id="total-groups" class="mt-2 text-2xl font-semibold">0</p>
+      </div>
+      <div class="summary-card">
+        <p class="text-xs font-semibold uppercase tracking-wide text-[#667085]">With options</p>
+        <p id="total-optioned" class="mt-2 text-2xl font-semibold">0</p>
+      </div>
+      <div class="summary-card">
+        <p class="text-xs font-semibold uppercase tracking-wide text-[#667085]">Visible</p>
+        <p id="visible-count" class="mt-2 text-2xl font-semibold">0</p>
+      </div>
+    </section>
+
+    <section class="toolbar mt-8">
+      <label for="field-search" class="sr-only">Search configuration fields</label>
+      <input
+        id="field-search"
+        type="search"
+        placeholder="Search fields, options, validation, or dependencies"
+        class="w-full rounded-lg border border-[#d0d5dd] bg-white px-4 py-3 text-sm text-[#172033] placeholder:text-[#98a2b3]"
+      >
+      <div id="filters" class="mobile-scroll mt-3 flex gap-2 overflow-x-auto"></div>
+    </section>
+
+    <section id="catalog-groups" class="mt-6 space-y-4"></section>
+    <div id="empty-state" class="mt-6 hidden rounded-xl border border-[#dfe4ec] bg-white p-10 text-center text-[#667085]">
+      No configuration fields match this search.
+    </div>
+
+  </main>
+
+  <script>
+    const configurationGroups = [
+      {
+        id: "identity",
+        name: "Identity & branding",
+        tone: "#d8ff3e",
+        fields: [
+          ["schemaVersion", "Select", "Integer enum; currently 1", "Required"],
+          ["revision", "Text", "1–64; letters, numbers, dot, underscore, hyphen", "Required"],
+          ["updatedAt", "Datetime", "Configuration activation time; ISO 8601 UTC", "Required"],
+          ["identity.name", "Text", "1–100 Unicode characters; single line", "Required"],
+          ["identity.shortName", "Text", "1–40 characters; single line", "Library name"],
+          ["identity.baseUrl", "URL", "HTTPS origin; no query or fragment", "Required"],
+          ["identity.fundingPartners", "Ordered list", "0–20; unique IDs; names 1–100 characters", "Empty"],
+          ["identity.assets.logoDark", "URL", "Stable public HTTPS SVG, PNG, or WebP URL", "Required"],
+          ["identity.assets.logoLight", "URL", "Stable public HTTPS SVG, PNG, or WebP URL", "Dark logo"],
+          ["identity.assets.favicon", "URL", "Stable public HTTPS SVG, PNG, or ICO URL", "Required"],
+          ["identity.assets.icons", "URL list", "0–12 stable public HTTPS SVG, PNG, or ICO URLs", "Empty"],
+          ["identity.assets.logoStyles", "CSS", "Raw CSS string applied directly to library logos", "Empty"],
+          ["institutions", "Ordered list", "0–200 user-defined entries; unique ID and name", "Empty"],
+          ["institutions[].logoUrl", "URL", "Stable public HTTPS SVG, PNG, or WebP URL", "Optional"]
+        ]
+      },
+      {
+        id: "theme",
+        name: "Theme & layout",
+        tone: "#75a7ff",
+        fields: [
+          ["theme.layout", "Select", "small, wide", "small"],
+          ["theme.colors.accent", "Color", "#RRGGBB or #RRGGBBAA", "Required"],
+          ["theme.colors.link", "Color", "Hex; WCAG AA contrast", "Accent"],
+          ["theme.colors.collection", "Color", "Hex only", "Accent"],
+          ["theme.colors.doi", "Color", "Hex only", "Accent"],
+          ["theme.colors.tertiary", "Color", "Hex only", "Required"],
+          ["theme.colors.backgroundDark", "Color", "Hex only", "Platform default"],
+          ["theme.colors.backgroundLight", "Color", "Hex only", "Platform default"],
+          ["theme.colors.cardDark", "Color", "Hex only", "Platform default"],
+          ["theme.colors.cardLight", "Color", "Hex only", "Platform default"],
+          ["theme.defaultMode", "Select", "light, dark, system", "dark"],
+          ["theme.forcedMode", "Select", "light, dark, null", "null"],
+          ["theme.fonts.heading", "Font", "Google Fonts family or uploaded WOFF2 URL", "Platform default"],
+          ["theme.fonts.body", "Font", "Google Fonts family or uploaded WOFF2 URL", "Platform default"],
+          ["theme.fonts.weights", "Multi-select", "Subset supported by selected fonts; must include 400", "400, 500, 700"]
+        ]
+      },
+      {
+        id: "navigation",
+        name: "Navigation & footer",
+        tone: "#78f5c6",
+        fields: [
+          ["navigation.links", "Ordered list", "0–12 top-level; unique IDs; one nested level", "Empty"],
+          ["navigation.links[].label", "Text / key", "1–80 characters", "Required"],
+          ["navigation.links[].href", "Link", "Internal /path or HTTPS", "Required"],
+          ["navigation.links[].icon", "Icon", "Platform icon ID or HTTPS SVG, PNG, or ICO URL", "Optional"],
+          ["navigation.links[].children", "Ordered list", "0–12; deeper nesting rejected", "Empty"],
+          ["navigation.links[].target", "Select", "self, blank; blank only for HTTPS", "self"],
+          ["navigation.links[].visible", "Toggle", "Boolean", "true"],
+          ["footer.sections", "Ordered list", "0–6; unique IDs", "Empty"],
+          ["footer.sections[].links", "Ordered list", "0–12 per section", "Empty"],
+          ["footer.socialLinks", "Provider list", "GitHub, Twitter, LinkedIn, YouTube, Bluesky", "Empty"],
+          ["footer.funders", "Ordered list", "0–20; unique IDs; validated logo and link", "Empty"],
+          ["footer.disclaimer", "Text", "Plain text; ≤2,000 characters", "Empty"],
+          ["footer.attribution", "Text", "Plain text; ≤500 characters", "Empty"],
+          ["contact.email", "Email", "Valid email; ≤254 characters", "Optional"],
+          ["contact.phone", "Phone", "E.164 format", "Optional"],
+          ["contact.address", "Text", "≤500 characters; ≤8 lines", "Optional"],
+          ["legal.privacyPolicy", "Link", "Internal path or HTTPS", "/privacy"],
+          ["legal.cookiePolicy", "Link", "Internal path or HTTPS", "/cookie-policy"],
+          ["legal.termsOfService", "Link", "Internal path or HTTPS", "Optional"]
+        ]
+      },
+      {
+        id: "localization",
+        name: "Localization",
+        tone: "#f3a6ff",
+        fields: [
+          ["localization.locales", "Multi-select", "1–20 unique canonical BCP 47 tags", "Required"],
+          ["localization.defaultLocale", "Select", "Must be enabled", "Required"],
+          ["localization.detectLocale", "Toggle", "Boolean", "false"],
+          ["localization.localePriority", "Ordered list", "Unique subset of enabled locales", "Locale order"]
+        ]
+      },
+      {
+        id: "search",
+        name: "Search & filters",
+        tone: "#ffba75",
+        fields: [
+          ["search.fullText", "Toggle", "Boolean", "true"],
+          ["search.tags", "Toggle", "Boolean", "true"],
+          ["search.country", "Toggle", "Boolean", "true"],
+          ["search.authorCountry", "Toggle", "Boolean", "true"],
+          ["search.embeddings", "Toggle", "Boolean", "true"],
+          ["search.scopes", "Multi-select", "Approved scope catalog; at least one", "All supported"],
+          ["search.defaultScope", "Select", "Must be enabled", "First scope"],
+          ["filters.institution.mode", "Select", "hidden, facet, facet-with-featured-value", "facet"],
+          ["filters.institution.label", "Text / key", "1–60 characters", "Platform key"],
+          ["filters.institution.featuredValue", "Text", "1–120; must match indexed institution", "Conditional"],
+          ["filters.countryLibrary", "Toggle", "Boolean", "false"],
+          ["filters.collectionsExpanded", "Toggle", "Boolean", "true"],
+          ["filters.years.enabled", "Toggle", "Boolean", "true"],
+          ["filters.years.minimum", "Number", "Integer 1900–current year", "1900"],
+          ["filters.years.maximum", "Number", "Minimum–current year", "Current year"]
+        ]
+      },
+      {
+        id: "content",
+        name: "Content & citations",
+        tone: "#d8ff3e",
+        fields: [
+          ["content.tags.comingSoon", "Tag list", "0–10 unique user-defined tags", "_comingsoon"],
+          ["content.tags.internal", "Tag list", "0–10 unique user-defined tags", "internal"],
+          ["content.tags.hidden", "Tag list", "0–10 unique user-defined tags", "hide"],
+          ["content.tags.description", "Tag list", "0–10 unique user-defined tags", "_category_description"],
+          ["content.tags.redirects", "Tag list", "0–10 unique user-defined tags", "_redirects"],
+          ["content.tags.publish", "Tag list", "1–10 unique; cannot equal hidden or internal", "_publish, publishPDF"],
+          ["citations.showUrl", "Toggle", "Boolean", "false"]
+        ]
+      },
+      {
+        id: "features",
+        name: "Feature switches",
+        tone: "#75a7ff",
+        fields: [
+          ["features.themeSwitcher", "Toggle", "Boolean; off when theme forced", "Conditional"],
+          ["features.languageSwitcher", "Toggle", "Requires at least two locales", "Conditional"],
+          ["features.login", "Toggle", "Boolean", "false"],
+          ["features.navbarSearch", "Toggle", "Boolean", "true"],
+          ["features.userCollections", "Toggle", "Requires login", "false"],
+          ["features.ai", "Toggle", "Requires enabled provider and model", "false"],
+          ["features.aiSearch", "Toggle", "Requires AI", "false"],
+          ["features.deepResearch", "Toggle", "Requires AI and approved large model", "false"],
+          ["features.relatedResources", "Toggle", "Requires embeddings", "false"],
+          ["features.collections", "Toggle", "Boolean", "true"],
+          ["features.collectionNotes", "Toggle", "Requires collections", "false"],
+          ["features.countryFocus", "Toggle", "Requires country search", "false"],
+          ["features.authorFilter", "Toggle", "Boolean", "true"],
+          ["features.authorLocation", "Toggle", "Requires author-country search", "false"],
+          ["features.yearsDropdown", "Toggle", "Requires year filter", "false"],
+          ["features.downloads", "Toggle", "Requires configured export", "false"],
+          ["features.atomFeed", "Toggle", "Requires Atom endpoint", "false"]
+        ]
+      },
+      {
+        id: "collections",
+        name: "Collections & exports",
+        tone: "#78f5c6",
+        fields: [
+          ["collections", "Ordered list", "0–500; unique existing IDs", "Empty"],
+          ["collections[].title", "Text / key", "1–100 characters", "Existing title"],
+          ["collections[].enabled", "Toggle", "Boolean", "true"],
+          ["collections[].order", "Number", "Integer 0–9,999", "List order"],
+          ["gapMaps", "Ordered list", "0–50; unique IDs and slugs", "Empty"],
+          ["gapMaps[].slug", "Text", "1–80 lowercase letters, numbers, hyphens", "Required"],
+          ["gapMaps[].label", "Text / key", "1–100 characters", "Required"],
+          ["gapMaps[].description", "Text", "≤500 characters", "Optional"],
+          ["gapMaps[].sourceUrl", "URL", "Stable external HTTPS HTML URL; served through same-site route", "Required"],
+          ["exports.ris", "URL", "HTTPS; approved RIS content type", "Optional"],
+          ["exports.bibtex", "URL", "HTTPS; approved BibTeX/text content type", "Optional"],
+          ["exports.atom", "URL", "HTTPS; Atom XML", "Optional"]
+        ]
+      },
+      {
+        id: "services",
+        name: "Runtime services",
+        tone: "#f3a6ff",
+        fields: [
+          ["services.database.url", "Secret", "postgres or postgresql URL; ≤4,096", "Required; server-only"],
+          ["services.search.host", "URL", "HTTP or HTTPS; no credentials/query", "Required; server-only"],
+          ["services.search.key", "Secret", "1–512 characters", "Required; server-only"],
+          ["services.search.index", "Text", "1–128; letters, numbers, underscore, hyphen", "Required"],
+          ["services.zotero.translationUrl", "URL", "HTTP or HTTPS; no credentials/query", "Optional; server-only"]
+        ]
+      },
+      {
+        id: "ai",
+        name: "AI providers",
+        tone: "#ffba75",
+        fields: [
+          ["ai.providers", "Provider list", "OpenAI, Google, Anthropic, Mistral, DeepSeek", "Maximum 5"],
+          ["ai.providers[].enabled", "Toggle", "Boolean", "false"],
+          ["ai.providers[].apiKey", "Secret", "1–512 characters", "Required when enabled"],
+          ["ai.providers[].defaultModel", "Model", "Active provider catalog model", "Required when enabled"],
+          ["ai.providers[].largeModel", "Model", "Approved large model", "Deep research"],
+          ["ai.providers[].smallModel", "Model", "Approved small model", "Optional"],
+          ["ai.modelId", "Catalog ID", "1–128 approved ID characters", "No free-form UI"]
+        ]
+      },
+      {
+        id: "integrations",
+        name: "Analytics, auth & email",
+        tone: "#d8ff3e",
+        fields: [
+          ["analytics.posthog.host", "URL", "HTTPS origin", "Required when enabled"],
+          ["analytics.posthog.key", "Secret", "phc_ prefix; 20–200 characters", "Required when enabled"],
+          ["analytics.google.measurementId", "Text", "G- plus 4–20 letters/numbers", "Optional"],
+          ["analytics.utmDurationSeconds", "Number", "Integer 60–7,776,000", "2,592,000"],
+          ["authentication.google.enabled", "Toggle", "Requires features.login", "false"],
+          ["authentication.google.clientId", "Secret", "10–255 characters", "Required when login + Google auth enabled"],
+          ["authentication.google.clientSecret", "Secret", "20–512 characters", "Required when login + Google auth enabled"],
+          ["authentication.secret", "Secret", "32–512 characters", "Required when login enabled"],
+          ["email.contactRecipient", "Email", "Valid; ≤254 characters", "Optional"],
+          ["email.takedownRecipient", "Email", "Valid; ≤254 characters", "Optional"],
+          ["email.smtp.host", "Host", "Hostname or IP; ≤253 characters", "Conditional"],
+          ["email.smtp.port", "Number", "Integer 1–65,535", "587"],
+          ["email.smtp.security", "Select", "tls, starttls, none", "starttls"],
+          ["email.smtp.username", "Secret", "1–255 characters", "Conditional"],
+          ["email.smtp.password", "Secret", "1–512 characters", "Conditional"],
+          ["email.smtp.from", "Email", "Valid; ≤254 characters", "Conditional"]
+        ]
+      },
+      {
+        id: "processing",
+        name: "Generation & processing",
+        tone: "#75a7ff",
+        fields: [
+          ["generation.sitemap", "Toggle", "Boolean", "true"],
+          ["generation.staticPages", "Toggle", "Runtime rendering only; no customer build", "false"],
+          ["generation.redirects", "Toggle", "Runtime redirects only", "true"],
+          ["processing.structureRules", "Typed list", "0–100; catalog operations; no code", "Empty"],
+          ["processing.pdfRules", "Typed list", "0–100; catalog operations; no code", "Empty"],
+          ["processing.sharedRules", "Typed list", "0–100; catalog operations; no code", "Empty"],
+          ["processing.rulePriority", "Number", "Integer 0–9,999", "List order"],
+          ["ai.prompts", "Slot map", "Maximum 20 platform prompt slots", "Platform defaults"],
+          ["ai.prompts[].value", "Text", "1–20,000; allowlisted variables only", "Override only"]
+        ]
+      }
+    ];
+
+    const booleanOptions = ["true", "false"];
+    const currentLocales = ["en-GB", "en-US", "de", "ar", "hi", "fr", "cn", "sw", "pt"];
+    const searchScopes = [
+      "title_abstract_author_and_keywords",
+      "title_abstract_and_keywords",
+      "title_and_abstract",
+      "title",
+      "authors",
+      "fields",
+      "documents",
+      "everywhere"
+    ];
+    const navbarIcons = [
+      "AboutUs",
+      "EvidenceLibrary",
+      "Programs",
+      "Blog",
+      "Team",
+      "ContactUs",
+      "TeamFill",
+      "ToolsFill",
+      "BookOpenFill",
+      "Bookshelf",
+      "ChatRightDotsFill",
+      "BsMapFill",
+      "LuX",
+      "FaQuestionCircle",
+      "IoStatsChart"
+    ];
+    const aiModels = [
+      "gemini-2.5-flash",
+      "gemini-2.5-pro",
+      "gpt-5-mini",
+      "deepseek-chat",
+      "claude-3-5-sonnet-20241022",
+      "claude-3-5-haiku-20241022",
+      "mistral-large-latest"
+    ];
+
+    const optionCatalog = {
+      "schemaVersion": ["1"],
+      "identity.assets.logoDark": ["HTTPS SVG URL", "HTTPS PNG URL", "HTTPS WebP URL"],
+      "identity.assets.logoLight": ["HTTPS SVG URL", "HTTPS PNG URL", "HTTPS WebP URL"],
+      "identity.assets.favicon": ["HTTPS SVG URL", "HTTPS PNG URL", "HTTPS ICO URL"],
+      "identity.assets.icons": ["SVG URL", "PNG URL", "ICO URL"],
+      "identity.baseUrl": ["https:"],
+      "institutions[].logoUrl": ["SVG URL", "PNG URL", "WebP URL"],
+      "theme.layout": ["small", "wide"],
+      "theme.colors.accent": ["#RRGGBB", "#RRGGBBAA"],
+      "theme.colors.link": ["#RRGGBB", "#RRGGBBAA"],
+      "theme.colors.collection": ["#RRGGBB", "#RRGGBBAA"],
+      "theme.colors.doi": ["#RRGGBB", "#RRGGBBAA"],
+      "theme.colors.tertiary": ["#RRGGBB", "#RRGGBBAA"],
+      "theme.colors.backgroundDark": ["#RRGGBB", "#RRGGBBAA"],
+      "theme.colors.backgroundLight": ["#RRGGBB", "#RRGGBBAA"],
+      "theme.colors.cardDark": ["#RRGGBB", "#RRGGBBAA"],
+      "theme.colors.cardLight": ["#RRGGBB", "#RRGGBBAA"],
+      "theme.defaultMode": ["light", "dark", "system"],
+      "theme.forcedMode": ["null", "light", "dark"],
+      "theme.fonts.heading": ["Google Fonts catalog", "Uploaded WOFF2 URL"],
+      "theme.fonts.body": ["Google Fonts catalog", "Uploaded WOFF2 URL"],
+      "theme.fonts.weights": ["100", "200", "300", "400", "500", "600", "700", "800", "900", "Variable"],
+      "navigation.links[].href": ["Internal /path", "HTTPS URL"],
+      "navigation.links[].icon": [...navbarIcons, "SVG URL", "PNG URL", "ICO URL"],
+      "navigation.links[].target": ["self", "blank"],
+      "footer.socialLinks": ["github", "twitter", "linkedin", "youtube", "bluesky"],
+      "legal.privacyPolicy": ["Internal /path", "HTTPS URL"],
+      "legal.cookiePolicy": ["Internal /path", "HTTPS URL"],
+      "legal.termsOfService": ["Internal /path", "HTTPS URL"],
+      "localization.locales": currentLocales,
+      "localization.defaultLocale": currentLocales,
+      "localization.localePriority": currentLocales,
+      "search.scopes": searchScopes,
+      "search.defaultScope": searchScopes,
+      "filters.institution.mode": ["hidden", "facet", "facet-with-featured-value"],
+      "content.tags.comingSoon": ["User-defined valid tags"],
+      "content.tags.internal": ["User-defined valid tags"],
+      "content.tags.hidden": ["User-defined valid tags"],
+      "content.tags.description": ["User-defined valid tags"],
+      "content.tags.redirects": ["User-defined valid tags"],
+      "content.tags.publish": ["User-defined valid tags"],
+      "gapMaps[].sourceUrl": ["HTTPS URL"],
+      "exports.ris": ["HTTPS RIS endpoint"],
+      "exports.bibtex": ["HTTPS BibTeX endpoint"],
+      "exports.atom": ["HTTPS Atom endpoint"],
+      "services.database.url": ["postgres:", "postgresql:"],
+      "services.search.host": ["http:", "https:"],
+      "services.zotero.translationUrl": ["http:", "https:"],
+      "ai.providers": ["openai", "google", "anthropic", "mistral", "deepseek"],
+      "ai.providers[].defaultModel": aiModels,
+      "ai.providers[].largeModel": aiModels,
+      "ai.providers[].smallModel": aiModels,
+      "ai.modelId": aiModels,
+      "analytics.posthog.host": ["https:"],
+      "email.smtp.security": ["tls", "starttls", "none"]
+    };
+
+    function optionsFor(field) {
+      if (field[1] === "Toggle") return booleanOptions;
+      return optionCatalog[field[0]] || [];
+    }
+
+    const allFields = configurationGroups.flatMap((group) => group.fields);
+    document.getElementById("total-fields").textContent = allFields.length;
+    document.getElementById("total-groups").textContent = configurationGroups.length;
+    document.getElementById("total-optioned").textContent =
+      allFields.filter((field) => optionsFor(field).length).length;
+
+    const catalog = document.getElementById("catalog-groups");
+    const filters = document.getElementById("filters");
+    const search = document.getElementById("field-search");
+    const emptyState = document.getElementById("empty-state");
+    const visibleCount = document.getElementById("visible-count");
+    let activeGroup = "all";
+
+    function renderFilters() {
+      const groups = [{ id: "all", name: "All groups" }, ...configurationGroups];
+      filters.innerHTML = groups.map((group) => `
+        <button
+          class="filter-button shrink-0 rounded-lg border border-[#d0d5dd] bg-white px-3 py-2 text-sm font-medium text-[#475467] hover:bg-[#f8fafc]"
+          type="button"
+          data-group="${group.id}"
+          aria-pressed="${activeGroup === group.id}"
+        >${group.name}</button>
+      `).join("");
+
+      filters.querySelectorAll("button").forEach((button) => {
+        button.addEventListener("click", () => {
+          activeGroup = button.dataset.group;
+          renderFilters();
+          renderCatalog();
+        });
+      });
+    }
+
+    function optionChips(field) {
+      const options = optionsFor(field);
+      if (!options.length) return '<span class="no-options">No fixed options</span>';
+      return `<div class="option-list">${options.map((option) =>
+        `<span class="option-chip">${option}</span>`
+      ).join("")}</div>`;
+    }
+
+    function renderCatalog() {
+      const query = search.value.trim().toLowerCase();
+      const groups = configurationGroups
+        .filter((group) => activeGroup === "all" || group.id === activeGroup)
+        .map((group) => ({
+          ...group,
+          fields: group.fields.filter((field) => {
+            const searchable = [...field, ...optionsFor(field)].join(" ").toLowerCase();
+            return searchable.includes(query);
+          })
+        }))
+        .filter((group) => group.fields.length);
+
+      const fieldTotal = groups.reduce((total, group) => total + group.fields.length, 0);
+      visibleCount.textContent = fieldTotal;
+      emptyState.classList.toggle("hidden", groups.length !== 0);
+
+      catalog.innerHTML = groups.map((group, index) => {
+        const expanded = Boolean(query) || activeGroup !== "all" || index === 0;
+        return `
+          <article class="category-card" data-category="${group.id}">
+            <button
+              type="button"
+              class="category-toggle flex items-center justify-between gap-4"
+              aria-expanded="${expanded}"
+            >
+              <span>
+                <span class="block text-lg font-semibold">${group.name}</span>
+                <span class="mt-1 block text-xs text-[#667085]">${group.fields.length} fields</span>
+              </span>
+              <svg class="category-chevron size-5 shrink-0 text-[#667085] transition-transform ${expanded ? "rotate-180" : ""}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <path d="m6 9 6 6 6-6"/>
+              </svg>
+            </button>
+            <div class="category-body" ${expanded ? "" : "hidden"}>
+              <div class="table-head">
+                <span>Field</span>
+                <span>Control</span>
+                <span>Actual options</span>
+                <span>Validation</span>
+                <span>Default / dependency</span>
+              </div>
+              ${group.fields.map((field) => `
+                <div class="field-row">
+                  <div class="field-cell" data-label="Field"><code>${field[0]}</code></div>
+                  <div class="field-cell" data-label="Control"><span class="control-chip">${field[1]}</span></div>
+                  <div class="field-cell" data-label="Actual options">${optionChips(field)}</div>
+                  <div class="field-cell text-sm leading-6 text-[#475467]" data-label="Validation">${field[2]}</div>
+                  <div class="field-cell text-sm leading-6 text-[#667085]" data-label="Default / dependency">${field[3]}</div>
+                </div>
+              `).join("")}
+            </div>
+          </article>
+        `;
+      }).join("");
+
+      catalog.querySelectorAll(".category-toggle").forEach((button) => {
+        button.addEventListener("click", () => {
+          const body = button.nextElementSibling;
+          const expanded = button.getAttribute("aria-expanded") === "true";
+          button.setAttribute("aria-expanded", String(!expanded));
+          body.hidden = expanded;
+          button.querySelector(".category-chevron").classList.toggle("rotate-180", !expanded);
+        });
+      });
+    }
+
+    search.addEventListener("input", renderCatalog);
+    renderFilters();
+    renderCatalog();
+  </script>
+</body>
+</html>
