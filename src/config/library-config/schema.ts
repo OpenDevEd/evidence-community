@@ -40,7 +40,7 @@ import {
 	utcTimestampSchema,
 } from "./primitives";
 
-const MAX_MANIFEST_BYTES = 1024 * 1024;
+export const MAX_LIBRARY_CONFIG_BYTES = 1024 * 1024;
 const DEFAULT_FONT_WEIGHTS = [400, 500, 700] as const;
 const FONT_WEIGHTS = [100, 200, 300, 400, 500, 600, 700, 800, 900] as const;
 
@@ -1121,11 +1121,11 @@ export function createLibraryConfigSchema(
 		const byteLength = new TextEncoder().encode(
 			JSON.stringify(config),
 		).byteLength;
-		if (byteLength > MAX_MANIFEST_BYTES) {
+		if (byteLength > MAX_LIBRARY_CONFIG_BYTES) {
 			addRequiredIssue(
 				context,
 				[],
-				`Manifest exceeds ${MAX_MANIFEST_BYTES} bytes`,
+				`Manifest exceeds ${MAX_LIBRARY_CONFIG_BYTES} bytes`,
 			);
 		}
 
