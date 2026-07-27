@@ -15,6 +15,10 @@ import Banner from "./Banner";
 import { Suspense } from "react";
 import Script from "next/script";
 import { getServerFeatureFlags } from "@/lib/server-feature-flags";
+import { connection } from "next/server";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { projectPublicLibraryConfig } from "@/config/library-config/public";
+import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -109,6 +113,10 @@ export default async function Base({
 	children: React.ReactNode;
 	locale: string;
 }>) {
+	await connection();
+	const libraryConfig = projectPublicLibraryConfig(
+		await getLibraryConfig(),
+	);
 	const dir = getLangDir(locale);
 	const googleAnalyticsId = process.env.GOOGLE_ANALYTICS_ID || "";
 
@@ -140,7 +148,9 @@ export default async function Base({
 					</Script>
 				) : null}
 				<Suspense fallback={null}>
-					<BaseContent locale={locale}>{children}</BaseContent>
+					<LibraryConfigProvider config={libraryConfig}>
+						<BaseContent locale={locale}>{children}</BaseContent>
+					</LibraryConfigProvider>
 				</Suspense>
 			</body>
 		</html>

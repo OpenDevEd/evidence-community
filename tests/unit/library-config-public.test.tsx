@@ -1,0 +1,105 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import { projectPublicLibraryConfig } from "@/config/library-config/public";
+import { libraryConfigSchema } from "@/config/library-config/schema";
+import {
+	LibraryConfigProvider,
+	useLibraryConfig,
+} from "@/context/LibraryConfigProvider";
+import { maximalLibraryConfig } from "../fixtures/library-config";
+
+const serverConfig = libraryConfigSchema.parse(maximalLibraryConfig);
+const publicConfig = projectPublicLibraryConfig(serverConfig);
+
+describe("public library configuration", () => {
+	it("projects only explicitly allowlisted root fields", () => {
+		expect(Object.keys(publicConfig).sort()).toEqual(
+			[
+				"ai",
+				"analytics",
+				"citations",
+				"collections",
+				"contact",
+				"content",
+				"exports",
+				"features",
+				"filters",
+				"footer",
+				"gapMaps",
+				"identity",
+				"institutions",
+				"legal",
+				"localization",
+				"navigation",
+				"revision",
+				"schemaVersion",
+				"search",
+				"theme",
+				"updatedAt",
+			].sort(),
+		);
+	});
+
+	it("reuses the projection while the active server revision object is unchanged", () => {
+		expect(projectPublicLibraryConfig(serverConfig)).toBe(publicConfig);
+	});
+
+	it("never serializes server service or credential values", () => {
+		const serialized = JSON.stringify(publicConfig);
+
+		expect(publicConfig).not.toHaveProperty("services");
+		expect(publicConfig).not.toHaveProperty("authentication");
+		expect(publicConfig).not.toHaveProperty("email");
+		expect(publicConfig).not.toHaveProperty("generation");
+		expect(publicConfig).not.toHaveProperty("processing");
+		expect(publicConfig.ai.providers[0]).not.toHaveProperty("apiKey");
+
+		for (const privateValue of [
+			"postgresql://library:password@database:5432/library",
+			"maximal-search-key",
+			"google-api-key",
+			"google-client-id",
+			"google-client-secret-value",
+			"12345678901234567890123456789012",
+			"smtp-password",
+			"smtp-user",
+		]) {
+			expect(serialized).not.toContain(privateValue);
+		}
+	});
+
+	it("retains safe AI provider metadata without API keys", () => {
+		expect(publicConfig.ai.providers).toEqual([
+			{
+				provider: "google",
+				enabled: true,
+				defaultModel: "gemini-2.5-flash",
+				largeModel: "gemini-2.5-pro",
+				smallModel: "gemini-2.5-flash",
+			},
+		]);
+	});
+});
+
+describe("LibraryConfigProvider", () => {
+	function RevisionConsumer() {
+		return <span>{useLibraryConfig().revision}</span>;
+	}
+
+	it("makes the public configuration available to client consumers", () => {
+		const markup = renderToStaticMarkup(
+			<LibraryConfigProvider config={publicConfig}>
+				<RevisionConsumer />
+			</LibraryConfigProvider>,
+		);
+
+		expect(markup).toBe("<span>maximal-1</span>");
+	});
+
+	it("fails clearly when the hook is used outside its provider", () => {
+		expect(() => renderToStaticMarkup(<RevisionConsumer />)).toThrow(
+			"useLibraryConfig must be used within LibraryConfigProvider",
+		);
+	});
+});
