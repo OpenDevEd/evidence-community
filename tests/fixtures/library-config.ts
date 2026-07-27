@@ -115,9 +115,9 @@ export const maximalLibraryConfig = {
 				icon: "EvidenceLibrary",
 				children: [
 					{
-						id: "about",
-						label: "About",
-						href: "/about",
+						id: "privacy",
+						label: "Privacy",
+						href: "/privacy",
 					},
 				],
 			},

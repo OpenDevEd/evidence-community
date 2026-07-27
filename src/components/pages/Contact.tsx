@@ -7,12 +7,13 @@ import { toast } from "../layout/Toast";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { Logo } from "../layout/navbar";
-import { Spacer } from "@nextui-org/react";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 export default function Contact() {
 	const t = useTranslations("ui");
-
-	const contactEmail = process.env.NEXT_PUBLIC_CONTACT_EMAIL;
+	const tFooter = useTranslations("footer");
+	const { contact } = useLibraryConfig();
+	const hasContact = Boolean(contact.email || contact.phone || contact.address);
 
 	return (
 		<PageContainer>
@@ -42,17 +43,43 @@ export default function Contact() {
 				}}
 				footer={
 					<div className="mt-12 w-full max-w-2xl border-t border-white/10 pt-8 flex flex-col gap-8 items-center">
-						{contactEmail && (
-							<p className="text-center">
-								{t("contactViaEmail")}{" "}
-								<Link
-									className="text-link"
-									href={`mailto:${contactEmail}`}
-								>
-									{contactEmail}
-								</Link>
-								.
-							</p>
+						{hasContact && (
+							<dl className="flex flex-col items-center gap-3 text-center">
+								{contact.email && (
+									<div>
+										<dt className="font-medium">{tFooter("email")}</dt>
+										<dd>
+											<Link
+												className="text-link"
+												href={`mailto:${contact.email}`}
+											>
+												{contact.email}
+											</Link>
+										</dd>
+									</div>
+								)}
+								{contact.phone && (
+									<div>
+										<dt className="font-medium">{tFooter("phone")}</dt>
+										<dd>
+											<Link
+												className="text-link"
+												href={`tel:${contact.phone}`}
+											>
+												{contact.phone}
+											</Link>
+										</dd>
+									</div>
+								)}
+								{contact.address && (
+									<div>
+										<dt className="font-medium">{tFooter("address")}</dt>
+										<dd className="whitespace-pre-line">
+											{contact.address}
+										</dd>
+									</div>
+								)}
+							</dl>
 						)}
 						<Logo />
 					</div>

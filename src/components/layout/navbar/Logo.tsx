@@ -6,7 +6,8 @@ import { twMerge } from "tailwind-merge";
 import { LibraryLogoImages } from "@/components/library/LibraryIdentity";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Link } from "@/i18n/routing";
-import { useStatus } from "@/context/Providers";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { getRuntimeHomeHref } from "@/config/library-config/links";
 
 interface LogoProps {
 	interactive?: boolean;
@@ -14,10 +15,8 @@ interface LogoProps {
 
 export function Logo({ interactive = true }: LogoProps) {
 	const [isLoaded, setIsLoaded] = useState(false);
-	const status = useStatus();
-
-	const links = status.links || [];
-	const homeLink = links.find((link) => link.label === "home")?.href ?? "/";
+	const { navigation } = useLibraryConfig();
+	const homeLink = getRuntimeHomeHref(navigation.links);
 
 	const logoContent = (
 		<div

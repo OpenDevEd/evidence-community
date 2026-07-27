@@ -10,16 +10,75 @@ export const PLATFORM_LOCALES = [
 	"pt",
 ] as const;
 
-export const PLATFORM_SEARCH_SCOPES = [
-	"title_abstract_author_and_keywords",
-	"title_abstract_and_keywords",
-	"title_and_abstract",
-	"title",
-	"authors",
-	"fields",
-	"documents",
-	"everywhere",
+export const PLATFORM_SEARCH_SCOPE_OPTIONS = [
+	{
+		key: "title_abstract_author_and_keywords",
+		legacyKey: "title_and_abstract",
+		name: "Title, abstract, authors and keywords",
+		attributesToSearchOn: [
+			"title",
+			"abstractNote",
+			"tags",
+			"fullNames",
+		],
+	},
+	{
+		key: "title_abstract_and_keywords",
+		legacyKey: "title_and_abstract",
+		name: "Title, abstract and keywords",
+		attributesToSearchOn: ["title", "abstractNote", "tags"],
+	},
+	{
+		key: "title_and_abstract",
+		legacyKey: "title_and_abstract",
+		name: "Title and abstract",
+		attributesToSearchOn: ["title", "abstractNote"],
+	},
+	{
+		key: "title",
+		legacyKey: "title",
+		name: "Title only",
+		attributesToSearchOn: ["title"],
+	},
+	{
+		key: "authors",
+		legacyKey: "creator",
+		name: "Authors and contributors",
+		attributesToSearchOn: ["fullNames"],
+	},
+	{
+		key: "fields",
+		legacyKey: "metadata",
+		name: "All metadata",
+		attributesToSearchOn: [
+			"title",
+			"abstractNote",
+			"fullNames",
+			"tags",
+		],
+	},
+	{
+		key: "documents",
+		legacyKey: "fulltext",
+		name: "Full text only",
+		attributesToSearchOn: ["fullTextPDFs.fullTextPDF.text"],
+	},
+	{
+		key: "everywhere",
+		legacyKey: "all",
+		name: "Everywhere",
+		attributesToSearchOn: ["*"],
+	},
 ] as const;
+
+export type PlatformSearchScope =
+	(typeof PLATFORM_SEARCH_SCOPE_OPTIONS)[number]["key"];
+
+export const PLATFORM_SEARCH_SCOPES =
+	PLATFORM_SEARCH_SCOPE_OPTIONS.map(({ key }) => key) as [
+		PlatformSearchScope,
+		...PlatformSearchScope[],
+	];
 
 export const PLATFORM_NAVBAR_ICON_IDS = [
 	"AboutUs",
@@ -38,6 +97,9 @@ export const PLATFORM_NAVBAR_ICON_IDS = [
 	"FaQuestionCircle",
 	"IoStatsChart",
 ] as const;
+
+export type PlatformNavbarIconId =
+	(typeof PLATFORM_NAVBAR_ICON_IDS)[number];
 
 export const PLATFORM_SOCIAL_PROVIDERS = [
 	"github",

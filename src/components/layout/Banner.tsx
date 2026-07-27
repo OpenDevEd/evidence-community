@@ -6,22 +6,19 @@ import GenericHeader from "../features/modals/GenericHeader";
 import { ModalBody, ModalContent, ModalFooter } from "@nextui-org/react";
 import { useTranslations } from "next-intl";
 import { Logo } from "./navbar";
-import { useStatus } from "@/context/Providers";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import { Link } from "@/i18n/routing";
-import { resolveCompanyFooterPolicyLinks } from "@/lib/legal-links";
 import { usePathname, useRouter } from "@/i18n/routing";
 import { isPolicyPage } from "@/lib/legal-links";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 export default function Banner() {
 	const { isPreferencesOpen, setConsentState } = useAnalyticsConsent();
-	const status = useStatus();
+	const { legal } = useLibraryConfig();
 	const pathname = usePathname();
 	const router = useRouter();
 	const t = useTranslations("ui");
 	const tFooter = useTranslations("footer");
-	const footer = status.companyFooter || {};
-	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
 	const onPolicyPage = isPolicyPage(pathname);
 
 	// On policy pages: don't show the banner at all.
@@ -88,17 +85,17 @@ export default function Banner() {
 						</div>
 					</div>
 					<div className="flex flex-wrap items-center justify-center gap-4 text-sm">
-						{resolvedFooterLinks.privacyPolicy ? (
+						{legal.privacyPolicy ? (
 							<Link
-								href={resolvedFooterLinks.privacyPolicy}
+								href={legal.privacyPolicy}
 								className="text-black/70 dark:text-white/70 underline underline-offset-4"
 							>
 								{tFooter("privacyPolicy")}
 							</Link>
 						) : null}
-						{resolvedFooterLinks.cookiePolicy ? (
+						{legal.cookiePolicy ? (
 							<Link
-								href={resolvedFooterLinks.cookiePolicy}
+								href={legal.cookiePolicy}
 								className="text-black/70 dark:text-white/70 underline underline-offset-4"
 							>
 								{tFooter("cookiePolicy")}

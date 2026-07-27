@@ -2,15 +2,16 @@
 
 import PageContainer from "@/components/layout/PageContainer";
 import EmailForm from "@/components/features/form/EmailForm";
-import Link from "next/link";
 import { BiLink } from "react-icons/bi";
 import { useTranslations } from "next-intl";
 import { sendTakedownRequest } from "@/lib/actions";
 import { toast } from "../layout/Toast";
-
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { Link } from "@/i18n/routing";
 
 function Footer() {
 	const t = useTranslations("ui");
+	const { legal } = useLibraryConfig();
 
 	return (<div className="mt-12 w-full max-w-2xl border-t border-white/10 pt-8">
 		<div className="space-y-4 text-sm">
@@ -23,7 +24,7 @@ function Footer() {
 			<p className="opacity-80">{t("whenToSubmitTakedown")}</p>
 			<div className="flex items-center gap-2 text-accent">
 				<Link
-					href="/about"
+					href={legal.privacyPolicy}
 					className="inline-flex items-center gap-2 hover:underline"
 				>
 					{t("learnMorePolicies")}

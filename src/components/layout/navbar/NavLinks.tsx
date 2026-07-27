@@ -10,44 +10,28 @@ import { Link } from "@/i18n/routing";
 import { Button } from "@/components/nextui/Button";
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { useDebounce } from "@/hooks/useDebounce";
-import { useStatus } from "@/context/Providers";
-import { NAVBAR_ICONS } from "@/constants/links";
 import { localizeOrUseIfCapitalized } from "@/lib/utils";
-import type { LinkObject } from "@/db/schema/tables/status";
 import GapMapLinks from "./GapMapLinks";
 import type { NavbarStyleVariant } from "@/types/navbar";
+import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import {
+	getRuntimeInternalHrefPath,
+	getRuntimeLinkAnchorProps,
+	getVisibleRuntimeLinks,
+	type RuntimeNavigationLink,
+} from "@/config/library-config/links";
 
 interface LinkItemProps {
-	link: LinkObject;
+	link: RuntimeNavigationLink;
 	pathname: string;
 	isMobile: boolean;
 	styleVariant: NavbarStyleVariant;
 }
 
-
-function getActiveHrefPath(href: string) {
-	if (href.startsWith("http://") || href.startsWith("https://")) {
-		try {
-			return new URL(href).pathname || "/";
-		} catch {
-			return href;
-		}
-	}
-
-	const queryIndex = href.indexOf("?");
-	const hashIndex = href.indexOf("#");
-	const endIndex =
-		queryIndex === -1
-			? hashIndex
-			: hashIndex === -1
-				? queryIndex
-				: Math.min(queryIndex, hashIndex);
-
-	return endIndex === -1 ? href : href.slice(0, endIndex);
-}
-
 function isActiveHref(pathname: string, href: string) {
-	const activeHrefPath = getActiveHrefPath(href);
+	const activeHrefPath = getRuntimeInternalHrefPath(href);
+	if (!activeHrefPath) return false;
 
 	return `${pathname}/`.includes(`${activeHrefPath}/`);
 }
@@ -65,10 +49,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 	}, [timeoutRef, onOpen]);
 
 	const isActive = isActiveHref(pathname, link.href);
-	const IconComponent = link.icon
-		? NAVBAR_ICONS[link.icon as keyof typeof NAVBAR_ICONS]
-		: null;
-
+	const visibleChildren = getVisibleRuntimeLinks(link.children);
 	return (
 		<li
 			onMouseEnter={clearTimeoutOpen}
@@ -80,18 +61,17 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 		>
 			<Link
 				href={link.href}
+				{...getRuntimeLinkAnchorProps(link)}
 				data-is-mobile={isMobile}
 				className={twMerge(
 					"flex gap-2 text-lg items-center justify-center font-medium",
 					styleVariant === "wide" && "uppercase font-base"
 				)}
 			>
-				{IconComponent && (
-					<IconComponent
-						data-is-mobile={isMobile}
-						aria-label={tUI("dropdownAriaLabel", {
-							label: localizeOrUseIfCapitalized(link.label, t),
-						})}
+				{link.icon && (
+					<RuntimeAsset
+						reference={link.icon}
+						alt=""
 						className={twMerge(
 							"fill-current size-6 shrink-0",
 							styleVariant === "wide" && "size-5"
@@ -103,7 +83,7 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 				</span>
 			</Link>
 
-			{link.dropdown && link.dropdown.length > 0 && (
+			{visibleChildren.length > 0 && (
 				<Dropdown color="accent" isOpen={isOpen} onOpenChange={onOpenChange} offset={12}>
 					<DropdownTrigger>
 						<Button
@@ -120,19 +100,23 @@ function LinkItem({ link, pathname, isMobile, styleVariant }: LinkItemProps) {
 							title: "text-white",
 						}}
 					>
-						{link.dropdown.map((child: any) => {
-							const ChildIcon = child.icon
-								? NAVBAR_ICONS[child.icon as keyof typeof NAVBAR_ICONS]
-								: null;
+						{visibleChildren.map((child) => {
 							return (
 								<DropdownItem
-									key={child.label}
+									key={child.id}
 									href={child.href}
+									{...getRuntimeLinkAnchorProps(child)}
 									startContent={
-										ChildIcon ? <ChildIcon className="size-4" /> : undefined
+										child.icon ? (
+											<RuntimeAsset
+												reference={child.icon}
+												alt=""
+												className="size-4"
+											/>
+										) : undefined
 									}
 								>
-									{t(child.label)}
+									{localizeOrUseIfCapitalized(child.label, t)}
 								</DropdownItem>
 							);
 						})}
@@ -154,8 +138,8 @@ export default function NavLinks({
 	isMobile = false,
 	styleVariant = "small",
 }: NavLinksProps) {
-	const status = useStatus();
-	const links: LinkObject[] = status.links || [];
+	const { navigation } = useLibraryConfig();
+	const links = getVisibleRuntimeLinks(navigation.links);
 
 	return (
 		<ul
@@ -165,18 +149,15 @@ export default function NavLinks({
 				!isMobile && "hidden xl:flex"
 			)}
 		>
-			{links.map(
-				(link, index) =>
-					!link.navExclude && (
-						<LinkItem
-							key={index}
-							link={link}
-							pathname={pathname}
-							isMobile={isMobile}
-							styleVariant={styleVariant}
-						/>
-					)
-			)}
+			{links.map((link) => (
+				<LinkItem
+					key={link.id}
+					link={link}
+					pathname={pathname}
+					isMobile={isMobile}
+					styleVariant={styleVariant}
+				/>
+			))}
 			<GapMapLinks
 				pathname={pathname}
 				isMobile={isMobile}

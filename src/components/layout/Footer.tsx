@@ -1,95 +1,86 @@
 "use client";
-import Image from "next/image";
-import { Button } from "@/components/nextui/Button";
+
 import { useState } from "react";
+import { ModalBody, ModalContent, ModalFooter } from "@nextui-org/react";
+import { useTranslations } from "next-intl";
+import { usePathname } from "next/navigation";
+import {
+	FaGithub,
+	FaLinkedin,
+	FaTwitter,
+	FaYoutube,
+} from "react-icons/fa";
+import { RiBlueskyFill } from "react-icons/ri";
+import type { IconType } from "react-icons";
+
+import GenericHeader from "@/components/features/modals/GenericHeader";
+import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import {
 	FundingPartners,
 	LibraryLogoImages,
 } from "@/components/library/LibraryIdentity";
-import { useTranslations } from "next-intl";
-import { Skeleton } from "@/components/nextui/Skeleton";
-import { Link } from "@/i18n/routing";
-import { twMerge } from "tailwind-merge";
-import { useStatus } from "@/context/Providers";
-import { usePathname } from "next/navigation";
-import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
-import {
-	localizeOrUseIfCapitalized,
-	parseCompanyName,
-} from "@/lib/utils";
-import { resolveCompanyFooterPolicyLinks, isPolicyPage } from "@/lib/legal-links";
+import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
-import GenericHeader from "@/components/features/modals/GenericHeader";
-import { ModalBody, ModalContent, ModalFooter } from "@nextui-org/react";
-import { Logo as BannerLogo } from "./navbar";
-import { useRouter } from "@/i18n/routing";
-import type { FooterLinkSection, LinkObject } from "@/db/schema/tables/status";
-import { FaGithub, FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
-import { RiBlueskyFill } from "react-icons/ri";
+import { Skeleton } from "@/components/nextui/Skeleton";
+import {
+	getRuntimeLinkAnchorProps,
+	getVisibleRuntimeLinks,
+	type RuntimeLeafLink,
+} from "@/config/library-config/links";
+import type { LibraryPublicConfig } from "@/config/library-config/schema";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { Link, useRouter } from "@/i18n/routing";
+import { isPolicyPage } from "@/lib/legal-links";
+import { localizeOrUseIfCapitalized } from "@/lib/utils";
 
-function groupLinksBySection(
-	links: LinkObject[],
-	defaultSection: string,
-): [string, LinkObject[]][] {
-	const grouped = links.reduce<Record<string, LinkObject[]>>((acc, link) => {
-		if (link.footerExclude) return acc;
-		const section = link.section || defaultSection;
-		if (!acc[section]) acc[section] = [];
-		acc[section].push(link);
-		return acc;
-	}, {});
+type SocialProvider =
+	LibraryPublicConfig["footer"]["socialLinks"][number]["provider"];
 
-	return Object.entries(grouped).sort(
-		(a, b) =>
-			links.findIndex((l) => l.section === a[0]) -
-			links.findIndex((l) => l.section === b[0]),
-	);
-}
+const SOCIAL_ICONS = {
+	github: FaGithub,
+	twitter: FaTwitter,
+	linkedin: FaLinkedin,
+	youtube: FaYoutube,
+	bluesky: RiBlueskyFill,
+} satisfies Record<SocialProvider, IconType>;
 
-function getFooterLinkSections(
-	footerSections: FooterLinkSection[] | undefined,
-	fallbackLinks: LinkObject[],
-	defaultSection: string,
-): [string, LinkObject[]][] {
-	if (footerSections?.length) {
-		return footerSections.map((section) => [
-			section.title,
-			section.links.filter((link) => !link.footerExclude),
-		]);
-	}
+const SOCIAL_COLORS = {
+	github: "bg-black dark:bg-white text-white dark:text-black",
+	twitter: "bg-[rgb(29,161,242)] text-white",
+	linkedin: "bg-[rgb(0,119,181)] text-white",
+	youtube: "bg-[rgb(205,32,31)] text-white",
+	bluesky: "bg-[rgb(0,121,212)] text-white",
+} satisfies Record<SocialProvider, string>;
 
-	return groupLinksBySection(fallbackLinks, defaultSection);
-}
-
-function isContactLink(link: LinkObject) {
-	return (
-		link.id === "contact" ||
-		link.label === "contactUs" ||
-		link.label === "Contact Us" ||
-		(typeof link.href === "string" && link.href.includes("/contact-us"))
-	);
-}
-
-const footerInfo = {
-	email: "opendeved@gmail.com",
-	phone: "+1-123-456-7890",
-	address: "123 Creativity Lane, Designville",
-};
-
-function FooterFieldColumn({
+function FooterColumn({
+	children,
 	title,
-	content,
 }: {
+	children: React.ReactNode;
 	title: string;
-	content: React.ReactNode;
 }) {
 	return (
-		<div className="flex flex-col w-full lg:w-auto items-center lg:items-start">
-			<h3 className="text-black/80 dark:text-white/80 font-bold text-xl">
+		<section className="flex min-w-0 flex-col items-center gap-5 sm:items-start">
+			<h2 className="text-xl font-bold text-black/80 dark:text-white/80">
 				{title}
-			</h3>
-			{content}
-		</div>
+			</h2>
+			{children}
+		</section>
+	);
+}
+
+function FooterLink({ link }: { link: RuntimeLeafLink }) {
+	const tNav = useTranslations("nav");
+
+	return (
+		<Link
+			href={link.href}
+			{...getRuntimeLinkAnchorProps(link)}
+			className="text-lg text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent"
+		>
+			{localizeOrUseIfCapitalized(link.label, tNav)}
+		</Link>
 	);
 }
 
@@ -99,7 +90,7 @@ function Logo() {
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className="w-[14.5rem] h-[3.375rem] rounded-lg"
+			className="flex h-[3.375rem] w-[14.5rem] items-center justify-center rounded-lg"
 		>
 			<LibraryLogoImages
 				className="h-auto max-h-full w-auto max-w-full"
@@ -109,398 +100,263 @@ function Logo() {
 	);
 }
 
-function SocialWrapper({
-	children,
-	className,
-}: {
-	children: React.ReactNode;
-	className?: string;
-}) {
-	return (
-		<div
-			className={twMerge(
-				"rounded-full  flex justify-center items-center p-3",
-				className,
-			)}
-		>
-			{children}
-		</div>
-	);
-}
-
-const socials = {
-	github: (
-		<SocialWrapper className="bg-black dark:bg-white">
-			<FaGithub className="fill-white dark:fill-black" />
-		</SocialWrapper>
-	),
-	twitter: (
-		<SocialWrapper className="bg-[rgb(29,161,242)]">
-			<FaTwitter className="fill-white" />
-		</SocialWrapper>
-	),
-	linkedin: (
-		<SocialWrapper className="bg-[rgb(0,119,181)]">
-			<FaLinkedin className="fill-white" />
-		</SocialWrapper>
-	),
-	youtube: (
-		<SocialWrapper className="bg-[rgb(205,32,31)]">
-			<FaYoutube className="fill-white" />
-		</SocialWrapper>
-	),
-	bluesky: (
-		<SocialWrapper className="bg-[rgb(0,121,212)]">
-			<RiBlueskyFill className="fill-white" />
-		</SocialWrapper>
-	),
-};
-
 export default function Footer() {
 	const t = useTranslations("footer");
 	const tUI = useTranslations("ui");
-	const tNav = useTranslations("nav");
+	const { contact, footer, legal } = useLibraryConfig();
 	const { openPreferences, setConsentState } = useAnalyticsConsent();
-	const status = useStatus();
-	const { companyName } = parseCompanyName(status?.companyName);
 	const pathname = usePathname();
 	const router = useRouter();
-	const links = status.links || [];
-	const footer = status.companyFooter || {};
-	const resolvedFooterLinks = resolveCompanyFooterPolicyLinks(footer);
 	const isMapPage = pathname.includes("/map");
-	const socialLinks = Object.entries(status.externalLinks || {}).filter(
-		([key]) => socials[key as keyof typeof socials],
-	);
 	const onPolicyPage = isPolicyPage(pathname);
 	const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
+	const hasContact = Boolean(contact.email || contact.phone || contact.address);
 
-	const contactData =
-		links.find((link) => link.id === "contact") ?? links.find(isContactLink);
-	const contactHref = contactData?.href?.trim() || null;
-
-	if (companyName === "EdTech Hub") {
-		const footerItemsSorted = getFooterLinkSections(
-			status.footerSections,
-			links,
-			"Site",
-		);
-		return (
-			!isMapPage && (
-				<footer
-					id="footer"
-					className="relative row-start-3 bg-card_light dark:bg-card w-full print:hidden flex justify-center items-center"
-				>
-					<div className="max-w-[96rem] px-0 flex w-full flex-col py-28 gap-52">
-						<div className="flex flex-col gap-6 px-14">
-							<div className="grid grid-cols-1 gap-6 lg:grid-cols-3 w-full">
-								{footerItemsSorted.map(([section, links]) => (
-									<div
-										key={section}
-										className="flex flex-col gap-6"
-									>
-										<h3 className="text-black/80 dark:text-white/80 font-bold text-3xl">
-											{section}
-										</h3>
-										<ul className="flex flex-col gap-4">
-											{links.map((link) => (
-												<li key={link.label}>
-													<Link
-														href={link.href}
-														className="text-black/60 dark:text-white/60 text-xl"
-													>
-														{localizeOrUseIfCapitalized(
-															link.label,
-															tNav,
-														)}
-													</Link>
-												</li>
-											))}
-										</ul>
-									</div>
-								))}
-							</div>
-							<div className="flex lg:grid grid-cols-3 gap-6 w-full">
-								<div></div>
-								<div></div>
-								<div className="flex gap-4">
-									{socialLinks
-										.filter(
-											([key]) =>
-												socials[
-													key as keyof typeof socials
-												],
-										)
-										.map(([key, value]) => (
-											<Link href={value} key={key}>
-												{
-													socials[
-														key as keyof typeof socials
-													]
-												}
-											</Link>
-										))}
-								</div>
-							</div>
-						</div>
-						<div className="w-full flex lg:flex-row flex-col justify-between items-end lg:items-center gap-8 overflow-hidden px-14">
-							<div className="text-black/60 dark:text-white/60 text-2xl font-bold shrink-0">
-								Supported by
-							</div>
-							<FundingPartners className="flex-1 justify-end text-black/60 dark:text-white/60 text-xl" />
-						</div>
-						<div className="w-full flex justify-center items-center text-[11px] text-center px-4">
-							The findings, interpretations, and conclusions
-							expressed in the content on this site do not
-							necessarily reflect the views of The UK government,
-							Bill & Melinda Gates foundation or the World Bank,
-							the Executive Directors of the World Bank, or the
-							governments they represent.
-						</div>
-						<div className="w-full text-center px-4">
-							<a
-								href="https://edtechhub.org"
-								className="text-accent underline"
-							>
-								EDTECH HUB 2025
-							</a>
-							. Creative Commons Attribution 4.0 International
-							License.
-						</div>
-						<Link href="https://opendeved.org">
-							<div className="flex w-full justify-center items-center gap-4">
-								Powered by
-								<div>
-									<Image
-										src="/logos/opendeved/logo_light.png"
-										className="dark:hidden"
-										alt="EdTech Hub"
-										width={128}
-										height={32}
-									/>
-									<Image
-										src="/logos/opendeved/logo.png"
-										className="hidden dark:block"
-										alt="EdTech Hub"
-										width={128}
-										height={32}
-									/>
-								</div>
-							</div>
-						</Link>
-					</div>
-				</footer>
-			)
-		);
-	}
+	if (isMapPage) return null;
 
 	return (
-		!isMapPage && (
-			<footer
-				id="footer"
-				className="relative row-start-3 bg-card_light dark:bg-card h-full w-full flex justify-center items-center flex-col gap-6 lg:gap-14 py-12 min-h-[32rem] lg:py-0 print:hidden"
-			>
-				<div className="max-w-[96rem] px-14 flex w-full justify-between lg:items-start items-center flex-col gap-6 lg:gap-14 lg:flex-row">
-					<div className="flex flex-col gap-6 h-full items-center lg:items-start">
-						<Logo />
-						<FundingPartners className="justify-center text-black/60 dark:text-white/60 lg:justify-start" />
-						<div className="flex flex-col gap-[0.875rem]">
-							{Object.entries(footerInfo).map(
-								([key, value]) =>
-									footer[key] && (
-										<div
-											key={key}
-											className="flex gap-2 justify-center lg:justify-start"
+		<footer
+			id="footer"
+			className="relative row-start-3 flex w-full flex-col items-center gap-12 bg-card_light px-6 py-12 print:hidden dark:bg-card lg:px-14"
+		>
+			<div className="grid w-full max-w-[96rem] grid-cols-1 gap-10 sm:grid-cols-2 xl:grid-cols-4">
+				<section className="flex flex-col items-center gap-6 sm:items-start">
+					<Logo />
+					<FundingPartners className="justify-center text-black/60 dark:text-white/60 sm:justify-start" />
+					{hasContact && (
+						<dl className="flex flex-col gap-3 text-center text-black/60 dark:text-white/60 sm:text-left">
+							{contact.email && (
+								<div>
+									<dt className="font-medium">{t("email")}</dt>
+									<dd>
+										<a
+											className="break-all font-bold hover:text-accent"
+											href={`mailto:${contact.email}`}
 										>
-											<span className="text-black/60 dark:text-white/60">
-												{t(key)}
-											</span>
-											<span className="text-black/60 dark:text-white/60 font-bold break-all text-wrap">
-												{footer[key]}
-											</span>
-										</div>
-									),
+											{contact.email}
+										</a>
+									</dd>
+								</div>
 							)}
-						</div>
-					</div>
-					{getFooterLinkSections(
-						status.footerSections,
-						links,
-						t("quickLinks"),
-					).map(
-						([section, sectionLinks]) => (
-							<FooterFieldColumn
-								key={section}
-								title={section}
-								content={
-									<ul className="flex flex-col gap-4 mt-6 items-center lg:items-start">
-										{sectionLinks.map((link) => (
-											<li key={link.label}>
-												<Link
-													href={link.href}
-													className="text-black/60 dark:text-white/60 text-xl"
-												>
-													{localizeOrUseIfCapitalized(
-														link.label,
-														tNav,
-													)}
-												</Link>
-											</li>
-										))}
-									</ul>
-								}
-							/>
-						),
-					)}
-					{(resolvedFooterLinks.privacyPolicy ||
-						resolvedFooterLinks.cookiePolicy ||
-						resolvedFooterLinks.termsOfService) && (
-						<FooterFieldColumn
-							title={t("legal")}
-							content={
-								<ul className="flex flex-col gap-4 mt-6 items-center lg:items-start">
-									{resolvedFooterLinks.privacyPolicy && (
-										<li>
-											<Link
-												href={resolvedFooterLinks.privacyPolicy}
-												className="text-black/60 dark:text-white/60 text-xl"
-											>
-												{t("privacyPolicy")}
-											</Link>
-										</li>
-									)}
-									{resolvedFooterLinks.cookiePolicy && (
-										<li>
-											<Link
-												href={resolvedFooterLinks.cookiePolicy}
-												className="text-black/60 dark:text-white/60 text-xl"
-											>
-												{t("cookiePolicy")}
-											</Link>
-										</li>
-									)}
-									{resolvedFooterLinks.termsOfService && (
-										<li>
-											<Link
-												href={resolvedFooterLinks.termsOfService}
-												className="text-black/60 dark:text-white/60 text-xl"
-											>
-												{t("termsOfService")}
-											</Link>
-										</li>
-									)}
-									<li>
-										<button
-											onClick={onPolicyPage ? () => setPolicyDialogOpen(true) : openPreferences}
-											className="text-black/60 dark:text-white/60 text-xl text-left"
+							{contact.phone && (
+								<div>
+									<dt className="font-medium">{t("phone")}</dt>
+									<dd>
+										<a
+											className="font-bold hover:text-accent"
+											href={`tel:${contact.phone}`}
 										>
-											{tUI("cookieSettings")}
-										</button>
+											{contact.phone}
+										</a>
+									</dd>
+								</div>
+							)}
+							{contact.address && (
+								<div>
+									<dt className="font-medium">{t("address")}</dt>
+									<dd className="whitespace-pre-line font-bold">
+										{contact.address}
+									</dd>
+								</div>
+							)}
+						</dl>
+					)}
+				</section>
+
+				{footer.sections.map((section) => {
+					const links = getVisibleRuntimeLinks(section.links);
+					if (links.length === 0) return null;
+
+					return (
+						<FooterColumn
+							key={section.id}
+							title={localizeOrUseIfCapitalized(section.title, t)}
+						>
+							<ul className="flex flex-col items-center gap-3 sm:items-start">
+								{links.map((link) => (
+									<li key={link.id}>
+										<FooterLink link={link} />
 									</li>
-								</ul>
-							}
-						/>
-					)}
-					{(socialLinks.length > 0 || contactHref) && (
-						<div className="flex flex-col h-full gap-6 w-full lg:w-auto">
-							{socialLinks.length > 0 && (
-								<FooterFieldColumn
-									title={t("stayConnected")}
-									content={
-										<div className="flex mt-6 gap-8">
-											{socialLinks.map((link) => (
-												<Link href={link[1]} key={link[0]}>
-													{
-														socials[
-															link[0] as keyof typeof socials
-														]
-													}
-												</Link>
-											))}
-										</div>
-									}
-								/>
-							)}
-							{contactHref && (
-								<FooterFieldColumn
-									title={t("contactUs")}
-									content={
-										<div className="mt-6">
-											<Button
-												as={Link}
-												href={contactHref}
-												color="accent"
-												className="px-12"
-											>
-												{contactData?.label
-													? localizeOrUseIfCapitalized(
-															contactData.label,
-															tNav,
-														)
-													: t("contactUs")}
-											</Button>
-										</div>
-									}
-								/>
-							)}
-						</div>
-					)}
-				</div>
-				{onPolicyPage && (
-					<DialogModal
-						scrollBehavior="inside"
-						isDismissable
-						size="xl"
-						isOpen={policyDialogOpen}
-						onClose={() => setPolicyDialogOpen(false)}
-						backdrop="blur"
-						classNames={{
-							base: "backdrop-blur-xl bg-background_light/60 dark:bg-card/60 border border-divider",
-						}}
-					>
-						<ModalContent className="p-6 pb-4">
-							<div className="flex justify-center p-4">
-								<BannerLogo />
-							</div>
-							<GenericHeader classNames={{ base: "justify-center" }}>
-								{tUI("cookieConsentTitle")}
-							</GenericHeader>
-							<ModalBody>
-								<p className="text-center text-default-500 mx-auto max-w-md mb-6">
-									{tUI("cookieConsentMessage")}
-								</p>
-							</ModalBody>
-							<ModalFooter className="flex-row flex-wrap items-center justify-center gap-3 pt-2">
-								<Button
-									color="tertiary"
-									onPress={() => {
-										setPolicyDialogOpen(false);
-										setConsentState("granted");
-										router.push("/");
-									}}
-									className="px-6 font-medium"
+								))}
+							</ul>
+						</FooterColumn>
+					);
+				})}
+
+				<FooterColumn title={t("legal")}>
+					<ul className="flex flex-col items-center gap-3 sm:items-start">
+						<li>
+							<Link
+								href={legal.privacyPolicy}
+								className="text-lg text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent"
+							>
+								{t("privacyPolicy")}
+							</Link>
+						</li>
+						<li>
+							<Link
+								href={legal.cookiePolicy}
+								className="text-lg text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent"
+							>
+								{t("cookiePolicy")}
+							</Link>
+						</li>
+						{legal.termsOfService && (
+							<li>
+								<Link
+									href={legal.termsOfService}
+									className="text-lg text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent"
 								>
-									{tUI("cookieAccept")}
-								</Button>
-								<Button
-									color="tertiary"
-									onPress={() => {
-										setPolicyDialogOpen(false);
-										setConsentState("denied");
-										router.push("/");
-									}}
-									className="px-6 font-medium"
-								>
-									{tUI("cookieDecline")}
-								</Button>
-							</ModalFooter>
-						</ModalContent>
-					</DialogModal>
+									{t("termsOfService")}
+								</Link>
+							</li>
+						)}
+						<li>
+							<button
+								type="button"
+								onClick={
+									onPolicyPage
+										? () => setPolicyDialogOpen(true)
+										: openPreferences
+								}
+								className="text-left text-lg text-black/60 hover:text-accent dark:text-white/60 dark:hover:text-accent"
+							>
+								{tUI("cookieSettings")}
+							</button>
+						</li>
+					</ul>
+				</FooterColumn>
+
+				{footer.socialLinks.length > 0 && (
+					<FooterColumn title={t("stayConnected")}>
+						<ul className="flex flex-wrap gap-4">
+							{footer.socialLinks.map((social) => {
+								const Icon = SOCIAL_ICONS[social.provider];
+
+								return (
+									<li key={social.provider}>
+										<Link
+											href={social.href}
+											target="_blank"
+											rel="noopener noreferrer"
+											aria-label={social.provider}
+											className={`flex size-11 items-center justify-center rounded-full ${SOCIAL_COLORS[social.provider]}`}
+										>
+											<Icon aria-hidden className="size-5" />
+										</Link>
+									</li>
+								);
+							})}
+						</ul>
+					</FooterColumn>
 				)}
-				<div className="absolute bottom-0 left-0 p-2 z-50 text-xs text-black/60 dark:text-white/60">
-					0.8.5
+			</div>
+
+			{footer.funders.length > 0 && (
+				<section
+					aria-label={tUI("fundingPartner")}
+					className="flex w-full max-w-[96rem] flex-wrap items-center justify-center gap-8 border-t border-black/10 pt-8 dark:border-white/10"
+				>
+					{footer.funders.map((funder) => {
+						const content = (
+							<span className="flex items-center gap-3 text-black/70 dark:text-white/70">
+								{funder.logoUrl && (
+									<RuntimeAsset
+										reference={funder.logoUrl}
+										alt={funder.name}
+										className="h-12 w-auto max-w-40 rounded-md bg-white object-contain p-1"
+										width={160}
+										height={48}
+									/>
+								)}
+								{!funder.logoUrl && (
+									<span className="font-medium">{funder.name}</span>
+								)}
+							</span>
+						);
+
+						return funder.href ? (
+							<Link
+								key={funder.id}
+								href={funder.href}
+								target="_blank"
+								rel="noopener noreferrer"
+							>
+								{content}
+							</Link>
+						) : (
+							<span key={funder.id}>{content}</span>
+						);
+					})}
+				</section>
+			)}
+
+			{(footer.disclaimer || footer.attribution) && (
+				<div className="flex w-full max-w-4xl flex-col gap-4 text-center text-sm text-black/60 dark:text-white/60">
+					{footer.disclaimer && (
+						<p className="whitespace-pre-line">{footer.disclaimer}</p>
+					)}
+					{footer.attribution && (
+						<p className="whitespace-pre-line">{footer.attribution}</p>
+					)}
 				</div>
-			</footer>
-		)
+			)}
+
+			{onPolicyPage && (
+				<DialogModal
+					scrollBehavior="inside"
+					isDismissable
+					size="xl"
+					isOpen={policyDialogOpen}
+					onClose={() => setPolicyDialogOpen(false)}
+					backdrop="blur"
+					classNames={{
+						base: "backdrop-blur-xl bg-background_light/60 dark:bg-card/60 border border-divider",
+					}}
+				>
+					<ModalContent className="p-6 pb-4">
+						<div className="flex justify-center p-4">
+							<Logo />
+						</div>
+						<GenericHeader classNames={{ base: "justify-center" }}>
+							{tUI("cookieConsentTitle")}
+						</GenericHeader>
+						<ModalBody>
+							<p className="mx-auto mb-6 max-w-md text-center text-default-500">
+								{tUI("cookieConsentMessage")}
+							</p>
+						</ModalBody>
+						<ModalFooter className="flex-row flex-wrap items-center justify-center gap-3 pt-2">
+							<Button
+								color="tertiary"
+								onPress={() => {
+									setPolicyDialogOpen(false);
+									setConsentState("granted");
+									router.push("/");
+								}}
+								className="px-6 font-medium"
+							>
+								{tUI("cookieAccept")}
+							</Button>
+							<Button
+								color="tertiary"
+								onPress={() => {
+									setPolicyDialogOpen(false);
+									setConsentState("denied");
+									router.push("/");
+								}}
+								className="px-6 font-medium"
+							>
+								{tUI("cookieDecline")}
+							</Button>
+						</ModalFooter>
+					</ModalContent>
+				</DialogModal>
+			)}
+
+			<div className="absolute bottom-0 left-0 p-2 text-xs text-black/60 dark:text-white/60">
+				0.8.5
+			</div>
+		</footer>
 	);
 }
