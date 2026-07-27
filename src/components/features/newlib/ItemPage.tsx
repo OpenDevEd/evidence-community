@@ -50,6 +50,7 @@ import {
 	useMemo,
 } from "react";
 import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { useQueryState } from "nuqs";
 import ItemOld from "@/components/pages/Item";
 import ItemHeader from "@/components/features/newlib/ItemHeader";
@@ -590,7 +591,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 	if (!item && !loading) return null;
 
 	const isCurrentEvidenceLibraryUrl = item
-		? buildCanonicalWebsiteLink(item) !== null
+		? getCanonicalWebsiteUrl(item) !== null
 		: false;
 	const details = Object.entries(item || {})
 		.filter(([key, value]) => value !== null)
@@ -897,7 +898,7 @@ function normaliseCanonicalHost(host: string) {
 	return host.toLowerCase().replace(/^www\./, "");
 }
 
-function buildCanonicalWebsiteLink(item: Item): CanonicalWebsiteLink | null {
+function getCanonicalWebsiteUrl(item: Item) {
 	const itemUrl = parseUrl(item.url);
 	const canonicalBaseUrl = parseUrl(process.env.NEXT_PUBLIC_CANONICAL_BASE_URL);
 	if (!itemUrl || !canonicalBaseUrl) return null;
@@ -909,13 +910,23 @@ function buildCanonicalWebsiteLink(item: Item): CanonicalWebsiteLink | null {
 	}
 	if (normaliseCanonicalPath(itemUrl.pathname) !== `/lib/${item.key}`) return null;
 
+	return itemUrl;
+}
+
+function buildCanonicalWebsiteLink(
+	item: Item,
+	faviconUrl: string,
+): CanonicalWebsiteLink | null {
+	const itemUrl = getCanonicalWebsiteUrl(item);
+	if (!itemUrl) return null;
+
 	return {
 		provider: "website",
 		kind: "canonical",
 		label: "itemIdentifierEvidenceLibrary",
 		value: `${itemUrl.host}${itemUrl.pathname}`,
 		url: itemUrl.toString(),
-		iconUrl: new URL("/favicon.ico", canonicalBaseUrl).toString(),
+		iconUrl: faviconUrl,
 	};
 }
 
@@ -994,6 +1005,7 @@ function ItemIdentifierRow({ link }: { link: IdentifierDisplayLink }) {
 
 function ItemIdentifiers({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
+	const faviconUrl = useLibraryConfig().identity.assets.favicon;
 	const links = useMemo(() => {
 		if (!item) return [];
 
@@ -1003,9 +1015,9 @@ function ItemIdentifiers({ item }: { item: Item | undefined }) {
 			attachmentsData: item.attachmentsData?.map(toDoiDisplayAttachment),
 		}).links;
 
-		const canonicalLink = buildCanonicalWebsiteLink(item);
+		const canonicalLink = buildCanonicalWebsiteLink(item, faviconUrl);
 		return canonicalLink ? [...doiLinks, canonicalLink] : doiLinks;
-	}, [item]);
+	}, [faviconUrl, item]);
 
 	if (!links.length) return null;
 

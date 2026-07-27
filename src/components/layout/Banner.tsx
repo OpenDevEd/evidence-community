@@ -42,7 +42,7 @@ export default function Banner() {
 		>
 			<ModalContent className="p-6 pb-4">
 				<div className="flex justify-center p-4">
-					<Logo dbStyle="splash" />
+					<Logo />
 				</div>
 				<GenericHeader
 					classNames={{

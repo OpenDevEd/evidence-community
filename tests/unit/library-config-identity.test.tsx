@@ -1,0 +1,195 @@
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { NextIntlClientProvider } from "next-intl";
+
+import {
+	FundingPartners,
+	LibraryLogoImages,
+} from "@/components/library/LibraryIdentity";
+import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
+import {
+	buildLibraryLogoCss,
+	buildLibraryMetadata,
+} from "@/config/library-config/identity";
+import { projectPublicLibraryConfig } from "@/config/library-config/public";
+import { libraryConfigSchema } from "@/config/library-config/schema";
+import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
+import { buildSiteUrl } from "@/lib/site-url";
+import {
+	maximalLibraryConfig,
+	minimalLibraryConfig,
+} from "../fixtures/library-config";
+
+const minimalConfig = projectPublicLibraryConfig(
+	libraryConfigSchema.parse(minimalLibraryConfig),
+);
+const maximalConfig = projectPublicLibraryConfig(
+	libraryConfigSchema.parse(maximalLibraryConfig),
+);
+
+function renderIdentity(
+	config: typeof minimalConfig | typeof maximalConfig,
+) {
+	return renderToStaticMarkup(
+		<NextIntlClientProvider
+			locale="en-GB"
+			messages={{
+				ui: {
+					fundingPartner: "Funding partner",
+					logoAlt: "Logo for {company} in {theme} mode",
+				},
+			}}
+		>
+			<LibraryConfigProvider config={config}>
+				<LibraryLogoImages />
+				<FundingPartners />
+			</LibraryConfigProvider>
+		</NextIntlClientProvider>,
+	);
+}
+
+describe("runtime library identity", () => {
+	it.each([
+		{
+			config: minimalConfig,
+			expected: {
+				name: "Minimal Evidence Library",
+				shortName: "Minimal Evidence Library",
+				baseUrl: "https://minimal.example.org",
+				favicon:
+					"https://assets.example.org/minimal/favicon.ico",
+				icons: [
+					"https://assets.example.org/minimal/favicon.ico",
+				],
+			},
+		},
+		{
+			config: maximalConfig,
+			expected: {
+				name: "Maximal Evidence Library",
+				shortName: "Maximal Library",
+				baseUrl: "https://maximal.example.org",
+				favicon:
+					"https://assets.example.org/maximal/favicon.png",
+				icons: [
+					"https://assets.example.org/maximal/favicon.png",
+					"https://assets.example.org/maximal/icon.svg",
+					"https://assets.example.org/maximal/icon.ico",
+				],
+			},
+		},
+	])(
+		"builds metadata for $expected.name from the active revision",
+		({ config, expected }) => {
+			const metadata = buildLibraryMetadata(config.identity);
+
+			expect(metadata.title).toBe(expected.name);
+			expect(metadata.description).toBe(expected.name);
+			expect(metadata.applicationName).toBe(expected.shortName);
+			expect(metadata.metadataBase).toEqual(
+				new URL(expected.baseUrl),
+			);
+			expect(metadata.alternates).toBeUndefined();
+			expect(metadata.icons).toEqual({
+				icon: expected.icons,
+				shortcut: expected.favicon,
+			});
+			expect(
+				buildSiteUrl("/lib", config.identity.baseUrl),
+			).toBe(
+				`${expected.baseUrl}/lib`,
+			);
+		},
+	);
+
+	it("renders different configured logo URLs and names from the same component", () => {
+		const minimalMarkup = renderIdentity(minimalConfig);
+		const maximalMarkup = renderIdentity(maximalConfig);
+
+		expect(minimalMarkup).toContain(
+			"https://assets.example.org/minimal/logo.svg",
+		);
+		expect(minimalMarkup).toContain(
+			"Logo for Minimal Evidence Library in light mode",
+		);
+		expect(maximalMarkup).toContain(
+			"https://assets.example.org/maximal/logo-light.webp",
+		);
+		expect(maximalMarkup).toContain(
+			"https://assets.example.org/maximal/logo-dark.svg",
+		);
+		expect(maximalMarkup).toContain(
+			"Logo for Maximal Evidence Library in dark mode",
+		);
+	});
+
+	it("deduplicates the favicon while keeping it first", () => {
+		const identity = {
+			...maximalConfig.identity,
+			assets: {
+				...maximalConfig.identity.assets,
+				icons: [
+					maximalConfig.identity.assets.favicon,
+					...maximalConfig.identity.assets.icons,
+				],
+			},
+		};
+
+		expect(buildLibraryMetadata(identity).icons).toEqual({
+			icon: [
+				"https://assets.example.org/maximal/favicon.png",
+				"https://assets.example.org/maximal/icon.svg",
+				"https://assets.example.org/maximal/icon.ico",
+			],
+			shortcut:
+				"https://assets.example.org/maximal/favicon.png",
+		});
+	});
+
+	it("renders funding partners in manifest order", () => {
+		const markup = renderIdentity(maximalConfig);
+
+		expect(markup.indexOf("Partner One")).toBeLessThan(
+			markup.indexOf("Partner Two"),
+		);
+		expect(renderIdentity(minimalConfig)).not.toContain(
+			'aria-label="Funding partner"',
+		);
+	});
+
+	it("emits the configured raw logo CSS against the shared logo selector", () => {
+		expect(buildLibraryLogoCss(minimalConfig.identity)).toBeNull();
+		expect(buildLibraryLogoCss(maximalConfig.identity)).toBe(
+			"[data-library-logo] {\nmax-width: 12rem;\nheight: auto;\n}",
+		);
+	});
+
+	it("renders valid raw CSS without HTML entity escaping", () => {
+		const identity = {
+			...maximalConfig.identity,
+			assets: {
+				...maximalConfig.identity.assets,
+				logoStyles:
+					'background-image: url("https://assets.example.org/logo.png");',
+			},
+		};
+
+		expect(
+			renderToStaticMarkup(<LibraryLogoStyles identity={identity} />),
+		).toContain(
+			'background-image: url("https://assets.example.org/logo.png");',
+		);
+	});
+
+	it.each([
+		"} nav { display: none;",
+		"</style><script>alert(1)</script>",
+		"not a CSS declaration",
+		"x".repeat(10_001),
+	])("rejects unconfined logo CSS: %s", (logoStyles) => {
+		const input = structuredClone(maximalLibraryConfig);
+		input.identity.assets.logoStyles = logoStyles;
+
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+});

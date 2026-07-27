@@ -19,6 +19,7 @@ import { connection } from "next/server";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
+import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
 
 const ubuntu = Ubuntu({
 	subsets: ["latin"],
@@ -124,6 +125,7 @@ export default async function Base({
 		<html lang={locale} dir={dir} suppressHydrationWarning>
 			<head>
 				<link rel="unapi-server" type="application/xml" title="unAPI" href="/api/unapi" />
+				<LibraryLogoStyles identity={libraryConfig.identity} />
 			</head>
 			<body
 				className={`${

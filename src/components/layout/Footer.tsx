@@ -2,6 +2,10 @@
 import Image from "next/image";
 import { Button } from "@/components/nextui/Button";
 import { useState } from "react";
+import {
+	FundingPartners,
+	LibraryLogoImages,
+} from "@/components/library/LibraryIdentity";
 import { style } from "@/../tailwind.config";
 import { useTranslations } from "next-intl";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -11,8 +15,6 @@ import { useStatus } from "@/context/Providers";
 import { usePathname } from "next/navigation";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import {
-	convertStringFromDatabaseToObject,
-	getDynamicStyles,
 	localizeOrUseIfCapitalized,
 	parseCompanyName,
 } from "@/lib/utils";
@@ -94,42 +96,16 @@ function FooterFieldColumn({
 
 function Logo() {
 	const [isLoaded, setIsLoaded] = useState(false);
-	const status = useStatus();
-	const { companyName } = parseCompanyName(status?.companyName);
-	const t = useTranslations("ui");
-	const companyLogoStyle = convertStringFromDatabaseToObject(
-		status.companyLogo || "",
-	)["footer"];
 
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className={twMerge(
-				"w-[14.5rem] h-[3.375rem] rounded-lg",
-				companyLogoStyle,
-			)}
+			className="w-[14.5rem] h-[3.375rem] rounded-lg"
 		>
-			{["dark", "light"].map((themeToMatch) => (
-				<Image
-					key={themeToMatch}
-					alt={t("logoAlt", {
-						company: companyName,
-						theme: themeToMatch,
-					})}
-					onLoad={() => setIsLoaded(true)}
-					className={twMerge(
-						themeToMatch === "light"
-							? "dark:hidden"
-							: "hidden dark:block",
-					)}
-					src={`/logos/${companyName.toLowerCase()}/logo${
-						themeToMatch === "light" ? "_light" : ""
-					}.png`}
-					width={232}
-					height={54}
-					style={getDynamicStyles(companyLogoStyle)}
-				/>
-			))}
+			<LibraryLogoImages
+				className="h-auto max-h-full w-auto max-w-full"
+				onLoad={() => setIsLoaded(true)}
+			/>
 		</Skeleton>
 	);
 }
@@ -270,17 +246,9 @@ export default function Footer() {
 						</div>
 						<div className="w-full flex lg:flex-row flex-col justify-between items-end lg:items-center gap-8 overflow-hidden px-14">
 							<div className="text-black/60 dark:text-white/60 text-2xl font-bold shrink-0">
-								EdTech Hub is supported by
+								Supported by
 							</div>
-							<div className="flex-1">
-								<Image
-									src="/assets/edtechfooter.webp"
-									alt="EdTech Hub"
-									width={1185}
-									height={124}
-									className="w-full h-full object-contain"
-								/>
-							</div>
+							<FundingPartners className="flex-1 justify-end text-black/60 dark:text-white/60 text-xl" />
 						</div>
 						<div className="w-full flex justify-center items-center text-[11px] text-center px-4">
 							The findings, interpretations, and conclusions
@@ -336,6 +304,7 @@ export default function Footer() {
 				<div className="max-w-[96rem] px-14 flex w-full justify-between lg:items-start items-center flex-col gap-6 lg:gap-14 lg:flex-row">
 					<div className="flex flex-col gap-6 h-full items-center lg:items-start">
 						<Logo />
+						<FundingPartners className="justify-center text-black/60 dark:text-white/60 lg:justify-start" />
 						<div className="flex flex-col gap-[0.875rem]">
 							{Object.entries(footerInfo).map(
 								([key, value]) =>
@@ -492,7 +461,7 @@ export default function Footer() {
 					>
 						<ModalContent className="p-6 pb-4">
 							<div className="flex justify-center p-4">
-								<BannerLogo dbStyle="splash" />
+								<BannerLogo />
 							</div>
 							<GenericHeader classNames={{ base: "justify-center" }}>
 								{tUI("cookieConsentTitle")}

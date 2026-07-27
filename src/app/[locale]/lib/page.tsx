@@ -5,9 +5,9 @@ import {
   buildLanguageAlternates,
   buildLocalizedSiteUrl,
 } from "@/lib/language-alternates";
-import { getSiteOrigin } from "@/lib/site-url";
 import { getItemsPaginationMeta } from "@/lib/search";
 import { cacheLife } from "next/cache";
+import { getLibraryConfig } from "@/config/library-config/server";
 
 async function getCachedPaginationMeta(queryParams: Parameters<typeof getItemsPaginationMeta>[0]) {
   'use cache'
@@ -29,13 +29,14 @@ export async function libraryMetadata(props: {
   const builtUrl = buildItemsQuery(queryParams, props.pathname);
 
   const paginationMeta = await getCachedPaginationMeta(queryParams);
+  const libraryConfig = await getLibraryConfig();
 
   const page = paginationMeta.currentPage;
   const totalPages = paginationMeta.totalPages;
 
-  const siteOrigin = getSiteOrigin();
+  const siteOrigin = libraryConfig.identity.baseUrl;
   const builtURLObject = new URL(builtUrl, siteOrigin);
-  const currentUrl = new URL(buildLocalizedSiteUrl(builtUrl, locale));
+  const currentUrl = new URL(buildLocalizedSiteUrl(builtUrl, locale, siteOrigin));
   const atomUrl = new URL(builtURLObject.pathname + "/atom.xml?" + builtURLObject.searchParams.toString(), siteOrigin);
 
   let previous: string | null = null;
@@ -57,7 +58,7 @@ export async function libraryMetadata(props: {
     generator: "new-el",
     alternates: {
       canonical: currentUrl,
-      languages: buildLanguageAlternates(builtUrl),
+      languages: buildLanguageAlternates(builtUrl, siteOrigin),
       types: {
         "application/atom+xml": atomUrl.toString()
       }

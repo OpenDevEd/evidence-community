@@ -51,6 +51,111 @@ const fundingPartnerSchema = z
 	})
 	.strict();
 
+function isCssDeclarationList(value: string) {
+	if (!value) return true;
+
+	let declarationStart = 0;
+	let parentheses = 0;
+	let quote: "'" | '"' | null = null;
+	let escaped = false;
+
+	const isDeclaration = (declaration: string) => {
+		const trimmed = declaration.trim();
+		if (!trimmed) return true;
+
+		let colon = -1;
+		let nestedParentheses = 0;
+		let nestedQuote: "'" | '"' | null = null;
+		let nestedEscape = false;
+
+		for (let index = 0; index < trimmed.length; index += 1) {
+			const character = trimmed[index];
+			if (nestedEscape) {
+				nestedEscape = false;
+				continue;
+			}
+			if (character === "\\") {
+				nestedEscape = true;
+				continue;
+			}
+			if (nestedQuote) {
+				if (character === nestedQuote) nestedQuote = null;
+				continue;
+			}
+			if (character === "'" || character === '"') {
+				nestedQuote = character;
+				continue;
+			}
+			if (character === "(") nestedParentheses += 1;
+			if (character === ")") nestedParentheses -= 1;
+			if (
+				character === ":" &&
+				nestedParentheses === 0
+			) {
+				colon = index;
+				break;
+			}
+		}
+
+		if (colon <= 0) return false;
+		const property = trimmed.slice(0, colon).trim();
+		const declarationValue = trimmed.slice(colon + 1).trim();
+
+		return (
+			/^(?:--[A-Za-z0-9_-]+|-?[A-Za-z][A-Za-z0-9-]*)$/.test(
+				property,
+			) && declarationValue.length > 0
+		);
+	};
+
+	for (let index = 0; index < value.length; index += 1) {
+		const character = value[index];
+		if (escaped) {
+			escaped = false;
+			continue;
+		}
+		if (character === "\\") {
+			escaped = true;
+			continue;
+		}
+		if (quote) {
+			if (character === quote) quote = null;
+			continue;
+		}
+		if (character === "'" || character === '"') {
+			quote = character;
+			continue;
+		}
+		if (character === "(") parentheses += 1;
+		if (character === ")") {
+			parentheses -= 1;
+			if (parentheses < 0) return false;
+		}
+		if (character === ";" && parentheses === 0) {
+			if (!isDeclaration(value.slice(declarationStart, index))) {
+				return false;
+			}
+			declarationStart = index + 1;
+		}
+	}
+
+	return (
+		!quote &&
+		parentheses === 0 &&
+		isDeclaration(value.slice(declarationStart))
+	);
+}
+
+const logoStylesSchema = rawStringSchema
+	.pipe(z.string().max(10_000))
+	.refine((value) => !/[{}<]/.test(value), {
+		message:
+			"Logo styles must contain CSS declarations only, without braces or markup",
+	})
+	.refine(isCssDeclarationList, {
+		message: "Logo styles must be a valid CSS declaration list",
+	});
+
 const identityAssetsSchema = z
 	.object({
 		logoDark: stableImageUrlSchema,
@@ -63,7 +168,7 @@ const identityAssetsSchema = z
 			.superRefine((icons, context) =>
 				addDuplicateIssues(icons, context, (icon) => icon),
 			),
-		logoStyles: rawStringSchema.default(""),
+		logoStyles: logoStylesSchema.default(""),
 	})
 	.strict()
 	.transform((assets) => ({

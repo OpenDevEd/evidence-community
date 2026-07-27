@@ -4,7 +4,7 @@
 	"private": true,
 	"scripts": {
 		"dev": "next dev --turbopack",
-		"build": "npm run icons:generate && npm run schema:generate && FORCE_COLOR=1 NODE_OPTIONS='--max_old_space_size=8192' next build",
+		"build": "npm run schema:generate && FORCE_COLOR=1 NODE_OPTIONS='--max_old_space_size=8192' next build",
 		"start": "next start",
 		"deploy:server": "bash ./deploy/deploy-server.sh",
 		"config:validate": "tsx ./tools/validateLibraryConfig.ts",
@@ -13,7 +13,6 @@
 		"test": "npm run test:unit && npm run test:e2e",
 		"test:unit": "vitest run",
 		"test:e2e": "playwright test",
-		"icons:generate": "npx tsx ./tools/generateIcons.ts",
 		"schema:generate": "npx tsx ./tools/generateSchema.ts"
 	},
 	"dependencies": {

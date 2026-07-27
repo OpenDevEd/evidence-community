@@ -53,6 +53,10 @@ export const maximalLibraryConfig = {
 				id: "partner-one",
 				name: "Partner One",
 			},
+			{
+				id: "partner-two",
+				name: "Partner Two",
+			},
 		],
 		assets: {
 			logoDark: "https://assets.example.org/maximal/logo-dark.svg",
