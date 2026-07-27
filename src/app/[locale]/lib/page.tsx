@@ -9,7 +9,10 @@ import { getItemsPaginationMeta } from "@/lib/search";
 import { cacheLife } from "next/cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 
-async function getCachedPaginationMeta(queryParams: Parameters<typeof getItemsPaginationMeta>[0]) {
+async function getCachedPaginationMeta(
+  queryParams: Parameters<typeof getItemsPaginationMeta>[0],
+  configRevision: string,
+) {
   'use cache'
   cacheLife({ revalidate: 60 })
   return getItemsPaginationMeta(queryParams);
@@ -28,15 +31,25 @@ export async function libraryMetadata(props: {
   const queryParams = defaultParams(searchParams);
   const builtUrl = buildItemsQuery(queryParams, props.pathname);
 
-  const paginationMeta = await getCachedPaginationMeta(queryParams);
   const libraryConfig = await getLibraryConfig();
+  const paginationMeta = await getCachedPaginationMeta(
+    queryParams,
+    libraryConfig.revision,
+  );
 
   const page = paginationMeta.currentPage;
   const totalPages = paginationMeta.totalPages;
 
   const siteOrigin = libraryConfig.identity.baseUrl;
   const builtURLObject = new URL(builtUrl, siteOrigin);
-  const currentUrl = new URL(buildLocalizedSiteUrl(builtUrl, locale, siteOrigin));
+  const currentUrl = new URL(
+    buildLocalizedSiteUrl(
+      builtUrl,
+      locale as typeof libraryConfig.localization.defaultLocale,
+      libraryConfig.localization,
+      siteOrigin,
+    ),
+  );
   const atomUrl = new URL(builtURLObject.pathname + "/atom.xml?" + builtURLObject.searchParams.toString(), siteOrigin);
 
   let previous: string | null = null;
@@ -58,7 +71,11 @@ export async function libraryMetadata(props: {
     generator: "new-el",
     alternates: {
       canonical: currentUrl,
-      languages: buildLanguageAlternates(builtUrl, siteOrigin),
+      languages: buildLanguageAlternates(
+        builtUrl,
+        libraryConfig.localization,
+        siteOrigin,
+      ),
       types: {
         "application/atom+xml": atomUrl.toString()
       }

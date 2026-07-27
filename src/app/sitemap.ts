@@ -1,7 +1,7 @@
 import { MetadataRoute } from "next";
 import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
-import { routing } from "@/i18n/routing";
+import { getLibraryConfig } from "@/config/library-config/server";
 import { getSitemapPageCount } from "@/lib/sitemap";
 import {
 	buildLanguageAlternates,
@@ -38,6 +38,8 @@ export default async function sitemap(props: {
 	let items;
 
 	const identifier = Number(await props.id);
+	const libraryConfig = await getLibraryConfig();
+	const { localization } = libraryConfig;
 
 	while (attempt < maxRetries) {
 		try {
@@ -72,17 +74,31 @@ export default async function sitemap(props: {
 			]);
 			policyEntries = [
 				{
-					url: buildLocalizedSiteUrl("/privacy", routing.defaultLocale),
+					url: buildLocalizedSiteUrl(
+						"/privacy",
+						localization.defaultLocale,
+						localization,
+					),
 					lastModified: privacyLastModified,
 					alternates: {
-						languages: buildLanguageAlternates("/privacy"),
+						languages: buildLanguageAlternates(
+							"/privacy",
+							localization,
+						),
 					},
 				},
 				{
-					url: buildLocalizedSiteUrl("/cookie-policy", routing.defaultLocale),
+					url: buildLocalizedSiteUrl(
+						"/cookie-policy",
+						localization.defaultLocale,
+						localization,
+					),
 					lastModified: cookiePolicyLastModified,
 					alternates: {
-						languages: buildLanguageAlternates("/cookie-policy"),
+						languages: buildLanguageAlternates(
+							"/cookie-policy",
+							localization,
+						),
 					},
 				},
 			];
@@ -101,10 +117,17 @@ export default async function sitemap(props: {
 	}
 
 	const itemEntries = items.results.map((item: any) => ({
-		url: buildLocalizedSiteUrl(`/lib/${item.key}`, routing.defaultLocale),
+		url: buildLocalizedSiteUrl(
+			`/lib/${item.key}`,
+			localization.defaultLocale,
+			localization,
+		),
 		lastModified: item.updatedAt,
 		alternates: {
-			languages: buildLanguageAlternates(`/lib/${item.key}`),
+			languages: buildLanguageAlternates(
+				`/lib/${item.key}`,
+				localization,
+			),
 		},
 		images: item.attachmentsData
 			?.filter((attachment: any) => attachment.PDFCoverPageImage)

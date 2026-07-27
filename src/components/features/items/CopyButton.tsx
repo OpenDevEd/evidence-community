@@ -6,7 +6,7 @@ import { Button } from "@/components/nextui/Button";
 import { FaClipboard, FaClipboardCheck } from "react-icons/fa";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
-import { routing } from "@/i18n/routing";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { FiCheck, FiCopy } from "react-icons/fi";
 
 const CopyButton = forwardRef<
@@ -31,6 +31,7 @@ const CopyButton = forwardRef<
 	const [clearCopied] = useDebounce(() => setIsCopied(false), 2000);
 	const locale = useLocale();
 	const t = useTranslations("ui");
+	const { localization } = useLibraryConfig();
 
 	const handleCopy = () => {
 		if (content || contentRef) {
@@ -39,7 +40,7 @@ const CopyButton = forwardRef<
 		} else {
 			const currentUrl = window.location.href;
 			const url = new URL(currentUrl);
-			if (locale !== routing.defaultLocale) {
+			if (locale !== localization.defaultLocale) {
 				url.pathname = `/${locale}/lib/${itemData?.key}`;
 			} else {
 				url.pathname = `/lib/${itemData?.key}`;

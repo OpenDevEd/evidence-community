@@ -1,4 +1,3 @@
-import ItemComponent from "@/components/pages/Item";
 import { getItem } from "@/app/api/item/[key]/route";
 import { db } from "@/db";
 import {
@@ -8,8 +7,8 @@ import {
 } from "@/app/api/cache";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
-import { cacheLife, cacheTag } from "next/cache";
 import { buildLanguageAlternates } from "@/lib/language-alternates";
+import { getLibraryConfig } from "@/config/library-config/server";
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL, getExtraValues, parseCompanyName } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
@@ -62,13 +61,11 @@ function getPages(pages: string): { firstPage?: string; lastPage?: string } {
 export async function generateMetadata(props: {
 	params: Promise<{ key: string }>;
 }): Promise<Metadata> {
-	'use cache'
 	const params = await props.params;
-	cacheLife({ revalidate: 60 })
-	cacheTag('metadata-' + params.key)
-	const [data, status] = await Promise.all([
+	const [data, status, libraryConfig] = await Promise.all([
 		getCurrentItem(params.key),
 		getCachedStatus(),
+		getLibraryConfig(),
 	]);
 
 	const { companyName, siteName } = parseCompanyName(status.companyName);
@@ -103,7 +100,10 @@ export async function generateMetadata(props: {
 		generator: "new-el",
 		alternates: {
 			canonical: buildSiteUrl(`/lib/${item.key}`),
-			languages: buildLanguageAlternates(`/lib/${item.key}`),
+			languages: buildLanguageAlternates(
+				`/lib/${item.key}`,
+				libraryConfig.localization,
+			),
 			types: {
 				"application/x-research-info-systems": buildSiteUrl(`/lib/${item.key}/export/ris`),
 				"application/x-bibtex": buildSiteUrl(`/lib/${item.key}/export/bibtex`),

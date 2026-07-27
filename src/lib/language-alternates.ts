@@ -1,26 +1,46 @@
-import { routing } from "@/i18n/routing";
+import type { RuntimeLocalization } from "@/i18n/runtime";
+import { buildRuntimeLocalizedPathname } from "@/i18n/runtime";
 import { buildSiteUrl } from "@/lib/site-url";
 
 export function buildLocalizedSiteUrl(
 	pathname: string,
-	locale: string,
+	locale: RuntimeLocalization["defaultLocale"],
+	localization: RuntimeLocalization,
 	baseUrl?: string,
 ) {
-	const localizedPath =
-		locale === routing.defaultLocale ? pathname : `/${locale}${pathname}`;
-
-	return buildSiteUrl(localizedPath, baseUrl);
+	return buildSiteUrl(
+		buildRuntimeLocalizedPathname(
+			pathname,
+			locale,
+			localization.defaultLocale,
+		),
+		baseUrl,
+	);
 }
 
-export function buildLanguageAlternates(pathname: string, baseUrl?: string) {
+export function buildLanguageAlternates(
+	pathname: string,
+	localization: RuntimeLocalization,
+	baseUrl?: string,
+) {
 	return Object.fromEntries([
-		...routing.locales.map((locale) => [
+		...localization.locales.map((locale) => [
 			locale,
-			buildLocalizedSiteUrl(pathname, locale, baseUrl),
+			buildLocalizedSiteUrl(
+				pathname,
+				locale,
+				localization,
+				baseUrl,
+			),
 		]),
 		[
 			"x-default",
-			buildLocalizedSiteUrl(pathname, routing.defaultLocale, baseUrl),
+			buildLocalizedSiteUrl(
+				pathname,
+				localization.defaultLocale,
+				localization,
+				baseUrl,
+			),
 		],
 	]);
 }
