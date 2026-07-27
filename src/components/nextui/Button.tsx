@@ -10,7 +10,7 @@ export const Button = extendVariants(NextUIButton, {
         border-black/10 dark:border-white/10`,
       card:
         `text-white dark:text-white 
-        bg-white/50 dark:bg-card 
+        bg-card_light/50 dark:bg-card
         border-black/10 dark:border-white/10`,
       accent:
         `text-white dark:text-white 

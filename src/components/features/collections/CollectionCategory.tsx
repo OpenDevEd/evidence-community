@@ -1,6 +1,6 @@
 "use client";
 
-import { useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "../../nextui/Button";
 import { motion } from "framer-motion";
@@ -28,49 +28,31 @@ export default function CollectionCategory({
 }) {
 	const t = useTranslations("ui");
 	const ref = useRef<HTMLDivElement>(null);
-	const { previousExpansionStates, globalExpanded, setGlobalExpanded } =
-		useContext(CacheContext);
-	const [expanded, setExpanded] = useMemo(() => {
-		const currentValue = globalExpanded[collection.key] ?? false;
-		return [
-			currentValue,
-			(value: boolean | ((prev: boolean) => boolean)) => {
-				setGlobalExpanded((obj: Record<string, boolean>) => ({
-					...obj,
-					[collection.key]:
-						typeof value === "boolean" ? value : value(currentValue),
-				}));
-			},
-		];
-	}, [globalExpanded, collection.key]);
-	const [showMore, setShowMore] = useState(false);
-	const scrollHeight = ref.current?.scrollHeight ?? 0;
+	const { globalExpanded, setGlobalExpanded } = useContext(CacheContext);
+	const expanded = globalExpanded[collection.key] ?? false;
+	const setExpanded = (value: boolean | ((previous: boolean) => boolean)) => {
+		setGlobalExpanded((current: Record<string, boolean>) => {
+			const previous = current[collection.key] ?? false;
+			return {
+				...current,
+				[collection.key]:
+					typeof value === "boolean" ? value : value(previous),
+			};
+		});
+	};
+	const [hasOverflow, setHasOverflow] = useState(false);
 
 	useEffect(() => {
-		const apply = () => {
-			if (ref.current) {
-				setShowMore((prev) => {
-					if (!ref.current) return prev;
-					previousExpansionStates.current[collection.key] =
-						ref.current.scrollHeight > MAX_COLLAPSED_HEIGHT;
-					return previousExpansionStates.current[collection.key];
-				});
-			}
-		};
+		const element = ref.current;
+		if (!element) return;
 
-		const observer = new MutationObserver(apply);
-		if (ref.current) {
-			observer.observe(ref.current, { childList: true, subtree: true });
-		}
-		apply();
-		return () => {
-			observer.disconnect();
-		};
-	}, [ref, collection.key, previousExpansionStates.current]);
+		const observer = new ResizeObserver(() => {
+			setHasOverflow(element.scrollHeight > MAX_COLLAPSED_HEIGHT);
+		});
+		observer.observe(element);
 
-	if (previousExpansionStates.current[collection.key] === undefined) {
-		previousExpansionStates.current[collection.key] = showMore;
-	}
+		return () => observer.disconnect();
+	}, [collection.key]);
 	
 	return (
 		<div className="relative">
@@ -93,28 +75,23 @@ export default function CollectionCategory({
 					facetDistribution={facetDistribution}
 				/>
 			</div>
-			{scrollHeight > 0 && (
-				<div
-					className={twMerge(
-						"transition-all duration-200 pb-0",
-						expanded && showMore && "pb-14"
-					)}
+			{hasOverflow && (
+					<div
+						className={twMerge(
+							"transition-all duration-200 pb-0",
+							expanded && "pb-14"
+						)}
 				></div>
 			)}
 			<AnimatePresence mode="wait" initial={false}>
-				{(showMore && scrollHeight > 0) && (
+				{hasOverflow && (
 					<motion.div
-						initial={
-							previousExpansionStates.current[collection.key] !==
-							showMore
-								? { opacity: 0 }
-								: { opacity: 1 }
-						}
+						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0 }}
 						className={twMerge(
-							"absolute bottom-0 w-full bg-white dark:bg-card z-10",
-							"before:absolute before:-top-24 before:left-0 before:right-0 before:h-24 before:bg-gradient-to-t from-white dark:before:from-card before:to-transparent before:z-10 before:opacity-100 before:transition-opacity duration-400 before:pointer-events-none",
+							"absolute bottom-0 w-full bg-card_light dark:bg-card z-10",
+							"before:absolute before:-top-24 before:left-0 before:right-0 before:h-24 before:bg-gradient-to-t before:from-card_light dark:before:from-card before:to-transparent before:z-10 before:opacity-100 before:transition-opacity duration-400 before:pointer-events-none",
 							expanded && "before:opacity-0"
 						)}
 						key={"show-more"}

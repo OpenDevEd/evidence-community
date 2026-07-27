@@ -11,7 +11,7 @@ export const Card = extendVariants(NextUICard, {
         base: "bg-accent border-accent dark:bg-accent/20 dark:border-white/10",
       },
       card: {
-        base: "bg-white dark:bg-card dark:border-white/10",
+        base: "bg-card_light dark:bg-card dark:border-white/10",
       },
       transparent: {
         base: "bg-transparent border-transparent",
@@ -37,4 +37,3 @@ export const Card = extendVariants(NextUICard, {
     custom: "default",
   },
 });
-    

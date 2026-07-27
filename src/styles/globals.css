@@ -4,8 +4,8 @@
 
 :root {
 	font-size: 100%;
-	--select-popover-tertiary-color-mixed-bg: color-mix(in srgb, theme("colors.tertiary.500") 10%, theme("colors.background.500") 90%);
-	--select-popover-tertiary-color-mixed-bg-light: theme("colors.tertiary.500");
+	--select-popover-tertiary-color-mixed-bg: color-mix(in srgb, rgb(var(--color-tertiary-500) / var(--color-tertiary-500-alpha)) 10%, rgb(var(--color-background-500) / var(--color-background-500-alpha)) 90%);
+	--select-popover-tertiary-color-mixed-bg-light: rgb(var(--color-tertiary-500) / var(--color-tertiary-500-alpha));
 }
 
 .select-popover-tertiary {
@@ -51,6 +51,16 @@
 
 body {
 	overflow-x: hidden;
+	font-family: var(--font-body), sans-serif;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+	font-family: var(--font-heading), sans-serif;
 }
 
 @layer utilities {

@@ -101,6 +101,7 @@ export const maximalLibraryConfig = {
 				source: "woff2",
 				family: "Maximal Sans",
 				url: "https://assets.example.org/fonts/maximal-sans.woff2",
+				weight: "variable",
 			},
 			weights: [300, 400, 500, 700],
 		},

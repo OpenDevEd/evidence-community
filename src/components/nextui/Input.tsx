@@ -11,7 +11,7 @@ export const Input = extendVariants(NextUIInput, {
 			},
 			card: {
 				inputWrapper:
-					"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
+					"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 group-data-[focus]:bg-card_light dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
 				input: "placeholder:text-black/60 dark:placeholder:text-white/40",
 				label: "text-black/80 dark:text-white/80",
 			},

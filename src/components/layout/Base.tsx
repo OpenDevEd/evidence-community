@@ -1,9 +1,7 @@
 import Providers from "@/context/Providers";
 import { FiltersProvider } from "@/context/FiltersProvider";
-import { Montserrat, Ubuntu } from "next/font/google";
 import Navbar from "@/components/layout/navbar";
 import Footer from "@/components/layout/Footer";
-import { style } from "@/../tailwind.config";
 import { getMessages, getTranslations } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
 import { getLangDir } from "rtl-detect";
@@ -20,18 +18,7 @@ import { getLibraryConfig } from "@/config/library-config/server";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
 import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
-
-const ubuntu = Ubuntu({
-	subsets: ["latin"],
-	weight: ["300", "400", "500", "700"],
-	variable: "--font-ubuntu",
-});
-
-const montserrat = Montserrat({
-	subsets: ["latin"],
-	weight: ["300", "400", "500", "700"],
-	variable: "--font-montserrat",
-});
+import { LibraryThemeStyles } from "@/components/library/LibraryThemeStyles";
 
 async function BaseContent({
 	children,
@@ -126,12 +113,9 @@ export default async function Base({
 			<head>
 				<link rel="unapi-server" type="application/xml" title="unAPI" href="/api/unapi" />
 				<LibraryLogoStyles identity={libraryConfig.identity} />
+				<LibraryThemeStyles theme={libraryConfig.theme} />
 			</head>
-			<body
-				className={`${
-					style === "wide" ? montserrat.className : ubuntu.className
-				}`}
-			>
+			<body>
 				{googleAnalyticsId ? (
 					<Script id="ga-consent-default" strategy="beforeInteractive">
 						{`

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useSyncExternalStore } from "react";
 import { useTheme } from "next-themes";
 import { useTranslations } from "next-intl";
 import { HiOutlineMoon } from "react-icons/hi2";
@@ -9,21 +9,33 @@ import { DropdownItem } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
 import { useFeatureFlagEnabled } from "@/context/Providers";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import type { NavbarElementProps } from "@/types/navbar";
+
+const subscribeToHydration = () => () => {};
 
 export default function ThemeSwitcher({
 	variant,
 	styleVariant,
 	showLabel,
 }: NavbarElementProps) {
-	const [mounted, setMounted] = useState(false);
+	const mounted = useSyncExternalStore(
+		subscribeToHydration,
+		() => true,
+		() => false,
+	);
 	const { resolvedTheme, setTheme } = useTheme();
 	const isEnabled = useFeatureFlagEnabled("theme-switcher");
+	const { features, theme } = useLibraryConfig();
 	const t = useTranslations("ui");
 
-	useEffect(() => setMounted(true), []);
-
-	if (!isEnabled) return null;
+	if (
+		!isEnabled ||
+		!features.themeSwitcher ||
+		theme.forcedMode
+	) {
+		return null;
+	}
 
 	const toggleTheme = () =>
 		setTheme(resolvedTheme === "dark" ? "light" : "dark");

@@ -10,7 +10,7 @@ export type NavbarBreakpoint = "mobile" | "tablet" | "desktop";
 // Where an element can be placed at each breakpoint
 export type NavbarPlacement = "inline" | "dropdown" | "mobileMenu" | "hidden";
 
-// Style variants from NEXT_PUBLIC_STYLE env variable
+// Style variants from the runtime library configuration
 export type NavbarStyleVariant = "small" | "wide";
 
 // Component render variants

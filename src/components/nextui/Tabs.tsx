@@ -12,7 +12,7 @@ export const Tabs = extendVariants(NextUITabs, {
 			},
 			card: {
 				base: "bg-transparent w-full",
-				tabList: "bg-white dark:bg-card border border-black/10 dark:border-white/10 rounded-2xl p-0.5 md:p-1 w-full md:w-auto",
+				tabList: "bg-card_light dark:bg-card border border-black/10 dark:border-white/10 rounded-2xl p-0.5 md:p-1 w-full md:w-auto",
 				tab: "text-black/60 dark:text-white/60 data-[selected=true]:!text-white [&_*]:data-[selected=true]:!text-white data-[selected=true]:!bg-transparent flex-1 md:flex-initial",
 				cursor: "!bg-accent dark:!bg-accent-500 rounded-xl",
 			},
@@ -46,4 +46,3 @@ export const Tabs = extendVariants(NextUITabs, {
 });
 
 export const Tab = NextUITab;
-

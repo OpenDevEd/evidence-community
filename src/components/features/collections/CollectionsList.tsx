@@ -67,7 +67,7 @@ function YearPicker({
 				inputProps={{
 					classNames: {
 						inputWrapper:
-							"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+							"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
 						input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 					},
 				}}
@@ -90,7 +90,7 @@ function YearPicker({
 			onChange={(e) => debouncedOnSelectionChange(e.target.value)}
 			classNames={{
 				inputWrapper:
-					"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+					"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
 				input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 				label: "text-black/80 dark:text-white/80",
 			}}
@@ -172,7 +172,7 @@ function FacetPicker({
 					inputProps={{
 						classNames: {
 							inputWrapper:
-								"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+								"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
 							input: twMerge(
 								"placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 								isMultiSelect &&
@@ -362,7 +362,7 @@ export function InnerCollectionList({
 			selectionMode="multiple"
 			fullWidth={false}
 			variant="shadow"
-			className="bg-white dark:bg-card p-6 rounded-xl rounded-t-none shadow-none"
+			className="bg-card_light dark:bg-card p-6 rounded-xl rounded-t-none shadow-none"
 			itemClasses={{
 				title: "text-black/80 dark:text-white/80 font-base text-2xl",
 				indicator: "text-black/80 dark:text-white/80",
@@ -388,7 +388,7 @@ export function InnerCollectionList({
 			))}
 		</Accordion>
 	) : (
-		<div className="text-lg bg-white dark:bg-card p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 select-none">
+		<div className="text-lg bg-card_light dark:bg-card p-6 rounded-xl shadow-none text-black/80 dark:text-white/80 font-medium flex justify-center items-center gap-2 select-none">
 			<LuX className="stroke-current size-6" />
 			<span>{t("noFacetsFound")}</span>
 		</div>
@@ -631,7 +631,7 @@ function FiltersList({
 		handleInstitutionSelect,
 		facetDistribution,
 		nationalInstitutionsData,
-		institutions,
+		nationalInstitutions,
 	]);
 
 	const authorLocationFilter = useMemo(() => {
@@ -924,7 +924,7 @@ export default function CollectionsList({
 				</section>
 				{isCollectionsEnabled && (
 					<section className="w-full">
-						{/* <div className="p-4 pt-6 pb-0 bg-white dark:bg-card">
+						{/* <div className="p-4 pt-6 pb-0 bg-card_light dark:bg-card">
 						<Input
 							placeholder={t("searchCollections")}
 							value={search}

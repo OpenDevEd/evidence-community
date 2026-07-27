@@ -6,7 +6,7 @@ export const Tooltip = extendVariants(NextUITooltip, {
 	variants: {
 		color: {
 			card: {
-				content: "bg-white dark:bg-card border border-white/10"
+				content: "bg-card_light dark:bg-card border border-white/10"
             }
 		},
 	},

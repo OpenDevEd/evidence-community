@@ -217,7 +217,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 							inputProps={{
 								classNames: {
 									inputWrapper:
-										"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+										"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
 									input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 								},
 							}}
@@ -266,7 +266,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 							inputProps={{
 								classNames: {
 									inputWrapper:
-										"bg-white dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
+										"bg-card_light dark:bg-card border-small border-black/10 dark:border-white/10 rounded-2xl",
 									input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
 								},
 							}}
@@ -389,7 +389,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 									/>
 									<Tooltip
 										contentStyle={{
-											backgroundColor: theme === "dark" ? "#1a1a1a" : "#ffffff",
+											backgroundColor: "transparent",
 											border: `1px solid ${theme === "dark" ? "rgba(255, 255, 255, 0.1)" : "rgba(0, 0, 0, 0.1)"}`,
 											borderRadius: "16px",
 											boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)",
@@ -407,7 +407,7 @@ export function CitationsByYear({ citationsByYear, institutionsByYear, topicsByY
 											const itemCount = data.itemCount;
 											
 											return (
-												<div className="bg-white dark:bg-[#1a1a1a] border border-black/10 dark:border-white/10 rounded-2xl shadow-lg p-4 min-w-[200px] space-y-3">
+												<div className="bg-card_light dark:bg-card border border-black/10 dark:border-white/10 rounded-2xl shadow-lg p-4 min-w-[200px] space-y-3">
 													{/* Header */}
 													<div className="flex items-center gap-2 pb-2 border-b border-black/10 dark:border-white/10">
 														<BsBarChart className="text-accent w-4 h-4" />

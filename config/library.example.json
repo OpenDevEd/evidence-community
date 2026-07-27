@@ -53,7 +53,8 @@
 			"body": {
 				"source": "woff2",
 				"family": "Example Sans",
-				"url": "https://assets.example.org/fonts/example-sans.woff2"
+				"url": "https://assets.example.org/fonts/example-sans.woff2",
+				"weight": "variable"
 			},
 			"weights": [
 				300,

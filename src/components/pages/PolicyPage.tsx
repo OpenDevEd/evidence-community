@@ -149,7 +149,7 @@ const markdownComponents: Components = {
 							? undefined
 							: "noopener noreferrer"
 					}
-					className="font-medium text-link_light underline decoration-black/15 underline-offset-4 transition-colors hover:text-link hover:decoration-current dark:text-link dark:decoration-white/20"
+					className="font-medium text-link underline decoration-black/15 underline-offset-4 transition-colors hover:decoration-current dark:decoration-white/20"
 				>
 					{children}
 				</a>
@@ -159,7 +159,7 @@ const markdownComponents: Components = {
 		return (
 			<Link
 				href={url}
-				className="font-medium text-link_light underline decoration-black/15 underline-offset-4 transition-colors hover:text-link hover:decoration-current dark:text-link dark:decoration-white/20"
+				className="font-medium text-link underline decoration-black/15 underline-offset-4 transition-colors hover:decoration-current dark:decoration-white/20"
 			>
 				{children}
 			</Link>

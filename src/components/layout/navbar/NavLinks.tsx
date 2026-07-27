@@ -13,7 +13,6 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { useStatus } from "@/context/Providers";
 import { NAVBAR_ICONS } from "@/constants/links";
 import { localizeOrUseIfCapitalized } from "@/lib/utils";
-import { style } from "@/../tailwind.config";
 import type { LinkObject } from "@/db/schema/tables/status";
 import GapMapLinks from "./GapMapLinks";
 import type { NavbarStyleVariant } from "@/types/navbar";
@@ -153,7 +152,7 @@ interface NavLinksProps {
 export default function NavLinks({
 	pathname,
 	isMobile = false,
-	styleVariant = (style as NavbarStyleVariant) || "small",
+	styleVariant = "small",
 }: NavLinksProps) {
 	const status = useStatus();
 	const links: LinkObject[] = status.links || [];

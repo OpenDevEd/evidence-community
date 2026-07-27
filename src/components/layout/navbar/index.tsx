@@ -7,8 +7,8 @@ import { useTheme } from "next-themes";
 import { useDisclosure } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import { usePathname } from "@/i18n/routing";
-import { style } from "@/../tailwind.config";
 import { FeatureFlagsContext } from "@/context/Providers";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 import { Logo } from "./Logo";
 import NavLinks from "./NavLinks";
@@ -36,7 +36,9 @@ export default function Navbar() {
 	const { resolvedTheme: theme, setTheme } = useTheme();
 	const { data: session } = useSession();
 	const { featureFlags } = useContext(FeatureFlagsContext);
-	const styleVariant = (style as NavbarStyleVariant) || "small";
+	const libraryConfig = useLibraryConfig();
+	const styleVariant =
+		libraryConfig.theme.layout as NavbarStyleVariant;
 
 	const {
 		isOpen: isLoginModalOpen,
@@ -61,7 +63,12 @@ export default function Navbar() {
 	// Get enabled elements based on feature flags and session
 	const enabledElements = getEnabledElements(
 		featureFlags ?? {},
-		session
+		session,
+	).filter(
+		(element) =>
+			element.id !== "theme-switcher" ||
+			(libraryConfig.features.themeSwitcher &&
+				!libraryConfig.theme.forcedMode),
 	);
 
 	// Get elements grouped by placement for each breakpoint

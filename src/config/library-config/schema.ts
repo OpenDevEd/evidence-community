@@ -39,6 +39,11 @@ import {
 	tagSchema,
 	utcTimestampSchema,
 } from "./primitives";
+import {
+	generateColorRamp,
+	parseHexColor,
+	type RgbaColor,
+} from "./theme";
 
 export const MAX_LIBRARY_CONFIG_BYTES = 1024 * 1024;
 const DEFAULT_FONT_WEIGHTS = [400, 500, 700] as const;
@@ -246,8 +251,16 @@ const googleFontSchema = z
 const woff2FontSchema = z
 	.object({
 		source: z.literal("woff2"),
-		family: singleLineStringSchema(100),
+		family: singleLineStringSchema(100).refine(
+			(value) =>
+				/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u.test(value),
+			{
+				message:
+					"Font family must contain only letters, numbers, spaces, dots, underscores, or hyphens",
+			},
+		),
 		url: stableWoff2UrlSchema,
+		weight: z.union([z.literal(400), z.literal("variable")]),
 	})
 	.strict();
 
@@ -256,16 +269,13 @@ export const fontSchema = z.discriminatedUnion("source", [
 	woff2FontSchema,
 ]);
 
-const fontWeightSchema = z.union([
-	z.union(
-		FONT_WEIGHTS.map((weight) => z.literal(weight)) as [
-			z.ZodLiteral<(typeof FONT_WEIGHTS)[number]>,
-			z.ZodLiteral<(typeof FONT_WEIGHTS)[number]>,
-			...z.ZodLiteral<(typeof FONT_WEIGHTS)[number]>[],
-		],
-	),
-	z.literal("variable"),
-]);
+const fontWeightSchema = z.union(
+	FONT_WEIGHTS.map((weight) => z.literal(weight)) as [
+		z.ZodLiteral<(typeof FONT_WEIGHTS)[number]>,
+		z.ZodLiteral<(typeof FONT_WEIGHTS)[number]>,
+		...z.ZodLiteral<(typeof FONT_WEIGHTS)[number]>[],
+	],
+);
 
 const themeFontsInputSchema = z
 	.object({
@@ -303,20 +313,8 @@ const themeColorsSchema = z
 		doi: colors.doi ?? colors.accent,
 	}));
 
-type Rgba = [number, number, number, number];
-
-function parseColor(value: string): Rgba {
-	const red = Number.parseInt(value.slice(1, 3), 16);
-	const green = Number.parseInt(value.slice(3, 5), 16);
-	const blue = Number.parseInt(value.slice(5, 7), 16);
-	const alpha =
-		value.length === 9 ? Number.parseInt(value.slice(7, 9), 16) / 255 : 1;
-
-	return [red, green, blue, alpha];
-}
-
 function composite(
-	foreground: Rgba,
+	foreground: RgbaColor,
 	background: [number, number, number],
 ): [number, number, number] {
 	return [
@@ -355,19 +353,13 @@ export function hasAccessiblePaletteTone(
 ) {
 	const canvasRgb: [number, number, number] =
 		canvas === "dark" ? [0, 0, 0] : [255, 255, 255];
-	const backgroundRgb = composite(parseColor(background), canvasRgb);
-	const linkColor = parseColor(link);
-	const factors = [0.2, 0.4, 0.6, 0.8, 1, 1.15, 1.3, 1.45, 1.6];
+	const backgroundRgb = composite(parseHexColor(background), canvasRgb);
 
-	return factors.some((factor) => {
-		const adjusted: Rgba = [
-			Math.max(0, Math.min(255, linkColor[0] * factor)),
-			Math.max(0, Math.min(255, linkColor[1] * factor)),
-			Math.max(0, Math.min(255, linkColor[2] * factor)),
-			linkColor[3],
-		];
-		return contrastRatio(composite(adjusted, backgroundRgb), backgroundRgb) >= 4.5;
-	});
+	return Object.values(generateColorRamp(link)).some(
+		(tone) =>
+			contrastRatio(composite(tone, backgroundRgb), backgroundRgb) >=
+			4.5,
+	);
 }
 
 const themeSchema = z
@@ -408,12 +400,28 @@ const themeSchema = z
 
 		for (const field of ["heading", "body"] as const) {
 			const font = theme.fonts[field];
-			if (font.source !== "google") continue;
+			if (font.source === "woff2") {
+				const unsupported =
+					font.weight === 400
+						? theme.fonts.weights.filter(
+								(weight) => weight !== 400,
+							)
+						: [];
+
+				if (unsupported.length) {
+					context.addIssue({
+						code: z.ZodIssueCode.custom,
+						message:
+							"Static WOFF2 files support only weight 400; use a variable WOFF2 file for multiple weights",
+						path: ["fonts", "weights"],
+					});
+				}
+				continue;
+			}
 
 			const supported = PLATFORM_FONT_CATALOG[font.family].weights;
 			const unsupported = theme.fonts.weights.filter(
 				(weight) =>
-					weight === "variable" ||
 					!supported.includes(
 						weight as (typeof supported)[number],
 					),
@@ -426,6 +434,24 @@ const themeSchema = z
 					path: ["fonts", "weights"],
 				});
 			}
+		}
+
+		const { heading, body } = theme.fonts;
+		if (
+			heading.family.toLocaleLowerCase() ===
+				body.family.toLocaleLowerCase() &&
+			(heading.source !== body.source ||
+				(heading.source === "woff2" &&
+					body.source === "woff2" &&
+					(heading.url !== body.url ||
+						heading.weight !== body.weight)))
+		) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message:
+					"Heading and body fonts with the same family must use the same source",
+				path: ["fonts", "body", "family"],
+			});
 		}
 
 		for (const [background, canvas] of [

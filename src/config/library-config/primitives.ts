@@ -124,6 +124,14 @@ function urlSchema({
 		.superRefine((value, context) => {
 			let parsed: URL;
 
+			if (/[<>]/u.test(value)) {
+				context.addIssue({
+					code: z.ZodIssueCode.custom,
+					message:
+						"Raw HTML delimiter characters are not allowed in URLs",
+				});
+			}
+
 			try {
 				parsed = new URL(value);
 			} catch {

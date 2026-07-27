@@ -221,7 +221,7 @@ function ItemAuthor({ author }: { author?: Author }) {
 		<Tooltip
 			isDisabled={affiliationCount === 0}
 			key={author?.name}
-			className="rounded-2xl bg-white dark:bg-card"
+			className="rounded-2xl bg-card_light dark:bg-card"
 			placement="left"
 			content={
 				<div className="py-2 px-1 min-w-[300px]">
@@ -701,7 +701,7 @@ function ItemAbstract({ item }: { item: Item | undefined }) {
 function ProcessHTML(html: string) {
 	// Single pass: match URLs or bare DOIs
 	const combined = /(https?:\/\/[^\s<>"{}|\\^`[\]]+)|(10\.\d{4,9}\/[-._;():\w]+)/gi;
-	const linkClass = "text-link_light dark:text-link hover:underline";
+	const linkClass = "text-link hover:underline";
 
 	return html.replace(combined, (match, url, doi) => {
 		const href = url || `https://doi.org/${doi}`;
@@ -753,7 +753,7 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 		const urlStr = origin
 			? `${origin}/lib/${item.key}`
 			: `/lib/${item.key}`;
-		const linkHtml = `<a href="${urlStr}" target="_blank" rel="noopener noreferrer" class="text-link_light dark:text-link hover:underline">${urlStr}</a>`;
+		const linkHtml = `<a href="${urlStr}" target="_blank" rel="noopener noreferrer" class="text-link hover:underline">${urlStr}</a>`;
 
 		// Copy Text Logic
 		let copy = decodedCitation;
@@ -982,11 +982,11 @@ function ItemIdentifierRow({ link }: { link: IdentifierDisplayLink }) {
 							href={link.url}
 							target="_blank"
 							rel="noopener noreferrer"
-							className="block overflow-hidden whitespace-nowrap pr-5 text-xs leading-tight text-link_light transition-colors hover:underline dark:text-link"
+							className="block overflow-hidden whitespace-nowrap pr-5 text-xs leading-tight text-link transition-colors hover:underline"
 						>
 							{link.value}
 						</a>
-						<div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-white via-white/80 to-transparent dark:from-card dark:via-card/80" />
+						<div className="pointer-events-none absolute inset-y-0 right-0 w-6 bg-gradient-to-l from-card_light via-card_light/80 to-transparent dark:from-card dark:via-card/80" />
 					</div>
 				</div>
 				<div className="flex shrink-0 items-center">
@@ -1385,7 +1385,7 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 				{notes?.map((note) => (
 					<Card key={note.id} color="card" className="flex flex-col">
 						<div
-							className="[&_a]:text-link_light dark:[&_a]:text-link"
+							className="[&_a]:text-link"
 							dangerouslySetInnerHTML={{
 								__html:
 									note.note?.replaceAll(
@@ -1408,7 +1408,7 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 							color="card"
 							className="flex flex-col p-4 transition-colors hover:bg-accent/5 group-hover:border-accent/50"
 						>
-							<div className="flex items-center gap-2 text-link_light dark:text-link font-medium">
+							<div className="flex items-center gap-2 text-link font-medium">
 								{link.title || link.url}
 							</div>
 							{link.title && link.url && (

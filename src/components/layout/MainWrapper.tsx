@@ -1,9 +1,8 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { style } from "../../../tailwind.config";
-
 import { twMerge } from "tailwind-merge";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 export default function MainWrapper({
 	children,
@@ -12,12 +11,13 @@ export default function MainWrapper({
 }) {
 	const pathname = usePathname();
 	const isMapPage = pathname.includes("/map");
+	const { theme } = useLibraryConfig();
 
 	return (
 		<div
 			className={twMerge(
 				"h-full w-full bg-background_light dark:bg-background flex flex-col items-center justify-items-center min-h-screen",
-				style === "small" && "xl:pt-14",
+				theme.layout === "small" && "xl:pt-14",
 				isMapPage && "!p-0"
 			)}
 		>

@@ -24,6 +24,7 @@ import ThemeSwitcher from "./ThemeSwitcher";
 import LoginButton from "./LoginButton";
 import LanguageSwitcher from "./LanguageSwitcher";
 import type { NavbarContext } from "@/types/navbar";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 interface ActionsDropdownProps {
 	context: NavbarContext;
@@ -36,8 +37,12 @@ export default function ActionsDropdown({ context }: ActionsDropdownProps) {
 	const router = useRouter();
 	const pathname = usePathname();
 	const { sortedLocales, localesNames } = useSortedLocales();
+	const libraryConfig = useLibraryConfig();
 
-	const isThemeEnabled = useFeatureFlagEnabled("theme-switcher");
+	const isThemeEnabled =
+		useFeatureFlagEnabled("theme-switcher") &&
+		libraryConfig.features.themeSwitcher &&
+		!libraryConfig.theme.forcedMode;
 	const isLanguageEnabled = useFeatureFlagEnabled("language-switcher");
 	const isLoginEnabled = useFeatureFlagEnabled("login");
 

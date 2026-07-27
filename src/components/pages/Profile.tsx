@@ -635,7 +635,7 @@ export default function Profile({ data }: { data: any }) {
 			/>
 			<div className="lg:w-80 xl:w-96 w-full flex-col gap-6 shrink-0">
 				<div className="w-full dark:bg-secondary bg-black/[4%] rounded-2xl flex flex-col">
-					<div className="w-full dark:bg-card bg-white rounded-2xl rounded-b-none overflow-hidden flex">
+					<div className="w-full dark:bg-card bg-card_light rounded-2xl rounded-b-none overflow-hidden flex">
 						<div
 							className={twMerge(
 								"size-32 shrink-0",

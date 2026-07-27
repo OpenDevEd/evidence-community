@@ -38,6 +38,7 @@ import {
 	type RuntimeFeatureFlags,
 	isFeatureFlagEnabled,
 } from "@/lib/feature-flags";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 
 type RuntimeStatus = InferSelectModel<typeof statusTable> & {
@@ -48,7 +49,6 @@ export type CacheContextType = {
 	cache: any;
 	setCache: (cache: any) => void;
 	itemsCache: any;
-	previousExpansionStates: any;
 	globalExpanded: any;
 	setGlobalExpanded: (globalExpanded: any) => void;
 	lastFetchedData: ItemsGetResponse | null;
@@ -117,7 +117,6 @@ function CacheProvider({
 }) {
 	const [cache, setCache] = useState({});
 	const itemsCache = useRef({});
-	const previousExpansionStates = useRef({});
 	const [globalExpanded, setGlobalExpanded] = useState({});
 	const [accordionGlobalExpanded, setAccordionGlobalExpanded] =
 		useState(null);
@@ -133,7 +132,6 @@ function CacheProvider({
 				cache,
 				setCache,
 				itemsCache,
-				previousExpansionStates,
 				globalExpanded,
 				setGlobalExpanded,
 				accordionGlobalExpanded,
@@ -239,12 +237,13 @@ export default function Providers({
 }) {
 	const router = useRouter();
 	const featureFlags = useMemo(() => initialFeatureFlags, [initialFeatureFlags]);
+	const { theme } = useLibraryConfig();
 
 	return (
 		<ThemeProvider
 			attribute={"class"}
-			defaultTheme={process.env.NEXT_PUBLIC_DEFAULT_THEME || "dark"}
-			forcedTheme={process.env.NEXT_PUBLIC_FORCED_THEME || undefined}
+			defaultTheme={theme.defaultMode}
+			forcedTheme={theme.forcedMode ?? undefined}
 			disableTransitionOnChange
 		>
 			<NuqsAdapter>

@@ -6,8 +6,6 @@ import {
 	Geography,
 	ZoomableGroup,
 } from "react-simple-maps";
-import tailwindConfig, { style } from "../../../tailwind.config";
-import resolveConfig from "tailwindcss/resolveConfig";
 import { ReactNode, useEffect, useRef, useState, memo } from "react";
 import {Tooltip } from "@nextui-org/react";
 import { useLocalStorage, useMouse, useWindowSize } from "@uidotdev/usehooks";
@@ -27,6 +25,11 @@ import { SelectItem } from "../nextui/SelectItem";
 import { useTranslations } from "next-intl";
 import { searchParamsLoader } from "@/lib/searchParams";
 import { inferParserType } from "nuqs/server";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import {
+	formatCssColor,
+	generateColorRamp,
+} from "@/config/library-config/theme";
 
 export type FeatureCollection = {
 	type: "FeatureCollection";
@@ -52,16 +55,6 @@ export type FeatureGeometry = {
 
 // URL to the world map GeoJSON data
 const geoUrl = "/features.json";
-
-const fullConfig = resolveConfig(tailwindConfig);
-
-export type ExtendedTheme = typeof fullConfig & {
-	theme: {
-		colors: {
-			accent: string;
-		};
-	};
-};
 
 function MouseTooltip({
 	content,
@@ -114,21 +107,15 @@ function linearColor(
 	return `rgb(${r}, ${g}, ${b})`;
 }
 
-function HEXToRGB(hex: string): [number, number, number] {
-	const r = parseInt(hex.slice(1, 3), 16);
-	const g = parseInt(hex.slice(3, 5), 16);
-	const b = parseInt(hex.slice(5, 7), 16);
-	return [r, g, b];
-}
-
 function ItemView({ props }: { props: ReturnType<typeof useItemsList> }) {
 	const isCountrySelected = countryFacetOptions.some(facet => (props.queryParams[facet.queryParam] as string[]).length > 0);
+	const { theme } = useLibraryConfig();
 
 	return (
 		<AnimatePresence>
 			{isCountrySelected && (
 				<motion.div
-					className={twMerge("fixed right-0 inset-y-0 top-36 md:top-0 md:pt-[calc(7.5rem-1.5rem)] md:pr-4 md:pb-4", style === "small" && "md:pt-[calc(7.5rem)]")}
+					className={twMerge("fixed right-0 inset-y-0 top-36 md:top-0 md:pt-[calc(7.5rem-1.5rem)] md:pr-4 md:pb-4", theme.layout === "small" && "md:pt-[calc(7.5rem)]")}
 					initial={{ opacity: 0, x: 100 }}
 					animate={{ opacity: 1, x: 0 }}
 					exit={{ opacity: 0, x: 100 }}
@@ -172,10 +159,19 @@ function Search({ props, setMapFacet, mapFacet }: { props: ReturnType<typeof use
 
 
 export default function Map() {
-	const tailwindAccentColor = (fullConfig as ExtendedTheme).theme.colors.accent[600];
-	const lightAccentColor = (fullConfig as ExtendedTheme).theme.colors.accent[100];
-	const RGBAccent = HEXToRGB(tailwindAccentColor);
-	const RGBLightAccent = HEXToRGB(lightAccentColor);
+	const { theme } = useLibraryConfig();
+	const accentRamp = generateColorRamp(theme.colors.accent);
+	const tailwindAccentColor = formatCssColor(accentRamp[600]);
+	const RGBAccent = accentRamp[600].slice(0, 3) as [
+		number,
+		number,
+		number,
+	];
+	const RGBLightAccent = accentRamp[100].slice(0, 3) as [
+		number,
+		number,
+		number,
+	];
 	const [tooltipContent, setTooltipContent] = useState<ReactNode | null>(
 		null
 	);

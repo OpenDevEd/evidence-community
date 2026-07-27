@@ -22,7 +22,7 @@ import useSWR from "swr";
 import { fetcher, fetcherPOST, getExtraValues, isAIAllowed } from "@/lib/utils";
 import Resource from "../features/items/Resource";
 import { Skeleton } from "../nextui/Skeleton";
-import { useMemo, useRef, useState } from "react";
+import { useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
 import { useFeatureFlagEnabled, useLastFetchedData } from "@/context/Providers";
@@ -40,13 +40,6 @@ import posthog from "posthog-js";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { useQueryState } from "nuqs";
 import { getSafeReferrer } from "@/constants/misc";
-
-function randomUUID() {
-	return (
-		Math.random().toString(36).substring(2, 15) +
-		Math.random().toString(36).substring(2, 15)
-	);
-}
 
 function AiButton({
 	data,
@@ -82,7 +75,7 @@ function AiButton({
 			revalidateIfStale: false,
 		}
 	);
-	const id = useRef(randomUUID());
+	const [generationId, setGenerationId] = useState(() => crypto.randomUUID());
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
 
@@ -115,14 +108,14 @@ function AiButton({
 
 	const summaryFeature = useAIFeature(
 		"summarize",
-		id.current,
+		generationId,
 		updateHistory,
 		data,
 		selectedModel
 	);
 	const explainFeature = useAIFeature(
 		"explain",
-		id.current,
+		generationId,
 		updateHistory,
 		data,
 		selectedModel
@@ -133,7 +126,7 @@ function AiButton({
 		[summaryFeature, explainFeature].forEach((feature) => {
 			feature.setCompletion("");
 		});
-		id.current = crypto.randomUUID();
+		setGenerationId(crypto.randomUUID());
 	};
 
 	return (
@@ -173,7 +166,7 @@ function AiButton({
 								[feature.key]: history,
 							}))
 						}
-						id={id.current}
+						id={generationId}
 					/>
 				))}
 				<Dropdown
@@ -289,15 +282,14 @@ export default function Item({
 
 	const aiAllowed = isAIAllowed(data?.item);
 
-	const hierarchy = useMemo(() => {
-		if (!data?.item?.collectionsData) return null;
-		return buildHierarchy(data.item.collectionsData);
-	}, [data?.item?.collectionsData]);
+	const hierarchy = data?.item?.collectionsData
+		? buildHierarchy(data.item.collectionsData)
+		: null;
 
 	return (
 		<PageContainer id="main-content" className="flex flex-col gap-4">
 			{data?.item && <abbr className="unapi-id" title={data?.item?.key}></abbr>}
-			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] ">
+			<div className="w-full dark:bg-card bg-card_light rounded-2xl dark:border dark:border-white/[8%] ">
 				{data?.item && (
 					<ItemControls
 						itemData={data?.item}
@@ -395,7 +387,7 @@ export default function Item({
 					setIsEmbedded={setIsEmbedded}
 				/>
 			)}
-			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden p-4 lg:p-10 gap-10 flex flex-col empty:hidden">
+			<div className="w-full dark:bg-card bg-card_light rounded-2xl dark:border dark:border-white/[8%] print:hidden p-4 lg:p-10 gap-10 flex flex-col empty:hidden">
 				{isRelatedItemsEnabled && data?.item && (
 					<div className="gap-8">
 						<RowContainer title={t("recommendedItems")}>

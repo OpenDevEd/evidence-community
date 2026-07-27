@@ -227,20 +227,22 @@ export default function NavbarSearch() {
 			0,
 		);
 
-	// Local input value (immediate) kept in sync with the `search` param, which
-	// is updated debounced so the preview tracks typing without per-key churn.
-	const [searchInput, setSearchInput] = useState(params.search);
+	// Keep an immediate draft while the debounced URL param still represents
+	// the value from which the user started typing. Once the URL changes, it is
+	// the source of truth again. This also handles browser navigation without
+	// synchronizing state from an effect.
+	const [searchDraft, setSearchDraft] = useState<{
+		value: string;
+		source: string;
+	} | null>(null);
+	const searchInput =
+		searchDraft?.source === params.search
+			? searchDraft.value
+			: params.search;
 	const [debounceSearch] = useDebounce(
 		(value: string) => setParams({ search: value, page: 1 }),
 		250,
 	);
-	const lastSyncedSearch = useRef(params.search);
-	useEffect(() => {
-		if (params.search !== lastSyncedSearch.current) {
-			setSearchInput(params.search);
-		}
-		lastSyncedSearch.current = params.search;
-	}, [params.search]);
 
 	const [isOpen, setIsOpen] = useState(false);
 	const [highlight, setHighlight] = useState(-1);
@@ -354,7 +356,7 @@ export default function NavbarSearch() {
 	);
 
 	const handleInput = (value: string) => {
-		setSearchInput(value);
+		setSearchDraft({ value, source: params.search });
 		setHighlight(-1);
 		debounceSearch(value.trim());
 		// Keep the dropdown open even when the field is emptied — no search is
@@ -409,7 +411,7 @@ export default function NavbarSearch() {
 					onFocus={() => setIsOpen(true)}
 					onKeyDown={handleKeyDown}
 					onClear={() => {
-						setSearchInput("");
+						setSearchDraft({ value: "", source: params.search });
 						setParams({ search: "", page: 1 });
 						// Clearing the text isn't the same as having nothing to
 						// show — keep the dropdown open on the now-unfiltered list.
@@ -442,7 +444,7 @@ export default function NavbarSearch() {
 					<div
 						role="listbox"
 						aria-label={t("search")}
-						className="absolute left-0 right-0 top-full mt-2 z-50 flex max-h-[70vh] flex-col overflow-hidden rounded-2xl border border-black/5 bg-white shadow-xl dark:border-white/10 dark:bg-card"
+						className="absolute left-0 right-0 top-full mt-2 z-50 flex max-h-[70vh] flex-col overflow-hidden rounded-2xl border border-black/5 bg-card_light shadow-xl dark:border-white/10 dark:bg-card"
 					>
 						<div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-2">
 							{results.length === 0 ? (
@@ -543,7 +545,7 @@ export default function NavbarSearch() {
 											placement="right"
 											delay={350}
 											closeDelay={0}
-											className="max-w-sm rounded-2xl border border-black/5 bg-white dark:border-white/10 dark:bg-card"
+											className="max-w-sm rounded-2xl border border-black/5 bg-card_light dark:border-white/10 dark:bg-card"
 											content={
 												<div className="flex max-w-sm flex-col gap-1.5 px-1 py-1">
 													<div
@@ -620,7 +622,7 @@ export default function NavbarSearch() {
 						{/* Sticky footer: jump to the full library results on the left,
 						    page through the matches in place on the right. */}
 						{totalItems > 0 && (
-							<div className="flex shrink-0 items-center justify-between gap-2 border-t border-black/5 bg-white px-3 py-2 dark:border-white/10 dark:bg-card">
+							<div className="flex shrink-0 items-center justify-between gap-2 border-t border-black/5 bg-card_light px-3 py-2 dark:border-white/10 dark:bg-card">
 								<button
 									type="button"
 									onClick={goToLibrary}

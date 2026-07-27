@@ -638,12 +638,29 @@ describe("manifest-wide activation", () => {
 		).toBe(false);
 	});
 
-	it("accepts variable weights for uploaded WOFF2 fonts", () => {
+	it("accepts multiple configured weights for variable WOFF2 fonts", () => {
 		const config: any = cloneLibraryConfig();
 		config.theme.fonts.heading = { ...config.theme.fonts.body };
-		config.theme.fonts.weights = [400, "variable"];
+		config.theme.fonts.weights = [400, 500, 700];
 
 		expect(catalogSchema.safeParse(config).success).toBe(true);
+	});
+
+	it("rejects multiple configured weights for static WOFF2 fonts", () => {
+		const config: any = cloneLibraryConfig();
+		config.theme.fonts.body.weight = 400;
+		config.theme.fonts.weights = [400, 500];
+
+		const result = catalogSchema.safeParse(config);
+
+		expect(result.success).toBe(false);
+		expect(
+			result.error?.issues.some(
+				(issue: any) =>
+					issue.path.join(".") === "theme.fonts.weights" &&
+					issue.message.includes("Static WOFF2"),
+			),
+		).toBe(true);
 	});
 
 	it("accepts case-insensitive HTTPS schemes for blank targets", () => {

@@ -46,7 +46,7 @@ export default function Contact() {
 							<p className="text-center">
 								{t("contactViaEmail")}{" "}
 								<Link
-									className="text-link_light dark:text-link"
+									className="text-link"
 									href={`mailto:${contactEmail}`}
 								>
 									{contactEmail}
