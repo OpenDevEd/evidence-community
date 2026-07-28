@@ -1,42 +1,38 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Evidence Library
 
-## Architecture
+A single Evidence Library image can run any validated library configuration.
+Identity, theme, navigation, localization, search, features, integrations, and
+service connections are loaded from one server-side JSON document at runtime.
+Changing a library does not require rebuilding the application.
 
-The deployed multi-tenant evidence-library architecture, data services, and
-Zotero synchronization flow are documented in
-[`docs/evidence-library-architecture.md`](docs/evidence-library-architecture.md).
-
-## Getting Started
-
-First, run the development server:
+## Local development
 
 ```bash
+npm install
+cp config/library.example.json config/library.local.json
+npm run config:validate -- config/library.local.json
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Development reads `config/library.local.json` by default. Set
+`LIBRARY_CONFIG_PATH` to use another document.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm run lint
+npx tsc --noEmit
+npm run test:unit
+npm run test:acceptance
+```
 
-## Learn More
+The acceptance command builds one production image, starts two independently
+configured libraries with PostgreSQL and Meilisearch, exercises their runtime
+integrations and mobile UI, and proves live activation and rollback.
 
-To learn more about Next.js, take a look at the following resources:
+## Documentation
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- [Runtime customization map](docs/evidence-library-customization-map.md)
+- [Deployment and operations](docs/evidence-library-operations.md)
+- [Configuration example](config/library.example.json)
+- [Current deployed architecture snapshot](docs/evidence-library-architecture.md)
