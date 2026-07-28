@@ -1,14 +1,8 @@
+import { RevisionAwareResourceFactory } from "@/lib/revision-aware-resource";
+
 export type DatabaseResource<TDatabase> = {
 	database: TDatabase;
 	dispose: () => Promise<void>;
-};
-
-type ActiveDatabase<TDatabase> = {
-	databaseUrl: string;
-	resource: DatabaseResource<TDatabase>;
-	revision: string;
-	updatedAt: string;
-	updatedAtMilliseconds: number;
 };
 
 export class DatabaseRevisionConflictError extends Error {
@@ -44,12 +38,7 @@ type RevisionAwareDatabaseFactoryOptions = {
 };
 
 export class RevisionAwareDatabaseFactory<TDatabase> {
-	readonly #createResource: (
-		databaseUrl: string,
-	) => DatabaseResource<TDatabase> | Promise<DatabaseResource<TDatabase>>;
-	readonly #onDisposeError: (error: unknown) => void;
-	#active: ActiveDatabase<TDatabase> | null = null;
-	#transition: Promise<void> | null = null;
+	readonly #factory: RevisionAwareResourceFactory<string, TDatabase>;
 
 	constructor(
 		createResource: (
@@ -59,15 +48,33 @@ export class RevisionAwareDatabaseFactory<TDatabase> {
 			| Promise<DatabaseResource<TDatabase>>,
 		options: RevisionAwareDatabaseFactoryOptions = {},
 	) {
-		this.#createResource = createResource;
-		this.#onDisposeError =
-			options.onDisposeError ??
-			((error) => {
-				console.error("Failed to dispose replaced database pool", error);
-			});
+		this.#factory = new RevisionAwareResourceFactory(
+			"database",
+			async (databaseUrl) => {
+				const resource = await createResource(databaseUrl);
+				return {
+					value: resource.database,
+					dispose: resource.dispose,
+				};
+			},
+			{
+				createConflictError: (revision) =>
+					new DatabaseRevisionConflictError(revision),
+				createOrderError: (details) =>
+					new DatabaseRevisionOrderError(details),
+				onDisposeError:
+					options.onDisposeError ??
+					((error) => {
+						console.error(
+							"Failed to dispose replaced database pool",
+							error,
+						);
+					}),
+			},
+		);
 	}
 
-	async get({
+	get({
 		databaseUrl,
 		revision,
 		updatedAt,
@@ -76,101 +83,18 @@ export class RevisionAwareDatabaseFactory<TDatabase> {
 		revision: string;
 		updatedAt: string;
 	}): Promise<TDatabase> {
-		while (true) {
-			if (this.#transition) {
-				try {
-					await this.#transition;
-				} catch {
-					// The caller that started the transition receives its error.
-					// Waiters re-evaluate their own revision against the active
-					// resource instead of inheriting an unrelated failure.
-				}
-				continue;
-			}
-
-			const active = this.#active;
-			if (active?.revision === revision) {
-				if (active.databaseUrl !== databaseUrl) {
-					throw new DatabaseRevisionConflictError(revision);
-				}
-
-				return active.resource.database;
-			}
-
-			const transition = this.#activate({
-				databaseUrl,
-				revision,
-				updatedAt,
-			});
-			this.#transition = transition;
-			try {
-				await transition;
-			} finally {
-				if (this.#transition === transition) {
-					this.#transition = null;
-				}
-			}
-		}
+		return this.#factory.get({
+			configuration: databaseUrl,
+			revision,
+			updatedAt,
+		});
 	}
 
 	getActiveRevision() {
-		return this.#active?.revision ?? null;
+		return this.#factory.getActiveRevision();
 	}
 
-	async dispose() {
-		if (this.#transition) {
-			await this.#transition.catch(() => undefined);
-		}
-
-		const active = this.#active;
-		this.#active = null;
-		await active?.resource.dispose();
-	}
-
-	async #activate({
-		databaseUrl,
-		revision,
-		updatedAt,
-	}: {
-		databaseUrl: string;
-		revision: string;
-		updatedAt: string;
-	}) {
-		const current = this.#active;
-		if (current?.revision === revision) {
-			if (current.databaseUrl !== databaseUrl) {
-				throw new DatabaseRevisionConflictError(revision);
-			}
-			return;
-		}
-
-		const updatedAtMilliseconds = Date.parse(updatedAt);
-		if (
-			current &&
-			updatedAtMilliseconds <= current.updatedAtMilliseconds
-		) {
-			throw new DatabaseRevisionOrderError({
-				activeRevision: current.revision,
-				activeUpdatedAt: current.updatedAt,
-				requestedRevision: revision,
-				requestedUpdatedAt: updatedAt,
-			});
-		}
-
-		const resource = await this.#createResource(databaseUrl);
-		const previous = this.#active;
-		this.#active = {
-			databaseUrl,
-			resource,
-			revision,
-			updatedAt,
-			updatedAtMilliseconds,
-		};
-
-		if (previous) {
-			void previous.resource
-				.dispose()
-				.catch(this.#onDisposeError);
-		}
+	dispose() {
+		return this.#factory.dispose();
 	}
 }
