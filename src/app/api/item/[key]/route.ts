@@ -64,7 +64,6 @@ export async function getItemRaw(
 	}
 
 	result.attachmentsData = result.attachmentsData?.filter((attachment: any) => attachment.deleted === 0);
-	result.citation = null;
 
 	return {
 		item: result,
