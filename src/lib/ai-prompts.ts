@@ -1,3 +1,5 @@
+import "server-only";
+
 import {
 	PLATFORM_PROMPT_DEFAULTS,
 	type PLATFORM_PROMPT_SLOTS,

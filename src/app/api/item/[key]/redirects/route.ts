@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { cacheLife, cacheTag } from "next/cache";
-import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
+import {
+	PRIVATE_NO_STORE_CACHE_CONTROL,
+	PUBLIC_READ_CACHE_CONTROL,
+} from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 
@@ -72,6 +75,18 @@ export async function GET(
 	}
 
 	const libraryConfig = await getLibraryConfig();
+	if (!libraryConfig.generation.redirects) {
+		return NextResponse.json(
+			{ value: itemKey },
+			{
+				status: 200,
+				headers: {
+					"Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL,
+				},
+			},
+		);
+	}
+
 	const indexKey = libraryConfig.services.search.index;
 	const key = indexKey + "|" + itemKey;
 	const encoding = encodeKey(key);
@@ -94,7 +109,7 @@ export async function GET(
 	return NextResponse.json(redirects, {
 		status: 200,
 		headers: {
-			"Cache-Control": PUBLIC_READ_CACHE_CONTROL,
+			"Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL,
 		},
 	});
 }

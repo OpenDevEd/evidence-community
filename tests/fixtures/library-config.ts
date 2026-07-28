@@ -322,7 +322,6 @@ export const maximalLibraryConfig = {
 	},
 	generation: {
 		sitemap: true,
-		staticPages: false,
 		redirects: true,
 	},
 	processing: {

@@ -16,6 +16,10 @@ ${entries}
 export async function GET() {
 	await connection();
 	const libraryConfig = await getLibraryConfig();
+	if (!libraryConfig.generation.sitemap) {
+		return new Response("Not Found", { status: 404 });
+	}
+
 	const totalPages = await getSitemapPageCount(libraryConfig);
 	const urls = Array.from({ length: totalPages }, (_, i) =>
 		getSitemapShardUrl(i, libraryConfig.identity.baseUrl)

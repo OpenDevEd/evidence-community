@@ -1146,7 +1146,6 @@ const emailConfigurationSchema = z
 const generationSchema = z
 	.object({
 		sitemap: z.boolean().default(true),
-		staticPages: z.boolean().default(false),
 		redirects: z.boolean().default(true),
 	})
 	.strict()

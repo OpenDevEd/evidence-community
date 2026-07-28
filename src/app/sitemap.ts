@@ -1,5 +1,6 @@
 import { MetadataRoute } from "next";
 import { PHASE_PRODUCTION_BUILD } from "next/constants";
+import { notFound } from "next/navigation";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getSitemapPageCount } from "@/lib/sitemap";
@@ -23,6 +24,10 @@ export async function generateSitemaps() {
 	}
 
 	const libraryConfig = await getLibraryConfig();
+	if (!libraryConfig.generation.sitemap) {
+		return [];
+	}
+
 	const totalPages = await getSitemapPageCount(libraryConfig);
 
 	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));
@@ -37,6 +42,10 @@ export default async function sitemap(props: {
 
 	const identifier = Number(await props.id);
 	const libraryConfig = await getLibraryConfig();
+	if (!libraryConfig.generation.sitemap) {
+		notFound();
+	}
+
 	const { localization } = libraryConfig;
 	const baseUrl = libraryConfig.identity.baseUrl;
 	const { index } = await getMeilisearchForConfig(libraryConfig);

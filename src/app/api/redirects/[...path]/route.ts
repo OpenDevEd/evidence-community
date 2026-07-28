@@ -3,7 +3,7 @@ import { cacheLife, cacheTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabaseForConfig } from "@/db";
 import { item } from "@/db/schema/tables/item";
-import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
+import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 
@@ -131,6 +131,17 @@ export async function GET(
 	const params = await props.params;
 	const requestedPath = params.path.join("/");
 	const config = await getLibraryConfig();
+	if (!config.generation.redirects) {
+		return NextResponse.json<RedirectsResponse>(
+			{ destination: null },
+			{
+				headers: {
+					"Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL,
+				},
+			},
+		);
+	}
+
 	const note = await getCachedRedirectsNote(
 		config.revision,
 		config.content.tags.redirects,
@@ -144,7 +155,7 @@ export async function GET(
 		{ destination },
 		{
 			headers: {
-				"Cache-Control": PUBLIC_READ_CACHE_CONTROL,
+				"Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL,
 			},
 		}
 	);

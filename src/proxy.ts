@@ -194,6 +194,7 @@ async function getNoteRedirectDestination(request: NextRequest) {
 	try {
 		const response = await Promise.race([
 			fetch(apiUrl, {
+				cache: "no-store",
 				headers: {
 					"x-redirect-lookup": "1",
 				},
@@ -309,39 +310,42 @@ export default async function proxy(request: NextRequest) {
 			: String(key);
 
 		if (isLikelyZoteroKey(resolvedKey)) {
-			try {
-				const { indexName, redirectsIndex } =
-					await getMeilisearchForConfig(libraryConfig);
-				const compositeKey =
-					indexName + "|" + resolvedKey;
-				const encoding = encodeKey(compositeKey);
+			let finalKey = resolvedKey;
 
-				const redirects = (await Promise.race([
-					redirectsIndex.getDocument(encoding),
-					new Promise((_, reject) =>
-						setTimeout(
-							() => reject(new Error("timeout")),
-							350
-						)
-					),
-				])) as Record<string, unknown>;
+			if (libraryConfig.generation.redirects) {
+				try {
+					const { indexName, redirectsIndex } =
+						await getMeilisearchForConfig(libraryConfig);
+					const compositeKey =
+						indexName + "|" + resolvedKey;
+					const encoding = encodeKey(compositeKey);
 
-				const finalKey = redirects?.value && redirects.value !== resolvedKey
-					? String(redirects.value)
-					: resolvedKey;
+					const redirects = (await Promise.race([
+						redirectsIndex.getDocument(encoding),
+						new Promise((_, reject) =>
+							setTimeout(
+								() => reject(new Error("timeout")),
+								350
+							)
+						),
+					])) as Record<string, unknown>;
 
-				if (finalKey !== key) {
-					const url = request.nextUrl.clone();
-					url.pathname = `/lib/${finalKey}${rest}`;
-					return NextResponse.redirect(url, 301);
+					if (
+						redirects?.value &&
+						redirects.value !== resolvedKey
+					) {
+						finalKey = String(redirects.value);
+					}
+				} catch {
+					// A redirect lookup failure still allows structural
+					// normalization of legacy prefixed keys below.
 				}
-			} catch {
-				// Timeout or not found - still redirect broken keys to cleaned version
-				if (resolvedKey !== key) {
-					const url = request.nextUrl.clone();
-					url.pathname = `/lib/${resolvedKey}${rest}`;
-					return NextResponse.redirect(url, 301);
-				}
+			}
+
+			if (finalKey !== key) {
+				const url = request.nextUrl.clone();
+				url.pathname = `/lib/${finalKey}${rest}`;
+				return NextResponse.redirect(url, 301);
 			}
 		}
 	}
@@ -401,9 +405,12 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.redirect(url, 307);
 	}
 
-	const noteRedirectDestination = await getNoteRedirectDestination(request);
-	if (noteRedirectDestination) {
-		return NextResponse.redirect(noteRedirectDestination, 307);
+	if (libraryConfig.generation.redirects) {
+		const noteRedirectDestination =
+			await getNoteRedirectDestination(request);
+		if (noteRedirectDestination) {
+			return NextResponse.redirect(noteRedirectDestination, 307);
+		}
 	}
 
 	const notFoundPageRedirect = redirectUnknownPathToNotFoundPage(request);

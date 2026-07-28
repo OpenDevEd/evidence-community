@@ -880,7 +880,6 @@ stable URLs, so there is no customer-facing asset base URL or host list.
 | Manifest field | Type/control | Constraints | Default/dependency |
 | --- | --- | --- | --- |
 | `generation.sitemap` | Toggle | Boolean | `true` |
-| `generation.staticPages` | Toggle | Boolean; runtime rendering only; cannot trigger a customer-specific build | `false` |
 | `generation.redirects` | Toggle | Boolean; redirects must be served from runtime configuration | `true` |
 | `processing.structureRules` | Typed rule list | 0–100 rules; unique IDs; conditions/actions selected from platform catalogs; arbitrary code rejected | `[]` |
 | `processing.pdfRules` | Typed rule list | 0–100 rules; unique IDs; platform-catalog conditions/actions only | `[]` |
@@ -888,6 +887,10 @@ stable URLs, so there is no customer-facing asset base URL or host list.
 | Rule priority | Number input | Integer 0–9,999; ties resolved by rule ID | List order |
 | `ai.prompts` | Prompt-slot map | Maximum 20 entries; keys must be platform-defined prompt-slot IDs | Platform defaults |
 | Prompt value | Multiline text | 1–20,000 characters; variables must come from the slot's allowlist; unknown variables rejected | Required when overriding a slot |
+
+Static-page generation is deliberately not configurable. Every customer uses
+the same runtime-rendered application path; no manifest value can trigger a
+customer-specific build.
 
 ### Cross-field activation rules
 

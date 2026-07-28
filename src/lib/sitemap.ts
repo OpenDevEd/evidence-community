@@ -22,6 +22,10 @@ export async function getSitemapPageCount(
 	config?: LibraryServerConfig,
 ) {
 	const libraryConfig = config ?? await getLibraryConfig();
+	if (!libraryConfig.generation.sitemap) {
+		return 0;
+	}
+
 	return getSitemapPageCountCached(
 		libraryConfig.revision,
 		libraryConfig,

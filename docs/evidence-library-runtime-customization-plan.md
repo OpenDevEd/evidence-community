@@ -122,7 +122,7 @@ Verification: lint, type-check, the initial unit test, and the smoke test pass.
 
 ### 2. Define the complete configuration contract
 
-- Implement the 140-field strict Zod schema from the approved customization
+- Implement the 139-field strict Zod schema from the approved customization
   map.
 - Split reusable schemas for IDs, stable URLs, internal links, colors, tags,
   fonts, icons, and secrets.
@@ -335,10 +335,12 @@ takedown behavior each match their dependency rules.
 
 ### 19. Move generation and processing behavior
 
-- Drive sitemap, redirects, static-page behavior, rule lists, priorities, and
-  prompt slots from configuration.
+- Drive sitemap, redirects, rule lists, priorities, and prompt slots from
+  configuration.
 - Keep runtime rendering as the only customer path; no configuration value may
   trigger a customer-specific build.
+- Remove the redundant static-page toggle because build-time generation cannot
+  be changed by a runtime manifest.
 - Replace free-form legacy rule arrays with the approved typed operations.
 
 Verification: generation toggles affect runtime routes only, and invalid
@@ -392,8 +394,8 @@ Verification: both libraries and a live revision change pass using the same
 | Runtime services | 5 | 14–16 |
 | AI providers | 7 | 17 |
 | Analytics, auth, and email | 16 | 18 |
-| Generation and processing | 9 | 19 |
-| **Total** | **140** | **All covered** |
+| Generation and processing | 8 | 19 |
+| **Total** | **139** | **All covered** |
 
 ## Testing decisions
 

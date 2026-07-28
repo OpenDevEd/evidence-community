@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
 
 import { PLATFORM_PROMPT_DEFAULTS } from "@/config/library-config/catalogs";
 import { libraryConfigSchema } from "@/config/library-config/schema";
