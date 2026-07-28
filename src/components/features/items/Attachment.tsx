@@ -127,8 +127,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 
 	const downloadURL = `/lib/${data.parentItem}/download/${data.key}`;
 
-	// Shared component for rendering the attachment image
-	const AttachmentImage = ({ className }: { className?: string }) => (
+	const attachmentImage = (
 		<>
 			{data?.PDFCoverPageImage ? (
 				<Skeleton isLoaded={loaded} className="rounded-xl w-full">
@@ -141,26 +140,19 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						width={512}
 						height={512}
 						onLoad={() => setLoaded(true)}
-						className={twMerge(
-							"rounded-xl bg-accent w-full",
-							className
-						)}
+						className="rounded-xl bg-accent w-full"
 					/>
 				</Skeleton>
 			) : (
 				<div
-					className={twMerge(
-						"rounded-xl bg-accent w-full aspect-[9/12]",
-						className
-					)}
+					className="rounded-xl bg-accent w-full aspect-[9/12]"
 				/>
 			)}
 		</>
 	);
 
-	// Shared component for rendering the title
-	const AttachmentTitle = ({ className }: { className?: string }) => (
-		<h4 className={twMerge("text-lg font-medium", className)}>
+	const attachmentTitle = (
+		<h4 className="text-lg font-medium line-clamp-2 lg:line-clamp-none">
 			<Link
 				href={isExternal ? pdfUrl : downloadURL}
 				target="_blank"
@@ -171,9 +163,8 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 		</h4>
 	);
 
-	// Shared component for rendering the action buttons
-	const AttachmentButtons = ({ className }: { className?: string }) => (
-		<div className={twMerge("flex gap-2", className)}>
+	const attachmentButtons = (
+		<div className="flex gap-2 flex-wrap md:flex-nowrap">
 			{!isExternal ? (
 				<>
 					<Button
@@ -276,7 +267,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						canHover && "md:hover:top-[var(--image-height)]"
 					)}
 				>
-					<AttachmentImage />
+					{attachmentImage}
 				</div>
 			)}
 			<div
@@ -288,8 +279,8 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					shouldShowLoading && "opacity-0"
 				)}
 			>
-				<AttachmentTitle className="line-clamp-2 lg:line-clamp-none" />
-				<AttachmentButtons className="flex-wrap md:flex-nowrap" />
+				{attachmentTitle}
+				{attachmentButtons}
 			</div>
 		</Card>
 	);

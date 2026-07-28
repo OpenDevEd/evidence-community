@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
@@ -199,11 +199,6 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 	}, [filteredTopics, topicsPage]);
 
 	const topicsPages = Math.ceil(filteredTopics.length / rowsPerPage);
-
-	// Reset topics page when search or filters change
-	useEffect(() => {
-		setTopicsPage(1);
-	}, [topicsSearch, selectedTopicLevel, selectedYear]);
 
 	return (
 		<SectionCard title={t("researchTopics")} icon={BsTags}>
@@ -442,7 +437,10 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 							<Input
 								label={t("searchTopics")}
 								value={topicsSearch}
-								onChange={(e) => setTopicsSearch(e.target.value)}
+								onChange={(e) => {
+									setTopicsSearch(e.target.value);
+									setTopicsPage(1);
+								}}
 								placeholder={t("searchByTopicNameOrPath")}
 								startContent={<BsSearch className="text-black/40 dark:text-white/40" />}
 							/>
@@ -455,6 +453,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 									onSelectionChange={(keys) => {
 										const selected = Array.from(keys)[0] as string;
 										setSelectedYear(selected || "all");
+										setTopicsPage(1);
 									}}
 									classNames={{
 										base: "flex-1 max-w-full",
@@ -483,6 +482,7 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 								onSelectionChange={(keys) => {
 									const selected = Array.from(keys)[0] as string;
 									setSelectedTopicLevel(selected || "all");
+									setTopicsPage(1);
 								}}
 								classNames={{
 									base: "flex-1 max-w-full",
@@ -608,4 +608,4 @@ export function ResearchTopics({ topicStats, topicOverview, topicsByYear }: Rese
 			</div>
 		</SectionCard>
 	);
-} 
+}

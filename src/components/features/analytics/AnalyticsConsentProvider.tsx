@@ -77,10 +77,14 @@ export function AnalyticsConsentProvider({
 	}, [analytics.posthog]);
 
 	useEffect(() => {
-		const nextConsentState = readConsentCookie();
-		setConsentStateValue(nextConsentState);
-		setIsPreferencesOpen(nextConsentState === "pending");
-		setHasHydratedConsent(true);
+		const hydrationTimer = window.setTimeout(() => {
+			const nextConsentState = readConsentCookie();
+			setConsentStateValue(nextConsentState);
+			setIsPreferencesOpen(nextConsentState === "pending");
+			setHasHydratedConsent(true);
+		}, 0);
+
+		return () => window.clearTimeout(hydrationTimer);
 	}, []);
 
 	useEffect(() => {
@@ -88,15 +92,17 @@ export function AnalyticsConsentProvider({
 			return;
 		}
 
-		if (consentState !== "granted") {
-			setAnalyticsReady(false);
-			updateGoogleConsent(false);
-			return;
-		}
+		const granted = consentState === "granted";
+		const didInitialize = granted
+			? initializeClientAnalytics(analytics)
+			: false;
+		updateGoogleConsent(granted);
 
-		const didInitialize = initializeClientAnalytics(analytics);
-		updateGoogleConsent(true);
-		setAnalyticsReady(didInitialize);
+		const readinessTimer = window.setTimeout(
+			() => setAnalyticsReady(didInitialize),
+			0,
+		);
+		return () => window.clearTimeout(readinessTimer);
 	}, [analytics, consentState, hasHydratedConsent]);
 
 	const closePreferences = useCallback(() => {

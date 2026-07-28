@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { BsBuilding, BsSearch } from "react-icons/bs";
 import { Table, TableHeader, TableColumn, TableBody, TableRow, TableCell } from "@/components/nextui/Table";
@@ -144,11 +144,6 @@ export function InstitutionsTable({
 		filteredInstitutions.length / rowsPerPage
 	);
 
-	// Reset institutions page when search or filters change
-	useEffect(() => {
-		setInstitutionsPage(1);
-	}, [institutionsSearch, showTopCountryOnly, selectedYear]);
-
 	return (
 		<SectionCard title={t("allInstitutions")} icon={BsBuilding}>
 			<div className="space-y-4">
@@ -156,9 +151,10 @@ export function InstitutionsTable({
 					<Input
 						label={t("searchInstitutions")}
 						value={institutionsSearch}
-						onChange={(e) =>
-							setInstitutionsSearch(e.target.value)
-						}
+						onChange={(e) => {
+							setInstitutionsSearch(e.target.value);
+							setInstitutionsPage(1);
+						}}
 						placeholder={t("searchByInstitutionName")}
 						startContent={
 							<BsSearch className="text-black/40 dark:text-white/40" />
@@ -174,6 +170,7 @@ export function InstitutionsTable({
 								keys
 							)[0] as string;
 							setSelectedYear(selected || "all");
+							setInstitutionsPage(1);
 						}}
 						classNames={{
 							base: "flex-1 max-w-full",
@@ -207,7 +204,10 @@ export function InstitutionsTable({
 					)}
 					<Switch
 						isSelected={showTopCountryOnly}
-						onValueChange={setShowTopCountryOnly}
+						onValueChange={(value) => {
+							setShowTopCountryOnly(value);
+							setInstitutionsPage(1);
+						}}
 						isDisabled={!topCountry}
 					>
 						<span className="text-sm text-black dark:text-white">
@@ -292,4 +292,4 @@ export function InstitutionsTable({
 			</div>
 		</SectionCard>
 	);
-} 
+}

@@ -1,4 +1,5 @@
 import { BsGlobe } from "react-icons/bs";
+import Image from "next/image";
 
 type CountryFlagProps = {
 	countryCode: string;
@@ -16,11 +17,13 @@ export function CountryFlag({ countryCode, className = "w-6 h-4" }: CountryFlagP
 	
 	return (
 		<div className={`${className} rounded-sm overflow-hidden shadow-sm flex-shrink-0`}>
-			<img
+			<Image
 				src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
 				alt={countryCode}
 				className="w-full h-full object-cover"
+				width={24}
+				height={16}
 			/>
 		</div>
 	);
-} 
+}

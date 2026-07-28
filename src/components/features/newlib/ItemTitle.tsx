@@ -20,22 +20,8 @@ const decodeHTMLEntities = (text: string) => {
 };
 
 export default function ItemTitle({ item, loadingProp }: { item: Item | undefined, loadingProp?: boolean }) {
-	// Try to use context, but fallback to prop if context is not available or fails
-	let loading = loadingProp;
-	
-	try {
-		// We need to handle the case where this component is used outside of ItemPage
-		// where LoadingContext might not be provided.
-		// However, since LoadingContext has a default value, use() should work.
-		// But to be safe and flexible, we allow passing loading as a prop.
-		if (loading === undefined) {
-			const context = use(LoadingContext);
-			loading = context.loading;
-		}
-	} catch (e) {
-		// Fallback if context usage fails (though unlikely with default value)
-		loading = loading ?? false;
-	}
+	const { loading: contextLoading } = use(LoadingContext);
+	const loading = loadingProp ?? contextLoading;
 
 	const escapedTitle = decodeHTMLEntities(item?.title || "");
 

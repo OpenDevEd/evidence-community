@@ -1,6 +1,6 @@
 "use client";
 
-import { ReactNode, useEffect, useRef, useState } from "react";
+import { ReactNode, useState } from "react";
 import { IoSearch } from "react-icons/io5";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
@@ -19,19 +19,23 @@ export function SearchBar({
 	classNames?: PropsOf<typeof Input>["classNames"];
 	endContent?: ReactNode;
 }) {
-	const [localValue, setLocalValue] = useState(search);
+	const [draft, setDraft] = useState({
+		sourceSearch: search,
+		value: search,
+	});
 	const [debouncedSearch, debounceRef] = useDebounce(handleSearchChange, 300);
 	const t = useTranslations("ui");
-	const lastDebouncedRef = useRef(search);
+	const localValue =
+		draft.sourceSearch === search || draft.value === search
+			? draft.value
+			: search;
 
-	// Only sync when the URL param changes externally (back button, programmatic reset)
-	// Skip when the change came from our own debounced update
-	useEffect(() => {
-		if (search !== lastDebouncedRef.current) {
-			setLocalValue(search);
-		}
-		lastDebouncedRef.current = search;
-	}, [search]);
+	if (draft.sourceSearch !== search) {
+		setDraft({
+			sourceSearch: search,
+			value: localValue,
+		});
+	}
 
 	return (
 		<Input
@@ -39,14 +43,12 @@ export function SearchBar({
 			value={localValue}
 			onChange={(e) => {
 				const value = e.target.value;
-				lastDebouncedRef.current = value;
-				setLocalValue(value);
+				setDraft({ sourceSearch: search, value });
 				debouncedSearch(value);
 			}}
 			onClear={() => {
 				if (debounceRef.current) clearTimeout(debounceRef.current);
-				lastDebouncedRef.current = "";
-				setLocalValue("");
+				setDraft({ sourceSearch: search, value: "" });
 				handleSearchChange("");
 			}}
 			placeholder={t("search")}

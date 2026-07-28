@@ -9,7 +9,6 @@ import { getCachedStatus } from "@/app/api/cache";
 import MainWrapper from "./MainWrapper";
 import Banner from "./Banner";
 import { Suspense } from "react";
-import Script from "next/script";
 import { connection } from "next/server";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
@@ -86,34 +85,12 @@ export default async function Base({
 		await getLibraryConfig(),
 	);
 	const dir = getLangDir(locale);
-	const googleAnalyticsId =
-		libraryConfig.analytics.google.measurementId;
-
 	return (
 		<html lang={locale} dir={dir} suppressHydrationWarning>
-			<head>
+			<body>
 				<link rel="unapi-server" type="application/xml" title="unAPI" href="/api/unapi" />
 				<LibraryLogoStyles identity={libraryConfig.identity} />
 				<LibraryThemeStyles theme={libraryConfig.theme} />
-			</head>
-			<body>
-				{googleAnalyticsId ? (
-					<Script id="ga-consent-default" strategy="beforeInteractive">
-						{`
-							window.dataLayer = window.dataLayer || [];
-							window.gtag =
-								window.gtag ||
-								function gtag(){window.dataLayer.push(arguments);}
-							window.gtag('consent', 'default', {
-								analytics_storage: 'denied',
-								ad_storage: 'denied',
-								ad_user_data: 'denied',
-								ad_personalization: 'denied',
-								wait_for_update: 500
-							});
-						`}
-					</Script>
-				) : null}
 				<Suspense fallback={null}>
 					<LibraryConfigProvider config={libraryConfig}>
 						<BaseContent

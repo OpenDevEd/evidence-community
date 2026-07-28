@@ -40,7 +40,8 @@ export type CacheContextType = {
 	status: RuntimeStatus;
 	cache: any;
 	setCache: (cache: any) => void;
-	itemsCache: any;
+	cacheItems: (pathname: string, data: ItemsGetResponse) => void;
+	getCachedItems: (pathname: string) => ItemsGetResponse | undefined;
 	globalExpanded: any;
 	setGlobalExpanded: (globalExpanded: any) => void;
 	lastFetchedData: ItemsGetResponse | null;
@@ -98,7 +99,17 @@ function CacheProvider({
 	gapmaps: GapMap[];
 }) {
 	const [cache, setCache] = useState({});
-	const itemsCache = useRef({});
+	const itemsCache = useRef<Record<string, ItemsGetResponse>>({});
+	const cacheItems = useCallback(
+		(pathname: string, data: ItemsGetResponse) => {
+			itemsCache.current[pathname] = data;
+		},
+		[],
+	);
+	const getCachedItems = useCallback(
+		(pathname: string) => itemsCache.current[pathname],
+		[],
+	);
 	const [globalExpanded, setGlobalExpanded] = useState({});
 	const [accordionGlobalExpanded, setAccordionGlobalExpanded] =
 		useState(null);
@@ -113,7 +124,8 @@ function CacheProvider({
 			value={{
 				cache,
 				setCache,
-				itemsCache,
+				cacheItems,
+				getCachedItems,
 				globalExpanded,
 				setGlobalExpanded,
 				accordionGlobalExpanded,

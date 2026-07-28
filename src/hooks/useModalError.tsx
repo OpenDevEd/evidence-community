@@ -77,7 +77,7 @@ export function useModalError({
 				</div>
 			</motion.div>
 		),
-		[errorMessage]
+		[animate, errorMessage, exit, initial, t]
 	);
 
 	return {

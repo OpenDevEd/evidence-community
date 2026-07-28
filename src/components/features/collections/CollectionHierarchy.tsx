@@ -1,7 +1,7 @@
 import { Collection } from "@/app/api/collections/types";
 import { Checkbox } from "@/components/nextui/Checkbox";
 import { FacetDistribution } from "meilisearch";
-import { useMemo, useCallback, memo } from "react";
+import { useMemo, memo } from "react";
 import { IoIosArrowDown } from "react-icons/io";
 
 interface CollectionHierarchyProps {
@@ -10,6 +10,18 @@ interface CollectionHierarchyProps {
 	selectedCollections: string[];
 	onCheckboxChange: (key: string) => void;
 	facetDistribution: FacetDistribution | undefined;
+}
+
+function hasSelectedDescendant(
+	collection: Collection,
+	selectedCollections: ReadonlySet<string>,
+): boolean {
+	return (
+		selectedCollections.has(collection.key) ||
+		(collection.children ?? []).some((child) =>
+			hasSelectedDescendant(child, selectedCollections),
+		)
+	);
 }
 
 function CollectionHierarchy({
@@ -43,21 +55,15 @@ function CollectionHierarchy({
 
 	const hasChildren = children.length > 0;
 
-	// Memoize the recursive function to avoid recreating it on every render
-	const isDescendantSelectedRecursive = useCallback((collection: Collection): boolean => {
-		if (selectedCollections.includes(collection.key)) {
-			return true;
-		}
-		const collectionChildren = collection.children || [];
-		return collectionChildren.some(isDescendantSelectedRecursive);
-	}, [selectedCollections]);
-
 	// Memoize the descendant selection check
 	const isDescendantSelected = useMemo(() => {
 		// Early return for performance - if no children, no descendants can be selected
 		if (!hasChildren) return false;
-		return isDescendantSelectedRecursive(collectionData);
-	}, [hasChildren, isDescendantSelectedRecursive, collectionData]);
+		return hasSelectedDescendant(
+			collectionData,
+			new Set(selectedCollections),
+		);
+	}, [collectionData, hasChildren, selectedCollections]);
 
 	// Memoize the style object to prevent unnecessary re-renders
 	const checkboxStyle = useMemo(() => ({

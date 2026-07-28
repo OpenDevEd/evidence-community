@@ -17,7 +17,7 @@ import { Divider } from "@nextui-org/react";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import PageContainer from "./PageContainer";
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import {
@@ -43,6 +43,7 @@ import {
 	BsTags,
 } from "react-icons/bs";
 import { motion } from "framer-motion";
+import Image from "next/image";
 import {
 	BarChart,
 	Bar,
@@ -283,10 +284,12 @@ function CountryFlag({ countryCode, className = "w-6 h-4" }: { countryCode: stri
 	
 	return (
 		<div className={`${className} rounded-sm overflow-hidden shadow-sm flex-shrink-0`}>
-			<img
+			<Image
 				src={`https://flagcdn.com/${countryCode.toLowerCase()}.svg`}
 				alt={countryCode}
 				className="w-full h-full object-cover"
+				width={24}
+				height={16}
 			/>
 		</div>
 	);
@@ -755,21 +758,6 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 	const countriesPages = Math.ceil(sortedCountries.length / rowsPerPage);
 	const collaborationPages = Math.ceil(sortedCollaborationCountries.length / rowsPerPage);
 	const authorsPages = Math.ceil(filteredAuthors.length / rowsPerPage);
-
-	// Reset institutions page when search or filters change
-	useEffect(() => {
-		setInstitutionsPage(1);
-	}, [institutionsSearch, showTopCountryOnly, selectedYear]);
-
-	// Reset authors page when search changes
-	useEffect(() => {
-		setAuthorsPage(1);
-	}, [authorsSearch]);
-
-	// Reset topics page when search or filters change
-	useEffect(() => {
-		setTopicsPage(1);
-	}, [topicsSearch, selectedTopicLevel]);
 
 	// Topic filtering and sorting
 	const filteredTopics = useMemo(() => {
@@ -1396,9 +1384,10 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 							<Input
 								label={t("searchInstitutions")}
 								value={institutionsSearch}
-								onChange={(e) =>
-									setInstitutionsSearch(e.target.value)
-								}
+								onChange={(e) => {
+									setInstitutionsSearch(e.target.value);
+									setInstitutionsPage(1);
+								}}
 								placeholder={t("searchByInstitutionName")}
 								startContent={
 									<BsSearch className="text-black/40 dark:text-white/40" />
@@ -1414,6 +1403,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 										keys
 									)[0] as string;
 									setSelectedYear(selected || "all");
+									setInstitutionsPage(1);
 								}}
 								classNames={{
 									base: "flex-1 max-w-full",
@@ -1447,7 +1437,10 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 								)}
 								<Switch
 									isSelected={showTopCountryOnly}
-									onValueChange={setShowTopCountryOnly}
+									onValueChange={(value) => {
+										setShowTopCountryOnly(value);
+										setInstitutionsPage(1);
+									}}
 									isDisabled={!topCountry}
 								>
 									<span className="text-sm text-black dark:text-white">
@@ -2343,7 +2336,10 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 								<Input
 									label={t("searchAuthors")}
 									value={authorsSearch}
-									onChange={(e) => setAuthorsSearch(e.target.value)}
+									onChange={(e) => {
+										setAuthorsSearch(e.target.value);
+										setAuthorsPage(1);
+									}}
 									placeholder={t("searchByAuthorName")}
 									startContent={<BsSearch className="text-black/40 dark:text-white/40" />}
 								/>
@@ -2661,7 +2657,10 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 									<Input
 										label={t("searchTopics")}
 										value={topicsSearch}
-										onChange={(e) => setTopicsSearch(e.target.value)}
+										onChange={(e) => {
+											setTopicsSearch(e.target.value);
+											setTopicsPage(1);
+										}}
 										placeholder={t("searchByTopicNameOrPath")}
 										startContent={<BsSearch className="text-black/40 dark:text-white/40" />}
 									/>
@@ -2673,6 +2672,7 @@ export default function StatisticsPage({ stats }: StatisticsPageProps) {
 										onSelectionChange={(keys) => {
 											const selected = Array.from(keys)[0] as string;
 											setSelectedTopicLevel(selected || "all");
+											setTopicsPage(1);
 										}}
 										classNames={{
 											base: "flex-1 max-w-full",

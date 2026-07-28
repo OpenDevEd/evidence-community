@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { motion } from "framer-motion";
@@ -98,11 +98,6 @@ export function AuthorAnalytics({
 	}, [filteredAuthors, authorsPage]);
 
 	const authorsPages = Math.ceil(filteredAuthors.length / rowsPerPage);
-
-	// Reset authors page when search changes
-	useEffect(() => {
-		setAuthorsPage(1);
-	}, [authorsSearch]);
 
 	return (
 		<SectionCard title={t("authorAnalytics")} icon={BsPeople}>
@@ -279,7 +274,10 @@ export function AuthorAnalytics({
 						<Input
 							label={t("searchAuthors")}
 							value={authorsSearch}
-							onChange={(e) => setAuthorsSearch(e.target.value)}
+							onChange={(e) => {
+								setAuthorsSearch(e.target.value);
+								setAuthorsPage(1);
+							}}
 							placeholder={t("searchByAuthorName")}
 							startContent={<BsSearch className="text-black/40 dark:text-white/40" />}
 						/>
@@ -364,4 +362,4 @@ export function AuthorAnalytics({
 			</div>
 		</SectionCard>
 	);
-} 
+}

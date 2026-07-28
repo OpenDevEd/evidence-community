@@ -39,9 +39,7 @@ export default function PolicyToc({
 			return false;
 		};
 
-		if (!syncActiveFromHash()) {
-			setActiveId(sections[0].id);
-		}
+		syncActiveFromHash();
 
 		const headings = sectionIds
 			.map((id) => document.getElementById(id))

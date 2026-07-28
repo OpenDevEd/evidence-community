@@ -1,4 +1,4 @@
-import { useContext, useMemo } from "react";
+import { useContext, useEffect, useMemo } from "react";
 import useSWR from "swr";
 import { usePathname } from "next/navigation";
 import { fetcher, buildItemsQuery } from "@/lib/utils";
@@ -19,7 +19,7 @@ function useItemsResults(
 ) {
 	const pathname = usePathname();
 	const { setLastFetchedData } = useLastFetchedData();
-	const { itemsCache } = useContext(CacheContext);
+	const { cacheItems, getCachedItems } = useContext(CacheContext);
 
 	const itemsQuery = useMemo(
 		() =>
@@ -55,11 +55,13 @@ function useItemsResults(
 		},
 	});
 
-	if (fetchedItemsData) {
-		itemsCache.current[pathname] = fetchedItemsData;
-	}
+	useEffect(() => {
+		if (fetchedItemsData) {
+			cacheItems(pathname, fetchedItemsData);
+		}
+	}, [cacheItems, fetchedItemsData, pathname]);
 
-	const itemsData = itemsCache.current[pathname];
+	const itemsData = fetchedItemsData ?? getCachedItems(pathname);
 
 	return {
 		itemsData,

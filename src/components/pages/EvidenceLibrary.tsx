@@ -502,10 +502,12 @@ function AITabContent({
 				onProviderChange={setSelectedProvider}
 			/>
 
-			<SmartScreeningModal
-				isOpen={isSmartScreeningOpen}
-				onOpenChange={onSmartScreeningOpenChange}
-			/>
+			{isSmartScreeningOpen ? (
+				<SmartScreeningModal
+					isOpen
+					onOpenChange={onSmartScreeningOpenChange}
+				/>
+			) : null}
 
 			<div className="flex items-end justify-start h-12">
 				<div className="flex items-end gap-4">
@@ -905,18 +907,13 @@ function SmartScreeningModal({
 		"smart-screening-fields",
 		[],
 	);
-	const [localFields, setLocalFields] = useState<SmartScreeningField[]>([]);
+	const [localFields, setLocalFields] = useState<SmartScreeningField[]>(
+		() => [...fields],
+	);
 	const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({});
 	const placeholderExample = `${t("label")} (${smartScreeningFieldTypes.join(
 		" | ",
 	)}): ${t("description")}`;
-
-	useEffect(() => {
-		if (isOpen) {
-			setLocalFields([...fields]);
-			setFieldErrors({});
-		}
-	}, [isOpen, fields]);
 
 	const fieldSchema = z.object({
 		label: z.string().min(1, t("labelRequired")).max(64, t("labelTooLong")),

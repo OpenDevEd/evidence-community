@@ -2,6 +2,7 @@ import { ReactNode, Suspense } from "react";
 import "@/styles/globals.css";
 import { Metadata, Viewport } from "next";
 import { connection } from "next/server";
+import Script from "next/script";
 
 import { buildLibraryMetadata } from "@/config/library-config/identity";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -27,6 +28,21 @@ async function RuntimeMetadataMarker() {
 export default function RootLayout({ children }: { children: ReactNode }) {
 	return (
 		<>
+			<Script id="ga-consent-default" strategy="beforeInteractive">
+				{`
+					window.dataLayer = window.dataLayer || [];
+					window.gtag =
+						window.gtag ||
+						function gtag(){window.dataLayer.push(arguments);}
+					window.gtag('consent', 'default', {
+						analytics_storage: 'denied',
+						ad_storage: 'denied',
+						ad_user_data: 'denied',
+						ad_personalization: 'denied',
+						wait_for_update: 500
+					});
+				`}
+			</Script>
 			{children}
 			{/* Next.js requires a Suspense-contained dynamic marker when
 			    request-time metadata is used with Cache Components. */}
