@@ -87,8 +87,18 @@ describe("library configuration fixtures", () => {
 		expect(config.search.scopes).toHaveLength(3);
 		expect(config.collections).toHaveLength(1);
 		expect(config.gapMaps).toHaveLength(1);
+		expect(config.gapMaps[0]?.enabled).toBe(true);
 		expect(config.ai.providers[0].enabled).toBe(true);
 		expect(config.processing.sharedRules).toHaveLength(1);
+	});
+
+	it("enables configured gap maps by default", () => {
+		const input = cloneLibraryConfig(maximalLibraryConfig);
+		delete input.gapMaps![0].enabled;
+
+		const config = catalogSchema.parse(input);
+
+		expect(config.gapMaps[0]?.enabled).toBe(true);
 	});
 
 	it("rejects the intentionally invalid fixture", () => {

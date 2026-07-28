@@ -11,7 +11,7 @@ import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
 import { getPolicyLastModified } from "@/lib/policy-documents";
-import { getGapMaps } from "@/lib/gapmaps";
+import { getEnabledGapMaps } from "@/config/library-config/gap-maps";
 
 // Sitemap shards render per-request so MeiliSearch is queried with the
 // runtime env, not the empty build env. generateSitemaps still runs at build
@@ -106,14 +106,11 @@ export default async function sitemap(props: {
 			// Policy docs may not exist in all environments; skip gracefully.
 		}
 
-		try {
-			const gapmaps = await getGapMaps();
-			gapmapEntries = gapmaps.map((gm) => ({
-				url: buildSiteUrl(gm.href),
-			}));
-		} catch {
-			// Gap maps may not exist in all environments; skip gracefully.
-		}
+		gapmapEntries = getEnabledGapMaps(
+			libraryConfig.gapMaps,
+		).map((gapMap) => ({
+			url: buildSiteUrl(gapMap.href),
+		}));
 	}
 
 	const itemEntries = items.results.map((item: any) => ({

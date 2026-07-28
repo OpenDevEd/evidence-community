@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 import createNextIntlPlugin from "next-intl/plugin";
-import config from "./src/constants/config.json" with { type: "json" };
 
 const withNextIntl = createNextIntlPlugin();
 
@@ -26,14 +25,8 @@ const nextConfig = {
 		dangerouslyAllowLocalIP: true,
 	},
 	async rewrites() {
-		const index = process.env.MEILI_INDEX || config.index;
 		return {
-			beforeFiles: [
-				{
-					source: "/gapmaps/:slug.html",
-					destination: `/gapmaps/${index}/:slug.html`,
-				},
-			],
+			beforeFiles: [],
 			afterFiles: [
 				{
 					source: "/sitemap.xml",
@@ -45,6 +38,7 @@ const nextConfig = {
 						"https://ocivvlhqiwtxvnycqnia.supabase.co/storage/v1/object/public/new-kerko/:path*",
 				},
 			],
+			fallback: [],
 		};
 	},
 	skipTrailingSlashRedirect: true,

@@ -251,6 +251,7 @@ export const maximalLibraryConfig = {
 			label: "Gap map one",
 			description: "A configured evidence gap map.",
 			sourceUrl: "https://assets.example.org/gapmaps/gap-map-one.html",
+			enabled: true,
 		},
 	],
 	exports: {

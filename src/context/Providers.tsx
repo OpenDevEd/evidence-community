@@ -21,7 +21,7 @@ import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Toaster } from "sonner";
 import { useQueryState } from "nuqs";
 import { ItemsGetResponse } from "@/app/api/items/types";
-import type { GapMap } from "@/lib/gapmaps";
+import type { GapMap } from "@/lib/gapmap-links";
 import {
 	AnalyticsConsentProvider,
 	useAnalyticsConsent,

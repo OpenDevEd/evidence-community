@@ -67,9 +67,21 @@ describe("public library configuration", () => {
 			"https://exports.example.org/library.ris",
 			"https://exports.example.org/library.bib",
 			"https://exports.example.org/library.atom",
+			"https://assets.example.org/gapmaps/gap-map-one.html",
 		]) {
 			expect(serialized).not.toContain(privateValue);
 		}
+	});
+
+	it("projects enabled gap maps through same-origin paths", () => {
+		expect(publicConfig.gapMaps).toEqual([
+			{
+				slug: "gap-map-one",
+				label: "Gap map one",
+				description: "A configured evidence gap map.",
+				href: "/gapmaps/gap-map-one.html",
+			},
+		]);
 	});
 
 	it("projects export availability without exposing source URLs", () => {

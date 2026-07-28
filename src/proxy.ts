@@ -271,6 +271,15 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.rewrite(url);
 	}
 
+	const configuredGapMapMatch = unlocalizedPathname.match(
+		/^\/gapmaps\/([a-z0-9][a-z0-9-]*)\.html$/u,
+	);
+	if (configuredGapMapMatch) {
+		const url = request.nextUrl.clone();
+		url.pathname = `/api/gapmaps/${configuredGapMapMatch[1]}`;
+		return NextResponse.rewrite(url);
+	}
+
 	// Check for redirections for item keys in URLs like /lib/{key}
 	const libItemMatch = request.nextUrl.pathname.match(/\/lib\/([^\/]+)(.*)/);
 	if (libItemMatch) {
@@ -436,6 +445,7 @@ export const config = {
 		"/([\\w-]+)?/lib/:path*/export/bibtex",
 		"/([\\w-]+)?/lib/:path*/download/:path*",
 		"/([\\w-]+)?/lib/atom.xml",
+		"/gapmaps/:slug.html",
 		// Add specific matcher for DOI URLs - using Next.js path matching syntax
 		"/lib/:doi/:rest*",
 	],

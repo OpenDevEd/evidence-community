@@ -3,6 +3,7 @@ import {
 	type LibraryPublicConfig,
 	type LibraryServerConfig,
 } from "./schema";
+import { getEnabledGapMaps } from "./gap-maps";
 
 const publicConfigCache = new WeakMap<
 	LibraryServerConfig,
@@ -33,7 +34,7 @@ export function projectPublicLibraryConfig(
 		citations: config.citations,
 		features: config.features,
 		collections: config.collections,
-		gapMaps: config.gapMaps,
+		gapMaps: getEnabledGapMaps(config.gapMaps),
 		exports: {
 			ris: Boolean(config.exports.ris),
 			bibtex: Boolean(config.exports.bibtex),

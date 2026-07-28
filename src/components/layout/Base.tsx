@@ -6,7 +6,6 @@ import { getMessages, getTranslations } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
 import { getLangDir } from "rtl-detect";
 import { getCachedStatus } from "@/app/api/cache";
-import { getGapMaps } from "@/lib/gapmaps";
 import MainWrapper from "./MainWrapper";
 import Banner from "./Banner";
 import { Suspense } from "react";
@@ -17,19 +16,21 @@ import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
 import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
 import { LibraryThemeStyles } from "@/components/library/LibraryThemeStyles";
+import type { LibraryPublicConfig } from "@/config/library-config/schema";
 
 async function BaseContent({
 	children,
+	gapmaps,
 	locale,
 }: Readonly<{
 	children: React.ReactNode;
+	gapmaps: LibraryPublicConfig["gapMaps"];
 	locale: string;
 }>) {
-	const [status, messages, t, gapmaps] = await Promise.all([
+	const [status, messages, t] = await Promise.all([
 		getCachedStatus(),
 		getMessages(),
 		getTranslations({ locale, namespace: "ui" }),
-		getGapMaps(),
 	]);
 
 	const googleAnalyticsId = process.env.GOOGLE_ANALYTICS_ID || "";
@@ -116,7 +117,12 @@ export default async function Base({
 				) : null}
 				<Suspense fallback={null}>
 					<LibraryConfigProvider config={libraryConfig}>
-						<BaseContent locale={locale}>{children}</BaseContent>
+						<BaseContent
+							gapmaps={libraryConfig.gapMaps}
+							locale={locale}
+						>
+							{children}
+						</BaseContent>
 					</LibraryConfigProvider>
 				</Suspense>
 			</body>

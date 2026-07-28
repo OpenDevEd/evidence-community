@@ -888,6 +888,7 @@ const gapMapSchema = z
 		label: singleLineStringSchema(100),
 		description: nonEmptyStringSchema(500).optional(),
 		sourceUrl: stableHtmlUrlSchema,
+		enabled: z.boolean().default(true),
 	})
 	.strict();
 
@@ -899,6 +900,22 @@ const gapMapsSchema = z
 		addDuplicateIssues(gapMaps, context, (gapMap) => gapMap.id);
 		addDuplicateIssues(gapMaps, context, (gapMap) => gapMap.slug);
 	});
+
+const publicGapMapSchema = gapMapSchema
+	.omit({
+		id: true,
+		sourceUrl: true,
+		enabled: true,
+	})
+	.extend({
+		href: internalLinkSchema,
+	})
+	.strict();
+
+const publicGapMapsSchema = z
+	.array(publicGapMapSchema)
+	.max(50)
+	.default([]);
 
 const exportsSchema = z
 	.object({
@@ -1548,7 +1565,7 @@ export const publicLibraryConfigSchema = z
 		citations: citationsSchema,
 		features: featuresSchema,
 		collections: collectionsSchema,
-		gapMaps: gapMapsSchema,
+		gapMaps: publicGapMapsSchema,
 		exports: publicExportsSchema,
 		ai: publicAiSchema,
 		analytics: analyticsSchema,
