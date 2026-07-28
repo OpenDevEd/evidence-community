@@ -246,8 +246,11 @@ export function parseCompanyName(raw: string | null | undefined): {
 	return { companyName, siteName };
 }
 
-export function convertToImageURL(url: string) {
-	return getSiteOrigin() + "/images/" + url.split("/").slice(8).join("/");
+export function convertToImageURL(
+	url: string,
+	baseUrl = getSiteOrigin(),
+) {
+	return baseUrl + "/images/" + url.split("/").slice(8).join("/");
 }
 
 export function getCountryAncestry(country: string) {

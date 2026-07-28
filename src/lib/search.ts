@@ -1,7 +1,6 @@
 import { getCachedCollections } from "@/app/api/cache";
 import { Collection } from "@/app/api/collections/types";
 import { ListItem } from "@/app/api/item/types";
-import config from "@/constants/config.json";
 import {
 	EXCLUDED_ITEM_TYPES,
 	ITEMS_PER_PAGE,
@@ -15,12 +14,15 @@ import {
 	normalizeRuntimeYearRange,
 	resolveRuntimeSearchScope,
 } from "@/config/library-config/search";
-import type { LibraryPublicConfig } from "@/config/library-config/schema";
+import type {
+	LibraryPublicConfig,
+	LibraryServerConfig,
+} from "@/config/library-config/schema";
 import { FacetDistribution } from "meilisearch";
 import { inferParserType } from "nuqs";
 import { cacheLife, cacheTag } from "next/cache";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
-import meilisearchClient from "./meilisearch";
+import { getMeilisearchForConfig } from "./meilisearch";
 import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "./utils";
 
@@ -72,17 +74,23 @@ type SearchFacetsResult = {
 	facetDistribution: FacetDistribution;
 };
 
-async function getCachedDisplayedAttributes() {
+async function getCachedDisplayedAttributes(
+	configRevision: string,
+	libraryConfig: LibraryServerConfig,
+) {
 	'use cache'
 	cacheLife({ revalidate: 60 })
-	cacheTag('attributes')
-	return meilisearchClient
-		.index(process.env.MEILI_INDEX || config.index)
-		.getDisplayedAttributes();
+	cacheTag('attributes-' + configRevision)
+	const { index } = await getMeilisearchForConfig(libraryConfig);
+	return index.getDisplayedAttributes();
 }
 
-export async function getMainAttributes() {
-	const attributes = await getCachedDisplayedAttributes();
+export async function getMainAttributes(config?: LibraryServerConfig) {
+	const libraryConfig = config ?? await getLibraryConfig();
+	const attributes = await getCachedDisplayedAttributes(
+		libraryConfig.revision,
+		libraryConfig,
+	);
 	return attributes.filter((attribute) => !attribute.endsWith("fullTextPDFs"));
 }
 
@@ -203,10 +211,8 @@ export async function getPublicItems(
 		includeHeavyFields?: boolean;
 	} = {}
 ): Promise<SearchItemsResult> {
-	const [libraryConfig, displayedAttributes] = await Promise.all([
-		getLibraryConfig(),
-		getMainAttributes(),
-	]);
+	const libraryConfig = await getLibraryConfig();
+	const displayedAttributes = await getMainAttributes(libraryConfig);
 	const { search, pageNum, limitNum, sortOption, finalFilters, attributesToSearchOn } =
 		resolveSearchRequest(
 			searchParams,
@@ -218,7 +224,7 @@ export async function getPublicItems(
 		? displayedAttributes
 		: [...LIST_ITEM_FIELDS];
 
-	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
+	const { index } = await getMeilisearchForConfig(libraryConfig);
 
 	const [searchResults, collections] = await Promise.all([
 		index.search(search, {
@@ -229,7 +235,7 @@ export async function getPublicItems(
 			...(sortOption ? { sort: [sortOption] } : {}),
 			filter: finalFilters,
 		}),
-		getCachedCollections(),
+		getCachedCollections(libraryConfig),
 	]);
 
 	const items = (searchResults.hits as ListItem[]).map((item) =>
@@ -264,7 +270,7 @@ export async function getPublicFacets(
 		libraryConfig.filters,
 	);
 
-	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
+	const { index } = await getMeilisearchForConfig(libraryConfig);
 
 	const searchResults = await index.search(search, {
 		offset: 0,
@@ -305,7 +311,7 @@ export async function getItemsPaginationMeta(
 			libraryConfig,
 		);
 
-	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
+	const { index } = await getMeilisearchForConfig(libraryConfig);
 
 	const searchResults = await index.search(search, {
 		offset: 0,

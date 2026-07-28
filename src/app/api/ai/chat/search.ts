@@ -9,7 +9,7 @@ import {
 import { google } from "@ai-sdk/google";
 import { z } from "zod";
 import { cleanItemForAI, formatRange, getTimeDuration } from "@/lib/utils";
-import client from "@/lib/meilisearch";
+import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { SearchResponse } from "meilisearch";
 import { Item } from "../../item/types";
 import { ALL_LABELS_IN_COUNTRY_HIERARCHY } from "@/constants/misc";
@@ -133,6 +133,8 @@ export async function getAnswerFromSearchAgentic(
 ) {
 	const startTime = Date.now();
 	const config = await getLibraryConfig();
+	const { index: searchIndex } =
+		await getMeilisearchForConfig(config);
 	if (!config.search.embeddings) {
 		throw new Error("Semantic search is disabled");
 	}
@@ -291,9 +293,8 @@ You must output an object conforming to the provided schema.`;
 					const inferredSort = "desc";
 					const inferredAmount = requestedLimitPerQuery;
 
-					const result: SearchResponse<Item> = await client
-						.index(process.env.MEILI_INDEX! || "items")
-						.search("", {
+					const result: SearchResponse<Item> =
+						await searchIndex.search("", {
 							q: searchQueryInstruction.query,
 							hybrid: { embedder: "openai", semanticRatio: 1 },
 							filter: [

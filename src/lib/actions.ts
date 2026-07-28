@@ -13,8 +13,7 @@ import {
 	SORT_OPTIONS,
 } from "@/constants/items";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
-import meilisearchClient from "@/lib/meilisearch";
-import config from "@/constants/config.json";
+import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
 import {
@@ -457,9 +456,9 @@ export async function convertItem(
 }
 
 export async function getLikedPosts(likes: Session["user"]["likes"]) {
-	const res = await meilisearchClient
-		.index(process.env.MEILI_INDEX || config.index)
-		.getDocuments({
+	const libraryConfig = await getLibraryConfig();
+	const { index } = await getMeilisearchForConfig(libraryConfig);
+	const res = await index.getDocuments({
 			filter: `key IN [${Object.keys(likes)
 				.map((key) => `"${key}"`)
 				.join(",")}]`,
@@ -470,10 +469,12 @@ export async function getLikedPosts(likes: Session["user"]["likes"]) {
 export async function searchIndex(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	extraProperties: Parameters<
-		ReturnType<typeof meilisearchClient.index>["search"]
+		Awaited<ReturnType<typeof getMeilisearchForConfig>>["index"]["search"]
 	>[1] = {},
 	extraFilters: NonNullable<
-		Parameters<ReturnType<typeof meilisearchClient.index>["search"]>[1]
+		Parameters<
+			Awaited<ReturnType<typeof getMeilisearchForConfig>>["index"]["search"]
+		>[1]
 	>["filter"] = []
 ) {
 	const items = async () => {
@@ -502,9 +503,8 @@ export async function searchIndex(
 			: [];
 		const author = searchParams.author || "";
 		const hiddenTags = libraryConfig.content.tags.hidden;
-		const searchIndex = meilisearchClient.index(
-			process.env.MEILI_INDEX || config.index
-		);
+		const { index: searchIndex } =
+			await getMeilisearchForConfig(libraryConfig);
 		// If no search query and relevance is selected, default to desc (newest)
 		// Otherwise, use the selected sort
 		const effectiveSort = search.trim().length === 0 && sort === SORT_OPTIONS[0].key
@@ -531,7 +531,7 @@ export async function searchIndex(
 				: null,
 		].filter((f): f is string => f !== null);
 
-		const allAttributes = await getMainAttributes();
+		const allAttributes = await getMainAttributes(libraryConfig);
 
 		const [searchResults, collections] = await Promise.all([
 			searchIndex.search(search, {
@@ -546,7 +546,7 @@ export async function searchIndex(
 				...extraProperties,
 				filter: finalFilters,
 			}),
-			getCachedCollections(),
+			getCachedCollections(libraryConfig),
 		]);
 
 		const items = searchResults.hits;
@@ -718,10 +718,4 @@ export async function getProfile(
 	}
 
 	return session ? session.user : data;
-}
-
-
-export async function getTotalItems() {
-	const stats = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getStats();
-	return stats.numberOfDocuments;
 }

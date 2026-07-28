@@ -2,22 +2,23 @@ import { getDatabase, getDatabaseForConfig } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { Item } from "../types";
-import meilisearchClient from "@/lib/meilisearch";
+import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { item } from "@/db/schema/tables/item";
 import { eq } from "drizzle-orm";
 import { Collection } from "../../collections/types";
-import config from "@/constants/config.json"
 import { getCachedCollections } from "../../cache";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { hasAnyTag } from "@/lib/tags";
 
-async function getMeilisearchItem(key: string) {
+async function getMeilisearchItem(
+	key: string,
+	libraryConfig: LibraryServerConfig,
+) {
 	try {
-		const result = await (
-			await meilisearchClient.getIndex(process.env.MEILI_INDEX || config.index)
-		).getDocument(key);
+		const { index } = await getMeilisearchForConfig(libraryConfig);
+		const result = await index.getDocument(key);
 		return result as Item;
 	} catch (error: any) {
 		if (error?.response?.status !== 404) {
@@ -49,7 +50,7 @@ export async function getItemRaw(
 	const result =
 		source === "db"
 			? await getDatabaseItem(key, libraryConfig)
-			: await getMeilisearchItem(key);
+			: await getMeilisearchItem(key, libraryConfig);
 	const { content } = libraryConfig;
 
 	if (

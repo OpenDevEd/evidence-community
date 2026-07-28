@@ -27,7 +27,10 @@ import { getDatabaseForConfig } from "@/db";
 
 export async function getComprehensiveStats(): Promise<ComprehensiveStats> {
 	const config = await getLibraryConfig();
-	return withMeilisearchCache(`${config.revision}-comprehensive-stats`, async () => {
+	return withMeilisearchCache(
+		config,
+		`${config.revision}-comprehensive-stats`,
+		async () => {
 		const db = await getDatabaseForConfig(config);
 		const totalItems = await getTotalItems(db);
 
@@ -97,5 +100,6 @@ export async function getComprehensiveStats(): Promise<ComprehensiveStats> {
 			topicOverview: topicData.topicOverview,
 			citationsByYear
 		};
-	});
+		},
+	);
 }

@@ -1,10 +1,10 @@
 import { Item } from "@/app/api/item/types";
-import config from "@/constants/config.json";
-import meilisearchClient from "@/lib/meilisearch";
+import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { ItemToZoteroJSON, ensureNoBlankItems, transformItem } from "@/lib/utils";
 import { cacheLife, cacheTag } from "next/cache";
 import { CiteProcSys, CSLItem, Engine } from "citeproc";
 import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { hasAnyTag } from "@/lib/tags";
 
 const DEFAULT_CITATION_LOCALE = "en-GB";
@@ -135,11 +135,11 @@ export async function getCSL(item: Item) {
 async function getCitationSourceItem(
 	key: string,
 	hiddenTags: readonly string[],
+	libraryConfig: LibraryServerConfig,
 ): Promise<Item | null> {
 	try {
-		const result = await meilisearchClient
-			.index(process.env.MEILI_INDEX || config.index)
-			.getDocument(key);
+		const { index } = await getMeilisearchForConfig(libraryConfig);
+		const result = await index.getDocument(key);
 
 		const item = result as Item;
 		if (!item || item.deleted || hasAnyTag(item.tags, hiddenTags)) {
@@ -158,11 +158,16 @@ async function getCitationForItemKeyCached(
 	normalizedLocale: string,
 	configRevision: string,
 	hiddenTags: readonly string[],
+	libraryConfig: LibraryServerConfig,
 ) {
 	'use cache'
 	cacheLife({ revalidate: 60 })
 	cacheTag('item-citation-' + key + '-' + normalizedLocale)
-	const item = await getCitationSourceItem(key, hiddenTags);
+	const item = await getCitationSourceItem(
+		key,
+		hiddenTags,
+		libraryConfig,
+	);
 	if (!item) {
 		return null;
 	}
@@ -177,13 +182,13 @@ async function getCitationForItemKeyCached(
 
 export async function getCitationForItemKey(key: string, lang: string = "en-GB") {
 	const normalizedLocale = normalizeLocale(lang);
-	const indexKey = String(process.env.MEILI_INDEX || config.index);
 	const libraryConfig = await getLibraryConfig();
 	return getCitationForItemKeyCached(
-		indexKey,
+		libraryConfig.services.search.index,
 		key,
 		normalizedLocale,
 		libraryConfig.revision,
 		libraryConfig.content.tags.hidden,
+		libraryConfig,
 	);
 }

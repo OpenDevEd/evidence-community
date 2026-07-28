@@ -2,7 +2,7 @@ import { getCachedItem, getCachedItemSmall } from "@/app/api/cache";
 import { getItem } from "@/app/api/item/[key]/route";
 import { Item } from "@/app/api/item/types";
 import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
-import client from "@/lib/meilisearch";
+import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { NextRequest, NextResponse } from "next/server";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -50,9 +50,8 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 		}${item.abstractNote ? `. The authors provide the following abstract: '${item.abstractNote}'` : ''
 		}`;
 
-	const result = await client
-		.index(process.env.MEILI_INDEX! || "items")
-		.search("", {
+	const { index } = await getMeilisearchForConfig(config);
+	const result = await index.search("", {
 			q: description,
 			hybrid: {
 				embedder: "openai",

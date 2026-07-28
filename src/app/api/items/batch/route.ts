@@ -1,24 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
 import { ListItem } from "@/app/api/item/types";
-import meilisearchClient from "@/lib/meilisearch";
-import config from "@/constants/config.json";
+import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { LIST_ITEM_FIELDS } from "@/lib/search";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { hasAnyTag } from "@/lib/tags";
 
 async function getPaginatedItems(
 	keys: string[],
 	page: number,
 	perPage: number,
-	includeHeavyFields: boolean
+	includeHeavyFields: boolean,
+	libraryConfig: LibraryServerConfig,
 ): Promise<{ items: ListItem[]; total: number }> {
 	if (keys.length === 0) return { items: [], total: 0 };
 
 	try {
-		const index = await meilisearchClient.getIndex(
-			process.env.MEILI_INDEX || config.index
-		);
+		const { index } = await getMeilisearchForConfig(libraryConfig);
 
 		const offset = (page - 1) * perPage;
 
@@ -55,7 +54,7 @@ export async function POST(request: NextRequest) {
 	const page = body.page || 1;
 	const perPage = body.perPage || 20;
 	const includeHeavyFields = body.includeHeavyFields === true;
-	const { content } = await getLibraryConfig();
+	const libraryConfig = await getLibraryConfig();
 
 	if (!keys || !Array.isArray(keys) || keys.length === 0) {
 		return NextResponse.json<ItemsBatchResponse>(
@@ -78,14 +77,15 @@ export async function POST(request: NextRequest) {
 		keys,
 		page,
 		perPage,
-		includeHeavyFields
+		includeHeavyFields,
+		libraryConfig,
 	);
 
 	// Filter out deleted items and items with blocked tags
 	const filteredItems = items.filter(
 		(item) =>
 			!item.deleted &&
-			!hasAnyTag(item.tags, content.tags.hidden)
+			!hasAnyTag(item.tags, libraryConfig.content.tags.hidden)
 	);
 
 	const totalPages = Math.ceil(total / perPage);

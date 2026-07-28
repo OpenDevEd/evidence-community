@@ -40,7 +40,7 @@ The current precedence is:
 
 The deployment contract begins in `Dockerfile`.
 
-The Docker build currently accepts 45 application configuration arguments in addition to `RUNTIME_IMAGE`. The build arguments matter because:
+The Docker build currently accepts 20 application configuration arguments in addition to `RUNTIME_IMAGE`. The build arguments matter because:
 
 - Next.js inlines `NEXT_PUBLIC_*` values into the client bundle;
 - `next.config.mjs` reads values while generating configuration and rewrites;
@@ -54,11 +54,16 @@ The Docker build currently accepts 45 application configuration arguments in add
 | Variable | Purpose | Main consumers |
 | --- | --- | --- |
 | `BASE_URL` | Public base URL and fallback canonical URL | `next.config.mjs`, site URL and metadata helpers |
-| `services.database.url` | Runtime PostgreSQL database for this library | `src/db/index.ts` |
-| `MEILISEARCH_HOST` | Meilisearch server | `src/lib/meilisearch.ts` and search/API routes |
-| `MASTER_KEY` | Meilisearch key | `src/lib/meilisearch.ts` |
-| `MEILI_INDEX` | Meilisearch index/library dataset | Search/API routes, `next.config.mjs`, gap-map routing |
 | `EXTERNAL_NAV_SOURCE_URL` | Optional external navigation/footer JSON endpoint | `src/lib/external-nav.ts` |
+
+The runtime manifest now selects the tenant data services without a rebuild:
+
+| Manifest field | Purpose | Main consumers |
+| --- | --- | --- |
+| `services.database.url` | PostgreSQL database for this library revision | `src/db/index.ts` |
+| `services.search.host` | Meilisearch server for this library revision | `src/lib/meilisearch.ts` |
+| `services.search.key` | Meilisearch API key for this library revision | `src/lib/meilisearch.ts` |
+| `services.search.index` | Tenant document index and shared-index namespace | Search, caches, redirects, sitemap, citations, and AI routes |
 
 #### Identity and visual styling
 
@@ -442,11 +447,13 @@ Changing this file requires changing the repository and rebuilding.
 The combination of these values selects the library's data:
 
 - `services.database.url`
-- `MEILISEARCH_HOST`
-- `MASTER_KEY`
-- `MEILI_INDEX`
+- `services.search.host`
+- `services.search.key`
+- `services.search.index`
 
-`MEILI_INDEX` also affects the gap-map rewrite generated in `next.config.mjs`.
+They are loaded from one validated runtime manifest revision. Each request
+uses that same revision when resolving PostgreSQL, Meilisearch, and cached
+collection data.
 
 ### Image hosting
 

@@ -104,12 +104,12 @@ become Meilisearch documents.
 
 ## Application Data Flow
 
-Each frontend chooses its tenant through environment variables:
+Each frontend chooses its tenant through one runtime manifest revision:
 
 ```text
 services.database.url -> the active revision's PostgreSQL database
-MEILISEARCH_HOST  -> shared internal Meilisearch service
-MEILI_INDEX       -> one tenant-specific index
+services.search.host  -> the active revision's Meilisearch service
+services.search.index -> the active revision's tenant-specific index
 ```
 
 At runtime:

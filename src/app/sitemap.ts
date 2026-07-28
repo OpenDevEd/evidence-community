@@ -1,6 +1,6 @@
 import { MetadataRoute } from "next";
-import meilisearchClient from "@/lib/meilisearch";
-import config from "@/constants/config.json";
+import { PHASE_PRODUCTION_BUILD } from "next/constants";
+import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getSitemapPageCount } from "@/lib/sitemap";
 import {
@@ -13,16 +13,17 @@ import { SITEMAP_SIZE } from "@/constants/misc";
 import { getPolicyLastModified } from "@/lib/policy-documents";
 import { getEnabledGapMaps } from "@/config/library-config/gap-maps";
 
-// Sitemap shards render per-request so MeiliSearch is queried with the
-// runtime env, not the empty build env. generateSitemaps still runs at build
-// to enumerate shard ids — guarded below.
+// Sitemap shards render per request so both shard enumeration and document
+// reads resolve the active runtime configuration revision.
 export const dynamic = "force-dynamic";
 
 export async function generateSitemaps() {
-	if (!process.env.MEILISEARCH_HOST) {
+	if (process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD) {
 		return [{ id: 0 }];
 	}
-	const totalPages = await getSitemapPageCount();
+
+	const libraryConfig = await getLibraryConfig();
+	const totalPages = await getSitemapPageCount(libraryConfig);
 
 	return Array.from({ length: totalPages }, (_, i) => ({ id: i }));
 }
@@ -30,9 +31,6 @@ export async function generateSitemaps() {
 export default async function sitemap(props: {
 	id: Promise<number>
 }): Promise<MetadataRoute.Sitemap> {
-	if (!process.env.MEILISEARCH_HOST) {
-		return [];
-	}
 	const maxRetries = 10;
 	let attempt = 0;
 	let items;
@@ -40,10 +38,12 @@ export default async function sitemap(props: {
 	const identifier = Number(await props.id);
 	const libraryConfig = await getLibraryConfig();
 	const { localization } = libraryConfig;
+	const baseUrl = libraryConfig.identity.baseUrl;
+	const { index } = await getMeilisearchForConfig(libraryConfig);
 
 	while (attempt < maxRetries) {
 		try {
-			items = await meilisearchClient.index(process.env.MEILI_INDEX || config.index).getDocuments({
+			items = await index.getDocuments({
 				limit: SITEMAP_SIZE,
 				fields: ["key", "updatedAt", "attachmentsData.PDFCoverPageImage", "attachmentsData.title"],
 				offset: identifier * SITEMAP_SIZE,
@@ -75,29 +75,33 @@ export default async function sitemap(props: {
 			policyEntries = [
 				{
 					url: buildLocalizedSiteUrl(
-						"/privacy",
-						localization.defaultLocale,
-						localization,
+							"/privacy",
+							localization.defaultLocale,
+							localization,
+							baseUrl,
 					),
 					lastModified: privacyLastModified,
 					alternates: {
 						languages: buildLanguageAlternates(
-							"/privacy",
-							localization,
+								"/privacy",
+								localization,
+								baseUrl,
 						),
 					},
 				},
 				{
 					url: buildLocalizedSiteUrl(
-						"/cookie-policy",
-						localization.defaultLocale,
-						localization,
+							"/cookie-policy",
+							localization.defaultLocale,
+							localization,
+							baseUrl,
 					),
 					lastModified: cookiePolicyLastModified,
 					alternates: {
 						languages: buildLanguageAlternates(
-							"/cookie-policy",
-							localization,
+								"/cookie-policy",
+								localization,
+								baseUrl,
 						),
 					},
 				},
@@ -108,27 +112,34 @@ export default async function sitemap(props: {
 
 		gapmapEntries = getEnabledGapMaps(
 			libraryConfig.gapMaps,
-		).map((gapMap) => ({
-			url: buildSiteUrl(gapMap.href),
+			).map((gapMap) => ({
+				url: buildSiteUrl(gapMap.href, baseUrl),
 		}));
 	}
 
 	const itemEntries = items.results.map((item: any) => ({
 		url: buildLocalizedSiteUrl(
-			`/lib/${item.key}`,
-			localization.defaultLocale,
-			localization,
+				`/lib/${item.key}`,
+				localization.defaultLocale,
+				localization,
+				baseUrl,
 		),
 		lastModified: item.updatedAt,
 		alternates: {
 			languages: buildLanguageAlternates(
-				`/lib/${item.key}`,
-				localization,
+					`/lib/${item.key}`,
+					localization,
+					baseUrl,
 			),
 		},
 		images: item.attachmentsData
 			?.filter((attachment: any) => attachment.PDFCoverPageImage)
-			.map((attachment: any) => convertToImageURL(attachment.PDFCoverPageImage)),
+				.map((attachment: any) =>
+					convertToImageURL(
+						attachment.PDFCoverPageImage,
+						baseUrl,
+					)
+				),
 	}));
 
 	return [...policyEntries, ...gapmapEntries, ...itemEntries];

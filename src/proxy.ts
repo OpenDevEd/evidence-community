@@ -2,7 +2,6 @@ import createMiddleware from "next-intl/middleware";
 import { NextRequest, NextResponse } from "next/server";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "./constants/items";
 import { loadLibraryConfig } from "./config/library-config/source";
-import configJSON from "./constants/config.json";
 import {
 	getDisabledLocaleRedirectPathname,
 	getOrderedRuntimeLocales,
@@ -13,7 +12,7 @@ import {
 	PRIVATE_NO_STORE_CACHE_CONTROL,
 	PUBLIC_READ_CACHE_CONTROL,
 } from "./lib/http-cache";
-import meilisearch from "./lib/meilisearch";
+import { getMeilisearchForConfig } from "./lib/meilisearch";
 import { getConfiguredSiteOrigin } from "./lib/site-url";
 import { normalizePathname } from "./lib/path";
 import { resolveRuntimeSearchScope } from "./config/library-config/search";
@@ -292,12 +291,14 @@ export default async function proxy(request: NextRequest) {
 
 		if (isLikelyZoteroKey(resolvedKey)) {
 			try {
+				const { indexName, redirectsIndex } =
+					await getMeilisearchForConfig(libraryConfig);
 				const compositeKey =
-					(process.env.MEILI_INDEX || configJSON.index) + "|" + resolvedKey;
+					indexName + "|" + resolvedKey;
 				const encoding = encodeKey(compositeKey);
 
 				const redirects = (await Promise.race([
-					meilisearch.index("redirects").getDocument(encoding),
+					redirectsIndex.getDocument(encoding),
 					new Promise((_, reject) =>
 						setTimeout(
 							() => reject(new Error("timeout")),

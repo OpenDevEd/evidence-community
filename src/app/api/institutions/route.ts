@@ -104,6 +104,7 @@ export async function GET() {
 	try {
 		const config = await getLibraryConfig();
 		const data = await withMeilisearchCache(
+			config,
 			`${config.revision}-institutions`,
 			() => fetchInstitutionsData(config),
 		);

@@ -1,16 +1,17 @@
-import meilisearch from "@/lib/meilisearch";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { getMeilisearchForConfig } from "@/lib/meilisearch";
 
-const CACHE_INDEX = "cache";
-
-function getDocumentId(key: string) {
-	return process.env.MEILI_INDEX + "-" + key;
-}
-
-export async function withMeilisearchCache<T>(key: string, compute: () => Promise<T>): Promise<T> {
-	const docId = getDocumentId(key);
+export async function withMeilisearchCache<T>(
+	libraryConfig: LibraryServerConfig,
+	key: string,
+	compute: () => Promise<T>,
+): Promise<T> {
+	const { cacheIndex, indexName } =
+		await getMeilisearchForConfig(libraryConfig);
+	const docId = indexName + "-" + key;
 
 	try {
-		const result = await meilisearch.index(CACHE_INDEX).getDocument(docId);
+		const result = await cacheIndex.getDocument(docId);
 		return JSON.parse(result.content);
 	} catch {
 		// Cache miss — compute fresh data
@@ -19,7 +20,7 @@ export async function withMeilisearchCache<T>(key: string, compute: () => Promis
 	const data = await compute();
 
 	try {
-		await meilisearch.index(CACHE_INDEX).addDocuments([
+		await cacheIndex.addDocuments([
 			{ id: docId, content: JSON.stringify(data) },
 		]);
 	} catch {

@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Item } from "@/app/api/item/types";
-import meilisearchClient from "@/lib/meilisearch";
-import config from "@/constants/config.json";
+import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { RelationsType } from "@/types/item";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { hasAnyTag } from "@/lib/tags";
 
 export type CitationYearData = {
@@ -26,11 +26,10 @@ export type CitationsResponse = {
 async function getSourceItem(
 	key: string,
 	hiddenTags: readonly string[],
+	libraryConfig: LibraryServerConfig,
 ): Promise<Item | null> {
 	try {
-		const index = await meilisearchClient.getIndex(
-			process.env.MEILI_INDEX || config.index
-		);
+		const { index } = await getMeilisearchForConfig(libraryConfig);
 		const result = await index.getDocument(key);
 
 		if (
@@ -61,6 +60,7 @@ async function getCitingItems(
 	page: number,
 	perPage: number,
 	hiddenTags: readonly string[],
+	libraryConfig: LibraryServerConfig,
 ): Promise<{
 	items: Item[];
 	countryDistribution: Record<string, number>;
@@ -76,9 +76,7 @@ async function getCitingItems(
 		};
 
 	try {
-		const index = await meilisearchClient.getIndex(
-			process.env.MEILI_INDEX || config.index
-		);
+		const { index } = await getMeilisearchForConfig(libraryConfig);
 
 		const offset = (page - 1) * perPage;
 
@@ -124,11 +122,15 @@ export async function GET(
 
 	const page = parseInt(searchParams.get("page") || "1");
 	const perPage = parseInt(searchParams.get("perPage") || "20");
-	const { content } = await getLibraryConfig();
-	const hiddenTags = content.tags.hidden;
+	const libraryConfig = await getLibraryConfig();
+	const hiddenTags = libraryConfig.content.tags.hidden;
 
 	// Get the source item first
-	const sourceItem = await getSourceItem(key, hiddenTags);
+	const sourceItem = await getSourceItem(
+		key,
+		hiddenTags,
+		libraryConfig,
+	);
 
 	if (!sourceItem) {
 		return NextResponse.json<CitationsResponse>({
@@ -158,10 +160,11 @@ export async function GET(
 		yearDistribution: rawYearDistribution,
 	} = await getCitingItems(
 		citedByKeys,
-		page,
-		perPage,
-		hiddenTags,
-	);
+			page,
+			perPage,
+			hiddenTags,
+			libraryConfig,
+		);
 
 	// Format year distribution
 	const yearDistribution = Object.entries(rawYearDistribution)

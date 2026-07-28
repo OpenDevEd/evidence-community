@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import meilisearch from "@/lib/meilisearch";
+import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { cacheLife, cacheTag } from "next/cache";
-import config from "@/constants/config.json";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
+import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 function encodeKey(key: string): string {
 	return key.split('').map(char => {
@@ -15,16 +16,31 @@ function isLikelyZoteroKey(key: string) {
 	return /^[A-Z0-9]{8}$/.test(key);
 }
 
-async function getCachedRedirectData(encoding: string, indexKey: string, itemKey: string) {
+async function getCachedRedirectData(
+	encoding: string,
+	indexKey: string,
+	itemKey: string,
+	configRevision: string,
+	libraryConfig: LibraryServerConfig,
+) {
 	'use cache'
 	cacheLife({ revalidate: 60 })
-	cacheTag('redirect-' + indexKey + '-' + itemKey)
+	cacheTag(
+		'redirect-' +
+			indexKey +
+			'-' +
+			configRevision +
+			'-' +
+			itemKey,
+	)
+	const { redirectsIndex } =
+		await getMeilisearchForConfig(libraryConfig);
 	const timeoutPromise = new Promise((_, reject) =>
 		setTimeout(() => reject(new Error("Redirect lookup timeout")), 350)
 	);
 
 	const redirects = (await Promise.race([
-		meilisearch.index("redirects").getDocument(encoding),
+		redirectsIndex.getDocument(encoding),
 		timeoutPromise,
 	])) as Record<string, unknown>;
 
@@ -55,14 +71,21 @@ export async function GET(
 		);
 	}
 
-	const indexKey = process.env.MEILI_INDEX || config.index;
+	const libraryConfig = await getLibraryConfig();
+	const indexKey = libraryConfig.services.search.index;
 	const key = indexKey + "|" + itemKey;
 	const encoding = encodeKey(key);
 
 	let redirects: Record<string, unknown>;
 
 	try {
-		redirects = await getCachedRedirectData(encoding, indexKey, itemKey);
+		redirects = await getCachedRedirectData(
+			encoding,
+			indexKey,
+			itemKey,
+			libraryConfig.revision,
+			libraryConfig,
+		);
 	} catch {
 		// Keep timeout/not-found fallbacks uncached.
 		redirects = { value: itemKey };

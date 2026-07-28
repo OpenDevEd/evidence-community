@@ -8,7 +8,7 @@ import {
 } from "@/lib/ai";
 import { SORT_OPTIONS } from "@/constants/items";
 import { SearchResponse } from "meilisearch";
-import client from "@/lib/meilisearch";
+import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { cleanItemForAI, formatRange } from "@/lib/utils";
 import { ItemsGetResponse } from "../../items/types";
 import { getCachedItem } from "../../cache";
@@ -26,6 +26,8 @@ export async function quickChat(
 	messages: any[]
 ) {
 	const config = await getLibraryConfig();
+	const { index: searchIndex } =
+		await getMeilisearchForConfig(config);
 	const result = streamText({
 		model: provider!(modelName!) as any,
 		system: [
@@ -206,9 +208,7 @@ Before you answer, classify the user’s intent into one of two categories:
 
 					let result: SearchResponse<Item>;
 					try {
-						result = await client
-							.index(process.env.MEILI_INDEX! || "items")
-							.search(q, {
+						result = await searchIndex.search(q, {
 								q,
 								hybrid: {
 									embedder: "openai",

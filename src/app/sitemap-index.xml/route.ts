@@ -1,4 +1,6 @@
 import { getSitemapPageCount, getSitemapShardUrl } from "@/lib/sitemap";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { connection } from "next/server";
 
 function buildSitemapIndex(urls: string[]) {
 	const entries = urls
@@ -12,9 +14,11 @@ ${entries}
 }
 
 export async function GET() {
-	const totalPages = await getSitemapPageCount();
+	await connection();
+	const libraryConfig = await getLibraryConfig();
+	const totalPages = await getSitemapPageCount(libraryConfig);
 	const urls = Array.from({ length: totalPages }, (_, i) =>
-		getSitemapShardUrl(i)
+		getSitemapShardUrl(i, libraryConfig.identity.baseUrl)
 	);
 
 	return new Response(buildSitemapIndex(urls), {
