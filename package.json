@@ -14,7 +14,10 @@
 		"test:unit": "vitest run",
 		"test:e2e": "playwright test",
 		"test:acceptance": "tsx ./tools/runRuntimeAcceptance.ts",
-		"schema:generate": "npx tsx ./tools/generateSchema.ts"
+		"schema:generate": "npm run schema:generate:library-config && npm run schema:generate:zotero",
+		"schema:generate:library-config": "tsx ./tools/generateLibraryConfigArtifacts.ts",
+		"schema:generate:zotero": "tsx ./tools/generateZoteroSchema.ts",
+		"schema:check": "tsx ./tools/generateLibraryConfigArtifacts.ts --check"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^3.0.103",
@@ -58,7 +61,6 @@
 		"node-cache": "^5.1.2",
 		"nodemailer": "^7.0.12",
 		"nuqs": "^2.3.2",
-		"openai": "^4.75.0",
 		"pdf-lib": "^1.17.1",
 		"pg": "^8.13.1",
 		"posthog-js": "^1.266.0",
@@ -82,8 +84,8 @@
 		"unist-util-visit": "^5.0.0",
 		"usehooks-ts": "^3.1.0",
 		"xmlbuilder2": "^4.0.3",
-		"zod": "^3.24.1",
-		"zod-validation-error": "^3.4.0"
+		"zod": "^4.4.3",
+		"zod-validation-error": "^5.0.0"
 	},
 	"devDependencies": {
 		"@google/generative-ai": "^0.24.1",
@@ -99,6 +101,8 @@
 		"@types/react-dom": "^19.2.3",
 		"@types/react-simple-maps": "^3.0.6",
 		"@types/rtl-detect": "^1.0.3",
+		"ajv": "^8.20.0",
+		"ajv-formats": "^3.0.1",
 		"drizzle-kit": "^0.31.8",
 		"esbuild": "^0.27.2",
 		"eslint": "^9.39.1",

@@ -16,13 +16,11 @@ import { revisionSchema, utcTimestampSchema } from "./primitives";
 
 const DEFAULT_DEVELOPMENT_CONFIG_PATH = "config/library.local.json";
 
-const revisionMetadataSchema = z
-	.object({
-		schemaVersion: z.literal(1),
-		revision: revisionSchema,
-		updatedAt: utcTimestampSchema,
-	})
-	.passthrough();
+const revisionMetadataSchema = z.looseObject({
+	schemaVersion: z.literal(1),
+	revision: revisionSchema,
+	updatedAt: utcTimestampSchema,
+});
 
 export type LibraryConfigEnvironment = "development" | "production";
 

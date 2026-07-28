@@ -150,6 +150,50 @@ test("reports the active runtime configuration revision only", async ({
 	});
 });
 
+test("serves value-free machine-readable configuration contracts", async ({
+	request,
+}) => {
+	const [schemaResponse, catalogResponse] = await Promise.all([
+		request.get("/library-config.schema.json"),
+		request.get("/library-config.catalogs.json"),
+	]);
+	expect(schemaResponse.status()).toBe(200);
+	expect(catalogResponse.status()).toBe(200);
+	expect(schemaResponse.headers()["content-type"]).toContain(
+		"application/json",
+	);
+	expect(catalogResponse.headers()["content-type"]).toContain(
+		"application/json",
+	);
+
+	const schemaText = await schemaResponse.text();
+	const catalogText = await catalogResponse.text();
+	const schema = JSON.parse(schemaText);
+	const catalog = JSON.parse(catalogText);
+
+	expect(schema).toMatchObject({
+		$schema: "https://json-schema.org/draft/2020-12/schema",
+		$id: "/library-config.schema.json",
+		type: "object",
+		additionalProperties: false,
+	});
+	expect(
+		schema.properties.services.properties.database.properties.url,
+	).toMatchObject({ writeOnly: true });
+	expect(catalog).toMatchObject({
+		catalogVersion: 1,
+		schemaVersion: 1,
+		schemaUrl: "/library-config.schema.json",
+	});
+	expect(catalog.fields.writeOnlyPaths).toContain(
+		"services.database.url",
+	);
+	expect(schemaText).not.toContain(expectedConfigRevision);
+	expect(catalogText).not.toContain(expectedConfigRevision);
+	expect(schemaText).not.toContain(expectedContactEmail);
+	expect(catalogText).not.toContain(expectedContactEmail);
+});
+
 test("renders identity assets, logo CSS, colors, and fonts from runtime configuration", async ({
 	page,
 }) => {

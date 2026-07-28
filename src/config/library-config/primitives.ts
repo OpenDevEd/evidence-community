@@ -9,7 +9,7 @@ const TAG_CONTROL_CHARACTERS = /[\u0000-\u001F\u007F]/u;
 
 export function nonEmptyStringSchema(
 	maximum: number,
-): z.ZodEffects<z.ZodString, string, string> {
+) {
 	return z
 		.string()
 		.trim()
@@ -22,7 +22,7 @@ export function nonEmptyStringSchema(
 
 export function singleLineStringSchema(
 	maximum: number,
-): z.ZodEffects<z.ZodString, string, string> {
+) {
 	return z
 		.string()
 		.trim()
@@ -40,7 +40,7 @@ export function singleLineStringSchema(
 
 export function plainTextSchema(
 	maximum: number,
-): z.ZodEffects<z.ZodString, string, string> {
+) {
 	return z
 		.string()
 		.trim()
@@ -115,7 +115,7 @@ function urlSchema({
 	stable = false,
 	noQuery = false,
 	extensions,
-}: UrlRules): z.ZodEffects<z.ZodString, string, string> {
+}: UrlRules) {
 	return z
 		.string()
 		.trim()
@@ -196,7 +196,8 @@ function urlSchema({
 					message: `URL path must end in ${extensions.join(", ")}`,
 				});
 			}
-		});
+		})
+		.meta({ format: "uri" });
 }
 
 export const publicHttpsUrlSchema = urlSchema({
@@ -254,7 +255,8 @@ export const postgresUrlSchema = z
 				message: "Must be a valid postgres: or postgresql: URL",
 			});
 		}
-	});
+	})
+	.meta({ format: "uri", writeOnly: true });
 
 function decodedPathSegments(value: string) {
 	let decoded = value;
@@ -332,7 +334,8 @@ export function secretSchema(minimum: number, maximum: number) {
 		.max(maximum)
 		.refine((value) => !DISALLOWED_CONTROL_CHARACTERS.test(value), {
 			message: "Control characters are not allowed",
-		});
+		})
+		.meta({ writeOnly: true });
 }
 
 function isValidIpv4(value: string) {

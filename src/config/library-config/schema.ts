@@ -291,7 +291,7 @@ const themeFontsInputSchema = z
 			),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const themeColorsSchema = z
 	.object({
@@ -536,7 +536,7 @@ const navigationSchema = z
 			),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const footerSectionSchema = z
 	.object({
@@ -599,7 +599,7 @@ const footerSchema = z
 		attribution: plainTextSchema(500).default(""),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const contactSchema = z
 	.object({
@@ -618,7 +618,7 @@ const contactSchema = z
 			.optional(),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const legalSchema = z
 	.object({
@@ -627,7 +627,7 @@ const legalSchema = z
 		termsOfService: linkSchema.optional(),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const localeSchema = z.enum(PLATFORM_LOCALES);
 
@@ -696,7 +696,7 @@ const searchSchema = z
 		defaultScope: scopeSchema.optional(),
 	})
 	.strict()
-	.default({})
+	.prefault({})
 	.transform((search) => {
 		const scopes =
 			search.scopes ??
@@ -742,7 +742,7 @@ const filtersSchema = z
 				featuredValue: singleLineStringSchema(120).optional(),
 			})
 			.strict()
-			.default({}),
+			.prefault({}),
 		countryLibrary: z.boolean().default(false),
 		collectionsExpanded: z.boolean().default(true),
 		years: z
@@ -769,13 +769,14 @@ const filtersSchema = z
 							message: "Maximum year cannot be in the future",
 						},
 					)
-					.default(() => new Date().getUTCFullYear()),
+					.default(() => new Date().getUTCFullYear())
+					.meta({ "x-dynamicDefault": "currentUtcYear" }),
 			})
 			.strict()
-			.default({}),
+			.prefault({}),
 	})
 	.strict()
-	.default({})
+	.prefault({})
 	.superRefine((filters, context) => {
 		if (
 			filters.institution.mode === "facet-with-featured-value" &&
@@ -820,17 +821,17 @@ const contentSchema = z
 				publish: tagList(["_publish", "publishPDF"], 1),
 			})
 			.strict()
-			.default({}),
+			.prefault({}),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const citationsSchema = z
 	.object({
 		showUrl: z.boolean().default(false),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const featuresSchema = z
 	.object({
@@ -853,7 +854,7 @@ const featuresSchema = z
 		atomFeed: z.boolean().default(false),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const collectionSchema = z
 	.object({
@@ -924,7 +925,7 @@ const exportsSchema = z
 		atom: publicHttpsUrlSchema.optional(),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const publicExportsSchema = z
 	.object({
@@ -958,7 +959,7 @@ const servicesSchema = z
 				translationUrl: serviceUrlSchema.optional(),
 			})
 			.strict()
-			.default({}),
+			.prefault({}),
 	})
 	.strict();
 
@@ -1034,7 +1035,7 @@ const promptSlotsSchema = z
 		summarize: promptValueSchema("summarize").optional(),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const aiSchema = z
 	.object({
@@ -1052,7 +1053,7 @@ const aiSchema = z
 		prompts: promptSlotsSchema,
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const posthogSchema = z
 	.object({
@@ -1066,7 +1067,7 @@ const posthogSchema = z
 			.optional(),
 	})
 	.strict()
-	.default({})
+	.prefault({})
 	.superRefine((posthog, context) => {
 		if (Boolean(posthog.host) !== Boolean(posthog.key)) {
 			context.addIssue({
@@ -1088,7 +1089,7 @@ const analyticsSchema = z
 					.optional(),
 			})
 			.strict()
-			.default({}),
+			.prefault({}),
 		utmDurationSeconds: z
 			.number()
 			.int()
@@ -1097,7 +1098,7 @@ const analyticsSchema = z
 			.default(2_592_000),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const authenticationSchema = z
 	.object({
@@ -1108,11 +1109,11 @@ const authenticationSchema = z
 				clientSecret: secretSchema(20, 512).optional(),
 			})
 			.strict()
-			.default({}),
+			.prefault({}),
 		secret: secretSchema(32, 512).optional(),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const smtpSchema = z
 	.object({
@@ -1124,7 +1125,7 @@ const smtpSchema = z
 		from: emailSchema.optional(),
 	})
 	.strict()
-	.default({})
+	.prefault({})
 	.superRefine((smtp, context) => {
 		if (Boolean(smtp.username) !== Boolean(smtp.password)) {
 			context.addIssue({
@@ -1141,7 +1142,7 @@ const emailConfigurationSchema = z
 		smtp: smtpSchema,
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const generationSchema = z
 	.object({
@@ -1149,7 +1150,7 @@ const generationSchema = z
 		redirects: z.boolean().default(true),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const processingRuleSchema = z
 	.object({
@@ -1184,7 +1185,7 @@ const processingSchema = z
 		sharedRules: processingRuleList(),
 	})
 	.strict()
-	.default({});
+	.prefault({});
 
 const serverConfigShape = {
 	schemaVersion: z.literal(1),

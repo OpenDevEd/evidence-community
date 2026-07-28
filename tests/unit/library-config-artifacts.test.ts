@@ -1,0 +1,101 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+import Ajv2020 from "ajv/dist/2020";
+import addFormats from "ajv-formats";
+import { describe, expect, it } from "vitest";
+
+import {
+	createLibraryConfigCatalog,
+	createLibraryConfigJsonSchema,
+} from "@/config/library-config/artifacts";
+
+async function readJson(relativePath: string) {
+	return JSON.parse(
+		await readFile(path.join(process.cwd(), relativePath), "utf8"),
+	);
+}
+
+describe("library configuration artifacts", () => {
+	it("keeps committed artifacts synchronized with the executable contract", async () => {
+		const schema = createLibraryConfigJsonSchema();
+		const catalog = createLibraryConfigCatalog(schema);
+
+		await expect(
+			readJson("public/library-config.schema.json"),
+		).resolves.toEqual(schema);
+		await expect(
+			readJson("public/library-config.catalogs.json"),
+		).resolves.toEqual(catalog);
+	});
+
+	it("emits valid Draft 2020-12 schema for real configuration inputs", async () => {
+		const schema = createLibraryConfigJsonSchema();
+		const example = await readJson("config/library.example.json");
+		const ajv = new Ajv2020({ allErrors: true, strict: true });
+		ajv.addKeyword("x-runtimeValidation");
+		ajv.addKeyword("x-dynamicDefault");
+		addFormats(ajv);
+		const validate = ajv.compile(schema);
+
+		expect(validate(example), ajv.errorsText(validate.errors)).toBe(
+			true,
+		);
+		expect(validate({ ...example, unknown: true })).toBe(false);
+		expect(
+			validate({
+				...example,
+				identity: { ...example.identity, name: "" },
+			}),
+		).toBe(false);
+	});
+
+	it("exports closed choices, extensible choices, and write-only paths", () => {
+		const catalog = createLibraryConfigCatalog();
+		const enums = new Map(
+			catalog.fields.enums.map((entry) => [entry.path, entry]),
+		);
+
+		expect(enums.get("theme.layout")).toEqual({
+			allowCustom: false,
+			path: "theme.layout",
+			values: ["small", "wide"],
+		});
+		expect(enums.get("theme.fonts.heading.family")).toMatchObject({
+			allowCustom: true,
+			values: ["Montserrat", "Ubuntu"],
+		});
+		expect(enums.get("navigation.links[].icon")).toMatchObject({
+			allowCustom: true,
+			values: expect.arrayContaining([
+				"EvidenceLibrary",
+				"FaQuestionCircle",
+			]),
+		});
+		expect(enums.get("processing.structureRules[].action")).toEqual({
+			allowCustom: false,
+			path: "processing.structureRules[].action",
+			values: ["append-system-instruction"],
+		});
+		const schema = createLibraryConfigJsonSchema();
+		const yearMaximum = (
+			(schema.properties as Record<string, any>).filters
+				.properties.years.properties as Record<string, any>
+		).maximum;
+		expect(yearMaximum).toMatchObject({
+			"x-dynamicDefault": "currentUtcYear",
+		});
+		expect(yearMaximum).not.toHaveProperty("default");
+		expect(catalog.fields.writeOnlyPaths).toEqual(
+			expect.arrayContaining([
+				"ai.providers[].apiKey",
+				"authentication.secret",
+				"services.database.url",
+				"services.search.key",
+			]),
+		);
+		expect(catalog.fields.writeOnlyPaths).not.toContain(
+			"analytics.posthog.key",
+		);
+	});
+});

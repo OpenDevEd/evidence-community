@@ -51,7 +51,7 @@ export async function authorizeForConfig(
 	const parsedCredentials = credentialsSchema.safeParse(props);
 	if (!parsedCredentials.success) {
 		return {
-			error: parsedCredentials.error.errors
+			error: parsedCredentials.error.issues
 				.map((error) => error.message)
 				.join(", "),
 		};

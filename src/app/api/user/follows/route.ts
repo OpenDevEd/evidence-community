@@ -54,7 +54,7 @@ export async function POST(request: Request) {
 
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return Response.json({ error: error.errors[0].message }, { status: 400 });
+      return Response.json({ error: error.issues[0].message }, { status: 400 });
     }
     console.error("Follow error:", error);
     return Response.json({ error: "Internal Server Error" }, { status: 500 });

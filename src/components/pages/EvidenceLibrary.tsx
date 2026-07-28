@@ -970,7 +970,7 @@ function SmartScreeningModal({
 				} catch (error) {
 					if (error instanceof z.ZodError) {
 						const fieldError =
-							error.errors[0]?.message || t("invalidField");
+							error.issues[0]?.message || t("invalidField");
 						newErrors[index] = `${t("fieldPrefix")} ${index + 1} ${
 							field.label
 						}: ${fieldError}`;
