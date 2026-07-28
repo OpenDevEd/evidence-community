@@ -280,16 +280,18 @@ export function initializePostHog(
 	posthogClient?.opt_out_capturing();
 	const nextClient = new PostHog();
 	nextClient.init(configuration.key, {
+		advanced_disable_flags: true,
 		advanced_disable_feature_flags_on_first_load: true,
 		api_host: configuration.host,
 		autocapture: false,
 		capture_pageleave: false,
 		capture_pageview: false,
-		cookieless_mode: "on_reject",
+		disable_external_dependency_loading: true,
 		disable_session_recording: true,
 		mask_all_element_attributes: true,
 		mask_all_text: true,
 		mask_personal_data_properties: true,
+		opt_out_persistence_by_default: true,
 		person_profiles: "never",
 		respect_dnt: true,
 	});

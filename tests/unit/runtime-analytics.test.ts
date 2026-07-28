@@ -79,7 +79,10 @@ describe("runtime browser analytics", () => {
 		expect(client?.init).toHaveBeenCalledWith(
 			"phc_1234567890123456",
 			expect.objectContaining({
+				advanced_disable_flags: true,
 				api_host: "https://analytics.runtime.example",
+				disable_external_dependency_loading: true,
+				opt_out_persistence_by_default: true,
 			}),
 		);
 		expect(getAnalyticsDistinctId()).toBe("runtime-distinct-id");

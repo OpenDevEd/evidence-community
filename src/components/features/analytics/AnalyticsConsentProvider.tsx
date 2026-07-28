@@ -10,7 +10,6 @@ import {
 import {
 	clearAnalyticsStorage,
 	initializeClientAnalytics,
-	initializePostHog,
 	updateGoogleConsent,
 } from "@/lib/analytics";
 import {
@@ -71,10 +70,6 @@ export function AnalyticsConsentProvider({
 	const [analyticsReady, setAnalyticsReady] = useState(false);
 	const [hasHydratedConsent, setHasHydratedConsent] = useState(false);
 	const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
-
-	useEffect(() => {
-		initializePostHog(analytics.posthog);
-	}, [analytics.posthog]);
 
 	useEffect(() => {
 		const hydrationTimer = window.setTimeout(() => {
