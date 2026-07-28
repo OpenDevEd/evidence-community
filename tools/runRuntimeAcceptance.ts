@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
 	copyFileSync,
@@ -5,9 +6,14 @@ import {
 	readFileSync,
 	rmSync,
 } from "node:fs";
+import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import {
+	activateLibraryConfig,
+	rollbackLibraryConfig,
+} from "../src/config/library-config/activation";
 import {
 	PLATFORM_LOCALES,
 	PLATFORM_SEARCH_SCOPE_OPTIONS,
@@ -26,6 +32,7 @@ import {
 	localesNames,
 	shortLocalesNames,
 } from "../src/i18n/routing";
+import { replaceFileAtomically } from "../src/lib/atomic-file";
 
 const rootDirectory = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
@@ -88,6 +95,17 @@ type MeilisearchTask = {
 	error?: unknown;
 };
 
+type RuntimeConfigHealth = {
+	state: "active" | "rejected";
+	active: {
+		revision: string;
+		updatedAt: string;
+	} | null;
+	rejected: {
+		revision: string | null;
+	} | null;
+};
+
 function run(command: string, args: string[], environment = commandEnvironment) {
 	const result = spawnSync(command, args, {
 		cwd: rootDirectory,
@@ -142,6 +160,17 @@ function composeForProject(
 
 function compose(...args: string[]) {
 	composeForProject(composeProject, runtimeDirectory, ...args);
+}
+
+function captureCompose(...args: string[]) {
+	return capture("docker", [
+		"compose",
+		"--file",
+		composeFile,
+		"--project-name",
+		composeProject,
+		...args,
+	]);
 }
 
 function processIsAlive(pid: number) {
@@ -544,6 +573,193 @@ function runBrowserSuite(profile: Profile) {
 	);
 }
 
+async function waitForRuntimeHealth(
+	profile: Profile,
+	predicate: (health: RuntimeConfigHealth) => boolean,
+	description: string,
+) {
+	const deadline = Date.now() + 20_000;
+	let lastHealth: RuntimeConfigHealth | null = null;
+	let lastError: unknown = null;
+
+	while (Date.now() < deadline) {
+		try {
+			const response = await fetch(
+				`http://127.0.0.1:${profile.port}/api/library-config/health`,
+			);
+			lastHealth = (await response.json()) as RuntimeConfigHealth;
+			if (predicate(lastHealth)) return lastHealth;
+		} catch (error) {
+			lastError = error;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 100));
+	}
+
+	throw new Error(
+		`Timed out waiting for ${description}; last health: ${JSON.stringify(lastHealth)}; last error: ${String(lastError)}`,
+	);
+}
+
+async function expectRenderedIdentity(
+	profile: Profile,
+	expectedName: string,
+) {
+	const response = await fetch(
+		`http://127.0.0.1:${profile.port}/${profile.config.localization.defaultLocale}/lib`,
+	);
+	assert.equal(response.status, 200);
+	assert.ok((await response.text()).includes(expectedName));
+}
+
+async function observeAtomicActivation(
+	profile: Profile,
+	allowedRevisions: readonly string[],
+	transition: () => Promise<unknown>,
+) {
+	let finished = false;
+	let lastObservationError: unknown = null;
+	const observations: RuntimeConfigHealth[] = [];
+	const observer = (async () => {
+		do {
+			try {
+				const response = await fetch(
+					`http://127.0.0.1:${profile.port}/api/library-config/health`,
+				);
+				observations.push(
+					(await response.json()) as RuntimeConfigHealth,
+				);
+			} catch (error) {
+				if (finished) throw error;
+				lastObservationError = error;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 10));
+		} while (!finished);
+	})();
+
+	let transitionError: unknown;
+	try {
+		await transition();
+	} catch (error) {
+		transitionError = error;
+	} finally {
+		finished = true;
+		try {
+			await observer;
+		} catch (error) {
+			if (!transitionError) throw error;
+		}
+	}
+	if (transitionError) throw transitionError;
+
+	assert.ok(
+		observations.length > 0,
+		`No runtime health observations were captured; last error: ${String(lastObservationError)}`,
+	);
+	for (const health of observations) {
+		assert.equal(health.state, "active");
+		assert.equal(health.rejected, null);
+		assert.ok(
+			health.active &&
+				allowedRevisions.includes(health.active.revision),
+			`Unexpected revision during atomic activation: ${JSON.stringify(health)}`,
+		);
+	}
+}
+
+function containerIdentity(service: Profile["name"]) {
+	const containerId = captureCompose("ps", "--quiet", service).trim();
+	assert.ok(containerId, `No running ${service} container found`);
+	return capture("docker", [
+		"inspect",
+		"--format",
+		"{{.Id}}|{{.Image}}",
+		containerId,
+	]).trim();
+}
+
+function timestampAfter(timestamp: string, milliseconds: number) {
+	return new Date(Date.parse(timestamp) + milliseconds).toISOString();
+}
+
+async function verifyLiveConfigLifecycle(profile: Profile) {
+	const targetPath = path.join(
+		runtimeDirectory,
+		profile.name,
+		"library.json",
+	);
+	const candidatePath = path.join(
+		runtimeDirectory,
+		profile.name,
+		"candidate.json",
+	);
+	const originalIdentity = containerIdentity(profile.name);
+	const activated = structuredClone(profile.config);
+	activated.revision = `${profile.config.revision}-activated`;
+	activated.updatedAt = timestampAfter(profile.config.updatedAt, 60_000);
+	activated.identity.name = "Amber Live Activation";
+	await writeFile(
+		candidatePath,
+		JSON.stringify(activated, null, "\t"),
+		"utf8",
+	);
+
+	await observeAtomicActivation(
+		profile,
+		[profile.config.revision, activated.revision],
+		() => activateLibraryConfig({ candidatePath, targetPath }),
+	);
+	const activatedHealth = await waitForRuntimeHealth(
+		profile,
+		(health) =>
+			health.state === "active" &&
+			health.active?.revision === activated.revision &&
+			health.rejected === null,
+		"valid configuration activation",
+	);
+	await expectRenderedIdentity(profile, activated.identity.name);
+	assert.equal(containerIdentity(profile.name), originalIdentity);
+
+	const invalid = structuredClone(activated);
+	invalid.revision = `${profile.config.revision}-rejected`;
+	invalid.updatedAt = timestampAfter(activated.updatedAt, 60_000);
+	const targetMode = (await stat(targetPath)).mode & 0o777;
+	invalid.identity.name = "";
+	await replaceFileAtomically({
+		content: `${JSON.stringify(invalid, null, "\t")}\n`,
+		mode: targetMode,
+		targetPath,
+	});
+	await waitForRuntimeHealth(
+		profile,
+		(health) =>
+			health.state === "rejected" &&
+			health.active?.revision === activated.revision &&
+			health.rejected?.revision === invalid.revision,
+		"invalid configuration rejection with last-valid retention",
+	);
+	await expectRenderedIdentity(profile, activated.identity.name);
+	assert.equal(containerIdentity(profile.name), originalIdentity);
+
+	const rollback = await rollbackLibraryConfig({
+		minimumUpdatedAt: activatedHealth.active?.updatedAt,
+		targetPath,
+	});
+	profile.config = rollback.active;
+	await waitForRuntimeHealth(
+		profile,
+		(health) =>
+			health.state === "active" &&
+			health.active?.revision === rollback.active.revision &&
+			health.rejected === null,
+		"configuration rollback",
+	);
+	await expectRenderedIdentity(profile, profile.config.identity.name);
+	assert.equal(containerIdentity(profile.name), originalIdentity);
+	console.log(
+		`${profile.name} live config activation, rejection, retention, and rollback passed without a container restart.`,
+	);
+}
+
 async function main() {
 	reapAbandonedProjects();
 	const profiles = [
@@ -578,6 +794,7 @@ async function main() {
 			"amber",
 			"indigo",
 		);
+		await verifyLiveConfigLifecycle(profiles[0]);
 		profiles.forEach(runBrowserSuite);
 		console.log("\nRuntime acceptance passed for Amber and Indigo.");
 		if (keepRunning) {
