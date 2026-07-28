@@ -204,15 +204,6 @@ export function generateRandomID(length: number = 12) {
 	return Math.random().toString(36).substring(2, 2 + length);
 }
 
-export function escapeXml(unsafe: string) {
-	return unsafe
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;")
-		.replace(/"/g, "&quot;")
-		.replace(/'/g, "&apos;");
-}
-
 export function unescapeXML(safe: string) {
 	return safe
 		.replace(/&amp;/g, "&")
@@ -301,7 +292,7 @@ export function ItemToZoteroJSON(item: Item): ZoteroItem {
 export function isSentenceCase(val: any) {
 	const matches = val.match(/^\W*(\w+)(.*?)$/);
 	if (matches && matches.length > 2) {
-		const [_, firstWord] = matches; // eslint-disable-line no-unused-vars
+		const [_, firstWord] = matches;
 		let remainingWords = matches[2];
 		const firstLetter = firstWord.substr(0, 1);
 		if (firstLetter.toUpperCase() !== firstLetter) {

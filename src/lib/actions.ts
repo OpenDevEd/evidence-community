@@ -17,7 +17,12 @@ import meilisearchClient from "@/lib/meilisearch";
 import config from "@/constants/config.json";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
-import { buildItemsQuery, defaultParams, generateRandomID, parseCompanyName, processSentenceCaseAPAItems, validateContactRequest, validateTakedownRequest } from "@/lib/utils";
+import {
+	generateRandomID,
+	parseCompanyName,
+	validateContactRequest,
+	validateTakedownRequest,
+} from "@/lib/utils";
 import {
 	getCachedCollections,
 	getCachedItemSmall,
@@ -447,32 +452,6 @@ export async function convertItem(
 	await Promise.allSettled(promises);
 
 	return texts.join("\n\n");
-}
-
-export async function downloadItems(
-	queryParams: Record<string, any>,
-	params: Record<string, any>,
-	format: "ris" | "bibtex"
-) {
-	const searchParams = defaultParams(queryParams);
-	const { collections, collectionId } = searchParams;
-	const id = params.id;
-	const { filter, status } = await getProfileSearchFilter(id, collectionId);
-
-	const items = await searchIndex(
-		searchParams,
-		{
-			limit: 1000000,
-		},
-		[
-			...collections.map(
-				(collection: string) => `collectionsAncestry = "${collection}"`
-			),
-			...(filter ? filter : []),
-		]
-	);
-
-	return await convertItem(items.items, format);
 }
 
 export async function getLikedPosts(likes: Session["user"]["likes"]) {

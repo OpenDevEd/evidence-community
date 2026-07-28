@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCachedItem, getCachedItemSmall } from '../../../../cache';
+import { getCachedItemSmall } from '../../../../cache';
 import { convertItem } from '@/lib/actions';
+import { getLibraryConfig } from '@/config/library-config/server';
+import {
+    getLibraryExportExtension,
+    isBibliographicExportFormat,
+} from '@/config/library-config/exports';
 
 export async function GET(
     request: NextRequest,
@@ -8,6 +13,20 @@ export async function GET(
 ) {
     const params = await props.params;
     const { key, format } = params;
+    if (!isBibliographicExportFormat(format)) {
+        return NextResponse.json(
+            { message: "Export format not found" },
+            { status: 404 },
+        );
+    }
+
+    const config = await getLibraryConfig();
+    if (!config.features.downloads || !config.exports[format]) {
+        return NextResponse.json(
+            { message: "Export format not available" },
+            { status: 404 },
+        );
+    }
 
     const result = await getCachedItemSmall(key);
 
@@ -19,12 +38,12 @@ export async function GET(
         })
     }
 
-    const converted = await convertItem(result.item, format as "ris" | "bibtex");
+    const converted = await convertItem(result.item, format);
 
     return new Response(converted, {
         headers: {
             "Content-Type": format === "ris" ? "application/x-research-info-systems" : "application/x-bibtex",
-            "Content-Disposition": `attachment; filename="${key}.${format}"`
+            "Content-Disposition": `attachment; filename="${key}.${getLibraryExportExtension(format)}"`
         }
     });
 }

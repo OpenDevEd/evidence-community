@@ -1,4 +1,18 @@
 import { Collection } from "@/app/api/collections/types";
+import type { LibraryPublicConfig } from "@/config/library-config/schema";
+
+export class RuntimeCollectionConfigurationError extends Error {
+	readonly missingIds: readonly string[];
+
+	constructor(missingIds: readonly string[]) {
+		const sortedIds = [...missingIds].sort();
+		super(
+			`Configured collection IDs do not exist: ${sortedIds.join(", ")}`,
+		);
+		this.name = "RuntimeCollectionConfigurationError";
+		this.missingIds = sortedIds;
+	}
+}
 
 export function buildHierarchy(
   collections: Collection[],
@@ -79,4 +93,93 @@ export function flattenHierarchy(
     },
     ...flattenHierarchy(collection.children || [])
   ]);
+}
+
+export function applyRuntimeCollectionConfiguration(
+	collections: readonly Collection[],
+	configuredCollections: readonly LibraryPublicConfig["collections"][number][],
+): Collection[] {
+	const collectionIds = new Set(
+		collections.map((collection) => collection.key),
+	);
+	const missingIds = configuredCollections
+		.map((collection) => collection.id)
+		.filter((id) => !collectionIds.has(id));
+
+	if (missingIds.length) {
+		throw new RuntimeCollectionConfigurationError(missingIds);
+	}
+
+	const hierarchy = buildHierarchy([...collections]);
+	const disabledKeys = new Set(
+		configuredCollections
+			.filter((configuration) => !configuration.enabled)
+			.flatMap((configuration) => {
+				const collection = recursiveFind(
+					configuration.id,
+					hierarchy,
+				);
+
+				return collection
+					? [
+							collection.key,
+							...getDescendantKeys(collection),
+						]
+					: [];
+			}),
+	);
+	const configuredRoots = configuredCollections
+		.map((configuration, index) => ({
+			configuration,
+			index,
+		}))
+		.sort((left, right) => {
+			const leftOrder =
+				left.configuration.order ?? left.index;
+			const rightOrder =
+				right.configuration.order ?? right.index;
+
+			return (
+				leftOrder - rightOrder ||
+				left.configuration.id.localeCompare(
+					right.configuration.id,
+				)
+			);
+		})
+		.filter(({ configuration }) => configuration.enabled)
+		.map(({ configuration }) => {
+			const collection = recursiveFind(
+				configuration.id,
+				hierarchy,
+			);
+
+			if (!collection) {
+				throw new RuntimeCollectionConfigurationError([
+					configuration.id,
+				]);
+			}
+
+			return {
+				...collection,
+				title:
+					configuration.title ??
+					collection.name ??
+					collection.title ??
+					collection.key,
+				parentCollection: null,
+				ancestry: undefined,
+			};
+		});
+
+	const flattenedCollections = flattenHierarchy(
+		buildHierarchy(flattenHierarchy(configuredRoots)),
+	).filter((collection) => !disabledKeys.has(collection.key));
+
+	return flattenedCollections.filter(
+		(collection, index, allCollections) =>
+			index ===
+			allCollections.findIndex(
+				(candidate) => candidate.key === collection.key,
+			),
+	);
 }

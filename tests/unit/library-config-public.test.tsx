@@ -64,9 +64,20 @@ describe("public library configuration", () => {
 			"12345678901234567890123456789012",
 			"smtp-password",
 			"smtp-user",
+			"https://exports.example.org/library.ris",
+			"https://exports.example.org/library.bib",
+			"https://exports.example.org/library.atom",
 		]) {
 			expect(serialized).not.toContain(privateValue);
 		}
+	});
+
+	it("projects export availability without exposing source URLs", () => {
+		expect(publicConfig.exports).toEqual({
+			ris: true,
+			bibtex: true,
+			atom: true,
+		});
 	});
 
 	it("retains safe AI provider metadata without API keys", () => {

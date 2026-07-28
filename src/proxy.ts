@@ -57,12 +57,6 @@ type KeyMap = {
 	) => any;
 };
 
-type ConfigCollection = {
-	title: string;
-	enabled: boolean;
-	legacyKey?: string;
-};
-
 const scopeMaps: Record<string, KeyMap> = Object.values(SCOPE_OPTIONS).reduce(
 	(acc: Record<string, KeyMap>, option) => {
 		acc[option.legacyKey] = {
@@ -86,43 +80,6 @@ const scopeMaps: Record<string, KeyMap> = Object.values(SCOPE_OPTIONS).reduce(
 	{} as Record<string, KeyMap>
 );
 
-const collections =
-	configJSON.collections[
-		(process.env.MEILI_INDEX ||
-			configJSON.index) as keyof typeof configJSON.collections
-	] || {};
-
-const collectionsMaps: Record<string, KeyMap> = Object.values(
-	collections as Record<string, ConfigCollection>
-)
-	.filter((option) => option.enabled && option.legacyKey)
-	.reduce((acc: Record<string, KeyMap>, option) => {
-		acc[option.legacyKey as keyof typeof acc] = {
-			key: "collections",
-			mapper: (
-				value: string,
-				request: NextRequest,
-				variables: Record<string, any>
-			) => {
-				const allCollections = (
-					request.nextUrl.searchParams.get("collections") || ""
-				)
-					.split(",")
-					.filter(Boolean);
-				const collectionsToAppend = value.split(".").filter(Boolean);
-				const newCollections = Array.from(
-					new Set([...allCollections, ...collectionsToAppend])
-				);
-				const finalCollections = newCollections.join(",");
-				request.nextUrl.searchParams.set(
-					"collections",
-					finalCollections
-				);
-			},
-		};
-		return acc;
-	}, {} as Record<string, KeyMap>);
-
 const keyMaps: Record<string, KeyMap> = Object.assign(
 	{
 		sort: {
@@ -137,12 +94,19 @@ const keyMaps: Record<string, KeyMap> = Object.assign(
 			},
 		},
 	},
-	scopeMaps,
-	collectionsMaps
+	scopeMaps
 );
 
 function isPublicLibraryPage(pathname: string) {
 	return /(?:^|\/)lib(?:\/[^/]+)?$/.test(normalizePathname(pathname));
+}
+
+function getUnlocalizedPathname(pathname: string) {
+	const locale = getPlatformPathLocale(pathname);
+	if (!locale) return pathname;
+
+	const unlocalizedPathname = pathname.slice(locale.length + 1);
+	return unlocalizedPathname || "/";
 }
 
 function encodeKey(key: string): string {
@@ -289,6 +253,24 @@ export default async function proxy(request: NextRequest) {
 		return newRequest;
 	}
 
+	const unlocalizedPathname = getUnlocalizedPathname(
+		request.nextUrl.pathname,
+	);
+	const configuredExportMatch = unlocalizedPathname.match(
+		/^\/lib\/export\/(ris|bibtex)$/u,
+	);
+	if (configuredExportMatch) {
+		const url = request.nextUrl.clone();
+		url.pathname = `/api/exports/${configuredExportMatch[1]}`;
+		return NextResponse.rewrite(url);
+	}
+
+	if (unlocalizedPathname === "/lib/atom.xml") {
+		const url = request.nextUrl.clone();
+		url.pathname = "/api/exports/atom";
+		return NextResponse.rewrite(url);
+	}
+
 	// Check for redirections for item keys in URLs like /lib/{key}
 	const libItemMatch = request.nextUrl.pathname.match(/\/lib\/([^\/]+)(.*)/);
 	if (libItemMatch) {
@@ -375,17 +357,6 @@ export default async function proxy(request: NextRequest) {
 		const url = request.nextUrl.clone();
 		url.pathname = `/api/item/${itemKey}/download/${attachmentKey}`;
 		return NextResponse.rewrite(url);
-	} else if (
-		request.nextUrl.pathname === "/lib/atom.xml" ||
-		(request.nextUrl.pathname.startsWith("/profile/") &&
-			request.nextUrl.pathname.endsWith("/atom.xml"))
-	) {
-		const id = request.nextUrl.pathname.startsWith("/profile/")
-			? request.nextUrl.pathname.split("/")[2]
-			: "main";
-		const url = request.nextUrl.clone();
-		url.pathname = `/api/feed/${id}`;
-		return NextResponse.rewrite(url);
 	} else if (request.nextUrl.pathname.startsWith("/api/")) {
 		return NextResponse.next();
 	}
@@ -465,7 +436,6 @@ export const config = {
 		"/([\\w-]+)?/lib/:path*/export/bibtex",
 		"/([\\w-]+)?/lib/:path*/download/:path*",
 		"/([\\w-]+)?/lib/atom.xml",
-		"/([\\w-]+)?/profile/:id/atom.xml",
 		// Add specific matcher for DOI URLs - using Next.js path matching syntax
 		"/lib/:doi/:rest*",
 	],

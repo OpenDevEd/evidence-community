@@ -18,12 +18,12 @@ import {
 	CacheContext,
 	CacheContextType,
 } from "@/context/Providers";
-import { useLibraryFeature } from "@/context/LibraryConfigProvider";
-import { DownloadModal } from "../items/ItemControls";
+import {
+	useLibraryConfig,
+	useLibraryFeature,
+} from "@/context/LibraryConfigProvider";
+import { DownloadModal } from "../newlib/DownloadModal";
 import { CardBody, useDisclosure } from "@nextui-org/react";
-import { downloadItems } from "@/lib/actions";
-import { usePathname, useRouter } from "@/i18n/routing";
-import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { ItemsContext } from "../items/ItemsList";
 import { useFiltersContext } from "@/context/FiltersProvider";
 import { countryFacetOptions } from "@/constants/misc";
@@ -33,6 +33,10 @@ import { Item } from "@/app/api/item/types";
 import { Card } from "@/components/nextui/Card";
 import { Divider } from "@/components/nextui/Divider";
 import { AiOutlineCompass } from "react-icons/ai";
+import {
+	getEnabledBibliographicExportFormats,
+	getLibraryExportPath,
+} from "@/config/library-config/exports";
 
 function Chip({
 	group,
@@ -417,17 +421,17 @@ function ResourcesList({
 	);
 }
 
-function ContentActions({ params }: { params?: Record<string, any> }) {
+function ContentActions() {
 	const itemsContext = use(ItemsContext);
 	const t = useTranslations("ui");
 	const format = useFormatter();
 	const totalItems = itemsContext.itemsData?.totalItems || 0;
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
-	const router = useRouter();
-	const pathName = usePathname();
-	const { localization } = useLibraryConfig();
+	const { exports, identity } = useLibraryConfig();
 	const isDownloadEnabled = useLibraryFeature("downloads");
 	const isAtomFeedEnabled = useLibraryFeature("atomFeed");
+	const availableFormats =
+		getEnabledBibliographicExportFormats(exports);
 
 	return (
 		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
@@ -435,24 +439,11 @@ function ContentActions({ params }: { params?: Record<string, any> }) {
 				isOpen={isOpen}
 				onOpenChange={onOpenChange}
 				onClose={onClose}
-				action={async (format: "ris" | "bibtex") => {
-					return await downloadItems(
-						itemsContext.queryParams,
-						params || {},
-						format
-					);
-				}}
-				fileName={
-					format.number(totalItems) +
-					" " +
-					format.dateTime(new Date(), {
-						day: "2-digit",
-						month: "2-digit",
-						year: "numeric",
-					})
-				}
+				hrefForFormat={getLibraryExportPath}
+				formats={availableFormats}
+				fileName={identity.shortName}
 			/>
-			{isDownloadEnabled && (
+			{isDownloadEnabled && availableFormats.length > 0 && (
 				<Button
 					endContent={<HiOutlineDownload className="size-6" />}
 					onPress={onOpen}
@@ -466,26 +457,18 @@ function ContentActions({ params }: { params?: Record<string, any> }) {
 			>
 				{t("printCitations", { count: format.number(totalItems) })}
 			</Button> */}
-			{isAtomFeedEnabled && (
+			{isAtomFeedEnabled && exports.atom && (
 				<Button
 					onPress={() => {
-						router.push(
-							{
-								pathname: pathName + "/atom.xml",
-								query: itemsContext.searchParams,
-							},
-							{
-								locale: localization.defaultLocale,
-							}
+						window.location.assign(
+							getLibraryExportPath("atom"),
 						);
 					}}
 					endContent={
 						<HiOutlineCodeBracketSquare className="size-6" />
 					}
 				>
-					{JSON.stringify(itemsContext.searchParams) == "{}"
-						? t("mainFeed")
-						: t("customFeed")}
+					{t("mainFeed")}
 				</Button>
 			)}
 		</div>
@@ -703,7 +686,7 @@ export function ResourcesView({
 			<FilterChips />
 			<ResourcesList abstract={abstract} view={view} />
 			<PaginationControls />
-			<ContentActions params={params} />
+			<ContentActions />
 			<div className="text-center lg:text-end text-black/60 dark:text-white/60 text-sm">
 				{t("lastUpdate", {
 					date: format.dateTime(new Date(status.databaseUpdatedAt!), {

@@ -16,8 +16,20 @@ import DialogModal from "@/components/nextui/DialogModal";
 import { Button } from "@/components/nextui/Button";
 import { Item } from "@/app/api/item/types";
 import { convertItem } from "@/lib/actions";
+import {
+	getEnabledBibliographicExportFormats,
+	getLibraryExportExtension,
+	type BibliographicExportFormat,
+} from "@/config/library-config/exports";
+import {
+	useLibraryConfig,
+	useLibraryFeature,
+} from "@/context/LibraryConfigProvider";
 
-async function defaultAction(itemData: Item, format: "ris" | "bibtex") {
+async function defaultAction(
+	itemData: Item,
+	format: BibliographicExportFormat,
+) {
 	return await convertItem(itemData!, format);
 }
 
@@ -27,17 +39,21 @@ export function DownloadButton({
 	itemData,
 	...props
 }: PropsOf<typeof Button> & {
-	action?: (format: "ris" | "bibtex") => Promise<string>;
+	action?: (format: BibliographicExportFormat) => Promise<string>;
 	fileName: string;
 	itemData?: Item;
 }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
-	const t = useTranslations("ui");
+	const isDownloadEnabled = useLibraryFeature("downloads");
+	const { exports } = useLibraryConfig();
+	const formats = getEnabledBibliographicExportFormats(exports);
 
-	const wrappedDefaultAction = (format: "ris" | "bibtex") => {
+	const wrappedDefaultAction = (format: BibliographicExportFormat) => {
 		if (!itemData) throw new Error("Item data is required for default action");
 		return defaultAction(itemData, format);
 	};
+
+	if (!isDownloadEnabled || formats.length === 0) return null;
 	
 	return (
 		<>
@@ -50,6 +66,7 @@ export function DownloadButton({
 				onClose={onClose}
 				action={action || wrappedDefaultAction}
 				fileName={fileName}
+				formats={formats}
 			/>
 		</>
 	);
@@ -60,16 +77,23 @@ export function DownloadModal({
 	onOpenChange,
 	onClose,
 	action,
+	hrefForFormat,
 	fileName,
+	formats,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 	onClose: () => void;
-	action: (format: "ris" | "bibtex") => Promise<string>;
+	action?: (format: BibliographicExportFormat) => Promise<string>;
+	hrefForFormat?: (format: BibliographicExportFormat) => string;
 	fileName: string;
+	formats?: readonly BibliographicExportFormat[];
 }) {
 	const t = useTranslations("ui");
 	const [loading, setLoading] = useState(false);
+	const { exports } = useLibraryConfig();
+	const availableFormats =
+		formats ?? getEnabledBibliographicExportFormats(exports);
 
 	return (
 		<DialogModal
@@ -88,9 +112,25 @@ export function DownloadModal({
 					onAction={async (index: number) => {
 						setLoading(true);
 						try {
-							const format = ["ris", "bibtex"][index] as
-								| "ris"
-								| "bibtex";
+							const format = availableFormats[index];
+							if (!format) return;
+
+							if (hrefForFormat) {
+								const anchor = document.createElement("a");
+								anchor.href = hrefForFormat(format);
+								anchor.download = `${fileName}.${getLibraryExportExtension(format)}`;
+								document.body.appendChild(anchor);
+								anchor.click();
+								anchor.remove();
+								return;
+							}
+
+							if (!action) {
+								throw new Error(
+									"A download action or URL is required",
+								);
+							}
+
 							const ret = await action(format);
 							const blob = new Blob([ret], {
 								type:
@@ -99,12 +139,13 @@ export function DownloadModal({
 										: "application/x-bibtex",
 							});
 							const url = URL.createObjectURL(blob);
-							const a = document.createElement("a");
-							a.href = url;
-							a.download = `${fileName}.${
-								format === "ris" ? "ris" : "bib"
-							}`;
-							a.click();
+							const anchor = document.createElement("a");
+							anchor.href = url;
+							anchor.download = `${fileName}.${getLibraryExportExtension(format)}`;
+							document.body.appendChild(anchor);
+							anchor.click();
+							anchor.remove();
+							URL.revokeObjectURL(url);
 						} catch (error) {
 							console.error(error);
 						} finally {
@@ -112,18 +153,19 @@ export function DownloadModal({
 						}
 					}}
 					highlightedIndexes={[]}
-					list={[
-						{
-							name: "RIS",
-							subtitle: ".ris",
-							description: t("RISDescription"),
-						},
-						{
-							name: "BibTeX",
-							subtitle: ".bib",
-							description: t("BibTeXDescription"),
-						},
-					]}
+					list={availableFormats.map((format) =>
+						format === "ris"
+							? {
+									name: "RIS",
+									subtitle: ".ris",
+									description: t("RISDescription"),
+								}
+							: {
+									name: "BibTeX",
+									subtitle: ".bib",
+									description: t("BibTeXDescription"),
+								},
+					)}
 				/>
 			</ModalContent>
 		</DialogModal>

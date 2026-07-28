@@ -61,7 +61,6 @@
     "viewOnZoteroToggleLabel": "\"在 Zotero.org 上查看\" 按钮",
     "openInZoteroToggleDescription": "在完整参考记录页面上显示或隐藏 \"在 Zotero 中打开\" 按钮。此按钮允许您在 Zotero 应用程序中打开记录。它可能仅在您在设备上安装了 Zotero 应用程序，并且如果您被授予访问包含记录的 Zotero 库时才有用。",
     "viewOnZoteroToggleDescription": "在完整参考记录页面上显示或隐藏 \"在 Zotero.org 上查看\" 按钮。此按钮允许您在 Zotero.org 网站上查看记录。如果您想在 Web 浏览器中查看记录，则可能很有用。",
-    "customFeed": "自定义订阅",
     "login": "登录",
     "register": "注册",
     "continueWithGoogle": "使用 Google 继续",

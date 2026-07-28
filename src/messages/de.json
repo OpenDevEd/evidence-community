@@ -61,7 +61,6 @@
     "viewOnZoteroToggleLabel": "\"Auf Zotero.org ansehen\" Button",
     "openInZoteroToggleDescription": "Zeigt oder verbirgt den \"In Zotero öffnen\" Button auf vollständigen bibliographischen Einträgen. Dieser Button ermöglicht es Ihnen, den Eintrag in der Zotero-Anwendung zu öffnen. Er ist möglicherweise nur nützlich, wenn Sie die Zotero-Anwendung auf Ihrem Gerät installiert haben und Zugriff auf die Zotero-Bibliothek erhalten haben, die den Eintrag enthält.",
     "viewOnZoteroToggleDescription": "Zeigt oder verbirgt den \"Auf Zotero.org ansehen\" Button auf vollständigen bibliographischen Einträgen. Dieser Button ermöglicht es Ihnen, den Eintrag auf der Zotero.org-Website zu sehen. Es ist möglicherweise nützlich, wenn Sie den Eintrag in einem Webbrowser ansehen möchten.",
-    "customFeed": "Benutzerdefiniertes Feed",
     "login": "Anmelden",
     "register": "Registrieren",
     "continueWithGoogle": "Mit Google fortfahren",

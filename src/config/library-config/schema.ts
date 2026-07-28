@@ -909,6 +909,14 @@ const exportsSchema = z
 	.strict()
 	.default({});
 
+const publicExportsSchema = z
+	.object({
+		ris: z.boolean(),
+		bibtex: z.boolean(),
+		atom: z.boolean(),
+	})
+	.strict();
+
 const servicesSchema = z
 	.object({
 		database: z
@@ -1541,7 +1549,7 @@ export const publicLibraryConfigSchema = z
 		features: featuresSchema,
 		collections: collectionsSchema,
 		gapMaps: gapMapsSchema,
-		exports: exportsSchema,
+		exports: publicExportsSchema,
 		ai: publicAiSchema,
 		analytics: analyticsSchema,
 	})

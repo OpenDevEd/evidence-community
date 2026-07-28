@@ -4,17 +4,28 @@ import { getItem, getItemRaw } from "./item/[key]/route";
 import { and, eq, InferSelectModel } from "drizzle-orm";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { status as statusTable } from "@/db/schema/tables/status";
-import { getCollections } from "./collections/route";
+import { getCollections } from "./collections/data";
 import { Collection } from "./collections/types";
 import { cacheLife, cacheTag } from "next/cache";
 import { getLibraryConfig } from "@/config/library-config/server";
+import { RuntimeCollectionConfigurationError } from "@/lib/collections";
 
 // --- Collections ---
+
+export type CachedCollectionsResult =
+	| {
+			ok: true;
+			collections: Collection[];
+	  }
+	| {
+			ok: false;
+			missingIds: readonly string[];
+	  };
 
 async function _getCollectionsCached(
 	configRevision: string,
 	countryLibrary: boolean,
-) {
+): Promise<CachedCollectionsResult> {
 	'use cache'
 	cacheLife({
 		revalidate: countryLibrary
@@ -22,15 +33,38 @@ async function _getCollectionsCached(
 			: 300,
 	})
 	cacheTag('collections')
-	return getCollections();
+	try {
+		return {
+			ok: true,
+			collections: await getCollections(),
+		};
+	} catch (error) {
+		if (error instanceof RuntimeCollectionConfigurationError) {
+			return {
+				ok: false,
+				missingIds: error.missingIds,
+			};
+		}
+
+		throw error;
+	}
 }
 
-export async function getCachedCollections() {
+export async function getCachedCollectionsResult() {
 	const config = await getLibraryConfig();
 	return _getCollectionsCached(
 		config.revision,
 		config.filters.countryLibrary,
 	);
+}
+
+export async function getCachedCollections() {
+	const result = await getCachedCollectionsResult();
+	if (!result.ok) {
+		throw new RuntimeCollectionConfigurationError(result.missingIds);
+	}
+
+	return result.collections;
 }
 
 // --- Hydrate helper (unchanged) ---

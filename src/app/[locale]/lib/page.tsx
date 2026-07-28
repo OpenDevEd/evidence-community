@@ -50,7 +50,9 @@ export async function libraryMetadata(props: {
       siteOrigin,
     ),
   );
-  const atomUrl = new URL(builtURLObject.pathname + "/atom.xml?" + builtURLObject.searchParams.toString(), siteOrigin);
+  const atomUrl = new URL(builtURLObject.pathname + "/atom.xml", siteOrigin);
+  const atomFeedEnabled =
+    libraryConfig.features.atomFeed && Boolean(libraryConfig.exports.atom);
 
   let previous: string | null = null;
   let next: string | null = null;
@@ -76,9 +78,11 @@ export async function libraryMetadata(props: {
         libraryConfig.localization,
         siteOrigin,
       ),
-      types: {
-        "application/atom+xml": atomUrl.toString()
-      }
+      types: atomFeedEnabled
+        ? {
+            "application/atom+xml": atomUrl.toString()
+          }
+        : undefined
     },
     pagination: { previous, next }
   }
