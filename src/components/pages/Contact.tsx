@@ -2,7 +2,7 @@
 
 import PageContainer from "@/components/layout/PageContainer";
 import EmailForm from "@/components/features/form/EmailForm";
-import { sendContactRequest } from "@/lib/actions";
+import { sendContactRequest } from "@/lib/email-actions";
 import { toast } from "../layout/Toast";
 import { useTranslations } from "next-intl";
 import Link from "next/link";

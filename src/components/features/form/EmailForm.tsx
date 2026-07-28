@@ -10,7 +10,7 @@ import { Textarea } from "@/components/nextui/Textarea";
 import { useModalError } from "@/hooks/useModalError";
 import { AnimatePresence, motion } from "framer-motion";
 import { BiLink, BiMessageSquare, BiSolidSend, BiUser } from "react-icons/bi";
-import { areLinksValid, sendTakedownRequest } from "@/lib/actions";
+import { areLinksValid } from "@/lib/actions";
 import { Spinner } from "@nextui-org/react";
 import { toast } from "@/components/layout/Toast";
 import { takedownRequestSchema } from "@/lib/utils";

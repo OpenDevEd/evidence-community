@@ -1,12 +1,16 @@
 import Takedown from "@/components/pages/Takedown";
-import transporter from "@/lib/nodemailer";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { isEmailChannelEnabled } from "@/lib/nodemailer";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 
-export default function Page() {
+export default async function Page() {
+	await connection();
+	const config = await getLibraryConfig();
 
-	if (!transporter || !process.env.TAKEDOWN_EMAIL) {
+	if (!isEmailChannelEnabled(config, "takedown")) {
 		return notFound();
 	}
-	
-	return <Takedown />
+
+	return <Takedown />;
 }

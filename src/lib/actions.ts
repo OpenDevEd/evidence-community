@@ -11,16 +11,10 @@ import {
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
-import {
-	generateRandomID,
-	parseCompanyName,
-	validateContactRequest,
-	validateTakedownRequest,
-} from "@/lib/utils";
+import { generateRandomID } from "@/lib/utils";
 import {
 	getCachedCollections,
 	getCachedItemSmall,
-	getCachedStatus,
 	getUserCollectionKeysDirect,
 	getUserLikesDirect,
 } from "@/app/api/cache";
@@ -35,7 +29,6 @@ import { generateObject } from "ai";
 import { headers } from "next/headers";
 import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
-import transporter from "./nodemailer";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import { getMainAttributes } from "@/lib/search";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -88,56 +81,6 @@ export async function areLinksValid(links: string[]) {
 	return validity;
 }
 
-export async function sendTakedownRequest(email: string, links: string[], description: string) {
-	if (!transporter) {
-		return { error: "Transporter not found" };
-	}
-
-	const status = await getCachedStatus();
-
-	const { companyName, siteName } = parseCompanyName(status.companyName);
-	const validator = await validateTakedownRequest(email, links, description);
-	if ("error" in validator) {
-		return { error: validator.error };
-	}
-
-	const mailOptions = {
-		from: email,
-		to: process.env.TAKEDOWN_EMAIL,
-		subject: `${companyName} - ${siteName} - Takedown Request`,
-		text: `Email: ${email}\nLinks: ${links.join("\n")}\nDescription: ${description}`,
-	};
-
-	const result = await transporter.sendMail(mailOptions);
-
-	return { success: result.accepted.length > 0 };
-}
-
-export async function sendContactRequest(email: string, description: string) {
-	if (!transporter) {
-		return { error: "Transporter not found" };
-	}
-
-
-	const status = await getCachedStatus();
-	const { companyName, siteName } = parseCompanyName(status.companyName);
-	const validator = await validateContactRequest(email, description);
-
-	if ("error" in validator) {
-		return { error: validator.error };
-	}
-
-	const mailOptions = {
-		from: email,
-		to: process.env.CONTACT_EMAIL,
-		subject: `${companyName} - ${siteName} - Feedback`,
-		text: `Email: ${email}\nDescription: ${description}`,
-	};
-
-	const result = await transporter.sendMail(mailOptions);
-
-	return { success: result.accepted.length > 0 };
-}
 export async function runScreening(
 	keys: string[],
 	provider: AIProviderId,

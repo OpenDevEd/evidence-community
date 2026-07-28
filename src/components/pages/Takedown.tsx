@@ -4,7 +4,7 @@ import PageContainer from "@/components/layout/PageContainer";
 import EmailForm from "@/components/features/form/EmailForm";
 import { BiLink } from "react-icons/bi";
 import { useTranslations } from "next-intl";
-import { sendTakedownRequest } from "@/lib/actions";
+import { sendTakedownRequest } from "@/lib/email-actions";
 import { toast } from "../layout/Toast";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Link } from "@/i18n/routing";

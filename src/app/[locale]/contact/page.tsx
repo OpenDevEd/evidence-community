@@ -1,12 +1,16 @@
 import ContactComponent from "@/components/pages/Contact";
-import transporter from "@/lib/nodemailer";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { isEmailChannelEnabled } from "@/lib/nodemailer";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 
-export default function Contact() {
+export default async function Contact() {
+	await connection();
+	const config = await getLibraryConfig();
 
-	if (!transporter || !process.env.CONTACT_EMAIL) {
+	if (!isEmailChannelEnabled(config, "contact")) {
 		return notFound();
 	}
 
 	return <ContactComponent />;
-}   
+}
