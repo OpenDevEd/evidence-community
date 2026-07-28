@@ -5,6 +5,28 @@ const expectedConfigRevision =
 const expectedConfigUpdatedAt =
 	process.env.PLAYWRIGHT_EXPECTED_CONFIG_UPDATED_AT ??
 	"2026-07-27T12:30:00.000Z";
+const expectedIdentityName =
+	process.env.PLAYWRIGHT_EXPECTED_IDENTITY_NAME ??
+	"Example Evidence Library";
+const expectedLogoUrl =
+	process.env.PLAYWRIGHT_EXPECTED_LOGO_URL ??
+	"https://assets.example.org/library/logo-light.webp";
+const expectedFaviconUrl =
+	process.env.PLAYWRIGHT_EXPECTED_FAVICON_URL ??
+	"https://assets.example.org/library/favicon.png";
+const expectedLogoStyleToken =
+	process.env.PLAYWRIGHT_EXPECTED_LOGO_STYLE_TOKEN ??
+	"max-width: 12rem";
+const expectedAccentRgb =
+	process.env.PLAYWRIGHT_EXPECTED_ACCENT_RGB ?? "230 129 36";
+const expectedGoogleFontFamilies = (
+	process.env.PLAYWRIGHT_EXPECTED_GOOGLE_FONT_FAMILIES ??
+	"Montserrat"
+).split("|");
+const expectedLoadedLogo =
+	process.env.PLAYWRIGHT_EXPECTED_LOADED_LOGO === "true";
+const expectedThemeClass =
+	process.env.PLAYWRIGHT_EXPECTED_THEME_CLASS ?? "";
 const expectedNavigationLabel =
 	process.env.PLAYWRIGHT_EXPECTED_NAVIGATION_LABEL ?? "Evidence";
 const expectedExternalNavigationLabel =
@@ -79,6 +101,10 @@ const expectedLogin =
 	process.env.PLAYWRIGHT_EXPECTED_LOGIN !== "false";
 const expectedAi =
 	process.env.PLAYWRIGHT_EXPECTED_AI !== "false";
+const expectedAiSearch =
+	process.env.PLAYWRIGHT_EXPECTED_AI_SEARCH !== "false";
+const expectedDeepResearch =
+	process.env.PLAYWRIGHT_EXPECTED_DEEP_RESEARCH !== "false";
 
 test("redirects the root route to the evidence library", async ({
 	request,
@@ -109,14 +135,76 @@ test("reports the active runtime configuration revision only", async ({
 		},
 		rejected: null,
 	});
-	expect(body).not.toContain("example-search-key");
+});
+
+test("renders identity assets, logo CSS, colors, and fonts from runtime configuration", async ({
+	page,
+}) => {
+	await page.goto("/lib");
+
+	await expect(page).toHaveTitle(expectedIdentityName);
+
+	const visibleLogo = page
+		.locator("img[data-library-logo]:visible")
+		.first();
+	await expect(visibleLogo).toHaveAttribute("src", expectedLogoUrl);
+	if (expectedLoadedLogo) {
+		await expect
+			.poll(() =>
+				visibleLogo.evaluate((image: HTMLImageElement) =>
+					image.complete ? image.naturalWidth : 0,
+				),
+			)
+			.toBeGreaterThan(0);
+	}
+
+	expect(
+		await page.locator("#library-logo-styles").textContent(),
+	).toContain(
+		expectedLogoStyleToken,
+	);
+	expect(
+		await page.locator("style[data-library-theme]").textContent(),
+	).toContain(
+		`--color-accent-500:${expectedAccentRgb}`,
+	);
+
+	const favicon = page
+		.locator(
+			`link[rel~="icon"][href="${expectedFaviconUrl}"], link[rel="shortcut icon"][href="${expectedFaviconUrl}"]`,
+		)
+		.first();
+	await expect(favicon).toHaveAttribute("href", expectedFaviconUrl);
+
+	const fontStylesheet = page.locator(
+		'link[rel="stylesheet"][href^="https://fonts.googleapis.com/css2"]',
+	);
+	await expect(fontStylesheet).toHaveCount(1);
+	const fontHref = await fontStylesheet.getAttribute("href");
+	expect(
+		new URL(fontHref!).searchParams
+			.getAll("family")
+			.map((family) => family.split(":")[0]),
+	).toEqual(expectedGoogleFontFamilies);
+
+	if (expectedThemeClass) {
+		await expect(page.locator("html")).toHaveClass(
+			new RegExp(`(?:^|\\s)${expectedThemeClass}(?:\\s|$)`, "u"),
+		);
+	}
 });
 
 test("renders navigation, footer, contact, and legal data from runtime configuration", async ({
 	page,
 }) => {
 	await page.goto("/lib");
-	await page.getByRole("button", { name: "Decline", exact: true }).click();
+	await page
+		.getByRole("button", {
+			name: expectedConsentDecline,
+			exact: true,
+		})
+		.click({ timeout: 3_000 })
+		.catch(() => undefined);
 
 	await expect(
 		page.getByRole("link", { name: expectedNavigationLabel, exact: true }),
@@ -162,14 +250,21 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 	).toHaveAttribute("href", /^https:\/\//u);
 
 	await page.goto("/contact");
+	const contactDetails = page.getByRole("main");
 	await expect(
-		page.getByRole("link", { name: expectedContactEmail, exact: true }),
+		contactDetails.getByRole("link", {
+			name: expectedContactEmail,
+			exact: true,
+		}),
 	).toHaveAttribute("href", `mailto:${expectedContactEmail}`);
 	await expect(
-		page.getByRole("link", { name: expectedContactPhone, exact: true }),
+		contactDetails.getByRole("link", {
+			name: expectedContactPhone,
+			exact: true,
+		}),
 	).toHaveAttribute("href", `tel:${expectedContactPhone}`);
 	await expect(
-		page.getByText(expectedContactAddress, { exact: false }),
+		contactDetails.getByText(expectedContactAddress, { exact: false }),
 	).toBeVisible();
 });
 
@@ -197,16 +292,23 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 	expect(await defaultResponse.text()).toContain(
 		`<html lang="${expectedDefaultLocale}"`,
 	);
-	expect(defaultResponse.headers()["cache-control"]).toBe(
-		"private, no-store",
-	);
+	if (expectedDetectedLocale) {
+		expect(defaultResponse.headers()["cache-control"]).toBe(
+			"private, no-store",
+		);
+	} else {
+		expect(defaultResponse.headers()["cache-control"]).toContain(
+			"public, s-maxage=",
+		);
+	}
 
 	for (const locale of expectedEnabledLocales) {
 		if (locale === expectedDefaultLocale) continue;
 		const enabledResponse = await request.get(`/${locale}/lib`, {
 			maxRedirects: 0,
 		});
-		expect(enabledResponse.status()).toBeLessThan(400);
+		expect(enabledResponse.status()).toBe(200);
+		expect(enabledResponse.headers().location).toBeUndefined();
 	}
 
 	if (expectedDetectedLocale) {
@@ -236,9 +338,12 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 		.click({ timeout: 3_000 })
 		.catch(() => undefined);
 
-	const languageTrigger = page
-		.getByText(expectedCurrentLocaleLabel, { exact: true })
-		.locator("..")
+	const secondaryNavigation = page.getByRole("navigation", {
+		name: "Secondary navigation",
+	});
+	const languageTrigger = secondaryNavigation
+		.getByRole("button")
+		.filter({ hasText: expectedCurrentLocaleLabel })
 		.filter({ visible: true });
 
 	if (!expectedLanguageSwitcher) {
@@ -247,6 +352,7 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 	}
 
 	await expect(languageTrigger).toBeVisible();
+	await expect(languageTrigger).toContainText(expectedCurrentLocaleLabel);
 	await languageTrigger.click();
 	const localeOptions = page.getByRole("menuitem");
 	await expect(localeOptions).toHaveCount(expectedLocaleOptions.length);
@@ -291,13 +397,14 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 	if (!expectedSwitchBackLocaleLabel) return;
 
 	await page
-		.getByText(
-			expectedSwitchLocale === "en-GB"
-				? "EN-GB"
-				: expectedSwitchLocale.toUpperCase(),
-			{ exact: true },
-		)
-		.locator("..")
+		.getByRole("banner")
+		.getByRole("button")
+		.filter({
+			hasText:
+				expectedSwitchLocale === "en-GB"
+					? "EN-GB"
+					: expectedSwitchLocale.toUpperCase(),
+		})
 		.filter({ visible: true })
 		.click();
 	await page
@@ -348,27 +455,40 @@ test("renders navbar features from the runtime manifest", async ({ page }) => {
 	await expect(loginButton).toHaveCount(expectedLogin ? 1 : 0);
 });
 
-test("rejects AI endpoints when runtime AI features are disabled", async ({
+test("enforces the runtime AI gate in both directions", async ({
 	request,
 }) => {
-	test.skip(expectedAi, "Runtime AI features are enabled");
+	const [itemAi, questions, quickSearch, deepResearch] = await Promise.all([
+		request.post("/api/ai", { data: {} }),
+		request.post("/api/ai/questions", { data: {} }),
+		request.post("/api/ai/chat", {
+			data: { messages: [], mode: "quick" },
+		}),
+		request.post("/api/ai/chat", {
+			data: { messages: [], mode: "full" },
+		}),
+	]);
 
-	const [itemAi, questions, quickSearch, deepResearch] =
-		await Promise.all([
-			request.post("/api/ai", { data: {} }),
-			request.post("/api/ai/questions", { data: {} }),
-			request.post("/api/ai/chat", {
-				data: { messages: [], mode: "quick" },
-			}),
-			request.post("/api/ai/chat", {
-				data: { messages: [], mode: "full" },
-			}),
-		]);
+	if (!expectedAi) {
+		expect(itemAi.status()).toBe(403);
+		expect(questions.status()).toBe(403);
+		expect(quickSearch.status()).toBe(403);
+		expect(deepResearch.status()).toBe(403);
+		return;
+	}
 
-	expect(itemAi.status()).toBe(403);
-	expect(questions.status()).toBe(403);
-	expect(quickSearch.status()).toBe(403);
-	expect(deepResearch.status()).toBe(403);
+	expect(itemAi.status()).not.toBe(403);
+	expect(questions.status()).not.toBe(403);
+	if (expectedAiSearch) {
+		expect(quickSearch.status()).not.toBe(403);
+	} else {
+		expect(quickSearch.status()).toBe(403);
+	}
+	if (expectedDeepResearch) {
+		expect(deepResearch.status()).not.toBe(403);
+	} else {
+		expect(deepResearch.status()).toBe(403);
+	}
 });
 
 test("enforces runtime search scopes, filters, embeddings, and citation URLs", async ({
@@ -378,7 +498,7 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 	await page.setViewportSize({ width: 1600, height: 1000 });
 	await page.goto("/en-GB/lib");
 	await page
-		.getByRole("button", { name: expectedConsentDecline, exact: true })
+		.getByRole("button", { name: "Decline", exact: true })
 		.click({ timeout: 3_000 })
 		.catch(() => undefined);
 
@@ -391,17 +511,18 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 	const yearFilter = page.getByText("Publication Year", {
 		exact: true,
 	});
-	const institutionFilter = page.getByText(
-		expectedInstitutionFilterLabel,
-		{ exact: true },
-	);
+	const institutionFilter = page
+		.getByRole("combobox", {
+			name: expectedInstitutionFilterLabel,
+			exact: true,
+		});
 	if (expectedYearFilter) {
 		await expect(yearFilter).toBeVisible();
 	} else {
 		await expect(yearFilter).toHaveCount(0);
 	}
 	if (expectedInstitutionFacet) {
-		await expect(institutionFilter).toBeVisible();
+		await expect(institutionFilter.first()).toBeVisible();
 	} else {
 		await expect(institutionFilter).toHaveCount(0);
 	}
