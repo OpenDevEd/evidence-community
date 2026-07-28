@@ -10,6 +10,8 @@ or `NEXT_PUBLIC_*` variables.
 | --- | --- | --- |
 | Configuration path | `LIBRARY_CONFIG_PATH` | `src/config/library-config/source.ts` |
 | Validation and defaults | `src/config/library-config/schema.ts` | Server startup and config health route |
+| JSON Schema | `/library-config.schema.json` | External editors and structural validation |
+| Option catalogs | `/library-config.catalogs.json` | External forms, selectors, and secret handling |
 | Public projection | `src/config/library-config/public.ts` | `LibraryConfigProvider` |
 | Example document | `config/library.example.json` | Operators and tests |
 | Health check | `/api/library-config/health` | Deployment health checks |
@@ -48,9 +50,11 @@ container image can be started repeatedly with different mounted documents.
 | `generation` | Sitemap and legacy-redirect route availability | Runtime booleans |
 | `processing` | Structure, PDF, and shared processing rules | Platform condition/action catalogs |
 
-The exact nested fields, defaults, limits, and cross-field dependencies live in
-`src/config/library-config/schema.ts`; this document intentionally does not
-duplicate that executable contract.
+The generated JSON Schema exposes nested fields, defaults, structural limits,
+and selectable values. The catalog adds rich option metadata, extensible-choice
+markers, and write-only paths. Custom refinements and cross-field dependencies
+remain authoritative in `src/config/library-config/schema.ts`; external tools
+must run `npm run config:validate -- <path>` before activation.
 
 ## Runtime assets
 

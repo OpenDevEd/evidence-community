@@ -50,6 +50,36 @@ dependencies without changing the active library. An equivalent permission
 setup is valid as long as the application user can traverse the directory and
 read `library.json`, while the operator can create and replace files.
 
+## External configuration tooling
+
+Every running image serves two value-free machine-readable contracts:
+
+| URL | Purpose |
+| --- | --- |
+| `/library-config.schema.json` | Draft 2020-12 structural schema generated from the runtime Zod schema |
+| `/library-config.catalogs.json` | Selectable values, rich platform options, extensible-choice markers, and write-only paths |
+
+These artifacts describe fields and constraints but never contain values from
+the active library. Paths marked `writeOnly` belong in server-side
+configuration storage and are removed from the browser's public runtime
+projection. The PostHog project key is intentionally not write-only because
+the configured browser analytics client must receive it.
+
+JSON Schema cannot express every custom refinement or cross-field dependency.
+External tooling may use it for forms and immediate structural feedback, but
+must use the runtime validation command before publishing:
+
+```bash
+npm run config:validate -- /path/to/candidate.json
+```
+
+Generated artifacts are committed for consumers and regenerated during builds.
+CI can detect drift without rewriting files:
+
+```bash
+npm run schema:check
+```
+
 ## Run the production image
 
 Build the shared image:
@@ -212,6 +242,7 @@ Run the complete local contract before deploying the shared image:
 ```bash
 npm run lint
 npx tsc --noEmit
+npm run schema:check
 npm run test:unit
 npm run test:acceptance
 ```

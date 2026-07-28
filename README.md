@@ -22,6 +22,7 @@ Development reads `config/library.local.json` by default. Set
 ```bash
 npm run lint
 npx tsc --noEmit
+npm run schema:check
 npm run test:unit
 npm run test:acceptance
 ```
@@ -35,4 +36,6 @@ integrations and mobile UI, and proves live activation and rollback.
 - [Runtime customization map](docs/evidence-library-customization-map.md)
 - [Deployment and operations](docs/evidence-library-operations.md)
 - [Configuration example](config/library.example.json)
+- [Machine-readable JSON Schema](public/library-config.schema.json)
+- [Machine-readable option catalogs](public/library-config.catalogs.json)
 - [Current deployed architecture snapshot](docs/evidence-library-architecture.md)
