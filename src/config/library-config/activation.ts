@@ -17,6 +17,7 @@ import {
 	type LibraryServerConfig,
 } from "./schema";
 import {
+	assertLibraryConfigRevisionAdvances,
 	digestLibraryConfig,
 	LibraryConfigSourceError,
 	validateLibraryConfigFile,
@@ -248,6 +249,11 @@ export async function activateLibraryConfig({
 				targetPath,
 			};
 		}
+
+		assertLibraryConfigRevisionAdvances(active, {
+			revision: existing.config?.revision ?? null,
+			updatedAt: existing.updatedAt,
+		});
 
 		return activateValidatedConfig({
 			active,

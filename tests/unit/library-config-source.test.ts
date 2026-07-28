@@ -148,6 +148,27 @@ describe("library configuration source", () => {
 		expect(source.getHealth().active?.revision).toBe("minimal-2");
 	});
 
+	it("keeps the last valid production revision when a replacement is not newer", async () => {
+		await writeConfig(minimalLibraryConfig);
+		const source = new LibraryConfigSource({
+			environment: "production",
+			path: configPath,
+		});
+		const active = await source.load();
+
+		const stale = cloneLibraryConfig(minimalLibraryConfig);
+		stale.revision = "minimal-2";
+		stale.identity.name = "Stale Evidence Library";
+		await writeConfig(stale);
+
+		expect(await source.load()).toBe(active);
+		expect(source.getHealth()).toMatchObject({
+			state: "rejected",
+			active: { revision: "minimal-1" },
+			rejected: { revision: "minimal-2" },
+		});
+	});
+
 	it("rejects changed content that reuses the active revision", async () => {
 		await writeConfig(minimalLibraryConfig);
 		const source = new LibraryConfigSource({

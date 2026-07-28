@@ -51,7 +51,8 @@ export type LibraryConfigSourceErrorCode =
 	| "INVALID_UTF8"
 	| "INVALID_JSON"
 	| "INVALID_CONFIG"
-	| "REVISION_REUSED";
+	| "REVISION_REUSED"
+	| "REVISION_NOT_NEWER";
 
 type LibraryConfigSourceErrorOptions = {
 	code: LibraryConfigSourceErrorCode;
@@ -129,6 +130,34 @@ function toActiveRevision(
 
 export function digestLibraryConfig(config: LibraryServerConfig) {
 	return createHash("sha256").update(JSON.stringify(config)).digest("hex");
+}
+
+export function assertLibraryConfigRevisionAdvances(
+	candidate: LibraryServerConfig,
+	current: {
+		revision: string | null;
+		updatedAt: string | null;
+	} | null,
+) {
+	if (
+		!current?.updatedAt ||
+		current.revision === candidate.revision ||
+		Date.parse(candidate.updatedAt) > Date.parse(current.updatedAt)
+	) {
+		return;
+	}
+
+	throw new LibraryConfigSourceError(
+		"Configuration updatedAt must be newer than the active revision",
+		{
+			code: "REVISION_NOT_NEWER",
+			details: [
+				`active updatedAt: ${current.updatedAt}`,
+				`candidate updatedAt: ${candidate.updatedAt}`,
+			],
+			revision: toActiveRevision(candidate),
+		},
+	);
 }
 
 function validationDetails(error: z.ZodError) {
@@ -364,6 +393,11 @@ export class LibraryConfigSource {
 				this.#rejected = null;
 				return this.#active.config;
 			}
+
+			assertLibraryConfigRevisionAdvances(
+				result.data,
+				this.#active?.revision ?? null,
+			);
 
 			this.#active = {
 				config: result.data,

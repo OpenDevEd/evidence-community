@@ -202,6 +202,27 @@ describe("library configuration activation", () => {
 		});
 	});
 
+	it("rejects a different revision that is not newer than the active configuration", async () => {
+		const target = JSON.stringify(minimalLibraryConfig, null, "\t");
+		await writeFile(targetPath, target, "utf8");
+		const candidate = cloneLibraryConfig(minimalLibraryConfig);
+		candidate.revision = "minimal-2";
+		candidate.identity.name = "Stale Evidence Library";
+		await writeFile(
+			candidatePath,
+			JSON.stringify(candidate, null, "\t"),
+			"utf8",
+		);
+
+		await expect(
+			activateLibraryConfig({ candidatePath, targetPath }),
+		).rejects.toMatchObject({ code: "REVISION_NOT_NEWER" });
+		expect(await readFile(targetPath, "utf8")).toBe(target);
+		await expect(access(`${targetPath}.previous`)).rejects.toMatchObject({
+			code: "ENOENT",
+		});
+	});
+
 	it("replaces an invalid active file without overwriting the last valid backup", async () => {
 		const invalid = cloneLibraryConfig(minimalLibraryConfig);
 		invalid.revision = "invalid-2";
