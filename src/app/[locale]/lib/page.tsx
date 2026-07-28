@@ -19,6 +19,7 @@ async function getCachedPaginationMeta(
 }
 
 export async function libraryMetadata(props: {
+  atomFeedPath?: string;
   params: Promise<{ locale: string }>;
   searchParams: Promise<URLSearchParams>;
   pathname: string;
@@ -41,7 +42,6 @@ export async function libraryMetadata(props: {
   const totalPages = paginationMeta.totalPages;
 
   const siteOrigin = libraryConfig.identity.baseUrl;
-  const builtURLObject = new URL(builtUrl, siteOrigin);
   const currentUrl = new URL(
     buildLocalizedSiteUrl(
       builtUrl,
@@ -50,9 +50,13 @@ export async function libraryMetadata(props: {
       siteOrigin,
     ),
   );
-  const atomUrl = new URL(builtURLObject.pathname + "/atom.xml", siteOrigin);
+  const atomUrl = props.atomFeedPath
+    ? new URL(props.atomFeedPath, siteOrigin)
+    : null;
   const atomFeedEnabled =
-    libraryConfig.features.atomFeed && Boolean(libraryConfig.exports.atom);
+    atomUrl &&
+    libraryConfig.features.atomFeed &&
+    Boolean(libraryConfig.exports.atom);
 
   let previous: string | null = null;
   let next: string | null = null;
@@ -94,6 +98,7 @@ export async function generateMetadata(props: {
 }): Promise<Metadata> {
   return libraryMetadata({
     ...props,
+    atomFeedPath: "/lib/atom.xml",
     pathname: "/lib"
   });
 }
