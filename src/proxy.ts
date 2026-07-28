@@ -21,6 +21,32 @@ import {
 } from "./lib/runtime-routing";
 import { resolveRuntimeSearchScope } from "./config/library-config/search";
 import type { LibraryPublicConfig } from "./config/library-config/schema";
+import {
+	consumeAIRateLimit,
+	type AIRateLimitStatus,
+} from "./lib/ai-rate-limit";
+
+function isRateLimitedAIRequest(request: NextRequest) {
+	return (
+		request.method === "POST" &&
+		(request.nextUrl.pathname === "/api/ai" ||
+			(request.nextUrl.pathname.startsWith("/api/ai/") &&
+				!request.nextUrl.pathname.startsWith("/api/ai/embeddings")))
+	);
+}
+
+function setAIRateLimitHeaders(
+	response: NextResponse,
+	status: AIRateLimitStatus,
+) {
+	response.headers.set("X-RateLimit-Limit", String(status.limit));
+	response.headers.set("X-RateLimit-Remaining", String(status.remaining));
+	response.headers.set("X-RateLimit-Reset", String(status.resetAt));
+	if (!status.allowed) {
+		response.headers.set("Retry-After", String(status.retryAfter));
+	}
+	return response;
+}
 
 function handleLegacyScope(
 	request: NextRequest,
@@ -390,6 +416,25 @@ export default async function proxy(request: NextRequest) {
 		url.pathname = `/api/item/${itemKey}/download/${attachmentKey}`;
 		return NextResponse.rewrite(url);
 	} else if (request.nextUrl.pathname.startsWith("/api/")) {
+		if (
+			libraryConfig.features.ai &&
+			isRateLimitedAIRequest(request)
+		) {
+			const rateLimit = consumeAIRateLimit(request.headers);
+			if (!rateLimit.allowed) {
+				return setAIRateLimitHeaders(
+					NextResponse.json(
+						{ error: "Rate limit exceeded" },
+						{ status: 429 },
+					),
+					rateLimit,
+				);
+			}
+			return setAIRateLimitHeaders(
+				NextResponse.next(),
+				rateLimit,
+			);
+		}
 		return NextResponse.next();
 	}
 

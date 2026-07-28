@@ -536,15 +536,20 @@ test("renders navbar features from the runtime manifest", async ({ page }) => {
 
 test("enforces the runtime AI gate in both directions", async ({
 	request,
-}) => {
+}, testInfo) => {
+	const headers = {
+		"x-real-ip": `198.51.98.${100 + testInfo.retry}`,
+	};
 	const [itemAi, questions, quickSearch, deepResearch] = await Promise.all([
-		request.post("/api/ai", { data: {} }),
-		request.post("/api/ai/questions", { data: {} }),
+		request.post("/api/ai", { data: {}, headers }),
+		request.post("/api/ai/questions", { data: {}, headers }),
 		request.post("/api/ai/chat", {
 			data: { messages: [], mode: "quick" },
+			headers,
 		}),
 		request.post("/api/ai/chat", {
 			data: { messages: [], mode: "full" },
+			headers,
 		}),
 	]);
 
@@ -568,6 +573,42 @@ test("enforces the runtime AI gate in both directions", async ({
 	} else {
 		expect(deepResearch.status()).toBe(403);
 	}
+});
+
+test("rate limits paid AI requests only when AI is enabled", async ({
+	request,
+}, testInfo) => {
+	const sendRequest = () =>
+		request.post("/api/ai?prompt=invalid", {
+			data: {},
+			headers: {
+				"x-real-ip": `198.51.99.${100 + testInfo.retry}`,
+			},
+		});
+
+	if (!expectedAi) {
+		const response = await sendRequest();
+		expect(response.status()).toBe(403);
+		expect(response.headers()["x-ratelimit-limit"]).toBeUndefined();
+		return;
+	}
+
+	for (let attempt = 1; attempt <= 10; attempt += 1) {
+		const response = await sendRequest();
+		expect(response.status()).toBe(400);
+		expect(response.headers()["x-ratelimit-limit"]).toBe("10");
+		expect(response.headers()["x-ratelimit-remaining"]).toBe(
+			String(10 - attempt),
+		);
+	}
+
+	const rejected = await sendRequest();
+	expect(rejected.status()).toBe(429);
+	expect(Number(rejected.headers()["retry-after"])).toBeGreaterThan(0);
+	expect(Number(rejected.headers()["retry-after"])).toBeLessThanOrEqual(60);
+	await expect(rejected.json()).resolves.toEqual({
+		error: "Rate limit exceeded",
+	});
 });
 
 test("enforces runtime search scopes, filters, embeddings, and citation URLs", async ({

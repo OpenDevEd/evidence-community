@@ -46,19 +46,17 @@ import {
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { CredentialsInput } from "@/lib/auth-credentials";
 import { authorizeForConfig } from "@/lib/auth-service";
+import { getAIRateLimitStatus } from "@/lib/ai-rate-limit";
 
 export async function getRateLimits() {
 	const headersList = await headers();
-	const retryAt = headersList.get("X-RateLimit-Reset");
-	const remaining = headersList.get("X-RateLimit-Remaining");
-	const limit = headersList.get("X-RateLimit-Limit");
-	const retryAfter = headersList.get("Retry-After");
+	const status = getAIRateLimitStatus(headersList);
 
 	return {
-		retryAt: retryAt ? parseInt(retryAt) : null,
-		remaining: remaining ? parseInt(remaining) : null,
-		limit: limit ? parseInt(limit) : null,
-		retryAfter: retryAfter ? parseInt(retryAfter) : null,
+		retryAt: status.resetAt,
+		remaining: status.remaining,
+		limit: status.limit,
+		retryAfter: status.allowed ? null : status.retryAfter,
 	}
 }
 
