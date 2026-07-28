@@ -13,6 +13,7 @@ JSON document.
 | Mount | Mount the directory containing the JSON file into the container |
 | Process | Run as the image's `nextjs` user, UID/GID `1001` |
 | Network | Expose `PORT`, default `3000`, through the deployment proxy |
+| Client identity | The deployment proxy must overwrite `X-Real-IP`; never expose the application origin directly |
 | Health | Probe `GET /api/library-config/health` |
 | Dependencies | Make server-side services and upstreams reachable from the application; make public assets and browser analytics reachable from clients |
 
@@ -172,9 +173,11 @@ Activation:
 
 1. takes an exclusive activation lock;
 2. validates and normalizes the candidate;
-3. preserves the previous valid revision as `library.json.previous`;
-4. replaces `library.json` atomically;
-5. preserves the active file mode.
+3. rejects a changed revision unless its `updatedAt` is newer than the active
+   or rejected target revision;
+4. preserves the previous valid revision as `library.json.previous`;
+5. replaces `library.json` atomically;
+6. preserves the active file mode.
 
 The next full application request observes the replacement. A revision may be
 reused only when its normalized content is identical; changed content requires
@@ -234,6 +237,9 @@ running before removing a stale lock.
 - PostgreSQL, Meilisearch, SMTP, server analytics, and AI provider endpoints
   must be reachable from the container network. Browser analytics hosts must
   also be reachable from the user's browser.
+- Paid AI generation endpoints allow ten requests per `X-Real-IP` per minute.
+  The application deliberately trusts only that proxy-owned header and groups
+  requests without it into one fail-closed bucket.
 
 ## Release verification
 
