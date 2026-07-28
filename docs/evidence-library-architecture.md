@@ -405,7 +405,9 @@ flag synchronization also changes it.
 | Public endpoint | `https://bib.opendev.space` |
 
 The root endpoint returns `404` because this is an API service. That response
-is expected.
+is expected. Evidence Library instances resolve the service per runtime
+configuration revision from `services.zotero.translationUrl`; when omitted,
+or temporarily unavailable, only generated citation formatting is disabled.
 
 ### MEE DOI sync
 

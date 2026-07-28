@@ -1,11 +1,14 @@
 import { Item } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { ItemToZoteroJSON, ensureNoBlankItems, transformItem } from "@/lib/utils";
+import { ItemToZoteroJSON, transformItem } from "@/lib/utils";
 import { cacheLife, cacheTag } from "next/cache";
 import { CiteProcSys, CSLItem, Engine } from "citeproc";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { hasAnyTag } from "@/lib/tags";
+import {
+	translateZoteroItemToCSL,
+} from "@/lib/zotero-translation";
 
 const DEFAULT_CITATION_LOCALE = "en-GB";
 const LOCALE_ALIASES: Record<string, string> = {
@@ -106,30 +109,16 @@ export async function getCitationFromCSL(csl: any, lang: string = "en-GB") {
 	return bibliography && bibliography.length > 0 ? bibliography[0] : null;
 }
 
-async function fetchCSL(zoteroItem: any, itemId: string) {
-	const url = new URL(process.env.ZOTERO_TRANSLATION_SERVER_URL!);
-	url.pathname = "export";
-	url.searchParams.set("format", "csljson");
-
-	const res = await fetch(url.toString(), {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-		},
-		body: JSON.stringify([zoteroItem]),
-	});
-
-	if (!res.ok) {
-		throw new Error(`Failed to generate CSL for item ${itemId}`);
-	}
-
-	const data = await res.json();
-	return data ? ensureNoBlankItems(data[0]) : null;
-}
-
-export async function getCSL(item: Item) {
+async function getCSL(
+	item: Item,
+	translationUrl: string,
+) {
 	const zoteroItem = ItemToZoteroJSON(item);
-	return fetchCSL(zoteroItem, String(item.id));
+	return translateZoteroItemToCSL(
+		zoteroItem,
+		String(item.id),
+		translationUrl,
+	);
 }
 
 async function getCitationSourceItem(
@@ -152,43 +141,46 @@ async function getCitationSourceItem(
 	}
 }
 
-async function getCitationForItemKeyCached(
+async function getCitationSourceItemCached(
 	indexKey: string,
 	key: string,
-	normalizedLocale: string,
 	configRevision: string,
 	hiddenTags: readonly string[],
 	libraryConfig: LibraryServerConfig,
 ) {
 	'use cache'
 	cacheLife({ revalidate: 60 })
-	cacheTag('item-citation-' + key + '-' + normalizedLocale)
-	const item = await getCitationSourceItem(
+	cacheTag('item-citation-source-' + key)
+	return getCitationSourceItem(
 		key,
 		hiddenTags,
+		libraryConfig,
+	);
+}
+
+export async function getCitationForItemKey(key: string, lang: string = "en-GB") {
+	const normalizedLocale = normalizeLocale(lang);
+	const libraryConfig = await getLibraryConfig();
+	const translationUrl = libraryConfig.services.zotero.translationUrl;
+	if (!translationUrl) {
+		return null;
+	}
+
+	const item = await getCitationSourceItemCached(
+		libraryConfig.services.search.index,
+		key,
+		libraryConfig.revision,
+		libraryConfig.content.tags.hidden,
 		libraryConfig,
 	);
 	if (!item) {
 		return null;
 	}
 
-	const csl = await getCSL(item);
+	const csl = await getCSL(item, translationUrl);
 	if (!csl) {
 		return null;
 	}
 
 	return getCitationFromCSL(csl, normalizedLocale);
-}
-
-export async function getCitationForItemKey(key: string, lang: string = "en-GB") {
-	const normalizedLocale = normalizeLocale(lang);
-	const libraryConfig = await getLibraryConfig();
-	return getCitationForItemKeyCached(
-		libraryConfig.services.search.index,
-		key,
-		normalizedLocale,
-		libraryConfig.revision,
-		libraryConfig.content.tags.hidden,
-		libraryConfig,
-	);
 }

@@ -44,7 +44,6 @@ import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc"
 import { FacetDistribution } from "meilisearch";
 import transporter from "./nodemailer";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
-import { getCitationFromCSL, getCSL } from "@/lib/citations";
 import { getMainAttributes } from "@/lib/search";
 import { getLibraryConfig } from "@/config/library-config/server";
 import {
@@ -53,8 +52,6 @@ import {
 	normalizeRuntimeYearRange,
 	resolveRuntimeSearchScope,
 } from "@/config/library-config/search";
-
-export { getCitationFromCSL, getCSL };
 
 export async function getRateLimits() {
 	const headersList = await headers();

@@ -142,7 +142,6 @@ The source also reads server variables that are not all declared as Docker build
 | Public URL | `NEXT_PUBLIC_CANONICAL_BASE_URL` |
 | Email | `CONTACT_EMAIL`, `TAKEDOWN_EMAIL`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS` |
 | Analytics | `GOOGLE_ANALYTICS_ID` |
-| Zotero | `ZOTERO_TRANSLATION_SERVER_URL` |
 | Authentication | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_SECRET` |
 | AI credentials | Provider SDK credentials such as `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, and `DEEPSEEK_API_KEY`; `tools/tl.js` separately reads `GEMINI_API_KEY` |
 | Generation jobs | `SHOULD_GENERATE_SITEMAP`, `SHOULD_GENERATE_STATIC_PAGES`, `SHOULD_GENERATE_REDIRECTIONS` |
@@ -590,6 +589,7 @@ than reading `process.env`, the `status` row, PostHog, or tenant files directly.
 | EdTech Hub footer branch | General footer schema | Model its sections, funders, disclaimer, attribution, and assets as data |
 | Hardcoded image host/rewrite | Generic asset proxy | Render each configured stable asset URL directly or route it through one generic same-site endpoint |
 | Database and Meilisearch selection | `services` in the server projection | Create clients from validated runtime configuration instead of build arguments |
+| `ZOTERO_TRANSLATION_SERVER_URL` | `services.zotero.translationUrl` | Complete: citation translation uses the optional runtime service and remains disabled when absent |
 | Contact, email, analytics, and authentication | Server/public manifest sections as appropriate | Initialize integrations from the runtime configuration interface |
 
 ### Example manifest shape

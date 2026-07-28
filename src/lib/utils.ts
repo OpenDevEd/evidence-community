@@ -386,19 +386,6 @@ export function processSentenceCaseAPAItems(item: ZoteroItem) {
 	return item;
 };
 
-export function ensureNoBlankItems(itemCSL: any) {
-	if (!('author' in itemCSL) && !('title' in itemCSL) && !('issued' in itemCSL)) {
-		// there is a risk of this item being skipped by citeproc in makeBibliography so we inject
-		// title to make sure it can be edited in bib-web
-		return {
-			...itemCSL,
-			title: 'Untitled'
-		};
-	} else {
-		return itemCSL;
-	}
-}
-
 export function transformItem(item: Item | undefined): Item | null;
 export function transformItem(item: ListItem | undefined): ListItem | null;
 export function transformItem<T extends Item | ListItem>(item: T | undefined): T | null {
