@@ -18,6 +18,7 @@ describe("public library configuration", () => {
 			[
 				"ai",
 				"analytics",
+				"authentication",
 				"citations",
 				"collections",
 				"contact",
@@ -49,11 +50,20 @@ describe("public library configuration", () => {
 		const serialized = JSON.stringify(publicConfig);
 
 		expect(publicConfig).not.toHaveProperty("services");
-		expect(publicConfig).not.toHaveProperty("authentication");
 		expect(publicConfig).not.toHaveProperty("email");
 		expect(publicConfig).not.toHaveProperty("generation");
 		expect(publicConfig).not.toHaveProperty("processing");
 		expect(publicConfig.ai.providers[0]).not.toHaveProperty("apiKey");
+		expect(publicConfig.authentication).toEqual({
+			google: { enabled: true },
+		});
+		expect(publicConfig.authentication.google).not.toHaveProperty(
+			"clientId",
+		);
+		expect(publicConfig.authentication.google).not.toHaveProperty(
+			"clientSecret",
+		);
+		expect(publicConfig.authentication).not.toHaveProperty("secret");
 
 		for (const privateValue of [
 			"postgresql://library:password@database:5432/library",

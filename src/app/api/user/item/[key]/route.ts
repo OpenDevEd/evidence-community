@@ -1,4 +1,4 @@
-import { getDatabase } from "@/db";
+import { getDatabaseForConfig } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "../../../auth/[...nextauth]/config";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
@@ -6,12 +6,19 @@ import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
 import { userCollection } from "@/db/schema/tables/userCollection";
 import { updateCachedUserCollectionKeys } from "@/app/api/cache";
+import {
+	featureUnavailableResponse,
+	getConfigForEnabledFeature,
+} from "@/lib/runtime-feature";
 
 const addToCollectionSchema = z.object({
 	collectionId: z.string().uuid(),
 });
 
 export async function GET(request: NextRequest, props: { params: Promise<{ key: string }> }) {
+    const config = await getConfigForEnabledFeature("userCollections");
+    if (!config) return featureUnavailableResponse();
+
     const params = await props.params;
     const session = await auth();
 
@@ -20,7 +27,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 	}
 
     try {
-		const db = await getDatabase();
+		const db = await getDatabaseForConfig(config);
 		const { key } = params;
 
 		const collections = await db.query.itemToUserCollection.findMany({
@@ -47,6 +54,9 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 }
 
 export async function POST(request: NextRequest, props: { params: Promise<{ key: string }> }) {
+    const config = await getConfigForEnabledFeature("userCollections");
+    if (!config) return featureUnavailableResponse();
+
     const params = await props.params;
     const session = await auth();
 
@@ -55,7 +65,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ key:
 	}
 
     try {
-		const db = await getDatabase();
+		const db = await getDatabaseForConfig(config);
 		const { key } = params;
 		const body = await request.json();
 

@@ -1,29 +1,17 @@
-"use client";
-
-import { use } from "react";
-import { redirect } from "@/i18n/routing";
-import { useSession } from "next-auth/react";
 import { notFound } from "next/navigation";
+import { connection } from "next/server";
 
-export default function ProfilePage(props: {
+import { getConfigForEnabledFeature } from "@/lib/runtime-feature";
+
+import ProfileRedirect from "./ProfileRedirect";
+
+export default async function ProfilePage(props: {
 	params: Promise<{ locale: string }>;
 }) {
-	const params = use(props.params);
+	await connection();
+	const config = await getConfigForEnabledFeature("login");
+	if (!config) notFound();
 
-	const { locale } = params;
-
-	const { data: session, status } = useSession();
-
-	if (status === "loading") {
-		return <div>Loading...</div>;
-	}
-
-	if (!session) {
-		return notFound();
-	}
-
-	return redirect({
-		href: "/profile/" + session.user.id,
-		locale,
-	});
+	const { locale } = await props.params;
+	return <ProfileRedirect locale={locale} />;
 }

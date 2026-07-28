@@ -1546,6 +1546,16 @@ const publicAiSchema = z
 	})
 	.strict();
 
+const publicAuthenticationSchema = z
+	.object({
+		google: z
+			.object({
+				enabled: z.boolean(),
+			})
+			.strict(),
+	})
+	.strict();
+
 export const publicLibraryConfigSchema = z
 	.object({
 		schemaVersion: z.literal(1),
@@ -1569,6 +1579,7 @@ export const publicLibraryConfigSchema = z
 		exports: publicExportsSchema,
 		ai: publicAiSchema,
 		analytics: analyticsSchema,
+		authentication: publicAuthenticationSchema,
 	})
 	.strict();
 

@@ -15,6 +15,11 @@ import {
 import { getMeilisearchForConfig } from "./lib/meilisearch";
 import { getConfiguredSiteOrigin } from "./lib/site-url";
 import { normalizePathname } from "./lib/path";
+import {
+	getCanonicalLibraryRedirect,
+	getUnlocalizedPathname,
+	isLoginProfilePath,
+} from "./lib/runtime-routing";
 import { resolveRuntimeSearchScope } from "./config/library-config/search";
 import type { LibraryPublicConfig } from "./config/library-config/schema";
 
@@ -98,14 +103,6 @@ const keyMaps: Record<string, KeyMap> = Object.assign(
 
 function isPublicLibraryPage(pathname: string) {
 	return /(?:^|\/)lib(?:\/[^/]+)?$/.test(normalizePathname(pathname));
-}
-
-function getUnlocalizedPathname(pathname: string) {
-	const locale = getPlatformPathLocale(pathname);
-	if (!locale) return pathname;
-
-	const unlocalizedPathname = pathname.slice(locale.length + 1);
-	return unlocalizedPathname || "/";
 }
 
 function encodeKey(key: string): string {
@@ -236,13 +233,22 @@ function redirectUnknownPathToNotFoundPage(request: NextRequest) {
 }
 
 export default async function proxy(request: NextRequest) {
+	const libraryConfig = await loadLibraryConfig();
+	const canonicalRedirect = getCanonicalLibraryRedirect(
+		request.nextUrl,
+		request.headers,
+		libraryConfig.identity.baseUrl,
+	);
+	if (canonicalRedirect) {
+		return NextResponse.redirect(canonicalRedirect, 308);
+	}
+
 	if (request.nextUrl.pathname === "/") {
 		const url = request.nextUrl.clone();
 		url.pathname = "/lib";
 		return NextResponse.redirect(url);
 	}
 
-	const libraryConfig = await loadLibraryConfig();
 	const newRequest = mapLegacySearchParams(
 		request,
 		libraryConfig.search,
@@ -255,6 +261,19 @@ export default async function proxy(request: NextRequest) {
 	const unlocalizedPathname = getUnlocalizedPathname(
 		request.nextUrl.pathname,
 	);
+	if (
+		!libraryConfig.features.login &&
+		isLoginProfilePath(request.nextUrl.pathname)
+	) {
+		return new NextResponse("Not Found", {
+			status: 404,
+			headers: {
+				"Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL,
+				"Content-Type": "text/plain; charset=utf-8",
+			},
+		});
+	}
+
 	const configuredExportMatch = unlocalizedPathname.match(
 		/^\/lib\/export\/(ris|bibtex)$/u,
 	);

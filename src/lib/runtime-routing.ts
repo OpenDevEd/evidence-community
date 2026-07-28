@@ -1,0 +1,71 @@
+import { getPlatformPathLocale } from "@/i18n/runtime";
+
+function firstForwardedValue(value: string | null) {
+	return value?.split(",")[0]?.trim() || null;
+}
+
+function isLoopbackHost(host: string) {
+	try {
+		const hostname = new URL(`http://${host}`).hostname
+			.replace(/^\[|\]$/g, "")
+			.toLowerCase();
+		return (
+			hostname === "localhost" ||
+			hostname === "127.0.0.1" ||
+			hostname === "::1"
+		);
+	} catch {
+		return false;
+	}
+}
+
+export function getUnlocalizedPathname(pathname: string) {
+	const locale = getPlatformPathLocale(pathname);
+	if (!locale) return pathname;
+
+	const unlocalizedPathname = pathname.slice(locale.length + 1);
+	return unlocalizedPathname || "/";
+}
+
+export function isLoginProfilePath(pathname: string) {
+	return /^\/profile(?:\/|$)/u.test(
+		getUnlocalizedPathname(pathname),
+	);
+}
+
+export function getCanonicalLibraryRedirect(
+	requestUrl: URL,
+	headers: Headers,
+	baseUrl: string,
+) {
+	const forwardedHost = firstForwardedValue(
+		headers.get("x-forwarded-host"),
+	);
+	const requestHost =
+		forwardedHost ??
+		firstForwardedValue(headers.get("host")) ??
+		requestUrl.host;
+	const requestProtocol = forwardedHost
+		? null
+		: requestUrl.protocol.replace(/:$/u, "");
+	const canonicalUrl = new URL(baseUrl);
+	const hasCanonicalHost =
+		requestHost.toLowerCase() ===
+		canonicalUrl.host.toLowerCase();
+	const hasCanonicalProtocol =
+		requestProtocol === null ||
+		requestProtocol.toLowerCase() ===
+			canonicalUrl.protocol.replace(/:$/u, "").toLowerCase();
+
+	if (
+		isLoopbackHost(requestHost) ||
+		(hasCanonicalHost && hasCanonicalProtocol)
+	) {
+		return null;
+	}
+
+	return new URL(
+		requestUrl.pathname + requestUrl.search,
+		canonicalUrl,
+	);
+}

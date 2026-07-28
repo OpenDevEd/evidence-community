@@ -1,12 +1,8 @@
 "use server";
 
-import { getDatabase } from "@/db";
-import { users } from "@/db/schema/tables/user";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
-import { eq, and, InferSelectModel } from "drizzle-orm";
-import { Session, User } from "next-auth";
-import { userToFollow } from "@/db/schema/tables/userToFollow";
-import { userCollection } from "@/db/schema/tables/userCollection";
+import { InferSelectModel } from "drizzle-orm";
+import { Session } from "next-auth";
 import {
 	EXCLUDED_ITEM_TYPES,
 	ITEMS_PER_PAGE,
@@ -14,7 +10,6 @@ import {
 } from "@/constants/items";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
 import {
 	generateRandomID,
@@ -29,10 +24,9 @@ import {
 	getUserCollectionKeysDirect,
 	getUserLikesDirect,
 } from "@/app/api/cache";
-import { auth, credentialsSchema } from "@/app/api/auth/[...nextauth]/config";
+import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { Collection } from "@/app/api/collections/types";
 import { z } from "zod";
-import bcrypt from "bcrypt";
 import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "@/lib/utils";
@@ -57,6 +51,8 @@ import {
 	type AIProviderId,
 } from "./ai-provider";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
+import type { CredentialsInput } from "@/lib/auth-credentials";
+import { authorizeForConfig } from "@/lib/auth-service";
 
 export async function getRateLimits() {
 	const headersList = await headers();
@@ -291,57 +287,14 @@ export async function runScreening(
 	return resultObject;
 }
 
-export const getUser = async (email: string) => {
-	const db = await getDatabase();
-	return await db.query.users.findFirst({
-		where: eq(users.email, email),
-	});
-};
-
-export const createUser = async (email: string, password: string) => {
-	const db = await getDatabase();
-	const hashedPassword = await bcrypt.hash(password, 10);
-	const [newUser] = await db
-		.insert(users)
-		.values({
-			email,
-			password: hashedPassword,
-		})
-		.returning();
-	return newUser;
-};
-
-
-export async function authorize(props: z.infer<typeof credentialsSchema>): Promise<{ error: string } | User> {
-
-	const parsedCredentials = credentialsSchema.safeParse(props);
-
-	if (!parsedCredentials.success) {
-		const errorMessages = parsedCredentials.error.errors
-			.map(err => err.message)
-			.join(", ");
-		return { error: errorMessages };
-	}
-
-	const { email, password, register } = parsedCredentials.data;
-
-	const existingUser = await getUser(email);
-
-	if (register && existingUser)
-		return { error: "userAlreadyExists" };
-
-	if (!existingUser && register)
-		return await createUser(email, password);
-
-	if (existingUser) {
-		const passwordsMatch = await bcrypt.compare(
-			password,
-			existingUser.password ?? ""
-		);
-		if (passwordsMatch) return existingUser;
-	}
-
-	return { error: "invalidCredentials" };
+export async function authorize(
+	props: CredentialsInput,
+): Promise<{ error: string } | { success: true }> {
+	const result = await authorizeForConfig(
+		props,
+		await getLibraryConfig(),
+	);
+	return "error" in result ? result : { success: true };
 }
 
 export async function getItems(
@@ -627,110 +580,4 @@ export async function searchIndex(
 	};
 
 	return items();
-}
-
-export async function getProfile(
-	id: string,
-	session: Session | null
-): Promise<Session["user"]> {
-	const isCurrentUser = session?.user.id === id;
-	const db = await getDatabase();
-
-	const data = await db.transaction(async (tx) => {
-		const following = await tx.query.userToFollow
-			.findMany({
-				where: and(
-					eq(userToFollow.userId, id),
-					eq(userToFollow.deleted, false)
-				),
-			})
-			.then((following) =>
-				following.reduce((acc, follow) => {
-					acc[follow.followingId] = follow.createdAt;
-					return acc;
-				}, {} as Session["user"]["following"])
-			);
-
-		const followers = await tx.query.userToFollow
-			.findMany({
-				where: and(
-					eq(userToFollow.followingId, id),
-					eq(userToFollow.deleted, false)
-				),
-			})
-			.then((followers) =>
-				followers.reduce((acc, follower) => {
-					acc[follower.userId] = follower.createdAt;
-					return acc;
-				}, {} as Session["user"]["followers"])
-			);
-
-		const collections = await tx.query.userCollection.findMany({
-			where: and(eq(userCollection.userId, id), eq(userCollection.deleted, false)),
-		});
-
-		const likes = await tx.query.usersToLikes
-			.findMany({
-				where: and(
-					eq(usersToLikes.userId, id),
-					eq(usersToLikes.deleted, false)
-				),
-				columns: {
-					itemKey: true,
-					createdAt: true,
-				},
-			})
-			.then((likes) =>
-				likes.reduce((acc, like) => {
-					acc[like.itemKey] = like.createdAt;
-					return acc;
-				}, {} as Session["user"]["likes"])
-			);
-
-		const profile = isCurrentUser
-			? session?.user
-			: await tx.query.users.findFirst({
-				where: eq(users.id, id),
-				columns: {
-					name: true,
-					image: true,
-					email: true,
-					createdAt: true,
-				},
-			});
-
-		const itemsCollections = await tx.query.itemToUserCollection
-			.findMany({
-				where: and(
-					eq(itemToUserCollection.userId, id),
-					eq(itemToUserCollection.deleted, false)
-				),
-			})
-			.then((items) =>
-				items.filter((item) => collections.some((collection) => collection.id === item.userCollectionId)).reduce((acc, item) => {
-					acc[item.itemKey] = acc[item.itemKey] || {};
-					acc[item.itemKey][item.userCollectionId] = item.updatedAt;
-					return acc;
-				}, {} as Session["user"]["itemsCollections"])
-			);
-
-		return {
-			...profile,
-			following,
-			followers,
-			likes,
-			collections,
-			id,
-			itemsCollections,
-		};
-	});
-
-	if (session) {
-		session.user = {
-			...session.user,
-			...data,
-		};
-	}
-
-	return session ? session.user : data;
 }

@@ -13,6 +13,7 @@ import GenericHeader from "@/components/features/modals/GenericHeader";
 import { Logo } from "./Logo";
 import { authenticate } from "@/lib/auth";
 import { useModalError } from "@/hooks/useModalError";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 interface LoginModalProps {
 	isOpen: boolean;
@@ -27,6 +28,7 @@ export default function LoginModal({
 }: LoginModalProps) {
 	const t = useTranslations("ui");
 	const tAuth = useTranslations("auth");
+	const { authentication, features } = useLibraryConfig();
 	const [loading, setLoading] = useState(false);
 	const {
 		displayOnError,
@@ -43,6 +45,9 @@ export default function LoginModal({
 		animate: { height: "auto", opacity: 1 },
 		exit: { height: 0, opacity: 0, y: 0 },
 	});
+	const googleEnabled = authentication.google.enabled;
+
+	if (!features.login) return null;
 
 	const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -135,21 +140,27 @@ export default function LoginModal({
 								{errorMessage && <ErrorField />}
 							</AnimatePresence>
 						</div>
-						<div className="flex items-center gap-4 my-4">
-							<div className="flex-1 h-[0.0625rem] bg-black/10 dark:bg-white/10" />
-							<span className="text-black/60 dark:text-white/60">
-								{t("or")}
-							</span>
-							<div className="flex-1 h-[0.0625rem] bg-black/10 dark:bg-white/10" />
-						</div>
-						<Button
-							onPress={() => signIn("google")}
-							color="secondary"
-							className="w-full dark:bg-white dark:text-black"
-							startContent={<FaGoogle className="size-5" />}
-						>
-							{t("continueWithGoogle")}
-						</Button>
+						{googleEnabled ? (
+							<>
+								<div className="flex items-center gap-4 my-4">
+									<div className="flex-1 h-[0.0625rem] bg-black/10 dark:bg-white/10" />
+									<span className="text-black/60 dark:text-white/60">
+										{t("or")}
+									</span>
+									<div className="flex-1 h-[0.0625rem] bg-black/10 dark:bg-white/10" />
+								</div>
+								<Button
+									onPress={() => signIn("google")}
+									color="secondary"
+									className="w-full dark:bg-white dark:text-black"
+									startContent={
+										<FaGoogle className="size-5" />
+									}
+								>
+									{t("continueWithGoogle")}
+								</Button>
+							</>
+						) : null}
 					</div>
 				</ModalBody>
 			</ModalContent>

@@ -1,29 +1,24 @@
-import { getDatabase } from "@/db";
+import { getDatabaseForConfig } from "@/db";
 import { userCollection } from "@/db/schema/tables/userCollection";
-import { authorize, getProfile } from "@/lib/actions";
 import { DrizzleAdapter } from "@auth/drizzle-adapter";
 import { InferSelectModel } from "drizzle-orm";
-import NextAuth, { CredentialsSignin, NextAuthConfig, User } from "next-auth";
-import { encode as defaultEncode } from "next-auth/jwt";
-import CredentialsProvider from "next-auth/providers/credentials";
-import Google from "next-auth/providers/google";
-import { z } from "zod";
+import NextAuth, {
+	type NextAuthConfig,
+	type Session,
+	type User,
+} from "next-auth";
+import { NextRequest } from "next/server";
 
-export const credentialsSchema = z.object({
-	email: z.string().email({
-		message: "invalidEmail"
-	}),
-	password: z.string().min(8, {
-		message: "invalidPassword"
-	}),
-	register: z
-		.union([z.boolean(), z.string()])
-		.optional()
-		.transform((value) => {
-			if (typeof value === 'boolean') return value;
-			return value === 'true';
-		}),
-});
+import { getLibraryConfig } from "@/config/library-config/server";
+import { buildAuthOptions } from "@/lib/auth-options";
+import {
+	authorizeForConfig,
+	getProfileForConfig,
+} from "@/lib/auth-service";
+import {
+	featureUnavailableResponse,
+	getConfigForEnabledFeature,
+} from "@/lib/runtime-feature";
 
 declare module "next-auth" {
 	interface Session {
@@ -49,89 +44,63 @@ declare module "next-auth" {
 	}
 }
 
-export class InvalidLoginError extends CredentialsSignin {
-	constructor(message: string) {
-		super(message);
-		this.message = message;
-	}
-	message: string;
-}
-
 export async function getAuthOptions(): Promise<NextAuthConfig> {
-	const adapter = DrizzleAdapter(await getDatabase());
+	const config = await getLibraryConfig();
+	if (!config.features.login) {
+		return buildAuthOptions(config);
+	}
 
-	return {
-		trustHost: true,
+	const adapter = DrizzleAdapter(
+		await getDatabaseForConfig(config),
+	);
+
+	return buildAuthOptions(config, {
 		adapter,
-		providers: [
-			Google,
-			CredentialsProvider({
-				name: "Credentials",
-				credentials: {
-					email: {
-						label: "Email",
-						type: "text",
-					},
-					password: { label: "Password", type: "password" },
-					register: { label: "Register", type: "boolean" },
-				},
-				type: "credentials",
-				async authorize(credentials) {
-					const user = await authorize(
-						credentials as z.infer<typeof credentialsSchema>,
-					);
-					if ("error" in user) {
-						return null;
-					}
-					return user;
-				},
-			}),
-		],
-		callbacks: {
-			jwt: async ({ token, user, account }) => {
-				if (account?.provider === "credentials") {
-					token.credentials = true;
-				}
-				if (user) {
-					token.id = user.id;
-				}
-				return token;
-			},
-			session: async ({ session, user }: { session: any; user: any }) => {
-				const updatedUser = await getProfile(user.id, session);
-				session.user = updatedUser;
-				return session;
-			},
+		async authorize(credentials) {
+			const user = await authorizeForConfig(
+				credentials,
+				config,
+			);
+			return "error" in user ? null : user;
 		},
-		jwt: {
-			encode: async function (params) {
-				if (params.token?.credentials) {
-					const sessionToken = crypto.randomUUID();
-
-					if (!params.token.sub) {
-						throw new Error("No user ID found in token");
-					}
-
-					const createdSession = await adapter.createSession?.({
-						sessionToken,
-						userId: params.token.sub,
-						expires: new Date(
-							Date.now() + 30 * 24 * 60 * 60 * 1000,
-						),
-					});
-
-					if (!createdSession) {
-						throw new Error("Failed to create session");
-					}
-
-					return sessionToken;
-				}
-				return defaultEncode(params);
-			},
-		},
-	};
+		getProfile: (userId, session) =>
+			getProfileForConfig(userId, session, config),
+	});
 }
 
-export const { auth, handlers, signIn, signOut } = NextAuth(
-	getAuthOptions,
-);
+const runtimeAuth = NextAuth(getAuthOptions);
+
+function withConfiguredOrigin(
+	request: NextRequest,
+	baseUrl: string,
+) {
+	const requestUrl = new URL(request.url);
+	const configuredUrl = new URL(
+		requestUrl.pathname + requestUrl.search,
+		baseUrl,
+	);
+	return new NextRequest(configuredUrl, request);
+}
+
+export async function auth(): Promise<Session | null> {
+	const config = await getConfigForEnabledFeature("login");
+	if (!config) return null;
+	return runtimeAuth.auth();
+}
+
+export const handlers = {
+	async GET(request: Parameters<typeof runtimeAuth.handlers.GET>[0]) {
+		const config = await getConfigForEnabledFeature("login");
+		if (!config) return featureUnavailableResponse();
+		return runtimeAuth.handlers.GET(
+			withConfiguredOrigin(request, config.identity.baseUrl),
+		);
+	},
+	async POST(request: Parameters<typeof runtimeAuth.handlers.POST>[0]) {
+		const config = await getConfigForEnabledFeature("login");
+		if (!config) return featureUnavailableResponse();
+		return runtimeAuth.handlers.POST(
+			withConfiguredOrigin(request, config.identity.baseUrl),
+		);
+	},
+};

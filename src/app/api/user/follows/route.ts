@@ -1,10 +1,17 @@
 import { z } from "zod";
-import { getDatabase } from "@/db";
+import { getDatabaseForConfig } from "@/db";
 import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { userToFollow } from "@/db/schema/tables/userToFollow";
 import { and, eq, sql } from "drizzle-orm";
+import {
+  featureUnavailableResponse,
+  getConfigForEnabledFeature,
+} from "@/lib/runtime-feature";
 
 export async function POST(request: Request) {
+  const config = await getConfigForEnabledFeature("login");
+  if (!config) return featureUnavailableResponse();
+
   const session = await auth();
   if (!session?.user) {
     return Response.json({ error: "Unauthorized" }, { status: 401 });
@@ -17,7 +24,7 @@ export async function POST(request: Request) {
   });
 
   try {
-    const db = await getDatabase();
+    const db = await getDatabaseForConfig(config);
     const body = await request.json();
     const { id } = schema.parse(body);
 

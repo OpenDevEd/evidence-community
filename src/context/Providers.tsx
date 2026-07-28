@@ -214,7 +214,8 @@ export default function Providers({
 	gapmaps: GapMap[];
 }) {
 	const router = useRouter();
-	const { analytics, theme } = useLibraryConfig();
+	const { analytics, features, theme } = useLibraryConfig();
+	const isLoginEnabled = features.login;
 
 	return (
 		<ThemeProvider
@@ -225,7 +226,13 @@ export default function Providers({
 		>
 			<NuqsAdapter>
 				<ToastAdapter>
-					<SessionProvider>
+					<SessionProvider
+						session={isLoginEnabled ? undefined : null}
+						refetchOnWindowFocus={isLoginEnabled}
+						refetchWhenOffline={
+							isLoginEnabled ? undefined : false
+						}
+					>
 						<AnalyticsConsentProvider>
 							<CacheProvider status={status} gapmaps={gapmaps}>
 								<NextUIProvider navigate={router.push}>

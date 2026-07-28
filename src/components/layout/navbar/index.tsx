@@ -34,6 +34,10 @@ export default function Navbar() {
 	const { resolvedTheme: theme, setTheme } = useTheme();
 	const { data: session } = useSession();
 	const libraryConfig = useLibraryConfig();
+	const isLoginEnabled = isLibraryFeatureEnabled(
+		libraryConfig.features,
+		"login",
+	);
 	const styleVariant =
 		libraryConfig.theme.layout as NavbarStyleVariant;
 
@@ -189,11 +193,13 @@ export default function Navbar() {
 				/>
 
 				{/* Login modal */}
-				<LoginModal
-					isOpen={isLoginModalOpen}
-					onOpenChange={onLoginModalOpenChange}
-					onClose={onLoginModalClose}
-				/>
+				{isLoginEnabled ? (
+					<LoginModal
+						isOpen={isLoginModalOpen}
+						onOpenChange={onLoginModalOpenChange}
+						onClose={onLoginModalClose}
+					/>
+				) : null}
 			</div>
 		</header>
 

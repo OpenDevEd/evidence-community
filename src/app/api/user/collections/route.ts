@@ -1,11 +1,15 @@
 import { z } from "zod";
-import { getDatabase } from "@/db";
+import { getDatabaseForConfig } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
 import { auth } from "../../auth/[...nextauth]/config";
 import { userCollection } from "@/db/schema/tables/userCollection";
 import { fromError } from "zod-validation-error";
+import {
+	featureUnavailableResponse,
+	getConfigForEnabledFeature,
+} from "@/lib/runtime-feature";
 
 export const createCollectionSchema = z.object({
   name: z.string().min(1).max(24),
@@ -14,6 +18,9 @@ export const createCollectionSchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
+  const config = await getConfigForEnabledFeature("userCollections");
+  if (!config) return featureUnavailableResponse();
+
   try {
     const session = await auth();
     if (!session?.user) {
@@ -22,7 +29,7 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
-    const db = await getDatabase();
+    const db = await getDatabaseForConfig(config);
 
     const body = await req.json();
     const validatedData = createCollectionSchema.safeParse(body);

@@ -3,6 +3,10 @@ import { ItemsGetResponse } from "@/app/api/items/types";
 import { getItems, getProfileSearchFilter, searchIndex } from "@/lib/actions";
 import { z } from "zod";
 import { defaultParams } from "@/lib/utils";
+import {
+	featureUnavailableResponse,
+	getConfigForEnabledFeature,
+} from "@/lib/runtime-feature";
 
 const EMPTY_ITEMS_RESPONSE = {
 	items: [],
@@ -18,6 +22,9 @@ const getItemsSchema = z.object({
 });
 
 export async function GET(request: NextRequest, props: { params: Promise<{ id: string }> }) {
+	const config = await getConfigForEnabledFeature("login");
+	if (!config) return featureUnavailableResponse();
+
 	const params = await props.params;
 	const { searchParams } = new URL(request.url);
 	const { id } = params;
@@ -28,4 +35,3 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 
 	return NextResponse.json<ItemsGetResponse>(res);
 }
-

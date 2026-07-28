@@ -1,12 +1,19 @@
-import { getDatabase } from "@/db";
+import { getDatabaseForConfig } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "../auth/[...nextauth]/config";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { eq, and, sql, InferSelectModel } from "drizzle-orm";
 import { getCachedUserLikes } from "../cache";
 import { revalidatePath, revalidateTag } from "next/cache";
+import {
+	featureUnavailableResponse,
+	getConfigForEnabledFeature,
+} from "@/lib/runtime-feature";
 
 export async function GET() {
+  const config = await getConfigForEnabledFeature("login");
+  if (!config) return featureUnavailableResponse();
+
   const session = await auth();
 
   if (!session?.user?.email) {
@@ -14,7 +21,7 @@ export async function GET() {
   }
 
   try {
-    const db = await getDatabase();
+    const db = await getDatabaseForConfig(config);
     const likes = await db.query.usersToLikes.findMany({
       where: eq(usersToLikes.userId, session.user.id),
       with: {
@@ -35,6 +42,9 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const config = await getConfigForEnabledFeature("login");
+  if (!config) return featureUnavailableResponse();
+
   const session = await auth();
 
   if (!session?.user?.email) {
@@ -42,7 +52,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const db = await getDatabase();
+    const db = await getDatabaseForConfig(config);
     const { itemKey } = await request.json();
 
     if (!itemKey) {

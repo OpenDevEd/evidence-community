@@ -50,6 +50,12 @@ export function projectPublicLibraryConfig(
 			})),
 		},
 		analytics: config.analytics,
+		authentication: {
+			google: {
+				enabled:
+					config.authentication.google.enabled,
+			},
+		},
 	});
 
 	publicConfigCache.set(config, publicConfig);

@@ -142,11 +142,15 @@ The source also reads server variables that are not all declared as Docker build
 | --- | --- |
 | Public URL | `NEXT_PUBLIC_CANONICAL_BASE_URL` |
 | Email | `CONTACT_EMAIL`, `TAKEDOWN_EMAIL`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS` |
-| Authentication | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_SECRET` |
 | AI credentials | Provider SDK credentials such as `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, and `DEEPSEEK_API_KEY`; `tools/tl.js` separately reads `GEMINI_API_KEY` |
 | Generation jobs | `SHOULD_GENERATE_SITEMAP`, `SHOULD_GENERATE_STATIC_PAGES`, `SHOULD_GENERATE_REDIRECTIONS` |
 
 `.env.example` does not currently represent the full source-level environment contract.
+
+Authentication is configured at runtime through
+`authentication.secret`, `authentication.google.enabled`,
+`authentication.google.clientId`, and
+`authentication.google.clientSecret`.
 
 ## 2. PostgreSQL runtime status
 
