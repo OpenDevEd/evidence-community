@@ -8,6 +8,7 @@
 		"start": "next start",
 		"deploy:server": "bash ./deploy/deploy-server.sh",
 		"db:migrate": "drizzle-kit migrate",
+		"config:activate": "tsx ./tools/activateLibraryConfig.ts",
 		"config:validate": "tsx ./tools/validateLibraryConfig.ts",
 		"lint": "eslint .",
 		"test": "npm run test:unit && npm run test:e2e",

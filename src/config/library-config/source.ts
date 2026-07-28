@@ -129,7 +129,7 @@ function toActiveRevision(
 	};
 }
 
-function digestConfig(config: LibraryServerConfig) {
+export function digestLibraryConfig(config: LibraryServerConfig) {
 	return createHash("sha256").update(JSON.stringify(config)).digest("hex");
 }
 
@@ -342,7 +342,7 @@ export class LibraryConfigSource {
 				);
 			}
 
-			const digest = digestConfig(result.data);
+			const digest = digestLibraryConfig(result.data);
 			if (
 				this.#active?.revision.revision === result.data.revision &&
 				this.#active.digest !== digest
