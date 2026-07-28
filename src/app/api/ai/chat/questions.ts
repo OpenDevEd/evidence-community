@@ -8,8 +8,9 @@ import {
 } from "ai";
 import { findRelevantContent, RAGResult } from "@/lib/ai";
 import { z } from "zod";
-import { google } from "@ai-sdk/google";
 import { getTimeDuration } from "@/lib/utils";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import type { ResolvedAIModels } from "@/lib/ai-provider";
 
 const Agent0Schema = z.object({
     inferred_page: z.number().int().default(0)
@@ -38,10 +39,9 @@ interface RetrievedContentGroup {
 }
 
 export async function getAnswerFromPdfAgentic(
-    provider: any,
-    modelName: string,
-    largeModel: string,
-    smallModel: string,
+    config: LibraryServerConfig,
+    models: ResolvedAIModels,
+    systemPrompt: string,
     userQuestion: string,
     itemKey: string | null,
     messagesHistory: ModelMessage[],
@@ -92,7 +92,7 @@ export async function getAnswerFromPdfAgentic(
   You must output an object that conforms to the provided schema.`;
 
                 const { object: pageInferenceResponse } = await generateObject({
-                    model: provider(smallModel),
+                    model: models.smallModel,
                     providerOptions: {
                         google: {
                             thinkingConfig: {
@@ -100,7 +100,7 @@ export async function getAnswerFromPdfAgentic(
                             },
                         },
                         openai: {
-                            reasoningEffort: "minimal",
+                            reasoningEffort: "low",
                         }
                     },
                     temperature: 1,
@@ -171,7 +171,7 @@ Based on this contextual understanding:
 You must output an object that conforms to the provided schema.`;
 
                 const { object: parsedPlan } = await generateObject({
-                    model: provider(smallModel),
+                    model: models.smallModel,
                     providerOptions: {
                         google: {
                             thinkingConfig: {
@@ -179,7 +179,7 @@ You must output an object that conforms to the provided schema.`;
                             },
                         },
                         openai: {
-                            reasoningEffort: "minimal",
+                            reasoningEffort: "low",
                         }
                     },
                     schema: Agent1Schema,
@@ -245,6 +245,7 @@ You must output an object that conforms to the provided schema.`;
                     });
 
                     const ragResults: RAGResult[] = await findRelevantContent(
+                        config,
                         searchQueryInstruction.query,
                         itemKey,
                         inferredPage,
@@ -371,8 +372,8 @@ You must output an object that conforms to the provided schema.`;
 
             try {
                 const result = streamText({
-                    model: provider(largeModel),
-                    system: agent3SystemPrompt,
+                    model: models.largeModel,
+                    system: `${systemPrompt}\n\n${agent3SystemPrompt}`,
                     messages: currentMessages,
                     onChunk: (chunk) => {
                         if (!finishedThinking) {

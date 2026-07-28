@@ -1,51 +1,11 @@
 import "server-only";
 
-import { openai } from "@ai-sdk/openai";
-import { google } from "@ai-sdk/google";
-import { anthropic } from "@ai-sdk/anthropic";
-import { mistral } from "@ai-sdk/mistral";
-import { deepseek } from "@ai-sdk/deepseek";
-import { models, pricings } from "@/constants/ai";
 import posthogClient from "./posthog";
-import { embed, embedMany } from "ai";
-import { Item } from "@/app/api/item/types";
-import { getDatabase } from "@/db";
-import { embeddings, embeddings as embeddingsTable } from "@/db/schema/tables/embeddings";
+import type { Item } from "@/app/api/item/types";
+import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { buildSiteUrl } from "@/lib/site-url";
-import { and, desc, eq, gt, or } from "drizzle-orm";
-import { cosineDistance } from "drizzle-orm";
-import { sql } from "drizzle-orm";
-
-const embeddingModel = openai.embedding("text-embedding-3-small");
-
-export const providers = [google, openai, deepseek, anthropic, mistral];
-
-export function getModel(modelIndex: number) {
-	const model = models[modelIndex];
-
-	if (!model) {
-		return { error: "Model not found" };
-	}
-
-	const provider = providers[modelIndex];
-
-	if (!provider) {
-		return { error: "Provider not found" };
-	}
-
-	const modelName = model.model;
-
-	if (!modelName) {
-		return { error: "Model name not found" };
-	}
-
-	return {
-		provider,
-		modelName,
-		largeModel: model.largeModel,
-		smallModel: model.smallModel,
-	};
-}
+import { getMeilisearchForConfig } from "./meilisearch";
 
 export function trackUsage(
 	eventName: string,
@@ -54,12 +14,6 @@ export function trackUsage(
 	prompt: string
 ) {
 	const modelName = event.response.modelId;
-	let costs = pricings[modelName as keyof typeof pricings];
-	if (!costs) {
-		costs = pricings["gpt-4o-mini"];
-	}
-	const input_cost_in_dollars = costs.input * event.usage?.promptTokens;
-	const output_cost_in_dollars = costs.output * event.usage?.completionTokens;
 
 	posthogClient.capture({
 		event: eventName,
@@ -70,140 +24,148 @@ export function trackUsage(
 			prompt_tokens: event.usage?.promptTokens,
 			completion_tokens: event.usage?.completionTokens,
 			total_tokens: event.usage?.totalTokens,
-			input_cost_in_dollars: input_cost_in_dollars,
-			output_cost_in_dollars: output_cost_in_dollars,
-			total_cost_in_dollars:
-				input_cost_in_dollars + output_cost_in_dollars,
 		},
 	});
 }
 
-const generateChunks = (input: string): string[] => {
-	return input
-		.trim()
-		.split(".")
-		.filter((i) => i !== "");
-};
-
-export const generateEmbeddings = async (
-	value: string
-): Promise<Array<{ embedding: number[]; content: string }>> => {
-	const chunks = generateChunks(value);
-	const { embeddings } = await embedMany({
-		model: embeddingModel as any,
-		values: chunks,
-	});
-	return embeddings.map((e, i) => ({ content: chunks[i], embedding: e }));
-};
-
-export const createResource = async (item: NonNullable<Item["fullTextPDFs"]>[0], parentKey: string) => {
-	try {
-		const db = await getDatabase();
-		const existingEmbeddings = await db.select().from(embeddings).where(eq(embeddings.itemKey, item.key)).limit(1);
-		const embeddingsAlreadyExistOrItemHasNoPDFs = item.fullTextPDF.length === 0 || existingEmbeddings.length > 0;
-		if (embeddingsAlreadyExistOrItemHasNoPDFs) {
-			return "Embeddings already exist for this item.";
-		}
-
-		let totalChunks = 0;
-		let insertedChunks = 0;
-
-		const allPDFPromises = item.fullTextPDF.map(async (page) => {
-			const embeddings = await generateEmbeddings(page.text);
-			totalChunks += embeddings.length;
-			const insertion = await db.insert(embeddingsTable).values(
-				embeddings.map((embedding) => ({
-					content: embedding.content,
-					page: page.page,
-					embedding: embedding.embedding,
-					itemKey: item.key,
-					parentKey: parentKey,
-				}))
-			);
-			insertedChunks += embeddings.length;
-			return insertion;
-		});
-
-
-		const results = await Promise.allSettled(allPDFPromises);
-
-		results.forEach((result, index) => {
-			if (result.status === 'rejected') {
-			}
-		});
-
-		return "Resource successfully created and embedded.";
-	} catch (error) {
-		return error instanceof Error && error.message.length > 0
-			? error.message
-			: "Error, please try again.";
-	}
-};
-
-export const generateEmbedding = async (value: string): Promise<number[]> => {
-	const input = value.replaceAll('\\n', ' ');
-	const { embedding } = await embed({
-		model: embeddingModel as any,
-		value: input,
-	});
-	return embedding;
-};
-
-export const doEmbeddingsExistForPDFs = async (itemKey: string) => {
-	const db = await getDatabase();
-	const existingEmbeddings = await db.select().from(embeddings).where(or(eq(embeddings.itemKey, itemKey), eq(embeddings.parentKey, itemKey))).limit(1);
-	return existingEmbeddings.length > 0;
-};
-
 export interface RAGResult {
-	name: string; // This is the content snippet
+	name: string;
 	similarity: number;
 	page: number;
 	parentKey: string | null;
-	url?: string; // Optional, as per your function's output
+	url?: string;
+}
+
+type PDFPage = { page: number; text: string };
+type PDFDocument = { fullTextPDF: PDFPage[] };
+type RAGSearchHit = Pick<Item, "key"> & {
+	fullTextPDFs?: PDFDocument[];
+	_formatted?: {
+		fullTextPDFs?: PDFDocument[];
+	};
+	_rankingScore?: number;
+};
+
+const HIGHLIGHT_START = "__EL_MATCH_START__";
+const HIGHLIGHT_END = "__EL_MATCH_END__";
+
+function countOccurrences(value: string, search: string) {
+	let count = 0;
+	let position = 0;
+	while ((position = value.indexOf(search, position)) !== -1) {
+		count += 1;
+		position += search.length;
+	}
+	return count;
+}
+
+function extractRAGPassages(
+	hit: RAGSearchHit,
+	itemKey: string,
+	userQuery: string,
+	userSpecifiedPage: number,
+) {
+	const formattedDocuments = hit._formatted?.fullTextPDFs;
+	const rawDocuments = hit.fullTextPDFs ?? [];
+	const documents = formattedDocuments ?? rawDocuments;
+	const queryTerms = userQuery
+		.toLocaleLowerCase()
+		.match(/[\p{L}\p{N}]{3,}/gu) ?? [];
+	const results: Array<{
+		order: number;
+		relevance: number;
+		result: RAGResult;
+	}> = [];
+	let order = 0;
+
+	for (const [documentIndex, document] of documents.entries()) {
+		for (const [pageIndex, page] of document.fullTextPDF.entries()) {
+			const rawPage =
+				rawDocuments[documentIndex]?.fullTextPDF[pageIndex];
+			const pageNumber = rawPage?.page ?? page.page;
+			if (
+				userSpecifiedPage !== 0 &&
+				pageNumber !== userSpecifiedPage
+			) {
+				continue;
+			}
+
+			const highlightedText = page.text.trim();
+			const text = highlightedText
+				.replaceAll(HIGHLIGHT_START, "")
+				.replaceAll(HIGHLIGHT_END, "");
+			if (!text) continue;
+			const normalizedText = text.toLocaleLowerCase();
+			const lexicalMatches = queryTerms.reduce(
+				(total, term) =>
+					total + countOccurrences(normalizedText, term),
+				0,
+			);
+			const highlightedMatches = countOccurrences(
+				highlightedText,
+				HIGHLIGHT_START,
+			);
+			results.push({
+				order,
+				relevance: highlightedMatches * 100 + lexicalMatches,
+				result: {
+					name: text,
+					similarity: hit._rankingScore ?? 0,
+					page: pageNumber,
+					parentKey: itemKey,
+					url: buildSiteUrl(`/lib/${itemKey}`),
+				},
+			});
+			order += 1;
+		}
+	}
+
+	return results
+		.sort(
+			(left, right) =>
+				right.relevance - left.relevance ||
+				left.order - right.order,
+		)
+		.slice(0, 10)
+		.map(({ result }) => result);
 }
 
 export const findRelevantContent = async (
+	config: Pick<
+		LibraryServerConfig,
+		"revision" | "search" | "services" | "updatedAt"
+	>,
 	userQuery: string,
 	itemKey: string | null,
 	userSpecifiedPage: number,
 ): Promise<RAGResult[]> => {
-	if (!itemKey) {
+	if (!itemKey || !config.search.embeddings) {
 		return [];
 	}
-	const db = await getDatabase();
-	const userQueryEmbedded = await generateEmbedding(userQuery);
-	const similarity = sql<number>`1 - (${cosineDistance(
-		embeddings.embedding,
-		userQueryEmbedded,
-	)})`;
 
-	const conditions = [
-		gt(similarity, 0.3), // Added a minimum similarity threshold, adjust as needed
-		or(eq(embeddings.parentKey, itemKey), eq(embeddings.itemKey, itemKey)),
-	];
+	const { index } = await getMeilisearchForConfig(config);
+	const result = await index.search<RAGSearchHit>(userQuery, {
+		hybrid: {
+			embedder: PLATFORM_SEARCH_EMBEDDER,
+			semanticRatio: 1,
+		},
+		filter: `key = ${JSON.stringify(itemKey)}`,
+		attributesToRetrieve: ["key", "fullTextPDFs"],
+		attributesToCrop: ["fullTextPDFs.fullTextPDF.text:300"],
+		attributesToHighlight: ["fullTextPDFs.fullTextPDF.text"],
+		cropMarker: " … ",
+		highlightPreTag: HIGHLIGHT_START,
+		highlightPostTag: HIGHLIGHT_END,
+		showRankingScore: true,
+		limit: 1,
+	});
 
-	if (userSpecifiedPage !== 0) {
-		conditions.push(eq(embeddings.page, userSpecifiedPage));
-	}
-
-	const whereCondition = and(...conditions.filter(Boolean));
-
-	// Ensure your actual db query is typed correctly if possible
-	const similarGuidesFromDb = await db
-		.select({
-			name: embeddings.content,
-			similarity,
-			page: embeddings.page,
-			parentKey: embeddings.parentKey,
-		})
-		.from(embeddings)
-		.where(whereCondition)
-		.orderBy((t: any) => desc(t.similarity))
-		.limit(10);
-
-	return similarGuidesFromDb.map((guide: any) => ({
-		...guide,
-		url: buildSiteUrl(`/lib/${guide.parentKey}`),
-	}));
+	return result.hits.flatMap((hit) =>
+		extractRAGPassages(
+			hit as RAGSearchHit,
+			itemKey,
+			userQuery,
+			userSpecifiedPage,
+		),
+	);
 };

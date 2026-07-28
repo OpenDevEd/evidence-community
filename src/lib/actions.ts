@@ -38,7 +38,6 @@ import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "@/lib/utils";
 import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
 import { generateObject } from "ai";
-import { getModel } from "./ai";
 import { headers } from "next/headers";
 import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
@@ -52,6 +51,12 @@ import {
 	normalizeRuntimeYearRange,
 	resolveRuntimeSearchScope,
 } from "@/config/library-config/search";
+import {
+	AIProviderUnavailableError,
+	getAIProviderForConfig,
+	type AIProviderId,
+} from "./ai-provider";
+import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 
 export async function getRateLimits() {
 	const headersList = await headers();
@@ -137,14 +142,28 @@ export async function sendContactRequest(email: string, description: string) {
 
 	return { success: result.accepted.length > 0 };
 }
-export async function runScreening(keys: string[], modelIndex: number, smartScreeningFields: SmartScreeningField[], distinctId: string) {
-	const { provider, modelName, error } = getModel(modelIndex);
-	if (error) {
-		return { error: error };
+export async function runScreening(
+	keys: string[],
+	provider: AIProviderId,
+	smartScreeningFields: SmartScreeningField[],
+	distinctId: string,
+) {
+	const libraryConfig = await getLibraryConfig();
+	if (!isLibraryFeatureEnabled(libraryConfig.features, "ai")) {
+		return { error: "AI is disabled" };
 	}
 
-	if (!provider || !modelName) {
-		return { error: "Model not found" };
+	let models;
+	try {
+		models = await getAIProviderForConfig(
+			libraryConfig,
+			provider,
+		);
+	} catch (error) {
+		if (error instanceof AIProviderUnavailableError) {
+			return { error: error.message };
+		}
+		throw error;
 	}
 
 	if (!keys || keys.length === 0) {
@@ -213,12 +232,12 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 
 				const start = Date.now();
 				const result = await generateObject({
-					model: provider!(modelName!) as any,
+					model: models.defaultModel,
 					schema: singleItemSchema,
 					temperature: 1,
 					providerOptions: {
 						openai: {
-							reasoningEffort: "minimal",
+							reasoningEffort: "low",
 						},
 						google: {
                             thinkingConfig: {

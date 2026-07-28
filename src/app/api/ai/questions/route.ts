@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
-import config from "@/constants/config.json";
 import { generateObject } from 'ai';
-import { getModel, trackUsage } from "@/lib/ai";
+import { trackUsage } from "@/lib/ai";
 import { getRuntimeRequestLocale } from "@/i18n/server";
 import { isAIAllowed } from "@/lib/utils";
 import { getCachedItem } from "../../cache";
 import { z } from "zod";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
+import {
+    AIProviderUnavailableError,
+    getAIProviderForConfig,
+} from "@/lib/ai-provider";
+import { getAISystemPrompt } from "@/lib/ai-prompts";
 
 export const maxDuration = 60;
 
@@ -18,11 +22,7 @@ export async function POST(req: Request) {
     }
 
     const locale = await getRuntimeRequestLocale(req);
-    const systemPrompt = config.prompts.questions?.join("\n")
-    const sharedRules = config.shared_rules.join("\n")
-    const pdfRules = config.pdf_rules.join("\n")
-    const structureRules = config.structure_rules.join("\n")
-    const { prompt: key, modelIndex, distinctId } = await req.json();
+    const { prompt: key, provider, distinctId } = await req.json();
     const prompt = "questions"
 
     const item = await getCachedItem(key!);
@@ -31,10 +31,17 @@ export async function POST(req: Request) {
         return new NextResponse("Item not found", { status: 404 });
     }
 
-    const { provider, modelName, error } = getModel(modelIndex);
-
-    if (error) {
-        return new NextResponse(error, { status: 404 });
+    let models;
+    try {
+        models = await getAIProviderForConfig(
+            libraryConfig,
+            provider,
+        );
+    } catch (error) {
+        if (error instanceof AIProviderUnavailableError) {
+            return new NextResponse(error.message, { status: 404 });
+        }
+        throw error;
     }
 
     const { fullTextPDFs, ...cleanItem } = item.item;
@@ -54,10 +61,12 @@ export async function POST(req: Request) {
 
     try {
         const result = await generateObject({
-            model: provider!(modelName!) as any,
+            model: models.defaultModel,
             system: [
-                `LOCALE: ${locale}\n`,
-                "You are a helpful assistant created by OpenDevEd (Open Development & Education)",
+                getAISystemPrompt(libraryConfig, "questions", {
+                    hasPdf: Boolean(fullTextPDFs?.length),
+                    locale,
+                }),
                 "You are given a PDF document in the following JSON format:",
                 "{ \"title\": \"PDF Title\", \"fullTextPDF\": Array<{ text: string; page: number; }> }[]",
                 "You need to generate 5 questions about the PDF content.",
@@ -71,7 +80,7 @@ export async function POST(req: Request) {
             temperature: 1,
             providerOptions: {
                 openai: {
-                    reasoningEffort: "minimal",
+                    reasoningEffort: "low",
                 },
                 google: {
                     thinkingConfig: {

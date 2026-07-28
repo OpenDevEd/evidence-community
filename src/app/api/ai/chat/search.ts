@@ -6,7 +6,6 @@ import {
 	createUIMessageStream,
 	createUIMessageStreamResponse,
 } from "ai";
-import { google } from "@ai-sdk/google";
 import { z } from "zod";
 import { cleanItemForAI, formatRange, getTimeDuration } from "@/lib/utils";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
@@ -15,7 +14,8 @@ import { Item } from "../../item/types";
 import { ALL_LABELS_IN_COUNTRY_HIERARCHY } from "@/constants/misc";
 import { createCountryFilters } from "@/lib/country";
 import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
-import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import type { ResolvedAIModels } from "@/lib/ai-provider";
 
 const Agent1Schema = z.object({
 	original_question: z
@@ -123,16 +123,14 @@ interface RetrievedDatabaseItem {
 }
 
 export async function getAnswerFromSearchAgentic(
-	provider: any,
-	modelName: string,
-	largeModel: string,
-	smallModel: string,
+	config: LibraryServerConfig,
+	models: ResolvedAIModels,
+	systemPrompt: string,
 	userQuestion: string,
 	messagesHistory: ModelMessage[],
 	locale: string
 ) {
 	const startTime = Date.now();
-	const config = await getLibraryConfig();
 	const { index: searchIndex } =
 		await getMeilisearchForConfig(config);
 	if (!config.search.embeddings) {
@@ -202,10 +200,10 @@ Focus on creating queries that will yield precise results.
 You must output an object conforming to the provided schema.`;
 
 				const { object: parsedPlan } = await generateObject({
-					model: provider(smallModel),
+					model: models.smallModel,
 					providerOptions: {
 						google: { thinkingConfig: { thinkingBudget: 0 } },
-						openai: { reasoningEffort: "minimal" },
+						openai: { reasoningEffort: "low" },
 					},
 					schema: Agent1Schema,
 					system: agent1SystemPrompt,
@@ -418,12 +416,12 @@ You MUST output an object conforming to the 'Agent2Point5OutputSchema'.\nEnsure 
 						.join("\n---\n")}\n`;
 					const { object: assessedEvidenceResult } =
 						await generateObject({
-							model: provider(smallModel),
+							model: models.smallModel,
 							providerOptions: {
 								google: {
 									thinkingConfig: { thinkingBudget: 0 },
 								},
-								openai: { reasoningEffort: "minimal" },
+								openai: { reasoningEffort: "low" },
 							},
 							schema: Agent2Point5OutputSchema,
 							system: agent2Point5SystemPrompt,
@@ -599,12 +597,12 @@ Generate the detailed, analytical answer with citations now, making extensive us
 
 			try {
 				const { object: agent3OutputObject } = await generateObject({
-					model: provider(largeModel),
+					model: models.largeModel,
 					schema: FinalAnswerSchema,
-					system: agent3SystemPrompt,
+					system: `${systemPrompt}\n\n${agent3SystemPrompt}`,
 					messages: currentMessages,
 					providerOptions: {
-						openai: { reasoningEffort: "minimal" },
+						openai: { reasoningEffort: "low" },
 						google: {
 							thinkingConfig: {
 								thinkingBudget: 0,
@@ -653,10 +651,10 @@ Your Task:\n
 Output the entire text with ONLY the citation formats corrected, ensuring all markdown formatting is preserved exactly as in the original.`;
 
 				const stream = streamText({
-					model: provider(smallModel),
+					model: models.smallModel,
 					providerOptions: {
 						google: { thinkingConfig: { thinkingBudget: 0 } },
-						openai: { reasoningEffort: "minimal" },
+						openai: { reasoningEffort: "low" },
 					},
 					system: agent4SystemPrompt,
 					messages: [

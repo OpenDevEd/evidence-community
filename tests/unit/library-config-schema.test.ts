@@ -374,7 +374,7 @@ describe("cross-field activation rules", () => {
 		[
 			"provider model from another catalog",
 			(config: any) => {
-				config.ai.providers[0].defaultModel = "gpt-5-mini";
+				config.ai.providers[0].defaultModel = "gpt-5.4-mini";
 			},
 		],
 		[

@@ -42,7 +42,7 @@ function createTextMessage(role: 'system' | 'user' | 'assistant' | 'data', conte
 	} as Message;
 }
 import FullScreenModal from "@/components/nextui/FullScreenModal";
-import { models } from "@/constants/ai";
+import { getAIProviderPresentation } from "@/constants/ai";
 import { FaTools } from "react-icons/fa";
 import { AIMarkdown } from "../markdown/Markdown";
 import posthog from "posthog-js";
@@ -63,6 +63,7 @@ import { Switch } from "@/components/nextui/Switch";
 import { BsQuestionCircleFill } from "react-icons/bs";
 import { Card } from "@/components/nextui/Card";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import type { AIProviderId } from "@/lib/ai-provider-factory";
 
 export const maxDuration = 240;
 
@@ -117,7 +118,7 @@ function ScreeningResults({ results }: { results: ScreeningResults }) {
 
 function MessageComponent({
 	message,
-	modelIndex,
+	provider,
 	isMutating,
 	isWaiting,
 	handleScreening,
@@ -125,13 +126,14 @@ function MessageComponent({
 	error,
 }: {
 	message: Message;
-	modelIndex: number;
+	provider: AIProviderId | null;
 	isMutating: boolean;
 	isWaiting: boolean;
 	handleScreening: (content: string) => void;
 	smartScreeningFields: SmartScreeningField[];
 	error: boolean;
 }) {
+	const presentation = getAIProviderPresentation(provider);
 	const tUI = useTranslations("ui");
 
 	const annotations = useMemo<Array<{ id: string; message: string }>>(() => {
@@ -152,7 +154,7 @@ function MessageComponent({
 				{message.role === "user" ? (
 					<LuUser className="size-4 text-white" />
 				) : (
-					React.createElement(models[modelIndex].icon, {
+					React.createElement(presentation.icon, {
 						className: "size-4 invert shrink-0",
 					})
 				)}
@@ -189,7 +191,7 @@ function MessageComponent({
 										)}
 									>
 										{React.createElement(
-											models[modelIndex].icon,
+											presentation.icon,
 											{
 												className: "size-4 fill-accent shrink-0",
 											}
@@ -258,7 +260,7 @@ export default function ChatModal({
 	isOpen,
 	onOpenChange,
 	data,
-	modelIndex,
+	provider,
 	questions,
 	externalInput,
 	setExternalInput,
@@ -268,7 +270,7 @@ export default function ChatModal({
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 	data?: ItemGetResponse | undefined;
-	modelIndex: number;
+	provider: AIProviderId | null;
 	questions?: undefined | string[];
 	externalInput?: string;
 	setExternalInput?: (input: string) => void;
@@ -304,7 +306,7 @@ export default function ChatModal({
 			},
 			body: {
 				key: data?.item?.key,
-				modelIndex,
+				provider,
 				distinctId: posthog.get_distinct_id(),
 				smartScreeningFields,
 				mode,
@@ -389,6 +391,7 @@ export default function ChatModal({
 	);
 
 	const handleScreening = async (content: string) => {
+		if (!provider) return;
 		const keys = content.match(/lib\/(\w+)/g);
 		if (!keys) {
 			return;
@@ -398,7 +401,7 @@ export default function ChatModal({
 		try {
 			const result = await runScreening(
 				keysArray,
-				modelIndex,
+				provider,
 				smartScreeningFields,
 				posthog.get_distinct_id()
 			);
@@ -523,8 +526,8 @@ export default function ChatModal({
 																	message={
 																		message
 																	}
-																	modelIndex={
-																		modelIndex
+																	provider={
+																		provider
 																	}
 																	isMutating={
 																		isMutating

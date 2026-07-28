@@ -2,7 +2,6 @@ import { ModelMessage, streamText, tool } from "ai";
 import { Item } from "../../item/types";
 import { z } from "zod";
 import {
-	doEmbeddingsExistForPDFs,
 	findRelevantContent,
 	trackUsage,
 } from "@/lib/ai";
@@ -12,12 +11,14 @@ import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { cleanItemForAI, formatRange } from "@/lib/utils";
 import { ItemsGetResponse } from "../../items/types";
 import { getCachedItem } from "../../cache";
-import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import type { ResolvedAIModels } from "@/lib/ai-provider";
 
 export async function quickChat(
 	req: Request,
-	provider: any,
-	modelName: string,
+	config: LibraryServerConfig,
+	models: ResolvedAIModels,
+	systemPrompt: string,
 	locale: string,
 	cleanItem: Item | null,
 	coreMessages: ModelMessage[],
@@ -25,12 +26,12 @@ export async function quickChat(
 	distinctId: string,
 	messages: any[]
 ) {
-	const config = await getLibraryConfig();
 	const { index: searchIndex } =
 		await getMeilisearchForConfig(config);
 	const result = streamText({
-		model: provider!(modelName!) as any,
+		model: models.defaultModel,
 		system: [
+			systemPrompt,
 			`LOCALE: ${locale}`,
 			`You are an AI research assistant created by OpenDevEd (Open Development & Education) to answer questions and help users find information about EdTech. Your primary role is to analyze and synthesize research findings into well-formatted responses.`,
 
@@ -127,28 +128,26 @@ Before you answer, classify the user’s intent into one of two categories:
 						!cleanItem
 					) {
 						const isGlobalChat = cleanItem === null;
-						if (isGlobalChat && userDefinedKey) {
-							const canLookUp =
-								await doEmbeddingsExistForPDFs(
-									userDefinedKey
-								);
-							if (!canLookUp) {
-								try {
-									const item = await getCachedItem(userDefinedKey);
-									const hasPDF = item?.item?.fullTextPDFs?.length && item?.item?.fullTextPDFs?.length > 0;
-									if (!hasPDF) {
-										return "There is no PDF attached to this item.";
-									}
-									if (item && item.item) {
-										return item.item.fullTextPDFs?.[0]?.fullTextPDF;
-									}
-								} catch (e) {
-									return "There is no PDF attached to this item.";
-								}
+						if (!config.search.embeddings) {
+							if (!isGlobalChat) {
+								return fullTextPDFs?.[0]?.fullTextPDF ??
+									"There is no PDF attached to this item.";
+							}
+							if (!userDefinedKey) {
+								return "There is no PDF attached to this item.";
+							}
+							try {
+								const item = await getCachedItem(userDefinedKey);
+								return item?.item?.fullTextPDFs?.[0]
+									?.fullTextPDF ??
+									"There is no PDF attached to this item.";
+							} catch {
+								return "There is no PDF attached to this item.";
 							}
 						}
 
 						const relevantContent = await findRelevantContent(
+							config,
 							userQuery,
 							cleanItem?.key || userDefinedKey || null,
 							userSpecifiedPage || 0
@@ -255,7 +254,7 @@ Before you answer, classify the user’s intent into one of two categories:
 		// },
 		temperature: 1,
 		providerOptions: {
-			openai: { reasoningEffort: "minimal" },
+			openai: { reasoningEffort: "low" },
 			google: { thinkingConfig: { thinkingBudget: 0 } },
 		},
 		onFinish(event) {

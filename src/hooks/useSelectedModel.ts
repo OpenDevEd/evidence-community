@@ -1,14 +1,32 @@
-import { models } from "@/constants/ai";
+import { getAIProviderPresentation } from "@/constants/ai";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import type { AIProviderId } from "@/lib/ai-provider-factory";
 import { useLocalStorage } from "usehooks-ts";
 
 export function useSelectedModel() {
-	const [selectedModelValue, setSelectedModel] = useLocalStorage("ai-model", 0);
-	const selectedModel = selectedModelValue >= models.length ? 0 : selectedModelValue;
-    const modelObject = models[selectedModel];
+	const { ai } = useLibraryConfig();
+	const availableProviders = ai.providers.filter(
+		(provider) => provider.enabled && provider.defaultModel,
+	);
+	const fallbackProvider = availableProviders[0]?.provider ?? null;
+	const [storedProvider, setSelectedProvider] =
+		useLocalStorage<AIProviderId | null>(
+			"ai-provider",
+			fallbackProvider,
+		);
+	const selectedProvider =
+		availableProviders.find(
+			(provider) => provider.provider === storedProvider,
+		) ?? availableProviders[0] ?? null;
+	const selectedProviderId = selectedProvider?.provider ?? null;
+	const providerPresentation =
+		getAIProviderPresentation(selectedProviderId);
 
 	return {
-		selectedModel,
-		setSelectedModel,
-		modelObject,
+		availableProviders,
+		selectedProvider,
+		selectedProviderId,
+		setSelectedProvider,
+		providerPresentation,
 	}
 }

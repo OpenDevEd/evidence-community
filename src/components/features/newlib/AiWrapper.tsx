@@ -15,7 +15,7 @@ import ChatModal from "@/components/features/modals/ChatModal";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
 import { fetcher, fetcherPOST, isAIAllowed } from "@/lib/utils";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
 import { AIHistory } from "@/types/ai";
@@ -29,6 +29,7 @@ import {
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
 import { twMerge } from "tailwind-merge";
+import type { AIProviderId } from "@/lib/ai-provider-factory";
 
 function randomUUID() {
 	return (
@@ -48,10 +49,13 @@ function AiButton({
 	setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>>;
 	variant?: "default" | "inline";
 }) {
-	const { selectedModel, setSelectedModel } = useSelectedModel();
+	const {
+		selectedProviderId,
+		setSelectedProvider,
+	} = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
-		modelIndex: selectedModel,
+		provider: selectedProviderId,
 		distinctId: posthog.get_distinct_id(),
 	};
 	const locale = useLocale();
@@ -76,15 +80,16 @@ function AiButton({
 			revalidateIfStale: false,
 		}
 	);
-	const id = useRef(randomUUID());
+	const [id, setId] = useState(randomUUID);
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
 
 	const [histories, setHistories] = useLocalStorage<
 		Record<string, AIHistory[]>
-	>(`ai-history`, {});
+	>(`ai-history-v2`, {});
 
 	const updateHistory = (prompt: string, completion: string, id: string) => {
+		if (!selectedProviderId) return;
 		setHistories((prev) => {
 			const newHistory = prev[prompt] || [];
 			const obj = newHistory.find((item) => item.id === id);
@@ -97,7 +102,7 @@ function AiButton({
 					date: new Date(),
 					title: data!.item!.title!,
 					key: data!.item!.key!,
-					modelIndex: selectedModel,
+					provider: selectedProviderId,
 				});
 			}
 			return { ...prev, [prompt]: newHistory };
@@ -106,25 +111,25 @@ function AiButton({
 
 	const summaryFeature = useAIFeature(
 		"summarize",
-		id.current,
+		id,
 		updateHistory,
 		data,
-		selectedModel
+		selectedProviderId
 	);
 	const explainFeature = useAIFeature(
 		"explain",
-		id.current,
+		id,
 		updateHistory,
 		data,
-		selectedModel
+		selectedProviderId
 	);
 
-	const handleModelChange = (modelIndex: number) => {
-		setSelectedModel(modelIndex);
+	const handleProviderChange = (provider: AIProviderId) => {
+		setSelectedProvider(provider);
 		[summaryFeature, explainFeature].forEach((feature) => {
 			feature.setCompletion("");
 		});
-		id.current = crypto.randomUUID();
+		setId(crypto.randomUUID());
 	};
 
 	return (
@@ -139,14 +144,14 @@ function AiButton({
 				<ModelSelector
 					isOpen={isChangeOpen}
 					onOpenChange={onChangeOpenChange}
-					selectedModel={selectedModel}
-					onModelChange={handleModelChange}
+					selectedProvider={selectedProviderId}
+					onProviderChange={handleProviderChange}
 				/>
 				<ChatModal
 					isOpen={isChatOpen}
 					onOpenChange={onChatOpenChange}
 					data={data}
-					modelIndex={selectedModel}
+					provider={selectedProviderId}
 					questions={questions}
 					isEmbedded={isEmbedded}
 					setIsEmbedded={setIsEmbedded}
@@ -166,7 +171,7 @@ function AiButton({
 								[feature.key]: history,
 							}))
 						}
-						id={id.current}
+						id={id}
 					/>
 				))}
 				<Dropdown
@@ -191,7 +196,7 @@ function AiButton({
 					<DropdownMenu
 						items={AI_DROPDOWN_ITEMS(
 							t,
-							selectedModel,
+							selectedProviderId,
 							onChangeOpenChange,
 							summaryFeature,
 							explainFeature,

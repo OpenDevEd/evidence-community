@@ -1,7 +1,6 @@
 import { getRuntimeRequestLocale } from "@/i18n/server";
 import { getCachedItem } from "../../cache";
 import { NextResponse } from "next/server";
-import { createResource, findRelevantContent, getModel, RAGResult } from "@/lib/ai";
 import { isAIAllowed } from "@/lib/utils";
 import { convertToModelMessages } from "ai";
 import { getAnswerFromPdfAgentic } from "./questions";
@@ -13,13 +12,23 @@ import {
 	isLibraryFeatureEnabled,
 	type LibraryFeatureId,
 } from "@/config/library-config/features";
+import {
+	AIProviderUnavailableError,
+	getAIProviderForConfig,
+} from "@/lib/ai-provider";
+import { getAISystemPrompt } from "@/lib/ai-prompts";
 
 export const maxDuration = 240;
 
-const EmbeddedItems = new Set<string>();
-
 export async function POST(req: Request) {
-	const { distinctId, messages, key, modelIndex, smartScreeningFields, mode } = await req.json();
+	const {
+		distinctId,
+		messages,
+		key,
+		provider,
+		smartScreeningFields,
+		mode,
+	} = await req.json();
 	const locale = await getRuntimeRequestLocale(req);
 	const config = await getLibraryConfig();
 	const requiredFeature: LibraryFeatureId = key
@@ -37,6 +46,12 @@ export async function POST(req: Request) {
 			status: 403,
 		});
 	}
+	if (key && mode !== "quick" && !config.search.embeddings) {
+		return new NextResponse(
+			"PDF research requires semantic search",
+			{ status: 403 },
+		);
+	}
 
 	let item = null;
 	if (key) {
@@ -44,18 +59,16 @@ export async function POST(req: Request) {
 		if (!item || !item.item) {
 			return new NextResponse("Item not found", { status: 404 });
 		}
-
-		for (const pdf of item.item.fullTextPDFs || []) {
-			if (!EmbeddedItems.has(pdf.key)) {
-				await createResource(pdf, key);
-				EmbeddedItems.add(pdf.key);
-			}
-		}
 	}
 
-	const { provider, modelName, error, largeModel, smallModel } = getModel(modelIndex);
-	if (error || !provider || !modelName) {
-		return new NextResponse(error, { status: 404 });
+	let models;
+	try {
+		models = await getAIProviderForConfig(config, provider);
+	} catch (error) {
+		if (error instanceof AIProviderUnavailableError) {
+			return new NextResponse(error.message, { status: 404 });
+		}
+		throw error;
 	}
 
 	const fullTextPDFs = item?.item?.fullTextPDFs;
@@ -68,13 +81,44 @@ export async function POST(req: Request) {
 	const coreMessages = modelMessages.filter(
 		(message) => message.content.length > 0
 	);
+	const systemPrompt = getAISystemPrompt(config, "chat", {
+		hasPdf: Boolean(fullTextPDFs?.length),
+		locale,
+	});
 
 	if (mode === "quick") {
-		return quickChat(req, provider, modelName, locale, cleanItem as Item, coreMessages, fullTextPDFs, distinctId, messages);
+		return quickChat(
+			req,
+			config,
+			models,
+			systemPrompt,
+			locale,
+			cleanItem as Item,
+			coreMessages,
+			fullTextPDFs,
+			distinctId,
+			messages,
+		);
 	}
 
 	try {
-		const response = cleanItem ? await getAnswerFromPdfAgentic(provider, modelName, largeModel, smallModel, messages.at(-1)?.content || "", cleanItem?.key || null, coreMessages) : await getAnswerFromSearchAgentic(provider, modelName, largeModel, smallModel, messages.at(-1)?.content || "", coreMessages, locale);
+		const response = cleanItem
+			? await getAnswerFromPdfAgentic(
+					config,
+					models,
+					systemPrompt,
+					messages.at(-1)?.content || "",
+					cleanItem?.key || null,
+					coreMessages,
+				)
+			: await getAnswerFromSearchAgentic(
+					config,
+					models,
+					systemPrompt,
+					messages.at(-1)?.content || "",
+					coreMessages,
+					locale,
+				);
 		return response;
 	} catch (error) {
 		return new NextResponse("An error occurred while generating the answer.", { status: 500 });

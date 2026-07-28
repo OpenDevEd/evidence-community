@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
-import config from "@/constants/config.json";
 import { getCachedItem } from "../cache";
 import { streamText } from 'ai';
-import { getModel, trackUsage } from "@/lib/ai";
+import { trackUsage } from "@/lib/ai";
 import { getRuntimeRequestLocale } from "@/i18n/server";
 import { isAIAllowed } from "@/lib/utils";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
+import {
+	AIProviderUnavailableError,
+	getAIProviderForConfig,
+} from "@/lib/ai-provider";
+import { getAISystemPrompt } from "@/lib/ai-prompts";
 
 export const maxDuration = 60;
 
@@ -19,13 +23,9 @@ export async function POST(req: Request) {
 	const { searchParams } = new URL(req.url);
 	const prompt = searchParams.get("prompt") || "summarize";
 	const locale = await getRuntimeRequestLocale(req);
-	const systemPrompt = config.prompts[prompt as keyof typeof config.prompts]?.join("\n")
-	const sharedRules = config.shared_rules.join("\n")
-	const pdfRules = config.pdf_rules.join("\n")
-	const structureRules = config.structure_rules.join("\n")
-	const { prompt: key, modelIndex, distinctId } = await req.json();
+	const { prompt: key, provider, distinctId } = await req.json();
 
-	if (!systemPrompt || prompt === "chat") {
+	if (prompt !== "summarize" && prompt !== "explain") {
 		return new NextResponse("Invalid prompt", { status: 400 });
 	}
 
@@ -35,10 +35,17 @@ export async function POST(req: Request) {
 		return new NextResponse("Item not found", { status: 404 });
 	}
 
-	const { provider, modelName, error } = getModel(modelIndex);
-
-	if (error) {
-		return new NextResponse(error, { status: 404 });
+	let models;
+	try {
+		models = await getAIProviderForConfig(
+			libraryConfig,
+			provider,
+		);
+	} catch (error) {
+		if (error instanceof AIProviderUnavailableError) {
+			return new NextResponse(error.message, { status: 404 });
+		}
+		throw error;
 	}
 
 	const {fullTextPDFs, ...cleanItem} = item.item;
@@ -55,19 +62,16 @@ export async function POST(req: Request) {
 	}
 
 	const result = streamText({
-		model: provider!(modelName!) as any,
-		system: [
-			`LOCALE: ${locale}\n`,
-			systemPrompt,
-			sharedRules,
-			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? pdfRules : "",
-			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? structureRules : "",
-		].join("\n"),
+		model: models.defaultModel,
+		system: getAISystemPrompt(libraryConfig, prompt, {
+			hasPdf: Boolean(fullTextPDFs?.length),
+			locale,
+		}),
 		prompt: JSON.stringify(cleanItem),
 		temperature: 1,
 		providerOptions: {
 			openai: {
-				reasoningEffort: "minimal",
+				reasoningEffort: "low",
 			},
 			google: {
 				thinkingConfig: {

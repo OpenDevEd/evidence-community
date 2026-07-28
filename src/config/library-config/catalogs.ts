@@ -120,9 +120,9 @@ export const PLATFORM_FONT_CATALOG = {
 
 export const PLATFORM_AI_MODEL_CATALOG = {
 	openai: {
-		active: ["gpt-5-mini"],
-		large: ["gpt-5-mini"],
-		small: ["gpt-5-mini"],
+		active: ["gpt-5.4", "gpt-5.4-mini"],
+		large: ["gpt-5.4"],
+		small: ["gpt-5.4-mini"],
 	},
 	google: {
 		active: ["gemini-2.5-flash", "gemini-2.5-pro"],
@@ -130,22 +130,19 @@ export const PLATFORM_AI_MODEL_CATALOG = {
 		small: ["gemini-2.5-flash"],
 	},
 	anthropic: {
-		active: [
-			"claude-3-5-sonnet-20241022",
-			"claude-3-5-haiku-20241022",
-		],
-		large: ["claude-3-5-sonnet-20241022"],
-		small: ["claude-3-5-haiku-20241022"],
+		active: ["claude-sonnet-4-6", "claude-haiku-4-5"],
+		large: ["claude-sonnet-4-6"],
+		small: ["claude-haiku-4-5"],
 	},
 	mistral: {
-		active: ["mistral-large-latest"],
+		active: ["mistral-large-latest", "mistral-small-latest"],
 		large: ["mistral-large-latest"],
-		small: ["mistral-large-latest"],
+		small: ["mistral-small-latest"],
 	},
 	deepseek: {
-		active: ["deepseek-chat"],
-		large: ["deepseek-chat"],
-		small: ["deepseek-chat"],
+		active: ["deepseek-v4-pro", "deepseek-v4-flash"],
+		large: ["deepseek-v4-pro"],
+		small: ["deepseek-v4-flash"],
 	},
 } as const;
 
@@ -163,6 +160,32 @@ export const PLATFORM_PROMPT_SLOTS = [
 	"summarize",
 ] as const;
 
+export const PLATFORM_PROMPT_DEFAULTS: Record<
+	(typeof PLATFORM_PROMPT_SLOTS)[number],
+	string
+> = {
+	questions: [
+		"You generate exactly five useful questions about the supplied evidence.",
+		"Use the requested locale.",
+		"Only ask questions that can be answered from the supplied evidence.",
+	].join("\n"),
+	chat: [
+		"You are an evidence research assistant.",
+		"Answer from the supplied evidence and state clearly when the evidence does not answer the question.",
+		"Use regular Markdown unless quoting PDF content.",
+	].join("\n"),
+	explain: [
+		"You are an analytical evidence research assistant.",
+		"Explain the methods, findings, implications, limitations, and technical terms in the supplied evidence.",
+		"Use clear Markdown and do not introduce unsupported claims.",
+	].join("\n"),
+	summarize: [
+		"You are a concise evidence research assistant.",
+		"Summarize the research question, key findings, conclusions, and implications from the supplied evidence.",
+		"Use clear Markdown and do not introduce unsupported claims.",
+	].join("\n"),
+};
+
 export const PLATFORM_PROMPT_VARIABLES: Record<
 	(typeof PLATFORM_PROMPT_SLOTS)[number],
 	readonly string[]
@@ -178,3 +201,5 @@ export const PLATFORM_PROMPT_VARIABLES: Record<
 export const PLATFORM_RULE_CONDITIONS = ["always", "has-pdf"] as const;
 
 export const PLATFORM_RULE_ACTIONS = ["append-system-instruction"] as const;
+
+export const PLATFORM_SEARCH_EMBEDDER = "openai";

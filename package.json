@@ -15,11 +15,11 @@
 		"schema:generate": "npx tsx ./tools/generateSchema.ts"
 	},
 	"dependencies": {
-		"@ai-sdk/anthropic": "^1.0.5",
-		"@ai-sdk/deepseek": "^0.1.8",
-		"@ai-sdk/google": "^1.1.9",
-		"@ai-sdk/mistral": "^1.1.0",
-		"@ai-sdk/openai": "^1.1.9",
+		"@ai-sdk/anthropic": "^3.0.103",
+		"@ai-sdk/deepseek": "^2.0.50",
+		"@ai-sdk/google": "^3.0.101",
+		"@ai-sdk/mistral": "^3.0.52",
+		"@ai-sdk/openai": "^3.0.88",
 		"@ai-sdk/react": "^3.0.40",
 		"@auth/drizzle-adapter": "^1.7.4",
 		"@citation-js/core": "^0.7.14",

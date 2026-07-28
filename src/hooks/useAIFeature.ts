@@ -1,6 +1,7 @@
 import { useDisclosure } from "@nextui-org/react";
 import useAIStream from "./useAIStream";
 import { ItemGetResponse } from "@/app/api/item/types";
+import type { AIProviderId } from "@/lib/ai-provider-factory";
 
 type AIFeature = {
     key: "summarize" | "explain";
@@ -18,7 +19,7 @@ export function useAIFeature(
     id: string,
     updateHistory: (prompt: string, completion: string, id: string) => void,
     item: ItemGetResponse | undefined,
-    modelIndex: number
+    provider: AIProviderId | null,
 ): AIFeature {
     const { isOpen, onOpenChange } = useDisclosure();
     const {
@@ -35,7 +36,7 @@ export function useAIFeature(
     const onPress = () => {
         onOpenChange();
         stream(item?.item?.key ?? "", {
-            body: { modelIndex },
+            body: { provider },
         });
     };
 
@@ -49,4 +50,4 @@ export function useAIFeature(
         setCompletion,
         onPress,
     };
-} 
+}
