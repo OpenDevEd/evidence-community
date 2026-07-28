@@ -26,7 +26,11 @@ import { twMerge } from "tailwind-merge";
 import { CountryDisplay } from "@/components/features/newlib/CountryDisplay";
 import Attachment from "@/components/features/items/Attachment";
 import VectorRelations from "@/components/features/newlib/VectorRelations";
-import { fetcher, getExtraValues } from "@/lib/utils";
+import {
+	fetcher,
+	getExtraValues,
+	localizeOrUseIfCapitalized,
+} from "@/lib/utils";
 import Relations from "@/components/features/newlib/Relations";
 import { DownloadButton } from "@/components/features/newlib/DownloadModal";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
@@ -58,8 +62,6 @@ import ItemHeader from "@/components/features/newlib/ItemHeader";
 import ItemTitle from "@/components/features/newlib/ItemTitle";
 import {
 	COUNTRIES,
-	FUNDING_PARTNER,
-	INSTITUTIONS_NAME,
 	getSafeReferrer,
 } from "@/constants/misc";
 import { transformItem } from "@/lib/utils";
@@ -73,6 +75,7 @@ import {
 } from "@opendeved/doi-sync-core/display";
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
+import Image from "next/image";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -317,12 +320,14 @@ function ItemAuthor({ author }: { author?: Author }) {
 														}}
 													>
 														<div className="w-4 h-3 rounded-sm overflow-hidden shadow-sm">
-															<img
+															<Image
 																src={`https://flagcdn.com/${institution.country_code.toLowerCase()}.svg`}
 																alt={
 																	institution.country_code
 																}
 																className="w-full h-full object-cover"
+																width={16}
+																height={12}
 															/>
 														</div>
 														<span className="text-xs text-black/60 dark:text-white/60">
@@ -445,12 +450,16 @@ function ItemInstitution({ institution }: { institution?: string }) {
 function ItemInstitutions({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
+	const { filters } = useLibraryConfig();
 	const institutions = (item?.institution as string[]) || [];
 	if (!institutions?.length && !loading) return null;
 
 	return (
 		<SidebarCard
-			title={t(INSTITUTIONS_NAME || "itemInstitutionsTitle")}
+			title={localizeOrUseIfCapitalized(
+				filters.institution.label,
+				t,
+			)}
 			count={item?.institution?.length}
 		>
 			{loading
@@ -469,17 +478,29 @@ function ItemInstitutions({ item }: { item: Item | undefined }) {
 	);
 }
 
-function ItemResearchPartner({ item }: { item: Item | undefined }) {
-	const { loading } = use(LoadingContext);
+function ItemFundingPartners() {
+	const { fundingPartners } = useLibraryConfig().identity;
 	const t = useTranslations("ui");
+	if (fundingPartners.length === 0) return null;
 
 	return (
-		<SidebarCard title={t("fundingPartner")} count={1}>
-			{loading ? (
-				<ItemInstitution key={0} institution={undefined} />
-			) : (
-				<ItemInstitution key={0} institution={FUNDING_PARTNER} />
-			)}
+		<SidebarCard
+			title={t("fundingPartner")}
+			count={fundingPartners.length}
+		>
+			{fundingPartners.map((partner) => (
+				<ItemRow
+					key={partner.id}
+					icon={
+						<Avatar
+							name={partner.name.charAt(0)}
+							size="sm"
+							className="text-lg text-accent bg-accent/10 brightness-150 shrink-0"
+						/>
+					}
+					title={partner.name}
+				/>
+			))}
 		</SidebarCard>
 	);
 }
@@ -568,6 +589,7 @@ function ItemDetailsRow({
 function ItemDetails({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
+	const { identity } = useLibraryConfig();
 	const excludedFields: (keyof Item)[] = [
 		"title",
 		"creators",
@@ -607,7 +629,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 	if (!item && !loading) return null;
 
 	const isCurrentEvidenceLibraryUrl = item
-		? getCanonicalWebsiteUrl(item) !== null
+		? getCanonicalWebsiteUrl(item, identity.baseUrl) !== null
 		: false;
 	const details = Object.entries(item || {})
 		.filter(([key, value]) => value !== null)
@@ -921,9 +943,9 @@ function normaliseCanonicalHost(host: string) {
 	return host.toLowerCase().replace(/^www\./, "");
 }
 
-function getCanonicalWebsiteUrl(item: Item) {
+function getCanonicalWebsiteUrl(item: Item, baseUrl: string) {
 	const itemUrl = parseUrl(item.url);
-	const canonicalBaseUrl = parseUrl(process.env.NEXT_PUBLIC_CANONICAL_BASE_URL);
+	const canonicalBaseUrl = parseUrl(baseUrl);
 	if (!itemUrl || !canonicalBaseUrl) return null;
 	if (
 		normaliseCanonicalHost(itemUrl.host) !==
@@ -939,8 +961,9 @@ function getCanonicalWebsiteUrl(item: Item) {
 function buildCanonicalWebsiteLink(
 	item: Item,
 	faviconUrl: string,
+	baseUrl: string,
 ): CanonicalWebsiteLink | null {
-	const itemUrl = getCanonicalWebsiteUrl(item);
+	const itemUrl = getCanonicalWebsiteUrl(item, baseUrl);
 	if (!itemUrl) return null;
 
 	return {
@@ -1028,7 +1051,8 @@ function ItemIdentifierRow({ link }: { link: IdentifierDisplayLink }) {
 
 function ItemIdentifiers({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
-	const faviconUrl = useLibraryConfig().identity.assets.favicon;
+	const { identity } = useLibraryConfig();
+	const faviconUrl = identity.assets.favicon;
 	const links = useMemo(() => {
 		if (!item) return [];
 
@@ -1038,9 +1062,13 @@ function ItemIdentifiers({ item }: { item: Item | undefined }) {
 			attachmentsData: item.attachmentsData?.map(toDoiDisplayAttachment),
 		}).links;
 
-		const canonicalLink = buildCanonicalWebsiteLink(item, faviconUrl);
+		const canonicalLink = buildCanonicalWebsiteLink(
+			item,
+			faviconUrl,
+			identity.baseUrl,
+		);
 		return canonicalLink ? [...doiLinks, canonicalLink] : doiLinks;
-	}, [faviconUrl, item]);
+	}, [faviconUrl, identity.baseUrl, item]);
 
 	if (!links.length) return null;
 
@@ -1508,9 +1536,7 @@ export default function ItemPage({
 							<div className="flex flex-col gap-8">
 								<ItemAuthors item={item} />
 								<ItemInstitutions item={item} />
-								{FUNDING_PARTNER && (
-									<ItemResearchPartner item={item} />
-								)}
+								<ItemFundingPartners />
 								<ItemIdentifiers item={item} />
 								<ItemDetails item={item} />
 								<ItemTechnical item={item} />

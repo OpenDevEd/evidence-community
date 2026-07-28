@@ -1,9 +1,3 @@
-const SITE_URL_ENV_KEYS = [
-	"BASE_URL",
-	"VERCEL_PROJECT_PRODUCTION_URL",
-	"VERCEL_URL",
-] as const;
-
 export function normalizeSiteOrigin(rawValue: string | undefined) {
 	if (!rawValue) return null;
 
@@ -21,35 +15,6 @@ export function normalizeSiteOrigin(rawValue: string | undefined) {
 	}
 }
 
-export function getConfiguredSiteOrigin() {
-	for (const envKey of SITE_URL_ENV_KEYS) {
-		const siteOrigin = normalizeSiteOrigin(process.env[envKey]);
-		if (siteOrigin) return siteOrigin;
-	}
-
-	return null;
-}
-
-export function getSiteOrigin() {
-	const siteOrigin = getConfiguredSiteOrigin();
-
-	if (!siteOrigin) {
-		throw new Error(
-			"BASE_URL or a Vercel site URL environment variable must be configured."
-		);
-	}
-
-	return siteOrigin;
-}
-
-export function buildSiteUrl(pathname: string, baseUrl = getSiteOrigin()) {
+export function buildSiteUrl(pathname: string, baseUrl: string) {
 	return new URL(pathname, `${baseUrl}/`).toString();
-}
-
-export function getSiteHost() {
-	const siteOrigin = getConfiguredSiteOrigin();
-
-	if (!siteOrigin) return null;
-
-	return new URL(siteOrigin).host;
 }

@@ -78,14 +78,12 @@ export default function ItemHeader({
 	const router = useRouter();
 	const tItemType = useTranslations("itemType");
 	const t = useTranslations("ui");
-	const url = process.env.BASE_URL;
-
+	const { identity } = useLibraryConfig();
 	const getUrl = useCallback(() => {
-		const baseUrl = typeof window !== "undefined" ? window.location.origin : url ?? "";
-		const finalURL = new URL(baseUrl + "/lib/" + item?.key);
+		const finalURL = new URL(`/lib/${item?.key}`, identity.baseUrl);
 		finalURL.search = "";
 		return finalURL.toString();
-	}, [item?.key, url]);
+	}, [identity.baseUrl, item?.key]);
 
 	const handleBack = () => {
 		if (window.history.length <= 1) {

@@ -6,15 +6,23 @@ import {
 import { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
 import { getPolicyLastModified } from "@/lib/policy-documents";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { connection } from "next/server";
 
-export const metadata: Metadata = getPolicyMetadata(
-	"Privacy Policy",
-	"Privacy notice describing how personal information is collected, used, and shared."
-);
+const description =
+	"Privacy notice describing how personal information is collected, used, and shared.";
+
+export async function generateMetadata(): Promise<Metadata> {
+	await connection();
+	const config = await getLibraryConfig();
+	return getPolicyMetadata("Privacy Policy", description, config.identity.name);
+}
 
 export default async function PrivacyPage() {
+	await connection();
+	const config = await getLibraryConfig();
 	const [content, tFooter, tNav, lastUpdated] = await Promise.all([
-		readPolicyDocument("privacy"),
+		readPolicyDocument("privacy", new URL(config.identity.baseUrl).host),
 		getTranslations("footer"),
 		getTranslations("nav"),
 		getPolicyLastModified("privacy"),

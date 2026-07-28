@@ -2,14 +2,13 @@ import { getItem } from "@/app/api/item/[key]/route";
 import {
 	getCachedItem,
 	getCachedItemSmall,
-	getCachedStatus,
 } from "@/app/api/cache";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
 import { buildLanguageAlternates } from "@/lib/language-alternates";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { buildSiteUrl } from "@/lib/site-url";
-import { convertToImageURL, getExtraValues, parseCompanyName } from "@/lib/utils";
+import { convertToImageURL, getExtraValues } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
 import { Suspense } from "react";
 import LoadingComponent from "./LoadingComponent";
@@ -43,13 +42,11 @@ export async function generateMetadata(props: {
 	params: Promise<{ key: string }>;
 }): Promise<Metadata> {
 	const params = await props.params;
-	const [data, status, libraryConfig] = await Promise.all([
+	const [data, libraryConfig] = await Promise.all([
 		getCurrentItem(params.key),
-		getCachedStatus(),
 		getLibraryConfig(),
 	]);
-
-	const { companyName, siteName } = parseCompanyName(status.companyName);
+	const baseUrl = libraryConfig.identity.baseUrl;
 
 	if (!data || !data.item) {
 		return {
@@ -80,21 +77,22 @@ export async function generateMetadata(props: {
 		description: item.abstractNote,
 		generator: "new-el",
 		alternates: {
-			canonical: buildSiteUrl(`/lib/${item.key}`),
+			canonical: buildSiteUrl(`/lib/${item.key}`, baseUrl),
 			languages: buildLanguageAlternates(
 				`/lib/${item.key}`,
 				libraryConfig.localization,
+				baseUrl,
 			),
 			types: {
-				"application/x-research-info-systems": buildSiteUrl(`/lib/${item.key}/export/ris`),
-				"application/x-bibtex": buildSiteUrl(`/lib/${item.key}/export/bibtex`),
+				"application/x-research-info-systems": buildSiteUrl(`/lib/${item.key}/export/ris`, baseUrl),
+				"application/x-bibtex": buildSiteUrl(`/lib/${item.key}/export/bibtex`, baseUrl),
 			},
 			media: {
 				"image/jpeg": pdfWithImage
 					? convertToImageURL(pdfWithImage.PDFCoverPageImage ?? "")
 					: null,
 				"application/pdf": pdfWithImage
-					? buildSiteUrl(`/lib/${item.key}/download/${pdfWithImage.key}`)
+					? buildSiteUrl(`/lib/${item.key}/download/${pdfWithImage.key}`, baseUrl)
 					: null,
 			},
 		},
@@ -133,14 +131,14 @@ export async function generateMetadata(props: {
 
 			citation_public_url: item.url ?? "",
 			citation_pdf_url: pdfWithImage
-				? buildSiteUrl(`/lib/${item.key}/download/${pdfWithImage.key}`)
+				? buildSiteUrl(`/lib/${item.key}/download/${pdfWithImage.key}`, baseUrl)
 				: "",
 		},
 		openGraph: {
 			title: item.title ?? "",
 			description: item.abstractNote ?? "",
-			url: buildSiteUrl(`/lib/${item.key}`),
-			siteName: `${companyName} - ${siteName}`,
+			url: buildSiteUrl(`/lib/${item.key}`, baseUrl),
+			siteName: libraryConfig.identity.name,
 			images: [
 				{
 					url: pdfWithImage

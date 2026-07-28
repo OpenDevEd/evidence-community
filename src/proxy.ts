@@ -13,7 +13,6 @@ import {
 	PUBLIC_READ_CACHE_CONTROL,
 } from "./lib/http-cache";
 import { getMeilisearchForConfig } from "./lib/meilisearch";
-import { getConfiguredSiteOrigin } from "./lib/site-url";
 import { normalizePathname } from "./lib/path";
 import {
 	getCanonicalLibraryRedirect,
@@ -188,7 +187,7 @@ async function getNoteRedirectDestination(request: NextRequest) {
 
 	const apiUrl = new URL(
 		`/api/redirects/${lookupPath.split("/").map(encodeURIComponent).join("/")}`,
-		getConfiguredSiteOrigin() ?? request.nextUrl.origin
+		request.nextUrl.origin
 	);
 
 	try {

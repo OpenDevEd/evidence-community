@@ -5,10 +5,6 @@ const withNextIntl = createNextIntlPlugin();
 
 const nextConfig = {
 	cacheComponents: true,
-	env: {
-		NEXT_PUBLIC_CANONICAL_BASE_URL:
-			process.env.NEXT_PUBLIC_CANONICAL_BASE_URL ?? process.env.BASE_URL ?? "",
-	},
 	experimental: {
 		staleTimes: {
 			dynamic: 30,
@@ -16,13 +12,9 @@ const nextConfig = {
 	},
 	reactCompiler: true,
 	images: {
-		remotePatterns: [
-			{ hostname: "tlxvwvgyaanqlmuyoguz.supabase.co" },
-			{ hostname: "lh3.googleusercontent.com" },
-			{ hostname: "ocivvlhqiwtxvnycqnia.supabase.co" },
-			{ hostname: "flagcdn.com" },
-		],
-		dangerouslyAllowLocalIP: true,
+		// Runtime configuration can reference any public asset host. Serving
+		// source URLs directly keeps one image build valid for every library.
+		unoptimized: true,
 	},
 	async rewrites() {
 		return {
@@ -31,11 +23,6 @@ const nextConfig = {
 				{
 					source: "/sitemap.xml",
 					destination: "/sitemap-index.xml",
-				},
-				{
-					source: "/images/:path*",
-					destination:
-						"https://ocivvlhqiwtxvnycqnia.supabase.co/storage/v1/object/public/new-kerko/:path*",
 				},
 			],
 			fallback: [],

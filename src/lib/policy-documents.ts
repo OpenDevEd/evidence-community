@@ -1,7 +1,5 @@
 import "server-only";
 
-import { getSiteHost } from "@/lib/site-url";
-import { parseCompanyName } from "@/lib/utils";
 import { readFile, stat } from "fs/promises";
 import { join } from "path";
 import { cacheLife, cacheTag } from "next/cache";
@@ -11,7 +9,6 @@ const POLICY_DOCUMENT_PATHS = {
 	cookiePolicy: join(process.cwd(), "docs", "cookie-policy.md"),
 } as const;
 
-const DEFAULT_POLICY_SITE_HOST = "docs.opendeved.net";
 const POLICY_SITE_HOST_TOKEN = "{{SITE_HOST}}";
 const POLICY_CONDITIONAL_CLOSE_TOKEN = "{{::}}";
 const POLICY_VERCEL_ENV_KEYS = [
@@ -35,10 +32,6 @@ type PolicyTemplateNode =
 
 function hasEnvValue(rawValue: string | undefined) {
 	return Boolean(rawValue?.trim());
-}
-
-function getPolicySiteHost() {
-	return getSiteHost() ?? DEFAULT_POLICY_SITE_HOST;
 }
 
 function getPolicyConditionalTags() {
@@ -119,8 +112,7 @@ function parsePolicyTemplate(content: string): PolicyTemplateNode[] {
 	return nodes;
 }
 
-function populatePolicyDocument(content: string) {
-	const siteHost = getPolicySiteHost();
+function populatePolicyDocument(content: string, siteHost: string) {
 	const enabledTags = getPolicyConditionalTags();
 
 	return parsePolicyTemplate(content)
@@ -189,12 +181,16 @@ function parsePolicyLastUpdated(content: string) {
 	return null;
 }
 
-export async function readPolicyDocument(document: keyof typeof POLICY_DOCUMENT_PATHS) {
+export async function readPolicyDocument(
+	document: keyof typeof POLICY_DOCUMENT_PATHS,
+	siteHost: string,
+) {
 	'use cache'
 	cacheLife({ revalidate: 3600 })
-	cacheTag('policy-doc-' + document)
+	cacheTag(`policy-doc-${document}-${siteHost}`)
 	return populatePolicyDocument(
-		await readFile(/* turbopackIgnore: true */ POLICY_DOCUMENT_PATHS[document], "utf-8")
+		await readFile(/* turbopackIgnore: true */ POLICY_DOCUMENT_PATHS[document], "utf-8"),
+		siteHost,
 	);
 }
 
@@ -215,12 +211,11 @@ export async function getPolicyLastModified(document: keyof typeof POLICY_DOCUME
 
 export function getPolicyMetadata(
 	title: "Privacy Policy" | "Cookie Policy",
-	description: string
+	description: string,
+	libraryName: string,
 ) {
-	const { companyName, siteName } = parseCompanyName(process.env.NEXT_PUBLIC_COMPANY_NAME);
-
 	return {
-		title: `${title} | ${companyName} - ${siteName}`,
+		title: `${title} | ${libraryName}`,
 		description,
 	};
 }

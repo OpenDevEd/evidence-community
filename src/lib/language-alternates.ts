@@ -6,7 +6,7 @@ export function buildLocalizedSiteUrl(
 	pathname: string,
 	locale: RuntimeLocalization["defaultLocale"],
 	localization: RuntimeLocalization,
-	baseUrl?: string,
+	baseUrl: string,
 ) {
 	return buildSiteUrl(
 		buildRuntimeLocalizedPathname(
@@ -21,7 +21,7 @@ export function buildLocalizedSiteUrl(
 export function buildLanguageAlternates(
 	pathname: string,
 	localization: RuntimeLocalization,
-	baseUrl?: string,
+	baseUrl: string,
 ) {
 	return Object.fromEntries([
 		...localization.locales.map((locale) => [

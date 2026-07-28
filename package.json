@@ -7,6 +7,7 @@
 		"build": "npm run schema:generate && FORCE_COLOR=1 NODE_OPTIONS='--max_old_space_size=8192' next build",
 		"start": "next start",
 		"deploy:server": "bash ./deploy/deploy-server.sh",
+		"db:migrate": "drizzle-kit migrate",
 		"config:validate": "tsx ./tools/validateLibraryConfig.ts",
 		"lint": "eslint .",
 		"test": "npm run test:unit && npm run test:e2e",

@@ -146,7 +146,6 @@ export default async function sitemap(props: {
 				.map((attachment: any) =>
 					convertToImageURL(
 						attachment.PDFCoverPageImage,
-						baseUrl,
 					)
 				),
 	}));

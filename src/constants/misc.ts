@@ -1115,10 +1115,6 @@ export const CSL_SKIP_WORDS = [
 
 export const SITEMAP_SIZE = 10000;
 
-export const INSTITUTIONS_NAME = process.env.NEXT_PUBLIC_INSTITUTIONS_NAME;
-
-export const FUNDING_PARTNER = process.env.NEXT_PUBLIC_FUNDING_PARTNER;
-
 /**
  * Acceptable referrer paths that users can navigate back to.
  * If a referrer doesn't start with one of these, it defaults to /lib.

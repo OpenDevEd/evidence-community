@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { Metadata } from "next";
 import { cacheLife, cacheTag } from "next/cache";
-import { getCachedItemSmall, getCachedStatus } from "@/app/api/cache";
+import { getCachedItemSmall } from "@/app/api/cache";
 import { Item } from "@/app/api/item/types";
-import { parseCompanyName } from "@/lib/utils";
+import { getLibraryConfig } from "@/config/library-config/server";
 import CitationPageClient from "./CitationPageClient";
 import { notFound } from "next/navigation";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -23,12 +23,10 @@ export async function generateMetadata(props: {
 	const params = await props.params;
 	cacheLife({ revalidate: 60 })
 	cacheTag('metadata-citation-' + params.key)
-	const [data, status] = await Promise.all([
+	const [data, libraryConfig] = await Promise.all([
 		getSourceItem(params.key),
-		getCachedStatus(),
+		getLibraryConfig(),
 	]);
-	
-	const { companyName, siteName } = parseCompanyName(status.companyName);
 
 	if (!data || !data.item) {
 		return {
@@ -45,7 +43,7 @@ export async function generateMetadata(props: {
 		openGraph: {
 			title: `Citations - ${item.title}`,
 			description: `View citation statistics and citing resources for "${item.title}"`,
-			siteName: `${companyName} - ${siteName}`,
+			siteName: libraryConfig.identity.name,
 		},
 	};
 }
@@ -91,6 +89,5 @@ export default async function CitationPage(props: {
 		</Suspense>
 	);
 }
-
 
 

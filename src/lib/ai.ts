@@ -78,6 +78,7 @@ function extractRAGPassages(
 	itemKey: string,
 	userQuery: string,
 	userSpecifiedPage: number,
+	baseUrl: string,
 ) {
 	const formattedDocuments = hit._formatted?.fullTextPDFs;
 	const rawDocuments = hit.fullTextPDFs ?? [];
@@ -127,7 +128,7 @@ function extractRAGPassages(
 					similarity: hit._rankingScore ?? 0,
 					page: pageNumber,
 					parentKey: itemKey,
-					url: buildSiteUrl(`/lib/${itemKey}`),
+					url: buildSiteUrl(`/lib/${itemKey}`, baseUrl),
 				},
 			});
 			order += 1;
@@ -147,7 +148,7 @@ function extractRAGPassages(
 export const findRelevantContent = async (
 	config: Pick<
 		LibraryServerConfig,
-		"revision" | "search" | "services" | "updatedAt"
+		"revision" | "search" | "services" | "updatedAt" | "identity"
 	>,
 	userQuery: string,
 	itemKey: string | null,
@@ -180,6 +181,7 @@ export const findRelevantContent = async (
 			itemKey,
 			userQuery,
 			userSpecifiedPage,
+			config.identity.baseUrl,
 		),
 	);
 };

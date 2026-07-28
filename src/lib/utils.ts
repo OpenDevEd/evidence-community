@@ -3,7 +3,6 @@ import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
 import { COUNTRIES, COUNTRY_PARAMS, CSL_SKIP_WORDS } from "@/constants/misc";
-import { getSiteOrigin } from "@/lib/site-url";
 import { z } from "zod";
 import { areLinksValid } from "./actions";
 import { InferSelectModel } from "drizzle-orm";
@@ -235,22 +234,8 @@ export function cleanAIResponse(response: string) {
 	return result;
 }
 
-export function parseCompanyName(raw: string | null | undefined): {
-	companyName: string;
-	siteName: string;
-} {
-	if (!raw) return { companyName: "Evidence Library", siteName: "Evidence Library" };
-	const parts = raw.split("|");
-	const companyName = parts[0].trim();
-	const siteName = parts[1]?.trim() || "Evidence Library";
-	return { companyName, siteName };
-}
-
-export function convertToImageURL(
-	url: string,
-	baseUrl = getSiteOrigin(),
-) {
-	return baseUrl + "/images/" + url.split("/").slice(8).join("/");
+export function convertToImageURL(url: string) {
+	return url;
 }
 
 export function getCountryAncestry(country: string) {
