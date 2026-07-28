@@ -12,13 +12,21 @@ export default defineConfig({
 	reporter: "list",
 	use: {
 		baseURL,
+		ignoreHTTPSErrors:
+			process.env.PLAYWRIGHT_IGNORE_HTTPS_ERRORS === "true",
 		screenshot: "only-on-failure",
 		trace: "on-first-retry",
 	},
 	projects: [
 		{
 			name: "chromium",
+			testIgnore: /runtime-mobile\.spec\.ts$/u,
 			use: { ...devices["Desktop Chrome"] },
+		},
+		{
+			name: "mobile-chromium",
+			testMatch: /runtime-mobile\.spec\.ts$/u,
+			use: { ...devices["Pixel 5"] },
 		},
 	],
 	webServer: process.env.PLAYWRIGHT_BASE_URL

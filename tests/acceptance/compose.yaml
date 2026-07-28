@@ -6,6 +6,12 @@ x-library-service: &library-service
   image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
   labels: *acceptance-labels
   depends_on:
+    ca-exporter:
+      condition: service_completed_successfully
+    fixture:
+      condition: service_healthy
+    mailpit:
+      condition: service_healthy
     postgres:
       condition: service_healthy
     meilisearch:
@@ -23,6 +29,67 @@ x-library-service: &library-service
     start_period: 10s
 
 services:
+  fixture:
+    image: caddy:2.11.4-alpine
+    labels: *acceptance-labels
+    environment:
+      FIXTURE_PORT: "${EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT:-4443}"
+    networks:
+      default:
+        aliases:
+          - collector.localhost
+    ports:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT:-4443}:${EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT:-4443}"
+    tmpfs:
+      - /config
+    volumes:
+      - ./fixture/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    healthcheck:
+      test:
+        - CMD
+        - wget
+        - --no-check-certificate
+        - --quiet
+        - --spider
+        - "https://127.0.0.1:${EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT:-4443}/health"
+      interval: 2s
+      timeout: 2s
+      retries: 60
+      start_period: 5s
+
+  ca-exporter:
+    image: alpine:3.23
+    labels: *acceptance-labels
+    depends_on:
+      fixture:
+        condition: service_healthy
+    command:
+      - /bin/sh
+      - -euc
+      - |
+        cp /caddy-data/caddy/pki/authorities/local/root.crt /ca/root.crt
+        chmod 0444 /ca/root.crt
+    volumes:
+      - caddy_data:/caddy-data:ro
+      - caddy_ca:/ca
+
+  mailpit:
+    image: axllent/mailpit:v1.30.0
+    labels: *acceptance-labels
+    environment:
+      MP_DATABASE: /data/mailpit.db
+    ports:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT:-38025}:8025"
+    tmpfs:
+      - /data
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+      start_period: 5s
+
   postgres:
     image: pgvector/pgvector:pg17
     labels: *acceptance-labels
@@ -63,16 +130,24 @@ services:
     <<: *library-service
     environment:
       LIBRARY_CONFIG_PATH: /runtime/config/library.json
+      NODE_EXTRA_CA_CERTS: /ca/root.crt
     ports:
       - "${EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT:-3142}:3000"
     volumes:
       - "${EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR:?runtime directory is required}/amber:/runtime/config:ro"
+      - caddy_ca:/ca:ro
 
   indigo:
     <<: *library-service
     environment:
       LIBRARY_CONFIG_PATH: /runtime/config/library.json
+      NODE_EXTRA_CA_CERTS: /ca/root.crt
     ports:
       - "${EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_PORT:-3143}:3000"
     volumes:
       - "${EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR:?runtime directory is required}/indigo:/runtime/config:ro"
+      - caddy_ca:/ca:ro
+
+volumes:
+  caddy_ca:
+  caddy_data:

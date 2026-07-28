@@ -193,7 +193,7 @@
   "features": {
     "themeSwitcher": true,
     "languageSwitcher": true,
-    "login": false,
+    "login": true,
     "navbarSearch": true,
     "userCollections": false,
     "ai": true,
@@ -206,8 +206,8 @@
     "authorFilter": true,
     "authorLocation": true,
     "yearsDropdown": true,
-    "downloads": false,
-    "atomFeed": false
+    "downloads": true,
+    "atomFeed": true
   },
   "collections": [
     {
@@ -229,8 +229,21 @@
       "order": 0
     }
   ],
-  "gapMaps": [],
-  "exports": {},
+  "gapMaps": [
+    {
+      "id": "amber-runtime-map",
+      "slug": "amber-runtime-map",
+      "label": "Amber Runtime Gap Map",
+      "description": "A locally served runtime gap map.",
+      "sourceUrl": "https://fixture/gapmaps/amber-runtime-map.html",
+      "enabled": true
+    }
+  ],
+  "exports": {
+    "ris": "https://fixture/exports/amber-library.ris",
+    "bibtex": "https://fixture/exports/amber-library.bib",
+    "atom": "https://fixture/exports/amber-library.atom"
+  },
   "services": {
     "database": {
       "url": "postgresql://library:library@postgres:5432/amber"
@@ -261,9 +274,14 @@
     }
   },
   "analytics": {
+    "posthog": {
+      "host": "https://collector.localhost:4443",
+      "key": "phc_acceptance_amber_runtime"
+    },
     "utmDurationSeconds": 600
   },
   "authentication": {
+    "secret": "amber-acceptance-auth-secret-0000000000000000",
     "google": {
       "enabled": false
     }

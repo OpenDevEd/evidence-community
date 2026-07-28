@@ -116,6 +116,8 @@ const expectedAiSearch =
 	process.env.PLAYWRIGHT_EXPECTED_AI_SEARCH !== "false";
 const expectedDeepResearch =
 	process.env.PLAYWRIGHT_EXPECTED_DEEP_RESEARCH !== "false";
+const expectedContactPage =
+	process.env.PLAYWRIGHT_EXPECTED_EMAIL !== "false";
 
 test("redirects the root route to the evidence library", async ({
 	request,
@@ -272,6 +274,15 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 			.locator("#footer")
 			.getByRole("link", { name: "Terms of Service", exact: true }),
 	).toHaveAttribute("href", /^https:\/\//u);
+
+	if (!expectedContactPage) {
+		await page.goto("/contact");
+		await expect(
+			page.getByText("Page Not Found", { exact: true }),
+		).toBeVisible();
+		await expect(page.locator("form")).toHaveCount(0);
+		return;
+	}
 
 	await page.goto("/contact");
 	const contactDetails = page.getByRole("main");

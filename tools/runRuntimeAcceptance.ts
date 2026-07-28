@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import {
-	copyFileSync,
 	mkdirSync,
 	readFileSync,
 	rmSync,
+	writeFileSync,
 } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -63,6 +63,10 @@ const image =
 	"evidence-library-acceptance:local";
 const meilisearchPort =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_MEILI_PORT ?? "7712";
+const fixturePort =
+	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT ?? "4443";
+const mailpitPort =
+	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT ?? "38025";
 const amberPort =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT ?? "3142";
 const indigoPort =
@@ -73,6 +77,8 @@ const skipBuild = process.argv.includes("--skip-build");
 const commandEnvironment = {
 	...process.env,
 	EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE: image,
+	EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT: fixturePort,
+	EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT: mailpitPort,
 	EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID: String(process.pid),
 	EVIDENCE_LIBRARY_ACCEPTANCE_PERSISTENT: String(keepRunning),
 	EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR: runtimeDirectory,
@@ -84,7 +90,6 @@ const persistentLabel =
 
 type Profile = {
 	config: LibraryServerConfig;
-	configPath: string;
 	name: "amber" | "indigo";
 	port: string;
 };
@@ -244,18 +249,29 @@ function loadProfile(
 	port: string,
 ): Profile {
 	const configPath = path.join(configDirectory, `${name}.json`);
+	const input = JSON.parse(readFileSync(configPath, "utf8")) as {
+		analytics?: { posthog?: { host?: string } };
+	};
+	if (input.analytics?.posthog?.host) {
+		const collectorUrl = new URL(
+			input.analytics.posthog.host,
+		);
+		collectorUrl.port = fixturePort;
+		input.analytics.posthog.host = collectorUrl.origin;
+	}
 	const config = libraryConfigSchema.parse(
-		JSON.parse(readFileSync(configPath, "utf8")),
+		input,
 	);
-	return { config, configPath, name, port };
+	return { config, name, port };
 }
 
 function prepareRuntimeConfig(profile: Profile) {
 	const targetDirectory = path.join(runtimeDirectory, profile.name);
 	mkdirSync(targetDirectory, { recursive: true });
-	copyFileSync(
-		profile.configPath,
+	writeFileSync(
 		path.join(targetDirectory, "library.json"),
+		`${JSON.stringify(profile.config, null, "\t")}\n`,
+		"utf8",
 	);
 }
 
@@ -445,12 +461,21 @@ function publicExpectations(profile: Profile) {
 			: config.theme.defaultMode);
 	const searchItemPrefix =
 		profile.name === "amber" ? "Amber" : "Indigo";
+	const enabledGapMap = config.gapMaps.find(
+		(gapMap) => gapMap.enabled,
+	);
+	const disabledGapMap = config.gapMaps.find(
+		(gapMap) => !gapMap.enabled,
+	);
 
 	return {
 		PLAYWRIGHT_BASE_URL: `http://127.0.0.1:${profile.port}`,
+		PLAYWRIGHT_RUNTIME_ACCEPTANCE: "true",
 		PLAYWRIGHT_EXPECTED_CONFIG_REVISION: config.revision,
 		PLAYWRIGHT_EXPECTED_CONFIG_UPDATED_AT: config.updatedAt,
 		PLAYWRIGHT_EXPECTED_IDENTITY_NAME: config.identity.name,
+		PLAYWRIGHT_EXPECTED_IDENTITY_SHORT_NAME:
+			config.identity.shortName,
 		PLAYWRIGHT_EXPECTED_LOGO_URL:
 			activeTheme === "dark"
 				? config.identity.assets.logoDark
@@ -558,6 +583,48 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_DEEP_RESEARCH: String(
 			config.features.deepResearch,
 		),
+		PLAYWRIGHT_EXPECTED_GAP_MAP: String(
+			Boolean(enabledGapMap),
+		),
+		PLAYWRIGHT_EXPECTED_EXPORT_RIS: String(
+			config.features.downloads &&
+				Boolean(config.exports.ris),
+		),
+		PLAYWRIGHT_EXPECTED_EXPORT_BIBTEX: String(
+			config.features.downloads &&
+				Boolean(config.exports.bibtex),
+		),
+		PLAYWRIGHT_EXPECTED_EXPORT_ATOM: String(
+			config.features.atomFeed &&
+				Boolean(config.exports.atom),
+		),
+		PLAYWRIGHT_EXPECTED_ANALYTICS: String(
+			Boolean(
+				config.analytics.posthog.host &&
+					config.analytics.posthog.key,
+			),
+		),
+		PLAYWRIGHT_EXPECTED_AUTHENTICATION: String(
+			config.features.login,
+		),
+		PLAYWRIGHT_EXPECTED_EMAIL: String(
+			Boolean(config.email.contactRecipient),
+		),
+		PLAYWRIGHT_FIXTURE_ORIGIN:
+			config.analytics.posthog.host ??
+			`https://collector.localhost:${fixturePort}`,
+		PLAYWRIGHT_MAILPIT_ORIGIN: `http://127.0.0.1:${mailpitPort}`,
+		PLAYWRIGHT_IGNORE_HTTPS_ERRORS: "true",
+		PLAYWRIGHT_GAP_MAP_SLUG: enabledGapMap?.slug ?? "",
+		PLAYWRIGHT_GAP_MAP_LABEL: enabledGapMap?.label ?? "",
+		PLAYWRIGHT_DISABLED_GAP_MAP_SLUG:
+			disabledGapMap?.slug ?? "",
+		PLAYWRIGHT_DISABLED_GAP_MAP_LABEL:
+			disabledGapMap?.label ?? "",
+		PLAYWRIGHT_GAP_MAP_MARKER: "AMBER_GAP_MAP_FIXTURE",
+		PLAYWRIGHT_CONTACT_RECIPIENT:
+			config.email.contactRecipient ?? "",
+		PLAYWRIGHT_EMAIL_SENDER: config.email.smtp.from ?? "",
 	};
 }
 
@@ -565,11 +632,112 @@ function runBrowserSuite(profile: Profile) {
 	console.log(`\nRunning ${profile.name} runtime acceptance suite`);
 	run(
 		"npx",
-		["playwright", "test", "tests/e2e/smoke.spec.ts"],
+		[
+			"playwright",
+			"test",
+			"tests/e2e/smoke.spec.ts",
+			"--project",
+			"chromium",
+		],
 		{
 			...commandEnvironment,
 			...publicExpectations(profile),
 		},
+	);
+	run(
+		"npx",
+		[
+			"playwright",
+			"test",
+			"tests/e2e/runtime-integrations.spec.ts",
+			"--project",
+			"chromium",
+		],
+		{
+			...commandEnvironment,
+			...publicExpectations(profile),
+		},
+	);
+	run(
+		"npx",
+		[
+			"playwright",
+			"test",
+			"tests/e2e/runtime-mobile.spec.ts",
+			"--project",
+			"mobile-chromium",
+		],
+		{
+			...commandEnvironment,
+			...publicExpectations(profile),
+		},
+	);
+}
+
+function countServerCollectorRequests(logs: string) {
+	return logs
+		.split("\n")
+		.filter(
+			(line) =>
+				line.includes('"method":"POST"') &&
+				/"uri":"\/(?:batch|e)\//u.test(line),
+		).length;
+}
+
+function verifyServerAnalyticsTransport(profile: Profile) {
+	const { host, key } = profile.config.analytics.posthog;
+	if (!host || !key) {
+		return;
+	}
+
+	const before = countServerCollectorRequests(
+		captureCompose("logs", "--no-color", "fixture"),
+	);
+	const eventName = `acceptance_server_${profile.name}_${Date.now()}`;
+	const script = [
+		'const { PostHog } = require("posthog-node");',
+		"const [host, key, event] = process.argv.slice(1);",
+		"const client = new PostHog(key, { host, flushAt: 1, flushInterval: 0 });",
+		'client.capture({ distinctId: "runtime-acceptance-server", event });',
+		"client.shutdown().then(() => process.exit(0)).catch((error) => { console.error(error); process.exit(1); });",
+	].join(" ");
+	compose(
+		"exec",
+		"--no-TTY",
+		profile.name,
+		"node",
+		"--eval",
+		script,
+		host,
+		key,
+		eventName,
+	);
+	const after = countServerCollectorRequests(
+		captureCompose("logs", "--no-color", "fixture"),
+	);
+	assert.ok(
+		after > before,
+		`${profile.name} server-side PostHog did not reach the configured collector`,
+	);
+	console.log(
+		`${profile.name} server-side PostHog reached the configured HTTPS collector.`,
+	);
+}
+
+function cleanupAcceptanceUsers() {
+	compose(
+		"exec",
+		"--no-TTY",
+		"postgres",
+		"psql",
+		"--set",
+		"ON_ERROR_STOP=1",
+		"--username",
+		"library",
+		"--dbname",
+		"amber",
+		"--command",
+		`DELETE FROM "user" WHERE "email" LIKE 'acceptance-%@example.org'`,
 	);
 }
 
@@ -795,7 +963,9 @@ async function main() {
 			"indigo",
 		);
 		await verifyLiveConfigLifecycle(profiles[0]);
+		profiles.forEach(verifyServerAnalyticsTransport);
 		profiles.forEach(runBrowserSuite);
+		cleanupAcceptanceUsers();
 		console.log("\nRuntime acceptance passed for Amber and Indigo.");
 		if (keepRunning) {
 			console.log(
@@ -810,6 +980,8 @@ async function main() {
 			"200",
 			"amber",
 			"indigo",
+			"fixture",
+			"mailpit",
 			"postgres",
 			"meilisearch",
 		);

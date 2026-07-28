@@ -224,8 +224,19 @@
       "order": 0
     }
   ],
-  "gapMaps": [],
-  "exports": {},
+  "gapMaps": [
+    {
+      "id": "indigo-disabled-map",
+      "slug": "indigo-disabled-map",
+      "label": "Indigo Disabled Gap Map",
+      "description": "A configured gap map that must remain unavailable.",
+      "sourceUrl": "https://fixture/gapmaps/indigo-disabled-map.html",
+      "enabled": false
+    }
+  ],
+  "exports": {
+    "ris": "https://fixture/exports/amber-library.ris"
+  },
   "services": {
     "database": {
       "url": "postgresql://library:library@postgres:5432/indigo"
@@ -264,14 +275,7 @@
     }
   },
   "email": {
-    "contactRecipient": "contact-indigo@example.org",
-    "takedownRecipient": "takedown-indigo@example.org",
-    "smtp": {
-      "host": "mailpit",
-      "port": 1025,
-      "security": "none",
-      "from": "runtime-indigo@example.org"
-    }
+    "smtp": {}
   },
   "generation": {
     "sitemap": false,
