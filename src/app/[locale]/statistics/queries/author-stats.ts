@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { eq, and, sql, desc } from "drizzle-orm";
 import { calculateHIndex } from "./utils";
@@ -53,7 +53,7 @@ export type AuthorCollaborationStats = {
 	collaborationRate: number;
 };
 
-export async function getAuthorCountries(): Promise<AuthorCountryStats[]> {
+export async function getAuthorCountries(db: Database): Promise<AuthorCountryStats[]> {
 	const authorCountriesResult = await db
 		.select({
 			countryCode: sql<string>`country_code`,
@@ -112,7 +112,7 @@ export async function getAuthorCountries(): Promise<AuthorCountryStats[]> {
 	return authorCountries;
 }
 
-export async function getAuthorProductivityStats(): Promise<AuthorProductivityStats> {
+export async function getAuthorProductivityStats(db: Database): Promise<AuthorProductivityStats> {
 	const globalAuthorProductivityResult = await db
 		.select({
 			totalAuthors: sql<number>`count(distinct author_name)`,
@@ -172,7 +172,7 @@ export async function getAuthorProductivityStats(): Promise<AuthorProductivitySt
 	return authorProductivityStats;
 }
 
-export async function getAuthorCollaborationStats(): Promise<AuthorCollaborationStats> {	
+export async function getAuthorCollaborationStats(db: Database): Promise<AuthorCollaborationStats> {
 	const globalCollaborationResult = await db
 		.select({
 			soloAuthors: sql<number>`count(distinct case when max_collaborators = 0 then author_name end)`,
@@ -218,7 +218,7 @@ export async function getAuthorCollaborationStats(): Promise<AuthorCollaboration
 	return authorCollaborationStats;
 }
 
-export async function getDetailedAuthorStats(): Promise<AuthorStats[]> {
+export async function getDetailedAuthorStats(db: Database): Promise<AuthorStats[]> {
 	const detailedAuthorStatsResult = await db
 		.select({
 			authorName: sql<string>`author_name`,
@@ -348,4 +348,4 @@ export async function getDetailedAuthorStats(): Promise<AuthorStats[]> {
 	
 	
 	return authorStats;
-} 
+}

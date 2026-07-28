@@ -1,9 +1,9 @@
 import { z } from "zod";
-import { db } from "@/db";
+import { getDatabase } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { authOptions, auth } from "../../auth/[...nextauth]/config";
+import { auth } from "../../auth/[...nextauth]/config";
 import { userCollection } from "@/db/schema/tables/userCollection";
 import { fromError } from "zod-validation-error";
 
@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
         { status: 401 }
       );
     }
+    const db = await getDatabase();
 
     const body = await req.json();
     const validatedData = createCollectionSchema.safeParse(body);

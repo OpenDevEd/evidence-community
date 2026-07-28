@@ -1,8 +1,8 @@
-import { auth, authOptions } from "@/app/api/auth/[...nextauth]/config";
+import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { eq } from "drizzle-orm";
 import { revalidateTag } from "next/cache";
 import { userCollection } from "@/db/schema/tables/userCollection";
-import { db } from "@/db";
+import { getDatabase } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function DELETE(req: NextRequest, props: { params: Promise<{ id: string }> }) {
@@ -11,6 +11,7 @@ export async function DELETE(req: NextRequest, props: { params: Promise<{ id: st
 	if (!session?.user) {
 		return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 	}
+	const db = await getDatabase();
 
 	const collection = await db.select().from(userCollection).where(eq(userCollection.id, id));
 	if (!collection) {

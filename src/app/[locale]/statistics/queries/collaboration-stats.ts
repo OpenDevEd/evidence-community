@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { eq, and, sql } from "drizzle-orm";
 import { COUNTRIES } from "@/constants/misc";
@@ -42,7 +42,7 @@ export type CollaborationStats = {
 	};
 };
 
-export async function getCollaborationStats(authorCountries: { countryCode: string; countryName: string; authorCount: number; itemCount: number; hIndex: number }[]): Promise<CollaborationStats> {
+export async function getCollaborationStats(db: Database, authorCountries: { countryCode: string; countryName: string; authorCount: number; itemCount: number; hIndex: number }[]): Promise<CollaborationStats> {
 	// First, get all items with their associated countries
 	const itemsWithCountriesResult = await db
 		.select({
@@ -187,4 +187,4 @@ export async function getCollaborationStats(authorCountries: { countryCode: stri
 	};
 	
 	return collaborationStats;
-} 
+}

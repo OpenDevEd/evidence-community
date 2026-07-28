@@ -22,10 +22,14 @@ import {
 	getCitationsByYear
 } from "./index";
 import { withMeilisearchCache } from "@/lib/cache-utils";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { getDatabaseForConfig } from "@/db";
 
 export async function getComprehensiveStats(): Promise<ComprehensiveStats> {
-	return withMeilisearchCache("comprehensive-stats", async () => {
-		const totalItems = await getTotalItems();
+	const config = await getLibraryConfig();
+	return withMeilisearchCache(`${config.revision}-comprehensive-stats`, async () => {
+		const db = await getDatabaseForConfig(config);
+		const totalItems = await getTotalItems(db);
 
 		const [
 			institutions,
@@ -47,27 +51,27 @@ export async function getComprehensiveStats(): Promise<ComprehensiveStats> {
 			topicsByYear,
 			citationsByYear
 		] = await Promise.all([
-			getInstitutionStats(),
-			getInstitutionStatsByYear(),
-			getAvailableYears(),
-			getItemTypeStats(totalItems),
-			getYearDistribution(),
-			getCitationStats(),
-			getCreatorStats(),
-			getFieldCompleteness(totalItems),
-			getAttachmentStats(totalItems),
-			getPublishersAndJournals(),
-			getRecentActivity(),
-			getAuthorCountries(),
-			getAuthorProductivityStats(),
-			getAuthorCollaborationStats(),
-			getDetailedAuthorStats(),
-			getTopicStats(),
-			getTopicStatsByYear(),
-			getCitationsByYear()
+			getInstitutionStats(db),
+			getInstitutionStatsByYear(db),
+			getAvailableYears(db),
+			getItemTypeStats(db, totalItems),
+			getYearDistribution(db),
+			getCitationStats(db),
+			getCreatorStats(db),
+			getFieldCompleteness(db, totalItems),
+			getAttachmentStats(db, totalItems),
+			getPublishersAndJournals(db),
+			getRecentActivity(db),
+			getAuthorCountries(db),
+			getAuthorProductivityStats(db),
+			getAuthorCollaborationStats(db),
+			getDetailedAuthorStats(db),
+			getTopicStats(db),
+			getTopicStatsByYear(db),
+			getCitationsByYear(db)
 		]);
 
-		const collaborationStats = await getCollaborationStats(authorCountries);
+		const collaborationStats = await getCollaborationStats(db, authorCountries);
 
 		return {
 			institutions,

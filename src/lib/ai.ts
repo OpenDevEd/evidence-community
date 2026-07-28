@@ -9,7 +9,7 @@ import { models, pricings } from "@/constants/ai";
 import posthogClient from "./posthog";
 import { embed, embedMany } from "ai";
 import { Item } from "@/app/api/item/types";
-import { db } from "@/db";
+import { getDatabase } from "@/db";
 import { embeddings, embeddings as embeddingsTable } from "@/db/schema/tables/embeddings";
 import { buildSiteUrl } from "@/lib/site-url";
 import { and, desc, eq, gt, or } from "drizzle-orm";
@@ -98,6 +98,7 @@ export const generateEmbeddings = async (
 
 export const createResource = async (item: NonNullable<Item["fullTextPDFs"]>[0], parentKey: string) => {
 	try {
+		const db = await getDatabase();
 		const existingEmbeddings = await db.select().from(embeddings).where(eq(embeddings.itemKey, item.key)).limit(1);
 		const embeddingsAlreadyExistOrItemHasNoPDFs = item.fullTextPDF.length === 0 || existingEmbeddings.length > 0;
 		if (embeddingsAlreadyExistOrItemHasNoPDFs) {
@@ -149,6 +150,7 @@ export const generateEmbedding = async (value: string): Promise<number[]> => {
 };
 
 export const doEmbeddingsExistForPDFs = async (itemKey: string) => {
+	const db = await getDatabase();
 	const existingEmbeddings = await db.select().from(embeddings).where(or(eq(embeddings.itemKey, itemKey), eq(embeddings.parentKey, itemKey))).limit(1);
 	return existingEmbeddings.length > 0;
 };
@@ -169,6 +171,7 @@ export const findRelevantContent = async (
 	if (!itemKey) {
 		return [];
 	}
+	const db = await getDatabase();
 	const userQueryEmbedded = await generateEmbedding(userQuery);
 	const similarity = sql<number>`1 - (${cosineDistance(
 		embeddings.embedding,

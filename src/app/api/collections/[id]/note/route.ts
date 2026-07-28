@@ -1,20 +1,23 @@
 import { and, eq, arrayContains, or } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { cacheLife, cacheTag } from "next/cache";
-import { db } from "@/db";
+import { getDatabaseForConfig } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 async function getCachedNote(
 	id: string,
 	configRevision: string,
 	descriptionTags: readonly string[],
+	config: LibraryServerConfig,
 ) {
 	'use cache'
 	cacheLife({ revalidate: 300 })
 	cacheTag('collection-note-' + id)
 	if (!descriptionTags.length) return null;
+	const db = await getDatabaseForConfig(config);
 
 	return db.query.item.findFirst({
 		where: and(
@@ -39,6 +42,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ id: s
 		id,
 		config.revision,
 		config.content.tags.description,
+		config,
 	);
 
 	return NextResponse.json({ note }, {

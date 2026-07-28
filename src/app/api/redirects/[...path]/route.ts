@@ -1,10 +1,11 @@
 import { and, arrayContains, eq, or } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
+import { getDatabaseForConfig } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 type RedirectsResponse = {
 	destination: string | null;
@@ -13,11 +14,13 @@ type RedirectsResponse = {
 async function getCachedRedirectsNote(
 	configRevision: string,
 	redirectTags: readonly string[],
+	config: LibraryServerConfig,
 ) {
 	"use cache";
 	cacheLife({ revalidate: 300 });
 	cacheTag("redirects-note");
 	if (!redirectTags.length) return null;
+	const db = await getDatabaseForConfig(config);
 
 	return db.query.item.findFirst({
 		where: and(
@@ -131,6 +134,7 @@ export async function GET(
 	const note = await getCachedRedirectsNote(
 		config.revision,
 		config.content.tags.redirects,
+		config,
 	);
 	const destination = note?.note
 		? parseRedirects(note.note).get(requestedPath) ?? null

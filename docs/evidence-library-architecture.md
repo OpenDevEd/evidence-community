@@ -107,7 +107,7 @@ become Meilisearch documents.
 Each frontend chooses its tenant through environment variables:
 
 ```text
-DATABASE_URL_POST -> one database in the shared PostgreSQL cluster
+services.database.url -> the active revision's PostgreSQL database
 MEILISEARCH_HOST  -> shared internal Meilisearch service
 MEILI_INDEX       -> one tenant-specific index
 ```

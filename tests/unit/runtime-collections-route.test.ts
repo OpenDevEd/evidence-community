@@ -4,6 +4,10 @@ vi.mock("@/app/api/cache", () => ({
 	getCachedCollectionsResult: vi.fn(),
 }));
 
+vi.mock("next/headers", () => ({
+	headers: vi.fn().mockResolvedValue(new Headers()),
+}));
+
 import { getCachedCollectionsResult } from "@/app/api/cache";
 import { GET } from "@/app/api/collections/route";
 

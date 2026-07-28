@@ -2,8 +2,10 @@ import {
 	getLibraryConfigHealth,
 	loadLibraryConfig,
 } from "@/config/library-config/source";
+import { headers } from "next/headers";
 
 export async function GET() {
+	await headers();
 	try {
 		await loadLibraryConfig();
 	} catch {

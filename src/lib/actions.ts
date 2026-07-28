@@ -1,6 +1,6 @@
 "use server";
 
-import { db } from "@/db";
+import { getDatabase } from "@/db";
 import { users } from "@/db/schema/tables/user";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { eq, and, InferSelectModel } from "drizzle-orm";
@@ -278,12 +278,14 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 }
 
 export const getUser = async (email: string) => {
+	const db = await getDatabase();
 	return await db.query.users.findFirst({
 		where: eq(users.email, email),
 	});
 };
 
 export const createUser = async (email: string, password: string) => {
+	const db = await getDatabase();
 	const hashedPassword = await bcrypt.hash(password, 10);
 	const [newUser] = await db
 		.insert(users)
@@ -617,6 +619,7 @@ export async function getProfile(
 	session: Session | null
 ): Promise<Session["user"]> {
 	const isCurrentUser = session?.user.id === id;
+	const db = await getDatabase();
 
 	const data = await db.transaction(async (tx) => {
 		const following = await tx.query.userToFollow
@@ -671,7 +674,7 @@ export async function getProfile(
 
 		const profile = isCurrentUser
 			? session?.user
-			: await db.query.users.findFirst({
+			: await tx.query.users.findFirst({
 				where: eq(users.id, id),
 				columns: {
 					name: true,

@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { eq, and, sql } from "drizzle-orm";
 import { calculateHIndex } from "./utils";
@@ -20,7 +20,7 @@ export type CreatorStats = {
 	maxCreatorsPerItem: number;
 };
 
-export async function getCitationStats(): Promise<CitationStats> {	
+export async function getCitationStats(db: Database): Promise<CitationStats> {
 	const citationStatsResult = await db
 		.select({
 			totalItems: sql<number>`count(*)`,
@@ -68,7 +68,7 @@ export async function getCitationStats(): Promise<CitationStats> {
 	return citationStats;
 }
 
-export async function getCreatorStats(): Promise<CreatorStats> {	
+export async function getCreatorStats(db: Database): Promise<CreatorStats> {
 	const creatorStatsResult = await db
 		.select({
 			totalCreators: sql<number>`sum(
@@ -134,4 +134,4 @@ export async function getCreatorStats(): Promise<CreatorStats> {
 	};
 	
 	return creatorStats;
-} 
+}

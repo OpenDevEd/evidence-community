@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { getDatabase, getDatabaseForConfig } from "@/db";
 import { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { Item } from "../types";
@@ -10,6 +10,7 @@ import config from "@/constants/config.json"
 import { getCachedCollections } from "../../cache";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { hasAnyTag } from "@/lib/tags";
 
 async function getMeilisearchItem(key: string) {
@@ -26,7 +27,13 @@ async function getMeilisearchItem(key: string) {
 	}
 }
 
-async function getDatabaseItem(key: string) {
+async function getDatabaseItem(
+	key: string,
+	libraryConfig?: LibraryServerConfig,
+) {
+	const db = libraryConfig
+		? await getDatabaseForConfig(libraryConfig)
+		: await getDatabase();
 	const result = await db.query.item.findFirst({
 		where: eq(item.key, key),
 	});
@@ -35,10 +42,15 @@ async function getDatabaseItem(key: string) {
 
 export async function getItemRaw(
 	key: string,
-	source: "db" | "meilisearch" = "meilisearch"
+	source: "db" | "meilisearch" = "meilisearch",
+	config?: LibraryServerConfig,
 ) {
-	const result = source === "db" ? await getDatabaseItem(key) : await getMeilisearchItem(key);
-	const { content } = await getLibraryConfig();
+	const libraryConfig = config ?? await getLibraryConfig();
+	const result =
+		source === "db"
+			? await getDatabaseItem(key, libraryConfig)
+			: await getMeilisearchItem(key);
+	const { content } = libraryConfig;
 
 	if (
 		!result ||
@@ -62,9 +74,10 @@ export async function getItem(
 	key: string,
 	source: "db" | "meilisearch" = "meilisearch"
 ) {
+	const libraryConfig = await getLibraryConfig();
 	const [rawResult, collections] = await Promise.all([
-		getItemRaw(key, source),
-		getCachedCollections(),
+		getItemRaw(key, source, libraryConfig),
+		getCachedCollections(libraryConfig),
 	]);
 
 	if (!rawResult.item) {

@@ -1,6 +1,6 @@
-import { db } from "@/db";
+import { getDatabase } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
-import { authOptions, auth } from "../auth/[...nextauth]/config";
+import { auth } from "../auth/[...nextauth]/config";
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { eq, and, sql, InferSelectModel } from "drizzle-orm";
 import { getCachedUserLikes } from "../cache";
@@ -14,6 +14,7 @@ export async function GET() {
   }
 
   try {
+    const db = await getDatabase();
     const likes = await db.query.usersToLikes.findMany({
       where: eq(usersToLikes.userId, session.user.id),
       with: {
@@ -41,6 +42,7 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const db = await getDatabase();
     const { itemKey } = await request.json();
 
     if (!itemKey) {

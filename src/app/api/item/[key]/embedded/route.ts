@@ -1,6 +1,6 @@
 import { item } from "@/db/schema/tables/item";
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/db";
+import { getDatabase } from "@/db";
 import { and, isNotNull, eq } from "drizzle-orm";
 import { embeddings } from "@/db/schema/tables/embeddings";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
@@ -11,8 +11,9 @@ export async function GET(
 ) {
 	const params = await props.params;
 	const { key } = params;
+	const db = await getDatabase();
 
-    const result = await db?.query.item.findMany({
+    const result = await db.query.item.findMany({
         where: and(eq(item.parentItem, key), isNotNull(item.PDFCoverPageImage)),
         columns: {
             key: true,
@@ -22,7 +23,7 @@ export async function GET(
     const attachments = result?.map((item) => item.key);
 
     const results = await Promise.all(attachments.map(async (attachment) => {
-        const result = await db?.query.embeddings.findFirst({
+        const result = await db.query.embeddings.findFirst({
             where: eq(embeddings.itemKey, attachment),
         });
         return result ? true : false;

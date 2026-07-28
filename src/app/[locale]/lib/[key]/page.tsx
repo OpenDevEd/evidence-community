@@ -1,5 +1,4 @@
 import { getItem } from "@/app/api/item/[key]/route";
-import { db } from "@/db";
 import {
 	getCachedItem,
 	getCachedItemSmall,
@@ -14,24 +13,6 @@ import { convertToImageURL, getExtraValues, parseCompanyName } from "@/lib/utils
 import ServerComponent from "./ServerComponent";
 import { Suspense } from "react";
 import LoadingComponent from "./LoadingComponent";
-
-// export async function generateStaticParams() {
-// 	if (process.env.SHOULD_GENERATE_STATIC_PAGES === "true") {
-// 		const documents = await db.query.item.findMany({
-// 			columns: {
-// 				key: true,
-// 				parentItem: true,
-// 			},
-// 		});
-
-// 		return documents.flatMap((item) =>
-// 			routing.locales.map((locale) => ({
-// 				locale,
-// 				key: item.parentItem ? item.parentItem : item.key,
-// 			}))
-// 		);
-// 	}
-// }
 
 export async function getCurrentItem(key: string) {
 	const data = await getCachedItemSmall(key).catch(() => ({

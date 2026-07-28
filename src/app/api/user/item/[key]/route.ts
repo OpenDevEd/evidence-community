@@ -1,6 +1,6 @@
-import { db } from "@/db";
+import { getDatabase } from "@/db";
 import { NextRequest, NextResponse } from "next/server";
-import { authOptions, auth } from "../../../auth/[...nextauth]/config";
+import { auth } from "../../../auth/[...nextauth]/config";
 import { itemToUserCollection } from "@/db/schema/tables/itemToUserCollection";
 import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod";
@@ -20,6 +20,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 	}
 
     try {
+		const db = await getDatabase();
 		const { key } = params;
 
 		const collections = await db.query.itemToUserCollection.findMany({
@@ -54,6 +55,7 @@ export async function POST(request: NextRequest, props: { params: Promise<{ key:
 	}
 
     try {
+		const db = await getDatabase();
 		const { key } = params;
 		const body = await request.json();
 

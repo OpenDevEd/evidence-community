@@ -1,8 +1,8 @@
 import dotenv from 'dotenv';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { eq } from 'drizzle-orm';
-import { item } from '@/db/schema/tables/item';
+import { createPostgresDatabaseResource } from '@/db/postgres';
+import { loadLibraryConfig } from '@/config/library-config/source';
 import { RelationsType } from '@/types/item';
 
 dotenv.config();
@@ -18,31 +18,40 @@ function getKey(url: string) {
         return;
     }
 
-	 const { db } = await import('@/db');
-     const reditectionsMap = new Map<string, string>();
-     const allItems = await db.query.item.findMany({
-        columns: {
-            key: true,
-            relations: true,
-        }
-     })
+	const config = await loadLibraryConfig();
+	const databaseResource = createPostgresDatabaseResource(
+		config.services.database.url,
+	);
+	try {
+		const redirectionsMap = new Map<string, string>();
+		const allItems = await databaseResource.database.query.item.findMany({
+			columns: {
+				key: true,
+				relations: true,
+			},
+		});
 
-    for (const item of allItems) {
-        const relations = (item.relations || {}) as RelationsType;
-        if (!relations) continue;
-        const value = relations['dc:replaces'];
-        if (value) {
-            if (Array.isArray(value)) {
-                for (const v of value) {
-                    reditectionsMap.set(getKey(v), item.key);
-                }
-            } else {
-                reditectionsMap.set(getKey(value), item.key);
-            }
-        }
-    }
-    
-    const mapToObject = Object.fromEntries(reditectionsMap);
+		for (const item of allItems) {
+			const relations = (item.relations || {}) as RelationsType;
+			if (!relations) continue;
+			const value = relations['dc:replaces'];
+			if (value) {
+				if (Array.isArray(value)) {
+					for (const replacement of value) {
+						redirectionsMap.set(getKey(replacement), item.key);
+					}
+				} else {
+					redirectionsMap.set(getKey(value), item.key);
+				}
+			}
+		}
 
-    await fs.writeFile(REDIRECTIONS_PATH, JSON.stringify(mapToObject, null, 2));
+		const mapToObject = Object.fromEntries(redirectionsMap);
+		await fs.writeFile(
+			REDIRECTIONS_PATH,
+			JSON.stringify(mapToObject, null, 2),
+		);
+	} finally {
+		await databaseResource.dispose();
+	}
 })();

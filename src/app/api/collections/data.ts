@@ -1,15 +1,17 @@
 import { getLibraryConfig } from "@/config/library-config/server";
-import { db } from "@/db";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { getDatabaseForConfig } from "@/db";
 import { applyRuntimeCollectionConfiguration } from "@/lib/collections";
 
-export async function getCollections() {
-	const [config, collections] = await Promise.all([
-		getLibraryConfig(),
-		db.query.collection.findMany(),
-	]);
+export async function getCollections(
+	config?: LibraryServerConfig,
+) {
+	const libraryConfig = config ?? await getLibraryConfig();
+	const db = await getDatabaseForConfig(libraryConfig);
+	const collections = await db.query.collection.findMany();
 
 	return applyRuntimeCollectionConfiguration(
 		collections,
-		config.collections,
+		libraryConfig.collections,
 	);
 }

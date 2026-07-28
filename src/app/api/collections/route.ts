@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
+import { headers } from "next/headers";
 import { Collection, CollectionsGetResponse } from "./types";
 import { getCachedCollectionsResult } from "../cache";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 
 export async function GET() {
+	await headers();
 	const result = await getCachedCollectionsResult();
 
 	if (!result.ok) {

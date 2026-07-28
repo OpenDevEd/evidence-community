@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { db } from "@/db";
-import { authOptions, auth } from "@/app/api/auth/[...nextauth]/config";
+import { getDatabase } from "@/db";
+import { auth } from "@/app/api/auth/[...nextauth]/config";
 import { userToFollow } from "@/db/schema/tables/userToFollow";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -17,6 +17,7 @@ export async function POST(request: Request) {
   });
 
   try {
+    const db = await getDatabase();
     const body = await request.json();
     const { id } = schema.parse(body);
 

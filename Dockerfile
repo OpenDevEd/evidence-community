@@ -24,11 +24,10 @@ FROM base AS builder
 #   1. Inlined into the client bundle by Next.js (NEXT_PUBLIC_*) or read by
 #      next.config.mjs for route rewrites (MEILI_INDEX).
 #   2. Read during Next.js 16's cacheComponents static pre-render of `'use cache'`
-#      routes (DATABASE_URL_POST, MEILISEARCH_HOST, MASTER_KEY). Database/cache
-#      values reach services via Coolify's internal Docker network.
+#      routes (MEILISEARCH_HOST, MASTER_KEY). Cache values reach services via
+#      Coolify's internal Docker network.
 # Coolify must pass these as build args (Service → Env vars → Available at Build).
 ARG BASE_URL
-ARG DATABASE_URL_POST
 ARG MASTER_KEY
 ARG MEILISEARCH_HOST
 ARG MEILI_INDEX
@@ -53,7 +52,6 @@ ARG NEXT_PUBLIC_TERTIARY_COLOR
 ARG NEXT_PUBLIC_UTM_DURATION
 
 ENV BASE_URL=$BASE_URL \
-	DATABASE_URL_POST=$DATABASE_URL_POST \
 	MASTER_KEY=$MASTER_KEY \
 	MEILISEARCH_HOST=$MEILISEARCH_HOST \
 	MEILI_INDEX=$MEILI_INDEX \

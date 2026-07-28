@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
 import { calculateHIndex } from "./utils";
@@ -38,7 +38,7 @@ export type TopicYearStats = {
 	hIndex: number;
 };
 
-export async function getTopicStats(): Promise<{ topicStats: TopicStats[]; topicOverview: TopicOverview }> {
+export async function getTopicStats(db: Database): Promise<{ topicStats: TopicStats[]; topicOverview: TopicOverview }> {
 	const topicStatsResult = await db
 		.select({
 			collections: item.collections,
@@ -161,7 +161,7 @@ export async function getTopicStats(): Promise<{ topicStats: TopicStats[]; topic
 	return { topicStats, topicOverview };
 }
 
-export async function getTopicStatsByYear(): Promise<TopicYearStats[]> {
+export async function getTopicStatsByYear(db: Database): Promise<TopicYearStats[]> {
 	const topicsByYearResult = await db
 		.select({
 			collections: item.collections,
@@ -251,4 +251,4 @@ export async function getTopicStatsByYear(): Promise<TopicYearStats[]> {
 	});
 
 	return topicYearStats;
-} 
+}

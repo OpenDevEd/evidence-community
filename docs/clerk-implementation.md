@@ -39,7 +39,7 @@ Uses `auth()` and `currentUser()` from `@clerk/nextjs/server`.
 ```ts
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { and, eq } from "drizzle-orm";
-import { db } from "@/db";
+import { getDatabase } from "@/db";
 import { accounts, users } from "@/db/schema/tables/user";
 
 type LocalUser = typeof users.$inferSelect;
@@ -77,6 +77,7 @@ function getPrimaryEmailAddress(
 }
 
 async function findUserByClerkAccount(clerkUserId: string) {
+  const db = await getDatabase();
   const account = await db.query.accounts.findFirst({
     where: and(
       eq(accounts.provider, "clerk"),
@@ -95,6 +96,7 @@ async function findUserByClerkAccount(clerkUserId: string) {
 }
 
 async function findUserByEmail(email: string) {
+  const db = await getDatabase();
   const user = await db.query.users.findFirst({
     where: eq(users.email, email),
   });
@@ -102,6 +104,7 @@ async function findUserByEmail(email: string) {
 }
 
 async function createLocalUserFromClerk(email: string) {
+  const db = await getDatabase();
   const clerkUser = await currentUser();
   if (!clerkUser) {
     return null;
@@ -130,6 +133,7 @@ async function createLocalUserFromClerk(email: string) {
 }
 
 async function ensureClerkAccountLink(userId: string, clerkUserId: string) {
+  const db = await getDatabase();
   await db
     .insert(accounts)
     .values({

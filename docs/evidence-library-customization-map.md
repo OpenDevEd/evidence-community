@@ -54,7 +54,7 @@ The Docker build currently accepts 45 application configuration arguments in add
 | Variable | Purpose | Main consumers |
 | --- | --- | --- |
 | `BASE_URL` | Public base URL and fallback canonical URL | `next.config.mjs`, site URL and metadata helpers |
-| `DATABASE_URL_POST` | PostgreSQL database for this library | `src/db/index.ts` |
+| `services.database.url` | Runtime PostgreSQL database for this library | `src/db/index.ts` |
 | `MEILISEARCH_HOST` | Meilisearch server | `src/lib/meilisearch.ts` and search/API routes |
 | `MASTER_KEY` | Meilisearch key | `src/lib/meilisearch.ts` |
 | `MEILI_INDEX` | Meilisearch index/library dataset | Search/API routes, `next.config.mjs`, gap-map routing |
@@ -134,7 +134,6 @@ The source also reads server variables that are not all declared as Docker build
 
 | Area | Variables |
 | --- | --- |
-| Database | `POSTGRES_POOL_MAX` |
 | Public URL | `NEXT_PUBLIC_CANONICAL_BASE_URL` |
 | Email | `CONTACT_EMAIL`, `TAKEDOWN_EMAIL`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS` |
 | Analytics | `GOOGLE_ANALYTICS_ID` |
@@ -442,7 +441,7 @@ Changing this file requires changing the repository and rebuilding.
 
 The combination of these values selects the library's data:
 
-- `DATABASE_URL_POST`
+- `services.database.url`
 - `MEILISEARCH_HOST`
 - `MASTER_KEY`
 - `MEILI_INDEX`

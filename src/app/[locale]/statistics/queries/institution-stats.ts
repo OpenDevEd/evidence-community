@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { sql, desc } from "drizzle-orm";
 import { calculateHIndex } from "./utils";
@@ -22,7 +22,7 @@ export type InstitutionYearStats = {
 	hIndex: number;
 };
 
-export async function getInstitutionStats(): Promise<InstitutionStats[]> {
+export async function getInstitutionStats(db: Database): Promise<InstitutionStats[]> {
 	const institutionStatsResult = await db
 		.select({
 			institution: sql<string>`institution_name`,
@@ -70,7 +70,7 @@ export async function getInstitutionStats(): Promise<InstitutionStats[]> {
 	}));
 }
 
-export async function getInstitutionStatsByYear(): Promise<InstitutionYearStats[]> {
+export async function getInstitutionStatsByYear(db: Database): Promise<InstitutionYearStats[]> {
 	const institutionsByYearResult = await db
 		.select({
 			institution: sql<string>`institution_name`,
@@ -136,4 +136,4 @@ export async function getInstitutionStatsByYear(): Promise<InstitutionYearStats[
 		avgCitationsPerItem: Number(stat.avgCitationsPerItem),
 		hIndex: calculateHIndex(stat.citationCounts?.map(c => Number(c)) || [])
 	}));
-} 
+}

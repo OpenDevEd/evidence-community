@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { eq, isNotNull, and, ne, sql, desc, gte } from "drizzle-orm";
 
@@ -32,7 +32,7 @@ export type CitationYearStats = {
 	avgCitationsPerItem: number;
 };
 
-export async function getTotalItems(): Promise<number> {
+export async function getTotalItems(db: Database): Promise<number> {
 	const totalItemsResult = await db
 		.select({ count: sql<number>`count(*)` })
 		.from(item)
@@ -48,7 +48,7 @@ export async function getTotalItems(): Promise<number> {
 	return Number(totalItems);
 }
 
-export async function getAvailableYears(): Promise<string[]> {
+export async function getAvailableYears(db: Database): Promise<string[]> {
 	const availableYearsResult = await db
 		.select({
 			year: sql<string>`extract(year from 
@@ -91,7 +91,7 @@ export async function getAvailableYears(): Promise<string[]> {
 	return availableYearsResult.map(stat => stat.year || '');
 }
 
-export async function getItemTypeStats(totalItems: number): Promise<ItemTypeStats[]> {
+export async function getItemTypeStats(db: Database, totalItems: number): Promise<ItemTypeStats[]> {
 	const itemTypeStatsResult = await db
 		.select({
 			itemType: item.itemType,
@@ -117,7 +117,7 @@ export async function getItemTypeStats(totalItems: number): Promise<ItemTypeStat
 	return itemTypes;
 }
 
-export async function getYearDistribution(): Promise<YearStats[]> {
+export async function getYearDistribution(db: Database): Promise<YearStats[]> {
 	const yearStatsResult = await db
 		.select({
 			year: sql<string>`extract(year from 
@@ -162,7 +162,7 @@ export async function getYearDistribution(): Promise<YearStats[]> {
 	}));
 }
 
-export async function getFieldCompleteness(totalItems: number): Promise<FieldStats[]> {
+export async function getFieldCompleteness(db: Database, totalItems: number): Promise<FieldStats[]> {
 	const fieldCompletenessResult = await db
 		.select({
 			titleFilled: sql<number>`count(case when ${item.title} is not null and ${item.title} != '' then 1 end)`,
@@ -206,7 +206,7 @@ export async function getFieldCompleteness(totalItems: number): Promise<FieldSta
 	return fieldCompleteness;
 }
 
-export async function getAttachmentStats(totalItems: number): Promise<AttachmentStats> {
+export async function getAttachmentStats(db: Database, totalItems: number): Promise<AttachmentStats> {
 	const attachmentStatsResult = await db
 		.select({
 			totalAttachments: sql<number>`count(case when ${item.parentItem} is not null and ${item.parentItem} != '' then 1 end)`,
@@ -224,7 +224,7 @@ export async function getAttachmentStats(totalItems: number): Promise<Attachment
 	return attachmentStats;
 }
 
-export async function getPublishersAndJournals(): Promise<{
+export async function getPublishersAndJournals(db: Database): Promise<{
 	topPublishers: { publisher: string; count: number }[];
 	topJournals: { journal: string; count: number }[];
 	languageDistribution: { language: string; count: number }[];
@@ -301,7 +301,7 @@ export async function getPublishersAndJournals(): Promise<{
 	};
 }
 
-export async function getRecentActivity(): Promise<{ date: string; count: number }[]> {
+export async function getRecentActivity(db: Database): Promise<{ date: string; count: number }[]> {
 	const recentActivityResult = await db
 		.select({
 			date: sql<string>`DATE(${item.dateAdded})`,
@@ -324,7 +324,7 @@ export async function getRecentActivity(): Promise<{ date: string; count: number
 	}));
 }
 
-export async function getCitationsByYear(): Promise<CitationYearStats[]> {
+export async function getCitationsByYear(db: Database): Promise<CitationYearStats[]> {
 	const citationsByYearResult = await db
 		.select({
 			year: sql<string>`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
@@ -359,4 +359,4 @@ export async function getCitationsByYear(): Promise<CitationYearStats[]> {
 		itemCount: Number(stat.itemCount),
 		avgCitationsPerItem: Number((Number(stat.avgCitationsPerItem) || 0).toFixed(2))
 	}));
-} 
+}

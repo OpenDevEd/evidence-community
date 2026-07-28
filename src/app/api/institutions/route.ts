@@ -1,10 +1,13 @@
-import { db } from "@/db";
+import { getDatabaseForConfig } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { desc, sql } from "drizzle-orm";
+import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { InstitutionsData } from "./types";
 import { withMeilisearchCache } from "@/lib/cache-utils";
+import { getLibraryConfig } from "@/config/library-config/server";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 
 // Helper function to calculate H-Index from citation counts
 function calculateHIndex(citationCounts: number[]): number {
@@ -27,7 +30,10 @@ function calculateHIndex(citationCounts: number[]): number {
 	return hIndex;
 }
 
-async function fetchInstitutionsData(): Promise<InstitutionsData> {
+async function fetchInstitutionsData(
+	config: LibraryServerConfig,
+): Promise<InstitutionsData> {
+	const db = await getDatabaseForConfig(config);
 	const institutionStatsResult = await db
 		.select({
 			institution: sql<string>`institution_name`,
@@ -94,8 +100,13 @@ async function fetchInstitutionsData(): Promise<InstitutionsData> {
 }
 
 export async function GET() {
+	await headers();
 	try {
-		const data = await withMeilisearchCache("institutions", fetchInstitutionsData);
+		const config = await getLibraryConfig();
+		const data = await withMeilisearchCache(
+			`${config.revision}-institutions`,
+			() => fetchInstitutionsData(config),
+		);
 		return NextResponse.json(data, {
 			headers: { "Cache-Control": PUBLIC_READ_CACHE_CONTROL },
 		});
