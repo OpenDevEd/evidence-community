@@ -128,10 +128,11 @@ These are defined in `src/constants/items.tsx`.
 | `NEXT_PUBLIC_GOOGLE_GENERATIVE_AI_MODEL` | Google model selection |
 | `NEXT_PUBLIC_MISTRAL_MODEL` | Mistral model selection |
 | `NEXT_PUBLIC_OPENAI_MODEL` | OpenAI model selection |
-| `NEXT_PUBLIC_POSTHOG_HOST` | PostHog host |
-| `NEXT_PUBLIC_POSTHOG_KEY` | PostHog project key |
 | `NEXT_PUBLIC_CONTACT_EMAIL` | Public contact address |
-| `NEXT_PUBLIC_UTM_DURATION` | UTM attribution duration |
+
+PostHog, Google Analytics, and the UTM attribution duration are runtime
+configuration fields: `analytics.posthog.host`, `analytics.posthog.key`,
+`analytics.google.measurementId`, and `analytics.utmDurationSeconds`.
 
 ### Server-only environment customization
 
@@ -141,7 +142,6 @@ The source also reads server variables that are not all declared as Docker build
 | --- | --- |
 | Public URL | `NEXT_PUBLIC_CANONICAL_BASE_URL` |
 | Email | `CONTACT_EMAIL`, `TAKEDOWN_EMAIL`, `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS` |
-| Analytics | `GOOGLE_ANALYTICS_ID` |
 | Authentication | `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `AUTH_SECRET` |
 | AI credentials | Provider SDK credentials such as `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `ANTHROPIC_API_KEY`, `MISTRAL_API_KEY`, and `DEEPSEEK_API_KEY`; `tools/tl.js` separately reads `GEMINI_API_KEY` |
 | Generation jobs | `SHOULD_GENERATE_SITEMAP`, `SHOULD_GENERATE_STATIC_PAGES`, `SHOULD_GENERATE_REDIRECTIONS` |

@@ -1,29 +1,25 @@
-import { PostHog } from 'posthog-node'
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { RevisionAwarePostHogFactory } from "./posthog-factory";
 
-// PostHog's constructor reads the API key eagerly and some versions throw on
-// missing values, so we can't instantiate at module load — `next build`'s
-// page-data collection imports route files (which transitively import this)
-// without the runtime env set. Lazy-construct on first property access via a
-// Proxy so every `import posthogClient from './posthog'` keeps working.
-let _client: PostHog | null = null;
+const globalPostHog = globalThis as typeof globalThis & {
+	__evidenceLibraryPostHogFactory?: RevisionAwarePostHogFactory;
+};
 
-function getClient(): PostHog {
-	if (!_client) {
-		_client = new PostHog(process.env.NEXT_PUBLIC_POSTHOG_KEY!, {
-			host: process.env.NEXT_PUBLIC_POSTHOG_HOST!,
-			flushAt: 1,
-			flushInterval: 0,
-		});
-	}
-	return _client;
+const posthogFactory =
+	globalPostHog.__evidenceLibraryPostHogFactory ??
+	new RevisionAwarePostHogFactory();
+
+globalPostHog.__evidenceLibraryPostHogFactory = posthogFactory;
+
+export function getPostHogForConfig(
+	config: Pick<
+		LibraryServerConfig,
+		"analytics" | "revision" | "updatedAt"
+	>,
+) {
+	return posthogFactory.get({
+		configuration: config.analytics.posthog,
+		revision: config.revision,
+		updatedAt: config.updatedAt,
+	});
 }
-
-const posthogClient = new Proxy({} as PostHog, {
-	get(_target, prop) {
-		const real = getClient();
-		const value = Reflect.get(real, prop, real);
-		return typeof value === "function" ? value.bind(real) : value;
-	},
-});
-
-export default posthogClient;

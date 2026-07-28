@@ -257,8 +257,9 @@ Before you answer, classify the user’s intent into one of two categories:
 			openai: { reasoningEffort: "low" },
 			google: { thinkingConfig: { thinkingBudget: 0 } },
 		},
-		onFinish(event) {
-			trackUsage(
+		async onFinish(event) {
+			await trackUsage(
+				config,
 				"chat_completion",
 				event,
 				distinctId,

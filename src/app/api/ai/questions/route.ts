@@ -91,7 +91,13 @@ export async function POST(req: Request) {
             prompt: JSON.stringify(fullTextPDFs)
         })
 
-        trackUsage("ai_" + prompt, result, distinctId, prompt);
+        await trackUsage(
+            libraryConfig,
+            "ai_" + prompt,
+            result,
+            distinctId,
+            prompt,
+        );
 
         return NextResponse.json(result.object.questions);
     } catch (error) {

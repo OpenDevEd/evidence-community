@@ -1,9 +1,10 @@
-'use client';
+"use client";
 
-import { useEffect, useMemo } from 'react';
-import { useQueryStates, parseAsString } from 'nuqs';
-import { useLocalStorage } from 'usehooks-ts';
+import { useEffect } from "react";
+import { useQueryStates, parseAsString } from "nuqs";
+import { useLocalStorage } from "usehooks-ts";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 type UTM = {
   utm_source?: string;
@@ -23,51 +24,14 @@ export type StoredUtm = {
 };
 
 export const UTM_KEYS: (keyof UTM)[] = [
-  'utm_source',
-  'utm_medium',
-  'utm_campaign',
-  'utm_term',
-  'utm_content',
+  "utm_source",
+  "utm_medium",
+  "utm_campaign",
+  "utm_term",
+  "utm_content",
 ];
 
-export const STORAGE_KEY = 'utm:active';
-
-/**
- * Parse NEXT_PUBLIC_UTM_DURATION into milliseconds.
- * Supports:
- * - "30d", "12h", "45m", "300s", "1500ms"
- * - Plain number -> treated as seconds (e.g., "3600" = 1 hour)
- * Default: 30 days.
- */
-function getDurationMs(): number {
-  const raw = (process.env.NEXT_PUBLIC_UTM_DURATION || '').trim();
-  const DEFAULT_MS = 30 * 24 * 60 * 60 * 1000; // 30d
-
-  if (!raw) return DEFAULT_MS;
-
-  const m = /^(\d+(?:\.\d+)?)(ms|s|m|h|d)?$/i.exec(raw);
-  if (!m) return DEFAULT_MS;
-
-  const amount = parseFloat(m[1]);
-  const unit = (m[2] || 's').toLowerCase(); // default to seconds if unit omitted
-
-  if (!Number.isFinite(amount) || amount <= 0) return DEFAULT_MS;
-
-  switch (unit) {
-    case 'ms':
-      return amount;
-    case 's':
-      return amount * 1000;
-    case 'm':
-      return amount * 60 * 1000;
-    case 'h':
-      return amount * 60 * 60 * 1000;
-    case 'd':
-      return amount * 24 * 60 * 60 * 1000;
-    default:
-      return DEFAULT_MS;
-  }
-}
+export const STORAGE_KEY = "utm:active";
 
 function normalize(v?: string | null): string | undefined {
   if (v == null) return undefined;
@@ -102,6 +66,7 @@ function utmEquals(a: UTM, b: UTM): boolean {
 
 export function UtmAttributionProvider() {
   const { consentState } = useAnalyticsConsent();
+  const { analytics } = useLibraryConfig();
   // Live UTMs from the URL (reactive)
   const [utmFromUrl] = useQueryStates({
     utm_source: parseAsString,
@@ -112,22 +77,24 @@ export function UtmAttributionProvider() {
   });
 
   // LocalStorage for the active UTMs with expiry
-  const [stored, setStored] = useLocalStorage<StoredUtm | null>(
+  const [, setStored, removeStored] = useLocalStorage<StoredUtm | null>(
     STORAGE_KEY,
     null
   );
 
-  const durationMs = useMemo(() => getDurationMs(), []);
+  const durationMs = analytics.utmDurationSeconds * 1000;
 
   useEffect(() => {
     if (consentState !== "granted") {
-      if (stored) {
-        setStored(null);
+      try {
+        if (window.localStorage.getItem(STORAGE_KEY) !== null) {
+          removeStored();
+        }
+      } catch (error) {
+        console.warn("Unable to clear stored UTM attribution", error);
       }
       return;
     }
-
-    const now = Date.now();
 
     // Build candidate from URL
     const candidate = collectValidUtms(utmFromUrl);
@@ -136,34 +103,34 @@ export function UtmAttributionProvider() {
       return;
     }
 
-    const isExpired = !stored || stored.expiresAt <= now;
+    const now = Date.now();
+    setStored((current) => {
+      const isExpired = !current || current.expiresAt <= now;
+      if (isExpired) {
+        // New session or expired -> set fresh
+        return {
+          utm: candidate,
+          startedAt: now,
+          expiresAt: now + durationMs,
+        };
+      }
 
-    if (isExpired) {
-      // New session or expired -> set fresh
-      setStored({
+      if (utmEquals(current.utm, candidate)) {
+        // Same UTMs appeared again -> renew TTL (keep original startedAt)
+        return {
+          ...current,
+          expiresAt: now + durationMs,
+        };
+      }
+
+      // Different UTMs -> overwrite and start a new window
+      return {
         utm: candidate,
         startedAt: now,
         expiresAt: now + durationMs,
-      });
-      return;
-    }
-
-    if (utmEquals(stored.utm, candidate)) {
-      // Same UTMs appeared again -> renew TTL (keep original startedAt)
-      setStored({
-        ...stored,
-        expiresAt: now + durationMs,
-      });
-      return;
-    }
-
-    // Different UTMs -> overwrite and start a new window
-    setStored({
-      utm: candidate,
-      startedAt: now,
-      expiresAt: now + durationMs,
+      };
     });
-  }, [consentState, durationMs, setStored, stored, utmFromUrl]);
+  }, [consentState, durationMs, removeStored, setStored, utmFromUrl]);
 
   return null;
 }

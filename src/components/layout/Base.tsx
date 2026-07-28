@@ -33,11 +33,9 @@ async function BaseContent({
 		getTranslations({ locale, namespace: "ui" }),
 	]);
 
-	const googleAnalyticsId = process.env.GOOGLE_ANALYTICS_ID || "";
 	return (
 		<NextIntlClientProvider messages={messages}>
 			<Providers
-				googleAnalyticsId={googleAnalyticsId}
 				status={status}
 				gapmaps={gapmaps}
 			>
@@ -88,7 +86,8 @@ export default async function Base({
 		await getLibraryConfig(),
 	);
 	const dir = getLangDir(locale);
-	const googleAnalyticsId = process.env.GOOGLE_ANALYTICS_ID || "";
+	const googleAnalyticsId =
+		libraryConfig.analytics.google.measurementId;
 
 	return (
 		<html lang={locale} dir={dir} suppressHydrationWarning>

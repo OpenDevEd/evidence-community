@@ -26,7 +26,6 @@
 		"@citation-js/plugin-bibtex": "^0.7.17",
 		"@citation-js/plugin-csl": "^0.7.14",
 		"@citation-js/plugin-ris": "^0.7.16",
-		"@next/third-parties": "^16.2.6",
 		"@nextui-org/react": "^2.6.11",
 		"@opendeved/doi-sync-core": "git+https://github.com/OpenDevEd/doi-sync-core.git#63f9645b185e9b0a003aaba13ed51d98b50d7aa9",
 		"@tanstack/react-form": "^1.6.3",

@@ -1,8 +1,8 @@
 "use client";
 
 import { StoredUtm, UTM_KEYS } from "@/components/features/UtmProvider";
-import { sendGAEvent } from "@next/third-parties/google";
-import posthog from "posthog-js";
+import type { LibraryPublicConfig } from "@/config/library-config/schema";
+import { PostHog } from "posthog-js";
 
 declare global {
 	interface Window {
@@ -30,22 +30,37 @@ export type PdfEventParams = {
 } & StoredUtm["utm"];
 
 export function trackPDFDownload(params: PdfEventParams) {
-	sendGAEvent("event", "pdf_download", {
+	if (!analyticsEnabled) {
+		return;
+	}
+
+	const event = {
 		engagement_time_msec: 1,
 		method: "download",
 		...params,
-	});
+	};
+	sendGoogleEvent("pdf_download", event);
+	posthogClient?.capture(
+		"download_attachment",
+		payloadToPosthog(params),
+	);
 }
 
 export function trackPDFView(params: PdfEventParams) {
-	sendGAEvent("event", "pdf_view", {
+	if (!analyticsEnabled) {
+		return;
+	}
+
+	const event = {
 		engagement_time_msec: 1,
 		method: "view",
 		...params,
-	});
+	};
+	sendGoogleEvent("pdf_view", event);
+	posthogClient?.capture("view_attachment", payloadToPosthog(params));
 }
 
-export function payloadToPosthog(params: PdfEventParams) {
+function payloadToPosthog(params: PdfEventParams) {
 	const payload: Record<string, unknown> = {
 		key: params.file_id,
 		filename: params.filename,
@@ -81,7 +96,9 @@ export type AttachmentAnalyticsPayload = {
 };
 
 let analyticsEnabled = false;
-let posthogInitialized = false;
+let posthogClient: PostHog | null = null;
+let posthogConfiguration: LibraryPublicConfig["analytics"]["posthog"] | null =
+	null;
 let googleAnalyticsMeasurementId: string | null = null;
 let googleAnalyticsReady = false;
 
@@ -92,8 +109,11 @@ type QueuedGoogleEvent = {
 
 const queuedGoogleEvents: QueuedGoogleEvent[] = [];
 
-function getPostHogApiHost() {
-	return process.env.NEXT_PUBLIC_POSTHOG_HOST?.trim();
+function posthogConfigurationsEqual(
+	left: LibraryPublicConfig["analytics"]["posthog"] | null,
+	right: LibraryPublicConfig["analytics"]["posthog"],
+) {
+	return left?.host === right.host && left?.key === right.key;
 }
 
 function gtag(...args: unknown[]) {
@@ -215,9 +235,7 @@ export function clearAnalyticsStorage() {
 
 	resetGoogleAnalyticsState();
 
-	if (posthogInitialized) {
-		posthog.opt_out_capturing();
-	}
+	posthogClient?.opt_out_capturing();
 
 	analyticsEnabled = false;
 	clearGACookies();
@@ -238,19 +256,32 @@ export function resetGoogleAnalytics() {
 	resetGoogleAnalyticsState();
 }
 
-export function initializePostHog() {
-	if (
-		posthogInitialized ||
-		typeof window === "undefined" ||
-		!process.env.NEXT_PUBLIC_POSTHOG_KEY ||
-		!getPostHogApiHost()
-	) {
-		return;
+export function initializePostHog(
+	configuration: LibraryPublicConfig["analytics"]["posthog"],
+) {
+	if (typeof window === "undefined") {
+		return false;
 	}
 
-	posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
+	if (!configuration.host || !configuration.key) {
+		posthogClient?.opt_out_capturing();
+		posthogClient = null;
+		posthogConfiguration = null;
+		return false;
+	}
+
+	if (
+		posthogClient &&
+		posthogConfigurationsEqual(posthogConfiguration, configuration)
+	) {
+		return true;
+	}
+
+	posthogClient?.opt_out_capturing();
+	const nextClient = new PostHog();
+	nextClient.init(configuration.key, {
 		advanced_disable_feature_flags_on_first_load: true,
-		api_host: getPostHogApiHost(),
+		api_host: configuration.host,
 		autocapture: false,
 		capture_pageleave: false,
 		capture_pageview: false,
@@ -261,36 +292,43 @@ export function initializePostHog() {
 		mask_personal_data_properties: true,
 		person_profiles: "never",
 		respect_dnt: true,
-		ui_host: "https://us.posthog.com",
 	});
 
-	posthogInitialized = true;
-}
-
-export function initializeClientAnalytics() {
-	if (!posthogInitialized) {
-		initializePostHog();
-	}
-
-	if (!posthogInitialized) {
-		analyticsEnabled = false;
-		return false;
-	}
-
-	posthog.opt_in_capturing({
-		captureEventName: false,
-	});
-
-	analyticsEnabled = true;
+	posthogClient = nextClient;
+	posthogConfiguration = configuration;
 	return true;
 }
 
+export function initializeClientAnalytics(
+	configuration: LibraryPublicConfig["analytics"],
+) {
+	const measurementId = configuration.google.measurementId;
+	if (measurementId) {
+		if (googleAnalyticsMeasurementId !== measurementId) {
+			prepareGoogleAnalytics(measurementId);
+		}
+	} else {
+		resetGoogleAnalyticsState();
+	}
+
+	const posthogAvailable = initializePostHog(configuration.posthog);
+	if (posthogAvailable) {
+		posthogClient?.opt_in_capturing({
+			captureEventName: false,
+		});
+	}
+
+	analyticsEnabled =
+		posthogAvailable || Boolean(measurementId);
+	return analyticsEnabled;
+}
+
 export function getAnalyticsDistinctId() {
-	if (!analyticsEnabled || !posthogInitialized) {
+	if (!analyticsEnabled || !posthogClient) {
 		return null;
 	}
 
-	return posthog.get_distinct_id();
+	return posthogClient.get_distinct_id();
 }
 
 export function updateGoogleConsent(granted: boolean) {
@@ -314,7 +352,7 @@ export function trackPageView(path?: string) {
 		page_path: pagePath,
 	});
 
-	posthog.capture("page_view", {
+	posthogClient?.capture("page_view", {
 		pagePath,
 	});
 }
@@ -339,7 +377,7 @@ export function trackAttachmentInteraction(
 		...basePayload,
 	});
 
-	posthog.capture("attachment_interaction", {
+	posthogClient?.capture("attachment_interaction", {
 		action: payload.action,
 		locale: payload.locale,
 		parentType: payload.parentType || "unknown",

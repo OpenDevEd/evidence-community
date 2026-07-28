@@ -45,7 +45,6 @@ import FullScreenModal from "@/components/nextui/FullScreenModal";
 import { getAIProviderPresentation } from "@/constants/ai";
 import { FaTools } from "react-icons/fa";
 import { AIMarkdown } from "../markdown/Markdown";
-import posthog from "posthog-js";
 import { Input } from "@/components/nextui/Input";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Textarea } from "@/components/nextui/Textarea";
@@ -56,6 +55,7 @@ import { SmartScreeningField, useIsAISearchEnabled } from "@/components/pages/Ev
 import useSWRMutation from "swr/mutation";
 import { cleanAIResponse, fetcher, setter } from "@/lib/utils";
 import { getRateLimits, runScreening } from "@/lib/actions";
+import { getAnalyticsDistinctId } from "@/lib/analytics";
 import Resource from "../items/Resource";
 import { GiStarSwirl } from "react-icons/gi";
 import { FaExclamationTriangle } from "react-icons/fa";
@@ -307,7 +307,7 @@ export default function ChatModal({
 			body: {
 				key: data?.item?.key,
 				provider,
-				distinctId: posthog.get_distinct_id(),
+				distinctId: getAnalyticsDistinctId(),
 				smartScreeningFields,
 				mode,
 			},
@@ -403,7 +403,6 @@ export default function ChatModal({
 				keysArray,
 				provider,
 				smartScreeningFields,
-				posthog.get_distinct_id()
 			);
 		if (Object.keys(result).length > 0) {
 			appendMessage(createTextMessage(

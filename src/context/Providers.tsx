@@ -206,17 +206,15 @@ function PramNotificationProvider({
 
 export default function Providers({
 	children,
-	googleAnalyticsId,
 	status,
 	gapmaps,
 }: {
 	children: ReactNode;
-	googleAnalyticsId: string;
 	status: RuntimeStatus;
 	gapmaps: GapMap[];
 }) {
 	const router = useRouter();
-	const { theme } = useLibraryConfig();
+	const { analytics, theme } = useLibraryConfig();
 
 	return (
 		<ThemeProvider
@@ -239,7 +237,9 @@ export default function Providers({
 									<UtmAttributionProvider />
 									{children}
 									<AnalyticsVendors
-										googleAnalyticsId={googleAnalyticsId}
+										googleAnalyticsId={
+											analytics.google.measurementId ?? ""
+										}
 									/>
 								</NextUIProvider>
 							</CacheProvider>

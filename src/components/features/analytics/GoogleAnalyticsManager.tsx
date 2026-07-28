@@ -19,11 +19,11 @@ export default function GoogleAnalyticsManager({
 	const isGranted = consentState === "granted";
 
 	useEffect(() => {
-		if (!gaId || typeof window === "undefined") {
+		if (typeof window === "undefined") {
 			return;
 		}
 
-		if (!isGranted) {
+		if (!gaId || !isGranted) {
 			resetGoogleAnalytics();
 			updateGoogleConsent(false);
 			return;

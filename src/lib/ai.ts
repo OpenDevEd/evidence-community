@@ -1,31 +1,45 @@
 import "server-only";
 
-import posthogClient from "./posthog";
+import { getPostHogForConfig } from "./posthog";
 import type { Item } from "@/app/api/item/types";
 import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { buildSiteUrl } from "@/lib/site-url";
 import { getMeilisearchForConfig } from "./meilisearch";
 
-export function trackUsage(
+export async function trackUsage(
+	config: LibraryServerConfig,
 	eventName: string,
 	event: any,
-	distinctId: string,
+	distinctId: string | null | undefined,
 	prompt: string
 ) {
-	const modelName = event.response.modelId;
+	if (!distinctId) {
+		return;
+	}
 
-	posthogClient.capture({
-		event: eventName,
-		distinctId: distinctId,
-		properties: {
-			model: modelName,
-			prompt: prompt,
-			prompt_tokens: event.usage?.promptTokens,
-			completion_tokens: event.usage?.completionTokens,
-			total_tokens: event.usage?.totalTokens,
-		},
-	});
+	try {
+		const posthogClient = await getPostHogForConfig(config);
+		if (!posthogClient) {
+			return;
+		}
+
+		const modelName = event.response.modelId;
+
+		posthogClient.capture({
+			event: eventName,
+			distinctId,
+			properties: {
+				model: modelName,
+				prompt,
+				prompt_tokens: event.usage?.promptTokens,
+				completion_tokens: event.usage?.completionTokens,
+				total_tokens: event.usage?.totalTokens,
+			},
+		});
+	} catch (error) {
+		console.error("Failed to record AI usage analytics", error);
+	}
 }
 
 export interface RAGResult {

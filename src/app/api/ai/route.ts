@@ -79,8 +79,14 @@ export async function POST(req: Request) {
 				},
 			},
 		},
-		onFinish(event) {
-			trackUsage("ai_" + prompt, event, distinctId, prompt);
+		async onFinish(event) {
+			await trackUsage(
+				libraryConfig,
+				"ai_" + prompt,
+				event,
+				distinctId,
+				prompt,
+			);
 		},
 	})
 

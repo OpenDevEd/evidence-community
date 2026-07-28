@@ -21,6 +21,7 @@ import {
 	useMemo,
 	useState,
 } from "react";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 type AnalyticsConsentContextValue = {
 	analyticsReady: boolean;
@@ -63,6 +64,7 @@ export function AnalyticsConsentProvider({
 }: {
 	children: React.ReactNode;
 }) {
+	const { analytics } = useLibraryConfig();
 	const [consentState, setConsentStateValue] = useState<AnalyticsConsentState>(
 		DEFAULT_ANALYTICS_CONSENT_STATE
 	);
@@ -71,7 +73,10 @@ export function AnalyticsConsentProvider({
 	const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
 
 	useEffect(() => {
-		initializePostHog();
+		initializePostHog(analytics.posthog);
+	}, [analytics.posthog]);
+
+	useEffect(() => {
 		const nextConsentState = readConsentCookie();
 		setConsentStateValue(nextConsentState);
 		setIsPreferencesOpen(nextConsentState === "pending");
@@ -89,10 +94,10 @@ export function AnalyticsConsentProvider({
 			return;
 		}
 
-		const didInitialize = initializeClientAnalytics();
+		const didInitialize = initializeClientAnalytics(analytics);
 		updateGoogleConsent(true);
 		setAnalyticsReady(didInitialize);
-	}, [consentState, hasHydratedConsent]);
+	}, [analytics, consentState, hasHydratedConsent]);
 
 	const closePreferences = useCallback(() => {
 		if (!hasHydratedConsent || consentState === "pending") {

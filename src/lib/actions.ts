@@ -146,7 +146,6 @@ export async function runScreening(
 	keys: string[],
 	provider: AIProviderId,
 	smartScreeningFields: SmartScreeningField[],
-	distinctId: string,
 ) {
 	const libraryConfig = await getLibraryConfig();
 	if (!isLibraryFeatureEnabled(libraryConfig.features, "ai")) {

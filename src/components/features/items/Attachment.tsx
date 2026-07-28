@@ -8,13 +8,12 @@ import Image from "next/image";
 import { LuDownload } from "react-icons/lu";
 import { Button } from "@/components/nextui/Button";
 import { FaEye } from "react-icons/fa";
-import posthog from "posthog-js";
 import { useTranslations } from "next-intl";
 import { Card } from "@/components/nextui/Card";
 import useSWR from "swr";
 import { fetcherExternal } from "@/lib/utils";
 import {
-	payloadToPosthog,
+	getAnalyticsDistinctId,
 	PdfEventParams,
 	trackPDFDownload,
 	trackPDFView,
@@ -58,7 +57,7 @@ function getPayload(
 	link_text: string,
 	utm: StoredUtm | null
 ): PdfEventParams {
-	const posthog_distinct_id = posthog?.get_distinct_id();
+	const posthog_distinct_id = getAnalyticsDistinctId() ?? undefined;
 
 	return {
 		file_id: data.key,
@@ -189,10 +188,6 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 								utm
 							);
 							trackPDFView(payload);
-							posthog.capture(
-								"view_attachment",
-								payloadToPosthog(payload)
-							);
 
 							window.open(downloadURL, "_blank");
 						}}
@@ -214,10 +209,6 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 								utm
 							);
 							trackPDFDownload(payload);
-							posthog.capture(
-								"download_attachment",
-								payloadToPosthog(payload)
-							);
 
 							downloadLink(data.url || "", data.filename || "");
 						}}
@@ -240,7 +231,6 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 							utm
 						);
 						trackPDFView(payload);
-						posthog.capture("view_attachment", payloadToPosthog(payload));
 
 						
 						window.open(pdfUrl, "_blank");
