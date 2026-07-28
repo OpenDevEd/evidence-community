@@ -10,6 +10,7 @@
 /coverage
 /playwright-report
 /test-results
+/tests/acceptance/runtime
 
 # next.js
 /.next/

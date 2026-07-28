@@ -1,0 +1,301 @@
+{
+  "schemaVersion": 1,
+  "revision": "acceptance-indigo-1",
+  "updatedAt": "2026-07-28T13:36:00Z",
+  "identity": {
+    "name": "Indigo Research Library",
+    "shortName": "Indigo Research",
+    "baseUrl": "https://indigo.example.org",
+    "fundingPartners": [
+      {
+        "id": "indigo-trust",
+        "name": "Indigo Trust"
+      }
+    ],
+    "assets": {
+      "logoDark": "https://raw.githubusercontent.com/github/explore/main/topics/typescript/typescript.png",
+      "logoLight": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png",
+      "favicon": "https://raw.githubusercontent.com/github/explore/main/topics/typescript/typescript.png",
+      "icons": [
+        "https://raw.githubusercontent.com/github/explore/main/topics/typescript/typescript.png"
+      ],
+      "logoStyles": "width: 3rem;\nheight: 3rem;\nborder: 3px solid #818cf8;"
+    }
+  },
+  "institutions": [
+    {
+      "id": "indigo-lab",
+      "name": "Indigo Lab",
+      "logoUrl": "https://raw.githubusercontent.com/github/explore/main/topics/typescript/typescript.png"
+    }
+  ],
+  "theme": {
+    "layout": "small",
+    "colors": {
+      "accent": "#818CF8",
+      "link": "#A5B4FC",
+      "collection": "#C4B5FD",
+      "doi": "#F0ABFC",
+      "tertiary": "#67E8F9",
+      "backgroundDark": "#11112B",
+      "backgroundLight": "#EEF2FF",
+      "cardDark": "#1E1B4B",
+      "cardLight": "#FFFFFF"
+    },
+    "defaultMode": "dark",
+    "forcedMode": "dark",
+    "fonts": {
+      "heading": {
+        "source": "google",
+        "family": "Ubuntu"
+      },
+      "body": {
+        "source": "google",
+        "family": "Ubuntu"
+      },
+      "weights": [
+        300,
+        400,
+        500,
+        700
+      ]
+    }
+  },
+  "navigation": {
+    "links": [
+      {
+        "id": "evidence",
+        "label": "Indigo Research",
+        "href": "/lib",
+        "icon": "EvidenceLibrary",
+        "children": [
+          {
+            "id": "privacy",
+            "label": "Indigo Privacy",
+            "href": "/privacy"
+          }
+        ]
+      },
+      {
+        "id": "external",
+        "label": "Indigo Network",
+        "href": "https://www.typescriptlang.org",
+        "icon": "https://raw.githubusercontent.com/github/explore/main/topics/typescript/typescript.png",
+        "target": "blank"
+      }
+    ]
+  },
+  "footer": {
+    "sections": [
+      {
+        "id": "resources",
+        "title": "Indigo Resources",
+        "links": [
+          {
+            "id": "library",
+            "label": "Indigo Library",
+            "href": "/lib"
+          }
+        ]
+      }
+    ],
+    "socialLinks": [
+      {
+        "provider": "linkedin",
+        "href": "https://linkedin.com/company/example"
+      }
+    ],
+    "funders": [
+      {
+        "id": "indigo-trust",
+        "name": "Indigo Trust",
+        "logoUrl": "https://raw.githubusercontent.com/github/explore/main/topics/typescript/typescript.png",
+        "href": "https://www.typescriptlang.org"
+      }
+    ],
+    "disclaimer": "Indigo research is supplied for testing.",
+    "attribution": "Curated by the Indigo Research team."
+  },
+  "contact": {
+    "email": "indigo@example.org",
+    "phone": "+442000000002",
+    "address": "2 Indigo Square\nLondon, United Kingdom"
+  },
+  "legal": {
+    "privacyPolicy": "/privacy",
+    "cookiePolicy": "/cookie-policy",
+    "termsOfService": "https://indigo.example.org/terms"
+  },
+  "localization": {
+    "locales": [
+      "en-GB"
+    ],
+    "defaultLocale": "en-GB",
+    "detectLocale": false,
+    "localePriority": [
+      "en-GB"
+    ]
+  },
+  "search": {
+    "fullText": false,
+    "tags": false,
+    "country": false,
+    "authorCountry": false,
+    "embeddings": false,
+    "scopes": [
+      "title"
+    ],
+    "defaultScope": "title"
+  },
+  "filters": {
+    "institution": {
+      "mode": "hidden",
+      "label": "institutions"
+    },
+    "countryLibrary": false,
+    "collectionsExpanded": true,
+    "years": {
+      "enabled": false,
+      "minimum": 2000,
+      "maximum": 2026
+    }
+  },
+  "content": {
+    "tags": {
+      "comingSoon": [
+        "coming-soon"
+      ],
+      "internal": [
+        "internal-only"
+      ],
+      "hidden": [
+        "hidden-record"
+      ],
+      "description": [
+        "collection-description"
+      ],
+      "redirects": [
+        "redirect-record"
+      ],
+      "publish": [
+        "publish-record"
+      ]
+    }
+  },
+  "citations": {
+    "showUrl": false
+  },
+  "features": {
+    "themeSwitcher": false,
+    "languageSwitcher": false,
+    "login": false,
+    "navbarSearch": false,
+    "userCollections": false,
+    "ai": false,
+    "aiSearch": false,
+    "deepResearch": false,
+    "relatedResources": false,
+    "collections": false,
+    "collectionNotes": false,
+    "countryFocus": false,
+    "authorFilter": false,
+    "authorLocation": false,
+    "yearsDropdown": false,
+    "downloads": false,
+    "atomFeed": false
+  },
+  "collections": [
+    {
+      "id": "ZBJ4NBSL",
+      "title": "Indigo Runtime First",
+      "enabled": true,
+      "order": 1
+    },
+    {
+      "id": "BBN8BK5J",
+      "title": "Indigo Runtime Themes",
+      "enabled": true,
+      "order": 2
+    },
+    {
+      "id": "IW8VHV4Z",
+      "title": "Hidden Work",
+      "enabled": false,
+      "order": 0
+    }
+  ],
+  "gapMaps": [],
+  "exports": {},
+  "services": {
+    "database": {
+      "url": "postgresql://library:library@postgres:5432/indigo"
+    },
+    "search": {
+      "host": "http://meilisearch:7700",
+      "key": "acceptance-master-key",
+      "index": "acceptance_indigo"
+    },
+    "zotero": {}
+  },
+  "ai": {
+    "providers": [
+      {
+        "provider": "google",
+        "enabled": true,
+        "apiKey": "google-api-key",
+        "defaultModel": "gemini-2.5-flash",
+        "largeModel": "gemini-2.5-pro",
+        "smallModel": "gemini-2.5-flash"
+      }
+    ],
+    "prompts": {
+      "questions": "Answer the user's question from the supplied evidence.",
+      "chat": "Discuss the supplied evidence.",
+      "explain": "Explain the supplied evidence.",
+      "summarize": "Indigo runtime summary prompt."
+    }
+  },
+  "analytics": {
+    "utmDurationSeconds": 600
+  },
+  "authentication": {
+    "google": {
+      "enabled": false
+    }
+  },
+  "email": {
+    "contactRecipient": "contact-indigo@example.org",
+    "takedownRecipient": "takedown-indigo@example.org",
+    "smtp": {
+      "host": "mailpit",
+      "port": 1025,
+      "security": "none",
+      "from": "runtime-indigo@example.org"
+    }
+  },
+  "generation": {
+    "sitemap": false,
+    "redirects": false
+  },
+  "processing": {
+    "structureRules": [
+      {
+        "id": "structure-one",
+        "priority": 10,
+        "condition": "has-pdf",
+        "action": "append-system-instruction",
+        "value": "Use the configured quotation structure."
+      }
+    ],
+    "pdfRules": [
+      {
+        "id": "pdf-one",
+        "priority": 20,
+        "condition": "has-pdf",
+        "action": "append-system-instruction",
+        "value": "Use stored PDF page numbers."
+      }
+    ],
+    "sharedRules": []
+  }
+}

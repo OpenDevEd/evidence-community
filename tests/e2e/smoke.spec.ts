@@ -11,6 +11,9 @@ const expectedIdentityName =
 const expectedLogoUrl =
 	process.env.PLAYWRIGHT_EXPECTED_LOGO_URL ??
 	"https://assets.example.org/library/logo-light.webp";
+const expectedLogoUrls = (
+	process.env.PLAYWRIGHT_EXPECTED_LOGO_URLS ?? expectedLogoUrl
+).split("|");
 const expectedFaviconUrl =
 	process.env.PLAYWRIGHT_EXPECTED_FAVICON_URL ??
 	"https://assets.example.org/library/favicon.png";
@@ -25,6 +28,14 @@ const expectedGoogleFontFamilies = (
 ).split("|");
 const expectedLoadedLogo =
 	process.env.PLAYWRIGHT_EXPECTED_LOADED_LOGO === "true";
+const expectedSearchItemKey =
+	process.env.PLAYWRIGHT_EXPECTED_SEARCH_ITEM_KEY ?? "";
+const expectedSearchItemTitle =
+	process.env.PLAYWRIGHT_EXPECTED_SEARCH_ITEM_TITLE ?? "";
+const expectedDatabaseItemKey =
+	process.env.PLAYWRIGHT_EXPECTED_DATABASE_ITEM_KEY ?? "";
+const expectedDatabaseItemTitle =
+	process.env.PLAYWRIGHT_EXPECTED_DATABASE_ITEM_TITLE ?? "";
 const expectedThemeClass =
 	process.env.PLAYWRIGHT_EXPECTED_THEME_CLASS ?? "";
 const expectedNavigationLabel =
@@ -140,6 +151,19 @@ test("reports the active runtime configuration revision only", async ({
 test("renders identity assets, logo CSS, colors, and fonts from runtime configuration", async ({
 	page,
 }) => {
+	if (expectedLoadedLogo) {
+		await page.route(
+			(url) => expectedLogoUrls.includes(url.toString()),
+			(route) =>
+				route.fulfill({
+					body: Buffer.from(
+						"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+						"base64",
+					),
+					contentType: "image/png",
+				}),
+		);
+	}
 	await page.goto("/lib");
 
 	await expect(page).toHaveTitle(expectedIdentityName);
@@ -547,7 +571,22 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 	const itemsResponse = await request.get("/api/items");
 	expect(itemsResponse.status()).toBe(200);
 	const firstItem = (await itemsResponse.json()).items?.[0];
-	expect(firstItem?.key).toBeTruthy();
+	if (expectedSearchItemKey) {
+		expect(firstItem?.key).toBe(expectedSearchItemKey);
+		expect(firstItem?.title).toBe(expectedSearchItemTitle);
+	} else {
+		expect(firstItem?.key).toBeTruthy();
+	}
+
+	if (expectedDatabaseItemKey) {
+		const databaseItemResponse = await request.get(
+			`/api/item/${expectedDatabaseItemKey}?source=db`,
+		);
+		expect(databaseItemResponse.status()).toBe(200);
+		const databaseItem = (await databaseItemResponse.json()).item;
+		expect(databaseItem?.key).toBe(expectedDatabaseItemKey);
+		expect(databaseItem?.title).toBe(expectedDatabaseItemTitle);
+	}
 
 	const embeddingsResponse = await request.get(
 		`/api/ai/embeddings/${firstItem.key}`,
@@ -561,6 +600,14 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 	}
 
 	await page.goto(`/en-GB/lib/${firstItem.key}`);
+	if (expectedSearchItemTitle) {
+		await expect(
+			page.getByRole("heading", {
+				level: 1,
+				name: expectedSearchItemTitle,
+			}),
+		).toBeVisible();
+	}
 	const itemUrl = new URL(`/lib/${firstItem.key}`, page.url()).toString();
 	const citationUrlText = page.getByText(
 		`Available at ${itemUrl}.`,

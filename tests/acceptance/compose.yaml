@@ -1,0 +1,78 @@
+x-acceptance-labels: &acceptance-labels
+  org.opendeved.evidence-library.acceptance.owner-pid: "${EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID:?owner pid is required}"
+  org.opendeved.evidence-library.acceptance.persistent: "${EVIDENCE_LIBRARY_ACCEPTANCE_PERSISTENT:-false}"
+
+x-library-service: &library-service
+  image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
+  labels: *acceptance-labels
+  depends_on:
+    postgres:
+      condition: service_healthy
+    meilisearch:
+      condition: service_healthy
+  restart: "no"
+  healthcheck:
+    test:
+      - CMD
+      - node
+      - -e
+      - fetch("http://127.0.0.1:3000/api/library-config/health").then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))
+    interval: 2s
+    timeout: 2s
+    retries: 60
+    start_period: 10s
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    labels: *acceptance-labels
+    environment:
+      POSTGRES_USER: library
+      POSTGRES_PASSWORD: library
+      POSTGRES_DB: postgres
+    ports:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_POSTGRES_PORT:-55434}:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      - ../../drizzle:/migrations:ro
+      - ./postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U library -d postgres"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+      start_period: 5s
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.37
+    labels: *acceptance-labels
+    environment:
+      MEILI_MASTER_KEY: acceptance-master-key
+      MEILI_NO_ANALYTICS: "true"
+    ports:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_MEILI_PORT:-7712}:7700"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:7700/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+      start_period: 5s
+
+  amber:
+    <<: *library-service
+    environment:
+      LIBRARY_CONFIG_PATH: /runtime/config/library.json
+    ports:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT:-3142}:3000"
+    volumes:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR:?runtime directory is required}/amber:/runtime/config:ro"
+
+  indigo:
+    <<: *library-service
+    environment:
+      LIBRARY_CONFIG_PATH: /runtime/config/library.json
+    ports:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_PORT:-3143}:3000"
+    volumes:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR:?runtime directory is required}/indigo:/runtime/config:ro"
