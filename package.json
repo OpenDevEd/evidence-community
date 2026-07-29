@@ -16,6 +16,7 @@
 		"test:acceptance": "tsx ./tools/runRuntimeAcceptance.ts",
 		"test:source-model": "tsx ./tools/verifySourceModel.ts",
 		"test:source-writer": "tsx ./tools/verifySourceIngestionWriter.ts",
+		"test:zotero-source": "tsx ./tools/verifyZoteroSourceSync.ts",
 		"test:native-lifecycle": "tsx ./tools/verifyNativeItemLifecycle.ts",
 		"test:native-file-lifecycle": "tsx ./tools/verifyNativeFileLifecycle.ts",
 		"test:file-storage": "tsx ./tools/verifySupabaseFileStorage.ts",

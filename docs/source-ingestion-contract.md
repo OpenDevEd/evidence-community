@@ -28,6 +28,11 @@ Library databases and deployments are not migrated or modified.
   and import history remain independent.
 - Credentials are referenced by `credentialRef`; secrets are not stored in the
   source record.
+- Zotero is a read-only Web API v3 source in v1. Its durable cursor records the
+  last complete library version and, during large imports, the target version
+  plus the source snapshot and next deterministic manifest offset. It also
+  retains soft-trash keys so restoring a parent rehydrates unchanged
+  descendants and memberships from a full source snapshot.
 
 ## Canonical records
 

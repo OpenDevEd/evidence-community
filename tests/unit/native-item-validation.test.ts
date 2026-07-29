@@ -21,8 +21,24 @@ describe("native item draft validation", () => {
 					},
 				];
 			}
-			if (definition.itemType === "note") {
+			if (
+				definition.itemType === "note" ||
+				definition.itemType === "attachment"
+			) {
 				payload.note = "Example note";
+			}
+			if (definition.itemType === "annotation") {
+				Object.assign(payload, {
+					annotationType: "highlight",
+					annotationAuthorName: "Ada",
+					annotationText: "Evidence",
+					annotationComment: "Important",
+					annotationColor: "#ffd400",
+					annotationPageLabel: "4",
+					annotationSortIndex: "00004|000001|00000",
+					annotationPosition:
+						'{"pageIndex":3,"rects":[[1,2,3,4]]}',
+				});
 			}
 
 			const validated = validateNativeItemDraft(payload);

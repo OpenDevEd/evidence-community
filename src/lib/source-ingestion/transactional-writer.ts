@@ -37,6 +37,7 @@ import {
 	type SourceIngestionBatch,
 	sourceIngestionBatchSchema,
 } from "./batch-schema";
+import { chunkValues } from "./chunks";
 import {
 	canonicalSourceJson,
 	sourceItemFingerprint,
@@ -109,14 +110,6 @@ export class SourceRelationshipCycleError extends Error {
 		super(`Source ${entity} parent relationships contain a cycle`);
 		this.name = "SourceRelationshipCycleError";
 	}
-}
-
-function chunks<T>(values: T[], size: number) {
-	const output: T[][] = [];
-	for (let index = 0; index < values.length; index += size) {
-		output.push(values.slice(index, index + size));
-	}
-	return output;
 }
 
 function jsonEqual(left: JsonValue, right: JsonValue) {
@@ -309,7 +302,10 @@ async function writeCollectionRows(
 	rows: CollectionInsert[],
 ) {
 	const written: Array<{ key: string; revision: number }> = [];
-	for (const rowChunk of chunks(rows, COLLECTION_UPSERT_CHUNK_SIZE)) {
+	for (const rowChunk of chunkValues(
+		rows,
+		COLLECTION_UPSERT_CHUNK_SIZE,
+	)) {
 		written.push(
 			...(await transaction
 				.insert(collection)
@@ -346,7 +342,7 @@ async function writeItemRows(
 	rows: ItemInsert[],
 ) {
 	const written: Array<{ key: string; revision: number }> = [];
-	for (const rowChunk of chunks(rows, ITEM_UPSERT_CHUNK_SIZE)) {
+	for (const rowChunk of chunkValues(rows, ITEM_UPSERT_CHUNK_SIZE)) {
 		written.push(
 			...(await transaction
 				.insert(item)
@@ -369,7 +365,7 @@ async function insertInChunks<T>(
 	size: number,
 	insert: (rowChunk: T[]) => Promise<unknown>,
 ) {
-	for (const rowChunk of chunks(rows, size)) {
+	for (const rowChunk of chunkValues(rows, size)) {
 		await insert(rowChunk);
 	}
 }
@@ -378,7 +374,7 @@ async function updateItemParents(
 	transaction: Transaction,
 	rows: Array<{ key: string; parentKey: string | null }>,
 ) {
-	for (const rowChunk of chunks(rows, RELATION_CHUNK_SIZE)) {
+	for (const rowChunk of chunkValues(rows, RELATION_CHUNK_SIZE)) {
 		const cases = sql.join(
 			rowChunk.map(
 				(row) =>
@@ -402,7 +398,7 @@ async function updateCollectionParents(
 	transaction: Transaction,
 	rows: Array<{ key: string; parentKey: string | null }>,
 ) {
-	for (const rowChunk of chunks(rows, RELATION_CHUNK_SIZE)) {
+	for (const rowChunk of chunkValues(rows, RELATION_CHUNK_SIZE)) {
 		const cases = sql.join(
 			rowChunk.map(
 				(row) =>

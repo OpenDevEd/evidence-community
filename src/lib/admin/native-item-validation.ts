@@ -50,6 +50,20 @@ const relationsSchema = z.record(z.string(), z.unknown());
 
 const specialFieldsByType = new Map<string, ReadonlySet<string>>([
 	["note", new Set(["note"])],
+	["attachment", new Set(["note"])],
+	[
+		"annotation",
+		new Set([
+			"annotationType",
+			"annotationAuthorName",
+			"annotationText",
+			"annotationComment",
+			"annotationColor",
+			"annotationPageLabel",
+			"annotationSortIndex",
+			"annotationPosition",
+		]),
+	],
 ]);
 
 const sharedPayloadFields = new Set([
@@ -170,14 +184,16 @@ export function validateNativeItemDraft(
 		normalizedPayload[field] = value;
 	}
 
-	if (definition.itemType === "note" && payload.note !== undefined) {
-		if (payload.note !== null && typeof payload.note !== "string") {
+	for (const field of specialFieldsByType.get(definition.itemType) ?? []) {
+		const value = payload[field];
+		if (value === undefined) continue;
+		if (value !== null && typeof value !== "string") {
 			throw new NativeItemValidationError(
-				"note must be a string or null",
+				`${field} must be a string or null`,
 			);
 		}
-		itemValues.note = payload.note;
-		normalizedPayload.note = payload.note;
+		itemValues[field] = value;
+		normalizedPayload[field] = value;
 	}
 
 	if (payload.creators !== undefined) {
