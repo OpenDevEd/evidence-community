@@ -52,3 +52,56 @@ export function generateCanonicalRecordKey(): string {
 
 	return output.join("");
 }
+
+export type CanonicalKeyReservation = {
+	findExistingKey: () => Promise<string | null>;
+	tryReserveKey: (candidate: string) => Promise<boolean>;
+	generateKey?: () => string;
+	sourceRecordKey?: string;
+};
+
+export async function reserveCanonicalRecordKey({
+	findExistingKey,
+	tryReserveKey,
+	generateKey = generateCanonicalRecordKey,
+	sourceRecordKey,
+}: CanonicalKeyReservation): Promise<string> {
+	const validateStoredKey = (key: string) => {
+		if (!isCanonicalRecordKey(key)) {
+			throw new Error(`Stored canonical record key is invalid: ${key}`);
+		}
+		return key;
+	};
+
+	const existingKey = await findExistingKey();
+	if (existingKey) {
+		return validateStoredKey(existingKey);
+	}
+
+	const adoptableKey = sourceRecordKey
+		? adoptableCanonicalRecordKey(sourceRecordKey)
+		: null;
+	let shouldTryAdoption = adoptableKey !== null;
+
+	for (;;) {
+		const candidate = shouldTryAdoption
+			? adoptableKey
+			: generateKey();
+		shouldTryAdoption = false;
+
+		if (!candidate || !isCanonicalRecordKey(candidate)) {
+			throw new Error(
+				`Canonical key generator returned an invalid key: ${candidate}`,
+			);
+		}
+
+		if (await tryReserveKey(candidate)) {
+			return candidate;
+		}
+
+		const concurrentlyReservedKey = await findExistingKey();
+		if (concurrentlyReservedKey) {
+			return validateStoredKey(concurrentlyReservedKey);
+		}
+	}
+}

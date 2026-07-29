@@ -1,5 +1,6 @@
 import {
   canonicalRecordKeyCheck,
+  collectionIdentity,
   sourceIdentityColumns,
 } from '@opendeved/evidence-library-core';
 import {
@@ -11,7 +12,6 @@ import {
   pgTable,
   timestamp,
   unique,
-  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 
@@ -34,14 +34,23 @@ export const collection = pgTable('collection', {
   updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   canonicalRecordKeyCheck('collection_key_format', table.key),
-  uniqueIndex('collection_source_record_unique').on(
-    table.sourceConnectionKey,
-    table.sourceRecordKey,
-  ),
   unique('collection_key_source_connection_unique').on(
     table.key,
     table.sourceConnectionKey,
   ),
+  foreignKey({
+    name: 'collection_identity_fk',
+    columns: [
+      table.key,
+      table.sourceConnectionKey,
+      table.sourceRecordKey,
+    ],
+    foreignColumns: [
+      collectionIdentity.key,
+      collectionIdentity.sourceConnectionKey,
+      collectionIdentity.sourceRecordKey,
+    ],
+  }),
   foreignKey({
     name: 'collection_parent_source_fk',
     columns: [table.parentCollection, table.sourceConnectionKey],

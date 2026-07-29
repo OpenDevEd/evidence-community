@@ -1,5 +1,6 @@
 import {
   canonicalRecordKeyCheck,
+  itemIdentity,
   sourceIdentityColumns,
 } from '@opendeved/evidence-library-core';
 import {
@@ -11,14 +12,22 @@ import {
   pgTable,
   timestamp,
   unique,
-  uniqueIndex,
   varchar,
 } from 'drizzle-orm/pg-core';
 import { itemType } from '../enums/itemType';
 import { creatorType } from '../enums/creatorType';
 
-type CreatorType = {
-  [key in typeof creatorType.enumValues[number]]?: string[];
+type Creator = {
+  creatorType: typeof creatorType.enumValues[number];
+  firstName?: string;
+  lastName?: string;
+  name?: string;
+  institution?: string;
+  institutions?: Array<{
+    id?: string;
+    country_code?: string;
+    display_name?: string;
+  }>;
 };
 
 export const item = pgTable('item', {
@@ -30,11 +39,12 @@ export const item = pgTable('item', {
   title: varchar(),
   abstractNote: varchar(),
 
-  creators: jsonb().$type<CreatorType>().array(),
+  creators: jsonb().$type<Creator[]>(),
 
   artworkMedium: varchar(),
   artworkSize: varchar(),
   date: varchar(),
+  originalDate: varchar(),
   shortTitle: varchar(),
   archive: varchar(),
   archiveLocation: varchar(),
@@ -49,6 +59,8 @@ export const item = pgTable('item', {
   numberOfVolumes: varchar(),
   volume: varchar(),
   place: varchar(),
+  eventPlace: varchar(),
+  originalPlace: varchar(),
   label: varchar(),
   runningTime: varchar(),
   ISBN: varchar(),
@@ -59,6 +71,7 @@ export const item = pgTable('item', {
   codePages: varchar(),
   legislativeBody: varchar(),
   session: varchar(),
+  sessionTitle: varchar(),
   history: varchar(),
   blogTitle: varchar(),
   websiteType: varchar(),
@@ -66,6 +79,7 @@ export const item = pgTable('item', {
   seriesNumber: varchar(),
   edition: varchar(),
   publisher: varchar(),
+  originalPublisher: varchar(),
   numPages: varchar(),
   bookTitle: varchar(),
   pages: varchar(),
@@ -82,6 +96,8 @@ export const item = pgTable('item', {
   proceedingsTitle: varchar(),
   conferenceName: varchar(),
   DOI: varchar(),
+  PMCID: varchar(),
+  PMID: varchar(),
   dictionaryTitle: varchar(),
   subject: varchar(),
   encyclopediaTitle: varchar(),
@@ -111,6 +127,7 @@ export const item = pgTable('item', {
   filingDate: varchar(),
   applicationNumber: varchar(),
   priorityNumbers: varchar(),
+  priorityDate: varchar(),
   issueDate: varchar(),
   references: varchar(),
   legalStatus: varchar(),
@@ -176,14 +193,23 @@ export const item = pgTable('item', {
   updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
 }, (table) => [
   canonicalRecordKeyCheck('item_key_format', table.key),
-  uniqueIndex('item_source_record_unique').on(
-    table.sourceConnectionKey,
-    table.sourceRecordKey,
-  ),
   unique('item_key_source_connection_unique').on(
     table.key,
     table.sourceConnectionKey,
   ),
+  foreignKey({
+    name: 'item_identity_fk',
+    columns: [
+      table.key,
+      table.sourceConnectionKey,
+      table.sourceRecordKey,
+    ],
+    foreignColumns: [
+      itemIdentity.key,
+      itemIdentity.sourceConnectionKey,
+      itemIdentity.sourceRecordKey,
+    ],
+  }),
   foreignKey({
     name: 'item_parent_source_fk',
     columns: [table.parentItem, table.sourceConnectionKey],

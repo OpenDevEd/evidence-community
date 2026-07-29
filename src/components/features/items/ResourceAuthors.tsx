@@ -6,7 +6,7 @@ import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
-function toInitials(name: string) {
+function toInitials(name?: string) {
 	if (!name) return '';
 	return name.split(' ').map(n => n[0]).join('. ') + ".";
 }

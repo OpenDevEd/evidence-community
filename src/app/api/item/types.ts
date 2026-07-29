@@ -39,10 +39,10 @@ export type ItemGetResponse = {
 };
 
 export type Author = {
-	firstName: string;
-	lastName: string;
-	institution: string;
-	name: string;
+	firstName?: string;
+	lastName?: string;
+	institution?: string;
+	name?: string;
 	creatorType: string;
 	institutions?: Institution[];
 };

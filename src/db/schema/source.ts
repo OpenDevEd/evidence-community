@@ -1,5 +1,8 @@
 import {
+	collectionIdentity,
 	createSourceRecordTables,
+	itemDraft,
+	itemIdentity,
 	outbox,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
@@ -8,7 +11,13 @@ import { relations } from "drizzle-orm";
 import { collection } from "./tables/collection";
 import { item } from "./tables/item";
 
-export { outbox, sourceConnection };
+export {
+	collectionIdentity,
+	itemDraft,
+	itemIdentity,
+	outbox,
+	sourceConnection,
+};
 
 export const { sourceRecordAlias, sourceSnapshot } =
 	createSourceRecordTables({

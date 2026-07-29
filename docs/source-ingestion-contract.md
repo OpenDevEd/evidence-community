@@ -10,6 +10,9 @@ Library databases and deployments are not migrated or modified.
   `23456789ABCDEFGHIJKLMNPQRSTUVWXYZ`.
 - A compatible provider key is adopted when unused. Otherwise the writer mints
   a canonical key and retains the provider key in `sourceRecordKey`.
+- `itemIdentity` and `collectionIdentity` reserve keys before record writes.
+  Reservations are never replaced by a later source and make concurrent
+  allocation safe.
 - Provider identity is unique by `(sourceConnectionKey, sourceRecordKey)`.
 - A removed source connection is retained with `status = 'removed'`; records
   never lose their permanent origin.
@@ -40,6 +43,28 @@ Library databases and deployments are not migrated or modified.
   `itemToCollection`; the canonical item table does not duplicate either list.
 - `sourceSnapshot` applies to bibliographic items. Collection synchronization
   uses the collection row's canonical revision and the connection cursor.
+
+## Native drafts and publication
+
+- Native drafts live only in `itemDraft`; editing a draft never mutates the
+  published `item` row.
+- There is exactly one active draft per native item key. `draftRevision`
+  provides optimistic concurrency and `baseRevision` prevents publishing over
+  a newer canonical record.
+- Draft payloads are complete Zotero-style snapshots validated against the
+  pinned Zotero schema. All 40 item types, their fields, and their allowed
+  creator roles use that single schema source.
+- Publishing replaces the complete editable metadata snapshot, normalized
+  tags, and normalized collection memberships in one transaction, increments
+  the canonical revision, emits one outbox event, and removes the draft.
+- Unpublishing retains the canonical row as a tombstone and emits a delete
+  event. Repeated unpublish requests are idempotent. Canonical identities are
+  not recycled after publication.
+- Opening a draft from a tombstoned native item is the explicit restore path;
+  publishing that draft clears the tombstone and emits a new upsert revision.
+- The temporary backend gate is `ADMIN_AUTH_BYPASS=true`. Every
+  `/api/admin/items/**` response is private and non-cacheable. Clerk token
+  verification will replace this gate when OpenScholar integration begins.
 
 ## Search projection
 

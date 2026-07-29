@@ -92,6 +92,27 @@ async function verify() {
 				`),
 		);
 
+		await expectConstraintViolation(
+			"native item identity equality",
+			"itemIdentity_native_source_key_match",
+			() =>
+				client.query(`
+					INSERT INTO "itemIdentity"
+						("key", "sourceConnectionKey", "sourceRecordKey")
+					VALUES ('NATV2345', 'native', 'OTHER234')
+				`),
+		);
+
+		await client.query(`
+			INSERT INTO "itemIdentity"
+				("key", "sourceConnectionKey", "sourceRecordKey")
+			VALUES
+				('AAAA2345', 'zotero-alpha', 'AAAA2345'),
+				('BBBB2345', 'zotero-beta', 'AAAA2345'),
+				('CCCC2345', 'zotero-alpha', 'CCCC2345'),
+				('DDDD2345', 'zotero-alpha', 'DDDD2345')
+		`);
+
 		await client.query(`
 			INSERT INTO "item"
 				("key", "sourceConnectionKey", "sourceRecordKey", "title")
@@ -104,12 +125,23 @@ async function verify() {
 
 		await expectConstraintViolation(
 			"canonical item key format",
-			"item_key_format",
+			"itemIdentity_key_format",
 			() =>
 				client.query(`
-					INSERT INTO "item"
+					INSERT INTO "itemIdentity"
 						("key", "sourceConnectionKey", "sourceRecordKey")
 					VALUES ('short', 'zotero-alpha', 'short')
+				`),
+		);
+
+		await expectConstraintViolation(
+			"native collection identity equality",
+			"collectionIdentity_native_source_key_match",
+			() =>
+				client.query(`
+					INSERT INTO "collectionIdentity"
+						("key", "sourceConnectionKey", "sourceRecordKey")
+					VALUES ('NATC2345', 'native', 'OTHER234')
 				`),
 		);
 
@@ -121,10 +153,10 @@ async function verify() {
 
 		await expectConstraintViolation(
 			"canonical item key uniqueness",
-			"item_pkey",
+			"itemIdentity_pkey",
 			() =>
 				client.query(`
-					INSERT INTO "item"
+					INSERT INTO "itemIdentity"
 						("key", "sourceConnectionKey", "sourceRecordKey")
 					VALUES ('AAAA2345', 'zotero-beta', 'OTHER234')
 				`),
@@ -132,10 +164,10 @@ async function verify() {
 
 		await expectConstraintViolation(
 			"provider item identity uniqueness",
-			"item_source_record_unique",
+			"itemIdentity_source_record_unique",
 			() =>
 				client.query(`
-					INSERT INTO "item"
+					INSERT INTO "itemIdentity"
 						("key", "sourceConnectionKey", "sourceRecordKey")
 					VALUES ('EEEE2345', 'zotero-alpha', 'AAAA2345')
 				`),
@@ -153,6 +185,14 @@ async function verify() {
 		);
 
 		await client.query(`
+			INSERT INTO "collectionIdentity"
+				("key", "sourceConnectionKey", "sourceRecordKey")
+			VALUES
+				('FFFF2345', 'zotero-alpha', 'FFFF2345'),
+				('GGGG2345', 'zotero-beta', 'FFFF2345')
+		`);
+
+		await client.query(`
 			INSERT INTO "collection"
 				("key", "sourceConnectionKey", "sourceRecordKey", "name")
 			VALUES
@@ -162,10 +202,10 @@ async function verify() {
 
 		await expectConstraintViolation(
 			"canonical collection key format",
-			"collection_key_format",
+			"collectionIdentity_key_format",
 			() =>
 				client.query(`
-					INSERT INTO "collection"
+					INSERT INTO "collectionIdentity"
 						("key", "sourceConnectionKey", "sourceRecordKey")
 					VALUES ('BAD00000', 'zotero-alpha', 'BAD00000')
 				`),
@@ -173,10 +213,10 @@ async function verify() {
 
 		await expectConstraintViolation(
 			"provider collection identity uniqueness",
-			"collection_source_record_unique",
+			"collectionIdentity_source_record_unique",
 			() =>
 				client.query(`
-					INSERT INTO "collection"
+					INSERT INTO "collectionIdentity"
 						("key", "sourceConnectionKey", "sourceRecordKey")
 					VALUES ('HHHH2345', 'zotero-alpha', 'FFFF2345')
 				`),

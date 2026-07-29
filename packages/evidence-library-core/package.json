@@ -13,10 +13,12 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "vendor"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "npm run clean && tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
     "prepare": "npm run build",
     "test": "vitest run"
   },

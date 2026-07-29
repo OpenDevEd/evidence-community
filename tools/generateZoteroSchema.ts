@@ -1,92 +1,104 @@
-import { writeFileSync } from "fs";
-import { join } from "path";
+import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { columns } from "../src/db/schema/views/columns";
 
-(async () => {
-    // Fetch the Zotero schema.json from GitHub
-    const zoteroSchemaUrl = "https://raw.githubusercontent.com/zotero/zotero-schema/master/schema.json";
-    const response = await fetch(zoteroSchemaUrl);
-    
-    if (!response.ok) {
-        throw new Error(`Failed to fetch Zotero schema: ${response.status} ${response.statusText}`);
-    }
-    
-    const zoteroSchema = await response.json();
-    
-    if (!zoteroSchema.csl) {
-        throw new Error("No CSL property found in Zotero schema");
-    }
-    
-    // Update the local csl.json file with the CSL data from Zotero schema
-    const cslPath = join(process.cwd(), "public", "csl.json");
-    writeFileSync(cslPath, JSON.stringify(zoteroSchema.csl, null, 2));
-    
-    // Fetch the APA CSL style file
-    const apaCslUrl = "https://raw.githubusercontent.com/citation-style-language/styles/master/apa.csl";
-    const apaCslResponse = await fetch(apaCslUrl);
-    
-    if (!apaCslResponse.ok) {
-        throw new Error(`Failed to fetch APA CSL style: ${apaCslResponse.status} ${apaCslResponse.statusText}`);
-    }
-    
-    const apaCslContent = await apaCslResponse.text();
-    
-    // Save APA CSL style to public folder
-    const apaCslPath = join(process.cwd(), "public", "apa.csl");
-    writeFileSync(apaCslPath, apaCslContent);
-    
-    // Now use the updated CSL data to generate schema
-    const csl = zoteroSchema.csl;
-    
-    const schema = {
-        CSL_TYPE_MAPPINGS: {} as Record<string, string>,
-        CSL_TYPE_MAPPINGS_REVERSE: {} as Record<string, string[]>,
-        CSL_TEXT_MAPPINGS: csl.fields.text,
-        CSL_DATE_MAPPINGS: csl.fields.date,
-        CSL_NAME_MAPPINGS: csl.names,
-        CSL_FIELD_MAPPINGS_REVERSE: {} as Record<string, string>,
-        COLUMN_TO_ZOTERO_TYPE_MAPPINGS: {} as Record<string, string>
-    };
+type ZoteroCsl = {
+	fields: {
+		date: Record<string, string>;
+		text: Record<string, string[]>;
+	};
+	names: Record<string, string>;
+	types: Record<string, string[]>;
+};
 
-    // Build type mappings
-    // Create a lowercase lookup map for columns
-    const columnKeysLowercase = Object.keys(columns).reduce((acc, key) => {
-        acc[key.toLowerCase()] = key;
-        return acc;
-    }, {} as Record<string, string>);
+type ZoteroSchema = {
+	csl: ZoteroCsl;
+	version: number;
+};
 
-    for (const cslType in csl.types) {
-        const zoteroTypes = csl.types[cslType as keyof typeof csl.types];
-        for (const zoteroType of zoteroTypes) {
-            // Check if zoteroType (in lowercase) matches a key in columns (in lowercase)
-            const matchingColumnKey = columnKeysLowercase[zoteroType.toLowerCase()];
-            const keyToUse = matchingColumnKey || zoteroType;
-            
-            schema.CSL_TYPE_MAPPINGS[keyToUse] = cslType;
-            
-            // If we used a column key, map it back to the original Zotero type
-            if (matchingColumnKey) {
-                schema.COLUMN_TO_ZOTERO_TYPE_MAPPINGS[matchingColumnKey] = zoteroType;
-            }
-        }
-        schema.CSL_TYPE_MAPPINGS_REVERSE[cslType] = [...zoteroTypes];
-    }
+const checkOnly = process.argv.includes("--check");
+const schemaSourcePath = join(
+	process.cwd(),
+	"packages",
+	"evidence-library-core",
+	"vendor",
+	"zotero-schema.json",
+);
+const apaSourcePath = join(process.cwd(), "vendor", "csl", "apa.csl");
 
-    // Build field mappings reverse for text fields
-    for (const cslField in csl.fields.text) {
-        const zoteroFields = csl.fields.text[cslField as keyof typeof csl.fields.text];
-        for (const zoteroField of zoteroFields) {
-            schema.CSL_FIELD_MAPPINGS_REVERSE[zoteroField] = cslField;
-        }
-    }
+const zoteroSchema = JSON.parse(
+	readFileSync(schemaSourcePath, "utf8"),
+) as ZoteroSchema;
+const csl = zoteroSchema.csl;
+const schema = {
+	CSL_TYPE_MAPPINGS: {} as Record<string, string>,
+	CSL_TYPE_MAPPINGS_REVERSE: {} as Record<string, string[]>,
+	CSL_TEXT_MAPPINGS: csl.fields.text,
+	CSL_DATE_MAPPINGS: csl.fields.date,
+	CSL_NAME_MAPPINGS: csl.names,
+	CSL_FIELD_MAPPINGS_REVERSE: {} as Record<string, string>,
+	COLUMN_TO_ZOTERO_TYPE_MAPPINGS: {} as Record<string, string>,
+	ZOTERO_SCHEMA_VERSION: zoteroSchema.version,
+};
 
-    // Build field mappings reverse for date fields
-    for (const cslField in csl.fields.date) {
-        const zoteroField = csl.fields.date[cslField as keyof typeof csl.fields.date];
-        schema.CSL_FIELD_MAPPINGS_REVERSE[zoteroField] = cslField;
-    }
+const columnKeysLowercase = Object.keys(columns).reduce(
+	(accumulator, key) => {
+		accumulator[key.toLowerCase()] = key;
+		return accumulator;
+	},
+	{} as Record<string, string>,
+);
 
-    // Write schema to JSON file
-    const schemaPath = join(process.cwd(), "public", "schema.json");
-    writeFileSync(schemaPath, JSON.stringify(schema, null, 2));
-})();
+for (const [cslType, zoteroTypes] of Object.entries(csl.types)) {
+	for (const zoteroType of zoteroTypes) {
+		const matchingColumnKey =
+			columnKeysLowercase[zoteroType.toLowerCase()];
+		const keyToUse = matchingColumnKey ?? zoteroType;
+
+		schema.CSL_TYPE_MAPPINGS[keyToUse] = cslType;
+		if (matchingColumnKey) {
+			schema.COLUMN_TO_ZOTERO_TYPE_MAPPINGS[matchingColumnKey] =
+				zoteroType;
+		}
+	}
+	schema.CSL_TYPE_MAPPINGS_REVERSE[cslType] = [...zoteroTypes];
+}
+
+for (const [cslField, zoteroFields] of Object.entries(csl.fields.text)) {
+	for (const zoteroField of zoteroFields) {
+		schema.CSL_FIELD_MAPPINGS_REVERSE[zoteroField] = cslField;
+	}
+}
+
+for (const [cslField, zoteroField] of Object.entries(csl.fields.date)) {
+	schema.CSL_FIELD_MAPPINGS_REVERSE[zoteroField] = cslField;
+}
+
+const outputs = new Map([
+	[
+		join(process.cwd(), "public", "csl.json"),
+		`${JSON.stringify(csl, null, 2)}\n`,
+	],
+	[
+		join(process.cwd(), "public", "schema.json"),
+		`${JSON.stringify(schema, null, 2)}\n`,
+	],
+	[
+		join(process.cwd(), "public", "apa.csl"),
+		readFileSync(apaSourcePath, "utf8"),
+	],
+]);
+
+for (const [outputPath, content] of outputs) {
+	if (checkOnly) {
+		if (readFileSync(outputPath, "utf8") !== content) {
+			throw new Error(
+				`Generated Zotero artifact is stale: ${outputPath}`,
+			);
+		}
+		continue;
+	}
+
+	writeFileSync(outputPath, content);
+}

@@ -14,11 +14,12 @@
 		"test:unit": "vitest run",
 		"test:e2e": "playwright test",
 		"test:acceptance": "tsx ./tools/runRuntimeAcceptance.ts",
-		"test:source-model": "tsx ./tools/verifySourceModel.ts",
+    "test:source-model": "tsx ./tools/verifySourceModel.ts",
+    "test:native-lifecycle": "tsx ./tools/verifyNativeItemLifecycle.ts",
 		"schema:generate": "npm run schema:generate:library-config && npm run schema:generate:zotero",
 		"schema:generate:library-config": "tsx ./tools/generateLibraryConfigArtifacts.ts",
 		"schema:generate:zotero": "tsx ./tools/generateZoteroSchema.ts",
-		"schema:check": "tsx ./tools/generateLibraryConfigArtifacts.ts --check"
+    "schema:check": "tsx ./tools/generateLibraryConfigArtifacts.ts --check && tsx ./tools/generateZoteroSchema.ts --check"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^3.0.103",

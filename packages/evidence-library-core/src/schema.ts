@@ -11,6 +11,7 @@ import {
 	primaryKey,
 	text,
 	timestamp,
+	unique,
 	uniqueIndex,
 	varchar,
 } from "drizzle-orm/pg-core";
@@ -126,6 +127,87 @@ export function sourceIdentityColumns() {
 		sourceRecordKey: varchar("sourceRecordKey", { length: 512 }).notNull(),
 	};
 }
+
+function createRecordIdentityTable(
+	tableName: "itemIdentity" | "collectionIdentity",
+) {
+	return pgTable(
+		tableName,
+		{
+			key: varchar("key", { length: 8 }).primaryKey(),
+			...sourceIdentityColumns(),
+			createdAt: timestampWithTimezone("createdAt")
+				.notNull()
+				.defaultNow(),
+		},
+		(table) => [
+			canonicalRecordKeyCheck(`${tableName}_key_format`, table.key),
+			check(
+				`${tableName}_native_source_key_match`,
+				sql`${table.sourceConnectionKey} <> 'native' OR ${table.sourceRecordKey} = ${table.key}`,
+			),
+			unique(`${tableName}_source_record_unique`).on(
+				table.sourceConnectionKey,
+				table.sourceRecordKey,
+			),
+			unique(`${tableName}_identity_unique`).on(
+				table.key,
+				table.sourceConnectionKey,
+				table.sourceRecordKey,
+			),
+			unique(`${tableName}_key_connection_unique`).on(
+				table.key,
+				table.sourceConnectionKey,
+			),
+		],
+	);
+}
+
+export const itemIdentity = createRecordIdentityTable("itemIdentity");
+export const collectionIdentity = createRecordIdentityTable(
+	"collectionIdentity",
+);
+
+export const itemDraft = pgTable(
+	"itemDraft",
+	{
+		itemKey: varchar("itemKey", { length: 8 }).primaryKey(),
+		sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 })
+			.notNull()
+			.default("native"),
+		payload: jsonb("payload").$type<JsonObject>().notNull(),
+		baseRevision: bigint("baseRevision", { mode: "number" })
+			.notNull()
+			.default(0),
+		draftRevision: bigint("draftRevision", { mode: "number" })
+			.notNull()
+			.default(1),
+		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
+		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
+	},
+	(table) => [
+		check(
+			"itemDraft_native_only",
+			sql`${table.sourceConnectionKey} = 'native'`,
+		),
+		check(
+			"itemDraft_payload_object",
+			sql`jsonb_typeof(${table.payload}) = 'object'`,
+		),
+		check(
+			"itemDraft_revision_positive",
+			sql`${table.draftRevision} >= 1 AND ${table.baseRevision} >= 0`,
+		),
+		foreignKey({
+			name: "itemDraft_identity_fk",
+			columns: [table.itemKey, table.sourceConnectionKey],
+			foreignColumns: [
+				itemIdentity.key,
+				itemIdentity.sourceConnectionKey,
+			],
+		}).onDelete("cascade"),
+	],
+);
 
 export const outbox = pgTable(
 	"outbox",
