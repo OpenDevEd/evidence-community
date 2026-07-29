@@ -4,8 +4,16 @@ import { NextResponse } from "next/server";
 
 import {
 	NativeDraftConflictError,
+	NativeItemHasPublishedFileError,
 	NativeItemNotFoundError,
 } from "./native-item-service";
+import {
+	NativeFileConflictError,
+	NativeFileNotFoundError,
+	NativeFileValidationError,
+} from "./native-file-service";
+import { EvidenceFileStorageError } from "./file-storage";
+import { InvalidPdfError } from "./pdf-processing";
 import { isAdminBypassEnabled } from "./access";
 import { NativeItemValidationError } from "./native-item-validation";
 
@@ -22,13 +30,20 @@ export function requireAdminBypass() {
 }
 
 export function adminErrorResponse(error: unknown) {
-	if (error instanceof NativeItemNotFoundError) {
+	if (
+		error instanceof NativeItemNotFoundError ||
+		error instanceof NativeFileNotFoundError
+	) {
 		return NextResponse.json(
 			{ error: error.message },
 			{ status: 404, headers: ADMIN_RESPONSE_HEADERS },
 		);
 	}
-	if (error instanceof NativeDraftConflictError) {
+	if (
+		error instanceof NativeDraftConflictError ||
+		error instanceof NativeItemHasPublishedFileError ||
+		error instanceof NativeFileConflictError
+	) {
 		return NextResponse.json(
 			{ error: error.message },
 			{ status: 409, headers: ADMIN_RESPONSE_HEADERS },
@@ -37,7 +52,9 @@ export function adminErrorResponse(error: unknown) {
 	if (
 		error instanceof ZodError ||
 		error instanceof SyntaxError ||
-		error instanceof NativeItemValidationError
+		error instanceof NativeItemValidationError ||
+		error instanceof NativeFileValidationError ||
+		error instanceof InvalidPdfError
 	) {
 		return NextResponse.json(
 			{ error: error.message },
@@ -60,6 +77,12 @@ export function adminErrorResponse(error: unknown) {
 		return NextResponse.json(
 			{ error: "Record already exists" },
 			{ status: 409, headers: ADMIN_RESPONSE_HEADERS },
+		);
+	}
+	if (error instanceof EvidenceFileStorageError) {
+		return NextResponse.json(
+			{ error: error.message },
+			{ status: 502, headers: ADMIN_RESPONSE_HEADERS },
 		);
 	}
 

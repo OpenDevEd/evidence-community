@@ -351,7 +351,8 @@
 			"email.smtp.password",
 			"email.smtp.username",
 			"services.database.url",
-			"services.search.key"
+			"services.search.key",
+			"services.storage.serviceRoleKey"
 		]
 	},
 	"options": {

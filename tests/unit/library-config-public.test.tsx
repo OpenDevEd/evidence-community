@@ -68,6 +68,10 @@ describe("public library configuration", () => {
 		for (const privateValue of [
 			"postgresql://library:password@database:5432/library",
 			"maximal-search-key",
+			"https://storage.example.org",
+			"maximal-storage-service-role-key",
+			"maximal-private",
+			"maximal-public",
 			"google-api-key",
 			"google-client-id",
 			"google-client-secret-value",

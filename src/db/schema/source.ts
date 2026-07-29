@@ -1,6 +1,8 @@
 import {
 	collectionIdentity,
+	createItemFilePublicationTable,
 	createSourceRecordTables,
+	itemFileDraft,
 	itemDraft,
 	itemIdentity,
 	outbox,
@@ -13,6 +15,7 @@ import { item } from "./tables/item";
 
 export {
 	collectionIdentity,
+	itemFileDraft,
 	itemDraft,
 	itemIdentity,
 	outbox,
@@ -24,6 +27,11 @@ export const { sourceRecordAlias, sourceSnapshot } =
 		key: item.key,
 		sourceConnectionKey: item.sourceConnectionKey,
 	});
+
+export const itemFilePublication = createItemFilePublicationTable({
+	key: item.key,
+	sourceConnectionKey: item.sourceConnectionKey,
+});
 
 export const sourceConnectionRelations = relations(
 	sourceConnection,

@@ -1391,6 +1391,48 @@
 					],
 					"additionalProperties": false
 				},
+				"storage": {
+					"type": "object",
+					"properties": {
+						"url": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 2048,
+							"format": "uri"
+						},
+						"serviceRoleKey": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 2048,
+							"writeOnly": true
+						},
+						"privateBucket": {
+							"type": "string",
+							"minLength": 3,
+							"maxLength": 63,
+							"pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$"
+						},
+						"publicBucket": {
+							"type": "string",
+							"minLength": 3,
+							"maxLength": 63,
+							"pattern": "^[a-z0-9][a-z0-9._-]*[a-z0-9]$"
+						},
+						"maxPdfBytes": {
+							"type": "integer",
+							"minimum": 1024,
+							"maximum": 524288000
+						}
+					},
+					"required": [
+						"url",
+						"serviceRoleKey",
+						"privateBucket",
+						"publicBucket",
+						"maxPdfBytes"
+					],
+					"additionalProperties": false
+				},
 				"zotero": {
 					"default": {},
 					"type": "object",
@@ -1407,7 +1449,8 @@
 			},
 			"required": [
 				"database",
-				"search"
+				"search",
+				"storage"
 			],
 			"additionalProperties": false
 		},

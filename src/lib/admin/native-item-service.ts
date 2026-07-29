@@ -7,6 +7,7 @@ import {
 	and,
 	eq,
 	getTableColumns,
+	inArray,
 	sql,
 	type InferInsertModel,
 } from "drizzle-orm";
@@ -14,6 +15,7 @@ import {
 import type { Database } from "@/db/database-schema";
 import { reserveItemIdentity } from "@/db/record-identity";
 import { item } from "@/db/schema/tables/item";
+import { itemFilePublication } from "@/db/schema/source";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { tag } from "@/db/schema/tables/tag";
@@ -63,6 +65,15 @@ export class NativeDraftConflictError extends Error {
 	constructor(itemKey: string) {
 		super(`Native item draft is stale: ${itemKey}`);
 		this.name = "NativeDraftConflictError";
+	}
+}
+
+export class NativeItemHasPublishedFileError extends Error {
+	constructor(itemKey: string) {
+		super(
+			`Unpublish the file before unpublishing attachment metadata: ${itemKey}`,
+		);
+		this.name = "NativeItemHasPublishedFileError";
 	}
 }
 
@@ -147,7 +158,8 @@ export async function openNativeItemDraft(
 			throw new NativeItemNotFoundError(itemKey);
 		}
 
-		const [tagRows, collectionRows] = await Promise.all([
+		const [tagRows, collectionRows, filePublication] =
+			await Promise.all([
 			transaction
 				.select({ name: itemToTag.tagName })
 				.from(itemToTag)
@@ -156,10 +168,17 @@ export async function openNativeItemDraft(
 				.select({ key: itemToCollection.collectionKey })
 				.from(itemToCollection)
 				.where(eq(itemToCollection.itemKey, itemKey)),
+			transaction
+				.select({ itemKey: itemFilePublication.itemKey })
+				.from(itemFilePublication)
+				.where(eq(itemFilePublication.itemKey, itemKey))
+				.limit(1)
+				.then((rows) => rows[0]),
 		]);
 
 		const payload: Record<string, unknown> = {};
 		for (const field of editableItemFields) {
+			if (field === "url" && filePublication) continue;
 			const value = published[field as keyof typeof published];
 			if (value !== null && value !== undefined) {
 				payload[field === "languageName" ? "language" : field] =
@@ -252,18 +271,41 @@ export async function publishNativeItemDraft(
 			throw new NativeItemNotFoundError(itemKey);
 		}
 
-		const [current] = await transaction
+		const validated = validateNativeItemDraft(draft.payload);
+		const parentItemKey =
+			validated.item.itemType === "Attachment"
+				? validated.item.parentItem
+				: null;
+		const keysToLock =
+			typeof parentItemKey === "string"
+				? [itemKey, parentItemKey]
+				: [itemKey];
+		const lockedItems = await transaction
 			.select()
 			.from(item)
-			.where(eq(item.key, itemKey))
-			.for("update")
-			.limit(1);
+			.where(inArray(item.key, keysToLock))
+			.orderBy(item.key)
+			.for("update");
+		const current = lockedItems.find(
+			(candidate) => candidate.key === itemKey,
+		);
+		const parent =
+			typeof parentItemKey === "string"
+				? lockedItems.find(
+						(candidate) => candidate.key === parentItemKey,
+					)
+				: undefined;
 		const currentRevision = current?.revision ?? 0;
 		if (currentRevision !== draft.baseRevision) {
 			throw new NativeDraftConflictError(itemKey);
 		}
+		if (
+			typeof parentItemKey === "string" &&
+			(!parent || parent.deleted === 1)
+		) {
+			throw new NativeItemNotFoundError(parentItemKey);
+		}
 
-		const validated = validateNativeItemDraft(draft.payload);
 		const nextRevision = currentRevision + 1;
 		const now = new Date();
 		const values = {
@@ -278,6 +320,18 @@ export async function publishNativeItemDraft(
 			deletedAt: null,
 			updatedAt: now,
 		} as ItemInsert;
+		if (current && validated.item.itemType === "Attachment") {
+			const [filePublication] = await transaction
+				.select({
+					publicUrl: itemFilePublication.publicUrl,
+				})
+				.from(itemFilePublication)
+				.where(eq(itemFilePublication.itemKey, itemKey))
+				.limit(1);
+			if (filePublication) {
+				values.url = filePublication.publicUrl;
+			}
+		}
 
 		let published;
 		if (current) {
@@ -329,6 +383,22 @@ export async function publishNativeItemDraft(
 			operation: "upsert",
 			revision: nextRevision,
 		});
+		if (parent) {
+			const parentRevision = parent.revision + 1;
+			await transaction
+				.update(item)
+				.set({
+					revision: parentRevision,
+					updatedAt: now,
+				})
+				.where(eq(item.key, parent.key));
+			await transaction.insert(outbox).values({
+				entityType: "item",
+				entityKey: parent.key,
+				operation: "upsert",
+				revision: parentRevision,
+			});
+		}
 		await transaction
 			.delete(itemDraft)
 			.where(eq(itemDraft.itemKey, itemKey));
@@ -342,7 +412,7 @@ export async function unpublishNativeItem(
 	itemKey: string,
 ) {
 	return db.transaction(async (transaction) => {
-		const [current] = await transaction
+		const [candidate] = await transaction
 			.select()
 			.from(item)
 			.where(
@@ -351,23 +421,48 @@ export async function unpublishNativeItem(
 					eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY),
 				),
 			)
-			.for("update")
 			.limit(1);
-		if (!current) {
+		if (!candidate) {
 			throw new NativeItemNotFoundError(itemKey);
 		}
+		const keysToLock =
+			candidate.itemType === "Attachment" &&
+			typeof candidate.parentItem === "string"
+				? [itemKey, candidate.parentItem]
+				: [itemKey];
+		const lockedItems = await transaction
+			.select()
+			.from(item)
+			.where(inArray(item.key, keysToLock))
+			.orderBy(item.key)
+			.for("update");
+		const current = lockedItems.find(
+			(candidate) => candidate.key === itemKey,
+		);
+		if (!current) throw new NativeItemNotFoundError(itemKey);
 		if (current.deleted === 1) {
 			return current;
 		}
+		if (current.itemType === "Attachment") {
+			const [filePublication] = await transaction
+				.select({ itemKey: itemFilePublication.itemKey })
+				.from(itemFilePublication)
+				.where(eq(itemFilePublication.itemKey, itemKey))
+				.limit(1);
+			if (filePublication) {
+				throw new NativeItemHasPublishedFileError(itemKey);
+			}
+		}
 
 		const nextRevision = current.revision + 1;
+		const now = new Date();
 		const [unpublished] = await transaction
 			.update(item)
-			.set({
-				deleted: 1,
-				deletedAt: new Date(),
-				revision: nextRevision,
-				updatedAt: new Date(),
+				.set({
+					deleted: 1,
+					deletedAt: now,
+					revision: nextRevision,
+					updatedAt: now,
 			})
 			.where(eq(item.key, itemKey))
 			.returning();
@@ -377,6 +472,29 @@ export async function unpublishNativeItem(
 			operation: "delete",
 			revision: nextRevision,
 		});
+		const parent =
+			typeof current.parentItem === "string"
+				? lockedItems.find(
+						(candidate) =>
+							candidate.key === current.parentItem,
+					)
+				: undefined;
+		if (parent) {
+			const parentRevision = parent.revision + 1;
+			await transaction
+				.update(item)
+				.set({
+					revision: parentRevision,
+					updatedAt: now,
+				})
+				.where(eq(item.key, parent.key));
+			await transaction.insert(outbox).values({
+				entityType: "item",
+				entityKey: parent.key,
+				operation: "upsert",
+				revision: parentRevision,
+			});
+		}
 		return unpublished!;
 	});
 }

@@ -209,6 +209,106 @@ export const itemDraft = pgTable(
 	],
 );
 
+export const itemFileDraft = pgTable(
+	"itemFileDraft",
+	{
+		itemKey: varchar("itemKey", { length: 8 }).primaryKey(),
+		sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 })
+			.notNull()
+			.default("native"),
+		parentItemKey: varchar("parentItemKey", { length: 8 }).notNull(),
+		uploadRevision: bigint("uploadRevision", { mode: "number" })
+			.notNull()
+			.default(1),
+		objectPath: varchar("objectPath", { length: 1024 }).notNull(),
+		filename: varchar("filename", { length: 255 }).notNull(),
+		contentType: varchar("contentType", { length: 128 }).notNull(),
+		expectedSizeBytes: bigint("expectedSizeBytes", {
+			mode: "number",
+		}).notNull(),
+		expectedSha256: varchar("expectedSha256", { length: 64 }).notNull(),
+		actualSizeBytes: bigint("actualSizeBytes", { mode: "number" }),
+		actualSha256: varchar("actualSha256", { length: 64 }),
+		extractedText: text("extractedText"),
+		coverObjectPath: varchar("coverObjectPath", { length: 1024 }),
+		coverWidth: integer("coverWidth"),
+		coverHeight: integer("coverHeight"),
+		pageCount: integer("pageCount"),
+		readyAt: timestampWithTimezone("readyAt"),
+		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
+		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
+	},
+	(table) => [
+		check(
+			"itemFileDraft_native_only",
+			sql`${table.sourceConnectionKey} = 'native'`,
+		),
+		check(
+			"itemFileDraft_pdf_only",
+			sql`${table.contentType} = 'application/pdf'`,
+		),
+		check(
+			"itemFileDraft_filename_valid",
+			sql`length(btrim(${table.filename})) BETWEEN 1 AND 255`,
+		),
+		check(
+			"itemFileDraft_expected_size_positive",
+			sql`${table.expectedSizeBytes} > 0`,
+		),
+		check(
+			"itemFileDraft_expected_sha256_valid",
+			sql`${table.expectedSha256} ~ '^[0-9a-f]{64}$'`,
+		),
+		check(
+			"itemFileDraft_upload_revision_positive",
+			sql`${table.uploadRevision} >= 1`,
+		),
+		check(
+			"itemFileDraft_ready_bundle_consistent",
+			sql`(
+				(
+					${table.readyAt} IS NULL
+					AND ${table.actualSizeBytes} IS NULL
+					AND ${table.actualSha256} IS NULL
+					AND ${table.extractedText} IS NULL
+					AND ${table.coverObjectPath} IS NULL
+					AND ${table.coverWidth} IS NULL
+					AND ${table.coverHeight} IS NULL
+					AND ${table.pageCount} IS NULL
+				)
+				OR (
+					${table.readyAt} IS NOT NULL
+					AND ${table.actualSizeBytes} = ${table.expectedSizeBytes}
+					AND ${table.actualSha256} = ${table.expectedSha256}
+					AND ${table.extractedText} IS NOT NULL
+					AND ${table.coverObjectPath} IS NOT NULL
+					AND ${table.coverWidth} > 0
+					AND ${table.coverHeight} > 0
+					AND ${table.pageCount} > 0
+				)
+			)`,
+		),
+		foreignKey({
+			name: "itemFileDraft_item_identity_fk",
+			columns: [table.itemKey, table.sourceConnectionKey],
+			foreignColumns: [
+				itemIdentity.key,
+				itemIdentity.sourceConnectionKey,
+			],
+		}).onDelete("cascade"),
+		foreignKey({
+			name: "itemFileDraft_parent_identity_fk",
+			columns: [table.parentItemKey, table.sourceConnectionKey],
+			foreignColumns: [
+				itemIdentity.key,
+				itemIdentity.sourceConnectionKey,
+			],
+		}).onDelete("cascade"),
+		unique("itemFileDraft_object_path_unique").on(table.objectPath),
+		index("itemFileDraft_parent_idx").on(table.parentItemKey),
+	],
+);
+
 export const outbox = pgTable(
 	"outbox",
 	{
@@ -243,6 +343,103 @@ export const outbox = pgTable(
 			.where(sql`${table.processedAt} IS NULL`),
 	],
 );
+
+export function createItemFilePublicationTable(itemColumns: {
+	key: AnyPgColumn;
+	sourceConnectionKey: AnyPgColumn;
+}) {
+	return pgTable(
+		"itemFilePublication",
+		{
+			itemKey: varchar("itemKey", { length: 8 }).primaryKey(),
+			sourceConnectionKey: varchar("sourceConnectionKey", {
+				length: 64,
+			}).notNull(),
+			parentItemKey: varchar("parentItemKey", {
+				length: 8,
+			}).notNull(),
+			uploadRevision: bigint("uploadRevision", {
+				mode: "number",
+			}).notNull(),
+			revision: bigint("revision", { mode: "number" }).notNull(),
+			sourceObjectPath: varchar("sourceObjectPath", {
+				length: 1024,
+			}).notNull(),
+			sourceCoverObjectPath: varchar("sourceCoverObjectPath", {
+				length: 1024,
+			}).notNull(),
+			objectPath: varchar("objectPath", { length: 1024 }).notNull(),
+			publicUrl: varchar("publicUrl", { length: 2048 }).notNull(),
+			filename: varchar("filename", { length: 255 }).notNull(),
+			contentType: varchar("contentType", { length: 128 }).notNull(),
+			sizeBytes: bigint("sizeBytes", { mode: "number" }).notNull(),
+			sha256: varchar("sha256", { length: 64 }).notNull(),
+			coverObjectPath: varchar("coverObjectPath", {
+				length: 1024,
+			}).notNull(),
+			coverPublicUrl: varchar("coverPublicUrl", {
+				length: 2048,
+			}).notNull(),
+			coverWidth: integer("coverWidth").notNull(),
+			coverHeight: integer("coverHeight").notNull(),
+			pageCount: integer("pageCount").notNull(),
+			publishedAt: timestampWithTimezone("publishedAt").notNull(),
+			createdAt: timestampWithTimezone("createdAt")
+				.notNull()
+				.defaultNow(),
+			updatedAt: timestampWithTimezone("updatedAt")
+				.notNull()
+				.defaultNow(),
+		},
+		(table) => [
+			check(
+				"itemFilePublication_pdf_only",
+				sql`${table.contentType} = 'application/pdf'`,
+			),
+			check(
+				"itemFilePublication_revision_positive",
+				sql`${table.revision} >= 1 AND ${table.uploadRevision} >= 1`,
+			),
+			check(
+				"itemFilePublication_size_positive",
+				sql`${table.sizeBytes} > 0`,
+			),
+			check(
+				"itemFilePublication_sha256_valid",
+				sql`${table.sha256} ~ '^[0-9a-f]{64}$'`,
+			),
+			check(
+				"itemFilePublication_dimensions_positive",
+				sql`${table.coverWidth} > 0 AND ${table.coverHeight} > 0 AND ${table.pageCount} > 0`,
+			),
+			foreignKey({
+				name: "itemFilePublication_item_fk",
+				columns: [table.itemKey, table.sourceConnectionKey],
+				foreignColumns: [
+					itemColumns.key,
+					itemColumns.sourceConnectionKey,
+				],
+			}).onDelete("cascade"),
+			foreignKey({
+				name: "itemFilePublication_parent_fk",
+				columns: [
+					table.parentItemKey,
+					table.sourceConnectionKey,
+				],
+				foreignColumns: [
+					itemColumns.key,
+					itemColumns.sourceConnectionKey,
+				],
+			}).onDelete("cascade"),
+			unique("itemFilePublication_object_path_unique").on(
+				table.objectPath,
+			),
+			index("itemFilePublication_parent_idx").on(
+				table.parentItemKey,
+			),
+		],
+	);
+}
 
 export function createSourceRecordTables(itemColumns: {
 	key: AnyPgColumn;

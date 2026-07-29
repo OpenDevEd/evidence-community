@@ -244,6 +244,13 @@
 			"key": "example-search-key",
 			"index": "example_library"
 		},
+		"storage": {
+			"url": "https://storage.example.org",
+			"serviceRoleKey": "example-storage-service-role-key",
+			"privateBucket": "evidence-library-private",
+			"publicBucket": "evidence-library-public",
+			"maxPdfBytes": 104857600
+		},
 		"zotero": {
 			"translationUrl": "http://translation-server:1969"
 		}

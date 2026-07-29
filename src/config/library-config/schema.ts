@@ -954,6 +954,38 @@ const servicesSchema = z
 					.regex(/^[A-Za-z0-9_-]+$/u),
 			})
 			.strict(),
+		storage: z
+			.object({
+				url: serviceUrlSchema,
+				serviceRoleKey: secretSchema(1, 2048),
+				privateBucket: z
+					.string()
+					.trim()
+					.min(3)
+					.max(63)
+					.regex(/^[a-z0-9][a-z0-9._-]*[a-z0-9]$/u),
+				publicBucket: z
+					.string()
+					.trim()
+					.min(3)
+					.max(63)
+					.regex(/^[a-z0-9][a-z0-9._-]*[a-z0-9]$/u),
+				maxPdfBytes: z
+					.number()
+					.int()
+					.min(1_024)
+					.max(524_288_000),
+			})
+			.strict()
+			.refine(
+				(storage) =>
+					storage.privateBucket !== storage.publicBucket,
+				{
+					message:
+						"Private and public storage buckets must be different",
+					path: ["publicBucket"],
+				},
+			),
 		zotero: z
 			.object({
 				translationUrl: serviceUrlSchema.optional(),

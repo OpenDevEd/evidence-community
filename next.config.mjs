@@ -5,6 +5,7 @@ const withNextIntl = createNextIntlPlugin();
 
 const nextConfig = {
 	cacheComponents: true,
+	serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
 	experimental: {
 		staleTimes: {
 			dynamic: 30,

@@ -241,12 +241,19 @@
     "database": {
       "url": "postgresql://library:library@postgres:5432/indigo"
     },
-    "search": {
-      "host": "http://meilisearch:7700",
-      "key": "acceptance-master-key",
-      "index": "acceptance_indigo"
-    },
-    "zotero": {}
+		"search": {
+			"host": "http://meilisearch:7700",
+			"key": "acceptance-master-key",
+			"index": "acceptance_indigo"
+		},
+		"storage": {
+			"url": "http://storage:5000",
+			"serviceRoleKey": "acceptance-storage-service-role-key",
+			"privateBucket": "indigo-private",
+			"publicBucket": "indigo-public",
+			"maxPdfBytes": 104857600
+		},
+		"zotero": {}
   },
   "ai": {
     "providers": [

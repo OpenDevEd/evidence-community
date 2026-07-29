@@ -37,6 +37,13 @@ export const minimalLibraryConfig = {
 			key: "search-key",
 			index: "minimal_library",
 		},
+		storage: {
+			url: "http://storage:5000",
+			serviceRoleKey: "storage-service-role-key",
+			privateBucket: "minimal-private",
+			publicBucket: "minimal-public",
+			maxPdfBytes: 104_857_600,
+		},
 	},
 } satisfies LibraryConfigInput;
 
@@ -267,6 +274,13 @@ export const maximalLibraryConfig = {
 			host: "https://search.example.org",
 			key: "maximal-search-key",
 			index: "maximal_library",
+		},
+		storage: {
+			url: "https://storage.example.org",
+			serviceRoleKey: "maximal-storage-service-role-key",
+			privateBucket: "maximal-private",
+			publicBucket: "maximal-public",
+			maxPdfBytes: 104_857_600,
 		},
 		zotero: {
 			translationUrl: "http://translation-server:1969",

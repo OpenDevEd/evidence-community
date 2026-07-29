@@ -66,6 +66,29 @@ Library databases and deployments are not migrated or modified.
   `/api/admin/items/**` response is private and non-cacheable. Clerk token
   verification will replace this gate when OpenScholar integration begins.
 
+## Native PDF files
+
+- PDF state is independent from attachment metadata. `itemFileDraft` points to
+  a private Supabase object and may exist before either its attachment or
+  parent metadata is published.
+- `POST /api/admin/items/{attachmentKey}/file` creates or resumes a signed
+  private upload. `POST .../file/complete` verifies the declared size and
+  SHA-256, parses the PDF, extracts text, and prepares its first-page cover.
+- `POST .../file/publish` requires published `Attachment` metadata and a
+  published parent. It copies the verified PDF and cover to content-addressed
+  public paths, updates the attachment's file-managed Zotero fields, records
+  `itemFilePublication`, and removes only the file draft.
+- A publish or unpublish of an attachment changes both the attachment and its
+  parent's search document. Both canonical revisions are incremented and both
+  outbox events are committed with the file state change.
+- `DELETE /api/admin/items/{attachmentKey}/file` unpublishes the binary while
+  leaving attachment metadata published. Attachment metadata cannot be
+  tombstoned while a file publication still exists; unpublish the file first.
+- The public PDF URL is system-managed while `itemFilePublication` exists.
+  Later metadata publications preserve it. Supabase service credentials and
+  bucket names remain in the server-only runtime configuration; clients only
+  receive a short-lived signed upload URL.
+
 ## Search projection
 
 Meilisearch documents are derived and rebuildable. Item documents must contain:

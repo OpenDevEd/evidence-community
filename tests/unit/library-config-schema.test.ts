@@ -359,6 +359,13 @@ describe("cross-field activation rules", () => {
 			},
 		],
 		[
+			"shared private and public storage bucket",
+			(config: any) => {
+				config.services.storage.publicBucket =
+					config.services.storage.privateBucket;
+			},
+		],
+		[
 			"maximum year below minimum",
 			(config: any) => {
 				config.filters.years.minimum = 2020;
