@@ -4,8 +4,7 @@ import {
 	pgTable,
 	text,
 	primaryKey,
-	integer,
-	uuid,
+	varchar,
 } from "drizzle-orm/pg-core";
 import { users } from "./user";
 import { item } from "./item";
@@ -14,7 +13,7 @@ export const usersToLikes = pgTable("userToLikes", {
 	userId: text("userId")
 		.notNull()
 		.references(() => users.id, { onDelete: "cascade" }),
-	itemKey: text("itemKey")
+	itemKey: varchar("itemKey", { length: 8 })
 		.notNull()
 		.references(() => item.key, { onDelete: "cascade" }),
 	deleted: boolean("deleted").notNull().default(false),

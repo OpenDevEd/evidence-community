@@ -1,8 +1,10 @@
-import { and, eq, arrayContains, or } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { NextRequest, NextResponse } from "next/server";
 import { cacheLife, cacheTag } from "next/cache";
 import { getDatabaseForConfig } from "@/db";
 import { item } from "@/db/schema/tables/item";
+import { itemToCollection } from "@/db/schema/tables/itemToCollection";
+import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -21,12 +23,16 @@ async function getCachedNote(
 
 	return db.query.item.findFirst({
 		where: and(
-			arrayContains(item.collections, [id]),
-			or(
-				...descriptionTags.map((tag) =>
-					arrayContains(item.tags, [tag]),
-				),
-			),
+			sql`exists (
+				select 1 from ${itemToCollection}
+				where ${itemToCollection.itemKey} = ${item.key}
+					and ${itemToCollection.collectionKey} = ${id}
+			)`,
+			sql`exists (
+				select 1 from ${itemToTag}
+				where ${itemToTag.itemKey} = ${item.key}
+					and ${inArray(itemToTag.tagName, [...descriptionTags])}
+			)`,
 			eq(item.itemType, "Note"),
 			eq(item.deleted, 0),
 		),

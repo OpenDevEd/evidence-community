@@ -599,16 +599,18 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"collectionsData",
 		"key",
 		"fullNames",
-		"id",
 		"itemType",
-		"version",
 		"country",
 		"institution",
 		"dateAdded",
 		"dateModified",
 		"deleted",
-		"groupExternalId",
-		"collections",
+		"deletedAt",
+		"sourceConnectionKey",
+		"sourceRecordKey",
+		"sourceExternalScopeKey",
+		"provider",
+		"revision",
 		"relations",
 		"createdAt",
 		"updatedAt",
@@ -667,7 +669,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 function ItemTechnical({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
-	if ((!item || item.groupExternalId !== 1) && !loading) return null;
+	if ((!item || item.provider !== "openalex") && !loading) return null;
 	const relations = item?.relations as RelationsType;
 
 	const keyValues = {
@@ -1329,7 +1331,7 @@ function ItemAttachments({ item }: { item: Item | undefined }) {
 			<div className="flex flex-col gap-4">
 				{validAttachments.map((attachment) => (
 					<Attachment
-						key={attachment.id}
+						key={attachment.key}
 						data={attachment}
 						item={item!}
 					/>
@@ -1367,7 +1369,7 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 		citedBy: t("citedByResource"),
 	};
 
-	if (item?.groupExternalId === 1) return null;
+	if (item?.provider === "openalex") return null;
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -1425,7 +1427,7 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 			)}
 			<div className="flex flex-col gap-4">
 				{notes?.map((note) => (
-					<Card key={note.id} color="card" className="flex flex-col">
+					<Card key={note.key} color="card" className="flex flex-col">
 						<div
 							className="[&_a]:text-link"
 							dangerouslySetInnerHTML={{
@@ -1440,7 +1442,7 @@ function ItemNotes({ item }: { item: Item | undefined }) {
 				))}
 				{links?.map((link) => (
 					<a
-						key={link.id}
+						key={link.key}
 						href={link.url || ""}
 						target="_blank"
 						rel="noopener noreferrer"

@@ -1,18 +1,32 @@
-import { integer, pgTable, varchar, uuid, timestamp, jsonb } from 'drizzle-orm/pg-core';
+import {
+  canonicalRecordKeyCheck,
+  sourceIdentityColumns,
+} from '@opendeved/evidence-library-core';
+import {
+  bigint,
+  foreignKey,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  timestamp,
+  unique,
+  uniqueIndex,
+  varchar,
+} from 'drizzle-orm/pg-core';
 import { itemType } from '../enums/itemType';
 import { creatorType } from '../enums/creatorType';
-import { group } from './group';
-import { language } from './language';
 
 type CreatorType = {
   [key in typeof creatorType.enumValues[number]]?: string[];
 };
 
 export const item = pgTable('item', {
-  id: uuid().primaryKey().defaultRandom(),
+  key: varchar('key', { length: 8 }).primaryKey(),
+  ...sourceIdentityColumns(),
+
   itemType: itemType().notNull().default('Artwork'),
-  version: integer('version').default(0),
-  key: varchar('key', { length: 255 }).notNull().unique(),
+  revision: bigint('revision', { mode: 'number' }).notNull().default(1),
   title: varchar(),
   abstractNote: varchar(),
 
@@ -151,16 +165,30 @@ export const item = pgTable('item', {
   PDFCoverPageHeight: integer(),
 
   deleted: integer('deleted').default(0),
+  deletedAt: timestamp('deletedAt', { withTimezone: true }),
 
   languageName: varchar('languageName'),
-  groupExternalId: integer('groupExternalId').references(() => group.externalId),
-  parentItem: varchar('parentItem'),
+  parentItem: varchar('parentItem', { length: 8 }),
 
-  tags: varchar().array(),
-  collections: varchar().array(),
-  
   relations: jsonb(),
 
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-});
+  createdAt: timestamp('createdAt', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updatedAt', { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [
+  canonicalRecordKeyCheck('item_key_format', table.key),
+  uniqueIndex('item_source_record_unique').on(
+    table.sourceConnectionKey,
+    table.sourceRecordKey,
+  ),
+  unique('item_key_source_connection_unique').on(
+    table.key,
+    table.sourceConnectionKey,
+  ),
+  foreignKey({
+    name: 'item_parent_source_fk',
+    columns: [table.parentItem, table.sourceConnectionKey],
+    foreignColumns: [table.key, table.sourceConnectionKey],
+  }),
+  index('item_source_connection_idx').on(table.sourceConnectionKey),
+  index('item_parent_idx').on(table.parentItem),
+]);

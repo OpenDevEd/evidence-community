@@ -1,4 +1,5 @@
 import { InferSelectModel } from "drizzle-orm";
+import type { SourceProvider } from "@opendeved/evidence-library-core";
 import { item } from "@/db/schema/tables/item";
 import { Collection } from "../collections/types";
 
@@ -9,6 +10,10 @@ interface Institution {
 }
 
 export type Item = InferSelectModel<typeof item> & {
+  provider?: SourceProvider;
+  sourceExternalScopeKey?: string | null;
+  tags?: string[];
+  collections?: string[];
   attachmentsData?: Item[];
   collectionsData?: Collection[];
   collectionsAncestry?: string[];

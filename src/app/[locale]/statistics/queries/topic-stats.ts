@@ -1,5 +1,6 @@
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
+import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { eq, and, sql, isNotNull } from "drizzle-orm";
 import { calculateHIndex } from "./utils";
 
@@ -41,7 +42,7 @@ export type TopicYearStats = {
 export async function getTopicStats(db: Database): Promise<{ topicStats: TopicStats[]; topicOverview: TopicOverview }> {
 	const topicStatsResult = await db
 		.select({
-			collections: item.collections,
+			collections: sql<string[]>`array_agg(${itemToCollection.collectionKey})`,
 			itemKey: item.key,
 			citationCount: sql<number>`case 
 				when ${item.relations}::jsonb ? 'cited_by' 
@@ -50,14 +51,14 @@ export async function getTopicStats(db: Database): Promise<{ topicStats: TopicSt
 			end`
 		})
 		.from(item)
+		.innerJoin(itemToCollection, eq(itemToCollection.itemKey, item.key))
 		.where(
 			and(
 				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
-				isNotNull(item.collections),
-				sql`array_length(${item.collections}, 1) > 0`
+				sql`${item.parentItem} IS NULL`
 			)
-		);
+		)
+		.groupBy(item.key, item.relations);
 
 	// Process hierarchical topic structure
 	const topicMap = new Map<string, {
@@ -164,7 +165,7 @@ export async function getTopicStats(db: Database): Promise<{ topicStats: TopicSt
 export async function getTopicStatsByYear(db: Database): Promise<TopicYearStats[]> {
 	const topicsByYearResult = await db
 		.select({
-			collections: item.collections,
+			collections: sql<string[]>`array_agg(${itemToCollection.collectionKey})`,
 			itemKey: item.key,
 			year: sql<string>`extract(year from to_date(${item.date}, 'YYYY-MM-DD'))::text`,
 			citationCount: sql<number>`case 
@@ -174,17 +175,17 @@ export async function getTopicStatsByYear(db: Database): Promise<TopicYearStats[
 			end`
 		})
 		.from(item)
+		.innerJoin(itemToCollection, eq(itemToCollection.itemKey, item.key))
 		.where(
 			and(
 				eq(item.deleted, 0),
-				sql`${item.parentItem} IS NULL OR ${item.parentItem} = ''`,
-				isNotNull(item.collections),
-				sql`array_length(${item.collections}, 1) > 0`,
+				sql`${item.parentItem} IS NULL`,
 				isNotNull(item.date),
 				sql`${item.date} ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'`,
 				sql`extract(year from to_date(${item.date}, 'YYYY-MM-DD')) >= 2000`
 			)
-		);
+		)
+		.groupBy(item.key, item.date, item.relations);
 
 	// Process hierarchical topic structure with yearly breakdown
 	const topicYearMap = new Map<string, {

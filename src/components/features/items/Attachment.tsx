@@ -241,7 +241,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 				"flex flex-col gap-4 p-4 rounded-2xl w-full dark:bg-background",
 				hasImage && "md:relative md:overflow-visible"
 			)}
-			key={data.id}
+			key={data.key}
 			color="card"
 		>
 			{shouldShowLoading && (

@@ -5,15 +5,8 @@
     {
       "idx": 0,
       "version": "7",
-      "when": 1785244045344,
-      "tag": "0000_create-schema",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1785244112618,
-      "tag": "0001_drop-legacy-status-columns",
+      "when": 1785333838143,
+      "tag": "0000_openscholar-source-model",
       "breakpoints": true
     }
   ]

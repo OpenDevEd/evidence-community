@@ -73,7 +73,7 @@ async function ServerComponent(props: { params: Promise<{ key: string }> }) {
 	const params = await props.params;
 	const data = await getSourceItem(params.key);
 	
-	if (!data || !data.item || data.item.groupExternalId === 1) {
+	if (!data || !data.item || data.item.provider === "openalex") {
 		return notFound();
 	}
 
@@ -89,5 +89,4 @@ export default async function CitationPage(props: {
 		</Suspense>
 	);
 }
-
 

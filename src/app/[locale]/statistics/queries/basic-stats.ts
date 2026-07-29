@@ -1,5 +1,6 @@
 import type { Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
+import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { eq, isNotNull, and, ne, sql, desc, gte } from "drizzle-orm";
 
 export type ItemTypeStats = {
@@ -175,7 +176,10 @@ export async function getFieldCompleteness(db: Database, totalItems: number): Pr
 			pagesFilled: sql<number>`count(case when ${item.pages} is not null and ${item.pages} != '' then 1 end)`,
 			volumeFilled: sql<number>`count(case when ${item.volume} is not null and ${item.volume} != '' then 1 end)`,
 			issueFilled: sql<number>`count(case when ${item.issue} is not null and ${item.issue} != '' then 1 end)`,
-			collectionsFilled: sql<number>`count(case when ${item.collections} is not null and array_length(${item.collections}, 1) > 0 then 1 end)`,
+			collectionsFilled: sql<number>`count(case when exists (
+				select 1 from ${itemToCollection}
+				where ${itemToCollection.itemKey} = ${item.key}
+			) then 1 end)`,
 			languageFilled: sql<number>`count(case when ${item.languageName} is not null and ${item.languageName} != '' then 1 end)`
 		})
 		.from(item)

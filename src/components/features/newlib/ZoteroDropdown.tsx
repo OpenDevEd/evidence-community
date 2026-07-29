@@ -16,13 +16,17 @@ import { useTranslations } from "next-intl";
 
 export default function ZoteroDropdown({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
-	if (!item || item.groupExternalId === 1) return null;
+	if (
+		!item ||
+		item.provider !== "zotero" ||
+		!item.sourceExternalScopeKey
+	) return null;
 
 	const handleAction = (key: Key) => {
 		if (key === "view") {
-			window.open(`https://zotero.org/users/local/zotero/items/${item.key}`, "_blank");
+			window.open(`https://zotero.org/users/local/zotero/items/${item.sourceRecordKey}`, "_blank");
 		} else if (key === "open") {
-			window.open(`zotero://select/groups/${item.groupExternalId}/items/${item.key}`, "_blank");
+			window.open(`zotero://select/groups/${item.sourceExternalScopeKey}/items/${item.sourceRecordKey}`, "_blank");
 		}
 	};
 

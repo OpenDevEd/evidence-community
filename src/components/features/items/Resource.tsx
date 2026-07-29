@@ -144,7 +144,7 @@ function CitationCounts({ itemData }: { itemData: Item | ListItem | undefined })
 	const t = useTranslations("ui");
 	const resourceHref = useResourceHref();
 	const relations = itemData?.relations as RelationsType;
-	const isOpenAlex = itemData?.groupExternalId === 1;
+	const isOpenAlex = itemData?.provider === "openalex";
 
 	const citesCount = (Array.isArray(relations?.cites) ? relations.cites.length : 0)
 		+ (Array.isArray(relations?.referenced_works) ? relations.referenced_works.length : 0);

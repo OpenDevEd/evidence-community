@@ -116,7 +116,7 @@ async function getCSL(
 	const zoteroItem = ItemToZoteroJSON(item);
 	return translateZoteroItemToCSL(
 		zoteroItem,
-		String(item.id),
+		item.key,
 		translationUrl,
 	);
 }

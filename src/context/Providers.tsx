@@ -154,7 +154,7 @@ export function useLastFetchedData() {
 				const allItems = [...(prev?.items ?? []), ...data.items];
 
 				const uniqueItems = allItems.reduce((acc, item) => {
-					acc.set(item.id, item);
+					acc.set(item.key, item);
 					item.citation = "<div>Loading...</div>";
 					return acc;
 				}, new Map());

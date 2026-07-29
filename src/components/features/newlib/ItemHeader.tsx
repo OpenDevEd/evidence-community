@@ -160,7 +160,7 @@ export default function ItemHeader({
 							<AiWrapper data={{ item: item }} variant="inline" />
 						)}
 						{getCitationCount(item) > 0 && (
-							item?.groupExternalId === 1 ? (
+							item?.provider === "openalex" ? (
 								<Button
 									size="sm"
 									color="secondary"

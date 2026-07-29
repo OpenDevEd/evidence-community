@@ -1,32 +1,459 @@
 {
-  "id": "014e134a-1277-446e-9aeb-c76ef629e2f7",
+  "id": "512d3fd3-484f-4a35-8936-ea18b3a751e5",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
   "tables": {
-    "public.collection": {
-      "name": "collection",
+    "public.outbox": {
+      "name": "outbox",
       "schema": "",
       "columns": {
         "id": {
           "name": "id",
-          "type": "uuid",
-          "primaryKey": false,
-          "notNull": false,
-          "default": "gen_random_uuid()"
+          "type": "bigint",
+          "primaryKey": true,
+          "notNull": true,
+          "identity": {
+            "type": "always",
+            "name": "outbox_id_seq",
+            "schema": "public",
+            "increment": "1",
+            "startWith": "1",
+            "minValue": "1",
+            "maxValue": "9223372036854775807",
+            "cache": "1",
+            "cycle": false
+          }
         },
+        "entityType": {
+          "name": "entityType",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "entityKey": {
+          "name": "entityKey",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "operation": {
+          "name": "operation",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "attempts": {
+          "name": "attempts",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "lastError": {
+          "name": "lastError",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "processedAt": {
+          "name": "processedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {
+        "outbox_entity_revision_unique": {
+          "name": "outbox_entity_revision_unique",
+          "columns": [
+            {
+              "expression": "entityType",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "entityKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "revision",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "outbox_unprocessed_idx": {
+          "name": "outbox_unprocessed_idx",
+          "columns": [
+            {
+              "expression": "id",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"outbox\".\"processedAt\" IS NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "outbox_entity_type_valid": {
+          "name": "outbox_entity_type_valid",
+          "value": "\"outbox\".\"entityType\" IN ('item', 'collection')"
+        },
+        "outbox_operation_valid": {
+          "name": "outbox_operation_valid",
+          "value": "\"outbox\".\"operation\" IN ('upsert', 'delete')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.sourceConnection": {
+      "name": "sourceConnection",
+      "schema": "",
+      "columns": {
         "key": {
           "name": "key",
-          "type": "varchar",
+          "type": "varchar(64)",
           "primaryKey": true,
           "notNull": true
         },
-        "version": {
-          "name": "version",
-          "type": "integer",
+        "provider": {
+          "name": "provider",
+          "type": "text",
           "primaryKey": false,
-          "notNull": false,
-          "default": 0
+          "notNull": true
+        },
+        "scopeKind": {
+          "name": "scopeKind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "externalScopeKey": {
+          "name": "externalScopeKey",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "credentialRef": {
+          "name": "credentialRef",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "config": {
+          "name": "config",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "syncCursor": {
+          "name": "syncCursor",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::jsonb"
+        },
+        "status": {
+          "name": "status",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'active'"
+        },
+        "createdAt": {
+          "name": "createdAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updatedAt": {
+          "name": "updatedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        }
+      },
+      "indexes": {
+        "sourceConnection_provider_scope_unique": {
+          "name": "sourceConnection_provider_scope_unique",
+          "columns": [
+            {
+              "expression": "provider",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "externalScopeKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "where": "\"sourceConnection\".\"externalScopeKey\" IS NOT NULL",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "sourceConnection_status_idx": {
+          "name": "sourceConnection_status_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {},
+      "compositePrimaryKeys": {},
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "sourceConnection_key_format": {
+          "name": "sourceConnection_key_format",
+          "value": "\"sourceConnection\".\"key\" ~ '^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$'"
+        },
+        "sourceConnection_scope_valid": {
+          "name": "sourceConnection_scope_valid",
+          "value": "(\n\t\t\t\t(\"sourceConnection\".\"provider\" = 'native' AND \"sourceConnection\".\"key\" = 'native' AND \"sourceConnection\".\"scopeKind\" = 'library' AND \"sourceConnection\".\"externalScopeKey\" IS NULL)\n\t\t\t\tOR (\"sourceConnection\".\"provider\" = 'zotero' AND \"sourceConnection\".\"scopeKind\" IN ('group', 'personal-library') AND \"sourceConnection\".\"externalScopeKey\" IS NOT NULL)\n\t\t\t\tOR (\"sourceConnection\".\"provider\" = 'mendeley' AND \"sourceConnection\".\"scopeKind\" IN ('group', 'personal-library') AND \"sourceConnection\".\"externalScopeKey\" IS NOT NULL)\n\t\t\t\tOR (\"sourceConnection\".\"provider\" = 'openalex' AND \"sourceConnection\".\"scopeKind\" = 'query' AND \"sourceConnection\".\"externalScopeKey\" IS NULL)\n\t\t\t\tOR (\"sourceConnection\".\"provider\" = 'dspace' AND \"sourceConnection\".\"scopeKind\" IN ('repository', 'collection', 'oai-set') AND \"sourceConnection\".\"externalScopeKey\" IS NOT NULL)\n\t\t\t\tOR (\"sourceConnection\".\"provider\" = 'eprints' AND \"sourceConnection\".\"scopeKind\" IN ('repository', 'oai-set') AND \"sourceConnection\".\"externalScopeKey\" IS NOT NULL)\n\t\t\t)"
+        },
+        "sourceConnection_status_valid": {
+          "name": "sourceConnection_status_valid",
+          "value": "\"sourceConnection\".\"status\" IN ('active', 'paused', 'removed')"
+        }
+      },
+      "isRLSEnabled": false
+    },
+    "public.sourceRecordAlias": {
+      "name": "sourceRecordAlias",
+      "schema": "",
+      "columns": {
+        "sourceConnectionKey": {
+          "name": "sourceConnectionKey",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "aliasKey": {
+          "name": "aliasKey",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "itemKey": {
+          "name": "itemKey",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {
+        "sourceRecordAlias_item_idx": {
+          "name": "sourceRecordAlias_item_idx",
+          "columns": [
+            {
+              "expression": "itemKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
+      "foreignKeys": {
+        "sourceRecordAlias_sourceConnectionKey_sourceConnection_key_fk": {
+          "name": "sourceRecordAlias_sourceConnectionKey_sourceConnection_key_fk",
+          "tableFrom": "sourceRecordAlias",
+          "tableTo": "sourceConnection",
+          "columnsFrom": [
+            "sourceConnectionKey"
+          ],
+          "columnsTo": [
+            "key"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
+        },
+        "sourceRecordAlias_item_source_fk": {
+          "name": "sourceRecordAlias_item_source_fk",
+          "tableFrom": "sourceRecordAlias",
+          "tableTo": "item",
+          "columnsFrom": [
+            "itemKey",
+            "sourceConnectionKey"
+          ],
+          "columnsTo": [
+            "key",
+            "sourceConnectionKey"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "sourceRecordAlias_sourceConnectionKey_aliasKey_pk": {
+          "name": "sourceRecordAlias_sourceConnectionKey_aliasKey_pk",
+          "columns": [
+            "sourceConnectionKey",
+            "aliasKey"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.sourceSnapshot": {
+      "name": "sourceSnapshot",
+      "schema": "",
+      "columns": {
+        "itemKey": {
+          "name": "itemKey",
+          "type": "varchar(8)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "payload": {
+          "name": "payload",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "remoteVersion": {
+          "name": "remoteVersion",
+          "type": "varchar(255)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "payloadHash": {
+          "name": "payloadHash",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "mappingProfileVersion": {
+          "name": "mappingProfileVersion",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "fetchedAt": {
+          "name": "fetchedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "sourceSnapshot_itemKey_item_key_fk": {
+          "name": "sourceSnapshot_itemKey_item_key_fk",
+          "tableFrom": "sourceSnapshot",
+          "tableTo": "item",
+          "columnsFrom": [
+            "itemKey"
+          ],
+          "columnsTo": [
+            "key"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "sourceSnapshot_itemKey_pk": {
+          "name": "sourceSnapshot_itemKey_pk",
+          "columns": [
+            "itemKey"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {},
+      "isRLSEnabled": false
+    },
+    "public.collection": {
+      "name": "collection",
+      "schema": "",
+      "columns": {
+        "key": {
+          "name": "key",
+          "type": "varchar(8)",
+          "primaryKey": true,
+          "notNull": true
+        },
+        "sourceConnectionKey": {
+          "name": "sourceConnectionKey",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sourceRecordKey": {
+          "name": "sourceRecordKey",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
         },
         "numCollections": {
           "name": "numCollections",
@@ -55,15 +482,15 @@
           "notNull": false,
           "default": 0
         },
-        "parentCollection": {
-          "name": "parentCollection",
-          "type": "varchar",
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
-        "groupExternalId": {
-          "name": "groupExternalId",
-          "type": "integer",
+        "parentCollection": {
+          "name": "parentCollection",
+          "type": "varchar(8)",
           "primaryKey": false,
           "notNull": false
         },
@@ -75,52 +502,120 @@
         },
         "createdAt": {
           "name": "createdAt",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "collection_source_record_unique": {
+          "name": "collection_source_record_unique",
+          "columns": [
+            {
+              "expression": "sourceConnectionKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sourceRecordKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "collection_source_connection_idx": {
+          "name": "collection_source_connection_idx",
+          "columns": [
+            {
+              "expression": "sourceConnectionKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "collection_parent_idx": {
+          "name": "collection_parent_idx",
+          "columns": [
+            {
+              "expression": "parentCollection",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "collection_parentCollection_collection_key_fk": {
-          "name": "collection_parentCollection_collection_key_fk",
+        "collection_sourceConnectionKey_sourceConnection_key_fk": {
+          "name": "collection_sourceConnectionKey_sourceConnection_key_fk",
           "tableFrom": "collection",
-          "tableTo": "collection",
+          "tableTo": "sourceConnection",
           "columnsFrom": [
-            "parentCollection"
+            "sourceConnectionKey"
           ],
           "columnsTo": [
             "key"
           ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
         },
-        "collection_groupExternalId_group_externalId_fk": {
-          "name": "collection_groupExternalId_group_externalId_fk",
+        "collection_parent_source_fk": {
+          "name": "collection_parent_source_fk",
           "tableFrom": "collection",
-          "tableTo": "group",
+          "tableTo": "collection",
           "columnsFrom": [
-            "groupExternalId"
+            "parentCollection",
+            "sourceConnectionKey"
           ],
           "columnsTo": [
-            "externalId"
+            "key",
+            "sourceConnectionKey"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
+      "uniqueConstraints": {
+        "collection_key_source_connection_unique": {
+          "name": "collection_key_source_connection_unique",
+          "nullsNotDistinct": false,
+          "columns": [
+            "key",
+            "sourceConnectionKey"
+          ]
+        }
+      },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "collection_key_format": {
+          "name": "collection_key_format",
+          "value": "\"collection\".\"key\" ~ '^[23456789ABCDEFGHIJKLMNPQRSTUVWXYZ]{8}$'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.embeddings": {
@@ -136,13 +631,13 @@
         },
         "itemKey": {
           "name": "itemKey",
-          "type": "varchar",
+          "type": "varchar(8)",
           "primaryKey": false,
           "notNull": false
         },
         "parentKey": {
           "name": "parentKey",
-          "type": "varchar",
+          "type": "varchar(8)",
           "primaryKey": false,
           "notNull": false
         },
@@ -209,7 +704,7 @@
           "columnsTo": [
             "key"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "embeddings_parentKey_item_key_fk": {
@@ -222,7 +717,7 @@
           "columnsTo": [
             "key"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -232,109 +727,27 @@
       "checkConstraints": {},
       "isRLSEnabled": false
     },
-    "public.group": {
-      "name": "group",
-      "schema": "",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
-          "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
-        },
-        "externalId": {
-          "name": "externalId",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "name": {
-          "name": "name",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "version": {
-          "name": "version",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "default": 0
-        },
-        "type": {
-          "name": "type",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
-        },
-        "description": {
-          "name": "description",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "url": {
-          "name": "url",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "numItems": {
-          "name": "numItems",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "itemsVersion": {
-          "name": "itemsVersion",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "createdAt": {
-          "name": "createdAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        },
-        "updatedAt": {
-          "name": "updatedAt",
-          "type": "timestamp",
-          "primaryKey": false,
-          "notNull": true,
-          "default": "now()"
-        }
-      },
-      "indexes": {},
-      "foreignKeys": {},
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {
-        "group_externalId_unique": {
-          "name": "group_externalId_unique",
-          "nullsNotDistinct": false,
-          "columns": [
-            "externalId"
-          ]
-        }
-      },
-      "policies": {},
-      "checkConstraints": {},
-      "isRLSEnabled": false
-    },
     "public.item": {
       "name": "item",
       "schema": "",
       "columns": {
-        "id": {
-          "name": "id",
-          "type": "uuid",
+        "key": {
+          "name": "key",
+          "type": "varchar(8)",
           "primaryKey": true,
-          "notNull": true,
-          "default": "gen_random_uuid()"
+          "notNull": true
+        },
+        "sourceConnectionKey": {
+          "name": "sourceConnectionKey",
+          "type": "varchar(64)",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sourceRecordKey": {
+          "name": "sourceRecordKey",
+          "type": "varchar(512)",
+          "primaryKey": false,
+          "notNull": true
         },
         "itemType": {
           "name": "itemType",
@@ -344,18 +757,12 @@
           "notNull": true,
           "default": "'Artwork'"
         },
-        "version": {
-          "name": "version",
-          "type": "integer",
+        "revision": {
+          "name": "revision",
+          "type": "bigint",
           "primaryKey": false,
-          "notNull": false,
-          "default": 0
-        },
-        "key": {
-          "name": "key",
-          "type": "varchar(255)",
-          "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": 1
         },
         "title": {
           "name": "title",
@@ -1138,33 +1545,21 @@
           "notNull": false,
           "default": 0
         },
+        "deletedAt": {
+          "name": "deletedAt",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "languageName": {
           "name": "languageName",
           "type": "varchar",
           "primaryKey": false,
           "notNull": false
         },
-        "groupExternalId": {
-          "name": "groupExternalId",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
         "parentItem": {
           "name": "parentItem",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "tags": {
-          "name": "tags",
-          "type": "varchar[]",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "collections": {
-          "name": "collections",
-          "type": "varchar[]",
+          "type": "varchar(8)",
           "primaryKey": false,
           "notNull": false
         },
@@ -1176,30 +1571,97 @@
         },
         "createdAt": {
           "name": "createdAt",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "item_source_record_unique": {
+          "name": "item_source_record_unique",
+          "columns": [
+            {
+              "expression": "sourceConnectionKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "sourceRecordKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "item_source_connection_idx": {
+          "name": "item_source_connection_idx",
+          "columns": [
+            {
+              "expression": "sourceConnectionKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "item_parent_idx": {
+          "name": "item_parent_idx",
+          "columns": [
+            {
+              "expression": "parentItem",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
-        "item_groupExternalId_group_externalId_fk": {
-          "name": "item_groupExternalId_group_externalId_fk",
+        "item_sourceConnectionKey_sourceConnection_key_fk": {
+          "name": "item_sourceConnectionKey_sourceConnection_key_fk",
           "tableFrom": "item",
-          "tableTo": "group",
+          "tableTo": "sourceConnection",
           "columnsFrom": [
-            "groupExternalId"
+            "sourceConnectionKey"
           ],
           "columnsTo": [
-            "externalId"
+            "key"
+          ],
+          "onDelete": "restrict",
+          "onUpdate": "cascade"
+        },
+        "item_parent_source_fk": {
+          "name": "item_parent_source_fk",
+          "tableFrom": "item",
+          "tableTo": "item",
+          "columnsFrom": [
+            "parentItem",
+            "sourceConnectionKey"
+          ],
+          "columnsTo": [
+            "key",
+            "sourceConnectionKey"
           ],
           "onDelete": "no action",
           "onUpdate": "no action"
@@ -1207,16 +1669,22 @@
       },
       "compositePrimaryKeys": {},
       "uniqueConstraints": {
-        "item_key_unique": {
-          "name": "item_key_unique",
+        "item_key_source_connection_unique": {
+          "name": "item_key_source_connection_unique",
           "nullsNotDistinct": false,
           "columns": [
-            "key"
+            "key",
+            "sourceConnectionKey"
           ]
         }
       },
       "policies": {},
-      "checkConstraints": {},
+      "checkConstraints": {
+        "item_key_format": {
+          "name": "item_key_format",
+          "value": "\"item\".\"key\" ~ '^[23456789ABCDEFGHIJKLMNPQRSTUVWXYZ]{8}$'"
+        }
+      },
       "isRLSEnabled": false
     },
     "public.itemToCollection": {
@@ -1225,32 +1693,48 @@
       "columns": {
         "itemKey": {
           "name": "itemKey",
-          "type": "varchar(255)",
+          "type": "varchar(8)",
           "primaryKey": false,
           "notNull": true
         },
         "collectionKey": {
           "name": "collectionKey",
-          "type": "varchar(255)",
+          "type": "varchar(8)",
           "primaryKey": false,
           "notNull": true
         },
         "createdAt": {
           "name": "createdAt",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "itemToCollection_collection_idx": {
+          "name": "itemToCollection_collection_idx",
+          "columns": [
+            {
+              "expression": "collectionKey",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "itemToCollection_itemKey_item_key_fk": {
           "name": "itemToCollection_itemKey_item_key_fk",
@@ -1262,7 +1746,7 @@
           "columnsTo": [
             "key"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "itemToCollection_collectionKey_collection_key_fk": {
@@ -1275,7 +1759,7 @@
           "columnsTo": [
             "key"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },
@@ -1299,7 +1783,7 @@
       "columns": {
         "itemKey": {
           "name": "itemKey",
-          "type": "varchar(255)",
+          "type": "varchar(8)",
           "primaryKey": false,
           "notNull": true
         },
@@ -1311,20 +1795,36 @@
         },
         "createdAt": {
           "name": "createdAt",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         },
         "updatedAt": {
           "name": "updatedAt",
-          "type": "timestamp",
+          "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": true,
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "itemToTag_tag_idx": {
+          "name": "itemToTag_tag_idx",
+          "columns": [
+            {
+              "expression": "tagName",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "itemToTag_itemKey_item_key_fk": {
           "name": "itemToTag_itemKey_item_key_fk",
@@ -1336,7 +1836,7 @@
           "columnsTo": [
             "key"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "itemToTag_tagName_tag_name_fk": {
@@ -1380,7 +1880,7 @@
         },
         "itemKey": {
           "name": "itemKey",
-          "type": "varchar",
+          "type": "varchar(8)",
           "primaryKey": false,
           "notNull": true
         },
@@ -1418,7 +1918,38 @@
           "default": "now()"
         }
       },
-      "indexes": {},
+      "indexes": {
+        "itemToUserCollection_collection_idx": {
+          "name": "itemToUserCollection_collection_idx",
+          "columns": [
+            {
+              "expression": "userCollectionId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "itemToUserCollection_user_idx": {
+          "name": "itemToUserCollection_user_idx",
+          "columns": [
+            {
+              "expression": "userId",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        }
+      },
       "foreignKeys": {
         "itemToUserCollection_itemKey_item_key_fk": {
           "name": "itemToUserCollection_itemKey_item_key_fk",
@@ -1430,7 +1961,7 @@
           "columnsTo": [
             "key"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "itemToUserCollection_userCollectionId_userCollection_id_fk": {
@@ -2163,7 +2694,7 @@
         },
         "itemKey": {
           "name": "itemKey",
-          "type": "text",
+          "type": "varchar(8)",
           "primaryKey": false,
           "notNull": true
         },

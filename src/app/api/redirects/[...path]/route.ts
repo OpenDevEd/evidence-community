@@ -1,8 +1,9 @@
-import { and, arrayContains, eq, or } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 import { getDatabaseForConfig } from "@/db";
 import { item } from "@/db/schema/tables/item";
+import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -24,11 +25,11 @@ async function getCachedRedirectsNote(
 
 	return db.query.item.findFirst({
 		where: and(
-			or(
-				...redirectTags.map((tag) =>
-					arrayContains(item.tags, [tag]),
-				),
-			),
+			sql`exists (
+				select 1 from ${itemToTag}
+				where ${itemToTag.itemKey} = ${item.key}
+					and ${inArray(itemToTag.tagName, [...redirectTags])}
+			)`,
 			eq(item.itemType, "Note"),
 			eq(item.deleted, 0)
 		),

@@ -27,10 +27,12 @@ import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "./utils";
 
 export const LIST_ITEM_FIELDS = [
-	"id",
 	"itemType",
-	"version",
 	"key",
+	"provider",
+	"sourceConnectionKey",
+	"sourceExternalScopeKey",
+	"sourceRecordKey",
 	"title",
 	"shortTitle",
 	"abstractNote",
@@ -42,7 +44,6 @@ export const LIST_ITEM_FIELDS = [
 	"deleted",
 	"extra",
 	"fullNames",
-	"groupExternalId",
 	"institution",
 	"languageName",
 	"relations",

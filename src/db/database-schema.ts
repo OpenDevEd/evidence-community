@@ -9,7 +9,6 @@ import * as userToFollowRelations from "./schema/relations/userToFollow";
 import * as userToLikesRelations from "./schema/relations/userToLikes";
 import * as collectionTable from "./schema/tables/collection";
 import * as embeddingsTable from "./schema/tables/embeddings";
-import * as groupTable from "./schema/tables/group";
 import * as itemTable from "./schema/tables/item";
 import * as itemToCollectionTable from "./schema/tables/itemToCollection";
 import * as itemToTagTable from "./schema/tables/itemToTag";
@@ -22,11 +21,12 @@ import * as userCollectionTable from "./schema/tables/userCollection";
 import * as userTable from "./schema/tables/user";
 import * as userToFollowTable from "./schema/tables/userToFollow";
 import * as userToLikesTable from "./schema/tables/userToLikes";
+import * as sourceTables from "./schema/source";
 
 export const schema = {
 	...itemTable,
 	...collectionTable,
-	...groupTable,
+	...sourceTables,
 	...itemToCollectionTable,
 	...itemToTagTable,
 	...languageTable,
