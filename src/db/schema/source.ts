@@ -7,6 +7,8 @@ import {
 	itemIdentity,
 	outbox,
 	sourceConnection,
+	sourceSyncRun,
+	sourceSyncState,
 } from "@opendeved/evidence-library-core";
 import { relations } from "drizzle-orm";
 
@@ -20,6 +22,8 @@ export {
 	itemIdentity,
 	outbox,
 	sourceConnection,
+	sourceSyncRun,
+	sourceSyncState,
 };
 
 export const { sourceRecordAlias, sourceSnapshot } =
@@ -39,6 +43,35 @@ export const sourceConnectionRelations = relations(
 		items: many(item),
 		collections: many(collection),
 		aliases: many(sourceRecordAlias),
+		syncRuns: many(sourceSyncRun),
+	}),
+);
+
+export const sourceSyncRunRelations = relations(
+	sourceSyncRun,
+	({ one }) => ({
+		sourceConnection: one(sourceConnection, {
+			fields: [sourceSyncRun.sourceConnectionKey],
+			references: [sourceConnection.key],
+		}),
+		state: one(sourceSyncState, {
+			fields: [sourceSyncRun.id],
+			references: [sourceSyncState.activeRunId],
+		}),
+	}),
+);
+
+export const sourceSyncStateRelations = relations(
+	sourceSyncState,
+	({ one }) => ({
+		sourceConnection: one(sourceConnection, {
+			fields: [sourceSyncState.sourceConnectionKey],
+			references: [sourceConnection.key],
+		}),
+		activeRun: one(sourceSyncRun, {
+			fields: [sourceSyncState.activeRunId],
+			references: [sourceSyncRun.id],
+		}),
 	}),
 );
 

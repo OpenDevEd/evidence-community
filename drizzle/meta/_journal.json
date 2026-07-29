@@ -29,6 +29,13 @@
       "when": 1785342467238,
       "tag": "0003_zotero-annotation-fields",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785345605058,
+      "tag": "0004_clever_apocalypse",
+      "breakpoints": true
     }
   ]
 }

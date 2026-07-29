@@ -12,7 +12,7 @@ export type JsonValue =
 	| JsonValue[]
 	| { [key: string]: JsonValue };
 
-const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
+export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 	z.union([
 		z.string(),
 		z.number().finite(),
@@ -23,7 +23,7 @@ const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 	]),
 );
 
-const jsonObjectSchema = z.record(z.string(), jsonValueSchema);
+export const jsonObjectSchema = z.record(z.string(), jsonValueSchema);
 export const MAX_SOURCE_RECORD_BYTES = 2 * 1024 * 1024;
 export const MAX_SOURCE_BATCH_BYTES = 64 * 1024 * 1024;
 const sourceRecordKeySchema = z.string().trim().min(1).max(512);

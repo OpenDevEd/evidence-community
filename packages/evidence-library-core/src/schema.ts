@@ -45,6 +45,12 @@ export const SOURCE_CONNECTION_STATUSES = [
 	"removed",
 ] as const;
 
+export const SOURCE_SYNC_RUN_STATUSES = [
+	"running",
+	"succeeded",
+	"failed",
+] as const;
+
 export const OUTBOX_ENTITY_TYPES = ["item", "collection"] as const;
 export const OUTBOX_OPERATIONS = ["upsert", "delete"] as const;
 
@@ -52,6 +58,8 @@ export type SourceProvider = (typeof SOURCE_PROVIDERS)[number];
 export type SourceScopeKind = (typeof SOURCE_SCOPE_KINDS)[number];
 export type SourceConnectionStatus =
 	(typeof SOURCE_CONNECTION_STATUSES)[number];
+export type SourceSyncRunStatus =
+	(typeof SOURCE_SYNC_RUN_STATUSES)[number];
 export type OutboxEntityType = (typeof OUTBOX_ENTITY_TYPES)[number];
 export type OutboxOperation = (typeof OUTBOX_OPERATIONS)[number];
 
@@ -113,6 +121,101 @@ export const sourceConnection = pgTable(
 			.on(table.provider, table.externalScopeKey)
 			.where(sql`${table.externalScopeKey} IS NOT NULL`),
 		index("sourceConnection_status_idx").on(table.status),
+	],
+);
+
+export const sourceSyncRun = pgTable(
+	"sourceSyncRun",
+	{
+		id: bigint("id", { mode: "number" })
+			.primaryKey()
+			.generatedAlwaysAsIdentity(),
+		sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 })
+			.notNull()
+			.references(() => sourceConnection.key, {
+				onDelete: "cascade",
+				onUpdate: "cascade",
+			}),
+		workerId: varchar("workerId", { length: 255 }).notNull(),
+		status: text("status", {
+			enum: SOURCE_SYNC_RUN_STATUSES,
+		})
+			.notNull()
+			.default("running"),
+		startedAt: timestampWithTimezone("startedAt").notNull().defaultNow(),
+		heartbeatAt: timestampWithTimezone("heartbeatAt")
+			.notNull()
+			.defaultNow(),
+		finishedAt: timestampWithTimezone("finishedAt"),
+		result: jsonb("result").$type<JsonObject>(),
+		error: text("error"),
+	},
+	(table) => [
+		check(
+			"sourceSyncRun_status_valid",
+			sql`${table.status} IN ('running', 'succeeded', 'failed')`,
+		),
+		check(
+			"sourceSyncRun_terminal_state_valid",
+			sql`(
+				(${table.status} = 'running' AND ${table.finishedAt} IS NULL AND ${table.result} IS NULL AND ${table.error} IS NULL)
+				OR (${table.status} = 'succeeded' AND ${table.finishedAt} IS NOT NULL AND ${table.result} IS NOT NULL AND ${table.error} IS NULL)
+				OR (${table.status} = 'failed' AND ${table.finishedAt} IS NOT NULL AND ${table.result} IS NULL AND ${table.error} IS NOT NULL)
+			)`,
+		),
+		uniqueIndex("sourceSyncRun_one_running_per_connection")
+			.on(table.sourceConnectionKey)
+			.where(sql`${table.status} = 'running'`),
+		index("sourceSyncRun_connection_started_idx").on(
+			table.sourceConnectionKey,
+			table.startedAt,
+		),
+	],
+);
+
+export const sourceSyncState = pgTable(
+	"sourceSyncState",
+	{
+		sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 })
+			.primaryKey()
+			.references(() => sourceConnection.key, {
+				onDelete: "cascade",
+				onUpdate: "cascade",
+			}),
+		activeRunId: bigint("activeRunId", { mode: "number" }).references(
+			() => sourceSyncRun.id,
+			{ onDelete: "set null" },
+		),
+		leaseOwner: varchar("leaseOwner", { length: 255 }),
+		leaseExpiresAt: timestampWithTimezone("leaseExpiresAt"),
+		lastAttemptAt: timestampWithTimezone("lastAttemptAt"),
+		lastSuccessAt: timestampWithTimezone("lastSuccessAt"),
+		lastFailureAt: timestampWithTimezone("lastFailureAt"),
+		consecutiveFailures: integer("consecutiveFailures")
+			.notNull()
+			.default(0),
+		lastError: text("lastError"),
+		lastResult: jsonb("lastResult").$type<JsonObject>(),
+		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
+	},
+	(table) => [
+		check(
+			"sourceSyncState_lease_bundle_valid",
+			sql`(
+				(${table.leaseOwner} IS NULL AND ${table.leaseExpiresAt} IS NULL AND ${table.activeRunId} IS NULL)
+				OR (${table.leaseOwner} IS NOT NULL AND ${table.leaseExpiresAt} IS NOT NULL AND ${table.activeRunId} IS NOT NULL)
+			)`,
+		),
+		check(
+			"sourceSyncState_failures_nonnegative",
+			sql`${table.consecutiveFailures} >= 0`,
+		),
+		uniqueIndex("sourceSyncState_active_run_unique")
+			.on(table.activeRunId)
+			.where(sql`${table.activeRunId} IS NOT NULL`),
+		index("sourceSyncState_lease_expiry_idx")
+			.on(table.leaseExpiresAt)
+			.where(sql`${table.leaseOwner} IS NOT NULL`),
 	],
 );
 

@@ -153,3 +153,41 @@ When a collection's name or parent changes, the outbox projector must expand
 that event to the complete descendant collection subtree and every member item
 whose derived collection ancestry changes. An `upsert` event is emitted only
 for active parent items; a tombstoned parent remains a deletion.
+
+## Source synchronization
+
+- `SourceAdapterRegistry` dispatches each connection by provider. The runtime
+  ships with the Zotero adapter; Mendeley, OpenAlex, DSpace, and EPrints plug
+  into the same interface without changing orchestration or canonical writes.
+- `sourceConnection` is the source registry and schedule input. A sweep selects
+  only active, non-native connections and runs them with bounded concurrency.
+- Every attempt creates an immutable `sourceSyncRun`. Exactly one running
+  attempt may exist for a connection.
+- `sourceSyncState` is the current health and lease record. It stores the active
+  run, lease owner and expiry, last attempt/success/failure, consecutive failure
+  count, bounded result summary, and last error.
+- Claiming, expiring an abandoned run, and assigning a new lease happen under a
+  row lock in one transaction. A second worker reports the connection as busy
+  while the lease is valid.
+- The runner maintains automatic heartbeats while the adapter works. Adapters
+  may also heartbeat at natural page or batch boundaries. Completion is
+  accepted only from the worker that still owns the run.
+- Adapter lookup, result validation, and adapter failures all pass through the
+  same failure finalizer, release the lease, and remain retryable. A successful
+  retry resets the consecutive failure count.
+- Result summaries must be JSON objects no larger than 1 MiB. Provider cursors
+  remain on `sourceConnection` and advance only inside
+  `writeSourceIngestionBatch`, so orchestration cannot acknowledge a partial
+  canonical write.
+
+Run one connection with:
+
+```sh
+npm run source:sync -- --connection zotero-example
+```
+
+Run every active external connection with:
+
+```sh
+npm run source:sync -- --concurrency 2
+```
