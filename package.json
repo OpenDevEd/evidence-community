@@ -19,6 +19,8 @@
 		"test:zotero-source": "tsx ./tools/verifyZoteroSourceSync.ts",
 		"test:source-orchestrator": "tsx ./tools/verifySourceOrchestrator.ts",
 		"source:sync": "tsx ./tools/runSourceSync.ts",
+		"search:index": "tsx ./tools/runSearchIndexer.ts",
+		"test:search-index": "tsx ./tools/verifySearchOutbox.ts",
 		"test:native-lifecycle": "tsx ./tools/verifyNativeItemLifecycle.ts",
 		"test:native-file-lifecycle": "tsx ./tools/verifyNativeFileLifecycle.ts",
 		"test:file-storage": "tsx ./tools/verifySupabaseFileStorage.ts",

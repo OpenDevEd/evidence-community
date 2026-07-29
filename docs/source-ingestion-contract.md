@@ -108,10 +108,21 @@ Meilisearch documents are derived and rebuildable. Item documents must contain:
 - derived hierarchical paths in `collectionsAncestry`;
 - all currently supported bibliographic/search fields.
 
-Collection documents must contain canonical `key`, `sourceConnectionKey`,
-`sourceRecordKey`, `provider`, `sourceExternalScopeKey`, and derived ancestry.
-The indexer must consume the transactional outbox and acknowledge an event only
-after Meilisearch accepts the corresponding upsert or deletion.
+Collections remain canonical in PostgreSQL and are not mixed into the item
+search index. A collection event expands to its current descendant subtree and
+reprojects every member item whose derived ancestry may have changed.
+
+The indexer claims one event at a time with a renewable lease. It projects the
+current canonical revision, waits for every asynchronous Meilisearch task to
+finish successfully, and only then acknowledges the event. Failures release
+the lease with exponential retry timing; exhausted events become visible dead
+letters. Replaying an event is safe because upserts and deletions are
+idempotent and always derive from current PostgreSQL state.
+
+A full rebuild deletes derived search documents and streams the current
+top-level canonical items back in bounded batches. It does not acknowledge
+outbox events; the normal drain immediately follows and covers writes that
+committed during the rebuild.
 
 ## Write ordering
 

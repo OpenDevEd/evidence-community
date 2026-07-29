@@ -14,6 +14,7 @@ export type SearchServiceConfiguration = {
 
 export type MeilisearchService = {
 	cacheIndex: Index;
+	client: MeiliSearch;
 	index: Index;
 	indexName: string;
 	redirectsIndex: Index;
@@ -41,6 +42,7 @@ function createMeilisearchService(
 	return {
 		value: {
 			cacheIndex: client.index(CACHE_INDEX_NAME),
+			client,
 			index: client.index(configuration.index),
 			indexName: configuration.index,
 			redirectsIndex: client.index(REDIRECTS_INDEX_NAME),

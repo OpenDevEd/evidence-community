@@ -424,8 +424,14 @@ export const outbox = pgTable(
 		revision: bigint("revision", { mode: "number" }).notNull(),
 		attempts: integer("attempts").notNull().default(0),
 		lastError: text("lastError"),
+		nextAttemptAt: timestampWithTimezone("nextAttemptAt")
+			.notNull()
+			.defaultNow(),
+		leaseOwner: varchar("leaseOwner", { length: 255 }),
+		leaseExpiresAt: timestampWithTimezone("leaseExpiresAt"),
 		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
 		processedAt: timestampWithTimezone("processedAt"),
+		deadLetteredAt: timestampWithTimezone("deadLetteredAt"),
 	},
 	(table) => [
 		check(
@@ -436,14 +442,36 @@ export const outbox = pgTable(
 			"outbox_operation_valid",
 			sql`${table.operation} IN ('upsert', 'delete')`,
 		),
+		check(
+			"outbox_attempts_nonnegative",
+			sql`${table.attempts} >= 0`,
+		),
+		check(
+			"outbox_lease_bundle_valid",
+			sql`(
+				(${table.leaseOwner} IS NULL AND ${table.leaseExpiresAt} IS NULL)
+				OR (${table.leaseOwner} IS NOT NULL AND ${table.leaseExpiresAt} IS NOT NULL)
+			)`,
+		),
+		check(
+			"outbox_terminal_state_valid",
+			sql`NOT (${table.processedAt} IS NOT NULL AND ${table.deadLetteredAt} IS NOT NULL)
+				AND (${table.processedAt} IS NULL AND ${table.deadLetteredAt} IS NULL
+					OR (${table.leaseOwner} IS NULL AND ${table.leaseExpiresAt} IS NULL))`,
+		),
 		uniqueIndex("outbox_entity_revision_unique").on(
 			table.entityType,
 			table.entityKey,
 			table.revision,
 		),
 		index("outbox_unprocessed_idx")
-			.on(table.id)
-			.where(sql`${table.processedAt} IS NULL`),
+			.on(table.nextAttemptAt, table.id)
+			.where(
+				sql`${table.processedAt} IS NULL AND ${table.deadLetteredAt} IS NULL`,
+			),
+		index("outbox_lease_expiry_idx")
+			.on(table.leaseExpiresAt)
+			.where(sql`${table.leaseOwner} IS NOT NULL`),
 	],
 );
 
