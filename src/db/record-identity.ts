@@ -1,9 +1,11 @@
 import {
+	adoptableCanonicalRecordKey,
 	collectionIdentity,
+	generateCanonicalRecordKey,
 	itemIdentity,
 	reserveCanonicalRecordKey,
 } from "@opendeved/evidence-library-core";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "./database-schema";
 
@@ -16,6 +18,130 @@ type ReserveIdentityOptions = {
 	sourceConnectionKey: string;
 	sourceRecordKey?: string;
 };
+
+type IdentityTable = typeof itemIdentity | typeof collectionIdentity;
+
+const MAX_IDENTITY_ALLOCATION_ATTEMPTS = 100;
+
+async function reserveRecordIdentities(
+	db: Executor,
+	table: IdentityTable,
+	{
+		sourceConnectionKey,
+		sourceRecordKeys,
+	}: {
+		sourceConnectionKey: string;
+		sourceRecordKeys: string[];
+	},
+) {
+	const uniqueSourceRecordKeys = [...new Set(sourceRecordKeys)];
+	if (uniqueSourceRecordKeys.length !== sourceRecordKeys.length) {
+		throw new Error("Source record keys must be unique within a batch");
+	}
+	if (uniqueSourceRecordKeys.length === 0) {
+		return new Map<string, string>();
+	}
+
+	const result = new Map<string, string>();
+	const loadExisting = async (keys: string[]) => {
+		if (keys.length === 0) return;
+		const rows = await db
+			.select({
+				key: table.key,
+				sourceRecordKey: table.sourceRecordKey,
+			})
+			.from(table)
+			.where(
+				and(
+					eq(table.sourceConnectionKey, sourceConnectionKey),
+					inArray(table.sourceRecordKey, keys),
+				),
+			);
+		for (const row of rows) {
+			result.set(row.sourceRecordKey, row.key);
+		}
+	};
+
+	await loadExisting(uniqueSourceRecordKeys);
+	let pending = uniqueSourceRecordKeys.filter((key) => !result.has(key));
+
+	const adoptableRows = pending.flatMap((sourceRecordKey) => {
+		const key = adoptableCanonicalRecordKey(sourceRecordKey);
+		return key
+			? [{ key, sourceConnectionKey, sourceRecordKey }]
+			: [];
+	});
+	if (adoptableRows.length > 0) {
+		const adopted = await db
+			.insert(table)
+			.values(adoptableRows)
+			.onConflictDoNothing()
+			.returning({
+				key: table.key,
+				sourceRecordKey: table.sourceRecordKey,
+			});
+		for (const row of adopted) {
+			result.set(row.sourceRecordKey, row.key);
+		}
+	}
+
+	await loadExisting(pending);
+	pending = pending.filter((key) => !result.has(key));
+
+	for (
+		let attempt = 0;
+		pending.length > 0 &&
+		attempt < MAX_IDENTITY_ALLOCATION_ATTEMPTS;
+		attempt += 1
+	) {
+		const candidates = pending.map((sourceRecordKey) => ({
+			key: generateCanonicalRecordKey(),
+			sourceConnectionKey,
+			sourceRecordKey,
+		}));
+		const inserted = await db
+			.insert(table)
+			.values(candidates)
+			.onConflictDoNothing()
+			.returning({
+				key: table.key,
+				sourceRecordKey: table.sourceRecordKey,
+			});
+		for (const row of inserted) {
+			result.set(row.sourceRecordKey, row.key);
+		}
+
+		await loadExisting(pending);
+		pending = pending.filter((key) => !result.has(key));
+	}
+
+	if (pending.length > 0) {
+		throw new Error(
+			`Failed to reserve canonical identities for: ${pending.join(", ")}`,
+		);
+	}
+	return result;
+}
+
+export async function reserveItemIdentities(
+	db: Executor,
+	options: {
+		sourceConnectionKey: string;
+		sourceRecordKeys: string[];
+	},
+) {
+	return reserveRecordIdentities(db, itemIdentity, options);
+}
+
+export async function reserveCollectionIdentities(
+	db: Executor,
+	options: {
+		sourceConnectionKey: string;
+		sourceRecordKeys: string[];
+	},
+) {
+	return reserveRecordIdentities(db, collectionIdentity, options);
+}
 
 export async function reserveItemIdentity(
 	db: Executor,

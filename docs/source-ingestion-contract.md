@@ -110,12 +110,41 @@ after Meilisearch accepts the corresponding upsert or deletion.
 
 ## Write ordering
 
-Parent foreign keys are deliberately immediate. A source adapter must therefore
-use a two-pass write:
+Source adapters emit provider-neutral batches to
+`writeSourceIngestionBatch`. Each batch contains raw source snapshots,
+Zotero-style canonical metadata, optional attachment fields, provider aliases,
+source-key relationships, and an expected/next cursor pair.
+
+The writer locks the source connection and rejects a stale cursor before
+writing. Identity reservation is batched and collision-safe. Valid
+eight-character provider keys are adopted when available; collisions are
+remapped without changing provider identity.
+
+Individual source records are capped at 2 MiB of serialized input and a batch
+at 64 MiB. Collection references are unique after applying the current
+connection as the default. The snapshot hash covers the complete canonical
+write envelope, not only the raw provider payload, so attachment fields,
+relationships, aliases, and source dates independently trigger replacement.
+
+Parent foreign keys are deliberately immediate. The writer therefore applies
+each batch in two passes:
 
 1. upsert items and collections with parent fields set to `NULL`;
 2. resolve provider keys to canonical keys and update parent fields.
 
-The canonical writes, normalized memberships/tags, current source snapshot, and
-outbox event commit in one PostgreSQL transaction. Only then may the connection
-cursor advance.
+Parents must remain within their source connection. Collection membership may
+reference any connection by `(sourceConnectionKey, sourceRecordKey)`. Missing,
+deleted, or cyclic relationships reject the complete batch. Relationship
+targets deleted by the same batch are treated as deleted during validation.
+
+Canonical writes, normalized memberships/tags, immutable aliases, current
+source snapshots, parent reprojections, outbox events, and the next connection
+cursor commit in one PostgreSQL transaction. Exact item replays update snapshot
+freshness and advance the cursor without producing canonical revisions.
+Repeated deletions are also no-ops. Unknown deletion keys never reserve
+identities.
+
+When a collection's name or parent changes, the outbox projector must expand
+that event to the complete descendant collection subtree and every member item
+whose derived collection ancestry changes. An `upsert` event is emitted only
+for active parent items; a tombstoned parent remains a deletion.
