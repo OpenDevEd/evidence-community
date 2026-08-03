@@ -12,6 +12,10 @@ import type {
 	AdminErrorPayload,
 	AdminFieldErrors,
 } from "@/lib/admin/errors";
+import type {
+	AdminItemBatchRequest,
+	AdminItemBatchResponse,
+} from "@/lib/admin/item-batch-contract";
 
 export class AdminApiError extends Error {
 	readonly code: AdminErrorCode;
@@ -190,6 +194,13 @@ export function unpublishAdminItem(key: string) {
 		`/api/admin/items/${encodeURIComponent(key)}/unpublish`,
 		{ method: "POST" },
 	);
+}
+
+export function mutateAdminItems(input: AdminItemBatchRequest) {
+	return requestJson<AdminItemBatchResponse>("/api/admin/items/batch", {
+		body: JSON.stringify(input),
+		method: "POST",
+	});
 }
 
 export function createAdminCollection(input: {

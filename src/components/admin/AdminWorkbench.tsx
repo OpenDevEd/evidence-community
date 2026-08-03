@@ -40,6 +40,10 @@ import type {
 	AdminRecordState,
 } from "@/lib/admin/types";
 import type { AdminItemSortColumnId } from "@/lib/admin/item-list-contract";
+import type {
+	AdminItemBatchRequest,
+	AdminItemBatchResult,
+} from "@/lib/admin/item-batch-contract";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { getRuntimeHomeHref } from "@/config/library-config/links";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -71,6 +75,7 @@ import {
 	getAdminItem,
 	getAdminLibrary,
 	moveAdminCollection,
+	mutateAdminItems,
 	openAdminDraft,
 	publishAdminItem,
 	publishAdminPdf,
@@ -241,25 +246,42 @@ function withoutRecordError(errors: Record<string, string>, key: string) {
 	return next;
 }
 
-function collectionKeysFromPayload(payload: Record<string, unknown>) {
-	return Array.isArray(payload.collections)
-		? payload.collections.filter(
-				(value): value is string => typeof value === "string",
-			)
-		: [];
-}
-
-function payloadWithCollection(
-	payload: Record<string, unknown>,
-	collectionKey: string,
+function batchResultSummary(
+	results: readonly AdminItemBatchResult[],
+	changedLabels: readonly [singular: string, plural: string],
 ) {
+	const changed = results.filter(
+		({ outcome }) => outcome === "changed",
+	).length;
+	const unchanged = results.filter(
+		({ outcome }) => outcome === "unchanged",
+	).length;
+	const skipped = results.filter(
+		({ outcome }) => outcome === "skipped",
+	).length;
+	const failed = results.filter(({ outcome }) => outcome === "failed");
 	return {
-		...payload,
-		collections: [
-			...new Set([...collectionKeysFromPayload(payload), collectionKey]),
-		],
+		changed,
+		failed,
+		message: [
+			changed
+				? `${changed} ${changed === 1 ? changedLabels[0] : changedLabels[1]}`
+				: null,
+			unchanged ? `${unchanged} unchanged` : null,
+			skipped ? `${skipped} skipped` : null,
+			failed.length ? `${failed.length} failed` : null,
+		]
+			.filter(Boolean)
+			.join(", "),
 	};
 }
+
+type BatchFeedback = {
+	changedLabels: readonly [singular: string, plural: string];
+	clearChangedInspector?: boolean;
+	emptyMessage: string;
+	successDescription?: string;
+};
 
 export default function AdminWorkbench({
 	definitions,
@@ -1245,185 +1267,123 @@ export default function AdminWorkbench({
 					: "asc",
 		}));
 
+	const flushBatchDrafts = async (itemKeys: readonly string[]) => {
+		const failures: AdminItemBatchResult[] = [];
+		for (const key of itemKeys) {
+			try {
+				await flushDraft(
+					key,
+					detail?.key === key && detail.draft
+						? draftPayload
+						: undefined,
+				);
+			} catch (error) {
+				failures.push({
+					...(error instanceof AdminApiError
+						? { code: error.code, fields: error.fields }
+						: {}),
+					key,
+					message: fileErrorMessage(error),
+					outcome: "failed",
+				});
+			}
+		}
+		await saveQueue.current;
+		const failedKeys = new Set(failures.map(({ key }) => key));
+		return {
+			failures,
+			readyKeys: itemKeys.filter((key) => !failedKeys.has(key)),
+		};
+	};
+
+	const executeBatchMutation = async (
+		request: AdminItemBatchRequest,
+		feedback: BatchFeedback,
+		localResults: readonly AdminItemBatchResult[] = [],
+	) => {
+		const remoteResults =
+			request.keys.length > 0
+				? (await mutateAdminItems(request)).results
+				: [];
+		const results = [...localResults, ...remoteResults];
+		const affectedKeys = new Set(results.map(({ key }) => key));
+		const failedKeys = new Set(
+			results
+				.filter(({ outcome }) => outcome === "failed")
+				.map(({ key }) => key),
+		);
+		setBulkKeys(
+			(current) =>
+				new Set(
+					[...current].filter(
+						(key) => !affectedKeys.has(key) || failedKeys.has(key),
+					),
+				),
+		);
+		const selectedFailure = results.find(
+			({ fields, key, outcome }) =>
+				key === selectedKeyRef.current &&
+				outcome === "failed" &&
+				fields &&
+				Object.keys(fields).length > 0,
+		);
+		const selectedChanged = Boolean(
+			feedback.clearChangedInspector &&
+			results.some(
+				({ key, outcome }) =>
+					key === selectedKeyRef.current && outcome === "changed",
+			),
+		);
+		if (selectedChanged) {
+			setSelectedKey(null);
+			setDetail(null);
+		}
+		await refreshCurrent(selectedChanged ? null : undefined);
+		if (selectedFailure?.fields) {
+			setValidationErrors(selectedFailure.fields);
+			setValidationRevision((current) => current + 1);
+			setMobilePane("inspector");
+		}
+		const summary = batchResultSummary(results, feedback.changedLabels);
+		if (summary.failed.length) {
+			toast.error(summary.message, {
+				description: failureDescription(
+					summary.failed.map(
+						({ key, message }) =>
+							`${key}: ${message ?? "Operation failed."}`,
+					),
+				),
+			});
+		} else if (summary.changed) {
+			toast.success(summary.message, {
+				description: feedback.successDescription,
+			});
+		} else {
+			toast.info(summary.message || feedback.emptyMessage);
+		}
+		return results;
+	};
+
 	const assignRecordsToCollection = (
 		itemKeys: readonly string[],
 		collectionKey: string,
 	) =>
 		void runBusy(async () => {
-			let changed = 0;
-			let skipped = 0;
-			let unchanged = 0;
-			const failures: string[] = [];
-
-			const saveLocalAssignment = async (
-				key: string,
-				payload: Record<string, unknown>,
-			) => {
-				const alreadyAssigned =
-					collectionKeysFromPayload(payload).includes(collectionKey);
-				let nextPayload = payloadWithCollection(payload, collectionKey);
-
-				for (let attempt = 0; attempt < 5; attempt += 1) {
-					if (selectedKeyRef.current === key) {
-						setDraftPayload(nextPayload);
-					}
-					await queueDraftSave(key, nextPayload, true);
-
-					const pending =
-						pendingPayloadByKey.current.get(key)?.payload;
-					if (pending) {
-						nextPayload = payloadWithCollection(
-							pending,
-							collectionKey,
-						);
-						continue;
-					}
-					if (
-						savedPayloadByKey.current.get(key) ===
-						JSON.stringify(nextPayload)
-					) {
-						return alreadyAssigned
-							? ("unchanged" as const)
-							: ("changed" as const);
-					}
-					throw new Error(
-						"Could not confirm the collection assignment",
-					);
-				}
-				throw new Error(
-					"Draft kept changing while assigning the collection",
-				);
-			};
-
-			for (const key of itemKeys) {
-				if (serverReloadKeys.current.has(key)) {
-					failures.push(`${key}: server draft is reloading`);
-					continue;
-				}
-				const pendingPayload =
-					pendingPayloadByKey.current.get(key)?.payload;
-				const localPayload =
-					detail?.key === key &&
-					detail.sourceConnectionKey ===
-						NATIVE_SOURCE_CONNECTION_KEY &&
-					detail.draft
-						? draftPayload
-						: pendingPayload;
-
-				if (localPayload) {
-					try {
-						const outcome = await saveLocalAssignment(
-							key,
-							localPayload,
-						);
-						if (outcome === "changed") changed += 1;
-						else unchanged += 1;
-					} catch (error) {
-						failures.push(`${key}: ${errorMessage(error)}`);
-					}
-					continue;
-				}
-
-				const timer = saveTimers.current.get(key);
-				if (timer) clearTimeout(timer);
-				saveTimers.current.delete(key);
-				pendingPayloadByKey.current.delete(key);
-				saveGeneration.current.set(
-					key,
-					(saveGeneration.current.get(key) ?? 0) + 1,
-				);
-
-				const operation = saveQueue.current.then(async () => {
-					let record = await getAdminItem(key);
-					if (
-						record.sourceConnectionKey !==
-						NATIVE_SOURCE_CONNECTION_KEY
-					) {
-						return "skipped" as const;
-					}
-					let payload = editablePayloadFromDetail(
-						record,
-						definitions,
-					);
-					if (
-						collectionKeysFromPayload(payload).includes(
-							collectionKey,
-						)
-					) {
-						return "unchanged" as const;
-					}
-					if (!record.draft) {
-						await openAdminDraft(key);
-						record = await getAdminItem(key);
-						payload = editablePayloadFromDetail(
-							record,
-							definitions,
-						);
-					}
-					const nextPayload = payloadWithCollection(
-						payload,
-						collectionKey,
-					);
-					const saved = await saveAdminDraft(
-						key,
-						record.draft!.draftRevision,
-						nextPayload,
-					);
-					revisionByKey.current.set(key, saved.draftRevision);
-					savedPayloadByKey.current.set(
-						key,
-						JSON.stringify(nextPayload),
-					);
-					if (selectedKeyRef.current === key) {
-						setDraftPayload(nextPayload);
-						setDetail((current) =>
-							current?.key === key
-								? { ...current, draft: saved }
-								: current,
-						);
-					}
-					return "changed" as const;
-				});
-				saveQueue.current = operation.then(
-					() => undefined,
-					() => undefined,
-				);
-				try {
-					const outcome = await operation;
-					if (outcome === "changed") changed += 1;
-					if (outcome === "unchanged") unchanged += 1;
-					if (outcome === "skipped") skipped += 1;
-				} catch (error) {
-					failures.push(`${key}: ${errorMessage(error)}`);
-				}
-			}
-			setBulkKeys(
-				(current) =>
-					new Set(
-						[...current].filter((key) => !itemKeys.includes(key)),
-					),
-			);
-			await refreshCurrent();
-			const result = [
-				changed
-					? `${changed} draft${changed === 1 ? "" : "s"} updated`
-					: null,
-				unchanged ? `${unchanged} already assigned` : null,
-				skipped ? `${skipped} skipped` : null,
-				failures.length ? `${failures.length} failed` : null,
-			].filter(Boolean);
-			if (failures.length) {
-				toast.error(result.join(", "), {
-					description: failureDescription(failures),
-				});
-			} else if (changed) {
-				toast.success(result.join(", "), {
-					description:
+			const { failures, readyKeys } = await flushBatchDrafts(itemKeys);
+			await executeBatchMutation(
+				{
+					action: "assignCollection",
+					collectionKey,
+					keys: [...readyKeys],
+				},
+				{
+					changedLabels: ["draft updated", "drafts updated"],
+					emptyMessage: "No records were changed",
+					successDescription:
 						"Publish the drafts to update the public library.",
-				});
-			} else {
-				toast.info(result.join(", ") || "No records were changed");
-			}
+				},
+				failures,
+			);
 		});
 
 	const assignBulkCollection = (collectionKey: string) =>
@@ -1444,44 +1404,17 @@ export default function AdminWorkbench({
 
 	const bulkPublish = () =>
 		void runBusy(async () => {
-			let published = 0;
-			let skipped = 0;
-			const failures: string[] = [];
-			for (const key of bulkKeys) {
-				try {
-					const record = await getAdminItem(key);
-					if (
-						record.sourceConnectionKey !==
-							NATIVE_SOURCE_CONNECTION_KEY ||
-						!record.draft
-					) {
-						skipped += 1;
-						continue;
-					}
-					await flushDraft(
-						key,
-						detail?.key === key ? draftPayload : undefined,
-					);
-					await publishAdminItem(key);
-					published += 1;
-				} catch (error) {
-					failures.push(`${key}: ${fileErrorMessage(error)}`);
-				}
-			}
-			setBulkKeys(new Set());
-			await refreshCurrent();
-			const result = `${published} record${
-				published === 1 ? "" : "s"
-			} published${skipped ? `, ${skipped} skipped` : ""}${
-				failures.length ? `, ${failures.length} failed` : ""
-			}`;
-			if (failures.length > 0) {
-				toast.error(result, {
-					description: failureDescription(failures),
-				});
-			} else {
-				toast.success(result);
-			}
+			const { failures, readyKeys } = await flushBatchDrafts([
+				...bulkKeys,
+			]);
+			await executeBatchMutation(
+				{ action: "publish", keys: [...readyKeys] },
+				{
+					changedLabels: ["record published", "records published"],
+					emptyMessage: "No records were published",
+				},
+				failures,
+			);
 		});
 
 	const bulkDelete = () =>
@@ -1491,48 +1424,18 @@ export default function AdminWorkbench({
 				"Native drafts will be deleted. Published native records will be unpublished. Imported records are skipped.",
 			danger: true,
 			action: async () => {
-				let changed = 0;
-				let skipped = 0;
-				const failures: string[] = [];
 				for (const key of bulkKeys) {
-					try {
-						const record = await getAdminItem(key);
-						if (
-							record.sourceConnectionKey !==
-							NATIVE_SOURCE_CONNECTION_KEY
-						) {
-							skipped += 1;
-						} else if (!record.published && record.draft) {
-							abandonPendingDraft(key);
-							await saveQueue.current;
-							await discardAdminDraft(key);
-							changed += 1;
-						} else if (record.published) {
-							await unpublishAdminItem(key);
-							changed += 1;
-						} else {
-							skipped += 1;
-						}
-					} catch (error) {
-						failures.push(`${key}: ${fileErrorMessage(error)}`);
-					}
+					abandonPendingDraft(key);
 				}
-				setBulkKeys(new Set());
-				setSelectedKey(null);
-				setDetail(null);
-				await refreshCurrent(null);
-				const result = `${changed} record${
-					changed === 1 ? "" : "s"
-				} removed${skipped ? `, ${skipped} skipped` : ""}${
-					failures.length ? `, ${failures.length} failed` : ""
-				}`;
-				if (failures.length > 0) {
-					toast.error(result, {
-						description: failureDescription(failures),
-					});
-				} else {
-					toast.success(result);
-				}
+				await saveQueue.current;
+				await executeBatchMutation(
+					{ action: "remove", keys: [...bulkKeys] },
+					{
+						changedLabels: ["record removed", "records removed"],
+						clearChangedInspector: true,
+						emptyMessage: "No records were removed",
+					},
+				);
 			},
 		});
 
@@ -1825,64 +1728,88 @@ export default function AdminWorkbench({
 							mobilePane === "list" ? "flex" : "hidden"
 						} flex-col xl:flex`}
 					>
-						{bulkKeys.size ? (
-							<div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
-								<Button
-									aria-label="Clear selection"
-									isIconOnly
-									onPress={() => setBulkKeys(new Set())}
-									size="xs"
-									variant="transparent"
-								>
-									<X aria-hidden size={14} />
-								</Button>
-								<Button
-									isDisabled={busy}
-									onPress={bulkPublish}
-									size="xs"
-									startContent={
-										<Send aria-hidden size={14} />
-									}
-									variant="transparent"
-								>
-									Publish
-								</Button>
-								<Select
-									aria-label="Assign selected records to a collection"
-									className="max-w-[210px]"
-									placeholder="Add to collection"
-									placement="left"
-									size="sm"
-									onSelectionChange={(keys) => {
-										const key = singleKey(
-											keys as Set<React.Key>,
-										);
-										if (key) assignBulkCollection(key);
-									}}
-								>
-									{activeNativeCollections.map(
-										(collection) => (
-											<SelectItem key={collection.key}>
-												{collection.name}
-											</SelectItem>
-										),
-									)}
-								</Select>
-								<Button
-									color="danger"
-									isDisabled={busy}
-									onPress={bulkDelete}
-									size="xs"
-									startContent={
-										<Trash2 aria-hidden size={14} />
-									}
-									variant="transparent"
-								>
-									Remove
-								</Button>
-							</div>
-						) : null}
 						<AdminItemTable
+							bulkActions={
+								bulkKeys.size ? (
+									<div
+										aria-label="Bulk actions"
+										className="flex h-full min-w-0 items-center gap-1 overflow-hidden"
+										role="toolbar"
+									>
+										<span className="hidden shrink-0 px-1 text-xs font-medium text-black/60 dark:text-white/65 sm:inline">
+											{bulkKeys.size} selected
+										</span>
+										<Tooltip content="Publish selected">
+											<Button
+												aria-label="Publish selected"
+												isDisabled={busy}
+												isIconOnly
+												onPress={bulkPublish}
+												size="xs"
+												variant="transparent"
+											>
+												<Send aria-hidden size={14} />
+											</Button>
+										</Tooltip>
+										<Select
+											aria-label="Assign selected records to a collection"
+											className="w-[min(150px,30vw)] max-w-[150px]"
+											classNames={{
+												trigger:
+													"h-8 min-h-8 rounded-lg",
+												value: "text-xs",
+											}}
+											isDisabled={busy}
+											placeholder="Collection"
+											placement="left"
+											size="sm"
+											onSelectionChange={(keys) => {
+												const key = singleKey(
+													keys as Set<React.Key>,
+												);
+												if (key)
+													assignBulkCollection(key);
+											}}
+										>
+											{activeNativeCollections.map(
+												(collection) => (
+													<SelectItem
+														key={collection.key}
+													>
+														{collection.name}
+													</SelectItem>
+												),
+											)}
+										</Select>
+										<Tooltip content="Remove selected">
+											<Button
+												aria-label="Remove selected"
+												className="text-danger"
+												isDisabled={busy}
+												isIconOnly
+												onPress={bulkDelete}
+												size="xs"
+												variant="transparent"
+											>
+												<Trash2 aria-hidden size={14} />
+											</Button>
+										</Tooltip>
+										<Tooltip content="Clear selection">
+											<Button
+												aria-label="Clear selection"
+												isIconOnly
+												onPress={() =>
+													setBulkKeys(new Set())
+												}
+												size="xs"
+												variant="transparent"
+											>
+												<X aria-hidden size={14} />
+											</Button>
+										</Tooltip>
+									</div>
+								) : undefined
+							}
 							bulkKeys={bulkKeys}
 							collections={library.collections}
 							dragEnabled={!busy}
@@ -2046,6 +1973,7 @@ export default function AdminWorkbench({
 
 			<DialogModal
 				isOpen={newItemOpen}
+				size="lg"
 				onOpenChange={(open) => setNewItemOpen(open)}
 			>
 				<ModalContent>

@@ -55,6 +55,7 @@ import type {
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { isTopLevelAdminItemType } from "@/lib/admin/item-fields";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
+import { collectionKeysFromPayload } from "@/lib/admin/item-payload";
 
 import { FileStateChip, RecordStateChip } from "./AdminStatus";
 import {
@@ -910,13 +911,7 @@ function CollectionsEditor({
 }) {
 	const error = firstAdminFieldError(errors, "collections");
 	const errorId = `admin-${recordKey}-collections-error`;
-	const selected = new Set(
-		Array.isArray(payload.collections)
-			? payload.collections.filter(
-					(entry): entry is string => typeof entry === "string",
-				)
-			: [],
-	);
+	const selected = new Set(collectionKeysFromPayload(payload));
 	const publishedSelected = new Set(publishedCollectionKeys ?? []);
 	const availableCollections = collections.filter(
 		(collection) => !collection.deleted || selected.has(collection.key),

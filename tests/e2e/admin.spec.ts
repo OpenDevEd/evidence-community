@@ -114,8 +114,15 @@ function publishedDetail(
 async function mockPublishedBook(
 	page: Page,
 	options: {
+		batchResults?: (body: {
+			action: string;
+			collectionKey?: string;
+			keys: string[];
+		}) => unknown[];
+		failDraftSave?: boolean;
 		itemCount?: number;
 		listRowOverrides?: Partial<Record<string, unknown>>;
+		onBatchRequest?: (body: unknown) => void;
 		onListRequest?: (url: URL) => void;
 	} = {},
 ) {
@@ -141,6 +148,45 @@ async function mockPublishedBook(
 							status: "active",
 						},
 					],
+				},
+			});
+			return;
+		}
+		if (
+			pathname === "/api/admin/items/batch" &&
+			request.method() === "POST"
+		) {
+			const body = request.postDataJSON() as {
+				action: string;
+				collectionKey?: string;
+				keys: string[];
+			};
+			options.onBatchRequest?.(body);
+			if (
+				body.action === "assignCollection" &&
+				body.collectionKey &&
+				body.keys.includes(publishedItemKey)
+			) {
+				const collections = Array.isArray(draftPayload.collections)
+					? draftPayload.collections.map(String)
+					: [];
+				draftPayload = {
+					...draftPayload,
+					collections: [
+						...new Set([...collections, body.collectionKey]),
+					],
+				};
+				draftRevision += 1;
+				editing = true;
+			}
+			await route.fulfill({
+				json: {
+					results:
+						options.batchResults?.(body) ??
+						body.keys.map((key) => ({
+							key,
+							outcome: "changed",
+						})),
 				},
 			});
 			return;
@@ -183,6 +229,19 @@ async function mockPublishedBook(
 			pathname === `/api/admin/items/${publishedItemKey}/draft` &&
 			request.method() === "PUT"
 		) {
+			if (options.failDraftSave) {
+				await route.fulfill({
+					json: {
+						error: {
+							code: "validation_failed",
+							fields: { title: "Enter a valid title." },
+							message: "Fix the highlighted fields.",
+						},
+					},
+					status: 422,
+				});
+				return;
+			}
 			const body = request.postDataJSON() as {
 				payload: Record<string, unknown>;
 			};
@@ -236,6 +295,22 @@ test("persists advanced typed filters in the URL", async ({ page }) => {
 		.getByRole("button", { name: "Filters, 1 active", exact: true })
 		.click();
 	const dialog = page.getByRole("dialog", { name: "Filter records" });
+	const filterGeometry = await dialog.evaluate((element) => {
+		const rect = element.getBoundingClientRect();
+		const style = getComputedStyle(element);
+		return {
+			boxSizing: style.boxSizing,
+			left: rect.left,
+			right: rect.right,
+			width: rect.width,
+		};
+	});
+	expect(filterGeometry.boxSizing).toBe("border-box");
+	expect(filterGeometry.width).toBeLessThanOrEqual(560);
+	expect(filterGeometry.left).toBeGreaterThanOrEqual(12);
+	expect(filterGeometry.right).toBeLessThanOrEqual(
+		await page.evaluate(() => window.innerWidth - 12),
+	);
 	await dialog.getByRole("button", { name: "Clear", exact: true }).click();
 	await dialog.locator('button[aria-label="Add filter"]').click();
 	await page.getByRole("option", { name: "Title", exact: true }).click();
@@ -312,6 +387,72 @@ test("persists advanced typed filters in the URL", async ({ page }) => {
 	await expect
 		.poll(() => listRequests.at(-1)?.searchParams.get("search"))
 		.toBe("restored");
+});
+
+test("keeps the filter editor inside a narrow viewport", async ({ page }) => {
+	await mockPublishedBook(page);
+	await page.setViewportSize({ height: 844, width: 390 });
+	await page.goto("/admin");
+	await page
+		.locator('button[aria-haspopup="dialog"][aria-label="Filters"]')
+		.click();
+	const dialog = page.getByRole("dialog", { name: "Filter records" });
+	await dialog.locator('button[aria-label="Add filter"]').click();
+	await page.getByRole("option", { name: "Year", exact: true }).click();
+	await dialog.locator('button[aria-label="Year operator"]').click();
+	await page.getByRole("option", { name: "Between", exact: true }).click();
+
+	const readGeometry = () =>
+		dialog.evaluate((element) => {
+			const rect = element.getBoundingClientRect();
+			const interactiveElements = [
+				...element.querySelectorAll<HTMLElement>(
+					'button, input, textarea, [role="checkbox"]',
+				),
+			].filter((control) => {
+				const controlRect = control.getBoundingClientRect();
+				return controlRect.width > 0 && controlRect.height > 0;
+			});
+			return {
+				interactiveControlsInside: interactiveElements.every(
+					(control) => {
+						const controlRect = control.getBoundingClientRect();
+						return (
+							controlRect.left >= rect.left &&
+							controlRect.right <= rect.right
+						);
+					},
+				),
+				documentOverflow:
+					document.documentElement.scrollWidth - window.innerWidth,
+				left: rect.left,
+				right: rect.right,
+				width: rect.width,
+			};
+		});
+	expect(await readGeometry()).toEqual({
+		interactiveControlsInside: true,
+		documentOverflow: 0,
+		left: 12,
+		right: 378,
+		width: 366,
+	});
+
+	await dialog.locator('button[aria-label="Filter 1 field"]').click();
+	await page.getByRole("option", { name: "State", exact: true }).click();
+	await dialog
+		.getByRole("button", { name: "State values", exact: true })
+		.click();
+	await expect(
+		dialog.getByRole("checkbox", { name: "Draft", exact: true }),
+	).toBeVisible();
+	expect(await readGeometry()).toEqual({
+		interactiveControlsInside: true,
+		documentOverflow: 0,
+		left: 12,
+		right: 378,
+		width: 366,
+	});
 });
 
 async function mockBookWithAttachment(
@@ -560,6 +701,32 @@ test("creates an item through a pointer click in the new-item dialog", async ({
 
 	const dialog = page.getByRole("dialog", { name: "New item" });
 	await expect(dialog).toBeVisible();
+	await expect
+		.poll(() =>
+			dialog.evaluate((element) => element.getBoundingClientRect().width),
+		)
+		.toBeLessThanOrEqual(513);
+	await expect
+		.poll(() =>
+			dialog.evaluate((element) => element.getBoundingClientRect().width),
+		)
+		.toBeGreaterThanOrEqual(511);
+	const modalGeometry = await dialog.evaluate((element) => {
+		const rect = element.getBoundingClientRect();
+		const style = getComputedStyle(element);
+		return {
+			boxSizing: style.boxSizing,
+			left: rect.left,
+			right: rect.right,
+			width: rect.width,
+		};
+	});
+	expect(modalGeometry.boxSizing).toBe("border-box");
+	expect(modalGeometry.width).toBeLessThanOrEqual(513);
+	expect(modalGeometry.left).toBeGreaterThanOrEqual(16);
+	expect(modalGeometry.right).toBeLessThanOrEqual(
+		await page.evaluate(() => window.innerWidth - 16),
+	);
 	await dialog.getByRole("button", { name: "Book", exact: true }).click();
 
 	await expect(dialog).toBeHidden();
@@ -859,23 +1026,20 @@ test("moves a native collection into another collection with pointer drag", asyn
 test("adds a native record to a collection with pointer drag", async ({
 	page,
 }) => {
-	await mockPublishedBook(page);
-	let savedPayload: Record<string, unknown> | null = null;
-	page.on("request", (request) => {
-		if (
-			request.method() === "PUT" &&
-			new URL(request.url()).pathname ===
-				`/api/admin/items/${publishedItemKey}/draft`
-		) {
-			savedPayload = (
-				request.postDataJSON() as { payload: Record<string, unknown> }
-			).payload;
-		}
+	let batchRequest: unknown;
+	await mockPublishedBook(page, {
+		itemCount: 2,
+		onBatchRequest: (body) => {
+			batchRequest = body;
+		},
 	});
 	await page.goto("/admin");
 	await expect(
 		page.getByRole("heading", { name: "Published book" }),
 	).toBeVisible();
+	await page
+		.getByRole("checkbox", { name: "Select Published book 2" })
+		.check();
 
 	const handle = page.locator(
 		`[data-record-drag-handle="${publishedItemKey}"]`,
@@ -890,14 +1054,21 @@ test("adds a native record to a collection with pointer drag", async ({
 	await page.mouse.up();
 
 	await expect
-		.poll(() => savedPayload?.collections)
-		.toEqual([longCollection.key]);
+		.poll(() => batchRequest)
+		.toEqual({
+			action: "assignCollection",
+			collectionKey: longCollection.key,
+			keys: [publishedItemKey],
+		});
 	await expect(
 		page.getByRole("button", {
 			name: "Changed: show published collections",
 		}),
 	).toBeVisible();
 	await expect(handle).toBeFocused();
+	await expect(
+		page.getByRole("checkbox", { name: "Select Published book 2" }),
+	).toBeChecked();
 });
 
 test("keeps admin chrome on one computed spacing system", async ({ page }) => {
@@ -1139,6 +1310,147 @@ test("configures columns, density, sizing, and persists computed table geometry"
 			.locator('thead th[data-column-id="title"]')
 			.evaluate((header) => header.getBoundingClientRect().width),
 	).toBeGreaterThan(beforeWidth + 35);
+});
+
+test("runs selected-record actions through one compact batch request", async ({
+	page,
+}) => {
+	const batchRequests: unknown[] = [];
+	await mockPublishedBook(page, {
+		itemCount: 2,
+		onBatchRequest: (body) => batchRequests.push(body),
+	});
+	await page.goto("/admin");
+	await expect(
+		page.getByRole("heading", { name: "Published book" }),
+	).toBeVisible();
+
+	await page
+		.getByRole("checkbox", { name: "Select all loaded records" })
+		.check();
+	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
+	await expect(bulkToolbar).toBeVisible();
+	await expect(bulkToolbar).toContainText("2 selected");
+
+	const toolbarGeometry = await page.evaluate(() => {
+		const bulk = document.querySelector<HTMLElement>(
+			'[role="toolbar"][aria-label="Bulk actions"]',
+		)!;
+		const controls = document.querySelector<HTMLElement>(
+			'[aria-label="Table view controls"]',
+		)!;
+		const bulkRect = bulk.getBoundingClientRect();
+		const controlsRect = controls.getBoundingClientRect();
+		return {
+			bulkBottom: bulkRect.bottom,
+			bulkTop: bulkRect.top,
+			controlsBottom: controlsRect.bottom,
+			controlsHeight: controlsRect.height,
+			controlsTop: controlsRect.top,
+			documentOverflow:
+				document.documentElement.scrollWidth - window.innerWidth,
+		};
+	});
+	expect(toolbarGeometry.controlsHeight).toBe(40);
+	expect(
+		Math.abs(
+			(toolbarGeometry.bulkTop + toolbarGeometry.bulkBottom) / 2 -
+				(toolbarGeometry.controlsTop + toolbarGeometry.controlsBottom) /
+					2,
+		),
+	).toBeLessThanOrEqual(1);
+	expect(toolbarGeometry.bulkBottom).toBeLessThanOrEqual(
+		toolbarGeometry.controlsBottom,
+	);
+	expect(toolbarGeometry.documentOverflow).toBe(0);
+	await bulkToolbar.getByRole("button", { name: "Publish selected" }).click();
+	await expect.poll(() => batchRequests.length).toBe(1);
+	expect(batchRequests).toEqual([
+		{
+			action: "publish",
+			keys: [publishedItemKey, "ROW00001"],
+		},
+	]);
+	await expect(bulkToolbar).toBeHidden();
+});
+
+test("continues a bulk action when one local draft cannot be saved", async ({
+	page,
+}) => {
+	const batchRequests: unknown[] = [];
+	await mockPublishedBook(page, {
+		failDraftSave: true,
+		itemCount: 2,
+		onBatchRequest: (body) => batchRequests.push(body),
+	});
+	await page.goto("/admin");
+
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector
+		.getByRole("textbox", { name: "Title", exact: true })
+		.fill("Invalid local draft");
+	await page
+		.getByRole("checkbox", { name: "Select all loaded records" })
+		.check();
+	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
+	await bulkToolbar.getByRole("button", { name: "Publish selected" }).click();
+
+	await expect
+		.poll(() => batchRequests)
+		.toEqual([
+			{
+				action: "publish",
+				keys: ["ROW00001"],
+			},
+		]);
+	await expect(
+		page.getByRole("checkbox", {
+			name: "Select Published book",
+			exact: true,
+		}),
+	).toBeChecked();
+	await expect(
+		page.getByRole("checkbox", { name: "Select Published book 2" }),
+	).not.toBeChecked();
+	await expect(page.getByText(/1 record published, 1 failed/)).toBeVisible();
+});
+
+test("shows server batch validation on the selected metadata field", async ({
+	page,
+}) => {
+	await mockPublishedBook(page, {
+		batchResults: ({ keys }) =>
+			keys.map((key) => ({
+				code: "validation_failed",
+				fields: { title: "Enter a publishable title." },
+				key,
+				message: "Check the highlighted fields and try again.",
+				outcome: "failed",
+			})),
+	});
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", { name: "Edit" }).click();
+	await page
+		.getByRole("checkbox", {
+			name: "Select Published book",
+			exact: true,
+		})
+		.check();
+	await page
+		.getByRole("toolbar", { name: "Bulk actions" })
+		.getByRole("button", { name: "Publish selected" })
+		.click();
+
+	await expect(
+		inspector
+			.locator('[data-slot="error-message"]')
+			.filter({ hasText: "Enter a publishable title." }),
+	).toBeVisible();
+	await expect(
+		inspector.getByRole("textbox", { name: "Title", exact: true }),
+	).toHaveAttribute("aria-invalid", "true");
 });
 
 test("virtualizes large record sets while keeping rows horizontal and key columns pinned", async ({
@@ -1522,6 +1834,16 @@ test("keeps button loading spinners on the icon geometry", async ({ page }) => {
 	await page.goto("/admin");
 	await page.getByRole("button", { name: "New", exact: true }).click();
 	const dialog = page.getByRole("dialog", { name: "New collection" });
+	await expect
+		.poll(() =>
+			dialog.evaluate((element) => element.getBoundingClientRect().width),
+		)
+		.toBeLessThanOrEqual(449);
+	await expect
+		.poll(() =>
+			dialog.evaluate((element) => element.getBoundingClientRect().width),
+		)
+		.toBeGreaterThanOrEqual(447);
 	await dialog.getByRole("textbox", { name: "Name" }).fill("New collection");
 	const create = dialog.getByRole("button", { name: "Create" });
 	const before = await create.evaluate((button) => {

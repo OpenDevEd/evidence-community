@@ -41,6 +41,7 @@ import {
 	useState,
 	type Dispatch,
 	type PointerEvent as ReactPointerEvent,
+	type ReactNode,
 	type SetStateAction,
 } from "react";
 
@@ -281,10 +282,12 @@ function RecordTitleCell({
 }
 
 function TableViewControls({
+	bulkActions,
 	onPreferencesChange,
 	onResetPreferences,
 	preferences,
 }: {
+	bulkActions?: ReactNode;
 	onPreferencesChange: Dispatch<SetStateAction<AdminItemTablePreferences>>;
 	onResetPreferences: () => void;
 	preferences: AdminItemTablePreferences;
@@ -295,8 +298,9 @@ function TableViewControls({
 	return (
 		<div
 			aria-label="Table view controls"
-			className="flex h-10 shrink-0 items-center justify-end gap-1 border-b border-black/[0.06] px-2 dark:border-white/[0.06]"
+			className="flex h-10 shrink-0 items-center gap-1 border-b border-black/[0.06] px-2 dark:border-white/[0.06]"
 		>
+			<div className="min-w-0 flex-1">{bulkActions}</div>
 			<Popover disableAnimation placement="bottom-end">
 				<PopoverTrigger>
 					<Button
@@ -507,6 +511,7 @@ function SortHeader({
 }
 
 export function AdminItemTable({
+	bulkActions,
 	bulkKeys,
 	collections,
 	dragEnabled,
@@ -529,6 +534,7 @@ export function AdminItemTable({
 	sort,
 	sortDirection,
 }: {
+	bulkActions?: ReactNode;
 	bulkKeys: ReadonlySet<string>;
 	collections: AdminCollection[];
 	dragEnabled: boolean;
@@ -838,6 +844,7 @@ export function AdminItemTable({
 	return (
 		<div className="flex min-h-0 flex-1 flex-col overflow-hidden">
 			<TableViewControls
+				bulkActions={bulkActions}
 				onPreferencesChange={onPreferencesChange}
 				onResetPreferences={onResetPreferences}
 				preferences={preferences}

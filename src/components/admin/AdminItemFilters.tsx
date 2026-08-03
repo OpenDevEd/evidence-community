@@ -363,7 +363,7 @@ export function AdminItemFilters({
 			</PopoverTrigger>
 			<PopoverContent
 				aria-label="Filter records"
-				className="w-[min(720px,calc(100vw-24px))] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+				className="w-[min(560px,calc(100vw-24px))] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
 			>
 				<div className="flex h-11 items-center justify-between border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
 					<span className="text-sm font-semibold text-black/80 dark:text-white/85">
@@ -401,7 +401,7 @@ export function AdminItemFilters({
 							>
 								<Select
 									aria-label={`Filter ${index + 1} field`}
-									className="w-36 shrink-0"
+									className="w-32 shrink-0"
 									classNames={{
 										trigger: "h-9 min-h-9 rounded-lg",
 										value: "text-xs",
@@ -439,7 +439,7 @@ export function AdminItemFilters({
 								</Select>
 								<Select
 									aria-label={`${definition.label} operator`}
-									className="w-36 shrink-0"
+									className="w-32 shrink-0"
 									classNames={{
 										trigger: "h-9 min-h-9 rounded-lg",
 										value: "text-xs",
@@ -522,10 +522,10 @@ export function AdminItemFilters({
 						);
 					})}
 				</div>
-				<div className="flex min-h-12 items-center justify-between gap-2 border-t border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
+				<div className="flex min-h-12 flex-wrap items-center justify-end gap-2 border-t border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
 					<Select
 						aria-label="Add filter"
-						className="w-40"
+						className="mr-auto w-40"
 						classNames={{
 							trigger: "h-9 min-h-9 rounded-lg",
 							value: "text-xs",
@@ -551,36 +551,34 @@ export function AdminItemFilters({
 							<SelectItem key={id}>{label}</SelectItem>
 						))}
 					</Select>
-					<div className="flex items-center gap-2">
-						{drafts.length > 0 && !parsed ? (
-							<span
-								aria-live="polite"
-								className="text-xs text-danger"
-							>
-								Fix highlighted filters
-							</span>
-						) : null}
-						<Button
-							onPress={() => setOpen(false)}
-							size="xs"
-							variant="transparent"
+					{drafts.length > 0 && !parsed ? (
+						<span
+							aria-live="polite"
+							className="order-first basis-full text-xs text-danger sm:order-none sm:basis-auto"
 						>
-							Cancel
-						</Button>
-						<Button
-							color="accent"
-							isDisabled={!parsed}
-							onPress={() => {
-								if (!parsed) return;
-								onChange(parsed);
-								setOpen(false);
-							}}
-							size="xs"
-							variant="solid"
-						>
-							Apply
-						</Button>
-					</div>
+							Fix highlighted filters
+						</span>
+					) : null}
+					<Button
+						onPress={() => setOpen(false)}
+						size="xs"
+						variant="transparent"
+					>
+						Cancel
+					</Button>
+					<Button
+						color="accent"
+						isDisabled={!parsed}
+						onPress={() => {
+							if (!parsed) return;
+							onChange(parsed);
+							setOpen(false);
+						}}
+						size="xs"
+						variant="solid"
+					>
+						Apply
+					</Button>
 				</div>
 			</PopoverContent>
 		</Popover>
