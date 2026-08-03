@@ -14,6 +14,7 @@ import {
 	Check,
 	ChevronDown,
 	ChevronsUpDown,
+	CircleAlert,
 	Columns3,
 	Database,
 	FileText,
@@ -22,6 +23,7 @@ import {
 	Lock,
 	RotateCcw,
 	Rows3,
+	SearchX,
 	Tag,
 	UserRound,
 	type LucideIcon,
@@ -33,9 +35,10 @@ import {
 	type ColumnDef,
 	type VisibilityState,
 } from "@tanstack/react-table";
-import { useVirtualizer } from "@tanstack/react-virtual";
+import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import {
 	useEffect,
+	useCallback,
 	useMemo,
 	useRef,
 	useState,
@@ -80,6 +83,25 @@ type AdminTableItem = AdminItemListRow & {
 };
 
 const ADMIN_ITEM_TABLE_HEADER_HEIGHT = 40;
+const ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY = "__header__";
+const ADMIN_ITEM_TABLE_STATUS_FOCUS_KEY = "__status__";
+const ADMIN_ITEM_TABLE_WIDGET_SELECTOR = [
+	"button:not([disabled]):not([aria-disabled='true']):not([data-disabled='true'])",
+	"input:not([disabled]):not([aria-disabled='true']):not([data-disabled='true'])",
+	"select:not([disabled]):not([aria-disabled='true']):not([data-disabled='true'])",
+	"textarea:not([disabled]):not([aria-disabled='true']):not([data-disabled='true'])",
+	"[role='button'][tabindex]:not([aria-disabled='true']):not([data-disabled='true'])",
+].join(", ");
+const DOCUMENT_TAB_STOP_SELECTOR =
+	"a[href], button, input, select, textarea, [tabindex]";
+
+function adminItemTableCellId(rowKey: string, columnId: AdminItemColumnId) {
+	return `admin-item-grid-cell-${encodeURIComponent(rowKey)}-${columnId}`;
+}
+
+function adminItemTableHeaderCellId(columnId: AdminItemColumnId) {
+	return `admin-item-grid-header-${columnId}`;
+}
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
 	day: "numeric",
@@ -251,6 +273,7 @@ function RecordTitleCell({
 						};
 					}}
 					title={`Drag or assign ${record.title}`}
+					tabIndex={-1}
 					type="button"
 				>
 					<GripVertical aria-hidden size={14} />
@@ -496,6 +519,7 @@ function SortHeader({
 		<button
 			className="flex h-full w-full min-w-0 items-center gap-1.5 text-left hover:text-black/65 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-focus dark:hover:text-white/70"
 			onClick={() => onSort(columnId)}
+			tabIndex={-1}
 			type="button"
 		>
 			<span className="truncate">{label}</span>
@@ -593,7 +617,6 @@ export function AdminItemTable({
 					<div
 						className="w-fit"
 						onClick={(event) => event.stopPropagation()}
-						onKeyDown={(event) => event.stopPropagation()}
 					>
 						<Checkbox
 							aria-label={`Select ${row.original.title}`}
@@ -602,6 +625,7 @@ export function AdminItemTable({
 								onToggleBulk(row.original.key, selected)
 							}
 							size="sm"
+							tabIndex={-1}
 						/>
 					</div>
 				),
@@ -616,6 +640,7 @@ export function AdminItemTable({
 							isSelected={allVisibleSelected}
 							onValueChange={onToggleVisible}
 							size="sm"
+							tabIndex={-1}
 						/>
 					</div>
 				),
@@ -781,6 +806,54 @@ export function AdminItemTable({
 	const rowHeight = adminItemTableRowHeight(preferences.density);
 	const tableRows = table.getRowModel().rows;
 	const tableScrollRef = useRef<HTMLDivElement>(null);
+	const gridRef = useRef<HTMLTableElement>(null);
+	const [activeRowKey, setActiveRowKey] = useState<string | null>(null);
+	const [activeColumnId, setActiveColumnId] =
+		useState<AdminItemColumnId>("title");
+	const [gridHasFocus, setGridHasFocus] = useState(false);
+	const visibleColumns = table.getVisibleLeafColumns();
+	const visibleColumnIds = visibleColumns.map(
+		(column) => column.id as AdminItemColumnId,
+	);
+	const effectiveActiveColumnId = visibleColumnIds.includes(activeColumnId)
+		? activeColumnId
+		: (visibleColumnIds[0] ?? "title");
+	const activeTableRowIndex = tableRows.findIndex(
+		(row) => row.original.key === activeRowKey,
+	);
+	const selectedTableRowIndex = tableRows.findIndex(
+		(row) => row.original.key === selectedKey,
+	);
+	const effectiveActiveRowKey =
+		activeRowKey === ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY
+			? ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY
+			: tableRows.length === 0 &&
+				  activeRowKey === ADMIN_ITEM_TABLE_STATUS_FOCUS_KEY
+				? ADMIN_ITEM_TABLE_STATUS_FOCUS_KEY
+				: activeTableRowIndex >= 0
+					? activeRowKey!
+					: selectedTableRowIndex >= 0
+						? tableRows[selectedTableRowIndex]!.original.key
+						: (tableRows[0]?.original.key ??
+							ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY);
+	const activeVirtualRowIndex = tableRows.findIndex(
+		(row) => row.original.key === effectiveActiveRowKey,
+	);
+	const virtualRangeExtractor = useCallback(
+		(range: Parameters<typeof defaultRangeExtractor>[0]) => {
+			const indexes = defaultRangeExtractor(range);
+			if (
+				activeVirtualRowIndex < 0 ||
+				indexes.includes(activeVirtualRowIndex)
+			) {
+				return indexes;
+			}
+			return [...indexes, activeVirtualRowIndex].sort(
+				(left, right) => left - right,
+			);
+		},
+		[activeVirtualRowIndex],
+	);
 	const rowVirtualizer = useVirtualizer({
 		count: tableRows.length,
 		estimateSize: () => rowHeight,
@@ -788,12 +861,150 @@ export function AdminItemTable({
 		getScrollElement: () => tableScrollRef.current,
 		initialRect: { height: 600, width: 632 },
 		overscan: 8,
+		rangeExtractor: virtualRangeExtractor,
 		scrollMargin: ADMIN_ITEM_TABLE_HEADER_HEIGHT,
 	});
 	useEffect(() => {
 		rowVirtualizer.measure();
 	}, [rowHeight, rowVirtualizer]);
-	const visibleColumnCount = table.getVisibleLeafColumns().length;
+	const activeColumnIndex = Math.max(
+		0,
+		visibleColumnIds.indexOf(effectiveActiveColumnId),
+	);
+	const activeGridRowIndex =
+		effectiveActiveRowKey === ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY
+			? -1
+			: effectiveActiveRowKey === ADMIN_ITEM_TABLE_STATUS_FOCUS_KEY
+				? 0
+				: activeVirtualRowIndex;
+	const activeCellId =
+		effectiveActiveRowKey === ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY
+			? adminItemTableHeaderCellId(effectiveActiveColumnId)
+			: effectiveActiveRowKey === ADMIN_ITEM_TABLE_STATUS_FOCUS_KEY
+				? "admin-item-grid-status"
+				: adminItemTableCellId(
+						effectiveActiveRowKey,
+						effectiveActiveColumnId,
+					);
+	const visibleColumnCount = visibleColumns.length;
+	const isCellActive = (rowKey: string, columnId: AdminItemColumnId) =>
+		gridHasFocus &&
+		effectiveActiveRowKey === rowKey &&
+		effectiveActiveColumnId === columnId;
+	const focusGridCell = (rowIndex: number, columnIndex: number) => {
+		const boundedColumnIndex = Math.max(
+			0,
+			Math.min(visibleColumnIds.length - 1, columnIndex),
+		);
+		const nextColumnId =
+			visibleColumnIds[boundedColumnIndex] ?? effectiveActiveColumnId;
+		const lastRowIndex = tableRows.length > 0 ? tableRows.length - 1 : 0;
+		const boundedRowIndex = Math.max(-1, Math.min(lastRowIndex, rowIndex));
+		const nextRowKey =
+			boundedRowIndex < 0
+				? ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY
+				: tableRows.length === 0
+					? ADMIN_ITEM_TABLE_STATUS_FOCUS_KEY
+					: tableRows[boundedRowIndex]!.original.key;
+		const nextCellId =
+			nextRowKey === ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY
+				? adminItemTableHeaderCellId(nextColumnId)
+				: nextRowKey === ADMIN_ITEM_TABLE_STATUS_FOCUS_KEY
+					? "admin-item-grid-status"
+					: adminItemTableCellId(nextRowKey, nextColumnId);
+
+		setActiveRowKey(nextRowKey);
+		setActiveColumnId(nextColumnId);
+		if (boundedRowIndex >= 0 && tableRows.length > 0) {
+			rowVirtualizer.scrollToIndex(boundedRowIndex, { align: "auto" });
+		}
+		const revealCell = (attempt: number) => {
+			requestAnimationFrame(() => {
+				const cell = document.getElementById(nextCellId);
+				if (cell) {
+					cell.scrollIntoView({
+						block: "nearest",
+						inline: "nearest",
+					});
+				} else if (attempt < 4) {
+					revealCell(attempt + 1);
+				}
+			});
+		};
+		revealCell(0);
+	};
+	const getActiveCellWidgets = () => {
+		const activeCell = document.getElementById(activeCellId);
+		return Array.from(
+			activeCell?.querySelectorAll<HTMLElement>(
+				ADMIN_ITEM_TABLE_WIDGET_SELECTOR,
+			) ?? [],
+		);
+	};
+	const focusOutsideGrid = (direction: -1 | 1) => {
+		const grid = gridRef.current;
+		if (!grid) return false;
+		const tabStops = Array.from(
+			document.querySelectorAll<HTMLElement>(DOCUMENT_TAB_STOP_SELECTOR),
+		).filter((element) => {
+			if (
+				element.tabIndex < 0 ||
+				element.getAttribute("aria-disabled") === "true" ||
+				element.hasAttribute("disabled") ||
+				element.closest("[inert]")
+			) {
+				return false;
+			}
+			const style = getComputedStyle(element);
+			return (
+				element.getClientRects().length > 0 &&
+				style.display !== "none" &&
+				style.visibility !== "hidden"
+			);
+		});
+		const gridIndex = tabStops.indexOf(grid);
+		if (gridIndex < 0) return false;
+		for (
+			let index = gridIndex + direction;
+			index >= 0 && index < tabStops.length;
+			index += direction
+		) {
+			const candidate = tabStops[index]!;
+			if (grid.contains(candidate)) continue;
+			candidate.focus({ preventScroll: true });
+			return document.activeElement === candidate;
+		}
+		return false;
+	};
+	const enterActiveCellWidget = () => {
+		const widget = getActiveCellWidgets()[0];
+		widget?.focus({ preventScroll: true });
+		return Boolean(widget);
+	};
+	const activateActiveCell = () => {
+		const activeRowIsComposite =
+			effectiveActiveRowKey === ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY ||
+			effectiveActiveRowKey === ADMIN_ITEM_TABLE_STATUS_FOCUS_KEY;
+		if (activeRowIsComposite || effectiveActiveColumnId === "select") {
+			getActiveCellWidgets()[0]?.click();
+			return;
+		}
+		onSelect(effectiveActiveRowKey);
+	};
+	const setActiveCellFromPointer = (
+		rowKey: string,
+		columnId: AdminItemColumnId,
+		target: EventTarget,
+	) => {
+		setActiveRowKey(rowKey);
+		setActiveColumnId(columnId);
+		if (
+			!(target instanceof Element) ||
+			!target.closest("button, input, select, textarea, [role='button']")
+		) {
+			gridRef.current?.focus({ preventScroll: true });
+		}
+	};
 	const selectColumnWidth = table.getColumn("select")?.getSize() ?? 44;
 	const setColumnSize = (id: AdminItemColumnId, size: number | null) =>
 		onPreferencesChange((current) => {
@@ -856,12 +1067,211 @@ export function AdminItemTable({
 				style={{ containerType: "inline-size" }}
 			>
 				<table
+					ref={gridRef}
+					aria-activedescendant={activeCellId}
+					aria-colcount={visibleColumnCount}
 					aria-label="Library records"
 					aria-multiselectable="true"
-					aria-rowcount={tableRows.length + 1}
-					className="grid border-separate border-spacing-0"
+					aria-rowcount={
+						tableRows.length > 0 ? tableRows.length + 1 : 2
+					}
+					className="grid border-separate border-spacing-0 outline-none"
+					onBlurCapture={(event) => {
+						if (
+							!event.currentTarget.contains(event.relatedTarget)
+						) {
+							setGridHasFocus(false);
+						}
+					}}
+					onFocusCapture={() => setGridHasFocus(true)}
+					onKeyDown={(event) => {
+						if (event.target !== event.currentTarget) {
+							if (event.key === "Escape") {
+								event.preventDefault();
+								event.stopPropagation();
+								gridRef.current?.focus({ preventScroll: true });
+							} else if (event.key === "Tab") {
+								const widgets = getActiveCellWidgets();
+								const activeWidgetIndex = widgets.indexOf(
+									event.target as HTMLElement,
+								);
+								if (activeWidgetIndex >= 0) {
+									const offset = event.shiftKey ? -1 : 1;
+									const nextWidget =
+										widgets[activeWidgetIndex + offset];
+									if (nextWidget) {
+										event.preventDefault();
+										nextWidget.focus({
+											preventScroll: true,
+										});
+									} else {
+										const lastGridRowIndex =
+											tableRows.length > 0
+												? tableRows.length - 1
+												: 0;
+										const leavingGrid = event.shiftKey
+											? activeGridRowIndex === -1 &&
+												activeColumnIndex === 0
+											: activeGridRowIndex ===
+													lastGridRowIndex &&
+												activeColumnIndex ===
+													visibleColumnIds.length - 1;
+										if (!leavingGrid) {
+											event.preventDefault();
+											const crossedRowBoundary =
+												event.shiftKey
+													? activeColumnIndex === 0
+													: activeColumnIndex ===
+														visibleColumnIds.length -
+															1;
+											const nextRowIndex =
+												crossedRowBoundary
+													? activeGridRowIndex +
+														offset
+													: activeGridRowIndex;
+											const nextColumnIndex =
+												crossedRowBoundary
+													? event.shiftKey
+														? visibleColumnIds.length -
+															1
+														: 0
+													: activeColumnIndex +
+														offset;
+											gridRef.current?.focus({
+												preventScroll: true,
+											});
+											focusGridCell(
+												nextRowIndex,
+												nextColumnIndex,
+											);
+										} else if (
+											focusOutsideGrid(
+												event.shiftKey ? -1 : 1,
+											)
+										) {
+											event.preventDefault();
+										}
+									}
+								}
+							}
+							return;
+						}
+						if (event.nativeEvent.isComposing) return;
+						const lastColumnIndex = Math.max(
+							0,
+							visibleColumnIds.length - 1,
+						);
+						const lastRowIndex =
+							tableRows.length > 0 ? tableRows.length - 1 : 0;
+						const pageRows = Math.max(
+							1,
+							Math.floor(
+								((tableScrollRef.current?.clientHeight ??
+									rowHeight) -
+									ADMIN_ITEM_TABLE_HEADER_HEIGHT) /
+									rowHeight,
+							),
+						);
+						if (
+							(event.ctrlKey || event.metaKey) &&
+							event.key.toLowerCase() === "a"
+						) {
+							event.preventDefault();
+							onToggleVisible(!allVisibleSelected);
+							return;
+						}
+						if (
+							event.shiftKey &&
+							event.key === " " &&
+							effectiveActiveRowKey !==
+								ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY &&
+							effectiveActiveRowKey !==
+								ADMIN_ITEM_TABLE_STATUS_FOCUS_KEY
+						) {
+							event.preventDefault();
+							const activeRow = tableRows[activeGridRowIndex];
+							if (activeRow) {
+								onToggleBulk(
+									activeRow.original.key,
+									!activeRow.original.bulkSelected,
+								);
+							}
+							return;
+						}
+						if (event.key === "F2") {
+							if (enterActiveCellWidget()) event.preventDefault();
+							return;
+						}
+						if (event.key === "Enter" || event.key === " ") {
+							event.preventDefault();
+							activateActiveCell();
+							return;
+						}
+						if (
+							(event.ctrlKey || event.metaKey) &&
+							event.key === "Home"
+						) {
+							event.preventDefault();
+							focusGridCell(-1, 0);
+							return;
+						}
+						if (
+							(event.ctrlKey || event.metaKey) &&
+							event.key === "End"
+						) {
+							event.preventDefault();
+							focusGridCell(lastRowIndex, lastColumnIndex);
+							return;
+						}
+						const nextPosition =
+							event.key === "ArrowRight"
+								? [activeGridRowIndex, activeColumnIndex + 1]
+								: event.key === "ArrowLeft"
+									? [
+											activeGridRowIndex,
+											activeColumnIndex - 1,
+										]
+									: event.key === "ArrowDown"
+										? [
+												activeGridRowIndex + 1,
+												activeColumnIndex,
+											]
+										: event.key === "ArrowUp"
+											? [
+													activeGridRowIndex - 1,
+													activeColumnIndex,
+												]
+											: event.key === "PageDown"
+												? [
+														activeGridRowIndex +
+															pageRows,
+														activeColumnIndex,
+													]
+												: event.key === "PageUp"
+													? [
+															activeGridRowIndex -
+																pageRows,
+															activeColumnIndex,
+														]
+													: event.key === "Home"
+														? [
+																activeGridRowIndex,
+																0,
+															]
+														: event.key === "End"
+															? [
+																	activeGridRowIndex,
+																	lastColumnIndex,
+																]
+															: null;
+						if (nextPosition) {
+							event.preventDefault();
+							focusGridCell(nextPosition[0]!, nextPosition[1]!);
+						}
+					}}
 					role="grid"
 					style={{ minWidth: "100%", width: table.getTotalSize() }}
+					tabIndex={0}
 				>
 					<thead className="sticky top-0 z-30 grid" role="rowgroup">
 						{table.getHeaderGroups().map((headerGroup) => (
@@ -885,6 +1295,7 @@ export function AdminItemTable({
 									return (
 										<th
 											key={header.id}
+											id={adminItemTableHeaderCellId(id)}
 											aria-colindex={
 												header.column.getIndex() + 1
 											}
@@ -896,13 +1307,25 @@ export function AdminItemTable({
 													: undefined
 											}
 											className={`group relative flex shrink-0 items-center border-b border-black/[0.06] bg-card_light px-3 text-left text-[11px] font-semibold normal-case text-black/40 dark:border-white/[0.06] dark:bg-card dark:text-white/40 ${
-												pinned ? "sticky z-40" : ""
-											} ${
+												isCellActive(
+													ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY,
+													id,
+												)
+													? "z-50 ring-2 ring-inset ring-focus/80"
+													: ""
+											} ${pinned ? "sticky z-40" : ""} ${
 												id === "title"
 													? "after:pointer-events-none after:absolute after:bottom-0 after:right-0 after:top-0 after:w-px after:bg-black/[0.07] dark:after:bg-white/[0.08]"
 													: ""
 											}`}
 											data-column-id={id}
+											onMouseDown={(event) =>
+												setActiveCellFromPointer(
+													ADMIN_ITEM_TABLE_HEADER_FOCUS_KEY,
+													id,
+													event.target,
+												)
+											}
 											role="columnheader"
 											style={{
 												height: ADMIN_ITEM_TABLE_HEADER_HEIGHT,
@@ -951,6 +1374,7 @@ export function AdminItemTable({
 															? "true"
 															: undefined
 													}
+													tabIndex={-1}
 													onDoubleClick={() =>
 														setColumnSize(id, null)
 													}
@@ -1024,24 +1448,14 @@ export function AdminItemTable({
 									}
 									aria-rowindex={virtualRow.index + 2}
 									aria-selected={row.original.bulkSelected}
-									className={`group absolute left-0 top-0 flex w-full cursor-pointer outline-none transition-colors after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-30 after:h-px after:bg-black/[0.06] after:content-[''] hover:bg-black/[0.055] focus-visible:bg-black/[0.055] dark:after:bg-black/30 dark:hover:bg-white/[0.07] dark:focus-visible:bg-white/[0.07] ${rowBackground}`}
+									className={`group absolute left-0 top-0 flex w-full cursor-pointer transition-colors after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:z-30 after:h-px after:bg-black/[0.06] after:content-[''] hover:bg-black/[0.055] dark:after:bg-black/30 dark:hover:bg-white/[0.07] ${rowBackground}`}
 									data-record-key={row.original.key}
 									onClick={() => onSelect(row.original.key)}
-									onKeyDown={(event) => {
-										if (
-											event.key === "Enter" ||
-											event.key === " "
-										) {
-											event.preventDefault();
-											onSelect(row.original.key);
-										}
-									}}
 									style={{
 										height: virtualRow.size,
 										transform: `translateY(${virtualRow.start - rowVirtualizer.options.scrollMargin}px)`,
 									}}
 									role="row"
-									tabIndex={0}
 								>
 									{row.getVisibleCells().map((cell) => {
 										const id = cell.column
@@ -1050,16 +1464,27 @@ export function AdminItemTable({
 											id === "select" || id === "title";
 										const pinnedSurface = pinned
 											? row.original.inspectorSelected
-												? "bg-card_light before:bg-accent/[0.08] group-hover:before:bg-black/[0.055] group-focus-visible:before:bg-black/[0.055] dark:bg-card dark:before:bg-accent/[0.12] dark:group-hover:before:bg-white/[0.07] dark:group-focus-visible:before:bg-white/[0.07]"
-												: "bg-card_light before:bg-transparent group-hover:before:bg-black/[0.055] group-focus-visible:before:bg-black/[0.055] dark:bg-card dark:group-hover:before:bg-white/[0.07] dark:group-focus-visible:before:bg-white/[0.07]"
+												? "bg-card_light before:bg-accent/[0.08] group-hover:before:bg-black/[0.055] dark:bg-card dark:before:bg-accent/[0.12] dark:group-hover:before:bg-white/[0.07]"
+												: "bg-card_light before:bg-transparent group-hover:before:bg-black/[0.055] dark:bg-card dark:group-hover:before:bg-white/[0.07]"
 											: "bg-inherit";
 										return (
 											<td
 												key={cell.id}
+												id={adminItemTableCellId(
+													row.original.key,
+													id,
+												)}
 												aria-colindex={
 													cell.column.getIndex() + 1
 												}
 												className={`flex shrink-0 items-center px-3 py-0 ${pinnedSurface} ${
+													isCellActive(
+														row.original.key,
+														id,
+													)
+														? "z-30 ring-2 ring-inset ring-focus/80"
+														: ""
+												} ${
 													pinned
 														? "sticky z-20 before:pointer-events-none before:absolute before:inset-0 before:content-[''] [&>*]:relative [&>*]:z-10"
 														: ""
@@ -1069,6 +1494,13 @@ export function AdminItemTable({
 														: ""
 												}`}
 												data-column-id={id}
+												onMouseDown={(event) =>
+													setActiveCellFromPointer(
+														row.original.key,
+														id,
+														event.target,
+													)
+												}
 												role="gridcell"
 												style={{
 													left:
@@ -1097,27 +1529,61 @@ export function AdminItemTable({
 								role="row"
 							>
 								<td
-									className="sticky left-0 flex h-40 items-center justify-center px-4 text-center text-sm text-black/45 dark:text-white/45"
+									id="admin-item-grid-status"
+									aria-atomic="true"
+									aria-live={error ? "assertive" : "polite"}
+									className={`sticky left-0 flex h-40 items-center justify-center px-4 text-center text-sm text-black/45 dark:text-white/45 ${
+										gridHasFocus &&
+										effectiveActiveRowKey ===
+											ADMIN_ITEM_TABLE_STATUS_FOCUS_KEY
+											? "ring-2 ring-inset ring-focus/80"
+											: ""
+									}`}
 									colSpan={visibleColumnCount}
+									onMouseDown={(event) =>
+										setActiveCellFromPointer(
+											ADMIN_ITEM_TABLE_STATUS_FOCUS_KEY,
+											effectiveActiveColumnId,
+											event.target,
+										)
+									}
 									role="gridcell"
 									style={{ width: "100cqw" }}
 								>
 									{loading ? (
 										<Spinner
-											label="Loading records"
+											label="Loading records…"
 											size="sm"
 										/>
 									) : error ? (
-										<div className="flex flex-col items-center gap-2">
+										<div className="flex max-w-sm flex-col items-center gap-2 text-pretty">
+											<CircleAlert
+												aria-hidden
+												className="text-danger/70"
+												size={20}
+											/>
 											<p className="text-sm text-danger">
 												{error}
 											</p>
-											<Button onPress={onRetry} size="xs">
+											<Button
+												onPress={onRetry}
+												size="xs"
+												tabIndex={-1}
+											>
 												Try again
 											</Button>
 										</div>
 									) : (
-										"No records match these filters."
+										<div className="flex flex-col items-center gap-2 text-pretty">
+											<SearchX
+												aria-hidden
+												className="opacity-45"
+												size={20}
+											/>
+											<p>
+												No records match these filters.
+											</p>
+										</div>
 									)}
 								</td>
 							</tr>

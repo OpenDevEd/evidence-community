@@ -119,14 +119,24 @@ async function mockPublishedBook(
 			collectionKey?: string;
 			keys: string[];
 		}) => unknown[];
+		beforeBatchResponse?: () => Promise<void>;
 		failDraftSave?: boolean;
 		itemCount?: number;
+		listFailure?: boolean;
+		listFailureCount?: number;
 		listRowOverrides?: Partial<Record<string, unknown>>;
-		onBatchRequest?: (body: unknown) => void;
+		onBatchRequest?: (body: {
+			action: string;
+			collectionKey?: string;
+			keys: string[];
+		}) => void;
 		onListRequest?: (url: URL) => void;
 	} = {},
 ) {
 	const itemCount = options.itemCount ?? 1;
+	let remainingListFailures = options.listFailure
+		? Number.POSITIVE_INFINITY
+		: (options.listFailureCount ?? 0);
 	let editing = false;
 	let draftPayload: Record<string, unknown> =
 		structuredClone(publishedPayload);
@@ -179,6 +189,7 @@ async function mockPublishedBook(
 				draftRevision += 1;
 				editing = true;
 			}
+			await options.beforeBatchResponse?.();
 			await route.fulfill({
 				json: {
 					results:
@@ -193,6 +204,19 @@ async function mockPublishedBook(
 		}
 		if (pathname === "/api/admin/items" && request.method() === "GET") {
 			options.onListRequest?.(new URL(request.url()));
+			if (remainingListFailures > 0) {
+				remainingListFailures -= 1;
+				await route.fulfill({
+					json: {
+						error: {
+							code: "internal_error",
+							message: "Records could not be loaded.",
+						},
+					},
+					status: 500,
+				});
+				return;
+			}
 			await route.fulfill({
 				json: {
 					hasMore: false,
@@ -1374,6 +1398,30 @@ test("runs selected-record actions through one compact batch request", async ({
 	await expect(bulkToolbar).toBeHidden();
 });
 
+test("chunks a 500-record keyboard selection through the batch contract", async ({
+	page,
+}) => {
+	const batchRequests: { action: string; keys: string[] }[] = [];
+	await mockPublishedBook(page, {
+		itemCount: 500,
+		onBatchRequest: (body) => batchRequests.push(body),
+	});
+	await page.goto("/admin");
+	const grid = page.getByRole("grid", { name: "Library records" });
+	await expect(grid).toHaveAttribute("aria-rowcount", "501");
+	await grid.focus();
+	await grid.press("Meta+A");
+	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
+	await expect(bulkToolbar).toContainText("500 selected");
+	await bulkToolbar.getByRole("button", { name: "Publish selected" }).click();
+	await expect.poll(() => batchRequests.length).toBe(10);
+	const submittedKeys = batchRequests.flatMap(({ keys }) => keys);
+	expect(batchRequests.every(({ keys }) => keys.length <= 50)).toBe(true);
+	expect(submittedKeys).toHaveLength(500);
+	expect(new Set(submittedKeys).size).toBe(500);
+	await expect(bulkToolbar).toBeHidden();
+});
+
 test("continues a bulk action when one local draft cannot be saved", async ({
 	page,
 }) => {
@@ -1484,10 +1532,21 @@ test("virtualizes large record sets while keeping rows horizontal and key column
 		element.dispatchEvent(new Event("scroll"));
 	});
 	await expect(page.locator('tr[data-record-key="ROW00499"]')).toBeVisible();
-	expect(await initialRows.count()).toBeLessThanOrEqual(25);
-	expect(await page.locator('tr[data-record-key="LIVEBOOK"]').count()).toBe(
-		0,
-	);
+	expect(await initialRows.count()).toBeLessThanOrEqual(26);
+	const activeRowIsOutsideViewport = await page
+		.locator('tr[data-record-key="LIVEBOOK"]')
+		.evaluate((row) => {
+			const scrollElement = row.closest<HTMLElement>(
+				"[data-admin-item-table-scroll]",
+			)!;
+			const rowRect = row.getBoundingClientRect();
+			const scrollRect = scrollElement.getBoundingClientRect();
+			return (
+				rowRect.bottom <= scrollRect.top + 40 ||
+				rowRect.top >= scrollRect.bottom
+			);
+		});
+	expect(activeRowIsOutsideViewport).toBe(true);
 
 	await scroll.evaluate((element) => {
 		element.scrollLeft = 260;
@@ -1539,6 +1598,289 @@ test("virtualizes large record sets while keeping rows horizontal and key column
 	expect(geometry.titleLeft).toBeCloseTo(geometry.scrollLeftEdge + 44, 0);
 	expect(geometry.titleBackground).not.toBe("rgba(0, 0, 0, 0)");
 	expect(geometry.documentOverflow).toBe(0);
+});
+
+test("navigates one stable grid tab stop through virtualized cells", async ({
+	page,
+}) => {
+	const listRequests: URL[] = [];
+	await mockPublishedBook(page, {
+		itemCount: 500,
+		onListRequest: (url) => listRequests.push(url),
+	});
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await page.goto("/admin");
+	const grid = page.getByRole("grid", { name: "Library records" });
+	const firstTitleCell = page.locator(
+		`#admin-item-grid-cell-${publishedItemKey}-title`,
+	);
+	await grid.focus();
+	await expect(grid).toBeFocused();
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		`admin-item-grid-cell-${publishedItemKey}-title`,
+	);
+	await expect(grid.locator('[tabindex="0"]')).toHaveCount(0);
+	const descendantTabIndices = await grid.evaluate((table) =>
+		Array.from(
+			table.querySelectorAll<HTMLElement>(
+				"a[href], button, input, select, textarea, [tabindex]",
+			),
+		).map((element) => element.tabIndex),
+	);
+	expect(descendantTabIndices.length).toBeGreaterThan(0);
+	expect(descendantTabIndices.every((tabIndex) => tabIndex === -1)).toBe(
+		true,
+	);
+	await grid.press("Shift+Tab");
+	expect(
+		await grid.evaluate(
+			(table) =>
+				document.activeElement !== table &&
+				!table.contains(document.activeElement),
+		),
+	).toBe(true);
+	await page.keyboard.press("Tab");
+	await expect(grid).toBeFocused();
+	const focusStyle = await firstTitleCell.evaluate((cell) => {
+		const style = getComputedStyle(cell);
+		return {
+			boxShadow: style.boxShadow,
+			outlineStyle: style.outlineStyle,
+			outlineWidth: style.outlineWidth,
+		};
+	});
+	expect(
+		focusStyle.boxShadow !== "none" ||
+			(focusStyle.outlineStyle !== "none" &&
+				Number.parseFloat(focusStyle.outlineWidth) > 0),
+	).toBe(true);
+
+	await grid.press("ArrowRight");
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		`admin-item-grid-cell-${publishedItemKey}-creators`,
+	);
+	await grid.press("ArrowUp");
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		"admin-item-grid-header-creators",
+	);
+	await grid.press("Home");
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		"admin-item-grid-header-select",
+	);
+	await grid.press("End");
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		"admin-item-grid-header-updated",
+	);
+	await grid.press("Control+Home");
+	await grid.press("F2");
+	const selectAllCheckbox = page.getByRole("checkbox", {
+		name: "Select all loaded records",
+	});
+	await expect(selectAllCheckbox).toBeFocused();
+	await selectAllCheckbox.press("Shift+Tab");
+	expect(
+		await grid.evaluate(
+			(table) =>
+				document.activeElement !== table &&
+				!table.contains(document.activeElement),
+		),
+	).toBe(true);
+	await grid.focus();
+	await grid.press("ArrowRight");
+	await grid.press("F2");
+	const titleHeader = page.locator("#admin-item-grid-header-title");
+	const sortButton = titleHeader.getByRole("button", {
+		name: "Title",
+		exact: true,
+	});
+	const resizeButton = titleHeader.getByRole("button", {
+		name: "Resize Title column",
+	});
+	await expect(sortButton).toBeFocused();
+	await sortButton.press("Enter");
+	await expect(titleHeader).toHaveAttribute("aria-sort", "ascending");
+	await expect
+		.poll(() => {
+			const sorting = listRequests.at(-1)?.searchParams.get("sorting");
+			return sorting ? JSON.parse(sorting) : null;
+		})
+		.toEqual([{ column: "title", direction: "asc" }]);
+	await sortButton.press("Escape");
+	await expect(grid).toBeFocused();
+	await grid.press("F2");
+	await expect(sortButton).toBeFocused();
+	await sortButton.press("Tab");
+	await expect(resizeButton).toBeFocused();
+	const titleWidthBeforeResize = await titleHeader.evaluate(
+		(header) => header.getBoundingClientRect().width,
+	);
+	await resizeButton.press("ArrowRight");
+	await expect
+		.poll(() =>
+			titleHeader.evaluate(
+				(header) => header.getBoundingClientRect().width,
+			),
+		)
+		.toBe(titleWidthBeforeResize + 16);
+	await expect
+		.poll(() =>
+			page.evaluate(() => {
+				const saved = localStorage.getItem(
+					"openscholar.admin.item-table.preferences.v1",
+				);
+				if (!saved) return null;
+				return JSON.parse(saved).columnSizing?.title ?? null;
+			}),
+		)
+		.toBe(titleWidthBeforeResize + 16);
+	await resizeButton.press("Tab");
+	await expect(grid).toBeFocused();
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		"admin-item-grid-header-creators",
+	);
+
+	await grid.press("Control+Home");
+	await grid.press("ArrowDown");
+	await grid.press("ArrowRight");
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		`admin-item-grid-cell-${publishedItemKey}-title`,
+	);
+	await grid.press("ArrowDown");
+	await grid.press("Enter");
+	await expect(
+		page.locator('tr[data-record-key="ROW00001"]'),
+	).toHaveAttribute("aria-current", "true");
+	await expect(
+		page.locator(`tr[data-record-key="${publishedItemKey}"]`),
+	).not.toHaveAttribute("aria-current", "true");
+	await grid.press("ArrowUp");
+	await grid.press("Enter");
+	await expect(
+		page.locator(`tr[data-record-key="${publishedItemKey}"]`),
+	).toHaveAttribute("aria-current", "true");
+	await expect(
+		page.getByRole("dialog", { name: "Add record to collection" }),
+	).toHaveCount(0);
+	await expect(grid).toBeFocused();
+	await grid.press("F2");
+	const assignmentButton = page.getByRole("button", {
+		name: "Drag or assign Published book",
+		exact: true,
+	});
+	await expect(assignmentButton).toBeFocused();
+	await assignmentButton.press("Escape");
+	await expect(grid).toBeFocused();
+	await grid.press("Shift+Space");
+	await expect(
+		page.getByRole("checkbox", {
+			name: "Select Published book",
+			exact: true,
+		}),
+	).toBeChecked();
+
+	await page.keyboard.press("PageDown");
+	await expect
+		.poll(async () => {
+			const id = await grid.getAttribute("aria-activedescendant");
+			return id?.includes("ROW000") ?? false;
+		})
+		.toBe(true);
+	await grid.press("PageUp");
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		`admin-item-grid-cell-${publishedItemKey}-title`,
+	);
+
+	await grid.press("Control+Home");
+	await grid.press("ArrowDown");
+	await grid.press("ArrowRight");
+	const scroll = page.locator("[data-admin-item-table-scroll]");
+	await scroll.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+		element.dispatchEvent(new Event("scroll"));
+	});
+	await expect(grid).toBeFocused();
+	await expect(firstTitleCell).toBeAttached();
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		`admin-item-grid-cell-${publishedItemKey}-title`,
+	);
+
+	await grid.press("Control+End");
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		"admin-item-grid-cell-ROW00499-updated",
+	);
+	await expect(
+		page.locator("#admin-item-grid-cell-ROW00499-updated"),
+	).toBeAttached();
+	await grid.press("ArrowDown");
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		"admin-item-grid-cell-ROW00499-updated",
+	);
+	await expect
+		.poll(async () => page.locator("tbody tr[data-record-key]").count())
+		.toBeLessThan(40);
+});
+
+test("keeps unavailable drag controls out of keyboard widget mode", async ({
+	page,
+}) => {
+	let markBatchStarted: (() => void) | undefined;
+	let releaseBatch: (() => void) | undefined;
+	const batchStarted = new Promise<void>((resolve) => {
+		markBatchStarted = resolve;
+	});
+	const batchRelease = new Promise<void>((resolve) => {
+		releaseBatch = resolve;
+	});
+	await mockPublishedBook(page, {
+		beforeBatchResponse: async () => {
+			markBatchStarted?.();
+			await batchRelease;
+		},
+	});
+	await page.goto("/admin");
+	await page
+		.getByRole("checkbox", { name: "Select Published book", exact: true })
+		.check();
+	await page.getByRole("button", { name: "Publish selected" }).click();
+	await batchStarted;
+
+	try {
+		const grid = page.getByRole("grid", { name: "Library records" });
+		await grid.focus();
+		await expect(
+			page.getByRole("button", {
+				name: "Drag or assign Published book",
+				exact: true,
+			}),
+		).toHaveAttribute("aria-disabled", "true");
+		await grid.press("ArrowRight");
+		await expect(grid).toHaveAttribute(
+			"aria-activedescendant",
+			`admin-item-grid-cell-${publishedItemKey}-title`,
+		);
+		await grid.press("F2");
+		await expect(grid).toBeFocused();
+		await grid.press("Enter");
+		await expect(
+			page.getByRole("dialog", { name: "Add record to collection" }),
+		).toHaveCount(0);
+	} finally {
+		releaseBatch?.();
+	}
+	await expect(
+		page.getByRole("button", { name: "Publish selected" }),
+	).toBeHidden();
 });
 
 test("keeps the record grid usable in the narrow list pane", async ({
@@ -1603,6 +1945,23 @@ test("keeps the empty state visible in a narrow scrolled grid", async ({
 		name: "No records match these filters.",
 	});
 	await expect(emptyState).toBeVisible();
+	const grid = page.getByRole("grid", { name: "Library records" });
+	await expect(grid).toHaveAttribute("aria-rowcount", "2");
+	await grid.focus();
+	await grid.press("ArrowDown");
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		"admin-item-grid-status",
+	);
+	const activeStyle = await emptyState.evaluate(
+		(cell) => getComputedStyle(cell).boxShadow,
+	);
+	expect(activeStyle).not.toBe("none");
+	await grid.press("ArrowUp");
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		"admin-item-grid-header-title",
+	);
 
 	const scroll = page.locator("[data-admin-item-table-scroll]");
 	await scroll.evaluate((element) => {
@@ -1634,6 +1993,36 @@ test("keeps the empty state visible in a narrow scrolled grid", async ({
 		geometry.scrollRightEdge + 1,
 	);
 	expect(geometry.cellWidth).toBeCloseTo(geometry.scrollClientWidth, 0);
+});
+
+test("announces an initial record-list failure from the grid status row", async ({
+	page,
+}) => {
+	await mockPublishedBook(page, { itemCount: 0, listFailureCount: 1 });
+	await page.goto("/admin");
+	const errorState = page.getByRole("gridcell", {
+		name: /Records could not be loaded\./,
+	});
+	await expect(errorState).toBeVisible();
+	await expect(errorState).toHaveAttribute("aria-live", "assertive");
+	await expect(errorState).toHaveAttribute("aria-atomic", "true");
+	await expect(
+		errorState.getByRole("button", { name: "Try again" }),
+	).toHaveAttribute("tabindex", "-1");
+	const grid = page.getByRole("grid", { name: "Library records" });
+	await grid.focus();
+	await grid.press("ArrowDown");
+	await grid.press("F2");
+	const retry = errorState.getByRole("button", { name: "Try again" });
+	await expect(retry).toBeFocused();
+	await retry.press("Escape");
+	await expect(grid).toBeFocused();
+	await grid.press("Enter");
+	await expect(
+		page.getByRole("gridcell", {
+			name: "No records match these filters.",
+		}),
+	).toBeVisible();
 });
 
 test("renders field types with semantic cells instead of plain text", async ({
