@@ -30,6 +30,7 @@ import {
 } from "@/constants/items";
 import { hasTag } from "@/lib/tags";
 import { countryFacetOptions } from "@/constants/misc";
+import { zoteroMarkupToSingleLine } from "@/lib/zoteroMarkup";
 
 // Lazily loaded so the heavy collections/filters graph stays out of the
 // always-present navbar bundle until the user opens Explore.
@@ -95,17 +96,7 @@ function formatFullDate(
 // preview for the hover tooltip.
 function abstractPreview(item: any): string {
 	const raw = typeof item?.abstractNote === "string" ? item.abstractNote : "";
-	if (!raw) return "";
-	return raw
-		.replace(/<[^>]*>/g, " ")
-		.replace(/&nbsp;/g, " ")
-		.replace(/&amp;/g, "&")
-		.replace(/&quot;/g, '"')
-		.replace(/&#39;|&apos;/g, "'")
-		.replace(/&lt;/g, "<")
-		.replace(/&gt;/g, ">")
-		.replace(/\s+/g, " ")
-		.trim();
+	return zoteroMarkupToSingleLine(raw);
 }
 
 function toInitials(name: string): string {

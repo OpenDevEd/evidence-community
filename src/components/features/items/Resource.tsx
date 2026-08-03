@@ -38,6 +38,7 @@ import PrefetchLink from "../PrefetchLink";
 import { generateCOinS } from "@/lib/coins";
 import { resolveGapMapsByTags } from "@/lib/gapmap-links";
 import { useGapMaps } from "@/context/Providers";
+import ZoteroRichText from "./ZoteroRichText";
 
 export function AddButton({
 	itemData,
@@ -333,9 +334,10 @@ function ResourceArticle({
 						!finalItemData ? "min-h-20" : "min-h-0"
 					)}
 				>
-					<p className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full">
-						{abstractText}
-					</p>
+					<ZoteroRichText
+						markup={abstractText || ""}
+						className="text-black/60 dark:text-white/60 line-clamp-3 text-lg w-full"
+					/>
 				</Skeleton>
 			)}
 		</article>

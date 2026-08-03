@@ -5,6 +5,7 @@ import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
 import { blockedTags } from "@/constants/misc";
 import client from "@/lib/meilisearch";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
+import { zoteroMarkupToPlainText } from "@/lib/zoteroMarkup";
 import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(request: NextRequest, props: { params: Promise<{ key: string }> }) {
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 
 	const item: any = itemResponse.item;
 	const institutionValue = item.institution || "";
+	const abstract = zoteroMarkupToPlainText(item.abstractNote);
 
 	const institution = Array.isArray(institutionValue) ? institutionValue.join(', ') : institutionValue;
 
@@ -42,7 +44,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 			? ` and is categorized under ${item.collections.join(', ')}`
 			: ''
 		}${item.url ? `. The work can be accessed at ${item.url}` : ''
-		}${item.abstractNote ? `. The authors provide the following abstract: '${item.abstractNote}'` : ''
+		}${abstract ? `. The authors provide the following abstract: '${abstract}'` : ''
 		}`;
 
 	const result = await client

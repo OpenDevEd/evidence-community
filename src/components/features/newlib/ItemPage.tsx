@@ -66,6 +66,10 @@ import { transformItem } from "@/lib/utils";
 import { INTERNAL_TAG, PUBLISH_TAGS } from "@/constants/items";
 import { hasAnyTag } from "@/lib/tags";
 import useSWR from "swr";
+import ZoteroRichText from "@/components/features/items/ZoteroRichText";
+import CitationDoiLink from "@/components/features/items/CitationDoiLink";
+import { resolveCitationDisplayMode } from "@/lib/citationMode.mts";
+import { zoteroMarkupToPlainText } from "@/lib/zoteroMarkup";
 import {
 	buildDoiDisplayLinks,
 	type DoiDisplayAttachment,
@@ -685,14 +689,16 @@ function ItemPropertyRowWrapper({
 
 function ItemAbstract({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
+	const abstract = item?.abstractNote || "";
 	return (
 		<ItemPropertyRowWrapper
 			title={t("itemAbstractTitle")}
-			copyText={item?.abstractNote || undefined}
+			copyText={zoteroMarkupToPlainText(abstract) || undefined}
 		>
-			<p className="text-base text-black/60 dark:text-white/60">
-				{item?.abstractNote}
-			</p>
+			<ZoteroRichText
+				markup={abstract}
+				className="text-base text-black/60 dark:text-white/60"
+			/>
 		</ItemPropertyRowWrapper>
 	);
 }
@@ -711,10 +717,16 @@ function ProcessHTML(html: string) {
 function ItemCitation({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const [origin, setOrigin] = useState("");
+	const citationDisplayMode = useMemo(
+		() => resolveCitationDisplayMode(item),
+		[item],
+	);
 	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{
 		citation: string | null;
 	}>(
-		item?.key ? `/item/${item.key}/citation` : null,
+		citationDisplayMode.mode === "citation" && item?.key
+			? `/item/${item.key}/citation`
+			: null,
 		fetcher,
 		{
 			revalidateOnFocus: false,
@@ -731,6 +743,14 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 	}, []);
 
 	const { citationCopy, citationHtml, isLoading } = useMemo(() => {
+		if (citationDisplayMode.mode === "doi-only") {
+			return {
+				citationCopy: citationDisplayMode.link?.value,
+				citationHtml: undefined,
+				isLoading: false,
+			};
+		}
+
 		if (isCitationFetching || resolvedCitation === "<div>Loading...</div>") {
 			return { isLoading: true };
 		}
@@ -779,7 +799,23 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 			citationHtml: finalHtml,
 			isLoading: false,
 		};
-	}, [isCitationFetching, item?.key, origin, resolvedCitation, t]);
+	}, [citationDisplayMode, isCitationFetching, item?.key, origin, resolvedCitation, t]);
+
+	if (citationDisplayMode.mode === "doi-only") {
+		if (!citationDisplayMode.link) return null;
+
+		return (
+			<ItemPropertyRowWrapper
+				title={t("itemCitationTitle")}
+				copyText={citationDisplayMode.link.value}
+			>
+				<CitationDoiLink
+					link={citationDisplayMode.link}
+					className="text-base text-wrap-anywhere"
+				/>
+			</ItemPropertyRowWrapper>
+		);
+	}
 
 	return (
 		<ItemPropertyRowWrapper

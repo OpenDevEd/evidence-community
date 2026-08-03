@@ -188,3 +188,4 @@ export const HIDE_TAG = process.env.NEXT_PUBLIC_HIDE_TAG || "hide"
 export const DESCRIPTION_TAG = process.env.NEXT_PUBLIC_DESCRIPTION_TAG || "_category_description"
 export const REDIRECTS_TAG = process.env.NEXT_PUBLIC_REDIRECTS_TAG || "_redirects"
 export const PUBLISH_TAGS = (process.env.NEXT_PUBLIC_PUBLISH_TAGS || "_publish,publishPDF").split(",")
+export { CITATION_DOI_ONLY_TAG } from "./citationMode.mts"

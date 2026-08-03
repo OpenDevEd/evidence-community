@@ -15,6 +15,7 @@ import { convertToImageURL, getExtraValues, parseCompanyName } from "@/lib/utils
 import ServerComponent from "./ServerComponent";
 import { Suspense } from "react";
 import LoadingComponent from "./LoadingComponent";
+import { zoteroMarkupToSingleLine } from "@/lib/zoteroMarkup";
 
 // export async function generateStaticParams() {
 // 	if (process.env.SHOULD_GENERATE_STATIC_PAGES === "true") {
@@ -82,6 +83,7 @@ export async function generateMetadata(props: {
 	}
 
 	const item: Item = data.item;
+	const abstractDescription = zoteroMarkupToSingleLine(item.abstractNote);
 	const extraValues = getExtraValues(item.extra ?? "");
 	const attachmentExists = item.attachmentsData?.find(
 		(a: any) => a.PDFCoverPageImage
@@ -99,7 +101,7 @@ export async function generateMetadata(props: {
 
 	return {
 		title: item.title,
-		description: item.abstractNote,
+		description: abstractDescription,
 		generator: "new-el",
 		alternates: {
 			canonical: buildSiteUrl(`/lib/${item.key}`),
@@ -157,7 +159,7 @@ export async function generateMetadata(props: {
 		},
 		openGraph: {
 			title: item.title ?? "",
-			description: item.abstractNote ?? "",
+			description: abstractDescription,
 			url: buildSiteUrl(`/lib/${item.key}`),
 			siteName: `${companyName} - ${siteName}`,
 			images: [

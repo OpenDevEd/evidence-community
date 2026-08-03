@@ -44,6 +44,7 @@ import transporter from "./nodemailer";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import { getCitationFromCSL, getCSL } from "@/lib/citations";
 import { getMainAttributes } from "@/lib/search";
+import { zoteroMarkupToPlainText } from "@/lib/zoteroMarkup";
 
 export { getCitationFromCSL, getCSL };
 
@@ -159,7 +160,7 @@ export async function runScreening(keys: string[], modelIndex: number, smartScre
 	const items = allItems.filter(result => result.status === "fulfilled" && result.value).map(result => (result as PromiseFulfilledResult<any>).value).filter((item) => item.abstractNote && item.abstractNote.length > 0)
 		.map((item: ItemGetResponse["item"]) => ({
 			title: item?.title,
-			abstractNote: item?.abstractNote,
+			abstractNote: zoteroMarkupToPlainText(item?.abstractNote),
 			key: item?.key,
 		}));
 
