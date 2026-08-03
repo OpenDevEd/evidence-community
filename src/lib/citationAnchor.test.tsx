@@ -13,6 +13,7 @@ test("renders a normalized DOI as an external anchor", () => {
 				value: "10.1234/example",
 				url: "https://doi.org/10.1234/example",
 			}}
+			className="text-base text-wrap-anywhere"
 		/>,
 	);
 
@@ -20,7 +21,10 @@ test("renders a normalized DOI as an external anchor", () => {
 	assert.match(output, /href="https:\/\/doi\.org\/10\.1234\/example"/);
 	assert.match(output, /target="_blank"/);
 	assert.match(output, /rel="noopener noreferrer"/);
-	assert.match(output, /class="[^"]*text-link_light[^"]*underline[^"]*"/);
+	assert.match(
+		output,
+		/class="text-link_light transition-colors hover:underline dark:text-link text-base text-wrap-anywhere"/,
+	);
 	assert.match(
 		output,
 		/>https:\/\/doi\.org\/10\.1234\/example<\/a>$/,
