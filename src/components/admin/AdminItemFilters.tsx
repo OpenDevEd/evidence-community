@@ -348,18 +348,22 @@ export function AdminItemFilters({
 			}}
 		>
 			<PopoverTrigger>
-				<Button
+				<button
 					aria-label={
 						filters.length > 0
 							? `Filters, ${filters.length} active`
 							: "Filters"
 					}
-					className="h-10 shrink-0 rounded-xl px-3"
-					startContent={<Filter aria-hidden size={15} />}
-					variant={filters.length > 0 ? "solid" : "transparent"}
+					className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-black/65 transition-colors hover:bg-black/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/65 dark:hover:bg-white/[0.06] ${
+						filters.length > 0
+							? "bg-black/[0.06] text-black/85 dark:bg-white/[0.08] dark:text-white/90"
+							: ""
+					}`}
+					type="button"
 				>
+					<Filter aria-hidden size={15} />
 					Filters{filters.length > 0 ? ` ${filters.length}` : ""}
-				</Button>
+				</button>
 			</PopoverTrigger>
 			<PopoverContent
 				aria-label="Filter records"
@@ -551,14 +555,6 @@ export function AdminItemFilters({
 							<SelectItem key={id}>{label}</SelectItem>
 						))}
 					</Select>
-					{drafts.length > 0 && !parsed ? (
-						<span
-							aria-live="polite"
-							className="order-first basis-full text-xs text-danger sm:order-none sm:basis-auto"
-						>
-							Fix highlighted filters
-						</span>
-					) : null}
 					<Button
 						onPress={() => setOpen(false)}
 						size="xs"

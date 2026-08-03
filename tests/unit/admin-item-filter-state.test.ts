@@ -7,8 +7,37 @@ import {
 	singleAdminItemFilterValue,
 	writeAdminItemViewFilters,
 } from "@/lib/admin/item-filter-state";
+import { parseAdminItemFilters } from "@/lib/admin/item-list-contract";
 
 describe("admin item filter URL state", () => {
+	it("explains how to correct an invalid filter value", () => {
+		expect(() =>
+			parseAdminItemFilters([
+				{ column: "title", operator: "contains", value: "" },
+			]),
+		).toThrow("Enter text for Title");
+		expect(() =>
+			parseAdminItemFilters([
+				{ column: "collections", operator: "anyOf", value: [] },
+			]),
+		).toThrow("Choose at least one value for Collections");
+		expect(() =>
+			parseAdminItemFilters([
+				{ column: "creators", operator: "contains", value: "" },
+			]),
+		).toThrow("Enter text for Creators");
+		expect(() =>
+			parseAdminItemFilters([
+				{ column: "dateAdded", operator: "before", value: "" },
+			]),
+		).toThrow("Enter a valid date for Date added");
+		expect(() =>
+			parseAdminItemFilters([
+				{ column: "fileState", operator: "anyOf", value: [] },
+			]),
+		).toThrow("Choose at least one value for PDF");
+	});
+
 	it("parses valid search, typed filters, and sorting", () => {
 		const searchParams = new URLSearchParams({
 			direction: "asc",

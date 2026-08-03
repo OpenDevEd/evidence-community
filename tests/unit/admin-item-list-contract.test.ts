@@ -94,7 +94,7 @@ describe("admin item list contract", () => {
 					},
 				],
 			}),
-		).toThrow(/Updated has an invalid value/u);
+		).toThrow(/Enter a valid date for Updated/u);
 
 		expect(() =>
 			parseAdminItemListRequest({
@@ -106,7 +106,7 @@ describe("admin item list contract", () => {
 					},
 				],
 			}),
-		).toThrow(/Year has an invalid value/u);
+		).toThrow(/Enter a valid range for Year/u);
 	});
 
 	it("rejects duplicate filters for the same column", () => {

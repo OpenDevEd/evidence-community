@@ -13,6 +13,9 @@ export default function DialogModal({
 				...classNames,
 				base: twMerge(
 					"border border-black/10 bg-background_light/80 backdrop-blur-xl dark:border-white/10 dark:bg-card/80",
+					size === "full"
+						? ""
+						: "w-[calc(100%-2rem)] sm:w-full",
 					classNames?.base,
 				),
 			}}

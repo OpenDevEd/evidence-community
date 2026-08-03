@@ -39,14 +39,17 @@ import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import {
 	useEffect,
 	useCallback,
+	forwardRef,
 	useMemo,
 	useRef,
 	useState,
 	type Dispatch,
+	type ComponentPropsWithoutRef,
 	type PointerEvent as ReactPointerEvent,
 	type ReactNode,
 	type SetStateAction,
 } from "react";
+import { twMerge } from "tailwind-merge";
 
 import { Button } from "@/components/nextui/Button";
 import { Checkbox } from "@/components/nextui/Checkbox";
@@ -304,6 +307,25 @@ function RecordTitleCell({
 	);
 }
 
+const TableViewTrigger = forwardRef<
+	HTMLButtonElement,
+	ComponentPropsWithoutRef<"button">
+>(function TableViewTrigger({ children, className, ...props }, ref) {
+	return (
+		<button
+			{...props}
+			className={twMerge(
+				"grid size-8 shrink-0 place-items-center rounded-lg text-black/45 transition-colors hover:bg-black/[0.05] hover:text-black/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/75",
+				className,
+			)}
+			ref={ref}
+			type="button"
+		>
+			{children}
+		</button>
+	);
+});
+
 function TableViewControls({
 	bulkActions,
 	onPreferencesChange,
@@ -326,14 +348,9 @@ function TableViewControls({
 			<div className="min-w-0 flex-1">{bulkActions}</div>
 			<Popover disableAnimation placement="bottom-end">
 				<PopoverTrigger>
-					<Button
-						aria-label="Choose and arrange columns"
-						isIconOnly
-						size="xs"
-						variant="transparent"
-					>
+					<TableViewTrigger aria-label="Choose and arrange columns">
 						<Columns3 aria-hidden size={15} />
-					</Button>
+					</TableViewTrigger>
 				</PopoverTrigger>
 				<PopoverContent className="w-72 rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card">
 					<div className="flex h-11 items-center justify-between border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
@@ -455,14 +472,9 @@ function TableViewControls({
 
 			<Popover disableAnimation placement="bottom-end">
 				<PopoverTrigger>
-					<Button
-						aria-label="Change row density"
-						isIconOnly
-						size="xs"
-						variant="transparent"
-					>
+					<TableViewTrigger aria-label="Change row density">
 						<Rows3 aria-hidden size={15} />
-					</Button>
+					</TableViewTrigger>
 				</PopoverTrigger>
 				<PopoverContent className="w-44 rounded-xl border border-black/[0.08] bg-white p-2 shadow-lg dark:border-white/[0.09] dark:bg-card">
 					<div className="w-full space-y-1">

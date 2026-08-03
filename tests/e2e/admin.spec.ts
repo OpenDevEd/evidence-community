@@ -725,6 +725,9 @@ test("creates an item through a pointer click in the new-item dialog", async ({
 
 	const dialog = page.getByRole("dialog", { name: "New item" });
 	await expect(dialog).toBeVisible();
+	await expect(
+		dialog.getByRole("textbox", { name: "Find an item type" }),
+	).toBeFocused();
 	await expect
 		.poll(() =>
 			dialog.evaluate((element) => element.getBoundingClientRect().width),
@@ -760,6 +763,44 @@ test("creates an item through a pointer click in the new-item dialog", async ({
 		itemType: "book",
 		tags: [],
 	});
+});
+
+test("focuses item search in a narrow keyboard-driven window", async ({
+	page,
+}) => {
+	await mockPublishedBook(page);
+	await page.setViewportSize({ height: 768, width: 1024 });
+	await page.goto("/admin");
+	await page.getByRole("button", { name: "New item" }).click();
+
+	const search = page
+		.getByRole("dialog", { name: "New item" })
+		.getByRole("textbox", { name: "Find an item type" });
+	await expect(search).toBeVisible();
+	await expect(search).toBeFocused();
+});
+
+test("lets touch users browse item types without opening the keyboard", async ({
+	browser,
+}) => {
+	const context = await browser.newContext({
+		hasTouch: true,
+		viewport: { height: 844, width: 390 },
+	});
+	const page = await context.newPage();
+	try {
+		await mockPublishedBook(page);
+		await page.goto("/admin");
+		await page.getByRole("button", { name: "New item" }).click();
+
+		const search = page
+			.getByRole("dialog", { name: "New item" })
+			.getByRole("textbox", { name: "Find an item type" });
+		await expect(search).toBeVisible();
+		await expect(search).not.toBeFocused();
+	} finally {
+		await context.close();
+	}
 });
 
 test("disables every metadata field until editing starts", async ({ page }) => {

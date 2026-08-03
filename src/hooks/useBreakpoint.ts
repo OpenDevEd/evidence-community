@@ -12,7 +12,9 @@ export function useBreakpointBelow(
 	query: keyof typeof BREAKPOINTS | null,
 	value?: string,
 ): boolean {
-	return useMediaQuery(
-		`(max-width: ${query ? BREAKPOINTS[query] : value})`,
-	);
+	return useMediaQuery(`(max-width: ${query ? BREAKPOINTS[query] : value})`);
+}
+
+export function useFinePointer(): boolean {
+	return useMediaQuery("(hover: hover) and (pointer: fine)");
 }

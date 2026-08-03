@@ -224,6 +224,28 @@ const stringValueSchema = z.string().trim().min(1).max(500);
 const stringListValueSchema = z.array(stringValueSchema).min(1).max(100);
 const numberValueSchema = z.number().finite();
 
+function invalidFilterValueMessage(
+	definition: AdminItemListColumnDefinition,
+	operator: AdminItemFilterOperator,
+) {
+	switch (operator) {
+		case "contains":
+			return `Enter text for ${definition.label}`;
+		case "anyOf":
+			return `Choose at least one value for ${definition.label}`;
+		case "equals":
+			return `Enter a valid value for ${definition.label}`;
+		case "before":
+		case "after":
+			return `Enter a valid date for ${definition.label}`;
+		case "between":
+			return `Enter a valid ${definition.kind === "date" ? "date " : ""}range for ${definition.label}`;
+		case "hasValue":
+		case "hasNoValue":
+			return `${definition.label} does not need a value for this filter`;
+	}
+}
+
 const adminItemFilterSchema = z
 	.object({
 		column: adminItemColumnIdSchema,
@@ -271,7 +293,7 @@ const adminItemFilterSchema = z
 		if (!valueResult.success) {
 			context.addIssue({
 				code: "custom",
-				message: `${definition.label} has an invalid value for the ${filter.operator} filter`,
+				message: invalidFilterValueMessage(definition, filter.operator),
 				path: ["value"],
 			});
 		}

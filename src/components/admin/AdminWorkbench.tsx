@@ -47,6 +47,7 @@ import type {
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { getRuntimeHomeHref } from "@/config/library-config/links";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { useFinePointer } from "@/hooks/useBreakpoint";
 import { Link } from "@/i18n/routing";
 import {
 	collectionAncestorKeys,
@@ -290,6 +291,7 @@ export default function AdminWorkbench({
 	definitions: AdminSchemaDefinition[];
 	initialFilters: AdminItemViewFilters;
 }) {
+	const finePointer = useFinePointer();
 	const { navigation } = useLibraryConfig();
 	const homeHref = getRuntimeHomeHref(navigation.links);
 	const [library, setLibrary] = useState<AdminLibrarySnapshot>({
@@ -1982,7 +1984,8 @@ export default function AdminWorkbench({
 							<ModalHeader>New item</ModalHeader>
 							<ModalBody>
 								<Input
-									autoFocus
+									aria-label="Find an item type"
+									autoFocus={finePointer}
 									placeholder="Find an item type"
 									startContent={
 										<Search aria-hidden size={15} />
