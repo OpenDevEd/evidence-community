@@ -745,7 +745,7 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 	const { citationCopy, citationHtml, isLoading } = useMemo(() => {
 		if (citationDisplayMode.mode === "doi-only") {
 			return {
-				citationCopy: citationDisplayMode.link?.value,
+				citationCopy: citationDisplayMode.link?.url,
 				citationHtml: undefined,
 				isLoading: false,
 			};
@@ -807,7 +807,7 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 		return (
 			<ItemPropertyRowWrapper
 				title={t("itemCitationTitle")}
-				copyText={citationDisplayMode.link.value}
+				copyText={citationDisplayMode.link.url}
 			>
 				<CitationDoiLink
 					link={citationDisplayMode.link}

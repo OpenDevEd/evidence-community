@@ -14,11 +14,11 @@ export default function CitationDoiLink({
 			target="_blank"
 			rel="noopener noreferrer"
 			className={twMerge(
-				"text-link_light hover:underline dark:text-link",
+				"font-medium text-link_light underline decoration-black/15 underline-offset-4 transition-colors hover:text-link hover:decoration-current dark:text-link dark:decoration-white/20",
 				className,
 			)}
 		>
-			{link.value}
+			{link.url}
 		</a>
 	);
 }

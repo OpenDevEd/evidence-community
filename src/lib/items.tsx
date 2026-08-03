@@ -117,7 +117,7 @@ function Citation({ value, loading, item }: FormatterProps) {
 					<div className="shrink-0">
 						<CopyButton
 							isIconOnly
-							content={citationDisplayMode.link.value}
+							content={citationDisplayMode.link.url}
 						/>
 					</div>
 				</motion.div>

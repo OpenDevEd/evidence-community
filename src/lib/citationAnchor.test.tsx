@@ -20,5 +20,9 @@ test("renders a normalized DOI as an external anchor", () => {
 	assert.match(output, /href="https:\/\/doi\.org\/10\.1234\/example"/);
 	assert.match(output, /target="_blank"/);
 	assert.match(output, /rel="noopener noreferrer"/);
-	assert.match(output, />10\.1234\/example<\/a>$/);
+	assert.match(output, /class="[^"]*text-link_light[^"]*underline[^"]*"/);
+	assert.match(
+		output,
+		/>https:\/\/doi\.org\/10\.1234\/example<\/a>$/,
+	);
 });
