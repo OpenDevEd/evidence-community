@@ -42,6 +42,44 @@ async function walkSort(
 	);
 }
 
+async function verifyRelationFilters(database: Database) {
+	const collectionPage = await getAdminItemListPage(database, {
+		filters: [
+			{
+				column: "collections",
+				operator: "anyOf",
+				value: ["collection-7"],
+			},
+		],
+		pageSize: 100,
+	});
+	assert(
+		collectionPage.items.length === 2 &&
+			collectionPage.items.every(({ collections }) =>
+				collections.includes("collection-7"),
+			),
+		"Collection overlap filter returned the wrong records",
+	);
+
+	const tagPage = await getAdminItemListPage(database, {
+		filters: [
+			{
+				column: "tags",
+				operator: "anyOf",
+				value: ["tag-7", "tag-8"],
+			},
+		],
+		pageSize: 100,
+	});
+	assert(
+		tagPage.items.length === 2 &&
+			tagPage.items.every(({ tags }) =>
+				tags.some((tag) => tag === "tag-7" || tag === "tag-8"),
+			),
+		"Tag overlap filter returned the wrong records",
+	);
+}
+
 async function verify() {
 	const client = new Client({ connectionString: databaseUrl });
 	await client.connect();
@@ -53,10 +91,12 @@ async function verify() {
 			await walkSort(database, column, "asc");
 			await walkSort(database, column, "desc");
 		}
+		await verifyRelationFilters(database);
 		await client.query("ROLLBACK");
 		console.log(
 			JSON.stringify({
 				rows: ROW_COUNT,
+				relationFilters: 2,
 				sorts: ADMIN_ITEM_SORT_COLUMN_IDS.length * 2,
 			}),
 		);

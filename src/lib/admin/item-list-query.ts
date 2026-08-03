@@ -1,4 +1,14 @@
-import { and, eq, inArray, isNotNull, isNull, lt, sql, type SQL } from "drizzle-orm";
+import {
+	and,
+	arrayOverlaps,
+	eq,
+	inArray,
+	isNotNull,
+	isNull,
+	lt,
+	sql,
+	type SQL,
+} from "drizzle-orm";
 import { z } from "zod";
 
 import type { Database } from "@/db/database-schema";
@@ -188,7 +198,7 @@ function listFilter(
 		if (filter.operator === "hasNoValue") {
 			return sql`cardinality(${relationColumn}) = 0`;
 		}
-		return sql`${relationColumn} && ${textArray(filter.value)}::text[]`;
+		return arrayOverlaps(relationColumn, textArray(filter.value));
 	}
 
 	if (!column) return undefined;
