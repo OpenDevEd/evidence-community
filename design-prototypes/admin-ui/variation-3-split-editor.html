@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Split Editor · Evidence Library admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/tokens.css">
+<link rel="stylesheet" href="shared/base.css">
+<style>
+	/* Browse side flat on the page; the editor is one raised surface.
+	   The boundary is the surface change, not a rule. */
+	body { overflow: hidden; --r-ctl: 10px; --r-panel: 10px; --label-w: 140px; }
+	.split {
+		display: grid;
+		grid-template-columns: minmax(340px, 470px) minmax(430px, 1fr);
+		height: 100vh;
+	}
+
+	/* browse side */
+	.browse { display: flex; flex-direction: column; min-height: 0; }
+	.browse .head { padding: 16px 18px 8px; }
+	.browse .head .toprow { display: flex; align-items: center; gap: 10px; }
+	.browse .head [data-library-logo] { max-height: 24px; width: auto; }
+	.browse .head .toprow .push { margin-left: auto; display: flex; gap: 6px; }
+	.browse .head .search {
+		width: 100%;
+		margin-top: 12px;
+		background: var(--card);
+		border: 0; border-radius: 10px;
+		padding: 8px 12px; font-size: 12.5px;
+	}
+	.browse .head .search::placeholder { color: var(--text-3); }
+	.browse .head .search:focus { outline: none; box-shadow: 0 0 0 1.5px var(--accent); }
+	.chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+	.chip {
+		background: var(--card);
+		border-radius: 8px;
+		color: var(--text-2);
+		font-size: 11.5px;
+		padding: 3px 10px;
+	}
+	.chip:hover { color: var(--text); background: var(--card-2); }
+	.chip.on { background: var(--accent-soft); color: var(--text); }
+	.browse .bulkstrip { padding: 6px 18px 0; }
+
+	.rows { flex: 1; overflow-y: auto; padding: 4px 10px 20px; }
+	.ghead { display: flex; align-items: baseline; gap: 10px; padding: 14px 10px 5px; }
+	.ghead .gname { font-size: 11px; font-weight: 500; color: var(--text-3); }
+	.ghead .detail { margin-left: auto; font-size: 10.5px; color: var(--text-3); }
+	.entry {
+		display: grid;
+		grid-template-columns: 22px 1fr auto;
+		gap: 0 10px;
+		padding: 8px 10px;
+		border-radius: 10px;
+		margin: 1px 0;
+		cursor: default;
+	}
+	.entry:hover { background: var(--card); }
+	.entry.on { background: var(--card-2); }
+	.entry.on .t { font-weight: 500; }
+	.entry .pick input { accent-color: var(--accent); }
+	.entry .t {
+		font-size: 12.5px;
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+	}
+	.entry .m { grid-column: 2; font-size: 11px; color: var(--text-3); }
+	.entry .states {
+		grid-row: 1 / span 2; grid-column: 3;
+		display: flex; flex-direction: column; align-items: flex-end;
+		justify-content: center; gap: 2px;
+	}
+	.empty { padding: 20px; color: var(--text-3); font-size: 12px; }
+
+	/* editor surface */
+	.editor { display: flex; flex-direction: column; min-height: 0; background: var(--card); }
+	.editor .ehead { padding: 20px 28px 0; }
+	.editor .ehead h2 { font-size: 15.5px; font-weight: 500; line-height: 1.4; }
+	.tabs {
+		display: flex; gap: 24px;
+		margin-top: 14px;
+		border-bottom: 1px solid var(--line-soft);
+	}
+	.tab {
+		padding: 7px 0 9px;
+		font-size: 12.5px; color: var(--text-2);
+		border-bottom: 2px solid transparent;
+		margin-bottom: -1px;
+		display: inline-flex; align-items: center; gap: 7px;
+	}
+	.tab svg { width: 13px; height: 13px; }
+	.tab:hover { color: var(--text); }
+	.tab.on { color: var(--text); border-bottom-color: var(--accent); }
+	.editor .ebody { flex: 1; overflow-y: auto; padding: 20px 28px 28px; }
+	.editor .efoot {
+		padding: 12px 28px;
+		border-top: 1px solid var(--line-soft);
+	}
+	.editor .efoot .lifecycle { flex-direction: row; align-items: center; flex-wrap: wrap; }
+	.editor .efoot .lc-states { gap: 10px; }
+	.editor .efoot .autosave { margin-left: auto; }
+	.editor .grp-h {
+		font-size: 11px; font-weight: 500; color: var(--text-3);
+		margin: 0 0 8px;
+	}
+
+	@media (max-width: 880px) {
+		body { overflow: auto; }
+		.split { grid-template-columns: 1fr; height: auto; }
+		.rows { max-height: 42vh; }
+		.editor .ebody { overflow: visible; }
+	}
+</style>
+</head>
+<body>
+<div class="split">
+	<section class="browse">
+		<div class="head">
+			<div class="toprow">
+				<span id="brand"></span>
+				<span class="push">
+					<button class="btn btn--primary" data-act="new-item" id="newbtn"></button>
+					<button class="ibtn" data-act="reset-demo" aria-label="Reset demo data" title="Reset demo data" id="resetbtn"></button>
+				</span>
+			</div>
+			<input id="q" class="search" type="search" placeholder="Filter items" aria-label="Search items">
+			<div class="chips" id="chips"></div>
+		</div>
+		<div class="bulkstrip" id="bulkstrip"></div>
+		<div class="rows" id="rows" aria-label="Items"></div>
+	</section>
+	<section class="editor" aria-label="Item editor">
+		<div class="ehead" id="ehead"></div>
+		<div class="ebody" id="ebody"></div>
+		<div class="efoot" id="efoot"></div>
+	</section>
+</div>
+
+<script src="shared/icons.js"></script>
+<script src="shared/mock-data.js"></script>
+<script src="shared/app.js"></script>
+<script>
+(function () {
+	const P = window.Proto;
+	const $ = (sel) => document.querySelector(sel);
+	let tab = "record";
+
+	$("#brand").outerHTML = P.logoHTML();
+	$("#newbtn").innerHTML = P.icon("plus") + "<span>New item</span>";
+	$("#resetbtn").innerHTML = P.icon("reset");
+
+	function renderChips() {
+		const s = P.ui;
+		const defs = [
+			{ label: "Drafts", k: "state", v: "draft" },
+			{ label: "Edited", k: "state", v: "edited" },
+			{ label: "Deleted", k: "state", v: "deleted" },
+			{ label: "PDF staged", k: "file", v: "staged" },
+			{ label: "PDF failed", k: "file", v: "error" },
+		];
+		P.sources.forEach((src) => {
+			defs.push({ label: src.label, k: "source", v: src.key });
+		});
+		$("#chips").innerHTML = defs.map((d) =>
+			'<button class="chip' + (s[d.k] === d.v ? " on" : "") +
+			'" data-chip="' + d.k + ":" + d.v + '" aria-pressed="' + (s[d.k] === d.v) + '">' +
+			P.esc(d.label) + "</button>").join("");
+	}
+
+	document.addEventListener("click", (event) => {
+		const chip = event.target.closest("[data-chip]");
+		if (chip) {
+			const bits = chip.dataset.chip.split(":");
+			P.ui[bits[0]] = P.ui[bits[0]] === bits[1] ? "all" : bits[1];
+			P.emit();
+			return;
+		}
+		const tabEl = event.target.closest("[data-tab]");
+		if (tabEl) {
+			tab = tabEl.dataset.tab;
+			renderEditor();
+		}
+	});
+
+	function renderRows() {
+		const rows = P.filtered();
+		const bySource = {};
+		rows.forEach((it) => { (bySource[it.sourceKey] = bySource[it.sourceKey] || []).push(it); });
+		$("#bulkstrip").innerHTML = P.C.bulkBar();
+		$("#rows").innerHTML = P.sources
+			.filter((src) => bySource[src.key])
+			.map((src) =>
+				'<div class="ghead"><span class="gname">' + P.esc(src.label) + "</span>" +
+					'<span class="detail">' + P.esc(src.detail) + "</span></div>" +
+				bySource[src.key].map((it) =>
+					'<div class="entry' + (it.key === P.ui.selected ? " on" : "") +
+					'" data-select="' + it.key + '" tabindex="0">' +
+					'<span class="pick"><input type="checkbox" data-bulk="' + it.key + '"' +
+						(P.ui.bulk[it.key] ? " checked" : "") +
+						' aria-label="Select ' + P.esc(P.titleOf(it)) + '"></span>' +
+					'<div class="t" data-echo-title="' + it.key + '">' + P.esc(P.titleOf(it)) + "</div>" +
+					'<div class="m">' + P.esc(P.creatorsLine(it, 2)) +
+						(P.year(it) ? ", " + P.year(it) : "") + "</div>" +
+					'<div class="states">' + P.C.stateTag(it) + P.C.fileStateText(it) + "</div>" +
+					"</div>",
+				).join(""),
+			).join("") || '<p class="empty">No items match.</p>';
+	}
+
+	function tabBtn(id, iconName, label) {
+		return '<button class="tab' + (tab === id ? " on" : "") + '" data-tab="' + id + '">' +
+			P.icon(iconName) + "<span>" + label + "</span></button>";
+	}
+
+	function renderEditor() {
+		const it = P.selected();
+		if (!it) {
+			$("#ehead").innerHTML = "";
+			$("#ebody").innerHTML = '<p class="none-note">Select an item.</p>';
+			$("#efoot").innerHTML = "";
+			return;
+		}
+		$("#ehead").innerHTML =
+			'<h2 data-echo-title="' + it.key + '">' + P.esc(P.titleOf(it)) + "</h2>" +
+			'<div class="tabs">' +
+				tabBtn("record", "pencil", "Record") +
+				tabBtn("attachments", "paperclip", "Attachments") +
+				tabBtn("collections", "folder", "Collections") +
+				tabBtn("history", "clock", "History") +
+			"</div>";
+		let body = "";
+		if (tab === "record") body = P.C.editorForm(it);
+		else if (tab === "attachments") body = P.C.attachments(it);
+		else if (tab === "collections") {
+			body = '<div class="grp-h">Membership</div>' + P.C.membership(it) +
+				'<div class="grp-h" style="margin-top:22px">All collections</div>' +
+				P.C.collectionManager();
+		} else body = P.C.history(it);
+		$("#ebody").innerHTML = body;
+		$("#efoot").innerHTML = P.C.lifecycle(it);
+	}
+
+	P.wireFilters({ q: $("#q") });
+	P.subscribe(renderChips);
+	P.subscribe(renderRows);
+	P.subscribe(renderEditor);
+	P.emit();
+})();
+</script>
+</body>
+</html>

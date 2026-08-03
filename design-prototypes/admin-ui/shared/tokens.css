@@ -1,0 +1,38 @@
+/*
+ * Palette and type resolved from the tenant's runtime config,
+ * config/library.local.json (forcedMode "dark"):
+ *
+ *   backgroundDark #09090B   page background
+ *   cardDark       #18181B   card surface (dark:bg-card in Card.tsx)
+ *   card border    rgba(255,255,255,.10)   (dark:border-white/10)
+ *   accent         #7C3AED
+ *   link           #06B6D4
+ *   collection     #10B981   (used here as the "published" tone)
+ *   doi            #F43F5E
+ *   tertiary       #F59E0B   (used here as the "draft" tone)
+ *   fonts          Ubuntu (google), weights 300/400/500/700
+ *
+ * Raised/hover surfaces are small lightness steps derived from cardDark.
+ * One font family only; hierarchy comes from size, weight, and opacity.
+ */
+:root {
+	--page: #09090B;
+	--card: #18181B;
+	--card-2: #1D1D21;
+	--card-3: #232327;
+	--line: rgba(255, 255, 255, 0.10);
+	--line-soft: rgba(255, 255, 255, 0.055);
+
+	--text: #E7E7EA;
+	--text-2: #A0A0A8;
+	--text-3: #6C6C75;
+
+	--accent: #7C3AED;
+	--accent-soft: rgba(124, 58, 237, 0.14);
+	--link: #06B6D4;
+	--doi: #F43F5E;
+	--ok: #10B981;
+	--warn: #F59E0B;
+
+	--sans: Ubuntu, system-ui, -apple-system, sans-serif;
+}

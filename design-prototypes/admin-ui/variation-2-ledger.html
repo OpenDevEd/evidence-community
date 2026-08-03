@@ -1,0 +1,257 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ledger · Evidence Library admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/tokens.css">
+<link rel="stylesheet" href="shared/base.css">
+<style>
+	/* One reading column on the bare page; editing slides in as a sheet. */
+	body { font-size: 14px; --r-ctl: 6px; --r-panel: 8px; }
+	.col { max-width: 880px; margin: 0 auto; padding: 0 24px; }
+
+	header.mast { padding: 28px 0 4px; }
+	header.mast .row1 { display: flex; align-items: center; gap: 16px; }
+	header.mast [data-library-logo] { max-height: 30px; width: auto; }
+	header.mast .search {
+		flex: 1;
+		background: transparent;
+		border: 0; border-bottom: 1px solid var(--line);
+		padding: 8px 2px;
+		font-size: 15px; font-weight: 300;
+	}
+	header.mast .search::placeholder { color: var(--text-3); }
+	header.mast .search:focus { outline: none; border-bottom-color: var(--accent); }
+	.filters {
+		display: flex; flex-wrap: wrap; align-items: center; gap: 2px 8px;
+		padding: 12px 0 8px;
+	}
+	.filters select {
+		background: transparent; border: 0; border-radius: 6px;
+		color: var(--text-2); font-size: 12.5px;
+		padding: 4px 2px; max-width: 168px;
+	}
+	.filters select:hover { color: var(--text); }
+	.filters select option { background: var(--card); }
+	.filters .push { margin-left: auto; display: flex; gap: 6px; align-items: center; }
+
+	main { padding-bottom: 120px; }
+	.item {
+		display: grid;
+		grid-template-columns: 26px 1fr auto;
+		gap: 4px 14px;
+		padding: 16px 4px;
+		border-bottom: 1px solid var(--line-soft);
+		cursor: default;
+	}
+	.item .pick { padding-top: 3px; }
+	.item .pick input { accent-color: var(--accent); }
+	.item .t {
+		font-size: 15.5px; font-weight: 500; line-height: 1.4;
+		transition: color 0.12s;
+	}
+	.item:hover .t, .item.on .t { color: var(--link); }
+	.item .m {
+		grid-column: 2;
+		display: flex; flex-wrap: wrap; gap: 2px 16px;
+		font-size: 12.5px; color: var(--text-2);
+	}
+	.item .m .venue { font-style: italic; }
+	.item .m .doi { color: var(--doi); font-size: 12px; }
+	.item .side {
+		grid-row: 1 / span 2; grid-column: 3;
+		display: flex; flex-direction: column; align-items: flex-end;
+		justify-content: center; gap: 3px;
+	}
+	.state { font-size: 11.5px; }
+	.empty { padding: 40px 4px; color: var(--text-3); }
+
+	/* sheet */
+	.scrim {
+		position: fixed; inset: 0; z-index: 8;
+		background: rgba(0, 0, 0, 0.5);
+		opacity: 0; pointer-events: none;
+		transition: opacity 0.15s;
+	}
+	.sheet {
+		position: fixed; top: 0; right: 0; bottom: 0; z-index: 9;
+		width: min(560px, 96vw);
+		background: var(--card);
+		box-shadow: -28px 0 60px rgba(0, 0, 0, 0.55);
+		transform: translateX(103%);
+		transition: transform 0.2s ease-out;
+		display: flex; flex-direction: column;
+		font-size: 13px;
+	}
+	body.open .scrim, body.mgropen .scrim { opacity: 1; pointer-events: auto; }
+	body.open .sheet--item, body.mgropen .sheet--mgr { transform: none; }
+	.sheet .shead { display: flex; align-items: flex-start; gap: 12px; padding: 18px 22px 10px; }
+	.sheet .shead h2 { font-size: 15px; font-weight: 500; flex: 1; line-height: 1.4; }
+	.sheet .scroll { flex: 1; overflow-y: auto; padding: 0 22px 20px; }
+	.sheet .grp { margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+	.sheet .grp:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+	.sheet .grp > .sec-h {
+		display: block;
+		font-size: 11px; font-weight: 500; color: var(--text-3);
+		margin-bottom: 8px;
+	}
+
+	/* floating bulk bar */
+	.bulkdock {
+		position: fixed; left: 50%; bottom: 18px; z-index: 7;
+		transform: translateX(-50%);
+	}
+	.bulkdock .bulkbar {
+		background: var(--card-3);
+		border: 1px solid var(--line);
+		border-radius: 10px;
+		padding: 8px 12px;
+		box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+	}
+
+	@media (max-width: 640px) {
+		header.mast .row1 { flex-wrap: wrap; }
+		.item { grid-template-columns: 26px 1fr; }
+		.item .side { grid-row: 3; grid-column: 2; flex-direction: row; justify-content: flex-start; gap: 14px; }
+	}
+</style>
+</head>
+<body>
+	<div class="col">
+		<header class="mast">
+			<div class="row1">
+				<span id="brand"></span>
+				<input id="q" class="search" type="search" placeholder="Search the library" aria-label="Search items">
+				<button class="ibtn" data-act="open-mgr" aria-label="Manage collections" title="Manage collections" id="mgrbtn"></button>
+				<button class="btn btn--primary" data-act="new-item" id="newbtn"></button>
+			</div>
+			<div class="filters">
+				<select id="f-source" aria-label="Filter by source"></select>
+				<select id="f-type" aria-label="Filter by item type"></select>
+				<select id="f-collection" aria-label="Filter by collection"></select>
+				<select id="f-state" aria-label="Filter by record state"></select>
+				<select id="f-file" aria-label="Filter by PDF state"></select>
+				<span class="push">
+					<button class="ibtn" id="resetf" aria-label="Reset filters" title="Reset filters"></button>
+					<button class="ibtn" data-act="reset-demo" aria-label="Reset demo data" title="Reset demo data" id="resetd"></button>
+				</span>
+			</div>
+		</header>
+		<main id="ledger" aria-label="Items"></main>
+	</div>
+
+	<div class="scrim" id="scrim"></div>
+	<aside class="sheet sheet--item" id="panel" aria-label="Item detail"></aside>
+	<aside class="sheet sheet--mgr" id="mgrpanel" aria-label="Collections"></aside>
+	<div class="bulkdock" id="bulkdock"></div>
+
+<script src="shared/icons.js"></script>
+<script src="shared/mock-data.js"></script>
+<script src="shared/app.js"></script>
+<script>
+(function () {
+	const P = window.Proto;
+	const $ = (sel) => document.querySelector(sel);
+
+	$("#brand").outerHTML = P.logoHTML();
+	$("#newbtn").innerHTML = P.icon("plus") + "<span>New item</span>";
+	$("#mgrbtn").innerHTML = P.icon("folder");
+	$("#resetf").innerHTML = P.icon("filter");
+	$("#resetd").innerHTML = P.icon("reset");
+
+	function metaLine(it) {
+		const bits = [];
+		const who = P.creatorsLine(it, 3);
+		const y = P.year(it);
+		if (who) bits.push("<span>" + P.esc(who) + (y ? ", " + y : "") + "</span>");
+		else if (y) bits.push("<span>" + y + "</span>");
+		if (P.venue(it)) bits.push('<span class="venue">' + P.esc(P.venue(it)) + "</span>");
+		bits.push("<span>" + P.typeLabel(P.effective(it).itemType) + "</span>");
+		const doi = (P.effective(it).fields || {}).DOI;
+		if (doi) bits.push('<span class="doi mono">' + P.esc(doi) + "</span>");
+		return bits.join("");
+	}
+
+	function renderLedger() {
+		const rows = P.filtered();
+		$("#ledger").innerHTML = rows.map((it) =>
+			'<article class="item' +
+				(it.key === P.ui.selected && document.body.classList.contains("open") ? " on" : "") +
+				'" data-select="' + it.key + '" tabindex="0">' +
+				'<span class="pick"><input type="checkbox" data-bulk="' + it.key + '"' +
+					(P.ui.bulk[it.key] ? " checked" : "") +
+					' aria-label="Select ' + P.esc(P.titleOf(it)) + '"></span>' +
+				'<div class="t" data-echo-title="' + it.key + '">' + P.esc(P.titleOf(it)) + "</div>" +
+				'<div class="m">' + metaLine(it) + "</div>" +
+				'<div class="side">' + P.C.stateTag(it) + P.C.fileStateText(it) + "</div>" +
+			"</article>",
+		).join("") || '<p class="empty">No items match.</p>';
+		$("#bulkdock").innerHTML = P.C.bulkBar();
+	}
+
+	function renderPanel() {
+		const it = P.selected();
+		if (!it) return;
+		$("#panel").innerHTML =
+			'<div class="shead"><h2 data-echo-title="' + it.key + '">' + P.esc(P.titleOf(it)) + "</h2>" +
+				P.C.iconBtn("sheet-close", "x", "Close") + "</div>" +
+			'<div class="scroll">' +
+				'<div class="grp"><span class="sec-h">Publication</span>' + P.C.lifecycle(it) + "</div>" +
+				'<div class="grp">' + P.C.editorForm(it) + "</div>" +
+				'<div class="grp"><span class="sec-h">Attachments</span>' + P.C.attachments(it) + "</div>" +
+				'<div class="grp"><span class="sec-h">History</span>' + P.C.history(it) + "</div>" +
+			"</div>";
+	}
+
+	function renderMgr() {
+		$("#mgrpanel").innerHTML =
+			'<div class="shead"><h2>Collections</h2>' +
+				P.C.iconBtn("sheet-close", "x", "Close") + "</div>" +
+			'<div class="scroll">' + P.C.collectionManager() + "</div>";
+	}
+
+	function closeSheets() {
+		document.body.classList.remove("open");
+		document.body.classList.remove("mgropen");
+		renderLedger();
+	}
+
+	document.addEventListener("click", (event) => {
+		if (event.target.closest("[data-act='sheet-close']")) { closeSheets(); return; }
+		if (event.target.closest("[data-act='open-mgr']")) {
+			document.body.classList.remove("open");
+			document.body.classList.add("mgropen");
+			renderMgr();
+			return;
+		}
+		const sel = event.target.closest("[data-select]");
+		if (sel && !event.target.closest("input, button, a, select")) {
+			document.body.classList.add("open");
+			document.body.classList.remove("mgropen");
+			renderPanel();
+			renderLedger();
+		}
+	});
+	$("#scrim").addEventListener("click", closeSheets);
+	document.addEventListener("keydown", (event) => {
+		if (event.key !== "Escape") return;
+		if (window.__protoEscConsumedAt && Date.now() - window.__protoEscConsumedAt < 150) return;
+		closeSheets();
+	});
+
+	P.wireFilters({
+		q: $("#q"), source: $("#f-source"), type: $("#f-type"),
+		state: $("#f-state"), file: $("#f-file"), collection: $("#f-collection"),
+		reset: $("#resetf"),
+	});
+	P.subscribe(renderLedger);
+	P.subscribe(() => { if (document.body.classList.contains("open")) renderPanel(); });
+	P.subscribe(() => { if (document.body.classList.contains("mgropen")) renderMgr(); });
+	P.emit();
+})();
+</script>
+</body>
+</html>

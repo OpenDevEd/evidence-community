@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Grid Console · Evidence Library admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/tokens.css">
+<link rel="stylesheet" href="shared/base.css">
+<style>
+	/* Dense flat instrument: every column visible, sharp corners, a bottom
+	   drawer with an icon rail for editing. */
+	body {
+		overflow: hidden;
+		font-size: 12px;
+		--r-ctl: 3px; --r-panel: 4px;
+		--btn-pad: 2px 9px; --btn-fs: 11.5px;
+		--label-w: 100px;
+	}
+	.console { display: grid; grid-template-rows: 42px auto 1fr auto; height: 100vh; }
+
+	.fbar {
+		display: flex; align-items: center; gap: 8px;
+		padding: 0 14px;
+		background: var(--card);
+		overflow-x: auto;
+	}
+	.fbar [data-library-logo] { max-height: 20px; width: auto; }
+	.fbar .brandmark { margin-right: 6px; }
+	.fbar .search {
+		width: 230px; flex: none;
+		background: var(--page);
+		border: 0; border-radius: 3px;
+		padding: 4px 9px; font-size: 11.5px;
+	}
+	.fbar .search::placeholder { color: var(--text-3); }
+	.fbar .search:focus { outline: none; box-shadow: 0 0 0 1px var(--accent); }
+	.fbar select {
+		flex: none;
+		background: var(--card-2);
+		border: 0; border-radius: 3px;
+		padding: 4px 6px; font-size: 11.5px;
+		color: var(--text-2);
+	}
+	.fbar select:hover { color: var(--text); }
+	.fbar .push { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: none; }
+
+	.bulkstrip { padding: 0 14px; background: var(--card); }
+	.bulkstrip .bulkbar { padding: 6px 0; border-top: 1px solid var(--line-soft); }
+
+	.gridwrap { overflow: auto; }
+	table { border-collapse: collapse; width: 100%; font-size: 12px; }
+	thead th {
+		position: sticky; top: 0; z-index: 2;
+		background: var(--page);
+		border-bottom: 1px solid var(--line);
+		padding: 7px 10px;
+		text-align: left; font-weight: 500; font-size: 11px;
+		color: var(--text-3);
+		cursor: pointer; user-select: none; white-space: nowrap;
+	}
+	thead th.chk { cursor: default; }
+	thead th:hover { color: var(--text-2); }
+	td {
+		padding: 4px 10px;
+		border-bottom: 1px solid var(--line-soft);
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+		max-width: 280px;
+		color: var(--text-2);
+	}
+	td.title { color: var(--text); max-width: 340px; }
+	td.key { color: var(--text-3); }
+	td.doi { color: var(--doi); }
+	td input[type="checkbox"] { accent-color: var(--accent); }
+	tbody tr:hover td { background: var(--card); }
+	tbody tr.on td { background: var(--accent-soft); }
+	tbody tr.on td.title { color: #fff; }
+	.empty { padding: 20px 14px; color: var(--text-3); }
+
+	/* drawer */
+	.drawer {
+		border-top: 1px solid var(--line);
+		background: var(--card);
+		height: 300px;
+		display: grid;
+		grid-template-rows: 38px 1fr;
+		min-height: 0;
+	}
+	.drawer.hidden { display: none; }
+	.dhead { display: flex; align-items: center; gap: 12px; padding: 0 14px; min-width: 0; }
+	.dhead .t {
+		font-size: 12.5px; font-weight: 500;
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+	}
+	.dhead .sub { display: flex; gap: 12px; font-size: 11px; color: var(--text-3); white-space: nowrap; }
+	.dhead .actions { margin-left: auto; display: flex; gap: 6px; flex: none; align-items: center; }
+	.dbody { display: grid; grid-template-columns: 40px 1fr; min-height: 0; }
+	.drail {
+		display: flex; flex-direction: column; gap: 2px;
+		padding: 8px 6px;
+		background: var(--card-2);
+	}
+	.drail .ibtn { width: 28px; height: 28px; }
+	.drail .ibtn.on { color: var(--text); background: var(--accent-soft); }
+	.dcontent { overflow-y: auto; padding: 12px 18px 16px; min-width: 0; }
+	.dcontent .edform .frows { display: grid; grid-template-columns: 1fr 1fr; gap: 0 28px; }
+	.dcontent .attachments { max-width: 720px; }
+
+	.reopen { position: fixed; right: 14px; bottom: 12px; z-index: 5; }
+
+	@media (max-width: 900px) {
+		.dcontent .edform .frows { grid-template-columns: 1fr; }
+		.drawer { height: 340px; }
+	}
+</style>
+</head>
+<body>
+<div class="console">
+	<div class="fbar">
+		<span id="brand"></span>
+		<input id="q" class="search" type="search" placeholder="Search title, creator, DOI, key" aria-label="Search items">
+		<select id="f-source" aria-label="Filter by source"></select>
+		<select id="f-type" aria-label="Filter by item type"></select>
+		<select id="f-state" aria-label="Filter by record state"></select>
+		<select id="f-file" aria-label="Filter by PDF state"></select>
+		<select id="f-collection" aria-label="Filter by collection"></select>
+		<button class="ibtn" id="resetf" aria-label="Reset filters" title="Reset filters"></button>
+		<span class="push">
+			<button class="btn btn--primary" data-act="new-item" id="newbtn"></button>
+			<button class="ibtn" data-act="reset-demo" aria-label="Reset demo data" title="Reset demo data" id="resetd"></button>
+		</span>
+	</div>
+
+	<div class="bulkstrip" id="bulkstrip"></div>
+	<div class="gridwrap" id="gridwrap" aria-label="Items"></div>
+	<div class="drawer hidden" id="drawer" aria-label="Item editor"></div>
+</div>
+
+<script src="shared/icons.js"></script>
+<script src="shared/mock-data.js"></script>
+<script src="shared/app.js"></script>
+<script>
+(function () {
+	const P = window.Proto;
+	const $ = (sel) => document.querySelector(sel);
+	let drawerOpen = true;
+	let dtab = "edit";
+
+	$("#brand").outerHTML = P.logoHTML();
+	$("#newbtn").innerHTML = P.icon("plus") + "<span>New</span>";
+	$("#resetd").innerHTML = P.icon("reset");
+	$("#resetf").innerHTML = P.icon("filter");
+
+	function arrow(col) {
+		const s = P.ui.sort;
+		return s.key !== col ? "" : (s.dir === 1 ? " ↑" : " ↓");
+	}
+
+	const COLS = [
+		["key", "Key", 1], ["type", "Type", 1], ["title", "Title", 1],
+		["creators", "Creators", 1], ["year", "Date", 1], ["venue", "Venue", 0],
+		["doi", "DOI", 0], ["source", "Source", 0], ["state", "State", 1],
+		["file", "PDF", 1], ["modified", "Modified", 1],
+	];
+
+	function renderGrid() {
+		const rows = P.filtered();
+		$("#bulkstrip").innerHTML = P.C.bulkBar();
+		$("#gridwrap").innerHTML = rows.length
+			? "<table><thead><tr>" +
+				'<th class="chk" style="width:30px"></th>' +
+				COLS.map((c) =>
+					"<th" + (c[2] ? ' data-sort="' + c[0] + '" tabindex="0"' : "") + ">" +
+					c[1] + (c[2] ? arrow(c[0]) : "") + "</th>").join("") +
+				"</tr></thead><tbody>" +
+				rows.map((it) => {
+					const p = P.effective(it);
+					return '<tr data-select="' + it.key + '"' +
+						(it.key === P.ui.selected ? ' class="on"' : "") + ' tabindex="0">' +
+						'<td><input type="checkbox" data-bulk="' + it.key + '"' +
+							(P.ui.bulk[it.key] ? " checked" : "") +
+							' aria-label="Select ' + P.esc(P.titleOf(it)) + '"></td>' +
+						'<td class="key mono">' + it.key + "</td>" +
+						"<td>" + P.typeLabel(p.itemType) + "</td>" +
+						'<td class="title"><span data-echo-title="' + it.key + '" title="' + P.esc(P.titleOf(it)) + '">' + P.esc(P.titleOf(it)) + "</span></td>" +
+						"<td>" + P.esc(P.creatorsLine(it, 2)) + "</td>" +
+						'<td class="mono">' + P.esc((p.fields || {}).date || "") + "</td>" +
+						"<td>" + P.esc(P.venue(it)) + "</td>" +
+						'<td class="doi mono">' + P.esc((p.fields || {}).DOI || "") + "</td>" +
+						"<td>" + P.esc(P.srcOf(it).label) + "</td>" +
+						"<td>" + P.C.stateTag(it) + "</td>" +
+						"<td>" + P.C.fileStateText(it) + "</td>" +
+						'<td class="mono">' + P.esc(it.dateModified || "") + "</td>" +
+						"</tr>";
+				}).join("") +
+				"</tbody></table>"
+			: '<p class="empty">No items match.</p>';
+	}
+
+	function railBtn(id, iconName, label) {
+		return '<button class="ibtn' + (dtab === id ? " on" : "") + '" data-dtab="' + id +
+			'" aria-label="' + label + '" title="' + label + '">' + P.icon(iconName) + "</button>";
+	}
+
+	function renderDrawer() {
+		const it = P.selected();
+		const drawer = $("#drawer");
+		const reopen = document.querySelector(".reopen");
+		if (reopen) reopen.remove();
+		if (!it || !drawerOpen) {
+			drawer.className = "drawer hidden";
+			drawer.innerHTML = "";
+			if (it) {
+				const b = document.createElement("button");
+				b.className = "btn reopen";
+				b.innerHTML = P.icon("pencil") + "<span>Inspector</span>";
+				b.addEventListener("click", () => { drawerOpen = true; renderDrawer(); });
+				document.body.appendChild(b);
+			}
+			return;
+		}
+		drawer.className = "drawer";
+		let content = "";
+		if (dtab === "edit") content = P.C.editorForm(it);
+		else if (dtab === "attach") content = P.C.attachments(it);
+		else if (dtab === "colls") content = P.C.collectionManager();
+		else content = P.C.history(it);
+		drawer.innerHTML =
+			'<div class="dhead">' +
+				'<span class="t" data-echo-title="' + it.key + '">' + P.esc(P.titleOf(it)) + "</span>" +
+				'<span class="sub"><span class="mono">' + it.key + "</span>" +
+					"<span>" + P.C.stateTag(it) + "</span>" +
+					'<span class="mono">rev ' + it.revision + "</span>" +
+					'<span class="autosave" data-autosave="' + it.key + '"></span></span>' +
+				'<span class="actions">' + lifecycleCompact(it) +
+					P.C.iconBtn("drawer-close", "x", "Close inspector") + "</span>" +
+			"</div>" +
+			'<div class="dbody">' +
+				'<div class="drail">' +
+					railBtn("edit", "pencil", "Edit record") +
+					railBtn("attach", "paperclip", "Attachments") +
+					railBtn("colls", "folder", "Collections") +
+					railBtn("history", "clock", "History") +
+				"</div>" +
+				'<div class="dcontent">' + content + "</div>" +
+			"</div>";
+	}
+
+	function lifecycleCompact(it) {
+		if (P.readOnly(it)) {
+			return P.C.btn("duplicate", "Duplicate", { key: it.key, icon: "copy" });
+		}
+		const conflict = it.draft && it.draft.baseRevision !== it.revision;
+		let out = "";
+		if (it.draft) {
+			out += P.C.iconBtn("save", "save", "Save draft", { key: it.key });
+			if (conflict) out += P.C.iconBtn("rebase", "retry", "Rebase stale draft", { key: it.key });
+			out += P.C.btn("publish", "Publish", { key: it.key, primary: !conflict, disabled: conflict, title: conflict ? "Rebase the draft first" : "", icon: "publish" });
+			out += P.C.iconBtn("discard", it.published ? "discard" : "trash",
+				it.published ? "Discard draft" : "Delete draft", { key: it.key, danger: true });
+		}
+		if (P.stateOf(it) === "published") {
+			out += P.C.iconBtn("unpublish", "unpublish", "Unpublish", { key: it.key });
+		}
+		if (P.stateOf(it) === "deleted") {
+			out += P.C.btn("restore", "Restore", { key: it.key, icon: "restore", primary: true });
+		}
+		out += P.C.iconBtn("duplicate", "copy", "Duplicate", { key: it.key });
+		return out;
+	}
+
+	document.addEventListener("click", (event) => {
+		if (event.target.closest("[data-act='drawer-close']")) {
+			drawerOpen = false;
+			renderDrawer();
+			return;
+		}
+		const t = event.target.closest("[data-dtab]");
+		if (t) { dtab = t.dataset.dtab; renderDrawer(); return; }
+		if (event.target.closest("[data-select]") &&
+			!event.target.closest("input, button, a, select")) {
+			drawerOpen = true;
+		}
+	});
+
+	P.wireFilters({
+		q: $("#q"), source: $("#f-source"), type: $("#f-type"),
+		state: $("#f-state"), file: $("#f-file"), collection: $("#f-collection"),
+		reset: $("#resetf"),
+	});
+	P.subscribe(renderGrid);
+	P.subscribe(renderDrawer);
+	P.emit();
+})();
+</script>
+</body>
+</html>

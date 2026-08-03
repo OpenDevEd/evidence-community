@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tri-Pane · Evidence Library admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Ubuntu:wght@300;400;500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="shared/tokens.css">
+<link rel="stylesheet" href="shared/base.css">
+<style>
+	/* Three raised panels on the page background; separation by gap. */
+	body { overflow: hidden; --r-panel: 16px; --r-ctl: 8px; }
+	.shell {
+		display: grid;
+		grid-template-rows: 54px 1fr;
+		height: 100vh;
+		padding: 0 12px 12px;
+	}
+	.topbar { display: flex; align-items: center; gap: 12px; min-width: 0; }
+	.topbar [data-library-logo] { max-height: 26px; width: auto; }
+	.topbar .search {
+		width: min(320px, 30vw);
+		background: var(--card);
+		border: 0; border-radius: 8px;
+		padding: 7px 12px; font-size: 12.5px;
+	}
+	.topbar .search::placeholder { color: var(--text-3); }
+	.topbar .search:focus { outline: none; box-shadow: 0 0 0 1.5px var(--accent); }
+	.topbar select.ctl { background: var(--card); border-color: transparent; color: var(--text-2); }
+	.topbar .spacer { flex: 1; }
+
+	.panes {
+		display: grid;
+		grid-template-columns: 250px minmax(330px, 1fr) 400px;
+		gap: 12px;
+		min-height: 0;
+	}
+	.pane { background: var(--card); border-radius: var(--r-panel); overflow-y: auto; min-height: 0; }
+
+	/* left rail */
+	.nav { padding: 8px 0 16px; }
+	.nav .sec-h {
+		font-size: 11px; font-weight: 500; color: var(--text-3);
+		padding: 14px 16px 4px;
+		display: flex; align-items: center; gap: 8px;
+	}
+	.nav button.navrow {
+		display: flex; align-items: center; gap: 8px;
+		width: calc(100% - 16px);
+		margin: 1px 8px;
+		padding: 4px 10px;
+		border-radius: 8px;
+		text-align: left;
+		color: var(--text-2);
+		font-size: 12.5px;
+	}
+	.nav button.navrow:hover { color: var(--text); background: var(--card-2); }
+	.nav button.navrow.on { color: var(--text); background: var(--accent-soft); }
+	.nav .navrow .src-note { margin-left: auto; font-size: 10px; color: var(--text-3); }
+	.nav .collmgr { padding: 0 8px; }
+	.nav .mgr-toolbar { padding: 0 2px; }
+	/* the rail is narrow: keep names readable, details live in tooltips */
+	.nav .mgr-desc, .nav .mgr-src { display: none; }
+
+	/* center table */
+	.list { display: flex; flex-direction: column; }
+	.list .bulkstrip { padding: 8px 14px 0; }
+	table { width: 100%; border-collapse: collapse; font-size: 12.5px; table-layout: fixed; }
+	thead th {
+		position: sticky; top: 0; z-index: 2;
+		background: var(--card);
+		border-bottom: 1px solid var(--line);
+		text-align: left; font-weight: 500; font-size: 11px;
+		color: var(--text-3);
+		padding: 9px 10px;
+		cursor: pointer; user-select: none; white-space: nowrap;
+	}
+	thead th.chk { cursor: default; }
+	tbody td {
+		padding: 6px 10px;
+		border-bottom: 1px solid var(--line-soft);
+		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+	}
+	tbody td.title { color: var(--text); }
+	tbody tr:hover { background: var(--card-2); }
+	tbody tr.on { background: var(--accent-soft); }
+	tbody tr.on td.title { color: #fff; }
+	td.dim { color: var(--text-2); }
+	td input[type="checkbox"] { accent-color: var(--accent); }
+	.empty { padding: 22px 18px; color: var(--text-3); font-size: 12px; }
+
+	/* right inspector */
+	.inspector { display: flex; flex-direction: column; }
+	.inspector .body { padding: 16px 18px 8px; flex: 1; }
+	.inspector h2 { font-size: 14px; font-weight: 500; line-height: 1.4; margin-bottom: 10px; }
+	.inspector .grp { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line-soft); }
+	.inspector .grp:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+	.inspector .grp > .sec-h,
+	.inspector details summary .sec-h {
+		display: block;
+		font-size: 11px; font-weight: 500; color: var(--text-3);
+		margin-bottom: 8px;
+	}
+	.inspector details summary {
+		list-style: none; cursor: pointer;
+		display: flex; align-items: center;
+	}
+	.inspector details summary::after {
+		content: "›"; margin-left: auto; color: var(--text-3);
+		transition: transform 0.12s;
+	}
+	.inspector details[open] summary::after { transform: rotate(90deg); }
+
+	@media (max-width: 1000px) {
+		body { overflow: auto; }
+		.shell { height: auto; grid-template-rows: 54px auto; }
+		.topbar { flex-wrap: wrap; padding-top: 8px; }
+		.shell { grid-template-rows: auto auto; }
+		.panes { grid-template-columns: 1fr; }
+		.pane { overflow: visible; }
+		.nav { max-height: 320px; overflow-y: auto; }
+	}
+</style>
+</head>
+<body>
+<div class="shell">
+	<header class="topbar">
+		<span id="brand"></span>
+		<input id="q" class="search" type="search" placeholder="Search title, creator, DOI, tag" aria-label="Search items">
+		<select id="f-type" class="ctl" aria-label="Filter by item type"></select>
+		<select id="f-file" class="ctl" aria-label="Filter by PDF state"></select>
+		<select id="f-collection" class="ctl" aria-label="Filter by collection"></select>
+		<div class="spacer"></div>
+		<button class="btn btn--primary" data-act="new-item" id="newbtn"></button>
+		<button class="ibtn" data-act="reset-demo" aria-label="Reset demo data" title="Reset demo data" id="resetbtn"></button>
+	</header>
+	<div class="panes">
+		<nav class="pane nav" id="nav" aria-label="Filters and collections"></nav>
+		<section class="pane list" aria-label="Items">
+			<div class="bulkstrip" id="bulkstrip"></div>
+			<div id="list"></div>
+		</section>
+		<aside class="pane inspector" aria-label="Item detail"><div class="body" id="inspector"></div></aside>
+	</div>
+</div>
+
+<script src="shared/icons.js"></script>
+<script src="shared/mock-data.js"></script>
+<script src="shared/app.js"></script>
+<script>
+(function () {
+	const P = window.Proto;
+	const $ = (sel) => document.querySelector(sel);
+
+	$("#brand").outerHTML = P.logoHTML();
+	$("#newbtn").innerHTML = P.icon("plus") + "<span>New item</span>";
+	$("#resetbtn").innerHTML = P.icon("reset");
+
+	function renderNav() {
+		const s = P.ui;
+		const sections = [];
+
+		sections.push('<div class="sec-h">Sources</div>' +
+			P.sources.map((src) =>
+				'<button class="navrow' + (s.source === src.key ? " on" : "") +
+				'" data-nav="source:' + src.key + '" aria-pressed="' + (s.source === src.key) + '">' +
+				"<span>" + P.esc(src.label) + "</span>" +
+				(src.status === "paused" ? '<span class="src-note">paused</span>' : "") +
+				(src.readOnly ? '<span class="src-note">read only</span>' : "") +
+				"</button>").join(""));
+
+		sections.push('<div class="sec-h">Record state</div>' +
+			P.filterEntries().state.map((e) =>
+				'<button class="navrow' + (s.state === e[0] ? " on" : "") +
+				'" data-nav="state:' + e[0] + '" aria-pressed="' + (s.state === e[0]) + '">' +
+				"<span>" + e[1] + "</span></button>").join(""));
+
+		sections.push('<div class="sec-h">Collections</div>' + P.C.collectionManager());
+		$("#nav").innerHTML = sections.join("");
+	}
+
+	document.addEventListener("click", (event) => {
+		const nav = event.target.closest("[data-nav]");
+		if (!nav) return;
+		const bits = nav.dataset.nav.split(":");
+		P.ui[bits[0]] = P.ui[bits[0]] === bits[1] ? "all" : bits[1];
+		P.emit();
+	});
+
+	function arrow(col) {
+		const s = P.ui.sort;
+		return s.key !== col ? "" : (s.dir === 1 ? " ↑" : " ↓");
+	}
+
+	function renderList() {
+		const rows = P.filtered();
+		$("#bulkstrip").innerHTML = P.C.bulkBar();
+		$("#list").innerHTML = rows.length
+			? "<table><thead><tr>" +
+				'<th class="chk" style="width:34px"></th>' +
+				'<th data-sort="title" tabindex="0">Title' + arrow("title") + "</th>" +
+				'<th data-sort="creators" style="width:120px">Creators' + arrow("creators") + "</th>" +
+				'<th data-sort="year" style="width:52px">Year' + arrow("year") + "</th>" +
+				'<th data-sort="state" style="width:82px">State' + arrow("state") + "</th>" +
+				'<th data-sort="file" style="width:104px">PDF' + arrow("file") + "</th>" +
+				"</tr></thead><tbody>" +
+				rows.map((it) =>
+					'<tr data-select="' + it.key + '" tabindex="0"' +
+					(it.key === P.ui.selected ? ' class="on"' : "") + ">" +
+					'<td><input type="checkbox" data-bulk="' + it.key + '"' +
+						(P.ui.bulk[it.key] ? " checked" : "") +
+						' aria-label="Select ' + P.esc(P.titleOf(it)) + '"></td>' +
+					'<td class="title" title="' + P.esc(P.titleOf(it)) + '"><span data-echo-title="' + it.key + '">' + P.esc(P.titleOf(it)) + "</span></td>" +
+					'<td class="dim">' + P.esc(P.creatorsLine(it, 2)) + "</td>" +
+					'<td class="dim">' + P.year(it) + "</td>" +
+					"<td>" + P.C.stateTag(it) + "</td>" +
+					"<td>" + P.C.fileStateText(it) + "</td>" +
+					"</tr>",
+				).join("") +
+				"</tbody></table>"
+			: '<p class="empty">No items match.</p>';
+	}
+
+	function renderInspector() {
+		const it = P.selected();
+		const box = $("#inspector");
+		if (!it) { box.innerHTML = '<p class="none-note">Select an item.</p>'; return; }
+		box.innerHTML =
+			'<div class="grp"><h2 data-echo-title="' + it.key + '">' + P.esc(P.titleOf(it)) + "</h2>" +
+				P.C.lifecycle(it) + "</div>" +
+			'<div class="grp">' + P.C.editorForm(it) + "</div>" +
+			'<div class="grp"><details open><summary><span class="sec-h">Attachments</span></summary>' +
+				P.C.attachments(it) + "</details></div>" +
+			'<div class="grp"><details><summary><span class="sec-h">History</span></summary>' +
+				P.C.history(it) + "</details></div>";
+	}
+
+	P.wireFilters({
+		q: $("#q"), type: $("#f-type"), file: $("#f-file"),
+		collection: $("#f-collection"),
+	});
+	P.subscribe(renderNav);
+	P.subscribe(renderList);
+	P.subscribe(renderInspector);
+	P.emit();
+})();
+</script>
+</body>
+</html>
