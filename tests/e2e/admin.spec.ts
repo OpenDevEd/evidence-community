@@ -180,6 +180,14 @@ async function mockPublishedBook(
 			collectionKey?: string;
 			keys: string[];
 		}) => void;
+		onCollectionPage?: (
+			request: URL,
+			items: AdminCollectionCatalogEntry[],
+		) => void;
+		onCollectionResolve?: (
+			keys: string[],
+			items: AdminCollectionCatalogEntry[],
+		) => void;
 		onDraftSave?: (payload: Record<string, unknown>) => void;
 		onListRequest?: (url: URL) => void;
 	} = {},
@@ -210,15 +218,15 @@ async function mockPublishedBook(
 			const view = requestUrl.searchParams.get("view") ?? "children";
 			if (view === "resolve") {
 				const keys = requestUrl.searchParams.getAll("key");
+				const items = keys.flatMap((key) => {
+					const entry = catalogEntries.find(
+						(collection) => collection.key === key,
+					);
+					return entry ? [entry] : [];
+				});
+				options.onCollectionResolve?.(keys, items);
 				await route.fulfill({
-					json: {
-						items: keys.flatMap((key) => {
-							const entry = catalogEntries.find(
-								(collection) => collection.key === key,
-							);
-							return entry ? [entry] : [];
-						}),
-					},
+					json: { items },
 				});
 				return;
 			}
@@ -227,21 +235,43 @@ async function mockPublishedBook(
 				.toLowerCase();
 			const parent = requestUrl.searchParams.get("parent");
 			const source = requestUrl.searchParams.get("source");
+			const state = requestUrl.searchParams.get("state") ?? "active";
+			const pageSize = Number(
+				requestUrl.searchParams.get("pageSize") ?? 50,
+			);
+			const offset = Number(requestUrl.searchParams.get("cursor") ?? 0);
+			const matches = catalogEntries
+				.filter(
+					(entry) =>
+						(state === "deleted"
+							? entry.deleted
+							: !entry.deleted) &&
+						(view === "search"
+							? entry.name.toLowerCase().includes(query)
+							: entry.parentCollection ===
+								(!parent || parent === "root"
+									? null
+									: parent)) &&
+						(!source || entry.sourceConnectionKey === source),
+				)
+				.sort(
+					(left, right) =>
+						(left.sortOrder ?? Number.MAX_SAFE_INTEGER) -
+							(right.sortOrder ?? Number.MAX_SAFE_INTEGER) ||
+						left.name
+							.toLocaleLowerCase()
+							.localeCompare(right.name.toLocaleLowerCase()) ||
+						left.key.localeCompare(right.key),
+				);
+			const items = matches.slice(offset, offset + pageSize);
+			const nextOffset = offset + items.length;
+			options.onCollectionPage?.(new URL(request.url()), items);
 			await route.fulfill({
 				json: {
-					hasMore: false,
-					items: catalogEntries.filter(
-						(entry) =>
-							!entry.deleted &&
-							(view === "search"
-								? entry.name.toLowerCase().includes(query)
-								: entry.parentCollection ===
-									(!parent || parent === "root"
-										? null
-										: parent)) &&
-							(!source || entry.sourceConnectionKey === source),
-					),
-					nextCursor: null,
+					hasMore: nextOffset < matches.length,
+					items,
+					nextCursor:
+						nextOffset < matches.length ? String(nextOffset) : null,
 				},
 			});
 			return;
@@ -398,6 +428,24 @@ async function mockPublishedBook(
 
 		await route.fulfill({ status: 404 });
 	});
+	return {
+		replaceCollection(entry: AdminCollectionCatalogEntry) {
+			const index = catalogEntries.findIndex(
+				({ key }) => key === entry.key,
+			);
+			if (index === -1) catalogEntries.push(entry);
+			else catalogEntries[index] = entry;
+			for (const candidate of catalogEntries) {
+				candidate.hasChildren = catalogEntries.some(
+					(child) =>
+						!child.deleted &&
+						child.sourceConnectionKey ===
+							candidate.sourceConnectionKey &&
+						child.parentCollection === candidate.key,
+				);
+			}
+		},
+	};
 }
 
 test("searches and assigns records with the collection picker", async ({
@@ -799,13 +847,16 @@ test("filters by searched native and imported collections without loading an opt
 	page,
 }) => {
 	const collectionSearches: URL[] = [];
-	const extraSources: AdminSource[] = Array.from({ length: 12 }, (_, index) => ({
-		key: `source-${index}`,
-		label: `Source ${index + 1}`,
-		provider: "zotero",
-		readOnly: true,
-		status: "active",
-	}));
+	const extraSources: AdminSource[] = Array.from(
+		{ length: 12 },
+		(_, index) => ({
+			key: `source-${index}`,
+			label: `Source ${index + 1}`,
+			provider: "zotero",
+			readOnly: true,
+			status: "active",
+		}),
+	);
 	await page.setViewportSize({ height: 420, width: 1280 });
 	await mockPublishedBook(page, {
 		additionalCollectionEntries: [importedCollection, deletedCollection],
@@ -836,9 +887,7 @@ test("filters by searched native and imported collections without loading an opt
 		name: /Remove Deleted archive/u,
 	});
 	await expect(deletedRemove).toBeVisible();
-	const sourceList = picker.locator(
-		"[data-admin-collection-picker-sources]",
-	);
+	const sourceList = picker.locator("[data-admin-collection-picker-sources]");
 	const sourceGeometry = await sourceList.evaluate((element) => ({
 		clientHeight: element.clientHeight,
 		maxHeight: Number.parseFloat(getComputedStyle(element).maxHeight),
@@ -910,8 +959,7 @@ test("filters by searched native and imported collections without loading an opt
 	expect(geometry.dialogWidth).toBeLessThanOrEqual(560);
 	expect(geometry.resultsMaxHeight).toBeLessThanOrEqual(320);
 	const apply = dialog.getByRole("button", { name: "Apply", exact: true });
-	await apply.focus();
-	await page.keyboard.press("Enter");
+	await apply.click();
 	await expect(dialog).toBeHidden();
 	await expect
 		.poll(() => {
@@ -1286,7 +1334,10 @@ test("disables every metadata field until editing starts", async ({ page }) => {
 test("shows draft differences with the published value and a revert action", async ({
 	page,
 }) => {
-	await mockPublishedBook(page);
+	const savedDrafts: Record<string, unknown>[] = [];
+	await mockPublishedBook(page, {
+		onDraftSave: (payload) => savedDrafts.push(structuredClone(payload)),
+	});
 	await page.goto("/admin");
 
 	const inspector = page.locator("#admin-inspector-pane");
@@ -1373,6 +1424,9 @@ test("shows draft differences with the published value and a revert action", asy
 		.check();
 	await collectionsDialog.getByRole("button", { name: "Done" }).click();
 	await expect(collectionsGroup).toContainText("Teacher development");
+	await expect
+		.poll(() => savedDrafts.at(-1)?.collections)
+		.toEqual([teacherCollection.key]);
 	const membershipGeometry = await collectionsGroup
 		.locator('[data-admin-collection-membership="TEACHDEV"]')
 		.evaluate((row) => ({
@@ -1574,10 +1628,663 @@ test("explains why a staged PDF cannot publish before its metadata", async ({
 	).toBeVisible();
 });
 
+test("searches active collections and browses deleted collections as flat trees", async ({
+	page,
+}) => {
+	const nestedChild: AdminCollectionCatalogEntry = {
+		ancestors: [{ key: longCollection.key, name: longCollection.name }],
+		deleted: false,
+		hasChildren: false,
+		key: "NESTED01",
+		name: "Nested child",
+		parentCollection: longCollection.key,
+		revision: 1,
+		sortOrder: 0,
+		sourceConnectionKey: "native",
+		updatedAt: timestamp,
+	};
+	const catalog = await mockPublishedBook(page, {
+		additionalCollectionEntries: [deletedCollection, nestedChild],
+	});
+	catalog.replaceCollection(nestedChild);
+	const searches: URL[] = [];
+	await page.route("**/api/admin/collections?*", async (route) => {
+		const url = new URL(route.request().url());
+		if (url.searchParams.get("view") === "search") searches.push(url);
+		await route.fallback();
+	});
+
+	await page.goto("/admin");
+	const catalogue = page.getByRole("region", {
+		name: "Collection catalogue",
+	});
+	const search = catalogue.getByRole("textbox", {
+		name: "Search collections",
+	});
+	await search.fill("very long");
+	const result = catalogue.getByRole("treeitem", {
+		name: new RegExp(longCollectionName, "u"),
+	});
+	await expect(result).toBeVisible();
+	await expect(result).toHaveAttribute("aria-level", "1");
+	await expect(result).toHaveAttribute("aria-posinset", "1");
+	await expect(result).toHaveAttribute("aria-setsize", "1");
+	await expect(
+		catalogue.getByRole("button", {
+			name: `Expand ${longCollectionName}`,
+		}),
+	).toHaveCount(0);
+	await expect(
+		catalogue.locator(
+			`[data-collection-drag-handle="${longCollection.key}"]`,
+		),
+	).toHaveCount(0);
+
+	await catalogue
+		.getByRole("button", { name: "Clear collection search" })
+		.click();
+	await catalogue
+		.getByRole("button", { name: "Show deleted collections" })
+		.click();
+	const deleted = catalogue.getByRole("treeitem", {
+		name: deletedCollection.name,
+	});
+	await expect(deleted).toBeVisible();
+	await expect(deleted).toHaveAttribute("aria-level", "1");
+	await expect(
+		catalogue.locator('[role="treeitem"][tabindex="0"]'),
+	).toHaveCount(1);
+	await expect
+		.poll(() =>
+			searches.some(
+				(url) =>
+					url.searchParams.get("state") === "deleted" &&
+					url.searchParams.get("source") === "native",
+			),
+		)
+		.toBe(true);
+});
+
+test("restores branch focus when a collection retry finishes empty", async ({
+	page,
+}) => {
+	const emptySource: AdminSource = {
+		key: "empty-import",
+		label: "Empty import",
+		provider: "zotero",
+		readOnly: true,
+		status: "active",
+	};
+	await mockPublishedBook(page, { additionalSources: [emptySource] });
+	let attempts = 0;
+	await page.route("**/api/admin/collections?*", async (route) => {
+		const request = new URL(route.request().url());
+		if (
+			request.searchParams.get("view") === "children" &&
+			request.searchParams.get("source") === emptySource.key
+		) {
+			attempts += 1;
+			if (attempts === 1) {
+				await route.fulfill({
+					json: {
+						error: {
+							code: "internal_error",
+							message: "Collections could not be loaded.",
+						},
+					},
+					status: 500,
+				});
+				return;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 150));
+			await route.fulfill({
+				json: { hasMore: false, items: [], nextCursor: null },
+			});
+			return;
+		}
+		await route.fallback();
+	});
+
+	await page.goto("/admin");
+	const tree = page.getByRole("tree", { name: "Collections" });
+	const source = tree.getByRole("treeitem", {
+		name: emptySource.label,
+		exact: true,
+	});
+	await source.click();
+	const retry = tree.getByRole("treeitem", { name: "Try again" });
+	await expect(retry).toBeVisible();
+	await retry.focus();
+	await page.keyboard.press("Enter");
+	await expect(tree.getByRole("treeitem", { name: "Loading" })).toBeFocused();
+	await expect(source).toBeFocused();
+	await expect(
+		tree.getByText("No collections here", { exact: true }),
+	).toBeVisible();
+});
+
+test("does not steal focus when a collection load finishes after the user leaves", async ({
+	page,
+}) => {
+	const slowSource: AdminSource = {
+		key: "slow-import",
+		label: "Slow import",
+		provider: "zotero",
+		readOnly: true,
+		status: "active",
+	};
+	await mockPublishedBook(page, { additionalSources: [slowSource] });
+	let releaseLoad!: () => void;
+	const loadGate = new Promise<void>((resolve) => {
+		releaseLoad = resolve;
+	});
+	await page.route("**/api/admin/collections?*", async (route) => {
+		const request = new URL(route.request().url());
+		if (
+			request.searchParams.get("view") === "children" &&
+			request.searchParams.get("source") === slowSource.key
+		) {
+			await loadGate;
+			await route.fulfill({
+				json: { hasMore: false, items: [], nextCursor: null },
+			});
+			return;
+		}
+		await route.fallback();
+	});
+
+	await page.goto("/admin");
+	const tree = page.getByRole("tree", { name: "Collections" });
+	await tree
+		.getByRole("treeitem", { name: slowSource.label, exact: true })
+		.click();
+	const loading = tree.getByRole("treeitem", { name: "Loading" });
+	await loading.focus();
+	await expect(loading).toBeFocused();
+	const nativeSource = tree.getByRole("treeitem", {
+		name: "Native",
+		exact: true,
+	});
+	await nativeSource.focus();
+	releaseLoad();
+	await expect(
+		tree.getByText("No collections here", { exact: true }),
+	).toBeVisible();
+	await expect(nativeSource).toBeFocused();
+});
+
+test("reveals and scrolls to a selected collection outside the first page", async ({
+	page,
+}) => {
+	const collections: AdminCollectionCatalogEntry[] = Array.from(
+		{ length: 120 },
+		(_, index) => ({
+			ancestors: [],
+			deleted: false,
+			hasChildren: false,
+			key: `D${String(index).padStart(7, "0")}`,
+			name: `Deep collection ${index + 1}`,
+			parentCollection: null,
+			revision: 1,
+			sortOrder: index + 10,
+			sourceConnectionKey: "native",
+			updatedAt: timestamp,
+		}),
+	);
+	await mockPublishedBook(page, { additionalCollectionEntries: collections });
+	const childrenRequests: URL[] = [];
+	await page.route("**/api/admin/collections?*", async (route) => {
+		const url = new URL(route.request().url());
+		if (url.searchParams.get("view") === "children") {
+			childrenRequests.push(url);
+		}
+		await route.fallback();
+	});
+	const selected = collections.at(-1)!;
+	const initialFilters = JSON.stringify([
+		{
+			column: "collections",
+			operator: "anyOf",
+			value: [selected.key],
+		},
+	]);
+
+	await page.goto(`/admin?filters=${encodeURIComponent(initialFilters)}`);
+	const tree = page.getByRole("tree", { name: "Collections" });
+	const selectedRow = tree.getByRole("treeitem", {
+		name: selected.name,
+		exact: true,
+	});
+	await expect(selectedRow).toBeVisible();
+	await expect(selectedRow).toHaveAttribute("aria-selected", "true");
+	await expect(selectedRow).not.toHaveAttribute("aria-posinset");
+	expect(await tree.locator("[data-index]").count()).toBeLessThanOrEqual(24);
+	expect(childrenRequests.some((url) => url.searchParams.has("cursor"))).toBe(
+		false,
+	);
+});
+
+test("refreshes an off-page ancestor after catalogue invalidation", async ({
+	page,
+}) => {
+	const roots: AdminCollectionCatalogEntry[] = Array.from(
+		{ length: 60 },
+		(_, index) => ({
+			ancestors: [],
+			deleted: false,
+			hasChildren: false,
+			key: `A${String(index).padStart(7, "0")}`,
+			name: `Earlier root ${index + 1}`,
+			parentCollection: null,
+			revision: 1,
+			sortOrder: index,
+			sourceConnectionKey: "native",
+			updatedAt: timestamp,
+		}),
+	);
+	const child: AdminCollectionCatalogEntry = {
+		ancestors: [{ key: longCollection.key, name: longCollection.name }],
+		deleted: false,
+		hasChildren: false,
+		key: "DEEPCHLD",
+		name: "Deep selected child",
+		parentCollection: longCollection.key,
+		revision: 1,
+		sortOrder: 0,
+		sourceConnectionKey: "native",
+		updatedAt: timestamp,
+	};
+	const offPageParent = { ...longCollection, sortOrder: 1000 };
+	const firstRootPages: string[][] = [];
+	const resolvedNames: string[][] = [];
+	const catalog = await mockPublishedBook(page, {
+		additionalCollectionEntries: [...roots, child],
+		onCollectionPage: (request, items) => {
+			const parent = request.searchParams.get("parent");
+			if (
+				(request.searchParams.get("view") ?? "children") ===
+					"children" &&
+				(!parent || parent === "root") &&
+				!request.searchParams.get("cursor") &&
+				request.searchParams.get("source") === "native"
+			) {
+				firstRootPages.push(items.map(({ key }) => key));
+			}
+		},
+		onCollectionResolve: (_keys, items) => {
+			resolvedNames.push(items.map(({ name }) => name));
+		},
+	});
+	catalog.replaceCollection({
+		...offPageParent,
+		ancestors: [],
+		hasChildren: true,
+	});
+	const renamedParent = {
+		...offPageParent,
+		name: "Renamed off-page parent",
+		revision: 2,
+	};
+	await page.route("**/api/admin/collections/LONGCOLL", async (route) => {
+		catalog.replaceCollection({
+			...renamedParent,
+			ancestors: [],
+			hasChildren: true,
+		});
+		catalog.replaceCollection({
+			...child,
+			ancestors: [{ key: renamedParent.key, name: renamedParent.name }],
+		});
+		await route.fulfill({ json: { collection: renamedParent } });
+	});
+	const initialFilters = JSON.stringify([
+		{
+			column: "collections",
+			operator: "anyOf",
+			value: [child.key],
+		},
+	]);
+
+	await page.goto(`/admin?filters=${encodeURIComponent(initialFilters)}`);
+	await expect.poll(() => firstRootPages.length).toBeGreaterThan(0);
+	expect(firstRootPages[0]).not.toContain(offPageParent.key);
+	const catalogue = page.getByRole("region", {
+		name: "Collection catalogue",
+	});
+	await expect(
+		catalogue.getByRole("treeitem", {
+			name: longCollection.name,
+			exact: true,
+		}),
+	).toBeVisible();
+	await catalogue
+		.getByRole("button", { name: `Manage ${longCollection.name}` })
+		.click();
+	await page.getByRole("menuitem", { name: "Rename" }).click();
+	const dialog = page.getByRole("dialog", { name: "Rename collection" });
+	await dialog
+		.getByRole("textbox", { name: "Name" })
+		.fill(renamedParent.name);
+	const resolutionsBeforeRename = resolvedNames.length;
+	await dialog.getByRole("button", { name: "Rename", exact: true }).click();
+	await expect
+		.poll(() =>
+			resolvedNames
+				.slice(resolutionsBeforeRename)
+				.some((names) => names.includes(renamedParent.name)),
+		)
+		.toBe(true);
+	await expect(
+		catalogue.getByRole("treeitem", {
+			name: renamedParent.name,
+			exact: true,
+		}),
+	).toBeVisible();
+});
+
+test("pages and virtualizes large collection catalogues while loading sources lazily", async ({
+	page,
+}) => {
+	const nestedChild: AdminCollectionCatalogEntry = {
+		ancestors: [{ key: longCollection.key, name: longCollection.name }],
+		deleted: false,
+		hasChildren: false,
+		key: "NESTED01",
+		name: "Nested child",
+		parentCollection: longCollection.key,
+		revision: 1,
+		sortOrder: 0,
+		sourceConnectionKey: "native",
+		updatedAt: timestamp,
+	};
+	const nativeCollections: AdminCollectionCatalogEntry[] = Array.from(
+		{ length: 300 },
+		(_, index) => ({
+			ancestors: [],
+			deleted: false,
+			hasChildren: false,
+			key: `C${String(index).padStart(7, "0")}`,
+			name: `Collection ${String(index + 1).padStart(3, "0")}`,
+			parentCollection: null,
+			revision: 1,
+			sortOrder: index + 10,
+			sourceConnectionKey: "native",
+			updatedAt: timestamp,
+		}),
+	);
+	const importedEntries: AdminCollectionCatalogEntry[] = Array.from(
+		{ length: 3 },
+		(_, index) => ({
+			ancestors: [],
+			deleted: false,
+			hasChildren: false,
+			key: `I${String(index).padStart(7, "0")}`,
+			name: `Imported ${index + 1}`,
+			parentCollection: null,
+			revision: 1,
+			sortOrder: index,
+			sourceConnectionKey: importedSource.key,
+			updatedAt: timestamp,
+		}),
+	);
+	const catalog = await mockPublishedBook(page, {
+		additionalCollectionEntries: [
+			nestedChild,
+			...nativeCollections,
+			...importedEntries,
+		],
+		additionalSources: [importedSource],
+	});
+	catalog.replaceCollection(nestedChild);
+	const catalogueRequests: URL[] = [];
+	let releaseRootPage!: () => void;
+	const rootPageGate = new Promise<void>((resolve) => {
+		releaseRootPage = resolve;
+	});
+	let releasePaginationFailure!: () => void;
+	const paginationFailureGate = new Promise<void>((resolve) => {
+		releasePaginationFailure = resolve;
+	});
+	let releasePaginationRetry!: () => void;
+	const paginationRetryGate = new Promise<void>((resolve) => {
+		releasePaginationRetry = resolve;
+	});
+	let paginationAttempts = 0;
+	await page.route("**/api/admin/collections?*", async (route) => {
+		const url = new URL(route.request().url());
+		if (url.searchParams.get("view") === "children") {
+			catalogueRequests.push(url);
+			const parent = url.searchParams.get("parent");
+			if (
+				url.searchParams.get("source") === "native" &&
+				(!parent || parent === "root") &&
+				!url.searchParams.get("cursor")
+			) {
+				await rootPageGate;
+			}
+			if (url.searchParams.get("parent") === longCollection.key) {
+				await new Promise((resolve) => setTimeout(resolve, 150));
+			}
+			if (
+				url.searchParams.get("source") === "native" &&
+				url.searchParams.get("cursor") === "50"
+			) {
+				paginationAttempts += 1;
+				if (paginationAttempts === 1) {
+					await paginationFailureGate;
+					await route.fulfill({
+						json: {
+							error: {
+								code: "internal_error",
+								message:
+									"More collections could not be loaded.",
+							},
+						},
+						status: 500,
+					});
+					return;
+				}
+				await paginationRetryGate;
+			}
+		}
+		await route.fallback();
+	});
+
+	await page.setViewportSize({ height: 720, width: 1280 });
+	await page.goto("/admin");
+	const tree = page.getByRole("tree", { name: "Collections" });
+	const nativeGroup = tree.getByRole("treeitem", {
+		name: "Native",
+		exact: true,
+	});
+	await nativeGroup.focus();
+	await page.keyboard.press("ArrowDown");
+	await expect(tree.getByRole("treeitem", { name: "Loading" })).toBeFocused();
+	releaseRootPage();
+	await expect(
+		tree.getByRole("treeitem", {
+			name: teacherCollection.name,
+			exact: true,
+		}),
+	).toBeFocused();
+	await expect(
+		tree.getByText("Collection 001", { exact: true }),
+	).toBeVisible();
+	await expect
+		.poll(
+			() =>
+				catalogueRequests.filter(
+					(url) =>
+						url.searchParams.get("source") === importedSource.key,
+				).length,
+		)
+		.toBe(0);
+
+	const initialGeometry = await tree.evaluate((element) => ({
+		clientHeight: element.clientHeight,
+		overflowY: getComputedStyle(element).overflowY,
+		renderedRows: element.querySelectorAll("[data-index]").length,
+		scrollHeight: element.scrollHeight,
+	}));
+	expect(initialGeometry).toMatchObject({ overflowY: "auto" });
+	expect(initialGeometry.scrollHeight).toBeGreaterThan(
+		initialGeometry.clientHeight,
+	);
+	expect(initialGeometry.renderedRows).toBeLessThan(24);
+	const parentRow = tree.getByRole("treeitem", {
+		name: longCollection.name,
+		exact: true,
+	});
+	await expect(
+		page.locator(`[data-collection-drag-handle="${longCollection.key}"]`),
+	).toBeAttached();
+	await parentRow.focus();
+	await page.keyboard.press("ArrowRight");
+	await expect(parentRow).toHaveAttribute("aria-expanded", "true");
+	await page.keyboard.press("ArrowRight");
+	await expect(parentRow).toBeFocused();
+	await expect(
+		tree.getByRole("treeitem", { name: nestedChild.name, exact: true }),
+	).toBeVisible();
+	await page.keyboard.press("ArrowRight");
+	await expect(
+		tree.getByRole("treeitem", { name: nestedChild.name, exact: true }),
+	).toBeFocused();
+	await page.keyboard.press("ArrowLeft");
+	await expect(parentRow).toBeFocused();
+
+	const firstGenerated = tree.getByRole("treeitem", {
+		name: "Collection 001",
+		exact: true,
+	});
+	await firstGenerated.focus();
+	await expect(firstGenerated).toBeFocused();
+	for (let index = 0; index < 30; index += 1) {
+		await page.keyboard.press("ArrowDown");
+		await expect(
+			tree.getByRole("treeitem", {
+				name: `Collection ${String(index + 2).padStart(3, "0")}`,
+				exact: true,
+			}),
+		).toBeFocused();
+	}
+	await expect(
+		tree.getByRole("treeitem", {
+			name: "Collection 031",
+			exact: true,
+		}),
+	).toBeFocused();
+	await page.keyboard.press("Home");
+	await expect(
+		tree.getByRole("treeitem", { name: "Native", exact: true }),
+	).toBeFocused();
+	await firstGenerated.focus();
+	await expect(firstGenerated).toBeFocused();
+	await tree.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+	});
+	await expect(tree.locator('[role="treeitem"]:focus')).toHaveCount(1);
+	await expect(tree.locator('[role="treeitem"][tabindex="0"]')).toHaveCount(
+		1,
+	);
+	const itemSearch = page.getByPlaceholder(
+		"Search title, creator, date or tag",
+	);
+	await itemSearch.focus();
+	await page.waitForTimeout(50);
+	await expect(itemSearch).toBeFocused();
+
+	await tree.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+	});
+	const importedGroup = tree.getByRole("treeitem", {
+		name: importedSource.label,
+	});
+	await expect(importedGroup).toBeVisible();
+	await importedGroup.focus();
+	await page.keyboard.press("Enter");
+	await expect(tree.getByText("Imported 1", { exact: true })).toBeVisible();
+	await expect
+		.poll(
+			() =>
+				catalogueRequests.filter(
+					(url) =>
+						url.searchParams.get("source") === importedSource.key,
+				).length,
+		)
+		.toBe(1);
+
+	await tree.evaluate((element) => {
+		element.scrollTop = 36 * 50;
+	});
+	const loadMore = tree.getByRole("treeitem", { name: "Load more" });
+	await expect(loadMore).toBeVisible();
+	await loadMore.focus();
+	await page.keyboard.press("Enter");
+	const loadingMore = tree.getByRole("treeitem", { name: "Loading" });
+	await expect(loadingMore).toBeFocused();
+	await expect(loadingMore).toHaveAttribute("aria-disabled", "true");
+	releasePaginationFailure();
+	const retryMore = tree.getByRole("treeitem", { name: "Try again" });
+	await expect(retryMore).toBeFocused();
+	await page.keyboard.press("Enter");
+	await expect(loadingMore).toBeFocused();
+	releasePaginationRetry();
+	await expect
+		.poll(() =>
+			catalogueRequests.some(
+				(url) =>
+					url.searchParams.get("source") === "native" &&
+					url.searchParams.get("cursor") === "50",
+			),
+		)
+		.toBe(true);
+	expect(paginationAttempts).toBe(2);
+	await expect(
+		tree.getByRole("treeitem", { name: "Load more" }),
+	).toBeFocused();
+	await tree.evaluate((element) => {
+		element.scrollTop = 36 * 50;
+	});
+	await expect(
+		tree.getByText("Collection 049", { exact: true }),
+	).toBeVisible();
+	// The focused row stays mounted outside the visible range so scrolling
+	// cannot strand keyboard focus; the rest of the 300-row catalogue remains
+	// virtualized.
+	expect(await tree.locator("[data-index]").count()).toBeLessThanOrEqual(25);
+});
+
 test("moves a native collection into another collection with pointer drag", async ({
 	page,
 }) => {
-	await mockPublishedBook(page);
+	const destinationChildren: AdminCollectionCatalogEntry[] = Array.from(
+		{ length: 60 },
+		(_, index) => ({
+			ancestors: [{ key: longCollection.key, name: longCollection.name }],
+			deleted: false,
+			hasChildren: false,
+			key: `M${String(index).padStart(7, "0")}`,
+			name: `Move destination child ${index + 1}`,
+			parentCollection: longCollection.key,
+			revision: 1,
+			sortOrder: index,
+			sourceConnectionKey: "native",
+			updatedAt: timestamp,
+		}),
+	);
+	const destinationFirstPages: string[][] = [];
+	const catalog = await mockPublishedBook(page, {
+		additionalCollectionEntries: destinationChildren,
+		onCollectionPage: (request, items) => {
+			if (
+				request.searchParams.get("parent") === longCollection.key &&
+				!request.searchParams.get("cursor")
+			) {
+				destinationFirstPages.push(items.map(({ key }) => key));
+			}
+		},
+	});
 	let moveRequest: Record<string, unknown> | null = null;
 	await page.route(
 		"**/api/admin/collections/TEACHDEV/move",
@@ -1592,6 +2299,13 @@ test("moves a native collection into another collection with pointer drag", asyn
 				revision: 2,
 				sortOrder: 1024,
 			};
+			catalog.replaceCollection({
+				...moved,
+				ancestors: [
+					{ key: longCollection.key, name: longCollection.name },
+				],
+				hasChildren: false,
+			});
 			await route.fulfill({
 				json: { collection: moved, collections: [moved] },
 			});
@@ -1616,11 +2330,14 @@ test("moves a native collection into another collection with pointer drag", asyn
 			position: "inside",
 			targetCollection: "LONGCOLL",
 		});
-	await expect(
-		page.locator(
-			'#admin-collection-children-LONGCOLL [data-collection-key="TEACHDEV"]',
-		),
-	).toBeVisible();
+	await expect.poll(() => destinationFirstPages.length).toBeGreaterThan(0);
+	expect(destinationFirstPages.at(-1)).not.toContain(teacherCollection.key);
+	const movedRow = page.locator('[data-collection-key="TEACHDEV"]');
+	await expect(movedRow).toBeVisible();
+	await expect(movedRow.getByRole("treeitem")).toHaveAttribute(
+		"aria-level",
+		"3",
+	);
 	await expect(
 		page.locator('[data-collection-drag-handle="TEACHDEV"]'),
 	).toBeFocused();

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AdminCollectionCatalogEntry } from "@/lib/admin/types";
 
@@ -28,6 +28,7 @@ export function useResolvedAdminCollections(keys: readonly string[]) {
 	const [resolution, setResolution] =
 		useState<ResolutionState>(EMPTY_RESOLUTION);
 	const [reloadToken, setReloadToken] = useState(0);
+	const retry = useCallback(() => setReloadToken((value) => value + 1), []);
 
 	useEffect(() => {
 		const controller = new AbortController();
@@ -50,9 +51,18 @@ export function useResolvedAdminCollections(keys: readonly string[]) {
 			const resolved = responses.flatMap((response) =>
 				response.status === "fulfilled" ? response.value.items : [],
 			);
+			const rejectedKeys = new Set(
+				responses.flatMap((response, index) =>
+					response.status === "rejected" ? chunks[index]! : [],
+				),
+			);
 			setResolution((current) => {
-				const retained = current.entries.filter(({ key }) => keySet.has(key));
-				const byKey = new Map(retained.map((entry) => [entry.key, entry]));
+				const retained = current.entries.filter(
+					({ key }) => keySet.has(key) && rejectedKeys.has(key),
+				);
+				const byKey = new Map(
+					retained.map((entry) => [entry.key, entry]),
+				);
 				for (const entry of resolved) byKey.set(entry.key, entry);
 				return {
 					entries: stableKeys.flatMap((key) => {
@@ -75,7 +85,7 @@ export function useResolvedAdminCollections(keys: readonly string[]) {
 		error: current ? resolution.error : false,
 		keySet,
 		loading: stableKeys.length > 0 && !current,
-		retry: () => setReloadToken((value) => value + 1),
+		retry,
 		stableKeys,
 	};
 }

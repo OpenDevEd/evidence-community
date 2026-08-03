@@ -68,7 +68,12 @@ import {
 } from "./AdminCollectionPicker";
 import { AdminItemFilters } from "./AdminItemFilters";
 import { AdminItemTable } from "./AdminItemTable";
-import { AdminNavigation, expandAdminCollections } from "./AdminNavigation";
+import {
+	AdminNavigation,
+	expandAdminCollections,
+	focusAdminCollection,
+	invalidateAdminCollectionCatalogue,
+} from "./AdminNavigation";
 import {
 	AdminApiError,
 	completeAdminPdf,
@@ -1242,6 +1247,7 @@ export default function AdminWorkbench({
 					}
 					toast.success("Collection created");
 				}
+				invalidateAdminCollectionCatalogue();
 				setCollectionDialog(null);
 				await refreshCurrent();
 			},
@@ -1267,6 +1273,7 @@ export default function AdminWorkbench({
 								position: "root",
 							},
 				);
+				invalidateAdminCollectionCatalogue();
 				setMoveDialog(null);
 				await refreshCurrent();
 				toast.success("Collection moved");
@@ -1295,13 +1302,14 @@ export default function AdminWorkbench({
 					: {
 							expectedRevision: collection.revision,
 							position: destination.position,
-							targetCollection:
-								destination.targetCollection,
+							targetCollection: destination.targetCollection,
 						},
 			).catch(async (error) => {
 				await loadLibrary();
 				throw error;
 			});
+			invalidateAdminCollectionCatalogue();
+			focusAdminCollection(collection.key);
 			setLibrary((current) => ({
 				...current,
 				collections: mergeAdminCollectionUpdates(
@@ -1343,6 +1351,7 @@ export default function AdminWorkbench({
 					collection.key,
 					collection.revision,
 				);
+				invalidateAdminCollectionCatalogue();
 				const selectedCollection = singleAdminItemFilterValue(
 					filters.filters,
 					"collections",
@@ -1373,6 +1382,7 @@ export default function AdminWorkbench({
 					collection.key,
 					collection.revision,
 				);
+				invalidateAdminCollectionCatalogue();
 				await refreshCurrent();
 				toast.success("Collection restored");
 			},
@@ -1791,7 +1801,6 @@ export default function AdminWorkbench({
 							<div className="min-h-0 flex-1">
 								<AdminNavigation
 									collection={collectionFilter}
-									collections={library.collections}
 									isBusy={busy}
 									onCreateCollection={openCreateCollection}
 									onDeleteCollection={removeCollection}

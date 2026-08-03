@@ -45,17 +45,24 @@ export type AdminCollectionCatalogueRow =
 			depth: number;
 			entry: AdminCollectionCatalogEntry;
 			kind: "collection";
+			positionInSet?: number;
 			revealed: boolean;
+			setSize: number;
 	  }
 	| {
 			branchKey: string;
 			depth: number;
 			kind: "empty" | "error" | "loadMore" | "loading";
 			parentCollection: string | null;
+			positionInSet?: number;
+			retryMode?: "more" | "refresh";
+			setSize: number;
 			sourceConnectionKey: string;
 	  }
 	| {
 			kind: "source";
+			positionInSet: number;
+			setSize: number;
 			source: AdminSource;
 	  };
 
@@ -175,7 +182,9 @@ function branchForReveal(
 			? mergeAdminCollectionCatalogueEntries(current.items, [entry])
 			: current.items,
 		revealed: canonical
-			? current.revealed.filter(({ key: itemKey }) => itemKey !== entry.key)
+			? current.revealed.filter(
+					({ key: itemKey }) => itemKey !== entry.key,
+				)
 			: mergeAdminCollectionCatalogueEntries(current.revealed, [entry]),
 	});
 }
@@ -203,7 +212,9 @@ export function adminCollectionCatalogueReducer(
 			);
 			for (const [branchKey, branch] of branches) {
 				if (branchKey === destinationBranchKey) continue;
-				const items = branch.items.filter(({ key }) => key !== entry.key);
+				const items = branch.items.filter(
+					({ key }) => key !== entry.key,
+				);
 				const revealed = branch.revealed.filter(
 					({ key }) => key !== entry.key,
 				);
@@ -364,6 +375,9 @@ export function flattenAdminCollectionCatalogue(
 			parentCollection,
 		);
 		const branch = state.branches.get(branchKey);
+		const statusPosition = branch?.revealed.length
+			? undefined
+			: (branch?.items.length ?? 0) + 1;
 		if (
 			!branch ||
 			(branch.status === "loading" &&
@@ -375,6 +389,8 @@ export function flattenAdminCollectionCatalogue(
 				depth,
 				kind: "loading",
 				parentCollection,
+				positionInSet: statusPosition,
+				setSize: -1,
 				sourceConnectionKey,
 			});
 			return;
@@ -389,6 +405,9 @@ export function flattenAdminCollectionCatalogue(
 				depth,
 				kind: "error",
 				parentCollection,
+				positionInSet: statusPosition,
+				retryMode: "refresh",
+				setSize: -1,
 				sourceConnectionKey,
 			});
 			return;
@@ -399,18 +418,29 @@ export function flattenAdminCollectionCatalogue(
 				depth,
 				kind: "empty",
 				parentCollection,
+				positionInSet: 1,
+				setSize: 1,
 				sourceConnectionKey,
 			});
 			return;
 		}
-		for (const entry of branch.items) {
-			rows.push({ depth, entry, kind: "collection", revealed: false });
-			if (entry.hasChildren && expandedCollections.has(entry.key)) {
-				visit(sourceConnectionKey, entry.key, depth + 1);
-			}
-		}
-		for (const entry of branch.revealed) {
-			rows.push({ depth, entry, kind: "collection", revealed: true });
+		const visibleEntries = [
+			...branch.items.map((entry) => ({ entry, revealed: false })),
+			...branch.revealed.map((entry) => ({ entry, revealed: true })),
+		];
+		const setSize =
+			branch.nextCursor || branch.revealed.length > 0
+				? -1
+				: visibleEntries.length;
+		for (const [index, { entry, revealed }] of visibleEntries.entries()) {
+			rows.push({
+				depth,
+				entry,
+				kind: "collection",
+				positionInSet: revealed ? undefined : index + 1,
+				revealed,
+				setSize,
+			});
 			if (entry.hasChildren && expandedCollections.has(entry.key)) {
 				visit(sourceConnectionKey, entry.key, depth + 1);
 			}
@@ -421,6 +451,8 @@ export function flattenAdminCollectionCatalogue(
 				depth,
 				kind: "loading",
 				parentCollection,
+				positionInSet: statusPosition,
+				setSize: -1,
 				sourceConnectionKey,
 			});
 		} else if (branch.status === "error" || branch.loadMoreError) {
@@ -429,6 +461,9 @@ export function flattenAdminCollectionCatalogue(
 				depth,
 				kind: "error",
 				parentCollection,
+				positionInSet: statusPosition,
+				retryMode: branch.loadMoreError ? "more" : "refresh",
+				setSize: -1,
 				sourceConnectionKey,
 			});
 		} else if (branch.nextCursor) {
@@ -437,13 +472,20 @@ export function flattenAdminCollectionCatalogue(
 				depth,
 				kind: "loadMore",
 				parentCollection,
+				positionInSet: statusPosition,
+				setSize: -1,
 				sourceConnectionKey,
 			});
 		}
 	};
 
-	for (const source of sources) {
-		rows.push({ kind: "source", source });
+	for (const [index, source] of sources.entries()) {
+		rows.push({
+			kind: "source",
+			positionInSet: index + 1,
+			setSize: sources.length,
+			source,
+		});
 		if (expandedSources.has(source.key)) visit(source.key, null, 1);
 	}
 	return rows;
@@ -549,7 +591,8 @@ export function useAdminCollectionCatalogue() {
 				}
 			} finally {
 				if (
-					controllers.current.get(requestKey)?.controller === controller
+					controllers.current.get(requestKey)?.controller ===
+					controller
 				) {
 					controllers.current.delete(requestKey);
 				}
@@ -571,7 +614,8 @@ export function useAdminCollectionCatalogue() {
 			const snapshot = stateRef.current;
 			const current = snapshot.search;
 			const cursor = options.more ? current.nextCursor : null;
-			if (options.more && (!cursor || current.context !== context)) return;
+			if (options.more && (!cursor || current.context !== context))
+				return;
 			if (options.more && current.loadingMore && !options.force) {
 				return;
 			}
@@ -586,10 +630,7 @@ export function useAdminCollectionCatalogue() {
 			const requestKey = "search";
 			const requestContext = `${context}\u0000${cursor ?? "first"}`;
 			const activeOwner = controllers.current.get(requestKey);
-			if (
-				activeOwner?.context === requestContext &&
-				!options.force
-			) {
+			if (activeOwner?.context === requestContext && !options.force) {
 				return;
 			}
 			activeOwner?.controller.abort();
@@ -638,7 +679,8 @@ export function useAdminCollectionCatalogue() {
 				}
 			} finally {
 				if (
-					controllers.current.get(requestKey)?.controller === controller
+					controllers.current.get(requestKey)?.controller ===
+					controller
 				) {
 					controllers.current.delete(requestKey);
 				}
@@ -657,13 +699,19 @@ export function useAdminCollectionCatalogue() {
 		});
 		dispatch({ type: "invalidate" });
 	}, []);
+	const reveal = useCallback((entries: AdminCollectionCatalogEntry[]) => {
+		stateRef.current = adminCollectionCatalogueReducer(stateRef.current, {
+			entries,
+			type: "reveal",
+		});
+		dispatch({ entries, type: "reveal" });
+	}, []);
 
 	return {
 		invalidate,
 		loadChildren,
 		loadSearch,
-		reveal: (entries: AdminCollectionCatalogEntry[]) =>
-			dispatch({ entries, type: "reveal" }),
+		reveal,
 		state,
 	};
 }
