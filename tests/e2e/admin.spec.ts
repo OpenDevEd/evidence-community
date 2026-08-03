@@ -1,5 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
+import type {
+	AdminCollectionCatalogEntry,
+	AdminSource,
+} from "@/lib/admin/types";
+
 const itemKey = "TESTBOOK";
 const publishedItemKey = "LIVEBOOK";
 const timestamp = "2026-07-31T12:00:00.000Z";
@@ -35,6 +40,40 @@ const collectionCatalogEntries = [teacherCollection, longCollection].map(
 		hasChildren: false,
 	}),
 );
+
+const importedCollection: AdminCollectionCatalogEntry = {
+	ancestors: [],
+	deleted: false,
+	hasChildren: false,
+	key: "IMPORT01",
+	name: "Imported research",
+	parentCollection: null,
+	revision: 1,
+	sortOrder: null,
+	sourceConnectionKey: "zotero-group",
+	updatedAt: timestamp,
+};
+
+const deletedCollection: AdminCollectionCatalogEntry = {
+	ancestors: [],
+	deleted: true,
+	hasChildren: false,
+	key: "DELETED1",
+	name: "Deleted archive",
+	parentCollection: null,
+	revision: 2,
+	sortOrder: 2,
+	sourceConnectionKey: "native",
+	updatedAt: timestamp,
+};
+
+const importedSource: AdminSource = {
+	key: "zotero-group",
+	label: "Zotero group",
+	provider: "zotero",
+	readOnly: true,
+	status: "active",
+};
 
 const publishedPayload = {
 	abstractNote: "A published summary",
@@ -122,6 +161,8 @@ function publishedDetail(
 async function mockPublishedBook(
 	page: Page,
 	options: {
+		additionalCollectionEntries?: AdminCollectionCatalogEntry[];
+		additionalSources?: AdminSource[];
 		batchResults?: (body: {
 			action: string;
 			collectionKey?: string;
@@ -130,6 +171,7 @@ async function mockPublishedBook(
 		beforeBatchResponse?: () => Promise<void>;
 		failDraftSave?: boolean;
 		itemCount?: number;
+		initialCollectionKeys?: string[];
 		listFailure?: boolean;
 		listFailureCount?: number;
 		listRowOverrides?: Partial<Record<string, unknown>>;
@@ -138,16 +180,23 @@ async function mockPublishedBook(
 			collectionKey?: string;
 			keys: string[];
 		}) => void;
+		onDraftSave?: (payload: Record<string, unknown>) => void;
 		onListRequest?: (url: URL) => void;
 	} = {},
 ) {
+	const catalogEntries = [
+		...collectionCatalogEntries,
+		...(options.additionalCollectionEntries ?? []),
+	];
 	const itemCount = options.itemCount ?? 1;
 	let remainingListFailures = options.listFailure
 		? Number.POSITIVE_INFINITY
 		: (options.listFailureCount ?? 0);
 	let editing = false;
-	let draftPayload: Record<string, unknown> =
-		structuredClone(publishedPayload);
+	let draftPayload: Record<string, unknown> = {
+		...structuredClone(publishedPayload),
+		collections: [...(options.initialCollectionKeys ?? [])],
+	};
 	let draftRevision = 1;
 	await page.route("**/api/admin/**", async (route) => {
 		const request = route.request();
@@ -164,7 +213,7 @@ async function mockPublishedBook(
 				await route.fulfill({
 					json: {
 						items: keys.flatMap((key) => {
-							const entry = collectionCatalogEntries.find(
+							const entry = catalogEntries.find(
 								(collection) => collection.key === key,
 							);
 							return entry ? [entry] : [];
@@ -180,8 +229,9 @@ async function mockPublishedBook(
 			await route.fulfill({
 				json: {
 					hasMore: false,
-					items: collectionCatalogEntries.filter(
+					items: catalogEntries.filter(
 						(entry) =>
+							!entry.deleted &&
 							(view === "search"
 								? entry.name.toLowerCase().includes(query)
 								: entry.parentCollection ===
@@ -196,9 +246,13 @@ async function mockPublishedBook(
 		}
 
 		if (pathname === "/api/admin/library") {
+			const collections = catalogEntries.map(
+				({ ancestors: _ancestors, hasChildren: _hasChildren, ...entry }) =>
+					entry,
+			);
 			await route.fulfill({
 				json: {
-					collections: [teacherCollection, longCollection],
+					collections,
 					sources: [
 						{
 							key: "native",
@@ -207,6 +261,7 @@ async function mockPublishedBook(
 							readOnly: false,
 							status: "active",
 						},
+						...(options.additionalSources ?? []),
 					],
 				},
 			});
@@ -319,6 +374,7 @@ async function mockPublishedBook(
 			const body = request.postDataJSON() as {
 				payload: Record<string, unknown>;
 			};
+			options.onDraftSave?.(body.payload);
 			draftPayload = body.payload;
 			draftRevision += 1;
 			await route.fulfill({
@@ -1128,42 +1184,63 @@ test("shows draft differences with the published value and a revert action", asy
 	await expect(title).toHaveValue("Published book");
 	await expect(titleMarker).toHaveCount(0);
 
-	const collection = inspector.getByRole("checkbox", {
-		name: /Teacher development/,
-	});
 	const collectionsGroup = inspector.getByRole("group", {
 		name: "Collections",
 	});
-	const longCollection = collectionsGroup.getByText(longCollectionName, {
+	await collectionsGroup
+		.getByRole("button", { name: "Add to collection" })
+		.click();
+	const collectionsDialog = page.getByRole("dialog", {
+		name: "Edit collections",
+	});
+	const longCollectionResult = collectionsDialog.getByText(longCollectionName, {
 		exact: true,
 	});
-	const collectionGeometry = await longCollection.evaluate((element) => {
-		const group = element.closest('[role="group"]')!;
+	const collectionGeometry = await longCollectionResult.evaluate((element) => {
+		const picker = element.closest("[data-admin-collection-picker]")!;
 		const style = getComputedStyle(element);
 		return {
-			groupClientWidth: group.clientWidth,
-			groupScrollWidth: group.scrollWidth,
+			pickerClientWidth: picker.clientWidth,
+			pickerScrollWidth: picker.scrollWidth,
 			overflow: style.overflow,
-			rightInsideGroup:
+			rightInsidePicker:
 				element.getBoundingClientRect().right <=
-				group.getBoundingClientRect().right,
+				picker.getBoundingClientRect().right,
 			textOverflow: style.textOverflow,
 		};
 	});
-	expect(collectionGeometry.groupScrollWidth).toBe(
-		collectionGeometry.groupClientWidth,
+	expect(collectionGeometry.pickerScrollWidth).toBe(
+		collectionGeometry.pickerClientWidth,
 	);
 	expect(collectionGeometry).toMatchObject({
 		overflow: "hidden",
-		rightInsideGroup: true,
+		rightInsidePicker: true,
 		textOverflow: "ellipsis",
 	});
-	await collection.click();
+	await collectionsDialog
+		.getByRole("checkbox", { name: /Teacher development/ })
+		.check();
+	await collectionsDialog.getByRole("button", { name: "Done" }).click();
+	await expect(collectionsGroup).toContainText("Teacher development");
+	const membershipGeometry = await collectionsGroup
+		.locator('[data-admin-collection-membership="TEACHDEV"]')
+		.evaluate((row) => ({
+			height: row.getBoundingClientRect().height,
+			removeSize: (() => {
+				const button = row.querySelector("button")!;
+				return [button.offsetWidth, button.offsetHeight];
+			})(),
+			rightInsideGroup:
+				row.getBoundingClientRect().right <=
+				row.parentElement!.getBoundingClientRect().right,
+		}));
+	expect(membershipGeometry).toEqual({
+		height: 44,
+		removeSize: [28, 28],
+		rightInsideGroup: true,
+	});
 	await expect(
-		collectionsGroup.getByText(
-			"Membership differs from the published value",
-			{ exact: true },
-		),
+		collectionsGroup.getByLabel("Added in this draft"),
 	).toHaveCount(1);
 	const collectionMarker = inspector.getByRole("button", {
 		name: "Changed: show published collections",
@@ -1172,8 +1249,67 @@ test("shows draft differences with the published value and a revert action", asy
 	await collectionMarker.click();
 	await expect(page.getByText("Empty", { exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Revert to published" }).click();
-	await expect(collection).not.toBeChecked();
+	await expect(collectionsGroup).toContainText("No collections");
 	await expect(collectionMarker).toHaveCount(0);
+});
+
+test("removes native memberships while imported and deleted memberships stay locked", async ({
+	page,
+}) => {
+	const savedPayloads: Record<string, unknown>[] = [];
+	await mockPublishedBook(page, {
+		additionalCollectionEntries: [importedCollection, deletedCollection],
+		additionalSources: [importedSource],
+		initialCollectionKeys: [
+			teacherCollection.key,
+			importedCollection.key,
+			deletedCollection.key,
+		],
+		onDraftSave: (payload) => savedPayloads.push(payload),
+	});
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", { name: "Edit" }).click();
+	const collectionsGroup = inspector.getByRole("group", {
+		name: "Collections",
+	});
+	await expect(
+		collectionsGroup.locator("[data-admin-collection-membership]"),
+	).toHaveCount(3);
+	await expect(collectionsGroup.getByLabel("Read only")).toHaveCount(2);
+	await expect(
+		collectionsGroup.getByRole("button", {
+			name: /Remove Teacher development/u,
+		}),
+	).toHaveCount(1);
+	await expect(
+		collectionsGroup.getByRole("button", {
+			name: /Remove Imported research|Remove Deleted archive/u,
+		}),
+	).toHaveCount(0);
+
+	await collectionsGroup
+		.getByRole("button", { name: /Remove Teacher development/u })
+		.click();
+	await expect(
+		collectionsGroup.locator('[data-admin-collection-membership="TEACHDEV"]'),
+	).toHaveCount(0);
+	await expect.poll(() => savedPayloads.at(-1)?.collections).toEqual([
+		importedCollection.key,
+		deletedCollection.key,
+	]);
+
+	await collectionsGroup
+		.getByRole("button", { name: "Add to collection" })
+		.click();
+	const dialog = page.getByRole("dialog", { name: "Edit collections" });
+	await expect(dialog.getByText("Imported research", { exact: true })).toBeVisible();
+	await expect(dialog.getByText("Deleted archive", { exact: true })).toBeVisible();
+	await expect(
+		dialog.getByRole("button", {
+			name: /Remove Imported research|Remove Deleted archive/u,
+		}),
+	).toHaveCount(0);
 });
 
 test("keeps parent attachments compact and moves file controls to the attachment", async ({

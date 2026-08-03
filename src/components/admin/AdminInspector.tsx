@@ -3,6 +3,10 @@
 import {
 	AutocompleteItem,
 	Chip,
+	ModalBody,
+	ModalContent,
+	ModalFooter,
+	ModalHeader,
 	Popover,
 	PopoverContent,
 	PopoverTrigger,
@@ -40,7 +44,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { Button } from "@/components/nextui/Button";
-import { Checkbox } from "@/components/nextui/Checkbox";
+import DialogModal from "@/components/nextui/DialogModal";
 import { Input } from "@/components/nextui/Input";
 import { Autocomplete } from "@/components/nextui/Autocomplete";
 import { Select } from "@/components/nextui/Select";
@@ -48,15 +52,20 @@ import { SelectItem } from "@/components/nextui/SelectItem";
 import { Textarea } from "@/components/nextui/Textarea";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import type {
-	AdminCollection,
 	AdminCreator,
 	AdminItemDetail,
+	AdminSource,
 } from "@/lib/admin/types";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import { isTopLevelAdminItemType } from "@/lib/admin/item-fields";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
 import { collectionKeysFromPayload } from "@/lib/admin/item-payload";
+import { useFinePointer } from "@/hooks/useBreakpoint";
 
+import {
+	adminCollectionPath,
+	AdminCollectionPicker,
+} from "./AdminCollectionPicker";
 import { FileStateChip, RecordStateChip } from "./AdminStatus";
 import {
 	computeAdminDraftDiff,
@@ -70,6 +79,7 @@ import {
 	humanizeAdminField,
 } from "./admin-schema";
 import { firstAdminFieldError, validationTargetId } from "./admin-validation";
+import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 
 type SaveState = "conflict" | "error" | "idle" | "saved" | "saving";
 
@@ -893,73 +903,75 @@ function TagsEditor({
 }
 
 function CollectionsEditor({
-	collections,
 	errors,
 	onChange,
 	payload,
 	publishedCollectionKeys,
 	readOnly,
 	recordKey,
+	sources,
 }: {
-	collections: AdminCollection[];
 	errors: AdminFieldErrors;
 	onChange: (payload: Record<string, unknown>) => void;
 	payload: Record<string, unknown>;
 	publishedCollectionKeys?: readonly string[];
 	readOnly: boolean;
 	recordKey: string;
+	sources: AdminSource[];
 }) {
+	const finePointer = useFinePointer();
+	const [pickerOpen, setPickerOpen] = useState(false);
 	const error = firstAdminFieldError(errors, "collections");
 	const errorId = `admin-${recordKey}-collections-error`;
-	const selected = new Set(collectionKeysFromPayload(payload));
+	const selectedKeys = collectionKeysFromPayload(payload);
+	const { entries, error: resolveError, loading, retry } =
+		useResolvedAdminCollections(selectedKeys);
 	const publishedSelected = new Set(publishedCollectionKeys ?? []);
-	const availableCollections = collections.filter(
-		(collection) => !collection.deleted || selected.has(collection.key),
-	);
-	const visibleCollections = readOnly
-		? availableCollections.filter((collection) => selected.has(collection.key))
-		: availableCollections;
 	return (
-		<div
-			id={`admin-${recordKey}-collections`}
-			aria-describedby={error ? errorId : undefined}
-			aria-label="Collections"
-			className={`space-y-1 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-danger ${
-				error ? "bg-danger/5 p-2" : ""
-			}`}
-			role="group"
-			tabIndex={-1}
-		>
-			{error ? (
-				<p
-					id={errorId}
-					className="mb-1 text-xs text-danger"
-					role="alert"
-				>
-					{error}
-				</p>
-			) : null}
-			{visibleCollections.length === 0 ? (
-				<EmptyValue
-					icon={Folder}
-					label={readOnly ? "No collections" : "No collections available"}
-				/>
-			) : null}
-			{visibleCollections.map((collection) => {
-				const imported =
-					collection.sourceConnectionKey !==
-					NATIVE_SOURCE_CONNECTION_KEY;
-				const retainedDeletedMembership =
-					collection.deleted && selected.has(collection.key);
-				const membershipChanged =
-					publishedCollectionKeys !== undefined &&
-					selected.has(collection.key) !==
-						publishedSelected.has(collection.key);
-				if (readOnly) {
+		<>
+			<div
+				id={`admin-${recordKey}-collections`}
+				aria-describedby={error ? errorId : undefined}
+				aria-label="Collections"
+				className={`space-y-1.5 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-danger ${
+					error ? "bg-danger/5 p-2" : ""
+				}`}
+				role="group"
+				tabIndex={-1}
+			>
+				{error ? (
+					<p id={errorId} className="mb-1 text-xs text-danger" role="alert">
+						{error}
+					</p>
+				) : null}
+				{resolveError ? (
+					<div className="flex min-h-9 items-center gap-2 rounded-lg bg-danger/10 px-2.5 text-xs text-danger" role="alert">
+						<AlertCircle aria-hidden className="shrink-0" size={13} />
+						<span className="min-w-0 flex-1">Collections could not be loaded.</span>
+						<Button onPress={retry} size="xs" variant="transparent">
+							Retry
+						</Button>
+					</div>
+				) : null}
+				{loading && entries.length === 0 ? (
+					<div className="grid min-h-10 place-items-center">
+						<Spinner label="Loading collections" size="sm" />
+					</div>
+				) : !resolveError && entries.length === 0 ? (
+					<EmptyValue icon={Folder} label="No collections" />
+				) : null}
+				{entries.map((entry) => {
+					const imported =
+						entry.sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY;
+					const locked = imported || entry.deleted;
+					const membershipChanged =
+						publishedCollectionKeys !== undefined &&
+						!publishedSelected.has(entry.key);
 					return (
 						<div
-							key={collection.key}
-							className="flex min-h-9 items-center gap-2 rounded-lg bg-black/[0.03] px-2.5 text-xs text-black/70 dark:bg-white/[0.04] dark:text-white/75"
+							key={entry.key}
+							className="flex min-h-11 items-center gap-2 rounded-lg bg-black/[0.03] px-2.5 text-xs text-black/70 dark:bg-white/[0.04] dark:text-white/75"
+							data-admin-collection-membership={entry.key}
 						>
 							<Folder
 								aria-hidden
@@ -967,85 +979,83 @@ function CollectionsEditor({
 								size={14}
 								strokeWidth={1.7}
 							/>
-							<span className="min-w-0 flex-1 truncate">
-								{collection.name}
+							<span className="min-w-0 flex-1">
+								<span className="block truncate font-medium">{entry.name}</span>
+								<span className="block truncate text-[11px] text-black/40 dark:text-white/40">
+									{adminCollectionPath(entry, sources)}
+								</span>
 							</span>
-							{retainedDeletedMembership ? (
-								<Chip className="h-5" size="sm" variant="flat">
-									Deleted
-								</Chip>
+							{membershipChanged ? (
+								<Tooltip content="Added in this draft">
+									<Pencil aria-label="Added in this draft" className="shrink-0 text-accent" size={11} />
+								</Tooltip>
 							) : null}
-							{imported ? (
-								<Lock
-									aria-label="Read only"
-									className="opacity-40"
-									size={11}
-								/>
+							{entry.deleted ? (
+								<Chip className="h-5" size="sm" variant="flat">Deleted</Chip>
+							) : null}
+							{locked ? (
+								<Lock aria-label="Read only" className="shrink-0 opacity-40" size={11} />
+							) : !readOnly ? (
+								<button
+									aria-label={`Remove ${entry.name}, ${adminCollectionPath(entry, sources)}`}
+									className="grid size-7 shrink-0 place-items-center rounded-md text-black/35 hover:bg-black/[0.06] hover:text-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/35 dark:hover:bg-white/[0.07] dark:hover:text-white/75"
+									onClick={() =>
+										onChange({
+											...payload,
+											collections: selectedKeys.filter((key) => key !== entry.key),
+										})
+									}
+									type="button"
+								>
+									<X aria-hidden size={13} />
+								</button>
 							) : null}
 						</div>
 					);
-				}
-				return (
-					<Checkbox
-						key={collection.key}
-						className="flex w-full min-w-0 max-w-none overflow-hidden rounded-lg px-2.5 py-2 transition-colors hover:bg-black/[0.035] dark:hover:bg-white/[0.045]"
-						classNames={{ label: "min-w-0 flex-1 overflow-hidden" }}
-						isDisabled={readOnly || imported}
-						isSelected={selected.has(collection.key)}
-						onValueChange={(checked) => {
-							if (
-								imported ||
-								(retainedDeletedMembership && checked)
-							)
-								return;
-							const next = new Set(selected);
-							if (checked) next.add(collection.key);
-							else next.delete(collection.key);
-							onChange({
-								...payload,
-								collections: [...next],
-							});
-						}}
-						size="sm"
+				})}
+				{!readOnly ? (
+					<Button
+						onPress={() => setPickerOpen(true)}
+						size="xs"
+						startContent={<Plus aria-hidden size={13} />}
+						variant="transparent"
 					>
-						<span className="flex min-w-0 w-full items-center gap-2 overflow-hidden text-xs">
-							<Folder
-								aria-hidden
-								className="shrink-0 text-black/35 dark:text-white/35"
-								size={14}
-								strokeWidth={1.7}
-							/>
-							<span className="min-w-0 flex-1 truncate">
-								{collection.name}
-							</span>
-							{membershipChanged ? (
-								<span
-									className="inline-flex shrink-0 text-accent"
-									title="Membership differs from the published value"
-								>
-									<Pencil aria-hidden size={10} strokeWidth={2} />
-									<span className="sr-only">
-										Membership differs from the published value
-									</span>
-								</span>
-							) : null}
-							{retainedDeletedMembership ? (
-								<Chip className="h-5" size="sm" variant="flat">
-									Deleted
-								</Chip>
-							) : null}
-							{imported ? (
-								<Lock
-									aria-label="Read only"
-									className="opacity-40"
-									size={11}
+						Add to collection
+					</Button>
+				) : null}
+			</div>
+
+			<DialogModal
+				isOpen={pickerOpen}
+				onOpenChange={setPickerOpen}
+				size="md"
+			>
+				<ModalContent>
+					{(onClose) => (
+						<>
+							<ModalHeader>Edit collections</ModalHeader>
+							<ModalBody>
+								<AdminCollectionPicker
+									autoFocus={finePointer}
+									editableOnly
+									onSelectionChange={(keys) =>
+										onChange({ ...payload, collections: keys })
+									}
+									selectedKeys={selectedKeys}
+									selectionMode="multiple"
+									sources={sources}
 								/>
-							) : null}
-						</span>
-					</Checkbox>
-				);
-			})}
-		</div>
+							</ModalBody>
+							<ModalFooter>
+								<Button onPress={onClose} size="xs" variant="transparent">
+									Done
+								</Button>
+							</ModalFooter>
+						</>
+					)}
+				</ModalContent>
+			</DialogModal>
+		</>
 	);
 }
 
@@ -1365,7 +1375,6 @@ function AttachmentFilePanel({
 
 export function AdminInspector({
 	busy,
-	collections,
 	definitions,
 	detail,
 	error,
@@ -1390,11 +1399,11 @@ export function AdminInspector({
 	payload,
 	saveMessage,
 	saveState,
+	sources,
 	validationErrors = {},
 	validationRevision = 0,
 }: {
 	busy: boolean;
-	collections: AdminCollection[];
 	definitions: readonly AdminSchemaDefinition[];
 	detail: AdminItemDetail | null;
 	error: string | null;
@@ -1419,6 +1428,7 @@ export function AdminInspector({
 	payload: Record<string, unknown>;
 	saveMessage: string | null;
 	saveState: SaveState;
+	sources: AdminSource[];
 	validationErrors: AdminFieldErrors;
 	validationRevision: number;
 }) {
@@ -1439,6 +1449,15 @@ export function AdminInspector({
 				? computeAdminDraftDiff(detail, payload, definition)
 				: EMPTY_ADMIN_DRAFT_DIFF,
 		[definition, detail, payload],
+	);
+	const { entries: publishedCollectionEntries } =
+		useResolvedAdminCollections(diff.collections ?? []);
+	const publishedCollectionNames = useMemo(
+		() =>
+			new Map(
+				publishedCollectionEntries.map((entry) => [entry.key, entry.name]),
+			),
+		[publishedCollectionEntries],
 	);
 	useEffect(() => {
 		if (!detailKey || validationRevision === 0) {
@@ -1750,10 +1769,7 @@ export function AdminInspector({
 									publishedValue={
 										<PublishedList
 											values={diff.collections.map(
-												(key) =>
-													collections.find(
-														(collection) => collection.key === key,
-													)?.name ?? key,
+												(key) => publishedCollectionNames.get(key) ?? key,
 											)}
 										/>
 									}
@@ -1764,7 +1780,6 @@ export function AdminInspector({
 						title="Collections"
 					>
 						<CollectionsEditor
-							collections={collections}
 							errors={validationErrors}
 							onChange={onChange}
 							payload={payload}
@@ -1775,6 +1790,7 @@ export function AdminInspector({
 							}
 							readOnly={readOnly}
 							recordKey={detail.key}
+							sources={sources}
 						/>
 					</Section>
 				) : null}

@@ -1946,7 +1946,6 @@ export default function AdminWorkbench({
 					>
 						<AdminInspector
 							busy={busy}
-							collections={library.collections}
 							definitions={definitions}
 							detail={detail}
 							error={detailError}
@@ -1975,6 +1974,7 @@ export default function AdminWorkbench({
 							payload={draftPayload}
 							saveMessage={saveMessage}
 							saveState={saveState}
+							sources={library.sources}
 							validationErrors={validationErrors}
 							validationRevision={validationRevision}
 						/>

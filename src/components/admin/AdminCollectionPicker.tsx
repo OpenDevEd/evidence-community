@@ -31,9 +31,9 @@ import type {
 
 import {
 	getAdminCollectionChildren,
-	resolveAdminCollectionCatalog,
 	searchAdminCollectionCatalog,
 } from "./admin-api";
+import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 
 type CollectionPathEntry = { key: string; name: string };
 
@@ -151,12 +151,6 @@ export function AdminCollectionPicker({
 	);
 	const [path, setPath] = useState<CollectionPathEntry[]>([]);
 	const [items, setItems] = useState<AdminCollectionCatalogEntry[]>([]);
-	const [selectedEntries, setSelectedEntries] = useState<
-		AdminCollectionCatalogEntry[]
-	>([]);
-	const [selectedEntriesError, setSelectedEntriesError] = useState(false);
-	const [selectedEntriesReloadToken, setSelectedEntriesReloadToken] =
-		useState(0);
 	const [nextCursor, setNextCursor] = useState<string | null>(null);
 	const [loading, setLoading] = useState(false);
 	const [loadingMore, setLoadingMore] = useState(false);
@@ -165,15 +159,12 @@ export function AdminCollectionPicker({
 	const requestVersion = useRef(0);
 	const loadMoreController = useRef<AbortController | null>(null);
 	const scrollRef = useRef<HTMLDivElement>(null);
-	const selectedSignature = selectedKeys.join("\u0000");
-	const stableSelectedKeys = useMemo(
-		() => (selectedSignature ? selectedSignature.split("\u0000") : []),
-		[selectedSignature],
-	);
-	const selectedSet = useMemo(
-		() => new Set(stableSelectedKeys),
-		[stableSelectedKeys],
-	);
+	const {
+		entries: selectedEntries,
+		error: selectedEntriesError,
+		keySet: selectedSet,
+		retry: retrySelectedEntries,
+	} = useResolvedAdminCollections(selectedKeys);
 	const activeParent = path.at(-1)?.key ?? null;
 	const showTopLevel =
 		allowTopLevel && !debouncedQuery && activeParent === null;
@@ -269,46 +260,6 @@ export function AdminCollectionPicker({
 			});
 		return () => controller.abort();
 	}, [contextKey, debouncedQuery, loadPage, sourceKey]);
-
-	useEffect(() => {
-		if (!stableSelectedKeys.length) {
-			setSelectedEntries([]);
-			setSelectedEntriesError(false);
-			return;
-		}
-		setSelectedEntries((current) =>
-			current.filter(({ key }) => selectedSet.has(key)),
-		);
-		setSelectedEntriesError(false);
-		const controller = new AbortController();
-		const chunks = Array.from(
-			{ length: Math.ceil(stableSelectedKeys.length / 100) },
-			(_, index) =>
-				stableSelectedKeys.slice(index * 100, index * 100 + 100),
-		);
-		void Promise.allSettled(
-			chunks.map((keys) =>
-				resolveAdminCollectionCatalog(keys, controller.signal),
-			),
-		).then((responses) => {
-			if (controller.signal.aborted) return;
-			const resolved = responses.flatMap((response) =>
-				response.status === "fulfilled" ? response.value.items : [],
-			);
-			setSelectedEntries((current) => {
-				const entries = new Map(current.map((entry) => [entry.key, entry]));
-				for (const entry of resolved) entries.set(entry.key, entry);
-				return stableSelectedKeys.flatMap((key) => {
-					const entry = entries.get(key);
-					return entry ? [entry] : [];
-				});
-			});
-			setSelectedEntriesError(
-				responses.some((response) => response.status === "rejected"),
-			);
-		});
-		return () => controller.abort();
-	}, [selectedEntriesReloadToken, selectedSet, stableSelectedKeys]);
 
 	const loadMore = useCallback(() => {
 		if (!nextCursor || loading || loadingMore) return;
@@ -417,9 +368,7 @@ export function AdminCollectionPicker({
 						Some selected collections could not be loaded.
 					</span>
 					<Button
-						onPress={() =>
-							setSelectedEntriesReloadToken((current) => current + 1)
-						}
+						onPress={retrySelectedEntries}
 						size="xs"
 						variant="transparent"
 					>
