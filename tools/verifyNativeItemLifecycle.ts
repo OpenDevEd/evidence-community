@@ -1,19 +1,22 @@
 import {
 	collectionIdentity,
 	itemDraft,
+	itemFileDraft,
 	itemIdentity,
 	outbox,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, count, eq, inArray, sql } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { reserveCollectionIdentities } from "../src/db/record-identity";
+import { itemFilePublication } from "../src/db/schema/source";
 import { collection } from "../src/db/schema/tables/collection";
 import { adminItemListProjection } from "../src/db/schema/tables/adminItemListProjection";
 import { item } from "../src/db/schema/tables/item";
 import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
+import { tag } from "../src/db/schema/tables/tag";
 import {
 	assignNativeItemDraftToCollection,
 	createNativeItemDraft,
@@ -84,13 +87,18 @@ async function verify() {
 	let importedSourceCreated = false;
 	let importedCollectionKeys: string[] = [];
 	let nativeCollectionKey: string | null = null;
+	const tagMarker = `${process.pid}-${Date.now()}`;
+	const draftTag = `verify-native-draft-${tagMarker}`;
+	const publishedTag = `verify-native-published-${tagMarker}`;
+	const secondTag = `verify-native-second-${tagMarker}`;
+	const verificationTags = [publishedTag, secondTag];
 
 	try {
 		const draft = await createNativeItemDraft(db, {
 			itemType: "book",
 			title: "Draft-only title",
 			creators: [{ creatorType: "author", name: "Example Author" }],
-			tags: ["draft-tag"],
+			tags: [draftTag],
 		});
 		createdKeys.push(draft.itemKey);
 		const [draftProjection] = await db
@@ -100,7 +108,7 @@ async function verify() {
 		assert(
 			draftProjection?.state === "draft" &&
 				draftProjection.title === "Draft-only title" &&
-				draftProjection.tags.includes("draft-tag"),
+				draftProjection.tags.includes(draftTag),
 			"Draft creation did not synchronously refresh the admin list",
 		);
 
@@ -117,7 +125,7 @@ async function verify() {
 				itemType: "Book",
 				title: "First published title",
 				creators: [{ creatorType: "author", name: "Example Author" }],
-				tags: ["published-tag"],
+				tags: [publishedTag],
 			},
 		});
 		assert(saved.draftRevision === 2, "Draft revision did not advance");
@@ -127,7 +135,7 @@ async function verify() {
 			.where(eq(adminItemListProjection.key, draft.itemKey));
 		assert(
 			savedProjection?.title === "First published title" &&
-				savedProjection.tags.includes("published-tag"),
+				savedProjection.tags.includes(publishedTag),
 			"Draft save did not synchronously refresh projected metadata",
 		);
 
@@ -174,7 +182,7 @@ async function verify() {
 			.where(eq(itemToTag.itemKey, draft.itemKey));
 		assert(
 			publishedTags.length === 1 &&
-				publishedTags[0]!.tagName === "published-tag",
+				publishedTags[0]!.tagName === publishedTag,
 			"Published tags were not normalized",
 		);
 
@@ -258,7 +266,7 @@ async function verify() {
 				collections: [importedCollectionKeys[0]!],
 				itemType: "Book",
 				title: "Second published title",
-				tags: ["second-tag"],
+				tags: [secondTag],
 			},
 		});
 		const secondPublication = await publishNativeItemDraft(
@@ -605,26 +613,100 @@ async function verify() {
 		);
 	} finally {
 		if (createdKeys.length > 0) {
-			await db
-				.delete(outbox)
-				.where(
-					and(
-						eq(outbox.entityType, "item"),
-						inArray(outbox.entityKey, createdKeys),
+			await db.transaction(async (transaction) => {
+				await transaction
+					.delete(outbox)
+					.where(
+						and(
+							eq(outbox.entityType, "item"),
+							inArray(outbox.entityKey, createdKeys),
+						),
+					);
+				await transaction
+					.delete(itemToCollection)
+					.where(inArray(itemToCollection.itemKey, createdKeys));
+				await transaction
+					.delete(itemToTag)
+					.where(inArray(itemToTag.itemKey, createdKeys));
+				await transaction
+					.delete(itemFilePublication)
+					.where(inArray(itemFilePublication.itemKey, createdKeys));
+				await transaction
+					.delete(itemFileDraft)
+					.where(inArray(itemFileDraft.itemKey, createdKeys));
+				await transaction
+					.delete(adminItemListProjection)
+					.where(inArray(adminItemListProjection.key, createdKeys));
+				await transaction
+					.delete(item)
+					.where(inArray(item.key, createdKeys));
+				await transaction
+					.delete(itemDraft)
+					.where(inArray(itemDraft.itemKey, createdKeys));
+				await transaction
+					.delete(itemIdentity)
+					.where(
+						and(
+							eq(itemIdentity.sourceConnectionKey, "native"),
+							inArray(itemIdentity.key, createdKeys),
+						),
+					);
+				await transaction
+					.delete(tag)
+					.where(inArray(tag.name, verificationTags));
+			});
+
+			const residueCounts = await Promise.all([
+				db
+					.select({ count: count() })
+					.from(itemIdentity)
+					.where(inArray(itemIdentity.key, createdKeys)),
+				db
+					.select({ count: count() })
+					.from(item)
+					.where(inArray(item.key, createdKeys)),
+				db
+					.select({ count: count() })
+					.from(itemDraft)
+					.where(inArray(itemDraft.itemKey, createdKeys)),
+				db
+					.select({ count: count() })
+					.from(itemFileDraft)
+					.where(inArray(itemFileDraft.itemKey, createdKeys)),
+				db
+					.select({ count: count() })
+					.from(itemFilePublication)
+					.where(inArray(itemFilePublication.itemKey, createdKeys)),
+				db
+					.select({ count: count() })
+					.from(adminItemListProjection)
+					.where(inArray(adminItemListProjection.key, createdKeys)),
+				db
+					.select({ count: count() })
+					.from(itemToCollection)
+					.where(inArray(itemToCollection.itemKey, createdKeys)),
+				db
+					.select({ count: count() })
+					.from(itemToTag)
+					.where(inArray(itemToTag.itemKey, createdKeys)),
+				db
+					.select({ count: count() })
+					.from(outbox)
+					.where(
+						and(
+							eq(outbox.entityType, "item"),
+							inArray(outbox.entityKey, createdKeys),
+						),
 					),
-				);
-			await db.delete(item).where(inArray(item.key, createdKeys));
-			await db
-				.delete(itemDraft)
-				.where(inArray(itemDraft.itemKey, createdKeys));
-			await db
-				.delete(itemIdentity)
-				.where(
-					and(
-						eq(itemIdentity.sourceConnectionKey, "native"),
-						inArray(itemIdentity.key, createdKeys),
-					),
-				);
+				db
+					.select({ count: count() })
+					.from(tag)
+					.where(inArray(tag.name, verificationTags)),
+			]);
+			assert(
+				residueCounts.every(([result]) => result?.count === 0),
+				`Native lifecycle cleanup left residue: ${JSON.stringify(residueCounts)}`,
+			);
 		}
 		if (importedSourceCreated) {
 			await db
