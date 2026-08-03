@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDatabase } from "@/db";
+import { revalidatePublishedItemCaches } from "@/lib/admin/cache";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
@@ -18,10 +19,8 @@ export async function POST(
 	try {
 		const { key } = await params;
 		const item = await unpublishNativeItem(await getDatabase(), key);
-		return NextResponse.json(
-			{ item },
-			{ headers: ADMIN_RESPONSE_HEADERS },
-		);
+		revalidatePublishedItemCaches(item.key, item.parentItem);
+		return NextResponse.json({ item }, { headers: ADMIN_RESPONSE_HEADERS });
 	} catch (error) {
 		return adminErrorResponse(error);
 	}

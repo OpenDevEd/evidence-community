@@ -5,8 +5,10 @@ import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
+	readAdminJson,
 	requireAdminBypass,
 } from "@/lib/admin/http";
+import { fileDraftJson } from "@/lib/admin/file-projection";
 import { completeNativePdfUpload } from "@/lib/admin/native-file-service";
 
 const bodySchema = z
@@ -25,7 +27,7 @@ export async function POST(
 	try {
 		const [{ key }, body, runtime] = await Promise.all([
 			params,
-			request.json().then((value) => bodySchema.parse(value)),
+			readAdminJson(request).then((value) => bodySchema.parse(value)),
 			getNativeFileRuntime(),
 		]);
 		const fileDraft = await completeNativePdfUpload(
@@ -39,7 +41,7 @@ export async function POST(
 			},
 		);
 		return NextResponse.json(
-			{ fileDraft },
+			{ fileDraft: fileDraftJson(fileDraft) },
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {

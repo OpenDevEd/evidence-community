@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDatabase } from "@/db";
+import { revalidatePublishedItemCaches } from "@/lib/admin/cache";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	requireAdminBypass,
 } from "@/lib/admin/http";
-import { publishNativeItemDraft } from "@/lib/admin/native-item-service";
+import { publishNativeItemDraftWithContext } from "@/lib/admin/native-item-service";
 
 export async function POST(
 	_request: NextRequest,
@@ -17,14 +18,14 @@ export async function POST(
 
 	try {
 		const { key } = await params;
-		const item = await publishNativeItemDraft(
-			await getDatabase(),
-			key,
+		const { item, previousParentItem } =
+			await publishNativeItemDraftWithContext(await getDatabase(), key);
+		revalidatePublishedItemCaches(
+			item.key,
+			item.parentItem,
+			previousParentItem,
 		);
-		return NextResponse.json(
-			{ item },
-			{ headers: ADMIN_RESPONSE_HEADERS },
-		);
+		return NextResponse.json({ item }, { headers: ADMIN_RESPONSE_HEADERS });
 	} catch (error) {
 		return adminErrorResponse(error);
 	}

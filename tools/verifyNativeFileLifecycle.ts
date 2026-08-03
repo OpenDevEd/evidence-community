@@ -18,6 +18,7 @@ import type {
 } from "../src/lib/admin/file-storage";
 import {
 	completeNativePdfUpload,
+	discardNativePdfDraft,
 	getNativeFileState,
 	NativeFileConflictError,
 	publishNativePdf,
@@ -44,6 +45,9 @@ function assert(condition: unknown, message: string): asserts condition {
 class MemoryFileStorage implements EvidenceFileStorage {
 	readonly privateFiles = new Map<string, Uint8Array>();
 	readonly publicFiles = new Map<string, Uint8Array>();
+	privateUploadHook: ((path: string) => Promise<void>) | null = null;
+	publicUploadHook: (() => Promise<void>) | null = null;
+	private publicUploadsAfterHook = 0;
 
 	async createSignedUpload(path: string): Promise<SignedFileUpload> {
 		return {
@@ -59,20 +63,26 @@ class MemoryFileStorage implements EvidenceFileStorage {
 		return data.slice();
 	}
 
-	async uploadPrivate(
-		path: string,
-		data: Uint8Array,
-		_contentType: string,
-	) {
+	async uploadPrivate(path: string, data: Uint8Array, _contentType: string) {
 		this.privateFiles.set(path, data.slice());
+		if (this.privateUploadHook) {
+			const hook = this.privateUploadHook;
+			this.privateUploadHook = null;
+			await hook(path);
+		}
 	}
 
-	async uploadPublic(
-		path: string,
-		data: Uint8Array,
-		_contentType: string,
-	) {
+	async uploadPublic(path: string, data: Uint8Array, _contentType: string) {
 		this.publicFiles.set(path, data.slice());
+		if (this.publicUploadHook) {
+			this.publicUploadsAfterHook += 1;
+			if (this.publicUploadsAfterHook === 2) {
+				const hook = this.publicUploadHook;
+				this.publicUploadHook = null;
+				this.publicUploadsAfterHook = 0;
+				await hook();
+			}
+		}
 	}
 
 	publicUrl(path: string) {
@@ -132,11 +142,7 @@ async function verify() {
 			expectedSha256: fileHash(pdf),
 			maxPdfBytes: 10_000_000,
 		};
-		const staged = await stageNativePdfUpload(
-			db,
-			storage,
-			stageInput,
-		);
+		const staged = await stageNativePdfUpload(db, storage, stageInput);
 		const retriedStage = await stageNativePdfUpload(
 			db,
 			storage,
@@ -160,36 +166,40 @@ async function verify() {
 			ready.readyAt &&
 				ready.pageCount === 1 &&
 				ready.coverWidth === 1600 &&
-				ready.extractedText?.includes(
-					"First file publication",
-				),
+				ready.extractedText?.includes("First file publication"),
 			"PDF completion did not validate and prepare the file",
 		);
 
-		const [prePublicationItem, prePublicationFile] =
-			await Promise.all([
-				db
-					.select()
-					.from(item)
-					.where(eq(item.key, attachmentDraft.itemKey))
-					.then((rows) => rows[0]),
-				db
-					.select()
-					.from(itemFilePublication)
-					.where(
-						eq(
-							itemFilePublication.itemKey,
-							attachmentDraft.itemKey,
-						),
-					)
-					.then((rows) => rows[0]),
-			]);
+		const [prePublicationItem, prePublicationFile] = await Promise.all([
+			db
+				.select()
+				.from(item)
+				.where(eq(item.key, attachmentDraft.itemKey))
+				.then((rows) => rows[0]),
+			db
+				.select()
+				.from(itemFilePublication)
+				.where(eq(itemFilePublication.itemKey, attachmentDraft.itemKey))
+				.then((rows) => rows[0]),
+		]);
 		assert(
 			!prePublicationItem && !prePublicationFile,
 			"Staged file leaked into published metadata",
 		);
 
 		await publishNativeItemDraft(db, parentDraft.itemKey);
+		const openParentDraft = await openNativeItemDraft(
+			db,
+			parentDraft.itemKey,
+		);
+		const savedParentDraft = await saveNativeItemDraft(db, {
+			itemKey: parentDraft.itemKey,
+			expectedDraftRevision: openParentDraft.draftRevision,
+			payload: {
+				...openParentDraft.payload,
+				title: "Parent edit preserved across child changes",
+			},
+		});
 		const attachmentMetadata = await publishNativeItemDraft(
 			db,
 			attachmentDraft.itemKey,
@@ -199,6 +209,18 @@ async function verify() {
 			"Metadata publication implicitly published the file",
 		);
 
+		const openAttachmentDraft = await openNativeItemDraft(
+			db,
+			attachmentDraft.itemKey,
+		);
+		const savedAttachmentDraft = await saveNativeItemDraft(db, {
+			itemKey: attachmentDraft.itemKey,
+			expectedDraftRevision: openAttachmentDraft.draftRevision,
+			payload: {
+				...openAttachmentDraft.payload,
+				title: "Attachment edit preserved across file publish",
+			},
+		});
 		const published = await publishNativePdf(db, storage, {
 			itemKey: attachmentDraft.itemKey,
 			expectedUploadRevision: ready.uploadRevision,
@@ -213,16 +235,53 @@ async function verify() {
 				storage.publicFiles.size === 2,
 			"File publication did not project the prepared PDF",
 		);
-
-		const state = await getNativeFileState(
-			db,
-			attachmentDraft.itemKey,
+		const [advancedAttachmentDraft] = await db
+			.select()
+			.from(itemDraft)
+			.where(eq(itemDraft.itemKey, attachmentDraft.itemKey));
+		assert(
+			advancedAttachmentDraft?.baseRevision === 2 &&
+				advancedAttachmentDraft.draftRevision ===
+					savedAttachmentDraft.draftRevision,
+			"File publication made the open attachment draft stale",
 		);
+
+		const state = await getNativeFileState(db, attachmentDraft.itemKey);
 		assert(
 			state.draft === null &&
 				state.publication?.uploadRevision === 1 &&
 				state.publication.revision === 2,
 			"Published file state is inconsistent",
+		);
+		const publishedPrivatePaths = new Set(storage.privateFiles.keys());
+		const disposableStage = await stageNativePdfUpload(db, storage, {
+			...stageInput,
+			filename: "disposable.pdf",
+		});
+		storage.privateFiles.set(disposableStage.upload.path, pdf);
+		await completeNativePdfUpload(db, storage, {
+			itemKey: attachmentDraft.itemKey,
+			expectedUploadRevision:
+				disposableStage.fileDraft.uploadRevision,
+			maxPdfBytes: 10_000_000,
+		});
+		await discardNativePdfDraft(
+			db,
+			storage,
+			attachmentDraft.itemKey,
+		);
+		const stateAfterDiscard = await getNativeFileState(
+			db,
+			attachmentDraft.itemKey,
+		);
+		assert(
+			stateAfterDiscard.draft === null &&
+				stateAfterDiscard.publication?.uploadRevision === 1 &&
+				storage.privateFiles.size === publishedPrivatePaths.size &&
+				[...publishedPrivatePaths].every((objectPath) =>
+					storage.privateFiles.has(objectPath),
+				),
+			"Discarding a staged replacement changed the publication or retained private objects",
 		);
 
 		let stalePublishRejected = false;
@@ -232,20 +291,15 @@ async function verify() {
 				expectedUploadRevision: ready.uploadRevision,
 			});
 		} catch (error) {
-			stalePublishRejected =
-				error instanceof NativeFileConflictError;
+			stalePublishRejected = error instanceof NativeFileConflictError;
 		}
 		assert(stalePublishRejected, "Stale file publication was accepted");
 
-		const metadataDraft = await openNativeItemDraft(
-			db,
-			attachmentDraft.itemKey,
-		);
 		await saveNativeItemDraft(db, {
 			itemKey: attachmentDraft.itemKey,
-			expectedDraftRevision: metadataDraft.draftRevision,
+			expectedDraftRevision: advancedAttachmentDraft.draftRevision,
 			payload: {
-				...metadataDraft.payload,
+				...advancedAttachmentDraft.payload,
 				title: "Renamed PDF metadata",
 			},
 		});
@@ -258,25 +312,38 @@ async function verify() {
 				republishedMetadata.url === published.item.url &&
 				republishedMetadata.PDFCoverPageImage ===
 					published.item.PDFCoverPageImage &&
-				republishedMetadata.fullTextPDF ===
-					published.item.fullTextPDF,
+				republishedMetadata.fullTextPDF === published.item.fullTextPDF,
 			"Metadata publication erased file-managed fields",
 		);
 
 		const replacement = await createPdf("Replacement file");
-		const replacementStage = await stageNativePdfUpload(
-			db,
-			storage,
-			{
-				...stageInput,
-				expectedSizeBytes: replacement.byteLength,
-				expectedSha256: fileHash(replacement),
-			},
-		);
+		const replacementStage = await stageNativePdfUpload(db, storage, {
+			...stageInput,
+			expectedSizeBytes: replacement.byteLength,
+			expectedSha256: fileHash(replacement),
+		});
 		assert(
 			replacementStage.fileDraft.uploadRevision === 2,
 			"Upload revision reset after publication",
 		);
+		storage.privateFiles.set(replacementStage.upload.path, replacement);
+		const superseding = await createPdf("Superseding staged file");
+		const supersedingStage = await stageNativePdfUpload(db, storage, {
+			...stageInput,
+			expectedSizeBytes: superseding.byteLength,
+			expectedSha256: fileHash(superseding),
+		});
+		assert(
+			supersedingStage.fileDraft.uploadRevision === 3 &&
+				!storage.privateFiles.has(replacementStage.upload.path),
+			"Re-staging a PDF retained the replaced private object",
+		);
+		storage.privateFiles.set(supersedingStage.upload.path, superseding);
+		await completeNativePdfUpload(db, storage, {
+			itemKey: attachmentDraft.itemKey,
+			expectedUploadRevision: supersedingStage.fileDraft.uploadRevision,
+			maxPdfBytes: 10_000_000,
+		});
 
 		let metadataUnpublishRejected = false;
 		try {
@@ -301,14 +368,231 @@ async function verify() {
 				Number(storage.publicFiles.size) === 0,
 			"File unpublish did not clear fields and public objects",
 		);
+		storage.publicUploadHook = async () => {
+			await db
+				.delete(itemFileDraft)
+				.where(eq(itemFileDraft.itemKey, attachmentDraft.itemKey));
+		};
+		let rolledBackPublicationRejected = false;
+		try {
+			await publishNativePdf(db, storage, {
+				itemKey: attachmentDraft.itemKey,
+				expectedUploadRevision:
+					supersedingStage.fileDraft.uploadRevision,
+			});
+		} catch (error) {
+			rolledBackPublicationRejected =
+				error instanceof NativeFileConflictError;
+		}
+		assert(
+			rolledBackPublicationRejected &&
+				Number(storage.publicFiles.size) === 0,
+			"Failed publication retained orphaned public objects",
+		);
+		const attachmentDraftAfterFileUnpublish = await openNativeItemDraft(
+			db,
+			attachmentDraft.itemKey,
+		);
+		assert(
+			attachmentDraftAfterFileUnpublish.baseRevision === 4,
+			"File unpublish left the attachment draft on a stale base",
+		);
+		await saveNativeItemDraft(db, {
+			itemKey: attachmentDraft.itemKey,
+			expectedDraftRevision:
+				attachmentDraftAfterFileUnpublish.draftRevision,
+			payload: {
+				...attachmentDraftAfterFileUnpublish.payload,
+				title: "Attachment edit preserved across file unpublish",
+			},
+		});
+		const attachmentAfterFileUnpublish = await publishNativeItemDraft(
+			db,
+			attachmentDraft.itemKey,
+		);
+		assert(
+			attachmentAfterFileUnpublish.revision === 5 &&
+				attachmentAfterFileUnpublish.title ===
+					"Attachment edit preserved across file unpublish",
+			"Attachment draft could not publish after file unpublish",
+		);
 		const metadataUnpublished = await unpublishNativeItem(
 			db,
 			attachmentDraft.itemKey,
 		);
 		assert(
 			metadataUnpublished.deleted === 1 &&
-				metadataUnpublished.revision === 5,
+				metadataUnpublished.revision === 6,
 			"Attachment metadata did not unpublish after its file",
+		);
+		const [advancedParentDraft] = await db
+			.select()
+			.from(itemDraft)
+			.where(eq(itemDraft.itemKey, parentDraft.itemKey));
+		assert(
+			advancedParentDraft?.baseRevision === 7 &&
+				advancedParentDraft.draftRevision ===
+					savedParentDraft.draftRevision,
+			"Child changes made the open parent draft stale",
+		);
+		const republishedParent = await publishNativeItemDraft(
+			db,
+			parentDraft.itemKey,
+		);
+		assert(
+			republishedParent.revision === 8 &&
+				republishedParent.title ===
+					"Parent edit preserved across child changes",
+			"Parent draft did not preserve edits across child changes",
+		);
+
+		const concurrentParentDraft = await createNativeItemDraft(db, {
+			itemType: "Report",
+			title: "Concurrent file parent",
+		});
+		const concurrentAttachmentDraft = await createNativeItemDraft(db, {
+			itemType: "Attachment",
+			parentItem: concurrentParentDraft.itemKey,
+			title: "Concurrent file attachment",
+		});
+		createdKeys.push(
+			concurrentParentDraft.itemKey,
+			concurrentAttachmentDraft.itemKey,
+		);
+		const concurrentInitialStage = await stageNativePdfUpload(db, storage, {
+			itemKey: concurrentAttachmentDraft.itemKey,
+			filename: "concurrent.pdf",
+			expectedSizeBytes: pdf.byteLength,
+			expectedSha256: fileHash(pdf),
+			maxPdfBytes: 10_000_000,
+		});
+		storage.privateFiles.set(concurrentInitialStage.upload.path, pdf);
+		const concurrentInitialReady = await completeNativePdfUpload(
+			db,
+			storage,
+			{
+				itemKey: concurrentAttachmentDraft.itemKey,
+				expectedUploadRevision:
+					concurrentInitialStage.fileDraft.uploadRevision,
+				maxPdfBytes: 10_000_000,
+			},
+		);
+		await publishNativeItemDraft(db, concurrentParentDraft.itemKey);
+		await publishNativeItemDraft(db, concurrentAttachmentDraft.itemKey);
+		await publishNativePdf(db, storage, {
+			itemKey: concurrentAttachmentDraft.itemKey,
+			expectedUploadRevision: concurrentInitialReady.uploadRevision,
+		});
+		const concurrentReplacementStage = await stageNativePdfUpload(
+			db,
+			storage,
+			{
+				itemKey: concurrentAttachmentDraft.itemKey,
+				filename: "concurrent-replacement.pdf",
+				expectedSizeBytes: pdf.byteLength,
+				expectedSha256: fileHash(pdf),
+				maxPdfBytes: 10_000_000,
+			},
+		);
+		storage.privateFiles.set(concurrentReplacementStage.upload.path, pdf);
+		const concurrentReplacementReady = await completeNativePdfUpload(
+			db,
+			storage,
+			{
+				itemKey: concurrentAttachmentDraft.itemKey,
+				expectedUploadRevision:
+					concurrentReplacementStage.fileDraft.uploadRevision,
+				maxPdfBytes: 10_000_000,
+			},
+		);
+		const concurrentFileMutations = await Promise.allSettled([
+			publishNativePdf(db, storage, {
+				itemKey: concurrentAttachmentDraft.itemKey,
+				expectedUploadRevision:
+					concurrentReplacementReady.uploadRevision,
+			}),
+			unpublishNativePdf(db, storage, concurrentAttachmentDraft.itemKey),
+		]);
+		assert(
+			concurrentFileMutations.every(
+				(result) => result.status === "fulfilled",
+			),
+			"Concurrent PDF publish and unpublish deadlocked or failed",
+		);
+		const [remainingConcurrentPublication] = await db
+			.select({ itemKey: itemFilePublication.itemKey })
+			.from(itemFilePublication)
+			.where(
+				eq(
+					itemFilePublication.itemKey,
+					concurrentAttachmentDraft.itemKey,
+				),
+			);
+		if (remainingConcurrentPublication) {
+			await unpublishNativePdf(
+				db,
+				storage,
+				concurrentAttachmentDraft.itemKey,
+			);
+		}
+		assert(
+			Number(storage.publicFiles.size) === 0,
+			"File lifecycle retained public objects after cleanup",
+		);
+		assert(
+			Number(storage.privateFiles.size) === 0,
+			"File lifecycle retained private objects after cleanup",
+		);
+		const conflictingParentDraft = await createNativeItemDraft(db, {
+			itemType: "Report",
+			title: "Conflicting completion parent",
+		});
+		const conflictingAttachmentDraft = await createNativeItemDraft(db, {
+			itemType: "Attachment",
+			parentItem: conflictingParentDraft.itemKey,
+			title: "Conflicting completion attachment",
+		});
+		createdKeys.push(
+			conflictingParentDraft.itemKey,
+			conflictingAttachmentDraft.itemKey,
+		);
+		const conflictingStage = await stageNativePdfUpload(db, storage, {
+			itemKey: conflictingAttachmentDraft.itemKey,
+			filename: "conflicting-completion.pdf",
+			expectedSizeBytes: pdf.byteLength,
+			expectedSha256: fileHash(pdf),
+			maxPdfBytes: 10_000_000,
+		});
+		storage.privateFiles.set(conflictingStage.upload.path, pdf);
+		let conflictedCoverPath = "";
+		storage.privateUploadHook = async (coverPath) => {
+			conflictedCoverPath = coverPath;
+			await db
+				.delete(itemFileDraft)
+				.where(
+					eq(
+						itemFileDraft.itemKey,
+						conflictingAttachmentDraft.itemKey,
+					),
+				);
+		};
+		let completionConflictRejected = false;
+		try {
+			await completeNativePdfUpload(db, storage, {
+				itemKey: conflictingAttachmentDraft.itemKey,
+				expectedUploadRevision:
+					conflictingStage.fileDraft.uploadRevision,
+				maxPdfBytes: 10_000_000,
+			});
+		} catch (error) {
+			completionConflictRejected =
+				error instanceof NativeFileConflictError;
+		}
+		assert(
+			completionConflictRejected &&
+				Boolean(conflictedCoverPath) &&
+				!storage.privateFiles.has(conflictedCoverPath),
+			"Conflicted PDF completion retained an orphaned cover",
 		);
 
 		const attachmentEvents = await db
@@ -320,7 +604,7 @@ async function verify() {
 			attachmentEvents
 				.map(({ operation, revision }) => `${operation}:${revision}`)
 				.join(",") ===
-				"upsert:1,upsert:2,upsert:3,upsert:4,delete:5",
+				"upsert:1,upsert:2,upsert:3,upsert:4,upsert:5,delete:6",
 			"Attachment lifecycle emitted the wrong outbox sequence",
 		);
 		const parentEvents = await db
@@ -332,7 +616,7 @@ async function verify() {
 			parentEvents
 				.map(({ operation, revision }) => `${operation}:${revision}`)
 				.join(",") ===
-				"upsert:1,upsert:2,upsert:3,upsert:4,upsert:5,upsert:6",
+				"upsert:1,upsert:2,upsert:3,upsert:4,upsert:5,upsert:6,upsert:7,upsert:8",
 			"Parent projection revisions did not follow attachment changes",
 		);
 
@@ -340,10 +624,10 @@ async function verify() {
 			JSON.stringify({
 				attachmentKey: attachmentDraft.itemKey,
 				fileRevision: state.publication.revision,
-				nextUploadRevision:
-					replacementStage.fileDraft.uploadRevision,
+				nextUploadRevision: supersedingStage.fileDraft.uploadRevision,
 				attachmentOutboxEvents: attachmentEvents.length,
 				parentOutboxEvents: parentEvents.length,
+				concurrentFileMutations: concurrentFileMutations.length,
 				publicObjects: storage.publicFiles.size,
 			}),
 		);
@@ -357,12 +641,7 @@ async function verify() {
 				.where(inArray(itemFileDraft.itemKey, createdKeys));
 			await db
 				.delete(itemFilePublication)
-				.where(
-					inArray(
-						itemFilePublication.itemKey,
-						createdKeys,
-					),
-				);
+				.where(inArray(itemFilePublication.itemKey, createdKeys));
 			await db.delete(item).where(inArray(item.key, createdKeys));
 			await db
 				.delete(itemDraft)
@@ -371,10 +650,7 @@ async function verify() {
 				.delete(itemIdentity)
 				.where(
 					and(
-						eq(
-							itemIdentity.sourceConnectionKey,
-							"native",
-						),
+						eq(itemIdentity.sourceConnectionKey, "native"),
 						inArray(itemIdentity.key, createdKeys),
 					),
 				);

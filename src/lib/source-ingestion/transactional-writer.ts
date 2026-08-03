@@ -142,7 +142,9 @@ function sourceItemValues(
 
 	let validated;
 	try {
-		validated = validateNativeItemDraft(record.metadata);
+		validated = validateNativeItemDraft(record.metadata, {
+			requireAttachmentParent: false,
+		});
 	} catch (error) {
 		if (error instanceof NativeItemValidationError) {
 			throw new SourceIngestionValidationError(error.message);

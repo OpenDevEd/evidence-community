@@ -4,6 +4,7 @@ import { getDatabase } from "@/db";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
+	readAdminJson,
 	requireAdminBypass,
 } from "@/lib/admin/http";
 import { createNativeItemDraft } from "@/lib/admin/native-item-service";
@@ -15,7 +16,7 @@ export async function POST(request: NextRequest) {
 	try {
 		const draft = await createNativeItemDraft(
 			await getDatabase(),
-			await request.json(),
+			await readAdminJson(request),
 		);
 		return NextResponse.json(
 			{ draft },

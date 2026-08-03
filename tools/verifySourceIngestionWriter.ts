@@ -12,6 +12,7 @@ import {
 	sourceSnapshot,
 } from "../src/db/schema/source";
 import { collection } from "../src/db/schema/tables/collection";
+import { adminItemListProjection } from "../src/db/schema/tables/adminItemListProjection";
 import { item } from "../src/db/schema/tables/item";
 import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
@@ -227,6 +228,14 @@ async function verify() {
 					"https://storage.example.org/evidence.pdf" &&
 				attachment.fullTextPDF === "Extracted evidence",
 			"Canonical item or attachment fields were written incorrectly",
+		);
+		const projectedRows = await db
+			.select({ key: adminItemListProjection.key })
+			.from(adminItemListProjection)
+			.where(inArray(adminItemListProjection.key, [parentKey, attachmentKey]));
+		assert(
+			projectedRows.length === 1 && projectedRows[0]?.key === parentKey,
+			"Source attachment reparenting left a stale root projection",
 		);
 		assert(
 			childCollection?.parentCollection ===

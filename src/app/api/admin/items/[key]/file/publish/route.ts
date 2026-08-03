@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
+import { revalidatePublishedItemCaches } from "@/lib/admin/cache";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
+	readAdminJson,
 	requireAdminBypass,
 } from "@/lib/admin/http";
+import { filePublicationJson } from "@/lib/admin/file-projection";
 import { publishNativePdf } from "@/lib/admin/native-file-service";
 
 const bodySchema = z
@@ -25,17 +28,28 @@ export async function POST(
 	try {
 		const [{ key }, body, runtime] = await Promise.all([
 			params,
-			request.json().then((value) => bodySchema.parse(value)),
+			readAdminJson(request).then((value) => bodySchema.parse(value)),
 			getNativeFileRuntime(),
 		]);
-		const published = await publishNativePdf(
-			runtime.db,
-			runtime.storage,
-			{ ...body, itemKey: key },
-		);
-		return NextResponse.json(published, {
-			headers: ADMIN_RESPONSE_HEADERS,
+		const published = await publishNativePdf(runtime.db, runtime.storage, {
+			...body,
+			itemKey: key,
 		});
+		revalidatePublishedItemCaches(
+			published.item.key,
+			published.item.parentItem,
+		);
+		return NextResponse.json(
+			{
+				file: filePublicationJson(published.file),
+				item: {
+					key: published.item.key,
+					parentItem: published.item.parentItem,
+					revision: published.item.revision,
+				},
+			},
+			{ headers: ADMIN_RESPONSE_HEADERS },
+		);
 	} catch (error) {
 		return adminErrorResponse(error);
 	}

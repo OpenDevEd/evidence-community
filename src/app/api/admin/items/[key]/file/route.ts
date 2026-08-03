@@ -4,8 +4,14 @@ import { z } from "zod";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
+	readAdminJson,
 	requireAdminBypass,
 } from "@/lib/admin/http";
+import { revalidatePublishedItemCaches } from "@/lib/admin/cache";
+import {
+	fileDraftJson,
+	filePublicationJson,
+} from "@/lib/admin/file-projection";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 import {
 	getNativeFileState,
@@ -25,10 +31,7 @@ const stageBodySchema = z
 	})
 	.strict();
 
-export async function GET(
-	_request: NextRequest,
-	{ params }: RouteContext,
-) {
+export async function GET(_request: NextRequest, { params }: RouteContext) {
 	const denied = requireAdminBypass();
 	if (denied) return denied;
 
@@ -39,7 +42,12 @@ export async function GET(
 		]);
 		const file = await getNativeFileState(db, key);
 		return NextResponse.json(
-			{ file },
+			{
+				file: {
+					draft: fileDraftJson(file.draft),
+					publication: filePublicationJson(file.publication),
+				},
+			},
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {
@@ -47,42 +55,39 @@ export async function GET(
 	}
 }
 
-export async function POST(
-	request: NextRequest,
-	{ params }: RouteContext,
-) {
+export async function POST(request: NextRequest, { params }: RouteContext) {
 	const denied = requireAdminBypass();
 	if (denied) return denied;
 
 	try {
 		const [{ key }, body, runtime] = await Promise.all([
 			params,
-			request.json().then((value) => stageBodySchema.parse(value)),
+			readAdminJson(request).then((value) =>
+				stageBodySchema.parse(value),
+			),
 			getNativeFileRuntime(),
 		]);
-		const staged = await stageNativePdfUpload(
-			runtime.db,
-			runtime.storage,
+		const staged = await stageNativePdfUpload(runtime.db, runtime.storage, {
+			...body,
+			itemKey: key,
+			maxPdfBytes: runtime.config.services.storage.maxPdfBytes,
+		});
+		return NextResponse.json(
 			{
-				...body,
-				itemKey: key,
-				maxPdfBytes:
-					runtime.config.services.storage.maxPdfBytes,
+				fileDraft: fileDraftJson(staged.fileDraft),
+				upload: staged.upload,
+			},
+			{
+				status: 201,
+				headers: ADMIN_RESPONSE_HEADERS,
 			},
 		);
-		return NextResponse.json(staged, {
-			status: 201,
-			headers: ADMIN_RESPONSE_HEADERS,
-		});
 	} catch (error) {
 		return adminErrorResponse(error);
 	}
 }
 
-export async function DELETE(
-	_request: NextRequest,
-	{ params }: RouteContext,
-) {
+export async function DELETE(_request: NextRequest, { params }: RouteContext) {
 	const denied = requireAdminBypass();
 	if (denied) return denied;
 
@@ -91,15 +96,9 @@ export async function DELETE(
 			params,
 			getNativeFileRuntime(),
 		]);
-		const item = await unpublishNativePdf(
-			runtime.db,
-			runtime.storage,
-			key,
-		);
-		return NextResponse.json(
-			{ item },
-			{ headers: ADMIN_RESPONSE_HEADERS },
-		);
+		const item = await unpublishNativePdf(runtime.db, runtime.storage, key);
+		revalidatePublishedItemCaches(item.key, item.parentItem);
+		return NextResponse.json({ item }, { headers: ADMIN_RESPONSE_HEADERS });
 	} catch (error) {
 		return adminErrorResponse(error);
 	}

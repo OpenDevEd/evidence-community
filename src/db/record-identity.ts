@@ -9,9 +9,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "./database-schema";
 
-type Transaction = Parameters<
-	Parameters<Database["transaction"]>[0]
->[0];
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
 
 type ReserveIdentityOptions = {
@@ -67,9 +65,7 @@ async function reserveRecordIdentities(
 
 	const adoptableRows = pending.flatMap((sourceRecordKey) => {
 		const key = adoptableCanonicalRecordKey(sourceRecordKey);
-		return key
-			? [{ key, sourceConnectionKey, sourceRecordKey }]
-			: [];
+		return key ? [{ key, sourceConnectionKey, sourceRecordKey }] : [];
 	});
 	if (adoptableRows.length > 0) {
 		const adopted = await db
@@ -90,8 +86,7 @@ async function reserveRecordIdentities(
 
 	for (
 		let attempt = 0;
-		pending.length > 0 &&
-		attempt < MAX_IDENTITY_ALLOCATION_ATTEMPTS;
+		pending.length > 0 && attempt < MAX_IDENTITY_ALLOCATION_ATTEMPTS;
 		attempt += 1
 	) {
 		const candidates = pending.map((sourceRecordKey) => ({
@@ -185,13 +180,10 @@ export async function reserveCollectionIdentity(
 	db: Executor,
 	{ sourceConnectionKey, sourceRecordKey }: ReserveIdentityOptions,
 ) {
-	if (!sourceRecordKey) {
-		throw new Error("Collections require a provider source record key");
-	}
-
 	return reserveCanonicalRecordKey({
 		sourceRecordKey,
 		findExistingKey: async () => {
+			if (!sourceRecordKey) return null;
 			const [existing] = await db
 				.select({ key: collectionIdentity.key })
 				.from(collectionIdentity)
@@ -201,10 +193,7 @@ export async function reserveCollectionIdentity(
 							collectionIdentity.sourceConnectionKey,
 							sourceConnectionKey,
 						),
-						eq(
-							collectionIdentity.sourceRecordKey,
-							sourceRecordKey,
-						),
+						eq(collectionIdentity.sourceRecordKey, sourceRecordKey),
 					),
 				)
 				.limit(1);
@@ -216,7 +205,7 @@ export async function reserveCollectionIdentity(
 				.values({
 					key: candidate,
 					sourceConnectionKey,
-					sourceRecordKey,
+					sourceRecordKey: sourceRecordKey ?? candidate,
 				})
 				.onConflictDoNothing()
 				.returning({ key: collectionIdentity.key });

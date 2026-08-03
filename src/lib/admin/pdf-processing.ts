@@ -1,5 +1,7 @@
 import { createCanvas } from "@napi-rs/canvas";
 
+import { AdminValidationError } from "./errors";
+
 const COVER_WIDTH = 1600;
 
 type TextItem = {
@@ -15,17 +17,14 @@ export type ProcessedPdf = {
 	text: string;
 };
 
-export class InvalidPdfError extends Error {
-	constructor(message: string) {
-		super(message);
+export class InvalidPdfError extends AdminValidationError {
+	constructor(message: string, options?: ErrorOptions) {
+		super(message, { file: message }, options);
 		this.name = "InvalidPdfError";
 	}
 }
 
-function pageText(
-	pageNumber: number,
-	items: readonly TextItem[],
-) {
+function pageText(pageNumber: number, items: readonly TextItem[]) {
 	let lastY: number | undefined;
 	let text = "";
 
@@ -48,17 +47,13 @@ function cleanExtractedText(text: string) {
 	);
 }
 
-export async function processPdf(
-	bytes: Uint8Array,
-): Promise<ProcessedPdf> {
+export async function processPdf(bytes: Uint8Array): Promise<ProcessedPdf> {
 	const headerOffset = Buffer.from(bytes).indexOf("%PDF-");
 	if (headerOffset < 0 || headerOffset > 1024) {
-		throw new InvalidPdfError("Uploaded file is not a PDF");
+		throw new InvalidPdfError("Choose a valid PDF file.");
 	}
 
-	const { getDocument } = await import(
-		"pdfjs-dist/legacy/build/pdf.mjs"
-	);
+	const { getDocument } = await import("pdfjs-dist/legacy/build/pdf.mjs");
 	const loadingTask = getDocument({
 		data: bytes.slice(),
 		useSystemFonts: true,
@@ -67,14 +62,16 @@ export async function processPdf(
 	try {
 		const document = await loadingTask.promise;
 		if (document.numPages < 1) {
-			throw new InvalidPdfError("PDF has no pages");
+			throw new InvalidPdfError("This PDF has no pages.");
 		}
 
 		const pages: string[] = [];
-		let firstPage:
-			| Awaited<ReturnType<typeof document.getPage>>
-			| undefined;
-		for (let pageNumber = 1; pageNumber <= document.numPages; pageNumber++) {
+		let firstPage: Awaited<ReturnType<typeof document.getPage>> | undefined;
+		for (
+			let pageNumber = 1;
+			pageNumber <= document.numPages;
+			pageNumber++
+		) {
 			const page = await document.getPage(pageNumber);
 			if (pageNumber === 1) firstPage = page;
 			const content = await page.getTextContent();
@@ -93,7 +90,7 @@ export async function processPdf(
 		}
 
 		if (!firstPage) {
-			throw new InvalidPdfError("PDF has no first page");
+			throw new InvalidPdfError("This PDF has no readable pages.");
 		}
 		const naturalViewport = firstPage.getViewport({ scale: 1 });
 		const scale = COVER_WIDTH / naturalViewport.width;
@@ -115,10 +112,10 @@ export async function processPdf(
 		};
 	} catch (error) {
 		if (error instanceof InvalidPdfError) throw error;
+		console.error("PDF processing failed", error);
 		throw new InvalidPdfError(
-			error instanceof Error
-				? `PDF processing failed: ${error.message}`
-				: "PDF processing failed",
+			"This PDF could not be processed. Try exporting it again or choose another file.",
+			{ cause: error },
 		);
 	} finally {
 		await loadingTask.destroy();

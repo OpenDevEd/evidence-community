@@ -1,9 +1,18 @@
-import { getZoteroSchema } from "@opendeved/evidence-library-core";
+import { getZoteroSchema } from "@opendeved/evidence-library-core/zotero-schema";
 import { describe, expect, it } from "vitest";
 
 import { validateNativeItemDraft } from "@/lib/admin/native-item-validation";
 
 describe("native item draft validation", () => {
+	it("can validate source attachment metadata before its parent reference is resolved", () => {
+		expect(
+			validateNativeItemDraft(
+				{ itemType: "Attachment", title: "Imported PDF" },
+				{ requireAttachmentParent: false },
+			).item,
+		).toMatchObject({ itemType: "Attachment" });
+	});
+
 	it("accepts every field for every vendored Zotero item type", () => {
 		for (const definition of getZoteroSchema().itemTypes) {
 			const payload: Record<string, unknown> = {
@@ -15,8 +24,7 @@ describe("native item draft validation", () => {
 			if (definition.creatorTypes[0]) {
 				payload.creators = [
 					{
-						creatorType:
-							definition.creatorTypes[0].creatorType,
+						creatorType: definition.creatorTypes[0].creatorType,
 						name: "Example Creator",
 					},
 				];
@@ -27,6 +35,9 @@ describe("native item draft validation", () => {
 			) {
 				payload.note = "Example note";
 			}
+			if (definition.itemType === "attachment") {
+				payload.parentItem = "ABCD2345";
+			}
 			if (definition.itemType === "annotation") {
 				Object.assign(payload, {
 					annotationType: "highlight",
@@ -36,8 +47,7 @@ describe("native item draft validation", () => {
 					annotationColor: "#ffd400",
 					annotationPageLabel: "4",
 					annotationSortIndex: "00004|000001|00000",
-					annotationPosition:
-						'{"pageIndex":3,"rects":[[1,2,3,4]]}',
+					annotationPosition: '{"pageIndex":3,"rects":[[1,2,3,4]]}',
 				});
 			}
 
@@ -48,15 +58,23 @@ describe("native item draft validation", () => {
 		}
 	});
 
-	it("rejects fields and creator types that do not belong to the item type", () => {
-		expect(() =>
+	it("returns field errors for fields and creator roles that do not belong to the item type", () => {
+		try {
 			validateNativeItemDraft({
 				itemType: "book",
 				reportNumber: "not a book field",
-			}),
-		).toThrow("reportNumber is not valid");
+			});
+			expect.unreachable("Expected field validation to fail");
+		} catch (error) {
+			expect(error).toMatchObject({
+				fields: {
+					reportNumber:
+						"Report Number is not available for Book.",
+				},
+			});
+		}
 
-		expect(() =>
+		try {
 			validateNativeItemDraft({
 				itemType: "book",
 				creators: [
@@ -65,8 +83,16 @@ describe("native item draft validation", () => {
 						name: "Wrong Role",
 					},
 				],
-			}),
-		).toThrow("director is not valid");
+			});
+			expect.unreachable("Expected creator role validation to fail");
+		} catch (error) {
+			expect(error).toMatchObject({
+				fields: {
+					"creators.0.creatorType":
+						"This creator role is not available for the selected item type.",
+				},
+			});
+		}
 	});
 
 	it("normalizes item types, language, tags, and collections", () => {
@@ -89,8 +115,8 @@ describe("native item draft validation", () => {
 		});
 	});
 
-	it("rejects malformed names and non-canonical collection keys", () => {
-		expect(() =>
+	it("returns field errors for malformed names and collection keys", () => {
+		try {
 			validateNativeItemDraft({
 				itemType: "book",
 				creators: [
@@ -100,14 +126,63 @@ describe("native item draft validation", () => {
 						name: "Ada Lovelace",
 					},
 				],
-			}),
-		).toThrow("either name or firstName/lastName");
+			});
+			expect.unreachable("Expected creator name validation to fail");
+		} catch (error) {
+			expect(error).toMatchObject({
+				fields: {
+					"creators.0":
+						"Use either a person name or an organisation name, not both.",
+				},
+			});
+		}
 
-		expect(() =>
+		try {
 			validateNativeItemDraft({
 				itemType: "book",
-				collections: ["not-a-key"],
-			}),
-		).toThrow();
+				collections: ["--------"],
+			});
+			expect.unreachable("Expected collection validation to fail");
+		} catch (error) {
+			expect(error).toMatchObject({
+				fields: {
+					collections:
+						"One or more selected collections are invalid.",
+				},
+			});
+		}
+	});
+
+	it("allows incomplete creators only while saving a draft", () => {
+		const payload = {
+			itemType: "book",
+			creators: [
+				{
+					creatorType: "author",
+					firstName: "",
+					lastName: "",
+				},
+			],
+		};
+
+		try {
+			validateNativeItemDraft(payload);
+			expect.unreachable("Expected incomplete creator validation to fail");
+		} catch (error) {
+			expect(error).toMatchObject({
+				fields: {
+					"creators.0":
+						"Enter a name for this creator, or remove the empty creator.",
+				},
+			});
+		}
+		expect(
+			validateNativeItemDraft(payload, {
+				allowIncompleteCreators: true,
+			}).payload,
+		).toMatchObject({
+			...payload,
+			itemType: "Book",
+		});
 	});
 });

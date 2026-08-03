@@ -1,13 +1,23 @@
 import {
 	getZoteroItemType,
-	isCanonicalRecordKey,
 	type ZoteroItemTypeDefinition,
-} from "@opendeved/evidence-library-core";
+} from "@opendeved/evidence-library-core/zotero-schema";
+import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { z } from "zod";
 
 import { creatorType } from "@/db/schema/enums/creatorType";
 import { itemType } from "@/db/schema/enums/itemType";
 import type { item } from "@/db/schema/tables/item";
+import {
+	ADMIN_SHARED_PAYLOAD_FIELDS,
+	adminPayloadFieldToDatabaseField,
+} from "@/lib/admin/item-fields";
+import {
+	adminFieldLabel,
+	AdminValidationError,
+	type AdminFieldErrors,
+	fieldErrorsFromZod,
+} from "@/lib/admin/errors";
 import type { InferInsertModel } from "drizzle-orm";
 
 const itemTypeByZoteroName = new Map(
@@ -15,35 +25,46 @@ const itemTypeByZoteroName = new Map(
 );
 const creatorTypes = new Set<string>(creatorType.enumValues);
 
-const creatorSchema = z
-	.object({
-		creatorType: z.string().min(1),
-		firstName: z.string().optional(),
-		lastName: z.string().optional(),
-		name: z.string().optional(),
-	})
-	.strict()
-	.superRefine((creator, context) => {
-		if (!creatorTypes.has(creator.creatorType)) {
-			context.addIssue({
-				code: "custom",
-				message: `Unsupported creator type: ${creator.creatorType}`,
-				path: ["creatorType"],
-			});
-		}
+function creatorSchema(allowIncomplete: boolean) {
+	return z
+		.object({
+			creatorType: z.string().min(1),
+			firstName: z.string().optional(),
+			lastName: z.string().optional(),
+			name: z.string().optional(),
+		})
+		.strict()
+		.superRefine((creator, context) => {
+			if (!creatorTypes.has(creator.creatorType)) {
+				context.addIssue({
+					code: "custom",
+					message: "Choose a valid creator role.",
+					path: ["creatorType"],
+				});
+			}
 
-		const hasSingleName = Boolean(creator.name?.trim());
-		const hasSplitName =
-			Boolean(creator.firstName?.trim()) ||
-			Boolean(creator.lastName?.trim());
-		if (hasSingleName === hasSplitName) {
-			context.addIssue({
-				code: "custom",
-				message:
-					"Creator must use either name or firstName/lastName",
-			});
-		}
-	});
+			const hasSingleName = Boolean(creator.name?.trim());
+			const hasSplitName =
+				Boolean(creator.firstName?.trim()) ||
+				Boolean(creator.lastName?.trim());
+			if (allowIncomplete && !hasSingleName && !hasSplitName) return;
+			if (!hasSingleName && !hasSplitName) {
+				context.addIssue({
+					code: "custom",
+					message:
+						"Enter a name for this creator, or remove the empty creator.",
+				});
+				return;
+			}
+			if (hasSingleName === hasSplitName) {
+				context.addIssue({
+					code: "custom",
+					message:
+						"Use either a person name or an organisation name, not both.",
+				});
+			}
+		});
+}
 
 const payloadObjectSchema = z.record(z.string(), z.unknown());
 const relationsSchema = z.record(z.string(), z.unknown());
@@ -66,20 +87,11 @@ const specialFieldsByType = new Map<string, ReadonlySet<string>>([
 	],
 ]);
 
-const sharedPayloadFields = new Set([
-	"collections",
-	"creators",
-	"itemType",
-	"parentItem",
-	"relations",
-	"tags",
-]);
-
 type ItemWrite = InferInsertModel<typeof item>;
 
-export class NativeItemValidationError extends Error {
-	constructor(message: string) {
-		super(message);
+export class NativeItemValidationError extends AdminValidationError {
+	constructor(message: string, fields: AdminFieldErrors = {}) {
+		super(message, fields);
 		this.name = "NativeItemValidationError";
 	}
 }
@@ -106,14 +118,16 @@ export type ValidatedNativeItemDraft = {
 
 function normalizeItemType(value: unknown) {
 	if (typeof value !== "string") {
-		throw new NativeItemValidationError("itemType must be a string");
+		throw new NativeItemValidationError("Choose an item type.", {
+			itemType: "Choose an item type.",
+		});
 	}
 
 	const normalized = itemTypeByZoteroName.get(value.toLowerCase());
 	if (!normalized) {
-		throw new NativeItemValidationError(
-			`Unsupported item type: ${value}`,
-		);
+		throw new NativeItemValidationError("Choose a supported item type.", {
+			itemType: "Choose a supported item type.",
+		});
 	}
 	return normalized;
 }
@@ -122,7 +136,7 @@ function zoteroDefinitionFor(itemTypeValue: string): ZoteroItemTypeDefinition {
 	const zoteroName = itemTypeValue[0]!.toLowerCase() + itemTypeValue.slice(1);
 	const definition = getZoteroItemType(zoteroName);
 	if (!definition) {
-		throw new NativeItemValidationError(
+		throw new Error(
 			`Vendored Zotero schema is missing item type: ${zoteroName}`,
 		);
 	}
@@ -131,16 +145,33 @@ function zoteroDefinitionFor(itemTypeValue: string): ZoteroItemTypeDefinition {
 
 function parseUniqueStrings(value: unknown, field: string, maxLength: number) {
 	if (value === undefined) return [];
-	const values = z.array(z.string()).parse(value);
-	const normalized = values.map((entry) => entry.trim());
-	if (normalized.some((entry) => !entry || entry.length > maxLength)) {
+	const result = z.array(z.string()).safeParse(value);
+	if (!result.success) {
 		throw new NativeItemValidationError(
-			`${field} entries must contain 1-${maxLength} characters`,
+			`Check the ${adminFieldLabel(field).toLowerCase()} and try again.`,
+			fieldErrorsFromZod(result.error, [field]),
+		);
+	}
+	const values = result.data;
+	const normalized = values.map((entry) => entry.trim());
+	const invalidIndex = normalized.findIndex(
+		(entry) => !entry || entry.length > maxLength,
+	);
+	if (invalidIndex >= 0) {
+		throw new NativeItemValidationError(
+			`Check the ${adminFieldLabel(field).toLowerCase()} and try again.`,
+			{
+				[`${field}.${invalidIndex}`]:
+					`${adminFieldLabel(field)} must contain 1-${maxLength} characters.`,
+			},
 		);
 	}
 	if (new Set(normalized).size !== normalized.length) {
 		throw new NativeItemValidationError(
-			`${field} entries must be unique`,
+			`Remove the duplicate ${adminFieldLabel(field).toLowerCase()}.`,
+			{
+				[field]: `${adminFieldLabel(field)} cannot contain duplicates.`,
+			},
 		);
 	}
 	return normalized;
@@ -148,12 +179,23 @@ function parseUniqueStrings(value: unknown, field: string, maxLength: number) {
 
 export function validateNativeItemDraft(
 	input: unknown,
+	options: {
+		allowIncompleteCreators?: boolean;
+		requireAttachmentParent?: boolean;
+	} = {},
 ): ValidatedNativeItemDraft {
-	const payload = payloadObjectSchema.parse(input);
+	const payloadResult = payloadObjectSchema.safeParse(input);
+	if (!payloadResult.success) {
+		throw new NativeItemValidationError(
+			"Check the record details and try again.",
+			fieldErrorsFromZod(payloadResult.error),
+		);
+	}
+	const payload = payloadResult.data;
 	const normalizedItemType = normalizeItemType(payload.itemType);
 	const definition = zoteroDefinitionFor(normalizedItemType);
 	const allowedFields = new Set([
-		...sharedPayloadFields,
+		...ADMIN_SHARED_PAYLOAD_FIELDS,
 		...definition.fields.map(({ field }) => field),
 		...(specialFieldsByType.get(definition.itemType) ?? []),
 	]);
@@ -161,7 +203,10 @@ export function validateNativeItemDraft(
 	for (const field of Object.keys(payload)) {
 		if (!allowedFields.has(field)) {
 			throw new NativeItemValidationError(
-				`${field} is not valid for Zotero item type ${definition.itemType}`,
+				"Remove fields that are not available for this item type.",
+				{
+					[field]: `${adminFieldLabel(field)} is not available for ${adminFieldLabel(definition.itemType)}.`,
+				},
 			);
 		}
 	}
@@ -177,10 +222,11 @@ export function validateNativeItemDraft(
 		if (value === undefined) continue;
 		if (value !== null && typeof value !== "string") {
 			throw new NativeItemValidationError(
-				`${field} must be a string or null`,
+				`Check ${adminFieldLabel(field).toLowerCase()} and try again.`,
+				{ [field]: `${adminFieldLabel(field)} must be text.` },
 			);
 		}
-		itemValues[field === "language" ? "languageName" : field] = value;
+		itemValues[adminPayloadFieldToDatabaseField(field)] = value;
 		normalizedPayload[field] = value;
 	}
 
@@ -189,7 +235,8 @@ export function validateNativeItemDraft(
 		if (value === undefined) continue;
 		if (value !== null && typeof value !== "string") {
 			throw new NativeItemValidationError(
-				`${field} must be a string or null`,
+				`Check ${adminFieldLabel(field).toLowerCase()} and try again.`,
+				{ [field]: `${adminFieldLabel(field)} must be text.` },
 			);
 		}
 		itemValues[field] = value;
@@ -197,14 +244,27 @@ export function validateNativeItemDraft(
 	}
 
 	if (payload.creators !== undefined) {
-		const creators = z.array(creatorSchema).parse(payload.creators);
+		const creatorResult = z
+			.array(creatorSchema(options.allowIncompleteCreators ?? false))
+			.safeParse(payload.creators);
+		if (!creatorResult.success) {
+			throw new NativeItemValidationError(
+				"Check the creator details and try again.",
+				fieldErrorsFromZod(creatorResult.error, ["creators"]),
+			);
+		}
+		const creators = creatorResult.data;
 		const allowedCreatorTypes = new Set(
 			definition.creatorTypes.map(({ creatorType }) => creatorType),
 		);
-		for (const creator of creators) {
+		for (const [index, creator] of creators.entries()) {
 			if (!allowedCreatorTypes.has(creator.creatorType)) {
 				throw new NativeItemValidationError(
-					`${creator.creatorType} is not valid for Zotero item type ${definition.itemType}`,
+					"Choose a valid creator role.",
+					{
+						[`creators.${index}.creatorType`]:
+							"This creator role is not available for the selected item type.",
+					},
 				);
 			}
 		}
@@ -213,19 +273,47 @@ export function validateNativeItemDraft(
 	}
 
 	if (payload.relations !== undefined) {
-		const relations = relationsSchema.parse(payload.relations);
+		const relationResult = relationsSchema.safeParse(payload.relations);
+		if (!relationResult.success) {
+			throw new NativeItemValidationError(
+				"Check the record relationships and try again.",
+				fieldErrorsFromZod(relationResult.error, ["relations"]),
+			);
+		}
+		const relations = relationResult.data;
 		itemValues.relations = relations;
 		normalizedPayload.relations = relations;
 	}
 
 	if (payload.parentItem !== undefined) {
-		const parentItem = z
+		const parentResult = z
 			.string()
-			.regex(/^[23456789ABCDEFGHIJKLMNPQRSTUVWXYZ]{8}$/)
+			.refine(isCanonicalRecordKey, {
+				message: "Choose a valid parent record.",
+			})
 			.nullable()
-			.parse(payload.parentItem);
+			.safeParse(payload.parentItem);
+		if (!parentResult.success) {
+			throw new NativeItemValidationError(
+				"Choose a valid parent record.",
+				fieldErrorsFromZod(parentResult.error, ["parentItem"]),
+			);
+		}
+		const parentItem = parentResult.data;
 		itemValues.parentItem = parentItem;
 		normalizedPayload.parentItem = parentItem;
+	}
+	if (
+		normalizedItemType === "Attachment" &&
+		(options.requireAttachmentParent ?? true) &&
+		typeof itemValues.parentItem !== "string"
+	) {
+		throw new NativeItemValidationError(
+			"Choose the record this attachment belongs to.",
+			{
+				parentItem: "Choose a parent record for this attachment.",
+			},
+		);
 	}
 
 	const collectionKeys = parseUniqueStrings(
@@ -235,7 +323,8 @@ export function validateNativeItemDraft(
 	);
 	if (collectionKeys.some((key) => !isCanonicalRecordKey(key))) {
 		throw new NativeItemValidationError(
-			"collections entries must be canonical record keys",
+			"Choose valid collections.",
+			{ collections: "One or more selected collections are invalid." },
 		);
 	}
 	const tags = parseUniqueStrings(payload.tags, "tags", 255);

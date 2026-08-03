@@ -5,6 +5,7 @@ import { getDatabase } from "@/db";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
+	readAdminJson,
 	requireAdminBypass,
 } from "@/lib/admin/http";
 import {
@@ -13,6 +14,7 @@ import {
 	openNativeItemDraft,
 	saveNativeItemDraft,
 } from "@/lib/admin/native-item-service";
+import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 
 type RouteContext = {
 	params: Promise<{ key: string }>;
@@ -23,10 +25,7 @@ const saveBodySchema = z.object({
 	payload: z.record(z.string(), z.unknown()),
 });
 
-export async function GET(
-	_request: NextRequest,
-	{ params }: RouteContext,
-) {
+export async function GET(_request: NextRequest, { params }: RouteContext) {
 	const denied = requireAdminBypass();
 	if (denied) return denied;
 
@@ -42,10 +41,7 @@ export async function GET(
 	}
 }
 
-export async function POST(
-	_request: NextRequest,
-	{ params }: RouteContext,
-) {
+export async function POST(_request: NextRequest, { params }: RouteContext) {
 	const denied = requireAdminBypass();
 	if (denied) return denied;
 
@@ -61,16 +57,13 @@ export async function POST(
 	}
 }
 
-export async function PUT(
-	request: NextRequest,
-	{ params }: RouteContext,
-) {
+export async function PUT(request: NextRequest, { params }: RouteContext) {
 	const denied = requireAdminBypass();
 	if (denied) return denied;
 
 	try {
 		const { key } = await params;
-		const body = saveBodySchema.parse(await request.json());
+		const body = saveBodySchema.parse(await readAdminJson(request));
 		const draft = await saveNativeItemDraft(await getDatabase(), {
 			itemKey: key,
 			...body,
@@ -84,16 +77,28 @@ export async function PUT(
 	}
 }
 
-export async function DELETE(
-	_request: NextRequest,
-	{ params }: RouteContext,
-) {
+export async function DELETE(_request: NextRequest, { params }: RouteContext) {
 	const denied = requireAdminBypass();
 	if (denied) return denied;
 
 	try {
-		const { key } = await params;
-		await discardNativeItemDraft(await getDatabase(), key);
+		const [{ key }, runtime] = await Promise.all([
+			params,
+			getNativeFileRuntime(),
+		]);
+		const discarded = await discardNativeItemDraft(runtime.db, key);
+		if (discarded.stagedPrivatePaths.length > 0) {
+			try {
+				await runtime.storage.removePrivate(
+					discarded.stagedPrivatePaths,
+				);
+			} catch (error) {
+				console.error(
+					"Failed to remove discarded private file objects",
+					error,
+				);
+			}
+		}
 		return new NextResponse(null, {
 			status: 204,
 			headers: ADMIN_RESPONSE_HEADERS,

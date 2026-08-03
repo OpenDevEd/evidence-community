@@ -8,6 +8,7 @@ import * as userRelations from "./schema/relations/user";
 import * as userToFollowRelations from "./schema/relations/userToFollow";
 import * as userToLikesRelations from "./schema/relations/userToLikes";
 import * as collectionTable from "./schema/tables/collection";
+import * as adminItemListProjectionTable from "./schema/tables/adminItemListProjection";
 import * as embeddingsTable from "./schema/tables/embeddings";
 import * as itemTable from "./schema/tables/item";
 import * as itemToCollectionTable from "./schema/tables/itemToCollection";
@@ -24,6 +25,7 @@ import * as userToLikesTable from "./schema/tables/userToLikes";
 import * as sourceTables from "./schema/source";
 
 export const schema = {
+	...adminItemListProjectionTable,
 	...itemTable,
 	...collectionTable,
 	...sourceTables,

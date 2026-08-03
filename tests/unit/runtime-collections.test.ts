@@ -18,6 +18,7 @@ function collection(
 		sourceConnectionKey: "native",
 		sourceRecordKey: key,
 		revision: 1,
+		sortOrder: 1024,
 		numCollections: 0,
 		numItems: 1,
 		name,
@@ -104,10 +105,7 @@ describe("runtime collection configuration", () => {
 			],
 		);
 
-		expect(result.map(({ key }) => key)).toEqual([
-			"root-a",
-			"child-b",
-		]);
+		expect(result.map(({ key }) => key)).toEqual(["root-a", "child-b"]);
 	});
 
 	it("resolves duplicate explicit order values by collection ID", () => {
@@ -132,10 +130,7 @@ describe("runtime collection configuration", () => {
 				],
 			),
 		).toThrowError(
-			new RuntimeCollectionConfigurationError([
-				"missing-a",
-				"missing-b",
-			]),
+			new RuntimeCollectionConfigurationError(["missing-a", "missing-b"]),
 		);
 	});
 });

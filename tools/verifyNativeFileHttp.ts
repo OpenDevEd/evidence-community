@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 
 const baseUrl = process.env.EVIDENCE_LIBRARY_TEST_URL;
@@ -59,6 +59,19 @@ async function createPdf() {
 	return new Uint8Array(await document.save());
 }
 
+async function uploadSignedPdf(
+	storage: SupabaseClient,
+	upload: { path: string; token: string },
+	pdf: Uint8Array,
+) {
+	const { error } = await storage.storage
+		.from(privateBucket)
+		.uploadToSignedUrl(upload.path, upload.token, pdf, {
+			contentType: "application/pdf",
+		});
+	if (error) throw error;
+}
+
 async function verify() {
 	const parent = await jsonRequest(
 		"/api/admin/items/drafts",
@@ -107,15 +120,7 @@ async function verify() {
 			persistSession: false,
 		},
 	});
-	const { error: uploadError } = await storage.storage
-		.from(privateBucket)
-		.uploadToSignedUrl(
-			staged.upload.path,
-			staged.upload.token,
-			pdf,
-			{ contentType: "application/pdf" },
-		);
-	if (uploadError) throw uploadError;
+	await uploadSignedPdf(storage, staged.upload, pdf);
 
 	const uploadRevision = staged.fileDraft.uploadRevision as number;
 	await jsonRequest(
@@ -161,6 +166,42 @@ async function verify() {
 			fileState.file.publication.sha256 === sha256,
 		"HTTP file state did not expose the publication",
 	);
+	const disposableStage = await jsonRequest(
+		`/api/admin/items/${attachmentKey}/file`,
+		{
+			method: "POST",
+			body: JSON.stringify({
+				expectedSha256: sha256,
+				expectedSizeBytes: pdf.byteLength,
+				filename: "discarded-replacement.pdf",
+			}),
+		},
+		201,
+	);
+	await uploadSignedPdf(storage, disposableStage.upload, pdf);
+	await jsonRequest(
+		`/api/admin/items/${attachmentKey}/file/complete`,
+		{
+			method: "POST",
+			body: JSON.stringify({
+				expectedUploadRevision:
+					disposableStage.fileDraft.uploadRevision,
+			}),
+		},
+	);
+	await jsonRequest(
+		`/api/admin/items/${attachmentKey}/file/draft`,
+		{ method: "DELETE" },
+		204,
+	);
+	const stateAfterDiscard = await jsonRequest(
+		`/api/admin/items/${attachmentKey}/file`,
+	);
+	assert(
+		stateAfterDiscard.file.draft === null &&
+			stateAfterDiscard.file.publication.sha256 === sha256,
+		"HTTP staged-file discard changed the publication",
+	);
 
 	await jsonRequest(`/api/admin/items/${attachmentKey}/file`, {
 		method: "DELETE",
@@ -182,6 +223,7 @@ async function verify() {
 			signedUpload: true,
 			metadataPublishedSeparately: true,
 			filePublishedSeparately: true,
+			stagedReplacementDiscarded: true,
 			fileUnpublished: true,
 		}),
 	);
