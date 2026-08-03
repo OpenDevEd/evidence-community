@@ -71,6 +71,13 @@
       "when": 1785767969011,
       "tag": "0009_admin_collection_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1785773599315,
+      "tag": "0010_admin_collection_state_search",
+      "breakpoints": true
     }
   ]
 }

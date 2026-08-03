@@ -1,0 +1,2 @@
+DROP INDEX "collection_source_connection_idx";--> statement-breakpoint
+CREATE INDEX "collection_source_state_search_idx" ON "collection" USING btree ("sourceConnectionKey","deleted",lower(coalesce("name", '')),"key");

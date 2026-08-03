@@ -226,8 +226,8 @@ export async function searchAdminCollections(
 		cursor &&
 		(cursor.query !== request.query.toLowerCase() ||
 			cursor.editableOnly !== request.editableOnly ||
-			cursor.includeDeleted !== request.includeDeleted ||
-			cursor.sourceConnectionKey !== request.sourceConnectionKey)
+			cursor.sourceConnectionKey !== request.sourceConnectionKey ||
+			cursor.state !== request.state)
 	) {
 		throw new AdminValidationError(
 			"The saved collection search position does not match this search. Search again.",
@@ -235,10 +235,14 @@ export async function searchAdminCollections(
 		);
 	}
 
-	const conditions: SQL[] = [
-		sql`${collectionNameSort} ILIKE ${containsPattern(request.query)} ESCAPE '\\'`,
-	];
-	if (!request.includeDeleted) conditions.push(eq(collection.deleted, 0));
+	const conditions: SQL[] = [];
+	if (request.query) {
+		conditions.push(
+			sql`${collectionNameSort} ILIKE ${containsPattern(request.query)} ESCAPE '\\'`,
+		);
+	}
+	if (request.state === "active") conditions.push(eq(collection.deleted, 0));
+	if (request.state === "deleted") conditions.push(eq(collection.deleted, 1));
 	if (request.editableOnly) {
 		conditions.push(
 			eq(collection.sourceConnectionKey, NATIVE_SOURCE_CONNECTION_KEY),
@@ -277,12 +281,12 @@ export async function searchAdminCollections(
 			hasMore && last
 				? encodeAdminCollectionSearchCursor({
 						editableOnly: request.editableOnly,
-						includeDeleted: request.includeDeleted,
 						key: last.key,
 						name: lastRow!.nameSort,
 						query: request.query.toLowerCase(),
 						rowSourceConnectionKey: last.sourceConnectionKey,
 						sourceConnectionKey: request.sourceConnectionKey,
+						state: request.state,
 					})
 				: null,
 	};

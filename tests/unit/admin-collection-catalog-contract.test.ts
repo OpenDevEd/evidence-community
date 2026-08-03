@@ -24,14 +24,54 @@ describe("admin collection catalogue contract", () => {
 		});
 	});
 
-	it("parses false boolean query parameters as false", () => {
+	it("defaults catalogue searches to active collections", () => {
 		expect(
 			parseAdminCollectionSearchRequest({
-				editableOnly: "false",
-				includeDeleted: "false",
 				query: "teacher",
 			}),
-		).toMatchObject({ editableOnly: false, includeDeleted: false });
+		).toMatchObject({
+			editableOnly: false,
+			state: "active",
+		});
+	});
+
+	it("parses an explicit deleted-only catalogue search", () => {
+		expect(
+			parseAdminCollectionSearchRequest({
+				query: "archive",
+				sourceConnectionKey: "native",
+				state: "deleted",
+			}),
+		).toMatchObject({
+			query: "archive",
+			sourceConnectionKey: "native",
+			state: "deleted",
+		});
+	});
+
+	it("rejects deleted browsing outside the native source", () => {
+		expect(() =>
+			parseAdminCollectionSearchRequest({
+				query: "",
+				sourceConnectionKey: "zotero-main",
+				state: "deleted",
+			}),
+		).toThrow();
+	});
+
+	it("rejects malformed booleans and empty active searches", () => {
+		expect(() =>
+			parseAdminCollectionSearchRequest({
+				editableOnly: "garbage",
+				query: "teacher",
+			}),
+		).toThrow();
+		expect(() =>
+			parseAdminCollectionSearchRequest({
+				query: "",
+				state: "active",
+			}),
+		).toThrow();
 	});
 
 	it("round trips opaque child cursors", () => {

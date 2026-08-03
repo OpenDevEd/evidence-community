@@ -9,6 +9,7 @@ import type {
 	AdminItemListPage,
 	AdminLibrarySnapshot,
 } from "@/lib/admin/types";
+import type { AdminCollectionSearchState } from "@/lib/admin/collection-catalog-contract";
 import type {
 	AdminErrorCode,
 	AdminErrorPayload,
@@ -171,10 +172,10 @@ export function searchAdminCollectionCatalog(
 	input: {
 		cursor?: string | null;
 		editableOnly?: boolean;
-		includeDeleted?: boolean;
 		pageSize?: number;
 		query: string;
 		sourceConnectionKey?: string | null;
+		state?: AdminCollectionSearchState;
 	},
 	signal?: AbortSignal,
 ) {
@@ -182,10 +183,10 @@ export function searchAdminCollectionCatalog(
 		collectionCatalogUrl("search", {
 			cursor: input.cursor,
 			editableOnly: input.editableOnly,
-			includeDeleted: input.includeDeleted,
 			pageSize: input.pageSize,
 			query: input.query,
 			source: input.sourceConnectionKey,
+			state: input.state,
 		}),
 		{ signal },
 	);

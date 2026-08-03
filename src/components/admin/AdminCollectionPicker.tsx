@@ -117,7 +117,6 @@ export function AdminCollectionPicker({
 	autoFocus = false,
 	disabledAncestorKey,
 	editableOnly = false,
-	includeDeleted = false,
 	lockDeletedSelections = true,
 	lockImportedSelections = true,
 	onSelect,
@@ -131,7 +130,6 @@ export function AdminCollectionPicker({
 	autoFocus?: boolean;
 	disabledAncestorKey?: string;
 	editableOnly?: boolean;
-	includeDeleted?: boolean;
 	lockDeletedSelections?: boolean;
 	lockImportedSelections?: boolean;
 	onSelect?: (entry: AdminCollectionCatalogEntry) => void;
@@ -172,7 +170,6 @@ export function AdminCollectionPicker({
 		sourceKey ?? "all",
 		activeParent ?? "root",
 		String(editableOnly),
-		String(includeDeleted),
 		reloadToken,
 	].join("\u0000");
 	const contextKeyRef = useRef(contextKey);
@@ -197,10 +194,10 @@ export function AdminCollectionPicker({
 						{
 							cursor,
 							editableOnly,
-							includeDeleted,
 							pageSize: 50,
 							query: debouncedQuery,
 							sourceConnectionKey: sourceKey,
+							state: "active",
 						},
 						signal,
 					)
@@ -224,7 +221,6 @@ export function AdminCollectionPicker({
 			contextKey,
 			debouncedQuery,
 			editableOnly,
-			includeDeleted,
 			sourceKey,
 		],
 	);

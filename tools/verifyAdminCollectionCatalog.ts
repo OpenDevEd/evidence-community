@@ -18,6 +18,7 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 async function createFixture(client: Client) {
+	await client.query(`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
 	await client.query(`
 		CREATE TEMP TABLE "collection" (
 			key varchar(8) PRIMARY KEY,
@@ -80,6 +81,16 @@ async function createFixture(client: Client) {
 		CREATE INDEX fixture_collection_name_search_idx
 		ON "collection" USING gin (lower(coalesce(name, '')) gin_trgm_ops)
 	`);
+	await client.query(`
+		CREATE INDEX fixture_collection_source_state_search_idx
+		ON "collection" (
+			"sourceConnectionKey",
+			deleted,
+			lower(coalesce(name, '')),
+			key
+		)
+	`);
+	await client.query(`ANALYZE "collection"`);
 }
 
 async function verify() {
@@ -158,6 +169,17 @@ async function verify() {
 			searchFirst.items.some(({ ancestors }) => ancestors.length > 0),
 			"Search results must include breadcrumbs for nested collections",
 		);
+		const deletedSearch = await searchAdminCollections(database, {
+			pageSize: 25,
+			query: "",
+			sourceConnectionKey: "native",
+			state: "deleted",
+		});
+		assert(deletedSearch.items.length > 0, "Deleted search returned no rows");
+		assert(
+			deletedSearch.items.every(({ deleted }) => deleted),
+			"Deleted-only search returned an active collection",
+		);
 		const searchSecond = await searchAdminCollections(database, {
 			cursor: searchFirst.nextCursor,
 			pageSize: 25,
@@ -211,6 +233,19 @@ async function verify() {
 				"fixture_collection_name_search_idx",
 			),
 			"Collection search did not use the trigram index",
+		);
+		const deletedPlan = await client.query<{ "QUERY PLAN": unknown }>(
+			`EXPLAIN (FORMAT JSON)
+			 SELECT key FROM "collection"
+			 WHERE "sourceConnectionKey" = 'native' AND deleted = 1
+			 ORDER BY lower(coalesce(name, '')), "sourceConnectionKey", key
+			 LIMIT 25`,
+		);
+		assert(
+			JSON.stringify(deletedPlan.rows[0]?.["QUERY PLAN"]).includes(
+				"fixture_collection_source_state_search_idx",
+			),
+			"Deleted collection browsing did not use the state search index",
 		);
 		const queryDurationMs = Math.round(performance.now() - queryStartedAt);
 		assert(

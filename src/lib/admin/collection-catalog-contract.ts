@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
 import { AdminValidationError } from "./errors";
 
 export const ADMIN_COLLECTION_PAGE_SIZE = 50;
@@ -19,6 +20,7 @@ export function parseAdminCollectionView(value: unknown) {
 }
 
 const collectionKeySchema = z.string().length(8);
+const collectionSearchStateSchema = z.enum(["active", "all", "deleted"]);
 const booleanParameterSchema = z.preprocess(
 	(value) => {
 		if (value === "true") return true;
@@ -27,6 +29,9 @@ const booleanParameterSchema = z.preprocess(
 	},
 	z.boolean(),
 );
+export type AdminCollectionSearchState = z.infer<
+	typeof collectionSearchStateSchema
+>;
 
 const childrenRequestSchema = z.object({
 	cursor: z.string().min(1).nullable().default(null),
@@ -59,19 +64,46 @@ const childrenCursorSchema = z.object({
 	sourceConnectionKey: z.string().min(1).max(64),
 });
 
-const searchRequestSchema = z.object({
-	cursor: z.string().min(1).nullable().default(null),
-	editableOnly: booleanParameterSchema.default(false),
-	includeDeleted: booleanParameterSchema.default(false),
-	pageSize: z.coerce
-		.number()
-		.int()
-		.min(1)
-		.max(ADMIN_COLLECTION_MAX_PAGE_SIZE)
-		.default(ADMIN_COLLECTION_PAGE_SIZE),
-	query: z.string().trim().min(1).max(200),
-	sourceConnectionKey: z.string().trim().min(1).max(64).nullable().default(null),
-});
+const searchRequestSchema = z
+	.object({
+		cursor: z.string().min(1).nullable().default(null),
+		editableOnly: booleanParameterSchema.default(false),
+		pageSize: z.coerce
+			.number()
+			.int()
+			.min(1)
+			.max(ADMIN_COLLECTION_MAX_PAGE_SIZE)
+			.default(ADMIN_COLLECTION_PAGE_SIZE),
+		query: z.string().trim().max(200).default(""),
+		sourceConnectionKey: z
+			.string()
+			.trim()
+			.min(1)
+			.max(64)
+			.nullable()
+			.default(null),
+		state: collectionSearchStateSchema.default("active"),
+	})
+	.superRefine((value, context) => {
+		if (!value.query && value.state !== "deleted") {
+			context.addIssue({
+				code: "custom",
+				message: "Enter a collection name to search",
+				path: ["query"],
+			});
+		}
+		if (
+			value.state === "deleted" &&
+			value.sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY
+		) {
+			context.addIssue({
+				code: "custom",
+				message:
+					"Deleted collection browsing is available for the native source only",
+				path: ["sourceConnectionKey"],
+			});
+		}
+	});
 
 export type AdminCollectionSearchRequest = z.infer<typeof searchRequestSchema>;
 
@@ -84,12 +116,12 @@ export function parseAdminCollectionSearchRequest(
 const searchCursorSchema = z.object({
 	v: z.literal(1),
 	editableOnly: z.boolean(),
-	includeDeleted: z.boolean(),
 	key: collectionKeySchema,
 	name: z.string(),
 	query: z.string(),
 	sourceConnectionKey: z.string().min(1).max(64).nullable(),
 	rowSourceConnectionKey: z.string().min(1).max(64),
+	state: collectionSearchStateSchema,
 });
 
 export type AdminCollectionSearchCursor = Omit<

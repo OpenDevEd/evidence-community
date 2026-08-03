@@ -49,11 +49,10 @@ export async function GET(request: NextRequest) {
 					cursor: searchParams.get("cursor"),
 					editableOnly:
 						searchParams.get("editableOnly") ?? undefined,
-					includeDeleted:
-						searchParams.get("includeDeleted") ?? undefined,
 					pageSize: searchParams.get("pageSize") ?? undefined,
 					query: searchParams.get("query") ?? undefined,
 					sourceConnectionKey: searchParams.get("source"),
+					state: searchParams.get("state") ?? undefined,
 				}),
 				{ headers: ADMIN_RESPONSE_HEADERS },
 			);

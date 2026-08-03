@@ -70,7 +70,12 @@ export const collection = pgTable(
 			"collection_native_sort_order_required",
 			sql`${table.sourceConnectionKey} <> 'native' OR ${table.sortOrder} IS NOT NULL`,
 		),
-		index("collection_source_connection_idx").on(table.sourceConnectionKey),
+		index("collection_source_state_search_idx").on(
+			table.sourceConnectionKey,
+			table.deleted,
+			sql`lower(coalesce(${table.name}, ''))`,
+			table.key,
+		),
 		index("collection_parent_idx").on(table.parentCollection),
 		index("collection_tree_order_idx").on(
 			table.sourceConnectionKey,
