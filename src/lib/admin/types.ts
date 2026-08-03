@@ -125,7 +125,6 @@ export type AdminSource = {
 };
 
 export type AdminLibrarySnapshot = {
-	collections: AdminCollection[];
 	sources: AdminSource[];
 };
 

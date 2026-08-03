@@ -18,17 +18,17 @@ import type { ReactNode } from "react";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import type {
-	AdminCollection,
+	AdminCollectionCatalogEntry,
 	AdminRecordState,
 	AdminSource,
 } from "@/lib/admin/types";
 
+import { AdminCollectionCatalogue } from "./AdminCollectionCatalogue";
 import {
-	AdminCollectionCatalogue,
 	requestAdminCollectionCatalogueInvalidation,
 	requestAdminCollectionExpansion,
 	requestAdminCollectionFocus,
-} from "./AdminCollectionCatalogue";
+} from "./admin-collection-events";
 
 export function expandAdminCollections(collectionKeys: string[]) {
 	requestAdminCollectionExpansion(collectionKeys);
@@ -98,12 +98,14 @@ export function AdminNavigation({
 	state,
 }: {
 	collection: string | null;
-	onCreateCollection: (parentCollection: string | null) => void;
-	onDeleteCollection: (collection: AdminCollection) => void;
-	onEditCollection: (collection: AdminCollection) => void;
+	onCreateCollection: (
+		parentCollection: AdminCollectionCatalogEntry | null,
+	) => void;
+	onDeleteCollection: (collection: AdminCollectionCatalogEntry) => void;
+	onEditCollection: (collection: AdminCollectionCatalogEntry) => void;
 	isBusy: boolean;
-	onMoveCollection: (collection: AdminCollection) => void;
-	onRestoreCollection: (collection: AdminCollection) => void;
+	onMoveCollection: (collection: AdminCollectionCatalogEntry) => void;
+	onRestoreCollection: (collection: AdminCollectionCatalogEntry) => void;
 	onSelectCollection: (key: string) => void;
 	onSelectSource: (key: string) => void;
 	onSelectState: (state: AdminRecordState | "all") => void;

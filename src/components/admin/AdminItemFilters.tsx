@@ -423,9 +423,9 @@ export function AdminItemFilters({
 			</PopoverTrigger>
 			<PopoverContent
 				aria-label="Filter records"
-				className="w-[min(520px,calc(100vw-24px))] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+				className="flex max-h-[calc(100dvh-72px)] w-[min(520px,calc(100vw-24px))] flex-col rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
 			>
-				<div className="flex h-11 items-center justify-between border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
+				<div className="flex h-11 shrink-0 items-center justify-between border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
 					<span className="text-sm font-semibold text-black/80 dark:text-white/85">
 						Filter records
 					</span>
@@ -440,7 +440,7 @@ export function AdminItemFilters({
 						</Button>
 					) : null}
 				</div>
-				<div className="max-h-[420px] overflow-y-auto p-2">
+				<div className="min-h-0 flex-1 overflow-y-auto p-2">
 					{drafts.length === 0 ? (
 						<p className="px-2 py-6 text-center text-sm text-black/45 dark:text-white/45">
 							No filters applied
@@ -598,7 +598,7 @@ export function AdminItemFilters({
 						);
 					})}
 				</div>
-				<div className="flex min-h-12 flex-wrap items-center justify-end gap-2 border-t border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
+				<div className="flex min-h-12 shrink-0 flex-wrap items-center justify-end gap-2 border-t border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
 					<Select
 						aria-label="Add filter"
 						className="mr-auto w-40"

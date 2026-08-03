@@ -19,12 +19,8 @@ import {
 	useState,
 } from "react";
 
-import {
-	isNativeCollectionDropDestination,
-	resolveNativeCollectionDrop,
-	type NativeCollectionDropDestination,
-} from "@/lib/admin/collection-tree";
-import type { AdminCollection } from "@/lib/admin/types";
+import type { AdminCollectionCatalogEntry } from "@/lib/admin/types";
+import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 
 import { focusAdminDragHandle } from "./admin-focus";
 
@@ -32,9 +28,23 @@ export const COLLECTION_DRAG_TYPE = "admin-native-collection";
 export const RECORD_DRAG_TYPE = "admin-native-record";
 
 export type CollectionDragData = {
-	collectionKey: string;
+	collection: AdminCollectionCatalogEntry;
 	kind: "collection";
-	name: string;
+};
+
+export type NativeCollectionDropDestination =
+	| {
+			position: "after" | "before" | "inside";
+			targetCollection: string;
+	  }
+	| {
+			position: "root";
+			targetCollection: null;
+	  };
+
+type CollectionDropData = NativeCollectionDropDestination & {
+	targetEntry?: AdminCollectionCatalogEntry;
+	targetName?: string;
 };
 
 export type RecordDragData = {
@@ -50,22 +60,6 @@ type AdminDragState = {
 	activeCollectionKey: string | null;
 	activeRecordCount: number;
 };
-
-class CollectionSnapshotStore {
-	#collections: AdminCollection[];
-
-	constructor(collections: AdminCollection[]) {
-		this.#collections = collections;
-	}
-
-	read() {
-		return this.#collections;
-	}
-
-	update(collections: AdminCollection[]) {
-		this.#collections = collections;
-	}
-}
 
 const AdminDragStateContext = createContext<AdminDragState>({
 	activeCollectionKey: null,
@@ -83,8 +77,10 @@ export function isCollectionDragData(
 	const data = value as Partial<CollectionDragData>;
 	return (
 		data.kind === "collection" &&
-		typeof data.collectionKey === "string" &&
-		typeof data.name === "string"
+		Boolean(data.collection) &&
+		typeof data.collection?.key === "string" &&
+		typeof data.collection.name === "string" &&
+		typeof data.collection.revision === "number"
 	);
 }
 
@@ -101,47 +97,79 @@ export function isRecordDragData(value: unknown): value is RecordDragData {
 	);
 }
 
-function describeDestination(
-	collections: readonly AdminCollection[],
+export function isNativeCollectionDropDestination(
+	value: unknown,
+): value is NativeCollectionDropDestination {
+	if (!value || typeof value !== "object") return false;
+	const candidate = value as Partial<NativeCollectionDropDestination>;
+	if (candidate.position === "root" && candidate.targetCollection === null) {
+		return true;
+	}
+	return (
+		(candidate.position === "before" ||
+			candidate.position === "inside" ||
+			candidate.position === "after") &&
+		typeof candidate.targetCollection === "string"
+	);
+}
+
+function collectionDropIsAllowed(
+	collection: AdminCollectionCatalogEntry,
 	value: unknown,
 ) {
+	if (!isNativeCollectionDropDestination(value)) return false;
+	if (value.position === "root") return true;
+	const target = (value as CollectionDropData).targetEntry;
+	if (
+		!target ||
+		target.deleted ||
+		target.sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY
+	) {
+		return false;
+	}
+	if (
+		target.key === collection.key ||
+		target.ancestors.some(({ key }) => key === collection.key)
+	) {
+		return false;
+	}
+	return true;
+}
+
+function destinationName(value: unknown) {
+	if (!value || typeof value !== "object") return "the collection";
+	const name = (value as { targetName?: unknown }).targetName;
+	return typeof name === "string" ? name : "the collection";
+}
+
+function describeDestination(value: unknown) {
 	if (!isNativeCollectionDropDestination(value)) return null;
 	if (value.position === "root") return "at the top level";
-	const targetName =
-		collections.find(({ key }) => key === value.targetCollection)?.name ??
-		"the collection";
+	const targetName = destinationName(value);
 	if (value.position === "inside") return `inside ${targetName}`;
 	return `${value.position} ${targetName}`;
 }
 
-function recordCollectionName(
-	collections: readonly AdminCollection[],
-	value: unknown,
-) {
+function recordCollectionName(value: unknown) {
 	if (
 		!isNativeCollectionDropDestination(value) ||
 		value.position !== "inside"
 	) {
 		return null;
 	}
-	return (
-		collections.find(({ key }) => key === value.targetCollection)?.name ??
-		"the collection"
-	);
+	return destinationName(value);
 }
 
 export function AdminDragDropRoot({
 	children,
-	collections,
 	enabled,
 	onDropCollection,
 	onDropRecords,
 }: {
 	children: ReactNode;
-	collections: AdminCollection[];
 	enabled: boolean;
 	onDropCollection: (
-		collection: AdminCollection,
+		collection: AdminCollectionCatalogEntry,
 		destination: NativeCollectionDropDestination,
 	) => void;
 	onDropRecords: (itemKeys: string[], collectionKey: string) => void;
@@ -152,12 +180,6 @@ export function AdminDragDropRoot({
 		| { key: string; kind: "record" }
 		| null
 	>(null);
-	const [collectionsStore] = useState(
-		() => new CollectionSnapshotStore(collections),
-	);
-	useEffect(() => {
-		collectionsStore.update(collections);
-	}, [collections, collectionsStore]);
 
 	const plugins = useMemo(
 		() => [
@@ -166,7 +188,7 @@ export function AdminDragDropRoot({
 					dragstart(event: DragStartEvent) {
 						const data = event.operation.source?.data;
 						if (isCollectionDragData(data)) {
-							return `Picked up ${data.name}.`;
+							return `Picked up ${data.collection.name}.`;
 						}
 						if (isRecordDragData(data)) {
 							return `Picked up ${data.label}.`;
@@ -176,30 +198,21 @@ export function AdminDragDropRoot({
 						const data = event.operation.source?.data;
 						const target = event.operation.target?.data;
 						if (isCollectionDragData(data)) {
-							const currentCollections = collectionsStore.read();
 							if (
-								isNativeCollectionDropDestination(target) &&
-								!resolveNativeCollectionDrop(
-									currentCollections,
-									data.collectionKey,
+								!collectionDropIsAllowed(
+									data.collection,
 									target,
 								)
 							) {
-								return `${data.name} is already in that position.`;
+								return `${data.collection.name} is not over a valid collection destination.`;
 							}
-							const destination = describeDestination(
-								currentCollections,
-								target,
-							);
+							const destination = describeDestination(target);
 							return destination
-								? `${data.name} will move ${destination}.`
-								: `${data.name} is not over a valid collection destination.`;
+								? `${data.collection.name} will move ${destination}.`
+								: `${data.collection.name} is not over a valid collection destination.`;
 						}
 						if (isRecordDragData(data)) {
-							const name = recordCollectionName(
-								collectionsStore.read(),
-								target,
-							);
+							const name = recordCollectionName(target);
 							return name
 								? `${data.label} will be added to ${name}.`
 								: `${data.label} is not over a native collection.`;
@@ -209,36 +222,27 @@ export function AdminDragDropRoot({
 						const data = event.operation.source?.data;
 						const target = event.operation.target?.data;
 						if (isCollectionDragData(data)) {
-							const currentCollections = collectionsStore.read();
 							if (event.canceled) {
-								return `Moving ${data.name} was cancelled.`;
+								return `Moving ${data.collection.name} was cancelled.`;
 							}
 							if (
-								isNativeCollectionDropDestination(target) &&
-								!resolveNativeCollectionDrop(
-									currentCollections,
-									data.collectionKey,
+								!collectionDropIsAllowed(
+									data.collection,
 									target,
 								)
 							) {
-								return `${data.name} was not moved because it is already in that position.`;
+								return `${data.collection.name} was not moved.`;
 							}
-							const destination = describeDestination(
-								currentCollections,
-								target,
-							);
+							const destination = describeDestination(target);
 							return destination
-								? `${data.name} was moved ${destination}.`
-								: `${data.name} was not moved.`;
+								? `${data.collection.name} was dropped ${destination}. Updating.`
+								: `${data.collection.name} was not moved.`;
 						}
 						if (isRecordDragData(data)) {
 							if (event.canceled) {
 								return `Adding ${data.label} was cancelled.`;
 							}
-							const name = recordCollectionName(
-								collectionsStore.read(),
-								target,
-							);
+							const name = recordCollectionName(target);
 							return name
 								? `${data.label} was dropped on ${name}. Updating the draft.`
 								: `${data.label} was not added to a collection.`;
@@ -254,7 +258,7 @@ export function AdminDragDropRoot({
 				(plugin) => plugin !== Accessibility,
 			),
 		],
-		[collectionsStore],
+		[],
 	);
 	useEffect(() => {
 		if (activeDrag || !enabled || !pendingFocus.current) return;
@@ -276,21 +280,17 @@ export function AdminDragDropRoot({
 		setActiveDrag(null);
 		if (isCollectionDragData(data)) {
 			pendingFocus.current = {
-				key: data.collectionKey,
+				key: data.collection.key,
 				kind: "collection",
 			};
 			if (
 				event.canceled ||
-				!isNativeCollectionDropDestination(destination)
+				!isNativeCollectionDropDestination(destination) ||
+				!collectionDropIsAllowed(data.collection, destination)
 			) {
 				return;
 			}
-			const collection = collections.find(
-				({ key }) => key === data.collectionKey,
-			);
-			if (collection) {
-				onDropCollection(collection, destination);
-			}
+			onDropCollection(data.collection, destination);
 			return;
 		}
 		if (isRecordDragData(data)) {
@@ -310,14 +310,12 @@ export function AdminDragDropRoot({
 	};
 
 	const activeCollection =
-		activeDrag?.kind === "collection"
-			? collections.find(({ key }) => key === activeDrag.collectionKey)
-			: null;
+		activeDrag?.kind === "collection" ? activeDrag.collection : null;
 	const dragState = useMemo<AdminDragState>(
 		() => ({
 			activeCollectionKey:
 				activeDrag?.kind === "collection"
-					? activeDrag.collectionKey
+					? activeDrag.collection.key
 					: null,
 			activeRecordCount:
 				activeDrag?.kind === "records" ? activeDrag.itemKeys.length : 0,

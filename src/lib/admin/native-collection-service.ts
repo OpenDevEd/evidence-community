@@ -6,7 +6,7 @@ import type { Database } from "@/db/database-schema";
 import { reserveCollectionIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
 
-import { collectionDescendantKeys } from "./collection-tree";
+import { collectionDescendantKeys } from "./collection-hierarchy";
 import { NATIVE_SOURCE_CONNECTION_KEY as NATIVE_CONNECTION_KEY } from "./constants";
 import { AdminValidationError, type AdminFieldErrors } from "./errors";
 export const NATIVE_COLLECTION_SORT_ORDER_STEP = 1024;

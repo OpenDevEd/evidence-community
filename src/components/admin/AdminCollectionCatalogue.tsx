@@ -32,10 +32,8 @@ import {
 import { Dropdown } from "@/components/nextui/Dropdown";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import type { NativeCollectionDropDestination } from "@/lib/admin/collection-tree";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import type {
-	AdminCollection,
 	AdminCollectionCatalogEntry,
 	AdminSource,
 } from "@/lib/admin/types";
@@ -43,6 +41,7 @@ import type {
 import {
 	COLLECTION_DRAG_TYPE,
 	type CollectionDragData,
+	type NativeCollectionDropDestination,
 	RECORD_DRAG_TYPE,
 	useAdminDragState,
 } from "./AdminDragDropProvider";
@@ -54,28 +53,14 @@ import {
 	useAdminCollectionCatalogue,
 } from "./useAdminCollectionCatalogue";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
+import {
+	ADMIN_COLLECTION_EXPANSION_EVENT,
+	ADMIN_COLLECTION_FOCUS_EVENT,
+	ADMIN_COLLECTION_INVALIDATION_EVENT,
+} from "./admin-collection-events";
 
-const EXPANSION_EVENT = "admin-collection-expansion";
-const FOCUS_EVENT = "admin-collection-catalogue-focus";
-const INVALIDATION_EVENT = "admin-collection-catalogue-invalidation";
 const MAX_VISUAL_DEPTH = 8;
 const ROW_HEIGHT = 36;
-
-export function requestAdminCollectionExpansion(collectionKeys: string[]) {
-	window.dispatchEvent(
-		new CustomEvent<string[]>(EXPANSION_EVENT, { detail: collectionKeys }),
-	);
-}
-
-export function requestAdminCollectionCatalogueInvalidation() {
-	window.dispatchEvent(new Event(INVALIDATION_EVENT));
-}
-
-export function requestAdminCollectionFocus(collectionKey: string) {
-	window.dispatchEvent(
-		new CustomEvent<string>(FOCUS_EVENT, { detail: collectionKey }),
-	);
-}
 
 function useDebouncedValue(value: string, delay: number) {
 	const [debounced, setDebounced] = useState(value);
@@ -152,7 +137,7 @@ function EdgeDropZone({
 	};
 	const { isDropTarget, ref } = useDroppable({
 		accept: COLLECTION_DRAG_TYPE,
-		data: destination,
+		data: { ...destination, targetEntry: entry, targetName: entry.name },
 		id: `admin-collection-drop:${position}:${entry.key}`,
 		type: `admin-collection-${position}`,
 	});
@@ -185,10 +170,10 @@ function CollectionActions({
 	onMove,
 }: {
 	entry: AdminCollectionCatalogEntry;
-	onCreate: (parentCollection: string | null) => void;
-	onDelete: (collection: AdminCollection) => void;
-	onEdit: (collection: AdminCollection) => void;
-	onMove: (collection: AdminCollection) => void;
+	onCreate: (parentCollection: AdminCollectionCatalogEntry | null) => void;
+	onDelete: (collection: AdminCollectionCatalogEntry) => void;
+	onEdit: (collection: AdminCollectionCatalogEntry) => void;
+	onMove: (collection: AdminCollectionCatalogEntry) => void;
 }) {
 	return (
 		<Dropdown placement="bottom-end">
@@ -204,7 +189,7 @@ function CollectionActions({
 			<DropdownMenu
 				aria-label={`Actions for ${entry.name}`}
 				onAction={(key) => {
-					if (key === "create") onCreate(entry.key);
+					if (key === "create") onCreate(entry);
 					if (key === "rename") onEdit(entry);
 					if (key === "move") onMove(entry);
 					if (key === "delete") onDelete(entry);
@@ -247,13 +232,13 @@ type CollectionRowProps = {
 	expanded: boolean;
 	focused: boolean;
 	hierarchyEnabled: boolean;
-	onCreate: (parentCollection: string | null) => void;
-	onDelete: (collection: AdminCollection) => void;
-	onEdit: (collection: AdminCollection) => void;
+	onCreate: (parentCollection: AdminCollectionCatalogEntry | null) => void;
+	onDelete: (collection: AdminCollectionCatalogEntry) => void;
+	onEdit: (collection: AdminCollectionCatalogEntry) => void;
 	onFocus: () => void;
 	onKeyDown: (event: KeyboardEvent<HTMLButtonElement>) => void;
-	onMove: (collection: AdminCollection) => void;
-	onRestore: (collection: AdminCollection) => void;
+	onMove: (collection: AdminCollectionCatalogEntry) => void;
+	onRestore: (collection: AdminCollectionCatalogEntry) => void;
 	onSelect: (key: string) => void;
 	onToggle: (entry: AdminCollectionCatalogEntry) => void;
 	path?: string;
@@ -307,16 +292,19 @@ function CollectionRow({
 	};
 	const { isDropTarget, ref: insideRef } = useDroppable({
 		accept: [COLLECTION_DRAG_TYPE, RECORD_DRAG_TYPE],
-		data: insideDestination,
+		data: {
+			...insideDestination,
+			targetEntry: entry,
+			targetName: entry.name,
+		},
 		disabled: !acceptsCollection && !acceptsRecords,
 		id: `admin-collection-inside:${entry.key}`,
 		type: "admin-collection-inside",
 	});
 	const { handleRef, isDragging, ref } = useDraggable<CollectionDragData>({
 		data: {
-			collectionKey: entry.key,
+			collection: entry,
 			kind: "collection",
-			name: entry.name,
 		},
 		disabled: !movesEnabled,
 		id: `admin-collection:${entry.key}`,
@@ -338,7 +326,7 @@ function CollectionRow({
 	const Icon = selected || expanded ? FolderOpen : Folder;
 	return (
 		<div
-			ref={ref}
+			ref={hierarchyEnabled ? ref : undefined}
 			className={`group relative flex h-full items-center rounded-lg pr-1 text-[13px] ${
 				isDragging ? "opacity-35" : ""
 			} ${
@@ -487,11 +475,11 @@ function CollectionRow({
 
 type CatalogueProps = {
 	busy: boolean;
-	onCreate: (parentCollection: string | null) => void;
-	onDelete: (collection: AdminCollection) => void;
-	onEdit: (collection: AdminCollection) => void;
-	onMove: (collection: AdminCollection) => void;
-	onRestore: (collection: AdminCollection) => void;
+	onCreate: (parentCollection: AdminCollectionCatalogEntry | null) => void;
+	onDelete: (collection: AdminCollectionCatalogEntry) => void;
+	onEdit: (collection: AdminCollectionCatalogEntry) => void;
+	onMove: (collection: AdminCollectionCatalogEntry) => void;
+	onRestore: (collection: AdminCollectionCatalogEntry) => void;
 	onSelect: (key: string) => void;
 	selectedCollection: string | null;
 	sources: AdminSource[];
@@ -607,8 +595,12 @@ export function AdminCollectionCatalogue({
 			if (!Array.isArray(keys)) return;
 			setExpandedCollections((current) => new Set([...current, ...keys]));
 		};
-		window.addEventListener(EXPANSION_EVENT, expand);
-		return () => window.removeEventListener(EXPANSION_EVENT, expand);
+		window.addEventListener(ADMIN_COLLECTION_EXPANSION_EVENT, expand);
+		return () =>
+			window.removeEventListener(
+				ADMIN_COLLECTION_EXPANSION_EVENT,
+				expand,
+			);
 	}, []);
 
 	useEffect(() => {
@@ -616,9 +608,15 @@ export function AdminCollectionCatalogue({
 			scrolledSelection.current = "";
 			catalogueInvalidate();
 		};
-		window.addEventListener(INVALIDATION_EVENT, handleInvalidation);
+		window.addEventListener(
+			ADMIN_COLLECTION_INVALIDATION_EVENT,
+			handleInvalidation,
+		);
 		return () =>
-			window.removeEventListener(INVALIDATION_EVENT, handleInvalidation);
+			window.removeEventListener(
+				ADMIN_COLLECTION_INVALIDATION_EVENT,
+				handleInvalidation,
+			);
 	}, [catalogueInvalidate]);
 
 	useEffect(() => {
@@ -626,8 +624,12 @@ export function AdminCollectionCatalogue({
 			const key = (event as CustomEvent<string>).detail;
 			if (typeof key === "string") setPendingFocusKey(key);
 		};
-		window.addEventListener(FOCUS_EVENT, handleFocus);
-		return () => window.removeEventListener(FOCUS_EVENT, handleFocus);
+		window.addEventListener(ADMIN_COLLECTION_FOCUS_EVENT, handleFocus);
+		return () =>
+			window.removeEventListener(
+				ADMIN_COLLECTION_FOCUS_EVENT,
+				handleFocus,
+			);
 	}, []);
 
 	const selectedKey =
@@ -964,14 +966,33 @@ export function AdminCollectionCatalogue({
 			(row) =>
 				row.kind === "collection" && row.entry.key === pendingFocusKey,
 		);
-		if (rowIndex < 0) return;
+		if (rowIndex < 0) {
+			if (
+				searchMode &&
+				(catalogueState.search.status === "ready" ||
+					catalogueState.search.status === "error") &&
+				!catalogueState.search.loadingMore
+			) {
+				document
+					.querySelector<HTMLElement>(
+						'[aria-label="Search collections"]',
+					)
+					?.focus({ preventScroll: true });
+				setPendingFocusKey(null);
+			}
+			return;
+		}
 		virtualizer.scrollToIndex(rowIndex, { align: "auto" });
 		let secondFrame = 0;
 		const firstFrame = window.requestAnimationFrame(() => {
 			secondFrame = window.requestAnimationFrame(() => {
-				const target = document.querySelector<HTMLElement>(
-					`[data-collection-drag-handle="${pendingFocusKey}"]`,
-				);
+				const target =
+					document.querySelector<HTMLElement>(
+						`[data-collection-drag-handle="${pendingFocusKey}"]`,
+					) ??
+					document.getElementById(
+						`admin-catalogue-collection:${pendingFocusKey}`,
+					);
 				if (!target) return;
 				target.focus({ preventScroll: true });
 				setPendingFocusKey(null);
@@ -981,7 +1002,15 @@ export function AdminCollectionCatalogue({
 			window.cancelAnimationFrame(firstFrame);
 			window.cancelAnimationFrame(secondFrame);
 		};
-	}, [busy, pendingFocusKey, rows, virtualizer]);
+	}, [
+		busy,
+		catalogueState.search.loadingMore,
+		catalogueState.search.status,
+		pendingFocusKey,
+		rows,
+		searchMode,
+		virtualizer,
+	]);
 
 	const toggleSource = (key: string) => {
 		setExpandedSources((current) => {

@@ -36,7 +36,6 @@ import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import type {
-	AdminCollection,
 	AdminCollectionCatalogEntry,
 	AdminItemDetail,
 	AdminItemViewFilters,
@@ -53,13 +52,6 @@ import { getRuntimeHomeHref } from "@/config/library-config/links";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { useFinePointer } from "@/hooks/useBreakpoint";
 import { Link } from "@/i18n/routing";
-import {
-	collectionAncestorKeys,
-	collectionDescendantKeys,
-	mergeAdminCollectionUpdates,
-	resolveNativeCollectionDrop,
-} from "@/lib/admin/collection-tree";
-import type { NativeCollectionDropDestination } from "@/lib/admin/collection-tree";
 
 import { AdminInspector } from "./AdminInspector";
 import {
@@ -105,7 +97,10 @@ import {
 	payloadForItemType,
 } from "./admin-schema";
 import { focusAdminDragHandle } from "./admin-focus";
-import { AdminDragDropRoot } from "./AdminDragDropProvider";
+import {
+	AdminDragDropRoot,
+	type NativeCollectionDropDestination,
+} from "./AdminDragDropProvider";
 import { isTopLevelAdminItemType } from "@/lib/admin/item-fields";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
 import {
@@ -127,13 +122,11 @@ type CollectionDialog =
 			parentCollection: string | null;
 	  }
 	| {
-			collection: AdminCollection;
+			collection: AdminCollectionCatalogEntry;
 			mode: "rename";
 	  };
 
-type MoveDialog = {
-	collection: AdminCollection;
-};
+type MoveDialog = { collection: AdminCollectionCatalogEntry };
 
 type CollectionLocation = {
 	key: string;
@@ -166,30 +159,23 @@ function collectionLocationFromCatalog(
 	};
 }
 
-function collectionLocationFromSnapshot(
-	key: string | null,
-	collections: AdminCollection[],
+function parentCollectionLocation(
+	entry: AdminCollectionCatalogEntry,
 	sources: AdminLibrarySnapshot["sources"],
 ): CollectionLocation | null {
-	if (!key) return null;
-	const entry = collections.find((collection) => collection.key === key);
-	if (!entry) return null;
+	const parent = entry.ancestors.at(-1);
+	if (!parent) return null;
 	const source =
 		sources.find(
 			({ key: sourceKey }) => sourceKey === entry.sourceConnectionKey,
 		)?.label ?? entry.sourceConnectionKey;
-	const ancestors = collectionAncestorKeys(collections, entry.key).flatMap(
-		(ancestorKey) => {
-			const ancestor = collections.find(
-				(collection) => collection.key === ancestorKey,
-			);
-			return ancestor ? [ancestor.name] : [];
-		},
-	);
 	return {
-		key: entry.key,
-		name: entry.name,
-		path: [source, ...ancestors].join(" › "),
+		key: parent.key,
+		name: parent.name,
+		path: [
+			source,
+			...entry.ancestors.slice(0, -1).map(({ name }) => name),
+		].join(" › "),
 	};
 }
 
@@ -395,7 +381,6 @@ export default function AdminWorkbench({
 	const { navigation } = useLibraryConfig();
 	const homeHref = getRuntimeHomeHref(navigation.links);
 	const [library, setLibrary] = useState<AdminLibrarySnapshot>({
-		collections: [],
 		sources: [],
 	});
 	const [detail, setDetail] = useState<AdminItemDetail | null>(null);
@@ -445,6 +430,8 @@ export default function AdminWorkbench({
 	const [collectionParent, setCollectionParent] = useState<string | null>(
 		null,
 	);
+	const [collectionParentEntry, setCollectionParentEntry] =
+		useState<AdminCollectionCatalogEntry | null>(null);
 	const [collectionParentLocation, setCollectionParentLocation] =
 		useState<CollectionLocation | null>(null);
 	const [collectionParentPickerOpen, setCollectionParentPickerOpen] =
@@ -1173,38 +1160,41 @@ export default function AdminWorkbench({
 		});
 	};
 
-	const openCreateCollection = (parentCollection: string | null) => {
+	const openCreateCollection = (
+		parentCollection: AdminCollectionCatalogEntry | null,
+	) => {
 		setCollectionErrors({});
-		setCollectionDialog({ mode: "create", parentCollection });
+		setCollectionDialog({
+			mode: "create",
+			parentCollection: parentCollection?.key ?? null,
+		});
 		setCollectionName("");
-		setCollectionParent(parentCollection);
+		setCollectionParent(parentCollection?.key ?? null);
+		setCollectionParentEntry(parentCollection);
 		setCollectionParentLocation(
-			collectionLocationFromSnapshot(
-				parentCollection,
-				library.collections,
-				library.sources,
-			),
+			parentCollection
+				? collectionLocationFromCatalog(
+						parentCollection,
+						library.sources,
+					)
+				: null,
 		);
 		setCollectionParentPickerOpen(false);
 	};
 
-	const openRenameCollection = (collection: AdminCollection) => {
+	const openRenameCollection = (collection: AdminCollectionCatalogEntry) => {
 		setCollectionErrors({});
 		setCollectionDialog({ collection, mode: "rename" });
 		setCollectionName(collection.name);
 		setCollectionParentPickerOpen(false);
 	};
 
-	const openMoveCollection = (collection: AdminCollection) => {
+	const openMoveCollection = (collection: AdminCollectionCatalogEntry) => {
 		setMoveErrors({});
 		setMoveDialog({ collection });
 		setMoveParent(collection.parentCollection);
 		setMoveParentLocation(
-			collectionLocationFromSnapshot(
-				collection.parentCollection,
-				library.collections,
-				library.sources,
-			),
+			parentCollectionLocation(collection, library.sources),
 		);
 		setMoveParentPickerOpen(false);
 		setMoveDestinationChanged(false);
@@ -1221,8 +1211,9 @@ export default function AdminWorkbench({
 		void runBusy(
 			async () => {
 				if (!collectionName.trim() || !collectionDialog) return;
+				let focusKey: string;
 				if (collectionDialog.mode === "rename") {
-					await renameAdminCollection(
+					const result = await renameAdminCollection(
 						collectionDialog.collection.key,
 						{
 							expectedRevision:
@@ -1230,24 +1221,26 @@ export default function AdminWorkbench({
 							name: collectionName,
 						},
 					);
+					focusKey = result.collection.key;
 					toast.success("Collection renamed");
 				} else {
-					await createAdminCollection({
+					const result = await createAdminCollection({
 						name: collectionName,
 						parentCollection: collectionParent,
 					});
-					if (collectionParent) {
+					focusKey = result.collection.key;
+					if (collectionParentEntry) {
 						expandAdminCollections([
-							...collectionAncestorKeys(
-								library.collections,
-								collectionParent,
+							...collectionParentEntry.ancestors.map(
+								({ key }) => key,
 							),
-							collectionParent,
+							collectionParentEntry.key,
 						]);
 					}
 					toast.success("Collection created");
 				}
 				invalidateAdminCollectionCatalogue();
+				focusAdminCollection(focusKey);
 				setCollectionDialog(null);
 				await refreshCurrent();
 			},
@@ -1258,7 +1251,7 @@ export default function AdminWorkbench({
 		void runBusy(
 			async () => {
 				if (!moveDialog) return;
-				await moveAdminCollection(
+				const result = await moveAdminCollection(
 					moveDialog.collection.key,
 					moveParent
 						? {
@@ -1274,65 +1267,53 @@ export default function AdminWorkbench({
 							},
 				);
 				invalidateAdminCollectionCatalogue();
+				focusAdminCollection(moveDialog.collection.key);
 				setMoveDialog(null);
 				await refreshCurrent();
-				toast.success("Collection moved");
+				toast.success(
+					result.collections.length
+						? "Collection moved"
+						: "Collection is already there",
+				);
 			},
 			(error) => setMoveErrors(formErrors(error)),
 		);
 
 	const dropCollection = (
-		collection: AdminCollection,
+		collection: AdminCollectionCatalogEntry,
 		destination: NativeCollectionDropDestination,
 	) => {
-		const move = resolveNativeCollectionDrop(
-			library.collections,
-			collection.key,
-			destination,
-		);
-		if (!move) return;
-		void runBusy(async () => {
-			const result = await moveAdminCollection(
-				collection.key,
-				destination.position === "root"
-					? {
-							expectedRevision: collection.revision,
-							position: "root",
-						}
-					: {
-							expectedRevision: collection.revision,
-							position: destination.position,
-							targetCollection: destination.targetCollection,
-						},
-			).catch(async (error) => {
-				await loadLibrary();
-				throw error;
-			});
-			invalidateAdminCollectionCatalogue();
-			focusAdminCollection(collection.key);
-			setLibrary((current) => ({
-				...current,
-				collections: mergeAdminCollectionUpdates(
-					current.collections,
+		void runBusy(
+			async () => {
+				const result = await moveAdminCollection(
+					collection.key,
+					destination.position === "root"
+						? {
+								expectedRevision: collection.revision,
+								position: "root",
+							}
+						: {
+								expectedRevision: collection.revision,
+								position: destination.position,
+								targetCollection: destination.targetCollection,
+							},
+				);
+				invalidateAdminCollectionCatalogue();
+				focusAdminCollection(collection.key);
+				toast.success(
 					result.collections.length
-						? result.collections
-						: [result.collection],
-				),
-			}));
-			if (move.parentCollection) {
-				expandAdminCollections([
-					...collectionAncestorKeys(
-						library.collections,
-						move.parentCollection,
-					),
-					move.parentCollection,
-				]);
-			}
-			toast.success("Collection moved");
-		});
+						? "Collection moved"
+						: "Collection is already there",
+				);
+			},
+			() => {
+				invalidateAdminCollectionCatalogue();
+				focusAdminCollection(collection.key);
+			},
+		);
 	};
 
-	const removeCollection = (collection: AdminCollection) =>
+	const removeCollection = (collection: AdminCollectionCatalogEntry) =>
 		setConfirmDialog({
 			title: `Delete ${collection.name}?`,
 			message:
@@ -1340,16 +1321,12 @@ export default function AdminWorkbench({
 			confirmLabel: "Delete",
 			danger: true,
 			action: async () => {
-				const removedKeys = new Set([
-					collection.key,
-					...collectionDescendantKeys(
-						library.collections,
-						collection.key,
-					),
-				]);
-				await deleteAdminCollection(
+				const result = await deleteAdminCollection(
 					collection.key,
 					collection.revision,
+				);
+				const removedKeys = new Set(
+					result.collections.map(({ key }) => key),
 				);
 				invalidateAdminCollectionCatalogue();
 				const selectedCollection = singleAdminItemFilterValue(
@@ -1371,7 +1348,7 @@ export default function AdminWorkbench({
 			},
 		});
 
-	const restoreCollection = (collection: AdminCollection) =>
+	const restoreCollection = (collection: AdminCollectionCatalogEntry) =>
 		setConfirmDialog({
 			title: `Restore ${collection.name}?`,
 			message:
@@ -1764,7 +1741,6 @@ export default function AdminWorkbench({
 			</header>
 
 			<AdminDragDropRoot
-				collections={library.collections}
 				enabled={!busy}
 				onDropCollection={dropCollection}
 				onDropRecords={(itemKeys, collectionKey) =>
@@ -1929,7 +1905,6 @@ export default function AdminWorkbench({
 								) : undefined
 							}
 							bulkKeys={bulkKeys}
-							collections={library.collections}
 							dragEnabled={!busy}
 							error={listError}
 							hasMore={hasMore}
@@ -2170,6 +2145,7 @@ export default function AdminWorkbench({
 										editableOnly
 										onSelect={(entry) => {
 											setCollectionParent(entry.key);
+											setCollectionParentEntry(entry);
 											setCollectionParentLocation(
 												collectionLocationFromCatalog(
 													entry,
@@ -2192,6 +2168,7 @@ export default function AdminWorkbench({
 										}
 										onSelectTopLevel={() => {
 											setCollectionParent(null);
+											setCollectionParentEntry(null);
 											setCollectionParentLocation(null);
 											setCollectionParentPickerOpen(
 												false,

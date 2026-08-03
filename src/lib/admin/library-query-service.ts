@@ -317,21 +317,10 @@ export function toAdminCollection(
 export async function getAdminLibrarySnapshot(
 	db: Database,
 ): Promise<AdminLibrarySnapshot> {
-	const [sourceRows, collectionRows] = await Promise.all([
-		db
-			.select()
-			.from(sourceConnection)
-			.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key)),
-		db
-			.select()
-			.from(collection)
-			.orderBy(
-				asc(collection.sourceConnectionKey),
-				sql`${collection.sortOrder} ASC NULLS LAST`,
-				sql`lower(coalesce(${collection.name}, ''))`,
-				asc(collection.key),
-			),
-	]);
+	const sourceRows = await db
+		.select()
+		.from(sourceConnection)
+		.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key));
 	const sources = sourceRows.map((row) => ({
 		key: row.key,
 		label:
@@ -355,7 +344,6 @@ export async function getAdminLibrarySnapshot(
 	}
 
 	return {
-		collections: collectionRows.map(toAdminCollection),
 		sources,
 	};
 }

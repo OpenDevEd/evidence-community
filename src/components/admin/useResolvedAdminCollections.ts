@@ -4,7 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { AdminCollectionCatalogEntry } from "@/lib/admin/types";
 
-import { resolveAdminCollectionCatalog } from "./admin-api";
+import {
+	readResolvedAdminCollection,
+	resolveAdminCollectionKeys,
+} from "./admin-collection-resolution-cache";
+import { ADMIN_COLLECTION_INVALIDATION_EVENT } from "./admin-collection-events";
 
 type ResolutionState = {
 	entries: AdminCollectionCatalogEntry[];
@@ -18,7 +22,12 @@ const EMPTY_RESOLUTION: ResolutionState = {
 	signature: "",
 };
 
-export function useResolvedAdminCollections(keys: readonly string[]) {
+export function useResolvedAdminCollections(
+	keys: readonly string[],
+	options: { maxAutoRetries?: number; retryDelayMs?: number } = {},
+) {
+	const maxAutoRetries = options.maxAutoRetries ?? 0;
+	const retryDelayMs = options.retryDelayMs ?? 250;
 	const signature = keys.join("\u0000");
 	const stableKeys = useMemo(
 		() => (signature ? signature.split("\u0000") : []),
@@ -28,56 +37,86 @@ export function useResolvedAdminCollections(keys: readonly string[]) {
 	const [resolution, setResolution] =
 		useState<ResolutionState>(EMPTY_RESOLUTION);
 	const [reloadToken, setReloadToken] = useState(0);
-	const retry = useCallback(() => setReloadToken((value) => value + 1), []);
+	const refresh = useCallback(() => setReloadToken((value) => value + 1), []);
+	const retry = refresh;
+	useEffect(() => {
+		window.addEventListener(ADMIN_COLLECTION_INVALIDATION_EVENT, refresh);
+		return () =>
+			window.removeEventListener(
+				ADMIN_COLLECTION_INVALIDATION_EVENT,
+				refresh,
+			);
+	}, [refresh]);
 
 	useEffect(() => {
+		let cancelled = false;
 		const controller = new AbortController();
 		void (async () => {
 			if (!stableKeys.length) {
 				await Promise.resolve();
-				if (!controller.signal.aborted) setResolution(EMPTY_RESOLUTION);
+				if (!cancelled) setResolution(EMPTY_RESOLUTION);
 				return;
 			}
-			const chunks = Array.from(
-				{ length: Math.ceil(stableKeys.length / 100) },
-				(_, index) => stableKeys.slice(index * 100, index * 100 + 100),
-			);
-			const responses = await Promise.allSettled(
-				chunks.map((chunk) =>
-					resolveAdminCollectionCatalog(chunk, controller.signal),
-				),
-			);
-			if (controller.signal.aborted) return;
-			const resolved = responses.flatMap((response) =>
-				response.status === "fulfilled" ? response.value.items : [],
-			);
-			const rejectedKeys = new Set(
-				responses.flatMap((response, index) =>
-					response.status === "rejected" ? chunks[index]! : [],
-				),
-			);
-			setResolution((current) => {
-				const retained = current.entries.filter(
-					({ key }) => keySet.has(key) && rejectedKeys.has(key),
-				);
-				const byKey = new Map(
-					retained.map((entry) => [entry.key, entry]),
-				);
-				for (const entry of resolved) byKey.set(entry.key, entry);
-				return {
-					entries: stableKeys.flatMap((key) => {
-						const entry = byKey.get(key);
-						return entry ? [entry] : [];
-					}),
-					error: responses.some(
-						(response) => response.status === "rejected",
-					),
-					signature,
-				};
-			});
+			let pendingKeys = stableKeys;
+			const resolvedThisRequest = new Map<
+				string,
+				AdminCollectionCatalogEntry | null
+			>();
+			for (let attempt = 0; attempt <= maxAutoRetries; attempt += 1) {
+				const { entries, failedKeys } =
+					await resolveAdminCollectionKeys(
+						pendingKeys,
+						controller.signal,
+					);
+				if (cancelled) return;
+				for (const [key, entry] of entries) {
+					resolvedThisRequest.set(key, entry);
+				}
+				setResolution((current) => {
+					const retained = current.entries.filter(
+						({ key }) => keySet.has(key) && failedKeys.has(key),
+					);
+					const byKey = new Map<string, AdminCollectionCatalogEntry>(
+						retained.map((entry) => [entry.key, entry]),
+					);
+					for (const key of stableKeys) {
+						const entry = resolvedThisRequest.has(key)
+							? resolvedThisRequest.get(key)
+							: readResolvedAdminCollection(key);
+						if (entry) byKey.set(key, entry);
+						else if (entry === null) byKey.delete(key);
+					}
+					return {
+						entries: stableKeys.flatMap((key) => {
+							const entry = byKey.get(key);
+							return entry ? [entry] : [];
+						}),
+						error: failedKeys.size > 0,
+						signature,
+					};
+				});
+				if (failedKeys.size === 0 || attempt === maxAutoRetries) {
+					return;
+				}
+				pendingKeys = [...failedKeys];
+				await new Promise<void>((resolve) => {
+					window.setTimeout(resolve, retryDelayMs * 2 ** attempt);
+				});
+				if (cancelled) return;
+			}
 		})();
-		return () => controller.abort();
-	}, [keySet, reloadToken, signature, stableKeys]);
+		return () => {
+			cancelled = true;
+			controller.abort();
+		};
+	}, [
+		keySet,
+		maxAutoRetries,
+		reloadToken,
+		retryDelayMs,
+		signature,
+		stableKeys,
+	]);
 
 	const current = resolution.signature === signature;
 	return {

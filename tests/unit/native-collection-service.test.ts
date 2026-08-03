@@ -13,7 +13,7 @@ import {
 	planNativeCollectionPosition,
 	resolveNativeCollectionMoveIntent,
 } from "@/lib/admin/native-collection-service";
-import { collectionDescendantKeys } from "@/lib/admin/collection-tree";
+import { collectionDescendantKeys } from "@/lib/admin/collection-hierarchy";
 
 const rows = [
 	{
@@ -119,31 +119,28 @@ describe("native collection validation", () => {
 			},
 		];
 		expect(
-			resolveNativeCollectionMoveIntent(
-				orderedRows,
-				"CDEF4567",
-				{ position: "after", targetCollection: "ABCD2345" },
-			),
+			resolveNativeCollectionMoveIntent(orderedRows, "CDEF4567", {
+				position: "after",
+				targetCollection: "ABCD2345",
+			}),
 		).toEqual({
 			beforeCollection: "BCDE3456",
 			parentCollection: null,
 		});
 		expect(
-			resolveNativeCollectionMoveIntent(
-				orderedRows,
-				"ABCD2345",
-				{ position: "inside", targetCollection: "BCDE3456" },
-			),
+			resolveNativeCollectionMoveIntent(orderedRows, "ABCD2345", {
+				position: "inside",
+				targetCollection: "BCDE3456",
+			}),
 		).toEqual({
 			beforeCollection: null,
 			parentCollection: "BCDE3456",
 		});
 		expect(() =>
-			resolveNativeCollectionMoveIntent(
-				orderedRows,
-				"ABCD2345",
-				{ position: "after", targetCollection: "ABCD2345" },
-			),
+			resolveNativeCollectionMoveIntent(orderedRows, "ABCD2345", {
+				position: "after",
+				targetCollection: "ABCD2345",
+			}),
 		).toThrow(NativeCollectionValidationError);
 	});
 

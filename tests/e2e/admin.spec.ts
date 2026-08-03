@@ -278,16 +278,8 @@ async function mockPublishedBook(
 		}
 
 		if (pathname === "/api/admin/library") {
-			const collections = catalogEntries.map(
-				({
-					ancestors: _ancestors,
-					hasChildren: _hasChildren,
-					...entry
-				}) => entry,
-			);
 			await route.fulfill({
 				json: {
-					collections,
 					sources: [
 						{
 							key: "native",
@@ -701,7 +693,12 @@ test("persists advanced typed filters in the URL", async ({ page }) => {
 	);
 	await dialog.getByRole("button", { name: "Clear", exact: true }).click();
 	await dialog.locator('button[aria-label="Add filter"]').click();
-	await page.getByRole("option", { name: "Title", exact: true }).click();
+	await page
+		.getByRole("option", { name: "Title", exact: true })
+		.press("Enter");
+	await expect(
+		dialog.locator('button[aria-label="Filter 1 field"]'),
+	).toContainText("Title");
 	await dialog.getByRole("textbox", { name: "Title value" }).fill("evidence");
 	await dialog.getByRole("button", { name: "Apply", exact: true }).click();
 
@@ -941,12 +938,17 @@ test("filters by searched native and imported collections without loading an opt
 		)!;
 		const rect = element.getBoundingClientRect();
 		const pickerRect = filterPicker.getBoundingClientRect();
+		const footer = element.lastElementChild!.getBoundingClientRect();
 		return {
+			dialogBottom: rect.bottom,
+			dialogHeight: rect.height,
 			dialogWidth: rect.width,
 			documentOverflow:
 				document.documentElement.scrollWidth - window.innerWidth,
 			pickerInside:
 				pickerRect.left >= rect.left && pickerRect.right <= rect.right,
+			footerInsideViewport:
+				footer.top >= 0 && footer.bottom <= window.innerHeight,
 			resultsMaxHeight: Number.parseFloat(
 				getComputedStyle(results).maxHeight,
 			),
@@ -954,8 +956,11 @@ test("filters by searched native and imported collections without loading an opt
 	});
 	expect(geometry).toMatchObject({
 		documentOverflow: 0,
+		footerInsideViewport: true,
 		pickerInside: true,
 	});
+	expect(geometry.dialogBottom).toBeLessThanOrEqual(420);
+	expect(geometry.dialogHeight).toBeLessThanOrEqual(348);
 	expect(geometry.dialogWidth).toBeLessThanOrEqual(560);
 	expect(geometry.resultsMaxHeight).toBeLessThanOrEqual(320);
 	const apply = dialog.getByRole("button", { name: "Apply", exact: true });
@@ -1068,7 +1073,6 @@ async function mockBookWithAttachment(
 		if (pathname === "/api/admin/library") {
 			await route.fulfill({
 				json: {
-					collections: [],
 					sources: [
 						{
 							key: "native",
@@ -1140,7 +1144,7 @@ test("creates an item through a pointer click in the new-item dialog", async ({
 
 		if (pathname === "/api/admin/library") {
 			await route.fulfill({
-				json: { collections: [], sources: [] },
+				json: { sources: [] },
 			});
 			return;
 		}
@@ -1982,6 +1986,138 @@ test("refreshes an off-page ancestor after catalogue invalidation", async ({
 	).toBeVisible();
 });
 
+test("refreshes loaded record collection labels after a rename", async ({
+	page,
+}) => {
+	let collectionSearches = 0;
+	const catalog = await mockPublishedBook(page, {
+		listRowOverrides: { collections: [teacherCollection.key] },
+		onCollectionPage: (request) => {
+			if (
+				request.searchParams.get("view") === "search" &&
+				request.searchParams.get("query") === "teacher"
+			) {
+				collectionSearches += 1;
+			}
+		},
+	});
+	const renamed = {
+		...collectionCatalogEntries[0]!,
+		name: "Learning library",
+		revision: 2,
+	};
+	await page.route(
+		`**/api/admin/collections/${teacherCollection.key}`,
+		async (route) => {
+			catalog.replaceCollection(renamed);
+			await route.fulfill({ json: { collection: renamed } });
+		},
+	);
+
+	await page.goto("/admin");
+	await page
+		.getByRole("button", { name: "Choose and arrange columns" })
+		.click();
+	await page
+		.getByRole("checkbox", { name: "Show Collections", exact: true })
+		.click();
+	await page.keyboard.press("Escape");
+	const collectionCell = page.locator(
+		`[data-record-key="${publishedItemKey}"] [data-column-id="collections"]`,
+	);
+	await expect(collectionCell).toContainText(teacherCollection.name);
+	await page
+		.getByRole("textbox", { name: "Search collections" })
+		.fill("teacher");
+	await expect.poll(() => collectionSearches).toBeGreaterThan(0);
+	await expect(
+		page.getByRole("treeitem", {
+			name: new RegExp(teacherCollection.name, "u"),
+		}),
+	).toBeVisible();
+
+	await page
+		.getByRole("button", {
+			name: `Manage ${teacherCollection.name}`,
+			exact: true,
+		})
+		.click();
+	await page.getByRole("menuitem", { name: "Rename" }).click();
+	const dialog = page.getByRole("dialog", { name: "Rename collection" });
+	await dialog.getByRole("textbox", { name: "Name" }).fill(renamed.name);
+	await dialog.getByRole("button", { name: "Rename", exact: true }).click();
+
+	await expect(collectionCell).toContainText(renamed.name);
+	await expect(collectionCell).not.toContainText(teacherCollection.name);
+	await expect(
+		page.getByRole("textbox", { name: "Search collections" }),
+	).toBeFocused();
+	await expect(
+		page.getByRole("treeitem", { name: new RegExp(renamed.name, "u") }),
+	).toHaveCount(0);
+});
+
+test("restores search focus when a mutation refresh cannot reload results", async ({
+	page,
+}) => {
+	let failSearch = false;
+	const catalog = await mockPublishedBook(page);
+	await page.route("**/api/admin/collections?*", async (route) => {
+		const request = new URL(route.request().url());
+		if (failSearch && request.searchParams.get("view") === "search") {
+			await route.fulfill({
+				json: {
+					error: {
+						code: "internal_error",
+						message: "Collections could not be reloaded.",
+					},
+				},
+				status: 503,
+			});
+			return;
+		}
+		await route.fallback();
+	});
+	const renamed = {
+		...collectionCatalogEntries[0]!,
+		name: "Teacher learning",
+		revision: 2,
+	};
+	await page.route(
+		`**/api/admin/collections/${teacherCollection.key}`,
+		async (route) => {
+			catalog.replaceCollection(renamed);
+			failSearch = true;
+			await route.fulfill({ json: { collection: renamed } });
+		},
+	);
+
+	await page.goto("/admin");
+	const search = page.getByRole("textbox", { name: "Search collections" });
+	await search.fill("teacher");
+	await expect(
+		page.getByRole("treeitem", {
+			name: `${teacherCollection.name} Native`,
+			exact: true,
+		}),
+	).toBeVisible();
+	await page
+		.getByRole("button", {
+			name: `Manage ${teacherCollection.name}`,
+			exact: true,
+		})
+		.click();
+	await page.getByRole("menuitem", { name: "Rename" }).click();
+	const dialog = page.getByRole("dialog", { name: "Rename collection" });
+	await dialog.getByRole("textbox", { name: "Name" }).fill(renamed.name);
+	await dialog.getByRole("button", { name: "Rename", exact: true }).click();
+
+	await expect(
+		page.getByRole("treeitem", { name: "Try again", exact: true }),
+	).toBeVisible();
+	await expect(search).toBeFocused();
+});
+
 test("pages and virtualizes large collection catalogues while loading sources lazily", async ({
 	page,
 }) => {
@@ -2341,6 +2477,54 @@ test("moves a native collection into another collection with pointer drag", asyn
 	await expect(
 		page.locator('[data-collection-drag-handle="TEACHDEV"]'),
 	).toBeFocused();
+});
+
+test("restores collection focus after a failed pointer move reloads the catalogue", async ({
+	page,
+}) => {
+	let moveAttempts = 0;
+	let rootPageLoads = 0;
+	await mockPublishedBook(page, {
+		onCollectionPage: (request) => {
+			if (
+				(request.searchParams.get("view") ?? "children") ===
+					"children" &&
+				(request.searchParams.get("parent") ?? "root") === "root" &&
+				request.searchParams.get("source") === "native"
+			) {
+				rootPageLoads += 1;
+			}
+		},
+	});
+	await page.route(
+		"**/api/admin/collections/TEACHDEV/move",
+		async (route) => {
+			moveAttempts += 1;
+			await route.fulfill({
+				json: {
+					error: {
+						code: "revision_conflict",
+						message: "The collection changed. Try the move again.",
+					},
+				},
+				status: 409,
+			});
+		},
+	);
+	await page.goto("/admin");
+	await expect.poll(() => rootPageLoads).toBeGreaterThan(0);
+
+	const handle = page.locator('[data-collection-drag-handle="TEACHDEV"]');
+	await activatePointerDrag(page, handle);
+	await movePointerTo(
+		page,
+		page.locator('[data-collection-drop="inside:LONGCOLL"]'),
+	);
+	await page.mouse.up();
+
+	await expect.poll(() => moveAttempts).toBe(1);
+	await expect.poll(() => rootPageLoads).toBeGreaterThan(1);
+	await expect(handle).toBeFocused();
 });
 
 test("adds a native record to a collection with pointer drag", async ({

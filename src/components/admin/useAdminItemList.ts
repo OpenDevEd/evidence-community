@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
@@ -61,6 +62,8 @@ export function useAdminItemList(
 	requestedColumns: readonly AdminItemColumnId[],
 	initialFilters: AdminItemViewFilters,
 ) {
+	const routeSearchParams = useSearchParams();
+	const routeSearch = routeSearchParams.toString();
 	const [filters, setFilters] =
 		useState<AdminItemViewFilters>(initialFilters);
 	const [items, setItems] = useState<AdminItemListRow[]>([]);
@@ -86,15 +89,13 @@ export function useAdminItemList(
 	}, [filters]);
 
 	useEffect(() => {
-		const restore = () =>
-			setFilters(
-				parseAdminItemViewFilters(
-					new URLSearchParams(window.location.search),
-				),
-			);
-		window.addEventListener("popstate", restore);
-		return () => window.removeEventListener("popstate", restore);
-	}, []);
+		const next = parseAdminItemViewFilters(
+			new URLSearchParams(routeSearch),
+		);
+		setFilters((current) =>
+			JSON.stringify(current) === JSON.stringify(next) ? current : next,
+		);
+	}, [routeSearch]);
 
 	const loadItems = useCallback(
 		async (cursor: string | null = null, append = false) => {

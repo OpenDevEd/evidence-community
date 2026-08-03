@@ -69,15 +69,12 @@ import {
 	type AdminItemTablePreferences,
 } from "@/lib/admin/item-table-preferences";
 import { recordDragLabel, recordDragSelection } from "@/lib/admin/record-drag";
-import type {
-	AdminCollection,
-	AdminItemListRow,
-	AdminSource,
-} from "@/lib/admin/types";
+import type { AdminItemListRow, AdminSource } from "@/lib/admin/types";
 
 import { RECORD_DRAG_TYPE, type RecordDragData } from "./AdminDragDropProvider";
 import { FileStateChip, RecordStateChip } from "./AdminStatus";
 import { humanizeAdminField } from "./admin-schema";
+import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 
 type AdminTableItem = AdminItemListRow & {
 	bulkSelected: boolean;
@@ -186,6 +183,22 @@ function RelationCell({
 				</span>
 			) : null}
 		</div>
+	);
+}
+
+function CollectionRelationCell({ keys }: { keys: readonly string[] }) {
+	const { entries } = useResolvedAdminCollections(keys, {
+		maxAutoRetries: 2,
+	});
+	const labels = new Map(entries.map(({ key, name }) => [key, name]));
+	return (
+		<RelationCell
+			entries={keys.map((key) => ({
+				key,
+				label: labels.get(key) ?? key,
+			}))}
+			icon={Folder}
+		/>
 	);
 }
 
@@ -549,7 +562,6 @@ function SortHeader({
 export function AdminItemTable({
 	bulkActions,
 	bulkKeys,
-	collections,
 	dragEnabled,
 	hasMore,
 	items,
@@ -572,7 +584,6 @@ export function AdminItemTable({
 }: {
 	bulkActions?: ReactNode;
 	bulkKeys: ReadonlySet<string>;
-	collections: AdminCollection[];
 	dragEnabled: boolean;
 	hasMore: boolean;
 	items: AdminItemListRow[];
@@ -612,10 +623,6 @@ export function AdminItemTable({
 				inspectorSelected: record.key === selectedKey,
 			})),
 		[bulkKeys, dragEnabled, items, selectedKey],
-	);
-	const collectionLabels = useMemo(
-		() => new Map(collections.map(({ key, name }) => [key, name])),
-		[collections],
 	);
 	const sourceLabels = useMemo(
 		() => new Map(sources.map(({ key, label }) => [key, label])),
@@ -735,13 +742,9 @@ export function AdminItemTable({
 				...ADMIN_ITEM_TABLE_COLUMN_SIZES.source,
 			},
 			{
-				cell: ({ row }) => {
-					const entries = row.original.collections.map((key) => ({
-						key,
-						label: collectionLabels.get(key) ?? key,
-					}));
-					return <RelationCell entries={entries} icon={Folder} />;
-				},
+				cell: ({ row }) => (
+					<CollectionRelationCell keys={row.original.collections} />
+				),
 				id: "collections",
 				...ADMIN_ITEM_TABLE_COLUMN_SIZES.collections,
 			},
@@ -792,7 +795,6 @@ export function AdminItemTable({
 		[
 			allVisibleSelected,
 			bulkKeys,
-			collectionLabels,
 			items,
 			onRequestCollectionAssignment,
 			onToggleBulk,

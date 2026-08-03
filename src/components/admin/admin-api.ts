@@ -398,10 +398,13 @@ export function moveAdminCollection(
 }
 
 export function deleteAdminCollection(key: string, expectedRevision: number) {
-	return requestJson(`/api/admin/collections/${encodeURIComponent(key)}`, {
-		method: "DELETE",
-		body: JSON.stringify({ expectedRevision }),
-	});
+	return requestJson<{ collections: AdminCollection[] }>(
+		`/api/admin/collections/${encodeURIComponent(key)}`,
+		{
+			method: "DELETE",
+			body: JSON.stringify({ expectedRevision }),
+		},
+	);
 }
 
 export function restoreAdminCollection(key: string, expectedRevision: number) {
