@@ -3,17 +3,8 @@ import {
 	itemIdentity,
 	outbox,
 } from "@opendeved/evidence-library-core";
-import {
-	and,
-	eq,
-	inArray,
-	isNull,
-} from "drizzle-orm";
-import {
-	MeiliSearch,
-	MeiliSearchApiError,
-	type Task,
-} from "meilisearch";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { MeiliSearch, MeiliSearchApiError, type Task } from "meilisearch";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { collection } from "../src/db/schema/tables/collection";
@@ -21,6 +12,7 @@ import { item } from "../src/db/schema/tables/item";
 import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import { tag } from "../src/db/schema/tables/tag";
+import { NATIVE_COLLECTION_SORT_ORDER_STEP } from "../src/lib/admin/native-collection-service";
 import type { MeilisearchService } from "../src/lib/meilisearch-factory";
 import {
 	applySearchProjectionPlan,
@@ -38,8 +30,7 @@ if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
 const verifiedDatabaseUrl = databaseUrl;
 const meilisearchHost =
 	process.env.MEILISEARCH_HOST ?? "http://127.0.0.1:57700";
-const meilisearchKey =
-	process.env.MEILISEARCH_KEY ?? "local-search-key";
+const meilisearchKey = process.env.MEILISEARCH_KEY ?? "local-search-key";
 
 const parentKey = "SRCH2345";
 const attachmentKey = "ATCH2345";
@@ -73,9 +64,7 @@ function service(client: MeiliSearch, indexName: string): MeilisearchService {
 	};
 }
 
-async function successfulTask(
-	taskPromise: { waitTask: () => Promise<Task> },
-) {
+async function successfulTask(taskPromise: { waitTask: () => Promise<Task> }) {
 	const task = await taskPromise.waitTask();
 	assert(
 		task.status === "succeeded",
@@ -83,10 +72,7 @@ async function successfulTask(
 	);
 }
 
-async function deleteIndexIfPresent(
-	client: MeiliSearch,
-	indexName: string,
-) {
+async function deleteIndexIfPresent(client: MeiliSearch, indexName: string) {
 	try {
 		await client.getRawIndex(indexName);
 		await successfulTask(client.deleteIndex(indexName));
@@ -102,13 +88,9 @@ async function deleteIndexIfPresent(
 }
 
 async function cleanupDatabase(
-	database: ReturnType<
-		typeof createPostgresDatabaseResource
-	>["database"],
+	database: ReturnType<typeof createPostgresDatabaseResource>["database"],
 ) {
-	await database
-		.delete(outbox)
-		.where(inArray(outbox.entityKey, entityKeys));
+	await database.delete(outbox).where(inArray(outbox.entityKey, entityKeys));
 	await database.delete(item).where(inArray(item.key, entityKeys));
 	await database
 		.delete(collection)
@@ -156,42 +138,42 @@ async function verify() {
 			})
 			.from(outbox)
 			.where(
-				and(
-					isNull(outbox.processedAt),
-					isNull(outbox.deadLetteredAt),
-				),
+				and(isNull(outbox.processedAt), isNull(outbox.deadLetteredAt)),
 			);
 		delayedExistingEvents.push(...pending);
 		if (pending.length > 0) {
 			await database
 				.update(outbox)
 				.set({
-					nextAttemptAt: new Date(
-						Date.now() + 24 * 60 * 60 * 1_000,
-					),
+					nextAttemptAt: new Date(Date.now() + 24 * 60 * 60 * 1_000),
 				})
-				.where(inArray(outbox.id, pending.map(({ id }) => id)));
+				.where(
+					inArray(
+						outbox.id,
+						pending.map(({ id }) => id),
+					),
+				);
 		}
 
 		await database.insert(collectionIdentity).values(
-			[firstRootKey, secondRootKey, childCollectionKey].map(
-				(key) => ({
-					key,
-					sourceConnectionKey: "native",
-					sourceRecordKey: key,
-				}),
-			),
+			[firstRootKey, secondRootKey, childCollectionKey].map((key) => ({
+				key,
+				sourceConnectionKey: "native",
+				sourceRecordKey: key,
+			})),
 		);
 		await database.insert(collection).values([
 			{
 				key: firstRootKey,
 				name: "First root",
+				sortOrder: NATIVE_COLLECTION_SORT_ORDER_STEP,
 				sourceConnectionKey: "native",
 				sourceRecordKey: firstRootKey,
 			},
 			{
 				key: secondRootKey,
 				name: "Second root",
+				sortOrder: NATIVE_COLLECTION_SORT_ORDER_STEP * 2,
 				sourceConnectionKey: "native",
 				sourceRecordKey: secondRootKey,
 			},
@@ -199,6 +181,7 @@ async function verify() {
 				key: childCollectionKey,
 				name: "Child collection",
 				parentCollection: firstRootKey,
+				sortOrder: NATIVE_COLLECTION_SORT_ORDER_STEP,
 				sourceConnectionKey: "native",
 				sourceRecordKey: childCollectionKey,
 			},
@@ -279,10 +262,7 @@ async function verify() {
 				revision: 1,
 			})
 			.returning();
-		assert(
-			attachmentEvent,
-			"The attachment outbox event was not created",
-		);
+		assert(attachmentEvent, "The attachment outbox event was not created");
 
 		const initialBatch = await drainSearchOutbox({
 			database,
@@ -321,8 +301,7 @@ async function verify() {
 			"The canonical identity was not projected",
 		);
 		assert(
-			initialDocument.collections.join(",") ===
-				childCollectionKey &&
+			initialDocument.collections.join(",") === childCollectionKey &&
 				initialDocument.collectionsAncestry.join(",") ===
 					[firstRootKey, childCollectionKey].sort().join(","),
 			"Collection membership and ancestry were not projected",
@@ -344,8 +323,7 @@ async function verify() {
 			.from(outbox)
 			.where(eq(outbox.id, initialEvent.id));
 		assert(
-			acknowledged?.processedAt &&
-				acknowledged.leaseOwner === null,
+			acknowledged?.processedAt && acknowledged.leaseOwner === null,
 			"The event was not durably acknowledged",
 		);
 		const [attachmentAcknowledged] = await database
@@ -390,9 +368,7 @@ async function verify() {
 		});
 		try {
 			await goodService.index.getDocument(reparentedKey);
-			throw new Error(
-				"The standalone document survived re-parenting",
-			);
+			throw new Error("The standalone document survived re-parenting");
 		} catch (error) {
 			assert(
 				error instanceof MeiliSearchApiError &&
@@ -400,10 +376,9 @@ async function verify() {
 				"Re-parent cleanup failed for an unexpected reason",
 			);
 		}
-		const reparentedParent =
-			await goodService.index.getDocument<{
-				attachmentsData: Array<{ key: string }>;
-			}>(parentKey);
+		const reparentedParent = await goodService.index.getDocument<{
+			attachmentsData: Array<{ key: string }>;
+		}>(parentKey);
 		assert(
 			reparentedParent.attachmentsData.some(
 				(attachment) => attachment.key === reparentedKey,
@@ -431,8 +406,7 @@ async function verify() {
 			limit: 1,
 		});
 		assert(
-			tasksAfterSizedBatch.total -
-				tasksBeforeSizedBatch.total ===
+			tasksAfterSizedBatch.total - tasksBeforeSizedBatch.total ===
 				sizedBatchDocuments.length,
 			"Serialized-size batching did not split oversized batches",
 		);
@@ -469,7 +443,9 @@ async function verify() {
 				taskTimeoutMs: 10_000,
 				workerId: "search-e2e-failure",
 			});
-			throw new Error("The invalid Meilisearch task unexpectedly succeeded");
+			throw new Error(
+				"The invalid Meilisearch task unexpectedly succeeded",
+			);
 		} catch (error) {
 			assert(
 				error instanceof SearchIndexTaskError,
@@ -499,10 +475,9 @@ async function verify() {
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-retry",
 		});
-		const retriedDocument =
-			await goodService.index.getDocument<{
-				title: string;
-			}>(parentKey);
+		const retriedDocument = await goodService.index.getDocument<{
+			title: string;
+		}>(parentKey);
 		assert(
 			retriedDocument.title === "Retry-safe indexed report",
 			"The successful retry did not update the search document",
@@ -589,19 +564,14 @@ async function verify() {
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-collection",
 		});
-		const movedDocument =
-			await goodService.index.getDocument<{
-				collectionsAncestry: string[];
-				revision: number;
-				title: string;
-			}>(parentKey);
+		const movedDocument = await goodService.index.getDocument<{
+			collectionsAncestry: string[];
+			revision: number;
+			title: string;
+		}>(parentKey);
 		assert(
-			movedDocument.collectionsAncestry.includes(
-				secondRootKey,
-			) &&
-				!movedDocument.collectionsAncestry.includes(
-					firstRootKey,
-				) &&
+			movedDocument.collectionsAncestry.includes(secondRootKey) &&
+				!movedDocument.collectionsAncestry.includes(firstRootKey) &&
 				movedDocument.revision === 3 &&
 				movedDocument.title === "Poison revision",
 			`A collection event did not reproject current affected items: ${JSON.stringify(movedDocument)}`,
@@ -701,10 +671,7 @@ async function verify() {
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-contender",
 		});
-		assert(
-			unavailable === null,
-			"A valid outbox lease was stolen",
-		);
+		assert(unavailable === null, "A valid outbox lease was stolen");
 		await database
 			.update(outbox)
 			.set({ leaseExpiresAt: new Date(Date.now() - 1_000) })
@@ -723,23 +690,17 @@ async function verify() {
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-serialized-follower",
 		});
-		const recoveredDocument =
-			await goodService.index.getDocument<{
-				revision: number;
-				title: string;
-			}>(parentKey);
+		const recoveredDocument = await goodService.index.getDocument<{
+			revision: number;
+			title: string;
+		}>(parentKey);
 		assert(
 			recoveredDocument.revision === 7 &&
-				recoveredDocument.title ===
-					"Serialized lease recovery report",
+				recoveredDocument.title === "Serialized lease recovery report",
 			"Expired-lease recovery did not preserve entity ordering",
 		);
 
-		const rebuilt = await rebuildSearchIndex(
-			database,
-			goodService,
-			60_000,
-		);
+		const rebuilt = await rebuildSearchIndex(database, goodService, 60_000);
 		assert(
 			rebuilt.indexed >= 1,
 			"The full rebuild omitted the canonical item",
