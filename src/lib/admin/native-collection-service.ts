@@ -79,14 +79,30 @@ export function normalizeNativeCollectionRenameInput(input: unknown) {
 
 export function normalizeNativeCollectionMoveInput(input: unknown) {
 	return z
-		.object({
-			beforeCollection: collectionParentSchema.optional().default(null),
-			expectedRevision: expectedRevisionSchema,
-			parentCollection: collectionParentSchema,
-		})
-		.strict()
+		.discriminatedUnion("position", [
+			z
+				.object({
+					expectedRevision: expectedRevisionSchema,
+					position: z.literal("root"),
+				})
+				.strict(),
+			z
+				.object({
+					expectedRevision: expectedRevisionSchema,
+					position: z.enum(["after", "before", "inside"]),
+					targetCollection: collectionParentSchema.unwrap(),
+				})
+				.strict(),
+		])
 		.parse(input);
 }
+
+export type NativeCollectionMoveIntent =
+	| { position: "root" }
+	| {
+			position: "after" | "before" | "inside";
+			targetCollection: string;
+	  };
 
 export function normalizeNativeCollectionRevisionInput(input: unknown) {
 	return z
@@ -195,6 +211,66 @@ function compareNativeCollectionOrder(
 		}) ||
 		left.key.localeCompare(right.key)
 	);
+}
+
+export function resolveNativeCollectionMoveIntent(
+	rows: NativeCollectionOrderRow[],
+	collectionKey: string,
+	intent: NativeCollectionMoveIntent,
+) {
+	if (intent.position === "root") {
+		return { beforeCollection: null, parentCollection: null };
+	}
+	const target = rows.find(
+		(row) =>
+			row.key === intent.targetCollection &&
+			row.deleted !== 1 &&
+			row.sourceConnectionKey === NATIVE_CONNECTION_KEY,
+	);
+	if (!target) {
+		throw new NativeCollectionValidationError(
+			"Choose another collection position.",
+			{
+				targetCollection:
+					"Choose an active collection created in this library.",
+			},
+		);
+	}
+	if (target.key === collectionKey) {
+		throw new NativeCollectionValidationError(
+			"Choose another collection position.",
+			{
+				targetCollection:
+					"A collection cannot be positioned relative to itself.",
+			},
+		);
+	}
+	if (intent.position === "inside") {
+		return {
+			beforeCollection: null,
+			parentCollection: target.key,
+		};
+	}
+	if (intent.position === "before") {
+		return {
+			beforeCollection: target.key,
+			parentCollection: target.parentCollection,
+		};
+	}
+	const siblings = rows
+		.filter(
+			(row) =>
+				row.key !== collectionKey &&
+				row.deleted !== 1 &&
+				row.sourceConnectionKey === NATIVE_CONNECTION_KEY &&
+				row.parentCollection === target.parentCollection,
+		)
+		.sort(compareNativeCollectionOrder);
+	const targetIndex = siblings.findIndex(({ key }) => key === target.key);
+	return {
+		beforeCollection: siblings[targetIndex + 1]?.key ?? null,
+		parentCollection: target.parentCollection,
+	};
 }
 
 export function planNativeCollectionPosition(
@@ -454,17 +530,22 @@ export async function moveNativeCollection(
 			current,
 			values.expectedRevision,
 		);
+		const move = resolveNativeCollectionMoveIntent(
+			rows,
+			collectionKey,
+			values,
+		);
 		assertValidNativeCollectionParent(
 			rows,
 			collectionKey,
-			values.parentCollection,
+			move.parentCollection,
 		);
 
 		const positionUpdates = planNativeCollectionPosition(
 			rows,
 			collectionKey,
-			values.parentCollection,
-			values.beforeCollection,
+			move.parentCollection,
+			move.beforeCollection,
 		);
 		if (positionUpdates.length === 0) {
 			return { collection: current, collections: [] };
@@ -476,7 +557,7 @@ export async function moveNativeCollection(
 			const row = rows.find(({ key }) => key === position.key);
 			const isMovedCollection = position.key === collectionKey;
 			const nextParent = isMovedCollection
-				? values.parentCollection
+				? move.parentCollection
 				: row!.parentCollection;
 			if (
 				row &&
@@ -489,7 +570,7 @@ export async function moveNativeCollection(
 				.update(collection)
 				.set({
 					...(isMovedCollection
-						? { parentCollection: values.parentCollection }
+						? { parentCollection: move.parentCollection }
 						: {}),
 					revision: sql`${collection.revision} + 1`,
 					sortOrder: position.sortOrder,
@@ -511,7 +592,7 @@ export async function moveNativeCollection(
 		const moved =
 			changedCollections.find(({ key }) => key === collectionKey) ??
 			current;
-		if (current.parentCollection !== values.parentCollection) {
+		if (current.parentCollection !== move.parentCollection) {
 			await transaction.insert(outbox).values({
 				entityType: "collection",
 				entityKey: collectionKey,

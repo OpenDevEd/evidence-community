@@ -1252,11 +1252,21 @@ export default function AdminWorkbench({
 		void runBusy(
 			async () => {
 				if (!moveDialog) return;
-				await moveAdminCollection(moveDialog.collection.key, {
-					beforeCollection: null,
-					expectedRevision: moveDialog.collection.revision,
-					parentCollection: moveParent,
-				});
+				await moveAdminCollection(
+					moveDialog.collection.key,
+					moveParent
+						? {
+								expectedRevision:
+									moveDialog.collection.revision,
+								position: "inside",
+								targetCollection: moveParent,
+							}
+						: {
+								expectedRevision:
+									moveDialog.collection.revision,
+								position: "root",
+							},
+				);
 				setMoveDialog(null);
 				await refreshCurrent();
 				toast.success("Collection moved");
@@ -1275,10 +1285,20 @@ export default function AdminWorkbench({
 		);
 		if (!move) return;
 		void runBusy(async () => {
-			const result = await moveAdminCollection(collection.key, {
-				...move,
-				expectedRevision: collection.revision,
-			}).catch(async (error) => {
+			const result = await moveAdminCollection(
+				collection.key,
+				destination.position === "root"
+					? {
+							expectedRevision: collection.revision,
+							position: "root",
+						}
+					: {
+							expectedRevision: collection.revision,
+							position: destination.position,
+							targetCollection:
+								destination.targetCollection,
+						},
+			).catch(async (error) => {
 				await loadLibrary();
 				throw error;
 			});

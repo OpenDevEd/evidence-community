@@ -380,11 +380,13 @@ export function renameAdminCollection(
 
 export function moveAdminCollection(
 	key: string,
-	input: {
-		beforeCollection: string | null;
-		expectedRevision: number;
-		parentCollection: string | null;
-	},
+	input:
+		| { expectedRevision: number; position: "root" }
+		| {
+				expectedRevision: number;
+				position: "after" | "before" | "inside";
+				targetCollection: string;
+		  },
 ) {
 	return requestJson<{
 		collection: AdminCollection;

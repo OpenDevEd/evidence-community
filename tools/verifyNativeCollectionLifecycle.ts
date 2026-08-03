@@ -85,9 +85,9 @@ async function verify() {
 			.from(outbox)
 			.where(eq(outbox.entityKey, child.key));
 		const moved = await moveNativeCollection(db, child.key, {
-			beforeCollection: secondRoot.key,
 			expectedRevision: child.revision,
-			parentCollection: null,
+			position: "before",
+			targetCollection: secondRoot.key,
 		});
 		assert(
 			moved.collection.parentCollection === null &&
@@ -108,9 +108,9 @@ async function verify() {
 		let staleMoveRejected = false;
 		try {
 			await moveNativeCollection(db, child.key, {
-				beforeCollection: null,
 				expectedRevision: child.revision,
-				parentCollection: firstRoot.key,
+				position: "inside",
+				targetCollection: firstRoot.key,
 			});
 		} catch (error) {
 			staleMoveRejected =
@@ -124,9 +124,9 @@ async function verify() {
 			.from(outbox)
 			.where(eq(outbox.entityKey, secondRoot.key));
 		const reordered = await moveNativeCollection(db, secondRoot.key, {
-			beforeCollection: child.key,
 			expectedRevision: secondRoot.revision,
-			parentCollection: null,
+			position: "before",
+			targetCollection: child.key,
 		});
 		const afterReorderEvents = await db
 			.select()

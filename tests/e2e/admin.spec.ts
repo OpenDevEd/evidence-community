@@ -599,9 +599,9 @@ test("moves a collection to a searched destination at the end", async ({
 	await expect
 		.poll(() => moveRequest)
 		.toEqual({
-			beforeCollection: null,
 			expectedRevision: teacherCollection.revision,
-			parentCollection: longCollection.key,
+			position: "inside",
+			targetCollection: longCollection.key,
 		});
 });
 
@@ -1612,9 +1612,9 @@ test("moves a native collection into another collection with pointer drag", asyn
 	await expect
 		.poll(() => moveRequest)
 		.toEqual({
-			beforeCollection: null,
 			expectedRevision: 1,
-			parentCollection: "LONGCOLL",
+			position: "inside",
+			targetCollection: "LONGCOLL",
 		});
 	await expect(
 		page.locator(

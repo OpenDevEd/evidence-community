@@ -11,6 +11,7 @@ import {
 	normalizeNativeCollectionRenameInput,
 	normalizeNativeCollectionInput,
 	planNativeCollectionPosition,
+	resolveNativeCollectionMoveIntent,
 } from "@/lib/admin/native-collection-service";
 import { collectionDescendantKeys } from "@/lib/admin/collection-tree";
 
@@ -66,15 +67,21 @@ describe("native collection validation", () => {
 		).toEqual({ expectedRevision: 3, name: "Renamed" });
 		expect(
 			normalizeNativeCollectionMoveInput({
-				beforeCollection: "BCDE3456",
 				expectedRevision: 4,
-				parentCollection: "ABCD2345",
+				position: "after",
+				targetCollection: "BCDE3456",
 			}),
 		).toEqual({
-			beforeCollection: "BCDE3456",
 			expectedRevision: 4,
-			parentCollection: "ABCD2345",
+			position: "after",
+			targetCollection: "BCDE3456",
 		});
+		expect(
+			normalizeNativeCollectionMoveInput({
+				expectedRevision: 4,
+				position: "root",
+			}),
+		).toEqual({ expectedRevision: 4, position: "root" });
 		expect(() =>
 			normalizeNativeCollectionRenameInput({
 				expectedRevision: 3,
@@ -82,6 +89,62 @@ describe("native collection validation", () => {
 				parentCollection: null,
 			}),
 		).toThrow();
+	});
+
+	it("resolves move intent against the locked sibling order", () => {
+		const orderedRows = [
+			{
+				deleted: 0,
+				key: "ABCD2345",
+				name: "First",
+				parentCollection: null,
+				sortOrder: 1024,
+				sourceConnectionKey: "native",
+			},
+			{
+				deleted: 0,
+				key: "BCDE3456",
+				name: "Second",
+				parentCollection: null,
+				sortOrder: 2048,
+				sourceConnectionKey: "native",
+			},
+			{
+				deleted: 0,
+				key: "CDEF4567",
+				name: "Third",
+				parentCollection: null,
+				sortOrder: 3072,
+				sourceConnectionKey: "native",
+			},
+		];
+		expect(
+			resolveNativeCollectionMoveIntent(
+				orderedRows,
+				"CDEF4567",
+				{ position: "after", targetCollection: "ABCD2345" },
+			),
+		).toEqual({
+			beforeCollection: "BCDE3456",
+			parentCollection: null,
+		});
+		expect(
+			resolveNativeCollectionMoveIntent(
+				orderedRows,
+				"ABCD2345",
+				{ position: "inside", targetCollection: "BCDE3456" },
+			),
+		).toEqual({
+			beforeCollection: null,
+			parentCollection: "BCDE3456",
+		});
+		expect(() =>
+			resolveNativeCollectionMoveIntent(
+				orderedRows,
+				"ABCD2345",
+				{ position: "after", targetCollection: "ABCD2345" },
+			),
+		).toThrow(NativeCollectionValidationError);
 	});
 
 	it("rejects stale mutation revisions with the current revision", () => {
