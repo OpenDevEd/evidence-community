@@ -15,7 +15,9 @@ import type {
 import type {
 	AdminItemBatchRequest,
 	AdminItemBatchResponse,
+	AdminItemBatchResult,
 } from "@/lib/admin/item-batch-contract";
+import { ADMIN_ITEM_BATCH_SIZE } from "@/lib/admin/item-batch-contract";
 
 export class AdminApiError extends Error {
 	readonly code: AdminErrorCode;
@@ -196,11 +198,86 @@ export function unpublishAdminItem(key: string) {
 	);
 }
 
-export function mutateAdminItems(input: AdminItemBatchRequest) {
-	return requestJson<AdminItemBatchResponse>("/api/admin/items/batch", {
-		body: JSON.stringify(input),
-		method: "POST",
-	});
+function itemBatchChunks(input: AdminItemBatchRequest) {
+	return Array.from(
+		{ length: Math.ceil(input.keys.length / ADMIN_ITEM_BATCH_SIZE) },
+		(_, index) => ({
+			...input,
+			keys: input.keys.slice(
+				index * ADMIN_ITEM_BATCH_SIZE,
+				(index + 1) * ADMIN_ITEM_BATCH_SIZE,
+			),
+		}),
+	);
+}
+
+function failedBatchChunk(
+	error: unknown,
+	keys: readonly string[],
+): AdminItemBatchResult[] {
+	const details =
+		error instanceof AdminApiError
+			? {
+					code: error.code,
+					fields: error.fields,
+					message: error.message,
+				}
+			: {
+					code: "internal_error" as const,
+					message:
+						"The selected records could not be updated. Try again.",
+				};
+	return keys.map((key) => ({
+		...details,
+		key,
+		outcome: "failed",
+	}));
+}
+
+async function mutateAdminItemChunks(input: AdminItemBatchRequest) {
+	const results: AdminItemBatchResult[] = [];
+	for (const chunk of itemBatchChunks(input)) {
+		try {
+			const response = await requestJson<AdminItemBatchResponse>(
+				"/api/admin/items/batch",
+				{
+					body: JSON.stringify(chunk),
+					method: "POST",
+				},
+			);
+			results.push(...response.results);
+		} catch (error) {
+			results.push(...failedBatchChunk(error, chunk.keys));
+		}
+	}
+	return results;
+}
+
+export async function mutateAdminItems(input: AdminItemBatchRequest) {
+	const firstPass = await mutateAdminItemChunks(input);
+	const resultByKey = new Map(
+		firstPass.map((result) => [result.key, result]),
+	);
+	let retryKeys = firstPass
+		.filter(({ retryable }) => retryable)
+		.map(({ key }) => key);
+	while (retryKeys.length > 0) {
+		const retried = await mutateAdminItemChunks({
+			...input,
+			keys: retryKeys,
+		});
+		for (const result of retried) resultByKey.set(result.key, result);
+		const nextRetryKeys = retried
+			.filter(({ retryable }) => retryable)
+			.map(({ key }) => key);
+		if (nextRetryKeys.length >= retryKeys.length) break;
+		retryKeys = nextRetryKeys;
+	}
+	return {
+		results: firstPass.map(
+			(result) => resultByKey.get(result.key) ?? result,
+		),
+	};
 }
 
 export function createAdminCollection(input: {

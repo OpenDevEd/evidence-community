@@ -3,13 +3,18 @@ import { z } from "zod";
 
 import type { AdminErrorCode, AdminFieldErrors } from "./errors";
 
+export const ADMIN_ITEM_BATCH_SIZE = 50;
+
 const canonicalKeySchema = z.string().refine(isCanonicalRecordKey, {
 	message: "Choose an available record.",
 });
 const itemKeysSchema = z
 	.array(canonicalKeySchema)
 	.min(1, "Select at least one record.")
-	.max(50, "Select no more than 50 records at once.")
+	.max(
+		ADMIN_ITEM_BATCH_SIZE,
+		`Select no more than ${ADMIN_ITEM_BATCH_SIZE} records at once.`,
+	)
 	.refine((keys) => new Set(keys).size === keys.length, {
 		message: "Each selected record must be unique.",
 	});
@@ -32,6 +37,7 @@ export type AdminItemBatchResult = {
 	key: string;
 	message?: string;
 	outcome: "changed" | "failed" | "skipped" | "unchanged";
+	retryable?: boolean;
 };
 
 export type AdminItemBatchResponse = {

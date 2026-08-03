@@ -313,6 +313,65 @@ async function verify() {
 			`New parent cleanup failed: ${JSON.stringify(newParentRemoval)}`,
 		);
 
+		const boundaryParentKey = await createDraft({
+			collections: [],
+			creators: [],
+			itemType: "Report",
+			tags: [],
+			title: "Cross-chunk boundary parent",
+		});
+		itemKeys.push(boundaryParentKey);
+		const boundaryChildKey = await createDraft({
+			collections: [],
+			creators: [],
+			itemType: "Note",
+			note: "Cross-chunk boundary child",
+			parentItem: boundaryParentKey,
+			tags: [],
+		});
+		itemKeys.push(boundaryChildKey);
+		const boundaryFillerKeys: string[] = [];
+		for (let index = 0; index < 49; index += 1) {
+			const fillerKey = await createDraft({
+				collections: [],
+				creators: [],
+				itemType: "Report",
+				tags: [],
+				title: `Cross-chunk filler ${index + 1}`,
+			});
+			boundaryFillerKeys.push(fillerKey);
+			itemKeys.push(fillerKey);
+		}
+		const boundaryFirstChunk = await runBatch({
+			action: "publish",
+			keys: [boundaryChildKey, ...boundaryFillerKeys],
+		});
+		assert(
+			boundaryFirstChunk[0]?.outcome === "failed" &&
+				boundaryFirstChunk[0].retryable === true &&
+				boundaryFirstChunk
+					.slice(1)
+					.every(({ outcome }) => outcome === "changed"),
+			`Cross-chunk dependency was not marked retryable: ${JSON.stringify(boundaryFirstChunk)}`,
+		);
+		const boundarySecondChunk = await runBatch({
+			action: "publish",
+			keys: [boundaryParentKey],
+		});
+		assert(
+			boundarySecondChunk[0]?.outcome === "changed",
+			`Cross-chunk parent did not publish: ${JSON.stringify(boundarySecondChunk)}`,
+		);
+		const boundaryRetry = await runBatch({
+			action: "publish",
+			keys: [boundaryChildKey],
+		});
+		assert(
+			boundaryRetry[0]?.outcome === "changed" &&
+				(await getItem(boundaryChildKey)).state === "published",
+			`Cross-chunk child retry failed: ${JSON.stringify(boundaryRetry)}`,
+		);
+
 		console.log(
 			JSON.stringify({
 				assigned: assignments.length,
@@ -322,6 +381,7 @@ async function verify() {
 				publishedParentDivergenceVerified: true,
 				removed: removals.length,
 				mixedOutcomesVerified: true,
+				crossChunkDependencyRetryVerified: true,
 			}),
 		);
 	} finally {

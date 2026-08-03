@@ -261,11 +261,10 @@ export async function runAdminItemBatch(
 				outcome: assignment.changed ? "changed" : "unchanged",
 			});
 		} catch (error) {
-			if (
-				allowDependencyRetry &&
-				(error instanceof NativeItemHasChildrenError ||
-					error instanceof NativeItemParentUnavailableError)
-			) {
+			const retryableDependencyFailure =
+				error instanceof NativeItemHasChildrenError ||
+				error instanceof NativeItemParentUnavailableError;
+			if (allowDependencyRetry && retryableDependencyFailure) {
 				mutationAttempts.push({ allowDependencyRetry: false, key });
 				continue;
 			}
@@ -276,6 +275,7 @@ export async function runAdminItemBatch(
 				key,
 				message: details.message,
 				outcome: "failed",
+				...(retryableDependencyFailure ? { retryable: true } : {}),
 			});
 		}
 	}
