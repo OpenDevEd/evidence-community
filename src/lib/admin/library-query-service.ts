@@ -15,6 +15,7 @@ import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
+import { payloadStringList } from "./item-payload";
 import {
 	fileDraftJson,
 	filePublicationJson,
@@ -227,15 +228,9 @@ export async function getAdminItemDetail(
 		getAdminAttachments(db, itemKey),
 	]);
 	const payload = draft?.payload ?? {};
-	const draftTags = Array.isArray(payload.tags)
-		? payload.tags.filter(
-				(value): value is string => typeof value === "string",
-			)
-		: null;
-	const draftCollections = Array.isArray(payload.collections)
-		? payload.collections.filter(
-				(value): value is string => typeof value === "string",
-			)
+	const draftTags = draft ? payloadStringList(payload, "tags") : null;
+	const draftCollections = draft
+		? payloadStringList(payload, "collections")
 		: null;
 	const parentItem =
 		typeof payload.parentItem === "string"

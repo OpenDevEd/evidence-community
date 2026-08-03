@@ -30,6 +30,7 @@ import {
 	NativeItemHasPublishedFileError,
 	openNativeItemDraft,
 	publishNativeItemDraft,
+	removeNativeItem,
 	saveNativeItemDraft,
 	unpublishNativeItem,
 } from "../src/lib/admin/native-item-service";
@@ -261,15 +262,10 @@ async function verify() {
 		storage.privateFiles.set(disposableStage.upload.path, pdf);
 		await completeNativePdfUpload(db, storage, {
 			itemKey: attachmentDraft.itemKey,
-			expectedUploadRevision:
-				disposableStage.fileDraft.uploadRevision,
+			expectedUploadRevision: disposableStage.fileDraft.uploadRevision,
 			maxPdfBytes: 10_000_000,
 		});
-		await discardNativePdfDraft(
-			db,
-			storage,
-			attachmentDraft.itemKey,
-		);
+		await discardNativePdfDraft(db, storage, attachmentDraft.itemKey);
 		const stateAfterDiscard = await getNativeFileState(
 			db,
 			attachmentDraft.itemKey,
@@ -620,6 +616,62 @@ async function verify() {
 			"Parent projection revisions did not follow attachment changes",
 		);
 
+		const removalParent = await createNativeItemDraft(db, {
+			itemType: "Report",
+			title: "Staged-file removal parent",
+		});
+		const removalAttachment = await createNativeItemDraft(db, {
+			itemType: "Attachment",
+			parentItem: removalParent.itemKey,
+			title: "Staged-file removal attachment",
+		});
+		createdKeys.push(removalParent.itemKey, removalAttachment.itemKey);
+		await publishNativeItemDraft(db, removalParent.itemKey);
+		await publishNativeItemDraft(db, removalAttachment.itemKey);
+		await openNativeItemDraft(db, removalAttachment.itemKey);
+		const removalStage = await stageNativePdfUpload(db, storage, {
+			...stageInput,
+			itemKey: removalAttachment.itemKey,
+		});
+		storage.privateFiles.set(removalStage.upload.path, pdf);
+		const removedWithStage = await removeNativeItem(
+			db,
+			removalAttachment.itemKey,
+		);
+		await storage.removePrivate(removedWithStage.stagedPrivatePaths);
+		const [
+			[removedMetadataDraft],
+			[removedFileDraft],
+			[removedPublication],
+		] = await Promise.all([
+			db
+				.select({ itemKey: itemDraft.itemKey })
+				.from(itemDraft)
+				.where(eq(itemDraft.itemKey, removalAttachment.itemKey))
+				.limit(1),
+			db
+				.select({ itemKey: itemFileDraft.itemKey })
+				.from(itemFileDraft)
+				.where(eq(itemFileDraft.itemKey, removalAttachment.itemKey))
+				.limit(1),
+			db
+				.select({ deleted: item.deleted })
+				.from(item)
+				.where(eq(item.key, removalAttachment.itemKey))
+				.limit(1),
+		]);
+		assert(
+			removedWithStage.changed &&
+				removedWithStage.stagedPrivatePaths.includes(
+					removalStage.upload.path,
+				) &&
+				!removedMetadataDraft &&
+				!removedFileDraft &&
+				removedPublication?.deleted === 1 &&
+				!storage.privateFiles.has(removalStage.upload.path),
+			"Record removal retained staged metadata or PDF state",
+		);
+
 		console.log(
 			JSON.stringify({
 				attachmentKey: attachmentDraft.itemKey,
@@ -629,6 +681,7 @@ async function verify() {
 				parentOutboxEvents: parentEvents.length,
 				concurrentFileMutations: concurrentFileMutations.length,
 				publicObjects: storage.publicFiles.size,
+				stagedRemovalVerified: true,
 			}),
 		);
 	} finally {

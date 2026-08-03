@@ -5,7 +5,7 @@ import {
 	outbox,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { reserveCollectionIdentities } from "../src/db/record-identity";
@@ -15,6 +15,7 @@ import { item } from "../src/db/schema/tables/item";
 import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import {
+	assignNativeItemDraftToCollection,
 	createNativeItemDraft,
 	discardNativeItemDraft,
 	NativeDraftConflictError,
@@ -22,9 +23,11 @@ import {
 	openNativeItemDraft,
 	publishNativeItemDraft,
 	publishNativeItemDraftWithContext,
+	removeNativeItem,
 	saveNativeItemDraft,
 	unpublishNativeItem,
 } from "../src/lib/admin/native-item-service";
+import { createNativeCollection } from "../src/lib/admin/native-collection-service";
 import { NativeItemValidationError } from "../src/lib/admin/native-item-validation";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
@@ -37,13 +40,50 @@ function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
+type VerificationDatabase = ReturnType<
+	typeof createPostgresDatabaseResource
+>["database"];
+
+async function runBehindNativeItemBarrier(
+	db: VerificationDatabase,
+	observer: VerificationDatabase,
+	itemKey: string,
+	start: () => Promise<unknown>[],
+) {
+	let operations: Promise<unknown>[] = [];
+	await db.transaction(async (transaction) => {
+		await transaction.execute(
+			sql`select pg_advisory_xact_lock(hashtextextended(${`native-item:${itemKey}`}, 0))`,
+		);
+		operations = start();
+		let waiting = 0;
+		for (let attempt = 0; attempt < 100; attempt += 1) {
+			const locks = await observer.execute<{ waiting: number }>(
+				sql`select count(*)::int as waiting from pg_locks where locktype = 'advisory' and not granted`,
+			);
+			waiting = Number(locks.rows[0]?.waiting ?? 0);
+			if (waiting >= operations.length) break;
+			await new Promise((resolve) => setTimeout(resolve, 10));
+		}
+		assert(
+			waiting >= operations.length,
+			"Concurrent operations did not reach the advisory-lock barrier",
+		);
+	});
+	return Promise.allSettled(operations);
+}
+
 async function verify() {
 	const resource = createPostgresDatabaseResource(verifiedDatabaseUrl);
+	const observerResource =
+		createPostgresDatabaseResource(verifiedDatabaseUrl);
 	const db = resource.database;
+	const observer = observerResource.database;
 	const createdKeys: string[] = [];
 	const importedSourceKey = `verify-zotero-${process.pid}`;
 	let importedSourceCreated = false;
 	let importedCollectionKeys: string[] = [];
+	let nativeCollectionKey: string | null = null;
 
 	try {
 		const draft = await createNativeItemDraft(db, {
@@ -425,6 +465,86 @@ async function verify() {
 			);
 		}
 
+		const concurrencyCollection = await createNativeCollection(db, {
+			name: "Concurrent assignment verification",
+			parentCollection: null,
+		});
+		nativeCollectionKey = concurrencyCollection.key;
+		const assignDiscardDraft = await createNativeItemDraft(db, {
+			itemType: "Report",
+			title: "Concurrent assign and discard",
+		});
+		createdKeys.push(assignDiscardDraft.itemKey);
+		await publishNativeItemDraft(db, assignDiscardDraft.itemKey);
+		await openNativeItemDraft(db, assignDiscardDraft.itemKey);
+		const assignmentAndDiscard = await runBehindNativeItemBarrier(
+			db,
+			observer,
+			assignDiscardDraft.itemKey,
+			() => [
+				assignNativeItemDraftToCollection(
+					db,
+					assignDiscardDraft.itemKey,
+					concurrencyCollection.key,
+				),
+				discardNativeItemDraft(db, assignDiscardDraft.itemKey),
+			],
+		);
+		assert(
+			assignmentAndDiscard.every(({ status }) => status === "fulfilled"),
+			"Concurrent assignment and discard deadlocked or failed",
+		);
+		const [settledDraft] = await db
+			.select({ payload: itemDraft.payload })
+			.from(itemDraft)
+			.where(eq(itemDraft.itemKey, assignDiscardDraft.itemKey))
+			.limit(1);
+		assert(
+			!settledDraft ||
+				(Array.isArray(settledDraft.payload.collections) &&
+					settledDraft.payload.collections.includes(
+						concurrencyCollection.key,
+					)),
+			"Concurrent assignment and discard left an unassigned draft",
+		);
+
+		const publishRemoveDraft = await createNativeItemDraft(db, {
+			itemType: "Report",
+			title: "Concurrent publish and remove",
+		});
+		createdKeys.push(publishRemoveDraft.itemKey);
+		const publishAndRemove = await runBehindNativeItemBarrier(
+			db,
+			observer,
+			publishRemoveDraft.itemKey,
+			() => [
+				publishNativeItemDraft(db, publishRemoveDraft.itemKey),
+				removeNativeItem(db, publishRemoveDraft.itemKey),
+			],
+		);
+		assert(
+			publishAndRemove[1]?.status === "fulfilled",
+			"Concurrent draft-only removal failed",
+		);
+		const [[publishRemoveItem], [publishRemoveOpenDraft]] =
+			await Promise.all([
+				db
+					.select({ deleted: item.deleted })
+					.from(item)
+					.where(eq(item.key, publishRemoveDraft.itemKey))
+					.limit(1),
+				db
+					.select({ itemKey: itemDraft.itemKey })
+					.from(itemDraft)
+					.where(eq(itemDraft.itemKey, publishRemoveDraft.itemKey))
+					.limit(1),
+			]);
+		assert(
+			(!publishRemoveItem || publishRemoveItem.deleted === 1) &&
+				!publishRemoveOpenDraft,
+			"Concurrent publish and remove left a live item or draft",
+		);
+
 		let invalidCollectionRejected = false;
 		try {
 			await createNativeItemDraft(db, {
@@ -479,6 +599,8 @@ async function verify() {
 				outboxEvents: events.length,
 				concurrentReservations: concurrentDrafts.length,
 				concurrentMutationRuns: concurrentMutationRunCount,
+				concurrentAssignDiscardVerified: true,
+				concurrentPublishRemoveVerified: true,
 			}),
 		);
 	} finally {
@@ -520,7 +642,23 @@ async function verify() {
 				.delete(sourceConnection)
 				.where(eq(sourceConnection.key, importedSourceKey));
 		}
-		await resource.dispose();
+		if (nativeCollectionKey) {
+			await db
+				.delete(outbox)
+				.where(
+					and(
+						eq(outbox.entityType, "collection"),
+						eq(outbox.entityKey, nativeCollectionKey),
+					),
+				);
+			await db
+				.delete(collection)
+				.where(eq(collection.key, nativeCollectionKey));
+			await db
+				.delete(collectionIdentity)
+				.where(eq(collectionIdentity.key, nativeCollectionKey));
+		}
+		await Promise.all([resource.dispose(), observerResource.dispose()]);
 	}
 }
 

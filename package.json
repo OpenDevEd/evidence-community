@@ -25,6 +25,7 @@
 		"benchmark:admin-items": "tsx ./tools/benchmarkAdminItemList.ts",
 		"test:admin-item-pagination": "tsx ./tools/verifyAdminItemListPagination.ts",
 		"test:admin-item-projection-concurrency": "tsx ./tools/verifyAdminItemProjectionConcurrency.ts",
+		"test:admin-item-batch-http": "tsx ./tools/verifyAdminItemBatchHttp.ts",
 		"test:native-collection-lifecycle": "tsx ./tools/verifyNativeCollectionLifecycle.ts",
 		"test:native-file-lifecycle": "tsx ./tools/verifyNativeFileLifecycle.ts",
 		"test:file-storage": "tsx ./tools/verifySupabaseFileStorage.ts",

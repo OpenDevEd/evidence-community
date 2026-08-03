@@ -24,6 +24,10 @@ import { tag } from "@/db/schema/tables/tag";
 import { adminDatabaseFieldToPayloadField } from "@/lib/admin/item-fields";
 
 import {
+	collectionKeysFromPayload,
+	payloadWithCollection,
+} from "./item-payload";
+import {
 	NativeItemValidationError,
 	validateNativeItemDraft,
 } from "./native-item-validation";
@@ -60,6 +64,15 @@ const editableItemFields = Object.keys(getTableColumns(item)).filter(
 type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
+
+async function lockNativeItemMutation(
+	transaction: Transaction,
+	itemKey: string,
+) {
+	await transaction.execute(
+		sql`select pg_advisory_xact_lock(hashtextextended(${`native-item:${itemKey}`}, 0))`,
+	);
+}
 
 export async function advanceOpenNativeDraftBaseRevision(
 	executor: Executor,
@@ -182,8 +195,7 @@ export function assertValidNativeItemCollectionMemberships({
 		throw new NativeItemValidationError(
 			"Imported collection memberships cannot be changed here.",
 			{
-				collections:
-					"Imported collection memberships are read only.",
+				collections: "Imported collection memberships are read only.",
 			},
 		);
 	}
@@ -193,15 +205,7 @@ export function nativeItemCollectionBaselineKeys(
 	publishedCollectionKeys: string[],
 	draftPayload: unknown,
 ) {
-	const payload =
-		draftPayload && typeof draftPayload === "object"
-			? (draftPayload as Record<string, unknown>)
-			: null;
-	const draftCollectionKeys = Array.isArray(payload?.collections)
-		? payload.collections.filter(
-				(value): value is string => typeof value === "string",
-			)
-		: [];
+	const draftCollectionKeys = collectionKeysFromPayload(draftPayload);
 	return [...new Set([...publishedCollectionKeys, ...draftCollectionKeys])];
 }
 
@@ -334,82 +338,96 @@ export async function getNativeItemDraft(db: Database, itemKey: string) {
 	return draft;
 }
 
+async function openNativeItemDraftInTransaction(
+	transaction: Transaction,
+	itemKey: string,
+) {
+	const [existingDraft] = await transaction
+		.select()
+		.from(itemDraft)
+		.where(
+			and(
+				eq(itemDraft.itemKey, itemKey),
+				eq(itemDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+			),
+		)
+		.for("update")
+		.limit(1);
+	if (existingDraft) return existingDraft;
+
+	const [published] = await transaction
+		.select()
+		.from(item)
+		.where(
+			and(
+				eq(item.key, itemKey),
+				eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+			),
+		)
+		.for("update")
+		.limit(1);
+	if (!published) {
+		throw new NativeItemNotFoundError(itemKey);
+	}
+
+	const tagRows = await transaction
+		.select({ name: itemToTag.tagName })
+		.from(itemToTag)
+		.where(eq(itemToTag.itemKey, itemKey));
+	const collectionRows = await transaction
+		.select({ key: itemToCollection.collectionKey })
+		.from(itemToCollection)
+		.where(eq(itemToCollection.itemKey, itemKey));
+	const [filePublication] = await transaction
+		.select({ itemKey: itemFilePublication.itemKey })
+		.from(itemFilePublication)
+		.where(eq(itemFilePublication.itemKey, itemKey))
+		.limit(1);
+
+	const payload: Record<string, unknown> = {};
+	for (const field of editableItemFields) {
+		if (field === "url" && filePublication) continue;
+		const value = published[field as keyof typeof published];
+		if (value !== null && value !== undefined) {
+			payload[adminDatabaseFieldToPayloadField(field)] = value;
+		}
+	}
+	payload.tags = tagRows.map(({ name }) => name);
+	payload.collections = collectionRows.map(({ key }) => key);
+
+	const validated = validateNativeItemDraft(payload);
+	const [draft] = await transaction
+		.insert(itemDraft)
+		.values({
+			itemKey,
+			sourceConnectionKey: NATIVE_CONNECTION_KEY,
+			payload: validated.payload,
+			baseRevision: published.revision,
+		})
+		.onConflictDoNothing()
+		.returning();
+	if (draft) return draft;
+
+	const [concurrentDraft] = await transaction
+		.select()
+		.from(itemDraft)
+		.where(eq(itemDraft.itemKey, itemKey))
+		.limit(1);
+	if (!concurrentDraft) {
+		throw new NativeDraftConflictError(itemKey);
+	}
+	return concurrentDraft;
+}
+
 export async function openNativeItemDraft(db: Database, itemKey: string) {
 	return db.transaction(async (transaction) => {
-		const [existingDraft] = await transaction
-			.select()
-			.from(itemDraft)
-			.where(eq(itemDraft.itemKey, itemKey))
-			.limit(1);
-		if (existingDraft) return existingDraft;
-
-		const [published] = await transaction
-			.select()
-			.from(item)
-			.where(
-				and(
-					eq(item.key, itemKey),
-					eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY),
-				),
-			)
-			.for("update")
-			.limit(1);
-		if (!published) {
-			throw new NativeItemNotFoundError(itemKey);
-		}
-
-		const tagRows = await transaction
-			.select({ name: itemToTag.tagName })
-			.from(itemToTag)
-			.where(eq(itemToTag.itemKey, itemKey));
-		const collectionRows = await transaction
-			.select({ key: itemToCollection.collectionKey })
-			.from(itemToCollection)
-			.where(eq(itemToCollection.itemKey, itemKey));
-		const [filePublication] = await transaction
-			.select({ itemKey: itemFilePublication.itemKey })
-			.from(itemFilePublication)
-			.where(eq(itemFilePublication.itemKey, itemKey))
-			.limit(1);
-
-		const payload: Record<string, unknown> = {};
-		for (const field of editableItemFields) {
-			if (field === "url" && filePublication) continue;
-			const value = published[field as keyof typeof published];
-			if (value !== null && value !== undefined) {
-				payload[adminDatabaseFieldToPayloadField(field)] = value;
-			}
-		}
-		payload.tags = tagRows.map(({ name }) => name);
-		payload.collections = collectionRows.map(({ key }) => key);
-
-		const validated = validateNativeItemDraft(payload);
-		const [draft] = await transaction
-			.insert(itemDraft)
-			.values({
-				itemKey,
-				sourceConnectionKey: NATIVE_CONNECTION_KEY,
-				payload: validated.payload,
-				baseRevision: published.revision,
-			})
-			.onConflictDoNothing()
-			.returning();
-		if (draft) return draft;
-
-		const [concurrentDraft] = await transaction
-			.select()
-			.from(itemDraft)
-			.where(eq(itemDraft.itemKey, itemKey))
-			.limit(1);
-		if (!concurrentDraft) {
-			throw new NativeDraftConflictError(itemKey);
-		}
-		return concurrentDraft;
+		await lockNativeItemMutation(transaction, itemKey);
+		return openNativeItemDraftInTransaction(transaction, itemKey);
 	});
 }
 
-export async function saveNativeItemDraft(
-	db: Database,
+async function saveNativeItemDraftInTransaction(
+	transaction: Transaction,
 	{
 		expectedDraftRevision,
 		itemKey,
@@ -423,11 +441,95 @@ export async function saveNativeItemDraft(
 	const validated = validateNativeItemDraft(payload, {
 		allowIncompleteCreators: true,
 	});
+	const [currentDraft] = await transaction
+		.select({
+			draftRevision: itemDraft.draftRevision,
+		})
+		.from(itemDraft)
+		.where(
+			and(
+				eq(itemDraft.itemKey, itemKey),
+				eq(itemDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+			),
+		)
+		.for("update")
+		.limit(1);
+	if (currentDraft?.draftRevision !== expectedDraftRevision) {
+		throw new NativeDraftConflictError(itemKey);
+	}
+	await assertValidNativeItemCollectionMembershipsInDatabase(
+		transaction,
+		itemKey,
+		validated.collectionKeys,
+	);
+	const [draft] = await transaction
+		.update(itemDraft)
+		.set({
+			payload: validated.payload,
+			draftRevision: sql`${itemDraft.draftRevision} + 1`,
+			updatedAt: new Date(),
+		})
+		.where(
+			and(
+				eq(itemDraft.itemKey, itemKey),
+				eq(itemDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+				eq(itemDraft.draftRevision, expectedDraftRevision),
+			),
+		)
+		.returning();
+	if (!draft) {
+		throw new NativeDraftConflictError(itemKey);
+	}
+	return draft;
+}
+
+export async function saveNativeItemDraft(
+	db: Database,
+	args: {
+		expectedDraftRevision: number;
+		itemKey: string;
+		payload: unknown;
+	},
+) {
 	return db.transaction(async (transaction) => {
-		const [currentDraft] = await transaction
-			.select({
-				draftRevision: itemDraft.draftRevision,
-			})
+		await lockNativeItemMutation(transaction, args.itemKey);
+		return saveNativeItemDraftInTransaction(transaction, args);
+	});
+}
+
+export async function assignNativeItemDraftToCollection(
+	db: Database,
+	itemKey: string,
+	collectionKey: string,
+) {
+	return db.transaction(async (transaction) => {
+		await lockNativeItemMutation(transaction, itemKey);
+		const [identity] = await transaction
+			.select({ key: itemIdentity.key })
+			.from(itemIdentity)
+			.where(
+				and(
+					eq(itemIdentity.key, itemKey),
+					eq(itemIdentity.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+				),
+			)
+			.for("update")
+			.limit(1);
+		if (!identity) throw new NativeItemNotFoundError(itemKey);
+		const [published] = await transaction
+			.select({ key: item.key })
+			.from(item)
+			.where(
+				and(
+					eq(item.key, itemKey),
+					eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+				),
+			)
+			.for("update")
+			.limit(1);
+
+		const [existingDraft] = await transaction
+			.select()
 			.from(itemDraft)
 			.where(
 				and(
@@ -437,33 +539,38 @@ export async function saveNativeItemDraft(
 			)
 			.for("update")
 			.limit(1);
-		if (currentDraft?.draftRevision !== expectedDraftRevision) {
-			throw new NativeDraftConflictError(itemKey);
-		}
-		await assertValidNativeItemCollectionMembershipsInDatabase(
-			transaction,
-			itemKey,
-			validated.collectionKeys,
-		);
-		const [draft] = await transaction
-			.update(itemDraft)
-			.set({
-				payload: validated.payload,
-				draftRevision: sql`${itemDraft.draftRevision} + 1`,
-				updatedAt: new Date(),
-			})
-			.where(
-				and(
-					eq(itemDraft.itemKey, itemKey),
-					eq(itemDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
-					eq(itemDraft.draftRevision, expectedDraftRevision),
-				),
+		if (
+			existingDraft &&
+			collectionKeysFromPayload(existingDraft.payload).includes(
+				collectionKey,
 			)
-			.returning();
-		if (!draft) {
-			throw new NativeDraftConflictError(itemKey);
+		) {
+			return { changed: false };
 		}
-		return draft;
+
+		if (!existingDraft && published) {
+			const [existingMembership] = await transaction
+				.select({ itemKey: itemToCollection.itemKey })
+				.from(itemToCollection)
+				.where(
+					and(
+						eq(itemToCollection.itemKey, itemKey),
+						eq(itemToCollection.collectionKey, collectionKey),
+					),
+				)
+				.limit(1);
+			if (existingMembership) return { changed: false };
+		}
+
+		const draft =
+			existingDraft ??
+			(await openNativeItemDraftInTransaction(transaction, itemKey));
+		await saveNativeItemDraftInTransaction(transaction, {
+			expectedDraftRevision: draft.draftRevision,
+			itemKey,
+			payload: payloadWithCollection(draft.payload, collectionKey),
+		});
+		return { changed: true };
 	});
 }
 
@@ -472,6 +579,7 @@ export async function publishNativeItemDraftWithContext(
 	itemKey: string,
 ) {
 	return db.transaction(async (transaction) => {
+		await lockNativeItemMutation(transaction, itemKey);
 		const [initialDraft] = await transaction
 			.select()
 			.from(itemDraft)
@@ -691,8 +799,13 @@ export async function publishNativeItemDraft(db: Database, itemKey: string) {
 
 class NativeItemLockSetChangedError extends Error {}
 
-async function unpublishNativeItemAttempt(db: Database, itemKey: string) {
+async function unpublishNativeItemAttempt(
+	db: Database,
+	itemKey: string,
+	discardDraft: boolean,
+) {
 	return db.transaction(async (transaction) => {
+		await lockNativeItemMutation(transaction, itemKey);
 		const [candidate] = await transaction
 			.select()
 			.from(item)
@@ -704,6 +817,21 @@ async function unpublishNativeItemAttempt(db: Database, itemKey: string) {
 			)
 			.limit(1);
 		if (!candidate) {
+			if (discardDraft) {
+				const discarded =
+					await discardNativeItemDraftIfPresentInTransaction(
+						transaction,
+						itemKey,
+						true,
+					);
+				if (discarded) {
+					return {
+						changed: true,
+						item: null,
+						stagedPrivatePaths: discarded.stagedPrivatePaths,
+					};
+				}
+			}
 			throw new NativeItemNotFoundError(itemKey);
 		}
 		const childrenToLock = await transaction
@@ -736,7 +864,18 @@ async function unpublishNativeItemAttempt(db: Database, itemKey: string) {
 		);
 		if (!current) throw new NativeItemNotFoundError(itemKey);
 		if (current.deleted === 1) {
-			return current;
+			const discarded = discardDraft
+				? await discardNativeItemDraftIfPresentInTransaction(
+						transaction,
+						itemKey,
+						true,
+					)
+				: null;
+			return {
+				changed: Boolean(discarded),
+				item: current,
+				stagedPrivatePaths: discarded?.stagedPrivatePaths ?? [],
+			};
 		}
 		const liveChildren = await transaction
 			.select({ key: item.key })
@@ -831,14 +970,34 @@ async function unpublishNativeItemAttempt(db: Database, itemKey: string) {
 				revision: parentRevision,
 			});
 		}
-		return unpublished!;
+		const discarded = discardDraft
+			? await discardNativeItemDraftIfPresentInTransaction(
+					transaction,
+					itemKey,
+					true,
+				)
+			: null;
+		return {
+			changed: true,
+			item: unpublished!,
+			stagedPrivatePaths: discarded?.stagedPrivatePaths ?? [],
+		};
 	});
 }
 
-export async function unpublishNativeItem(db: Database, itemKey: string) {
+export async function unpublishNativeItemWithOutcome(
+	db: Database,
+	itemKey: string,
+) {
 	for (let attempt = 0; attempt < 3; attempt += 1) {
 		try {
-			return await unpublishNativeItemAttempt(db, itemKey);
+			const outcome = await unpublishNativeItemAttempt(
+				db,
+				itemKey,
+				false,
+			);
+			if (!outcome.item) throw new NativeItemNotFoundError(itemKey);
+			return { ...outcome, item: outcome.item };
 		} catch (error) {
 			if (!(error instanceof NativeItemLockSetChangedError)) throw error;
 		}
@@ -846,90 +1005,151 @@ export async function unpublishNativeItem(db: Database, itemKey: string) {
 	throw new NativeItemMutationConflictError(itemKey);
 }
 
-export async function discardNativeItemDraft(db: Database, itemKey: string) {
-	return db.transaction(async (transaction) => {
-		const [staged] = await transaction
-			.select({
-				coverObjectPath: itemFileDraft.coverObjectPath,
-				objectPath: itemFileDraft.objectPath,
-			})
-			.from(itemFileDraft)
-			.where(eq(itemFileDraft.itemKey, itemKey))
-			.for("update")
-			.limit(1);
-		const [draft] = await transaction
+export async function unpublishNativeItem(db: Database, itemKey: string) {
+	return (await unpublishNativeItemWithOutcome(db, itemKey)).item;
+}
+
+async function discardNativeItemDraftInTransaction(
+	transaction: Transaction,
+	itemKey: string,
+	{
+		removeFileDraft = false,
+		requireMetadataDraft = true,
+	}: {
+		removeFileDraft?: boolean;
+		requireMetadataDraft?: boolean;
+	} = {},
+) {
+	const [staged] = await transaction
+		.select({
+			coverObjectPath: itemFileDraft.coverObjectPath,
+			objectPath: itemFileDraft.objectPath,
+		})
+		.from(itemFileDraft)
+		.where(eq(itemFileDraft.itemKey, itemKey))
+		.for("update")
+		.limit(1);
+	const [draft] = await transaction
+		.select({ itemKey: itemDraft.itemKey })
+		.from(itemDraft)
+		.where(
+			and(
+				eq(itemDraft.itemKey, itemKey),
+				eq(itemDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+			),
+		)
+		.for("update")
+		.limit(1);
+	if (!draft && !(removeFileDraft && staged)) {
+		if (!requireMetadataDraft) return null;
+		throw new NativeItemNotFoundError(itemKey);
+	}
+	const [identity] = await transaction
+		.select({ key: itemIdentity.key })
+		.from(itemIdentity)
+		.where(
+			and(
+				eq(itemIdentity.key, itemKey),
+				eq(itemIdentity.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+			),
+		)
+		.for("update")
+		.limit(1);
+	if (!identity) {
+		throw new NativeItemNotFoundError(itemKey);
+	}
+	const [published] = await transaction
+		.select({ key: item.key })
+		.from(item)
+		.where(eq(item.key, itemKey))
+		.limit(1);
+	if (!published) {
+		const [childDraft] = await transaction
 			.select({ itemKey: itemDraft.itemKey })
 			.from(itemDraft)
-			.where(
-				and(
-					eq(itemDraft.itemKey, itemKey),
-					eq(itemDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
-				),
-			)
-			.for("update")
+			.where(sql`${itemDraft.payload} ->> 'parentItem' = ${itemKey}`)
 			.limit(1);
-		if (!draft) {
-			throw new NativeItemNotFoundError(itemKey);
-		}
-		const [identity] = await transaction
-			.select({ key: itemIdentity.key })
-			.from(itemIdentity)
-			.where(
-				and(
-					eq(itemIdentity.key, itemKey),
-					eq(itemIdentity.sourceConnectionKey, NATIVE_CONNECTION_KEY),
-				),
-			)
-			.for("update")
-			.limit(1);
-		if (!identity) {
-			throw new NativeItemNotFoundError(itemKey);
-		}
-		const [published] = await transaction
+		const [publishedChild] = await transaction
 			.select({ key: item.key })
 			.from(item)
-			.where(eq(item.key, itemKey))
+			.where(eq(item.parentItem, itemKey))
 			.limit(1);
-		if (!published) {
-			const [childDraft] = await transaction
-				.select({ itemKey: itemDraft.itemKey })
-				.from(itemDraft)
+		if (childDraft || publishedChild) {
+			throw new NativeItemHasChildrenError(itemKey);
+		}
+	}
+	const [discarded] = draft
+		? await transaction
+				.delete(itemDraft)
 				.where(
-					sql`${itemDraft.payload} ->> 'parentItem' = ${itemKey}`,
+					and(
+						eq(itemDraft.itemKey, itemKey),
+						eq(
+							itemDraft.sourceConnectionKey,
+							NATIVE_CONNECTION_KEY,
+						),
+					),
 				)
-				.limit(1);
-			const [publishedChild] = await transaction
-				.select({ key: item.key })
-				.from(item)
-				.where(eq(item.parentItem, itemKey))
-				.limit(1);
-			if (childDraft || publishedChild) {
-				throw new NativeItemHasChildrenError(itemKey);
-			}
-		}
-		const [discarded] = await transaction
-			.delete(itemDraft)
-			.where(
-				and(
-					eq(itemDraft.itemKey, itemKey),
-					eq(itemDraft.sourceConnectionKey, NATIVE_CONNECTION_KEY),
-				),
-			)
-			.returning({ itemKey: itemDraft.itemKey });
-		if (!discarded) throw new NativeDraftConflictError(itemKey);
-		if (!published) {
-			await transaction
-				.delete(itemIdentity)
-				.where(eq(itemIdentity.key, itemKey));
-		}
-		return {
-			removedIdentity: !published,
-			stagedPrivatePaths:
-				!published && staged
-					? [staged.objectPath, staged.coverObjectPath].filter(
-							(path): path is string => Boolean(path),
-						)
-					: [],
-		};
+				.returning({ itemKey: itemDraft.itemKey })
+		: [null];
+	if (draft && !discarded) throw new NativeDraftConflictError(itemKey);
+	if (removeFileDraft && staged) {
+		await transaction
+			.delete(itemFileDraft)
+			.where(eq(itemFileDraft.itemKey, itemKey));
+	}
+	if (!published) {
+		await transaction
+			.delete(itemIdentity)
+			.where(eq(itemIdentity.key, itemKey));
+	}
+	return {
+		removedIdentity: !published,
+		stagedPrivatePaths:
+			(!published || removeFileDraft) && staged
+				? [staged.objectPath, staged.coverObjectPath].filter(
+						(path): path is string => Boolean(path),
+					)
+				: [],
+	};
+}
+
+async function discardNativeItemDraftIfPresentInTransaction(
+	transaction: Transaction,
+	itemKey: string,
+	removeFileDraft = false,
+) {
+	return discardNativeItemDraftInTransaction(transaction, itemKey, {
+		removeFileDraft,
+		requireMetadataDraft: false,
 	});
+}
+
+export async function discardNativeItemDraft(db: Database, itemKey: string) {
+	return db.transaction(async (transaction) => {
+		await lockNativeItemMutation(transaction, itemKey);
+		const discarded = await discardNativeItemDraftInTransaction(
+			transaction,
+			itemKey,
+		);
+		if (!discarded) throw new NativeItemNotFoundError(itemKey);
+		return discarded;
+	});
+}
+
+export async function removeNativeItem(db: Database, itemKey: string) {
+	for (let attempt = 0; attempt < 3; attempt += 1) {
+		try {
+			const removed = await unpublishNativeItemAttempt(db, itemKey, true);
+			return {
+				changed: removed.changed,
+				item: removed.item,
+				stagedPrivatePaths: removed.stagedPrivatePaths,
+			};
+		} catch (error) {
+			if (error instanceof NativeItemLockSetChangedError) continue;
+			throw error;
+		}
+	}
+	throw new NativeItemMutationConflictError(itemKey);
 }

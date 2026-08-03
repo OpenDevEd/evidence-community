@@ -51,40 +51,45 @@ export async function readAdminJson(request: Request) {
 	}
 }
 
-function adminError(
-	status: number,
-	code: AdminErrorCode,
-	message: string,
-	fields?: AdminErrorPayload["error"]["fields"],
-) {
+export type AdminErrorDetails = AdminErrorPayload["error"] & {
+	status: number;
+};
+
+function adminError(details: AdminErrorDetails) {
 	return NextResponse.json<AdminErrorPayload>(
 		{
 			error: {
-				code,
-				...(fields && Object.keys(fields).length > 0 ? { fields } : {}),
-				message,
+				code: details.code,
+				...(details.fields && Object.keys(details.fields).length > 0
+					? { fields: details.fields }
+					: {}),
+				message: details.message,
 			},
 		},
-		{ status, headers: ADMIN_RESPONSE_HEADERS },
+		{ status: details.status, headers: ADMIN_RESPONSE_HEADERS },
 	);
 }
 
 export function requireAdminBypass() {
 	if (isAdminBypassEnabled()) return null;
-	return adminError(404, "not_found", "This page is not available.");
+	return adminError({
+		code: "not_found",
+		message: "This page is not available.",
+		status: 404,
+	});
 }
 
-export function adminErrorResponse(error: unknown) {
+export function adminErrorDetails(error: unknown): AdminErrorDetails {
 	if (
 		error instanceof NativeItemNotFoundError ||
 		error instanceof NativeFileNotFoundError ||
 		error instanceof NativeCollectionNotFoundError
 	) {
-		return adminError(
-			404,
-			"not_found",
-			"The requested record is no longer available.",
-		);
+		return {
+			code: "not_found",
+			message: "The requested record is no longer available.",
+			status: 404,
+		};
 	}
 	if (
 		error instanceof NativeDraftConflictError ||
@@ -92,39 +97,43 @@ export function adminErrorResponse(error: unknown) {
 		error instanceof NativeItemMutationConflictError ||
 		error instanceof NativeFileConflictError
 	) {
-		return adminError(
-			409,
-			"conflict",
-			"This content changed while you were editing it. Refresh and try again.",
-		);
+		return {
+			code: "conflict",
+			message:
+				"This content changed while you were editing it. Refresh and try again.",
+			status: 409,
+		};
 	}
 	if (error instanceof NativeItemHasPublishedFileError) {
-		return adminError(
-			409,
-			"conflict",
-			"Unpublish this attachment's PDF before unpublishing the attachment.",
-		);
+		return {
+			code: "conflict",
+			message:
+				"Unpublish this attachment's PDF before unpublishing the attachment.",
+			status: 409,
+		};
 	}
 	if (error instanceof NativeItemHasChildrenError) {
-		return adminError(
-			409,
-			"conflict",
-			"Handle this record's attachments first: delete attachment drafts and unpublish published attachments.",
-		);
+		return {
+			code: "conflict",
+			message:
+				"Handle this record's attachments first: delete attachment drafts and unpublish published attachments.",
+			status: 409,
+		};
 	}
 	if (error instanceof NativeItemParentUnavailableError) {
-		return adminError(
-			409,
-			"conflict",
-			"The parent record is unavailable. Restore or publish it, then try again.",
-		);
+		return {
+			code: "conflict",
+			message:
+				"The parent record is unavailable. Restore or publish it, then try again.",
+			status: 409,
+		};
 	}
 	if (error instanceof ZodError) {
 		const details = validationErrorPayload(
 			"Check the highlighted fields and try again.",
 			fieldErrorsFromZod(error),
 		);
-		return adminError(400, details.code, details.message, details.fields);
+		return { ...details, status: 400 };
 	}
 	if (
 		error instanceof AdminValidationError ||
@@ -136,40 +145,51 @@ export function adminErrorResponse(error: unknown) {
 			error.message,
 			error instanceof AdminValidationError ? error.fields : {},
 		);
-		return adminError(400, details.code, details.message, details.fields);
+		return { ...details, status: 400 };
 	}
 	const databaseError = (
 		error instanceof DrizzleQueryError ? error.cause : error
 	) as { code?: string } | undefined;
 	if (databaseError?.code === "40P01" || databaseError?.code === "40001") {
-		return adminError(
-			409,
-			"conflict",
-			"This content changed while you were editing it. Refresh and try again.",
-		);
+		return {
+			code: "conflict",
+			message:
+				"This content changed while you were editing it. Refresh and try again.",
+			status: 409,
+		};
 	}
 	if (databaseError?.code === "23503" || databaseError?.code === "23514") {
-		return adminError(
-			400,
-			"invalid_reference",
-			"Some selected records are no longer available. Refresh and try again.",
-		);
+		return {
+			code: "invalid_reference",
+			message:
+				"Some selected records are no longer available. Refresh and try again.",
+			status: 400,
+		};
 	}
 	if (databaseError?.code === "23505") {
-		return adminError(409, "already_exists", "This record already exists.");
+		return {
+			code: "already_exists",
+			message: "This record already exists.",
+			status: 409,
+		};
 	}
 	if (error instanceof EvidenceFileStorageError) {
-		return adminError(
-			502,
-			"storage_unavailable",
-			"File storage is temporarily unavailable. Try again shortly.",
-		);
+		return {
+			code: "storage_unavailable",
+			message:
+				"File storage is temporarily unavailable. Try again shortly.",
+			status: 502,
+		};
 	}
 
 	console.error("Admin item operation failed", error);
-	return adminError(
-		500,
-		"internal_error",
-		"Something went wrong. Try again.",
-	);
+	return {
+		code: "internal_error",
+		message: "Something went wrong. Try again.",
+		status: 500,
+	};
+}
+
+export function adminErrorResponse(error: unknown) {
+	return adminError(adminErrorDetails(error));
 }
