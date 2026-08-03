@@ -408,6 +408,133 @@ test("searches and assigns records with the collection picker", async ({
 	});
 });
 
+test("creates a collection in a searched location without a full-list select", async ({
+	page,
+}) => {
+	let createRequest: Record<string, unknown> | undefined;
+	await mockPublishedBook(page);
+	await page.route("**/api/admin/collections", async (route) => {
+		if (route.request().method() !== "POST") {
+			await route.fallback();
+			return;
+		}
+		createRequest = route.request().postDataJSON() as Record<string, unknown>;
+		await route.fulfill({
+			json: {
+				collection: {
+					...longCollection,
+					key: "NEWCOLL1",
+					name: "Nested collection",
+					parentCollection: longCollection.key,
+				},
+			},
+		});
+	});
+
+	await page.goto("/admin");
+	await page.getByRole("button", { exact: true, name: "New" }).click();
+	let dialog = page.getByRole("dialog", { name: "New collection" });
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByRole("textbox", { name: "Name" })).toBeFocused();
+	const locationGeometry = await dialog
+		.locator("[data-admin-collection-location]")
+		.evaluate((element) => {
+			const style = getComputedStyle(element);
+			return {
+				borderWidth: style.borderWidth,
+				paddingLeft: style.paddingLeft,
+				paddingRight: style.paddingRight,
+			};
+		});
+	expect(locationGeometry).toEqual({
+		borderWidth: "0px",
+		paddingLeft: "12px",
+		paddingRight: "12px",
+	});
+	await dialog.getByRole("button", { name: "Change location" }).click();
+	dialog = page.getByRole("dialog", { name: "Choose location" });
+	const search = dialog.getByRole("textbox", { name: "Search collections" });
+	await expect(search).toBeFocused();
+	await search.fill("very long");
+	await dialog
+		.getByRole("button", {
+			name: /A very long collection name/u,
+		})
+		.click();
+	dialog = page.getByRole("dialog", { name: "New collection" });
+	await expect(
+		dialog.getByRole("button", { name: "Change location" }),
+	).toContainText(longCollection.name);
+	await dialog
+		.getByRole("textbox", { name: "Name" })
+		.fill("Nested collection");
+	await dialog.getByRole("button", { name: "Create" }).click();
+	await expect.poll(() => createRequest).toEqual({
+		name: "Nested collection",
+		parentCollection: longCollection.key,
+	});
+});
+
+test("moves a collection to a searched destination at the end", async ({
+	page,
+}) => {
+	let moveRequest: Record<string, unknown> | undefined;
+	await mockPublishedBook(page);
+	await page.route(
+		"**/api/admin/collections/TEACHDEV/move",
+		async (route) => {
+			moveRequest = route.request().postDataJSON() as Record<string, unknown>;
+			await route.fulfill({
+				json: {
+					collection: {
+						...teacherCollection,
+						parentCollection: longCollection.key,
+						revision: 2,
+					},
+					collections: [],
+				},
+			});
+		},
+	);
+
+	await page.goto("/admin");
+	await page.locator('[data-collection-key="TEACHDEV"]').hover();
+	await page
+		.getByRole("button", { name: "Manage Teacher development" })
+		.click();
+	await page.getByRole("menuitem", { name: "Move" }).click();
+	let dialog = page.getByRole("dialog", {
+		name: "Move Teacher development",
+	});
+	await expect(dialog).toBeVisible();
+	await expect(
+		dialog.getByRole("button", { name: "Change destination" }),
+	).toContainText("Top level");
+	await expect(
+		dialog.getByRole("button", { name: "Move", exact: true }),
+	).toBeDisabled();
+	await dialog.getByRole("button", { name: "Change destination" }).click();
+	dialog = page.getByRole("dialog", { name: "Choose destination" });
+	await dialog
+		.getByRole("textbox", { name: "Search collections" })
+		.fill("very long");
+	await dialog
+		.getByRole("button", { name: /A very long collection name/u })
+		.click();
+	dialog = page.getByRole("dialog", {
+		name: "Move Teacher development",
+	});
+	await expect(
+		dialog.getByRole("button", { name: "Change destination" }),
+	).toBeFocused();
+	await dialog.getByRole("button", { name: "Move", exact: true }).click();
+	await expect.poll(() => moveRequest).toEqual({
+		beforeCollection: null,
+		expectedRevision: teacherCollection.revision,
+		parentCollection: longCollection.key,
+	});
+});
+
 test("persists advanced typed filters in the URL", async ({ page }) => {
 	test.setTimeout(45_000);
 	const listRequests: URL[] = [];

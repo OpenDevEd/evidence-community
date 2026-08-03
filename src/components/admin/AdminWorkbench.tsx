@@ -7,9 +7,12 @@ import {
 	ModalHeader,
 } from "@nextui-org/react";
 import {
+	ArrowLeft,
 	Archive,
 	Check,
+	ChevronRight,
 	Clock3,
+	Folder,
 	FolderInput,
 	Library,
 	List,
@@ -34,6 +37,7 @@ import { SelectItem } from "@/components/nextui/SelectItem";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import type {
 	AdminCollection,
+	AdminCollectionCatalogEntry,
 	AdminItemDetail,
 	AdminItemViewFilters,
 	AdminLibrarySnapshot,
@@ -52,17 +56,16 @@ import { Link } from "@/i18n/routing";
 import {
 	collectionAncestorKeys,
 	collectionDescendantKeys,
-	collectionMovePositionOptions,
-	currentCollectionMovePosition,
-	legalNativeCollectionParents,
 	mergeAdminCollectionUpdates,
-	resolveBeforeCollection,
 	resolveNativeCollectionDrop,
 } from "@/lib/admin/collection-tree";
 import type { NativeCollectionDropDestination } from "@/lib/admin/collection-tree";
 
 import { AdminInspector } from "./AdminInspector";
-import { AdminCollectionPicker } from "./AdminCollectionPicker";
+import {
+	adminCollectionPath,
+	AdminCollectionPicker,
+} from "./AdminCollectionPicker";
 import { AdminItemFilters } from "./AdminItemFilters";
 import { AdminItemTable } from "./AdminItemTable";
 import { AdminNavigation, expandAdminCollections } from "./AdminNavigation";
@@ -127,6 +130,12 @@ type MoveDialog = {
 	collection: AdminCollection;
 };
 
+type CollectionLocation = {
+	key: string;
+	name: string;
+	path: string;
+};
+
 type ConfirmDialog = {
 	action: () => Promise<void>;
 	confirmLabel?: string;
@@ -140,6 +149,86 @@ type RecordAssignment = {
 	focusKey: string;
 	itemKeys: string[];
 };
+
+function collectionLocationFromCatalog(
+	entry: AdminCollectionCatalogEntry,
+	sources: AdminLibrarySnapshot["sources"],
+): CollectionLocation {
+	return {
+		key: entry.key,
+		name: entry.name,
+		path: adminCollectionPath(entry, sources),
+	};
+}
+
+function collectionLocationFromSnapshot(
+	key: string | null,
+	collections: AdminCollection[],
+	sources: AdminLibrarySnapshot["sources"],
+): CollectionLocation | null {
+	if (!key) return null;
+	const entry = collections.find((collection) => collection.key === key);
+	if (!entry) return null;
+	const source =
+		sources.find(({ key: sourceKey }) => sourceKey === entry.sourceConnectionKey)
+			?.label ?? entry.sourceConnectionKey;
+	const ancestors = collectionAncestorKeys(collections, entry.key).flatMap(
+		(ancestorKey) => {
+			const ancestor = collections.find(
+				(collection) => collection.key === ancestorKey,
+			);
+			return ancestor ? [ancestor.name] : [];
+		},
+	);
+	return {
+		key: entry.key,
+		name: entry.name,
+		path: [source, ...ancestors].join(" › "),
+	};
+}
+
+function CollectionLocationButton({
+	buttonRef,
+	label,
+	location,
+	onPress,
+}: {
+	buttonRef?: React.RefObject<HTMLButtonElement | null>;
+	label: string;
+	location: CollectionLocation | null;
+	onPress: () => void;
+}) {
+	return (
+		<div className="space-y-1.5">
+			<div className="text-xs font-medium text-black/60 dark:text-white/65">
+				{label}
+			</div>
+			<button
+				aria-label={`Change ${label.toLowerCase()}, current ${location?.name ?? "Top level"}, ${location?.path ?? "Native"}`}
+				className="flex min-h-14 w-full items-center gap-2.5 rounded-xl bg-black/[0.035] px-3 text-left transition-colors hover:bg-black/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:bg-white/[0.045] dark:hover:bg-white/[0.07]"
+				data-admin-collection-location
+				onClick={onPress}
+				ref={buttonRef}
+				type="button"
+			>
+				<Folder aria-hidden className="shrink-0 text-accent" size={15} />
+				<span className="min-w-0 flex-1">
+					<span className="block truncate text-sm font-medium text-black/75 dark:text-white/80">
+						{location?.name ?? "Top level"}
+					</span>
+					<span className="block truncate text-[11px] text-black/40 dark:text-white/40">
+						{location?.path ?? "Native"}
+					</span>
+				</span>
+				<ChevronRight
+					aria-hidden
+					className="shrink-0 text-black/30 dark:text-white/30"
+					size={14}
+				/>
+			</button>
+		</div>
+	);
+}
 
 const ADMIN_DESKTOP_MEDIA_QUERY = "(min-width: 1280px)";
 
@@ -346,12 +435,19 @@ export default function AdminWorkbench({
 	const [collectionParent, setCollectionParent] = useState<string | null>(
 		null,
 	);
+	const [collectionParentLocation, setCollectionParentLocation] =
+		useState<CollectionLocation | null>(null);
+	const [collectionParentPickerOpen, setCollectionParentPickerOpen] =
+		useState(false);
 	const [collectionErrors, setCollectionErrors] = useState<AdminFieldErrors>(
 		{},
 	);
 	const [moveDialog, setMoveDialog] = useState<MoveDialog | null>(null);
 	const [moveParent, setMoveParent] = useState<string | null>(null);
-	const [movePosition, setMovePosition] = useState("first");
+	const [moveParentLocation, setMoveParentLocation] =
+		useState<CollectionLocation | null>(null);
+	const [moveParentPickerOpen, setMoveParentPickerOpen] = useState(false);
+	const [moveDestinationChanged, setMoveDestinationChanged] = useState(false);
 	const [moveErrors, setMoveErrors] = useState<AdminFieldErrors>({});
 	const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
 	const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
@@ -359,6 +455,7 @@ export default function AdminWorkbench({
 	);
 
 	const detailRequest = useRef(0);
+	const moveLocationButtonRef = useRef<HTMLButtonElement>(null);
 	const selectedKeyRef = useRef<string | null>(null);
 	const detailRef = useRef<AdminItemDetail | null>(null);
 	const draftPayloadRef = useRef<Record<string, unknown>>({});
@@ -1071,21 +1168,41 @@ export default function AdminWorkbench({
 		setCollectionDialog({ mode: "create", parentCollection });
 		setCollectionName("");
 		setCollectionParent(parentCollection);
+		setCollectionParentLocation(
+			collectionLocationFromSnapshot(
+				parentCollection,
+				library.collections,
+				library.sources,
+			),
+		);
+		setCollectionParentPickerOpen(false);
 	};
 
 	const openRenameCollection = (collection: AdminCollection) => {
 		setCollectionErrors({});
 		setCollectionDialog({ collection, mode: "rename" });
 		setCollectionName(collection.name);
+		setCollectionParentPickerOpen(false);
 	};
 
 	const openMoveCollection = (collection: AdminCollection) => {
 		setMoveErrors({});
 		setMoveDialog({ collection });
 		setMoveParent(collection.parentCollection);
-		setMovePosition(
-			currentCollectionMovePosition(library.collections, collection),
+		setMoveParentLocation(
+			collectionLocationFromSnapshot(
+				collection.parentCollection,
+				library.collections,
+				library.sources,
+			),
 		);
+		setMoveParentPickerOpen(false);
+		setMoveDestinationChanged(false);
+	};
+
+	const closeMoveParentPicker = () => {
+		setMoveParentPickerOpen(false);
+		window.requestAnimationFrame(() => moveLocationButtonRef.current?.focus());
 	};
 
 	const submitCollection = () =>
@@ -1129,12 +1246,7 @@ export default function AdminWorkbench({
 			async () => {
 				if (!moveDialog) return;
 				await moveAdminCollection(moveDialog.collection.key, {
-					beforeCollection: resolveBeforeCollection(
-						library.collections,
-						moveParent,
-						moveDialog.collection.key,
-						movePosition,
-					),
+					beforeCollection: null,
 					expectedRevision: moveDialog.collection.revision,
 					parentCollection: moveParent,
 				});
@@ -1461,17 +1573,6 @@ export default function AdminWorkbench({
 		(collection) =>
 			collection.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY,
 	);
-	const legalCollectionParents = legalNativeCollectionParents(
-		library.collections,
-		moveDialog?.collection.key,
-	);
-	const movePositionOptions = moveDialog
-		? collectionMovePositionOptions(
-				library.collections,
-				moveParent,
-				moveDialog.collection.key,
-			)
-		: [];
 	const selectedCollectionFilter = singleAdminItemFilterValue(
 		filters.filters,
 		"collections",
@@ -2025,54 +2126,39 @@ export default function AdminWorkbench({
 					{(onClose) => (
 						<>
 							<ModalHeader>
-								{collectionDialog?.mode === "rename"
-									? "Rename collection"
-									: "New collection"}
+								{collectionParentPickerOpen ? (
+									<span className="flex items-center gap-2">
+										<button
+											aria-label="Back to new collection"
+											className="grid size-7 shrink-0 place-items-center rounded-md text-black/45 hover:bg-black/[0.05] hover:text-black/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
+											onClick={() => setCollectionParentPickerOpen(false)}
+											type="button"
+										>
+											<ArrowLeft aria-hidden size={14} />
+										</button>
+										Choose location
+									</span>
+								) : collectionDialog?.mode === "rename" ? (
+									"Rename collection"
+								) : (
+									"New collection"
+								)}
 							</ModalHeader>
 							<ModalBody>
-								<Input
-									autoFocus
-									errorMessage={collectionErrors.name}
-									isInvalid={Boolean(collectionErrors.name)}
-									label="Name"
-									labelPlacement="outside"
-									value={collectionName}
-									onValueChange={(value) => {
-										setCollectionName(value);
-										setCollectionErrors((current) =>
-											withoutFieldErrors(
-												current,
-												"_form",
-												"name",
-											),
-										);
-									}}
-								/>
-								{collectionDialog?.mode === "create" ? (
-									<Select
-										aria-label="Parent collection"
-										className="max-w-none"
-										label="Parent"
-										labelPlacement="outside"
-										errorMessage={
-											collectionErrors.parentCollection
-										}
-										isInvalid={Boolean(
-											collectionErrors.parentCollection,
-										)}
-										placement="left"
-										selectedKeys={
-											collectionParent
-												? new Set([collectionParent])
-												: new Set(["root"])
-										}
-										onSelectionChange={(keys) => {
-											const key = singleKey(
-												keys as Set<React.Key>,
+								{collectionParentPickerOpen ? (
+									<AdminCollectionPicker
+										allowTopLevel
+										autoFocus={finePointer}
+										editableOnly
+										onSelect={(entry) => {
+											setCollectionParent(entry.key);
+											setCollectionParentLocation(
+												collectionLocationFromCatalog(
+													entry,
+													library.sources,
+												),
 											);
-											setCollectionParent(
-												key === "root" ? null : key,
-											);
+											setCollectionParentPickerOpen(false);
 											setCollectionErrors((current) =>
 												withoutFieldErrors(
 													current,
@@ -2081,25 +2167,65 @@ export default function AdminWorkbench({
 												),
 											);
 										}}
-									>
-										{[
-											{
-												key: "root",
-												name: "Top level",
-											},
-											...legalNativeCollectionParents(
-												library.collections,
-											).map((collection) => ({
-												key: collection.key,
-												name: collection.name,
-											})),
-										].map((collection) => (
-											<SelectItem key={collection.key}>
-												{collection.name}
-											</SelectItem>
-										))}
-									</Select>
-								) : null}
+										onSelectionChange={(keys) =>
+											setCollectionParent(keys[0] ?? null)
+										}
+										onSelectTopLevel={() => {
+											setCollectionParent(null);
+											setCollectionParentLocation(null);
+											setCollectionParentPickerOpen(false);
+											setCollectionErrors((current) =>
+												withoutFieldErrors(
+													current,
+													"_form",
+													"parentCollection",
+												),
+											);
+										}}
+										selectedKeys={
+											collectionParent ? [collectionParent] : []
+										}
+										selectionMode="single"
+										sources={library.sources}
+									/>
+								) : (
+									<>
+										<Input
+											autoFocus={finePointer}
+											errorMessage={collectionErrors.name}
+											isInvalid={Boolean(collectionErrors.name)}
+											label="Name"
+											labelPlacement="outside"
+											value={collectionName}
+											onValueChange={(value) => {
+												setCollectionName(value);
+												setCollectionErrors((current) =>
+													withoutFieldErrors(
+														current,
+														"_form",
+														"name",
+													),
+												);
+											}}
+										/>
+										{collectionDialog?.mode === "create" ? (
+											<>
+												<CollectionLocationButton
+													label="Location"
+													location={collectionParentLocation}
+													onPress={() =>
+														setCollectionParentPickerOpen(true)
+													}
+												/>
+												{collectionErrors.parentCollection ? (
+													<p className="text-xs text-danger" role="alert">
+														{collectionErrors.parentCollection}
+													</p>
+												) : null}
+											</>
+										) : null}
+									</>
+								)}
 								{collectionErrors._form ? (
 									<p
 										className="text-xs text-danger"
@@ -2117,21 +2243,23 @@ export default function AdminWorkbench({
 								>
 									Cancel
 								</Button>
-								<Button
-									color="accent"
-									isDisabled={!collectionName.trim() || busy}
-									isLoading={busy}
-									onPress={submitCollection}
-									size="xs"
-									startContent={
-										<FolderInput aria-hidden size={14} />
-									}
-									variant="solid"
-								>
-									{collectionDialog?.mode === "rename"
-										? "Rename"
-										: "Create"}
-								</Button>
+								{!collectionParentPickerOpen ? (
+									<Button
+										color="accent"
+										isDisabled={!collectionName.trim() || busy}
+										isLoading={busy}
+										onPress={submitCollection}
+										size="xs"
+										startContent={
+											<FolderInput aria-hidden size={14} />
+										}
+										variant="solid"
+									>
+										{collectionDialog?.mode === "rename"
+											? "Rename"
+											: "Create"}
+									</Button>
+								) : null}
 							</ModalFooter>
 						</>
 					)}
@@ -2151,96 +2279,82 @@ export default function AdminWorkbench({
 					{(onClose) => (
 						<>
 							<ModalHeader>
-								Move {moveDialog?.collection.name}
+								{moveParentPickerOpen ? (
+									<span className="flex items-center gap-2">
+										<button
+											aria-label={`Back to move ${moveDialog?.collection.name ?? "collection"}`}
+											className="grid size-7 shrink-0 place-items-center rounded-md text-black/45 hover:bg-black/[0.05] hover:text-black/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
+											onClick={closeMoveParentPicker}
+											type="button"
+										>
+											<ArrowLeft aria-hidden size={14} />
+										</button>
+										Choose destination
+									</span>
+								) : (
+									`Move ${moveDialog?.collection.name ?? "collection"}`
+								)}
 							</ModalHeader>
 							<ModalBody>
-								<Select
-									aria-label="Move to parent collection"
-									className="max-w-none"
-									label="Parent"
-									labelPlacement="outside"
-									errorMessage={moveErrors.parentCollection}
-									isInvalid={Boolean(
-										moveErrors.parentCollection,
-									)}
-									placement="left"
-									selectedKeys={
-										moveParent
-											? new Set([moveParent])
-											: new Set(["root"])
-									}
-									onSelectionChange={(keys) => {
-										const key = singleKey(
-											keys as Set<React.Key>,
-										);
-										const parent =
-											key === "root" ? null : key;
-										setMoveParent(parent);
-										setMoveErrors((current) =>
-											withoutFieldErrors(
-												current,
-												"_form",
-												"parentCollection",
-											),
-										);
-										const positions =
-											collectionMovePositionOptions(
-												library.collections,
-												parent,
-												moveDialog!.collection.key,
+								{moveParentPickerOpen ? (
+									<AdminCollectionPicker
+										allowTopLevel
+										autoFocus={finePointer}
+										disabledAncestorKey={moveDialog?.collection.key}
+										editableOnly
+										onSelect={(entry) => {
+											setMoveParent(entry.key);
+											setMoveParentLocation(
+												collectionLocationFromCatalog(
+													entry,
+													library.sources,
+												),
 											);
-										setMovePosition(
-											positions.at(-1)?.key ?? "first",
-										);
-									}}
-								>
-									{[
-										{ key: "root", name: "Top level" },
-										...legalCollectionParents.map(
-											(collection) => ({
-												key: collection.key,
-												name: collection.name,
-											}),
-										),
-									].map((collection) => (
-										<SelectItem key={collection.key}>
-											{collection.name}
-										</SelectItem>
-									))}
-								</Select>
-								<Select
-									aria-label="Collection position"
-									className="max-w-none"
-									label="Position"
-									labelPlacement="outside"
-									errorMessage={moveErrors.beforeCollection}
-									isInvalid={Boolean(
-										moveErrors.beforeCollection,
-									)}
-									placement="left"
-									selectedKeys={new Set([movePosition])}
-									onSelectionChange={(keys) => {
-										const key = singleKey(
-											keys as Set<React.Key>,
-										);
-										if (key) {
-											setMovePosition(key);
+											closeMoveParentPicker();
+											setMoveDestinationChanged(true);
 											setMoveErrors((current) =>
 												withoutFieldErrors(
 													current,
 													"_form",
-													"beforeCollection",
+													"parentCollection",
 												),
 											);
+										}}
+										onSelectionChange={(keys) =>
+											setMoveParent(keys[0] ?? null)
 										}
-									}}
-								>
-									{movePositionOptions.map((position) => (
-										<SelectItem key={position.key}>
-											{position.label}
-										</SelectItem>
-									))}
-								</Select>
+										onSelectTopLevel={() => {
+											setMoveParent(null);
+											setMoveParentLocation(null);
+											closeMoveParentPicker();
+											setMoveDestinationChanged(true);
+											setMoveErrors((current) =>
+												withoutFieldErrors(
+													current,
+													"_form",
+													"parentCollection",
+												),
+											);
+										}}
+										selectedKeys={moveParent ? [moveParent] : []}
+										selectionMode="single"
+										sources={library.sources}
+									/>
+								) : (
+									<>
+										<CollectionLocationButton
+											buttonRef={moveLocationButtonRef}
+											label="Destination"
+											location={moveParentLocation}
+											onPress={() => setMoveParentPickerOpen(true)}
+										/>
+										{moveErrors.parentCollection ? (
+											<p className="text-xs text-danger" role="alert">
+												{moveErrors.parentCollection}
+											</p>
+										) : null}
+									</>
+								)}
 								{moveErrors._form ? (
 									<p
 										className="text-xs text-danger"
@@ -2258,19 +2372,21 @@ export default function AdminWorkbench({
 								>
 									Cancel
 								</Button>
-								<Button
-									color="accent"
-									isDisabled={busy}
-									isLoading={busy}
-									onPress={submitCollectionMove}
-									size="xs"
-									startContent={
-										<FolderInput aria-hidden size={14} />
-									}
-									variant="solid"
-								>
-									Move
-								</Button>
+								{!moveParentPickerOpen ? (
+									<Button
+										color="accent"
+										isDisabled={busy || !moveDestinationChanged}
+										isLoading={busy}
+										onPress={submitCollectionMove}
+										size="xs"
+										startContent={
+											<FolderInput aria-hidden size={14} />
+										}
+										variant="solid"
+									>
+										Move
+									</Button>
+								) : null}
 							</ModalFooter>
 						</>
 					)}
