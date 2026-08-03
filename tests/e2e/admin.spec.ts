@@ -28,6 +28,14 @@ const longCollection = {
 	updatedAt: timestamp,
 };
 
+const collectionCatalogEntries = [teacherCollection, longCollection].map(
+	(collection) => ({
+		...collection,
+		ancestors: [],
+		hasChildren: false,
+	}),
+);
+
 const publishedPayload = {
 	abstractNote: "A published summary",
 	collections: [],
@@ -143,7 +151,49 @@ async function mockPublishedBook(
 	let draftRevision = 1;
 	await page.route("**/api/admin/**", async (route) => {
 		const request = route.request();
-		const pathname = new URL(request.url()).pathname;
+		const requestUrl = new URL(request.url());
+		const pathname = requestUrl.pathname;
+
+		if (
+			pathname === "/api/admin/collections" &&
+			request.method() === "GET"
+		) {
+			const view = requestUrl.searchParams.get("view") ?? "children";
+			if (view === "resolve") {
+				const keys = requestUrl.searchParams.getAll("key");
+				await route.fulfill({
+					json: {
+						items: keys.flatMap((key) => {
+							const entry = collectionCatalogEntries.find(
+								(collection) => collection.key === key,
+							);
+							return entry ? [entry] : [];
+						}),
+					},
+				});
+				return;
+			}
+			const query = (requestUrl.searchParams.get("query") ?? "")
+				.trim()
+				.toLowerCase();
+			const parent = requestUrl.searchParams.get("parent");
+			await route.fulfill({
+				json: {
+					hasMore: false,
+					items: collectionCatalogEntries.filter(
+						(entry) =>
+							(view === "search"
+								? entry.name.toLowerCase().includes(query)
+								: entry.parentCollection ===
+										(!parent || parent === "root" ? null : parent)) &&
+							entry.sourceConnectionKey ===
+								(requestUrl.searchParams.get("source") ?? "native"),
+					),
+					nextCursor: null,
+				},
+			});
+			return;
+		}
 
 		if (pathname === "/api/admin/library") {
 			await route.fulfill({
@@ -288,6 +338,75 @@ async function mockPublishedBook(
 		await route.fulfill({ status: 404 });
 	});
 }
+
+test("searches and assigns records with the collection picker", async ({
+	page,
+}) => {
+	let batchRequest:
+		| { action: string; collectionKey?: string; keys: string[] }
+		| undefined;
+	await mockPublishedBook(page, {
+		onBatchRequest: (request) => {
+			batchRequest = request;
+		},
+	});
+	await page.goto("/admin");
+	const assignmentButton = page.getByRole("button", {
+		name: "Drag or assign Published book",
+		exact: true,
+	});
+	await assignmentButton.focus();
+	await assignmentButton.press("Enter");
+	const dialog = page.getByRole("dialog", {
+		name: "Add record to collection",
+	});
+	await expect(dialog).toBeVisible();
+	await expect
+		.poll(() =>
+			dialog.evaluate((element) => getComputedStyle(element).opacity),
+		)
+		.toBe("1");
+	const pickerGeometry = await dialog.evaluate((element) => {
+		const dialogRect = element.getBoundingClientRect();
+		const picker = element.querySelector<HTMLElement>(
+			"[data-admin-collection-picker]",
+		)!;
+		const results = element.querySelector<HTMLElement>(
+			"[data-admin-collection-picker-results]",
+		)!;
+		const resultsStyle = getComputedStyle(results);
+		return {
+			dialogMaxWidth: getComputedStyle(element).maxWidth,
+			dialogWidth: dialogRect.width,
+			pickerInsideDialog:
+				picker.getBoundingClientRect().right <= dialogRect.right &&
+				picker.getBoundingClientRect().left >= dialogRect.left,
+			resultsComputedHeight: Number.parseFloat(resultsStyle.height),
+			resultsMaxHeight: resultsStyle.maxHeight,
+			resultsOverflowY: resultsStyle.overflowY,
+		};
+	});
+	expect(pickerGeometry).toMatchObject({
+		dialogMaxWidth: "448px",
+		pickerInsideDialog: true,
+		resultsOverflowY: "auto",
+	});
+	expect(pickerGeometry.dialogWidth).toBeLessThanOrEqual(480);
+	expect(pickerGeometry.resultsComputedHeight).toBeLessThanOrEqual(320);
+	const collectionSearch = dialog.getByRole("textbox", {
+		name: "Search collections",
+	});
+	await expect(collectionSearch).toBeFocused();
+	await collectionSearch.fill("teacher");
+	await dialog
+		.getByRole("button", { name: /Teacher development/u })
+		.click();
+	await expect.poll(() => batchRequest).toEqual({
+		action: "assignCollection",
+		collectionKey: teacherCollection.key,
+		keys: [publishedItemKey],
+	});
+});
 
 test("persists advanced typed filters in the URL", async ({ page }) => {
 	test.setTimeout(45_000);

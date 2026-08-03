@@ -62,6 +62,7 @@ import {
 import type { NativeCollectionDropDestination } from "@/lib/admin/collection-tree";
 
 import { AdminInspector } from "./AdminInspector";
+import { AdminCollectionPicker } from "./AdminCollectionPicker";
 import { AdminItemFilters } from "./AdminItemFilters";
 import { AdminItemTable } from "./AdminItemTable";
 import { AdminNavigation, expandAdminCollections } from "./AdminNavigation";
@@ -1922,42 +1923,24 @@ export default function AdminWorkbench({
 								to collection
 							</ModalHeader>
 							<ModalBody>
-								<div className="flex max-h-[52vh] flex-col gap-1 overflow-y-auto">
-									{activeNativeCollections.map(
-										(collection) => (
-											<button
-												key={collection.key}
-												className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-left text-sm text-black/70 hover:bg-accent/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/70 dark:hover:bg-accent/15"
-												onClick={() => {
-													const assignment =
-														recordAssignment;
-													closeRecordAssignment();
-													if (assignment) {
-														assignRecordsToCollection(
-															assignment.itemKeys,
-															collection.key,
-														);
-													}
-												}}
-												type="button"
-											>
-												<FolderInput
-													aria-hidden
-													className="shrink-0 opacity-55"
-													size={15}
-												/>
-												<span className="truncate">
-													{collection.name}
-												</span>
-											</button>
-										),
-									)}
-									{activeNativeCollections.length === 0 ? (
-										<p className="py-6 text-center text-sm text-black/45 dark:text-white/45">
-											Create a native collection first.
-										</p>
-									) : null}
-								</div>
+								<AdminCollectionPicker
+									editableOnly
+									autoFocus={finePointer}
+									onSelect={(collection) => {
+										const assignment = recordAssignment;
+										closeRecordAssignment();
+										if (assignment) {
+											assignRecordsToCollection(
+												assignment.itemKeys,
+												collection.key,
+											);
+										}
+									}}
+									onSelectionChange={() => undefined}
+									selectedKeys={[]}
+									selectionMode="single"
+									sources={library.sources}
+								/>
 							</ModalBody>
 							<ModalFooter>
 								<Button

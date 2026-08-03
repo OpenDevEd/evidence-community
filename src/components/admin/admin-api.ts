@@ -2,6 +2,8 @@
 
 import type {
 	AdminCollection,
+	AdminCollectionCatalogEntry,
+	AdminCollectionCatalogPage,
 	AdminItemDetail,
 	AdminItemDraft,
 	AdminItemListPage,
@@ -128,6 +130,75 @@ export function getAdminItems(
 ) {
 	return requestJson<AdminItemListPage>(
 		`/api/admin/items?${searchParams.toString()}`,
+		{ signal },
+	);
+}
+
+function collectionCatalogUrl(
+	view: "children" | "resolve" | "search",
+	parameters: Record<string, boolean | null | number | string | undefined>,
+) {
+	const searchParams = new URLSearchParams({ view });
+	for (const [key, value] of Object.entries(parameters)) {
+		if (value !== null && value !== undefined && value !== "") {
+			searchParams.set(key, String(value));
+		}
+	}
+	return `/api/admin/collections?${searchParams.toString()}`;
+}
+
+export function getAdminCollectionChildren(
+	input: {
+		cursor?: string | null;
+		pageSize?: number;
+		parentCollection: string | null;
+		sourceConnectionKey: string;
+	},
+	signal?: AbortSignal,
+) {
+	return requestJson<AdminCollectionCatalogPage>(
+		collectionCatalogUrl("children", {
+			cursor: input.cursor,
+			pageSize: input.pageSize,
+			parent: input.parentCollection ?? "root",
+			source: input.sourceConnectionKey,
+		}),
+		{ signal },
+	);
+}
+
+export function searchAdminCollectionCatalog(
+	input: {
+		cursor?: string | null;
+		editableOnly?: boolean;
+		includeDeleted?: boolean;
+		pageSize?: number;
+		query: string;
+		sourceConnectionKey?: string | null;
+	},
+	signal?: AbortSignal,
+) {
+	return requestJson<AdminCollectionCatalogPage>(
+		collectionCatalogUrl("search", {
+			cursor: input.cursor,
+			editableOnly: input.editableOnly,
+			includeDeleted: input.includeDeleted,
+			pageSize: input.pageSize,
+			query: input.query,
+			source: input.sourceConnectionKey,
+		}),
+		{ signal },
+	);
+}
+
+export function resolveAdminCollectionCatalog(
+	keys: readonly string[],
+	signal?: AbortSignal,
+) {
+	const searchParams = new URLSearchParams({ view: "resolve" });
+	for (const key of keys) searchParams.append("key", key);
+	return requestJson<{ items: AdminCollectionCatalogEntry[] }>(
+		`/api/admin/collections?${searchParams.toString()}`,
 		{ signal },
 	);
 }
