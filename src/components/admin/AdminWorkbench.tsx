@@ -146,7 +146,7 @@ type ConfirmDialog = {
 };
 
 type RecordAssignment = {
-	focusKey: string;
+	focusKey: string | null;
 	itemKeys: string[];
 };
 
@@ -1501,9 +1501,6 @@ export default function AdminWorkbench({
 			);
 		});
 
-	const assignBulkCollection = (collectionKey: string) =>
-		assignRecordsToCollection([...bulkKeys], collectionKey);
-
 	const requestRecordAssignment = (itemKeys: string[], focusKey: string) => {
 		setRecordAssignment({ focusKey, itemKeys });
 	};
@@ -1566,13 +1563,6 @@ export default function AdminWorkbench({
 		);
 	}, [definitions, newItemSearch]);
 
-	const activeCollections = library.collections.filter(
-		(collection) => !collection.deleted,
-	);
-	const activeNativeCollections = activeCollections.filter(
-		(collection) =>
-			collection.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY,
-	);
 	const selectedCollectionFilter = singleAdminItemFilterValue(
 		filters.filters,
 		"collections",
@@ -1855,36 +1845,22 @@ export default function AdminWorkbench({
 												<Send aria-hidden size={14} />
 											</Button>
 										</Tooltip>
-										<Select
-											aria-label="Assign selected records to a collection"
-											className="w-[min(150px,30vw)] max-w-[150px]"
-											classNames={{
-												trigger:
-													"h-8 min-h-8 rounded-lg",
-												value: "text-xs",
-											}}
-											isDisabled={busy}
-											placeholder="Collection"
-											placement="left"
-											size="sm"
-											onSelectionChange={(keys) => {
-												const key = singleKey(
-													keys as Set<React.Key>,
-												);
-												if (key)
-													assignBulkCollection(key);
-											}}
-										>
-											{activeNativeCollections.map(
-												(collection) => (
-													<SelectItem
-														key={collection.key}
-													>
-														{collection.name}
-													</SelectItem>
-												),
-											)}
-										</Select>
+										<Tooltip content="Add selected to collection">
+											<button
+												aria-label="Add selected to collection"
+												className="grid size-8 shrink-0 place-items-center rounded-lg text-black/55 hover:bg-black/[0.05] hover:text-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-40 dark:text-white/60 dark:hover:bg-white/[0.06] dark:hover:text-white/85"
+												disabled={busy}
+												onClick={() =>
+													setRecordAssignment({
+														focusKey: null,
+														itemKeys: [...bulkKeys],
+													})
+												}
+												type="button"
+											>
+												<FolderInput aria-hidden size={14} />
+											</button>
+										</Tooltip>
 										<Tooltip content="Remove selected">
 											<Button
 												aria-label="Remove selected"

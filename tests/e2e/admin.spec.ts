@@ -1685,6 +1685,63 @@ test("runs selected-record actions through one compact batch request", async ({
 	await expect(bulkToolbar).toBeHidden();
 });
 
+test("assigns selected records through the searchable collection picker", async ({
+	page,
+}) => {
+	const batchRequests: unknown[] = [];
+	await mockPublishedBook(page, {
+		itemCount: 2,
+		onBatchRequest: (body) => batchRequests.push(body),
+	});
+	await page.goto("/admin");
+	await page
+		.getByRole("checkbox", { name: "Select all loaded records" })
+		.check();
+	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
+	const assign = bulkToolbar.getByRole("button", {
+		name: "Add selected to collection",
+	});
+	const toolbarStyles = await bulkToolbar.evaluate((toolbar) => ({
+		buttonSizes: [...toolbar.querySelectorAll("button")].map((button) => [
+			button.offsetWidth,
+			button.offsetHeight,
+		]),
+		gap: getComputedStyle(toolbar).gap,
+	}));
+	expect(toolbarStyles.gap).toBe("4px");
+	expect(new Set(toolbarStyles.buttonSizes.map(String))).toEqual(
+		new Set(["32,32"]),
+	);
+	await assign.focus();
+	await assign.press("Enter");
+	let dialog = page.getByRole("dialog", {
+		name: "Add 2 records to collection",
+	});
+	await expect(dialog).toBeVisible();
+	await dialog.getByRole("button", { name: "Cancel" }).click();
+	await expect(assign).toBeFocused();
+
+	await assign.click();
+	dialog = page.getByRole("dialog", {
+		name: "Add 2 records to collection",
+	});
+	await dialog
+		.getByRole("textbox", { name: "Search collections" })
+		.fill("teacher");
+	await dialog
+		.getByRole("button", { name: /Teacher development/u })
+		.click();
+	await expect.poll(() => batchRequests).toEqual([
+		{
+			action: "assignCollection",
+			collectionKey: teacherCollection.key,
+			keys: [publishedItemKey, "ROW00001"],
+		},
+	]);
+	await expect(dialog).toBeHidden();
+	await expect(bulkToolbar).toBeHidden();
+});
+
 test("chunks a 500-record keyboard selection through the batch contract", async ({
 	page,
 }) => {
