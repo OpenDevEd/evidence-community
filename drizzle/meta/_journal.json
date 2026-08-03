@@ -64,6 +64,13 @@
       "when": 1785516690231,
       "tag": "0008_admin_item_cursor_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1785767969011,
+      "tag": "0009_admin_collection_catalog",
+      "breakpoints": true
     }
   ]
 }

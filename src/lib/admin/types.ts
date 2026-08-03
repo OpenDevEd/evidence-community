@@ -102,6 +102,20 @@ export type AdminCollection = {
 	updatedAt: string;
 };
 
+export type AdminCollectionCatalogEntry = AdminCollection & {
+	ancestors: Array<{
+		key: string;
+		name: string;
+	}>;
+	hasChildren: boolean;
+};
+
+export type AdminCollectionCatalogPage = {
+	hasMore: boolean;
+	items: AdminCollectionCatalogEntry[];
+	nextCursor: string | null;
+};
+
 export type AdminSource = {
 	key: string;
 	label: string;

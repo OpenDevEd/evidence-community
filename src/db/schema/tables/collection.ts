@@ -78,5 +78,9 @@ export const collection = pgTable(
 			table.sortOrder,
 			table.key,
 		),
+		index("collection_name_search_idx").using(
+			"gin",
+			sql`lower(coalesce(${table.name}, '')) gin_trgm_ops`,
+		),
 	],
 );

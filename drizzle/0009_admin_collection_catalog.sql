@@ -1,0 +1,1 @@
+CREATE INDEX "collection_name_search_idx" ON "collection" USING gin (lower(coalesce("name", '')) gin_trgm_ops);
