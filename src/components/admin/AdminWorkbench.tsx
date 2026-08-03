@@ -37,6 +37,7 @@ import type {
 	AdminItemDetail,
 	AdminItemViewFilters,
 	AdminLibrarySnapshot,
+	AdminRecordState,
 } from "@/lib/admin/types";
 import type { AdminItemSortColumnId } from "@/lib/admin/item-list-contract";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
@@ -56,6 +57,7 @@ import {
 import type { NativeCollectionDropDestination } from "@/lib/admin/collection-tree";
 
 import { AdminInspector } from "./AdminInspector";
+import { AdminItemFilters } from "./AdminItemFilters";
 import { AdminItemTable } from "./AdminItemTable";
 import { AdminNavigation, expandAdminCollections } from "./AdminNavigation";
 import {
@@ -97,6 +99,10 @@ import {
 } from "./admin-validation";
 import { useAdminItemList } from "./useAdminItemList";
 import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
+import {
+	setSingleAdminItemFilter,
+	singleAdminItemFilterValue,
+} from "@/lib/admin/item-filter-state";
 
 type SaveState = "conflict" | "error" | "idle" | "saved" | "saving";
 
@@ -134,74 +140,6 @@ function singleKey(keys: "all" | Set<React.Key>) {
 	if (keys === "all") return null;
 	const value = [...keys][0];
 	return typeof value === "string" ? value : null;
-}
-
-function RecordFilterSelects({
-	definitions,
-	file,
-	fileClassName,
-	itemType,
-	itemTypeClassName,
-	onFileChange,
-	onItemTypeChange,
-}: {
-	definitions: AdminSchemaDefinition[];
-	file: AdminItemViewFilters["file"];
-	fileClassName?: string;
-	itemType: string;
-	itemTypeClassName?: string;
-	onFileChange: (file: AdminItemViewFilters["file"]) => void;
-	onItemTypeChange: (itemType: string) => void;
-}) {
-	return (
-		<>
-			<Select
-				aria-label="Filter by item type"
-				className={itemTypeClassName}
-				classNames={{
-					trigger: "h-10 min-h-10 rounded-xl",
-					value: "text-sm",
-				}}
-				placement="left"
-				selectedKeys={new Set([itemType])}
-				size="sm"
-				onSelectionChange={(keys) => {
-					const selected = singleKey(keys as Set<React.Key>);
-					if (selected) onItemTypeChange(selected);
-				}}
-			>
-				{[{ itemType: "all" }, ...definitions].map((definition) => (
-					<SelectItem key={definition.itemType}>
-						{definition.itemType === "all"
-							? "All types"
-							: humanizeAdminField(definition.itemType)}
-					</SelectItem>
-				))}
-			</Select>
-			<Select
-				aria-label="Filter by PDF state"
-				className={fileClassName}
-				classNames={{
-					trigger: "h-10 min-h-10 rounded-xl",
-					value: "text-sm",
-				}}
-				placement="left"
-				selectedKeys={new Set([file])}
-				size="sm"
-				onSelectionChange={(keys) => {
-					const selected = singleKey(keys as Set<React.Key>);
-					if (selected)
-						onFileChange(selected as AdminItemViewFilters["file"]);
-				}}
-			>
-				<SelectItem key="all">Any PDF</SelectItem>
-				<SelectItem key="published">PDF live</SelectItem>
-				<SelectItem key="staged">PDF staged</SelectItem>
-				<SelectItem key="processing">Processing</SelectItem>
-				<SelectItem key="none">No PDF</SelectItem>
-			</Select>
-		</>
-	);
 }
 
 function UpdatedSortButton({
@@ -325,8 +263,10 @@ function payloadWithCollection(
 
 export default function AdminWorkbench({
 	definitions,
+	initialFilters,
 }: {
 	definitions: AdminSchemaDefinition[];
+	initialFilters: AdminItemViewFilters;
 }) {
 	const { navigation } = useLibraryConfig();
 	const homeHref = getRuntimeHomeHref(navigation.links);
@@ -355,7 +295,7 @@ export default function AdminWorkbench({
 		setFilters,
 		setItems,
 		setSelectedKey,
-	} = useAdminItemList(detail, requestedColumns);
+	} = useAdminItemList(detail, requestedColumns, initialFilters);
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState<string | null>(null);
 	const [draftPayload, setDraftPayload] = useState<Record<string, unknown>>(
@@ -1239,10 +1179,18 @@ export default function AdminWorkbench({
 					collection.key,
 					collection.revision,
 				);
-				if (removedKeys.has(filters.collection)) {
+				const selectedCollection = singleAdminItemFilterValue(
+					filters.filters,
+					"collections",
+				);
+				if (selectedCollection && removedKeys.has(selectedCollection)) {
 					setFilters((current) => ({
 						...current,
-						collection: "all",
+						filters: setSingleAdminItemFilter(
+							current.filters,
+							"collections",
+							null,
+						),
 					}));
 				}
 				await refreshCurrent();
@@ -1618,6 +1566,27 @@ export default function AdminWorkbench({
 				moveDialog.collection.key,
 			)
 		: [];
+	const selectedCollectionFilter = singleAdminItemFilterValue(
+		filters.filters,
+		"collections",
+	);
+	const collectionFilter =
+		selectedCollectionFilter === undefined
+			? "all"
+			: selectedCollectionFilter;
+	const selectedSourceFilter = singleAdminItemFilterValue(
+		filters.filters,
+		"source",
+	);
+	const sourceFilter =
+		selectedSourceFilter === undefined ? "all" : selectedSourceFilter;
+	const selectedStateFilter = singleAdminItemFilterValue(
+		filters.filters,
+		"state",
+	);
+	const stateFilter = (
+		selectedStateFilter === undefined ? "all" : selectedStateFilter
+	) as AdminRecordState | "all" | null;
 
 	return (
 		<main className="fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
@@ -1633,49 +1602,51 @@ export default function AdminWorkbench({
 				>
 					<LibraryLogoImages className="max-h-7 max-w-full object-contain" />
 				</Link>
-				<Input
-					aria-label="Search records"
-					className="col-span-3 row-start-2 w-full sm:min-w-[180px] sm:max-w-[340px] sm:flex-1"
-					classNames={{
-						input: "text-sm",
-						inputWrapper: "h-10 min-h-10 rounded-xl",
-					}}
-					isClearable
-					placeholder="Search title, creator, date or tag"
-					startContent={
-						<Search
-							aria-hidden
-							className="text-black/35 dark:text-white/35"
-							size={15}
-						/>
-					}
-					value={filters.query}
-					onClear={() =>
-						setFilters((current) => ({
-							...current,
-							query: "",
-						}))
-					}
-					onValueChange={(query) =>
-						setFilters((current) => ({
-							...current,
-							query,
-						}))
-					}
-				/>
-				<RecordFilterSelects
-					definitions={definitions}
-					file={filters.file}
-					fileClassName="hidden max-w-[150px] xl:flex"
-					itemType={filters.itemType}
-					itemTypeClassName="hidden max-w-[170px] shrink-0 xl:flex"
-					onFileChange={(file) =>
-						setFilters((current) => ({ ...current, file }))
-					}
-					onItemTypeChange={(itemType) =>
-						setFilters((current) => ({ ...current, itemType }))
-					}
-				/>
+				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:min-w-[260px] sm:max-w-[520px] sm:flex-1">
+					<Input
+						aria-label="Search records"
+						className="min-w-0 flex-1"
+						classNames={{
+							input: "text-sm",
+							inputWrapper: "h-10 min-h-10 rounded-xl",
+						}}
+						isClearable
+						placeholder="Search title, creator, date or tag"
+						startContent={
+							<Search
+								aria-hidden
+								className="text-black/35 dark:text-white/35"
+								size={15}
+							/>
+						}
+						value={filters.query}
+						onClear={() =>
+							setFilters((current) => ({
+								...current,
+								query: "",
+							}))
+						}
+						onValueChange={(query) =>
+							setFilters((current) => ({
+								...current,
+								query,
+							}))
+						}
+					/>
+					<AdminItemFilters
+						collections={library.collections}
+						definitions={definitions}
+						filters={filters.filters}
+						items={items}
+						onChange={(nextFilters) =>
+							setFilters((current) => ({
+								...current,
+								filters: nextFilters,
+							}))
+						}
+						sources={library.sources}
+					/>
+				</div>
 				<div className="hidden flex-1 sm:block" />
 				<div className="col-start-2 row-start-1 flex shrink-0 rounded-xl bg-black/[0.035] p-1 xl:hidden dark:bg-white/[0.035]">
 					{[
@@ -1777,26 +1748,7 @@ export default function AdminWorkbench({
 						} xl:block`}
 					>
 						<div className="flex h-full min-h-0 flex-col">
-							<div className="flex shrink-0 items-center gap-2 border-b border-black/[0.06] p-3 xl:hidden dark:border-white/[0.06]">
-								<RecordFilterSelects
-									definitions={definitions}
-									file={filters.file}
-									fileClassName="w-[180px] max-w-[30vw] shrink-0"
-									itemType={filters.itemType}
-									itemTypeClassName="w-[220px] max-w-[35vw] shrink-0"
-									onFileChange={(file) =>
-										setFilters((current) => ({
-											...current,
-											file,
-										}))
-									}
-									onItemTypeChange={(itemType) =>
-										setFilters((current) => ({
-											...current,
-											itemType,
-										}))
-									}
-								/>
+							<div className="flex shrink-0 items-center justify-end gap-2 border-b border-black/[0.06] p-3 xl:hidden dark:border-white/[0.06]">
 								<Button
 									aria-label="Refresh"
 									isIconOnly
@@ -1815,7 +1767,7 @@ export default function AdminWorkbench({
 							</div>
 							<div className="min-h-0 flex-1">
 								<AdminNavigation
-									collection={filters.collection}
+									collection={collectionFilter}
 									collections={library.collections}
 									isBusy={busy}
 									onCreateCollection={openCreateCollection}
@@ -1826,24 +1778,40 @@ export default function AdminWorkbench({
 									onSelectCollection={(collection) =>
 										setFilters((current) => ({
 											...current,
-											collection,
+											filters: setSingleAdminItemFilter(
+												current.filters,
+												"collections",
+												collection === "all"
+													? null
+													: collection,
+											),
 										}))
 									}
 									onSelectSource={(source) =>
 										setFilters((current) => ({
 											...current,
-											source,
+											filters: setSingleAdminItemFilter(
+												current.filters,
+												"source",
+												source === "all"
+													? null
+													: source,
+											),
 										}))
 									}
 									onSelectState={(state) =>
 										setFilters((current) => ({
 											...current,
-											state,
+											filters: setSingleAdminItemFilter(
+												current.filters,
+												"state",
+												state === "all" ? null : state,
+											),
 										}))
 									}
-									source={filters.source}
+									source={sourceFilter}
 									sources={library.sources}
-									state={filters.state}
+									state={stateFilter}
 								/>
 							</div>
 						</div>

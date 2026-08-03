@@ -131,7 +131,7 @@ function CollectionRow({
 	onMove: (collection: AdminCollection) => void;
 	onSelect: (key: string) => void;
 	onToggle: (key: string) => void;
-	selectedCollection: string;
+	selectedCollection: string | null;
 }) {
 	const editable = entry.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
 	const hasChildren = collections.some(
@@ -186,7 +186,7 @@ function CollectionRow({
 					isDragging ? "opacity-35" : ""
 				} ${
 					selectedCollection === entry.key
-							? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
+						? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
 						: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
 				}`}
 				style={{ paddingLeft: 6 + depth * 12 }}
@@ -355,7 +355,9 @@ function CollectionRow({
 								</DropdownItem>
 								<DropdownItem
 									key="rename"
-									startContent={<Pencil aria-hidden size={14} />}
+									startContent={
+										<Pencil aria-hidden size={14} />
+									}
 								>
 									Rename
 								</DropdownItem>
@@ -370,7 +372,9 @@ function CollectionRow({
 								<DropdownItem
 									key="delete"
 									color="danger"
-									startContent={<Trash2 aria-hidden size={14} />}
+									startContent={
+										<Trash2 aria-hidden size={14} />
+									}
 								>
 									Delete
 								</DropdownItem>
@@ -438,7 +442,7 @@ function CollectionRows({
 	onSelect: (key: string) => void;
 	onToggle: (key: string) => void;
 	parentCollection?: string | null;
-	selectedCollection: string;
+	selectedCollection: string | null;
 }) {
 	return collections
 		.filter(
@@ -495,7 +499,7 @@ export function AdminCollectionTree({
 	onSelect: (key: string) => void;
 	onToggle: (key: string) => void;
 	showRootDropZone?: boolean;
-	selectedCollection: string;
+	selectedCollection: string | null;
 }) {
 	const { activeCollectionKey: activeCollection } = useAdminDragState();
 	const invalidTargets = useMemo(

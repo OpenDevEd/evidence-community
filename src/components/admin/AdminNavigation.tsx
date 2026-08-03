@@ -152,7 +152,7 @@ export function AdminNavigation({
 	sources,
 	state,
 }: {
-	collection: string;
+	collection: string | null;
 	collections: AdminCollection[];
 	onCreateCollection: (parentCollection: string | null) => void;
 	onDeleteCollection: (collection: AdminCollection) => void;
@@ -163,9 +163,9 @@ export function AdminNavigation({
 	onSelectCollection: (key: string) => void;
 	onSelectSource: (key: string) => void;
 	onSelectState: (state: AdminRecordState | "all") => void;
-	source: string;
+	source: string | null;
 	sources: AdminSource[];
-	state: AdminRecordState | "all";
+	state: AdminRecordState | "all" | null;
 }) {
 	const activeCollections = useMemo(
 		() => collections.filter((entry) => !entry.deleted),
@@ -269,7 +269,7 @@ export function AdminNavigation({
 						aria-pressed={source === entry.key}
 						className={`${navigationItemClass} ${
 							source === entry.key
-									? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
+								? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
 								: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
 						}`}
 						onClick={() =>
@@ -301,7 +301,7 @@ export function AdminNavigation({
 						aria-pressed={state === entry.key}
 						className={`${navigationItemClass} ${
 							state === entry.key
-									? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
+								? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
 								: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
 						}`}
 						onClick={() => onSelectState(entry.key)}
@@ -331,7 +331,7 @@ export function AdminNavigation({
 				aria-pressed={collection === "all"}
 				className={`${navigationItemClass} ${
 					collection === "all"
-							? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
+						? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
 						: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
 				}`}
 				onClick={() => onSelectCollection("all")}

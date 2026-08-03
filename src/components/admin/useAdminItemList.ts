@@ -3,10 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-import type {
-	AdminItemColumnId,
-	AdminItemFilterOperator,
-} from "@/lib/admin/item-list-contract";
+import type { AdminItemColumnId } from "@/lib/admin/item-list-contract";
 import { resolveAdminSelection } from "@/lib/admin/selection";
 import type {
 	AdminItemDetail,
@@ -20,16 +17,10 @@ function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : "Could not load records";
 }
 
-const DEFAULT_FILTERS: AdminItemViewFilters = {
-	collection: "all",
-	file: "all",
-	itemType: "all",
-	query: "",
-	sort: "updated",
-	sortDirection: "desc",
-	source: "all",
-	state: "all",
-};
+import {
+	parseAdminItemViewFilters,
+	writeAdminItemViewFilters,
+} from "@/lib/admin/item-filter-state";
 
 function mergeItemPages(
 	current: readonly AdminItemListRow[],
@@ -54,25 +45,9 @@ function buildListSearchParams(
 	cursor: string | null,
 	requestedColumns: readonly AdminItemColumnId[],
 ) {
-	const typedFilters: Array<{
-		column: AdminItemColumnId;
-		operator: AdminItemFilterOperator;
-		value: string[];
-	}> = [];
-	for (const [column, value] of [
-		["collections", filters.collection],
-		["fileState", filters.file],
-		["itemType", filters.itemType],
-		["source", filters.source],
-		["state", filters.state],
-	] as const) {
-		if (value !== "all") {
-			typedFilters.push({ column, operator: "anyOf", value: [value] });
-		}
-	}
 	return new URLSearchParams({
 		...(cursor ? { cursor } : {}),
-		filters: JSON.stringify(typedFilters),
+		filters: JSON.stringify(filters.filters),
 		requestedColumns: JSON.stringify(requestedColumns),
 		search: filters.query,
 		sorting: JSON.stringify([
@@ -84,9 +59,10 @@ function buildListSearchParams(
 export function useAdminItemList(
 	detail: AdminItemDetail | null,
 	requestedColumns: readonly AdminItemColumnId[],
+	initialFilters: AdminItemViewFilters,
 ) {
 	const [filters, setFilters] =
-		useState<AdminItemViewFilters>(DEFAULT_FILTERS);
+		useState<AdminItemViewFilters>(initialFilters);
 	const [items, setItems] = useState<AdminItemListRow[]>([]);
 	const [hasMore, setHasMore] = useState(false);
 	const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -98,6 +74,27 @@ export function useAdminItemList(
 	const requestController = useRef<AbortController | null>(null);
 	const detailRef = useRef(detail);
 	detailRef.current = detail;
+
+	useEffect(() => {
+		const next = writeAdminItemViewFilters(
+			new URLSearchParams(window.location.search),
+			filters,
+		);
+		const search = next.toString();
+		const href = `${window.location.pathname}${search ? `?${search}` : ""}${window.location.hash}`;
+		window.history.replaceState(window.history.state, "", href);
+	}, [filters]);
+
+	useEffect(() => {
+		const restore = () =>
+			setFilters(
+				parseAdminItemViewFilters(
+					new URLSearchParams(window.location.search),
+				),
+			);
+		window.addEventListener("popstate", restore);
+		return () => window.removeEventListener("popstate", restore);
+	}, []);
 
 	const loadItems = useCallback(
 		async (cursor: string | null = null, append = false) => {

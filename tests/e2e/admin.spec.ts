@@ -116,6 +116,7 @@ async function mockPublishedBook(
 	options: {
 		itemCount?: number;
 		listRowOverrides?: Partial<Record<string, unknown>>;
+		onListRequest?: (url: URL) => void;
 	} = {},
 ) {
 	const itemCount = options.itemCount ?? 1;
@@ -145,6 +146,7 @@ async function mockPublishedBook(
 			return;
 		}
 		if (pathname === "/api/admin/items" && request.method() === "GET") {
+			options.onListRequest?.(new URL(request.url()));
 			await route.fulfill({
 				json: {
 					hasMore: false,
@@ -203,6 +205,114 @@ async function mockPublishedBook(
 		await route.fulfill({ status: 404 });
 	});
 }
+
+test("persists advanced typed filters in the URL", async ({ page }) => {
+	test.setTimeout(45_000);
+	const listRequests: URL[] = [];
+	await mockPublishedBook(page, {
+		onListRequest: (url) => listRequests.push(url),
+	});
+	const initialFilters = encodeURIComponent(
+		JSON.stringify([
+			{ column: "state", operator: "anyOf", value: ["draft"] },
+		]),
+	);
+	await page.goto(`/admin?search=teacher&filters=${initialFilters}`);
+
+	await expect(
+		page.getByRole("textbox", { name: "Search records" }),
+	).toHaveValue("teacher");
+	await expect(
+		page.getByRole("button", { name: "Drafts", exact: true }),
+	).toHaveAttribute("aria-pressed", "true");
+	await expect(
+		page.getByRole("button", { name: "Filters, 1 active", exact: true }),
+	).toBeVisible();
+	await expect
+		.poll(() => listRequests.at(-1)?.searchParams.get("search"))
+		.toBe("teacher");
+
+	await page
+		.getByRole("button", { name: "Filters, 1 active", exact: true })
+		.click();
+	const dialog = page.getByRole("dialog", { name: "Filter records" });
+	await dialog.getByRole("button", { name: "Clear", exact: true }).click();
+	await dialog.locator('button[aria-label="Add filter"]').click();
+	await page.getByRole("option", { name: "Title", exact: true }).click();
+	await dialog.getByRole("textbox", { name: "Title value" }).fill("evidence");
+	await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+
+	await expect
+		.poll(() => {
+			const filters = new URL(page.url()).searchParams.get("filters");
+			return filters ? JSON.parse(filters) : null;
+		})
+		.toEqual([
+			{ column: "title", operator: "contains", value: "evidence" },
+		]);
+	expect(new URL(page.url()).searchParams.get("search")).toBe("teacher");
+	await expect
+		.poll(() => {
+			const filters = listRequests.at(-1)?.searchParams.get("filters");
+			return filters ? JSON.parse(filters) : null;
+		})
+		.toEqual([
+			{ column: "title", operator: "contains", value: "evidence" },
+		]);
+
+	await page.reload();
+	await expect(
+		page.getByRole("textbox", { name: "Search records" }),
+	).toHaveValue("teacher");
+	await expect(
+		page.getByRole("button", { name: "Filters, 1 active", exact: true }),
+	).toBeVisible();
+
+	await page.evaluate(() => {
+		const url = new URL(window.location.href);
+		url.searchParams.set(
+			"filters",
+			JSON.stringify([
+				{
+					column: "state",
+					operator: "anyOf",
+					value: ["draft", "published"],
+				},
+			]),
+		);
+		window.history.pushState({}, "", url);
+		window.dispatchEvent(new PopStateEvent("popstate"));
+	});
+	await expect(
+		page.getByRole("button", { name: "All records", exact: true }),
+	).toHaveAttribute("aria-pressed", "false");
+	await expect(
+		page.getByRole("button", { name: "Drafts", exact: true }),
+	).toHaveAttribute("aria-pressed", "false");
+	await expect(
+		page.getByRole("button", { name: "Published", exact: true }),
+	).toHaveAttribute("aria-pressed", "false");
+
+	await page.evaluate(() => {
+		const url = new URL(window.location.href);
+		url.searchParams.delete("filters");
+		url.searchParams.set("search", "restored");
+		window.history.pushState({}, "", url);
+		window.dispatchEvent(new PopStateEvent("popstate"));
+	});
+	await expect(
+		page.getByRole("textbox", { name: "Search records" }),
+	).toHaveValue("restored");
+	await expect(
+		page.getByRole("button", { name: "All records", exact: true }),
+	).toHaveAttribute("aria-pressed", "true");
+	await expect(
+		page.getByRole("button", { name: "Filters", exact: true }),
+	).toBeVisible();
+	await expect
+		.poll(() => listRequests.at(-1)?.searchParams.get("search"))
+		.toBe("restored");
+});
 
 async function mockBookWithAttachment(
 	page: Page,

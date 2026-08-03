@@ -1,18 +1,9 @@
 import { z } from "zod";
 
-import {
-	ADMIN_ITEM_MAX_PAGE_SIZE,
-	ADMIN_ITEM_PAGE_SIZE,
-} from "./constants";
+import { ADMIN_ITEM_MAX_PAGE_SIZE, ADMIN_ITEM_PAGE_SIZE } from "./constants";
 
 export type AdminItemColumnKind =
-	| "date"
-	| "enum"
-	| "number"
-	| "people"
-	| "relation"
-	| "selection"
-	| "text";
+	"date" | "enum" | "number" | "people" | "relation" | "selection" | "text";
 
 export const ADMIN_ITEM_FILTER_OPERATORS = [
 	"after",
@@ -192,8 +183,7 @@ export const ADMIN_ITEM_LIST_COLUMNS = [
 	},
 ] as const satisfies readonly AdminItemListColumnDefinitionShape[];
 
-export type AdminItemColumnId =
-	(typeof ADMIN_ITEM_LIST_COLUMNS)[number]["id"];
+export type AdminItemColumnId = (typeof ADMIN_ITEM_LIST_COLUMNS)[number]["id"];
 
 export type AdminItemSortColumnId = Extract<
 	(typeof ADMIN_ITEM_LIST_COLUMNS)[number],
@@ -217,10 +207,7 @@ export const ADMIN_ITEM_DEFAULT_COLUMNS = ADMIN_ITEM_LIST_COLUMNS.filter(
 
 export const ADMIN_ITEM_SORT_COLUMN_IDS = ADMIN_ITEM_LIST_COLUMNS.filter(
 	({ sortable }) => sortable,
-).map(({ id }) => id) as [
-	AdminItemSortColumnId,
-	...AdminItemSortColumnId[],
-];
+).map(({ id }) => id) as [AdminItemSortColumnId, ...AdminItemSortColumnId[]];
 
 const adminItemColumnIdSchema = z.enum(ADMIN_ITEM_COLUMN_IDS);
 const adminItemFilterOperatorSchema = z.enum(ADMIN_ITEM_FILTER_OPERATORS);
@@ -289,11 +276,27 @@ const adminItemFilterSchema = z
 			});
 		}
 	});
+
+export type AdminItemFilter = z.infer<typeof adminItemFilterSchema>;
+
+const adminItemFiltersSchema = z
+	.array(adminItemFilterSchema)
+	.max(30)
+	.refine(
+		(filters) =>
+			new Set(filters.map(({ column }) => column)).size ===
+			filters.length,
+		{ message: "Each column can only be filtered once" },
+	);
+
+export function parseAdminItemFilters(value: unknown): AdminItemFilter[] {
+	return adminItemFiltersSchema.parse(value);
+}
 const adminItemSortColumnSchema = z.enum(ADMIN_ITEM_SORT_COLUMN_IDS);
 
 const adminItemListRequestSchema = z.object({
 	cursor: z.string().min(1).nullable().default(null),
-	filters: z.array(adminItemFilterSchema).max(30).default([]),
+	filters: adminItemFiltersSchema.default([]),
 	pageSize: z.coerce
 		.number()
 		.int()
@@ -320,6 +323,8 @@ const adminItemListRequestSchema = z.object({
 
 export type AdminItemListRequest = z.infer<typeof adminItemListRequestSchema>;
 
-export function parseAdminItemListRequest(value: unknown): AdminItemListRequest {
+export function parseAdminItemListRequest(
+	value: unknown,
+): AdminItemListRequest {
 	return adminItemListRequestSchema.parse(value);
 }

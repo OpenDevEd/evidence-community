@@ -122,12 +122,8 @@ export type AdminItemListPage = {
 };
 
 export type AdminItemViewFilters = {
-	collection: string;
-	file: AdminFileState | "all";
-	itemType: string;
+	filters: import("./item-list-contract").AdminItemFilter[];
 	query: string;
 	sort: import("./item-list-contract").AdminItemSortColumnId;
 	sortDirection: "asc" | "desc";
-	source: string;
-	state: AdminRecordState | "all";
 };

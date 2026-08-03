@@ -22,9 +22,9 @@ describe("admin item list contract", () => {
 			ADMIN_ITEM_LIST_COLUMNS.length,
 		);
 		expect(
-			ADMIN_ITEM_LIST_COLUMNS.filter(({ defaultVisible }) => defaultVisible).map(
-				({ id }) => id,
-			),
+			ADMIN_ITEM_LIST_COLUMNS.filter(
+				({ defaultVisible }) => defaultVisible,
+			).map(({ id }) => id),
 		).toEqual(ADMIN_ITEM_DEFAULT_COLUMNS);
 		expect(
 			ADMIN_ITEM_LIST_COLUMNS.filter(({ sortable }) => sortable).map(
@@ -107,5 +107,20 @@ describe("admin item list contract", () => {
 				],
 			}),
 		).toThrow(/Year has an invalid value/u);
+	});
+
+	it("rejects duplicate filters for the same column", () => {
+		expect(() =>
+			parseAdminItemListRequest({
+				filters: [
+					{ column: "state", operator: "anyOf", value: ["draft"] },
+					{
+						column: "state",
+						operator: "anyOf",
+						value: ["published"],
+					},
+				],
+			}),
+		).toThrow(/Each column can only be filtered once/u);
 	});
 });
