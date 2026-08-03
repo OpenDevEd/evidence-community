@@ -226,6 +226,7 @@ async function mockPublishedBook(
 				.trim()
 				.toLowerCase();
 			const parent = requestUrl.searchParams.get("parent");
+			const source = requestUrl.searchParams.get("source");
 			await route.fulfill({
 				json: {
 					hasMore: false,
@@ -235,9 +236,10 @@ async function mockPublishedBook(
 							(view === "search"
 								? entry.name.toLowerCase().includes(query)
 								: entry.parentCollection ===
-										(!parent || parent === "root" ? null : parent)) &&
-							entry.sourceConnectionKey ===
-								(requestUrl.searchParams.get("source") ?? "native"),
+									(!parent || parent === "root"
+										? null
+										: parent)) &&
+							(!source || entry.sourceConnectionKey === source),
 					),
 					nextCursor: null,
 				},
@@ -247,8 +249,11 @@ async function mockPublishedBook(
 
 		if (pathname === "/api/admin/library") {
 			const collections = catalogEntries.map(
-				({ ancestors: _ancestors, hasChildren: _hasChildren, ...entry }) =>
-					entry,
+				({
+					ancestors: _ancestors,
+					hasChildren: _hasChildren,
+					...entry
+				}) => entry,
 			);
 			await route.fulfill({
 				json: {
@@ -399,8 +404,7 @@ test("searches and assigns records with the collection picker", async ({
 	page,
 }) => {
 	let batchRequest:
-		| { action: string; collectionKey?: string; keys: string[] }
-		| undefined;
+		{ action: string; collectionKey?: string; keys: string[] } | undefined;
 	await mockPublishedBook(page, {
 		onBatchRequest: (request) => {
 			batchRequest = request;
@@ -454,14 +458,14 @@ test("searches and assigns records with the collection picker", async ({
 	});
 	await expect(collectionSearch).toBeFocused();
 	await collectionSearch.fill("teacher");
-	await dialog
-		.getByRole("button", { name: /Teacher development/u })
-		.click();
-	await expect.poll(() => batchRequest).toEqual({
-		action: "assignCollection",
-		collectionKey: teacherCollection.key,
-		keys: [publishedItemKey],
-	});
+	await dialog.getByRole("button", { name: /Teacher development/u }).click();
+	await expect
+		.poll(() => batchRequest)
+		.toEqual({
+			action: "assignCollection",
+			collectionKey: teacherCollection.key,
+			keys: [publishedItemKey],
+		});
 });
 
 test("creates a collection in a searched location without a full-list select", async ({
@@ -474,7 +478,10 @@ test("creates a collection in a searched location without a full-list select", a
 			await route.fallback();
 			return;
 		}
-		createRequest = route.request().postDataJSON() as Record<string, unknown>;
+		createRequest = route.request().postDataJSON() as Record<
+			string,
+			unknown
+		>;
 		await route.fulfill({
 			json: {
 				collection: {
@@ -525,10 +532,12 @@ test("creates a collection in a searched location without a full-list select", a
 		.getByRole("textbox", { name: "Name" })
 		.fill("Nested collection");
 	await dialog.getByRole("button", { name: "Create" }).click();
-	await expect.poll(() => createRequest).toEqual({
-		name: "Nested collection",
-		parentCollection: longCollection.key,
-	});
+	await expect
+		.poll(() => createRequest)
+		.toEqual({
+			name: "Nested collection",
+			parentCollection: longCollection.key,
+		});
 });
 
 test("moves a collection to a searched destination at the end", async ({
@@ -539,7 +548,10 @@ test("moves a collection to a searched destination at the end", async ({
 	await page.route(
 		"**/api/admin/collections/TEACHDEV/move",
 		async (route) => {
-			moveRequest = route.request().postDataJSON() as Record<string, unknown>;
+			moveRequest = route.request().postDataJSON() as Record<
+				string,
+				unknown
+			>;
 			await route.fulfill({
 				json: {
 					collection: {
@@ -584,11 +596,13 @@ test("moves a collection to a searched destination at the end", async ({
 		dialog.getByRole("button", { name: "Change destination" }),
 	).toBeFocused();
 	await dialog.getByRole("button", { name: "Move", exact: true }).click();
-	await expect.poll(() => moveRequest).toEqual({
-		beforeCollection: null,
-		expectedRevision: teacherCollection.revision,
-		parentCollection: longCollection.key,
-	});
+	await expect
+		.poll(() => moveRequest)
+		.toEqual({
+			beforeCollection: null,
+			expectedRevision: teacherCollection.revision,
+			parentCollection: longCollection.key,
+		});
 });
 
 test("persists advanced typed filters in the URL", async ({ page }) => {
@@ -779,6 +793,138 @@ test("keeps the filter editor inside a narrow viewport", async ({ page }) => {
 		right: 378,
 		width: 366,
 	});
+});
+
+test("filters by searched native and imported collections without loading an option list", async ({
+	page,
+}) => {
+	const collectionSearches: URL[] = [];
+	const extraSources: AdminSource[] = Array.from({ length: 12 }, (_, index) => ({
+		key: `source-${index}`,
+		label: `Source ${index + 1}`,
+		provider: "zotero",
+		readOnly: true,
+		status: "active",
+	}));
+	await page.setViewportSize({ height: 420, width: 1280 });
+	await mockPublishedBook(page, {
+		additionalCollectionEntries: [importedCollection, deletedCollection],
+		additionalSources: [importedSource, ...extraSources],
+	});
+	await page.route("**/api/admin/collections?*", async (route) => {
+		const url = new URL(route.request().url());
+		if (url.searchParams.get("view") === "search") {
+			collectionSearches.push(url);
+		}
+		await route.fallback();
+	});
+	const initialFilters = JSON.stringify([
+		{
+			column: "collections",
+			operator: "anyOf",
+			value: [deletedCollection.key],
+		},
+	]);
+	await page.goto(`/admin?filters=${encodeURIComponent(initialFilters)}`);
+	await page.getByRole("button", { name: /^Filters/u }).click();
+	const dialog = page.getByRole("dialog", { name: "Filter records" });
+	await dialog.getByRole("button", { name: "Collection values" }).click();
+	const picker = dialog.locator("[data-admin-collection-filter-picker]");
+	const search = picker.getByRole("textbox", { name: "Search collections" });
+	await expect(search).toBeFocused();
+	const deletedRemove = picker.getByRole("button", {
+		name: /Remove Deleted archive/u,
+	});
+	await expect(deletedRemove).toBeVisible();
+	const sourceList = picker.locator(
+		"[data-admin-collection-picker-sources]",
+	);
+	const sourceGeometry = await sourceList.evaluate((element) => ({
+		clientHeight: element.clientHeight,
+		maxHeight: Number.parseFloat(getComputedStyle(element).maxHeight),
+		scrollHeight: element.scrollHeight,
+	}));
+	expect(sourceGeometry.maxHeight).toBeLessThanOrEqual(420 * 0.44);
+	expect(sourceGeometry.clientHeight).toBeLessThanOrEqual(
+		Math.ceil(sourceGeometry.maxHeight),
+	);
+	expect(sourceGeometry.scrollHeight).toBeGreaterThan(
+		sourceGeometry.clientHeight,
+	);
+	await deletedRemove.click();
+
+	await search.fill("teacher");
+	const native = picker.getByRole("checkbox", {
+		name: /Teacher development/u,
+	});
+	await native.check();
+	const removeNative = picker.getByRole("button", {
+		name: /Remove Teacher development/u,
+	});
+	await expect(removeNative).toBeVisible();
+	await removeNative.click();
+	await expect(native).not.toBeChecked();
+	await native.check();
+
+	await search.fill("imported");
+	await expect
+		.poll(() => collectionSearches.at(-1)?.searchParams.get("query"))
+		.toBe("imported");
+	const imported = picker.getByRole("checkbox", {
+		name: /Imported research/u,
+	});
+	await imported.check();
+	const removeImported = picker.getByRole("button", {
+		name: /Remove Imported research/u,
+	});
+	await expect(removeImported).toBeVisible();
+	await removeImported.click();
+	await expect(imported).not.toBeChecked();
+	await imported.check();
+	await expect(removeImported).toBeVisible();
+
+	const geometry = await dialog.evaluate((element) => {
+		const filterPicker = element.querySelector<HTMLElement>(
+			"[data-admin-collection-filter-picker]",
+		)!;
+		const results = element.querySelector<HTMLElement>(
+			"[data-admin-collection-picker-results]",
+		)!;
+		const rect = element.getBoundingClientRect();
+		const pickerRect = filterPicker.getBoundingClientRect();
+		return {
+			dialogWidth: rect.width,
+			documentOverflow:
+				document.documentElement.scrollWidth - window.innerWidth,
+			pickerInside:
+				pickerRect.left >= rect.left && pickerRect.right <= rect.right,
+			resultsMaxHeight: Number.parseFloat(
+				getComputedStyle(results).maxHeight,
+			),
+		};
+	});
+	expect(geometry).toMatchObject({
+		documentOverflow: 0,
+		pickerInside: true,
+	});
+	expect(geometry.dialogWidth).toBeLessThanOrEqual(560);
+	expect(geometry.resultsMaxHeight).toBeLessThanOrEqual(320);
+	const apply = dialog.getByRole("button", { name: "Apply", exact: true });
+	await apply.focus();
+	await page.keyboard.press("Enter");
+	await expect(dialog).toBeHidden();
+	await expect
+		.poll(() => {
+			const filters = new URL(page.url()).searchParams.get("filters");
+			return filters ? JSON.parse(filters) : null;
+		})
+		.toEqual([
+			{
+				column: "collections",
+				operator: "anyOf",
+				value: [teacherCollection.key, importedCollection.key],
+			},
+		]);
 });
 
 async function mockBookWithAttachment(
@@ -1193,22 +1339,27 @@ test("shows draft differences with the published value and a revert action", asy
 	const collectionsDialog = page.getByRole("dialog", {
 		name: "Edit collections",
 	});
-	const longCollectionResult = collectionsDialog.getByText(longCollectionName, {
-		exact: true,
-	});
-	const collectionGeometry = await longCollectionResult.evaluate((element) => {
-		const picker = element.closest("[data-admin-collection-picker]")!;
-		const style = getComputedStyle(element);
-		return {
-			pickerClientWidth: picker.clientWidth,
-			pickerScrollWidth: picker.scrollWidth,
-			overflow: style.overflow,
-			rightInsidePicker:
-				element.getBoundingClientRect().right <=
-				picker.getBoundingClientRect().right,
-			textOverflow: style.textOverflow,
-		};
-	});
+	const longCollectionResult = collectionsDialog.getByText(
+		longCollectionName,
+		{
+			exact: true,
+		},
+	);
+	const collectionGeometry = await longCollectionResult.evaluate(
+		(element) => {
+			const picker = element.closest("[data-admin-collection-picker]")!;
+			const style = getComputedStyle(element);
+			return {
+				pickerClientWidth: picker.clientWidth,
+				pickerScrollWidth: picker.scrollWidth,
+				overflow: style.overflow,
+				rightInsidePicker:
+					element.getBoundingClientRect().right <=
+					picker.getBoundingClientRect().right,
+				textOverflow: style.textOverflow,
+			};
+		},
+	);
 	expect(collectionGeometry.pickerScrollWidth).toBe(
 		collectionGeometry.pickerClientWidth,
 	);
@@ -1292,19 +1443,24 @@ test("removes native memberships while imported and deleted memberships stay loc
 		.getByRole("button", { name: /Remove Teacher development/u })
 		.click();
 	await expect(
-		collectionsGroup.locator('[data-admin-collection-membership="TEACHDEV"]'),
+		collectionsGroup.locator(
+			'[data-admin-collection-membership="TEACHDEV"]',
+		),
 	).toHaveCount(0);
-	await expect.poll(() => savedPayloads.at(-1)?.collections).toEqual([
-		importedCollection.key,
-		deletedCollection.key,
-	]);
+	await expect
+		.poll(() => savedPayloads.at(-1)?.collections)
+		.toEqual([importedCollection.key, deletedCollection.key]);
 
 	await collectionsGroup
 		.getByRole("button", { name: "Add to collection" })
 		.click();
 	const dialog = page.getByRole("dialog", { name: "Edit collections" });
-	await expect(dialog.getByText("Imported research", { exact: true })).toBeVisible();
-	await expect(dialog.getByText("Deleted archive", { exact: true })).toBeVisible();
+	await expect(
+		dialog.getByText("Imported research", { exact: true }),
+	).toBeVisible();
+	await expect(
+		dialog.getByText("Deleted archive", { exact: true }),
+	).toBeVisible();
 	await expect(
 		dialog.getByRole("button", {
 			name: /Remove Imported research|Remove Deleted archive/u,
@@ -1864,16 +2020,16 @@ test("assigns selected records through the searchable collection picker", async 
 	await dialog
 		.getByRole("textbox", { name: "Search collections" })
 		.fill("teacher");
-	await dialog
-		.getByRole("button", { name: /Teacher development/u })
-		.click();
-	await expect.poll(() => batchRequests).toEqual([
-		{
-			action: "assignCollection",
-			collectionKey: teacherCollection.key,
-			keys: [publishedItemKey, "ROW00001"],
-		},
-	]);
+	await dialog.getByRole("button", { name: /Teacher development/u }).click();
+	await expect
+		.poll(() => batchRequests)
+		.toEqual([
+			{
+				action: "assignCollection",
+				collectionKey: teacherCollection.key,
+				keys: [publishedItemKey, "ROW00001"],
+			},
+		]);
 	await expect(dialog).toBeHidden();
 	await expect(bulkToolbar).toBeHidden();
 });

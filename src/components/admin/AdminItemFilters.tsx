@@ -18,14 +18,13 @@ import {
 	type AdminItemFilter,
 	type AdminItemFilterOperator,
 } from "@/lib/admin/item-list-contract";
-import type {
-	AdminCollection,
-	AdminItemListRow,
-	AdminSource,
-} from "@/lib/admin/types";
+import type { AdminItemListRow, AdminSource } from "@/lib/admin/types";
 
+import { AdminCollectionPicker } from "./AdminCollectionPicker";
 import type { AdminSchemaDefinition } from "./admin-schema";
 import { humanizeAdminField } from "./admin-schema";
+import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
+import { useFinePointer } from "@/hooks/useBreakpoint";
 
 const OPERATOR_LABELS: Record<AdminItemFilterOperator, string> = {
 	after: "After",
@@ -65,7 +64,6 @@ function newFilter(column: AdminItemColumnId): AdminItemFilter {
 
 function optionsForColumn(
 	column: AdminItemColumnId,
-	collections: readonly AdminCollection[],
 	definitions: readonly AdminSchemaDefinition[],
 	items: readonly AdminItemListRow[],
 	sources: readonly AdminSource[],
@@ -88,10 +86,6 @@ function optionsForColumn(
 			}));
 		case "source":
 			return sources.map(({ key, label }) => ({ key, label }));
-		case "collections":
-			return collections
-				.filter(({ deleted }) => !deleted)
-				.map(({ key, name }) => ({ key, label: name }));
 		case "tags":
 			return [...new Set(items.flatMap(({ tags }) => tags))]
 				.toSorted((left, right) => left.localeCompare(right))
@@ -101,8 +95,62 @@ function optionsForColumn(
 	}
 }
 
+function CollectionFilterValueEditor({
+	errorId,
+	onChange,
+	selectedValues,
+	sources,
+}: {
+	errorId?: string;
+	onChange: (value: unknown) => void;
+	selectedValues: string[];
+	sources: readonly AdminSource[];
+}) {
+	const finePointer = useFinePointer();
+	const [open, setOpen] = useState(false);
+	const { entries } = useResolvedAdminCollections(selectedValues);
+	const labels = new Map(entries.map((entry) => [entry.key, entry.name]));
+	return (
+		<div className="w-full" data-admin-collection-filter-picker>
+			<button
+				aria-describedby={errorId}
+				aria-expanded={open}
+				aria-label="Collection values"
+				className="flex h-9 w-full items-center gap-2 rounded-lg border border-black/10 bg-black/[0.025] px-3 text-left text-xs text-black/75 outline-none transition-colors hover:bg-black/[0.045] focus-visible:ring-2 focus-visible:ring-focus dark:border-white/10 dark:bg-white/[0.045] dark:text-white/80 dark:hover:bg-white/[0.07]"
+				onClick={() => setOpen((current) => !current)}
+				type="button"
+			>
+				<span className="min-w-0 flex-1 truncate">
+					{selectedValues.length > 0
+						? selectedValues
+								.map((key) => labels.get(key) ?? key)
+								.join(", ")
+						: "Choose collections"}
+				</span>
+				<ChevronDown
+					aria-hidden
+					className={`shrink-0 transition-transform ${open ? "rotate-180" : ""}`}
+					size={13}
+				/>
+			</button>
+			{open ? (
+				<div className="mt-1.5 rounded-xl bg-black/[0.02] p-1.5 dark:bg-white/[0.025]">
+					<AdminCollectionPicker
+						autoFocus={finePointer}
+						lockDeletedSelections={false}
+						lockImportedSelections={false}
+						onSelectionChange={onChange}
+						selectedKeys={selectedValues}
+						selectionMode="multiple"
+						sources={sources}
+					/>
+				</div>
+			) : null}
+		</div>
+	);
+}
+
 function FilterValueEditor({
-	collections,
 	definitions,
 	filter,
 	errorId,
@@ -110,7 +158,6 @@ function FilterValueEditor({
 	onChange,
 	sources,
 }: {
-	collections: readonly AdminCollection[];
 	definitions: readonly AdminSchemaDefinition[];
 	errorId?: string;
 	filter: AdminItemFilter;
@@ -124,9 +171,20 @@ function FilterValueEditor({
 		return null;
 	}
 	const definition = getAdminItemListColumn(filter.column);
+	if (filter.operator === "anyOf" && filter.column === "collections") {
+		return (
+			<CollectionFilterValueEditor
+				errorId={errorId}
+				onChange={onChange}
+				selectedValues={
+					Array.isArray(filter.value) ? filter.value.map(String) : []
+				}
+				sources={sources}
+			/>
+		);
+	}
 	const options = optionsForColumn(
 		filter.column,
-		collections,
 		definitions,
 		items,
 		sources,
@@ -296,14 +354,12 @@ function FilterValueEditor({
 }
 
 export function AdminItemFilters({
-	collections,
 	definitions,
 	filters,
 	items,
 	onChange,
 	sources,
 }: {
-	collections: readonly AdminCollection[];
 	definitions: readonly AdminSchemaDefinition[];
 	filters: readonly AdminItemFilter[];
 	items: readonly AdminItemListRow[];
@@ -367,7 +423,7 @@ export function AdminItemFilters({
 			</PopoverTrigger>
 			<PopoverContent
 				aria-label="Filter records"
-				className="w-[min(560px,calc(100vw-24px))] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+				className="w-[min(520px,calc(100vw-24px))] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
 			>
 				<div className="flex h-11 items-center justify-between border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
 					<span className="text-sm font-semibold text-black/80 dark:text-white/85">
@@ -398,6 +454,17 @@ export function AdminItemFilters({
 						const errorId = error
 							? `admin-filter-${index}-error`
 							: undefined;
+						const wideValueEditor =
+							filter.column === "collections" &&
+							filter.operator === "anyOf";
+						const setFilterValue = (value: unknown) =>
+							setDrafts((current) =>
+								current.map((entry, entryIndex) =>
+									entryIndex === index
+										? { ...entry, value }
+										: entry,
+								),
+							);
 						return (
 							<div
 								key={`${filter.column}:${index}`}
@@ -480,23 +547,16 @@ export function AdminItemFilters({
 										),
 									)}
 								</Select>
-								<FilterValueEditor
-									collections={collections}
-									definitions={definitions}
-									errorId={errorId}
-									filter={filter}
-									items={items}
-									sources={sources}
-									onChange={(value) =>
-										setDrafts((current) =>
-											current.map((entry, entryIndex) =>
-												entryIndex === index
-													? { ...entry, value }
-													: entry,
-											),
-										)
-									}
-								/>
+								{!wideValueEditor ? (
+									<FilterValueEditor
+										definitions={definitions}
+										errorId={errorId}
+										filter={filter}
+										items={items}
+										sources={sources}
+										onChange={setFilterValue}
+									/>
+								) : null}
 								<Button
 									aria-label={`Remove ${definition.label} filter`}
 									isIconOnly
@@ -513,6 +573,18 @@ export function AdminItemFilters({
 								>
 									<Trash2 aria-hidden size={14} />
 								</Button>
+								{wideValueEditor ? (
+									<div className="basis-full">
+										<FilterValueEditor
+											definitions={definitions}
+											errorId={errorId}
+											filter={filter}
+											items={items}
+											sources={sources}
+											onChange={setFilterValue}
+										/>
+									</div>
+								) : null}
 								{error ? (
 									<p
 										id={errorId}

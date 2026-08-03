@@ -12,13 +12,7 @@ import {
 	Search,
 	X,
 } from "lucide-react";
-import {
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/nextui/Button";
 import { Checkbox } from "@/components/nextui/Checkbox";
@@ -74,14 +68,15 @@ function isLockedCollection(entry: AdminCollectionCatalogEntry) {
 
 function SelectionRow({
 	entry,
+	locked,
 	onRemove,
 	sources,
 }: {
 	entry: AdminCollectionCatalogEntry;
+	locked: boolean;
 	onRemove: (key: string) => void;
 	sources: readonly AdminSource[];
 }) {
-	const locked = isLockedCollection(entry);
 	return (
 		<div className="flex min-h-10 items-center gap-2 rounded-lg bg-black/[0.035] px-2.5 dark:bg-white/[0.045]">
 			<Folder
@@ -123,6 +118,8 @@ export function AdminCollectionPicker({
 	disabledAncestorKey,
 	editableOnly = false,
 	includeDeleted = false,
+	lockDeletedSelections = true,
+	lockImportedSelections = true,
 	onSelect,
 	onSelectTopLevel,
 	onSelectionChange,
@@ -135,6 +132,8 @@ export function AdminCollectionPicker({
 	disabledAncestorKey?: string;
 	editableOnly?: boolean;
 	includeDeleted?: boolean;
+	lockDeletedSelections?: boolean;
+	lockImportedSelections?: boolean;
 	onSelect?: (entry: AdminCollectionCatalogEntry) => void;
 	onSelectTopLevel?: () => void;
 	onSelectionChange: (keys: string[]) => void;
@@ -187,7 +186,11 @@ export function AdminCollectionPicker({
 	);
 
 	const loadPage = useCallback(
-		async (cursor: string | null, append: boolean, signal?: AbortSignal) => {
+		async (
+			cursor: string | null,
+			append: boolean,
+			signal?: AbortSignal,
+		) => {
 			const requestContext = contextKey;
 			const page = debouncedQuery
 				? await searchAdminCollectionCatalog(
@@ -282,7 +285,8 @@ export function AdminCollectionPicker({
 				);
 			})
 			.finally(() => {
-				if (contextKeyRef.current === requestContext) setLoadingMore(false);
+				if (contextKeyRef.current === requestContext)
+					setLoadingMore(false);
 			});
 	}, [contextKey, loadPage, loading, loadingMore, nextCursor]);
 
@@ -309,7 +313,9 @@ export function AdminCollectionPicker({
 	};
 
 	const removeSelection = (key: string) => {
-		onSelectionChange(selectedKeys.filter((candidate) => candidate !== key));
+		onSelectionChange(
+			selectedKeys.filter((candidate) => candidate !== key),
+		);
 	};
 
 	const browseInto = (entry: AdminCollectionCatalogEntry) => {
@@ -355,6 +361,12 @@ export function AdminCollectionPicker({
 						<SelectionRow
 							key={entry.key}
 							entry={entry}
+							locked={
+								(lockDeletedSelections && entry.deleted) ||
+								(lockImportedSelections &&
+									entry.sourceConnectionKey !==
+										NATIVE_SOURCE_CONNECTION_KEY)
+							}
 							onRemove={removeSelection}
 							sources={sources}
 						/>
@@ -401,11 +413,20 @@ export function AdminCollectionPicker({
 							sourceKey}
 					</button>
 					{path.map((entry, index) => (
-						<div key={entry.key} className="flex min-w-0 items-center">
-							<ChevronRight aria-hidden className="shrink-0" size={11} />
+						<div
+							key={entry.key}
+							className="flex min-w-0 items-center"
+						>
+							<ChevronRight
+								aria-hidden
+								className="shrink-0"
+								size={11}
+							/>
 							<button
 								className="min-w-0 truncate rounded-md px-1.5 py-1 hover:bg-black/[0.05] hover:text-black/75 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
-								onClick={() => setPath(path.slice(0, index + 1))}
+								onClick={() =>
+									setPath(path.slice(0, index + 1))
+								}
 								type="button"
 							>
 								{entry.name}
@@ -416,7 +437,10 @@ export function AdminCollectionPicker({
 			) : null}
 
 			{!debouncedQuery && !sourceKey ? (
-				<div className="max-h-72 min-h-48 space-y-1 overflow-y-auto rounded-xl bg-black/[0.02] p-1.5 dark:bg-white/[0.025]">
+				<div
+					className="max-h-[min(44vh,288px)] space-y-1 overflow-y-auto rounded-xl bg-black/[0.02] p-1.5 dark:bg-white/[0.025]"
+					data-admin-collection-picker-sources
+				>
 					{sources.map((source) => (
 						<button
 							key={source.key}
@@ -424,19 +448,35 @@ export function AdminCollectionPicker({
 							onClick={() => chooseSource(source.key)}
 							type="button"
 						>
-							<Folder aria-hidden className="shrink-0 opacity-45" size={15} />
-							<span className="min-w-0 flex-1 truncate">{source.label}</span>
+							<Folder
+								aria-hidden
+								className="shrink-0 opacity-45"
+								size={15}
+							/>
+							<span className="min-w-0 flex-1 truncate">
+								{source.label}
+							</span>
 							{source.readOnly ? (
-								<Lock aria-label="Read only" className="opacity-35" size={12} />
+								<Lock
+									aria-label="Read only"
+									className="opacity-35"
+									size={12}
+								/>
 							) : null}
-							<ChevronRight aria-hidden className="opacity-35" size={13} />
+							<ChevronRight
+								aria-hidden
+								className="opacity-35"
+								size={13}
+							/>
 						</button>
 					))}
 				</div>
 			) : (
 				<div
 					ref={scrollRef}
-					className="relative max-h-[min(44vh,320px)] min-h-48 overflow-y-auto rounded-xl bg-black/[0.02] dark:bg-white/[0.025]"
+					className={`relative max-h-[min(44vh,320px)] overflow-y-auto rounded-xl bg-black/[0.02] dark:bg-white/[0.025] ${
+						loading || error || items.length === 0 ? "min-h-48" : ""
+					}`}
 					data-admin-collection-picker-results
 				>
 					{showTopLevel ? (
@@ -445,20 +485,36 @@ export function AdminCollectionPicker({
 							onClick={onSelectTopLevel}
 							type="button"
 						>
-							<FolderOpen aria-hidden className="text-accent" size={15} />
+							<FolderOpen
+								aria-hidden
+								className="text-accent"
+								size={15}
+							/>
 							Top level
 						</button>
 					) : null}
 					{loading ? (
 						<div className="grid min-h-48 place-items-center text-black/40 dark:text-white/40">
-							<LoaderCircle aria-label="Loading collections" className="animate-spin" size={15} />
+							<LoaderCircle
+								aria-label="Loading collections"
+								className="animate-spin"
+								size={15}
+							/>
 						</div>
 					) : error ? (
 						<div className="flex min-h-48 flex-col items-center justify-center gap-2 px-6 text-center">
-							<AlertCircle aria-hidden className="text-danger" size={17} />
-							<p className="text-xs text-black/55 dark:text-white/55">{error}</p>
+							<AlertCircle
+								aria-hidden
+								className="text-danger"
+								size={17}
+							/>
+							<p className="text-xs text-black/55 dark:text-white/55">
+								{error}
+							</p>
 							<Button
-								onPress={() => setReloadToken((current) => current + 1)}
+								onPress={() =>
+									setReloadToken((current) => current + 1)
+								}
 								size="xs"
 								variant="transparent"
 							>
@@ -494,12 +550,18 @@ export function AdminCollectionPicker({
 												size="xs"
 												startContent={
 													loadingMore ? (
-														<LoaderCircle aria-hidden className="animate-spin" size={14} />
+														<LoaderCircle
+															aria-hidden
+															className="animate-spin"
+															size={14}
+														/>
 													) : undefined
 												}
 												variant="transparent"
 											>
-												{loadingMore ? "Loading" : "Load more"}
+												{loadingMore
+													? "Loading"
+													: "Load more"}
 											</Button>
 										</div>
 									);
@@ -507,10 +569,12 @@ export function AdminCollectionPicker({
 								const selected = selectedSet.has(entry.key);
 								const disabled =
 									entry.deleted ||
-									(editableOnly && isLockedCollection(entry)) ||
+									(editableOnly &&
+										isLockedCollection(entry)) ||
 									entry.key === disabledAncestorKey ||
 									entry.ancestors.some(
-										({ key }) => key === disabledAncestorKey,
+										({ key }) =>
+											key === disabledAncestorKey,
 									);
 								return (
 									<div
@@ -529,38 +593,59 @@ export function AdminCollectionPicker({
 											}`}
 										>
 											{selectionMode === "multiple" ? (
-											<Checkbox
-												aria-label={`${entry.name}, ${adminCollectionPath(entry, sources)}`}
+												<Checkbox
+													aria-label={`${entry.name}, ${adminCollectionPath(entry, sources)}`}
 													className="m-0 min-w-0 flex-1 p-2"
-													classNames={{ label: "min-w-0 flex-1" }}
+													classNames={{
+														label: "min-w-0 flex-1",
+													}}
 													isDisabled={disabled}
 													isSelected={selected}
-													onValueChange={() => toggleEntry(entry)}
+													onValueChange={() =>
+														toggleEntry(entry)
+													}
 													size="sm"
 												>
-													<CollectionResultLabel entry={entry} sources={sources} />
+													<CollectionResultLabel
+														entry={entry}
+														sources={sources}
+													/>
 												</Checkbox>
 											) : (
 												<button
 													aria-pressed={selected}
 													className="flex min-w-0 flex-1 items-center gap-2 self-stretch px-2.5 text-left disabled:cursor-not-allowed disabled:opacity-40"
 													disabled={disabled}
-													onClick={() => toggleEntry(entry)}
+													onClick={() =>
+														toggleEntry(entry)
+													}
 													type="button"
 												>
-													<Folder aria-hidden className="shrink-0 opacity-45" size={14} />
-													<CollectionResultLabel entry={entry} sources={sources} />
+													<Folder
+														aria-hidden
+														className="shrink-0 opacity-45"
+														size={14}
+													/>
+													<CollectionResultLabel
+														entry={entry}
+														sources={sources}
+													/>
 												</button>
 											)}
-										{entry.hasChildren ? (
-											<button
-												aria-label={`Browse inside ${entry.name}, ${adminCollectionPath(entry, sources)}`}
-												className="mr-1 grid size-8 shrink-0 place-items-center rounded-md text-black/35 hover:bg-black/[0.06] hover:text-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-30 dark:text-white/35 dark:hover:bg-white/[0.07] dark:hover:text-white/75"
-												disabled={disabled}
-													onClick={() => browseInto(entry)}
+											{entry.hasChildren ? (
+												<button
+													aria-label={`Browse inside ${entry.name}, ${adminCollectionPath(entry, sources)}`}
+													className="mr-1 grid size-8 shrink-0 place-items-center rounded-md text-black/35 hover:bg-black/[0.06] hover:text-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-30 dark:text-white/35 dark:hover:bg-white/[0.07] dark:hover:text-white/75"
+													disabled={disabled}
+													onClick={() =>
+														browseInto(entry)
+													}
 													type="button"
 												>
-													<ChevronRight aria-hidden size={14} />
+													<ChevronRight
+														aria-hidden
+														size={14}
+													/>
 												</button>
 											) : null}
 										</div>

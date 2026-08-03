@@ -170,8 +170,9 @@ function collectionLocationFromSnapshot(
 	const entry = collections.find((collection) => collection.key === key);
 	if (!entry) return null;
 	const source =
-		sources.find(({ key: sourceKey }) => sourceKey === entry.sourceConnectionKey)
-			?.label ?? entry.sourceConnectionKey;
+		sources.find(
+			({ key: sourceKey }) => sourceKey === entry.sourceConnectionKey,
+		)?.label ?? entry.sourceConnectionKey;
 	const ancestors = collectionAncestorKeys(collections, entry.key).flatMap(
 		(ancestorKey) => {
 			const ancestor = collections.find(
@@ -211,7 +212,11 @@ function CollectionLocationButton({
 				ref={buttonRef}
 				type="button"
 			>
-				<Folder aria-hidden className="shrink-0 text-accent" size={15} />
+				<Folder
+					aria-hidden
+					className="shrink-0 text-accent"
+					size={15}
+				/>
 				<span className="min-w-0 flex-1">
 					<span className="block truncate text-sm font-medium text-black/75 dark:text-white/80">
 						{location?.name ?? "Top level"}
@@ -1202,7 +1207,9 @@ export default function AdminWorkbench({
 
 	const closeMoveParentPicker = () => {
 		setMoveParentPickerOpen(false);
-		window.requestAnimationFrame(() => moveLocationButtonRef.current?.focus());
+		window.requestAnimationFrame(() =>
+			moveLocationButtonRef.current?.focus(),
+		);
 	};
 
 	const submitCollection = () =>
@@ -1631,7 +1638,6 @@ export default function AdminWorkbench({
 						}
 					/>
 					<AdminItemFilters
-						collections={library.collections}
 						definitions={definitions}
 						filters={filters.filters}
 						items={items}
@@ -1858,7 +1864,10 @@ export default function AdminWorkbench({
 												}
 												type="button"
 											>
-												<FolderInput aria-hidden size={14} />
+												<FolderInput
+													aria-hidden
+													size={14}
+												/>
 											</button>
 										</Tooltip>
 										<Tooltip content="Remove selected">
@@ -2107,7 +2116,11 @@ export default function AdminWorkbench({
 										<button
 											aria-label="Back to new collection"
 											className="grid size-7 shrink-0 place-items-center rounded-md text-black/45 hover:bg-black/[0.05] hover:text-black/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
-											onClick={() => setCollectionParentPickerOpen(false)}
+											onClick={() =>
+												setCollectionParentPickerOpen(
+													false,
+												)
+											}
 											type="button"
 										>
 											<ArrowLeft aria-hidden size={14} />
@@ -2134,7 +2147,9 @@ export default function AdminWorkbench({
 													library.sources,
 												),
 											);
-											setCollectionParentPickerOpen(false);
+											setCollectionParentPickerOpen(
+												false,
+											);
 											setCollectionErrors((current) =>
 												withoutFieldErrors(
 													current,
@@ -2149,7 +2164,9 @@ export default function AdminWorkbench({
 										onSelectTopLevel={() => {
 											setCollectionParent(null);
 											setCollectionParentLocation(null);
-											setCollectionParentPickerOpen(false);
+											setCollectionParentPickerOpen(
+												false,
+											);
 											setCollectionErrors((current) =>
 												withoutFieldErrors(
 													current,
@@ -2159,7 +2176,9 @@ export default function AdminWorkbench({
 											);
 										}}
 										selectedKeys={
-											collectionParent ? [collectionParent] : []
+											collectionParent
+												? [collectionParent]
+												: []
 										}
 										selectionMode="single"
 										sources={library.sources}
@@ -2169,7 +2188,9 @@ export default function AdminWorkbench({
 										<Input
 											autoFocus={finePointer}
 											errorMessage={collectionErrors.name}
-											isInvalid={Boolean(collectionErrors.name)}
+											isInvalid={Boolean(
+												collectionErrors.name,
+											)}
 											label="Name"
 											labelPlacement="outside"
 											value={collectionName}
@@ -2188,14 +2209,23 @@ export default function AdminWorkbench({
 											<>
 												<CollectionLocationButton
 													label="Location"
-													location={collectionParentLocation}
+													location={
+														collectionParentLocation
+													}
 													onPress={() =>
-														setCollectionParentPickerOpen(true)
+														setCollectionParentPickerOpen(
+															true,
+														)
 													}
 												/>
 												{collectionErrors.parentCollection ? (
-													<p className="text-xs text-danger" role="alert">
-														{collectionErrors.parentCollection}
+													<p
+														className="text-xs text-danger"
+														role="alert"
+													>
+														{
+															collectionErrors.parentCollection
+														}
 													</p>
 												) : null}
 											</>
@@ -2222,12 +2252,17 @@ export default function AdminWorkbench({
 								{!collectionParentPickerOpen ? (
 									<Button
 										color="accent"
-										isDisabled={!collectionName.trim() || busy}
+										isDisabled={
+											!collectionName.trim() || busy
+										}
 										isLoading={busy}
 										onPress={submitCollection}
 										size="xs"
 										startContent={
-											<FolderInput aria-hidden size={14} />
+											<FolderInput
+												aria-hidden
+												size={14}
+											/>
 										}
 										variant="solid"
 									>
@@ -2276,7 +2311,9 @@ export default function AdminWorkbench({
 									<AdminCollectionPicker
 										allowTopLevel
 										autoFocus={finePointer}
-										disabledAncestorKey={moveDialog?.collection.key}
+										disabledAncestorKey={
+											moveDialog?.collection.key
+										}
 										editableOnly
 										onSelect={(entry) => {
 											setMoveParent(entry.key);
@@ -2312,7 +2349,9 @@ export default function AdminWorkbench({
 												),
 											);
 										}}
-										selectedKeys={moveParent ? [moveParent] : []}
+										selectedKeys={
+											moveParent ? [moveParent] : []
+										}
 										selectionMode="single"
 										sources={library.sources}
 									/>
@@ -2322,10 +2361,15 @@ export default function AdminWorkbench({
 											buttonRef={moveLocationButtonRef}
 											label="Destination"
 											location={moveParentLocation}
-											onPress={() => setMoveParentPickerOpen(true)}
+											onPress={() =>
+												setMoveParentPickerOpen(true)
+											}
 										/>
 										{moveErrors.parentCollection ? (
-											<p className="text-xs text-danger" role="alert">
+											<p
+												className="text-xs text-danger"
+												role="alert"
+											>
 												{moveErrors.parentCollection}
 											</p>
 										) : null}
@@ -2351,12 +2395,17 @@ export default function AdminWorkbench({
 								{!moveParentPickerOpen ? (
 									<Button
 										color="accent"
-										isDisabled={busy || !moveDestinationChanged}
+										isDisabled={
+											busy || !moveDestinationChanged
+										}
 										isLoading={busy}
 										onPress={submitCollectionMove}
 										size="xs"
 										startContent={
-											<FolderInput aria-hidden size={14} />
+											<FolderInput
+												aria-hidden
+												size={14}
+											/>
 										}
 										variant="solid"
 									>
