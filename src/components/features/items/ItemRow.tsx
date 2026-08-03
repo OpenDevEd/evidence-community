@@ -7,6 +7,7 @@ import React from "react";
 import { Tooltip } from "@nextui-org/react";
 import { AiFillQuestionCircle } from "react-icons/ai";
 import { useQueryState } from "nuqs";
+import { resolveCitationDisplayMode } from "@/lib/citationMode.mts";
 export default function ItemRow({ item, row, router, value, customRowName, loading, tooltip, pathname }: { item: Item; row?: string; router: ReturnType<typeof useRouter>, value?: any, customRowName?: string, loading: boolean, tooltip?: string, pathname: string }) {
 	const t = useTranslations();
 	const formatter = useFormatter();
@@ -25,7 +26,16 @@ export default function ItemRow({ item, row, router, value, customRowName, loadi
 				return "N/A";
 		}
 	})();
-	if (!rowValue || !originalValue) return null;
+	// DOI-only items render a DOI anchor instead of a formatted citation and
+	// usually have no stored `citation` value, so the citation row must not be
+	// gated on `originalValue` in that mode.
+	const citationDisplayMode =
+		row === "citation" && !customRowName
+			? resolveCitationDisplayMode(item)
+			: null;
+	const rendersDoiOnlyCitation =
+		citationDisplayMode?.mode === "doi-only" && !!citationDisplayMode.link;
+	if (!rowValue || (!originalValue && !rendersDoiOnlyCitation)) return null;
 	const rowName = customRowName || t("article." + row);
 
 	return (
