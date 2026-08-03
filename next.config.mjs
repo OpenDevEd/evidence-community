@@ -4,6 +4,7 @@ import createNextIntlPlugin from "next-intl/plugin";
 const withNextIntl = createNextIntlPlugin();
 
 const nextConfig = {
+	allowedDevOrigins: ["127.0.0.1"],
 	cacheComponents: true,
 	serverExternalPackages: ["@napi-rs/canvas", "pdfjs-dist"],
 	experimental: {

@@ -51,7 +51,7 @@ function setAIRateLimitHeaders(
 function handleLegacyScope(
 	request: NextRequest,
 	scope: string,
-	variables: Record<string, any>
+	variables: Record<string, any>,
 ) {
 	variables.scopes = variables.scopes || [];
 	variables.scopes.push(scope);
@@ -63,7 +63,7 @@ function handleLegacyScope(
 		);
 	} else {
 		const newScopeValue = Object.values(SCOPE_OPTIONS).find(
-			(option) => option.legacyKey === scope
+			(option) => option.legacyKey === scope,
 		)?.key;
 		if (newScopeValue) {
 			request.nextUrl.searchParams.set(
@@ -82,7 +82,7 @@ type KeyMap = {
 	mapper: (
 		value: string,
 		request: NextRequest,
-		variables: Record<string, any>
+		variables: Record<string, any>,
 	) => any;
 };
 
@@ -93,7 +93,7 @@ const scopeMaps: Record<string, KeyMap> = Object.values(SCOPE_OPTIONS).reduce(
 			mapper: (
 				value: string,
 				request: NextRequest,
-				variables: Record<string, any>
+				variables: Record<string, any>,
 			) => {
 				handleLegacyScope(request, option.legacyKey, variables);
 				const oldSearch =
@@ -106,7 +106,7 @@ const scopeMaps: Record<string, KeyMap> = Object.values(SCOPE_OPTIONS).reduce(
 		};
 		return acc;
 	},
-	{} as Record<string, KeyMap>
+	{} as Record<string, KeyMap>,
 );
 
 const keyMaps: Record<string, KeyMap> = Object.assign(
@@ -115,7 +115,7 @@ const keyMaps: Record<string, KeyMap> = Object.assign(
 			key: "sort",
 			mapper: (value: string, request: NextRequest) => {
 				const newValue = Object.values(SORT_OPTIONS).find(
-					(option) => option.legacyKey === value
+					(option) => option.legacyKey === value,
 				)?.key;
 				if (newValue) {
 					request.nextUrl.searchParams.set("sort", newValue);
@@ -123,7 +123,7 @@ const keyMaps: Record<string, KeyMap> = Object.assign(
 			},
 		},
 	},
-	scopeMaps
+	scopeMaps,
 );
 
 function isPublicLibraryPage(pathname: string) {
@@ -142,7 +142,7 @@ function mapLegacySearchParams(
 	runtimeSearch: LibraryPublicConfig["search"],
 ) {
 	const originalSearchParams = new URLSearchParams(
-		request.nextUrl.searchParams
+		request.nextUrl.searchParams,
 	);
 	const variables: Record<string, any> = { runtimeSearch };
 	const entries = Array.from(request.nextUrl.searchParams.entries());
@@ -178,6 +178,7 @@ function isLikelyBrokenKey(key: string) {
 const RESERVED_ROUTE_SEGMENTS = new Set([
 	"404",
 	"about",
+	"admin",
 	"api",
 	"citation",
 	"contact",
@@ -213,7 +214,7 @@ async function getNoteRedirectDestination(request: NextRequest) {
 
 	const apiUrl = new URL(
 		`/api/redirects/${lookupPath.split("/").map(encodeURIComponent).join("/")}`,
-		request.nextUrl.origin
+		request.nextUrl.origin,
 	);
 
 	try {
@@ -225,7 +226,7 @@ async function getNoteRedirectDestination(request: NextRequest) {
 				},
 			}),
 			new Promise<never>((_, reject) =>
-				setTimeout(() => reject(new Error("timeout")), 350)
+				setTimeout(() => reject(new Error("timeout")), 350),
 			),
 		]);
 
@@ -275,10 +276,7 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.redirect(url);
 	}
 
-	const newRequest = mapLegacySearchParams(
-		request,
-		libraryConfig.search,
-	);
+	const newRequest = mapLegacySearchParams(request, libraryConfig.search);
 
 	if (newRequest) {
 		return newRequest;
@@ -341,24 +339,17 @@ export default async function proxy(request: NextRequest) {
 				try {
 					const { indexName, redirectsIndex } =
 						await getMeilisearchForConfig(libraryConfig);
-					const compositeKey =
-						indexName + "|" + resolvedKey;
+					const compositeKey = indexName + "|" + resolvedKey;
 					const encoding = encodeKey(compositeKey);
 
 					const redirects = (await Promise.race([
 						redirectsIndex.getDocument(encoding),
 						new Promise((_, reject) =>
-							setTimeout(
-								() => reject(new Error("timeout")),
-								350
-							)
+							setTimeout(() => reject(new Error("timeout")), 350),
 						),
 					])) as Record<string, unknown>;
 
-					if (
-						redirects?.value &&
-						redirects.value !== resolvedKey
-					) {
+					if (redirects?.value && redirects.value !== resolvedKey) {
 						finalKey = String(redirects.value);
 					}
 				} catch {
@@ -378,17 +369,17 @@ export default async function proxy(request: NextRequest) {
 	const supportedFormats = ["ris", "bibtex"];
 
 	const exportMatch = request.nextUrl.pathname.match(
-		/\/lib\/(.+?)\/export\/(ris|bibtex)$/
+		/\/lib\/(.+?)\/export\/(ris|bibtex)$/,
 	);
 	if (exportMatch) {
 		if (!supportedFormats.includes(exportMatch[2])) {
 			return NextResponse.json(
 				{
 					error: `Unsupported export format. Supported formats are: ${supportedFormats.join(
-						", "
+						", ",
 					)}`,
 				},
-				{ status: 400 }
+				{ status: 400 },
 			);
 		}
 		const key = exportMatch[1];
@@ -399,7 +390,7 @@ export default async function proxy(request: NextRequest) {
 	}
 
 	const downloadMatch = request.nextUrl.pathname.match(
-		/\/lib\/(.+?)\/download\/?(?:([^\/]+)(.*))?$/
+		/\/lib\/(.+?)\/download\/?(?:([^\/]+)(.*))?$/,
 	);
 	if (downloadMatch) {
 		const itemKey = downloadMatch[1];
@@ -416,10 +407,7 @@ export default async function proxy(request: NextRequest) {
 		url.pathname = `/api/item/${itemKey}/download/${attachmentKey}`;
 		return NextResponse.rewrite(url);
 	} else if (request.nextUrl.pathname.startsWith("/api/")) {
-		if (
-			libraryConfig.features.ai &&
-			isRateLimitedAIRequest(request)
-		) {
+		if (libraryConfig.features.ai && isRateLimitedAIRequest(request)) {
 			const rateLimit = consumeAIRateLimit(request.headers);
 			if (!rateLimit.allowed) {
 				return setAIRateLimitHeaders(
@@ -430,19 +418,15 @@ export default async function proxy(request: NextRequest) {
 					rateLimit,
 				);
 			}
-			return setAIRateLimitHeaders(
-				NextResponse.next(),
-				rateLimit,
-			);
+			return setAIRateLimitHeaders(NextResponse.next(), rateLimit);
 		}
 		return NextResponse.next();
 	}
 
-	const disabledLocaleRedirectPathname =
-		getDisabledLocaleRedirectPathname(
-			request.nextUrl.pathname,
-			libraryConfig.localization,
-		);
+	const disabledLocaleRedirectPathname = getDisabledLocaleRedirectPathname(
+		request.nextUrl.pathname,
+		libraryConfig.localization,
+	);
 	if (disabledLocaleRedirectPathname) {
 		const url = request.nextUrl.clone();
 		url.pathname = disabledLocaleRedirectPathname;
@@ -462,9 +446,7 @@ export default async function proxy(request: NextRequest) {
 		return notFoundPageRedirect;
 	}
 
-	const hasLocaleRewriteHeader = request.headers.has(
-		"x-next-intl-locale",
-	);
+	const hasLocaleRewriteHeader = request.headers.has("x-next-intl-locale");
 	const isInternalLocaleRewrite =
 		hasLocaleRewriteHeader &&
 		getPlatformPathLocale(request.nextUrl.pathname) !== null;
@@ -476,16 +458,13 @@ export default async function proxy(request: NextRequest) {
 		// second time. Preserve the already-resolved locale on that internal
 		// request instead of canonicalizing it back to the public unprefixed
 		// URL and creating a redirect loop.
-		localePrefix: isInternalLocaleRewrite
-			? "always"
-			: "as-needed",
+		localePrefix: isInternalLocaleRewrite ? "always" : "as-needed",
 		localeCookie: RUNTIME_LOCALE_COOKIE,
 		alternateLinks: false,
 	})(request);
 
 	if (isPublicLibraryPage(request.nextUrl.pathname)) {
-		const isRedirect =
-			response.status >= 300 && response.status < 400;
+		const isRedirect = response.status >= 300 && response.status < 400;
 		const setsLocaleCookie = response.headers.has("set-cookie");
 		const variesByLocaleDetection =
 			libraryConfig.localization.detectLocale &&

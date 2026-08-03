@@ -1,34 +1,39 @@
 {
-  "name": "@opendeved/evidence-library-core",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
-  "exports": {
-    ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "require": "./dist/index.js"
-    }
-  },
-  "files": [
-    "dist",
-    "vendor"
-  ],
-  "scripts": {
-    "build": "npm run clean && tsc -p tsconfig.json",
-    "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "prepare": "npm run build",
-    "test": "vitest run"
-  },
-  "peerDependencies": {
-    "drizzle-orm": "^0.45.1"
-  },
-  "devDependencies": {
-    "@types/node": "^20.19.9",
-    "drizzle-orm": "^0.45.1",
-    "typescript": "^5.8.3",
-    "vitest": "^4.1.10"
-  }
+	"name": "@opendeved/evidence-library-core",
+	"version": "0.1.0",
+	"private": true,
+	"type": "module",
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"require": "./dist/index.js"
+		},
+		"./zotero-schema": {
+			"types": "./dist/zotero-schema.d.ts",
+			"import": "./dist/zotero-schema.js",
+			"require": "./dist/zotero-schema.js"
+		}
+	},
+	"files": [
+		"dist",
+		"vendor"
+	],
+	"scripts": {
+		"build": "npm run clean && tsc -p tsconfig.json",
+		"clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
+		"prepare": "npm run build",
+		"test": "vitest run"
+	},
+	"peerDependencies": {
+		"drizzle-orm": "^0.45.1"
+	},
+	"devDependencies": {
+		"@types/node": "^20.19.9",
+		"drizzle-orm": "^0.45.1",
+		"typescript": "^5.8.3",
+		"vitest": "^4.1.10"
+	}
 }

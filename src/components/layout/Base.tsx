@@ -1,15 +1,14 @@
 import Providers from "@/context/Providers";
 import { FiltersProvider } from "@/context/FiltersProvider";
-import Navbar from "@/components/layout/navbar";
-import Footer from "@/components/layout/Footer";
 import { getMessages, getTranslations } from "next-intl/server";
 import { NextIntlClientProvider } from "next-intl";
 import { getLangDir } from "rtl-detect";
 import { getCachedStatus } from "@/app/api/cache";
 import MainWrapper from "./MainWrapper";
-import Banner from "./Banner";
+import SiteChrome from "./SiteChrome";
 import { Suspense } from "react";
 import { connection } from "next/server";
+import ConsentDefaultsScript from "@/app/_components/ConsentDefaultsScript";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { projectPublicLibraryConfig } from "@/config/library-config/public";
 import { LibraryConfigProvider } from "@/context/LibraryConfigProvider";
@@ -34,39 +33,20 @@ async function BaseContent({
 
 	return (
 		<NextIntlClientProvider messages={messages}>
-			<Providers
-				status={status}
-				gapmaps={gapmaps}
-			>
+			<Providers status={status} gapmaps={gapmaps}>
 				{/* Single shared filter state for the whole app — lives above the
 				    navbar AND the page so collections/params stay resident across
 				    navigation (no chip flash, no duplicate fetches). */}
 				<FiltersProvider>
-				<MainWrapper>
-					<nav
-						aria-label={t("skipNavAriaLabel")}
-						className="absolute top-0 left-0 w-64 h-0"
-					>
-						<a
-							href="#main-content"
-							className="p-4 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100"
+					<MainWrapper>
+						<SiteChrome
+							skipNavigationLabel={t("skipNavAriaLabel")}
+							skipToContentLabel={t("skipToContent")}
+							skipToFooterLabel={t("skipToFooter")}
 						>
-							{t("skipToContent")}
-						</a>
-						<a
-							href="#footer"
-							className="p-4 text-center w-1 h-1 absolute top-0 left-[-999px] z-[-999] focus:z-[999] focus:left-0 opacity-0 focus:w-fit focus:h-fit focus:opacity-100"
-						>
-							{t("skipToFooter")}
-						</a>
-					</nav>
-					<Navbar />
-					<div className="flex-1 w-full flex flex-col items-center">
-						{children}
-					</div>
-					<Footer />
-					<Banner />
-				</MainWrapper>
+							{children}
+						</SiteChrome>
+					</MainWrapper>
 				</FiltersProvider>
 			</Providers>
 		</NextIntlClientProvider>
@@ -81,14 +61,18 @@ export default async function Base({
 	locale: string;
 }>) {
 	await connection();
-	const libraryConfig = projectPublicLibraryConfig(
-		await getLibraryConfig(),
-	);
+	const libraryConfig = projectPublicLibraryConfig(await getLibraryConfig());
 	const dir = getLangDir(locale);
 	return (
 		<html lang={locale} dir={dir} suppressHydrationWarning>
 			<body>
-				<link rel="unapi-server" type="application/xml" title="unAPI" href="/api/unapi" />
+				<ConsentDefaultsScript />
+				<link
+					rel="unapi-server"
+					type="application/xml"
+					title="unAPI"
+					href="/api/unapi"
+				/>
 				<LibraryLogoStyles identity={libraryConfig.identity} />
 				<LibraryThemeStyles theme={libraryConfig.theme} />
 				<Suspense fallback={null}>

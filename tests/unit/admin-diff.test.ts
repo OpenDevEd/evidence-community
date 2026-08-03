@@ -1,0 +1,163 @@
+import { describe, expect, it } from "vitest";
+
+import {
+	computeAdminDraftDiff,
+	EMPTY_ADMIN_DRAFT_DIFF,
+} from "@/components/admin/admin-diff";
+import type { AdminSchemaDefinition } from "@/components/admin/admin-schema";
+import type { AdminItemDetail } from "@/lib/admin/types";
+
+const definition: AdminSchemaDefinition = {
+	creatorTypes: [{ creatorType: "author", primary: true }],
+	fields: [
+		{ field: "title" },
+		{ field: "language" },
+		{ field: "abstractNote" },
+	],
+	itemType: "book",
+};
+
+function detail(
+	overrides: Partial<AdminItemDetail> = {},
+): AdminItemDetail {
+	return {
+		attachments: [],
+		collectionKeys: ["CURRENT"],
+		creators: [],
+		date: null,
+		draft: {
+			baseRevision: 1,
+			createdAt: "2026-01-01T00:00:00.000Z",
+			draftRevision: 1,
+			itemKey: "BOOK0001",
+			payload: {},
+			sourceConnectionKey: "native",
+			updatedAt: "2026-01-01T00:00:00.000Z",
+		},
+		fileDraft: null,
+		filePublication: null,
+		fileState: "none",
+		itemType: "book",
+		key: "BOOK0001",
+		parentItem: null,
+		parentState: null,
+		published: {
+			abstractNote: null,
+			creators: [],
+			itemType: "book",
+			languageName: "English",
+			title: "Published title",
+		},
+		publishedCollectionKeys: ["PUBLISHED"],
+		publishedTags: ["evidence"],
+		revision: 1,
+		sourceConnectionKey: "native",
+		sourceFileUrl: null,
+		state: "edited",
+		tags: ["draft"],
+		title: "Draft title",
+		updatedAt: "2026-01-01T00:00:00.000Z",
+		...overrides,
+	};
+}
+
+describe("computeAdminDraftDiff", () => {
+	it("maps language to its published database field and treats empty values equally", () => {
+		const result = computeAdminDraftDiff(
+			detail(),
+			{
+				abstractNote: "",
+				collections: ["CURRENT"],
+				creators: [],
+				itemType: "Book",
+				language: "French",
+				tags: ["draft"],
+				title: "Published title",
+			},
+			definition,
+		);
+
+		expect(result.itemType).toBeNull();
+		expect(result.fields).toEqual({ language: "English" });
+		expect(result.tags).toEqual(["evidence"]);
+		expect(result.collections).toEqual(["PUBLISHED"]);
+	});
+
+	it("normalizes creator whitespace and unordered tag and collection sets", () => {
+		const originalCreators = [
+			{
+				creatorType: "author",
+				firstName: "Ada",
+				lastName: "Lovelace",
+			},
+		];
+		const result = computeAdminDraftDiff(
+			detail({
+				published: {
+					creators: originalCreators,
+					itemType: "book",
+					title: "Published title",
+				},
+				publishedCollectionKeys: ["B", "A"],
+				publishedTags: ["two", "one"],
+			}),
+			{
+				collections: ["A", "B"],
+				creators: [
+					{
+						creatorType: "author",
+						firstName: " Ada ",
+						lastName: "Lovelace",
+					},
+				],
+				itemType: "book",
+				tags: ["one", "two"],
+				title: "Published title",
+			},
+			definition,
+		);
+
+		expect(result.creators).toBeNull();
+		expect(result.tags).toBeNull();
+		expect(result.collections).toBeNull();
+	});
+
+	it("returns the published collection, creator, and tag values for reverting", () => {
+		const originalCreators = [
+			{ creatorType: "author", name: "OpenDevEd" },
+		];
+		const result = computeAdminDraftDiff(
+			detail({
+				published: {
+					creators: originalCreators,
+					itemType: "book",
+					title: "Published title",
+				},
+			}),
+			{
+				collections: [],
+				creators: [],
+				itemType: "report",
+				tags: [],
+				title: "Draft title",
+			},
+			definition,
+		);
+
+		expect(result.itemType).toBe("book");
+		expect(result.fields.title).toBe("Published title");
+		expect(result.creators).toEqual(originalCreators);
+		expect(result.tags).toEqual(["evidence"]);
+		expect(result.collections).toEqual(["PUBLISHED"]);
+	});
+
+	it("does not mark an unpublished draft because every value is new", () => {
+		expect(
+			computeAdminDraftDiff(
+				detail({ published: null, publishedCollectionKeys: [], publishedTags: [] }),
+				{ itemType: "book", title: "New book" },
+				definition,
+			),
+		).toEqual(EMPTY_ADMIN_DRAFT_DIFF);
+	});
+});

@@ -1,0 +1,2456 @@
+"use client";
+
+import {
+	ModalBody,
+	ModalContent,
+	ModalFooter,
+	ModalHeader,
+} from "@nextui-org/react";
+import {
+	Archive,
+	Check,
+	Clock3,
+	FolderInput,
+	Library,
+	List,
+	Menu,
+	PanelRight,
+	Plus,
+	RefreshCw,
+	Search,
+	Send,
+	Trash2,
+	X,
+} from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { toast } from "sonner";
+
+import { LibraryLogoImages } from "@/components/library/LibraryIdentity";
+import { Button } from "@/components/nextui/Button";
+import DialogModal from "@/components/nextui/DialogModal";
+import { Input } from "@/components/nextui/Input";
+import { Select } from "@/components/nextui/Select";
+import { SelectItem } from "@/components/nextui/SelectItem";
+import { Tooltip } from "@/components/nextui/Tooltip";
+import type {
+	AdminCollection,
+	AdminItemDetail,
+	AdminItemViewFilters,
+	AdminLibrarySnapshot,
+} from "@/lib/admin/types";
+import type { AdminItemSortColumnId } from "@/lib/admin/item-list-contract";
+import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
+import { getRuntimeHomeHref } from "@/config/library-config/links";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { Link } from "@/i18n/routing";
+import {
+	collectionAncestorKeys,
+	collectionDescendantKeys,
+	collectionMovePositionOptions,
+	currentCollectionMovePosition,
+	legalNativeCollectionParents,
+	mergeAdminCollectionUpdates,
+	resolveBeforeCollection,
+	resolveNativeCollectionDrop,
+} from "@/lib/admin/collection-tree";
+import type { NativeCollectionDropDestination } from "@/lib/admin/collection-tree";
+
+import { AdminInspector } from "./AdminInspector";
+import { AdminItemTable } from "./AdminItemTable";
+import { AdminNavigation, expandAdminCollections } from "./AdminNavigation";
+import {
+	AdminApiError,
+	completeAdminPdf,
+	createAdminCollection,
+	createAdminDraft,
+	deleteAdminCollection,
+	discardAdminDraft,
+	discardAdminPdfDraft,
+	getAdminItem,
+	getAdminLibrary,
+	moveAdminCollection,
+	openAdminDraft,
+	publishAdminItem,
+	publishAdminPdf,
+	renameAdminCollection,
+	restoreAdminCollection,
+	saveAdminDraft,
+	sha256File,
+	stageAdminPdf,
+	unpublishAdminItem,
+	unpublishAdminPdf,
+	uploadAdminPdf,
+} from "./admin-api";
+import {
+	type AdminSchemaDefinition,
+	editablePayloadFromDetail,
+	humanizeAdminField,
+	payloadForItemType,
+} from "./admin-schema";
+import { focusAdminDragHandle } from "./admin-focus";
+import { AdminDragDropRoot } from "./AdminDragDropProvider";
+import { isTopLevelAdminItemType } from "@/lib/admin/item-fields";
+import type { AdminFieldErrors } from "@/lib/admin/errors";
+import {
+	clearChangedAdminFieldErrors,
+	shouldClearAdminValidationErrors,
+} from "./admin-validation";
+import { useAdminItemList } from "./useAdminItemList";
+import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
+
+type SaveState = "conflict" | "error" | "idle" | "saved" | "saving";
+
+type CollectionDialog =
+	| {
+			mode: "create";
+			parentCollection: string | null;
+	  }
+	| {
+			collection: AdminCollection;
+			mode: "rename";
+	  };
+
+type MoveDialog = {
+	collection: AdminCollection;
+};
+
+type ConfirmDialog = {
+	action: () => Promise<void>;
+	confirmLabel?: string;
+	danger?: boolean;
+	message: string;
+	onError?: (error: unknown) => void;
+	title: string;
+};
+
+type RecordAssignment = {
+	focusKey: string;
+	itemKeys: string[];
+};
+
+const ADMIN_DESKTOP_MEDIA_QUERY = "(min-width: 1280px)";
+
+function singleKey(keys: "all" | Set<React.Key>) {
+	if (keys === "all") return null;
+	const value = [...keys][0];
+	return typeof value === "string" ? value : null;
+}
+
+function RecordFilterSelects({
+	definitions,
+	file,
+	fileClassName,
+	itemType,
+	itemTypeClassName,
+	onFileChange,
+	onItemTypeChange,
+}: {
+	definitions: AdminSchemaDefinition[];
+	file: AdminItemViewFilters["file"];
+	fileClassName?: string;
+	itemType: string;
+	itemTypeClassName?: string;
+	onFileChange: (file: AdminItemViewFilters["file"]) => void;
+	onItemTypeChange: (itemType: string) => void;
+}) {
+	return (
+		<>
+			<Select
+				aria-label="Filter by item type"
+				className={itemTypeClassName}
+				classNames={{
+					trigger: "h-10 min-h-10 rounded-xl",
+					value: "text-sm",
+				}}
+				placement="left"
+				selectedKeys={new Set([itemType])}
+				size="sm"
+				onSelectionChange={(keys) => {
+					const selected = singleKey(keys as Set<React.Key>);
+					if (selected) onItemTypeChange(selected);
+				}}
+			>
+				{[{ itemType: "all" }, ...definitions].map((definition) => (
+					<SelectItem key={definition.itemType}>
+						{definition.itemType === "all"
+							? "All types"
+							: humanizeAdminField(definition.itemType)}
+					</SelectItem>
+				))}
+			</Select>
+			<Select
+				aria-label="Filter by PDF state"
+				className={fileClassName}
+				classNames={{
+					trigger: "h-10 min-h-10 rounded-xl",
+					value: "text-sm",
+				}}
+				placement="left"
+				selectedKeys={new Set([file])}
+				size="sm"
+				onSelectionChange={(keys) => {
+					const selected = singleKey(keys as Set<React.Key>);
+					if (selected)
+						onFileChange(selected as AdminItemViewFilters["file"]);
+				}}
+			>
+				<SelectItem key="all">Any PDF</SelectItem>
+				<SelectItem key="published">PDF live</SelectItem>
+				<SelectItem key="staged">PDF staged</SelectItem>
+				<SelectItem key="processing">Processing</SelectItem>
+				<SelectItem key="none">No PDF</SelectItem>
+			</Select>
+		</>
+	);
+}
+
+function UpdatedSortButton({
+	className,
+	iconOnly = false,
+	onPress,
+	selected,
+	sortDirection,
+}: {
+	className?: string;
+	iconOnly?: boolean;
+	onPress: () => void;
+	selected: boolean;
+	sortDirection: AdminItemViewFilters["sortDirection"];
+}) {
+	const label = `Sort by last updated${
+		selected
+			? `, currently ${
+					sortDirection === "asc" ? "ascending" : "descending"
+				}`
+			: ""
+	}`;
+	const button = (
+		<Button
+			aria-label={label}
+			aria-pressed={selected}
+			className={className}
+			isIconOnly={iconOnly}
+			onPress={onPress}
+			size="xs"
+			startContent={
+				iconOnly ? undefined : <Clock3 aria-hidden size={14} />
+			}
+			variant={selected ? "solid" : "transparent"}
+		>
+			{iconOnly ? <Clock3 aria-hidden size={15} /> : "Last updated"}
+		</Button>
+	);
+
+	return iconOnly ? (
+		<Tooltip content="Sort by last updated">{button}</Tooltip>
+	) : (
+		button
+	);
+}
+
+function errorMessage(error: unknown) {
+	return error instanceof Error ? error.message : "Admin operation failed";
+}
+
+function formErrors(error: unknown): AdminFieldErrors {
+	if (
+		error instanceof AdminApiError &&
+		error.code === "validation_failed" &&
+		Object.keys(error.fields).length > 0
+	) {
+		return error.fields;
+	}
+	return { _form: errorMessage(error) };
+}
+
+function fileErrorMessage(error: unknown) {
+	if (
+		error instanceof AdminApiError &&
+		Object.keys(error.fields).length > 0
+	) {
+		return Object.values(error.fields)[0]!;
+	}
+	return errorMessage(error);
+}
+
+function failureDescription(failures: readonly string[]) {
+	return [
+		...failures.slice(0, 2),
+		failures.length > 2 ? `${failures.length - 2} more failures` : null,
+	]
+		.filter(Boolean)
+		.join(" ");
+}
+
+function withoutFieldErrors(errors: AdminFieldErrors, ...fields: string[]) {
+	const next = Object.fromEntries(
+		Object.entries(errors).filter(
+			([path]) =>
+				!fields.some(
+					(field) => path === field || path.startsWith(`${field}.`),
+				),
+		),
+	);
+	return Object.keys(next).length === Object.keys(errors).length
+		? errors
+		: next;
+}
+
+function withoutRecordError(errors: Record<string, string>, key: string) {
+	if (!(key in errors)) return errors;
+	const next = { ...errors };
+	delete next[key];
+	return next;
+}
+
+function collectionKeysFromPayload(payload: Record<string, unknown>) {
+	return Array.isArray(payload.collections)
+		? payload.collections.filter(
+				(value): value is string => typeof value === "string",
+			)
+		: [];
+}
+
+function payloadWithCollection(
+	payload: Record<string, unknown>,
+	collectionKey: string,
+) {
+	return {
+		...payload,
+		collections: [
+			...new Set([...collectionKeysFromPayload(payload), collectionKey]),
+		],
+	};
+}
+
+export default function AdminWorkbench({
+	definitions,
+}: {
+	definitions: AdminSchemaDefinition[];
+}) {
+	const { navigation } = useLibraryConfig();
+	const homeHref = getRuntimeHomeHref(navigation.links);
+	const [library, setLibrary] = useState<AdminLibrarySnapshot>({
+		collections: [],
+		sources: [],
+	});
+	const [detail, setDetail] = useState<AdminItemDetail | null>(null);
+	const {
+		preferences: itemTablePreferences,
+		requestedColumns,
+		resetPreferences: resetItemTablePreferences,
+		setPreferences: setItemTablePreferences,
+	} = useAdminItemTablePreferences();
+	const {
+		bulkKeys,
+		error: listError,
+		filters,
+		hasMore,
+		items,
+		loading: listLoading,
+		loadItems,
+		nextCursor,
+		selectedKey,
+		setBulkKeys,
+		setFilters,
+		setItems,
+		setSelectedKey,
+	} = useAdminItemList(detail, requestedColumns);
+	const [detailLoading, setDetailLoading] = useState(false);
+	const [detailError, setDetailError] = useState<string | null>(null);
+	const [draftPayload, setDraftPayload] = useState<Record<string, unknown>>(
+		{},
+	);
+	const [saveState, setSaveState] = useState<SaveState>("idle");
+	const [saveMessage, setSaveMessage] = useState<string | null>(null);
+	const [validationErrors, setValidationErrors] = useState<AdminFieldErrors>(
+		{},
+	);
+	const [validationRevision, setValidationRevision] = useState(0);
+	const [busy, setBusy] = useState(false);
+	const [recordAssignment, setRecordAssignment] =
+		useState<RecordAssignment | null>(null);
+	const [mobilePane, setMobilePane] = useState<
+		"inspector" | "list" | "navigation"
+	>("list");
+	const [newItemOpen, setNewItemOpen] = useState(false);
+	const [newItemSearch, setNewItemSearch] = useState("");
+	const [collectionDialog, setCollectionDialog] =
+		useState<CollectionDialog | null>(null);
+	const [collectionName, setCollectionName] = useState("");
+	const [collectionParent, setCollectionParent] = useState<string | null>(
+		null,
+	);
+	const [collectionErrors, setCollectionErrors] = useState<AdminFieldErrors>(
+		{},
+	);
+	const [moveDialog, setMoveDialog] = useState<MoveDialog | null>(null);
+	const [moveParent, setMoveParent] = useState<string | null>(null);
+	const [movePosition, setMovePosition] = useState("first");
+	const [moveErrors, setMoveErrors] = useState<AdminFieldErrors>({});
+	const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
+	const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
+		null,
+	);
+
+	const detailRequest = useRef(0);
+	const selectedKeyRef = useRef<string | null>(null);
+	const detailRef = useRef<AdminItemDetail | null>(null);
+	const draftPayloadRef = useRef<Record<string, unknown>>({});
+	const saveQueue = useRef<Promise<void>>(Promise.resolve());
+	const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+	const saveGeneration = useRef(new Map<string, number>());
+	const pendingPayloadByKey = useRef(
+		new Map<
+			string,
+			{ generation: number; payload: Record<string, unknown> }
+		>(),
+	);
+	const revisionByKey = useRef(new Map<string, number>());
+	const savedPayloadByKey = useRef(new Map<string, string>());
+	const saveFailureByKey = useRef(
+		new Map<
+			string,
+			{
+				fields: AdminFieldErrors;
+				message: string;
+				state: SaveState;
+			}
+		>(),
+	);
+	const serverReloadKeys = useRef(new Map<string, number>());
+	const busyOperations = useRef(0);
+	const mobilePaneMounted = useRef(false);
+	selectedKeyRef.current = selectedKey;
+	detailRef.current = detail;
+	draftPayloadRef.current = draftPayload;
+
+	useEffect(() => {
+		const previous = document.body.style.overflow;
+		document.body.style.overflow = "hidden";
+		return () => {
+			document.body.style.overflow = previous;
+		};
+	}, []);
+
+	useEffect(() => {
+		const failure = selectedKey
+			? saveFailureByKey.current.get(selectedKey)
+			: undefined;
+		setValidationErrors(failure?.fields ?? {});
+		setSaveState(failure?.state ?? "idle");
+		setSaveMessage(failure?.message ?? null);
+	}, [selectedKey]);
+
+	useEffect(() => {
+		if (!mobilePaneMounted.current) {
+			mobilePaneMounted.current = true;
+			return;
+		}
+		if (window.matchMedia(ADMIN_DESKTOP_MEDIA_QUERY).matches) return;
+		const frame = requestAnimationFrame(() => {
+			document.getElementById(`admin-${mobilePane}-pane`)?.focus();
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [mobilePane]);
+
+	const loadLibrary = useCallback(async () => {
+		try {
+			setLibrary(await getAdminLibrary());
+		} catch (error) {
+			toast.error(errorMessage(error));
+		}
+	}, []);
+
+	useEffect(() => {
+		void loadLibrary();
+	}, [loadLibrary]);
+
+	const abandonPendingDraft = useCallback((key: string) => {
+		const timer = saveTimers.current.get(key);
+		if (timer) clearTimeout(timer);
+		saveTimers.current.delete(key);
+		pendingPayloadByKey.current.delete(key);
+		saveGeneration.current.set(
+			key,
+			(saveGeneration.current.get(key) ?? 0) + 1,
+		);
+		revisionByKey.current.delete(key);
+		savedPayloadByKey.current.delete(key);
+		saveFailureByKey.current.delete(key);
+	}, []);
+
+	const applyDetail = useCallback(
+		(next: AdminItemDetail, replaceLocal = false) => {
+			if (replaceLocal) abandonPendingDraft(next.key);
+			const knownRevision = revisionByKey.current.get(next.key);
+			const staleDraft =
+				!replaceLocal &&
+				next.draft &&
+				knownRevision !== undefined &&
+				next.draft.draftRevision < knownRevision;
+			const pending = pendingPayloadByKey.current.get(next.key);
+			if (staleDraft && next.draft) {
+				let latestPayload = pending?.payload ?? next.draft.payload;
+				const savedPayload = savedPayloadByKey.current.get(next.key);
+				if (!pending && savedPayload) {
+					try {
+						latestPayload = JSON.parse(savedPayload) as Record<
+							string,
+							unknown
+						>;
+					} catch {
+						latestPayload = next.draft.payload;
+					}
+				}
+				const latestTitle =
+					typeof latestPayload.title === "string"
+						? latestPayload.title.trim() || "Untitled"
+						: next.title;
+				setDetail({
+					...next,
+					draft: {
+						...next.draft,
+						draftRevision: knownRevision,
+						payload: latestPayload,
+					},
+					itemType: String(latestPayload.itemType ?? next.itemType),
+					title: latestTitle,
+				});
+				setDraftPayload(latestPayload);
+				if (!pending) {
+					setSaveState("idle");
+					setSaveMessage(null);
+				}
+				return true;
+			}
+			if (pending && next.draft) {
+				if (knownRevision === undefined) {
+					revisionByKey.current.set(
+						next.key,
+						next.draft.draftRevision,
+					);
+					savedPayloadByKey.current.set(
+						next.key,
+						JSON.stringify(next.draft.payload),
+					);
+				}
+				const pendingPayload = pending.payload;
+				const pendingTitle =
+					typeof pendingPayload.title === "string"
+						? pendingPayload.title.trim() || "Untitled"
+						: next.title;
+				setDetail({
+					...next,
+					draft: { ...next.draft, payload: pendingPayload },
+					itemType: String(pendingPayload.itemType ?? next.itemType),
+					title: pendingTitle,
+				});
+				setDraftPayload(pendingPayload);
+				const failure = saveFailureByKey.current.get(next.key);
+				if (failure) {
+					setValidationErrors(failure.fields);
+					setSaveState(failure.state);
+					setSaveMessage(failure.message);
+				}
+				return true;
+			}
+			if (pending && !next.draft) {
+				abandonPendingDraft(next.key);
+			}
+			if (next.draft) {
+				revisionByKey.current.set(next.key, next.draft.draftRevision);
+				savedPayloadByKey.current.set(
+					next.key,
+					JSON.stringify(next.draft.payload),
+				);
+			} else {
+				revisionByKey.current.delete(next.key);
+				savedPayloadByKey.current.delete(next.key);
+			}
+			const payload = editablePayloadFromDetail(next, definitions);
+			setDetail(next);
+			if (
+				shouldClearAdminValidationErrors({
+					currentKey: detailRef.current?.key,
+					currentPayload: draftPayloadRef.current,
+					nextKey: next.key,
+					nextPayload: payload,
+					replaceLocal,
+				})
+			) {
+				setValidationErrors({});
+			}
+			setDraftPayload(payload);
+			setSaveState(pending && !next.draft ? "error" : "idle");
+			setSaveMessage(
+				pending && !next.draft
+					? "The server draft no longer exists. Reopen it before editing."
+					: null,
+			);
+			return true;
+		},
+		[abandonPendingDraft, definitions],
+	);
+
+	const loadDetail = useCallback(
+		async (key: string, discardLocal = false) => {
+			const requestId = ++detailRequest.current;
+			setDetailLoading(true);
+			setDetailError(null);
+			if (discardLocal) {
+				serverReloadKeys.current.set(
+					key,
+					(serverReloadKeys.current.get(key) ?? 0) + 1,
+				);
+				abandonPendingDraft(key);
+				await saveQueue.current;
+			}
+			try {
+				const next = await getAdminItem(key);
+				if (requestId === detailRequest.current) {
+					applyDetail(next, discardLocal);
+				}
+			} catch (error) {
+				if (requestId === detailRequest.current) {
+					const message = errorMessage(error);
+					setDetail((current) =>
+						current?.key === key ? current : null,
+					);
+					setDetailError(message);
+					toast.error(message);
+				}
+			} finally {
+				if (discardLocal) {
+					const remaining =
+						(serverReloadKeys.current.get(key) ?? 1) - 1;
+					if (remaining > 0) {
+						serverReloadKeys.current.set(key, remaining);
+					} else {
+						serverReloadKeys.current.delete(key);
+					}
+				}
+				if (requestId === detailRequest.current) {
+					setDetailLoading(false);
+				}
+			}
+		},
+		[abandonPendingDraft, applyDetail],
+	);
+
+	useEffect(() => {
+		if (selectedKey) void loadDetail(selectedKey);
+		else {
+			detailRequest.current += 1;
+			setDetail(null);
+			setDetailError(null);
+			setDetailLoading(false);
+		}
+	}, [loadDetail, selectedKey]);
+
+	const refreshCurrent = useCallback(
+		async (detailKey: string | null = selectedKeyRef.current) => {
+			await Promise.all([
+				loadLibrary(),
+				loadItems(),
+				detailKey ? loadDetail(detailKey) : Promise.resolve(),
+			]);
+		},
+		[loadDetail, loadItems, loadLibrary],
+	);
+
+	const executeSave = useCallback(
+		async (
+			key: string,
+			payload: Record<string, unknown>,
+			generation: number,
+		) => {
+			if (saveGeneration.current.get(key) !== generation) return;
+			const serialized = JSON.stringify(payload);
+			if (savedPayloadByKey.current.get(key) === serialized) {
+				saveFailureByKey.current.delete(key);
+				if (
+					pendingPayloadByKey.current.get(key)?.generation ===
+					generation
+				) {
+					pendingPayloadByKey.current.delete(key);
+				}
+				if (selectedKeyRef.current === key) {
+					setValidationErrors({});
+					setSaveState("saved");
+					setSaveMessage(null);
+				}
+				return;
+			}
+
+			if (selectedKeyRef.current === key) {
+				setSaveState("saving");
+				setSaveMessage(null);
+			}
+			try {
+				const revision = revisionByKey.current.get(key);
+				if (!revision) {
+					throw new Error(`Draft revision is missing for ${key}`);
+				}
+				const saved = await saveAdminDraft(key, revision, payload);
+				revisionByKey.current.set(key, saved.draftRevision);
+				savedPayloadByKey.current.set(key, serialized);
+				saveFailureByKey.current.delete(key);
+				if (selectedKeyRef.current === key) {
+					setDetail((current) =>
+						current?.key === key
+							? { ...current, draft: saved }
+							: current,
+					);
+				}
+				if (saveGeneration.current.get(key) !== generation) return;
+				if (
+					pendingPayloadByKey.current.get(key)?.generation ===
+					generation
+				) {
+					pendingPayloadByKey.current.delete(key);
+				}
+				if (selectedKeyRef.current === key) {
+					setSaveState("saved");
+					setSaveMessage(null);
+				}
+			} catch (error) {
+				if (saveGeneration.current.get(key) !== generation) return;
+				const failure = {
+					fields:
+						error instanceof AdminApiError &&
+						error.code === "validation_failed"
+							? error.fields
+							: {},
+					message: errorMessage(error),
+					state:
+						error instanceof AdminApiError && error.status === 409
+							? ("conflict" as const)
+							: ("error" as const),
+				};
+				saveFailureByKey.current.set(key, failure);
+				if (selectedKeyRef.current === key) {
+					setValidationErrors(failure.fields);
+					setSaveState(failure.state);
+					setSaveMessage(failure.message);
+				} else {
+					toast.error(`Could not save draft ${key}`, {
+						description: errorMessage(error),
+					});
+				}
+				throw error;
+			}
+		},
+		[],
+	);
+
+	const queueDraftSave = useCallback(
+		(key: string, payload: Record<string, unknown>, immediate = false) => {
+			saveFailureByKey.current.delete(key);
+			const generation = (saveGeneration.current.get(key) ?? 0) + 1;
+			saveGeneration.current.set(key, generation);
+			pendingPayloadByKey.current.set(key, { generation, payload });
+			const existingTimer = saveTimers.current.get(key);
+			if (existingTimer) clearTimeout(existingTimer);
+
+			const queue = () => {
+				saveTimers.current.delete(key);
+				const pending = pendingPayloadByKey.current.get(key);
+				const queuedPayload =
+					pending?.generation === generation
+						? pending.payload
+						: payload;
+				const next = saveQueue.current.then(() =>
+					executeSave(key, queuedPayload, generation),
+				);
+				saveQueue.current = next.catch(() => undefined);
+				return next;
+			};
+			if (immediate) return queue();
+			saveTimers.current.set(
+				key,
+				setTimeout(() => {
+					void queue().catch(() => undefined);
+				}, 700),
+			);
+			return Promise.resolve();
+		},
+		[executeSave],
+	);
+
+	const flushDraft = useCallback(
+		(key: string, fallback?: Record<string, unknown>) => {
+			const payload =
+				pendingPayloadByKey.current.get(key)?.payload ?? fallback;
+			return payload
+				? queueDraftSave(key, payload, true)
+				: Promise.resolve();
+		},
+		[queueDraftSave],
+	);
+
+	useEffect(
+		() => () => {
+			for (const timer of saveTimers.current.values()) {
+				clearTimeout(timer);
+			}
+		},
+		[],
+	);
+
+	const updatePayload = useCallback(
+		(next: Record<string, unknown>) => {
+			if (!detail?.draft) return;
+			let normalized = next;
+			const currentType = String(
+				draftPayload.itemType ?? detail.itemType,
+			);
+			const nextType = String(next.itemType ?? currentType);
+			if (nextType !== currentType) {
+				const nextDefinition = definitions.find(
+					(entry) => entry.itemType === nextType,
+				);
+				if (nextDefinition) {
+					normalized = payloadForItemType(next, nextDefinition);
+				}
+			}
+			setValidationErrors((current) =>
+				clearChangedAdminFieldErrors(current, draftPayload, normalized),
+			);
+			setDraftPayload(normalized);
+			const title =
+				typeof normalized.title === "string"
+					? normalized.title.trim() || "Untitled"
+					: detail.title;
+			setDetail((current) =>
+				current
+					? {
+							...current,
+							itemType: String(
+								normalized.itemType ?? current.itemType,
+							),
+							title,
+						}
+					: current,
+			);
+			setItems((current) =>
+				current.map((record) =>
+					record.key === detail.key
+						? {
+								...record,
+								itemType: String(
+									normalized.itemType ?? record.itemType,
+								),
+								state:
+									record.state === "deleted"
+										? "deleted"
+										: record.revision
+											? "edited"
+											: "draft",
+								title,
+							}
+						: record,
+				),
+			);
+			setSaveState("idle");
+			setSaveMessage(null);
+			void queueDraftSave(detail.key, normalized);
+		},
+		[definitions, detail, draftPayload, queueDraftSave],
+	);
+
+	const runBusy = useCallback(
+		async (
+			operation: () => Promise<void>,
+			onError?: (error: unknown) => void,
+		) => {
+			busyOperations.current += 1;
+			if (busyOperations.current === 1) setBusy(true);
+			try {
+				await operation();
+			} catch (error) {
+				onError?.(error);
+				toast.error(errorMessage(error));
+			} finally {
+				busyOperations.current = Math.max(
+					0,
+					busyOperations.current - 1,
+				);
+				if (busyOperations.current === 0) setBusy(false);
+			}
+		},
+		[],
+	);
+
+	const captureInspectorValidation = useCallback(
+		(recordKey: string, error: unknown) => {
+			if (
+				recordKey !== selectedKeyRef.current ||
+				!(error instanceof AdminApiError) ||
+				error.code !== "validation_failed" ||
+				Object.keys(error.fields).length === 0
+			) {
+				return;
+			}
+			setValidationErrors(error.fields);
+			setValidationRevision((current) => current + 1);
+			setMobilePane("inspector");
+		},
+		[],
+	);
+
+	const clearRecordErrors = useCallback((keys: readonly string[]) => {
+		setFileErrors((current) =>
+			keys.reduce((next, key) => withoutRecordError(next, key), current),
+		);
+	}, []);
+
+	const publishCurrent = () => {
+		if (!detail?.draft) return;
+		const recordKey = detail.key;
+		void runBusy(
+			async () => {
+				await flushDraft(recordKey, draftPayload);
+				await publishAdminItem(recordKey);
+				clearRecordErrors([recordKey]);
+				setValidationErrors({});
+				toast.success("Record published");
+				await Promise.all([loadDetail(recordKey), loadItems()]);
+			},
+			(error) => captureInspectorValidation(recordKey, error),
+		);
+	};
+
+	const openCurrentDraft = () =>
+		void runBusy(async () => {
+			if (!detail) return;
+			await openAdminDraft(detail.key);
+			await Promise.all([loadDetail(detail.key), loadItems()]);
+		});
+
+	const restoreCurrent = () => {
+		if (!detail) return;
+		const recordKey = detail.key;
+		void runBusy(
+			async () => {
+				await openAdminDraft(recordKey);
+				await publishAdminItem(recordKey);
+				clearRecordErrors([recordKey]);
+				setValidationErrors({});
+				toast.success("Record restored");
+				await Promise.all([loadDetail(recordKey), loadItems()]);
+			},
+			(error) => captureInspectorValidation(recordKey, error),
+		);
+	};
+
+	const duplicateCurrent = () =>
+		void runBusy(async () => {
+			if (!detail) return;
+			const payload = editablePayloadFromDetail(detail, definitions);
+			delete payload.parentItem;
+			payload.collections = [];
+			const created = await createAdminDraft(payload);
+			await loadItems();
+			setSelectedKey(created.itemKey);
+			setMobilePane("inspector");
+			toast.success("Native draft created");
+		});
+
+	const discardCurrent = () => {
+		if (!detail?.draft) return;
+		setConfirmDialog({
+			title: detail.published ? "Discard changes?" : "Delete draft?",
+			message: detail.published
+				? "The published record will stay unchanged."
+				: "This draft has never been published.",
+			danger: !detail.published,
+			action: async () => {
+				abandonPendingDraft(detail.key);
+				await saveQueue.current;
+				await discardAdminDraft(detail.key);
+				if (detail.published) {
+					await loadDetail(detail.key);
+				} else {
+					setSelectedKey(null);
+					setDetail(null);
+				}
+				await loadItems();
+				toast.success(
+					detail.published ? "Changes discarded" : "Draft deleted",
+				);
+			},
+		});
+	};
+
+	const unpublishCurrent = () => {
+		if (!detail) return;
+		setConfirmDialog({
+			title: "Unpublish record?",
+			message:
+				"It will leave the public library and remain recoverable here.",
+			danger: true,
+			action: async () => {
+				await unpublishAdminItem(detail.key);
+				await Promise.all([loadDetail(detail.key), loadItems()]);
+				toast.success("Record unpublished");
+			},
+		});
+	};
+
+	const createAttachment = () =>
+		void runBusy(async () => {
+			if (!detail || detail.itemType === "Attachment") return;
+			const created = await createAdminDraft({
+				collections: [],
+				itemType: "attachment",
+				parentItem: detail.key,
+				tags: [],
+				title: "PDF attachment",
+			});
+			await loadDetail(detail.key);
+			setSelectedKey(created.itemKey);
+			setMobilePane("inspector");
+			toast.success("Attachment draft created");
+		});
+
+	const uploadPdf = (key: string, file: File) =>
+		void runBusy(
+			async () => {
+				setFileErrors((current) => withoutRecordError(current, key));
+				if (
+					file.type !== "application/pdf" &&
+					!file.name.toLowerCase().endsWith(".pdf")
+				) {
+					throw new Error("Choose a PDF file");
+				}
+				toast.info("Preparing PDF");
+				const expectedSha256 = await sha256File(file);
+				const staged = await stageAdminPdf(key, {
+					expectedSha256,
+					expectedSizeBytes: file.size,
+					filename: file.name,
+				});
+				await uploadAdminPdf(staged.upload.signedUrl, file);
+				await completeAdminPdf(key, staged.fileDraft.uploadRevision);
+				if (detail) await loadDetail(detail.key);
+				await loadItems();
+				toast.success("PDF staged and processed");
+			},
+			(error) =>
+				setFileErrors((current) => ({
+					...current,
+					[key]: fileErrorMessage(error),
+				})),
+		);
+
+	const publishPdf = (key: string, uploadRevision: number) =>
+		void runBusy(
+			async () => {
+				setFileErrors((current) => withoutRecordError(current, key));
+				await publishAdminPdf(key, uploadRevision);
+				if (detail) await loadDetail(detail.key);
+				await loadItems();
+				toast.success("PDF published");
+			},
+			(error) =>
+				setFileErrors((current) => ({
+					...current,
+					[key]: fileErrorMessage(error),
+				})),
+		);
+
+	const discardPdfDraft = (key: string) => {
+		setConfirmDialog({
+			danger: true,
+			title: "Discard staged PDF?",
+			message:
+				"The staged PDF will be removed. Any currently published PDF will stay online.",
+			action: async () => {
+				await discardAdminPdfDraft(key);
+				setFileErrors((current) => withoutRecordError(current, key));
+				if (detail) await loadDetail(detail.key);
+				await loadItems();
+				toast.success("Staged PDF discarded");
+			},
+			onError: (error) =>
+				setFileErrors((current) => ({
+					...current,
+					[key]: fileErrorMessage(error),
+				})),
+		});
+	};
+
+	const unpublishPdf = (key: string) => {
+		setConfirmDialog({
+			title: "Unpublish PDF?",
+			message:
+				"The attachment metadata will stay published. The PDF can be staged again later.",
+			action: async () => {
+				await unpublishAdminPdf(key);
+				setFileErrors((current) => withoutRecordError(current, key));
+				if (detail) await loadDetail(detail.key);
+				await loadItems();
+				toast.success("PDF unpublished");
+			},
+			onError: (error) =>
+				setFileErrors((current) => ({
+					...current,
+					[key]: fileErrorMessage(error),
+				})),
+		});
+	};
+
+	const openCreateCollection = (parentCollection: string | null) => {
+		setCollectionErrors({});
+		setCollectionDialog({ mode: "create", parentCollection });
+		setCollectionName("");
+		setCollectionParent(parentCollection);
+	};
+
+	const openRenameCollection = (collection: AdminCollection) => {
+		setCollectionErrors({});
+		setCollectionDialog({ collection, mode: "rename" });
+		setCollectionName(collection.name);
+	};
+
+	const openMoveCollection = (collection: AdminCollection) => {
+		setMoveErrors({});
+		setMoveDialog({ collection });
+		setMoveParent(collection.parentCollection);
+		setMovePosition(
+			currentCollectionMovePosition(library.collections, collection),
+		);
+	};
+
+	const submitCollection = () =>
+		void runBusy(
+			async () => {
+				if (!collectionName.trim() || !collectionDialog) return;
+				if (collectionDialog.mode === "rename") {
+					await renameAdminCollection(
+						collectionDialog.collection.key,
+						{
+							expectedRevision:
+								collectionDialog.collection.revision,
+							name: collectionName,
+						},
+					);
+					toast.success("Collection renamed");
+				} else {
+					await createAdminCollection({
+						name: collectionName,
+						parentCollection: collectionParent,
+					});
+					if (collectionParent) {
+						expandAdminCollections([
+							...collectionAncestorKeys(
+								library.collections,
+								collectionParent,
+							),
+							collectionParent,
+						]);
+					}
+					toast.success("Collection created");
+				}
+				setCollectionDialog(null);
+				await refreshCurrent();
+			},
+			(error) => setCollectionErrors(formErrors(error)),
+		);
+
+	const submitCollectionMove = () =>
+		void runBusy(
+			async () => {
+				if (!moveDialog) return;
+				await moveAdminCollection(moveDialog.collection.key, {
+					beforeCollection: resolveBeforeCollection(
+						library.collections,
+						moveParent,
+						moveDialog.collection.key,
+						movePosition,
+					),
+					expectedRevision: moveDialog.collection.revision,
+					parentCollection: moveParent,
+				});
+				setMoveDialog(null);
+				await refreshCurrent();
+				toast.success("Collection moved");
+			},
+			(error) => setMoveErrors(formErrors(error)),
+		);
+
+	const dropCollection = (
+		collection: AdminCollection,
+		destination: NativeCollectionDropDestination,
+	) => {
+		const move = resolveNativeCollectionDrop(
+			library.collections,
+			collection.key,
+			destination,
+		);
+		if (!move) return;
+		void runBusy(async () => {
+			const result = await moveAdminCollection(collection.key, {
+				...move,
+				expectedRevision: collection.revision,
+			}).catch(async (error) => {
+				await loadLibrary();
+				throw error;
+			});
+			setLibrary((current) => ({
+				...current,
+				collections: mergeAdminCollectionUpdates(
+					current.collections,
+					result.collections.length
+						? result.collections
+						: [result.collection],
+				),
+			}));
+			if (move.parentCollection) {
+				expandAdminCollections([
+					...collectionAncestorKeys(
+						library.collections,
+						move.parentCollection,
+					),
+					move.parentCollection,
+				]);
+			}
+			toast.success("Collection moved");
+		});
+	};
+
+	const removeCollection = (collection: AdminCollection) =>
+		setConfirmDialog({
+			title: `Delete ${collection.name}?`,
+			message:
+				"This deletes the collection and its active descendants. Records stay in the library. Restore only brings back collections deleted by this action.",
+			confirmLabel: "Delete",
+			danger: true,
+			action: async () => {
+				const removedKeys = new Set([
+					collection.key,
+					...collectionDescendantKeys(
+						library.collections,
+						collection.key,
+					),
+				]);
+				await deleteAdminCollection(
+					collection.key,
+					collection.revision,
+				);
+				if (removedKeys.has(filters.collection)) {
+					setFilters((current) => ({
+						...current,
+						collection: "all",
+					}));
+				}
+				await refreshCurrent();
+				toast.success("Collection deleted");
+			},
+		});
+
+	const restoreCollection = (collection: AdminCollection) =>
+		setConfirmDialog({
+			title: `Restore ${collection.name}?`,
+			message:
+				"This restores the collection and descendants deleted in the same action. Descendants deleted earlier stay deleted. If its parent is still deleted, the collection returns at the top level.",
+			confirmLabel: "Restore",
+			action: async () => {
+				await restoreAdminCollection(
+					collection.key,
+					collection.revision,
+				);
+				await refreshCurrent();
+				toast.success("Collection restored");
+			},
+		});
+
+	const createItem = (definition: AdminSchemaDefinition) =>
+		void runBusy(async () => {
+			const created = await createAdminDraft({
+				collections: [],
+				creators: [],
+				itemType: definition.itemType,
+				tags: [],
+			});
+			setNewItemOpen(false);
+			setNewItemSearch("");
+			await loadItems();
+			setSelectedKey(created.itemKey);
+			setMobilePane("inspector");
+			toast.success("Draft created");
+		});
+
+	const reloadConflictedDraft = () => {
+		if (!detail || detailLoading) return;
+		void loadDetail(detail.key, true);
+	};
+
+	const changeSort = (sort: AdminItemSortColumnId) =>
+		setFilters((current) => ({
+			...current,
+			sort,
+			sortDirection:
+				current.sort === sort && current.sortDirection === "asc"
+					? "desc"
+					: "asc",
+		}));
+
+	const assignRecordsToCollection = (
+		itemKeys: readonly string[],
+		collectionKey: string,
+	) =>
+		void runBusy(async () => {
+			let changed = 0;
+			let skipped = 0;
+			let unchanged = 0;
+			const failures: string[] = [];
+
+			const saveLocalAssignment = async (
+				key: string,
+				payload: Record<string, unknown>,
+			) => {
+				const alreadyAssigned =
+					collectionKeysFromPayload(payload).includes(collectionKey);
+				let nextPayload = payloadWithCollection(payload, collectionKey);
+
+				for (let attempt = 0; attempt < 5; attempt += 1) {
+					if (selectedKeyRef.current === key) {
+						setDraftPayload(nextPayload);
+					}
+					await queueDraftSave(key, nextPayload, true);
+
+					const pending =
+						pendingPayloadByKey.current.get(key)?.payload;
+					if (pending) {
+						nextPayload = payloadWithCollection(
+							pending,
+							collectionKey,
+						);
+						continue;
+					}
+					if (
+						savedPayloadByKey.current.get(key) ===
+						JSON.stringify(nextPayload)
+					) {
+						return alreadyAssigned
+							? ("unchanged" as const)
+							: ("changed" as const);
+					}
+					throw new Error(
+						"Could not confirm the collection assignment",
+					);
+				}
+				throw new Error(
+					"Draft kept changing while assigning the collection",
+				);
+			};
+
+			for (const key of itemKeys) {
+				if (serverReloadKeys.current.has(key)) {
+					failures.push(`${key}: server draft is reloading`);
+					continue;
+				}
+				const pendingPayload =
+					pendingPayloadByKey.current.get(key)?.payload;
+				const localPayload =
+					detail?.key === key &&
+					detail.sourceConnectionKey ===
+						NATIVE_SOURCE_CONNECTION_KEY &&
+					detail.draft
+						? draftPayload
+						: pendingPayload;
+
+				if (localPayload) {
+					try {
+						const outcome = await saveLocalAssignment(
+							key,
+							localPayload,
+						);
+						if (outcome === "changed") changed += 1;
+						else unchanged += 1;
+					} catch (error) {
+						failures.push(`${key}: ${errorMessage(error)}`);
+					}
+					continue;
+				}
+
+				const timer = saveTimers.current.get(key);
+				if (timer) clearTimeout(timer);
+				saveTimers.current.delete(key);
+				pendingPayloadByKey.current.delete(key);
+				saveGeneration.current.set(
+					key,
+					(saveGeneration.current.get(key) ?? 0) + 1,
+				);
+
+				const operation = saveQueue.current.then(async () => {
+					let record = await getAdminItem(key);
+					if (
+						record.sourceConnectionKey !==
+						NATIVE_SOURCE_CONNECTION_KEY
+					) {
+						return "skipped" as const;
+					}
+					let payload = editablePayloadFromDetail(
+						record,
+						definitions,
+					);
+					if (
+						collectionKeysFromPayload(payload).includes(
+							collectionKey,
+						)
+					) {
+						return "unchanged" as const;
+					}
+					if (!record.draft) {
+						await openAdminDraft(key);
+						record = await getAdminItem(key);
+						payload = editablePayloadFromDetail(
+							record,
+							definitions,
+						);
+					}
+					const nextPayload = payloadWithCollection(
+						payload,
+						collectionKey,
+					);
+					const saved = await saveAdminDraft(
+						key,
+						record.draft!.draftRevision,
+						nextPayload,
+					);
+					revisionByKey.current.set(key, saved.draftRevision);
+					savedPayloadByKey.current.set(
+						key,
+						JSON.stringify(nextPayload),
+					);
+					if (selectedKeyRef.current === key) {
+						setDraftPayload(nextPayload);
+						setDetail((current) =>
+							current?.key === key
+								? { ...current, draft: saved }
+								: current,
+						);
+					}
+					return "changed" as const;
+				});
+				saveQueue.current = operation.then(
+					() => undefined,
+					() => undefined,
+				);
+				try {
+					const outcome = await operation;
+					if (outcome === "changed") changed += 1;
+					if (outcome === "unchanged") unchanged += 1;
+					if (outcome === "skipped") skipped += 1;
+				} catch (error) {
+					failures.push(`${key}: ${errorMessage(error)}`);
+				}
+			}
+			setBulkKeys(
+				(current) =>
+					new Set(
+						[...current].filter((key) => !itemKeys.includes(key)),
+					),
+			);
+			await refreshCurrent();
+			const result = [
+				changed
+					? `${changed} draft${changed === 1 ? "" : "s"} updated`
+					: null,
+				unchanged ? `${unchanged} already assigned` : null,
+				skipped ? `${skipped} skipped` : null,
+				failures.length ? `${failures.length} failed` : null,
+			].filter(Boolean);
+			if (failures.length) {
+				toast.error(result.join(", "), {
+					description: failureDescription(failures),
+				});
+			} else if (changed) {
+				toast.success(result.join(", "), {
+					description:
+						"Publish the drafts to update the public library.",
+				});
+			} else {
+				toast.info(result.join(", ") || "No records were changed");
+			}
+		});
+
+	const assignBulkCollection = (collectionKey: string) =>
+		assignRecordsToCollection([...bulkKeys], collectionKey);
+
+	const requestRecordAssignment = (itemKeys: string[], focusKey: string) => {
+		setRecordAssignment({ focusKey, itemKeys });
+	};
+
+	const closeRecordAssignment = () => {
+		const focusKey = recordAssignment?.focusKey;
+		setRecordAssignment(null);
+		if (!focusKey) return;
+		requestAnimationFrame(() => {
+			focusAdminDragHandle({ key: focusKey, kind: "record" });
+		});
+	};
+
+	const bulkPublish = () =>
+		void runBusy(async () => {
+			let published = 0;
+			let skipped = 0;
+			const failures: string[] = [];
+			for (const key of bulkKeys) {
+				try {
+					const record = await getAdminItem(key);
+					if (
+						record.sourceConnectionKey !==
+							NATIVE_SOURCE_CONNECTION_KEY ||
+						!record.draft
+					) {
+						skipped += 1;
+						continue;
+					}
+					await flushDraft(
+						key,
+						detail?.key === key ? draftPayload : undefined,
+					);
+					await publishAdminItem(key);
+					published += 1;
+				} catch (error) {
+					failures.push(`${key}: ${fileErrorMessage(error)}`);
+				}
+			}
+			setBulkKeys(new Set());
+			await refreshCurrent();
+			const result = `${published} record${
+				published === 1 ? "" : "s"
+			} published${skipped ? `, ${skipped} skipped` : ""}${
+				failures.length ? `, ${failures.length} failed` : ""
+			}`;
+			if (failures.length > 0) {
+				toast.error(result, {
+					description: failureDescription(failures),
+				});
+			} else {
+				toast.success(result);
+			}
+		});
+
+	const bulkDelete = () =>
+		setConfirmDialog({
+			title: "Remove selected records?",
+			message:
+				"Native drafts will be deleted. Published native records will be unpublished. Imported records are skipped.",
+			danger: true,
+			action: async () => {
+				let changed = 0;
+				let skipped = 0;
+				const failures: string[] = [];
+				for (const key of bulkKeys) {
+					try {
+						const record = await getAdminItem(key);
+						if (
+							record.sourceConnectionKey !==
+							NATIVE_SOURCE_CONNECTION_KEY
+						) {
+							skipped += 1;
+						} else if (!record.published && record.draft) {
+							abandonPendingDraft(key);
+							await saveQueue.current;
+							await discardAdminDraft(key);
+							changed += 1;
+						} else if (record.published) {
+							await unpublishAdminItem(key);
+							changed += 1;
+						} else {
+							skipped += 1;
+						}
+					} catch (error) {
+						failures.push(`${key}: ${fileErrorMessage(error)}`);
+					}
+				}
+				setBulkKeys(new Set());
+				setSelectedKey(null);
+				setDetail(null);
+				await refreshCurrent(null);
+				const result = `${changed} record${
+					changed === 1 ? "" : "s"
+				} removed${skipped ? `, ${skipped} skipped` : ""}${
+					failures.length ? `, ${failures.length} failed` : ""
+				}`;
+				if (failures.length > 0) {
+					toast.error(result, {
+						description: failureDescription(failures),
+					});
+				} else {
+					toast.success(result);
+				}
+			},
+		});
+
+	const filteredDefinitions = useMemo(() => {
+		const query = newItemSearch.trim().toLowerCase();
+		return definitions.filter(
+			(definition) =>
+				isTopLevelAdminItemType(definition.itemType) &&
+				(!query ||
+					humanizeAdminField(definition.itemType)
+						.toLowerCase()
+						.includes(query)),
+		);
+	}, [definitions, newItemSearch]);
+
+	const activeCollections = library.collections.filter(
+		(collection) => !collection.deleted,
+	);
+	const activeNativeCollections = activeCollections.filter(
+		(collection) =>
+			collection.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY,
+	);
+	const legalCollectionParents = legalNativeCollectionParents(
+		library.collections,
+		moveDialog?.collection.key,
+	);
+	const movePositionOptions = moveDialog
+		? collectionMovePositionOptions(
+				library.collections,
+				moveParent,
+				moveDialog.collection.key,
+			)
+		: [];
+
+	return (
+		<main className="fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
+			<h1 className="sr-only">Library administration</h1>
+			<header
+				className="grid min-h-[104px] shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-2 sm:flex sm:min-h-14 sm:py-0"
+				data-admin-region="toolbar"
+			>
+				<Link
+					aria-label="Open library"
+					className="col-start-1 row-start-1 flex h-8 min-w-0 max-w-[120px] items-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:mr-1 sm:w-[120px] sm:shrink-0 xl:w-[150px] xl:max-w-none"
+					href={homeHref}
+				>
+					<LibraryLogoImages className="max-h-7 max-w-full object-contain" />
+				</Link>
+				<Input
+					aria-label="Search records"
+					className="col-span-3 row-start-2 w-full sm:min-w-[180px] sm:max-w-[340px] sm:flex-1"
+					classNames={{
+						input: "text-sm",
+						inputWrapper: "h-10 min-h-10 rounded-xl",
+					}}
+					isClearable
+					placeholder="Search title, creator, date or tag"
+					startContent={
+						<Search
+							aria-hidden
+							className="text-black/35 dark:text-white/35"
+							size={15}
+						/>
+					}
+					value={filters.query}
+					onClear={() =>
+						setFilters((current) => ({
+							...current,
+							query: "",
+						}))
+					}
+					onValueChange={(query) =>
+						setFilters((current) => ({
+							...current,
+							query,
+						}))
+					}
+				/>
+				<RecordFilterSelects
+					definitions={definitions}
+					file={filters.file}
+					fileClassName="hidden max-w-[150px] xl:flex"
+					itemType={filters.itemType}
+					itemTypeClassName="hidden max-w-[170px] shrink-0 xl:flex"
+					onFileChange={(file) =>
+						setFilters((current) => ({ ...current, file }))
+					}
+					onItemTypeChange={(itemType) =>
+						setFilters((current) => ({ ...current, itemType }))
+					}
+				/>
+				<div className="hidden flex-1 sm:block" />
+				<div className="col-start-2 row-start-1 flex shrink-0 rounded-xl bg-black/[0.035] p-1 xl:hidden dark:bg-white/[0.035]">
+					{[
+						{
+							icon: Menu,
+							key: "navigation" as const,
+							label: "Filters",
+						},
+						{
+							icon: List,
+							key: "list" as const,
+							label: "Records",
+						},
+						{
+							icon: PanelRight,
+							key: "inspector" as const,
+							label: "Editor",
+						},
+					].map((entry) => {
+						const Icon = entry.icon;
+						return (
+							<Tooltip key={entry.key} content={entry.label}>
+								<Button
+									aria-controls={`admin-${entry.key}-pane`}
+									aria-label={entry.label}
+									aria-pressed={mobilePane === entry.key}
+									isIconOnly
+									onPress={() => setMobilePane(entry.key)}
+									size="xs"
+									variant={
+										mobilePane === entry.key
+											? "solid"
+											: "transparent"
+									}
+								>
+									<Icon aria-hidden size={15} />
+								</Button>
+							</Tooltip>
+						);
+					})}
+				</div>
+				<Tooltip content="Refresh">
+					<Button
+						aria-label="Refresh"
+						className="hidden text-black/45 hover:bg-black/[0.05] hover:text-black/80 xl:flex dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+						isIconOnly
+						onPress={() => void refreshCurrent()}
+						size="xs"
+						variant="transparent"
+					>
+						<RefreshCw aria-hidden size={15} />
+					</Button>
+				</Tooltip>
+				<UpdatedSortButton
+					className="hidden xl:flex"
+					iconOnly
+					onPress={() => changeSort("updated")}
+					selected={filters.sort === "updated"}
+					sortDirection={filters.sortDirection}
+				/>
+				<Button
+					aria-label="New item"
+					className="col-start-3 row-start-1 lg:hidden"
+					color="accent"
+					isIconOnly
+					onPress={() => setNewItemOpen(true)}
+					size="xs"
+					variant="solid"
+				>
+					<Plus aria-hidden size={15} />
+				</Button>
+				<Button
+					className="hidden h-9 rounded-xl px-3 font-semibold shadow-sm shadow-accent/10 lg:flex"
+					color="accent"
+					onPress={() => setNewItemOpen(true)}
+					size="xs"
+					startContent={<Plus aria-hidden size={15} />}
+					variant="solid"
+				>
+					New item
+				</Button>
+			</header>
+
+			<AdminDragDropRoot
+				collections={library.collections}
+				enabled={!busy}
+				onDropCollection={dropCollection}
+				onDropRecords={(itemKeys, collectionKey) =>
+					assignRecordsToCollection(itemKeys, collectionKey)
+				}
+			>
+				<div className="grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3 xl:grid-cols-[240px_minmax(0,1fr)_360px]">
+					<aside
+						id="admin-navigation-pane"
+						aria-label="Filters and collections"
+						tabIndex={-1}
+						className={`min-h-0 overflow-hidden rounded-2xl bg-card_light focus-visible:outline-none dark:bg-card ${
+							mobilePane === "navigation" ? "block" : "hidden"
+						} xl:block`}
+					>
+						<div className="flex h-full min-h-0 flex-col">
+							<div className="flex shrink-0 items-center gap-2 border-b border-black/[0.06] p-3 xl:hidden dark:border-white/[0.06]">
+								<RecordFilterSelects
+									definitions={definitions}
+									file={filters.file}
+									fileClassName="w-[180px] max-w-[30vw] shrink-0"
+									itemType={filters.itemType}
+									itemTypeClassName="w-[220px] max-w-[35vw] shrink-0"
+									onFileChange={(file) =>
+										setFilters((current) => ({
+											...current,
+											file,
+										}))
+									}
+									onItemTypeChange={(itemType) =>
+										setFilters((current) => ({
+											...current,
+											itemType,
+										}))
+									}
+								/>
+								<Button
+									aria-label="Refresh"
+									isIconOnly
+									onPress={() => void refreshCurrent()}
+									size="xs"
+									variant="transparent"
+								>
+									<RefreshCw aria-hidden size={14} />
+								</Button>
+								<UpdatedSortButton
+									iconOnly
+									onPress={() => changeSort("updated")}
+									selected={filters.sort === "updated"}
+									sortDirection={filters.sortDirection}
+								/>
+							</div>
+							<div className="min-h-0 flex-1">
+								<AdminNavigation
+									collection={filters.collection}
+									collections={library.collections}
+									isBusy={busy}
+									onCreateCollection={openCreateCollection}
+									onDeleteCollection={removeCollection}
+									onEditCollection={openRenameCollection}
+									onMoveCollection={openMoveCollection}
+									onRestoreCollection={restoreCollection}
+									onSelectCollection={(collection) =>
+										setFilters((current) => ({
+											...current,
+											collection,
+										}))
+									}
+									onSelectSource={(source) =>
+										setFilters((current) => ({
+											...current,
+											source,
+										}))
+									}
+									onSelectState={(state) =>
+										setFilters((current) => ({
+											...current,
+											state,
+										}))
+									}
+									source={filters.source}
+									sources={library.sources}
+									state={filters.state}
+								/>
+							</div>
+						</div>
+					</aside>
+
+					<section
+						aria-label="Records"
+						id="admin-list-pane"
+						tabIndex={-1}
+						className={`min-h-0 overflow-hidden rounded-2xl bg-card_light focus-visible:outline-none dark:bg-card ${
+							mobilePane === "list" ? "flex" : "hidden"
+						} flex-col xl:flex`}
+					>
+						{bulkKeys.size ? (
+							<div className="flex min-h-12 shrink-0 flex-wrap items-center gap-2 border-b border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
+								<Button
+									aria-label="Clear selection"
+									isIconOnly
+									onPress={() => setBulkKeys(new Set())}
+									size="xs"
+									variant="transparent"
+								>
+									<X aria-hidden size={14} />
+								</Button>
+								<Button
+									isDisabled={busy}
+									onPress={bulkPublish}
+									size="xs"
+									startContent={
+										<Send aria-hidden size={14} />
+									}
+									variant="transparent"
+								>
+									Publish
+								</Button>
+								<Select
+									aria-label="Assign selected records to a collection"
+									className="max-w-[210px]"
+									placeholder="Add to collection"
+									placement="left"
+									size="sm"
+									onSelectionChange={(keys) => {
+										const key = singleKey(
+											keys as Set<React.Key>,
+										);
+										if (key) assignBulkCollection(key);
+									}}
+								>
+									{activeNativeCollections.map(
+										(collection) => (
+											<SelectItem key={collection.key}>
+												{collection.name}
+											</SelectItem>
+										),
+									)}
+								</Select>
+								<Button
+									color="danger"
+									isDisabled={busy}
+									onPress={bulkDelete}
+									size="xs"
+									startContent={
+										<Trash2 aria-hidden size={14} />
+									}
+									variant="transparent"
+								>
+									Remove
+								</Button>
+							</div>
+						) : null}
+						<AdminItemTable
+							bulkKeys={bulkKeys}
+							collections={library.collections}
+							dragEnabled={!busy}
+							error={listError}
+							hasMore={hasMore}
+							items={items}
+							loading={listLoading}
+							preferences={itemTablePreferences}
+							onLoadMore={() => {
+								if (nextCursor !== null && !listLoading) {
+									void loadItems(nextCursor, true);
+								}
+							}}
+							onRequestCollectionAssignment={
+								requestRecordAssignment
+							}
+							onRetry={() => void loadItems()}
+							onPreferencesChange={setItemTablePreferences}
+							onResetPreferences={resetItemTablePreferences}
+							onSelect={(key) => {
+								setSelectedKey(key);
+								setMobilePane("inspector");
+							}}
+							onSort={changeSort}
+							onToggleBulk={(key, selected) =>
+								setBulkKeys((current) => {
+									const next = new Set(current);
+									if (selected) next.add(key);
+									else next.delete(key);
+									return next;
+								})
+							}
+							onToggleVisible={(selected) =>
+								setBulkKeys(
+									selected
+										? new Set(items.map(({ key }) => key))
+										: new Set(),
+								)
+							}
+							selectedKey={selectedKey}
+							sort={filters.sort}
+							sortDirection={filters.sortDirection}
+							sources={library.sources}
+						/>
+					</section>
+
+					<aside
+						aria-label="Record editor"
+						id="admin-inspector-pane"
+						tabIndex={-1}
+						className={`min-h-0 overflow-hidden rounded-2xl bg-card_light focus-visible:outline-none dark:bg-card ${
+							mobilePane === "inspector" ? "block" : "hidden"
+						} xl:block`}
+					>
+						<AdminInspector
+							busy={busy}
+							collections={library.collections}
+							definitions={definitions}
+							detail={detail}
+							error={detailError}
+							fileErrors={fileErrors}
+							loading={detailLoading}
+							onBackToParent={(key) => setSelectedKey(key)}
+							onChange={updatePayload}
+							onCreateAttachment={createAttachment}
+							onDiscardDraft={discardCurrent}
+							onDiscardFile={discardPdfDraft}
+							onDuplicate={duplicateCurrent}
+							onOpenDraft={openCurrentDraft}
+							onPublish={publishCurrent}
+							onPublishFile={publishPdf}
+							onReloadDraft={reloadConflictedDraft}
+							onRetry={() =>
+								selectedKey
+									? void loadDetail(selectedKey)
+									: undefined
+							}
+							onRestore={restoreCurrent}
+							onSelectAttachment={(key) => setSelectedKey(key)}
+							onUnpublish={unpublishCurrent}
+							onUnpublishFile={unpublishPdf}
+							onUpload={uploadPdf}
+							payload={draftPayload}
+							saveMessage={saveMessage}
+							saveState={saveState}
+							validationErrors={validationErrors}
+							validationRevision={validationRevision}
+						/>
+					</aside>
+				</div>
+			</AdminDragDropRoot>
+
+			<DialogModal
+				isOpen={Boolean(recordAssignment)}
+				size="md"
+				onOpenChange={(open) => {
+					if (!open) closeRecordAssignment();
+				}}
+			>
+				<ModalContent>
+					{(onClose) => (
+						<>
+							<ModalHeader>
+								Add{" "}
+								{recordAssignment?.itemKeys.length === 1
+									? "record"
+									: `${recordAssignment?.itemKeys.length ?? 0} records`}{" "}
+								to collection
+							</ModalHeader>
+							<ModalBody>
+								<div className="flex max-h-[52vh] flex-col gap-1 overflow-y-auto">
+									{activeNativeCollections.map(
+										(collection) => (
+											<button
+												key={collection.key}
+												className="flex min-h-10 items-center gap-2 rounded-lg px-3 text-left text-sm text-black/70 hover:bg-accent/10 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/70 dark:hover:bg-accent/15"
+												onClick={() => {
+													const assignment =
+														recordAssignment;
+													closeRecordAssignment();
+													if (assignment) {
+														assignRecordsToCollection(
+															assignment.itemKeys,
+															collection.key,
+														);
+													}
+												}}
+												type="button"
+											>
+												<FolderInput
+													aria-hidden
+													className="shrink-0 opacity-55"
+													size={15}
+												/>
+												<span className="truncate">
+													{collection.name}
+												</span>
+											</button>
+										),
+									)}
+									{activeNativeCollections.length === 0 ? (
+										<p className="py-6 text-center text-sm text-black/45 dark:text-white/45">
+											Create a native collection first.
+										</p>
+									) : null}
+								</div>
+							</ModalBody>
+							<ModalFooter>
+								<Button
+									onPress={onClose}
+									size="xs"
+									variant="transparent"
+								>
+									Cancel
+								</Button>
+							</ModalFooter>
+						</>
+					)}
+				</ModalContent>
+			</DialogModal>
+
+			<DialogModal
+				isOpen={newItemOpen}
+				onOpenChange={(open) => setNewItemOpen(open)}
+			>
+				<ModalContent>
+					{(onClose) => (
+						<>
+							<ModalHeader>New item</ModalHeader>
+							<ModalBody>
+								<Input
+									autoFocus
+									placeholder="Find an item type"
+									startContent={
+										<Search aria-hidden size={15} />
+									}
+									value={newItemSearch}
+									onValueChange={setNewItemSearch}
+								/>
+								<div className="grid max-h-[52vh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
+									{filteredDefinitions.map((definition) => (
+										<button
+											key={definition.itemType}
+											className="flex min-h-12 items-center gap-2 rounded-xl bg-black/[0.035] px-3 text-left text-sm hover:bg-accent/10 dark:bg-white/[0.035] dark:hover:bg-accent/15"
+											onClick={() =>
+												createItem(definition)
+											}
+											type="button"
+										>
+											<Library
+												aria-hidden
+												className="shrink-0 opacity-45"
+												size={16}
+											/>
+											{humanizeAdminField(
+												definition.itemType,
+											)}
+										</button>
+									))}
+								</div>
+							</ModalBody>
+							<ModalFooter>
+								<Button
+									onPress={onClose}
+									size="xs"
+									variant="transparent"
+								>
+									Cancel
+								</Button>
+							</ModalFooter>
+						</>
+					)}
+				</ModalContent>
+			</DialogModal>
+
+			<DialogModal
+				isOpen={Boolean(collectionDialog)}
+				onOpenChange={(open) => {
+					if (!open) {
+						setCollectionDialog(null);
+						setCollectionErrors({});
+					}
+				}}
+			>
+				<ModalContent>
+					{(onClose) => (
+						<>
+							<ModalHeader>
+								{collectionDialog?.mode === "rename"
+									? "Rename collection"
+									: "New collection"}
+							</ModalHeader>
+							<ModalBody>
+								<Input
+									autoFocus
+									errorMessage={collectionErrors.name}
+									isInvalid={Boolean(collectionErrors.name)}
+									label="Name"
+									labelPlacement="outside"
+									value={collectionName}
+									onValueChange={(value) => {
+										setCollectionName(value);
+										setCollectionErrors((current) =>
+											withoutFieldErrors(
+												current,
+												"_form",
+												"name",
+											),
+										);
+									}}
+								/>
+								{collectionDialog?.mode === "create" ? (
+									<Select
+										aria-label="Parent collection"
+										className="max-w-none"
+										label="Parent"
+										labelPlacement="outside"
+										errorMessage={
+											collectionErrors.parentCollection
+										}
+										isInvalid={Boolean(
+											collectionErrors.parentCollection,
+										)}
+										placement="left"
+										selectedKeys={
+											collectionParent
+												? new Set([collectionParent])
+												: new Set(["root"])
+										}
+										onSelectionChange={(keys) => {
+											const key = singleKey(
+												keys as Set<React.Key>,
+											);
+											setCollectionParent(
+												key === "root" ? null : key,
+											);
+											setCollectionErrors((current) =>
+												withoutFieldErrors(
+													current,
+													"_form",
+													"parentCollection",
+												),
+											);
+										}}
+									>
+										{[
+											{
+												key: "root",
+												name: "Top level",
+											},
+											...legalNativeCollectionParents(
+												library.collections,
+											).map((collection) => ({
+												key: collection.key,
+												name: collection.name,
+											})),
+										].map((collection) => (
+											<SelectItem key={collection.key}>
+												{collection.name}
+											</SelectItem>
+										))}
+									</Select>
+								) : null}
+								{collectionErrors._form ? (
+									<p
+										className="text-xs text-danger"
+										role="alert"
+									>
+										{collectionErrors._form}
+									</p>
+								) : null}
+							</ModalBody>
+							<ModalFooter>
+								<Button
+									onPress={onClose}
+									size="xs"
+									variant="transparent"
+								>
+									Cancel
+								</Button>
+								<Button
+									color="accent"
+									isDisabled={!collectionName.trim() || busy}
+									isLoading={busy}
+									onPress={submitCollection}
+									size="xs"
+									startContent={
+										<FolderInput aria-hidden size={14} />
+									}
+									variant="solid"
+								>
+									{collectionDialog?.mode === "rename"
+										? "Rename"
+										: "Create"}
+								</Button>
+							</ModalFooter>
+						</>
+					)}
+				</ModalContent>
+			</DialogModal>
+
+			<DialogModal
+				isOpen={Boolean(moveDialog)}
+				onOpenChange={(open) => {
+					if (!open) {
+						setMoveDialog(null);
+						setMoveErrors({});
+					}
+				}}
+			>
+				<ModalContent>
+					{(onClose) => (
+						<>
+							<ModalHeader>
+								Move {moveDialog?.collection.name}
+							</ModalHeader>
+							<ModalBody>
+								<Select
+									aria-label="Move to parent collection"
+									className="max-w-none"
+									label="Parent"
+									labelPlacement="outside"
+									errorMessage={moveErrors.parentCollection}
+									isInvalid={Boolean(
+										moveErrors.parentCollection,
+									)}
+									placement="left"
+									selectedKeys={
+										moveParent
+											? new Set([moveParent])
+											: new Set(["root"])
+									}
+									onSelectionChange={(keys) => {
+										const key = singleKey(
+											keys as Set<React.Key>,
+										);
+										const parent =
+											key === "root" ? null : key;
+										setMoveParent(parent);
+										setMoveErrors((current) =>
+											withoutFieldErrors(
+												current,
+												"_form",
+												"parentCollection",
+											),
+										);
+										const positions =
+											collectionMovePositionOptions(
+												library.collections,
+												parent,
+												moveDialog!.collection.key,
+											);
+										setMovePosition(
+											positions.at(-1)?.key ?? "first",
+										);
+									}}
+								>
+									{[
+										{ key: "root", name: "Top level" },
+										...legalCollectionParents.map(
+											(collection) => ({
+												key: collection.key,
+												name: collection.name,
+											}),
+										),
+									].map((collection) => (
+										<SelectItem key={collection.key}>
+											{collection.name}
+										</SelectItem>
+									))}
+								</Select>
+								<Select
+									aria-label="Collection position"
+									className="max-w-none"
+									label="Position"
+									labelPlacement="outside"
+									errorMessage={moveErrors.beforeCollection}
+									isInvalid={Boolean(
+										moveErrors.beforeCollection,
+									)}
+									placement="left"
+									selectedKeys={new Set([movePosition])}
+									onSelectionChange={(keys) => {
+										const key = singleKey(
+											keys as Set<React.Key>,
+										);
+										if (key) {
+											setMovePosition(key);
+											setMoveErrors((current) =>
+												withoutFieldErrors(
+													current,
+													"_form",
+													"beforeCollection",
+												),
+											);
+										}
+									}}
+								>
+									{movePositionOptions.map((position) => (
+										<SelectItem key={position.key}>
+											{position.label}
+										</SelectItem>
+									))}
+								</Select>
+								{moveErrors._form ? (
+									<p
+										className="text-xs text-danger"
+										role="alert"
+									>
+										{moveErrors._form}
+									</p>
+								) : null}
+							</ModalBody>
+							<ModalFooter>
+								<Button
+									onPress={onClose}
+									size="xs"
+									variant="transparent"
+								>
+									Cancel
+								</Button>
+								<Button
+									color="accent"
+									isDisabled={busy}
+									isLoading={busy}
+									onPress={submitCollectionMove}
+									size="xs"
+									startContent={
+										<FolderInput aria-hidden size={14} />
+									}
+									variant="solid"
+								>
+									Move
+								</Button>
+							</ModalFooter>
+						</>
+					)}
+				</ModalContent>
+			</DialogModal>
+
+			<DialogModal
+				isOpen={Boolean(confirmDialog)}
+				size="md"
+				onOpenChange={(open) => {
+					if (!open) setConfirmDialog(null);
+				}}
+			>
+				<ModalContent>
+					{(onClose) => (
+						<>
+							<ModalHeader>{confirmDialog?.title}</ModalHeader>
+							<ModalBody>
+								<p className="text-sm text-black/60 dark:text-white/60">
+									{confirmDialog?.message}
+								</p>
+							</ModalBody>
+							<ModalFooter>
+								<Button
+									onPress={onClose}
+									size="xs"
+									variant="transparent"
+								>
+									Cancel
+								</Button>
+								<Button
+									color={
+										confirmDialog?.danger
+											? "danger"
+											: "accent"
+									}
+									isLoading={busy}
+									onPress={() => {
+										const action = confirmDialog?.action;
+										if (!action) return;
+										void runBusy(async () => {
+											await action();
+											setConfirmDialog(null);
+										}, confirmDialog?.onError);
+									}}
+									size="xs"
+									startContent={
+										confirmDialog?.danger ? (
+											<Archive aria-hidden size={14} />
+										) : (
+											<Check aria-hidden size={14} />
+										)
+									}
+									variant="solid"
+								>
+									{confirmDialog?.confirmLabel ?? "Confirm"}
+								</Button>
+							</ModalFooter>
+						</>
+					)}
+				</ModalContent>
+			</DialogModal>
+		</main>
+	);
+}

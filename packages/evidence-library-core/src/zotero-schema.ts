@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import zoteroSchema from "../vendor/zotero-schema.json" with { type: "json" };
 
 type ZoteroField = {
 	baseField?: string;
@@ -23,17 +23,10 @@ export type ZoteroSchema = {
 	version: number;
 };
 
-let cachedSchema: ZoteroSchema | undefined;
 let cachedItemTypes: ReadonlyMap<string, ZoteroItemTypeDefinition> | undefined;
 
 export function getZoteroSchema(): ZoteroSchema {
-	cachedSchema ??= JSON.parse(
-		readFileSync(
-			new URL("../vendor/zotero-schema.json", import.meta.url),
-			"utf8",
-		),
-	) as ZoteroSchema;
-	return cachedSchema;
+	return zoteroSchema as ZoteroSchema;
 }
 
 export function getZoteroItemTypes(): ReadonlyMap<

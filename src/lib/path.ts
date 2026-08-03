@@ -14,3 +14,11 @@
 export function normalizePathname(pathname: string): string {
 	return pathname.replace(/\/+$/, "") || "/";
 }
+
+export function isAdminPath(pathname: string, locale: string): boolean {
+	const segments = normalizePathname(pathname).split("/").filter(Boolean);
+	return (
+		segments[0] === "admin" ||
+		(segments[0] === locale && segments[1] === "admin")
+	);
+}

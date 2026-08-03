@@ -28,12 +28,20 @@ export default defineConfig({
 			testMatch: /runtime-mobile\.spec\.ts$/u,
 			use: { ...devices["Pixel 5"] },
 		},
+		{
+			name: "webkit-admin",
+			testMatch: /admin\.spec\.ts$/u,
+			use: { ...devices["Desktop Safari"] },
+		},
 	],
 	webServer: process.env.PLAYWRIGHT_BASE_URL
 		? undefined
 		: {
 				command:
 					"LIBRARY_CONFIG_PATH=config/library.example.json npm run dev -- --hostname 127.0.0.1 --port 3100",
+				env: {
+					ADMIN_AUTH_BYPASS: "true",
+				},
 				reuseExistingServer: false,
 				timeout: 120_000,
 				url: `${baseURL}/api/library-config/health`,
