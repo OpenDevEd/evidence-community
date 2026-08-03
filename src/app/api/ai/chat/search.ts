@@ -15,6 +15,7 @@ import { Item } from "../../item/types";
 import { ALL_LABELS_IN_COUNTRY_HIERARCHY, blockedTags } from "@/constants/misc";
 import { createCountryFilters } from "@/lib/country";
 import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
+import { zoteroMarkupToPlainText } from "@/lib/zoteroMarkup";
 
 const Agent1Schema = z.object({
 	original_question: z
@@ -318,7 +319,7 @@ You must output an object conforming to the provided schema.`;
 
 					const itemsForThisQuery = result.hits.map((item: Item) => ({
 						title: item.title || "Untitled",
-						description: item.abstractNote || "",
+						description: zoteroMarkupToPlainText(item.abstractNote),
 						anchor: `/lib/${item.key}`,
 						citationKey: item.key,
 					}));

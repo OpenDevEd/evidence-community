@@ -53,6 +53,18 @@ body {
 	overflow-x: hidden;
 }
 
+.zotero-rich-text {
+	white-space: pre-line;
+}
+
+.zotero-rich-text .zotero-small-caps {
+	font-variant: small-caps;
+}
+
+.zotero-rich-text p + p {
+	margin-top: 1em;
+}
+
 @layer utilities {
 	.text-balance {
 		text-wrap: balance;

@@ -22,6 +22,8 @@ import { MdSearchOff } from "react-icons/md";
 import { serializeSearchParams } from "./searchParams";
 import { COUNTRY_PARAMS, SHOW_URL_IN_CITATION } from "@/constants/misc";
 import { useFeatureFlagEnabled } from "@/context/Providers";
+import CitationDoiLink from "@/components/features/items/CitationDoiLink";
+import { resolveCitationDisplayMode } from "./citationMode.mts";
 
 type FormatterProps = {
 	value: any;
@@ -73,8 +75,14 @@ function formatDate({ value, formatter }: FormatterProps) {
 
 function Citation({ value, loading, item }: FormatterProps) {
 	const contentRef = useRef(null);
+	const citationDisplayMode = useMemo(
+		() => resolveCitationDisplayMode(item),
+		[item],
+	);
 	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{ citation: string | null }>(
-		item?.key ? `/item/${item.key}/citation` : null,
+		citationDisplayMode.mode === "citation" && item?.key
+			? `/item/${item.key}/citation`
+			: null,
 		fetcher,
 		{
 			revalidateOnFocus: false,
@@ -84,7 +92,38 @@ function Citation({ value, loading, item }: FormatterProps) {
 	);
 
 	const resolvedCitation = citationResponse?.citation || value || "";
-	const isLoading = loading || isCitationFetching;
+	const isLoading =
+		loading ||
+		(citationDisplayMode.mode === "citation" && isCitationFetching);
+
+	if (citationDisplayMode.mode === "doi-only") {
+		if (!citationDisplayMode.link) return false;
+
+		return (
+			<Skeleton
+				isLoaded={!isLoading}
+				className="w-full min-h-16 rounded-2xl"
+			>
+				<motion.div
+					initial={{ height: "5rem" }}
+					animate={isLoading ? { height: "5rem" } : { height: "auto" }}
+					transition={{ duration: 0.2, ease: "easeOut" }}
+					className="flex gap-4 w-full bg-black/[4%] dark:bg-secondary-300 border border-white/[4%] p-4 rounded-2xl items-center justify-between break-all"
+				>
+					<CitationDoiLink
+						link={citationDisplayMode.link}
+						className="text-lg"
+					/>
+					<div className="shrink-0">
+						<CopyButton
+							isIconOnly
+							content={citationDisplayMode.link.value}
+						/>
+					</div>
+				</motion.div>
+			</Skeleton>
+		);
+	}
 
 	let sanitizedHtml = (resolvedCitation || "").trim();
 
