@@ -267,6 +267,7 @@ async function mockPublishedBook(
 			keys: string[];
 		}) => AdminItemBatchResult[];
 		beforeBatchResponse?: () => Promise<void>;
+		beforeCollectionPageResponse?: (request: URL) => Promise<void>;
 		failDraftSave?: boolean;
 		itemCount?: number;
 		initialCollectionKeys?: string[];
@@ -363,6 +364,9 @@ async function mockPublishedBook(
 				);
 			const items = matches.slice(offset, offset + pageSize);
 			const nextOffset = offset + items.length;
+			await options.beforeCollectionPageResponse?.(
+				new URL(request.url()),
+			);
 			options.onCollectionPage?.(new URL(request.url()), items);
 			await route.fulfill({
 				json: {
@@ -576,7 +580,10 @@ test("searches and assigns records with the collection picker", async ({
 		const results = element.querySelector<HTMLElement>(
 			"[data-admin-collection-picker-results]",
 		)!;
-		const resultsStyle = getComputedStyle(results);
+		const resultsScroll = element.querySelector<HTMLElement>(
+			"[data-admin-collection-picker-scroll]",
+		)!;
+		const resultsStyle = getComputedStyle(resultsScroll);
 		return {
 			dialogMaxWidth: getComputedStyle(element).maxWidth,
 			dialogWidth: dialogRect.width,
@@ -608,6 +615,298 @@ test("searches and assigns records with the collection picker", async ({
 			collectionKey: teacherCollection.key,
 			keys: [publishedItemKey],
 		});
+});
+
+test("keeps collection results stable and inactive while browsing", async ({
+	page,
+}) => {
+	const parent: AdminCollectionCatalogEntry = {
+		ancestors: [],
+		deleted: false,
+		hasChildren: true,
+		key: "PARENT01",
+		name: "Browse parent",
+		parentCollection: null,
+		revision: 1,
+		sortOrder: 2,
+		sourceConnectionKey: "native",
+		updatedAt: timestamp,
+	};
+	const child: AdminCollectionCatalogEntry = {
+		ancestors: [{ key: parent.key, name: parent.name }],
+		deleted: false,
+		hasChildren: false,
+		key: "CHILD001",
+		name: "Loaded child",
+		parentCollection: parent.key,
+		revision: 1,
+		sortOrder: 0,
+		sourceConnectionKey: "native",
+		updatedAt: timestamp,
+	};
+	let releaseChildPage: () => void = () => {};
+	const childPageRelease = new Promise<void>((resolve) => {
+		releaseChildPage = resolve;
+	});
+	let markChildRequestStarted: () => void = () => {};
+	const childRequestStarted = new Promise<void>((resolve) => {
+		markChildRequestStarted = resolve;
+	});
+	await mockPublishedBook(page, {
+		additionalCollectionEntries: [parent, child],
+		beforeCollectionPageResponse: async (request) => {
+			if (request.searchParams.get("parent") !== parent.key) return;
+			markChildRequestStarted();
+			await childPageRelease;
+		},
+	});
+
+	await page.goto("/admin");
+	const assignmentButton = page.getByRole("button", {
+		name: "Drag or assign Published book",
+		exact: true,
+	});
+	await assignmentButton.focus();
+	await assignmentButton.press("Enter");
+	const dialog = page.getByRole("dialog", {
+		name: "Add record to collection",
+	});
+	const results = dialog.locator("[data-admin-collection-picker-results]");
+	const content = results.locator("[data-admin-collection-picker-content]");
+	await expect(content.getByText(parent.name, { exact: true })).toBeVisible();
+	await expect(results).toHaveAttribute("aria-busy", "false");
+	await expect(content).toHaveCSS("opacity", "1");
+	await expect(
+		content.getByRole("button", {
+			name: `Select ${parent.name}, Native`,
+		}),
+	).toBeVisible();
+	const heightBefore = await results.evaluate((element) =>
+		Number.parseFloat(getComputedStyle(element).height),
+	);
+
+	await dialog
+		.getByRole("button", {
+			name: `Open ${parent.name}, Native`,
+		})
+		.click();
+	await childRequestStarted;
+
+	await expect(results).toHaveAttribute("aria-busy", "true");
+	await expect(content).toHaveAttribute("inert", "");
+	await expect(content).toHaveCSS("opacity", "0.4");
+	await expect(
+		dialog.getByRole("textbox", { name: "Search collections" }),
+	).toBeDisabled();
+	await expect(
+		dialog.getByRole("button", { name: "Native", exact: true }),
+	).toBeDisabled();
+	await expect(content.getByText(parent.name, { exact: true })).toBeVisible();
+	await expect(
+		results.getByRole("status", { name: "Loading collections" }),
+	).toBeVisible();
+	const loadingGeometry = await results.evaluate((element) => {
+		const contentElement = element.querySelector<HTMLElement>(
+			"[data-admin-collection-picker-content]",
+		)!;
+		const indicator = element.querySelector<HTMLElement>(
+			'[role="status"][aria-label="Loading collections"]',
+		)!;
+		const spinner = indicator.querySelector("svg")!;
+		const scroll = element.querySelector<HTMLElement>(
+			"[data-admin-collection-picker-scroll]",
+		)!;
+		const contentStyle = getComputedStyle(contentElement);
+		const spinnerStyle = getComputedStyle(spinner);
+		return {
+			height: Number.parseFloat(getComputedStyle(element).height),
+			indicatorAnchoredToWrapper:
+				indicator.parentElement?.parentElement === element,
+			indicatorVisible: indicator.getBoundingClientRect().height > 0,
+			opacity: contentStyle.opacity,
+			pointerEvents: contentStyle.pointerEvents,
+			scrollOverflowY: getComputedStyle(scroll).overflowY,
+			spinnerHeight: Number.parseFloat(spinnerStyle.height),
+			spinnerWidth: Number.parseFloat(spinnerStyle.width),
+		};
+	});
+	expect(loadingGeometry).toEqual({
+		height: heightBefore,
+		indicatorAnchoredToWrapper: true,
+		indicatorVisible: true,
+		opacity: "0.4",
+		pointerEvents: "none",
+		scrollOverflowY: "auto",
+		spinnerHeight: 14,
+		spinnerWidth: 14,
+	});
+
+	releaseChildPage();
+	await expect(
+		dialog.getByRole("button", {
+			name: `Select ${child.name}, Native › ${parent.name}`,
+		}),
+	).toBeVisible();
+	await expect(results).toHaveAttribute("aria-busy", "false");
+	await expect(content).not.toHaveAttribute("inert");
+	const currentBreadcrumb = dialog
+		.locator('[aria-current="page"]')
+		.filter({ hasText: parent.name });
+	await expect(currentBreadcrumb).toHaveCount(1);
+	expect(await currentBreadcrumb.evaluate((element) => element.tagName)).toBe(
+		"SPAN",
+	);
+	await expect(
+		dialog.getByRole("button", { name: parent.name, exact: true }),
+	).toHaveCount(0);
+});
+
+test("uses the same collection traversal model for multi-select", async ({
+	page,
+}) => {
+	const parent: AdminCollectionCatalogEntry = {
+		ancestors: [],
+		deleted: false,
+		hasChildren: true,
+		key: "MULTIP01",
+		name: "Multi parent",
+		parentCollection: null,
+		revision: 1,
+		sortOrder: 2,
+		sourceConnectionKey: "native",
+		updatedAt: timestamp,
+	};
+	const child: AdminCollectionCatalogEntry = {
+		ancestors: [{ key: parent.key, name: parent.name }],
+		deleted: false,
+		hasChildren: false,
+		key: "MULTIC01",
+		name: "Multi child",
+		parentCollection: parent.key,
+		revision: 1,
+		sortOrder: 0,
+		sourceConnectionKey: "native",
+		updatedAt: timestamp,
+	};
+	const extraSources: AdminSource[] = Array.from(
+		{ length: 12 },
+		(_, index) => ({
+			key: `multi-source-${index}`,
+			label: `Multi source ${index + 1}`,
+			provider: "zotero",
+			readOnly: true,
+			status: "active",
+		}),
+	);
+	let delayPickerRoot = false;
+	let releaseSourcePage: () => void = () => {};
+	const sourcePageRelease = new Promise<void>((resolve) => {
+		releaseSourcePage = resolve;
+	});
+	let markSourceRequestStarted: () => void = () => {};
+	const sourceRequestStarted = new Promise<void>((resolve) => {
+		markSourceRequestStarted = resolve;
+	});
+	await mockPublishedBook(page, {
+		additionalCollectionEntries: [parent, child],
+		additionalSources: extraSources,
+		beforeCollectionPageResponse: async (request) => {
+			if (
+				!delayPickerRoot ||
+				request.searchParams.get("parent") !== "root" ||
+				request.searchParams.get("pageSize") !== "50"
+			)
+				return;
+			markSourceRequestStarted();
+			await sourcePageRelease;
+		},
+	});
+
+	await page.goto("/admin");
+	await page.getByRole("button", { name: "Filters", exact: true }).click();
+	const filters = page.getByRole("dialog", { name: "Filter records" });
+	await filters.locator('button[aria-label="Add filter"]').click();
+	await page
+		.getByRole("option", { name: "Collections", exact: true })
+		.click();
+	await filters.getByRole("button", { name: "Collection values" }).click();
+	const picker = filters.locator("[data-admin-collection-filter-picker]");
+	const sources = picker.locator("[data-admin-collection-picker-sources]");
+	const sourceScroll = sources.locator(
+		"[data-admin-collection-picker-source-scroll]",
+	);
+	const sourceHeight = await sources.evaluate((element) =>
+		Number.parseFloat(getComputedStyle(element).height),
+	);
+	const sourceScrollTop = await sourceScroll.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+		return element.scrollTop;
+	});
+	expect(sourceScrollTop).toBeGreaterThan(0);
+	delayPickerRoot = true;
+	await picker
+		.getByRole("button", { name: "Native", exact: true })
+		.evaluate((element) => (element as HTMLButtonElement).click());
+	await sourceRequestStarted;
+	await expect(sources).toHaveAttribute("aria-busy", "true");
+	await expect(
+		picker.getByRole("textbox", { name: "Search collections" }),
+	).toBeDisabled();
+	await expect(
+		sources.locator("[data-admin-collection-picker-source-content]"),
+	).toHaveAttribute("inert", "");
+	await expect(
+		sources.getByRole("status", { name: "Loading collections" }),
+	).toBeVisible();
+	const sourceLoadingGeometry = await sources.evaluate((element) => {
+		const indicator = element.querySelector<HTMLElement>(
+			'[role="status"][aria-label="Loading collections"]',
+		)!;
+		const scroll = element.querySelector<HTMLElement>(
+			"[data-admin-collection-picker-source-scroll]",
+		)!;
+		const indicatorRect = indicator.getBoundingClientRect();
+		const wrapperRect = element.getBoundingClientRect();
+		return {
+			height: Number.parseFloat(getComputedStyle(element).height),
+			indicatorInsideViewport:
+				indicatorRect.top >= wrapperRect.top &&
+				indicatorRect.bottom <= wrapperRect.bottom,
+			scrollTop: scroll.scrollTop,
+		};
+	});
+	expect(sourceLoadingGeometry).toEqual({
+		height: sourceHeight,
+		indicatorInsideViewport: true,
+		scrollTop: sourceScrollTop,
+	});
+	await expect(
+		picker.locator("[data-admin-collection-picker-results]"),
+	).toHaveCount(0);
+	releaseSourcePage();
+
+	await expect(
+		picker.getByRole("button", {
+			name: `Select ${parent.name}, Native`,
+		}),
+	).toBeVisible();
+	await picker
+		.getByRole("button", { name: `Open ${parent.name}, Native` })
+		.click();
+	const childSelection = picker.getByRole("button", {
+		name: new RegExp(
+			`^(Select|Deselect) ${child.name}, Native › ${parent.name}$`,
+			"u",
+		),
+	});
+	await expect(childSelection).toBeVisible();
+	await childSelection.click();
+	await expect(childSelection).toHaveAttribute("aria-pressed", "true");
+	await expect(
+		picker.getByRole("button", {
+			name: new RegExp(`Remove ${child.name}`, "u"),
+		}),
+	).toBeVisible();
 });
 
 test("creates a collection in a searched location without a full-list select", async ({
@@ -786,22 +1085,66 @@ test("persists advanced typed filters in the URL", async ({ page }) => {
 		.click();
 	const dialog = page.getByRole("dialog", { name: "Filter records" });
 	const filterGeometry = await dialog.evaluate((element) => {
-		const rect = element.getBoundingClientRect();
-		const style = getComputedStyle(element);
+		const surface = element.querySelector<HTMLElement>(
+			"[data-slot=content]",
+		)!;
+		const scroll = element.querySelector<HTMLElement>(
+			"[data-admin-filter-scroll]",
+		)!;
+		const list = element.querySelector<HTMLElement>(
+			"[data-admin-filter-list]",
+		)!;
+		const row = element.querySelector<HTMLElement>(
+			"[data-admin-filter-row]",
+		)!;
+		const rect = surface.getBoundingClientRect();
+		const scrollRect = scroll.getBoundingClientRect();
+		const listRect = list.getBoundingClientRect();
+		const rowRect = row.getBoundingClientRect();
+		const style = getComputedStyle(surface);
+		const listStyle = getComputedStyle(list);
 		return {
 			boxSizing: style.boxSizing,
+			contentGaps: [
+				rowRect.top - listRect.top,
+				rowRect.left - listRect.left,
+				listRect.bottom - rowRect.bottom,
+				listRect.right - rowRect.right,
+			],
 			left: rect.left,
+			listPadding: [
+				listStyle.paddingTop,
+				listStyle.paddingRight,
+				listStyle.paddingBottom,
+				listStyle.paddingLeft,
+			],
 			right: rect.right,
+			scrollInsets: [
+				scrollRect.left - rect.left,
+				rect.right - scrollRect.right,
+			],
 			width: rect.width,
 		};
 	});
-	expect(filterGeometry.boxSizing).toBe("border-box");
-	expect(filterGeometry.width).toBeLessThanOrEqual(560);
+	expect(filterGeometry).toMatchObject({
+		boxSizing: "border-box",
+		contentGaps: [8, 8, 8, 8],
+		listPadding: ["8px", "8px", "8px", "8px"],
+		scrollInsets: [1, 1],
+		width: 420,
+	});
 	expect(filterGeometry.left).toBeGreaterThanOrEqual(12);
 	expect(filterGeometry.right).toBeLessThanOrEqual(
 		await page.evaluate(() => window.innerWidth - 12),
 	);
 	await dialog.getByRole("button", { name: "Clear", exact: true }).click();
+	await expect
+		.poll(() =>
+			dialog
+				.locator("[data-slot=content]")
+				.evaluate((element) => element.getBoundingClientRect().width),
+		)
+		.toBe(420);
 	await dialog.locator('button[aria-label="Add filter"]').click();
 	await page
 		.getByRole("option", { name: "Title", exact: true })
@@ -809,6 +1152,13 @@ test("persists advanced typed filters in the URL", async ({ page }) => {
 	await expect(
 		dialog.locator('button[aria-label="Filter 1 field"]'),
 	).toContainText("Title");
+	await expect
+		.poll(() =>
+			dialog
+				.locator("[data-slot=content]")
+				.evaluate((element) => element.getBoundingClientRect().width),
+		)
+		.toBe(420);
 	await dialog.getByRole("textbox", { name: "Title value" }).fill("evidence");
 	await dialog.getByRole("button", { name: "Apply", exact: true }).click();
 
@@ -995,11 +1345,13 @@ test("filters by searched native and imported collections without loading an opt
 	});
 	await expect(deletedRemove).toBeVisible();
 	const sourceList = picker.locator("[data-admin-collection-picker-sources]");
-	const sourceGeometry = await sourceList.evaluate((element) => ({
-		clientHeight: element.clientHeight,
-		maxHeight: Number.parseFloat(getComputedStyle(element).maxHeight),
-		scrollHeight: element.scrollHeight,
-	}));
+	const sourceGeometry = await sourceList
+		.locator("[data-admin-collection-picker-source-scroll]")
+		.evaluate((element) => ({
+			clientHeight: element.clientHeight,
+			maxHeight: Number.parseFloat(getComputedStyle(element).maxHeight),
+			scrollHeight: element.scrollHeight,
+		}));
 	expect(sourceGeometry.maxHeight).toBeLessThanOrEqual(420 * 0.44);
 	expect(sourceGeometry.clientHeight).toBeLessThanOrEqual(
 		Math.ceil(sourceGeometry.maxHeight),
@@ -1010,33 +1362,33 @@ test("filters by searched native and imported collections without loading an opt
 	await deletedRemove.click();
 
 	await search.fill("teacher");
-	const native = picker.getByRole("checkbox", {
-		name: /Teacher development/u,
+	const native = picker.getByRole("button", {
+		name: /^(Select|Deselect) Teacher development/u,
 	});
-	await native.check();
+	await native.click();
 	const removeNative = picker.getByRole("button", {
 		name: /Remove Teacher development/u,
 	});
 	await expect(removeNative).toBeVisible();
 	await removeNative.click();
-	await expect(native).not.toBeChecked();
-	await native.check();
+	await expect(native).toHaveAttribute("aria-pressed", "false");
+	await native.click();
 
 	await search.fill("imported");
 	await expect
 		.poll(() => collectionSearches.at(-1)?.searchParams.get("query"))
 		.toBe("imported");
-	const imported = picker.getByRole("checkbox", {
-		name: /Imported research/u,
+	const imported = picker.getByRole("button", {
+		name: /^(Select|Deselect) Imported research/u,
 	});
-	await imported.check();
+	await imported.click();
 	const removeImported = picker.getByRole("button", {
 		name: /Remove Imported research/u,
 	});
 	await expect(removeImported).toBeVisible();
 	await removeImported.click();
-	await expect(imported).not.toBeChecked();
-	await imported.check();
+	await expect(imported).toHaveAttribute("aria-pressed", "false");
+	await imported.click();
 	await expect(removeImported).toBeVisible();
 
 	const geometry = await dialog.evaluate((element) => {
@@ -1044,7 +1396,7 @@ test("filters by searched native and imported collections without loading an opt
 			"[data-admin-collection-filter-picker]",
 		)!;
 		const results = element.querySelector<HTMLElement>(
-			"[data-admin-collection-picker-results]",
+			"[data-admin-collection-picker-scroll]",
 		)!;
 		const rect = element.getBoundingClientRect();
 		const pickerRect = filterPicker.getBoundingClientRect();
@@ -1535,8 +1887,8 @@ test("shows draft differences with the published value and a revert action", asy
 		textOverflow: "ellipsis",
 	});
 	await collectionsDialog
-		.getByRole("checkbox", { name: /Teacher development/ })
-		.check();
+		.getByRole("button", { name: /^Select Teacher development/u })
+		.click();
 	await collectionsDialog.getByRole("button", { name: "Done" }).click();
 	await expect(collectionsGroup).toContainText("Teacher development");
 	await expect
@@ -2826,6 +3178,53 @@ test("configures columns, density, sizing, and persists computed table geometry"
 	await page
 		.getByRole("button", { name: "Choose and arrange columns" })
 		.click();
+	const columnPopoverGeometry = await page
+		.locator("[data-admin-column-popover]")
+		.evaluate((base) => {
+			const surface = base.querySelector<HTMLElement>(
+				'[data-slot="content"]',
+			);
+			const scroll = base.querySelector<HTMLElement>(
+				"[data-admin-column-scroll]",
+			);
+			const list = base.querySelector<HTMLElement>(
+				"[data-admin-column-list]",
+			);
+			if (!surface || !scroll || !list)
+				throw new Error("Column popover geometry is incomplete");
+			scroll.scrollTop = scroll.scrollHeight;
+			const surfaceRect = surface.getBoundingClientRect();
+			const scrollRect = scroll.getBoundingClientRect();
+			const listRect = list.getBoundingClientRect();
+			const firstRow = list.firstElementChild?.getBoundingClientRect();
+			const lastRow = list.lastElementChild?.getBoundingClientRect();
+			const listStyle = getComputedStyle(list);
+			return {
+				contentGaps: [
+					firstRow ? firstRow.top - listRect.top : null,
+					firstRow ? firstRow.left - listRect.left : null,
+					lastRow ? listRect.bottom - lastRow.bottom : null,
+					lastRow ? listRect.right - lastRow.right : null,
+				],
+				listPadding: [
+					listStyle.paddingTop,
+					listStyle.paddingRight,
+					listStyle.paddingBottom,
+					listStyle.paddingLeft,
+				],
+				scrollInsets: [
+					scrollRect.left - surfaceRect.left,
+					surfaceRect.right - scrollRect.right,
+				],
+				width: surfaceRect.width,
+			};
+		});
+	expect(columnPopoverGeometry).toEqual({
+		contentGaps: [8, 8, 8, 8],
+		listPadding: ["8px", "8px", "8px", "8px"],
+		scrollInsets: [1, 1],
+		width: 224,
+	});
 	await page
 		.getByRole("checkbox", { name: "Show Tags", exact: true })
 		.click();
@@ -3966,7 +4365,9 @@ test("tracks direct publish, unpublish, and restore mutations", async ({
 	await page.goto("/admin");
 	const inspector = page.locator("#admin-inspector-pane");
 	await inspector.getByRole("button", { name: "Edit" }).click();
-	await inspector.getByRole("button", { name: "Publish", exact: true }).click();
+	await inspector
+		.getByRole("button", { name: "Publish", exact: true })
+		.click();
 	await indexing.expectTracked(publishReceipt);
 
 	await inspector.getByRole("button", { name: "Unpublish" }).click();
@@ -4012,7 +4413,9 @@ test("tracks direct publish, unpublish, and restore mutations", async ({
 		},
 	);
 	await page.reload();
-	await inspector.getByRole("button", { name: "Restore", exact: true }).click();
+	await inspector
+		.getByRole("button", { name: "Restore", exact: true })
+		.click();
 	await indexing.expectTracked(restoreReceipt);
 });
 
@@ -4061,7 +4464,11 @@ test("tracks collection delete and restore mutations", async ({ page }) => {
 		additionalCollectionEntries: [deletedCollection],
 	});
 	const indexing = await mockCompletedIndexing(page);
-	const deleteReceipt = indexingReceipt(teacherCollection.key, "collection", 2);
+	const deleteReceipt = indexingReceipt(
+		teacherCollection.key,
+		"collection",
+		2,
+	);
 	const restoreReceipt = indexingReceipt(
 		teacherCollection.key,
 		"collection",
@@ -4151,9 +4558,7 @@ test("tracks bulk remove mutations", async ({ page }) => {
 	});
 	const indexing = await mockCompletedIndexing(page);
 	await page.goto("/admin");
-	await page
-		.getByRole("checkbox", { name: "Select Published book" })
-		.check();
+	await page.getByRole("checkbox", { name: "Select Published book" }).check();
 	await page
 		.getByRole("toolbar", { name: "Bulk actions" })
 		.getByRole("button", { name: "Remove selected" })
@@ -4187,7 +4592,11 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 			workerStage = receiptState === "processing" ? "indexing" : "idle";
 			return keys.map((key) => ({
 				indexingReceipts: [
-					{ entityKey: key, entityType: "item", revision: batchRevision },
+					{
+						entityKey: key,
+						entityType: "item",
+						revision: batchRevision,
+					},
 				],
 				key,
 				outcome: "changed",
@@ -4210,7 +4619,9 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 					currentEventCount: hasPending ? 1 : 0,
 					heartbeatAt: timestamp,
 					lastCompletedAt: hasPending ? null : timestamp,
-					lastError: hasFailed ? "Meilisearch rejected the update" : null,
+					lastError: hasFailed
+						? "Meilisearch rejected the update"
+						: null,
 					stage: workerStage,
 					startedAt: timestamp,
 					stoppedAt: null,
@@ -4284,7 +4695,8 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 		"Indexing 42%",
 		4_000,
 	);
-	const triggerGeometry = await measureAdminSearchIndexTrigger(indexingStatus);
+	const triggerGeometry =
+		await measureAdminSearchIndexTrigger(indexingStatus);
 	expect(triggerGeometry).toEqual({
 		display: "flex",
 		flexDirection: "row",
@@ -4296,8 +4708,14 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 	});
 
 	const { geometry: popoverGeometry, popover } =
-		await openAndMeasureAdminSearchIndexPopover(page, indexingStatus, 4_000);
-	await expect(popover.getByText("Indexing 42%", { exact: true })).toBeVisible();
+		await openAndMeasureAdminSearchIndexPopover(
+			page,
+			indexingStatus,
+			4_000,
+		);
+	await expect(
+		popover.getByText("Indexing 42%", { exact: true }),
+	).toBeVisible();
 	expect(popoverGeometry).toMatchObject({
 		documentOverflow: 0,
 		innerPadding: "12px",
