@@ -4,12 +4,104 @@ import type {
 	AdminCollectionCatalogEntry,
 	AdminSource,
 } from "@/lib/admin/types";
+import type { AdminItemBatchResult } from "@/lib/admin/item-batch-contract";
 
 const itemKey = "TESTBOOK";
-const publishedItemKey = "LIVEBOOK";
+const publishedItemKey = "LIVEB22K";
 const timestamp = "2026-07-31T12:00:00.000Z";
 const longCollectionName =
 	"A very long collection name that must stay inside the metadata inspector";
+
+type IndexingReceipt = {
+	entityKey: string;
+	entityType: "collection" | "item";
+	revision: number;
+};
+
+function indexingReceipt(
+	entityKey: string,
+	entityType: IndexingReceipt["entityType"],
+	revision: number,
+): IndexingReceipt {
+	return { entityKey, entityType, revision };
+}
+
+async function mockCompletedIndexing(page: Page) {
+	const statusRequests: IndexingReceipt[][] = [];
+	await page.route("**/api/admin/search-index", async (route) => {
+		await route.fulfill({
+			json: {
+				queue: {
+					hasFailed: false,
+					hasPending: false,
+					nextAttemptAt: null,
+				},
+				worker: {
+					active: true,
+					batchProgress: null,
+					batchUid: null,
+					currentEventCount: 0,
+					heartbeatAt: timestamp,
+					lastCompletedAt: timestamp,
+					lastError: null,
+					stage: "idle",
+					startedAt: timestamp,
+					stoppedAt: null,
+					taskUid: null,
+					workerId: "search-indexer",
+				},
+			},
+		});
+	});
+	await page.route("**/api/admin/search-index/receipts", async (route) => {
+		const request = route.request().postDataJSON() as {
+			receipts: IndexingReceipt[];
+		};
+		statusRequests.push(request.receipts);
+		await route.fulfill({
+			json: {
+				receipts: request.receipts.map((receipt) => ({
+					...receipt,
+					attempts: 0,
+					createdAt: timestamp,
+					error: null,
+					nextAttemptAt: timestamp,
+					processedAt: timestamp,
+					state: "indexed",
+				})),
+			},
+		});
+	});
+	return {
+		async expectTracked(receipt: IndexingReceipt) {
+			await expect
+				.poll(() =>
+					statusRequests.some((request) =>
+						request.some(
+							(candidate) =>
+								candidate.entityKey === receipt.entityKey &&
+								candidate.entityType === receipt.entityType &&
+								candidate.revision === receipt.revision,
+						),
+					),
+				)
+				.toBe(true);
+		},
+	};
+}
+
+async function mockPublicShell(page: Page) {
+	await page.route("**/api/collections", async (route) => {
+		await route.fulfill({ json: { collections: [] } });
+	});
+	await page.route("**/api/facets?*", async (route) => {
+		await route.fulfill({ json: { facetDistribution: {} } });
+	});
+}
+
+test.beforeEach(async ({ page }) => {
+	await mockPublicShell(page);
+});
 
 const teacherCollection = {
 	deleted: false,
@@ -167,7 +259,7 @@ async function mockPublishedBook(
 			action: string;
 			collectionKey?: string;
 			keys: string[];
-		}) => unknown[];
+		}) => AdminItemBatchResult[];
 		beforeBatchResponse?: () => Promise<void>;
 		failDraftSave?: boolean;
 		itemCount?: number;
@@ -327,6 +419,7 @@ async function mockPublishedBook(
 					results:
 						options.batchResults?.(body) ??
 						body.keys.map((key) => ({
+							indexingReceipts: [],
 							key,
 							outcome: "changed",
 						})),
@@ -437,6 +530,9 @@ async function mockPublishedBook(
 				);
 			}
 		},
+		setEditing(value: boolean) {
+			editing = value;
+		},
 	};
 }
 
@@ -512,7 +608,9 @@ test("creates a collection in a searched location without a full-list select", a
 	page,
 }) => {
 	let createRequest: Record<string, unknown> | undefined;
+	const receipt = indexingReceipt("NEWCALL2", "collection", 1);
 	await mockPublishedBook(page);
+	const indexing = await mockCompletedIndexing(page);
 	await page.route("**/api/admin/collections", async (route) => {
 		if (route.request().method() !== "POST") {
 			await route.fallback();
@@ -526,10 +624,11 @@ test("creates a collection in a searched location without a full-list select", a
 			json: {
 				collection: {
 					...longCollection,
-					key: "NEWCOLL1",
+					key: "NEWCALL2",
 					name: "Nested collection",
 					parentCollection: longCollection.key,
 				},
+				indexingReceipts: [receipt],
 			},
 		});
 	});
@@ -578,13 +677,16 @@ test("creates a collection in a searched location without a full-list select", a
 			name: "Nested collection",
 			parentCollection: longCollection.key,
 		});
+	await indexing.expectTracked(receipt);
 });
 
 test("moves a collection to a searched destination at the end", async ({
 	page,
 }) => {
 	let moveRequest: Record<string, unknown> | undefined;
+	const receipt = indexingReceipt("TEACHDEV", "collection", 2);
 	await mockPublishedBook(page);
+	const indexing = await mockCompletedIndexing(page);
 	await page.route(
 		"**/api/admin/collections/TEACHDEV/move",
 		async (route) => {
@@ -600,6 +702,7 @@ test("moves a collection to a searched destination at the end", async ({
 						revision: 2,
 					},
 					collections: [],
+					indexingReceipts: [receipt],
 				},
 			});
 		},
@@ -643,6 +746,7 @@ test("moves a collection to a searched destination at the end", async ({
 			position: "inside",
 			targetCollection: longCollection.key,
 		});
+	await indexing.expectTracked(receipt);
 });
 
 test("persists advanced typed filters in the URL", async ({ page }) => {
@@ -984,7 +1088,7 @@ async function mockBookWithAttachment(
 	page: Page,
 	options: { attachmentState?: "draft" | "published" } = {},
 ) {
-	const attachmentKey = "PDFATT01";
+	const attachmentKey = "PDFATT22";
 	const attachmentState = options.attachmentState ?? "published";
 	const attachmentDraft = {
 		baseRevision: 0,
@@ -1289,6 +1393,7 @@ test("lets touch users browse item types without opening the keyboard", async ({
 	});
 	const page = await context.newPage();
 	try {
+		await mockPublicShell(page);
 		await mockPublishedBook(page);
 		await page.goto("/admin");
 		await page.getByRole("button", { name: "New item" }).click();
@@ -1939,7 +2044,9 @@ test("refreshes an off-page ancestor after catalogue invalidation", async ({
 			...child,
 			ancestors: [{ key: renamedParent.key, name: renamedParent.name }],
 		});
-		await route.fulfill({ json: { collection: renamedParent } });
+		await route.fulfill({
+			json: { collection: renamedParent, indexingReceipts: [] },
+		});
 	});
 	const initialFilters = JSON.stringify([
 		{
@@ -2006,11 +2113,15 @@ test("refreshes loaded record collection labels after a rename", async ({
 		name: "Learning library",
 		revision: 2,
 	};
+	const receipt = indexingReceipt(teacherCollection.key, "collection", 2);
+	const indexing = await mockCompletedIndexing(page);
 	await page.route(
 		`**/api/admin/collections/${teacherCollection.key}`,
 		async (route) => {
 			catalog.replaceCollection(renamed);
-			await route.fulfill({ json: { collection: renamed } });
+			await route.fulfill({
+				json: { collection: renamed, indexingReceipts: [receipt] },
+			});
 		},
 	);
 
@@ -2055,6 +2166,7 @@ test("refreshes loaded record collection labels after a rename", async ({
 	await expect(
 		page.getByRole("treeitem", { name: new RegExp(renamed.name, "u") }),
 	).toHaveCount(0);
+	await indexing.expectTracked(receipt);
 });
 
 test("restores search focus when a mutation refresh cannot reload results", async ({
@@ -2088,7 +2200,9 @@ test("restores search focus when a mutation refresh cannot reload results", asyn
 		async (route) => {
 			catalog.replaceCollection(renamed);
 			failSearch = true;
-			await route.fulfill({ json: { collection: renamed } });
+			await route.fulfill({
+				json: { collection: renamed, indexingReceipts: [] },
+			});
 		},
 	);
 
@@ -2421,6 +2535,8 @@ test("moves a native collection into another collection with pointer drag", asyn
 			}
 		},
 	});
+	const receipt = indexingReceipt(teacherCollection.key, "collection", 2);
+	const indexing = await mockCompletedIndexing(page);
 	let moveRequest: Record<string, unknown> | null = null;
 	await page.route(
 		"**/api/admin/collections/TEACHDEV/move",
@@ -2443,7 +2559,11 @@ test("moves a native collection into another collection with pointer drag", asyn
 				hasChildren: false,
 			});
 			await route.fulfill({
-				json: { collection: moved, collections: [moved] },
+				json: {
+					collection: moved,
+					collections: [moved],
+					indexingReceipts: [receipt],
+				},
 			});
 		},
 	);
@@ -2477,6 +2597,7 @@ test("moves a native collection into another collection with pointer drag", asyn
 	await expect(
 		page.locator('[data-collection-drag-handle="TEACHDEV"]'),
 	).toBeFocused();
+	await indexing.expectTracked(receipt);
 });
 
 test("restores collection focus after a failed pointer move reloads the catalogue", async ({
@@ -3009,6 +3130,7 @@ test("shows server batch validation on the selected metadata field", async ({
 			keys.map((key) => ({
 				code: "validation_failed",
 				fields: { title: "Enter a publishable title." },
+				indexingReceipts: [],
 				key,
 				message: "Check the highlighted fields and try again.",
 				outcome: "failed",
@@ -3071,7 +3193,7 @@ test("virtualizes large record sets while keeping rows horizontal and key column
 	await expect(page.locator('tr[data-record-key="ROW00499"]')).toBeVisible();
 	expect(await initialRows.count()).toBeLessThanOrEqual(26);
 	const activeRowIsOutsideViewport = await page
-		.locator('tr[data-record-key="LIVEBOOK"]')
+		.locator(`tr[data-record-key="${publishedItemKey}"]`)
 		.evaluate((row) => {
 			const scrollElement = row.closest<HTMLElement>(
 				"[data-admin-item-table-scroll]",
@@ -3426,18 +3548,20 @@ test("keeps the record grid usable in the narrow list pane", async ({
 	await mockPublishedBook(page);
 	await page.setViewportSize({ width: 390, height: 844 });
 	await page.goto("/admin");
-	await expect(page.locator('tr[data-record-key="LIVEBOOK"]')).toBeVisible();
+	await expect(
+		page.locator(`tr[data-record-key="${publishedItemKey}"]`),
+	).toBeVisible();
 	const scroll = page.locator("[data-admin-item-table-scroll]");
 	await scroll.evaluate((element) => {
 		element.scrollLeft = 300;
 		element.dispatchEvent(new Event("scroll"));
 	});
-	const geometry = await page.evaluate(() => {
+	const geometry = await page.evaluate((recordKey) => {
 		const scrollElement = document.querySelector<HTMLElement>(
 			"[data-admin-item-table-scroll]",
 		)!;
 		const row = document.querySelector<HTMLElement>(
-			'tr[data-record-key="LIVEBOOK"]',
+			`tr[data-record-key="${recordKey}"]`,
 		)!;
 		const selectCell = row.querySelector<HTMLElement>(
 			'td[data-column-id="select"]',
@@ -3459,7 +3583,7 @@ test("keeps the record grid usable in the narrow list pane", async ({
 				.backgroundColor,
 			viewportLeft: scrollRect.left,
 		};
-	});
+	}, publishedItemKey);
 
 	expect(geometry.documentOverflow).toBe(0);
 	expect(geometry.rowDisplay).toBe("flex");
@@ -3596,7 +3720,7 @@ test("renders field types with semantic cells instead of plain text", async ({
 	}
 	await page.mouse.click(280, 72);
 
-	const row = page.locator('tr[data-record-key="LIVEBOOK"]');
+	const row = page.locator(`tr[data-record-key="${publishedItemKey}"]`);
 	const creators = row.locator('td[data-column-id="creators"]');
 	const collections = row.locator('td[data-column-id="collections"]');
 	const tags = row.locator('td[data-column-id="tags"]');
@@ -3710,7 +3834,7 @@ test("renders one dark row separator instead of cell borders", async ({
 	).toBeVisible();
 
 	const computed = await page
-		.locator('tr[data-record-key="LIVEBOOK"]')
+		.locator(`tr[data-record-key="${publishedItemKey}"]`)
 		.evaluate((row) => {
 			const cell = row.querySelector("td")!;
 			const cellStyle = getComputedStyle(cell);
@@ -3745,7 +3869,7 @@ test("keeps button loading spinners on the icon geometry", async ({ page }) => {
 			json: {
 				collection: {
 					deleted: false,
-					key: "NEWCOLL",
+					key: "NEWCALL3",
 					name: "New collection",
 					parentCollection: null,
 					revision: 1,
@@ -3753,6 +3877,7 @@ test("keeps button loading spinners on the icon geometry", async ({ page }) => {
 					sourceConnectionKey: "native",
 					updatedAt: timestamp,
 				},
+				indexingReceipts: [],
 			},
 		});
 	});
@@ -3805,4 +3930,454 @@ test("keeps button loading spinners on the icon geometry", async ({ page }) => {
 	if (!finishRequest) throw new Error("Collection request did not start");
 	finishRequest();
 	await expect(dialog).toBeHidden();
+});
+
+test("tracks direct publish, unpublish, and restore mutations", async ({
+	page,
+}) => {
+	const book = await mockPublishedBook(page);
+	const indexing = await mockCompletedIndexing(page);
+	const publishReceipt = indexingReceipt(publishedItemKey, "item", 2);
+	const unpublishReceipt = indexingReceipt(publishedItemKey, "item", 3);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/publish`,
+		async (route) => {
+			book.setEditing(false);
+			await route.fulfill({
+				json: { indexingReceipts: [publishReceipt], item: {} },
+			});
+		},
+	);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/unpublish`,
+		async (route) => {
+			await route.fulfill({
+				json: { indexingReceipts: [unpublishReceipt], item: {} },
+			});
+		},
+	);
+
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: "Publish", exact: true }).click();
+	await indexing.expectTracked(publishReceipt);
+
+	await inspector.getByRole("button", { name: "Unpublish" }).click();
+	const unpublishDialog = page.getByRole("dialog", {
+		name: "Unpublish record?",
+	});
+	await unpublishDialog
+		.getByRole("button", { name: "Confirm", exact: true })
+		.click();
+	await indexing.expectTracked(unpublishReceipt);
+
+	const restoreReceipt = indexingReceipt(publishedItemKey, "item", 4);
+	await page.route("**/api/admin/items", async (route) => {
+		if (route.request().method() !== "GET") {
+			await route.fallback();
+			return;
+		}
+		await route.fulfill({
+			json: {
+				hasMore: false,
+				items: [publishedListRow({ state: "deleted" })],
+				nextCursor: null,
+			},
+		});
+	});
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}`,
+		async (route) => {
+			await route.fulfill({
+				json: {
+					item: { ...publishedDetail(false), state: "deleted" },
+				},
+			});
+		},
+	);
+	await page.unroute(`**/api/admin/items/${publishedItemKey}/publish`);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/publish`,
+		async (route) => {
+			await route.fulfill({
+				json: { indexingReceipts: [restoreReceipt], item: {} },
+			});
+		},
+	);
+	await page.reload();
+	await inspector.getByRole("button", { name: "Restore", exact: true }).click();
+	await indexing.expectTracked(restoreReceipt);
+});
+
+test("tracks PDF publish and unpublish mutations", async ({ page }) => {
+	await mockBookWithAttachment(page);
+	const indexing = await mockCompletedIndexing(page);
+	const publishReceipt = indexingReceipt("PDFATT22", "item", 2);
+	const unpublishReceipt = indexingReceipt("PDFATT22", "item", 3);
+	await page.route(
+		"**/api/admin/items/PDFATT22/file/publish",
+		async (route) => {
+			await route.fulfill({
+				json: { indexingReceipts: [publishReceipt], item: {} },
+			});
+		},
+	);
+	await page.route("**/api/admin/items/PDFATT22/file", async (route) => {
+		if (route.request().method() !== "DELETE") {
+			await route.fallback();
+			return;
+		}
+		await route.fulfill({
+			json: { indexingReceipts: [unpublishReceipt], item: {} },
+		});
+	});
+
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector
+		.getByRole("button", { name: "Open PDF attachment" })
+		.click();
+	await inspector
+		.getByRole("button", { name: "Publish PDF", exact: true })
+		.click();
+	await indexing.expectTracked(publishReceipt);
+	await inspector.getByRole("button", { name: "Unpublish PDF" }).click();
+	await page
+		.getByRole("dialog", { name: "Unpublish PDF?" })
+		.getByRole("button", { name: "Confirm", exact: true })
+		.click();
+	await indexing.expectTracked(unpublishReceipt);
+});
+
+test("tracks collection delete and restore mutations", async ({ page }) => {
+	const catalog = await mockPublishedBook(page, {
+		additionalCollectionEntries: [deletedCollection],
+	});
+	const indexing = await mockCompletedIndexing(page);
+	const deleteReceipt = indexingReceipt(teacherCollection.key, "collection", 2);
+	const restoreReceipt = indexingReceipt(
+		teacherCollection.key,
+		"collection",
+		3,
+	);
+	await page.route(
+		`**/api/admin/collections/${teacherCollection.key}`,
+		async (route) => {
+			if (route.request().method() !== "DELETE") {
+				await route.fallback();
+				return;
+			}
+			const deleted = {
+				...teacherCollection,
+				deleted: true,
+				revision: 2,
+			};
+			catalog.replaceCollection({
+				...deleted,
+				ancestors: [],
+				hasChildren: false,
+			});
+			await route.fulfill({
+				json: {
+					collections: [deleted],
+					indexingReceipts: [deleteReceipt],
+				},
+			});
+		},
+	);
+	await page.route(
+		`**/api/admin/collections/${teacherCollection.key}/restore`,
+		async (route) => {
+			const restored = { ...teacherCollection, revision: 3 };
+			catalog.replaceCollection({
+				...restored,
+				ancestors: [],
+				hasChildren: false,
+			});
+			await route.fulfill({
+				json: {
+					collection: restored,
+					collections: [restored],
+					indexingReceipts: [restoreReceipt],
+				},
+			});
+		},
+	);
+
+	await page.goto("/admin");
+	const catalogue = page.getByRole("region", {
+		name: "Collection catalogue",
+	});
+	await page.locator('[data-collection-key="TEACHDEV"]').hover();
+	await page
+		.getByRole("button", { name: "Manage Teacher development" })
+		.click();
+	await page.getByRole("menuitem", { name: "Delete" }).click();
+	await page
+		.getByRole("dialog", { name: "Delete Teacher development?" })
+		.getByRole("button", { name: "Delete", exact: true })
+		.click();
+	await indexing.expectTracked(deleteReceipt);
+
+	await catalogue
+		.getByRole("button", { name: "Show deleted collections" })
+		.click();
+	await catalogue
+		.getByRole("button", { name: "Restore Teacher development" })
+		.click();
+	await page
+		.getByRole("dialog", { name: "Restore Teacher development?" })
+		.getByRole("button", { name: "Restore", exact: true })
+		.click();
+	await indexing.expectTracked(restoreReceipt);
+});
+
+test("tracks bulk remove mutations", async ({ page }) => {
+	const receipt = indexingReceipt(publishedItemKey, "item", 2);
+	await mockPublishedBook(page, {
+		batchResults: ({ keys }) =>
+			keys.map((key) => ({
+				indexingReceipts: [receipt],
+				key,
+				outcome: "changed",
+			})),
+	});
+	const indexing = await mockCompletedIndexing(page);
+	await page.goto("/admin");
+	await page
+		.getByRole("checkbox", { name: "Select Published book" })
+		.check();
+	await page
+		.getByRole("toolbar", { name: "Bulk actions" })
+		.getByRole("button", { name: "Remove selected" })
+		.click();
+	await page
+		.getByRole("dialog", { name: "Remove selected records?" })
+		.getByRole("button", { name: "Confirm", exact: true })
+		.click();
+	await indexing.expectTracked(receipt);
+});
+
+test("tracks publishing through Meilisearch progress, failure, and retry", async ({
+	page,
+}) => {
+	let batchRevision = 0;
+	let hasFailed = false;
+	let hasPending = false;
+	let receiptState: "failed" | "indexed" | "processing" | "queued" =
+		"processing";
+	let retryRequest: unknown;
+	let workerProgress: number | null = 42;
+	let workerStage: "idle" | "indexing" | "waiting" = "indexing";
+
+	await mockPublishedBook(page, {
+		batchResults: ({ keys }) => {
+			batchRevision += 1;
+			receiptState = batchRevision === 1 ? "processing" : "failed";
+			hasFailed = receiptState === "failed";
+			hasPending = receiptState === "processing";
+			workerProgress = receiptState === "processing" ? 42 : null;
+			workerStage = receiptState === "processing" ? "indexing" : "idle";
+			return keys.map((key) => ({
+				indexingReceipts: [
+					{ entityKey: key, entityType: "item", revision: batchRevision },
+				],
+				key,
+				outcome: "changed",
+			}));
+		},
+	});
+
+	await page.route("**/api/admin/search-index", async (route) => {
+		await route.fulfill({
+			json: {
+				queue: {
+					hasFailed,
+					hasPending,
+					nextAttemptAt: hasPending ? timestamp : null,
+				},
+				worker: {
+					active: true,
+					batchProgress: workerProgress,
+					batchUid: workerProgress === null ? null : 8,
+					currentEventCount: hasPending ? 1 : 0,
+					heartbeatAt: timestamp,
+					lastCompletedAt: hasPending ? null : timestamp,
+					lastError: hasFailed ? "Meilisearch rejected the update" : null,
+					stage: workerStage,
+					startedAt: timestamp,
+					stoppedAt: null,
+					taskUid: workerProgress === null ? null : 9,
+					workerId: "search-indexer",
+				},
+			},
+		});
+	});
+	await page.route("**/api/admin/search-index/receipts", async (route) => {
+		const body = route.request().postDataJSON() as {
+			receipts: Array<{
+				entityKey: string;
+				entityType: "collection" | "item";
+				revision: number;
+			}>;
+		};
+		await route.fulfill({
+			json: {
+				receipts: body.receipts.map((receipt) => ({
+					...receipt,
+					attempts: receiptState === "failed" ? 3 : 0,
+					createdAt: timestamp,
+					error:
+						receiptState === "failed"
+							? "Meilisearch rejected the update"
+							: null,
+					nextAttemptAt: timestamp,
+					processedAt: receiptState === "indexed" ? timestamp : null,
+					state: receiptState,
+				})),
+			},
+		});
+	});
+	await page.route("**/api/admin/search-index/retry", async (route) => {
+		retryRequest = route.request().postDataJSON();
+		receiptState = "queued";
+		hasFailed = false;
+		hasPending = true;
+		workerStage = "waiting";
+		workerProgress = null;
+		await route.fulfill({
+			json: {
+				receipts: [
+					{
+						entityKey: publishedItemKey,
+						entityType: "item",
+						revision: batchRevision,
+					},
+				],
+				requeued: 1,
+			},
+		});
+	});
+	await page.goto("/admin");
+	await expect(
+		page.getByRole("button", { name: "Search indexing: Search ready" }),
+	).toBeVisible();
+
+	const selectRecord = page.getByRole("checkbox", {
+		name: "Select Published book",
+	});
+	await selectRecord.check();
+	await page
+		.getByRole("toolbar", { name: "Bulk actions" })
+		.getByRole("button", { name: "Publish selected" })
+		.click();
+
+	const indexingStatus = page.getByRole("button", {
+		name: "Search indexing: Indexing 42%",
+	});
+	await expect(indexingStatus).toBeVisible();
+	const triggerGeometry = await indexingStatus.evaluate((element) => {
+		const style = getComputedStyle(element);
+		return {
+			display: style.display,
+			flexDirection: style.flexDirection,
+			height: element.getBoundingClientRect().height,
+			iconHeight: element
+				.querySelector("svg")
+				?.parentElement?.getBoundingClientRect().height,
+			paddingLeft: style.paddingLeft,
+			paddingRight: style.paddingRight,
+			width: element.getBoundingClientRect().width,
+		};
+	});
+	expect(triggerGeometry).toEqual({
+		display: "flex",
+		flexDirection: "row",
+		height: 32,
+		iconHeight: 14,
+		paddingLeft: "8px",
+		paddingRight: "8px",
+		width: 32,
+	});
+
+	await indexingStatus.click();
+	const popover = page.locator("[data-admin-search-index-popover]");
+	await expect(popover).toBeVisible();
+	await expect(popover.getByText("Indexing 42%", { exact: true })).toBeVisible();
+	const popoverGeometry = await popover.evaluate((element) => {
+		const rect = element.getBoundingClientRect();
+		const surface = element.querySelector<HTMLElement>(
+			'[data-slot="content"]',
+		)!;
+		const surfaceStyle = getComputedStyle(surface);
+		const inner = element.querySelector<HTMLElement>(
+			"[data-admin-search-index-content]",
+		)!;
+		const progress = element.querySelector<HTMLElement>(
+			'[role="progressbar"] > div',
+		);
+		return {
+			documentOverflow: document.documentElement.scrollWidth - window.innerWidth,
+			innerPadding: getComputedStyle(inner).padding,
+			progressHeight: progress?.getBoundingClientRect().height,
+			rightInsideViewport: rect.right <= window.innerWidth,
+			surfaceBorderRadius: surfaceStyle.borderRadius,
+			surfaceBorderWidth: surfaceStyle.borderWidth,
+			width: rect.width,
+		};
+	});
+	expect(popoverGeometry).toMatchObject({
+		documentOverflow: 0,
+		innerPadding: "12px",
+		progressHeight: 4,
+		rightInsideViewport: true,
+		surfaceBorderRadius: "12px",
+		surfaceBorderWidth: "1px",
+		width: 256,
+	});
+	await page.keyboard.press("Escape");
+
+	receiptState = "indexed";
+	hasPending = false;
+	workerProgress = null;
+	workerStage = "idle";
+	await expect(
+		page.getByRole("button", { name: "Search indexing: Search updated" }),
+	).toBeVisible({ timeout: 4_000 });
+
+	await selectRecord.check();
+	await page
+		.getByRole("toolbar", { name: "Bulk actions" })
+		.getByRole("button", { name: "Publish selected" })
+		.click();
+	const failedStatus = page.getByRole("button", {
+		name: "Search indexing: Indexing failed",
+	});
+	await expect(failedStatus).toBeVisible();
+	await failedStatus.click();
+	await page.getByRole("button", { name: "Retry indexing" }).click();
+	await expect
+		.poll(() => retryRequest)
+		.toEqual({
+			receipts: [
+				{
+					entityKey: publishedItemKey,
+					entityType: "item",
+					revision: 2,
+				},
+			],
+			scope: "receipts",
+		});
+	await expect(
+		page.locator('[data-admin-search-index-status="queued"]'),
+	).toHaveAttribute("aria-label", "Search indexing: Search queued");
+	await page.keyboard.press("Escape");
+
+	receiptState = "indexed";
+	hasPending = false;
+	workerStage = "idle";
+	await expect(
+		page.getByRole("button", { name: "Search indexing: Search updated" }),
+	).toBeVisible({ timeout: 4_000 });
 });

@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
 	getAdminLibrary,
+	getAdminSearchIndexOverview,
+	getAdminSearchIndexReceipts,
 	mutateAdminItems,
+	publishAdminItem,
+	retryAdminSearchIndex,
 } from "@/components/admin/admin-api";
 
 afterEach(() => {
@@ -25,7 +29,13 @@ describe("admin API client", () => {
 		const fetchMock = vi.fn().mockResolvedValue(
 			new Response(
 				JSON.stringify({
-					results: [{ key: "ABCD2345", outcome: "changed" }],
+					results: [
+						{
+							indexingReceipts: [],
+							key: "ABCD2345",
+							outcome: "changed",
+						},
+					],
 				}),
 				{
 					headers: { "Content-Type": "application/json" },
@@ -38,7 +48,13 @@ describe("admin API client", () => {
 		await expect(
 			mutateAdminItems({ action: "publish", keys: ["ABCD2345"] }),
 		).resolves.toEqual({
-			results: [{ key: "ABCD2345", outcome: "changed" }],
+			results: [
+				{
+					indexingReceipts: [],
+					key: "ABCD2345",
+					outcome: "changed",
+				},
+			],
 		});
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 		expect(fetchMock).toHaveBeenCalledWith(
@@ -60,6 +76,7 @@ describe("admin API client", () => {
 			return new Response(
 				JSON.stringify({
 					results: body.keys.map((key) => ({
+						indexingReceipts: [],
 						key,
 						outcome: "changed",
 					})),
@@ -75,7 +92,11 @@ describe("admin API client", () => {
 		await expect(
 			mutateAdminItems({ action: "publish", keys }),
 		).resolves.toEqual({
-			results: keys.map((key) => ({ key, outcome: "changed" })),
+			results: keys.map((key) => ({
+				indexingReceipts: [],
+				key,
+				outcome: "changed",
+			})),
 		});
 		expect(fetchMock).toHaveBeenCalledTimes(2);
 		const requestSizes = fetchMock.mock.calls.map(([, init]) => {
@@ -94,6 +115,7 @@ describe("admin API client", () => {
 			return new Response(
 				JSON.stringify({
 					results: body.keys.map((key, index) => ({
+						indexingReceipts: [],
 						key,
 						outcome:
 							currentRequest === 0 && index === 0
@@ -114,7 +136,11 @@ describe("admin API client", () => {
 
 		const response = await mutateAdminItems({ action: "remove", keys });
 		expect(response.results).toEqual(
-			keys.map((key) => ({ key, outcome: "changed" })),
+			keys.map((key) => ({
+				indexingReceipts: [],
+				key,
+				outcome: "changed",
+			})),
 		);
 		expect(fetchMock).toHaveBeenCalledTimes(3);
 		expect(
@@ -135,6 +161,7 @@ describe("admin API client", () => {
 			return new Response(
 				JSON.stringify({
 					results: body.keys.map((key) => ({
+						indexingReceipts: [],
 						key,
 						outcome: retryable ? "failed" : "changed",
 						...(retryable
@@ -152,7 +179,11 @@ describe("admin API client", () => {
 
 		const response = await mutateAdminItems({ action: "publish", keys });
 		expect(response.results).toEqual(
-			keys.map((key) => ({ key, outcome: "changed" })),
+			keys.map((key) => ({
+				indexingReceipts: [],
+				key,
+				outcome: "changed",
+			})),
 		);
 		expect(fetchMock).toHaveBeenCalledTimes(6);
 	});
@@ -217,6 +248,155 @@ describe("admin API client", () => {
 			message:
 				"This content changed while you were editing it. Refresh and try again.",
 			status: 409,
+		});
+	});
+
+	it("requests the lightweight search worker overview without caching", async () => {
+		const overview = {
+			queue: { hasFailed: false, hasPending: false, nextAttemptAt: null },
+			worker: null,
+		};
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response(JSON.stringify(overview), {
+				headers: { "Content-Type": "application/json" },
+				status: 200,
+			}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+		const controller = new AbortController();
+
+		await expect(
+			getAdminSearchIndexOverview(controller.signal),
+		).resolves.toEqual(overview);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/admin/search-index",
+			expect.objectContaining({
+				cache: "no-store",
+				signal: controller.signal,
+			}),
+		);
+	});
+
+	it("sends receipt identities to status and retry APIs", async () => {
+		const receipt = {
+			entityKey: "LIVEB22K",
+			entityType: "item" as const,
+			revision: 4,
+		};
+		const status = {
+			...receipt,
+			attempts: 0,
+			createdAt: "2026-08-04T10:00:00.000Z",
+			error: null,
+			nextAttemptAt: "2026-08-04T10:00:00.000Z",
+			processedAt: null,
+			state: "queued",
+		};
+		const fetchMock = vi.fn().mockImplementation(async (path: string) =>
+			new Response(JSON.stringify({
+				receipts: path.endsWith("/receipts") ? [status] : [],
+				requeued: 1,
+			}), {
+				headers: { "Content-Type": "application/json" },
+				status: 200,
+			}),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await getAdminSearchIndexReceipts([receipt]);
+		await retryAdminSearchIndex({ receipts: [receipt], scope: "receipts" });
+
+		expect(fetchMock.mock.calls).toEqual([
+			[
+				"/api/admin/search-index/receipts",
+				expect.objectContaining({
+					body: JSON.stringify({ receipts: [receipt] }),
+					method: "POST",
+				}),
+			],
+			[
+				"/api/admin/search-index/retry",
+				expect.objectContaining({
+					body: JSON.stringify({
+						receipts: [receipt],
+						scope: "receipts",
+					}),
+					method: "POST",
+				}),
+			],
+		]);
+	});
+
+	it.each([
+		["missing", []],
+		[
+			"duplicate",
+			[
+				{
+					entityKey: "LIVEB22K",
+					entityType: "item",
+					revision: 4,
+				},
+				{
+					entityKey: "LIVEB22K",
+					entityType: "item",
+					revision: 4,
+				},
+			],
+		],
+		[
+			"mismatched",
+			[
+				{
+					entityKey: "ABCD2345",
+					entityType: "item",
+					revision: 4,
+				},
+			],
+		],
+	] as const)("rejects %s receipt status responses", async (_label, returned) => {
+		const statuses = returned.map((receipt) => ({
+			...receipt,
+			attempts: 0,
+			createdAt: "2026-08-04T10:00:00.000Z",
+			error: null,
+			nextAttemptAt: "2026-08-04T10:00:00.000Z",
+			processedAt: null,
+			state: "queued",
+		}));
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue(
+				new Response(JSON.stringify({ receipts: statuses }), {
+					headers: { "Content-Type": "application/json" },
+					status: 200,
+				}),
+			),
+		);
+
+		await expect(
+			getAdminSearchIndexReceipts([
+				{ entityKey: "LIVEB22K", entityType: "item", revision: 4 },
+			]),
+		).rejects.toMatchObject({ code: "internal_error", status: 502 });
+	});
+
+	it("rejects mutation responses that omit indexing receipts", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue(
+				new Response(JSON.stringify({ item: {} }), {
+					headers: { "Content-Type": "application/json" },
+					status: 200,
+				}),
+			),
+		);
+
+		await expect(publishAdminItem("LIVEB22K")).rejects.toMatchObject({
+			code: "internal_error",
+			message:
+				"The server returned an invalid search indexing response. Refresh and try again.",
+			status: 502,
 		});
 	});
 });
