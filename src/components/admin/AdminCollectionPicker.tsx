@@ -4,6 +4,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import {
 	AlertCircle,
 	ArrowLeft,
+	Check,
 	ChevronRight,
 	Folder,
 	FolderOpen,
@@ -15,7 +16,6 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/nextui/Button";
-import { Checkbox } from "@/components/nextui/Checkbox";
 import { Input } from "@/components/nextui/Input";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import type {
@@ -112,6 +112,149 @@ function SelectionRow({
 	);
 }
 
+function CollectionLoadingStatus() {
+	return (
+		<div
+			aria-label="Loading collections"
+			className="inline-flex items-center gap-2 rounded-lg border border-black/[0.08] bg-card_light px-2.5 py-2 text-xs font-medium text-black/60 shadow-sm dark:border-white/[0.09] dark:bg-card dark:text-white/65"
+			role="status"
+		>
+			<LoaderCircle
+				aria-hidden
+				className="animate-spin motion-reduce:animate-none"
+				size={14}
+			/>
+			Loading
+		</div>
+	);
+}
+
+function CollectionLoadingIndicator() {
+	return (
+		<div className="pointer-events-none absolute inset-0 z-20 grid place-items-center">
+			<CollectionLoadingStatus />
+		</div>
+	);
+}
+
+function CollectionErrorStatus({
+	message,
+	onRetry,
+}: {
+	message: string;
+	onRetry: () => void;
+}) {
+	return (
+		<div className="flex flex-col items-center justify-center gap-2 px-6 py-3 text-center">
+			<AlertCircle aria-hidden className="text-danger" size={17} />
+			<p className="text-xs text-black/55 dark:text-white/55">
+				{message}
+			</p>
+			<Button onPress={onRetry} size="xs" variant="transparent">
+				Try again
+			</Button>
+		</div>
+	);
+}
+
+function CollectionSelectionIndicator({ selected }: { selected: boolean }) {
+	return (
+		<span
+			aria-hidden
+			className={`grid size-4 shrink-0 place-items-center rounded-[5px] border-2 transition-colors ${
+				selected
+					? "border-accent bg-accent text-white"
+					: "border-default bg-transparent text-transparent"
+			}`}
+		>
+			{selected ? <Check size={11} strokeWidth={2.5} /> : null}
+		</span>
+	);
+}
+
+function CollectionResultRow({
+	disabled,
+	entry,
+	onBrowse,
+	onSelect,
+	selected,
+	selectionMode,
+	sources,
+}: {
+	disabled: boolean;
+	entry: AdminCollectionCatalogEntry;
+	onBrowse: (entry: AdminCollectionCatalogEntry) => void;
+	onSelect: (entry: AdminCollectionCatalogEntry) => void;
+	selected: boolean;
+	selectionMode: "multiple" | "single";
+	sources: readonly AdminSource[];
+}) {
+	const path = adminCollectionPath(entry, sources);
+	const opensCollection = entry.hasChildren;
+	const selectionLabel = `${selectionMode === "multiple" && selected ? "Deselect" : "Select"} ${entry.name}, ${path}`;
+	if (!opensCollection) {
+		return (
+			<button
+				aria-label={selectionLabel}
+				aria-pressed={selected}
+				className={`flex h-full w-full min-w-0 items-center gap-2 rounded-lg px-2.5 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-40 ${
+					selected
+						? "bg-accent/[0.12] dark:bg-accent/20"
+						: "hover:bg-black/[0.04] dark:hover:bg-white/[0.045]"
+				}`}
+				data-admin-collection-result-row
+				disabled={disabled}
+				onClick={() => onSelect(entry)}
+				type="button"
+			>
+				<CollectionSelectionIndicator selected={selected} />
+				<Folder aria-hidden className="shrink-0 opacity-45" size={14} />
+				<CollectionResultLabel entry={entry} sources={sources} />
+			</button>
+		);
+	}
+	return (
+		<div
+			className={`group flex h-full min-w-0 items-center rounded-lg transition-colors ${
+				selected
+					? "bg-accent/[0.12] dark:bg-accent/20"
+					: "hover:bg-black/[0.04] dark:hover:bg-white/[0.045]"
+			}`}
+			data-admin-collection-result-row
+		>
+			<button
+				aria-label={selectionLabel}
+				aria-pressed={selected}
+				className="grid size-9 shrink-0 place-items-center rounded-lg text-black/40 outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-40 dark:text-white/45"
+				disabled={disabled}
+				onClick={() => onSelect(entry)}
+				type="button"
+			>
+				<CollectionSelectionIndicator selected={selected} />
+			</button>
+			<button
+				aria-label={`${opensCollection ? "Open" : "Choose"} ${entry.name}, ${path}`}
+				className="flex min-w-0 flex-1 items-center gap-2 self-stretch rounded-lg pr-2 text-left outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:cursor-not-allowed disabled:opacity-40"
+				disabled={disabled}
+				onClick={() =>
+					opensCollection ? onBrowse(entry) : onSelect(entry)
+				}
+				type="button"
+			>
+				<Folder aria-hidden className="shrink-0 opacity-45" size={14} />
+				<CollectionResultLabel entry={entry} sources={sources} />
+				{opensCollection ? (
+					<ChevronRight
+						aria-hidden
+						className="shrink-0 text-black/35 dark:text-white/35"
+						size={14}
+					/>
+				) : null}
+			</button>
+		</div>
+	);
+}
+
 export function AdminCollectionPicker({
 	allowTopLevel = false,
 	autoFocus = false,
@@ -153,8 +296,10 @@ export function AdminCollectionPicker({
 	const [loadingMore, setLoadingMore] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [reloadToken, setReloadToken] = useState(0);
+	const [sourceSelectionPending, setSourceSelectionPending] = useState(false);
 	const requestVersion = useRef(0);
 	const loadMoreController = useRef<AbortController | null>(null);
+	const pickerRef = useRef<HTMLDivElement>(null);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const {
 		entries: selectedEntries,
@@ -181,6 +326,18 @@ export function AdminCollectionPicker({
 		},
 		[],
 	);
+
+	useEffect(() => {
+		if (!autoFocus || loading) return;
+		const frame = window.requestAnimationFrame(() => {
+			pickerRef.current
+				?.querySelector<HTMLInputElement>(
+					'input[aria-label="Search collections"]',
+				)
+				?.focus();
+		});
+		return () => window.cancelAnimationFrame(frame);
+	}, [autoFocus, loading]);
 
 	const loadPage = useCallback(
 		async (
@@ -215,14 +372,9 @@ export function AdminCollectionPicker({
 				append ? uniqueEntries(current, page.items) : page.items,
 			);
 			setNextCursor(page.nextCursor);
+			setSourceSelectionPending(false);
 		},
-		[
-			activeParent,
-			contextKey,
-			debouncedQuery,
-			editableOnly,
-			sourceKey,
-		],
+		[activeParent, contextKey, debouncedQuery, editableOnly, sourceKey],
 	);
 
 	useEffect(() => {
@@ -233,12 +385,11 @@ export function AdminCollectionPicker({
 			setNextCursor(null);
 			setError(null);
 			setLoading(false);
+			setSourceSelectionPending(false);
 			return;
 		}
 		const controller = new AbortController();
 		const version = ++requestVersion.current;
-		setItems([]);
-		setNextCursor(null);
 		setError(null);
 		setLoading(true);
 		void loadPage(null, false, controller.signal)
@@ -253,6 +404,7 @@ export function AdminCollectionPicker({
 						? caught.message
 						: "Collections could not be loaded.",
 				);
+				setSourceSelectionPending(false);
 			})
 			.finally(() => {
 				if (version === requestVersion.current) setLoading(false);
@@ -314,20 +466,34 @@ export function AdminCollectionPicker({
 		);
 	};
 
-	const browseInto = (entry: AdminCollectionCatalogEntry) => {
-		setQuery("");
-		setSourceKey(entry.sourceConnectionKey);
-		setPath([...entry.ancestors, { key: entry.key, name: entry.name }]);
+	const navigateToPath = (nextPath: CollectionPathEntry[]) => {
+		const nextParent = nextPath.at(-1)?.key ?? null;
+		if (nextParent === activeParent) return;
+		setLoading(true);
+		setPath(nextPath);
 		scrollRef.current?.scrollTo({ top: 0 });
 	};
 
+	const browseInto = (entry: AdminCollectionCatalogEntry) => {
+		setQuery("");
+		setSourceKey(entry.sourceConnectionKey);
+		navigateToPath([
+			...entry.ancestors,
+			{ key: entry.key, name: entry.name },
+		]);
+	};
+
 	const chooseSource = (key: string) => {
+		if (key === sourceKey && activeParent === null) return;
+		setLoading(true);
+		setSourceSelectionPending(true);
 		setSourceKey(key);
 		setPath([]);
 	};
 
 	return (
 		<div
+			ref={pickerRef}
 			className="flex min-h-0 w-full flex-col gap-2"
 			data-admin-collection-picker
 		>
@@ -339,6 +505,7 @@ export function AdminCollectionPicker({
 					inputWrapper: "h-9 min-h-9 rounded-lg",
 				}}
 				placeholder="Search collections"
+				isDisabled={loading}
 				startContent={
 					<Search
 						aria-hidden
@@ -352,7 +519,10 @@ export function AdminCollectionPicker({
 			/>
 
 			{selectionMode === "multiple" && selectedEntries.length > 0 ? (
-				<div className="max-h-28 space-y-1 overflow-y-auto pr-1">
+				<div
+					className="max-h-28 space-y-1 overflow-y-auto pr-1"
+					inert={loading ? true : undefined}
+				>
 					{selectedEntries.map((entry) => (
 						<SelectionRow
 							key={entry.key}
@@ -370,7 +540,10 @@ export function AdminCollectionPicker({
 				</div>
 			) : null}
 			{selectionMode === "multiple" && selectedEntriesError ? (
-				<div className="flex min-h-9 items-center gap-2 rounded-lg bg-danger/10 px-2.5 text-xs text-danger">
+				<div
+					className="flex min-h-9 items-center gap-2 rounded-lg bg-danger/10 px-2.5 text-xs text-danger"
+					inert={loading ? true : undefined}
+				>
 					<AlertCircle aria-hidden className="shrink-0" size={13} />
 					<span className="min-w-0 flex-1">
 						Some selected collections could not be loaded.
@@ -385,12 +558,13 @@ export function AdminCollectionPicker({
 				</div>
 			) : null}
 
-			{!debouncedQuery && sourceKey ? (
+			{!debouncedQuery && sourceKey && !sourceSelectionPending ? (
 				<div className="flex min-h-7 items-center gap-1 overflow-hidden px-0.5 text-xs text-black/45 dark:text-white/45">
 					{!editableOnly ? (
 						<button
 							aria-label="Choose source"
-							className="grid size-7 shrink-0 place-items-center rounded-md hover:bg-black/[0.05] hover:text-black/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:hover:bg-white/[0.06] dark:hover:text-white/75"
+							className="grid size-7 shrink-0 place-items-center rounded-md hover:bg-black/[0.05] hover:text-black/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
+							disabled={loading}
 							onClick={() => {
 								setSourceKey(null);
 								setPath([]);
@@ -400,14 +574,25 @@ export function AdminCollectionPicker({
 							<ArrowLeft aria-hidden size={13} />
 						</button>
 					) : null}
-					<button
-						className="shrink-0 rounded-md px-1.5 py-1 font-medium hover:bg-black/[0.05] hover:text-black/75 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
-						onClick={() => setPath([])}
-						type="button"
-					>
-						{sources.find(({ key }) => key === sourceKey)?.label ??
-							sourceKey}
-					</button>
+					{path.length > 0 ? (
+						<button
+							className="shrink-0 rounded-md px-1.5 py-1 font-medium hover:bg-black/[0.05] hover:text-black/75 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
+							disabled={loading}
+							onClick={() => navigateToPath([])}
+							type="button"
+						>
+							{sources.find(({ key }) => key === sourceKey)
+								?.label ?? sourceKey}
+						</button>
+					) : (
+						<span
+							aria-current="page"
+							className="shrink-0 px-1.5 py-1 font-medium text-black/65 dark:text-white/65"
+						>
+							{sources.find(({ key }) => key === sourceKey)
+								?.label ?? sourceKey}
+						</span>
+					)}
 					{path.map((entry, index) => (
 						<div
 							key={entry.key}
@@ -418,238 +603,242 @@ export function AdminCollectionPicker({
 								className="shrink-0"
 								size={11}
 							/>
-							<button
-								className="min-w-0 truncate rounded-md px-1.5 py-1 hover:bg-black/[0.05] hover:text-black/75 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
-								onClick={() =>
-									setPath(path.slice(0, index + 1))
-								}
-								type="button"
-							>
-								{entry.name}
-							</button>
+							{index === path.length - 1 ? (
+								<span
+									aria-current="page"
+									className="min-w-0 truncate px-1.5 py-1 text-black/65 dark:text-white/65"
+								>
+									{entry.name}
+								</span>
+							) : (
+								<button
+									className="min-w-0 truncate rounded-md px-1.5 py-1 hover:bg-black/[0.05] hover:text-black/75 disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
+									disabled={loading}
+									onClick={() =>
+										navigateToPath(path.slice(0, index + 1))
+									}
+									type="button"
+								>
+									{entry.name}
+								</button>
+							)}
 						</div>
 					))}
 				</div>
 			) : null}
 
-			{!debouncedQuery && !sourceKey ? (
+			{!debouncedQuery && (!sourceKey || sourceSelectionPending) ? (
 				<div
-					className="max-h-[min(44vh,288px)] space-y-1 overflow-y-auto rounded-xl bg-black/[0.02] p-1.5 dark:bg-white/[0.025]"
+					aria-busy={sourceSelectionPending}
+					className="relative rounded-xl bg-black/[0.02] dark:bg-white/[0.025]"
 					data-admin-collection-picker-sources
 				>
-					{sources.map((source) => (
-						<button
-							key={source.key}
-							className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm text-black/70 hover:bg-black/[0.045] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/75 dark:hover:bg-white/[0.055]"
-							onClick={() => chooseSource(source.key)}
-							type="button"
+					<div
+						className="max-h-[min(44vh,288px)] overflow-y-auto rounded-xl"
+						data-admin-collection-picker-source-scroll
+					>
+						<div
+							className={`space-y-1 p-1.5 transition-opacity duration-150 motion-reduce:transition-none ${
+								sourceSelectionPending
+									? "pointer-events-none select-none opacity-40"
+									: "opacity-100"
+							}`}
+							data-admin-collection-picker-source-content
+							inert={sourceSelectionPending ? true : undefined}
 						>
-							<Folder
-								aria-hidden
-								className="shrink-0 opacity-45"
-								size={15}
-							/>
-							<span className="min-w-0 flex-1 truncate">
-								{source.label}
-							</span>
-							{source.readOnly ? (
-								<Lock
-									aria-label="Read only"
-									className="opacity-35"
-									size={12}
-								/>
-							) : null}
-							<ChevronRight
-								aria-hidden
-								className="opacity-35"
-								size={13}
-							/>
-						</button>
-					))}
+							{sources.map((source) => (
+								<button
+									key={source.key}
+									className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm text-black/70 hover:bg-black/[0.045] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/75 dark:hover:bg-white/[0.055]"
+									onClick={() => chooseSource(source.key)}
+									type="button"
+								>
+									<Folder
+										aria-hidden
+										className="shrink-0 opacity-45"
+										size={15}
+									/>
+									<span className="min-w-0 flex-1 truncate">
+										{source.label}
+									</span>
+									{source.readOnly ? (
+										<Lock
+											aria-label="Read only"
+											className="opacity-35"
+											size={12}
+										/>
+									) : null}
+									<ChevronRight
+										aria-hidden
+										className="opacity-35"
+										size={13}
+									/>
+								</button>
+							))}
+						</div>
+					</div>
+					{sourceSelectionPending ? (
+						<CollectionLoadingIndicator />
+					) : null}
 				</div>
 			) : (
 				<div
-					ref={scrollRef}
-					className={`relative max-h-[min(44vh,320px)] overflow-y-auto rounded-xl bg-black/[0.02] dark:bg-white/[0.025] ${
-						loading || error || items.length === 0 ? "min-h-48" : ""
-					}`}
+					aria-busy={loading}
+					className="relative rounded-xl bg-black/[0.02] dark:bg-white/[0.025]"
 					data-admin-collection-picker-results
 				>
-					{showTopLevel ? (
-						<button
-							className="sticky top-0 z-10 flex min-h-11 w-full items-center gap-2 border-b border-black/[0.06] bg-card_light px-3 text-left text-sm font-medium text-black/70 hover:bg-black/[0.035] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:border-white/[0.06] dark:bg-card dark:text-white/75 dark:hover:bg-white/[0.045]"
-							onClick={onSelectTopLevel}
-							type="button"
+					<div
+						ref={scrollRef}
+						className="max-h-[min(44vh,320px)] overflow-y-auto rounded-xl"
+						data-admin-collection-picker-scroll
+					>
+						<div
+							className={`transition-opacity duration-150 motion-reduce:transition-none ${
+								loading || error
+									? "pointer-events-none select-none opacity-40"
+									: "opacity-100"
+							}`}
+							data-admin-collection-picker-content
+							inert={loading || Boolean(error) ? true : undefined}
 						>
-							<FolderOpen
-								aria-hidden
-								className="text-accent"
-								size={15}
-							/>
-							Top level
-						</button>
-					) : null}
-					{loading ? (
-						<div className="grid min-h-48 place-items-center text-black/40 dark:text-white/40">
-							<LoaderCircle
-								aria-label="Loading collections"
-								className="animate-spin"
-								size={15}
-							/>
+							{showTopLevel ? (
+								<button
+									className="sticky top-0 z-10 flex min-h-11 w-full items-center gap-2 border-b border-black/[0.06] bg-card_light px-3 text-left text-sm font-medium text-black/70 hover:bg-black/[0.035] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:border-white/[0.06] dark:bg-card dark:text-white/75 dark:hover:bg-white/[0.045]"
+									onClick={onSelectTopLevel}
+									type="button"
+								>
+									<FolderOpen
+										aria-hidden
+										className="text-accent"
+										size={15}
+									/>
+									Top level
+								</button>
+							) : null}
+							{items.length === 0 && !loading && !error ? (
+								<div className="grid place-items-center px-6 py-4 text-center text-xs text-black/40 dark:text-white/40">
+									{debouncedQuery
+										? "No matching collections"
+										: "No collections here"}
+								</div>
+							) : (
+								<div
+									className="relative w-full"
+									style={{
+										height: virtualizer.getTotalSize(),
+									}}
+								>
+									{virtualizer
+										.getVirtualItems()
+										.map((virtualRow) => {
+											const entry =
+												items[virtualRow.index];
+											if (!entry) {
+												return (
+													<div
+														key="load-more"
+														className="absolute left-0 top-0 flex w-full items-center justify-center"
+														style={{
+															height: virtualRow.size,
+															transform: `translateY(${virtualRow.start}px)`,
+														}}
+													>
+														<Button
+															isDisabled={
+																loadingMore
+															}
+															onPress={loadMore}
+															size="xs"
+															startContent={
+																loadingMore ? (
+																	<LoaderCircle
+																		aria-hidden
+																		className="animate-spin"
+																		size={
+																			14
+																		}
+																	/>
+																) : undefined
+															}
+															variant="transparent"
+														>
+															{loadingMore
+																? "Loading"
+																: "Load more"}
+														</Button>
+													</div>
+												);
+											}
+											const selected = selectedSet.has(
+												entry.key,
+											);
+											const disabled =
+												entry.deleted ||
+												(editableOnly &&
+													isLockedCollection(
+														entry,
+													)) ||
+												entry.key ===
+													disabledAncestorKey ||
+												entry.ancestors.some(
+													({ key }) =>
+														key ===
+														disabledAncestorKey,
+												);
+											return (
+												<div
+													key={entry.key}
+													className="absolute left-0 top-0 w-full px-1 py-0.5"
+													style={{
+														height: virtualRow.size,
+														transform: `translateY(${virtualRow.start}px)`,
+													}}
+												>
+													<CollectionResultRow
+														disabled={disabled}
+														entry={entry}
+														onBrowse={browseInto}
+														onSelect={toggleEntry}
+														selected={selected}
+														selectionMode={
+															selectionMode
+														}
+														sources={sources}
+													/>
+												</div>
+											);
+										})}
+								</div>
+							)}
 						</div>
+					</div>
+					{loading ? (
+						items.length > 0 || showTopLevel ? (
+							<CollectionLoadingIndicator />
+						) : (
+							<div className="flex justify-center py-2">
+								<CollectionLoadingStatus />
+							</div>
+						)
 					) : error ? (
-						<div className="flex min-h-48 flex-col items-center justify-center gap-2 px-6 text-center">
-							<AlertCircle
-								aria-hidden
-								className="text-danger"
-								size={17}
-							/>
-							<p className="text-xs text-black/55 dark:text-white/55">
-								{error}
-							</p>
-							<Button
-								onPress={() =>
+						items.length > 0 || showTopLevel ? (
+							<div className="absolute inset-0 z-20 grid place-items-center">
+								<CollectionErrorStatus
+									message={error}
+									onRetry={() =>
+										setReloadToken((current) => current + 1)
+									}
+								/>
+							</div>
+						) : (
+							<CollectionErrorStatus
+								message={error}
+								onRetry={() =>
 									setReloadToken((current) => current + 1)
 								}
-								size="xs"
-								variant="transparent"
-							>
-								Try again
-							</Button>
-						</div>
-					) : items.length === 0 ? (
-						<div className="grid min-h-48 place-items-center px-6 text-center text-xs text-black/40 dark:text-white/40">
-							{debouncedQuery
-								? "No matching collections"
-								: "No collections here"}
-						</div>
-					) : (
-						<div
-							className="relative w-full"
-							style={{ height: virtualizer.getTotalSize() }}
-						>
-							{virtualizer.getVirtualItems().map((virtualRow) => {
-								const entry = items[virtualRow.index];
-								if (!entry) {
-									return (
-										<div
-											key="load-more"
-											className="absolute left-0 top-0 flex w-full items-center justify-center"
-											style={{
-												height: virtualRow.size,
-												transform: `translateY(${virtualRow.start}px)`,
-											}}
-										>
-											<Button
-												isDisabled={loadingMore}
-												onPress={loadMore}
-												size="xs"
-												startContent={
-													loadingMore ? (
-														<LoaderCircle
-															aria-hidden
-															className="animate-spin"
-															size={14}
-														/>
-													) : undefined
-												}
-												variant="transparent"
-											>
-												{loadingMore
-													? "Loading"
-													: "Load more"}
-											</Button>
-										</div>
-									);
-								}
-								const selected = selectedSet.has(entry.key);
-								const disabled =
-									entry.deleted ||
-									(editableOnly &&
-										isLockedCollection(entry)) ||
-									entry.key === disabledAncestorKey ||
-									entry.ancestors.some(
-										({ key }) =>
-											key === disabledAncestorKey,
-									);
-								return (
-									<div
-										key={entry.key}
-										className="absolute left-0 top-0 w-full px-1 py-0.5"
-										style={{
-											height: virtualRow.size,
-											transform: `translateY(${virtualRow.start}px)`,
-										}}
-									>
-										<div
-											className={`flex h-full min-w-0 items-center rounded-lg transition-colors ${
-												selected
-													? "bg-accent/[0.12] dark:bg-accent/20"
-													: "hover:bg-black/[0.04] dark:hover:bg-white/[0.045]"
-											}`}
-										>
-											{selectionMode === "multiple" ? (
-												<Checkbox
-													aria-label={`${entry.name}, ${adminCollectionPath(entry, sources)}`}
-													className="m-0 min-w-0 flex-1 p-2"
-													classNames={{
-														label: "min-w-0 flex-1",
-													}}
-													isDisabled={disabled}
-													isSelected={selected}
-													onValueChange={() =>
-														toggleEntry(entry)
-													}
-													size="sm"
-												>
-													<CollectionResultLabel
-														entry={entry}
-														sources={sources}
-													/>
-												</Checkbox>
-											) : (
-												<button
-													aria-pressed={selected}
-													className="flex min-w-0 flex-1 items-center gap-2 self-stretch px-2.5 text-left disabled:cursor-not-allowed disabled:opacity-40"
-													disabled={disabled}
-													onClick={() =>
-														toggleEntry(entry)
-													}
-													type="button"
-												>
-													<Folder
-														aria-hidden
-														className="shrink-0 opacity-45"
-														size={14}
-													/>
-													<CollectionResultLabel
-														entry={entry}
-														sources={sources}
-													/>
-												</button>
-											)}
-											{entry.hasChildren ? (
-												<button
-													aria-label={`Browse inside ${entry.name}, ${adminCollectionPath(entry, sources)}`}
-													className="mr-1 grid size-8 shrink-0 place-items-center rounded-md text-black/35 hover:bg-black/[0.06] hover:text-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-30 dark:text-white/35 dark:hover:bg-white/[0.07] dark:hover:text-white/75"
-													disabled={disabled}
-													onClick={() =>
-														browseInto(entry)
-													}
-													type="button"
-												>
-													<ChevronRight
-														aria-hidden
-														size={14}
-													/>
-												</button>
-											) : null}
-										</div>
-									</div>
-								);
-							})}
-						</div>
-					)}
+							/>
+						)
+					) : null}
 				</div>
 			)}
 		</div>
