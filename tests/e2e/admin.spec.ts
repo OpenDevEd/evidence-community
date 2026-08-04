@@ -6,6 +6,12 @@ import type {
 } from "@/lib/admin/types";
 import type { AdminItemBatchResult } from "@/lib/admin/item-batch-contract";
 
+import {
+	measureAdminSearchIndexTrigger,
+	openAndMeasureAdminSearchIndexPopover,
+	waitForAdminSearchIndexStatus,
+} from "./admin-search-index-page";
+
 const itemKey = "TESTBOOK";
 const publishedItemKey = "LIVEB22K";
 const timestamp = "2026-07-31T12:00:00.000Z";
@@ -4273,24 +4279,12 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 		.getByRole("button", { name: "Publish selected" })
 		.click();
 
-	const indexingStatus = page.getByRole("button", {
-		name: "Search indexing: Indexing 42%",
-	});
-	await expect(indexingStatus).toBeVisible();
-	const triggerGeometry = await indexingStatus.evaluate((element) => {
-		const style = getComputedStyle(element);
-		return {
-			display: style.display,
-			flexDirection: style.flexDirection,
-			height: element.getBoundingClientRect().height,
-			iconHeight: element
-				.querySelector("svg")
-				?.parentElement?.getBoundingClientRect().height,
-			paddingLeft: style.paddingLeft,
-			paddingRight: style.paddingRight,
-			width: element.getBoundingClientRect().width,
-		};
-	});
+	const indexingStatus = await waitForAdminSearchIndexStatus(
+		page,
+		"Indexing 42%",
+		4_000,
+	);
+	const triggerGeometry = await measureAdminSearchIndexTrigger(indexingStatus);
 	expect(triggerGeometry).toEqual({
 		display: "flex",
 		flexDirection: "row",
@@ -4301,32 +4295,9 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 		width: 32,
 	});
 
-	await indexingStatus.click();
-	const popover = page.locator("[data-admin-search-index-popover]");
-	await expect(popover).toBeVisible();
+	const { geometry: popoverGeometry, popover } =
+		await openAndMeasureAdminSearchIndexPopover(page, indexingStatus, 4_000);
 	await expect(popover.getByText("Indexing 42%", { exact: true })).toBeVisible();
-	const popoverGeometry = await popover.evaluate((element) => {
-		const rect = element.getBoundingClientRect();
-		const surface = element.querySelector<HTMLElement>(
-			'[data-slot="content"]',
-		)!;
-		const surfaceStyle = getComputedStyle(surface);
-		const inner = element.querySelector<HTMLElement>(
-			"[data-admin-search-index-content]",
-		)!;
-		const progress = element.querySelector<HTMLElement>(
-			'[role="progressbar"] > div',
-		);
-		return {
-			documentOverflow: document.documentElement.scrollWidth - window.innerWidth,
-			innerPadding: getComputedStyle(inner).padding,
-			progressHeight: progress?.getBoundingClientRect().height,
-			rightInsideViewport: rect.right <= window.innerWidth,
-			surfaceBorderRadius: surfaceStyle.borderRadius,
-			surfaceBorderWidth: surfaceStyle.borderWidth,
-			width: rect.width,
-		};
-	});
 	expect(popoverGeometry).toMatchObject({
 		documentOverflow: 0,
 		innerPadding: "12px",
