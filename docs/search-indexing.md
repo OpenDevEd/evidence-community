@@ -83,6 +83,35 @@ npm run search:index -- --requeue-dead-letters
 `--requeue-dead-letters` resets terminal events to immediately retryable state
 and can be combined with either one-shot or watch mode.
 
+## Production worker
+
+Build the dedicated worker target from the same revision as the web image:
+
+```sh
+docker build --target search-indexer -t evidence-library-search-indexer .
+```
+
+Run one worker service per library. Mount the same runtime configuration used
+by the web service and give the service a stable logical worker identity:
+
+```sh
+docker run -d \
+  --name evidence-library-search-indexer \
+  --restart unless-stopped \
+  -e LIBRARY_CONFIG_PATH=/runtime/library.json \
+  -e SEARCH_INDEX_WORKER_ID=search-indexer-1 \
+  -v /srv/evidence-library/runtime:/runtime:ro \
+  evidence-library-search-indexer
+```
+
+The worker stores its stage, heartbeat, current Meilisearch task and batch,
+real batch progress when available, last completion, and last error in
+PostgreSQL. The container health check fails when its durable heartbeat is
+more than twenty seconds old or belongs to a replacement container generation.
+Delivery errors remain visible across restarts and clear only after a later
+event succeeds. Database migrations must be applied before a new worker
+revision starts.
+
 The real-service verifier creates isolated indexes and proves document shape,
 collection reprojection, re-parent cleanup, tombstone deletion, restoration,
 byte-aware requests, asynchronous task failure, retry, dead-letter requeue,
@@ -93,4 +122,14 @@ DATABASE_URL_POST=postgresql://library:library@127.0.0.1:55435/library \
 MEILISEARCH_HOST=http://127.0.0.1:57700 \
 MEILISEARCH_KEY=local-search-key \
 npm run test:search-index
+```
+
+The worker lifecycle verifier additionally exercises process health, rolling
+replacement fencing, historical errors, active PostgreSQL cancellation,
+durable task progress, startup failures, and graceful shutdown:
+
+```sh
+LIBRARY_CONFIG_PATH=config/library.local.json \
+DATABASE_URL_POST=postgresql://library:library@127.0.0.1:55435/library \
+npm run test:search-worker
 ```
