@@ -13,6 +13,7 @@ import {
 	deleteNativeCollection,
 	renameNativeCollection,
 } from "@/lib/admin/native-collection-service";
+import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 type RouteContext = { params: Promise<{ key: string }> };
 
@@ -29,7 +30,12 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 		);
 		revalidateTag("collections", "max");
 		return NextResponse.json(
-			{ collection: toAdminCollection(collection) },
+			{
+				collection: toAdminCollection(collection),
+				indexingReceipts: [
+					adminSearchIndexReceipt("collection", collection),
+				],
+			},
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {
@@ -50,7 +56,12 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 		);
 		revalidateTag("collections", "max");
 		return NextResponse.json(
-			{ collections: collections.map(toAdminCollection) },
+			{
+				collections: collections.map(toAdminCollection),
+				indexingReceipts: collections.map((collection) =>
+					adminSearchIndexReceipt("collection", collection),
+				),
+			},
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {

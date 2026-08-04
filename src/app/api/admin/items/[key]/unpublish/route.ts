@@ -7,7 +7,8 @@ import {
 	adminErrorResponse,
 	requireAdminBypass,
 } from "@/lib/admin/http";
-import { unpublishNativeItem } from "@/lib/admin/native-item-service";
+import { unpublishNativeItemWithOutcome } from "@/lib/admin/native-item-service";
+import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 export async function POST(
 	_request: NextRequest,
@@ -18,9 +19,26 @@ export async function POST(
 
 	try {
 		const { key } = await params;
-		const item = await unpublishNativeItem(await getDatabase(), key);
+		const result = await unpublishNativeItemWithOutcome(
+			await getDatabase(),
+			key,
+		);
+		const { item } = result;
 		revalidatePublishedItemCaches(item.key, item.parentItem);
-		return NextResponse.json({ item }, { headers: ADMIN_RESPONSE_HEADERS });
+		return NextResponse.json(
+			{
+				...(result.changed
+					? {
+							indexingReceipts: result.indexingRecords.map(
+								(record) =>
+									adminSearchIndexReceipt("item", record),
+							),
+						}
+					: {}),
+				item,
+			},
+			{ headers: ADMIN_RESPONSE_HEADERS },
+		);
 	} catch (error) {
 		return adminErrorResponse(error);
 	}

@@ -11,6 +11,7 @@ import {
 } from "@/lib/admin/http";
 import { filePublicationJson } from "@/lib/admin/file-projection";
 import { publishNativePdf } from "@/lib/admin/native-file-service";
+import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 const bodySchema = z
 	.object({
@@ -42,6 +43,9 @@ export async function POST(
 		return NextResponse.json(
 			{
 				file: filePublicationJson(published.file),
+				indexingReceipts: published.indexingRecords.map((record) =>
+					adminSearchIndexReceipt("item", record),
+				),
 				item: {
 					key: published.item.key,
 					parentItem: published.item.parentItem,

@@ -16,8 +16,9 @@ import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 import {
 	getNativeFileState,
 	stageNativePdfUpload,
-	unpublishNativePdf,
+	unpublishNativePdfWithContext,
 } from "@/lib/admin/native-file-service";
+import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 type RouteContext = {
 	params: Promise<{ key: string }>;
@@ -96,9 +97,22 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
 			params,
 			getNativeFileRuntime(),
 		]);
-		const item = await unpublishNativePdf(runtime.db, runtime.storage, key);
+		const unpublished = await unpublishNativePdfWithContext(
+			runtime.db,
+			runtime.storage,
+			key,
+		);
+		const { item } = unpublished;
 		revalidatePublishedItemCaches(item.key, item.parentItem);
-		return NextResponse.json({ item }, { headers: ADMIN_RESPONSE_HEADERS });
+		return NextResponse.json(
+			{
+				indexingReceipts: unpublished.indexingRecords.map((record) =>
+					adminSearchIndexReceipt("item", record),
+				),
+				item,
+			},
+			{ headers: ADMIN_RESPONSE_HEADERS },
+		);
 	} catch (error) {
 		return adminErrorResponse(error);
 	}

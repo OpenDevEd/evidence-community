@@ -548,7 +548,11 @@ export async function moveNativeCollection(
 			move.beforeCollection,
 		);
 		if (positionUpdates.length === 0) {
-			return { collection: current, collections: [] };
+			return {
+				collection: current,
+				collections: [],
+				indexingCollections: [],
+			};
 		}
 
 		const now = new Date();
@@ -592,7 +596,9 @@ export async function moveNativeCollection(
 		const moved =
 			changedCollections.find(({ key }) => key === collectionKey) ??
 			current;
-		if (current.parentCollection !== move.parentCollection) {
+		const projectionChanged =
+			current.parentCollection !== move.parentCollection;
+		if (projectionChanged) {
 			await transaction.insert(outbox).values({
 				entityType: "collection",
 				entityKey: collectionKey,
@@ -600,7 +606,11 @@ export async function moveNativeCollection(
 				revision: moved.revision,
 			});
 		}
-		return { collection: moved, collections: changedCollections };
+		return {
+			collection: moved,
+			collections: changedCollections,
+			indexingCollections: projectionChanged ? [moved] : [],
+		};
 	});
 }
 

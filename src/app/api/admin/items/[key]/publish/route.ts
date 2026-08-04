@@ -8,6 +8,7 @@ import {
 	requireAdminBypass,
 } from "@/lib/admin/http";
 import { publishNativeItemDraftWithContext } from "@/lib/admin/native-item-service";
+import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 export async function POST(
 	_request: NextRequest,
@@ -18,14 +19,22 @@ export async function POST(
 
 	try {
 		const { key } = await params;
-		const { item, previousParentItem } =
+		const { indexingRecords, item, previousParentItem } =
 			await publishNativeItemDraftWithContext(await getDatabase(), key);
 		revalidatePublishedItemCaches(
 			item.key,
 			item.parentItem,
 			previousParentItem,
 		);
-		return NextResponse.json({ item }, { headers: ADMIN_RESPONSE_HEADERS });
+		return NextResponse.json(
+			{
+				indexingReceipts: indexingRecords.map((record) =>
+					adminSearchIndexReceipt("item", record),
+				),
+				item,
+			},
+			{ headers: ADMIN_RESPONSE_HEADERS },
+		);
 	} catch (error) {
 		return adminErrorResponse(error);
 	}

@@ -654,6 +654,10 @@ export async function publishNativePdf(
 
 			return {
 				file: savedPublication!,
+				indexingRecords: [
+					{ key: itemKey, revision: nextRevision },
+					{ key: parent.key, revision: parentNextRevision },
+				],
 				item: publishedItem!,
 				previousPrivatePaths: previousPublication
 					? [
@@ -783,11 +787,12 @@ export async function publishNativePdf(
 
 	return {
 		file: transactionResult.file,
+		indexingRecords: transactionResult.indexingRecords,
 		item: transactionResult.item,
 	};
 }
 
-export async function unpublishNativePdf(
+export async function unpublishNativePdfWithContext(
 	db: Database,
 	storage: EvidenceFileStorage,
 	itemKey: string,
@@ -921,6 +926,10 @@ export async function unpublishNativePdf(
 		]);
 
 		return {
+			indexingRecords: [
+				{ key: itemKey, revision: attachmentRevision },
+				{ key: parent.key, revision: parentRevision },
+			],
 			item: updatedItem!,
 			privatePaths: [
 				publication.sourceObjectPath,
@@ -942,5 +951,13 @@ export async function unpublishNativePdf(
 			);
 		}
 	}
-	return result.item;
+	return { indexingRecords: result.indexingRecords, item: result.item };
+}
+
+export async function unpublishNativePdf(
+	db: Database,
+	storage: EvidenceFileStorage,
+	itemKey: string,
+) {
+	return (await unpublishNativePdfWithContext(db, storage, itemKey)).item;
 }

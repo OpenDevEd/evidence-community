@@ -13,6 +13,7 @@ import type {
 	AdminItemBatchResponse,
 	AdminItemBatchResult,
 } from "./item-batch-contract";
+import { adminSearchIndexReceipt } from "./search-index-contract";
 import {
 	assignNativeItemDraftToCollection,
 	NativeItemHasChildrenError,
@@ -205,7 +206,13 @@ export async function runAdminItemBatch(
 				}
 				const { item: published, previousParentItem } =
 					publishedContext;
-				results.push({ key, outcome: "changed" });
+				results.push({
+					indexingReceipts: publishedContext.indexingRecords.map(
+						(record) => adminSearchIndexReceipt("item", record),
+					),
+					key,
+					outcome: "changed",
+				});
 				revalidationTargets.push({
 					itemKey: published.key,
 					parentItem: published.parentItem,
@@ -218,6 +225,18 @@ export async function runAdminItemBatch(
 				try {
 					const removed = await removeNativeItem(db, key);
 					results.push({
+						...(removed.changed && removed.item
+							? {
+									indexingReceipts:
+										removed.indexingRecords.map(
+											(record) =>
+												adminSearchIndexReceipt(
+													"item",
+													record,
+												),
+										),
+								}
+							: {}),
 						key,
 						outcome: removed.changed ? "changed" : "unchanged",
 					});

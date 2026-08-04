@@ -10,6 +10,7 @@ import {
 } from "@/lib/admin/http";
 import { toAdminCollection } from "@/lib/admin/library-query-service";
 import { restoreNativeCollection } from "@/lib/admin/native-collection-service";
+import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 export async function POST(
 	request: Request,
@@ -30,6 +31,9 @@ export async function POST(
 			{
 				collection: toAdminCollection(result.collection),
 				collections: result.collections.map(toAdminCollection),
+				indexingReceipts: result.collections.map((collection) =>
+					adminSearchIndexReceipt("collection", collection),
+				),
 			},
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);

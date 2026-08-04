@@ -754,6 +754,7 @@ export async function publishNativeItemDraftWithContext(
 			operation: "upsert",
 			revision: nextRevision,
 		});
+		const indexingRecords = [{ key: itemKey, revision: nextRevision }];
 		for (const relatedParentKey of relatedParentKeys) {
 			const relatedParent = lockedItems.find(
 				(candidate) => candidate.key === relatedParentKey,
@@ -781,12 +782,17 @@ export async function publishNativeItemDraftWithContext(
 				operation: "upsert",
 				revision: parentRevision,
 			});
+			indexingRecords.push({
+				key: relatedParent.key,
+				revision: parentRevision,
+			});
 		}
 		await transaction
 			.delete(itemDraft)
 			.where(eq(itemDraft.itemKey, itemKey));
 
 		return {
+			indexingRecords,
 			item: published!,
 			previousParentItem: candidate?.parentItem ?? null,
 		};
@@ -827,6 +833,7 @@ async function unpublishNativeItemAttempt(
 				if (discarded) {
 					return {
 						changed: true,
+						indexingRecords: [],
 						item: null,
 						stagedPrivatePaths: discarded.stagedPrivatePaths,
 					};
@@ -873,6 +880,7 @@ async function unpublishNativeItemAttempt(
 				: null;
 			return {
 				changed: Boolean(discarded),
+				indexingRecords: [],
 				item: current,
 				stagedPrivatePaths: discarded?.stagedPrivatePaths ?? [],
 			};
@@ -942,6 +950,7 @@ async function unpublishNativeItemAttempt(
 			operation: "delete",
 			revision: nextRevision,
 		});
+		const indexingRecords = [{ key: itemKey, revision: nextRevision }];
 		const parent =
 			typeof current.parentItem === "string"
 				? lockedItems.find(
@@ -969,6 +978,7 @@ async function unpublishNativeItemAttempt(
 				operation: "upsert",
 				revision: parentRevision,
 			});
+			indexingRecords.push({ key: parent.key, revision: parentRevision });
 		}
 		const discarded = discardDraft
 			? await discardNativeItemDraftIfPresentInTransaction(
@@ -979,6 +989,7 @@ async function unpublishNativeItemAttempt(
 			: null;
 		return {
 			changed: true,
+			indexingRecords,
 			item: unpublished!,
 			stagedPrivatePaths: discarded?.stagedPrivatePaths ?? [],
 		};
@@ -1143,6 +1154,7 @@ export async function removeNativeItem(db: Database, itemKey: string) {
 			const removed = await unpublishNativeItemAttempt(db, itemKey, true);
 			return {
 				changed: removed.changed,
+				indexingRecords: removed.indexingRecords,
 				item: removed.item,
 				stagedPrivatePaths: removed.stagedPrivatePaths,
 			};

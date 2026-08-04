@@ -2,6 +2,7 @@ import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { z } from "zod";
 
 import type { AdminErrorCode, AdminFieldErrors } from "./errors";
+import type { AdminSearchIndexReceipt } from "./search-index-contract";
 
 export const ADMIN_ITEM_BATCH_SIZE = 50;
 
@@ -35,6 +36,7 @@ export type AdminItemBatchResult = {
 	code?: AdminErrorCode;
 	fields?: AdminFieldErrors;
 	key: string;
+	indexingReceipts?: AdminSearchIndexReceipt[];
 	message?: string;
 	outcome: "changed" | "failed" | "skipped" | "unchanged";
 	retryable?: boolean;

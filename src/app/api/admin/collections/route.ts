@@ -16,6 +16,7 @@ import {
 } from "@/lib/admin/collection-catalog-service";
 import { parseAdminCollectionView } from "@/lib/admin/collection-catalog-contract";
 import { createNativeCollection } from "@/lib/admin/native-collection-service";
+import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 export async function GET(request: NextRequest) {
 	await connection();
@@ -84,7 +85,12 @@ export async function POST(request: NextRequest) {
 		);
 		revalidateTag("collections", "max");
 		return NextResponse.json(
-			{ collection: toAdminCollection(collection) },
+			{
+				collection: toAdminCollection(collection),
+				indexingReceipts: [
+					adminSearchIndexReceipt("collection", collection),
+				],
+			},
 			{ status: 201, headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {
