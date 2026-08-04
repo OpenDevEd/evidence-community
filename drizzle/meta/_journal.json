@@ -78,6 +78,13 @@
       "when": 1785773599315,
       "tag": "0010_admin_collection_state_search",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1785830178917,
+      "tag": "0011_search_index_worker_state",
+      "breakpoints": true
     }
   ]
 }

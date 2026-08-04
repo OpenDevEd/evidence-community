@@ -1,10 +1,11 @@
 import type { Index } from "meilisearch";
-import { MeiliSearch } from "meilisearch";
+import { Meilisearch } from "meilisearch";
 
 import { RevisionAwareResourceFactory } from "./revision-aware-resource";
 
 const CACHE_INDEX_NAME = "cache";
 const REDIRECTS_INDEX_NAME = "redirects";
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 export type SearchServiceConfiguration = {
 	host: string;
@@ -14,7 +15,7 @@ export type SearchServiceConfiguration = {
 
 export type MeilisearchService = {
 	cacheIndex: Index;
-	client: MeiliSearch;
+	client: Meilisearch;
 	index: Index;
 	indexName: string;
 	redirectsIndex: Index;
@@ -33,10 +34,12 @@ function configurationsEqual(
 
 function createMeilisearchService(
 	configuration: SearchServiceConfiguration,
+	options: RevisionAwareMeilisearchFactoryOptions,
 ) {
-	const client = new MeiliSearch({
+	const client = new Meilisearch({
 		host: configuration.host,
 		apiKey: configuration.key,
+		timeout: options.requestTimeoutMs,
 	});
 
 	return {
@@ -50,14 +53,40 @@ function createMeilisearchService(
 	};
 }
 
+export type RevisionAwareMeilisearchFactoryOptions = {
+	requestTimeoutMs?: number;
+};
+
 export class RevisionAwareMeilisearchFactory {
-	readonly #factory = new RevisionAwareResourceFactory(
-		"Meilisearch",
-		createMeilisearchService,
-		{
-			configurationEquals: configurationsEqual,
-		},
-	);
+	readonly #factory: RevisionAwareResourceFactory<
+		SearchServiceConfiguration,
+		MeilisearchService
+	>;
+
+	constructor(options: RevisionAwareMeilisearchFactoryOptions = {}) {
+		const requestTimeoutMs =
+			options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+		if (
+			!Number.isSafeInteger(requestTimeoutMs) ||
+			requestTimeoutMs < 100 ||
+			requestTimeoutMs > 5 * 60 * 1_000
+		) {
+			throw new Error(
+				"requestTimeoutMs must be an integer between 100 and 300,000",
+			);
+		}
+		const clientOptions = {
+			requestTimeoutMs,
+		};
+		this.#factory = new RevisionAwareResourceFactory(
+			"Meilisearch",
+			(configuration) =>
+				createMeilisearchService(configuration, clientOptions),
+			{
+				configurationEquals: configurationsEqual,
+			},
+		);
+	}
 
 	get({
 		configuration,

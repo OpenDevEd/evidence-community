@@ -6,6 +6,7 @@ import {
 	itemDraft,
 	itemIdentity,
 	outbox,
+	searchIndexWorker,
 	sourceConnection,
 	sourceSyncRun,
 	sourceSyncState,
@@ -21,16 +22,16 @@ export {
 	itemDraft,
 	itemIdentity,
 	outbox,
+	searchIndexWorker,
 	sourceConnection,
 	sourceSyncRun,
 	sourceSyncState,
 };
 
-export const { sourceRecordAlias, sourceSnapshot } =
-	createSourceRecordTables({
-		key: item.key,
-		sourceConnectionKey: item.sourceConnectionKey,
-	});
+export const { sourceRecordAlias, sourceSnapshot } = createSourceRecordTables({
+	key: item.key,
+	sourceConnectionKey: item.sourceConnectionKey,
+});
 
 export const itemFilePublication = createItemFilePublicationTable({
 	key: item.key,
@@ -47,19 +48,16 @@ export const sourceConnectionRelations = relations(
 	}),
 );
 
-export const sourceSyncRunRelations = relations(
-	sourceSyncRun,
-	({ one }) => ({
-		sourceConnection: one(sourceConnection, {
-			fields: [sourceSyncRun.sourceConnectionKey],
-			references: [sourceConnection.key],
-		}),
-		state: one(sourceSyncState, {
-			fields: [sourceSyncRun.id],
-			references: [sourceSyncState.activeRunId],
-		}),
+export const sourceSyncRunRelations = relations(sourceSyncRun, ({ one }) => ({
+	sourceConnection: one(sourceConnection, {
+		fields: [sourceSyncRun.sourceConnectionKey],
+		references: [sourceConnection.key],
 	}),
-);
+	state: one(sourceSyncState, {
+		fields: [sourceSyncRun.id],
+		references: [sourceSyncState.activeRunId],
+	}),
+}));
 
 export const sourceSyncStateRelations = relations(
 	sourceSyncState,
@@ -75,15 +73,12 @@ export const sourceSyncStateRelations = relations(
 	}),
 );
 
-export const sourceSnapshotRelations = relations(
-	sourceSnapshot,
-	({ one }) => ({
-		item: one(item, {
-			fields: [sourceSnapshot.itemKey],
-			references: [item.key],
-		}),
+export const sourceSnapshotRelations = relations(sourceSnapshot, ({ one }) => ({
+	item: one(item, {
+		fields: [sourceSnapshot.itemKey],
+		references: [item.key],
 	}),
-);
+}));
 
 export const sourceRecordAliasRelations = relations(
 	sourceRecordAlias,

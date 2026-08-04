@@ -9,6 +9,7 @@ import {
 	jsonb,
 	pgTable,
 	primaryKey,
+	real,
 	text,
 	timestamp,
 	unique,
@@ -53,25 +54,33 @@ export const SOURCE_SYNC_RUN_STATUSES = [
 
 export const OUTBOX_ENTITY_TYPES = ["item", "collection"] as const;
 export const OUTBOX_OPERATIONS = ["upsert", "delete"] as const;
+export const SEARCH_INDEX_WORKER_STAGES = [
+	"starting",
+	"idle",
+	"projecting",
+	"waiting",
+	"indexing",
+	"retrying",
+	"stopping",
+	"stopped",
+] as const;
 
 export type SourceProvider = (typeof SOURCE_PROVIDERS)[number];
 export type SourceScopeKind = (typeof SOURCE_SCOPE_KINDS)[number];
 export type SourceConnectionStatus =
 	(typeof SOURCE_CONNECTION_STATUSES)[number];
-export type SourceSyncRunStatus =
-	(typeof SOURCE_SYNC_RUN_STATUSES)[number];
+export type SourceSyncRunStatus = (typeof SOURCE_SYNC_RUN_STATUSES)[number];
 export type OutboxEntityType = (typeof OUTBOX_ENTITY_TYPES)[number];
 export type OutboxOperation = (typeof OUTBOX_OPERATIONS)[number];
+export type SearchIndexWorkerStage =
+	(typeof SEARCH_INDEX_WORKER_STAGES)[number];
 
 type JsonObject = Record<string, unknown>;
 
 const timestampWithTimezone = (name: string) =>
 	timestamp(name, { withTimezone: true });
 
-export function canonicalRecordKeyCheck(
-	name: string,
-	column: AnyPgColumn,
-) {
+export function canonicalRecordKeyCheck(name: string, column: AnyPgColumn) {
 	return check(
 		name,
 		sql`${column} ~ ${sql.raw(`'${CANONICAL_RECORD_KEY_SQL_PATTERN}'`)}`,
@@ -267,9 +276,8 @@ function createRecordIdentityTable(
 }
 
 export const itemIdentity = createRecordIdentityTable("itemIdentity");
-export const collectionIdentity = createRecordIdentityTable(
-	"collectionIdentity",
-);
+export const collectionIdentity =
+	createRecordIdentityTable("collectionIdentity");
 
 export const itemDraft = pgTable(
 	"itemDraft",
@@ -442,10 +450,7 @@ export const outbox = pgTable(
 			"outbox_operation_valid",
 			sql`${table.operation} IN ('upsert', 'delete')`,
 		),
-		check(
-			"outbox_attempts_nonnegative",
-			sql`${table.attempts} >= 0`,
-		),
+		check("outbox_attempts_nonnegative", sql`${table.attempts} >= 0`),
 		check(
 			"outbox_lease_bundle_valid",
 			sql`(
@@ -472,6 +477,56 @@ export const outbox = pgTable(
 		index("outbox_lease_expiry_idx")
 			.on(table.leaseExpiresAt)
 			.where(sql`${table.leaseOwner} IS NOT NULL`),
+	],
+);
+
+export const searchIndexWorker = pgTable(
+	"searchIndexWorker",
+	{
+		workerId: varchar("workerId", { length: 255 }).primaryKey(),
+		instanceId: varchar("instanceId", { length: 64 }).notNull(),
+		stage: text("stage", { enum: SEARCH_INDEX_WORKER_STAGES })
+			.notNull()
+			.default("starting"),
+		startedAt: timestampWithTimezone("startedAt").notNull().defaultNow(),
+		heartbeatAt: timestampWithTimezone("heartbeatAt")
+			.notNull()
+			.defaultNow(),
+		stoppedAt: timestampWithTimezone("stoppedAt"),
+		currentEventCount: integer("currentEventCount").notNull().default(0),
+		currentTaskUid: bigint("currentTaskUid", { mode: "number" }),
+		currentBatchUid: bigint("currentBatchUid", { mode: "number" }),
+		currentBatchProgress: real("currentBatchProgress"),
+		lastCompletedAt: timestampWithTimezone("lastCompletedAt"),
+		lastError: text("lastError"),
+	},
+	(table) => [
+		check(
+			"searchIndexWorker_stage_valid",
+			sql`${table.stage} IN ('starting', 'idle', 'projecting', 'waiting', 'indexing', 'retrying', 'stopping', 'stopped')`,
+		),
+		check(
+			"searchIndexWorker_event_count_nonnegative",
+			sql`${table.currentEventCount} >= 0`,
+		),
+		check(
+			"searchIndexWorker_progress_valid",
+			sql`${table.currentBatchProgress} IS NULL OR (${table.currentBatchUid} IS NOT NULL AND ${table.currentTaskUid} IS NOT NULL AND ${table.stage} = 'indexing' AND ${table.currentBatchProgress} >= 0 AND ${table.currentBatchProgress} <= 100)`,
+		),
+		check(
+			"searchIndexWorker_work_state_valid",
+			sql`(
+				(${table.stage} IN ('starting', 'idle', 'retrying', 'stopping', 'stopped') AND ${table.currentEventCount} = 0 AND ${table.currentTaskUid} IS NULL AND ${table.currentBatchUid} IS NULL AND ${table.currentBatchProgress} IS NULL)
+				OR (${table.stage} = 'projecting' AND ${table.currentEventCount} > 0 AND ${table.currentTaskUid} IS NULL AND ${table.currentBatchUid} IS NULL AND ${table.currentBatchProgress} IS NULL)
+				OR (${table.stage} IN ('waiting', 'indexing') AND ${table.currentEventCount} > 0 AND ${table.currentTaskUid} IS NOT NULL)
+			)`,
+		),
+		check(
+			"searchIndexWorker_stopped_state_valid",
+			sql`(${table.stage} = 'stopped' AND ${table.stoppedAt} IS NOT NULL) OR (${table.stage} <> 'stopped' AND ${table.stoppedAt} IS NULL)`,
+		),
+		index("searchIndexWorker_heartbeat_idx").on(table.heartbeatAt),
+		uniqueIndex("searchIndexWorker_instance_unique").on(table.instanceId),
 	],
 );
 
@@ -553,10 +608,7 @@ export function createItemFilePublicationTable(itemColumns: {
 			}).onDelete("cascade"),
 			foreignKey({
 				name: "itemFilePublication_parent_fk",
-				columns: [
-					table.parentItemKey,
-					table.sourceConnectionKey,
-				],
+				columns: [table.parentItemKey, table.sourceConnectionKey],
 				foreignColumns: [
 					itemColumns.key,
 					itemColumns.sourceConnectionKey,
@@ -565,9 +617,7 @@ export function createItemFilePublicationTable(itemColumns: {
 			unique("itemFilePublication_object_path_unique").on(
 				table.objectPath,
 			),
-			index("itemFilePublication_parent_idx").on(
-				table.parentItemKey,
-			),
+			index("itemFilePublication_parent_idx").on(table.parentItemKey),
 		],
 	);
 }
