@@ -14,6 +14,7 @@ import type {
 	AdminSearchIndexReceiptStatus,
 	AdminSearchIndexRetryRequest,
 } from "./search-index-contract";
+import { adminSearchIndexReceiptIdentity } from "./search-index-contract";
 
 type OutboxReceiptRow = Pick<
 	typeof outbox.$inferSelect,
@@ -29,10 +30,6 @@ type OutboxReceiptRow = Pick<
 	| "processedAt"
 	| "revision"
 >;
-
-function receiptIdentity(receipt: AdminSearchIndexReceipt) {
-	return `${receipt.entityType}:${receipt.entityKey}:${receipt.revision}`;
-}
 
 function receiptState(row: OutboxReceiptRow, now: Date) {
 	if (row.processedAt) return "indexed";
@@ -122,10 +119,14 @@ export async function getAdminSearchIndexReceipts(
 		.from(outbox)
 		.where(receiptPredicate(receipts));
 	const byIdentity = new Map(
-		rows.map((row) => [receiptIdentity(row), row] as const),
+		rows.map((row) => [adminSearchIndexReceiptIdentity(row), row] as const),
 	);
 	return receipts.map((receipt) =>
-		receiptJson(receipt, byIdentity.get(receiptIdentity(receipt)), now),
+		receiptJson(
+			receipt,
+			byIdentity.get(adminSearchIndexReceiptIdentity(receipt)),
+			now,
+		),
 	);
 }
 

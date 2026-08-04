@@ -27,14 +27,11 @@ export async function POST(
 		revalidatePublishedItemCaches(item.key, item.parentItem);
 		return NextResponse.json(
 			{
-				...(result.changed
-					? {
-							indexingReceipts: result.indexingRecords.map(
-								(record) =>
-									adminSearchIndexReceipt("item", record),
-							),
-						}
-					: {}),
+				indexingReceipts: result.changed
+					? result.indexingRecords.map((record) =>
+							adminSearchIndexReceipt("item", record),
+						)
+					: [],
 				item,
 			},
 			{ headers: ADMIN_RESPONSE_HEADERS },

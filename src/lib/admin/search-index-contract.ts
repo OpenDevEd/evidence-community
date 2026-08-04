@@ -1,9 +1,12 @@
-import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
+import {
+	isCanonicalRecordKey,
+	SEARCH_INDEX_WORKER_STAGES,
+} from "@opendeved/evidence-library-core";
 import { z } from "zod";
 
 export const ADMIN_SEARCH_INDEX_RECEIPT_LIMIT = 100;
 
-const receiptSchema = z
+export const adminSearchIndexReceiptSchema = z
 	.object({
 		entityKey: z.string().refine(isCanonicalRecordKey, {
 			message: "Choose an available record.",
@@ -16,7 +19,7 @@ const receiptSchema = z
 export const adminSearchIndexReceiptsSchema = z
 	.object({
 		receipts: z
-			.array(receiptSchema)
+			.array(adminSearchIndexReceiptSchema)
 			.min(1, "Choose at least one indexing update.")
 			.max(
 				ADMIN_SEARCH_INDEX_RECEIPT_LIMIT,
@@ -24,12 +27,8 @@ export const adminSearchIndexReceiptsSchema = z
 			)
 			.refine(
 				(receipts) =>
-					new Set(
-						receipts.map(
-							(receipt) =>
-								`${receipt.entityType}:${receipt.entityKey}:${receipt.revision}`,
-						),
-					).size === receipts.length,
+					new Set(receipts.map(adminSearchIndexReceiptIdentity)).size ===
+					receipts.length,
 				{ message: "Each indexing update must be unique." },
 			),
 	})
@@ -45,7 +44,16 @@ export const adminSearchIndexRetrySchema = z.discriminatedUnion("scope", [
 		.strict(),
 ]);
 
-export type AdminSearchIndexReceipt = z.infer<typeof receiptSchema>;
+export type AdminSearchIndexReceipt = z.infer<
+	typeof adminSearchIndexReceiptSchema
+>;
+
+export function adminSearchIndexReceiptIdentity(
+	receipt: AdminSearchIndexReceipt,
+) {
+	return `${receipt.entityType}:${receipt.entityKey}:${receipt.revision}`;
+}
+
 export type AdminSearchIndexReceiptsRequest = z.infer<
 	typeof adminSearchIndexReceiptsSchema
 >;
@@ -53,28 +61,81 @@ export type AdminSearchIndexRetryRequest = z.infer<
 	typeof adminSearchIndexRetrySchema
 >;
 
-export type AdminSearchIndexReceiptState =
-	| "failed"
-	| "indexed"
-	| "processing"
-	| "queued"
-	| "retrying"
-	| "unknown";
+export const adminSearchIndexReceiptStateSchema = z.enum([
+	"failed",
+	"indexed",
+	"processing",
+	"queued",
+	"retrying",
+	"unknown",
+]);
 
-export type AdminSearchIndexReceiptStatus = AdminSearchIndexReceipt & {
-	attempts: number | null;
-	createdAt: string | null;
-	error: string | null;
-	nextAttemptAt: string | null;
-	processedAt: string | null;
-	state: AdminSearchIndexReceiptState;
-};
+export type AdminSearchIndexReceiptState = z.infer<
+	typeof adminSearchIndexReceiptStateSchema
+>;
+
+export const adminSearchIndexReceiptStatusSchema =
+	adminSearchIndexReceiptSchema.extend({
+		attempts: z.number().int().nonnegative().nullable(),
+		createdAt: z.string().nullable(),
+		error: z.string().nullable(),
+		nextAttemptAt: z.string().nullable(),
+		processedAt: z.string().nullable(),
+		state: adminSearchIndexReceiptStateSchema,
+	});
+
+export type AdminSearchIndexReceiptStatus = z.infer<
+	typeof adminSearchIndexReceiptStatusSchema
+>;
+
+export const adminSearchIndexOverviewSchema = z
+	.object({
+		queue: z
+			.object({
+				hasFailed: z.boolean(),
+				hasPending: z.boolean(),
+				nextAttemptAt: z.string().nullable(),
+			})
+			.strict(),
+		worker: z
+			.object({
+				active: z.boolean(),
+				batchProgress: z.number().min(0).max(100).nullable(),
+				batchUid: z.number().int().nonnegative().nullable(),
+				currentEventCount: z.number().int().nonnegative(),
+				heartbeatAt: z.string(),
+				lastCompletedAt: z.string().nullable(),
+				lastError: z.string().nullable(),
+				stage: z.enum(SEARCH_INDEX_WORKER_STAGES),
+				startedAt: z.string(),
+				stoppedAt: z.string().nullable(),
+				taskUid: z.number().int().nonnegative().nullable(),
+				workerId: z.string().min(1),
+			})
+			.strict()
+			.nullable(),
+	})
+	.strict();
+
+export type AdminSearchIndexOverview = z.infer<
+	typeof adminSearchIndexOverviewSchema
+>;
+
+export const adminSearchIndexMutationResultSchema = z
+	.object({
+		indexingReceipts: z.array(adminSearchIndexReceiptSchema),
+	})
+	.passthrough();
+
+export type AdminSearchIndexMutationResult = z.infer<
+	typeof adminSearchIndexMutationResultSchema
+>;
 
 export function adminSearchIndexReceipt(
 	entityType: AdminSearchIndexReceipt["entityType"],
 	record: { key: string; revision: number },
 ): AdminSearchIndexReceipt {
-	return receiptSchema.parse({
+	return adminSearchIndexReceiptSchema.parse({
 		entityKey: record.key,
 		entityType,
 		revision: record.revision,

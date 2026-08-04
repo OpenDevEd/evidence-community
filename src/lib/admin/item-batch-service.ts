@@ -97,7 +97,7 @@ async function assertAssignableCollection(db: Database, collectionKey: string) {
 }
 
 function skipped(key: string, message: string): AdminItemBatchResult {
-	return { key, message, outcome: "skipped" };
+	return { indexingReceipts: [], key, message, outcome: "skipped" };
 }
 
 export function orderBatchKeysByDependency(
@@ -225,18 +225,12 @@ export async function runAdminItemBatch(
 				try {
 					const removed = await removeNativeItem(db, key);
 					results.push({
-						...(removed.changed && removed.item
-							? {
-									indexingReceipts:
-										removed.indexingRecords.map(
-											(record) =>
-												adminSearchIndexReceipt(
-													"item",
-													record,
-												),
-										),
-								}
-							: {}),
+						indexingReceipts:
+							removed.changed && removed.item
+								? removed.indexingRecords.map((record) =>
+										adminSearchIndexReceipt("item", record),
+									)
+								: [],
 						key,
 						outcome: removed.changed ? "changed" : "unchanged",
 					});
@@ -276,6 +270,7 @@ export async function runAdminItemBatch(
 				request.collectionKey,
 			);
 			results.push({
+				indexingReceipts: [],
 				key,
 				outcome: assignment.changed ? "changed" : "unchanged",
 			});
@@ -292,6 +287,7 @@ export async function runAdminItemBatch(
 				code: details.code,
 				...(details.fields ? { fields: details.fields } : {}),
 				key,
+				indexingReceipts: [],
 				message: details.message,
 				outcome: "failed",
 				...(retryableDependencyFailure ? { retryable: true } : {}),

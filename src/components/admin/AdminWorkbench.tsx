@@ -103,12 +103,15 @@ import {
 } from "./AdminDragDropProvider";
 import { isTopLevelAdminItemType } from "@/lib/admin/item-fields";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
+import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
 import {
 	clearChangedAdminFieldErrors,
 	shouldClearAdminValidationErrors,
 } from "./admin-validation";
 import { useAdminItemList } from "./useAdminItemList";
 import { useAdminItemTablePreferences } from "./useAdminItemTablePreferences";
+import { AdminSearchIndexStatus } from "./AdminSearchIndexStatus";
+import { useAdminSearchIndex } from "./useAdminSearchIndex";
 import {
 	setSingleAdminItemFilter,
 	singleAdminItemFilterValue,
@@ -303,6 +306,12 @@ function fileErrorMessage(error: unknown) {
 	return errorMessage(error);
 }
 
+function indexingToastDescription(result: AdminSearchIndexMutationResult) {
+	return result.indexingReceipts.length > 0
+		? "Search indexing has started."
+		: "Search is already up to date.";
+}
+
 function failureDescription(failures: readonly string[]) {
 	return [
 		...failures.slice(0, 2),
@@ -450,6 +459,7 @@ export default function AdminWorkbench({
 	const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
 		null,
 	);
+	const searchIndex = useAdminSearchIndex();
 
 	const detailRequest = useRef(0);
 	const moveLocationButtonRef = useRef<HTMLButtonElement>(null);
@@ -964,16 +974,25 @@ export default function AdminWorkbench({
 		);
 	}, []);
 
+	const trackIndexing = useCallback(
+		(result: AdminSearchIndexMutationResult) =>
+			searchIndex.track(result.indexingReceipts),
+		[searchIndex.track],
+	);
+
 	const publishCurrent = () => {
 		if (!detail?.draft) return;
 		const recordKey = detail.key;
 		void runBusy(
 			async () => {
 				await flushDraft(recordKey, draftPayload);
-				await publishAdminItem(recordKey);
+				const result = await publishAdminItem(recordKey);
+				trackIndexing(result);
 				clearRecordErrors([recordKey]);
 				setValidationErrors({});
-				toast.success("Record published");
+				toast.success("Record published", {
+					description: indexingToastDescription(result),
+				});
 				await Promise.all([loadDetail(recordKey), loadItems()]);
 			},
 			(error) => captureInspectorValidation(recordKey, error),
@@ -993,10 +1012,13 @@ export default function AdminWorkbench({
 		void runBusy(
 			async () => {
 				await openAdminDraft(recordKey);
-				await publishAdminItem(recordKey);
+				const result = await publishAdminItem(recordKey);
+				trackIndexing(result);
 				clearRecordErrors([recordKey]);
 				setValidationErrors({});
-				toast.success("Record restored");
+				toast.success("Record restored", {
+					description: indexingToastDescription(result),
+				});
 				await Promise.all([loadDetail(recordKey), loadItems()]);
 			},
 			(error) => captureInspectorValidation(recordKey, error),
@@ -1050,9 +1072,12 @@ export default function AdminWorkbench({
 				"It will leave the public library and remain recoverable here.",
 			danger: true,
 			action: async () => {
-				await unpublishAdminItem(detail.key);
+				const result = await unpublishAdminItem(detail.key);
+				trackIndexing(result);
 				await Promise.all([loadDetail(detail.key), loadItems()]);
-				toast.success("Record unpublished");
+				toast.success("Record unpublished", {
+					description: indexingToastDescription(result),
+				});
 			},
 		});
 	};
@@ -1107,10 +1132,13 @@ export default function AdminWorkbench({
 		void runBusy(
 			async () => {
 				setFileErrors((current) => withoutRecordError(current, key));
-				await publishAdminPdf(key, uploadRevision);
+				const result = await publishAdminPdf(key, uploadRevision);
+				trackIndexing(result);
 				if (detail) await loadDetail(detail.key);
 				await loadItems();
-				toast.success("PDF published");
+				toast.success("PDF published", {
+					description: indexingToastDescription(result),
+				});
 			},
 			(error) =>
 				setFileErrors((current) => ({
@@ -1146,11 +1174,14 @@ export default function AdminWorkbench({
 			message:
 				"The attachment metadata will stay published. The PDF can be staged again later.",
 			action: async () => {
-				await unpublishAdminPdf(key);
+				const result = await unpublishAdminPdf(key);
+				trackIndexing(result);
 				setFileErrors((current) => withoutRecordError(current, key));
 				if (detail) await loadDetail(detail.key);
 				await loadItems();
-				toast.success("PDF unpublished");
+				toast.success("PDF unpublished", {
+					description: indexingToastDescription(result),
+				});
 			},
 			onError: (error) =>
 				setFileErrors((current) => ({
@@ -1221,6 +1252,7 @@ export default function AdminWorkbench({
 							name: collectionName,
 						},
 					);
+					trackIndexing(result);
 					focusKey = result.collection.key;
 					toast.success("Collection renamed");
 				} else {
@@ -1228,6 +1260,7 @@ export default function AdminWorkbench({
 						name: collectionName,
 						parentCollection: collectionParent,
 					});
+					trackIndexing(result);
 					focusKey = result.collection.key;
 					if (collectionParentEntry) {
 						expandAdminCollections([
@@ -1266,6 +1299,7 @@ export default function AdminWorkbench({
 								position: "root",
 							},
 				);
+				trackIndexing(result);
 				invalidateAdminCollectionCatalogue();
 				focusAdminCollection(moveDialog.collection.key);
 				setMoveDialog(null);
@@ -1298,6 +1332,7 @@ export default function AdminWorkbench({
 								targetCollection: destination.targetCollection,
 							},
 				);
+				trackIndexing(result);
 				invalidateAdminCollectionCatalogue();
 				focusAdminCollection(collection.key);
 				toast.success(
@@ -1325,6 +1360,7 @@ export default function AdminWorkbench({
 					collection.key,
 					collection.revision,
 				);
+				trackIndexing(result);
 				const removedKeys = new Set(
 					result.collections.map(({ key }) => key),
 				);
@@ -1355,10 +1391,11 @@ export default function AdminWorkbench({
 				"This restores the collection and descendants deleted in the same action. Descendants deleted earlier stay deleted. If its parent is still deleted, the collection returns at the top level.",
 			confirmLabel: "Restore",
 			action: async () => {
-				await restoreAdminCollection(
+				const result = await restoreAdminCollection(
 					collection.key,
 					collection.revision,
 				);
+				trackIndexing(result);
 				invalidateAdminCollectionCatalogue();
 				await refreshCurrent();
 				toast.success("Collection restored");
@@ -1412,6 +1449,7 @@ export default function AdminWorkbench({
 						? { code: error.code, fields: error.fields }
 						: {}),
 					key,
+					indexingReceipts: [],
 					message: fileErrorMessage(error),
 					outcome: "failed",
 				});
@@ -1435,6 +1473,9 @@ export default function AdminWorkbench({
 				? (await mutateAdminItems(request)).results
 				: [];
 		const results = [...localResults, ...remoteResults];
+		searchIndex.track(
+			remoteResults.flatMap(({ indexingReceipts }) => indexingReceipts),
+		);
 		const affectedKeys = new Set(results.map(({ key }) => key));
 		const failedKeys = new Set(
 			results
@@ -1658,45 +1699,53 @@ export default function AdminWorkbench({
 					/>
 				</div>
 				<div className="hidden flex-1 sm:block" />
-				<div className="col-start-2 row-start-1 flex shrink-0 rounded-xl bg-black/[0.035] p-1 xl:hidden dark:bg-white/[0.035]">
-					{[
-						{
-							icon: Menu,
-							key: "navigation" as const,
-							label: "Filters",
-						},
-						{
-							icon: List,
-							key: "list" as const,
-							label: "Records",
-						},
-						{
-							icon: PanelRight,
-							key: "inspector" as const,
-							label: "Editor",
-						},
-					].map((entry) => {
-						const Icon = entry.icon;
-						return (
-							<Tooltip key={entry.key} content={entry.label}>
-								<Button
-									aria-controls={`admin-${entry.key}-pane`}
-									aria-label={entry.label}
-									aria-pressed={mobilePane === entry.key}
-									isIconOnly
-									onPress={() => setMobilePane(entry.key)}
-									size="xs"
-									variant={
-										mobilePane === entry.key
-											? "solid"
-											: "transparent"
-									}
-								>
-									<Icon aria-hidden size={15} />
-								</Button>
-							</Tooltip>
-						);
-					})}
+				<div className="col-start-2 row-start-1 flex shrink-0 items-center gap-1">
+					<div className="flex rounded-xl bg-black/[0.035] p-1 xl:hidden dark:bg-white/[0.035]">
+						{[
+							{
+								icon: Menu,
+								key: "navigation" as const,
+								label: "Filters",
+							},
+							{
+								icon: List,
+								key: "list" as const,
+								label: "Records",
+							},
+							{
+								icon: PanelRight,
+								key: "inspector" as const,
+								label: "Editor",
+							},
+						].map((entry) => {
+							const Icon = entry.icon;
+							return (
+								<Tooltip key={entry.key} content={entry.label}>
+									<Button
+										aria-controls={`admin-${entry.key}-pane`}
+										aria-label={entry.label}
+										aria-pressed={mobilePane === entry.key}
+										isIconOnly
+										onPress={() => setMobilePane(entry.key)}
+										size="xs"
+										variant={
+											mobilePane === entry.key
+												? "solid"
+												: "transparent"
+										}
+									>
+										<Icon aria-hidden size={15} />
+									</Button>
+								</Tooltip>
+							);
+						})}
+					</div>
+					<AdminSearchIndexStatus
+						error={searchIndex.error}
+						onRefresh={() => void searchIndex.refresh()}
+						onRetry={() => void searchIndex.retry()}
+						view={searchIndex.view}
+					/>
 				</div>
 				<Tooltip content="Refresh">
 					<Button

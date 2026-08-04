@@ -21,6 +21,20 @@ import type {
 	AdminItemBatchResult,
 } from "@/lib/admin/item-batch-contract";
 import { ADMIN_ITEM_BATCH_SIZE } from "@/lib/admin/item-batch-contract";
+import type {
+	AdminSearchIndexMutationResult,
+	AdminSearchIndexOverview,
+	AdminSearchIndexReceipt,
+	AdminSearchIndexReceiptStatus,
+	AdminSearchIndexRetryRequest,
+} from "@/lib/admin/search-index-contract";
+import {
+	adminSearchIndexReceiptIdentity,
+	adminSearchIndexMutationResultSchema,
+	adminSearchIndexOverviewSchema,
+	adminSearchIndexReceiptSchema,
+	adminSearchIndexReceiptStatusSchema,
+} from "@/lib/admin/search-index-contract";
 
 export class AdminApiError extends Error {
 	readonly code: AdminErrorCode;
@@ -119,6 +133,28 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 	}
 	if (response.status === 204) return undefined as T;
 	return response.json() as Promise<T>;
+}
+
+function invalidSearchIndexResponse() {
+	return new AdminApiError(
+		{
+			code: "internal_error",
+			message:
+				"The server returned an invalid search indexing response. Refresh and try again.",
+		},
+		502,
+	);
+}
+
+async function requestIndexingMutation<T extends object>(
+	path: string,
+	init?: RequestInit,
+): Promise<T & AdminSearchIndexMutationResult> {
+	const response = await requestJson<unknown>(path, init);
+	if (!adminSearchIndexMutationResultSchema.safeParse(response).success) {
+		throw invalidSearchIndexResponse();
+	}
+	return response as T & AdminSearchIndexMutationResult;
 }
 
 export function getAdminLibrary() {
@@ -257,14 +293,14 @@ export function discardAdminDraft(key: string) {
 }
 
 export function publishAdminItem(key: string) {
-	return requestJson<{ item: Record<string, unknown> }>(
+	return requestIndexingMutation<{ item: Record<string, unknown> }>(
 		`/api/admin/items/${encodeURIComponent(key)}/publish`,
 		{ method: "POST" },
 	);
 }
 
 export function unpublishAdminItem(key: string) {
-	return requestJson<{ item: Record<string, unknown> }>(
+	return requestIndexingMutation<{ item: Record<string, unknown> }>(
 		`/api/admin/items/${encodeURIComponent(key)}/unpublish`,
 		{ method: "POST" },
 	);
@@ -301,6 +337,7 @@ function failedBatchChunk(
 				};
 	return keys.map((key) => ({
 		...details,
+		indexingReceipts: [],
 		key,
 		outcome: "failed",
 	}));
@@ -317,6 +354,19 @@ async function mutateAdminItemChunks(input: AdminItemBatchRequest) {
 					method: "POST",
 				},
 			);
+			if (
+				response.results.some(
+					(result) =>
+						!Array.isArray(result.indexingReceipts) ||
+						result.indexingReceipts.some(
+							(receipt) =>
+								!adminSearchIndexReceiptSchema.safeParse(receipt)
+									.success,
+						),
+				)
+			) {
+				throw invalidSearchIndexResponse();
+			}
 			results.push(...response.results);
 		} catch (error) {
 			results.push(...failedBatchChunk(error, chunk.keys));
@@ -356,7 +406,7 @@ export function createAdminCollection(input: {
 	name: string;
 	parentCollection: string | null;
 }) {
-	return requestJson<{ collection: AdminCollection }>(
+	return requestIndexingMutation<{ collection: AdminCollection }>(
 		"/api/admin/collections",
 		{
 			method: "POST",
@@ -369,7 +419,7 @@ export function renameAdminCollection(
 	key: string,
 	input: { expectedRevision: number; name: string },
 ) {
-	return requestJson<{ collection: AdminCollection }>(
+	return requestIndexingMutation<{ collection: AdminCollection }>(
 		`/api/admin/collections/${encodeURIComponent(key)}`,
 		{
 			method: "PATCH",
@@ -388,7 +438,7 @@ export function moveAdminCollection(
 				targetCollection: string;
 		  },
 ) {
-	return requestJson<{
+	return requestIndexingMutation<{
 		collection: AdminCollection;
 		collections: AdminCollection[];
 	}>(`/api/admin/collections/${encodeURIComponent(key)}/move`, {
@@ -398,7 +448,7 @@ export function moveAdminCollection(
 }
 
 export function deleteAdminCollection(key: string, expectedRevision: number) {
-	return requestJson<{ collections: AdminCollection[] }>(
+	return requestIndexingMutation<{ collections: AdminCollection[] }>(
 		`/api/admin/collections/${encodeURIComponent(key)}`,
 		{
 			method: "DELETE",
@@ -408,7 +458,10 @@ export function deleteAdminCollection(key: string, expectedRevision: number) {
 }
 
 export function restoreAdminCollection(key: string, expectedRevision: number) {
-	return requestJson(
+	return requestIndexingMutation<{
+			collection: AdminCollection;
+			collections: AdminCollection[];
+		}>(
 		`/api/admin/collections/${encodeURIComponent(key)}/restore`,
 		{
 			method: "POST",
@@ -480,7 +533,7 @@ export function discardAdminPdfDraft(key: string) {
 }
 
 export function publishAdminPdf(key: string, expectedUploadRevision: number) {
-	return requestJson(
+	return requestIndexingMutation<{ item: Record<string, unknown> }>(
 		`/api/admin/items/${encodeURIComponent(key)}/file/publish`,
 		{
 			method: "POST",
@@ -490,9 +543,80 @@ export function publishAdminPdf(key: string, expectedUploadRevision: number) {
 }
 
 export function unpublishAdminPdf(key: string) {
-	return requestJson(`/api/admin/items/${encodeURIComponent(key)}/file`, {
+	return requestIndexingMutation<{ item: Record<string, unknown> }>(`/api/admin/items/${encodeURIComponent(key)}/file`, {
 		method: "DELETE",
 	});
+}
+
+export async function getAdminSearchIndexOverview(signal?: AbortSignal) {
+	const response = await requestJson<unknown>("/api/admin/search-index", {
+		signal,
+	});
+	const parsed = adminSearchIndexOverviewSchema.safeParse(response);
+	if (!parsed.success) throw invalidSearchIndexResponse();
+	return parsed.data satisfies AdminSearchIndexOverview;
+}
+
+export async function getAdminSearchIndexReceipts(
+	receipts: readonly AdminSearchIndexReceipt[],
+	signal?: AbortSignal,
+) {
+	const response = await requestJson<unknown>(
+		"/api/admin/search-index/receipts",
+		{
+			body: JSON.stringify({ receipts }),
+			method: "POST",
+			signal,
+		},
+	);
+	const receiptsResponse =
+		response && typeof response === "object" && "receipts" in response
+			? response.receipts
+			: undefined;
+	const parsed = adminSearchIndexReceiptStatusSchema
+		.array()
+		.safeParse(receiptsResponse);
+	if (!parsed.success) throw invalidSearchIndexResponse();
+	const requestedIdentities = new Set(
+		receipts.map(adminSearchIndexReceiptIdentity),
+	);
+	const returnedIdentities = new Set(
+		parsed.data.map(adminSearchIndexReceiptIdentity),
+	);
+	if (
+		returnedIdentities.size !== parsed.data.length ||
+		returnedIdentities.size !== requestedIdentities.size ||
+		[...requestedIdentities].some(
+			(identity) => !returnedIdentities.has(identity),
+		)
+	) {
+		throw invalidSearchIndexResponse();
+	}
+	return { receipts: parsed.data satisfies AdminSearchIndexReceiptStatus[] };
+}
+
+export async function retryAdminSearchIndex(input: AdminSearchIndexRetryRequest) {
+	const response = await requestJson<unknown>("/api/admin/search-index/retry", {
+		body: JSON.stringify(input),
+		method: "POST",
+	});
+	if (!response || typeof response !== "object") {
+		throw invalidSearchIndexResponse();
+	}
+	const receipts =
+		"receipts" in response
+			? adminSearchIndexReceiptSchema.array().safeParse(response.receipts)
+			: null;
+	if (
+		!receipts?.success ||
+		!("requeued" in response) ||
+		typeof response.requeued !== "number" ||
+		!Number.isSafeInteger(response.requeued) ||
+		response.requeued < 0
+	) {
+		throw invalidSearchIndexResponse();
+	}
+	return { receipts: receipts.data, requeued: response.requeued };
 }
 
 export async function sha256File(file: File) {

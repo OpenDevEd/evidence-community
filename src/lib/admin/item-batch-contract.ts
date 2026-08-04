@@ -36,7 +36,7 @@ export type AdminItemBatchResult = {
 	code?: AdminErrorCode;
 	fields?: AdminFieldErrors;
 	key: string;
-	indexingReceipts?: AdminSearchIndexReceipt[];
+	indexingReceipts: AdminSearchIndexReceipt[];
 	message?: string;
 	outcome: "changed" | "failed" | "skipped" | "unchanged";
 	retryable?: boolean;
