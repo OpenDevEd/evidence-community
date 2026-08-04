@@ -112,6 +112,31 @@ Delivery errors remain visible across restarts and clear only after a later
 event succeeds. Database migrations must be applied before a new worker
 revision starts.
 
+## Admin observability
+
+Published admin mutations return an `indexingReceipts[]` set with one receipt
+for every outbox row committed by their transaction. Each receipt contains an
+entity type, canonical key, and revision.
+Returning the complete set matters when an attachment is moved between parents:
+the update is finished only after the attachment, previous parent, and new
+parent receipts are indexed. Draft and upload-staging changes do not return
+receipts because they do not affect the public search projection.
+
+The admin application uses three private, non-cacheable endpoints:
+
+- `GET /api/admin/search-index` returns the current worker stage and genuine
+  Meilisearch batch progress, plus lightweight pending/failed queue signals;
+- `POST /api/admin/search-index/receipts` resolves up to 100 exact receipts as
+  queued, processing, retrying, indexed, failed, or unknown; and
+- `POST /api/admin/search-index/retry` explicitly requeues selected failed
+  receipts or all failed receipts. It never resets active, queued, or already
+  indexed work.
+
+Overview polling intentionally does not calculate queue counts. This keeps the
+hot status request bounded as a library's outbox history grows. Exact progress
+belongs to the mutation's receipt set, and callers wait until every receipt in
+that set reaches `indexed`.
+
 The real-service verifier creates isolated indexes and proves document shape,
 collection reprojection, re-parent cleanup, tombstone deletion, restoration,
 byte-aware requests, asynchronous task failure, retry, dead-letter requeue,
@@ -124,9 +149,12 @@ MEILISEARCH_KEY=local-search-key \
 npm run test:search-index
 ```
 
-The worker lifecycle verifier additionally exercises process health, rolling
-replacement fencing, historical errors, active PostgreSQL cancellation,
-durable task progress, startup failures, and graceful shutdown:
+The worker lifecycle verifier additionally starts an isolated production Next
+server and database, then exercises process health, rolling replacement
+fencing, historical errors, active PostgreSQL cancellation, durable task
+progress, receipt states, targeted and global retry, startup failures, graceful
+shutdown, and a real publish-edit-unpublish lifecycle through HTTP and
+Meilisearch:
 
 ```sh
 LIBRARY_CONFIG_PATH=config/library.local.json \
