@@ -4,13 +4,14 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
+import { chromium, webkit, type Browser, type Page } from "@playwright/test";
 import {
 	generateCanonicalRecordKey,
 	itemIdentity,
 	outbox,
 	searchIndexWorker,
 } from "@opendeved/evidence-library-core";
-import { eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { Meilisearch, MeilisearchApiError } from "meilisearch";
 
 import {
@@ -19,6 +20,7 @@ import {
 } from "../src/db/cancellable-transaction";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { item } from "../src/db/schema/tables/item";
+import { status as libraryStatus } from "../src/db/schema/tables/status";
 import {
 	getSearchIndexWorker,
 	registerSearchIndexWorker,
@@ -27,6 +29,13 @@ import {
 	stopSearchIndexWorker,
 	updateSearchIndexWorker,
 } from "../src/lib/search-index/worker-state";
+import { chunkValues } from "../src/lib/chunk-values";
+import {
+	adminSearchIndexStatus,
+	measureAdminSearchIndexTrigger,
+	openAndMeasureAdminSearchIndexPopover,
+	waitForAdminSearchIndexStatus,
+} from "../tests/e2e/admin-search-index-page";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
@@ -199,6 +208,44 @@ async function waitForReceiptsIndexed(
 	}, message);
 }
 
+async function publishDraftThroughAdmin(page: Page, title: string) {
+	const checkbox = page.getByRole("checkbox", { name: `Select ${title}` });
+	await checkbox.waitFor({ state: "visible", timeout: timeoutMs });
+	await checkbox.check();
+	const mutationResponse = page.waitForResponse((response) => {
+		const request = response.request();
+		return (
+			new URL(response.url()).pathname === "/api/admin/items/batch" &&
+			request.method() === "POST"
+		);
+	});
+	await page
+		.getByRole("toolbar", { name: "Bulk actions" })
+		.getByRole("button", { name: "Publish selected" })
+		.click();
+	const response = await mutationResponse;
+	assert(response.ok(), `The admin publish request failed (${response.status()})`);
+	const body = (await response.json()) as {
+		results?: Array<{ indexingReceipts?: IndexReceipt[] }>;
+	};
+	const receipts = body.results?.flatMap(
+		({ indexingReceipts }) => indexingReceipts ?? [],
+	);
+	assert(
+		receipts?.length,
+		"The admin publish response did not include an indexing receipt",
+	);
+	return receipts;
+}
+
+function outboxReceiptPredicate(receipt: IndexReceipt) {
+	return and(
+		eq(outbox.entityKey, receipt.entityKey),
+		eq(outbox.entityType, receipt.entityType),
+		eq(outbox.revision, receipt.revision),
+	);
+}
+
 async function terminateChild(child: ReturnType<typeof spawn> | null) {
 	if (child && child.exitCode === null && child.signalCode === null) {
 		child.kill("SIGKILL");
@@ -224,9 +271,11 @@ async function main() {
 	const adminResource = createPostgresDatabaseResource(verifiedDatabaseUrl);
 	const replacementWorkerId = `${workerId}-replacement`;
 	const failureWorkerId = `${workerId}-startup-failure`;
+	const browserFailureWorkerId = `${workerId}-browser-failure`;
 	const stalledWorkerId = `${workerId}-stalled-request`;
 	const isolatedDatabaseName = `search_worker_e2e_${process.pid}`;
 	const isolatedIndexName = `search_worker_e2e_${process.pid}`;
+	const failedIndexName = `search_worker_e2e_failure_${process.pid}`;
 	const quotedDatabaseName = `"${isolatedDatabaseName}"`;
 	let resource: ReturnType<typeof createPostgresDatabaseResource> | null =
 		null;
@@ -234,9 +283,12 @@ async function main() {
 	let temporaryDirectory: string | null = null;
 	let meilisearch: Meilisearch | null = null;
 	let worker: ReturnType<typeof runTool> | null = null;
+	let browserFailureWorker: ReturnType<typeof runTool> | null = null;
 	let stalledWorker: ReturnType<typeof runTool> | null = null;
 	let failedWorker: ReturnType<typeof runTool> | null = null;
 	let webServer: ReturnType<typeof runCommand> | null = null;
+	let chromiumBrowser: Browser | null = null;
+	let webkitBrowser: Browser | null = null;
 	let stalledSearchServer: Server | null = null;
 	let stderr = "";
 	let verificationError: unknown;
@@ -288,11 +340,17 @@ async function main() {
 			isolatedDatabaseUrl.toString(),
 		);
 		const database = resource.database;
+		await database.insert(libraryStatus).values({
+			databaseUpdatedAt: new Date(),
+			totalItems: 0,
+			totalRecords: 0,
+		});
 		meilisearch = new Meilisearch({
 			apiKey: isolatedConfig.services.search.key,
 			host: isolatedConfig.services.search.host,
 		});
 		await deleteIndexIfPresent(meilisearch, isolatedIndexName);
+		await deleteIndexIfPresent(meilisearch, failedIndexName);
 
 		await database.delete(outbox).where(eq(outbox.entityKey, itemKey));
 		await database.delete(item).where(eq(item.key, itemKey));
@@ -306,6 +364,7 @@ async function main() {
 					workerId,
 					replacementWorkerId,
 					failureWorkerId,
+					browserFailureWorkerId,
 					stalledWorkerId,
 				]),
 			);
@@ -985,6 +1044,193 @@ async function main() {
 		);
 
 		worker.kill("SIGTERM");
+		const preBrowserWorkerExit = await waitForExit(worker);
+		assert(
+			preBrowserWorkerExit === 0,
+			`The watch worker did not stop before the browser workload: ${stderr}`,
+		);
+		worker = null;
+		const preBrowserStopped = await getSearchIndexWorker(database, workerId);
+		assert(
+			preBrowserStopped?.stage === "stopped" &&
+				preBrowserStopped.stoppedAt !== null &&
+				!searchIndexWorkerIsActive(preBrowserStopped),
+			"The worker did not persist its stopped state before the browser workload",
+		);
+
+		const browserPublishTitle = "Browser indexing verification";
+		const browserPublishDraft = await createDraft({
+			abstractNote: "Browser-published record in the real progress workload.",
+			collections: [],
+			creators: [],
+			itemType: "Report",
+			tags: [],
+			title: browserPublishTitle,
+		});
+		chromiumBrowser = await chromium.launch();
+		const chromiumPage = await chromiumBrowser.newPage({
+			viewport: { height: 900, width: 1440 },
+		});
+		await chromiumPage.goto(`${baseUrl}/admin`);
+		const initialChromiumStatus = adminSearchIndexStatus(chromiumPage);
+		try {
+			await initialChromiumStatus.waitFor({
+				state: "visible",
+				timeout: timeoutMs,
+			});
+		} catch (error) {
+			await chromiumPage.screenshot({
+				path: `${temporaryDirectory}/admin-indexing-failure.png`,
+			});
+			throw new Error(
+				`The real admin indexing control did not render at ${chromiumPage.url()}: ${(await chromiumPage.locator("body").innerText()).slice(0, 500)}\n${webOutput.slice(-3_000)}`,
+				{ cause: error },
+			);
+		}
+		await waitForAdminSearchIndexStatus(
+			chromiumPage,
+			"Search offline",
+			timeoutMs,
+		);
+
+		const progressFixtureIndexes = Array.from(
+			{ length: 99 },
+			(_value, index) => index,
+		);
+		const progressFixtureKeys: string[] = [];
+		for (const fixtureChunk of chunkValues(progressFixtureIndexes, 10)) {
+			const fixtures = await Promise.all(
+				fixtureChunk.map((index) =>
+					createDraft({
+						abstractNote: `progress-${index}-${"x".repeat(500_000)}`,
+						collections: [],
+						creators: [],
+						itemType: "Report",
+						tags: [],
+						title: `Indexing progress fixture ${index + 1}`,
+					}),
+			),
+			);
+			progressFixtureKeys.push(
+				...fixtures.map(({ draft }) => draft.itemKey),
+			);
+		}
+		for (const keyChunk of chunkValues(progressFixtureKeys, 50)) {
+			const result = await requestJson<{
+				results: Array<{
+					indexingReceipts: IndexReceipt[];
+					outcome: string;
+				}>;
+			}>(baseUrl, "/api/admin/items/batch", {
+				body: JSON.stringify({ action: "publish", keys: keyChunk }),
+				method: "POST",
+			});
+			assert(
+				result.results.length === keyChunk.length &&
+					result.results.every(
+						({ indexingReceipts, outcome }) =>
+							outcome === "changed" && indexingReceipts.length === 1,
+					),
+				"The real progress workload did not queue every fixture",
+			);
+		}
+		await waitForAdminSearchIndexStatus(
+			chromiumPage,
+			"Search paused",
+			timeoutMs,
+		);
+		const browserPublishReceipts = await publishDraftThroughAdmin(
+			chromiumPage,
+			browserPublishTitle,
+		);
+		assert(
+			browserPublishReceipts.length === 1 &&
+				browserPublishReceipts[0]?.entityKey ===
+					browserPublishDraft.draft.itemKey,
+			"The browser publish returned the wrong indexing receipt",
+		);
+		await waitForAdminSearchIndexStatus(
+			chromiumPage,
+			"Search paused",
+			timeoutMs,
+		);
+		worker = runTool(
+			"tools/runSearchIndexer.ts",
+			["--watch", "--poll-ms", "100"],
+			env,
+		);
+		worker.stderr?.on("data", (chunk) => {
+			stderr += String(chunk);
+		});
+		await chromiumPage.waitForFunction(
+			() => {
+				const status = document.querySelector(
+					"[data-admin-search-index-status]",
+				);
+				return (
+					status?.getAttribute("data-admin-search-index-status") ===
+						"indexing" &&
+					/^Search indexing: Indexing (?:[1-9]|[1-9]\d)%$/u.test(
+						status.getAttribute("aria-label") ?? "",
+					)
+				);
+			},
+			undefined,
+			{ timeout: timeoutMs },
+		);
+		const activeStatus = chromiumPage.locator(
+			'[data-admin-search-index-status="indexing"]',
+		);
+		const triggerGeometry = await measureAdminSearchIndexTrigger(activeStatus);
+		assert(
+			JSON.stringify(triggerGeometry) ===
+				JSON.stringify({
+					display: "flex",
+					flexDirection: "row",
+					height: 32,
+					iconHeight: 14,
+					paddingLeft: "8px",
+					paddingRight: "8px",
+					width: 32,
+				}),
+			`The real indexing trigger computed CSS was wrong: ${JSON.stringify(triggerGeometry)}`,
+		);
+		const { geometry: statusGeometry } =
+			await openAndMeasureAdminSearchIndexPopover(
+				chromiumPage,
+				activeStatus,
+				timeoutMs,
+			);
+		assert(
+			statusGeometry.documentOverflow === 0 &&
+				statusGeometry.innerPadding === "12px" &&
+				statusGeometry.progressHeight === 4 &&
+				statusGeometry.rightInsideViewport &&
+				statusGeometry.surfaceBorderRadius === "12px" &&
+				statusGeometry.surfaceBorderWidth === "1px" &&
+				statusGeometry.width === 256,
+			`The real indexing progress popover computed CSS was wrong: ${JSON.stringify(statusGeometry)}`,
+		);
+		await chromiumPage.screenshot({
+			path: `${temporaryDirectory}/admin-indexing-e2e.png`,
+		});
+		await chromiumPage.keyboard.press("Escape");
+		await waitForAdminSearchIndexStatus(
+			chromiumPage,
+			"Search updated",
+			timeoutMs,
+		);
+		const browserIndexedDocument = await meilisearch
+			.index(isolatedIndexName)
+			.getDocument<{ title: string }>(browserPublishDraft.draft.itemKey);
+		assert(
+			browserIndexedDocument.title === browserPublishTitle,
+			"The admin UI reported completion before its document was searchable",
+		);
+		await chromiumBrowser.close();
+		chromiumBrowser = null;
+
+		worker.kill("SIGTERM");
 		const workerExit = await waitForExit(worker);
 		assert(
 			workerExit === 0,
@@ -1009,6 +1255,196 @@ async function main() {
 		assert(
 			stoppedHealthExit !== 0,
 			"The stopped worker unexpectedly passed its health check",
+		);
+
+		const failedIndexTask = await meilisearch
+			.createIndex(failedIndexName, { primaryKey: "id" })
+			.waitTask();
+		assert(
+			failedIndexTask.status === "succeeded",
+			"The deliberately incompatible Meilisearch index was not created",
+		);
+		const browserFailureConfigPath = `${temporaryDirectory}/browser-failure-library.json`;
+		const browserFailureConfig = structuredClone(isolatedConfig);
+		browserFailureConfig.services.search.index = failedIndexName;
+		await writeFile(
+			browserFailureConfigPath,
+			JSON.stringify(browserFailureConfig),
+		);
+		const browserRetryTitle = "Browser indexing retry verification";
+		const browserRetryDraft = await createDraft({
+			collections: [],
+			creators: [],
+			itemType: "Report",
+			tags: [],
+			title: browserRetryTitle,
+		});
+		webkitBrowser = await webkit.launch();
+		const webkitPage = await webkitBrowser.newPage({
+			viewport: { height: 900, width: 1440 },
+		});
+		await webkitPage.goto(`${baseUrl}/admin`);
+		await waitForAdminSearchIndexStatus(
+			webkitPage,
+			"Search offline",
+			timeoutMs,
+		);
+		const browserRetryReceipts = await publishDraftThroughAdmin(
+			webkitPage,
+			browserRetryTitle,
+		);
+		assert(
+			browserRetryReceipts.length === 1 &&
+				browserRetryReceipts[0]?.entityKey ===
+					browserRetryDraft.draft.itemKey,
+			"The browser retry publish returned the wrong indexing receipt",
+		);
+		const browserRetryReceipt = browserRetryReceipts[0]!;
+		await waitForAdminSearchIndexStatus(
+			webkitPage,
+			"Search paused",
+			timeoutMs,
+		);
+		browserFailureWorker = runTool(
+			"tools/runSearchIndexer.ts",
+			["--watch", "--poll-ms", "100"],
+			{
+				...env,
+				LIBRARY_CONFIG_PATH: browserFailureConfigPath,
+				SEARCH_INDEX_WORKER_ID: browserFailureWorkerId,
+				SEARCH_INDEX_WORKER_INSTANCE_PATH: `${temporaryDirectory}/browser-failure-worker-instance`,
+			},
+		);
+		browserFailureWorker.stderr?.on("data", (chunk) => {
+			stderr += String(chunk);
+		});
+		for (let expectedAttempts = 1; expectedAttempts <= 15; expectedAttempts += 1) {
+			await waitFor(async () => {
+				const [failed] = await database
+					.select({
+						attempts: outbox.attempts,
+						deadLetteredAt: outbox.deadLetteredAt,
+					})
+					.from(outbox)
+					.where(outboxReceiptPredicate(browserRetryReceipt));
+				return Boolean(
+					failed &&
+						failed.attempts >= expectedAttempts &&
+						(expectedAttempts < 15 || failed.deadLetteredAt),
+				);
+			}, `The real Meilisearch task failure did not reach attempt ${expectedAttempts}`);
+			if (expectedAttempts < 15) {
+				await database
+					.update(outbox)
+					.set({ nextAttemptAt: new Date() })
+					.where(outboxReceiptPredicate(browserRetryReceipt));
+			}
+		}
+		const unrelatedFailedKey = generateCanonicalRecordKey();
+		const deadLetteredAt = new Date();
+		await database.insert(outbox).values({
+			attempts: 15,
+			deadLetteredAt,
+			entityKey: unrelatedFailedKey,
+			entityType: "item",
+			lastError: "Unrelated permanent search failure",
+			nextAttemptAt: deadLetteredAt,
+			operation: "delete",
+			revision: 1,
+		});
+		const failedStatus = await waitForAdminSearchIndexStatus(
+			webkitPage,
+			"Indexing failed",
+			timeoutMs,
+		);
+		browserFailureWorker.kill("SIGTERM");
+		assert(
+			(await waitForExit(browserFailureWorker)) === 0,
+			`The real failing search worker did not stop cleanly: ${stderr}`,
+		);
+		const failedTriggerGeometry =
+			await measureAdminSearchIndexTrigger(failedStatus);
+		assert(
+			failedTriggerGeometry.height === 32 &&
+				failedTriggerGeometry.iconHeight === 14 &&
+				failedTriggerGeometry.paddingLeft === "8px" &&
+				failedTriggerGeometry.paddingRight === "8px",
+			`The WebKit indexing trigger computed CSS was wrong: ${JSON.stringify(failedTriggerGeometry)}`,
+		);
+		const { geometry: failedPopoverGeometry, popover: failedPopover } =
+			await openAndMeasureAdminSearchIndexPopover(
+				webkitPage,
+				failedStatus,
+				timeoutMs,
+			);
+		assert(
+			failedPopoverGeometry.documentOverflow === 0 &&
+				failedPopoverGeometry.innerPadding === "12px" &&
+				failedPopoverGeometry.progressHeight === null &&
+				failedPopoverGeometry.rightInsideViewport &&
+				failedPopoverGeometry.surfaceBorderRadius === "12px" &&
+				failedPopoverGeometry.surfaceBorderWidth === "1px" &&
+				failedPopoverGeometry.width === 256,
+			`The WebKit failed popover computed CSS was wrong: ${JSON.stringify(failedPopoverGeometry)}`,
+		);
+		await failedPopover
+			.getByRole("button", { name: "Retry indexing" })
+			.click();
+		await webkitPage.keyboard.press("Escape");
+		await waitFor(async () => {
+			const [requeued] = await database
+				.select({
+					attempts: outbox.attempts,
+					deadLetteredAt: outbox.deadLetteredAt,
+				})
+				.from(outbox)
+				.where(outboxReceiptPredicate(browserRetryReceipt));
+			return requeued?.attempts === 0 && requeued.deadLetteredAt === null;
+		}, "The admin retry control did not requeue the exact failed receipt");
+		const [unrelatedFailure] = await database
+			.select({
+				attempts: outbox.attempts,
+				deadLetteredAt: outbox.deadLetteredAt,
+			})
+			.from(outbox)
+			.where(eq(outbox.entityKey, unrelatedFailedKey));
+		assert(
+			unrelatedFailure?.attempts === 15 &&
+				unrelatedFailure.deadLetteredAt !== null,
+			"The admin retry control changed an unrelated failed receipt",
+		);
+		await database.delete(outbox).where(eq(outbox.entityKey, unrelatedFailedKey));
+		await waitForAdminSearchIndexStatus(
+			webkitPage,
+			"Search paused",
+			timeoutMs,
+		);
+		worker = runTool(
+			"tools/runSearchIndexer.ts",
+			["--watch", "--poll-ms", "100"],
+			env,
+		);
+		worker.stderr?.on("data", (chunk) => {
+			stderr += String(chunk);
+		});
+		await waitForAdminSearchIndexStatus(
+			webkitPage,
+			"Search updated",
+			timeoutMs,
+		);
+		const retriedDocument = await meilisearch
+			.index(isolatedIndexName)
+			.getDocument<{ title: string }>(browserRetryDraft.draft.itemKey);
+		assert(
+			retriedDocument.title === browserRetryTitle,
+			"The browser retry reported completion before the document was searchable",
+		);
+		await webkitBrowser.close();
+		webkitBrowser = null;
+		worker.kill("SIGTERM");
+		assert(
+			(await waitForExit(worker)) === 0,
+			`The restarted watch worker did not stop cleanly: ${stderr}`,
 		);
 
 		let markStalledRequestStarted!: () => void;
@@ -1098,8 +1534,15 @@ async function main() {
 	} catch (error) {
 		verificationError = error;
 	} finally {
+		if (chromiumBrowser) {
+			await attemptCleanup(() => chromiumBrowser!.close());
+		}
+		if (webkitBrowser) {
+			await attemptCleanup(() => webkitBrowser!.close());
+		}
 		await attemptCleanup(() => terminateChild(migration));
 		await attemptCleanup(() => terminateChild(worker));
+		await attemptCleanup(() => terminateChild(browserFailureWorker));
 		await attemptCleanup(() => terminateChild(stalledWorker));
 		await attemptCleanup(() => terminateChild(failedWorker));
 		await attemptCleanup(() => terminateChild(webServer));
@@ -1109,6 +1552,9 @@ async function main() {
 		if (meilisearch) {
 			await attemptCleanup(() =>
 				deleteIndexIfPresent(meilisearch!, isolatedIndexName),
+			);
+			await attemptCleanup(() =>
+				deleteIndexIfPresent(meilisearch!, failedIndexName),
 			);
 		}
 		if (resource) {
@@ -1157,6 +1603,15 @@ async function main() {
 			adminHttpRetry: true,
 			completeReparentReceipts: true,
 			collectionMutationReceipts: true,
+			adminBrowserComputedCss: true,
+			adminBrowserLiveProgress: true,
+			adminBrowserPublishIndexed: true,
+			adminBrowserRetryIndexed: true,
+			adminBrowserRetryIsolation: true,
+			chromium: true,
+			currentProductionBuild: true,
+			realMeilisearchTaskFailure: true,
+			webkit: true,
 			publishEditDeleteIndexed: true,
 			workerId,
 		}),

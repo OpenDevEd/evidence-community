@@ -22,7 +22,7 @@
 		"search:index": "tsx ./tools/runSearchIndexer.ts",
 		"search:index:health": "tsx ./tools/checkSearchIndexerHealth.ts",
 		"test:search-index": "tsx ./tools/verifySearchOutbox.ts",
-		"test:search-worker": "tsx ./tools/verifySearchIndexerWorker.ts",
+		"test:search-worker": "npm run build && tsx ./tools/verifySearchIndexerWorker.ts",
 		"test:native-lifecycle": "tsx ./tools/verifyNativeItemLifecycle.ts",
 		"benchmark:admin-items": "tsx ./tools/benchmarkAdminItemList.ts",
 		"test:admin-item-pagination": "tsx ./tools/verifyAdminItemListPagination.ts",
