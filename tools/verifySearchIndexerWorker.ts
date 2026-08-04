@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
 import {
+	generateCanonicalRecordKey,
 	itemIdentity,
 	outbox,
 	searchIndexWorker,
@@ -37,6 +38,12 @@ if (!process.env.LIBRARY_CONFIG_PATH) {
 const workerId = `search-worker-e2e-${process.pid}`;
 const itemKey = "WRKR2345";
 const timeoutMs = 20_000;
+
+type IndexReceipt = {
+	entityKey: string;
+	entityType: "collection" | "item";
+	revision: number;
+};
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
@@ -135,6 +142,63 @@ async function closeServer(server: Server) {
 	});
 }
 
+async function availablePort() {
+	const server = createServer();
+	await new Promise<void>((resolve, reject) => {
+		server.once("error", reject);
+		server.listen(0, "127.0.0.1", resolve);
+	});
+	const address = server.address();
+	assert(
+		address && typeof address !== "string",
+		"Could not reserve a local HTTP port",
+	);
+	await closeServer(server);
+	return address.port;
+}
+
+async function requestJson<T>(
+	baseUrl: string,
+	path: string,
+	init?: RequestInit,
+): Promise<T> {
+	const response = await fetch(`${baseUrl}${path}`, {
+		...init,
+		headers: {
+			...(init?.body ? { "Content-Type": "application/json" } : {}),
+			...init?.headers,
+		},
+	});
+	const body = (await response.json().catch(() => null)) as T | null;
+	if (!response.ok) {
+		throw new Error(
+			`${init?.method ?? "GET"} ${path} failed (${response.status}): ${JSON.stringify(body)}`,
+		);
+	}
+	assert(body !== null, `${init?.method ?? "GET"} ${path} returned no JSON`);
+	return body;
+}
+
+async function receiptStatuses(baseUrl: string, receipts: IndexReceipt[]) {
+	return requestJson<{
+		receipts: Array<IndexReceipt & { state: string }>;
+	}>(baseUrl, "/api/admin/search-index/receipts", {
+		body: JSON.stringify({ receipts }),
+		method: "POST",
+	});
+}
+
+async function waitForReceiptsIndexed(
+	baseUrl: string,
+	receipts: IndexReceipt[],
+	message: string,
+) {
+	await waitFor(async () => {
+		const result = await receiptStatuses(baseUrl, receipts);
+		return result.receipts.every(({ state }) => state === "indexed");
+	}, message);
+}
+
 async function terminateChild(child: ReturnType<typeof spawn> | null) {
 	if (child && child.exitCode === null && child.signalCode === null) {
 		child.kill("SIGKILL");
@@ -172,6 +236,7 @@ async function main() {
 	let worker: ReturnType<typeof runTool> | null = null;
 	let stalledWorker: ReturnType<typeof runTool> | null = null;
 	let failedWorker: ReturnType<typeof runTool> | null = null;
+	let webServer: ReturnType<typeof runCommand> | null = null;
 	let stalledSearchServer: Server | null = null;
 	let stderr = "";
 	let verificationError: unknown;
@@ -269,10 +334,181 @@ async function main() {
 
 		const env = {
 			...process.env,
+			ADMIN_AUTH_BYPASS: "true",
 			LIBRARY_CONFIG_PATH: isolatedConfigPath,
 			SEARCH_INDEX_WORKER_ID: workerId,
 			SEARCH_INDEX_WORKER_INSTANCE_PATH: `${temporaryDirectory}/worker-instance`,
 		};
+		const webPort = await availablePort();
+		const baseUrl = `http://127.0.0.1:${webPort}`;
+		let webOutput = "";
+		webServer = runCommand(
+			"node_modules/.bin/next",
+			["start", "--hostname", "127.0.0.1", "--port", String(webPort)],
+			env,
+		);
+		webServer.stdout?.on("data", (chunk) => {
+			webOutput += String(chunk);
+		});
+		webServer.stderr?.on("data", (chunk) => {
+			webOutput += String(chunk);
+		});
+		await waitFor(async () => {
+			try {
+				const response = await fetch(`${baseUrl}/api/admin/search-index`);
+				return response.ok;
+			} catch {
+				return false;
+			}
+		}, `The isolated admin server did not start: ${webOutput}`);
+
+		const statusKeys = Array.from({ length: 6 }, () =>
+			generateCanonicalRecordKey(),
+		);
+		const statusNow = new Date();
+		await database.insert(outbox).values([
+			{
+				entityKey: statusKeys[0]!,
+				entityType: "item",
+				operation: "upsert",
+				revision: 1,
+			},
+			{
+				attempts: 2,
+				entityKey: statusKeys[1]!,
+				entityType: "item",
+				lastError: "Temporary search failure",
+				nextAttemptAt: new Date(statusNow.getTime() + 60_000),
+				operation: "upsert",
+				revision: 1,
+			},
+			{
+				entityKey: statusKeys[2]!,
+				entityType: "item",
+				leaseExpiresAt: new Date(statusNow.getTime() + 60_000),
+				leaseOwner: "receipt-verifier",
+				operation: "upsert",
+				revision: 1,
+			},
+			{
+				entityKey: statusKeys[3]!,
+				entityType: "item",
+				operation: "upsert",
+				processedAt: statusNow,
+				revision: 1,
+			},
+			{
+				attempts: 15,
+				deadLetteredAt: statusNow,
+				entityKey: statusKeys[4]!,
+				entityType: "item",
+				lastError: "Permanent search failure",
+				operation: "upsert",
+				revision: 1,
+			},
+		]);
+		await registerSearchIndexWorker(
+			database,
+			workerId,
+			"receipt-verifier",
+			statusNow,
+		);
+		await updateSearchIndexWorker(
+			database,
+			workerId,
+			"receipt-verifier",
+			{
+				currentBatchProgress: 37,
+				currentBatchUid: 22,
+				currentEventCount: 3,
+				currentTaskUid: 11,
+				stage: "indexing",
+			},
+			statusNow,
+		);
+		const receipts: IndexReceipt[] = statusKeys.map((entityKey) => ({
+			entityKey,
+			entityType: "item",
+			revision: 1,
+		}));
+		const statuses = await receiptStatuses(baseUrl, receipts);
+		assert(
+			statuses.receipts.map(({ state }) => state).join(",") ===
+				"queued,retrying,processing,indexed,failed,unknown",
+			`Receipt states were wrong: ${JSON.stringify(statuses)}`,
+		);
+		const overview = await requestJson<{
+			queue: { hasFailed: boolean; hasPending: boolean };
+			worker: {
+				active: boolean;
+				batchProgress: number | null;
+				stage: string;
+			} | null;
+		}>(baseUrl, "/api/admin/search-index");
+		assert(
+			overview.queue.hasFailed &&
+				overview.queue.hasPending &&
+				overview.worker?.active === true &&
+				overview.worker.stage === "indexing" &&
+				overview.worker.batchProgress === 37,
+			`Search overview was wrong: ${JSON.stringify(overview)}`,
+		);
+		const targetedRetry = await requestJson<{
+			receipts: IndexReceipt[];
+			requeued: number;
+		}>(baseUrl, "/api/admin/search-index/retry", {
+			body: JSON.stringify({
+				receipts: [receipts[3], receipts[4]],
+				scope: "receipts",
+			}),
+			method: "POST",
+		});
+		assert(
+			targetedRetry.requeued === 1 &&
+				targetedRetry.receipts[0]?.entityKey === statusKeys[4],
+			`Targeted retry changed the wrong receipts: ${JSON.stringify(targetedRetry)}`,
+		);
+		await database.insert(outbox).values({
+			attempts: 15,
+			deadLetteredAt: statusNow,
+			entityKey: statusKeys[5]!,
+			entityType: "collection",
+			lastError: "Second permanent search failure",
+			operation: "delete",
+			revision: 1,
+		});
+		const allRetry = await requestJson<{
+			receipts: IndexReceipt[];
+			requeued: number;
+		}>(baseUrl, "/api/admin/search-index/retry", {
+			body: JSON.stringify({ scope: "allFailed" }),
+			method: "POST",
+		});
+		assert(
+			allRetry.requeued === 1 && allRetry.receipts.length === 0,
+			`All-failure retry was not bounded: ${JSON.stringify(allRetry)}`,
+		);
+		const invalidRetry = await fetch(
+			`${baseUrl}/api/admin/search-index/retry`,
+			{
+				body: JSON.stringify({ scope: "all" }),
+				headers: { "Content-Type": "application/json" },
+				method: "POST",
+			},
+		);
+		const invalidRetryBody = (await invalidRetry.json()) as {
+			error?: { code?: string; fields?: Record<string, string> };
+		};
+		assert(
+			invalidRetry.status === 400 &&
+				invalidRetryBody.error?.code === "validation_failed" &&
+				Boolean(invalidRetryBody.error.fields),
+			`Invalid retry did not return a human validation error: ${JSON.stringify(invalidRetryBody)}`,
+		);
+		await database
+			.delete(outbox)
+			.where(inArray(outbox.entityKey, statusKeys));
+
 		await registerSearchIndexWorker(
 			database,
 			workerId,
@@ -387,25 +623,29 @@ async function main() {
 			"The health check did not report the expected worker",
 		);
 
-		await database.insert(itemIdentity).values({
-			key: itemKey,
-			sourceConnectionKey: "native",
-			sourceRecordKey: itemKey,
+		const created = await requestJson<{
+			draft: { itemKey: string };
+		}>(baseUrl, "/api/admin/items/drafts", {
+			body: JSON.stringify({
+				abstractNote: "x".repeat(2_000_000),
+				collections: [],
+				creators: [],
+				itemType: "Report",
+				tags: [],
+				title: "Worker progress verification",
+			}),
+			method: "POST",
 		});
-		await database.insert(item).values({
-			abstractNote: "x".repeat(2_000_000),
-			itemType: "Report",
-			key: itemKey,
-			sourceConnectionKey: "native",
-			sourceRecordKey: itemKey,
-			title: "Worker progress verification",
+		const published = await requestJson<{
+			indexingReceipts: IndexReceipt[];
+		}>(baseUrl, `/api/admin/items/${created.draft.itemKey}/publish`, {
+			method: "POST",
 		});
-		await database.insert(outbox).values({
-			entityKey: itemKey,
-			entityType: "item",
-			operation: "upsert",
-			revision: 1,
-		});
+		assert(
+			published.indexingReceipts[0]?.entityKey === created.draft.itemKey &&
+				published.indexingReceipts[0]?.revision === 1,
+			`Publish did not return its indexing receipt: ${JSON.stringify(published)}`,
+		);
 		const observedStages = new Set<string>();
 		let observedTask = false;
 		await waitFor(
@@ -432,10 +672,316 @@ async function main() {
 		);
 		const indexedDocument = await meilisearch
 			.index(isolatedIndexName)
-			.getDocument<{ title: string }>(itemKey);
+			.getDocument<{ title: string }>(created.draft.itemKey);
 		assert(
 			indexedDocument.title === "Worker progress verification",
 			"The worker reported completion before the document was searchable",
+		);
+		const opened = await requestJson<{
+			draft: { draftRevision: number; payload: Record<string, unknown> };
+		}>(baseUrl, `/api/admin/items/${created.draft.itemKey}/draft`, {
+			method: "POST",
+		});
+		await requestJson(
+			baseUrl,
+			`/api/admin/items/${created.draft.itemKey}/draft`,
+			{
+				body: JSON.stringify({
+					expectedDraftRevision: opened.draft.draftRevision,
+					payload: {
+						...opened.draft.payload,
+						abstractNote: "Updated and reindexed",
+						title: "Worker progress verification updated",
+					},
+				}),
+				method: "PUT",
+			},
+		);
+		const republished = await requestJson<{
+			indexingReceipts: IndexReceipt[];
+		}>(baseUrl, `/api/admin/items/${created.draft.itemKey}/publish`, {
+			method: "POST",
+		});
+		assert(
+			republished.indexingReceipts[0]?.revision === 2,
+			"The edited publication did not return revision 2",
+		);
+		await waitForReceiptsIndexed(
+			baseUrl,
+			republished.indexingReceipts,
+			"The edited publication receipt never became indexed",
+		);
+		const updatedDocument = await meilisearch
+			.index(isolatedIndexName)
+			.getDocument<{ title: string }>(created.draft.itemKey);
+		assert(
+			updatedDocument.title === "Worker progress verification updated",
+			"The indexed document did not reflect the edited metadata",
+		);
+		const unpublished = await requestJson<{
+			indexingReceipts: IndexReceipt[];
+		}>(baseUrl, `/api/admin/items/${created.draft.itemKey}/unpublish`, {
+			method: "POST",
+		});
+		await waitForReceiptsIndexed(
+			baseUrl,
+			unpublished.indexingReceipts,
+			"The unpublish receipt never became indexed",
+		);
+		try {
+			await meilisearch
+				.index(isolatedIndexName)
+				.getDocument(created.draft.itemKey);
+			throw new Error("The unpublished document remained searchable");
+		} catch (error) {
+			assert(
+				error instanceof MeilisearchApiError &&
+					error.cause?.code === "document_not_found",
+				"The unpublished document lookup failed unexpectedly",
+			);
+		}
+
+		const createDraft = (payload: Record<string, unknown>) =>
+			requestJson<{ draft: { itemKey: string } }>(
+				baseUrl,
+				"/api/admin/items/drafts",
+				{
+					body: JSON.stringify(payload),
+					method: "POST",
+				},
+			);
+		const oldParent = await createDraft({
+			collections: [],
+			creators: [],
+			itemType: "Report",
+			tags: [],
+			title: "Old receipt parent",
+		});
+		const newParent = await createDraft({
+			collections: [],
+			creators: [],
+			itemType: "Report",
+			tags: [],
+			title: "New receipt parent",
+		});
+		for (const parent of [oldParent, newParent]) {
+			const result = await requestJson<{
+				indexingReceipts: IndexReceipt[];
+			}>(baseUrl, `/api/admin/items/${parent.draft.itemKey}/publish`, {
+				method: "POST",
+			});
+			await waitForReceiptsIndexed(
+				baseUrl,
+				result.indexingReceipts,
+				"A reparenting fixture parent was not indexed",
+			);
+		}
+		const child = await createDraft({
+			collections: [],
+			creators: [],
+			itemType: "Attachment",
+			parentItem: oldParent.draft.itemKey,
+			tags: [],
+			title: "Receipt reparent child",
+		});
+		const childPublished = await requestJson<{
+			indexingReceipts: IndexReceipt[];
+		}>(baseUrl, `/api/admin/items/${child.draft.itemKey}/publish`, {
+			method: "POST",
+		});
+		await waitForReceiptsIndexed(
+			baseUrl,
+			childPublished.indexingReceipts,
+			"The initial child publication was not indexed",
+		);
+		const childDraft = await requestJson<{
+			draft: { draftRevision: number; payload: Record<string, unknown> };
+		}>(baseUrl, `/api/admin/items/${child.draft.itemKey}/draft`, {
+			method: "POST",
+		});
+		await requestJson(
+			baseUrl,
+			`/api/admin/items/${child.draft.itemKey}/draft`,
+			{
+				body: JSON.stringify({
+					expectedDraftRevision: childDraft.draft.draftRevision,
+					payload: {
+						...childDraft.draft.payload,
+						parentItem: newParent.draft.itemKey,
+					},
+				}),
+				method: "PUT",
+			},
+		);
+		const reparented = await requestJson<{
+			indexingReceipts: IndexReceipt[];
+		}>(baseUrl, `/api/admin/items/${child.draft.itemKey}/publish`, {
+			method: "POST",
+		});
+		const reparentReceiptKeys = new Set(
+			reparented.indexingReceipts.map(({ entityKey }) => entityKey),
+		);
+		assert(
+			reparentReceiptKeys.size === 3 &&
+				reparentReceiptKeys.has(child.draft.itemKey) &&
+				reparentReceiptKeys.has(oldParent.draft.itemKey) &&
+				reparentReceiptKeys.has(newParent.draft.itemKey),
+			`Reparenting did not expose all transactional receipts: ${JSON.stringify(reparented)}`,
+		);
+		await waitForReceiptsIndexed(
+			baseUrl,
+			reparented.indexingReceipts,
+			"The reparenting receipt set did not finish indexing",
+		);
+		const [oldParentDocument, newParentDocument] = await Promise.all([
+			meilisearch.index(isolatedIndexName).getDocument<{
+				attachmentsData: Array<{ key: string }>;
+			}>(oldParent.draft.itemKey),
+			meilisearch.index(isolatedIndexName).getDocument<{
+				attachmentsData: Array<{ key: string }>;
+			}>(newParent.draft.itemKey),
+		]);
+		assert(
+			!oldParentDocument.attachmentsData.some(
+				({ key }) => key === child.draft.itemKey,
+			) &&
+				newParentDocument.attachmentsData.some(
+					({ key }) => key === child.draft.itemKey,
+				),
+			"The completed reparent receipt set left a stale parent projection",
+		);
+
+		let createdCollection = await requestJson<{
+			collection: { key: string; revision: number };
+			indexingReceipts: IndexReceipt[];
+		}>(baseUrl, "/api/admin/collections", {
+			body: JSON.stringify({
+				name: "Index receipt verification",
+				parentCollection: null,
+			}),
+			method: "POST",
+		});
+		assert(
+			createdCollection.indexingReceipts.length === 1 &&
+				createdCollection.indexingReceipts[0]?.entityType === "collection",
+			"Collection creation did not return its indexing receipt",
+		);
+		await waitForReceiptsIndexed(
+			baseUrl,
+			createdCollection.indexingReceipts,
+			"The collection receipt never became indexed",
+		);
+		createdCollection = await requestJson<{
+			collection: { key: string; revision: number };
+			indexingReceipts: IndexReceipt[];
+		}>(
+			baseUrl,
+			`/api/admin/collections/${createdCollection.collection.key}`,
+			{
+				body: JSON.stringify({
+					expectedRevision: createdCollection.collection.revision,
+					name: "Renamed index receipt verification",
+				}),
+				method: "PATCH",
+			},
+		);
+		assert(
+			createdCollection.indexingReceipts[0]?.revision ===
+				createdCollection.collection.revision,
+			"Collection rename returned the wrong receipt revision",
+		);
+		await waitForReceiptsIndexed(
+			baseUrl,
+			createdCollection.indexingReceipts,
+			"The collection rename receipt never became indexed",
+		);
+		const targetCollection = await requestJson<{
+			collection: { key: string; revision: number };
+			indexingReceipts: IndexReceipt[];
+		}>(baseUrl, "/api/admin/collections", {
+			body: JSON.stringify({
+				name: "Receipt move target",
+				parentCollection: null,
+			}),
+			method: "POST",
+		});
+		await waitForReceiptsIndexed(
+			baseUrl,
+			targetCollection.indexingReceipts,
+			"The collection move target receipt never became indexed",
+		);
+		const movedCollection = await requestJson<{
+			collection: { key: string; revision: number };
+			indexingReceipts: IndexReceipt[];
+		}>(
+			baseUrl,
+			`/api/admin/collections/${createdCollection.collection.key}/move`,
+			{
+				body: JSON.stringify({
+					expectedRevision: createdCollection.collection.revision,
+					position: "inside",
+					targetCollection: targetCollection.collection.key,
+				}),
+				method: "POST",
+			},
+		);
+		assert(
+			movedCollection.indexingReceipts[0]?.revision ===
+				movedCollection.collection.revision,
+			"Collection move returned the wrong receipt revision",
+		);
+		await waitForReceiptsIndexed(
+			baseUrl,
+			movedCollection.indexingReceipts,
+			"The collection move receipt never became indexed",
+		);
+		const deletedCollection = await requestJson<{
+			collections: Array<{ key: string; revision: number }>;
+			indexingReceipts: IndexReceipt[];
+		}>(baseUrl, `/api/admin/collections/${movedCollection.collection.key}`, {
+			body: JSON.stringify({
+				expectedRevision: movedCollection.collection.revision,
+			}),
+			method: "DELETE",
+		});
+		assert(
+			deletedCollection.indexingReceipts.length ===
+				deletedCollection.collections.length &&
+				deletedCollection.indexingReceipts[0]?.revision ===
+					deletedCollection.collections[0]?.revision,
+			"Collection deletion did not expose every changed receipt",
+		);
+		await waitForReceiptsIndexed(
+			baseUrl,
+			deletedCollection.indexingReceipts,
+			"The collection delete receipts never became indexed",
+		);
+		const deletedRoot = deletedCollection.collections.find(
+			({ key }) => key === movedCollection.collection.key,
+		);
+		assert(deletedRoot, "The deleted collection response omitted its root");
+		const restoredCollection = await requestJson<{
+			collections: Array<{ key: string; revision: number }>;
+			indexingReceipts: IndexReceipt[];
+		}>(
+			baseUrl,
+			`/api/admin/collections/${movedCollection.collection.key}/restore`,
+			{
+				body: JSON.stringify({
+					expectedRevision: deletedRoot.revision,
+				}),
+				method: "POST",
+			},
+		);
+		assert(
+			restoredCollection.indexingReceipts.length ===
+				restoredCollection.collections.length,
+			"Collection restoration did not expose every changed receipt",
+		);
+		await waitForReceiptsIndexed(
+			baseUrl,
+			restoredCollection.indexingReceipts,
+			"The collection restore receipts never became indexed",
 		);
 
 		worker.kill("SIGTERM");
@@ -556,6 +1102,7 @@ async function main() {
 		await attemptCleanup(() => terminateChild(worker));
 		await attemptCleanup(() => terminateChild(stalledWorker));
 		await attemptCleanup(() => terminateChild(failedWorker));
+		await attemptCleanup(() => terminateChild(webServer));
 		if (stalledSearchServer) {
 			await attemptCleanup(() => closeServer(stalledSearchServer!));
 		}
@@ -606,6 +1153,11 @@ async function main() {
 			stalledRequestShutdown: true,
 			isolatedDatabase: true,
 			isolatedIndex: true,
+			adminHttpReceipts: true,
+			adminHttpRetry: true,
+			completeReparentReceipts: true,
+			collectionMutationReceipts: true,
+			publishEditDeleteIndexed: true,
 			workerId,
 		}),
 	);

@@ -87,6 +87,54 @@ async function jsonRequest(
 	return body;
 }
 
+async function assertIndexingReceipts(
+	db: ReturnType<typeof createPostgresDatabaseResource>["database"],
+	response: {
+		indexingReceipts?: Array<{
+			entityKey: string;
+			entityType: "collection" | "item";
+			revision: number;
+		}>;
+	},
+	expectedKeys: string[],
+	context: string,
+) {
+	const receipts = response.indexingReceipts ?? [];
+	assert(
+		receipts.length === expectedKeys.length &&
+			expectedKeys.every((key) =>
+				receipts.some(
+					(receipt) =>
+						receipt.entityType === "item" &&
+						receipt.entityKey === key,
+				),
+			),
+		`${context} returned an incomplete receipt set: ${JSON.stringify(receipts)}`,
+	);
+	const rows = await db
+		.select({
+			entityKey: outbox.entityKey,
+			entityType: outbox.entityType,
+			revision: outbox.revision,
+		})
+		.from(outbox)
+		.where(
+			or(
+				...receipts.map((receipt) =>
+					and(
+						eq(outbox.entityType, receipt.entityType),
+						eq(outbox.entityKey, receipt.entityKey),
+						eq(outbox.revision, receipt.revision),
+					),
+				),
+			),
+		);
+	assert(
+		rows.length === receipts.length,
+		`${context} returned receipts that do not match its outbox rows`,
+	);
+}
+
 async function createPdf() {
 	const document = await PDFDocument.create();
 	const font = await document.embedFont(StandardFonts.Helvetica);
@@ -270,6 +318,12 @@ async function verify() {
 				}),
 			},
 		);
+		await assertIndexingReceipts(
+			db,
+			publication,
+			[attachmentKey, parentKey],
+			"PDF publication",
+		);
 		publicObjectPaths.add(publicObjectPath(publication.file.publicUrl));
 		publicObjectPaths.add(
 			publicObjectPath(publication.file.coverPublicUrl),
@@ -330,9 +384,18 @@ async function verify() {
 			"HTTP staged-file discard changed the publication",
 		);
 
-		await jsonRequest(`/api/admin/items/${attachmentKey}/file`, {
+		const fileUnpublished = await jsonRequest(
+			`/api/admin/items/${attachmentKey}/file`,
+			{
 			method: "DELETE",
-		});
+			},
+		);
+		await assertIndexingReceipts(
+			db,
+			fileUnpublished,
+			[attachmentKey, parentKey],
+			"PDF unpublish",
+		);
 		const removedResponse = await fetch(
 			`${publication.file.publicUrl}?removed=${Date.now()}`,
 			{ cache: "no-store" },

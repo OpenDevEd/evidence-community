@@ -5,7 +5,7 @@ import {
 	itemIdentity,
 	outbox,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, or } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { adminItemListProjection } from "../src/db/schema/tables/adminItemListProjection";
@@ -16,6 +16,7 @@ import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import type {
 	AdminItemBatchRequest,
 	AdminItemBatchResponse,
+	AdminItemBatchResult,
 } from "../src/lib/admin/item-batch-contract";
 
 const baseUrl = process.env.ADMIN_BASE_URL ?? "http://127.0.0.1:3100";
@@ -60,6 +61,46 @@ async function runBatch(input: AdminItemBatchRequest) {
 			method: "POST",
 		})
 	).results;
+}
+
+async function assertChangedReceiptsExist(
+	db: ReturnType<typeof createPostgresDatabaseResource>["database"],
+	results: AdminItemBatchResult[],
+	context: string,
+) {
+	const receipts = results.flatMap((result) =>
+		result.outcome === "changed" ? (result.indexingReceipts ?? []) : [],
+	);
+	const changed = results.filter(({ outcome }) => outcome === "changed");
+	assert(
+		changed.every(
+			(result) => (result.indexingReceipts?.length ?? 0) > 0,
+		),
+		`${context} omitted a changed record receipt: ${JSON.stringify(results)}`,
+	);
+	if (receipts.length === 0) return;
+	const rows = await db
+		.select({
+			entityKey: outbox.entityKey,
+			entityType: outbox.entityType,
+			revision: outbox.revision,
+		})
+		.from(outbox)
+		.where(
+			or(
+				...receipts.map((receipt) =>
+					and(
+						eq(outbox.entityType, receipt.entityType),
+						eq(outbox.entityKey, receipt.entityKey),
+						eq(outbox.revision, receipt.revision),
+					),
+				),
+			),
+		);
+	assert(
+		rows.length === receipts.length,
+		`${context} returned receipts that do not match its outbox rows`,
+	);
 }
 
 async function getItem(key: string) {
@@ -202,6 +243,7 @@ async function verify() {
 			publications.every(({ outcome }) => outcome === "changed"),
 			`Dependency-ordered publication failed: ${JSON.stringify(publications)}`,
 		);
+		await assertChangedReceiptsExist(db, publications, "Batch publication");
 		const publishedParent = await getItem(parentKey);
 		const publishedChild = await getItem(childKey);
 		assert(
@@ -227,6 +269,7 @@ async function verify() {
 				mixedRemovals[2]?.outcome === "skipped",
 			`Mixed batch outcomes were wrong: ${JSON.stringify(mixedRemovals)}`,
 		);
+		await assertChangedReceiptsExist(db, mixedRemovals, "Mixed batch removal");
 		assert(
 			(await getItem(parentKey)).state === "published" &&
 				(await getItem(childKey)).state === "published" &&
@@ -243,6 +286,7 @@ async function verify() {
 			removals.every(({ outcome }) => outcome === "changed"),
 			`Dependency-ordered removal failed: ${JSON.stringify(removals)}`,
 		);
+		await assertChangedReceiptsExist(db, removals, "Batch removal");
 		for (const key of itemKeys) {
 			assert(
 				(await getItem(key)).state === "deleted",
