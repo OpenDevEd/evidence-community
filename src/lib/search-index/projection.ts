@@ -10,7 +10,7 @@ import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
-import { chunkValues } from "@/lib/source-ingestion/chunks";
+import { chunkValues } from "@/lib/chunk-values";
 
 export type SearchProjectionEvent = {
 	entityKey: string;

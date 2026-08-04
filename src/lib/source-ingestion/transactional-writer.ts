@@ -37,7 +37,7 @@ import {
 	type SourceIngestionBatch,
 	sourceIngestionBatchSchema,
 } from "./batch-schema";
-import { chunkValues } from "./chunks";
+import { chunkValues } from "@/lib/chunk-values";
 import {
 	canonicalSourceJson,
 	sourceItemFingerprint,

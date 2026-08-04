@@ -17,7 +17,7 @@ import {
 	type SourceSyncResult,
 	type SyncableSourceProvider,
 } from "./adapter";
-import { chunkValues } from "./chunks";
+import { chunkValues } from "@/lib/chunk-values";
 import type { SourceCredentialResolver } from "./credentials";
 
 const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1_000;

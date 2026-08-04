@@ -12,7 +12,7 @@ import { item } from "@/db/schema/tables/item";
 import type { SourceCredentialResolver } from "../credentials";
 import { SourceCredentialNotFoundError } from "../credentials";
 import type { SourceIngestionBatch } from "../batch-schema";
-import { chunkValues } from "../chunks";
+import { chunkValues } from "@/lib/chunk-values";
 import { writeSourceIngestionBatch } from "../transactional-writer";
 import { ZOTERO_OBJECT_REQUEST_SIZE, ZoteroApiClient } from "./client";
 import {
