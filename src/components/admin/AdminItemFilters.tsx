@@ -210,7 +210,7 @@ function FilterValueEditor({
 			setCustomValue("");
 		};
 		return (
-			<div className="min-w-44 flex-1">
+			<div className="w-full min-w-0">
 				<button
 					aria-describedby={errorId}
 					aria-expanded={optionsOpen}
@@ -298,7 +298,7 @@ function FilterValueEditor({
 		const values = Array.isArray(filter.value) ? filter.value : ["", ""];
 		const inputType = definition.kind === "date" ? "date" : "number";
 		return (
-			<div className="flex min-w-52 flex-1 items-center gap-1.5">
+			<div className="flex w-full min-w-0 items-center gap-2">
 				{[0, 1].map((index) => (
 					<Input
 						key={index}
@@ -328,7 +328,7 @@ function FilterValueEditor({
 		<Input
 			aria-label={`${definition.label} value`}
 			aria-describedby={errorId}
-			className="min-w-44 flex-1"
+			className="w-full min-w-0"
 			classNames={{
 				input: "text-xs",
 				inputWrapper: "h-9 min-h-9 rounded-lg",
@@ -423,9 +423,10 @@ export function AdminItemFilters({
 			</PopoverTrigger>
 			<PopoverContent
 				aria-label="Filter records"
-				className="flex max-h-[calc(100dvh-72px)] w-[min(520px,calc(100vw-24px))] flex-col rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+				className="box-border flex max-h-[calc(100dvh-72px)] w-[min(420px,calc(100vw-24px))] min-w-0 max-w-none flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+				data-admin-filter-popover
 			>
-				<div className="flex h-11 shrink-0 items-center justify-between border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
+				<div className="flex h-11 w-full shrink-0 items-center justify-between border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
 					<span className="text-sm font-semibold text-black/80 dark:text-white/85">
 						Filter records
 					</span>
@@ -440,163 +441,165 @@ export function AdminItemFilters({
 						</Button>
 					) : null}
 				</div>
-				<div className="min-h-0 flex-1 overflow-y-auto p-2">
-					{drafts.length === 0 ? (
-						<p className="px-2 py-6 text-center text-sm text-black/45 dark:text-white/45">
-							No filters applied
-						</p>
-					) : null}
-					{drafts.map((filter, index) => {
-						const definition = getAdminItemListColumn(
-							filter.column,
-						);
-						const error = filterErrors.get(index);
-						const errorId = error
-							? `admin-filter-${index}-error`
-							: undefined;
-						const wideValueEditor =
-							filter.column === "collections" &&
-							filter.operator === "anyOf";
-						const setFilterValue = (value: unknown) =>
-							setDrafts((current) =>
-								current.map((entry, entryIndex) =>
-									entryIndex === index
-										? { ...entry, value }
-										: entry,
-								),
-							);
-						return (
-							<div
-								key={`${filter.column}:${index}`}
-								className="flex flex-wrap items-center gap-2 rounded-lg p-1.5 hover:bg-black/[0.025] dark:hover:bg-white/[0.03]"
-							>
-								<Select
-									aria-label={`Filter ${index + 1} field`}
-									className="w-32 shrink-0"
-									classNames={{
-										trigger: "h-9 min-h-9 rounded-lg",
-										value: "text-xs",
-									}}
-									placement="left"
-									selectedKeys={new Set([filter.column])}
-									size="sm"
-									onSelectionChange={(keys) => {
-										const column = selectedKey(
-											keys as Set<React.Key>,
-										) as AdminItemColumnId | null;
-										if (!column) return;
-										setDrafts((current) =>
-											current.map((entry, entryIndex) =>
-												entryIndex === index
-													? newFilter(column)
-													: entry,
-											),
-										);
-									}}
-								>
-									{ADMIN_ITEM_LIST_COLUMNS.filter(
-										({ filterable, id }) =>
-											filterable &&
-											(id === filter.column ||
-												!drafts.some(
-													(entry) =>
-														entry.column === id,
-												)),
-									).map(({ id, label }) => (
-										<SelectItem key={id}>
-											{label}
-										</SelectItem>
-									))}
-								</Select>
-								<Select
-									aria-label={`${definition.label} operator`}
-									className="w-32 shrink-0"
-									classNames={{
-										trigger: "h-9 min-h-9 rounded-lg",
-										value: "text-xs",
-									}}
-									placement="left"
-									selectedKeys={new Set([filter.operator])}
-									size="sm"
-									onSelectionChange={(keys) => {
-										const operator = selectedKey(
-											keys as Set<React.Key>,
-										) as AdminItemFilterOperator | null;
-										if (!operator) return;
-										setDrafts((current) =>
-											current.map((entry, entryIndex) =>
-												entryIndex === index
-													? {
-															...entry,
-															operator,
-															value: initialValue(
-																entry.column,
-																operator,
-															),
-														}
-													: entry,
-											),
-										);
-									}}
-								>
-									{definition.filterOperators.map(
-										(operator) => (
-											<SelectItem key={operator}>
-												{OPERATOR_LABELS[operator]}
-											</SelectItem>
-										),
-									)}
-								</Select>
-								{!wideValueEditor ? (
-									<FilterValueEditor
-										definitions={definitions}
-										errorId={errorId}
-										filter={filter}
-										items={items}
-										sources={sources}
-										onChange={setFilterValue}
-									/>
-								) : null}
-								<Button
-									aria-label={`Remove ${definition.label} filter`}
-									isIconOnly
-									onPress={() =>
-										setDrafts((current) =>
-											current.filter(
-												(_, entryIndex) =>
-													entryIndex !== index,
-											),
-										)
-									}
-									size="xs"
-									variant="transparent"
-								>
-									<Trash2 aria-hidden size={14} />
-								</Button>
-								{wideValueEditor ? (
-									<div className="basis-full">
-										<FilterValueEditor
-											definitions={definitions}
-											errorId={errorId}
-											filter={filter}
-											items={items}
-											sources={sources}
-											onChange={setFilterValue}
-										/>
-									</div>
-								) : null}
-								{error ? (
-									<p
-										id={errorId}
-										className="basis-full px-1 text-xs text-danger"
-										role="alert"
-									>
-										{error}
-									</p>
-								) : null}
+				<div
+					className="min-h-0 w-full flex-1 overflow-y-auto"
+					data-admin-filter-scroll
+				>
+					<div className="space-y-2 p-2" data-admin-filter-list>
+						{drafts.length === 0 ? (
+							<div className="flex min-h-24 items-center justify-center gap-2 rounded-lg bg-black/[0.025] text-sm font-medium text-black/45 dark:bg-white/[0.025] dark:text-white/45">
+								<Filter aria-hidden size={15} />
+								<span>No filters yet</span>
 							</div>
-						);
-					})}
+						) : null}
+						{drafts.map((filter, index) => {
+							const definition = getAdminItemListColumn(
+								filter.column,
+							);
+							const error = filterErrors.get(index);
+							const errorId = error
+								? `admin-filter-${index}-error`
+								: undefined;
+							const hasValueEditor =
+								filter.operator !== "hasNoValue" &&
+								filter.operator !== "hasValue";
+							const setFilterValue = (value: unknown) =>
+								setDrafts((current) =>
+									current.map((entry, entryIndex) =>
+										entryIndex === index
+											? { ...entry, value }
+											: entry,
+									),
+								);
+							return (
+								<div
+									key={`${filter.column}:${index}`}
+									className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_2rem] items-start gap-2 rounded-lg border border-black/[0.06] bg-black/[0.02] p-2 dark:border-white/[0.07] dark:bg-white/[0.025]"
+									data-admin-filter-row
+								>
+									<Select
+										aria-label={`Filter ${index + 1} field`}
+										className="w-full min-w-0"
+										classNames={{
+											trigger: "h-9 min-h-9 rounded-lg",
+											value: "text-xs",
+										}}
+										placement="left"
+										selectedKeys={new Set([filter.column])}
+										size="sm"
+										onSelectionChange={(keys) => {
+											const column = selectedKey(
+												keys as Set<React.Key>,
+											) as AdminItemColumnId | null;
+											if (!column) return;
+											setDrafts((current) =>
+												current.map(
+													(entry, entryIndex) =>
+														entryIndex === index
+															? newFilter(column)
+															: entry,
+												),
+											);
+										}}
+									>
+										{ADMIN_ITEM_LIST_COLUMNS.filter(
+											({ filterable, id }) =>
+												filterable &&
+												(id === filter.column ||
+													!drafts.some(
+														(entry) =>
+															entry.column === id,
+													)),
+										).map(({ id, label }) => (
+											<SelectItem key={id}>
+												{label}
+											</SelectItem>
+										))}
+									</Select>
+									<Select
+										aria-label={`${definition.label} operator`}
+										className="w-full min-w-0"
+										classNames={{
+											trigger: "h-9 min-h-9 rounded-lg",
+											value: "text-xs",
+										}}
+										placement="left"
+										selectedKeys={
+											new Set([filter.operator])
+										}
+										size="sm"
+										onSelectionChange={(keys) => {
+											const operator = selectedKey(
+												keys as Set<React.Key>,
+											) as AdminItemFilterOperator | null;
+											if (!operator) return;
+											setDrafts((current) =>
+												current.map(
+													(entry, entryIndex) =>
+														entryIndex === index
+															? {
+																	...entry,
+																	operator,
+																	value: initialValue(
+																		entry.column,
+																		operator,
+																	),
+																}
+															: entry,
+												),
+											);
+										}}
+									>
+										{definition.filterOperators.map(
+											(operator) => (
+												<SelectItem key={operator}>
+													{OPERATOR_LABELS[operator]}
+												</SelectItem>
+											),
+										)}
+									</Select>
+									<Button
+										aria-label={`Remove ${definition.label} filter`}
+										className="h-9 min-h-9 w-8 min-w-8"
+										isIconOnly
+										onPress={() =>
+											setDrafts((current) =>
+												current.filter(
+													(_, entryIndex) =>
+														entryIndex !== index,
+												),
+											)
+										}
+										size="xs"
+										variant="transparent"
+									>
+										<Trash2 aria-hidden size={14} />
+									</Button>
+									{hasValueEditor ? (
+										<div className="col-span-full min-w-0">
+											<FilterValueEditor
+												definitions={definitions}
+												errorId={errorId}
+												filter={filter}
+												items={items}
+												sources={sources}
+												onChange={setFilterValue}
+											/>
+										</div>
+									) : null}
+									{error ? (
+										<p
+											id={errorId}
+											className="col-span-full px-1 text-xs text-danger"
+											role="alert"
+										>
+											{error}
+										</p>
+									) : null}
+								</div>
+							);
+						})}
+					</div>
 				</div>
 				<div className="flex min-h-12 shrink-0 flex-wrap items-center justify-end gap-2 border-t border-black/[0.06] px-3 py-2 dark:border-white/[0.06]">
 					<Select

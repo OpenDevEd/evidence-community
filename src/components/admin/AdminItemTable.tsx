@@ -365,8 +365,11 @@ function TableViewControls({
 						<Columns3 aria-hidden size={15} />
 					</TableViewTrigger>
 				</PopoverTrigger>
-				<PopoverContent className="w-72 rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card">
-					<div className="flex h-11 items-center justify-between border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
+				<PopoverContent
+					className="w-56 rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+					data-admin-column-popover
+				>
+					<div className="flex h-11 w-full items-center justify-between border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
 						<span className="text-sm font-semibold text-black/80 dark:text-white/85">
 							Columns
 						</span>
@@ -382,103 +385,112 @@ function TableViewControls({
 							</Button>
 						</Tooltip>
 					</div>
-					<div className="max-h-[420px] overflow-y-auto p-2">
-						{preferences.columnOrder.map((id) => {
-							const definition = getAdminItemListColumn(id);
-							const optionalIndex = optionalOrder.indexOf(id);
-							return (
-								<div
-									key={id}
-									className="flex h-9 items-center gap-1 rounded-lg px-1 hover:bg-black/[0.035] dark:hover:bg-white/[0.04]"
-								>
-									<Checkbox
-										aria-label={`Show ${definition.label}`}
-										className="min-w-0 flex-1"
-										isDisabled={!definition.optional}
-										isSelected={
-											preferences.columnVisibility[id]
-										}
-										onValueChange={(visible) =>
-											onPreferencesChange((current) => ({
-												...current,
-												columnVisibility: {
-													...current.columnVisibility,
-													[id]: visible,
-												},
-											}))
-										}
-										size="sm"
+					<div
+						className="max-h-[420px] w-full overflow-y-auto"
+						data-admin-column-scroll
+					>
+						<div className="p-2" data-admin-column-list>
+							{preferences.columnOrder.map((id) => {
+								const definition = getAdminItemListColumn(id);
+								const optionalIndex = optionalOrder.indexOf(id);
+								return (
+									<div
+										key={id}
+										className="flex h-9 items-center gap-1 rounded-lg px-1 hover:bg-black/[0.035] dark:hover:bg-white/[0.04]"
 									>
-										<span className="truncate text-xs">
-											{definition.label}
-										</span>
-									</Checkbox>
-									{definition.optional ? (
-										<div className="flex shrink-0">
-											<Button
-												aria-label={`Move ${definition.label} left`}
-												isDisabled={optionalIndex <= 0}
-												isIconOnly
-												onPress={() =>
-													onPreferencesChange(
-														(current) => ({
-															...current,
-															columnOrder:
-																moveAdminItemTableColumn(
-																	current.columnOrder,
-																	id,
-																	"up",
-																),
-														}),
-													)
-												}
-												size="xs"
-												variant="transparent"
-											>
-												<ArrowUp
-													aria-hidden
-													size={13}
-												/>
-											</Button>
-											<Button
-												aria-label={`Move ${definition.label} right`}
-												isDisabled={
-													optionalIndex ===
-													optionalOrder.length - 1
-												}
-												isIconOnly
-												onPress={() =>
-													onPreferencesChange(
-														(current) => ({
-															...current,
-															columnOrder:
-																moveAdminItemTableColumn(
-																	current.columnOrder,
-																	id,
-																	"down",
-																),
-														}),
-													)
-												}
-												size="xs"
-												variant="transparent"
-											>
-												<ArrowDown
-													aria-hidden
-													size={13}
-												/>
-											</Button>
-										</div>
-									) : (
-										<Lock
-											aria-label="Required column"
-											className="mx-2 opacity-30"
-											size={12}
-										/>
-									)}
-								</div>
-							);
-						})}
+										<Checkbox
+											aria-label={`Show ${definition.label}`}
+											className="min-w-0 flex-1"
+											isDisabled={!definition.optional}
+											isSelected={
+												preferences.columnVisibility[id]
+											}
+											onValueChange={(visible) =>
+												onPreferencesChange(
+													(current) => ({
+														...current,
+														columnVisibility: {
+															...current.columnVisibility,
+															[id]: visible,
+														},
+													}),
+												)
+											}
+											size="sm"
+										>
+											<span className="truncate text-xs">
+												{definition.label}
+											</span>
+										</Checkbox>
+										{definition.optional ? (
+											<div className="flex shrink-0">
+												<Button
+													aria-label={`Move ${definition.label} left`}
+													isDisabled={
+														optionalIndex <= 0
+													}
+													isIconOnly
+													onPress={() =>
+														onPreferencesChange(
+															(current) => ({
+																...current,
+																columnOrder:
+																	moveAdminItemTableColumn(
+																		current.columnOrder,
+																		id,
+																		"up",
+																	),
+															}),
+														)
+													}
+													size="xs"
+													variant="transparent"
+												>
+													<ArrowUp
+														aria-hidden
+														size={13}
+													/>
+												</Button>
+												<Button
+													aria-label={`Move ${definition.label} right`}
+													isDisabled={
+														optionalIndex ===
+														optionalOrder.length - 1
+													}
+													isIconOnly
+													onPress={() =>
+														onPreferencesChange(
+															(current) => ({
+																...current,
+																columnOrder:
+																	moveAdminItemTableColumn(
+																		current.columnOrder,
+																		id,
+																		"down",
+																	),
+															}),
+														)
+													}
+													size="xs"
+													variant="transparent"
+												>
+													<ArrowDown
+														aria-hidden
+														size={13}
+													/>
+												</Button>
+											</div>
+										) : (
+											<Lock
+												aria-label="Required column"
+												className="mx-2 opacity-30"
+												size={12}
+											/>
+										)}
+									</div>
+								);
+							})}
+						</div>
 					</div>
 				</PopoverContent>
 			</Popover>
