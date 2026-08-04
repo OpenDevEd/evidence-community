@@ -477,6 +477,11 @@ export const outbox = pgTable(
 		index("outbox_lease_expiry_idx")
 			.on(table.leaseExpiresAt)
 			.where(sql`${table.leaseOwner} IS NOT NULL`),
+		index("outbox_dead_lettered_idx")
+			.on(table.deadLetteredAt)
+			.where(
+				sql`${table.processedAt} IS NULL AND ${table.deadLetteredAt} IS NOT NULL`,
+			),
 	],
 );
 

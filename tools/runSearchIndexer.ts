@@ -180,7 +180,11 @@ async function main() {
 			updatedAt: config.updatedAt,
 		});
 		const requeued = command.requeueDeadLetters
-			? await requeueSearchOutboxDeadLetters(databaseResource.database)
+			? (
+					await requeueSearchOutboxDeadLetters(
+						databaseResource.database,
+					)
+				).length
 			: 0;
 		if (command.rebuild) {
 			const plan = await rebuildSearchIndex(

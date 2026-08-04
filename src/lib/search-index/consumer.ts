@@ -785,10 +785,31 @@ export async function drainSearchOutbox(
 	return results;
 }
 
+export type SearchOutboxReceiptSelector = {
+	entityKey: string;
+	entityType: "collection" | "item";
+	revision: number;
+};
+
 export async function requeueSearchOutboxDeadLetters(
 	database: Database,
-	requeuedAt = new Date(),
+	options: {
+		receipts?: readonly SearchOutboxReceiptSelector[];
+		requeuedAt?: Date;
+	} = {},
 ) {
+	if (options.receipts?.length === 0) return [];
+	const receiptFilter = options.receipts
+		? or(
+				...options.receipts.map((receipt) =>
+					and(
+						eq(outbox.entityType, receipt.entityType),
+						eq(outbox.entityKey, receipt.entityKey),
+						eq(outbox.revision, receipt.revision),
+					),
+				),
+			)
+		: undefined;
 	const rows = await database
 		.update(outbox)
 		.set({
@@ -797,13 +818,21 @@ export async function requeueSearchOutboxDeadLetters(
 			lastError: null,
 			leaseExpiresAt: null,
 			leaseOwner: null,
-			nextAttemptAt: requeuedAt,
+			nextAttemptAt: options.requeuedAt ?? new Date(),
 		})
 		.where(
-			and(isNull(outbox.processedAt), isNotNull(outbox.deadLetteredAt)),
+			and(
+				isNull(outbox.processedAt),
+				isNotNull(outbox.deadLetteredAt),
+				receiptFilter,
+			),
 		)
-		.returning({ id: outbox.id });
-	return rows.length;
+		.returning({
+			entityKey: outbox.entityKey,
+			entityType: outbox.entityType,
+			revision: outbox.revision,
+		});
+	return rows;
 }
 
 export async function ensureSearchIndex(

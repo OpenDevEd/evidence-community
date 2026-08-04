@@ -2,14 +2,13 @@ import { loadLibraryConfig } from "../src/config/library-config/source";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import {
 	getSearchIndexWorker,
+	SEARCH_INDEX_WORKER_MAX_HEARTBEAT_AGE_MS,
 	searchIndexWorkerIsActive,
 } from "../src/lib/search-index/worker-state";
 import {
 	readSearchIndexWorkerInstance,
 	resolveSearchIndexWorkerInstancePath,
 } from "../src/lib/search-index/worker-instance";
-
-const maximumHeartbeatAgeMs = 20_000;
 
 async function main() {
 	const workerId = process.env.SEARCH_INDEX_WORKER_ID?.trim();
@@ -31,7 +30,7 @@ async function main() {
 			!searchIndexWorkerIsActive(
 				worker,
 				new Date(),
-				maximumHeartbeatAgeMs,
+				SEARCH_INDEX_WORKER_MAX_HEARTBEAT_AGE_MS,
 			)
 		) {
 			throw new Error("Search index worker heartbeat is stale");

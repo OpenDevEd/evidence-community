@@ -85,6 +85,13 @@
       "when": 1785830178917,
       "tag": "0011_search_index_worker_state",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1785835756117,
+      "tag": "0012_search-index-dead-letter-lookup",
+      "breakpoints": true
     }
   ]
 }

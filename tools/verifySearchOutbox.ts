@@ -558,7 +558,7 @@ async function verify() {
 			"Retry exhaustion did not dead-letter the event",
 		);
 		const requeued = await requeueSearchOutboxDeadLetters(database);
-		assert(requeued === 1, "The dead letter was not requeued");
+		assert(requeued.length === 1, "The dead letter was not requeued");
 		const [resetDeadLetter] = await database
 			.select()
 			.from(outbox)

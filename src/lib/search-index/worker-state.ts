@@ -8,6 +8,7 @@ import type { Database } from "@/db/database-schema";
 
 const MAX_WORKER_ID_LENGTH = 255;
 const INSTANCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
+export const SEARCH_INDEX_WORKER_MAX_HEARTBEAT_AGE_MS = 20_000;
 
 export type SearchIndexWorkerSnapshot = typeof searchIndexWorker.$inferSelect;
 
@@ -103,7 +104,7 @@ export function createSearchIndexWorkerStateReporter(options: {
 export function searchIndexWorkerIsActive(
 	worker: SearchIndexWorkerSnapshot,
 	now = new Date(),
-	maximumHeartbeatAgeMs = 15_000,
+	maximumHeartbeatAgeMs = SEARCH_INDEX_WORKER_MAX_HEARTBEAT_AGE_MS,
 ) {
 	if (
 		!Number.isSafeInteger(maximumHeartbeatAgeMs) ||

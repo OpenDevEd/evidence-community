@@ -1,0 +1,1 @@
+CREATE INDEX "outbox_dead_lettered_idx" ON "outbox" USING btree ("deadLetteredAt") WHERE "outbox"."processedAt" IS NULL AND "outbox"."deadLetteredAt" IS NOT NULL;
