@@ -2,8 +2,10 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { outbox } from "@opendeved/evidence-library-core";
 import {
-	MeiliSearchApiError,
+	MeilisearchApiError,
+	MeilisearchTaskTimeOutError,
 	type Index,
+	type Meilisearch,
 	type Task,
 } from "meilisearch";
 import {
@@ -42,6 +44,7 @@ const MAX_ERROR_LENGTH = 32 * 1_024;
 type ClaimedEvent = typeof outbox.$inferSelect;
 
 export type SearchOutboxConsumerOptions = {
+	batchClient?: Meilisearch["batches"];
 	database: Database;
 	heartbeatIntervalMs?: number;
 	index: Index;
@@ -49,10 +52,20 @@ export type SearchOutboxConsumerOptions = {
 	maxDocumentBatchBytes?: number;
 	maxAttempts?: number;
 	now?: () => Date;
+	onProgress?: (progress: SearchOutboxProgress) => Promise<void>;
 	retryBaseMs?: number;
 	retryMaxMs?: number;
+	signal?: AbortSignal;
 	taskTimeoutMs?: number;
 	workerId: string;
+};
+
+export type SearchOutboxProgress = {
+	batchProgress: number | null;
+	batchUid: number | null;
+	eventIds: number[];
+	stage: "indexing" | "projecting" | "waiting";
+	taskUid: number | null;
 };
 
 export type SearchOutboxProcessResult = {
@@ -66,6 +79,13 @@ export class SearchOutboxLeaseLostError extends Error {
 	constructor(eventId: number) {
 		super(`Search outbox lease was lost for event ${eventId}`);
 		this.name = "SearchOutboxLeaseLostError";
+	}
+}
+
+export class SearchOutboxAbortError extends Error {
+	constructor() {
+		super("Search outbox processing was aborted");
+		this.name = "SearchOutboxAbortError";
 	}
 }
 
@@ -91,13 +111,11 @@ function validateOptions(options: SearchOutboxConsumerOptions) {
 	const heartbeatIntervalMs =
 		options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
 	const maxDocumentBatchBytes =
-		options.maxDocumentBatchBytes ??
-		DEFAULT_MAX_DOCUMENT_BATCH_BYTES;
+		options.maxDocumentBatchBytes ?? DEFAULT_MAX_DOCUMENT_BATCH_BYTES;
 	const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
 	const retryBaseMs = options.retryBaseMs ?? DEFAULT_RETRY_BASE_MS;
 	const retryMaxMs = options.retryMaxMs ?? DEFAULT_RETRY_MAX_MS;
-	const taskTimeoutMs =
-		options.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
+	const taskTimeoutMs = options.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
 	if (
 		!Number.isSafeInteger(leaseDurationMs) ||
 		leaseDurationMs < 1_000 ||
@@ -142,10 +160,7 @@ function validateOptions(options: SearchOutboxConsumerOptions) {
 			"retry delays must be safe integers and retryMaxMs must be at least retryBaseMs",
 		);
 	}
-	if (
-		!Number.isSafeInteger(taskTimeoutMs) ||
-		taskTimeoutMs < 1_000
-	) {
+	if (!Number.isSafeInteger(taskTimeoutMs) || taskTimeoutMs < 1_000) {
 		throw new Error("taskTimeoutMs must be an integer of at least 1,000");
 	}
 	return {
@@ -176,12 +191,31 @@ function errorMessage(error: unknown) {
 	).slice(0, MAX_ERROR_LENGTH);
 }
 
+function throwIfAborted(signal?: AbortSignal) {
+	if (signal?.aborted) throw new SearchOutboxAbortError();
+}
+
+async function abortable<T>(promise: PromiseLike<T>, signal?: AbortSignal) {
+	throwIfAborted(signal);
+	if (!signal) return promise;
+	return new Promise<T>((resolve, reject) => {
+		const abort = () => reject(new SearchOutboxAbortError());
+		signal.addEventListener("abort", abort, { once: true });
+		Promise.resolve(promise)
+			.then(resolve, reject)
+			.finally(() => {
+				signal.removeEventListener("abort", abort);
+			});
+	});
+}
+
 async function claimEvents(
 	options: SearchOutboxConsumerOptions,
 	leaseDurationMs: number,
 	workerId: string,
 	limit: number,
 ) {
+	throwIfAborted(options.signal);
 	const claimedAt = now(options);
 	return options.database.transaction(async (transaction) => {
 		const leasedEntity = alias(outbox, "leasedEntity");
@@ -212,16 +246,9 @@ async function claimEvents(
 										outbox.entityKey,
 									),
 									isNull(leasedEntity.processedAt),
-									isNull(
-										leasedEntity.deadLetteredAt,
-									),
-									isNotNull(
-										leasedEntity.leaseOwner,
-									),
-									gt(
-										leasedEntity.leaseExpiresAt,
-										claimedAt,
-									),
+									isNull(leasedEntity.deadLetteredAt),
+									isNotNull(leasedEntity.leaseOwner),
+									gt(leasedEntity.leaseExpiresAt, claimedAt),
 								),
 							),
 					),
@@ -236,15 +263,38 @@ async function claimEvents(
 		return transaction
 			.update(outbox)
 			.set({
-				leaseExpiresAt: expiresAt(
-					claimedAt,
-					leaseDurationMs,
-				),
+				leaseExpiresAt: expiresAt(claimedAt, leaseDurationMs),
 				leaseOwner: workerId,
 			})
-			.where(inArray(outbox.id, candidates.map(({ id }) => id)))
+			.where(
+				inArray(
+					outbox.id,
+					candidates.map(({ id }) => id),
+				),
+			)
 			.returning();
 	});
+}
+
+async function releaseEvents(
+	options: SearchOutboxConsumerOptions,
+	events: readonly ClaimedEvent[],
+	workerId: string,
+) {
+	await options.database
+		.update(outbox)
+		.set({ leaseExpiresAt: null, leaseOwner: null })
+		.where(
+			and(
+				inArray(
+					outbox.id,
+					events.map(({ id }) => id),
+				),
+				eq(outbox.leaseOwner, workerId),
+				isNull(outbox.processedAt),
+				isNull(outbox.deadLetteredAt),
+			),
+		);
 }
 
 async function heartbeatEvents(
@@ -261,7 +311,10 @@ async function heartbeatEvents(
 		})
 		.where(
 			and(
-				inArray(outbox.id, events.map(({ id }) => id)),
+				inArray(
+					outbox.id,
+					events.map(({ id }) => id),
+				),
 				eq(outbox.leaseOwner, workerId),
 				isNull(outbox.processedAt),
 				isNull(outbox.deadLetteredAt),
@@ -291,12 +344,7 @@ async function heartbeatLoop(
 			return;
 		}
 		try {
-			await heartbeatEvents(
-				options,
-				events,
-				leaseDurationMs,
-				workerId,
-			);
+			await heartbeatEvents(options, events, leaseDurationMs, workerId);
 		} catch (error) {
 			onFailure(error);
 			return;
@@ -319,7 +367,10 @@ async function acknowledgeEvents(
 		})
 		.where(
 			and(
-				inArray(outbox.id, events.map(({ id }) => id)),
+				inArray(
+					outbox.id,
+					events.map(({ id }) => id),
+				),
 				eq(outbox.leaseOwner, workerId),
 				isNull(outbox.processedAt),
 				isNull(outbox.deadLetteredAt),
@@ -352,14 +403,11 @@ async function failEvents(
 				.update(outbox)
 				.set({
 					attempts,
-					deadLetteredAt:
-						attempts >= maxAttempts ? failedAt : null,
+					deadLetteredAt: attempts >= maxAttempts ? failedAt : null,
 					lastError: errorMessage(error),
 					leaseExpiresAt: null,
 					leaseOwner: null,
-					nextAttemptAt: new Date(
-						failedAt.getTime() + retryDelay,
-					),
+					nextAttemptAt: new Date(failedAt.getTime() + retryDelay),
 				})
 				.where(
 					and(
@@ -380,15 +428,90 @@ async function failEvents(
 async function waitForSuccessfulTask(
 	taskPromise: ReturnType<Index["addDocuments"]>,
 	taskTimeoutMs: number,
+	options: {
+		batchClient?: Meilisearch["batches"];
+		eventIds?: number[];
+		onProgress?: SearchOutboxConsumerOptions["onProgress"];
+		signal?: AbortSignal;
+		taskClient?: Index["tasks"];
+	} = {},
 ) {
-	const task = await taskPromise.waitTask({
-		interval: 50,
-		timeout: taskTimeoutMs,
+	if (!options.taskClient) {
+		const task = await taskPromise.waitTask({
+			interval: 50,
+			timeout: taskTimeoutMs,
+		});
+		if (task.status !== "succeeded") throw new SearchIndexTaskError(task);
+		return task;
+	}
+	const enqueued = await abortable(taskPromise, options.signal);
+	const eventIds = options.eventIds ?? [];
+	let lastProgressSignature = "";
+	const reportProgress = async (progress: SearchOutboxProgress) => {
+		const signature = JSON.stringify(progress);
+		if (signature === lastProgressSignature) return;
+		lastProgressSignature = signature;
+		await options.onProgress?.(progress);
+	};
+	await reportProgress({
+		batchProgress: null,
+		batchUid: null,
+		eventIds,
+		stage: "waiting",
+		taskUid: enqueued.taskUid,
 	});
-	if (task.status !== "succeeded") {
+	const deadline = Date.now() + taskTimeoutMs;
+	while (Date.now() <= deadline) {
+		throwIfAborted(options.signal);
+		const task = await abortable(
+			options.taskClient.getTask(enqueued.taskUid, {
+				signal: options.signal,
+			}),
+			options.signal,
+		);
+		let batchProgress: number | null = null;
+		if (task.batchUid !== null && options.batchClient) {
+			try {
+				const batch = await abortable(
+					options.batchClient.getBatch(task.batchUid),
+					options.signal,
+				);
+				batchProgress = batch.progress?.percentage ?? null;
+			} catch (error) {
+				if (error instanceof SearchOutboxAbortError) throw error;
+				// Batch telemetry is optional; task status remains authoritative.
+			}
+		}
+		if (task.status === "enqueued" || task.status === "processing") {
+			await reportProgress({
+				batchProgress,
+				batchUid: task.batchUid,
+				eventIds,
+				stage: task.status === "enqueued" ? "waiting" : "indexing",
+				taskUid: task.uid,
+			});
+			try {
+				await delay(100, undefined, { signal: options.signal });
+			} catch (error) {
+				if (options.signal?.aborted) throw new SearchOutboxAbortError();
+				throw error;
+			}
+			continue;
+		}
+		await reportProgress({
+			batchProgress:
+				task.status === "succeeded" && task.batchUid !== null
+					? 100
+					: batchProgress,
+			batchUid: task.batchUid,
+			eventIds,
+			stage: "indexing",
+			taskUid: task.uid,
+		});
+		if (task.status === "succeeded") return task;
 		throw new SearchIndexTaskError(task);
 	}
-	return task;
+	throw new MeilisearchTaskTimeOutError(enqueued.taskUid, taskTimeoutMs);
 }
 
 export async function applySearchProjectionPlan(
@@ -396,6 +519,12 @@ export async function applySearchProjectionPlan(
 	plan: SearchProjectionPlan,
 	taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
 	maxDocumentBatchBytes = DEFAULT_MAX_DOCUMENT_BATCH_BYTES,
+	progressOptions: {
+		batchClient?: Meilisearch["batches"];
+		eventIds?: number[];
+		onProgress?: SearchOutboxConsumerOptions["onProgress"];
+		signal?: AbortSignal;
+	} = {},
 ) {
 	if (
 		!Number.isSafeInteger(maxDocumentBatchBytes) ||
@@ -414,12 +543,14 @@ export async function applySearchProjectionPlan(
 				primaryKey: "key",
 			}),
 			taskTimeoutMs,
+			{ ...progressOptions, taskClient: index.tasks },
 		);
 	}
 	if (plan.deleteKeys.length > 0) {
 		await waitForSuccessfulTask(
 			index.deleteDocuments(plan.deleteKeys),
 			taskTimeoutMs,
+			{ ...progressOptions, taskClient: index.tasks },
 		);
 	}
 }
@@ -444,8 +575,7 @@ function chunkDocumentsBySerializedBytes(
 			chunkBytes = 2;
 		}
 		chunk.push(document);
-		chunkBytes +=
-			documentBytes + (chunk.length > 1 ? 1 : 0);
+		chunkBytes += documentBytes + (chunk.length > 1 ? 1 : 0);
 	}
 	if (chunk.length > 0) chunks.push(chunk);
 	return chunks;
@@ -484,35 +614,42 @@ async function processClaimedEvents(
 	);
 
 	try {
+		throwIfAborted(options.signal);
+		await options.onProgress?.({
+			batchProgress: null,
+			batchUid: null,
+			eventIds: events.map(({ id }) => id),
+			stage: "projecting",
+			taskUid: null,
+		});
 		let deleteCount = 0;
 		let documentCount = 0;
 		for await (const plan of generateSearchProjectionPlans(
 			options.database,
 			events,
+			500,
+			options.signal,
 		)) {
+			throwIfAborted(options.signal);
 			if (heartbeatFailure) throw heartbeatFailure;
-			await heartbeatEvents(
-				options,
-				events,
-				leaseDurationMs,
-				workerId,
-			);
+			await heartbeatEvents(options, events, leaseDurationMs, workerId);
 			await applySearchProjectionPlan(
 				options.index,
 				plan,
 				taskTimeoutMs,
 				maxDocumentBatchBytes,
+				{
+					batchClient: options.batchClient,
+					eventIds: events.map(({ id }) => id),
+					onProgress: options.onProgress,
+					signal: options.signal,
+				},
 			);
 			deleteCount += plan.deleteKeys.length;
 			documentCount += plan.documents.length;
 		}
 		if (heartbeatFailure) throw heartbeatFailure;
-		await heartbeatEvents(
-			options,
-			events,
-			leaseDurationMs,
-			workerId,
-		);
+		await heartbeatEvents(options, events, leaseDurationMs, workerId);
 		await acknowledgeEvents(options, events, workerId);
 		return {
 			deleteCount,
@@ -522,6 +659,14 @@ async function processClaimedEvents(
 		};
 	} catch (error) {
 		const failure = heartbeatFailure ?? error;
+		if (
+			!heartbeatFailure &&
+			(failure instanceof SearchOutboxAbortError ||
+				options.signal?.aborted)
+		) {
+			await releaseEvents(options, events, workerId);
+			throw new SearchOutboxAbortError();
+		}
 		if (
 			deferBatchTaskFailure &&
 			!heartbeatFailure &&
@@ -551,16 +696,11 @@ export async function processNextSearchOutboxBatch(
 	},
 ): Promise<SearchOutboxProcessResult[] | null> {
 	const batchSize = options.batchSize ?? 100;
-	if (
-		!Number.isSafeInteger(batchSize) ||
-		batchSize < 1 ||
-		batchSize > 500
-	) {
-		throw new Error(
-			"batchSize must be an integer between 1 and 500",
-		);
+	if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 500) {
+		throw new Error("batchSize must be an integer between 1 and 500");
 	}
 	const validated = validateOptions(options);
+	throwIfAborted(options.signal);
 	const events = await claimEvents(
 		options,
 		validated.leaseDurationMs,
@@ -579,12 +719,7 @@ export async function processNextSearchOutboxBatch(
 			),
 		];
 	} catch (error) {
-		if (
-			!(
-				error instanceof SearchIndexTaskError &&
-				events.length > 1
-			)
-		) {
+		if (!(error instanceof SearchIndexTaskError && events.length > 1)) {
 			throw error;
 		}
 
@@ -630,13 +765,12 @@ export async function drainSearchOutbox(
 		maxEvents < 1 ||
 		maxEvents > 1_000_000
 	) {
-		throw new Error(
-			"maxEvents must be an integer between 1 and 1,000,000",
-		);
+		throw new Error("maxEvents must be an integer between 1 and 1,000,000");
 	}
 	const results: SearchOutboxProcessResult[] = [];
 	let processedEvents = 0;
 	while (processedEvents < maxEvents) {
+		throwIfAborted(options.signal);
 		const batchResults = await processNextSearchOutboxBatch({
 			...options,
 			batchSize: Math.min(100, maxEvents - processedEvents),
@@ -666,10 +800,7 @@ export async function requeueSearchOutboxDeadLetters(
 			nextAttemptAt: requeuedAt,
 		})
 		.where(
-			and(
-				isNull(outbox.processedAt),
-				isNotNull(outbox.deadLetteredAt),
-			),
+			and(isNull(outbox.processedAt), isNotNull(outbox.deadLetteredAt)),
 		)
 		.returning({ id: outbox.id });
 	return rows.length;
@@ -677,17 +808,23 @@ export async function requeueSearchOutboxDeadLetters(
 
 export async function ensureSearchIndex(
 	service: MeilisearchService,
-	taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
+	options: {
+		signal?: AbortSignal;
+		taskTimeoutMs?: number;
+	} = {},
 ) {
+	const taskTimeoutMs = options.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
+	throwIfAborted(options.signal);
 	try {
-		await service.client.getRawIndex(service.indexName);
+		await abortable(
+			service.client.getRawIndex(service.indexName),
+			options.signal,
+		);
 	} catch (error) {
-		if (
-			!(
-				error instanceof MeiliSearchApiError &&
-				error.cause?.code === "index_not_found"
-			)
-		) {
+		if (!(
+			error instanceof MeilisearchApiError &&
+			error.cause?.code === "index_not_found"
+		)) {
 			throw error;
 		}
 		try {
@@ -696,15 +833,16 @@ export async function ensureSearchIndex(
 					primaryKey: "key",
 				}),
 				taskTimeoutMs,
+				{
+					signal: options.signal,
+					taskClient: service.index.tasks,
+				},
 			);
 		} catch (creationError) {
-			if (
-				!(
-					creationError instanceof SearchIndexTaskError &&
-					creationError.task.error?.code ===
-						"index_already_exists"
-				)
-			) {
+			if (!(
+				creationError instanceof SearchIndexTaskError &&
+				creationError.task.error?.code === "index_already_exists"
+			)) {
 				throw creationError;
 			}
 		}
@@ -748,30 +886,45 @@ export async function ensureSearchIndex(
 			],
 		}),
 		taskTimeoutMs,
+		{
+			signal: options.signal,
+			taskClient: service.index.tasks,
+		},
 	);
 }
 
 export async function rebuildSearchIndex(
 	database: Database,
 	service: MeilisearchService,
-	taskTimeoutMs = DEFAULT_TASK_TIMEOUT_MS,
-	maxDocumentBatchBytes = DEFAULT_MAX_DOCUMENT_BATCH_BYTES,
+	options: {
+		maxDocumentBatchBytes?: number;
+		signal?: AbortSignal;
+		taskTimeoutMs?: number;
+	} = {},
 ) {
-	await ensureSearchIndex(service, taskTimeoutMs);
+	const taskTimeoutMs = options.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
+	const maxDocumentBatchBytes =
+		options.maxDocumentBatchBytes ?? DEFAULT_MAX_DOCUMENT_BATCH_BYTES;
+	await ensureSearchIndex(service, options);
 	await waitForSuccessfulTask(
 		service.index.deleteAllDocuments(),
 		taskTimeoutMs,
+		{ signal: options.signal, taskClient: service.index.tasks },
 	);
 	let deleted = 0;
 	let indexed = 0;
 	for await (const plan of generateFullSearchProjectionPlans(
 		database,
+		500,
+		options.signal,
 	)) {
+		throwIfAborted(options.signal);
 		await applySearchProjectionPlan(
 			service.index,
 			plan,
 			taskTimeoutMs,
 			maxDocumentBatchBytes,
+			{ signal: options.signal },
 		);
 		deleted += plan.deleteKeys.length;
 		indexed += plan.documents.length;

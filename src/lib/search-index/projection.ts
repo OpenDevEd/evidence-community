@@ -2,6 +2,10 @@ import { sourceConnection } from "@opendeved/evidence-library-core";
 import { asc, eq, inArray, isNull } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import {
+	type DatabaseTransaction,
+	withCancellableDatabaseTransaction,
+} from "@/db/cancellable-transaction";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
@@ -33,6 +37,7 @@ export type SearchProjectionPlan = {
 
 type CollectionRow = typeof collection.$inferSelect;
 type ItemRow = typeof item.$inferSelect;
+type SearchProjectionDatabase = Pick<Database | DatabaseTransaction, "select">;
 
 function uniqueSorted(values: Iterable<string>) {
 	return [...new Set(values)].sort();
@@ -99,12 +104,13 @@ function splitValues(value: string | null) {
 function creatorNames(creators: ItemRow["creators"]) {
 	return uniqueSorted(
 		(creators ?? [])
-			.map((creator) =>
-				creator.name?.trim() ||
-				[creator.firstName, creator.lastName]
-					.filter(Boolean)
-					.join(" ")
-					.trim(),
+			.map(
+				(creator) =>
+					creator.name?.trim() ||
+					[creator.firstName, creator.lastName]
+						.filter(Boolean)
+						.join(" ")
+						.trim(),
 			)
 			.filter(Boolean),
 	);
@@ -115,12 +121,11 @@ function normalizedDate(value: string | null) {
 	const yearMatch = value.match(/\b(1\d{3}|2\d{3})\b/u);
 	const year = yearMatch?.[1];
 	const timestamp = Date.parse(value);
-	const date =
-		Number.isFinite(timestamp)
-			? new Date(timestamp)
-			: year
-				? new Date(`${year}-01-01T00:00:00.000Z`)
-				: null;
+	const date = Number.isFinite(timestamp)
+		? new Date(timestamp)
+		: year
+			? new Date(`${year}-01-01T00:00:00.000Z`)
+			: null;
 	return {
 		...(date
 			? {
@@ -141,9 +146,7 @@ function fullTextPages(value: string | null) {
 		const text = match[2]?.trim();
 		if (text) pages.push({ page: Number(match[1]), text });
 	}
-	return pages.length > 0
-		? pages
-		: [{ page: 1, text: value.trim() }];
+	return pages.length > 0 ? pages : [{ page: 1, text: value.trim() }];
 }
 
 function jsonValue(value: unknown): unknown {
@@ -154,9 +157,7 @@ function jsonValue(value: unknown): unknown {
 			Object.entries(value)
 				.filter(
 					([, child]) =>
-						child !== null &&
-						child !== undefined &&
-						child !== "",
+						child !== null && child !== undefined && child !== "",
 				)
 				.map(([key, child]) => [key, jsonValue(child)]),
 		);
@@ -169,16 +170,14 @@ function cleanRow(row: ItemRow) {
 		Object.entries(row)
 			.filter(
 				([, value]) =>
-					value !== null &&
-					value !== undefined &&
-					value !== "",
+					value !== null && value !== undefined && value !== "",
 			)
 			.map(([key, value]) => [key, jsonValue(value)]),
 	);
 }
 
 async function resolveTopLevelItemKeys(
-	database: Database,
+	database: SearchProjectionDatabase,
 	events: readonly SearchProjectionEvent[],
 	collections: readonly CollectionRow[],
 ) {
@@ -203,10 +202,7 @@ async function resolveTopLevelItemKeys(
 				.select({ itemKey: itemToCollection.itemKey })
 				.from(itemToCollection)
 				.where(
-					inArray(
-						itemToCollection.collectionKey,
-						collectionChunk,
-					),
+					inArray(itemToCollection.collectionKey, collectionChunk),
 				);
 			for (const membership of memberships) {
 				requestedItemKeys.add(membership.itemKey);
@@ -216,10 +212,7 @@ async function resolveTopLevelItemKeys(
 	if (requestedItemKeys.size === 0) return [];
 
 	const rows: Array<{ key: string; parentItem: string | null }> = [];
-	for (const itemChunk of chunkValues(
-		[...requestedItemKeys],
-		1_000,
-	)) {
+	for (const itemChunk of chunkValues([...requestedItemKeys], 1_000)) {
 		rows.push(
 			...(await database
 				.select({
@@ -240,7 +233,7 @@ async function resolveTopLevelItemKeys(
 }
 
 async function buildSearchProjectionPlanForKeys(
-	database: Database,
+	database: SearchProjectionDatabase,
 	topLevelKeys: readonly string[],
 	collections: readonly CollectionRow[],
 ): Promise<SearchProjectionPlan> {
@@ -252,8 +245,7 @@ async function buildSearchProjectionPlanForKeys(
 		.select({
 			item,
 			provider: sourceConnection.provider,
-			sourceExternalScopeKey:
-				sourceConnection.externalScopeKey,
+			sourceExternalScopeKey: sourceConnection.externalScopeKey,
 		})
 		.from(item)
 		.innerJoin(
@@ -263,8 +255,7 @@ async function buildSearchProjectionPlanForKeys(
 		.where(inArray(item.key, topLevelKeys))
 		.orderBy(asc(item.key));
 	const activeParents = itemRows.filter(
-		(row) =>
-			row.item.parentItem === null && row.item.deleted !== 1,
+		(row) => row.item.parentItem === null && row.item.deleted !== 1,
 	);
 	const activeParentKeys = activeParents.map(({ item }) => item.key);
 	const children =
@@ -285,12 +276,7 @@ async function buildSearchProjectionPlanForKeys(
 					database
 						.select()
 						.from(itemToTag)
-						.where(
-							inArray(
-								itemToTag.itemKey,
-								allDocumentItemKeys,
-							),
-						)
+						.where(inArray(itemToTag.itemKey, allDocumentItemKeys))
 						.orderBy(
 							asc(itemToTag.itemKey),
 							asc(itemToTag.tagName),
@@ -299,10 +285,7 @@ async function buildSearchProjectionPlanForKeys(
 						.select()
 						.from(itemToCollection)
 						.where(
-							inArray(
-								itemToCollection.itemKey,
-								activeParentKeys,
-							),
+							inArray(itemToCollection.itemKey, activeParentKeys),
 						)
 						.orderBy(
 							asc(itemToCollection.itemKey),
@@ -330,27 +313,23 @@ async function buildSearchProjectionPlanForKeys(
 		siblings.push(child);
 		childrenByParent.set(child.parentItem, siblings);
 	}
-	const collectionsByKey = new Map(
-		collections.map((row) => [row.key, row]),
-	);
+	const collectionsByKey = new Map(collections.map((row) => [row.key, row]));
 
 	const documents = activeParents.map(
 		({ item: parent, provider, sourceExternalScopeKey }) => {
 			const directCollections = uniqueSorted(
 				collectionsByItem.get(parent.key) ?? [],
 			);
-			const attachments = (
-				childrenByParent.get(parent.key) ?? []
-			).map((child) => ({
-				...cleanRow({
-					...child,
-					fullTextPDF: null,
+			const attachments = (childrenByParent.get(parent.key) ?? []).map(
+				(child) => ({
+					...cleanRow({
+						...child,
+						fullTextPDF: null,
+					}),
+					tags: uniqueSorted(tagsByItem.get(child.key) ?? []),
 				}),
-				tags: uniqueSorted(tagsByItem.get(child.key) ?? []),
-			}));
-			const fullTextPDFs = (
-				childrenByParent.get(parent.key) ?? []
-			)
+			);
+			const fullTextPDFs = (childrenByParent.get(parent.key) ?? [])
 				.filter((child) => child.deleted !== 1)
 				.map((child) => ({
 					key: child.key,
@@ -382,9 +361,7 @@ async function buildSearchProjectionPlanForKeys(
 			} satisfies ItemSearchDocument;
 		},
 	);
-	const documentKeys = new Set(
-		documents.map((document) => document.key),
-	);
+	const documentKeys = new Set(documents.map((document) => document.key));
 	return {
 		deleteKeys: topLevelKeys.filter((key) => !documentKeys.has(key)),
 		documents,
@@ -396,12 +373,18 @@ async function* plansForKeys(
 	topLevelKeys: readonly string[],
 	collections: readonly CollectionRow[],
 	batchSize: number,
+	signal?: AbortSignal,
 ) {
 	for (const keyChunk of chunkValues([...topLevelKeys], batchSize)) {
-		yield buildSearchProjectionPlanForKeys(
+		yield withCancellableDatabaseTransaction(
 			database,
-			keyChunk,
-			collections,
+			signal,
+			(transaction) =>
+				buildSearchProjectionPlanForKeys(
+					transaction,
+					keyChunk,
+					collections,
+				),
 		);
 	}
 }
@@ -410,6 +393,7 @@ export async function* generateSearchProjectionPlans(
 	database: Database,
 	events: readonly SearchProjectionEvent[],
 	batchSize = 500,
+	signal?: AbortSignal,
 ) {
 	if (
 		!Number.isSafeInteger(batchSize) ||
@@ -420,40 +404,54 @@ export async function* generateSearchProjectionPlans(
 			"projection batchSize must be an integer between 1 and 1,000",
 		);
 	}
-	const collections = await database
-		.select()
-		.from(collection)
-		.orderBy(asc(collection.key));
-	const topLevelKeys = await resolveTopLevelItemKeys(
-		database,
-		events,
-		collections,
-	);
-	yield* plansForKeys(
-		database,
-		topLevelKeys,
-		collections,
-		batchSize,
-	);
+	const { collections, topLevelKeys } =
+		await withCancellableDatabaseTransaction(
+			database,
+			signal,
+			async (transaction) => {
+				const collections = await transaction
+					.select()
+					.from(collection)
+					.orderBy(asc(collection.key));
+				return {
+					collections,
+					topLevelKeys: await resolveTopLevelItemKeys(
+						transaction,
+						events,
+						collections,
+					),
+				};
+			},
+		);
+	yield* plansForKeys(database, topLevelKeys, collections, batchSize, signal);
 }
 
 export async function* generateFullSearchProjectionPlans(
 	database: Database,
 	batchSize = 500,
+	signal?: AbortSignal,
 ) {
-	const topLevelRows = await database
-		.select({ key: item.key })
-		.from(item)
-		.where(isNull(item.parentItem))
-		.orderBy(asc(item.key));
-	const collections = await database
-		.select()
-		.from(collection)
-		.orderBy(asc(collection.key));
+	const { collections, topLevelRows } =
+		await withCancellableDatabaseTransaction(
+			database,
+			signal,
+			async (transaction) => ({
+				collections: await transaction
+					.select()
+					.from(collection)
+					.orderBy(asc(collection.key)),
+				topLevelRows: await transaction
+					.select({ key: item.key })
+					.from(item)
+					.where(isNull(item.parentItem))
+					.orderBy(asc(item.key)),
+			}),
+		);
 	yield* plansForKeys(
 		database,
 		topLevelRows.map(({ key }) => key),
 		collections,
 		batchSize,
+		signal,
 	);
 }

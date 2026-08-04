@@ -4,7 +4,7 @@ import {
 	outbox,
 } from "@opendeved/evidence-library-core";
 import { and, eq, inArray, isNull } from "drizzle-orm";
-import { MeiliSearch, MeiliSearchApiError, type Task } from "meilisearch";
+import { Meilisearch, MeilisearchApiError, type Task } from "meilisearch";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { collection } from "../src/db/schema/tables/collection";
@@ -22,6 +22,8 @@ import {
 	requeueSearchOutboxDeadLetters,
 	rebuildSearchIndex,
 	SearchIndexTaskError,
+	SearchOutboxAbortError,
+	type SearchOutboxProgress,
 } from "../src/lib/search-index/consumer";
 import type { SearchProjectionPlan } from "../src/lib/search-index/projection";
 
@@ -54,7 +56,7 @@ function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
-function service(client: MeiliSearch, indexName: string): MeilisearchService {
+function service(client: Meilisearch, indexName: string): MeilisearchService {
 	return {
 		cacheIndex: client.index("cache"),
 		client,
@@ -72,13 +74,13 @@ async function successfulTask(taskPromise: { waitTask: () => Promise<Task> }) {
 	);
 }
 
-async function deleteIndexIfPresent(client: MeiliSearch, indexName: string) {
+async function deleteIndexIfPresent(client: Meilisearch, indexName: string) {
 	try {
 		await client.getRawIndex(indexName);
 		await successfulTask(client.deleteIndex(indexName));
 	} catch (error) {
 		if (
-			error instanceof MeiliSearchApiError &&
+			error instanceof MeilisearchApiError &&
 			error.cause?.code === "index_not_found"
 		) {
 			return;
@@ -106,8 +108,12 @@ async function cleanupDatabase(
 
 async function verify() {
 	const resource = createPostgresDatabaseResource(verifiedDatabaseUrl);
+	const testLock = await resource.pool.connect();
+	await testLock.query(
+		"select pg_advisory_lock(hashtextextended('search-index-verifier', 0))",
+	);
 	const database = resource.database;
-	const client = new MeiliSearch({
+	const client = new Meilisearch({
 		apiKey: meilisearchKey,
 		host: meilisearchHost,
 	});
@@ -264,12 +270,17 @@ async function verify() {
 			.returning();
 		assert(attachmentEvent, "The attachment outbox event was not created");
 
+		const observedProgress: SearchOutboxProgress[] = [];
 		const initialBatch = await drainSearchOutbox({
+			batchClient: client.batches,
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
 			leaseDurationMs: 1_000,
 			maxEvents: 2,
+			onProgress: async (progress) => {
+				observedProgress.push(progress);
+			},
 			taskTimeoutMs: 10_000,
 			workerId: "search-e2e-initial",
 		});
@@ -277,7 +288,19 @@ async function verify() {
 			initialBatch.length === 1 &&
 				initialBatch[0]?.eventIds.length === 2 &&
 				initialBatch[0].documentCount === 1,
-			"Bulk outbox delivery did not coalesce parent and child events",
+			`Bulk outbox delivery did not coalesce parent and child events: ${JSON.stringify(initialBatch)}`,
+		);
+		assert(
+			observedProgress[0]?.stage === "projecting" &&
+				observedProgress.some(({ stage }) => stage === "waiting") &&
+				observedProgress.some(
+					({ batchProgress, batchUid, stage, taskUid }) =>
+						stage === "indexing" &&
+						batchProgress === 100 &&
+						batchUid !== null &&
+						taskUid !== null,
+				),
+			"The consumer did not expose real Meilisearch task progress",
 		);
 		const initialDocument = await goodService.index.getDocument<{
 			attachmentsData: Array<{ key: string; tags: string[] }>;
@@ -341,13 +364,17 @@ async function verify() {
 			operation: "upsert",
 			revision: 1,
 		});
-		await processNextSearchOutboxEvent({
+		const standaloneResult = await processNextSearchOutboxEvent({
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-standalone",
 		});
+		assert(
+			standaloneResult?.eventIds.length === 1,
+			`The standalone event was not processed alone: ${JSON.stringify(standaloneResult)}`,
+		);
 		await goodService.index.getDocument(reparentedKey);
 		await database
 			.update(item)
@@ -359,21 +386,27 @@ async function verify() {
 			operation: "upsert",
 			revision: 2,
 		});
-		await processNextSearchOutboxEvent({
+		const reparentResult = await processNextSearchOutboxEvent({
 			database,
 			heartbeatIntervalMs: 100,
 			index: goodService.index,
 			leaseDurationMs: 1_000,
 			workerId: "search-e2e-reparent",
 		});
+		assert(
+			reparentResult?.eventIds.length === 1 &&
+				reparentResult.deleteCount === 1 &&
+				reparentResult.documentCount === 1,
+			`The re-parent event produced the wrong projection: ${JSON.stringify(reparentResult)}`,
+		);
 		try {
 			await goodService.index.getDocument(reparentedKey);
 			throw new Error("The standalone document survived re-parenting");
 		} catch (error) {
 			assert(
-				error instanceof MeiliSearchApiError &&
+				error instanceof MeilisearchApiError &&
 					error.cause?.code === "document_not_found",
-				"Re-parent cleanup failed for an unexpected reason",
+				`Re-parent cleanup failed for an unexpected reason: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
 			);
 		}
 		const reparentedParent = await goodService.index.getDocument<{
@@ -511,7 +544,7 @@ async function verify() {
 		} catch (error) {
 			assert(
 				error instanceof SearchIndexTaskError,
-				"The poison event failed for an unexpected reason",
+				`The poison event failed for an unexpected reason: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
 			);
 		}
 		const [deadLettered] = await database
@@ -599,7 +632,7 @@ async function verify() {
 			throw new Error("The tombstoned document remains searchable");
 		} catch (error) {
 			assert(
-				error instanceof MeiliSearchApiError &&
+				error instanceof MeilisearchApiError &&
 					error.cause?.code === "document_not_found",
 				"The tombstone check failed for an unexpected reason",
 			);
@@ -700,7 +733,118 @@ async function verify() {
 			"Expired-lease recovery did not preserve entity ordering",
 		);
 
-		const rebuilt = await rebuildSearchIndex(database, goodService, 60_000);
+		await database
+			.update(item)
+			.set({ revision: 8, title: "Interrupted indexing report" })
+			.where(eq(item.key, parentKey));
+		const [interruptedEvent] = await database
+			.insert(outbox)
+			.values({
+				entityKey: parentKey,
+				entityType: "item",
+				operation: "upsert",
+				revision: 8,
+			})
+			.returning();
+		assert(interruptedEvent, "The interrupted event was not created");
+		const shutdown = new AbortController();
+		let releaseWaitingProgress!: () => void;
+		const waitingProgressHeld = new Promise<void>((resolve) => {
+			releaseWaitingProgress = resolve;
+		});
+		let reportWaitingReached!: () => void;
+		const waitingReached = new Promise<void>((resolve) => {
+			reportWaitingReached = resolve;
+		});
+		const interruptedProcessing = processNextSearchOutboxEvent({
+			batchClient: client.batches,
+			database,
+			heartbeatIntervalMs: 100,
+			index: goodService.index,
+			leaseDurationMs: 1_000,
+			onProgress: async ({ stage }) => {
+				if (stage === "waiting") {
+					reportWaitingReached();
+					await waitingProgressHeld;
+				}
+			},
+			signal: shutdown.signal,
+			workerId: "search-e2e-first-generation",
+		});
+		await waitingReached;
+		const replacementWhileLeased = await processNextSearchOutboxEvent({
+			database,
+			heartbeatIntervalMs: 100,
+			index: goodService.index,
+			leaseDurationMs: 1_000,
+			workerId: "search-e2e-replacement-generation",
+		});
+		assert(
+			replacementWhileLeased === null,
+			"A replacement generation stole its predecessor's active lease",
+		);
+		shutdown.abort();
+		releaseWaitingProgress();
+		try {
+			await interruptedProcessing;
+			throw new Error("The active worker ignored its shutdown signal");
+		} catch (error) {
+			assert(
+				error instanceof SearchOutboxAbortError,
+				"Active shutdown failed for an unexpected reason",
+			);
+		}
+		const [releasedEvent] = await database
+			.select()
+			.from(outbox)
+			.where(eq(outbox.id, interruptedEvent.id));
+		assert(
+			releasedEvent?.processedAt === null &&
+				releasedEvent.leaseOwner === null &&
+				releasedEvent.leaseExpiresAt === null &&
+				releasedEvent.attempts === 0,
+			"Shutdown did not release the active event without penalizing it",
+		);
+
+		const progressWithoutBatchTelemetry: SearchOutboxProgress[] = [];
+		let unavailableBatchTelemetryCalls = 0;
+		await processNextSearchOutboxEvent({
+			batchClient: {
+				getBatch: async () => {
+					unavailableBatchTelemetryCalls += 1;
+					throw new Error("batch telemetry unavailable");
+				},
+			} as unknown as Meilisearch["batches"],
+			database,
+			heartbeatIntervalMs: 100,
+			index: goodService.index,
+			leaseDurationMs: 1_000,
+			onProgress: async (progress) => {
+				progressWithoutBatchTelemetry.push(progress);
+			},
+			workerId: "search-e2e-no-batch-telemetry",
+		});
+		assert(
+			unavailableBatchTelemetryCalls > 0 &&
+				progressWithoutBatchTelemetry.some(
+					({ stage, taskUid }) =>
+						stage === "indexing" && taskUid !== null,
+				),
+			"Task progress disappeared when batch telemetry was unavailable",
+		);
+		const recoveredAfterShutdown = await goodService.index.getDocument<{
+			revision: number;
+			title: string;
+		}>(parentKey);
+		assert(
+			recoveredAfterShutdown.revision === 8 &&
+				recoveredAfterShutdown.title === "Interrupted indexing report",
+			"The event released during shutdown was not retryable",
+		);
+
+		const rebuilt = await rebuildSearchIndex(database, goodService, {
+			taskTimeoutMs: 60_000,
+		});
 		assert(
 			rebuilt.indexed >= 1,
 			"The full rebuild omitted the canonical item",
@@ -717,9 +861,11 @@ async function verify() {
 				entityLeaseSerialization: true,
 				expiredLeaseRecovery: true,
 				fullRebuild: true,
+				gracefulActiveShutdown: true,
 				index: goodIndexName,
 				reparentCleanup: true,
 				retryAfterTaskFailure: true,
+				taskProgressWithoutBatchTelemetry: true,
 			}),
 		);
 	} finally {
@@ -734,6 +880,10 @@ async function verify() {
 			deleteIndexIfPresent(client, goodIndexName),
 			deleteIndexIfPresent(client, badIndexName),
 		]);
+		await testLock.query(
+			"select pg_advisory_unlock(hashtextextended('search-index-verifier', 0))",
+		);
+		testLock.release();
 		await resource.dispose();
 	}
 }
