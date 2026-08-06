@@ -60,6 +60,12 @@ Library databases and deployments are not migrated or modified.
   clear tombstone; an absent field inherits the latest canonical value. The
   materialized base-plus-patch payload is validated against the pinned Zotero
   schema.
+- Saves include the materialized payload the editor actually saw. The server
+  derives only the editor's delta from that payload, rebases it onto the latest
+  canonical row under lock, and then stores the resulting minimal patch. Source
+  changes made during an edit session therefore flow through untouched fields.
+- The field-patch migration refuses to run while legacy full-snapshot drafts
+  exist instead of silently changing the meaning of saved edits.
 - Publishing applies the patch to the latest canonical base, normalizes tags
   and collection memberships in the same transaction, increments the canonical
   revision, emits one outbox event, and removes the draft.

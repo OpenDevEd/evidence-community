@@ -443,15 +443,20 @@ async function saveNativeItemDraftInTransaction(
 	transaction: Transaction,
 	{
 		expectedDraftRevision,
+		expectedPayload,
 		itemKey,
 		payload,
 	}: {
 		expectedDraftRevision: number;
+		expectedPayload: unknown;
 		itemKey: string;
 		payload: unknown;
 	},
 ) {
-	const validated = validateNativeItemDraft(payload, {
+	const expected = validateNativeItemDraft(expectedPayload, {
+		allowIncompleteCreators: true,
+	});
+	const submitted = validateNativeItemDraft(payload, {
 		allowIncompleteCreators: true,
 	});
 	const [currentDraft] = await transaction
@@ -484,6 +489,15 @@ async function saveNativeItemDraftInTransaction(
 		itemKey,
 		published ?? null,
 	);
+	const currentPayload = applyItemDraftPatch(basePayload, currentDraft.patch);
+	const editorChanges = createItemDraftPatch(
+		expected.payload,
+		submitted.payload,
+	);
+	const intendedPayload = applyItemDraftPatch(currentPayload, editorChanges);
+	const validated = validateNativeItemDraft(intendedPayload, {
+		allowIncompleteCreators: true,
+	});
 	const patch = createItemDraftPatch(basePayload, validated.payload);
 	await assertValidNativeItemCollectionMembershipsInDatabase(
 		transaction,
@@ -516,6 +530,7 @@ export async function saveNativeItemDraft(
 	db: Database,
 	args: {
 		expectedDraftRevision: number;
+		expectedPayload: unknown;
 		itemKey: string;
 		payload: unknown;
 	},
@@ -603,6 +618,7 @@ export async function assignNativeItemDraftToCollection(
 		const draftPayload = existingDraftPayload ?? openedDraft!.payload;
 		await saveNativeItemDraftInTransaction(transaction, {
 			expectedDraftRevision: draftRevision,
+			expectedPayload: draftPayload,
 			itemKey,
 			payload: payloadWithCollection(draftPayload, collectionKey),
 		});

@@ -105,6 +105,10 @@ import { isTopLevelAdminItemType } from "@/lib/admin/item-fields";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
 import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
 import {
+	applyItemDraftPatch,
+	createItemDraftPatch,
+} from "@/lib/admin/item-draft-merge";
+import {
 	clearChangedAdminFieldErrors,
 	shouldClearAdminValidationErrors,
 } from "./admin-validation";
@@ -761,22 +765,66 @@ export default function AdminWorkbench({
 				if (!revision) {
 					throw new Error(`Draft revision is missing for ${key}`);
 				}
-				const saved = await saveAdminDraft(key, revision, payload);
+				const expectedSerialized = savedPayloadByKey.current.get(key);
+				if (!expectedSerialized) {
+					throw new Error(
+						`Saved draft payload is missing for ${key}`,
+					);
+				}
+				const expectedPayload = JSON.parse(
+					expectedSerialized,
+				) as Record<string, unknown>;
+				const saved = await saveAdminDraft(
+					key,
+					revision,
+					expectedPayload,
+					payload,
+				);
 				revisionByKey.current.set(key, saved.draftRevision);
-				savedPayloadByKey.current.set(key, serialized);
+				savedPayloadByKey.current.set(
+					key,
+					JSON.stringify(saved.payload),
+				);
 				saveFailureByKey.current.delete(key);
+				const pending = pendingPayloadByKey.current.get(key);
+				if (pending && pending.generation !== generation) {
+					const changesAfterRequest = createItemDraftPatch(
+						payload,
+						pending.payload,
+					);
+					const rebasedPayload = applyItemDraftPatch(
+						saved.payload,
+						changesAfterRequest,
+					);
+					pendingPayloadByKey.current.set(key, {
+						...pending,
+						payload: rebasedPayload,
+					});
+					if (selectedKeyRef.current === key) {
+						setDetail((current) =>
+							current?.key === key
+								? {
+										...current,
+										draft: {
+											...saved,
+											payload: rebasedPayload,
+										},
+									}
+								: current,
+						);
+						setDraftPayload(rebasedPayload);
+					}
+					return;
+				}
 				if (selectedKeyRef.current === key) {
 					setDetail((current) =>
 						current?.key === key
 							? { ...current, draft: saved }
 							: current,
 					);
+					setDraftPayload(saved.payload);
 				}
-				if (saveGeneration.current.get(key) !== generation) return;
-				if (
-					pendingPayloadByKey.current.get(key)?.generation ===
-					generation
-				) {
+				if (pending?.generation === generation) {
 					pendingPayloadByKey.current.delete(key);
 				}
 				if (selectedKeyRef.current === key) {

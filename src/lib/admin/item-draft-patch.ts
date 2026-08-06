@@ -2,6 +2,12 @@ import { getTableColumns } from "drizzle-orm";
 
 import { item } from "@/db/schema/tables/item";
 import { adminDatabaseFieldToPayloadField } from "@/lib/admin/item-fields";
+import {
+	applyItemDraftPatch,
+	createItemDraftPatch,
+} from "@/lib/admin/item-draft-merge";
+
+export { applyItemDraftPatch, createItemDraftPatch };
 
 const systemManagedItemFields = new Set([
 	"PDFCoverPageHeight",
@@ -31,46 +37,6 @@ export const editableItemDatabaseFields = Object.keys(
 	getTableColumns(item),
 ).filter((field) => !systemManagedItemFields.has(field));
 
-function equalJsonValue(left: unknown, right: unknown) {
-	return JSON.stringify(left) === JSON.stringify(right);
-}
-
-export function applyItemDraftPatch(
-	base: Record<string, unknown>,
-	patch: Record<string, unknown>,
-) {
-	const effective = { ...base };
-	for (const [field, value] of Object.entries(patch)) {
-		if (value === null) {
-			delete effective[field];
-		} else {
-			effective[field] = value;
-		}
-	}
-	return effective;
-}
-
-export function createItemDraftPatch(
-	base: Record<string, unknown>,
-	next: Record<string, unknown>,
-) {
-	const patch: Record<string, unknown> = {};
-	const fields = new Set([...Object.keys(base), ...Object.keys(next)]);
-	for (const field of fields) {
-		const baseHasField = Object.hasOwn(base, field);
-		const nextHasField = Object.hasOwn(next, field);
-		if (!nextHasField) {
-			if (baseHasField) patch[field] = null;
-			continue;
-		}
-		const nextValue = next[field];
-		if (!baseHasField || !equalJsonValue(base[field], nextValue)) {
-			patch[field] = nextValue;
-		}
-	}
-	return patch;
-}
-
 export function publishedAdminItemPayload(
 	published: typeof item.$inferSelect | null | undefined,
 	{
@@ -92,8 +58,8 @@ export function publishedAdminItemPayload(
 			payload[adminDatabaseFieldToPayloadField(field)] = value;
 		}
 	}
-	payload.collections = collectionKeys;
-	payload.tags = tags;
+	payload.collections = [...collectionKeys].sort();
+	payload.tags = [...tags].sort();
 	return payload;
 }
 

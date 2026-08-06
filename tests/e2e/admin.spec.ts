@@ -287,7 +287,10 @@ async function mockPublishedBook(
 			keys: string[],
 			items: AdminCollectionCatalogEntry[],
 		) => void;
-		onDraftSave?: (payload: Record<string, unknown>) => void;
+		onDraftSave?: (
+			payload: Record<string, unknown>,
+			expectedPayload: Record<string, unknown>,
+		) => void;
 		onListRequest?: (url: URL) => void;
 	} = {},
 ) {
@@ -502,9 +505,10 @@ async function mockPublishedBook(
 				return;
 			}
 			const body = request.postDataJSON() as {
+				expectedPayload: Record<string, unknown>;
 				payload: Record<string, unknown>;
 			};
-			options.onDraftSave?.(body.payload);
+			options.onDraftSave?.(body.payload, body.expectedPayload);
 			draftPayload = body.payload;
 			draftRevision += 1;
 			await route.fulfill({
@@ -1923,6 +1927,33 @@ test("shows draft differences with the published value and a revert action", asy
 	await page.getByRole("button", { name: "Revert to published" }).click();
 	await expect(collectionsGroup).toContainText("No collections");
 	await expect(collectionMarker).toHaveCount(0);
+});
+
+test("autosaves against the exact draft payload the editor saw", async ({
+	page,
+}) => {
+	const saves: Array<{
+		expected: Record<string, unknown>;
+		next: Record<string, unknown>;
+	}> = [];
+	await mockPublishedBook(page, {
+		onDraftSave: (next, expected) =>
+			saves.push({
+				expected: structuredClone(expected),
+				next: structuredClone(next),
+			}),
+	});
+	await page.goto("/admin");
+
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector
+		.getByRole("textbox", { name: "Title", exact: true })
+		.fill("Locally edited title");
+
+	await expect.poll(() => saves.length).toBe(1);
+	expect(saves[0]?.expected.title).toBe("Published book");
+	expect(saves[0]?.next.title).toBe("Locally edited title");
 });
 
 test("removes native memberships while imported and deleted memberships stay locked", async ({

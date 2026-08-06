@@ -1,3 +1,10 @@
+DO $$
+BEGIN
+	IF EXISTS (SELECT 1 FROM "itemDraft") THEN
+		RAISE EXCEPTION 'itemDraft must be empty before enabling field-level patches';
+	END IF;
+END $$;
+--> statement-breakpoint
 ALTER TABLE "itemDraft" RENAME COLUMN "payload" TO "patch";--> statement-breakpoint
 ALTER TABLE "itemDraft" RENAME CONSTRAINT "itemDraft_payload_object" TO "itemDraft_patch_object";--> statement-breakpoint
 

@@ -174,7 +174,7 @@ function parseUniqueStrings(value: unknown, field: string, maxLength: number) {
 			},
 		);
 	}
-	return normalized;
+	return normalized.sort();
 }
 
 export function validateNativeItemDraft(

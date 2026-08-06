@@ -22,6 +22,7 @@ type RouteContext = {
 
 const saveBodySchema = z.object({
 	expectedDraftRevision: z.number().int().positive(),
+	expectedPayload: z.record(z.string(), z.unknown()),
 	payload: z.record(z.string(), z.unknown()),
 });
 

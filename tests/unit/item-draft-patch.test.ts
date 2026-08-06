@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import {
 	applyItemDraftPatch,
 	createItemDraftPatch,
-} from "@/lib/admin/item-draft-patch";
+	effectiveItemParent,
+} from "@/lib/admin/item-draft-merge";
 
 describe("item draft patches", () => {
 	it("stores only fields that differ from the canonical base", () => {
@@ -63,5 +64,57 @@ describe("item draft patches", () => {
 				{ itemType: "Report", title: "Published title" },
 			),
 		).toEqual({});
+	});
+
+	it("does not treat JSON object key order as an edit", () => {
+		expect(
+			createItemDraftPatch(
+				{
+					creators: [
+						{
+							lastName: "Lovelace",
+							firstName: "Ada",
+							creatorType: "author",
+						},
+					],
+				},
+				{
+					creators: [
+						{
+							creatorType: "author",
+							firstName: "Ada",
+							lastName: "Lovelace",
+						},
+					],
+				},
+			),
+		).toEqual({});
+	});
+
+	it("rebases only editor changes onto a remotely updated draft", () => {
+		const editorChanges = createItemDraftPatch(
+			{ date: "2024", itemType: "Report", title: "Original title" },
+			{ date: "2024", itemType: "Report", title: "Local title" },
+		);
+		expect(
+			applyItemDraftPatch(
+				{ date: "2026", itemType: "Report", title: "Remote title" },
+				editorChanges,
+			),
+		).toEqual({
+			date: "2026",
+			itemType: "Report",
+			title: "Local title",
+		});
+	});
+
+	it("distinguishes an inherited parent from a cleared or changed parent", () => {
+		expect(effectiveItemParent("PARENT23", {})).toBe("PARENT23");
+		expect(
+			effectiveItemParent("PARENT23", { parentItem: null }),
+		).toBeNull();
+		expect(
+			effectiveItemParent("PARENT23", { parentItem: "PARENT45" }),
+		).toBe("PARENT45");
 	});
 });

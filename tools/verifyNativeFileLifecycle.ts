@@ -197,6 +197,7 @@ async function verify() {
 		const savedParentDraft = await saveNativeItemDraft(db, {
 			itemKey: parentDraft.itemKey,
 			expectedDraftRevision: openParentDraft.draftRevision,
+			expectedPayload: openParentDraft.payload,
 			payload: {
 				...openParentDraft.payload,
 				title: "Parent edit preserved across child changes",
@@ -218,6 +219,7 @@ async function verify() {
 		const savedAttachmentDraft = await saveNativeItemDraft(db, {
 			itemKey: attachmentDraft.itemKey,
 			expectedDraftRevision: openAttachmentDraft.draftRevision,
+			expectedPayload: openAttachmentDraft.payload,
 			payload: {
 				...openAttachmentDraft.payload,
 				title: "Attachment edit preserved across file publish",
@@ -295,6 +297,7 @@ async function verify() {
 		await saveNativeItemDraft(db, {
 			itemKey: attachmentDraft.itemKey,
 			expectedDraftRevision: advancedAttachmentDraft.draftRevision,
+			expectedPayload: advancedAttachmentDraft.payload,
 			payload: {
 				...advancedAttachmentDraft.payload,
 				title: "Renamed PDF metadata",
@@ -398,6 +401,7 @@ async function verify() {
 			itemKey: attachmentDraft.itemKey,
 			expectedDraftRevision:
 				attachmentDraftAfterFileUnpublish.draftRevision,
+			expectedPayload: attachmentDraftAfterFileUnpublish.payload,
 			payload: {
 				...attachmentDraftAfterFileUnpublish.payload,
 				title: "Attachment edit preserved across file unpublish",

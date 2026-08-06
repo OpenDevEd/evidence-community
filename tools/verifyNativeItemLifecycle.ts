@@ -121,6 +121,7 @@ async function verify() {
 		const saved = await saveNativeItemDraft(db, {
 			itemKey: draft.itemKey,
 			expectedDraftRevision: 1,
+			expectedPayload: draft.payload,
 			payload: {
 				itemType: "Book",
 				title: "First published title",
@@ -144,6 +145,7 @@ async function verify() {
 			await saveNativeItemDraft(db, {
 				itemKey: draft.itemKey,
 				expectedDraftRevision: 1,
+				expectedPayload: saved.payload,
 				payload: { itemType: "Book", title: "Stale edit" },
 			});
 		} catch (error) {
@@ -200,8 +202,17 @@ async function verify() {
 		);
 		const { abstractNote: _removedAbstract, ...patchMergePayload } =
 			patchMergeEdit.payload;
+		await db
+			.update(item)
+			.set({
+				date: "2026",
+				revision: sql`${item.revision} + 1`,
+				updatedAt: new Date(),
+			})
+			.where(eq(item.key, patchMergeDraft.itemKey));
 		await saveNativeItemDraft(db, {
 			expectedDraftRevision: patchMergeEdit.draftRevision,
+			expectedPayload: patchMergeEdit.payload,
 			itemKey: patchMergeDraft.itemKey,
 			payload: {
 				...patchMergePayload,
@@ -218,14 +229,6 @@ async function verify() {
 				Object.keys(storedPatch.patch).length === 2,
 			"Saved draft did not contain only changed fields and tombstones",
 		);
-		await db
-			.update(item)
-			.set({
-				date: "2026",
-				revision: sql`${item.revision} + 1`,
-				updatedAt: new Date(),
-			})
-			.where(eq(item.key, patchMergeDraft.itemKey));
 		const mergedPublication = await publishNativeItemDraft(
 			db,
 			patchMergeDraft.itemKey,
@@ -295,6 +298,7 @@ async function verify() {
 				await saveNativeItemDraft(db, {
 					itemKey: draft.itemKey,
 					expectedDraftRevision: reopened.draftRevision,
+					expectedPayload: reopened.payload,
 					payload: {
 						collections,
 						itemType: "Book",
@@ -313,6 +317,7 @@ async function verify() {
 		await saveNativeItemDraft(db, {
 			itemKey: draft.itemKey,
 			expectedDraftRevision: reopened.draftRevision,
+			expectedPayload: reopened.payload,
 			payload: {
 				collections: [importedCollectionKeys[0]!],
 				itemType: "Book",
@@ -343,6 +348,7 @@ async function verify() {
 		await saveNativeItemDraft(db, {
 			itemKey: draft.itemKey,
 			expectedDraftRevision: restoreDraft.draftRevision,
+			expectedPayload: restoreDraft.payload,
 			payload: {
 				...restoreDraft.payload,
 				title: "Restored published title",
@@ -458,6 +464,7 @@ async function verify() {
 		await saveNativeItemDraft(db, {
 			itemKey: reparentedNoteDraft.itemKey,
 			expectedDraftRevision: reparentDraft.draftRevision,
+			expectedPayload: reparentDraft.payload,
 			payload: {
 				...reparentDraft.payload,
 				parentItem: newParentDraft.itemKey,
@@ -479,6 +486,7 @@ async function verify() {
 		await saveNativeItemDraft(db, {
 			itemKey: newParentDraft.itemKey,
 			expectedDraftRevision: parentWithChildDraft.draftRevision,
+			expectedPayload: parentWithChildDraft.payload,
 			payload: {
 				...parentWithChildDraft.payload,
 				parentItem: oldParentDraft.itemKey,

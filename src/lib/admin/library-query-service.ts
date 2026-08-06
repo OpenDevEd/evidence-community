@@ -19,6 +19,7 @@ import {
 	applyItemDraftPatch,
 	publishedAdminItemPayload,
 } from "./item-draft-patch";
+import { effectiveItemParent } from "./item-draft-merge";
 import { payloadStringList } from "./item-payload";
 import {
 	fileDraftJson,
@@ -195,7 +196,7 @@ async function getAdminAttachments(
 	const tagsByKey = groupRowsByItemKey(tagRows);
 	const collectionsByKey = groupRowsByItemKey(membershipRows);
 
-	return keys.map((key) => {
+	return keys.flatMap((key) => {
 		const published = publishedByKey.get(key) ?? null;
 		const draft = draftByKey.get(key) ?? null;
 		const fileDraft = fileDraftByKey.get(key) ?? null;
@@ -209,25 +210,33 @@ async function getAdminAttachments(
 		const effectivePayload = draft
 			? applyItemDraftPatch(basePayload, draft.patch)
 			: basePayload;
-		return {
-			...itemSummary(
-				published,
-				draft,
-				fileDraft,
-				filePublication,
-				effectivePayload,
-			),
-			draft: draftJson(draft, effectivePayload),
-			fileDraft: fileDraftJson(fileDraft),
-			filePublication: filePublicationJson(filePublication),
-			parentItem: parentItemKey,
-			sourceFileUrl:
-				!filePublication &&
-				published?.contentType?.toLowerCase() === "application/pdf" &&
-				published.url
-					? published.url
-					: null,
-		};
+		const effectiveParentItem = effectiveItemParent(
+			published?.parentItem,
+			draft?.patch,
+		);
+		if (effectiveParentItem !== parentItemKey) return [];
+		return [
+			{
+				...itemSummary(
+					published,
+					draft,
+					fileDraft,
+					filePublication,
+					effectivePayload,
+				),
+				draft: draftJson(draft, effectivePayload),
+				fileDraft: fileDraftJson(fileDraft),
+				filePublication: filePublicationJson(filePublication),
+				parentItem: effectiveParentItem,
+				sourceFileUrl:
+					!filePublication &&
+					published?.contentType?.toLowerCase() ===
+						"application/pdf" &&
+					published.url
+						? published.url
+						: null,
+			},
+		];
 	});
 }
 

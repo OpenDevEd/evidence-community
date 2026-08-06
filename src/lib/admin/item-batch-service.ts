@@ -14,6 +14,7 @@ import type {
 	AdminItemBatchResult,
 } from "./item-batch-contract";
 import { adminSearchIndexReceipt } from "./search-index-contract";
+import { effectiveItemParent } from "./item-draft-merge";
 import {
 	assignNativeItemDraftToCollection,
 	NativeItemHasChildrenError,
@@ -145,15 +146,13 @@ export async function runAdminItemBatch(
 	const revalidationTargets: RevalidationTarget[] = [];
 	const parentByKey = new Map(
 		request.keys.map((key) => {
-			const draftParent = state.drafts.get(key)?.patch.parentItem;
+			const draftPatch = state.drafts.get(key)?.patch;
 			const published = state.published.get(key);
 			return [
 				key,
 				request.action === "remove" && published?.deleted === 0
 					? published.parentItem
-					: typeof draftParent === "string"
-						? draftParent
-						: (published?.parentItem ?? null),
+					: effectiveItemParent(published?.parentItem, draftPatch),
 			] as const;
 		}),
 	);

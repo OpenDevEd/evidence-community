@@ -110,7 +110,7 @@ describe("native item draft validation", () => {
 		expect(validated.payload).toMatchObject({
 			itemType: "Book",
 			language: "en",
-			tags: ["evidence", "education"],
+			tags: ["education", "evidence"],
 			collections: ["ABCD2345"],
 		});
 	});
