@@ -3,6 +3,8 @@ import {
 	itemIdentity,
 	outbox,
 	sourceConnection,
+	sourceFileCleanup,
+	sourceRecordIssue,
 } from "@opendeved/evidence-library-core";
 import {
 	and,
@@ -19,6 +21,7 @@ import {
 	reserveItemIdentities,
 } from "@/db/record-identity";
 import {
+	itemFilePublication,
 	sourceRecordAlias,
 	sourceSnapshot,
 } from "@/db/schema/source";
@@ -44,9 +47,7 @@ import {
 	sourcePayloadHash,
 } from "./fingerprint";
 
-type Transaction = Parameters<
-	Parameters<Database["transaction"]>[0]
->[0];
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type ItemInsert = InferInsertModel<typeof item>;
 type CollectionInsert = InferInsertModel<typeof collection>;
 
@@ -88,6 +89,15 @@ export class SourceCursorConflictError extends Error {
 	constructor(sourceConnectionKey: string) {
 		super(`Source cursor is stale: ${sourceConnectionKey}`);
 		this.name = "SourceCursorConflictError";
+	}
+}
+
+export class SourceFileStagingConflictError extends Error {
+	constructor(sourceConnectionKey: string, objectPaths: readonly string[]) {
+		super(
+			`Source file staging was lost for ${sourceConnectionKey}: ${objectPaths.join(", ")}`,
+		);
+		this.name = "SourceFileStagingConflictError";
 	}
 }
 
@@ -163,8 +173,7 @@ function sourceItemValues(
 	) as Partial<ItemInsert>;
 	Object.assign(values, validated.item);
 	values.dateAdded = record.sourceDates?.addedAt ?? null;
-	values.dateModified =
-		record.sourceDates?.modifiedAt ?? fetchedAt;
+	values.dateModified = record.sourceDates?.modifiedAt ?? fetchedAt;
 
 	if (record.file) {
 		values.url = record.file.url;
@@ -194,8 +203,7 @@ async function loadIdentityMap(
 	sourceRecordKeys: string[],
 ) {
 	if (sourceRecordKeys.length === 0) return new Map<string, string>();
-	const table =
-		entity === "item" ? itemIdentity : collectionIdentity;
+	const table = entity === "item" ? itemIdentity : collectionIdentity;
 	const rows = await transaction
 		.select({
 			key: table.key,
@@ -252,14 +260,10 @@ async function resolveCollectionReferences(
 			.from(collectionIdentity)
 			.where(
 				and(
-					eq(
-						collectionIdentity.sourceConnectionKey,
-						connectionKey,
-					),
-					inArray(
-						collectionIdentity.sourceRecordKey,
-						[...sourceRecordKeys],
-					),
+					eq(collectionIdentity.sourceConnectionKey, connectionKey),
+					inArray(collectionIdentity.sourceRecordKey, [
+						...sourceRecordKeys,
+					]),
 				),
 			);
 		for (const row of rows) {
@@ -304,10 +308,7 @@ async function writeCollectionRows(
 	rows: CollectionInsert[],
 ) {
 	const written: Array<{ key: string; revision: number }> = [];
-	for (const rowChunk of chunkValues(
-		rows,
-		COLLECTION_UPSERT_CHUNK_SIZE,
-	)) {
+	for (const rowChunk of chunkValues(rows, COLLECTION_UPSERT_CHUNK_SIZE)) {
 		written.push(
 			...(await transaction
 				.insert(collection)
@@ -318,9 +319,7 @@ async function writeCollectionRows(
 						deleted: sql.raw(`excluded."deleted"`),
 						deletedAt: sql.raw(`excluded."deletedAt"`),
 						name: sql.raw(`excluded."name"`),
-						numCollections: sql.raw(
-							`excluded."numCollections"`,
-						),
+						numCollections: sql.raw(`excluded."numCollections"`),
 						numItems: sql.raw(`excluded."numItems"`),
 						parentCollection: sql.raw(
 							`excluded."parentCollection"`,
@@ -339,10 +338,7 @@ async function writeCollectionRows(
 	return written;
 }
 
-async function writeItemRows(
-	transaction: Transaction,
-	rows: ItemInsert[],
-) {
+async function writeItemRows(transaction: Transaction, rows: ItemInsert[]) {
 	const written: Array<{ key: string; revision: number }> = [];
 	for (const rowChunk of chunkValues(rows, ITEM_UPSERT_CHUNK_SIZE)) {
 		written.push(
@@ -378,10 +374,7 @@ async function updateItemParents(
 ) {
 	for (const rowChunk of chunkValues(rows, RELATION_CHUNK_SIZE)) {
 		const cases = sql.join(
-			rowChunk.map(
-				(row) =>
-					sql`WHEN ${row.key} THEN ${row.parentKey}`,
-			),
+			rowChunk.map((row) => sql`WHEN ${row.key} THEN ${row.parentKey}`),
 			sql` `,
 		);
 		const keys = sql.join(
@@ -402,10 +395,7 @@ async function updateCollectionParents(
 ) {
 	for (const rowChunk of chunkValues(rows, RELATION_CHUNK_SIZE)) {
 		const cases = sql.join(
-			rowChunk.map(
-				(row) =>
-					sql`WHEN ${row.key} THEN ${row.parentKey}`,
-			),
+			rowChunk.map((row) => sql`WHEN ${row.key} THEN ${row.parentKey}`),
 			sql` `,
 		);
 		const keys = sql.join(
@@ -494,10 +484,7 @@ async function assertAcyclicCollectionParents(
 	}
 }
 
-export async function writeSourceIngestionBatch(
-	db: Database,
-	input: unknown,
-) {
+export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 	const parsed = sourceIngestionBatchSchema.safeParse(input);
 	if (!parsed.success) {
 		throw new SourceIngestionValidationError(
@@ -576,15 +563,12 @@ export async function writeSourceIngestionBatch(
 			throw new SourceCursorConflictError(batch.sourceConnectionKey);
 		}
 
-		const collectionKeys = await reserveCollectionIdentities(
-			transaction,
-			{
-				sourceConnectionKey: batch.sourceConnectionKey,
-				sourceRecordKeys: collectionUpserts.map(
-					(record) => record.sourceRecordKey,
-				),
-			},
-		);
+		const collectionKeys = await reserveCollectionIdentities(transaction, {
+			sourceConnectionKey: batch.sourceConnectionKey,
+			sourceRecordKeys: collectionUpserts.map(
+				(record) => record.sourceRecordKey,
+			),
+		});
 		const itemKeys = await reserveItemIdentities(transaction, {
 			sourceConnectionKey: batch.sourceConnectionKey,
 			sourceRecordKeys: itemUpserts.map(
@@ -597,9 +581,7 @@ export async function writeSourceIngestionBatch(
 			"collection",
 			batch.sourceConnectionKey,
 			[
-				...collectionDeletes.map(
-					(record) => record.sourceRecordKey,
-				),
+				...collectionDeletes.map((record) => record.sourceRecordKey),
 				...collectionUpserts.flatMap((record) =>
 					record.parentSourceRecordKey
 						? [record.parentSourceRecordKey]
@@ -650,8 +632,7 @@ export async function writeSourceIngestionBatch(
 							name: collection.name,
 							numCollections: collection.numCollections,
 							numItems: collection.numItems,
-							parentCollection:
-								collection.parentCollection,
+							parentCollection: collection.parentCollection,
 							relations: collection.relations,
 						})
 						.from(collection)
@@ -673,6 +654,20 @@ export async function writeSourceIngestionBatch(
 						.where(inArray(sourceSnapshot.itemKey, allItemKeys));
 		const snapshotByItemKey = new Map(
 			snapshots.map((row) => [row.itemKey, row]),
+		);
+		const existingPublications =
+			allItemKeys.length === 0
+				? []
+				: await transaction
+						.select()
+						.from(itemFilePublication)
+						.where(
+							inArray(itemFilePublication.itemKey, allItemKeys),
+						)
+						.orderBy(itemFilePublication.itemKey)
+						.for("update");
+		const existingPublicationByItemKey = new Map(
+			existingPublications.map((row) => [row.itemKey, row]),
 		);
 
 		const parentItemKeys = new Map<string, string | null>();
@@ -697,9 +692,7 @@ export async function writeSourceIngestionBatch(
 				parentCollectionKeys.set(record.sourceRecordKey, null);
 				continue;
 			}
-			const parentKey = collectionKeys.get(
-				record.parentSourceRecordKey,
-			);
+			const parentKey = collectionKeys.get(record.parentSourceRecordKey);
 			if (!parentKey) {
 				throw new SourceReferenceNotFoundError(
 					"collection",
@@ -712,40 +705,36 @@ export async function writeSourceIngestionBatch(
 		const allCollectionReferences = itemUpserts.flatMap(
 			(record) => record.collections,
 		);
-		const resolvedCollectionReferences =
-			await resolveCollectionReferences(
-				transaction,
-				batch.sourceConnectionKey,
-				allCollectionReferences,
-				collectionKeys,
-			);
+		const resolvedCollectionReferences = await resolveCollectionReferences(
+			transaction,
+			batch.sourceConnectionKey,
+			allCollectionReferences,
+			collectionKeys,
+		);
 
 		const now = new Date();
 		const collectionEvents = new Map<
 			string,
 			{ operation: "delete" | "upsert"; revision: number }
 		>();
-		const changedCollectionUpserts = collectionUpserts.filter(
-			(record) => {
-				const key = collectionKeys.get(record.sourceRecordKey)!;
-				const existing = existingCollectionByKey.get(key);
-				const parentKey =
-					parentCollectionKeys.get(record.sourceRecordKey) ?? null;
-				return (
-					!existing ||
-					existing.deleted === 1 ||
-					existing.name !== record.data.name ||
-					existing.numCollections !==
-						record.data.numCollections ||
-					existing.numItems !== record.data.numItems ||
-					existing.parentCollection !== parentKey ||
-					!nullableJsonEqual(
-						existing.relations as Record<string, unknown> | null,
-						record.data.relations,
-					)
-				);
-			},
-		);
+		const changedCollectionUpserts = collectionUpserts.filter((record) => {
+			const key = collectionKeys.get(record.sourceRecordKey)!;
+			const existing = existingCollectionByKey.get(key);
+			const parentKey =
+				parentCollectionKeys.get(record.sourceRecordKey) ?? null;
+			return (
+				!existing ||
+				existing.deleted === 1 ||
+				existing.name !== record.data.name ||
+				existing.numCollections !== record.data.numCollections ||
+				existing.numItems !== record.data.numItems ||
+				existing.parentCollection !== parentKey ||
+				!nullableJsonEqual(
+					existing.relations as Record<string, unknown> | null,
+					record.data.relations,
+				)
+			);
+		});
 		const writtenCollections = await writeCollectionRows(
 			transaction,
 			changedCollectionUpserts.map((record) => ({
@@ -771,9 +760,7 @@ export async function writeSourceIngestionBatch(
 		}
 		const collectionDeleteKeys = collectionDeletes.flatMap((record) => {
 			const key = collectionKeys.get(record.sourceRecordKey);
-			const existing = key
-				? existingCollectionByKey.get(key)
-				: undefined;
+			const existing = key ? existingCollectionByKey.get(key) : undefined;
 			return key && existing && existing.deleted !== 1 ? [key] : [];
 		});
 		const collectionDeleteKeySet = new Set(collectionDeleteKeys);
@@ -781,9 +768,8 @@ export async function writeSourceIngestionBatch(
 			...new Set(
 				changedCollectionUpserts.flatMap((record) => {
 					const parentKey =
-						parentCollectionKeys.get(
-							record.sourceRecordKey,
-						) ?? null;
+						parentCollectionKeys.get(record.sourceRecordKey) ??
+						null;
 					return parentKey ? [parentKey] : [];
 				}),
 			),
@@ -804,17 +790,11 @@ export async function writeSourceIngestionBatch(
 				.from(collection)
 				.where(
 					and(
-						inArray(
-							collection.key,
-							activeParentCollectionKeys,
-						),
+						inArray(collection.key, activeParentCollectionKeys),
 						eq(collection.deleted, 0),
 					),
 				);
-			if (
-				activeParents.length !==
-				activeParentCollectionKeys.length
-			) {
+			if (activeParents.length !== activeParentCollectionKeys.length) {
 				throw new SourceReferenceNotFoundError(
 					"collection",
 					"active parent",
@@ -826,8 +806,7 @@ export async function writeSourceIngestionBatch(
 			changedCollectionUpserts.map((record) => ({
 				key: collectionKeys.get(record.sourceRecordKey)!,
 				parentKey:
-					parentCollectionKeys.get(record.sourceRecordKey) ??
-					null,
+					parentCollectionKeys.get(record.sourceRecordKey) ?? null,
 			})),
 		);
 
@@ -854,8 +833,8 @@ export async function writeSourceIngestionBatch(
 		}
 		await assertAcyclicCollectionParents(
 			transaction,
-			changedCollectionUpserts.map(
-				(record) => collectionKeys.get(record.sourceRecordKey)!,
+			changedCollectionUpserts.map((record) =>
+				collectionKeys.get(record.sourceRecordKey)!,
 			),
 		);
 
@@ -869,8 +848,7 @@ export async function writeSourceIngestionBatch(
 				!snapshot ||
 				snapshot.payloadHash !== sourceItemFingerprint(record) ||
 				snapshot.remoteVersion !== record.remoteVersion ||
-				snapshot.mappingProfileVersion !==
-					batch.mappingProfileVersion
+				snapshot.mappingProfileVersion !== batch.mappingProfileVersion
 			);
 		});
 		const itemEvents = new Map<
@@ -907,17 +885,12 @@ export async function writeSourceIngestionBatch(
 			...new Set(
 				changedItemUpserts.flatMap((record) => {
 					const parentKey =
-						parentItemKeys.get(record.sourceRecordKey) ??
-						null;
+						parentItemKeys.get(record.sourceRecordKey) ?? null;
 					return parentKey ? [parentKey] : [];
 				}),
 			),
 		];
-		if (
-			activeParentItemKeys.some((key) =>
-				itemDeleteKeySet.has(key),
-			)
-		) {
+		if (activeParentItemKeys.some((key) => itemDeleteKeySet.has(key))) {
 			throw new SourceReferenceNotFoundError(
 				"item",
 				"parent deleted in this batch",
@@ -934,18 +907,14 @@ export async function writeSourceIngestionBatch(
 					),
 				);
 			if (activeParents.length !== activeParentItemKeys.length) {
-				throw new SourceReferenceNotFoundError(
-					"item",
-					"active parent",
-				);
+				throw new SourceReferenceNotFoundError("item", "active parent");
 			}
 		}
 		await updateItemParents(
 			transaction,
 			changedItemUpserts.map((record) => ({
 				key: itemKeys.get(record.sourceRecordKey)!,
-				parentKey:
-					parentItemKeys.get(record.sourceRecordKey) ?? null,
+				parentKey: parentItemKeys.get(record.sourceRecordKey) ?? null,
 			})),
 		);
 
@@ -972,13 +941,215 @@ export async function writeSourceIngestionBatch(
 		}
 		await assertAcyclicItemParents(
 			transaction,
-			changedItemUpserts.map(
-				(record) => itemKeys.get(record.sourceRecordKey)!,
+			changedItemUpserts.map((record) =>
+				itemKeys.get(record.sourceRecordKey)!,
 			),
 		);
 
-		const changedItemKeys = changedItemUpserts.map(
-			(record) => itemKeys.get(record.sourceRecordKey)!,
+		const writtenItemRevisionByKey = new Map(
+			writtenItems.map((row) => [row.key, row.revision]),
+		);
+		const publicationUpserts = changedItemUpserts.flatMap((record) => {
+			const publication = record.file?.managedPublication;
+			if (!publication || !record.file) return [];
+			const itemKey = itemKeys.get(record.sourceRecordKey)!;
+			const parentItemKey =
+				parentItemKeys.get(record.sourceRecordKey) ?? null;
+			const revision = writtenItemRevisionByKey.get(itemKey);
+			if (!parentItemKey || revision === undefined) {
+				throw new SourceIngestionValidationError(
+					`Managed source file ${record.sourceRecordKey} requires a written parent attachment`,
+				);
+			}
+			const previous = existingPublicationByItemKey.get(itemKey);
+			const sameContent =
+				previous?.sha256 === publication.sha256 &&
+				previous.objectPath === publication.objectPath &&
+				previous.coverObjectPath === publication.coverObjectPath;
+			return [
+				{
+					itemKey,
+					sourceConnectionKey: batch.sourceConnectionKey,
+					parentItemKey,
+					uploadRevision: sameContent
+						? previous.uploadRevision
+						: (previous?.uploadRevision ?? 0) + 1,
+					revision,
+					sourceObjectPath: publication.objectPath,
+					sourceCoverObjectPath: publication.coverObjectPath,
+					objectPath: publication.objectPath,
+					publicUrl: record.file.url!,
+					filename: record.file.filename!,
+					contentType: record.file.contentType!,
+					sizeBytes: publication.sizeBytes,
+					sha256: publication.sha256,
+					coverObjectPath: publication.coverObjectPath,
+					coverPublicUrl: record.file.coverUrl!,
+					coverWidth: record.file.coverWidth!,
+					coverHeight: record.file.coverHeight!,
+					pageCount: publication.pageCount,
+					publishedAt: sameContent ? previous.publishedAt : now,
+					updatedAt: now,
+				},
+			];
+		});
+		const publicationUpsertByItemKey = new Map(
+			publicationUpserts.map((row) => [row.itemKey, row]),
+		);
+		const publicationDeleteItemKeys = [
+			...new Set([
+				...itemDeleteKeys,
+				...changedItemUpserts.flatMap((record) => {
+					const itemKey = itemKeys.get(record.sourceRecordKey)!;
+					return !record.file?.managedPublication ? [itemKey] : [];
+				}),
+			]),
+		].filter(
+			(itemKey) =>
+				existingPublicationByItemKey.has(itemKey) &&
+				!publicationUpsertByItemKey.has(itemKey),
+		);
+		const publicationDeleteItemKeySet = new Set(publicationDeleteItemKeys);
+		const activePublicationPaths = new Set(
+			publicationUpserts.flatMap((row) => [
+				row.objectPath,
+				row.coverObjectPath,
+			]),
+		);
+		const stalePublicationPaths = [
+			...new Set(
+				existingPublications.flatMap((previous) => {
+					const next = publicationUpsertByItemKey.get(
+						previous.itemKey,
+					);
+					const removed = publicationDeleteItemKeySet.has(
+						previous.itemKey,
+					);
+					if (!removed && !next) return [];
+					return [
+						previous.objectPath,
+						previous.coverObjectPath,
+					].filter(
+						(objectPath) => !activePublicationPaths.has(objectPath),
+					);
+				}),
+			),
+		];
+
+		if (activePublicationPaths.size > 0) {
+			const consumedStagingRows = await transaction
+				.delete(sourceFileCleanup)
+				.where(
+					and(
+						eq(
+							sourceFileCleanup.sourceConnectionKey,
+							batch.sourceConnectionKey,
+						),
+						inArray(sourceFileCleanup.objectPath, [
+							...activePublicationPaths,
+						]),
+					),
+				)
+				.returning({ objectPath: sourceFileCleanup.objectPath });
+			const consumedPaths = new Set(
+				consumedStagingRows.map(({ objectPath }) => objectPath),
+			);
+			const missingStagedPaths = changedItemUpserts.flatMap((record) => {
+				const publication = record.file?.managedPublication;
+				if (!publication?.staged) return [];
+				return [
+					publication.objectPath,
+					publication.coverObjectPath,
+				].filter((objectPath) => !consumedPaths.has(objectPath));
+			});
+			if (missingStagedPaths.length > 0) {
+				throw new SourceFileStagingConflictError(
+					batch.sourceConnectionKey,
+					missingStagedPaths,
+				);
+			}
+		}
+		if (publicationDeleteItemKeys.length > 0) {
+			await transaction
+				.delete(itemFilePublication)
+				.where(
+					inArray(
+						itemFilePublication.itemKey,
+						publicationDeleteItemKeys,
+					),
+				);
+		}
+		await insertInChunks(
+			publicationUpserts,
+			RELATION_CHUNK_SIZE,
+			(rowChunk) =>
+				transaction
+					.insert(itemFilePublication)
+					.values(rowChunk)
+					.onConflictDoUpdate({
+						target: itemFilePublication.itemKey,
+						set: {
+							sourceConnectionKey: sql.raw(
+								`excluded."sourceConnectionKey"`,
+							),
+							parentItemKey: sql.raw(`excluded."parentItemKey"`),
+							uploadRevision: sql.raw(
+								`excluded."uploadRevision"`,
+							),
+							revision: sql.raw(`excluded."revision"`),
+							sourceObjectPath: sql.raw(
+								`excluded."sourceObjectPath"`,
+							),
+							sourceCoverObjectPath: sql.raw(
+								`excluded."sourceCoverObjectPath"`,
+							),
+							objectPath: sql.raw(`excluded."objectPath"`),
+							publicUrl: sql.raw(`excluded."publicUrl"`),
+							filename: sql.raw(`excluded."filename"`),
+							contentType: sql.raw(`excluded."contentType"`),
+							sizeBytes: sql.raw(`excluded."sizeBytes"`),
+							sha256: sql.raw(`excluded."sha256"`),
+							coverObjectPath: sql.raw(
+								`excluded."coverObjectPath"`,
+							),
+							coverPublicUrl: sql.raw(
+								`excluded."coverPublicUrl"`,
+							),
+							coverWidth: sql.raw(`excluded."coverWidth"`),
+							coverHeight: sql.raw(`excluded."coverHeight"`),
+							pageCount: sql.raw(`excluded."pageCount"`),
+							publishedAt: sql.raw(`excluded."publishedAt"`),
+							updatedAt: sql.raw(`excluded."updatedAt"`),
+						},
+					}),
+		);
+		await insertInChunks(
+			stalePublicationPaths.map((objectPath) => ({
+				sourceConnectionKey: batch.sourceConnectionKey,
+				objectPath,
+				updatedAt: now,
+			})),
+			RELATION_CHUNK_SIZE,
+			(rowChunk) =>
+				transaction
+					.insert(sourceFileCleanup)
+					.values(rowChunk)
+					.onConflictDoUpdate({
+						target: [
+							sourceFileCleanup.sourceConnectionKey,
+							sourceFileCleanup.objectPath,
+						],
+						set: {
+							attempts: 0,
+							deadLetteredAt: null,
+							lastError: null,
+							updatedAt: now,
+						},
+					}),
+		);
+
+		const changedItemKeys = changedItemUpserts.map((record) =>
+			itemKeys.get(record.sourceRecordKey)!,
 		);
 		if (changedItemKeys.length > 0) {
 			await transaction
@@ -998,10 +1169,7 @@ export async function writeSourceIngestionBatch(
 			[...new Map(tagRows.map((row) => [row.name, row])).values()],
 			RELATION_CHUNK_SIZE,
 			(rowChunk) =>
-				transaction
-					.insert(tag)
-					.values(rowChunk)
-					.onConflictDoNothing(),
+				transaction.insert(tag).values(rowChunk).onConflictDoNothing(),
 		);
 		const itemTagRows = changedItemUpserts.flatMap((record) =>
 			normalizedItems
@@ -1011,10 +1179,8 @@ export async function writeSourceIngestionBatch(
 					tagName,
 				})),
 		);
-		await insertInChunks(
-			itemTagRows,
-			RELATION_CHUNK_SIZE,
-			(rowChunk) => transaction.insert(itemToTag).values(rowChunk),
+		await insertInChunks(itemTagRows, RELATION_CHUNK_SIZE, (rowChunk) =>
+			transaction.insert(itemToTag).values(rowChunk),
 		);
 
 		const itemCollectionRows = changedItemUpserts.flatMap((record) =>
@@ -1026,17 +1192,14 @@ export async function writeSourceIngestionBatch(
 						batch.sourceConnectionKey;
 					return {
 						itemKey: itemKeys.get(record.sourceRecordKey)!,
-						collectionKey:
-							resolvedCollectionReferences.get(
-								`${connectionKey}\u0000${reference.sourceRecordKey}`,
-							)!,
+						collectionKey: resolvedCollectionReferences.get(
+							`${connectionKey}\u0000${reference.sourceRecordKey}`,
+						)!,
 					};
 				}),
 		);
 		const activeCollectionKeys = [
-			...new Set(
-				itemCollectionRows.map((row) => row.collectionKey),
-			),
+			...new Set(itemCollectionRows.map((row) => row.collectionKey)),
 		];
 		if (activeCollectionKeys.length > 0) {
 			const activeCollections = await transaction
@@ -1048,9 +1211,7 @@ export async function writeSourceIngestionBatch(
 						eq(collection.deleted, 0),
 					),
 				);
-			if (
-				activeCollections.length !== activeCollectionKeys.length
-			) {
+			if (activeCollections.length !== activeCollectionKeys.length) {
 				throw new SourceReferenceNotFoundError(
 					"collection",
 					"active relationship",
@@ -1060,8 +1221,7 @@ export async function writeSourceIngestionBatch(
 		await insertInChunks(
 			itemCollectionRows,
 			RELATION_CHUNK_SIZE,
-			(rowChunk) =>
-				transaction.insert(itemToCollection).values(rowChunk),
+			(rowChunk) => transaction.insert(itemToCollection).values(rowChunk),
 		);
 
 		const aliasRows = itemUpserts.flatMap((record) =>
@@ -1090,20 +1250,16 @@ export async function writeSourceIngestionBatch(
 				aliasRows.map((row) => [row.aliasKey, row.itemKey]),
 			);
 			const conflict = existingAliases.find(
-				(row) =>
-					expectedByAlias.get(row.aliasKey) !== row.itemKey,
+				(row) => expectedByAlias.get(row.aliasKey) !== row.itemKey,
 			);
 			if (conflict) {
 				throw new SourceAliasConflictError(conflict.aliasKey);
 			}
-			await insertInChunks(
-				aliasRows,
-				RELATION_CHUNK_SIZE,
-				(rowChunk) =>
-					transaction
-						.insert(sourceRecordAlias)
-						.values(rowChunk)
-						.onConflictDoNothing(),
+			await insertInChunks(aliasRows, RELATION_CHUNK_SIZE, (rowChunk) =>
+				transaction
+					.insert(sourceRecordAlias)
+					.values(rowChunk)
+					.onConflictDoNothing(),
 			);
 		}
 
@@ -1117,8 +1273,7 @@ export async function writeSourceIngestionBatch(
 			const existingSnapshot = snapshotByItemKey.get(itemKey);
 			if (
 				existingSnapshot?.payloadHash === expectedHash &&
-				existingSnapshot.remoteVersion ===
-					record.remoteVersion &&
+				existingSnapshot.remoteVersion === record.remoteVersion &&
 				existingSnapshot.mappingProfileVersion ===
 					batch.mappingProfileVersion
 			) {
@@ -1130,8 +1285,7 @@ export async function writeSourceIngestionBatch(
 					payload: record.raw,
 					payloadHash: expectedHash,
 					remoteVersion: record.remoteVersion,
-					mappingProfileVersion:
-						batch.mappingProfileVersion,
+					mappingProfileVersion: batch.mappingProfileVersion,
 					fetchedAt: batch.fetchedAt,
 				},
 			];
@@ -1145,29 +1299,22 @@ export async function writeSourceIngestionBatch(
 				? [itemKey]
 				: [];
 		});
-		await insertInChunks(
-			snapshotRows,
-			RELATION_CHUNK_SIZE,
-			(rowChunk) =>
-				transaction
-					.insert(sourceSnapshot)
-					.values(rowChunk)
-					.onConflictDoUpdate({
-						target: sourceSnapshot.itemKey,
-						set: {
-							payload: sql.raw(`excluded."payload"`),
-							payloadHash: sql.raw(
-								`excluded."payloadHash"`,
-							),
-							remoteVersion: sql.raw(
-								`excluded."remoteVersion"`,
-							),
-							mappingProfileVersion: sql.raw(
-								`excluded."mappingProfileVersion"`,
-							),
-							fetchedAt: sql.raw(`excluded."fetchedAt"`),
-						},
-					}),
+		await insertInChunks(snapshotRows, RELATION_CHUNK_SIZE, (rowChunk) =>
+			transaction
+				.insert(sourceSnapshot)
+				.values(rowChunk)
+				.onConflictDoUpdate({
+					target: sourceSnapshot.itemKey,
+					set: {
+						payload: sql.raw(`excluded."payload"`),
+						payloadHash: sql.raw(`excluded."payloadHash"`),
+						remoteVersion: sql.raw(`excluded."remoteVersion"`),
+						mappingProfileVersion: sql.raw(
+							`excluded."mappingProfileVersion"`,
+						),
+						fetchedAt: sql.raw(`excluded."fetchedAt"`),
+					},
+				}),
 		);
 		await insertInChunks(
 			refreshedSnapshotKeys,
@@ -1230,19 +1377,54 @@ export async function writeSourceIngestionBatch(
 					revision,
 				}),
 			),
-			...[...itemEvents].map(
-				([entityKey, { operation, revision }]) => ({
-					entityType: "item" as const,
-					entityKey,
-					operation,
-					revision,
-				}),
-			),
+			...[...itemEvents].map(([entityKey, { operation, revision }]) => ({
+				entityType: "item" as const,
+				entityKey,
+				operation,
+				revision,
+			})),
 		];
+		await insertInChunks(outboxRows, RELATION_CHUNK_SIZE, (rowChunk) =>
+			transaction.insert(outbox).values(rowChunk),
+		);
+
+		const issueSourceRecordKeys = batch.items.map(
+			(record) => record.sourceRecordKey,
+		);
+		if (issueSourceRecordKeys.length > 0) {
+			await transaction
+				.delete(sourceRecordIssue)
+				.where(
+					and(
+						eq(
+							sourceRecordIssue.sourceConnectionKey,
+							batch.sourceConnectionKey,
+						),
+						inArray(
+							sourceRecordIssue.sourceRecordKey,
+							issueSourceRecordKeys,
+						),
+					),
+				);
+		}
 		await insertInChunks(
-			outboxRows,
+			itemUpserts.flatMap((record) =>
+				record.processingIssue
+					? [
+							{
+								sourceConnectionKey: batch.sourceConnectionKey,
+								sourceRecordKey: record.sourceRecordKey,
+								code: record.processingIssue.code,
+								message: record.processingIssue.message,
+								remoteVersion: record.remoteVersion,
+								updatedAt: now,
+							},
+						]
+					: [],
+			),
 			RELATION_CHUNK_SIZE,
-			(rowChunk) => transaction.insert(outbox).values(rowChunk),
+			(rowChunk) =>
+				transaction.insert(sourceRecordIssue).values(rowChunk),
 		);
 
 		await transaction

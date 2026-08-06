@@ -133,6 +133,67 @@ export const sourceConnection = pgTable(
 	],
 );
 
+export const sourceFileCleanup = pgTable(
+	"sourceFileCleanup",
+	{
+		id: bigint("id", { mode: "number" })
+			.primaryKey()
+			.generatedAlwaysAsIdentity(),
+		sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 })
+			.notNull()
+			.references(() => sourceConnection.key, {
+				onDelete: "cascade",
+				onUpdate: "cascade",
+			}),
+		objectPath: varchar("objectPath", { length: 1024 }).notNull(),
+		attempts: integer("attempts").notNull().default(0),
+		lastError: text("lastError"),
+		deadLetteredAt: timestampWithTimezone("deadLetteredAt"),
+		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
+		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
+	},
+	(table) => [
+		check(
+			"sourceFileCleanup_attempts_nonnegative",
+			sql`${table.attempts} >= 0`,
+		),
+		unique("sourceFileCleanup_connection_path_unique").on(
+			table.sourceConnectionKey,
+			table.objectPath,
+		),
+		index("sourceFileCleanup_connection_created_idx")
+			.on(table.sourceConnectionKey, table.createdAt)
+			.where(sql`${table.deadLetteredAt} IS NULL`),
+	],
+);
+
+export const sourceRecordIssue = pgTable(
+	"sourceRecordIssue",
+	{
+		sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 })
+			.notNull()
+			.references(() => sourceConnection.key, {
+				onDelete: "cascade",
+				onUpdate: "cascade",
+			}),
+		sourceRecordKey: varchar("sourceRecordKey", { length: 512 }).notNull(),
+		code: varchar("code", { length: 64 }).notNull(),
+		message: varchar("message", { length: 4096 }).notNull(),
+		remoteVersion: varchar("remoteVersion", { length: 255 }),
+		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
+		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
+	},
+	(table) => [
+		primaryKey({
+			columns: [table.sourceConnectionKey, table.sourceRecordKey],
+		}),
+		index("sourceRecordIssue_connection_updated_idx").on(
+			table.sourceConnectionKey,
+			table.updatedAt,
+		),
+	],
+);
+
 export const sourceSyncRun = pgTable(
 	"sourceSyncRun",
 	{

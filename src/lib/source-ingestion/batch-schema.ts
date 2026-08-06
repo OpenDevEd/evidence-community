@@ -26,12 +26,24 @@ export const jsonValueSchema: z.ZodType<JsonValue> = z.lazy(() =>
 export const jsonObjectSchema = z.record(z.string(), jsonValueSchema);
 export const MAX_SOURCE_RECORD_BYTES = 2 * 1024 * 1024;
 export const MAX_SOURCE_BATCH_BYTES = 64 * 1024 * 1024;
+export const MAX_SOURCE_RECORD_ISSUE_MESSAGE_LENGTH = 4096;
 const sourceRecordKeySchema = z.string().trim().min(1).max(512);
 const nullableRemoteVersionSchema = z
 	.string()
 	.max(255)
 	.nullable()
 	.default(null);
+
+const sourceRecordIssueSchema = z
+	.object({
+		code: z.string().trim().min(1).max(64),
+		message: z
+			.string()
+			.trim()
+			.min(1)
+			.max(MAX_SOURCE_RECORD_ISSUE_MESSAGE_LENGTH),
+	})
+	.strict();
 
 const sourceRecordAliasSchema = z
 	.object({
@@ -52,6 +64,17 @@ const collectionReferenceSchema = z
 	})
 	.strict();
 
+const managedFilePublicationSchema = z
+	.object({
+		objectPath: z.string().trim().min(1).max(1024),
+		coverObjectPath: z.string().trim().min(1).max(1024),
+		sizeBytes: z.number().int().positive(),
+		sha256: z.string().regex(/^[0-9a-f]{64}$/u),
+		pageCount: z.number().int().positive(),
+		staged: z.boolean(),
+	})
+	.strict();
+
 const attachmentFileSchema = z
 	.object({
 		url: z.string().url().max(2048).nullable().default(null),
@@ -65,20 +88,36 @@ const attachmentFileSchema = z
 		coverUrl: z.string().url().max(2048).nullable().default(null),
 		coverWidth: z.number().int().positive().nullable().default(null),
 		coverHeight: z.number().int().positive().nullable().default(null),
+		managedPublication: managedFilePublicationSchema
+			.nullable()
+			.default(null),
 	})
 	.strict()
 	.superRefine((file, context) => {
-		const coverValues = [
-			file.coverUrl,
-			file.coverWidth,
-			file.coverHeight,
-		];
+		const coverValues = [file.coverUrl, file.coverWidth, file.coverHeight];
 		const populated = coverValues.filter((value) => value !== null);
 		if (populated.length > 0 && populated.length !== coverValues.length) {
 			context.addIssue({
 				code: "custom",
 				message:
 					"coverUrl, coverWidth, and coverHeight must be provided together",
+			});
+		}
+		if (
+			file.managedPublication &&
+			(file.url === null ||
+				file.contentType !== "application/pdf" ||
+				file.filename === null ||
+				file.md5 === null ||
+				file.coverUrl === null ||
+				file.coverWidth === null ||
+				file.coverHeight === null ||
+				file.fullText === null)
+		) {
+			context.addIssue({
+				code: "custom",
+				message:
+					"managedPublication requires PDF metadata, public file, cover, dimensions, and extracted text",
 			});
 		}
 	});
@@ -98,12 +137,10 @@ const itemUpsertSchema = z
 		raw: jsonObjectSchema,
 		metadata: jsonObjectSchema,
 		parentSourceRecordKey: sourceRecordKeySchema.nullable().default(null),
-		collections: z
-			.array(collectionReferenceSchema)
-			.max(1_000)
-			.default([]),
+		collections: z.array(collectionReferenceSchema).max(1_000).default([]),
 		aliases: z.array(sourceRecordAliasSchema).max(1_000).default([]),
 		file: attachmentFileSchema.nullable().default(null),
+		processingIssue: sourceRecordIssueSchema.nullable().default(null),
 		sourceDates: sourceDatesSchema.nullable().default(null),
 	})
 	.strict();
@@ -152,17 +189,21 @@ export const sourceIngestionBatchSchema = z
 		mappingProfileVersion: z.string().trim().min(1).max(64),
 		fetchedAt: z.date(),
 		items: z
-			.array(z.discriminatedUnion("operation", [
-				itemUpsertSchema,
-				itemDeleteSchema,
-			]))
+			.array(
+				z.discriminatedUnion("operation", [
+					itemUpsertSchema,
+					itemDeleteSchema,
+				]),
+			)
 			.max(5_000)
 			.default([]),
 		collections: z
-			.array(z.discriminatedUnion("operation", [
-				collectionUpsertSchema,
-				collectionDeleteSchema,
-			]))
+			.array(
+				z.discriminatedUnion("operation", [
+					collectionUpsertSchema,
+					collectionDeleteSchema,
+				]),
+			)
 			.max(5_000)
 			.default([]),
 	})
@@ -204,8 +245,7 @@ export const sourceIngestionBatchSchema = z
 			const collectionReferences = new Set<string>();
 			record.collections.forEach((reference, referenceIndex) => {
 				const connectionKey =
-					reference.sourceConnectionKey ??
-					batch.sourceConnectionKey;
+					reference.sourceConnectionKey ?? batch.sourceConnectionKey;
 				const identity = `${connectionKey}\u0000${reference.sourceRecordKey}`;
 				if (collectionReferences.has(identity)) {
 					context.addIssue({
@@ -226,7 +266,13 @@ export const sourceIngestionBatchSchema = z
 					context.addIssue({
 						code: "custom",
 						message: "Duplicate item alias key",
-						path: ["items", itemIndex, "aliases", aliasIndex, "key"],
+						path: [
+							"items",
+							itemIndex,
+							"aliases",
+							aliasIndex,
+							"key",
+						],
 					});
 				}
 				aliases.add(alias.key);
@@ -241,9 +287,7 @@ export const sourceIngestionBatchSchema = z
 		}
 	});
 
-export type SourceIngestionBatch = z.infer<
-	typeof sourceIngestionBatchSchema
->;
+export type SourceIngestionBatch = z.infer<typeof sourceIngestionBatchSchema>;
 export type SourceItemUpsert = Extract<
 	SourceIngestionBatch["items"][number],
 	{ operation: "upsert" }

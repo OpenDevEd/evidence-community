@@ -8,6 +8,8 @@ import {
 	outbox,
 	searchIndexWorker,
 	sourceConnection,
+	sourceFileCleanup,
+	sourceRecordIssue,
 	sourceSyncRun,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
@@ -24,6 +26,8 @@ export {
 	outbox,
 	searchIndexWorker,
 	sourceConnection,
+	sourceFileCleanup,
+	sourceRecordIssue,
 	sourceSyncRun,
 	sourceSyncState,
 };
