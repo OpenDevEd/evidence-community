@@ -43,9 +43,18 @@ const connectionKeys = [
 	"zotero-unpublish-writer",
 	"zotero-staging-writer",
 	"zotero-native-link-writer",
+	"zotero-native-file-writer",
 ];
-const tagNames = ["attachment-tag", "parent-tag", "restored-tag"];
+const tagNames = [
+	"attachment-tag",
+	"parent-tag",
+	"writer-native-publish",
+	"writer-native-remote",
+	"restored-tag",
+];
 const nativeLinkItemKey = "NATV2345";
+const nativeFileParentKey = "NATP2345";
+const nativeFileItemKey = "NATA2345";
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
@@ -107,27 +116,203 @@ async function verify() {
 				scopeKind: "group",
 				externalScopeKey: "writer-zotero-native-link",
 			},
+			{
+				key: "zotero-native-file-writer",
+				provider: "zotero",
+				scopeKind: "group",
+				externalScopeKey: "writer-zotero-native-file",
+			},
 		]);
 
-		await db.insert(itemIdentity).values({
-			key: nativeLinkItemKey,
+		await db.insert(itemIdentity).values(
+			[nativeLinkItemKey, nativeFileParentKey, nativeFileItemKey].map(
+				(key) => ({
+					key,
+					sourceConnectionKey: "native",
+					sourceRecordKey: key,
+				}),
+			),
+		);
+		await db.insert(item).values([
+			{
+				key: nativeLinkItemKey,
+				itemType: "Report",
+				sourceConnectionKey: "native",
+				sourceRecordKey: nativeLinkItemKey,
+				title: "Local title",
+			},
+			{
+				key: nativeFileParentKey,
+				itemType: "Report",
+				sourceConnectionKey: "native",
+				sourceRecordKey: nativeFileParentKey,
+				title: "Native file parent",
+			},
+			{
+				PDFCoverPageHeight: 1600,
+				PDFCoverPageImage:
+					"https://storage.example.org/native/cover.png",
+				PDFCoverPageWidth: 1200,
+				charset: "utf-8",
+				contentType: "application/pdf",
+				filename: "native.pdf",
+				fullTextPDF: "Native extracted text",
+				itemType: "Attachment",
+				key: nativeFileItemKey,
+				linkMode: "imported_file",
+				md5: "native-md5",
+				mtime: "1786042000000",
+				parentItem: nativeFileParentKey,
+				revision: 4,
+				sourceConnectionKey: "native",
+				sourceRecordKey: nativeFileItemKey,
+				title: "Native attachment",
+				url: "https://storage.example.org/native/document.pdf",
+			},
+		]);
+		await db.insert(itemSourceLink).values([
+			{
+				dirtyFields: ["title"],
+				itemKey: nativeLinkItemKey,
+				sourceConnectionKey: "zotero-native-link-writer",
+				sourceRecordKey: "LINK2345",
+				writebackEnabled: true,
+			},
+			{
+				itemKey: nativeFileParentKey,
+				sourceConnectionKey: "zotero-native-file-writer",
+				sourceRecordKey: "FILEP001",
+				writebackEnabled: true,
+			},
+			{
+				itemKey: nativeFileItemKey,
+				sourceConnectionKey: "zotero-native-file-writer",
+				sourceRecordKey: "FILEA001",
+				writebackEnabled: true,
+			},
+		]);
+		await db
+			.insert(tag)
+			.values([
+				{ name: "writer-native-publish" },
+				{ name: "writer-native-remote" },
+			])
+			.onConflictDoNothing();
+		await db.insert(itemToTag).values({
+			itemKey: nativeFileItemKey,
+			tagName: "writer-native-publish",
+		});
+		await db.insert(itemFilePublication).values({
+			contentType: "application/pdf",
+			coverHeight: 1600,
+			coverObjectPath: "native/public/cover.png",
+			coverPublicUrl: "https://storage.example.org/native/cover.png",
+			coverWidth: 1200,
+			filename: "native.pdf",
+			itemKey: nativeFileItemKey,
+			objectPath: "native/public/document.pdf",
+			pageCount: 3,
+			parentItemKey: nativeFileParentKey,
+			publicationTags: ["writer-native-publish"],
+			publicUrl: "https://storage.example.org/native/document.pdf",
+			publishedAt: new Date("2026-08-06T12:00:00.000Z"),
+			revision: 4,
+			sha256: "d".repeat(64),
+			sizeBytes: 200,
 			sourceConnectionKey: "native",
-			sourceRecordKey: nativeLinkItemKey,
+			sourceCoverObjectPath: "native/private/cover.png",
+			sourceObjectPath: "native/private/document.pdf",
+			uploadRevision: 1,
 		});
-		await db.insert(item).values({
-			key: nativeLinkItemKey,
-			itemType: "Report",
-			sourceConnectionKey: "native",
-			sourceRecordKey: nativeLinkItemKey,
-			title: "Local title",
+
+		const foreignFileUpdate = await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-native-file-writer",
+				expectedCursor: {},
+				nextCursor: { version: 1 },
+			}),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "FILEA001",
+					remoteVersion: "2",
+					raw: { key: "FILEA001", version: 2 },
+					metadata: {
+						itemType: "Attachment",
+						tags: ["writer-native-remote"],
+						title: "Remote attachment title",
+					},
+					file: {
+						charset: null,
+						contentType: "application/pdf",
+						coverHeight: null,
+						coverUrl: null,
+						coverWidth: null,
+						filename: "remote.pdf",
+						fullText: null,
+						linkMode: "linked_url",
+						managedPublication: null,
+						md5: null,
+						mtime: null,
+						url: "https://remote.example.org/document.pdf",
+					},
+				},
+			],
 		});
-		await db.insert(itemSourceLink).values({
-			dirtyFields: ["title"],
-			itemKey: nativeLinkItemKey,
-			sourceConnectionKey: "zotero-native-link-writer",
-			sourceRecordKey: "LINK2345",
-			writebackEnabled: true,
-		});
+		const [
+			[nativeFileAfterSync],
+			[nativePublicationAfterSync],
+			nativeFileTagsAfterSync,
+			foreignFileCleanup,
+		] = await Promise.all([
+			db.select().from(item).where(eq(item.key, nativeFileItemKey)),
+			db
+				.select()
+				.from(itemFilePublication)
+				.where(eq(itemFilePublication.itemKey, nativeFileItemKey)),
+			db
+				.select({ name: itemToTag.tagName })
+				.from(itemToTag)
+				.where(eq(itemToTag.itemKey, nativeFileItemKey)),
+			db
+				.select()
+				.from(sourceFileCleanup)
+				.where(
+					eq(
+						sourceFileCleanup.sourceConnectionKey,
+						"zotero-native-file-writer",
+					),
+				),
+		]);
+		assert(
+			foreignFileUpdate.itemKeys.FILEA001 === nativeFileItemKey &&
+				nativeFileAfterSync?.sourceConnectionKey === "native" &&
+				nativeFileAfterSync.revision === 5 &&
+				nativeFileAfterSync.title === "Remote attachment title" &&
+				nativeFileAfterSync.parentItem === nativeFileParentKey &&
+				nativeFileAfterSync.url ===
+					"https://storage.example.org/native/document.pdf" &&
+				nativeFileAfterSync.filename === "native.pdf" &&
+				nativeFileAfterSync.linkMode === "imported_file" &&
+				nativeFileAfterSync.md5 === "native-md5" &&
+				nativeFileAfterSync.fullTextPDF === "Native extracted text" &&
+				nativeFileAfterSync.PDFCoverPageImage ===
+					"https://storage.example.org/native/cover.png" &&
+				nativePublicationAfterSync?.sourceConnectionKey === "native" &&
+				nativePublicationAfterSync.parentItemKey ===
+					nativeFileParentKey &&
+				nativePublicationAfterSync.revision === 4 &&
+				nativePublicationAfterSync.objectPath ===
+					"native/public/document.pdf" &&
+				nativeFileTagsAfterSync.some(
+					({ name }) => name === "writer-native-publish",
+				) &&
+				nativeFileTagsAfterSync.some(
+					({ name }) => name === "writer-native-remote",
+				) &&
+				foreignFileCleanup.length === 0,
+			"Inbound source sync overwrote or deleted foreign-owned PDF state",
+		);
 
 		const linkedRecord = {
 			operation: "upsert" as const,
@@ -1445,6 +1630,8 @@ async function verify() {
 		const itemKeys = [
 			...identities.map(({ key }) => key),
 			nativeLinkItemKey,
+			nativeFileParentKey,
+			nativeFileItemKey,
 		];
 		if (itemKeys.length > 0) {
 			await db.delete(outbox).where(inArray(outbox.entityKey, itemKeys));
@@ -1474,9 +1661,13 @@ async function verify() {
 		await db
 			.delete(itemIdentity)
 			.where(inArray(itemIdentity.sourceConnectionKey, connectionKeys));
-		await db
-			.delete(itemIdentity)
-			.where(eq(itemIdentity.key, nativeLinkItemKey));
+		await db.delete(itemIdentity).where(
+			inArray(itemIdentity.key, [
+				nativeLinkItemKey,
+				nativeFileParentKey,
+				nativeFileItemKey,
+			]),
+		);
 		await db
 			.delete(collectionIdentity)
 			.where(

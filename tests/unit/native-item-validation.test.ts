@@ -4,13 +4,23 @@ import { describe, expect, it } from "vitest";
 import { validateNativeItemDraft } from "@/lib/admin/native-item-validation";
 
 describe("native item draft validation", () => {
-	it("can validate source attachment metadata before its parent reference is resolved", () => {
+	it("can validate source child metadata before parent references are resolved", () => {
 		expect(
 			validateNativeItemDraft(
 				{ itemType: "Attachment", title: "Imported PDF" },
-				{ requireAttachmentParent: false },
+				{ requireChildParent: false },
 			).item,
 		).toMatchObject({ itemType: "Attachment" });
+		expect(
+			validateNativeItemDraft(
+				{
+					annotationPosition: '{"pageIndex":0,"rects":[]}',
+					annotationType: "highlight",
+					itemType: "Annotation",
+				},
+				{ requireChildParent: false },
+			).item,
+		).toMatchObject({ itemType: "Annotation" });
 	});
 
 	it("accepts every field for every vendored Zotero item type", () => {

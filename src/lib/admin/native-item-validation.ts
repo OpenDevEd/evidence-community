@@ -165,7 +165,7 @@ export function validateNativeItemDraft(
 	input: unknown,
 	options: {
 		allowIncompleteCreators?: boolean;
-		requireAttachmentParent?: boolean;
+		requireChildParent?: boolean;
 	} = {},
 ): ValidatedNativeItemDraft {
 	const payloadResult = payloadObjectSchema.safeParse(input);
@@ -293,7 +293,7 @@ export function validateNativeItemDraft(
 		normalizedPayload,
 		definition.itemType,
 		{
-			requireAttachmentParent: options.requireAttachmentParent,
+			requireChildParent: options.requireChildParent,
 		},
 	);
 	if (structuralErrors.length > 0) {

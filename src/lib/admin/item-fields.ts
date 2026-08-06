@@ -10,6 +10,7 @@ export const ADMIN_SHARED_PAYLOAD_FIELDS = new Set([
 ]);
 
 const CHILD_ONLY_ITEM_TYPES = new Set(["annotation", "attachment", "note"]);
+const PARENT_REQUIRED_ITEM_TYPES = new Set(["annotation", "attachment"]);
 
 export function adminSharedPayloadFieldsForZoteroItemType(definition: {
 	creatorTypes: readonly unknown[];
@@ -33,14 +34,13 @@ export type ZoteroStructuralFieldError = {
 export function zoteroStructuralFieldErrors(
 	payload: Readonly<Record<string, unknown>>,
 	itemType: string,
-	options: { requireAttachmentParent?: boolean } = {},
+	options: { requireChildParent?: boolean } = {},
 ): ZoteroStructuralFieldError[] {
 	const normalizedItemType = itemType.toLowerCase();
 	const errors: ZoteroStructuralFieldError[] = [];
 	if (
-		(normalizedItemType === "annotation" ||
-			(normalizedItemType === "attachment" &&
-				(options.requireAttachmentParent ?? true))) &&
+		(PARENT_REQUIRED_ITEM_TYPES.has(normalizedItemType) &&
+			(options.requireChildParent ?? true)) &&
 		(typeof payload.parentItem !== "string" ||
 			!isCanonicalRecordKey(payload.parentItem))
 	) {

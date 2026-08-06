@@ -258,7 +258,7 @@ describe("Zotero attachment publication", () => {
 		});
 	});
 
-	it("contains permanent attachment failures as durable record issues", async () => {
+	it("accepts a published linked URL without downloading or managing it", async () => {
 		const downloadAttachment = vi.fn();
 		const processor = createZoteroAttachmentProcessor({
 			database: publicationDatabase(),
@@ -271,6 +271,7 @@ describe("Zotero attachment publication", () => {
 				filename: "linked.pdf",
 				linkMode: "linked_url",
 				md5: null,
+				url: "https://library.example.org/evidence.pdf",
 			}),
 			processor,
 			new Set(),
@@ -286,13 +287,38 @@ describe("Zotero attachment publication", () => {
 				filename: "linked.pdf",
 				linkMode: "linked_url",
 				managedPublication: null,
+				url: "https://library.example.org/evidence.pdf",
+			},
+			processingIssue: null,
+		});
+		expect(downloadAttachment).not.toHaveBeenCalled();
+	});
+
+	it("contains a published linked URL without a URL as a record issue", async () => {
+		const downloadAttachment = vi.fn();
+		const processor = createZoteroAttachmentProcessor({
+			database: publicationDatabase(),
+			maxPdfBytes: 10_000_000,
+			publishTags: ["purple-publish"],
+			storage: new MemoryStorage(),
+		});
+		const mapped = await mapZoteroItem(
+			attachment({ linkMode: "linked_url", md5: null, url: "" }),
+			processor,
+			new Set(),
+			{
+				client: { downloadAttachment } as unknown as ZoteroApiClient,
+				prefix: "groups/6632364",
+				sourceConnectionKey: "zotero-openscholar-test",
+			},
+		);
+		expect(mapped).toMatchObject({
+			file: {
+				linkMode: "linked_url",
+				managedPublication: null,
 				url: null,
 			},
-			processingIssue: {
-				code: "zotero_file_unavailable",
-				message:
-					"Zotero attachment ATTACH01: published PDFs must use imported_file or imported_url storage",
-			},
+			processingIssue: { code: "zotero_file_metadata_invalid" },
 		});
 		expect(downloadAttachment).not.toHaveBeenCalled();
 	});

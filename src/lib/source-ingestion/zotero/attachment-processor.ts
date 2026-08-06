@@ -261,17 +261,28 @@ export function createZoteroAttachmentProcessor(
 			);
 		}
 		const linkMode = optionalString(item.data.linkMode, 128);
-		if (linkMode !== "imported_file" && linkMode !== "imported_url") {
-			throw new ZoteroAttachmentPermanentError(
-				"zotero_file_unavailable",
-				`Zotero attachment ${item.key}: published PDFs must use imported_file or imported_url storage`,
-				base,
-			);
-		}
 		if (!item.data.parentItem) {
 			throw new ZoteroAttachmentPermanentError(
 				"zotero_parent_required",
 				`Zotero attachment ${item.key}: a published PDF must have a parent item`,
+				base,
+			);
+		}
+		if (linkMode === "linked_url") {
+			const url = optionalString(item.data.url, 2048);
+			if (!url) {
+				throw new ZoteroAttachmentPermanentError(
+					"zotero_file_metadata_invalid",
+					`Zotero attachment ${item.key}: a published linked URL must have a valid URL`,
+					base,
+				);
+			}
+			return { ...base, url };
+		}
+		if (linkMode !== "imported_file" && linkMode !== "imported_url") {
+			throw new ZoteroAttachmentPermanentError(
+				"zotero_file_unavailable",
+				`Zotero attachment ${item.key}: published PDFs must use linked_url, imported_file, or imported_url storage`,
 				base,
 			);
 		}

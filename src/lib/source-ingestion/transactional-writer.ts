@@ -72,6 +72,19 @@ const sourceWritableItemFields = Object.keys(itemColumns).filter(
 			"updatedAt",
 		]).has(field),
 );
+const fileManagedItemFields = [
+	"url",
+	"contentType",
+	"filename",
+	"linkMode",
+	"md5",
+	"mtime",
+	"charset",
+	"fullTextPDF",
+	"PDFCoverPageImage",
+	"PDFCoverPageWidth",
+	"PDFCoverPageHeight",
+] as const satisfies readonly (keyof ItemInsert)[];
 
 export class SourceIngestionValidationError extends Error {
 	constructor(message: string) {
@@ -154,11 +167,13 @@ function sourceItemValues(
 	let validated;
 	try {
 		validated = validateNativeItemDraft(record.metadata, {
-			requireAttachmentParent: false,
+			requireChildParent: false,
 		});
 	} catch (error) {
 		if (error instanceof NativeItemValidationError) {
-			throw new SourceIngestionValidationError(error.message);
+			throw new SourceIngestionValidationError(
+				`Source record ${record.sourceRecordKey}: ${error.message}`,
+			);
 		}
 		throw error;
 	}
@@ -239,6 +254,31 @@ function maskDirtyItemFields(
 		}
 	}
 	return masked as Partial<ItemInsert>;
+}
+
+function sourceOwnsCanonicalItem(
+	existing: typeof item.$inferSelect | undefined,
+	sourceConnectionKey: string,
+) {
+	return !existing || existing.sourceConnectionKey === sourceConnectionKey;
+}
+
+function preserveForeignOwnedFileFields(
+	incoming: Partial<ItemInsert>,
+	existing: typeof item.$inferSelect | undefined,
+	sourceConnectionKey: string,
+	hasManagedPublication: boolean,
+) {
+	if (!existing || existing.sourceConnectionKey === sourceConnectionKey) {
+		return incoming;
+	}
+	const preserved = { ...incoming } as Record<string, unknown>;
+	const existingValues = existing as unknown as Record<string, unknown>;
+	for (const field of fileManagedItemFields) {
+		preserved[field] = existingValues[field];
+	}
+	if (hasManagedPublication) preserved.itemType = existing.itemType;
+	return preserved as Partial<ItemInsert>;
 }
 
 function itemValuesDiffer(
@@ -1042,6 +1082,13 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 					sourceLinkByItemKey.get(key)?.dirtyFields ?? [],
 				);
 				const normalized = normalizedItems.get(record.sourceRecordKey)!;
+				const existingPublication =
+					existingPublicationByItemKey.get(key);
+				const protectsManagedPublication =
+					!sourceOwnsCanonicalItem(
+						existing,
+						batch.sourceConnectionKey,
+					) && Boolean(existingPublication);
 				const incomingCollections = normalized.collectionReferences.map(
 					(reference) => {
 						const connectionKey =
@@ -1066,18 +1113,35 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 									]),
 								].sort(),
 						dirtyFields,
-						item: maskDirtyItemFields(
-							normalized.item,
+						item: preserveForeignOwnedFileFields(
+							maskDirtyItemFields(
+								normalized.item,
+								existing,
+								dirtyFields,
+							),
 							existing,
-							dirtyFields,
+							batch.sourceConnectionKey,
+							protectsManagedPublication,
 						),
-						parentItem: dirtyFields.has("parentItem")
+						parentItem: protectsManagedPublication
 							? (existing?.parentItem ?? null)
-							: (parentItemKeys.get(record.sourceRecordKey) ??
-								null),
-						tags: dirtyFields.has("tags")
-							? (existingTagsByItemKey.get(key) ?? [])
-							: normalized.tags,
+							: dirtyFields.has("parentItem")
+								? (existing?.parentItem ?? null)
+								: (parentItemKeys.get(record.sourceRecordKey) ??
+									null),
+						tags: [
+							...new Set([
+								...(dirtyFields.has("tags")
+									? (existingTagsByItemKey.get(key) ?? [])
+									: normalized.tags),
+								...(sourceOwnsCanonicalItem(
+									existing,
+									batch.sourceConnectionKey,
+								)
+									? []
+									: (existingPublication?.publicationTags ?? [])),
+							]),
+						].sort(),
 					},
 				] as const;
 			}),
@@ -1103,15 +1167,21 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			)!;
 			const publication = record.file?.managedPublication;
 			const existingPublication = existingPublicationByItemKey.get(key);
-			const publicationChanged = publication
-				? !existingPublication ||
-					existingPublication.objectPath !== publication.objectPath ||
-					existingPublication.coverObjectPath !==
-						publication.coverObjectPath ||
-					existingPublication.sizeBytes !== publication.sizeBytes ||
-					existingPublication.sha256 !== publication.sha256 ||
-					existingPublication.pageCount !== publication.pageCount
-				: Boolean(existingPublication);
+			const publicationChanged = sourceOwnsCanonicalItem(
+				existing,
+				batch.sourceConnectionKey,
+			)
+				? publication
+					? !existingPublication ||
+						existingPublication.objectPath !==
+							publication.objectPath ||
+						existingPublication.coverObjectPath !==
+							publication.coverObjectPath ||
+						existingPublication.sizeBytes !== publication.sizeBytes ||
+						existingPublication.sha256 !== publication.sha256 ||
+						existingPublication.pageCount !== publication.pageCount
+					: Boolean(existingPublication)
+				: false;
 			return (
 				itemValuesDiffer(existing, state.item) ||
 				existing.parentItem !== state.parentItem ||
@@ -1245,6 +1315,14 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			const publication = record.file?.managedPublication;
 			if (!publication || !record.file) return [];
 			const itemKey = itemKeys.get(record.sourceRecordKey)!;
+			if (
+				!sourceOwnsCanonicalItem(
+					existingItemByKey.get(itemKey),
+					batch.sourceConnectionKey,
+				)
+			) {
+				return [];
+			}
 			const parentItemKey = effectiveItemStateByRecordKey.get(
 				record.sourceRecordKey,
 			)!.parentItem;
@@ -1294,7 +1372,12 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				...itemDeleteKeys,
 				...changedItemUpserts.flatMap((record) => {
 					const itemKey = itemKeys.get(record.sourceRecordKey)!;
-					return !record.file?.managedPublication ? [itemKey] : [];
+					return sourceOwnsCanonicalItem(
+						existingItemByKey.get(itemKey),
+						batch.sourceConnectionKey,
+					) && !record.file?.managedPublication
+						? [itemKey]
+						: [];
 				}),
 			]),
 		].filter(
