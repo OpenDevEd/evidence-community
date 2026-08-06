@@ -100,9 +100,11 @@ reintroduce memberships into an already-trashed collection subtree.
   observed in trash and therefore never previously assigned a canonical row.
 - The full Zotero response is retained as the raw source snapshot.
 - Zotero object URLs become immutable source aliases.
-- Zotero item versions become `sourceSnapshot.remoteVersion`.
-
-The adapter has no Zotero writeback in v1.
+- Zotero item versions are stored on both `itemSourceLink.remoteVersion` and
+  the corresponding link-scoped `sourceSnapshot.remoteVersion`.
+- Inbound identity resolution uses `itemSourceLink`, allowing a native item to
+  link to Zotero without changing ownership or creating a second canonical
+  record. Locally dirty fields are masked during inbound updates.
 
 ## Attachments
 

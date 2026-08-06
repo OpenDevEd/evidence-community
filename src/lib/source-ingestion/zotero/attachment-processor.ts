@@ -7,7 +7,7 @@ import { isSourceConnectionKey } from "@opendeved/evidence-library-core";
 import type { Database } from "@/db/database-schema";
 import {
 	itemFilePublication,
-	itemIdentity,
+	itemSourceLink,
 	sourceConnection,
 	sourceFileCleanup,
 } from "@/db/schema/source";
@@ -130,16 +130,16 @@ async function currentPublication(
 			sizeBytes: itemFilePublication.sizeBytes,
 			url: item.url,
 		})
-		.from(itemIdentity)
-		.innerJoin(item, eq(item.key, itemIdentity.key))
+		.from(itemSourceLink)
+		.innerJoin(item, eq(item.key, itemSourceLink.itemKey))
 		.leftJoin(
 			itemFilePublication,
 			eq(itemFilePublication.itemKey, item.key),
 		)
 		.where(
 			and(
-				eq(itemIdentity.sourceConnectionKey, sourceConnectionKey),
-				eq(itemIdentity.sourceRecordKey, sourceRecordKey),
+				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
+				eq(itemSourceLink.sourceRecordKey, sourceRecordKey),
 			),
 		)
 		.limit(1);

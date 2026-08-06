@@ -1,6 +1,6 @@
 import {
 	collectionIdentity,
-	itemIdentity,
+	itemSourceLink,
 	outbox,
 	sourceConnection,
 	sourceFileCleanup,
@@ -16,9 +16,10 @@ import {
 } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { lockItemMutations } from "@/db/item-mutation-lock";
 import {
 	reserveCollectionIdentities,
-	reserveItemIdentities,
+	reserveItemSourceLinks,
 } from "@/db/record-identity";
 import {
 	itemFilePublication,
@@ -139,7 +140,6 @@ function sourceItemValues(
 		SourceIngestionBatch["items"][number],
 		{ operation: "upsert" }
 	>,
-	fetchedAt: Date,
 ) {
 	if (
 		Object.hasOwn(record.metadata, "parentItem") ||
@@ -173,7 +173,7 @@ function sourceItemValues(
 	) as Partial<ItemInsert>;
 	Object.assign(values, validated.item);
 	values.dateAdded = record.sourceDates?.addedAt ?? null;
-	values.dateModified = record.sourceDates?.modifiedAt ?? fetchedAt;
+	values.dateModified = record.sourceDates?.modifiedAt ?? null;
 
 	if (record.file) {
 		values.url = record.file.url;
@@ -196,6 +196,61 @@ function sourceItemValues(
 	};
 }
 
+function databaseValueEqual(left: unknown, right: unknown) {
+	if (left instanceof Date || right instanceof Date) {
+		return (
+			left instanceof Date &&
+			right instanceof Date &&
+			left.getTime() === right.getTime()
+		);
+	}
+	if (
+		left !== null &&
+		right !== null &&
+		typeof left === "object" &&
+		typeof right === "object"
+	) {
+		return (
+			canonicalSourceJson(left as JsonValue) ===
+			canonicalSourceJson(right as JsonValue)
+		);
+	}
+	return left === right;
+}
+
+function stringSetEqual(left: readonly string[], right: readonly string[]) {
+	if (left.length !== right.length) return false;
+	const rightSet = new Set(right);
+	return left.every((value) => rightSet.has(value));
+}
+
+function maskDirtyItemFields(
+	incoming: Partial<ItemInsert>,
+	existing: typeof item.$inferSelect | undefined,
+	dirtyFields: ReadonlySet<string>,
+) {
+	if (!existing || dirtyFields.size === 0) return incoming;
+	const masked = { ...incoming } as Record<string, unknown>;
+	const existingValues = existing as unknown as Record<string, unknown>;
+	for (const field of sourceWritableItemFields) {
+		if (dirtyFields.has(field)) masked[field] = existingValues[field];
+	}
+	return masked as Partial<ItemInsert>;
+}
+
+function itemValuesDiffer(
+	existing: typeof item.$inferSelect | undefined,
+	next: Partial<ItemInsert>,
+) {
+	if (!existing) return true;
+	const existingValues = existing as unknown as Record<string, unknown>;
+	const nextValues = next as Record<string, unknown>;
+	return sourceWritableItemFields.some(
+		(field) =>
+			!databaseValueEqual(existingValues[field], nextValues[field]),
+	);
+}
+
 async function loadIdentityMap(
 	transaction: Transaction,
 	entity: "collection" | "item",
@@ -203,19 +258,44 @@ async function loadIdentityMap(
 	sourceRecordKeys: string[],
 ) {
 	if (sourceRecordKeys.length === 0) return new Map<string, string>();
-	const table = entity === "item" ? itemIdentity : collectionIdentity;
-	const rows = await transaction
-		.select({
-			key: table.key,
-			sourceRecordKey: table.sourceRecordKey,
-		})
-		.from(table)
-		.where(
-			and(
-				eq(table.sourceConnectionKey, sourceConnectionKey),
-				inArray(table.sourceRecordKey, sourceRecordKeys),
-			),
-		);
+	const rows =
+		entity === "item"
+			? await transaction
+					.select({
+						key: itemSourceLink.itemKey,
+						sourceRecordKey: itemSourceLink.sourceRecordKey,
+					})
+					.from(itemSourceLink)
+					.where(
+						and(
+							eq(
+								itemSourceLink.sourceConnectionKey,
+								sourceConnectionKey,
+							),
+							inArray(
+								itemSourceLink.sourceRecordKey,
+								sourceRecordKeys,
+							),
+						),
+					)
+			: await transaction
+					.select({
+						key: collectionIdentity.key,
+						sourceRecordKey: collectionIdentity.sourceRecordKey,
+					})
+					.from(collectionIdentity)
+					.where(
+						and(
+							eq(
+								collectionIdentity.sourceConnectionKey,
+								sourceConnectionKey,
+							),
+							inArray(
+								collectionIdentity.sourceRecordKey,
+								sourceRecordKeys,
+							),
+						),
+					);
 	return new Map(
 		rows.map(({ key, sourceRecordKey }) => [sourceRecordKey, key]),
 	);
@@ -410,6 +490,32 @@ async function updateCollectionParents(
 	}
 }
 
+async function updateItemSourceLinkVersions(
+	transaction: Transaction,
+	sourceConnectionKey: string,
+	rows: Array<{ itemKey: string; remoteVersion: string | null }>,
+	updatedAt: Date,
+) {
+	for (const rowChunk of chunkValues(rows, RELATION_CHUNK_SIZE)) {
+		const values = sql.join(
+			rowChunk.map(
+				(row) => sql`(${row.itemKey}, ${row.remoteVersion}::varchar)`,
+			),
+			sql`, `,
+		);
+		await transaction.execute(sql`
+			UPDATE "itemSourceLink" AS link
+			SET
+				"remoteVersion" = incoming."remoteVersion",
+				"lastAcknowledgedRemoteVersion" = incoming."remoteVersion",
+				"updatedAt" = ${updatedAt}
+			FROM (VALUES ${values}) AS incoming("itemKey", "remoteVersion")
+			WHERE link."sourceConnectionKey" = ${sourceConnectionKey}
+				AND link."itemKey" = incoming."itemKey"
+		`);
+	}
+}
+
 async function assertAcyclicItemParents(
 	transaction: Transaction,
 	itemKeys: string[],
@@ -513,7 +619,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 	const normalizedItems = new Map(
 		itemUpserts.map((record) => [
 			record.sourceRecordKey,
-			sourceItemValues(record, batch.fetchedAt),
+			sourceItemValues(record),
 		]),
 	);
 
@@ -569,7 +675,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				(record) => record.sourceRecordKey,
 			),
 		});
-		const itemKeys = await reserveItemIdentities(transaction, {
+		const itemKeys = await reserveItemSourceLinks(transaction, {
 			sourceConnectionKey: batch.sourceConnectionKey,
 			sourceRecordKeys: itemUpserts.map(
 				(record) => record.sourceRecordKey,
@@ -609,15 +715,12 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 
 		const allItemKeys = [...new Set(itemKeys.values())];
 		const allCollectionKeys = [...new Set(collectionKeys.values())];
+		await lockItemMutations(transaction, allItemKeys);
 		const existingItems =
 			allItemKeys.length === 0
 				? []
 				: await transaction
-						.select({
-							deleted: item.deleted,
-							key: item.key,
-							parentItem: item.parentItem,
-						})
+						.select()
 						.from(item)
 						.where(inArray(item.key, allItemKeys))
 						.orderBy(item.key)
@@ -642,6 +745,26 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const existingItemByKey = new Map(
 			existingItems.map((row) => [row.key, row]),
 		);
+		const sourceLinks =
+			allItemKeys.length === 0
+				? []
+				: await transaction
+						.select()
+						.from(itemSourceLink)
+						.where(
+							and(
+								eq(
+									itemSourceLink.sourceConnectionKey,
+									batch.sourceConnectionKey,
+								),
+								inArray(itemSourceLink.itemKey, allItemKeys),
+							),
+						)
+						.orderBy(itemSourceLink.itemKey)
+						.for("update");
+		const sourceLinkByItemKey = new Map(
+			sourceLinks.map((row) => [row.itemKey, row]),
+		);
 		const existingCollectionByKey = new Map(
 			existingCollections.map((row) => [row.key, row]),
 		);
@@ -651,7 +774,15 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				: await transaction
 						.select()
 						.from(sourceSnapshot)
-						.where(inArray(sourceSnapshot.itemKey, allItemKeys));
+						.where(
+							and(
+								eq(
+									sourceSnapshot.sourceConnectionKey,
+									batch.sourceConnectionKey,
+								),
+								inArray(sourceSnapshot.itemKey, allItemKeys),
+							),
+						);
 		const snapshotByItemKey = new Map(
 			snapshots.map((row) => [row.itemKey, row]),
 		);
@@ -669,6 +800,38 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const existingPublicationByItemKey = new Map(
 			existingPublications.map((row) => [row.itemKey, row]),
 		);
+		const existingTagRows =
+			allItemKeys.length === 0
+				? []
+				: await transaction
+						.select({
+							itemKey: itemToTag.itemKey,
+							tagName: itemToTag.tagName,
+						})
+						.from(itemToTag)
+						.where(inArray(itemToTag.itemKey, allItemKeys));
+		const existingCollectionRows =
+			allItemKeys.length === 0
+				? []
+				: await transaction
+						.select({
+							collectionKey: itemToCollection.collectionKey,
+							itemKey: itemToCollection.itemKey,
+						})
+						.from(itemToCollection)
+						.where(inArray(itemToCollection.itemKey, allItemKeys));
+		const existingTagsByItemKey = new Map<string, string[]>();
+		for (const row of existingTagRows) {
+			const values = existingTagsByItemKey.get(row.itemKey) ?? [];
+			values.push(row.tagName);
+			existingTagsByItemKey.set(row.itemKey, values);
+		}
+		const existingCollectionsByItemKey = new Map<string, string[]>();
+		for (const row of existingCollectionRows) {
+			const values = existingCollectionsByItemKey.get(row.itemKey) ?? [];
+			values.push(row.collectionKey);
+			existingCollectionsByItemKey.set(row.itemKey, values);
+		}
 
 		const parentItemKeys = new Map<string, string | null>();
 		for (const record of itemUpserts) {
@@ -838,17 +1001,84 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			),
 		);
 
+		const effectiveItemStateByRecordKey = new Map(
+			itemUpserts.map((record) => {
+				const key = itemKeys.get(record.sourceRecordKey)!;
+				const existing = existingItemByKey.get(key);
+				const dirtyFields = new Set(
+					sourceLinkByItemKey.get(key)?.dirtyFields ?? [],
+				);
+				const normalized = normalizedItems.get(record.sourceRecordKey)!;
+				const incomingCollections = normalized.collectionReferences.map(
+					(reference) => {
+						const connectionKey =
+							reference.sourceConnectionKey ??
+							batch.sourceConnectionKey;
+						return resolvedCollectionReferences.get(
+							`${connectionKey}\u0000${reference.sourceRecordKey}`,
+						)!;
+					},
+				);
+				return [
+					record.sourceRecordKey,
+					{
+						collections: dirtyFields.has("collections")
+							? (existingCollectionsByItemKey.get(key) ?? [])
+							: incomingCollections,
+						dirtyFields,
+						item: maskDirtyItemFields(
+							normalized.item,
+							existing,
+							dirtyFields,
+						),
+						parentItem: dirtyFields.has("parentItem")
+							? (existing?.parentItem ?? null)
+							: (parentItemKeys.get(record.sourceRecordKey) ??
+								null),
+						tags: dirtyFields.has("tags")
+							? (existingTagsByItemKey.get(key) ?? [])
+							: normalized.tags,
+					},
+				] as const;
+			}),
+		);
 		const changedItemUpserts = itemUpserts.filter((record) => {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const existing = existingItemByKey.get(key);
+			if (!existing || existing.deleted === 1) return true;
 			const snapshot = snapshotByItemKey.get(key);
-			return (
-				!existing ||
-				existing.deleted === 1 ||
+			const sourceChanged =
 				!snapshot ||
 				snapshot.payloadHash !== sourceItemFingerprint(record) ||
-				snapshot.remoteVersion !== record.remoteVersion ||
-				snapshot.mappingProfileVersion !== batch.mappingProfileVersion
+				snapshot.mappingProfileVersion !== batch.mappingProfileVersion;
+			if (!sourceChanged) return false;
+
+			const state = effectiveItemStateByRecordKey.get(
+				record.sourceRecordKey,
+			)!;
+			const publication = record.file?.managedPublication;
+			const existingPublication = existingPublicationByItemKey.get(key);
+			const publicationChanged = publication
+				? !existingPublication ||
+					existingPublication.objectPath !== publication.objectPath ||
+					existingPublication.coverObjectPath !==
+						publication.coverObjectPath ||
+					existingPublication.sizeBytes !== publication.sizeBytes ||
+					existingPublication.sha256 !== publication.sha256 ||
+					existingPublication.pageCount !== publication.pageCount
+				: Boolean(existingPublication);
+			return (
+				itemValuesDiffer(existing, state.item) ||
+				existing.parentItem !== state.parentItem ||
+				!stringSetEqual(
+					existingTagsByItemKey.get(key) ?? [],
+					state.tags,
+				) ||
+				!stringSetEqual(
+					existingCollectionsByItemKey.get(key) ?? [],
+					state.collections,
+				) ||
+				publicationChanged
 			);
 		});
 		const itemEvents = new Map<
@@ -857,17 +1087,26 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		>();
 		const writtenItems = await writeItemRows(
 			transaction,
-			changedItemUpserts.map((record) => ({
-				...normalizedItems.get(record.sourceRecordKey)!.item,
-				key: itemKeys.get(record.sourceRecordKey)!,
-				sourceConnectionKey: batch.sourceConnectionKey,
-				sourceRecordKey: record.sourceRecordKey,
-				parentItem: null,
-				revision: 1,
-				deleted: 0,
-				deletedAt: null,
-				updatedAt: now,
-			})),
+			changedItemUpserts.map((record) => {
+				const key = itemKeys.get(record.sourceRecordKey)!;
+				const existing = existingItemByKey.get(key);
+				return {
+					...effectiveItemStateByRecordKey.get(
+						record.sourceRecordKey,
+					)!.item,
+					key,
+					sourceConnectionKey:
+						existing?.sourceConnectionKey ??
+						batch.sourceConnectionKey,
+					sourceRecordKey:
+						existing?.sourceRecordKey ?? record.sourceRecordKey,
+					parentItem: null,
+					revision: 1,
+					deleted: 0,
+					deletedAt: null,
+					updatedAt: now,
+				};
+			}),
 		);
 		for (const row of writtenItems) {
 			itemEvents.set(row.key, {
@@ -884,8 +1123,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const activeParentItemKeys = [
 			...new Set(
 				changedItemUpserts.flatMap((record) => {
-					const parentKey =
-						parentItemKeys.get(record.sourceRecordKey) ?? null;
+					const parentKey = effectiveItemStateByRecordKey.get(
+						record.sourceRecordKey,
+					)!.parentItem;
 					return parentKey ? [parentKey] : [];
 				}),
 			),
@@ -914,7 +1154,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			transaction,
 			changedItemUpserts.map((record) => ({
 				key: itemKeys.get(record.sourceRecordKey)!,
-				parentKey: parentItemKeys.get(record.sourceRecordKey) ?? null,
+				parentKey: effectiveItemStateByRecordKey.get(
+					record.sourceRecordKey,
+				)!.parentItem,
 			})),
 		);
 
@@ -953,8 +1195,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			const publication = record.file?.managedPublication;
 			if (!publication || !record.file) return [];
 			const itemKey = itemKeys.get(record.sourceRecordKey)!;
-			const parentItemKey =
-				parentItemKeys.get(record.sourceRecordKey) ?? null;
+			const parentItemKey = effectiveItemStateByRecordKey.get(
+				record.sourceRecordKey,
+			)!.parentItem;
 			const revision = writtenItemRevisionByKey.get(itemKey);
 			if (!parentItemKey || revision === undefined) {
 				throw new SourceIngestionValidationError(
@@ -1161,7 +1404,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		}
 
 		const tagRows = changedItemUpserts.flatMap((record) =>
-			normalizedItems
+			effectiveItemStateByRecordKey
 				.get(record.sourceRecordKey)!
 				.tags.map((name) => ({ name })),
 		);
@@ -1172,7 +1415,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				transaction.insert(tag).values(rowChunk).onConflictDoNothing(),
 		);
 		const itemTagRows = changedItemUpserts.flatMap((record) =>
-			normalizedItems
+			effectiveItemStateByRecordKey
 				.get(record.sourceRecordKey)!
 				.tags.map((tagName) => ({
 					itemKey: itemKeys.get(record.sourceRecordKey)!,
@@ -1184,19 +1427,12 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		);
 
 		const itemCollectionRows = changedItemUpserts.flatMap((record) =>
-			normalizedItems
+			effectiveItemStateByRecordKey
 				.get(record.sourceRecordKey)!
-				.collectionReferences.map((reference) => {
-					const connectionKey =
-						reference.sourceConnectionKey ??
-						batch.sourceConnectionKey;
-					return {
-						itemKey: itemKeys.get(record.sourceRecordKey)!,
-						collectionKey: resolvedCollectionReferences.get(
-							`${connectionKey}\u0000${reference.sourceRecordKey}`,
-						)!,
-					};
-				}),
+				.collections.map((collectionKey) => ({
+					itemKey: itemKeys.get(record.sourceRecordKey)!,
+					collectionKey,
+				})),
 		);
 		const activeCollectionKeys = [
 			...new Set(itemCollectionRows.map((row) => row.collectionKey)),
@@ -1282,6 +1518,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			return [
 				{
 					itemKey,
+					sourceConnectionKey: batch.sourceConnectionKey,
 					payload: record.raw,
 					payloadHash: expectedHash,
 					remoteVersion: record.remoteVersion,
@@ -1304,7 +1541,10 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				.insert(sourceSnapshot)
 				.values(rowChunk)
 				.onConflictDoUpdate({
-					target: sourceSnapshot.itemKey,
+					target: [
+						sourceSnapshot.itemKey,
+						sourceSnapshot.sourceConnectionKey,
+					],
 					set: {
 						payload: sql.raw(`excluded."payload"`),
 						payloadHash: sql.raw(`excluded."payloadHash"`),
@@ -1323,7 +1563,26 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				transaction
 					.update(sourceSnapshot)
 					.set({ fetchedAt: batch.fetchedAt })
-					.where(inArray(sourceSnapshot.itemKey, keyChunk)),
+					.where(
+						and(
+							eq(
+								sourceSnapshot.sourceConnectionKey,
+								batch.sourceConnectionKey,
+							),
+							inArray(sourceSnapshot.itemKey, keyChunk),
+						),
+					),
+		);
+		await updateItemSourceLinkVersions(
+			transaction,
+			batch.sourceConnectionKey,
+			batch.items.flatMap((record) => {
+				const itemKey = itemKeys.get(record.sourceRecordKey);
+				return itemKey
+					? [{ itemKey, remoteVersion: record.remoteVersion }]
+					: [];
+			}),
+			now,
 		);
 
 		const directlyChangedItemKeys = new Set(itemEvents.keys());
@@ -1331,8 +1590,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		for (const record of changedItemUpserts) {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const oldParent = existingItemByKey.get(key)?.parentItem;
-			const newParent =
-				parentItemKeys.get(record.sourceRecordKey) ?? null;
+			const newParent = effectiveItemStateByRecordKey.get(
+				record.sourceRecordKey,
+			)!.parentItem;
 			if (oldParent) affectedParentKeys.add(oldParent);
 			if (newParent) affectedParentKeys.add(newParent);
 		}

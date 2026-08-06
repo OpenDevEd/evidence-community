@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
 	type AnyPgColumn,
 	bigint,
+	boolean,
 	check,
 	foreignKey,
 	index,
@@ -339,6 +340,55 @@ function createRecordIdentityTable(
 export const itemIdentity = createRecordIdentityTable("itemIdentity");
 export const collectionIdentity =
 	createRecordIdentityTable("collectionIdentity");
+
+export const itemSourceLink = pgTable(
+	"itemSourceLink",
+	{
+		itemKey: varchar("itemKey", { length: 8 })
+			.notNull()
+			.references(() => itemIdentity.key, { onDelete: "cascade" }),
+		sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 })
+			.notNull()
+			.references(() => sourceConnection.key, {
+				onDelete: "cascade",
+				onUpdate: "cascade",
+			}),
+		sourceRecordKey: varchar("sourceRecordKey", { length: 512 }).notNull(),
+		remoteVersion: varchar("remoteVersion", { length: 255 }),
+		lastAcknowledgedRemoteVersion: varchar(
+			"lastAcknowledgedRemoteVersion",
+			{ length: 255 },
+		),
+		dirtyFields: jsonb("dirtyFields")
+			.$type<string[]>()
+			.notNull()
+			.default([]),
+		writebackEnabled: boolean("writebackEnabled").notNull().default(false),
+		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
+		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
+	},
+	(table) => [
+		primaryKey({
+			columns: [table.itemKey, table.sourceConnectionKey],
+		}),
+		check(
+			"itemSourceLink_remote_only",
+			sql`${table.sourceConnectionKey} <> 'native'`,
+		),
+		check(
+			"itemSourceLink_dirty_fields_array",
+			sql`jsonb_typeof(${table.dirtyFields}) = 'array'`,
+		),
+		unique("itemSourceLink_source_record_unique").on(
+			table.sourceConnectionKey,
+			table.sourceRecordKey,
+		),
+		uniqueIndex("itemSourceLink_one_writeback_per_item")
+			.on(table.itemKey)
+			.where(sql`${table.writebackEnabled} = true`),
+		index("itemSourceLink_connection_idx").on(table.sourceConnectionKey),
+	],
+);
 
 export const itemDraft = pgTable(
 	"itemDraft",
@@ -688,16 +738,14 @@ export function createItemFilePublicationTable(itemColumns: {
 	);
 }
 
-export function createSourceRecordTables(itemColumns: {
-	key: AnyPgColumn;
-	sourceConnectionKey: AnyPgColumn;
-}) {
+export function createSourceRecordTables() {
 	const sourceSnapshot = pgTable(
 		"sourceSnapshot",
 		{
-			itemKey: varchar("itemKey", { length: 8 })
-				.notNull()
-				.references(() => itemColumns.key, { onDelete: "cascade" }),
+			itemKey: varchar("itemKey", { length: 8 }).notNull(),
+			sourceConnectionKey: varchar("sourceConnectionKey", {
+				length: 64,
+			}).notNull(),
 			payload: jsonb("payload").$type<JsonObject>().notNull(),
 			remoteVersion: varchar("remoteVersion", { length: 255 }),
 			payloadHash: varchar("payloadHash", { length: 64 }).notNull(),
@@ -706,7 +754,19 @@ export function createSourceRecordTables(itemColumns: {
 			}),
 			fetchedAt: timestampWithTimezone("fetchedAt").notNull(),
 		},
-		(table) => [primaryKey({ columns: [table.itemKey] })],
+		(table) => [
+			primaryKey({
+				columns: [table.itemKey, table.sourceConnectionKey],
+			}),
+			foreignKey({
+				name: "sourceSnapshot_item_source_link_fk",
+				columns: [table.itemKey, table.sourceConnectionKey],
+				foreignColumns: [
+					itemSourceLink.itemKey,
+					itemSourceLink.sourceConnectionKey,
+				],
+			}).onDelete("cascade"),
+		],
 	);
 
 	const sourceRecordAlias = pgTable(
@@ -727,11 +787,11 @@ export function createSourceRecordTables(itemColumns: {
 				columns: [table.sourceConnectionKey, table.aliasKey],
 			}),
 			foreignKey({
-				name: "sourceRecordAlias_item_source_fk",
+				name: "sourceRecordAlias_item_source_link_fk",
 				columns: [table.itemKey, table.sourceConnectionKey],
 				foreignColumns: [
-					itemColumns.key,
-					itemColumns.sourceConnectionKey,
+					itemSourceLink.itemKey,
+					itemSourceLink.sourceConnectionKey,
 				],
 			}).onDelete("cascade"),
 			index("sourceRecordAlias_item_idx").on(table.itemKey),

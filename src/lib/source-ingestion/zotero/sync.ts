@@ -1,6 +1,6 @@
 import {
 	collectionIdentity,
-	itemIdentity,
+	itemSourceLink,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
 import { and, eq, isNull, ne, or } from "drizzle-orm";
@@ -475,11 +475,11 @@ async function loadLocalSourceState(
 				deleted: item.deleted,
 				key: item.key,
 				parentItem: item.parentItem,
-				sourceRecordKey: itemIdentity.sourceRecordKey,
+				sourceRecordKey: itemSourceLink.sourceRecordKey,
 			})
-			.from(itemIdentity)
-			.innerJoin(item, eq(itemIdentity.key, item.key))
-			.where(eq(itemIdentity.sourceConnectionKey, sourceConnectionKey)),
+			.from(itemSourceLink)
+			.innerJoin(item, eq(itemSourceLink.itemKey, item.key))
+			.where(eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey)),
 		database
 			.select({
 				deleted: collection.deleted,
@@ -503,10 +503,9 @@ async function mappingReplayRequired(
 	const [staleSnapshot] = await database
 		.select({ itemKey: sourceSnapshot.itemKey })
 		.from(sourceSnapshot)
-		.innerJoin(itemIdentity, eq(itemIdentity.key, sourceSnapshot.itemKey))
 		.where(
 			and(
-				eq(itemIdentity.sourceConnectionKey, sourceConnectionKey),
+				eq(sourceSnapshot.sourceConnectionKey, sourceConnectionKey),
 				or(
 					isNull(sourceSnapshot.mappingProfileVersion),
 					ne(

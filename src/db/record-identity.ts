@@ -3,6 +3,7 @@ import {
 	collectionIdentity,
 	generateCanonicalRecordKey,
 	itemIdentity,
+	itemSourceLink,
 	reserveCanonicalRecordKey,
 } from "@opendeved/evidence-library-core";
 import { and, eq, inArray } from "drizzle-orm";
@@ -126,6 +127,75 @@ export async function reserveItemIdentities(
 	},
 ) {
 	return reserveRecordIdentities(db, itemIdentity, options);
+}
+
+export async function reserveItemSourceLinks(
+	db: Executor,
+	{
+		sourceConnectionKey,
+		sourceRecordKeys,
+	}: {
+		sourceConnectionKey: string;
+		sourceRecordKeys: string[];
+	},
+) {
+	const uniqueSourceRecordKeys = [...new Set(sourceRecordKeys)];
+	if (uniqueSourceRecordKeys.length !== sourceRecordKeys.length) {
+		throw new Error("Source record keys must be unique within a batch");
+	}
+	if (uniqueSourceRecordKeys.length === 0) {
+		return new Map<string, string>();
+	}
+
+	const result = new Map<string, string>();
+	const loadLinks = async () => {
+		const rows = await db
+			.select({
+				itemKey: itemSourceLink.itemKey,
+				sourceRecordKey: itemSourceLink.sourceRecordKey,
+			})
+			.from(itemSourceLink)
+			.where(
+				and(
+					eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
+					inArray(
+						itemSourceLink.sourceRecordKey,
+						uniqueSourceRecordKeys,
+					),
+				),
+			);
+		for (const row of rows) {
+			result.set(row.sourceRecordKey, row.itemKey);
+		}
+	};
+
+	await loadLinks();
+	const pending = uniqueSourceRecordKeys.filter((key) => !result.has(key));
+	if (pending.length > 0) {
+		const allocated = await reserveRecordIdentities(db, itemIdentity, {
+			sourceConnectionKey,
+			sourceRecordKeys: pending,
+		});
+		await db
+			.insert(itemSourceLink)
+			.values(
+				pending.map((sourceRecordKey) => ({
+					itemKey: allocated.get(sourceRecordKey)!,
+					sourceConnectionKey,
+					sourceRecordKey,
+				})),
+			)
+			.onConflictDoNothing();
+		await loadLinks();
+	}
+
+	const unresolved = uniqueSourceRecordKeys.filter((key) => !result.has(key));
+	if (unresolved.length > 0) {
+		throw new Error(
+			`Failed to reserve source links for: ${unresolved.join(", ")}`,
+		);
+	}
+	return result;
 }
 
 export async function reserveCollectionIdentities(

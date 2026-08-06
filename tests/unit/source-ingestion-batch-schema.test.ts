@@ -34,9 +34,7 @@ function batch() {
 						sourceRecordKey: "SHARED01",
 					},
 				],
-				aliases: [
-					{ key: "zotero:ITEM0001", kind: "provider-uri" },
-				],
+				aliases: [{ key: "zotero:ITEM0001", kind: "provider-uri" }],
 				file: {
 					url: "https://storage.example.org/file.pdf",
 					contentType: "application/pdf",
@@ -97,9 +95,7 @@ describe("sourceIngestionBatchSchema", () => {
 		input.items[0]!.raw = {
 			invalid: BigInt(1),
 		} as never;
-		expect(sourceIngestionBatchSchema.safeParse(input).success).toBe(
-			false,
-		);
+		expect(sourceIngestionBatchSchema.safeParse(input).success).toBe(false);
 	});
 
 	it("rejects duplicate collection identities after applying the connection default", () => {
@@ -117,8 +113,7 @@ describe("sourceIngestionBatchSchema", () => {
 			expect(
 				parsed.error.issues.some(
 					(issue) =>
-						issue.message ===
-						"Duplicate collection reference",
+						issue.message === "Duplicate collection reference",
 				),
 			).toBe(true);
 		}
@@ -142,7 +137,7 @@ describe("sourceIngestionBatchSchema", () => {
 });
 
 describe("sourceItemFingerprint", () => {
-	it("tracks every canonical sidecar while ignoring JSON object key order", () => {
+	it("tracks canonical sidecars while ignoring version and JSON key order", () => {
 		const parsed = sourceIngestionBatchSchema.parse(batch());
 		const record = parsed.items[0] as SourceItemUpsert;
 		const baseline = sourceItemFingerprint(record);
@@ -153,7 +148,6 @@ describe("sourceItemFingerprint", () => {
 			{ ...record, metadata: { ...record.metadata, title: "Changed" } },
 			{ ...record, parentSourceRecordKey: "PARENT02" },
 			{ ...record, raw: { ...record.raw, version: 2 } },
-			{ ...record, remoteVersion: "2" },
 			{
 				...record,
 				sourceDates: {
@@ -166,6 +160,9 @@ describe("sourceItemFingerprint", () => {
 		for (const variant of variants) {
 			expect(sourceItemFingerprint(variant)).not.toBe(baseline);
 		}
+		expect(sourceItemFingerprint({ ...record, remoteVersion: "2" })).toBe(
+			baseline,
+		);
 		expect(
 			sourceItemFingerprint({
 				...record,

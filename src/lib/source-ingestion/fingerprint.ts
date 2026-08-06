@@ -1,9 +1,6 @@
 import { createHash } from "node:crypto";
 
-import type {
-	JsonValue,
-	SourceItemUpsert,
-} from "./batch-schema";
+import type { JsonValue, SourceItemUpsert } from "./batch-schema";
 
 export function canonicalSourceJson(value: JsonValue): string {
 	if (value === null || typeof value !== "object") {
@@ -35,14 +32,11 @@ export function sourceItemFingerprint(record: SourceItemUpsert) {
 		metadata: record.metadata,
 		parentSourceRecordKey: record.parentSourceRecordKey,
 		raw: record.raw,
-		remoteVersion: record.remoteVersion,
 		sourceDates: record.sourceDates
 			? {
-					addedAt:
-						record.sourceDates.addedAt?.toISOString() ?? null,
+					addedAt: record.sourceDates.addedAt?.toISOString() ?? null,
 					modifiedAt:
-						record.sourceDates.modifiedAt?.toISOString() ??
-						null,
+						record.sourceDates.modifiedAt?.toISOString() ?? null,
 				}
 			: null,
 	});

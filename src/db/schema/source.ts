@@ -5,6 +5,7 @@ import {
 	itemFileDraft,
 	itemDraft,
 	itemIdentity,
+	itemSourceLink,
 	outbox,
 	searchIndexWorker,
 	sourceConnection,
@@ -23,6 +24,7 @@ export {
 	itemFileDraft,
 	itemDraft,
 	itemIdentity,
+	itemSourceLink,
 	outbox,
 	searchIndexWorker,
 	sourceConnection,
@@ -32,10 +34,7 @@ export {
 	sourceSyncState,
 };
 
-export const { sourceRecordAlias, sourceSnapshot } = createSourceRecordTables({
-	key: item.key,
-	sourceConnectionKey: item.sourceConnectionKey,
-});
+export const { sourceRecordAlias, sourceSnapshot } = createSourceRecordTables();
 
 export const itemFilePublication = createItemFilePublicationTable({
 	key: item.key,
@@ -46,6 +45,7 @@ export const sourceConnectionRelations = relations(
 	sourceConnection,
 	({ many }) => ({
 		items: many(item),
+		itemSourceLinks: many(itemSourceLink),
 		collections: many(collection),
 		aliases: many(sourceRecordAlias),
 		syncRuns: many(sourceSyncRun),
@@ -82,7 +82,30 @@ export const sourceSnapshotRelations = relations(sourceSnapshot, ({ one }) => ({
 		fields: [sourceSnapshot.itemKey],
 		references: [item.key],
 	}),
+	itemSourceLink: one(itemSourceLink, {
+		fields: [sourceSnapshot.itemKey, sourceSnapshot.sourceConnectionKey],
+		references: [
+			itemSourceLink.itemKey,
+			itemSourceLink.sourceConnectionKey,
+		],
+	}),
 }));
+
+export const itemSourceLinkRelations = relations(
+	itemSourceLink,
+	({ one, many }) => ({
+		sourceConnection: one(sourceConnection, {
+			fields: [itemSourceLink.sourceConnectionKey],
+			references: [sourceConnection.key],
+		}),
+		item: one(item, {
+			fields: [itemSourceLink.itemKey],
+			references: [item.key],
+		}),
+		snapshots: many(sourceSnapshot),
+		aliases: many(sourceRecordAlias),
+	}),
+);
 
 export const sourceRecordAliasRelations = relations(
 	sourceRecordAlias,
@@ -94,6 +117,16 @@ export const sourceRecordAliasRelations = relations(
 		item: one(item, {
 			fields: [sourceRecordAlias.itemKey],
 			references: [item.key],
+		}),
+		itemSourceLink: one(itemSourceLink, {
+			fields: [
+				sourceRecordAlias.itemKey,
+				sourceRecordAlias.sourceConnectionKey,
+			],
+			references: [
+				itemSourceLink.itemKey,
+				itemSourceLink.sourceConnectionKey,
+			],
 		}),
 	}),
 );

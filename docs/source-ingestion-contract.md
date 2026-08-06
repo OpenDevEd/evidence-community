@@ -10,10 +10,16 @@ Library databases and deployments are not migrated or modified.
   `23456789ABCDEFGHIJKLMNPQRSTUVWXYZ`.
 - A compatible provider key is adopted when unused. Otherwise the writer mints
   a canonical key and retains the provider key in `sourceRecordKey`.
-- `itemIdentity` and `collectionIdentity` reserve keys before record writes.
-  Reservations are never replaced by a later source and make concurrent
-  allocation safe.
-- Provider identity is unique by `(sourceConnectionKey, sourceRecordKey)`.
+- `itemIdentity` and `collectionIdentity` reserve canonical keys before record
+  writes. Reservations are never replaced by a later source and make
+  concurrent allocation safe.
+- `itemSourceLink` maps a canonical item to a remote record. Provider identity
+  is unique by `(sourceConnectionKey, sourceRecordKey)`, while
+  `(itemKey, sourceConnectionKey)` allows one item to link to several providers
+  without changing its canonical owner.
+- At most one source link per item may have writeback enabled. Each link tracks
+  the latest remote version, the last acknowledged version, and the canonical
+  fields that currently contain unpublished local changes.
 - A removed source connection is retained with `status = 'removed'`; records
   never lose their permanent origin.
 
@@ -28,26 +34,30 @@ Library databases and deployments are not migrated or modified.
   and import history remain independent.
 - Credentials are referenced by `credentialRef`; secrets are not stored in the
   source record.
-- Zotero is a read-only Web API v3 source in v1. Its durable cursor records the
-  last complete library version and, during large imports, the target version
-  plus the source snapshot and next deterministic manifest offset. It also
-  retains soft-trash keys so restoring a parent rehydrates unchanged
-  descendants and memberships from a full source snapshot.
+- Zotero uses Web API v3. Its durable cursor records the last complete library
+  version and, during large imports, the target version plus the source
+  snapshot and next deterministic manifest offset. It also retains soft-trash
+  keys so restoring a parent rehydrates unchanged descendants and memberships
+  from a full source snapshot.
 
 ## Canonical records
 
 - `revision` is the monotonic canonical record revision.
-- `sourceSnapshot.remoteVersion` is the provider's revision, ETag, cursor
+- `itemSourceLink.remoteVersion` and the link-scoped
+  `sourceSnapshot.remoteVersion` record the provider's revision, ETag, cursor
   version, or equivalent.
 - The former `item.version` and `collection.version` fields do not exist.
-- Parent items, parent collections, and aliases must belong to the same source
-  connection.
+- Imported parent items and parent collections retain their source ownership.
+  Aliases belong to an explicit item-source link rather than the canonical
+  item's owner.
 - Collection membership may cross connections intentionally. This permits a
   native curated collection to combine records from multiple providers.
 - Tags and collection memberships are normalized through `itemToTag` and
   `itemToCollection`; the canonical item table does not duplicate either list.
-- `sourceSnapshot` applies to bibliographic items. Collection synchronization
-  uses the collection row's canonical revision and the connection cursor.
+- `sourceSnapshot` is keyed by `(itemKey, sourceConnectionKey)`, so one
+  canonical item can retain independent snapshots from several providers.
+  Collection synchronization uses the collection row's canonical revision and
+  the connection cursor.
 
 ## Native drafts and publication
 
@@ -160,12 +170,15 @@ reference any connection by `(sourceConnectionKey, sourceRecordKey)`. Missing,
 deleted, or cyclic relationships reject the complete batch. Relationship
 targets deleted by the same batch are treated as deleted during validation.
 
-Canonical writes, normalized memberships/tags, immutable aliases, current
-source snapshots, parent reprojections, outbox events, and the next connection
-cursor commit in one PostgreSQL transaction. Exact item replays update snapshot
-freshness and advance the cursor without producing canonical revisions.
-Repeated deletions are also no-ops. Unknown deletion keys never reserve
-identities.
+Canonical writes, normalized memberships/tags, immutable aliases, source-link
+versions, current link-scoped snapshots, parent reprojections, outbox events,
+and the next connection cursor commit in one PostgreSQL transaction. Inbound
+resolution consults `itemSourceLink` first, preventing a linked native item from
+being imported again. Fields listed in the link's `dirtyFields` remain local;
+the source updates every other field. Exact replays, version-only changes, and
+remote changes confined to dirty fields advance link/snapshot state without
+producing canonical revisions. Repeated deletions are also no-ops. Unknown
+deletion keys never reserve identities.
 
 When a collection's name or parent changes, the outbox projector must expand
 that event to the complete descendant collection subtree and every member item

@@ -4,15 +4,10 @@ import {
 	itemIdentity,
 	outbox,
 } from "@opendeved/evidence-library-core";
-import {
-	and,
-	eq,
-	inArray,
-	sql,
-	type InferInsertModel,
-} from "drizzle-orm";
+import { and, eq, inArray, sql, type InferInsertModel } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { lockItemMutation } from "@/db/item-mutation-lock";
 import { reserveItemIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
@@ -41,15 +36,6 @@ import { NATIVE_SOURCE_CONNECTION_KEY as NATIVE_CONNECTION_KEY } from "./constan
 type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
-
-async function lockNativeItemMutation(
-	transaction: Transaction,
-	itemKey: string,
-) {
-	await transaction.execute(
-		sql`select pg_advisory_xact_lock(hashtextextended(${`native-item:${itemKey}`}, 0))`,
-	);
-}
 
 export async function advanceOpenNativeDraftBaseRevision(
 	executor: Executor,
@@ -434,7 +420,7 @@ async function openNativeItemDraftInTransaction(
 
 export async function openNativeItemDraft(db: Database, itemKey: string) {
 	return db.transaction(async (transaction) => {
-		await lockNativeItemMutation(transaction, itemKey);
+		await lockItemMutation(transaction, itemKey);
 		return openNativeItemDraftInTransaction(transaction, itemKey);
 	});
 }
@@ -536,7 +522,7 @@ export async function saveNativeItemDraft(
 	},
 ) {
 	return db.transaction(async (transaction) => {
-		await lockNativeItemMutation(transaction, args.itemKey);
+		await lockItemMutation(transaction, args.itemKey);
 		return saveNativeItemDraftInTransaction(transaction, args);
 	});
 }
@@ -547,7 +533,7 @@ export async function assignNativeItemDraftToCollection(
 	collectionKey: string,
 ) {
 	return db.transaction(async (transaction) => {
-		await lockNativeItemMutation(transaction, itemKey);
+		await lockItemMutation(transaction, itemKey);
 		const [identity] = await transaction
 			.select({ key: itemIdentity.key })
 			.from(itemIdentity)
@@ -591,7 +577,9 @@ export async function assignNativeItemDraftToCollection(
 			: null;
 		if (
 			existingDraftPayload &&
-			collectionKeysFromPayload(existingDraftPayload).includes(collectionKey)
+			collectionKeysFromPayload(existingDraftPayload).includes(
+				collectionKey,
+			)
 		) {
 			return { changed: false };
 		}
@@ -631,7 +619,7 @@ export async function publishNativeItemDraftWithContext(
 	itemKey: string,
 ) {
 	return db.transaction(async (transaction) => {
-		await lockNativeItemMutation(transaction, itemKey);
+		await lockItemMutation(transaction, itemKey);
 		const [initialDraft] = await transaction
 			.select()
 			.from(itemDraft)
@@ -874,7 +862,7 @@ async function unpublishNativeItemAttempt(
 	discardDraft: boolean,
 ) {
 	return db.transaction(async (transaction) => {
-		await lockNativeItemMutation(transaction, itemKey);
+		await lockItemMutation(transaction, itemKey);
 		const [candidate] = await transaction
 			.select()
 			.from(item)
@@ -1201,7 +1189,7 @@ async function discardNativeItemDraftIfPresentInTransaction(
 
 export async function discardNativeItemDraft(db: Database, itemKey: string) {
 	return db.transaction(async (transaction) => {
-		await lockNativeItemMutation(transaction, itemKey);
+		await lockItemMutation(transaction, itemKey);
 		const discarded = await discardNativeItemDraftInTransaction(
 			transaction,
 			itemKey,

@@ -22,7 +22,9 @@ async function expectConstraintViolation(
 	try {
 		await operation();
 		await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
-		throw new Error(`${label}: expected constraint ${constraint} to reject`);
+		throw new Error(
+			`${label}: expected constraint ${constraint} to reject`,
+		);
 	} catch (error) {
 		await client.query(`ROLLBACK TO SAVEPOINT ${savepoint}`);
 		const postgresError = error as { constraint?: string };
@@ -122,6 +124,43 @@ async function verify() {
 				('CCCC2345', 'zotero-alpha', 'CCCC2345', 'Alpha parent'),
 				('DDDD2345', 'zotero-alpha', 'DDDD2345', 'Alpha child')
 		`);
+
+		await client.query(`
+			INSERT INTO "itemSourceLink"
+				("itemKey", "sourceConnectionKey", "sourceRecordKey")
+			VALUES
+				('AAAA2345', 'zotero-alpha', 'AAAA2345'),
+				('BBBB2345', 'zotero-beta', 'AAAA2345'),
+				('CCCC2345', 'zotero-alpha', 'CCCC2345'),
+				('DDDD2345', 'zotero-alpha', 'DDDD2345')
+		`);
+
+		await expectConstraintViolation(
+			"native source-link rejection",
+			"itemSourceLink_remote_only",
+			() =>
+				client.query(`
+					INSERT INTO "itemSourceLink"
+						("itemKey", "sourceConnectionKey", "sourceRecordKey")
+					VALUES ('AAAA2345', 'native', 'AAAA2345')
+				`),
+		);
+
+		await client.query(`
+			UPDATE "itemSourceLink"
+			SET "writebackEnabled" = true
+			WHERE "itemKey" = 'AAAA2345' AND "sourceConnectionKey" = 'zotero-alpha'
+		`);
+		await expectConstraintViolation(
+			"single writeback link per item",
+			"itemSourceLink_one_writeback_per_item",
+			() =>
+				client.query(`
+					INSERT INTO "itemSourceLink"
+						("itemKey", "sourceConnectionKey", "sourceRecordKey", "writebackEnabled")
+					VALUES ('AAAA2345', 'zotero-beta', 'SECOND234', true)
+				`),
+		);
 
 		await expectConstraintViolation(
 			"canonical item key format",
@@ -235,9 +274,9 @@ async function verify() {
 
 		await client.query(`
 			INSERT INTO "sourceSnapshot"
-				("itemKey", "payload", "payloadHash", "remoteVersion", "fetchedAt")
+				("itemKey", "sourceConnectionKey", "payload", "payloadHash", "remoteVersion", "fetchedAt")
 			VALUES
-				('AAAA2345', '{"key":"AAAA2345"}', repeat('a', 64), '1', now())
+				('AAAA2345', 'zotero-alpha', '{"key":"AAAA2345"}', repeat('a', 64), '1', now())
 		`);
 
 		await client.query(`
@@ -249,7 +288,7 @@ async function verify() {
 
 		await expectConstraintViolation(
 			"cross-source alias rejection",
-			"sourceRecordAlias_item_source_fk",
+			"sourceRecordAlias_item_source_link_fk",
 			() =>
 				client.query(`
 					INSERT INTO "sourceRecordAlias"
@@ -294,16 +333,20 @@ async function verify() {
 			unprocessedEvents: string;
 		}>(`
 			SELECT
-				(SELECT count(*) FROM "sourceConnection") AS connections,
-				(SELECT count(*) FROM "item") AS items,
-				(SELECT count(*) FROM "collection") AS collections,
-				(SELECT count(*) FROM "outbox" WHERE "processedAt" IS NULL)
+				(SELECT count(*) FROM "sourceConnection"
+					WHERE "key" IN ('zotero-alpha', 'zotero-beta', 'openalex-main')) AS connections,
+				(SELECT count(*) FROM "item"
+					WHERE "key" IN ('AAAA2345', 'BBBB2345', 'CCCC2345', 'DDDD2345')) AS items,
+				(SELECT count(*) FROM "collection"
+					WHERE "key" IN ('FFFF2345', 'GGGG2345')) AS collections,
+				(SELECT count(*) FROM "outbox"
+					WHERE "entityKey" = 'AAAA2345' AND "processedAt" IS NULL)
 					AS "unprocessedEvents"
 		`);
 
 		const counts = result.rows[0];
 		const expected = {
-			connections: "4",
+			connections: "3",
 			items: "4",
 			collections: "2",
 			unprocessedEvents: "1",

@@ -56,7 +56,7 @@ async function runBehindNativeItemBarrier(
 	let operations: Promise<unknown>[] = [];
 	await db.transaction(async (transaction) => {
 		await transaction.execute(
-			sql`select pg_advisory_xact_lock(hashtextextended(${`native-item:${itemKey}`}, 0))`,
+			sql`select pg_advisory_xact_lock(hashtextextended(${`item:${itemKey}`}, 0))`,
 		);
 		operations = start();
 		let waiting = 0;

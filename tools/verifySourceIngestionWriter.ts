@@ -1,6 +1,7 @@
 import {
 	collectionIdentity,
 	itemIdentity,
+	itemSourceLink,
 	outbox,
 	sourceConnection,
 	sourceFileCleanup,
@@ -40,8 +41,10 @@ const connectionKeys = [
 	"zotero-writer",
 	"zotero-unpublish-writer",
 	"zotero-staging-writer",
+	"zotero-native-link-writer",
 ];
 const tagNames = ["attachment-tag", "parent-tag", "restored-tag"];
+const nativeLinkItemKey = "NATV2345";
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
@@ -97,7 +100,171 @@ async function verify() {
 				scopeKind: "group",
 				externalScopeKey: "writer-zotero-staging",
 			},
+			{
+				key: "zotero-native-link-writer",
+				provider: "zotero",
+				scopeKind: "group",
+				externalScopeKey: "writer-zotero-native-link",
+			},
 		]);
+
+		await db.insert(itemIdentity).values({
+			key: nativeLinkItemKey,
+			sourceConnectionKey: "native",
+			sourceRecordKey: nativeLinkItemKey,
+		});
+		await db.insert(item).values({
+			key: nativeLinkItemKey,
+			itemType: "Report",
+			sourceConnectionKey: "native",
+			sourceRecordKey: nativeLinkItemKey,
+			title: "Local title",
+		});
+		await db.insert(itemSourceLink).values({
+			dirtyFields: ["title"],
+			itemKey: nativeLinkItemKey,
+			sourceConnectionKey: "zotero-native-link-writer",
+			sourceRecordKey: "LINK2345",
+			writebackEnabled: true,
+		});
+
+		const linkedRecord = {
+			operation: "upsert" as const,
+			sourceRecordKey: "LINK2345",
+			remoteVersion: "1",
+			raw: { key: "LINK2345", version: 1 },
+			metadata: {
+				abstractNote: "Remote abstract",
+				itemType: "Report",
+				title: "Remote title",
+			},
+		};
+		const linkedFirst = await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-native-link-writer",
+				expectedCursor: {},
+				nextCursor: { version: 1 },
+			}),
+			items: [linkedRecord],
+		});
+		assert(
+			linkedFirst.itemKeys.LINK2345 === nativeLinkItemKey,
+			"A linked native item was duplicated during source resolution",
+		);
+		const [linkedAfterFirst] = await db
+			.select()
+			.from(item)
+			.where(eq(item.key, nativeLinkItemKey));
+		assert(
+			linkedAfterFirst?.sourceConnectionKey === "native" &&
+				linkedAfterFirst.title === "Local title" &&
+				linkedAfterFirst.abstractNote === "Remote abstract" &&
+				linkedAfterFirst.revision === 2,
+			"Inbound sync did not preserve ownership and dirty fields",
+		);
+
+		const versionOnly = await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-native-link-writer",
+				expectedCursor: { version: 1 },
+				nextCursor: { version: 2 },
+			}),
+			fetchedAt: new Date("2026-07-29T12:05:00.000Z"),
+			items: [
+				{
+					...linkedRecord,
+					remoteVersion: "2",
+					raw: { key: "LINK2345", version: 2 },
+				},
+			],
+		});
+		assert(
+			versionOnly.written.items === 0 &&
+				versionOnly.written.outboxEvents === 0,
+			"A remote-version-only update bumped the canonical revision",
+		);
+
+		const dirtyOnly = await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-native-link-writer",
+				expectedCursor: { version: 2 },
+				nextCursor: { version: 3 },
+			}),
+			items: [
+				{
+					...linkedRecord,
+					remoteVersion: "3",
+					raw: { key: "LINK2345", version: 3 },
+					metadata: {
+						...linkedRecord.metadata,
+						title: "Another remote title",
+					},
+				},
+			],
+		});
+		assert(
+			dirtyOnly.written.items === 0 &&
+				dirtyOnly.written.outboxEvents === 0,
+			"A remote change confined to dirty fields bumped the canonical revision",
+		);
+
+		const unmaskedChange = await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-native-link-writer",
+				expectedCursor: { version: 3 },
+				nextCursor: { version: 4 },
+			}),
+			items: [
+				{
+					...linkedRecord,
+					remoteVersion: "4",
+					raw: { key: "LINK2345", version: 4 },
+					metadata: {
+						...linkedRecord.metadata,
+						abstractNote: "Updated remote abstract",
+						title: "Another remote title",
+					},
+				},
+			],
+		});
+		const [[linkedAfterUpdate], [linkedSourceLink], [linkedSnapshot]] =
+			await Promise.all([
+				db.select().from(item).where(eq(item.key, nativeLinkItemKey)),
+				db
+					.select()
+					.from(itemSourceLink)
+					.where(
+						and(
+							eq(itemSourceLink.itemKey, nativeLinkItemKey),
+							eq(
+								itemSourceLink.sourceConnectionKey,
+								"zotero-native-link-writer",
+							),
+						),
+					),
+				db
+					.select()
+					.from(sourceSnapshot)
+					.where(
+						and(
+							eq(sourceSnapshot.itemKey, nativeLinkItemKey),
+							eq(
+								sourceSnapshot.sourceConnectionKey,
+								"zotero-native-link-writer",
+							),
+						),
+					),
+			]);
+		assert(
+			unmaskedChange.written.items === 1 &&
+				linkedAfterUpdate?.title === "Local title" &&
+				linkedAfterUpdate.abstractNote === "Updated remote abstract" &&
+				linkedAfterUpdate.revision === 3 &&
+				linkedSourceLink?.remoteVersion === "4" &&
+				linkedSourceLink.lastAcknowledgedRemoteVersion === "4" &&
+				linkedSnapshot?.remoteVersion === "4",
+			"Link-scoped snapshots or dirty-field masking were not maintained",
+		);
 
 		const mendeleyResult = await writeSourceIngestionBatch(db, {
 			...baseBatch({
@@ -1134,7 +1301,10 @@ async function verify() {
 			.select({ key: itemIdentity.key })
 			.from(itemIdentity)
 			.where(inArray(itemIdentity.sourceConnectionKey, connectionKeys));
-		const itemKeys = identities.map(({ key }) => key);
+		const itemKeys = [
+			...identities.map(({ key }) => key),
+			nativeLinkItemKey,
+		];
 		if (itemKeys.length > 0) {
 			await db.delete(outbox).where(inArray(outbox.entityKey, itemKeys));
 			await db
@@ -1163,6 +1333,9 @@ async function verify() {
 		await db
 			.delete(itemIdentity)
 			.where(inArray(itemIdentity.sourceConnectionKey, connectionKeys));
+		await db
+			.delete(itemIdentity)
+			.where(eq(itemIdentity.key, nativeLinkItemKey));
 		await db
 			.delete(collectionIdentity)
 			.where(
