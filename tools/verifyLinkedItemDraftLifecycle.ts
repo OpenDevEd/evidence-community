@@ -171,6 +171,7 @@ async function verify() {
 			payload: {
 				...opened.payload,
 				collections: [nativeCollection.key],
+				language: "fr",
 				tags: ["local"],
 				title: "Local title",
 			},
@@ -233,7 +234,7 @@ async function verify() {
 				) &&
 				publishedTags.some((row) => row.tagName === "local") &&
 				JSON.stringify(publishedLink?.dirtyFields) ===
-					JSON.stringify(["tags", "title"]),
+					JSON.stringify(["language", "tags", "title"]),
 			"Publishing an imported draft did not preserve source identity, local curation, or dirty fields",
 		);
 
@@ -294,6 +295,7 @@ async function verify() {
 					metadata: {
 						abstractNote: "Latest remote abstract",
 						itemType: "Report",
+						language: "de",
 						tags: ["remote-three"],
 						title: "Latest remote title",
 					},
@@ -315,6 +317,7 @@ async function verify() {
 		assert(
 			afterInbound?.title === "Local title for every source" &&
 				afterInbound.abstractNote === "Latest remote abstract" &&
+				afterInbound.languageName === "fr" &&
 				tagsAfterInbound.some((row) => row.tagName === "local") &&
 				membershipsAfterInbound.some(
 					(row) => row.collectionKey === nativeCollection.key,

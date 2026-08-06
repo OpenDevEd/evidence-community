@@ -35,6 +35,7 @@ import {
 	NativeItemValidationError,
 	validateNativeItemDraft,
 } from "@/lib/admin/native-item-validation";
+import { adminDatabaseFieldToPayloadField } from "@/lib/admin/item-fields";
 
 import {
 	type JsonValue,
@@ -233,7 +234,9 @@ function maskDirtyItemFields(
 	const masked = { ...incoming } as Record<string, unknown>;
 	const existingValues = existing as unknown as Record<string, unknown>;
 	for (const field of sourceWritableItemFields) {
-		if (dirtyFields.has(field)) masked[field] = existingValues[field];
+		if (dirtyFields.has(adminDatabaseFieldToPayloadField(field))) {
+			masked[field] = existingValues[field];
+		}
 	}
 	return masked as Partial<ItemInsert>;
 }
