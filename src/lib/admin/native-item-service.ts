@@ -7,7 +7,6 @@ import {
 import {
 	and,
 	eq,
-	getTableColumns,
 	inArray,
 	sql,
 	type InferInsertModel,
@@ -21,45 +20,23 @@ import { itemFilePublication } from "@/db/schema/source";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { tag } from "@/db/schema/tables/tag";
-import { adminDatabaseFieldToPayloadField } from "@/lib/admin/item-fields";
 
 import {
 	collectionKeysFromPayload,
 	payloadWithCollection,
 } from "./item-payload";
 import {
+	applyItemDraftPatch,
+	createItemDraftPatch,
+	editableItemDatabaseFields,
+	materializeItemDraft,
+	publishedAdminItemPayload,
+} from "./item-draft-patch";
+import {
 	NativeItemValidationError,
 	validateNativeItemDraft,
 } from "./native-item-validation";
 import { NATIVE_SOURCE_CONNECTION_KEY as NATIVE_CONNECTION_KEY } from "./constants";
-
-const systemManagedItemFields = new Set([
-	"PDFCoverPageHeight",
-	"PDFCoverPageImage",
-	"PDFCoverPageWidth",
-	"charset",
-	"citation",
-	"contentType",
-	"createdAt",
-	"dateAdded",
-	"dateModified",
-	"deleted",
-	"deletedAt",
-	"filename",
-	"fullTextPDF",
-	"key",
-	"linkMode",
-	"md5",
-	"mtime",
-	"revision",
-	"sourceConnectionKey",
-	"sourceRecordKey",
-	"updatedAt",
-]);
-
-const editableItemFields = Object.keys(getTableColumns(item)).filter(
-	(field) => !systemManagedItemFields.has(field),
-);
 
 type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -221,7 +198,7 @@ async function assertValidNativeItemCollectionMembershipsInDatabase(
 					.from(itemToCollection)
 					.where(eq(itemToCollection.itemKey, itemKey)),
 				db
-					.select({ payload: itemDraft.payload })
+					.select({ patch: itemDraft.patch })
 					.from(itemDraft)
 					.where(
 						and(
@@ -238,7 +215,7 @@ async function assertValidNativeItemCollectionMembershipsInDatabase(
 		: [[], null];
 	const baselineCollectionKeys = nativeItemCollectionBaselineKeys(
 		baselineRows.map(({ key }) => key),
-		existingDraft?.payload,
+		existingDraft?.patch,
 	);
 	const relevantKeys = [
 		...new Set([...baselineCollectionKeys, ...desiredCollectionKeys]),
@@ -266,12 +243,57 @@ function publishedItemValues(
 	validated: ReturnType<typeof validateNativeItemDraft>,
 ) {
 	const snapshot = Object.fromEntries(
-		editableItemFields.map((field) => [field, null]),
+		editableItemDatabaseFields.map((field) => [field, null]),
 	) as Partial<ItemInsert>;
 	return {
 		...snapshot,
 		...validated.item,
 	};
+}
+
+async function loadPublishedNativeItemPayload(
+	executor: Executor,
+	itemKey: string,
+	published?: typeof item.$inferSelect | null,
+) {
+	const [publishedRow, tagRows, collectionRows, filePublication] =
+		await Promise.all([
+			published === undefined
+				? executor
+						.select()
+						.from(item)
+						.where(
+							and(
+								eq(item.key, itemKey),
+								eq(
+									item.sourceConnectionKey,
+									NATIVE_CONNECTION_KEY,
+								),
+							),
+						)
+						.limit(1)
+						.then((rows) => rows[0] ?? null)
+				: Promise.resolve(published),
+			executor
+				.select({ name: itemToTag.tagName })
+				.from(itemToTag)
+				.where(eq(itemToTag.itemKey, itemKey)),
+			executor
+				.select({ key: itemToCollection.collectionKey })
+				.from(itemToCollection)
+				.where(eq(itemToCollection.itemKey, itemKey)),
+			executor
+				.select({ itemKey: itemFilePublication.itemKey })
+				.from(itemFilePublication)
+				.where(eq(itemFilePublication.itemKey, itemKey))
+				.limit(1)
+				.then((rows) => rows[0] ?? null),
+		]);
+	return publishedAdminItemPayload(publishedRow, {
+		collectionKeys: collectionRows.map(({ key }) => key),
+		hasPublishedFile: Boolean(filePublication),
+		tags: tagRows.map(({ name }) => name),
+	});
 }
 
 export async function createNativeItemDraft(db: Database, payload: unknown) {
@@ -313,11 +335,11 @@ export async function createNativeItemDraft(db: Database, payload: unknown) {
 			.values({
 				itemKey,
 				sourceConnectionKey: NATIVE_CONNECTION_KEY,
-				payload: validated.payload,
+				patch: validated.payload,
 			})
 			.returning();
 
-		return draft!;
+		return materializeItemDraft(draft!, {});
 	});
 }
 
@@ -335,7 +357,10 @@ export async function getNativeItemDraft(db: Database, itemKey: string) {
 	if (!draft) {
 		throw new NativeItemNotFoundError(itemKey);
 	}
-	return draft;
+	return materializeItemDraft(
+		draft,
+		await loadPublishedNativeItemPayload(db, itemKey),
+	);
 }
 
 async function openNativeItemDraftInTransaction(
@@ -353,7 +378,12 @@ async function openNativeItemDraftInTransaction(
 		)
 		.for("update")
 		.limit(1);
-	if (existingDraft) return existingDraft;
+	if (existingDraft) {
+		return materializeItemDraft(
+			existingDraft,
+			await loadPublishedNativeItemPayload(transaction, itemKey),
+		);
+	}
 
 	const [published] = await transaction
 		.select()
@@ -370,43 +400,23 @@ async function openNativeItemDraftInTransaction(
 		throw new NativeItemNotFoundError(itemKey);
 	}
 
-	const tagRows = await transaction
-		.select({ name: itemToTag.tagName })
-		.from(itemToTag)
-		.where(eq(itemToTag.itemKey, itemKey));
-	const collectionRows = await transaction
-		.select({ key: itemToCollection.collectionKey })
-		.from(itemToCollection)
-		.where(eq(itemToCollection.itemKey, itemKey));
-	const [filePublication] = await transaction
-		.select({ itemKey: itemFilePublication.itemKey })
-		.from(itemFilePublication)
-		.where(eq(itemFilePublication.itemKey, itemKey))
-		.limit(1);
-
-	const payload: Record<string, unknown> = {};
-	for (const field of editableItemFields) {
-		if (field === "url" && filePublication) continue;
-		const value = published[field as keyof typeof published];
-		if (value !== null && value !== undefined) {
-			payload[adminDatabaseFieldToPayloadField(field)] = value;
-		}
-	}
-	payload.tags = tagRows.map(({ name }) => name);
-	payload.collections = collectionRows.map(({ key }) => key);
-
+	const payload = await loadPublishedNativeItemPayload(
+		transaction,
+		itemKey,
+		published,
+	);
 	const validated = validateNativeItemDraft(payload);
 	const [draft] = await transaction
 		.insert(itemDraft)
 		.values({
 			itemKey,
 			sourceConnectionKey: NATIVE_CONNECTION_KEY,
-			payload: validated.payload,
+			patch: {},
 			baseRevision: published.revision,
 		})
 		.onConflictDoNothing()
 		.returning();
-	if (draft) return draft;
+	if (draft) return materializeItemDraft(draft, validated.payload);
 
 	const [concurrentDraft] = await transaction
 		.select()
@@ -416,7 +426,10 @@ async function openNativeItemDraftInTransaction(
 	if (!concurrentDraft) {
 		throw new NativeDraftConflictError(itemKey);
 	}
-	return concurrentDraft;
+	return materializeItemDraft(
+		concurrentDraft,
+		await loadPublishedNativeItemPayload(transaction, itemKey, published),
+	);
 }
 
 export async function openNativeItemDraft(db: Database, itemKey: string) {
@@ -442,9 +455,7 @@ async function saveNativeItemDraftInTransaction(
 		allowIncompleteCreators: true,
 	});
 	const [currentDraft] = await transaction
-		.select({
-			draftRevision: itemDraft.draftRevision,
-		})
+		.select()
 		.from(itemDraft)
 		.where(
 			and(
@@ -457,6 +468,23 @@ async function saveNativeItemDraftInTransaction(
 	if (currentDraft?.draftRevision !== expectedDraftRevision) {
 		throw new NativeDraftConflictError(itemKey);
 	}
+	const [published] = await transaction
+		.select()
+		.from(item)
+		.where(
+			and(
+				eq(item.key, itemKey),
+				eq(item.sourceConnectionKey, NATIVE_CONNECTION_KEY),
+			),
+		)
+		.for("update")
+		.limit(1);
+	const basePayload = await loadPublishedNativeItemPayload(
+		transaction,
+		itemKey,
+		published ?? null,
+	);
+	const patch = createItemDraftPatch(basePayload, validated.payload);
 	await assertValidNativeItemCollectionMembershipsInDatabase(
 		transaction,
 		itemKey,
@@ -465,7 +493,8 @@ async function saveNativeItemDraftInTransaction(
 	const [draft] = await transaction
 		.update(itemDraft)
 		.set({
-			payload: validated.payload,
+			baseRevision: published?.revision ?? 0,
+			patch,
 			draftRevision: sql`${itemDraft.draftRevision} + 1`,
 			updatedAt: new Date(),
 		})
@@ -480,7 +509,7 @@ async function saveNativeItemDraftInTransaction(
 	if (!draft) {
 		throw new NativeDraftConflictError(itemKey);
 	}
-	return draft;
+	return materializeItemDraft(draft, basePayload);
 }
 
 export async function saveNativeItemDraft(
@@ -539,11 +568,15 @@ export async function assignNativeItemDraftToCollection(
 			)
 			.for("update")
 			.limit(1);
+		const existingDraftPayload = existingDraft
+			? applyItemDraftPatch(
+					await loadPublishedNativeItemPayload(transaction, itemKey),
+					existingDraft.patch,
+				)
+			: null;
 		if (
-			existingDraft &&
-			collectionKeysFromPayload(existingDraft.payload).includes(
-				collectionKey,
-			)
+			existingDraftPayload &&
+			collectionKeysFromPayload(existingDraftPayload).includes(collectionKey)
 		) {
 			return { changed: false };
 		}
@@ -562,13 +595,16 @@ export async function assignNativeItemDraftToCollection(
 			if (existingMembership) return { changed: false };
 		}
 
-		const draft =
-			existingDraft ??
-			(await openNativeItemDraftInTransaction(transaction, itemKey));
+		const openedDraft = existingDraft
+			? null
+			: await openNativeItemDraftInTransaction(transaction, itemKey);
+		const draftRevision =
+			existingDraft?.draftRevision ?? openedDraft!.draftRevision;
+		const draftPayload = existingDraftPayload ?? openedDraft!.payload;
 		await saveNativeItemDraftInTransaction(transaction, {
-			expectedDraftRevision: draft.draftRevision,
+			expectedDraftRevision: draftRevision,
 			itemKey,
-			payload: payloadWithCollection(draft.payload, collectionKey),
+			payload: payloadWithCollection(draftPayload, collectionKey),
 		});
 		return { changed: true };
 	});
@@ -594,7 +630,12 @@ export async function publishNativeItemDraftWithContext(
 			throw new NativeItemNotFoundError(itemKey);
 		}
 
-		const initialValidated = validateNativeItemDraft(initialDraft.payload);
+		const initialValidated = validateNativeItemDraft(
+			applyItemDraftPatch(
+				await loadPublishedNativeItemPayload(transaction, itemKey),
+				initialDraft.patch,
+			),
+		);
 		const [candidate] = await transaction
 			.select({ parentItem: item.parentItem })
 			.from(item)
@@ -627,7 +668,19 @@ export async function publishNativeItemDraftWithContext(
 		if (!draft || draft.draftRevision !== initialDraft.draftRevision) {
 			throw new NativeDraftConflictError(itemKey);
 		}
-		const validated = validateNativeItemDraft(draft.payload);
+		const current = lockedItems.find(
+			(candidate) => candidate.key === itemKey,
+		);
+		const validated = validateNativeItemDraft(
+			applyItemDraftPatch(
+				await loadPublishedNativeItemPayload(
+					transaction,
+					itemKey,
+					current ?? null,
+				),
+				draft.patch,
+			),
+		);
 		if (validated.item.parentItem !== parentItemKey) {
 			throw new NativeDraftConflictError(itemKey);
 		}
@@ -635,9 +688,6 @@ export async function publishNativeItemDraftWithContext(
 			transaction,
 			itemKey,
 			validated.collectionKeys,
-		);
-		const current = lockedItems.find(
-			(candidate) => candidate.key === itemKey,
 		);
 		if ((current?.parentItem ?? null) !== (candidate?.parentItem ?? null)) {
 			throw new NativeDraftConflictError(itemKey);
@@ -649,9 +699,6 @@ export async function publishNativeItemDraftWithContext(
 					)
 				: undefined;
 		const currentRevision = current?.revision ?? 0;
-		if (currentRevision !== draft.baseRevision) {
-			throw new NativeDraftConflictError(itemKey);
-		}
 		if (
 			typeof parentItemKey === "string" &&
 			(parentItemKey === itemKey ||
@@ -1078,7 +1125,7 @@ async function discardNativeItemDraftInTransaction(
 		const [childDraft] = await transaction
 			.select({ itemKey: itemDraft.itemKey })
 			.from(itemDraft)
-			.where(sql`${itemDraft.payload} ->> 'parentItem' = ${itemKey}`)
+			.where(sql`${itemDraft.patch} ->> 'parentItem' = ${itemKey}`)
 			.limit(1);
 		const [publishedChild] = await transaction
 			.select({ key: item.key })

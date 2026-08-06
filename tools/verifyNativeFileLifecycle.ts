@@ -27,6 +27,7 @@ import {
 } from "../src/lib/admin/native-file-service";
 import {
 	createNativeItemDraft,
+	getNativeItemDraft,
 	NativeItemHasPublishedFileError,
 	openNativeItemDraft,
 	publishNativeItemDraft,
@@ -236,10 +237,10 @@ async function verify() {
 				storage.publicFiles.size === 2,
 			"File publication did not project the prepared PDF",
 		);
-		const [advancedAttachmentDraft] = await db
-			.select()
-			.from(itemDraft)
-			.where(eq(itemDraft.itemKey, attachmentDraft.itemKey));
+		const advancedAttachmentDraft = await getNativeItemDraft(
+			db,
+			attachmentDraft.itemKey,
+		);
 		assert(
 			advancedAttachmentDraft?.baseRevision === 2 &&
 				advancedAttachmentDraft.draftRevision ===

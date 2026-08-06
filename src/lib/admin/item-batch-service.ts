@@ -48,7 +48,7 @@ async function loadBatchState(db: Database, request: AdminItemBatchRequest) {
 			.from(itemIdentity)
 			.where(inArray(itemIdentity.key, request.keys)),
 		db
-			.select({ itemKey: itemDraft.itemKey, payload: itemDraft.payload })
+			.select({ itemKey: itemDraft.itemKey, patch: itemDraft.patch })
 			.from(itemDraft)
 			.where(inArray(itemDraft.itemKey, request.keys)),
 		db
@@ -145,7 +145,7 @@ export async function runAdminItemBatch(
 	const revalidationTargets: RevalidationTarget[] = [];
 	const parentByKey = new Map(
 		request.keys.map((key) => {
-			const draftParent = state.drafts.get(key)?.payload.parentItem;
+			const draftParent = state.drafts.get(key)?.patch.parentItem;
 			const published = state.published.get(key);
 			return [
 				key,

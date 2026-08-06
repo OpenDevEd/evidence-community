@@ -5,7 +5,7 @@ import {
 	itemFileDraft,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
-import { and, asc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { itemFilePublication } from "@/db/schema/source";
@@ -15,6 +15,10 @@ import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
+import {
+	applyItemDraftPatch,
+	publishedAdminItemPayload,
+} from "./item-draft-patch";
 import { payloadStringList } from "./item-payload";
 import {
 	fileDraftJson,
@@ -39,13 +43,25 @@ function dateString(value: Date | string | null | undefined) {
 	return value instanceof Date ? value.toISOString() : value;
 }
 
+function groupRowsByItemKey<T extends { itemKey: string }>(rows: T[]) {
+	const grouped = new Map<string, T[]>();
+	for (const row of rows) {
+		const group = grouped.get(row.itemKey);
+		if (group) group.push(row);
+		else grouped.set(row.itemKey, [row]);
+	}
+	return grouped;
+}
+
 function draftJson(
 	row: typeof itemDraft.$inferSelect | null | undefined,
+	payload: Record<string, unknown>,
 ): AdminItemDraft | null {
 	if (!row) return null;
 	return {
 		...row,
 		createdAt: dateString(row.createdAt),
+		payload,
 		updatedAt: dateString(row.updatedAt),
 	};
 }
@@ -83,8 +99,9 @@ function itemSummary(
 	draft: typeof itemDraft.$inferSelect | null,
 	fileDraft: typeof itemFileDraft.$inferSelect | null = null,
 	filePublication: typeof itemFilePublication.$inferSelect | null = null,
+	draftPayload: Record<string, unknown> = {},
 ): AdminItemSummary {
-	const payload = draft?.payload ?? {};
+	const payload = draft ? draftPayload : {};
 	return {
 		creators: (payload.creators ??
 			published?.creators ??
@@ -118,20 +135,25 @@ async function getAdminAttachments(
 	db: Database,
 	parentItemKey: string,
 ): Promise<AdminAttachment[]> {
-	const [publishedRows, draftRows] = await Promise.all([
-		db
-			.select()
-			.from(item)
-			.where(eq(item.parentItem, parentItemKey))
-			.orderBy(asc(item.dateAdded), asc(item.key)),
-		db
-			.select()
-			.from(itemDraft)
-			.where(
-				sql`${itemDraft.payload} ->> 'parentItem' = ${parentItemKey}`,
-			)
-			.orderBy(asc(itemDraft.createdAt)),
-	]);
+	const publishedRows = await db
+		.select()
+		.from(item)
+		.where(eq(item.parentItem, parentItemKey))
+		.orderBy(asc(item.dateAdded), asc(item.key));
+	const publishedKeys = publishedRows.map(({ key }) => key);
+	const draftParentCondition = sql`${itemDraft.patch} ->> 'parentItem' = ${parentItemKey}`;
+	const draftRows = await db
+		.select()
+		.from(itemDraft)
+		.where(
+			publishedKeys.length > 0
+				? or(
+						draftParentCondition,
+						inArray(itemDraft.itemKey, publishedKeys),
+					)
+				: draftParentCondition,
+		)
+		.orderBy(asc(itemDraft.createdAt));
 	const keys = [
 		...new Set([
 			...publishedRows.map(({ key }) => key),
@@ -140,7 +162,8 @@ async function getAdminAttachments(
 	];
 	if (keys.length === 0) return [];
 
-	const [fileDraftRows, filePublicationRows] = await Promise.all([
+	const [fileDraftRows, filePublicationRows, tagRows, membershipRows] =
+		await Promise.all([
 		db
 			.select()
 			.from(itemFileDraft)
@@ -149,6 +172,17 @@ async function getAdminAttachments(
 			.select()
 			.from(itemFilePublication)
 			.where(inArray(itemFilePublication.itemKey, keys)),
+		db
+			.select({ itemKey: itemToTag.itemKey, name: itemToTag.tagName })
+			.from(itemToTag)
+			.where(inArray(itemToTag.itemKey, keys)),
+		db
+			.select({
+				itemKey: itemToCollection.itemKey,
+				key: itemToCollection.collectionKey,
+			})
+			.from(itemToCollection)
+			.where(inArray(itemToCollection.itemKey, keys)),
 	]);
 	const publishedByKey = new Map(publishedRows.map((row) => [row.key, row]));
 	const draftByKey = new Map(draftRows.map((row) => [row.itemKey, row]));
@@ -158,15 +192,32 @@ async function getAdminAttachments(
 	const filePublicationByKey = new Map(
 		filePublicationRows.map((row) => [row.itemKey, row]),
 	);
+	const tagsByKey = groupRowsByItemKey(tagRows);
+	const collectionsByKey = groupRowsByItemKey(membershipRows);
 
 	return keys.map((key) => {
 		const published = publishedByKey.get(key) ?? null;
 		const draft = draftByKey.get(key) ?? null;
 		const fileDraft = fileDraftByKey.get(key) ?? null;
 		const filePublication = filePublicationByKey.get(key) ?? null;
+		const basePayload = publishedAdminItemPayload(published, {
+			collectionKeys:
+				collectionsByKey.get(key)?.map(({ key }) => key) ?? [],
+			hasPublishedFile: Boolean(filePublication),
+			tags: tagsByKey.get(key)?.map(({ name }) => name) ?? [],
+		});
+		const effectivePayload = draft
+			? applyItemDraftPatch(basePayload, draft.patch)
+			: basePayload;
 		return {
-			...itemSummary(published, draft, fileDraft, filePublication),
-			draft: draftJson(draft),
+			...itemSummary(
+				published,
+				draft,
+				fileDraft,
+				filePublication,
+				effectivePayload,
+			),
+			draft: draftJson(draft, effectivePayload),
 			fileDraft: fileDraftJson(fileDraft),
 			filePublication: filePublicationJson(filePublication),
 			parentItem: parentItemKey,
@@ -227,15 +278,20 @@ export async function getAdminItemDetail(
 			: Promise.resolve([]),
 		getAdminAttachments(db, itemKey),
 	]);
-	const payload = draft?.payload ?? {};
+	const basePayload = publishedAdminItemPayload(published, {
+		collectionKeys: membershipRows.map(({ key }) => key),
+		hasPublishedFile: Boolean(filePublication),
+		tags: tagRows.map(({ name }) => name),
+	});
+	const payload = draft
+		? applyItemDraftPatch(basePayload, draft.patch)
+		: basePayload;
 	const draftTags = draft ? payloadStringList(payload, "tags") : null;
 	const draftCollections = draft
 		? payloadStringList(payload, "collections")
 		: null;
 	const parentItem =
-		typeof payload.parentItem === "string"
-			? payload.parentItem
-			: (published?.parentItem ?? null);
+		typeof payload.parentItem === "string" ? payload.parentItem : null;
 	const [parentPublished, parentDraft] = parentItem
 		? await Promise.all([
 				db
@@ -253,7 +309,13 @@ export async function getAdminItemDetail(
 			])
 		: [null, null];
 
-	const summary = itemSummary(published, draft, fileDraft, filePublication);
+	const summary = itemSummary(
+		published,
+		draft,
+		fileDraft,
+		filePublication,
+		payload,
+	);
 	const attachmentFileState = attachments.reduce<AdminFileState>(
 		(current, attachment) => {
 			const priority: Record<AdminFileState, number> = {
@@ -278,7 +340,7 @@ export async function getAdminItemDetail(
 		attachments,
 		collectionKeys:
 			draftCollections ?? membershipRows.map(({ key }) => key),
-		draft: draftJson(draft),
+		draft: draftJson(draft, payload),
 		fileDraft: fileDraftJson(fileDraft),
 		filePublication: filePublicationJson(filePublication),
 		parentItem,

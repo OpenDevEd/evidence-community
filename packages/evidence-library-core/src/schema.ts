@@ -347,7 +347,7 @@ export const itemDraft = pgTable(
 		sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 })
 			.notNull()
 			.default("native"),
-		payload: jsonb("payload").$type<JsonObject>().notNull(),
+		patch: jsonb("patch").$type<JsonObject>().notNull(),
 		baseRevision: bigint("baseRevision", { mode: "number" })
 			.notNull()
 			.default(0),
@@ -363,8 +363,8 @@ export const itemDraft = pgTable(
 			sql`${table.sourceConnectionKey} = 'native'`,
 		),
 		check(
-			"itemDraft_payload_object",
-			sql`jsonb_typeof(${table.payload}) = 'object'`,
+			"itemDraft_patch_object",
+			sql`jsonb_typeof(${table.patch}) = 'object'`,
 		),
 		check(
 			"itemDraft_revision_positive",

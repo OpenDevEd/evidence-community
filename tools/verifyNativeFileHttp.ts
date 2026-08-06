@@ -430,8 +430,8 @@ async function verify() {
 					.from(itemDraft)
 					.where(
 						or(
-							sql`${itemDraft.payload}->>'title' = ${parentTitle}`,
-							sql`${itemDraft.payload}->>'title' = ${attachmentTitle}`,
+								sql`${itemDraft.patch}->>'title' = ${parentTitle}`,
+								sql`${itemDraft.patch}->>'title' = ${attachmentTitle}`,
 						),
 					),
 			]);

@@ -36,6 +36,7 @@ export type AdminItemDraft = {
 	createdAt: string;
 	draftRevision: number;
 	itemKey: string;
+	patch: Record<string, unknown>;
 	payload: Record<string, unknown>;
 	sourceConnectionKey: string;
 	updatedAt: string;

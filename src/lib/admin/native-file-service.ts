@@ -198,7 +198,7 @@ export async function stageNativePdfUpload(
 	const normalized = normalizeStageInput(input);
 	const staged = await db.transaction(async (transaction) => {
 		const [metadataDraft] = await transaction
-			.select({ payload: itemDraft.payload })
+			.select({ patch: itemDraft.patch })
 			.from(itemDraft)
 			.where(
 				and(
@@ -222,7 +222,7 @@ export async function stageNativePdfUpload(
 			.limit(1);
 		const { parentItem } = attachmentDescriptor(
 			input.itemKey,
-			metadataDraft?.payload,
+			metadataDraft?.patch,
 			published,
 		);
 

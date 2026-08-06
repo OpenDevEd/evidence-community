@@ -30,6 +30,7 @@ function detail(
 			createdAt: "2026-01-01T00:00:00.000Z",
 			draftRevision: 1,
 			itemKey: "BOOK0001",
+			patch: {},
 			payload: {},
 			sourceConnectionKey: "native",
 			updatedAt: "2026-01-01T00:00:00.000Z",

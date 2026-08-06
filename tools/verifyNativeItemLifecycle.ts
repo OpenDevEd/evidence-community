@@ -186,6 +186,57 @@ async function verify() {
 			"Published tags were not normalized",
 		);
 
+		const patchMergeDraft = await createNativeItemDraft(db, {
+			abstractNote: "Published abstract",
+			date: "2024",
+			itemType: "Report",
+			title: "Published merge title",
+		});
+		createdKeys.push(patchMergeDraft.itemKey);
+		await publishNativeItemDraft(db, patchMergeDraft.itemKey);
+		const patchMergeEdit = await openNativeItemDraft(
+			db,
+			patchMergeDraft.itemKey,
+		);
+		const { abstractNote: _removedAbstract, ...patchMergePayload } =
+			patchMergeEdit.payload;
+		await saveNativeItemDraft(db, {
+			expectedDraftRevision: patchMergeEdit.draftRevision,
+			itemKey: patchMergeDraft.itemKey,
+			payload: {
+				...patchMergePayload,
+				title: "Locally edited merge title",
+			},
+		});
+		const [storedPatch] = await db
+			.select({ patch: itemDraft.patch })
+			.from(itemDraft)
+			.where(eq(itemDraft.itemKey, patchMergeDraft.itemKey));
+		assert(
+			storedPatch?.patch.title === "Locally edited merge title" &&
+				storedPatch.patch.abstractNote === null &&
+				Object.keys(storedPatch.patch).length === 2,
+			"Saved draft did not contain only changed fields and tombstones",
+		);
+		await db
+			.update(item)
+			.set({
+				date: "2026",
+				revision: sql`${item.revision} + 1`,
+				updatedAt: new Date(),
+			})
+			.where(eq(item.key, patchMergeDraft.itemKey));
+		const mergedPublication = await publishNativeItemDraft(
+			db,
+			patchMergeDraft.itemKey,
+		);
+		assert(
+			mergedPublication.title === "Locally edited merge title" &&
+				mergedPublication.abstractNote === null &&
+				mergedPublication.date === "2026",
+			"Publishing did not apply the patch to the latest canonical base",
+		);
+
 		await db.insert(sourceConnection).values({
 			externalScopeKey: `verify-native-memberships-${Date.now()}`,
 			key: importedSourceKey,
@@ -503,14 +554,14 @@ async function verify() {
 			"Concurrent assignment and discard deadlocked or failed",
 		);
 		const [settledDraft] = await db
-			.select({ payload: itemDraft.payload })
+			.select({ patch: itemDraft.patch })
 			.from(itemDraft)
 			.where(eq(itemDraft.itemKey, assignDiscardDraft.itemKey))
 			.limit(1);
 		assert(
 			!settledDraft ||
-				(Array.isArray(settledDraft.payload.collections) &&
-					settledDraft.payload.collections.includes(
+				(Array.isArray(settledDraft.patch.collections) &&
+					settledDraft.patch.collections.includes(
 						concurrencyCollection.key,
 					)),
 			"Concurrent assignment and discard left an unassigned draft",
@@ -609,6 +660,7 @@ async function verify() {
 				concurrentMutationRuns: concurrentMutationRunCount,
 				concurrentAssignDiscardVerified: true,
 				concurrentPublishRemoveVerified: true,
+				fieldPatchMergeVerified: true,
 			}),
 		);
 	} finally {

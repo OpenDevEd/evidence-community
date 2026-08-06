@@ -54,14 +54,15 @@ Library databases and deployments are not migrated or modified.
 - Native drafts live only in `itemDraft`; editing a draft never mutates the
   published `item` row.
 - There is exactly one active draft per native item key. `draftRevision`
-  provides optimistic concurrency and `baseRevision` prevents publishing over
-  a newer canonical record.
-- Draft payloads are complete Zotero-style snapshots validated against the
-  pinned Zotero schema. All 40 item types, their fields, and their allowed
-  creator roles use that single schema source.
-- Publishing replaces the complete editable metadata snapshot, normalized
-  tags, and normalized collection memberships in one transaction, increments
-  the canonical revision, emits one outbox event, and removes the draft.
+  provides optimistic editor concurrency, while `baseRevision` records which
+  canonical revision was visible when the patch was last saved.
+- Drafts store only changed Zotero-style fields. A present `null` is an explicit
+  clear tombstone; an absent field inherits the latest canonical value. The
+  materialized base-plus-patch payload is validated against the pinned Zotero
+  schema.
+- Publishing applies the patch to the latest canonical base, normalizes tags
+  and collection memberships in the same transaction, increments the canonical
+  revision, emits one outbox event, and removes the draft.
 - Unpublishing retains the canonical row as a tombstone and emits a delete
   event. Repeated unpublish requests are idempotent. Canonical identities are
   not recycled after publication.
