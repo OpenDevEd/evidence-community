@@ -6,7 +6,7 @@ import {
 	outbox,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notExists } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { sourceSnapshot } from "../src/db/schema/source";
@@ -398,7 +398,19 @@ async function cleanup(
 	await database
 		.delete(sourceConnection)
 		.where(eq(sourceConnection.key, connectionKey));
-	await database.delete(tag).where(inArray(tag.name, tagNames));
+	await database
+		.delete(tag)
+		.where(
+			and(
+				inArray(tag.name, tagNames),
+				notExists(
+					database
+						.select({ tagName: itemToTag.tagName })
+						.from(itemToTag)
+						.where(eq(itemToTag.tagName, tag.name)),
+				),
+			),
+		);
 }
 
 async function verify() {
