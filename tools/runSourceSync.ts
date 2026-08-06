@@ -2,10 +2,6 @@ import { hostname } from "node:os";
 
 import { loadLibraryConfig } from "../src/config/library-config/source";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
-import { createSupabaseFileStorage } from "../src/lib/admin/file-storage";
-import { createEnvironmentCredentialResolver } from "../src/lib/source-ingestion/credentials";
-import { createDefaultSourceAdapterRegistry } from "../src/lib/source-ingestion/default-registry";
-import { createZoteroAttachmentProcessor } from "../src/lib/source-ingestion/zotero/attachment-processor";
 import {
 	runActiveSourceConnections,
 	runSourceConnection,
@@ -17,6 +13,7 @@ import {
 	runSourceWorker,
 	validateSourceSyncPollMs,
 } from "../src/lib/source-ingestion/source-worker";
+import { createSourceSyncRuntime } from "../src/lib/source-ingestion/runtime";
 
 const usage =
 	"Usage: npm run source:sync -- [--connection <key>] [--concurrency <1-32>] [--watch] [--poll-ms <1000-3600000>] [--worker-id <id>]";
@@ -150,18 +147,14 @@ async function main() {
 	process.on("SIGTERM", stop);
 
 	try {
-		const attachmentProcessor = createZoteroAttachmentProcessor({
-			database: databaseResource.database,
-			maxPdfBytes: config.services.storage.maxPdfBytes,
-			publishTags: config.content.tags.publish,
-			storage: createSupabaseFileStorage(config.services.storage),
-		});
+		const runtime = createSourceSyncRuntime(
+			config,
+			databaseResource.database,
+		);
 		const options = {
-			credentialResolver: createEnvironmentCredentialResolver(),
+			credentialResolver: runtime.credentialResolver,
 			database: databaseResource.database,
-			registry: createDefaultSourceAdapterRegistry({
-				zotero: { attachmentProcessor },
-			}),
+			registry: runtime.registry,
 			workerId: command.workerId,
 		};
 		const result = await runSourceWorker({
