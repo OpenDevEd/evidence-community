@@ -127,6 +127,20 @@
       "when": 1786029698534,
       "tag": "0017_remote-source-deletion-state",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1786031405779,
+      "tag": "0018_editable-source-drafts",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1786032173395,
+      "tag": "0019_linked-item-parents",
+      "breakpoints": true
     }
   ]
 }

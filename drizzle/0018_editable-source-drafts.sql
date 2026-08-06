@@ -1,0 +1,1 @@
+ALTER TABLE "itemDraft" DROP CONSTRAINT "itemDraft_native_only";

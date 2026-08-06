@@ -709,6 +709,7 @@ async function verify() {
 			items: [
 				{
 					...firstBatch.items[1],
+					collections: [{ sourceRecordKey: "DDDD2345" }],
 					remoteVersion: "12",
 					raw: { key: "BBBB2345", version: 12 },
 					metadata: {
@@ -727,18 +728,31 @@ async function verify() {
 			attachmentUpdate.written.items === 2,
 			"Attachment update did not reproject its parent",
 		);
-		const [savedIssue] = await db
-			.select()
-			.from(sourceRecordIssue)
-			.where(
-				and(
-					eq(sourceRecordIssue.sourceConnectionKey, "zotero-writer"),
-					eq(sourceRecordIssue.sourceRecordKey, "BBBB2345"),
+		const [[savedIssue], membershipsAfterSourceUpdate] = await Promise.all([
+			db
+				.select()
+				.from(sourceRecordIssue)
+				.where(
+					and(
+						eq(
+							sourceRecordIssue.sourceConnectionKey,
+							"zotero-writer",
+						),
+						eq(sourceRecordIssue.sourceRecordKey, "BBBB2345"),
+					),
 				),
-			);
+			db
+				.select()
+				.from(itemToCollection)
+				.where(eq(itemToCollection.itemKey, attachmentKey)),
+		]);
 		assert(
 			savedIssue?.code === "zotero_file_unavailable",
 			"A source record processing issue was not persisted with the batch",
+		);
+		assert(
+			membershipsAfterSourceUpdate.length === 2,
+			"A source update removed a collection membership owned by another source",
 		);
 
 		let staleRejected = false;

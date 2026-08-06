@@ -70,6 +70,26 @@ describe("sourceIngestionBatchSchema", () => {
 		}
 	});
 
+	it("rejects delete and upsert operations for the same item", () => {
+		const original = batch();
+		const parsed = sourceIngestionBatchSchema.safeParse({
+			...original,
+			items: [
+				...original.items,
+				{
+					operation: "delete",
+					sourceRecordKey: original.items[0]!.sourceRecordKey,
+				},
+			],
+		});
+		expect(parsed.success).toBe(false);
+		if (!parsed.success) {
+			expect(parsed.error.issues[0]?.message).toContain(
+				"Duplicate items sourceRecordKey",
+			);
+		}
+	});
+
 	it("requires complete cover metadata", () => {
 		const input = batch();
 		const item = input.items[0]!;

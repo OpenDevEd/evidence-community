@@ -410,10 +410,6 @@ export const itemDraft = pgTable(
 	},
 	(table) => [
 		check(
-			"itemDraft_native_only",
-			sql`${table.sourceConnectionKey} = 'native'`,
-		),
-		check(
 			"itemDraft_patch_object",
 			sql`jsonb_typeof(${table.patch}) = 'object'`,
 		),

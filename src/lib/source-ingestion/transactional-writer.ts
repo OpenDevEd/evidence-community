@@ -831,9 +831,15 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				: await transaction
 						.select({
 							collectionKey: itemToCollection.collectionKey,
+							collectionSourceConnectionKey:
+								collection.sourceConnectionKey,
 							itemKey: itemToCollection.itemKey,
 						})
 						.from(itemToCollection)
+						.innerJoin(
+							collection,
+							eq(collection.key, itemToCollection.collectionKey),
+						)
 						.where(inArray(itemToCollection.itemKey, allItemKeys));
 		const existingTagsByItemKey = new Map<string, string[]>();
 		for (const row of existingTagRows) {
@@ -842,10 +848,19 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			existingTagsByItemKey.set(row.itemKey, values);
 		}
 		const existingCollectionsByItemKey = new Map<string, string[]>();
+		const foreignCollectionsByItemKey = new Map<string, string[]>();
 		for (const row of existingCollectionRows) {
 			const values = existingCollectionsByItemKey.get(row.itemKey) ?? [];
 			values.push(row.collectionKey);
 			existingCollectionsByItemKey.set(row.itemKey, values);
+			if (
+				row.collectionSourceConnectionKey !== batch.sourceConnectionKey
+			) {
+				const foreignValues =
+					foreignCollectionsByItemKey.get(row.itemKey) ?? [];
+				foreignValues.push(row.collectionKey);
+				foreignCollectionsByItemKey.set(row.itemKey, foreignValues);
+			}
 		}
 
 		const parentItemKeys = new Map<string, string | null>();
@@ -1039,7 +1054,14 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 					{
 						collections: dirtyFields.has("collections")
 							? (existingCollectionsByItemKey.get(key) ?? [])
-							: incomingCollections,
+							: [
+									...new Set([
+										...(foreignCollectionsByItemKey.get(
+											key,
+										) ?? []),
+										...incomingCollections,
+									]),
+								].sort(),
 						dirtyFields,
 						item: maskDirtyItemFields(
 							normalized.item,

@@ -212,16 +212,19 @@ async function verify() {
 				`),
 		);
 
-		await expectConstraintViolation(
-			"cross-source parent rejection",
-			"item_parent_source_fk",
-			() =>
-				client.query(`
-					UPDATE "item"
-					SET "parentItem" = 'CCCC2345'
-					WHERE "key" = 'BBBB2345'
-				`),
-		);
+		await client.query(`
+			UPDATE "item"
+			SET "parentItem" = 'CCCC2345'
+			WHERE "key" = 'BBBB2345'
+		`);
+		const crossSourceParent = await client.query<{ parentItem: string }>(`
+			SELECT "parentItem"
+			FROM "item"
+			WHERE "key" = 'BBBB2345'
+		`);
+		if (crossSourceParent.rows[0]?.parentItem !== "CCCC2345") {
+			throw new Error("A linked cross-source parent was not retained");
+		}
 
 		await client.query(`
 			INSERT INTO "collectionIdentity"
