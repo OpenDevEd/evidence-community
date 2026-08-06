@@ -274,6 +274,7 @@ export class ZoteroApiClient {
 	async verifyKeyAccess(
 		scope: ZoteroLibraryScope,
 		requiredAccess: "read" | "write" = "read",
+		signal?: AbortSignal,
 	) {
 		if (!this.options.apiKey) {
 			if (requiredAccess === "write") {
@@ -284,7 +285,9 @@ export class ZoteroApiClient {
 			}
 			return;
 		}
-		const response = await this.request("keys/current");
+		const response = await this.request("keys/current", undefined, {
+			signal,
+		});
 		const key = zoteroKeyAccessSchema.parse(await response.json());
 		const access =
 			scope.kind === "personal-library"

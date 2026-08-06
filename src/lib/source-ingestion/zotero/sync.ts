@@ -31,8 +31,7 @@ import {
 	type ZoteroCursor,
 	type ZoteroItemResponse,
 } from "./schema";
-
-const ZOTERO_MAPPING_PROFILE_VERSION = "zotero-web-api-v3-3";
+import { ZOTERO_MAPPING_PROFILE_VERSION } from "./profile";
 
 type Fetch = typeof fetch;
 
