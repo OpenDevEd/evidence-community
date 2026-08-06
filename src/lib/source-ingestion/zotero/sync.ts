@@ -1,7 +1,6 @@
 import {
 	collectionIdentity,
 	itemSourceLink,
-	sourceConnection,
 } from "@opendeved/evidence-library-core";
 import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 
@@ -11,11 +10,15 @@ import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 
 import type { SourceCredentialResolver } from "../credentials";
-import { SourceCredentialNotFoundError } from "../credentials";
 import type { SourceIngestionBatch } from "../batch-schema";
 import { chunkValues } from "@/lib/chunk-values";
 import { writeSourceIngestionBatch } from "../transactional-writer";
-import { ZOTERO_OBJECT_REQUEST_SIZE, ZoteroApiClient } from "./client";
+import { ZOTERO_OBJECT_REQUEST_SIZE, type ZoteroApiClient } from "./client";
+import {
+	createZoteroConnectionClient,
+	loadZoteroSourceConnection,
+	ZoteroSourceConfigurationError,
+} from "./connection";
 import {
 	mapZoteroCollection,
 	mapZoteroItem,
@@ -23,7 +26,6 @@ import {
 	type ZoteroAttachmentProcessorContext,
 } from "./mapper";
 import {
-	zoteroConnectionConfigSchema,
 	zoteroCursorSchema,
 	type ZoteroCollectionResponse,
 	type ZoteroCursor,
@@ -98,13 +100,6 @@ type SoftTrashState = {
 	softTrashedItemKeys: Set<string>;
 };
 
-export class ZoteroSourceConfigurationError extends Error {
-	constructor(message: string) {
-		super(message);
-		this.name = "ZoteroSourceConfigurationError";
-	}
-}
-
 export class ZoteroSnapshotChangedError extends Error {
 	constructor() {
 		super("Zotero library changed while its sync snapshot was read");
@@ -114,25 +109,6 @@ export class ZoteroSnapshotChangedError extends Error {
 
 function currentLibraryVersion(cursor: ZoteroCursor) {
 	return "libraryVersion" in cursor ? cursor.libraryVersion : 0;
-}
-
-function sourcePrefix(scopeKind: string, externalScopeKey: string) {
-	if (scopeKind === "group") return `groups/${externalScopeKey}`;
-	if (scopeKind === "personal-library") {
-		return `users/${externalScopeKey}`;
-	}
-	throw new ZoteroSourceConfigurationError(
-		`Unsupported Zotero scope kind: ${scopeKind}`,
-	);
-}
-
-function zoteroScopeKind(scopeKind: string) {
-	if (scopeKind === "group" || scopeKind === "personal-library") {
-		return scopeKind;
-	}
-	throw new ZoteroSourceConfigurationError(
-		`Unsupported Zotero scope kind: ${scopeKind}`,
-	);
 }
 
 function assertSnapshotVersion(actual: number, expected: number) {
@@ -731,66 +707,18 @@ function expandLocalDescendantDeletes(
 	return { ...manifest, entries: retainedEntries };
 }
 
-async function loadConnection(database: Database, key: string) {
-	const [connection] = await database
-		.select()
-		.from(sourceConnection)
-		.where(eq(sourceConnection.key, key))
-		.limit(1);
-	if (!connection || connection.provider !== "zotero") {
-		throw new ZoteroSourceConfigurationError(
-			`Zotero source connection was not found: ${key}`,
-		);
-	}
-	if (connection.status !== "active") {
-		throw new ZoteroSourceConfigurationError(
-			`Zotero source connection is not active: ${key}`,
-		);
-	}
-	if (!connection.externalScopeKey) {
-		throw new ZoteroSourceConfigurationError(
-			`Zotero source connection has no external scope: ${key}`,
-		);
-	}
-	return connection;
-}
-
 export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
-	const connection = await loadConnection(
+	const connection = await loadZoteroSourceConnection(
 		options.database,
 		options.sourceConnectionKey,
 	);
-	const config = zoteroConnectionConfigSchema.parse(connection.config);
-	const externalScopeKey = connection.externalScopeKey;
-	if (!externalScopeKey) {
-		throw new ZoteroSourceConfigurationError(
-			`Zotero source connection has no external scope: ${connection.key}`,
-		);
-	}
-	const scopeKind = zoteroScopeKind(connection.scopeKind);
-	const prefix = sourcePrefix(scopeKind, externalScopeKey);
-	let apiKey: string | null = null;
-	if (connection.credentialRef) {
-		if (!options.credentialResolver) {
-			throw new SourceCredentialNotFoundError(connection.credentialRef);
-		}
-		apiKey = await options.credentialResolver(connection.credentialRef);
-		if (!apiKey) {
-			throw new SourceCredentialNotFoundError(connection.credentialRef);
-		}
-	}
-	const client = new ZoteroApiClient({
-		apiBaseUrl: config.apiBaseUrl,
-		apiKey,
-		attachmentDownloadTimeoutMs: config.attachmentDownloadTimeoutMs,
-		fetch: options.fetch,
-		requestTimeoutMs: config.requestTimeoutMs,
-		sleep: options.sleep,
-	});
-	await client.verifyKeyAccess({
-		externalScopeKey,
-		kind: scopeKind,
-	});
+	const { client, config, prefix, scope } =
+		await createZoteroConnectionClient(connection, {
+			credentialResolver: options.credentialResolver,
+			fetch: options.fetch,
+			sleep: options.sleep,
+		});
+	await client.verifyKeyAccess(scope);
 	const attachmentContext: ZoteroAttachmentProcessorContext = {
 		client,
 		prefix,
@@ -805,7 +733,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		attempt < config.maxConsistencyRetries;
 		attempt += 1
 	) {
-		const latestConnection = await loadConnection(
+		const latestConnection = await loadZoteroSourceConnection(
 			options.database,
 			options.sourceConnectionKey,
 		);
