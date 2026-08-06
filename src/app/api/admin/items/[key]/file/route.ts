@@ -101,7 +101,6 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
 			runtime.db,
 			runtime.storage,
 			key,
-			{ publicationTags: runtime.config.content.tags.publish },
 		);
 		const { item } = unpublished;
 		revalidatePublishedItemCaches(item.key, item.parentItem);

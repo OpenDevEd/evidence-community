@@ -1,0 +1,2 @@
+ALTER TABLE "itemFilePublication" ADD COLUMN "publicationTags" jsonb DEFAULT '[]'::jsonb NOT NULL;--> statement-breakpoint
+ALTER TABLE "itemFilePublication" ADD CONSTRAINT "itemFilePublication_publication_tags_array" CHECK (jsonb_typeof("itemFilePublication"."publicationTags") = 'array');

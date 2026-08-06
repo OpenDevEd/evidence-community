@@ -717,9 +717,11 @@ export async function publishItemDraftWithContext(
 			deletedAt: null,
 			updatedAt: now,
 		} as ItemInsert;
+		let publishedTags = validated.tags;
 		if (current && validated.item.itemType === "Attachment") {
 			const [filePublication] = await transaction
 				.select({
+					publicationTags: itemFilePublication.publicationTags,
 					publicUrl: itemFilePublication.publicUrl,
 				})
 				.from(itemFilePublication)
@@ -727,6 +729,12 @@ export async function publishItemDraftWithContext(
 				.limit(1);
 			if (filePublication) {
 				values.url = filePublication.publicUrl;
+				publishedTags = [
+					...new Set([
+						...validated.tags,
+						...filePublication.publicationTags,
+					]),
+				].sort();
 			}
 		}
 
@@ -747,13 +755,13 @@ export async function publishItemDraftWithContext(
 		await transaction
 			.delete(itemToTag)
 			.where(eq(itemToTag.itemKey, itemKey));
-		if (validated.tags.length > 0) {
+		if (publishedTags.length > 0) {
 			await transaction
 				.insert(tag)
-				.values(validated.tags.map((name) => ({ name })))
+				.values(publishedTags.map((name) => ({ name })))
 				.onConflictDoNothing();
 			await transaction.insert(itemToTag).values(
-				validated.tags.map((tagName) => ({
+				publishedTags.map((tagName) => ({
 					itemKey,
 					tagName,
 				})),

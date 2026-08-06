@@ -305,6 +305,11 @@ async function verify() {
 				publishedTags.some(({ name }) => name === PUBLICATION_TAGS[0]),
 			"File publication did not project the prepared PDF",
 		);
+		assert(
+			published.file.publicationTags.join(",") ===
+				PUBLICATION_TAGS.join(","),
+			"File publication did not retain ownership of its publication tags",
+		);
 		const advancedAttachmentDraft = await getNativeItemDraft(
 			db,
 			attachmentDraft.itemKey,
@@ -367,6 +372,7 @@ async function verify() {
 			expectedPayload: advancedAttachmentDraft.payload,
 			payload: {
 				...advancedAttachmentDraft.payload,
+				tags: ["topic-tag"],
 				title: "Renamed PDF metadata",
 			},
 		});
@@ -374,13 +380,23 @@ async function verify() {
 			db,
 			attachmentDraft.itemKey,
 		);
+		const tagsAfterMetadataPublish = await db
+			.select({ name: itemToTag.tagName })
+			.from(itemToTag)
+			.where(eq(itemToTag.itemKey, attachmentDraft.itemKey));
 		assert(
 			republishedMetadata.revision === 3 &&
 				republishedMetadata.url === published.item.url &&
 				republishedMetadata.PDFCoverPageImage ===
 					published.item.PDFCoverPageImage &&
-				republishedMetadata.fullTextPDF === published.item.fullTextPDF,
-			"Metadata publication erased file-managed fields",
+				republishedMetadata.fullTextPDF === published.item.fullTextPDF &&
+				tagsAfterMetadataPublish.some(
+					({ name }) => name === PUBLICATION_TAGS[0],
+				) &&
+				tagsAfterMetadataPublish.some(
+					({ name }) => name === "topic-tag",
+				),
+			"Metadata publication erased file-managed state or publication tags",
 		);
 
 		const replacement = await createPdf("Replacement file");
@@ -428,7 +444,6 @@ async function verify() {
 			db,
 			storage,
 			attachmentDraft.itemKey,
-			{ publicationTags: PUBLICATION_TAGS },
 		);
 		const [[unpublishedJob], remainingPublicationTags] = await Promise.all([
 			db
@@ -607,9 +622,11 @@ async function verify() {
 					concurrentReplacementReady.uploadRevision,
 				publicationTags: PUBLICATION_TAGS,
 			}),
-			unpublishNativePdf(db, storage, concurrentAttachmentDraft.itemKey, {
-				publicationTags: PUBLICATION_TAGS,
-			}),
+			unpublishNativePdf(
+				db,
+				storage,
+				concurrentAttachmentDraft.itemKey,
+			),
 		]);
 		assert(
 			concurrentFileMutations.every(
@@ -631,7 +648,6 @@ async function verify() {
 				db,
 				storage,
 				concurrentAttachmentDraft.itemKey,
-				{ publicationTags: PUBLICATION_TAGS },
 			);
 		}
 		assert(

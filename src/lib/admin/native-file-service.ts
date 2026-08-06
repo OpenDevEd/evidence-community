@@ -521,6 +521,10 @@ export async function publishNativePdf(
 
 	const commitPublication = () =>
 		db.transaction(async (transaction) => {
+			await lockItemMutations(transaction, [
+				itemKey,
+				draft.parentItemKey,
+			]);
 			const [lockedDraft] = await transaction
 				.select()
 				.from(itemFileDraft)
@@ -534,10 +538,9 @@ export async function publishNativePdf(
 			) {
 				throw new NativeFileConflictError(itemKey);
 			}
-			await lockItemMutations(transaction, [
-				itemKey,
-				lockedDraft.parentItemKey,
-			]);
+			if (lockedDraft.parentItemKey !== draft.parentItemKey) {
+				throw new NativeFileConflictError(itemKey);
+			}
 
 			const lockedItems = await transaction
 				.select()
@@ -665,6 +668,7 @@ export async function publishNativePdf(
 				coverWidth: lockedDraft.coverWidth!,
 				coverHeight: lockedDraft.coverHeight!,
 				pageCount: lockedDraft.pageCount!,
+				publicationTags: normalizedPublicationTags,
 				publishedAt: now,
 				updatedAt: now,
 			};
@@ -845,9 +849,7 @@ export async function unpublishNativePdfWithContext(
 	db: Database,
 	storage: EvidenceFileStorage,
 	itemKey: string,
-	{ publicationTags }: { publicationTags: readonly string[] },
 ) {
-	const normalizedPublicationTags = normalizePublicationTags(publicationTags);
 	const result = await db.transaction(async (transaction) => {
 		const [initialPublication] = await transaction
 			.select()
@@ -955,7 +957,7 @@ export async function unpublishNativePdfWithContext(
 			.where(
 				and(
 					eq(itemToTag.itemKey, itemKey),
-					inArray(itemToTag.tagName, normalizedPublicationTags),
+					inArray(itemToTag.tagName, publication.publicationTags),
 				),
 			);
 		await advanceOpenNativeDraftBaseRevision(
@@ -1028,8 +1030,6 @@ export async function unpublishNativePdf(
 	db: Database,
 	storage: EvidenceFileStorage,
 	itemKey: string,
-	options: { publicationTags: readonly string[] },
 ) {
-	return (await unpublishNativePdfWithContext(db, storage, itemKey, options))
-		.item;
+	return (await unpublishNativePdfWithContext(db, storage, itemKey)).item;
 }

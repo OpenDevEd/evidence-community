@@ -798,6 +798,10 @@ export function createItemFilePublicationTable(itemColumns: {
 			coverWidth: integer("coverWidth").notNull(),
 			coverHeight: integer("coverHeight").notNull(),
 			pageCount: integer("pageCount").notNull(),
+			publicationTags: jsonb("publicationTags")
+				.$type<string[]>()
+				.notNull()
+				.default([]),
 			publishedAt: timestampWithTimezone("publishedAt").notNull(),
 			createdAt: timestampWithTimezone("createdAt")
 				.notNull()
@@ -826,6 +830,10 @@ export function createItemFilePublicationTable(itemColumns: {
 			check(
 				"itemFilePublication_dimensions_positive",
 				sql`${table.coverWidth} > 0 AND ${table.coverHeight} > 0 AND ${table.pageCount} > 0`,
+			),
+			check(
+				"itemFilePublication_publication_tags_array",
+				sql`jsonb_typeof(${table.publicationTags}) = 'array'`,
 			),
 			foreignKey({
 				name: "itemFilePublication_item_fk",
