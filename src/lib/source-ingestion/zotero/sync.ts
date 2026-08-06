@@ -3,9 +3,10 @@ import {
 	itemIdentity,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull, ne, or } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { sourceSnapshot } from "@/db/schema/source";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 
@@ -19,6 +20,7 @@ import {
 	mapZoteroCollection,
 	mapZoteroItem,
 	type ZoteroAttachmentProcessor,
+	type ZoteroAttachmentProcessorContext,
 } from "./mapper";
 import {
 	zoteroConnectionConfigSchema,
@@ -28,7 +30,7 @@ import {
 	type ZoteroItemResponse,
 } from "./schema";
 
-const ZOTERO_MAPPING_PROFILE_VERSION = "zotero-web-api-v3-2";
+const ZOTERO_MAPPING_PROFILE_VERSION = "zotero-web-api-v3-3";
 
 type Fetch = typeof fetch;
 
@@ -426,6 +428,7 @@ async function mapManifestEntries(
 	entries: ManifestEntry[],
 	attachmentProcessor?: ZoteroAttachmentProcessor,
 	excludedCollectionKeys: ReadonlySet<string> = new Set(),
+	attachmentContext?: ZoteroAttachmentProcessorContext,
 ) {
 	const items: SourceIngestionBatch["items"] = [];
 	const collections: SourceIngestionBatch["collections"] = [];
@@ -447,6 +450,7 @@ async function mapManifestEntries(
 						entry.response,
 						attachmentProcessor,
 						excludedCollectionKeys,
+						attachmentContext,
 					)
 				: {
 						operation: "delete",
@@ -490,6 +494,30 @@ async function loadLocalSourceState(
 			),
 	]);
 	return { collections, items };
+}
+
+async function mappingReplayRequired(
+	database: Database,
+	sourceConnectionKey: string,
+) {
+	const [staleSnapshot] = await database
+		.select({ itemKey: sourceSnapshot.itemKey })
+		.from(sourceSnapshot)
+		.innerJoin(itemIdentity, eq(itemIdentity.key, sourceSnapshot.itemKey))
+		.where(
+			and(
+				eq(itemIdentity.sourceConnectionKey, sourceConnectionKey),
+				or(
+					isNull(sourceSnapshot.mappingProfileVersion),
+					ne(
+						sourceSnapshot.mappingProfileVersion,
+						ZOTERO_MAPPING_PROFILE_VERSION,
+					),
+				),
+			),
+		)
+		.limit(1);
+	return Boolean(staleSnapshot);
 }
 
 function manifestRestoresTombstone(
@@ -755,6 +783,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 	const client = new ZoteroApiClient({
 		apiBaseUrl: config.apiBaseUrl,
 		apiKey,
+		attachmentDownloadTimeoutMs: config.attachmentDownloadTimeoutMs,
 		fetch: options.fetch,
 		requestTimeoutMs: config.requestTimeoutMs,
 		sleep: options.sleep,
@@ -763,6 +792,14 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		externalScopeKey,
 		kind: scopeKind,
 	});
+	const attachmentContext: ZoteroAttachmentProcessorContext = {
+		client,
+		prefix,
+		sourceConnectionKey: options.sourceConnectionKey,
+	};
+	await options.attachmentProcessor?.flushCleanup?.(
+		options.sourceConnectionKey,
+	);
 
 	for (
 		let attempt = 0;
@@ -776,15 +813,23 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 		const cursor = zoteroCursorSchema.parse(latestConnection.syncCursor);
 		const baseVersion = currentLibraryVersion(cursor);
 		try {
-			const localState = await loadLocalSourceState(
-				options.database,
-				options.sourceConnectionKey,
-			);
+			const [localState, requiresMappingReplay] = await Promise.all([
+				loadLocalSourceState(
+					options.database,
+					options.sourceConnectionKey,
+				),
+				mappingReplayRequired(
+					options.database,
+					options.sourceConnectionKey,
+				),
+			]);
 			const previousSoftTrash = previousSoftTrashState(cursor);
 			let snapshotSince =
 				"pending" in cursor && cursor.pending
 					? cursor.pending.snapshotSince
-					: baseVersion;
+					: requiresMappingReplay
+						? 0
+						: baseVersion;
 			let manifest = await readManifest(
 				client,
 				prefix,
@@ -862,6 +907,9 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 					nextCursor,
 					sourceConnectionKey: options.sourceConnectionKey,
 				});
+				await options.attachmentProcessor?.flushCleanup?.(
+					options.sourceConnectionKey,
+				);
 				return {
 					batches: 1,
 					records: 0,
@@ -879,6 +927,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 					manifest.entries.slice(offset, end),
 					options.attachmentProcessor,
 					excludedCollectionKeys,
+					attachmentContext,
 				);
 				const nextCursor =
 					end === manifest.entries.length
@@ -905,6 +954,9 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 					nextCursor,
 					sourceConnectionKey: options.sourceConnectionKey,
 				});
+				await options.attachmentProcessor?.flushCleanup?.(
+					options.sourceConnectionKey,
+				);
 				expectedCursor = nextCursor;
 				offset = end;
 				batches += 1;

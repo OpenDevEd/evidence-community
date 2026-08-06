@@ -581,6 +581,7 @@ async function verify() {
 				filename: String(record.data.filename),
 				fullText: null,
 				linkMode: String(record.data.linkMode),
+				managedPublication: null,
 				md5: String(record.data.md5),
 				mtime: String(record.data.mtime),
 				url: "https://storage.example.org/report.pdf",

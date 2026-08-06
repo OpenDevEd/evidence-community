@@ -5,6 +5,12 @@ const jsonObjectSchema = z.record(z.string(), z.unknown());
 export const zoteroConnectionConfigSchema = z
 	.object({
 		apiBaseUrl: z.string().url().default("https://api.zotero.org"),
+		attachmentDownloadTimeoutMs: z
+			.number()
+			.int()
+			.min(1_000)
+			.max(900_000)
+			.default(120_000),
 		maxConsistencyRetries: z.number().int().min(1).max(10).default(4),
 		maxRecordsPerBatch: z.number().int().min(1).max(1_000).default(500),
 		maxSnapshotRecords: z

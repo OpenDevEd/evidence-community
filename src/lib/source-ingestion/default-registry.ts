@@ -1,7 +1,4 @@
-import {
-	SourceAdapterRegistry,
-	type SourceAdapter,
-} from "./adapter";
+import { SourceAdapterRegistry, type SourceAdapter } from "./adapter";
 import {
 	createZoteroSourceAdapter,
 	type ZoteroSourceAdapterOptions,
@@ -9,11 +6,11 @@ import {
 
 export type DefaultSourceAdapterRegistryOptions = {
 	additionalAdapters?: readonly SourceAdapter[];
-	zotero?: ZoteroSourceAdapterOptions;
+	zotero: ZoteroSourceAdapterOptions;
 };
 
 export function createDefaultSourceAdapterRegistry(
-	options: DefaultSourceAdapterRegistryOptions = {},
+	options: DefaultSourceAdapterRegistryOptions,
 ) {
 	return new SourceAdapterRegistry([
 		createZoteroSourceAdapter(options.zotero),

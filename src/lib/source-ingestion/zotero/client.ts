@@ -25,6 +25,7 @@ export type ZoteroLibraryScope =
 type ZoteroApiClientOptions = {
 	apiBaseUrl: string;
 	apiKey: string | null;
+	attachmentDownloadTimeoutMs?: number;
 	fetch?: Fetch;
 	requestTimeoutMs: number;
 	sleep?: Sleep;
@@ -58,11 +59,87 @@ function parseLibraryVersion(response: Response) {
 }
 
 function retryDelay(response: Response, attempt: number) {
-	const retryAfter = Number(response.headers.get("retry-after"));
-	if (Number.isFinite(retryAfter) && retryAfter >= 0) {
+	const retryAfterHeader = response.headers.get("retry-after");
+	const retryAfter = retryAfterHeader ? Number(retryAfterHeader) : Number.NaN;
+	if (Number.isFinite(retryAfter) && retryAfter > 0) {
 		return Math.min(retryAfter * 1_000, 60_000);
 	}
 	return Math.min(250 * 2 ** attempt, 5_000);
+}
+
+async function readBoundedResponse(
+	response: Response,
+	maxBytes: number,
+	inactivityTimeoutMs: number,
+	totalTimeoutMs: number,
+) {
+	const contentLength = Number(response.headers.get("content-length"));
+	if (Number.isFinite(contentLength) && contentLength > maxBytes) {
+		await response.body?.cancel();
+		throw new ZoteroApiError(
+			`Zotero attachment is ${contentLength} bytes, exceeding the ${maxBytes}-byte limit`,
+			413,
+		);
+	}
+	if (!response.body) {
+		throw new ZoteroApiError("Zotero attachment response had no body");
+	}
+
+	const reader = response.body.getReader();
+	const chunks: Uint8Array[] = [];
+	let total = 0;
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	const deadline = Date.now() + totalTimeoutMs;
+	try {
+		while (true) {
+			const remainingMs = deadline - Date.now();
+			if (remainingMs <= 0) {
+				throw new ZoteroApiError(
+					"Zotero attachment download exceeded its total deadline",
+				);
+			}
+			const read = reader.read();
+			const result = await Promise.race([
+				read,
+				new Promise<never>((_resolve, reject) => {
+					timeout = setTimeout(
+						() =>
+							reject(
+								new ZoteroApiError(
+									remainingMs <= inactivityTimeoutMs
+										? "Zotero attachment download exceeded its total deadline"
+										: "Zotero attachment download timed out",
+								),
+							),
+						Math.min(inactivityTimeoutMs, remainingMs),
+					);
+				}),
+			]);
+			if (timeout) clearTimeout(timeout);
+			if (result.done) break;
+			total += result.value.byteLength;
+			if (total > maxBytes) {
+				throw new ZoteroApiError(
+					`Zotero attachment exceeds the ${maxBytes}-byte limit`,
+					413,
+				);
+			}
+			chunks.push(result.value);
+		}
+	} catch (error) {
+		await reader.cancel().catch(() => undefined);
+		throw error;
+	} finally {
+		if (timeout) clearTimeout(timeout);
+	}
+
+	const bytes = new Uint8Array(total);
+	let offset = 0;
+	for (const chunk of chunks) {
+		bytes.set(chunk, offset);
+		offset += chunk.byteLength;
+	}
+	return bytes;
 }
 
 export class ZoteroApiClient {
@@ -83,7 +160,15 @@ export class ZoteroApiClient {
 		if (delay > 0) await this.sleep(delay);
 	}
 
-	private async request(path: string, query?: URLSearchParams) {
+	private async request(
+		path: string,
+		query?: URLSearchParams,
+		options: {
+			accept?: string;
+			apiHeaders?: boolean;
+			redirect?: RequestRedirect;
+		} = {},
+	) {
 		for (let attempt = 0; attempt < 4; attempt += 1) {
 			await this.waitForBackoff();
 			const url = new URL(
@@ -101,12 +186,13 @@ export class ZoteroApiClient {
 			try {
 				response = await this.fetchImplementation(url, {
 					headers: {
-						Accept: "application/json",
-						...(this.options.apiKey
+						Accept: options.accept ?? "application/json",
+						...(this.options.apiKey && options.apiHeaders !== false
 							? { "Zotero-API-Key": this.options.apiKey }
 							: {}),
 						"Zotero-API-Version": "3",
 					},
+					redirect: options.redirect,
 					signal: controller.signal,
 				});
 			} catch (error) {
@@ -133,8 +219,16 @@ export class ZoteroApiClient {
 				(response.status === 429 || response.status >= 500) &&
 				attempt < 3
 			) {
+				await response.body?.cancel();
 				await this.sleep(retryDelay(response, attempt));
 				continue;
+			}
+			if (
+				options.redirect === "manual" &&
+				response.status >= 300 &&
+				response.status < 400
+			) {
+				return response;
 			}
 			if (!response.ok) {
 				throw new ZoteroApiError(
@@ -238,6 +332,46 @@ export class ZoteroApiClient {
 		return {
 			data: zoteroItemResponseSchema.array().parse(await response.json()),
 			libraryVersion: parseLibraryVersion(response),
+		};
+	}
+
+	async downloadAttachment(
+		prefix: string,
+		itemKey: string,
+		maxBytes: number,
+	) {
+		let response = await this.request(
+			`${prefix}/items/${encodeURIComponent(itemKey)}/file`,
+			undefined,
+			{ accept: "application/pdf", redirect: "manual" },
+		);
+		if (response.status >= 300 && response.status < 400) {
+			const location = response.headers.get("location");
+			if (!location) {
+				await response.body?.cancel();
+				throw new ZoteroApiError(
+					"Zotero attachment redirect omitted Location",
+				);
+			}
+			const redirectUrl = new URL(
+				location,
+				response.url || this.options.apiBaseUrl,
+			).toString();
+			await response.body?.cancel();
+			response = await this.request(redirectUrl, undefined, {
+				accept: "application/pdf",
+				apiHeaders: false,
+			});
+		}
+		return {
+			bytes: await readBoundedResponse(
+				response,
+				maxBytes,
+				this.options.requestTimeoutMs,
+				this.options.attachmentDownloadTimeoutMs ?? 120_000,
+			),
+			contentType: response.headers.get("content-type"),
+			etag: response.headers.get("etag")?.replace(/^"|"$/gu, "") ?? null,
 		};
 	}
 }

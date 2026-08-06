@@ -5,13 +5,13 @@ import { syncZoteroSource } from "./sync";
 type Fetch = typeof fetch;
 
 export type ZoteroSourceAdapterOptions = {
-	attachmentProcessor?: ZoteroAttachmentProcessor;
+	attachmentProcessor: ZoteroAttachmentProcessor;
 	fetch?: Fetch;
 	sleep?: (milliseconds: number) => Promise<void>;
 };
 
 export function createZoteroSourceAdapter(
-	options: ZoteroSourceAdapterOptions = {},
+	options: ZoteroSourceAdapterOptions,
 ): SourceAdapter {
 	return {
 		provider: "zotero",

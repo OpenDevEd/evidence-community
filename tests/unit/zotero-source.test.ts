@@ -22,6 +22,7 @@ describe("Zotero source configuration", () => {
 	it("applies bounded defaults and rejects oversized batches", () => {
 		expect(zoteroConnectionConfigSchema.parse({})).toMatchObject({
 			apiBaseUrl: "https://api.zotero.org",
+			attachmentDownloadTimeoutMs: 120_000,
 			maxConsistencyRetries: 4,
 			maxRecordsPerBatch: 500,
 			maxSnapshotRecords: 100_000,
@@ -38,9 +39,7 @@ describe("Zotero source configuration", () => {
 		const resolver = createEnvironmentCredentialResolver({
 			ZOTERO_TEST_KEY: "secret",
 		});
-		await expect(resolver("env:ZOTERO_TEST_KEY")).resolves.toBe(
-			"secret",
-		);
+		await expect(resolver("env:ZOTERO_TEST_KEY")).resolves.toBe("secret");
 		await expect(resolver("vault:zotero")).rejects.toBeInstanceOf(
 			SourceCredentialNotFoundError,
 		);
@@ -96,6 +95,175 @@ describe("Zotero source configuration", () => {
 			}),
 		).rejects.toBeInstanceOf(ZoteroApiError);
 	});
+
+	it("backs off on transient API errors when Retry-After is absent", async () => {
+		let attempts = 0;
+		const delays: number[] = [];
+		const client = new ZoteroApiClient({
+			apiBaseUrl: "https://api.zotero.test",
+			apiKey: "secret",
+			fetch: async () => {
+				attempts += 1;
+				return attempts === 1
+					? new Response("temporary", { status: 503 })
+					: new Response(
+							JSON.stringify({
+								access: { groups: { all: { library: true } } },
+								userID: 123,
+							}),
+						);
+			},
+			requestTimeoutMs: 1_000,
+			sleep: async (milliseconds) => {
+				delays.push(milliseconds);
+			},
+		});
+		await client.verifyKeyAccess({
+			externalScopeKey: "999",
+			kind: "group",
+		});
+		expect(attempts).toBe(2);
+		expect(delays).toEqual([250]);
+	});
+
+	it("downloads bounded attachment bytes and normalizes the ETag", async () => {
+		const client = new ZoteroApiClient({
+			apiBaseUrl: "https://api.zotero.test",
+			apiKey: "secret",
+			fetch: async (_input, init) => {
+				expect(new Headers(init?.headers).get("accept")).toBe(
+					"application/pdf",
+				);
+				return new Response(new Uint8Array([1, 2, 3]), {
+					headers: {
+						"content-length": "3",
+						"content-type": "application/pdf",
+						etag: '"abc123"',
+					},
+				});
+			},
+			requestTimeoutMs: 1_000,
+		});
+		await expect(
+			client.downloadAttachment("groups/999", "AAAA2345", 3),
+		).resolves.toMatchObject({
+			bytes: new Uint8Array([1, 2, 3]),
+			contentType: "application/pdf",
+			etag: "abc123",
+		});
+	});
+
+	it("rejects attachment responses that exceed the byte limit", async () => {
+		const client = new ZoteroApiClient({
+			apiBaseUrl: "https://api.zotero.test",
+			apiKey: "secret",
+			fetch: async () =>
+				new Response(new Uint8Array([1, 2, 3, 4]), {
+					headers: { "content-length": "4" },
+				}),
+			requestTimeoutMs: 1_000,
+		});
+		await expect(
+			client.downloadAttachment("groups/999", "AAAA2345", 3),
+		).rejects.toMatchObject({ status: 413 });
+	});
+
+	it("stops an attachment stream when the declared length is missing", async () => {
+		const client = new ZoteroApiClient({
+			apiBaseUrl: "https://api.zotero.test",
+			apiKey: "secret",
+			fetch: async () =>
+				new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							controller.enqueue(new Uint8Array([1, 2]));
+							controller.enqueue(new Uint8Array([3, 4]));
+							controller.close();
+						},
+					}),
+				),
+			requestTimeoutMs: 1_000,
+		});
+		await expect(
+			client.downloadAttachment("groups/999", "AAAA2345", 3),
+		).rejects.toMatchObject({ status: 413 });
+	});
+
+	it("does not forward the Zotero API key to attachment storage redirects", async () => {
+		const requests: Array<{ headers: Headers; url: string }> = [];
+		const client = new ZoteroApiClient({
+			apiBaseUrl: "https://api.zotero.test",
+			apiKey: "secret",
+			fetch: (async (input, init) => {
+				requests.push({
+					headers: new Headers(init?.headers),
+					url: String(input),
+				});
+				return requests.length === 1
+					? new Response(null, {
+							headers: {
+								location:
+									"https://storage.zotero.test/file.pdf",
+							},
+							status: 302,
+						})
+					: new Response(new Uint8Array([1, 2, 3]));
+			}) as typeof fetch,
+			requestTimeoutMs: 1_000,
+		});
+		await client.downloadAttachment("groups/999", "AAAA2345", 3);
+		expect(requests).toHaveLength(2);
+		expect(requests[0]?.headers.get("zotero-api-key")).toBe("secret");
+		expect(requests[1]?.url).toBe("https://storage.zotero.test/file.pdf");
+		expect(requests[1]?.headers.has("zotero-api-key")).toBe(false);
+	});
+
+	it("cancels a stalled attachment stream at the inactivity bound", async () => {
+		const client = new ZoteroApiClient({
+			apiBaseUrl: "https://api.zotero.test",
+			apiKey: "secret",
+			attachmentDownloadTimeoutMs: 100,
+			fetch: async () =>
+				new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							controller.enqueue(new Uint8Array([1]));
+						},
+					}),
+				),
+			requestTimeoutMs: 10,
+		});
+		await expect(
+			client.downloadAttachment("groups/999", "AAAA2345", 3),
+		).rejects.toThrow("download timed out");
+	});
+
+	it("cancels an active attachment stream at the total deadline", async () => {
+		let interval: ReturnType<typeof setInterval> | undefined;
+		const client = new ZoteroApiClient({
+			apiBaseUrl: "https://api.zotero.test",
+			apiKey: "secret",
+			attachmentDownloadTimeoutMs: 50,
+			fetch: async () =>
+				new Response(
+					new ReadableStream<Uint8Array>({
+						start(controller) {
+							interval = setInterval(
+								() => controller.enqueue(new Uint8Array([1])),
+								5,
+							);
+						},
+						cancel() {
+							if (interval) clearInterval(interval);
+						},
+					}),
+				),
+			requestTimeoutMs: 1_000,
+		});
+		await expect(
+			client.downloadAttachment("groups/999", "AAAA2345", 1_000),
+		).rejects.toThrow("exceeded its total deadline");
+	});
 });
 
 describe("Zotero source mapping", () => {
@@ -137,6 +305,7 @@ describe("Zotero source mapping", () => {
 			filename: "paper.pdf",
 			fullText: null,
 			linkMode: "imported_file",
+			managedPublication: null,
 			md5: null,
 			mtime: null,
 			url: "https://storage.example.org/paper.pdf",
@@ -182,8 +351,7 @@ describe("Zotero source mapping", () => {
 					annotationColor: "#ffd400",
 					annotationComment: "Important",
 					annotationPageLabel: "4",
-					annotationPosition:
-						'{"pageIndex":3,"rects":[[1,2,3,4]]}',
+					annotationPosition: '{"pageIndex":3,"rects":[[1,2,3,4]]}',
 					annotationSortIndex: "00004|000001|00000",
 					annotationText: "Evidence",
 					annotationType: "highlight",

@@ -3,11 +3,14 @@ import {
 	itemIdentity,
 	outbox,
 	sourceConnection,
+	sourceFileCleanup,
+	sourceRecordIssue,
 } from "@opendeved/evidence-library-core";
 import { and, eq, inArray } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import {
+	itemFilePublication,
 	sourceRecordAlias,
 	sourceSnapshot,
 } from "../src/db/schema/source";
@@ -17,19 +20,27 @@ import { item } from "../src/db/schema/tables/item";
 import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import { tag } from "../src/db/schema/tables/tag";
+import type { EvidenceFileStorage } from "../src/lib/admin/file-storage";
 import {
 	SourceAliasConflictError,
 	SourceCursorConflictError,
+	SourceFileStagingConflictError,
 	SourceReferenceNotFoundError,
 	SourceRelationshipCycleError,
 	writeSourceIngestionBatch,
 } from "../src/lib/source-ingestion/transactional-writer";
+import { flushSourceFileCleanup } from "../src/lib/source-ingestion/zotero/attachment-processor";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
 const verifiedDatabaseUrl = databaseUrl;
 
-const connectionKeys = ["mendeley-writer", "zotero-writer"];
+const connectionKeys = [
+	"mendeley-writer",
+	"zotero-writer",
+	"zotero-unpublish-writer",
+	"zotero-staging-writer",
+];
 const tagNames = ["attachment-tag", "parent-tag", "restored-tag"];
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -74,6 +85,18 @@ async function verify() {
 				scopeKind: "group",
 				externalScopeKey: "writer-zotero",
 			},
+			{
+				key: "zotero-unpublish-writer",
+				provider: "zotero",
+				scopeKind: "group",
+				externalScopeKey: "writer-zotero-unpublish",
+			},
+			{
+				key: "zotero-staging-writer",
+				provider: "zotero",
+				scopeKind: "group",
+				externalScopeKey: "writer-zotero-staging",
+			},
 		]);
 
 		const mendeleyResult = await writeSourceIngestionBatch(db, {
@@ -105,6 +128,77 @@ async function verify() {
 		assert(
 			mendeleyResult.itemKeys.AAAA2345 === "AAAA2345",
 			"An available provider key was not adopted",
+		);
+
+		let stagingConflict = false;
+		try {
+			await writeSourceIngestionBatch(db, {
+				...baseBatch({
+					connectionKey: "zotero-staging-writer",
+					expectedCursor: {},
+					nextCursor: { version: 1 },
+				}),
+				items: [
+					{
+						operation: "upsert",
+						sourceRecordKey: "STAGEP01",
+						remoteVersion: "1",
+						raw: { key: "STAGEP01", version: 1 },
+						metadata: {
+							itemType: "Report",
+							title: "Staging conflict parent",
+						},
+					},
+					{
+						operation: "upsert",
+						sourceRecordKey: "STAGEA01",
+						remoteVersion: "1",
+						raw: { key: "STAGEA01", version: 1 },
+						metadata: {
+							itemType: "Attachment",
+							title: "Staging conflict PDF",
+						},
+						parentSourceRecordKey: "STAGEP01",
+						file: {
+							url: "https://storage.example.org/staging.pdf",
+							contentType: "application/pdf",
+							filename: "staging.pdf",
+							linkMode: "imported_file",
+							md5: "d".repeat(32),
+							fullText: "Staging conflict",
+							coverUrl: "https://storage.example.org/staging.png",
+							coverWidth: 1200,
+							coverHeight: 1600,
+							managedPublication: {
+								objectPath:
+									"sources/zotero/zotero-staging-writer/STAGEA01/dddddddddddddddddddddddddddddddd/document.pdf",
+								coverObjectPath:
+									"sources/zotero/zotero-staging-writer/STAGEA01/dddddddddddddddddddddddddddddddd/cover.png",
+								sizeBytes: 20,
+								sha256: "d".repeat(64),
+								pageCount: 1,
+								staged: true,
+							},
+						},
+					},
+				],
+			});
+		} catch (error) {
+			stagingConflict = error instanceof SourceFileStagingConflictError;
+		}
+		assert(
+			stagingConflict,
+			"A missing upload-staging row did not abort the source transaction",
+		);
+		const stagedConflictIdentities = await db
+			.select()
+			.from(itemIdentity)
+			.where(
+				eq(itemIdentity.sourceConnectionKey, "zotero-staging-writer"),
+			);
+		assert(
+			stagedConflictIdentities.length === 0,
+			"A staging conflict left partially committed item identities",
 		);
 
 		const firstBatch = {
@@ -179,10 +273,19 @@ async function verify() {
 						md5: "example-md5",
 						mtime: "1722254400000",
 						fullText: "Extracted evidence",
-						coverUrl:
-							"https://storage.example.org/evidence.png",
+						coverUrl: "https://storage.example.org/evidence.png",
 						coverWidth: 1200,
 						coverHeight: 1600,
+						managedPublication: {
+							objectPath:
+								"sources/zotero/zotero-writer/BBBB2345/example-md5/document.pdf",
+							coverObjectPath:
+								"sources/zotero/zotero-writer/BBBB2345/example-md5/cover.png",
+							sizeBytes: 1234,
+							sha256: "a".repeat(64),
+							pageCount: 3,
+							staged: false,
+						},
 					},
 				},
 			],
@@ -213,73 +316,80 @@ async function verify() {
 			db
 				.select()
 				.from(collection)
-				.where(
-					eq(
-						collection.key,
-						first.collectionKeys.DDDD2345!,
-					),
-				)
+				.where(eq(collection.key, first.collectionKeys.DDDD2345!))
 				.then((rows) => rows[0]),
 		]);
 		assert(
 			parent?.revision === 1 &&
 				attachment?.parentItem === parentKey &&
-				attachment.url ===
-					"https://storage.example.org/evidence.pdf" &&
+				attachment.url === "https://storage.example.org/evidence.pdf" &&
 				attachment.fullTextPDF === "Extracted evidence",
 			"Canonical item or attachment fields were written incorrectly",
 		);
 		const projectedRows = await db
 			.select({ key: adminItemListProjection.key })
 			.from(adminItemListProjection)
-			.where(inArray(adminItemListProjection.key, [parentKey, attachmentKey]));
+			.where(
+				inArray(adminItemListProjection.key, [
+					parentKey,
+					attachmentKey,
+				]),
+			);
 		assert(
 			projectedRows.length === 1 && projectedRows[0]?.key === parentKey,
 			"Source attachment reparenting left a stale root projection",
 		);
 		assert(
-			childCollection?.parentCollection ===
-				first.collectionKeys.CCCC2345,
+			childCollection?.parentCollection === first.collectionKeys.CCCC2345,
 			"Two-pass collection parenting failed",
 		);
 
-		const [memberships, tags, snapshot, alias] = await Promise.all([
-			db
-				.select()
-				.from(itemToCollection)
-				.where(eq(itemToCollection.itemKey, attachmentKey)),
-			db
-				.select()
-				.from(itemToTag)
-				.where(eq(itemToTag.itemKey, attachmentKey)),
-			db
-				.select()
-				.from(sourceSnapshot)
-				.where(eq(sourceSnapshot.itemKey, attachmentKey))
-				.then((rows) => rows[0]),
-			db
-				.select()
-				.from(sourceRecordAlias)
-				.where(
-					and(
-						eq(
-							sourceRecordAlias.sourceConnectionKey,
-							"zotero-writer",
+		const [memberships, tags, snapshot, alias, publication] =
+			await Promise.all([
+				db
+					.select()
+					.from(itemToCollection)
+					.where(eq(itemToCollection.itemKey, attachmentKey)),
+				db
+					.select()
+					.from(itemToTag)
+					.where(eq(itemToTag.itemKey, attachmentKey)),
+				db
+					.select()
+					.from(sourceSnapshot)
+					.where(eq(sourceSnapshot.itemKey, attachmentKey))
+					.then((rows) => rows[0]),
+				db
+					.select()
+					.from(sourceRecordAlias)
+					.where(
+						and(
+							eq(
+								sourceRecordAlias.sourceConnectionKey,
+								"zotero-writer",
+							),
+							eq(
+								sourceRecordAlias.aliasKey,
+								"zotero:group:AAAA2345",
+							),
 						),
-						eq(
-							sourceRecordAlias.aliasKey,
-							"zotero:group:AAAA2345",
-						),
-					),
-				)
-				.then((rows) => rows[0]),
-		]);
+					)
+					.then((rows) => rows[0]),
+				db
+					.select()
+					.from(itemFilePublication)
+					.where(eq(itemFilePublication.itemKey, attachmentKey))
+					.then((rows) => rows[0]),
+			]);
 		assert(
 			memberships.length === 2 &&
 				tags.length === 1 &&
 				tags[0]?.tagName === "attachment-tag" &&
 				snapshot?.payloadHash.length === 64 &&
-				alias?.itemKey === parentKey,
+				alias?.itemKey === parentKey &&
+				publication?.sourceConnectionKey === "zotero-writer" &&
+				publication.parentItemKey === parentKey &&
+				publication.sha256 === "a".repeat(64),
 			"Normalized relationships, snapshot, or alias is wrong",
 		);
 
@@ -312,12 +422,29 @@ async function verify() {
 						title: "Updated PDF",
 						tags: ["attachment-tag"],
 					},
+					processingIssue: {
+						code: "zotero_file_unavailable",
+						message: "Temporary fixture issue",
+					},
 				},
 			],
 		});
 		assert(
 			attachmentUpdate.written.items === 2,
 			"Attachment update did not reproject its parent",
+		);
+		const [savedIssue] = await db
+			.select()
+			.from(sourceRecordIssue)
+			.where(
+				and(
+					eq(sourceRecordIssue.sourceConnectionKey, "zotero-writer"),
+					eq(sourceRecordIssue.sourceRecordKey, "BBBB2345"),
+				),
+			);
+		assert(
+			savedIssue?.code === "zotero_file_unavailable",
+			"A source record processing issue was not persisted with the batch",
 		);
 
 		let staleRejected = false;
@@ -361,8 +488,7 @@ async function verify() {
 				],
 			});
 		} catch (error) {
-			aliasConflictRejected =
-				error instanceof SourceAliasConflictError;
+			aliasConflictRejected = error instanceof SourceAliasConflictError;
 		}
 		assert(aliasConflictRejected, "An alias was reassigned");
 
@@ -390,8 +516,7 @@ async function verify() {
 				],
 			});
 		} catch (error) {
-			cycleRejected =
-				error instanceof SourceRelationshipCycleError;
+			cycleRejected = error instanceof SourceRelationshipCycleError;
 		}
 		assert(cycleRejected, "A collection parent cycle was accepted");
 
@@ -413,6 +538,35 @@ async function verify() {
 		assert(
 			deletion.written.items === 2,
 			"Attachment deletion did not reproject its parent",
+		);
+		const unresolvedIssue = await db
+			.select()
+			.from(sourceRecordIssue)
+			.where(
+				and(
+					eq(sourceRecordIssue.sourceConnectionKey, "zotero-writer"),
+					eq(sourceRecordIssue.sourceRecordKey, "BBBB2345"),
+				),
+			);
+		assert(
+			unresolvedIssue.length === 0,
+			"A source record issue was not resolved by a later successful batch",
+		);
+		const [deletedPublication, queuedCleanup] = await Promise.all([
+			db
+				.select()
+				.from(itemFilePublication)
+				.where(eq(itemFilePublication.itemKey, attachmentKey)),
+			db
+				.select()
+				.from(sourceFileCleanup)
+				.where(
+					eq(sourceFileCleanup.sourceConnectionKey, "zotero-writer"),
+				),
+		]);
+		assert(
+			deletedPublication.length === 0 && queuedCleanup.length === 2,
+			"Deleting a managed source PDF did not durably queue both public objects",
 		);
 		const repeatedDeletion = await writeSourceIngestionBatch(db, {
 			...baseBatch({
@@ -452,6 +606,105 @@ async function verify() {
 				},
 			],
 		});
+		const [restoredPublication, staleCleanup] = await Promise.all([
+			db
+				.select()
+				.from(itemFilePublication)
+				.where(eq(itemFilePublication.itemKey, attachmentKey)),
+			db
+				.select()
+				.from(sourceFileCleanup)
+				.where(
+					eq(sourceFileCleanup.sourceConnectionKey, "zotero-writer"),
+				),
+		]);
+		assert(
+			restoredPublication.length === 1 && staleCleanup.length === 0,
+			"Restoring content-addressed source paths left an unsafe pending cleanup",
+		);
+		const retryPaths = [
+			"sources/zotero/zotero-writer/obsolete/document.pdf",
+			"sources/zotero/zotero-writer/obsolete/cover.png",
+		];
+		await db.insert(sourceFileCleanup).values(
+			retryPaths.map((objectPath) => ({
+				sourceConnectionKey: "zotero-writer",
+				objectPath,
+			})),
+		);
+		let cleanupShouldFail = true;
+		const removedPaths: string[] = [];
+		const cleanupStorage = {
+			async removePublic(paths: string[]) {
+				if (cleanupShouldFail)
+					throw new Error("temporary storage outage");
+				removedPaths.push(...paths);
+			},
+		} as unknown as EvidenceFileStorage;
+		let cleanupFailed = false;
+		try {
+			await flushSourceFileCleanup(db, cleanupStorage, "zotero-writer");
+		} catch {
+			cleanupFailed = true;
+		}
+		const failedCleanup = await db
+			.select()
+			.from(sourceFileCleanup)
+			.where(eq(sourceFileCleanup.sourceConnectionKey, "zotero-writer"));
+		assert(
+			cleanupFailed &&
+				failedCleanup.length === 2 &&
+				failedCleanup.every(
+					(row) =>
+						row.attempts === 1 &&
+						row.lastError === "temporary storage outage",
+				),
+			"A failed source-file cleanup was not retained for retry",
+		);
+		cleanupShouldFail = false;
+		await flushSourceFileCleanup(db, cleanupStorage, "zotero-writer");
+		const completedCleanup = await db
+			.select()
+			.from(sourceFileCleanup)
+			.where(eq(sourceFileCleanup.sourceConnectionKey, "zotero-writer"));
+		assert(
+			completedCleanup.length === 0 &&
+				removedPaths.sort().join("\n") === retryPaths.sort().join("\n"),
+			"A retained source-file cleanup did not complete on retry",
+		);
+		await db.insert(sourceFileCleanup).values({
+			sourceConnectionKey: "zotero-writer",
+			objectPath: "sources/zotero/zotero-writer/poison.pdf",
+		});
+		const permanentlyFailingStorage = {
+			async removePublic() {
+				throw new Error("permanent object failure");
+			},
+		} as unknown as EvidenceFileStorage;
+		for (let attempt = 0; attempt < 5; attempt += 1) {
+			try {
+				await flushSourceFileCleanup(
+					db,
+					permanentlyFailingStorage,
+					"zotero-writer",
+				);
+			} catch {
+				if (attempt === 4) {
+					throw new Error(
+						"Cleanup remained retryable after its attempt cap",
+					);
+				}
+			}
+		}
+		const [deadLetteredCleanup] = await db
+			.select()
+			.from(sourceFileCleanup)
+			.where(eq(sourceFileCleanup.sourceConnectionKey, "zotero-writer"));
+		assert(
+			deadLetteredCleanup?.attempts === 5 &&
+				Boolean(deadLetteredCleanup.deadLetteredAt),
+			"A poison cleanup object was not dead-lettered after five attempts",
+		);
 
 		await writeSourceIngestionBatch(db, {
 			...baseBatch({
@@ -471,10 +724,7 @@ async function verify() {
 			.from(itemIdentity)
 			.where(
 				and(
-					eq(
-						itemIdentity.sourceConnectionKey,
-						"zotero-writer",
-					),
+					eq(itemIdentity.sourceConnectionKey, "zotero-writer"),
 					eq(itemIdentity.sourceRecordKey, "UNKNOWN1"),
 				),
 			);
@@ -497,9 +747,7 @@ async function verify() {
 							itemType: "Document",
 							title: "Must roll back",
 						},
-						collections: [
-							{ sourceRecordKey: "MISSING1" },
-						],
+						collections: [{ sourceRecordKey: "MISSING1" }],
 					},
 				],
 			});
@@ -507,24 +755,15 @@ async function verify() {
 			missingReferenceRejected =
 				error instanceof SourceReferenceNotFoundError;
 		}
-		assert(
-			missingReferenceRejected,
-			"A missing relationship was accepted",
-		);
+		assert(missingReferenceRejected, "A missing relationship was accepted");
 		const [rolledBackIdentity, zoteroConnection] = await Promise.all([
 			db
 				.select()
 				.from(itemIdentity)
 				.where(
 					and(
-						eq(
-							itemIdentity.sourceConnectionKey,
-							"zotero-writer",
-						),
-						eq(
-							itemIdentity.sourceRecordKey,
-							"HHHH2345",
-						),
+						eq(itemIdentity.sourceConnectionKey, "zotero-writer"),
+						eq(itemIdentity.sourceRecordKey, "HHHH2345"),
 					),
 				)
 				.then((rows) => rows[0]),
@@ -639,15 +878,240 @@ async function verify() {
 			],
 		});
 
+		const publicationLifecycle = await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-unpublish-writer",
+				expectedCursor: {},
+				nextCursor: { version: 1 },
+			}),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "PUBP0001",
+					remoteVersion: "1",
+					raw: { key: "PUBP0001" },
+					metadata: {
+						itemType: "Report",
+						title: "Publication parent",
+					},
+				},
+				{
+					operation: "upsert",
+					sourceRecordKey: "PUBA0001",
+					remoteVersion: "1",
+					raw: { key: "PUBA0001" },
+					metadata: {
+						itemType: "Attachment",
+						title: "Publication PDF",
+					},
+					parentSourceRecordKey: "PUBP0001",
+					file: {
+						url: "https://storage.example.org/publication.pdf",
+						contentType: "application/pdf",
+						filename: "publication.pdf",
+						linkMode: "imported_file",
+						md5: "publication-md5",
+						mtime: "1",
+						fullText: "Publication text",
+						coverUrl: "https://storage.example.org/publication.png",
+						coverWidth: 1200,
+						coverHeight: 1600,
+						managedPublication: {
+							objectPath: "sources/zotero/unpublish/document.pdf",
+							coverObjectPath:
+								"sources/zotero/unpublish/cover.png",
+							sizeBytes: 20,
+							sha256: "c".repeat(64),
+							pageCount: 1,
+							staged: false,
+						},
+					},
+				},
+			],
+		});
+		const publicationAttachmentKey =
+			publicationLifecycle.itemKeys.PUBA0001!;
+		await db.insert(sourceFileCleanup).values(
+			[
+				"sources/zotero/unpublish/document.pdf",
+				"sources/zotero/unpublish/cover.png",
+			].map((objectPath) => ({
+				attempts: 5,
+				deadLetteredAt: new Date(),
+				lastError: "simulated prior cleanup failure",
+				objectPath,
+				sourceConnectionKey: "zotero-unpublish-writer",
+			})),
+		);
+		await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-unpublish-writer",
+				expectedCursor: { version: 1 },
+				nextCursor: { version: 2 },
+			}),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "PUBA0001",
+					remoteVersion: "2",
+					raw: { key: "PUBA0001", tags: [] },
+					metadata: { itemType: "Attachment", title: "Private PDF" },
+					parentSourceRecordKey: "PUBP0001",
+					file: {
+						url: null,
+						contentType: "application/pdf",
+						filename: "publication.pdf",
+						linkMode: "imported_file",
+						md5: "publication-md5",
+						mtime: "1",
+						charset: null,
+						fullText: null,
+						coverUrl: null,
+						coverWidth: null,
+						coverHeight: null,
+						managedPublication: null,
+					},
+				},
+			],
+		});
+		const [unpublishedAttachment, unpublishedLedger, unpublishCleanup] =
+			await Promise.all([
+				db
+					.select()
+					.from(item)
+					.where(eq(item.key, publicationAttachmentKey))
+					.then((rows) => rows[0]),
+				db
+					.select()
+					.from(itemFilePublication)
+					.where(
+						eq(
+							itemFilePublication.itemKey,
+							publicationAttachmentKey,
+						),
+					),
+				db
+					.select()
+					.from(sourceFileCleanup)
+					.where(
+						eq(
+							sourceFileCleanup.sourceConnectionKey,
+							"zotero-unpublish-writer",
+						),
+					),
+			]);
+		assert(
+			unpublishedAttachment?.url === null &&
+				unpublishedAttachment.fullTextPDF === null &&
+				unpublishedLedger.length === 0 &&
+				unpublishCleanup.length === 2 &&
+				unpublishCleanup.every(
+					(row) =>
+						row.attempts === 0 &&
+						row.deadLetteredAt === null &&
+						row.lastError === null,
+				),
+			"Removing a publication tag did not clear and queue the managed PDF bundle",
+		);
+
+		await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-unpublish-writer",
+				expectedCursor: { version: 2 },
+				nextCursor: { version: 3 },
+			}),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "PUBA0001",
+					remoteVersion: "3",
+					raw: { key: "PUBA0001", tags: ["purple-publish"] },
+					metadata: {
+						itemType: "Attachment",
+						title: "Republished PDF",
+					},
+					parentSourceRecordKey: "PUBP0001",
+					file: {
+						url: "https://storage.example.org/publication.pdf",
+						contentType: "application/pdf",
+						filename: "publication.pdf",
+						linkMode: "imported_file",
+						md5: "publication-md5",
+						mtime: "1",
+						fullText: "Publication text",
+						coverUrl: "https://storage.example.org/publication.png",
+						coverWidth: 1200,
+						coverHeight: 1600,
+						managedPublication: {
+							objectPath: "sources/zotero/unpublish/document.pdf",
+							coverObjectPath:
+								"sources/zotero/unpublish/cover.png",
+							sizeBytes: 20,
+							sha256: "c".repeat(64),
+							pageCount: 1,
+							staged: false,
+						},
+					},
+				},
+			],
+		});
+		await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-unpublish-writer",
+				expectedCursor: { version: 3 },
+				nextCursor: { version: 4 },
+			}),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "PUBA0001",
+					remoteVersion: "4",
+					raw: { key: "PUBA0001", itemType: "report" },
+					metadata: {
+						itemType: "Report",
+						title: "Converted source record",
+					},
+					file: null,
+				},
+			],
+		});
+		const [convertedItem, convertedLedger, convertedCleanup] =
+			await Promise.all([
+				db
+					.select()
+					.from(item)
+					.where(eq(item.key, publicationAttachmentKey))
+					.then((rows) => rows[0]),
+				db
+					.select()
+					.from(itemFilePublication)
+					.where(
+						eq(
+							itemFilePublication.itemKey,
+							publicationAttachmentKey,
+						),
+					),
+				db
+					.select()
+					.from(sourceFileCleanup)
+					.where(
+						eq(
+							sourceFileCleanup.sourceConnectionKey,
+							"zotero-unpublish-writer",
+						),
+					),
+			]);
+		assert(
+			convertedItem?.itemType === "Report" &&
+				convertedLedger.length === 0 &&
+				convertedCleanup.length === 2,
+			"A file-null source upsert orphaned its managed publication",
+		);
+
 		const writerEvents = await db
 			.select()
 			.from(outbox)
-			.where(
-				inArray(outbox.entityKey, [
-					parentKey,
-					attachmentKey,
-				]),
-			)
+			.where(inArray(outbox.entityKey, [parentKey, attachmentKey]))
 			.orderBy(outbox.id);
 		const parentEvents = writerEvents.filter(
 			(event) => event.entityKey === parentKey,
@@ -669,17 +1133,10 @@ async function verify() {
 		const identities = await db
 			.select({ key: itemIdentity.key })
 			.from(itemIdentity)
-			.where(
-				inArray(
-					itemIdentity.sourceConnectionKey,
-					connectionKeys,
-				),
-			);
+			.where(inArray(itemIdentity.sourceConnectionKey, connectionKeys));
 		const itemKeys = identities.map(({ key }) => key);
 		if (itemKeys.length > 0) {
-			await db
-				.delete(outbox)
-				.where(inArray(outbox.entityKey, itemKeys));
+			await db.delete(outbox).where(inArray(outbox.entityKey, itemKeys));
 			await db
 				.delete(itemToCollection)
 				.where(inArray(itemToCollection.itemKey, itemKeys));
@@ -692,10 +1149,7 @@ async function verify() {
 			.select({ key: collectionIdentity.key })
 			.from(collectionIdentity)
 			.where(
-				inArray(
-					collectionIdentity.sourceConnectionKey,
-					connectionKeys,
-				),
+				inArray(collectionIdentity.sourceConnectionKey, connectionKeys),
 			);
 		const collectionKeys = collectionIdentities.map(({ key }) => key);
 		if (collectionKeys.length > 0) {
@@ -708,19 +1162,11 @@ async function verify() {
 		}
 		await db
 			.delete(itemIdentity)
-			.where(
-				inArray(
-					itemIdentity.sourceConnectionKey,
-					connectionKeys,
-				),
-			);
+			.where(inArray(itemIdentity.sourceConnectionKey, connectionKeys));
 		await db
 			.delete(collectionIdentity)
 			.where(
-				inArray(
-					collectionIdentity.sourceConnectionKey,
-					connectionKeys,
-				),
+				inArray(collectionIdentity.sourceConnectionKey, connectionKeys),
 			);
 		await db
 			.delete(sourceConnection)

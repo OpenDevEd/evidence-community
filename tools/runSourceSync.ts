@@ -2,8 +2,10 @@ import { hostname } from "node:os";
 
 import { loadLibraryConfig } from "../src/config/library-config/source";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
+import { createSupabaseFileStorage } from "../src/lib/admin/file-storage";
 import { createEnvironmentCredentialResolver } from "../src/lib/source-ingestion/credentials";
 import { createDefaultSourceAdapterRegistry } from "../src/lib/source-ingestion/default-registry";
+import { createZoteroAttachmentProcessor } from "../src/lib/source-ingestion/zotero/attachment-processor";
 import {
 	runActiveSourceConnections,
 	runSourceConnection,
@@ -60,10 +62,18 @@ async function main() {
 	);
 
 	try {
+		const attachmentProcessor = createZoteroAttachmentProcessor({
+			database: databaseResource.database,
+			maxPdfBytes: config.services.storage.maxPdfBytes,
+			publishTags: config.content.tags.publish,
+			storage: createSupabaseFileStorage(config.services.storage),
+		});
 		const options = {
 			credentialResolver: createEnvironmentCredentialResolver(),
 			database: databaseResource.database,
-			registry: createDefaultSourceAdapterRegistry(),
+			registry: createDefaultSourceAdapterRegistry({
+				zotero: { attachmentProcessor },
+			}),
 			workerId: command.workerId,
 		};
 		const result = command.sourceConnectionKey
