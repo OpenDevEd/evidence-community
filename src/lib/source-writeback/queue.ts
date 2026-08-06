@@ -4,11 +4,20 @@ import {
 	sourceWritebackJob,
 	type SourceWritebackOperation,
 } from "@opendeved/evidence-library-core";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
+export class SourceWritebackTargetKeyCollisionError extends Error {
+	constructor(itemKey: string, sourceConnectionKey: string) {
+		super(
+			`Canonical item key ${itemKey} is already used by another record in writeback target ${sourceConnectionKey}`,
+		);
+		this.name = "SourceWritebackTargetKeyCollisionError";
+	}
+}
 
 export function sourceWritebackIdempotencyKey({
 	canonicalRevision,
@@ -89,14 +98,14 @@ export async function ensureDefaultWritebackLink(
 		.where(
 			and(
 				eq(sourceConnection.defaultWriteback, true),
-				eq(sourceConnection.status, "active"),
+				ne(sourceConnection.status, "removed"),
 			),
 		)
 		.limit(1)
 		.for("key share");
 	if (!target) return null;
 
-	const [link] = await transaction
+	const [insertedLink] = await transaction
 		.insert(itemSourceLink)
 		.values({
 			itemKey,
@@ -104,16 +113,21 @@ export async function ensureDefaultWritebackLink(
 			sourceRecordKey: itemKey,
 			writebackEnabled: true,
 		})
-		.onConflictDoUpdate({
-			target: [
-				itemSourceLink.itemKey,
-				itemSourceLink.sourceConnectionKey,
-			],
-			set: {
-				updatedAt: new Date(),
-				writebackEnabled: true,
-			},
-		})
+		.onConflictDoNothing()
 		.returning();
-	return link!;
+	if (insertedLink) return insertedLink;
+
+	const [existingLink] = await transaction
+		.select()
+		.from(itemSourceLink)
+		.where(
+			and(
+				eq(itemSourceLink.itemKey, itemKey),
+				eq(itemSourceLink.sourceConnectionKey, target.key),
+			),
+		)
+		.limit(1)
+		.for("update");
+	if (existingLink) return existingLink;
+	throw new SourceWritebackTargetKeyCollisionError(itemKey, target.key);
 }

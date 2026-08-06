@@ -34,12 +34,12 @@ CREATE TABLE "sourceWritebackJob" (
 );
 --> statement-breakpoint
 ALTER TABLE "sourceConnection" ADD COLUMN "defaultWriteback" boolean DEFAULT false NOT NULL;--> statement-breakpoint
-ALTER TABLE "sourceWritebackJob" ADD CONSTRAINT "sourceWritebackJob_link_fk" FOREIGN KEY ("itemKey","sourceConnectionKey") REFERENCES "public"."itemSourceLink"("itemKey","sourceConnectionKey") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "sourceWritebackJob" ADD CONSTRAINT "sourceWritebackJob_link_fk" FOREIGN KEY ("itemKey","sourceConnectionKey") REFERENCES "public"."itemSourceLink"("itemKey","sourceConnectionKey") ON DELETE cascade ON UPDATE cascade;--> statement-breakpoint
 CREATE INDEX "sourceWritebackJob_unprocessed_idx" ON "sourceWritebackJob" USING btree ("nextAttemptAt","id") WHERE "sourceWritebackJob"."processedAt" IS NULL AND "sourceWritebackJob"."deadLetteredAt" IS NULL;--> statement-breakpoint
 CREATE INDEX "sourceWritebackJob_link_idx" ON "sourceWritebackJob" USING btree ("itemKey","sourceConnectionKey");--> statement-breakpoint
 CREATE UNIQUE INDEX "sourceConnection_one_default_writeback" ON "sourceConnection" USING btree ("defaultWriteback") WHERE "sourceConnection"."defaultWriteback" = true;--> statement-breakpoint
 ALTER TABLE "sourceConnection" ADD CONSTRAINT "sourceConnection_default_writeback_remote" CHECK (NOT "sourceConnection"."defaultWriteback" OR (
 				"sourceConnection"."provider" <> 'native'
-				AND "sourceConnection"."status" = 'active'
+				AND "sourceConnection"."status" <> 'removed'
 				AND "sourceConnection"."credentialRef" IS NOT NULL
 			));

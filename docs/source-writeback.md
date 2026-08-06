@@ -9,12 +9,14 @@ transaction as that commit.
 1. Claim the oldest ready job with `FOR UPDATE SKIP LOCKED`, a renewable lease,
    and a source/item advisory lock. Only one revision for one remote record may
    be in flight at a time.
-2. Under the shared item-mutation lock, materialize one consistent provider
+2. Re-check the stream after claiming so a concurrent commit cannot create an
+   overlapping lease, then materialize one consistent provider
    payload from the canonical item, tags, provider-owned collections, parent
    link, remote key, and remote version.
 3. Skip an obsolete upsert after unpublish or an obsolete delete after restore.
-   A paused connection defers the job without consuming an attempt; a removed
-   connection or disabled link supersedes it.
+   A paused connection or a child waiting for its parent remote identity defers
+   the job without consuming an attempt; a removed connection or disabled link
+   supersedes it.
 4. Call the provider adapter outside the database transaction while renewing
    the lease.
 5. Under the item-mutation lock, record the returned remote key/version and
@@ -29,8 +31,9 @@ repeated calls safe because a process can fail after the remote write but
 before local acknowledgement.
 
 The provider-neutral worker and fake adapter verifier cover default-target
-linking, native creation, imported updates, in-flight edits, lease exclusion,
-lease expiry, retry, dead-lettering, pause/resume, stale job suppression,
+linking, native creation, imported updates, parent-before-child ordering,
+in-flight edits, heartbeat renewal, lease exclusion, lease expiry, retry,
+dead-lettering, pause/resume, paused-target item creation, stale job suppression,
 snapshots, and duplicate enqueue calls:
 
 ```sh

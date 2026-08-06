@@ -135,7 +135,7 @@ export const sourceConnection = pgTable(
 			"sourceConnection_default_writeback_remote",
 			sql`NOT ${table.defaultWriteback} OR (
 				${table.provider} <> 'native'
-				AND ${table.status} = 'active'
+				AND ${table.status} <> 'removed'
 				AND ${table.credentialRef} IS NOT NULL
 			)`,
 		),
@@ -453,7 +453,9 @@ export const sourceWritebackJob = pgTable(
 				itemSourceLink.itemKey,
 				itemSourceLink.sourceConnectionKey,
 			],
-		}).onDelete("cascade"),
+		})
+			.onDelete("cascade")
+			.onUpdate("cascade"),
 		check(
 			"sourceWritebackJob_operation_valid",
 			sql`${table.operation} IN ('upsert', 'delete')`,

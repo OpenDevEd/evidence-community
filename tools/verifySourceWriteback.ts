@@ -33,7 +33,10 @@ import {
 	processNextSourceWritebackJob,
 	type SourceWritebackConsumerOptions,
 } from "../src/lib/source-writeback/consumer";
-import { enqueueSourceWritebackJob } from "../src/lib/source-writeback/queue";
+import {
+	enqueueSourceWritebackJob,
+	SourceWritebackTargetKeyCollisionError,
+} from "../src/lib/source-writeback/queue";
 import { runSourceWritebackWorker } from "../src/lib/source-writeback/worker";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
@@ -128,6 +131,63 @@ async function verify() {
 			scopeKind: "group",
 		});
 
+		const disabledLinkDraft = await createNativeItemDraft(db, {
+			itemType: "Report",
+			title: "Explicitly local item",
+		});
+		createdItemKeys.push(disabledLinkDraft.itemKey);
+		await db.insert(itemSourceLink).values({
+			itemKey: disabledLinkDraft.itemKey,
+			sourceConnectionKey: connectionKey,
+			sourceRecordKey: disabledLinkDraft.itemKey,
+			writebackEnabled: false,
+		});
+		await publishItemDraft(db, disabledLinkDraft.itemKey);
+		const [[preservedDisabledLink], disabledJobs] = await Promise.all([
+			db
+				.select({ writebackEnabled: itemSourceLink.writebackEnabled })
+				.from(itemSourceLink)
+				.where(eq(itemSourceLink.itemKey, disabledLinkDraft.itemKey)),
+			db
+				.select({ id: sourceWritebackJob.id })
+				.from(sourceWritebackJob)
+				.where(
+					eq(sourceWritebackJob.itemKey, disabledLinkDraft.itemKey),
+				),
+		]);
+		assert(
+			preservedDisabledLink?.writebackEnabled === false &&
+				disabledJobs.length === 0,
+			"Publishing silently re-enabled a deliberately disabled source link",
+		);
+
+		const collisionOwner = await createNativeItemDraft(db, {
+			itemType: "Report",
+			title: "Remote key owner",
+		});
+		const collisionDraft = await createNativeItemDraft(db, {
+			itemType: "Report",
+			title: "Remote key collision",
+		});
+		createdItemKeys.push(collisionOwner.itemKey, collisionDraft.itemKey);
+		await db.insert(itemSourceLink).values({
+			itemKey: collisionOwner.itemKey,
+			sourceConnectionKey: connectionKey,
+			sourceRecordKey: collisionDraft.itemKey,
+			writebackEnabled: false,
+		});
+		let collisionRejected = false;
+		try {
+			await publishItemDraft(db, collisionDraft.itemKey);
+		} catch (error) {
+			collisionRejected =
+				error instanceof SourceWritebackTargetKeyCollisionError;
+		}
+		assert(
+			collisionRejected,
+			"A target-key collision did not produce the explicit writeback error",
+		);
+
 		const nativeDraft = await createNativeItemDraft(db, {
 			abstractNote: "First abstract",
 			itemType: "report",
@@ -176,6 +236,58 @@ async function verify() {
 			"The worker did not acknowledge a successful create and persist its remote baseline",
 		);
 
+		const parentDraft = await createNativeItemDraft(db, {
+			itemType: "Report",
+			title: "Writeback parent",
+		});
+		const childDraft = await createNativeItemDraft(db, {
+			itemType: "Note",
+			note: "Writeback child",
+			parentItem: parentDraft.itemKey,
+		});
+		createdItemKeys.push(parentDraft.itemKey, childDraft.itemKey);
+		await publishItemDraft(db, parentDraft.itemKey);
+		await publishItemDraft(db, childDraft.itemKey);
+		const [parentJob] = await db
+			.select({ id: sourceWritebackJob.id })
+			.from(sourceWritebackJob)
+			.where(eq(sourceWritebackJob.itemKey, parentDraft.itemKey))
+			.limit(1);
+		assert(parentJob, "The parent writeback job was not queued");
+		await db
+			.update(sourceWritebackJob)
+			.set({ nextAttemptAt: new Date(Date.now() + 60_000) })
+			.where(eq(sourceWritebackJob.id, parentJob.id));
+		const waitingChild =
+			await processNextSourceWritebackJob(consumerOptions);
+		assert(
+			waitingChild.status === "deferred" &&
+				waitingChild.itemKey === childDraft.itemKey,
+			"A child write consumed an attempt before its parent had a remote identity",
+		);
+		await db
+			.update(sourceWritebackJob)
+			.set({ nextAttemptAt: new Date(0) })
+			.where(eq(sourceWritebackJob.id, parentJob.id));
+		const writtenParent =
+			await processNextSourceWritebackJob(consumerOptions);
+		assert(
+			writtenParent.status === "processed" &&
+				writtenParent.itemKey === parentDraft.itemKey,
+			"The parent was not written before its deferred child",
+		);
+		await db
+			.update(sourceWritebackJob)
+			.set({ nextAttemptAt: new Date(0) })
+			.where(eq(sourceWritebackJob.id, waitingChild.jobId!));
+		const writtenChild =
+			await processNextSourceWritebackJob(consumerOptions);
+		assert(
+			writtenChild.status === "processed" &&
+				calls.at(-1)?.payload.parentItem === parentDraft.itemKey,
+			"The child was not written with its acknowledged parent identity",
+		);
+
 		const openedSecond = await openItemDraft(db, nativeDraft.itemKey);
 		await saveItemDraft(db, {
 			expectedDraftRevision: openedSecond.draftRevision,
@@ -202,6 +314,7 @@ async function verify() {
 			payload: { ...openedThird.payload, abstractNote: "Third abstract" },
 		});
 		await publishItemDraft(db, nativeDraft.itemKey);
+		await delay(1_100);
 		const concurrentClaim = await processNextSourceWritebackJob({
 			...consumerOptions,
 			workerId: `${consumerOptions.workerId}-concurrent`,
@@ -414,12 +527,23 @@ async function verify() {
 		await publishItemDraft(db, importedItemKey);
 		await db
 			.update(sourceConnection)
-			.set({ defaultWriteback: false })
-			.where(eq(sourceConnection.key, connectionKey));
-		await db
-			.update(sourceConnection)
 			.set({ status: "paused" })
 			.where(eq(sourceConnection.key, connectionKey));
+		const pausedNativeDraft = await createNativeItemDraft(db, {
+			itemType: "report",
+			title: "Created while writeback is paused",
+		});
+		createdItemKeys.push(pausedNativeDraft.itemKey);
+		await publishItemDraft(db, pausedNativeDraft.itemKey);
+		const [pausedNativeLink] = await db
+			.select()
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, pausedNativeDraft.itemKey));
+		assert(
+			pausedNativeLink?.sourceConnectionKey === connectionKey &&
+				pausedNativeLink.writebackEnabled,
+			"Publishing while the default target was paused stranded a native item without a writeback link",
+		);
 		const deferred = await processNextSourceWritebackJob(consumerOptions);
 		const [deferredJob] = await db
 			.select({ attempts: sourceWritebackJob.attempts })
@@ -434,10 +558,6 @@ async function verify() {
 			.set({ status: "active" })
 			.where(eq(sourceConnection.key, connectionKey));
 		await db
-			.update(sourceConnection)
-			.set({ defaultWriteback: true })
-			.where(eq(sourceConnection.key, connectionKey));
-		await db
 			.update(sourceWritebackJob)
 			.set({ nextAttemptAt: new Date(0) })
 			.where(eq(sourceWritebackJob.id, deferred.jobId!));
@@ -447,12 +567,14 @@ async function verify() {
 			maxJobsPerSweep: 10,
 			signal: workerController.signal,
 		});
-		const importedCall = calls.at(-1)!;
+		const importedCall = calls
+			.toReversed()
+			.find(({ itemKey }) => itemKey === importedItemKey);
 		assert(
 			workerResult.lastSweep?.some(
 				({ status }) => status === "processed",
 			) &&
-				importedCall.itemKey === importedItemKey &&
+				importedCall?.itemKey === importedItemKey &&
 				importedCall.sourceRecordKey === "IMPT2345" &&
 				importedCall.remoteVersion === "10" &&
 				importedCall.payload.title === "Locally edited import",

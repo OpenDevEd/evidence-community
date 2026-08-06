@@ -35,8 +35,9 @@ Library databases and deployments are not migrated or modified.
   and import history remain independent.
 - Credentials are referenced by `credentialRef`; secrets are not stored in the
   source record.
-- At most one active remote connection is marked `defaultWriteback`. A native
-  item's first publication links it to that target with the canonical
+- At most one non-removed remote connection is marked `defaultWriteback`. The
+  target may be paused without losing queued work or stranding new items. A
+  native item's first publication links it to that target with the canonical
   eight-character key as its pending provider key. With no default target,
   native publication remains local-only.
 - Zotero uses Web API v3. Its durable cursor records the last complete library

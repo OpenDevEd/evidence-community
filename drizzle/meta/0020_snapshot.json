@@ -1358,7 +1358,7 @@
         },
         "sourceConnection_default_writeback_remote": {
           "name": "sourceConnection_default_writeback_remote",
-          "value": "NOT \"sourceConnection\".\"defaultWriteback\" OR (\n\t\t\t\t\"sourceConnection\".\"provider\" <> 'native'\n\t\t\t\tAND \"sourceConnection\".\"status\" = 'active'\n\t\t\t\tAND \"sourceConnection\".\"credentialRef\" IS NOT NULL\n\t\t\t)"
+          "value": "NOT \"sourceConnection\".\"defaultWriteback\" OR (\n\t\t\t\t\"sourceConnection\".\"provider\" <> 'native'\n\t\t\t\tAND \"sourceConnection\".\"status\" <> 'removed'\n\t\t\t\tAND \"sourceConnection\".\"credentialRef\" IS NOT NULL\n\t\t\t)"
         }
       },
       "isRLSEnabled": false
@@ -2239,7 +2239,7 @@
             "sourceConnectionKey"
           ],
           "onDelete": "cascade",
-          "onUpdate": "no action"
+          "onUpdate": "cascade"
         }
       },
       "compositePrimaryKeys": {},

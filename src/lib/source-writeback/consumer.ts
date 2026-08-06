@@ -13,6 +13,7 @@ import {
 	isNotNull,
 	isNull,
 	lte,
+	ne,
 	notExists,
 	or,
 	sql,
@@ -66,6 +67,7 @@ export type SourceWritebackProcessResult = {
 		| "dead-lettered"
 		| "deferred"
 		| "idle"
+		| "lease-lost"
 		| "processed"
 		| "retrying"
 		| "superseded";
@@ -82,15 +84,6 @@ export class SourceWritebackAbortError extends Error {
 	constructor() {
 		super("Source writeback processing was aborted");
 		this.name = "SourceWritebackAbortError";
-	}
-}
-
-export class SourceWritebackParentUnavailableError extends Error {
-	constructor(itemKey: string, parentItemKey: string) {
-		super(
-			`Parent ${parentItemKey} has not been written to this source for item ${itemKey}`,
-		);
-		this.name = "SourceWritebackParentUnavailableError";
 	}
 }
 
@@ -220,6 +213,29 @@ async function claimJob(
 			.for("update", { skipLocked: true })
 			.limit(1);
 		if (!candidate) return null;
+
+		// The candidate query and the advisory lock can observe different
+		// READ COMMITTED snapshots. Re-check after acquiring the stream lock so
+		// a lease committed during the candidate scan cannot overlap this job.
+		const [activeLease] = await transaction
+			.select({ id: sourceWritebackJob.id })
+			.from(sourceWritebackJob)
+			.where(
+				and(
+					ne(sourceWritebackJob.id, candidate.id),
+					eq(sourceWritebackJob.itemKey, candidate.itemKey),
+					eq(
+						sourceWritebackJob.sourceConnectionKey,
+						candidate.sourceConnectionKey,
+					),
+					isNull(sourceWritebackJob.processedAt),
+					isNull(sourceWritebackJob.deadLetteredAt),
+					isNotNull(sourceWritebackJob.leaseOwner),
+					gt(sourceWritebackJob.leaseExpiresAt, claimedAt),
+				),
+			)
+			.limit(1);
+		if (activeLease) return null;
 
 		const [claimed] = await transaction
 			.update(sourceWritebackJob)
@@ -362,7 +378,12 @@ async function loadRequest(
 			return { disposition: "supersede" as const, request: null, state };
 		}
 		if (state.connection.status === "paused") {
-			return { disposition: "defer" as const, request: null, state };
+			return {
+				deferDelay: "long" as const,
+				disposition: "defer" as const,
+				request: null,
+				state,
+			};
 		}
 
 		const [tagRows, collectionRows] = await Promise.all([
@@ -393,7 +414,11 @@ async function loadRequest(
 		let parentSourceRecordKey: string | null = null;
 		if (state.item.parentItem) {
 			const [parentLink] = await transaction
-				.select({ sourceRecordKey: itemSourceLink.sourceRecordKey })
+				.select({
+					remoteDeleted: itemSourceLink.remoteDeleted,
+					remoteVersion: itemSourceLink.remoteVersion,
+					sourceRecordKey: itemSourceLink.sourceRecordKey,
+				})
 				.from(itemSourceLink)
 				.where(
 					and(
@@ -405,11 +430,17 @@ async function loadRequest(
 					),
 				)
 				.limit(1);
-			if (!parentLink) {
-				throw new SourceWritebackParentUnavailableError(
-					job.itemKey,
-					state.item.parentItem,
-				);
+			if (
+				!parentLink ||
+				parentLink.remoteDeleted ||
+				parentLink.remoteVersion === null
+			) {
+				return {
+					deferDelay: "short" as const,
+					disposition: "defer" as const,
+					request: null,
+					state,
+				};
 			}
 			parentSourceRecordKey = parentLink.sourceRecordKey;
 		}
@@ -671,7 +702,9 @@ export async function processNextSourceWritebackJob(
 				options,
 				job,
 				validated.workerId,
-				validated.retryMaxMs,
+				loaded.deferDelay === "short"
+					? validated.retryBaseMs
+					: validated.retryMaxMs,
 			);
 			return { ...resultBase, status: "deferred" };
 		}
@@ -709,7 +742,9 @@ export async function processNextSourceWritebackJob(
 		await acknowledgeJob(options, job, writeResult, validated.workerId);
 		return { ...resultBase, status: "processed" };
 	} catch (error) {
-		if (error instanceof SourceWritebackLeaseLostError) throw error;
+		if (error instanceof SourceWritebackLeaseLostError) {
+			return { ...resultBase, status: "lease-lost" };
+		}
 		if (options.signal?.aborted) {
 			await releaseJob(options, job, validated.workerId);
 			throw new SourceWritebackAbortError();
