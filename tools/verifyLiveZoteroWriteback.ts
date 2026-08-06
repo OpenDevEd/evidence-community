@@ -278,11 +278,20 @@ async function verifyNativeSeparation(
 async function cleanupLocalItems(database: Database, itemKeys: string[]) {
 	if (itemKeys.length === 0) return;
 	await database
+		.delete(sourceWritebackJob)
+		.where(inArray(sourceWritebackJob.itemKey, itemKeys));
+	await database
+		.delete(sourceSnapshot)
+		.where(inArray(sourceSnapshot.itemKey, itemKeys));
+	await database
 		.delete(itemDraft)
 		.where(inArray(itemDraft.itemKey, itemKeys));
 	await database
 		.delete(itemFileDraft)
 		.where(inArray(itemFileDraft.itemKey, itemKeys));
+	await database
+		.delete(itemFilePublication)
+		.where(inArray(itemFilePublication.itemKey, itemKeys));
 	await database
 		.delete(itemToCollection)
 		.where(inArray(itemToCollection.itemKey, itemKeys));
@@ -322,6 +331,7 @@ async function verifyLiveWriteback() {
 	const privatePaths = new Set<string>();
 	const publicPaths = new Set<string>();
 	let previousDefaultKeys: string[] = [];
+	let writebackDefaultsCaptured = false;
 	let zoteroClient: ZoteroApiClient | null = null;
 	let zoteroPrefix: string | null = null;
 	let syncRuntime: ReturnType<typeof createSourceSyncRuntime> | null = null;
@@ -361,6 +371,7 @@ async function verifyLiveWriteback() {
 				.from(sourceConnection)
 				.where(eq(sourceConnection.defaultWriteback, true))
 		).map(({ key }) => key);
+		writebackDefaultsCaptured = true;
 		if (previousDefaultKeys.length > 0) {
 			await database
 				.update(sourceConnection)
@@ -755,18 +766,38 @@ async function verifyLiveWriteback() {
 			.catch((error) =>
 				console.error("Failed to clean up public test files", error),
 			);
-		await cleanupLocalItems(database, itemKeys);
-		await database
-			.update(sourceConnection)
-			.set({ defaultWriteback: false })
-			.where(eq(sourceConnection.key, LIVE_ZOTERO_CONNECTION_KEY));
-		if (previousDefaultKeys.length > 0) {
-			await database
-				.update(sourceConnection)
-				.set({ defaultWriteback: true })
-				.where(inArray(sourceConnection.key, previousDefaultKeys));
+		try {
+			await cleanupLocalItems(database, itemKeys);
+		} finally {
+			try {
+				if (writebackDefaultsCaptured) {
+					await database.transaction(async (transaction) => {
+						await transaction
+							.update(sourceConnection)
+							.set({ defaultWriteback: false })
+							.where(
+								eq(
+									sourceConnection.key,
+									LIVE_ZOTERO_CONNECTION_KEY,
+								),
+							);
+						if (previousDefaultKeys.length > 0) {
+							await transaction
+								.update(sourceConnection)
+								.set({ defaultWriteback: true })
+								.where(
+									inArray(
+										sourceConnection.key,
+										previousDefaultKeys,
+									),
+								);
+						}
+					});
+				}
+			} finally {
+				await databaseResource.dispose();
+			}
 		}
-		await databaseResource.dispose();
 	}
 }
 
