@@ -7,12 +7,24 @@ import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { loadLibraryConfig } from "../src/config/library-config/source";
 
 export const ZOTERO_PLAYGROUND = {
+	collectionKeys: {
+		controls: "2KZ6K297",
+		reports: "RQ9TXQ4Q",
+		root: "4QQJXM54",
+	},
 	groupId: "6632364",
 	groupName: "OpenScholar Test",
 	markerTag: "openscholar-test-fixture",
 	ownerUserId: 7_635_957,
 	ownerUsername: "opendeved",
 } as const;
+
+export const ZOTERO_PLAYGROUND_PUBLISHED_PDF_TOKENS = [
+	"OPENSCHOLAR-PDF-PUBLISHED-PAGE-ONE-001",
+	"OPENSCHOLAR-PDF-PUBLISHED-PAGE-TWO-002",
+] as const;
+export const ZOTERO_PLAYGROUND_UNPUBLISHED_PDF_TOKEN =
+	"OPENSCHOLAR-PDF-PRIVATE-CONTROL-001";
 
 const API_BASE_URL = "https://api.zotero.org";
 const PAGE_SIZE = 100;
@@ -58,6 +70,7 @@ type SeedSummary = {
 	collections: Record<string, string>;
 	createdItems: string[];
 	deduplicatedPdfs: string[];
+	deletedCollections: string[];
 	fixtureItems: Record<string, string>;
 	publishTag: string;
 	unchangedItems: string[];
@@ -328,10 +341,7 @@ async function buildPdfFixtures(
 			},
 			bytes: await createFixturePdf({
 				documentTitle: "OpenScholar Published Report Fixture",
-				pageTokens: [
-					"OPENSCHOLAR-PDF-PUBLISHED-PAGE-ONE-001",
-					"OPENSCHOLAR-PDF-PUBLISHED-PAGE-TWO-002",
-				],
+				pageTokens: [...ZOTERO_PLAYGROUND_PUBLISHED_PDF_TOKENS],
 			}),
 			filename: "openscholar-published-report.pdf",
 			parentFixtureId: "published-report",
@@ -354,7 +364,7 @@ async function buildPdfFixtures(
 			},
 			bytes: await createFixturePdf({
 				documentTitle: "OpenScholar Unpublished Control Fixture",
-				pageTokens: ["OPENSCHOLAR-PDF-PRIVATE-CONTROL-001"],
+				pageTokens: [ZOTERO_PLAYGROUND_UNPUBLISHED_PDF_TOKEN],
 			}),
 			filename: "openscholar-unpublished-control.pdf",
 			parentFixtureId: "unpublished-article",
@@ -536,42 +546,87 @@ export class ZoteroPlaygroundSeeder {
 		});
 	}
 
-	private async ensureCollections() {
+	private async patchCollection(
+		record: ZoteroRecord,
+		data: Record<string, unknown>,
+	) {
+		await this.request(`${this.prefix}/collections/${record.key}`, {
+			body: JSON.stringify(data),
+			headers: {
+				"Content-Type": "application/json",
+				"If-Unmodified-Since-Version": String(record.version),
+			},
+			method: "PATCH",
+		});
+	}
+
+	private async deleteCollection(record: ZoteroRecord) {
+		await this.request(`${this.prefix}/collections/${record.key}`, {
+			headers: {
+				"If-Unmodified-Since-Version": String(record.version),
+			},
+			method: "DELETE",
+		});
+	}
+
+	private async ensureCollections(summary: SeedSummary) {
 		const existing = await this.list(`${this.prefix}/collections`);
-		const exact = (name: string, parentCollection: string | false) => {
-			const matches = existing.filter(
-				(record) =>
-					record.data.name === name &&
-					record.data.parentCollection === parentCollection,
-			);
-			if (matches.length > 1) {
-				throw new Error(
-					`Multiple Zotero fixture collections match ${name}`,
-				);
+		const byKey = new Map(existing.map((record) => [record.key, record]));
+		const ensure = async (
+			key: string,
+			name: string,
+			parentCollection: string | false,
+		) => {
+			const desired = { name, parentCollection };
+			const current = byKey.get(key);
+			if (!current) {
+				await this.create("collections", {
+					key,
+					version: 0,
+					...desired,
+				});
+				return key;
 			}
-			return matches[0]?.key;
+			if (!editableFieldsMatch(current.data, desired)) {
+				await this.patchCollection(current, desired);
+			}
+			return key;
 		};
 		const rootName = "[OpenScholar fixture] Evidence";
-		const root =
-			exact(rootName, false) ??
-			(await this.create("collections", {
-				name: rootName,
-				parentCollection: false,
-			}));
+		const root = await ensure(
+			ZOTERO_PLAYGROUND.collectionKeys.root,
+			rootName,
+			false,
+		);
 		const reportsName = "[OpenScholar fixture] Reports";
-		const reports =
-			exact(reportsName, root) ??
-			(await this.create("collections", {
-				name: reportsName,
-				parentCollection: root,
-			}));
+		const reports = await ensure(
+			ZOTERO_PLAYGROUND.collectionKeys.reports,
+			reportsName,
+			root,
+		);
 		const controlsName = "[OpenScholar fixture] Controls";
-		const controls =
-			exact(controlsName, root) ??
-			(await this.create("collections", {
-				name: controlsName,
-				parentCollection: root,
-			}));
+		const controls = await ensure(
+			ZOTERO_PLAYGROUND.collectionKeys.controls,
+			controlsName,
+			root,
+		);
+
+		const expectedKeys = new Set([root, reports, controls]);
+		const exactFixtureShapes = new Set([
+			JSON.stringify([rootName, false]),
+			JSON.stringify([reportsName, root]),
+			JSON.stringify([controlsName, root]),
+		]);
+		for (const record of existing) {
+			if (expectedKeys.has(record.key)) continue;
+			const shape = JSON.stringify([
+				record.data.name,
+				record.data.parentCollection,
+			]);
+			if (!exactFixtureShapes.has(shape)) continue;
+			await this.deleteCollection(record);
+			summary.deletedCollections.push(record.key);
+		}
 		return { controls, reports, root };
 	}
 
@@ -670,18 +725,20 @@ export class ZoteroPlaygroundSeeder {
 
 	async seed(): Promise<SeedSummary> {
 		await this.verifyTarget();
-		const collections = await this.ensureCollections();
-		const existing = await this.existingFixtureItems();
 		const summary: SeedSummary = {
-			collections,
+			collections: {},
 			createdItems: [],
 			deduplicatedPdfs: [],
+			deletedCollections: [],
 			fixtureItems: {},
 			publishTag: this.options.publishTag,
 			unchangedItems: [],
 			updatedItems: [],
 			uploadedPdfs: [],
 		};
+		const collections = await this.ensureCollections(summary);
+		summary.collections = collections;
+		const existing = await this.existingFixtureItems();
 
 		for (const parent of buildParentFixtures(collections)) {
 			await this.upsertFixtureItem(parent, existing, summary);
@@ -743,6 +800,11 @@ async function main() {
 	}
 	const config = await loadLibraryConfig();
 	const publishTag = config.content.tags.publish[0];
+	if (!publishTag) {
+		throw new Error(
+			"The active library configuration has no publication tag",
+		);
+	}
 	const seeder = new ZoteroPlaygroundSeeder({
 		apiKey,
 		groupId: command.groupId,

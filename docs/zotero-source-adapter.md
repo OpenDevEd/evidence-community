@@ -106,12 +106,49 @@ The adapter has no Zotero writeback in v1.
 
 ## Attachments
 
-The adapter accepts an injected attachment processor. The processor receives
-the original Zotero attachment response and may reuse the existing
-download/PDF/Supabase pipeline to return public file metadata. File processing
-is outside the database transaction and must therefore be idempotent. A failed
-processor leaves the durable
-cursor at the preceding completed batch, so the attachment resumes safely.
+The runtime injects the shared PDF and Supabase storage pipeline into the
+adapter. A Zotero attachment is published only when it is a PDF, uses Zotero's
+`imported_file` or `imported_url` mode, has a parent item, and carries one of the
+configured publication tags. Untagged attachments retain their metadata but
+have no public URL, extracted text, cover, or `itemFilePublication` row.
+
+Published PDFs are downloaded with total and inactivity timeouts and the
+configured byte limit, verified against Zotero's MD5, parsed for bounded full
+text, and rendered to a cover image. The PDF and cover use content-addressed
+paths under the source connection and are uploaded to the configured public
+Supabase bucket. `itemFilePublication` records the immutable object paths,
+hash, dimensions, page count, and parent relationship.
+
+Uploads are staged in `sourceFileCleanup` before storage writes. The ingestion
+transaction either adopts those objects and queues the prior publication for
+deletion or leaves the staged objects queued for retry. Cleanup retries are
+durable and dead-letter after five failed attempts. Permanent attachment
+problems are recorded in `sourceRecordIssue` without blocking the rest of the
+source; transient failures leave the cursor at the preceding completed batch.
+Replaying the same Zotero MD5 reuses the existing publication without another
+download or upload.
+
+## Dedicated live verification
+
+The live verifier is intentionally limited to the OpenScholar Zotero
+playground and loopback PostgreSQL, Supabase, and Meilisearch services. It
+reconciles the deterministic fixture, runs the real source adapter, drains the
+local outbox using its normal claim protocol, and verifies source identities,
+read-only draft separation, publication-tag behavior, stored PDF and cover,
+cursor health, and search projection:
+
+```sh
+LIBRARY_CONFIG_PATH=config/library.local.json \
+ZOTERO_OPENSCHOLAR_TEST_API_KEY=... \
+npm run test:zotero-live -- \
+  --confirm-group 6632364 \
+  --confirm-local-writes
+```
+
+Both confirmations are mandatory. The verifier also reads the connection row
+and refuses unless it is the active `zotero` group connection for `6632364`.
+Outbox delivery remains safe if a local search worker is running because both
+consumers use the same row-claim and lease protocol.
 
 The local verification server exercises key authentication, strict API v3
 headers, parent ordering, one-record checkpoint batches, interruption/resume,
