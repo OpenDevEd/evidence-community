@@ -268,6 +268,10 @@ async function mockPublishedBook(
 		}) => AdminItemBatchResult[];
 		beforeBatchResponse?: () => Promise<void>;
 		beforeCollectionPageResponse?: (request: URL) => Promise<void>;
+		beforeDraftSaveResponse?: (body: {
+			expectedPayload: Record<string, unknown>;
+			payload: Record<string, unknown>;
+		}) => Promise<Record<string, unknown> | void>;
 		failDraftSave?: boolean;
 		itemCount?: number;
 		initialCollectionKeys?: string[];
@@ -509,7 +513,8 @@ async function mockPublishedBook(
 				payload: Record<string, unknown>;
 			};
 			options.onDraftSave?.(body.payload, body.expectedPayload);
-			draftPayload = body.payload;
+			draftPayload =
+				(await options.beforeDraftSaveResponse?.(body)) ?? body.payload;
 			draftRevision += 1;
 			await route.fulfill({
 				json: { draft: publishedDraft(draftPayload, draftRevision) },
@@ -1954,6 +1959,53 @@ test("autosaves against the exact draft payload the editor saw", async ({
 	await expect.poll(() => saves.length).toBe(1);
 	expect(saves[0]?.expected.title).toBe("Published book");
 	expect(saves[0]?.next.title).toBe("Locally edited title");
+});
+
+test("rebases an autosave queued behind an in-flight save", async ({ page }) => {
+	let releaseFirstSave: (() => void) | undefined;
+	const firstSaveStarted = new Promise<void>((resolve) => {
+		releaseFirstSave = resolve;
+	});
+	let unblockFirstResponse: (() => void) | undefined;
+	const firstResponseBlocked = new Promise<void>((resolve) => {
+		unblockFirstResponse = resolve;
+	});
+	const saves: Array<{
+		expected: Record<string, unknown>;
+		next: Record<string, unknown>;
+	}> = [];
+	await mockPublishedBook(page, {
+		beforeDraftSaveResponse: async ({ payload }) => {
+			if (saves.length !== 1) return;
+			releaseFirstSave?.();
+			await firstResponseBlocked;
+			return { ...payload, date: "2026" };
+		},
+		onDraftSave: (next, expected) =>
+			saves.push({
+				expected: structuredClone(expected),
+				next: structuredClone(next),
+			}),
+	});
+	await page.goto("/admin");
+
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector
+		.getByRole("textbox", { name: "Title", exact: true })
+		.fill("First local edit");
+	await firstSaveStarted;
+	await inspector
+		.getByRole("textbox", { name: "Abstract Note", exact: true })
+		.fill("Second local edit");
+	await page.waitForTimeout(800);
+	unblockFirstResponse?.();
+
+	await expect.poll(() => saves.length).toBe(2);
+	expect(saves[1]?.expected.date).toBe("2026");
+	expect(saves[1]?.next.date).toBe("2026");
+	expect(saves[1]?.next.title).toBe("First local edit");
+	expect(saves[1]?.next.abstractNote).toBe("Second local edit");
 });
 
 test("removes native memberships while imported and deleted memberships stay locked", async ({

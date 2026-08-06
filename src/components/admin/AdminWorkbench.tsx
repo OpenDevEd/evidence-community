@@ -872,14 +872,14 @@ export default function AdminWorkbench({
 
 			const queue = () => {
 				saveTimers.current.delete(key);
-				const pending = pendingPayloadByKey.current.get(key);
-				const queuedPayload =
-					pending?.generation === generation
-						? pending.payload
-						: payload;
-				const next = saveQueue.current.then(() =>
-					executeSave(key, queuedPayload, generation),
-				);
+				const next = saveQueue.current.then(() => {
+					const pending = pendingPayloadByKey.current.get(key);
+					const queuedPayload =
+						pending?.generation === generation
+							? pending.payload
+							: payload;
+					return executeSave(key, queuedPayload, generation);
+				});
 				saveQueue.current = next.catch(() => undefined);
 				return next;
 			};
