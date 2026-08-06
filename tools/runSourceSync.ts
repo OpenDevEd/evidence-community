@@ -9,14 +9,23 @@ import { createZoteroAttachmentProcessor } from "../src/lib/source-ingestion/zot
 import {
 	runActiveSourceConnections,
 	runSourceConnection,
+	SourceLeaseUnavailableError,
+	type SourceRunSweepResult,
 } from "../src/lib/source-ingestion/orchestrator";
+import {
+	DEFAULT_SOURCE_SYNC_POLL_MS,
+	runSourceWorker,
+	validateSourceSyncPollMs,
+} from "../src/lib/source-ingestion/source-worker";
 
 const usage =
-	"Usage: npm run source:sync -- [--connection <key>] [--concurrency <1-32>] [--worker-id <id>]";
+	"Usage: npm run source:sync -- [--connection <key>] [--concurrency <1-32>] [--watch] [--poll-ms <1000-3600000>] [--worker-id <id>]";
 
 type Command = {
 	concurrency: number;
+	pollMs: number;
 	sourceConnectionKey?: string;
+	watch: boolean;
 	workerId: string;
 };
 
@@ -28,8 +37,12 @@ function requireValue(args: string[], index: number) {
 
 function parseCommand(args: string[]): Command {
 	let concurrency = 2;
+	let pollMs = DEFAULT_SOURCE_SYNC_POLL_MS;
 	let sourceConnectionKey: string | undefined;
-	let workerId = `${hostname()}:${process.pid}`;
+	let watch = false;
+	let workerId =
+		process.env.SOURCE_SYNC_WORKER_ID?.trim() ||
+		`${hostname()}:${process.pid}`;
 
 	for (let index = 0; index < args.length; index += 1) {
 		const argument = args[index];
@@ -43,6 +56,15 @@ function parseCommand(args: string[]): Command {
 			index += 1;
 			continue;
 		}
+		if (argument === "--watch") {
+			watch = true;
+			continue;
+		}
+		if (argument === "--poll-ms") {
+			pollMs = Number(requireValue(args, index));
+			index += 1;
+			continue;
+		}
 		if (argument === "--worker-id") {
 			workerId = requireValue(args, index);
 			index += 1;
@@ -51,7 +73,61 @@ function parseCommand(args: string[]): Command {
 		throw new Error(usage);
 	}
 
-	return { concurrency, sourceConnectionKey, workerId };
+	if (
+		!Number.isSafeInteger(concurrency) ||
+		concurrency < 1 ||
+		concurrency > 32
+	) {
+		throw new Error(usage);
+	}
+	try {
+		validateSourceSyncPollMs(pollMs);
+	} catch {
+		throw new Error(usage);
+	}
+	return { concurrency, pollMs, sourceConnectionKey, watch, workerId };
+}
+
+function errorMessage(error: unknown) {
+	return error instanceof Error
+		? `${error.name}: ${error.message}`
+		: String(error);
+}
+
+async function runConfiguredSweep(
+	command: Command,
+	options: Parameters<typeof runActiveSourceConnections>[0],
+): Promise<SourceRunSweepResult[]> {
+	if (!command.sourceConnectionKey) {
+		return runActiveSourceConnections({
+			...options,
+			concurrency: command.concurrency,
+		});
+	}
+	try {
+		return [
+			await runSourceConnection({
+				...options,
+				sourceConnectionKey: command.sourceConnectionKey,
+			}),
+		];
+	} catch (error) {
+		if (error instanceof SourceLeaseUnavailableError) {
+			return [
+				{
+					connectionKey: command.sourceConnectionKey,
+					status: "busy",
+				},
+			];
+		}
+		return [
+			{
+				connectionKey: command.sourceConnectionKey,
+				error: errorMessage(error),
+				status: "failed",
+			},
+		];
+	}
 }
 
 async function main() {
@@ -60,6 +136,18 @@ async function main() {
 	const databaseResource = createPostgresDatabaseResource(
 		config.services.database.url,
 	);
+	const abortController = new AbortController();
+	let signalCount = 0;
+	const stop = () => {
+		signalCount += 1;
+		if (signalCount === 1) {
+			abortController.abort();
+			return;
+		}
+		process.exit(130);
+	};
+	process.on("SIGINT", stop);
+	process.on("SIGTERM", stop);
 
 	try {
 		const attachmentProcessor = createZoteroAttachmentProcessor({
@@ -76,23 +164,23 @@ async function main() {
 			}),
 			workerId: command.workerId,
 		};
-		const result = command.sourceConnectionKey
-			? await runSourceConnection({
-					...options,
-					sourceConnectionKey: command.sourceConnectionKey,
-				})
-			: await runActiveSourceConnections({
-					...options,
-					concurrency: command.concurrency,
-				});
-		console.log(JSON.stringify(result, null, 2));
+		const result = await runSourceWorker({
+			onError: (error) => console.error(errorMessage(error)),
+			onSweep: (sweep) => console.log(JSON.stringify(sweep, null, 2)),
+			pollMs: command.pollMs,
+			runSweep: () => runConfiguredSweep(command, options),
+			signal: abortController.signal,
+			watch: command.watch,
+		});
 		if (
-			Array.isArray(result) &&
-			result.some((entry) => entry.status === "failed")
+			!command.watch &&
+			result.lastSweep?.some((entry) => entry.status === "failed")
 		) {
 			process.exitCode = 1;
 		}
 	} finally {
+		process.off("SIGINT", stop);
+		process.off("SIGTERM", stop);
 		await databaseResource.dispose();
 	}
 }

@@ -87,4 +87,27 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
 
 CMD ["node_modules/.bin/tsx", "tools/runSearchIndexer.ts", "--watch"]
 
+FROM base AS source-sync
+
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV SOURCE_SYNC_WORKER_ID=source-sync
+
+WORKDIR /app
+
+RUN groupadd --system --gid 1001 nodejs \
+	&& useradd --system --uid 1001 --gid nodejs sourceworker
+
+COPY --from=deps --chown=sourceworker:nodejs /app/node_modules ./node_modules
+COPY --chown=sourceworker:nodejs packages ./packages
+COPY --chown=sourceworker:nodejs src ./src
+COPY --chown=sourceworker:nodejs tools ./tools
+COPY --chown=sourceworker:nodejs package.json tsconfig.json ./
+
+RUN npm --prefix packages/evidence-library-core run build
+
+USER sourceworker
+
+CMD ["node_modules/.bin/tsx", "tools/runSourceSync.ts", "--watch"]
+
 FROM runner AS final
