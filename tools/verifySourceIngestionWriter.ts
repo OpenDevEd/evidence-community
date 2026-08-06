@@ -22,6 +22,7 @@ import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import { tag } from "../src/db/schema/tables/tag";
 import type { EvidenceFileStorage } from "../src/lib/admin/file-storage";
+import { removeNativeItem } from "../src/lib/admin/native-item-service";
 import {
 	SourceAliasConflictError,
 	SourceCursorConflictError,
@@ -261,9 +262,135 @@ async function verify() {
 				linkedAfterUpdate.abstractNote === "Updated remote abstract" &&
 				linkedAfterUpdate.revision === 3 &&
 				linkedSourceLink?.remoteVersion === "4" &&
-				linkedSourceLink.lastAcknowledgedRemoteVersion === "4" &&
+				linkedSourceLink.lastAcknowledgedRemoteVersion === null &&
 				linkedSnapshot?.remoteVersion === "4",
 			"Link-scoped snapshots or dirty-field masking were not maintained",
+		);
+
+		const linkedRemoteDelete = await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-native-link-writer",
+				expectedCursor: { version: 4 },
+				nextCursor: { version: 5 },
+			}),
+			items: [
+				{
+					operation: "delete",
+					raw: { deleted: true, key: "LINK2345" },
+					remoteVersion: "5",
+					sourceRecordKey: "LINK2345",
+				},
+			],
+		});
+		const [[linkedAfterDelete], [linkAfterDelete]] = await Promise.all([
+			db.select().from(item).where(eq(item.key, nativeLinkItemKey)),
+			db
+				.select()
+				.from(itemSourceLink)
+				.where(
+					and(
+						eq(itemSourceLink.itemKey, nativeLinkItemKey),
+						eq(
+							itemSourceLink.sourceConnectionKey,
+							"zotero-native-link-writer",
+						),
+					),
+				),
+		]);
+		assert(
+			linkedRemoteDelete.written.items === 0 &&
+				linkedRemoteDelete.written.outboxEvents === 0 &&
+				linkedAfterDelete?.deleted === 0 &&
+				linkedAfterDelete.revision === 3 &&
+				linkAfterDelete?.remoteDeleted === true &&
+				linkAfterDelete.remoteVersion === "5" &&
+				linkAfterDelete.lastAcknowledgedRemoteVersion === null,
+			"A remote deletion tombstoned a differently owned canonical item",
+		);
+
+		const linkedRemoteRestore = await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-native-link-writer",
+				expectedCursor: { version: 5 },
+				nextCursor: { version: 6 },
+			}),
+			items: [
+				{
+					...linkedRecord,
+					remoteVersion: "6",
+					raw: { key: "LINK2345", version: 6 },
+					metadata: {
+						...linkedRecord.metadata,
+						abstractNote: "Updated remote abstract",
+					},
+				},
+			],
+		});
+		const [linkAfterRestore] = await db
+			.select()
+			.from(itemSourceLink)
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, nativeLinkItemKey),
+					eq(
+						itemSourceLink.sourceConnectionKey,
+						"zotero-native-link-writer",
+					),
+				),
+			);
+		assert(
+			linkedRemoteRestore.written.items === 0 &&
+				linkedRemoteRestore.written.outboxEvents === 0 &&
+				linkAfterRestore?.remoteDeleted === false &&
+				linkAfterRestore.remoteVersion === "6",
+			"Restoring a linked remote record did not reactivate its source link",
+		);
+
+		const locallyRemoved = await removeNativeItem(db, nativeLinkItemKey);
+		assert(
+			locallyRemoved.item?.deleted === 1,
+			"Native removal did not tombstone the linked item",
+		);
+		const linkedRemoteUpsertAfterLocalDelete =
+			await writeSourceIngestionBatch(db, {
+				...baseBatch({
+					connectionKey: "zotero-native-link-writer",
+					expectedCursor: { version: 6 },
+					nextCursor: { version: 7 },
+				}),
+				items: [
+					{
+						...linkedRecord,
+						remoteVersion: "7",
+						raw: { key: "LINK2345", version: 7 },
+					},
+				],
+			});
+		const [[linkedAfterLocalDelete], [linkAfterLocalDeleteUpsert]] =
+			await Promise.all([
+				db.select().from(item).where(eq(item.key, nativeLinkItemKey)),
+				db
+					.select()
+					.from(itemSourceLink)
+					.where(
+						and(
+							eq(itemSourceLink.itemKey, nativeLinkItemKey),
+							eq(
+								itemSourceLink.sourceConnectionKey,
+								"zotero-native-link-writer",
+							),
+						),
+					),
+			]);
+		assert(
+			linkedRemoteUpsertAfterLocalDelete.written.items === 0 &&
+				linkedRemoteUpsertAfterLocalDelete.written.outboxEvents === 0 &&
+				linkedAfterLocalDelete?.deleted === 1 &&
+				linkedAfterLocalDelete.revision ===
+					locallyRemoved.item.revision &&
+				linkAfterLocalDeleteUpsert?.remoteDeleted === false &&
+				linkAfterLocalDeleteUpsert.remoteVersion === "7",
+			"A remote upsert resurrected a locally deleted linked item",
 		);
 
 		const mendeleyResult = await writeSourceIngestionBatch(db, {

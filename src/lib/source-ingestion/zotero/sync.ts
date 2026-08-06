@@ -3,7 +3,7 @@ import {
 	itemSourceLink,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
-import { and, eq, isNull, ne, or } from "drizzle-orm";
+import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { sourceSnapshot } from "@/db/schema/source";
@@ -472,7 +472,7 @@ async function loadLocalSourceState(
 	const [items, collections] = await Promise.all([
 		database
 			.select({
-				deleted: item.deleted,
+				deleted: sql<number>`CASE WHEN ${itemSourceLink.remoteDeleted} THEN 1 ELSE 0 END`,
 				key: item.key,
 				parentItem: item.parentItem,
 				sourceRecordKey: itemSourceLink.sourceRecordKey,

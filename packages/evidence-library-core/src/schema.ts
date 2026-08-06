@@ -355,6 +355,7 @@ export const itemSourceLink = pgTable(
 			}),
 		sourceRecordKey: varchar("sourceRecordKey", { length: 512 }).notNull(),
 		remoteVersion: varchar("remoteVersion", { length: 255 }),
+		remoteDeleted: boolean("remoteDeleted").notNull().default(false),
 		lastAcknowledgedRemoteVersion: varchar(
 			"lastAcknowledgedRemoteVersion",
 			{ length: 255 },

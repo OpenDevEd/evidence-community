@@ -18,8 +18,9 @@ Library databases and deployments are not migrated or modified.
   `(itemKey, sourceConnectionKey)` allows one item to link to several providers
   without changing its canonical owner.
 - At most one source link per item may have writeback enabled. Each link tracks
-  the latest remote version, the last acknowledged version, and the canonical
-  fields that currently contain unpublished local changes.
+  the latest remote version, remote deletion state, the last fully acknowledged
+  version, and the canonical fields that currently contain unpublished local
+  changes.
 - A removed source connection is retained with `status = 'removed'`; records
   never lose their permanent origin.
 
@@ -179,6 +180,12 @@ the source updates every other field. Exact replays, version-only changes, and
 remote changes confined to dirty fields advance link/snapshot state without
 producing canonical revisions. Repeated deletions are also no-ops. Unknown
 deletion keys never reserve identities.
+
+A remote deletion tombstones the canonical item only when that connection owns
+the canonical record. For linked native or differently owned items, it marks
+the source link as remotely deleted while preserving local metadata and files.
+The last fully acknowledged version advances only when no dirty field is being
+masked and the requested remote deletion was applied canonically.
 
 When a collection's name or parent changes, the outbox projector must expand
 that event to the complete descendant collection subtree and every member item

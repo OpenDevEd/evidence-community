@@ -493,13 +493,19 @@ async function updateCollectionParents(
 async function updateItemSourceLinkVersions(
 	transaction: Transaction,
 	sourceConnectionKey: string,
-	rows: Array<{ itemKey: string; remoteVersion: string | null }>,
+	rows: Array<{
+		acknowledged: boolean;
+		itemKey: string;
+		remoteDeleted: boolean;
+		remoteVersion: string | null;
+	}>,
 	updatedAt: Date,
 ) {
 	for (const rowChunk of chunkValues(rows, RELATION_CHUNK_SIZE)) {
 		const values = sql.join(
 			rowChunk.map(
-				(row) => sql`(${row.itemKey}, ${row.remoteVersion}::varchar)`,
+				(row) =>
+					sql`(${row.itemKey}, ${row.remoteVersion}::varchar, ${row.remoteDeleted}::boolean, ${row.acknowledged}::boolean)`,
 			),
 			sql`, `,
 		);
@@ -507,9 +513,18 @@ async function updateItemSourceLinkVersions(
 			UPDATE "itemSourceLink" AS link
 			SET
 				"remoteVersion" = incoming."remoteVersion",
-				"lastAcknowledgedRemoteVersion" = incoming."remoteVersion",
+				"remoteDeleted" = incoming."remoteDeleted",
+				"lastAcknowledgedRemoteVersion" = CASE
+					WHEN incoming."acknowledged" THEN incoming."remoteVersion"
+					ELSE link."lastAcknowledgedRemoteVersion"
+				END,
 				"updatedAt" = ${updatedAt}
-			FROM (VALUES ${values}) AS incoming("itemKey", "remoteVersion")
+			FROM (VALUES ${values}) AS incoming(
+				"itemKey",
+				"remoteVersion",
+				"remoteDeleted",
+				"acknowledged"
+			)
 			WHERE link."sourceConnectionKey" = ${sourceConnectionKey}
 				AND link."itemKey" = incoming."itemKey"
 		`);
@@ -1045,7 +1060,12 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const changedItemUpserts = itemUpserts.filter((record) => {
 			const key = itemKeys.get(record.sourceRecordKey)!;
 			const existing = existingItemByKey.get(key);
-			if (!existing || existing.deleted === 1) return true;
+			if (!existing) return true;
+			if (existing.deleted === 1) {
+				return (
+					existing.sourceConnectionKey === batch.sourceConnectionKey
+				);
+			}
 			const snapshot = snapshotByItemKey.get(key);
 			const sourceChanged =
 				!snapshot ||
@@ -1117,7 +1137,12 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const itemDeleteKeys = itemDeletes.flatMap((record) => {
 			const key = itemKeys.get(record.sourceRecordKey);
 			const existing = key ? existingItemByKey.get(key) : undefined;
-			return key && existing && existing.deleted !== 1 ? [key] : [];
+			return key &&
+				existing &&
+				existing.sourceConnectionKey === batch.sourceConnectionKey &&
+				existing.deleted !== 1
+				? [key]
+				: [];
 		});
 		const itemDeleteKeySet = new Set(itemDeleteKeys);
 		const activeParentItemKeys = [
@@ -1578,8 +1603,27 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			batch.sourceConnectionKey,
 			batch.items.flatMap((record) => {
 				const itemKey = itemKeys.get(record.sourceRecordKey);
+				const link = itemKey
+					? sourceLinkByItemKey.get(itemKey)
+					: undefined;
+				const existing = itemKey
+					? existingItemByKey.get(itemKey)
+					: undefined;
+				const remoteDeleted = record.operation === "delete";
+				const acknowledged =
+					(link?.dirtyFields.length ?? 0) === 0 &&
+					(!remoteDeleted ||
+						existing?.sourceConnectionKey ===
+							batch.sourceConnectionKey);
 				return itemKey
-					? [{ itemKey, remoteVersion: record.remoteVersion }]
+					? [
+							{
+								acknowledged,
+								itemKey,
+								remoteDeleted,
+								remoteVersion: record.remoteVersion,
+							},
+						]
 					: [];
 			}),
 			now,
