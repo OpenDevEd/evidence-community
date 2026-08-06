@@ -4,6 +4,7 @@ import {
 	zoteroItemResponseSchema,
 	zoteroKeyAccessSchema,
 	zoteroVersionsSchema,
+	zoteroWriteResponseSchema,
 	type ZoteroCollectionResponse,
 	type ZoteroItemResponse,
 } from "./schema";
@@ -40,9 +41,21 @@ export class ZoteroApiError extends Error {
 	constructor(
 		message: string,
 		public readonly status?: number,
+		public readonly responseBody?: string,
 	) {
 		super(message);
 		this.name = "ZoteroApiError";
+	}
+}
+
+export class ZoteroObjectWriteError extends ZoteroApiError {
+	constructor(
+		message: string,
+		status: number,
+		public readonly objectIndex: string,
+	) {
+		super(message, status);
+		this.name = "ZoteroObjectWriteError";
 	}
 }
 
@@ -166,7 +179,11 @@ export class ZoteroApiClient {
 		options: {
 			accept?: string;
 			apiHeaders?: boolean;
+			body?: string;
+			headers?: HeadersInit;
+			method?: "DELETE" | "GET" | "PATCH" | "POST" | "PUT";
 			redirect?: RequestRedirect;
+			signal?: AbortSignal;
 		} = {},
 	) {
 		for (let attempt = 0; attempt < 4; attempt += 1) {
@@ -178,6 +195,9 @@ export class ZoteroApiClient {
 			if (query) url.search = query.toString();
 
 			const controller = new AbortController();
+			const signal = options.signal
+				? AbortSignal.any([options.signal, controller.signal])
+				: controller.signal;
 			const timeout = setTimeout(
 				() => controller.abort(),
 				this.options.requestTimeoutMs,
@@ -185,17 +205,25 @@ export class ZoteroApiClient {
 			let response: Response;
 			try {
 				response = await this.fetchImplementation(url, {
-					headers: {
+					body: options.body,
+					headers: new Headers({
 						Accept: options.accept ?? "application/json",
 						...(this.options.apiKey && options.apiHeaders !== false
 							? { "Zotero-API-Key": this.options.apiKey }
 							: {}),
 						"Zotero-API-Version": "3",
-					},
+						...Object.fromEntries(
+							new Headers(options.headers).entries(),
+						),
+					}),
+					method: options.method ?? "GET",
 					redirect: options.redirect,
-					signal: controller.signal,
+					signal,
 				});
 			} catch (error) {
+				if (options.signal?.aborted) {
+					throw options.signal.reason ?? error;
+				}
 				if (attempt === 3) {
 					throw new ZoteroApiError(
 						`Zotero request failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -231,9 +259,11 @@ export class ZoteroApiClient {
 				return response;
 			}
 			if (!response.ok) {
+				const responseBody = (await response.text()).slice(0, 8_192);
 				throw new ZoteroApiError(
-					`Zotero request failed with ${response.status} ${response.statusText}`,
+					`Zotero request failed with ${response.status} ${response.statusText}${responseBody ? `: ${responseBody}` : ""}`,
 					response.status,
+					responseBody,
 				);
 			}
 			return response;
@@ -241,23 +271,160 @@ export class ZoteroApiClient {
 		throw new ZoteroApiError("Zotero request exhausted retries");
 	}
 
-	async verifyKeyAccess(scope: ZoteroLibraryScope) {
-		if (!this.options.apiKey) return;
+	async verifyKeyAccess(
+		scope: ZoteroLibraryScope,
+		requiredAccess: "read" | "write" = "read",
+	) {
+		if (!this.options.apiKey) {
+			if (requiredAccess === "write") {
+				throw new ZoteroApiError(
+					`Zotero API key is required to write ${scope.kind} ${scope.externalScopeKey}`,
+					403,
+				);
+			}
+			return;
+		}
 		const response = await this.request("keys/current");
 		const key = zoteroKeyAccessSchema.parse(await response.json());
-		const hasLibraryAccess =
+		const access =
 			scope.kind === "personal-library"
-				? String(key.userID) === scope.externalScopeKey &&
-					key.access.user?.library === true
-				: key.access.groups?.all?.library === true ||
-					key.access.groups?.[scope.externalScopeKey]?.library ===
-						true;
+				? String(key.userID) === scope.externalScopeKey
+					? key.access.user
+					: undefined
+				: (key.access.groups?.[scope.externalScopeKey] ??
+					key.access.groups?.all);
+		const hasLibraryAccess =
+			access?.library === true &&
+			(requiredAccess === "read" || access.write === true);
 		if (!hasLibraryAccess) {
 			throw new ZoteroApiError(
-				`Zotero API key cannot read ${scope.kind} ${scope.externalScopeKey}`,
+				`Zotero API key cannot ${requiredAccess} ${scope.kind} ${scope.externalScopeKey}`,
 				403,
 			);
 		}
+	}
+
+	async item(
+		prefix: string,
+		itemKey: string,
+		signal?: AbortSignal,
+	): Promise<ZoteroResponse<ZoteroItemResponse>> {
+		const response = await this.request(
+			`${prefix}/items/${encodeURIComponent(itemKey)}`,
+			new URLSearchParams({ includeTrashed: "1" }),
+			{ signal },
+		);
+		return {
+			data: zoteroItemResponseSchema.parse(await response.json()),
+			libraryVersion: parseLibraryVersion(response),
+		};
+	}
+
+	async createItem(
+		prefix: string,
+		data: Record<string, unknown>,
+		writeToken: string,
+		signal?: AbortSignal,
+	) {
+		if (!/^[a-zA-Z0-9]{32}$/.test(writeToken)) {
+			throw new ZoteroApiError(
+				"Zotero write token must contain exactly 32 alphanumeric characters",
+			);
+		}
+		const response = await this.request(`${prefix}/items`, undefined, {
+			body: JSON.stringify([data]),
+			headers: {
+				"Content-Type": "application/json",
+				"Zotero-Write-Token": writeToken,
+			},
+			method: "POST",
+			signal,
+		});
+		const result = zoteroWriteResponseSchema.parse(await response.json());
+		const failure = result.failed["0"];
+		if (failure) {
+			throw new ZoteroObjectWriteError(
+				`Zotero rejected item creation: ${failure.message}`,
+				failure.code,
+				"0",
+			);
+		}
+		if (
+			!("0" in result.successful) &&
+			!("0" in result.success) &&
+			!("0" in result.unchanged)
+		) {
+			throw new ZoteroApiError(
+				"Zotero item creation response omitted object 0",
+				response.status,
+			);
+		}
+		return { libraryVersion: parseLibraryVersion(response) };
+	}
+
+	async patchItem(
+		prefix: string,
+		itemKey: string,
+		data: Record<string, unknown>,
+		version: number,
+		signal?: AbortSignal,
+	) {
+		return this.writeSingleItem(
+			"PATCH",
+			prefix,
+			itemKey,
+			data,
+			version,
+			signal,
+		);
+	}
+
+	async deleteItem(
+		prefix: string,
+		itemKey: string,
+		version: number,
+		signal?: AbortSignal,
+	) {
+		return this.writeSingleItem(
+			"DELETE",
+			prefix,
+			itemKey,
+			undefined,
+			version,
+			signal,
+		);
+	}
+
+	private async writeSingleItem(
+		method: "DELETE" | "PATCH",
+		prefix: string,
+		itemKey: string,
+		data: Record<string, unknown> | undefined,
+		version: number,
+		signal?: AbortSignal,
+	) {
+		if (!Number.isSafeInteger(version) || version < 0) {
+			throw new ZoteroApiError(
+				"Zotero item version must be non-negative",
+			);
+		}
+		const response = await this.request(
+			`${prefix}/items/${encodeURIComponent(itemKey)}`,
+			undefined,
+			{
+				body: data === undefined ? undefined : JSON.stringify(data),
+				headers: {
+					...(data === undefined
+						? {}
+						: { "Content-Type": "application/json" }),
+					"If-Unmodified-Since-Version": String(version),
+				},
+				method,
+				signal,
+			},
+		);
+		await response.body?.cancel();
+		return { libraryVersion: parseLibraryVersion(response) };
 	}
 
 	async versions(

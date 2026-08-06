@@ -38,6 +38,7 @@ export const zoteroKeyAccessSchema = z
 						z
 							.object({
 								library: z.boolean().optional(),
+								write: z.boolean().optional(),
 							})
 							.passthrough(),
 					)
@@ -45,12 +46,32 @@ export const zoteroKeyAccessSchema = z
 				user: z
 					.object({
 						library: z.boolean().optional(),
+						write: z.boolean().optional(),
 					})
 					.passthrough()
 					.optional(),
 			})
 			.passthrough(),
 		userID: z.number().int().nonnegative(),
+	})
+	.passthrough();
+
+export const zoteroWriteResponseSchema = z
+	.object({
+		failed: z
+			.record(
+				z.string(),
+				z
+					.object({
+						code: z.number().int(),
+						message: z.string(),
+					})
+					.passthrough(),
+			)
+			.default({}),
+		success: z.record(z.string(), z.unknown()).default({}),
+		successful: z.record(z.string(), z.unknown()).default({}),
+		unchanged: z.record(z.string(), z.unknown()).default({}),
 	})
 	.passthrough();
 
