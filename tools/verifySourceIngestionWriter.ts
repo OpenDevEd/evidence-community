@@ -314,6 +314,130 @@ async function verify() {
 			"Inbound source sync overwrote or deleted foreign-owned PDF state",
 		);
 
+		const foreignStagedPaths = [
+			"sources/zotero/native-foreign/document.pdf",
+			"sources/zotero/native-foreign/cover.png",
+		];
+		const sourceOwnedStagedPaths = [
+			"sources/zotero/native-sibling/document.pdf",
+			"sources/zotero/native-sibling/cover.png",
+		];
+		await db.insert(sourceFileCleanup).values(
+			[...foreignStagedPaths, ...sourceOwnedStagedPaths].map(
+				(objectPath) => ({
+					objectPath,
+					sourceConnectionKey: "zotero-native-file-writer",
+				}),
+			),
+		);
+		await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-native-file-writer",
+				expectedCursor: { version: 1 },
+				nextCursor: { version: 2 },
+			}),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "FILEA001",
+					remoteVersion: "3",
+					raw: { key: "FILEA001", version: 3 },
+					metadata: {
+						itemType: "Attachment",
+						title: "Foreign staged attachment",
+					},
+					file: {
+						charset: null,
+						contentType: "application/pdf",
+						coverHeight: 600,
+						coverUrl:
+							"https://remote.example.org/foreign-cover.png",
+						coverWidth: 400,
+						filename: "foreign.pdf",
+						fullText: "Foreign remote PDF",
+						linkMode: "imported_file",
+						managedPublication: {
+							coverObjectPath: foreignStagedPaths[1]!,
+							objectPath: foreignStagedPaths[0]!,
+							pageCount: 1,
+							sha256: "e".repeat(64),
+							sizeBytes: 100,
+							staged: true,
+						},
+						md5: "foreign-md5",
+						mtime: "2",
+						url: "https://remote.example.org/foreign.pdf",
+					},
+				},
+				{
+					operation: "upsert",
+					sourceRecordKey: "FILES002",
+					remoteVersion: "1",
+					raw: { key: "FILES002", version: 1 },
+					metadata: {
+						itemType: "Attachment",
+						title: "Source-owned staged attachment",
+					},
+					parentSourceRecordKey: "FILEP002",
+					file: {
+						charset: null,
+						contentType: "application/pdf",
+						coverHeight: 600,
+						coverUrl:
+							"https://storage.example.org/sibling-cover.png",
+						coverWidth: 400,
+						filename: "sibling.pdf",
+						fullText: "Source-owned PDF",
+						linkMode: "imported_file",
+						managedPublication: {
+							coverObjectPath: sourceOwnedStagedPaths[1]!,
+							objectPath: sourceOwnedStagedPaths[0]!,
+							pageCount: 1,
+							sha256: "f".repeat(64),
+							sizeBytes: 100,
+							staged: true,
+						},
+						md5: "sibling-md5",
+						mtime: "2",
+						url: "https://storage.example.org/sibling.pdf",
+					},
+				},
+				{
+					operation: "upsert",
+					sourceRecordKey: "FILEP002",
+					remoteVersion: "1",
+					raw: { key: "FILEP002", version: 1 },
+					metadata: {
+						itemType: "Report",
+						title: "Source-owned staged parent",
+					},
+				},
+			],
+		});
+		const stagedCleanupAfterMixedBatch = await db
+			.select({ objectPath: sourceFileCleanup.objectPath })
+			.from(sourceFileCleanup)
+			.where(
+				eq(
+					sourceFileCleanup.sourceConnectionKey,
+					"zotero-native-file-writer",
+				),
+			);
+		assert(
+			foreignStagedPaths.every((objectPath) =>
+				stagedCleanupAfterMixedBatch.some(
+					(row) => row.objectPath === objectPath,
+				),
+			) &&
+				sourceOwnedStagedPaths.every(
+					(objectPath) =>
+						!stagedCleanupAfterMixedBatch.some(
+							(row) => row.objectPath === objectPath,
+						),
+				),
+			"A foreign-owned staged file blocked or consumed the mixed source batch",
+		);
+
 		const linkedRecord = {
 			operation: "upsert" as const,
 			sourceRecordKey: "LINK2345",
@@ -1661,13 +1785,15 @@ async function verify() {
 		await db
 			.delete(itemIdentity)
 			.where(inArray(itemIdentity.sourceConnectionKey, connectionKeys));
-		await db.delete(itemIdentity).where(
-			inArray(itemIdentity.key, [
-				nativeLinkItemKey,
-				nativeFileParentKey,
-				nativeFileItemKey,
-			]),
-		);
+		await db
+			.delete(itemIdentity)
+			.where(
+				inArray(itemIdentity.key, [
+					nativeLinkItemKey,
+					nativeFileParentKey,
+					nativeFileItemKey,
+				]),
+			);
 		await db
 			.delete(collectionIdentity)
 			.where(

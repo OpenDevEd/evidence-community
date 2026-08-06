@@ -269,7 +269,7 @@ function preserveForeignOwnedFileFields(
 	sourceConnectionKey: string,
 	hasManagedPublication: boolean,
 ) {
-	if (!existing || existing.sourceConnectionKey === sourceConnectionKey) {
+	if (!existing || sourceOwnsCanonicalItem(existing, sourceConnectionKey)) {
 		return incoming;
 	}
 	const preserved = { ...incoming } as Record<string, unknown>;
@@ -1139,7 +1139,8 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 									batch.sourceConnectionKey,
 								)
 									? []
-									: (existingPublication?.publicationTags ?? [])),
+									: (existingPublication?.publicationTags ??
+										[])),
 							]),
 						].sort(),
 					},
@@ -1177,7 +1178,8 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 							publication.objectPath ||
 						existingPublication.coverObjectPath !==
 							publication.coverObjectPath ||
-						existingPublication.sizeBytes !== publication.sizeBytes ||
+						existingPublication.sizeBytes !==
+							publication.sizeBytes ||
 						existingPublication.sha256 !== publication.sha256 ||
 						existingPublication.pageCount !== publication.pageCount
 					: Boolean(existingPublication)
@@ -1431,6 +1433,17 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				consumedStagingRows.map(({ objectPath }) => objectPath),
 			);
 			const missingStagedPaths = changedItemUpserts.flatMap((record) => {
+				const existing = existingItemByKey.get(
+					itemKeys.get(record.sourceRecordKey)!,
+				);
+				if (
+					!sourceOwnsCanonicalItem(
+						existing,
+						batch.sourceConnectionKey,
+					)
+				) {
+					return [];
+				}
 				const publication = record.file?.managedPublication;
 				if (!publication?.staged) return [];
 				return [
