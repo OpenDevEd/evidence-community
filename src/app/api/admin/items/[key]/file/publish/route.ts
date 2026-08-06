@@ -35,6 +35,7 @@ export async function POST(
 		const published = await publishNativePdf(runtime.db, runtime.storage, {
 			...body,
 			itemKey: key,
+			publicationTags: runtime.config.content.tags.publish,
 		});
 		revalidatePublishedItemCaches(
 			published.item.key,

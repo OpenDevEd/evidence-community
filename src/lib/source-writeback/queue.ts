@@ -76,6 +76,62 @@ export async function enqueueSourceWritebackJob(
 	return job ?? null;
 }
 
+// The caller must hold the canonical item's advisory mutation lock so this
+// read/merge cannot race ingestion or worker acknowledgement.
+export async function markItemWritebackDirty(
+	transaction: Transaction,
+	{
+		canonicalRevision,
+		dirtyFields,
+		itemKey,
+		updatedAt,
+	}: {
+		canonicalRevision: number;
+		dirtyFields: readonly string[];
+		itemKey: string;
+		updatedAt: Date;
+	},
+) {
+	const changedFields = [...new Set(dirtyFields)].sort();
+	if (changedFields.length === 0) return;
+
+	const links = await transaction
+		.select()
+		.from(itemSourceLink)
+		.where(eq(itemSourceLink.itemKey, itemKey))
+		.orderBy(itemSourceLink.sourceConnectionKey)
+		.for("update");
+	for (const link of links) {
+		const combinedDirtyFields = [
+			...new Set([...link.dirtyFields, ...changedFields]),
+		].sort();
+		await transaction
+			.update(itemSourceLink)
+			.set({
+				dirtyFields: combinedDirtyFields,
+				updatedAt,
+			})
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, itemKey),
+					eq(
+						itemSourceLink.sourceConnectionKey,
+						link.sourceConnectionKey,
+					),
+				),
+			);
+		if (link.writebackEnabled) {
+			await enqueueSourceWritebackJob(transaction, {
+				canonicalRevision,
+				dirtyFields: combinedDirtyFields,
+				itemKey,
+				operation: "upsert",
+				sourceConnectionKey: link.sourceConnectionKey,
+			});
+		}
+	}
+}
+
 export async function ensureDefaultWritebackLink(
 	transaction: Transaction,
 	itemKey: string,

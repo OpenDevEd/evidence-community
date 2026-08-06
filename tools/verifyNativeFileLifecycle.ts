@@ -4,7 +4,10 @@ import {
 	itemDraft,
 	itemFileDraft,
 	itemIdentity,
+	itemSourceLink,
 	outbox,
+	sourceConnection,
+	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { and, eq, inArray } from "drizzle-orm";
@@ -12,6 +15,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { itemFilePublication } from "../src/db/schema/source";
 import { item } from "../src/db/schema/tables/item";
+import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import type {
 	EvidenceFileStorage,
 	SignedFileUpload,
@@ -39,6 +43,7 @@ import {
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
 const verifiedDatabaseUrl = databaseUrl;
+const PUBLICATION_TAGS = ["publish-record"] as const;
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
@@ -123,8 +128,31 @@ async function verify() {
 	const db = resource.database;
 	const storage = new MemoryFileStorage();
 	const createdKeys: string[] = [];
+	const connectionKey = `native-file-writeback-${process.pid}-${Date.now()}`;
+	let previousDefaultKeys: string[] = [];
 
 	try {
+		previousDefaultKeys = (
+			await db
+				.select({ key: sourceConnection.key })
+				.from(sourceConnection)
+				.where(eq(sourceConnection.defaultWriteback, true))
+		).map(({ key }) => key);
+		if (previousDefaultKeys.length > 0) {
+			await db
+				.update(sourceConnection)
+				.set({ defaultWriteback: false })
+				.where(inArray(sourceConnection.key, previousDefaultKeys));
+		}
+		await db.insert(sourceConnection).values({
+			credentialRef: "env:NATIVE_FILE_WRITEBACK_TEST_KEY",
+			defaultWriteback: true,
+			externalScopeKey: connectionKey,
+			key: connectionKey,
+			provider: "zotero",
+			scopeKind: "group",
+		});
+
 		const parentDraft = await createNativeItemDraft(db, {
 			itemType: "Report",
 			title: "Parent report",
@@ -228,7 +256,40 @@ async function verify() {
 		const published = await publishNativePdf(db, storage, {
 			itemKey: attachmentDraft.itemKey,
 			expectedUploadRevision: ready.uploadRevision,
+			publicationTags: PUBLICATION_TAGS,
 		});
+		const [[publishedLink], [publishedJob], publishedTags] =
+			await Promise.all([
+				db
+					.select()
+					.from(itemSourceLink)
+					.where(
+						and(
+							eq(itemSourceLink.itemKey, attachmentDraft.itemKey),
+							eq(
+								itemSourceLink.sourceConnectionKey,
+								connectionKey,
+							),
+						),
+					),
+				db
+					.select()
+					.from(sourceWritebackJob)
+					.where(
+						and(
+							eq(
+								sourceWritebackJob.itemKey,
+								attachmentDraft.itemKey,
+							),
+							eq(sourceWritebackJob.canonicalRevision, 2),
+						),
+					)
+					.limit(1),
+				db
+					.select({ name: itemToTag.tagName })
+					.from(itemToTag)
+					.where(eq(itemToTag.itemKey, attachmentDraft.itemKey)),
+			]);
 		assert(
 			published.item.revision === 2 &&
 				published.item.url?.includes(fileHash(pdf)) &&
@@ -236,7 +297,12 @@ async function verify() {
 				published.item.fullTextPDF?.includes(
 					"First file publication",
 				) &&
-				storage.publicFiles.size === 2,
+				storage.publicFiles.size === 2 &&
+				publishedLink?.dirtyFields.includes("url") &&
+				publishedLink.dirtyFields.includes("tags") &&
+				publishedJob?.dirtyFields.includes("url") &&
+				publishedJob.dirtyFields.includes("tags") &&
+				publishedTags.some(({ name }) => name === PUBLICATION_TAGS[0]),
 			"File publication did not project the prepared PDF",
 		);
 		const advancedAttachmentDraft = await getNativeItemDraft(
@@ -288,6 +354,7 @@ async function verify() {
 			await publishNativePdf(db, storage, {
 				itemKey: attachmentDraft.itemKey,
 				expectedUploadRevision: ready.uploadRevision,
+				publicationTags: PUBLICATION_TAGS,
 			});
 		} catch (error) {
 			stalePublishRejected = error instanceof NativeFileConflictError;
@@ -361,11 +428,36 @@ async function verify() {
 			db,
 			storage,
 			attachmentDraft.itemKey,
+			{ publicationTags: PUBLICATION_TAGS },
 		);
+		const [[unpublishedJob], remainingPublicationTags] = await Promise.all([
+			db
+				.select()
+				.from(sourceWritebackJob)
+				.where(
+					and(
+						eq(sourceWritebackJob.itemKey, attachmentDraft.itemKey),
+						eq(sourceWritebackJob.canonicalRevision, 4),
+					),
+				)
+				.limit(1),
+			db
+				.select({ name: itemToTag.tagName })
+				.from(itemToTag)
+				.where(
+					and(
+						eq(itemToTag.itemKey, attachmentDraft.itemKey),
+						inArray(itemToTag.tagName, PUBLICATION_TAGS),
+					),
+				),
+		]);
 		assert(
 			fileUnpublished.revision === 4 &&
 				fileUnpublished.url === null &&
-				Number(storage.publicFiles.size) === 0,
+				Number(storage.publicFiles.size) === 0 &&
+				unpublishedJob?.dirtyFields.includes("url") &&
+				unpublishedJob.dirtyFields.includes("tags") &&
+				remainingPublicationTags.length === 0,
 			"File unpublish did not clear fields and public objects",
 		);
 		storage.publicUploadHook = async () => {
@@ -379,6 +471,7 @@ async function verify() {
 				itemKey: attachmentDraft.itemKey,
 				expectedUploadRevision:
 					supersedingStage.fileDraft.uploadRevision,
+				publicationTags: PUBLICATION_TAGS,
 			});
 		} catch (error) {
 			rolledBackPublicationRejected =
@@ -483,6 +576,7 @@ async function verify() {
 		await publishNativePdf(db, storage, {
 			itemKey: concurrentAttachmentDraft.itemKey,
 			expectedUploadRevision: concurrentInitialReady.uploadRevision,
+			publicationTags: PUBLICATION_TAGS,
 		});
 		const concurrentReplacementStage = await stageNativePdfUpload(
 			db,
@@ -511,8 +605,11 @@ async function verify() {
 				itemKey: concurrentAttachmentDraft.itemKey,
 				expectedUploadRevision:
 					concurrentReplacementReady.uploadRevision,
+				publicationTags: PUBLICATION_TAGS,
 			}),
-			unpublishNativePdf(db, storage, concurrentAttachmentDraft.itemKey),
+			unpublishNativePdf(db, storage, concurrentAttachmentDraft.itemKey, {
+				publicationTags: PUBLICATION_TAGS,
+			}),
 		]);
 		assert(
 			concurrentFileMutations.every(
@@ -534,6 +631,7 @@ async function verify() {
 				db,
 				storage,
 				concurrentAttachmentDraft.itemKey,
+				{ publicationTags: PUBLICATION_TAGS },
 			);
 		}
 		assert(
@@ -692,6 +790,12 @@ async function verify() {
 	} finally {
 		if (createdKeys.length > 0) {
 			await db
+				.delete(sourceWritebackJob)
+				.where(inArray(sourceWritebackJob.itemKey, createdKeys));
+			await db
+				.delete(itemSourceLink)
+				.where(inArray(itemSourceLink.itemKey, createdKeys));
+			await db
 				.delete(outbox)
 				.where(inArray(outbox.entityKey, createdKeys));
 			await db
@@ -712,6 +816,15 @@ async function verify() {
 						inArray(itemIdentity.key, createdKeys),
 					),
 				);
+		}
+		await db
+			.delete(sourceConnection)
+			.where(eq(sourceConnection.key, connectionKey));
+		if (previousDefaultKeys.length > 0) {
+			await db
+				.update(sourceConnection)
+				.set({ defaultWriteback: true })
+				.where(inArray(sourceConnection.key, previousDefaultKeys));
 		}
 		await resource.dispose();
 	}

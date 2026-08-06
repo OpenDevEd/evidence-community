@@ -9,8 +9,15 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { lockItemMutations } from "@/db/item-mutation-lock";
 import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
+import { itemToTag } from "@/db/schema/tables/itemToTag";
+import { tag } from "@/db/schema/tables/tag";
+import {
+	ensureDefaultWritebackLink,
+	markItemWritebackDirty,
+} from "@/lib/source-writeback/queue";
 
 import type { EvidenceFileStorage } from "./file-storage";
 import { advanceOpenItemDraftBaseRevision as advanceOpenNativeDraftBaseRevision } from "./native-item-service";
@@ -48,6 +55,21 @@ type StageNativePdfInput = {
 	itemKey: string;
 	maxPdfBytes: number;
 };
+
+function normalizePublicationTags(values: readonly string[]) {
+	const tags = [...new Set(values.map((value) => value.trim()))].filter(
+		Boolean,
+	);
+	if (tags.length === 0) {
+		throw new NativeFileValidationError(
+			"PDF publication is not configured.",
+			{
+				file: "Configure at least one PDF publication tag, then try again.",
+			},
+		);
+	}
+	return tags.sort();
+}
 
 function normalizeStageInput(input: StageNativePdfInput) {
 	const filename = input.filename.trim();
@@ -440,11 +462,14 @@ export async function publishNativePdf(
 	{
 		expectedUploadRevision,
 		itemKey,
+		publicationTags,
 	}: {
 		expectedUploadRevision: number;
 		itemKey: string;
+		publicationTags: readonly string[];
 	},
 ) {
+	const normalizedPublicationTags = normalizePublicationTags(publicationTags);
 	const [draft] = await db
 		.select()
 		.from(itemFileDraft)
@@ -509,6 +534,10 @@ export async function publishNativePdf(
 			) {
 				throw new NativeFileConflictError(itemKey);
 			}
+			await lockItemMutations(transaction, [
+				itemKey,
+				lockedDraft.parentItemKey,
+			]);
 
 			const lockedItems = await transaction
 				.select()
@@ -591,6 +620,19 @@ export async function publishNativePdf(
 					updatedAt: now,
 				})
 				.where(eq(item.key, parent.key));
+			await transaction
+				.insert(tag)
+				.values(normalizedPublicationTags.map((name) => ({ name })))
+				.onConflictDoNothing();
+			await transaction
+				.insert(itemToTag)
+				.values(
+					normalizedPublicationTags.map((tagName) => ({
+						itemKey,
+						tagName,
+					})),
+				)
+				.onConflictDoNothing();
 			await advanceOpenNativeDraftBaseRevision(
 				transaction,
 				attachment.key,
@@ -648,6 +690,13 @@ export async function publishNativePdf(
 					revision: parentNextRevision,
 				},
 			]);
+			await ensureDefaultWritebackLink(transaction, itemKey);
+			await markItemWritebackDirty(transaction, {
+				canonicalRevision: nextRevision,
+				dirtyFields: ["tags", "url"],
+				itemKey,
+				updatedAt: now,
+			});
 			await transaction
 				.delete(itemFileDraft)
 				.where(eq(itemFileDraft.itemKey, itemKey));
@@ -796,7 +845,9 @@ export async function unpublishNativePdfWithContext(
 	db: Database,
 	storage: EvidenceFileStorage,
 	itemKey: string,
+	{ publicationTags }: { publicationTags: readonly string[] },
 ) {
+	const normalizedPublicationTags = normalizePublicationTags(publicationTags);
 	const result = await db.transaction(async (transaction) => {
 		const [initialPublication] = await transaction
 			.select()
@@ -812,6 +863,10 @@ export async function unpublishNativePdfWithContext(
 			)
 			.limit(1);
 		if (!initialPublication) throw new NativeFileNotFoundError(itemKey);
+		await lockItemMutations(transaction, [
+			itemKey,
+			initialPublication.parentItemKey,
+		]);
 
 		const lockedItems = await transaction
 			.select()
@@ -895,6 +950,14 @@ export async function unpublishNativePdfWithContext(
 				updatedAt: now,
 			})
 			.where(eq(item.key, parent.key));
+		await transaction
+			.delete(itemToTag)
+			.where(
+				and(
+					eq(itemToTag.itemKey, itemKey),
+					inArray(itemToTag.tagName, normalizedPublicationTags),
+				),
+			);
 		await advanceOpenNativeDraftBaseRevision(
 			transaction,
 			attachment.key,
@@ -924,6 +987,13 @@ export async function unpublishNativePdfWithContext(
 				revision: parentRevision,
 			},
 		]);
+		await ensureDefaultWritebackLink(transaction, itemKey);
+		await markItemWritebackDirty(transaction, {
+			canonicalRevision: attachmentRevision,
+			dirtyFields: ["tags", "url"],
+			itemKey,
+			updatedAt: now,
+		});
 
 		return {
 			indexingRecords: [
@@ -958,6 +1028,8 @@ export async function unpublishNativePdf(
 	db: Database,
 	storage: EvidenceFileStorage,
 	itemKey: string,
+	options: { publicationTags: readonly string[] },
 ) {
-	return (await unpublishNativePdfWithContext(db, storage, itemKey)).item;
+	return (await unpublishNativePdfWithContext(db, storage, itemKey, options))
+		.item;
 }

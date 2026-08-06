@@ -154,6 +154,29 @@ describe("Zotero writeback mapping", () => {
 		});
 	});
 
+	it("publishes and unpublishes attachment URLs without deleting metadata", () => {
+		expect(
+			createZoteroItemPatch(
+				{
+					itemType: "Attachment",
+					parentItem: "PARENT23",
+					tags: ["publish-record"],
+					url: "https://files.example.test/document.pdf",
+				},
+				["tags", "url"],
+			),
+		).toEqual({
+			tags: [{ tag: "publish-record" }],
+			url: "https://files.example.test/document.pdf",
+		});
+		expect(
+			createZoteroItemPatch(
+				{ itemType: "Attachment", parentItem: "PARENT23" },
+				["tags", "url"],
+			),
+		).toEqual({ tags: [], url: "" });
+	});
+
 	it("permits only clear operations for old fields during item-type changes", () => {
 		expect(
 			createZoteroItemPatch({ itemType: "Book" }, [

@@ -37,6 +37,7 @@ import { NATIVE_SOURCE_CONNECTION_KEY as NATIVE_CONNECTION_KEY } from "./constan
 import {
 	enqueueSourceWritebackJob,
 	ensureDefaultWritebackLink,
+	markItemWritebackDirty,
 } from "@/lib/source-writeback/queue";
 
 type ItemInsert = InferInsertModel<typeof item>;
@@ -825,44 +826,12 @@ export async function publishItemDraftWithContext(
 			if (access.identity.sourceConnectionKey === NATIVE_CONNECTION_KEY) {
 				await ensureDefaultWritebackLink(transaction, itemKey);
 			}
-			// Every linked source is now behind the canonical item. The shared
-			// item advisory lock serializes this read-modify-write with ingestion
-			// and must also be taken by the writeback worker before clearing dirt.
-			const links = await transaction
-				.select()
-				.from(itemSourceLink)
-				.where(eq(itemSourceLink.itemKey, itemKey))
-				.orderBy(itemSourceLink.sourceConnectionKey)
-				.for("update");
-			for (const link of links) {
-				const dirtyFields = [
-					...new Set([...link.dirtyFields, ...changedFields]),
-				].sort();
-				await transaction
-					.update(itemSourceLink)
-					.set({
-						dirtyFields,
-						updatedAt: now,
-					})
-					.where(
-						and(
-							eq(itemSourceLink.itemKey, itemKey),
-							eq(
-								itemSourceLink.sourceConnectionKey,
-								link.sourceConnectionKey,
-							),
-						),
-					);
-				if (link.writebackEnabled) {
-					await enqueueSourceWritebackJob(transaction, {
-						canonicalRevision: nextRevision,
-						dirtyFields,
-						itemKey,
-						operation: "upsert",
-						sourceConnectionKey: link.sourceConnectionKey,
-					});
-				}
-			}
+			await markItemWritebackDirty(transaction, {
+				canonicalRevision: nextRevision,
+				dirtyFields: changedFields,
+				itemKey,
+				updatedAt: now,
+			});
 		}
 		await transaction
 			.delete(itemDraft)
