@@ -1,6 +1,7 @@
 import type { AdminItemDetail } from "@/lib/admin/types";
 import {
 	ADMIN_SHARED_PAYLOAD_FIELDS,
+	adminSharedPayloadFieldsForZoteroItemType,
 	adminPayloadFieldToDatabaseField,
 } from "@/lib/admin/item-fields";
 
@@ -50,13 +51,22 @@ export function editablePayloadFromDetail(
 	if (detail.draft) return { ...detail.draft.payload };
 	const definition = definitionFor(definitions, detail.itemType);
 	const published = detail.published ?? {};
+	const sharedFields = definition
+		? adminSharedPayloadFieldsForZoteroItemType(definition)
+		: ADMIN_SHARED_PAYLOAD_FIELDS;
 	const payload: Record<string, unknown> = {
 		itemType: definition?.itemType ?? detail.itemType,
-		collections: detail.collectionKeys,
-		creators: published.creators ?? detail.creators,
 		tags: detail.tags,
 	};
-	if (detail.parentItem) payload.parentItem = detail.parentItem;
+	if (sharedFields.has("collections")) {
+		payload.collections = detail.collectionKeys;
+	}
+	if (sharedFields.has("creators")) {
+		payload.creators = published.creators ?? detail.creators;
+	}
+	if (sharedFields.has("parentItem") && detail.parentItem) {
+		payload.parentItem = detail.parentItem;
+	}
 	for (const { field } of definition?.fields ?? []) {
 		const databaseField = adminPayloadFieldToDatabaseField(field);
 		const value = published[databaseField];
@@ -70,12 +80,14 @@ export function payloadForItemType(
 	nextDefinition: AdminSchemaDefinition,
 ) {
 	const nextFields = new Set(nextDefinition.fields.map(({ field }) => field));
+	const sharedFields =
+		adminSharedPayloadFieldsForZoteroItemType(nextDefinition);
 	return Object.fromEntries(
 		Object.entries({
 			...payload,
 			itemType: nextDefinition.itemType,
 		}).filter(([field]) => {
-			if (ADMIN_SHARED_PAYLOAD_FIELDS.has(field)) return true;
+			if (sharedFields.has(field)) return true;
 			return nextFields.has(field);
 		}),
 	);

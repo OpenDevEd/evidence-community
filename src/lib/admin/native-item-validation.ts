@@ -9,8 +9,11 @@ import { creatorType } from "@/db/schema/enums/creatorType";
 import { itemType } from "@/db/schema/enums/itemType";
 import type { item } from "@/db/schema/tables/item";
 import {
-	ADMIN_SHARED_PAYLOAD_FIELDS,
+	adminSharedPayloadFieldsForZoteroItemType,
+	adminSpecialFieldsForZoteroItemType,
 	adminPayloadFieldToDatabaseField,
+	canonicalItemTypeToZotero,
+	zoteroStructuralFieldErrors,
 } from "@/lib/admin/item-fields";
 import {
 	adminFieldLabel,
@@ -69,24 +72,6 @@ function creatorSchema(allowIncomplete: boolean) {
 const payloadObjectSchema = z.record(z.string(), z.unknown());
 const relationsSchema = z.record(z.string(), z.unknown());
 
-const specialFieldsByType = new Map<string, ReadonlySet<string>>([
-	["note", new Set(["note"])],
-	["attachment", new Set(["note"])],
-	[
-		"annotation",
-		new Set([
-			"annotationType",
-			"annotationAuthorName",
-			"annotationText",
-			"annotationComment",
-			"annotationColor",
-			"annotationPageLabel",
-			"annotationSortIndex",
-			"annotationPosition",
-		]),
-	],
-]);
-
 type ItemWrite = InferInsertModel<typeof item>;
 
 export class NativeItemValidationError extends AdminValidationError {
@@ -133,7 +118,7 @@ function normalizeItemType(value: unknown) {
 }
 
 function zoteroDefinitionFor(itemTypeValue: string): ZoteroItemTypeDefinition {
-	const zoteroName = itemTypeValue[0]!.toLowerCase() + itemTypeValue.slice(1);
+	const zoteroName = canonicalItemTypeToZotero(itemTypeValue);
 	const definition = getZoteroItemType(zoteroName);
 	if (!definition) {
 		throw new Error(
@@ -161,8 +146,7 @@ function parseUniqueStrings(value: unknown, field: string, maxLength: number) {
 		throw new NativeItemValidationError(
 			`Check the ${adminFieldLabel(field).toLowerCase()} and try again.`,
 			{
-				[`${field}.${invalidIndex}`]:
-					`${adminFieldLabel(field)} must contain 1-${maxLength} characters.`,
+				[`${field}.${invalidIndex}`]: `${adminFieldLabel(field)} must contain 1-${maxLength} characters.`,
 			},
 		);
 	}
@@ -195,9 +179,9 @@ export function validateNativeItemDraft(
 	const normalizedItemType = normalizeItemType(payload.itemType);
 	const definition = zoteroDefinitionFor(normalizedItemType);
 	const allowedFields = new Set([
-		...ADMIN_SHARED_PAYLOAD_FIELDS,
+		...adminSharedPayloadFieldsForZoteroItemType(definition),
 		...definition.fields.map(({ field }) => field),
-		...(specialFieldsByType.get(definition.itemType) ?? []),
+		...adminSpecialFieldsForZoteroItemType(definition.itemType),
 	]);
 
 	for (const field of Object.keys(payload)) {
@@ -230,7 +214,9 @@ export function validateNativeItemDraft(
 		normalizedPayload[field] = value;
 	}
 
-	for (const field of specialFieldsByType.get(definition.itemType) ?? []) {
+	for (const field of adminSpecialFieldsForZoteroItemType(
+		definition.itemType,
+	)) {
 		const value = payload[field];
 		if (value === undefined) continue;
 		if (value !== null && typeof value !== "string") {
@@ -303,16 +289,19 @@ export function validateNativeItemDraft(
 		itemValues.parentItem = parentItem;
 		normalizedPayload.parentItem = parentItem;
 	}
-	if (
-		normalizedItemType === "Attachment" &&
-		(options.requireAttachmentParent ?? true) &&
-		typeof itemValues.parentItem !== "string"
-	) {
+	const structuralErrors = zoteroStructuralFieldErrors(
+		normalizedPayload,
+		definition.itemType,
+		{
+			requireAttachmentParent: options.requireAttachmentParent,
+		},
+	);
+	if (structuralErrors.length > 0) {
 		throw new NativeItemValidationError(
-			"Choose the record this attachment belongs to.",
-			{
-				parentItem: "Choose a parent record for this attachment.",
-			},
+			"Complete the required record details and try again.",
+			Object.fromEntries(
+				structuralErrors.map(({ field, message }) => [field, message]),
+			),
 		);
 	}
 
@@ -322,10 +311,9 @@ export function validateNativeItemDraft(
 		8,
 	);
 	if (collectionKeys.some((key) => !isCanonicalRecordKey(key))) {
-		throw new NativeItemValidationError(
-			"Choose valid collections.",
-			{ collections: "One or more selected collections are invalid." },
-		);
+		throw new NativeItemValidationError("Choose valid collections.", {
+			collections: "One or more selected collections are invalid.",
+		});
 	}
 	const tags = parseUniqueStrings(payload.tags, "tags", 255);
 	normalizedPayload.collections = collectionKeys;

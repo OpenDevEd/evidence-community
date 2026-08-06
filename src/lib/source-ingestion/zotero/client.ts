@@ -323,10 +323,15 @@ export class ZoteroApiClient {
 	async createItem(
 		prefix: string,
 		data: Record<string, unknown>,
-		writeToken: string,
-		signal?: AbortSignal,
+		options: {
+			signal?: AbortSignal;
+			writeToken?: string;
+		} = {},
 	) {
-		if (!/^[a-zA-Z0-9]{32}$/.test(writeToken)) {
+		if (
+			options.writeToken !== undefined &&
+			!/^[a-zA-Z0-9]{32}$/.test(options.writeToken)
+		) {
 			throw new ZoteroApiError(
 				"Zotero write token must contain exactly 32 alphanumeric characters",
 			);
@@ -335,10 +340,12 @@ export class ZoteroApiClient {
 			body: JSON.stringify([data]),
 			headers: {
 				"Content-Type": "application/json",
-				"Zotero-Write-Token": writeToken,
+				...(options.writeToken
+					? { "Zotero-Write-Token": options.writeToken }
+					: {}),
 			},
 			method: "POST",
-			signal,
+			signal: options.signal,
 		});
 		const result = zoteroWriteResponseSchema.parse(await response.json());
 		const failure = result.failed["0"];

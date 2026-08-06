@@ -66,17 +66,20 @@ describe("Zotero write client", () => {
 		).resolves.toBeUndefined();
 	});
 
-	it("creates a predetermined item with an idempotent write token", async () => {
+	it("creates a versioned predetermined item without a redundant write token", async () => {
 		const fetchImplementation = vi.fn<typeof fetch>(
 			async (_input, init) => {
 				const headers = new Headers(init?.headers);
 				expect(init?.method).toBe("POST");
 				expect(headers.get("content-type")).toBe("application/json");
-				expect(headers.get("zotero-write-token")).toBe(
-					"0123456789abcdef0123456789abcdef",
-				);
+				expect(headers.has("zotero-write-token")).toBe(false);
 				expect(JSON.parse(String(init?.body))).toEqual([
-					{ itemType: "report", key: "ABCD2345", title: "Test" },
+					{
+						itemType: "report",
+						key: "ABCD2345",
+						title: "Test",
+						version: 0,
+					},
 				]);
 				return versionedResponse(
 					JSON.stringify({
@@ -86,11 +89,12 @@ describe("Zotero write client", () => {
 			},
 		);
 		await expect(
-			client(fetchImplementation).createItem(
-				"groups/999",
-				{ itemType: "report", key: "ABCD2345", title: "Test" },
-				"0123456789abcdef0123456789abcdef",
-			),
+			client(fetchImplementation).createItem("groups/999", {
+				itemType: "report",
+				key: "ABCD2345",
+				title: "Test",
+				version: 0,
+			}),
 		).resolves.toEqual({ libraryVersion: 12 });
 		expect(fetchImplementation).toHaveBeenCalledOnce();
 	});
@@ -109,7 +113,9 @@ describe("Zotero write client", () => {
 			api.createItem(
 				"groups/999",
 				{ itemType: "report" },
-				"0123456789abcdef0123456789abcdef",
+				{
+					writeToken: "0123456789abcdef0123456789abcdef",
+				},
 			),
 		).rejects.toBeInstanceOf(ZoteroObjectWriteError);
 	});

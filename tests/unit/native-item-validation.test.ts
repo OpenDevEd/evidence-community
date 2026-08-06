@@ -40,6 +40,7 @@ describe("native item draft validation", () => {
 			}
 			if (definition.itemType === "annotation") {
 				Object.assign(payload, {
+					parentItem: "ABCD2345",
 					annotationType: "highlight",
 					annotationAuthorName: "Ada",
 					annotationText: "Evidence",
@@ -58,6 +59,30 @@ describe("native item draft validation", () => {
 		}
 	});
 
+	it("requires valid child metadata before publication", () => {
+		for (const payload of [
+			{ itemType: "Attachment" },
+			{ itemType: "Annotation" },
+			{
+				itemType: "Annotation",
+				parentItem: "ABCD2345",
+				annotationType: "unknown",
+				annotationPosition: "not json",
+			},
+		]) {
+			expect(() => validateNativeItemDraft(payload)).toThrow();
+		}
+
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "Annotation",
+				parentItem: "ABCD2345",
+				annotationType: "highlight",
+				annotationPosition: '{"pageIndex":0,"rects":[]}',
+			}),
+		).not.toThrow();
+	});
+
 	it("returns field errors for fields and creator roles that do not belong to the item type", () => {
 		try {
 			validateNativeItemDraft({
@@ -68,8 +93,7 @@ describe("native item draft validation", () => {
 		} catch (error) {
 			expect(error).toMatchObject({
 				fields: {
-					reportNumber:
-						"Report Number is not available for Book.",
+					reportNumber: "Report Number is not available for Book.",
 				},
 			});
 		}
@@ -167,7 +191,9 @@ describe("native item draft validation", () => {
 
 		try {
 			validateNativeItemDraft(payload);
-			expect.unreachable("Expected incomplete creator validation to fail");
+			expect.unreachable(
+				"Expected incomplete creator validation to fail",
+			);
 		} catch (error) {
 			expect(error).toMatchObject({
 				fields: {
