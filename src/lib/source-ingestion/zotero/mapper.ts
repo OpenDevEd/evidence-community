@@ -69,8 +69,8 @@ function parseDate(value: unknown, field: string) {
 }
 
 function aliases(item: ZoteroItemResponse) {
-	const values = Object.values(item.links ?? {}).flatMap((link) =>
-		link.href ? [{ key: link.href, kind: "zotero-uri" }] : [],
+	const values = [item.links?.self, item.links?.alternate].flatMap((link) =>
+		link?.href ? [{ key: link.href, kind: "zotero-uri" }] : [],
 	);
 	return [...new Map(values.map((value) => [value.key, value])).values()];
 }

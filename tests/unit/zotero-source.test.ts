@@ -4,6 +4,7 @@ import {
 	SourceCredentialNotFoundError,
 	createEnvironmentCredentialResolver,
 } from "@/lib/source-ingestion/credentials";
+import { sourceIngestionBatchSchema } from "@/lib/source-ingestion/batch-schema";
 import {
 	mapZoteroCollection,
 	mapZoteroItem,
@@ -267,6 +268,84 @@ describe("Zotero source configuration", () => {
 });
 
 describe("Zotero source mapping", () => {
+	it("does not treat parent, child, or enclosure relationship URLs as aliases", async () => {
+		const parent = await mapZoteroItem(
+			zoteroItemResponseSchema.parse({
+				key: "A4S7ZT9E",
+				version: 1,
+				links: {
+					self: {
+						href: "https://api.zotero.org/groups/6632364/items/A4S7ZT9E",
+						type: "application/json",
+					},
+					alternate: {
+						href: "https://www.zotero.org/groups/6632364/items/A4S7ZT9E",
+						type: "text/html",
+					},
+					attachment: {
+						href: "https://api.zotero.org/groups/6632364/items/4CK9MKRN",
+						type: "application/json",
+					},
+				},
+				data: { itemType: "report", title: "Parent" },
+			}),
+		);
+		const attachment = await mapZoteroItem(
+			zoteroItemResponseSchema.parse({
+				key: "4CK9MKRN",
+				version: 1,
+				links: {
+					self: {
+						href: "https://api.zotero.org/groups/6632364/items/4CK9MKRN",
+						type: "application/json",
+					},
+					alternate: {
+						href: "https://www.zotero.org/groups/6632364/items/4CK9MKRN",
+						type: "text/html",
+					},
+					up: {
+						href: "https://api.zotero.org/groups/6632364/items/A4S7ZT9E",
+						type: "application/json",
+					},
+					enclosure: {
+						href: "https://api.zotero.org/groups/6632364/items/4CK9MKRN/file/view",
+						type: "application/pdf",
+					},
+				},
+				data: {
+					contentType: "application/pdf",
+					itemType: "attachment",
+					parentItem: "A4S7ZT9E",
+					title: "Child",
+				},
+			}),
+		);
+		const parsed = sourceIngestionBatchSchema.safeParse({
+			sourceConnectionKey: "zotero-openscholar-test",
+			expectedCursor: {},
+			nextCursor: { libraryVersion: 1 },
+			mappingProfileVersion: "test",
+			fetchedAt: new Date(),
+			collections: [],
+			items: [parent, attachment],
+		});
+		expect(parsed.success).toBe(true);
+		if (
+			parent.operation !== "upsert" ||
+			attachment.operation !== "upsert"
+		) {
+			throw new Error("Expected mapped upserts");
+		}
+		expect(parent.aliases.map(({ key }) => key)).toEqual([
+			"https://api.zotero.org/groups/6632364/items/A4S7ZT9E",
+			"https://www.zotero.org/groups/6632364/items/A4S7ZT9E",
+		]);
+		expect(attachment.aliases.map(({ key }) => key)).toEqual([
+			"https://api.zotero.org/groups/6632364/items/4CK9MKRN",
+			"https://www.zotero.org/groups/6632364/items/4CK9MKRN",
+		]);
+	});
+
 	it("maps provider fields without leaking relationship or file sidecars into metadata", async () => {
 		const response = zoteroItemResponseSchema.parse({
 			key: "AAAA2345",
