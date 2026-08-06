@@ -34,6 +34,10 @@ import {
 	validateNativeItemDraft,
 } from "./native-item-validation";
 import { NATIVE_SOURCE_CONNECTION_KEY as NATIVE_CONNECTION_KEY } from "./constants";
+import {
+	enqueueSourceWritebackJob,
+	ensureDefaultWritebackLink,
+} from "@/lib/source-writeback/queue";
 
 type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -818,6 +822,9 @@ export async function publishItemDraftWithContext(
 			);
 		}
 		if (changedFields.length > 0) {
+			if (access.identity.sourceConnectionKey === NATIVE_CONNECTION_KEY) {
+				await ensureDefaultWritebackLink(transaction, itemKey);
+			}
 			// Every linked source is now behind the canonical item. The shared
 			// item advisory lock serializes this read-modify-write with ingestion
 			// and must also be taken by the writeback worker before clearing dirt.
@@ -828,12 +835,13 @@ export async function publishItemDraftWithContext(
 				.orderBy(itemSourceLink.sourceConnectionKey)
 				.for("update");
 			for (const link of links) {
+				const dirtyFields = [
+					...new Set([...link.dirtyFields, ...changedFields]),
+				].sort();
 				await transaction
 					.update(itemSourceLink)
 					.set({
-						dirtyFields: [
-							...new Set([...link.dirtyFields, ...changedFields]),
-						].sort(),
+						dirtyFields,
 						updatedAt: now,
 					})
 					.where(
@@ -845,6 +853,15 @@ export async function publishItemDraftWithContext(
 							),
 						),
 					);
+				if (link.writebackEnabled) {
+					await enqueueSourceWritebackJob(transaction, {
+						canonicalRevision: nextRevision,
+						dirtyFields,
+						itemKey,
+						operation: "upsert",
+						sourceConnectionKey: link.sourceConnectionKey,
+					});
+				}
 			}
 		}
 		await transaction
@@ -998,6 +1015,26 @@ async function unpublishNativeItemAttempt(
 			operation: "delete",
 			revision: nextRevision,
 		});
+		const [writebackLink] = await transaction
+			.select()
+			.from(itemSourceLink)
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, itemKey),
+					eq(itemSourceLink.writebackEnabled, true),
+				),
+			)
+			.limit(1)
+			.for("update");
+		if (writebackLink) {
+			await enqueueSourceWritebackJob(transaction, {
+				canonicalRevision: nextRevision,
+				dirtyFields: writebackLink.dirtyFields,
+				itemKey,
+				operation: "delete",
+				sourceConnectionKey: writebackLink.sourceConnectionKey,
+			});
+		}
 		const indexingRecords = [{ key: itemKey, revision: nextRevision }];
 		const parent =
 			typeof current.parentItem === "string"

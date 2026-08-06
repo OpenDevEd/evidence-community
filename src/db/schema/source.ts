@@ -11,6 +11,7 @@ import {
 	sourceConnection,
 	sourceFileCleanup,
 	sourceRecordIssue,
+	sourceWritebackJob,
 	sourceSyncRun,
 	sourceSyncState,
 } from "@opendeved/evidence-library-core";
@@ -30,6 +31,7 @@ export {
 	sourceConnection,
 	sourceFileCleanup,
 	sourceRecordIssue,
+	sourceWritebackJob,
 	sourceSyncRun,
 	sourceSyncState,
 };
@@ -49,6 +51,7 @@ export const sourceConnectionRelations = relations(
 		collections: many(collection),
 		aliases: many(sourceRecordAlias),
 		syncRuns: many(sourceSyncRun),
+		writebackJobs: many(sourceWritebackJob),
 	}),
 );
 
@@ -104,6 +107,31 @@ export const itemSourceLinkRelations = relations(
 		}),
 		snapshots: many(sourceSnapshot),
 		aliases: many(sourceRecordAlias),
+		writebackJobs: many(sourceWritebackJob),
+	}),
+);
+
+export const sourceWritebackJobRelations = relations(
+	sourceWritebackJob,
+	({ one }) => ({
+		sourceConnection: one(sourceConnection, {
+			fields: [sourceWritebackJob.sourceConnectionKey],
+			references: [sourceConnection.key],
+		}),
+		item: one(item, {
+			fields: [sourceWritebackJob.itemKey],
+			references: [item.key],
+		}),
+		itemSourceLink: one(itemSourceLink, {
+			fields: [
+				sourceWritebackJob.itemKey,
+				sourceWritebackJob.sourceConnectionKey,
+			],
+			references: [
+				itemSourceLink.itemKey,
+				itemSourceLink.sourceConnectionKey,
+			],
+		}),
 	}),
 );
 

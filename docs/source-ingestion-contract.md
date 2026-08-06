@@ -35,6 +35,10 @@ Library databases and deployments are not migrated or modified.
   and import history remain independent.
 - Credentials are referenced by `credentialRef`; secrets are not stored in the
   source record.
+- At most one active remote connection is marked `defaultWriteback`. A native
+  item's first publication links it to that target with the canonical
+  eight-character key as its pending provider key. With no default target,
+  native publication remains local-only.
 - Zotero uses Web API v3. Its durable cursor records the last complete library
   version and, during large imports, the target version plus the source
   snapshot and next deterministic manifest offset. It also retains soft-trash
@@ -85,9 +89,15 @@ Library databases and deployments are not migrated or modified.
   and removes the draft. Every source must mask locally changed fields until it
   catches up, even when only one link is the writeback target. Native collection
   memberships are library-local and are not marked for provider writeback.
+- A writeback-enabled link also receives one durable `sourceWritebackJob` for
+  the new canonical revision in the publication transaction. The stable
+  source/item/revision/operation idempotency key makes duplicate enqueue calls
+  harmless. Imported items use their existing remote key and version; native
+  items use the configured default connection.
 - Unpublishing retains the canonical row as a tombstone and emits a delete
-  event. Repeated unpublish requests are idempotent. Canonical identities are
-  not recycled after publication.
+  event plus a remote delete job when the native item has a writeback target.
+  Repeated unpublish requests are idempotent. Canonical identities are not
+  recycled after publication.
 - Opening a draft from a tombstoned item is the explicit restore path;
   publishing that draft clears the tombstone and emits a new upsert revision.
   A linked tombstone marks every editable provider field dirty so writeback can

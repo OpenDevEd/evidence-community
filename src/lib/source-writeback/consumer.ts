@@ -1,0 +1,747 @@
+import { setTimeout as delay } from "node:timers/promises";
+
+import {
+	itemSourceLink,
+	sourceConnection,
+	sourceWritebackJob,
+} from "@opendeved/evidence-library-core";
+import {
+	and,
+	asc,
+	eq,
+	gt,
+	isNotNull,
+	isNull,
+	lte,
+	notExists,
+	or,
+	sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
+
+import type { Database } from "@/db/database-schema";
+import { lockItemMutation } from "@/db/item-mutation-lock";
+import { sourceSnapshot } from "@/db/schema/source";
+import { collection } from "@/db/schema/tables/collection";
+import { item } from "@/db/schema/tables/item";
+import { itemToCollection } from "@/db/schema/tables/itemToCollection";
+import { itemToTag } from "@/db/schema/tables/itemToTag";
+import { publishedAdminItemPayload } from "@/lib/admin/item-draft-patch";
+import type { SourceCredentialResolver } from "@/lib/source-ingestion/credentials";
+
+import {
+	type SourceWritebackAdapterRegistry,
+	type SourceWritebackRequest,
+	type SourceWritebackResult,
+} from "./adapter";
+
+const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1_000;
+const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 1_000;
+const DEFAULT_MAX_ATTEMPTS = 15;
+const DEFAULT_RETRY_BASE_MS = 5_000;
+const DEFAULT_RETRY_MAX_MS = 60 * 60 * 1_000;
+const MAX_ERROR_LENGTH = 32 * 1_024;
+
+type ClaimedJob = typeof sourceWritebackJob.$inferSelect;
+
+export type SourceWritebackConsumerOptions = {
+	credentialResolver?: SourceCredentialResolver;
+	database: Database;
+	heartbeatIntervalMs?: number;
+	leaseDurationMs?: number;
+	maxAttempts?: number;
+	now?: () => Date;
+	registry: SourceWritebackAdapterRegistry;
+	retryBaseMs?: number;
+	retryMaxMs?: number;
+	signal?: AbortSignal;
+	workerId: string;
+};
+
+export type SourceWritebackProcessResult = {
+	itemKey?: string;
+	jobId?: number;
+	operation?: "upsert" | "delete";
+	status:
+		| "dead-lettered"
+		| "deferred"
+		| "idle"
+		| "processed"
+		| "retrying"
+		| "superseded";
+};
+
+export class SourceWritebackLeaseLostError extends Error {
+	constructor(jobId: number) {
+		super(`Source writeback lease was lost for job ${jobId}`);
+		this.name = "SourceWritebackLeaseLostError";
+	}
+}
+
+export class SourceWritebackAbortError extends Error {
+	constructor() {
+		super("Source writeback processing was aborted");
+		this.name = "SourceWritebackAbortError";
+	}
+}
+
+export class SourceWritebackParentUnavailableError extends Error {
+	constructor(itemKey: string, parentItemKey: string) {
+		super(
+			`Parent ${parentItemKey} has not been written to this source for item ${itemKey}`,
+		);
+		this.name = "SourceWritebackParentUnavailableError";
+	}
+}
+
+function validateOptions(options: SourceWritebackConsumerOptions) {
+	const workerId = options.workerId.trim();
+	if (!workerId || workerId.length > 255) {
+		throw new Error("workerId must contain 1-255 characters");
+	}
+	const leaseDurationMs =
+		options.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
+	const heartbeatIntervalMs =
+		options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
+	const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
+	const retryBaseMs = options.retryBaseMs ?? DEFAULT_RETRY_BASE_MS;
+	const retryMaxMs = options.retryMaxMs ?? DEFAULT_RETRY_MAX_MS;
+	if (
+		!Number.isSafeInteger(leaseDurationMs) ||
+		leaseDurationMs < 1_000 ||
+		leaseDurationMs > 60 * 60 * 1_000
+	) {
+		throw new Error(
+			"leaseDurationMs must be an integer between 1,000 and 3,600,000",
+		);
+	}
+	if (
+		!Number.isSafeInteger(heartbeatIntervalMs) ||
+		heartbeatIntervalMs < 100 ||
+		heartbeatIntervalMs >= leaseDurationMs
+	) {
+		throw new Error(
+			"heartbeatIntervalMs must be an integer of at least 100 and less than leaseDurationMs",
+		);
+	}
+	if (
+		!Number.isSafeInteger(maxAttempts) ||
+		maxAttempts < 1 ||
+		maxAttempts > 100
+	) {
+		throw new Error("maxAttempts must be an integer between 1 and 100");
+	}
+	if (
+		!Number.isSafeInteger(retryBaseMs) ||
+		retryBaseMs < 100 ||
+		!Number.isSafeInteger(retryMaxMs) ||
+		retryMaxMs < retryBaseMs
+	) {
+		throw new Error(
+			"retry delays must be safe integers and retryMaxMs must be at least retryBaseMs",
+		);
+	}
+	return {
+		heartbeatIntervalMs,
+		leaseDurationMs,
+		maxAttempts,
+		retryBaseMs,
+		retryMaxMs,
+		workerId,
+	};
+}
+
+function currentTime(options: SourceWritebackConsumerOptions) {
+	return (options.now ?? (() => new Date()))();
+}
+
+function leaseExpiry(value: Date, leaseDurationMs: number) {
+	return new Date(value.getTime() + leaseDurationMs);
+}
+
+function errorMessage(error: unknown) {
+	return (
+		error instanceof Error
+			? `${error.name}: ${error.message}`
+			: String(error)
+	).slice(0, MAX_ERROR_LENGTH);
+}
+
+function throwIfAborted(signal?: AbortSignal) {
+	if (signal?.aborted) throw new SourceWritebackAbortError();
+}
+
+async function claimJob(
+	options: SourceWritebackConsumerOptions,
+	leaseDurationMs: number,
+	workerId: string,
+) {
+	throwIfAborted(options.signal);
+	const claimedAt = currentTime(options);
+	return options.database.transaction(async (transaction) => {
+		const leasedLink = alias(sourceWritebackJob, "leasedWritebackLink");
+		const [candidate] = await transaction
+			.select()
+			.from(sourceWritebackJob)
+			.where(
+				and(
+					isNull(sourceWritebackJob.processedAt),
+					isNull(sourceWritebackJob.deadLetteredAt),
+					lte(sourceWritebackJob.nextAttemptAt, claimedAt),
+					or(
+						isNull(sourceWritebackJob.leaseExpiresAt),
+						lte(sourceWritebackJob.leaseExpiresAt, claimedAt),
+					),
+					notExists(
+						transaction
+							.select({ id: leasedLink.id })
+							.from(leasedLink)
+							.where(
+								and(
+									eq(
+										leasedLink.itemKey,
+										sourceWritebackJob.itemKey,
+									),
+									eq(
+										leasedLink.sourceConnectionKey,
+										sourceWritebackJob.sourceConnectionKey,
+									),
+									isNull(leasedLink.processedAt),
+									isNull(leasedLink.deadLetteredAt),
+									isNotNull(leasedLink.leaseOwner),
+									gt(leasedLink.leaseExpiresAt, claimedAt),
+								),
+							),
+					),
+					sql<boolean>`pg_try_advisory_xact_lock(hashtextextended('source-writeback:' || ${sourceWritebackJob.sourceConnectionKey} || ':' || ${sourceWritebackJob.itemKey}, 0))`,
+				),
+			)
+			.orderBy(asc(sourceWritebackJob.id))
+			.for("update", { skipLocked: true })
+			.limit(1);
+		if (!candidate) return null;
+
+		const [claimed] = await transaction
+			.update(sourceWritebackJob)
+			.set({
+				leaseExpiresAt: leaseExpiry(claimedAt, leaseDurationMs),
+				leaseOwner: workerId,
+			})
+			.where(eq(sourceWritebackJob.id, candidate.id))
+			.returning();
+		return claimed!;
+	});
+}
+
+async function releaseJob(
+	options: SourceWritebackConsumerOptions,
+	job: ClaimedJob,
+	workerId: string,
+) {
+	await options.database
+		.update(sourceWritebackJob)
+		.set({ leaseExpiresAt: null, leaseOwner: null })
+		.where(
+			and(
+				eq(sourceWritebackJob.id, job.id),
+				eq(sourceWritebackJob.leaseOwner, workerId),
+				isNull(sourceWritebackJob.processedAt),
+				isNull(sourceWritebackJob.deadLetteredAt),
+			),
+		);
+}
+
+async function heartbeatJob(
+	options: SourceWritebackConsumerOptions,
+	job: ClaimedJob,
+	leaseDurationMs: number,
+	workerId: string,
+) {
+	const heartbeatAt = currentTime(options);
+	const [updated] = await options.database
+		.update(sourceWritebackJob)
+		.set({ leaseExpiresAt: leaseExpiry(heartbeatAt, leaseDurationMs) })
+		.where(
+			and(
+				eq(sourceWritebackJob.id, job.id),
+				eq(sourceWritebackJob.leaseOwner, workerId),
+				isNull(sourceWritebackJob.processedAt),
+				isNull(sourceWritebackJob.deadLetteredAt),
+			),
+		)
+		.returning({ id: sourceWritebackJob.id });
+	if (!updated) throw new SourceWritebackLeaseLostError(job.id);
+}
+
+async function heartbeatLoop(
+	options: SourceWritebackConsumerOptions,
+	job: ClaimedJob,
+	heartbeatIntervalMs: number,
+	leaseDurationMs: number,
+	workerId: string,
+	signal: AbortSignal,
+	onFailure: (error: unknown) => void,
+) {
+	while (!signal.aborted) {
+		try {
+			await delay(heartbeatIntervalMs, undefined, { signal });
+		} catch (error) {
+			if (signal.aborted) return;
+			onFailure(error);
+			return;
+		}
+		try {
+			await heartbeatJob(options, job, leaseDurationMs, workerId);
+		} catch (error) {
+			onFailure(error);
+			return;
+		}
+	}
+}
+
+async function markSuperseded(
+	options: SourceWritebackConsumerOptions,
+	job: ClaimedJob,
+	workerId: string,
+) {
+	const [updated] = await options.database
+		.update(sourceWritebackJob)
+		.set({
+			leaseExpiresAt: null,
+			leaseOwner: null,
+			processedAt: currentTime(options),
+			superseded: true,
+		})
+		.where(
+			and(
+				eq(sourceWritebackJob.id, job.id),
+				eq(sourceWritebackJob.leaseOwner, workerId),
+				isNull(sourceWritebackJob.processedAt),
+				isNull(sourceWritebackJob.deadLetteredAt),
+			),
+		)
+		.returning({ id: sourceWritebackJob.id });
+	if (!updated) throw new SourceWritebackLeaseLostError(job.id);
+}
+
+async function loadRequest(
+	options: SourceWritebackConsumerOptions,
+	job: ClaimedJob,
+) {
+	return options.database.transaction(async (transaction) => {
+		await lockItemMutation(transaction, job.itemKey);
+		const [state] = await transaction
+			.select({
+				connection: sourceConnection,
+				item,
+				link: itemSourceLink,
+			})
+			.from(itemSourceLink)
+			.innerJoin(
+				sourceConnection,
+				eq(sourceConnection.key, itemSourceLink.sourceConnectionKey),
+			)
+			.innerJoin(item, eq(item.key, itemSourceLink.itemKey))
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, job.itemKey),
+					eq(
+						itemSourceLink.sourceConnectionKey,
+						job.sourceConnectionKey,
+					),
+				),
+			)
+			.limit(1);
+		if (!state) return null;
+		if (
+			!state.link.writebackEnabled ||
+			state.connection.status === "removed" ||
+			(job.operation === "upsert" && state.item.deleted === 1) ||
+			(job.operation === "delete" && state.item.deleted === 0)
+		) {
+			return { disposition: "supersede" as const, request: null, state };
+		}
+		if (state.connection.status === "paused") {
+			return { disposition: "defer" as const, request: null, state };
+		}
+
+		const [tagRows, collectionRows] = await Promise.all([
+			transaction
+				.select({ name: itemToTag.tagName })
+				.from(itemToTag)
+				.where(eq(itemToTag.itemKey, job.itemKey))
+				.orderBy(itemToTag.tagName),
+			transaction
+				.select({ sourceRecordKey: collection.sourceRecordKey })
+				.from(itemToCollection)
+				.innerJoin(
+					collection,
+					eq(collection.key, itemToCollection.collectionKey),
+				)
+				.where(
+					and(
+						eq(itemToCollection.itemKey, job.itemKey),
+						eq(
+							collection.sourceConnectionKey,
+							job.sourceConnectionKey,
+						),
+						eq(collection.deleted, 0),
+					),
+				)
+				.orderBy(collection.sourceRecordKey),
+		]);
+		let parentSourceRecordKey: string | null = null;
+		if (state.item.parentItem) {
+			const [parentLink] = await transaction
+				.select({ sourceRecordKey: itemSourceLink.sourceRecordKey })
+				.from(itemSourceLink)
+				.where(
+					and(
+						eq(itemSourceLink.itemKey, state.item.parentItem),
+						eq(
+							itemSourceLink.sourceConnectionKey,
+							job.sourceConnectionKey,
+						),
+					),
+				)
+				.limit(1);
+			if (!parentLink) {
+				throw new SourceWritebackParentUnavailableError(
+					job.itemKey,
+					state.item.parentItem,
+				);
+			}
+			parentSourceRecordKey = parentLink.sourceRecordKey;
+		}
+
+		const payload = publishedAdminItemPayload(state.item, {
+			collectionKeys: collectionRows.map(
+				({ sourceRecordKey }) => sourceRecordKey,
+			),
+			tags: tagRows.map(({ name }) => name),
+		});
+		if (parentSourceRecordKey) payload.parentItem = parentSourceRecordKey;
+
+		const request: SourceWritebackRequest = {
+			dirtyFields: job.dirtyFields,
+			idempotencyKey: job.idempotencyKey,
+			itemKey: job.itemKey,
+			operation: job.operation,
+			payload,
+			remoteDeleted: state.link.remoteDeleted,
+			remoteVersion: state.link.remoteVersion,
+			sourceConnection: state.connection,
+			sourceRecordKey: state.link.sourceRecordKey,
+		};
+		return { disposition: "write" as const, request, state };
+	});
+}
+
+async function deferJob(
+	options: SourceWritebackConsumerOptions,
+	job: ClaimedJob,
+	workerId: string,
+	delayMs: number,
+) {
+	const deferredAt = currentTime(options);
+	const [updated] = await options.database
+		.update(sourceWritebackJob)
+		.set({
+			leaseExpiresAt: null,
+			leaseOwner: null,
+			nextAttemptAt: new Date(deferredAt.getTime() + delayMs),
+		})
+		.where(
+			and(
+				eq(sourceWritebackJob.id, job.id),
+				eq(sourceWritebackJob.leaseOwner, workerId),
+				isNull(sourceWritebackJob.processedAt),
+				isNull(sourceWritebackJob.deadLetteredAt),
+			),
+		)
+		.returning({ id: sourceWritebackJob.id });
+	if (!updated) throw new SourceWritebackLeaseLostError(job.id);
+}
+
+function validateResult(result: SourceWritebackResult) {
+	if (!result.sourceRecordKey || result.sourceRecordKey.length > 512) {
+		throw new Error(
+			"Writeback adapter returned an invalid source record key",
+		);
+	}
+	if (result.remoteVersion !== null && result.remoteVersion.length > 255) {
+		throw new Error("Writeback adapter returned an invalid remote version");
+	}
+	if (
+		result.snapshot &&
+		!/^[0-9a-f]{64}$/.test(result.snapshot.fingerprint)
+	) {
+		throw new Error(
+			"Writeback adapter returned an invalid snapshot fingerprint",
+		);
+	}
+}
+
+async function acknowledgeJob(
+	options: SourceWritebackConsumerOptions,
+	job: ClaimedJob,
+	result: SourceWritebackResult,
+	workerId: string,
+) {
+	validateResult(result);
+	await options.database.transaction(async (transaction) => {
+		await lockItemMutation(transaction, job.itemKey);
+		const [currentJob] = await transaction
+			.select()
+			.from(sourceWritebackJob)
+			.where(eq(sourceWritebackJob.id, job.id))
+			.for("update")
+			.limit(1);
+		if (
+			!currentJob ||
+			currentJob.leaseOwner !== workerId ||
+			currentJob.processedAt ||
+			currentJob.deadLetteredAt
+		) {
+			throw new SourceWritebackLeaseLostError(job.id);
+		}
+		const [currentItem] = await transaction
+			.select({ revision: item.revision })
+			.from(item)
+			.where(eq(item.key, job.itemKey))
+			.for("update")
+			.limit(1);
+		const [currentLink] = await transaction
+			.select()
+			.from(itemSourceLink)
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, job.itemKey),
+					eq(
+						itemSourceLink.sourceConnectionKey,
+						job.sourceConnectionKey,
+					),
+				),
+			)
+			.for("update")
+			.limit(1);
+		if (!currentItem || !currentLink) {
+			throw new SourceWritebackLeaseLostError(job.id);
+		}
+		const dirtyFields =
+			currentItem.revision === job.canonicalRevision
+				? currentLink.dirtyFields.filter(
+						(field) => !job.dirtyFields.includes(field),
+					)
+				: currentLink.dirtyFields;
+		const completedAt = currentTime(options);
+		await transaction
+			.update(itemSourceLink)
+			.set({
+				dirtyFields,
+				lastAcknowledgedRemoteVersion: result.remoteVersion,
+				remoteDeleted: job.operation === "delete",
+				remoteVersion: result.remoteVersion,
+				sourceRecordKey: result.sourceRecordKey,
+				updatedAt: completedAt,
+			})
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, job.itemKey),
+					eq(
+						itemSourceLink.sourceConnectionKey,
+						job.sourceConnectionKey,
+					),
+				),
+			);
+		if (result.snapshot) {
+			await transaction
+				.insert(sourceSnapshot)
+				.values({
+					fetchedAt: completedAt,
+					itemKey: job.itemKey,
+					mappingProfileVersion:
+						result.snapshot.mappingProfileVersion ?? null,
+					payload: result.snapshot.payload,
+					payloadHash: result.snapshot.fingerprint,
+					remoteVersion: result.remoteVersion,
+					sourceConnectionKey: job.sourceConnectionKey,
+				})
+				.onConflictDoUpdate({
+					target: [
+						sourceSnapshot.itemKey,
+						sourceSnapshot.sourceConnectionKey,
+					],
+					set: {
+						fetchedAt: completedAt,
+						mappingProfileVersion:
+							result.snapshot.mappingProfileVersion ?? null,
+						payload: result.snapshot.payload,
+						payloadHash: result.snapshot.fingerprint,
+						remoteVersion: result.remoteVersion,
+					},
+				});
+		}
+		const [acknowledged] = await transaction
+			.update(sourceWritebackJob)
+			.set({
+				completedRemoteVersion: result.remoteVersion,
+				completedSourceRecordKey: result.sourceRecordKey,
+				lastError: null,
+				leaseExpiresAt: null,
+				leaseOwner: null,
+				processedAt: completedAt,
+			})
+			.where(
+				and(
+					eq(sourceWritebackJob.id, job.id),
+					eq(sourceWritebackJob.leaseOwner, workerId),
+					isNull(sourceWritebackJob.processedAt),
+					isNull(sourceWritebackJob.deadLetteredAt),
+				),
+			)
+			.returning({ id: sourceWritebackJob.id });
+		if (!acknowledged) throw new SourceWritebackLeaseLostError(job.id);
+	});
+}
+
+async function failJob(
+	options: SourceWritebackConsumerOptions,
+	job: ClaimedJob,
+	workerId: string,
+	error: unknown,
+	maxAttempts: number,
+	retryBaseMs: number,
+	retryMaxMs: number,
+) {
+	const attempts = job.attempts + 1;
+	const failedAt = currentTime(options);
+	const deadLettered = attempts >= maxAttempts;
+	const retryDelay = Math.min(
+		retryMaxMs,
+		retryBaseMs * 2 ** Math.max(0, attempts - 1),
+	);
+	const [updated] = await options.database
+		.update(sourceWritebackJob)
+		.set({
+			attempts,
+			deadLetteredAt: deadLettered ? failedAt : null,
+			lastError: errorMessage(error),
+			leaseExpiresAt: null,
+			leaseOwner: null,
+			nextAttemptAt: new Date(failedAt.getTime() + retryDelay),
+		})
+		.where(
+			and(
+				eq(sourceWritebackJob.id, job.id),
+				eq(sourceWritebackJob.leaseOwner, workerId),
+				isNull(sourceWritebackJob.processedAt),
+				isNull(sourceWritebackJob.deadLetteredAt),
+			),
+		)
+		.returning({ id: sourceWritebackJob.id });
+	if (!updated) throw new SourceWritebackLeaseLostError(job.id);
+	return deadLettered;
+}
+
+export async function processNextSourceWritebackJob(
+	options: SourceWritebackConsumerOptions,
+): Promise<SourceWritebackProcessResult> {
+	const validated = validateOptions(options);
+	const job = await claimJob(
+		options,
+		validated.leaseDurationMs,
+		validated.workerId,
+	);
+	if (!job) return { status: "idle" };
+	const resultBase = {
+		itemKey: job.itemKey,
+		jobId: job.id,
+		operation: job.operation,
+	};
+
+	try {
+		const loaded = await loadRequest(options, job);
+		if (!loaded || loaded.disposition === "supersede") {
+			await markSuperseded(options, job, validated.workerId);
+			return { ...resultBase, status: "superseded" };
+		}
+		if (loaded.disposition === "defer") {
+			await deferJob(
+				options,
+				job,
+				validated.workerId,
+				validated.retryMaxMs,
+			);
+			return { ...resultBase, status: "deferred" };
+		}
+		const adapter = options.registry.get(loaded.state.connection.provider);
+		const heartbeatAbort = new AbortController();
+		const operationAbort = new AbortController();
+		const combinedSignal = options.signal
+			? AbortSignal.any([options.signal, operationAbort.signal])
+			: operationAbort.signal;
+		let heartbeatFailure: unknown = null;
+		const heartbeat = heartbeatLoop(
+			options,
+			job,
+			validated.heartbeatIntervalMs,
+			validated.leaseDurationMs,
+			validated.workerId,
+			heartbeatAbort.signal,
+			(error) => {
+				heartbeatFailure = error;
+				operationAbort.abort(error);
+			},
+		);
+		let writeResult: SourceWritebackResult;
+		try {
+			writeResult = await adapter.write(loaded.request, {
+				credentialResolver: options.credentialResolver,
+				signal: combinedSignal,
+			});
+		} finally {
+			heartbeatAbort.abort();
+			await heartbeat;
+		}
+		if (heartbeatFailure) throw heartbeatFailure;
+		throwIfAborted(options.signal);
+		await acknowledgeJob(options, job, writeResult, validated.workerId);
+		return { ...resultBase, status: "processed" };
+	} catch (error) {
+		if (error instanceof SourceWritebackLeaseLostError) throw error;
+		if (options.signal?.aborted) {
+			await releaseJob(options, job, validated.workerId);
+			throw new SourceWritebackAbortError();
+		}
+		const deadLettered = await failJob(
+			options,
+			job,
+			validated.workerId,
+			error,
+			validated.maxAttempts,
+			validated.retryBaseMs,
+			validated.retryMaxMs,
+		);
+		return {
+			...resultBase,
+			status: deadLettered ? "dead-lettered" : "retrying",
+		};
+	}
+}
+
+export async function drainSourceWritebackJobs(
+	options: SourceWritebackConsumerOptions,
+	maxJobs = 10_000,
+) {
+	if (!Number.isSafeInteger(maxJobs) || maxJobs < 1 || maxJobs > 1_000_000) {
+		throw new Error("maxJobs must be an integer between 1 and 1,000,000");
+	}
+	const results: SourceWritebackProcessResult[] = [];
+	for (let processed = 0; processed < maxJobs; processed += 1) {
+		const result = await processNextSourceWritebackJob(options);
+		if (result.status === "idle") break;
+		results.push(result);
+	}
+	return results;
+}

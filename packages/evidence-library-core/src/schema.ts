@@ -55,6 +55,7 @@ export const SOURCE_SYNC_RUN_STATUSES = [
 
 export const OUTBOX_ENTITY_TYPES = ["item", "collection"] as const;
 export const OUTBOX_OPERATIONS = ["upsert", "delete"] as const;
+export const SOURCE_WRITEBACK_OPERATIONS = ["upsert", "delete"] as const;
 export const SEARCH_INDEX_WORKER_STAGES = [
 	"starting",
 	"idle",
@@ -73,6 +74,8 @@ export type SourceConnectionStatus =
 export type SourceSyncRunStatus = (typeof SOURCE_SYNC_RUN_STATUSES)[number];
 export type OutboxEntityType = (typeof OUTBOX_ENTITY_TYPES)[number];
 export type OutboxOperation = (typeof OUTBOX_OPERATIONS)[number];
+export type SourceWritebackOperation =
+	(typeof SOURCE_WRITEBACK_OPERATIONS)[number];
 export type SearchIndexWorkerStage =
 	(typeof SEARCH_INDEX_WORKER_STAGES)[number];
 
@@ -96,6 +99,7 @@ export const sourceConnection = pgTable(
 		scopeKind: text("scopeKind", { enum: SOURCE_SCOPE_KINDS }).notNull(),
 		externalScopeKey: varchar("externalScopeKey", { length: 512 }),
 		credentialRef: varchar("credentialRef", { length: 255 }),
+		defaultWriteback: boolean("defaultWriteback").notNull().default(false),
 		config: jsonb("config").$type<JsonObject>().notNull().default({}),
 		syncCursor: jsonb("syncCursor")
 			.$type<JsonObject>()
@@ -127,6 +131,17 @@ export const sourceConnection = pgTable(
 			"sourceConnection_status_valid",
 			sql`${table.status} IN ('active', 'paused', 'removed')`,
 		),
+		check(
+			"sourceConnection_default_writeback_remote",
+			sql`NOT ${table.defaultWriteback} OR (
+				${table.provider} <> 'native'
+				AND ${table.status} = 'active'
+				AND ${table.credentialRef} IS NOT NULL
+			)`,
+		),
+		uniqueIndex("sourceConnection_one_default_writeback")
+			.on(table.defaultWriteback)
+			.where(sql`${table.defaultWriteback} = true`),
 		uniqueIndex("sourceConnection_provider_scope_unique")
 			.on(table.provider, table.externalScopeKey)
 			.where(sql`${table.externalScopeKey} IS NOT NULL`),
@@ -388,6 +403,105 @@ export const itemSourceLink = pgTable(
 			.on(table.itemKey)
 			.where(sql`${table.writebackEnabled} = true`),
 		index("itemSourceLink_connection_idx").on(table.sourceConnectionKey),
+	],
+);
+
+export const sourceWritebackJob = pgTable(
+	"sourceWritebackJob",
+	{
+		id: bigint("id", { mode: "number" })
+			.primaryKey()
+			.generatedAlwaysAsIdentity(),
+		itemKey: varchar("itemKey", { length: 8 }).notNull(),
+		sourceConnectionKey: varchar("sourceConnectionKey", {
+			length: 64,
+		}).notNull(),
+		operation: text("operation", {
+			enum: SOURCE_WRITEBACK_OPERATIONS,
+		}).notNull(),
+		canonicalRevision: bigint("canonicalRevision", {
+			mode: "number",
+		}).notNull(),
+		dirtyFields: jsonb("dirtyFields")
+			.$type<string[]>()
+			.notNull()
+			.default([]),
+		idempotencyKey: varchar("idempotencyKey", { length: 255 }).notNull(),
+		attempts: integer("attempts").notNull().default(0),
+		lastError: text("lastError"),
+		nextAttemptAt: timestampWithTimezone("nextAttemptAt")
+			.notNull()
+			.defaultNow(),
+		leaseOwner: varchar("leaseOwner", { length: 255 }),
+		leaseExpiresAt: timestampWithTimezone("leaseExpiresAt"),
+		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
+		processedAt: timestampWithTimezone("processedAt"),
+		deadLetteredAt: timestampWithTimezone("deadLetteredAt"),
+		superseded: boolean("superseded").notNull().default(false),
+		completedSourceRecordKey: varchar("completedSourceRecordKey", {
+			length: 512,
+		}),
+		completedRemoteVersion: varchar("completedRemoteVersion", {
+			length: 255,
+		}),
+	},
+	(table) => [
+		foreignKey({
+			name: "sourceWritebackJob_link_fk",
+			columns: [table.itemKey, table.sourceConnectionKey],
+			foreignColumns: [
+				itemSourceLink.itemKey,
+				itemSourceLink.sourceConnectionKey,
+			],
+		}).onDelete("cascade"),
+		check(
+			"sourceWritebackJob_operation_valid",
+			sql`${table.operation} IN ('upsert', 'delete')`,
+		),
+		check(
+			"sourceWritebackJob_revision_positive",
+			sql`${table.canonicalRevision} >= 1`,
+		),
+		check(
+			"sourceWritebackJob_dirty_fields_array",
+			sql`jsonb_typeof(${table.dirtyFields}) = 'array'`,
+		),
+		check(
+			"sourceWritebackJob_attempts_nonnegative",
+			sql`${table.attempts} >= 0`,
+		),
+		check(
+			"sourceWritebackJob_lease_bundle_valid",
+			sql`(
+				(${table.leaseOwner} IS NULL AND ${table.leaseExpiresAt} IS NULL)
+				OR (${table.leaseOwner} IS NOT NULL AND ${table.leaseExpiresAt} IS NOT NULL)
+			)`,
+		),
+		check(
+			"sourceWritebackJob_terminal_state_valid",
+			sql`NOT (${table.processedAt} IS NOT NULL AND ${table.deadLetteredAt} IS NOT NULL)
+				AND (NOT ${table.superseded} OR ${table.processedAt} IS NOT NULL)
+				AND (${table.processedAt} IS NULL AND ${table.deadLetteredAt} IS NULL
+					OR (${table.leaseOwner} IS NULL AND ${table.leaseExpiresAt} IS NULL))`,
+		),
+		unique("sourceWritebackJob_idempotency_unique").on(
+			table.idempotencyKey,
+		),
+		unique("sourceWritebackJob_revision_unique").on(
+			table.itemKey,
+			table.sourceConnectionKey,
+			table.canonicalRevision,
+			table.operation,
+		),
+		index("sourceWritebackJob_unprocessed_idx")
+			.on(table.nextAttemptAt, table.id)
+			.where(
+				sql`${table.processedAt} IS NULL AND ${table.deadLetteredAt} IS NULL`,
+			),
+		index("sourceWritebackJob_link_idx").on(
+			table.itemKey,
+			table.sourceConnectionKey,
+		),
 	],
 );
 

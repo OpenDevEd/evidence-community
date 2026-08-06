@@ -11,18 +11,18 @@ type SourceWorkerDelay = (
 	signal: AbortSignal,
 ) => Promise<void>;
 
-export type SourceWorkerOptions = {
+export type SourceWorkerOptions<TResult = SourceRunSweepResult[]> = {
 	delay?: SourceWorkerDelay;
 	onError?: (error: unknown) => void;
-	onSweep?: (results: SourceRunSweepResult[]) => void;
+	onSweep?: (results: TResult) => void;
 	pollMs?: number;
-	runSweep: () => Promise<SourceRunSweepResult[]>;
+	runSweep: () => Promise<TResult>;
 	signal: AbortSignal;
 	watch?: boolean;
 };
 
-export type SourceWorkerResult = {
-	lastSweep: SourceRunSweepResult[] | null;
+export type SourceWorkerResult<TResult = SourceRunSweepResult[]> = {
+	lastSweep: TResult | null;
 	sweeps: number;
 };
 
@@ -43,15 +43,15 @@ async function defaultDelay(milliseconds: number, signal: AbortSignal) {
 	await delay(milliseconds, undefined, { signal });
 }
 
-export async function runSourceWorker(
-	options: SourceWorkerOptions,
-): Promise<SourceWorkerResult> {
+export async function runSourceWorker<TResult = SourceRunSweepResult[]>(
+	options: SourceWorkerOptions<TResult>,
+): Promise<SourceWorkerResult<TResult>> {
 	const watch = options.watch ?? false;
 	const pollMs = validateSourceSyncPollMs(
 		options.pollMs ?? DEFAULT_SOURCE_SYNC_POLL_MS,
 	);
 	const wait = options.delay ?? defaultDelay;
-	let lastSweep: SourceRunSweepResult[] | null = null;
+	let lastSweep: TResult | null = null;
 	let sweeps = 0;
 
 	while (!options.signal.aborted) {
