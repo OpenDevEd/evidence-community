@@ -18,16 +18,16 @@ import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import { tag } from "../src/db/schema/tables/tag";
 import {
-	assignNativeItemDraftToCollection,
+	assignItemDraftToCollection as assignNativeItemDraftToCollection,
 	createNativeItemDraft,
-	discardNativeItemDraft,
-	NativeDraftConflictError,
-	NativeItemHasChildrenError,
-	openNativeItemDraft,
-	publishNativeItemDraft,
-	publishNativeItemDraftWithContext,
+	discardItemDraft as discardNativeItemDraft,
+	ItemDraftConflictError as NativeDraftConflictError,
+	ItemHasChildrenError as NativeItemHasChildrenError,
+	openItemDraft as openNativeItemDraft,
+	publishItemDraft as publishNativeItemDraft,
+	publishItemDraftWithContext as publishNativeItemDraftWithContext,
 	removeNativeItem,
-	saveNativeItemDraft,
+	saveItemDraft as saveNativeItemDraft,
 	unpublishNativeItem,
 } from "../src/lib/admin/native-item-service";
 import { createNativeCollection } from "../src/lib/admin/native-collection-service";

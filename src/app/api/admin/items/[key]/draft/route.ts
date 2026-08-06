@@ -9,10 +9,10 @@ import {
 	requireAdminBypass,
 } from "@/lib/admin/http";
 import {
-	discardNativeItemDraft,
-	getNativeItemDraft,
-	openNativeItemDraft,
-	saveNativeItemDraft,
+	discardItemDraft,
+	getItemDraft,
+	openItemDraft,
+	saveItemDraft,
 } from "@/lib/admin/native-item-service";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 
@@ -32,7 +32,7 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
 
 	try {
 		const { key } = await params;
-		const draft = await getNativeItemDraft(await getDatabase(), key);
+		const draft = await getItemDraft(await getDatabase(), key);
 		return NextResponse.json(
 			{ draft },
 			{ headers: ADMIN_RESPONSE_HEADERS },
@@ -48,7 +48,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
 
 	try {
 		const { key } = await params;
-		const draft = await openNativeItemDraft(await getDatabase(), key);
+		const draft = await openItemDraft(await getDatabase(), key);
 		return NextResponse.json(
 			{ draft },
 			{ status: 201, headers: ADMIN_RESPONSE_HEADERS },
@@ -65,7 +65,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
 	try {
 		const { key } = await params;
 		const body = saveBodySchema.parse(await readAdminJson(request));
-		const draft = await saveNativeItemDraft(await getDatabase(), {
+		const draft = await saveItemDraft(await getDatabase(), {
 			itemKey: key,
 			...body,
 		});
@@ -87,7 +87,7 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
 			params,
 			getNativeFileRuntime(),
 		]);
-		const discarded = await discardNativeItemDraft(runtime.db, key);
+		const discarded = await discardItemDraft(runtime.db, key);
 		if (discarded.stagedPrivatePaths.length > 0) {
 			try {
 				await runtime.storage.removePrivate(

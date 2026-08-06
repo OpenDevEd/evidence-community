@@ -81,6 +81,7 @@ export type AdminItemDetail = AdminItemSummary & {
 	attachments: AdminAttachment[];
 	collectionKeys: string[];
 	draft: AdminItemDraft | null;
+	editable: boolean;
 	fileDraft: AdminFileDraft | null;
 	filePublication: AdminFilePublication | null;
 	parentItem: string | null;

@@ -3,12 +3,13 @@ import { DrizzleQueryError } from "drizzle-orm";
 import { NextResponse } from "next/server";
 
 import {
-	NativeDraftConflictError,
-	NativeItemHasChildrenError,
-	NativeItemHasPublishedFileError,
-	NativeItemMutationConflictError,
-	NativeItemNotFoundError,
-	NativeItemParentUnavailableError,
+	ItemDraftConflictError,
+	ItemHasChildrenError,
+	ItemHasPublishedFileError,
+	ItemMutationConflictError,
+	ItemNotFoundError,
+	ItemParentUnavailableError,
+	ItemWritebackUnavailableError,
 } from "./native-item-service";
 import {
 	NativeFileConflictError,
@@ -81,7 +82,7 @@ export function requireAdminBypass() {
 
 export function adminErrorDetails(error: unknown): AdminErrorDetails {
 	if (
-		error instanceof NativeItemNotFoundError ||
+		error instanceof ItemNotFoundError ||
 		error instanceof NativeFileNotFoundError ||
 		error instanceof NativeCollectionNotFoundError
 	) {
@@ -92,9 +93,9 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 		};
 	}
 	if (
-		error instanceof NativeDraftConflictError ||
+		error instanceof ItemDraftConflictError ||
 		error instanceof NativeCollectionConflictError ||
-		error instanceof NativeItemMutationConflictError ||
+		error instanceof ItemMutationConflictError ||
 		error instanceof NativeFileConflictError
 	) {
 		return {
@@ -104,7 +105,14 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 			status: 409,
 		};
 	}
-	if (error instanceof NativeItemHasPublishedFileError) {
+	if (error instanceof ItemWritebackUnavailableError) {
+		return {
+			code: "conflict",
+			message: "This record's source is not configured for writeback.",
+			status: 409,
+		};
+	}
+	if (error instanceof ItemHasPublishedFileError) {
 		return {
 			code: "conflict",
 			message:
@@ -112,7 +120,7 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 			status: 409,
 		};
 	}
-	if (error instanceof NativeItemHasChildrenError) {
+	if (error instanceof ItemHasChildrenError) {
 		return {
 			code: "conflict",
 			message:
@@ -120,7 +128,7 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 			status: 409,
 		};
 	}
-	if (error instanceof NativeItemParentUnavailableError) {
+	if (error instanceof ItemParentUnavailableError) {
 		return {
 			code: "conflict",
 			message:

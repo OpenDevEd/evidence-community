@@ -7,7 +7,7 @@ import {
 	adminErrorResponse,
 	requireAdminBypass,
 } from "@/lib/admin/http";
-import { publishNativeItemDraftWithContext } from "@/lib/admin/native-item-service";
+import { publishItemDraftWithContext } from "@/lib/admin/native-item-service";
 import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 export async function POST(
@@ -20,7 +20,7 @@ export async function POST(
 	try {
 		const { key } = await params;
 		const { indexingRecords, item, previousParentItem } =
-			await publishNativeItemDraftWithContext(await getDatabase(), key);
+			await publishItemDraftWithContext(await getDatabase(), key);
 		revalidatePublishedItemCaches(
 			item.key,
 			item.parentItem,

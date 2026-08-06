@@ -8,7 +8,7 @@ import { item } from "../src/db/schema/tables/item";
 import { tag } from "../src/db/schema/tables/tag";
 import {
 	createNativeItemDraft,
-	publishNativeItemDraft,
+	publishItemDraft as publishNativeItemDraft,
 } from "../src/lib/admin/native-item-service";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
@@ -36,7 +36,7 @@ async function verify() {
 		await resource.database.insert(tag).values({ name: tagName });
 
 		await first.query("BEGIN");
-		await first.query('UPDATE item SET title = $1 WHERE key = $2', [
+		await first.query("UPDATE item SET title = $1 WHERE key = $2", [
 			"Title from first transaction",
 			itemKey,
 		]);

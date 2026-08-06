@@ -3,6 +3,7 @@ import "server-only";
 import {
 	itemDraft,
 	itemFileDraft,
+	itemSourceLink,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
@@ -26,7 +27,7 @@ import {
 	filePublicationJson,
 	publishedItemJson,
 } from "./file-projection";
-import { NativeItemNotFoundError } from "./native-item-service";
+import { ItemNotFoundError } from "./native-item-service";
 import type {
 	AdminAttachment,
 	AdminCollection,
@@ -165,26 +166,26 @@ async function getAdminAttachments(
 
 	const [fileDraftRows, filePublicationRows, tagRows, membershipRows] =
 		await Promise.all([
-		db
-			.select()
-			.from(itemFileDraft)
-			.where(inArray(itemFileDraft.itemKey, keys)),
-		db
-			.select()
-			.from(itemFilePublication)
-			.where(inArray(itemFilePublication.itemKey, keys)),
-		db
-			.select({ itemKey: itemToTag.itemKey, name: itemToTag.tagName })
-			.from(itemToTag)
-			.where(inArray(itemToTag.itemKey, keys)),
-		db
-			.select({
-				itemKey: itemToCollection.itemKey,
-				key: itemToCollection.collectionKey,
-			})
-			.from(itemToCollection)
-			.where(inArray(itemToCollection.itemKey, keys)),
-	]);
+			db
+				.select()
+				.from(itemFileDraft)
+				.where(inArray(itemFileDraft.itemKey, keys)),
+			db
+				.select()
+				.from(itemFilePublication)
+				.where(inArray(itemFilePublication.itemKey, keys)),
+			db
+				.select({ itemKey: itemToTag.itemKey, name: itemToTag.tagName })
+				.from(itemToTag)
+				.where(inArray(itemToTag.itemKey, keys)),
+			db
+				.select({
+					itemKey: itemToCollection.itemKey,
+					key: itemToCollection.collectionKey,
+				})
+				.from(itemToCollection)
+				.where(inArray(itemToCollection.itemKey, keys)),
+		]);
 	const publishedByKey = new Map(publishedRows.map((row) => [row.key, row]));
 	const draftByKey = new Map(draftRows.map((row) => [row.itemKey, row]));
 	const fileDraftByKey = new Map(
@@ -244,33 +245,45 @@ export async function getAdminItemDetail(
 	db: Database,
 	itemKey: string,
 ): Promise<AdminItemDetail> {
-	const [published, draft, fileDraft, filePublication] = await Promise.all([
-		db
-			.select()
-			.from(item)
-			.where(eq(item.key, itemKey))
-			.limit(1)
-			.then((rows) => rows[0] ?? null),
-		db
-			.select()
-			.from(itemDraft)
-			.where(eq(itemDraft.itemKey, itemKey))
-			.limit(1)
-			.then((rows) => rows[0] ?? null),
-		db
-			.select()
-			.from(itemFileDraft)
-			.where(eq(itemFileDraft.itemKey, itemKey))
-			.limit(1)
-			.then((rows) => rows[0] ?? null),
-		db
-			.select()
-			.from(itemFilePublication)
-			.where(eq(itemFilePublication.itemKey, itemKey))
-			.limit(1)
-			.then((rows) => rows[0] ?? null),
-	]);
-	if (!published && !draft) throw new NativeItemNotFoundError(itemKey);
+	const [published, draft, fileDraft, filePublication, writebackLink] =
+		await Promise.all([
+			db
+				.select()
+				.from(item)
+				.where(eq(item.key, itemKey))
+				.limit(1)
+				.then((rows) => rows[0] ?? null),
+			db
+				.select()
+				.from(itemDraft)
+				.where(eq(itemDraft.itemKey, itemKey))
+				.limit(1)
+				.then((rows) => rows[0] ?? null),
+			db
+				.select()
+				.from(itemFileDraft)
+				.where(eq(itemFileDraft.itemKey, itemKey))
+				.limit(1)
+				.then((rows) => rows[0] ?? null),
+			db
+				.select()
+				.from(itemFilePublication)
+				.where(eq(itemFilePublication.itemKey, itemKey))
+				.limit(1)
+				.then((rows) => rows[0] ?? null),
+			db
+				.select({ itemKey: itemSourceLink.itemKey })
+				.from(itemSourceLink)
+				.where(
+					and(
+						eq(itemSourceLink.itemKey, itemKey),
+						eq(itemSourceLink.writebackEnabled, true),
+					),
+				)
+				.limit(1)
+				.then((rows) => rows[0] ?? null),
+		]);
+	if (!published && !draft) throw new ItemNotFoundError(itemKey);
 
 	const [tagRows, membershipRows, attachments] = await Promise.all([
 		published
@@ -350,6 +363,9 @@ export async function getAdminItemDetail(
 		collectionKeys:
 			draftCollections ?? membershipRows.map(({ key }) => key),
 		draft: draftJson(draft, payload),
+		editable:
+			summary.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY ||
+			Boolean(writebackLink),
 		fileDraft: fileDraftJson(fileDraft),
 		filePublication: filePublicationJson(filePublication),
 		parentItem,

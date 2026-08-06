@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import { NativeItemValidationError } from "@/lib/admin/native-item-validation";
 import {
-	assertValidNativeItemCollectionMemberships,
-	nativeItemCollectionBaselineKeys,
+	assertValidItemCollectionMemberships as assertValidNativeItemCollectionMemberships,
+	itemCollectionBaselineKeys as nativeItemCollectionBaselineKeys,
 } from "@/lib/admin/native-item-service";
 
 const collectionRows = [
@@ -49,9 +49,7 @@ describe("native item collection memberships", () => {
 				collectionRows,
 				desiredCollectionKeys: [],
 			}),
-		).toThrow(
-			"Imported collection memberships cannot be changed here.",
-		);
+		).toThrow("Imported collection memberships cannot be changed here.");
 	});
 
 	it("rejects missing and deleted native collections", () => {

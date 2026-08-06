@@ -27,12 +27,12 @@ import {
 } from "../src/lib/admin/native-file-service";
 import {
 	createNativeItemDraft,
-	getNativeItemDraft,
-	NativeItemHasPublishedFileError,
-	openNativeItemDraft,
-	publishNativeItemDraft,
+	getItemDraft as getNativeItemDraft,
+	ItemHasPublishedFileError as NativeItemHasPublishedFileError,
+	openItemDraft as openNativeItemDraft,
+	publishItemDraft as publishNativeItemDraft,
 	removeNativeItem,
-	saveNativeItemDraft,
+	saveItemDraft as saveNativeItemDraft,
 	unpublishNativeItem,
 } from "../src/lib/admin/native-item-service";
 

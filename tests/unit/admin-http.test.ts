@@ -6,9 +6,9 @@ import { adminErrorResponse, readAdminJson } from "@/lib/admin/http";
 import { NativeCollectionValidationError } from "@/lib/admin/native-collection-service";
 import { NativeFileValidationError } from "@/lib/admin/native-file-service";
 import {
-	NativeItemHasChildrenError,
-	NativeItemHasPublishedFileError,
-	NativeItemParentUnavailableError,
+	ItemHasChildrenError as NativeItemHasChildrenError,
+	ItemHasPublishedFileError as NativeItemHasPublishedFileError,
+	ItemParentUnavailableError as NativeItemParentUnavailableError,
 } from "@/lib/admin/native-item-service";
 import { NativeItemValidationError } from "@/lib/admin/native-item-validation";
 import { InvalidPdfError } from "@/lib/admin/pdf-processing";

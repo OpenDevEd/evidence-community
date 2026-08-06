@@ -16,11 +16,11 @@ import type {
 import { adminSearchIndexReceipt } from "./search-index-contract";
 import { effectiveItemParent } from "./item-draft-merge";
 import {
-	assignNativeItemDraftToCollection,
-	NativeItemHasChildrenError,
-	NativeItemNotFoundError,
-	NativeItemParentUnavailableError,
-	publishNativeItemDraftWithContext,
+	assignItemDraftToCollection,
+	ItemHasChildrenError,
+	ItemNotFoundError,
+	ItemParentUnavailableError,
+	publishItemDraftWithContext,
 	removeNativeItem,
 } from "./native-item-service";
 
@@ -176,23 +176,16 @@ export async function runAdminItemBatch(
 			results.push(skipped(key, "This record is no longer available."));
 			continue;
 		}
-		if (identity.sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY) {
-			results.push(
-				skipped(key, "Imported records are read only in this version."),
-			);
-			continue;
-		}
-
 		try {
 			if (request.action === "publish") {
 				let publishedContext;
 				try {
-					publishedContext = await publishNativeItemDraftWithContext(
+					publishedContext = await publishItemDraftWithContext(
 						db,
 						key,
 					);
 				} catch (error) {
-					if (error instanceof NativeItemNotFoundError) {
+					if (error instanceof ItemNotFoundError) {
 						results.push(
 							skipped(
 								key,
@@ -221,6 +214,18 @@ export async function runAdminItemBatch(
 			}
 
 			if (request.action === "remove") {
+				if (
+					identity.sourceConnectionKey !==
+					NATIVE_SOURCE_CONNECTION_KEY
+				) {
+					results.push(
+						skipped(
+							key,
+							"Remote record removal is not available yet.",
+						),
+					);
+					continue;
+				}
 				try {
 					const removed = await removeNativeItem(db, key);
 					results.push({
@@ -253,7 +258,7 @@ export async function runAdminItemBatch(
 					}
 					continue;
 				} catch (error) {
-					if (error instanceof NativeItemNotFoundError) {
+					if (error instanceof ItemNotFoundError) {
 						results.push(
 							skipped(key, "This record is already removed."),
 						);
@@ -263,7 +268,7 @@ export async function runAdminItemBatch(
 				}
 			}
 
-			const assignment = await assignNativeItemDraftToCollection(
+			const assignment = await assignItemDraftToCollection(
 				db,
 				key,
 				request.collectionKey,
@@ -275,8 +280,8 @@ export async function runAdminItemBatch(
 			});
 		} catch (error) {
 			const retryableDependencyFailure =
-				error instanceof NativeItemHasChildrenError ||
-				error instanceof NativeItemParentUnavailableError;
+				error instanceof ItemHasChildrenError ||
+				error instanceof ItemParentUnavailableError;
 			if (allowDependencyRetry && retryableDependencyFailure) {
 				mutationAttempts.push({ allowDependencyRetry: false, key });
 				continue;

@@ -60,11 +60,13 @@ Library databases and deployments are not migrated or modified.
   Collection synchronization uses the collection row's canonical revision and
   the connection cursor.
 
-## Native drafts and publication
+## Drafts and publication
 
-- Native drafts live only in `itemDraft`; editing a draft never mutates the
+- Drafts live only in `itemDraft`; editing a draft never mutates the
   published `item` row.
-- There is exactly one active draft per native item key. `draftRevision`
+- There is exactly one active draft per item key. Native items are always
+  editable; imported items require one writeback-enabled `itemSourceLink`.
+  `draftRevision`
   provides optimistic editor concurrency, while `baseRevision` records which
   canonical revision was visible when the patch was last saved.
 - Drafts store only changed Zotero-style fields. A present `null` is an explicit
@@ -79,7 +81,9 @@ Library databases and deployments are not migrated or modified.
   exist instead of silently changing the meaning of saved edits.
 - Publishing applies the patch to the latest canonical base, normalizes tags
   and collection memberships in the same transaction, increments the canonical
-  revision, emits one outbox event, and removes the draft.
+  revision, emits one outbox event, records the writeback link's dirty fields,
+  and removes the draft. Native collection memberships are library-local and
+  are not marked for provider writeback.
 - Unpublishing retains the canonical row as a tombstone and emits a delete
   event. Repeated unpublish requests are idempotent. Canonical identities are
   not recycled after publication.
@@ -166,10 +170,13 @@ each batch in two passes:
 1. upsert items and collections with parent fields set to `NULL`;
 2. resolve provider keys to canonical keys and update parent fields.
 
-Parents must remain within their source connection. Collection membership may
-reference any connection by `(sourceConnectionKey, sourceRecordKey)`. Missing,
-deleted, or cyclic relationships reject the complete batch. Relationship
-targets deleted by the same batch are treated as deleted during validation.
+Provider parent references resolve through that provider's item links. The
+canonical parent and child may therefore have different owners when, for
+example, a Zotero attachment belongs to a linked native parent. Collection
+membership may reference any connection by
+`(sourceConnectionKey, sourceRecordKey)`. Missing, deleted, or cyclic
+relationships reject the complete batch. Relationship targets deleted by the
+same batch are treated as deleted during validation.
 
 Canonical writes, normalized memberships/tags, immutable aliases, source-link
 versions, current link-scoped snapshots, parent reprojections, outbox events,
@@ -181,11 +188,18 @@ remote changes confined to dirty fields advance link/snapshot state without
 producing canonical revisions. Repeated deletions are also no-ops. Unknown
 deletion keys never reserve identities.
 
+Collection membership replacement is scoped to the source being ingested.
+Memberships whose collection belongs to another source, including native
+curation collections, are retained across remote updates.
+
 A remote deletion tombstones the canonical item only when that connection owns
 the canonical record. For linked native or differently owned items, it marks
 the source link as remotely deleted while preserving local metadata and files.
 The last fully acknowledged version advances only when no dirty field is being
 masked and the requested remote deletion was applied canonically.
+For a suppressed remote upsert of a locally deleted, differently owned item,
+the acknowledged version means the remote state was fully observed; it does
+not mean the canonical tombstone mirrors the remote record.
 
 When a collection's name or parent changes, the outbox projector must expand
 that event to the complete descendant collection subtree and every member item

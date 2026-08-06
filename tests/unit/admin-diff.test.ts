@@ -17,9 +17,7 @@ const definition: AdminSchemaDefinition = {
 	itemType: "book",
 };
 
-function detail(
-	overrides: Partial<AdminItemDetail> = {},
-): AdminItemDetail {
+function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 	return {
 		attachments: [],
 		collectionKeys: ["CURRENT"],
@@ -35,6 +33,7 @@ function detail(
 			sourceConnectionKey: "native",
 			updatedAt: "2026-01-01T00:00:00.000Z",
 		},
+		editable: true,
 		fileDraft: null,
 		filePublication: null,
 		fileState: "none",
@@ -124,9 +123,7 @@ describe("computeAdminDraftDiff", () => {
 	});
 
 	it("returns the published collection, creator, and tag values for reverting", () => {
-		const originalCreators = [
-			{ creatorType: "author", name: "OpenDevEd" },
-		];
+		const originalCreators = [{ creatorType: "author", name: "OpenDevEd" }];
 		const result = computeAdminDraftDiff(
 			detail({
 				published: {
@@ -155,7 +152,11 @@ describe("computeAdminDraftDiff", () => {
 	it("does not mark an unpublished draft because every value is new", () => {
 		expect(
 			computeAdminDraftDiff(
-				detail({ published: null, publishedCollectionKeys: [], publishedTags: [] }),
+				detail({
+					published: null,
+					publishedCollectionKeys: [],
+					publishedTags: [],
+				}),
 				{ itemType: "book", title: "New book" },
 				definition,
 			),

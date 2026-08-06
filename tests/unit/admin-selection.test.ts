@@ -10,6 +10,7 @@ function attachmentDetail(key: string): AdminItemDetail {
 		creators: [],
 		date: null,
 		draft: null,
+		editable: true,
 		fileDraft: null,
 		filePublication: null,
 		fileState: "none",

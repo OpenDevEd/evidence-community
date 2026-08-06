@@ -26,6 +26,7 @@
 		"test:search-index": "tsx ./tools/verifySearchOutbox.ts",
 		"test:search-worker": "npm run build && tsx ./tools/verifySearchIndexerWorker.ts",
 		"test:native-lifecycle": "tsx ./tools/verifyNativeItemLifecycle.ts",
+		"test:linked-item-lifecycle": "tsx ./tools/verifyLinkedItemDraftLifecycle.ts",
 		"benchmark:admin-items": "tsx ./tools/benchmarkAdminItemList.ts",
 		"test:admin-item-pagination": "tsx ./tools/verifyAdminItemListPagination.ts",
 		"test:admin-collection-catalog": "tsx ./tools/verifyAdminCollectionCatalog.ts",

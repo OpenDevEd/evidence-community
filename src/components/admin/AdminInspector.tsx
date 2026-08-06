@@ -110,7 +110,7 @@ function FieldLabel({
 	const className =
 		"block text-xs font-medium text-black/55 dark:text-white/55";
 	return (
-			<div className="flex min-h-6 items-center gap-1.5">
+		<div className="flex min-h-6 items-center gap-1.5">
 			{htmlFor ? (
 				<label className={className} htmlFor={htmlFor}>
 					{children}
@@ -414,7 +414,9 @@ function MetadataEditor({
 										itemType: diff.itemType,
 									})
 								}
-								publishedValue={humanizeAdminField(diff.itemType)}
+								publishedValue={humanizeAdminField(
+									diff.itemType,
+								)}
 							/>
 						) : undefined
 					}
@@ -924,8 +926,12 @@ function CollectionsEditor({
 	const error = firstAdminFieldError(errors, "collections");
 	const errorId = `admin-${recordKey}-collections-error`;
 	const selectedKeys = collectionKeysFromPayload(payload);
-	const { entries, error: resolveError, loading, retry } =
-		useResolvedAdminCollections(selectedKeys);
+	const {
+		entries,
+		error: resolveError,
+		loading,
+		retry,
+	} = useResolvedAdminCollections(selectedKeys);
 	const publishedSelected = new Set(publishedCollectionKeys ?? []);
 	return (
 		<>
@@ -940,14 +946,27 @@ function CollectionsEditor({
 				tabIndex={-1}
 			>
 				{error ? (
-					<p id={errorId} className="mb-1 text-xs text-danger" role="alert">
+					<p
+						id={errorId}
+						className="mb-1 text-xs text-danger"
+						role="alert"
+					>
 						{error}
 					</p>
 				) : null}
 				{resolveError ? (
-					<div className="flex min-h-9 items-center gap-2 rounded-lg bg-danger/10 px-2.5 text-xs text-danger" role="alert">
-						<AlertCircle aria-hidden className="shrink-0" size={13} />
-						<span className="min-w-0 flex-1">Collections could not be loaded.</span>
+					<div
+						className="flex min-h-9 items-center gap-2 rounded-lg bg-danger/10 px-2.5 text-xs text-danger"
+						role="alert"
+					>
+						<AlertCircle
+							aria-hidden
+							className="shrink-0"
+							size={13}
+						/>
+						<span className="min-w-0 flex-1">
+							Collections could not be loaded.
+						</span>
 						<Button onPress={retry} size="xs" variant="transparent">
 							Retry
 						</Button>
@@ -962,7 +981,8 @@ function CollectionsEditor({
 				) : null}
 				{entries.map((entry) => {
 					const imported =
-						entry.sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY;
+						entry.sourceConnectionKey !==
+						NATIVE_SOURCE_CONNECTION_KEY;
 					const locked = imported || entry.deleted;
 					const membershipChanged =
 						publishedCollectionKeys !== undefined &&
@@ -980,21 +1000,33 @@ function CollectionsEditor({
 								strokeWidth={1.7}
 							/>
 							<span className="min-w-0 flex-1">
-								<span className="block truncate font-medium">{entry.name}</span>
+								<span className="block truncate font-medium">
+									{entry.name}
+								</span>
 								<span className="block truncate text-[11px] text-black/40 dark:text-white/40">
 									{adminCollectionPath(entry, sources)}
 								</span>
 							</span>
 							{membershipChanged ? (
 								<Tooltip content="Added in this draft">
-									<Pencil aria-label="Added in this draft" className="shrink-0 text-accent" size={11} />
+									<Pencil
+										aria-label="Added in this draft"
+										className="shrink-0 text-accent"
+										size={11}
+									/>
 								</Tooltip>
 							) : null}
 							{entry.deleted ? (
-								<Chip className="h-5" size="sm" variant="flat">Deleted</Chip>
+								<Chip className="h-5" size="sm" variant="flat">
+									Deleted
+								</Chip>
 							) : null}
 							{locked ? (
-								<Lock aria-label="Read only" className="shrink-0 opacity-40" size={11} />
+								<Lock
+									aria-label="Read only"
+									className="shrink-0 opacity-40"
+									size={11}
+								/>
 							) : !readOnly ? (
 								<button
 									aria-label={`Remove ${entry.name}, ${adminCollectionPath(entry, sources)}`}
@@ -1002,7 +1034,9 @@ function CollectionsEditor({
 									onClick={() =>
 										onChange({
 											...payload,
-											collections: selectedKeys.filter((key) => key !== entry.key),
+											collections: selectedKeys.filter(
+												(key) => key !== entry.key,
+											),
 										})
 									}
 									type="button"
@@ -1039,7 +1073,10 @@ function CollectionsEditor({
 									autoFocus={finePointer}
 									editableOnly
 									onSelectionChange={(keys) =>
-										onChange({ ...payload, collections: keys })
+										onChange({
+											...payload,
+											collections: keys,
+										})
 									}
 									selectedKeys={selectedKeys}
 									selectionMode="multiple"
@@ -1047,7 +1084,11 @@ function CollectionsEditor({
 								/>
 							</ModalBody>
 							<ModalFooter>
-								<Button onPress={onClose} size="xs" variant="transparent">
+								<Button
+									onPress={onClose}
+									size="xs"
+									variant="transparent"
+								>
 									Done
 								</Button>
 							</ModalFooter>
@@ -1235,9 +1276,11 @@ function AttachmentFilePanel({
 							<p className="truncate font-medium text-black/80 dark:text-white/80">
 								{detail.filePublication.filename}
 							</p>
-						<p className="mt-1 text-black/45 dark:text-white/45">
-							{detail.filePublication.pageCount} pages ·{" "}
-							{formatFileSize(detail.filePublication.sizeBytes)}
+							<p className="mt-1 text-black/45 dark:text-white/45">
+								{detail.filePublication.pageCount} pages ·{" "}
+								{formatFileSize(
+									detail.filePublication.sizeBytes,
+								)}
 							</p>
 						</div>
 						<FileStateChip state="published" />
@@ -1262,7 +1305,9 @@ function AttachmentFilePanel({
 								isDisabled={busy}
 								onPress={() => onUnpublishFile(detail.key)}
 								size="xs"
-								startContent={<RotateCcw aria-hidden size={14} />}
+								startContent={
+									<RotateCcw aria-hidden size={14} />
+								}
 								variant="transparent"
 							>
 								Unpublish PDF
@@ -1284,15 +1329,19 @@ function AttachmentFilePanel({
 								{detail.fileDraft.filename}
 							</p>
 							<p className="mt-1 text-black/45 dark:text-white/45">
-							{detail.fileDraft.pageCount
-								? `${detail.fileDraft.pageCount} pages · `
-								: ""}
-							{formatFileSize(detail.fileDraft.expectedSizeBytes)}
+								{detail.fileDraft.pageCount
+									? `${detail.fileDraft.pageCount} pages · `
+									: ""}
+								{formatFileSize(
+									detail.fileDraft.expectedSizeBytes,
+								)}
 							</p>
 						</div>
 						<FileStateChip
 							state={
-								detail.fileDraft.readyAt ? "staged" : "processing"
+								detail.fileDraft.readyAt
+									? "staged"
+									: "processing"
 							}
 						/>
 					</div>
@@ -1304,7 +1353,9 @@ function AttachmentFilePanel({
 						<div className="mt-2 flex flex-wrap gap-1">
 							{publishPdfButton && publishPdfDisabledReason ? (
 								<Tooltip content={publishPdfDisabledReason}>
-									<span className="inline-flex">{publishPdfButton}</span>
+									<span className="inline-flex">
+										{publishPdfButton}
+									</span>
 								</Tooltip>
 							) : (
 								publishPdfButton
@@ -1450,12 +1501,16 @@ export function AdminInspector({
 				: EMPTY_ADMIN_DRAFT_DIFF,
 		[definition, detail, payload],
 	);
-	const { entries: publishedCollectionEntries } =
-		useResolvedAdminCollections(diff.collections ?? []);
+	const { entries: publishedCollectionEntries } = useResolvedAdminCollections(
+		diff.collections ?? [],
+	);
 	const publishedCollectionNames = useMemo(
 		() =>
 			new Map(
-				publishedCollectionEntries.map((entry) => [entry.key, entry.name]),
+				publishedCollectionEntries.map((entry) => [
+					entry.key,
+					entry.name,
+				]),
 			),
 		[publishedCollectionEntries],
 	);
@@ -1492,7 +1547,7 @@ export function AdminInspector({
 	}
 
 	const native = detail.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
-	const editable = native && Boolean(detail.draft) && !busy;
+	const editable = detail.editable && Boolean(detail.draft) && !busy;
 	const readOnly = !editable;
 	const hasPublishedChild = detail.attachments.some(
 		(attachment) =>
@@ -1550,8 +1605,8 @@ export function AdminInspector({
 								{detail.key}
 							</p>
 						</div>
-						{!native ? (
-							<Tooltip content="Imported records are read only">
+						{!detail.editable ? (
+							<Tooltip content="This source is not configured for writeback">
 								<Lock
 									aria-label="Read only"
 									className="mt-1 text-black/35 dark:text-white/35"
@@ -1570,7 +1625,7 @@ export function AdminInspector({
 						/>
 					</div>
 					<div className="mt-4 flex flex-wrap items-center gap-2">
-						{!native ? (
+						{!detail.editable ? (
 							<Button
 								className="h-9 rounded-xl px-3 font-semibold"
 								color="accent"
@@ -1710,10 +1765,15 @@ export function AdminInspector({
 									}
 									publishedValue={
 										<PublishedList
-											values={diff.creators.map((creator) => {
-												const name = creatorDisplayName(creator);
-												return `${humanizeAdminField(creator.creatorType)}: ${name || "Unnamed"}`;
-											})}
+											values={diff.creators.map(
+												(creator) => {
+													const name =
+														creatorDisplayName(
+															creator,
+														);
+													return `${humanizeAdminField(creator.creatorType)}: ${name || "Unnamed"}`;
+												},
+											)}
 										/>
 									}
 								/>
@@ -1739,7 +1799,9 @@ export function AdminInspector({
 								onRevert={() =>
 									onChange({ ...payload, tags: diff.tags })
 								}
-								publishedValue={<PublishedList values={diff.tags} />}
+								publishedValue={
+									<PublishedList values={diff.tags} />
+								}
 							/>
 						) : undefined
 					}
@@ -1769,7 +1831,10 @@ export function AdminInspector({
 									publishedValue={
 										<PublishedList
 											values={diff.collections.map(
-												(key) => publishedCollectionNames.get(key) ?? key,
+												(key) =>
+													publishedCollectionNames.get(
+														key,
+													) ?? key,
 											)}
 										/>
 									}
@@ -1795,7 +1860,9 @@ export function AdminInspector({
 					</Section>
 				) : null}
 				<Section
-					icon={detail.itemType === "Attachment" ? FileText : Paperclip}
+					icon={
+						detail.itemType === "Attachment" ? FileText : Paperclip
+					}
 					title={
 						detail.itemType === "Attachment" ? "PDF" : "Attachments"
 					}

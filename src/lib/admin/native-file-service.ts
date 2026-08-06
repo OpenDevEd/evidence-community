@@ -13,7 +13,7 @@ import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 
 import type { EvidenceFileStorage } from "./file-storage";
-import { advanceOpenNativeDraftBaseRevision } from "./native-item-service";
+import { advanceOpenItemDraftBaseRevision as advanceOpenNativeDraftBaseRevision } from "./native-item-service";
 import { processPdf } from "./pdf-processing";
 import { NATIVE_SOURCE_CONNECTION_KEY as NATIVE_CONNECTION_KEY } from "./constants";
 import { AdminValidationError, type AdminFieldErrors } from "./errors";
