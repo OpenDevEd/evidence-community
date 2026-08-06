@@ -87,11 +87,10 @@ HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
 
 CMD ["node_modules/.bin/tsx", "tools/runSearchIndexer.ts", "--watch"]
 
-FROM base AS source-sync
+FROM base AS source-worker-base
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV SOURCE_SYNC_WORKER_ID=source-sync
 
 WORKDIR /app
 
@@ -108,6 +107,16 @@ RUN npm --prefix packages/evidence-library-core run build
 
 USER sourceworker
 
+FROM source-worker-base AS source-sync
+
+ENV SOURCE_SYNC_WORKER_ID=source-sync
+
 CMD ["node_modules/.bin/tsx", "tools/runSourceSync.ts", "--watch"]
+
+FROM source-worker-base AS source-writeback
+
+ENV SOURCE_WRITEBACK_WORKER_ID=source-writeback
+
+CMD ["node_modules/.bin/tsx", "tools/runSourceWriteback.ts", "--watch"]
 
 FROM runner AS final

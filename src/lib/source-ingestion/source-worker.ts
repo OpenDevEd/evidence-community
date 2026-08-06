@@ -2,9 +2,9 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import type { SourceRunSweepResult } from "./orchestrator";
 
-export const DEFAULT_SOURCE_SYNC_POLL_MS = 60_000;
-export const MIN_SOURCE_SYNC_POLL_MS = 1_000;
-export const MAX_SOURCE_SYNC_POLL_MS = 60 * 60 * 1_000;
+export const DEFAULT_SOURCE_WORKER_POLL_MS = 60_000;
+export const MIN_SOURCE_WORKER_POLL_MS = 1_000;
+export const MAX_SOURCE_WORKER_POLL_MS = 60 * 60 * 1_000;
 
 type SourceWorkerDelay = (
 	milliseconds: number,
@@ -26,14 +26,14 @@ export type SourceWorkerResult<TResult = SourceRunSweepResult[]> = {
 	sweeps: number;
 };
 
-export function validateSourceSyncPollMs(value: number) {
+export function validateSourceWorkerPollMs(value: number) {
 	if (
 		!Number.isSafeInteger(value) ||
-		value < MIN_SOURCE_SYNC_POLL_MS ||
-		value > MAX_SOURCE_SYNC_POLL_MS
+		value < MIN_SOURCE_WORKER_POLL_MS ||
+		value > MAX_SOURCE_WORKER_POLL_MS
 	) {
 		throw new Error(
-			`pollMs must be an integer between ${MIN_SOURCE_SYNC_POLL_MS} and ${MAX_SOURCE_SYNC_POLL_MS}`,
+			`pollMs must be an integer between ${MIN_SOURCE_WORKER_POLL_MS} and ${MAX_SOURCE_WORKER_POLL_MS}`,
 		);
 	}
 	return value;
@@ -47,8 +47,8 @@ export async function runSourceWorker<TResult = SourceRunSweepResult[]>(
 	options: SourceWorkerOptions<TResult>,
 ): Promise<SourceWorkerResult<TResult>> {
 	const watch = options.watch ?? false;
-	const pollMs = validateSourceSyncPollMs(
-		options.pollMs ?? DEFAULT_SOURCE_SYNC_POLL_MS,
+	const pollMs = validateSourceWorkerPollMs(
+		options.pollMs ?? DEFAULT_SOURCE_WORKER_POLL_MS,
 	);
 	const wait = options.delay ?? defaultDelay;
 	let lastSweep: TResult | null = null;

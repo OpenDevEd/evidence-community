@@ -9,9 +9,9 @@ import {
 	type SourceRunSweepResult,
 } from "../src/lib/source-ingestion/orchestrator";
 import {
-	DEFAULT_SOURCE_SYNC_POLL_MS,
+	DEFAULT_SOURCE_WORKER_POLL_MS,
 	runSourceWorker,
-	validateSourceSyncPollMs,
+	validateSourceWorkerPollMs,
 } from "../src/lib/source-ingestion/source-worker";
 import { createSourceSyncRuntime } from "../src/lib/source-ingestion/runtime";
 
@@ -34,7 +34,7 @@ function requireValue(args: string[], index: number) {
 
 function parseCommand(args: string[]): Command {
 	let concurrency = 2;
-	let pollMs = DEFAULT_SOURCE_SYNC_POLL_MS;
+	let pollMs = DEFAULT_SOURCE_WORKER_POLL_MS;
 	let sourceConnectionKey: string | undefined;
 	let watch = false;
 	let workerId =
@@ -78,7 +78,7 @@ function parseCommand(args: string[]): Command {
 		throw new Error(usage);
 	}
 	try {
-		validateSourceSyncPollMs(pollMs);
+		validateSourceWorkerPollMs(pollMs);
 	} catch {
 		throw new Error(usage);
 	}

@@ -42,6 +42,8 @@ const DEFAULT_MAX_ATTEMPTS = 15;
 const DEFAULT_RETRY_BASE_MS = 5_000;
 const DEFAULT_RETRY_MAX_MS = 60 * 60 * 1_000;
 const MAX_ERROR_LENGTH = 32 * 1_024;
+export const DEFAULT_SOURCE_WRITEBACK_MAX_JOBS = 10_000;
+export const MAX_SOURCE_WRITEBACK_JOBS = 1_000_000;
 
 type ClaimedJob = typeof sourceWritebackJob.$inferSelect;
 
@@ -58,6 +60,27 @@ export type SourceWritebackConsumerOptions = {
 	signal?: AbortSignal;
 	workerId: string;
 };
+
+export function validateSourceWritebackWorkerId(value: string) {
+	const workerId = value.trim();
+	if (!workerId || workerId.length > 255) {
+		throw new Error("workerId must contain 1-255 characters");
+	}
+	return workerId;
+}
+
+export function validateSourceWritebackMaxJobs(value: number) {
+	if (
+		!Number.isSafeInteger(value) ||
+		value < 1 ||
+		value > MAX_SOURCE_WRITEBACK_JOBS
+	) {
+		throw new Error(
+			`maxJobs must be an integer between 1 and ${MAX_SOURCE_WRITEBACK_JOBS}`,
+		);
+	}
+	return value;
+}
 
 export type SourceWritebackProcessResult = {
 	itemKey?: string;
@@ -97,10 +120,7 @@ export class SourceWritebackParentUnavailableError extends Error {
 }
 
 function validateOptions(options: SourceWritebackConsumerOptions) {
-	const workerId = options.workerId.trim();
-	if (!workerId || workerId.length > 255) {
-		throw new Error("workerId must contain 1-255 characters");
-	}
+	const workerId = validateSourceWritebackWorkerId(options.workerId);
 	const leaseDurationMs =
 		options.leaseDurationMs ?? DEFAULT_LEASE_DURATION_MS;
 	const heartbeatIntervalMs =
@@ -811,11 +831,9 @@ export async function processNextSourceWritebackJob(
 
 export async function drainSourceWritebackJobs(
 	options: SourceWritebackConsumerOptions,
-	maxJobs = 10_000,
+	maxJobs = DEFAULT_SOURCE_WRITEBACK_MAX_JOBS,
 ) {
-	if (!Number.isSafeInteger(maxJobs) || maxJobs < 1 || maxJobs > 1_000_000) {
-		throw new Error("maxJobs must be an integer between 1 and 1,000,000");
-	}
+	validateSourceWritebackMaxJobs(maxJobs);
 	const results: SourceWritebackProcessResult[] = [];
 	for (let processed = 0; processed < maxJobs; processed += 1) {
 		const result = await processNextSourceWritebackJob(options);

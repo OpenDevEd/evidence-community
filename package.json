@@ -21,6 +21,7 @@
 		"test:zotero-live": "tsx ./tools/verifyLiveZoteroPipeline.ts",
 		"test:source-orchestrator": "tsx ./tools/verifySourceOrchestrator.ts",
 		"source:sync": "tsx ./tools/runSourceSync.ts",
+		"source:writeback": "tsx ./tools/runSourceWriteback.ts",
 		"search:index": "tsx ./tools/runSearchIndexer.ts",
 		"search:index:health": "tsx ./tools/checkSearchIndexerHealth.ts",
 		"test:search-index": "tsx ./tools/verifySearchOutbox.ts",

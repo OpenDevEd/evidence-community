@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { SourceRunSweepResult } from "@/lib/source-ingestion/orchestrator";
 import {
 	runSourceWorker,
-	validateSourceSyncPollMs,
+	validateSourceWorkerPollMs,
 } from "@/lib/source-ingestion/source-worker";
 
 const succeeded: SourceRunSweepResult = {
@@ -19,7 +19,7 @@ const succeeded: SourceRunSweepResult = {
 	status: "succeeded",
 };
 
-describe("source synchronization worker", () => {
+describe("source worker", () => {
 	it("runs exactly one sweep outside watch mode", async () => {
 		const controller = new AbortController();
 		const runSweep = vi.fn(async () => [succeeded]);
@@ -91,10 +91,12 @@ describe("source synchronization worker", () => {
 	it("stops immediately when polling is aborted", async () => {
 		const controller = new AbortController();
 		const runSweep = vi.fn(async () => [succeeded]);
-		const wait = vi.fn(async (_milliseconds: number, signal: AbortSignal) => {
-			controller.abort();
-			throw signal.reason;
-		});
+		const wait = vi.fn(
+			async (_milliseconds: number, signal: AbortSignal) => {
+				controller.abort();
+				throw signal.reason;
+			},
+		);
 
 		const result = await runSourceWorker({
 			delay: wait,
@@ -121,13 +123,13 @@ describe("source synchronization worker", () => {
 	});
 
 	it("validates the documented polling bounds", () => {
-		expect(validateSourceSyncPollMs(1_000)).toBe(1_000);
-		expect(validateSourceSyncPollMs(3_600_000)).toBe(3_600_000);
-		expect(() => validateSourceSyncPollMs(999)).toThrow(/between 1000/u);
-		expect(() => validateSourceSyncPollMs(3_600_001)).toThrow(
+		expect(validateSourceWorkerPollMs(1_000)).toBe(1_000);
+		expect(validateSourceWorkerPollMs(3_600_000)).toBe(3_600_000);
+		expect(() => validateSourceWorkerPollMs(999)).toThrow(/between 1000/u);
+		expect(() => validateSourceWorkerPollMs(3_600_001)).toThrow(
 			/between 1000/u,
 		);
-		expect(() => validateSourceSyncPollMs(Number.NaN)).toThrow(
+		expect(() => validateSourceWorkerPollMs(Number.NaN)).toThrow(
 			/between 1000/u,
 		);
 	});

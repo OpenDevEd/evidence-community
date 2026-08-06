@@ -44,3 +44,42 @@ DATABASE_URL_POST=postgresql://library:library@127.0.0.1:55435/library \
 
 The concrete Zotero adapter owns Web API payload mapping, optimistic version
 checks, conflict refetch, and create/delete idempotency.
+
+## Run the worker
+
+The worker reads the active library configuration for the PostgreSQL URL and
+resolves each source connection's `credentialRef` from the process environment.
+It does not need a separate provider configuration file.
+
+Run one bounded drain locally:
+
+```sh
+npm run source:writeback
+```
+
+Run continuously:
+
+```sh
+npm run source:writeback -- --watch
+```
+
+Options:
+
+- `--max-jobs <1-1000000>` limits each sweep; default `10000`.
+- `--poll-ms <1000-3600000>` controls the delay between watched sweeps;
+  default `60000`.
+- `--worker-id <id>` overrides `SOURCE_WRITEBACK_WORKER_ID` or the generated
+  host/process identity.
+
+A one-shot run exits non-zero if any job retries, dead-letters, or loses its
+lease. Deferred and superseded jobs are expected workflow outcomes. Watched
+runs log sweep-level errors and keep polling; a first `SIGINT` or `SIGTERM`
+stops cleanly, while a second signal forces exit.
+
+Build the dedicated worker image with the `source-writeback` Docker target. It
+runs the same CLI in watch mode and shares the source-worker image layer with
+the ingestion worker:
+
+```sh
+docker build --target source-writeback -t evidence-library-source-writeback .
+```
