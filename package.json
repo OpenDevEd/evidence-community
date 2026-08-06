@@ -17,6 +17,7 @@
 		"test:source-model": "tsx ./tools/verifySourceModel.ts",
 		"test:source-writer": "tsx ./tools/verifySourceIngestionWriter.ts",
 		"test:zotero-source": "tsx ./tools/verifyZoteroSourceSync.ts",
+		"test:zotero-playground:seed": "tsx ./tools/seedZoteroPlayground.ts",
 		"test:source-orchestrator": "tsx ./tools/verifySourceOrchestrator.ts",
 		"source:sync": "tsx ./tools/runSourceSync.ts",
 		"search:index": "tsx ./tools/runSearchIndexer.ts",
