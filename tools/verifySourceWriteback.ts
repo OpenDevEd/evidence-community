@@ -260,9 +260,18 @@ async function verify() {
 			.where(eq(sourceWritebackJob.id, parentJob.id));
 		const waitingChild =
 			await processNextSourceWritebackJob(consumerOptions);
+		const [waitingChildJob] = await db
+			.select({
+				attempts: sourceWritebackJob.attempts,
+				lastError: sourceWritebackJob.lastError,
+			})
+			.from(sourceWritebackJob)
+			.where(eq(sourceWritebackJob.id, waitingChild.jobId!));
 		assert(
 			waitingChild.status === "deferred" &&
-				waitingChild.itemKey === childDraft.itemKey,
+				waitingChild.itemKey === childDraft.itemKey &&
+				waitingChildJob?.attempts === 0 &&
+				waitingChildJob.lastError?.includes("writeback is pending"),
 			"A child write consumed an attempt before its parent had a remote identity",
 		);
 		await db
@@ -287,6 +296,57 @@ async function verify() {
 				calls.at(-1)?.payload.parentItem === parentDraft.itemKey,
 			"The child was not written with its acknowledged parent identity",
 		);
+
+		const failedParentDraft = await createNativeItemDraft(db, {
+			itemType: "Report",
+			title: "Failed writeback parent",
+		});
+		const blockedChildDraft = await createNativeItemDraft(db, {
+			itemType: "Note",
+			note: "Child of failed writeback",
+			parentItem: failedParentDraft.itemKey,
+		});
+		createdItemKeys.push(
+			failedParentDraft.itemKey,
+			blockedChildDraft.itemKey,
+		);
+		await publishItemDraft(db, failedParentDraft.itemKey);
+		await publishItemDraft(db, blockedChildDraft.itemKey);
+		const [failedParentJob] = await db
+			.select({ id: sourceWritebackJob.id })
+			.from(sourceWritebackJob)
+			.where(eq(sourceWritebackJob.itemKey, failedParentDraft.itemKey))
+			.limit(1);
+		assert(failedParentJob, "The failed parent job was not queued");
+		await db
+			.update(sourceWritebackJob)
+			.set({
+				deadLetteredAt: new Date(),
+				lastError: "Deliberate parent failure",
+			})
+			.where(eq(sourceWritebackJob.id, failedParentJob.id));
+		const blockedChild =
+			await processNextSourceWritebackJob(consumerOptions);
+		const [blockedChildJob] = await db
+			.select({
+				attempts: sourceWritebackJob.attempts,
+				lastError: sourceWritebackJob.lastError,
+			})
+			.from(sourceWritebackJob)
+			.where(eq(sourceWritebackJob.id, blockedChild.jobId!));
+		assert(
+			blockedChild.status === "retrying" &&
+				blockedChild.itemKey === blockedChildDraft.itemKey &&
+				blockedChildJob?.attempts === 1 &&
+				blockedChildJob.lastError?.includes(
+					"no viable writeback queued",
+				),
+			"A child without a viable parent writeback was deferred forever",
+		);
+		await db
+			.update(sourceWritebackJob)
+			.set({ deadLetteredAt: new Date() })
+			.where(eq(sourceWritebackJob.id, blockedChild.jobId!));
 
 		const openedSecond = await openItemDraft(db, nativeDraft.itemKey);
 		await saveItemDraft(db, {

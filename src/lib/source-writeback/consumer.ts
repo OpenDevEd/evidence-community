@@ -87,6 +87,15 @@ export class SourceWritebackAbortError extends Error {
 	}
 }
 
+export class SourceWritebackParentUnavailableError extends Error {
+	constructor(itemKey: string, parentItemKey: string) {
+		super(
+			`Parent ${parentItemKey} has no viable writeback queued for child ${itemKey}`,
+		);
+		this.name = "SourceWritebackParentUnavailableError";
+	}
+}
+
 function validateOptions(options: SourceWritebackConsumerOptions) {
 	const workerId = options.workerId.trim();
 	if (!workerId || workerId.length > 255) {
@@ -380,6 +389,7 @@ async function loadRequest(
 		if (state.connection.status === "paused") {
 			return {
 				deferDelay: "long" as const,
+				deferReason: "Source connection is paused",
 				disposition: "defer" as const,
 				request: null,
 				state,
@@ -430,13 +440,44 @@ async function loadRequest(
 					),
 				)
 				.limit(1);
-			if (
-				!parentLink ||
-				parentLink.remoteDeleted ||
-				parentLink.remoteVersion === null
-			) {
+			if (!parentLink) {
+				return {
+					deferDelay: "long" as const,
+					deferReason: `Parent ${state.item.parentItem} is not linked to this source yet`,
+					disposition: "defer" as const,
+					request: null,
+					state,
+				};
+			}
+			if (parentLink.remoteDeleted || parentLink.remoteVersion === null) {
+				const [pendingParentJob] = await transaction
+					.select({ id: sourceWritebackJob.id })
+					.from(sourceWritebackJob)
+					.where(
+						and(
+							eq(
+								sourceWritebackJob.itemKey,
+								state.item.parentItem,
+							),
+							eq(
+								sourceWritebackJob.sourceConnectionKey,
+								job.sourceConnectionKey,
+							),
+							eq(sourceWritebackJob.operation, "upsert"),
+							isNull(sourceWritebackJob.processedAt),
+							isNull(sourceWritebackJob.deadLetteredAt),
+						),
+					)
+					.limit(1);
+				if (!pendingParentJob) {
+					throw new SourceWritebackParentUnavailableError(
+						job.itemKey,
+						state.item.parentItem,
+					);
+				}
 				return {
 					deferDelay: "short" as const,
+					deferReason: `Parent ${state.item.parentItem} writeback is pending`,
 					disposition: "defer" as const,
 					request: null,
 					state,
@@ -473,11 +514,13 @@ async function deferJob(
 	job: ClaimedJob,
 	workerId: string,
 	delayMs: number,
+	reason: string,
 ) {
 	const deferredAt = currentTime(options);
 	const [updated] = await options.database
 		.update(sourceWritebackJob)
 		.set({
+			lastError: reason.slice(0, MAX_ERROR_LENGTH),
 			leaseExpiresAt: null,
 			leaseOwner: null,
 			nextAttemptAt: new Date(deferredAt.getTime() + delayMs),
@@ -705,6 +748,7 @@ export async function processNextSourceWritebackJob(
 				loaded.deferDelay === "short"
 					? validated.retryBaseMs
 					: validated.retryMaxMs,
+				loaded.deferReason,
 			);
 			return { ...resultBase, status: "deferred" };
 		}

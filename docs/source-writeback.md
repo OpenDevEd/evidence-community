@@ -15,8 +15,9 @@ transaction as that commit.
    link, remote key, and remote version.
 3. Skip an obsolete upsert after unpublish or an obsolete delete after restore.
    A paused connection or a child waiting for its parent remote identity defers
-   the job without consuming an attempt; a removed connection or disabled link
-   supersedes it.
+   the job without consuming an attempt and records the reason for operators.
+   A child whose linked parent has no viable upsert fails normally instead of
+   deferring forever. A removed connection or disabled link supersedes the job.
 4. Call the provider adapter outside the database transaction while renewing
    the lease.
 5. Under the item-mutation lock, record the returned remote key/version and
