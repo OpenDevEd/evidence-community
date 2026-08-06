@@ -81,14 +81,17 @@ Library databases and deployments are not migrated or modified.
   exist instead of silently changing the meaning of saved edits.
 - Publishing applies the patch to the latest canonical base, normalizes tags
   and collection memberships in the same transaction, increments the canonical
-  revision, emits one outbox event, records the writeback link's dirty fields,
-  and removes the draft. Native collection memberships are library-local and
-  are not marked for provider writeback.
+  revision, emits one outbox event, records changed fields on every source link,
+  and removes the draft. Every source must mask locally changed fields until it
+  catches up, even when only one link is the writeback target. Native collection
+  memberships are library-local and are not marked for provider writeback.
 - Unpublishing retains the canonical row as a tombstone and emits a delete
   event. Repeated unpublish requests are idempotent. Canonical identities are
   not recycled after publication.
-- Opening a draft from a tombstoned native item is the explicit restore path;
+- Opening a draft from a tombstoned item is the explicit restore path;
   publishing that draft clears the tombstone and emits a new upsert revision.
+  A linked tombstone marks every editable provider field dirty so writeback can
+  recreate a remotely deleted record rather than silently diverging.
 - The temporary backend gate is `ADMIN_AUTH_BYPASS=true`. Every
   `/api/admin/items/**` response is private and non-cacheable. Clerk token
   verification will replace this gate when OpenScholar integration begins.

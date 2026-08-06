@@ -15,6 +15,7 @@ import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import { createNativeCollection } from "../src/lib/admin/native-collection-service";
 import {
 	createNativeItemDraft,
+	discardItemDraft,
 	getItemDraft,
 	ItemHasChildrenError,
 	ItemWritebackUnavailableError,
@@ -31,6 +32,7 @@ const verifiedDatabaseUrl = databaseUrl;
 const baseUrl = process.env.EVIDENCE_LIBRARY_TEST_URL;
 
 const connectionKey = "zotero-linked-draft-test";
+const secondaryConnectionKey = "mendeley-linked-draft-test";
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
@@ -62,9 +64,13 @@ async function adminRequest<T>(
 	return body as T;
 }
 
-function batch(expectedVersion: number | null, nextVersion: number) {
+function batch(
+	expectedVersion: number | null,
+	nextVersion: number,
+	sourceConnectionKey = connectionKey,
+) {
 	return {
-		sourceConnectionKey: connectionKey,
+		sourceConnectionKey,
 		expectedCursor:
 			expectedVersion === null ? {} : { version: expectedVersion },
 		nextCursor: { version: nextVersion },
@@ -82,12 +88,20 @@ async function verify() {
 	let nativeParentKey: string | null = null;
 
 	try {
-		await db.insert(sourceConnection).values({
-			key: connectionKey,
-			provider: "zotero",
-			scopeKind: "group",
-			externalScopeKey: "linked-draft-test",
-		});
+		await db.insert(sourceConnection).values([
+			{
+				key: connectionKey,
+				provider: "zotero",
+				scopeKind: "group",
+				externalScopeKey: "linked-draft-test",
+			},
+			{
+				key: secondaryConnectionKey,
+				provider: "mendeley",
+				scopeKind: "group",
+				externalScopeKey: "linked-draft-secondary-test",
+			},
+		]);
 
 		const imported = await writeSourceIngestionBatch(db, {
 			...batch(null, 1),
@@ -107,6 +121,11 @@ async function verify() {
 			],
 		});
 		const itemKey = imported.itemKeys.EDIT2345!;
+		await db.insert(itemSourceLink).values({
+			itemKey,
+			sourceConnectionKey: secondaryConnectionKey,
+			sourceRecordKey: "SECOND45",
+		});
 
 		let readOnlyRejected = false;
 		try {
@@ -218,6 +237,52 @@ async function verify() {
 			"Publishing an imported draft did not preserve source identity, local curation, or dirty fields",
 		);
 
+		const secondEdit = await openItemDraft(db, itemKey);
+		await saveItemDraft(db, {
+			expectedDraftRevision: secondEdit.draftRevision,
+			expectedPayload: secondEdit.payload,
+			itemKey,
+			payload: {
+				...secondEdit.payload,
+				title: "Local title for every source",
+			},
+		});
+		await publishItemDraft(db, itemKey);
+		const linkedSources = await db
+			.select()
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, itemKey));
+		assert(
+			linkedSources.length === 2 &&
+				linkedSources.every((link) =>
+					link.dirtyFields.includes("title"),
+				),
+			"Publishing did not protect local edits against every linked source",
+		);
+		await writeSourceIngestionBatch(db, {
+			...batch(null, 1, secondaryConnectionKey),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "SECOND45",
+					remoteVersion: "1",
+					raw: { key: "SECOND45", version: 1 },
+					metadata: {
+						itemType: "Report",
+						title: "Secondary remote title",
+					},
+				},
+			],
+		});
+		const [afterSecondaryInbound] = await db
+			.select({ title: item.title })
+			.from(item)
+			.where(eq(item.key, itemKey));
+		assert(
+			afterSecondaryInbound?.title === "Local title for every source",
+			"A secondary linked source overwrote a locally published edit",
+		);
+
 		await writeSourceIngestionBatch(db, {
 			...batch(2, 3),
 			items: [
@@ -248,7 +313,7 @@ async function verify() {
 					.where(eq(itemToTag.itemKey, itemKey)),
 			]);
 		assert(
-			afterInbound?.title === "Local title" &&
+			afterInbound?.title === "Local title for every source" &&
 				afterInbound.abstractNote === "Latest remote abstract" &&
 				tagsAfterInbound.some((row) => row.tagName === "local") &&
 				membershipsAfterInbound.some(
@@ -256,6 +321,32 @@ async function verify() {
 				),
 			"Inbound sync overwrote dirty metadata or foreign collection memberships",
 		);
+
+		const retainedDraft = await openItemDraft(db, itemKey);
+		await db
+			.update(itemSourceLink)
+			.set({ writebackEnabled: false })
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, itemKey),
+					eq(itemSourceLink.sourceConnectionKey, connectionKey),
+				),
+			);
+		assert(
+			(await getItemDraft(db, itemKey)).draftRevision ===
+				retainedDraft.draftRevision,
+			"An existing draft became unreadable after writeback was disabled",
+		);
+		await discardItemDraft(db, itemKey);
+		await db
+			.update(itemSourceLink)
+			.set({ writebackEnabled: true })
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, itemKey),
+					eq(itemSourceLink.sourceConnectionKey, connectionKey),
+				),
+			);
 
 		if (baseUrl) {
 			const detailResponse = await adminRequest<{
@@ -305,6 +396,29 @@ async function verify() {
 			);
 		}
 
+		await db
+			.update(item)
+			.set({ deleted: 1, deletedAt: new Date() })
+			.where(eq(item.key, itemKey));
+		await db
+			.update(itemSourceLink)
+			.set({ dirtyFields: [], remoteDeleted: true })
+			.where(eq(itemSourceLink.itemKey, itemKey));
+		await openItemDraft(db, itemKey);
+		await publishItemDraft(db, itemKey);
+		const restoredLinks = await db
+			.select()
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, itemKey));
+		assert(
+			restoredLinks.every(
+				(link) =>
+					link.dirtyFields.includes("title") &&
+					link.dirtyFields.includes("tags"),
+			),
+			"Restoring a remotely deleted item did not request remote recreation",
+		);
+
 		const nativeParentDraft = await createNativeItemDraft(db, {
 			collections: [],
 			itemType: "report",
@@ -317,8 +431,31 @@ async function verify() {
 			itemKey: nativeParentKey,
 			sourceConnectionKey: connectionKey,
 			sourceRecordKey: "PARN2345",
-			writebackEnabled: true,
 		});
+		const linkedNativeEdit = await openItemDraft(db, nativeParentKey);
+		await saveItemDraft(db, {
+			expectedDraftRevision: linkedNativeEdit.draftRevision,
+			expectedPayload: linkedNativeEdit.payload,
+			itemKey: nativeParentKey,
+			payload: {
+				...linkedNativeEdit.payload,
+				title: "Protected linked native parent",
+			},
+		});
+		await publishItemDraft(db, nativeParentKey);
+		const [linkedNativeLink] = await db
+			.select()
+			.from(itemSourceLink)
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, nativeParentKey),
+					eq(itemSourceLink.sourceConnectionKey, connectionKey),
+				),
+			);
+		assert(
+			linkedNativeLink?.dirtyFields.includes("title"),
+			"A native item with a writeback-disabled link did not protect its edit",
+		);
 		await writeSourceIngestionBatch(db, {
 			...batch(3, 4),
 			items: [
@@ -345,6 +482,15 @@ async function verify() {
 				},
 			],
 		});
+		const [linkedNativeAfterInbound] = await db
+			.select({ title: item.title })
+			.from(item)
+			.where(eq(item.key, nativeParentKey));
+		assert(
+			linkedNativeAfterInbound?.title ===
+				"Protected linked native parent",
+			"Inbound sync overwrote a linked native item's local edit",
+		);
 		let childGuarded = false;
 		try {
 			await removeNativeItem(db, nativeParentKey);
@@ -403,7 +549,12 @@ async function verify() {
 		}
 		await db
 			.delete(sourceConnection)
-			.where(eq(sourceConnection.key, connectionKey));
+			.where(
+				inArray(sourceConnection.key, [
+					connectionKey,
+					secondaryConnectionKey,
+				]),
+			);
 		await resource.dispose();
 	}
 }

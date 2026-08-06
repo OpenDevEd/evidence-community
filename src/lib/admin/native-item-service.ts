@@ -21,6 +21,7 @@ import {
 	collectionKeysFromPayload,
 	payloadWithCollection,
 } from "./item-payload";
+import { adminDatabaseFieldToPayloadField } from "./item-fields";
 import {
 	applyItemDraftPatch,
 	createItemDraftPatch,
@@ -111,6 +112,7 @@ async function requireItemDraftAccess(executor: Executor, itemKey: string) {
 		.select({
 			key: itemIdentity.key,
 			sourceConnectionKey: itemIdentity.sourceConnectionKey,
+			sourceRecordKey: itemIdentity.sourceRecordKey,
 		})
 		.from(itemIdentity)
 		.where(eq(itemIdentity.key, itemKey))
@@ -351,7 +353,6 @@ export async function createNativeItemDraft(db: Database, payload: unknown) {
 }
 
 export async function getItemDraft(db: Database, itemKey: string) {
-	await requireItemDraftAccess(db, itemKey);
 	const [draft] = await db
 		.select()
 		.from(itemDraft)
@@ -702,7 +703,8 @@ export async function publishItemDraftWithContext(
 			...publishedItemValues(validated),
 			key: itemKey,
 			sourceConnectionKey: access.identity.sourceConnectionKey,
-			sourceRecordKey: current?.sourceRecordKey ?? itemKey,
+			sourceRecordKey:
+				current?.sourceRecordKey ?? access.identity.sourceRecordKey,
 			revision: nextRevision,
 			dateAdded: current?.dateAdded ?? now,
 			dateModified: now,
@@ -804,19 +806,33 @@ export async function publishItemDraftWithContext(
 				revision: parentRevision,
 			});
 		}
-		if (access.writebackLink) {
-			const changedFields = Object.keys(draft.patch).filter(
-				(field) => field !== "collections",
+		const changedFields = Object.keys(draft.patch).filter(
+			(field) => field !== "collections",
+		);
+		if (current?.deleted === 1) {
+			changedFields.push(
+				...editableItemDatabaseFields.map(
+					adminDatabaseFieldToPayloadField,
+				),
+				"tags",
 			);
-			if (changedFields.length > 0) {
+		}
+		if (changedFields.length > 0) {
+			// Every linked source is now behind the canonical item. The shared
+			// item advisory lock serializes this read-modify-write with ingestion
+			// and must also be taken by the writeback worker before clearing dirt.
+			const links = await transaction
+				.select()
+				.from(itemSourceLink)
+				.where(eq(itemSourceLink.itemKey, itemKey))
+				.orderBy(itemSourceLink.sourceConnectionKey)
+				.for("update");
+			for (const link of links) {
 				await transaction
 					.update(itemSourceLink)
 					.set({
 						dirtyFields: [
-							...new Set([
-								...access.writebackLink.dirtyFields,
-								...changedFields,
-							]),
+							...new Set([...link.dirtyFields, ...changedFields]),
 						].sort(),
 						updatedAt: now,
 					})
@@ -825,7 +841,7 @@ export async function publishItemDraftWithContext(
 							eq(itemSourceLink.itemKey, itemKey),
 							eq(
 								itemSourceLink.sourceConnectionKey,
-								access.writebackLink.sourceConnectionKey,
+								link.sourceConnectionKey,
 							),
 						),
 					);
