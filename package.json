@@ -19,6 +19,7 @@
 		"test:zotero-source": "tsx ./tools/verifyZoteroSourceSync.ts",
 		"test:zotero-playground:seed": "tsx ./tools/seedZoteroPlayground.ts",
 		"test:zotero-live": "tsx ./tools/verifyLiveZoteroPipeline.ts",
+		"test:zotero-writeback-live": "tsx ./tools/verifyLiveZoteroWriteback.ts",
 		"test:source-orchestrator": "tsx ./tools/verifySourceOrchestrator.ts",
 		"source:sync": "tsx ./tools/runSourceSync.ts",
 		"source:writeback": "tsx ./tools/runSourceWriteback.ts",
