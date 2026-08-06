@@ -22,7 +22,6 @@ import {
 	createNativeItemDraft,
 	discardItemDraft as discardNativeItemDraft,
 	ItemDraftConflictError as NativeDraftConflictError,
-	ItemHasChildrenError as NativeItemHasChildrenError,
 	openItemDraft as openNativeItemDraft,
 	publishItemDraft as publishNativeItemDraft,
 	publishItemDraftWithContext as publishNativeItemDraftWithContext,
@@ -483,24 +482,23 @@ async function verify() {
 			db,
 			newParentDraft.itemKey,
 		);
-		await saveNativeItemDraft(db, {
-			itemKey: newParentDraft.itemKey,
-			expectedDraftRevision: parentWithChildDraft.draftRevision,
-			expectedPayload: parentWithChildDraft.payload,
-			payload: {
-				...parentWithChildDraft.payload,
-				parentItem: oldParentDraft.itemKey,
-			},
-		});
 		let nestedParentRejected = false;
 		try {
-			await publishNativeItemDraft(db, newParentDraft.itemKey);
+			await saveNativeItemDraft(db, {
+				itemKey: newParentDraft.itemKey,
+				expectedDraftRevision: parentWithChildDraft.draftRevision,
+				expectedPayload: parentWithChildDraft.payload,
+				payload: {
+					...parentWithChildDraft.payload,
+					parentItem: oldParentDraft.itemKey,
+				},
+			});
 		} catch (error) {
-			nestedParentRejected = error instanceof NativeItemHasChildrenError;
+			nestedParentRejected = error instanceof NativeItemValidationError;
 		}
 		assert(
 			nestedParentRejected,
-			"Reparenting an item with live children was accepted",
+			"A top-level item accepted an invalid parent assignment",
 		);
 
 		const concurrentMutationRunCount = 3;
