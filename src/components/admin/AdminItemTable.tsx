@@ -1616,6 +1616,22 @@ export function AdminItemTable({
 						) : null}
 					</tbody>
 				</table>
+				{hasMore ? (
+					<div
+						className="sticky left-0 flex h-12 w-full items-center justify-center border-t border-black/[0.05] bg-card_light dark:border-white/[0.05] dark:bg-card"
+						data-admin-item-table-load-more
+					>
+						<Button
+							isLoading={loading}
+							onPress={onLoadMore}
+							size="xs"
+							startContent={<ChevronDown aria-hidden size={14} />}
+							variant="transparent"
+						>
+							Load more
+						</Button>
+					</div>
+				) : null}
 			</div>
 			{error && items.length > 0 ? (
 				<div
@@ -1625,19 +1641,6 @@ export function AdminItemTable({
 					<span className="truncate">{error}</span>
 					<Button onPress={onRetry} size="xs" variant="transparent">
 						Retry
-					</Button>
-				</div>
-			) : null}
-			{hasMore ? (
-				<div className="flex shrink-0 justify-center border-t border-black/[0.05] p-2 dark:border-white/[0.05]">
-					<Button
-						isLoading={loading}
-						onPress={onLoadMore}
-						size="xs"
-						startContent={<ChevronDown aria-hidden size={14} />}
-						variant="transparent"
-					>
-						Load more
 					</Button>
 				</div>
 			) : null}

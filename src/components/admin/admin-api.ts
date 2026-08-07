@@ -35,6 +35,10 @@ import {
 	adminSearchIndexReceiptSchema,
 	adminSearchIndexReceiptStatusSchema,
 } from "@/lib/admin/search-index-contract";
+import {
+	adminSourceWritebackStatusSchema,
+	type AdminSourceWritebackStatus,
+} from "@/lib/admin/source-writeback-contract";
 
 export class AdminApiError extends Error {
 	readonly code: AdminErrorCode;
@@ -141,6 +145,17 @@ function invalidSearchIndexResponse() {
 			code: "internal_error",
 			message:
 				"The server returned an invalid search indexing response. Refresh and try again.",
+		},
+		502,
+	);
+}
+
+function invalidSourceWritebackResponse() {
+	return new AdminApiError(
+		{
+			code: "internal_error",
+			message:
+				"The server returned an invalid writeback status. Refresh and try again.",
 		},
 		502,
 	);
@@ -306,6 +321,35 @@ export function unpublishAdminItem(key: string) {
 		`/api/admin/items/${encodeURIComponent(key)}/unpublish`,
 		{ method: "POST" },
 	);
+}
+
+async function sourceWritebackStatusRequest(
+	key: string,
+	method: "GET" | "POST",
+	signal?: AbortSignal,
+): Promise<AdminSourceWritebackStatus> {
+	const response = await requestJson<unknown>(
+		`/api/admin/items/${encodeURIComponent(key)}/writeback/${method === "GET" ? "status" : "retry"}`,
+		{ method, signal },
+	);
+	const status =
+		response && typeof response === "object" && "status" in response
+			? response.status
+			: undefined;
+	const parsed = adminSourceWritebackStatusSchema.safeParse(status);
+	if (!parsed.success) throw invalidSourceWritebackResponse();
+	return parsed.data;
+}
+
+export function getAdminSourceWritebackStatus(
+	key: string,
+	signal?: AbortSignal,
+) {
+	return sourceWritebackStatusRequest(key, "GET", signal);
+}
+
+export function retryAdminSourceWriteback(key: string) {
+	return sourceWritebackStatusRequest(key, "POST");
 }
 
 function itemBatchChunks(input: AdminItemBatchRequest) {

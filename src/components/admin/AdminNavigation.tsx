@@ -3,10 +3,10 @@
 import {
 	CircleCheck,
 	Cloud,
+	CloudUpload,
 	Database,
 	FileClock,
 	Folder,
-	FolderOpen,
 	FolderPlus,
 	Library,
 	Lock,
@@ -106,7 +106,7 @@ export function AdminNavigation({
 	isBusy: boolean;
 	onMoveCollection: (collection: AdminCollectionCatalogEntry) => void;
 	onRestoreCollection: (collection: AdminCollectionCatalogEntry) => void;
-	onSelectCollection: (key: string) => void;
+	onSelectCollection: (key: string | null) => void;
 	onSelectSource: (key: string) => void;
 	onSelectState: (state: AdminRecordState | "all") => void;
 	source: string | null;
@@ -147,8 +147,17 @@ export function AdminNavigation({
 							</span>
 							{entry.status === "paused" ? (
 								<Pause aria-label="Paused" size={11} />
+							) : entry.writeback?.enabled &&
+							  entry.writeback.supported ? (
+								<CloudUpload
+									aria-label="Writeback enabled"
+									size={11}
+								/>
 							) : entry.readOnly ? (
-								<Lock aria-label="Read only" size={11} />
+								<Lock
+									aria-label="Writeback unavailable"
+									size={11}
+								/>
 							) : null}
 						</button>
 					);
@@ -190,19 +199,6 @@ export function AdminNavigation({
 				icon={Folder}
 				title="Collections"
 			/>
-			<button
-				aria-pressed={collection === "all"}
-				className={`${navigationItemClass} ${
-					collection === "all"
-						? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
-						: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
-				}`}
-				onClick={() => onSelectCollection("all")}
-				type="button"
-			>
-				<FolderOpen aria-hidden size={14} />
-				All collections
-			</button>
 			<AdminCollectionCatalogue
 				busy={isBusy}
 				onCreate={onCreateCollection}
@@ -210,7 +206,9 @@ export function AdminNavigation({
 				onEdit={onEditCollection}
 				onMove={onMoveCollection}
 				onRestore={onRestoreCollection}
-				onSelect={onSelectCollection}
+				onSelect={(key) =>
+					onSelectCollection(collection === key ? null : key)
+				}
 				selectedCollection={collection}
 				sources={sources}
 			/>

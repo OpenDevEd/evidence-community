@@ -1,7 +1,7 @@
 "use client";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
-import { ChevronDown, Filter, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, Filter, ListFilter, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ZodError } from "zod";
 
@@ -405,20 +405,41 @@ export function AdminItemFilters({
 		>
 			<PopoverTrigger>
 				<button
+					aria-expanded={open}
 					aria-label={
 						filters.length > 0
 							? `Filters, ${filters.length} active`
 							: "Filters"
 					}
-					className={`inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-xl px-3 text-sm font-medium text-black/65 transition-colors hover:bg-black/[0.05] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/65 dark:hover:bg-white/[0.06] ${
+					className={`relative grid size-10 shrink-0 place-items-center rounded-xl border text-black/55 shadow-[inset_0_1px_0_rgba(255,255,255,0.45)] transition-[background-color,border-color,color,box-shadow] hover:text-black/85 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/55 dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] dark:hover:text-white/85 ${
 						filters.length > 0
-							? "bg-black/[0.06] text-black/85 dark:bg-white/[0.08] dark:text-white/90"
-							: ""
+							? "border-accent/40 bg-accent/[0.09] text-black/75 hover:border-accent/55 hover:bg-accent/[0.14] dark:border-accent/45 dark:bg-accent/[0.16] dark:text-white/85 dark:hover:bg-accent/[0.22]"
+							: "border-black/[0.08] bg-black/[0.025] hover:border-black/[0.12] hover:bg-black/[0.05] dark:border-white/[0.09] dark:bg-white/[0.045] dark:hover:border-white/[0.14] dark:hover:bg-white/[0.07]"
 					}`}
+					data-active={filters.length > 0 ? "true" : "false"}
+					data-admin-filter-trigger
+					title={
+						filters.length > 0
+							? `${filters.length} active filters`
+							: "Filter records"
+					}
 					type="button"
 				>
-					<Filter aria-hidden size={15} />
-					Filters{filters.length > 0 ? ` ${filters.length}` : ""}
+					<ListFilter
+						aria-hidden
+						data-admin-filter-trigger-icon
+						data-admin-filter-trigger-glyph="list-filter"
+						size={17}
+						strokeWidth={2.1}
+					/>
+					{filters.length > 0 ? (
+						<span
+							className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-bold leading-none text-white ring-2 ring-background_light dark:ring-background"
+							data-admin-filter-trigger-count
+						>
+							{filters.length}
+						</span>
+					) : null}
 				</button>
 			</PopoverTrigger>
 			<PopoverContent

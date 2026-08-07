@@ -11,7 +11,6 @@ import {
 	Archive,
 	Check,
 	ChevronRight,
-	Clock3,
 	Folder,
 	FolderInput,
 	Library,
@@ -29,6 +28,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { LibraryLogoImages } from "@/components/library/LibraryIdentity";
+import ThemeSwitcher from "@/components/layout/navbar/ThemeSwitcher";
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Input } from "@/components/nextui/Input";
@@ -241,50 +241,6 @@ function singleKey(keys: "all" | Set<React.Key>) {
 	return typeof value === "string" ? value : null;
 }
 
-function UpdatedSortButton({
-	className,
-	iconOnly = false,
-	onPress,
-	selected,
-	sortDirection,
-}: {
-	className?: string;
-	iconOnly?: boolean;
-	onPress: () => void;
-	selected: boolean;
-	sortDirection: AdminItemViewFilters["sortDirection"];
-}) {
-	const label = `Sort by last updated${
-		selected
-			? `, currently ${
-					sortDirection === "asc" ? "ascending" : "descending"
-				}`
-			: ""
-	}`;
-	const button = (
-		<Button
-			aria-label={label}
-			aria-pressed={selected}
-			className={className}
-			isIconOnly={iconOnly}
-			onPress={onPress}
-			size="xs"
-			startContent={
-				iconOnly ? undefined : <Clock3 aria-hidden size={14} />
-			}
-			variant={selected ? "solid" : "transparent"}
-		>
-			{iconOnly ? <Clock3 aria-hidden size={15} /> : "Last updated"}
-		</Button>
-	);
-
-	return iconOnly ? (
-		<Tooltip content="Sort by last updated">{button}</Tooltip>
-	) : (
-		button
-	);
-}
-
 function errorMessage(error: unknown) {
 	return error instanceof Error ? error.message : "Admin operation failed";
 }
@@ -391,7 +347,7 @@ export default function AdminWorkbench({
 	initialFilters: AdminItemViewFilters;
 }) {
 	const finePointer = useFinePointer();
-	const { navigation } = useLibraryConfig();
+	const { navigation, theme } = useLibraryConfig();
 	const homeHref = getRuntimeHomeHref(navigation.links);
 	const [library, setLibrary] = useState<AdminLibrarySnapshot>({
 		sources: [],
@@ -1670,10 +1626,7 @@ export default function AdminWorkbench({
 		filters.filters,
 		"collections",
 	);
-	const collectionFilter =
-		selectedCollectionFilter === undefined
-			? "all"
-			: selectedCollectionFilter;
+	const collectionFilter = selectedCollectionFilter ?? null;
 	const selectedSourceFilter = singleAdminItemFilterValue(
 		filters.filters,
 		"source",
@@ -1692,12 +1645,12 @@ export default function AdminWorkbench({
 		<main className="fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
 			<h1 className="sr-only">Library administration</h1>
 			<header
-				className="grid min-h-[104px] shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-2 sm:flex sm:min-h-14 sm:py-0"
+				className="grid min-h-28 shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-3 sm:flex sm:min-h-16 xl:relative"
 				data-admin-region="toolbar"
 			>
 				<Link
 					aria-label="Open library"
-					className="col-start-1 row-start-1 flex h-8 min-w-0 max-w-[120px] items-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:mr-1 sm:w-[120px] sm:shrink-0 xl:w-[150px] xl:max-w-none"
+					className="col-start-1 row-start-1 flex h-10 min-w-0 max-w-[120px] items-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:mr-1 sm:w-[120px] sm:shrink-0 xl:absolute xl:left-1/2 xl:mr-0 xl:w-[150px] xl:max-w-none xl:-translate-x-1/2"
 					href={homeHref}
 				>
 					<LibraryLogoImages className="max-h-7 max-w-full object-contain" />
@@ -1794,11 +1747,16 @@ export default function AdminWorkbench({
 						onRetry={() => void searchIndex.retry()}
 						view={searchIndex.view}
 					/>
+					<ThemeSwitcher
+						styleVariant={theme.layout}
+						toolbar
+						variant="inline"
+					/>
 				</div>
 				<Tooltip content="Refresh">
 					<Button
 						aria-label="Refresh"
-						className="hidden text-black/45 hover:bg-black/[0.05] hover:text-black/80 xl:flex dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+						className="hidden h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 xl:flex dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
 						isIconOnly
 						onPress={() => void refreshCurrent()}
 						size="xs"
@@ -1807,16 +1765,9 @@ export default function AdminWorkbench({
 						<RefreshCw aria-hidden size={15} />
 					</Button>
 				</Tooltip>
-				<UpdatedSortButton
-					className="hidden xl:flex"
-					iconOnly
-					onPress={() => changeSort("updated")}
-					selected={filters.sort === "updated"}
-					sortDirection={filters.sortDirection}
-				/>
 				<Button
 					aria-label="New item"
-					className="col-start-3 row-start-1 lg:hidden"
+					className="col-start-3 row-start-1 h-10 min-h-10 rounded-xl lg:hidden"
 					color="accent"
 					isIconOnly
 					onPress={() => setNewItemOpen(true)}
@@ -1826,7 +1777,7 @@ export default function AdminWorkbench({
 					<Plus aria-hidden size={15} />
 				</Button>
 				<Button
-					className="hidden h-9 rounded-xl px-3 font-semibold shadow-sm shadow-accent/10 lg:flex"
+					className="hidden h-10 min-h-10 rounded-xl px-3 font-semibold shadow-sm shadow-accent/10 lg:flex"
 					color="accent"
 					onPress={() => setNewItemOpen(true)}
 					size="xs"
@@ -1864,12 +1815,6 @@ export default function AdminWorkbench({
 								>
 									<RefreshCw aria-hidden size={14} />
 								</Button>
-								<UpdatedSortButton
-									iconOnly
-									onPress={() => changeSort("updated")}
-									selected={filters.sort === "updated"}
-									sortDirection={filters.sortDirection}
-								/>
 							</div>
 							<div className="min-h-0 flex-1">
 								<AdminNavigation
@@ -1886,9 +1831,7 @@ export default function AdminWorkbench({
 											filters: setSingleAdminItemFilter(
 												current.filters,
 												"collections",
-												collection === "all"
-													? null
-													: collection,
+												collection,
 											),
 										}))
 									}

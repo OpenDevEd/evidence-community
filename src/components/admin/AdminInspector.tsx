@@ -67,6 +67,8 @@ import {
 	AdminCollectionPicker,
 } from "./AdminCollectionPicker";
 import { FileStateChip, RecordStateChip } from "./AdminStatus";
+import { AdminSourceWritebackStatus } from "./AdminSourceWritebackStatus";
+import { useAdminSourceWriteback } from "./useAdminSourceWriteback";
 import {
 	computeAdminDraftDiff,
 	EMPTY_ADMIN_DRAFT_DIFF,
@@ -82,6 +84,16 @@ import { firstAdminFieldError, validationTargetId } from "./admin-validation";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 
 type SaveState = "conflict" | "error" | "idle" | "saved" | "saving";
+
+const writebackUnavailableMessage = {
+	"item-locked": "Writeback is locked for this record.",
+	"not-linked": "This record is not linked to a writeback source.",
+	ok: "This record is read only.",
+	"source-disabled": "Writeback is disabled for this source.",
+	"source-paused": "This record's source is paused.",
+	"source-removed": "This record's source has been removed.",
+	"unsupported-provider": "This source type does not support writeback.",
+} as const;
 
 const inspectorInputClassNames = {
 	input: "text-sm",
@@ -1504,6 +1516,11 @@ export function AdminInspector({
 	const { entries: publishedCollectionEntries } = useResolvedAdminCollections(
 		diff.collections ?? [],
 	);
+	const sourceWriteback = useAdminSourceWriteback(
+		detail?.key ?? null,
+		detail?.writeback?.sourceKey ?? null,
+		detail?.revision ?? null,
+	);
 	const publishedCollectionNames = useMemo(
 		() =>
 			new Map(
@@ -1606,7 +1623,13 @@ export function AdminInspector({
 							</p>
 						</div>
 						{!detail.editable ? (
-							<Tooltip content="This source is not configured for writeback">
+							<Tooltip
+								content={
+									writebackUnavailableMessage[
+										detail.writeback?.reason ?? "not-linked"
+									]
+								}
+							>
 								<Lock
 									aria-label="Read only"
 									className="mt-1 text-black/35 dark:text-white/35"
@@ -1618,6 +1641,20 @@ export function AdminInspector({
 					<div className="mt-2 flex flex-wrap items-center gap-1.5">
 						<RecordStateChip state={detail.state} />
 						<FileStateChip state={detail.fileState} />
+						{detail.writeback?.sourceKey ? (
+							<AdminSourceWritebackStatus
+								error={sourceWriteback.error}
+								loading={sourceWriteback.loading}
+								onRefresh={() => void sourceWriteback.refresh()}
+								onRetry={() => void sourceWriteback.retry()}
+								retrying={sourceWriteback.retrying}
+								sourceLabel={
+									detail.writeback.sourceLabel ??
+									detail.writeback.sourceKey
+								}
+								status={sourceWriteback.status}
+							/>
+						) : null}
 						<SaveIndicator
 							message={saveMessage}
 							onReload={onReloadDraft}

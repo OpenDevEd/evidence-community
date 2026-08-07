@@ -8,16 +8,22 @@ import { IoMdSunny } from "react-icons/io";
 import { DropdownItem } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
+import { Tooltip } from "@/components/nextui/Tooltip";
 import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 import type { NavbarElementProps } from "@/types/navbar";
 
 const subscribeToHydration = () => () => {};
 
+type ThemeSwitcherProps = NavbarElementProps & {
+	toolbar?: boolean;
+};
+
 export default function ThemeSwitcher({
 	variant,
 	styleVariant,
 	showLabel,
-}: NavbarElementProps) {
+	toolbar = false,
+}: ThemeSwitcherProps) {
 	const mounted = useSyncExternalStore(
 		subscribeToHydration,
 		() => true,
@@ -58,23 +64,31 @@ export default function ThemeSwitcher({
 	}
 
 	// Inline variant - standalone button
-	return (
+	const button = (
 		<Button
-			variant="invisible"
-			disableRipple
-			onPress={toggleTheme}
 			aria-label={label}
-			className="flex items-center justify-center gap-2"
+			className={twMerge(
+				"flex items-center justify-center gap-2",
+				toolbar &&
+					"h-10 min-h-10 w-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80",
+			)}
+			disableRipple
+			isIconOnly={toolbar}
+			onPress={toggleTheme}
+			size={toolbar ? "xs" : undefined}
+			variant={toolbar ? "transparent" : "invisible"}
 		>
 			<IoMdSunny
 				className={twMerge(
-					"size-5 fill-accent transition-all",
+					toolbar ? "size-4" : "size-5",
+					"fill-accent transition-all",
 					"dark:block hidden"
 				)}
 			/>
 			<HiOutlineMoon
 				className={twMerge(
-					"size-5 stroke-accent transition-all",
+					toolbar ? "size-4" : "size-5",
+					"stroke-accent transition-all",
 					"dark:hidden block"
 				)}
 			/>
@@ -106,4 +120,6 @@ export default function ThemeSwitcher({
 			)}
 		</Button>
 	);
+
+	return toolbar ? <Tooltip content={label}>{button}</Tooltip> : button;
 }

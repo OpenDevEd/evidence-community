@@ -286,6 +286,7 @@ async function mockPublishedBook(
 		}) => Promise<Record<string, unknown> | void>;
 		failDraftSave?: boolean;
 		itemCount?: number;
+		itemPageSize?: number;
 		initialCollectionKeys?: string[];
 		listFailure?: boolean;
 		listFailureCount?: number;
@@ -315,6 +316,7 @@ async function mockPublishedBook(
 		...(options.additionalCollectionEntries ?? []),
 	];
 	const itemCount = options.itemCount ?? 1;
+	const itemPageSize = options.itemPageSize ?? itemCount;
 	let remainingListFailures = options.listFailure
 		? Number.POSITIVE_INFINITY
 		: (options.listFailureCount ?? 0);
@@ -472,24 +474,31 @@ async function mockPublishedBook(
 				});
 				return;
 			}
+			const offset = Number(requestUrl.searchParams.get("cursor") ?? 0);
+			const nextOffset = Math.min(itemCount, offset + itemPageSize);
 			await route.fulfill({
 				json: {
-					hasMore: false,
-					items: Array.from({ length: itemCount }, (_, index) =>
-						publishedListRow({
-							...options.listRowOverrides,
-							key:
-								index === 0
-									? publishedItemKey
-									: `ROW${String(index).padStart(5, "0")}`,
-							state: editing ? "edited" : "published",
-							title:
-								index === 0
-									? publishedPayload.title
-									: `Published book ${index + 1}`,
-						}),
+					hasMore: nextOffset < itemCount,
+					items: Array.from(
+						{ length: nextOffset - offset },
+						(_, pageIndex) => {
+							const index = offset + pageIndex;
+							return publishedListRow({
+								...options.listRowOverrides,
+								key:
+									index === 0
+										? publishedItemKey
+										: `ROW${String(index).padStart(5, "0")}`,
+								state: editing ? "edited" : "published",
+								title:
+									index === 0
+										? publishedPayload.title
+										: `Published book ${index + 1}`,
+							});
+						},
 					),
-					nextCursor: null,
+					nextCursor:
+						nextOffset < itemCount ? String(nextOffset) : null,
 				},
 			});
 			return;
@@ -567,6 +576,209 @@ async function mockPublishedBook(
 		},
 	};
 }
+
+test("edits an imported record and shows its writeback lifecycle", async ({
+	page,
+}) => {
+	await mockCompletedIndexing(page);
+	await mockPublishedBook(page, {
+		additionalSources: [importedSource],
+		listRowOverrides: { sourceConnectionKey: importedSource.key },
+	});
+	let editing = false;
+	let draftRevision = 1;
+	let revision = 7;
+	let writebackStarted = false;
+	let forceFailure = false;
+	let retryRequests = 0;
+	let statusRequests = 0;
+	let draftPayload = structuredClone(publishedPayload);
+	const draft = () => ({
+		baseRevision: revision,
+		createdAt: timestamp,
+		draftRevision,
+		itemKey: publishedItemKey,
+		patch: {},
+		payload: draftPayload,
+		sourceConnectionKey: importedSource.key,
+		updatedAt: timestamp,
+	});
+	const detail = () => ({
+		...publishedDetail(editing, draftPayload, draftRevision),
+		draft: editing ? draft() : null,
+		editable: true,
+		revision,
+		sourceConnectionKey: importedSource.key,
+		state: editing ? "edited" : "published",
+		title: String(draftPayload.title),
+		writeback: {
+			effective: true,
+			itemEnabled: true,
+			reason: "ok",
+			sourceEnabled: true,
+			sourceKey: importedSource.key,
+			sourceLabel: importedSource.label,
+			sourceStatus: "active",
+			supported: true,
+		},
+	});
+
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/writeback/status`,
+		async (route) => {
+			const states = ["queued", "sending", "synced"] as const;
+			const state = forceFailure
+				? "failed"
+				: writebackStarted
+					? states[Math.min(statusRequests++, states.length - 1)]
+					: "synced";
+			await route.fulfill({
+				json: {
+					status: {
+						attempts: 0,
+						canonicalRevision: revision,
+						error: forceFailure
+							? "Zotero rejected the update."
+							: null,
+						jobId: 91,
+						nextAttemptAt: timestamp,
+						processedAt: state === "synced" ? timestamp : null,
+						sourceKey: importedSource.key,
+						state,
+					},
+				},
+			});
+		},
+	);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/writeback/retry`,
+		async (route) => {
+			retryRequests += 1;
+			forceFailure = false;
+			writebackStarted = true;
+			statusRequests = 1;
+			await route.fulfill({
+				json: {
+					status: {
+						attempts: 0,
+						canonicalRevision: revision,
+						error: null,
+						jobId: 91,
+						nextAttemptAt: timestamp,
+						processedAt: null,
+						sourceKey: importedSource.key,
+						state: "queued",
+					},
+				},
+			});
+		},
+	);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/draft`,
+		async (route) => {
+			if (route.request().method() === "POST") {
+				editing = true;
+				await route.fulfill({ json: { draft: draft() } });
+				return;
+			}
+			if (route.request().method() === "PUT") {
+				draftPayload = route.request().postDataJSON().payload;
+				draftRevision += 1;
+				await route.fulfill({ json: { draft: draft() } });
+				return;
+			}
+			await route.fulfill({ status: 405 });
+		},
+	);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/publish`,
+		async (route) => {
+			editing = false;
+			revision += 1;
+			writebackStarted = true;
+			statusRequests = 0;
+			await route.fulfill({
+				json: { indexingReceipts: [], item: draftPayload },
+			});
+		},
+	);
+	await page.route(`**/api/admin/items/${publishedItemKey}`, async (route) =>
+		route.fulfill({ json: { item: detail() } }),
+	);
+
+	await page.goto("/admin");
+	await expect(
+		page.getByRole("button", { name: `${importedSource.label}: Synced` }),
+	).toBeVisible();
+	await page.getByRole("button", { name: "Edit", exact: true }).click();
+	const title = page.getByRole("textbox", { name: "Title", exact: true });
+	await expect(title).toBeEnabled();
+	await title.fill("Imported edit for writeback");
+	await expect(page.getByText("Saved", { exact: true })).toBeVisible();
+	await page.getByRole("button", { name: "Publish", exact: true }).click();
+
+	const status = page.locator("[data-admin-writeback-status]");
+	await expect(status).toHaveAttribute(
+		"data-admin-writeback-status",
+		"queued",
+	);
+	await expect(status).toHaveAttribute(
+		"data-admin-writeback-status",
+		"sending",
+		{ timeout: 5_000 },
+	);
+	await expect(status).toHaveAttribute(
+		"data-admin-writeback-status",
+		"synced",
+		{ timeout: 5_000 },
+	);
+
+	await status.click();
+	const popover = page.locator("[data-admin-writeback-popover]");
+	await expect(popover).toBeVisible();
+	const geometry = await popover.evaluate((element) => {
+		const content = element.firstElementChild as HTMLElement;
+		const inner = content.firstElementChild as HTMLElement;
+		const chip = document.querySelector<HTMLElement>(
+			"[data-admin-writeback-status]",
+		)!;
+		const icon = chip.querySelector("svg")!;
+		return {
+			chipHeight: getComputedStyle(chip).height,
+			iconHeight: getComputedStyle(icon).height,
+			innerPadding: [
+				getComputedStyle(inner).paddingTop,
+				getComputedStyle(inner).paddingRight,
+				getComputedStyle(inner).paddingBottom,
+				getComputedStyle(inner).paddingLeft,
+			],
+			width: getComputedStyle(content).width,
+		};
+	});
+	expect(geometry).toEqual({
+		chipHeight: "24px",
+		iconHeight: "12px",
+		innerPadding: ["12px", "12px", "12px", "12px"],
+		width: "256px",
+	});
+
+	forceFailure = true;
+	writebackStarted = false;
+	await page.reload();
+	const failedStatus = page.locator('[data-admin-writeback-status="failed"]');
+	await expect(failedStatus).toBeVisible();
+	await failedStatus.click();
+	await expect(page.getByText("Zotero rejected the update.")).toBeVisible();
+	await page
+		.getByRole("button", { name: "Retry writeback", exact: true })
+		.click();
+	await expect.poll(() => retryRequests).toBe(1);
+	await expect(page.locator("[data-admin-writeback-status]")).toHaveAttribute(
+		"data-admin-writeback-status",
+		"synced",
+		{ timeout: 5_000 },
+	);
+});
 
 test("searches and assigns records with the collection picker", async ({
 	page,
@@ -1077,11 +1289,101 @@ test("moves a collection to a searched destination at the end", async ({
 	await indexing.expectTracked(receipt);
 });
 
+test("switches the admin workbench between light and dark themes", async ({
+	page,
+}) => {
+	await page.emulateMedia({ colorScheme: "dark" });
+	await mockPublishedBook(page);
+	await page.goto("/admin");
+
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				document.documentElement.classList.contains("dark"),
+			),
+		)
+		.toBe(true);
+	const switcher = page.getByRole("button", {
+		name: /Switch to light(?: mode)?/u,
+	});
+	await expect(switcher).toBeVisible();
+	await switcher.click();
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				document.documentElement.classList.contains("dark"),
+			),
+		)
+		.toBe(false);
+	await expect(
+		page.getByRole("button", { name: /Switch to dark(?: mode)?/u }),
+	).toBeVisible();
+});
+
 test("persists advanced typed filters in the URL", async ({ page }) => {
 	test.setTimeout(45_000);
 	const listRequests: URL[] = [];
 	await mockPublishedBook(page, {
 		onListRequest: (url) => listRequests.push(url),
+	});
+	const measureFilterTrigger = () =>
+		page.locator("[data-admin-filter-trigger]").evaluate((trigger) => {
+			const colorChannels = (value: string) =>
+				(value.match(/[\d.]+/gu) ?? []).slice(0, 3).map(Number);
+			const sameChannels = (left: string, right: string) =>
+				colorChannels(left).every(
+					(channel, index) => channel === colorChannels(right)[index],
+				);
+			const icon = trigger.querySelector<HTMLElement>(
+				"[data-admin-filter-trigger-icon]",
+			)!;
+			const count = trigger.querySelector<HTMLElement>(
+				"[data-admin-filter-trigger-count]",
+			);
+			const glyph = trigger.querySelector<SVGElement>(
+				"[data-admin-filter-trigger-glyph]",
+			)!;
+			const rootStyle = getComputedStyle(document.documentElement);
+			const accent = `rgb(${rootStyle.getPropertyValue("--color-accent-500").trim().replaceAll(" ", ", ")})`;
+			const triggerStyle = getComputedStyle(trigger);
+			const iconRect = icon.getBoundingClientRect();
+			return {
+				active: trigger.getAttribute("data-active"),
+				backgroundIsTransparent:
+					triggerStyle.backgroundColor === "rgba(0, 0, 0, 0)",
+				backgroundUsesAccent: sameChannels(
+					triggerStyle.backgroundColor,
+					accent,
+				),
+				borderUsesAccent: sameChannels(
+					triggerStyle.borderColor,
+					accent,
+				),
+				borderWidth: triggerStyle.borderWidth,
+				countFontWeight: count
+					? Number(getComputedStyle(count).fontWeight)
+					: null,
+				glyph: glyph.getAttribute("data-admin-filter-trigger-glyph"),
+				height: trigger.getBoundingClientRect().height,
+				iconSize: [iconRect.width, iconRect.height],
+				padding: triggerStyle.padding,
+				width: trigger.getBoundingClientRect().width,
+			};
+		});
+
+	await page.goto("/admin");
+	expect(await measureFilterTrigger()).toEqual({
+		active: "false",
+		backgroundIsTransparent: false,
+		backgroundUsesAccent: false,
+		borderUsesAccent: false,
+		borderWidth: "1px",
+		countFontWeight: null,
+		glyph: "list-filter",
+		height: 40,
+		iconSize: [17, 17],
+		padding: "0px",
+		width: 40,
 	});
 	const initialFilters = encodeURIComponent(
 		JSON.stringify([
@@ -1099,6 +1401,19 @@ test("persists advanced typed filters in the URL", async ({ page }) => {
 	await expect(
 		page.getByRole("button", { name: "Filters, 1 active", exact: true }),
 	).toBeVisible();
+	expect(await measureFilterTrigger()).toEqual({
+		active: "true",
+		backgroundIsTransparent: false,
+		backgroundUsesAccent: true,
+		borderUsesAccent: true,
+		borderWidth: "1px",
+		countFontWeight: 700,
+		glyph: "list-filter",
+		height: 40,
+		iconSize: [17, 17],
+		padding: "0px",
+		width: 40,
+	});
 	await expect
 		.poll(() => listRequests.at(-1)?.searchParams.get("search"))
 		.toBe("teacher");
@@ -1106,6 +1421,10 @@ test("persists advanced typed filters in the URL", async ({ page }) => {
 	await page
 		.getByRole("button", { name: "Filters, 1 active", exact: true })
 		.click();
+	await expect(page.locator("[data-admin-filter-trigger]")).toHaveAttribute(
+		"aria-expanded",
+		"true",
+	);
 	const dialog = page.getByRole("dialog", { name: "Filter records" });
 	const filterGeometry = await dialog.evaluate((element) => {
 		const surface = element.querySelector<HTMLElement>(
@@ -1464,6 +1783,56 @@ test("filters by searched native and imported collections without loading an opt
 				value: [teacherCollection.key, importedCollection.key],
 			},
 		]);
+});
+
+test("toggles collection filters directly from the catalogue", async ({
+	page,
+}) => {
+	const listRequests: URL[] = [];
+	await mockPublishedBook(page, {
+		onListRequest: (url) => listRequests.push(url),
+	});
+	await page.goto("/admin");
+
+	await expect(
+		page.getByRole("button", { name: "All collections", exact: true }),
+	).toHaveCount(0);
+	const collection = page
+		.locator('[data-collection-key="TEACHDEV"]')
+		.getByRole("treeitem");
+	await expect(collection).toHaveAttribute("aria-selected", "false");
+	await collection.click();
+	await expect(collection).toHaveAttribute("aria-selected", "true");
+	await expect(
+		page.getByRole("button", { name: "Filters, 1 active", exact: true }),
+	).toBeVisible();
+	await expect
+		.poll(() => {
+			const filters = new URL(page.url()).searchParams.get("filters");
+			return filters ? JSON.parse(filters) : null;
+		})
+		.toEqual([
+			{
+				column: "collections",
+				operator: "anyOf",
+				value: [teacherCollection.key],
+			},
+		]);
+
+	await collection.click();
+	await expect(collection).toHaveAttribute("aria-selected", "false");
+	await expect(
+		page.getByRole("button", { name: "Filters", exact: true }),
+	).toBeVisible();
+	await expect
+		.poll(() => new URL(page.url()).searchParams.get("filters"))
+		.toBeNull();
+	await expect
+		.poll(() => {
+			const filters = listRequests.at(-1)?.searchParams.get("filters");
+			return filters ? JSON.parse(filters) : null;
+		})
+		.toEqual([]);
 });
 
 async function mockBookWithAttachment(
@@ -1976,7 +2345,9 @@ test("autosaves against the exact draft payload the editor saw", async ({
 	expect(saves[0]?.next.title).toBe("Locally edited title");
 });
 
-test("rebases an autosave queued behind an in-flight save", async ({ page }) => {
+test("rebases an autosave queued behind an in-flight save", async ({
+	page,
+}) => {
 	let releaseFirstSave: (() => void) | undefined;
 	const firstSaveStarted = new Promise<void>((resolve) => {
 		releaseFirstSave = resolve;
@@ -3188,6 +3559,23 @@ test("keeps admin chrome on one computed spacing system", async ({ page }) => {
 		const newItem = [...document.querySelectorAll("button")].find(
 			(button) => button.textContent?.trim() === "New item",
 		)!;
+		const navbarControls = [
+			document.querySelector<HTMLElement>('[data-slot="input-wrapper"]')!,
+			document.querySelector<HTMLElement>("[data-admin-filter-trigger]")!,
+			document.querySelector<HTMLElement>(
+				"[data-admin-search-index-status]",
+			)!,
+			...[...toolbar.querySelectorAll<HTMLElement>("button")].filter(
+				(button) =>
+					button.offsetParent !== null &&
+					[
+						"Refresh",
+						"Switch to dark mode",
+						"Switch to light mode",
+					].includes(button.getAttribute("aria-label") ?? ""),
+			),
+			newItem,
+		];
 		const edit = [...document.querySelectorAll("button")].find(
 			(button) => button.textContent?.trim() === "Edit",
 		)!;
@@ -3216,10 +3604,32 @@ test("keeps admin chrome on one computed spacing system", async ({ page }) => {
 				'button[aria-label="Manage Teacher development"]',
 			).length,
 			contentTop: content.getBoundingClientRect().top,
+			contentGap: Number.parseFloat(getComputedStyle(content).gap),
+			contentPaddingBottom: Number.parseFloat(
+				getComputedStyle(content).paddingBottom,
+			),
+			contentPaddingLeft: Number.parseFloat(
+				getComputedStyle(content).paddingLeft,
+			),
 			lightSelectedBackground,
+			navbarControlBottoms: navbarControls.map(
+				(element) => element.getBoundingClientRect().bottom,
+			),
+			navbarControlHeights: navbarControls.map(
+				(element) => element.getBoundingClientRect().height,
+			),
+			navbarControlTops: navbarControls.map(
+				(element) => element.getBoundingClientRect().top,
+			),
 			recordGap: Number.parseFloat(getComputedStyle(recordTitle).gap),
 			recordHeight: recordRow.getBoundingClientRect().height,
 			recordRowDisplay: getComputedStyle(recordRow).display,
+			paneBottom: document
+				.querySelector<HTMLElement>("#admin-navigation-pane")!
+				.getBoundingClientRect().bottom,
+			paneLeft: document
+				.querySelector<HTMLElement>("#admin-navigation-pane")!
+				.getBoundingClientRect().left,
 			tableControlsHeight: tableControls.getBoundingClientRect().height,
 			tableDisplay: getComputedStyle(tableHeader).display,
 			tableHeaderHeight: tableHeader.getBoundingClientRect().height,
@@ -3228,8 +3638,22 @@ test("keeps admin chrome on one computed spacing system", async ({ page }) => {
 		};
 	});
 
-	expect(measurements.toolbarHeight).toBe(56);
-	expect(measurements.contentTop).toBe(56);
+	expect(measurements.toolbarHeight).toBe(64);
+	expect(measurements.contentTop).toBe(64);
+	expect(measurements.contentGap).toBe(12);
+	expect(measurements.contentPaddingBottom).toBe(12);
+	expect(measurements.contentPaddingLeft).toBe(12);
+	expect(measurements.paneBottom).toBe(788);
+	expect(measurements.paneLeft).toBe(12);
+	expect(measurements.navbarControlHeights).toEqual(
+		measurements.navbarControlHeights.map(() => 40),
+	);
+	expect(measurements.navbarControlTops).toEqual(
+		measurements.navbarControlTops.map(() => 12),
+	);
+	expect(measurements.navbarControlBottoms).toEqual(
+		measurements.navbarControlBottoms.map(() => 52),
+	);
 	expect(measurements.recordHeight).toBe(56);
 	expect(measurements.recordGap).toBe(8);
 	expect(measurements.tableControlsHeight).toBe(40);
@@ -3245,6 +3669,14 @@ test("keeps admin chrome on one computed spacing system", async ({ page }) => {
 	expect(measurements.collectionManageButtonCount).toBe(1);
 	expect(measurements.lightSelectedBackground).not.toBe("rgba(0, 0, 0, 0)");
 	expect(measurements.validationBackground).not.toBe("rgba(0, 0, 0, 0)");
+	await expect(
+		page.getByRole("button", { name: /Sort by last updated/u }),
+	).toHaveCount(0);
+	const updatedHeader = page.locator('thead th[data-column-id="updated"]');
+	await expect(updatedHeader).toHaveAttribute("aria-sort", "descending");
+	await expect(
+		updatedHeader.getByRole("button", { name: "Updated", exact: true }),
+	).toBeVisible();
 
 	const collection = page.locator('[data-collection-key="TEACHDEV"]');
 	await collection.hover();
@@ -3762,6 +4194,79 @@ test("virtualizes large record sets while keeping rows horizontal and key column
 	expect(geometry.titleLeft).toBeCloseTo(geometry.scrollLeftEdge + 44, 0);
 	expect(geometry.titleBackground).not.toBe("rgba(0, 0, 0, 0)");
 	expect(geometry.documentOverflow).toBe(0);
+});
+
+test("places record pagination at the actual end of the scrollable list", async ({
+	page,
+}) => {
+	const listRequests: URL[] = [];
+	await mockPublishedBook(page, {
+		itemCount: 120,
+		itemPageSize: 60,
+		onListRequest: (url) => listRequests.push(url),
+	});
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await page.goto("/admin");
+	await expect(
+		page.getByRole("heading", { name: "Published book" }),
+	).toBeVisible();
+
+	const scroll = page.locator("[data-admin-item-table-scroll]");
+	const loadMoreRegion = page.locator("[data-admin-item-table-load-more]");
+	const loadMore = loadMoreRegion.getByRole("button", {
+		name: "Load more",
+	});
+	await expect(loadMore).toBeAttached();
+	await expect(loadMore).not.toBeInViewport();
+	expect(
+		await loadMoreRegion.evaluate(
+			(element) =>
+				element.parentElement?.hasAttribute(
+					"data-admin-item-table-scroll",
+				) ?? false,
+		),
+	).toBe(true);
+
+	await scroll.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+		element.scrollLeft = 260;
+		element.dispatchEvent(new Event("scroll"));
+	});
+	await expect(loadMore).toBeInViewport();
+	const endGeometry = await page.evaluate(() => {
+		const scrollElement = document.querySelector<HTMLElement>(
+			"[data-admin-item-table-scroll]",
+		)!;
+		const region = document.querySelector<HTMLElement>(
+			"[data-admin-item-table-load-more]",
+		)!;
+		const lastRow = document.querySelector<HTMLElement>(
+			'tr[data-record-key="ROW00059"]',
+		)!;
+		const scrollRect = scrollElement.getBoundingClientRect();
+		const regionRect = region.getBoundingClientRect();
+		return {
+			lastRowBottom: lastRow.getBoundingClientRect().bottom,
+			position: getComputedStyle(region).position,
+			regionLeft: regionRect.left,
+			regionTop: regionRect.top,
+			regionWidth: regionRect.width,
+			scrollLeft: scrollRect.left,
+			scrollWidth: scrollRect.width,
+		};
+	});
+	expect(endGeometry.position).toBe("sticky");
+	expect(endGeometry.regionTop).toBeCloseTo(endGeometry.lastRowBottom, 0);
+	expect(endGeometry.regionLeft).toBeCloseTo(endGeometry.scrollLeft, 0);
+	expect(endGeometry.regionWidth).toBe(endGeometry.scrollWidth);
+	await loadMore.click();
+	await expect(loadMoreRegion).toHaveCount(0);
+	await expect(
+		page.getByRole("grid", { name: "Library records" }),
+	).toHaveAttribute("aria-rowcount", "121");
+	await expect
+		.poll(() => listRequests.at(-1)?.searchParams.get("cursor"))
+		.toBe("60");
 });
 
 test("navigates one stable grid tab stop through virtualized cells", async ({
