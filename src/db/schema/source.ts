@@ -1,5 +1,7 @@
 import {
 	collectionIdentity,
+	collectionSourceLink,
+	collectionSourceSnapshot,
 	createItemFilePublicationTable,
 	createSourceRecordTables,
 	itemFileDraft,
@@ -22,6 +24,8 @@ import { item } from "./tables/item";
 
 export {
 	collectionIdentity,
+	collectionSourceLink,
+	collectionSourceSnapshot,
 	itemFileDraft,
 	itemDraft,
 	itemIdentity,
@@ -48,6 +52,7 @@ export const sourceConnectionRelations = relations(
 	({ many }) => ({
 		items: many(item),
 		itemSourceLinks: many(itemSourceLink),
+		collectionSourceLinks: many(collectionSourceLink),
 		collections: many(collection),
 		aliases: many(sourceRecordAlias),
 		syncRuns: many(sourceSyncRun),
@@ -111,6 +116,42 @@ export const itemSourceLinkRelations = relations(
 	}),
 );
 
+export const collectionSourceSnapshotRelations = relations(
+	collectionSourceSnapshot,
+	({ one }) => ({
+		collection: one(collection, {
+			fields: [collectionSourceSnapshot.collectionKey],
+			references: [collection.key],
+		}),
+		collectionSourceLink: one(collectionSourceLink, {
+			fields: [
+				collectionSourceSnapshot.collectionKey,
+				collectionSourceSnapshot.sourceConnectionKey,
+			],
+			references: [
+				collectionSourceLink.collectionKey,
+				collectionSourceLink.sourceConnectionKey,
+			],
+		}),
+	}),
+);
+
+export const collectionSourceLinkRelations = relations(
+	collectionSourceLink,
+	({ one, many }) => ({
+		sourceConnection: one(sourceConnection, {
+			fields: [collectionSourceLink.sourceConnectionKey],
+			references: [sourceConnection.key],
+		}),
+		collection: one(collection, {
+			fields: [collectionSourceLink.collectionKey],
+			references: [collection.key],
+		}),
+		snapshots: many(collectionSourceSnapshot),
+		writebackJobs: many(sourceWritebackJob),
+	}),
+);
+
 export const sourceWritebackJobRelations = relations(
 	sourceWritebackJob,
 	({ one }) => ({
@@ -130,6 +171,20 @@ export const sourceWritebackJobRelations = relations(
 			references: [
 				itemSourceLink.itemKey,
 				itemSourceLink.sourceConnectionKey,
+			],
+		}),
+		collection: one(collection, {
+			fields: [sourceWritebackJob.collectionKey],
+			references: [collection.key],
+		}),
+		collectionSourceLink: one(collectionSourceLink, {
+			fields: [
+				sourceWritebackJob.collectionKey,
+				sourceWritebackJob.sourceConnectionKey,
+			],
+			references: [
+				collectionSourceLink.collectionKey,
+				collectionSourceLink.sourceConnectionKey,
 			],
 		}),
 	}),

@@ -242,6 +242,42 @@ async function verify() {
 				('GGGG2345', 'zotero-beta', 'FFFF2345', 'Beta collision collection')
 		`);
 
+		await client.query(`
+			INSERT INTO "collectionSourceLink"
+				("collectionKey", "sourceConnectionKey", "sourceRecordKey")
+			VALUES
+				('FFFF2345', 'zotero-alpha', 'FFFF2345'),
+				('GGGG2345', 'zotero-beta', 'FFFF2345')
+		`);
+
+		await expectConstraintViolation(
+			"native collection source-link rejection",
+			"collectionSourceLink_remote_only",
+			() =>
+				client.query(`
+					INSERT INTO "collectionSourceLink"
+						("collectionKey", "sourceConnectionKey", "sourceRecordKey")
+					VALUES ('FFFF2345', 'native', 'FFFF2345')
+				`),
+		);
+
+		await client.query(`
+			UPDATE "collectionSourceLink"
+			SET "writebackEnabled" = true
+			WHERE "collectionKey" = 'FFFF2345'
+				AND "sourceConnectionKey" = 'zotero-alpha'
+		`);
+		await expectConstraintViolation(
+			"single writeback link per collection",
+			"collectionSourceLink_one_writeback_per_collection",
+			() =>
+				client.query(`
+					INSERT INTO "collectionSourceLink"
+						("collectionKey", "sourceConnectionKey", "sourceRecordKey", "writebackEnabled")
+					VALUES ('FFFF2345', 'zotero-beta', 'SECOND-COLLECTION', true)
+				`),
+		);
+
 		await expectConstraintViolation(
 			"canonical collection key format",
 			"collectionIdentity_key_format",
@@ -281,6 +317,48 @@ async function verify() {
 			VALUES
 				('AAAA2345', 'zotero-alpha', '{"key":"AAAA2345"}', repeat('a', 64), '1', now())
 		`);
+
+		await client.query(`
+			INSERT INTO "collectionSourceSnapshot"
+				("collectionKey", "sourceConnectionKey", "payload", "payloadHash", "remoteVersion", "fetchedAt")
+			VALUES
+				('FFFF2345', 'zotero-alpha', '{"key":"FFFF2345"}', repeat('b', 64), '1', now())
+		`);
+
+		await client.query(`
+			INSERT INTO "sourceWritebackJob"
+				("itemKey", "sourceConnectionKey", "operation", "canonicalRevision", "idempotencyKey")
+			VALUES
+				('AAAA2345', 'zotero-alpha', 'upsert', 1, 'source-writeback:item:zotero-alpha:AAAA2345:1:upsert')
+		`);
+		await client.query(`
+			INSERT INTO "sourceWritebackJob"
+				("collectionKey", "sourceConnectionKey", "operation", "canonicalRevision", "idempotencyKey")
+			VALUES
+				('FFFF2345', 'zotero-alpha', 'upsert', 1, 'source-writeback:collection:zotero-alpha:FFFF2345:1:upsert')
+		`);
+		await expectConstraintViolation(
+			"collection writeback revision idempotency",
+			"sourceWritebackJob_collection_revision_unique",
+			() =>
+				client.query(`
+					INSERT INTO "sourceWritebackJob"
+						("collectionKey", "sourceConnectionKey", "operation", "canonicalRevision", "idempotencyKey")
+					VALUES
+						('FFFF2345', 'zotero-alpha', 'upsert', 1, 'duplicate-collection-revision')
+				`),
+		);
+		await expectConstraintViolation(
+			"writeback job entity exclusivity",
+			"sourceWritebackJob_one_entity",
+			() =>
+				client.query(`
+					INSERT INTO "sourceWritebackJob"
+						("itemKey", "collectionKey", "sourceConnectionKey", "operation", "canonicalRevision", "idempotencyKey")
+					VALUES
+						('AAAA2345', 'FFFF2345', 'zotero-alpha', 'upsert', 2, 'invalid-two-entity-job')
+				`),
+		);
 
 		await client.query(`
 			INSERT INTO "sourceRecordAlias"

@@ -45,7 +45,11 @@ const MAX_ERROR_LENGTH = 32 * 1_024;
 export const DEFAULT_SOURCE_WRITEBACK_MAX_JOBS = 10_000;
 export const MAX_SOURCE_WRITEBACK_JOBS = 1_000_000;
 
-type ClaimedJob = typeof sourceWritebackJob.$inferSelect;
+type SourceWritebackJobRow = typeof sourceWritebackJob.$inferSelect;
+type ClaimedJob = Omit<SourceWritebackJobRow, "collectionKey" | "itemKey"> & {
+	collectionKey: null;
+	itemKey: string;
+};
 
 export type SourceWritebackConsumerOptions = {
 	credentialResolver?: SourceCredentialResolver;
@@ -207,6 +211,8 @@ async function claimJob(
 			.from(sourceWritebackJob)
 			.where(
 				and(
+					isNotNull(sourceWritebackJob.itemKey),
+					isNull(sourceWritebackJob.collectionKey),
 					isNull(sourceWritebackJob.processedAt),
 					isNull(sourceWritebackJob.deadLetteredAt),
 					lte(sourceWritebackJob.nextAttemptAt, claimedAt),
@@ -242,6 +248,11 @@ async function claimJob(
 			.for("update", { skipLocked: true })
 			.limit(1);
 		if (!candidate) return null;
+		if (!candidate.itemKey || candidate.collectionKey !== null) {
+			throw new Error(
+				"Claimed a non-item writeback job in the item worker",
+			);
+		}
 
 		// The candidate query and the advisory lock can observe different
 		// READ COMMITTED snapshots. Re-check after acquiring the stream lock so
@@ -274,7 +285,12 @@ async function claimJob(
 			})
 			.where(eq(sourceWritebackJob.id, candidate.id))
 			.returning();
-		return claimed!;
+		if (!claimed?.itemKey || claimed.collectionKey !== null) {
+			throw new Error(
+				"Claimed writeback job changed entity while leasing",
+			);
+		}
+		return claimed as ClaimedJob;
 	});
 }
 

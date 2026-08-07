@@ -406,13 +406,96 @@ export const itemSourceLink = pgTable(
 	],
 );
 
+export const collectionSourceLink = pgTable(
+	"collectionSourceLink",
+	{
+		collectionKey: varchar("collectionKey", { length: 8 })
+			.notNull()
+			.references(() => collectionIdentity.key, { onDelete: "cascade" }),
+		sourceConnectionKey: varchar("sourceConnectionKey", { length: 64 })
+			.notNull()
+			.references(() => sourceConnection.key, {
+				onDelete: "cascade",
+				onUpdate: "cascade",
+			}),
+		sourceRecordKey: varchar("sourceRecordKey", { length: 512 }).notNull(),
+		remoteVersion: varchar("remoteVersion", { length: 255 }),
+		remoteDeleted: boolean("remoteDeleted").notNull().default(false),
+		lastAcknowledgedRemoteVersion: varchar(
+			"lastAcknowledgedRemoteVersion",
+			{ length: 255 },
+		),
+		dirtyFields: jsonb("dirtyFields")
+			.$type<string[]>()
+			.notNull()
+			.default([]),
+		writebackEnabled: boolean("writebackEnabled").notNull().default(false),
+		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
+		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
+	},
+	(table) => [
+		primaryKey({
+			columns: [table.collectionKey, table.sourceConnectionKey],
+		}),
+		check(
+			"collectionSourceLink_remote_only",
+			sql`${table.sourceConnectionKey} <> 'native'`,
+		),
+		check(
+			"collectionSourceLink_dirty_fields_array",
+			sql`jsonb_typeof(${table.dirtyFields}) = 'array'`,
+		),
+		unique("collectionSourceLink_source_record_unique").on(
+			table.sourceConnectionKey,
+			table.sourceRecordKey,
+		),
+		uniqueIndex("collectionSourceLink_one_writeback_per_collection")
+			.on(table.collectionKey)
+			.where(sql`${table.writebackEnabled} = true`),
+		index("collectionSourceLink_connection_idx").on(
+			table.sourceConnectionKey,
+		),
+	],
+);
+
+export const collectionSourceSnapshot = pgTable(
+	"collectionSourceSnapshot",
+	{
+		collectionKey: varchar("collectionKey", { length: 8 }).notNull(),
+		sourceConnectionKey: varchar("sourceConnectionKey", {
+			length: 64,
+		}).notNull(),
+		payload: jsonb("payload").$type<JsonObject>().notNull(),
+		remoteVersion: varchar("remoteVersion", { length: 255 }),
+		payloadHash: varchar("payloadHash", { length: 64 }).notNull(),
+		mappingProfileVersion: varchar("mappingProfileVersion", {
+			length: 64,
+		}),
+		fetchedAt: timestampWithTimezone("fetchedAt").notNull(),
+	},
+	(table) => [
+		primaryKey({
+			columns: [table.collectionKey, table.sourceConnectionKey],
+		}),
+		foreignKey({
+			name: "collectionSourceSnapshot_collection_source_link_fk",
+			columns: [table.collectionKey, table.sourceConnectionKey],
+			foreignColumns: [
+				collectionSourceLink.collectionKey,
+				collectionSourceLink.sourceConnectionKey,
+			],
+		}).onDelete("cascade"),
+	],
+);
+
 export const sourceWritebackJob = pgTable(
 	"sourceWritebackJob",
 	{
 		id: bigint("id", { mode: "number" })
 			.primaryKey()
 			.generatedAlwaysAsIdentity(),
-		itemKey: varchar("itemKey", { length: 8 }).notNull(),
+		itemKey: varchar("itemKey", { length: 8 }),
+		collectionKey: varchar("collectionKey", { length: 8 }),
 		sourceConnectionKey: varchar("sourceConnectionKey", {
 			length: 64,
 		}).notNull(),
@@ -447,7 +530,7 @@ export const sourceWritebackJob = pgTable(
 	},
 	(table) => [
 		foreignKey({
-			name: "sourceWritebackJob_link_fk",
+			name: "sourceWritebackJob_item_link_fk",
 			columns: [table.itemKey, table.sourceConnectionKey],
 			foreignColumns: [
 				itemSourceLink.itemKey,
@@ -456,6 +539,20 @@ export const sourceWritebackJob = pgTable(
 		})
 			.onDelete("cascade")
 			.onUpdate("cascade"),
+		foreignKey({
+			name: "sourceWritebackJob_collection_link_fk",
+			columns: [table.collectionKey, table.sourceConnectionKey],
+			foreignColumns: [
+				collectionSourceLink.collectionKey,
+				collectionSourceLink.sourceConnectionKey,
+			],
+		})
+			.onDelete("cascade")
+			.onUpdate("cascade"),
+		check(
+			"sourceWritebackJob_one_entity",
+			sql`(${table.itemKey} IS NULL) <> (${table.collectionKey} IS NULL)`,
+		),
 		check(
 			"sourceWritebackJob_operation_valid",
 			sql`${table.operation} IN ('upsert', 'delete')`,
@@ -489,19 +586,33 @@ export const sourceWritebackJob = pgTable(
 		unique("sourceWritebackJob_idempotency_unique").on(
 			table.idempotencyKey,
 		),
-		unique("sourceWritebackJob_revision_unique").on(
-			table.itemKey,
-			table.sourceConnectionKey,
-			table.canonicalRevision,
-			table.operation,
-		),
+		uniqueIndex("sourceWritebackJob_item_revision_unique")
+			.on(
+				table.itemKey,
+				table.sourceConnectionKey,
+				table.canonicalRevision,
+				table.operation,
+			)
+			.where(sql`${table.itemKey} IS NOT NULL`),
+		uniqueIndex("sourceWritebackJob_collection_revision_unique")
+			.on(
+				table.collectionKey,
+				table.sourceConnectionKey,
+				table.canonicalRevision,
+				table.operation,
+			)
+			.where(sql`${table.collectionKey} IS NOT NULL`),
 		index("sourceWritebackJob_unprocessed_idx")
 			.on(table.nextAttemptAt, table.id)
 			.where(
 				sql`${table.processedAt} IS NULL AND ${table.deadLetteredAt} IS NULL`,
 			),
-		index("sourceWritebackJob_link_idx").on(
+		index("sourceWritebackJob_item_link_idx").on(
 			table.itemKey,
+			table.sourceConnectionKey,
+		),
+		index("sourceWritebackJob_collection_link_idx").on(
+			table.collectionKey,
 			table.sourceConnectionKey,
 		),
 	],
