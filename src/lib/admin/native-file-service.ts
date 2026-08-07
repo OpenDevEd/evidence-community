@@ -9,7 +9,7 @@ import {
 import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
-import { lockItemMutations } from "@/db/item-mutation-lock";
+import { lockItemMutations } from "@/db/canonical-mutation-lock";
 import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemToTag } from "@/db/schema/tables/itemToTag";

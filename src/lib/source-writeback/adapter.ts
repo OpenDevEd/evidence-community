@@ -10,10 +10,9 @@ export type SourceWritebackConnection = InferSelectModel<
 	typeof sourceConnection
 >;
 
-export type SourceWritebackRequest = {
+type SourceWritebackRequestBase = {
 	dirtyFields: readonly string[];
 	idempotencyKey: string;
-	itemKey: string;
 	operation: "upsert" | "delete";
 	payload: Readonly<Record<string, unknown>>;
 	remoteDeleted: boolean;
@@ -21,6 +20,16 @@ export type SourceWritebackRequest = {
 	sourceConnection: SourceWritebackConnection;
 	sourceRecordKey: string;
 };
+
+export type SourceWritebackRequest =
+	| (SourceWritebackRequestBase & {
+			collectionKey: string;
+			entity: "collection";
+	  })
+	| (SourceWritebackRequestBase & {
+			entity: "item";
+			itemKey: string;
+	  });
 
 export type SourceWritebackResult = {
 	remoteVersion: string | null;

@@ -323,6 +323,22 @@ export class ZoteroApiClient {
 		};
 	}
 
+	async collection(
+		prefix: string,
+		collectionKey: string,
+		signal?: AbortSignal,
+	): Promise<ZoteroResponse<ZoteroCollectionResponse>> {
+		const response = await this.request(
+			`${prefix}/collections/${encodeURIComponent(collectionKey)}`,
+			undefined,
+			{ signal },
+		);
+		return {
+			data: zoteroCollectionResponseSchema.parse(await response.json()),
+			libraryVersion: parseLibraryVersion(response),
+		};
+	}
+
 	async createItem(
 		prefix: string,
 		data: Record<string, unknown>,
@@ -330,6 +346,29 @@ export class ZoteroApiClient {
 			signal?: AbortSignal;
 			writeToken?: string;
 		} = {},
+	) {
+		return this.createObject("items", prefix, data, options);
+	}
+
+	async createCollection(
+		prefix: string,
+		data: Record<string, unknown>,
+		options: {
+			signal?: AbortSignal;
+			writeToken?: string;
+		} = {},
+	) {
+		return this.createObject("collections", prefix, data, options);
+	}
+
+	private async createObject(
+		entity: "collections" | "items",
+		prefix: string,
+		data: Record<string, unknown>,
+		options: {
+			signal?: AbortSignal;
+			writeToken?: string;
+		},
 	) {
 		if (
 			options.writeToken !== undefined &&
@@ -339,7 +378,7 @@ export class ZoteroApiClient {
 				"Zotero write token must contain exactly 32 alphanumeric characters",
 			);
 		}
-		const response = await this.request(`${prefix}/items`, undefined, {
+		const response = await this.request(`${prefix}/${entity}`, undefined, {
 			body: JSON.stringify([data]),
 			headers: {
 				"Content-Type": "application/json",
@@ -354,7 +393,7 @@ export class ZoteroApiClient {
 		const failure = result.failed["0"];
 		if (failure) {
 			throw new ZoteroObjectWriteError(
-				`Zotero rejected item creation: ${failure.message}`,
+				`Zotero rejected ${entity === "items" ? "item" : "collection"} creation: ${failure.message}`,
 				failure.code,
 				"0",
 			);
@@ -365,7 +404,7 @@ export class ZoteroApiClient {
 			!("0" in result.unchanged)
 		) {
 			throw new ZoteroApiError(
-				"Zotero item creation response omitted object 0",
+				`Zotero ${entity === "items" ? "item" : "collection"} creation response omitted object 0`,
 				response.status,
 			);
 		}
@@ -379,8 +418,9 @@ export class ZoteroApiClient {
 		version: number,
 		signal?: AbortSignal,
 	) {
-		return this.writeSingleItem(
+		return this.writeSingleObject(
 			"PATCH",
+			"items",
 			prefix,
 			itemKey,
 			data,
@@ -395,8 +435,9 @@ export class ZoteroApiClient {
 		version: number,
 		signal?: AbortSignal,
 	) {
-		return this.writeSingleItem(
+		return this.writeSingleObject(
 			"DELETE",
+			"items",
 			prefix,
 			itemKey,
 			undefined,
@@ -405,21 +446,57 @@ export class ZoteroApiClient {
 		);
 	}
 
-	private async writeSingleItem(
-		method: "DELETE" | "PATCH",
+	async putCollection(
 		prefix: string,
-		itemKey: string,
+		collectionKey: string,
+		data: Record<string, unknown>,
+		version: number,
+		signal?: AbortSignal,
+	) {
+		return this.writeSingleObject(
+			"PUT",
+			"collections",
+			prefix,
+			collectionKey,
+			data,
+			version,
+			signal,
+		);
+	}
+
+	async deleteCollection(
+		prefix: string,
+		collectionKey: string,
+		version: number,
+		signal?: AbortSignal,
+	) {
+		return this.writeSingleObject(
+			"DELETE",
+			"collections",
+			prefix,
+			collectionKey,
+			undefined,
+			version,
+			signal,
+		);
+	}
+
+	private async writeSingleObject(
+		method: "DELETE" | "PATCH" | "PUT",
+		entity: "collections" | "items",
+		prefix: string,
+		objectKey: string,
 		data: Record<string, unknown> | undefined,
 		version: number,
 		signal?: AbortSignal,
 	) {
 		if (!Number.isSafeInteger(version) || version < 0) {
 			throw new ZoteroApiError(
-				"Zotero item version must be non-negative",
+				`Zotero ${entity === "items" ? "item" : "collection"} version must be non-negative`,
 			);
 		}
 		const response = await this.request(
-			`${prefix}/items/${encodeURIComponent(itemKey)}`,
+			`${prefix}/${entity}/${encodeURIComponent(objectKey)}`,
 			undefined,
 			{
 				body: data === undefined ? undefined : JSON.stringify(data),

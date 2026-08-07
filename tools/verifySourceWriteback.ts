@@ -58,6 +58,7 @@ async function verify() {
 	let releaseBlocked = () => {};
 	let markBlocked = () => {};
 	let blocked = Promise.resolve();
+	let sourceGateEnabled = true;
 	let version = 0;
 	const calls: SourceWritebackRequest[] = [];
 
@@ -106,6 +107,7 @@ async function verify() {
 		registry,
 		retryBaseMs: 100,
 		retryMaxMs: 100,
+		sourceWritebackEnabled: () => sourceGateEnabled,
 		workerId: `writeback-verifier-${marker}`,
 	};
 
@@ -629,12 +631,17 @@ async function verify() {
 		});
 		const importedCall = calls
 			.toReversed()
-			.find(({ itemKey }) => itemKey === importedItemKey);
+			.find(
+				(request) =>
+					request.entity === "item" &&
+					request.itemKey === importedItemKey,
+			);
 		assert(
 			workerResult.lastSweep?.some(
 				({ status }) => status === "processed",
 			) &&
-				importedCall?.itemKey === importedItemKey &&
+				importedCall?.entity === "item" &&
+				importedCall.itemKey === importedItemKey &&
 				importedCall.sourceRecordKey === "IMPT2345" &&
 				importedCall.remoteVersion === "10" &&
 				importedCall.payload.title === "Locally edited import",

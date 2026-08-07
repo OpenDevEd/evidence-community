@@ -8,7 +8,7 @@ import {
 import { and, eq, inArray, sql, type InferInsertModel } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
-import { lockItemMutation } from "@/db/item-mutation-lock";
+import { lockItemMutation } from "@/db/canonical-mutation-lock";
 import { reserveItemIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";

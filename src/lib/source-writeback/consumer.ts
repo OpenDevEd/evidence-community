@@ -1,6 +1,8 @@
 import { setTimeout as delay } from "node:timers/promises";
 
 import {
+	collectionSourceLink,
+	collectionSourceSnapshot,
 	itemSourceLink,
 	sourceConnection,
 	sourceWritebackJob,
@@ -21,7 +23,10 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "@/db/database-schema";
-import { lockItemMutation } from "@/db/item-mutation-lock";
+import {
+	lockCollectionMutation,
+	lockItemMutation,
+} from "@/db/canonical-mutation-lock";
 import { sourceSnapshot } from "@/db/schema/source";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
@@ -46,10 +51,15 @@ export const DEFAULT_SOURCE_WRITEBACK_MAX_JOBS = 10_000;
 export const MAX_SOURCE_WRITEBACK_JOBS = 1_000_000;
 
 type SourceWritebackJobRow = typeof sourceWritebackJob.$inferSelect;
-type ClaimedJob = Omit<SourceWritebackJobRow, "collectionKey" | "itemKey"> & {
-	collectionKey: null;
-	itemKey: string;
-};
+type ClaimedJob =
+	| (Omit<SourceWritebackJobRow, "collectionKey" | "itemKey"> & {
+			collectionKey: null;
+			itemKey: string;
+	  })
+	| (Omit<SourceWritebackJobRow, "collectionKey" | "itemKey"> & {
+			collectionKey: string;
+			itemKey: null;
+	  });
 
 export type SourceWritebackConsumerOptions = {
 	credentialResolver?: SourceCredentialResolver;
@@ -62,6 +72,10 @@ export type SourceWritebackConsumerOptions = {
 	retryBaseMs?: number;
 	retryMaxMs?: number;
 	signal?: AbortSignal;
+	// Omitting the source policy disables all writeback.
+	sourceWritebackEnabled?: (
+		sourceConnectionKey: string,
+	) => boolean | Promise<boolean>;
 	workerId: string;
 };
 
@@ -87,6 +101,7 @@ export function validateSourceWritebackMaxJobs(value: number) {
 }
 
 export type SourceWritebackProcessResult = {
+	collectionKey?: string;
 	itemKey?: string;
 	jobId?: number;
 	operation?: "upsert" | "delete";
@@ -120,6 +135,15 @@ export class SourceWritebackParentUnavailableError extends Error {
 			`Parent ${parentItemKey} has no viable writeback queued for child ${itemKey}`,
 		);
 		this.name = "SourceWritebackParentUnavailableError";
+	}
+}
+
+export class SourceWritebackCollectionParentUnavailableError extends Error {
+	constructor(collectionKey: string, parentCollectionKey: string) {
+		super(
+			`Parent collection ${parentCollectionKey} has no viable writeback queued for child collection ${collectionKey}`,
+		);
+		this.name = "SourceWritebackCollectionParentUnavailableError";
 	}
 }
 
@@ -197,6 +221,19 @@ function throwIfAborted(signal?: AbortSignal) {
 	if (signal?.aborted) throw new SourceWritebackAbortError();
 }
 
+function isClaimedJob(job: SourceWritebackJobRow): job is ClaimedJob {
+	return (
+		(typeof job.itemKey === "string" && job.collectionKey === null) ||
+		(typeof job.collectionKey === "string" && job.itemKey === null)
+	);
+}
+
+function jobEntity(job: ClaimedJob) {
+	return job.itemKey !== null
+		? ({ entity: "item", key: job.itemKey } as const)
+		: ({ entity: "collection", key: job.collectionKey! } as const);
+}
+
 async function claimJob(
 	options: SourceWritebackConsumerOptions,
 	leaseDurationMs: number,
@@ -211,8 +248,6 @@ async function claimJob(
 			.from(sourceWritebackJob)
 			.where(
 				and(
-					isNotNull(sourceWritebackJob.itemKey),
-					isNull(sourceWritebackJob.collectionKey),
 					isNull(sourceWritebackJob.processedAt),
 					isNull(sourceWritebackJob.deadLetteredAt),
 					lte(sourceWritebackJob.nextAttemptAt, claimedAt),
@@ -226,10 +261,8 @@ async function claimJob(
 							.from(leasedLink)
 							.where(
 								and(
-									eq(
-										leasedLink.itemKey,
-										sourceWritebackJob.itemKey,
-									),
+									sql`${leasedLink.itemKey} IS NOT DISTINCT FROM ${sourceWritebackJob.itemKey}`,
+									sql`${leasedLink.collectionKey} IS NOT DISTINCT FROM ${sourceWritebackJob.collectionKey}`,
 									eq(
 										leasedLink.sourceConnectionKey,
 										sourceWritebackJob.sourceConnectionKey,
@@ -241,17 +274,20 @@ async function claimJob(
 								),
 							),
 					),
-					sql<boolean>`pg_try_advisory_xact_lock(hashtextextended('source-writeback:' || ${sourceWritebackJob.sourceConnectionKey} || ':' || ${sourceWritebackJob.itemKey}, 0))`,
+					sql<boolean>`pg_try_advisory_xact_lock(hashtextextended(
+						'source-writeback:' || ${sourceWritebackJob.sourceConnectionKey} || ':' ||
+						CASE WHEN ${sourceWritebackJob.itemKey} IS NULL THEN 'collection:' || ${sourceWritebackJob.collectionKey}
+						ELSE 'item:' || ${sourceWritebackJob.itemKey} END,
+						0
+					))`,
 				),
 			)
 			.orderBy(asc(sourceWritebackJob.id))
 			.for("update", { skipLocked: true })
 			.limit(1);
 		if (!candidate) return null;
-		if (!candidate.itemKey || candidate.collectionKey !== null) {
-			throw new Error(
-				"Claimed a non-item writeback job in the item worker",
-			);
+		if (!isClaimedJob(candidate)) {
+			throw new Error("Claimed writeback job violates the entity XOR");
 		}
 
 		// The candidate query and the advisory lock can observe different
@@ -263,7 +299,8 @@ async function claimJob(
 			.where(
 				and(
 					ne(sourceWritebackJob.id, candidate.id),
-					eq(sourceWritebackJob.itemKey, candidate.itemKey),
+					sql`${sourceWritebackJob.itemKey} IS NOT DISTINCT FROM ${candidate.itemKey}`,
+					sql`${sourceWritebackJob.collectionKey} IS NOT DISTINCT FROM ${candidate.collectionKey}`,
 					eq(
 						sourceWritebackJob.sourceConnectionKey,
 						candidate.sourceConnectionKey,
@@ -285,12 +322,12 @@ async function claimJob(
 			})
 			.where(eq(sourceWritebackJob.id, candidate.id))
 			.returning();
-		if (!claimed?.itemKey || claimed.collectionKey !== null) {
+		if (!claimed || !isClaimedJob(claimed)) {
 			throw new Error(
 				"Claimed writeback job changed entity while leasing",
 			);
 		}
-		return claimed as ClaimedJob;
+		return claimed;
 	});
 }
 
@@ -385,10 +422,13 @@ async function markSuperseded(
 	if (!updated) throw new SourceWritebackLeaseLostError(job.id);
 }
 
-async function loadRequest(
+async function loadItemRequest(
 	options: SourceWritebackConsumerOptions,
-	job: ClaimedJob,
+	job: Extract<ClaimedJob, { itemKey: string }>,
 ) {
+	const sourceWritebackEnabled = options.sourceWritebackEnabled
+		? await options.sourceWritebackEnabled(job.sourceConnectionKey)
+		: false;
 	return options.database.transaction(async (transaction) => {
 		await lockItemMutation(transaction, job.itemKey);
 		const [state] = await transaction
@@ -426,6 +466,24 @@ async function loadRequest(
 			return {
 				deferDelay: "long" as const,
 				deferReason: "Source connection is paused",
+				disposition: "defer" as const,
+				request: null,
+				state,
+			};
+		}
+		if (!options.registry.has(state.connection.provider)) {
+			return {
+				deferDelay: "long" as const,
+				deferReason: `Writeback is not supported for provider ${state.connection.provider}`,
+				disposition: "defer" as const,
+				request: null,
+				state,
+			};
+		}
+		if (!sourceWritebackEnabled) {
+			return {
+				deferDelay: "long" as const,
+				deferReason: "Writeback is disabled for this source",
 				disposition: "defer" as const,
 				request: null,
 				state,
@@ -532,6 +590,7 @@ async function loadRequest(
 
 		const request: SourceWritebackRequest = {
 			dirtyFields: job.dirtyFields,
+			entity: "item",
 			idempotencyKey: job.idempotencyKey,
 			itemKey: job.itemKey,
 			operation: job.operation,
@@ -543,6 +602,176 @@ async function loadRequest(
 		};
 		return { disposition: "write" as const, request, state };
 	});
+}
+
+async function loadCollectionRequest(
+	options: SourceWritebackConsumerOptions,
+	job: Extract<ClaimedJob, { collectionKey: string }>,
+) {
+	const sourceWritebackEnabled = options.sourceWritebackEnabled
+		? await options.sourceWritebackEnabled(job.sourceConnectionKey)
+		: false;
+	return options.database.transaction(async (transaction) => {
+		await lockCollectionMutation(transaction, job.collectionKey);
+		const [state] = await transaction
+			.select({
+				collection,
+				connection: sourceConnection,
+				link: collectionSourceLink,
+			})
+			.from(collectionSourceLink)
+			.innerJoin(
+				sourceConnection,
+				eq(
+					sourceConnection.key,
+					collectionSourceLink.sourceConnectionKey,
+				),
+			)
+			.innerJoin(
+				collection,
+				eq(collection.key, collectionSourceLink.collectionKey),
+			)
+			.where(
+				and(
+					eq(collectionSourceLink.collectionKey, job.collectionKey),
+					eq(
+						collectionSourceLink.sourceConnectionKey,
+						job.sourceConnectionKey,
+					),
+				),
+			)
+			.limit(1);
+		if (!state) return null;
+		if (
+			!state.link.writebackEnabled ||
+			state.connection.status === "removed" ||
+			(job.operation === "upsert" && state.collection.deleted === 1) ||
+			(job.operation === "delete" && state.collection.deleted === 0)
+		) {
+			return { disposition: "supersede" as const, request: null, state };
+		}
+		if (state.connection.status === "paused") {
+			return {
+				deferDelay: "long" as const,
+				deferReason: "Source connection is paused",
+				disposition: "defer" as const,
+				request: null,
+				state,
+			};
+		}
+		if (!options.registry.has(state.connection.provider)) {
+			return {
+				deferDelay: "long" as const,
+				deferReason: `Writeback is not supported for provider ${state.connection.provider}`,
+				disposition: "defer" as const,
+				request: null,
+				state,
+			};
+		}
+		if (!sourceWritebackEnabled) {
+			return {
+				deferDelay: "long" as const,
+				deferReason: "Writeback is disabled for this source",
+				disposition: "defer" as const,
+				request: null,
+				state,
+			};
+		}
+
+		let parentSourceRecordKey: string | null = null;
+		if (job.operation === "upsert" && state.collection.parentCollection) {
+			const [parentLink] = await transaction
+				.select({
+					remoteDeleted: collectionSourceLink.remoteDeleted,
+					remoteVersion: collectionSourceLink.remoteVersion,
+					sourceRecordKey: collectionSourceLink.sourceRecordKey,
+				})
+				.from(collectionSourceLink)
+				.where(
+					and(
+						eq(
+							collectionSourceLink.collectionKey,
+							state.collection.parentCollection,
+						),
+						eq(
+							collectionSourceLink.sourceConnectionKey,
+							job.sourceConnectionKey,
+						),
+					),
+				)
+				.limit(1);
+			if (!parentLink) {
+				return {
+					deferDelay: "long" as const,
+					deferReason: `Parent collection ${state.collection.parentCollection} is not linked to this source yet`,
+					disposition: "defer" as const,
+					request: null,
+					state,
+				};
+			}
+			if (parentLink.remoteDeleted || parentLink.remoteVersion === null) {
+				const [pendingParentJob] = await transaction
+					.select({ id: sourceWritebackJob.id })
+					.from(sourceWritebackJob)
+					.where(
+						and(
+							eq(
+								sourceWritebackJob.collectionKey,
+								state.collection.parentCollection,
+							),
+							eq(
+								sourceWritebackJob.sourceConnectionKey,
+								job.sourceConnectionKey,
+							),
+							eq(sourceWritebackJob.operation, "upsert"),
+							isNull(sourceWritebackJob.processedAt),
+							isNull(sourceWritebackJob.deadLetteredAt),
+						),
+					)
+					.limit(1);
+				if (!pendingParentJob) {
+					throw new SourceWritebackCollectionParentUnavailableError(
+						job.collectionKey,
+						state.collection.parentCollection,
+					);
+				}
+				return {
+					deferDelay: "short" as const,
+					deferReason: `Parent collection ${state.collection.parentCollection} writeback is pending`,
+					disposition: "defer" as const,
+					request: null,
+					state,
+				};
+			}
+			parentSourceRecordKey = parentLink.sourceRecordKey;
+		}
+
+		const request: SourceWritebackRequest = {
+			collectionKey: job.collectionKey,
+			dirtyFields: job.dirtyFields,
+			entity: "collection",
+			idempotencyKey: job.idempotencyKey,
+			operation: job.operation,
+			payload: {
+				name: state.collection.name ?? "",
+				parentCollection: parentSourceRecordKey ?? false,
+				relations: state.collection.relations ?? {},
+			},
+			remoteDeleted: state.link.remoteDeleted,
+			remoteVersion: state.link.remoteVersion,
+			sourceConnection: state.connection,
+			sourceRecordKey: state.link.sourceRecordKey,
+		};
+		return { disposition: "write" as const, request, state };
+	});
+}
+
+async function loadRequest(
+	options: SourceWritebackConsumerOptions,
+	job: ClaimedJob,
+) {
+	if (job.itemKey !== null) return loadItemRequest(options, job);
+	return loadCollectionRequest(options, job);
 }
 
 async function deferJob(
@@ -599,8 +828,132 @@ async function acknowledgeJob(
 	workerId: string,
 ) {
 	validateResult(result);
+	if (job.collectionKey !== null) {
+		await options.database.transaction(async (transaction) => {
+			await lockCollectionMutation(transaction, job.collectionKey);
+			const [currentJob] = await transaction
+				.select()
+				.from(sourceWritebackJob)
+				.where(eq(sourceWritebackJob.id, job.id))
+				.for("update")
+				.limit(1);
+			if (
+				!currentJob ||
+				currentJob.leaseOwner !== workerId ||
+				currentJob.processedAt ||
+				currentJob.deadLetteredAt
+			) {
+				throw new SourceWritebackLeaseLostError(job.id);
+			}
+			const [currentCollection] = await transaction
+				.select({ revision: collection.revision })
+				.from(collection)
+				.where(eq(collection.key, job.collectionKey))
+				.for("update")
+				.limit(1);
+			const [currentLink] = await transaction
+				.select()
+				.from(collectionSourceLink)
+				.where(
+					and(
+						eq(
+							collectionSourceLink.collectionKey,
+							job.collectionKey,
+						),
+						eq(
+							collectionSourceLink.sourceConnectionKey,
+							job.sourceConnectionKey,
+						),
+					),
+				)
+				.for("update")
+				.limit(1);
+			if (!currentCollection || !currentLink) {
+				throw new SourceWritebackLeaseLostError(job.id);
+			}
+			const dirtyFields =
+				currentCollection.revision === job.canonicalRevision
+					? currentLink.dirtyFields.filter(
+							(field) => !job.dirtyFields.includes(field),
+						)
+					: currentLink.dirtyFields;
+			const completedAt = currentTime(options);
+			await transaction
+				.update(collectionSourceLink)
+				.set({
+					dirtyFields,
+					lastAcknowledgedRemoteVersion: result.remoteVersion,
+					remoteDeleted: job.operation === "delete",
+					remoteVersion: result.remoteVersion,
+					sourceRecordKey: result.sourceRecordKey,
+					updatedAt: completedAt,
+				})
+				.where(
+					and(
+						eq(
+							collectionSourceLink.collectionKey,
+							job.collectionKey,
+						),
+						eq(
+							collectionSourceLink.sourceConnectionKey,
+							job.sourceConnectionKey,
+						),
+					),
+				);
+			if (result.snapshot) {
+				await transaction
+					.insert(collectionSourceSnapshot)
+					.values({
+						collectionKey: job.collectionKey,
+						fetchedAt: completedAt,
+						mappingProfileVersion:
+							result.snapshot.mappingProfileVersion ?? null,
+						payload: result.snapshot.payload,
+						payloadHash: result.snapshot.fingerprint,
+						remoteVersion: result.remoteVersion,
+						sourceConnectionKey: job.sourceConnectionKey,
+					})
+					.onConflictDoUpdate({
+						target: [
+							collectionSourceSnapshot.collectionKey,
+							collectionSourceSnapshot.sourceConnectionKey,
+						],
+						set: {
+							fetchedAt: completedAt,
+							mappingProfileVersion:
+								result.snapshot.mappingProfileVersion ?? null,
+							payload: result.snapshot.payload,
+							payloadHash: result.snapshot.fingerprint,
+							remoteVersion: result.remoteVersion,
+						},
+					});
+			}
+			const [acknowledged] = await transaction
+				.update(sourceWritebackJob)
+				.set({
+					completedRemoteVersion: result.remoteVersion,
+					completedSourceRecordKey: result.sourceRecordKey,
+					lastError: null,
+					leaseExpiresAt: null,
+					leaseOwner: null,
+					processedAt: completedAt,
+				})
+				.where(
+					and(
+						eq(sourceWritebackJob.id, job.id),
+						eq(sourceWritebackJob.leaseOwner, workerId),
+						isNull(sourceWritebackJob.processedAt),
+						isNull(sourceWritebackJob.deadLetteredAt),
+					),
+				)
+				.returning({ id: sourceWritebackJob.id });
+			if (!acknowledged) throw new SourceWritebackLeaseLostError(job.id);
+		});
+		return;
+	}
+	const itemKey = job.itemKey;
 	await options.database.transaction(async (transaction) => {
-		await lockItemMutation(transaction, job.itemKey);
+		await lockItemMutation(transaction, itemKey);
 		const [currentJob] = await transaction
 			.select()
 			.from(sourceWritebackJob)
@@ -618,7 +971,7 @@ async function acknowledgeJob(
 		const [currentItem] = await transaction
 			.select({ revision: item.revision })
 			.from(item)
-			.where(eq(item.key, job.itemKey))
+			.where(eq(item.key, itemKey))
 			.for("update")
 			.limit(1);
 		const [currentLink] = await transaction
@@ -626,7 +979,7 @@ async function acknowledgeJob(
 			.from(itemSourceLink)
 			.where(
 				and(
-					eq(itemSourceLink.itemKey, job.itemKey),
+					eq(itemSourceLink.itemKey, itemKey),
 					eq(
 						itemSourceLink.sourceConnectionKey,
 						job.sourceConnectionKey,
@@ -657,7 +1010,7 @@ async function acknowledgeJob(
 			})
 			.where(
 				and(
-					eq(itemSourceLink.itemKey, job.itemKey),
+					eq(itemSourceLink.itemKey, itemKey),
 					eq(
 						itemSourceLink.sourceConnectionKey,
 						job.sourceConnectionKey,
@@ -669,7 +1022,7 @@ async function acknowledgeJob(
 				.insert(sourceSnapshot)
 				.values({
 					fetchedAt: completedAt,
-					itemKey: job.itemKey,
+					itemKey,
 					mappingProfileVersion:
 						result.snapshot.mappingProfileVersion ?? null,
 					payload: result.snapshot.payload,
@@ -764,8 +1117,11 @@ export async function processNextSourceWritebackJob(
 		validated.workerId,
 	);
 	if (!job) return { status: "idle" };
+	const entity = jobEntity(job);
 	const resultBase = {
-		itemKey: job.itemKey,
+		...(entity.entity === "item"
+			? { itemKey: entity.key }
+			: { collectionKey: entity.key }),
 		jobId: job.id,
 		operation: job.operation,
 	};

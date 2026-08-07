@@ -20,7 +20,7 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "@/db/database-schema";
-import { lockItemMutations } from "@/db/item-mutation-lock";
+import { lockItemMutations } from "@/db/canonical-mutation-lock";
 import {
 	reserveCollectionIdentities,
 	reserveItemSourceLinks,

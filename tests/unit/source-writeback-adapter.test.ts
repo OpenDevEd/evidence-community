@@ -37,12 +37,13 @@ describe("sourceWritebackIdempotencyKey", () => {
 	it("is stable per source, item, revision, and operation", () => {
 		const input = {
 			canonicalRevision: 42,
-			itemKey: "ABCD2345",
+			entity: "item" as const,
+			entityKey: "ABCD2345",
 			operation: "upsert" as const,
 			sourceConnectionKey: "zotero-test",
 		};
 		expect(sourceWritebackIdempotencyKey(input)).toBe(
-			"source-writeback:zotero-test:ABCD2345:42:upsert",
+			"source-writeback:zotero-test:item:ABCD2345:42:upsert",
 		);
 		expect(sourceWritebackIdempotencyKey(input)).toBe(
 			sourceWritebackIdempotencyKey({ ...input }),

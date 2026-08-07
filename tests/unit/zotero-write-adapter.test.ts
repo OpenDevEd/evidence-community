@@ -1,5 +1,7 @@
 import type { SourceWritebackRequest } from "@/lib/source-writeback/adapter";
 import type { ZoteroItemResponse } from "@/lib/source-ingestion/zotero/schema";
+import type { ZoteroCollectionResponse } from "@/lib/source-ingestion/zotero/schema";
+import { sourcePayloadHash } from "@/lib/source-ingestion/fingerprint";
 import {
 	createZoteroWritebackAdapter,
 	ZoteroWritebackKeyCollisionError,
@@ -8,6 +10,8 @@ import {
 import { describe, expect, it, vi } from "vitest";
 
 type StoredItem = ZoteroItemResponse;
+type StoredCollection = ZoteroCollectionResponse;
+type ItemWritebackRequest = Extract<SourceWritebackRequest, { entity: "item" }>;
 
 function versionedResponse(
 	libraryVersion: number,
@@ -23,17 +27,30 @@ function versionedResponse(
 	});
 }
 
-function createFakeZotero(initialItems: StoredItem[] = []) {
+function createFakeZotero(
+	initialItems: StoredItem[] = [],
+	initialCollections: StoredCollection[] = [],
+) {
 	const items = new Map(initialItems.map((item) => [item.key, item]));
+	const collections = new Map(
+		initialCollections.map((collection) => [collection.key, collection]),
+	);
 	let libraryVersion = Math.max(
 		10,
 		...initialItems.map((item) => item.version),
+		...initialCollections.map((collection) => collection.version),
 	);
 	let patchConflict:
 		((item: StoredItem, nextVersion: number) => void) | null = null;
 	let deleteConflict:
 		((item: StoredItem, nextVersion: number) => void) | null = null;
 	let alwaysPatchConflict = false;
+	let collectionPutConflict:
+		((collection: StoredCollection, nextVersion: number) => void) | null =
+		null;
+	let collectionDeleteConflict:
+		((collection: StoredCollection, nextVersion: number) => void) | null =
+		null;
 
 	const fetchImplementation = vi.fn<typeof fetch>(async (input, init) => {
 		const url = new URL(String(input));
@@ -152,6 +169,97 @@ function createFakeZotero(initialItems: StoredItem[] = []) {
 			return versionedResponse(libraryVersion, null, { status: 204 });
 		}
 
+		const collectionMatch = url.pathname.match(
+			/^\/groups\/6632364\/collections\/([^/]+)$/u,
+		);
+		if (method === "GET" && collectionMatch) {
+			const stored = collections.get(
+				decodeURIComponent(collectionMatch[1]!),
+			);
+			return stored
+				? versionedResponse(libraryVersion, JSON.stringify(stored))
+				: versionedResponse(libraryVersion, "missing", { status: 404 });
+		}
+		if (method === "POST" && url.pathname.endsWith("/collections")) {
+			const [inputCollection] = JSON.parse(String(init?.body)) as Record<
+				string,
+				unknown
+			>[];
+			const key = String(inputCollection!.key);
+			if (collections.has(key)) {
+				return versionedResponse(
+					libraryVersion,
+					JSON.stringify({
+						failed: {
+							"0": { code: 412, message: "Key exists" },
+						},
+					}),
+				);
+			}
+			libraryVersion += 1;
+			const stored: StoredCollection = {
+				data: {
+					...inputCollection,
+					key,
+					version: libraryVersion,
+				} as unknown as StoredCollection["data"],
+				key,
+				meta: { numCollections: 0, numItems: 0 },
+				version: libraryVersion,
+			};
+			collections.set(key, stored);
+			return versionedResponse(
+				libraryVersion,
+				JSON.stringify({ successful: { "0": stored } }),
+			);
+		}
+		if ((method === "PUT" || method === "DELETE") && collectionMatch) {
+			const key = decodeURIComponent(collectionMatch[1]!);
+			const stored = collections.get(key);
+			if (!stored) {
+				return versionedResponse(libraryVersion, "missing", {
+					status: 404,
+				});
+			}
+			const expectedVersion = Number(
+				new Headers(init?.headers).get("if-unmodified-since-version"),
+			);
+			const conflict =
+				method === "PUT"
+					? collectionPutConflict
+					: collectionDeleteConflict;
+			if (conflict) {
+				libraryVersion += 1;
+				conflict(stored, libraryVersion);
+				stored.version = libraryVersion;
+				stored.data.version = libraryVersion;
+				if (method === "PUT") collectionPutConflict = null;
+				else collectionDeleteConflict = null;
+			}
+			if (expectedVersion !== stored.version) {
+				return versionedResponse(libraryVersion, "version mismatch", {
+					status: 412,
+				});
+			}
+			if (method === "DELETE") {
+				collections.delete(key);
+				libraryVersion += 1;
+				return versionedResponse(libraryVersion, null, { status: 204 });
+			}
+			const replacement = JSON.parse(String(init?.body)) as Record<
+				string,
+				unknown
+			>;
+			libraryVersion += 1;
+			stored.data = {
+				...replacement,
+				key,
+				version: libraryVersion,
+			} as unknown as StoredCollection["data"];
+			stored.version = libraryVersion;
+			return versionedResponse(libraryVersion, null, { status: 204 });
+		}
+
 		return versionedResponse(libraryVersion, "unexpected request", {
 			status: 500,
 		});
@@ -171,6 +279,17 @@ function createFakeZotero(initialItems: StoredItem[] = []) {
 		) {
 			patchConflict = mutate;
 		},
+		conflictOnCollectionDelete(
+			mutate: (collection: StoredCollection, nextVersion: number) => void,
+		) {
+			collectionDeleteConflict = mutate;
+		},
+		conflictOnCollectionPut(
+			mutate: (collection: StoredCollection, nextVersion: number) => void,
+		) {
+			collectionPutConflict = mutate;
+		},
+		collections,
 		fetch: fetchImplementation,
 		items,
 	};
@@ -196,11 +315,31 @@ function remoteReport(
 	};
 }
 
+function remoteCollection(
+	data: Record<string, unknown> = {},
+	version = 4,
+): StoredCollection {
+	return {
+		data: {
+			key: "COLL2345",
+			name: "Remote collection",
+			parentCollection: false,
+			relations: {},
+			version,
+			...data,
+		},
+		key: "COLL2345",
+		meta: { numCollections: 0, numItems: 0 },
+		version,
+	};
+}
+
 function request(
-	overrides: Partial<SourceWritebackRequest> = {},
-): SourceWritebackRequest {
+	overrides: Partial<ItemWritebackRequest> = {},
+): ItemWritebackRequest {
 	return {
 		dirtyFields: ["title"],
+		entity: "item",
 		idempotencyKey: "source-writeback:zotero-test:ABCD2345:1:upsert",
 		itemKey: "ABCD2345",
 		operation: "upsert",
@@ -225,6 +364,31 @@ function request(
 			updatedAt: new Date(0),
 		},
 		sourceRecordKey: "ABCD2345",
+		...overrides,
+	};
+}
+
+function collectionRequest(
+	overrides: Partial<
+		Extract<SourceWritebackRequest, { entity: "collection" }>
+	> = {},
+): Extract<SourceWritebackRequest, { entity: "collection" }> {
+	return {
+		collectionKey: "COLL2345",
+		dirtyFields: ["name"],
+		entity: "collection",
+		idempotencyKey:
+			"source-writeback:zotero-test:collection:COLL2345:1:upsert",
+		operation: "upsert",
+		payload: {
+			name: "Local collection",
+			parentCollection: false,
+			relations: {},
+		},
+		remoteDeleted: false,
+		remoteVersion: "4",
+		sourceConnection: request().sourceConnection,
+		sourceRecordKey: "COLL2345",
 		...overrides,
 	};
 }
@@ -400,6 +564,120 @@ describe("Zotero writeback adapter", () => {
 				context(),
 			),
 		).resolves.toMatchObject({ remoteVersion: null });
+	});
+
+	it("creates a collection with its canonical key and snapshots the response", async () => {
+		const zotero = createFakeZotero();
+		const result = await createZoteroWritebackAdapter({
+			fetch: zotero.fetch,
+		}).write(collectionRequest({ remoteVersion: null }), context());
+
+		expect(zotero.collections.get("COLL2345")?.data).toMatchObject({
+			name: "Local collection",
+			parentCollection: false,
+		});
+		expect(result).toMatchObject({
+			remoteVersion: "11",
+			snapshot: {
+				fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/u),
+				mappingProfileVersion: "zotero-web-api-v3-4",
+			},
+			sourceRecordKey: "COLL2345",
+		});
+		expect(methods(zotero.fetch)).toEqual(["GET", "GET", "POST", "GET"]);
+	});
+
+	it("rebases a collection rename and reparent after an optimistic conflict", async () => {
+		const zotero = createFakeZotero([], [remoteCollection()]);
+		zotero.conflictOnCollectionPut((collection) => {
+			collection.data.name = "Concurrent remote name";
+			collection.data.relations = {
+				"dc:relation": "https://remote.example.test/change",
+			};
+		});
+
+		const result = await createZoteroWritebackAdapter({
+			fetch: zotero.fetch,
+			sleep: async () => undefined,
+		}).write(
+			collectionRequest({
+				dirtyFields: ["name", "parentCollection"],
+				payload: {
+					name: "Renamed locally",
+					parentCollection: "PARN2345",
+					relations: {},
+				},
+			}),
+			context(),
+		);
+
+		expect(zotero.collections.get("COLL2345")?.data).toMatchObject({
+			name: "Renamed locally",
+			parentCollection: "PARN2345",
+			relations: {
+				"dc:relation": "https://remote.example.test/change",
+			},
+		});
+		expect(result.remoteVersion).toBe("12");
+		expect(result.snapshot).toBeUndefined();
+		expect(
+			methods(zotero.fetch).filter((method) => method === "PUT"),
+		).toHaveLength(2);
+	});
+
+	it("deletes collections idempotently and emits the ingestion-compatible tombstone", async () => {
+		const zotero = createFakeZotero([], [remoteCollection()]);
+		zotero.conflictOnCollectionDelete((collection) => {
+			collection.data.name = "Concurrent remote name";
+		});
+		const adapter = createZoteroWritebackAdapter({
+			fetch: zotero.fetch,
+			sleep: async () => undefined,
+		});
+
+		const deleted = await adapter.write(
+			collectionRequest({ operation: "delete", payload: {} }),
+			context(),
+		);
+		expect(zotero.collections.has("COLL2345")).toBe(false);
+		expect(deleted).toMatchObject({
+			remoteVersion: null,
+			snapshot: {
+				fingerprint: sourcePayloadHash({ deleted: true }),
+				payload: { deleted: true },
+			},
+		});
+		expect(
+			methods(zotero.fetch).filter((method) => method === "DELETE"),
+		).toHaveLength(2);
+
+		await expect(
+			adapter.write(
+				collectionRequest({
+					operation: "delete",
+					payload: {},
+					remoteDeleted: true,
+					remoteVersion: null,
+				}),
+				context(),
+			),
+		).resolves.toMatchObject({ remoteVersion: null });
+	});
+
+	it("recreates a restored collection with the same key", async () => {
+		const zotero = createFakeZotero();
+		await expect(
+			createZoteroWritebackAdapter({ fetch: zotero.fetch }).write(
+				collectionRequest({
+					remoteDeleted: true,
+					remoteVersion: null,
+				}),
+				context(),
+			),
+		).resolves.toMatchObject({ remoteVersion: "11" });
+		expect(zotero.collections.get("COLL2345")?.data.name).toBe(
+			"Local collection",
+		);
 	});
 
 	it("bounds repeated optimistic retries", async () => {

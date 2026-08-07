@@ -1,4 +1,5 @@
 import {
+	collectionSourceLink,
 	itemSourceLink,
 	sourceConnection,
 	sourceWritebackJob,
@@ -21,19 +22,22 @@ export class SourceWritebackTargetKeyCollisionError extends Error {
 
 export function sourceWritebackIdempotencyKey({
 	canonicalRevision,
-	itemKey,
+	entityKey,
+	entity,
 	operation,
 	sourceConnectionKey,
 }: {
 	canonicalRevision: number;
-	itemKey: string;
+	entity: "collection" | "item";
+	entityKey: string;
 	operation: SourceWritebackOperation;
 	sourceConnectionKey: string;
 }) {
 	return [
 		"source-writeback",
 		sourceConnectionKey,
-		itemKey,
+		entity,
+		entityKey,
 		canonicalRevision,
 		operation,
 	].join(":");
@@ -63,7 +67,8 @@ export async function enqueueSourceWritebackJob(
 			dirtyFields: normalizedDirtyFields,
 			idempotencyKey: sourceWritebackIdempotencyKey({
 				canonicalRevision,
-				itemKey,
+				entity: "item",
+				entityKey: itemKey,
 				operation,
 				sourceConnectionKey,
 			}),
@@ -74,6 +79,95 @@ export async function enqueueSourceWritebackJob(
 		.onConflictDoNothing()
 		.returning();
 	return job ?? null;
+}
+
+export async function enqueueCollectionWritebackJob(
+	transaction: Transaction,
+	{
+		canonicalRevision,
+		collectionKey,
+		dirtyFields,
+		operation,
+		sourceConnectionKey,
+	}: {
+		canonicalRevision: number;
+		collectionKey: string;
+		dirtyFields: readonly string[];
+		operation: SourceWritebackOperation;
+		sourceConnectionKey: string;
+	},
+) {
+	const normalizedDirtyFields = [...new Set(dirtyFields)].sort();
+	const [job] = await transaction
+		.insert(sourceWritebackJob)
+		.values({
+			canonicalRevision,
+			collectionKey,
+			dirtyFields: normalizedDirtyFields,
+			idempotencyKey: sourceWritebackIdempotencyKey({
+				canonicalRevision,
+				entity: "collection",
+				entityKey: collectionKey,
+				operation,
+				sourceConnectionKey,
+			}),
+			operation,
+			sourceConnectionKey,
+		})
+		.onConflictDoNothing()
+		.returning();
+	return job ?? null;
+}
+
+export async function markCollectionWritebackDirty(
+	transaction: Transaction,
+	{
+		canonicalRevision,
+		collectionKey,
+		dirtyFields,
+		updatedAt,
+	}: {
+		canonicalRevision: number;
+		collectionKey: string;
+		dirtyFields: readonly string[];
+		updatedAt: Date;
+	},
+) {
+	const changedFields = [...new Set(dirtyFields)].sort();
+	if (changedFields.length === 0) return;
+
+	const links = await transaction
+		.select()
+		.from(collectionSourceLink)
+		.where(eq(collectionSourceLink.collectionKey, collectionKey))
+		.orderBy(collectionSourceLink.sourceConnectionKey)
+		.for("update");
+	for (const link of links) {
+		const combinedDirtyFields = [
+			...new Set([...link.dirtyFields, ...changedFields]),
+		].sort();
+		await transaction
+			.update(collectionSourceLink)
+			.set({ dirtyFields: combinedDirtyFields, updatedAt })
+			.where(
+				and(
+					eq(collectionSourceLink.collectionKey, collectionKey),
+					eq(
+						collectionSourceLink.sourceConnectionKey,
+						link.sourceConnectionKey,
+					),
+				),
+			);
+		if (link.writebackEnabled) {
+			await enqueueCollectionWritebackJob(transaction, {
+				canonicalRevision,
+				collectionKey,
+				dirtyFields: combinedDirtyFields,
+				operation: "upsert",
+				sourceConnectionKey: link.sourceConnectionKey,
+			});
+		}
+	}
 }
 
 // The caller must hold the canonical item's advisory mutation lock so this
@@ -131,6 +225,10 @@ export async function markItemWritebackDirty(
 		}
 	}
 }
+
+// Any API that changes a link from writebackEnabled=false to true must enqueue
+// an upsert for the link's retained dirtyFields. Disabled links deliberately
+// keep those fields after their older jobs are superseded.
 
 export async function ensureDefaultWritebackLink(
 	transaction: Transaction,
