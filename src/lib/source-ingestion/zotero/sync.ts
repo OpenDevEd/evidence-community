@@ -1,5 +1,6 @@
 import {
 	collectionIdentity,
+	collectionSourceSnapshot,
 	itemSourceLink,
 } from "@opendeved/evidence-library-core";
 import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
@@ -48,6 +49,8 @@ type ManifestEntry =
 	| {
 			entity: "collection";
 			operation: "delete";
+			remoteVersion: string | null;
+			response?: ZoteroCollectionResponse;
 			sourceRecordKey: string;
 	  }
 	| {
@@ -370,6 +373,8 @@ async function readManifest(
 			.map((response): ManifestEntry => ({
 				entity: "collection",
 				operation: "delete",
+				remoteVersion: String(response.version),
+				response,
 				sourceRecordKey: response.key,
 			})),
 		...[...deletedItemKeys]
@@ -385,6 +390,7 @@ async function readManifest(
 			.map((sourceRecordKey): ManifestEntry => ({
 				entity: "collection",
 				operation: "delete",
+				remoteVersion: null,
 				sourceRecordKey,
 			})),
 	];
@@ -415,6 +421,10 @@ async function mapManifestEntries(
 					: {
 							operation: "delete",
 							sourceRecordKey: entry.sourceRecordKey,
+							remoteVersion: entry.remoteVersion,
+							raw: entry.response
+								? (entry.response as never)
+								: { deleted: true },
 						},
 			);
 			continue;
@@ -475,23 +485,58 @@ async function mappingReplayRequired(
 	database: Database,
 	sourceConnectionKey: string,
 ) {
-	const [staleSnapshot] = await database
-		.select({ itemKey: sourceSnapshot.itemKey })
-		.from(sourceSnapshot)
-		.where(
-			and(
-				eq(sourceSnapshot.sourceConnectionKey, sourceConnectionKey),
-				or(
-					isNull(sourceSnapshot.mappingProfileVersion),
-					ne(
-						sourceSnapshot.mappingProfileVersion,
-						ZOTERO_MAPPING_PROFILE_VERSION,
+	const [[staleItemSnapshot], [staleCollectionSnapshot]] = await Promise.all([
+		database
+			.select({ itemKey: sourceSnapshot.itemKey })
+			.from(sourceSnapshot)
+			.where(
+				and(
+					eq(sourceSnapshot.sourceConnectionKey, sourceConnectionKey),
+					or(
+						isNull(sourceSnapshot.mappingProfileVersion),
+						ne(
+							sourceSnapshot.mappingProfileVersion,
+							ZOTERO_MAPPING_PROFILE_VERSION,
+						),
 					),
 				),
-			),
-		)
-		.limit(1);
-	return Boolean(staleSnapshot);
+			)
+			.limit(1),
+		database
+			.select({ collectionKey: collectionIdentity.key })
+			.from(collectionIdentity)
+			.leftJoin(
+				collectionSourceSnapshot,
+				and(
+					eq(
+						collectionSourceSnapshot.collectionKey,
+						collectionIdentity.key,
+					),
+					eq(
+						collectionSourceSnapshot.sourceConnectionKey,
+						collectionIdentity.sourceConnectionKey,
+					),
+				),
+			)
+			.where(
+				and(
+					eq(
+						collectionIdentity.sourceConnectionKey,
+						sourceConnectionKey,
+					),
+					or(
+						isNull(collectionSourceSnapshot.collectionKey),
+						isNull(collectionSourceSnapshot.mappingProfileVersion),
+						ne(
+							collectionSourceSnapshot.mappingProfileVersion,
+							ZOTERO_MAPPING_PROFILE_VERSION,
+						),
+					),
+				),
+			)
+			.limit(1),
+	]);
+	return Boolean(staleItemSnapshot || staleCollectionSnapshot);
 }
 
 function manifestRestoresTombstone(
@@ -699,6 +744,7 @@ function expandLocalDescendantDeletes(
 			retainedEntries.push({
 				entity: "collection",
 				operation: "delete",
+				remoteVersion: null,
 				sourceRecordKey,
 			});
 		}

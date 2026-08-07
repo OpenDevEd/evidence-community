@@ -3,9 +3,13 @@ import { describe, expect, it } from "vitest";
 import {
 	MAX_SOURCE_RECORD_BYTES,
 	sourceIngestionBatchSchema,
+	type SourceCollectionUpsert,
 	type SourceItemUpsert,
 } from "@/lib/source-ingestion/batch-schema";
-import { sourceItemFingerprint } from "@/lib/source-ingestion/fingerprint";
+import {
+	sourceCollectionFingerprint,
+	sourceItemFingerprint,
+} from "@/lib/source-ingestion/fingerprint";
 
 function batch() {
 	return {
@@ -189,5 +193,39 @@ describe("sourceItemFingerprint", () => {
 				raw: { version: 1, key: "ITEM0001" },
 			}),
 		).toBe(baseline);
+	});
+});
+
+describe("sourceCollectionFingerprint", () => {
+	it("tracks collection content while keeping the transport version out of the hash", () => {
+		const record: SourceCollectionUpsert = {
+			operation: "upsert",
+			sourceRecordKey: "COLL0001",
+			remoteVersion: "1",
+			raw: { key: "COLL0001", version: 1 },
+			data: {
+				name: "Collection",
+				numCollections: 0,
+				numItems: 1,
+				relations: {},
+			},
+			parentSourceRecordKey: null,
+		};
+		const baseline = sourceCollectionFingerprint(record);
+		expect(
+			sourceCollectionFingerprint({ ...record, remoteVersion: "2" }),
+		).toBe(baseline);
+		expect(
+			sourceCollectionFingerprint({
+				...record,
+				data: { ...record.data, name: "Changed" },
+			}),
+		).not.toBe(baseline);
+		expect(
+			sourceCollectionFingerprint({
+				...record,
+				parentSourceRecordKey: "PARENT01",
+			}),
+		).not.toBe(baseline);
 	});
 });

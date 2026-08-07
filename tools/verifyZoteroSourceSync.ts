@@ -2,6 +2,7 @@ import { createServer, type ServerResponse } from "node:http";
 
 import {
 	collectionIdentity,
+	collectionSourceSnapshot,
 	itemIdentity,
 	outbox,
 	sourceConnection,
@@ -580,24 +581,25 @@ async function verify() {
 			"Partial Zotero sync did not persist its checkpoint",
 		);
 
+		const attachmentProcessor = async (record: RemoteRecord) => ({
+			charset: String(record.data.charset),
+			contentType: String(record.data.contentType),
+			coverHeight: null,
+			coverUrl: null,
+			coverWidth: null,
+			filename: String(record.data.filename),
+			fullText: null,
+			linkMode: String(record.data.linkMode),
+			managedPublication: null,
+			md5: String(record.data.md5),
+			mtime: String(record.data.mtime),
+			url: "https://storage.example.org/report.pdf",
+		});
 		const initial = await syncZoteroSource({
 			database,
 			sourceConnectionKey: connectionKey,
 			credentialResolver: createEnvironmentCredentialResolver(),
-			attachmentProcessor: async (record) => ({
-				charset: String(record.data.charset),
-				contentType: String(record.data.contentType),
-				coverHeight: null,
-				coverUrl: null,
-				coverWidth: null,
-				filename: String(record.data.filename),
-				fullText: null,
-				linkMode: String(record.data.linkMode),
-				managedPublication: null,
-				md5: String(record.data.md5),
-				mtime: String(record.data.mtime),
-				url: "https://storage.example.org/report.pdf",
-			}),
+			attachmentProcessor,
 			sleep: async () => {},
 		});
 		assert(
@@ -803,20 +805,53 @@ async function verify() {
 			.select()
 			.from(outbox)
 			.where(inArray(outbox.entityKey, syncedEntityKeys));
+		await database
+			.delete(sourceSnapshot)
+			.where(eq(sourceSnapshot.sourceConnectionKey, connectionKey));
+		await database
+			.delete(collectionSourceSnapshot)
+			.where(
+				and(
+					eq(
+						collectionSourceSnapshot.collectionKey,
+						childCollectionIdentity.key,
+					),
+					eq(
+						collectionSourceSnapshot.sourceConnectionKey,
+						connectionKey,
+					),
+				),
+			);
 		const replay = await syncZoteroSource({
 			database,
 			sourceConnectionKey: connectionKey,
 			credentialResolver: createEnvironmentCredentialResolver(),
+			attachmentProcessor,
 			sleep: async () => {},
 		});
 		const eventsAfterReplay = await database
 			.select()
 			.from(outbox)
 			.where(inArray(outbox.entityKey, syncedEntityKeys));
+		const settledReplay = await syncZoteroSource({
+			database,
+			sourceConnectionKey: connectionKey,
+			credentialResolver: createEnvironmentCredentialResolver(),
+			attachmentProcessor,
+			sleep: async () => {},
+		});
 		assert(
-			replay.records === 0 &&
+			replay.records === 15 &&
+				settledReplay.records === 0 &&
 				eventsAfterReplay.length === eventsBeforeReplay.length,
-			"Exact Zotero replay emitted canonical changes",
+			`Collection-snapshot replay did not run exactly once without canonical changes: ${JSON.stringify(
+				{
+					eventsAfter: eventsAfterReplay.length,
+					eventsBefore: eventsBeforeReplay.length,
+					replayRecords: replay.records,
+					settledReplayRecords: settledReplay.records,
+				},
+			)}`,
 		);
 
 		remote.version = 11;

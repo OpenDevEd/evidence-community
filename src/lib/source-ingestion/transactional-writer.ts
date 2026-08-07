@@ -1,5 +1,7 @@
 import {
 	collectionIdentity,
+	collectionSourceLink,
+	collectionSourceSnapshot,
 	itemSourceLink,
 	outbox,
 	sourceConnection,
@@ -11,9 +13,11 @@ import {
 	eq,
 	getTableColumns,
 	inArray,
+	notExists,
 	sql,
 	type InferInsertModel,
 } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "@/db/database-schema";
 import { lockItemMutations } from "@/db/item-mutation-lock";
@@ -45,6 +49,7 @@ import {
 import { chunkValues } from "@/lib/chunk-values";
 import {
 	canonicalSourceJson,
+	sourceCollectionFingerprint,
 	sourceItemFingerprint,
 	sourcePayloadHash,
 } from "./fingerprint";
@@ -574,6 +579,98 @@ async function updateItemSourceLinkVersions(
 	}
 }
 
+async function ensureCollectionSourceLinks(
+	transaction: Transaction,
+	sourceConnectionKey: string,
+	rows: Array<{ collectionKey: string; sourceRecordKey: string }>,
+) {
+	if (rows.length === 0) return;
+	const inserted = await transaction
+		.insert(collectionSourceLink)
+		.values(
+			rows.map((row) => ({
+				...row,
+				sourceConnectionKey,
+			})),
+		)
+		.onConflictDoNothing()
+		.returning({ collectionKey: collectionSourceLink.collectionKey });
+	const insertedKeys = inserted.map((row) => row.collectionKey);
+	if (insertedKeys.length === 0) return;
+
+	const enabledLink = alias(
+		collectionSourceLink,
+		"enabledCollectionSourceLink",
+	);
+	await transaction
+		.update(collectionSourceLink)
+		.set({ writebackEnabled: true })
+		.where(
+			and(
+				inArray(collectionSourceLink.collectionKey, insertedKeys),
+				eq(
+					collectionSourceLink.sourceConnectionKey,
+					sourceConnectionKey,
+				),
+				notExists(
+					transaction
+						.select({ collectionKey: enabledLink.collectionKey })
+						.from(enabledLink)
+						.where(
+							and(
+								eq(
+									enabledLink.collectionKey,
+									collectionSourceLink.collectionKey,
+								),
+								eq(enabledLink.writebackEnabled, true),
+							),
+						),
+				),
+			),
+		);
+}
+
+async function updateCollectionSourceLinkVersions(
+	transaction: Transaction,
+	sourceConnectionKey: string,
+	rows: Array<{
+		acknowledged: boolean;
+		collectionKey: string;
+		remoteDeleted: boolean;
+		remoteVersion: string | null;
+	}>,
+	updatedAt: Date,
+) {
+	for (const rowChunk of chunkValues(rows, RELATION_CHUNK_SIZE)) {
+		const values = sql.join(
+			rowChunk.map(
+				(row) =>
+					sql`(${row.collectionKey}, ${row.remoteVersion}::varchar, ${row.remoteDeleted}::boolean, ${row.acknowledged}::boolean)`,
+			),
+			sql`, `,
+		);
+		await transaction.execute(sql`
+			UPDATE "collectionSourceLink" AS link
+			SET
+				"remoteVersion" = incoming."remoteVersion",
+				"remoteDeleted" = incoming."remoteDeleted",
+				"lastAcknowledgedRemoteVersion" = CASE
+					WHEN incoming."acknowledged" THEN incoming."remoteVersion"
+					ELSE link."lastAcknowledgedRemoteVersion"
+				END,
+				"updatedAt" = ${updatedAt}
+			FROM (VALUES ${values}) AS incoming(
+				"collectionKey",
+				"remoteVersion",
+				"remoteDeleted",
+				"acknowledged"
+			)
+			WHERE link."sourceConnectionKey" = ${sourceConnectionKey}
+				AND link."collectionKey" = incoming."collectionKey"
+		`);
+	}
+}
+
 async function assertAcyclicItemParents(
 	transaction: Transaction,
 	itemKeys: string[],
@@ -770,6 +867,23 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		)) {
 			itemKeys.set(sourceRecordKey, key);
 		}
+		await ensureCollectionSourceLinks(
+			transaction,
+			batch.sourceConnectionKey,
+			batch.collections.flatMap((record) => {
+				const collectionKey = collectionKeys.get(
+					record.sourceRecordKey,
+				);
+				return collectionKey
+					? [
+							{
+								collectionKey,
+								sourceRecordKey: record.sourceRecordKey,
+							},
+						]
+					: [];
+			}),
+		);
 
 		const allItemKeys = [...new Set(itemKeys.values())];
 		const allCollectionKeys = [...new Set(collectionKeys.values())];
@@ -795,6 +909,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 							numItems: collection.numItems,
 							parentCollection: collection.parentCollection,
 							relations: collection.relations,
+							sourceConnectionKey: collection.sourceConnectionKey,
 						})
 						.from(collection)
 						.where(inArray(collection.key, allCollectionKeys))
@@ -823,6 +938,29 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const sourceLinkByItemKey = new Map(
 			sourceLinks.map((row) => [row.itemKey, row]),
 		);
+		const collectionSourceLinks =
+			allCollectionKeys.length === 0
+				? []
+				: await transaction
+						.select()
+						.from(collectionSourceLink)
+						.where(
+							and(
+								eq(
+									collectionSourceLink.sourceConnectionKey,
+									batch.sourceConnectionKey,
+								),
+								inArray(
+									collectionSourceLink.collectionKey,
+									allCollectionKeys,
+								),
+							),
+						)
+						.orderBy(collectionSourceLink.collectionKey)
+						.for("update");
+		const sourceLinkByCollectionKey = new Map(
+			collectionSourceLinks.map((row) => [row.collectionKey, row]),
+		);
 		const existingCollectionByKey = new Map(
 			existingCollections.map((row) => [row.key, row]),
 		);
@@ -843,6 +981,27 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 						);
 		const snapshotByItemKey = new Map(
 			snapshots.map((row) => [row.itemKey, row]),
+		);
+		const collectionSnapshots =
+			allCollectionKeys.length === 0
+				? []
+				: await transaction
+						.select()
+						.from(collectionSourceSnapshot)
+						.where(
+							and(
+								eq(
+									collectionSourceSnapshot.sourceConnectionKey,
+									batch.sourceConnectionKey,
+								),
+								inArray(
+									collectionSourceSnapshot.collectionKey,
+									allCollectionKeys,
+								),
+							),
+						);
+		const snapshotByCollectionKey = new Map(
+			collectionSnapshots.map((row) => [row.collectionKey, row]),
 		);
 		const existingPublications =
 			allItemKeys.length === 0
@@ -953,40 +1112,78 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			string,
 			{ operation: "delete" | "upsert"; revision: number }
 		>();
+		const effectiveCollectionStateByRecordKey = new Map(
+			collectionUpserts.map((record) => {
+				const key = collectionKeys.get(record.sourceRecordKey)!;
+				const existing = existingCollectionByKey.get(key);
+				const dirtyFields = new Set(
+					sourceLinkByCollectionKey.get(key)?.dirtyFields ?? [],
+				);
+				return [
+					record.sourceRecordKey,
+					{
+						name:
+							existing && dirtyFields.has("name")
+								? existing.name
+								: record.data.name,
+						numCollections: record.data.numCollections,
+						numItems: record.data.numItems,
+						parentCollection:
+							existing && dirtyFields.has("parentCollection")
+								? existing.parentCollection
+								: (parentCollectionKeys.get(
+										record.sourceRecordKey,
+									) ?? null),
+						relations: record.data.relations,
+					},
+				] as const;
+			}),
+		);
 		const changedCollectionUpserts = collectionUpserts.filter((record) => {
 			const key = collectionKeys.get(record.sourceRecordKey)!;
 			const existing = existingCollectionByKey.get(key);
-			const parentKey =
-				parentCollectionKeys.get(record.sourceRecordKey) ?? null;
+			if (!existing || existing.deleted === 1) return true;
+			const snapshot = snapshotByCollectionKey.get(key);
+			const sourceChanged =
+				!snapshot ||
+				snapshot.payloadHash !== sourceCollectionFingerprint(record) ||
+				snapshot.mappingProfileVersion !== batch.mappingProfileVersion;
+			if (!sourceChanged) return false;
+			const state = effectiveCollectionStateByRecordKey.get(
+				record.sourceRecordKey,
+			)!;
 			return (
-				!existing ||
-				existing.deleted === 1 ||
-				existing.name !== record.data.name ||
-				existing.numCollections !== record.data.numCollections ||
-				existing.numItems !== record.data.numItems ||
-				existing.parentCollection !== parentKey ||
+				existing.name !== state.name ||
+				existing.numCollections !== state.numCollections ||
+				existing.numItems !== state.numItems ||
+				existing.parentCollection !== state.parentCollection ||
 				!nullableJsonEqual(
 					existing.relations as Record<string, unknown> | null,
-					record.data.relations,
+					state.relations,
 				)
 			);
 		});
 		const writtenCollections = await writeCollectionRows(
 			transaction,
-			changedCollectionUpserts.map((record) => ({
-				key: collectionKeys.get(record.sourceRecordKey)!,
-				sourceConnectionKey: batch.sourceConnectionKey,
-				sourceRecordKey: record.sourceRecordKey,
-				revision: 1,
-				name: record.data.name,
-				numCollections: record.data.numCollections,
-				numItems: record.data.numItems,
-				relations: record.data.relations,
-				parentCollection: null,
-				deleted: 0,
-				deletedAt: null,
-				updatedAt: now,
-			})),
+			changedCollectionUpserts.map((record) => {
+				const state = effectiveCollectionStateByRecordKey.get(
+					record.sourceRecordKey,
+				)!;
+				return {
+					key: collectionKeys.get(record.sourceRecordKey)!,
+					sourceConnectionKey: batch.sourceConnectionKey,
+					sourceRecordKey: record.sourceRecordKey,
+					revision: 1,
+					name: state.name,
+					numCollections: state.numCollections,
+					numItems: state.numItems,
+					relations: state.relations,
+					parentCollection: null,
+					deleted: 0,
+					deletedAt: null,
+					updatedAt: now,
+				};
+			}),
 		);
 		for (const row of writtenCollections) {
 			collectionEvents.set(row.key, {
@@ -1003,9 +1200,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const activeParentCollectionKeys = [
 			...new Set(
 				changedCollectionUpserts.flatMap((record) => {
-					const parentKey =
-						parentCollectionKeys.get(record.sourceRecordKey) ??
-						null;
+					const parentKey = effectiveCollectionStateByRecordKey.get(
+						record.sourceRecordKey,
+					)!.parentCollection;
 					return parentKey ? [parentKey] : [];
 				}),
 			),
@@ -1041,8 +1238,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			transaction,
 			changedCollectionUpserts.map((record) => ({
 				key: collectionKeys.get(record.sourceRecordKey)!,
-				parentKey:
-					parentCollectionKeys.get(record.sourceRecordKey) ?? null,
+				parentKey: effectiveCollectionStateByRecordKey.get(
+					record.sourceRecordKey,
+				)!.parentCollection,
 			})),
 		);
 
@@ -1645,6 +1843,92 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			);
 		}
 
+		const collectionSnapshotRows = batch.collections.flatMap((record) => {
+			const collectionKey = collectionKeys.get(record.sourceRecordKey);
+			if (!collectionKey) return [];
+			const expectedHash =
+				record.operation === "upsert"
+					? sourceCollectionFingerprint(record)
+					: sourcePayloadHash(record.raw);
+			const existingSnapshot = snapshotByCollectionKey.get(collectionKey);
+			if (
+				existingSnapshot?.payloadHash === expectedHash &&
+				existingSnapshot.remoteVersion === record.remoteVersion &&
+				existingSnapshot.mappingProfileVersion ===
+					batch.mappingProfileVersion
+			) {
+				return [];
+			}
+			return [
+				{
+					collectionKey,
+					sourceConnectionKey: batch.sourceConnectionKey,
+					payload: record.raw,
+					payloadHash: expectedHash,
+					remoteVersion: record.remoteVersion,
+					mappingProfileVersion: batch.mappingProfileVersion,
+					fetchedAt: batch.fetchedAt,
+				},
+			];
+		});
+		const replacedCollectionSnapshotKeys = new Set(
+			collectionSnapshotRows.map((row) => row.collectionKey),
+		);
+		const refreshedCollectionSnapshotKeys = batch.collections.flatMap(
+			(record) => {
+				const collectionKey = collectionKeys.get(
+					record.sourceRecordKey,
+				);
+				return collectionKey &&
+					!replacedCollectionSnapshotKeys.has(collectionKey)
+					? [collectionKey]
+					: [];
+			},
+		);
+		await insertInChunks(
+			collectionSnapshotRows,
+			RELATION_CHUNK_SIZE,
+			(rowChunk) =>
+				transaction
+					.insert(collectionSourceSnapshot)
+					.values(rowChunk)
+					.onConflictDoUpdate({
+						target: [
+							collectionSourceSnapshot.collectionKey,
+							collectionSourceSnapshot.sourceConnectionKey,
+						],
+						set: {
+							payload: sql.raw(`excluded."payload"`),
+							payloadHash: sql.raw(`excluded."payloadHash"`),
+							remoteVersion: sql.raw(`excluded."remoteVersion"`),
+							mappingProfileVersion: sql.raw(
+								`excluded."mappingProfileVersion"`,
+							),
+							fetchedAt: sql.raw(`excluded."fetchedAt"`),
+						},
+					}),
+		);
+		await insertInChunks(
+			refreshedCollectionSnapshotKeys,
+			RELATION_CHUNK_SIZE,
+			(keyChunk) =>
+				transaction
+					.update(collectionSourceSnapshot)
+					.set({ fetchedAt: batch.fetchedAt })
+					.where(
+						and(
+							eq(
+								collectionSourceSnapshot.sourceConnectionKey,
+								batch.sourceConnectionKey,
+							),
+							inArray(
+								collectionSourceSnapshot.collectionKey,
+								keyChunk,
+							),
+						),
+					),
+		);
+
 		const snapshotRows = batch.items.flatMap((record) => {
 			const itemKey = itemKeys.get(record.sourceRecordKey);
 			if (!itemKey) return [];
@@ -1741,6 +2025,38 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 							{
 								acknowledged,
 								itemKey,
+								remoteDeleted,
+								remoteVersion: record.remoteVersion,
+							},
+						]
+					: [];
+			}),
+			now,
+		);
+		await updateCollectionSourceLinkVersions(
+			transaction,
+			batch.sourceConnectionKey,
+			batch.collections.flatMap((record) => {
+				const collectionKey = collectionKeys.get(
+					record.sourceRecordKey,
+				);
+				const link = collectionKey
+					? sourceLinkByCollectionKey.get(collectionKey)
+					: undefined;
+				const existing = collectionKey
+					? existingCollectionByKey.get(collectionKey)
+					: undefined;
+				const remoteDeleted = record.operation === "delete";
+				const acknowledged =
+					(link?.dirtyFields.length ?? 0) === 0 &&
+					(!remoteDeleted ||
+						existing?.sourceConnectionKey ===
+							batch.sourceConnectionKey);
+				return collectionKey
+					? [
+							{
+								acknowledged,
+								collectionKey,
 								remoteDeleted,
 								remoteVersion: record.remoteVersion,
 							},

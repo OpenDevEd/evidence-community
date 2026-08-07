@@ -163,6 +163,8 @@ export function mapZoteroCollection(
 	return {
 		operation: "upsert",
 		sourceRecordKey: collection.key,
+		remoteVersion: String(collection.version),
+		raw: collection as never,
 		data: {
 			name: collection.data.name,
 			numCollections: collection.meta?.numCollections ?? null,

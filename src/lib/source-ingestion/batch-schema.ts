@@ -167,6 +167,8 @@ const collectionUpsertSchema = z
 	.object({
 		operation: z.literal("upsert"),
 		sourceRecordKey: sourceRecordKeySchema,
+		remoteVersion: nullableRemoteVersionSchema,
+		raw: jsonObjectSchema.default({}),
 		data: collectionDataSchema,
 		parentSourceRecordKey: sourceRecordKeySchema.nullable().default(null),
 	})
@@ -176,6 +178,8 @@ const collectionDeleteSchema = z
 	.object({
 		operation: z.literal("delete"),
 		sourceRecordKey: sourceRecordKeySchema,
+		remoteVersion: nullableRemoteVersionSchema,
+		raw: jsonObjectSchema.default({ deleted: true }),
 	})
 	.strict();
 
@@ -290,5 +294,9 @@ export const sourceIngestionBatchSchema = z
 export type SourceIngestionBatch = z.infer<typeof sourceIngestionBatchSchema>;
 export type SourceItemUpsert = Extract<
 	SourceIngestionBatch["items"][number],
+	{ operation: "upsert" }
+>;
+export type SourceCollectionUpsert = Extract<
+	SourceIngestionBatch["collections"][number],
 	{ operation: "upsert" }
 >;

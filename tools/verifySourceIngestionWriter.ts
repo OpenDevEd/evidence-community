@@ -1,5 +1,7 @@
 import {
 	collectionIdentity,
+	collectionSourceLink,
+	collectionSourceSnapshot,
 	itemIdentity,
 	itemSourceLink,
 	outbox,
@@ -814,6 +816,8 @@ async function verify() {
 				{
 					operation: "upsert",
 					sourceRecordKey: "CCCC2345",
+					remoteVersion: "20",
+					raw: { key: "CCCC2345", version: 20 },
 					data: {
 						name: "Root collection",
 						numCollections: 1,
@@ -824,6 +828,8 @@ async function verify() {
 				{
 					operation: "upsert",
 					sourceRecordKey: "DDDD2345",
+					remoteVersion: "21",
+					raw: { key: "DDDD2345", version: 21 },
 					parentSourceRecordKey: "CCCC2345",
 					data: {
 						name: "Child collection",
@@ -905,7 +911,13 @@ async function verify() {
 			"An unclaimed provider key was not adopted",
 		);
 
-		const [parent, attachment, childCollection] = await Promise.all([
+		const [
+			parent,
+			attachment,
+			childCollection,
+			childCollectionLink,
+			childCollectionSnapshot,
+		] = await Promise.all([
 			db
 				.select()
 				.from(item)
@@ -920,6 +932,38 @@ async function verify() {
 				.select()
 				.from(collection)
 				.where(eq(collection.key, first.collectionKeys.DDDD2345!))
+				.then((rows) => rows[0]),
+			db
+				.select()
+				.from(collectionSourceLink)
+				.where(
+					and(
+						eq(
+							collectionSourceLink.collectionKey,
+							first.collectionKeys.DDDD2345!,
+						),
+						eq(
+							collectionSourceLink.sourceConnectionKey,
+							"zotero-writer",
+						),
+					),
+				)
+				.then((rows) => rows[0]),
+			db
+				.select()
+				.from(collectionSourceSnapshot)
+				.where(
+					and(
+						eq(
+							collectionSourceSnapshot.collectionKey,
+							first.collectionKeys.DDDD2345!,
+						),
+						eq(
+							collectionSourceSnapshot.sourceConnectionKey,
+							"zotero-writer",
+						),
+					),
+				)
 				.then((rows) => rows[0]),
 		]);
 		assert(
@@ -943,8 +987,14 @@ async function verify() {
 			"Source attachment reparenting left a stale root projection",
 		);
 		assert(
-			childCollection?.parentCollection === first.collectionKeys.CCCC2345,
-			"Two-pass collection parenting failed",
+			childCollection?.parentCollection ===
+				first.collectionKeys.CCCC2345 &&
+				childCollectionLink?.writebackEnabled === true &&
+				childCollectionLink.remoteVersion === "21" &&
+				childCollectionLink.lastAcknowledgedRemoteVersion === "21" &&
+				childCollectionSnapshot?.remoteVersion === "21" &&
+				childCollectionSnapshot.payloadHash.length === 64,
+			"Collection parenting, source links, versions, or snapshots were not written",
 		);
 
 		const [memberships, tags, snapshot, alias, publication] =
@@ -995,9 +1045,31 @@ async function verify() {
 				publication.sha256 === "a".repeat(64),
 			"Normalized relationships, snapshot, or alias is wrong",
 		);
+		await db
+			.delete(collectionSourceLink)
+			.where(
+				and(
+					eq(
+						collectionSourceLink.collectionKey,
+						first.collectionKeys.DDDD2345!,
+					),
+					eq(
+						collectionSourceLink.sourceConnectionKey,
+						"zotero-writer",
+					),
+				),
+			);
 
 		const replay = await writeSourceIngestionBatch(db, {
 			...firstBatch,
+			collections: firstBatch.collections.map((record, index) => ({
+				...record,
+				remoteVersion: String(22 + index),
+				raw: {
+					key: record.sourceRecordKey,
+					version: 22 + index,
+				},
+			})),
 			expectedCursor: { version: 1 },
 			nextCursor: { version: 2 },
 			fetchedAt: new Date("2026-07-29T12:05:00.000Z"),
@@ -1008,6 +1080,47 @@ async function verify() {
 				replay.written.outboxEvents === 0,
 			"An identical replay created canonical revisions",
 		);
+		const [childLinkAfterVersionOnlySync] = await db
+			.select()
+			.from(collectionSourceLink)
+			.where(
+				and(
+					eq(
+						collectionSourceLink.collectionKey,
+						first.collectionKeys.DDDD2345!,
+					),
+					eq(
+						collectionSourceLink.sourceConnectionKey,
+						"zotero-writer",
+					),
+				),
+			);
+		assert(
+			childLinkAfterVersionOnlySync?.remoteVersion === "23" &&
+				childLinkAfterVersionOnlySync.lastAcknowledgedRemoteVersion ===
+					"23",
+			"A collection version-only sync did not advance its source link",
+		);
+
+		await db
+			.update(collection)
+			.set({ name: "Local pending child name" })
+			.where(eq(collection.key, first.collectionKeys.DDDD2345!));
+		await db
+			.update(collectionSourceLink)
+			.set({ dirtyFields: ["name"] })
+			.where(
+				and(
+					eq(
+						collectionSourceLink.collectionKey,
+						first.collectionKeys.DDDD2345!,
+					),
+					eq(
+						collectionSourceLink.sourceConnectionKey,
+						"zotero-writer",
+					),
+				),
+			);
 
 		const attachmentUpdate = await writeSourceIngestionBatch(db, {
 			...baseBatch({
@@ -1032,10 +1145,50 @@ async function verify() {
 					},
 				},
 			],
+			collections: [
+				{
+					...firstBatch.collections[1],
+					remoteVersion: "24",
+					raw: { key: "DDDD2345", version: 24 },
+					data: {
+						...firstBatch.collections[1]!.data,
+						name: "Remote conflicting child name",
+					},
+				},
+			],
 		});
 		assert(
 			attachmentUpdate.written.items === 2,
 			"Attachment update did not reproject its parent",
+		);
+		const [[childAfterDirtySync], [childLinkAfterDirtySync]] =
+			await Promise.all([
+				db
+					.select()
+					.from(collection)
+					.where(eq(collection.key, first.collectionKeys.DDDD2345!)),
+				db
+					.select()
+					.from(collectionSourceLink)
+					.where(
+						and(
+							eq(
+								collectionSourceLink.collectionKey,
+								first.collectionKeys.DDDD2345!,
+							),
+							eq(
+								collectionSourceLink.sourceConnectionKey,
+								"zotero-writer",
+							),
+						),
+					),
+			]);
+		assert(
+			attachmentUpdate.written.collections === 0 &&
+				childAfterDirtySync?.name === "Local pending child name" &&
+				childLinkAfterDirtySync?.remoteVersion === "24" &&
+				childLinkAfterDirtySync.lastAcknowledgedRemoteVersion === "23",
+			"Inbound collection sync overwrote or acknowledged a dirty field",
 		);
 		const [[savedIssue], membershipsAfterSourceUpdate] = await Promise.all([
 			db
@@ -1151,10 +1304,46 @@ async function verify() {
 					raw: { key: "BBBB2345", deleted: true },
 				},
 			],
+			collections: [
+				{
+					operation: "delete",
+					sourceRecordKey: "DDDD2345",
+					remoteVersion: "25",
+					raw: { deleted: true, key: "DDDD2345" },
+				},
+			],
 		});
 		assert(
 			deletion.written.items === 2,
 			"Attachment deletion did not reproject its parent",
+		);
+		const [[childAfterDelete], [childLinkAfterDelete]] = await Promise.all([
+			db
+				.select()
+				.from(collection)
+				.where(eq(collection.key, first.collectionKeys.DDDD2345!)),
+			db
+				.select()
+				.from(collectionSourceLink)
+				.where(
+					and(
+						eq(
+							collectionSourceLink.collectionKey,
+							first.collectionKeys.DDDD2345!,
+						),
+						eq(
+							collectionSourceLink.sourceConnectionKey,
+							"zotero-writer",
+						),
+					),
+				),
+		]);
+		assert(
+			childAfterDelete?.deleted === 1 &&
+				childLinkAfterDelete?.remoteDeleted === true &&
+				childLinkAfterDelete.remoteVersion === "25" &&
+				childLinkAfterDelete.lastAcknowledgedRemoteVersion === "23",
+			"Collection deletion state or dirty acknowledgement was lost",
 		);
 		const unresolvedIssue = await db
 			.select()
@@ -1222,22 +1411,39 @@ async function verify() {
 					},
 				},
 			],
+			collections: [
+				{
+					...firstBatch.collections[1],
+					remoteVersion: "26",
+					raw: { key: "DDDD2345", version: 26 },
+				},
+			],
 		});
-		const [restoredPublication, staleCleanup] = await Promise.all([
-			db
-				.select()
-				.from(itemFilePublication)
-				.where(eq(itemFilePublication.itemKey, attachmentKey)),
-			db
-				.select()
-				.from(sourceFileCleanup)
-				.where(
-					eq(sourceFileCleanup.sourceConnectionKey, "zotero-writer"),
-				),
-		]);
+		const [restoredPublication, staleCleanup, [restoredCollection]] =
+			await Promise.all([
+				db
+					.select()
+					.from(itemFilePublication)
+					.where(eq(itemFilePublication.itemKey, attachmentKey)),
+				db
+					.select()
+					.from(sourceFileCleanup)
+					.where(
+						eq(
+							sourceFileCleanup.sourceConnectionKey,
+							"zotero-writer",
+						),
+					),
+				db
+					.select()
+					.from(collection)
+					.where(eq(collection.key, first.collectionKeys.DDDD2345!)),
+			]);
 		assert(
-			restoredPublication.length === 1 && staleCleanup.length === 0,
-			"Restoring content-addressed source paths left an unsafe pending cleanup",
+			restoredPublication.length === 1 &&
+				staleCleanup.length === 0 &&
+				restoredCollection?.deleted === 0,
+			"Restoring source records left an unsafe cleanup or deleted collection",
 		);
 		const retryPaths = [
 			"sources/zotero/zotero-writer/obsolete/document.pdf",

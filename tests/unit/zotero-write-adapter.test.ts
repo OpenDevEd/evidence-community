@@ -255,7 +255,7 @@ describe("Zotero writeback adapter", () => {
 			remoteVersion: "11",
 			snapshot: {
 				fingerprint: expect.stringMatching(/^[0-9a-f]{64}$/u),
-				mappingProfileVersion: "zotero-web-api-v3-3",
+				mappingProfileVersion: "zotero-web-api-v3-4",
 			},
 			sourceRecordKey: "ABCD2345",
 		});
