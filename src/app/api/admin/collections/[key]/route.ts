@@ -2,6 +2,7 @@ import { revalidateTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDatabase } from "@/db";
+import { loadLibraryConfig } from "@/config/library-config/source";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
@@ -10,9 +11,9 @@ import {
 } from "@/lib/admin/http";
 import { toAdminCollection } from "@/lib/admin/library-query-service";
 import {
-	deleteNativeCollection,
-	renameNativeCollection,
-} from "@/lib/admin/native-collection-service";
+	deleteAdminCollection,
+	renameAdminCollection,
+} from "@/lib/admin/collection-mutation-service";
 import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 type RouteContext = { params: Promise<{ key: string }> };
@@ -23,10 +24,11 @@ export async function PATCH(request: NextRequest, { params }: RouteContext) {
 
 	try {
 		const { key } = await params;
-		const collection = await renameNativeCollection(
+		const collection = await renameAdminCollection(
 			await getDatabase(),
 			key,
 			await readAdminJson(request),
+			{ writebackConfig: await loadLibraryConfig() },
 		);
 		revalidateTag("collections", "max");
 		return NextResponse.json(
@@ -49,10 +51,11 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 
 	try {
 		const { key } = await params;
-		const collections = await deleteNativeCollection(
+		const collections = await deleteAdminCollection(
 			await getDatabase(),
 			key,
 			await readAdminJson(request),
+			{ writebackConfig: await loadLibraryConfig() },
 		);
 		revalidateTag("collections", "max");
 		return NextResponse.json(

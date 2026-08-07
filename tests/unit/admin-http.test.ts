@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 import { z } from "zod";
 
 import { adminErrorResponse, readAdminJson } from "@/lib/admin/http";
-import { NativeCollectionValidationError } from "@/lib/admin/native-collection-service";
+import { CollectionWritebackUnavailableError } from "@/lib/admin/collection-mutation-service";
+import { CollectionValidationError } from "@/lib/admin/native-collection-service";
 import { NativeFileValidationError } from "@/lib/admin/native-file-service";
 import {
 	ItemHasChildrenError as NativeItemHasChildrenError,
@@ -71,13 +72,10 @@ describe("admin API error mapping", () => {
 
 	it("returns actionable collection and PDF field errors", async () => {
 		const collectionResponse = adminErrorResponse(
-			new NativeCollectionValidationError(
-				"Choose another parent collection.",
-				{
-					parentCollection:
-						"A collection cannot be placed inside itself or one of its subcollections.",
-				},
-			),
+			new CollectionValidationError("Choose another parent collection.", {
+				parentCollection:
+					"A collection cannot be placed inside itself or one of its subcollections.",
+			}),
 		);
 		expect(await collectionResponse.json()).toMatchObject({
 			error: {
@@ -110,6 +108,22 @@ describe("admin API error mapping", () => {
 			error: {
 				code: "validation_failed",
 				fields: { file: "Choose a valid PDF file." },
+			},
+		});
+	});
+
+	it("explains when collection writeback is disabled", async () => {
+		const response = adminErrorResponse(
+			new CollectionWritebackUnavailableError(
+				"ABCD2345",
+				"source-disabled",
+			),
+		);
+		expect(response.status).toBe(409);
+		expect(await response.json()).toMatchObject({
+			error: {
+				code: "conflict",
+				message: "Writeback is disabled for this collection's source.",
 			},
 		});
 	});

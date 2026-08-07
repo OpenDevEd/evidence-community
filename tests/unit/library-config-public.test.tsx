@@ -53,6 +53,7 @@ describe("public library configuration", () => {
 		expect(publicConfig).not.toHaveProperty("email");
 		expect(publicConfig).not.toHaveProperty("generation");
 		expect(publicConfig).not.toHaveProperty("processing");
+		expect(publicConfig).not.toHaveProperty("sources");
 		expect(publicConfig.ai.providers[0]).not.toHaveProperty("apiKey");
 		expect(publicConfig.authentication).toEqual({
 			google: { enabled: true },

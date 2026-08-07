@@ -1,7 +1,7 @@
 {
 	"schemaVersion": 1,
-	"revision": "example-1",
-	"updatedAt": "2026-07-27T12:30:00.000Z",
+	"revision": "example-2",
+	"updatedAt": "2026-08-07T12:00:00.000Z",
 	"identity": {
 		"name": "Example Evidence Library",
 		"shortName": "Example Library",
@@ -56,12 +56,7 @@
 				"url": "https://assets.example.org/fonts/example-sans.woff2",
 				"weight": "variable"
 			},
-			"weights": [
-				300,
-				400,
-				500,
-				700
-			]
+			"weights": [300, 400, 500, 700]
 		}
 	},
 	"navigation": {
@@ -130,16 +125,10 @@
 		"termsOfService": "https://library.example.org/terms"
 	},
 	"localization": {
-		"locales": [
-			"en-GB",
-			"fr"
-		],
+		"locales": ["en-GB", "fr"],
 		"defaultLocale": "en-GB",
 		"detectLocale": true,
-		"localePriority": [
-			"fr",
-			"en-GB"
-		]
+		"localePriority": ["fr", "en-GB"]
 	},
 	"search": {
 		"fullText": true,
@@ -147,11 +136,7 @@
 		"country": true,
 		"authorCountry": true,
 		"embeddings": true,
-		"scopes": [
-			"title_abstract_author_and_keywords",
-			"title",
-			"authors"
-		],
+		"scopes": ["title_abstract_author_and_keywords", "title", "authors"],
 		"defaultScope": "title_abstract_author_and_keywords"
 	},
 	"filters": {
@@ -170,24 +155,12 @@
 	},
 	"content": {
 		"tags": {
-			"comingSoon": [
-				"coming-soon"
-			],
-			"internal": [
-				"internal-only"
-			],
-			"hidden": [
-				"hidden-record"
-			],
-			"description": [
-				"collection-description"
-			],
-			"redirects": [
-				"redirect-record"
-			],
-			"publish": [
-				"publish-record"
-			]
+			"comingSoon": ["coming-soon"],
+			"internal": ["internal-only"],
+			"hidden": ["hidden-record"],
+			"description": ["collection-description"],
+			"redirects": ["redirect-record"],
+			"publish": ["publish-record"]
 		}
 	},
 	"citations": {
@@ -235,6 +208,12 @@
 		"bibtex": "https://exports.example.org/library.bib",
 		"atom": "https://exports.example.org/library.atom"
 	},
+	"sources": [
+		{
+			"key": "zotero-example",
+			"writebackEnabled": false
+		}
+	],
 	"services": {
 		"database": {
 			"url": "postgresql://library:password@database:5432/library"

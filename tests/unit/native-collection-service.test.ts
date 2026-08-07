@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	NativeCollectionConflictError,
-	NativeCollectionValidationError,
+	CollectionConflictError,
+	CollectionValidationError,
 	assertExpectedNativeCollectionRevision,
-	assertValidNativeCollectionParent,
+	assertValidCollectionParent,
 	nativeCollectionRestoreCohortKeys,
 	nextNativeCollectionSortOrder,
 	normalizeNativeCollectionMoveInput,
@@ -141,7 +141,7 @@ describe("native collection validation", () => {
 				position: "after",
 				targetCollection: "ABCD2345",
 			}),
-		).toThrow(NativeCollectionValidationError);
+		).toThrow(CollectionValidationError);
 	});
 
 	it("rejects stale mutation revisions with the current revision", () => {
@@ -150,7 +150,7 @@ describe("native collection validation", () => {
 				{ key: "ABCD2345", revision: 7 },
 				6,
 			),
-		).toThrow(NativeCollectionConflictError);
+		).toThrow(CollectionConflictError);
 		try {
 			assertExpectedNativeCollectionRevision(
 				{ key: "ABCD2345", revision: 7 },
@@ -163,10 +163,16 @@ describe("native collection validation", () => {
 
 	it("rejects deleted or imported parents and hierarchy cycles", () => {
 		try {
-			assertValidNativeCollectionParent(rows, null, "DEFG5678");
+			assertValidCollectionParent(
+				rows,
+				"native",
+				null,
+				"DEFG5678",
+				"Choose an active collection created in this library.",
+			);
 			expect.unreachable("Expected invalid parent error");
 		} catch (error) {
-			expect(error).toBeInstanceOf(NativeCollectionValidationError);
+			expect(error).toBeInstanceOf(CollectionValidationError);
 			expect(error).toMatchObject({
 				fields: {
 					parentCollection:
@@ -175,10 +181,22 @@ describe("native collection validation", () => {
 			});
 		}
 		expect(() =>
-			assertValidNativeCollectionParent(rows, null, "EFGH6789"),
-		).toThrow(NativeCollectionValidationError);
+			assertValidCollectionParent(
+				rows,
+				"native",
+				null,
+				"EFGH6789",
+				"Choose an active collection created in this library.",
+			),
+		).toThrow(CollectionValidationError);
 		try {
-			assertValidNativeCollectionParent(rows, "ABCD2345", "CDEF4567");
+			assertValidCollectionParent(
+				rows,
+				"native",
+				"ABCD2345",
+				"CDEF4567",
+				"Choose an active collection created in this library.",
+			);
 			expect.unreachable("Expected hierarchy cycle error");
 		} catch (error) {
 			expect(error).toMatchObject({

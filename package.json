@@ -31,6 +31,7 @@
 		"test:linked-item-lifecycle": "tsx ./tools/verifyLinkedItemDraftLifecycle.ts",
 		"test:source-writeback": "tsx ./tools/verifySourceWriteback.ts",
 		"test:collection-writeback": "tsx ./tools/verifyCollectionSourceWriteback.ts",
+		"test:source-collections": "tsx ./tools/verifySourceCollectionLifecycle.ts",
 		"benchmark:admin-items": "tsx ./tools/benchmarkAdminItemList.ts",
 		"test:admin-item-pagination": "tsx ./tools/verifyAdminItemListPagination.ts",
 		"test:admin-collection-catalog": "tsx ./tools/verifyAdminCollectionCatalog.ts",

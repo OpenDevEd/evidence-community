@@ -20,7 +20,10 @@ import {
 import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "@/db/database-schema";
-import { lockItemMutations } from "@/db/canonical-mutation-lock";
+import {
+	lockCollectionMutations,
+	lockItemMutations,
+} from "@/db/canonical-mutation-lock";
 import {
 	reserveCollectionIdentities,
 	reserveItemSourceLinks,
@@ -887,6 +890,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 
 		const allItemKeys = [...new Set(itemKeys.values())];
 		const allCollectionKeys = [...new Set(collectionKeys.values())];
+		await lockCollectionMutations(transaction, allCollectionKeys);
 		await lockItemMutations(transaction, allItemKeys);
 		const existingItems =
 			allItemKeys.length === 0
@@ -1142,7 +1146,12 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const changedCollectionUpserts = collectionUpserts.filter((record) => {
 			const key = collectionKeys.get(record.sourceRecordKey)!;
 			const existing = existingCollectionByKey.get(key);
-			if (!existing || existing.deleted === 1) return true;
+			if (!existing) return true;
+			if (existing.deleted === 1) {
+				return !sourceLinkByCollectionKey
+					.get(key)
+					?.dirtyFields.includes("deleted");
+			}
 			const snapshot = snapshotByCollectionKey.get(key);
 			const sourceChanged =
 				!snapshot ||
@@ -1194,7 +1203,17 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		const collectionDeleteKeys = collectionDeletes.flatMap((record) => {
 			const key = collectionKeys.get(record.sourceRecordKey);
 			const existing = key ? existingCollectionByKey.get(key) : undefined;
-			return key && existing && existing.deleted !== 1 ? [key] : [];
+			const pendingLocalRestore = key
+				? sourceLinkByCollectionKey
+						.get(key)
+						?.dirtyFields.includes("deleted")
+				: false;
+			return key &&
+				existing &&
+				existing.deleted !== 1 &&
+				!pendingLocalRestore
+				? [key]
+				: [];
 		});
 		const collectionDeleteKeySet = new Set(collectionDeleteKeys);
 		const activeParentCollectionKeys = [

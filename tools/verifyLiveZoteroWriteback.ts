@@ -121,6 +121,7 @@ async function drainWriteback(
 					registry: runtime.registry,
 					retryBaseMs: 100,
 					retryMaxMs: 500,
+					sourceWritebackEnabled: () => true,
 					workerId: `zotero-live-writeback:${process.pid}:${label}`,
 				},
 				100,

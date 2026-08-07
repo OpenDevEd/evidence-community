@@ -22,6 +22,7 @@ import {
 	ItemParentUnavailableError,
 	publishItemDraftWithContext,
 	removeNativeItem,
+	type ItemWritebackPolicyOptions,
 } from "./native-item-service";
 
 type RevalidationTarget = {
@@ -33,6 +34,7 @@ type RevalidationTarget = {
 type BatchDependencies = {
 	db: Database;
 	removePrivateFiles: (paths: string[]) => Promise<void>;
+	writebackPolicyOptions?: ItemWritebackPolicyOptions;
 };
 
 export type AdminItemBatchExecution = AdminItemBatchResponse & {
@@ -136,7 +138,7 @@ export function orderBatchKeysByDependency(
 
 export async function runAdminItemBatch(
 	request: AdminItemBatchRequest,
-	{ db, removePrivateFiles }: BatchDependencies,
+	{ db, removePrivateFiles, writebackPolicyOptions = {} }: BatchDependencies,
 ): Promise<AdminItemBatchExecution> {
 	if (request.action === "assignCollection") {
 		await assertAssignableCollection(db, request.collectionKey);
@@ -183,6 +185,7 @@ export async function runAdminItemBatch(
 					publishedContext = await publishItemDraftWithContext(
 						db,
 						key,
+						writebackPolicyOptions,
 					);
 				} catch (error) {
 					if (error instanceof ItemNotFoundError) {
@@ -272,6 +275,7 @@ export async function runAdminItemBatch(
 				db,
 				key,
 				request.collectionKey,
+				writebackPolicyOptions,
 			);
 			results.push({
 				indexingReceipts: [],

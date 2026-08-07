@@ -2,6 +2,7 @@ import { revalidateTag } from "next/cache";
 import { connection, NextRequest, NextResponse } from "next/server";
 
 import { getDatabase } from "@/db";
+import { loadLibraryConfig } from "@/config/library-config/source";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
@@ -15,7 +16,7 @@ import {
 	searchAdminCollections,
 } from "@/lib/admin/collection-catalog-service";
 import { parseAdminCollectionView } from "@/lib/admin/collection-catalog-contract";
-import { createNativeCollection } from "@/lib/admin/native-collection-service";
+import { createAdminCollection } from "@/lib/admin/collection-mutation-service";
 import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 export async function GET(request: NextRequest) {
@@ -48,8 +49,7 @@ export async function GET(request: NextRequest) {
 			return NextResponse.json(
 				await searchAdminCollections(database, {
 					cursor: searchParams.get("cursor"),
-					editableOnly:
-						searchParams.get("editableOnly") ?? undefined,
+					editableOnly: searchParams.get("editableOnly") ?? undefined,
 					pageSize: searchParams.get("pageSize") ?? undefined,
 					query: searchParams.get("query") ?? undefined,
 					sourceConnectionKey: searchParams.get("source"),
@@ -79,9 +79,10 @@ export async function POST(request: NextRequest) {
 	if (denied) return denied;
 
 	try {
-		const collection = await createNativeCollection(
+		const collection = await createAdminCollection(
 			await getDatabase(),
 			await readAdminJson(request),
+			{ writebackConfig: await loadLibraryConfig() },
 		);
 		revalidateTag("collections", "max");
 		return NextResponse.json(

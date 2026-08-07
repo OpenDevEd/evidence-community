@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getLibraryConfig } from "@/config/library-config/server";
 import { revalidatePublishedItemCaches } from "@/lib/admin/cache";
 import {
 	ADMIN_RESPONSE_HEADERS,
@@ -19,10 +20,14 @@ export async function POST(request: NextRequest) {
 		const input = adminItemBatchRequestSchema.parse(
 			await readAdminJson(request),
 		);
-		const runtime = await getNativeFileRuntime();
+		const [runtime, writebackConfig] = await Promise.all([
+			getNativeFileRuntime(),
+			getLibraryConfig(),
+		]);
 		const execution = await runAdminItemBatch(input, {
 			db: runtime.db,
 			removePrivateFiles: (paths) => runtime.storage.removePrivate(paths),
+			writebackPolicyOptions: { writebackConfig },
 		});
 		for (const target of execution.revalidationTargets) {
 			revalidatePublishedItemCaches(

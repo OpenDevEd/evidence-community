@@ -171,6 +171,7 @@ const importedSource: AdminSource = {
 	provider: "zotero",
 	readOnly: true,
 	status: "active",
+	writeback: { enabled: true, supported: true },
 };
 
 const publishedPayload = {
@@ -239,6 +240,7 @@ function publishedDetail(
 		fileDraft: null,
 		filePublication: null,
 		fileState: "none",
+		editable: true,
 		itemType: "book",
 		key: publishedItemKey,
 		parentItem: null,
@@ -253,6 +255,16 @@ function publishedDetail(
 		tags: [],
 		title: publishedPayload.title,
 		updatedAt: timestamp,
+		writeback: {
+			effective: false,
+			itemEnabled: false,
+			reason: "not-linked",
+			sourceEnabled: false,
+			sourceKey: null,
+			sourceLabel: null,
+			sourceStatus: null,
+			supported: false,
+		},
 	};
 }
 
@@ -396,6 +408,7 @@ async function mockPublishedBook(
 							provider: "native",
 							readOnly: false,
 							status: "active",
+							writeback: { enabled: false, supported: false },
 						},
 						...(options.additionalSources ?? []),
 					],
@@ -805,6 +818,7 @@ test("uses the same collection traversal model for multi-select", async ({
 			provider: "zotero",
 			readOnly: true,
 			status: "active",
+			writeback: { enabled: true, supported: true },
 		}),
 	);
 	let delayPickerRoot = false;
@@ -1321,6 +1335,7 @@ test("filters by searched native and imported collections without loading an opt
 			provider: "zotero",
 			readOnly: true,
 			status: "active",
+			writeback: { enabled: true, supported: true },
 		}),
 	);
 	await page.setViewportSize({ height: 420, width: 1280 });
@@ -2264,6 +2279,7 @@ test("restores branch focus when a collection retry finishes empty", async ({
 		provider: "zotero",
 		readOnly: true,
 		status: "active",
+		writeback: { enabled: true, supported: true },
 	};
 	await mockPublishedBook(page, { additionalSources: [emptySource] });
 	let attempts = 0;
@@ -2322,6 +2338,7 @@ test("does not steal focus when a collection load finishes after the user leaves
 		provider: "zotero",
 		readOnly: true,
 		status: "active",
+		writeback: { enabled: true, supported: true },
 	};
 	await mockPublishedBook(page, { additionalSources: [slowSource] });
 	let releaseLoad!: () => void;

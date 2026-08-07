@@ -80,8 +80,7 @@ export const maximalLibraryConfig = {
 		{
 			id: "institution-one",
 			name: "Institution One",
-			logoUrl:
-				"https://assets.example.org/maximal/institution-one.png",
+			logoUrl: "https://assets.example.org/maximal/institution-one.png",
 		},
 	],
 	theme: {
@@ -190,11 +189,7 @@ export const maximalLibraryConfig = {
 		country: true,
 		authorCountry: true,
 		embeddings: true,
-		scopes: [
-			"title_abstract_author_and_keywords",
-			"title",
-			"authors",
-		],
+		scopes: ["title_abstract_author_and_keywords", "title", "authors"],
 		defaultScope: "title_abstract_author_and_keywords",
 	},
 	filters: {
@@ -266,6 +261,12 @@ export const maximalLibraryConfig = {
 		bibtex: "https://exports.example.org/library.bib",
 		atom: "https://exports.example.org/library.atom",
 	},
+	sources: [
+		{
+			key: "zotero-maximal",
+			writebackEnabled: true,
+		},
+	],
 	services: {
 		database: {
 			url: "postgresql://library:password@database:5432/library",

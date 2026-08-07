@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabase } from "@/db";
 import {
 	ADMIN_RESPONSE_HEADERS,
@@ -48,7 +49,11 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
 
 	try {
 		const { key } = await params;
-		const draft = await openItemDraft(await getDatabase(), key);
+		const [db, writebackConfig] = await Promise.all([
+			getDatabase(),
+			getLibraryConfig(),
+		]);
+		const draft = await openItemDraft(db, key, { writebackConfig });
 		return NextResponse.json(
 			{ draft },
 			{ status: 201, headers: ADMIN_RESPONSE_HEADERS },
@@ -65,10 +70,18 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
 	try {
 		const { key } = await params;
 		const body = saveBodySchema.parse(await readAdminJson(request));
-		const draft = await saveItemDraft(await getDatabase(), {
-			itemKey: key,
-			...body,
-		});
+		const [db, writebackConfig] = await Promise.all([
+			getDatabase(),
+			getLibraryConfig(),
+		]);
+		const draft = await saveItemDraft(
+			db,
+			{
+				itemKey: key,
+				...body,
+			},
+			{ writebackConfig },
+		);
 		return NextResponse.json(
 			{ draft },
 			{ headers: ADMIN_RESPONSE_HEADERS },

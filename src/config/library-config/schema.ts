@@ -1,3 +1,4 @@
+import { isSourceConnectionKey } from "@opendeved/evidence-library-core";
 import { z } from "zod";
 
 import {
@@ -39,11 +40,7 @@ import {
 	tagSchema,
 	utcTimestampSchema,
 } from "./primitives";
-import {
-	generateColorRamp,
-	parseHexColor,
-	type RgbaColor,
-} from "./theme";
+import { generateColorRamp, parseHexColor, type RgbaColor } from "./theme";
 
 export const MAX_LIBRARY_CONFIG_BYTES = 1024 * 1024;
 const DEFAULT_FONT_WEIGHTS = [400, 500, 700] as const;
@@ -93,10 +90,7 @@ function isCssDeclarationList(value: string) {
 			}
 			if (character === "(") nestedParentheses += 1;
 			if (character === ")") nestedParentheses -= 1;
-			if (
-				character === ":" &&
-				nestedParentheses === 0
-			) {
+			if (character === ":" && nestedParentheses === 0) {
 				colon = index;
 				break;
 			}
@@ -107,9 +101,8 @@ function isCssDeclarationList(value: string) {
 		const declarationValue = trimmed.slice(colon + 1).trim();
 
 		return (
-			/^(?:--[A-Za-z0-9_-]+|-?[A-Za-z][A-Za-z0-9-]*)$/.test(
-				property,
-			) && declarationValue.length > 0
+			/^(?:--[A-Za-z0-9_-]+|-?[A-Za-z][A-Za-z0-9-]*)$/.test(property) &&
+			declarationValue.length > 0
 		);
 	};
 
@@ -229,10 +222,8 @@ const institutionsSchema = z
 			context,
 			(institution) => institution.id,
 		);
-		addDuplicateIssues(
-			institutions,
-			context,
-			(institution) => institution.name.toLowerCase(),
+		addDuplicateIssues(institutions, context, (institution) =>
+			institution.name.toLowerCase(),
 		);
 	});
 
@@ -252,8 +243,7 @@ const woff2FontSchema = z
 	.object({
 		source: z.literal("woff2"),
 		family: singleLineStringSchema(100).refine(
-			(value) =>
-				/^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u.test(value),
+			(value) => /^[\p{L}\p{N}][\p{L}\p{N} ._-]*$/u.test(value),
 			{
 				message:
 					"Font family must contain only letters, numbers, spaces, dots, underscores, or hyphens",
@@ -287,7 +277,9 @@ const themeFontsInputSchema = z
 			.max(10)
 			.default([...DEFAULT_FONT_WEIGHTS])
 			.superRefine((weights, context) =>
-				addDuplicateIssues(weights, context, (weight) => String(weight)),
+				addDuplicateIssues(weights, context, (weight) =>
+					String(weight),
+				),
 			),
 	})
 	.strict()
@@ -332,9 +324,7 @@ function luminance(color: [number, number, number]) {
 			: ((normalized + 0.055) / 1.055) ** 2.4;
 	});
 
-	return (
-		0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2]
-	);
+	return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
 }
 
 function contrastRatio(
@@ -357,8 +347,7 @@ export function hasAccessiblePaletteTone(
 
 	return Object.values(generateColorRamp(link)).some(
 		(tone) =>
-			contrastRatio(composite(tone, backgroundRgb), backgroundRgb) >=
-			4.5,
+			contrastRatio(composite(tone, backgroundRgb), backgroundRgb) >= 4.5,
 	);
 }
 
@@ -403,9 +392,7 @@ const themeSchema = z
 			if (font.source === "woff2") {
 				const unsupported =
 					font.weight === 400
-						? theme.fonts.weights.filter(
-								(weight) => weight !== 400,
-							)
+						? theme.fonts.weights.filter((weight) => weight !== 400)
 						: [];
 
 				if (unsupported.length) {
@@ -422,9 +409,7 @@ const themeSchema = z
 			const supported = PLATFORM_FONT_CATALOG[font.family].weights;
 			const unsupported = theme.fonts.weights.filter(
 				(weight) =>
-					!supported.includes(
-						weight as (typeof supported)[number],
-					),
+					!supported.includes(weight as (typeof supported)[number]),
 			);
 
 			if (unsupported.length) {
@@ -459,11 +444,7 @@ const themeSchema = z
 			[theme.colors.backgroundLight, "light"],
 		] as const) {
 			if (
-				!hasAccessiblePaletteTone(
-					theme.colors.link,
-					background,
-					canvas,
-				)
+				!hasAccessiblePaletteTone(theme.colors.link, background, canvas)
 			) {
 				context.addIssue({
 					code: z.ZodIssueCode.custom,
@@ -517,12 +498,9 @@ const navigationLinkSchema = z
 	.superRefine((link, context) => {
 		addBlankTargetIssue(link, context);
 
-		addDuplicateIssues(
-			link.children,
-			context,
-			(child) => child.id,
-			["children"],
-		);
+		addDuplicateIssues(link.children, context, (child) => child.id, [
+			"children",
+		]);
 	});
 
 const navigationSchema = z
@@ -582,11 +560,7 @@ const footerSchema = z
 			.max(PLATFORM_SOCIAL_PROVIDERS.length)
 			.default([])
 			.superRefine((links, context) =>
-				addDuplicateIssues(
-					links,
-					context,
-					(link) => link.provider,
-				),
+				addDuplicateIssues(links, context, (link) => link.provider),
 			),
 		funders: z
 			.array(funderSchema)
@@ -653,8 +627,9 @@ const localizationSchema = z
 	.strict()
 	.transform((localization) => ({
 		...localization,
-		localePriority:
-			localization.localePriority ?? [...localization.locales],
+		localePriority: localization.localePriority ?? [
+			...localization.locales,
+		],
 	}))
 	.superRefine((localization, context) => {
 		if (!localization.locales.includes(localization.defaultLocale)) {
@@ -722,8 +697,7 @@ const searchSchema = z
 				if (scope === "documents") {
 					context.addIssue({
 						code: z.ZodIssueCode.custom,
-						message:
-							"Documents scope requires full-text search",
+						message: "Documents scope requires full-text search",
 						path: ["scopes", index],
 					});
 				}
@@ -752,23 +726,17 @@ const filtersSchema = z
 					.number()
 					.int()
 					.min(1900)
-					.refine(
-						(value) => value <= new Date().getUTCFullYear(),
-						{
-							message: "Minimum year cannot be in the future",
-						},
-					)
+					.refine((value) => value <= new Date().getUTCFullYear(), {
+						message: "Minimum year cannot be in the future",
+					})
 					.default(1900),
 				maximum: z
 					.number()
 					.int()
 					.min(1900)
-					.refine(
-						(value) => value <= new Date().getUTCFullYear(),
-						{
-							message: "Maximum year cannot be in the future",
-						},
-					)
+					.refine((value) => value <= new Date().getUTCFullYear(), {
+						message: "Maximum year cannot be in the future",
+					})
 					.default(() => new Date().getUTCFullYear())
 					.meta({ "x-dynamicDefault": "currentUtcYear" }),
 			})
@@ -870,11 +838,7 @@ const collectionsSchema = z
 	.max(500)
 	.default([])
 	.superRefine((collections, context) =>
-		addDuplicateIssues(
-			collections,
-			context,
-			(collection) => collection.id,
-		),
+		addDuplicateIssues(collections, context, (collection) => collection.id),
 	);
 
 const gapMapSchema = z
@@ -913,10 +877,7 @@ const publicGapMapSchema = gapMapSchema
 	})
 	.strict();
 
-const publicGapMapsSchema = z
-	.array(publicGapMapSchema)
-	.max(50)
-	.default([]);
+const publicGapMapsSchema = z.array(publicGapMapSchema).max(50).default([]);
 
 const exportsSchema = z
 	.object({
@@ -970,16 +931,11 @@ const servicesSchema = z
 					.min(3)
 					.max(63)
 					.regex(/^[a-z0-9][a-z0-9._-]*[a-z0-9]$/u),
-				maxPdfBytes: z
-					.number()
-					.int()
-					.min(1_024)
-					.max(524_288_000),
+				maxPdfBytes: z.number().int().min(1_024).max(524_288_000),
 			})
 			.strict()
 			.refine(
-				(storage) =>
-					storage.privateBucket !== storage.publicBucket,
+				(storage) => storage.privateBucket !== storage.publicBucket,
 				{
 					message:
 						"Private and public storage buckets must be different",
@@ -994,6 +950,26 @@ const servicesSchema = z
 			.prefault({}),
 	})
 	.strict();
+
+const sourceConfigurationSchema = z
+	.object({
+		key: z
+			.string()
+			.trim()
+			.min(1)
+			.max(64)
+			.refine(isSourceConnectionKey, "Invalid source connection key"),
+		writebackEnabled: z.boolean().default(false),
+	})
+	.strict();
+
+const sourcesSchema = z
+	.array(sourceConfigurationSchema)
+	.max(100)
+	.default([])
+	.superRefine((sources, context) =>
+		addDuplicateIssues(sources, context, (source) => source.key),
+	);
 
 const aiProviderSchema = z
 	.object({
@@ -1041,22 +1017,21 @@ const aiProviderSchema = z
 	});
 
 function promptValueSchema(slot: (typeof PLATFORM_PROMPT_SLOTS)[number]) {
-	return nonEmptyStringSchema(20_000)
-		.superRefine((value, context) => {
-			const variables = value.matchAll(
-				/\{\{\s*([A-Za-z][A-Za-z0-9_.-]*)\s*\}\}/gu,
-			);
-			const allowed = PLATFORM_PROMPT_VARIABLES[slot];
+	return nonEmptyStringSchema(20_000).superRefine((value, context) => {
+		const variables = value.matchAll(
+			/\{\{\s*([A-Za-z][A-Za-z0-9_.-]*)\s*\}\}/gu,
+		);
+		const allowed = PLATFORM_PROMPT_VARIABLES[slot];
 
-			for (const match of variables) {
-				if (!allowed.includes(match[1])) {
-					context.addIssue({
-						code: z.ZodIssueCode.custom,
-						message: `Unknown variable for ${slot}: ${match[1]}`,
-					});
-				}
+		for (const match of variables) {
+			if (!allowed.includes(match[1])) {
+				context.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: `Unknown variable for ${slot}: ${match[1]}`,
+				});
 			}
-		});
+		}
+	});
 }
 
 const promptSlotsSchema = z
@@ -1162,7 +1137,8 @@ const smtpSchema = z
 		if (Boolean(smtp.username) !== Boolean(smtp.password)) {
 			context.addIssue({
 				code: z.ZodIssueCode.custom,
-				message: "SMTP username and password must be configured together",
+				message:
+					"SMTP username and password must be configured together",
 			});
 		}
 	});
@@ -1239,6 +1215,7 @@ const serverConfigShape = {
 	collections: collectionsSchema,
 	gapMaps: gapMapsSchema,
 	exports: exportsSchema,
+	sources: sourcesSchema,
 	services: servicesSchema,
 	ai: aiSchema,
 	analytics: analyticsSchema,
@@ -1439,10 +1416,7 @@ export function createLibraryConfigSchema(
 			}
 		}
 
-		if (
-			config.features.relatedResources &&
-			!config.search.embeddings
-		) {
+		if (config.features.relatedResources && !config.search.embeddings) {
 			addRequiredIssue(
 				context,
 				["features", "relatedResources"],
@@ -1450,10 +1424,7 @@ export function createLibraryConfigSchema(
 			);
 		}
 
-		if (
-			config.features.collectionNotes &&
-			!config.features.collections
-		) {
+		if (config.features.collectionNotes && !config.features.collections) {
 			addRequiredIssue(
 				context,
 				["features", "collectionNotes"],
@@ -1469,10 +1440,7 @@ export function createLibraryConfigSchema(
 			);
 		}
 
-		if (
-			config.features.authorLocation &&
-			!config.search.authorCountry
-		) {
+		if (config.features.authorLocation && !config.search.authorCountry) {
 			addRequiredIssue(
 				context,
 				["features", "authorLocation"],
@@ -1480,10 +1448,7 @@ export function createLibraryConfigSchema(
 			);
 		}
 
-		if (
-			config.features.yearsDropdown &&
-			!config.filters.years.enabled
-		) {
+		if (config.features.yearsDropdown && !config.filters.years.enabled) {
 			addRequiredIssue(
 				context,
 				["features", "yearsDropdown"],

@@ -49,14 +49,18 @@ describe("admin collection catalogue contract", () => {
 		});
 	});
 
-	it("rejects deleted browsing outside the native source", () => {
-		expect(() =>
+	it("allows deleted browsing within a writeback source", () => {
+		expect(
 			parseAdminCollectionSearchRequest({
 				query: "",
 				sourceConnectionKey: "zotero-main",
 				state: "deleted",
 			}),
-		).toThrow();
+		).toMatchObject({
+			query: "",
+			sourceConnectionKey: "zotero-main",
+			state: "deleted",
+		});
 	});
 
 	it("rejects malformed booleans and empty active searches", () => {
@@ -82,7 +86,11 @@ describe("admin collection catalogue contract", () => {
 			sortOrder: 1024,
 			sourceConnectionKey: "native",
 		};
-		expect(decodeAdminCollectionChildrenCursor(encodeAdminCollectionChildrenCursor(cursor))).toEqual(cursor);
+		expect(
+			decodeAdminCollectionChildrenCursor(
+				encodeAdminCollectionChildrenCursor(cursor),
+			),
+		).toEqual(cursor);
 	});
 
 	it("rejects unknown catalogue views", () => {

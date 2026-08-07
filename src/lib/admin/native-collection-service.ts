@@ -29,26 +29,26 @@ type NativeCollectionOrderRow = {
 	sourceConnectionKey: string;
 };
 
-export class NativeCollectionNotFoundError extends Error {
+export class CollectionNotFoundError extends Error {
 	constructor(collectionKey: string) {
-		super(`Native collection was not found: ${collectionKey}`);
-		this.name = "NativeCollectionNotFoundError";
+		super(`Collection was not found: ${collectionKey}`);
+		this.name = "CollectionNotFoundError";
 	}
 }
 
-export class NativeCollectionValidationError extends AdminValidationError {
+export class CollectionValidationError extends AdminValidationError {
 	constructor(message: string, fields: AdminFieldErrors = {}) {
 		super(message, fields);
-		this.name = "NativeCollectionValidationError";
+		this.name = "CollectionValidationError";
 	}
 }
 
-export class NativeCollectionConflictError extends Error {
+export class CollectionConflictError extends Error {
 	readonly currentRevision: number;
 
 	constructor(collectionKey: string, currentRevision: number) {
-		super(`Native collection is stale: ${collectionKey}`);
-		this.name = "NativeCollectionConflictError";
+		super(`Collection is stale: ${collectionKey}`);
+		this.name = "CollectionConflictError";
 		this.currentRevision = currentRevision;
 	}
 }
@@ -118,22 +118,24 @@ export function assertExpectedNativeCollectionRevision(
 	expectedRevision: number,
 ) {
 	if (collectionRow.revision !== expectedRevision) {
-		throw new NativeCollectionConflictError(
+		throw new CollectionConflictError(
 			collectionRow.key,
 			collectionRow.revision,
 		);
 	}
 }
 
-export function assertValidNativeCollectionParent(
+export function assertValidCollectionParent(
 	rows: Array<{
 		deleted: number | null;
 		key: string;
 		parentCollection: string | null;
 		sourceConnectionKey: string;
 	}>,
+	sourceConnectionKey: string,
 	collectionKey: string | null,
 	parentCollection: string | null,
+	invalidParentMessage: string,
 ) {
 	if (!parentCollection) return;
 	const parentByKey = new Map(rows.map((row) => [row.key, row]));
@@ -141,14 +143,11 @@ export function assertValidNativeCollectionParent(
 	if (
 		!parent ||
 		parent.deleted === 1 ||
-		parent.sourceConnectionKey !== NATIVE_CONNECTION_KEY
+		parent.sourceConnectionKey !== sourceConnectionKey
 	) {
-		throw new NativeCollectionValidationError(
+		throw new CollectionValidationError(
 			"Choose another parent collection.",
-			{
-				parentCollection:
-					"Choose an active collection created in this library.",
-			},
+			{ parentCollection: invalidParentMessage },
 		);
 	}
 
@@ -156,7 +155,7 @@ export function assertValidNativeCollectionParent(
 	let cursor: string | null = parentCollection;
 	while (cursor) {
 		if (cursor === collectionKey) {
-			throw new NativeCollectionValidationError(
+			throw new CollectionValidationError(
 				"Choose another parent collection.",
 				{
 					parentCollection:
@@ -165,7 +164,7 @@ export function assertValidNativeCollectionParent(
 			);
 		}
 		if (visited.has(cursor)) {
-			throw new NativeCollectionValidationError(
+			throw new CollectionValidationError(
 				"This collection hierarchy needs to be repaired before it can be changed.",
 				{
 					parentCollection:
@@ -228,7 +227,7 @@ export function resolveNativeCollectionMoveIntent(
 			row.sourceConnectionKey === NATIVE_CONNECTION_KEY,
 	);
 	if (!target) {
-		throw new NativeCollectionValidationError(
+		throw new CollectionValidationError(
 			"Choose another collection position.",
 			{
 				targetCollection:
@@ -237,7 +236,7 @@ export function resolveNativeCollectionMoveIntent(
 		);
 	}
 	if (target.key === collectionKey) {
-		throw new NativeCollectionValidationError(
+		throw new CollectionValidationError(
 			"Choose another collection position.",
 			{
 				targetCollection:
@@ -292,7 +291,7 @@ export function planNativeCollectionPosition(
 		? destinationSiblings.findIndex((row) => row.key === beforeCollection)
 		: destinationSiblings.length;
 	if (insertionIndex < 0) {
-		throw new NativeCollectionValidationError(
+		throw new CollectionValidationError(
 			"Choose another collection position.",
 			{
 				beforeCollection:
@@ -409,7 +408,13 @@ export async function createNativeCollection(db: Database, input: unknown) {
 			.where(eq(collection.sourceConnectionKey, NATIVE_CONNECTION_KEY))
 			.orderBy(asc(collection.key))
 			.for("update");
-		assertValidNativeCollectionParent(rows, null, values.parentCollection);
+		assertValidCollectionParent(
+			rows,
+			NATIVE_CONNECTION_KEY,
+			null,
+			values.parentCollection,
+			"Choose an active collection created in this library.",
+		);
 
 		const key = await reserveCollectionIdentity(transaction, {
 			sourceConnectionKey: NATIVE_CONNECTION_KEY,
@@ -460,10 +465,10 @@ export async function renameNativeCollection(
 			.for("update")
 			.limit(1);
 		if (!current) {
-			throw new NativeCollectionNotFoundError(collectionKey);
+			throw new CollectionNotFoundError(collectionKey);
 		}
 		if (current.deleted === 1) {
-			throw new NativeCollectionValidationError(
+			throw new CollectionValidationError(
 				"Restore this collection before renaming it.",
 				{
 					name: "Deleted collections cannot be renamed.",
@@ -516,10 +521,10 @@ export async function moveNativeCollection(
 			.for("update");
 		const current = rows.find(({ key }) => key === collectionKey);
 		if (!current) {
-			throw new NativeCollectionNotFoundError(collectionKey);
+			throw new CollectionNotFoundError(collectionKey);
 		}
 		if (current.deleted === 1) {
-			throw new NativeCollectionValidationError(
+			throw new CollectionValidationError(
 				"Restore this collection before moving it.",
 				{
 					parentCollection: "Deleted collections cannot be moved.",
@@ -535,10 +540,12 @@ export async function moveNativeCollection(
 			collectionKey,
 			values,
 		);
-		assertValidNativeCollectionParent(
+		assertValidCollectionParent(
 			rows,
+			NATIVE_CONNECTION_KEY,
 			collectionKey,
 			move.parentCollection,
+			"Choose an active collection created in this library.",
 		);
 
 		const positionUpdates = planNativeCollectionPosition(
@@ -636,7 +643,7 @@ export async function deleteNativeCollection(
 			.for("update");
 		const current = rows.find(({ key }) => key === collectionKey);
 		if (!current) {
-			throw new NativeCollectionNotFoundError(collectionKey);
+			throw new CollectionNotFoundError(collectionKey);
 		}
 		assertExpectedNativeCollectionRevision(
 			current,
@@ -693,7 +700,7 @@ export async function restoreNativeCollection(
 			.for("update");
 		const current = rows.find(({ key }) => key === collectionKey);
 		if (!current) {
-			throw new NativeCollectionNotFoundError(collectionKey);
+			throw new CollectionNotFoundError(collectionKey);
 		}
 		assertExpectedNativeCollectionRevision(
 			current,
@@ -703,7 +710,7 @@ export async function restoreNativeCollection(
 			return { collection: current, collections: [] };
 		}
 		if (!current.deletedAt) {
-			throw new NativeCollectionValidationError(
+			throw new CollectionValidationError(
 				"This collection could not be restored.",
 				{
 					_form: "Reload the page and try again. If the problem continues, contact support.",

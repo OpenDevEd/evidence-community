@@ -91,6 +91,25 @@ export type AdminItemDetail = AdminItemSummary & {
 	publishedTags: string[];
 	sourceFileUrl: string | null;
 	tags: string[];
+	writeback: AdminItemWriteback;
+};
+
+export type AdminItemWriteback = {
+	effective: boolean;
+	itemEnabled: boolean;
+	reason:
+		| "item-locked"
+		| "not-linked"
+		| "ok"
+		| "source-disabled"
+		| "source-paused"
+		| "source-removed"
+		| "unsupported-provider";
+	sourceEnabled: boolean;
+	sourceKey: string | null;
+	sourceLabel: string | null;
+	sourceStatus: string | null;
+	supported: boolean;
 };
 
 export type AdminCollection = {
@@ -124,6 +143,10 @@ export type AdminSource = {
 	provider: string;
 	readOnly: boolean;
 	status: string;
+	writeback: {
+		enabled: boolean;
+		supported: boolean;
+	};
 };
 
 export type AdminLibrarySnapshot = {

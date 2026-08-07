@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabase } from "@/db";
 import { revalidatePublishedItemCaches } from "@/lib/admin/cache";
 import {
@@ -19,8 +20,12 @@ export async function POST(
 
 	try {
 		const { key } = await params;
+		const [db, writebackConfig] = await Promise.all([
+			getDatabase(),
+			getLibraryConfig(),
+		]);
 		const { indexingRecords, item, previousParentItem } =
-			await publishItemDraftWithContext(await getDatabase(), key);
+			await publishItemDraftWithContext(db, key, { writebackConfig });
 		revalidatePublishedItemCaches(
 			item.key,
 			item.parentItem,

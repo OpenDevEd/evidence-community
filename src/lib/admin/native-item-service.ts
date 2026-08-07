@@ -8,6 +8,7 @@ import {
 import { and, eq, inArray, sql, type InferInsertModel } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutation } from "@/db/canonical-mutation-lock";
 import { reserveItemIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
@@ -39,10 +40,17 @@ import {
 	ensureDefaultWritebackLink,
 	markItemWritebackDirty,
 } from "@/lib/source-writeback/queue";
+import {
+	resolveItemWritebackPolicy,
+	type SourceWritebackReason,
+} from "@/lib/source-writeback/policy";
 
 type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
+export type ItemWritebackPolicyOptions = {
+	writebackConfig?: Pick<LibraryServerConfig, "sources">;
+};
 
 export async function advanceOpenItemDraftBaseRevision(
 	executor: Executor,
@@ -83,9 +91,12 @@ export class ItemMutationConflictError extends Error {
 }
 
 export class ItemWritebackUnavailableError extends Error {
-	constructor(itemKey: string) {
-		super(`Item has no enabled writeback source: ${itemKey}`);
+	readonly reason: SourceWritebackReason;
+
+	constructor(itemKey: string, reason: SourceWritebackReason) {
+		super(`Item writeback is unavailable (${reason}): ${itemKey}`);
 		this.name = "ItemWritebackUnavailableError";
+		this.reason = reason;
 	}
 }
 
@@ -112,7 +123,11 @@ export class ItemParentUnavailableError extends Error {
 	}
 }
 
-async function requireItemDraftAccess(executor: Executor, itemKey: string) {
+async function requireItemDraftAccess(
+	executor: Executor,
+	itemKey: string,
+	options: ItemWritebackPolicyOptions = {},
+) {
 	const [identity] = await executor
 		.select({
 			key: itemIdentity.key,
@@ -123,24 +138,19 @@ async function requireItemDraftAccess(executor: Executor, itemKey: string) {
 		.where(eq(itemIdentity.key, itemKey))
 		.limit(1);
 	if (!identity) throw new ItemNotFoundError(itemKey);
-
-	const [writebackLink] = await executor
-		.select()
-		.from(itemSourceLink)
-		.where(
-			and(
-				eq(itemSourceLink.itemKey, itemKey),
-				eq(itemSourceLink.writebackEnabled, true),
-			),
-		)
-		.limit(1);
-	if (
-		identity.sourceConnectionKey !== NATIVE_CONNECTION_KEY &&
-		!writebackLink
-	) {
-		throw new ItemWritebackUnavailableError(itemKey);
+	if (identity.sourceConnectionKey === NATIVE_CONNECTION_KEY) {
+		return { identity };
 	}
-	return { identity, writebackLink: writebackLink ?? null };
+
+	const writeback = await resolveItemWritebackPolicy(
+		executor,
+		itemKey,
+		options.writebackConfig ?? { sources: [] },
+	);
+	if (!writeback.effective) {
+		throw new ItemWritebackUnavailableError(itemKey, writeback.reason);
+	}
+	return { identity };
 }
 
 export function assertValidItemCollectionMemberships({
@@ -375,8 +385,9 @@ export async function getItemDraft(db: Database, itemKey: string) {
 async function openItemDraftInTransaction(
 	transaction: Transaction,
 	itemKey: string,
+	options: ItemWritebackPolicyOptions = {},
 ) {
-	const access = await requireItemDraftAccess(transaction, itemKey);
+	const access = await requireItemDraftAccess(transaction, itemKey, options);
 	const [existingDraft] = await transaction
 		.select()
 		.from(itemDraft)
@@ -432,10 +443,14 @@ async function openItemDraftInTransaction(
 	);
 }
 
-export async function openItemDraft(db: Database, itemKey: string) {
+export async function openItemDraft(
+	db: Database,
+	itemKey: string,
+	options: ItemWritebackPolicyOptions = {},
+) {
 	return db.transaction(async (transaction) => {
 		await lockItemMutation(transaction, itemKey);
-		return openItemDraftInTransaction(transaction, itemKey);
+		return openItemDraftInTransaction(transaction, itemKey, options);
 	});
 }
 
@@ -452,8 +467,9 @@ async function saveItemDraftInTransaction(
 		itemKey: string;
 		payload: unknown;
 	},
+	options: ItemWritebackPolicyOptions = {},
 ) {
-	await requireItemDraftAccess(transaction, itemKey);
+	await requireItemDraftAccess(transaction, itemKey, options);
 	const expected = validateNativeItemDraft(expectedPayload, {
 		allowIncompleteCreators: true,
 	});
@@ -524,10 +540,11 @@ export async function saveItemDraft(
 		itemKey: string;
 		payload: unknown;
 	},
+	options: ItemWritebackPolicyOptions = {},
 ) {
 	return db.transaction(async (transaction) => {
 		await lockItemMutation(transaction, args.itemKey);
-		return saveItemDraftInTransaction(transaction, args);
+		return saveItemDraftInTransaction(transaction, args, options);
 	});
 }
 
@@ -535,10 +552,11 @@ export async function assignItemDraftToCollection(
 	db: Database,
 	itemKey: string,
 	collectionKey: string,
+	options: ItemWritebackPolicyOptions = {},
 ) {
 	return db.transaction(async (transaction) => {
 		await lockItemMutation(transaction, itemKey);
-		await requireItemDraftAccess(transaction, itemKey);
+		await requireItemDraftAccess(transaction, itemKey, options);
 		const [published] = await transaction
 			.select({ key: item.key })
 			.from(item)
@@ -583,16 +601,20 @@ export async function assignItemDraftToCollection(
 
 		const openedDraft = existingDraft
 			? null
-			: await openItemDraftInTransaction(transaction, itemKey);
+			: await openItemDraftInTransaction(transaction, itemKey, options);
 		const draftRevision =
 			existingDraft?.draftRevision ?? openedDraft!.draftRevision;
 		const draftPayload = existingDraftPayload ?? openedDraft!.payload;
-		await saveItemDraftInTransaction(transaction, {
-			expectedDraftRevision: draftRevision,
-			expectedPayload: draftPayload,
-			itemKey,
-			payload: payloadWithCollection(draftPayload, collectionKey),
-		});
+		await saveItemDraftInTransaction(
+			transaction,
+			{
+				expectedDraftRevision: draftRevision,
+				expectedPayload: draftPayload,
+				itemKey,
+				payload: payloadWithCollection(draftPayload, collectionKey),
+			},
+			options,
+		);
 		return { changed: true };
 	});
 }
@@ -600,10 +622,15 @@ export async function assignItemDraftToCollection(
 export async function publishItemDraftWithContext(
 	db: Database,
 	itemKey: string,
+	options: ItemWritebackPolicyOptions = {},
 ) {
 	return db.transaction(async (transaction) => {
 		await lockItemMutation(transaction, itemKey);
-		const access = await requireItemDraftAccess(transaction, itemKey);
+		const access = await requireItemDraftAccess(
+			transaction,
+			itemKey,
+			options,
+		);
 		const [initialDraft] = await transaction
 			.select()
 			.from(itemDraft)
@@ -853,8 +880,12 @@ export async function publishItemDraftWithContext(
 	});
 }
 
-export async function publishItemDraft(db: Database, itemKey: string) {
-	return (await publishItemDraftWithContext(db, itemKey)).item;
+export async function publishItemDraft(
+	db: Database,
+	itemKey: string,
+	options: ItemWritebackPolicyOptions = {},
+) {
+	return (await publishItemDraftWithContext(db, itemKey, options)).item;
 }
 
 class NativeItemLockSetChangedError extends Error {}

@@ -4,6 +4,7 @@ import { loadLibraryConfig } from "../src/config/library-config/source";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { parseSourceWritebackCommand } from "../src/lib/source-writeback/command";
 import type { SourceWritebackProcessResult } from "../src/lib/source-writeback/consumer";
+import { isSourceWritebackEnabled } from "../src/lib/source-writeback/policy";
 import { createSourceWritebackRuntime } from "../src/lib/source-writeback/runtime";
 import { runSourceWritebackWorker } from "../src/lib/source-writeback/worker";
 
@@ -55,6 +56,19 @@ async function main() {
 			pollMs: command.pollMs,
 			registry: runtime.registry,
 			signal: abortController.signal,
+			sourceWritebackEnabled: async (sourceConnectionKey) => {
+				try {
+					return isSourceWritebackEnabled(
+						await loadLibraryConfig(),
+						sourceConnectionKey,
+					);
+				} catch (error) {
+					console.error(
+						`Could not read the writeback configuration; deferring the job: ${errorMessage(error)}`,
+					);
+					return false;
+				}
+			},
 			watch: command.watch,
 			workerId: command.workerId,
 		});

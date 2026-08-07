@@ -4,7 +4,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { collection } from "../src/db/schema/tables/collection";
 import {
-	NativeCollectionConflictError,
+	CollectionConflictError,
 	createNativeCollection,
 	deleteNativeCollection,
 	moveNativeCollection,
@@ -75,7 +75,7 @@ async function verify() {
 			});
 		} catch (error) {
 			staleRenameRejected =
-				error instanceof NativeCollectionConflictError &&
+				error instanceof CollectionConflictError &&
 				error.currentRevision === renamed.revision;
 		}
 		assert(staleRenameRejected, "A stale collection rename was accepted");
@@ -114,7 +114,7 @@ async function verify() {
 			});
 		} catch (error) {
 			staleMoveRejected =
-				error instanceof NativeCollectionConflictError &&
+				error instanceof CollectionConflictError &&
 				error.currentRevision === moved.collection.revision;
 		}
 		assert(staleMoveRejected, "A stale collection move was accepted");
@@ -145,7 +145,7 @@ async function verify() {
 			});
 		} catch (error) {
 			staleDeleteRejected =
-				error instanceof NativeCollectionConflictError &&
+				error instanceof CollectionConflictError &&
 				error.currentRevision === reordered.collection.revision;
 		}
 		assert(staleDeleteRejected, "A stale collection delete was accepted");
@@ -213,8 +213,7 @@ async function verify() {
 				)!.revision,
 			});
 		} catch (error) {
-			staleRestoreRejected =
-				error instanceof NativeCollectionConflictError;
+			staleRestoreRejected = error instanceof CollectionConflictError;
 		}
 		assert(staleRestoreRejected, "A stale collection restore was accepted");
 

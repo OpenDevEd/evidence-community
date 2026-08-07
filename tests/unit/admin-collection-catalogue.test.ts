@@ -35,6 +35,7 @@ const nativeSource: AdminSource = {
 	provider: "native",
 	readOnly: false,
 	status: "active",
+	writeback: { enabled: false, supported: false },
 };
 
 const initialState = (): AdminCollectionCatalogueState => ({

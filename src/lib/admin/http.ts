@@ -20,9 +20,9 @@ import { EvidenceFileStorageError } from "./file-storage";
 import { InvalidPdfError } from "./pdf-processing";
 import { isAdminBypassEnabled } from "./access";
 import {
-	NativeCollectionConflictError,
-	NativeCollectionNotFoundError,
-	NativeCollectionValidationError,
+	CollectionConflictError,
+	CollectionNotFoundError,
+	CollectionValidationError,
 } from "./native-collection-service";
 import {
 	AdminValidationError,
@@ -31,6 +31,8 @@ import {
 	type AdminErrorPayload,
 	validationErrorPayload,
 } from "./errors";
+import { AdminSourceWritebackRetryError } from "./source-writeback-service";
+import { CollectionWritebackUnavailableError } from "./collection-mutation-service";
 
 export const ADMIN_RESPONSE_HEADERS = {
 	"Cache-Control": "private, no-store",
@@ -84,7 +86,7 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 	if (
 		error instanceof ItemNotFoundError ||
 		error instanceof NativeFileNotFoundError ||
-		error instanceof NativeCollectionNotFoundError
+		error instanceof CollectionNotFoundError
 	) {
 		return {
 			code: "not_found",
@@ -94,7 +96,7 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 	}
 	if (
 		error instanceof ItemDraftConflictError ||
-		error instanceof NativeCollectionConflictError ||
+		error instanceof CollectionConflictError ||
 		error instanceof ItemMutationConflictError ||
 		error instanceof NativeFileConflictError
 	) {
@@ -105,10 +107,33 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 			status: 409,
 		};
 	}
-	if (error instanceof ItemWritebackUnavailableError) {
+	if (
+		error instanceof ItemWritebackUnavailableError ||
+		error instanceof CollectionWritebackUnavailableError
+	) {
+		const subject =
+			error instanceof CollectionWritebackUnavailableError
+				? "collection"
+				: "record";
+		const messages = {
+			"item-locked": `This ${subject} has been locked for source writeback.`,
+			"not-linked": `This ${subject} is not linked to a writeback source.`,
+			ok: `This ${subject} is not currently available for source writeback.`,
+			"source-disabled": `Writeback is disabled for this ${subject}'s source.`,
+			"source-paused": `This ${subject}'s source is currently paused.`,
+			"source-removed": `This ${subject}'s source has been removed.`,
+			"unsupported-provider": `This ${subject}'s source does not support writeback.`,
+		} satisfies Record<typeof error.reason, string>;
 		return {
 			code: "conflict",
-			message: "This record's source is not configured for writeback.",
+			message: messages[error.reason],
+			status: 409,
+		};
+	}
+	if (error instanceof AdminSourceWritebackRetryError) {
+		return {
+			code: "conflict",
+			message: error.message,
 			status: 409,
 		};
 	}
@@ -146,7 +171,7 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 	if (
 		error instanceof AdminValidationError ||
 		error instanceof NativeFileValidationError ||
-		error instanceof NativeCollectionValidationError ||
+		error instanceof CollectionValidationError ||
 		error instanceof InvalidPdfError
 	) {
 		const details = validationErrorPayload(

@@ -49,7 +49,9 @@ function expectCatalogIssue(
 	expect(result.success).toBe(false);
 	if (!result.success) {
 		expect(
-			result.error.issues.some((issue) => issue.message.includes(message)),
+			result.error.issues.some((issue) =>
+				issue.message.includes(message),
+			),
 		).toBe(true);
 	}
 }
@@ -72,10 +74,7 @@ describe("library configuration fixtures", () => {
 			"title_abstract_author_and_keywords",
 		);
 		expect(config.features.login).toBe(false);
-		expect(config.content.tags.publish).toEqual([
-			"_publish",
-			"publishPDF",
-		]);
+		expect(config.content.tags.publish).toEqual(["_publish", "publishPDF"]);
 	});
 
 	it("parses the maximal fixture with every configuration group", () => {
@@ -88,6 +87,9 @@ describe("library configuration fixtures", () => {
 		expect(config.collections).toHaveLength(1);
 		expect(config.gapMaps).toHaveLength(1);
 		expect(config.gapMaps[0]?.enabled).toBe(true);
+		expect(config.sources).toEqual([
+			{ key: "zotero-maximal", writebackEnabled: true },
+		]);
 		expect(config.ai.providers[0].enabled).toBe(true);
 		expect(config.processing.sharedRules).toHaveLength(1);
 	});
@@ -102,9 +104,9 @@ describe("library configuration fixtures", () => {
 	});
 
 	it("rejects the intentionally invalid fixture", () => {
-		expect(libraryConfigSchema.safeParse(invalidLibraryConfig).success).toBe(
-			false,
-		);
+		expect(
+			libraryConfigSchema.safeParse(invalidLibraryConfig).success,
+		).toBe(false);
 	});
 });
 
@@ -113,17 +115,17 @@ describe("reusable field schemas", () => {
 		["ID punctuation", idSchema, "not.valid"],
 		["non-UTC timestamp", utcTimestampSchema, "2026-07-27T12:00:00+01:00"],
 		["HTTP public origin", publicHttpsOriginSchema, "http://example.org"],
-		[
-			"origin path",
-			publicHttpsOriginSchema,
-			"https://example.org/library",
-		],
+		["origin path", publicHttpsOriginSchema, "https://example.org/library"],
 		[
 			"signed image URL",
 			stableImageUrlSchema,
 			"https://assets.example.org/logo.svg?token=temporary",
 		],
-		["wrong image type", stableImageUrlSchema, "https://example.org/logo.gif"],
+		[
+			"wrong image type",
+			stableImageUrlSchema,
+			"https://example.org/logo.gif",
+		],
 		["protocol-relative link", internalLinkSchema, "//example.org/path"],
 		["encoded traversal", internalLinkSchema, "/safe/%2e%2e/admin"],
 		["multiline tag", tagSchema, "first\nsecond"],
@@ -160,7 +162,10 @@ describe("reusable field schemas", () => {
 describe("strict field groups", () => {
 	it.each([
 		["identity", (config: any) => (config.identity.unknown = true)],
-		["institutions", (config: any) => (config.institutions[0].unknown = true)],
+		[
+			"institutions",
+			(config: any) => (config.institutions[0].unknown = true),
+		],
 		["theme", (config: any) => (config.theme.unknown = true)],
 		["navigation", (config: any) => (config.navigation.unknown = true)],
 		["footer", (config: any) => (config.footer.unknown = true)],
@@ -172,9 +177,13 @@ describe("strict field groups", () => {
 		["content", (config: any) => (config.content.unknown = true)],
 		["citations", (config: any) => (config.citations.unknown = true)],
 		["features", (config: any) => (config.features.unknown = true)],
-		["collections", (config: any) => (config.collections[0].unknown = true)],
+		[
+			"collections",
+			(config: any) => (config.collections[0].unknown = true),
+		],
 		["gap maps", (config: any) => (config.gapMaps[0].unknown = true)],
 		["exports", (config: any) => (config.exports.unknown = true)],
+		["sources", (config: any) => (config.sources[0].unknown = true)],
 		["services", (config: any) => (config.services.unknown = true)],
 		["AI", (config: any) => (config.ai.unknown = true)],
 		["analytics", (config: any) => (config.analytics.unknown = true)],
@@ -337,7 +346,8 @@ describe("cross-field activation rules", () => {
 		[
 			"featured institution not in institution catalog",
 			(config: any) => {
-				config.filters.institution.featuredValue = "Missing Institution";
+				config.filters.institution.featuredValue =
+					"Missing Institution";
 			},
 		],
 		[
@@ -573,11 +583,7 @@ describe("unique configuration lists", () => {
 		[
 			"locale priority",
 			(config: any) => {
-				config.localization.localePriority = [
-					"en-GB",
-					"fr",
-					"en-GB",
-				];
+				config.localization.localePriority = ["en-GB", "fr", "en-GB"];
 			},
 		],
 		[
@@ -631,16 +637,14 @@ describe("unique configuration lists", () => {
 				config.ai.providers.push({ ...config.ai.providers[0] });
 			},
 		],
-		...["structureRules", "pdfRules", "sharedRules"].map(
-			(ruleList) => [
-				`${ruleList} IDs`,
-				(config: any) => {
-					config.processing[ruleList].push({
-						...config.processing[ruleList][0],
-					});
-				},
-			],
-		),
+		...["structureRules", "pdfRules", "sharedRules"].map((ruleList) => [
+			`${ruleList} IDs`,
+			(config: any) => {
+				config.processing[ruleList].push({
+					...config.processing[ruleList][0],
+				});
+			},
+		]),
 	] as [string, (config: any) => void][])(
 		"rejects duplicate %s",
 		(_name, mutate) => {
@@ -653,12 +657,12 @@ describe("manifest-wide activation", () => {
 	it("detects link colors without any accessible generated tone", () => {
 		expect(hasAccessiblePaletteTone("#000000", "#000000")).toBe(false);
 		expect(hasAccessiblePaletteTone("#1976D2", "#FFFFFF")).toBe(true);
-		expect(
-			hasAccessiblePaletteTone("#FFFFFF", "#00000080", "dark"),
-		).toBe(true);
-		expect(
-			hasAccessiblePaletteTone("#FFFFFF", "#00000080", "light"),
-		).toBe(false);
+		expect(hasAccessiblePaletteTone("#FFFFFF", "#00000080", "dark")).toBe(
+			true,
+		);
+		expect(hasAccessiblePaletteTone("#FFFFFF", "#00000080", "light")).toBe(
+			false,
+		);
 	});
 
 	it("accepts multiple configured weights for variable WOFF2 fonts", () => {

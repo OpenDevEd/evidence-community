@@ -119,17 +119,19 @@ export async function enqueueCollectionWritebackJob(
 	return job ?? null;
 }
 
-export async function markCollectionWritebackDirty(
+async function markCollectionWriteback(
 	transaction: Transaction,
 	{
 		canonicalRevision,
 		collectionKey,
 		dirtyFields,
+		operation,
 		updatedAt,
 	}: {
 		canonicalRevision: number;
 		collectionKey: string;
 		dirtyFields: readonly string[];
+		operation: SourceWritebackOperation;
 		updatedAt: Date;
 	},
 ) {
@@ -163,11 +165,43 @@ export async function markCollectionWritebackDirty(
 				canonicalRevision,
 				collectionKey,
 				dirtyFields: combinedDirtyFields,
-				operation: "upsert",
+				operation,
 				sourceConnectionKey: link.sourceConnectionKey,
 			});
 		}
 	}
+}
+
+// The caller must hold the canonical collection's advisory mutation lock so
+// this read/merge cannot race ingestion or worker acknowledgement.
+export function markCollectionWritebackDirty(
+	transaction: Transaction,
+	args: {
+		canonicalRevision: number;
+		collectionKey: string;
+		dirtyFields: readonly string[];
+		updatedAt: Date;
+	},
+) {
+	return markCollectionWriteback(transaction, {
+		...args,
+		operation: "upsert",
+	});
+}
+
+export function markCollectionWritebackDeleted(
+	transaction: Transaction,
+	args: {
+		canonicalRevision: number;
+		collectionKey: string;
+		updatedAt: Date;
+	},
+) {
+	return markCollectionWriteback(transaction, {
+		...args,
+		dirtyFields: ["deleted"],
+		operation: "delete",
+	});
 }
 
 // The caller must hold the canonical item's advisory mutation lock so this

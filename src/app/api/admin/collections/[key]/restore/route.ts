@@ -2,6 +2,7 @@ import { revalidateTag } from "next/cache";
 import { NextResponse } from "next/server";
 
 import { getDatabase } from "@/db";
+import { loadLibraryConfig } from "@/config/library-config/source";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
@@ -9,7 +10,7 @@ import {
 	requireAdminBypass,
 } from "@/lib/admin/http";
 import { toAdminCollection } from "@/lib/admin/library-query-service";
-import { restoreNativeCollection } from "@/lib/admin/native-collection-service";
+import { restoreAdminCollection } from "@/lib/admin/collection-mutation-service";
 import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 export async function POST(
@@ -21,10 +22,11 @@ export async function POST(
 
 	try {
 		const { key } = await params;
-		const result = await restoreNativeCollection(
+		const result = await restoreAdminCollection(
 			await getDatabase(),
 			key,
 			await readAdminJson(request),
+			{ writebackConfig: await loadLibraryConfig() },
 		);
 		revalidateTag("collections", "max");
 		return NextResponse.json(

@@ -6,7 +6,8 @@ import {
 	itemSourceLink,
 	reserveCanonicalRecordKey,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, notExists } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "./database-schema";
 
@@ -187,6 +188,43 @@ export async function reserveItemSourceLinks(
 			)
 			.onConflictDoNothing();
 		await loadLinks();
+
+		const insertedItemKeys = pending.flatMap((sourceRecordKey) => {
+			const itemKey = result.get(sourceRecordKey);
+			return itemKey ? [itemKey] : [];
+		});
+		if (insertedItemKeys.length > 0) {
+			const enabledLink = alias(itemSourceLink, "enabledItemSourceLink");
+			await db
+				.update(itemSourceLink)
+				.set({ writebackEnabled: true })
+				.where(
+					and(
+						inArray(itemSourceLink.itemKey, insertedItemKeys),
+						eq(
+							itemSourceLink.sourceConnectionKey,
+							sourceConnectionKey,
+						),
+						notExists(
+							db
+								.select({ itemKey: enabledLink.itemKey })
+								.from(enabledLink)
+								.where(
+									and(
+										eq(
+											enabledLink.itemKey,
+											itemSourceLink.itemKey,
+										),
+										eq(
+											enabledLink.writebackEnabled,
+											true,
+										),
+									),
+								),
+						),
+					),
+				);
+		}
 	}
 
 	const unresolved = uniqueSourceRecordKeys.filter((key) => !result.has(key));

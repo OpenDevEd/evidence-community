@@ -31,6 +31,7 @@ describe("admin library snapshot", () => {
 					provider: "native",
 					readOnly: false,
 					status: "active",
+					writeback: { enabled: false, supported: false },
 				},
 				{
 					key: "zotero-main",
@@ -38,6 +39,7 @@ describe("admin library snapshot", () => {
 					provider: "zotero",
 					readOnly: true,
 					status: "active",
+					writeback: { enabled: false, supported: true },
 				},
 			],
 		});

@@ -20,8 +20,13 @@ import {
 	openItemDraft,
 	publishItemDraft,
 	saveItemDraft,
+	type ItemWritebackPolicyOptions,
 	unpublishNativeItem,
 } from "../src/lib/admin/native-item-service";
+import {
+	getAdminSourceWritebackStatus,
+	retryAdminSourceWriteback,
+} from "../src/lib/admin/source-writeback-service";
 import type { JsonValue } from "../src/lib/source-ingestion/batch-schema";
 import { sourcePayloadHash } from "../src/lib/source-ingestion/fingerprint";
 import { writeSourceIngestionBatch } from "../src/lib/source-ingestion/transactional-writer";
@@ -61,6 +66,11 @@ async function verify() {
 	let sourceGateEnabled = true;
 	let version = 0;
 	const calls: SourceWritebackRequest[] = [];
+	const writebackPolicyOptions = {
+		writebackConfig: {
+			sources: [{ key: connectionKey, writebackEnabled: true }],
+		},
+	} satisfies ItemWritebackPolicyOptions;
 
 	const registry = new SourceWritebackAdapterRegistry([
 		{
@@ -464,8 +474,40 @@ async function verify() {
 				finalFailure.status === "dead-lettered",
 			"Repeated remote failures did not reach the configured dead letter state",
 		);
-
+		const failedStatus = await getAdminSourceWritebackStatus(
+			db,
+			nativeDraft.itemKey,
+			writebackPolicyOptions.writebackConfig,
+		);
+		assert(
+			failedStatus.state === "failed" &&
+				failedStatus.jobId === finalFailure.jobId &&
+				failedStatus.error?.includes("deliberate remote failure"),
+			"The admin status did not expose the dead-lettered writeback failure",
+		);
+		const requeuedStatus = await retryAdminSourceWriteback(
+			db,
+			nativeDraft.itemKey,
+			writebackPolicyOptions.writebackConfig,
+		);
+		assert(
+			requeuedStatus.state === "queued" && requeuedStatus.attempts === 0,
+			"The admin retry did not requeue the failed writeback job",
+		);
 		behavior = "success";
+		const manualRetry =
+			await processNextSourceWritebackJob(consumerOptions);
+		const syncedStatus = await getAdminSourceWritebackStatus(
+			db,
+			nativeDraft.itemKey,
+			writebackPolicyOptions.writebackConfig,
+		);
+		assert(
+			manualRetry.status === "processed" &&
+				syncedStatus.state === "synced",
+			"The manually retried writeback did not reach the synced state",
+		);
+
 		const staleDraft = await createNativeItemDraft(db, {
 			itemType: "report",
 			title: "Never-created remote item",
@@ -576,17 +618,25 @@ async function verify() {
 			.update(itemSourceLink)
 			.set({ writebackEnabled: true })
 			.where(eq(itemSourceLink.itemKey, importedItemKey));
-		const importedOpened = await openItemDraft(db, importedItemKey);
-		await saveItemDraft(db, {
-			expectedDraftRevision: importedOpened.draftRevision,
-			expectedPayload: importedOpened.payload,
-			itemKey: importedItemKey,
-			payload: {
-				...importedOpened.payload,
-				title: "Locally edited import",
+		const importedOpened = await openItemDraft(
+			db,
+			importedItemKey,
+			writebackPolicyOptions,
+		);
+		await saveItemDraft(
+			db,
+			{
+				expectedDraftRevision: importedOpened.draftRevision,
+				expectedPayload: importedOpened.payload,
+				itemKey: importedItemKey,
+				payload: {
+					...importedOpened.payload,
+					title: "Locally edited import",
+				},
 			},
-		});
-		await publishItemDraft(db, importedItemKey);
+			writebackPolicyOptions,
+		);
+		await publishItemDraft(db, importedItemKey, writebackPolicyOptions);
 		await db
 			.update(sourceConnection)
 			.set({ status: "paused" })
@@ -619,6 +669,28 @@ async function verify() {
 			.update(sourceConnection)
 			.set({ status: "active" })
 			.where(eq(sourceConnection.key, connectionKey));
+		await db
+			.update(sourceWritebackJob)
+			.set({ nextAttemptAt: new Date(0) })
+			.where(eq(sourceWritebackJob.id, deferred.jobId!));
+		sourceGateEnabled = false;
+		const gateDeferred =
+			await processNextSourceWritebackJob(consumerOptions);
+		const [gateDeferredJob] = await db
+			.select({
+				attempts: sourceWritebackJob.attempts,
+				lastError: sourceWritebackJob.lastError,
+			})
+			.from(sourceWritebackJob)
+			.where(eq(sourceWritebackJob.id, deferred.jobId!));
+		assert(
+			gateDeferred.status === "deferred" &&
+				gateDeferredJob?.attempts === 0 &&
+				gateDeferredJob.lastError ===
+					"Writeback is disabled for this source",
+			"A disabled source gate consumed attempts or discarded its pending write",
+		);
+		sourceGateEnabled = true;
 		await db
 			.update(sourceWritebackJob)
 			.set({ nextAttemptAt: new Date(0) })

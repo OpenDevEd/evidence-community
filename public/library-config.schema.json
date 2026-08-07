@@ -1343,6 +1343,29 @@
 			},
 			"additionalProperties": false
 		},
+		"sources": {
+			"default": [],
+			"maxItems": 100,
+			"type": "array",
+			"items": {
+				"type": "object",
+				"properties": {
+					"key": {
+						"type": "string",
+						"minLength": 1,
+						"maxLength": 64
+					},
+					"writebackEnabled": {
+						"default": false,
+						"type": "boolean"
+					}
+				},
+				"required": [
+					"key"
+				],
+				"additionalProperties": false
+			}
+		},
 		"services": {
 			"type": "object",
 			"properties": {

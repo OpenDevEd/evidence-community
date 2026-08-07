@@ -3,7 +3,6 @@ import "server-only";
 import {
 	itemDraft,
 	itemFileDraft,
-	itemSourceLink,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
 import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
@@ -14,6 +13,12 @@ import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
+import { getLibraryConfig } from "@/config/library-config/server";
+import {
+	isSourceWritebackEnabled,
+	resolveItemWritebackPolicy,
+	WRITEBACK_SUPPORTED_PROVIDERS,
+} from "@/lib/source-writeback/policy";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
 import {
@@ -245,7 +250,8 @@ export async function getAdminItemDetail(
 	db: Database,
 	itemKey: string,
 ): Promise<AdminItemDetail> {
-	const [published, draft, fileDraft, filePublication, writebackLink] =
+	const config = await getLibraryConfig();
+	const [published, draft, fileDraft, filePublication, writeback] =
 		await Promise.all([
 			db
 				.select()
@@ -271,17 +277,7 @@ export async function getAdminItemDetail(
 				.where(eq(itemFilePublication.itemKey, itemKey))
 				.limit(1)
 				.then((rows) => rows[0] ?? null),
-			db
-				.select({ itemKey: itemSourceLink.itemKey })
-				.from(itemSourceLink)
-				.where(
-					and(
-						eq(itemSourceLink.itemKey, itemKey),
-						eq(itemSourceLink.writebackEnabled, true),
-					),
-				)
-				.limit(1)
-				.then((rows) => rows[0] ?? null),
+			resolveItemWritebackPolicy(db, itemKey, config),
 		]);
 	if (!published && !draft) throw new ItemNotFoundError(itemKey);
 
@@ -365,7 +361,7 @@ export async function getAdminItemDetail(
 		draft: draftJson(draft, payload),
 		editable:
 			summary.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY ||
-			Boolean(writebackLink),
+			writeback.effective,
 		fileDraft: fileDraftJson(fileDraft),
 		filePublication: filePublicationJson(filePublication),
 		parentItem,
@@ -383,6 +379,7 @@ export async function getAdminItemDetail(
 				? published.url
 				: null,
 		tags: draftTags ?? tagRows.map(({ name }) => name),
+		writeback,
 	};
 }
 
@@ -404,10 +401,13 @@ export function toAdminCollection(
 export async function getAdminLibrarySnapshot(
 	db: Database,
 ): Promise<AdminLibrarySnapshot> {
-	const sourceRows = await db
-		.select()
-		.from(sourceConnection)
-		.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key));
+	const [sourceRows, config] = await Promise.all([
+		db
+			.select()
+			.from(sourceConnection)
+			.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key)),
+		getLibraryConfig(),
+	]);
 	const sources = sourceRows.map((row) => ({
 		key: row.key,
 		label:
@@ -419,6 +419,12 @@ export async function getAdminLibrarySnapshot(
 		provider: row.provider,
 		readOnly: row.provider !== NATIVE_SOURCE_CONNECTION_KEY,
 		status: row.status,
+		writeback: {
+			enabled: isSourceWritebackEnabled(config, row.key),
+			supported: WRITEBACK_SUPPORTED_PROVIDERS.some(
+				(provider) => provider === row.provider,
+			),
+		},
 	}));
 	if (!sources.some(({ key }) => key === NATIVE_SOURCE_CONNECTION_KEY)) {
 		sources.unshift({
@@ -427,6 +433,10 @@ export async function getAdminLibrarySnapshot(
 			provider: NATIVE_SOURCE_CONNECTION_KEY,
 			readOnly: false,
 			status: "active",
+			writeback: {
+				enabled: false,
+				supported: false,
+			},
 		});
 	}
 

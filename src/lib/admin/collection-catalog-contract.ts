@@ -1,6 +1,5 @@
 import { z } from "zod";
 
-import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
 import { AdminValidationError } from "./errors";
 
 export const ADMIN_COLLECTION_PAGE_SIZE = 50;
@@ -21,14 +20,11 @@ export function parseAdminCollectionView(value: unknown) {
 
 const collectionKeySchema = z.string().length(8);
 const collectionSearchStateSchema = z.enum(["active", "all", "deleted"]);
-const booleanParameterSchema = z.preprocess(
-	(value) => {
-		if (value === "true") return true;
-		if (value === "false") return false;
-		return value;
-	},
-	z.boolean(),
-);
+const booleanParameterSchema = z.preprocess((value) => {
+	if (value === "true") return true;
+	if (value === "false") return false;
+	return value;
+}, z.boolean());
 export type AdminCollectionSearchState = z.infer<
 	typeof collectionSearchStateSchema
 >;
@@ -90,17 +86,6 @@ const searchRequestSchema = z
 				code: "custom",
 				message: "Enter a collection name to search",
 				path: ["query"],
-			});
-		}
-		if (
-			value.state === "deleted" &&
-			value.sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY
-		) {
-			context.addIssue({
-				code: "custom",
-				message:
-					"Deleted collection browsing is available for the native source only",
-				path: ["sourceConnectionKey"],
 			});
 		}
 	});

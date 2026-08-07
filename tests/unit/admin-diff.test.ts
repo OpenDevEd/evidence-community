@@ -57,6 +57,16 @@ function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 		tags: ["draft"],
 		title: "Draft title",
 		updatedAt: "2026-01-01T00:00:00.000Z",
+		writeback: {
+			effective: false,
+			itemEnabled: false,
+			reason: "not-linked",
+			sourceEnabled: false,
+			sourceKey: null,
+			sourceLabel: null,
+			sourceStatus: null,
+			supported: false,
+		},
 		...overrides,
 	};
 }

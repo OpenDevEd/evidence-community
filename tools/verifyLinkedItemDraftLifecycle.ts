@@ -23,6 +23,7 @@ import {
 	publishItemDraft,
 	removeNativeItem,
 	saveItemDraft,
+	type ItemWritebackPolicyOptions,
 } from "../src/lib/admin/native-item-service";
 import { writeSourceIngestionBatch } from "../src/lib/source-ingestion/transactional-writer";
 
@@ -33,6 +34,11 @@ const baseUrl = process.env.EVIDENCE_LIBRARY_TEST_URL;
 
 const connectionKey = "zotero-linked-draft-test";
 const secondaryConnectionKey = "mendeley-linked-draft-test";
+const writebackPolicyOptions = {
+	writebackConfig: {
+		sources: [{ key: connectionKey, writebackEnabled: true }],
+	},
+} satisfies ItemWritebackPolicyOptions;
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
@@ -126,10 +132,19 @@ async function verify() {
 			sourceConnectionKey: secondaryConnectionKey,
 			sourceRecordKey: "SECOND45",
 		});
+		await db
+			.update(itemSourceLink)
+			.set({ writebackEnabled: false })
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, itemKey),
+					eq(itemSourceLink.sourceConnectionKey, connectionKey),
+				),
+			);
 
 		let readOnlyRejected = false;
 		try {
-			await openItemDraft(db, itemKey);
+			await openItemDraft(db, itemKey, writebackPolicyOptions);
 		} catch (error) {
 			readOnlyRejected = error instanceof ItemWritebackUnavailableError;
 		}
@@ -163,19 +178,23 @@ async function verify() {
 		});
 		nativeCollectionKey = nativeCollection.key;
 
-		const opened = await openItemDraft(db, itemKey);
-		await saveItemDraft(db, {
-			expectedDraftRevision: opened.draftRevision,
-			expectedPayload: opened.payload,
-			itemKey,
-			payload: {
-				...opened.payload,
-				collections: [nativeCollection.key],
-				language: "fr",
-				tags: ["local"],
-				title: "Local title",
+		const opened = await openItemDraft(db, itemKey, writebackPolicyOptions);
+		await saveItemDraft(
+			db,
+			{
+				expectedDraftRevision: opened.draftRevision,
+				expectedPayload: opened.payload,
+				itemKey,
+				payload: {
+					...opened.payload,
+					collections: [nativeCollection.key],
+					language: "fr",
+					tags: ["local"],
+					title: "Local title",
+				},
 			},
-		});
+			writebackPolicyOptions,
+		);
 
 		await writeSourceIngestionBatch(db, {
 			...batch(1, 2),
@@ -202,7 +221,11 @@ async function verify() {
 			"An imported draft did not overlay its patch on the latest remote base",
 		);
 
-		const published = await publishItemDraft(db, itemKey);
+		const published = await publishItemDraft(
+			db,
+			itemKey,
+			writebackPolicyOptions,
+		);
 		const [[publishedLink], publishedMemberships, publishedTags] =
 			await Promise.all([
 				db
@@ -238,17 +261,25 @@ async function verify() {
 			"Publishing an imported draft did not preserve source identity, local curation, or dirty fields",
 		);
 
-		const secondEdit = await openItemDraft(db, itemKey);
-		await saveItemDraft(db, {
-			expectedDraftRevision: secondEdit.draftRevision,
-			expectedPayload: secondEdit.payload,
+		const secondEdit = await openItemDraft(
+			db,
 			itemKey,
-			payload: {
-				...secondEdit.payload,
-				title: "Local title for every source",
+			writebackPolicyOptions,
+		);
+		await saveItemDraft(
+			db,
+			{
+				expectedDraftRevision: secondEdit.draftRevision,
+				expectedPayload: secondEdit.payload,
+				itemKey,
+				payload: {
+					...secondEdit.payload,
+					title: "Local title for every source",
+				},
 			},
-		});
-		await publishItemDraft(db, itemKey);
+			writebackPolicyOptions,
+		);
+		await publishItemDraft(db, itemKey, writebackPolicyOptions);
 		const linkedSources = await db
 			.select()
 			.from(itemSourceLink)
@@ -325,7 +356,11 @@ async function verify() {
 			"Inbound sync overwrote dirty metadata or foreign collection memberships",
 		);
 
-		const retainedDraft = await openItemDraft(db, itemKey);
+		const retainedDraft = await openItemDraft(
+			db,
+			itemKey,
+			writebackPolicyOptions,
+		);
 		await db
 			.update(itemSourceLink)
 			.set({ writebackEnabled: false })
@@ -407,8 +442,8 @@ async function verify() {
 			.update(itemSourceLink)
 			.set({ dirtyFields: [], remoteDeleted: true })
 			.where(eq(itemSourceLink.itemKey, itemKey));
-		await openItemDraft(db, itemKey);
-		await publishItemDraft(db, itemKey);
+		await openItemDraft(db, itemKey, writebackPolicyOptions);
+		await publishItemDraft(db, itemKey, writebackPolicyOptions);
 		const restoredLinks = await db
 			.select()
 			.from(itemSourceLink)
