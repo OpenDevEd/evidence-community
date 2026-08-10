@@ -34,6 +34,7 @@ import { Dropdown } from "@/components/nextui/Dropdown";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
+import { itemCollectionSourceIsAssignable } from "@/lib/admin/item-collection-policy";
 import type {
 	AdminCollectionCatalogEntry,
 	AdminSource,
@@ -278,7 +279,11 @@ function CollectionRow({
 	const movesEnabled =
 		editable && view === "active" && hierarchyEnabled && !busy;
 	const visualDepth = Math.min(depth, MAX_VISUAL_DEPTH);
-	const { activeCollectionKey, activeRecordCount } = useAdminDragState();
+	const {
+		activeCollectionKey,
+		activeRecordCount,
+		activeRecordSourceConnectionKey,
+	} = useAdminDragState();
 	const invalidCollectionTarget = Boolean(
 		activeCollectionKey &&
 		(activeCollectionKey === entry.key ||
@@ -289,7 +294,15 @@ function CollectionRow({
 		Boolean(activeCollectionKey) &&
 		!invalidCollectionTarget;
 	const acceptsRecords =
-		editable && view === "active" && !busy && activeRecordCount > 0;
+		editable &&
+		view === "active" &&
+		!busy &&
+		activeRecordCount > 0 &&
+		activeRecordSourceConnectionKey !== null &&
+		itemCollectionSourceIsAssignable(
+			activeRecordSourceConnectionKey,
+			entry.sourceConnectionKey,
+		);
 	const insideDestination: CollectionDropDestination = {
 		position: "inside",
 		targetCollection: entry.key,

@@ -20,6 +20,7 @@ import {
 } from "react";
 
 import type { AdminCollectionCatalogEntry } from "@/lib/admin/types";
+import { itemCollectionSourceIsAssignable } from "@/lib/admin/item-collection-policy";
 import { focusAdminDragHandle } from "./admin-focus";
 
 export const COLLECTION_DRAG_TYPE = "admin-collection";
@@ -58,11 +59,13 @@ type AdminDragData = CollectionDragData | RecordDragData;
 type AdminDragState = {
 	activeCollectionKey: string | null;
 	activeRecordCount: number;
+	activeRecordSourceConnectionKey: string | null;
 };
 
 const AdminDragStateContext = createContext<AdminDragState>({
 	activeCollectionKey: null,
 	activeRecordCount: 0,
+	activeRecordSourceConnectionKey: null,
 });
 
 export function useAdminDragState() {
@@ -151,7 +154,10 @@ export function recordDropIsAllowed(
 	return Boolean(
 		target &&
 		!target.deleted &&
-		target.sourceConnectionKey === record.sourceConnectionKey,
+		itemCollectionSourceIsAssignable(
+			record.sourceConnectionKey,
+			target.sourceConnectionKey,
+		),
 	);
 }
 
@@ -335,6 +341,10 @@ export function AdminDragDropRoot({
 					: null,
 			activeRecordCount:
 				activeDrag?.kind === "records" ? activeDrag.itemKeys.length : 0,
+			activeRecordSourceConnectionKey:
+				activeDrag?.kind === "records"
+					? activeDrag.sourceConnectionKey
+					: null,
 		}),
 		[activeDrag],
 	);

@@ -90,7 +90,14 @@ describe("admin record collection destinations", () => {
 		sourceConnectionKey: "zotero-main",
 	};
 
-	it("allows only live collections in the record source", () => {
+	it("allows live native and same-source collections", () => {
+		expect(
+			recordDropIsAllowed(dragged, {
+				position: "inside",
+				targetCollection: "NATIVE01",
+				targetEntry: collection("NATIVE01", "native"),
+			}),
+		).toBe(true);
 		expect(
 			recordDropIsAllowed(dragged, {
 				position: "inside",
@@ -98,6 +105,9 @@ describe("admin record collection destinations", () => {
 				targetEntry: collection("SAME2345", "zotero-main"),
 			}),
 		).toBe(true);
+	});
+
+	it("rejects deleted and unrelated external collections", () => {
 		expect(
 			recordDropIsAllowed(dragged, {
 				position: "inside",

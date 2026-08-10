@@ -35,6 +35,7 @@ import {
 	validateNativeItemDraft,
 } from "./native-item-validation";
 import { NATIVE_SOURCE_CONNECTION_KEY as NATIVE_CONNECTION_KEY } from "./constants";
+import { itemCollectionSourceIsAssignable } from "./item-collection-policy";
 import {
 	enqueueSourceWritebackJob,
 	ensureDefaultWritebackLink,
@@ -177,8 +178,11 @@ export function assertValidItemCollectionMemberships({
 			const sourceConnectionKey =
 				collectionsByKey.get(key)?.sourceConnectionKey;
 			return (
-				sourceConnectionKey !== NATIVE_CONNECTION_KEY &&
-				sourceConnectionKey !== itemSourceConnectionKey
+				typeof sourceConnectionKey !== "string" ||
+				!itemCollectionSourceIsAssignable(
+					itemSourceConnectionKey,
+					sourceConnectionKey,
+				)
 			);
 		}),
 	);
@@ -205,8 +209,10 @@ export function assertValidItemCollectionMemberships({
 			);
 		}
 		if (
-			target.sourceConnectionKey !== NATIVE_CONNECTION_KEY &&
-			target.sourceConnectionKey !== itemSourceConnectionKey
+			!itemCollectionSourceIsAssignable(
+				itemSourceConnectionKey,
+				target.sourceConnectionKey,
+			)
 		) {
 			desiredForeignKeys.add(key);
 		}

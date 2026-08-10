@@ -291,6 +291,9 @@ async function mockPublishedBook(
 		listFailure?: boolean;
 		listFailureCount?: number;
 		listRowOverrides?: Partial<Record<string, unknown>>;
+		listRowOverridesForIndex?: (
+			index: number,
+		) => Partial<Record<string, unknown>>;
 		onBatchRequest?: (body: {
 			action: string;
 			collectionKey?: string;
@@ -485,6 +488,7 @@ async function mockPublishedBook(
 							const index = offset + pageIndex;
 							return publishedListRow({
 								...options.listRowOverrides,
+								...options.listRowOverridesForIndex?.(index),
 								key:
 									index === 0
 										? publishedItemKey
@@ -851,7 +855,7 @@ test("searches and assigns records with the collection picker", async ({
 		});
 });
 
-test("assigns writable Zotero records only within their source", async ({
+test("assigns writable Zotero records to native or own-source collections", async ({
 	page,
 }) => {
 	let batchRequest:
@@ -860,9 +864,23 @@ test("assigns writable Zotero records only within their source", async ({
 		...importedSource,
 		readOnly: false,
 	};
+	const unrelatedSource: AdminSource = {
+		...writableSource,
+		key: "zotero-unrelated",
+		label: "Unrelated Zotero",
+	};
+	const unrelatedCollection: AdminCollectionCatalogEntry = {
+		...importedCollection,
+		key: "OTHER234",
+		name: "Unrelated collection",
+		sourceConnectionKey: unrelatedSource.key,
+	};
 	await mockPublishedBook(page, {
-		additionalCollectionEntries: [importedCollection],
-		additionalSources: [writableSource],
+		additionalCollectionEntries: [
+			importedCollection,
+			unrelatedCollection,
+		],
+		additionalSources: [writableSource, unrelatedSource],
 		listRowOverrides: {
 			sourceConnectionKey: writableSource.key,
 		},
@@ -888,11 +906,33 @@ test("assigns writable Zotero records only within their source", async ({
 		}),
 	).toBeVisible();
 	await expect(
-		dialog.getByRole("button", { name: /Select .*Native/ }),
+		dialog.getByRole("button", { name: "Choose source" }),
+	).toBeVisible();
+	await dialog.getByRole("button", { name: "Choose source" }).click();
+	await expect(
+		dialog.getByRole("button", { name: "Native", exact: true }),
+	).toBeVisible();
+	await expect(
+		dialog.getByRole("button", {
+			name: writableSource.label,
+			exact: true,
+		}),
+	).toBeVisible();
+	await expect(
+		dialog.getByRole("button", {
+			name: unrelatedSource.label,
+			exact: true,
+		}),
 	).toHaveCount(0);
+	await dialog.getByRole("button", { name: "Native", exact: true }).click();
+	await expect(
+		dialog.getByRole("button", {
+			name: `Select ${teacherCollection.name}, Native`,
+		}),
+	).toBeVisible();
 	await dialog
 		.getByRole("button", {
-			name: `Select ${importedCollection.name}, ${writableSource.label}`,
+			name: `Select ${teacherCollection.name}, Native`,
 		})
 		.click();
 
@@ -900,7 +940,7 @@ test("assigns writable Zotero records only within their source", async ({
 		.poll(() => batchRequest)
 		.toEqual({
 			action: "assignCollection",
-			collectionKey: importedCollection.key,
+			collectionKey: teacherCollection.key,
 			keys: [publishedItemKey],
 		});
 });
@@ -3718,12 +3758,20 @@ test("restores collection focus after a failed pointer move reloads the catalogu
 	await expect(handle).toBeFocused();
 });
 
-test("adds a native record to a collection with pointer drag", async ({
+test("adds a writable Zotero record to a native collection with pointer drag", async ({
 	page,
 }) => {
 	let batchRequest: unknown;
+	const writableSource: AdminSource = {
+		...importedSource,
+		readOnly: false,
+	};
 	await mockPublishedBook(page, {
+		additionalSources: [writableSource],
 		itemCount: 2,
+		listRowOverrides: {
+			sourceConnectionKey: writableSource.key,
+		},
 		onBatchRequest: (body) => {
 			batchRequest = body;
 		},
@@ -4177,12 +4225,21 @@ test("runs selected-record actions through one compact batch request", async ({
 	await expect(bulkToolbar).toBeHidden();
 });
 
-test("assigns selected records through the searchable collection picker", async ({
+test("assigns mixed-source records to their shared native collection", async ({
 	page,
 }) => {
 	const batchRequests: unknown[] = [];
+	const writableSource: AdminSource = {
+		...importedSource,
+		readOnly: false,
+	};
 	await mockPublishedBook(page, {
+		additionalSources: [writableSource],
 		itemCount: 2,
+		listRowOverridesForIndex: (index) =>
+			index === 1
+				? { sourceConnectionKey: writableSource.key }
+				: { sourceConnectionKey: "native" },
 		onBatchRequest: (body) => batchRequests.push(body),
 	});
 	await page.goto("/admin");
@@ -4217,6 +4274,9 @@ test("assigns selected records through the searchable collection picker", async 
 	dialog = page.getByRole("dialog", {
 		name: "Add 2 records to collection",
 	});
+	await expect(
+		dialog.getByRole("button", { name: "Choose source" }),
+	).toHaveCount(0);
 	await dialog
 		.getByRole("textbox", { name: "Search collections" })
 		.fill("teacher");

@@ -57,6 +57,7 @@ import type {
 	AdminSource,
 } from "@/lib/admin/types";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
+import { editableItemCollectionSourceKeys } from "@/lib/admin/item-collection-policy";
 import { isTopLevelAdminItemType } from "@/lib/admin/item-fields";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
 import { collectionKeysFromPayload } from "@/lib/admin/item-payload";
@@ -947,14 +948,10 @@ function CollectionsEditor({
 		retry,
 	} = useResolvedAdminCollections(selectedKeys);
 	const publishedSelected = new Set(publishedCollectionKeys ?? []);
-	const editableSourceKeys = sources
-		.filter(
-			({ key, readOnly: sourceReadOnly }) =>
-				!sourceReadOnly &&
-				(key === NATIVE_SOURCE_CONNECTION_KEY ||
-					key === sourceConnectionKey),
-		)
-		.map(({ key }) => key);
+	const editableSourceKeys = editableItemCollectionSourceKeys(
+		sourceConnectionKey,
+		sources,
+	);
 	const editableSourceSet = new Set(editableSourceKeys);
 	return (
 		<>

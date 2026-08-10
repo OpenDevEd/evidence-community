@@ -48,6 +48,7 @@ import type {
 	AdminItemBatchResult,
 } from "@/lib/admin/item-batch-contract";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
+import { editableItemCollectionSourceKeysForItems } from "@/lib/admin/item-collection-policy";
 import { getRuntimeHomeHref } from "@/config/library-config/links";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { useFinePointer } from "@/hooks/useBreakpoint";
@@ -152,8 +153,9 @@ type ConfirmDialog = {
 
 type RecordAssignment = {
 	focusKey: string | null;
+	initialSourceConnectionKey: string;
 	itemKeys: string[];
-	sourceConnectionKey: string;
+	itemSourceConnectionKeys: string[];
 };
 
 function collectionLocationFromCatalog(
@@ -427,25 +429,43 @@ export default function AdminWorkbench({
 	const searchIndex = useAdminSearchIndex();
 	const editableCollectionSourceKeys = useMemo(
 		() =>
-			library.sources
-				.filter(({ readOnly }) => !readOnly)
-				.map(({ key }) => key),
+			library.sources.flatMap(({ key, readOnly }) =>
+				readOnly ? [] : [key],
+			),
 		[library.sources],
 	);
-	const bulkAssignmentSource = useMemo(() => {
+	const bulkAssignmentScope = useMemo(() => {
 		if (!bulkKeys.size) return null;
 		const selectedItems = items.filter(({ key }) => bulkKeys.has(key));
 		if (selectedItems.length !== bulkKeys.size) return null;
-		const selectedSources = new Set(
+		const itemSourceConnectionKeys = [
+			...new Set(
 			selectedItems.map(({ sourceConnectionKey }) => sourceConnectionKey),
+			),
+		];
+		const sourceByKey = new Map(
+			library.sources.map((source) => [source.key, source]),
 		);
-		if (selectedSources.size !== 1) return null;
-		const [sourceConnectionKey] = selectedSources;
-		return sourceConnectionKey &&
-			editableCollectionSourceKeys.includes(sourceConnectionKey)
-			? sourceConnectionKey
-			: null;
-	}, [bulkKeys, editableCollectionSourceKeys, items]);
+		// Every selected item must support draft mutations, even when Native is shared.
+		if (
+			itemSourceConnectionKeys.some(
+				(key) => sourceByKey.get(key)?.readOnly !== false,
+			)
+		)
+			return null;
+		const allowedSourceKeys = editableItemCollectionSourceKeysForItems(
+			itemSourceConnectionKeys,
+			library.sources,
+		);
+		if (allowedSourceKeys.length === 0) return null;
+		return {
+			initialSourceConnectionKey:
+				itemSourceConnectionKeys.length === 1
+					? itemSourceConnectionKeys[0]!
+					: NATIVE_SOURCE_CONNECTION_KEY,
+			itemSourceConnectionKeys,
+		};
+	}, [bulkKeys, items, library.sources]);
 
 	const detailRequest = useRef(0);
 	const moveLocationButtonRef = useRef<HTMLButtonElement>(null);
@@ -1625,7 +1645,12 @@ export default function AdminWorkbench({
 		focusKey: string,
 		sourceConnectionKey: string,
 	) => {
-		setRecordAssignment({ focusKey, itemKeys, sourceConnectionKey });
+		setRecordAssignment({
+			focusKey,
+			initialSourceConnectionKey: sourceConnectionKey,
+			itemKeys,
+			itemSourceConnectionKeys: [sourceConnectionKey],
+		});
 	};
 
 	const closeRecordAssignment = () => {
@@ -1962,9 +1987,9 @@ export default function AdminWorkbench({
 										</Tooltip>
 										<Tooltip
 											content={
-												bulkAssignmentSource
+												bulkAssignmentScope
 													? "Add selected to collection"
-													: "Select records from one editable source"
+													: "Select editable records with a shared collection source"
 											}
 										>
 											<button
@@ -1972,16 +1997,15 @@ export default function AdminWorkbench({
 												className="grid size-8 shrink-0 place-items-center rounded-lg text-black/55 hover:bg-black/[0.05] hover:text-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-40 dark:text-white/60 dark:hover:bg-white/[0.06] dark:hover:text-white/85"
 												disabled={
 													busy ||
-													!bulkAssignmentSource
+													!bulkAssignmentScope
 												}
 												onClick={() => {
-													if (!bulkAssignmentSource)
+													if (!bulkAssignmentScope)
 														return;
 													setRecordAssignment({
 														focusKey: null,
 														itemKeys: [...bulkKeys],
-														sourceConnectionKey:
-															bulkAssignmentSource,
+														...bulkAssignmentScope,
 													});
 												}}
 												type="button"
@@ -2133,14 +2157,15 @@ export default function AdminWorkbench({
 								<AdminCollectionPicker
 									allowedSourceKeys={
 										recordAssignment
-											? [
-													recordAssignment.sourceConnectionKey,
-												]
+											? editableItemCollectionSourceKeysForItems(
+													recordAssignment.itemSourceConnectionKeys,
+													library.sources,
+												)
 											: []
 									}
 									autoFocus={finePointer}
 									initialSourceKey={
-										recordAssignment?.sourceConnectionKey ??
+										recordAssignment?.initialSourceConnectionKey ??
 										null
 									}
 									onSelect={(collection) => {
