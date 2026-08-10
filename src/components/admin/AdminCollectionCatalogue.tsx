@@ -23,8 +23,10 @@ import {
 } from "lucide-react";
 import {
 	type KeyboardEvent,
+	type RefObject,
 	useCallback,
 	useEffect,
+	useLayoutEffect,
 	useMemo,
 	useRef,
 	useState,
@@ -503,6 +505,7 @@ type CatalogueProps = {
 	onMove: (collection: AdminCollectionCatalogEntry) => void;
 	onRestore: (collection: AdminCollectionCatalogEntry) => void;
 	onSelect: (key: string) => void;
+	scrollElementRef: RefObject<HTMLElement | null>;
 	selectedCollection: string | null;
 	sources: AdminSource[];
 };
@@ -520,6 +523,7 @@ export function AdminCollectionCatalogue({
 	onMove,
 	onRestore,
 	onSelect,
+	scrollElementRef,
 	selectedCollection,
 	sources,
 }: CatalogueProps) {
@@ -557,7 +561,8 @@ export function AdminCollectionCatalogue({
 	const [pendingFocusKey, setPendingFocusKey] = useState<string | null>(null);
 	const [pendingFocusEntry, setPendingFocusEntry] =
 		useState<AdminCollectionCatalogEntry | null>(null);
-	const scrollRef = useRef<HTMLDivElement>(null);
+	const catalogueListRef = useRef<HTMLDivElement>(null);
+	const [scrollMargin, setScrollMargin] = useState(0);
 	const pendingStatusFocus = useRef<{
 		branchKey: string;
 		intent: "first" | "status";
@@ -568,6 +573,16 @@ export function AdminCollectionCatalogue({
 	const restoredExpansion = useRef(false);
 	const scrolledSelection = useRef("");
 	const storageKey = `admin.collection-catalogue.expanded:${identity.baseUrl}`;
+	useLayoutEffect(() => {
+		const list = catalogueListRef.current;
+		const scrollElement = scrollElementRef.current;
+		if (!list || !scrollElement) return;
+		const nextMargin =
+			list.getBoundingClientRect().top -
+			scrollElement.getBoundingClientRect().top +
+			scrollElement.scrollTop;
+		setScrollMargin(nextMargin);
+	}, [scrollElementRef, sources.length]);
 	useEffect(() => {
 		const cancelStaleStatusTransfer = (event: FocusEvent) => {
 			const pending = pendingStatusFocus.current;
@@ -946,8 +961,9 @@ export function AdminCollectionCatalogue({
 		count: rows.length,
 		estimateSize: () => ROW_HEIGHT,
 		getItemKey: (index) => rowId(rows[index]!),
-		getScrollElement: () => scrollRef.current,
+		getScrollElement: () => scrollElementRef.current,
 		overscan: 8,
+		scrollMargin,
 		rangeExtractor: (range) => {
 			const indexes = new Set(defaultRangeExtractor(range));
 			if (focusedIndex >= 0) indexes.add(focusedIndex);
@@ -1268,8 +1284,8 @@ export function AdminCollectionCatalogue({
 				</Tooltip>
 			</div>
 			<div
-				ref={scrollRef}
-				className="min-h-0 flex-1 overflow-y-auto px-2"
+				ref={catalogueListRef}
+				className="min-h-0 flex-1 px-2"
 				role="tree"
 				aria-label={
 					view === "deleted" ? "Deleted collections" : "Collections"
@@ -1290,7 +1306,7 @@ export function AdminCollectionCatalogue({
 								data-index={virtualRow.index}
 								style={{
 									height: ROW_HEIGHT,
-									transform: `translateY(${virtualRow.start}px)`,
+									transform: `translateY(${virtualRow.start - scrollMargin}px)`,
 								}}
 							>
 								{row.kind === "source" ? (

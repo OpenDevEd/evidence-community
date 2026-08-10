@@ -14,7 +14,7 @@ import {
 	Pencil,
 	Trash2,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useRef } from "react";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import type {
@@ -65,7 +65,7 @@ function NavigationHeading({
 	title: string;
 }) {
 	return (
-		<div className="flex min-h-8 items-center gap-2 px-2 pt-3 first:pt-2">
+		<div className="flex min-h-8 items-center gap-2 px-4 pt-3 first:pt-2">
 			<Icon
 				aria-hidden
 				className="text-black/30 dark:text-white/30"
@@ -83,7 +83,7 @@ function NavigationHeading({
 const navigationItemClass =
 	"flex min-h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] transition-colors";
 const navigationListSurfaceClass =
-	"rounded-xl bg-black/[0.035] p-1 dark:bg-black/20";
+	"bg-black/[0.035] px-2 py-1 dark:bg-black/20";
 
 export function AdminNavigation({
 	collection,
@@ -116,12 +116,15 @@ export function AdminNavigation({
 	sources: AdminSource[];
 	state: AdminRecordState | "all" | null;
 }) {
+	const navigationRef = useRef<HTMLElement>(null);
+
 	return (
 		<nav
+			ref={navigationRef}
 			aria-label="Admin filters and collections"
-			className="flex h-full min-h-0 flex-col overflow-hidden px-2 pb-2"
+			className="flex h-full min-h-0 flex-col overflow-y-auto pb-2"
 		>
-			<div className="max-h-[42%] shrink-0 overflow-y-auto">
+			<div className="shrink-0">
 				<NavigationHeading icon={Database} title="Sources" />
 				<div className={navigationListSurfaceClass}>
 					{sources.map((entry) => {
@@ -207,7 +210,7 @@ export function AdminNavigation({
 				title="Collections"
 			/>
 			<div
-				className={`${navigationListSurfaceClass} flex min-h-0 flex-1 flex-col overflow-hidden`}
+				className={`${navigationListSurfaceClass} flex shrink-0 flex-col px-0`}
 			>
 				<AdminCollectionCatalogue
 					busy={isBusy}
@@ -220,6 +223,7 @@ export function AdminNavigation({
 						onSelectCollection(collection === key ? null : key)
 					}
 					selectedCollection={collection}
+					scrollElementRef={navigationRef}
 					sources={sources}
 				/>
 			</div>
