@@ -65,7 +65,7 @@ function NavigationHeading({
 	title: string;
 }) {
 	return (
-		<div className="flex min-h-8 items-center gap-2 px-4 pt-3 first:pt-2">
+		<div className="flex min-h-8 items-center gap-2 px-4 pb-1 pt-3 first:pt-2">
 			<Icon
 				aria-hidden
 				className="text-black/30 dark:text-white/30"
@@ -83,7 +83,7 @@ function NavigationHeading({
 const navigationItemClass =
 	"flex min-h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] transition-colors";
 const navigationListSurfaceClass =
-	"bg-black/[0.035] px-2 py-1 dark:bg-black/20";
+	"bg-black/[0.035] px-2 py-2 dark:bg-black/20";
 
 export function AdminNavigation({
 	collection,
