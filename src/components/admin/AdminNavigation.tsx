@@ -122,7 +122,7 @@ export function AdminNavigation({
 		<nav
 			ref={navigationRef}
 			aria-label="Admin filters and collections"
-			className="flex h-full min-h-0 flex-col overflow-y-auto pb-2"
+			className="flex h-full min-h-0 flex-col overflow-y-auto"
 		>
 			<div className="shrink-0">
 				<NavigationHeading icon={Database} title="Sources" />
