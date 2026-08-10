@@ -65,7 +65,7 @@ function NavigationHeading({
 	title: string;
 }) {
 	return (
-		<div className="flex min-h-8 items-center gap-2 px-4 pb-1 pt-3 first:pt-2">
+		<div className="flex min-h-8 items-center gap-2 px-4 pb-2 pt-3 first:pt-2">
 			<Icon
 				aria-hidden
 				className="text-black/30 dark:text-white/30"
