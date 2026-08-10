@@ -5,6 +5,9 @@ import {
 	ModalContent,
 	ModalFooter,
 	ModalHeader,
+	Popover,
+	PopoverContent,
+	PopoverTrigger,
 } from "@nextui-org/react";
 import {
 	ArrowLeft,
@@ -1854,27 +1857,63 @@ export default function AdminWorkbench({
 						<RefreshCw aria-hidden size={15} />
 					</Button>
 				</Tooltip>
-				<Button
-					aria-label="New item"
-					className="col-start-3 row-start-1 h-10 min-h-10 rounded-xl lg:hidden"
-					color="accent"
-					isIconOnly
-					onPress={() => setNewItemOpen(true)}
-					size="xs"
-					variant="solid"
+				<Popover
+					disableAnimation
+					isOpen={newItemOpen}
+					onOpenChange={(open) => {
+						setNewItemOpen(open);
+						if (!open) setNewItemSearch("");
+					}}
+					placement="bottom-end"
 				>
-					<Plus aria-hidden size={15} />
-				</Button>
-				<Button
-					className="hidden h-10 min-h-10 rounded-xl px-3 font-semibold shadow-sm shadow-accent/10 lg:flex"
-					color="accent"
-					onPress={() => setNewItemOpen(true)}
-					size="xs"
-					startContent={<Plus aria-hidden size={15} />}
-					variant="solid"
-				>
-					New item
-				</Button>
+					<PopoverTrigger>
+						<Button
+							aria-label="New item"
+							className="col-start-3 row-start-1 h-10 min-h-10 w-10 !min-w-10 rounded-xl px-0 font-semibold shadow-sm shadow-accent/10 lg:w-auto lg:!min-w-0 lg:px-3"
+							color="accent"
+							size="xs"
+							variant="solid"
+						>
+							<Plus aria-hidden size={15} />
+							<span className="hidden lg:inline">New item</span>
+						</Button>
+					</PopoverTrigger>
+					<PopoverContent className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card">
+						<div className="w-full">
+							<div className="border-b border-black/[0.06] p-3 dark:border-white/[0.06]">
+								<Input
+									aria-label="Find an item type"
+									autoFocus={finePointer}
+									placeholder="Find an item type"
+									startContent={
+										<Search aria-hidden size={15} />
+									}
+									value={newItemSearch}
+									onValueChange={setNewItemSearch}
+								/>
+							</div>
+							<div className="flex max-h-[52vh] flex-col gap-1 overflow-y-auto p-1">
+								{filteredDefinitions.map((definition) => (
+									<button
+										key={definition.itemType}
+										className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-left text-sm text-black/70 hover:bg-black/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/70 dark:hover:bg-white/[0.05]"
+										onClick={() => createItem(definition)}
+										type="button"
+									>
+										<Library
+											aria-hidden
+											className="shrink-0 opacity-45"
+											size={16}
+										/>
+										{humanizeAdminField(
+											definition.itemType,
+										)}
+									</button>
+								))}
+							</div>
+						</div>
+					</PopoverContent>
+				</Popover>
 			</header>
 
 			<AdminDragDropRoot
@@ -2179,62 +2218,6 @@ export default function AdminWorkbench({
 									selectionMode="single"
 									sources={library.sources}
 								/>
-							</ModalBody>
-							<ModalFooter>
-								<Button
-									onPress={onClose}
-									size="xs"
-									variant="transparent"
-								>
-									Cancel
-								</Button>
-							</ModalFooter>
-						</>
-					)}
-				</ModalContent>
-			</DialogModal>
-
-			<DialogModal
-				isOpen={newItemOpen}
-				size="lg"
-				onOpenChange={(open) => setNewItemOpen(open)}
-			>
-				<ModalContent>
-					{(onClose) => (
-						<>
-							<ModalHeader>New item</ModalHeader>
-							<ModalBody>
-								<Input
-									aria-label="Find an item type"
-									autoFocus={finePointer}
-									placeholder="Find an item type"
-									startContent={
-										<Search aria-hidden size={15} />
-									}
-									value={newItemSearch}
-									onValueChange={setNewItemSearch}
-								/>
-								<div className="flex max-h-[52vh] flex-col gap-1 overflow-y-auto pr-1">
-									{filteredDefinitions.map((definition) => (
-										<button
-											key={definition.itemType}
-											className="flex min-h-12 items-center gap-2 rounded-xl bg-black/[0.035] px-3 text-left text-sm hover:bg-accent/10 dark:bg-white/[0.035] dark:hover:bg-accent/15"
-											onClick={() =>
-												createItem(definition)
-											}
-											type="button"
-										>
-											<Library
-												aria-hidden
-												className="shrink-0 opacity-45"
-												size={16}
-											/>
-											{humanizeAdminField(
-												definition.itemType,
-											)}
-										</button>
-									))}
-								</div>
 							</ModalBody>
 							<ModalFooter>
 								<Button
