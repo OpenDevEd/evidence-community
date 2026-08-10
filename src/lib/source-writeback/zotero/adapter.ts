@@ -304,7 +304,7 @@ async function writeCollection(
 			404,
 		);
 	};
-	let desired =
+	const desired =
 		request.operation === "upsert"
 			? createZoteroCollectionPayload(request)
 			: null;
@@ -314,7 +314,10 @@ async function writeCollection(
 		try {
 			const created = await client.createCollection(
 				prefix,
-				createPayload,
+				{
+					...createPayload,
+					version: 0,
+				},
 				{
 					signal: context.signal,
 				},

@@ -85,6 +85,20 @@ function createFakeZotero(
 				unknown
 			>[];
 			const key = String(inputItem!.key);
+			if (inputItem!.version !== 0) {
+				return versionedResponse(
+					libraryVersion,
+					JSON.stringify({
+						failed: {
+							"0": {
+								code: 412,
+								message:
+									"Key-based item creation requires version 0",
+							},
+						},
+					}),
+				);
+			}
 			if (items.has(key)) {
 				return versionedResponse(
 					libraryVersion,
@@ -186,6 +200,20 @@ function createFakeZotero(
 				unknown
 			>[];
 			const key = String(inputCollection!.key);
+			if (inputCollection!.version !== 0) {
+				return versionedResponse(
+					libraryVersion,
+					JSON.stringify({
+						failed: {
+							"0": {
+								code: 412,
+								message:
+									"Key-based collection creation requires version 0",
+							},
+						},
+					}),
+				);
+			}
 			if (collections.has(key)) {
 				return versionedResponse(
 					libraryVersion,
@@ -584,7 +612,35 @@ describe("Zotero writeback adapter", () => {
 			},
 			sourceRecordKey: "COLL2345",
 		});
+		const postCall = zotero.fetch.mock.calls.find(
+			([_input, init]) => init?.method === "POST",
+		);
+		expect(JSON.parse(String(postCall?.[1]?.body))).toMatchObject([
+			{ key: "COLL2345", version: 0 },
+		]);
 		expect(methods(zotero.fetch)).toEqual(["GET", "GET", "POST", "GET"]);
+	});
+
+	it("accepts an exact collection create replay but rejects a different remote collection", async () => {
+		const replay = createFakeZotero(
+			[],
+			[remoteCollection({ name: "Local collection" })],
+		);
+		await expect(
+			createZoteroWritebackAdapter({ fetch: replay.fetch }).write(
+				collectionRequest({ remoteVersion: null }),
+				context(),
+			),
+		).resolves.toMatchObject({ remoteVersion: "4" });
+		expect(methods(replay.fetch)).toEqual(["GET", "GET"]);
+
+		const collision = createFakeZotero([], [remoteCollection()]);
+		await expect(
+			createZoteroWritebackAdapter({ fetch: collision.fetch }).write(
+				collectionRequest({ remoteVersion: null }),
+				context(),
+			),
+		).rejects.toBeInstanceOf(ZoteroWritebackKeyCollisionError);
 	});
 
 	it("rebases a collection rename and reparent after an optimistic conflict", async () => {
