@@ -4176,22 +4176,24 @@ test("runs selected-record actions through one compact batch request", async ({
 		page.getByRole("heading", { name: "Published book" }),
 	).toBeVisible();
 
-	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
-	await expect(bulkToolbar).toBeVisible();
-	await expect(bulkToolbar).toContainText("0 selected");
-	for (const label of [
-		"Publish selected",
-		"Add selected to collection",
-		"Remove selected",
-		"Clear selection",
-	]) {
-		await expect(bulkToolbar.getByRole("button", { name: label })).toBeDisabled();
-	}
-
 	await page
 		.getByRole("checkbox", { name: "Select all loaded records" })
 		.check();
+	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
+	await expect(bulkToolbar).toBeVisible();
 	await expect(bulkToolbar).toContainText("2 selected");
+	await expect(
+		bulkToolbar.getByRole("button", { name: "Publish selected" }),
+	).toContainText("Publish");
+	await expect(
+		bulkToolbar.getByRole("button", { name: "Add selected to collection" }),
+	).toContainText("Add to collection");
+	await expect(
+		bulkToolbar.getByRole("button", { name: "Remove selected" }),
+	).toContainText("Remove");
+	await expect(
+		bulkToolbar.getByRole("button", { name: "Clear selection" }),
+	).toContainText("Clear");
 
 	const toolbarGeometry = await page.evaluate(() => {
 		const bulk = document.querySelector<HTMLElement>(
@@ -4202,7 +4204,8 @@ test("runs selected-record actions through one compact batch request", async ({
 		)!;
 		const bulkRect = bulk.getBoundingClientRect();
 		const controlsRect = controls.getBoundingClientRect();
-		const actionsRect = bulk.firstElementChild!.getBoundingClientRect();
+		const buttons = bulk.querySelectorAll("button");
+		const actionsRect = buttons[buttons.length - 1]!.getBoundingClientRect();
 		const countRect = bulk.lastElementChild!.getBoundingClientRect();
 		return {
 			actionsRight: actionsRect.right,
@@ -4239,15 +4242,7 @@ test("runs selected-record actions through one compact batch request", async ({
 			keys: [publishedItemKey, "ROW00001"],
 		},
 	]);
-	await expect(bulkToolbar).toContainText("0 selected");
-	for (const label of [
-		"Publish selected",
-		"Add selected to collection",
-		"Remove selected",
-		"Clear selection",
-	]) {
-		await expect(bulkToolbar.getByRole("button", { name: label })).toBeDisabled();
-	}
+	await expect(bulkToolbar).toBeHidden();
 });
 
 test("assigns mixed-source records to their shared native collection", async ({
@@ -4276,16 +4271,17 @@ test("assigns mixed-source records to their shared native collection", async ({
 		name: "Add selected to collection",
 	});
 	const toolbarStyles = await bulkToolbar.evaluate((toolbar) => ({
-		buttonSizes: [...toolbar.querySelectorAll("button")].map((button) => [
-			button.offsetWidth,
-			button.offsetHeight,
-		]),
+		buttonSizes: [...toolbar.querySelectorAll("button")].map((button) => ({
+			height: button.offsetHeight,
+			width: button.offsetWidth,
+		})),
 		gap: getComputedStyle(toolbar).gap,
 	}));
 	expect(toolbarStyles.gap).toBe("4px");
-	expect(new Set(toolbarStyles.buttonSizes.map(String))).toEqual(
-		new Set(["32,32"]),
+	expect(toolbarStyles.buttonSizes.every(({ height }) => height === 32)).toBe(
+		true,
 	);
+	expect(toolbarStyles.buttonSizes.every(({ width }) => width > 32)).toBe(true);
 	await assign.focus();
 	await assign.press("Enter");
 	let dialog = page.getByRole("dialog", {

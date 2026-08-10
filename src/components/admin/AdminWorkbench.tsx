@@ -1964,22 +1964,22 @@ export default function AdminWorkbench({
 					>
 						<AdminItemTable
 							bulkActions={
-								<div
-									aria-label="Bulk actions"
-									className="flex h-full min-w-0 items-center gap-1 overflow-hidden"
-									role="toolbar"
-								>
-									<div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-black/[0.035] p-0.5 dark:bg-white/[0.04]">
+								bulkKeys.size ? (
+									<div
+										aria-label="Bulk actions"
+										className="flex h-full min-w-0 items-center gap-1 overflow-hidden"
+										role="toolbar"
+									>
 										<Tooltip content="Publish selected">
 											<Button
 												aria-label="Publish selected"
-												isDisabled={busy || bulkKeys.size === 0}
-												isIconOnly
+												isDisabled={busy}
 												onPress={bulkPublish}
 												size="xs"
 												variant="transparent"
 											>
 												<Send aria-hidden size={14} />
+												Publish
 											</Button>
 										</Tooltip>
 										<Tooltip
@@ -1989,14 +1989,10 @@ export default function AdminWorkbench({
 													: "Select editable records with a shared collection source"
 											}
 										>
-											<button
+											<Button
 												aria-label="Add selected to collection"
-												className="grid size-8 shrink-0 place-items-center rounded-lg text-black/55 hover:bg-black/[0.05] hover:text-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-40 dark:text-white/60 dark:hover:bg-white/[0.06] dark:hover:text-white/85"
-												disabled={
-													busy ||
-													!bulkAssignmentScope
-												}
-												onClick={() => {
+												isDisabled={busy || !bulkAssignmentScope}
+												onPress={() => {
 													if (!bulkAssignmentScope)
 														return;
 													setRecordAssignment({
@@ -2005,32 +2001,29 @@ export default function AdminWorkbench({
 														...bulkAssignmentScope,
 													});
 												}}
-												type="button"
+												size="xs"
+												variant="transparent"
 											>
-												<FolderInput
-													aria-hidden
-													size={14}
-												/>
-											</button>
+												<FolderInput aria-hidden size={14} />
+												Add to collection
+											</Button>
 										</Tooltip>
 										<Tooltip content="Remove selected">
 											<Button
 												aria-label="Remove selected"
-												className="text-danger"
-												isDisabled={busy || bulkKeys.size === 0}
-												isIconOnly
+												className="text-danger disabled:text-black/35 dark:disabled:text-white/35"
+												isDisabled={busy}
 												onPress={bulkDelete}
 												size="xs"
 												variant="transparent"
 											>
 												<Trash2 aria-hidden size={14} />
+												Remove
 											</Button>
 										</Tooltip>
 										<Tooltip content="Clear selection">
 											<Button
 												aria-label="Clear selection"
-												isDisabled={bulkKeys.size === 0}
-												isIconOnly
 												onPress={() =>
 													setBulkKeys(new Set())
 												}
@@ -2038,13 +2031,14 @@ export default function AdminWorkbench({
 												variant="transparent"
 											>
 												<X aria-hidden size={14} />
+												Clear
 											</Button>
 										</Tooltip>
-									</div>
-									<span className="ml-auto hidden shrink-0 px-2 text-xs font-medium tabular-nums text-black/55 dark:text-white/60 sm:inline">
+										<span className="hidden shrink-0 px-2 text-xs font-medium tabular-nums text-black/55 dark:text-white/60 sm:inline">
 										{bulkKeys.size} selected
-									</span>
-								</div>
+										</span>
+									</div>
+								) : undefined
 							}
 							bulkKeys={bulkKeys}
 							dragEnabled={!busy}
