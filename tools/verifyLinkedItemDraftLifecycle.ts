@@ -1,9 +1,11 @@
 import {
 	collectionIdentity,
+	itemDraft,
 	itemIdentity,
 	itemSourceLink,
 	outbox,
 	sourceConnection,
+	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -13,6 +15,7 @@ import { item } from "../src/db/schema/tables/item";
 import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import { createNativeCollection } from "../src/lib/admin/native-collection-service";
+import { runAdminItemBatch } from "../src/lib/admin/item-batch-service";
 import {
 	createNativeItemDraft,
 	discardItemDraft,
@@ -92,6 +95,33 @@ async function verify() {
 	const db = resource.database;
 	let nativeCollectionKey: string | null = null;
 	let nativeParentKey: string | null = null;
+	let sourceCollectionKey: string | null = null;
+	let secondaryCollectionKey: string | null = null;
+	const assignCollection = async (itemKey: string, collectionKey: string) => {
+		if (baseUrl) {
+			return adminRequest<{
+				results: Array<{
+					message?: string;
+					outcome: "changed" | "failed" | "skipped" | "unchanged";
+				}>;
+			}>("/api/admin/items/batch", {
+				body: JSON.stringify({
+					action: "assignCollection",
+					collectionKey,
+					keys: [itemKey],
+				}),
+				method: "POST",
+			});
+		}
+		return runAdminItemBatch(
+			{ action: "assignCollection", collectionKey, keys: [itemKey] },
+			{
+				db,
+				removePrivateFiles: async () => {},
+				writebackPolicyOptions,
+			},
+		);
+	};
 
 	try {
 		await db.insert(sourceConnection).values([
@@ -111,6 +141,20 @@ async function verify() {
 
 		const imported = await writeSourceIngestionBatch(db, {
 			...batch(null, 1),
+			collections: [
+				{
+					data: {
+						name: "Source curation",
+						numCollections: 0,
+						numItems: 0,
+						relations: {},
+					},
+					operation: "upsert",
+					raw: { key: "COLL2345", version: 1 },
+					remoteVersion: "1",
+					sourceRecordKey: "COLL2345",
+				},
+			],
 			items: [
 				{
 					operation: "upsert",
@@ -127,6 +171,25 @@ async function verify() {
 			],
 		});
 		const itemKey = imported.itemKeys.EDIT2345!;
+		sourceCollectionKey = imported.collectionKeys.COLL2345!;
+		const secondaryImported = await writeSourceIngestionBatch(db, {
+			...batch(null, 1, secondaryConnectionKey),
+			collections: [
+				{
+					data: {
+						name: "Another source collection",
+						numCollections: 0,
+						numItems: 0,
+						relations: {},
+					},
+					operation: "upsert",
+					raw: { key: "OTHER234", version: 1 },
+					remoteVersion: "1",
+					sourceRecordKey: "OTHER234",
+				},
+			],
+		});
+		secondaryCollectionKey = secondaryImported.collectionKeys.OTHER234!;
 		await db.insert(itemSourceLink).values({
 			itemKey,
 			sourceConnectionKey: secondaryConnectionKey,
@@ -177,6 +240,30 @@ async function verify() {
 			parentCollection: null,
 		});
 		nativeCollectionKey = nativeCollection.key;
+		const crossSourceAssignment = await assignCollection(
+			itemKey,
+			secondaryCollectionKey,
+		);
+		const draftsAfterRejectedAssignment = await db
+			.select({ itemKey: itemDraft.itemKey })
+			.from(itemDraft)
+			.where(eq(itemDraft.itemKey, itemKey));
+		const crossSourceResult = crossSourceAssignment.results[0];
+		assert(
+			crossSourceResult?.outcome === "failed" &&
+				crossSourceResult.message?.includes("another source") ===
+					true &&
+				draftsAfterRejectedAssignment.length === 0,
+			`Cross-source assignment was not rejected atomically: ${JSON.stringify(crossSourceAssignment.results)}`,
+		);
+		const sourceAssignment = await assignCollection(
+			itemKey,
+			sourceCollectionKey,
+		);
+		assert(
+			sourceAssignment.results[0]?.outcome === "changed",
+			`Batch assignment to a same-source collection failed: ${JSON.stringify(sourceAssignment.results)}`,
+		);
 
 		const opened = await openItemDraft(db, itemKey, writebackPolicyOptions);
 		await saveItemDraft(
@@ -187,7 +274,7 @@ async function verify() {
 				itemKey,
 				payload: {
 					...opened.payload,
-					collections: [nativeCollection.key],
+					collections: [nativeCollection.key, sourceCollectionKey],
 					language: "fr",
 					tags: ["local"],
 					title: "Local title",
@@ -226,39 +313,62 @@ async function verify() {
 			itemKey,
 			writebackPolicyOptions,
 		);
-		const [[publishedLink], publishedMemberships, publishedTags] =
-			await Promise.all([
-				db
-					.select()
-					.from(itemSourceLink)
-					.where(
-						and(
-							eq(itemSourceLink.itemKey, itemKey),
-							eq(
-								itemSourceLink.sourceConnectionKey,
-								connectionKey,
-							),
+		const [
+			publishedLinks,
+			publishedMemberships,
+			publishedTags,
+			writebackJobs,
+		] = await Promise.all([
+			db
+				.select()
+				.from(itemSourceLink)
+				.where(eq(itemSourceLink.itemKey, itemKey)),
+			db
+				.select()
+				.from(itemToCollection)
+				.where(eq(itemToCollection.itemKey, itemKey)),
+			db.select().from(itemToTag).where(eq(itemToTag.itemKey, itemKey)),
+			db
+				.select()
+				.from(sourceWritebackJob)
+				.where(
+					and(
+						eq(sourceWritebackJob.itemKey, itemKey),
+						eq(
+							sourceWritebackJob.sourceConnectionKey,
+							connectionKey,
 						),
 					),
-				db
-					.select()
-					.from(itemToCollection)
-					.where(eq(itemToCollection.itemKey, itemKey)),
-				db
-					.select()
-					.from(itemToTag)
-					.where(eq(itemToTag.itemKey, itemKey)),
-			]);
+				),
+		]);
+		const publishedLink = publishedLinks.find(
+			(link) => link.sourceConnectionKey === connectionKey,
+		);
+		const secondaryLink = publishedLinks.find(
+			(link) => link.sourceConnectionKey === secondaryConnectionKey,
+		);
 		assert(
 			published.title === "Local title" &&
 				published.abstractNote === "Remote abstract while editing" &&
 				publishedMemberships.some(
 					(row) => row.collectionKey === nativeCollection.key,
 				) &&
+				publishedMemberships.some(
+					(row) => row.collectionKey === sourceCollectionKey,
+				) &&
 				publishedTags.some((row) => row.tagName === "local") &&
 				JSON.stringify(publishedLink?.dirtyFields) ===
-					JSON.stringify(["language", "tags", "title"]),
-			"Publishing an imported draft did not preserve source identity, local curation, or dirty fields",
+					JSON.stringify([
+						"collections",
+						"language",
+						"tags",
+						"title",
+					]) &&
+				!secondaryLink?.dirtyFields.includes("collections") &&
+				writebackJobs.some((job) =>
+					job.dirtyFields.includes("collections"),
+				),
+			"Publishing an imported draft did not preserve memberships or queue source-scoped collection writeback",
 		);
 
 		const secondEdit = await openItemDraft(
@@ -292,7 +402,7 @@ async function verify() {
 			"Publishing did not protect local edits against every linked source",
 		);
 		await writeSourceIngestionBatch(db, {
-			...batch(null, 1, secondaryConnectionKey),
+			...batch(1, 2, secondaryConnectionKey),
 			items: [
 				{
 					operation: "upsert",
@@ -584,6 +694,28 @@ async function verify() {
 			await db
 				.delete(collectionIdentity)
 				.where(eq(collectionIdentity.key, nativeCollectionKey));
+		}
+		if (sourceCollectionKey) {
+			await db
+				.delete(outbox)
+				.where(eq(outbox.entityKey, sourceCollectionKey));
+			await db
+				.delete(collection)
+				.where(eq(collection.key, sourceCollectionKey));
+			await db
+				.delete(collectionIdentity)
+				.where(eq(collectionIdentity.key, sourceCollectionKey));
+		}
+		if (secondaryCollectionKey) {
+			await db
+				.delete(outbox)
+				.where(eq(outbox.entityKey, secondaryCollectionKey));
+			await db
+				.delete(collection)
+				.where(eq(collection.key, secondaryCollectionKey));
+			await db
+				.delete(collectionIdentity)
+				.where(eq(collectionIdentity.key, secondaryCollectionKey));
 		}
 		await db
 			.delete(sourceConnection)

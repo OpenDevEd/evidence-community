@@ -1,14 +1,18 @@
 import {
 	collectionIdentity,
 	collectionSourceLink,
+	itemIdentity,
+	itemSourceLink,
 	outbox,
 	sourceConnection,
 	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
-import { eq, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { collection } from "../src/db/schema/tables/collection";
+import { item } from "../src/db/schema/tables/item";
+import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import {
 	CollectionWritebackUnavailableError,
 	createAdminCollection,
@@ -17,6 +21,10 @@ import {
 	renameAdminCollection,
 	restoreAdminCollection,
 } from "../src/lib/admin/collection-mutation-service";
+import {
+	createNativeItemDraft,
+	publishItemDraft,
+} from "../src/lib/admin/native-item-service";
 import { writeSourceIngestionBatch } from "../src/lib/source-ingestion/transactional-writer";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
@@ -39,6 +47,7 @@ async function verify() {
 	};
 	const disabledOptions = { writebackConfig: { sources: [] } };
 	const createdKeys: string[] = [];
+	let memberItemKey: string | null = null;
 	let cursor: Record<string, unknown> = {};
 
 	const ingest = async (
@@ -65,7 +74,7 @@ async function verify() {
 		>,
 	) => {
 		const nextCursor = { revision: Date.now() + Math.random() };
-		await writeSourceIngestionBatch(database, {
+		const result = await writeSourceIngestionBatch(database, {
 			collections,
 			expectedCursor: cursor,
 			fetchedAt: new Date(),
@@ -75,6 +84,7 @@ async function verify() {
 			sourceConnectionKey: connectionKey,
 		});
 		cursor = nextCursor;
+		return result;
 	};
 
 	try {
@@ -149,6 +159,27 @@ async function verify() {
 			},
 			enabledOptions,
 		);
+		const memberDraft = await createNativeItemDraft(database, {
+			itemType: "Report",
+			title: "Collection restore multi-source member",
+		});
+		memberItemKey = memberDraft.itemKey;
+		await publishItemDraft(database, memberItemKey);
+		await database.insert(itemSourceLink).values({
+			itemKey: memberItemKey,
+			remoteVersion: "1",
+			sourceConnectionKey: connectionKey,
+			sourceRecordKey: "MEMB2345",
+			writebackEnabled: true,
+		});
+		await database.insert(itemToCollection).values({
+			collectionKey: child.key,
+			itemKey: memberItemKey,
+		});
+		const [memberBeforeDelete] = await database
+			.select({ revision: item.revision })
+			.from(item)
+			.where(eq(item.key, memberItemKey));
 		const [currentParent] = await database
 			.select()
 			.from(collection)
@@ -207,6 +238,37 @@ async function verify() {
 			restored.collections.length === 2 &&
 				restored.collections.every(({ deleted }) => deleted === 0),
 			"Source collection restore did not restore the delete cohort",
+		);
+		const [[memberAfterRestore], [memberLinkAfterRestore], memberJobs] =
+			await Promise.all([
+				database
+					.select({ revision: item.revision })
+					.from(item)
+					.where(eq(item.key, memberItemKey)),
+				database
+					.select()
+					.from(itemSourceLink)
+					.where(
+						and(
+							eq(itemSourceLink.itemKey, memberItemKey),
+							eq(
+								itemSourceLink.sourceConnectionKey,
+								connectionKey,
+							),
+						),
+					),
+				database
+					.select()
+					.from(sourceWritebackJob)
+					.where(eq(sourceWritebackJob.itemKey, memberItemKey)),
+			]);
+		assert(
+			memberAfterRestore?.revision === memberBeforeDelete!.revision + 1 &&
+				memberLinkAfterRestore?.dirtyFields.includes("collections") &&
+				memberJobs.some((job) =>
+					job.dirtyFields.includes("collections"),
+				),
+			"Restoring a source collection did not queue membership recreation for its items",
 		);
 
 		await ingest(
@@ -331,6 +393,18 @@ async function verify() {
 			}),
 		);
 	} finally {
+		if (memberItemKey) {
+			await database
+				.delete(outbox)
+				.where(eq(outbox.entityKey, memberItemKey));
+			await database
+				.delete(itemToCollection)
+				.where(eq(itemToCollection.itemKey, memberItemKey));
+			await database.delete(item).where(eq(item.key, memberItemKey));
+			await database
+				.delete(itemIdentity)
+				.where(eq(itemIdentity.key, memberItemKey));
+		}
 		if (createdKeys.length > 0) {
 			await database
 				.delete(outbox)

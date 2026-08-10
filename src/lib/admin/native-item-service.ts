@@ -156,6 +156,7 @@ async function requireItemDraftAccess(
 export function assertValidItemCollectionMemberships({
 	baselineCollectionKeys,
 	collectionRows,
+	itemSourceConnectionKey,
 	desiredCollectionKeys,
 }: {
 	baselineCollectionKeys: string[];
@@ -164,20 +165,24 @@ export function assertValidItemCollectionMemberships({
 		key: string;
 		sourceConnectionKey: string;
 	}>;
+	itemSourceConnectionKey: string;
 	desiredCollectionKeys: string[];
 }) {
 	const collectionsByKey = new Map(
 		collectionRows.map((row) => [row.key, row]),
 	);
 	const baselineKeys = new Set(baselineCollectionKeys);
-	const baselineImportedKeys = new Set(
-		baselineCollectionKeys.filter(
-			(key) =>
-				collectionsByKey.get(key)?.sourceConnectionKey !==
-				NATIVE_CONNECTION_KEY,
-		),
+	const baselineForeignKeys = new Set(
+		baselineCollectionKeys.filter((key) => {
+			const sourceConnectionKey =
+				collectionsByKey.get(key)?.sourceConnectionKey;
+			return (
+				sourceConnectionKey !== NATIVE_CONNECTION_KEY &&
+				sourceConnectionKey !== itemSourceConnectionKey
+			);
+		}),
 	);
-	const desiredImportedKeys = new Set<string>();
+	const desiredForeignKeys = new Set<string>();
 
 	for (const key of desiredCollectionKeys) {
 		const target = collectionsByKey.get(key);
@@ -190,29 +195,32 @@ export function assertValidItemCollectionMemberships({
 				},
 			);
 		}
-		if (target.sourceConnectionKey === NATIVE_CONNECTION_KEY) {
-			if (target.deleted === 1 && !baselineKeys.has(key)) {
-				throw new NativeItemValidationError(
-					"One or more selected collections have been deleted.",
-					{
-						collections:
-							"Remove deleted collections before publishing.",
-					},
-				);
-			}
-		} else {
-			desiredImportedKeys.add(key);
+		if (target.deleted === 1 && !baselineKeys.has(key)) {
+			throw new NativeItemValidationError(
+				"One or more selected collections have been deleted.",
+				{
+					collections:
+						"Remove deleted collections before publishing.",
+				},
+			);
+		}
+		if (
+			target.sourceConnectionKey !== NATIVE_CONNECTION_KEY &&
+			target.sourceConnectionKey !== itemSourceConnectionKey
+		) {
+			desiredForeignKeys.add(key);
 		}
 	}
 
-	const unchangedImportedMemberships =
-		baselineImportedKeys.size === desiredImportedKeys.size &&
-		[...baselineImportedKeys].every((key) => desiredImportedKeys.has(key));
-	if (!unchangedImportedMemberships) {
+	const unchangedForeignMemberships =
+		baselineForeignKeys.size === desiredForeignKeys.size &&
+		[...baselineForeignKeys].every((key) => desiredForeignKeys.has(key));
+	if (!unchangedForeignMemberships) {
 		throw new NativeItemValidationError(
-			"Imported collection memberships cannot be changed here.",
+			"Collections from another source cannot be changed here.",
 			{
-				collections: "Imported collection memberships are read only.",
+				collections:
+					"Only collections from this record's source can be changed.",
 			},
 		);
 	}
@@ -229,6 +237,7 @@ export function itemCollectionBaselineKeys(
 async function assertValidItemCollectionMembershipsInDatabase(
 	db: Executor,
 	itemKey: string | null,
+	itemSourceConnectionKey: string,
 	desiredCollectionKeys: string[],
 ) {
 	const [baselineRows, existingDraft] = itemKey
@@ -267,8 +276,53 @@ async function assertValidItemCollectionMembershipsInDatabase(
 	assertValidItemCollectionMemberships({
 		baselineCollectionKeys,
 		collectionRows,
+		itemSourceConnectionKey,
 		desiredCollectionKeys,
 	});
+}
+
+async function sourceCollectionMembershipChanged(
+	db: Executor,
+	itemKey: string,
+	sourceConnectionKey: string,
+	desiredCollectionKeys: string[],
+) {
+	if (sourceConnectionKey === NATIVE_CONNECTION_KEY) return false;
+	const [currentRows, desiredRows] = await Promise.all([
+		db
+			.select({ key: itemToCollection.collectionKey })
+			.from(itemToCollection)
+			.innerJoin(
+				collection,
+				eq(collection.key, itemToCollection.collectionKey),
+			)
+			.where(
+				and(
+					eq(itemToCollection.itemKey, itemKey),
+					eq(collection.sourceConnectionKey, sourceConnectionKey),
+				),
+			),
+		desiredCollectionKeys.length === 0
+			? Promise.resolve([])
+			: db
+					.select({ key: collection.key })
+					.from(collection)
+					.where(
+						and(
+							inArray(collection.key, desiredCollectionKeys),
+							eq(
+								collection.sourceConnectionKey,
+								sourceConnectionKey,
+							),
+						),
+					),
+	]);
+	const currentKeys = new Set(currentRows.map(({ key }) => key));
+	const desiredKeys = new Set(desiredRows.map(({ key }) => key));
+	return (
+		currentKeys.size !== desiredKeys.size ||
+		[...currentKeys].some((key) => !desiredKeys.has(key))
+	);
 }
 
 function publishedItemValues(
@@ -329,6 +383,7 @@ export async function createNativeItemDraft(db: Database, payload: unknown) {
 		await assertValidItemCollectionMembershipsInDatabase(
 			transaction,
 			null,
+			NATIVE_CONNECTION_KEY,
 			validated.collectionKeys,
 		);
 		const parentItemKey = validated.item.parentItem;
@@ -469,7 +524,7 @@ async function saveItemDraftInTransaction(
 	},
 	options: ItemWritebackPolicyOptions = {},
 ) {
-	await requireItemDraftAccess(transaction, itemKey, options);
+	const access = await requireItemDraftAccess(transaction, itemKey, options);
 	const expected = validateNativeItemDraft(expectedPayload, {
 		allowIncompleteCreators: true,
 	});
@@ -509,6 +564,7 @@ async function saveItemDraftInTransaction(
 	await assertValidItemCollectionMembershipsInDatabase(
 		transaction,
 		itemKey,
+		access.identity.sourceConnectionKey,
 		validated.collectionKeys,
 	);
 	const [draft] = await transaction
@@ -697,6 +753,13 @@ export async function publishItemDraftWithContext(
 		await assertValidItemCollectionMembershipsInDatabase(
 			transaction,
 			itemKey,
+			access.identity.sourceConnectionKey,
+			validated.collectionKeys,
+		);
+		const sourceMembershipChanged = await sourceCollectionMembershipChanged(
+			transaction,
+			itemKey,
+			access.identity.sourceConnectionKey,
 			validated.collectionKeys,
 		);
 		if ((current?.parentItem ?? null) !== (candidate?.parentItem ?? null)) {
@@ -857,13 +920,20 @@ export async function publishItemDraftWithContext(
 				"tags",
 			);
 		}
-		if (changedFields.length > 0) {
+		if (changedFields.length > 0 || sourceMembershipChanged) {
 			if (access.identity.sourceConnectionKey === NATIVE_CONNECTION_KEY) {
 				await ensureDefaultWritebackLink(transaction, itemKey);
 			}
 			await markItemWritebackDirty(transaction, {
 				canonicalRevision: nextRevision,
 				dirtyFields: changedFields,
+				dirtyFieldsBySource: sourceMembershipChanged
+					? {
+							[access.identity.sourceConnectionKey]: [
+								"collections",
+							],
+						}
+					: undefined,
 				itemKey,
 				updatedAt: now,
 			});

@@ -33,9 +33,14 @@ export async function POST(
 			{
 				collection: toAdminCollection(result.collection),
 				collections: result.collections.map(toAdminCollection),
-				indexingReceipts: result.collections.map((collection) =>
-					adminSearchIndexReceipt("collection", collection),
-				),
+				indexingReceipts: [
+					...result.collections.map((collection) =>
+						adminSearchIndexReceipt("collection", collection),
+					),
+					...result.indexingItems.map((item) =>
+						adminSearchIndexReceipt("item", item),
+					),
+				],
 			},
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);

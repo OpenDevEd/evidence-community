@@ -81,20 +81,13 @@ async function assertAssignableCollection(db: Database, collectionKey: string) {
 		.select({ key: collection.key })
 		.from(collection)
 		.where(
-			and(
-				eq(collection.key, collectionKey),
-				eq(
-					collection.sourceConnectionKey,
-					NATIVE_SOURCE_CONNECTION_KEY,
-				),
-				eq(collection.deleted, 0),
-			),
+			and(eq(collection.key, collectionKey), eq(collection.deleted, 0)),
 		)
 		.limit(1);
 	if (!target) {
 		throw new AdminValidationError("Choose an active library collection.", {
 			collectionKey:
-				"Records can only be assigned to an active collection created in this library.",
+				"Records can only be assigned to an active collection.",
 		});
 	}
 }

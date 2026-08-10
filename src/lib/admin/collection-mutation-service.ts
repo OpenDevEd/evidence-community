@@ -1,5 +1,6 @@
 import {
 	collectionSourceLink,
+	itemSourceLink,
 	outbox,
 	sourceConnection,
 } from "@opendeved/evidence-library-core";
@@ -10,10 +11,13 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import {
 	lockCollectionMutation,
 	lockCollectionMutations,
+	lockItemMutations,
 } from "@/db/canonical-mutation-lock";
 import type { Database } from "@/db/database-schema";
 import { reserveCollectionIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
+import { item } from "@/db/schema/tables/item";
+import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import {
 	evaluateSourceWritebackPolicy,
 	resolveCollectionWritebackPolicy,
@@ -22,10 +26,12 @@ import {
 import {
 	markCollectionWritebackDeleted,
 	markCollectionWritebackDirty,
+	markItemWritebackDirty,
 } from "@/lib/source-writeback/queue";
 
 import { collectionDescendantKeys } from "./collection-hierarchy";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
+import { advanceOpenItemDraftBaseRevision } from "./native-item-service";
 import {
 	assertExpectedNativeCollectionRevision,
 	assertValidCollectionParent,
@@ -513,7 +519,12 @@ export async function restoreAdminCollection(
 		.limit(1);
 	if (!identity) throw new CollectionNotFoundError(collectionKey);
 	if (identity.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY) {
-		return restoreNativeCollection(database, collectionKey, values);
+		const result = await restoreNativeCollection(
+			database,
+			collectionKey,
+			values,
+		);
+		return { ...result, indexingItems: [] };
 	}
 
 	return database.transaction(async (transaction) => {
@@ -549,7 +560,7 @@ export async function restoreAdminCollection(
 			values.expectedRevision,
 		);
 		if (current.deleted !== 1) {
-			return { collection: current, collections: [] };
+			return { collection: current, collections: [], indexingItems: [] };
 		}
 		if (!current.deletedAt) {
 			throw new CollectionValidationError(
@@ -625,7 +636,90 @@ export async function restoreAdminCollection(
 				updatedAt: now,
 			});
 		}
+		const memberCandidates = await transaction
+			.selectDistinct({ key: item.key })
+			.from(itemToCollection)
+			.innerJoin(item, eq(item.key, itemToCollection.itemKey))
+			.innerJoin(
+				itemSourceLink,
+				and(
+					eq(itemSourceLink.itemKey, item.key),
+					eq(
+						itemSourceLink.sourceConnectionKey,
+						identity.sourceConnectionKey,
+					),
+				),
+			)
+			.where(
+				and(
+					inArray(itemToCollection.collectionKey, cohortKeys),
+					eq(item.deleted, 0),
+				),
+			)
+			.orderBy(item.key);
+		const memberKeys = memberCandidates.map(({ key }) => key);
+		await lockItemMutations(transaction, memberKeys);
+		const lockedMembers =
+			memberKeys.length === 0
+				? []
+				: await transaction
+						.select()
+						.from(item)
+						.where(
+							and(
+								inArray(item.key, memberKeys),
+								eq(item.deleted, 0),
+							),
+						)
+						.orderBy(item.key)
+						.for("update");
+		const lockedMemberKeys = lockedMembers.map(({ key }) => key);
+		const indexingItems =
+			lockedMemberKeys.length === 0
+				? []
+				: await transaction
+						.update(item)
+						.set({
+							revision: sql`${item.revision} + 1`,
+							updatedAt: now,
+						})
+						.where(inArray(item.key, lockedMemberKeys))
+						.returning();
+		for (const member of indexingItems) {
+			const previous = lockedMembers.find(
+				({ key }) => key === member.key,
+			)!;
+			await advanceOpenItemDraftBaseRevision(
+				transaction,
+				member.key,
+				previous.revision,
+				member.revision,
+			);
+			await markItemWritebackDirty(transaction, {
+				canonicalRevision: member.revision,
+				dirtyFields: [],
+				dirtyFieldsBySource: {
+					[identity.sourceConnectionKey]: ["collections"],
+				},
+				itemKey: member.key,
+				updatedAt: now,
+			});
+		}
+		if (indexingItems.length > 0) {
+			await transaction.insert(outbox).values(
+				indexingItems.map((member) => ({
+					entityKey: member.key,
+					entityType: "item" as const,
+					operation: "upsert" as const,
+					revision: member.revision,
+				})),
+			);
+		}
 		await emitCollectionEvents(transaction, restored, "upsert");
-		return { collection: restoredRoot!, collections: restored };
+		return {
+			collection: restoredRoot!,
+			collections: restored,
+			indexingItems,
+		};
 	});
 }

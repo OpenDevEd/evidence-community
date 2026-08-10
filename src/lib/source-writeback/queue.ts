@@ -211,17 +211,26 @@ export async function markItemWritebackDirty(
 	{
 		canonicalRevision,
 		dirtyFields,
+		dirtyFieldsBySource = {},
 		itemKey,
 		updatedAt,
 	}: {
 		canonicalRevision: number;
 		dirtyFields: readonly string[];
+		dirtyFieldsBySource?: Readonly<
+			Record<string, readonly string[] | undefined>
+		>;
 		itemKey: string;
 		updatedAt: Date;
 	},
 ) {
-	const changedFields = [...new Set(dirtyFields)].sort();
-	if (changedFields.length === 0) return;
+	const commonChangedFields = [...new Set(dirtyFields)].sort();
+	if (
+		commonChangedFields.length === 0 &&
+		Object.keys(dirtyFieldsBySource).length === 0
+	) {
+		return;
+	}
 
 	const links = await transaction
 		.select()
@@ -230,6 +239,13 @@ export async function markItemWritebackDirty(
 		.orderBy(itemSourceLink.sourceConnectionKey)
 		.for("update");
 	for (const link of links) {
+		const changedFields = [
+			...new Set([
+				...commonChangedFields,
+				...(dirtyFieldsBySource[link.sourceConnectionKey] ?? []),
+			]),
+		].sort();
+		if (changedFields.length === 0) continue;
 		const combinedDirtyFields = [
 			...new Set([...link.dirtyFields, ...changedFields]),
 		].sort();

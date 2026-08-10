@@ -18,70 +18,106 @@ const collectionRows = [
 		sourceConnectionKey: "zotero-main",
 	},
 	{
-		deleted: 1,
+		deleted: 0,
 		key: "CDEF4567",
+		sourceConnectionKey: "zotero-secondary",
+	},
+	{
+		deleted: 1,
+		key: "DEFG5678",
 		sourceConnectionKey: "native",
+	},
+	{
+		deleted: 1,
+		key: "EFGH6789",
+		sourceConnectionKey: "zotero-main",
 	},
 ];
 
 describe("native item collection memberships", () => {
-	it("allows active native memberships and retained imported memberships", () => {
+	it("allows a linked item to change native and same-source memberships", () => {
 		expect(() =>
 			assertValidNativeItemCollectionMemberships({
-				baselineCollectionKeys: ["BCDE3456"],
+				baselineCollectionKeys: [],
 				collectionRows,
+				itemSourceConnectionKey: "zotero-main",
 				desiredCollectionKeys: ["ABCD2345", "BCDE3456"],
+			}),
+		).not.toThrow();
+		expect(() =>
+			assertValidNativeItemCollectionMemberships({
+				baselineCollectionKeys: ["ABCD2345", "BCDE3456"],
+				collectionRows,
+				itemSourceConnectionKey: "zotero-main",
+				desiredCollectionKeys: [],
 			}),
 		).not.toThrow();
 	});
 
-	it("rejects adding or removing imported memberships", () => {
+	it("keeps collections from another source immutable", () => {
 		expect(() =>
 			assertValidNativeItemCollectionMemberships({
 				baselineCollectionKeys: [],
 				collectionRows,
-				desiredCollectionKeys: ["BCDE3456"],
+				itemSourceConnectionKey: "zotero-main",
+				desiredCollectionKeys: ["CDEF4567"],
 			}),
 		).toThrow(NativeItemValidationError);
 		expect(() =>
 			assertValidNativeItemCollectionMemberships({
-				baselineCollectionKeys: ["BCDE3456"],
+				baselineCollectionKeys: ["CDEF4567"],
 				collectionRows,
+				itemSourceConnectionKey: "zotero-main",
 				desiredCollectionKeys: [],
 			}),
-		).toThrow("Imported collection memberships cannot be changed here.");
+		).toThrow("Collections from another source cannot be changed here.");
 	});
 
-	it("rejects missing and deleted native collections", () => {
+	it("keeps imported memberships immutable for native items", () => {
 		expect(() =>
 			assertValidNativeItemCollectionMemberships({
 				baselineCollectionKeys: [],
 				collectionRows,
-				desiredCollectionKeys: ["DEFG5678"],
+				itemSourceConnectionKey: "native",
+				desiredCollectionKeys: ["BCDE3456"],
+			}),
+		).toThrow("Collections from another source cannot be changed here.");
+	});
+
+	it("rejects missing and deleted collections", () => {
+		expect(() =>
+			assertValidNativeItemCollectionMemberships({
+				baselineCollectionKeys: [],
+				collectionRows,
+				itemSourceConnectionKey: "zotero-main",
+				desiredCollectionKeys: ["FGHJ789A"],
 			}),
 		).toThrow("selected collections no longer exist");
 		expect(() =>
 			assertValidNativeItemCollectionMemberships({
 				baselineCollectionKeys: [],
 				collectionRows,
-				desiredCollectionKeys: ["CDEF4567"],
+				itemSourceConnectionKey: "zotero-main",
+				desiredCollectionKeys: ["EFGH6789"],
 			}),
 		).toThrow("selected collections have been deleted");
 	});
 
-	it("allows retaining but not adding a deleted native membership", () => {
+	it("allows retaining but not adding a deleted same-source membership", () => {
 		expect(() =>
 			assertValidNativeItemCollectionMemberships({
-				baselineCollectionKeys: ["CDEF4567"],
+				baselineCollectionKeys: ["EFGH6789"],
 				collectionRows,
-				desiredCollectionKeys: ["CDEF4567"],
+				itemSourceConnectionKey: "zotero-main",
+				desiredCollectionKeys: ["EFGH6789"],
 			}),
 		).not.toThrow();
 		expect(() =>
 			assertValidNativeItemCollectionMemberships({
 				baselineCollectionKeys: [],
 				collectionRows,
-				desiredCollectionKeys: ["CDEF4567"],
+				itemSourceConnectionKey: "zotero-main",
+				desiredCollectionKeys: ["EFGH6789"],
 			}),
 		).toThrow("selected collections have been deleted");
 	});
