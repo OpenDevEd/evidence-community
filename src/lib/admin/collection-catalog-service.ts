@@ -15,7 +15,6 @@ import {
 	type AdminCollectionChildrenRequest,
 	type AdminCollectionSearchRequest,
 } from "./collection-catalog-contract";
-import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
 import { AdminValidationError } from "./errors";
 import type {
 	AdminCollectionCatalogEntry,
@@ -43,7 +42,10 @@ function catalogSelection(database: Database) {
 				.from(child)
 				.where(
 					and(
-						eq(child.sourceConnectionKey, collection.sourceConnectionKey),
+						eq(
+							child.sourceConnectionKey,
+							collection.sourceConnectionKey,
+						),
 						eq(child.parentCollection, collection.key),
 						eq(child.deleted, 0),
 					),
@@ -82,7 +84,8 @@ type AncestorRow = {
 };
 
 async function ancestorMap(database: Database, keys: string[]) {
-	if (keys.length === 0) return new Map<string, AdminCollectionCatalogEntry["ancestors"]>();
+	if (keys.length === 0)
+		return new Map<string, AdminCollectionCatalogEntry["ancestors"]>();
 	const keyParameters = sql.join(
 		keys.map((key) => sql`${key}`),
 		sql`, `,
@@ -123,7 +126,10 @@ async function ancestorMap(database: Database, keys: string[]) {
 		FROM ancestor_rows
 		ORDER BY "targetKey", depth DESC
 	`);
-	const ancestors = new Map<string, AdminCollectionCatalogEntry["ancestors"]>();
+	const ancestors = new Map<
+		string,
+		AdminCollectionCatalogEntry["ancestors"]
+	>();
 	for (const row of result.rows) {
 		const current = ancestors.get(row.targetKey) ?? [];
 		current.push({
@@ -140,13 +146,15 @@ async function hydrateCatalogRows(database: Database, rows: CatalogRow[]) {
 		database,
 		rows.map(({ key }) => key),
 	);
-	return rows.map(({ nameSort: _nameSort, ...row }): AdminCollectionCatalogEntry => ({
-		...row,
-		ancestors: ancestors.get(row.key) ?? [],
-		deleted: row.deleted === 1,
-		name: row.name?.trim() || "Untitled collection",
-		updatedAt: dateString(row.updatedAt),
-	}));
+	return rows.map(
+		({ nameSort: _nameSort, ...row }): AdminCollectionCatalogEntry => ({
+			...row,
+			ancestors: ancestors.get(row.key) ?? [],
+			deleted: row.deleted === 1,
+			name: row.name?.trim() || "Untitled collection",
+			updatedAt: dateString(row.updatedAt),
+		}),
+	);
 }
 
 export async function getAdminCollectionChildrenPage(
@@ -225,7 +233,6 @@ export async function searchAdminCollections(
 	if (
 		cursor &&
 		(cursor.query !== request.query.toLowerCase() ||
-			cursor.editableOnly !== request.editableOnly ||
 			cursor.sourceConnectionKey !== request.sourceConnectionKey ||
 			cursor.state !== request.state)
 	) {
@@ -243,11 +250,7 @@ export async function searchAdminCollections(
 	}
 	if (request.state === "active") conditions.push(eq(collection.deleted, 0));
 	if (request.state === "deleted") conditions.push(eq(collection.deleted, 1));
-	if (request.editableOnly) {
-		conditions.push(
-			eq(collection.sourceConnectionKey, NATIVE_SOURCE_CONNECTION_KEY),
-		);
-	} else if (request.sourceConnectionKey) {
+	if (request.sourceConnectionKey) {
 		conditions.push(
 			eq(collection.sourceConnectionKey, request.sourceConnectionKey),
 		);
@@ -280,7 +283,6 @@ export async function searchAdminCollections(
 		nextCursor:
 			hasMore && last
 				? encodeAdminCollectionSearchCursor({
-						editableOnly: request.editableOnly,
 						key: last.key,
 						name: lastRow!.nameSort,
 						query: request.query.toLowerCase(),

@@ -30,7 +30,6 @@ describe("admin collection catalogue contract", () => {
 				query: "teacher",
 			}),
 		).toMatchObject({
-			editableOnly: false,
 			state: "active",
 		});
 	});
@@ -63,13 +62,7 @@ describe("admin collection catalogue contract", () => {
 		});
 	});
 
-	it("rejects malformed booleans and empty active searches", () => {
-		expect(() =>
-			parseAdminCollectionSearchRequest({
-				editableOnly: "garbage",
-				query: "teacher",
-			}),
-		).toThrow();
+	it("rejects empty active searches", () => {
 		expect(() =>
 			parseAdminCollectionSearchRequest({
 				query: "",

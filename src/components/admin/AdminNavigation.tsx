@@ -25,6 +25,7 @@ import type {
 
 import { AdminCollectionCatalogue } from "./AdminCollectionCatalogue";
 import {
+	type AdminCollectionFocusRequest,
 	requestAdminCollectionCatalogueInvalidation,
 	requestAdminCollectionExpansion,
 	requestAdminCollectionFocus,
@@ -38,8 +39,8 @@ export function invalidateAdminCollectionCatalogue() {
 	requestAdminCollectionCatalogueInvalidation();
 }
 
-export function focusAdminCollection(collectionKey: string) {
-	requestAdminCollectionFocus(collectionKey);
+export function focusAdminCollection(request: AdminCollectionFocusRequest) {
+	requestAdminCollectionFocus(request);
 }
 
 const stateOptions: Array<{

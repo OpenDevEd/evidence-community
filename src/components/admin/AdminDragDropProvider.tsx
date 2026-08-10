@@ -20,30 +20,28 @@ import {
 } from "react";
 
 import type { AdminCollectionCatalogEntry } from "@/lib/admin/types";
-import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
-
 import { focusAdminDragHandle } from "./admin-focus";
 
-export const COLLECTION_DRAG_TYPE = "admin-native-collection";
-export const RECORD_DRAG_TYPE = "admin-native-record";
+export const COLLECTION_DRAG_TYPE = "admin-collection";
+export const RECORD_DRAG_TYPE = "admin-record";
 
 export type CollectionDragData = {
 	collection: AdminCollectionCatalogEntry;
 	kind: "collection";
 };
 
-export type NativeCollectionDropDestination =
+export type CollectionDropDestination =
 	| {
 			position: "after" | "before" | "inside";
 			targetCollection: string;
+			targetEntry?: AdminCollectionCatalogEntry;
 	  }
 	| {
 			position: "root";
 			targetCollection: null;
 	  };
 
-type CollectionDropData = NativeCollectionDropDestination & {
-	targetEntry?: AdminCollectionCatalogEntry;
+type CollectionDropData = CollectionDropDestination & {
 	targetName?: string;
 };
 
@@ -52,6 +50,7 @@ export type RecordDragData = {
 	itemKeys: string[];
 	kind: "records";
 	label: string;
+	sourceConnectionKey: string;
 };
 
 type AdminDragData = CollectionDragData | RecordDragData;
@@ -93,15 +92,16 @@ export function isRecordDragData(value: unknown): value is RecordDragData {
 		Array.isArray(data.itemKeys) &&
 		data.itemKeys.length > 0 &&
 		data.itemKeys.every((key) => typeof key === "string") &&
-		typeof data.label === "string"
+		typeof data.label === "string" &&
+		typeof data.sourceConnectionKey === "string"
 	);
 }
 
-export function isNativeCollectionDropDestination(
+export function isCollectionDropDestination(
 	value: unknown,
-): value is NativeCollectionDropDestination {
+): value is CollectionDropDestination {
 	if (!value || typeof value !== "object") return false;
-	const candidate = value as Partial<NativeCollectionDropDestination>;
+	const candidate = value as Partial<CollectionDropDestination>;
 	if (candidate.position === "root" && candidate.targetCollection === null) {
 		return true;
 	}
@@ -113,17 +113,17 @@ export function isNativeCollectionDropDestination(
 	);
 }
 
-function collectionDropIsAllowed(
+export function collectionDropIsAllowed(
 	collection: AdminCollectionCatalogEntry,
 	value: unknown,
 ) {
-	if (!isNativeCollectionDropDestination(value)) return false;
+	if (!isCollectionDropDestination(value)) return false;
 	if (value.position === "root") return true;
-	const target = (value as CollectionDropData).targetEntry;
+	const target = value.targetEntry;
 	if (
 		!target ||
 		target.deleted ||
-		target.sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY
+		target.sourceConnectionKey !== collection.sourceConnectionKey
 	) {
 		return false;
 	}
@@ -136,6 +136,25 @@ function collectionDropIsAllowed(
 	return true;
 }
 
+export function recordDropIsAllowed(
+	record: RecordDragData,
+	value: unknown,
+): value is CollectionDropData & {
+	position: "inside";
+	targetCollection: string;
+	targetEntry: AdminCollectionCatalogEntry;
+} {
+	if (!isCollectionDropDestination(value) || value.position !== "inside") {
+		return false;
+	}
+	const target = value.targetEntry;
+	return Boolean(
+		target &&
+		!target.deleted &&
+		target.sourceConnectionKey === record.sourceConnectionKey,
+	);
+}
+
 function destinationName(value: unknown) {
 	if (!value || typeof value !== "object") return "the collection";
 	const name = (value as { targetName?: unknown }).targetName;
@@ -143,7 +162,7 @@ function destinationName(value: unknown) {
 }
 
 function describeDestination(value: unknown) {
-	if (!isNativeCollectionDropDestination(value)) return null;
+	if (!isCollectionDropDestination(value)) return null;
 	if (value.position === "root") return "at the top level";
 	const targetName = destinationName(value);
 	if (value.position === "inside") return `inside ${targetName}`;
@@ -151,10 +170,7 @@ function describeDestination(value: unknown) {
 }
 
 function recordCollectionName(value: unknown) {
-	if (
-		!isNativeCollectionDropDestination(value) ||
-		value.position !== "inside"
-	) {
+	if (!isCollectionDropDestination(value) || value.position !== "inside") {
 		return null;
 	}
 	return destinationName(value);
@@ -170,7 +186,7 @@ export function AdminDragDropRoot({
 	enabled: boolean;
 	onDropCollection: (
 		collection: AdminCollectionCatalogEntry,
-		destination: NativeCollectionDropDestination,
+		destination: CollectionDropDestination,
 	) => void;
 	onDropRecords: (itemKeys: string[], collectionKey: string) => void;
 }) {
@@ -212,10 +228,12 @@ export function AdminDragDropRoot({
 								: `${data.collection.name} is not over a valid collection destination.`;
 						}
 						if (isRecordDragData(data)) {
-							const name = recordCollectionName(target);
+							const name = recordDropIsAllowed(data, target)
+								? recordCollectionName(target)
+								: null;
 							return name
 								? `${data.label} will be added to ${name}.`
-								: `${data.label} is not over a native collection.`;
+								: `${data.label} is not over an editable collection.`;
 						}
 					},
 					dragend(event: DragEndEvent) {
@@ -242,7 +260,9 @@ export function AdminDragDropRoot({
 							if (event.canceled) {
 								return `Adding ${data.label} was cancelled.`;
 							}
-							const name = recordCollectionName(target);
+							const name = recordDropIsAllowed(data, target)
+								? recordCollectionName(target)
+								: null;
 							return name
 								? `${data.label} was dropped on ${name}. Updating the draft.`
 								: `${data.label} was not added to a collection.`;
@@ -251,7 +271,7 @@ export function AdminDragDropRoot({
 				},
 				screenReaderInstructions: {
 					draggable:
-						"Collection handles: press Space to pick up, use the arrow keys to choose a destination, then press Space to drop or Escape to cancel. Record handles: press Space or Enter to open the native collection picker, or use pointer drag and drop.",
+						"Collection handles: press Space to pick up, use the arrow keys to choose a destination, then press Space to drop or Escape to cancel. Record handles: press Space or Enter to open the collection picker, or use pointer drag and drop.",
 				},
 			}),
 			...defaultPreset.plugins.filter(
@@ -285,7 +305,7 @@ export function AdminDragDropRoot({
 			};
 			if (
 				event.canceled ||
-				!isNativeCollectionDropDestination(destination) ||
+				!isCollectionDropDestination(destination) ||
 				!collectionDropIsAllowed(data.collection, destination)
 			) {
 				return;
@@ -298,11 +318,7 @@ export function AdminDragDropRoot({
 				key: data.focusKey,
 				kind: "record",
 			};
-			if (
-				event.canceled ||
-				!isNativeCollectionDropDestination(destination) ||
-				destination.position !== "inside"
-			) {
+			if (event.canceled || !recordDropIsAllowed(data, destination)) {
 				return;
 			}
 			onDropRecords(data.itemKeys, destination.targetCollection);

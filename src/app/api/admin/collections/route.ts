@@ -49,7 +49,6 @@ export async function GET(request: NextRequest) {
 			return NextResponse.json(
 				await searchAdminCollections(database, {
 					cursor: searchParams.get("cursor"),
-					editableOnly: searchParams.get("editableOnly") ?? undefined,
 					pageSize: searchParams.get("pageSize") ?? undefined,
 					query: searchParams.get("query") ?? undefined,
 					sourceConnectionKey: searchParams.get("source"),

@@ -15,9 +15,8 @@ import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { getLibraryConfig } from "@/config/library-config/server";
 import {
-	isSourceWritebackEnabled,
+	evaluateSourceWritebackPolicy,
 	resolveItemWritebackPolicy,
-	WRITEBACK_SUPPORTED_PROVIDERS,
 } from "@/lib/source-writeback/policy";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
@@ -408,24 +407,36 @@ export async function getAdminLibrarySnapshot(
 			.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key)),
 		getLibraryConfig(),
 	]);
-	const sources = sourceRows.map((row) => ({
-		key: row.key,
-		label:
-			row.provider === NATIVE_SOURCE_CONNECTION_KEY
-				? "Native"
-				: `${row.provider[0]!.toUpperCase()}${row.provider.slice(1)} · ${
-						row.externalScopeKey ?? row.key
-					}`,
-		provider: row.provider,
-		readOnly: row.provider !== NATIVE_SOURCE_CONNECTION_KEY,
-		status: row.status,
-		writeback: {
-			enabled: isSourceWritebackEnabled(config, row.key),
-			supported: WRITEBACK_SUPPORTED_PROVIDERS.some(
-				(provider) => provider === row.provider,
-			),
-		},
-	}));
+	const sources = sourceRows.map((row) => {
+		const policy = evaluateSourceWritebackPolicy(
+			{
+				externalScopeKey: row.externalScopeKey,
+				itemEnabled: true,
+				provider: row.provider,
+				sourceKey: row.key,
+				sourceStatus: row.status,
+			},
+			config,
+		);
+		return {
+			key: row.key,
+			label:
+				row.provider === NATIVE_SOURCE_CONNECTION_KEY
+					? "Native"
+					: `${row.provider[0]!.toUpperCase()}${row.provider.slice(1)} · ${
+							row.externalScopeKey ?? row.key
+						}`,
+			provider: row.provider,
+			readOnly:
+				row.provider !== NATIVE_SOURCE_CONNECTION_KEY &&
+				!policy.effective,
+			status: row.status,
+			writeback: {
+				enabled: policy.sourceEnabled,
+				supported: policy.supported,
+			},
+		};
+	});
 	if (!sources.some(({ key }) => key === NATIVE_SOURCE_CONNECTION_KEY)) {
 		sources.unshift({
 			key: NATIVE_SOURCE_CONNECTION_KEY,

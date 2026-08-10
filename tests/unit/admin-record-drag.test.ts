@@ -27,7 +27,12 @@ describe("admin record drag", () => {
 
 	it("drags an unselected native record by itself", () => {
 		expect(
-			recordDragSelection(nativeA, items, new Set(["BBBB2222"])),
+			recordDragSelection(
+				nativeA,
+				items,
+				new Set(["BBBB2222"]),
+				new Set(["native"]),
+			),
 		).toEqual(["AAAA1111"]);
 	});
 
@@ -37,13 +42,30 @@ describe("admin record drag", () => {
 				nativeB,
 				items,
 				new Set(["BBBB2222", "CCCC3333", "AAAA1111"]),
+				new Set(["native"]),
 			),
 		).toEqual(["AAAA1111", "BBBB2222"]);
 	});
 
-	it("does not make imported records draggable", () => {
+	it("drags selected records from the same editable source", () => {
 		expect(
-			recordDragSelection(imported, items, new Set(["CCCC3333"])),
+			recordDragSelection(
+				imported,
+				items,
+				new Set(["AAAA1111", "CCCC3333"]),
+				new Set(["native", "zotero-main"]),
+			),
+		).toEqual(["CCCC3333"]);
+	});
+
+	it("does not make records from a read-only source draggable", () => {
+		expect(
+			recordDragSelection(
+				imported,
+				items,
+				new Set(["CCCC3333"]),
+				new Set(["native"]),
+			),
 		).toEqual([]);
 	});
 
@@ -61,6 +83,7 @@ describe("admin record drag", () => {
 				itemKeys: ["AAAA1111", "BBBB2222"],
 				kind: "records",
 				label: "2 selected records",
+				sourceConnectionKey: "native",
 			}),
 		).toBe(true);
 		expect(
@@ -68,6 +91,7 @@ describe("admin record drag", () => {
 				itemKeys: ["AAAA1111", "BBBB2222"],
 				kind: "records",
 				label: "2 selected records",
+				sourceConnectionKey: "native",
 			}),
 		).toBe(false);
 	});

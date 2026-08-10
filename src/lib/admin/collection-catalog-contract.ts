@@ -20,11 +20,6 @@ export function parseAdminCollectionView(value: unknown) {
 
 const collectionKeySchema = z.string().length(8);
 const collectionSearchStateSchema = z.enum(["active", "all", "deleted"]);
-const booleanParameterSchema = z.preprocess((value) => {
-	if (value === "true") return true;
-	if (value === "false") return false;
-	return value;
-}, z.boolean());
 export type AdminCollectionSearchState = z.infer<
 	typeof collectionSearchStateSchema
 >;
@@ -63,7 +58,6 @@ const childrenCursorSchema = z.object({
 const searchRequestSchema = z
 	.object({
 		cursor: z.string().min(1).nullable().default(null),
-		editableOnly: booleanParameterSchema.default(false),
 		pageSize: z.coerce
 			.number()
 			.int()
@@ -100,7 +94,6 @@ export function parseAdminCollectionSearchRequest(
 
 const searchCursorSchema = z.object({
 	v: z.literal(1),
-	editableOnly: z.boolean(),
 	key: collectionKeySchema,
 	name: z.string(),
 	query: z.string(),

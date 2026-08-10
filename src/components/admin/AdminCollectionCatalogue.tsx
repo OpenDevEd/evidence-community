@@ -6,6 +6,7 @@ import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import {
 	Archive,
 	ChevronRight,
+	Cloud,
 	Folder,
 	FolderInput,
 	FolderOpen,
@@ -41,13 +42,14 @@ import type {
 import {
 	COLLECTION_DRAG_TYPE,
 	type CollectionDragData,
-	type NativeCollectionDropDestination,
+	type CollectionDropDestination,
 	RECORD_DRAG_TYPE,
 	useAdminDragState,
 } from "./AdminDragDropProvider";
 import { adminCollectionPath } from "./AdminCollectionPicker";
 import {
 	adminCollectionBranchKey,
+	adminCollectionCatalogueReducer,
 	flattenAdminCollectionCatalogue,
 	type AdminCollectionCatalogueRow,
 	useAdminCollectionCatalogue,
@@ -57,6 +59,7 @@ import {
 	ADMIN_COLLECTION_EXPANSION_EVENT,
 	ADMIN_COLLECTION_FOCUS_EVENT,
 	ADMIN_COLLECTION_INVALIDATION_EVENT,
+	type AdminCollectionFocusRequest,
 } from "./admin-collection-events";
 
 const MAX_VISUAL_DEPTH = 8;
@@ -94,7 +97,7 @@ function useResolvedCataloguePath(key: string | null, generation: number) {
 }
 
 function RootDropZone({ active }: { active: boolean }) {
-	const destination: NativeCollectionDropDestination = {
+	const destination: CollectionDropDestination = {
 		position: "root",
 		targetCollection: null,
 	};
@@ -131,7 +134,7 @@ function EdgeDropZone({
 	entry: AdminCollectionCatalogEntry;
 	position: "after" | "before";
 }) {
-	const destination: NativeCollectionDropDestination = {
+	const destination: CollectionDropDestination = {
 		position,
 		targetCollection: entry.key,
 	};
@@ -228,6 +231,7 @@ function CollectionActions({
 type CollectionRowProps = {
 	busy: boolean;
 	depth: number;
+	editable: boolean;
 	entry: AdminCollectionCatalogEntry;
 	expanded: boolean;
 	focused: boolean;
@@ -251,6 +255,7 @@ type CollectionRowProps = {
 function CollectionRow({
 	busy,
 	depth,
+	editable,
 	entry,
 	expanded,
 	focused,
@@ -270,10 +275,8 @@ function CollectionRow({
 	setSize,
 	view,
 }: CollectionRowProps) {
-	const editable =
-		entry.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY &&
-		view === "active";
-	const movesEnabled = editable && hierarchyEnabled && !busy;
+	const movesEnabled =
+		editable && view === "active" && hierarchyEnabled && !busy;
 	const visualDepth = Math.min(depth, MAX_VISUAL_DEPTH);
 	const { activeCollectionKey, activeRecordCount } = useAdminDragState();
 	const invalidCollectionTarget = Boolean(
@@ -285,8 +288,9 @@ function CollectionRow({
 		movesEnabled &&
 		Boolean(activeCollectionKey) &&
 		!invalidCollectionTarget;
-	const acceptsRecords = editable && !busy && activeRecordCount > 0;
-	const insideDestination: NativeCollectionDropDestination = {
+	const acceptsRecords =
+		editable && view === "active" && !busy && activeRecordCount > 0;
+	const insideDestination: CollectionDropDestination = {
 		position: "inside",
 		targetCollection: entry.key,
 	};
@@ -393,6 +397,7 @@ function CollectionRow({
 				<span className="size-6 shrink-0" />
 			)}
 			<button
+				aria-disabled={view === "deleted" && !editable}
 				aria-expanded={
 					entry.hasChildren && hierarchyEnabled ? expanded : undefined
 				}
@@ -402,9 +407,10 @@ function CollectionRow({
 				aria-setsize={setSize}
 				className="relative z-30 flex h-full min-w-0 flex-1 items-center gap-2 text-left focus-visible:outline-none"
 				id={`admin-catalogue-collection:${entry.key}`}
-				onClick={() =>
-					view === "active" ? onSelect(entry.key) : onRestore(entry)
-				}
+				onClick={() => {
+					if (view === "active") onSelect(entry.key);
+					else if (editable) onRestore(entry);
+				}}
 				onFocus={onFocus}
 				onKeyDown={onKeyDown}
 				role="treeitem"
@@ -428,15 +434,15 @@ function CollectionRow({
 						</span>
 					) : null}
 				</span>
-				{entry.sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY ? (
+				{!editable ? (
 					<Lock
-						aria-label="Read only"
+						aria-label="Collection editing unavailable"
 						className="shrink-0 opacity-35"
 						size={11}
 					/>
 				) : null}
 			</button>
-			{view === "deleted" ? (
+			{view === "deleted" && editable ? (
 				<Tooltip content={`Restore ${entry.name}`}>
 					<button
 						aria-label={`Restore ${entry.name}`}
@@ -447,7 +453,7 @@ function CollectionRow({
 						<RotateCcw aria-hidden size={13} />
 					</button>
 				</Tooltip>
-			) : editable ? (
+			) : view === "active" && editable ? (
 				<div className="relative z-30 flex items-center opacity-0 group-focus-within:opacity-100 group-hover:opacity-100">
 					{entry.hasChildren && hierarchyEnabled ? (
 						<button
@@ -514,6 +520,15 @@ export function AdminCollectionCatalogue({
 	const [query, setQuery] = useState("");
 	const debouncedQuery = useDebouncedValue(query.trim(), 250);
 	const [view, setView] = useState<"active" | "deleted">("active");
+	const editableSourceKeys = useMemo(
+		() =>
+			new Set(
+				sources
+					.filter(({ readOnly }) => !readOnly)
+					.map(({ key }) => key),
+			),
+		[sources],
+	);
 	const [expandedSources, setExpandedSources] = useState(
 		() => new Set([NATIVE_SOURCE_CONNECTION_KEY]),
 	);
@@ -524,6 +539,8 @@ export function AdminCollectionCatalogue({
 		`source:${NATIVE_SOURCE_CONNECTION_KEY}`,
 	);
 	const [pendingFocusKey, setPendingFocusKey] = useState<string | null>(null);
+	const [pendingFocusEntry, setPendingFocusEntry] =
+		useState<AdminCollectionCatalogEntry | null>(null);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const pendingStatusFocus = useRef<{
 		branchKey: string;
@@ -606,6 +623,7 @@ export function AdminCollectionCatalogue({
 	useEffect(() => {
 		const handleInvalidation = () => {
 			scrolledSelection.current = "";
+			setPendingFocusEntry(null);
 			catalogueInvalidate();
 		};
 		window.addEventListener(
@@ -621,8 +639,11 @@ export function AdminCollectionCatalogue({
 
 	useEffect(() => {
 		const handleFocus = (event: Event) => {
-			const key = (event as CustomEvent<string>).detail;
-			if (typeof key === "string") setPendingFocusKey(key);
+			const request = (event as CustomEvent<AdminCollectionFocusRequest>)
+				.detail;
+			if (!request || typeof request.key !== "string") return;
+			setPendingFocusEntry(request.entry ?? null);
+			setPendingFocusKey(request.key);
 		};
 		window.addEventListener(ADMIN_COLLECTION_FOCUS_EVENT, handleFocus);
 		return () =>
@@ -631,6 +652,22 @@ export function AdminCollectionCatalogue({
 				handleFocus,
 			);
 	}, []);
+
+	useEffect(() => {
+		if (!pendingFocusEntry) return;
+		reveal([pendingFocusEntry]);
+		setExpandedSources(
+			(current) =>
+				new Set([...current, pendingFocusEntry.sourceConnectionKey]),
+		);
+		setExpandedCollections(
+			(current) =>
+				new Set([
+					...current,
+					...pendingFocusEntry.ancestors.map(({ key }) => key),
+				]),
+		);
+	}, [pendingFocusEntry, reveal]);
 
 	const selectedKey =
 		selectedCollection && selectedCollection !== "all"
@@ -652,7 +689,7 @@ export function AdminCollectionCatalogue({
 		);
 	}, [reveal, selectedPath]);
 	const pendingFocusPath = useResolvedCataloguePath(
-		pendingFocusKey,
+		pendingFocusEntry ? null : pendingFocusKey,
 		catalogueState.generation,
 	);
 	useEffect(() => {
@@ -676,8 +713,7 @@ export function AdminCollectionCatalogue({
 		if (!searchMode) return;
 		void loadSearch({
 			query: debouncedQuery,
-			sourceConnectionKey:
-				view === "deleted" ? NATIVE_SOURCE_CONNECTION_KEY : null,
+			sourceConnectionKey: null,
 			state: view === "deleted" ? "deleted" : "active",
 		});
 	}, [
@@ -710,15 +746,25 @@ export function AdminCollectionCatalogue({
 		}
 	}, [catalogueState.branches, expandedSources, loadChildren, searchMode]);
 
+	const catalogueTreeState = useMemo(
+		() =>
+			pendingFocusEntry
+				? adminCollectionCatalogueReducer(catalogueState, {
+						entries: [pendingFocusEntry],
+						type: "reveal",
+					})
+				: catalogueState,
+		[catalogueState, pendingFocusEntry],
+	);
 	const treeRows = useMemo(
 		() =>
 			flattenAdminCollectionCatalogue(
-				catalogueState,
+				catalogueTreeState,
 				sources,
 				expandedSources,
 				expandedCollections,
 			),
-		[catalogueState, expandedCollections, expandedSources, sources],
+		[catalogueTreeState, expandedCollections, expandedSources, sources],
 	);
 	useEffect(() => {
 		if (searchMode) return;
@@ -790,8 +836,7 @@ export function AdminCollectionCatalogue({
 				parentCollection: null,
 				positionInSet: statusPosition,
 				setSize: -1,
-				sourceConnectionKey:
-					view === "deleted" ? NATIVE_SOURCE_CONNECTION_KEY : "all",
+				sourceConnectionKey: "all",
 			});
 		} else if (
 			catalogueState.search.status === "error" ||
@@ -807,8 +852,7 @@ export function AdminCollectionCatalogue({
 					? "more"
 					: "refresh",
 				setSize: -1,
-				sourceConnectionKey:
-					view === "deleted" ? NATIVE_SOURCE_CONNECTION_KEY : "all",
+				sourceConnectionKey: "all",
 			});
 		} else if (catalogueState.search.nextCursor) {
 			resultRows.push({
@@ -818,8 +862,7 @@ export function AdminCollectionCatalogue({
 				parentCollection: null,
 				positionInSet: statusPosition,
 				setSize: -1,
-				sourceConnectionKey:
-					view === "deleted" ? NATIVE_SOURCE_CONNECTION_KEY : "all",
+				sourceConnectionKey: "all",
 			});
 		} else if (resultRows.length === 0) {
 			resultRows.push({
@@ -829,8 +872,7 @@ export function AdminCollectionCatalogue({
 				parentCollection: null,
 				positionInSet: 1,
 				setSize: 1,
-				sourceConnectionKey:
-					view === "deleted" ? NATIVE_SOURCE_CONNECTION_KEY : "all",
+				sourceConnectionKey: "all",
 			});
 		}
 		return resultRows;
@@ -874,6 +916,15 @@ export function AdminCollectionCatalogue({
 		}
 	}, [focusableRows, focusedId, rowId]);
 	const focusedIndex = rows.findIndex((row) => rowId(row) === focusedId);
+	const pendingFocusIndex = rows.findIndex(
+		(row) =>
+			row.kind === "collection" &&
+			row.entry.key === pendingFocusKey &&
+			(!pendingFocusEntry ||
+				(row.entry.parentCollection ===
+					pendingFocusEntry.parentCollection &&
+					row.entry.revision === pendingFocusEntry.revision)),
+	);
 	// eslint-disable-next-line react-hooks/incompatible-library
 	const virtualizer = useVirtualizer({
 		count: rows.length,
@@ -882,13 +933,10 @@ export function AdminCollectionCatalogue({
 		getScrollElement: () => scrollRef.current,
 		overscan: 8,
 		rangeExtractor: (range) => {
-			const visibleIndexes = defaultRangeExtractor(range);
-			if (focusedIndex < 0 || visibleIndexes.includes(focusedIndex)) {
-				return visibleIndexes;
-			}
-			return [...visibleIndexes, focusedIndex].sort(
-				(left, right) => left - right,
-			);
+			const indexes = new Set(defaultRangeExtractor(range));
+			if (focusedIndex >= 0) indexes.add(focusedIndex);
+			if (pendingFocusIndex >= 0) indexes.add(pendingFocusIndex);
+			return [...indexes].sort((left, right) => left - right);
 		},
 	});
 	useEffect(() => {
@@ -960,11 +1008,28 @@ export function AdminCollectionCatalogue({
 					row.entry.parentCollection === parentCollection,
 			),
 		);
+	const pendingFocusBranch = pendingFocusEntry
+		? catalogueState.branches.get(
+				adminCollectionBranchKey(
+					pendingFocusEntry.sourceConnectionKey,
+					pendingFocusEntry.parentCollection,
+				),
+			)
+		: null;
+	const pendingFocusCanSettle =
+		!pendingFocusEntry ||
+		(pendingFocusBranch?.status === "ready" &&
+			!pendingFocusBranch.loadingMore);
 	useEffect(() => {
 		if (!pendingFocusKey || busy) return;
 		const rowIndex = rows.findIndex(
 			(row) =>
-				row.kind === "collection" && row.entry.key === pendingFocusKey,
+				row.kind === "collection" &&
+				row.entry.key === pendingFocusKey &&
+				(!pendingFocusEntry ||
+					(row.entry.parentCollection ===
+						pendingFocusEntry.parentCollection &&
+						row.entry.revision === pendingFocusEntry.revision)),
 		);
 		if (rowIndex < 0) {
 			if (
@@ -979,10 +1044,11 @@ export function AdminCollectionCatalogue({
 					)
 					?.focus({ preventScroll: true });
 				setPendingFocusKey(null);
+				setPendingFocusEntry(null);
 			}
 			return;
 		}
-		virtualizer.scrollToIndex(rowIndex, { align: "auto" });
+		virtualizer.scrollToIndex(rowIndex, { align: "center" });
 		let secondFrame = 0;
 		const firstFrame = window.requestAnimationFrame(() => {
 			secondFrame = window.requestAnimationFrame(() => {
@@ -995,7 +1061,10 @@ export function AdminCollectionCatalogue({
 					);
 				if (!target) return;
 				target.focus({ preventScroll: true });
-				setPendingFocusKey(null);
+				if (pendingFocusCanSettle) {
+					setPendingFocusKey(null);
+					setPendingFocusEntry(null);
+				}
 			});
 		});
 		return () => {
@@ -1006,6 +1075,8 @@ export function AdminCollectionCatalogue({
 		busy,
 		catalogueState.search.loadingMore,
 		catalogueState.search.status,
+		pendingFocusEntry,
+		pendingFocusCanSettle,
 		pendingFocusKey,
 		rows,
 		searchMode,
@@ -1051,10 +1122,7 @@ export function AdminCollectionCatalogue({
 			void loadSearch(
 				{
 					query: debouncedQuery,
-					sourceConnectionKey:
-						view === "deleted"
-							? NATIVE_SOURCE_CONNECTION_KEY
-							: null,
+					sourceConnectionKey: null,
 					state: view === "deleted" ? "deleted" : "active",
 				},
 				requestOptions,
@@ -1284,8 +1352,10 @@ export function AdminCollectionCatalogue({
 										{row.source.key ===
 										NATIVE_SOURCE_CONNECTION_KEY ? (
 											<Folder aria-hidden size={14} />
-										) : (
+										) : row.source.readOnly ? (
 											<Lock aria-hidden size={13} />
+										) : (
+											<Cloud aria-hidden size={13} />
 										)}
 										<span className="truncate">
 											{row.source.label}
@@ -1295,6 +1365,9 @@ export function AdminCollectionCatalogue({
 									<CollectionRow
 										busy={busy}
 										depth={searchMode ? 0 : row.depth}
+										editable={editableSourceKeys.has(
+											row.entry.sourceConnectionKey,
+										)}
 										entry={row.entry}
 										expanded={expandedCollections.has(
 											row.entry.key,

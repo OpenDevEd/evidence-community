@@ -851,6 +851,60 @@ test("searches and assigns records with the collection picker", async ({
 		});
 });
 
+test("assigns writable Zotero records only within their source", async ({
+	page,
+}) => {
+	let batchRequest:
+		{ action: string; collectionKey?: string; keys: string[] } | undefined;
+	const writableSource: AdminSource = {
+		...importedSource,
+		readOnly: false,
+	};
+	await mockPublishedBook(page, {
+		additionalCollectionEntries: [importedCollection],
+		additionalSources: [writableSource],
+		listRowOverrides: {
+			sourceConnectionKey: writableSource.key,
+		},
+		onBatchRequest: (request) => {
+			batchRequest = request;
+		},
+	});
+
+	await page.goto("/admin");
+	const assignmentButton = page.getByRole("button", {
+		name: "Drag or assign Published book",
+		exact: true,
+	});
+	await assignmentButton.focus();
+	await assignmentButton.press("Enter");
+	const dialog = page.getByRole("dialog", {
+		name: "Add record to collection",
+	});
+	await expect(dialog).toBeVisible();
+	await expect(
+		dialog.getByRole("button", {
+			name: `Select ${importedCollection.name}, ${writableSource.label}`,
+		}),
+	).toBeVisible();
+	await expect(
+		dialog.getByRole("button", { name: /Select .*Native/ }),
+	).toHaveCount(0);
+	await dialog
+		.getByRole("button", {
+			name: `Select ${importedCollection.name}, ${writableSource.label}`,
+		})
+		.click();
+
+	await expect
+		.poll(() => batchRequest)
+		.toEqual({
+			action: "assignCollection",
+			collectionKey: importedCollection.key,
+			keys: [publishedItemKey],
+		});
+});
+
 test("keeps collection results stable and inactive while browsing", async ({
 	page,
 }) => {
@@ -1216,8 +1270,124 @@ test("creates a collection in a searched location without a full-list select", a
 		.toEqual({
 			name: "Nested collection",
 			parentCollection: longCollection.key,
+			sourceConnectionKey: "native",
 		});
 	await indexing.expectTracked(receipt);
+});
+
+test("creates and renames collections in an editable Zotero source", async ({
+	page,
+}) => {
+	const editableImportedSource = { ...importedSource, readOnly: false };
+	let createRequest: Record<string, unknown> | undefined;
+	let renameRequest: Record<string, unknown> | undefined;
+	const catalog = await mockPublishedBook(page, {
+		additionalCollectionEntries: [importedCollection],
+		additionalSources: [editableImportedSource],
+	});
+	await mockCompletedIndexing(page);
+	await page.route("**/api/admin/collections", async (route) => {
+		if (route.request().method() !== "POST") {
+			await route.fallback();
+			return;
+		}
+		createRequest = route.request().postDataJSON() as Record<
+			string,
+			unknown
+		>;
+		const created = {
+			...importedCollection,
+			ancestors: [
+				{ key: importedCollection.key, name: importedCollection.name },
+			],
+			key: "REMOTE02",
+			name: "Remote child",
+			parentCollection: importedCollection.key,
+			revision: 1,
+		};
+		catalog.replaceCollection(created);
+		await route.fulfill({
+			json: { collection: created, indexingReceipts: [] },
+			status: 201,
+		});
+	});
+	await page.route("**/api/admin/collections/IMPORT01", async (route) => {
+		if (route.request().method() !== "PATCH") {
+			await route.fallback();
+			return;
+		}
+		renameRequest = route.request().postDataJSON() as Record<
+			string,
+			unknown
+		>;
+		const renamed = {
+			...importedCollection,
+			name: "Renamed remote collection",
+			revision: 2,
+		};
+		catalog.replaceCollection(renamed);
+		await route.fulfill({
+			json: { collection: renamed, indexingReceipts: [] },
+		});
+	});
+
+	const sourceFilters = JSON.stringify([
+		{
+			column: "source",
+			operator: "anyOf",
+			value: [editableImportedSource.key],
+		},
+	]);
+	await page.goto(`/admin?filters=${encodeURIComponent(sourceFilters)}`);
+	await page.getByRole("button", { name: "New", exact: true }).click();
+	let dialog = page.getByRole("dialog", { name: "New collection" });
+	await expect(
+		dialog.getByRole("button", {
+			name: `Change location, current Top level, ${editableImportedSource.label}`,
+		}),
+	).toBeVisible();
+	await dialog.getByRole("button", { name: "Cancel" }).click();
+
+	await page
+		.getByRole("treeitem", { name: editableImportedSource.label })
+		.click();
+	const remoteRow = page.locator(
+		`[data-collection-key="${importedCollection.key}"]`,
+	);
+	await expect(remoteRow).toBeVisible();
+	await remoteRow.hover();
+	await remoteRow
+		.getByRole("button", { name: `Manage ${importedCollection.name}` })
+		.click();
+	await page.getByRole("menuitem", { name: "New inside" }).click();
+	dialog = page.getByRole("dialog", { name: "New collection" });
+	await dialog.getByRole("textbox", { name: "Name" }).fill("Remote child");
+	await dialog.getByRole("button", { name: "Create" }).click();
+	await expect
+		.poll(() => createRequest)
+		.toEqual({
+			name: "Remote child",
+			parentCollection: importedCollection.key,
+			sourceConnectionKey: editableImportedSource.key,
+		});
+
+	await expect(remoteRow).toBeVisible();
+	await remoteRow.hover();
+	await remoteRow
+		.getByRole("button", { name: `Manage ${importedCollection.name}` })
+		.click();
+	await page.getByRole("menuitem", { name: "Rename" }).click();
+	dialog = page.getByRole("dialog", { name: "Rename collection" });
+	await dialog
+		.getByRole("textbox", { name: "Name" })
+		.fill("Renamed remote collection");
+	await dialog.getByRole("button", { name: "Rename" }).click();
+	await expect
+		.poll(() => renameRequest)
+		.toEqual({
+			expectedRevision: importedCollection.revision,
+			name: "Renamed remote collection",
+		});
 });
 
 test("moves a collection to a searched destination at the end", async ({
@@ -2635,7 +2805,7 @@ test("searches active collections and browses deleted collections as flat trees"
 			searches.some(
 				(url) =>
 					url.searchParams.get("state") === "deleted" &&
-					url.searchParams.get("source") === "native",
+					url.searchParams.get("source") === null,
 			),
 		)
 		.toBe(true);
@@ -3334,7 +3504,7 @@ test("pages and virtualizes large collection catalogues while loading sources la
 	expect(await tree.locator("[data-index]").count()).toBeLessThanOrEqual(25);
 });
 
-test("moves a native collection into another collection with pointer drag", async ({
+test("moves and then deletes a native collection without reviving its focus overlay", async ({
 	page,
 }) => {
 	const destinationChildren: AdminCollectionCatalogEntry[] = Array.from(
@@ -3365,6 +3535,11 @@ test("moves a native collection into another collection with pointer drag", asyn
 		},
 	});
 	const receipt = indexingReceipt(teacherCollection.key, "collection", 2);
+	const deleteReceipt = indexingReceipt(
+		teacherCollection.key,
+		"collection",
+		3,
+	);
 	const indexing = await mockCompletedIndexing(page);
 	let moveRequest: Record<string, unknown> | null = null;
 	await page.route(
@@ -3396,6 +3571,29 @@ test("moves a native collection into another collection with pointer drag", asyn
 			});
 		},
 	);
+	await page.route("**/api/admin/collections/TEACHDEV", async (route) => {
+		if (route.request().method() !== "DELETE") {
+			await route.fallback();
+			return;
+		}
+		const deleted = {
+			...teacherCollection,
+			deleted: true,
+			parentCollection: longCollection.key,
+			revision: 3,
+		};
+		catalog.replaceCollection({
+			...deleted,
+			ancestors: [{ key: longCollection.key, name: longCollection.name }],
+			hasChildren: false,
+		});
+		await route.fulfill({
+			json: {
+				collections: [deleted],
+				indexingReceipts: [deleteReceipt],
+			},
+		});
+	});
 	await page.goto("/admin");
 
 	const handle = page.locator('[data-collection-drag-handle="TEACHDEV"]');
@@ -3427,6 +3625,18 @@ test("moves a native collection into another collection with pointer drag", asyn
 		page.locator('[data-collection-drag-handle="TEACHDEV"]'),
 	).toBeFocused();
 	await indexing.expectTracked(receipt);
+
+	await movedRow.hover();
+	await movedRow
+		.getByRole("button", { name: "Manage Teacher development" })
+		.click();
+	await page.getByRole("menuitem", { name: "Delete" }).click();
+	await page
+		.getByRole("dialog", { name: "Delete Teacher development?" })
+		.getByRole("button", { name: "Delete", exact: true })
+		.click();
+	await expect(movedRow).toHaveCount(0);
+	await indexing.expectTracked(deleteReceipt);
 });
 
 test("restores collection focus after a failed pointer move reloads the catalogue", async ({
@@ -5305,11 +5515,11 @@ test("tracks publishing through Meilisearch progress, failure, and retry", async
 	expect(triggerGeometry).toEqual({
 		display: "flex",
 		flexDirection: "row",
-		height: 32,
+		height: 40,
 		iconHeight: 14,
 		paddingLeft: "8px",
 		paddingRight: "8px",
-		width: 32,
+		width: 40,
 	});
 
 	const { geometry: popoverGeometry, popover } =

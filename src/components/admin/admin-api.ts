@@ -222,7 +222,6 @@ export function getAdminCollectionChildren(
 export function searchAdminCollectionCatalog(
 	input: {
 		cursor?: string | null;
-		editableOnly?: boolean;
 		pageSize?: number;
 		query: string;
 		sourceConnectionKey?: string | null;
@@ -233,7 +232,6 @@ export function searchAdminCollectionCatalog(
 	return requestJson<AdminCollectionCatalogPage>(
 		collectionCatalogUrl("search", {
 			cursor: input.cursor,
-			editableOnly: input.editableOnly,
 			pageSize: input.pageSize,
 			query: input.query,
 			source: input.sourceConnectionKey,
@@ -406,8 +404,9 @@ async function mutateAdminItemChunks(input: AdminItemBatchRequest) {
 						!Array.isArray(result.indexingReceipts) ||
 						result.indexingReceipts.some(
 							(receipt) =>
-								!adminSearchIndexReceiptSchema.safeParse(receipt)
-									.success,
+								!adminSearchIndexReceiptSchema.safeParse(
+									receipt,
+								).success,
 						),
 				)
 			) {
@@ -451,6 +450,7 @@ export async function mutateAdminItems(input: AdminItemBatchRequest) {
 export function createAdminCollection(input: {
 	name: string;
 	parentCollection: string | null;
+	sourceConnectionKey: string;
 }) {
 	return requestIndexingMutation<{ collection: AdminCollection }>(
 		"/api/admin/collections",
@@ -505,15 +505,12 @@ export function deleteAdminCollection(key: string, expectedRevision: number) {
 
 export function restoreAdminCollection(key: string, expectedRevision: number) {
 	return requestIndexingMutation<{
-			collection: AdminCollection;
-			collections: AdminCollection[];
-		}>(
-		`/api/admin/collections/${encodeURIComponent(key)}/restore`,
-		{
-			method: "POST",
-			body: JSON.stringify({ expectedRevision }),
-		},
-	);
+		collection: AdminCollection;
+		collections: AdminCollection[];
+	}>(`/api/admin/collections/${encodeURIComponent(key)}/restore`, {
+		method: "POST",
+		body: JSON.stringify({ expectedRevision }),
+	});
 }
 
 type StageFileResponse = {
@@ -589,9 +586,12 @@ export function publishAdminPdf(key: string, expectedUploadRevision: number) {
 }
 
 export function unpublishAdminPdf(key: string) {
-	return requestIndexingMutation<{ item: Record<string, unknown> }>(`/api/admin/items/${encodeURIComponent(key)}/file`, {
-		method: "DELETE",
-	});
+	return requestIndexingMutation<{ item: Record<string, unknown> }>(
+		`/api/admin/items/${encodeURIComponent(key)}/file`,
+		{
+			method: "DELETE",
+		},
+	);
 }
 
 export async function getAdminSearchIndexOverview(signal?: AbortSignal) {
@@ -641,11 +641,16 @@ export async function getAdminSearchIndexReceipts(
 	return { receipts: parsed.data satisfies AdminSearchIndexReceiptStatus[] };
 }
 
-export async function retryAdminSearchIndex(input: AdminSearchIndexRetryRequest) {
-	const response = await requestJson<unknown>("/api/admin/search-index/retry", {
-		body: JSON.stringify(input),
-		method: "POST",
-	});
+export async function retryAdminSearchIndex(
+	input: AdminSearchIndexRetryRequest,
+) {
+	const response = await requestJson<unknown>(
+		"/api/admin/search-index/retry",
+		{
+			body: JSON.stringify(input),
+			method: "POST",
+		},
+	);
 	if (!response || typeof response !== "object") {
 		throw invalidSearchIndexResponse();
 	}

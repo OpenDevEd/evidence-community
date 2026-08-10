@@ -99,7 +99,7 @@ import {
 import { focusAdminDragHandle } from "./admin-focus";
 import {
 	AdminDragDropRoot,
-	type NativeCollectionDropDestination,
+	type CollectionDropDestination,
 } from "./AdminDragDropProvider";
 import { isTopLevelAdminItemType } from "@/lib/admin/item-fields";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
@@ -153,6 +153,7 @@ type ConfirmDialog = {
 type RecordAssignment = {
 	focusKey: string | null;
 	itemKeys: string[];
+	sourceConnectionKey: string;
 };
 
 function collectionLocationFromCatalog(
@@ -191,11 +192,13 @@ function CollectionLocationButton({
 	label,
 	location,
 	onPress,
+	topLevelSource,
 }: {
 	buttonRef?: React.RefObject<HTMLButtonElement | null>;
 	label: string;
 	location: CollectionLocation | null;
 	onPress: () => void;
+	topLevelSource: string;
 }) {
 	return (
 		<div className="space-y-1.5">
@@ -203,7 +206,7 @@ function CollectionLocationButton({
 				{label}
 			</div>
 			<button
-				aria-label={`Change ${label.toLowerCase()}, current ${location?.name ?? "Top level"}, ${location?.path ?? "Native"}`}
+				aria-label={`Change ${label.toLowerCase()}, current ${location?.name ?? "Top level"}, ${location?.path ?? topLevelSource}`}
 				className="flex min-h-14 w-full items-center gap-2.5 rounded-xl bg-black/[0.035] px-3 text-left transition-colors hover:bg-black/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:bg-white/[0.045] dark:hover:bg-white/[0.07]"
 				data-admin-collection-location
 				onClick={onPress}
@@ -220,7 +223,7 @@ function CollectionLocationButton({
 						{location?.name ?? "Top level"}
 					</span>
 					<span className="block truncate text-[11px] text-black/40 dark:text-white/40">
-						{location?.path ?? "Native"}
+						{location?.path ?? topLevelSource}
 					</span>
 				</span>
 				<ChevronRight
@@ -399,6 +402,8 @@ export default function AdminWorkbench({
 	const [collectionParent, setCollectionParent] = useState<string | null>(
 		null,
 	);
+	const [collectionSourceConnectionKey, setCollectionSourceConnectionKey] =
+		useState(NATIVE_SOURCE_CONNECTION_KEY);
 	const [collectionParentEntry, setCollectionParentEntry] =
 		useState<AdminCollectionCatalogEntry | null>(null);
 	const [collectionParentLocation, setCollectionParentLocation] =
@@ -420,6 +425,27 @@ export default function AdminWorkbench({
 		null,
 	);
 	const searchIndex = useAdminSearchIndex();
+	const editableCollectionSourceKeys = useMemo(
+		() =>
+			library.sources
+				.filter(({ readOnly }) => !readOnly)
+				.map(({ key }) => key),
+		[library.sources],
+	);
+	const bulkAssignmentSource = useMemo(() => {
+		if (!bulkKeys.size) return null;
+		const selectedItems = items.filter(({ key }) => bulkKeys.has(key));
+		if (selectedItems.length !== bulkKeys.size) return null;
+		const selectedSources = new Set(
+			selectedItems.map(({ sourceConnectionKey }) => sourceConnectionKey),
+		);
+		if (selectedSources.size !== 1) return null;
+		const [sourceConnectionKey] = selectedSources;
+		return sourceConnectionKey &&
+			editableCollectionSourceKeys.includes(sourceConnectionKey)
+			? sourceConnectionKey
+			: null;
+	}, [bulkKeys, editableCollectionSourceKeys, items]);
 
 	const detailRequest = useRef(0);
 	const moveLocationButtonRef = useRef<HTMLButtonElement>(null);
@@ -1198,12 +1224,22 @@ export default function AdminWorkbench({
 	const openCreateCollection = (
 		parentCollection: AdminCollectionCatalogEntry | null,
 	) => {
+		const requestedSource =
+			parentCollection?.sourceConnectionKey ?? sourceFilter;
+		const sourceConnectionKey =
+			requestedSource &&
+			library.sources.some(
+				({ key, readOnly }) => key === requestedSource && !readOnly,
+			)
+				? requestedSource
+				: NATIVE_SOURCE_CONNECTION_KEY;
 		setCollectionErrors({});
 		setCollectionDialog({
 			mode: "create",
 			parentCollection: parentCollection?.key ?? null,
 		});
 		setCollectionName("");
+		setCollectionSourceConnectionKey(sourceConnectionKey);
 		setCollectionParent(parentCollection?.key ?? null);
 		setCollectionParentEntry(parentCollection);
 		setCollectionParentLocation(
@@ -1263,6 +1299,7 @@ export default function AdminWorkbench({
 					const result = await createAdminCollection({
 						name: collectionName,
 						parentCollection: collectionParent,
+						sourceConnectionKey: collectionSourceConnectionKey,
 					});
 					trackIndexing(result);
 					focusKey = result.collection.key;
@@ -1277,7 +1314,7 @@ export default function AdminWorkbench({
 					toast.success("Collection created");
 				}
 				invalidateAdminCollectionCatalogue();
-				focusAdminCollection(focusKey);
+				focusAdminCollection({ key: focusKey });
 				setCollectionDialog(null);
 				await refreshCurrent();
 			},
@@ -1305,7 +1342,7 @@ export default function AdminWorkbench({
 				);
 				trackIndexing(result);
 				invalidateAdminCollectionCatalogue();
-				focusAdminCollection(moveDialog.collection.key);
+				focusAdminCollection({ key: moveDialog.collection.key });
 				setMoveDialog(null);
 				await refreshCurrent();
 				toast.success(
@@ -1319,7 +1356,7 @@ export default function AdminWorkbench({
 
 	const dropCollection = (
 		collection: AdminCollectionCatalogEntry,
-		destination: NativeCollectionDropDestination,
+		destination: CollectionDropDestination,
 	) => {
 		void runBusy(
 			async () => {
@@ -1338,7 +1375,27 @@ export default function AdminWorkbench({
 				);
 				trackIndexing(result);
 				invalidateAdminCollectionCatalogue();
-				focusAdminCollection(collection.key);
+				const target =
+					destination.position === "root"
+						? null
+						: destination.targetEntry;
+				const ancestors =
+					destination.position === "root"
+						? []
+						: destination.position === "inside" && target
+							? [
+									...target.ancestors,
+									{ key: target.key, name: target.name },
+								]
+							: (target?.ancestors ?? collection.ancestors);
+				focusAdminCollection({
+					entry: {
+						...result.collection,
+						ancestors,
+						hasChildren: collection.hasChildren,
+					},
+					key: collection.key,
+				});
 				toast.success(
 					result.collections.length
 						? "Collection moved"
@@ -1347,7 +1404,10 @@ export default function AdminWorkbench({
 			},
 			() => {
 				invalidateAdminCollectionCatalogue();
-				focusAdminCollection(collection.key);
+				focusAdminCollection({
+					entry: collection,
+					key: collection.key,
+				});
 			},
 		);
 	};
@@ -1560,8 +1620,12 @@ export default function AdminWorkbench({
 			);
 		});
 
-	const requestRecordAssignment = (itemKeys: string[], focusKey: string) => {
-		setRecordAssignment({ focusKey, itemKeys });
+	const requestRecordAssignment = (
+		itemKeys: string[],
+		focusKey: string,
+		sourceConnectionKey: string,
+	) => {
+		setRecordAssignment({ focusKey, itemKeys, sourceConnectionKey });
 	};
 
 	const closeRecordAssignment = () => {
@@ -1896,17 +1960,30 @@ export default function AdminWorkbench({
 												<Send aria-hidden size={14} />
 											</Button>
 										</Tooltip>
-										<Tooltip content="Add selected to collection">
+										<Tooltip
+											content={
+												bulkAssignmentSource
+													? "Add selected to collection"
+													: "Select records from one editable source"
+											}
+										>
 											<button
 												aria-label="Add selected to collection"
 												className="grid size-8 shrink-0 place-items-center rounded-lg text-black/55 hover:bg-black/[0.05] hover:text-black/80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-40 dark:text-white/60 dark:hover:bg-white/[0.06] dark:hover:text-white/85"
-												disabled={busy}
-												onClick={() =>
+												disabled={
+													busy ||
+													!bulkAssignmentSource
+												}
+												onClick={() => {
+													if (!bulkAssignmentSource)
+														return;
 													setRecordAssignment({
 														focusKey: null,
 														itemKeys: [...bulkKeys],
-													})
-												}
+														sourceConnectionKey:
+															bulkAssignmentSource,
+													});
+												}}
 												type="button"
 											>
 												<FolderInput
@@ -2054,8 +2131,18 @@ export default function AdminWorkbench({
 							</ModalHeader>
 							<ModalBody>
 								<AdminCollectionPicker
-									editableOnly
+									allowedSourceKeys={
+										recordAssignment
+											? [
+													recordAssignment.sourceConnectionKey,
+												]
+											: []
+									}
 									autoFocus={finePointer}
+									initialSourceKey={
+										recordAssignment?.sourceConnectionKey ??
+										null
+									}
 									onSelect={(collection) => {
 										const assignment = recordAssignment;
 										closeRecordAssignment();
@@ -2180,9 +2267,14 @@ export default function AdminWorkbench({
 							<ModalBody>
 								{collectionParentPickerOpen ? (
 									<AdminCollectionPicker
+										allowedSourceKeys={[
+											collectionSourceConnectionKey,
+										]}
 										allowTopLevel
 										autoFocus={finePointer}
-										editableOnly
+										initialSourceKey={
+											collectionSourceConnectionKey
+										}
 										onSelect={(entry) => {
 											setCollectionParent(entry.key);
 											setCollectionParentEntry(entry);
@@ -2206,7 +2298,10 @@ export default function AdminWorkbench({
 										onSelectionChange={(keys) =>
 											setCollectionParent(keys[0] ?? null)
 										}
-										onSelectTopLevel={() => {
+										onSelectTopLevel={(sourceKey) => {
+											setCollectionSourceConnectionKey(
+												sourceKey,
+											);
 											setCollectionParent(null);
 											setCollectionParentEntry(null);
 											setCollectionParentLocation(null);
@@ -2253,6 +2348,68 @@ export default function AdminWorkbench({
 										/>
 										{collectionDialog?.mode === "create" ? (
 											<>
+												{collectionDialog.parentCollection ===
+													null &&
+												editableCollectionSourceKeys.length >
+													1 ? (
+													<Select
+														aria-label="Collection source"
+														classNames={{
+															base: "max-w-none",
+															trigger:
+																"h-10 min-h-10 rounded-xl",
+															value: "text-left text-sm",
+														}}
+														label="Source"
+														labelPlacement="outside"
+														onSelectionChange={(
+															keys,
+														) => {
+															const [key] = [
+																...keys,
+															];
+															if (
+																typeof key !==
+																"string"
+															)
+																return;
+															setCollectionSourceConnectionKey(
+																key,
+															);
+															setCollectionParent(
+																null,
+															);
+															setCollectionParentEntry(
+																null,
+															);
+															setCollectionParentLocation(
+																null,
+															);
+														}}
+														selectedKeys={[
+															collectionSourceConnectionKey,
+														]}
+														size="sm"
+													>
+														{library.sources
+															.filter(
+																({
+																	readOnly,
+																}) => !readOnly,
+															)
+															.map((source) => (
+																<SelectItem
+																	key={
+																		source.key
+																	}
+																>
+																	{
+																		source.label
+																	}
+																</SelectItem>
+															))}
+													</Select>
+												) : null}
 												<CollectionLocationButton
 													label="Location"
 													location={
@@ -2262,6 +2419,14 @@ export default function AdminWorkbench({
 														setCollectionParentPickerOpen(
 															true,
 														)
+													}
+													topLevelSource={
+														library.sources.find(
+															({ key }) =>
+																key ===
+																collectionSourceConnectionKey,
+														)?.label ??
+														collectionSourceConnectionKey
 													}
 												/>
 												{collectionErrors.parentCollection ? (
@@ -2355,12 +2520,23 @@ export default function AdminWorkbench({
 							<ModalBody>
 								{moveParentPickerOpen ? (
 									<AdminCollectionPicker
+										allowedSourceKeys={
+											moveDialog
+												? [
+														moveDialog.collection
+															.sourceConnectionKey,
+													]
+												: []
+										}
 										allowTopLevel
 										autoFocus={finePointer}
 										disabledAncestorKey={
 											moveDialog?.collection.key
 										}
-										editableOnly
+										initialSourceKey={
+											moveDialog?.collection
+												.sourceConnectionKey
+										}
 										onSelect={(entry) => {
 											setMoveParent(entry.key);
 											setMoveParentLocation(
@@ -2409,6 +2585,17 @@ export default function AdminWorkbench({
 											location={moveParentLocation}
 											onPress={() =>
 												setMoveParentPickerOpen(true)
+											}
+											topLevelSource={
+												library.sources.find(
+													({ key }) =>
+														key ===
+														moveDialog?.collection
+															.sourceConnectionKey,
+												)?.label ??
+												moveDialog?.collection
+													.sourceConnectionKey ??
+												NATIVE_SOURCE_CONNECTION_KEY
 											}
 										/>
 										{moveErrors.parentCollection ? (

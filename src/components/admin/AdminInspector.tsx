@@ -923,6 +923,7 @@ function CollectionsEditor({
 	publishedCollectionKeys,
 	readOnly,
 	recordKey,
+	sourceConnectionKey,
 	sources,
 }: {
 	errors: AdminFieldErrors;
@@ -931,6 +932,7 @@ function CollectionsEditor({
 	publishedCollectionKeys?: readonly string[];
 	readOnly: boolean;
 	recordKey: string;
+	sourceConnectionKey: string;
 	sources: AdminSource[];
 }) {
 	const finePointer = useFinePointer();
@@ -945,6 +947,15 @@ function CollectionsEditor({
 		retry,
 	} = useResolvedAdminCollections(selectedKeys);
 	const publishedSelected = new Set(publishedCollectionKeys ?? []);
+	const editableSourceKeys = sources
+		.filter(
+			({ key, readOnly: sourceReadOnly }) =>
+				!sourceReadOnly &&
+				(key === NATIVE_SOURCE_CONNECTION_KEY ||
+					key === sourceConnectionKey),
+		)
+		.map(({ key }) => key);
+	const editableSourceSet = new Set(editableSourceKeys);
 	return (
 		<>
 			<div
@@ -992,10 +1003,9 @@ function CollectionsEditor({
 					<EmptyValue icon={Folder} label="No collections" />
 				) : null}
 				{entries.map((entry) => {
-					const imported =
-						entry.sourceConnectionKey !==
-						NATIVE_SOURCE_CONNECTION_KEY;
-					const locked = imported || entry.deleted;
+					const locked =
+						entry.deleted ||
+						!editableSourceSet.has(entry.sourceConnectionKey);
 					const membershipChanged =
 						publishedCollectionKeys !== undefined &&
 						!publishedSelected.has(entry.key);
@@ -1082,8 +1092,9 @@ function CollectionsEditor({
 							<ModalHeader>Edit collections</ModalHeader>
 							<ModalBody>
 								<AdminCollectionPicker
+									allowedSourceKeys={editableSourceKeys}
 									autoFocus={finePointer}
-									editableOnly
+									initialSourceKey={sourceConnectionKey}
 									onSelectionChange={(keys) =>
 										onChange({
 											...payload,
@@ -1892,6 +1903,7 @@ export function AdminInspector({
 							}
 							readOnly={readOnly}
 							recordKey={detail.key}
+							sourceConnectionKey={detail.sourceConnectionKey}
 							sources={sources}
 						/>
 					</Section>

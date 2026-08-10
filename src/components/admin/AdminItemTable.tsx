@@ -54,7 +54,6 @@ import { twMerge } from "tailwind-merge";
 import { Button } from "@/components/nextui/Button";
 import { Checkbox } from "@/components/nextui/Checkbox";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import {
 	getAdminItemListColumn,
 	type AdminItemColumnId,
@@ -204,6 +203,7 @@ function CollectionRelationCell({ keys }: { keys: readonly string[] }) {
 
 function RecordTitleCell({
 	bulkKeys,
+	editableSourceKeys,
 	items,
 	onRequestCollectionAssignment,
 	record,
@@ -213,11 +213,17 @@ function RecordTitleCell({
 	onRequestCollectionAssignment: (
 		itemKeys: string[],
 		focusKey: string,
+		sourceConnectionKey: string,
 	) => void;
 	record: AdminTableItem;
+	editableSourceKeys: ReadonlySet<string>;
 }) {
-	const itemKeys = recordDragSelection(record, items, bulkKeys);
-	const native = record.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY;
+	const itemKeys = recordDragSelection(
+		record,
+		items,
+		bulkKeys,
+		editableSourceKeys,
+	);
 	const draggable = record.dragEnabled && itemKeys.length > 0;
 	const pointerStart = useRef<{ x: number; y: number } | null>(null);
 	const { handleRef, isDragging, ref } = useDraggable<RecordDragData>({
@@ -226,6 +232,7 @@ function RecordTitleCell({
 			itemKeys,
 			kind: "records",
 			label: recordDragLabel(record, itemKeys),
+			sourceConnectionKey: record.sourceConnectionKey,
 		},
 		disabled: !draggable,
 		id: `admin-record:${record.key}`,
@@ -239,7 +246,7 @@ function RecordTitleCell({
 				isDragging ? "opacity-35" : ""
 			}`}
 		>
-			{native ? (
+			{editableSourceKeys.has(record.sourceConnectionKey) ? (
 				<button
 					ref={handleRef}
 					aria-disabled={!draggable}
@@ -269,7 +276,11 @@ function RecordTitleCell({
 						) {
 							return;
 						}
-						onRequestCollectionAssignment(itemKeys, record.key);
+						onRequestCollectionAssignment(
+							itemKeys,
+							record.key,
+							record.sourceConnectionKey,
+						);
 					}}
 					onKeyDownCapture={(event) => {
 						if (
@@ -280,7 +291,11 @@ function RecordTitleCell({
 						event.preventDefault();
 						event.stopPropagation();
 						event.nativeEvent.stopImmediatePropagation();
-						onRequestCollectionAssignment(itemKeys, record.key);
+						onRequestCollectionAssignment(
+							itemKeys,
+							record.key,
+							record.sourceConnectionKey,
+						);
 					}}
 					onPointerDown={(event) => {
 						pointerStart.current = {
@@ -296,9 +311,9 @@ function RecordTitleCell({
 				</button>
 			) : (
 				<span
-					aria-label="Imported record assignments are read only"
+					aria-label="Collection assignment unavailable"
 					className="grid size-7 shrink-0 place-items-center text-black/20 dark:text-white/20"
-					title="Imported record assignments are read only"
+					title="Collection assignment unavailable for this source"
 				>
 					<Lock aria-hidden size={12} />
 				</span>
@@ -606,6 +621,7 @@ export function AdminItemTable({
 	onRequestCollectionAssignment: (
 		itemKeys: string[],
 		focusKey: string,
+		sourceConnectionKey: string,
 	) => void;
 	onResetPreferences: () => void;
 	onRetry: () => void;
@@ -638,6 +654,15 @@ export function AdminItemTable({
 	);
 	const sourceLabels = useMemo(
 		() => new Map(sources.map(({ key, label }) => [key, label])),
+		[sources],
+	);
+	const editableSourceKeys = useMemo(
+		() =>
+			new Set(
+				sources
+					.filter(({ readOnly }) => !readOnly)
+					.map(({ key }) => key),
+			),
 		[sources],
 	);
 
@@ -682,6 +707,7 @@ export function AdminItemTable({
 				cell: ({ row }) => (
 					<RecordTitleCell
 						bulkKeys={bulkKeys}
+						editableSourceKeys={editableSourceKeys}
 						items={items}
 						onRequestCollectionAssignment={
 							onRequestCollectionAssignment
@@ -807,6 +833,7 @@ export function AdminItemTable({
 		[
 			allVisibleSelected,
 			bulkKeys,
+			editableSourceKeys,
 			items,
 			onRequestCollectionAssignment,
 			onToggleBulk,

@@ -17,7 +17,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/nextui/Button";
 import { Input } from "@/components/nextui/Input";
-import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 import type {
 	AdminCollectionCatalogEntry,
 	AdminSource,
@@ -57,13 +56,6 @@ export function adminCollectionPath(
 		sources.find(({ key }) => key === entry.sourceConnectionKey)?.label ??
 		entry.sourceConnectionKey;
 	return [source, ...entry.ancestors.map(({ name }) => name)].join(" › ");
-}
-
-function isLockedCollection(entry: AdminCollectionCatalogEntry) {
-	return (
-		entry.deleted ||
-		entry.sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY
-	);
 }
 
 function SelectionRow({
@@ -256,12 +248,12 @@ function CollectionResultRow({
 }
 
 export function AdminCollectionPicker({
+	allowedSourceKeys,
 	allowTopLevel = false,
 	autoFocus = false,
 	disabledAncestorKey,
-	editableOnly = false,
+	initialSourceKey = null,
 	lockDeletedSelections = true,
-	lockImportedSelections = true,
 	onSelect,
 	onSelectTopLevel,
 	onSelectionChange,
@@ -269,14 +261,14 @@ export function AdminCollectionPicker({
 	selectionMode,
 	sources,
 }: {
+	allowedSourceKeys?: readonly string[];
 	allowTopLevel?: boolean;
 	autoFocus?: boolean;
 	disabledAncestorKey?: string;
-	editableOnly?: boolean;
+	initialSourceKey?: string | null;
 	lockDeletedSelections?: boolean;
-	lockImportedSelections?: boolean;
 	onSelect?: (entry: AdminCollectionCatalogEntry) => void;
-	onSelectTopLevel?: () => void;
+	onSelectTopLevel?: (sourceConnectionKey: string) => void;
 	onSelectionChange: (keys: string[]) => void;
 	selectedKeys: readonly string[];
 	selectionMode: "multiple" | "single";
@@ -284,11 +276,38 @@ export function AdminCollectionPicker({
 }) {
 	"use no memo";
 
+	const allowedSourceKeySignature =
+		allowedSourceKeys === undefined
+			? null
+			: [...new Set(allowedSourceKeys)].sort().join("\u0000");
+	const allowedSourceSet = useMemo(
+		() =>
+			allowedSourceKeySignature === null
+				? null
+				: new Set(
+						allowedSourceKeySignature
+							.split("\u0000")
+							.filter(Boolean),
+					),
+		[allowedSourceKeySignature],
+	);
+	const availableSources = useMemo(
+		() =>
+			allowedSourceSet
+				? sources.filter(({ key }) => allowedSourceSet.has(key))
+				: sources,
+		[allowedSourceSet, sources],
+	);
+	const defaultSourceKey =
+		initialSourceKey &&
+		availableSources.some(({ key }) => key === initialSourceKey)
+			? initialSourceKey
+			: availableSources.length === 1
+				? availableSources[0]!.key
+				: null;
 	const [query, setQuery] = useState("");
 	const debouncedQuery = useDebouncedValue(query.trim(), 250);
-	const [sourceKey, setSourceKey] = useState<string | null>(
-		editableOnly ? NATIVE_SOURCE_CONNECTION_KEY : null,
-	);
+	const [sourceKey, setSourceKey] = useState<string | null>(defaultSourceKey);
 	const [path, setPath] = useState<CollectionPathEntry[]>([]);
 	const [items, setItems] = useState<AdminCollectionCatalogEntry[]>([]);
 	const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -308,13 +327,15 @@ export function AdminCollectionPicker({
 		retry: retrySelectedEntries,
 	} = useResolvedAdminCollections(selectedKeys);
 	const activeParent = path.at(-1)?.key ?? null;
+	const awaitingSource =
+		!sourceKey && (!debouncedQuery || allowedSourceSet !== null);
 	const showTopLevel =
 		allowTopLevel && !debouncedQuery && activeParent === null;
 	const contextKey = [
 		debouncedQuery,
 		sourceKey ?? "all",
 		activeParent ?? "root",
-		String(editableOnly),
+		availableSources.map(({ key }) => key).join(","),
 		reloadToken,
 	].join("\u0000");
 	const contextKeyRef = useRef(contextKey);
@@ -346,11 +367,11 @@ export function AdminCollectionPicker({
 			signal?: AbortSignal,
 		) => {
 			const requestContext = contextKey;
+			if (!sourceKey && (!debouncedQuery || allowedSourceSet)) return;
 			const page = debouncedQuery
 				? await searchAdminCollectionCatalog(
 						{
 							cursor,
-							editableOnly,
 							pageSize: 50,
 							query: debouncedQuery,
 							sourceConnectionKey: sourceKey,
@@ -374,13 +395,13 @@ export function AdminCollectionPicker({
 			setNextCursor(page.nextCursor);
 			setSourceSelectionPending(false);
 		},
-		[activeParent, contextKey, debouncedQuery, editableOnly, sourceKey],
+		[activeParent, contextKey, debouncedQuery, sourceKey],
 	);
 
 	useEffect(() => {
 		loadMoreController.current?.abort();
 		setLoadingMore(false);
-		if (!debouncedQuery && !sourceKey) {
+		if (!sourceKey && (!debouncedQuery || allowedSourceSet)) {
 			setItems([]);
 			setNextCursor(null);
 			setError(null);
@@ -410,7 +431,7 @@ export function AdminCollectionPicker({
 				if (version === requestVersion.current) setLoading(false);
 			});
 		return () => controller.abort();
-	}, [contextKey, debouncedQuery, loadPage, sourceKey]);
+	}, [allowedSourceSet, contextKey, debouncedQuery, loadPage, sourceKey]);
 
 	const loadMore = useCallback(() => {
 		if (!nextCursor || loading || loadingMore) return;
@@ -529,9 +550,12 @@ export function AdminCollectionPicker({
 							entry={entry}
 							locked={
 								(lockDeletedSelections && entry.deleted) ||
-								(lockImportedSelections &&
-									entry.sourceConnectionKey !==
-										NATIVE_SOURCE_CONNECTION_KEY)
+								Boolean(
+									allowedSourceSet &&
+									!allowedSourceSet.has(
+										entry.sourceConnectionKey,
+									),
+								)
 							}
 							onRemove={removeSelection}
 							sources={sources}
@@ -560,7 +584,7 @@ export function AdminCollectionPicker({
 
 			{!debouncedQuery && sourceKey && !sourceSelectionPending ? (
 				<div className="flex min-h-7 items-center gap-1 overflow-hidden px-0.5 text-xs text-black/45 dark:text-white/45">
-					{!editableOnly ? (
+					{availableSources.length > 1 ? (
 						<button
 							aria-label="Choose source"
 							className="grid size-7 shrink-0 place-items-center rounded-md hover:bg-black/[0.05] hover:text-black/75 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus disabled:cursor-not-allowed disabled:opacity-40 dark:hover:bg-white/[0.06] dark:hover:text-white/75"
@@ -627,7 +651,7 @@ export function AdminCollectionPicker({
 				</div>
 			) : null}
 
-			{!debouncedQuery && (!sourceKey || sourceSelectionPending) ? (
+			{awaitingSource || sourceSelectionPending ? (
 				<div
 					aria-busy={sourceSelectionPending}
 					className="relative rounded-xl bg-black/[0.02] dark:bg-white/[0.025]"
@@ -646,7 +670,7 @@ export function AdminCollectionPicker({
 							data-admin-collection-picker-source-content
 							inert={sourceSelectionPending ? true : undefined}
 						>
-							{sources.map((source) => (
+							{availableSources.map((source) => (
 								<button
 									key={source.key}
 									className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2.5 text-left text-sm text-black/70 hover:bg-black/[0.045] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/75 dark:hover:bg-white/[0.055]"
@@ -704,7 +728,10 @@ export function AdminCollectionPicker({
 							{showTopLevel ? (
 								<button
 									className="sticky top-0 z-10 flex min-h-11 w-full items-center gap-2 border-b border-black/[0.06] bg-card_light px-3 text-left text-sm font-medium text-black/70 hover:bg-black/[0.035] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:border-white/[0.06] dark:bg-card dark:text-white/75 dark:hover:bg-white/[0.045]"
-									onClick={onSelectTopLevel}
+									onClick={() =>
+										sourceKey &&
+										onSelectTopLevel?.(sourceKey)
+									}
 									type="button"
 								>
 									<FolderOpen
@@ -774,10 +801,6 @@ export function AdminCollectionPicker({
 											);
 											const disabled =
 												entry.deleted ||
-												(editableOnly &&
-													isLockedCollection(
-														entry,
-													)) ||
 												entry.key ===
 													disabledAncestorKey ||
 												entry.ancestors.some(

@@ -138,7 +138,6 @@ function CollectionFilterValueEditor({
 					<AdminCollectionPicker
 						autoFocus={finePointer}
 						lockDeletedSelections={false}
-						lockImportedSelections={false}
 						onSelectionChange={onChange}
 						selectedKeys={selectedValues}
 						selectionMode="multiple"

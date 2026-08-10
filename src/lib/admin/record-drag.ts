@@ -1,17 +1,17 @@
-import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
 import type { AdminItemSummary } from "./types";
 
 export function recordDragSelection(
 	record: AdminItemSummary,
 	items: readonly AdminItemSummary[],
 	selectedKeys: ReadonlySet<string>,
+	editableSourceKeys: ReadonlySet<string>,
 ) {
-	if (record.sourceConnectionKey !== NATIVE_SOURCE_CONNECTION_KEY) return [];
+	if (!editableSourceKeys.has(record.sourceConnectionKey)) return [];
 	if (!selectedKeys.has(record.key)) return [record.key];
 	return items
 		.filter(
 			(item) =>
-				item.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY &&
+				item.sourceConnectionKey === record.sourceConnectionKey &&
 				selectedKeys.has(item.key),
 		)
 		.map(({ key }) => key);
