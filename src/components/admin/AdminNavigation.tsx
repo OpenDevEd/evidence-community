@@ -82,6 +82,8 @@ function NavigationHeading({
 
 const navigationItemClass =
 	"flex min-h-9 w-full items-center gap-2 rounded-lg px-2 text-left text-[13px] transition-colors";
+const navigationListSurfaceClass =
+	"rounded-xl bg-black/[0.035] p-1 dark:bg-black/20";
 
 export function AdminNavigation({
 	collection,
@@ -121,69 +123,73 @@ export function AdminNavigation({
 		>
 			<div className="max-h-[42%] shrink-0 overflow-y-auto">
 				<NavigationHeading icon={Database} title="Sources" />
-				{sources.map((entry) => {
-					const Icon =
-						entry.provider === NATIVE_SOURCE_CONNECTION_KEY
-							? Database
-							: Cloud;
-					return (
-						<button
-							key={entry.key}
-							aria-pressed={source === entry.key}
-							className={`${navigationItemClass} ${
-								source === entry.key
-									? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
-									: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
-							}`}
-							onClick={() =>
-								onSelectSource(
-									source === entry.key ? "all" : entry.key,
-								)
-							}
-							type="button"
-						>
-							<Icon aria-hidden size={14} />
-							<span className="min-w-0 flex-1 truncate">
-								{entry.label}
-							</span>
-							{entry.status === "paused" ? (
-								<Pause aria-label="Paused" size={11} />
-							) : entry.writeback?.enabled &&
-							  entry.writeback.supported ? (
-								<CloudUpload
-									aria-label="Writeback enabled"
-									size={11}
-								/>
-							) : entry.readOnly ? (
-								<Lock
-									aria-label="Writeback unavailable"
-									size={11}
-								/>
-							) : null}
-						</button>
-					);
-				})}
+				<div className={navigationListSurfaceClass}>
+					{sources.map((entry) => {
+						const Icon =
+							entry.provider === NATIVE_SOURCE_CONNECTION_KEY
+								? Database
+								: Cloud;
+						return (
+							<button
+								key={entry.key}
+								aria-pressed={source === entry.key}
+								className={`${navigationItemClass} ${
+									source === entry.key
+										? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
+										: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
+								}`}
+								onClick={() =>
+									onSelectSource(
+										source === entry.key ? "all" : entry.key,
+									)
+								}
+								type="button"
+							>
+								<Icon aria-hidden size={14} />
+								<span className="min-w-0 flex-1 truncate">
+									{entry.label}
+								</span>
+								{entry.status === "paused" ? (
+									<Pause aria-label="Paused" size={11} />
+								) : entry.writeback?.enabled &&
+								  entry.writeback.supported ? (
+									<CloudUpload
+										aria-label="Writeback enabled"
+										size={11}
+									/>
+								) : entry.readOnly ? (
+									<Lock
+										aria-label="Writeback unavailable"
+										size={11}
+									/>
+								) : null}
+							</button>
+						);
+					})}
+				</div>
 
 				<NavigationHeading icon={CircleCheck} title="Record state" />
-				{stateOptions.map((entry) => {
-					const Icon = entry.icon;
-					return (
-						<button
-							key={entry.key}
-							aria-pressed={state === entry.key}
-							className={`${navigationItemClass} ${
-								state === entry.key
-									? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
-									: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
-							}`}
-							onClick={() => onSelectState(entry.key)}
-							type="button"
-						>
-							<Icon aria-hidden size={14} />
-							{entry.label}
-						</button>
-					);
-				})}
+				<div className={navigationListSurfaceClass}>
+					{stateOptions.map((entry) => {
+						const Icon = entry.icon;
+						return (
+							<button
+								key={entry.key}
+								aria-pressed={state === entry.key}
+								className={`${navigationItemClass} ${
+									state === entry.key
+										? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
+										: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
+								}`}
+								onClick={() => onSelectState(entry.key)}
+								type="button"
+							>
+								<Icon aria-hidden size={14} />
+								{entry.label}
+							</button>
+						);
+					})}
+				</div>
 			</div>
 
 			<NavigationHeading
@@ -200,19 +206,23 @@ export function AdminNavigation({
 				icon={Folder}
 				title="Collections"
 			/>
-			<AdminCollectionCatalogue
-				busy={isBusy}
-				onCreate={onCreateCollection}
-				onDelete={onDeleteCollection}
-				onEdit={onEditCollection}
-				onMove={onMoveCollection}
-				onRestore={onRestoreCollection}
-				onSelect={(key) =>
-					onSelectCollection(collection === key ? null : key)
-				}
-				selectedCollection={collection}
-				sources={sources}
-			/>
+			<div
+				className={`${navigationListSurfaceClass} flex min-h-0 flex-1 flex-col overflow-hidden`}
+			>
+				<AdminCollectionCatalogue
+					busy={isBusy}
+					onCreate={onCreateCollection}
+					onDelete={onDeleteCollection}
+					onEdit={onEditCollection}
+					onMove={onMoveCollection}
+					onRestore={onRestoreCollection}
+					onSelect={(key) =>
+						onSelectCollection(collection === key ? null : key)
+					}
+					selectedCollection={collection}
+					sources={sources}
+				/>
+			</div>
 		</nav>
 	);
 }
