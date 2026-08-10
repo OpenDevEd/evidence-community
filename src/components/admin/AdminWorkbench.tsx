@@ -1878,7 +1878,10 @@ export default function AdminWorkbench({
 							<span className="hidden lg:inline">New item</span>
 						</Button>
 					</PopoverTrigger>
-					<PopoverContent className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card">
+					<PopoverContent
+						aria-label="New item"
+						className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+					>
 						<div className="w-full">
 							<div className="border-b border-black/[0.06] p-3 dark:border-white/[0.06]">
 								<Input

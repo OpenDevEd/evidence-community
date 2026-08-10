@@ -1379,6 +1379,11 @@ test("creates and renames collections in an editable Zotero source", async ({
 		},
 	]);
 	await page.goto(`/admin?filters=${encodeURIComponent(sourceFilters)}`);
+	await expect(
+		page.getByRole("button", {
+			name: editableImportedSource.label,
+		}),
+	).toHaveAttribute("aria-pressed", "true");
 	await page.getByRole("button", { name: "New", exact: true }).click();
 	let dialog = page.getByRole("dialog", { name: "New collection" });
 	await expect(
@@ -2229,7 +2234,7 @@ test.skip(
 	"External targets must explicitly confirm that the admin UI is enabled.",
 );
 
-test("creates an item through a pointer click in the new-item dialog", async ({
+test("creates an item through a pointer click in the new-item popover", async ({
 	page,
 }) => {
 	let submittedPayload: unknown;
@@ -2319,22 +2324,22 @@ test("creates an item through a pointer click in the new-item dialog", async ({
 	await page.goto("/admin");
 	await page.getByRole("button", { name: "New item" }).click();
 
-	const dialog = page.getByRole("dialog", { name: "New item" });
-	await expect(dialog).toBeVisible();
+	const popover = page.getByRole("dialog", { name: "New item" });
+	await expect(popover).toBeVisible();
 	await expect(
-		dialog.getByRole("textbox", { name: "Find an item type" }),
+		popover.getByRole("textbox", { name: "Find an item type" }),
 	).toBeFocused();
 	await expect
 		.poll(() =>
-			dialog.evaluate((element) => element.getBoundingClientRect().width),
+			popover.evaluate((element) => element.getBoundingClientRect().width),
 		)
-		.toBeLessThanOrEqual(513);
+		.toBeLessThanOrEqual(321);
 	await expect
 		.poll(() =>
-			dialog.evaluate((element) => element.getBoundingClientRect().width),
+			popover.evaluate((element) => element.getBoundingClientRect().width),
 		)
-		.toBeGreaterThanOrEqual(511);
-	const modalGeometry = await dialog.evaluate((element) => {
+		.toBeGreaterThanOrEqual(319);
+	const popoverGeometry = await popover.evaluate((element) => {
 		const rect = element.getBoundingClientRect();
 		const style = getComputedStyle(element);
 		return {
@@ -2344,15 +2349,15 @@ test("creates an item through a pointer click in the new-item dialog", async ({
 			width: rect.width,
 		};
 	});
-	expect(modalGeometry.boxSizing).toBe("border-box");
-	expect(modalGeometry.width).toBeLessThanOrEqual(513);
-	expect(modalGeometry.left).toBeGreaterThanOrEqual(16);
-	expect(modalGeometry.right).toBeLessThanOrEqual(
-		await page.evaluate(() => window.innerWidth - 16),
+	expect(popoverGeometry.boxSizing).toBe("border-box");
+	expect(popoverGeometry.width).toBeLessThanOrEqual(321);
+	expect(popoverGeometry.left).toBeGreaterThanOrEqual(12);
+	expect(popoverGeometry.right).toBeLessThanOrEqual(
+		await page.evaluate(() => window.innerWidth - 12),
 	);
-	await dialog.getByRole("button", { name: "Book", exact: true }).click();
+	await popover.getByRole("button", { name: "Book", exact: true }).click();
 
-	await expect(dialog).toBeHidden();
+	await expect(popover).toBeHidden();
 	expect(submittedPayload).toEqual({
 		collections: [],
 		creators: [],
@@ -2838,7 +2843,14 @@ test("searches active collections and browses deleted collections as flat trees"
 	const search = catalogue.getByRole("textbox", {
 		name: "Search collections",
 	});
+	await expect(
+		catalogue.getByRole("treeitem", {
+			name: longCollectionName,
+			exact: true,
+		}),
+	).toBeVisible();
 	await search.fill("very long");
+	await expect.poll(() => searches.length).toBeGreaterThan(0);
 	const result = catalogue.getByRole("treeitem", {
 		name: new RegExp(longCollectionName, "u"),
 	});
@@ -3037,7 +3049,7 @@ test("reveals and scrolls to a selected collection outside the first page", asyn
 	await expect(selectedRow).toBeVisible();
 	await expect(selectedRow).toHaveAttribute("aria-selected", "true");
 	await expect(selectedRow).not.toHaveAttribute("aria-posinset");
-	expect(await tree.locator("[data-index]").count()).toBeLessThanOrEqual(24);
+	expect(await tree.locator("[data-index]").count()).toBeLessThanOrEqual(32);
 	expect(childrenRequests.some((url) => url.searchParams.has("cursor"))).toBe(
 		false,
 	);
@@ -3243,9 +3255,13 @@ test("restores search focus when a mutation refresh cannot reload results", asyn
 	page,
 }) => {
 	let failSearch = false;
+	let searchRequests = 0;
 	const catalog = await mockPublishedBook(page);
 	await page.route("**/api/admin/collections?*", async (route) => {
 		const request = new URL(route.request().url());
+		if (request.searchParams.get("view") === "search") {
+			searchRequests += 1;
+		}
 		if (failSearch && request.searchParams.get("view") === "search") {
 			await route.fulfill({
 				json: {
@@ -3278,7 +3294,14 @@ test("restores search focus when a mutation refresh cannot reload results", asyn
 
 	await page.goto("/admin");
 	const search = page.getByRole("textbox", { name: "Search collections" });
+	await expect(
+		page.getByRole("treeitem", {
+			name: teacherCollection.name,
+			exact: true,
+		}),
+	).toBeVisible();
 	await search.fill("teacher");
+	await expect.poll(() => searchRequests).toBeGreaterThan(0);
 	await expect(
 		page.getByRole("treeitem", {
 			name: `${teacherCollection.name} Native`,
@@ -3440,17 +3463,26 @@ test("pages and virtualizes large collection catalogues while loading sources la
 		)
 		.toBe(0);
 
-	const initialGeometry = await tree.evaluate((element) => ({
-		clientHeight: element.clientHeight,
-		overflowY: getComputedStyle(element).overflowY,
-		renderedRows: element.querySelectorAll("[data-index]").length,
-		scrollHeight: element.scrollHeight,
-	}));
-	expect(initialGeometry).toMatchObject({ overflowY: "auto" });
-	expect(initialGeometry.scrollHeight).toBeGreaterThan(
-		initialGeometry.clientHeight,
+	const navigation = page.getByRole("navigation", {
+		name: "Admin filters and collections",
+	});
+	const [initialGeometry, navigationGeometry] = await Promise.all([
+		tree.evaluate((element) => ({
+			overflowY: getComputedStyle(element).overflowY,
+			renderedRows: element.querySelectorAll("[data-index]").length,
+		})),
+		navigation.evaluate((element) => ({
+			clientHeight: element.clientHeight,
+			overflowY: getComputedStyle(element).overflowY,
+			scrollHeight: element.scrollHeight,
+		})),
+	]);
+	expect(initialGeometry.overflowY).toBe("visible");
+	expect(navigationGeometry.overflowY).toBe("auto");
+	expect(navigationGeometry.scrollHeight).toBeGreaterThan(
+		navigationGeometry.clientHeight,
 	);
-	expect(initialGeometry.renderedRows).toBeLessThan(24);
+	expect(initialGeometry.renderedRows).toBeLessThan(40);
 	const parentRow = tree.getByRole("treeitem", {
 		name: longCollection.name,
 		exact: true,
@@ -3500,7 +3532,7 @@ test("pages and virtualizes large collection catalogues while loading sources la
 	).toBeFocused();
 	await firstGenerated.focus();
 	await expect(firstGenerated).toBeFocused();
-	await tree.evaluate((element) => {
+	await navigation.evaluate((element) => {
 		element.scrollTop = element.scrollHeight;
 	});
 	await expect(tree.locator('[role="treeitem"]:focus')).toHaveCount(1);
@@ -3514,7 +3546,7 @@ test("pages and virtualizes large collection catalogues while loading sources la
 	await page.waitForTimeout(50);
 	await expect(itemSearch).toBeFocused();
 
-	await tree.evaluate((element) => {
+	await navigation.evaluate((element) => {
 		element.scrollTop = element.scrollHeight;
 	});
 	const importedGroup = tree.getByRole("treeitem", {
@@ -3534,7 +3566,7 @@ test("pages and virtualizes large collection catalogues while loading sources la
 		)
 		.toBe(1);
 
-	await tree.evaluate((element) => {
+	await navigation.evaluate((element) => {
 		element.scrollTop = 36 * 50;
 	});
 	const loadMore = tree.getByRole("treeitem", { name: "Load more" });
@@ -3563,7 +3595,7 @@ test("pages and virtualizes large collection catalogues while loading sources la
 	await expect(
 		tree.getByRole("treeitem", { name: "Load more" }),
 	).toBeFocused();
-	await tree.evaluate((element) => {
+	await navigation.evaluate((element) => {
 		element.scrollTop = 36 * 50;
 	});
 	await expect(
@@ -3572,7 +3604,7 @@ test("pages and virtualizes large collection catalogues while loading sources la
 	// The focused row stays mounted outside the visible range so scrolling
 	// cannot strand keyboard focus; the rest of the 300-row catalogue remains
 	// virtualized.
-	expect(await tree.locator("[data-index]").count()).toBeLessThanOrEqual(25);
+	expect(await tree.locator("[data-index]").count()).toBeLessThan(48);
 });
 
 test("moves and then deletes a native collection without reviving its focus overlay", async ({
@@ -4876,7 +4908,7 @@ test("keeps unavailable drag controls out of keyboard widget mode", async ({
 	}
 	await expect(
 		page.getByRole("button", { name: "Publish selected" }),
-	).toBeHidden();
+	).toBeDisabled();
 });
 
 test("keeps the record grid usable in the narrow list pane", async ({

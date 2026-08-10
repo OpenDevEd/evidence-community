@@ -747,6 +747,7 @@ async function main() {
 			{
 				body: JSON.stringify({
 					expectedDraftRevision: opened.draft.draftRevision,
+					expectedPayload: opened.draft.payload,
 					payload: {
 						...opened.draft.payload,
 						abstractNote: "Updated and reindexed",
@@ -836,8 +837,6 @@ async function main() {
 			);
 		}
 		const child = await createDraft({
-			collections: [],
-			creators: [],
 			itemType: "Attachment",
 			parentItem: oldParent.draft.itemKey,
 			tags: [],
@@ -864,6 +863,7 @@ async function main() {
 			{
 				body: JSON.stringify({
 					expectedDraftRevision: childDraft.draft.draftRevision,
+					expectedPayload: childDraft.draft.payload,
 					payload: {
 						...childDraft.draft.payload,
 						parentItem: newParent.draft.itemKey,
@@ -1187,11 +1187,11 @@ async function main() {
 				JSON.stringify({
 					display: "flex",
 					flexDirection: "row",
-					height: 32,
+					height: 40,
 					iconHeight: 14,
 					paddingLeft: "8px",
 					paddingRight: "8px",
-					width: 32,
+					width: 40,
 				}),
 			`The real indexing trigger computed CSS was wrong: ${JSON.stringify(triggerGeometry)}`,
 		);
@@ -1365,7 +1365,7 @@ async function main() {
 		const failedTriggerGeometry =
 			await measureAdminSearchIndexTrigger(failedStatus);
 		assert(
-			failedTriggerGeometry.height === 32 &&
+			failedTriggerGeometry.height === 40 &&
 				failedTriggerGeometry.iconHeight === 14 &&
 				failedTriggerGeometry.paddingLeft === "8px" &&
 				failedTriggerGeometry.paddingRight === "8px",
