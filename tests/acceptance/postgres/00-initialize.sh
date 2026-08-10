@@ -23,11 +23,11 @@ VALUES
 	('BBN8BK5J', 'native', 'BBN8BK5J'),
 	('IW8VHV4Z', 'native', 'IW8VHV4Z');
 
-INSERT INTO "collection" ("key", "sourceConnectionKey", "sourceRecordKey", "name", "numItems")
+INSERT INTO "collection" ("key", "sourceConnectionKey", "sourceRecordKey", "name", "numItems", "sortOrder")
 VALUES
-	('ZBJ4NBSL', 'native', 'ZBJ4NBSL', 'Amber source collection', 1),
-	('BBN8BK5J', 'native', 'BBN8BK5J', 'Amber theme collection', 0),
-	('IW8VHV4Z', 'native', 'IW8VHV4Z', 'Amber hidden collection', 0);
+	('ZBJ4NBSL', 'native', 'ZBJ4NBSL', 'Amber source collection', 1, 0),
+	('BBN8BK5J', 'native', 'BBN8BK5J', 'Amber theme collection', 0, 1024),
+	('IW8VHV4Z', 'native', 'IW8VHV4Z', 'Amber hidden collection', 0, 2048);
 
 INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
 VALUES ('AMBR2345', 'native', 'AMBR2345');
@@ -55,11 +55,11 @@ VALUES
 	('BBN8BK5J', 'native', 'BBN8BK5J'),
 	('IW8VHV4Z', 'native', 'IW8VHV4Z');
 
-INSERT INTO "collection" ("key", "sourceConnectionKey", "sourceRecordKey", "name", "numItems")
+INSERT INTO "collection" ("key", "sourceConnectionKey", "sourceRecordKey", "name", "numItems", "sortOrder")
 VALUES
-	('ZBJ4NBSL', 'native', 'ZBJ4NBSL', 'Indigo source collection', 1),
-	('BBN8BK5J', 'native', 'BBN8BK5J', 'Indigo theme collection', 0),
-	('IW8VHV4Z', 'native', 'IW8VHV4Z', 'Indigo hidden collection', 0);
+	('ZBJ4NBSL', 'native', 'ZBJ4NBSL', 'Indigo source collection', 1, 0),
+	('BBN8BK5J', 'native', 'BBN8BK5J', 'Indigo theme collection', 0, 1024),
+	('IW8VHV4Z', 'native', 'IW8VHV4Z', 'Indigo hidden collection', 0, 2048);
 
 INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
 VALUES ('INDG2345', 'native', 'INDG2345');

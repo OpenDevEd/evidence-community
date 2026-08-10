@@ -461,6 +461,8 @@ function publicExpectations(profile: Profile) {
 			: config.theme.defaultMode);
 	const searchItemPrefix =
 		profile.name === "amber" ? "Amber" : "Indigo";
+	const databaseItemKey =
+		profile.name === "amber" ? "AMBR2345" : "INDG2345";
 	const enabledGapMap = config.gapMaps.find(
 		(gapMap) => gapMap.enabled,
 	);
@@ -499,7 +501,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_SEARCH_ITEM_TITLE:
 			`${searchItemPrefix} runtime evidence`,
 		PLAYWRIGHT_EXPECTED_DATABASE_ITEM_KEY:
-			`${searchItemPrefix.toUpperCase()}_DATABASE_FIXTURE`,
+			databaseItemKey,
 		PLAYWRIGHT_EXPECTED_DATABASE_ITEM_TITLE:
 			`${searchItemPrefix} database evidence`,
 		PLAYWRIGHT_EXPECTED_NAVIGATION_LABEL:
