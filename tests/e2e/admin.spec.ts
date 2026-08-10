@@ -4176,24 +4176,22 @@ test("runs selected-record actions through one compact batch request", async ({
 		page.getByRole("heading", { name: "Published book" }),
 	).toBeVisible();
 
+	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
+	await expect(bulkToolbar).toBeVisible();
+	await expect(bulkToolbar.getByText("selected")).toHaveCount(0);
+	for (const label of [
+		"Publish selected",
+		"Add selected to collection",
+		"Remove selected",
+		"Clear selection",
+	]) {
+		await expect(bulkToolbar.getByRole("button", { name: label })).toBeDisabled();
+	}
+
 	await page
 		.getByRole("checkbox", { name: "Select all loaded records" })
 		.check();
-	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
-	await expect(bulkToolbar).toBeVisible();
 	await expect(bulkToolbar).toContainText("2 selected");
-	await expect(
-		bulkToolbar.getByRole("button", { name: "Publish selected" }),
-	).toContainText("Publish");
-	await expect(
-		bulkToolbar.getByRole("button", { name: "Add selected to collection" }),
-	).toContainText("Add to collection");
-	await expect(
-		bulkToolbar.getByRole("button", { name: "Remove selected" }),
-	).toContainText("Remove");
-	await expect(
-		bulkToolbar.getByRole("button", { name: "Clear selection" }),
-	).toContainText("Clear");
 
 	const toolbarGeometry = await page.evaluate(() => {
 		const bulk = document.querySelector<HTMLElement>(
@@ -4242,7 +4240,15 @@ test("runs selected-record actions through one compact batch request", async ({
 			keys: [publishedItemKey, "ROW00001"],
 		},
 	]);
-	await expect(bulkToolbar).toBeHidden();
+	await expect(bulkToolbar.getByText("selected")).toHaveCount(0);
+	for (const label of [
+		"Publish selected",
+		"Add selected to collection",
+		"Remove selected",
+		"Clear selection",
+	]) {
+		await expect(bulkToolbar.getByRole("button", { name: label })).toBeDisabled();
+	}
 });
 
 test("assigns mixed-source records to their shared native collection", async ({
@@ -4271,17 +4277,16 @@ test("assigns mixed-source records to their shared native collection", async ({
 		name: "Add selected to collection",
 	});
 	const toolbarStyles = await bulkToolbar.evaluate((toolbar) => ({
-		buttonSizes: [...toolbar.querySelectorAll("button")].map((button) => ({
-			height: button.offsetHeight,
-			width: button.offsetWidth,
-		})),
+		buttonSizes: [...toolbar.querySelectorAll("button")].map((button) => [
+			button.offsetWidth,
+			button.offsetHeight,
+		]),
 		gap: getComputedStyle(toolbar).gap,
 	}));
 	expect(toolbarStyles.gap).toBe("4px");
-	expect(toolbarStyles.buttonSizes.every(({ height }) => height === 32)).toBe(
-		true,
+	expect(new Set(toolbarStyles.buttonSizes.map(String))).toEqual(
+		new Set(["32,32"]),
 	);
-	expect(toolbarStyles.buttonSizes.every(({ width }) => width > 32)).toBe(true);
 	await assign.focus();
 	await assign.press("Enter");
 	let dialog = page.getByRole("dialog", {
@@ -4312,7 +4317,7 @@ test("assigns mixed-source records to their shared native collection", async ({
 			},
 		]);
 	await expect(dialog).toBeHidden();
-	await expect(bulkToolbar).toBeHidden();
+	await expect(bulkToolbar.getByText("selected")).toHaveCount(0);
 });
 
 test("chunks a 500-record keyboard selection through the batch contract", async ({
@@ -4336,7 +4341,7 @@ test("chunks a 500-record keyboard selection through the batch contract", async 
 	expect(batchRequests.every(({ keys }) => keys.length <= 50)).toBe(true);
 	expect(submittedKeys).toHaveLength(500);
 	expect(new Set(submittedKeys).size).toBe(500);
-	await expect(bulkToolbar).toBeHidden();
+	await expect(bulkToolbar.getByText("selected")).toHaveCount(0);
 });
 
 test("continues a bulk action when one local draft cannot be saved", async ({

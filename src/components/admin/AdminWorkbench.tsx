@@ -1964,22 +1964,21 @@ export default function AdminWorkbench({
 					>
 						<AdminItemTable
 							bulkActions={
-								bulkKeys.size ? (
-									<div
-										aria-label="Bulk actions"
-										className="flex h-full min-w-0 items-center gap-1 overflow-hidden"
-										role="toolbar"
-									>
+								<div
+									aria-label="Bulk actions"
+									className="flex h-full min-w-0 items-center gap-1 overflow-hidden"
+									role="toolbar"
+								>
 										<Tooltip content="Publish selected">
 											<Button
 												aria-label="Publish selected"
-												isDisabled={busy}
+												isDisabled={busy || bulkKeys.size === 0}
+												isIconOnly
 												onPress={bulkPublish}
 												size="xs"
 												variant="transparent"
 											>
 												<Send aria-hidden size={14} />
-												Publish
 											</Button>
 										</Tooltip>
 										<Tooltip
@@ -1992,6 +1991,7 @@ export default function AdminWorkbench({
 											<Button
 												aria-label="Add selected to collection"
 												isDisabled={busy || !bulkAssignmentScope}
+												isIconOnly
 												onPress={() => {
 													if (!bulkAssignmentScope)
 														return;
@@ -2005,25 +2005,26 @@ export default function AdminWorkbench({
 												variant="transparent"
 											>
 												<FolderInput aria-hidden size={14} />
-												Add to collection
 											</Button>
 										</Tooltip>
 										<Tooltip content="Remove selected">
 											<Button
 												aria-label="Remove selected"
-												className="text-danger disabled:text-black/35 dark:disabled:text-white/35"
-												isDisabled={busy}
+												className="text-danger"
+												isDisabled={busy || bulkKeys.size === 0}
+												isIconOnly
 												onPress={bulkDelete}
 												size="xs"
 												variant="transparent"
 											>
 												<Trash2 aria-hidden size={14} />
-												Remove
 											</Button>
 										</Tooltip>
 										<Tooltip content="Clear selection">
 											<Button
 												aria-label="Clear selection"
+												isDisabled={bulkKeys.size === 0}
+												isIconOnly
 												onPress={() =>
 													setBulkKeys(new Set())
 												}
@@ -2031,14 +2032,14 @@ export default function AdminWorkbench({
 												variant="transparent"
 											>
 												<X aria-hidden size={14} />
-												Clear
 											</Button>
 										</Tooltip>
+									{bulkKeys.size ? (
 										<span className="hidden shrink-0 px-2 text-xs font-medium tabular-nums text-black/55 dark:text-white/60 sm:inline">
-										{bulkKeys.size} selected
+											{bulkKeys.size} selected
 										</span>
-									</div>
-								) : undefined
+									) : null}
+								</div>
 							}
 							bulkKeys={bulkKeys}
 							dragEnabled={!busy}
