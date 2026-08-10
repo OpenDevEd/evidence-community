@@ -134,10 +134,15 @@ async function openDraft(key: string) {
 async function saveDraft(
 	key: string,
 	expectedDraftRevision: number,
+	expectedPayload: Record<string, unknown>,
 	payload: Record<string, unknown>,
 ) {
 	await requestJson(`/api/admin/items/${key}/draft`, {
-		body: JSON.stringify({ expectedDraftRevision, payload }),
+		body: JSON.stringify({
+			expectedDraftRevision,
+			expectedPayload,
+			payload,
+		}),
 		method: "PUT",
 	});
 }
@@ -170,6 +175,7 @@ async function verify() {
 			body: JSON.stringify({
 				name: `Batch verification ${Date.now()}`,
 				parentCollection: null,
+				sourceConnectionKey: "native",
 			}),
 			method: "POST",
 		});
@@ -193,7 +199,6 @@ async function verify() {
 		itemKeys.push(siblingKey);
 		const childKey = await createDraft({
 			collections: [],
-			creators: [],
 			itemType: "Note",
 			note: "Batch verification child",
 			parentItem: parentKey,
@@ -312,7 +317,6 @@ async function verify() {
 		itemKeys.push(newParentKey);
 		const reparentedChildKey = await createDraft({
 			collections: [],
-			creators: [],
 			itemType: "Note",
 			note: "Batch ordering child",
 			parentItem: oldParentKey,
@@ -333,6 +337,7 @@ async function verify() {
 		await saveDraft(
 			reparentedChildKey,
 			reparentedChildDraft.draftRevision,
+			reparentedChildDraft.payload,
 			{
 				...reparentedChildDraft.payload,
 				parentItem: newParentKey,
@@ -367,7 +372,6 @@ async function verify() {
 		itemKeys.push(boundaryParentKey);
 		const boundaryChildKey = await createDraft({
 			collections: [],
-			creators: [],
 			itemType: "Note",
 			note: "Cross-chunk boundary child",
 			parentItem: boundaryParentKey,
