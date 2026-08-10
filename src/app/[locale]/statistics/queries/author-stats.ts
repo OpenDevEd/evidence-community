@@ -82,12 +82,12 @@ export async function getAuthorCountries(db: Database): Promise<AuthorCountrySta
 				${item.key} as item_key,
 				${item.relations} as item_relations
 			FROM ${item},
-			LATERAL unnest(${item.creators}) as creator_data,
+			LATERAL jsonb_array_elements(${item.creators}) as creator_data,
 			LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
 			WHERE ${item.deleted} = 0 
 			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 			AND ${item.creators} IS NOT NULL
-			AND array_length(${item.creators}, 1) > 0
+			AND jsonb_array_length(${item.creators}) > 0
 			AND creator_data ? 'institutions'
 			AND jsonb_typeof(creator_data->'institutions') = 'array'
 			AND jsonb_array_length(creator_data->'institutions') > 0
@@ -139,11 +139,11 @@ export async function getAuthorProductivityStats(db: Database): Promise<AuthorPr
 				) as author_name,
 				count(distinct ${item.key}) as item_count
 			FROM ${item},
-			LATERAL unnest(${item.creators}) as creator_data
+			LATERAL jsonb_array_elements(${item.creators}) as creator_data
 			WHERE ${item.deleted} = 0 
 			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 			AND ${item.creators} IS NOT NULL
-			AND array_length(${item.creators}, 1) > 0
+			AND jsonb_array_length(${item.creators}) > 0
 			GROUP BY author_name
 		) as author_productivity`)
 		.where(sql`author_name IS NOT NULL AND author_name != '' AND author_name != 'Unknown Author'`);
@@ -191,13 +191,13 @@ export async function getAuthorCollaborationStats(db: Database): Promise<AuthorC
 					nullif(trim(creator_data->>'name'), ''),
 					'Unknown Author'
 				) as author_name,
-				max(array_length(${item.creators}, 1) - 1) as max_collaborators
+				max(jsonb_array_length(${item.creators}) - 1) as max_collaborators
 			FROM ${item},
-			LATERAL unnest(${item.creators}) as creator_data
+			LATERAL jsonb_array_elements(${item.creators}) as creator_data
 			WHERE ${item.deleted} = 0 
 			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 			AND ${item.creators} IS NOT NULL
-			AND array_length(${item.creators}, 1) > 0
+			AND jsonb_array_length(${item.creators}) > 0
 			GROUP BY author_name
 		) as author_collaboration`)
 		.where(sql`author_name IS NOT NULL AND author_name != '' AND author_name != 'Unknown Author'`);
@@ -286,7 +286,7 @@ export async function getDetailedAuthorStats(db: Database): Promise<AuthorStats[
 				institution_data->>'display_name' as institution_name,
 				institution_data->>'country_code' as country_code
 			FROM ${item},
-			LATERAL unnest(${item.creators}) as creator_data,
+			LATERAL jsonb_array_elements(${item.creators}) as creator_data,
 			LATERAL jsonb_array_elements(
 				case 
 					when creator_data ? 'institutions' and jsonb_typeof(creator_data->'institutions') = 'array' 
@@ -297,7 +297,7 @@ export async function getDetailedAuthorStats(db: Database): Promise<AuthorStats[
 			WHERE ${item.deleted} = 0 
 			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 			AND ${item.creators} IS NOT NULL
-			AND array_length(${item.creators}, 1) > 0
+			AND jsonb_array_length(${item.creators}) > 0
 			AND trim(coalesce(creator_data->>'firstName', '') || ' ' || coalesce(creator_data->>'lastName', '') || ' ' || coalesce(creator_data->>'name', '')) != ''
 		) as author_details`)
 		.where(sql`author_name IS NOT NULL AND author_name != '' AND author_name != 'Unknown Author'`)

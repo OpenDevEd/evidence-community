@@ -74,21 +74,21 @@ export async function getCreatorStats(db: Database): Promise<CreatorStats> {
 			totalCreators: sql<number>`sum(
 				case 
 					when ${item.creators} is not null 
-					then array_length(${item.creators}, 1) 
+					then jsonb_array_length(${item.creators})
 					else 0 
 				end
 			)`,
 			avgCreators: sql<number>`avg(
 				case 
 					when ${item.creators} is not null 
-					then array_length(${item.creators}, 1) 
+					then jsonb_array_length(${item.creators})
 					else 0 
 				end
 			)`,
 			maxCreators: sql<number>`max(
 				case 
 					when ${item.creators} is not null 
-					then array_length(${item.creators}, 1) 
+					then jsonb_array_length(${item.creators})
 					else 0 
 				end
 			)`
@@ -118,11 +118,11 @@ export async function getCreatorStats(db: Database): Promise<CreatorStats> {
 					'Unknown Author'
 				) as author_name
 			FROM ${item},
-			LATERAL unnest(${item.creators}) as creator_data
+			LATERAL jsonb_array_elements(${item.creators}) as creator_data
 			WHERE ${item.deleted} = 0 
 			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 			AND ${item.creators} IS NOT NULL
-			AND array_length(${item.creators}, 1) > 0
+			AND jsonb_array_length(${item.creators}) > 0
 		) as all_authors`)
 		.where(sql`author_name IS NOT NULL AND author_name != '' AND author_name != 'Unknown Author'`);
 

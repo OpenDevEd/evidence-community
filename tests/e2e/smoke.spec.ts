@@ -684,6 +684,14 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 		expect(databaseItem?.title).toBe(expectedDatabaseItemTitle);
 	}
 
+	const institutionsResponse = await request.get("/api/institutions");
+	expect(institutionsResponse.status()).toBe(200);
+	const institutions = await institutionsResponse.json();
+	expect(typeof institutions.topCountryCode).toBe("string");
+	expect(institutions.totalInstitutions).toBe(
+		institutions.institutions.length,
+	);
+
 	const embeddingsResponse = await request.get(
 		`/api/ai/embeddings/${firstItem.key}`,
 	);

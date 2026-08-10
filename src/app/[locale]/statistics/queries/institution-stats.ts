@@ -43,12 +43,12 @@ export async function getInstitutionStats(db: Database): Promise<InstitutionStat
 					else 0 
 				end as item_citations
 			FROM ${item},
-			LATERAL unnest(${item.creators}) as creator_data,
+			LATERAL jsonb_array_elements(${item.creators}) as creator_data,
 			LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
 			WHERE ${item.deleted} = 0 
 			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 			AND ${item.creators} IS NOT NULL
-			AND array_length(${item.creators}, 1) > 0
+			AND jsonb_array_length(${item.creators}) > 0
 			AND creator_data ? 'institutions'
 			AND jsonb_typeof(creator_data->'institutions') = 'array'
 			AND jsonb_array_length(creator_data->'institutions') > 0
@@ -106,12 +106,12 @@ export async function getInstitutionStatsByYear(db: Database): Promise<Instituti
 					creator_data,
 					institution_data
 				FROM ${item},
-				LATERAL unnest(${item.creators}) as creator_data,
+				LATERAL jsonb_array_elements(${item.creators}) as creator_data,
 				LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
 				WHERE ${item.deleted} = 0 
 				AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 				AND ${item.creators} IS NOT NULL
-				AND array_length(${item.creators}, 1) > 0
+				AND jsonb_array_length(${item.creators}) > 0
 				AND creator_data ? 'institutions'
 				AND jsonb_typeof(creator_data->'institutions') = 'array'
 				AND jsonb_array_length(creator_data->'institutions') > 0

@@ -54,12 +54,12 @@ async function fetchInstitutionsData(
 					else 0
 				end as item_citations
 			FROM ${item},
-			LATERAL unnest(${item.creators}) as creator_data,
+			LATERAL jsonb_array_elements(${item.creators}) as creator_data,
 			LATERAL jsonb_array_elements(creator_data->'institutions') as institution_data
 			WHERE ${item.deleted} = 0
 			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
 			AND ${item.creators} IS NOT NULL
-			AND array_length(${item.creators}, 1) > 0
+			AND jsonb_array_length(${item.creators}) > 0
 			AND creator_data ? 'institutions'
 			AND jsonb_typeof(creator_data->'institutions') = 'array'
 			AND jsonb_array_length(creator_data->'institutions') > 0
@@ -71,14 +71,16 @@ async function fetchInstitutionsData(
 		.groupBy(sql`institution_name, country_code`)
 		.orderBy(desc(sql`count(*)`));
 
-	if (institutionStatsResult.length === 0) {
-		throw new Error("No institutions found");
-	}
-
-	const topCountryCode = institutionStatsResult[0]?.countryCode;
+	const topCountryCode = institutionStatsResult.find(
+		(stat) => stat.countryCode?.trim(),
+	)?.countryCode;
 
 	if (!topCountryCode) {
-		throw new Error("No top country found");
+		return {
+			topCountryCode: "",
+			totalInstitutions: 0,
+			institutions: [],
+		};
 	}
 
 	const topCountryInstitutions = institutionStatsResult
