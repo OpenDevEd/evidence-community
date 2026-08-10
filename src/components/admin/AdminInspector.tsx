@@ -23,6 +23,7 @@ import {
 	Copy,
 	Download,
 	Eye,
+	ExternalLink,
 	FilePenLine,
 	FilePlus2,
 	FileText,
@@ -42,6 +43,7 @@ import {
 	X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
@@ -51,6 +53,7 @@ import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Textarea } from "@/components/nextui/Textarea";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import type {
 	AdminCreator,
 	AdminItemDetail,
@@ -1503,6 +1506,7 @@ export function AdminInspector({
 	validationErrors: AdminFieldErrors;
 	validationRevision: number;
 }) {
+	const { identity } = useLibraryConfig();
 	const detailKey = detail?.key;
 	const definition = useMemo(
 		() =>
@@ -1578,6 +1582,10 @@ export function AdminInspector({
 		(attachment) =>
 			attachment.state === "published" || attachment.state === "edited",
 	);
+	const itemUrl =
+		detail.published && detail.state !== "deleted"
+			? new URL(`/lib/${detail.key}`, identity.baseUrl).toString()
+			: null;
 
 	return (
 		<div
@@ -1630,21 +1638,59 @@ export function AdminInspector({
 								{detail.key}
 							</p>
 						</div>
-						{!detail.editable ? (
-							<Tooltip
-								content={
-									writebackUnavailableMessage[
-										detail.writeback?.reason ?? "not-linked"
-									]
-								}
-							>
-								<Lock
-									aria-label="Read only"
-									className="mt-1 text-black/35 dark:text-white/35"
-									size={15}
-								/>
-							</Tooltip>
-						) : null}
+						<div className="flex shrink-0 items-center gap-1">
+							{itemUrl ? (
+								<>
+									<Tooltip content="Open public item">
+										<Button
+											as="a"
+											aria-label="Open public item"
+											href={itemUrl}
+											isIconOnly
+											rel="noreferrer"
+											size="xs"
+											target="_blank"
+											variant="transparent"
+										>
+											<ExternalLink aria-hidden size={14} />
+										</Button>
+									</Tooltip>
+									<Tooltip content="Copy public item link">
+										<Button
+											aria-label="Copy public item link"
+											isIconOnly
+											onPress={() => {
+												void navigator.clipboard
+													.writeText(itemUrl)
+													.then(() => toast.success("Item link copied"))
+													.catch(() =>
+														toast.error("Could not copy item link"),
+													);
+											}}
+											size="xs"
+											variant="transparent"
+										>
+											<Copy aria-hidden size={14} />
+										</Button>
+									</Tooltip>
+								</>
+							) : null}
+							{!detail.editable ? (
+								<Tooltip
+									content={
+										writebackUnavailableMessage[
+											detail.writeback?.reason ?? "not-linked"
+										]
+									}
+								>
+									<Lock
+										aria-label="Read only"
+										className="text-black/35 dark:text-white/35"
+										size={15}
+									/>
+								</Tooltip>
+							) : null}
+						</div>
 					</div>
 					<div className="mt-2 flex flex-wrap items-center gap-1.5">
 						<RecordStateChip state={detail.state} />
