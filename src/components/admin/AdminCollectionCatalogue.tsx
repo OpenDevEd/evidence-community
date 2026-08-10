@@ -335,9 +335,16 @@ function CollectionRow({
 				isDragging ? "opacity-35" : ""
 			} ${
 				selected
-					? "bg-accent/[0.12] font-medium text-black dark:bg-accent/20 dark:text-white"
-					: "text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.04]"
+					? "font-medium text-black dark:text-white"
+					: "text-black/60 dark:text-white/60"
+			} ${
+				isDropTarget
+					? "bg-accent/15 ring-1 ring-inset ring-accent/55 dark:bg-accent/25"
+					: selected
+						? "bg-accent/[0.12] dark:bg-accent/20"
+						: "hover:bg-black/[0.04] dark:hover:bg-white/[0.04]"
 			}`}
+			data-collection-drop-highlight={isDropTarget ? entry.key : undefined}
 			data-collection-key={entry.key}
 			style={{ paddingLeft: 4 + visualDepth * 12 }}
 		>
@@ -359,11 +366,7 @@ function CollectionRow({
 				<div
 					ref={insideRef}
 					aria-hidden
-					className={`pointer-events-none absolute inset-x-0 top-1/4 z-10 h-1/2 rounded-md ${
-						isDropTarget
-							? "bg-accent/15 ring-1 ring-inset ring-accent/55 dark:bg-accent/25"
-							: ""
-					}`}
+					className="pointer-events-none absolute inset-x-0 top-1/4 z-10 h-1/2"
 					data-collection-drop={`inside:${entry.key}`}
 					data-record-collection-drop={
 						acceptsRecords ? entry.key : undefined

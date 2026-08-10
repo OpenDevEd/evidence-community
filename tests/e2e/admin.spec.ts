@@ -2152,6 +2152,37 @@ async function movePointerTo(page: Page, target: Locator) {
 	});
 }
 
+async function expectFullCollectionDropHighlight(
+	page: Page,
+	target: Locator,
+	collectionKey: string,
+) {
+	const highlightedRow = page.locator(
+		`[data-collection-drop-highlight="${collectionKey}"]`,
+	);
+	await expect(highlightedRow).toBeVisible();
+	await expect(highlightedRow).toHaveAttribute(
+		"data-collection-key",
+		collectionKey,
+	);
+	const [dropTargetBox, highlightedRowBox, computedStyle] = await Promise.all([
+		target.boundingBox(),
+		highlightedRow.boundingBox(),
+		highlightedRow.evaluate((element) => {
+			const style = window.getComputedStyle(element);
+			return {
+				backgroundColor: style.backgroundColor,
+				borderRadius: style.borderRadius,
+				boxShadow: style.boxShadow,
+			};
+		}),
+	]);
+	expect(dropTargetBox?.height).toBeLessThan(highlightedRowBox?.height ?? 0);
+	expect(computedStyle.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
+	expect(computedStyle.borderRadius).toBe("8px");
+	expect(computedStyle.boxShadow).not.toBe("none");
+}
+
 test.skip(
 	Boolean(process.env.PLAYWRIGHT_BASE_URL) &&
 		process.env.PLAYWRIGHT_ADMIN_UI !== "true",
@@ -3603,7 +3634,7 @@ test("moves and then deletes a native collection without reviving its focus over
 		'[data-collection-drop="inside:LONGCOLL"]',
 	);
 	await movePointerTo(page, insideTarget);
-	await expect(insideTarget).toHaveClass(/bg-accent\/15/u);
+	await expectFullCollectionDropHighlight(page, insideTarget, "LONGCOLL");
 	await page.mouse.up();
 
 	await expect
@@ -3714,7 +3745,7 @@ test("adds a native record to a collection with pointer drag", async ({
 	);
 	await expect(target).toBeVisible();
 	await movePointerTo(page, target);
-	await expect(target).toHaveClass(/bg-accent\/15/u);
+	await expectFullCollectionDropHighlight(page, target, longCollection.key);
 	await page.mouse.up();
 
 	await expect
