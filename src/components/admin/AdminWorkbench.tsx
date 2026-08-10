@@ -2214,7 +2214,7 @@ export default function AdminWorkbench({
 									value={newItemSearch}
 									onValueChange={setNewItemSearch}
 								/>
-								<div className="grid max-h-[52vh] grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
+								<div className="flex max-h-[52vh] flex-col gap-1 overflow-y-auto pr-1">
 									{filteredDefinitions.map((definition) => (
 										<button
 											key={definition.itemType}
