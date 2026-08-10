@@ -4176,11 +4176,21 @@ test("runs selected-record actions through one compact batch request", async ({
 		page.getByRole("heading", { name: "Published book" }),
 	).toBeVisible();
 
+	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
+	await expect(bulkToolbar).toBeVisible();
+	await expect(bulkToolbar).toContainText("0 selected");
+	for (const label of [
+		"Publish selected",
+		"Add selected to collection",
+		"Remove selected",
+		"Clear selection",
+	]) {
+		await expect(bulkToolbar.getByRole("button", { name: label })).toBeDisabled();
+	}
+
 	await page
 		.getByRole("checkbox", { name: "Select all loaded records" })
 		.check();
-	const bulkToolbar = page.getByRole("toolbar", { name: "Bulk actions" });
-	await expect(bulkToolbar).toBeVisible();
 	await expect(bulkToolbar).toContainText("2 selected");
 
 	const toolbarGeometry = await page.evaluate(() => {
@@ -4192,9 +4202,13 @@ test("runs selected-record actions through one compact batch request", async ({
 		)!;
 		const bulkRect = bulk.getBoundingClientRect();
 		const controlsRect = controls.getBoundingClientRect();
+		const actionsRect = bulk.firstElementChild!.getBoundingClientRect();
+		const countRect = bulk.lastElementChild!.getBoundingClientRect();
 		return {
+			actionsRight: actionsRect.right,
 			bulkBottom: bulkRect.bottom,
 			bulkTop: bulkRect.top,
+			countLeft: countRect.left,
 			controlsBottom: controlsRect.bottom,
 			controlsHeight: controlsRect.height,
 			controlsTop: controlsRect.top,
@@ -4213,6 +4227,9 @@ test("runs selected-record actions through one compact batch request", async ({
 	expect(toolbarGeometry.bulkBottom).toBeLessThanOrEqual(
 		toolbarGeometry.controlsBottom,
 	);
+	expect(toolbarGeometry.countLeft).toBeGreaterThan(
+		toolbarGeometry.actionsRight,
+	);
 	expect(toolbarGeometry.documentOverflow).toBe(0);
 	await bulkToolbar.getByRole("button", { name: "Publish selected" }).click();
 	await expect.poll(() => batchRequests.length).toBe(1);
@@ -4222,7 +4239,15 @@ test("runs selected-record actions through one compact batch request", async ({
 			keys: [publishedItemKey, "ROW00001"],
 		},
 	]);
-	await expect(bulkToolbar).toBeHidden();
+	await expect(bulkToolbar).toContainText("0 selected");
+	for (const label of [
+		"Publish selected",
+		"Add selected to collection",
+		"Remove selected",
+		"Clear selection",
+	]) {
+		await expect(bulkToolbar.getByRole("button", { name: label })).toBeDisabled();
+	}
 });
 
 test("assigns mixed-source records to their shared native collection", async ({

@@ -1964,19 +1964,16 @@ export default function AdminWorkbench({
 					>
 						<AdminItemTable
 							bulkActions={
-								bulkKeys.size ? (
-									<div
-										aria-label="Bulk actions"
-										className="flex h-full min-w-0 items-center gap-1 overflow-hidden"
-										role="toolbar"
-									>
-										<span className="hidden shrink-0 px-1 text-xs font-medium text-black/60 dark:text-white/65 sm:inline">
-											{bulkKeys.size} selected
-										</span>
+								<div
+									aria-label="Bulk actions"
+									className="flex h-full min-w-0 items-center gap-1 overflow-hidden"
+									role="toolbar"
+								>
+									<div className="flex shrink-0 items-center gap-0.5 rounded-lg bg-black/[0.035] p-0.5 dark:bg-white/[0.04]">
 										<Tooltip content="Publish selected">
 											<Button
 												aria-label="Publish selected"
-												isDisabled={busy}
+												isDisabled={busy || bulkKeys.size === 0}
 												isIconOnly
 												onPress={bulkPublish}
 												size="xs"
@@ -2020,7 +2017,7 @@ export default function AdminWorkbench({
 											<Button
 												aria-label="Remove selected"
 												className="text-danger"
-												isDisabled={busy}
+												isDisabled={busy || bulkKeys.size === 0}
 												isIconOnly
 												onPress={bulkDelete}
 												size="xs"
@@ -2032,6 +2029,7 @@ export default function AdminWorkbench({
 										<Tooltip content="Clear selection">
 											<Button
 												aria-label="Clear selection"
+												isDisabled={bulkKeys.size === 0}
 												isIconOnly
 												onPress={() =>
 													setBulkKeys(new Set())
@@ -2043,7 +2041,10 @@ export default function AdminWorkbench({
 											</Button>
 										</Tooltip>
 									</div>
-								) : undefined
+									<span className="ml-auto hidden shrink-0 px-2 text-xs font-medium tabular-nums text-black/55 dark:text-white/60 sm:inline">
+										{bulkKeys.size} selected
+									</span>
+								</div>
 							}
 							bulkKeys={bulkKeys}
 							dragEnabled={!busy}
