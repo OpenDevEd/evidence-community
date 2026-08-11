@@ -138,8 +138,8 @@ Read the smallest relevant set before changing code:
 | Runtime and operations | `docs/evidence-library-operations.md`, `config/library.example.json` |
 | Deployed production snapshot | `docs/evidence-library-architecture.md` — reverify live facts before reuse |
 | Canonical source model | `packages/evidence-library-core/src/schema.ts`, `docs/source-ingestion-contract.md` |
-| Zotero adapter | `docs/zotero-source-adapter.md`, `src/lib/source-adapters/zotero/` |
-| Sync orchestration | `docs/source-orchestration.md`, `src/lib/source-orchestration/` |
+| Zotero adapter | `docs/zotero-source-adapter.md`, `src/lib/source-ingestion/zotero/` |
+| Sync orchestration | `docs/source-orchestration.md`, `src/lib/source-ingestion/orchestrator.ts` |
 | Source writeback | `docs/source-writeback.md`, `src/lib/source-writeback/` |
 | Search projection | `docs/search-indexing.md`, `src/lib/search-index/` |
 | Admin item list | `docs/admin-item-list.md`, `src/components/admin/`, `src/lib/admin/` |
