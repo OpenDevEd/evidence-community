@@ -3153,6 +3153,16 @@ test("refreshes an off-page ancestor after catalogue invalidation", async ({
 	await catalogue
 		.getByRole("button", { name: `Manage ${longCollection.name}` })
 		.click();
+	const menu = page.getByRole("menu");
+	await expect(menu).toBeVisible();
+	const navigation = page.locator("#admin-navigation-pane nav");
+	const scrollPosition = await navigation.evaluate((element) => {
+		const previous = element.scrollTop;
+		element.scrollTop = Math.max(0, previous - 1);
+		return { current: element.scrollTop, previous };
+	});
+	expect(scrollPosition.current).not.toBe(scrollPosition.previous);
+	await expect(menu).toBeVisible();
 	await page.getByRole("menuitem", { name: "Rename" }).click();
 	const dialog = page.getByRole("dialog", { name: "Rename collection" });
 	await dialog

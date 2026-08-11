@@ -182,7 +182,7 @@ function CollectionActions({
 	onMove: (collection: AdminCollectionCatalogEntry) => void;
 }) {
 	return (
-		<Dropdown placement="bottom-end">
+		<Dropdown placement="bottom-end" shouldCloseOnScroll={false}>
 			<DropdownTrigger>
 				<button
 					aria-label={`Manage ${entry.name}`}
