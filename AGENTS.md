@@ -1,171 +1,196 @@
-## Ultimate rules
+## Rule zero: write for normal people
 
-1. **DRY first.** Before implementing anything, search the repository for an existing component, service, schema primitive, adapter, worker, fixture, verifier, or documentation contract that can be extended or repurposed.
-2. **Research before guessing.** Words such as "likely", "possible", "probably", and "I think" are a stop signal. Use the `find-skills` skill, the relevant installed skill, primary/current documentation, library source, and web research before deciding.
-3. **No legacy compatibility.** This branch is pre-testing. Prefer clean breaking changes, delete obsolete paths, and leave no dead code, dual behavior, compatibility shims, or speculative fallbacks unless the user explicitly changes this rule.
-4. **Do not derail work over secrets.** The user accepts environment values appearing in agent history and terminal output. Do not rotate keys, lecture about exposure, or add redaction work unless requested.
+This is the most important rule in this file. Use plain, everyday language in every reply, plan, pull request, issue, document, commit message, code comment, error message, and piece of interface text. Write so that someone without a technical background can understand it on the first read.
 
-## Product identity and repository boundary
+1. Start with the answer or the next action. Do not start with a preamble.
+2. Use short sentences and common words. If a technical term is necessary, explain it in plain language.
+3. If there is more than one step, use a numbered list with no more than five items. Keep each step to one clear action.
+4. Say what is done, what is happening now, and the one next action. Use concrete time estimates when time matters.
+5. Remove tangents, repeated summaries, vague wording, corporate language, academic language, metaphors, and unnecessary detail. For errors, say what failed, why it failed, and how to fix it.
 
-This repository is the **Evidence Library runtime** for the combined OpenScholar product. It owns:
+### Examples
 
-- the public evidence-library website;
-- record-and-metadata administration under `/admin`;
-- canonical library records, drafts, revisions, tombstones, collections, and files;
-- runtime library manifests and activation/rollback;
-- PostgreSQL-to-Meilisearch projection;
-- source ingestion and orchestration;
-- Zotero Sync and Zotero Writeback; and
-- durable background workers, retries, leases, dead letters, and delivery receipts.
+| Bad | Good |
+|---|---|
+| “The provider-neutral transactional ingestion foundation has been implemented.” | “The library can now import records from different sources without creating duplicates.” |
+| “The operation failed because of an upstream provider conflict.” | “Zotero changed after we loaded the record. Reload it, compare the changes, and try again.” |
+| “This milestone is materially complete based on the implementation evidence.” | “This milestone is done. All three issues are closed and tested.” |
+| “We should operationalize the remaining deployment concerns.” | “Next: test creating a new library on the development server.” |
+| “The system persists canonical state while asynchronously projecting derived search documents.” | “PostgreSQL stores the real record. Meilisearch receives a searchable copy in the background.” |
 
-OpenScholar is developed in `OpenDevEd/openalex-count` on branch `dev`. It owns research discovery, literature-review workflow, screening, extraction, synthesis, research organization, user subscriptions/billing, and the future control-plane and publish-entry experience. Do not recreate those research workflows here. The repositories meet through an explicit authenticated, versioned, idempotent publish/provisioning contract.
+Before sending or publishing anything, reread it once and simplify it. These rules are always active, even when the `i-have-adhd` skill was not explicitly requested.
 
-Active development branch for this repository: `openscholar`.
+## Four rules that always apply
 
-## Outline knowledge base — required project context
+1. **Reuse before building.** Search the repository first. Extend an existing component, service, schema type, adapter, worker, fixture, test tool, or document when it already solves part of the problem.
+2. **Check facts instead of guessing.** Words such as “likely,” “possible,” “probably,” and “I think” mean you need to stop and check. Use `find-skills`, the right installed skill, current official docs, library source, and web research.
+3. **Do not keep old behavior.** This branch is still in testing. Make clean breaking changes, delete replaced code, and do not add compatibility layers or fallback paths unless the user asks for them.
+4. **Do not interrupt work over secrets.** The user accepts environment values appearing in terminal output and agent history. Do not rotate keys, lecture about exposure, or add redaction work unless asked.
 
-The shared durable knowledge base is the **OpenScholar** collection in Outline.
+## What this repository owns
 
-- Collection ID: `16480726-288c-42f7-9912-5047444585c9`
-- Start document: **00 — Start Here: OpenScholar Agent Map**
-- Start document ID: `cc243a51-87ec-4137-869e-0e791f6161f4`
+This repository is the **Evidence Library runtime**. It owns the public library website and the `/admin` record editor. It also owns records, drafts, revisions, deleted-record markers, collections, files, runtime configuration, search indexing, source imports, Zotero sync, Zotero writeback, and the workers that run these jobs.
+
+OpenScholar lives in `OpenDevEd/openalex-count` on branch `dev`. It owns research discovery, literature reviews, screening, extraction, synthesis, research organization, billing, and the future setup and publishing flow for Evidence Libraries.
+
+Do not rebuild OpenScholar’s research tools here. The two repositories must talk through a clear API that is authenticated, versioned, and safe to retry.
+
+The active branch in this repository is `openscholar`.
+
+## Read Outline before product or roadmap work
+
+The shared knowledge base is the **OpenScholar** collection in Outline.
+
+### Main pages
+
+- Collection: `16480726-288c-42f7-9912-5047444585c9`
+- Start here: `cc243a51-87ec-4137-869e-0e791f6161f4`
 - Evidence Library current state: `57d9f73d-4fce-430d-b0ad-da11903141b6`
 - Product boundaries: `ff5168e3-7289-42b2-a3e4-a07401fcfce1`
 - Integration contract: `ff15f65c-bf85-48b3-baf5-e849f85cde41`
+
+### More pages
+
 - Architecture and data ownership: `c5a528cb-ae33-4282-96d6-a3fa28036709`
 - Current decisions: `636ce019-6fe6-4a4e-918b-95e0912cc92d`
 - Development runbooks: `30b7169b-1530-424a-a374-80478d1bee56`
-- Knowledge-base protocol: `81d7111b-d75c-46d2-9229-e1eb44934195`
+- Knowledge-base rules: `81d7111b-d75c-46d2-9229-e1eb44934195`
 
-At the start of product, architecture, roadmap, or cross-repository work:
+For product, architecture, roadmap, or cross-repository work:
 
-1. Confirm the Outline MCP server is connected.
-2. Read the Start document by ID.
+1. Check that the Outline MCP server works.
+2. Read the Start page.
 3. Read the Evidence Library current-state page.
-4. Read only the additional pages relevant to the task.
-5. Cross-check implementation and deployment claims against this branch, tests, real-service verifiers, and the live runtime.
+4. Read only the other pages needed for the task.
+5. Check any claim about current behavior against this branch, its tests, the real service tools, and the running app.
 
-If Outline is unavailable, continue only when repository-local context is sufficient and explicitly report that the knowledge base could not be read or updated. Never claim an MCP write succeeded without re-reading it.
+If Outline is down, continue only when the repository gives you enough information. Say clearly that Outline could not be read. Never claim an Outline update worked until you read the page again.
 
-## Knowledge-base write requirement
+## Keep Outline accurate
 
-Outline must track durable shared truth, not every commit. After an authorized change is verified and pushed, update the smallest canonical Outline page when the work changes:
+Outline stores shared facts, not a copy of every commit. After a verified change is pushed, update the smallest existing Outline page when the change affects:
 
 - a product or architecture decision;
-- repository ownership or a cross-repository contract;
-- actual implementation status;
-- a supported development or operational workflow;
-- deployment topology; or
-- roadmap interpretation.
+- which repository owns something;
+- what is actually built;
+- a supported development or support process; or
+- deployment setup or roadmap meaning.
 
-Search before creating a page. Update the canonical document instead of creating duplicates. Record the date, repository, branch, commit, and verification evidence. Preserve superseded decisions and their rationale. Do not document uncommitted experiments or let Outline get ahead of Git.
+Search before creating a page. Update the existing main page instead of making a duplicate. Include the date, repository, branch, commit, and proof. Keep old decisions and explain why they changed. Do not document work that is still uncommitted.
 
-## Authority and current-state rules
+## Which source wins
 
-When sources conflict, use this order:
+When two sources disagree, use this order:
 
-1. the user's current explicit instruction;
-2. active branch code, tests, committed history, and verified runtime;
-3. current Outline decisions;
-4. the applicable product roadmap;
-5. delivery plans, prototypes, transcripts, historical audits, and superseded material.
+1. The user’s latest instruction.
+2. Current branch code, tests, commit history, and verified runtime behavior.
+3. Current Outline decisions.
+4. The relevant product roadmap.
+5. Old plans, prototypes, transcripts, and audits.
 
-The `openscholar` branch and its commit history are authoritative for current development progress. The WIP/design roadmap was an input for milestone creation, not a progress tracker. A previous `main`-only zero-baseline rule applied to a GitHub planning exercise and must not erase real branch implementation.
+The `openscholar` branch is the source of truth for current progress. The old “start from `main`” rule was only used to rebuild a clean GitHub milestone list. It must not erase work that now exists on this branch.
 
-Zotero Sync and Zotero Writeback are implemented here. Collection-membership writeback, source collection management, and drag/bulk membership flows are also implemented. Inspect the current code before planning; never add “implement Zotero writeback” as untouched future work.
+Zotero sync and writeback already work here. This includes source collection management, collection membership writeback, and drag and bulk collection actions. Read the code before planning. Never list Zotero writeback as untouched future work.
 
-The BeeWriter `roadmap.qmd` remains the Evidence Library/self-service product roadmap despite its obsolete callout; the user explicitly rejected that callout. In that roadmap, the “subscription website” is OpenScholar. `roadmap-v2.qmd` is a narrower Discover-to-Publish pilot programme and does not replace the broader product roadmap.
+The BeeWriter `roadmap.qmd` is still the main Evidence Library and self-service roadmap. Ignore its obsolete warning. In that roadmap, the “subscription website” means OpenScholar. `roadmap-v2.qmd` is a smaller Discover-to-Publish pilot, not a replacement for the full roadmap.
 
-## Next.js and React rules
+## Next.js and React
 
-This repository uses Next.js 16 and React 19. Read the relevant guide under `node_modules/next/dist/docs/` before changing Next.js APIs, conventions, caching, routing, request behavior, or file structure.
+This repository uses Next.js 16 and React 19. Before changing a Next.js API, route, cache rule, request rule, or file layout, read the matching guide under `node_modules/next/dist/docs/`.
 
-Do not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect` for application-state synchronization, prop mirroring, derived state, URL state, data fetching, mutation triggers, filters, tabs, pagination, modal state, or form mirroring. Use Server Components, route handlers/loaders, SWR where already established, `nuqs`, derived render values, lifted state, context, and event handlers.
+Do not use `useEffect`, `useLayoutEffect`, or `useInsertionEffect` to copy state, mirror props, derive values, manage URL state, fetch data, trigger mutations, or control filters, tabs, pages, or forms.
 
-Effects are allowed only for genuine external browser/DOM systems that require setup and teardown, such as event listeners, observers, timers, or imperative third-party widgets. Keep them in the smallest leaf component or custom hook with complete cleanup and exhaustive dependencies.
+Use Server Components, route handlers, SWR where the project already uses it, `nuqs`, values calculated during render, lifted state, context, and event handlers.
 
-## Architecture invariants
+An effect is allowed only when a real browser or outside system needs setup and cleanup. Examples are event listeners, observers, timers, and third-party widgets. Put it in the smallest component or hook. Include full cleanup and complete dependencies.
 
-### Canonical state
+## Data rules that must stay true
 
-- PostgreSQL is canonical. Meilisearch is derived and disposable.
-- Public item state changes only through explicit publication/unpublication/restore flows.
-- Drafts are private intent; they are not public canonical rows.
-- Tombstoned identities are retained and are not silently recycled.
-- File draft state and file publication state are distinct.
-- Canonical revisions, normalized relations, outbox events, and required writeback jobs commit transactionally.
+### Records and files
 
-### Search delivery
+- PostgreSQL stores the real data. Meilisearch only stores a searchable copy.
+- Public records change only through publish, unpublish, and restore actions.
+- Drafts stay private. They are not public records.
+- Deleted record keys stay reserved and are never silently reused.
+- File drafts and published files are separate states.
 
-- The outbox indexer reads current canonical state; it does not reconstruct historical payloads.
-- A Meilisearch request is not success until its asynchronous task reaches terminal `succeeded`.
-- Entity leases and serialization must prevent older revisions from overwriting newer projections.
-- Child attachment events reproject their parent; collection changes reproject affected descendants and members.
-- Admin mutations return exact indexing receipts. Do not replace receipt tracking with fake timers or optimistic “indexed” labels.
+Record revisions, relationships, search events, and required writeback jobs must save in the same database transaction.
 
-### Source ingestion
+### Search
 
-- Provider adapters emit provider-neutral batches through the shared ingestion contract.
-- Source cursors advance only in the same transaction as canonical writes.
-- Exact replays and version-only changes must not create false canonical revisions.
-- Identity reservation is collision-safe and preserves provider identity through aliases/links.
-- Locally dirty fields stay protected during inbound sync until provider acknowledgement.
-- Source ownership, canonical ownership, and collection membership are separate concepts.
+- The search worker reads the latest PostgreSQL state. It does not rebuild old payloads from events.
+- A Meilisearch request is complete only after Meilisearch reports that its task succeeded.
+- Leases and one-at-a-time processing must stop an older record version from replacing a newer one.
+- Attachment changes must reindex their parent. Collection changes must reindex affected children and members.
+- Admin changes must return real indexing receipts. Never fake an “indexed” state with a timer or hopeful label.
+
+### Source imports
+
+- Every source adapter sends the same provider-independent batch format.
+- A source cursor moves forward in the same transaction as the imported record changes.
+- Replaying the same data, or receiving only a source version change, must not create fake record revisions.
+- Key reservation must handle collisions and keep the source identity through links and aliases.
+- Local edits stay protected during imports until the source confirms them.
+
+Source ownership, record ownership, and collection membership are different things. Do not mix them.
 
 ### Source writeback
 
-- Local publication is the canonical commit; provider writes are asynchronous durable jobs.
-- Job identity and retries are idempotent.
-- Remote version conflicts require refetch/reconciliation, not blind overwrite.
-- In-flight local edits must survive remote acknowledgement.
-- Provider-owned memberships may write back; native collection memberships must not be misrepresented as provider-owned.
-- Parent/child ordering, deletion, restoration, and file ownership must remain explicit.
+- Publishing locally is the real commit. Updates to Zotero or another source happen later through saved worker jobs.
+- Retrying a job must not create duplicate remote work.
+- When the source changed remotely, reload and reconcile it. Never overwrite it blindly.
+- A newer local edit must survive confirmation of an older writeback request.
+- Only source-owned collection memberships may be written back as source memberships.
+
+Keep parent and child order, deletion, restoration, and file ownership clear at every step.
 
 ### Runtime configuration
 
-- One image serves multiple libraries through a validated server-side JSON manifest.
-- Do not reintroduce tenant-specific build-time forks.
-- Generated schema and catalog artifacts must stay synchronized with their typed source.
-- Activation and rollback are versioned runtime operations.
+- One container image serves different libraries from a validated server-side JSON file.
+- Never bring back customer-specific builds.
+- Keep generated schemas and option catalogs in sync with their TypeScript source.
+- Activation and rollback always use named versions.
 
-## Source and documentation map
+## Where to start reading
 
-Read the smallest relevant set before changing code:
+Read only what the task needs.
 
-| Concern | Canonical starting points |
+| Work | Start here |
 |---|---|
-| Product/runtime overview | `README.md`, `docs/evidence-library-customization-map.md` |
-| Runtime and operations | `docs/evidence-library-operations.md`, `config/library.example.json` |
-| Deployed production snapshot | `docs/evidence-library-architecture.md` — reverify live facts before reuse |
-| Canonical source model | `packages/evidence-library-core/src/schema.ts`, `docs/source-ingestion-contract.md` |
-| Zotero adapter | `docs/zotero-source-adapter.md`, `src/lib/source-ingestion/zotero/` |
-| Sync orchestration | `docs/source-orchestration.md`, `src/lib/source-ingestion/orchestrator.ts` |
-| Source writeback | `docs/source-writeback.md`, `src/lib/source-writeback/` |
-| Search projection | `docs/search-indexing.md`, `src/lib/search-index/` |
-| Admin item list | `docs/admin-item-list.md`, `src/components/admin/`, `src/lib/admin/` |
-| Generated config schema | `public/library-config.schema.json`, `public/library-config.catalogs.json` |
+| Product and runtime | `README.md` and `docs/evidence-library-customization-map.md` |
+| Runtime operations | `docs/evidence-library-operations.md` and `config/library.example.json` |
+| Current production setup | `docs/evidence-library-architecture.md`, then check the live system |
+| Source data model | `packages/evidence-library-core/src/schema.ts` and `docs/source-ingestion-contract.md` |
+| Zotero imports | `docs/zotero-source-adapter.md` and `src/lib/source-ingestion/zotero/` |
+| Source scheduling | `docs/source-orchestration.md` and `src/lib/source-ingestion/orchestrator.ts` |
+| Source writeback | `docs/source-writeback.md` and `src/lib/source-writeback/` |
+| Search indexing | `docs/search-indexing.md` and `src/lib/search-index/` |
+| Admin record table | `docs/admin-item-list.md`, `src/components/admin/`, and `src/lib/admin/` |
+| Generated config files | `public/library-config.schema.json` and `public/library-config.catalogs.json` |
 
-Never assume the deployed production snapshot describes the `openscholar` branch, or vice versa.
+Never treat the production snapshot as proof of what this branch does. Never treat this branch as proof of what production is running.
 
-## Planning doctrine
+## How to write a large plan
 
-When work is large enough to justify a plan, create `plans/<kebab-case-topic>/` containing:
+Put a large plan in `plans/<kebab-case-topic>/`.
 
-1. `00-README.md` with gap audit, locked decisions, inventory, dependencies, DRY donors, tests, migration stance, delegation policy, and grounding sources.
-2. Numbered execution plans (`01-*.md`, `02-*.md`, …), each with goal, scope, design, TDD sequence, files touched, migration stance, exact test plan, deployability/runtime gate, acceptance criteria, and pitfalls.
-3. `PROMPTS.md` with one self-contained copyable fenced prompt per numbered plan.
+It needs three things:
 
-Ground every plan in current source, installed skills, and current primary documentation. Name exact donor modules. Plans must prescribe behavioral/ARIA/data-contract tests, not Tailwind or class-string assertions.
+1. `00-README.md`: the gap, fixed decisions, plan list, dependencies, existing code to reuse, tests, data migration choice, agent use, and sources.
+2. Numbered files such as `01-topic.md`: goal, scope, design, test-first steps, files, data migration choice, exact tests, runtime check, completion rules, and risks.
+3. `PROMPTS.md`: one complete copyable prompt for every numbered plan.
 
-If implementation exposes a plan error, commit in-progress work, revise and commit the plan before continuing. If a required API truly does not exist or a pre-existing blocker prevents safe work, record a blocker document and stop instead of hiding it with a workaround.
+Use the real code, installed skills, and current official docs. Name the exact code that should be reused. Tests in plans must check behavior, accessibility, or data. Do not tell an agent to test Tailwind class names.
 
-## TDD and testing
+If coding shows that the plan is wrong, commit safe work first. Update and commit the plan before continuing. If a needed API does not exist, or an existing bug makes the work unsafe, write a blocker file and stop. Do not hide the problem with a workaround.
 
-Pure logic follows red → green → refactor. Write or update behavioral tests in the same slice as behavior changes. Prefer roles, accessible names, text, `aria-*`, `data-*`, database state, wire responses, and real worker state over implementation strings.
+## Tests
 
-Forbidden tests include assertions on Tailwind utilities, CSS class strings, or inline styles. Layout and visual styling require Playwright/browser verification or screenshot comparison, not JSDOM class matching.
+Use red → green → clean up for plain logic. Add or update behavior tests in the same change. Prefer roles, labels, visible text, `aria-*`, `data-*`, database rows, API responses, and real worker state.
 
-Core checks:
+Do not test Tailwind classes, CSS class strings, or inline styles. Use Playwright or screenshots for layout and visual styling.
+
+### Main checks
 
 ```sh
 npm run lint
@@ -175,7 +200,7 @@ npm run test:unit
 npm run test:acceptance
 ```
 
-Focused real-service commands:
+### Real-service checks
 
 ```sh
 npm run test:source-model
@@ -193,34 +218,39 @@ npm run test:native-lifecycle
 npm run test:linked-item-lifecycle
 ```
 
-Run the exact checks relevant to the changed slice, then broaden according to risk. Real-service verifiers require the environment documented beside their tools. A build or unit suite does not replace browser/runtime validation for user-facing or worker behavior.
+Run the checks that match the change, then run wider checks when the risk is higher. Real-service tests need the environment described beside their tools. A build or unit test does not replace checking the real browser, worker, or service.
 
-For documentation-only changes, run `git diff --check` and verify every referenced command, branch, and Outline document ID.
+For documentation-only work, run `git diff --check`. Also check every command, branch name, and Outline page ID mentioned in the document.
 
-## Development data and deployment boundaries
+## Development data and live systems
 
-The `openscholar` development data is disposable. Prefer clean schema changes over compatibility shims or backfills. When a schema change invalidates dev rows, wipe and reseed the affected local/dev data unless the current task explicitly establishes production migration requirements.
+Development data on `openscholar` is disposable. Prefer a clean schema change over compatibility code or a backfill. If a schema change breaks development rows, wipe and reseed the affected local or development data unless the task specifically needs a production migration.
 
-The existing Evidence Library production fleet and its tenants are outside ordinary branch work. Do not mutate Coolify production, shared PostgreSQL, Meilisearch, Supabase, Zotero groups, domains, or existing tenant data unless the user explicitly authorizes that exact system and scope. Supported APIs plus readback are required for control-plane changes; do not write Coolify's internal SQL.
+Existing Evidence Library production tenants are off limits unless the user names the exact system and gives permission. Do not change shared Coolify, PostgreSQL, Meilisearch, Supabase, Zotero groups, domains, or tenant data on your own.
 
-## Commit and push discipline
+For control-plane changes, use the supported API and read the value back. Never edit Coolify’s internal database directly.
+
+## Git rules
 
 - Use conventional commit prefixes.
-- Keep one concern per commit and commit each TDD green/logical unit.
-- Never commit with tests red.
-- Never use `--no-verify`, `--no-gpg-sign`, or hook-bypass flags.
-- Stage explicit paths; never absorb unrelated dirty or untracked work.
-- Do not push unless the user explicitly authorizes it.
-- After pushing, read back the remote SHA and update Outline when durable shared truth changed.
+- Keep one concern in each commit. Commit each working test-first step or clear unit of work.
+- Never commit while relevant tests are failing.
+- Never use `--no-verify`, `--no-gpg-sign`, or another hook bypass.
+- Stage named files. Do not include unrelated local work.
 
-## Completion standard
+Do not push unless the user clearly asks. After a push, read back the remote commit. Update Outline only when the pushed change alters shared facts.
 
-A task is complete only when:
+## When the task is done
 
-1. the intended behavior is implemented without duplicate or legacy paths;
-2. relevant tests pass;
-3. schema/generated artifacts are synchronized when touched;
-4. the real browser/worker/runtime path is verified in proportion to risk;
-5. the diff contains only intended files;
-6. commits are atomic and the authorized branch is pushed when requested; and
-7. the canonical Outline page is updated and re-read when durable shared truth changed.
+The code is done when:
+
+1. The requested behavior works without duplicate or old paths.
+2. The right tests pass.
+3. Generated schemas and catalogs match their source when they changed.
+4. The real browser, worker, or service was checked when the change affects it.
+
+The delivery is done when:
+
+1. The diff contains only the intended files.
+2. Commits are small and clear, and the branch is pushed only when requested.
+3. Outline is updated and read back when the pushed work changes shared facts.
