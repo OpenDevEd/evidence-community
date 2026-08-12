@@ -7,7 +7,7 @@ x-runtime-config: &runtime-config
   mode: 0444
 
 x-source-build: &source-build
-  context: ..
+  context: .
   dockerfile: Dockerfile
 
 services:

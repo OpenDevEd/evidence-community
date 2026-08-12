@@ -7,14 +7,14 @@ x-runtime-config: &runtime-config
   mode: 0444
 
 x-search-build: &search-build
-  context: ..
+  context: .
   dockerfile: Dockerfile
   target: search-indexer
 
 services:
   web:
     build:
-      context: ..
+      context: .
       dockerfile: Dockerfile
       target: final
     environment: *runtime-environment

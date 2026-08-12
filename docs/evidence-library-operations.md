@@ -27,6 +27,15 @@ To change a Coolify deployment, update `LIBRARY_CONFIG_JSON` and redeploy the
 repository Compose file. The host-directory steps below are only for running
 the image directly with Docker. They do not apply to the Coolify Compose path.
 
+Run Compose from the repository root. This matches Coolify and keeps the build
+context on the repository Dockerfile and source tree:
+
+```bash
+LIBRARY_CONFIG_JSON="$(jq -c . config/library.example.json)" \
+  docker compose --project-directory . \
+  -f docker/compose.library.yaml config
+```
+
 ## Prepare a library for direct Docker use
 
 Create a host directory whose owner can activate changes and whose numeric group
