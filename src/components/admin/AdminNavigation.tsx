@@ -210,7 +210,7 @@ export function AdminNavigation({
 				title="Collections"
 			/>
 			<div
-				className={`${navigationListSurfaceClass} flex shrink-0 flex-col px-0`}
+				className={`${navigationListSurfaceClass} flex grow shrink-0 flex-col px-0`}
 			>
 				<AdminCollectionCatalogue
 					busy={isBusy}

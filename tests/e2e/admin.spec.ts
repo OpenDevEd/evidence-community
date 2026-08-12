@@ -4018,6 +4018,38 @@ test("keeps admin chrome on one computed spacing system", async ({ page }) => {
 	await expect(page.getByRole("menuitem", { name: "Rename" })).toBeVisible();
 });
 
+test("fills the remaining navigation height with the collections surface", async ({
+	page,
+}) => {
+	await mockPublishedBook(page);
+	await page.setViewportSize({ width: 1280, height: 800 });
+	await page.goto("/admin");
+	await expect(
+		page.getByRole("heading", { name: "Published book" }),
+	).toBeVisible();
+
+	const navigation = page.getByRole("navigation", {
+		name: "Admin filters and collections",
+	});
+	const collectionSurface = page
+		.getByRole("region", { name: "Collection catalogue" })
+		.locator("..");
+	const [navigationBox, collectionSurfaceBox] = await Promise.all([
+		navigation.boundingBox(),
+		collectionSurface.boundingBox(),
+	]);
+
+	expect(navigationBox).not.toBeNull();
+	expect(collectionSurfaceBox).not.toBeNull();
+	expect(
+		Math.abs(
+			collectionSurfaceBox!.y +
+				collectionSurfaceBox!.height -
+				(navigationBox!.y + navigationBox!.height),
+		),
+	).toBeLessThanOrEqual(1);
+});
+
 test("configures columns, density, sizing, and persists computed table geometry", async ({
 	page,
 }) => {
