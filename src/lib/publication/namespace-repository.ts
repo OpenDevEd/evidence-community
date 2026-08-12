@@ -3,6 +3,8 @@ import { eq } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { doiNamespace } from "@/db/schema/publication";
 
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+
 export type AllocateManagedCrossrefDoiInput = {
 	environment: "test";
 	prefix: string;
@@ -30,60 +32,58 @@ function validateInput(input: AllocateManagedCrossrefDoiInput) {
 }
 
 export async function allocateManagedCrossrefDoi(
-	database: Database,
+	transaction: Transaction,
 	input: AllocateManagedCrossrefDoiInput,
 ) {
 	validateInput(input);
 
-	return database.transaction(async (transaction) => {
-		await transaction
-			.insert(doiNamespace)
-			.values({
-				environment: input.environment,
-				prefix: input.prefix,
-				suffixNamespace: input.suffixNamespace,
-			})
-			.onConflictDoNothing();
+	await transaction
+		.insert(doiNamespace)
+		.values({
+			environment: input.environment,
+			prefix: input.prefix,
+			suffixNamespace: input.suffixNamespace,
+		})
+		.onConflictDoNothing();
 
-		const [stored] = await transaction
-			.select()
-			.from(doiNamespace)
-			.where(eq(doiNamespace.environment, input.environment))
-			.for("update");
+	const [stored] = await transaction
+		.select()
+		.from(doiNamespace)
+		.where(eq(doiNamespace.environment, input.environment))
+		.for("update");
 
-		if (!stored) {
-			throw new Error("The DOI namespace row could not be created");
-		}
+	if (!stored) {
+		throw new Error("The DOI namespace row could not be created");
+	}
 
-		if (
+	if (
 			stored.prefix !== input.prefix ||
 			stored.suffixNamespace !== input.suffixNamespace
-		) {
+	) {
 			if (stored.nextSequence !== 1) {
 				throw new DoiNamespaceConfigurationError(
 					"The DOI prefix or suffix namespace cannot change after the first DOI is reserved",
 				);
 			}
 
-			await transaction
-				.update(doiNamespace)
-				.set({
-					prefix: input.prefix,
-					suffixNamespace: input.suffixNamespace,
-					updatedAt: new Date(),
-				})
-				.where(eq(doiNamespace.environment, input.environment));
-		}
-
 		await transaction
 			.update(doiNamespace)
 			.set({
-				nextSequence: stored.nextSequence + 1,
+				prefix: input.prefix,
+				suffixNamespace: input.suffixNamespace,
 				updatedAt: new Date(),
 			})
 			.where(eq(doiNamespace.environment, input.environment));
+	}
 
-		const sequence = String(stored.nextSequence).padStart(6, "0");
-		return `${input.prefix}/${input.suffixNamespace}${sequence}`;
-	});
+	await transaction
+		.update(doiNamespace)
+		.set({
+			nextSequence: stored.nextSequence + 1,
+			updatedAt: new Date(),
+		})
+		.where(eq(doiNamespace.environment, input.environment));
+
+	const sequence = String(stored.nextSequence).padStart(6, "0");
+	return `${input.prefix}/${input.suffixNamespace}${sequence}`;
 }

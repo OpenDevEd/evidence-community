@@ -13,6 +13,11 @@ import {
 } from "@/lib/admin/native-item-service";
 import { NativeItemValidationError } from "@/lib/admin/native-item-validation";
 import { InvalidPdfError } from "@/lib/admin/pdf-processing";
+import {
+	CrossrefActivationConfigurationError,
+	CrossrefActivationValidationError,
+	ExternalCrossrefDoiError,
+} from "@/lib/publication/errors";
 
 function wrappedDatabaseError(code: string) {
 	const cause = Object.assign(new Error("database rejected write"), {
@@ -22,6 +27,34 @@ function wrappedDatabaseError(code: string) {
 }
 
 describe("admin API error mapping", () => {
+	it("returns plain Crossref activation errors", async () => {
+		const validation = adminErrorResponse(
+			new CrossrefActivationValidationError(
+				"Complete the required Crossref fields and try again.",
+				{ publicationTitle: "Add a journal title." },
+			),
+		);
+		expect(validation.status).toBe(400);
+		expect(await validation.json()).toEqual({
+			error: {
+				code: "validation_failed",
+				fields: { publicationTitle: "Add a journal title." },
+				message: "Complete the required Crossref fields and try again.",
+			},
+		});
+
+		for (const error of [
+			new CrossrefActivationConfigurationError(
+				"Crossref test publishing is not configured for this library.",
+			),
+			new ExternalCrossrefDoiError("10.9999/external"),
+		]) {
+			const response = adminErrorResponse(error);
+			expect(response.status).toBe(409);
+			expect((await response.json()).error.code).toBe("conflict");
+		}
+	});
+
 	it("unwraps Drizzle foreign-key and check violations as bad requests", async () => {
 		for (const code of ["23503", "23514"]) {
 			const response = adminErrorResponse(wrappedDatabaseError(code));

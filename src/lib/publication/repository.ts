@@ -1,5 +1,3 @@
-import "server-only";
-
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
@@ -14,6 +12,9 @@ import {
 import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
+
+type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
+type Executor = Database | Transaction;
 
 export type PublicationRepositorySnapshot = {
 	record: typeof item.$inferSelect | null;
@@ -34,7 +35,7 @@ export type PublicationRepositorySnapshot = {
 
 /** Reads every durable fact needed to build the one admin publication view. */
 export async function readPublicationRepositorySnapshot(
-	database: Database,
+	database: Executor,
 	itemKey: string,
 	crossrefEnvironment: "test",
 ): Promise<PublicationRepositorySnapshot> {

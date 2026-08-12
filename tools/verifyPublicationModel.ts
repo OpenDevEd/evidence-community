@@ -302,11 +302,13 @@ async function verifyConstraints(client: pg.Client) {
 async function verifyNamespaceAllocation(database: Database) {
 	const allocated = await Promise.all(
 		Array.from({ length: 20 }, () =>
-			allocateManagedCrossrefDoi(database, {
-				environment: "test",
-				prefix: "10.5555",
-				suffixNamespace: "model.",
-			}),
+			database.transaction((transaction) =>
+				allocateManagedCrossrefDoi(transaction, {
+					environment: "test",
+					prefix: "10.5555",
+					suffixNamespace: "model.",
+				}),
+			),
 		),
 	);
 	if (new Set(allocated).size !== allocated.length) {
@@ -322,11 +324,13 @@ async function verifyNamespaceAllocation(database: Database) {
 	}
 
 	try {
-		await allocateManagedCrossrefDoi(database, {
-			environment: "test",
-			prefix: "10.5555",
-			suffixNamespace: "changed.",
-		});
+		await database.transaction((transaction) =>
+			allocateManagedCrossrefDoi(transaction, {
+				environment: "test",
+				prefix: "10.5555",
+				suffixNamespace: "changed.",
+			}),
+		);
 		throw new Error("A used DOI namespace was allowed to change");
 	} catch (error) {
 		if (!(error instanceof Error) || !error.message.includes("cannot change")) {

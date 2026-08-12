@@ -33,6 +33,13 @@ import {
 } from "./errors";
 import { AdminSourceWritebackRetryError } from "./source-writeback-service";
 import { CollectionWritebackUnavailableError } from "./collection-mutation-service";
+import {
+	CrossrefActivationConfigurationError,
+	CrossrefActivationValidationError,
+	CrossrefPublicationItemNotFoundError,
+	ExternalCrossrefDoiError,
+	PublicationItemNotFoundError,
+} from "@/lib/publication/errors";
 
 export const ADMIN_RESPONSE_HEADERS = {
 	"Cache-Control": "private, no-store",
@@ -86,13 +93,33 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 	if (
 		error instanceof ItemNotFoundError ||
 		error instanceof NativeFileNotFoundError ||
-		error instanceof CollectionNotFoundError
+		error instanceof CollectionNotFoundError ||
+		error instanceof CrossrefPublicationItemNotFoundError ||
+		error instanceof PublicationItemNotFoundError
 	) {
 		return {
 			code: "not_found",
 			message: "The requested record is no longer available.",
 			status: 404,
 		};
+	}
+	if (error instanceof ExternalCrossrefDoiError) {
+		return {
+			code: "conflict",
+			message: error.message,
+			status: 409,
+		};
+	}
+	if (error instanceof CrossrefActivationConfigurationError) {
+		return {
+			code: "conflict",
+			message: error.message,
+			status: 409,
+		};
+	}
+	if (error instanceof CrossrefActivationValidationError) {
+		const details = validationErrorPayload(error.message, { ...error.fields });
+		return { ...details, status: 400 };
 	}
 	if (
 		error instanceof ItemDraftConflictError ||
