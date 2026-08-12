@@ -1,0 +1,607 @@
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
+
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import {
+	buildAdminPublicationViewFromSnapshot,
+	PublicationItemNotFoundError,
+} from "@/lib/publication/admin-publication-view";
+import type { PublicationRepositorySnapshot } from "@/lib/publication/repository";
+
+type Snapshot = PublicationRepositorySnapshot;
+
+const config = {
+	identity: { baseUrl: "https://library.example.org" },
+	services: {
+		publication: {
+			crossref: {
+				enabled: true,
+				environment: "test",
+				loginId: "test-login",
+				depositorName: "Evidence Library",
+				email: "doi@example.org",
+				password: "password",
+				registrant: "Evidence Library",
+				prefix: "10.5555",
+				suffixNamespace: "library.",
+			},
+			zenodo: {
+				enabled: true,
+				environment: "sandbox",
+				token: "token",
+				defaultIdentifierPolicy: "reuse-crossref",
+				accessRight: "open",
+				license: "cc-by-4.0",
+			},
+			worker: {
+				batchSize: 25,
+				leaseSeconds: 900,
+				retryLimit: 8,
+				nightlyUtcTime: "02:00",
+			},
+		},
+	},
+} as Pick<LibraryServerConfig, "identity" | "services">;
+
+function record(changes: Record<string, unknown> = {}) {
+	return {
+		key: "ABCDEFGH",
+		revision: 4,
+		itemType: "JournalArticle",
+		title: "A useful study",
+		date: "2024-03-04",
+		abstractNote: "A complete description",
+		languageName: "eng",
+		publisher: "Publisher",
+		institution: "Institute",
+		rights: "Copyright holder",
+		creators: [
+			{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" },
+		],
+		publicationTitle: "Research Journal",
+		createdAt: new Date("2024-01-01T00:00:00Z"),
+		dateAdded: new Date("2024-01-02T00:00:00Z"),
+		updatedAt: new Date("2026-08-12T00:00:00Z"),
+		deleted: 0,
+		parentItem: null,
+		DOI: null,
+		extra: null,
+		...changes,
+	} as NonNullable<Snapshot["record"]>;
+}
+
+function snapshot(changes: Partial<Snapshot> = {}): Snapshot {
+	return {
+		record: record(),
+		tags: ["education"],
+		attachments: [],
+		files: [],
+		targets: [],
+		identifiers: [],
+		states: [],
+		jobs: [],
+		journals: [],
+		namespace: null,
+		...changes,
+	};
+}
+
+function target(
+	provider: "crossref" | "zenodo",
+	identifierPolicy: "reuse-crossref" | "mint-zenodo" | null = null,
+) {
+	return {
+		itemKey: "ABCDEFGH",
+		provider,
+		environment: provider === "crossref" ? "test" : "sandbox",
+		identifierPolicy,
+		requestedBy: "admin",
+		requestedAt: new Date("2026-08-12T10:00:00Z"),
+		deactivatedAt: null,
+		updatedAt: new Date("2026-08-12T10:00:00Z"),
+	} as Snapshot["targets"][number];
+}
+
+function identifier(input: {
+	provider: "crossref" | "zenodo";
+	doi: string;
+	role?: "primary" | "version" | "concept";
+	lifecycle?: "reserved" | "verified";
+	ownership?: "managed" | "external";
+}) {
+	return {
+		id: 1,
+		itemKey: "ABCDEFGH",
+		registrar: input.provider,
+		environment: input.provider === "crossref" ? "test" : "sandbox",
+		role: input.role ?? "primary",
+		doi: input.doi,
+		ownership: input.ownership ?? "managed",
+		lifecycle: input.lifecycle ?? "verified",
+		isCurrent: true,
+		reservedAt: new Date("2026-08-12T10:00:00Z"),
+		verifiedAt:
+			input.lifecycle === "reserved"
+				? null
+				: new Date("2026-08-12T10:05:00Z"),
+		createdAt: new Date("2026-08-12T10:00:00Z"),
+		updatedAt: new Date("2026-08-12T10:05:00Z"),
+	} as Snapshot["identifiers"][number];
+}
+
+function job(changes: Record<string, unknown> = {}) {
+	return {
+		id: 1,
+		itemKey: "ABCDEFGH",
+		provider: "crossref",
+		environment: "test",
+		canonicalRevision: 4,
+		fileRevision: null,
+		reason: "manual_activation",
+		idempotencyKey: "crossref:ABCDEFGH:4",
+		attempts: 0,
+		lastError: null,
+		nextAttemptAt: new Date("2026-08-12T10:00:00Z"),
+		leaseOwner: null,
+		leaseExpiresAt: null,
+		createdAt: new Date("2026-08-12T10:00:00Z"),
+		updatedAt: new Date("2026-08-12T10:00:00Z"),
+		processedAt: null,
+		deadLetteredAt: null,
+		supersededAt: null,
+		resultReceipt: null,
+		...changes,
+	} as Snapshot["jobs"][number];
+}
+
+function syncState(changes: Record<string, unknown> = {}) {
+	return {
+		itemKey: "ABCDEFGH",
+		provider: "zenodo",
+		environment: "sandbox",
+		identifierPolicy: "mint-zenodo",
+		lastPayloadHash: null,
+		lastPayloadSnapshot: null,
+		lastFileManifestHash: null,
+		lastFileManifestSnapshot: null,
+		pendingStage: null,
+		pendingPayloadHash: null,
+		pendingPayloadSnapshot: null,
+		pendingBatchId: null,
+		pendingFilename: null,
+		pendingSubmittedAt: null,
+		pendingReason: null,
+		zenodoRecordId: "456",
+		zenodoParentId: "123",
+		zenodoVersionDoi: "10.5072/zenodo.456",
+		zenodoConceptDoi: "10.5072/zenodo.123",
+		orphanDraftDepositionId: null,
+		lastFailureClass: null,
+		lastFailureSummary: null,
+		consecutiveFailures: 0,
+		updatedAt: new Date("2026-08-12T10:00:00Z"),
+		...changes,
+	} as Snapshot["states"][number];
+}
+
+describe("admin publication view", () => {
+	it("shows valid inactive providers without guessing the next DOI", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot(),
+			config,
+		});
+
+		expect(view.doiNamespace).toEqual({
+			prefix: "10.5555",
+			suffixNamespace: "library.",
+		});
+		expect(view.providers.crossref).toMatchObject({
+			displayState: "inactive",
+			blockers: [],
+			capabilities: { canActivate: true },
+			exact: { plan: { status: "skipped" } },
+		});
+		expect(view.providers.zenodo.capabilities.allowedIdentifierPolicies).toEqual([
+			"mint-zenodo",
+		]);
+		expect(JSON.stringify(view)).not.toContain("000000");
+	});
+
+	it("blocks duplicate publication when the record has an external DOI", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({ record: record({ DOI: "10.9999/external" }) }),
+			config,
+		});
+
+		expect(view.providers.crossref.displayState).toBe("blocked");
+		expect(view.providers.zenodo.displayState).toBe("blocked");
+		expect(view.providers.crossref.blockers[0]).toContain("external DOI");
+		expect(view.providers.zenodo.capabilities.allowedIdentifierPolicies).toEqual([]);
+	});
+
+	it("does not treat an external identifier on the configured prefix as managed", () => {
+		const external = identifier({
+			provider: "crossref",
+			doi: "10.5555/existing",
+			ownership: "external",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: external.doi }),
+				targets: [target("crossref")],
+				identifiers: [external],
+			}),
+			config,
+		});
+
+		expect(view.providers.crossref.displayState).toBe("blocked");
+		expect(view.providers.crossref.blockers).toContain(
+			"Activate and verify the Crossref DOI required by this publication",
+		);
+		expect(view.providers.crossref.links).toEqual([]);
+		expect(JSON.stringify(view.providers.crossref.blockers)).not.toContain(
+			"MISSING_MANAGED_CROSSREF_DOI",
+		);
+	});
+
+	it("blocks an unclassified external Zenodo DOI from all new DOI allocation", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: "10.5281/zenodo.123" }),
+			}),
+			config,
+		});
+
+		expect(view.bibliographicDoi).toMatchObject({
+			status: "resolved",
+			doi: "10.5281/zenodo.123",
+		});
+		expect(view.providers.crossref.capabilities.canActivate).toBe(false);
+		expect(view.providers.zenodo.capabilities.canActivate).toBe(false);
+	});
+
+	it("ignores this record's own managed Zenodo DOI when considering Crossref", () => {
+		const managedZenodo = identifier({
+			provider: "zenodo",
+			doi: "10.5072/zenodo.456",
+			role: "version",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: managedZenodo.doi }),
+				targets: [target("zenodo", "mint-zenodo")],
+				identifiers: [managedZenodo],
+			}),
+			config,
+		});
+
+		expect(view.bibliographicDoi.status).toBe("none");
+		expect(view.providers.crossref.capabilities.canActivate).toBe(true);
+	});
+
+	it("shows a queued reserved Crossref DOI immediately", () => {
+		const managed = identifier({
+			provider: "crossref",
+			doi: "10.5555/library.000001",
+			lifecycle: "reserved",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: managed.doi }),
+				targets: [target("crossref")],
+				identifiers: [managed],
+				jobs: [job()],
+			}),
+			config,
+			now: new Date("2026-08-12T10:00:00Z"),
+		});
+
+		expect(view.providers.crossref.displayState).toBe("queued");
+		expect(view.providers.crossref.exact.plan).toMatchObject({
+			status: "write_required",
+			operations: ["crossref_redeposit"],
+		});
+		expect(view.providers.crossref.links).toEqual([
+			expect.objectContaining({
+				label: "Reserved Crossref DOI",
+				status: "reserved",
+				value: managed.doi,
+			}),
+		]);
+	});
+
+	it("waits for Crossref verification before reusing its DOI in Zenodo", () => {
+		const managed = identifier({
+			provider: "crossref",
+			doi: "10.5555/library.000001",
+			lifecycle: "reserved",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: managed.doi }),
+				targets: [target("crossref"), target("zenodo", "reuse-crossref")],
+				identifiers: [managed],
+			}),
+			config,
+		});
+
+		expect(view.providers.zenodo).toMatchObject({
+			displayState: "waiting",
+			waitingOn: "crossref",
+		});
+	});
+
+	it("waits locally for a published file before minting a Zenodo DOI", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({ targets: [target("zenodo", "mint-zenodo")] }),
+			config,
+		});
+
+		expect(view.providers.zenodo).toMatchObject({
+			displayState: "waiting",
+			waitingOn: "file",
+			exact: { plan: { status: "waiting_for_file" } },
+		});
+	});
+
+	it("blocks unsupported Crossref item types with the provider message", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({ record: record({ itemType: "Artwork" }) }),
+			config,
+		});
+
+		expect(view.providers.crossref.displayState).toBe("blocked");
+		expect(view.providers.crossref.blockers).toContain(
+			"Crossref does not support Evidence Library item type Artwork",
+		);
+	});
+
+	it("uses the newest non-superseded job as the visible progress", () => {
+		const managed = identifier({
+			provider: "crossref",
+			doi: "10.5555/library.000001",
+			lifecycle: "reserved",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: managed.doi }),
+				targets: [target("crossref")],
+				identifiers: [managed],
+				jobs: [
+					job({ id: 2, createdAt: new Date("2026-08-12T11:00:00Z") }),
+					job({
+						id: 1,
+						attempts: 8,
+						deadLetteredAt: new Date("2026-08-12T10:30:00Z"),
+					}),
+				],
+			}),
+			config,
+		});
+
+		expect(view.providers.crossref.displayState).toBe("queued");
+		expect(view.providers.crossref.exact.job?.id).toBe(2);
+	});
+
+	it("keeps superseded jobs in history without making them current", () => {
+		const managed = identifier({
+			provider: "crossref",
+			doi: "10.5555/library.000001",
+			lifecycle: "reserved",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: managed.doi }),
+				targets: [target("crossref")],
+				identifiers: [managed],
+				jobs: [
+					job({
+						id: 3,
+						createdAt: new Date("2026-08-12T12:00:00Z"),
+						supersededAt: new Date("2026-08-12T12:01:00Z"),
+					}),
+					job({ id: 2, createdAt: new Date("2026-08-12T11:00:00Z") }),
+				],
+			}),
+			config,
+		});
+
+		expect(view.providers.crossref.exact.job?.id).toBe(2);
+		expect(view.providers.crossref.exact.recentJobs).toEqual([
+			expect.objectContaining({ id: 3, supersededAt: expect.any(String) }),
+			expect.objectContaining({ id: 2, supersededAt: null }),
+		]);
+	});
+
+	it("keeps a journaled Zenodo publish visible even before state settlement", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				targets: [target("zenodo", "mint-zenodo")],
+				journals: [
+					{
+						id: 1,
+						itemKey: "ABCDEFGH",
+						provider: "zenodo",
+						environment: "sandbox",
+						operationType: "zenodo_create",
+						payloadHash: "a".repeat(64),
+						fileManifestHash: "b".repeat(64),
+						depositionId: "123",
+						draftRecordId: "456",
+						parentId: null,
+						status: "ready_to_publish",
+						publishedRecordId: null,
+						identifiers: null,
+						orphanDraftCleanupDepositionId: null,
+						createdAt: new Date("2026-08-12T10:00:00Z"),
+						updatedAt: new Date("2026-08-12T10:00:00Z"),
+						publishedAt: null,
+					},
+				],
+			}),
+			config,
+		});
+
+		expect(view.providers.zenodo.displayState).toBe("verifying");
+		expect(view.providers.zenodo.exact.plan.operations).toEqual([
+			"zenodo_publish_journaled_draft",
+		]);
+	});
+
+	it("uses settled Zenodo state when planning the Crossref archive relation", () => {
+		const crossref = identifier({
+			provider: "crossref",
+			doi: "10.5555/library.000001",
+		});
+		const zenodoVersion = identifier({
+			provider: "zenodo",
+			doi: "10.5072/zenodo.456",
+			role: "version",
+		});
+		const zenodoConcept = identifier({
+			provider: "zenodo",
+			doi: "10.5072/zenodo.123",
+			role: "concept",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: crossref.doi }),
+				targets: [target("crossref"), target("zenodo", "mint-zenodo")],
+				identifiers: [crossref, zenodoVersion, zenodoConcept],
+				states: [syncState()],
+			}),
+			config,
+		});
+
+		expect(view.providers.crossref.blockers).toEqual([]);
+		expect(view.providers.crossref.exact.plan.operations).toContain(
+			"crossref_redeposit",
+		);
+	});
+
+	it("keeps Zenodo metadata errors out of the Crossref blockers", () => {
+		const crossref = identifier({
+			provider: "crossref",
+			doi: "10.5555/library.000001",
+		});
+		const zenodoVersion = identifier({
+			provider: "zenodo",
+			doi: "10.5072/zenodo.456",
+			role: "version",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: crossref.doi, abstractNote: null }),
+				targets: [target("crossref"), target("zenodo", "mint-zenodo")],
+				identifiers: [crossref, zenodoVersion],
+				states: [syncState()],
+			}),
+			config,
+		});
+
+		expect(view.providers.zenodo.blockers).toContain(
+			"Zenodo requires an abstract or description",
+		);
+		expect(view.providers.crossref.blockers).not.toContain(
+			"Zenodo requires an abstract or description",
+		);
+		expect(view.providers.crossref).toMatchObject({
+			displayState: "repair_pending",
+			exact: {
+				plan: {
+					status: "unavailable",
+					reason: "ZENODO_RELATION_NOT_READY",
+				},
+			},
+		});
+	});
+
+	it("blocks a changed namespace after the first reservation", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				namespace: {
+					environment: "test",
+					prefix: "10.5555",
+					suffixNamespace: "old.",
+					nextSequence: 2,
+					createdAt: new Date("2026-08-12T10:00:00Z"),
+					updatedAt: new Date("2026-08-12T10:00:00Z"),
+				},
+			}),
+			config,
+		});
+
+		expect(view.providers.crossref.blockers).toContain(
+			"The configured DOI prefix or namespace does not match the namespace already used by this library",
+		);
+	});
+
+	it("attributes corrupt Zenodo state only to Zenodo", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				targets: [target("zenodo", "mint-zenodo")],
+				states: [syncState({ identifierPolicy: "invalid" })],
+			}),
+			config,
+		});
+
+		expect(view.providers.zenodo.blockers).toContain(
+			"Saved Zenodo publication state is invalid",
+		);
+		expect(view.providers.crossref.blockers).not.toContain(
+			"Saved Crossref publication state is invalid",
+		);
+	});
+
+	it("turns invalid published file bundles into a Zenodo blocker", () => {
+		const file = {
+			itemKey: "FILE0001",
+			revision: 1,
+			filename: "paper.pdf",
+			contentType: "application/pdf",
+			sizeBytes: 123,
+			sha256: "a".repeat(64),
+		} as Snapshot["files"][number];
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				files: [file, { ...file, itemKey: "FILE0002" }],
+			}),
+			config,
+		});
+
+		expect(view.providers.zenodo.blockers).toContain(
+			"Published files must use different filenames",
+		);
+		expect(view.providers.crossref.blockers).not.toContain(
+			"Published files must use different filenames",
+		);
+	});
+
+	it("fails clearly when the item does not exist", () => {
+		expect(() =>
+			buildAdminPublicationViewFromSnapshot({
+				itemKey: "MISSING1",
+				snapshot: snapshot({ record: null }),
+				config,
+			}),
+		).toThrow(PublicationItemNotFoundError);
+	});
+});

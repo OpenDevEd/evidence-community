@@ -11,6 +11,10 @@ export type BibliographicDoiInput = {
 	attachments?: readonly BibliographicDoiAttachment[] | null;
 };
 
+export type BibliographicDoiResolutionOptions = {
+	ignoredDois?: readonly string[];
+};
+
 export type BibliographicDoiConflict = {
 	source: string;
 	doi: string;
@@ -55,7 +59,14 @@ function extraDoi(extra: string | null | undefined) {
 
 export function resolveBibliographicDoi(
 	input: BibliographicDoiInput,
+	options: BibliographicDoiResolutionOptions = {},
 ): BibliographicDoiResolution {
+	const ignoredDois = new Set(
+		(options.ignoredDois ?? []).flatMap((value) => {
+			const doi = normalizeDoi(value);
+			return doi ? [doi] : [];
+		}),
+	);
 	const candidates = [
 		{ source: "item.DOI", value: input.DOI },
 		{ source: "item.extra.DOI", value: extraDoi(input.extra) },
@@ -75,7 +86,7 @@ export function resolveBibliographicDoi(
 		.filter(
 			(candidate): candidate is { source: string; doi: string } =>
 				candidate.doi !== null &&
-				!isZenodoDoi(candidate.doi),
+				!ignoredDois.has(candidate.doi),
 		);
 
 	if (candidates.length === 0) {

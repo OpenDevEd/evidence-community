@@ -160,12 +160,18 @@ function parseImportedZenodoIdentifiers(
 export function buildPublicationDisplay(
 	input: PublicationDisplayInput,
 ): PublicationDisplay {
-	const bibliographicDoi = resolveBibliographicDoi(input);
 	const importedZenodo = parseImportedZenodoIdentifiers(input);
 	const managedCrossref = input.publicationIdentifiers?.crossref ?? null;
 	const managedZenodo = input.publicationIdentifiers?.zenodo ?? null;
 	const zenodoVersionDoi =
 		managedZenodo?.versionDoi ?? importedZenodo.versionDoi;
+	const zenodoConceptDoi =
+		managedZenodo?.conceptDoi ?? importedZenodo.conceptDoi;
+	const bibliographicDoi = resolveBibliographicDoi(input, {
+		ignoredDois: [zenodoVersionDoi, zenodoConceptDoi].filter(
+			(value): value is string => Boolean(value),
+		),
+	});
 	const displayBibliographicDoi =
 		bibliographicDoi.status === "resolved" &&
 		bibliographicDoi.doi !== zenodoVersionDoi
@@ -178,8 +184,7 @@ export function buildPublicationDisplay(
 			bibliographicDoi: displayBibliographicDoi,
 			crossrefDoi: managedCrossref?.doi,
 			zenodoVersionDoi,
-			zenodoConceptDoi:
-				managedZenodo?.conceptDoi ?? importedZenodo.conceptDoi,
+			zenodoConceptDoi,
 			zenodoRecordId: managedZenodo?.recordId ?? importedZenodo.recordId,
 			zenodoConceptRecordId:
 				managedZenodo?.conceptRecordId ??

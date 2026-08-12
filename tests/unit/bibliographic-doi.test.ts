@@ -60,7 +60,7 @@ describe("resolveBibliographicDoi", () => {
 		});
 	});
 
-	it("does not treat Zenodo archive DOIs as conflicting bibliographic DOIs", () => {
+	it("ignores only Zenodo archive DOIs already classified by the caller", () => {
 		expect(
 			resolveBibliographicDoi({
 				DOI: "10.1234/article",
@@ -71,10 +71,23 @@ describe("resolveBibliographicDoi", () => {
 						tags: ["_r:doi"],
 					},
 				],
+			}, {
+				ignoredDois: ["10.5281/zenodo.123", "10.5281/zenodo.456"],
 			}),
 		).toEqual({
 			status: "resolved",
 			doi: "10.1234/article",
+			sources: ["item.DOI"],
+			conflicts: [],
+		});
+	});
+
+	it("keeps an unclassified Zenodo DOI so activation cannot allocate another DOI", () => {
+		expect(
+			resolveBibliographicDoi({ DOI: "10.5281/zenodo.123" }),
+		).toEqual({
+			status: "resolved",
+			doi: "10.5281/zenodo.123",
 			sources: ["item.DOI"],
 			conflicts: [],
 		});
