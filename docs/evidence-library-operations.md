@@ -47,7 +47,7 @@ ingress, and Funnel is off.
 The private address is:
 
 ```text
-https://openscholar-el-dev.tail40de7d.ts.net
+http://openscholar-el-dev.tail40de7d.ts.net
 ```
 
 The active tailnet must report `opendeved.net`, MagicDNS enabled, and the suffix
@@ -90,7 +90,7 @@ Deploy in this order:
 
 After deployment, check all three containers and the Serve rules. The generated
 Compose model must have no published host ports and no Traefik router labels.
-Tailscale Serve must proxy to `127.0.0.1:3000`. The pinned `socat` process in
+Tailscale Serve must proxy private HTTP 80 to `127.0.0.1:3000`. The pinned `socat` process in
 the repository-owned Tailscale image must listen only on that loopback address
 and forward to `web:3000` over Coolify's private application network. Do not
 enable Coolify's Raw Compose mode: the checked-in file works with the normal
@@ -100,7 +100,7 @@ Run the live boundary probe from a device connected to the tailnet:
 
 ```bash
 ops/tailscale-development/probe.sh \
-  https://openscholar-el-dev.tail40de7d.ts.net \
+  http://openscholar-el-dev.tail40de7d.ts.net \
   https://docs-openscholar-compose-e2e.opendev.space
 ```
 

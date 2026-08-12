@@ -139,7 +139,7 @@ export function inspectTailscaleDevelopmentDeployment(
 	const tailscaleHealth = strings(record(tailscale.healthcheck).test).join(" ");
 	check(errors, tailscaleHealth.includes("tailscale status --json"), "Tailscale health must check its tailnet connection.");
 	check(errors, tailscaleHealth.includes("nc -z 127.0.0.1 3000"), "Tailscale health must check the loopback forwarder.");
-	check(errors, tailscaleHealth.includes("tailscale serve status --json"), "Tailscale health must check that Serve loaded its HTTPS listener.");
+	check(errors, tailscaleHealth.includes("tailscale serve status --json"), "Tailscale health must check that Serve loaded its private listener.");
 
 	const dockerfile = readFileSync(
 		path.join(root, "ops/tailscale-development/Dockerfile"),
@@ -181,12 +181,12 @@ export function inspectTailscaleDevelopmentDeployment(
 
 	const servePath = path.join(root, "ops/tailscale-development/serve.json");
 	const serve = JSON.parse(readFileSync(servePath, "utf8")) as JsonRecord;
-	const tcp443 = record(record(serve.TCP)["443"]);
-	const web443 = record(record(serve.Web)["${TS_CERT_DOMAIN}:443"]);
-	const rootHandler = record(record(web443.Handlers)["/"]);
-	check(errors, tcp443.HTTPS === true, "Tailscale Serve must provide private HTTPS on port 443.");
+	const tcp80 = record(record(serve.TCP)["80"]);
+	const web80 = record(record(serve.Web)["${TS_CERT_DOMAIN}:80"]);
+	const rootHandler = record(record(web80.Handlers)["/"]);
+	check(errors, tcp80.HTTP === true, "Tailscale Serve must provide private HTTP on port 80.");
 	check(errors, rootHandler.Proxy === "http://127.0.0.1:3000", "Tailscale Serve must proxy only to the supported loopback target.");
-	check(errors, record(serve.AllowFunnel)["${TS_CERT_DOMAIN}:443"] === false, "Tailscale Funnel must stay disabled.");
+	check(errors, record(serve.AllowFunnel)["${TS_CERT_DOMAIN}:80"] === false, "Tailscale Funnel must stay disabled.");
 
 	return errors;
 }

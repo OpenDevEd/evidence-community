@@ -15,6 +15,6 @@ After deployment, run:
 
 ```bash
 ops/tailscale-development/probe.sh \
-  https://openscholar-el-dev.tail40de7d.ts.net \
+  http://openscholar-el-dev.tail40de7d.ts.net \
   https://docs-openscholar-compose-e2e.opendev.space
 ```
