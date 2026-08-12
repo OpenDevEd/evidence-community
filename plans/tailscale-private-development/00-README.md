@@ -1,6 +1,6 @@
 # Tailscale-only development Evidence Library
 
-Status: planned. The current development deployment is public and keeps `/admin` disabled, so this plan changes both facts in one release.
+Status: complete on 2026-08-12. The development Evidence Library is now private to the `opendeved.net` Tailscale network, and its existing admin bypass is enabled only in that private deployment.
 
 ## Goal
 
