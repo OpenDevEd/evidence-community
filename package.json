@@ -17,6 +17,8 @@
 		"test:tailscale-development": "vitest run tests/unit/tailscale-development-deployment.test.ts && tsx ./tools/verifyTailscaleDevelopmentDeployment.ts",
 		"test:source-model": "tsx ./tools/verifySourceModel.ts",
 		"test:publication-model": "tsx ./tools/verifyPublicationModel.ts",
+		"test:crossref-activation": "vitest run --config vitest.crossref.config.ts",
+		"publication:run-once": "esbuild ./tools/runPublicationJobsOnce.ts --bundle --platform=node --format=esm --banner:js=\"import { createRequire } from 'node:module'; const require = createRequire(import.meta.url);\" --outfile=.next/publication/run-once.mjs && node .next/publication/run-once.mjs",
 		"test:source-writer": "tsx ./tools/verifySourceIngestionWriter.ts",
 		"test:zotero-source": "tsx ./tools/verifyZoteroSourceSync.ts",
 		"test:zotero-playground:seed": "tsx ./tools/seedZoteroPlayground.ts",
