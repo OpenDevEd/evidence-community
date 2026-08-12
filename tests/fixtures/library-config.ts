@@ -286,6 +286,33 @@ export const maximalLibraryConfig = {
 		zotero: {
 			translationUrl: "http://translation-server:1969",
 		},
+		publication: {
+			crossref: {
+				enabled: true,
+				environment: "test",
+				loginId: "crossref-login",
+				depositorName: "Maximal Library",
+				email: "doi@example.org",
+				password: "crossref-password",
+				registrant: "Maximal Evidence Library",
+				prefix: "10.5555",
+				suffixNamespace: "el.",
+			},
+			zenodo: {
+				enabled: true,
+				environment: "sandbox",
+				token: "zenodo-sandbox-token",
+				defaultIdentifierPolicy: "reuse-crossref",
+				accessRight: "open",
+				license: "cc-by-4.0",
+			},
+			worker: {
+				batchSize: 25,
+				leaseSeconds: 900,
+				retryLimit: 8,
+				nightlyUtcTime: "02:00",
+			},
+		},
 	},
 	ai: {
 		providers: [

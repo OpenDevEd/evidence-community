@@ -83,6 +83,9 @@ describe("public library configuration", () => {
 			"https://exports.example.org/library.bib",
 			"https://exports.example.org/library.atom",
 			"https://assets.example.org/gapmaps/gap-map-one.html",
+			"crossref-login",
+			"crossref-password",
+			"zenodo-sandbox-token",
 		]) {
 			expect(serialized).not.toContain(privateValue);
 		}

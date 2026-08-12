@@ -481,6 +481,113 @@ describe("cross-field activation rules", () => {
 	});
 });
 
+describe("publication services", () => {
+	function publicationConfig() {
+		const config = cloneLibraryConfig();
+		(config.services as any).publication = {
+			crossref: {
+				enabled: true,
+				environment: "test",
+				loginId: "crossref-login",
+				depositorName: "OpenDevEd",
+				email: "doi@example.org",
+				password: "crossref-password",
+				registrant: "Open Development & Education",
+				prefix: "10.1234",
+				suffixNamespace: "el.",
+			},
+			zenodo: {
+				enabled: true,
+				environment: "sandbox",
+				token: "zenodo-sandbox-token",
+				defaultIdentifierPolicy: "reuse-crossref",
+				accessRight: "open",
+				license: "cc-by-4.0",
+			},
+			worker: {
+				batchSize: 25,
+				leaseSeconds: 900,
+				retryLimit: 8,
+				nightlyUtcTime: "02:00",
+			},
+		};
+		return config;
+	}
+
+	it("accepts only test providers and applies worker defaults", () => {
+		const config = publicationConfig();
+		delete (config.services as any).publication.worker;
+
+		const parsed = catalogSchema.parse(config);
+
+		expect(parsed.services.publication.worker).toEqual({
+			batchSize: 25,
+			leaseSeconds: 900,
+			retryLimit: 8,
+			nightlyUtcTime: "02:00",
+		});
+	});
+
+	it("keeps publication disabled when the group is omitted", () => {
+		const parsed = catalogSchema.parse(minimalLibraryConfig);
+
+		expect(parsed.services.publication.crossref.enabled).toBe(false);
+		expect(parsed.services.publication.zenodo.enabled).toBe(false);
+	});
+
+	it.each([
+		["Crossref production", ["crossref", "environment"], "production"],
+		["Zenodo production", ["zenodo", "environment"], "production"],
+		["invalid prefix", ["crossref", "prefix"], "11.1234"],
+		["unsafe namespace", ["crossref", "suffixNamespace"], "library/item"],
+		["invalid nightly time", ["worker", "nightlyUtcTime"], "25:00"],
+		["unsupported access", ["zenodo", "accessRight"], "restricted"],
+	] as const)("rejects %s", (_label, path, value) => {
+		const config = publicationConfig();
+		(config.services as any).publication[path[0]][path[1]] = value;
+
+		expect(catalogSchema.safeParse(config).success).toBe(false);
+	});
+
+	it.each([
+		"loginId",
+		"depositorName",
+		"email",
+		"password",
+		"registrant",
+		"prefix",
+		"suffixNamespace",
+	] as const)("requires Crossref %s when enabled", (field) => {
+		const config = publicationConfig();
+		delete (config.services as any).publication.crossref[field];
+
+		expect(catalogSchema.safeParse(config).success).toBe(false);
+	});
+
+	it("requires a Zenodo token when enabled", () => {
+		const config = publicationConfig();
+		delete (config.services as any).publication.zenodo.token;
+
+		expect(catalogSchema.safeParse(config).success).toBe(false);
+	});
+
+	it("requires Crossref when Zenodo reuses a Crossref DOI", () => {
+		const config = publicationConfig();
+		(config.services as any).publication.crossref.enabled = false;
+
+		expect(catalogSchema.safeParse(config).success).toBe(false);
+	});
+
+	it("allows Zenodo to mint its own DOI without Crossref", () => {
+		const config = publicationConfig();
+		(config.services as any).publication.crossref = { enabled: false };
+		(config.services as any).publication.zenodo.defaultIdentifierPolicy =
+			"mint-zenodo";
+
+		expect(catalogSchema.safeParse(config).success).toBe(true);
+	});
+});
+
 describe("unique configuration lists", () => {
 	it.each([
 		[

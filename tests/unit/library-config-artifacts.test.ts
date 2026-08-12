@@ -92,6 +92,9 @@ describe("library configuration artifacts", () => {
 				"authentication.secret",
 				"services.database.url",
 				"services.search.key",
+				"services.publication.crossref.loginId",
+				"services.publication.crossref.password",
+				"services.publication.zenodo.token",
 			]),
 		);
 		expect(catalog.fields.writeOnlyPaths).not.toContain(

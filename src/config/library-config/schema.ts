@@ -896,6 +896,134 @@ const publicExportsSchema = z
 	})
 	.strict();
 
+const crossrefPublicationSchema = z
+	.object({
+		enabled: z.boolean().default(false),
+		environment: z.literal("test").default("test"),
+		loginId: secretSchema(1, 255).optional(),
+		depositorName: singleLineStringSchema(255).optional(),
+		email: emailSchema.optional(),
+		password: secretSchema(1, 512).optional(),
+		registrant: singleLineStringSchema(255).optional(),
+		prefix: z
+			.string()
+			.trim()
+			.regex(/^10\.\d{4,9}$/u, "Crossref prefix must look like 10.1234")
+			.optional(),
+		suffixNamespace: z
+			.string()
+			.trim()
+			.toLowerCase()
+			.min(1)
+			.max(64)
+			.regex(
+				/^[a-z0-9][a-z0-9._-]*$/u,
+				"DOI suffix namespace must start with a letter or number and use only letters, numbers, dots, underscores, or hyphens",
+			)
+			.optional(),
+	})
+	.strict()
+	.prefault({})
+	.superRefine((crossref, context) => {
+		if (!crossref.enabled) return;
+
+		for (const [field, message] of [
+			["loginId", "Enabled Crossref publication requires a login ID"],
+			[
+				"depositorName",
+				"Enabled Crossref publication requires a depositor name",
+			],
+			["email", "Enabled Crossref publication requires an email address"],
+			["password", "Enabled Crossref publication requires a password"],
+			["registrant", "Enabled Crossref publication requires a registrant"],
+			["prefix", "Enabled Crossref publication requires an assigned prefix"],
+			[
+				"suffixNamespace",
+				"Enabled Crossref publication requires a library DOI suffix namespace",
+			],
+		] as const) {
+			if (crossref[field]) continue;
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message,
+				path: [field],
+			});
+		}
+	});
+
+const zenodoPublicationSchema = z
+	.object({
+		enabled: z.boolean().default(false),
+		environment: z.literal("sandbox").default("sandbox"),
+		token: secretSchema(1, 2048).optional(),
+		defaultIdentifierPolicy: z
+			.enum(["reuse-crossref", "mint-zenodo"])
+			.default("reuse-crossref"),
+		accessRight: z.literal("open").default("open"),
+		license: z
+			.string()
+			.trim()
+			.toLowerCase()
+			.min(1)
+			.max(128)
+			.regex(
+				/^[a-z0-9][a-z0-9.-]*$/u,
+				"Zenodo license must be a supported license ID",
+			)
+			.default("cc-by-4.0"),
+	})
+	.strict()
+	.prefault({})
+	.superRefine((zenodo, context) => {
+		if (zenodo.enabled && !zenodo.token) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Enabled Zenodo publication requires a Sandbox token",
+				path: ["token"],
+			});
+		}
+	});
+
+const publicationWorkerSchema = z
+	.object({
+		batchSize: z.number().int().min(1).max(500).default(25),
+		leaseSeconds: z.number().int().min(30).max(3_600).default(900),
+		retryLimit: z.number().int().min(1).max(20).default(8),
+		nightlyUtcTime: z
+			.string()
+			.trim()
+			.regex(
+				/^(?:[01]\d|2[0-3]):[0-5]\d$/u,
+				"Nightly publication time must use 24-hour UTC time such as 02:00",
+			)
+			.default("02:00"),
+	})
+	.strict()
+	.prefault({});
+
+const publicationServicesSchema = z
+	.object({
+		crossref: crossrefPublicationSchema,
+		zenodo: zenodoPublicationSchema,
+		worker: publicationWorkerSchema,
+	})
+	.strict()
+	.prefault({})
+	.superRefine((publication, context) => {
+		if (
+			publication.zenodo.enabled &&
+			publication.zenodo.defaultIdentifierPolicy === "reuse-crossref" &&
+			!publication.crossref.enabled
+		) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message:
+					"Zenodo can reuse a Crossref DOI only when Crossref publication is enabled",
+				path: ["zenodo", "defaultIdentifierPolicy"],
+			});
+		}
+	});
+
 const servicesSchema = z
 	.object({
 		database: z
@@ -948,6 +1076,7 @@ const servicesSchema = z
 			})
 			.strict()
 			.prefault({}),
+		publication: publicationServicesSchema,
 	})
 	.strict();
 

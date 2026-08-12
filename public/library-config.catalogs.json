@@ -256,6 +256,14 @@
 			},
 			{
 				"allowCustom": false,
+				"path": "services.publication.zenodo.defaultIdentifierPolicy",
+				"values": [
+					"reuse-crossref",
+					"mint-zenodo"
+				]
+			},
+			{
+				"allowCustom": false,
 				"path": "theme.defaultMode",
 				"values": [
 					"light",
@@ -351,6 +359,9 @@
 			"email.smtp.password",
 			"email.smtp.username",
 			"services.database.url",
+			"services.publication.crossref.loginId",
+			"services.publication.crossref.password",
+			"services.publication.zenodo.token",
 			"services.search.key",
 			"services.storage.serviceRoleKey"
 		]

@@ -1468,6 +1468,139 @@
 						}
 					},
 					"additionalProperties": false
+				},
+				"publication": {
+					"default": {},
+					"type": "object",
+					"properties": {
+						"crossref": {
+							"default": {},
+							"type": "object",
+							"properties": {
+								"enabled": {
+									"default": false,
+									"type": "boolean"
+								},
+								"environment": {
+									"default": "test",
+									"type": "string",
+									"const": "test"
+								},
+								"loginId": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 255,
+									"writeOnly": true
+								},
+								"depositorName": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 255
+								},
+								"email": {
+									"type": "string",
+									"maxLength": 254,
+									"format": "email",
+									"pattern": "^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+								},
+								"password": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 512,
+									"writeOnly": true
+								},
+								"registrant": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 255
+								},
+								"prefix": {
+									"type": "string",
+									"pattern": "^10\\.\\d{4,9}$"
+								},
+								"suffixNamespace": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 64,
+									"pattern": "^[a-z0-9][a-z0-9._-]*$"
+								}
+							},
+							"additionalProperties": false
+						},
+						"zenodo": {
+							"default": {},
+							"type": "object",
+							"properties": {
+								"enabled": {
+									"default": false,
+									"type": "boolean"
+								},
+								"environment": {
+									"default": "sandbox",
+									"type": "string",
+									"const": "sandbox"
+								},
+								"token": {
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 2048,
+									"writeOnly": true
+								},
+								"defaultIdentifierPolicy": {
+									"default": "reuse-crossref",
+									"type": "string",
+									"enum": [
+										"reuse-crossref",
+										"mint-zenodo"
+									]
+								},
+								"accessRight": {
+									"default": "open",
+									"type": "string",
+									"const": "open"
+								},
+								"license": {
+									"default": "cc-by-4.0",
+									"type": "string",
+									"minLength": 1,
+									"maxLength": 128,
+									"pattern": "^[a-z0-9][a-z0-9.-]*$"
+								}
+							},
+							"additionalProperties": false
+						},
+						"worker": {
+							"default": {},
+							"type": "object",
+							"properties": {
+								"batchSize": {
+									"default": 25,
+									"type": "integer",
+									"minimum": 1,
+									"maximum": 500
+								},
+								"leaseSeconds": {
+									"default": 900,
+									"type": "integer",
+									"minimum": 30,
+									"maximum": 3600
+								},
+								"retryLimit": {
+									"default": 8,
+									"type": "integer",
+									"minimum": 1,
+									"maximum": 20
+								},
+								"nightlyUtcTime": {
+									"default": "02:00",
+									"type": "string",
+									"pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$"
+								}
+							},
+							"additionalProperties": false
+						}
+					},
+					"additionalProperties": false
 				}
 			},
 			"required": [
