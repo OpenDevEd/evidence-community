@@ -22,6 +22,7 @@ The private stack has these rules:
 
 - `tailscale` uses `tailscale/tailscale:v1.98.10@sha256:cdf5612ded5be1344f1a704b8c5e53496db97376bb533e5e15f141e48bf60cc0`.
 - `TS_HOSTNAME=openscholar-el-dev`.
+- Map `TAILSCALE_AUTHKEY` to `TS_AUTHKEY` with an empty default so Coolify can render the image-build command without copying the runtime key into build arguments. Read back the runtime value before deploy; `containerboot` must fail if neither saved state nor a runtime key exists.
 - `TS_USERSPACE=true`, `TS_AUTH_ONCE=true`, and `TS_STATE_DIR=/var/lib/tailscale`.
 - Mount the `ops/tailscale-development` folder read-only and set `TS_SERVE_CONFIG=/config/serve.json`.
 - The web and Tailscale services use Coolify's private application network.

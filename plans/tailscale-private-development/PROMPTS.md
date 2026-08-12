@@ -10,7 +10,7 @@ STANDING RULES
 2. Make a clean breaking change. Do not add a public fallback, compatibility URL, Funnel path, or dead deployment file.
 3. Read current official Tailscale and Coolify docs before changing their configuration. Check the installed code and live deployment instead of guessing.
 4. Use red, green, clean up for the deployment contract checker. Test parsed behavior and live results, never YAML formatting or CSS classes.
-5. Never enable ADMIN_AUTH_BYPASS while a public hostname or host port reaches the web container.
+5. Never enable ADMIN_AUTH_BYPASS while a public hostname or host port reaches the web container. Keep the Tailscale key runtime-only; allow Coolify's build-time Compose render without copying the key into the image build.
 6. Keep production tenants and shared production services out of scope.
 7. Commit each green unit. Run the live deployment checks before reporting success.
 8. Use other agents for broad research. Have Fable High review this completed step, not each line change.
