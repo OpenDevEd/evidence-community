@@ -58,6 +58,8 @@ Deployment `c9bke7r2axlyybqmmy8a2nlw` started all three private containers and r
 
 Deployment `m586zml5pj3n7g0h9br4vk1x` loaded the repository Serve configuration correctly, but certificate requests failed because Tailscale's public status page reports an active certificate-creation incident affecting new Serve and Funnel services. Private HTTP keeps the development site usable without adding a public path or manual certificate setup. Tailscale's WireGuard connection still encrypts the traffic. The canonical runtime URL stays HTTPS so the product schema is not weakened for an external outage. Move Serve back to HTTPS in a later clean change after Tailscale resolves the incident; do not keep both listeners.
 
+The next `openscholar` deployment failed because concurrent publication work changed migration `0025` after the development database had applied its first version. Do not revert or rewrite that agent's work as part of this deployment. Use the repository branch `codex/new-el-private-dev`, based on the last proven healthy deployed commit plus the private HTTP change, until the publication work adds a new forward migration and restores restart safety on `openscholar`.
+
 The Compose file publishes no host ports. Coolify must have no domain attached to either service. The current application stores that public route in the production `SERVICE_URL_WEB` and `SERVICE_FQDN_WEB` environment records even though `docker_compose_domains` is already empty. Delete those exact records by UUID and read back their absence before stopping the public stack. The deployment check must inspect the effective Traefik labels because Coolify can override a checked-in `traefik.enable=false` label when a saved service domain remains attached.
 
 ## Test rules

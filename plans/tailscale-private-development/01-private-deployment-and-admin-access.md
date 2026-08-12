@@ -9,6 +9,7 @@ Move the isolated development Evidence Library behind Tailscale and enable its e
 - Add the private Tailscale deployment files and behavior checks in `new-el/openscholar`.
 - Update the isolated development runtime configuration to use the Tailscale address.
 - Redeploy Coolify application `rzbo9als0hdnr4gegtx97qos` from the repository-owned private Compose file.
+- During concurrent publication work, deploy the isolated `codex/new-el-private-dev` branch so an edited already-applied migration cannot break this runtime. Return the application to `openscholar` only after that branch restarts cleanly.
 - Remove the current Coolify web domain from that application.
 - Verify the public library, admin workbench, admin API, settings health, and search worker.
 
