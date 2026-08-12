@@ -14,6 +14,7 @@
 		"test:unit": "vitest run",
 		"test:e2e": "playwright test",
 		"test:acceptance": "tsx ./tools/runRuntimeAcceptance.ts",
+		"test:tailscale-development": "vitest run tests/unit/tailscale-development-deployment.test.ts && tsx ./tools/verifyTailscaleDevelopmentDeployment.ts",
 		"test:source-model": "tsx ./tools/verifySourceModel.ts",
 		"test:source-writer": "tsx ./tools/verifySourceIngestionWriter.ts",
 		"test:zotero-source": "tsx ./tools/verifyZoteroSourceSync.ts",

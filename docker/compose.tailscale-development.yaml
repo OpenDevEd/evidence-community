@@ -1,0 +1,66 @@
+services:
+  tailscale:
+    image: tailscale/tailscale:v1.98.10@sha256:cdf5612ded5be1344f1a704b8c5e53496db97376bb533e5e15f141e48bf60cc0
+    hostname: openscholar-el-dev
+    environment:
+      TS_AUTHKEY: "${TAILSCALE_AUTHKEY:?Tailscale auth key is required}"
+      TS_AUTH_ONCE: "true"
+      TS_HOSTNAME: openscholar-el-dev
+      TS_SERVE_CONFIG: /config/serve.json
+      TS_STATE_DIR: /var/lib/tailscale
+      TS_USERSPACE: "true"
+    volumes:
+      - ./ops/tailscale-development/serve.json:/config/serve.json:ro
+      - tailscale-state:/var/lib/tailscale
+    healthcheck:
+      test: ["CMD-SHELL", "tailscale status --json >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      start_period: 30s
+      retries: 6
+    labels:
+      traefik.enable: "false"
+    restart: unless-stopped
+
+  web:
+    extends:
+      file: docker/compose.library.yaml
+      service: web
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: final
+    command:
+      - node_modules/.bin/next
+      - start
+      - --hostname
+      - 127.0.0.1
+    environment:
+      ADMIN_AUTH_BYPASS: "true"
+    network_mode: service:tailscale
+    expose: !reset []
+    depends_on:
+      tailscale:
+        condition: service_healthy
+      search-indexer:
+        condition: service_healthy
+    labels:
+      traefik.enable: "false"
+
+  search-indexer:
+    extends:
+      file: docker/compose.library.yaml
+      service: search-indexer
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: search-indexer
+    labels:
+      traefik.enable: "false"
+
+configs:
+  library-config:
+    content: "${LIBRARY_CONFIG_JSON:?library config JSON is required}"
+
+volumes:
+  tailscale-state:
