@@ -1,6 +1,6 @@
 # Crossref and Zenodo publication
 
-Status: planning only. No provider writes, schema mutations, or production enablement are authorized by this plan.
+Status: shared core and MEE worker complete; Evidence Library work is planned but not implemented. No provider writes, schema mutations, or production enablement are authorized by this plan.
 
 ## Goal
 
@@ -10,11 +10,11 @@ Add manually activated, per-item Crossref and Zenodo publication to the Evidence
 
 | Repository | Branch | Inspected revision | Role |
 |---|---|---:|---|
-| `OpenDevEd/new-el` | `openscholar` | `ca509b8c11fe569cdbc370b7471eebe30ff28ee9` | Canonical records, files, runtime configuration, admin UI, jobs, and worker runtime |
-| `OpenDevEd/doi-sync-core` | `openscholar`, branched from `main` | `895f2f67bba36b62a443424004cd9bd15c13e7d1` | Shared Crossref and Zenodo planning/execution/settlement engine |
-| `OpenDevEd/mee-doi-sync` | `openscholar`, branched from `main` | `778ef3ca1eaa07b3767d898c2f3da96fbd000227` | MEE adapter and operational donor; not the Evidence Library worker |
+| `OpenDevEd/new-el` | `openscholar` | `2f5e8157fe7fef9ed8028426c6c421ef95e5a8ca` | Canonical records, files, runtime configuration, admin UI, jobs, and worker runtime |
+| `OpenDevEd/doi-sync-core` | `openscholar` | `9816cde6f80e02c45ecd9242b03c1f2e3f1c698e` | Completed provider-neutral Crossref and Zenodo planning/execution/settlement engine |
+| `OpenDevEd/mee-doi-sync-worker` | `openscholar` | `66a8721f0c5529e5a6633457c390cc41bdf1f30a` | Completed MEE adapter and operational donor; not the Evidence Library worker |
 
-The core verification suite passed with 294 tests. The MEE worker verification suite passed with 152 tests and 2 intentionally skipped tests.
+The completed core verification suite passed with 293 tests. The completed MEE worker verification suite passed with 146 tests. Both branches are pushed at the exact revisions above.
 
 Required Outline context was read before planning: Start Here, Evidence Library current state, Architecture and data ownership, and Current decisions. This plan does not update Outline because it is uncommitted planning work.
 
@@ -34,6 +34,9 @@ Required Outline context was read before planning: Start Here, Evidence Library 
 12. Crossref test and Zenodo Sandbox must pass the complete real-service matrix before any production-enablement work is planned.
 13. No production provider writes are part of phases 01-07.
 14. Provider-neutral core and MEE adapter work happens only on each repository's `openscholar` branch. Their `main` branches remain untouched.
+15. A newly allocated Crossref DOI becomes the canonical item DOI as soon as it is reserved. The item, search projection, and ordinary source writeback expose it immediately, while the publication target remains `reserved` or in progress until Crossref verifies it.
+16. The browser never chooses a Crossref prefix or constructs a DOI. The prefix and a library-specific suffix namespace come from validated server-only configuration; PostgreSQL allocates the next suffix atomically.
+17. The admin UI reads one server-built publication view. It does not combine jobs, journals, provider state, and identifiers in browser state.
 
 ## Supported Crossref activation types
 
@@ -133,15 +136,17 @@ Zenodo uses its own controlled vocabulary and is not constrained to this Crossre
 Manual admin action
   -> canonical PostgreSQL transaction
        -> publication target + immutable identifier reservation
+       -> canonical DOI + item revision
        -> publication job + receipt
-       -> search-index outbox event when canonical DOI changes
-       -> ordinary source-writeback job when canonical DOI changed
+       -> search-index outbox event
+       -> ordinary source-writeback job when allowed
   -> publication worker
        -> provider-neutral snapshot from canonical item + published files
        -> doi-sync-core plan / execute / settle
        -> Crossref test or Zenodo Sandbox
        -> provider state + receipt
-       -> search-index outbox event when managed identifiers settle
+       -> provider state + receipt update after verification
+       -> search-index outbox event when later managed identifiers settle
 
 Canonical item/file mutation
   -> publication job only for existing activated targets
@@ -159,7 +164,7 @@ Crossref, Zenodo, and source writeback remain separate delivery concerns. Core e
 - The normalized bibliographic DOI resolved from `item.DOI`, Zotero-style `extra`, or a DOI link attachment tagged `_r:doi` remains the item's canonical bibliographic identity. Conflicting sources are invalid rather than silently preferred.
 - `publicationIdentifier` is authoritative for identifiers managed by an activated publication target and distinguishes managed Crossref DOI, external DOI classification, Zenodo version DOI, and Zenodo concept DOI.
 - The public search projection combines bibliographic identity with normalized managed publication identifiers. It does not infer managed state from `extra`, attachment tags, or display links.
-- `publicationTarget` is the explicit opt-in and provider lifecycle.
+- `publicationTarget` is the explicit opt-in. It stores activation facts and provider policy, not a second copy of queue progress.
 - `publicationSyncState` stores last-success hashes, snapshots, provider IDs, and pending Crossref verification.
 - `publicationSyncJob` stores durable attempts, leases, retries, supersession, and dead letters.
 - `zenodoPublishJournal` makes draft preparation and publish recovery crash-safe.
@@ -171,7 +176,7 @@ Add a server-only `services.publication` section:
 
 - `crossref.enabled`
 - `crossref.environment`: initially only `test`
-- depositor name, email, login ID, password, registrant, prefix, and suffix namespace
+- depositor name, email, login ID, password, registrant, Crossref-assigned prefix, and library-specific suffix namespace
 - `zenodo.enabled`
 - `zenodo.environment`: initially only `sandbox`
 - token, default identifier policy, access right, and license
@@ -181,8 +186,11 @@ Cross-field validation enforces:
 
 - `reuse-crossref` requires Crossref configuration.
 - The Crossref prefix and suffix namespace are non-empty and DOI-safe.
+- The suffix namespace is immutable after the first DOI reservation. A namespace must be unique among libraries sharing a Crossref prefix; future OpenScholar provisioning owns that cross-library assignment.
 - Test/sandbox are the only accepted environments until phase 07's evidence exists and a separate production plan changes the schema.
 - Publication services never appear in the public configuration projection.
+
+The Crossref member account supplies the prefix. The Evidence Library supplies only the opaque suffix. The first format is `<prefix>/<suffixNamespace><zero-padded sequence>`, for example `10.1234/el.000001`. The sequence is readable but carries no item metadata. The database counter and a unique DOI constraint prevent reuse inside one library; the per-library namespace prevents clashes when several libraries share one Crossref prefix.
 
 ## Testing strategy
 
@@ -200,9 +208,11 @@ The development database is disposable. Add clean tables and constraints without
 
 ## Dependencies and ordering
 
-1. Phase 01 changes and verifies `doi-sync-core` on `openscholar`, then updates `mee-doi-sync-worker` on `openscholar` to the exact new core commit so the shared package has no legacy facade. Both branches start at the grounded `main` revisions above.
-2. Phase 02 advances the Evidence Library's active `@opendeved/doi-sync-core/display` consumer to the exact verified phase-01 commit and migrates `ItemPage` to the provider-neutral display contract in the same green change; phases 03-06 consume that dependency and its provider-neutral ports.
-3. Phase 07 proves the complete system against test providers and produces the evidence required for a separate production-enablement plan.
+1. Phase 01 is complete at the exact shared repository revisions above.
+2. Phase 02 adds Evidence Library state and configuration, advances the active `@opendeved/doi-sync-core/display` consumer, and creates the one read model used by the API and UI.
+3. Phases 03-05 add activation, delivery, recovery, and reconciliation without UI-only state.
+4. Phase 06 adds the admin inspector controls over those finished contracts.
+5. Phase 07 proves the complete system against test providers and produces the evidence required for a separate production-enablement plan.
 
 ## Delegation policy
 
@@ -238,5 +248,5 @@ The development database is disposable. Add clean tables and constraints without
 3. [03 — Manual Crossref activation](./03-crossref-activation.md)
 4. [04 — Manual Zenodo activation](./04-zenodo-activation.md)
 5. [05 — Durable delivery and nightly reconciliation](./05-worker-and-reconciliation.md)
-6. [06 — Admin activation and progress UI](./06-admin-publication-ui.md)
+6. [06 — Admin DOI publishing UI](./06-admin-publication-ui.md)
 7. [07 — Real sandbox qualification and documentation](./07-sandbox-qualification.md)

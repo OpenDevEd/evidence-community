@@ -33,7 +33,7 @@ Expose exact worker health and per-item receipts. Do not synthesize progress or 
 4. Add retry/dead-letter tests for transient, permanent, conflict, and ambiguous recovery failures.
 5. Add nightly keyset pagination tests proving only activated targets are scanned and unchanged hashes enqueue nothing.
 6. Add restart tests for pending Crossref verification and Zenodo journals.
-7. Implement worker, scheduler, health state, CLI, and container process command.
+7. Implement worker, scheduler, health state, CLI, and container process command; delete the provisional `tools/runPublicationJobsOnce.ts` runner from phases 03-04.
 8. Run all focused real-service-independent verifiers with real PostgreSQL.
 
 ## Files touched

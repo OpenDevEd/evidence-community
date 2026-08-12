@@ -22,8 +22,9 @@ The activation request may specify `mint-zenodo`; omission uses the manifest def
 
 Rules:
 
-- `reuse-crossref` waits for an active Crossref target or uses a verified existing external DOI representing the same work. DOI discovery uses the same `resolveBibliographicDoi` path as Crossref activation, including Extra-only and conflict handling. It never fabricates or pre-assumes an active DOI.
+- `reuse-crossref` requires the item's activated managed Crossref DOI. It may be selected while that DOI is reserved, but the Zenodo target remains locally waiting until Crossref verifies it. External bibliographic DOIs do not satisfy this option.
 - `mint-zenodo` works independently and reserves/mints Zenodo identifiers through the provider.
+- If the item already has an external bibliographic DOI and no managed Crossref target, server-side activation validation blocks both policies in this version. Do not mint a duplicate Zenodo DOI and do not broaden the shared core contract inside the Evidence Library adapter. The status contract therefore advertises no allowed Zenodo policy and the UI only renders that capability.
 - No published file produces durable `waiting_for_file`. Publishing a file later queues the existing activated target automatically.
 - File bytes come only from current `itemFilePublication` rows and configured storage. SHA-256 and size are checked before upload.
 - The selected policy is persisted at activation and becomes immutable after first publish.
@@ -37,7 +38,7 @@ Map all supported Evidence Library parent types to Zenodo's documented controlle
 
 ## TDD sequence
 
-1. Add policy tests for defaulting, explicit minting, immutable published policy, and Crossref dependency.
+1. Add policy tests for defaulting, explicit minting, immutable published policy, Crossref dependency, and external-DOI duplicate prevention.
 2. Add type-mapper tests against Zenodo's controlled vocabulary.
 3. Add file-adapter tests for published-only selection, checksum, missing bytes, and filename conflict.
 4. Add route tests for duplicate activation and `waiting_for_file`.
@@ -88,6 +89,7 @@ npm run lint
 - Repeated activation returns the same target.
 - `reuse-crossref` is the default and its dependency is visible in state.
 - `mint-zenodo` works without Crossref and settles both version and concept DOI.
+- An external bibliographic DOI cannot accidentally produce a duplicate Zenodo DOI.
 - File changes follow the locked policy without silent identity changes.
 - Every remote mutation is recoverable or ends in a durable actionable state.
 - Newly settled Zenodo links appear through a real parent search reproject, not optimistic UI state.

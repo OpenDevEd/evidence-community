@@ -7,7 +7,7 @@ Replace the Zotero-shaped shared engine with a provider-neutral publication engi
 ## Scope
 
 - Repository: `OpenDevEd/doi-sync-core`, branch `openscholar` from `895f2f67bba36b62a443424004cd9bd15c13e7d1`.
-- Coordinated consumer update: `OpenDevEd/mee-doi-sync`, branch `openscholar` from `778ef3ca1eaa07b3767d898c2f3da96fbd000227`.
+- Coordinated consumer update: `OpenDevEd/mee-doi-sync-worker`, branch `openscholar` from `778ef3ca1eaa07b3767d898c2f3da96fbd000227`.
 - Pure canonical metadata and file inputs.
 - Independent Crossref and Zenodo targets.
 - Explicit Crossref and Zenodo type mappers.
