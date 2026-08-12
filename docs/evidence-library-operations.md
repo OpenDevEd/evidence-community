@@ -11,7 +11,7 @@ JSON document.
 | Image | Build the repository `Dockerfile` once; do not pass customer build arguments |
 | Configuration | Set `LIBRARY_CONFIG_PATH` to an absolute JSON file path |
 | Mount | Mount the directory containing the JSON file into the container |
-| Process | Run as the image's `nextjs` user, UID/GID `1001` |
+| Process | The image prepares config access as root, then runs the application as UID/GID `1001` |
 | Network | Expose `PORT`, default `3000`, through the deployment proxy |
 | Client identity | The deployment proxy must overwrite `X-Real-IP`; never expose the application origin directly |
 | Health | Probe `GET /api/library-config/health` |
@@ -109,9 +109,15 @@ docker run -d \
   evidence-library:local
 ```
 
-Mount the directory, not `library.json` itself. Activation replaces the file
-atomically. A single-file bind mount can remain attached to the previous inode
-and prevent the running container from seeing the new revision.
+The image checks whether UID `1001` can read the configured file. When a
+platform supplies a root-owned writable file mount, the image grants group
+`1001` read access before dropping privileges. A read-only mount must already
+be readable by UID or GID `1001`.
+
+Mount the directory when configuration must change without a restart.
+Activation replaces the file atomically. A single-file bind mount can remain
+attached to the previous inode, so single-file mounts support restart-based
+configuration delivery only.
 
 The same image can serve another library by starting another container with a
 different configuration directory, port, PostgreSQL database, and Meilisearch

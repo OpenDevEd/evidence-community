@@ -46,6 +46,8 @@ WORKDIR /app
 RUN groupadd --system --gid 1001 nodejs \
 	&& useradd --system --uid 1001 --gid nodejs nextjs
 
+COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/evidence-library-entrypoint
+
 COPY --from=prod-deps --chown=nextjs:nodejs /app/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/docs ./docs
@@ -53,13 +55,12 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next ./.next
 COPY --from=builder --chown=nextjs:nodejs /app/package.json ./package.json
 COPY --from=builder --chown=nextjs:nodejs /app/next.config.mjs ./next.config.mjs
 
-USER nextjs
-
 EXPOSE 3000
 
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 	CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT ?? 3000}/api/library-config/health`).then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
 
+ENTRYPOINT ["evidence-library-entrypoint"]
 CMD ["node_modules/.bin/next", "start"]
 
 FROM base AS search-indexer
@@ -74,6 +75,8 @@ WORKDIR /app
 RUN groupadd --system --gid 1001 nodejs \
 	&& useradd --system --uid 1001 --gid nodejs indexer
 
+COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/evidence-library-entrypoint
+
 COPY --from=deps --chown=indexer:nodejs /app/node_modules ./node_modules
 COPY --chown=indexer:nodejs packages ./packages
 COPY --chown=indexer:nodejs src ./src
@@ -82,11 +85,10 @@ COPY --chown=indexer:nodejs package.json tsconfig.json ./
 
 RUN npm --prefix packages/evidence-library-core run build
 
-USER indexer
-
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
 	CMD ["node_modules/.bin/tsx", "tools/checkSearchIndexerHealth.ts"]
 
+ENTRYPOINT ["evidence-library-entrypoint"]
 CMD ["node_modules/.bin/tsx", "tools/runSearchIndexer.ts", "--watch"]
 
 FROM base AS source-worker-base
@@ -99,6 +101,8 @@ WORKDIR /app
 RUN groupadd --system --gid 1001 nodejs \
 	&& useradd --system --uid 1001 --gid nodejs sourceworker
 
+COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/evidence-library-entrypoint
+
 COPY --from=deps --chown=sourceworker:nodejs /app/node_modules ./node_modules
 COPY --chown=sourceworker:nodejs packages ./packages
 COPY --chown=sourceworker:nodejs src ./src
@@ -107,8 +111,7 @@ COPY --chown=sourceworker:nodejs package.json tsconfig.json ./
 
 RUN npm --prefix packages/evidence-library-core run build
 
-USER sourceworker
-
+ENTRYPOINT ["evidence-library-entrypoint"]
 FROM source-worker-base AS source-sync
 
 ENV SOURCE_SYNC_WORKER_ID=source-sync

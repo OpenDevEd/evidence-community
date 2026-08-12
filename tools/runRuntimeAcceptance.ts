@@ -275,6 +275,94 @@ function prepareRuntimeConfig(profile: Profile) {
 	);
 }
 
+async function verifyRootOwnedConfigStartup() {
+	const containerName = `${composeProject}-config-permissions`;
+	const volumeName = `${composeProject}-root-owned-config`;
+	const sourceDirectory = path.join(runtimeDirectory, "amber");
+
+	run("docker", ["volume", "create", volumeName]);
+	try {
+		run("docker", [
+			"run",
+			"--rm",
+			"--volume",
+			`${volumeName}:/runtime/config`,
+			"--volume",
+			`${sourceDirectory}:/source:ro`,
+			"node:22-bookworm-slim",
+			"sh",
+			"-c",
+			"cp /source/library.json /runtime/config/library.json && chown 0:0 /runtime/config/library.json && chmod 600 /runtime/config/library.json",
+		]);
+		run("docker", [
+			"run",
+			"--detach",
+			"--name",
+			containerName,
+			"--label",
+			`${ownerLabel}=${process.pid}`,
+			"--label",
+			`${persistentLabel}=false`,
+			"--env",
+			"LIBRARY_CONFIG_PATH=/runtime/config/library.json",
+			"--volume",
+			`${volumeName}:/runtime/config`,
+			image,
+		]);
+
+		const deadline = Date.now() + 60_000;
+		let healthy = false;
+		while (Date.now() < deadline) {
+			const result = spawnSync(
+				"docker",
+				[
+					"exec",
+					containerName,
+					"node",
+					"-e",
+					"fetch('http://127.0.0.1:3000/api/library-config/health').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))",
+				],
+				{ cwd: rootDirectory, env: commandEnvironment },
+			);
+			if (result.status === 0) {
+				healthy = true;
+				break;
+			}
+			await new Promise((resolve) => setTimeout(resolve, 500));
+		}
+		assert.equal(
+			healthy,
+			true,
+			"the image must start with a root-owned 0600 library config",
+		);
+		assert.equal(
+			capture("docker", [
+				"exec",
+				containerName,
+				"sh",
+				"-c",
+				"awk '/^Uid:/ {print $2}' /proc/1/status",
+			]).trim(),
+			"1001",
+			"the web process must run as uid 1001",
+		);
+		console.log(
+			"Root-owned config startup passed and the web process runs as uid 1001.",
+		);
+	} finally {
+		spawnSync("docker", ["rm", "--force", containerName], {
+			cwd: rootDirectory,
+			env: commandEnvironment,
+			stdio: "ignore",
+		});
+		spawnSync("docker", ["volume", "rm", "--force", volumeName], {
+			cwd: rootDirectory,
+			env: commandEnvironment,
+			stdio: "ignore",
+		});
+	}
+}
+
 async function meilisearchRequest<T>(
 	pathname: string,
 	init?: RequestInit,
@@ -944,6 +1032,7 @@ async function main() {
 		if (!skipBuild) {
 			run("docker", ["build", "--tag", image, "."]);
 		}
+		await verifyRootOwnedConfigStartup();
 		compose(
 			"up",
 			"--wait",
