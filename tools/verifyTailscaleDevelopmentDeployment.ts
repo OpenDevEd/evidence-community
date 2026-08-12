@@ -34,11 +34,19 @@ function mountedTargets(value: unknown): string[] {
 	});
 }
 
-function renderCompose(root: string): JsonRecord {
+function renderCompose(root: string, includeRuntimeKey = true): JsonRecord {
 	const composeFile = path.join(
 		root,
 		"docker/compose.tailscale-development.yaml",
 	);
+	const environment = {
+		...process.env,
+		LIBRARY_CONFIG_JSON: "{}",
+		...(includeRuntimeKey
+			? { TAILSCALE_AUTHKEY: "test-only-compose-value" }
+			: {}),
+	};
+	if (!includeRuntimeKey) delete environment.TAILSCALE_AUTHKEY;
 	const result = spawnSync(
 		"docker",
 		[
@@ -54,11 +62,7 @@ function renderCompose(root: string): JsonRecord {
 		{
 			cwd: root,
 			encoding: "utf8",
-			env: {
-				...process.env,
-				LIBRARY_CONFIG_JSON: "{}",
-				TAILSCALE_AUTHKEY: "test-only-compose-value",
-			},
+			env: environment,
 		},
 	);
 	if (result.status !== 0) {
@@ -82,6 +86,7 @@ export function inspectTailscaleDevelopmentDeployment(
 ): string[] {
 	const errors: string[] = [];
 	const model = renderCompose(root);
+	const buildModel = renderCompose(root, false);
 	const services = record(model.services);
 	const tailscale = record(services.tailscale);
 	const web = record(services.web);
@@ -119,7 +124,11 @@ export function inspectTailscaleDevelopmentDeployment(
 	check(errors, tailscaleBuild.context === root, "Tailscale must build from the repository root.");
 	check(errors, tailscaleBuild.dockerfile === "ops/tailscale-development/Dockerfile", "Tailscale must use the repository-owned sidecar Dockerfile.");
 	const tailscaleEnvironment = record(tailscale.environment);
+	const buildTailscaleEnvironment = record(
+		record(record(buildModel.services).tailscale).environment,
+	);
 	check(errors, tailscaleEnvironment.TS_AUTHKEY === "test-only-compose-value", "Coolify TAILSCALE_AUTHKEY must feed the container's TS_AUTHKEY.");
+	check(errors, buildTailscaleEnvironment.TS_AUTHKEY === "", "Coolify must be able to render the image build without copying in the runtime key.");
 	check(errors, tailscaleEnvironment.TS_AUTH_ONCE === "true", "Tailscale must reuse its saved login.");
 	check(errors, tailscaleEnvironment.TS_USERSPACE === "true", "Tailscale must run without host network privileges.");
 	check(errors, tailscaleEnvironment.TS_STATE_DIR === "/var/lib/tailscale", "Tailscale must save its login in the persistent state directory.");

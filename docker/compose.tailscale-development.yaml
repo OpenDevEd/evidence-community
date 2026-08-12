@@ -5,7 +5,7 @@ services:
       dockerfile: ops/tailscale-development/Dockerfile
     hostname: openscholar-el-dev
     environment:
-      TS_AUTHKEY: "${TAILSCALE_AUTHKEY:?Tailscale auth key is required}"
+      TS_AUTHKEY: "${TAILSCALE_AUTHKEY:-}"
       TS_AUTH_ONCE: "true"
       TS_HOSTNAME: openscholar-el-dev
       TS_SERVE_CONFIG: /config/serve.json
