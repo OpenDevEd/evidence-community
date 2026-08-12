@@ -12,10 +12,9 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "true"
     volumes:
-      - ./ops/tailscale-development:/config:ro
       - tailscale-state:/var/lib/tailscale
     healthcheck:
-      test: ["CMD-SHELL", "tailscale status --json >/dev/null && nc -z 127.0.0.1 3000"]
+      test: ["CMD-SHELL", "tailscale status --json >/dev/null && nc -z 127.0.0.1 3000 && tailscale serve status --json | grep -q '\"TCP\"'"]
       interval: 10s
       timeout: 5s
       start_period: 30s

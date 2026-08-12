@@ -135,10 +135,11 @@ export function inspectTailscaleDevelopmentDeployment(
 	check(errors, tailscaleEnvironment.TS_SERVE_CONFIG === "/config/serve.json", "Tailscale must load the repository Serve configuration.");
 	const tailscaleTargets = mountedTargets(tailscale.volumes);
 	check(errors, tailscaleTargets.includes("/var/lib/tailscale"), "Tailscale state must use a persistent volume.");
-	check(errors, tailscaleTargets.includes("/config"), "The repository Serve directory must be mounted into Tailscale.");
+	check(errors, !tailscaleTargets.includes("/config"), "The baked Serve configuration must not be replaced by Coolify storage.");
 	const tailscaleHealth = strings(record(tailscale.healthcheck).test).join(" ");
 	check(errors, tailscaleHealth.includes("tailscale status --json"), "Tailscale health must check its tailnet connection.");
 	check(errors, tailscaleHealth.includes("nc -z 127.0.0.1 3000"), "Tailscale health must check the loopback forwarder.");
+	check(errors, tailscaleHealth.includes("tailscale serve status --json"), "Tailscale health must check that Serve loaded its HTTPS listener.");
 
 	const dockerfile = readFileSync(
 		path.join(root, "ops/tailscale-development/Dockerfile"),
@@ -146,6 +147,7 @@ export function inspectTailscaleDevelopmentDeployment(
 	);
 	check(errors, dockerfile.includes(`FROM ${tailscaleImage}`), "The repository Tailscale image must use the pinned official base image.");
 	check(errors, dockerfile.includes("apk add --no-cache socat=1.8.1.3-r0"), "The loopback forwarder package must be pinned.");
+	check(errors, dockerfile.includes("COPY ops/tailscale-development/serve.json /config/serve.json"), "The repository Serve file must be baked into the sidecar image.");
 	const entrypoint = readFileSync(
 		path.join(root, "ops/tailscale-development/entrypoint.sh"),
 		"utf8",
