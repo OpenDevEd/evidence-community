@@ -29,6 +29,7 @@ Make the development Evidence Library reachable only from Mohammed's Tailscale n
 9. Do not use Tailscale identity headers as application authentication. Membership of the tailnet is the temporary development gate.
 10. The generic library Compose remains secure by default. The admin bypass exists only in the private development Compose.
 11. Coolify renders Compose once with build-time values and again with runtime values. `TS_AUTHKEY` therefore uses an empty build-time default, while the checked Coolify runtime environment must contain `TAILSCALE_AUTHKEY` before deployment. The key is not passed into the image build.
+12. Bake `serve.json` into the repository-owned Tailscale image. Do not use a relative bind mount: Coolify converts it into deployment storage instead of preserving the checked-out repository directory.
 
 ## Plan
 
@@ -52,6 +53,8 @@ The private Compose file builds a small sidecar from the pinned `tailscale/tails
 The first live deployment attempt, `xk2eeaemp55ye0bbp88fd5bj`, proved that Coolify 4.1.2 cannot parse Docker Compose's `!reset` YAML tag. Coolify caught that parser error, saved an empty service model, and Docker Compose returned `no service selected`. Coolify also adds its application network to each service, so `network_mode: service:tailscale` would conflict with that generated network. The private Compose must therefore use ordinary YAML and normal private service networking. Raw Compose mode is not used because it would be a one-off server setting instead of a repository-owned deployment.
 
 The second live deployment attempt, `dw9yqkar9ny3po19o2uc0aeh`, proved that Coolify expands service environment values during its image-build command using only build-time variables. A required `TAILSCALE_AUTHKEY` expression therefore stopped the build even though the runtime value was present. The Compose file must allow an empty build-time expansion and rely on the read-back runtime environment check plus Tailscale startup failure if that runtime value is absent.
+
+Deployment `c9bke7r2axlyybqmmy8a2nlw` started all three private containers and registered the Tailscale node, but proved that Coolify turns the relative Serve-directory bind mount into an empty persistent directory. The sidecar image must copy the repository Serve file to `/config/serve.json`, and its health check must fail unless `tailscale serve status --json` contains the HTTPS listener.
 
 The Compose file publishes no host ports. Coolify must have no domain attached to either service. The current application stores that public route in the production `SERVICE_URL_WEB` and `SERVICE_FQDN_WEB` environment records even though `docker_compose_domains` is already empty. Delete those exact records by UUID and read back their absence before stopping the public stack. The deployment check must inspect the effective Traefik labels because Coolify can override a checked-in `traefik.enable=false` label when a saved service domain remains attached.
 

@@ -24,7 +24,7 @@ The private stack has these rules:
 - `TS_HOSTNAME=openscholar-el-dev`.
 - Map `TAILSCALE_AUTHKEY` to `TS_AUTHKEY` with an empty default so Coolify can render the image-build command without copying the runtime key into build arguments. Read back the runtime value before deploy; `containerboot` must fail if neither saved state nor a runtime key exists.
 - `TS_USERSPACE=true`, `TS_AUTH_ONCE=true`, and `TS_STATE_DIR=/var/lib/tailscale`.
-- Mount the `ops/tailscale-development` folder read-only and set `TS_SERVE_CONFIG=/config/serve.json`.
+- Copy `ops/tailscale-development/serve.json` into the sidecar image at `/config/serve.json` and set `TS_SERVE_CONFIG` to that path. Do not bind-mount the repository directory through Coolify.
 - The web and Tailscale services use Coolify's private application network.
 - Build the Tailscale service from a repository Dockerfile whose base image is the pinned official image. Install a pinned `socat` package and start a loopback-only forwarder from `127.0.0.1:3000` to `web:3000` before starting the official `containerboot` process.
 - Tailscale Serve reaches the supported local target `127.0.0.1:3000`; the forwarder reaches the web service over the private network.
@@ -58,7 +58,7 @@ Add `ops/tailscale-development/serve.json` with private HTTPS only:
 }
 ```
 
-Add a repository check that parses the rendered Compose model, Tailscale Dockerfile, entrypoint, and Serve JSON. It must fail if it finds a host port, public Traefik route, Funnel, a non-loopback Serve backend, a non-loopback forwarder listener, a forwarder destination other than `web:3000`, a missing admin bypass, an unpinned Tailscale base image or forwarder package, or missing persistent state. The private file uses ordinary YAML only because Coolify 4.1.2 rejects Docker Compose custom tags such as `!reset`.
+Add a repository check that parses the rendered Compose model, Tailscale Dockerfile, entrypoint, and Serve JSON. It must fail if it finds a host port, public Traefik route, Funnel, a non-loopback Serve backend, a non-loopback forwarder listener, a forwarder destination other than `web:3000`, a missing baked Serve file, a health check that accepts empty Serve state, a missing admin bypass, an unpinned Tailscale base image or forwarder package, or missing persistent state. The private file uses ordinary YAML only because Coolify 4.1.2 rejects Docker Compose custom tags such as `!reset`.
 
 ## Test-first sequence
 
