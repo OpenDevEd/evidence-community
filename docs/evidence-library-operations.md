@@ -36,6 +36,88 @@ LIBRARY_CONFIG_JSON="$(jq -c . config/library.example.json)" \
   -f docker/compose.library.yaml config
 ```
 
+## Private Tailscale development deployment
+
+The isolated development library uses
+`docker/compose.tailscale-development.yaml`. It reuses the shared web and search
+worker services, adds a pinned Tailscale sidecar, and enables the existing
+temporary admin bypass. It publishes no host port. Tailscale Serve is its only
+ingress, and Funnel is off.
+
+The private address is:
+
+```text
+https://openscholar-el-dev.tail40de7d.ts.net
+```
+
+The active tailnet must report `opendeved.net`, MagicDNS enabled, and the suffix
+`tail40de7d.ts.net`. Check it before deployment:
+
+```bash
+tailscale status --json | jq '{BackendState, CurrentTailnet}'
+```
+
+Coolify application `rzbo9als0hdnr4gegtx97qos` stores only these deployment
+inputs after its old generated-domain records are removed:
+
+| Key | Purpose |
+| --- | --- |
+| `LIBRARY_CONFIG_JSON` | Complete validated runtime settings with `identity.baseUrl` set to the private address |
+| `TAILSCALE_AUTHKEY` | Non-ephemeral reusable key used as the sidecar's `TS_AUTHKEY` |
+
+The Compose file, Serve rules, image pin, loopback binding, bypass setting,
+health checks, and persistent Tailscale state all live in the repository. The
+auth key is the only new secret. Tailscale state is saved in a named volume, so
+ordinary container restarts do not need the key again.
+
+Render and verify the repository contract before changing Coolify:
+
+```bash
+npm run test:tailscale-development
+LIBRARY_CONFIG_JSON="$(jq -c . /path/to/private-library.json)" \
+TAILSCALE_AUTHKEY=test-only-compose-value \
+docker compose --project-directory . \
+  -f docker/compose.tailscale-development.yaml config
+```
+
+Deploy in this order:
+
+1. Validate a new named runtime revision whose `identity.baseUrl` is the private address.
+2. Push the checked repository commit and point Coolify at that exact commit.
+3. Delete the production `SERVICE_URL_WEB` and `SERVICE_FQDN_WEB` records by their exact Coolify environment UUIDs, read back that both are absent, and confirm `docker_compose_domains` is empty.
+4. Stop the old stack and prove its public hostname no longer reaches this application.
+5. Select `/docker/compose.tailscale-development.yaml`, store the two required inputs, deploy, and inspect the generated labels before accepting the bypass as safe.
+
+After deployment, check all three containers and the Serve rules. Inside the
+shared Tailscale/web network namespace, `ss -ltn` must show Next.js only on
+`127.0.0.1:3000`. From another container on the Coolify network, the sidecar's
+Docker-network address must refuse port `3000`. A tailnet address may still
+forward that port to shared loopback in Tailscale userspace mode; that traffic
+remains inside the tailnet.
+
+Run the live boundary probe from a device connected to the tailnet:
+
+```bash
+ops/tailscale-development/probe.sh \
+  https://openscholar-el-dev.tail40de7d.ts.net \
+  https://docs-openscholar-compose-e2e.opendev.space
+```
+
+Also open `/lib` and `/admin` at the private address in a real browser. The
+admin API must return `Cache-Control: private, no-store`. The old public
+hostname may return a Cloudflare or shared-proxy 404; that is safe as long as
+it does not return this library's health data or admin workbench.
+
+Tailscale Serve does not replace an incoming `X-Real-IP` header. The current AI
+rate limiter trusts that header. This is accepted only for this private
+development deployment because every caller is already inside the tailnet.
+
+To roll back, stop the private stack first. Point Coolify back at
+`/docker/compose.library.yaml`, store a new runtime revision with the approved
+public address, restore the public domain records, and deploy. Confirm `/admin`
+and every admin API are hidden before the public route is restored. Never add a
+public domain to the Tailscale Compose deployment.
+
 ## Prepare a library for direct Docker use
 
 Create a host directory whose owner can activate changes and whose numeric group
