@@ -34,17 +34,17 @@ The private stack has these rules:
 - The search worker remains a separate internal service and retains its current health check. Web keeps `depends_on: search-indexer: condition: service_healthy`, so database setup finishes before web starts.
 - The web service does not declare `ports`. Its internal `expose: 3000` does not publish a host port.
 
-Add `ops/tailscale-development/serve.json` with private HTTPS only:
+Add `ops/tailscale-development/serve.json` with private HTTP only while Tailscale's confirmed certificate incident prevents new HTTPS certificates:
 
 ```json
 {
   "TCP": {
-    "443": {
-      "HTTPS": true
+    "80": {
+      "HTTP": true
     }
   },
   "Web": {
-    "${TS_CERT_DOMAIN}:443": {
+    "${TS_CERT_DOMAIN}:80": {
       "Handlers": {
         "/": {
           "Proxy": "http://127.0.0.1:3000"
@@ -53,7 +53,7 @@ Add `ops/tailscale-development/serve.json` with private HTTPS only:
     }
   },
   "AllowFunnel": {
-    "${TS_CERT_DOMAIN}:443": false
+    "${TS_CERT_DOMAIN}:80": false
   }
 }
 ```
@@ -64,8 +64,8 @@ Add a repository check that parses the rendered Compose model, Tailscale Dockerf
 
 1. Add failing tests for the private deployment contract. Add the Compose and Serve files until the parsed behavior passes.
 2. Update `docs/evidence-library-operations.md` with the private command, required values, the `X-Real-IP` limitation, verification, and rollback. Render the Compose file with real-shaped values.
-3. Confirm the Coolify application uses Compose parser version 3 or newer. Enable MagicDNS and HTTPS certificates for the tailnet. Use a non-ephemeral reusable auth key; this single development node does not require a tag. Disable key expiry for the registered node. The HTTPS certificate name will appear in public certificate-transparency logs.
-4. Read the active tailnet from `tailscale status --json` and require `CurrentTailnet.Name=opendeved.net`, `CurrentTailnet.MagicDNSEnabled=true`, and `CurrentTailnet.MagicDNSSuffix=tail40de7d.ts.net`. Prepare a new runtime JSON revision whose `identity.baseUrl` is `https://openscholar-el-dev.tail40de7d.ts.net`. Run `npm run config:validate -- /path/to/private-library.json`. Store it and `TAILSCALE_AUTHKEY` through the Coolify API, then read both settings back.
+3. Confirm the Coolify application uses Compose parser version 3 or newer. Use a non-ephemeral reusable auth key; this single development node does not require a tag. Disable key expiry for the registered node.
+4. Read the active tailnet from `tailscale status --json` and require `CurrentTailnet.Name=opendeved.net`, `CurrentTailnet.MagicDNSEnabled=true`, and `CurrentTailnet.MagicDNSSuffix=tail40de7d.ts.net`. Prepare a new runtime JSON revision whose `identity.baseUrl` is `http://openscholar-el-dev.tail40de7d.ts.net`. Run `npm run config:validate -- /path/to/private-library.json`. Store it and `TAILSCALE_AUTHKEY` through the Coolify API, then read both settings back.
 5. Push the implementation. Patch Coolify's `git_commit_sha` to that commit and read it back. Delete the exact production `SERVICE_URL_WEB` and `SERVICE_FQDN_WEB` environment records by UUID, read back that both are absent, and confirm `docker_compose_domains` remains empty. Stop the old stack, then prove the old hostname has no router to this app. Only then point Coolify at `docker/compose.tailscale-development.yaml`, deploy, wait for health, run all probes, and get a blocking-finding-free Fable High review.
 
 ## Files that change
@@ -96,14 +96,14 @@ git diff --check
 After deployment, from a Tailscale device:
 
 ```sh
-curl --fail-with-body https://openscholar-el-dev.tail40de7d.ts.net/api/library-config/health
-curl --fail-with-body https://openscholar-el-dev.tail40de7d.ts.net/api/admin/library
+curl --fail-with-body http://openscholar-el-dev.tail40de7d.ts.net/api/library-config/health
+curl --fail-with-body http://openscholar-el-dev.tail40de7d.ts.net/api/admin/library
 ```
 
 Open these paths in a real browser on a Tailscale device:
 
-- `https://openscholar-el-dev.tail40de7d.ts.net/lib`
-- `https://openscholar-el-dev.tail40de7d.ts.net/admin`
+- `http://openscholar-el-dev.tail40de7d.ts.net/lib`
+- `http://openscholar-el-dev.tail40de7d.ts.net/admin`
 
 From a non-Tailscale path, prove the old hostname and direct server IP do not reach this application. The old hostname must not return the library health JSON, admin workbench markers, or app-specific headers. A Cloudflare or shared-Traefik 404 is a pass. The app's streamed 404 can use HTTP 200, so check the response body as well as the status. If the old DNS record is removed, NXDOMAIN is also a pass.
 
@@ -113,7 +113,7 @@ Inspect the live Compose model and container ports. Prove there is no host port 
 
 - `docker compose config` succeeds with no host ports, no public route, Serve targeting loopback through the checked forwarder, Funnel off, and the bypass on.
 - Coolify reports the Tailscale, web, and search-worker containers healthy. Its stored `git_commit_sha` and deployed commit both match the pushed commit.
-- `tailscale serve status --json` shows HTTPS 443 proxying to `127.0.0.1:3000` and no Funnel.
+- `tailscale serve status --json` shows HTTP 80 proxying to `127.0.0.1:3000` and no Funnel.
 - The health endpoint returns the new active revision.
 - `/admin` shows the real workbench without a login page.
 - `/api/admin/library` returns `200` with `Cache-Control: private, no-store`.
@@ -154,3 +154,4 @@ Never attach a public domain to a deployment running the bypass Compose.
 - Tailscale Serve does not overwrite `X-Real-IP`, while the current AI rate limiter reads that header. This development-only deployment accepts that limit and records it in the operating guide.
 - Coolify 4.1.2 rejects Docker Compose custom YAML tags and adds its private application network to every service. Keep this file on ordinary YAML and normal service networking; do not enable Raw Compose as a server-only workaround.
 - Tailscale Serve supports only loopback HTTP proxy targets. Keep the forwarder bound to `127.0.0.1`; never change Serve directly to a Docker service name.
+- Tailscale reports an active certificate-creation incident. Private HTTP is encrypted by Tailscale but can face browser DNS-rebinding risks. This development-only bypass accepts that temporary limit; return to HTTPS with a clean replacement after certificate creation recovers.
