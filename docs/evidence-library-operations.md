@@ -65,7 +65,7 @@ inputs after its old generated-domain records are removed:
 | `LIBRARY_CONFIG_JSON` | Complete validated runtime settings with `identity.baseUrl` set to the private address |
 | `TAILSCALE_AUTHKEY` | Non-ephemeral reusable key used as the sidecar's `TS_AUTHKEY` |
 
-The Compose file, Serve rules, image pin, loopback binding, bypass setting,
+The Compose file, Serve rules, image pin, private service network, bypass setting,
 health checks, and persistent Tailscale state all live in the repository. The
 auth key is the only new secret. Tailscale state is saved in a named volume, so
 ordinary container restarts do not need the key again.
@@ -88,12 +88,11 @@ Deploy in this order:
 4. Stop the old stack and prove its public hostname no longer reaches this application.
 5. Select `/docker/compose.tailscale-development.yaml`, store the two required inputs, deploy, and inspect the generated labels before accepting the bypass as safe.
 
-After deployment, check all three containers and the Serve rules. Inside the
-shared Tailscale/web network namespace, `ss -ltn` must show Next.js only on
-`127.0.0.1:3000`. From another container on the Coolify network, the sidecar's
-Docker-network address must refuse port `3000`. A tailnet address may still
-forward that port to shared loopback in Tailscale userspace mode; that traffic
-remains inside the tailnet.
+After deployment, check all three containers and the Serve rules. The generated
+Compose model must have no published host ports and no Traefik router labels.
+Tailscale Serve must proxy to `web:3000` over Coolify's private application
+network. Do not enable Coolify's Raw Compose mode: the checked-in file works
+with the normal parser and keeps the whole setup in the repository.
 
 Run the live boundary probe from a device connected to the tailnet:
 

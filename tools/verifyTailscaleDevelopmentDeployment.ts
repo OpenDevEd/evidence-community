@@ -131,13 +131,15 @@ export function inspectTailscaleDevelopmentDeployment(
 	check(errors, webBuild.context === root, "Web must build from the repository root.");
 	check(errors, webBuild.dockerfile === "Dockerfile", "Web must use the shared repository Dockerfile.");
 	check(errors, webEnvironment.ADMIN_AUTH_BYPASS === "true", "The private web container must enable the existing admin bypass.");
-	check(errors, web.network_mode === "service:tailscale", "Web must share only the Tailscale network namespace.");
-	check(errors, !web.expose, "Web must not declare an exposed port.");
 	check(
 		errors,
-		strings(web.command).join(" ") ===
-			"node_modules/.bin/next start --hostname 127.0.0.1",
-		"Next.js must listen only on 127.0.0.1.",
+		!web.network_mode,
+		"Web must use the private application network that Coolify manages.",
+	);
+	check(
+		errors,
+		strings(web.expose).includes("3000"),
+		"Web must expose port 3000 only to the private application network.",
 	);
 	const dependencies = record(web.depends_on);
 	check(errors, record(dependencies.tailscale).condition === "service_healthy", "Web must wait for Tailscale to be healthy.");
@@ -153,7 +155,7 @@ export function inspectTailscaleDevelopmentDeployment(
 	const web443 = record(record(serve.Web)["${TS_CERT_DOMAIN}:443"]);
 	const rootHandler = record(record(web443.Handlers)["/"]);
 	check(errors, tcp443.HTTPS === true, "Tailscale Serve must provide private HTTPS on port 443.");
-	check(errors, rootHandler.Proxy === "http://127.0.0.1:3000", "Tailscale Serve must proxy only to the loopback Next.js listener.");
+	check(errors, rootHandler.Proxy === "http://web:3000", "Tailscale Serve must proxy only to the private web service.");
 	check(errors, record(serve.AllowFunnel)["${TS_CERT_DOMAIN}:443"] === false, "Tailscale Funnel must stay disabled.");
 
 	return errors;

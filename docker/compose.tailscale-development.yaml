@@ -30,15 +30,8 @@ services:
       context: .
       dockerfile: Dockerfile
       target: final
-    command:
-      - node_modules/.bin/next
-      - start
-      - --hostname
-      - 127.0.0.1
     environment:
       ADMIN_AUTH_BYPASS: "true"
-    network_mode: service:tailscale
-    expose: !reset []
     depends_on:
       tailscale:
         condition: service_healthy
