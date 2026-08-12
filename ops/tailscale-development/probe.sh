@@ -43,7 +43,7 @@ fi
 
 request private-admin-api "$private_base/api/admin/library"
 private_admin_code="$(sed -n '1p' "$probe_dir/private-admin-api.result")"
-private_admin_cache="$(awk 'BEGIN { IGNORECASE=1 } /^cache-control:/ { sub(/^[^:]+:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$probe_dir/private-admin-api.headers")"
+private_admin_cache="$(awk 'tolower($0) ~ /^cache-control:/ { sub(/^[^:]+:[[:space:]]*/, ""); sub(/\r$/, ""); value=$0 } END { print value }' "$probe_dir/private-admin-api.headers")"
 if [ "$private_admin_code" = "200" ]; then
 	pass "admin API is enabled"
 else
