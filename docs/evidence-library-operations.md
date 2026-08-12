@@ -8,20 +8,26 @@ JSON document.
 
 | Input | Required contract |
 | --- | --- |
-| Image | Build the repository `Dockerfile` once; do not pass customer build arguments |
-| Configuration | Set `LIBRARY_CONFIG_PATH` to an absolute JSON file path |
-| Mount | Mount the directory containing the JSON file into the container |
-| Process | The image prepares config access as root, then runs the application as UID/GID `1001` |
+| Deployment | Use `docker/compose.library.yaml` so the web app and search worker use one repository-owned release |
+| Image | Build the repository `Dockerfile`; do not pass customer build arguments |
+| Configuration | Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document; Compose mounts it at `LIBRARY_CONFIG_PATH` |
+| Process | Each image prepares config access as root, then runs as UID/GID `1001` |
 | Network | Expose `PORT`, default `3000`, through the deployment proxy |
 | Client identity | The deployment proxy must overwrite `X-Real-IP`; never expose the application origin directly |
 | Health | Probe `GET /api/library-config/health` |
 | Dependencies | Make server-side services and upstreams reachable from the application; make public assets and browser analytics reachable from clients |
 
-Only `LIBRARY_CONFIG_PATH` selects the runtime document. Library values and
-secrets belong in that document, not in `NEXT_PUBLIC_*` variables or customer
-image builds.
+The Compose file sets `LIBRARY_CONFIG_PATH`. Library values and secrets belong
+in `LIBRARY_CONFIG_JSON`, not in `NEXT_PUBLIC_*` variables or customer image
+builds. The default deployment always includes one search worker. A web-only
+deployment is incomplete because it cannot create search settings or publish
+records into Meilisearch.
 
-## Prepare a library
+To change a Coolify deployment, update `LIBRARY_CONFIG_JSON` and redeploy the
+repository Compose file. The host-directory steps below are only for running
+the image directly with Docker. They do not apply to the Coolify Compose path.
+
+## Prepare a library for direct Docker use
 
 Create a host directory whose owner can activate changes and whose numeric group
 matches the container's GID `1001`. The setgid bit keeps atomically replaced
@@ -81,7 +87,7 @@ CI can detect drift without rewriting files:
 npm run schema:check
 ```
 
-## Run the production image
+## Run the image directly
 
 Build the shared image:
 

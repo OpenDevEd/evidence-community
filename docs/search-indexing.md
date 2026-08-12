@@ -85,6 +85,23 @@ and can be combined with either one-shot or watch mode.
 
 ## Production worker
 
+Deploy a library with `docker/compose.library.yaml`. It builds the web app and
+the required search worker from the same commit, mounts the same runtime config
+into both, and makes the search worker apply database migrations before it
+starts. The web app waits until the worker is healthy.
+
+Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document, then use
+the repository Compose file as the Coolify source of truth. Do not deploy the
+web target by itself and do not configure index settings with a separate
+Meilisearch command. The worker creates and updates those settings at startup.
+
+`docker/compose.library.yaml` always runs the web app and one search worker.
+For a library with source connections, first deploy that base stack and wait
+for the search worker to become healthy. Then deploy
+`docker/compose.sources.yaml` as a second Coolify application using the same
+commit and `LIBRARY_CONFIG_JSON`. The second file runs the source-sync and
+source-writeback workers without relying on Compose profiles.
+
 Build the dedicated worker target from the same revision as the web image:
 
 ```sh
@@ -106,8 +123,9 @@ docker run -d \
 
 The worker stores its stage, heartbeat, current Meilisearch task and batch,
 real batch progress when available, last completion, and last error in
-PostgreSQL. The container health check fails when its durable heartbeat is
-more than twenty seconds old or belongs to a replacement container generation.
+PostgreSQL. The container health check fails while startup is still preparing
+the index, when its durable heartbeat is more than twenty seconds old, or when
+that heartbeat belongs to a replacement container generation.
 Delivery errors remain visible across restarts and clear only after a later
 event succeeds. Database migrations must be applied before a new worker
 revision starts.

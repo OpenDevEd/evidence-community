@@ -599,8 +599,24 @@ async function main() {
 					[],
 					replacementHealthEnv,
 				),
+			)) !== 0,
+			"A worker passed health before startup finished",
+		);
+		await updateSearchIndexWorker(
+			database,
+			replacementWorkerId,
+			"first-instance",
+			{ currentEventCount: 0, stage: "idle" },
+		);
+		assert(
+			(await waitForExit(
+				runTool(
+					"tools/checkSearchIndexerHealth.ts",
+					[],
+					replacementHealthEnv,
+				),
 			)) === 0,
-			"The owning worker generation did not pass health",
+			"The ready owning worker generation did not pass health",
 		);
 		await registerSearchIndexWorker(
 			database,

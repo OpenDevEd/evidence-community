@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	createSearchIndexWorkerStateReporter,
 	searchIndexWorkerIsActive,
+	searchIndexWorkerIsReady,
 	type SearchIndexWorkerSnapshot,
 } from "@/lib/search-index/worker-state";
 
@@ -41,6 +42,22 @@ describe("search index worker state", () => {
 				{
 					...snapshot,
 					stoppedAt: new Date("2026-08-04T12:00:05.000Z"),
+				},
+				now,
+				15_000,
+			),
+		).toBe(false);
+	});
+
+	it("reports a worker as ready only after startup finishes", () => {
+		const now = new Date("2026-08-04T12:00:10.000Z");
+
+		expect(searchIndexWorkerIsReady(snapshot, now, 15_000)).toBe(true);
+		expect(
+			searchIndexWorkerIsReady(
+				{
+					...snapshot,
+					stage: "starting",
 				},
 				now,
 				15_000,

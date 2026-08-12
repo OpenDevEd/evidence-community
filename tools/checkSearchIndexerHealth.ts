@@ -3,7 +3,7 @@ import { createPostgresDatabaseResource } from "../src/db/postgres";
 import {
 	getSearchIndexWorker,
 	SEARCH_INDEX_WORKER_MAX_HEARTBEAT_AGE_MS,
-	searchIndexWorkerIsActive,
+	searchIndexWorkerIsReady,
 } from "../src/lib/search-index/worker-state";
 import {
 	readSearchIndexWorkerInstance,
@@ -27,13 +27,13 @@ async function main() {
 		if (
 			!worker ||
 			worker.instanceId !== instanceId ||
-			!searchIndexWorkerIsActive(
+			!searchIndexWorkerIsReady(
 				worker,
 				new Date(),
 				SEARCH_INDEX_WORKER_MAX_HEARTBEAT_AGE_MS,
 			)
 		) {
-			throw new Error("Search index worker heartbeat is stale");
+			throw new Error("Search index worker is not ready");
 		}
 		console.log(
 			JSON.stringify({

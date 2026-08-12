@@ -118,6 +118,17 @@ export function searchIndexWorkerIsActive(
 	);
 }
 
+export function searchIndexWorkerIsReady(
+	worker: SearchIndexWorkerSnapshot,
+	now = new Date(),
+	maximumHeartbeatAgeMs = SEARCH_INDEX_WORKER_MAX_HEARTBEAT_AGE_MS,
+) {
+	return (
+		worker.stage !== "starting" &&
+		searchIndexWorkerIsActive(worker, now, maximumHeartbeatAgeMs)
+	);
+}
+
 export async function getSearchIndexWorker(
 	database: Database,
 	workerId: string,

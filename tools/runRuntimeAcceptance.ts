@@ -61,6 +61,9 @@ const runtimeDirectory = path.join(
 const image =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE ??
 	"evidence-library-acceptance:local";
+const searchIndexerImage =
+	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE ??
+	"evidence-library-acceptance-search-indexer:local";
 const meilisearchPort =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_MEILI_PORT ?? "7712";
 const fixturePort =
@@ -77,6 +80,7 @@ const skipBuild = process.argv.includes("--skip-build");
 const commandEnvironment = {
 	...process.env,
 	EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE: image,
+	EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE: searchIndexerImage,
 	EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT: fixturePort,
 	EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT: mailpitPort,
 	EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID: String(process.pid),
@@ -418,26 +422,6 @@ async function enqueue(
 
 async function seedSearch(profile: Profile) {
 	const indexUid = profile.config.services.search.index;
-	await enqueue("/indexes", "POST", {
-		uid: indexUid,
-		primaryKey: "key",
-	});
-	await enqueue(`/indexes/${indexUid}/settings`, "PATCH", {
-		filterableAttributes: [
-			"itemType",
-			"deleted",
-			"tags",
-			"institution",
-			"country",
-			"creators.institutions.country_code",
-			"fullNames",
-			"collectionsAncestry",
-			"datePublished",
-		],
-		sortableAttributes: ["datePublished", "fullNames", "title"],
-		searchableAttributes: ["*"],
-	});
-
 	const amber = profile.name === "amber";
 	const colorName = amber ? "Amber" : "Indigo";
 	const institution = amber ? "Amber Institute" : "Indigo Lab";
@@ -1031,6 +1015,14 @@ async function main() {
 	try {
 		if (!skipBuild) {
 			run("docker", ["build", "--tag", image, "."]);
+			run("docker", [
+				"build",
+				"--target",
+				"search-indexer",
+				"--tag",
+				searchIndexerImage,
+				".",
+			]);
 		}
 		await verifyRootOwnedConfigStartup();
 		compose(
@@ -1042,6 +1034,14 @@ async function main() {
 			"meilisearch",
 		);
 		await seedSharedSearchIndexes();
+		compose(
+			"up",
+			"--wait",
+			"--wait-timeout",
+			"180",
+			"amber-search-indexer",
+			"indigo-search-indexer",
+		);
 		for (const profile of profiles) {
 			await seedSearch(profile);
 		}
@@ -1052,6 +1052,8 @@ async function main() {
 			"180",
 			"amber",
 			"indigo",
+			"amber-search-indexer",
+			"indigo-search-indexer",
 		);
 		await verifyLiveConfigLifecycle(profiles[0]);
 		profiles.forEach(verifyServerAnalyticsTransport);

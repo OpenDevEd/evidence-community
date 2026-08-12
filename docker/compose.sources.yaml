@@ -1,0 +1,34 @@
+x-runtime-environment: &runtime-environment
+  LIBRARY_CONFIG_PATH: /runtime/config/library.json
+
+x-runtime-config: &runtime-config
+  source: library-config
+  target: /runtime/config/library.json
+  mode: 0444
+
+x-source-build: &source-build
+  context: ..
+  dockerfile: Dockerfile
+
+services:
+  source-sync:
+    build:
+      <<: *source-build
+      target: source-sync
+    environment: *runtime-environment
+    configs:
+      - *runtime-config
+    restart: unless-stopped
+
+  source-writeback:
+    build:
+      <<: *source-build
+      target: source-writeback
+    environment: *runtime-environment
+    configs:
+      - *runtime-config
+    restart: unless-stopped
+
+configs:
+  library-config:
+    content: "${LIBRARY_CONFIG_JSON:?library config JSON is required}"

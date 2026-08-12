@@ -79,9 +79,10 @@ COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/evidence-library-entrypoin
 
 COPY --from=deps --chown=indexer:nodejs /app/node_modules ./node_modules
 COPY --chown=indexer:nodejs packages ./packages
+COPY --chown=indexer:nodejs drizzle ./drizzle
 COPY --chown=indexer:nodejs src ./src
 COPY --chown=indexer:nodejs tools ./tools
-COPY --chown=indexer:nodejs package.json tsconfig.json ./
+COPY --chown=indexer:nodejs drizzle.config.ts package.json tsconfig.json ./
 
 RUN npm --prefix packages/evidence-library-core run build
 

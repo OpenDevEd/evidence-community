@@ -1,0 +1,51 @@
+x-runtime-environment: &runtime-environment
+  LIBRARY_CONFIG_PATH: /runtime/config/library.json
+
+x-runtime-config: &runtime-config
+  source: library-config
+  target: /runtime/config/library.json
+  mode: 0444
+
+x-search-build: &search-build
+  context: ..
+  dockerfile: Dockerfile
+  target: search-indexer
+
+services:
+  web:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+      target: final
+    environment: *runtime-environment
+    configs:
+      - *runtime-config
+    depends_on:
+      search-indexer:
+        condition: service_healthy
+    restart: unless-stopped
+    expose:
+      - "3000"
+
+  search-indexer:
+    build: *search-build
+    command:
+      - /bin/sh
+      - -euc
+      - npm run db:migrate && exec node_modules/.bin/tsx tools/runSearchIndexer.ts --watch
+    environment:
+      <<: *runtime-environment
+      SEARCH_INDEX_WORKER_ID: search-indexer
+    configs:
+      - *runtime-config
+    healthcheck:
+      test: ["CMD", "node_modules/.bin/tsx", "tools/checkSearchIndexerHealth.ts"]
+      interval: 15s
+      timeout: 5s
+      start_period: 300s
+      retries: 3
+    restart: unless-stopped
+
+configs:
+  library-config:
+    content: "${LIBRARY_CONFIG_JSON:?library config JSON is required}"
