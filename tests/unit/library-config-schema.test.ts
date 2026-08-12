@@ -111,6 +111,16 @@ describe("library configuration fixtures", () => {
 });
 
 describe("reusable field schemas", () => {
+	it("accepts an HTTP origin for a private library", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.identity.baseUrl =
+			"http://openscholar-el-dev.tail40de7d.ts.net";
+
+		expect(libraryConfigSchema.parse(input).identity.baseUrl).toBe(
+			"http://openscholar-el-dev.tail40de7d.ts.net",
+		);
+	});
+
 	it.each([
 		["ID punctuation", idSchema, "not.valid"],
 		["non-UTC timestamp", utcTimestampSchema, "2026-07-27T12:00:00+01:00"],

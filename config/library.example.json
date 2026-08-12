@@ -231,7 +231,7 @@
 			"maxPdfBytes": 104857600
 		},
 		"zotero": {
-			"translationUrl": "http://translation-server:1969"
+			"translationUrl": "https://bib.opendev.space"
 		},
 		"publication": {
 			"crossref": {

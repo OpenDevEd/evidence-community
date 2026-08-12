@@ -28,6 +28,7 @@ import {
 	postgresUrlSchema,
 	publicHttpsOriginSchema,
 	publicHttpsUrlSchema,
+	publicWebOriginSchema,
 	revisionSchema,
 	rawStringSchema,
 	secretSchema,
@@ -178,7 +179,7 @@ const identitySchema = z
 	.object({
 		name: singleLineStringSchema(100),
 		shortName: singleLineStringSchema(40).optional(),
-		baseUrl: publicHttpsOriginSchema,
+		baseUrl: publicWebOriginSchema,
 		fundingPartners: z
 			.array(fundingPartnerSchema)
 			.max(20)
@@ -1723,6 +1724,7 @@ export {
 	modelIdSchema,
 	publicHttpsOriginSchema,
 	publicHttpsUrlSchema,
+	publicWebOriginSchema,
 	revisionSchema,
 	secretSchema,
 	serviceUrlSchema,

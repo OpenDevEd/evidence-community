@@ -209,6 +209,11 @@ export const publicHttpsOriginSchema = urlSchema({
 	originOnly: true,
 });
 
+export const publicWebOriginSchema = urlSchema({
+	protocols: ["http:", "https:"],
+	originOnly: true,
+});
+
 export const stableImageUrlSchema = urlSchema({
 	protocols: ["https:"],
 	stable: true,
