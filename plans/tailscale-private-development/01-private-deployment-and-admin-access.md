@@ -63,7 +63,7 @@ Add a repository check that parses the rendered Compose model and Serve JSON. It
 2. Update `docs/evidence-library-operations.md` with the private command, required values, the `X-Real-IP` limitation, verification, and rollback. Render the Compose file with real-shaped values.
 3. Confirm the Coolify application uses Compose parser version 3 or newer. Enable MagicDNS and HTTPS certificates for the tailnet. Use a non-ephemeral reusable auth key; this single development node does not require a tag. Disable key expiry for the registered node. The HTTPS certificate name will appear in public certificate-transparency logs.
 4. Prepare a new runtime JSON revision whose `identity.baseUrl` is `https://openscholar-el-dev.tail5a46da.ts.net`. Run `npm run config:validate -- /path/to/private-library.json`. Store it and `TAILSCALE_AUTHKEY` through the Coolify API, then read both settings back.
-5. Push the implementation. Patch Coolify's `git_commit_sha` to that commit and read it back. Clear `docker_compose_domains` and read it back. Stop the old stack, then prove the old hostname has no router to this app. Only then point Coolify at `docker/compose.tailscale-development.yaml`, deploy, wait for health, run all probes, and get a blocking-finding-free Fable High review.
+5. Push the implementation. Patch Coolify's `git_commit_sha` to that commit and read it back. Delete the exact production `SERVICE_URL_WEB` and `SERVICE_FQDN_WEB` environment records by UUID, read back that both are absent, and confirm `docker_compose_domains` remains empty. Stop the old stack, then prove the old hostname has no router to this app. Only then point Coolify at `docker/compose.tailscale-development.yaml`, deploy, wait for health, run all probes, and get a blocking-finding-free Fable High review.
 
 ## Files that change
 
@@ -143,7 +143,7 @@ Never attach a public domain to a deployment running the bypass Compose.
 
 ## Risks
 
-- A stale Coolify child-service domain can recreate Traefik labels and override `traefik.enable=false`. Clear `docker_compose_domains`, read it back, and inspect effective labels before enabling the bypass.
+- The current public route comes from saved production `SERVICE_URL_WEB` and `SERVICE_FQDN_WEB` records even though `docker_compose_domains` is empty. Resolve each record by exact key and production scope, delete it by UUID, read back that both are absent, and inspect effective labels before enabling the bypass.
 - A mismatched `identity.baseUrl` redirects the private address to the old public hostname.
 - Losing the Tailscale state volume forces the node to authenticate again.
 - An unpinned sidecar image can change deployment behavior without a repository commit.

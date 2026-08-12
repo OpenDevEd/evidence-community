@@ -48,7 +48,7 @@ This step must finish before work continues on the OpenScholar Evidence Library 
 
 The private Compose file adds a pinned `tailscale/tailscale` sidecar. The web container shares the sidecar's network namespace. Its command starts Next.js with `--hostname 127.0.0.1`, and Tailscale Serve sends private HTTPS traffic to `127.0.0.1:3000`.
 
-The Compose file publishes no host ports. Coolify must have no domain attached to either service. The deployment check must inspect the effective Traefik labels because Coolify can override a checked-in `traefik.enable=false` label when a domain remains attached.
+The Compose file publishes no host ports. Coolify must have no domain attached to either service. The current application stores that public route in the production `SERVICE_URL_WEB` and `SERVICE_FQDN_WEB` environment records even though `docker_compose_domains` is already empty. Delete those exact records by UUID and read back their absence before stopping the public stack. The deployment check must inspect the effective Traefik labels because Coolify can override a checked-in `traefik.enable=false` label when a saved service domain remains attached.
 
 ## Test rules
 

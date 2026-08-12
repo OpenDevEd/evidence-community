@@ -21,7 +21,7 @@ EXECUTION RHYTHM
 - Add the operating guide and probes after the contract is green.
 - Commit each working unit.
 - Push the `openscholar` branch, read back the remote commit hash, then change the isolated Coolify application and deploy that commit.
-- Clear and read back the Coolify service domains, stop the old stack, and verify the old public route is gone before deploying the Compose file that enables the bypass.
+- Delete the exact production `SERVICE_URL_WEB` and `SERVICE_FQDN_WEB` records by UUID, read back that both are absent, confirm `docker_compose_domains` is empty, stop the old stack, and verify the old public route is gone before deploying the Compose file that enables the bypass.
 - Prove both sides: the Tailnet path works and the public path cannot route to the stack.
 
 COMMIT DISCIPLINE
