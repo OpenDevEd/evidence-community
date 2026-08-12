@@ -62,7 +62,7 @@ Add a repository check that parses the rendered Compose model and Serve JSON. It
 1. Add failing tests for the private deployment contract. Add the Compose and Serve files until the parsed behavior passes.
 2. Update `docs/evidence-library-operations.md` with the private command, required values, the `X-Real-IP` limitation, verification, and rollback. Render the Compose file with real-shaped values.
 3. Confirm the Coolify application uses Compose parser version 3 or newer. Enable MagicDNS and HTTPS certificates for the tailnet. Use a non-ephemeral reusable auth key; this single development node does not require a tag. Disable key expiry for the registered node. The HTTPS certificate name will appear in public certificate-transparency logs.
-4. Prepare a new runtime JSON revision whose `identity.baseUrl` is `https://openscholar-el-dev.tail5a46da.ts.net`. Run `npm run config:validate -- /path/to/private-library.json`. Store it and `TAILSCALE_AUTHKEY` through the Coolify API, then read both settings back.
+4. Read the active tailnet from `tailscale status --json` and require `CurrentTailnet.Name=opendeved.net`, `CurrentTailnet.MagicDNSEnabled=true`, and `CurrentTailnet.MagicDNSSuffix=tail40de7d.ts.net`. Prepare a new runtime JSON revision whose `identity.baseUrl` is `https://openscholar-el-dev.tail40de7d.ts.net`. Run `npm run config:validate -- /path/to/private-library.json`. Store it and `TAILSCALE_AUTHKEY` through the Coolify API, then read both settings back.
 5. Push the implementation. Patch Coolify's `git_commit_sha` to that commit and read it back. Delete the exact production `SERVICE_URL_WEB` and `SERVICE_FQDN_WEB` environment records by UUID, read back that both are absent, and confirm `docker_compose_domains` remains empty. Stop the old stack, then prove the old hostname has no router to this app. Only then point Coolify at `docker/compose.tailscale-development.yaml`, deploy, wait for health, run all probes, and get a blocking-finding-free Fable High review.
 
 ## Files that change
@@ -93,14 +93,14 @@ git diff --check
 After deployment, from a Tailscale device:
 
 ```sh
-curl --fail-with-body https://openscholar-el-dev.tail5a46da.ts.net/api/library-config/health
-curl --fail-with-body https://openscholar-el-dev.tail5a46da.ts.net/api/admin/library
+curl --fail-with-body https://openscholar-el-dev.tail40de7d.ts.net/api/library-config/health
+curl --fail-with-body https://openscholar-el-dev.tail40de7d.ts.net/api/admin/library
 ```
 
 Open these paths in a real browser on a Tailscale device:
 
-- `https://openscholar-el-dev.tail5a46da.ts.net/lib`
-- `https://openscholar-el-dev.tail5a46da.ts.net/admin`
+- `https://openscholar-el-dev.tail40de7d.ts.net/lib`
+- `https://openscholar-el-dev.tail40de7d.ts.net/admin`
 
 From a non-Tailscale path, prove the old hostname and direct server IP do not reach this application. The old hostname must not return the library health JSON, admin workbench markers, or app-specific headers. A Cloudflare or shared-Traefik 404 is a pass. The app's streamed 404 can use HTTP 200, so check the response body as well as the status. If the old DNS record is removed, NXDOMAIN is also a pass.
 
