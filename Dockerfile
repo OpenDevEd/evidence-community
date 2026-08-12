@@ -23,6 +23,8 @@ FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
+RUN npm --prefix packages/evidence-library-core run build
+
 RUN --mount=type=cache,target=/app/.next/cache \
 	npm run build
 
