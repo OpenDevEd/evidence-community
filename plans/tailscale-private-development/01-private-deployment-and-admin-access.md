@@ -61,7 +61,7 @@ Add a repository check that parses the rendered Compose model and Serve JSON. It
 
 1. Add failing tests for the private deployment contract. Add the Compose and Serve files until the parsed behavior passes.
 2. Update `docs/evidence-library-operations.md` with the private command, required values, the `X-Real-IP` limitation, verification, and rollback. Render the Compose file with real-shaped values.
-3. Confirm the Coolify application uses Compose parser version 3 or newer. Enable MagicDNS and HTTPS certificates for the tailnet. Create a non-ephemeral tagged auth key and disable key expiry for the registered node. The HTTPS certificate name will appear in public certificate-transparency logs.
+3. Confirm the Coolify application uses Compose parser version 3 or newer. Enable MagicDNS and HTTPS certificates for the tailnet. Use a non-ephemeral reusable auth key; this single development node does not require a tag. Disable key expiry for the registered node. The HTTPS certificate name will appear in public certificate-transparency logs.
 4. Prepare a new runtime JSON revision whose `identity.baseUrl` is `https://openscholar-el-dev.tail5a46da.ts.net`. Run `npm run config:validate -- /path/to/private-library.json`. Store it and `TAILSCALE_AUTHKEY` through the Coolify API, then read both settings back.
 5. Push the implementation. Patch Coolify's `git_commit_sha` to that commit and read it back. Clear `docker_compose_domains` and read it back. Stop the old stack, then prove the old hostname has no router to this app. Only then point Coolify at `docker/compose.tailscale-development.yaml`, deploy, wait for health, run all probes, and get a blocking-finding-free Fable High review.
 

@@ -24,7 +24,7 @@ Make the development Evidence Library reachable only from Mohammed's Tailscale n
 4. Tailscale Serve is the only ingress. Tailscale Funnel stays off.
 5. The private Compose starts Next.js with `--hostname 127.0.0.1`, so the backend listens only on loopback inside the shared Tailscale network namespace.
 6. The repository owns the Compose file, Serve file, checks, and operating guide. Coolify stores only required deployment values and secrets.
-7. The only new secret is `TAILSCALE_AUTHKEY`. Use a non-ephemeral tagged key. Keep Tailscale state in a named volume, set `TS_AUTH_ONCE=true`, and disable key expiry for the registered node.
+7. The only new secret is `TAILSCALE_AUTHKEY`. Use a non-ephemeral reusable key. This single development node does not require a tag. Keep Tailscale state in a named volume, set `TS_AUTH_ONCE=true`, and disable key expiry for the registered node.
 8. The private address is `https://openscholar-el-dev.tail5a46da.ts.net`. The matching runtime `identity.baseUrl` must take effect in the same deploy that follows removal of the public route.
 9. Do not use Tailscale identity headers as application authentication. Membership of the tailnet is the temporary development gate.
 10. The generic library Compose remains secure by default. The admin bypass exists only in the private development Compose.
