@@ -340,11 +340,18 @@ async function main() {
 			isolatedDatabaseUrl.toString(),
 		);
 		const database = resource.database;
-		await database.insert(libraryStatus).values({
-			databaseUpdatedAt: new Date(),
-			totalItems: 0,
-			totalRecords: 0,
-		});
+		const [seededStatus] = await database
+			.select()
+			.from(libraryStatus)
+			.where(eq(libraryStatus.id, 1));
+		assert(
+			seededStatus?.totalItems === 0 && seededStatus.totalRecords === 0,
+			"Fresh database migrations did not create the empty status row",
+		);
+		await database
+			.update(libraryStatus)
+			.set({ databaseUpdatedAt: new Date() })
+			.where(eq(libraryStatus.id, 1));
 		meilisearch = new Meilisearch({
 			apiKey: isolatedConfig.services.search.key,
 			host: isolatedConfig.services.search.host,

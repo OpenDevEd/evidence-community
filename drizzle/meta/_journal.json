@@ -169,6 +169,13 @@
       "when": 1786111977062,
       "tag": "0023_collection-source-writeback",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1786533417006,
+      "tag": "0024_status-singleton",
+      "breakpoints": true
     }
   ]
 }

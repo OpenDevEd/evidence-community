@@ -77,6 +77,9 @@ The `status` table contains content/import status only:
 | `databaseUpdatedAt` | Content database update time |
 | `createdAt`, `updatedAt` | Status-row timestamps |
 
+Fresh migrations create the one required status row with zero counts. Runtime
+code updates that row; deployments do not need a separate database seed step.
+
 Branding, layout, and export URLs are not database fields. The versioned
 Drizzle migrations can bootstrap the current schema on an empty database and
 also destructively remove the superseded customer columns from an existing

@@ -14,8 +14,11 @@ for database in amber indigo; do
 done
 
 psql --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname amber <<'SQL'
-INSERT INTO "status" ("totalRecords", "totalItems", "databaseUpdatedAt")
-VALUES (1, 1, '2026-07-28T00:00:00Z');
+UPDATE "status"
+SET "totalRecords" = 1,
+	"totalItems" = 1,
+	"databaseUpdatedAt" = '2026-07-28T00:00:00Z'
+WHERE "id" = 1;
 
 INSERT INTO "collectionIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
 VALUES
@@ -46,8 +49,11 @@ VALUES (
 SQL
 
 psql --set ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname indigo <<'SQL'
-INSERT INTO "status" ("totalRecords", "totalItems", "databaseUpdatedAt")
-VALUES (1, 1, '2026-07-28T00:00:00Z');
+UPDATE "status"
+SET "totalRecords" = 1,
+	"totalItems" = 1,
+	"databaseUpdatedAt" = '2026-07-28T00:00:00Z'
+WHERE "id" = 1;
 
 INSERT INTO "collectionIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
 VALUES

@@ -298,7 +298,7 @@ export async function getStatusDirect(
 		: await getDatabase();
 	const newStatus = await db.query.status.findFirst();
 	if (!newStatus) {
-		throw new Error('Status not found');
+		throw new Error('The status row is missing. Run npm run db:migrate to create it.');
 	}
 	return newStatus;
 }

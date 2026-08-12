@@ -689,7 +689,7 @@ export function ResourcesView({
 			<ContentActions />
 			<div className="text-center lg:text-end text-black/60 dark:text-white/60 text-sm">
 				{t("lastUpdate", {
-					date: format.dateTime(new Date(status.databaseUpdatedAt!), {
+					date: format.dateTime(new Date(status.databaseUpdatedAt), {
 						day: "2-digit",
 						month: "2-digit",
 						year: "numeric",

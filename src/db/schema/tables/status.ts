@@ -1,12 +1,17 @@
-import { integer, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { check, integer, pgTable, timestamp } from "drizzle-orm/pg-core";
 
-import { pgTable } from "drizzle-orm/pg-core";
-
-export const status = pgTable("status", {
-	id: uuid("id").primaryKey().defaultRandom(),
-	totalRecords: integer("totalRecords"),
-	totalItems: integer("totalItems"),
-	databaseUpdatedAt: timestamp("databaseUpdatedAt"),
-	createdAt: timestamp("createdAt").defaultNow(),
-	updatedAt: timestamp("updatedAt").defaultNow(),
-});
+export const status = pgTable(
+	"status",
+	{
+		id: integer("id").primaryKey().default(1),
+		totalRecords: integer("totalRecords").notNull().default(0),
+		totalItems: integer("totalItems").notNull().default(0),
+		databaseUpdatedAt: timestamp("databaseUpdatedAt")
+			.notNull()
+			.defaultNow(),
+		createdAt: timestamp("createdAt").notNull().defaultNow(),
+		updatedAt: timestamp("updatedAt").notNull().defaultNow(),
+	},
+	(table) => [check("status_singleton", sql`${table.id} = 1`)],
+);
