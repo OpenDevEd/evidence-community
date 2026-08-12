@@ -23,12 +23,14 @@ import * as userTable from "./schema/tables/user";
 import * as userToFollowTable from "./schema/tables/userToFollow";
 import * as userToLikesTable from "./schema/tables/userToLikes";
 import * as sourceTables from "./schema/source";
+import * as publicationTables from "./schema/publication";
 
 export const schema = {
 	...adminItemListProjectionTable,
 	...itemTable,
 	...collectionTable,
 	...sourceTables,
+	...publicationTables,
 	...itemToCollectionTable,
 	...itemToTagTable,
 	...languageTable,
