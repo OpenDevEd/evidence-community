@@ -115,7 +115,9 @@ export function inspectTailscaleDevelopmentDeployment(
 		);
 	}
 
-	check(errors, tailscale.image === tailscaleImage, "The Tailscale image must be pinned by version and digest.");
+	const tailscaleBuild = record(tailscale.build);
+	check(errors, tailscaleBuild.context === root, "Tailscale must build from the repository root.");
+	check(errors, tailscaleBuild.dockerfile === "ops/tailscale-development/Dockerfile", "Tailscale must use the repository-owned sidecar Dockerfile.");
 	const tailscaleEnvironment = record(tailscale.environment);
 	check(errors, tailscaleEnvironment.TS_AUTHKEY === "test-only-compose-value", "Coolify TAILSCALE_AUTHKEY must feed the container's TS_AUTHKEY.");
 	check(errors, tailscaleEnvironment.TS_AUTH_ONCE === "true", "Tailscale must reuse its saved login.");
@@ -124,7 +126,24 @@ export function inspectTailscaleDevelopmentDeployment(
 	check(errors, tailscaleEnvironment.TS_SERVE_CONFIG === "/config/serve.json", "Tailscale must load the repository Serve configuration.");
 	const tailscaleTargets = mountedTargets(tailscale.volumes);
 	check(errors, tailscaleTargets.includes("/var/lib/tailscale"), "Tailscale state must use a persistent volume.");
-	check(errors, tailscaleTargets.includes("/config/serve.json"), "The repository Serve file must be mounted into Tailscale.");
+	check(errors, tailscaleTargets.includes("/config"), "The repository Serve directory must be mounted into Tailscale.");
+	const tailscaleHealth = strings(record(tailscale.healthcheck).test).join(" ");
+	check(errors, tailscaleHealth.includes("tailscale status --json"), "Tailscale health must check its tailnet connection.");
+	check(errors, tailscaleHealth.includes("nc -z 127.0.0.1 3000"), "Tailscale health must check the loopback forwarder.");
+
+	const dockerfile = readFileSync(
+		path.join(root, "ops/tailscale-development/Dockerfile"),
+		"utf8",
+	);
+	check(errors, dockerfile.includes(`FROM ${tailscaleImage}`), "The repository Tailscale image must use the pinned official base image.");
+	check(errors, dockerfile.includes("apk add --no-cache socat=1.8.1.3-r0"), "The loopback forwarder package must be pinned.");
+	const entrypoint = readFileSync(
+		path.join(root, "ops/tailscale-development/entrypoint.sh"),
+		"utf8",
+	);
+	check(errors, entrypoint.includes("TCP-LISTEN:3000,bind=127.0.0.1,reuseaddr,fork"), "The forwarder must listen only on loopback.");
+	check(errors, entrypoint.includes("TCP:web:3000"), "The forwarder must target the private web service.");
+	check(errors, entrypoint.includes("exec /usr/local/bin/containerboot"), "The sidecar must start Tailscale with its official container entrypoint.");
 
 	const webEnvironment = record(web.environment);
 	const webBuild = record(web.build);
@@ -155,7 +174,7 @@ export function inspectTailscaleDevelopmentDeployment(
 	const web443 = record(record(serve.Web)["${TS_CERT_DOMAIN}:443"]);
 	const rootHandler = record(record(web443.Handlers)["/"]);
 	check(errors, tcp443.HTTPS === true, "Tailscale Serve must provide private HTTPS on port 443.");
-	check(errors, rootHandler.Proxy === "http://web:3000", "Tailscale Serve must proxy only to the private web service.");
+	check(errors, rootHandler.Proxy === "http://127.0.0.1:3000", "Tailscale Serve must proxy only to the supported loopback target.");
 	check(errors, record(serve.AllowFunnel)["${TS_CERT_DOMAIN}:443"] === false, "Tailscale Funnel must stay disabled.");
 
 	return errors;

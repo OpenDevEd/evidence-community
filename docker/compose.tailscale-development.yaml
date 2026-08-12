@@ -1,6 +1,8 @@
 services:
   tailscale:
-    image: tailscale/tailscale:v1.98.10@sha256:cdf5612ded5be1344f1a704b8c5e53496db97376bb533e5e15f141e48bf60cc0
+    build:
+      context: .
+      dockerfile: ops/tailscale-development/Dockerfile
     hostname: openscholar-el-dev
     environment:
       TS_AUTHKEY: "${TAILSCALE_AUTHKEY:?Tailscale auth key is required}"
@@ -10,10 +12,10 @@ services:
       TS_STATE_DIR: /var/lib/tailscale
       TS_USERSPACE: "true"
     volumes:
-      - ./ops/tailscale-development/serve.json:/config/serve.json:ro
+      - ./ops/tailscale-development:/config:ro
       - tailscale-state:/var/lib/tailscale
     healthcheck:
-      test: ["CMD-SHELL", "tailscale status --json >/dev/null"]
+      test: ["CMD-SHELL", "tailscale status --json >/dev/null && nc -z 127.0.0.1 3000"]
       interval: 10s
       timeout: 5s
       start_period: 30s

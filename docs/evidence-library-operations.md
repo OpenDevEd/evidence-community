@@ -65,7 +65,7 @@ inputs after its old generated-domain records are removed:
 | `LIBRARY_CONFIG_JSON` | Complete validated runtime settings with `identity.baseUrl` set to the private address |
 | `TAILSCALE_AUTHKEY` | Non-ephemeral reusable key used as the sidecar's `TS_AUTHKEY` |
 
-The Compose file, Serve rules, image pin, private service network, bypass setting,
+The Compose file, Serve rules, image pin, loopback bridge, bypass setting,
 health checks, and persistent Tailscale state all live in the repository. The
 auth key is the only new secret. Tailscale state is saved in a named volume, so
 ordinary container restarts do not need the key again.
@@ -90,9 +90,11 @@ Deploy in this order:
 
 After deployment, check all three containers and the Serve rules. The generated
 Compose model must have no published host ports and no Traefik router labels.
-Tailscale Serve must proxy to `web:3000` over Coolify's private application
-network. Do not enable Coolify's Raw Compose mode: the checked-in file works
-with the normal parser and keeps the whole setup in the repository.
+Tailscale Serve must proxy to `127.0.0.1:3000`. The pinned `socat` process in
+the repository-owned Tailscale image must listen only on that loopback address
+and forward to `web:3000` over Coolify's private application network. Do not
+enable Coolify's Raw Compose mode: the checked-in file works with the normal
+parser and keeps the whole setup in the repository.
 
 Run the live boundary probe from a device connected to the tailnet:
 
