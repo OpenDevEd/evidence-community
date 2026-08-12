@@ -1,5 +1,5 @@
 {
-  "id": "82c39709-b1c1-4061-8ee4-866272ee7cdc",
+  "id": "7a673cdb-9003-493f-be54-25781007540d",
   "prevId": "0de1c64b-c1bc-4cb0-b162-a3b3cd185154",
   "version": "7",
   "dialect": "postgresql",
@@ -246,7 +246,7 @@
             "provider",
             "environment"
           ],
-          "onDelete": "cascade",
+          "onDelete": "restrict",
           "onUpdate": "no action"
         }
       },
@@ -869,11 +869,11 @@
         },
         "publicationSyncState_last_success_bundle_valid": {
           "name": "publicationSyncState_last_success_bundle_valid",
-          "value": "(\n\t\t\t\t(\"publicationSyncState\".\"lastPayloadHash\" IS NULL AND \"publicationSyncState\".\"lastPayloadSnapshot\" IS NULL)\n\t\t\t\tOR \"publicationSyncState\".\"lastPayloadHash\" ~ '^[0-9a-f]{64}$'\n\t\t\t)"
+          "value": "(\n\t\t\t\t(\"publicationSyncState\".\"lastPayloadHash\" IS NULL AND \"publicationSyncState\".\"lastPayloadSnapshot\" IS NULL)\n\t\t\t\tOR (\"publicationSyncState\".\"lastPayloadHash\" ~ '^[0-9a-f]{64}$' AND \"publicationSyncState\".\"lastPayloadSnapshot\" IS NOT NULL)\n\t\t\t)"
         },
         "publicationSyncState_file_bundle_valid": {
           "name": "publicationSyncState_file_bundle_valid",
-          "value": "(\n\t\t\t\t(\"publicationSyncState\".\"lastFileManifestHash\" IS NULL AND \"publicationSyncState\".\"lastFileManifestSnapshot\" IS NULL)\n\t\t\t\tOR \"publicationSyncState\".\"lastFileManifestHash\" ~ '^[0-9a-f]{64}$'\n\t\t\t)"
+          "value": "(\n\t\t\t\t(\"publicationSyncState\".\"lastFileManifestHash\" IS NULL AND \"publicationSyncState\".\"lastFileManifestSnapshot\" IS NULL)\n\t\t\t\tOR (\"publicationSyncState\".\"lastFileManifestHash\" ~ '^[0-9a-f]{64}$' AND \"publicationSyncState\".\"lastFileManifestSnapshot\" IS NOT NULL)\n\t\t\t)"
         },
         "publicationSyncState_pending_bundle_valid": {
           "name": "publicationSyncState_pending_bundle_valid",

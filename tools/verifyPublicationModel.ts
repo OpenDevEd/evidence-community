@@ -1,4 +1,5 @@
 import { drizzle } from "drizzle-orm/node-postgres";
+import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 
 import type { Database } from "@/db/database-schema";
@@ -6,8 +7,9 @@ import { allocateManagedCrossrefDoi } from "@/lib/publication/namespace-reposito
 
 const { Client, Pool } = pg;
 
-const databaseUrl = process.env.DATABASE_URL_POST;
-if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
+const configuredDatabaseUrl = process.env.DATABASE_URL_POST;
+if (!configuredDatabaseUrl) throw new Error("DATABASE_URL_POST is required");
+const databaseUrl: string = configuredDatabaseUrl;
 
 let savepointNumber = 0;
 
@@ -139,8 +141,8 @@ async function verifyConstraints(client: pg.Client) {
 
 		await client.query(`
 			INSERT INTO "publicationSyncState"
-				("itemKey", "provider", "environment", "lastPayloadHash")
-			VALUES ('D2TESTA2', 'crossref', 'test', repeat('c', 64))
+				("itemKey", "provider", "environment", "lastPayloadHash", "lastPayloadSnapshot")
+			VALUES ('D2TESTA2', 'crossref', 'test', repeat('c', 64), '{}')
 		`);
 		await expectConstraintViolation(
 			client,
@@ -149,7 +151,18 @@ async function verifyConstraints(client: pg.Client) {
 			() =>
 				client.query(`
 					UPDATE "publicationSyncState"
-					SET "lastFileManifestHash" = repeat('d', 64)
+					SET "lastFileManifestHash" = repeat('d', 64), "lastFileManifestSnapshot" = '{}'
+					WHERE "itemKey" = 'D2TESTA2' AND "provider" = 'crossref'
+				`),
+		);
+		await expectConstraintViolation(
+			client,
+			"last-success hash needs its snapshot",
+			"publicationSyncState_last_success_bundle_valid",
+			() =>
+				client.query(`
+					UPDATE "publicationSyncState"
+					SET "lastPayloadSnapshot" = NULL
 					WHERE "itemKey" = 'D2TESTA2' AND "provider" = 'crossref'
 				`),
 		);
@@ -286,56 +299,75 @@ async function verifyConstraints(client: pg.Client) {
 	}
 }
 
-async function verifyNamespaceAllocation() {
-	const pool = new Pool({ connectionString: databaseUrl, max: 8 });
-	const database = drizzle({ client: pool }) as unknown as Database;
-	try {
-		const allocated = await Promise.all(
-			Array.from({ length: 20 }, () =>
-				allocateManagedCrossrefDoi(database, {
-					environment: "test",
-					prefix: "10.5555",
-					suffixNamespace: "model.",
-				}),
-			),
-		);
-		if (new Set(allocated).size !== allocated.length) {
-			throw new Error("Concurrent DOI allocation returned a duplicate");
-		}
-		if (!allocated.every((doi) => /^10\.5555\/model\.\d+$/u.test(doi))) {
-			throw new Error("DOI allocation returned an invalid suffix");
-		}
-
-		try {
-			await allocateManagedCrossrefDoi(database, {
+async function verifyNamespaceAllocation(database: Database) {
+	const allocated = await Promise.all(
+		Array.from({ length: 20 }, () =>
+			allocateManagedCrossrefDoi(database, {
 				environment: "test",
 				prefix: "10.5555",
-				suffixNamespace: "changed.",
-			});
-			throw new Error("A used DOI namespace was allowed to change");
-		} catch (error) {
-			if (!(error instanceof Error) || !error.message.includes("cannot change")) {
-				throw error;
-			}
+				suffixNamespace: "model.",
+			}),
+		),
+	);
+	if (new Set(allocated).size !== allocated.length) {
+		throw new Error("Concurrent DOI allocation returned a duplicate");
+	}
+	if (
+		!allocated.every((doi) => /^10\.5555\/model\.\d{6}$/u.test(doi))
+	) {
+		throw new Error("DOI allocation did not use a six-digit sequence");
+	}
+	if (!allocated.includes("10.5555/model.000001")) {
+		throw new Error("The first DOI did not start at 000001");
+	}
+
+	try {
+		await allocateManagedCrossrefDoi(database, {
+			environment: "test",
+			prefix: "10.5555",
+			suffixNamespace: "changed.",
+		});
+		throw new Error("A used DOI namespace was allowed to change");
+	} catch (error) {
+		if (!(error instanceof Error) || !error.message.includes("cannot change")) {
+			throw error;
 		}
-	} finally {
-		await pool.query(
-			`DELETE FROM "doiNamespace" WHERE "environment" = 'test' AND "suffixNamespace" = 'model.'`,
-		);
-		await pool.end();
 	}
 }
 
 async function main() {
-	const client = new Client({ connectionString: databaseUrl });
-	await client.connect();
+	const sourceUrl = new URL(databaseUrl);
+	const databaseName = `publication_model_${process.pid}_${Date.now()}`;
+	const adminUrl = new URL(sourceUrl);
+	adminUrl.pathname = "/postgres";
+	const temporaryUrl = new URL(sourceUrl);
+	temporaryUrl.pathname = `/${databaseName}`;
+	const admin = new Client({ connectionString: adminUrl.toString() });
+	let client: pg.Client | null = null;
+	let pool: pg.Pool | null = null;
+	await admin.connect();
 	try {
+		await admin.query(`CREATE DATABASE "${databaseName}"`);
+		pool = new Pool({ connectionString: temporaryUrl.toString(), max: 8 });
+		const database = drizzle({ client: pool }) as unknown as Database;
+		await migrate(database, { migrationsFolder: "drizzle" });
+		client = new Client({ connectionString: temporaryUrl.toString() });
+		await client.connect();
 		await verifyConstraints(client);
+		await verifyNamespaceAllocation(database);
 	} finally {
-		await client.end();
+		await client?.end();
+		await pool?.end();
+		await admin.query(
+			`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
+			[databaseName],
+		);
+		await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
+		await admin.end();
 	}
-	await verifyNamespaceAllocation();
-	console.log("Publication model constraints and concurrent DOI allocation passed.");
+	console.log(
+		"Publication model migration, constraints, and concurrent DOI allocation passed in an isolated database.",
+	);
 }
 
 main().catch((error) => {

@@ -189,7 +189,7 @@ export const publicationIdentifier = pgTable(
 				publicationTarget.provider,
 				publicationTarget.environment,
 			],
-		}).onDelete("cascade"),
+		}).onDelete("restrict"),
 		check(
 			"publicationIdentifier_provider_shape_valid",
 			sql`(
@@ -313,14 +313,14 @@ export const publicationSyncState = pgTable(
 			"publicationSyncState_last_success_bundle_valid",
 			sql`(
 				(${table.lastPayloadHash} IS NULL AND ${table.lastPayloadSnapshot} IS NULL)
-				OR ${table.lastPayloadHash} ~ '^[0-9a-f]{64}$'
+				OR (${table.lastPayloadHash} ~ '^[0-9a-f]{64}$' AND ${table.lastPayloadSnapshot} IS NOT NULL)
 			)`,
 		),
 		check(
 			"publicationSyncState_file_bundle_valid",
 			sql`(
 				(${table.lastFileManifestHash} IS NULL AND ${table.lastFileManifestSnapshot} IS NULL)
-				OR ${table.lastFileManifestHash} ~ '^[0-9a-f]{64}$'
+				OR (${table.lastFileManifestHash} ~ '^[0-9a-f]{64}$' AND ${table.lastFileManifestSnapshot} IS NOT NULL)
 			)`,
 		),
 		check(

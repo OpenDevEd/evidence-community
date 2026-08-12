@@ -159,11 +159,11 @@ CREATE TABLE "publicationSyncState" (
 			)),
 	CONSTRAINT "publicationSyncState_last_success_bundle_valid" CHECK ((
 				("publicationSyncState"."lastPayloadHash" IS NULL AND "publicationSyncState"."lastPayloadSnapshot" IS NULL)
-				OR "publicationSyncState"."lastPayloadHash" ~ '^[0-9a-f]{64}$'
+				OR ("publicationSyncState"."lastPayloadHash" ~ '^[0-9a-f]{64}$' AND "publicationSyncState"."lastPayloadSnapshot" IS NOT NULL)
 			)),
 	CONSTRAINT "publicationSyncState_file_bundle_valid" CHECK ((
 				("publicationSyncState"."lastFileManifestHash" IS NULL AND "publicationSyncState"."lastFileManifestSnapshot" IS NULL)
-				OR "publicationSyncState"."lastFileManifestHash" ~ '^[0-9a-f]{64}$'
+				OR ("publicationSyncState"."lastFileManifestHash" ~ '^[0-9a-f]{64}$' AND "publicationSyncState"."lastFileManifestSnapshot" IS NOT NULL)
 			)),
 	CONSTRAINT "publicationSyncState_pending_bundle_valid" CHECK ((
 				("publicationSyncState"."pendingStage" IS NULL
@@ -241,7 +241,7 @@ CREATE TABLE "zenodoPublishJournal" (
 			))
 );
 --> statement-breakpoint
-ALTER TABLE "publicationIdentifier" ADD CONSTRAINT "publicationIdentifier_target_fk" FOREIGN KEY ("itemKey","registrar","environment") REFERENCES "public"."publicationTarget"("itemKey","provider","environment") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "publicationIdentifier" ADD CONSTRAINT "publicationIdentifier_target_fk" FOREIGN KEY ("itemKey","registrar","environment") REFERENCES "public"."publicationTarget"("itemKey","provider","environment") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "publicationSyncJob" ADD CONSTRAINT "publicationSyncJob_target_fk" FOREIGN KEY ("itemKey","provider","environment") REFERENCES "public"."publicationTarget"("itemKey","provider","environment") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "publicationSyncState" ADD CONSTRAINT "publicationSyncState_target_fk" FOREIGN KEY ("itemKey","provider","environment") REFERENCES "public"."publicationTarget"("itemKey","provider","environment") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "publicationTarget" ADD CONSTRAINT "publicationTarget_itemKey_itemIdentity_key_fk" FOREIGN KEY ("itemKey") REFERENCES "public"."itemIdentity"("key") ON DELETE restrict ON UPDATE no action;--> statement-breakpoint

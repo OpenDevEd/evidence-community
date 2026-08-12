@@ -83,6 +83,7 @@ export async function allocateManagedCrossrefDoi(
 			})
 			.where(eq(doiNamespace.environment, input.environment));
 
-		return `${input.prefix}/${input.suffixNamespace}${stored.nextSequence}`;
+		const sequence = String(stored.nextSequence).padStart(6, "0");
+		return `${input.prefix}/${input.suffixNamespace}${sequence}`;
 	});
 }
