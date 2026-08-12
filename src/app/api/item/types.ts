@@ -2,6 +2,7 @@ import { InferSelectModel } from "drizzle-orm";
 import type { SourceProvider } from "@opendeved/evidence-library-core";
 import { item } from "@/db/schema/tables/item";
 import { Collection } from "../collections/types";
+import type { PublicationIdentifierSummary } from "@/lib/publication/publication-display-adapter";
 
 interface Institution {
   id?: string;
@@ -23,6 +24,7 @@ export type Item = InferSelectModel<typeof item> & {
   fullNames?: string[];
   dateTimestamp?: string;
   datePublished?: string;
+  publicationIdentifiers?: PublicationIdentifierSummary;
 };
 
 export type ListAttachment = Omit<

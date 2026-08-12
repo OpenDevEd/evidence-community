@@ -11,6 +11,7 @@ import {
 	IoDownloadOutline,
 	IoChevronBack,
 	IoDownload,
+	IoLinkOutline,
 } from "react-icons/io5";
 import { SiZenodo } from "react-icons/si";
 import { BsQuote } from "react-icons/bs";
@@ -68,11 +69,9 @@ import { transformItem } from "@/lib/utils";
 import { hasAnyTag } from "@/lib/tags";
 import useSWR from "swr";
 import {
-	buildDoiDisplayLinks,
-	type DoiDisplayAttachment,
 	type DoiDisplayLink,
-	type DoiDisplayProvider,
 } from "@opendeved/doi-sync-core/display";
+import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import Image from "next/image";
@@ -626,6 +625,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"callNumber",
 		"dateTimestamp",
 		"DOI",
+		"publicationIdentifiers",
 	];
 
 	if (!item && !loading) return null;
@@ -867,15 +867,6 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 	);
 }
 
-function toDoiDisplayAttachment(attachment: Item): DoiDisplayAttachment {
-	return {
-		linkMode: attachment.linkMode,
-		title: attachment.title,
-		url: attachment.url,
-		tags: attachment.tags,
-	};
-}
-
 function CrossrefLogo({ className }: { className?: string }) {
 	return (
 		<svg
@@ -990,11 +981,13 @@ function IdentifierLogo({ link }: { link: IdentifierDisplayLink }) {
 				/>
 			) : link.provider === "crossref" ? (
 				<CrossrefLogo className="h-6 w-4" />
-			) : (
+			) : link.provider === "zenodo" ? (
 				<SiZenodo
 					className="size-5 text-[#1682D4]"
 					aria-label="Zenodo"
 				/>
+			) : (
+				<IoLinkOutline className="size-5 text-doi" aria-label="DOI" />
 			)}
 		</div>
 	);
@@ -1058,11 +1051,12 @@ function ItemIdentifiers({ item }: { item: Item | undefined }) {
 	const links = useMemo(() => {
 		if (!item) return [];
 
-		const doiLinks = buildDoiDisplayLinks({
+		const doiLinks = buildPublicationDisplay({
 			DOI: item.DOI,
 			extra: item.extra,
-			attachmentsData: item.attachmentsData?.map(toDoiDisplayAttachment),
-		}).links;
+			attachments: item.attachmentsData,
+			publicationIdentifiers: item.publicationIdentifiers,
+		}).links.links;
 
 		const canonicalLink = buildCanonicalWebsiteLink(
 			item,
