@@ -22,7 +22,7 @@ Make the development Evidence Library reachable only from Mohammed's Tailscale n
 2. Use the existing `ADMIN_AUTH_BYPASS` gate. Do not build a second admin login or identity system.
 3. Never enable the bypass while a public route can reach the app.
 4. Tailscale Serve is the only ingress. Tailscale Funnel stays off.
-5. The private Compose starts Next.js with `--hostname 127.0.0.1`, so the backend listens only on loopback inside the shared Tailscale network namespace.
+5. The web service stays on Coolify's private application network. It publishes no host port and has no Traefik router. Tailscale Serve reaches it by the internal service name `web:3000`.
 6. The repository owns the Compose file, Serve file, checks, and operating guide. Coolify stores only required deployment values and secrets.
 7. The only new secret is `TAILSCALE_AUTHKEY`. Use a non-ephemeral reusable key. This single development node does not require a tag. Keep Tailscale state in a named volume, set `TS_AUTH_ONCE=true`, and disable key expiry for the registered node.
 8. The private address is `https://openscholar-el-dev.tail40de7d.ts.net`. The active `opendeved.net` tailnet reported that MagicDNS suffix on 2026-08-12. The matching runtime `identity.baseUrl` must take effect in the same deploy that follows removal of the public route.
@@ -46,7 +46,9 @@ This step must finish before work continues on the OpenScholar Evidence Library 
 
 ## Repository-owned deployment shape
 
-The private Compose file adds a pinned `tailscale/tailscale` sidecar. The web container shares the sidecar's network namespace. Its command starts Next.js with `--hostname 127.0.0.1`, and Tailscale Serve sends private HTTPS traffic to `127.0.0.1:3000`.
+The private Compose file adds a pinned `tailscale/tailscale` sidecar. Tailscale Serve sends private HTTPS traffic over Coolify's private application network to `web:3000`.
+
+The first live deployment attempt, `xk2eeaemp55ye0bbp88fd5bj`, proved that Coolify 4.1.2 cannot parse Docker Compose's `!reset` YAML tag. Coolify caught that parser error, saved an empty service model, and Docker Compose returned `no service selected`. Coolify also adds its application network to each service, so `network_mode: service:tailscale` would conflict with that generated network. The private Compose must therefore use ordinary YAML only and normal private service networking. Raw Compose mode is not used because it would be a one-off server setting instead of a repository-owned deployment.
 
 The Compose file publishes no host ports. Coolify must have no domain attached to either service. The current application stores that public route in the production `SERVICE_URL_WEB` and `SERVICE_FQDN_WEB` environment records even though `docker_compose_domains` is already empty. Delete those exact records by UUID and read back their absence before stopping the public stack. The deployment check must inspect the effective Traefik labels because Coolify can override a checked-in `traefik.enable=false` label when a saved service domain remains attached.
 

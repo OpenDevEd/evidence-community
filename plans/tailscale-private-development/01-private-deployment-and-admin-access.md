@@ -24,12 +24,12 @@ The private stack has these rules:
 - `TS_HOSTNAME=openscholar-el-dev`.
 - `TS_USERSPACE=true`, `TS_AUTH_ONCE=true`, and `TS_STATE_DIR=/var/lib/tailscale`.
 - Mount the `ops/tailscale-development` folder read-only and set `TS_SERVE_CONFIG=/config/serve.json`.
-- The web container uses `network_mode: service:tailscale`.
-- The web command is `node_modules/.bin/next start --hostname 127.0.0.1`, and the container sets `ADMIN_AUTH_BYPASS=true`.
+- The web and Tailscale services use Coolify's private application network. Tailscale Serve reaches the web service at `web:3000`.
+- The web container sets `ADMIN_AUTH_BYPASS=true`.
 - No service publishes a host port.
 - Coolify has no domain attached to web or Tailscale. A checked-in `traefik.enable=false` label is not treated as a safety boundary.
 - The search worker remains a separate internal service and retains its current health check. Web keeps `depends_on: search-indexer: condition: service_healthy`, so database setup finishes before web starts.
-- The namespace-shared web service does not declare `ports` or `expose`.
+- The web service does not declare `ports`. Its internal `expose: 3000` does not publish a host port.
 
 Add `ops/tailscale-development/serve.json` with private HTTPS only:
 
@@ -44,7 +44,7 @@ Add `ops/tailscale-development/serve.json` with private HTTPS only:
     "${TS_CERT_DOMAIN}:443": {
       "Handlers": {
         "/": {
-          "Proxy": "http://127.0.0.1:3000"
+          "Proxy": "http://web:3000"
         }
       }
     }
@@ -55,7 +55,7 @@ Add `ops/tailscale-development/serve.json` with private HTTPS only:
 }
 ```
 
-Add a repository check that parses the rendered Compose model and Serve JSON. It must fail if it finds a host port, public Traefik route, Funnel, a Next.js command without `--hostname 127.0.0.1`, a non-loopback Serve backend, a missing admin bypass, an unpinned Tailscale image, an `expose` entry on web, or missing persistent state.
+Add a repository check that parses the rendered Compose model and Serve JSON. It must fail if it finds a host port, public Traefik route, Funnel, a Serve backend other than `web:3000`, a missing admin bypass, an unpinned Tailscale image, or missing persistent state. The private file uses ordinary YAML only because Coolify 4.1.2 rejects Docker Compose custom tags such as `!reset`.
 
 ## Test-first sequence
 
@@ -104,13 +104,13 @@ Open these paths in a real browser on a Tailscale device:
 
 From a non-Tailscale path, prove the old hostname and direct server IP do not reach this application. The old hostname must not return the library health JSON, admin workbench markers, or app-specific headers. A Cloudflare or shared-Traefik 404 is a pass. The app's streamed 404 can use HTTP 200, so check the response body as well as the status. If the old DNS record is removed, NXDOMAIN is also a pass.
 
-Inside the shared network namespace, run `ss -ltn` and prove the only Next.js listener is `127.0.0.1:3000`. From another container on the host's Docker network, prove the sidecar container IP refuses port 3000. The node's tailnet IP may answer on port 3000 because Tailscale userspace networking can send tailnet traffic to the same localhost port; that remains inside the tailnet boundary. Confirm this behavior against the current Tailscale userspace-networking documentation before writing the probe.
+Inspect the live Compose model and container ports. Prove there is no host port and no Traefik router for web. Confirm Tailscale Serve reaches `web:3000` only through the private application network.
 
 ## Deployability gate
 
-- `docker compose config` succeeds with no host ports, no `expose` entry on web, no public route, a Next.js `--hostname 127.0.0.1` command, Funnel off, and the bypass on.
+- `docker compose config` succeeds with no host ports, no public route, Serve targeting `web:3000`, Funnel off, and the bypass on.
 - Coolify reports the Tailscale, web, and search-worker containers healthy. Its stored `git_commit_sha` and deployed commit both match the pushed commit.
-- `tailscale serve status --json` shows HTTPS 443 proxying to `127.0.0.1:3000` and no Funnel.
+- `tailscale serve status --json` shows HTTPS 443 proxying to `web:3000` and no Funnel.
 - The health endpoint returns the new active revision.
 - `/admin` shows the real workbench without a login page.
 - `/api/admin/library` returns `200` with `Cache-Control: private, no-store`.
@@ -149,3 +149,4 @@ Never attach a public domain to a deployment running the bypass Compose.
 - An unpinned sidecar image can change deployment behavior without a repository commit.
 - An old hostname may still return a Cloudflare or shared-Traefik 404. It fails the boundary only if it reaches this application.
 - Tailscale Serve does not overwrite `X-Real-IP`, while the current AI rate limiter reads that header. This development-only deployment accepts that limit and records it in the operating guide.
+- Coolify 4.1.2 rejects Docker Compose custom YAML tags and adds its private application network to every service. Keep this file on ordinary YAML and normal service networking; do not enable Raw Compose as a server-only workaround.

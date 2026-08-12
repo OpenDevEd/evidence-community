@@ -6,7 +6,7 @@
 Implement plans/tailscale-private-development/01-private-deployment-and-admin-access.md. Read plans/tailscale-private-development/00-README.md first. This step blocks further OpenScholar Evidence Library interface work. Estimate 2-4 hours and keep working without asking questions whose answers are already in the plan.
 
 STANDING RULES
-1. Reuse the existing Compose, admin bypass, runtime routing, probe, and search-worker contracts. Do not build a second login or admin gate.
+1. Reuse the existing Compose, admin bypass, runtime routing, probe, and search-worker contracts. Keep the private file compatible with Coolify 4.1.2: ordinary YAML only, no custom tags, and normal private service networking. Do not build a second login or admin gate.
 2. Make a clean breaking change. Do not add a public fallback, compatibility URL, Funnel path, or dead deployment file.
 3. Read current official Tailscale and Coolify docs before changing their configuration. Check the installed code and live deployment instead of guessing.
 4. Use red, green, clean up for the deployment contract checker. Test parsed behavior and live results, never YAML formatting or CSS classes.
