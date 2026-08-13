@@ -1,8 +1,6 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { columns } from "../src/db/schema/views/columns";
-
 type ZoteroCsl = {
 	fields: {
 		date: Record<string, string>;
@@ -42,25 +40,12 @@ const schema = {
 	ZOTERO_SCHEMA_VERSION: zoteroSchema.version,
 };
 
-const columnKeysLowercase = Object.keys(columns).reduce(
-	(accumulator, key) => {
-		accumulator[key.toLowerCase()] = key;
-		return accumulator;
-	},
-	{} as Record<string, string>,
-);
-
 for (const [cslType, zoteroTypes] of Object.entries(csl.types)) {
 	for (const zoteroType of zoteroTypes) {
-		const matchingColumnKey =
-			columnKeysLowercase[zoteroType.toLowerCase()];
-		const keyToUse = matchingColumnKey ?? zoteroType;
-
-		schema.CSL_TYPE_MAPPINGS[keyToUse] = cslType;
-		if (matchingColumnKey) {
-			schema.COLUMN_TO_ZOTERO_TYPE_MAPPINGS[matchingColumnKey] =
-				zoteroType;
-		}
+		const canonicalType =
+			zoteroType[0]!.toUpperCase() + zoteroType.slice(1);
+		schema.CSL_TYPE_MAPPINGS[canonicalType] = cslType;
+		schema.COLUMN_TO_ZOTERO_TYPE_MAPPINGS[canonicalType] = zoteroType;
 	}
 	schema.CSL_TYPE_MAPPINGS_REVERSE[cslType] = [...zoteroTypes];
 }
