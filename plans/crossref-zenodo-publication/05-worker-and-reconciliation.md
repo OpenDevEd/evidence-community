@@ -19,7 +19,9 @@ Create one publication-worker process for each Evidence Library deployment. It s
 1. A short-poll delivery consumer claims due `publicationSyncJob` rows with `FOR UPDATE SKIP LOCKED`, serializes by item/provider/environment, reads current canonical state, invokes the core, and settles exact provider results.
 2. A nightly scheduler acquires a singleton database lease, keyset-pages activated targets, rebuilds current desired hashes, verifies pending state, and enqueues only missing work.
 
-Canonical item publication/edit/unpublication and file publication changes enqueue jobs only for existing active/waiting publication targets. The job records the triggering revision, but the worker reads current canonical state. Older jobs are superseded so an older projection cannot overwrite newer provider state.
+Canonical item publication/edit and file publication changes enqueue jobs only for existing active/waiting publication targets. The job records the triggering revision, but the worker reads current canonical state. Older jobs are superseded so an older projection cannot overwrite newer provider state.
+
+Record unpublication is blocked until the shared DOI core can express a real provider withdrawal and the Evidence Library can keep a DOI landing page available. See [`BLOCKER-unpublish-core.md`](./BLOCKER-unpublish-core.md). Do not enqueue unpublication as an ordinary metadata update or report it as successful.
 
 Crossref and Zenodo failures are isolated by target. Crossref-to-Zenodo relation updates are scheduled after a minted Zenodo version DOI settles. Provider success is recorded only after the core's terminal verification rules pass.
 
@@ -27,7 +29,7 @@ Expose exact worker health and per-item receipts. Do not synthesize progress or 
 
 ## TDD sequence
 
-1. Add failing queue tests for manual activation, metadata publication, file publication, unpublication, and inactive items.
+1. Add failing queue tests for manual activation, metadata publication, file publication, file unpublication, and inactive items. Assert that record unpublication does not enqueue an unsupported provider update.
 2. Add failing claim/lease/serialization tests with two workers and lease expiry.
 3. Add failing supersession tests proving an older revision cannot settle over newer state.
 4. Add retry/dead-letter tests for transient, permanent, conflict, and ambiguous recovery failures.
@@ -85,6 +87,7 @@ npm run lint
 
 - Inactive items never enter the publication queue or nightly scan.
 - Activated items enqueue immediately after relevant canonical changes.
+- Record unpublication remains blocked until the shared core supports withdrawal and the public DOI landing page remains available.
 - Nightly reconciliation repairs missed work and remains a no-op for converged records.
 - Leases and supersession prevent stale overwrites.
 - Provider environments, receipts, failures, and dead letters are queryable.
@@ -95,4 +98,4 @@ npm run lint
 - A provider HTTP success is not terminal provider success.
 - Nightly scans must use keyset pagination, not offset pagination.
 - Long provider operations need renewable leases and abort behavior after lease loss.
-- Unpublication cannot delete a registered DOI; it must update landing/status metadata according to provider policy.
+- A registered DOI cannot be deleted. Do not treat local unpublication as provider success until the shared core supports withdrawal and the public site serves a stable tombstone landing page.
