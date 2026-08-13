@@ -1,7 +1,12 @@
 import type { AdminItemDetail } from "@/lib/admin/types";
 import {
+	describeZoteroField,
+	type ZoteroFieldDescriptor,
+} from "@opendeved/evidence-library-core/zotero-schema";
+import {
 	ADMIN_SHARED_PAYLOAD_FIELDS,
 	adminSharedPayloadFieldsForZoteroItemType,
+	adminSpecialFieldsForZoteroItemType,
 } from "@/lib/admin/item-fields";
 
 export type AdminSchemaDefinition = {
@@ -15,6 +20,21 @@ export type AdminSchemaDefinition = {
 	}>;
 	itemType: string;
 };
+
+export function adminFieldDescriptors(
+	definition: AdminSchemaDefinition | undefined,
+): ZoteroFieldDescriptor[] {
+	if (!definition) return [];
+	const fields = definition.fields.map(describeZoteroField);
+	const known = new Set(fields.map(({ field }) => field));
+	for (const field of adminSpecialFieldsForZoteroItemType(
+		definition.itemType,
+	)) {
+		if (known.has(field)) continue;
+		fields.push({ field, semanticField: field, type: "text" });
+	}
+	return fields;
+}
 
 export function humanizeAdminField(value: string) {
 	const words = value
@@ -66,7 +86,7 @@ export function editablePayloadFromDetail(
 	if (sharedFields.has("parentItem") && detail.parentItem) {
 		payload.parentItem = detail.parentItem;
 	}
-	for (const { field } of definition?.fields ?? []) {
+	for (const { field } of adminFieldDescriptors(definition)) {
 		const value = published[field];
 		if (value !== null && value !== undefined) payload[field] = value;
 	}
@@ -77,7 +97,9 @@ export function payloadForItemType(
 	payload: Record<string, unknown>,
 	nextDefinition: AdminSchemaDefinition,
 ) {
-	const nextFields = new Set(nextDefinition.fields.map(({ field }) => field));
+	const nextFields = new Set(
+		adminFieldDescriptors(nextDefinition).map(({ field }) => field),
+	);
 	const sharedFields =
 		adminSharedPayloadFieldsForZoteroItemType(nextDefinition);
 	return Object.fromEntries(

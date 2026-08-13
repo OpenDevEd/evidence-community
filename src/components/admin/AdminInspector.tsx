@@ -79,6 +79,7 @@ import {
 	type AdminDraftDiff,
 } from "./admin-diff";
 import {
+	adminFieldDescriptors,
 	type AdminSchemaDefinition,
 	creatorDisplayName,
 	definitionFor,
@@ -86,6 +87,7 @@ import {
 } from "./admin-schema";
 import { firstAdminFieldError, validationTargetId } from "./admin-validation";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
+import { AdminMetadataField } from "./AdminMetadataField";
 
 type SaveState = "conflict" | "error" | "idle" | "saved" | "saving";
 
@@ -482,19 +484,20 @@ function MetadataEditor({
 						))}
 				</Autocomplete>
 			</div>
-			{definition?.fields.map(({ field }) => {
+			{adminFieldDescriptors(definition)
+				.filter(
+					({ field }) =>
+						field !== "annotationPosition" &&
+						field !== "annotationSortIndex",
+				)
+				.map((descriptor) => {
+				const { field } = descriptor;
 				const value =
 					typeof payload[field] === "string"
 						? String(payload[field])
 						: "";
 				const fieldId = `admin-${detail.key}-${field}`;
 				const label = humanizeAdminField(field);
-				const multiline = [
-					"abstractNote",
-					"extra",
-					"note",
-					"history",
-				].includes(field);
 				const changed = Object.prototype.hasOwnProperty.call(
 					diff.fields,
 					field,
@@ -524,35 +527,17 @@ function MetadataEditor({
 						>
 							{label}
 						</FieldLabel>
-						{multiline ? (
-							<Textarea
-								aria-label={label}
-								classNames={inspectorTextareaClassNames}
-								errorMessage={errors[field]}
-								id={fieldId}
-								isInvalid={Boolean(errors[field])}
-								isDisabled={readOnly}
-								maxRows={10}
-								minRows={field === "abstractNote" ? 4 : 2}
-								value={value}
-								onValueChange={(next) =>
-									updateField(field, next)
-								}
-							/>
-						) : (
-							<Input
-								aria-label={label}
-								classNames={inspectorInputClassNames}
-								errorMessage={errors[field]}
-								id={fieldId}
-								isInvalid={Boolean(errors[field])}
-								isDisabled={readOnly}
-								value={value}
-								onValueChange={(next) =>
-									updateField(field, next)
-								}
-							/>
-						)}
+						<AdminMetadataField
+							descriptor={descriptor}
+							disabled={readOnly}
+							error={errors[field]}
+							id={fieldId}
+							label={label}
+							value={value}
+							onValueChange={(next) =>
+								updateField(field, next)
+							}
+						/>
 					</div>
 				);
 			})}
@@ -1547,6 +1532,7 @@ export function AdminInspector({
 		if (!detailKey || validationRevision === 0) {
 			return;
 		}
+		// Browser focus is the outside system: move it only after validation renders.
 		const frame = requestAnimationFrame(() => {
 			document
 				.getElementById(`admin-${detailKey}-validation-summary`)

@@ -1,6 +1,9 @@
 import type { AdminCreator, AdminItemDetail } from "@/lib/admin/types";
 
-import type { AdminSchemaDefinition } from "./admin-schema";
+import {
+	adminFieldDescriptors,
+	type AdminSchemaDefinition,
+} from "./admin-schema";
 
 export type AdminDraftDiff = {
 	collections: string[] | null;
@@ -74,7 +77,7 @@ export function computeAdminDraftDiff(
 	const currentItemType = textValue(payload.itemType || detail.itemType);
 	const fields: Record<string, string> = {};
 
-	for (const { field } of definition?.fields ?? []) {
+	for (const { field } of adminFieldDescriptors(definition)) {
 		const original = textValue(published[field]);
 		const current = textValue(payload[field]);
 		if (current !== original) fields[field] = original;

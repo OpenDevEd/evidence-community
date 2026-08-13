@@ -2437,6 +2437,42 @@ test("disables every metadata field until editing starts", async ({ page }) => {
 	await expect(creatorRole).not.toHaveAttribute("data-disabled", "true");
 });
 
+test("uses date, URL, and identifier controls that match the metadata", async ({
+	page,
+}) => {
+	const savedDrafts: Record<string, unknown>[] = [];
+	await mockPublishedBook(page, {
+		onDraftSave: (payload) => savedDrafts.push(structuredClone(payload)),
+	});
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", { name: "Edit" }).click();
+
+	const url = inspector.getByLabel("URL", { exact: true });
+	const doi = inspector.getByLabel("DOI", { exact: true });
+	await expect(url).toHaveAttribute("type", "url");
+	await expect(doi).toHaveAttribute("data-field-kind", "doi");
+
+	const itemType = inspector.getByRole("combobox", { name: "Item type" });
+	await itemType.fill("Case");
+	await page.getByRole("option", { name: "Case", exact: true }).click();
+	await expect(inspector.getByLabel("Case Name", { exact: true })).toBeVisible();
+	await expect(inspector.getByRole("status")).toHaveText("Saved");
+
+	const precision = inspector.getByRole("combobox", {
+		name: "Date Decided precision",
+	});
+	await precision.selectOption("year");
+	const decided = inspector.getByLabel("Date Decided", { exact: true });
+	await expect(decided).toHaveAttribute("inputmode", "numeric");
+	await decided.fill("2024");
+	await expect
+		.poll(() =>
+			savedDrafts.some((payload) => payload.dateDecided === "2024"),
+		)
+		.toBe(true);
+});
+
 test("shows draft differences with the published value and a revert action", async ({
 	page,
 }) => {
