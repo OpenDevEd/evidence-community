@@ -1,4 +1,7 @@
-import { describeZoteroField } from "@opendeved/evidence-library-core/zotero-schema";
+import {
+	describeZoteroField,
+	getZoteroSchema,
+} from "@opendeved/evidence-library-core/zotero-schema";
 import { describe, expect, it } from "vitest";
 
 import {
@@ -7,6 +10,79 @@ import {
 } from "@/lib/admin/field-contract";
 
 describe("admin metadata field contract", () => {
+	it("classifies every vendored field from one complete policy", () => {
+		const multiline = new Set([
+			"abstractNote",
+			"extra",
+			"history",
+			"references",
+		]);
+		const distinctFields = new Set<string>();
+		let checked = 0;
+		for (const definition of getZoteroSchema().itemTypes) {
+			for (const field of definition.fields) {
+				const descriptor = describeZoteroField(field);
+				const expected =
+					descriptor.type === "date"
+						? "bibliographic-date"
+						: descriptor.field === "accessDate"
+							? "access-date"
+							: descriptor.field === "url"
+								? "url"
+								: multiline.has(descriptor.field)
+									? "multiline"
+									: "text";
+				expect(adminFieldContract(descriptor).kind).toBe(expected);
+				distinctFields.add(descriptor.field);
+				checked += 1;
+			}
+		}
+		expect(checked).toBe(770);
+		expect(distinctFields.size).toBe(121);
+	});
+
+	it("keeps all number-looking bibliographic values as text", () => {
+		const fields = [
+			"applicationNumber",
+			"archiveID",
+			"artworkSize",
+			"billNumber",
+			"codeNumber",
+			"codePages",
+			"codeVolume",
+			"docketNumber",
+			"documentNumber",
+			"edition",
+			"episodeNumber",
+			"firstPage",
+			"identifier",
+			"issue",
+			"number",
+			"numberOfVolumes",
+			"numPages",
+			"pages",
+			"partNumber",
+			"patentNumber",
+			"priorityNumbers",
+			"publicLawNumber",
+			"reporterVolume",
+			"reportNumber",
+			"runningTime",
+			"scale",
+			"section",
+			"seriesNumber",
+			"session",
+			"versionNumber",
+			"volume",
+		];
+		for (const field of fields) {
+			expect(
+				adminFieldContract({ field, semanticField: field, type: "text" }).kind,
+			).toBe("text");
+		}
+		expect(fields).toHaveLength(31);
+	});
+
 	it("inherits date controls through Zotero base fields", () => {
 		expect(
 			adminFieldContract(
@@ -69,6 +145,8 @@ describe("admin metadata field contract", () => {
 			"2024-05-20 12:30:45",
 			"2024-05-20T12:30:45.123Z",
 			"2024-05-20T12:30:45+01:00",
+			"2024-05-20T12:30:45+0100",
+			"-0044-03-15",
 			"CURRENT_TIMESTAMP",
 		]) {
 			expect(normalizeAdminFieldValue(descriptor, value)).toEqual({ value });

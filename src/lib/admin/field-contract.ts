@@ -50,22 +50,33 @@ export function adminFieldContract(descriptor: AdminFieldDescriptor): {
 }
 
 function isCalendarDate(value: string) {
-	const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+	const match = /^(-?\d{4})-(\d{2})-(\d{2})$/u.exec(value);
 	if (!match) return false;
 	const year = Number(match[1]);
 	const month = Number(match[2]);
 	const day = Number(match[3]);
-	const date = new Date(Date.UTC(year, month - 1, day));
-	return (
-		date.getUTCFullYear() === year &&
-		date.getUTCMonth() === month - 1 &&
-		date.getUTCDate() === day
-	);
+	if (month < 1 || month > 12 || day < 1) return false;
+	const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+	const daysInMonth = [
+		31,
+		leapYear ? 29 : 28,
+		31,
+		30,
+		31,
+		30,
+		31,
+		31,
+		30,
+		31,
+		30,
+		31,
+	];
+	return day <= daysInMonth[month - 1]!;
 }
 
 function isAccessDate(value: string) {
 	if (value === "CURRENT_TIMESTAMP") return true;
-	const match = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):(\d{2}))?)?$/u.exec(
+	const match = /^(-?\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):?(\d{2}))?)?$/u.exec(
 		value,
 	);
 	if (!match || !isCalendarDate(match[1]!)) return false;
