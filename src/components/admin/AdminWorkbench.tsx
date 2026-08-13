@@ -18,6 +18,7 @@ import {
 	FolderInput,
 	Library,
 	List,
+	LogOut,
 	Menu,
 	PanelRight,
 	Plus,
@@ -1860,66 +1861,86 @@ export default function AdminWorkbench({
 						<RefreshCw aria-hidden size={15} />
 					</Button>
 				</Tooltip>
-				<Popover
-					disableAnimation
-					isOpen={newItemOpen}
-					onOpenChange={(open) => {
-						setNewItemOpen(open);
-						if (!open) setNewItemSearch("");
-					}}
-					placement="bottom-end"
-				>
-					<PopoverTrigger>
-						<Button
-							aria-label="New item"
-							className="col-start-3 row-start-1 h-10 min-h-10 w-10 !min-w-10 rounded-xl px-0 font-semibold shadow-sm shadow-accent/10 lg:w-auto lg:!min-w-0 lg:px-3"
-							color="accent"
-							size="xs"
-							variant="solid"
-						>
-							<Plus aria-hidden size={15} />
-							<span className="hidden lg:inline">New item</span>
-						</Button>
-					</PopoverTrigger>
-					<PopoverContent
-						aria-label="New item"
-						className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+				<div className="col-start-3 row-start-1 flex shrink-0 items-center gap-1">
+					<form action="/api/admin/session/logout" method="post">
+						<Tooltip content="Log out">
+							<Button
+								aria-label="Log out"
+								className="h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+								isIconOnly
+								size="xs"
+								type="submit"
+								variant="transparent"
+							>
+								<LogOut aria-hidden size={15} />
+							</Button>
+						</Tooltip>
+					</form>
+					<Popover
+						disableAnimation
+						isOpen={newItemOpen}
+						onOpenChange={(open) => {
+							setNewItemOpen(open);
+							if (!open) setNewItemSearch("");
+						}}
+						placement="bottom-end"
 					>
-						<div className="w-full">
-							<div className="border-b border-black/[0.06] p-3 dark:border-white/[0.06]">
-								<Input
-									aria-label="Find an item type"
-									autoFocus={finePointer}
-									placeholder="Find an item type"
-									startContent={
-										<Search aria-hidden size={15} />
-									}
-									value={newItemSearch}
-									onValueChange={setNewItemSearch}
-								/>
+						<PopoverTrigger>
+							<Button
+								aria-label="New item"
+								className="h-10 min-h-10 w-10 !min-w-10 rounded-xl px-0 font-semibold shadow-sm shadow-accent/10 lg:w-auto lg:!min-w-0 lg:px-3"
+								color="accent"
+								size="xs"
+								variant="solid"
+							>
+								<Plus aria-hidden size={15} />
+								<span className="hidden lg:inline">
+									New item
+								</span>
+							</Button>
+						</PopoverTrigger>
+						<PopoverContent
+							aria-label="New item"
+							className="w-80 max-w-[calc(100vw-1.5rem)] rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
+						>
+							<div className="w-full">
+								<div className="border-b border-black/[0.06] p-3 dark:border-white/[0.06]">
+									<Input
+										aria-label="Find an item type"
+										autoFocus={finePointer}
+										placeholder="Find an item type"
+										startContent={
+											<Search aria-hidden size={15} />
+										}
+										value={newItemSearch}
+										onValueChange={setNewItemSearch}
+									/>
+								</div>
+								<div className="flex max-h-[52vh] flex-col gap-1 overflow-y-auto p-1">
+									{filteredDefinitions.map((definition) => (
+										<button
+											key={definition.itemType}
+											className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-left text-sm text-black/70 hover:bg-black/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/70 dark:hover:bg-white/[0.05]"
+											onClick={() =>
+												createItem(definition)
+											}
+											type="button"
+										>
+											<Library
+												aria-hidden
+												className="shrink-0 opacity-45"
+												size={16}
+											/>
+											{humanizeAdminField(
+												definition.itemType,
+											)}
+										</button>
+									))}
+								</div>
 							</div>
-							<div className="flex max-h-[52vh] flex-col gap-1 overflow-y-auto p-1">
-								{filteredDefinitions.map((definition) => (
-									<button
-										key={definition.itemType}
-										className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-left text-sm text-black/70 hover:bg-black/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/70 dark:hover:bg-white/[0.05]"
-										onClick={() => createItem(definition)}
-										type="button"
-									>
-										<Library
-											aria-hidden
-											className="shrink-0 opacity-45"
-											size={16}
-										/>
-										{humanizeAdminField(
-											definition.itemType,
-										)}
-									</button>
-								))}
-							</div>
-						</div>
-					</PopoverContent>
-				</Popover>
+						</PopoverContent>
+					</Popover>
+				</div>
 			</header>
 
 			<AdminDragDropRoot

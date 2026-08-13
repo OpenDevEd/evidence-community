@@ -39,23 +39,9 @@ export default async function AdminPage({
 	}));
 
 	return (
-		<>
-			<AdminWorkbench
-				definitions={definitions}
-				initialFilters={parseAdminItemViewFilters(urlSearchParams)}
-			/>
-			<form
-				action="/api/admin/session/logout"
-				className="fixed right-16 top-3 z-50"
-				method="post"
-			>
-				<button
-					className="min-h-10 rounded-xl px-3 text-sm font-semibold"
-					type="submit"
-				>
-					Log out
-				</button>
-			</form>
-		</>
+		<AdminWorkbench
+			definitions={definitions}
+			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
+		/>
 	);
 }

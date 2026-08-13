@@ -619,7 +619,22 @@ test("logs in with Enter, keeps the session, and logs out", async ({
 		page.getByRole("textbox", { name: "Search records" }),
 	).toBeVisible();
 
-	await page.getByRole("button", { name: "Log out" }).click();
+	const logout = page.getByRole("button", { name: "Log out" });
+	const newItem = page.getByRole("button", { name: "New item" });
+	await expect(logout).toBeVisible();
+	await expect(logout).toHaveText("");
+	await logout.hover();
+	await expect(page.getByRole("tooltip")).toHaveText("Log out");
+	const [logoutBox, newItemBox] = await Promise.all([
+		logout.boundingBox(),
+		newItem.boundingBox(),
+	]);
+	expect(logoutBox).not.toBeNull();
+	expect(newItemBox).not.toBeNull();
+	expect(logoutBox!.x + logoutBox!.width).toBeLessThanOrEqual(newItemBox!.x);
+	expect(Math.abs(logoutBox!.y - newItemBox!.y)).toBeLessThanOrEqual(1);
+
+	await logout.click();
 	await expect(page.getByLabel("Admin password")).toBeVisible();
 });
 
