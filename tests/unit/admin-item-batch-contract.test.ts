@@ -1,4 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("server-only", () => ({}));
 
 import { adminItemBatchRequestSchema } from "@/lib/admin/item-batch-contract";
 import { orderBatchKeysByDependency } from "@/lib/admin/item-batch-service";
@@ -32,10 +34,12 @@ describe("admin item batch contract", () => {
 
 	it("rejects invalid, duplicate, empty, and oversized selections", () => {
 		const alphabet = "23456789ABCDEFGHIJKLMNPQRSTUVWXYZ";
-		const oversizedSelection = Array.from({ length: 51 }, (_, index) =>
-			`AAAAAA${alphabet[Math.floor(index / alphabet.length)]}${
-				alphabet[index % alphabet.length]
-			}`,
+		const oversizedSelection = Array.from(
+			{ length: 51 },
+			(_, index) =>
+				`AAAAAA${alphabet[Math.floor(index / alphabet.length)]}${
+					alphabet[index % alphabet.length]
+				}`,
 		);
 		for (const keys of [
 			[],
