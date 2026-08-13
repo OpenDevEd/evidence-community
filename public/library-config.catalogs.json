@@ -276,6 +276,7 @@
 				"path": "theme.fonts.body.family",
 				"values": [
 					"Montserrat",
+					"Poppins",
 					"Ubuntu"
 				]
 			},
@@ -300,6 +301,7 @@
 				"path": "theme.fonts.heading.family",
 				"values": [
 					"Montserrat",
+					"Poppins",
 					"Ubuntu"
 				]
 			},
@@ -472,6 +474,15 @@
 		"fonts": [
 			{
 				"family": "Montserrat",
+				"weights": [
+					300,
+					400,
+					500,
+					700
+				]
+			},
+			{
+				"family": "Poppins",
 				"weights": [
 					300,
 					400,

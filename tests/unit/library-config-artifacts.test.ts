@@ -63,7 +63,7 @@ describe("library configuration artifacts", () => {
 		});
 		expect(enums.get("theme.fonts.heading.family")).toMatchObject({
 			allowCustom: true,
-			values: ["Montserrat", "Ubuntu"],
+			values: ["Montserrat", "Poppins", "Ubuntu"],
 		});
 		expect(enums.get("navigation.links[].icon")).toMatchObject({
 			allowCustom: true,

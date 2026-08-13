@@ -112,6 +112,9 @@ export const PLATFORM_FONT_CATALOG = {
 	Montserrat: {
 		weights: [300, 400, 500, 700],
 	},
+	Poppins: {
+		weights: [300, 400, 500, 700],
+	},
 	Ubuntu: {
 		weights: [300, 400, 500, 700],
 	},

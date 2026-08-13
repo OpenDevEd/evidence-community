@@ -152,6 +152,22 @@ describe("runtime theme assets", () => {
 		);
 	});
 
+	it("loads Poppins from the runtime config", () => {
+		const input = structuredClone(
+			maximalLibraryConfig,
+		) as LibraryConfigInput;
+		input.theme.fonts!.heading = { source: "google", family: "Poppins" };
+		input.theme.fonts!.body = { source: "google", family: "Poppins" };
+		const theme = libraryConfigSchema.parse(input).theme;
+
+		expect(buildGoogleFontsUrl(theme)).toBe(
+			"https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;700&display=swap",
+		);
+		expect(buildThemeFontCss(theme)).toContain(
+			'--font-heading:"Poppins",sans-serif;--font-body:"Poppins",sans-serif',
+		);
+	});
+
 	it.each(["light", "dark"] as const)(
 		"accepts a forced %s mode only when the switcher is excluded",
 		(forcedMode) => {

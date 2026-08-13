@@ -247,6 +247,7 @@
 											"type": "string",
 											"enum": [
 												"Montserrat",
+												"Poppins",
 												"Ubuntu"
 											]
 										}
@@ -311,6 +312,7 @@
 											"type": "string",
 											"enum": [
 												"Montserrat",
+												"Poppins",
 												"Ubuntu"
 											]
 										}
