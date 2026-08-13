@@ -16,10 +16,10 @@ This causes three user-visible failures:
 
 ## Fixed decisions
 
-1. Keep Zotero's item-specific field names in PostgreSQL and in Zotero
-   writeback. For example, a case keeps `caseName` and `dateDecided`.
-2. Use Zotero's `baseField` only to add canonical search fields such as `title`
-   and `date`.
+1. PostgreSQL, drafts, publication, and search use canonical fields such as
+   `title`, `date`, and `publisher`.
+2. Zotero import, writeback, and the editor translate item-specific names such
+   as `caseName` and `dateDecided` at their boundaries.
 3. Use one shared field contract for the editor and server validation.
 4. Bibliographic dates support year, month, exact date, and flexible text. They
    are not ordinary HTML date values.
@@ -29,8 +29,10 @@ This causes three user-visible failures:
    January 1.
 7. Bibliographic numbers such as volume, issue, pages, ISBN, and patent number
    stay text. They may contain letters, ranges, or punctuation.
-8. This is a clean breaking change. Rebuild the development search index. Do
-   not add old-field fallbacks.
+8. Remove all 58 duplicate Zotero alias columns. Add the missing canonical
+   `medium` and `authority` columns.
+9. This is a clean breaking change. Wipe and resync development records, then
+   rebuild the search index. Do not add old-field fallbacks or backfills.
 
 ## Existing code to reuse
 
@@ -46,7 +48,8 @@ This causes three user-visible failures:
 ## Plan
 
 1. [01-shared-field-contract-and-search.md](01-shared-field-contract-and-search.md)
-   fixes canonical fields, date projection, validation, and editor controls.
+   replaces duplicate alias storage with one canonical field model, then fixes
+   date projection, validation, search, and editor controls.
 
 ## Test rules
 
@@ -58,9 +61,10 @@ This causes three user-visible failures:
 
 ## Data choice
 
-No PostgreSQL migration is needed. The source field names remain unchanged.
-The development Meilisearch index must be rebuilt because its derived fields
-change.
+Use one destructive Drizzle migration to drop the 58 alias columns and add
+`medium` and `authority`. Do not preserve or backfill development rows. Wipe
+records, drafts, source state, and queued jobs, then resync or reseed. Rebuild
+Meilisearch from PostgreSQL.
 
 ## Agent use
 
@@ -72,4 +76,3 @@ owns tests, implementation, commits, browser checks, and deployment.
 - Current branch code and tests.
 - The vendored Zotero schema.
 - Zotero's current item-field documentation, checked on 2026-08-13.
-

@@ -11,14 +11,16 @@ plan.
 
 STANDING RULES
 1. Reuse the vendored Zotero schema and current admin controls before building.
-2. Keep Zotero provider fields in PostgreSQL and writeback. Use baseField for
-   canonical search meaning.
+2. Keep canonical fields in PostgreSQL and all internal services. Translate
+   item-specific Zotero field names only at editor/import/writeback boundaries.
 3. Do not keep the broken Date.parse or fake-January behavior.
 4. Use one shared contract for controls and server validation.
 5. Use red-green-clean-up for pure logic and add tests with every integration.
-6. Check current official Zotero behavior instead of guessing.
-7. Protect unrelated dirty publication and Zenodo work.
-8. Use read-only agents for broad research; keep tests, edits, and commits here.
+6. Delete all duplicate alias columns. Do not add compatibility reads or a
+   backfill; development data is disposable.
+7. Check current official Zotero behavior instead of guessing.
+8. Protect unrelated dirty publication and Zenodo work.
+9. Use read-only agents for broad research; keep tests, edits, and commits here.
 
 EXECUTION RHYTHM
 For pure schema, date, validation, and filter logic, write one failing behavior

@@ -7,7 +7,8 @@ Meilisearch agree about what every metadata field means.
 
 ## Scope
 
-- Carry Zotero field type and `baseField` meaning into the admin schema.
+- Add a schema-owned codec between Zotero fields and canonical fields.
+- Replace the 58 alias database columns with canonical storage.
 - Add one shared admin field contract.
 - Add controls for bibliographic dates, access dates, URLs, identifiers,
   multiline text, and fixed choices.
@@ -21,9 +22,10 @@ Meilisearch agree about what every metadata field means.
 
 ### Zotero fields
 
-The database keeps provider field names such as `caseName`. Search adds the
-canonical `title` from Zotero's `baseField` declaration. The same rule applies
-to canonical dates and the other declared base fields.
+The database keeps only canonical names. Zotero import maps `caseName` to
+`title`; writeback and the editor map `title` back to the item-specific field.
+The source snapshot remains raw Zotero JSON. No internal service stores both
+names.
 
 ### Dates
 
@@ -52,17 +54,23 @@ date, or flexible-date control. Access date uses a calendar date control.
 
 ## Test-first steps
 
-1. Add failing schema tests for direct and inherited field meaning.
-2. Add failing date tests for year, month, day, season, flexible text, and
+1. Add failing exhaustive codec tests for all direct and aliased fields.
+2. Make admin drafts and source batches canonical while both database column
+   sets still exist.
+3. Fix Zotero import, writeback, and item-type transitions through the codec.
+4. Add failing date tests for year, month, day, season, flexible text, and
    impossible dates. Implement the pure parser.
-3. Add failing validation tests for typed fields. Implement the shared field
+5. Add failing validation tests for typed fields. Implement the shared field
    contract and server checks.
-4. Add failing projection tests for case, email, patent, and statute canonical
-   fields. Implement canonical projection and precision-aware dates.
-5. Add failing search-scope and filter escaping tests. Fix request building.
-6. Add browser tests for the visible controls and field errors. Implement the
+6. Add failing projection and public API tests for canonical-only records.
+   Implement precision-aware dates.
+7. Add failing search-scope and filter escaping tests. Fix request building.
+8. Add browser tests for the visible controls and field errors. Implement the
    editor dispatcher.
-7. Rebuild the development search index and run the real-service checks.
+9. Add the destructive schema migration, remove the 58 alias columns and dead
+   alias catalogue code, then regenerate schema artifacts.
+10. Wipe and resync development data, rebuild the search index, and run the
+    real-service checks.
 
 ## Files
 
@@ -80,6 +88,11 @@ Expected changes include:
 - `src/lib/search-index/consumer.ts`
 - `src/config/library-config/search.ts`
 - `src/lib/search.ts`
+- `src/db/schema/tables/item.ts`
+- `src/lib/source-ingestion/zotero/mapper.ts`
+- `src/lib/source-writeback/zotero/mapper.ts`
+- `src/lib/publication/record-adapter.ts`
+- the generated Drizzle migration and schema snapshot
 - matching unit, browser, and real-service tests
 
 ## Deployment check
@@ -87,14 +100,18 @@ Expected changes include:
 1. Run the focused unit tests and TypeScript.
 2. Run `npm run test:search-index` and `npm run test:search-worker`.
 3. Run the focused admin Playwright tests in Chromium and WebKit.
-4. Rebuild the development Meilisearch index.
-5. Open a case and a normal record in `/admin`, then confirm their public title,
+4. Run the source import and Zotero writeback real-service checks.
+5. Wipe and resync the isolated development data.
+6. Rebuild the development Meilisearch index.
+7. Open a case and a normal record in `/admin`, then confirm their public title,
    year filter, and Newest/Oldest order.
-6. Confirm the running Next.js app has no compile or unhandled errors.
+8. Confirm the running Next.js app has no compile or unhandled errors.
 
 ## Completion rules
 
-- Every vendored `baseField` appears correctly in the search document.
+- Every vendored `baseField` round-trips through canonical storage and the
+  item-specific editor/Zotero name.
+- No alias database column or internal compatibility read remains.
 - A malformed date cannot create a derived year or sort value.
 - A partial date never becomes a fake exact day.
 - The editor uses the shared control for each typed field.
@@ -105,8 +122,7 @@ Expected changes include:
 
 ## Risks
 
-- A stricter field rule may reject bad development records. Development data is
-  disposable; correct or reseed it rather than adding a fallback.
+- Existing development rows and JSON patches use alias keys. Wipe them instead
+  of adding compatibility reads or a backfill.
 - Search settings change. A full development reindex is required.
 - Zotero dates are flexible. Do not replace them with one required day picker.
-
