@@ -5709,6 +5709,69 @@ test("tracks bulk remove mutations", async ({ page }) => {
 	await indexing.expectTracked(receipt);
 });
 
+test("keeps an immediately rejected batch indexing wait handled", async ({
+	page,
+}) => {
+	await page.addInitScript(() => {
+		const trackedWindow = window as typeof window & {
+			__adminUnhandledRejections?: string[];
+		};
+		trackedWindow.__adminUnhandledRejections = [];
+		window.addEventListener("unhandledrejection", (event) => {
+			trackedWindow.__adminUnhandledRejections?.push(
+				event.reason instanceof Error
+					? event.reason.message
+					: String(event.reason),
+			);
+		});
+	});
+	let batchRequest = 0;
+	await mockPublishedBook(page, {
+		batchResults: ({ keys }) => {
+			batchRequest += 1;
+			return keys.map((key) => ({
+				indexingReceipts: [
+					indexingReceipt(key, "item", batchRequest === 1 ? 2 : 1),
+				],
+				key,
+				outcome: "changed",
+			}));
+		},
+	});
+	await mockCompletedIndexing(page);
+	await page.goto("/admin");
+	const selectRecord = page.getByRole("checkbox", {
+		name: "Select Published book",
+	});
+	const publishSelected = page.getByRole("button", {
+		name: "Publish selected",
+	});
+
+	await selectRecord.check();
+	await publishSelected.click();
+	await expect(page.getByText("1 record published")).toBeVisible();
+
+	await selectRecord.check();
+	await publishSelected.click();
+	await expect(
+		page
+			.getByLabel("Notifications alt+T")
+			.getByText(
+				"A newer public search update replaced this one. Refresh and try again.",
+			),
+	).toBeVisible();
+
+	const unhandled = await page.evaluate(
+		() =>
+			(
+				window as typeof window & {
+					__adminUnhandledRejections?: string[];
+				}
+			).__adminUnhandledRejections ?? [],
+	);
+	expect(unhandled).toEqual([]);
+});
+
 test("tracks publishing through Meilisearch progress, failure, and retry", async ({
 	page,
 }) => {

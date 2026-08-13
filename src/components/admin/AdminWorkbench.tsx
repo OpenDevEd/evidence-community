@@ -1561,45 +1561,49 @@ export default function AdminWorkbench({
 		const indexingCompletion = searchIndex.trackAndWait(
 			remoteResults.flatMap(({ indexingReceipts }) => indexingReceipts),
 		);
-		const affectedKeys = new Set(results.map(({ key }) => key));
-		const failedKeys = new Set(
-			results
-				.filter(({ outcome }) => outcome === "failed")
-				.map(({ key }) => key),
-		);
-		setBulkKeys(
-			(current) =>
-				new Set(
-					[...current].filter(
-						(key) => !affectedKeys.has(key) || failedKeys.has(key),
+		void indexingCompletion.catch(() => {});
+		try {
+			const affectedKeys = new Set(results.map(({ key }) => key));
+			const failedKeys = new Set(
+				results
+					.filter(({ outcome }) => outcome === "failed")
+					.map(({ key }) => key),
+			);
+			setBulkKeys(
+				(current) =>
+					new Set(
+						[...current].filter(
+							(key) => !affectedKeys.has(key) || failedKeys.has(key),
+						),
 					),
+			);
+			const selectedFailure = results.find(
+				({ fields, key, outcome }) =>
+					key === selectedKeyRef.current &&
+					outcome === "failed" &&
+					fields &&
+					Object.keys(fields).length > 0,
+			);
+			const selectedChanged = Boolean(
+				feedback.clearChangedInspector &&
+				results.some(
+					({ key, outcome }) =>
+						key === selectedKeyRef.current && outcome === "changed",
 				),
-		);
-		const selectedFailure = results.find(
-			({ fields, key, outcome }) =>
-				key === selectedKeyRef.current &&
-				outcome === "failed" &&
-				fields &&
-				Object.keys(fields).length > 0,
-		);
-		const selectedChanged = Boolean(
-			feedback.clearChangedInspector &&
-			results.some(
-				({ key, outcome }) =>
-					key === selectedKeyRef.current && outcome === "changed",
-			),
-		);
-		if (selectedChanged) {
-			setSelectedKey(null);
-			setDetail(null);
+			);
+			if (selectedChanged) {
+				setSelectedKey(null);
+				setDetail(null);
+			}
+			await refreshCurrent(selectedChanged ? null : undefined);
+			if (selectedFailure?.fields) {
+				setValidationErrors(selectedFailure.fields);
+				setValidationRevision((current) => current + 1);
+				setMobilePane("inspector");
+			}
+		} finally {
+			await indexingCompletion;
 		}
-		await refreshCurrent(selectedChanged ? null : undefined);
-		if (selectedFailure?.fields) {
-			setValidationErrors(selectedFailure.fields);
-			setValidationRevision((current) => current + 1);
-			setMobilePane("inspector");
-		}
-		await indexingCompletion;
 		const summary = batchResultSummary(results, feedback.changedLabels);
 		if (summary.failed.length) {
 			toast.error(summary.message, {

@@ -133,7 +133,7 @@ export function useAdminSearchIndex() {
 		requestRef.current = controller;
 		setLoading(true);
 		try {
-			const tracked = new Map(
+			const tracked = new Map<string, AdminSearchIndexReceipt>(
 				receiptsRef.current.map((receipt) => [
 					adminSearchIndexReceiptIdentity(receipt),
 					receipt,
