@@ -25,21 +25,13 @@ import {
 	type ItemWritebackPolicyOptions,
 } from "./native-item-service";
 
-type RevalidationTarget = {
-	itemKey: string;
-	parentItem: string | null;
-	previousParentItem?: string | null;
-};
-
 type BatchDependencies = {
 	db: Database;
 	removePrivateFiles: (paths: string[]) => Promise<void>;
 	writebackPolicyOptions?: ItemWritebackPolicyOptions;
 };
 
-export type AdminItemBatchExecution = AdminItemBatchResponse & {
-	revalidationTargets: RevalidationTarget[];
-};
+export type AdminItemBatchExecution = AdminItemBatchResponse;
 
 async function loadBatchState(db: Database, request: AdminItemBatchRequest) {
 	const [identities, drafts, published] = await Promise.all([
@@ -138,7 +130,6 @@ export async function runAdminItemBatch(
 	}
 	const state = await loadBatchState(db, request);
 	const results: AdminItemBatchResult[] = [];
-	const revalidationTargets: RevalidationTarget[] = [];
 	const parentByKey = new Map(
 		request.keys.map((key) => {
 			const draftPatch = state.drafts.get(key)?.patch;
@@ -192,19 +183,12 @@ export async function runAdminItemBatch(
 					}
 					throw error;
 				}
-				const { item: published, previousParentItem } =
-					publishedContext;
 				results.push({
 					indexingReceipts: publishedContext.indexingRecords.map(
 						(record) => adminSearchIndexReceipt("item", record),
 					),
 					key,
 					outcome: "changed",
-				});
-				revalidationTargets.push({
-					itemKey: published.key,
-					parentItem: published.parentItem,
-					previousParentItem,
 				});
 				continue;
 			}
@@ -234,12 +218,6 @@ export async function runAdminItemBatch(
 						key,
 						outcome: removed.changed ? "changed" : "unchanged",
 					});
-					if (removed.changed && removed.item) {
-						revalidationTargets.push({
-							itemKey: removed.item.key,
-							parentItem: removed.item.parentItem,
-						});
-					}
 					if (removed.stagedPrivatePaths.length > 0) {
 						try {
 							await removePrivateFiles(
@@ -299,6 +277,5 @@ export async function runAdminItemBatch(
 	const resultByKey = new Map(results.map((result) => [result.key, result]));
 	return {
 		results: request.keys.map((key) => resultByKey.get(key)!),
-		revalidationTargets,
 	};
 }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDatabase } from "@/db";
+import { revalidateIndexedReceiptCaches } from "@/lib/admin/cache";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
@@ -18,13 +19,13 @@ export async function POST(request: NextRequest) {
 		const { receipts } = adminSearchIndexReceiptsSchema.parse(
 			await readAdminJson(request),
 		);
+		const statuses = await getAdminSearchIndexReceipts(
+			await getDatabase(),
+			receipts,
+		);
+		revalidateIndexedReceiptCaches(statuses);
 		return NextResponse.json(
-			{
-				receipts: await getAdminSearchIndexReceipts(
-					await getDatabase(),
-					receipts,
-				),
-			},
+			{ receipts: statuses },
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {

@@ -1,4 +1,3 @@
-import { revalidateTag } from "next/cache";
 import { connection, NextRequest, NextResponse } from "next/server";
 
 import { getDatabase } from "@/db";
@@ -83,7 +82,6 @@ export async function POST(request: NextRequest) {
 			await readAdminJson(request),
 			{ writebackConfig: await loadLibraryConfig() },
 		);
-		revalidateTag("collections", "max");
 		return NextResponse.json(
 			{
 				collection: toAdminCollection(collection),

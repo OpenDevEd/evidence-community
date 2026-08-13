@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getDatabase } from "@/db";
-import { revalidatePublishedItemCaches } from "@/lib/admin/cache";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
@@ -24,7 +23,6 @@ export async function POST(
 			key,
 		);
 		const { item } = result;
-		revalidatePublishedItemCaches(item.key, item.parentItem);
 		return NextResponse.json(
 			{
 				indexingReceipts: result.changed

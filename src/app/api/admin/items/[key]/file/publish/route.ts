@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
-import { revalidatePublishedItemCaches } from "@/lib/admin/cache";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
@@ -37,10 +36,6 @@ export async function POST(
 			itemKey: key,
 			publicationTags: runtime.config.content.tags.publish,
 		});
-		revalidatePublishedItemCaches(
-			published.item.key,
-			published.item.parentItem,
-		);
 		return NextResponse.json(
 			{
 				file: filePublicationJson(published.file),

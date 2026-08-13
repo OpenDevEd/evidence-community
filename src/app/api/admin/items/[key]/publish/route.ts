@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabase } from "@/db";
-import { revalidatePublishedItemCaches } from "@/lib/admin/cache";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
@@ -24,13 +23,8 @@ export async function POST(
 			getDatabase(),
 			getLibraryConfig(),
 		]);
-		const { indexingRecords, item, previousParentItem } =
+		const { indexingRecords, item } =
 			await publishItemDraftWithContext(db, key, { writebackConfig });
-		revalidatePublishedItemCaches(
-			item.key,
-			item.parentItem,
-			previousParentItem,
-		);
 		return NextResponse.json(
 			{
 				indexingReceipts: indexingRecords.map((record) =>

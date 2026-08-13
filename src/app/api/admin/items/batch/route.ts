@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { getLibraryConfig } from "@/config/library-config/server";
-import { revalidatePublishedItemCaches } from "@/lib/admin/cache";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
@@ -29,13 +28,6 @@ export async function POST(request: NextRequest) {
 			removePrivateFiles: (paths) => runtime.storage.removePrivate(paths),
 			writebackPolicyOptions: { writebackConfig },
 		});
-		for (const target of execution.revalidationTargets) {
-			revalidatePublishedItemCaches(
-				target.itemKey,
-				target.parentItem,
-				target.previousParentItem,
-			);
-		}
 		return NextResponse.json(
 			{ results: execution.results },
 			{ headers: ADMIN_RESPONSE_HEADERS },

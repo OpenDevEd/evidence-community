@@ -7,7 +7,6 @@ import {
 	readAdminJson,
 	requireAdminBypass,
 } from "@/lib/admin/http";
-import { revalidatePublishedItemCaches } from "@/lib/admin/cache";
 import {
 	fileDraftJson,
 	filePublicationJson,
@@ -103,7 +102,6 @@ export async function DELETE(_request: NextRequest, { params }: RouteContext) {
 			key,
 		);
 		const { item } = unpublished;
-		revalidatePublishedItemCaches(item.key, item.parentItem);
 		return NextResponse.json(
 			{
 				indexingReceipts: unpublished.indexingRecords.map((record) =>
