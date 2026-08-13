@@ -38,6 +38,7 @@ function isAbortError(error: unknown) {
 
 const ADMIN_SEARCH_INDEX_REVISION_HISTORY_LIMIT = 500;
 const ADMIN_SEARCH_INDEX_STATUS_CONCURRENCY = 4;
+const ADMIN_SEARCH_INDEX_STATUS_FAILURE_LIMIT = 3;
 
 type ReceiptWaiter = {
 	pending: Map<string, AdminSearchIndexReceipt>;
@@ -117,7 +118,9 @@ export function useAdminSearchIndex() {
 	const [receiptUnavailable, setReceiptUnavailable] = useState(false);
 	const [loading, setLoading] = useState(true);
 	const [retrying, setRetrying] = useState(false);
+	const [statusRequestFailures, setStatusRequestFailures] = useState(0);
 	const receiptsRef = useRef(receipts);
+	const statusRequestFailuresRef = useRef(0);
 	const latestRevisionByEntityRef = useRef(new Map<string, number>());
 	const receiptWaitersRef = useRef(new Set<ReceiptWaiter>());
 	const requestRef = useRef<AbortController | null>(null);
@@ -185,15 +188,22 @@ export function useAdminSearchIndex() {
 			setReceiptUnavailable(hasUnknown);
 			receiptsRef.current = remaining;
 			setReceipts(remaining);
+			statusRequestFailuresRef.current = 0;
+			setStatusRequestFailures(0);
 			setError(null);
 		} catch (caught) {
 			if (!isAbortError(caught)) {
-				const message = errorMessage(caught);
-				setError(message);
-				rejectReceiptWaiters(
-					receiptWaitersRef.current,
-					new Error(message),
-				);
+				const failureCount = statusRequestFailuresRef.current + 1;
+				statusRequestFailuresRef.current = failureCount;
+				setStatusRequestFailures(failureCount);
+				if (failureCount >= ADMIN_SEARCH_INDEX_STATUS_FAILURE_LIMIT) {
+					const message = errorMessage(caught);
+					setError(message);
+					rejectReceiptWaiters(
+						receiptWaitersRef.current,
+						new Error(message),
+					);
+				}
 			}
 		} finally {
 			if (requestRef.current === controller) {
@@ -218,7 +228,15 @@ export function useAdminSearchIndex() {
 				: ADMIN_SEARCH_INDEX_IDLE_POLL_MS,
 		);
 		return () => window.clearTimeout(timer);
-	}, [error, fastPolling, overview, receiptUnavailable, receipts, refresh]);
+	}, [
+		error,
+		fastPolling,
+		overview,
+		receiptUnavailable,
+		receipts,
+		refresh,
+		statusRequestFailures,
+	]);
 
 	const queueReceipts = useCallback(
 		(incoming: readonly AdminSearchIndexReceipt[]) => {

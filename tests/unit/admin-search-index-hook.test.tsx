@@ -259,6 +259,129 @@ describe("useAdminSearchIndex", () => {
 		expect(current.view.kind).toBe("failed");
 	});
 
+	it("keeps waiting through two temporary status-request failures", async () => {
+		let statusRequests = 0;
+		api.receipts.mockImplementation(async (receipts) => {
+			statusRequests += 1;
+			if (statusRequests <= 2) throw new Error("Temporary network failure");
+			return {
+				receipts: receipts.map(
+					(entry: { entityKey: string; revision: number }) =>
+						receiptStatus(entry.entityKey, "indexed", entry.revision),
+				),
+			};
+		});
+		await renderHarness();
+
+		let outcome: "pending" | "rejected" | "resolved" = "pending";
+		let completion!: Promise<void>;
+		await act(async () => {
+			completion = current.trackAndWait([
+				{ entityKey: "RETRYING", entityType: "item", revision: 3 },
+			]);
+			completion.then(
+				() => {
+					outcome = "resolved";
+				},
+				() => {
+					outcome = "rejected";
+				},
+			);
+			await flushAsync();
+		});
+		expect(outcome).toBe("pending");
+		expect(current.error).toBeNull();
+
+		await act(async () => {
+			await current.refresh();
+		});
+		expect(outcome).toBe("pending");
+		expect(current.error).toBeNull();
+
+		await act(async () => {
+			await current.refresh();
+			await completion;
+		});
+		expect(outcome).toBe("resolved");
+		expect(current.error).toBeNull();
+	});
+
+	it("stops the action after three consecutive status-request failures", async () => {
+		api.receipts.mockRejectedValue(new Error("Status service unavailable"));
+		await renderHarness();
+
+		let rejection!: Promise<void | Error>;
+		await act(async () => {
+			const completion = current.trackAndWait([
+				{ entityKey: "GIVEUP01", entityType: "item", revision: 2 },
+			]);
+			rejection = completion.catch((error: Error) => error);
+			await flushAsync();
+		});
+		expect(current.error).toBeNull();
+
+		await act(async () => {
+			await current.refresh();
+		});
+		expect(current.error).toBeNull();
+
+		await act(async () => {
+			await current.refresh();
+		});
+		const error = await rejection;
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).message).toBe("Status service unavailable");
+		expect(current.error).toBe("Status service unavailable");
+		expect(current.view.kind).toBe("unavailable");
+	});
+
+	it("automatically retries temporary status-request failures", async () => {
+		vi.useFakeTimers();
+		let statusRequests = 0;
+		api.receipts.mockImplementation(async (receipts) => {
+			statusRequests += 1;
+			if (statusRequests <= 2) throw new Error("Temporary network failure");
+			return {
+				receipts: receipts.map(
+					(entry: { entityKey: string; revision: number }) =>
+						receiptStatus(entry.entityKey, "indexed", entry.revision),
+				),
+			};
+		});
+		await act(async () => {
+			root.render(<Harness />);
+			await flushPromises();
+		});
+
+		let resolved = false;
+		let completion!: Promise<void>;
+		await act(async () => {
+			completion = current.trackAndWait([
+				{ entityKey: "AUTORETRY", entityType: "item", revision: 5 },
+			]);
+			completion.then(() => {
+				resolved = true;
+			});
+			await flushPromises();
+		});
+		expect(statusRequests).toBe(1);
+		expect(resolved).toBe(false);
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(1_000);
+			await flushPromises();
+		});
+		expect(statusRequests).toBe(2);
+		expect(resolved).toBe(false);
+
+		await act(async () => {
+			await vi.advanceTimersByTimeAsync(1_000);
+			await completion;
+		});
+		expect(statusRequests).toBe(3);
+		expect(resolved).toBe(true);
+	});
+
 	it("chunks more than 100 tracked receipts without dropping any", async () => {
 		api.receipts.mockImplementation(async (receipts) => ({
 			receipts: receipts.map((entry: { entityKey: string; revision: number }) =>
