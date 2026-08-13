@@ -129,6 +129,6 @@ describe("admin session routes", () => {
 
 		expect(response.status).toBe(303);
 		expect(cookie).toContain("evidence_library_admin=");
-		expect(cookie).toContain("Expires=Thu, 01 Jan 1970 00:00:00 GMT");
+		expect(cookie).toContain("Max-Age=0");
 	});
 });
