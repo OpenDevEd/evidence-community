@@ -43,6 +43,9 @@ STANDING RULES
 4. Run action work in handlers. Do not add state-sync effects.
 5. Check the real browser, PostgreSQL, Meilisearch, and worker.
 6. Use read-only agents for broad research; keep edits and commits in the main session.
+7. Keep active action waits on every exact receipt, including two revisions of one record.
+8. Retry temporary status-request failures twice, then stop truthfully on the third consecutive failure.
+9. Observe batch completion promises immediately and await them even when intermediate UI refresh fails.
 
 EXECUTION RHYTHM
 Make the receipt promise green, wire one direct publish, then all other receipt actions, then run real lifecycle tests. Commit each green unit.

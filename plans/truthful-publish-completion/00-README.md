@@ -33,6 +33,9 @@ Publishing must mean PostgreSQL saved the change, Meilisearch succeeded, and the
 - Prove no cache invalidation runs for queued, processing, retrying, failed, or unknown receipts.
 - Prove indexed item and collection receipts clear the right Next.js tags before the response returns.
 - Prove publish, restore, unpublish, PDF changes, parents, collections, and bulk actions wait for every returned receipt.
+- Prove two revisions of the same record remain exact status requests until both finish.
+- Prove one or two temporary status-request failures keep waiting and retry, while three consecutive failures stop with a truthful error.
+- Prove the batch wait remains observed and runs even when the intermediate admin refresh fails.
 - Check visible text, API responses, and real Meilisearch state. Do not test CSS strings.
 
 ## Data migration
