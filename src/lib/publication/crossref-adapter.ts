@@ -12,7 +12,7 @@ import { and, eq, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutation } from "@/db/canonical-mutation-lock";
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import {
 	publicationIdentifier,
 	publicationSyncState,
@@ -61,8 +61,8 @@ function requireConfig(config: PublicationConfig) {
 	};
 }
 
-async function buildCrossrefPlan(
-	database: Database,
+export async function buildCrossrefPlan(
+	database: Database | DatabaseTransaction,
 	itemKey: string,
 	config: PublicationConfig,
 ) {

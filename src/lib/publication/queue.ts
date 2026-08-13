@@ -71,6 +71,7 @@ export function publicationJobIdempotencyKey(input: {
 	identifierPolicy: ZenodoIdentifierPolicy | null;
 	canonicalRevision: number;
 	fileRevision: number | null;
+	idempotencyDiscriminator?: string;
 }) {
 	return [
 		"publication",
@@ -81,6 +82,9 @@ export function publicationJobIdempotencyKey(input: {
 		input.canonicalRevision,
 		...(input.provider === "zenodo"
 			? [input.fileRevision ?? "no-file"]
+			: []),
+		...(input.idempotencyDiscriminator
+			? [input.idempotencyDiscriminator]
 			: []),
 	].join(":");
 }
@@ -119,6 +123,7 @@ export async function savePublicationJob(
 		identifierPolicy: ZenodoIdentifierPolicy | null;
 		canonicalRevision: number;
 		fileRevision: number | null;
+		idempotencyDiscriminator?: string;
 		reason: PublicationJobReason;
 		now: Date;
 	},
@@ -188,6 +193,7 @@ export async function enqueuePublicationJobsForItem(
 		>;
 		now: Date;
 		providers?: readonly PublicationProvider[];
+		idempotencyDiscriminator?: string;
 	},
 ) {
 	const [targets, publishedFiles, managedCrossrefIdentifiers] =
@@ -257,6 +263,7 @@ export async function enqueuePublicationJobsForItem(
 			identifierPolicy: target.identifierPolicy,
 			canonicalRevision: input.canonicalRevision,
 			fileRevision: target.provider === "zenodo" ? fileRevision : null,
+			idempotencyDiscriminator: input.idempotencyDiscriminator,
 			reason: input.reason,
 			now: input.now,
 		});
