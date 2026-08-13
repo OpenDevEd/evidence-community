@@ -1,7 +1,9 @@
 import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import {
+	describeZoteroItemTypeFields,
 	getZoteroItemType,
 	getZoteroItemTypes,
+	itemTypeZoteroFieldName,
 	type ZoteroItemTypeDefinition,
 } from "@opendeved/evidence-library-core/zotero-schema";
 
@@ -16,7 +18,9 @@ import {
 const knownEditableFields = new Set([
 	...ADMIN_SHARED_PAYLOAD_FIELDS,
 	...[...getZoteroItemTypes().values()].flatMap((definition) => [
-		...definition.fields.map(({ field }) => field),
+		...describeZoteroItemTypeFields(definition.itemType).map(
+			({ semanticField }) => semanticField,
+		),
 		...adminSpecialFieldsForZoteroItemType(definition.itemType),
 	]),
 ]);
@@ -47,9 +51,21 @@ function itemTypeDefinition(payload: Readonly<Record<string, unknown>>) {
 function allowedFields(definition: ZoteroItemTypeDefinition) {
 	return new Set([
 		...adminSharedPayloadFieldsForZoteroItemType(definition),
-		...definition.fields.map(({ field }) => field),
+		...describeZoteroItemTypeFields(definition.itemType).map(
+			({ semanticField }) => semanticField,
+		),
 		...adminSpecialFieldsForZoteroItemType(definition.itemType),
 	]);
+}
+
+function providerField(
+	definition: ZoteroItemTypeDefinition,
+	canonicalField: string,
+) {
+	return (
+		itemTypeZoteroFieldName(definition.itemType, canonicalField) ??
+		canonicalField
+	);
 }
 
 function creatorPayload(value: unknown, definition: ZoteroItemTypeDefinition) {
@@ -178,7 +194,12 @@ export function createZoteroItemPayload(
 				`Canonical writeback payload field is not valid for ${definition.itemType}: ${field}`,
 			);
 		}
-		data[field] = fieldValue(field, value, false, definition);
+		data[providerField(definition, field)] = fieldValue(
+			field,
+			value,
+			false,
+			definition,
+		);
 	}
 	if (definition.itemType === "attachment") {
 		addAttachmentTransportFields(data, payload);
@@ -189,8 +210,12 @@ export function createZoteroItemPayload(
 export function createZoteroItemPatch(
 	payload: Readonly<Record<string, unknown>>,
 	dirtyFields: readonly string[],
+	options: { previousItemType?: string } = {},
 ) {
 	const definition = itemTypeDefinition(payload);
+	const previousDefinition = options.previousItemType
+		? getZoteroItemType(options.previousItemType)
+		: null;
 	assertStructuralFields(payload, definition);
 	const validFields = allowedFields(definition);
 	const itemTypeChanging = dirtyFields.includes("itemType");
@@ -211,7 +236,20 @@ export function createZoteroItemPatch(
 				`Canonical writeback dirty field is not valid for ${definition.itemType}: ${field}`,
 			);
 		}
-		data[field] = fieldValue(field, payload[field], !hasValue, definition);
+		const targetDefinition = validFields.has(field)
+			? definition
+			: previousDefinition;
+		if (!targetDefinition) {
+			throw new ZoteroWritebackMappingError(
+				`Previous Zotero item type is required to clear ${field}`,
+			);
+		}
+		data[providerField(targetDefinition, field)] = fieldValue(
+			field,
+			payload[field],
+			!hasValue,
+			definition,
+		);
 	}
 	if (data.itemType === "attachment") {
 		addAttachmentTransportFields(data, payload);

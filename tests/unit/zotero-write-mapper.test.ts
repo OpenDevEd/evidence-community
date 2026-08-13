@@ -108,6 +108,38 @@ describe("Zotero writeback mapping", () => {
 		});
 	});
 
+	it("maps canonical fields back to the target Zotero field names", () => {
+		expect(
+			createZoteroItemPayload(
+				{
+					authority: "Supreme Court",
+					date: "2024-05",
+					itemType: "Case",
+					title: "Example v Example",
+				},
+				"CASE2345",
+			),
+		).toMatchObject({
+			caseName: "Example v Example",
+			court: "Supreme Court",
+			dateDecided: "2024-05",
+			itemType: "case",
+		});
+		expect(
+			createZoteroItemPatch(
+				{
+					date: "2025",
+					itemType: "Statute",
+					title: "Evidence Act",
+				},
+				["date", "title"],
+			),
+		).toEqual({
+			dateEnacted: "2025",
+			nameOfAct: "Evidence Act",
+		});
+	});
+
 	it("maps dirty removals to Zotero PATCH clear values", () => {
 		expect(
 			createZoteroItemPatch(
@@ -181,17 +213,18 @@ describe("Zotero writeback mapping", () => {
 		expect(
 			createZoteroItemPatch({ itemType: "Book" }, [
 				"itemType",
-				"reportType",
-			]),
+				"type",
+			], { previousItemType: "report" }),
 		).toEqual({ itemType: "book", reportType: "" });
 		expect(() =>
 			createZoteroItemPatch(
-				{ itemType: "Book", reportType: "Still present" },
-				["itemType", "reportType"],
+				{ itemType: "Book", type: "Still present" },
+				["itemType", "type"],
+				{ previousItemType: "report" },
 			),
 		).toThrow(ZoteroWritebackMappingError);
 		expect(() =>
-			createZoteroItemPatch({ itemType: "Book" }, ["reportType"]),
+			createZoteroItemPatch({ itemType: "Book" }, ["type"]),
 		).toThrow(ZoteroWritebackMappingError);
 	});
 

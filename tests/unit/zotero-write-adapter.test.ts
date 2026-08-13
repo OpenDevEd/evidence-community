@@ -516,7 +516,7 @@ describe("Zotero writeback adapter", () => {
 		await expect(
 			createZoteroWritebackAdapter({ fetch: ordinary.fetch }).write(
 				request({
-					dirtyFields: ["itemType", "reportType"],
+					dirtyFields: ["itemType", "type"],
 					payload: { itemType: "Book" },
 				}),
 				context(),

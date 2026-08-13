@@ -643,6 +643,7 @@ export function createZoteroWritebackAdapter(
 			const patch = createZoteroItemPatch(
 				request.payload,
 				request.dirtyFields,
+				{ previousItemType: current?.data.itemType },
 			);
 			if (current && request.dirtyFields.includes("itemType")) {
 				assertSafeTypeTransition(
