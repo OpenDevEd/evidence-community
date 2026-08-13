@@ -1,17 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { buildAdminPublicationView } from "@/lib/publication/admin-publication-view";
 
 export async function GET(
-	_request: Request,
+	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {

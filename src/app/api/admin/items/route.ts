@@ -4,7 +4,7 @@ import { getDatabase } from "@/db";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { getAdminItemListPage } from "@/lib/admin/item-list-query";
 import { parseAdminItemListRequest } from "@/lib/admin/item-list-contract";
@@ -27,7 +27,7 @@ function jsonParameter(searchParams: URLSearchParams, name: string) {
 export async function GET(request: NextRequest) {
 	await connection();
 
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {
@@ -36,10 +36,7 @@ export async function GET(request: NextRequest) {
 			cursor: searchParams.get("cursor"),
 			filters: jsonParameter(searchParams, "filters"),
 			pageSize: searchParams.get("pageSize") ?? undefined,
-			requestedColumns: jsonParameter(
-				searchParams,
-				"requestedColumns",
-			),
+			requestedColumns: jsonParameter(searchParams, "requestedColumns"),
 			search: searchParams.get("search") ?? undefined,
 			sorting: jsonParameter(searchParams, "sorting"),
 		});

@@ -5,14 +5,14 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readAdminJson,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { adminItemBatchRequestSchema } from "@/lib/admin/item-batch-contract";
 import { runAdminItemBatch } from "@/lib/admin/item-batch-service";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 
 export async function POST(request: NextRequest) {
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {

@@ -36,6 +36,11 @@ import {
 	openAndMeasureAdminSearchIndexPopover,
 	waitForAdminSearchIndexStatus,
 } from "../tests/e2e/admin-search-index-page";
+import {
+	createAdminTestSession,
+	type AdminTestSession,
+	withAdminTestSession,
+} from "./adminSession";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
@@ -47,6 +52,7 @@ if (!process.env.LIBRARY_CONFIG_PATH) {
 const workerId = `search-worker-e2e-${process.pid}`;
 const itemKey = "WRKR2345";
 const timeoutMs = 20_000;
+let adminSession: AdminTestSession;
 
 type IndexReceipt = {
 	entityKey: string;
@@ -173,10 +179,10 @@ async function requestJson<T>(
 ): Promise<T> {
 	const response = await fetch(`${baseUrl}${path}`, {
 		...init,
-		headers: {
+		headers: withAdminTestSession(adminSession, {
 			...(init?.body ? { "Content-Type": "application/json" } : {}),
 			...init?.headers,
-		},
+		}),
 	});
 	const body = (await response.json().catch(() => null)) as T | null;
 	if (!response.ok) {
@@ -224,7 +230,10 @@ async function publishDraftThroughAdmin(page: Page, title: string) {
 		.getByRole("button", { name: "Publish selected" })
 		.click();
 	const response = await mutationResponse;
-	assert(response.ok(), `The admin publish request failed (${response.status()})`);
+	assert(
+		response.ok(),
+		`The admin publish request failed (${response.status()})`,
+	);
 	const body = (await response.json()) as {
 		results?: Array<{ indexingReceipts?: IndexReceipt[] }>;
 	};
@@ -309,6 +318,7 @@ async function main() {
 		const isolatedConfig = JSON.parse(
 			await readFile(sourceConfigPath, "utf8"),
 		) as {
+			authentication: { adminPassword: string };
 			services: {
 				database: { url: string };
 				search: { host: string; index: string; key: string };
@@ -400,7 +410,6 @@ async function main() {
 
 		const env = {
 			...process.env,
-			ADMIN_AUTH_BYPASS: "true",
 			LIBRARY_CONFIG_PATH: isolatedConfigPath,
 			SEARCH_INDEX_WORKER_ID: workerId,
 			SEARCH_INDEX_WORKER_INSTANCE_PATH: `${temporaryDirectory}/worker-instance`,
@@ -421,12 +430,18 @@ async function main() {
 		});
 		await waitFor(async () => {
 			try {
-				const response = await fetch(`${baseUrl}/api/admin/search-index`);
+				const response = await fetch(
+					`${baseUrl}/api/library-config/health`,
+				);
 				return response.ok;
 			} catch {
 				return false;
 			}
 		}, `The isolated admin server did not start: ${webOutput}`);
+		adminSession = await createAdminTestSession(
+			baseUrl,
+			isolatedConfig.authentication.adminPassword,
+		);
 
 		const statusKeys = Array.from({ length: 6 }, () =>
 			generateCanonicalRecordKey(),
@@ -724,7 +739,8 @@ async function main() {
 			method: "POST",
 		});
 		assert(
-			published.indexingReceipts[0]?.entityKey === created.draft.itemKey &&
+			published.indexingReceipts[0]?.entityKey ===
+				created.draft.itemKey &&
 				published.indexingReceipts[0]?.revision === 1,
 			`Publish did not return its indexing receipt: ${JSON.stringify(published)}`,
 		);
@@ -945,7 +961,8 @@ async function main() {
 		});
 		assert(
 			createdCollection.indexingReceipts.length === 1 &&
-				createdCollection.indexingReceipts[0]?.entityType === "collection",
+				createdCollection.indexingReceipts[0]?.entityType ===
+					"collection",
 			"Collection creation did not return its indexing receipt",
 		);
 		await waitForReceiptsIndexed(
@@ -1020,12 +1037,16 @@ async function main() {
 		const deletedCollection = await requestJson<{
 			collections: Array<{ key: string; revision: number }>;
 			indexingReceipts: IndexReceipt[];
-		}>(baseUrl, `/api/admin/collections/${movedCollection.collection.key}`, {
-			body: JSON.stringify({
-				expectedRevision: movedCollection.collection.revision,
-			}),
-			method: "DELETE",
-		});
+		}>(
+			baseUrl,
+			`/api/admin/collections/${movedCollection.collection.key}`,
+			{
+				body: JSON.stringify({
+					expectedRevision: movedCollection.collection.revision,
+				}),
+				method: "DELETE",
+			},
+		);
 		assert(
 			deletedCollection.indexingReceipts.length ===
 				deletedCollection.collections.length &&
@@ -1073,7 +1094,10 @@ async function main() {
 			`The watch worker did not stop before the browser workload: ${stderr}`,
 		);
 		worker = null;
-		const preBrowserStopped = await getSearchIndexWorker(database, workerId);
+		const preBrowserStopped = await getSearchIndexWorker(
+			database,
+			workerId,
+		);
 		assert(
 			preBrowserStopped?.stage === "stopped" &&
 				preBrowserStopped.stoppedAt !== null &&
@@ -1083,7 +1107,8 @@ async function main() {
 
 		const browserPublishTitle = "Browser indexing verification";
 		const browserPublishDraft = await createDraft({
-			abstractNote: "Browser-published record in the real progress workload.",
+			abstractNote:
+				"Browser-published record in the real progress workload.",
 			collections: [],
 			creators: [],
 			itemType: "Report",
@@ -1094,6 +1119,15 @@ async function main() {
 		const chromiumPage = await chromiumBrowser.newPage({
 			viewport: { height: 900, width: 1440 },
 		});
+		await chromiumPage
+			.context()
+			.addCookies([
+				{
+					name: adminSession.name,
+					url: baseUrl,
+					value: adminSession.value,
+				},
+			]);
 		await chromiumPage.goto(`${baseUrl}/admin`);
 		const initialChromiumStatus = adminSearchIndexStatus(chromiumPage);
 		try {
@@ -1132,7 +1166,7 @@ async function main() {
 						tags: [],
 						title: `Indexing progress fixture ${index + 1}`,
 					}),
-			),
+				),
 			);
 			progressFixtureKeys.push(
 				...fixtures.map(({ draft }) => draft.itemKey),
@@ -1152,7 +1186,8 @@ async function main() {
 				result.results.length === keyChunk.length &&
 					result.results.every(
 						({ indexingReceipts, outcome }) =>
-							outcome === "changed" && indexingReceipts.length === 1,
+							outcome === "changed" &&
+							indexingReceipts.length === 1,
 					),
 				"The real progress workload did not queue every fixture",
 			);
@@ -1204,7 +1239,8 @@ async function main() {
 		const activeStatus = chromiumPage.locator(
 			'[data-admin-search-index-status="indexing"]',
 		);
-		const triggerGeometry = await measureAdminSearchIndexTrigger(activeStatus);
+		const triggerGeometry =
+			await measureAdminSearchIndexTrigger(activeStatus);
 		assert(
 			JSON.stringify(triggerGeometry) ===
 				JSON.stringify({
@@ -1306,6 +1342,15 @@ async function main() {
 		const webkitPage = await webkitBrowser.newPage({
 			viewport: { height: 900, width: 1440 },
 		});
+		await webkitPage
+			.context()
+			.addCookies([
+				{
+					name: adminSession.name,
+					url: baseUrl,
+					value: adminSession.value,
+				},
+			]);
 		await webkitPage.goto(`${baseUrl}/admin`);
 		await waitForAdminSearchIndexStatus(
 			webkitPage,
@@ -1341,7 +1386,11 @@ async function main() {
 		browserFailureWorker.stderr?.on("data", (chunk) => {
 			stderr += String(chunk);
 		});
-		for (let expectedAttempts = 1; expectedAttempts <= 15; expectedAttempts += 1) {
+		for (
+			let expectedAttempts = 1;
+			expectedAttempts <= 15;
+			expectedAttempts += 1
+		) {
 			await waitFor(async () => {
 				const [failed] = await database
 					.select({
@@ -1352,8 +1401,8 @@ async function main() {
 					.where(outboxReceiptPredicate(browserRetryReceipt));
 				return Boolean(
 					failed &&
-						failed.attempts >= expectedAttempts &&
-						(expectedAttempts < 15 || failed.deadLetteredAt),
+					failed.attempts >= expectedAttempts &&
+					(expectedAttempts < 15 || failed.deadLetteredAt),
 				);
 			}, `The real Meilisearch task failure did not reach attempt ${expectedAttempts}`);
 			if (expectedAttempts < 15) {
@@ -1436,7 +1485,9 @@ async function main() {
 				unrelatedFailure.deadLetteredAt !== null,
 			"The admin retry control changed an unrelated failed receipt",
 		);
-		await database.delete(outbox).where(eq(outbox.entityKey, unrelatedFailedKey));
+		await database
+			.delete(outbox)
+			.where(eq(outbox.entityKey, unrelatedFailedKey));
 		await waitForAdminSearchIndexStatus(
 			webkitPage,
 			"Search paused",

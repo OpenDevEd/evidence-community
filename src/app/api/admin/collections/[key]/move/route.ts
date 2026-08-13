@@ -6,7 +6,7 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readAdminJson,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { toAdminCollection } from "@/lib/admin/library-query-service";
 import { moveAdminCollection } from "@/lib/admin/collection-mutation-service";
@@ -15,7 +15,7 @@ import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 type RouteContext = { params: Promise<{ key: string }> };
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {

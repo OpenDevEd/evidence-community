@@ -1,8 +1,19 @@
 import { DrizzleQueryError } from "drizzle-orm";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-import { adminErrorResponse, readAdminJson } from "@/lib/admin/http";
+const access = vi.hoisted(() => ({ authorized: false }));
+
+vi.mock("@/lib/admin/access", () => ({
+	adminSessionCookieName: () => "evidence_library_admin",
+	isAdminSessionAuthorized: () => access.authorized,
+}));
+
+import {
+	adminErrorResponse,
+	readAdminJson,
+	requireAdminSession,
+} from "@/lib/admin/http";
 import { CollectionWritebackUnavailableError } from "@/lib/admin/collection-mutation-service";
 import { CollectionValidationError } from "@/lib/admin/native-collection-service";
 import { NativeFileValidationError } from "@/lib/admin/native-file-service";
@@ -29,6 +40,35 @@ function wrappedDatabaseError(code: string) {
 	});
 	return new DrizzleQueryError("insert into item", [], cause);
 }
+
+describe("admin API session gate", () => {
+	it("returns 401 without a valid session", async () => {
+		access.authorized = false;
+		const response = await requireAdminSession({
+			cookies: { get: () => undefined },
+		});
+
+		expect(response?.status).toBe(401);
+		expect(response?.headers.get("Cache-Control")).toBe(
+			"private, no-store",
+		);
+		expect(await response?.json()).toEqual({
+			error: {
+				code: "unauthorized",
+				message: "Enter the admin password to continue.",
+			},
+		});
+	});
+
+	it("allows a valid session", async () => {
+		access.authorized = true;
+		expect(
+			await requireAdminSession({
+				cookies: { get: () => ({ value: "valid" }) },
+			}),
+		).toBeNull();
+	});
+});
 
 describe("admin API error mapping", () => {
 	it("returns plain Crossref activation errors", async () => {

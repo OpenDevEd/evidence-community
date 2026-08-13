@@ -16,6 +16,11 @@ import { adminItemListProjection } from "../src/db/schema/tables/adminItemListPr
 import { item } from "../src/db/schema/tables/item";
 import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
+import {
+	createAdminTestSession,
+	type AdminTestSession,
+	withAdminTestSession,
+} from "./adminSession";
 
 const baseUrl = process.env.EVIDENCE_LIBRARY_TEST_URL;
 const databaseUrl = process.env.DATABASE_URL_POST;
@@ -27,6 +32,7 @@ const privateBucket =
 	process.env.SUPABASE_TEST_PRIVATE_BUCKET ?? "evidence-library-private";
 const publicBucket =
 	process.env.SUPABASE_TEST_PUBLIC_BUCKET ?? "evidence-library-public";
+let adminSession: AdminTestSession;
 
 if (
 	!baseUrl ||
@@ -68,10 +74,12 @@ async function jsonRequest(
 ) {
 	const response = await fetch(`${baseUrl}${path}`, {
 		...init,
-		headers: {
-			"Content-Type": "application/json",
-			...init.headers,
-		},
+		headers: Object.fromEntries(
+			withAdminTestSession(adminSession, {
+				"Content-Type": "application/json",
+				...init.headers,
+			}),
+		),
 	});
 	const body = await response.json().catch(() => null);
 	if (response.status !== expectedStatus) {
@@ -202,6 +210,7 @@ async function removeAndVerifyObjects(
 }
 
 async function verify() {
+	adminSession = await createAdminTestSession(baseUrl!);
 	const database = createPostgresDatabaseResource(databaseUrl!);
 	const db = database.database;
 	const storageAdmin = createClient(storageUrl!, serviceRoleKey!, {
@@ -387,7 +396,7 @@ async function verify() {
 		const fileUnpublished = await jsonRequest(
 			`/api/admin/items/${attachmentKey}/file`,
 			{
-			method: "DELETE",
+				method: "DELETE",
 			},
 		);
 		await assertIndexingReceipts(
@@ -430,8 +439,8 @@ async function verify() {
 					.from(itemDraft)
 					.where(
 						or(
-								sql`${itemDraft.patch}->>'title' = ${parentTitle}`,
-								sql`${itemDraft.patch}->>'title' = ${attachmentTitle}`,
+							sql`${itemDraft.patch}->>'title' = ${parentTitle}`,
+							sql`${itemDraft.patch}->>'title' = ${attachmentTitle}`,
 						),
 					),
 			]);

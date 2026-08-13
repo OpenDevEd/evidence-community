@@ -5,12 +5,12 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readAdminJson,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { createNativeItemDraft } from "@/lib/admin/native-item-service";
 
 export async function POST(request: NextRequest) {
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {

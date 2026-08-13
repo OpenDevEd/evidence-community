@@ -5,7 +5,7 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readAdminJson,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import {
 	fileDraftJson,
@@ -31,8 +31,8 @@ const stageBodySchema = z
 	})
 	.strict();
 
-export async function GET(_request: NextRequest, { params }: RouteContext) {
-	const denied = requireAdminBypass();
+export async function GET(request: NextRequest, { params }: RouteContext) {
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {
@@ -56,7 +56,7 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
 }
 
 export async function POST(request: NextRequest, { params }: RouteContext) {
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {
@@ -87,8 +87,8 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 	}
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteContext) {
-	const denied = requireAdminBypass();
+export async function DELETE(request: NextRequest, { params }: RouteContext) {
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {

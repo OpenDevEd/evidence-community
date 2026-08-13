@@ -2,21 +2,44 @@ import "server-only";
 
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 
-export const ADMIN_SESSION_COOKIE = "__Host-evidence_library_admin";
-export const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1_000;
+import { getLibraryConfig } from "@/config/library-config/server";
+import { ClientRateLimiter } from "@/lib/client-rate-limit";
 
-export const adminSessionCookieOptions = {
-	httpOnly: true,
-	maxAge: ADMIN_SESSION_TTL_MS / 1_000,
-	path: "/",
-	sameSite: "strict",
-	secure: true,
-} as const;
+export const ADMIN_SESSION_COOKIE = "__Host-evidence_library_admin";
+export const ADMIN_DEVELOPMENT_SESSION_COOKIE = "evidence_library_admin";
+export const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1_000;
+export const ADMIN_LOGIN_MAX_ATTEMPTS = 5;
+export const ADMIN_LOGIN_WINDOW_MS = 5 * 60 * 1_000;
+
+export function adminSessionCookieOptions(environment = process.env.NODE_ENV) {
+	return {
+		httpOnly: true,
+		maxAge: ADMIN_SESSION_TTL_MS / 1_000,
+		path: "/",
+		sameSite: "strict" as const,
+		secure: environment === "production",
+	};
+}
+
+export function adminSessionCookieName(environment = process.env.NODE_ENV) {
+	return environment === "production"
+		? ADMIN_SESSION_COOKIE
+		: ADMIN_DEVELOPMENT_SESSION_COOKIE;
+}
 
 export type AdminCredentials = {
 	password: string;
 	secret: string;
 };
+
+export async function getAdminCredentials(): Promise<AdminCredentials | null> {
+	const authentication = (await getLibraryConfig()).authentication;
+	if (!authentication.adminPassword || !authentication.secret) return null;
+	return {
+		password: authentication.adminPassword,
+		secret: authentication.secret,
+	};
+}
 
 function digest(value: string) {
 	return createHash("sha256").update(value).digest();
@@ -63,7 +86,8 @@ export function verifyAdminSessionToken(
 	if (!payload || !signature || extra) return false;
 
 	const expectedSignature = sign(payload, credentials.secret);
-	if (!timingSafeEqual(digest(signature), digest(expectedSignature))) return false;
+	if (!timingSafeEqual(digest(signature), digest(expectedSignature)))
+		return false;
 
 	try {
 		const session = JSON.parse(
@@ -78,4 +102,30 @@ export function verifyAdminSessionToken(
 	} catch {
 		return false;
 	}
+}
+
+export async function isAdminSessionAuthorized(token: string | undefined) {
+	const credentials = await getAdminCredentials();
+	return credentials ? verifyAdminSessionToken(token, credentials) : false;
+}
+
+const adminLoginGlobal = globalThis as typeof globalThis & {
+	__evidenceLibraryAdminLoginLimiter?: ClientRateLimiter;
+};
+
+const adminLoginLimiter =
+	adminLoginGlobal.__evidenceLibraryAdminLoginLimiter ??
+	new ClientRateLimiter({
+		maxRequests: ADMIN_LOGIN_MAX_ATTEMPTS,
+		windowMs: ADMIN_LOGIN_WINDOW_MS,
+	});
+
+adminLoginGlobal.__evidenceLibraryAdminLoginLimiter = adminLoginLimiter;
+
+export function consumeAdminLoginAttempt(headers: Pick<Headers, "get">) {
+	return adminLoginLimiter.consume(headers);
+}
+
+export function getAdminLoginStatus(headers: Pick<Headers, "get">) {
+	return adminLoginLimiter.getStatus(headers);
 }

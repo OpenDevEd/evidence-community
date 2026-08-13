@@ -7,7 +7,7 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readAdminJson,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import {
 	discardItemDraft,
@@ -27,8 +27,8 @@ const saveBodySchema = z.object({
 	payload: z.record(z.string(), z.unknown()),
 });
 
-export async function GET(_request: NextRequest, { params }: RouteContext) {
-	const denied = requireAdminBypass();
+export async function GET(request: NextRequest, { params }: RouteContext) {
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {
@@ -43,8 +43,8 @@ export async function GET(_request: NextRequest, { params }: RouteContext) {
 	}
 }
 
-export async function POST(_request: NextRequest, { params }: RouteContext) {
-	const denied = requireAdminBypass();
+export async function POST(request: NextRequest, { params }: RouteContext) {
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {
@@ -64,7 +64,7 @@ export async function POST(_request: NextRequest, { params }: RouteContext) {
 }
 
 export async function PUT(request: NextRequest, { params }: RouteContext) {
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {
@@ -91,8 +91,8 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
 	}
 }
 
-export async function DELETE(_request: NextRequest, { params }: RouteContext) {
-	const denied = requireAdminBypass();
+export async function DELETE(request: NextRequest, { params }: RouteContext) {
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {

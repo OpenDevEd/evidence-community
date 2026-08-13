@@ -18,7 +18,7 @@ import {
 } from "./native-file-service";
 import { EvidenceFileStorageError } from "./file-storage";
 import { InvalidPdfError } from "./pdf-processing";
-import { isAdminBypassEnabled } from "./access";
+import { adminSessionCookieName, isAdminSessionAuthorized } from "./access";
 import {
 	CollectionConflictError,
 	CollectionNotFoundError,
@@ -99,12 +99,20 @@ function adminError(details: AdminErrorDetails) {
 	);
 }
 
-export function requireAdminBypass() {
-	if (isAdminBypassEnabled()) return null;
+export async function requireAdminSession(request: {
+	cookies: { get(name: string): { value: string } | undefined };
+}) {
+	if (
+		await isAdminSessionAuthorized(
+			request.cookies.get(adminSessionCookieName())?.value,
+		)
+	) {
+		return null;
+	}
 	return adminError({
-		code: "not_found",
-		message: "This page is not available.",
-		status: 404,
+		code: "unauthorized",
+		message: "Enter the admin password to continue.",
+		status: 401,
 	});
 }
 

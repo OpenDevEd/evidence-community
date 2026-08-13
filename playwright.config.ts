@@ -1,7 +1,6 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL =
-	process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3100";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3100";
 
 export default defineConfig({
 	testDir: "./tests/e2e",
@@ -39,9 +38,6 @@ export default defineConfig({
 		: {
 				command:
 					"LIBRARY_CONFIG_PATH=config/library.example.json npm run dev -- --hostname 127.0.0.1 --port 3100",
-				env: {
-					ADMIN_AUTH_BYPASS: "true",
-				},
 				reuseExistingServer: false,
 				timeout: 120_000,
 				url: `${baseURL}/api/library-config/health`,

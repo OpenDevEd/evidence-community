@@ -6,7 +6,7 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readAdminJson,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { fileDraftJson } from "@/lib/admin/file-projection";
 import { completeNativePdfUpload } from "@/lib/admin/native-file-service";
@@ -21,7 +21,7 @@ export async function POST(
 	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {
@@ -36,8 +36,7 @@ export async function POST(
 			{
 				...body,
 				itemKey: key,
-				maxPdfBytes:
-					runtime.config.services.storage.maxPdfBytes,
+				maxPdfBytes: runtime.config.services.storage.maxPdfBytes,
 			},
 		);
 		return NextResponse.json(

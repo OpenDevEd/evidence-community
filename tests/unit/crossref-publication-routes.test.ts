@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 
 const mocks = vi.hoisted(() => ({
 	activate: vi.fn(),
@@ -22,7 +23,7 @@ vi.mock("@/lib/admin/http", async () => {
 		ADMIN_RESPONSE_HEADERS: { "Cache-Control": "private, no-store" },
 		adminErrorResponse: (error: unknown) =>
 			NextResponse.json({ error: String(error) }, { status: 500 }),
-		requireAdminBypass: () => null,
+		requireAdminSession: () => null,
 	};
 });
 vi.mock("@/lib/publication/crossref-activation-service", () => ({
@@ -45,7 +46,7 @@ describe("Crossref publication admin routes", () => {
 	});
 
 	it("uses only server configuration when activating", async () => {
-		const request = new Request(
+		const request = new NextRequest(
 			"https://library.example.org/api/admin/items/ABCDEFGH/publication/crossref/activate",
 			{
 				method: "POST",
@@ -70,9 +71,12 @@ describe("Crossref publication admin routes", () => {
 	});
 
 	it("returns the shared publication view", async () => {
-		const response = await status(new Request("https://library.example.org"), {
-			params: Promise.resolve({ key: "ABCDEFGH" }),
-		});
+		const response = await status(
+			new NextRequest("https://library.example.org"),
+			{
+				params: Promise.resolve({ key: "ABCDEFGH" }),
+			},
+		);
 		expect(await response.json()).toEqual({
 			publication: { itemKey: "ABCDEFGH" },
 		});
@@ -80,9 +84,12 @@ describe("Crossref publication admin routes", () => {
 	});
 
 	it("reopens the existing failed job", async () => {
-		const response = await retry(new Request("https://library.example.org"), {
-			params: Promise.resolve({ key: "ABCDEFGH" }),
-		});
+		const response = await retry(
+			new NextRequest("https://library.example.org"),
+			{
+				params: Promise.resolve({ key: "ABCDEFGH" }),
+			},
+		);
 		expect(await response.json()).toEqual({
 			activation: { job: { id: 1, state: "retrying" } },
 		});

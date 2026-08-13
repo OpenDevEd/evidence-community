@@ -1,19 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { activateCrossrefPublication } from "@/lib/publication/crossref-activation-service";
 
 export async function POST(
-	_request: Request,
+	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {

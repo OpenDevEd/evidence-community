@@ -6,6 +6,7 @@ import {
 	ADMIN_SESSION_COOKIE,
 	ADMIN_SESSION_TTL_MS,
 	adminPasswordMatches,
+	adminSessionCookieName,
 	adminSessionCookieOptions,
 	createAdminSessionToken,
 	verifyAdminSessionToken,
@@ -18,7 +19,9 @@ const credentials = {
 
 describe("admin access", () => {
 	it("accepts only the configured password", () => {
-		expect(adminPasswordMatches("correct horse battery staple", credentials)).toBe(true);
+		expect(
+			adminPasswordMatches("correct horse battery staple", credentials),
+		).toBe(true);
 		expect(adminPasswordMatches("wrong password", credentials)).toBe(false);
 	});
 
@@ -26,9 +29,15 @@ describe("admin access", () => {
 		const now = Date.UTC(2026, 7, 13, 12);
 		const token = createAdminSessionToken(credentials, now);
 
-		expect(verifyAdminSessionToken(token, credentials, now + 1_000)).toBe(true);
+		expect(verifyAdminSessionToken(token, credentials, now + 1_000)).toBe(
+			true,
+		);
 		expect(
-			verifyAdminSessionToken(token, credentials, now + ADMIN_SESSION_TTL_MS),
+			verifyAdminSessionToken(
+				token,
+				credentials,
+				now + ADMIN_SESSION_TTL_MS,
+			),
 		).toBe(false);
 	});
 
@@ -36,7 +45,9 @@ describe("admin access", () => {
 		const now = Date.UTC(2026, 7, 13, 12);
 		const token = createAdminSessionToken(credentials, now);
 
-		expect(verifyAdminSessionToken(`${token}x`, credentials, now)).toBe(false);
+		expect(verifyAdminSessionToken(`${token}x`, credentials, now)).toBe(
+			false,
+		);
 		expect(
 			verifyAdminSessionToken(
 				token,
@@ -55,13 +66,20 @@ describe("admin access", () => {
 
 	it("uses a host-only secure private cookie", () => {
 		expect(ADMIN_SESSION_COOKIE).toBe("__Host-evidence_library_admin");
-		expect(adminSessionCookieOptions).toEqual({
+		expect(adminSessionCookieName("production")).toBe(ADMIN_SESSION_COOKIE);
+		expect(adminSessionCookieName("development")).toBe(
+			"evidence_library_admin",
+		);
+		expect(adminSessionCookieOptions("production")).toEqual({
 			httpOnly: true,
 			maxAge: ADMIN_SESSION_TTL_MS / 1_000,
 			path: "/",
 			sameSite: "strict",
 			secure: true,
 		});
-		expect(adminSessionCookieOptions).not.toHaveProperty("domain");
+		expect(adminSessionCookieOptions("production")).not.toHaveProperty(
+			"domain",
+		);
+		expect(adminSessionCookieOptions("development").secure).toBe(false);
 	});
 });

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -7,7 +7,7 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readOptionalAdminJson,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { activateZenodoPublication } from "@/lib/publication/zenodo-activation-service";
 
@@ -18,10 +18,10 @@ const requestSchema = z
 	.strict();
 
 export async function POST(
-	request: Request,
+	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {

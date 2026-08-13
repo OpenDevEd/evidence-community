@@ -15,6 +15,9 @@ import {
 const itemKey = "TESTBOOK";
 const publishedItemKey = "LIVEB22K";
 const timestamp = "2026-07-31T12:00:00.000Z";
+const adminPassword =
+	process.env.EVIDENCE_LIBRARY_ADMIN_PASSWORD ??
+	"correct horse battery staple";
 const longCollectionName =
 	"A very long collection name that must stay inside the metadata inspector";
 
@@ -107,6 +110,11 @@ async function mockPublicShell(page: Page) {
 
 test.beforeEach(async ({ page }) => {
 	await mockPublicShell(page);
+	const response = await page.request.post("/api/admin/session", {
+		form: { password: adminPassword },
+		maxRedirects: 0,
+	});
+	expect(response.status()).toBe(303);
 });
 
 const teacherCollection = {
@@ -333,6 +341,10 @@ async function mockPublishedBook(
 		const request = route.request();
 		const requestUrl = new URL(request.url());
 		const pathname = requestUrl.pathname;
+		if (pathname.startsWith("/api/admin/session")) {
+			await route.continue();
+			return;
+		}
 
 		if (
 			pathname === "/api/admin/collections" &&
@@ -580,6 +592,36 @@ async function mockPublishedBook(
 		},
 	};
 }
+
+test("logs in with Enter, keeps the session, and logs out", async ({
+	page,
+}) => {
+	test.setTimeout(90_000);
+	await mockPublishedBook(page);
+	await page.context().clearCookies();
+	await page.goto("/admin");
+
+	const password = page.getByLabel("Admin password");
+	await expect(password).toBeVisible();
+	await password.fill("wrong password");
+	await password.press("Enter");
+	await expect(page.getByRole("alert")).toHaveText(
+		"That password is not correct.",
+	);
+
+	await password.fill(adminPassword);
+	await password.press("Enter");
+	await expect(
+		page.getByRole("textbox", { name: "Search records" }),
+	).toBeVisible();
+	await page.reload();
+	await expect(
+		page.getByRole("textbox", { name: "Search records" }),
+	).toBeVisible();
+
+	await page.getByRole("button", { name: "Log out" }).click();
+	await expect(page.getByLabel("Admin password")).toBeVisible();
+});
 
 test("edits an imported record and shows its writeback lifecycle", async ({
 	page,
@@ -876,10 +918,7 @@ test("assigns writable Zotero records to native or own-source collections", asyn
 		sourceConnectionKey: unrelatedSource.key,
 	};
 	await mockPublishedBook(page, {
-		additionalCollectionEntries: [
-			importedCollection,
-			unrelatedCollection,
-		],
+		additionalCollectionEntries: [importedCollection, unrelatedCollection],
 		additionalSources: [writableSource, unrelatedSource],
 		listRowOverrides: {
 			sourceConnectionKey: writableSource.key,
@@ -2213,18 +2252,20 @@ async function expectFullCollectionDropHighlight(
 		"data-collection-key",
 		collectionKey,
 	);
-	const [dropTargetBox, highlightedRowBox, computedStyle] = await Promise.all([
-		target.boundingBox(),
-		highlightedRow.boundingBox(),
-		highlightedRow.evaluate((element) => {
-			const style = window.getComputedStyle(element);
-			return {
-				backgroundColor: style.backgroundColor,
-				borderRadius: style.borderRadius,
-				boxShadow: style.boxShadow,
-			};
-		}),
-	]);
+	const [dropTargetBox, highlightedRowBox, computedStyle] = await Promise.all(
+		[
+			target.boundingBox(),
+			highlightedRow.boundingBox(),
+			highlightedRow.evaluate((element) => {
+				const style = window.getComputedStyle(element);
+				return {
+					backgroundColor: style.backgroundColor,
+					borderRadius: style.borderRadius,
+					boxShadow: style.boxShadow,
+				};
+			}),
+		],
+	);
 	expect(dropTargetBox?.height).toBeLessThan(highlightedRowBox?.height ?? 0);
 	expect(computedStyle.backgroundColor).not.toBe("rgba(0, 0, 0, 0)");
 	expect(computedStyle.borderRadius).toBe("8px");
@@ -2334,12 +2375,16 @@ test("creates an item through a pointer click in the new-item popover", async ({
 	).toBeFocused();
 	await expect
 		.poll(() =>
-			popover.evaluate((element) => element.getBoundingClientRect().width),
+			popover.evaluate(
+				(element) => element.getBoundingClientRect().width,
+			),
 		)
 		.toBeLessThanOrEqual(321);
 	await expect
 		.poll(() =>
-			popover.evaluate((element) => element.getBoundingClientRect().width),
+			popover.evaluate(
+				(element) => element.getBoundingClientRect().width,
+			),
 		)
 		.toBeGreaterThanOrEqual(319);
 	const popoverGeometry = await popover.evaluate((element) => {
@@ -2473,13 +2518,18 @@ test("uses date, URL, and identifier controls that match the metadata", async ({
 	const itemType = inspector.getByRole("combobox", { name: "Item type" });
 	await itemType.fill("Case");
 	await page.getByRole("option", { name: "Case", exact: true }).click();
-	await expect(inspector.getByLabel("Case Name", { exact: true })).toBeVisible();
+	await expect(
+		inspector.getByLabel("Case Name", { exact: true }),
+	).toBeVisible();
 	await expect(inspector.getByRole("status")).toHaveText("Saved");
 
 	const precision = inspector.getByRole("combobox", {
 		name: "Date Decided precision",
 	});
-	await expect(precision.locator("option")).toHaveText(["Exact date", "Year"]);
+	await expect(precision.locator("option")).toHaveText([
+		"Exact date",
+		"Year",
+	]);
 	await precision.selectOption("year");
 	const decided = inspector.getByLabel("Date Decided", { exact: true });
 	await expect(decided).toHaveAttribute("type", "number");
@@ -4314,7 +4364,9 @@ test("runs selected-record actions through one compact batch request", async ({
 		"Remove selected",
 		"Clear selection",
 	]) {
-		await expect(bulkToolbar.getByRole("button", { name: label })).toBeDisabled();
+		await expect(
+			bulkToolbar.getByRole("button", { name: label }),
+		).toBeDisabled();
 	}
 
 	await page
@@ -4332,7 +4384,8 @@ test("runs selected-record actions through one compact batch request", async ({
 		const bulkRect = bulk.getBoundingClientRect();
 		const controlsRect = controls.getBoundingClientRect();
 		const buttons = bulk.querySelectorAll("button");
-		const actionsRect = buttons[buttons.length - 1]!.getBoundingClientRect();
+		const actionsRect =
+			buttons[buttons.length - 1]!.getBoundingClientRect();
 		const countRect = bulk.lastElementChild!.getBoundingClientRect();
 		return {
 			actionsRight: actionsRect.right,
@@ -4376,7 +4429,9 @@ test("runs selected-record actions through one compact batch request", async ({
 		"Remove selected",
 		"Clear selection",
 	]) {
-		await expect(bulkToolbar.getByRole("button", { name: label })).toBeDisabled();
+		await expect(
+			bulkToolbar.getByRole("button", { name: label }),
+		).toBeDisabled();
 	}
 });
 
@@ -5493,8 +5548,7 @@ test("shows publish success only after Meilisearch finishes", async ({
 				queue: {
 					hasFailed: false,
 					hasPending: receiptState === "queued",
-					nextAttemptAt:
-						receiptState === "queued" ? timestamp : null,
+					nextAttemptAt: receiptState === "queued" ? timestamp : null,
 				},
 				worker: {
 					active: true,

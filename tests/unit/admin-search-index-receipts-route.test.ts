@@ -21,7 +21,7 @@ vi.mock("@/lib/admin/http", async () => {
 		adminErrorResponse: (error: unknown) =>
 			NextResponse.json({ error: String(error) }, { status: 500 }),
 		readAdminJson: (request: Request) => request.json(),
-		requireAdminBypass: () => null,
+		requireAdminSession: () => null,
 	};
 });
 vi.mock("@/lib/admin/search-index-service", () => ({
@@ -53,19 +53,22 @@ describe("admin search receipt route", () => {
 		mocks.getReceipts.mockResolvedValue(statuses);
 
 		const response = await POST(
-			new NextRequest("https://library.example.org/api/admin/search-index/receipts", {
-				body: JSON.stringify({
-					receipts: [
-						{
-							entityKey: "23456789",
-							entityType: "item",
-							revision: 1,
-						},
-					],
-				}),
-				headers: { "content-type": "application/json" },
-				method: "POST",
-			}),
+			new NextRequest(
+				"https://library.example.org/api/admin/search-index/receipts",
+				{
+					body: JSON.stringify({
+						receipts: [
+							{
+								entityKey: "23456789",
+								entityType: "item",
+								revision: 1,
+							},
+						],
+					}),
+					headers: { "content-type": "application/json" },
+					method: "POST",
+				},
+			),
 		);
 
 		expect(mocks.getReceipts).toHaveBeenCalledWith(mocks.database, [

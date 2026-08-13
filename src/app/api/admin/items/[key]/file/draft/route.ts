@@ -4,15 +4,15 @@ import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { discardNativePdfDraft } from "@/lib/admin/native-file-service";
 
 export async function DELETE(
-	_request: NextRequest,
+	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {

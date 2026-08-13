@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextRequest } from "next/server";
 import { ZodError } from "zod";
 
 const mocks = vi.hoisted(() => ({
@@ -29,7 +30,7 @@ vi.mock("@/lib/admin/http", async () => {
 			const text = await request.text();
 			return text ? JSON.parse(text) : {};
 		},
-		requireAdminBypass: () => null,
+		requireAdminSession: () => null,
 	};
 });
 vi.mock("@/lib/publication/zenodo-activation-service", () => ({
@@ -50,9 +51,12 @@ describe("Zenodo publication admin routes", () => {
 
 	it("uses the configured default when the request body is empty", async () => {
 		const response = await activate(
-			new Request("https://library.example.org/api/admin/items/ABCDEFGH/publication/zenodo/activate", {
-				method: "POST",
-			}),
+			new NextRequest(
+				"https://library.example.org/api/admin/items/ABCDEFGH/publication/zenodo/activate",
+				{
+					method: "POST",
+				},
+			),
 			{ params: Promise.resolve({ key: "ABCDEFGH" }) },
 		);
 		expect(response.status).toBe(200);
@@ -66,11 +70,14 @@ describe("Zenodo publication admin routes", () => {
 
 	it("passes only the supported DOI policy", async () => {
 		const response = await activate(
-			new Request("https://library.example.org/api/admin/items/ABCDEFGH/publication/zenodo/activate", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ identifierPolicy: "mint-zenodo" }),
-			}),
+			new NextRequest(
+				"https://library.example.org/api/admin/items/ABCDEFGH/publication/zenodo/activate",
+				{
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ identifierPolicy: "mint-zenodo" }),
+				},
+			),
 			{ params: Promise.resolve({ key: "ABCDEFGH" }) },
 		);
 		expect(response.status).toBe(200);
@@ -83,9 +90,12 @@ describe("Zenodo publication admin routes", () => {
 	});
 
 	it("reopens the failed Zenodo job", async () => {
-		const response = await retry(new Request("https://library.example.org"), {
-			params: Promise.resolve({ key: "ABCDEFGH" }),
-		});
+		const response = await retry(
+			new NextRequest("https://library.example.org"),
+			{
+				params: Promise.resolve({ key: "ABCDEFGH" }),
+			},
+		);
 		expect(await response.json()).toEqual({
 			activation: { job: { id: 2, state: "retrying" } },
 		});
@@ -98,11 +108,14 @@ describe("Zenodo publication admin routes", () => {
 
 	it("rejects an unknown DOI policy before calling the service", async () => {
 		const response = await activate(
-			new Request("https://library.example.org/api/admin/items/ABCDEFGH/publication/zenodo/activate", {
-				method: "POST",
-				headers: { "content-type": "application/json" },
-				body: JSON.stringify({ identifierPolicy: "guess" }),
-			}),
+			new NextRequest(
+				"https://library.example.org/api/admin/items/ABCDEFGH/publication/zenodo/activate",
+				{
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify({ identifierPolicy: "guess" }),
+				},
+			),
 			{ params: Promise.resolve({ key: "ABCDEFGH" }) },
 		);
 		expect(response.status).toBe(400);

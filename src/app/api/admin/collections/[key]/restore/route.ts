@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 import { getDatabase } from "@/db";
 import { loadLibraryConfig } from "@/config/library-config/source";
@@ -6,17 +6,17 @@ import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
 	readAdminJson,
-	requireAdminBypass,
+	requireAdminSession,
 } from "@/lib/admin/http";
 import { toAdminCollection } from "@/lib/admin/library-query-service";
 import { restoreAdminCollection } from "@/lib/admin/collection-mutation-service";
 import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 
 export async function POST(
-	request: Request,
+	request: NextRequest,
 	{ params }: { params: Promise<{ key: string }> },
 ) {
-	const denied = requireAdminBypass();
+	const denied = await requireAdminSession(request);
 	if (denied) return denied;
 
 	try {

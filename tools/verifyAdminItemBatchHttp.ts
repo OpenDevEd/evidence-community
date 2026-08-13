@@ -18,11 +18,17 @@ import type {
 	AdminItemBatchResponse,
 	AdminItemBatchResult,
 } from "../src/lib/admin/item-batch-contract";
+import {
+	createAdminTestSession,
+	type AdminTestSession,
+	withAdminTestSession,
+} from "./adminSession";
 
 const baseUrl = process.env.ADMIN_BASE_URL ?? "http://127.0.0.1:3100";
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
 const verifiedDatabaseUrl = databaseUrl;
+let adminSession: AdminTestSession;
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
@@ -31,10 +37,12 @@ function assert(condition: unknown, message: string): asserts condition {
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 	const response = await fetch(`${baseUrl}${path}`, {
 		...init,
-		headers: {
-			...(init?.body ? { "Content-Type": "application/json" } : {}),
-			...init?.headers,
-		},
+		headers: Object.fromEntries(
+			withAdminTestSession(adminSession, {
+				...(init?.body ? { "Content-Type": "application/json" } : {}),
+				...init?.headers,
+			}),
+		),
 	});
 	const body = (await response.json().catch(() => null)) as T | null;
 	if (!response.ok) {
@@ -73,9 +81,7 @@ async function assertChangedReceiptsExist(
 	);
 	const changed = results.filter(({ outcome }) => outcome === "changed");
 	assert(
-		changed.every(
-			(result) => (result.indexingReceipts?.length ?? 0) > 0,
-		),
+		changed.every((result) => (result.indexingReceipts?.length ?? 0) > 0),
 		`${context} omitted a changed record receipt: ${JSON.stringify(results)}`,
 	);
 	if (receipts.length === 0) return;
@@ -163,6 +169,7 @@ async function missingItemKey(
 }
 
 async function verify() {
+	adminSession = await createAdminTestSession(baseUrl);
 	const database = createPostgresDatabaseResource(verifiedDatabaseUrl);
 	const db = database.database;
 	const itemKeys: string[] = [];
@@ -274,7 +281,11 @@ async function verify() {
 				mixedRemovals[2]?.outcome === "skipped",
 			`Mixed batch outcomes were wrong: ${JSON.stringify(mixedRemovals)}`,
 		);
-		await assertChangedReceiptsExist(db, mixedRemovals, "Mixed batch removal");
+		await assertChangedReceiptsExist(
+			db,
+			mixedRemovals,
+			"Mixed batch removal",
+		);
 		assert(
 			(await getItem(parentKey)).state === "published" &&
 				(await getItem(childKey)).state === "published" &&

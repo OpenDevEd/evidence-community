@@ -7,6 +7,7 @@ export type AdminErrorCode =
 	| "invalid_reference"
 	| "not_found"
 	| "storage_unavailable"
+	| "unauthorized"
 	| "validation_failed";
 
 export type AdminFieldErrors = Record<string, string>;

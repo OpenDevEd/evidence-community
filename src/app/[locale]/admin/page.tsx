@@ -1,9 +1,13 @@
 import { getZoteroSchema } from "@opendeved/evidence-library-core/zotero-schema";
+import { cookies } from "next/headers";
 import { connection } from "next/server";
-import { notFound } from "next/navigation";
 
 import AdminWorkbench from "@/components/admin/AdminWorkbench";
-import { isAdminBypassEnabled } from "@/lib/admin/access";
+import { AdminLogin } from "@/components/admin/AdminLogin";
+import {
+	adminSessionCookieName,
+	isAdminSessionAuthorized,
+} from "@/lib/admin/access";
 import { parseAdminItemViewFilters } from "@/lib/admin/item-filter-state";
 
 export default async function AdminPage({
@@ -12,8 +16,15 @@ export default async function AdminPage({
 	searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
 	await connection();
-	if (!isAdminBypassEnabled()) notFound();
 	const resolvedSearchParams = await searchParams;
+	const cookieStore = await cookies();
+	if (
+		!(await isAdminSessionAuthorized(
+			cookieStore.get(adminSessionCookieName())?.value,
+		))
+	) {
+		return <AdminLogin status={resolvedSearchParams.login} />;
+	}
 	const urlSearchParams = new URLSearchParams();
 	for (const [key, value] of Object.entries(resolvedSearchParams)) {
 		for (const entry of Array.isArray(value) ? value : [value]) {
@@ -28,9 +39,23 @@ export default async function AdminPage({
 	}));
 
 	return (
-		<AdminWorkbench
-			definitions={definitions}
-			initialFilters={parseAdminItemViewFilters(urlSearchParams)}
-		/>
+		<>
+			<AdminWorkbench
+				definitions={definitions}
+				initialFilters={parseAdminItemViewFilters(urlSearchParams)}
+			/>
+			<form
+				action="/api/admin/session/logout"
+				className="fixed right-16 top-3 z-50"
+				method="post"
+			>
+				<button
+					className="min-h-10 rounded-xl px-3 text-sm font-semibold"
+					type="submit"
+				>
+					Log out
+				</button>
+			</form>
+		</>
 	);
 }

@@ -29,11 +29,17 @@ import {
 	type ItemWritebackPolicyOptions,
 } from "../src/lib/admin/native-item-service";
 import { writeSourceIngestionBatch } from "../src/lib/source-ingestion/transactional-writer";
+import {
+	createAdminTestSession,
+	type AdminTestSession,
+	withAdminTestSession,
+} from "./adminSession";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
 const verifiedDatabaseUrl = databaseUrl;
 const baseUrl = process.env.EVIDENCE_LIBRARY_TEST_URL;
+let adminSession: AdminTestSession | null = null;
 
 const connectionKey = "zotero-linked-draft-test";
 const secondaryConnectionKey = "mendeley-linked-draft-test";
@@ -53,12 +59,15 @@ async function adminRequest<T>(
 	expectedStatus = 200,
 ) {
 	assert(baseUrl, "EVIDENCE_LIBRARY_TEST_URL is required for HTTP checks");
+	assert(adminSession, "The admin HTTP session is missing");
 	const response = await fetch(`${baseUrl}${path}`, {
 		...init,
-		headers: {
-			"Content-Type": "application/json",
-			...init.headers,
-		},
+		headers: Object.fromEntries(
+			withAdminTestSession(adminSession, {
+				"Content-Type": "application/json",
+				...init.headers,
+			}),
+		),
 	});
 	const body = await response.json().catch(() => null);
 	assert(
@@ -91,6 +100,7 @@ function batch(
 }
 
 async function verify() {
+	if (baseUrl) adminSession = await createAdminTestSession(baseUrl);
 	const resource = createPostgresDatabaseResource(verifiedDatabaseUrl);
 	const db = resource.database;
 	let nativeCollectionKey: string | null = null;
