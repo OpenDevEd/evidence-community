@@ -1,8 +1,19 @@
 import zoteroSchema from "../vendor/zotero-schema.json" with { type: "json" };
 
-type ZoteroField = {
+export type ZoteroField = {
 	baseField?: string;
 	field: string;
+};
+
+export type ZoteroFieldType = "date" | "text";
+
+type ZoteroFieldMetadata = {
+	type?: "date";
+};
+
+export type ZoteroFieldDescriptor = ZoteroField & {
+	semanticField: string;
+	type: ZoteroFieldType;
 };
 
 type ZoteroCreatorType = {
@@ -19,7 +30,9 @@ export type ZoteroItemTypeDefinition = {
 export type ZoteroSchema = {
 	csl: Record<string, unknown>;
 	itemTypes: ZoteroItemTypeDefinition[];
-	meta: Record<string, unknown>;
+	meta: {
+		fields: Record<string, ZoteroFieldMetadata>;
+	};
 	version: number;
 };
 
@@ -46,4 +59,46 @@ export function getZoteroItemType(
 	itemType: string,
 ): ZoteroItemTypeDefinition | null {
 	return getZoteroItemTypes().get(itemType) ?? null;
+}
+
+export function describeZoteroField(
+	definition: ZoteroField,
+): ZoteroFieldDescriptor {
+	const semanticField = definition.baseField ?? definition.field;
+	const fields = getZoteroSchema().meta.fields;
+	const type =
+		fields[definition.field]?.type ?? fields[semanticField]?.type ?? "text";
+	return {
+		...definition,
+		semanticField,
+		type,
+	};
+}
+
+export function describeZoteroItemTypeFields(
+	itemType: string,
+): readonly ZoteroFieldDescriptor[] {
+	return (getZoteroItemType(itemType)?.fields ?? []).map(describeZoteroField);
+}
+
+export function canonicalZoteroFieldName(
+	itemType: string,
+	zoteroField: string,
+): string | null {
+	return (
+		describeZoteroItemTypeFields(itemType).find(
+			(descriptor) => descriptor.field === zoteroField,
+		)?.semanticField ?? null
+	);
+}
+
+export function itemTypeZoteroFieldName(
+	itemType: string,
+	canonicalField: string,
+): string | null {
+	return (
+		describeZoteroItemTypeFields(itemType).find(
+			(descriptor) => descriptor.semanticField === canonicalField,
+		)?.field ?? null
+	);
 }
