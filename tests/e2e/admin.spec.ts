@@ -2869,6 +2869,15 @@ test("keeps parent attachments compact and moves file controls to the attachment
 	await expect(
 		inspector.getByRole("button", { name: "Parent record" }),
 	).toBeVisible();
+	const publicAttachmentUrl =
+		"https://library.example.org/lib/LIVEB22K/download/PDFATT22";
+	await expect(inspector.getByLabel("Open public item")).toHaveAttribute(
+		"href",
+		publicAttachmentUrl,
+	);
+	await expect(
+		inspector.getByLabel("Copy public item link"),
+	).toBeEnabled();
 	await expect(
 		inspector.locator('[data-admin-file-row="published"]'),
 	).toContainText("published.pdf");
@@ -2917,6 +2926,10 @@ test("explains why a staged PDF cannot publish before its metadata", async ({
 	await inspector
 		.getByRole("button", { name: "Open PDF attachment" })
 		.click();
+	await expect(inspector.getByLabel("Open public item")).toBeDisabled();
+	await expect(
+		inspector.getByLabel("Copy public item link"),
+	).toBeDisabled();
 	const publishPdf = inspector.getByRole("button", {
 		name: "Publish PDF",
 		exact: true,

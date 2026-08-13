@@ -64,6 +64,7 @@ import { editableItemCollectionSourceKeys } from "@/lib/admin/item-collection-po
 import { isTopLevelAdminItemType } from "@/lib/admin/item-fields";
 import type { AdminFieldErrors } from "@/lib/admin/errors";
 import { collectionKeysFromPayload } from "@/lib/admin/item-payload";
+import { buildAdminPublicItemUrl } from "@/lib/admin/public-link";
 import { useFinePointer } from "@/hooks/useBreakpoint";
 
 import {
@@ -1561,10 +1562,9 @@ export function AdminInspector({
 		(attachment) =>
 			attachment.state === "published" || attachment.state === "edited",
 	);
-	const itemUrl =
-		detail.published && detail.state !== "deleted"
-			? new URL(`/lib/${detail.key}`, identity.baseUrl).toString()
-			: null;
+	const itemUrl = buildAdminPublicItemUrl(detail, identity.baseUrl);
+	const showPublicLinkActions =
+		detail.itemType === "Attachment" || Boolean(itemUrl);
 
 	return (
 		<div
@@ -1618,14 +1618,15 @@ export function AdminInspector({
 							</p>
 						</div>
 						<div className="flex shrink-0 items-center gap-1">
-							{itemUrl ? (
+							{showPublicLinkActions ? (
 								<>
 									<Tooltip content="Open public item">
 										<Button
 											as="a"
 											aria-label="Open public item"
-											href={itemUrl}
+											href={itemUrl ?? undefined}
 											isIconOnly
+											isDisabled={!itemUrl}
 											rel="noreferrer"
 											size="xs"
 											target="_blank"
@@ -1638,7 +1639,9 @@ export function AdminInspector({
 										<Button
 											aria-label="Copy public item link"
 											isIconOnly
+											isDisabled={!itemUrl}
 											onPress={() => {
+												if (!itemUrl) return;
 												void navigator.clipboard
 													.writeText(itemUrl)
 													.then(() => toast.success("Item link copied"))
