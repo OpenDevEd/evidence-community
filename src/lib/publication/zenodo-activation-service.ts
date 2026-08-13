@@ -3,7 +3,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutation } from "@/db/canonical-mutation-lock";
-import type { Database, DatabaseTransaction } from "@/db/database-schema";
+import type { Database } from "@/db/database-schema";
 import {
 	publicationSyncJob,
 	publicationSyncState,
@@ -18,7 +18,12 @@ import {
 	ZenodoIdentifierPolicyLockedError,
 	PublicationItemNotFoundError,
 } from "./errors";
-import { publicationJobState } from "./queue";
+import {
+	publicationJobIdempotencyKey,
+	publicationJobState,
+	savePublicationJob,
+	supersedeUnleasedPublicationJobs,
+} from "./queue";
 import {
 	buildPublicationFileManifest,
 	buildPublicationIdentifiers,
@@ -78,14 +83,19 @@ export function resolveZenodoActivationPolicy(
 	) {
 		throw new ZenodoActivationValidationError(
 			`This record already uses ${input.bibliographicDoi}. Zenodo cannot assign another DOI in this version.`,
-			{ DOI: "Remove the external DOI before publishing this record to Zenodo." },
+			{
+				DOI: "Remove the external DOI before publishing this record to Zenodo.",
+			},
 		);
 	}
 	const policy = input.requestedPolicy ?? input.configuredDefault;
 	if (policy === "reuse-crossref" && !input.managedCrossref) {
 		throw new ZenodoActivationValidationError(
 			"Activate a Crossref DOI for this record before reusing it on Zenodo.",
-			{ identifierPolicy: "Choose a Zenodo DOI or activate Crossref first." },
+			{
+				identifierPolicy:
+					"Choose a Zenodo DOI or activate Crossref first.",
+			},
 		);
 	}
 	return policy;
@@ -129,7 +139,8 @@ function receipt(input: {
 	providerRecordExists: boolean;
 }): ZenodoActivationReceipt {
 	const jobState = input.job ? publicationJobState(input.job) : null;
-	const state = input.waitingOn === "crossref"
+	const state =
+		input.waitingOn === "crossref"
 			? "waiting_for_crossref"
 			: input.waitingOn === "file"
 				? "waiting_for_file"
@@ -167,7 +178,8 @@ function zenodoHasStarted(snapshot: PublicationRepositorySnapshot) {
 		) ||
 		snapshot.journals.some(
 			(journal) =>
-				journal.provider === "zenodo" && journal.environment === "sandbox",
+				journal.provider === "zenodo" &&
+				journal.environment === "sandbox",
 		) ||
 		snapshot.jobs.some(
 			(job) =>
@@ -176,90 +188,6 @@ function zenodoHasStarted(snapshot: PublicationRepositorySnapshot) {
 				Boolean(job.processedAt || job.leaseOwner),
 		)
 	);
-}
-
-function zenodoJobIdempotencyKey(input: {
-	itemKey: string;
-	identifierPolicy: ZenodoIdentifierPolicy;
-	canonicalRevision: number;
-	fileRevision: number;
-}) {
-	return [
-		"publication",
-		"zenodo",
-		"sandbox",
-		input.itemKey,
-		input.identifierPolicy,
-		input.canonicalRevision,
-		input.fileRevision,
-	].join(":");
-}
-
-async function supersedeActiveZenodoJobs(
-	transaction: DatabaseTransaction,
-	itemKey: string,
-	now: Date,
-) {
-	await transaction
-		.update(publicationSyncJob)
-		.set({ supersededAt: now, updatedAt: now })
-		.where(
-			and(
-				eq(publicationSyncJob.itemKey, itemKey),
-				eq(publicationSyncJob.provider, "zenodo"),
-				eq(publicationSyncJob.environment, "sandbox"),
-				isNull(publicationSyncJob.processedAt),
-				isNull(publicationSyncJob.deadLetteredAt),
-				isNull(publicationSyncJob.supersededAt),
-				isNull(publicationSyncJob.leaseOwner),
-			),
-		);
-}
-
-async function saveZenodoJob(
-	transaction: DatabaseTransaction,
-	input: {
-		itemKey: string;
-		identifierPolicy: ZenodoIdentifierPolicy;
-		canonicalRevision: number;
-		fileRevision: number;
-		now: Date;
-	},
-) {
-	const idempotencyKey = zenodoJobIdempotencyKey(input);
-	const [inserted] = await transaction
-		.insert(publicationSyncJob)
-		.values({
-			itemKey: input.itemKey,
-			provider: "zenodo",
-			environment: "sandbox",
-			canonicalRevision: input.canonicalRevision,
-			fileRevision: input.fileRevision,
-			reason: "manual_activation",
-			idempotencyKey,
-			nextAttemptAt: input.now,
-			createdAt: input.now,
-			updatedAt: input.now,
-		})
-		.onConflictDoNothing({ target: publicationSyncJob.idempotencyKey })
-		.returning();
-	if (inserted) return inserted;
-	const [existing] = await transaction
-		.select()
-		.from(publicationSyncJob)
-		.where(eq(publicationSyncJob.idempotencyKey, idempotencyKey))
-		.limit(1);
-	if (!existing) throw new Error("The Zenodo publication job could not be saved");
-	if (existing.supersededAt && !existing.processedAt && !existing.deadLetteredAt) {
-		const [restored] = await transaction
-			.update(publicationSyncJob)
-			.set({ supersededAt: null, nextAttemptAt: input.now, updatedAt: input.now })
-			.where(eq(publicationSyncJob.id, existing.id))
-			.returning();
-		if (!restored) throw new Error("The Zenodo publication job could not be restored");
-		return restored;
-	}
-	return existing;
 }
 
 function prepareZenodoActivation(input: {
@@ -456,7 +384,8 @@ export async function activateZenodoPublication(
 			);
 
 		const activeJobs = activeZenodoJobs(snapshot.jobs);
-		const leasedJob = activeJobs.find((job) => job.leaseOwner !== null) ?? null;
+		const leasedJob =
+			activeJobs.find((job) => job.leaseOwner !== null) ?? null;
 		if (waitingOn && leasedJob) {
 			throw new ZenodoActivationValidationError(
 				"Zenodo publication is already running. Wait for it to finish, then reload this record.",
@@ -465,12 +394,19 @@ export async function activateZenodoPublication(
 
 		let job: typeof publicationSyncJob.$inferSelect | null = null;
 		if (waitingOn) {
-			await supersedeActiveZenodoJobs(transaction, itemKey, now);
+			await supersedeUnleasedPublicationJobs(transaction, {
+				itemKey,
+				provider: "zenodo",
+				environment: "sandbox",
+				now,
+			});
 		} else if (leasedJob) {
 			job = leasedJob;
 		} else {
 			if (fileRevision === null) {
-				throw new Error("A ready Zenodo job must have a published file");
+				throw new Error(
+					"A ready Zenodo job must have a published file",
+				);
 			}
 			const nextJob = {
 				itemKey,
@@ -479,14 +415,29 @@ export async function activateZenodoPublication(
 				fileRevision,
 				now,
 			};
-			const expectedIdempotencyKey = zenodoJobIdempotencyKey(nextJob);
+			const expectedIdempotencyKey = publicationJobIdempotencyKey({
+				...nextJob,
+				provider: "zenodo",
+				environment: "sandbox",
+			});
 			job =
 				activeJobs.find(
-					(candidate) => candidate.idempotencyKey === expectedIdempotencyKey,
+					(candidate) =>
+						candidate.idempotencyKey === expectedIdempotencyKey,
 				) ?? null;
 			if (!job) {
-				await supersedeActiveZenodoJobs(transaction, itemKey, now);
-				job = await saveZenodoJob(transaction, nextJob);
+				await supersedeUnleasedPublicationJobs(transaction, {
+					itemKey,
+					provider: "zenodo",
+					environment: "sandbox",
+					now,
+				});
+				job = await savePublicationJob(transaction, {
+					...nextJob,
+					provider: "zenodo",
+					environment: "sandbox",
+					reason: "manual_activation",
+				});
 			}
 		}
 		const providerRecordExists = snapshot.states.some(
@@ -554,7 +505,10 @@ export async function retryZenodoPublication(
 					isNull(publicationSyncJob.supersededAt),
 				),
 			)
-			.orderBy(desc(publicationSyncJob.createdAt), desc(publicationSyncJob.id))
+			.orderBy(
+				desc(publicationSyncJob.createdAt),
+				desc(publicationSyncJob.id),
+			)
 			.limit(1)
 			.for("update");
 		if (!job?.deadLetteredAt) {
@@ -585,11 +539,14 @@ export async function retryZenodoPublication(
 				.where(eq(publicationSyncJob.id, job.id))
 				.returning();
 		} else {
-			retried = await saveZenodoJob(transaction, {
+			retried = await savePublicationJob(transaction, {
 				itemKey,
+				provider: "zenodo",
+				environment: "sandbox",
 				identifierPolicy: target.identifierPolicy,
 				canonicalRevision: prepared.record.revision,
 				fileRevision: prepared.fileRevision,
+				reason: "manual_retry",
 				now,
 			});
 		}

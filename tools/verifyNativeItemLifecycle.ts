@@ -11,6 +11,10 @@ import { and, count, eq, inArray, sql } from "drizzle-orm";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { reserveCollectionIdentities } from "../src/db/record-identity";
 import { itemFilePublication } from "../src/db/schema/source";
+import {
+	publicationSyncJob,
+	publicationTarget,
+} from "../src/db/schema/publication";
 import { collection } from "../src/db/schema/tables/collection";
 import { adminItemListProjection } from "../src/db/schema/tables/adminItemListProjection";
 import { item } from "../src/db/schema/tables/item";
@@ -186,6 +190,21 @@ async function verify() {
 				publishedTags[0]!.tagName === publishedTag,
 			"Published tags were not normalized",
 		);
+		await db.insert(publicationTarget).values([
+			{
+				itemKey: draft.itemKey,
+				provider: "crossref",
+				environment: "test",
+				requestedBy: "native-lifecycle-test",
+			},
+			{
+				itemKey: draft.itemKey,
+				provider: "zenodo",
+				environment: "sandbox",
+				identifierPolicy: "mint-zenodo",
+				requestedBy: "native-lifecycle-test",
+			},
+		]);
 
 		const patchMergeDraft = await createNativeItemDraft(db, {
 			abstractNote: "Published abstract",
@@ -195,6 +214,13 @@ async function verify() {
 		});
 		createdKeys.push(patchMergeDraft.itemKey);
 		await publishNativeItemDraft(db, patchMergeDraft.itemKey);
+		await db.insert(publicationTarget).values({
+			itemKey: patchMergeDraft.itemKey,
+			provider: "crossref",
+			environment: "test",
+			requestedBy: "native-lifecycle-test",
+			deactivatedAt: new Date(),
+		});
 		const patchMergeEdit = await openNativeItemDraft(
 			db,
 			patchMergeDraft.itemKey,
@@ -237,6 +263,14 @@ async function verify() {
 				mergedPublication.abstractNote === null &&
 				mergedPublication.date === "2026",
 			"Publishing did not apply the patch to the latest canonical base",
+		);
+		const inactiveTargetJobs = await db
+			.select({ id: publicationSyncJob.id })
+			.from(publicationSyncJob)
+			.where(eq(publicationSyncJob.itemKey, patchMergeDraft.itemKey));
+		assert(
+			inactiveTargetJobs.length === 0,
+			"A deactivated publication target received a record-change job",
 		);
 
 		await db.insert(sourceConnection).values({
@@ -333,6 +367,17 @@ async function verify() {
 				secondPublication.title === "Second published title",
 			"Second publication was not revisioned",
 		);
+		const publicationJobsAfterEdit = await db
+			.select()
+			.from(publicationSyncJob)
+			.where(eq(publicationSyncJob.itemKey, draft.itemKey));
+		assert(
+			publicationJobsAfterEdit.length === 1 &&
+				publicationJobsAfterEdit[0]?.provider === "crossref" &&
+				publicationJobsAfterEdit[0].reason === "record_changed" &&
+				publicationJobsAfterEdit[0].canonicalRevision === 2,
+			"Record publication did not queue only the ready active target",
+		);
 		const retainedMemberships = await db
 			.select({ key: itemToCollection.collectionKey })
 			.from(itemToCollection)
@@ -366,6 +411,14 @@ async function verify() {
 				advancedRestoreDraft?.baseRevision === 3,
 			"Unpublish made the record's open draft stale",
 		);
+		const publicationJobsAfterUnpublish = await db
+			.select({ id: publicationSyncJob.id })
+			.from(publicationSyncJob)
+			.where(eq(publicationSyncJob.itemKey, draft.itemKey));
+		assert(
+			publicationJobsAfterUnpublish.length === 1,
+			"Record unpublication queued an unsupported DOI withdrawal",
+		);
 		const restored = await publishNativeItemDraft(db, draft.itemKey);
 		assert(
 			restored.revision === 4 &&
@@ -380,6 +433,20 @@ async function verify() {
 				unpublished.deletedAt !== null &&
 				unpublished.revision === 5,
 			"Unpublish did not create a tombstone revision",
+		);
+		const publicationJobsAfterSecondUnpublish = await db
+			.select()
+			.from(publicationSyncJob)
+			.where(eq(publicationSyncJob.itemKey, draft.itemKey));
+		assert(
+			publicationJobsAfterSecondUnpublish.length === 2 &&
+				publicationJobsAfterSecondUnpublish.some(
+					(job) =>
+						job.provider === "crossref" &&
+						job.canonicalRevision === 4 &&
+						job.reason === "record_changed",
+				),
+			"Record restore did not queue Crossref or unpublish queued extra work",
 		);
 		const [deletedProjection] = await db
 			.select()
@@ -672,6 +739,12 @@ async function verify() {
 	} finally {
 		if (createdKeys.length > 0) {
 			await db.transaction(async (transaction) => {
+				await transaction
+					.delete(publicationSyncJob)
+					.where(inArray(publicationSyncJob.itemKey, createdKeys));
+				await transaction
+					.delete(publicationTarget)
+					.where(inArray(publicationTarget.itemKey, createdKeys));
 				await transaction
 					.delete(outbox)
 					.where(

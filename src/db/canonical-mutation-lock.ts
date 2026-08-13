@@ -34,6 +34,19 @@ async function lockCanonicalMutations(
 	}
 }
 
+async function tryLockCanonicalMutation(
+	transaction: Transaction,
+	entity: CanonicalEntity,
+	key: string,
+) {
+	const result = await transaction.execute<{ locked: boolean }>(sql`
+		SELECT pg_try_advisory_xact_lock(
+			hashtextextended(${entity} || ':' || ${key}, 0)
+		) AS locked
+	`);
+	return result.rows[0]?.locked === true;
+}
+
 export function lockItemMutations(
 	transaction: Transaction,
 	itemKeys: readonly string[],
@@ -43,6 +56,10 @@ export function lockItemMutations(
 
 export function lockItemMutation(transaction: Transaction, itemKey: string) {
 	return lockItemMutations(transaction, [itemKey]);
+}
+
+export function tryLockItemMutation(transaction: Transaction, itemKey: string) {
+	return tryLockCanonicalMutation(transaction, "item", itemKey);
 }
 
 export function lockCollectionMutations(

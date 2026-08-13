@@ -43,6 +43,7 @@ import {
 	validateNativeItemDraft,
 } from "@/lib/admin/native-item-validation";
 import { adminDatabaseFieldToPayloadField } from "@/lib/admin/item-fields";
+import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 
 import {
 	type JsonValue,
@@ -888,17 +889,32 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			}),
 		);
 
-		const allItemKeys = [...new Set(itemKeys.values())];
+		const batchItemKeys = [...new Set(itemKeys.values())];
+		const existingParentRows =
+			batchItemKeys.length === 0
+				? []
+				: await transaction
+						.select({ parentItem: item.parentItem })
+						.from(item)
+						.where(inArray(item.key, batchItemKeys));
+		const allItemKeys = [
+			...new Set([
+				...batchItemKeys,
+				...existingParentRows.flatMap(({ parentItem }) =>
+					parentItem ? [parentItem] : [],
+				),
+			]),
+		];
 		const allCollectionKeys = [...new Set(collectionKeys.values())];
 		await lockCollectionMutations(transaction, allCollectionKeys);
 		await lockItemMutations(transaction, allItemKeys);
 		const existingItems =
-			allItemKeys.length === 0
+			batchItemKeys.length === 0
 				? []
 				: await transaction
 						.select()
 						.from(item)
-						.where(inArray(item.key, allItemKeys))
+						.where(inArray(item.key, batchItemKeys))
 						.orderBy(item.key)
 						.for("update");
 		const existingCollections =
@@ -923,7 +939,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			existingItems.map((row) => [row.key, row]),
 		);
 		const sourceLinks =
-			allItemKeys.length === 0
+			batchItemKeys.length === 0
 				? []
 				: await transaction
 						.select()
@@ -934,7 +950,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 									itemSourceLink.sourceConnectionKey,
 									batch.sourceConnectionKey,
 								),
-								inArray(itemSourceLink.itemKey, allItemKeys),
+								inArray(itemSourceLink.itemKey, batchItemKeys),
 							),
 						)
 						.orderBy(itemSourceLink.itemKey)
@@ -969,7 +985,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			existingCollections.map((row) => [row.key, row]),
 		);
 		const snapshots =
-			allItemKeys.length === 0
+			batchItemKeys.length === 0
 				? []
 				: await transaction
 						.select()
@@ -980,7 +996,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 									sourceSnapshot.sourceConnectionKey,
 									batch.sourceConnectionKey,
 								),
-								inArray(sourceSnapshot.itemKey, allItemKeys),
+								inArray(sourceSnapshot.itemKey, batchItemKeys),
 							),
 						);
 		const snapshotByItemKey = new Map(
@@ -1008,13 +1024,13 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			collectionSnapshots.map((row) => [row.collectionKey, row]),
 		);
 		const existingPublications =
-			allItemKeys.length === 0
+			batchItemKeys.length === 0
 				? []
 				: await transaction
 						.select()
 						.from(itemFilePublication)
 						.where(
-							inArray(itemFilePublication.itemKey, allItemKeys),
+							inArray(itemFilePublication.itemKey, batchItemKeys),
 						)
 						.orderBy(itemFilePublication.itemKey)
 						.for("update");
@@ -1022,7 +1038,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			existingPublications.map((row) => [row.itemKey, row]),
 		);
 		const existingTagRows =
-			allItemKeys.length === 0
+			batchItemKeys.length === 0
 				? []
 				: await transaction
 						.select({
@@ -1030,9 +1046,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 							tagName: itemToTag.tagName,
 						})
 						.from(itemToTag)
-						.where(inArray(itemToTag.itemKey, allItemKeys));
+						.where(inArray(itemToTag.itemKey, batchItemKeys));
 		const existingCollectionRows =
-			allItemKeys.length === 0
+			batchItemKeys.length === 0
 				? []
 				: await transaction
 						.select({
@@ -1046,7 +1062,9 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 							collection,
 							eq(collection.key, itemToCollection.collectionKey),
 						)
-						.where(inArray(itemToCollection.itemKey, allItemKeys));
+						.where(
+							inArray(itemToCollection.itemKey, batchItemKeys),
+						);
 		const existingTagsByItemKey = new Map<string, string[]>();
 		for (const row of existingTagRows) {
 			const values = existingTagsByItemKey.get(row.itemKey) ?? [];
@@ -2126,6 +2144,58 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 					revision: parent.revision,
 				});
 			}
+		}
+
+		const changedRows =
+			itemEvents.size === 0
+				? []
+				: await transaction
+						.select({
+							deleted: item.deleted,
+							key: item.key,
+							parentItem: item.parentItem,
+							revision: item.revision,
+						})
+						.from(item)
+						.where(inArray(item.key, [...itemEvents.keys()]));
+		const changedParentKeys = [
+			...new Set(
+				changedRows.flatMap((row) => {
+					if (row.parentItem) return [row.parentItem];
+					return row.deleted === 0 ? [row.key] : [];
+				}),
+			),
+		].sort();
+		const changedParents =
+			changedParentKeys.length === 0
+				? []
+				: await transaction
+						.select({ key: item.key, revision: item.revision })
+						.from(item)
+						.where(
+							and(
+								inArray(item.key, changedParentKeys),
+								eq(item.deleted, 0),
+							),
+						)
+						.orderBy(item.key);
+		const fileChangedParentKeys = new Set([
+			...publicationUpserts.map(({ parentItemKey }) => parentItemKey),
+			...publicationDeleteItemKeys.flatMap((itemKey) => {
+				const parentItemKey =
+					existingPublicationByItemKey.get(itemKey)?.parentItemKey;
+				return parentItemKey ? [parentItemKey] : [];
+			}),
+		]);
+		for (const parent of changedParents) {
+			await enqueuePublicationJobsForItem(transaction, {
+				itemKey: parent.key,
+				canonicalRevision: parent.revision,
+				reason: fileChangedParentKeys.has(parent.key)
+					? "file_changed"
+					: "record_changed",
+				now,
+			});
 		}
 
 		const outboxRows = [

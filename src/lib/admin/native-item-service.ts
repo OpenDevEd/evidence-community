@@ -9,7 +9,10 @@ import { and, eq, inArray, sql, type InferInsertModel } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { lockItemMutation } from "@/db/canonical-mutation-lock";
+import {
+	lockItemMutation,
+	lockItemMutations,
+} from "@/db/canonical-mutation-lock";
 import { reserveItemIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
@@ -30,6 +33,7 @@ import {
 	materializeItemDraft,
 	publishedAdminItemPayload,
 } from "./item-draft-patch";
+import { effectiveItemParent } from "./item-draft-merge";
 import {
 	NativeItemValidationError,
 	validateNativeItemDraft,
@@ -45,6 +49,7 @@ import {
 	resolveItemWritebackPolicy,
 	type SourceWritebackReason,
 } from "@/lib/source-writeback/policy";
+import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 
 type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -686,8 +691,37 @@ export async function publishItemDraftWithContext(
 	itemKey: string,
 	options: ItemWritebackPolicyOptions = {},
 ) {
+	const [lockCandidate, lockDraft] = await Promise.all([
+		db
+			.select({ parentItem: item.parentItem })
+			.from(item)
+			.where(eq(item.key, itemKey))
+			.limit(1)
+			.then((rows) => rows[0]),
+		db
+			.select({
+				draftRevision: itemDraft.draftRevision,
+				patch: itemDraft.patch,
+			})
+			.from(itemDraft)
+			.where(eq(itemDraft.itemKey, itemKey))
+			.limit(1)
+			.then((rows) => rows[0]),
+	]);
+	if (!lockDraft) throw new ItemNotFoundError(itemKey);
+	const lockedParentItem = effectiveItemParent(
+		lockCandidate?.parentItem,
+		lockDraft.patch,
+	);
+	const advisoryLockKeys = [
+		...new Set(
+			[itemKey, lockCandidate?.parentItem, lockedParentItem].filter(
+				(key): key is string => typeof key === "string",
+			),
+		),
+	];
 	return db.transaction(async (transaction) => {
-		await lockItemMutation(transaction, itemKey);
+		await lockItemMutations(transaction, advisoryLockKeys);
 		const access = await requireItemDraftAccess(
 			transaction,
 			itemKey,
@@ -701,6 +735,20 @@ export async function publishItemDraftWithContext(
 		if (!initialDraft) {
 			throw new ItemNotFoundError(itemKey);
 		}
+		const [candidate] = await transaction
+			.select({ parentItem: item.parentItem })
+			.from(item)
+			.where(eq(item.key, itemKey))
+			.limit(1);
+		if (
+			initialDraft.draftRevision !== lockDraft.draftRevision ||
+			(candidate?.parentItem ?? null) !==
+				(lockCandidate?.parentItem ?? null) ||
+			effectiveItemParent(candidate?.parentItem, initialDraft.patch) !==
+				lockedParentItem
+		) {
+			throw new ItemDraftConflictError(itemKey);
+		}
 
 		const initialValidated = validateNativeItemDraft(
 			applyItemDraftPatch(
@@ -708,11 +756,6 @@ export async function publishItemDraftWithContext(
 				initialDraft.patch,
 			),
 		);
-		const [candidate] = await transaction
-			.select({ parentItem: item.parentItem })
-			.from(item)
-			.where(eq(item.key, itemKey))
-			.limit(1);
 		const parentItemKey = initialValidated.item.parentItem;
 		const relatedParentKeys = [
 			...new Set(
@@ -721,17 +764,16 @@ export async function publishItemDraftWithContext(
 				),
 			),
 		];
-		const keysToLock = [...new Set([itemKey, ...relatedParentKeys])];
 		const lockedItems = await transaction
 			.select()
 			.from(item)
-			.where(inArray(item.key, keysToLock))
+			.where(inArray(item.key, advisoryLockKeys))
 			.orderBy(item.key)
 			.for("update");
 		const lockedDrafts = await transaction
 			.select()
 			.from(itemDraft)
-			.where(inArray(itemDraft.itemKey, keysToLock))
+			.where(inArray(itemDraft.itemKey, advisoryLockKeys))
 			.orderBy(itemDraft.itemKey)
 			.for("update");
 		const draft = lockedDrafts.find(
@@ -942,6 +984,18 @@ export async function publishItemDraftWithContext(
 					: undefined,
 				itemKey,
 				updatedAt: now,
+			});
+		}
+		const publicationRecordKey = validated.item.parentItem ?? itemKey;
+		const publicationRecordRevision = indexingRecords.find(
+			(record) => record.key === publicationRecordKey,
+		)?.revision;
+		if (publicationRecordRevision) {
+			await enqueuePublicationJobsForItem(transaction, {
+				itemKey: publicationRecordKey,
+				canonicalRevision: publicationRecordRevision,
+				reason: "record_changed",
+				now,
 			});
 		}
 		await transaction

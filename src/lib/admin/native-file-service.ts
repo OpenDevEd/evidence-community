@@ -18,6 +18,7 @@ import {
 	ensureDefaultWritebackLink,
 	markItemWritebackDirty,
 } from "@/lib/source-writeback/queue";
+import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 
 import type { EvidenceFileStorage } from "./file-storage";
 import { advanceOpenItemDraftBaseRevision as advanceOpenNativeDraftBaseRevision } from "./native-item-service";
@@ -701,6 +702,12 @@ export async function publishNativePdf(
 				itemKey,
 				updatedAt: now,
 			});
+			await enqueuePublicationJobsForItem(transaction, {
+				itemKey: parent.key,
+				canonicalRevision: parentNextRevision,
+				reason: "file_changed",
+				now,
+			});
 			await transaction
 				.delete(itemFileDraft)
 				.where(eq(itemFileDraft.itemKey, itemKey));
@@ -995,6 +1002,12 @@ export async function unpublishNativePdfWithContext(
 			dirtyFields: ["tags", "url"],
 			itemKey,
 			updatedAt: now,
+		});
+		await enqueuePublicationJobsForItem(transaction, {
+			itemKey: parent.key,
+			canonicalRevision: parentRevision,
+			reason: "file_changed",
+			now,
 		});
 
 		return {

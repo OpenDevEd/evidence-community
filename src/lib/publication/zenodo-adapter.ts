@@ -46,11 +46,7 @@ import {
 	buildPublicationRecordSnapshot,
 } from "./record-adapter";
 import { readPublicationRepositorySnapshot } from "./repository";
-import {
-	currentManagedDoi,
-	providerState,
-	targetFor,
-} from "./state-adapter";
+import { currentManagedDoi, providerState, targetFor } from "./state-adapter";
 
 type PublicationConfig = Pick<LibraryServerConfig, "identity" | "services">;
 
@@ -169,7 +165,10 @@ async function assertNoIdentifierCollision(
 		);
 	}
 	const collisions = await transaction
-		.select({ doi: publicationIdentifier.doi, itemKey: publicationIdentifier.itemKey })
+		.select({
+			doi: publicationIdentifier.doi,
+			itemKey: publicationIdentifier.itemKey,
+		})
 		.from(publicationIdentifier)
 		.where(
 			and(
@@ -270,6 +269,7 @@ function createZenodoJournal(
 			await assertPublicationJobLease(transaction, {
 				jobId: job.id,
 				workerId,
+				observedAt,
 			});
 			await operation(transaction);
 		});
@@ -290,7 +290,10 @@ function createZenodoJournal(
 						>,
 						fileManifestHash: input.fileManifestHash ?? null,
 						fileManifestSnapshot: input.fileManifestHash
-							? (plan.snapshots.fileManifest as Record<string, unknown>)
+							? (plan.snapshots.fileManifest as Record<
+									string,
+									unknown
+								>)
 							: null,
 						depositionId: input.depositionId,
 						draftRecordId: input.draftRecordId,
@@ -307,13 +310,14 @@ function createZenodoJournal(
 						set: {
 							operationType: input.operationType,
 							payloadHash: input.zenodoPayloadHash,
-							payloadSnapshot: plan.snapshots.zenodoPayload as Record<
-								string,
-								unknown
-							>,
+							payloadSnapshot: plan.snapshots
+								.zenodoPayload as Record<string, unknown>,
 							fileManifestHash: input.fileManifestHash ?? null,
 							fileManifestSnapshot: input.fileManifestHash
-								? (plan.snapshots.fileManifest as Record<string, unknown>)
+								? (plan.snapshots.fileManifest as Record<
+										string,
+										unknown
+									>)
 								: null,
 							draftRecordId: input.draftRecordId,
 							parentId: input.parentId ?? null,
@@ -331,24 +335,33 @@ function createZenodoJournal(
 						payloadHash: zenodoPublishJournal.payloadHash,
 						payloadSnapshot: zenodoPublishJournal.payloadSnapshot,
 						fileManifestHash: zenodoPublishJournal.fileManifestHash,
-						fileManifestSnapshot: zenodoPublishJournal.fileManifestSnapshot,
+						fileManifestSnapshot:
+							zenodoPublishJournal.fileManifestSnapshot,
 					})
 					.from(zenodoPublishJournal)
 					.where(
 						and(
 							eq(zenodoPublishJournal.itemKey, input.recordId),
-							eq(zenodoPublishJournal.depositionId, input.depositionId),
+							eq(
+								zenodoPublishJournal.depositionId,
+								input.depositionId,
+							),
 						),
 					)
 					.limit(1);
-				if (!savedDraft) throw new Error("The prepared Zenodo draft was not journaled");
+				if (!savedDraft)
+					throw new Error(
+						"The prepared Zenodo draft was not journaled",
+					);
 				await saveZenodoIdentifiers(transaction, {
 					itemKey: input.recordId,
 					identifiers: input.identifiers,
 					observedAt: input.observedAt,
 				});
 				const [target] = await transaction
-					.select({ identifierPolicy: publicationTarget.identifierPolicy })
+					.select({
+						identifierPolicy: publicationTarget.identifierPolicy,
+					})
 					.from(publicationTarget)
 					.where(
 						and(
@@ -418,8 +431,10 @@ function createZenodoJournal(
 							lastFileManifestSnapshot,
 							zenodoRecordId: input.identifiers.latestRecordId,
 							zenodoParentId: input.identifiers.parentId,
-							zenodoVersionDoi: input.identifiers.versionDoi ?? null,
-							zenodoConceptDoi: input.identifiers.conceptDoi ?? null,
+							zenodoVersionDoi:
+								input.identifiers.versionDoi ?? null,
+							zenodoConceptDoi:
+								input.identifiers.conceptDoi ?? null,
 							orphanDraftDepositionId:
 								input.orphanDraftCleanup?.depositionId ?? null,
 							updatedAt: input.observedAt,
@@ -430,7 +445,10 @@ function createZenodoJournal(
 					.set({
 						status: "published",
 						publishedRecordId: input.publishedRecordId,
-						identifiers: input.identifiers as unknown as Record<string, unknown>,
+						identifiers: input.identifiers as unknown as Record<
+							string,
+							unknown
+						>,
 						orphanDraftCleanupDepositionId:
 							input.orphanDraftCleanup?.depositionId ?? null,
 						publishedAt: input.observedAt,
@@ -439,17 +457,24 @@ function createZenodoJournal(
 					.where(
 						and(
 							eq(zenodoPublishJournal.itemKey, input.recordId),
-							eq(zenodoPublishJournal.depositionId, input.depositionId),
+							eq(
+								zenodoPublishJournal.depositionId,
+								input.depositionId,
+							),
 						),
 					)
 					.returning({ id: zenodoPublishJournal.id });
-				if (!journal) throw new Error("The prepared Zenodo draft was not journaled");
+				if (!journal)
+					throw new Error(
+						"The prepared Zenodo draft was not journaled",
+					);
 				const [current] = await transaction
 					.select({ revision: item.revision })
 					.from(item)
 					.where(eq(item.key, input.recordId))
 					.limit(1);
-				if (!current) throw new Error("The published record no longer exists");
+				if (!current)
+					throw new Error("The published record no longer exists");
 				await enqueueItemSearchReprojection(transaction, {
 					itemKey: input.recordId,
 					revision: current.revision,
@@ -463,7 +488,10 @@ function createZenodoJournal(
 					.where(
 						and(
 							eq(zenodoPublishJournal.itemKey, input.recordId),
-							eq(zenodoPublishJournal.depositionId, input.depositionId),
+							eq(
+								zenodoPublishJournal.depositionId,
+								input.depositionId,
+							),
 						),
 					);
 			}),
@@ -511,9 +539,11 @@ function zenodoPatchValues(
 	now: Date,
 ) {
 	const zenodo = patch.zenodo;
-	const lastSuccess = zenodo?.lastSuccess ?? previousState?.zenodo?.lastSuccess;
+	const lastSuccess =
+		zenodo?.lastSuccess ?? previousState?.zenodo?.lastSuccess;
 	const previousSuccess = previousState?.zenodo?.lastSuccess;
-	const identifiers = zenodo?.identifiers ?? previousState?.zenodo?.identifiers;
+	const identifiers =
+		zenodo?.identifiers ?? previousState?.zenodo?.identifiers;
 	const orphanDraftCleanup =
 		zenodo && "orphanDraftCleanup" in zenodo
 			? zenodo.orphanDraftCleanup
@@ -527,22 +557,20 @@ function zenodoPatchValues(
 		identifierPolicy: savedIdentifierPolicy,
 		lastPayloadHash: lastSuccess?.payloadHash ?? null,
 		lastPayloadSnapshot:
-			(lastSuccess?.payloadSnapshot as Record<string, unknown> | undefined) ??
+			(lastSuccess?.payloadSnapshot as
+				Record<string, unknown> | undefined) ??
 			(lastSuccess?.payloadHash === previousSuccess?.payloadHash
 				? (previousSuccess?.payloadSnapshot as
-						| Record<string, unknown>
-						| undefined)
+						Record<string, unknown> | undefined)
 				: undefined) ??
 			null,
 		lastFileManifestHash: lastSuccess?.fileManifestHash ?? null,
 		lastFileManifestSnapshot:
 			(lastSuccess?.fileManifestSnapshot as
-				| Record<string, unknown>
-				| undefined) ??
+				Record<string, unknown> | undefined) ??
 			(lastSuccess?.fileManifestHash === previousSuccess?.fileManifestHash
 				? (previousSuccess?.fileManifestSnapshot as
-						| Record<string, unknown>
-						| undefined)
+						Record<string, unknown> | undefined)
 				: undefined) ??
 			null,
 		zenodoRecordId: identifiers?.latestRecordId ?? null,
@@ -583,7 +611,11 @@ async function settleZenodoState(
 ) {
 	await database.transaction(async (transaction) => {
 		await lockItemMutation(transaction, input.itemKey);
-		await assertPublicationJobLease(transaction, input);
+		await assertPublicationJobLease(transaction, {
+			jobId: input.jobId,
+			workerId: input.workerId,
+			observedAt: input.settledAt,
+		});
 		const values = zenodoPatchValues(
 			input.patch,
 			input.previousState,
@@ -668,7 +700,11 @@ export async function runZenodoPublicationJobsOnce(
 	const now = options.now ?? (() => new Date());
 	const workerConfig = config.services.publication.worker;
 	const outcomes: Array<{ jobId: number; status: string }> = [];
-	for (let processed = 0; processed < workerConfig.batchSize; processed += 1) {
+	for (
+		let processed = 0;
+		processed < workerConfig.batchSize;
+		processed += 1
+	) {
 		const job = await claimNextPublicationJob(database, {
 			provider: "zenodo",
 			environment: "sandbox",
@@ -679,8 +715,13 @@ export async function runZenodoPublicationJobsOnce(
 		if (!job) break;
 		try {
 			const built = await buildZenodoPlan(database, job.itemKey, config);
-			if (built.plan.status === "skipped" || built.plan.status === "waiting_for_file") {
-				throw new Error("The Zenodo target did not produce a runnable plan");
+			if (
+				built.plan.status === "skipped" ||
+				built.plan.status === "waiting_for_file"
+			) {
+				throw new Error(
+					"The Zenodo target did not produce a runnable plan",
+				);
 			}
 			let results: readonly PublicationSyncOperationResult[] = [];
 			if (built.plan.status === "write_required") {
@@ -690,7 +731,10 @@ export async function runZenodoPublicationJobsOnce(
 					providers: {
 						zenodo: options.provider ?? new ZenodoApiClient(),
 					},
-					fileReader: createPublicationFileReader(storage, built.snapshot.files),
+					fileReader: createPublicationFileReader(
+						storage,
+						built.snapshot.files,
+					),
 					zenodoJournal: createZenodoJournal(
 						database,
 						job,
@@ -728,23 +772,28 @@ export async function runZenodoPublicationJobsOnce(
 				settlement.statePatch.failure?.provider === "zenodo"
 					? settlement.statePatch.failure
 					: null;
-			const failure = operationFailure?.status === "failed"
-				? {
-						failureClass: operationFailure.failureClass,
-						summary: operationFailure.failureSummary,
-						consecutiveCount: stateFailure?.consecutiveCount ?? 1,
-					}
-				: cleanupFailure?.status === "succeeded"
+			const failure =
+				operationFailure?.status === "failed"
 					? {
-							failureClass:
-								cleanupFailure.zenodoOrphanDraftCleanup?.failureClass ??
-								"ZENODO_ORPHAN_DRAFT_CLEANUP_FAILED",
-							summary:
-								cleanupFailure.zenodoOrphanDraftCleanup?.failureSummary ??
-								"Zenodo orphaned draft cleanup failed",
-							consecutiveCount: stateFailure?.consecutiveCount ?? 1,
+							failureClass: operationFailure.failureClass,
+							summary: operationFailure.failureSummary,
+							consecutiveCount:
+								stateFailure?.consecutiveCount ?? 1,
 						}
-				: stateFailure;
+					: cleanupFailure?.status === "succeeded"
+						? {
+								failureClass:
+									cleanupFailure.zenodoOrphanDraftCleanup
+										?.failureClass ??
+									"ZENODO_ORPHAN_DRAFT_CLEANUP_FAILED",
+								summary:
+									cleanupFailure.zenodoOrphanDraftCleanup
+										?.failureSummary ??
+									"Zenodo orphaned draft cleanup failed",
+								consecutiveCount:
+									stateFailure?.consecutiveCount ?? 1,
+							}
+						: stateFailure;
 			const recoveryOnly =
 				built.plan.status === "write_required" &&
 				built.plan.operations.length > 0 &&
@@ -770,7 +819,12 @@ export async function runZenodoPublicationJobsOnce(
 					? {
 							status: "deferred",
 							delayMs: Math.min(
-								60_000 * 2 ** Math.max(failure.consecutiveCount - 1, 0),
+								60_000 *
+									2 **
+										Math.max(
+											failure.consecutiveCount - 1,
+											0,
+										),
 								3_600_000,
 							),
 							error: failure.summary,
@@ -780,18 +834,17 @@ export async function runZenodoPublicationJobsOnce(
 						? {
 								status: "deferred",
 								delayMs: 0,
-								error:
-									"Recovered saved Zenodo work. Publication will continue on the next run.",
+								error: "Recovered saved Zenodo work. Publication will continue on the next run.",
 								deadLetter: false,
 							}
 						: {
-							status: "finished",
-							receipt: {
-								provider: "zenodo",
-								environment: "sandbox",
-								published: true,
+								status: "finished",
+								receipt: {
+									provider: "zenodo",
+									environment: "sandbox",
+									published: true,
+								},
 							},
-						},
 			});
 			outcomes.push({
 				jobId: job.id,
@@ -810,12 +863,18 @@ export async function runZenodoPublicationJobsOnce(
 			}
 			const failedAt = now();
 			const previousState = providerState(
-				await readPublicationRepositorySnapshot(database, job.itemKey, "test"),
+				await readPublicationRepositorySnapshot(
+					database,
+					job.itemKey,
+					"test",
+				),
 				"zenodo",
 				config.services.publication,
 			);
 			const [target] = await database
-				.select({ identifierPolicy: publicationTarget.identifierPolicy })
+				.select({
+					identifierPolicy: publicationTarget.identifierPolicy,
+				})
 				.from(publicationTarget)
 				.where(
 					and(
@@ -840,8 +899,10 @@ export async function runZenodoPublicationJobsOnce(
 			const patch = settleProviderSyncFailure({
 				previousState,
 				provider: "zenodo",
-				failureClass: error instanceof Error ? error.name : "UNKNOWN_ERROR",
-				failureSummary: error instanceof Error ? error.message : String(error),
+				failureClass:
+					error instanceof Error ? error.name : "UNKNOWN_ERROR",
+				failureSummary:
+					error instanceof Error ? error.message : String(error),
 			});
 			const count = patch.failure?.consecutiveCount ?? 1;
 			const deadLetter = count >= workerConfig.retryLimit;
@@ -857,8 +918,14 @@ export async function runZenodoPublicationJobsOnce(
 					settledAt: failedAt,
 					jobResult: {
 						status: "deferred",
-						delayMs: Math.min(60_000 * 2 ** Math.max(count - 1, 0), 3_600_000),
-						error: error instanceof Error ? error.message : String(error),
+						delayMs: Math.min(
+							60_000 * 2 ** Math.max(count - 1, 0),
+							3_600_000,
+						),
+						error:
+							error instanceof Error
+								? error.message
+								: String(error),
 						deadLetter,
 					},
 				});

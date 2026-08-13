@@ -9,9 +9,13 @@ import {
 	sourceFileCleanup,
 	sourceRecordIssue,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
+import {
+	publicationSyncJob,
+	publicationTarget,
+} from "../src/db/schema/publication";
 import {
 	itemFilePublication,
 	sourceRecordAlias,
@@ -1754,6 +1758,23 @@ async function verify() {
 		});
 		const publicationAttachmentKey =
 			publicationLifecycle.itemKeys.PUBA0001!;
+		const publicationParentKey = publicationLifecycle.itemKeys.PUBP0001!;
+		await db.insert(publicationTarget).values([
+			{
+				itemKey: publicationParentKey,
+				provider: "crossref",
+				environment: "test",
+				identifierPolicy: null,
+				requestedBy: "source-writer-verifier",
+			},
+			{
+				itemKey: publicationParentKey,
+				provider: "zenodo",
+				environment: "sandbox",
+				identifierPolicy: "mint-zenodo",
+				requestedBy: "source-writer-verifier",
+			},
+		]);
 		await db.insert(sourceFileCleanup).values(
 			[
 				"sources/zotero/unpublish/document.pdf",
@@ -1836,6 +1857,21 @@ async function verify() {
 				),
 			"Removing a publication tag did not clear and queue the managed PDF bundle",
 		);
+		const jobsAfterSourceFileRemoval = await db
+			.select()
+			.from(publicationSyncJob)
+			.where(
+				and(
+					eq(publicationSyncJob.itemKey, publicationParentKey),
+					isNull(publicationSyncJob.supersededAt),
+				),
+			);
+		assert(
+			jobsAfterSourceFileRemoval.length === 1 &&
+				jobsAfterSourceFileRemoval[0]?.provider === "crossref" &&
+				jobsAfterSourceFileRemoval[0].reason === "file_changed",
+			"A source PDF removal did not queue the active publication targets correctly",
+		);
 
 		await writeSourceIngestionBatch(db, {
 			...baseBatch({
@@ -1878,6 +1914,28 @@ async function verify() {
 				},
 			],
 		});
+		const jobsAfterSourceFilePublish = await db
+			.select()
+			.from(publicationSyncJob)
+			.where(
+				and(
+					eq(publicationSyncJob.itemKey, publicationParentKey),
+					isNull(publicationSyncJob.supersededAt),
+				),
+			);
+		assert(
+			jobsAfterSourceFilePublish.length === 2 &&
+				jobsAfterSourceFilePublish.every(
+					(job) => job.reason === "file_changed",
+				) &&
+				jobsAfterSourceFilePublish.some(
+					(job) => job.provider === "crossref",
+				) &&
+				jobsAfterSourceFilePublish.some(
+					(job) => job.provider === "zenodo",
+				),
+			"A source PDF publish did not queue both active publication targets",
+		);
 		await writeSourceIngestionBatch(db, {
 			...baseBatch({
 				connectionKey: "zotero-unpublish-writer",
@@ -1931,6 +1989,41 @@ async function verify() {
 			"A file-null source upsert orphaned its managed publication",
 		);
 
+		await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-unpublish-writer",
+				expectedCursor: { version: 4 },
+				nextCursor: { version: 5 },
+			}),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "PUBP0001",
+					remoteVersion: "5",
+					raw: { key: "PUBP0001", title: "Updated publication" },
+					metadata: {
+						itemType: "Report",
+						title: "Updated publication parent",
+					},
+				},
+			],
+		});
+		const currentPublicationJobs = await db
+			.select()
+			.from(publicationSyncJob)
+			.where(
+				and(
+					eq(publicationSyncJob.itemKey, publicationParentKey),
+					isNull(publicationSyncJob.supersededAt),
+				),
+			);
+		assert(
+			currentPublicationJobs.length === 1 &&
+				currentPublicationJobs[0]?.provider === "crossref" &&
+				currentPublicationJobs[0].reason === "record_changed",
+			"A source metadata update did not replace stale publication jobs",
+		);
+
 		const writerEvents = await db
 			.select()
 			.from(outbox)
@@ -1964,6 +2057,12 @@ async function verify() {
 			nativeFileItemKey,
 		];
 		if (itemKeys.length > 0) {
+			await db
+				.delete(publicationSyncJob)
+				.where(inArray(publicationSyncJob.itemKey, itemKeys));
+			await db
+				.delete(publicationTarget)
+				.where(inArray(publicationTarget.itemKey, itemKeys));
 			await db.delete(outbox).where(inArray(outbox.entityKey, itemKeys));
 			await db
 				.delete(itemToCollection)

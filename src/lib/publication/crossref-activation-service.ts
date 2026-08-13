@@ -21,6 +21,8 @@ import { allocateManagedCrossrefDoi } from "./namespace-repository";
 import {
 	enqueueItemSearchReprojection,
 	publicationJobState,
+	savePublicationJob,
+	supersedeUnleasedPublicationJobs,
 } from "./queue";
 import { buildPublicationRecordSnapshot } from "./record-adapter";
 import { readPublicationRepositorySnapshot } from "./repository";
@@ -317,26 +319,22 @@ export async function activateCrossrefPublication(
 			revision: nextRevision,
 			queuedAt: now,
 		});
-		const [job] = await transaction
-			.insert(publicationSyncJob)
-			.values({
-				itemKey,
-				provider: "crossref",
-				environment: "test",
-				canonicalRevision: nextRevision,
-				reason: "manual_activation",
-				idempotencyKey: [
-					"publication",
-					"crossref",
-					"test",
-					itemKey,
-					nextRevision,
-				].join(":"),
-				nextAttemptAt: now,
-				createdAt: now,
-				updatedAt: now,
-			})
-			.returning();
+		await supersedeUnleasedPublicationJobs(transaction, {
+			itemKey,
+			provider: "crossref",
+			environment: "test",
+			now,
+		});
+		const job = await savePublicationJob(transaction, {
+			itemKey,
+			provider: "crossref",
+			environment: "test",
+			identifierPolicy: null,
+			canonicalRevision: nextRevision,
+			fileRevision: null,
+			reason: "manual_activation",
+			now,
+		});
 		if (!identifier || !job) {
 			throw new Error("Crossref activation could not be saved");
 		}

@@ -29,9 +29,10 @@ import { readPublicationRepositorySnapshot } from "./repository";
 import { currentManagedDoi, providerState } from "./state-adapter";
 import {
 	assertPublicationJobLease,
-	claimPublicationJobs,
+	claimNextPublicationJob,
 	deferPublicationJob,
 	enqueueItemSearchReprojection,
+	enqueuePublicationJobsForItem,
 	finishPublicationJob,
 	PublicationJobLeaseLostError,
 } from "./queue";
@@ -153,7 +154,11 @@ async function recordCrossrefPending(
 ) {
 	await database.transaction(async (transaction) => {
 		await lockItemMutation(transaction, input.recordId);
-		await assertPublicationJobLease(transaction, input);
+		await assertPublicationJobLease(transaction, {
+			jobId: input.jobId,
+			workerId: input.workerId,
+			observedAt: input.submittedAt,
+		});
 		await transaction
 			.insert(publicationSyncState)
 			.values({
@@ -248,6 +253,11 @@ async function settleCrossrefState(
 ) {
 	await database.transaction(async (transaction) => {
 		await lockItemMutation(transaction, input.itemKey);
+		await assertPublicationJobLease(transaction, {
+			jobId: input.jobId,
+			workerId: input.workerId,
+			observedAt: input.settledAt,
+		});
 		const values = patchValues(
 			input.patch,
 			input.previousState,
@@ -296,6 +306,13 @@ async function settleCrossrefState(
 				itemKey: input.itemKey,
 				revision: current?.revision ?? input.canonicalRevision,
 				queuedAt: input.settledAt,
+			});
+			await enqueuePublicationJobsForItem(transaction, {
+				itemKey: input.itemKey,
+				canonicalRevision: current?.revision ?? input.canonicalRevision,
+				reason: "crossref_verified",
+				now: input.settledAt,
+				providers: ["zenodo"],
 			});
 		}
 		if (input.jobResult.status === "finished") {
@@ -411,11 +428,10 @@ export async function runCrossrefPublicationJobsOnce(
 		processed < workerConfig.batchSize;
 		processed += 1
 	) {
-		const [job] = await claimPublicationJobs(database, {
+		const job = await claimNextPublicationJob(database, {
 			provider: "crossref",
 			environment: "test",
 			workerId,
-			limit: 1,
 			leaseSeconds: workerConfig.leaseSeconds,
 			claimedAt: now(),
 		});

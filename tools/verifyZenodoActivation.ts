@@ -1,6 +1,9 @@
 import { createHash } from "node:crypto";
 
-import type { ZenodoPreparedDraft, ZenodoWriter } from "@opendeved/doi-sync-core";
+import type {
+	ZenodoPreparedDraft,
+	ZenodoWriter,
+} from "@opendeved/doi-sync-core";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client, Pool } from "pg";
@@ -19,7 +22,12 @@ import {
 	ZenodoIdentifierPolicyLockedError,
 } from "../src/lib/publication/zenodo-activation-service";
 import { runZenodoPublicationJobsOnce } from "../src/lib/publication/zenodo-adapter";
-import { claimNextPublicationJob } from "../src/lib/publication/queue";
+import {
+	claimNextPublicationJob,
+	deferPublicationJob,
+	finishPublicationJob,
+	PublicationJobLeaseLostError,
+} from "../src/lib/publication/queue";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
@@ -66,7 +74,11 @@ async function seedParent(
 		[
 			input.key,
 			JSON.stringify([
-				{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" },
+				{
+					creatorType: "author",
+					firstName: "Ada",
+					lastName: "Lovelace",
+				},
 			]),
 			input.doi ?? null,
 		],
@@ -132,9 +144,12 @@ function memoryStorage(files: ReadonlyMap<string, Uint8Array>) {
 
 let fakeZenodoRecordNumber = 1000;
 
-function successfulZenodoProvider(input: { discardCount?: { value: number } } = {}): ZenodoWriter {
+function successfulZenodoProvider(
+	input: { discardCount?: { value: number } } = {},
+): ZenodoWriter {
 	const prepared = async (
-		onPreparedDraft: ((draft: ZenodoPreparedDraft) => Promise<void>) | undefined,
+		onPreparedDraft:
+			((draft: ZenodoPreparedDraft) => Promise<void>) | undefined,
 	) => {
 		fakeZenodoRecordNumber += 1;
 		const draft = {
@@ -152,10 +167,12 @@ function successfulZenodoProvider(input: { discardCount?: { value: number } } = 
 		discardPreparedDraft: async () => {
 			if (input.discardCount) input.discardCount.value += 1;
 		},
-		prepareCreateRecord: async (request) => prepared(request.onPreparedDraft),
+		prepareCreateRecord: async (request) =>
+			prepared(request.onPreparedDraft),
 		prepareUpdateRecordMetadata: async (request) =>
 			prepared(request.onPreparedDraft),
-		prepareUpdateRecordFiles: async (request) => prepared(request.onPreparedDraft),
+		prepareUpdateRecordFiles: async (request) =>
+			prepared(request.onPreparedDraft),
 		prepareNewVersion: async (request) => prepared(request.onPreparedDraft),
 		publishDraft: async ({ draft }) => ({
 			latestRecordId: draft.draftRecordId,
@@ -188,7 +205,9 @@ function publishTimeoutProvider(): ZenodoWriter {
 	return {
 		...provider,
 		publishDraft: async () => {
-			throw new Error("Zenodo timed out after receiving the publish request");
+			throw new Error(
+				"Zenodo timed out after receiving the publish request",
+			);
 		},
 	};
 }
@@ -268,7 +287,10 @@ async function verify(database: Database, client: Client) {
 		config,
 		"mint-zenodo",
 	);
-	assert(fileless.state === "waiting_for_file", "Fileless activation did not wait");
+	assert(
+		fileless.state === "waiting_for_file",
+		"Fileless activation did not wait",
+	);
 	assert(fileless.job === null, "Fileless activation created a provider job");
 	const repeated = await activateZenodoPublication(
 		database,
@@ -283,7 +305,8 @@ async function verify(database: Database, client: Client) {
 			(SELECT count(*) FROM "publicationSyncJob" WHERE "itemKey" = 'ZENACTAA')::text AS jobs`,
 	);
 	assert(
-		filelessRows.rows[0]?.targets === "1" && filelessRows.rows[0]?.jobs === "0",
+		filelessRows.rows[0]?.targets === "1" &&
+			filelessRows.rows[0]?.jobs === "0",
 		"Fileless activation was not idempotent",
 	);
 
@@ -308,7 +331,10 @@ async function verify(database: Database, client: Client) {
 		`UPDATE "publicationIdentifier" SET "lifecycle" = 'verified', "verifiedAt" = now() WHERE "itemKey" = 'ZENACTAB' AND "registrar" = 'crossref'`,
 	);
 	const ready = await activateZenodoPublication(database, "ZENACTAB", config);
-	assert(ready.state === "queued" && ready.job !== null, "Ready target was not queued");
+	assert(
+		ready.state === "queued" && ready.job !== null,
+		"Ready target was not queued",
+	);
 	const repeatedReady = await activateZenodoPublication(
 		database,
 		"ZENACTAB",
@@ -350,14 +376,18 @@ async function verify(database: Database, client: Client) {
 		revised.job !== null && revised.job.id !== independent.job.id,
 		"A new canonical revision did not replace its old job",
 	);
-	const revisedJobs = await client.query<{ active: string; superseded: string }>(
+	const revisedJobs = await client.query<{
+		active: string;
+		superseded: string;
+	}>(
 		`SELECT
 			count(*) FILTER (WHERE "processedAt" IS NULL AND "deadLetteredAt" IS NULL AND "supersededAt" IS NULL)::text AS active,
 			count(*) FILTER (WHERE "supersededAt" IS NOT NULL)::text AS superseded
 		 FROM "publicationSyncJob" WHERE "itemKey" = 'ZENACTAC'`,
 	);
 	assert(
-		revisedJobs.rows[0]?.active === "1" && revisedJobs.rows[0]?.superseded === "1",
+		revisedJobs.rows[0]?.active === "1" &&
+			revisedJobs.rows[0]?.superseded === "1",
 		"A revised activation left duplicate active jobs",
 	);
 
@@ -384,7 +414,8 @@ async function verify(database: Database, client: Client) {
 		"reuse-crossref",
 	);
 	assert(
-		changedPolicy.state === "waiting_for_crossref" && changedPolicy.job === null,
+		changedPolicy.state === "waiting_for_crossref" &&
+			changedPolicy.job === null,
 		"A policy change returned its superseded job",
 	);
 	const oldPolicyJob = await client.query<{ supersededAt: Date | null }>(
@@ -414,7 +445,8 @@ async function verify(database: Database, client: Client) {
 		"mint-zenodo",
 	);
 	assert(
-		afterUnpublish.state === "waiting_for_file" && afterUnpublish.job === null,
+		afterUnpublish.state === "waiting_for_file" &&
+			afterUnpublish.job === null,
 		"File removal left a stale job in the activation receipt",
 	);
 	const unpublishedJob = await client.query<{ supersededAt: Date | null }>(
@@ -483,16 +515,25 @@ async function verify(database: Database, client: Client) {
 	await seedParent(client, { key: "ZENACTAD", doi: "10.9999/external" });
 	for (const policy of ["reuse-crossref", "mint-zenodo"] as const) {
 		try {
-			await activateZenodoPublication(database, "ZENACTAD", config, policy);
+			await activateZenodoPublication(
+				database,
+				"ZENACTAD",
+				config,
+				policy,
+			);
 			throw new Error(`External DOI allowed ${policy}`);
 		} catch (error) {
-			if (!(error instanceof ZenodoActivationValidationError)) throw error;
+			if (!(error instanceof ZenodoActivationValidationError))
+				throw error;
 		}
 	}
 	const externalTarget = await client.query(
 		`SELECT 1 FROM "publicationTarget" WHERE "itemKey" = 'ZENACTAD'`,
 	);
-	assert(externalTarget.rowCount === 0, "Rejected external DOI saved a target");
+	assert(
+		externalTarget.rowCount === 0,
+		"Rejected external DOI saved a target",
+	);
 
 	await seedParent(client, { key: "ZENACTAE" });
 	try {
@@ -517,7 +558,9 @@ async function verify(database: Database, client: Client) {
 		doi: "10.5555/library.3",
 		lifecycle: "verified",
 	});
-	await client.query(`UPDATE "item" SET "DOI" = '10.5555/library.3' WHERE "key" = 'ZENACTAC'`);
+	await client.query(
+		`UPDATE "item" SET "DOI" = '10.5555/library.3' WHERE "key" = 'ZENACTAC'`,
+	);
 	try {
 		await activateZenodoPublication(
 			database,
@@ -535,7 +578,9 @@ async function verify(database: Database, client: Client) {
 		 SET "leaseOwner" = NULL, "leaseExpiresAt" = NULL, "supersededAt" = now()
 		 WHERE "provider" = 'zenodo' AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL`,
 	);
-	const publishedBytes = new TextEncoder().encode("verified Zenodo PDF bytes");
+	const publishedBytes = new TextEncoder().encode(
+		"verified Zenodo PDF bytes",
+	);
 	await seedParent(client, { key: "ZENWRKAA" });
 	await seedPublishedFile(client, "ZENWRKAA", "ZENPDFWA", publishedBytes);
 	const workerActivation = await activateZenodoPublication(
@@ -661,7 +706,9 @@ async function verify(database: Database, client: Client) {
 		"A metadata-only Zenodo update erased the settled file state",
 	);
 
-	const recoveryBytes = new TextEncoder().encode("recoverable Zenodo PDF bytes");
+	const recoveryBytes = new TextEncoder().encode(
+		"recoverable Zenodo PDF bytes",
+	);
 	await seedParent(client, { key: "ZENWRKAB" });
 	await seedPublishedFile(client, "ZENWRKAB", "ZENPDFWB", recoveryBytes);
 	const recoveryActivation = await activateZenodoPublication(
@@ -855,14 +902,19 @@ async function verify(database: Database, client: Client) {
 		config,
 		"mint-zenodo",
 	);
-	await client.query(`UPDATE "item" SET "deleted" = 1 WHERE "key" = 'ZENWRKAD'`);
+	await client.query(
+		`UPDATE "item" SET "deleted" = 1 WHERE "key" = 'ZENWRKAD'`,
+	);
 	const preplanConfig = {
 		...recoveryConfig,
 		services: {
 			...recoveryConfig.services,
 			publication: {
 				...recoveryConfig.services.publication,
-				worker: { ...recoveryConfig.services.publication.worker, retryLimit: 1 },
+				worker: {
+					...recoveryConfig.services.publication.worker,
+					retryLimit: 1,
+				},
 			},
 		},
 	} as LibraryServerConfig;
@@ -910,7 +962,10 @@ async function verify(database: Database, client: Client) {
 		"mint-zenodo",
 	);
 	const existingVersionDoi = publishedState.rows[0]?.versionDoi;
-	assert(existingVersionDoi, "The collision fixture has no existing Zenodo DOI");
+	assert(
+		existingVersionDoi,
+		"The collision fixture has no existing Zenodo DOI",
+	);
 	const collisionResult = await runZenodoPublicationJobsOnce(
 		database,
 		recoveryConfig,
@@ -979,6 +1034,87 @@ async function verify(database: Database, client: Client) {
 		firstClaim && secondClaim && firstClaim.id !== secondClaim.id,
 		"Concurrent workers did not move past the locked head job",
 	);
+	await client.query(
+		`UPDATE "publicationSyncJob"
+		 SET "leaseOwner" = NULL, "leaseExpiresAt" = NULL, "supersededAt" = $1
+		 WHERE "id" = ANY($2::bigint[])`,
+		[claimTime, [firstClaim.id, secondClaim.id]],
+	);
+
+	const leaseBytes = new TextEncoder().encode("serialized Zenodo lease");
+	await seedParent(client, { key: "ZENWRKAH" });
+	await seedPublishedFile(client, "ZENWRKAH", "ZENPDFWH", leaseBytes);
+	const leaseActivation = await activateZenodoPublication(
+		database,
+		"ZENWRKAH",
+		config,
+		"mint-zenodo",
+	);
+	const leaseStart = new Date("2030-08-13T13:00:00Z");
+	const leasedJob = await claimNextPublicationJob(database, {
+		provider: "zenodo",
+		environment: "sandbox",
+		workerId: "lease-owner",
+		leaseSeconds: 60,
+		claimedAt: leaseStart,
+	});
+	assert(
+		leasedJob && leasedJob.id === leaseActivation.job?.id,
+		"The lease test did not claim its first job",
+	);
+	await client.query(
+		`INSERT INTO "publicationSyncJob" (
+			"itemKey", "provider", "environment", "canonicalRevision", "fileRevision",
+			"reason", "idempotencyKey", "nextAttemptAt"
+		) VALUES (
+			'ZENWRKAH', 'zenodo', 'sandbox', 2, 1,
+			'record_changed', 'publication:zenodo:sandbox:ZENWRKAH:mint-zenodo:2:1', $1
+		)`,
+		[leaseStart],
+	);
+	const blockedSibling = await claimNextPublicationJob(database, {
+		provider: "zenodo",
+		environment: "sandbox",
+		workerId: "blocked-sibling-worker",
+		leaseSeconds: 60,
+		claimedAt: new Date(leaseStart.getTime() + 1_000),
+	});
+	assert(
+		blockedSibling === null,
+		"A newer Zenodo job ran beside an older leased job for the same record",
+	);
+	let expiredLeaseRejected = false;
+	try {
+		await finishPublicationJob(database, {
+			jobId: leasedJob.id,
+			workerId: "lease-owner",
+			finishedAt: new Date(leaseStart.getTime() + 61_000),
+			receipt: { provider: "zenodo" },
+		});
+	} catch (error) {
+		expiredLeaseRejected = error instanceof PublicationJobLeaseLostError;
+	}
+	assert(
+		expiredLeaseRejected,
+		"A worker settled a Zenodo job after its lease expired",
+	);
+	let expiredDeferRejected = false;
+	try {
+		await deferPublicationJob(database, {
+			jobId: leasedJob.id,
+			workerId: "lease-owner",
+			deferredAt: new Date(leaseStart.getTime() + 61_000),
+			delayMs: 60_000,
+			error: "simulated retry",
+			deadLetter: false,
+		});
+	} catch (error) {
+		expiredDeferRejected = error instanceof PublicationJobLeaseLostError;
+	}
+	assert(
+		expiredDeferRejected,
+		"A worker deferred a Zenodo job after its lease expired",
+	);
 }
 
 async function verifyIsolatedDatabase() {
@@ -995,7 +1131,10 @@ async function verifyIsolatedDatabase() {
 	try {
 		await admin.query(`CREATE DATABASE "${databaseName}"`);
 		pool = new Pool({ connectionString: temporaryUrl.toString(), max: 12 });
-		const database = drizzle({ client: pool, schema }) as unknown as Database;
+		const database = drizzle({
+			client: pool,
+			schema,
+		}) as unknown as Database;
 		await migrate(database, { migrationsFolder: "drizzle" });
 		client = new Client({ connectionString: temporaryUrl.toString() });
 		await client.connect();

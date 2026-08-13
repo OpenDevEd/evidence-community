@@ -70,7 +70,7 @@ async function seedItem(
 		[input.key],
 	);
 	await client.query(
-		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "date", "creators", "institution", "DOI", "deleted")
+		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "date", "creators", "publisher", "DOI", "deleted")
 		 VALUES ($1, 'zotero-activation', $1, $2, 1, 'Crossref activation record', '2026-08-12', $3::jsonb, 'OpenDevEd', $4, 0)`,
 		[
 			input.key,
@@ -88,6 +88,47 @@ async function seedItem(
 	await client.query(
 		`INSERT INTO "itemSourceLink" ("itemKey", "sourceConnectionKey", "sourceRecordKey", "writebackEnabled") VALUES ($1, 'zotero-activation', $1, true)`,
 		[input.key],
+	);
+}
+
+async function seedPublishedFile(
+	client: Client,
+	parentKey: string,
+	fileKey: string,
+) {
+	await client.query(
+		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'zotero-activation', $1)`,
+		[fileKey],
+	);
+	await client.query(
+		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "parentItem", "revision", "title", "deleted")
+		 VALUES ($1, 'zotero-activation', $1, 'Attachment', $2, 1, 'Crossref wake PDF', 0)`,
+		[fileKey, parentKey],
+	);
+	await client.query(
+		`INSERT INTO "itemFilePublication" (
+			"itemKey", "sourceConnectionKey", "parentItemKey", "uploadRevision", "revision",
+			"sourceObjectPath", "sourceCoverObjectPath", "objectPath", "publicUrl", "filename",
+			"contentType", "sizeBytes", "sha256", "coverObjectPath", "coverPublicUrl",
+			"coverWidth", "coverHeight", "pageCount", "publicationTags", "publishedAt"
+		) VALUES (
+			$1, 'zotero-activation', $2, 1, 1,
+			$3, $4, $5, $6, $7,
+			'application/pdf', 12, $8, $9, $10,
+			100, 140, 1, '[]'::jsonb, now()
+		)`,
+		[
+			fileKey,
+			parentKey,
+			`private/${fileKey}.pdf`,
+			`private/${fileKey}.png`,
+			`public/${fileKey}.pdf`,
+			`https://files.example.org/${fileKey}.pdf`,
+			`${fileKey}.pdf`,
+			"a".repeat(64),
+			`public/${fileKey}.png`,
+			`https://files.example.org/${fileKey}.png`,
+		],
 	);
 }
 
@@ -274,9 +315,9 @@ function batchLeaseStealingProvider(
 
 async function verify(database: Database, client: Client) {
 	await client.query(
-		`INSERT INTO "sourceConnection" ("key", "provider", "scopeKind", "externalScopeKey", "credentialRef", "defaultWriteback") VALUES ('zotero-activation', 'zotero', 'group', 'activation-test', 'test-key', true)`,
+		`INSERT INTO "sourceConnection" ("key", "provider", "scopeKind", "externalScopeKey", "credentialRef", "defaultWriteback")
+		 VALUES ('zotero-activation', 'zotero', 'group', 'activation-test', 'test-key', true)`,
 	);
-
 	await seedItem(client, { key: "CRACTAAB" });
 	const first = await activateCrossrefPublication(
 		database,
@@ -699,6 +740,57 @@ async function verify(database: Database, client: Client) {
 			stalePendingState.rows[0]?.lastFailureClass ===
 				"CROSSREF_PENDING_STALE",
 		"Stale Crossref verification did not become a visible failed job",
+	);
+
+	await client.query(
+		`UPDATE "publicationSyncJob"
+		 SET "leaseOwner" = NULL, "leaseExpiresAt" = NULL, "supersededAt" = now()
+		 WHERE "provider" = 'crossref' AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL`,
+	);
+	await seedItem(client, { key: "CRACTAAR" });
+	await seedPublishedFile(client, "CRACTAAR", "CRPDFAAR");
+	const wakeActivation = await activateCrossrefPublication(
+		database,
+		"CRACTAAR",
+		config,
+	);
+	await client.query(
+		`INSERT INTO "publicationTarget" ("itemKey", "provider", "environment", "identifierPolicy", "requestedBy")
+		 VALUES ('CRACTAAR', 'zenodo', 'sandbox', 'reuse-crossref', 'crossref-wake-test')`,
+	);
+	const wakeOutcomes = await runCrossrefPublicationJobsOnce(
+		database,
+		config,
+		{
+			provider: successfulProvider(),
+			workerId: "crossref-wake-worker",
+			now: () => new Date("2030-08-19T09:00:00Z"),
+		},
+	);
+	assert(
+		wakeOutcomes.some(
+			(outcome) =>
+				outcome.jobId === wakeActivation.job.id &&
+				outcome.status === "succeeded",
+		),
+		"Crossref verification did not finish for the Zenodo wake fixture",
+	);
+	const zenodoWakeJobs = await client.query<{
+		canonicalRevision: number;
+		fileRevision: number | null;
+		reason: string;
+	}>(
+		`SELECT "canonicalRevision", "fileRevision", "reason"
+		 FROM "publicationSyncJob"
+		 WHERE "itemKey" = 'CRACTAAR' AND "provider" = 'zenodo' AND "supersededAt" IS NULL`,
+	);
+	assert(
+		zenodoWakeJobs.rows.length === 1 &&
+			zenodoWakeJobs.rows[0]?.reason === "crossref_verified" &&
+			Number(zenodoWakeJobs.rows[0].canonicalRevision) ===
+				wakeActivation.canonicalRevision &&
+			Number(zenodoWakeJobs.rows[0].fileRevision) === 1,
+		"Verified Crossref DOI did not wake the ready reuse-Crossref Zenodo target",
 	);
 }
 

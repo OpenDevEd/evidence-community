@@ -10,10 +10,14 @@ import {
 	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
 import { PDFDocument, StandardFonts } from "pdf-lib";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { itemFilePublication } from "../src/db/schema/source";
+import {
+	publicationSyncJob,
+	publicationTarget,
+} from "../src/db/schema/publication";
 import { item } from "../src/db/schema/tables/item";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import type {
@@ -245,6 +249,21 @@ async function verify() {
 			attachmentMetadata.url === null,
 			"Metadata publication implicitly published the file",
 		);
+		await db.insert(publicationTarget).values([
+			{
+				itemKey: parentDraft.itemKey,
+				provider: "crossref",
+				environment: "test",
+				requestedBy: "native-file-test",
+			},
+			{
+				itemKey: parentDraft.itemKey,
+				provider: "zenodo",
+				environment: "sandbox",
+				identifierPolicy: "mint-zenodo",
+				requestedBy: "native-file-test",
+			},
+		]);
 
 		const openAttachmentDraft = await openNativeItemDraft(
 			db,
@@ -315,6 +334,33 @@ async function verify() {
 			published.file.publicationTags.join(",") ===
 				PUBLICATION_TAGS.join(","),
 			"File publication did not retain ownership of its publication tags",
+		);
+		const publicationJobsAfterFilePublish = await db
+			.select()
+			.from(publicationSyncJob)
+			.where(
+				and(
+					eq(publicationSyncJob.itemKey, parentDraft.itemKey),
+					isNull(publicationSyncJob.supersededAt),
+				),
+			);
+		const parentFilePublishRevision = published.indexingRecords.find(
+			(record) => record.key === parentDraft.itemKey,
+		)?.revision;
+		assert(
+			parentFilePublishRevision != null &&
+				publicationJobsAfterFilePublish.length === 2 &&
+				publicationJobsAfterFilePublish.every(
+					(job) =>
+						job.reason === "file_changed" &&
+						job.canonicalRevision === parentFilePublishRevision,
+				) &&
+				publicationJobsAfterFilePublish.some(
+					(job) =>
+						job.provider === "zenodo" &&
+						job.fileRevision === published.file.revision,
+				),
+			"File publication did not queue both active publication targets",
 		);
 		const advancedAttachmentDraft = await getNativeItemDraft(
 			db,
@@ -395,7 +441,8 @@ async function verify() {
 				republishedMetadata.url === published.item.url &&
 				republishedMetadata.PDFCoverPageImage ===
 					published.item.PDFCoverPageImage &&
-				republishedMetadata.fullTextPDF === published.item.fullTextPDF &&
+				republishedMetadata.fullTextPDF ===
+					published.item.fullTextPDF &&
 				tagsAfterMetadataPublish.some(
 					({ name }) => name === PUBLICATION_TAGS[0],
 				) &&
@@ -480,6 +527,29 @@ async function verify() {
 				unpublishedJob.dirtyFields.includes("tags") &&
 				remainingPublicationTags.length === 0,
 			"File unpublish did not clear fields and public objects",
+		);
+		const [parentAfterFileUnpublish] = await db
+			.select({ revision: item.revision })
+			.from(item)
+			.where(eq(item.key, parentDraft.itemKey));
+		const activePublicationJobsAfterFileUnpublish = await db
+			.select()
+			.from(publicationSyncJob)
+			.where(
+				and(
+					eq(publicationSyncJob.itemKey, parentDraft.itemKey),
+					isNull(publicationSyncJob.supersededAt),
+				),
+			);
+		assert(
+			activePublicationJobsAfterFileUnpublish.length === 1 &&
+				activePublicationJobsAfterFileUnpublish[0]?.provider ===
+					"crossref" &&
+				activePublicationJobsAfterFileUnpublish[0].reason ===
+					"file_changed" &&
+				activePublicationJobsAfterFileUnpublish[0].canonicalRevision ===
+					parentAfterFileUnpublish?.revision,
+			"File unpublish did not leave Zenodo waiting for a file",
 		);
 		storage.publicUploadHook = async () => {
 			await db
@@ -628,11 +698,7 @@ async function verify() {
 					concurrentReplacementReady.uploadRevision,
 				publicationTags: PUBLICATION_TAGS,
 			}),
-			unpublishNativePdf(
-				db,
-				storage,
-				concurrentAttachmentDraft.itemKey,
-			),
+			unpublishNativePdf(db, storage, concurrentAttachmentDraft.itemKey),
 		]);
 		assert(
 			concurrentFileMutations.every(
@@ -811,6 +877,12 @@ async function verify() {
 		);
 	} finally {
 		if (createdKeys.length > 0) {
+			await db
+				.delete(publicationSyncJob)
+				.where(inArray(publicationSyncJob.itemKey, createdKeys));
+			await db
+				.delete(publicationTarget)
+				.where(inArray(publicationTarget.itemKey, createdKeys));
 			await db
 				.delete(sourceWritebackJob)
 				.where(inArray(sourceWritebackJob.itemKey, createdKeys));

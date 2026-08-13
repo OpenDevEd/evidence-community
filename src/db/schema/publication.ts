@@ -41,6 +41,7 @@ export const PUBLICATION_JOB_REASONS = [
 	"manual_retry",
 	"record_changed",
 	"file_changed",
+	"crossref_verified",
 	"nightly_reconciliation",
 ] as const;
 export const ZENODO_JOURNAL_OPERATIONS = [
@@ -66,8 +67,8 @@ export const PUBLICATION_RUN_STATUSES = [
 ] as const;
 
 export type PublicationProvider = (typeof PUBLICATION_PROVIDERS)[number];
-export type PublicationEnvironment =
-	(typeof PUBLICATION_ENVIRONMENTS)[number];
+export type PublicationEnvironment = (typeof PUBLICATION_ENVIRONMENTS)[number];
+export type PublicationJobReason = (typeof PUBLICATION_JOB_REASONS)[number];
 export type ZenodoIdentifierPolicy =
 	(typeof ZENODO_IDENTIFIER_POLICIES)[number];
 
@@ -91,7 +92,10 @@ export const doiNamespace = pgTable(
 		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
 	},
 	(table) => [
-		check("doiNamespace_environment_valid", sql`${table.environment} = 'test'`),
+		check(
+			"doiNamespace_environment_valid",
+			sql`${table.environment} = 'test'`,
+		),
 		check(
 			"doiNamespace_prefix_valid",
 			sql`${table.prefix} ~ '^10\\.[0-9]{4,9}$'`,
@@ -125,7 +129,9 @@ export const publicationTarget = pgTable(
 			enum: ZENODO_IDENTIFIER_POLICIES,
 		}),
 		requestedBy: varchar("requestedBy", { length: 255 }).notNull(),
-		requestedAt: timestampWithTimezone("requestedAt").notNull().defaultNow(),
+		requestedAt: timestampWithTimezone("requestedAt")
+			.notNull()
+			.defaultNow(),
 		deactivatedAt: timestampWithTimezone("deactivatedAt"),
 		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
 	},
@@ -246,14 +252,16 @@ export const publicationSyncState = pgTable(
 		lastPayloadHash: varchar("lastPayloadHash", { length: 64 }),
 		lastPayloadSnapshot: jsonb("lastPayloadSnapshot").$type<JsonObject>(),
 		lastFileManifestHash: varchar("lastFileManifestHash", { length: 64 }),
-		lastFileManifestSnapshot:
-			jsonb("lastFileManifestSnapshot").$type<JsonObject>(),
+		lastFileManifestSnapshot: jsonb(
+			"lastFileManifestSnapshot",
+		).$type<JsonObject>(),
 		pendingStage: text("pendingStage", {
 			enum: ["relation_clear", "deposit"],
 		}),
 		pendingPayloadHash: varchar("pendingPayloadHash", { length: 64 }),
-		pendingPayloadSnapshot:
-			jsonb("pendingPayloadSnapshot").$type<JsonObject>(),
+		pendingPayloadSnapshot: jsonb(
+			"pendingPayloadSnapshot",
+		).$type<JsonObject>(),
 		pendingBatchId: varchar("pendingBatchId", { length: 255 }),
 		pendingFilename: varchar("pendingFilename", { length: 255 }),
 		pendingSubmittedAt: timestampWithTimezone("pendingSubmittedAt"),
@@ -267,7 +275,9 @@ export const publicationSyncState = pgTable(
 		}),
 		lastFailureClass: varchar("lastFailureClass", { length: 255 }),
 		lastFailureSummary: text("lastFailureSummary"),
-		consecutiveFailures: integer("consecutiveFailures").notNull().default(0),
+		consecutiveFailures: integer("consecutiveFailures")
+			.notNull()
+			.default(0),
 		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
 	},
 	(table) => [
@@ -364,13 +374,17 @@ export const publicationSyncJob = pgTable(
 		environment: text("environment", {
 			enum: PUBLICATION_ENVIRONMENTS,
 		}).notNull(),
-		canonicalRevision: bigint("canonicalRevision", { mode: "number" }).notNull(),
+		canonicalRevision: bigint("canonicalRevision", {
+			mode: "number",
+		}).notNull(),
 		fileRevision: bigint("fileRevision", { mode: "number" }),
 		reason: text("reason", { enum: PUBLICATION_JOB_REASONS }).notNull(),
 		idempotencyKey: varchar("idempotencyKey", { length: 255 }).notNull(),
 		attempts: integer("attempts").notNull().default(0),
 		lastError: text("lastError"),
-		nextAttemptAt: timestampWithTimezone("nextAttemptAt").notNull().defaultNow(),
+		nextAttemptAt: timestampWithTimezone("nextAttemptAt")
+			.notNull()
+			.defaultNow(),
 		leaseOwner: varchar("leaseOwner", { length: 255 }),
 		leaseExpiresAt: timestampWithTimezone("leaseExpiresAt"),
 		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
@@ -394,10 +408,13 @@ export const publicationSyncJob = pgTable(
 			"publicationSyncJob_revisions_positive",
 			sql`${table.canonicalRevision} >= 1 AND (${table.fileRevision} IS NULL OR ${table.fileRevision} >= 1)`,
 		),
-		check("publicationSyncJob_attempts_nonnegative", sql`${table.attempts} >= 0`),
+		check(
+			"publicationSyncJob_attempts_nonnegative",
+			sql`${table.attempts} >= 0`,
+		),
 		check(
 			"publicationSyncJob_reason_valid",
-			sql`${table.reason} IN ('manual_activation', 'manual_retry', 'record_changed', 'file_changed', 'nightly_reconciliation')`,
+			sql`${table.reason} IN ('manual_activation', 'manual_retry', 'record_changed', 'file_changed', 'crossref_verified', 'nightly_reconciliation')`,
 		),
 		check(
 			"publicationSyncJob_lease_bundle_valid",
@@ -417,7 +434,9 @@ export const publicationSyncJob = pgTable(
 			sql`(${table.processedAt} IS NULL AND ${table.resultReceipt} IS NULL)
 				OR (${table.processedAt} IS NOT NULL AND ${table.resultReceipt} IS NOT NULL)`,
 		),
-		unique("publicationSyncJob_idempotency_unique").on(table.idempotencyKey),
+		unique("publicationSyncJob_idempotency_unique").on(
+			table.idempotencyKey,
+		),
 		index("publicationSyncJob_ready_idx")
 			.on(table.nextAttemptAt, table.id)
 			.where(
@@ -452,8 +471,7 @@ export const zenodoPublishJournal = pgTable(
 		payloadHash: varchar("payloadHash", { length: 64 }).notNull(),
 		payloadSnapshot: jsonb("payloadSnapshot").$type<JsonObject>().notNull(),
 		fileManifestHash: varchar("fileManifestHash", { length: 64 }),
-		fileManifestSnapshot:
-			jsonb("fileManifestSnapshot").$type<JsonObject>(),
+		fileManifestSnapshot: jsonb("fileManifestSnapshot").$type<JsonObject>(),
 		depositionId: varchar("depositionId", { length: 255 }).notNull(),
 		draftRecordId: varchar("draftRecordId", { length: 255 }).notNull(),
 		parentId: varchar("parentId", { length: 255 }),
