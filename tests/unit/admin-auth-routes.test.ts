@@ -118,6 +118,23 @@ describe("admin session routes", () => {
 		expect((await login(request)).status).toBe(403);
 	});
 
+	it("handles a malformed form as a failed password", async () => {
+		const response = await login(
+			new NextRequest("http://localhost/api/admin/session", {
+				body: "not a form",
+				headers: {
+					"content-type": "application/json",
+					origin: "http://localhost",
+					"x-real-ip": "198.51.100.23",
+				},
+				method: "POST",
+			}),
+		);
+		expect(response.headers.get("location")).toBe(
+			"http://localhost/admin?login=invalid",
+		);
+	});
+
 	it("clears the cookie on logout", async () => {
 		const response = await logout(
 			new NextRequest("http://localhost/api/admin/session/logout", {

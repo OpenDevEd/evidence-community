@@ -89,6 +89,10 @@ export class ClientRateLimiter {
 		return { ...this.#statusForBucket(current, now), allowed: true };
 	}
 
+	reset(headers: ClientHeaders) {
+		this.#buckets.delete(getClientIdentifier(headers));
+	}
+
 	#statusForBucket(
 		bucket: RateLimitBucket | undefined,
 		now: number,

@@ -126,6 +126,6 @@ export function consumeAdminLoginAttempt(headers: Pick<Headers, "get">) {
 	return adminLoginLimiter.consume(headers);
 }
 
-export function getAdminLoginStatus(headers: Pick<Headers, "get">) {
-	return adminLoginLimiter.getStatus(headers);
+export function resetAdminLoginAttempts(headers: Pick<Headers, "get">) {
+	adminLoginLimiter.reset(headers);
 }

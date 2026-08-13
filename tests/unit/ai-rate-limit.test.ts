@@ -1,11 +1,4 @@
-import {
-	afterEach,
-	beforeEach,
-	describe,
-	expect,
-	it,
-	vi,
-} from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	AI_RATE_LIMIT_MAX_REQUESTS,
@@ -33,7 +26,11 @@ describe("AI request rate limiting", () => {
 		vi.setSystemTime(new Date("2026-07-28T19:00:00.000Z"));
 		const headers = requestHeaders("198.51.100.10");
 
-		for (let request = 1; request <= AI_RATE_LIMIT_MAX_REQUESTS; request += 1) {
+		for (
+			let request = 1;
+			request <= AI_RATE_LIMIT_MAX_REQUESTS;
+			request += 1
+		) {
 			expect(limiter.consume(headers)).toMatchObject({
 				allowed: true,
 				remaining: AI_RATE_LIMIT_MAX_REQUESTS - request,
@@ -75,6 +72,15 @@ describe("AI request rate limiting", () => {
 		});
 	});
 
+	it("can clear one client's current window", () => {
+		const headers = requestHeaders("198.51.100.22");
+		limiter.consume(headers);
+		limiter.reset(headers);
+		expect(limiter.getStatus(headers).remaining).toBe(
+			AI_RATE_LIMIT_MAX_REQUESTS,
+		);
+	});
+
 	it("ignores client-controlled forwarding headers", () => {
 		const firstHeaders = new Headers({
 			"x-forwarded-for": "203.0.113.40",
@@ -97,14 +103,20 @@ describe("AI request rate limiting", () => {
 		vi.setSystemTime(new Date("2026-07-28T21:00:00.000Z"));
 		limiter = new AIRateLimiter({ maxTrackedClients: 2 });
 
-		expect(limiter.consume(requestHeaders("198.51.100.30")).allowed).toBe(true);
-		expect(limiter.consume(requestHeaders("198.51.100.31")).allowed).toBe(true);
+		expect(limiter.consume(requestHeaders("198.51.100.30")).allowed).toBe(
+			true,
+		);
+		expect(limiter.consume(requestHeaders("198.51.100.31")).allowed).toBe(
+			true,
+		);
 		expect(limiter.consume(requestHeaders("198.51.100.32"))).toMatchObject({
 			allowed: false,
 			remaining: 0,
 			retryAfter: AI_RATE_LIMIT_WINDOW_MS / 1_000,
 		});
-		expect(limiter.getStatus(requestHeaders("198.51.100.32"))).toMatchObject({
+		expect(
+			limiter.getStatus(requestHeaders("198.51.100.32")),
+		).toMatchObject({
 			allowed: false,
 			remaining: 0,
 			retryAfter: AI_RATE_LIMIT_WINDOW_MS / 1_000,

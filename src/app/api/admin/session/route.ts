@@ -7,7 +7,7 @@ import {
 	consumeAdminLoginAttempt,
 	createAdminSessionToken,
 	getAdminCredentials,
-	getAdminLoginStatus,
+	resetAdminLoginAttempts,
 } from "@/lib/admin/access";
 
 function adminRedirect(request: NextRequest, status?: string) {
@@ -30,18 +30,21 @@ export async function POST(request: NextRequest) {
 
 	const credentials = await getAdminCredentials();
 	if (!credentials) return adminRedirect(request, "unavailable");
-	if (!getAdminLoginStatus(request.headers).allowed) {
+	if (!consumeAdminLoginAttempt(request.headers).allowed) {
 		return adminRedirect(request, "limited");
 	}
 
-	const password = (await request.formData()).get("password");
+	const password = await request
+		.formData()
+		.then((formData) => formData.get("password"))
+		.catch(() => null);
 	if (
 		typeof password !== "string" ||
 		!adminPasswordMatches(password, credentials)
 	) {
-		consumeAdminLoginAttempt(request.headers);
 		return adminRedirect(request, "invalid");
 	}
+	resetAdminLoginAttempts(request.headers);
 
 	const response = adminRedirect(request);
 	response.cookies.set(
