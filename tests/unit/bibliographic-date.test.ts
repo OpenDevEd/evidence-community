@@ -8,7 +8,6 @@ import {
 describe("bibliographic dates", () => {
 	it.each([
 		["2024", { precision: "year", year: 2024, sortKey: 20240000 }],
-		["2024-05", { precision: "month", year: 2024, sortKey: 20240500 }],
 		[
 			"2024-05-20",
 			{
@@ -18,8 +17,7 @@ describe("bibliographic dates", () => {
 				sortKey: 20240520,
 			},
 		],
-		["Spring 2024", { precision: "season", year: 2024, sortKey: 20240300 }],
-	])("understands %s without inventing missing date parts", (value, expected) => {
+	])("understands the supported date %s", (value, expected) => {
 		expect(parseBibliographicDate(value)).toMatchObject({
 			kind: "parsed",
 			raw: value,
@@ -27,15 +25,15 @@ describe("bibliographic dates", () => {
 		});
 	});
 
-	it("keeps flexible bibliographic text without deriving a fake date", () => {
-		expect(parseBibliographicDate("forthcoming")).toEqual({
-			kind: "literal",
-			raw: "forthcoming",
-		});
-	});
-
-	it.each(["2024-13", "2024-02-30", "2024-13-99"])(
-		"rejects the impossible date-like value %s",
+	it.each([
+		"2024-05",
+		"Spring 2024",
+		"forthcoming",
+		"2024-13",
+		"2024-02-30",
+		"2024-13-99",
+	])(
+		"rejects the unsupported or impossible value %s",
 		(value) => {
 			expect(parseBibliographicDate(value)).toEqual({
 				kind: "invalid",
@@ -45,9 +43,9 @@ describe("bibliographic dates", () => {
 	);
 
 	it("trims the stored value and treats an empty value as absent", () => {
-		expect(parseBibliographicDate("  2024-05  ")).toMatchObject({
+		expect(parseBibliographicDate("  2024  ")).toMatchObject({
 			kind: "parsed",
-			raw: "2024-05",
+			raw: "2024",
 		});
 		expect(parseBibliographicDate("   ")).toEqual({ kind: "empty", raw: "" });
 	});
@@ -63,6 +61,7 @@ describe("bibliographic dates", () => {
 			year: "2024",
 		});
 		expect(bibliographicDateSearchFields("forthcoming")).toEqual({});
+		expect(bibliographicDateSearchFields("2024-05")).toEqual({});
 		expect(bibliographicDateSearchFields("2024-13-99")).toEqual({});
 	});
 });

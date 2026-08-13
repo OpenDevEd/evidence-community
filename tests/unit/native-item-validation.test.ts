@@ -37,12 +37,12 @@ describe("native item draft validation", () => {
 			validateNativeItemDraft({
 				itemType: "case",
 				caseName: "Example v Example",
-				dateDecided: "2024-05",
+				dateDecided: "2024",
 				court: "Supreme Court",
 			}).item,
 		).toMatchObject({
 			authority: "Supreme Court",
-			date: "2024-05",
+			date: "2024",
 			itemType: "Case",
 			title: "Example v Example",
 		});
@@ -145,7 +145,9 @@ describe("native item draft validation", () => {
 		});
 
 		for (const [field, value, message] of [
-			["date", "2024-02-31", "Enter a real date"],
+			["date", "2024-02-31", "Enter an exact date or a four-digit year"],
+			["date", "2024-05", "Enter an exact date or a four-digit year"],
+			["date", "Spring 2024", "Enter an exact date or a four-digit year"],
 			["accessDate", "2024-99-99", "Enter a real access date"],
 			["url", "example.com", "Enter a full HTTP or HTTPS address"],
 			["DOI", "not a doi", "Enter a valid DOI"],
@@ -160,6 +162,13 @@ describe("native item draft validation", () => {
 				});
 			}
 		}
+
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "case",
+				dateDecided: "2024-05",
+			}),
+		).toThrow("Check date decided");
 	});
 
 	it("requires valid child metadata before publication", () => {

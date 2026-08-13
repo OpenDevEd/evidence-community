@@ -139,7 +139,7 @@ export function normalizeAdminFieldValue(
 	if (kind === "bibliographic-date") {
 		if (parseBibliographicDate(value).kind === "invalid") {
 			return {
-				error: "Enter a real date, month, year, season, or other date text.",
+				error: "Enter an exact date or a four-digit year.",
 				value,
 			};
 		}

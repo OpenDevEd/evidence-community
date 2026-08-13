@@ -1,25 +1,17 @@
 export type BibliographicDateResult =
 	| { kind: "empty"; raw: "" }
 	| { kind: "invalid"; raw: string }
-	| { kind: "literal"; raw: string }
 	| {
 			isoDate?: string;
 			kind: "parsed";
-			precision: "day" | "month" | "season" | "year";
+			precision: "day" | "year";
 			raw: string;
 			sortKey: number;
 			year: number;
 	  };
 
-const ISO_LIKE_PATTERN = /^([12]\d{3})(?:-(\d{2})(?:-(\d{2}))?)?$/u;
-const SEASON_PATTERN = /^(spring|summer|autumn|fall|winter)\s+([12]\d{3})$/iu;
-const SEASON_MONTH = {
-	spring: 3,
-	summer: 6,
-	autumn: 9,
-	fall: 9,
-	winter: 12,
-} as const;
+const YEAR_PATTERN = /^[12]\d{3}$/u;
+const EXACT_DATE_PATTERN = /^([12]\d{3})-(\d{2})-(\d{2})$/u;
 
 function validCalendarDate(year: number, month: number, day: number) {
 	const date = new Date(Date.UTC(year, month - 1, day));
@@ -34,30 +26,22 @@ export function parseBibliographicDate(value: string): BibliographicDateResult {
 	const raw = value.trim();
 	if (!raw) return { kind: "empty", raw: "" };
 
-	const iso = ISO_LIKE_PATTERN.exec(raw);
-	if (iso) {
-		const year = Number(iso[1]);
-		const month = iso[2] ? Number(iso[2]) : null;
-		const day = iso[3] ? Number(iso[3]) : null;
-		if (month === null) {
-			return {
-				kind: "parsed",
-				precision: "year",
-				raw,
-				sortKey: year * 10_000,
-				year,
-			};
-		}
-		if (month < 1 || month > 12) return { kind: "invalid", raw };
-		if (day === null) {
-			return {
-				kind: "parsed",
-				precision: "month",
-				raw,
-				sortKey: year * 10_000 + month * 100,
-				year,
-			};
-		}
+	if (YEAR_PATTERN.test(raw)) {
+		const year = Number(raw);
+		return {
+			kind: "parsed",
+			precision: "year",
+			raw,
+			sortKey: year * 10_000,
+			year,
+		};
+	}
+
+	const exactDate = EXACT_DATE_PATTERN.exec(raw);
+	if (exactDate) {
+		const year = Number(exactDate[1]);
+		const month = Number(exactDate[2]);
+		const day = Number(exactDate[3]);
 		if (!validCalendarDate(year, month, day)) {
 			return { kind: "invalid", raw };
 		}
@@ -71,23 +55,7 @@ export function parseBibliographicDate(value: string): BibliographicDateResult {
 		};
 	}
 
-	const season = SEASON_PATTERN.exec(raw);
-	if (season) {
-		const year = Number(season[2]);
-		const month = SEASON_MONTH[
-			season[1]!.toLowerCase() as keyof typeof SEASON_MONTH
-		];
-		return {
-			kind: "parsed",
-			precision: "season",
-			raw,
-			sortKey: year * 10_000 + month * 100,
-			year,
-		};
-	}
-
-	if (/^[12]\d{3}-\d/u.test(raw)) return { kind: "invalid", raw };
-	return { kind: "literal", raw };
+	return { kind: "invalid", raw };
 }
 
 export function bibliographicDateSearchFields(value: string | null) {

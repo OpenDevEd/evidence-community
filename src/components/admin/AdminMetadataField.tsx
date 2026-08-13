@@ -28,23 +28,19 @@ const selectClassNames = {
 	value: "text-sm",
 } as const;
 
-type DateMode = "day" | "flexible" | "month" | "year";
+type DateMode = "day" | "year";
 
 const DATE_MODES: Array<{ key: DateMode; label: string }> = [
 	{ key: "day", label: "Exact date" },
-	{ key: "month", label: "Month" },
 	{ key: "year", label: "Year" },
-	{ key: "flexible", label: "Flexible text" },
 ];
 
 function dateMode(value: string): DateMode {
 	const parsed = parseBibliographicDate(value);
 	if (parsed.kind === "parsed") {
-		if (parsed.precision === "day") return "day";
-		if (parsed.precision === "month") return "month";
 		if (parsed.precision === "year") return "year";
 	}
-	return value ? "flexible" : "day";
+	return "day";
 }
 
 function BibliographicDateField({
@@ -56,7 +52,7 @@ function BibliographicDateField({
 	value,
 }: CommonFieldProps) {
 	const [mode, setMode] = useState<DateMode>(() => dateMode(value));
-	const inputType = mode === "day" ? "date" : mode === "month" ? "month" : "text";
+	const inputType = mode === "day" ? "date" : "number";
 	return (
 		<div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
 			<select
@@ -80,11 +76,6 @@ function BibliographicDateField({
 			<Input
 				aria-label={label}
 				classNames={inputClassNames}
-				description={
-					mode === "flexible"
-						? "For example: Spring 2024 or circa 1998"
-						: undefined
-				}
 				errorMessage={error}
 				id={id}
 				inputMode={mode === "year" ? "numeric" : undefined}
@@ -93,7 +84,7 @@ function BibliographicDateField({
 				max={mode === "year" ? "2999" : undefined}
 				min={mode === "year" ? "1000" : undefined}
 				pattern={mode === "year" ? "[12][0-9]{3}" : undefined}
-				placeholder={mode === "flexible" ? "Enter date text" : undefined}
+				step={mode === "year" ? 1 : undefined}
 				type={inputType}
 				value={value}
 				onValueChange={onValueChange}

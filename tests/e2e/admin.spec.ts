@@ -2462,8 +2462,10 @@ test("uses date, URL, and identifier controls that match the metadata", async ({
 	const precision = inspector.getByRole("combobox", {
 		name: "Date Decided precision",
 	});
+	await expect(precision.locator("option")).toHaveText(["Exact date", "Year"]);
 	await precision.selectOption("year");
 	const decided = inspector.getByLabel("Date Decided", { exact: true });
+	await expect(decided).toHaveAttribute("type", "number");
 	await expect(decided).toHaveAttribute("inputmode", "numeric");
 	await decided.fill("2024");
 	await expect

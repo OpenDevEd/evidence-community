@@ -45,15 +45,17 @@ describe("admin metadata field contract", () => {
 		).toBe(kind);
 	});
 
-	it("keeps flexible dates but rejects impossible calendar-shaped dates", () => {
+	it("accepts only exact dates and four-digit years", () => {
 		const descriptor = describeZoteroField({ field: "date" });
-		expect(normalizeAdminFieldValue(descriptor, "  Spring 2024  ")).toEqual({
-			value: "Spring 2024",
+		expect(normalizeAdminFieldValue(descriptor, "  2024  ")).toEqual({
+			value: "2024",
 		});
-		expect(normalizeAdminFieldValue(descriptor, "2024-02-31")).toEqual({
-			error: "Enter a real date, month, year, season, or other date text.",
-			value: "2024-02-31",
-		});
+		for (const value of ["2024-05", "Spring 2024", "forthcoming", "2024-02-31"]) {
+			expect(normalizeAdminFieldValue(descriptor, value)).toEqual({
+				error: "Enter an exact date or a four-digit year.",
+				value,
+			});
+		}
 	});
 
 	it("validates dates, links, and identifiers using their real formats", () => {
