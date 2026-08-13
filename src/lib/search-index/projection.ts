@@ -1,4 +1,5 @@
 import { sourceConnection } from "@opendeved/evidence-library-core";
+import { itemTypeZoteroFieldName } from "@opendeved/evidence-library-core/zotero-schema";
 import { asc, eq, inArray, isNull } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
@@ -114,6 +115,18 @@ function creatorNames(creators: ItemRow["creators"]) {
 			)
 			.filter(Boolean),
 	);
+}
+
+function institutionValues(parent: ItemRow) {
+	const zoteroField = itemTypeZoteroFieldName(
+		parent.itemType[0]!.toLowerCase() + parent.itemType.slice(1),
+		"publisher",
+	);
+	return ["institution", "organization", "university"].includes(
+		zoteroField ?? "",
+	)
+		? splitValues(parent.publisher)
+		: [];
 }
 
 function normalizedDate(value: string | null) {
@@ -350,7 +363,7 @@ async function buildSearchProjectionPlanForKeys(
 				deleted: parent.deleted ?? 0,
 				fullNames: creatorNames(parent.creators),
 				fullTextPDFs,
-				institution: splitValues(parent.institution),
+				institution: institutionValues(parent),
 				key: parent.key,
 				provider,
 				revision: parent.revision,

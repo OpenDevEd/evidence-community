@@ -19,7 +19,6 @@ function record(
 		abstractNote: "  A   summary ",
 		languageName: "eng",
 		publisher: "Publisher",
-		institution: "Institute",
 		rights: "Copyright holder",
 		creators: [
 			{
@@ -58,7 +57,6 @@ describe("publication record adapter", () => {
 			abstract: "A summary",
 			language: "eng",
 			publisher: "Publisher",
-			institution: "Institute",
 			rights: "Copyright holder",
 			license: "cc-by-4.0",
 			creators: [

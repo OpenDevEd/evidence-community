@@ -45,7 +45,7 @@ function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 			abstractNote: null,
 			creators: [],
 			itemType: "book",
-			languageName: "English",
+			language: "English",
 			title: "Published title",
 		},
 		publishedCollectionKeys: ["PUBLISHED"],
@@ -72,7 +72,7 @@ function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 }
 
 describe("computeAdminDraftDiff", () => {
-	it("maps language to its published database field and treats empty values equally", () => {
+	it("compares the item-specific language field and treats empty values equally", () => {
 		const result = computeAdminDraftDiff(
 			detail(),
 			{

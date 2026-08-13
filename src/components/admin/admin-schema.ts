@@ -2,7 +2,6 @@ import type { AdminItemDetail } from "@/lib/admin/types";
 import {
 	ADMIN_SHARED_PAYLOAD_FIELDS,
 	adminSharedPayloadFieldsForZoteroItemType,
-	adminPayloadFieldToDatabaseField,
 } from "@/lib/admin/item-fields";
 
 export type AdminSchemaDefinition = {
@@ -68,8 +67,7 @@ export function editablePayloadFromDetail(
 		payload.parentItem = detail.parentItem;
 	}
 	for (const { field } of definition?.fields ?? []) {
-		const databaseField = adminPayloadFieldToDatabaseField(field);
-		const value = published[databaseField];
+		const value = published[field];
 		if (value !== null && value !== undefined) payload[field] = value;
 	}
 	return payload;

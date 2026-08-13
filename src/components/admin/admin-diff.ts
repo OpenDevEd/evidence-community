@@ -1,4 +1,3 @@
-import { adminPayloadFieldToDatabaseField } from "@/lib/admin/item-fields";
 import type { AdminCreator, AdminItemDetail } from "@/lib/admin/types";
 
 import type { AdminSchemaDefinition } from "./admin-schema";
@@ -76,9 +75,7 @@ export function computeAdminDraftDiff(
 	const fields: Record<string, string> = {};
 
 	for (const { field } of definition?.fields ?? []) {
-		const original = textValue(
-			published[adminPayloadFieldToDatabaseField(field)],
-		);
+		const original = textValue(published[field]);
 		const current = textValue(payload[field]);
 		if (current !== original) fields[field] = original;
 	}

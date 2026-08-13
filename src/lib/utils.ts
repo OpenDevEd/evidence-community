@@ -5,9 +5,7 @@ import { loadSearchParams, serializeSearchParams } from "./searchParams";
 import { COUNTRIES, COUNTRY_PARAMS, CSL_SKIP_WORDS } from "@/constants/misc";
 import { z } from "zod";
 import { areLinksValid } from "./actions";
-import { InferSelectModel } from "drizzle-orm";
-import { item, item as itemTable } from "@/db/schema/tables/item";
-import schema from "../../public/schema.json";
+import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 import balanced from "balanced-match";
 
 export const takedownRequestSchema = z.object({
@@ -250,29 +248,35 @@ export function getCountryAncestry(country: string) {
 	return ancestry;
 }
 
-type ZoteroItem = Omit<InferSelectModel<typeof itemTable>, "itemType"> & { language: string | null, itemType: string };
+type ZoteroItem = Record<string, unknown> & { itemType: string };
 
 export function ItemToZoteroJSON(item: Item): ZoteroItem {
-	const { attachmentsData, languageName, citation, pages, numPages, reportType, url, createdAt, updatedAt, deleted, deletedAt, collectionsData, collectionsAncestry, fullTextPDFs, institution: institutionArray, fullNames, dateTimestamp, year, datePublished, provider, sourceExternalScopeKey, sourceConnectionKey, sourceRecordKey, revision, tags, ...rest } = item;
+	const { attachmentsData, citation, createdAt, updatedAt, deleted, deletedAt, collectionsData, collectionsAncestry, fullTextPDFs, institution: institutionArray, fullNames, dateTimestamp, year, datePublished, provider, sourceExternalScopeKey, sourceConnectionKey, sourceRecordKey, revision, tags, ...rest } = item;
 
 	const finalCountry = Array.isArray(item.country) ? item.country.join("|") : item.country;
 	const finalInstitution = Array.isArray(item.institution) ? item.institution.join("|") : item.institution;
 
-	const zoteroItem = rest as ZoteroItem;
+	const zoteroItem: ZoteroItem = {
+		...rest,
+		itemType: item.itemType[0]!.toLowerCase() + item.itemType.slice(1),
+	};
+	for (const { field, semanticField } of describeZoteroItemTypeFields(
+		zoteroItem.itemType,
+	)) {
+		const internalField =
+			semanticField === "language" ? "languageName" : semanticField;
+		const value = item[internalField as keyof Item];
+		delete zoteroItem[internalField];
+		if (value !== null && value !== undefined) zoteroItem[field] = value;
+	}
 
 	const country = finalCountry?.split("|").map(c => c.trim());
 	zoteroItem.country = country ? country[0] : null;
 
 	const institution = finalInstitution?.split("|").map(c => c.trim());
-	zoteroItem.institution = institution ? institution[0] : null;
-
-	zoteroItem.language = languageName || null;
-
-	zoteroItem.itemType = schema.COLUMN_TO_ZOTERO_TYPE_MAPPINGS[item.itemType as keyof typeof schema.COLUMN_TO_ZOTERO_TYPE_MAPPINGS];
-
-	zoteroItem.date = datePublished || zoteroItem.date;
-
-	zoteroItem.numPages = numPages || pages?.split(/[-–]/)[0] || null;
+	if (institution?.[0] && "institution" in zoteroItem) {
+		zoteroItem.institution = institution[0];
+	}
 
 	return zoteroItem;
 }

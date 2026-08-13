@@ -59,6 +59,7 @@ describe("admin file projections", () => {
 			await import("@/lib/admin/file-projection");
 		const projection = publishedItemJson({
 			fullTextPDF: "private extracted text",
+			itemType: "Book",
 			key: "ABCDEFGH",
 			title: "Evidence",
 			updatedAt: new Date("2026-07-30T12:00:00.000Z"),

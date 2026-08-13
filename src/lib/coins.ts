@@ -422,21 +422,13 @@ function addBookFields(params: URLSearchParams, item: Item | ListItem) {
     if (item.title) params.append('rft.btitle', item.title);
   }
   
-  if (item.bookTitle) {
-    params.append('rft.btitle', item.bookTitle);
+  if (item.publicationTitle) {
+    params.append('rft.btitle', item.publicationTitle);
   }
   
   // For book sections, dictionary entries, etc., add chapter/section title
   if (['BookSection', 'DictionaryEntry', 'EncyclopediaArticle'].includes(item.itemType || '')) {
     if (item.title) params.append('rft.atitle', item.title);
-  }
-  
-  // Dictionary and encyclopedia specific
-  if (item.dictionaryTitle) {
-    params.append('rft.btitle', item.dictionaryTitle);
-  }
-  if (item.encyclopediaTitle) {
-    params.append('rft.btitle', item.encyclopediaTitle);
   }
   
   if (item.numPages) params.append('rft.tpages', item.numPages);
@@ -460,8 +452,8 @@ function addBookFields(params: URLSearchParams, item: Item | ListItem) {
 function addDissertationFields(params: URLSearchParams, item: Item | ListItem) {
   if (item.itemType !== 'Thesis') return;
   
-  if (item.university) params.append('rft.inst', item.university);
-  if (item.thesisType) params.append('rft.degree', item.thesisType);
+  if (item.publisher) params.append('rft.inst', item.publisher);
+  if (item.type) params.append('rft.degree', item.type);
   if (item.title) params.append('rft.title', item.title);
 }
 
@@ -471,13 +463,13 @@ function addDissertationFields(params: URLSearchParams, item: Item | ListItem) {
 function addPatentFields(params: URLSearchParams, item: Item | ListItem) {
   if (item.itemType !== 'Patent') return;
   
-  if (item.patentNumber) params.append('rft.number', item.patentNumber);
+  if (item.number) params.append('rft.number', item.number);
   if (item.assignee) params.append('rft.assignee', item.assignee);
   if (item.country) params.append('rft.cc', item.country);
   if (item.applicationNumber) params.append('rft.applnumber', item.applicationNumber);
   if (item.filingDate) params.append('rft.appldate', item.filingDate);
-  if (item.issueDate) params.append('rft.date', item.issueDate);
-  if (item.issuingAuthority) params.append('rft.inventor', item.issuingAuthority);
+  if (item.date) params.append('rft.date', item.date);
+  if (item.authority) params.append('rft.inventor', item.authority);
 }
 
 /**
@@ -486,8 +478,8 @@ function addPatentFields(params: URLSearchParams, item: Item | ListItem) {
 function addConferenceFields(params: URLSearchParams, item: Item | ListItem) {
   if (!['ConferencePaper', 'Presentation'].includes(item.itemType || '')) return;
   
-  if (item.proceedingsTitle) {
-    params.append('rft.btitle', item.proceedingsTitle);
+  if (item.publicationTitle) {
+    params.append('rft.btitle', item.publicationTitle);
   }
   if (item.title) {
     params.append('rft.atitle', item.title);
@@ -502,7 +494,7 @@ function addAudioVisualFields(params: URLSearchParams, item: Item | ListItem) {
   
   if (!avTypes.includes(item.itemType || '')) return;
   
-  if (item.programTitle) params.append('rft.title', item.programTitle);
+  if (item.publicationTitle) params.append('rft.title', item.publicationTitle);
 }
 
 /**
@@ -514,10 +506,8 @@ function addLegalFields(params: URLSearchParams, item: Item | ListItem) {
   if (!legalTypes.includes(item.itemType || '')) return;
   
   // Keep strictly minimal DC-style fields
-  if (item.caseName) params.append('rft.title', item.caseName);
-  if (item.nameOfAct) params.append('rft.title', item.nameOfAct);
-  if (item.dateDecided) params.append('rft.date', item.dateDecided);
-  if (item.dateEnacted) params.append('rft.date', item.dateEnacted);
+  if (item.title) params.append('rft.title', item.title);
+  if (item.date) params.append('rft.date', item.date);
 }
 
 /**

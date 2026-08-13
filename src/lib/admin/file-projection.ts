@@ -6,6 +6,7 @@ import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 
 import type { AdminFileDraft, AdminFilePublication } from "./types";
+import { adminCanonicalPayloadToItemFields } from "./item-fields";
 
 function dateString(value: Date | string) {
 	return value instanceof Date ? value.toISOString() : value;
@@ -52,7 +53,7 @@ export function publishedItemJson(
 	row: typeof item.$inferSelect | null | undefined,
 ): Record<string, unknown> | null {
 	if (!row) return null;
-	return Object.fromEntries(
+	const payload = Object.fromEntries(
 		Object.entries(row)
 			.filter(([key]) => key !== "fullTextPDF")
 			.map(([key, value]) => [
@@ -60,4 +61,5 @@ export function publishedItemJson(
 				value instanceof Date ? value.toISOString() : value,
 			]),
 	);
+	return adminCanonicalPayloadToItemFields(payload, row.itemType);
 }

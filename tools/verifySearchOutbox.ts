@@ -211,7 +211,7 @@ async function verify() {
 					},
 				],
 				date: "2026",
-				institution: "OpenDevEd|Evidence Lab",
+				publisher: "OpenDevEd|Evidence Lab",
 				itemType: "Report",
 				key: parentKey,
 				sourceConnectionKey: "native",

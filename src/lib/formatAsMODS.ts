@@ -127,7 +127,7 @@ export function formatItemAsMODS(item: Item): string {
     }
 
     // originInfo
-    if (item.place || item.publisher || item.date || item.edition || item.dateEnacted) {
+    if (item.place || item.publisher || item.date || item.edition) {
         const origin = mods.ele("originInfo");
         
         if (item.place) {
@@ -207,7 +207,7 @@ export function formatItemAsMODS(item: Item): string {
     
     if (isArticle || isSection) {
         const host = mods.ele("relatedItem", { type: "host" });
-        const hostTitle = isArticle ? item.publicationTitle : (item.bookTitle || item.publicationTitle);
+        const hostTitle = item.publicationTitle;
         
         if (hostTitle) {
             host.ele("titleInfo").ele("title").txt(hostTitle);

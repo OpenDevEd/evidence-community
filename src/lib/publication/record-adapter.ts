@@ -9,6 +9,7 @@ import {
 	type PublicationIdentifiers,
 	type PublicationRecordSnapshot,
 } from "@opendeved/doi-sync-core";
+import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 
 type EvidenceLibraryCreator = {
 	creatorType: string;
@@ -32,7 +33,6 @@ export type EvidenceLibraryPublicationRecord = Readonly<
 	abstractNote: string | null;
 	languageName: string | null;
 	publisher: string | null;
-	institution: string | null;
 	rights: string | null;
 	creators: EvidenceLibraryCreator[] | null;
 	createdAt: Date;
@@ -56,29 +56,15 @@ const PRIVATE_TAGS = new Set([
 	"publication",
 ]);
 
-const PROVIDER_FIELD_NAMES = [
-	"ISBN",
-	"ISSN",
-	"blogTitle",
-	"bookTitle",
-	"conferenceName",
-	"dictionaryTitle",
-	"edition",
-	"encyclopediaTitle",
-	"issue",
-	"number",
-	"pages",
-	"place",
-	"presentationType",
-	"proceedingsTitle",
-	"publicationTitle",
-	"reportNumber",
-	"section",
-	"thesisType",
-	"versionNumber",
-	"volume",
-	"websiteTitle",
-] as const satisfies readonly (keyof EvidenceLibraryPublicationRecord)[];
+const TOP_LEVEL_PUBLICATION_FIELDS = new Set([
+	"abstractNote",
+	"creators",
+	"date",
+	"language",
+	"publisher",
+	"rights",
+	"title",
+]);
 
 function normalizeText(value: string | null | undefined) {
 	const normalized = value?.replace(/\s+/gu, " ").trim();
@@ -149,12 +135,16 @@ function publicTags(tags: readonly string[]) {
 
 function providerFields(record: EvidenceLibraryPublicationRecord): JsonObject {
 	const fields: Record<string, JsonObject[string]> = {};
-	for (const name of PROVIDER_FIELD_NAMES) {
-		const value = record[name];
+	const zoteroItemType =
+		record.itemType[0]!.toLowerCase() + record.itemType.slice(1);
+	for (const descriptor of describeZoteroItemTypeFields(zoteroItemType)) {
+		if (TOP_LEVEL_PUBLICATION_FIELDS.has(descriptor.semanticField)) continue;
+		const value = record[descriptor.semanticField];
 		if (value === undefined || value === null) continue;
 		const parsed = jsonValueSchema.safeParse(value);
 		if (parsed.success) {
-			fields[name === "versionNumber" ? "version" : name] = parsed.data;
+			fields[descriptor.field === "versionNumber" ? "version" : descriptor.field] =
+				parsed.data;
 		}
 	}
 	return fields;
@@ -173,7 +163,11 @@ export function buildPublicationRecordSnapshot(input: {
 		abstract: normalizeText(input.record.abstractNote),
 		language: normalizeText(input.record.languageName),
 		publisher: normalizeText(input.record.publisher),
-		institution: normalizeText(input.record.institution),
+		institution: ["Manuscript", "Report", "Standard", "Thesis"].includes(
+			input.record.itemType,
+		)
+			? normalizeText(input.record.publisher)
+			: null,
 		rights: normalizeText(input.record.rights),
 		license: normalizeText(input.license),
 	};

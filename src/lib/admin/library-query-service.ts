@@ -20,6 +20,7 @@ import {
 } from "@/lib/source-writeback/policy";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
+import { adminCanonicalPayloadToItemFields } from "./item-fields";
 import {
 	applyItemDraftPatch,
 	publishedAdminItemPayload,
@@ -67,7 +68,10 @@ function draftJson(
 	return {
 		...row,
 		createdAt: dateString(row.createdAt),
-		payload,
+		payload: adminCanonicalPayloadToItemFields(
+			payload,
+			String(payload.itemType ?? ""),
+		),
 		updatedAt: dateString(row.updatedAt),
 	};
 }

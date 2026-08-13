@@ -121,9 +121,12 @@ export async function generateMetadata(props: {
 
 			citation_conference_title: item.conferenceName ?? "",
 			citation_journal_title: item.publicationTitle ?? "",
-			citation_dissertation_institution: item.university ?? "",
-			citation_technical_report_institution: institution ?? "",
-			citation_technical_report_number: item.reportNumber ?? "",
+			citation_dissertation_institution:
+				item.itemType === "Thesis" ? (item.publisher ?? "") : "",
+			citation_technical_report_institution:
+				item.itemType === "Report" ? (item.publisher ?? "") : "",
+			citation_technical_report_number:
+				item.itemType === "Report" ? (item.number ?? "") : "",
 
 			citation_isbn: item.ISBN ?? extraValues.get("ISBN") ?? "",
 			citation_issn: item.ISSN ?? extraValues.get("ISSN") ?? "",

@@ -171,7 +171,7 @@ export async function getFieldCompleteness(db: Database, totalItems: number): Pr
 			doiFilled: sql<number>`count(case when ${item.DOI} is not null and ${item.DOI} != '' then 1 end)`,
 			urlFilled: sql<number>`count(case when ${item.url} is not null and ${item.url} != '' then 1 end)`,
 			dateFilled: sql<number>`count(case when ${item.date} is not null and ${item.date} != '' then 1 end)`,
-			institutionFilled: sql<number>`count(case when ${item.institution} is not null and ${item.institution} != '' then 1 end)`,
+			institutionFilled: sql<number>`count(case when ${item.itemType} in ('Manuscript', 'Report', 'Standard', 'Thesis') and ${item.publisher} is not null and ${item.publisher} != '' then 1 end)`,
 			creatorsFilled: sql<number>`count(case when ${item.creators} is not null then 1 end)`,
 			pagesFilled: sql<number>`count(case when ${item.pages} is not null and ${item.pages} != '' then 1 end)`,
 			volumeFilled: sql<number>`count(case when ${item.volume} is not null and ${item.volume} != '' then 1 end)`,

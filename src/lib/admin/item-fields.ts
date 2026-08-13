@@ -1,4 +1,5 @@
 import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
+import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
 
 export const ADMIN_SHARED_PAYLOAD_FIELDS = new Set([
 	"collections",
@@ -120,6 +121,24 @@ export function adminPayloadFieldToDatabaseField(field: string) {
 
 export function adminDatabaseFieldToPayloadField(field: string) {
 	return field === "languageName" ? "language" : field;
+}
+
+export function adminCanonicalPayloadToItemFields(
+	payload: Readonly<Record<string, unknown>>,
+	itemType: string,
+) {
+	const zoteroItemType = itemType[0]!.toLowerCase() + itemType.slice(1);
+	const output = { ...payload };
+	for (const { field, semanticField } of describeZoteroItemTypeFields(
+		zoteroItemType,
+	)) {
+		const internalField =
+			semanticField === "language" ? "languageName" : semanticField;
+		if (!Object.hasOwn(payload, internalField)) continue;
+		if (field !== internalField) delete output[internalField];
+		output[field] = payload[internalField];
+	}
+	return output;
 }
 
 export function isTopLevelAdminItemType(itemType: string) {

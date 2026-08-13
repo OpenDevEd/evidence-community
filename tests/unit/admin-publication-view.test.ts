@@ -52,7 +52,6 @@ function record(changes: Record<string, unknown> = {}) {
 		abstractNote: "A complete description",
 		languageName: "eng",
 		publisher: "Publisher",
-		institution: "Institute",
 		rights: "Copyright holder",
 		creators: [
 			{ creatorType: "author", firstName: "Ada", lastName: "Lovelace" },
