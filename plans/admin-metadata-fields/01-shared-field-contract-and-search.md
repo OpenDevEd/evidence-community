@@ -11,8 +11,8 @@ Meilisearch agree about what every metadata field means.
 - Replace the 58 alias database columns with canonical storage.
 - Remove the two unused APC JSON columns from the item record.
 - Add one shared admin field contract.
-- Add controls for bibliographic dates, access dates, URLs, identifiers,
-  multiline text, and fixed choices.
+- Add controls for bibliographic dates, access dates, URLs, multiline text,
+  optional colours, and fixed choices.
 - Preserve item-specific Zotero fields while projecting their canonical search
   fields.
 - Replace permissive JavaScript date parsing and fake January 1 values.
@@ -41,17 +41,23 @@ calendar date. A shared parser returns:
 Month-only, season, flexible-text, and impossible dates are rejected.
 
 The editor provides two precision choices: Exact date and Year. Exact date
-uses a calendar control. Year uses a number input. Access date uses a calendar
-date control.
+uses a calendar control. Year uses a number input. Access Date stays text
+because Zotero accepts dates, timestamps, and `CURRENT_TIMESTAMP`.
 
 ### Other fields
 
 - URL uses a URL control and requires an absolute HTTP or HTTPS address.
-- DOI, ISBN, ISSN, PMID, and PMCID use identifier controls and server checks.
+- DOI, ISBN, ISSN, PMID, and PMCID stay text. Zotero does not format-check
+  them, so OpenScholar trims only surrounding whitespace and preserves the
+  value exactly.
 - Abstract, Extra, History, References, notes, and annotation text use
   multiline controls.
 - Annotation type uses a fixed-choice control.
+- Optional annotation colour uses text plus a colour picker so an empty value
+  remains empty.
 - Bibliographic labels and numbers remain text.
+- Zotero field lengths, note lengths, annotation dependencies, child-item
+  collection rules, and relation shapes are validated once on the server.
 
 ## Test-first steps
 
@@ -61,8 +67,9 @@ date control.
 3. Fix Zotero import, writeback, and item-type transitions through the codec.
 4. Add failing date tests for year, exact day, and rejected month, season,
    flexible text, and impossible dates. Implement the pure parser.
-5. Add failing validation tests for typed fields. Implement the shared field
-   contract and server checks.
+5. Add failing validation tests for every field contract, Zotero length and
+   annotation rules, child-item collections, and relations. Implement the
+   shared field contract and server checks.
 6. Add failing projection and public API tests for canonical-only records.
    Implement precision-aware dates.
 7. Add failing search-scope and filter escaping tests. Fix request building.
@@ -121,6 +128,12 @@ Expected changes include:
 - A partial date never becomes a fake exact day.
 - The editor uses the shared control for each typed field.
 - The server rejects values that the control says are invalid.
+- Identifiers are never rejected or rewritten as if Zotero gave them stricter
+  types.
+- Access Date timestamps and empty annotation colours remain visible and save
+  unchanged.
+- Zotero length, annotation, child-item collection, and relation rules are
+  enforced before save or writeback.
 - Broad search finds DOI and other metadata.
 - Quotes and backslashes in filter values do not break Meilisearch requests.
 - Focused unit, real-service, browser, and runtime checks pass.

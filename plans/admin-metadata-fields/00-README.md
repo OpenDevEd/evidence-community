@@ -28,14 +28,21 @@ This causes three user-visible failures:
    breaking rule with no compatibility path.
 6. A year uses a precision-aware sort value. It does not pretend to be January
    1.
-7. Bibliographic numbers such as volume, issue, pages, ISBN, and patent number
-   stay text. They may contain letters, ranges, or punctuation.
+7. Bibliographic numbers and identifiers such as volume, issue, pages, DOI,
+   ISBN, PMID, and patent number stay text. Zotero does not format-check these
+   values, so OpenScholar must not reject or rewrite them.
 8. Remove all 58 duplicate Zotero alias columns. Add the missing canonical
    `medium` and `authority` columns.
 9. Remove the unused `apc_list` and `apc_paid` columns. They are not Zotero
    fields, have no working editor or public display, and must not enter the
    canonical draft contract.
-10. This is a clean breaking change. Wipe and resync development records, then
+10. Access Date keeps Zotero's date, timestamp, and `CURRENT_TIMESTAMP` values
+    in a text control. A calendar-only input would hide valid timestamps.
+11. Optional annotation colours use a text value with a colour picker. An
+    empty colour must stay empty instead of becoming black.
+12. Apply Zotero's field, note, annotation, child-collection, and relation
+    rules at the shared validation boundary.
+13. This is a clean breaking change. Wipe and resync development records, then
    rebuild the search index. Do not add old-field fallbacks or backfills.
 
 ## Existing code to reuse
