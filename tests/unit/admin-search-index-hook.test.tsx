@@ -182,6 +182,56 @@ describe("useAdminSearchIndex", () => {
 		expect(current.receipts).toEqual([]);
 	});
 
+	it("checks every exact revision when one action updates the same record twice", async () => {
+		api.receipts.mockImplementation(async (receipts) => ({
+			receipts: receipts.map(
+				(entry: { entityKey: string; revision: number }) =>
+					receiptStatus(
+						entry.entityKey,
+						entry.revision === 8 ? "queued" : "indexed",
+						entry.revision,
+					),
+			),
+		}));
+		await renderHarness();
+		api.receipts.mockClear();
+
+		let resolved = false;
+		let completion!: Promise<void>;
+		await act(async () => {
+			completion = current.trackAndWait([
+				{ entityKey: "SAMEITEM", entityType: "item", revision: 7 },
+				{ entityKey: "SAMEITEM", entityType: "item", revision: 8 },
+			]);
+			completion.then(() => {
+				resolved = true;
+			});
+			await flushAsync();
+		});
+
+		expect(api.receipts).toHaveBeenCalledWith(
+			expect.arrayContaining([
+				{ entityKey: "SAMEITEM", entityType: "item", revision: 7 },
+				{ entityKey: "SAMEITEM", entityType: "item", revision: 8 },
+			]),
+			expect.any(AbortSignal),
+		);
+		expect(api.receipts.mock.calls[0]?.[0]).toHaveLength(2);
+		expect(resolved).toBe(false);
+
+		api.receipts.mockImplementation(async (receipts) => ({
+			receipts: receipts.map(
+				(entry: { entityKey: string; revision: number }) =>
+					receiptStatus(entry.entityKey, "indexed", entry.revision),
+			),
+		}));
+		await act(async () => {
+			await current.refresh();
+			await completion;
+		});
+		expect(resolved).toBe(true);
+	});
+
 	it("rejects an action when public search fails", async () => {
 		api.receipts.mockImplementation(async (receipts) => ({
 			receipts: receipts.map(

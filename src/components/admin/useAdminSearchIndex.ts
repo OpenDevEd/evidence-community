@@ -40,7 +40,7 @@ const ADMIN_SEARCH_INDEX_REVISION_HISTORY_LIMIT = 500;
 const ADMIN_SEARCH_INDEX_STATUS_CONCURRENCY = 4;
 
 type ReceiptWaiter = {
-	pending: Set<string>;
+	pending: Map<string, AdminSearchIndexReceipt>;
 	reject: (error: Error) => void;
 	resolve: () => void;
 };
@@ -64,7 +64,7 @@ function settleReceiptWaiters(
 	);
 	for (const waiter of waiters) {
 		let failure: AdminSearchIndexReceiptStatus | null = null;
-		for (const identity of waiter.pending) {
+		for (const identity of waiter.pending.keys()) {
 			const status = byIdentity.get(identity);
 			if (!status) continue;
 			if (status.state === "failed" || status.state === "unknown") {
@@ -130,9 +130,19 @@ export function useAdminSearchIndex() {
 		requestRef.current = controller;
 		setLoading(true);
 		try {
-			const tracked = receiptsRef.current;
+			const tracked = new Map(
+				receiptsRef.current.map((receipt) => [
+					adminSearchIndexReceiptIdentity(receipt),
+					receipt,
+				]),
+			);
+			for (const waiter of receiptWaitersRef.current) {
+				for (const [identity, receipt] of waiter.pending) {
+					tracked.set(identity, receipt);
+				}
+			}
 			const receiptChunks = chunkValues(
-				tracked.map(({ entityKey, entityType, revision }) => ({
+				[...tracked.values()].map(({ entityKey, entityType, revision }) => ({
 					entityKey,
 					entityType,
 					revision,
@@ -159,13 +169,16 @@ export function useAdminSearchIndex() {
 			}
 			if (controller.signal.aborted) return;
 			setOverview(nextOverview);
+			const receivedStatuses = receiptResponses.flatMap(
+				(response) => response.receipts,
+			);
 			const merged = mergeAdminSearchIndexStatuses(
 				receiptsRef.current,
-				receiptResponses.flatMap((response) => response.receipts),
+				receivedStatuses,
 			);
 			const hasUnknown = merged.some(({ state }) => state === "unknown");
 			const remaining = merged.filter(({ state }) => state !== "indexed");
-			settleReceiptWaiters(receiptWaitersRef.current, merged);
+			settleReceiptWaiters(receiptWaitersRef.current, receivedStatuses);
 			if (merged.length > 0 && remaining.length === 0 && !hasUnknown) {
 				setCompleted(true);
 			}
@@ -255,8 +268,11 @@ export function useAdminSearchIndex() {
 			}
 			const completion = new Promise<void>((resolve, reject) => {
 				receiptWaitersRef.current.add({
-					pending: new Set(
-						accepted.map(adminSearchIndexReceiptIdentity),
+					pending: new Map(
+						accepted.map((receipt) => [
+							adminSearchIndexReceiptIdentity(receipt),
+							receipt,
+						]),
 					),
 					reject,
 					resolve,
