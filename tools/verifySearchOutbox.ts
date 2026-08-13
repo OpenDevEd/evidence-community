@@ -639,7 +639,7 @@ async function verify() {
 			assert(
 				error instanceof MeilisearchApiError &&
 					error.cause?.code === "document_not_found",
-				"The tombstone check failed for an unexpected reason",
+				`The tombstone check failed for an unexpected reason: ${String(error)}`,
 			);
 		}
 

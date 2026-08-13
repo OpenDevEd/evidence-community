@@ -1,7 +1,7 @@
-import { normalizeDoi } from "@opendeved/doi-sync-core";
 import type { ZoteroFieldDescriptor } from "@opendeved/evidence-library-core/zotero-schema";
 
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
+import { normalizeDoi } from "@/lib/doi";
 
 export type AdminFieldKind =
 	| "access-date"

@@ -2,7 +2,7 @@ import {
 	buildDoiDisplayLinks,
 	type DoiDisplayLinks,
 } from "@opendeved/doi-sync-core/display";
-import { normalizeDoi } from "@opendeved/doi-sync-core";
+import { normalizeDoi } from "@/lib/doi";
 
 import {
 	isZenodoDoi,

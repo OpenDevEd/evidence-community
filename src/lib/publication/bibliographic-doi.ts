@@ -1,4 +1,4 @@
-import { normalizeDoi } from "@opendeved/doi-sync-core";
+import { normalizeDoi } from "@/lib/doi";
 
 export type BibliographicDoiAttachment = {
 	url?: string | null;
