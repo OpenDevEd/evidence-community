@@ -11,9 +11,9 @@ import {
 	ADMIN_SHARED_PAYLOAD_FIELDS,
 	adminSpecialFieldsForZoteroItemType,
 	adminSharedPayloadFieldsForZoteroItemType,
-	canonicalItemTypeToZotero,
 	zoteroStructuralFieldErrors,
 } from "@/lib/admin/item-fields";
+import { canonicalItemTypeToZotero } from "@/lib/item-field-codec";
 
 const knownEditableFields = new Set([
 	...ADMIN_SHARED_PAYLOAD_FIELDS,
@@ -104,6 +104,28 @@ function stringList(value: unknown, field: string) {
 	return value as string[];
 }
 
+const zoteroRelationPredicates = new Set([
+	"dc:relation",
+	"dc:replaces",
+	"mendeleyDB:annotationUUID",
+	"mendeleyDB:documentUUID",
+	"mendeleyDB:fileHash",
+	"mendeleyDB:notebookUUID",
+	"mendeleyDB:relatedDocumentUUID",
+	"mendeleyDB:relatedFileHash",
+	"mendeleyDB:relatedRemoteDocumentUUID",
+	"mendeleyDB:remoteDocumentUUID",
+	"owl:sameAs",
+]);
+
+function zoteroRelations(value: object) {
+	return Object.fromEntries(
+		Object.entries(value).filter(([predicate]) =>
+			zoteroRelationPredicates.has(predicate),
+		),
+	);
+}
+
 function fieldValue(
 	field: string,
 	value: unknown,
@@ -125,7 +147,7 @@ function fieldValue(
 				"Canonical writeback payload has invalid relations",
 			);
 		}
-		return value;
+		return zoteroRelations(value);
 	}
 	if (field === "parentItem") {
 		if (clearing) return false;
@@ -163,6 +185,15 @@ function assertStructuralFields(
 	const [error] = zoteroStructuralFieldErrors(payload, definition.itemType);
 	if (error) {
 		throw new ZoteroWritebackMappingError(error.message);
+	}
+	if (
+		payload.parentItem &&
+		Array.isArray(payload.collections) &&
+		payload.collections.length > 0
+	) {
+		throw new ZoteroWritebackMappingError(
+			"Remove collections from this child record. It inherits them from its parent.",
+		);
 	}
 }
 

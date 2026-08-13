@@ -4,6 +4,9 @@ import {
 	ADMIN_ANNOTATION_TYPES,
 	utf8ByteLength,
 } from "@/lib/admin/field-contract";
+import {
+	canonicalItemFieldToDatabaseField,
+} from "@/lib/item-field-codec";
 
 export const ADMIN_SHARED_PAYLOAD_FIELDS = new Set([
 	"collections",
@@ -14,8 +17,8 @@ export const ADMIN_SHARED_PAYLOAD_FIELDS = new Set([
 	"tags",
 ]);
 
-const CHILD_ONLY_ITEM_TYPES = new Set(["annotation", "attachment", "note"]);
-const PARENT_REQUIRED_ITEM_TYPES = new Set(["annotation", "attachment"]);
+const PARENT_CAPABLE_ITEM_TYPES = new Set(["annotation", "attachment", "note"]);
+const PARENT_REQUIRED_ITEM_TYPES = new Set(["annotation"]);
 
 export function adminSharedPayloadFieldsForZoteroItemType(definition: {
 	creatorTypes: readonly unknown[];
@@ -23,7 +26,7 @@ export function adminSharedPayloadFieldsForZoteroItemType(definition: {
 }) {
 	const fields = new Set(ADMIN_SHARED_PAYLOAD_FIELDS);
 	if (definition.creatorTypes.length === 0) fields.delete("creators");
-	if (!CHILD_ONLY_ITEM_TYPES.has(definition.itemType.toLowerCase())) {
+	if (!PARENT_CAPABLE_ITEM_TYPES.has(definition.itemType.toLowerCase())) {
 		fields.delete("parentItem");
 	}
 	return fields;
@@ -84,7 +87,7 @@ export function zoteroStructuralFieldErrors(
 	if (typeof annotationText === "string" && [...annotationText].length > 7_500) {
 		errors.push({
 			field: "annotationText",
-			message: "Annotation Text must be 7,500 characters or less.",
+			message: "Shorten Annotation Text to 7,500 characters or fewer.",
 		});
 	}
 	if (
@@ -93,7 +96,7 @@ export function zoteroStructuralFieldErrors(
 	) {
 		errors.push({
 			field: "annotationPageLabel",
-			message: "Annotation Page Label must be 50 bytes or less.",
+			message: "Shorten Annotation Page Label to 50 simple characters or fewer.",
 		});
 	}
 	if (
@@ -105,7 +108,8 @@ export function zoteroStructuralFieldErrors(
 	) {
 		errors.push({
 			field: "annotationSortIndex",
-			message: "Enter a valid annotation sort position.",
+			message:
+				"Use the annotation position supplied by the PDF, EPUB, or web-page reader.",
 		});
 	}
 
@@ -119,7 +123,7 @@ export function zoteroStructuralFieldErrors(
 	if (utf8ByteLength(annotationPosition) > 65_535) {
 		errors.push({
 			field: "annotationPosition",
-			message: "Annotation Position must be 65,535 bytes or less.",
+			message: "Shorten Annotation Position to 65,535 simple characters or fewer.",
 		});
 		return errors;
 	}
@@ -159,22 +163,8 @@ const specialFieldsByZoteroItemType = new Map<string, ReadonlySet<string>>([
 	],
 ]);
 
-export function canonicalItemTypeToZotero(itemType: string) {
-	return itemType.length === 0
-		? ""
-		: itemType[0]!.toLowerCase() + itemType.slice(1);
-}
-
 export function adminSpecialFieldsForZoteroItemType(itemType: string) {
 	return specialFieldsByZoteroItemType.get(itemType) ?? new Set<string>();
-}
-
-export function adminCanonicalFieldToDatabaseField(field: string) {
-	return field === "language" ? "languageName" : field;
-}
-
-export function adminDatabaseFieldToPayloadField(field: string) {
-	return field === "languageName" ? "language" : field;
 }
 
 export function adminCanonicalPayloadToItemFields(
@@ -186,7 +176,7 @@ export function adminCanonicalPayloadToItemFields(
 	for (const { field, semanticField } of describeZoteroItemTypeFields(
 		zoteroItemType,
 	)) {
-		const internalField = adminCanonicalFieldToDatabaseField(semanticField);
+		const internalField = canonicalItemFieldToDatabaseField(semanticField);
 		if (!Object.hasOwn(payload, internalField)) continue;
 		if (field !== internalField) delete output[internalField];
 		output[field] = payload[internalField];
@@ -207,5 +197,5 @@ export function adminCanonicalDraftToItemFields<
 }
 
 export function isTopLevelAdminItemType(itemType: string) {
-	return !CHILD_ONLY_ITEM_TYPES.has(itemType.toLowerCase());
+	return itemType.toLowerCase() !== "annotation";
 }

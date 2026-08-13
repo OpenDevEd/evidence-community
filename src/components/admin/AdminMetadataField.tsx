@@ -52,17 +52,18 @@ function BibliographicDateField({
 	value,
 }: CommonFieldProps) {
 	const [mode, setMode] = useState<DateMode>(() => dateMode(value));
-	const inputType = mode === "day" ? "date" : "number";
+	const displayedMode = value ? dateMode(value) : mode;
+	const inputType = displayedMode === "day" ? "date" : "number";
 	return (
 		<div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">
 			<select
 				aria-label={`${label} precision`}
 				className="h-10 rounded-xl border-small border-black/10 bg-white px-3 text-sm text-black/80 outline-none focus-visible:ring-2 focus-visible:ring-focus disabled:opacity-50 dark:border-white/10 dark:bg-secondary dark:text-white/80"
 				disabled={disabled}
-				value={mode}
+				value={displayedMode}
 				onChange={(event) => {
 					const selected = event.currentTarget.value as DateMode;
-					if (selected === mode) return;
+					if (selected === displayedMode) return;
 					setMode(selected);
 					onValueChange("");
 				}}
@@ -78,13 +79,13 @@ function BibliographicDateField({
 				classNames={inputClassNames}
 				errorMessage={error}
 				id={id}
-				inputMode={mode === "year" ? "numeric" : undefined}
+				inputMode={displayedMode === "year" ? "numeric" : undefined}
 				isDisabled={disabled}
 				isInvalid={Boolean(error)}
-				max={mode === "year" ? "2999" : undefined}
-				min={mode === "year" ? "1000" : undefined}
-				pattern={mode === "year" ? "[12][0-9]{3}" : undefined}
-				step={mode === "year" ? 1 : undefined}
+				max={displayedMode === "year" ? "2999" : undefined}
+				min={displayedMode === "year" ? "1000" : undefined}
+				pattern={displayedMode === "year" ? "[12][0-9]{3}" : undefined}
+				step={displayedMode === "year" ? 1 : undefined}
 				type={inputType}
 				value={value}
 				onValueChange={onValueChange}

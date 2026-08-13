@@ -39,10 +39,10 @@ describe("Zotero writeback mapping", () => {
 		}
 	});
 
-	it("rejects incomplete child records before calling Zotero", () => {
+	it("allows standalone attachments but rejects incomplete annotations", () => {
 		expect(() =>
 			createZoteroItemPayload({ itemType: "Attachment" }, "ATTACH23"),
-		).toThrow(ZoteroWritebackMappingError);
+		).not.toThrow();
 		expect(() =>
 			createZoteroItemPayload(
 				{
@@ -60,22 +60,29 @@ describe("Zotero writeback mapping", () => {
 		expect(
 			createZoteroItemPayload(
 				{
-					collections: ["COLL2345"],
+					collections: [],
 					itemType: "Note",
 					note: "A note",
 					parentItem: "PARENT23",
-					relations: { "dc:relation": "https://example.test/item" },
+					relations: {
+						"dc:relation":
+							"http://zotero.org/users/123/items/ABCD2345",
+						cited_by: 7,
+						referenced_works: ["WXYZ6789"],
+					},
 					tags: ["evidence"],
 				},
 				"ABCD2345",
 			),
 		).toEqual({
-			collections: ["COLL2345"],
+			collections: [],
 			itemType: "note",
 			key: "ABCD2345",
 			note: "A note",
 			parentItem: "PARENT23",
-			relations: { "dc:relation": "https://example.test/item" },
+			relations: {
+				"dc:relation": "http://zotero.org/users/123/items/ABCD2345",
+			},
 			tags: [{ tag: "evidence" }],
 			version: 0,
 		});

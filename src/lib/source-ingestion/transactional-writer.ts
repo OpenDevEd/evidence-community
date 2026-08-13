@@ -42,7 +42,7 @@ import {
 	NativeItemValidationError,
 	validateNativeItemDraft,
 } from "@/lib/admin/native-item-validation";
-import { adminDatabaseFieldToPayloadField } from "@/lib/admin/item-fields";
+import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
 
 import {
@@ -258,7 +258,7 @@ function maskDirtyItemFields(
 	const masked = { ...incoming } as Record<string, unknown>;
 	const existingValues = existing as unknown as Record<string, unknown>;
 	for (const field of sourceWritableItemFields) {
-		if (dirtyFields.has(adminDatabaseFieldToPayloadField(field))) {
+		if (dirtyFields.has(databaseItemFieldToPayloadField(field))) {
 			masked[field] = existingValues[field];
 		}
 	}

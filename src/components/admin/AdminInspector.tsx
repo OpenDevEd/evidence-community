@@ -1895,7 +1895,7 @@ export function AdminInspector({
 						recordKey={detail.key}
 					/>
 				</Section>
-				{detail.itemType !== "Attachment" ? (
+				{!detail.parentItem ? (
 					<Section
 						actions={
 							diff.collections ? (

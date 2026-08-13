@@ -108,13 +108,16 @@ export function normalizeAdminFieldValue(
 	const { kind } = adminFieldContract(descriptor);
 	if (descriptor.field === "note") {
 		if ([...value].length > 500_000) {
-			return { error: "Keep this note at 500,000 characters or less.", value };
+			return { error: "Shorten this note to 500,000 characters or fewer.", value };
 		}
 	} else if (
 		!descriptor.field.startsWith("annotation") &&
 		utf8ByteLength(value) > 65_535
 	) {
-		return { error: "Keep this field at 65,535 bytes or less.", value };
+		return {
+			error: "Shorten this field to 65,535 simple characters or fewer.",
+			value,
+		};
 	}
 
 	if (kind === "bibliographic-date") {

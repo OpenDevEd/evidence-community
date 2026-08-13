@@ -25,7 +25,7 @@ import {
 	collectionKeysFromPayload,
 	payloadWithCollection,
 } from "./item-payload";
-import { adminDatabaseFieldToPayloadField } from "./item-fields";
+import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
 import {
 	applyItemDraftPatch,
 	createItemDraftPatch,
@@ -963,7 +963,7 @@ export async function publishItemDraftWithContext(
 		if (current?.deleted === 1) {
 			changedFields.push(
 				...editableItemDatabaseFields.map(
-					adminDatabaseFieldToPayloadField,
+					databaseItemFieldToPayloadField,
 				),
 				"tags",
 			);

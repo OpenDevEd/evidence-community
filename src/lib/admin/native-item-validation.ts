@@ -10,13 +10,15 @@ import { creatorType } from "@/db/schema/enums/creatorType";
 import { itemType } from "@/db/schema/enums/itemType";
 import type { item } from "@/db/schema/tables/item";
 import {
-	adminCanonicalFieldToDatabaseField,
 	adminSharedPayloadFieldsForZoteroItemType,
 	adminSpecialFieldsForZoteroItemType,
-	canonicalItemTypeToZotero,
 	isTopLevelAdminItemType,
 	zoteroStructuralFieldErrors,
 } from "@/lib/admin/item-fields";
+import {
+	canonicalItemFieldToDatabaseField,
+	canonicalItemTypeToZotero,
+} from "@/lib/item-field-codec";
 import {
 	adminFieldLabel,
 	AdminValidationError,
@@ -219,7 +221,7 @@ export function validateNativeItemDraft(
 		...adminSharedPayloadFieldsForZoteroItemType(definition),
 		...fieldDescriptors.flatMap(({ field, semanticField }) => {
 			const databaseField =
-				adminCanonicalFieldToDatabaseField(semanticField);
+				canonicalItemFieldToDatabaseField(semanticField);
 			return [field, semanticField, databaseField];
 		}),
 		...adminSpecialFieldsForZoteroItemType(definition.itemType),
@@ -244,7 +246,7 @@ export function validateNativeItemDraft(
 	};
 	for (const descriptor of fieldDescriptors) {
 		const { field, semanticField } = descriptor;
-		const databaseField = adminCanonicalFieldToDatabaseField(semanticField);
+		const databaseField = canonicalItemFieldToDatabaseField(semanticField);
 		const hasItemField = Object.hasOwn(payload, field);
 		const alternativeNames = [...new Set([semanticField, databaseField])].filter(
 			(name) => name !== field,
@@ -402,7 +404,7 @@ export function validateNativeItemDraft(
 			collections: "One or more selected collections are invalid.",
 		});
 	}
-	if (!isTopLevelAdminItemType(normalizedItemType) && collectionKeys.length > 0) {
+	if (normalizedPayload.parentItem && collectionKeys.length > 0) {
 		throw new NativeItemValidationError(
 			"Child records inherit collections from their parent.",
 			{

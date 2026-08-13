@@ -240,7 +240,7 @@ describe("native item draft validation", () => {
 			[
 				"annotationPageLabel",
 				{ ...annotation, annotationPageLabel: "é".repeat(26) },
-				"Annotation Page Label must be 50 bytes or less.",
+				"Shorten Annotation Page Label to 50 simple characters or fewer.",
 			],
 			[
 				"annotationPosition",
@@ -248,7 +248,7 @@ describe("native item draft validation", () => {
 					...annotation,
 					annotationPosition: JSON.stringify({ value: "p".repeat(65_536) }),
 				},
-				"Annotation Position must be 65,535 bytes or less.",
+				"Shorten Annotation Position to 65,535 simple characters or fewer.",
 			],
 		] as const) {
 			try {
@@ -262,7 +262,6 @@ describe("native item draft validation", () => {
 
 	it("requires valid child metadata before publication", () => {
 		for (const payload of [
-			{ itemType: "Attachment" },
 			{ itemType: "Annotation" },
 			{
 				itemType: "Annotation",
@@ -290,8 +289,23 @@ describe("native item draft validation", () => {
 				collections: ["ABCD2345"],
 				itemType: "Note",
 				note: "Child note",
+				parentItem: "ABCD2345",
 			}),
 		).toThrow("Child records inherit collections from their parent");
+		expect(() =>
+			validateNativeItemDraft({
+				collections: ["ABCD2345"],
+				itemType: "Note",
+				note: "Standalone note",
+			}),
+		).not.toThrow();
+		expect(() =>
+			validateNativeItemDraft({
+				collections: ["ABCD2345"],
+				itemType: "Attachment",
+				title: "Standalone file",
+			}),
+		).not.toThrow();
 
 		expect(() =>
 			validateNativeItemDraft({

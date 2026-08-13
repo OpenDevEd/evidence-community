@@ -2543,6 +2543,14 @@ test("uses controls that preserve every supported metadata value", async ({
 			),
 		)
 		.toBe(true);
+	const language = inspector.getByLabel("Language", { exact: true });
+	await language.fill("French");
+	await expect
+		.poll(() =>
+			savedDrafts.some((payload) => payload.language === "French"),
+		)
+		.toBe(true);
+	await expect(language).toHaveValue("French");
 
 	const itemType = inspector.getByRole("combobox", { name: "Item type" });
 	await itemType.fill("Case");

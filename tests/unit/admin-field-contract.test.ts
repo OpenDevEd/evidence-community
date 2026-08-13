@@ -203,6 +203,6 @@ describe("admin metadata field contract", () => {
 				{ field: "title", semanticField: "title", type: "text" },
 				"é".repeat(32_768),
 			).error,
-		).toBe("Keep this field at 65,535 bytes or less.");
+		).toBe("Shorten this field to 65,535 simple characters or fewer.");
 	});
 });

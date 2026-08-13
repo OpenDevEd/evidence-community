@@ -53,4 +53,19 @@ describe("public item details", () => {
 			),
 		).toEqual([]);
 	});
+
+	it("shows a real publisher using the item-specific Zotero label", () => {
+		expect(
+			selectPublicItemDetails(
+				{ itemType: "Book", key: "BOOK0001", publisher: "OpenDevEd" },
+				"https://library.example.org",
+			),
+		).toContainEqual({ label: "publisher", value: "OpenDevEd" });
+		expect(
+			selectPublicItemDetails(
+				{ itemType: "Report", key: "REPORT01", publisher: "OpenDevEd" },
+				"https://library.example.org",
+			),
+		).toContainEqual({ label: "institution", value: "OpenDevEd" });
+	});
 });
