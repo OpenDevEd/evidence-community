@@ -42,7 +42,11 @@ This causes three user-visible failures:
     empty colour must stay empty instead of becoming black.
 12. Apply Zotero's field, note, annotation, child-collection, and relation
     rules at the shared validation boundary.
-13. This is a clean breaking change. Wipe and resync development records, then
+13. A note or attachment is a child only when it has `parentItem`. Standalone
+    notes and attachments remain valid and can belong to collections.
+14. Canonical relations may contain Zotero and OpenAlex data. Zotero writeback
+    sends only Zotero predicates.
+15. This is a clean breaking change. Wipe and resync development records, then
    rebuild the search index. Do not add old-field fallbacks or backfills.
 
 ## Existing code to reuse

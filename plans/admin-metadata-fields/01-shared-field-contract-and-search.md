@@ -58,6 +58,12 @@ because Zotero accepts dates, timestamps, and `CURRENT_TIMESTAMP`.
 - Bibliographic labels and numbers remain text.
 - Zotero field lengths, note lengths, annotation dependencies, child-item
   collection rules, and relation shapes are validated once on the server.
+- Child status comes from `parentItem`, not item type. Notes and attachments
+  may be standalone. An annotation always needs a parent.
+- Canonical relations retain provider-specific data. Zotero writeback removes
+  OpenAlex-only fields instead of sending data Zotero rejects.
+- Date precision follows the current value after autosave, revert, and record
+  changes without copying props through an effect.
 
 ## Test-first steps
 
@@ -106,9 +112,14 @@ Expected changes include:
 
 ## Deployment check
 
-1. Run the focused unit tests and TypeScript.
+1. Run `npx vitest run tests/unit/admin-field-contract.test.ts
+   tests/unit/native-item-validation.test.ts
+   tests/unit/item-draft-patch.test.ts tests/unit/public-item-details.test.ts`,
+   `npm run test:unit`, and `npx tsc --noEmit`.
 2. Run `npm run test:search-index` and `npm run test:search-worker`.
-3. Run the focused admin Playwright tests in Chromium and WebKit.
+3. Run the admin Playwright tests named `uses controls that preserve every
+   supported metadata value` and `keeps an empty annotation colour empty` in
+   Chromium and WebKit.
 4. Run the source import and Zotero writeback real-service checks.
 5. Wipe and resync the isolated development data.
 6. Rebuild the development Meilisearch index.
@@ -134,6 +145,10 @@ Expected changes include:
   unchanged.
 - Zotero length, annotation, child-item collection, and relation rules are
   enforced before save or writeback.
+- Language and every other aliased field remain visible after the draft API
+  responds.
+- Standalone notes and attachments remain valid, and Zotero writeback never
+  receives OpenAlex-only relations.
 - Broad search finds DOI and other metadata.
 - Quotes and backslashes in filter values do not break Meilisearch requests.
 - Focused unit, real-service, browser, and runtime checks pass.
