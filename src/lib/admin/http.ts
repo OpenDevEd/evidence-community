@@ -39,6 +39,9 @@ import {
 	CrossrefDoiAlreadyManagedError,
 	ExternalCrossrefDoiError,
 	PublicationItemNotFoundError,
+	ZenodoActivationConfigurationError,
+	ZenodoActivationValidationError,
+	ZenodoIdentifierPolicyLockedError,
 } from "@/lib/publication/errors";
 
 export const ADMIN_RESPONSE_HEADERS = {
@@ -58,6 +61,22 @@ export async function readAdminJson(request: Request) {
 			);
 		}
 		throw error;
+	}
+}
+
+export async function readOptionalAdminJson(request: Request) {
+	const text = await request.text();
+	if (!text.trim()) return {};
+	try {
+		return JSON.parse(text) as unknown;
+	} catch (error) {
+		throw new AdminValidationError(
+			"The submitted information could not be read.",
+			{
+				_form: "Reload the page and try again. If the problem continues, contact support.",
+			},
+			{ cause: error },
+		);
 	}
 }
 
@@ -104,7 +123,8 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 	}
 	if (
 		error instanceof ExternalCrossrefDoiError ||
-		error instanceof CrossrefDoiAlreadyManagedError
+		error instanceof CrossrefDoiAlreadyManagedError ||
+		error instanceof ZenodoIdentifierPolicyLockedError
 	) {
 		return {
 			code: "conflict",
@@ -112,14 +132,20 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 			status: 409,
 		};
 	}
-	if (error instanceof CrossrefActivationConfigurationError) {
+	if (
+		error instanceof CrossrefActivationConfigurationError ||
+		error instanceof ZenodoActivationConfigurationError
+	) {
 		return {
 			code: "conflict",
 			message: error.message,
 			status: 409,
 		};
 	}
-	if (error instanceof CrossrefActivationValidationError) {
+	if (
+		error instanceof CrossrefActivationValidationError ||
+		error instanceof ZenodoActivationValidationError
+	) {
 		const details = validationErrorPayload(error.message, {
 			...error.fields,
 		});

@@ -18,6 +18,9 @@ import {
 	CrossrefActivationValidationError,
 	CrossrefDoiAlreadyManagedError,
 	ExternalCrossrefDoiError,
+	ZenodoActivationConfigurationError,
+	ZenodoActivationValidationError,
+	ZenodoIdentifierPolicyLockedError,
 } from "@/lib/publication/errors";
 
 function wrappedDatabaseError(code: string) {
@@ -53,6 +56,31 @@ describe("admin API error mapping", () => {
 				"10.5555/library.000001",
 				"ABCDEFGH",
 			),
+		]) {
+			const response = adminErrorResponse(error);
+			expect(response.status).toBe(409);
+			expect((await response.json()).error.code).toBe("conflict");
+		}
+	});
+
+	it("returns plain Zenodo activation errors", async () => {
+		const validation = adminErrorResponse(
+			new ZenodoActivationValidationError("Publish a PDF first.", {
+				identifierPolicy: "Choose a DOI option.",
+			}),
+		);
+		expect(validation.status).toBe(400);
+		expect(await validation.json()).toEqual({
+			error: {
+				code: "validation_failed",
+				fields: { identifierPolicy: "Choose a DOI option." },
+				message: "Publish a PDF first.",
+			},
+		});
+
+		for (const error of [
+			new ZenodoActivationConfigurationError("Zenodo is not configured."),
+			new ZenodoIdentifierPolicyLockedError(),
 		]) {
 			const response = adminErrorResponse(error);
 			expect(response.status).toBe(409);

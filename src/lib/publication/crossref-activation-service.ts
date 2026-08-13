@@ -18,7 +18,10 @@ import {
 	type BibliographicDoiInput,
 } from "./bibliographic-doi";
 import { allocateManagedCrossrefDoi } from "./namespace-repository";
-import { enqueueItemSearchReprojection } from "./queue";
+import {
+	enqueueItemSearchReprojection,
+	publicationJobState,
+} from "./queue";
 import { buildPublicationRecordSnapshot } from "./record-adapter";
 import { readPublicationRepositorySnapshot } from "./repository";
 import {
@@ -115,14 +118,6 @@ function requireCrossrefConfig(config: PublicationConfig) {
 	};
 }
 
-function jobState(job: typeof publicationSyncJob.$inferSelect) {
-	if (job.processedAt) return "finished" as const;
-	if (job.deadLetteredAt) return "failed" as const;
-	if (job.leaseOwner) return "working" as const;
-	if (job.attempts > 0) return "retrying" as const;
-	return "queued" as const;
-}
-
 function receipt(input: {
 	itemKey: string;
 	doi: string;
@@ -137,7 +132,7 @@ function receipt(input: {
 		doi: input.doi,
 		lifecycle: input.lifecycle,
 		canonicalRevision: input.canonicalRevision,
-		job: { id: input.job.id, state: jobState(input.job) },
+		job: { id: input.job.id, state: publicationJobState(input.job) },
 		indexing: {
 			entityType: "item",
 			entityKey: input.itemKey,

@@ -9,6 +9,16 @@ import {
 
 type Executor = Database | DatabaseTransaction;
 
+export function publicationJobState(
+	job: typeof publicationSyncJob.$inferSelect,
+) {
+	if (job.processedAt) return "finished" as const;
+	if (job.deadLetteredAt) return "failed" as const;
+	if (job.leaseOwner) return "working" as const;
+	if (job.attempts > 0) return "retrying" as const;
+	return "queued" as const;
+}
+
 export class PublicationJobLeaseLostError extends Error {
 	constructor() {
 		super("The publication job lease was lost");

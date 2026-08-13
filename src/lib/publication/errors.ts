@@ -57,3 +57,32 @@ export class CrossrefDoiAlreadyManagedError extends Error {
 		this.name = "CrossrefDoiAlreadyManagedError";
 	}
 }
+
+export class ZenodoActivationConfigurationError extends Error {
+	constructor(message: string) {
+		super(message);
+		this.name = "ZenodoActivationConfigurationError";
+	}
+}
+
+export class ZenodoActivationValidationError extends Error {
+	readonly fields: Readonly<Record<string, string>>;
+
+	constructor(
+		message: string,
+		fields: Readonly<Record<string, string>> = {},
+	) {
+		super(message);
+		this.name = "ZenodoActivationValidationError";
+		this.fields = fields;
+	}
+}
+
+export class ZenodoIdentifierPolicyLockedError extends Error {
+	constructor() {
+		super(
+			"This record has already been sent to Zenodo. Its DOI choice cannot be changed.",
+		);
+		this.name = "ZenodoIdentifierPolicyLockedError";
+	}
+}
