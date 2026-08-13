@@ -676,16 +676,6 @@ export const valueFormatter: Record<
 		const values = getExtraValues(finalValue);
 		return <ObjectView value={values} args={args} />;
 	},
-	apc_list: (args) => {
-		const finalValue = args.value;
-		return false;
-		return <ObjectView value={finalValue} args={args} />;
-	},
-	apc_paid: (args) => {
-		const finalValue = args.value;
-		return false;
-		return <ObjectView value={finalValue} args={args} />;
-	},
 	citation: (args) => {
 		return <Citation {...args} />;
 	},

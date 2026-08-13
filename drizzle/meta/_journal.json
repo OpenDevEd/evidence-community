@@ -204,6 +204,13 @@
       "when": 1786615010427,
       "tag": "0028_publication-job-crossref-verified",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1786635112064,
+      "tag": "0029_remove-unused-apc-fields",
+      "breakpoints": true
     }
   ]
 }

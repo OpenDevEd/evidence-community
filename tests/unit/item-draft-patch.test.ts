@@ -5,8 +5,14 @@ import {
 	createItemDraftPatch,
 	effectiveItemParent,
 } from "@/lib/admin/item-draft-merge";
+import { editableItemDatabaseFields } from "@/lib/admin/item-draft-patch";
 
 describe("item draft patches", () => {
+	it("contains only real editable record fields", () => {
+		expect(editableItemDatabaseFields).not.toContain("apc_list");
+		expect(editableItemDatabaseFields).not.toContain("apc_paid");
+	});
+
 	it("stores only fields that differ from the canonical base", () => {
 		expect(
 			createItemDraftPatch(

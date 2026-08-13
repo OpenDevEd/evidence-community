@@ -114,9 +114,6 @@ export const item = pgTable(
 		md5: varchar(),
 		mtime: varchar(),
 		charset: varchar(),
-		apc_list: jsonb(),
-		apc_paid: jsonb(),
-
 		type: varchar(),
 		citationKey: varchar(),
 		number: varchar(),
