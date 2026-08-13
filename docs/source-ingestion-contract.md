@@ -103,9 +103,9 @@ Library databases and deployments are not migrated or modified.
   publishing that draft clears the tombstone and emits a new upsert revision.
   A linked tombstone marks every editable provider field dirty so writeback can
   recreate a remotely deleted record rather than silently diverging.
-- The temporary backend gate is `ADMIN_AUTH_BYPASS=true`. Every
-  `/api/admin/items/**` response is private and non-cacheable. Clerk token
-  verification will replace this gate when OpenScholar integration begins.
+- The admin password creates a signed, short-lived, HTTP-only cookie. Every
+  `/api/admin/items/**` response requires that cookie and is private and
+  non-cacheable.
 
 ## Native PDF files
 

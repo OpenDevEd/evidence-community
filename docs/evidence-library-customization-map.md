@@ -25,7 +25,7 @@ container image can be started repeatedly with different mounted documents.
 | Section | What it controls | Main constraints |
 | --- | --- | --- |
 | `schemaVersion`, `revision`, `updatedAt` | Contract version and revision identity | Schema version `1`; bounded revision; UTC timestamp |
-| `identity` | Name, short name, canonical origin, funding partners | HTTP or HTTPS origin; bounded unique partner IDs |
+| `identity` | Name, short name, canonical origin, funding partners | HTTPS origin; bounded unique partner IDs |
 | `identity.assets` | Dark/light logos, favicon, app icons, logo CSS | Stable public URLs; CSS declarations only |
 | `institutions` | Institution names and optional logos | Up to 200; unique IDs and case-insensitive names |
 | `theme` | Layout, colors, mode, fonts, weights | Catalog values and validated colors/font URLs |

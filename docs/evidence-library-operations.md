@@ -6,16 +6,16 @@ JSON document.
 
 ## Deployment contract
 
-| Input | Required contract |
-| --- | --- |
-| Deployment | Use `docker/compose.library.yaml` so the web app and search worker use one repository-owned release |
-| Image | Build the repository `Dockerfile`; do not pass customer build arguments |
-| Configuration | Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document; Compose mounts it at `LIBRARY_CONFIG_PATH` |
-| Process | Each image prepares config access as root, then runs as UID/GID `1001` |
-| Network | Expose `PORT`, default `3000`, through the deployment proxy |
-| Client identity | The deployment proxy must overwrite `X-Real-IP`; never expose the application origin directly |
-| Health | Probe `GET /api/library-config/health` |
-| Dependencies | Make server-side services and upstreams reachable from the application; make public assets and browser analytics reachable from clients |
+| Input           | Required contract                                                                                                                       |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Deployment      | Use `docker/compose.library.yaml` so the web app and search worker use one repository-owned release                                     |
+| Image           | Build the repository `Dockerfile`; do not pass customer build arguments                                                                 |
+| Configuration   | Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document; Compose mounts it at `LIBRARY_CONFIG_PATH`                        |
+| Process         | Each image prepares config access as root, then runs as UID/GID `1001`                                                                  |
+| Network         | Expose `PORT`, default `3000`, through the deployment proxy                                                                             |
+| Client identity | The deployment proxy must overwrite `X-Real-IP`; never expose the application origin directly                                           |
+| Health          | Probe `GET /api/library-config/health`                                                                                                  |
+| Dependencies    | Make server-side services and upstreams reachable from the application; make public assets and browser analytics reachable from clients |
 
 The Compose file sets `LIBRARY_CONFIG_PATH`. Library values and secrets belong
 in `LIBRARY_CONFIG_JSON`, not in `NEXT_PUBLIC_*` variables or customer image
@@ -36,88 +36,27 @@ LIBRARY_CONFIG_JSON="$(jq -c . config/library.example.json)" \
   -f docker/compose.library.yaml config
 ```
 
-## Private Tailscale development deployment
+## HTTPS and admin access
 
-The isolated development library uses
-`docker/compose.tailscale-development.yaml`. It reuses the shared web and search
-worker services, adds a pinned Tailscale sidecar, and enables the existing
-temporary admin bypass. It publishes no host port. Tailscale Serve is its only
-ingress, and Funnel is off.
+Every library uses the normal Compose file and a public HTTPS origin. Set
+`identity.baseUrl` to that exact HTTPS origin. Coolify must force HTTP requests
+to HTTPS and route the hostname to the `web` service on port `3000`.
 
-The private address is:
+The private runtime configuration must contain both
+`authentication.adminPassword` and `authentication.secret`. The password form
+creates a signed 12-hour cookie. The cookie is HTTP-only, same-site strict,
+host-only, and secure in production. It contains no password. Changing either
+private value signs out every existing session.
 
-```text
-http://openscholar-el-dev.tail40de7d.ts.net
-```
+The public library stays open. `/admin` shows the password form when signed
+out. Every admin data API returns `401` with `Cache-Control: private, no-store`
+unless it receives a valid cookie. Login failures share a small fixed window
+per client address. The deployment proxy must overwrite `X-Real-IP` so an
+internet caller cannot choose that address.
 
-The active tailnet must report `opendeved.net`, MagicDNS enabled, and the suffix
-`tail40de7d.ts.net`. Check it before deployment:
-
-```bash
-tailscale status --json | jq '{BackendState, CurrentTailnet}'
-```
-
-Coolify application `rzbo9als0hdnr4gegtx97qos` stores only these deployment
-inputs after its old generated-domain records are removed:
-
-| Key | Purpose |
-| --- | --- |
-| `LIBRARY_CONFIG_JSON` | Complete validated runtime settings with `identity.baseUrl` set to the private address |
-| `TAILSCALE_AUTHKEY` | Non-ephemeral reusable key used as the sidecar's `TS_AUTHKEY` |
-
-The Compose file, Serve rules, image pin, loopback bridge, bypass setting,
-health checks, and persistent Tailscale state all live in the repository. The
-auth key is the only new secret. Tailscale state is saved in a named volume, so
-ordinary container restarts do not need the key again.
-
-Render and verify the repository contract before changing Coolify:
-
-```bash
-npm run test:tailscale-development
-LIBRARY_CONFIG_JSON="$(jq -c . /path/to/private-library.json)" \
-TAILSCALE_AUTHKEY=test-only-compose-value \
-docker compose --project-directory . \
-  -f docker/compose.tailscale-development.yaml config
-```
-
-Deploy in this order:
-
-1. Validate a new named runtime revision whose `identity.baseUrl` is the private address.
-2. Push the checked repository commit and point Coolify at that exact commit.
-3. Delete the production `SERVICE_URL_WEB` and `SERVICE_FQDN_WEB` records by their exact Coolify environment UUIDs, read back that both are absent, and confirm `docker_compose_domains` is empty.
-4. Stop the old stack and prove its public hostname no longer reaches this application.
-5. Select `/docker/compose.tailscale-development.yaml`, store the two required inputs, deploy, and inspect the generated labels before accepting the bypass as safe.
-
-After deployment, check all three containers and the Serve rules. The generated
-Compose model must have no published host ports and no Traefik router labels.
-Tailscale Serve must proxy private HTTP 80 to `127.0.0.1:3000`. The pinned `socat` process in
-the repository-owned Tailscale image must listen only on that loopback address
-and forward to `web:3000` over Coolify's private application network. Do not
-enable Coolify's Raw Compose mode: the checked-in file works with the normal
-parser and keeps the whole setup in the repository.
-
-Run the live boundary probe from a device connected to the tailnet:
-
-```bash
-ops/tailscale-development/probe.sh \
-  http://openscholar-el-dev.tail40de7d.ts.net \
-  https://docs-openscholar-compose-e2e.opendev.space
-```
-
-Also open `/lib` and `/admin` at the private address in a real browser. The
-admin API must return `Cache-Control: private, no-store`. The old public
-hostname may return a Cloudflare or shared-proxy 404; that is safe as long as
-it does not return this library's health data or admin workbench.
-
-Tailscale Serve does not replace an incoming `X-Real-IP` header. The current AI
-rate limiter trusts that header. This is accepted only for this private
-development deployment because every caller is already inside the tailnet.
-
-To roll back, stop the private stack first. Point Coolify back at
-`/docker/compose.library.yaml`, store a new runtime revision with the approved
-public address, restore the public domain records, and deploy. Confirm `/admin`
-and every admin API are hidden before the public route is restored. Never add a
-public domain to the Tailscale Compose deployment.
+After deployment, check the HTTP redirect, the HTTPS certificate, the login
+form, reload persistence, logout, and one real PDF upload. In the browser,
+`window.isSecureContext` must be true and `crypto.subtle` must exist.
 
 ## Prepare a library for direct Docker use
 
@@ -153,9 +92,9 @@ read `library.json`, while the operator can create and replace files.
 
 Every running image serves two value-free machine-readable contracts:
 
-| URL | Purpose |
-| --- | --- |
-| `/library-config.schema.json` | Draft 2020-12 structural schema generated from the runtime Zod schema |
+| URL                             | Purpose                                                                                   |
+| ------------------------------- | ----------------------------------------------------------------------------------------- |
+| `/library-config.schema.json`   | Draft 2020-12 structural schema generated from the runtime Zod schema                     |
 | `/library-config.catalogs.json` | Selectable values, rich platform options, extensible-choice markers, and write-only paths |
 
 These artifacts describe fields and constraints but never contain values from
@@ -231,13 +170,13 @@ An active response contains revision metadata only:
 
 ```json
 {
-  "state": "active",
-  "active": {
-    "schemaVersion": 1,
-    "revision": "example-1",
-    "updatedAt": "2026-07-27T12:30:00.000Z"
-  },
-  "rejected": null
+	"state": "active",
+	"active": {
+		"schemaVersion": 1,
+		"revision": "example-1",
+		"updatedAt": "2026-07-27T12:30:00.000Z"
+	},
+	"rejected": null
 }
 ```
 
@@ -246,11 +185,11 @@ Responses use `Cache-Control: no-store`.
 
 The endpoint returns:
 
-| State | HTTP status | Meaning |
-| --- | ---: | --- |
-| Active configuration loaded | `200` | The process has a usable revision |
-| Invalid update rejected; previous revision retained | `200` | Service remains available; JSON `state` is `rejected` |
-| No valid revision has loaded | `503` | Startup/configuration failure |
+| State                                               | HTTP status | Meaning                                               |
+| --------------------------------------------------- | ----------: | ----------------------------------------------------- |
+| Active configuration loaded                         |       `200` | The process has a usable revision                     |
+| Invalid update rejected; previous revision retained |       `200` | Service remains available; JSON `state` is `rejected` |
+| No valid revision has loaded                        |       `503` | Startup/configuration failure                         |
 
 The image health check uses this endpoint. Operational monitoring must also
 alert when the JSON `state` is `rejected`, because the container intentionally
