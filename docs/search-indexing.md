@@ -145,7 +145,9 @@ The admin application uses three private, non-cacheable endpoints:
 - `GET /api/admin/search-index` returns the current worker stage and genuine
   Meilisearch batch progress, plus lightweight pending/failed queue signals;
 - `POST /api/admin/search-index/receipts` resolves up to 100 exact receipts as
-  queued, processing, retrying, indexed, failed, or unknown; and
+  queued, processing, retrying, indexed, failed, or unknown. Before it returns
+  an indexed receipt, it immediately expires the affected Next.js item,
+  citation, metadata, or collection cache tags; and
 - `POST /api/admin/search-index/retry` explicitly requeues selected failed
   receipts or all failed receipts. It never resets active, queued, or already
   indexed work.
@@ -153,7 +155,9 @@ The admin application uses three private, non-cacheable endpoints:
 Overview polling intentionally does not calculate queue counts. This keeps the
 hot status request bounded as a library's outbox history grows. Exact progress
 belongs to the mutation's receipt set, and callers wait until every receipt in
-that set reaches `indexed`.
+that set reaches `indexed`. The admin shows final publish, restore, unpublish,
+file, collection, and bulk success only after that wait finishes. Public API
+and proxy cache headers are a separate policy and are not changed by this flow.
 
 The real-service verifier creates isolated indexes and proves document shape,
 collection reprojection, re-parent cleanup, tombstone deletion, restoration,
