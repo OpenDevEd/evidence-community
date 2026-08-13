@@ -306,12 +306,14 @@ async function verify() {
 			attachmentsData: Array<{ key: string; tags: string[] }>;
 			collections: string[];
 			collectionsAncestry: string[];
+			dateSortKey: number;
 			fullTextPDFs: Array<{
 				fullTextPDF: Array<{ page: number; text: string }>;
 				key: string;
 			}>;
 			fullNames: string[];
 			key: string;
+			metadataSearch: string[];
 			provider: string;
 			revision: number;
 			tags: string[];
@@ -332,7 +334,10 @@ async function verify() {
 		assert(
 			initialDocument.tags.includes(tagName) &&
 				initialDocument.fullNames.includes("Amina Search") &&
-				initialDocument.year === "2026",
+				initialDocument.year === "2026" &&
+				initialDocument.dateSortKey === 20260000 &&
+				initialDocument.metadataSearch.includes("Initial indexed report") &&
+				initialDocument.metadataSearch.includes("OpenDevEd|Evidence Lab"),
 			"Derived search fields were not projected",
 		);
 		assert(

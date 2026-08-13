@@ -251,7 +251,7 @@ export function getCountryAncestry(country: string) {
 type ZoteroItem = Record<string, unknown> & { itemType: string };
 
 export function ItemToZoteroJSON(item: Item): ZoteroItem {
-	const { attachmentsData, citation, createdAt, updatedAt, deleted, deletedAt, collectionsData, collectionsAncestry, fullTextPDFs, institution: institutionArray, fullNames, dateTimestamp, year, datePublished, provider, sourceExternalScopeKey, sourceConnectionKey, sourceRecordKey, revision, tags, ...rest } = item;
+	const { attachmentsData, citation, createdAt, updatedAt, deleted, deletedAt, collectionsData, collectionsAncestry, fullTextPDFs, institution: institutionArray, fullNames, dateSortKey, year, datePublished, provider, sourceExternalScopeKey, sourceConnectionKey, sourceRecordKey, revision, tags, ...rest } = item;
 
 	const finalCountry = Array.isArray(item.country) ? item.country.join("|") : item.country;
 	const finalInstitution = Array.isArray(item.institution) ? item.institution.join("|") : item.institution;

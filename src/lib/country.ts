@@ -1,5 +1,6 @@
 import { COUNTRY_HIERARCHY, Entry } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
+import { meilisearchEquals } from "@/lib/meilisearch-filter";
 
 
 
@@ -251,7 +252,7 @@ export function buildHierarchicalFilters(
 	
 	if (countrySelections['direct'] && countrySelections['direct'].size > 0) {
 		const countries = Array.from(countrySelections['direct']);
-		filterParts.push(...countries.map(c => `${filterAttribute} = "${c}"`));
+		filterParts.push(...countries.map((code) => meilisearchEquals(filterAttribute, code)));
 	}
 	
 	for (const continent of continentSelections) {
@@ -262,7 +263,7 @@ export function buildHierarchicalFilters(
 			const entry = findEntryByPath(continent);
 			if (entry) {
 				const countryCodes = extractCountryCodes(entry);
-				const filter = countryCodes.map(code => `${filterAttribute} = "${code}"`).join(' OR ');
+				const filter = countryCodes.map((code) => meilisearchEquals(filterAttribute, code)).join(' OR ');
 				if (filter) {
 					filterParts.push(`(${filter})`);
 				}
@@ -278,7 +279,7 @@ export function buildHierarchicalFilters(
 				const entry = findEntryByPath(region);
 				if (entry) {
 					const countryCodes = extractCountryCodes(entry);
-					const filter = countryCodes.map(code => `${filterAttribute} = "${code}"`).join(' OR ');
+					const filter = countryCodes.map((code) => meilisearchEquals(filterAttribute, code)).join(' OR ');
 					if (filter) {
 						filterParts.push(`(${filter})`);
 					}
@@ -291,7 +292,7 @@ export function buildHierarchicalFilters(
 		if (parent === 'direct') continue;
 		
 		const countries = Array.from(countrySelections[parent]);
-		filterParts.push(...countries.map(c => `${filterAttribute} = "${c}"`));
+		filterParts.push(...countries.map((code) => meilisearchEquals(filterAttribute, code)));
 	}
 	
 	if (filterParts.length === 0) return null;

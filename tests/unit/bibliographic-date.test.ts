@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { parseBibliographicDate } from "@/lib/bibliographic-date";
+import {
+	bibliographicDateSearchFields,
+	parseBibliographicDate,
+} from "@/lib/bibliographic-date";
 
 describe("bibliographic dates", () => {
 	it.each([
@@ -47,5 +50,19 @@ describe("bibliographic dates", () => {
 			raw: "2024-05",
 		});
 		expect(parseBibliographicDate("   ")).toEqual({ kind: "empty", raw: "" });
+	});
+
+	it("projects only truthful fields for search", () => {
+		expect(bibliographicDateSearchFields("2024")).toEqual({
+			dateSortKey: 20240000,
+			year: "2024",
+		});
+		expect(bibliographicDateSearchFields("2024-05-20")).toEqual({
+			datePublished: "2024-05-20",
+			dateSortKey: 20240520,
+			year: "2024",
+		});
+		expect(bibliographicDateSearchFields("forthcoming")).toEqual({});
+		expect(bibliographicDateSearchFields("2024-13-99")).toEqual({});
 	});
 });

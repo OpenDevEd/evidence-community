@@ -50,12 +50,7 @@ export const PLATFORM_SEARCH_SCOPE_OPTIONS = [
 		key: "fields",
 		legacyKey: "metadata",
 		name: "All metadata",
-		attributesToSearchOn: [
-			"title",
-			"abstractNote",
-			"fullNames",
-			"tags",
-		],
+		attributesToSearchOn: ["metadataSearch", "tags"],
 	},
 	{
 		key: "documents",
@@ -67,7 +62,11 @@ export const PLATFORM_SEARCH_SCOPE_OPTIONS = [
 		key: "everywhere",
 		legacyKey: "all",
 		name: "Everywhere",
-		attributesToSearchOn: ["*"],
+		attributesToSearchOn: [
+			"metadataSearch",
+			"tags",
+			"fullTextPDFs.fullTextPDF.text",
+		],
 	},
 ] as const;
 

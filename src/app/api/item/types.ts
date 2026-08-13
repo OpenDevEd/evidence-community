@@ -22,7 +22,7 @@ export type Item = InferSelectModel<typeof item> & {
   fullTextPDFs?: Array<{ key: string; fullTextPDF: Array<{ text: string, page: number }> }>;
   institution?: string[];
   fullNames?: string[];
-  dateTimestamp?: string;
+  dateSortKey?: number;
   datePublished?: string;
   publicationIdentifiers?: PublicationIdentifierSummary;
 };

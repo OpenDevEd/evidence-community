@@ -89,3 +89,14 @@ export function parseBibliographicDate(value: string): BibliographicDateResult {
 	if (/^[12]\d{3}-\d/u.test(raw)) return { kind: "invalid", raw };
 	return { kind: "literal", raw };
 }
+
+export function bibliographicDateSearchFields(value: string | null) {
+	if (!value) return {};
+	const parsed = parseBibliographicDate(value);
+	if (parsed.kind !== "parsed") return {};
+	return {
+		...(parsed.isoDate ? { datePublished: parsed.isoDate } : {}),
+		dateSortKey: parsed.sortKey,
+		year: String(parsed.year),
+	};
+}

@@ -623,7 +623,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 		"tags",
 		"extra",
 		"callNumber",
-		"dateTimestamp",
+		"dateSortKey",
 		"DOI",
 		"publicationIdentifiers",
 	];

@@ -47,6 +47,7 @@ import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { CredentialsInput } from "@/lib/auth-credentials";
 import { authorizeForConfig } from "@/lib/auth-service";
 import { getAIRateLimitStatus } from "@/lib/ai-rate-limit";
+import { meilisearchEquals, meilisearchIn } from "@/lib/meilisearch-filter";
 
 export async function getRateLimits() {
 	const headersList = await headers();
@@ -261,8 +262,8 @@ export async function getItems(
 			facets,
 		},
 		[
-			...collections.map(
-				(collection: string) => `collectionsAncestry = "${collection}"`
+			...collections.map((collection: string) =>
+				meilisearchEquals("collectionsAncestry", collection),
 			),
 			...(userFilters?.filter ? userFilters.filter : []),
 		]
@@ -302,27 +303,22 @@ export async function getProfileSearchFilter(
 		}
 
 		return {
-			filter: [
-				`key IN [${collectionKeys.itemKeys
-					.map((key: string) => `"${key}"`)
-					.join(",")}]`,
-			],
+			filter: [meilisearchIn("key", collectionKeys.itemKeys)],
 		};
 	}
 
 	if (likes) {
 		return {
 			filter: [
-				`key IN [${likes
+				meilisearchIn("key", likes
 					.filter(
 						(like: InferSelectModel<typeof usersToLikes>) =>
 							!like.deleted
 					)
 					.map(
 						(like: InferSelectModel<typeof usersToLikes>) =>
-							`"${like.itemKey}"`
-					)
-					.join(",")}]`,
+							like.itemKey,
+					)),
 			],
 		};
 	}
@@ -368,9 +364,7 @@ export async function getLikedPosts(likes: Session["user"]["likes"]) {
 	const libraryConfig = await getLibraryConfig();
 	const { index } = await getMeilisearchForConfig(libraryConfig);
 	const res = await index.getDocuments({
-			filter: `key IN [${Object.keys(likes)
-				.map((key) => `"${key}"`)
-				.join(",")}]`,
+		filter: meilisearchIn("key", Object.keys(likes)),
 		});
 
 	return res.results;
@@ -429,9 +423,11 @@ export async function searchIndex(
 		const finalFilters = [
 			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
 			range ? formatRange(range) : null,
-			...(Array.isArray(institution) ? institution.map((i) => `institution = "${i}"`) : []),
+			...(Array.isArray(institution)
+				? institution.map((value) => meilisearchEquals("institution", value))
+				: []),
 			...countryFilters, // Replace the old country filters with our hierarchical ones
-			author ? `fullNames = "${author}"` : null,
+			author ? meilisearchEquals("fullNames", author) : null,
 			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
 			"deleted != 1",

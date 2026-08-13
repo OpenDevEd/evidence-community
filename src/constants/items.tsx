@@ -10,8 +10,8 @@ export const EXCLUDED_ITEM_TYPES = ["Note", "Attachment", "Annotation"];
 
 export const SORT_OPTIONS = [
 	{ key: "relevance", legacyKey: "relevance", name: "Relevance" },
-	{ key: "desc", legacyKey: "date_desc", name: "Newest", sort: "datePublished:desc" },
-	{ key: "asc", legacyKey: "date_asc", name: "Oldest", sort: "datePublished:asc" },
+	{ key: "desc", legacyKey: "date_desc", name: "Newest", sort: "dateSortKey:desc" },
+	{ key: "asc", legacyKey: "date_asc", name: "Oldest", sort: "dateSortKey:asc" },
 	// { key: "dateAddedDesc", name: "Date Added (Newest)", sort: "dateAdded:desc" },
 	// { key: "dateAddedAsc", name: "Date Added (Oldest)", sort: "dateAdded:asc" },
 	{ key: "authorAZ", legacyKey: "author_asc", name: "Author A-Z", sort: "fullNames:asc" },

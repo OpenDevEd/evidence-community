@@ -7,16 +7,6 @@ import type { LibraryPublicConfig } from "./schema";
 type RuntimeSearch = LibraryPublicConfig["search"];
 type RuntimeFilters = LibraryPublicConfig["filters"];
 
-const PLATFORM_EVERYWHERE_ATTRIBUTES = Array.from(
-	new Set(
-		PLATFORM_SEARCH_SCOPE_OPTIONS.flatMap((option) =>
-			option.attributesToSearchOn.filter(
-				(attribute) => attribute !== "*",
-			),
-		),
-	),
-);
-
 export function getRuntimeSearchScopeOptions(search: RuntimeSearch) {
 	return PLATFORM_SEARCH_SCOPE_OPTIONS.filter(
 		(option) =>
@@ -49,14 +39,7 @@ export function getRuntimeSearchAttributes(
 		PLATFORM_SEARCH_SCOPE_OPTIONS.find(
 			(option) => option.key === scope,
 		) ?? PLATFORM_SEARCH_SCOPE_OPTIONS[0];
-	const configuredAttributes = scopeOption.attributesToSearchOn;
-	const candidateAttributes = (
-		configuredAttributes as readonly string[]
-	).includes("*")
-		? PLATFORM_EVERYWHERE_ATTRIBUTES
-		: configuredAttributes;
-
-	return candidateAttributes.filter((attribute) => {
+	return scopeOption.attributesToSearchOn.filter((attribute) => {
 		if (
 			!search.fullText &&
 			attribute.startsWith("fullTextPDFs.")

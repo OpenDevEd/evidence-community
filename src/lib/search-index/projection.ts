@@ -12,6 +12,7 @@ import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { chunkValues } from "@/lib/chunk-values";
+import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
 
 export type SearchProjectionEvent = {
 	entityKey: string;
@@ -129,27 +130,6 @@ function institutionValues(parent: ItemRow) {
 		: [];
 }
 
-function normalizedDate(value: string | null) {
-	if (!value) return {};
-	const yearMatch = value.match(/\b(1\d{3}|2\d{3})\b/u);
-	const year = yearMatch?.[1];
-	const timestamp = Date.parse(value);
-	const date = Number.isFinite(timestamp)
-		? new Date(timestamp)
-		: year
-			? new Date(`${year}-01-01T00:00:00.000Z`)
-			: null;
-	return {
-		...(date
-			? {
-					datePublished: date.toISOString(),
-					dateTimestamp: date.getTime(),
-				}
-			: {}),
-		...(year ? { year } : {}),
-	};
-}
-
 function fullTextPages(value: string | null) {
 	if (!value?.trim()) return [];
 	const pages: Array<{ page: number; text: string }> = [];
@@ -186,6 +166,40 @@ function cleanRow(row: ItemRow) {
 					value !== null && value !== undefined && value !== "",
 			)
 			.map(([key, value]) => [key, jsonValue(value)]),
+	);
+}
+
+const NON_METADATA_SEARCH_FIELDS = new Set([
+	"PDFCoverPageImage",
+	"citation",
+	"createdAt",
+	"deleted",
+	"deletedAt",
+	"fullTextPDF",
+	"key",
+	"revision",
+	"sourceConnectionKey",
+	"sourceRecordKey",
+	"updatedAt",
+]);
+
+function searchableValues(value: unknown): string[] {
+	if (typeof value === "string") return value.trim() ? [value.trim()] : [];
+	if (typeof value === "number" || typeof value === "boolean") {
+		return [String(value)];
+	}
+	if (Array.isArray(value)) return value.flatMap(searchableValues);
+	if (value && typeof value === "object") {
+		return Object.values(value).flatMap(searchableValues);
+	}
+	return [];
+}
+
+function metadataSearchValues(row: ItemRow) {
+	return uniqueSorted(
+		Object.entries(cleanRow(row)).flatMap(([field, value]) =>
+			NON_METADATA_SEARCH_FIELDS.has(field) ? [] : searchableValues(value),
+		),
 	);
 }
 
@@ -352,7 +366,7 @@ async function buildSearchProjectionPlanForKeys(
 
 			return {
 				...cleanRow(parent),
-				...normalizedDate(parent.date),
+				...bibliographicDateSearchFields(parent.date),
 				attachmentsData: attachments,
 				collections: directCollections,
 				collectionsAncestry: collectionAncestry(
@@ -364,6 +378,7 @@ async function buildSearchProjectionPlanForKeys(
 				fullNames: creatorNames(parent.creators),
 				fullTextPDFs,
 				institution: institutionValues(parent),
+				metadataSearch: metadataSearchValues(parent),
 				key: parent.key,
 				provider,
 				revision: parent.revision,

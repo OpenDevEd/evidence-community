@@ -424,9 +424,7 @@
 				"key": "fields",
 				"name": "All metadata",
 				"attributesToSearchOn": [
-					"title",
-					"abstractNote",
-					"fullNames",
+					"metadataSearch",
 					"tags"
 				]
 			},
@@ -441,7 +439,9 @@
 				"key": "everywhere",
 				"name": "Everywhere",
 				"attributesToSearchOn": [
-					"*"
+					"metadataSearch",
+					"tags",
+					"fullTextPDFs.fullTextPDF.text"
 				]
 			}
 		],

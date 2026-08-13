@@ -897,7 +897,6 @@ export async function ensureSearchIndex(
 				"fullNames",
 				"collections",
 				"collectionsAncestry",
-				"datePublished",
 				"year",
 				"key",
 				"provider",
@@ -906,7 +905,7 @@ export async function ensureSearchIndex(
 			pagination: { maxTotalHits: 1_000_000 },
 			searchableAttributes: ["*"],
 			sortableAttributes: [
-				"datePublished",
+				"dateSortKey",
 				"fullNames",
 				"title",
 				"year",

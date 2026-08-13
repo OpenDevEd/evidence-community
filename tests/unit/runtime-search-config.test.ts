@@ -53,14 +53,18 @@ describe("runtime search configuration", () => {
 
 		expect(
 			getRuntimeSearchAttributes("everywhere", search),
-		).toEqual(["title", "abstractNote", "fullNames"]);
+		).toEqual(["metadataSearch"]);
 		expect(
 			getRuntimeSearchAttributes("everywhere", {
 				...search,
 				fullText: true,
 				tags: true,
 			}),
-		).not.toContain("*");
+		).toEqual([
+			"metadataSearch",
+			"tags",
+			"fullTextPDFs.fullTextPDF.text",
+		]);
 	});
 
 	it("derives facets from enabled runtime filters and capabilities", () => {

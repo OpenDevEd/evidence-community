@@ -25,6 +25,7 @@ import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import { getMeilisearchForConfig } from "./meilisearch";
 import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "./utils";
+import { meilisearchEquals } from "./meilisearch-filter";
 
 export const LIST_ITEM_FIELDS = [
 	"itemType",
@@ -177,12 +178,16 @@ function resolveSearchRequest(
 		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
 		range ? formatRange(range) : null,
 		...(Array.isArray(institution)
-			? institution.map((institutionValue) => `institution = "${institutionValue}"`)
+			? institution.map((institutionValue) =>
+					meilisearchEquals("institution", institutionValue),
+				)
 			: []),
 		...createCountryFilters(country, author_country),
-		author ? `fullNames = "${author}"` : null,
+		author ? meilisearchEquals("fullNames", author) : null,
 		scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
-		...collections.map((collection) => `collectionsAncestry = "${collection}"`),
+		...collections.map((collection) =>
+			meilisearchEquals("collectionsAncestry", collection),
+		),
 		"deleted != 1",
 		hiddenTags.length
 			? `tags NOT IN ${JSON.stringify(hiddenTags)}`
