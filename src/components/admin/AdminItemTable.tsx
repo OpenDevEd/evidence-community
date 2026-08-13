@@ -23,7 +23,6 @@ import {
 	Lock,
 	RotateCcw,
 	Rows3,
-	SearchX,
 	Tag,
 	UserRound,
 	type LucideIcon,
@@ -1627,13 +1626,8 @@ export function AdminItemTable({
 											</Button>
 										</div>
 									) : (
-										<div className="flex flex-col items-center gap-2 text-pretty">
-											<SearchX
-												aria-hidden
-												className="opacity-45"
-												size={20}
-											/>
-											<p>
+									<div className="flex flex-col items-center text-pretty">
+										<p>
 												No records match these filters.
 											</p>
 										</div>

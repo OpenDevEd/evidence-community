@@ -274,16 +274,9 @@ function Section({
 	);
 }
 
-function EmptyValue({
-	icon: Icon,
-	label,
-}: {
-	icon: typeof Plus;
-	label: string;
-}) {
+function EmptyValue({ label }: { label: string }) {
 	return (
-		<div className="flex min-h-9 items-center gap-2 text-xs text-black/35 dark:text-white/35">
-			<Icon aria-hidden size={14} strokeWidth={1.7} />
+		<div className="flex min-h-9 items-center text-xs text-black/35 dark:text-white/35">
 			<span>{label}</span>
 		</div>
 	);
@@ -602,7 +595,7 @@ function CreatorsEditor({
 	return (
 		<div className="space-y-3">
 			{creators.length === 0 ? (
-				<EmptyValue icon={Users} label="No creators" />
+				<EmptyValue label="No creators" />
 			) : null}
 			{creators.map((creator, index) => {
 				const organization = typeof creator.name === "string";
@@ -851,7 +844,7 @@ function TagsEditor({
 	return (
 		<div className="space-y-2">
 			{tags.length === 0 && readOnly ? (
-				<EmptyValue icon={Tag} label="No tags" />
+				<EmptyValue label="No tags" />
 			) : null}
 			<div className="flex flex-wrap gap-1.5">
 				{tags.map((tag) => (
@@ -985,7 +978,7 @@ function CollectionsEditor({
 						<Spinner label="Loading collections" size="sm" />
 					</div>
 				) : !resolveError && entries.length === 0 ? (
-					<EmptyValue icon={Folder} label="No collections" />
+					<EmptyValue label="No collections" />
 				) : null}
 				{entries.map((entry) => {
 					const locked =
@@ -1196,7 +1189,7 @@ function AttachmentList({
 				))}
 			</div>
 			{detail.attachments.length === 0 ? (
-				<EmptyValue icon={Paperclip} label="No attachments" />
+				<EmptyValue label="No attachments" />
 			) : null}
 			{!readOnly ? (
 				<Button

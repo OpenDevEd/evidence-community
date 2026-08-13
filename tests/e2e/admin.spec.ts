@@ -1154,6 +1154,9 @@ test("uses the same collection traversal model for multi-select", async ({
 	await page.goto("/admin");
 	await page.getByRole("button", { name: "Filters", exact: true }).click();
 	const filters = page.getByRole("dialog", { name: "Filter records" });
+	const noFilters = filters.getByText("No filters yet", { exact: true });
+	await expect(noFilters).toBeVisible();
+	await expect(noFilters.locator("..").locator("svg")).toHaveCount(0);
 	await filters.locator('button[aria-label="Add filter"]').click();
 	await page
 		.getByRole("option", { name: "Collections", exact: true })
@@ -2364,6 +2367,20 @@ test("creates an item through a pointer click in the new-item popover", async ({
 		itemType: "book",
 		tags: [],
 	});
+});
+
+test("shows inspector empty values as text without decorative icons", async ({
+	page,
+}) => {
+	await mockPublishedBook(page);
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+
+	for (const label of ["No tags", "No collections", "No attachments"]) {
+		const emptyValue = inspector.getByText(label, { exact: true });
+		await expect(emptyValue).toBeVisible();
+		await expect(emptyValue.locator("..").locator("svg")).toHaveCount(0);
+	}
 });
 
 test("focuses item search in a narrow keyboard-driven window", async ({
@@ -5055,6 +5072,7 @@ test("keeps the empty state visible in a narrow scrolled grid", async ({
 		name: "No records match these filters.",
 	});
 	await expect(emptyState).toBeVisible();
+	await expect(emptyState.locator("svg")).toHaveCount(0);
 	const grid = page.getByRole("grid", { name: "Library records" });
 	await expect(grid).toHaveAttribute("aria-rowcount", "2");
 	await grid.focus();

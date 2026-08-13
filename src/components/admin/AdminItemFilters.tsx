@@ -1,7 +1,7 @@
 "use client";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
-import { ChevronDown, Filter, ListFilter, Plus, Trash2, X } from "lucide-react";
+import { ChevronDown, ListFilter, Plus, Trash2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ZodError } from "zod";
 
@@ -467,8 +467,7 @@ export function AdminItemFilters({
 				>
 					<div className="space-y-2 p-2" data-admin-filter-list>
 						{drafts.length === 0 ? (
-							<div className="flex min-h-24 items-center justify-center gap-2 rounded-lg bg-black/[0.025] text-sm font-medium text-black/45 dark:bg-white/[0.025] dark:text-white/45">
-								<Filter aria-hidden size={15} />
+							<div className="flex min-h-24 items-center justify-center rounded-lg bg-black/[0.025] text-sm font-medium text-black/45 dark:bg-white/[0.025] dark:text-white/45">
 								<span>No filters yet</span>
 							</div>
 						) : null}
