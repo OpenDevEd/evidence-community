@@ -1,0 +1,56 @@
+import { describe, expect, it } from "vitest";
+
+import { selectPublicItemDetails } from "@/lib/public-item-details";
+
+describe("public item details", () => {
+	it("shows only real item-type metadata fields", () => {
+		expect(
+			selectPublicItemDetails(
+				{
+					collections: [],
+					createdAt: "2026-08-13T12:46:34.376Z",
+					itemType: "Report",
+					key: "REPORT01",
+					languageName: "English",
+					metadataSearch: [
+						"2026-08-13T12:46:34.376Z",
+						"Report",
+						"A report",
+					],
+					number: "R-12",
+					title: "A report",
+					type: "Evidence review",
+					updatedAt: "2026-08-13T12:47:19.279Z",
+					url: "https://library.example.org/lib/REPORT01",
+				},
+				"https://library.example.org",
+			),
+		).toEqual([
+			{ label: "reportNumber", value: "R-12" },
+			{ label: "reportType", value: "Evidence review" },
+			{ label: "language", value: "English" },
+		]);
+	});
+
+	it("keeps an external source URL but hides the library's own item URL", () => {
+		const common = {
+			itemType: "Report",
+			key: "REPORT01",
+		};
+		expect(
+			selectPublicItemDetails(
+				{ ...common, url: "https://source.example.org/report" },
+				"https://library.example.org",
+			),
+		).toContainEqual({
+			label: "url",
+			value: "https://source.example.org/report",
+		});
+		expect(
+			selectPublicItemDetails(
+				{ ...common, url: "https://library.example.org/lib/REPORT01" },
+				"https://library.example.org",
+			),
+		).toEqual([]);
+	});
+});

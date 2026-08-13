@@ -75,6 +75,8 @@ import { buildPublicationDisplay } from "@/lib/publication/publication-display-a
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import Image from "next/image";
+import { getCanonicalWebsiteItemUrl } from "@/lib/canonical-item-url";
+import { selectPublicItemDetails } from "@/lib/public-item-details";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -589,59 +591,11 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
 	const { identity } = useLibraryConfig();
-	const excludedFields: (keyof Item)[] = [
-		"title",
-		"creators",
-		"institution",
-		"abstractNote",
-		"citation",
-		"collectionsData",
-		"key",
-		"fullNames",
-		"itemType",
-		"country",
-		"institution",
-		"dateAdded",
-		"dateModified",
-		"deleted",
-		"deletedAt",
-		"sourceConnectionKey",
-		"sourceRecordKey",
-		"sourceExternalScopeKey",
-		"provider",
-		"revision",
-		"relations",
-		"createdAt",
-		"updatedAt",
-		"collectionsAncestry",
-		"date",
-		"year",
-		"apc_list",
-		"apc_paid",
-		"attachmentsData",
-		"fullTextPDFs",
-		"tags",
-		"extra",
-		"callNumber",
-		"dateSortKey",
-		"DOI",
-		"publicationIdentifiers",
-	];
 
 	if (!item && !loading) return null;
-
-	const isCurrentEvidenceLibraryUrl = item
-		? getCanonicalWebsiteUrl(item, identity.baseUrl) !== null
-		: false;
-	const details = Object.entries(item || {})
-		.filter(([key, value]) => value !== null)
-		.filter(
-			([key]) => key !== "url" || !isCurrentEvidenceLibraryUrl,
-		)
-		.map(([key, value]) => ({
-			label: key,
-			value: String(value),
-		}));
+	const details = item
+		? selectPublicItemDetails(item, identity.baseUrl)
+		: [];
 
 	return (
 		<SidebarCard title={t("itemPublicationDetailsTitle")}>
@@ -649,14 +603,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 				? Array.from({ length: 3 }).map((_, index) => (
 						<ItemDetailsRow key={index} detail={undefined} />
 					))
-				: details
-						.filter(
-							(detail) =>
-								!excludedFields.includes(
-									detail.label as keyof Item,
-								),
-						)
-						.map((detail) => (
+				: details.map((detail) => (
 							<ItemDetailsRow
 								key={detail.label}
 								detail={detail}
@@ -912,51 +859,12 @@ type CanonicalWebsiteLink = {
 
 type IdentifierDisplayLink = DoiDisplayLink | CanonicalWebsiteLink;
 
-function parseUrl(value: string | null | undefined) {
-	if (!value) return null;
-
-	try {
-		return new URL(value);
-	} catch {
-		return null;
-	}
-}
-
-function normaliseCanonicalPath(pathname: string) {
-	const parts = pathname.split("/").filter(Boolean);
-	const libIndex = parts.indexOf("lib");
-	if (libIndex === -1) return null;
-
-	const key = parts[libIndex + 1];
-	if (!key) return null;
-	return `/lib/${key}`;
-}
-
-function normaliseCanonicalHost(host: string) {
-	return host.toLowerCase().replace(/^www\./, "");
-}
-
-function getCanonicalWebsiteUrl(item: Item, baseUrl: string) {
-	const itemUrl = parseUrl(item.url);
-	const canonicalBaseUrl = parseUrl(baseUrl);
-	if (!itemUrl || !canonicalBaseUrl) return null;
-	if (
-		normaliseCanonicalHost(itemUrl.host) !==
-		normaliseCanonicalHost(canonicalBaseUrl.host)
-	) {
-		return null;
-	}
-	if (normaliseCanonicalPath(itemUrl.pathname) !== `/lib/${item.key}`) return null;
-
-	return itemUrl;
-}
-
 function buildCanonicalWebsiteLink(
 	item: Item,
 	faviconUrl: string,
 	baseUrl: string,
 ): CanonicalWebsiteLink | null {
-	const itemUrl = getCanonicalWebsiteUrl(item, baseUrl);
+	const itemUrl = getCanonicalWebsiteItemUrl(item, baseUrl);
 	if (!itemUrl) return null;
 
 	return {
