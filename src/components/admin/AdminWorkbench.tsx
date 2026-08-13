@@ -1868,17 +1868,19 @@ export default function AdminWorkbench({
 						method="post"
 					/>
 					<Tooltip content="Log out">
-						<Button
-							aria-label="Log out"
-							className="h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
-							form="admin-logout"
-							isIconOnly
-							size="xs"
-							type="submit"
-							variant="transparent"
-						>
-							<LogOut aria-hidden size={15} />
-						</Button>
+						<span className="inline-flex">
+							<Button
+								aria-label="Log out"
+								className="h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+								form="admin-logout"
+								isIconOnly
+								size="xs"
+								type="submit"
+								variant="transparent"
+							>
+								<LogOut aria-hidden size={15} />
+							</Button>
+						</span>
 					</Tooltip>
 					<Popover
 						disableAnimation
