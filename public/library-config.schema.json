@@ -1745,6 +1745,12 @@
 			"default": {},
 			"type": "object",
 			"properties": {
+				"adminPassword": {
+					"type": "string",
+					"minLength": 12,
+					"maxLength": 512,
+					"writeOnly": true
+				},
 				"google": {
 					"default": {},
 					"type": "object",

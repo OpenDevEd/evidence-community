@@ -111,14 +111,23 @@ describe("library configuration fixtures", () => {
 });
 
 describe("reusable field schemas", () => {
-	it("accepts an HTTP origin for a private library", () => {
+	it("rejects an HTTP public origin", () => {
 		const input = cloneLibraryConfig(minimalLibraryConfig);
 		input.identity.baseUrl =
 			"http://openscholar-el-dev.tail40de7d.ts.net";
 
-		expect(libraryConfigSchema.parse(input).identity.baseUrl).toBe(
-			"http://openscholar-el-dev.tail40de7d.ts.net",
-		);
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+
+	it("accepts a private admin password but rejects a short one", () => {
+		const input = cloneLibraryConfig(maximalLibraryConfig);
+		input.authentication.adminPassword = "correct horse battery staple";
+		expect(
+			libraryConfigSchema.parse(input).authentication.adminPassword,
+		).toBe("correct horse battery staple");
+
+		input.authentication.adminPassword = "short";
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
 	});
 
 	it.each([

@@ -28,7 +28,6 @@ import {
 	postgresUrlSchema,
 	publicHttpsOriginSchema,
 	publicHttpsUrlSchema,
-	publicWebOriginSchema,
 	revisionSchema,
 	rawStringSchema,
 	secretSchema,
@@ -179,7 +178,7 @@ const identitySchema = z
 	.object({
 		name: singleLineStringSchema(100),
 		shortName: singleLineStringSchema(40).optional(),
-		baseUrl: publicWebOriginSchema,
+		baseUrl: publicHttpsOriginSchema,
 		fundingPartners: z
 			.array(fundingPartnerSchema)
 			.max(20)
@@ -1239,6 +1238,7 @@ const analyticsSchema = z
 
 const authenticationSchema = z
 	.object({
+		adminPassword: secretSchema(12, 512).optional(),
 		google: z
 			.object({
 				enabled: z.boolean().default(false),
@@ -1724,7 +1724,6 @@ export {
 	modelIdSchema,
 	publicHttpsOriginSchema,
 	publicHttpsUrlSchema,
-	publicWebOriginSchema,
 	revisionSchema,
 	secretSchema,
 	serviceUrlSchema,

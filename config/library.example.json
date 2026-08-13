@@ -290,6 +290,7 @@
 		"utmDurationSeconds": 2592000
 	},
 	"authentication": {
+		"adminPassword": "correct horse battery staple",
 		"google": {
 			"enabled": true,
 			"clientId": "google-client-id",

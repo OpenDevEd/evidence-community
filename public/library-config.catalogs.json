@@ -355,6 +355,7 @@
 		],
 		"writeOnlyPaths": [
 			"ai.providers[].apiKey",
+			"authentication.adminPassword",
 			"authentication.google.clientId",
 			"authentication.google.clientSecret",
 			"authentication.secret",

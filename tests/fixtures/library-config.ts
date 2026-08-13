@@ -343,6 +343,7 @@ export const maximalLibraryConfig = {
 		utmDurationSeconds: 2_592_000,
 	},
 	authentication: {
+		adminPassword: "correct horse battery staple",
 		google: {
 			enabled: true,
 			clientId: "google-client-id",
