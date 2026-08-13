@@ -70,6 +70,12 @@ class MemoryFileStorage implements EvidenceFileStorage {
 		return data.slice();
 	}
 
+	async downloadPublic(path: string) {
+		const bytes = this.publicFiles.get(path);
+		if (!bytes) throw new Error(`Missing public object ${path}`);
+		return bytes.slice();
+	}
+
 	async uploadPrivate(path: string, data: Uint8Array, _contentType: string) {
 		this.privateFiles.set(path, data.slice());
 		if (this.privateUploadHook) {

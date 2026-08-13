@@ -12,6 +12,7 @@ export type SignedFileUpload = {
 export interface EvidenceFileStorage {
 	createSignedUpload(path: string): Promise<SignedFileUpload>;
 	downloadPrivate(path: string): Promise<Uint8Array>;
+	downloadPublic(path: string): Promise<Uint8Array>;
 	uploadPrivate(
 		path: string,
 		data: Uint8Array,
@@ -70,6 +71,19 @@ export function createSupabaseFileStorage(
 			if (error) {
 				throw new EvidenceFileStorageError(
 					"private download",
+					error.message,
+				);
+			}
+			return new Uint8Array(await data.arrayBuffer());
+		},
+
+		async downloadPublic(path) {
+			const { data, error } = await client.storage
+				.from(configuration.publicBucket)
+				.download(path);
+			if (error) {
+				throw new EvidenceFileStorageError(
+					"public download",
 					error.message,
 				);
 			}

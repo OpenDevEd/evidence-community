@@ -39,6 +39,12 @@ class MemoryStorage implements EvidenceFileStorage {
 		throw new Error("not used");
 	}
 
+	async downloadPublic(path: string): Promise<Uint8Array> {
+		const bytes = this.publicObjects.get(path);
+		if (!bytes) throw new Error("not found");
+		return bytes;
+	}
+
 	async uploadPrivate(): Promise<void> {
 		throw new Error("not used");
 	}
