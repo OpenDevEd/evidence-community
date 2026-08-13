@@ -5481,6 +5481,83 @@ test("tracks direct publish, unpublish, and restore mutations", async ({
 	await indexing.expectTracked(restoreReceipt);
 });
 
+test("shows publish success only after Meilisearch finishes", async ({
+	page,
+}) => {
+	const book = await mockPublishedBook(page);
+	const receipt = indexingReceipt(publishedItemKey, "item", 2);
+	let receiptState: "indexed" | "queued" = "queued";
+	await page.route("**/api/admin/search-index", async (route) => {
+		await route.fulfill({
+			json: {
+				queue: {
+					hasFailed: false,
+					hasPending: receiptState === "queued",
+					nextAttemptAt:
+						receiptState === "queued" ? timestamp : null,
+				},
+				worker: {
+					active: true,
+					batchProgress: null,
+					batchUid: null,
+					currentEventCount: receiptState === "queued" ? 1 : 0,
+					heartbeatAt: timestamp,
+					lastCompletedAt:
+						receiptState === "indexed" ? timestamp : null,
+					lastError: null,
+					stage: receiptState === "queued" ? "waiting" : "idle",
+					startedAt: timestamp,
+					stoppedAt: null,
+					taskUid: null,
+					workerId: "search-indexer",
+				},
+			},
+		});
+	});
+	await page.route("**/api/admin/search-index/receipts", async (route) => {
+		await route.fulfill({
+			json: {
+				receipts: [
+					{
+						...receipt,
+						attempts: 0,
+						createdAt: timestamp,
+						error: null,
+						nextAttemptAt: timestamp,
+						processedAt:
+							receiptState === "indexed" ? timestamp : null,
+						state: receiptState,
+					},
+				],
+			},
+		});
+	});
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/publish`,
+		async (route) => {
+			book.setEditing(false);
+			await route.fulfill({
+				json: { indexingReceipts: [receipt], item: {} },
+			});
+		},
+	);
+
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector
+		.getByRole("button", { name: "Publish", exact: true })
+		.click();
+
+	await expect(
+		page.getByText("Record published", { exact: true }),
+	).toHaveCount(0);
+	receiptState = "indexed";
+	await expect(
+		page.getByText("Record published", { exact: true }),
+	).toBeVisible({ timeout: 4_000 });
+});
+
 test("tracks PDF publish and unpublish mutations", async ({ page }) => {
 	await mockBookWithAttachment(page);
 	const indexing = await mockCompletedIndexing(page);

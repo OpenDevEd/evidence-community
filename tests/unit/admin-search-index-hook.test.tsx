@@ -140,6 +140,75 @@ describe("useAdminSearchIndex", () => {
 		expect(current.view.kind).toBe("indexed");
 	});
 
+	it("resolves an action only after every tracked receipt is indexed", async () => {
+		api.receipts.mockImplementation(async (receipts) => ({
+			receipts: receipts.map(
+				(entry: { entityKey: string; revision: number }) =>
+					receiptStatus(
+						entry.entityKey,
+						entry.entityKey === "23456789" ? "indexed" : "queued",
+						entry.revision,
+					),
+			),
+		}));
+		await renderHarness();
+
+		let resolved = false;
+		let completion!: Promise<void>;
+		await act(async () => {
+			completion = current.trackAndWait([
+				{ entityKey: "23456789", entityType: "item", revision: 7 },
+				{ entityKey: "ABCDEFGH", entityType: "item", revision: 4 },
+			]);
+			completion.then(() => {
+				resolved = true;
+			});
+			await flushAsync();
+		});
+		expect(resolved).toBe(false);
+
+		api.receipts.mockImplementation(async (receipts) => ({
+			receipts: receipts.map(
+				(entry: { entityKey: string; revision: number }) =>
+					receiptStatus(entry.entityKey, "indexed", entry.revision),
+			),
+		}));
+		await act(async () => {
+			await current.refresh();
+			await completion;
+		});
+
+		expect(resolved).toBe(true);
+		expect(current.receipts).toEqual([]);
+	});
+
+	it("rejects an action when public search fails", async () => {
+		api.receipts.mockImplementation(async (receipts) => ({
+			receipts: receipts.map(
+				(entry: { entityKey: string; revision: number }) =>
+					receiptStatus(entry.entityKey, "failed", entry.revision),
+			),
+		}));
+		await renderHarness();
+
+		let completion!: Promise<void>;
+		let rejection!: Promise<void | Error>;
+		await act(async () => {
+			completion = current.trackAndWait([
+				{ entityKey: "23456789", entityType: "item", revision: 7 },
+			]);
+			rejection = completion.catch((error: Error) => error);
+			await flushAsync();
+		});
+
+		const error = await rejection;
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).message).toContain(
+			"The record was saved, but public search did not finish",
+		);
+		expect(current.view.kind).toBe("failed");
+	});
+
 	it("chunks more than 100 tracked receipts without dropping any", async () => {
 		api.receipts.mockImplementation(async (receipts) => ({
 			receipts: receipts.map((entry: { entityKey: string; revision: number }) =>

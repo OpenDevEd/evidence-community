@@ -281,12 +281,6 @@ function fileErrorMessage(error: unknown) {
 	return errorMessage(error);
 }
 
-function indexingToastDescription(result: AdminSearchIndexMutationResult) {
-	return result.indexingReceipts.length > 0
-		? "Search indexing has started."
-		: "Search is already up to date.";
-}
-
 function failureDescription(failures: readonly string[]) {
 	return [
 		...failures.slice(0, 2),
@@ -1034,10 +1028,10 @@ export default function AdminWorkbench({
 		);
 	}, []);
 
-	const trackIndexing = useCallback(
+	const waitForIndexing = useCallback(
 		(result: AdminSearchIndexMutationResult) =>
-			searchIndex.track(result.indexingReceipts),
-		[searchIndex.track],
+			searchIndex.trackAndWait(result.indexingReceipts),
+		[searchIndex.trackAndWait],
 	);
 
 	const publishCurrent = () => {
@@ -1047,12 +1041,10 @@ export default function AdminWorkbench({
 			async () => {
 				await flushDraft(recordKey, draftPayload);
 				const result = await publishAdminItem(recordKey);
-				trackIndexing(result);
+				await waitForIndexing(result);
 				clearRecordErrors([recordKey]);
 				setValidationErrors({});
-				toast.success("Record published", {
-					description: indexingToastDescription(result),
-				});
+				toast.success("Record published");
 				await Promise.all([loadDetail(recordKey), loadItems()]);
 			},
 			(error) => captureInspectorValidation(recordKey, error),
@@ -1073,12 +1065,10 @@ export default function AdminWorkbench({
 			async () => {
 				await openAdminDraft(recordKey);
 				const result = await publishAdminItem(recordKey);
-				trackIndexing(result);
+				await waitForIndexing(result);
 				clearRecordErrors([recordKey]);
 				setValidationErrors({});
-				toast.success("Record restored", {
-					description: indexingToastDescription(result),
-				});
+				toast.success("Record restored");
 				await Promise.all([loadDetail(recordKey), loadItems()]);
 			},
 			(error) => captureInspectorValidation(recordKey, error),
@@ -1133,11 +1123,9 @@ export default function AdminWorkbench({
 			danger: true,
 			action: async () => {
 				const result = await unpublishAdminItem(detail.key);
-				trackIndexing(result);
+				await waitForIndexing(result);
 				await Promise.all([loadDetail(detail.key), loadItems()]);
-				toast.success("Record unpublished", {
-					description: indexingToastDescription(result),
-				});
+				toast.success("Record unpublished");
 			},
 		});
 	};
@@ -1193,12 +1181,10 @@ export default function AdminWorkbench({
 			async () => {
 				setFileErrors((current) => withoutRecordError(current, key));
 				const result = await publishAdminPdf(key, uploadRevision);
-				trackIndexing(result);
+				await waitForIndexing(result);
 				if (detail) await loadDetail(detail.key);
 				await loadItems();
-				toast.success("PDF published", {
-					description: indexingToastDescription(result),
-				});
+				toast.success("PDF published");
 			},
 			(error) =>
 				setFileErrors((current) => ({
@@ -1235,13 +1221,11 @@ export default function AdminWorkbench({
 				"The attachment metadata will stay published. The PDF can be staged again later.",
 			action: async () => {
 				const result = await unpublishAdminPdf(key);
-				trackIndexing(result);
+				await waitForIndexing(result);
 				setFileErrors((current) => withoutRecordError(current, key));
 				if (detail) await loadDetail(detail.key);
 				await loadItems();
-				toast.success("PDF unpublished", {
-					description: indexingToastDescription(result),
-				});
+				toast.success("PDF unpublished");
 			},
 			onError: (error) =>
 				setFileErrors((current) => ({
@@ -1322,7 +1306,7 @@ export default function AdminWorkbench({
 							name: collectionName,
 						},
 					);
-					trackIndexing(result);
+					await waitForIndexing(result);
 					focusKey = result.collection.key;
 					toast.success("Collection renamed");
 				} else {
@@ -1331,7 +1315,7 @@ export default function AdminWorkbench({
 						parentCollection: collectionParent,
 						sourceConnectionKey: collectionSourceConnectionKey,
 					});
-					trackIndexing(result);
+					await waitForIndexing(result);
 					focusKey = result.collection.key;
 					if (collectionParentEntry) {
 						expandAdminCollections([
@@ -1377,7 +1361,7 @@ export default function AdminWorkbench({
 								position: "root",
 							},
 				);
-				trackIndexing(result);
+				await waitForIndexing(result);
 				invalidateAdminCollectionCatalogue();
 				focusAdminCollection({ key: moveDialog.collection.key });
 				setMoveDialog(null);
@@ -1410,7 +1394,7 @@ export default function AdminWorkbench({
 								targetCollection: destination.targetCollection,
 							},
 				);
-				trackIndexing(result);
+				await waitForIndexing(result);
 				invalidateAdminCollectionCatalogue();
 				const target =
 					destination.position === "root"
@@ -1461,7 +1445,7 @@ export default function AdminWorkbench({
 					collection.key,
 					collection.revision,
 				);
-				trackIndexing(result);
+				await waitForIndexing(result);
 				const removedKeys = new Set(
 					result.collections.map(({ key }) => key),
 				);
@@ -1496,7 +1480,7 @@ export default function AdminWorkbench({
 					collection.key,
 					collection.revision,
 				);
-				trackIndexing(result);
+				await waitForIndexing(result);
 				invalidateAdminCollectionCatalogue();
 				await refreshCurrent();
 				toast.success("Collection restored");
@@ -1574,7 +1558,7 @@ export default function AdminWorkbench({
 				? (await mutateAdminItems(request)).results
 				: [];
 		const results = [...localResults, ...remoteResults];
-		searchIndex.track(
+		const indexingCompletion = searchIndex.trackAndWait(
 			remoteResults.flatMap(({ indexingReceipts }) => indexingReceipts),
 		);
 		const affectedKeys = new Set(results.map(({ key }) => key));
@@ -1615,6 +1599,7 @@ export default function AdminWorkbench({
 			setValidationRevision((current) => current + 1);
 			setMobilePane("inspector");
 		}
+		await indexingCompletion;
 		const summary = batchResultSummary(results, feedback.changedLabels);
 		if (summary.failed.length) {
 			toast.error(summary.message, {

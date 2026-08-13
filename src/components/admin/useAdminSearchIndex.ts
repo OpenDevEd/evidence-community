@@ -39,6 +39,55 @@ function isAbortError(error: unknown) {
 const ADMIN_SEARCH_INDEX_REVISION_HISTORY_LIMIT = 500;
 const ADMIN_SEARCH_INDEX_STATUS_CONCURRENCY = 4;
 
+type ReceiptWaiter = {
+	pending: Set<string>;
+	reject: (error: Error) => void;
+	resolve: () => void;
+};
+
+function receiptCompletionError(receipt: AdminSearchIndexReceiptStatus) {
+	const detail = receipt.error ? ` ${receipt.error}` : "";
+	return new Error(
+		`The record was saved, but public search did not finish.${detail}`,
+	);
+}
+
+function settleReceiptWaiters(
+	waiters: Set<ReceiptWaiter>,
+	statuses: readonly AdminSearchIndexReceiptStatus[],
+) {
+	const byIdentity = new Map(
+		statuses.map((status) => [
+			adminSearchIndexReceiptIdentity(status),
+			status,
+		]),
+	);
+	for (const waiter of waiters) {
+		let failure: AdminSearchIndexReceiptStatus | null = null;
+		for (const identity of waiter.pending) {
+			const status = byIdentity.get(identity);
+			if (!status) continue;
+			if (status.state === "failed" || status.state === "unknown") {
+				failure = status;
+				break;
+			}
+			if (status.state === "indexed") waiter.pending.delete(identity);
+		}
+		if (failure) {
+			waiters.delete(waiter);
+			waiter.reject(receiptCompletionError(failure));
+		} else if (waiter.pending.size === 0) {
+			waiters.delete(waiter);
+			waiter.resolve();
+		}
+	}
+}
+
+function rejectReceiptWaiters(waiters: Set<ReceiptWaiter>, error: Error) {
+	for (const waiter of waiters) waiter.reject(error);
+	waiters.clear();
+}
+
 function rememberLatestRevision(
 	history: Map<string, number>,
 	identity: string,
@@ -70,6 +119,7 @@ export function useAdminSearchIndex() {
 	const [retrying, setRetrying] = useState(false);
 	const receiptsRef = useRef(receipts);
 	const latestRevisionByEntityRef = useRef(new Map<string, number>());
+	const receiptWaitersRef = useRef(new Set<ReceiptWaiter>());
 	const requestRef = useRef<AbortController | null>(null);
 	const retryingRef = useRef(false);
 	receiptsRef.current = receipts;
@@ -115,6 +165,7 @@ export function useAdminSearchIndex() {
 			);
 			const hasUnknown = merged.some(({ state }) => state === "unknown");
 			const remaining = merged.filter(({ state }) => state !== "indexed");
+			settleReceiptWaiters(receiptWaitersRef.current, merged);
 			if (merged.length > 0 && remaining.length === 0 && !hasUnknown) {
 				setCompleted(true);
 			}
@@ -123,7 +174,14 @@ export function useAdminSearchIndex() {
 			setReceipts(remaining);
 			setError(null);
 		} catch (caught) {
-			if (!isAbortError(caught)) setError(errorMessage(caught));
+			if (!isAbortError(caught)) {
+				const message = errorMessage(caught);
+				setError(message);
+				rejectReceiptWaiters(
+					receiptWaitersRef.current,
+					new Error(message),
+				);
+			}
 		} finally {
 			if (requestRef.current === controller) {
 				requestRef.current = null;
@@ -149,19 +207,21 @@ export function useAdminSearchIndex() {
 		return () => window.clearTimeout(timer);
 	}, [error, fastPolling, overview, receiptUnavailable, receipts, refresh]);
 
-	const track = useCallback(
+	const queueReceipts = useCallback(
 		(incoming: readonly AdminSearchIndexReceipt[]) => {
-			if (incoming.length === 0) return;
+			if (incoming.length === 0) return [];
 			const latestRevisionByEntity = latestRevisionByEntityRef.current;
 			const accepted = incoming.filter((receipt) => {
 				const identity = adminSearchIndexEntityIdentity(receipt);
+				const latest = latestRevisionByEntity.get(identity) ?? 0;
+				if (receipt.revision === latest) return true;
 				return rememberLatestRevision(
 					latestRevisionByEntity,
 					identity,
 					receipt.revision,
 				);
 			});
-			if (accepted.length === 0) return;
+			if (accepted.length === 0) return [];
 			const next = mergeAdminSearchIndexReceipts(
 				receiptsRef.current,
 				accepted,
@@ -170,9 +230,42 @@ export function useAdminSearchIndex() {
 			setCompleted(false);
 			setReceiptUnavailable(false);
 			setReceipts(next);
-			void refresh();
+			return accepted;
 		},
-		[refresh],
+		[],
+	);
+
+	const track = useCallback(
+		(incoming: readonly AdminSearchIndexReceipt[]) => {
+			if (queueReceipts(incoming).length > 0) void refresh();
+		},
+		[queueReceipts, refresh],
+	);
+
+	const trackAndWait = useCallback(
+		(incoming: readonly AdminSearchIndexReceipt[]) => {
+			if (incoming.length === 0) return Promise.resolve();
+			const accepted = queueReceipts(incoming);
+			if (accepted.length !== incoming.length) {
+				return Promise.reject(
+					new Error(
+						"A newer public search update replaced this one. Refresh and try again.",
+					),
+				);
+			}
+			const completion = new Promise<void>((resolve, reject) => {
+				receiptWaitersRef.current.add({
+					pending: new Set(
+						accepted.map(adminSearchIndexReceiptIdentity),
+					),
+					reject,
+					resolve,
+				});
+			});
+			void refresh();
+			return completion;
+		},
+		[queueReceipts, refresh],
 	);
 
 	const retry = useCallback(async () => {
@@ -260,6 +353,7 @@ export function useAdminSearchIndex() {
 		refresh,
 		retry,
 		track,
+		trackAndWait,
 		view,
 	};
 }
