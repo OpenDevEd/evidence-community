@@ -142,6 +142,18 @@ export function adminCanonicalPayloadToItemFields(
 	return output;
 }
 
+export function adminCanonicalDraftToItemFields<
+	T extends { payload: Record<string, unknown> },
+>(draft: T): T {
+	return {
+		...draft,
+		payload: adminCanonicalPayloadToItemFields(
+			draft.payload,
+			String(draft.payload.itemType ?? ""),
+		),
+	};
+}
+
 export function isTopLevelAdminItemType(itemType: string) {
 	return !CHILD_ONLY_ITEM_TYPES.has(itemType.toLowerCase());
 }

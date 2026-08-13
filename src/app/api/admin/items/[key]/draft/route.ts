@@ -16,6 +16,7 @@ import {
 	saveItemDraft,
 } from "@/lib/admin/native-item-service";
 import { getNativeFileRuntime } from "@/lib/admin/file-runtime";
+import { adminCanonicalDraftToItemFields } from "@/lib/admin/item-fields";
 
 type RouteContext = {
 	params: Promise<{ key: string }>;
@@ -35,7 +36,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
 		const { key } = await params;
 		const draft = await getItemDraft(await getDatabase(), key);
 		return NextResponse.json(
-			{ draft },
+			{ draft: draft ? adminCanonicalDraftToItemFields(draft) : null },
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {
@@ -55,7 +56,7 @@ export async function POST(request: NextRequest, { params }: RouteContext) {
 		]);
 		const draft = await openItemDraft(db, key, { writebackConfig });
 		return NextResponse.json(
-			{ draft },
+			{ draft: adminCanonicalDraftToItemFields(draft) },
 			{ status: 201, headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {
@@ -83,7 +84,7 @@ export async function PUT(request: NextRequest, { params }: RouteContext) {
 			{ writebackConfig },
 		);
 		return NextResponse.json(
-			{ draft },
+			{ draft: adminCanonicalDraftToItemFields(draft) },
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {

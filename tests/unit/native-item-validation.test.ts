@@ -1,10 +1,15 @@
 import {
 	describeZoteroField,
+	describeZoteroItemTypeFields,
 	getZoteroSchema,
 } from "@opendeved/evidence-library-core/zotero-schema";
 import { describe, expect, it } from "vitest";
 
 import { adminFieldContract } from "@/lib/admin/field-contract";
+import {
+	adminCanonicalDraftToItemFields,
+	adminCanonicalPayloadToItemFields,
+} from "@/lib/admin/item-fields";
 import { validateNativeItemDraft } from "@/lib/admin/native-item-validation";
 
 function validFieldValue(field: { baseField?: string; field: string }) {
@@ -128,6 +133,51 @@ describe("native item draft validation", () => {
 				definition.itemType.toLowerCase(),
 			);
 		}
+	});
+
+	it("round-trips every vendored field through canonical draft storage", () => {
+		let checkedFields = 0;
+		for (const definition of getZoteroSchema().itemTypes) {
+			const payload: Record<string, unknown> = {
+				itemType: definition.itemType,
+			};
+			const expected = new Map<string, string>();
+			for (const field of definition.fields) {
+				const value = validFieldValue(field);
+				payload[field.field] = value;
+				expected.set(field.field, value);
+			}
+			if (definition.itemType === "attachment") {
+				payload.parentItem = "ABCD2345";
+			}
+			if (definition.itemType === "annotation") {
+				Object.assign(payload, {
+					annotationPosition: '{"pageIndex":0,"rects":[]}',
+					annotationType: "highlight",
+					parentItem: "ABCD2345",
+				});
+			}
+
+			const validated = validateNativeItemDraft(payload);
+			const editorPayload = adminCanonicalPayloadToItemFields(
+				validated.payload,
+				validated.item.itemType,
+			);
+			const editorDraft = adminCanonicalDraftToItemFields({
+				itemKey: "ABCD2345",
+				payload: validated.payload,
+			});
+
+			for (const descriptor of describeZoteroItemTypeFields(
+				definition.itemType,
+			)) {
+				const expectedValue = expected.get(descriptor.field);
+				expect(editorPayload[descriptor.field]).toBe(expectedValue);
+				expect(editorDraft.payload[descriptor.field]).toBe(expectedValue);
+				checkedFields += 1;
+			}
+		}
+		expect(checkedFields).toBe(770);
 	});
 
 	it("normalizes typed values and reports the field that is wrong", () => {

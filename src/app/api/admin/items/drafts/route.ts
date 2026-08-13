@@ -8,6 +8,7 @@ import {
 	requireAdminSession,
 } from "@/lib/admin/http";
 import { createNativeItemDraft } from "@/lib/admin/native-item-service";
+import { adminCanonicalDraftToItemFields } from "@/lib/admin/item-fields";
 
 export async function POST(request: NextRequest) {
 	const denied = await requireAdminSession(request);
@@ -19,7 +20,7 @@ export async function POST(request: NextRequest) {
 			await readAdminJson(request),
 		);
 		return NextResponse.json(
-			{ draft },
+			{ draft: adminCanonicalDraftToItemFields(draft) },
 			{ status: 201, headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {

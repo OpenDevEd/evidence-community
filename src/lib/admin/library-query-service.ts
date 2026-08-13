@@ -20,7 +20,10 @@ import {
 } from "@/lib/source-writeback/policy";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
-import { adminCanonicalPayloadToItemFields } from "./item-fields";
+import {
+	adminCanonicalDraftToItemFields,
+	adminCanonicalPayloadToItemFields,
+} from "./item-fields";
 import {
 	applyItemDraftPatch,
 	publishedAdminItemPayload,
@@ -65,15 +68,12 @@ function draftJson(
 	payload: Record<string, unknown>,
 ): AdminItemDraft | null {
 	if (!row) return null;
-	return {
+	return adminCanonicalDraftToItemFields({
 		...row,
 		createdAt: dateString(row.createdAt),
-		payload: adminCanonicalPayloadToItemFields(
-			payload,
-			String(payload.itemType ?? ""),
-		),
+		payload,
 		updatedAt: dateString(row.updatedAt),
-	};
+	});
 }
 
 function itemState(
