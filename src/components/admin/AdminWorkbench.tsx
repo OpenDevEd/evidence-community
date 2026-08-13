@@ -473,6 +473,7 @@ export default function AdminWorkbench({
 	}, [bulkKeys, items, library.sources]);
 
 	const detailRequest = useRef(0);
+	const logoutFormRef = useRef<HTMLFormElement>(null);
 	const moveLocationButtonRef = useRef<HTMLButtonElement>(null);
 	const selectedKeyRef = useRef<string | null>(null);
 	const detailRef = useRef<AdminItemDetail | null>(null);
@@ -1864,23 +1865,21 @@ export default function AdminWorkbench({
 				<div className="col-start-3 row-start-1 flex shrink-0 items-center gap-1">
 					<form
 						action="/api/admin/session/logout"
-						id="admin-logout"
 						method="post"
+						ref={logoutFormRef}
 					/>
 					<Tooltip content="Log out">
-						<span className="inline-flex">
-							<Button
-								aria-label="Log out"
-								className="h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
-								form="admin-logout"
-								isIconOnly
-								size="xs"
-								type="submit"
-								variant="transparent"
-							>
-								<LogOut aria-hidden size={15} />
-							</Button>
-						</span>
+						<Button
+							aria-label="Log out"
+							className="h-10 min-h-10 rounded-xl text-black/45 hover:bg-black/[0.05] hover:text-black/80 dark:text-white/45 dark:hover:bg-white/[0.06] dark:hover:text-white/80"
+							isIconOnly
+							onPress={() => logoutFormRef.current?.requestSubmit()}
+							size="xs"
+							type="button"
+							variant="transparent"
+						>
+							<LogOut aria-hidden size={15} />
+						</Button>
 					</Tooltip>
 					<Popover
 						disableAnimation
