@@ -420,6 +420,36 @@ describe("Zotero source mapping", () => {
 		}
 	});
 
+	it("maps item-specific Zotero fields to canonical source metadata", async () => {
+		const response = zoteroItemResponseSchema.parse({
+			key: "CASE2345",
+			version: 3,
+			data: {
+				caseName: "Example v Example",
+				court: "Supreme Court",
+				dateDecided: "2024-05",
+				itemType: "case",
+				key: "CASE2345",
+				version: 3,
+			},
+		});
+
+		const mapped = await mapZoteroItem(response);
+		expect(mapped).toMatchObject({
+			metadata: {
+				authority: "Supreme Court",
+				date: "2024-05",
+				itemType: "case",
+				title: "Example v Example",
+			},
+		});
+		if (mapped.operation === "upsert") {
+			expect(mapped.metadata).not.toHaveProperty("caseName");
+			expect(mapped.metadata).not.toHaveProperty("court");
+			expect(mapped.metadata).not.toHaveProperty("dateDecided");
+		}
+	});
+
 	it("maps Zotero annotation fields as canonical metadata", async () => {
 		const mapped = await mapZoteroItem(
 			zoteroItemResponseSchema.parse({

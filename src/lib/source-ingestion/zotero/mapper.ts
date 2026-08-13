@@ -5,6 +5,7 @@ import {
 } from "../batch-schema";
 import type { ZoteroCollectionResponse, ZoteroItemResponse } from "./schema";
 import type { ZoteroApiClient } from "./client";
+import { canonicalZoteroFieldName } from "@opendeved/evidence-library-core/zotero-schema";
 
 type ItemUpsert = Extract<
 	SourceIngestionBatch["items"][number],
@@ -194,9 +195,12 @@ export async function mapZoteroItem(
 	}
 
 	const metadata = Object.fromEntries(
-		Object.entries(item.data).filter(
-			([field]) => !technicalItemFields.has(field),
-		),
+		Object.entries(item.data)
+			.filter(([field]) => !technicalItemFields.has(field))
+			.map(([field, value]) => [
+				canonicalZoteroFieldName(item.data.itemType, field) ?? field,
+				value,
+			]),
 	);
 	metadata.tags = (item.data.tags ?? []).map(({ tag }) => tag);
 	let file: ItemUpsert["file"] = null;
