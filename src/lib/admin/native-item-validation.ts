@@ -1,4 +1,5 @@
 import {
+	describeZoteroItemTypeFields,
 	getZoteroItemType,
 	type ZoteroItemTypeDefinition,
 } from "@opendeved/evidence-library-core/zotero-schema";
@@ -11,7 +12,6 @@ import type { item } from "@/db/schema/tables/item";
 import {
 	adminSharedPayloadFieldsForZoteroItemType,
 	adminSpecialFieldsForZoteroItemType,
-	adminPayloadFieldToDatabaseField,
 	canonicalItemTypeToZotero,
 	zoteroStructuralFieldErrors,
 } from "@/lib/admin/item-fields";
@@ -178,9 +178,14 @@ export function validateNativeItemDraft(
 	const payload = payloadResult.data;
 	const normalizedItemType = normalizeItemType(payload.itemType);
 	const definition = zoteroDefinitionFor(normalizedItemType);
+	const fieldDescriptors = describeZoteroItemTypeFields(definition.itemType);
 	const allowedFields = new Set([
 		...adminSharedPayloadFieldsForZoteroItemType(definition),
-		...definition.fields.map(({ field }) => field),
+		...fieldDescriptors.flatMap(({ field, semanticField }) => {
+			const databaseField =
+				semanticField === "language" ? "languageName" : semanticField;
+			return [field, semanticField, databaseField];
+		}),
 		...adminSpecialFieldsForZoteroItemType(definition.itemType),
 	]);
 
@@ -201,8 +206,24 @@ export function validateNativeItemDraft(
 	const normalizedPayload: Record<string, unknown> = {
 		itemType: normalizedItemType,
 	};
-	for (const { field } of definition.fields) {
-		const value = payload[field];
+	for (const { field, semanticField } of fieldDescriptors) {
+		const databaseField =
+			semanticField === "language" ? "languageName" : semanticField;
+		const hasItemField = Object.hasOwn(payload, field);
+		const hasCanonicalField =
+			Object.hasOwn(payload, databaseField) ||
+			Object.hasOwn(payload, semanticField);
+		if (field !== semanticField && hasItemField && hasCanonicalField) {
+			throw new NativeItemValidationError(
+				`Use only one name for ${adminFieldLabel(field)}.`,
+				{
+					[field]: `Use only one name for ${adminFieldLabel(field)}.`,
+				},
+			);
+		}
+		const value = hasItemField
+			? payload[field]
+			: (payload[databaseField] ?? payload[semanticField]);
 		if (value === undefined) continue;
 		if (value !== null && typeof value !== "string") {
 			throw new NativeItemValidationError(
@@ -210,8 +231,8 @@ export function validateNativeItemDraft(
 				{ [field]: `${adminFieldLabel(field)} must be text.` },
 			);
 		}
-		itemValues[adminPayloadFieldToDatabaseField(field)] = value;
-		normalizedPayload[field] = value;
+		itemValues[databaseField] = value;
+		normalizedPayload[databaseField] = value;
 	}
 
 	for (const field of adminSpecialFieldsForZoteroItemType(

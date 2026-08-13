@@ -4,6 +4,39 @@ import { describe, expect, it } from "vitest";
 import { validateNativeItemDraft } from "@/lib/admin/native-item-validation";
 
 describe("native item draft validation", () => {
+	it("stores item-specific Zotero fields under one canonical name", () => {
+		expect(
+			validateNativeItemDraft({
+				itemType: "case",
+				caseName: "Example v Example",
+				dateDecided: "2024-05",
+				court: "Supreme Court",
+			}).item,
+		).toMatchObject({
+			authority: "Supreme Court",
+			date: "2024-05",
+			itemType: "Case",
+			title: "Example v Example",
+		});
+	});
+
+	it("accepts canonical draft fields but rejects two names for one value", () => {
+		expect(
+			validateNativeItemDraft({
+				itemType: "case",
+				title: "Example v Example",
+			}).payload,
+		).toMatchObject({ title: "Example v Example" });
+
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "case",
+				caseName: "One title",
+				title: "Another title",
+			}),
+		).toThrow("Use only one name for Case Name");
+	});
+
 	it("can validate source child metadata before parent references are resolved", () => {
 		expect(
 			validateNativeItemDraft(
@@ -143,7 +176,7 @@ describe("native item draft validation", () => {
 		});
 		expect(validated.payload).toMatchObject({
 			itemType: "Book",
-			language: "en",
+			languageName: "en",
 			tags: ["education", "evidence"],
 			collections: ["ABCD2345"],
 		});

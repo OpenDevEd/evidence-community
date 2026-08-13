@@ -40,10 +40,12 @@ export const item = pgTable(
 		revision: bigint("revision", { mode: "number" }).notNull().default(1),
 		title: varchar(),
 		abstractNote: varchar(),
+		authority: varchar(),
 
 		creators: jsonb().$type<Creator[]>(),
 
 		artworkMedium: varchar(),
+		medium: varchar(),
 		artworkSize: varchar(),
 		date: varchar(),
 		originalDate: varchar(),
