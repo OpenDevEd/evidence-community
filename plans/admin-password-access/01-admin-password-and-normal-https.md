@@ -14,9 +14,10 @@ Replace the temporary Tailscale bypass with a small password login and deploy th
    - create and verify a versioned, expiring HMAC-SHA-256 session token;
    - bind the token to both current secrets so changing either one ends old sessions.
 2. Replace `requireAdminBypass()` with one request-cookie gate in `src/lib/admin/http.ts`. Update every `/api/admin/**` handler to pass its request to that gate.
-3. Add native login and logout forms under `src/app/[locale]/admin/`. Use Server Actions to set and delete the cookie. Keep errors plain and do not expose configuration details.
-4. Add a small bounded login-attempt limiter by extracting the reusable fixed-window logic from `src/lib/ai-rate-limit.ts`. Do not add a second copy.
+3. Add native login and logout forms under `src/app/[locale]/admin/`. Post them to small session Route Handlers that set and delete the cookie. Keep errors plain and do not expose configuration details.
+4. Add a small bounded login-attempt limiter by extracting the reusable fixed-window logic from `src/lib/ai-rate-limit.ts`. Count only failed passwords. Confirm Coolify's proxy overwrites `X-Real-IP`. Do not add a second copy.
 5. Remove every `ADMIN_AUTH_BYPASS` reference. Local browser tests use the private password and signing secret in their test library configuration instead.
+6. Add one shared verification helper that signs in through the session route and adds its returned cookie to admin requests. Use it in `tools/verifySearchIndexerWorker.ts`, `tools/verifyNativeFileHttp.ts`, `tools/verifyLinkedItemDraftLifecycle.ts`, and `tools/verifyAdminItemBatchHttp.ts`.
 
 ### Deployment
 
@@ -43,7 +44,11 @@ npm run schema:check
 npx vitest run tests/unit/admin-access.test.ts tests/unit/admin-auth-routes.test.ts tests/unit/ai-rate-limit.test.ts
 npx playwright test tests/e2e/admin.spec.ts --project=chromium --project=webkit-admin
 npm run build
-docker compose -f docker/compose.library.yaml config
+LIBRARY_CONFIG_JSON="$(cat config/library.example.json)" docker compose -f docker/compose.library.yaml config
+npm run test:native-file-http
+npm run test:linked-item-lifecycle
+npm run test:admin-item-batch-http
+npm run test:search-worker
 rg -n "ADMIN_AUTH_BYPASS|TAILSCALE|Tailscale|tailscale" --glob '!plans/admin-password-access/**' .
 ```
 
@@ -64,6 +69,7 @@ The newest output must contain `✓ Compiled` and no module, type, compile, or u
 5. Upload and publish one small PDF. Confirm the file reaches storage and the admin UI shows it.
 6. Logout, then prove `/api/admin/library` returns `401` without the cookie and succeeds after logging in again.
 7. Coolify shows only `web` and `search-indexer`; both are healthy. No Tailscale container, stored key, domain, or volume remains.
+8. The live login response has `Secure`, `HttpOnly`, `SameSite=Strict`, `Path=/`, and no `Domain`. The proxy supplies a trusted `X-Real-IP` value to the app.
 
 ## Completion rules
 

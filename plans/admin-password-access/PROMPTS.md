@@ -8,9 +8,9 @@ Implement plans/admin-password-access/01-admin-password-and-normal-https.md. Rea
 STANDING RULES
 1. Reuse before building. Search for the existing admin gate, response headers, rate limiter, forms, tests, Compose file, and Coolify workflow first.
 2. Delete the old Tailscale deployment and ADMIN_AUTH_BYPASS completely. Do not preserve compatibility code, fallback reads, or old docs.
-3. Read the installed Next.js authentication, cookies, forms, Server Actions, and Route Handler docs before changing those APIs.
+3. Read the installed Next.js authentication, cookies, forms, and Route Handler docs before changing those APIs.
 4. Use red, green, clean up for pure authentication logic. Add or update behavior tests with every integration change. Never test CSS class strings.
-5. Do not use useEffect for authentication, forms, redirects, or copied state. Use Server Components, native forms, Server Actions, and request-time checks.
+5. Do not use useEffect for authentication, forms, redirects, or copied state. Use Server Components, native forms, Route Handlers, and request-time checks.
 6. Check the running Next.js app after app/component commits with `npx pm2 logs next --lines 5 --nostream`. Require a recent `✓ Compiled` and no recent compile or runtime error.
 7. Use the supported Coolify API and read every saved value back. Never edit Coolify's database directly.
 8. Use Fable-5 at High to review this whole completed step. Reviewers remain read-only.
