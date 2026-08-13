@@ -1,5 +1,6 @@
 import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
+import { ADMIN_ANNOTATION_TYPES } from "@/lib/admin/field-contract";
 
 export const ADMIN_SHARED_PAYLOAD_FIELDS = new Set([
 	"collections",
@@ -25,7 +26,7 @@ export function adminSharedPayloadFieldsForZoteroItemType(definition: {
 	return fields;
 }
 
-const ZOTERO_ANNOTATION_TYPES = new Set(["highlight", "image", "ink", "note"]);
+const ZOTERO_ANNOTATION_TYPES = new Set<string>(ADMIN_ANNOTATION_TYPES);
 
 export type ZoteroStructuralFieldError = {
 	field: string;

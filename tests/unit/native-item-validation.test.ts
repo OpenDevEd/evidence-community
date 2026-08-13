@@ -1,7 +1,35 @@
-import { getZoteroSchema } from "@opendeved/evidence-library-core/zotero-schema";
+import {
+	describeZoteroField,
+	getZoteroSchema,
+} from "@opendeved/evidence-library-core/zotero-schema";
 import { describe, expect, it } from "vitest";
 
+import { adminFieldContract } from "@/lib/admin/field-contract";
 import { validateNativeItemDraft } from "@/lib/admin/native-item-validation";
+
+function validFieldValue(field: { baseField?: string; field: string }) {
+	const descriptor = describeZoteroField(field);
+	switch (adminFieldContract(descriptor).kind) {
+		case "access-date":
+			return "2024-05-20";
+		case "bibliographic-date":
+			return "2024";
+		case "doi":
+			return "10.1000/example";
+		case "isbn":
+			return "978-0-306-40615-7";
+		case "issn":
+			return "2049-3630";
+		case "pmcid":
+			return "PMC12345";
+		case "pmid":
+			return "12345";
+		case "url":
+			return "https://example.com/record";
+		default:
+			return `Example ${field.field}`;
+	}
+}
 
 describe("native item draft validation", () => {
 	it("stores item-specific Zotero fields under one canonical name", () => {
@@ -61,8 +89,8 @@ describe("native item draft validation", () => {
 			const payload: Record<string, unknown> = {
 				itemType: definition.itemType,
 			};
-			for (const { field } of definition.fields) {
-				payload[field] = `${definition.itemType}-${field}`;
+			for (const field of definition.fields) {
+				payload[field.field] = validFieldValue(field);
 			}
 			if (definition.creatorTypes[0]) {
 				payload.creators = [
@@ -102,6 +130,38 @@ describe("native item draft validation", () => {
 		}
 	});
 
+	it("normalizes typed values and reports the field that is wrong", () => {
+		expect(
+			validateNativeItemDraft({
+				DOI: "https://doi.org/10.1000/Example",
+				ISBN: "978-0-306-40615-7",
+				itemType: "book",
+				url: "https://example.com/book",
+			}).item,
+		).toMatchObject({
+			DOI: "10.1000/example",
+			ISBN: "978-0-306-40615-7",
+			url: "https://example.com/book",
+		});
+
+		for (const [field, value, message] of [
+			["date", "2024-02-31", "Enter a real date"],
+			["accessDate", "2024-99-99", "Enter a real access date"],
+			["url", "example.com", "Enter a full HTTP or HTTPS address"],
+			["DOI", "not a doi", "Enter a valid DOI"],
+			["ISBN", "123", "Enter a valid ISBN"],
+		] as const) {
+			try {
+				validateNativeItemDraft({ itemType: "book", [field]: value });
+				expect.unreachable(`Expected ${field} validation to fail`);
+			} catch (error) {
+				expect(error).toMatchObject({
+					fields: { [field]: expect.stringContaining(message) },
+				});
+			}
+		}
+	});
+
 	it("requires valid child metadata before publication", () => {
 		for (const payload of [
 			{ itemType: "Attachment" },
@@ -120,10 +180,27 @@ describe("native item draft validation", () => {
 			validateNativeItemDraft({
 				itemType: "Annotation",
 				parentItem: "ABCD2345",
-				annotationType: "highlight",
+				annotationType: "underline",
 				annotationPosition: '{"pageIndex":0,"rects":[]}',
 			}),
 		).not.toThrow();
+	});
+
+	it("rejects direct collections on child records and malformed relations", () => {
+		expect(() =>
+			validateNativeItemDraft({
+				collections: ["ABCD2345"],
+				itemType: "Note",
+				note: "Child note",
+			}),
+		).toThrow("Child records inherit collections from their parent");
+
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "Book",
+				relations: { "dc:relation": { key: "bad" } },
+			}),
+		).toThrow("Check the record relationships");
 	});
 
 	it("returns field errors for fields and creator roles that do not belong to the item type", () => {

@@ -13,6 +13,7 @@ import {
 	adminSharedPayloadFieldsForZoteroItemType,
 	adminSpecialFieldsForZoteroItemType,
 	canonicalItemTypeToZotero,
+	isTopLevelAdminItemType,
 	zoteroStructuralFieldErrors,
 } from "@/lib/admin/item-fields";
 import {
@@ -22,6 +23,7 @@ import {
 	fieldErrorsFromZod,
 } from "@/lib/admin/errors";
 import type { InferInsertModel } from "drizzle-orm";
+import { normalizeAdminFieldValue } from "@/lib/admin/field-contract";
 
 const itemTypeByZoteroName = new Map(
 	itemType.enumValues.map((value) => [value.toLowerCase(), value]),
@@ -70,7 +72,12 @@ function creatorSchema(allowIncomplete: boolean) {
 }
 
 const payloadObjectSchema = z.record(z.string(), z.unknown());
-const relationsSchema = z.record(z.string(), z.unknown());
+const relationValueSchema = z.union([
+	z.string(),
+	z.number(),
+	z.array(z.string()),
+]);
+const relationsSchema = z.record(z.string(), relationValueSchema);
 
 type ItemWrite = InferInsertModel<typeof item>;
 
@@ -206,7 +213,8 @@ export function validateNativeItemDraft(
 	const normalizedPayload: Record<string, unknown> = {
 		itemType: normalizedItemType,
 	};
-	for (const { field, semanticField } of fieldDescriptors) {
+	for (const descriptor of fieldDescriptors) {
+		const { field, semanticField } = descriptor;
 		const databaseField =
 			semanticField === "language" ? "languageName" : semanticField;
 		const hasItemField = Object.hasOwn(payload, field);
@@ -231,8 +239,20 @@ export function validateNativeItemDraft(
 				{ [field]: `${adminFieldLabel(field)} must be text.` },
 			);
 		}
-		itemValues[databaseField] = value;
-		normalizedPayload[databaseField] = value;
+		if (typeof value === "string") {
+			const normalized = normalizeAdminFieldValue(descriptor, value);
+			if (normalized.error) {
+				throw new NativeItemValidationError(
+					`Check ${adminFieldLabel(field).toLowerCase()} and try again.`,
+					{ [field]: normalized.error },
+				);
+			}
+			itemValues[databaseField] = normalized.value;
+			normalizedPayload[databaseField] = normalized.value;
+		} else {
+			itemValues[databaseField] = value;
+			normalizedPayload[databaseField] = value;
+		}
 	}
 
 	for (const field of adminSpecialFieldsForZoteroItemType(
@@ -246,8 +266,23 @@ export function validateNativeItemDraft(
 				{ [field]: `${adminFieldLabel(field)} must be text.` },
 			);
 		}
-		itemValues[field] = value;
-		normalizedPayload[field] = value;
+		if (typeof value === "string") {
+			const normalized = normalizeAdminFieldValue(
+				{ field, semanticField: field, type: "text" },
+				value,
+			);
+			if (normalized.error) {
+				throw new NativeItemValidationError(
+					`Check ${adminFieldLabel(field).toLowerCase()} and try again.`,
+					{ [field]: normalized.error },
+				);
+			}
+			itemValues[field] = normalized.value;
+			normalizedPayload[field] = normalized.value;
+		} else {
+			itemValues[field] = value;
+			normalizedPayload[field] = value;
+		}
 	}
 
 	if (payload.creators !== undefined) {
@@ -335,6 +370,15 @@ export function validateNativeItemDraft(
 		throw new NativeItemValidationError("Choose valid collections.", {
 			collections: "One or more selected collections are invalid.",
 		});
+	}
+	if (!isTopLevelAdminItemType(normalizedItemType) && collectionKeys.length > 0) {
+		throw new NativeItemValidationError(
+			"Child records inherit collections from their parent.",
+			{
+				collections:
+					"Child records inherit collections from their parent. Remove the direct collection.",
+			},
+		);
 	}
 	const tags = parseUniqueStrings(payload.tags, "tags", 255);
 	normalizedPayload.collections = collectionKeys;
