@@ -14,21 +14,11 @@ import { validateNativeItemDraft } from "@/lib/admin/native-item-validation";
 
 function validFieldValue(field: { baseField?: string; field: string }) {
 	const descriptor = describeZoteroField(field);
-	switch (adminFieldContract(descriptor).kind) {
+		switch (adminFieldContract(descriptor).kind) {
 		case "access-date":
 			return "2024-05-20";
 		case "bibliographic-date":
 			return "2024";
-		case "doi":
-			return "10.1000/example";
-		case "isbn":
-			return "978-0-306-40615-7";
-		case "issn":
-			return "2049-3630";
-		case "pmcid":
-			return "PMC12345";
-		case "pmid":
-			return "12345";
 		case "url":
 			return "https://example.com/record";
 		default:
@@ -188,7 +178,7 @@ describe("native item draft validation", () => {
 		expect(checkedFields).toBe(770);
 	});
 
-	it("normalizes typed values and reports the field that is wrong", () => {
+	it("preserves text identifiers and reports typed fields that are wrong", () => {
 		expect(
 			validateNativeItemDraft({
 				DOI: "https://doi.org/10.1000/Example",
@@ -197,7 +187,7 @@ describe("native item draft validation", () => {
 				url: "https://example.com/book",
 			}).item,
 		).toMatchObject({
-			DOI: "10.1000/example",
+			DOI: "https://doi.org/10.1000/Example",
 			ISBN: "978-0-306-40615-7",
 			url: "https://example.com/book",
 		});
@@ -206,10 +196,8 @@ describe("native item draft validation", () => {
 			["date", "2024-02-31", "Enter an exact date or a four-digit year"],
 			["date", "2024-05", "Enter an exact date or a four-digit year"],
 			["date", "Spring 2024", "Enter an exact date or a four-digit year"],
-			["accessDate", "2024-99-99", "Enter a real access date"],
+			["accessDate", "2024-99-99", "Enter a real access date or timestamp"],
 			["url", "example.com", "Enter a full HTTP or HTTPS address"],
-			["DOI", "not a doi", "Enter a valid DOI"],
-			["ISBN", "123", "Enter a valid ISBN"],
 		] as const) {
 			try {
 				validateNativeItemDraft({ itemType: "book", [field]: value });
@@ -227,6 +215,49 @@ describe("native item draft validation", () => {
 				dateDecided: "2024-05",
 			}),
 		).toThrow("Check date decided");
+	});
+
+	it("enforces Zotero note and annotation limits", () => {
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "Note",
+				note: "n".repeat(500_001),
+			}),
+		).toThrow("Check note");
+
+		const annotation = {
+			annotationPosition: '{"pageIndex":0,"rects":[]}',
+			annotationType: "note",
+			itemType: "Annotation",
+			parentItem: "ABCD2345",
+		};
+		for (const [field, payload, message] of [
+			[
+				"annotationText",
+				{ ...annotation, annotationText: "Not allowed" },
+				"Annotation Text is available only for highlights and underlines.",
+			],
+			[
+				"annotationPageLabel",
+				{ ...annotation, annotationPageLabel: "é".repeat(26) },
+				"Annotation Page Label must be 50 bytes or less.",
+			],
+			[
+				"annotationPosition",
+				{
+					...annotation,
+					annotationPosition: JSON.stringify({ value: "p".repeat(65_536) }),
+				},
+				"Annotation Position must be 65,535 bytes or less.",
+			],
+		] as const) {
+			try {
+				validateNativeItemDraft(payload);
+				expect.unreachable(`Expected ${field} validation to fail`);
+			} catch (error) {
+				expect(error).toMatchObject({ fields: { [field]: message } });
+			}
+		}
 	});
 
 	it("requires valid child metadata before publication", () => {
@@ -268,6 +299,29 @@ describe("native item draft validation", () => {
 				relations: { "dc:relation": { key: "bad" } },
 			}),
 		).toThrow("Check the record relationships");
+
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "Book",
+				relations: { unknown: "value" },
+			}),
+		).toThrow("Check the record relationships");
+
+		expect(
+			validateNativeItemDraft({
+				itemType: "Book",
+				relations: {
+					"dc:relation":
+						"http://zotero.org/users/123/items/ABCD2345",
+					cited_by: 4,
+					referenced_works: ["WXYZ6789"],
+				},
+			}).item.relations,
+		).toEqual({
+			"dc:relation": "http://zotero.org/users/123/items/ABCD2345",
+			cited_by: 4,
+			referenced_works: ["WXYZ6789"],
+		});
 	});
 
 	it("returns field errors for fields and creator roles that do not belong to the item type", () => {

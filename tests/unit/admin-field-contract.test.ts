@@ -26,11 +26,11 @@ describe("admin metadata field contract", () => {
 	it.each([
 		["accessDate", "access-date"],
 		["url", "url"],
-		["DOI", "doi"],
-		["ISBN", "isbn"],
-		["ISSN", "issn"],
-		["PMID", "pmid"],
-		["PMCID", "pmcid"],
+		["DOI", "text"],
+		["ISBN", "text"],
+		["ISSN", "text"],
+		["PMID", "text"],
+		["PMCID", "text"],
 		["abstractNote", "multiline"],
 		["annotationText", "multiline"],
 		["annotationType", "annotation-type"],
@@ -58,13 +58,29 @@ describe("admin metadata field contract", () => {
 		}
 	});
 
-	it("validates dates, links, and identifiers using their real formats", () => {
-		expect(
-			normalizeAdminFieldValue(
-				{ field: "accessDate", semanticField: "accessDate", type: "text" },
-				"2024-05-20",
-			),
-		).toEqual({ value: "2024-05-20" });
+	it("accepts every Zotero access-date format", () => {
+		const descriptor = {
+			field: "accessDate",
+			semanticField: "accessDate",
+			type: "text" as const,
+		};
+		for (const value of [
+			"2024-05-20",
+			"2024-05-20 12:30:45",
+			"2024-05-20T12:30:45.123Z",
+			"2024-05-20T12:30:45+01:00",
+			"CURRENT_TIMESTAMP",
+		]) {
+			expect(normalizeAdminFieldValue(descriptor, value)).toEqual({ value });
+		}
+		for (const value of ["2024-99-99", "2024-05-20T25:00:00Z", "yesterday"]) {
+			expect(normalizeAdminFieldValue(descriptor, value).error).toBe(
+				"Enter a real access date or timestamp.",
+			);
+		}
+	});
+
+	it("validates links but preserves Zotero identifiers as text", () => {
 		expect(
 			normalizeAdminFieldValue(
 				{ field: "url", semanticField: "url", type: "text" },
@@ -76,7 +92,7 @@ describe("admin metadata field contract", () => {
 				{ field: "DOI", semanticField: "DOI", type: "text" },
 				"https://doi.org/10.1000/Example",
 			),
-		).toEqual({ value: "10.1000/example" });
+		).toEqual({ value: "https://doi.org/10.1000/Example" });
 		expect(
 			normalizeAdminFieldValue(
 				{ field: "ISBN", semanticField: "ISBN", type: "text" },
@@ -93,13 +109,22 @@ describe("admin metadata field contract", () => {
 			normalizeAdminFieldValue(
 				{ field: "PMID", semanticField: "PMID", type: "text" },
 				"abc",
-			).error,
-		).toBe("Enter the PMID as digits only.");
+			),
+		).toEqual({ value: "abc" });
 		expect(
 			normalizeAdminFieldValue(
 				{ field: "PMCID", semanticField: "PMCID", type: "text" },
 				"12345",
 			),
-		).toEqual({ value: "PMC12345" });
+		).toEqual({ value: "12345" });
+	});
+
+	it("rejects ordinary Zotero fields larger than 65,535 bytes", () => {
+		expect(
+			normalizeAdminFieldValue(
+				{ field: "title", semanticField: "title", type: "text" },
+				"é".repeat(32_768),
+			).error,
+		).toBe("Keep this field at 65,535 bytes or less.");
 	});
 });

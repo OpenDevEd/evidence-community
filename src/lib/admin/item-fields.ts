@@ -1,6 +1,9 @@
 import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { describeZoteroItemTypeFields } from "@opendeved/evidence-library-core/zotero-schema";
-import { ADMIN_ANNOTATION_TYPES } from "@/lib/admin/field-contract";
+import {
+	ADMIN_ANNOTATION_TYPES,
+	utf8ByteLength,
+} from "@/lib/admin/field-contract";
 
 export const ADMIN_SHARED_PAYLOAD_FIELDS = new Set([
 	"collections",
@@ -52,6 +55,10 @@ export function zoteroStructuralFieldErrors(
 		});
 	}
 	if (normalizedItemType !== "annotation") return errors;
+	const annotationText = payload.annotationText;
+	const annotationPageLabel = payload.annotationPageLabel;
+	const annotationSortIndex = payload.annotationSortIndex;
+	const annotationPosition = payload.annotationPosition;
 
 	if (
 		typeof payload.annotationType !== "string" ||
@@ -62,16 +69,62 @@ export function zoteroStructuralFieldErrors(
 			message: "Choose a valid annotation type.",
 		});
 	}
+	if (
+		typeof annotationText === "string" &&
+		annotationText.length > 0 &&
+		payload.annotationType !== "highlight" &&
+		payload.annotationType !== "underline"
+	) {
+		errors.push({
+			field: "annotationText",
+			message:
+				"Annotation Text is available only for highlights and underlines.",
+		});
+	}
+	if (typeof annotationText === "string" && [...annotationText].length > 7_500) {
+		errors.push({
+			field: "annotationText",
+			message: "Annotation Text must be 7,500 characters or less.",
+		});
+	}
+	if (
+		typeof annotationPageLabel === "string" &&
+		utf8ByteLength(annotationPageLabel) > 50
+	) {
+		errors.push({
+			field: "annotationPageLabel",
+			message: "Annotation Page Label must be 50 bytes or less.",
+		});
+	}
+	if (
+		typeof annotationSortIndex === "string" &&
+		annotationSortIndex.length > 0 &&
+		!/^\d{5}\|\d{6}\|\d{5}$|^\d{5}\|\d{8}$|^\d{7,8}$/u.test(
+			annotationSortIndex,
+		)
+	) {
+		errors.push({
+			field: "annotationSortIndex",
+			message: "Enter a valid annotation sort position.",
+		});
+	}
 
-	if (typeof payload.annotationPosition !== "string") {
+	if (typeof annotationPosition !== "string") {
 		errors.push({
 			field: "annotationPosition",
 			message: "Enter a valid annotation position.",
 		});
 		return errors;
 	}
+	if (utf8ByteLength(annotationPosition) > 65_535) {
+		errors.push({
+			field: "annotationPosition",
+			message: "Annotation Position must be 65,535 bytes or less.",
+		});
+		return errors;
+	}
 	try {
-		const position = JSON.parse(payload.annotationPosition) as unknown;
+		const position = JSON.parse(annotationPosition) as unknown;
 		if (
 			!position ||
 			typeof position !== "object" ||

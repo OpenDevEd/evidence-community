@@ -155,25 +155,44 @@ export function AdminMetadataField({
 			</Select>
 		);
 	}
+	if (kind === "color") {
+		const pickerValue = /^#[\da-f]{6}$/iu.test(props.value)
+			? props.value
+			: "#ffd400";
+		return (
+			<Input
+				aria-label={props.label}
+				classNames={inputClassNames}
+				data-field-kind={kind}
+				endContent={
+					<input
+						aria-label={`${props.label} picker`}
+						disabled={props.disabled}
+						type="color"
+						value={pickerValue}
+						onChange={(event) =>
+							props.onValueChange(event.currentTarget.value)
+						}
+					/>
+				}
+				errorMessage={props.error}
+				id={props.id}
+				isDisabled={props.disabled}
+				isInvalid={Boolean(props.error)}
+				placeholder="#ffd400"
+				type="text"
+				value={props.value}
+				onValueChange={props.onValueChange}
+			/>
+		);
+	}
 
-	const inputType =
-		kind === "access-date"
-			? "date"
-			: kind === "color"
-				? "color"
-				: kind === "url"
-					? "url"
-					: "text";
-	const inputMode =
-		kind === "url"
-			? "url"
-			: kind === "pmid" || kind === "pmcid"
-				? "numeric"
-				: undefined;
+	const inputType = kind === "url" ? "url" : "text";
+	const inputMode = kind === "url" ? "url" : undefined;
 	return (
 		<Input
 			aria-label={props.label}
-			autoCapitalize={kind === "doi" || kind === "url" ? "none" : undefined}
+			autoCapitalize={kind === "url" ? "none" : undefined}
 			classNames={inputClassNames}
 			data-field-kind={kind}
 			errorMessage={props.error}
@@ -181,7 +200,12 @@ export function AdminMetadataField({
 			inputMode={inputMode}
 			isDisabled={props.disabled}
 			isInvalid={Boolean(props.error)}
-			spellCheck={kind === "doi" || kind === "url" ? false : undefined}
+			placeholder={
+				kind === "access-date"
+					? "YYYY-MM-DD, timestamp, or CURRENT_TIMESTAMP"
+					: undefined
+			}
+			spellCheck={kind === "url" ? false : undefined}
 			type={inputType}
 			value={props.value}
 			onValueChange={props.onValueChange}

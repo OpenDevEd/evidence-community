@@ -523,7 +523,13 @@ function MetadataEditor({
 						</FieldLabel>
 						<AdminMetadataField
 							descriptor={descriptor}
-							disabled={readOnly}
+							disabled={
+								readOnly ||
+								(field === "annotationType" &&
+									String(
+										detail.published?.itemType ?? "",
+									).toLowerCase() === "annotation")
+							}
 							error={errors[field]}
 							id={fieldId}
 							label={label}

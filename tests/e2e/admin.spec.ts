@@ -2514,7 +2514,7 @@ test("disables every metadata field until editing starts", async ({ page }) => {
 	await expect(creatorRole).not.toHaveAttribute("data-disabled", "true");
 });
 
-test("uses date, URL, and identifier controls that match the metadata", async ({
+test("uses controls that preserve every supported metadata value", async ({
 	page,
 }) => {
 	const savedDrafts: Record<string, unknown>[] = [];
@@ -2527,10 +2527,33 @@ test("uses date, URL, and identifier controls that match the metadata", async ({
 
 	const url = inspector.getByLabel("URL", { exact: true });
 	const doi = inspector.getByLabel("DOI", { exact: true });
+	const accessDate = inspector.getByLabel("Access Date", { exact: true });
 	await expect(url).toHaveAttribute("type", "url");
-	await expect(doi).toHaveAttribute("data-field-kind", "doi");
+	await expect(doi).toHaveAttribute("type", "text");
+	await expect(doi).toHaveAttribute("data-field-kind", "text");
+	await expect(accessDate).toHaveAttribute("type", "text");
+	await accessDate.fill("2024-05-20T12:30:45+01:00");
+	await expect
+		.poll(() =>
+			savedDrafts.some(
+				(payload) =>
+					payload.accessDate === "2024-05-20T12:30:45+01:00",
+			),
+		)
+		.toBe(true);
 
 	const itemType = inspector.getByRole("combobox", { name: "Item type" });
+	await itemType.fill("Annotation");
+	await page.getByRole("option", { name: "Annotation", exact: true }).click();
+	const annotationColor = inspector.getByLabel("Annotation Color", {
+		exact: true,
+	});
+	await expect(annotationColor).toHaveAttribute("type", "text");
+	await expect(annotationColor).toHaveValue("");
+	await expect(
+		inspector.getByLabel("Annotation Color picker", { exact: true }),
+	).toHaveAttribute("type", "color");
+
 	await itemType.fill("Case");
 	await page.getByRole("option", { name: "Case", exact: true }).click();
 	await expect(

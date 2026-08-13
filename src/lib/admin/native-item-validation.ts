@@ -24,7 +24,10 @@ import {
 	fieldErrorsFromZod,
 } from "@/lib/admin/errors";
 import type { InferInsertModel } from "drizzle-orm";
-import { normalizeAdminFieldValue } from "@/lib/admin/field-contract";
+import {
+	normalizeAdminFieldValue,
+	utf8ByteLength,
+} from "@/lib/admin/field-contract";
 
 const itemTypeByZoteroName = new Map(
 	itemType.enumValues.map((value) => [value.toLowerCase(), value]),
@@ -73,12 +76,37 @@ function creatorSchema(allowIncomplete: boolean) {
 }
 
 const payloadObjectSchema = z.record(z.string(), z.unknown());
-const relationValueSchema = z.union([
-	z.string(),
-	z.number(),
-	z.array(z.string()),
+const stringOrStringsSchema = z.union([z.string(), z.array(z.string())]);
+const zoteroItemUriSchema = z
+	.string()
+	.regex(
+		/^http:\/\/zotero\.org\/(?:users|groups)\/\d+\/(?:publications\/)?items\/[A-Z0-9]{8}$/u,
+		"Use a Zotero item address.",
+	);
+const zoteroItemUriOrUrisSchema = z.union([
+	zoteroItemUriSchema,
+	z.array(zoteroItemUriSchema),
 ]);
-const relationsSchema = z.record(z.string(), relationValueSchema);
+const relationsSchema = z
+	.object({
+		"dc:relation": zoteroItemUriOrUrisSchema.optional(),
+		"dc:replaces": zoteroItemUriOrUrisSchema.optional(),
+		"owl:sameAs": zoteroItemUriOrUrisSchema.optional(),
+		"mendeleyDB:annotationUUID": stringOrStringsSchema.optional(),
+		"mendeleyDB:documentUUID": stringOrStringsSchema.optional(),
+		"mendeleyDB:fileHash": stringOrStringsSchema.optional(),
+		"mendeleyDB:notebookUUID": stringOrStringsSchema.optional(),
+		"mendeleyDB:relatedDocumentUUID": stringOrStringsSchema.optional(),
+		"mendeleyDB:relatedFileHash": stringOrStringsSchema.optional(),
+		"mendeleyDB:relatedRemoteDocumentUUID": stringOrStringsSchema.optional(),
+		"mendeleyDB:remoteDocumentUUID": stringOrStringsSchema.optional(),
+		cited_by: z.number().int().nonnegative().optional(),
+		citedBy: z.array(z.string()).optional(),
+		cites: z.array(z.string()).optional(),
+		referenced_works: z.array(z.string()).optional(),
+		related_works: stringOrStringsSchema.optional(),
+	})
+	.strict();
 
 type ItemWrite = InferInsertModel<typeof item>;
 

@@ -1,19 +1,13 @@
 import type { ZoteroFieldDescriptor } from "@opendeved/evidence-library-core/zotero-schema";
 
 import { parseBibliographicDate } from "@/lib/bibliographic-date";
-import { normalizeDoi } from "@/lib/doi";
 
 export type AdminFieldKind =
 	| "access-date"
 	| "annotation-type"
 	| "bibliographic-date"
 	| "color"
-	| "doi"
-	| "isbn"
-	| "issn"
 	| "multiline"
-	| "pmcid"
-	| "pmid"
 	| "text"
 	| "url";
 
@@ -41,14 +35,6 @@ const MULTILINE_FIELDS = new Set([
 	"references",
 ]);
 
-const IDENTIFIER_KINDS = new Map<string, AdminFieldKind>([
-	["DOI", "doi"],
-	["ISBN", "isbn"],
-	["ISSN", "issn"],
-	["PMCID", "pmcid"],
-	["PMID", "pmid"],
-]);
-
 export function adminFieldContract(descriptor: AdminFieldDescriptor): {
 	kind: AdminFieldKind;
 } {
@@ -59,8 +45,6 @@ export function adminFieldContract(descriptor: AdminFieldDescriptor): {
 		return { kind: "annotation-type" };
 	}
 	if (descriptor.field === "annotationColor") return { kind: "color" };
-	const identifierKind = IDENTIFIER_KINDS.get(descriptor.semanticField);
-	if (identifierKind) return { kind: identifierKind };
 	if (MULTILINE_FIELDS.has(descriptor.field)) return { kind: "multiline" };
 	return { kind: "text" };
 }
@@ -81,51 +65,27 @@ function isCalendarDate(value: string) {
 
 function isAccessDate(value: string) {
 	if (value === "CURRENT_TIMESTAMP") return true;
-	const datePart = value.slice(0, 10);
-	if (!isCalendarDate(datePart)) return false;
-	if (value.length === 10) return true;
-	return /^\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?Z?)$/u.test(
+	const match = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):(\d{2}))?)?$/u.exec(
 		value,
 	);
-}
-
-function validIsbn(value: string) {
-	const compact = value.replace(/[\s-]/gu, "").toUpperCase();
-	if (/^\d{9}[\dX]$/u.test(compact)) {
-		const total = [...compact].reduce(
-			(sum, character, index) =>
-				sum +
-				(character === "X" ? 10 : Number(character)) * (10 - index),
-			0,
-		);
-		return total % 11 === 0;
-	}
-	if (!/^\d{13}$/u.test(compact)) return false;
-	const total = [...compact].reduce(
-		(sum, character, index) =>
-			sum + Number(character) * (index % 2 === 0 ? 1 : 3),
-		0,
+	if (!match || !isCalendarDate(match[1]!)) return false;
+	if (match[2] === undefined) return true;
+	const hour = Number(match[2]);
+	const minute = Number(match[3]);
+	const second = Number(match[4]);
+	if (hour > 23 || minute > 59 || second > 59) return false;
+	if (match[6] === undefined) return true;
+	const offsetHour = Number(match[6]);
+	const offsetMinute = Number(match[7]);
+	return (
+		offsetHour <= 14 &&
+		offsetMinute <= 59 &&
+		(offsetHour < 14 || offsetMinute === 0)
 	);
-	return total % 10 === 0;
 }
 
-function validIssn(value: string) {
-	const compact = value.replace(/[\s-]/gu, "").toUpperCase();
-	if (!/^\d{7}[\dX]$/u.test(compact)) return false;
-	const total = [...compact].reduce(
-		(sum, character, index) =>
-			sum + (character === "X" ? 10 : Number(character)) * (8 - index),
-		0,
-	);
-	return total % 11 === 0;
-}
-
-function everyIdentifier(value: string, validate: (entry: string) => boolean) {
-	return value
-		.split(/[,;\n]+/u)
-		.map((entry) => entry.trim())
-		.filter(Boolean)
-		.every(validate);
+export function utf8ByteLength(value: string) {
+	return new TextEncoder().encode(value).byteLength;
 }
 
 export function normalizeAdminFieldValue(
@@ -135,6 +95,16 @@ export function normalizeAdminFieldValue(
 	const value = input.trim();
 	if (!value) return { value: "" };
 	const { kind } = adminFieldContract(descriptor);
+	if (descriptor.field === "note") {
+		if ([...value].length > 500_000) {
+			return { error: "Keep this note at 500,000 characters or less.", value };
+		}
+	} else if (
+		!descriptor.field.startsWith("annotation") &&
+		utf8ByteLength(value) > 65_535
+	) {
+		return { error: "Keep this field at 65,535 bytes or less.", value };
+	}
 
 	if (kind === "bibliographic-date") {
 		if (parseBibliographicDate(value).kind === "invalid") {
@@ -148,7 +118,7 @@ export function normalizeAdminFieldValue(
 	if (kind === "access-date") {
 		return isAccessDate(value)
 			? { value }
-			: { error: "Enter a real access date.", value };
+			: { error: "Enter a real access date or timestamp.", value };
 	}
 	if (kind === "url") {
 		try {
@@ -158,27 +128,6 @@ export function normalizeAdminFieldValue(
 			}
 		} catch {}
 		return { error: "Enter a full HTTP or HTTPS address.", value };
-	}
-	if (kind === "doi") {
-		const doi = normalizeDoi(value);
-		return doi
-			? { value: doi }
-			: { error: "Enter a valid DOI, such as 10.1000/example.", value };
-	}
-	if (kind === "isbn" && !everyIdentifier(value, validIsbn)) {
-		return { error: "Enter a valid ISBN-10 or ISBN-13.", value };
-	}
-	if (kind === "issn" && !everyIdentifier(value, validIssn)) {
-		return { error: "Enter a valid ISSN.", value };
-	}
-	if (kind === "pmid" && !/^\d+$/u.test(value)) {
-		return { error: "Enter the PMID as digits only.", value };
-	}
-	if (kind === "pmcid") {
-		const normalized = value.toUpperCase().replace(/^PMC\s*/u, "");
-		return /^\d+$/u.test(normalized)
-			? { value: `PMC${normalized}` }
-			: { error: "Enter a PMCID, such as PMC12345.", value };
 	}
 	if (
 		kind === "annotation-type" &&
