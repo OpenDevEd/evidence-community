@@ -116,7 +116,7 @@ export function adminSpecialFieldsForZoteroItemType(itemType: string) {
 	return specialFieldsByZoteroItemType.get(itemType) ?? new Set<string>();
 }
 
-export function adminPayloadFieldToDatabaseField(field: string) {
+export function adminCanonicalFieldToDatabaseField(field: string) {
 	return field === "language" ? "languageName" : field;
 }
 
@@ -133,8 +133,7 @@ export function adminCanonicalPayloadToItemFields(
 	for (const { field, semanticField } of describeZoteroItemTypeFields(
 		zoteroItemType,
 	)) {
-		const internalField =
-			semanticField === "language" ? "languageName" : semanticField;
+		const internalField = adminCanonicalFieldToDatabaseField(semanticField);
 		if (!Object.hasOwn(payload, internalField)) continue;
 		if (field !== internalField) delete output[internalField];
 		output[field] = payload[internalField];

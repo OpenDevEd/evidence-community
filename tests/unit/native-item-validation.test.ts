@@ -68,6 +68,14 @@ describe("native item draft validation", () => {
 				title: "Another title",
 			}),
 		).toThrow("Use only one name for Case Name");
+
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "book",
+				language: "French",
+				languageName: "English",
+			}),
+		).toThrow("Use only one name for Language");
 	});
 
 	it("can validate source child metadata before parent references are resolved", () => {

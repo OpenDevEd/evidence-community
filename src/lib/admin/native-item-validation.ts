@@ -10,6 +10,7 @@ import { creatorType } from "@/db/schema/enums/creatorType";
 import { itemType } from "@/db/schema/enums/itemType";
 import type { item } from "@/db/schema/tables/item";
 import {
+	adminCanonicalFieldToDatabaseField,
 	adminSharedPayloadFieldsForZoteroItemType,
 	adminSpecialFieldsForZoteroItemType,
 	canonicalItemTypeToZotero,
@@ -190,7 +191,7 @@ export function validateNativeItemDraft(
 		...adminSharedPayloadFieldsForZoteroItemType(definition),
 		...fieldDescriptors.flatMap(({ field, semanticField }) => {
 			const databaseField =
-				semanticField === "language" ? "languageName" : semanticField;
+				adminCanonicalFieldToDatabaseField(semanticField);
 			return [field, semanticField, databaseField];
 		}),
 		...adminSpecialFieldsForZoteroItemType(definition.itemType),
@@ -215,13 +216,15 @@ export function validateNativeItemDraft(
 	};
 	for (const descriptor of fieldDescriptors) {
 		const { field, semanticField } = descriptor;
-		const databaseField =
-			semanticField === "language" ? "languageName" : semanticField;
+		const databaseField = adminCanonicalFieldToDatabaseField(semanticField);
 		const hasItemField = Object.hasOwn(payload, field);
-		const hasCanonicalField =
-			Object.hasOwn(payload, databaseField) ||
-			Object.hasOwn(payload, semanticField);
-		if (field !== semanticField && hasItemField && hasCanonicalField) {
+		const alternativeNames = [...new Set([semanticField, databaseField])].filter(
+			(name) => name !== field,
+		);
+		if (
+			hasItemField &&
+			alternativeNames.some((name) => Object.hasOwn(payload, name))
+		) {
 			throw new NativeItemValidationError(
 				`Use only one name for ${adminFieldLabel(field)}.`,
 				{
