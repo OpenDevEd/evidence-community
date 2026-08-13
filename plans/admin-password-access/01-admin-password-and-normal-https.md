@@ -9,21 +9,21 @@ Replace the temporary Tailscale bypass with a small password login and deploy th
 ### Authentication
 
 1. Replace `src/lib/admin/access.ts` with server-only helpers that:
-   - require `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET`;
+   - require `authentication.adminPassword` and the existing `authentication.secret` from the private library configuration;
    - compare the submitted password in constant time;
    - create and verify a versioned, expiring HMAC-SHA-256 session token;
    - bind the token to both current secrets so changing either one ends old sessions.
 2. Replace `requireAdminBypass()` with one request-cookie gate in `src/lib/admin/http.ts`. Update every `/api/admin/**` handler to pass its request to that gate.
 3. Add native login and logout forms under `src/app/[locale]/admin/`. Use Server Actions to set and delete the cookie. Keep errors plain and do not expose configuration details.
 4. Add a small bounded login-attempt limiter by extracting the reusable fixed-window logic from `src/lib/ai-rate-limit.ts`. Do not add a second copy.
-5. Remove every `ADMIN_AUTH_BYPASS` reference. Local browser tests receive test password and signing-secret values instead.
+5. Remove every `ADMIN_AUTH_BYPASS` reference. Local browser tests use the private password and signing secret in their test library configuration instead.
 
 ### Deployment
 
 1. Delete `docker/compose.tailscale-development.yaml`, `ops/tailscale-development/`, its checker, its test, and its package script.
-2. Pass `ADMIN_PASSWORD` and `ADMIN_SESSION_SECRET` only to `web` in `docker/compose.library.yaml`. Fail startup when either runtime value is missing.
+2. Add the private `authentication.adminPassword` field to the library configuration schema. Keep it out of the public configuration beside `authentication.secret`. Require both fields when the admin runs.
 3. Replace the Tailscale section in `docs/evidence-library-operations.md` with the normal HTTPS and password setup. Update `docs/source-ingestion-contract.md` so it no longer describes a bypass.
-4. Push the tested commit. Through the supported Coolify API, point application `rzbo9als0hdnr4gegtx97qos` to `/docker/compose.library.yaml`, attach `docs-openscholar-compose-e2e.opendev.space` to `web:3000`, add both admin runtime values, remove `TAILSCALE_AUTHKEY`, and update `LIBRARY_CONFIG_JSON.identity.baseUrl` plus its revision and timestamp.
+4. Push the tested commit. Through the supported Coolify API, point application `rzbo9als0hdnr4gegtx97qos` to `/docker/compose.library.yaml`, attach `docs-openscholar-compose-e2e.opendev.space` to `web:3000`, remove `TAILSCALE_AUTHKEY`, and update `LIBRARY_CONFIG_JSON` with the admin password, HTTPS base URL, revision, and timestamp.
 5. Read the saved Coolify values and generated Compose model back before deploying.
 
 ## Test-first steps

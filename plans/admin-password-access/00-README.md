@@ -10,12 +10,12 @@ Restore the development Evidence Library on its normal public HTTPS address. Kee
 
 1. Delete the Tailscale deployment, key, sidecar, checks, and old plan. There is no compatibility path.
 2. Use the normal `docker/compose.library.yaml` deployment and the Coolify HTTPS domain `https://docs-openscholar-compose-e2e.opendev.space`.
-3. `ADMIN_PASSWORD` is the one login password. `ADMIN_SESSION_SECRET` signs the login cookie. Both are required runtime values for the web service only.
+3. Add `authentication.adminPassword` to the private library configuration. Reuse the existing private `authentication.secret` to sign the login cookie. The public configuration already removes private authentication values.
 4. A successful native form submission creates a short-lived signed cookie. The cookie is `HttpOnly`, `Secure`, `SameSite=Strict`, and available only on this site.
-5. The cookie stores no password. A changed password or signing secret immediately ends existing sessions.
+5. The cookie stores no password. A changed admin password or authentication secret immediately ends existing sessions.
 6. The admin page shows a password form when signed out. Every admin API returns `401` when the cookie is missing, expired, or changed.
 7. Logout deletes the cookie. No bypass environment variable or old 404 gate remains.
-8. Reuse the existing admin response headers and the repository's bounded client rate-limiter shape. Do not add a database, user table, or authentication package for one password.
+8. Reuse the existing admin response headers, private runtime configuration, authentication secret, and bounded client rate-limiter shape. Do not add a database, user table, authentication package, or second signing secret for one password.
 
 ## Plan
 
