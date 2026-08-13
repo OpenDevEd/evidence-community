@@ -32,7 +32,10 @@ This causes three user-visible failures:
    stay text. They may contain letters, ranges, or punctuation.
 8. Remove all 58 duplicate Zotero alias columns. Add the missing canonical
    `medium` and `authority` columns.
-9. This is a clean breaking change. Wipe and resync development records, then
+9. Remove the unused `apc_list` and `apc_paid` columns. They are not Zotero
+   fields, have no working editor or public display, and must not enter the
+   canonical draft contract.
+10. This is a clean breaking change. Wipe and resync development records, then
    rebuild the search index. Do not add old-field fallbacks or backfills.
 
 ## Existing code to reuse

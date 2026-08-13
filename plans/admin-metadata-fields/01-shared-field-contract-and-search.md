@@ -9,6 +9,7 @@ Meilisearch agree about what every metadata field means.
 
 - Add a schema-owned codec between Zotero fields and canonical fields.
 - Replace the 58 alias database columns with canonical storage.
+- Remove the two unused APC JSON columns from the item record.
 - Add one shared admin field contract.
 - Add controls for bibliographic dates, access dates, URLs, identifiers,
   multiline text, and fixed choices.
@@ -67,8 +68,9 @@ date control.
 7. Add failing search-scope and filter escaping tests. Fix request building.
 8. Add browser tests for the visible controls and field errors. Implement the
    editor dispatcher.
-9. Add the destructive schema migration, remove the 58 alias columns and dead
-   alias catalogue code, then regenerate schema artifacts.
+9. Add the destructive schema migration, remove the 58 alias columns, remove
+   the unused `apc_list` and `apc_paid` columns, and delete dead alias catalogue
+   code, then regenerate schema artifacts.
 10. Wipe and resync development data, rebuild the search index, and run the
     real-service checks.
 
@@ -111,7 +113,10 @@ Expected changes include:
 
 - Every vendored `baseField` round-trips through canonical storage and the
   item-specific editor/Zotero name.
+- Every draft API response uses the item-specific editor names for all 770
+  vendored field appearances.
 - No alias database column or internal compatibility read remains.
+- No unused APC field remains in the item table or public item details.
 - A malformed date cannot create a derived year or sort value.
 - A partial date never becomes a fake exact day.
 - The editor uses the shared control for each typed field.
