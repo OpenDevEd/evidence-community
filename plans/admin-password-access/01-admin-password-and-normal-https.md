@@ -22,9 +22,10 @@ Replace the temporary Tailscale bypass with a small password login and deploy th
 
 1. Delete `docker/compose.tailscale-development.yaml`, `ops/tailscale-development/`, its checker, its test, and its package script.
 2. Add the private `authentication.adminPassword` field to the library configuration schema. Keep it out of the public configuration beside `authentication.secret`. Require both fields when the admin runs.
-3. Replace the Tailscale section in `docs/evidence-library-operations.md` with the normal HTTPS and password setup. Update `docs/source-ingestion-contract.md` so it no longer describes a bypass.
-4. Push the tested commit. Through the supported Coolify API, point application `rzbo9als0hdnr4gegtx97qos` to `/docker/compose.library.yaml`, attach `docs-openscholar-compose-e2e.opendev.space` to `web:3000`, remove `TAILSCALE_AUTHKEY`, and update `LIBRARY_CONFIG_JSON` with the admin password, HTTPS base URL, revision, and timestamp.
-5. Read the saved Coolify values and generated Compose model back before deploying.
+3. Delete the temporary HTTP-origin schema and restore `identity.baseUrl` to the existing HTTPS-only origin schema. Remove the matching HTTP test and restore HTTPS wording in customization docs.
+4. Replace the Tailscale section in `docs/evidence-library-operations.md` with the normal HTTPS and password setup. Update `docs/source-ingestion-contract.md` so it no longer describes a bypass.
+5. Push the tested commit. Through the supported Coolify API, point application `rzbo9als0hdnr4gegtx97qos` to `/docker/compose.library.yaml`, attach `docs-openscholar-compose-e2e.opendev.space` to `web:3000`, remove `TAILSCALE_AUTHKEY`, and update `LIBRARY_CONFIG_JSON` with the admin password, HTTPS base URL, revision, and timestamp.
+6. Read the saved Coolify values and generated Compose model back before deploying. After the normal stack is healthy, delete the old Coolify Tailscale storage and remove the registered Tailscale device.
 
 ## Test-first steps
 
