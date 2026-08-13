@@ -2,6 +2,7 @@ import { outbox } from "@opendeved/evidence-library-core";
 import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
 import type { Database, DatabaseTransaction } from "@/db/database-schema";
+import { lockItemMutation } from "@/db/canonical-mutation-lock";
 import {
 	publicationSyncJob,
 	type PublicationProvider,
@@ -117,6 +118,77 @@ export async function claimPublicationJobs(
 			})
 			.where(inArray(publicationSyncJob.id, ids))
 			.returning();
+	});
+}
+
+/** Claims one job while holding the same item lock used by admin mutations. */
+export async function claimNextPublicationJob(
+	database: Database,
+	input: {
+		provider: PublicationProvider;
+		environment: "test" | "sandbox";
+		workerId: string;
+		leaseSeconds: number;
+		claimedAt: Date;
+	},
+) {
+	return database.transaction(async (transaction) => {
+		while (true) {
+			const candidates = await transaction
+				.select({
+					id: publicationSyncJob.id,
+					itemKey: publicationSyncJob.itemKey,
+				})
+				.from(publicationSyncJob)
+				.where(
+					and(
+						eq(publicationSyncJob.provider, input.provider),
+						eq(publicationSyncJob.environment, input.environment),
+						isNull(publicationSyncJob.processedAt),
+						isNull(publicationSyncJob.deadLetteredAt),
+						isNull(publicationSyncJob.supersededAt),
+						lte(publicationSyncJob.nextAttemptAt, input.claimedAt),
+						or(
+							isNull(publicationSyncJob.leaseOwner),
+							lte(publicationSyncJob.leaseExpiresAt, input.claimedAt),
+						),
+					),
+				)
+				.orderBy(publicationSyncJob.nextAttemptAt, publicationSyncJob.id)
+				.limit(32);
+			if (candidates.length === 0) return null;
+			for (const candidate of candidates) {
+				await lockItemMutation(transaction, candidate.itemKey);
+				const [claimed] = await transaction
+					.update(publicationSyncJob)
+					.set({
+						attempts: sql`${publicationSyncJob.attempts} + 1`,
+						leaseOwner: input.workerId,
+						leaseExpiresAt: new Date(
+							input.claimedAt.getTime() + input.leaseSeconds * 1_000,
+						),
+						updatedAt: input.claimedAt,
+					})
+					.where(
+						and(
+							eq(publicationSyncJob.id, candidate.id),
+							isNull(publicationSyncJob.processedAt),
+							isNull(publicationSyncJob.deadLetteredAt),
+							isNull(publicationSyncJob.supersededAt),
+							lte(publicationSyncJob.nextAttemptAt, input.claimedAt),
+							or(
+								isNull(publicationSyncJob.leaseOwner),
+								lte(
+									publicationSyncJob.leaseExpiresAt,
+									input.claimedAt,
+								),
+							),
+						),
+					)
+					.returning();
+				if (claimed) return claimed;
+			}
+		}
 	});
 }
 

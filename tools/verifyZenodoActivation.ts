@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+
+import type { ZenodoPreparedDraft, ZenodoWriter } from "@opendeved/doi-sync-core";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client, Pool } from "pg";
@@ -8,12 +11,15 @@ vi.mock("server-only", () => ({}));
 import type { LibraryServerConfig } from "../src/config/library-config/schema";
 import type { Database } from "../src/db/database-schema";
 import { schema } from "../src/db/database-schema";
+import type { EvidenceFileStorage } from "../src/lib/admin/file-storage";
 import {
 	activateZenodoPublication,
 	retryZenodoPublication,
 	ZenodoActivationValidationError,
 	ZenodoIdentifierPolicyLockedError,
 } from "../src/lib/publication/zenodo-activation-service";
+import { runZenodoPublicationJobsOnce } from "../src/lib/publication/zenodo-adapter";
+import { claimNextPublicationJob } from "../src/lib/publication/queue";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
@@ -55,7 +61,7 @@ async function seedParent(
 		[input.key],
 	);
 	await client.query(
-		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "abstractNote", "date", "creators", "institution", "DOI", "deleted")
+		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision", "title", "abstractNote", "date", "creators", "publisher", "DOI", "deleted")
 		 VALUES ($1, 'native', $1, 'Report', 1, 'Zenodo activation record', 'A complete description.', '2026-08-13', $2::jsonb, 'OpenDevEd', $3, 0)`,
 		[
 			input.key,
@@ -67,7 +73,16 @@ async function seedParent(
 	);
 }
 
-async function seedPublishedFile(client: Client, parentKey: string, fileKey: string) {
+async function seedPublishedFile(
+	client: Client,
+	parentKey: string,
+	fileKey: string,
+	bytes?: Uint8Array,
+) {
+	const size = bytes?.byteLength ?? 12;
+	const sha256 = bytes
+		? createHash("sha256").update(bytes).digest("hex")
+		: "a".repeat(64);
 	await client.query(
 		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'native', $1)`,
 		[fileKey],
@@ -86,7 +101,7 @@ async function seedPublishedFile(client: Client, parentKey: string, fileKey: str
 		) VALUES (
 			$1, 'native', $2, 1, 1,
 			$3, $4, $5, $6, $7,
-			'application/pdf', 12, $8, $9, $10,
+			'application/pdf', $8, $9, $10, $11,
 			100, 140, 1, '[]'::jsonb, now()
 		)`,
 		[
@@ -97,11 +112,126 @@ async function seedPublishedFile(client: Client, parentKey: string, fileKey: str
 			`public/${fileKey}.pdf`,
 			`https://files.example.org/${fileKey}.pdf`,
 			`${fileKey}.pdf`,
-			"a".repeat(64),
+			size,
+			sha256,
 			`public/${fileKey}.png`,
 			`https://files.example.org/${fileKey}.png`,
 		],
 	);
+}
+
+function memoryStorage(files: ReadonlyMap<string, Uint8Array>) {
+	return {
+		downloadPublic: async (path: string) => {
+			const bytes = files.get(path);
+			if (!bytes) throw new Error(`Missing public object ${path}`);
+			return bytes.slice();
+		},
+	} as unknown as EvidenceFileStorage;
+}
+
+let fakeZenodoRecordNumber = 1000;
+
+function successfulZenodoProvider(input: { discardCount?: { value: number } } = {}): ZenodoWriter {
+	const prepared = async (
+		onPreparedDraft: ((draft: ZenodoPreparedDraft) => Promise<void>) | undefined,
+	) => {
+		fakeZenodoRecordNumber += 1;
+		const draft = {
+			depositionId: String(fakeZenodoRecordNumber),
+			draftRecordId: String(fakeZenodoRecordNumber),
+			parentId: String(fakeZenodoRecordNumber + 10_000),
+			payloadSnapshot: { title: "Zenodo activation record" },
+		};
+		await onPreparedDraft?.(draft);
+		return draft;
+	};
+	return {
+		findRecordByDoi: async () => ({ status: "not_found" }),
+		deleteUnpublishedDraft: async () => undefined,
+		discardPreparedDraft: async () => {
+			if (input.discardCount) input.discardCount.value += 1;
+		},
+		prepareCreateRecord: async (request) => prepared(request.onPreparedDraft),
+		prepareUpdateRecordMetadata: async (request) =>
+			prepared(request.onPreparedDraft),
+		prepareUpdateRecordFiles: async (request) => prepared(request.onPreparedDraft),
+		prepareNewVersion: async (request) => prepared(request.onPreparedDraft),
+		publishDraft: async ({ draft }) => ({
+			latestRecordId: draft.draftRecordId,
+			parentId: draft.parentId ?? draft.draftRecordId,
+			versionDoi: `10.5072/zenodo.${draft.draftRecordId}`,
+			conceptDoi: `10.5072/zenodo.${draft.parentId ?? draft.draftRecordId}`,
+			links: {},
+		}),
+	};
+}
+
+function failingAfterJournalProvider(): ZenodoWriter {
+	const provider = successfulZenodoProvider();
+	return {
+		...provider,
+		prepareCreateRecord: async (request) => {
+			const draft = {
+				depositionId: "2001",
+				draftRecordId: "2001",
+				parentId: "2000",
+			};
+			await request.onPreparedDraft?.(draft);
+			throw new Error("Upload stopped after the draft was saved");
+		},
+	};
+}
+
+function publishTimeoutProvider(): ZenodoWriter {
+	const provider = successfulZenodoProvider();
+	return {
+		...provider,
+		publishDraft: async () => {
+			throw new Error("Zenodo timed out after receiving the publish request");
+		},
+	};
+}
+
+function forbidPrepareProvider(): ZenodoWriter {
+	const provider = successfulZenodoProvider();
+	const unexpectedPrepare = async () => {
+		throw new Error("Recovery prepared a second Zenodo draft");
+	};
+	return {
+		...provider,
+		prepareCreateRecord: unexpectedPrepare,
+		prepareUpdateRecordMetadata: unexpectedPrepare,
+		prepareUpdateRecordFiles: unexpectedPrepare,
+		prepareNewVersion: unexpectedPrepare,
+	};
+}
+
+function collisionProvider(doi: string): ZenodoWriter {
+	const provider = successfulZenodoProvider();
+	return {
+		...provider,
+		publishDraft: async ({ draft }) => ({
+			latestRecordId: draft.draftRecordId,
+			parentId: draft.parentId ?? draft.draftRecordId,
+			versionDoi: doi,
+			conceptDoi: `10.5072/zenodo.${draft.parentId ?? draft.draftRecordId}`,
+			links: {},
+		}),
+	};
+}
+
+function metadataUpdateProvider(input: {
+	latestRecordId: string;
+	parentId: string;
+	versionDoi: string;
+	conceptDoi: string;
+}): ZenodoWriter {
+	const provider = successfulZenodoProvider();
+	return {
+		...provider,
+		publishDraft: async () => ({ ...input, links: {} }),
+	};
 }
 
 async function seedCrossref(
@@ -399,6 +529,456 @@ async function verify(database: Database, client: Client) {
 	} catch (error) {
 		if (!(error instanceof ZenodoIdentifierPolicyLockedError)) throw error;
 	}
+
+	await client.query(
+		`UPDATE "publicationSyncJob"
+		 SET "leaseOwner" = NULL, "leaseExpiresAt" = NULL, "supersededAt" = now()
+		 WHERE "provider" = 'zenodo' AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL`,
+	);
+	const publishedBytes = new TextEncoder().encode("verified Zenodo PDF bytes");
+	await seedParent(client, { key: "ZENWRKAA" });
+	await seedPublishedFile(client, "ZENWRKAA", "ZENPDFWA", publishedBytes);
+	const workerActivation = await activateZenodoPublication(
+		database,
+		"ZENWRKAA",
+		config,
+		"mint-zenodo",
+	);
+	const workerOutcomes = await runZenodoPublicationJobsOnce(
+		database,
+		config,
+		memoryStorage(new Map([["public/ZENPDFWA.pdf", publishedBytes]])),
+		{
+			provider: successfulZenodoProvider(),
+			workerId: "zenodo-success-worker",
+			now: () => new Date("2030-08-13T10:00:00Z"),
+		},
+	);
+	assert(
+		workerOutcomes.some(
+			(outcome) =>
+				outcome.jobId === workerActivation.job?.id &&
+				outcome.status === "succeeded",
+		),
+		"The fake Zenodo provider did not publish the queued record",
+	);
+	const publishedState = await client.query<{
+		conceptDoi: string | null;
+		fileManifestHash: string | null;
+		journalStatus: string | null;
+		parentId: string | null;
+		processedAt: Date | null;
+		recordId: string | null;
+		searchEvents: string;
+		versionDoi: string | null;
+	}>(
+		`SELECT
+			pss."zenodoConceptDoi" AS "conceptDoi",
+			pss."zenodoVersionDoi" AS "versionDoi",
+			pss."zenodoRecordId" AS "recordId",
+			pss."zenodoParentId" AS "parentId",
+			pss."lastFileManifestHash" AS "fileManifestHash",
+			psj."processedAt",
+			zpj."status" AS "journalStatus",
+			(SELECT count(*) FROM "outbox" WHERE "entityType" = 'item' AND "entityKey" = 'ZENWRKAA')::text AS "searchEvents"
+		 FROM "publicationSyncState" pss
+		 JOIN "publicationSyncJob" psj ON psj."itemKey" = pss."itemKey" AND psj."provider" = pss."provider"
+		 LEFT JOIN "zenodoPublishJournal" zpj ON zpj."itemKey" = pss."itemKey"
+		 WHERE pss."itemKey" = 'ZENWRKAA' AND pss."provider" = 'zenodo'`,
+	);
+	assert(
+		publishedState.rows[0]?.versionDoi?.startsWith("10.5072/zenodo.") &&
+			publishedState.rows[0]?.conceptDoi?.startsWith("10.5072/zenodo.") &&
+			publishedState.rows[0]?.journalStatus === "published" &&
+			publishedState.rows[0]?.processedAt != null &&
+			Number(publishedState.rows[0]?.searchEvents ?? 0) > 0,
+		"Zenodo publication did not settle identifiers, journal, job, and search together",
+	);
+	const managedIdentifiers = await client.query<{ role: string }>(
+		`SELECT "role" FROM "publicationIdentifier"
+		 WHERE "itemKey" = 'ZENWRKAA' AND "registrar" = 'zenodo' AND "isCurrent" = true
+		 ORDER BY "role"`,
+	);
+	assert(
+		managedIdentifiers.rows.map(({ role }) => role).join(",") ===
+			"concept,version",
+		"Zenodo identifiers were not normalized into the publication table",
+	);
+	const firstPublished = publishedState.rows[0];
+	assert(
+		firstPublished?.recordId &&
+			firstPublished.parentId &&
+			firstPublished.versionDoi &&
+			firstPublished.conceptDoi &&
+			firstPublished.fileManifestHash,
+		"The published Zenodo fixture is incomplete",
+	);
+	await client.query(
+		`UPDATE "item" SET "title" = 'Updated Zenodo metadata', "revision" = "revision" + 1 WHERE "key" = 'ZENWRKAA'`,
+	);
+	const metadataActivation = await activateZenodoPublication(
+		database,
+		"ZENWRKAA",
+		config,
+		"mint-zenodo",
+	);
+	const metadataUpdate = await runZenodoPublicationJobsOnce(
+		database,
+		config,
+		memoryStorage(new Map([["public/ZENPDFWA.pdf", publishedBytes]])),
+		{
+			provider: metadataUpdateProvider({
+				latestRecordId: firstPublished.recordId,
+				parentId: firstPublished.parentId,
+				versionDoi: firstPublished.versionDoi,
+				conceptDoi: firstPublished.conceptDoi,
+			}),
+			workerId: "zenodo-metadata-worker",
+			now: () => new Date("2030-08-13T10:30:00Z"),
+		},
+	);
+	assert(
+		metadataUpdate.some(
+			(outcome) =>
+				outcome.jobId === metadataActivation.job?.id &&
+				outcome.status === "succeeded",
+		),
+		"Zenodo metadata update did not finish",
+	);
+	const preservedFileState = await client.query<{
+		fileManifestHash: string | null;
+		fileManifestSnapshot: unknown;
+	}>(
+		`SELECT
+			"lastFileManifestHash" AS "fileManifestHash",
+			"lastFileManifestSnapshot" AS "fileManifestSnapshot"
+		 FROM "publicationSyncState" WHERE "itemKey" = 'ZENWRKAA' AND "provider" = 'zenodo'`,
+	);
+	assert(
+		preservedFileState.rows[0]?.fileManifestHash ===
+			firstPublished.fileManifestHash &&
+			preservedFileState.rows[0]?.fileManifestSnapshot != null,
+		"A metadata-only Zenodo update erased the settled file state",
+	);
+
+	const recoveryBytes = new TextEncoder().encode("recoverable Zenodo PDF bytes");
+	await seedParent(client, { key: "ZENWRKAB" });
+	await seedPublishedFile(client, "ZENWRKAB", "ZENPDFWB", recoveryBytes);
+	const recoveryActivation = await activateZenodoPublication(
+		database,
+		"ZENWRKAB",
+		config,
+		"mint-zenodo",
+	);
+	let recoveryTime = new Date("2030-08-13T11:00:00Z");
+	const recoveryStorage = memoryStorage(
+		new Map([["public/ZENPDFWB.pdf", recoveryBytes]]),
+	);
+	const recoveryConfig = {
+		...config,
+		services: {
+			...config.services,
+			publication: {
+				...config.services.publication,
+				worker: { ...config.services.publication.worker, batchSize: 1 },
+			},
+		},
+	} as LibraryServerConfig;
+	const interrupted = await runZenodoPublicationJobsOnce(
+		database,
+		recoveryConfig,
+		recoveryStorage,
+		{
+			provider: failingAfterJournalProvider(),
+			workerId: "zenodo-recovery-worker",
+			now: () => recoveryTime,
+		},
+	);
+	assert(
+		interrupted.some(
+			(outcome) =>
+				outcome.jobId === recoveryActivation.job?.id &&
+				outcome.status === "retrying",
+		),
+		"A prepared Zenodo draft failure was not saved for retry",
+	);
+	const preparingJournal = await client.query<{ status: string }>(
+		`SELECT "status" FROM "zenodoPublishJournal" WHERE "itemKey" = 'ZENWRKAB'`,
+	);
+	assert(
+		preparingJournal.rows[0]?.status === "preparing",
+		"The interrupted Zenodo draft was not journaled before failure",
+	);
+	recoveryTime = new Date(recoveryTime.getTime() + 61_000);
+	const discardCount = { value: 0 };
+	const recovered = await runZenodoPublicationJobsOnce(
+		database,
+		recoveryConfig,
+		recoveryStorage,
+		{
+			provider: successfulZenodoProvider({ discardCount }),
+			workerId: "zenodo-recovery-worker",
+			now: () => recoveryTime,
+		},
+	);
+	assert(
+		recovered.some(
+			(outcome) =>
+				outcome.jobId === recoveryActivation.job?.id &&
+				outcome.status === "recovered",
+		) && discardCount.value === 1,
+		"The interrupted Zenodo draft was not discarded before retry",
+	);
+	const journalAfterDiscard = await client.query(
+		`SELECT 1 FROM "zenodoPublishJournal" WHERE "itemKey" = 'ZENWRKAB'`,
+	);
+	assert(
+		journalAfterDiscard.rowCount === 0,
+		"The discarded Zenodo journal was not cleared",
+	);
+	const resumed = await runZenodoPublicationJobsOnce(
+		database,
+		recoveryConfig,
+		recoveryStorage,
+		{
+			provider: successfulZenodoProvider(),
+			workerId: "zenodo-recovery-worker",
+			now: () => recoveryTime,
+		},
+	);
+	const resumedJob = await client.query<{ lastError: string | null }>(
+		`SELECT "lastError" FROM "publicationSyncJob" WHERE "id" = $1`,
+		[recoveryActivation.job?.id],
+	);
+	assert(
+		resumed.some(
+			(outcome) =>
+				outcome.jobId === recoveryActivation.job?.id &&
+				outcome.status === "succeeded",
+		),
+		`Zenodo publication did not resume after draft cleanup: ${JSON.stringify(resumed)} ${resumedJob.rows[0]?.lastError ?? ""}`,
+	);
+
+	const timeoutBytes = new TextEncoder().encode("publish timeout PDF bytes");
+	await seedParent(client, { key: "ZENWRKAC" });
+	await seedPublishedFile(client, "ZENWRKAC", "ZENPDFWC", timeoutBytes);
+	const timeoutActivation = await activateZenodoPublication(
+		database,
+		"ZENWRKAC",
+		config,
+		"mint-zenodo",
+	);
+	const timeoutStorage = memoryStorage(
+		new Map([["public/ZENPDFWC.pdf", timeoutBytes]]),
+	);
+	const timedOut = await runZenodoPublicationJobsOnce(
+		database,
+		recoveryConfig,
+		timeoutStorage,
+		{
+			provider: publishTimeoutProvider(),
+			workerId: "zenodo-timeout-worker",
+			now: () => recoveryTime,
+		},
+	);
+	assert(
+		timedOut.some(
+			(outcome) =>
+				outcome.jobId === timeoutActivation.job?.id &&
+				outcome.status === "retrying",
+		),
+		"A publish timeout was not saved for retry",
+	);
+	const readyJournal = await client.query<{
+		fileManifestSnapshot: unknown;
+		payloadSnapshot: unknown;
+		status: string;
+	}>(
+		`SELECT "status", "payloadSnapshot", "fileManifestSnapshot"
+		 FROM "zenodoPublishJournal" WHERE "itemKey" = 'ZENWRKAC'`,
+	);
+	assert(
+		readyJournal.rows[0]?.status === "ready_to_publish" &&
+			readyJournal.rows[0]?.payloadSnapshot != null &&
+			readyJournal.rows[0]?.fileManifestSnapshot != null,
+		"The publish-timeout journal did not retain exact payload snapshots",
+	);
+	await client.query(
+		`UPDATE "item" SET "title" = 'Changed after Zenodo accepted the draft', "revision" = "revision" + 1 WHERE "key" = 'ZENWRKAC'`,
+	);
+	recoveryTime = new Date(recoveryTime.getTime() + 61_000);
+	const timeoutRecovered = await runZenodoPublicationJobsOnce(
+		database,
+		recoveryConfig,
+		timeoutStorage,
+		{
+			provider: forbidPrepareProvider(),
+			workerId: "zenodo-timeout-worker",
+			now: () => recoveryTime,
+		},
+	);
+	assert(
+		timeoutRecovered.some(
+			(outcome) =>
+				outcome.jobId === timeoutActivation.job?.id &&
+				outcome.status === "succeeded",
+		),
+		"The ready Zenodo draft was not republished without creating another draft",
+	);
+	const timeoutState = await client.query<{
+		fileManifestHash: string | null;
+		fileManifestSnapshot: unknown;
+		payloadHash: string | null;
+		payloadSnapshot: unknown;
+	}>(
+		`SELECT
+			"lastPayloadHash" AS "payloadHash",
+			"lastPayloadSnapshot" AS "payloadSnapshot",
+			"lastFileManifestHash" AS "fileManifestHash",
+			"lastFileManifestSnapshot" AS "fileManifestSnapshot"
+		 FROM "publicationSyncState" WHERE "itemKey" = 'ZENWRKAC' AND "provider" = 'zenodo'`,
+	);
+	assert(
+		timeoutState.rows[0]?.payloadHash != null &&
+			timeoutState.rows[0]?.payloadSnapshot != null &&
+			timeoutState.rows[0]?.fileManifestHash != null &&
+			timeoutState.rows[0]?.fileManifestSnapshot != null,
+		"Publish-timeout recovery lost the exact successful Zenodo state",
+	);
+
+	const preplanBytes = new TextEncoder().encode("preplan failure PDF bytes");
+	await seedParent(client, { key: "ZENWRKAD" });
+	await seedPublishedFile(client, "ZENWRKAD", "ZENPDFWD", preplanBytes);
+	const preplanActivation = await activateZenodoPublication(
+		database,
+		"ZENWRKAD",
+		config,
+		"mint-zenodo",
+	);
+	await client.query(`UPDATE "item" SET "deleted" = 1 WHERE "key" = 'ZENWRKAD'`);
+	const preplanConfig = {
+		...recoveryConfig,
+		services: {
+			...recoveryConfig.services,
+			publication: {
+				...recoveryConfig.services.publication,
+				worker: { ...recoveryConfig.services.publication.worker, retryLimit: 1 },
+			},
+		},
+	} as LibraryServerConfig;
+	const preplanFailure = await runZenodoPublicationJobsOnce(
+		database,
+		preplanConfig,
+		memoryStorage(new Map([["public/ZENPDFWD.pdf", preplanBytes]])),
+		{
+			provider: successfulZenodoProvider(),
+			workerId: "zenodo-preplan-worker",
+			now: () => recoveryTime,
+		},
+	);
+	assert(
+		preplanFailure.some(
+			(outcome) =>
+				outcome.jobId === preplanActivation.job?.id &&
+				outcome.status === "failed",
+		),
+		"A first-run planning failure did not dead-letter cleanly",
+	);
+	const preplanJob = await client.query<{
+		deadLetteredAt: Date | null;
+		failureClass: string | null;
+	}>(
+		`SELECT psj."deadLetteredAt", pss."lastFailureClass" AS "failureClass"
+		 FROM "publicationSyncJob" psj
+		 JOIN "publicationSyncState" pss ON pss."itemKey" = psj."itemKey" AND pss."provider" = psj."provider"
+		 WHERE psj."id" = $1`,
+		[preplanActivation.job?.id],
+	);
+	assert(
+		preplanJob.rows[0]?.deadLetteredAt != null &&
+			preplanJob.rows[0]?.failureClass != null,
+		"A first-run planning failure left no durable failure state",
+	);
+
+	const collisionBytes = new TextEncoder().encode("collision PDF bytes");
+	await seedParent(client, { key: "ZENWRKAE" });
+	await seedPublishedFile(client, "ZENWRKAE", "ZENPDFWE", collisionBytes);
+	const collisionActivation = await activateZenodoPublication(
+		database,
+		"ZENWRKAE",
+		config,
+		"mint-zenodo",
+	);
+	const existingVersionDoi = publishedState.rows[0]?.versionDoi;
+	assert(existingVersionDoi, "The collision fixture has no existing Zenodo DOI");
+	const collisionResult = await runZenodoPublicationJobsOnce(
+		database,
+		recoveryConfig,
+		memoryStorage(new Map([["public/ZENPDFWE.pdf", collisionBytes]])),
+		{
+			provider: collisionProvider(existingVersionDoi),
+			workerId: "zenodo-collision-worker",
+			now: () => recoveryTime,
+		},
+	);
+	assert(
+		collisionResult.some(
+			(outcome) =>
+				outcome.jobId === collisionActivation.job?.id &&
+				outcome.status === "retrying",
+		),
+		"A locally owned Zenodo DOI collision was not rejected",
+	);
+	const collisionOwner = await client.query<{ itemKey: string }>(
+		`SELECT "itemKey" FROM "publicationIdentifier"
+		 WHERE "registrar" = 'zenodo' AND "environment" = 'sandbox' AND "doi" = $1`,
+		[existingVersionDoi],
+	);
+	assert(
+		collisionOwner.rows[0]?.itemKey === "ZENWRKAA",
+		"A Zenodo DOI collision reassigned another record's identifier",
+	);
+
+	await client.query(
+		`UPDATE "publicationSyncJob"
+		 SET "leaseOwner" = NULL, "leaseExpiresAt" = NULL, "supersededAt" = now()
+		 WHERE "provider" = 'zenodo' AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL`,
+	);
+	for (const [parentKey, fileKey] of [
+		["ZENWRKAF", "ZENPDFWF"],
+		["ZENWRKAG", "ZENPDFWG"],
+	] as const) {
+		const bytes = new TextEncoder().encode(`concurrent claim ${parentKey}`);
+		await seedParent(client, { key: parentKey });
+		await seedPublishedFile(client, parentKey, fileKey, bytes);
+		await activateZenodoPublication(
+			database,
+			parentKey,
+			config,
+			"mint-zenodo",
+		);
+	}
+	const claimTime = new Date("2030-08-13T12:00:00Z");
+	const [firstClaim, secondClaim] = await Promise.all([
+		claimNextPublicationJob(database, {
+			provider: "zenodo",
+			environment: "sandbox",
+			workerId: "parallel-worker-one",
+			leaseSeconds: 900,
+			claimedAt: claimTime,
+		}),
+		claimNextPublicationJob(database, {
+			provider: "zenodo",
+			environment: "sandbox",
+			workerId: "parallel-worker-two",
+			leaseSeconds: 900,
+			claimedAt: claimTime,
+		}),
+	]);
+	assert(
+		firstClaim && secondClaim && firstClaim.id !== secondClaim.id,
+		"Concurrent workers did not move past the locked head job",
+	);
 }
 
 async function verifyIsolatedDatabase() {

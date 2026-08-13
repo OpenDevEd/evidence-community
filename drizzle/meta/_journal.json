@@ -190,6 +190,13 @@
       "when": 1786612061540,
       "tag": "0026_canonical-metadata-fields",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1786612781699,
+      "tag": "0027_zenodo-journal-snapshots",
+      "breakpoints": true
     }
   ]
 }

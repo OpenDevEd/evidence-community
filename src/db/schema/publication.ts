@@ -450,7 +450,10 @@ export const zenodoPublishJournal = pgTable(
 			enum: ZENODO_JOURNAL_OPERATIONS,
 		}).notNull(),
 		payloadHash: varchar("payloadHash", { length: 64 }).notNull(),
+		payloadSnapshot: jsonb("payloadSnapshot").$type<JsonObject>().notNull(),
 		fileManifestHash: varchar("fileManifestHash", { length: 64 }),
+		fileManifestSnapshot:
+			jsonb("fileManifestSnapshot").$type<JsonObject>(),
 		depositionId: varchar("depositionId", { length: 255 }).notNull(),
 		draftRecordId: varchar("draftRecordId", { length: 255 }).notNull(),
 		parentId: varchar("parentId", { length: 255 }),
@@ -481,7 +484,9 @@ export const zenodoPublishJournal = pgTable(
 		),
 		check(
 			"zenodoPublishJournal_hashes_valid",
-			sql`${table.payloadHash} ~ '^[0-9a-f]{64}$' AND (${table.fileManifestHash} IS NULL OR ${table.fileManifestHash} ~ '^[0-9a-f]{64}$')`,
+			sql`${table.payloadHash} ~ '^[0-9a-f]{64}$'
+				AND ((${table.fileManifestHash} IS NULL AND ${table.fileManifestSnapshot} IS NULL)
+					OR (${table.fileManifestHash} ~ '^[0-9a-f]{64}$' AND ${table.fileManifestSnapshot} IS NOT NULL))`,
 		),
 		check(
 			"zenodoPublishJournal_operation_valid",
