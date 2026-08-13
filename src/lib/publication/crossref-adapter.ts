@@ -35,6 +35,7 @@ import {
 	enqueuePublicationJobsForItem,
 	finishPublicationJob,
 	PublicationJobLeaseLostError,
+	withPublicationJobHeartbeat,
 } from "./queue";
 
 type PublicationConfig = Pick<LibraryServerConfig, "identity" | "services">;
@@ -414,7 +415,9 @@ export async function runCrossrefPublicationJobsOnce(
 	database: Database,
 	config: PublicationConfig,
 	options: {
+		heartbeatIntervalMs?: number;
 		provider?: CrossrefDepositor;
+		signal?: AbortSignal;
 		workerId?: string;
 		now?: () => Date;
 	} = {},
@@ -479,23 +482,40 @@ export async function runCrossrefPublicationJobsOnce(
 
 			let results: readonly PublicationSyncOperationResult[] = [];
 			if (built.plan.status === "write_required") {
-				results = await executeLivePublicationSyncPlan({
-					plan: built.plan,
-					credentials: {},
-					providers: {
-						crossref: options.provider ?? new CrossrefApiClient(),
+				results = await withPublicationJobHeartbeat(
+					database,
+					{
+						jobId: job.id,
+						workerId,
+						leaseSeconds: workerConfig.leaseSeconds,
+						heartbeatIntervalMs: options.heartbeatIntervalMs,
+						now,
+						signal: options.signal,
 					},
-					crossref: requireConfig(config),
-					crossrefJournal: {
-						recordCrossrefPendingDeposit: (pending) =>
-							recordCrossrefPending(database, {
-								...pending,
-								jobId: job.id,
-								workerId,
-							}),
-					},
-					now,
-				});
+					(signal) =>
+						executeLivePublicationSyncPlan({
+							plan: built.plan,
+							credentials: {},
+							providers: {
+								crossref:
+									options.provider ??
+									new CrossrefApiClient({
+										fetch: (url, init) =>
+											fetch(url, { ...init, signal }),
+									}),
+							},
+							crossref: requireConfig(config),
+							crossrefJournal: {
+								recordCrossrefPendingDeposit: (pending) =>
+									recordCrossrefPending(database, {
+										...pending,
+										jobId: job.id,
+										workerId,
+									}),
+							},
+							now,
+						}),
+				);
 			}
 			const settledAt = now();
 			const settlement = settlePublicationSyncState({

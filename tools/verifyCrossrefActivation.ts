@@ -2,6 +2,7 @@ import {
 	ProviderHttpError,
 	type CrossrefDepositor,
 } from "@opendeved/doi-sync-core";
+import { setTimeout as delay } from "node:timers/promises";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client, Pool } from "pg";
@@ -135,6 +136,27 @@ async function seedPublishedFile(
 function successfulProvider(): CrossrefDepositor {
 	return {
 		submitPublication: async (input) => {
+			await input.onSubmitted?.();
+			return {
+				status: "succeeded",
+				filename: input.filename,
+				diagnostic: {
+					status: "success",
+					recordCount: 1,
+					successCount: 1,
+					failureCount: 0,
+				},
+				xmlVerification: { status: "matched" },
+			};
+		},
+		verifyPublication: async () => ({ status: "matched" }),
+	};
+}
+
+function slowSuccessfulProvider(): CrossrefDepositor {
+	return {
+		submitPublication: async (input) => {
+			await delay(1_200);
 			await input.onSubmitted?.();
 			return {
 				status: "succeeded",
@@ -791,6 +813,43 @@ async function verify(database: Database, client: Client) {
 				wakeActivation.canonicalRevision &&
 			Number(zenodoWakeJobs.rows[0].fileRevision) === 1,
 		"Verified Crossref DOI did not wake the ready reuse-Crossref Zenodo target",
+	);
+
+	await seedItem(client, { key: "CRACTAAS" });
+	const heartbeatConfig = {
+		...config,
+		services: {
+			...config.services,
+			publication: {
+				...config.services.publication,
+				worker: {
+					...config.services.publication.worker,
+					leaseSeconds: 1,
+				},
+			},
+		},
+	} as LibraryServerConfig;
+	const heartbeatActivation = await activateCrossrefPublication(
+		database,
+		"CRACTAAS",
+		heartbeatConfig,
+	);
+	const heartbeatOutcomes = await runCrossrefPublicationJobsOnce(
+		database,
+		heartbeatConfig,
+		{
+			heartbeatIntervalMs: 200,
+			provider: slowSuccessfulProvider(),
+			workerId: "crossref-heartbeat-worker",
+		},
+	);
+	assert(
+		heartbeatOutcomes.some(
+			(outcome) =>
+				outcome.jobId === heartbeatActivation.job.id &&
+				outcome.status === "succeeded",
+		),
+		"A slow Crossref request lost its renewable publication lease",
 	);
 }
 

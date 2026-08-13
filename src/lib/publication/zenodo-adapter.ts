@@ -39,6 +39,7 @@ import {
 	enqueueItemSearchReprojection,
 	finishPublicationJob,
 	PublicationJobLeaseLostError,
+	withPublicationJobHeartbeat,
 } from "./queue";
 import {
 	buildPublicationFileManifest,
@@ -690,7 +691,9 @@ export async function runZenodoPublicationJobsOnce(
 	config: PublicationConfig,
 	storage: EvidenceFileStorage,
 	options: {
+		heartbeatIntervalMs?: number;
 		provider?: ZenodoWriter;
+		signal?: AbortSignal;
 		workerId?: string;
 		now?: () => Date;
 	} = {},
@@ -725,24 +728,42 @@ export async function runZenodoPublicationJobsOnce(
 			}
 			let results: readonly PublicationSyncOperationResult[] = [];
 			if (built.plan.status === "write_required") {
-				results = await executeLivePublicationSyncPlan({
-					plan: built.plan,
-					credentials: { zenodoToken: zenodo.token },
-					providers: {
-						zenodo: options.provider ?? new ZenodoApiClient(),
-					},
-					fileReader: createPublicationFileReader(
-						storage,
-						built.snapshot.files,
-					),
-					zenodoJournal: createZenodoJournal(
-						database,
-						job,
+				const runnablePlan = built.plan;
+				results = await withPublicationJobHeartbeat(
+					database,
+					{
+						jobId: job.id,
 						workerId,
-						built.plan,
-					),
-					now,
-				});
+						leaseSeconds: workerConfig.leaseSeconds,
+						heartbeatIntervalMs: options.heartbeatIntervalMs,
+						now,
+						signal: options.signal,
+					},
+					(signal) =>
+						executeLivePublicationSyncPlan({
+							plan: runnablePlan,
+							credentials: { zenodoToken: zenodo.token },
+							providers: {
+								zenodo:
+									options.provider ??
+									new ZenodoApiClient({
+										fetch: (url, init) =>
+											fetch(url, { ...init, signal }),
+									}),
+							},
+							fileReader: createPublicationFileReader(
+								storage,
+								built.snapshot.files,
+							),
+							zenodoJournal: createZenodoJournal(
+								database,
+								job,
+								workerId,
+								runnablePlan,
+							),
+							now,
+						}),
+				);
 			}
 			const settledAt = now();
 			const durableState = providerState(

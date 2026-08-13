@@ -1,4 +1,5 @@
 import { outbox } from "@opendeved/evidence-library-core";
+import { setTimeout as delay } from "node:timers/promises";
 import {
 	and,
 	eq,
@@ -42,6 +43,97 @@ export class PublicationJobLeaseLostError extends Error {
 	constructor() {
 		super("The publication job lease was lost");
 		this.name = "PublicationJobLeaseLostError";
+	}
+}
+
+export async function renewPublicationJobLease(
+	database: Executor,
+	input: {
+		jobId: number;
+		workerId: string;
+		heartbeatAt: Date;
+		leaseSeconds: number;
+	},
+) {
+	const [job] = await database
+		.update(publicationSyncJob)
+		.set({
+			leaseExpiresAt: new Date(
+				input.heartbeatAt.getTime() + input.leaseSeconds * 1_000,
+			),
+			updatedAt: input.heartbeatAt,
+		})
+		.where(
+			and(
+				eq(publicationSyncJob.id, input.jobId),
+				eq(publicationSyncJob.leaseOwner, input.workerId),
+				gt(publicationSyncJob.leaseExpiresAt, input.heartbeatAt),
+				isNull(publicationSyncJob.processedAt),
+				isNull(publicationSyncJob.deadLetteredAt),
+				isNull(publicationSyncJob.supersededAt),
+			),
+		)
+		.returning({ id: publicationSyncJob.id });
+	if (!job) throw new PublicationJobLeaseLostError();
+}
+
+export async function withPublicationJobHeartbeat<T>(
+	database: Executor,
+	input: {
+		jobId: number;
+		workerId: string;
+		leaseSeconds: number;
+		heartbeatIntervalMs?: number;
+		now?: () => Date;
+		signal?: AbortSignal;
+	},
+	operation: (signal: AbortSignal) => Promise<T>,
+) {
+	const leaseMs = input.leaseSeconds * 1_000;
+	const heartbeatIntervalMs =
+		input.heartbeatIntervalMs ?? Math.min(30_000, Math.floor(leaseMs / 3));
+	if (
+		!Number.isSafeInteger(heartbeatIntervalMs) ||
+		heartbeatIntervalMs < 100 ||
+		heartbeatIntervalMs >= leaseMs
+	) {
+		throw new Error(
+			"heartbeatIntervalMs must be an integer of at least 100 and less than the job lease",
+		);
+	}
+	const now = input.now ?? (() => new Date());
+	const heartbeatAbort = new AbortController();
+	const signal = input.signal
+		? AbortSignal.any([input.signal, heartbeatAbort.signal])
+		: heartbeatAbort.signal;
+	let heartbeatFailure: unknown = null;
+	const heartbeat = (async () => {
+		try {
+			while (!signal.aborted) {
+				await delay(heartbeatIntervalMs, undefined, { signal });
+				await renewPublicationJobLease(database, {
+					jobId: input.jobId,
+					workerId: input.workerId,
+					heartbeatAt: now(),
+					leaseSeconds: input.leaseSeconds,
+				});
+			}
+		} catch (error) {
+			if (signal.aborted) return;
+			heartbeatFailure = error;
+			heartbeatAbort.abort(error);
+		}
+	})();
+	try {
+		const result = await operation(signal);
+		if (heartbeatFailure) throw heartbeatFailure;
+		return result;
+	} catch (error) {
+		if (heartbeatFailure) throw heartbeatFailure;
+		throw error;
+	} finally {
+		heartbeatAbort.abort();
+		await heartbeat;
 	}
 }
 
