@@ -125,7 +125,9 @@ Expected changes include:
 - Existing development rows and JSON patches use alias keys. Wipe them instead
   of adding compatibility reads or a backfill.
 - Search settings change. A full development reindex is required.
-- Zotero dates are flexible. Do not replace them with one required day picker.
+- Zotero may send flexible dates. This library deliberately accepts only an
+  exact day or a four-digit year, so unsupported source values must be fixed
+  before import.
 - The private server already applied the original `0025_publication-model.sql`.
   Restore that migration byte-for-byte and move its newer constraint changes
   into the next unapplied forward migration before deploying this schema.
