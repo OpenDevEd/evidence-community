@@ -4,16 +4,27 @@ import {
 	adminSessionCookieName,
 	adminSessionCookieOptions,
 } from "@/lib/admin/access";
+import {
+	getExternalRequestOrigin,
+	hasMatchingRequestOrigin,
+} from "@/lib/runtime-routing";
 
 export async function POST(request: NextRequest) {
-	const origin = request.headers.get("origin");
-	if (origin && origin !== new URL(request.url).origin) {
+	const requestUrl = new URL(request.url);
+	if (!hasMatchingRequestOrigin(requestUrl, request.headers)) {
 		return new NextResponse("This request came from a different site.", {
 			status: 403,
 		});
 	}
 
-	const response = NextResponse.redirect(new URL("/admin", request.url), 303);
+	const response = NextResponse.redirect(
+		new URL(
+			"/admin",
+			getExternalRequestOrigin(requestUrl, request.headers) ??
+				request.url,
+		),
+		303,
+	);
 	response.cookies.set(adminSessionCookieName(), "", {
 		...adminSessionCookieOptions(),
 		maxAge: 0,

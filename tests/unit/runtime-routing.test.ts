@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	getCanonicalLibraryRedirect,
+	getExternalRequestOrigin,
 	getUnlocalizedPathname,
 	isLoginProfilePath,
 } from "@/lib/runtime-routing";
@@ -18,9 +19,7 @@ describe("runtime route enforcement", () => {
 
 	it("does not treat similarly named routes as profiles", () => {
 		expect(isLoginProfilePath("/profiled")).toBe(false);
-		expect(isLoginProfilePath("/en-GB/profiled/user-one")).toBe(
-			false,
-		);
+		expect(isLoginProfilePath("/en-GB/profiled/user-one")).toBe(false);
 	});
 
 	it("removes a supported locale prefix", () => {
@@ -73,10 +72,7 @@ describe("runtime route enforcement", () => {
 				"x-forwarded-host": "library.example.org",
 			});
 			if (forwardedProtocol) {
-				headers.set(
-					"x-forwarded-proto",
-					forwardedProtocol,
-				);
+				headers.set("x-forwarded-proto", forwardedProtocol);
 			}
 
 			expect(
@@ -96,8 +92,19 @@ describe("runtime route enforcement", () => {
 			"https://library.example.org",
 		);
 
-		expect(redirect?.toString()).toBe(
-			"https://library.example.org/lib",
-		);
+		expect(redirect?.toString()).toBe("https://library.example.org/lib");
+	});
+
+	it("rebuilds the public origin reported by the trusted proxy", () => {
+		expect(
+			getExternalRequestOrigin(
+				new URL("http://web:3000/api/admin/session"),
+				new Headers({
+					host: "web:3000",
+					"x-forwarded-host": "library.example.org",
+					"x-forwarded-proto": "https",
+				}),
+			),
+		).toBe("https://library.example.org");
 	});
 });

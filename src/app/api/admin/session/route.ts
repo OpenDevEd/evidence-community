@@ -9,20 +9,23 @@ import {
 	getAdminCredentials,
 	resetAdminLoginAttempts,
 } from "@/lib/admin/access";
+import {
+	getExternalRequestOrigin,
+	hasMatchingRequestOrigin,
+} from "@/lib/runtime-routing";
 
 function adminRedirect(request: NextRequest, status?: string) {
-	const url = new URL("/admin", request.url);
+	const url = new URL(
+		"/admin",
+		getExternalRequestOrigin(new URL(request.url), request.headers) ??
+			request.url,
+	);
 	if (status) url.searchParams.set("login", status);
 	return NextResponse.redirect(url, 303);
 }
 
-function hasValidOrigin(request: NextRequest) {
-	const origin = request.headers.get("origin");
-	return !origin || origin === new URL(request.url).origin;
-}
-
 export async function POST(request: NextRequest) {
-	if (!hasValidOrigin(request)) {
+	if (!hasMatchingRequestOrigin(new URL(request.url), request.headers)) {
 		return new NextResponse("This request came from a different site.", {
 			status: 403,
 		});

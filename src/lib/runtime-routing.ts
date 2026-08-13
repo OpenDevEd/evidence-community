@@ -4,6 +4,34 @@ function firstForwardedValue(value: string | null) {
 	return value?.split(",")[0]?.trim() || null;
 }
 
+export function getExternalRequestOrigin(
+	requestUrl: URL,
+	headers: Pick<Headers, "get">,
+) {
+	const host =
+		firstForwardedValue(headers.get("x-forwarded-host")) ??
+		firstForwardedValue(headers.get("host")) ??
+		requestUrl.host;
+	const protocol =
+		firstForwardedValue(headers.get("x-forwarded-proto")) ??
+		requestUrl.protocol.replace(/:$/u, "");
+	if (protocol !== "http" && protocol !== "https") return null;
+
+	try {
+		return new URL(`${protocol}://${host}`).origin;
+	} catch {
+		return null;
+	}
+}
+
+export function hasMatchingRequestOrigin(
+	requestUrl: URL,
+	headers: Pick<Headers, "get">,
+) {
+	const origin = headers.get("origin");
+	return !origin || origin === getExternalRequestOrigin(requestUrl, headers);
+}
+
 function isLoopbackHost(host: string) {
 	try {
 		const hostname = new URL(`http://${host}`).hostname
@@ -28,9 +56,7 @@ export function getUnlocalizedPathname(pathname: string) {
 }
 
 export function isLoginProfilePath(pathname: string) {
-	return /^\/profile(?:\/|$)/u.test(
-		getUnlocalizedPathname(pathname),
-	);
+	return /^\/profile(?:\/|$)/u.test(getUnlocalizedPathname(pathname));
 }
 
 export function getCanonicalLibraryRedirect(
@@ -38,9 +64,7 @@ export function getCanonicalLibraryRedirect(
 	headers: Headers,
 	baseUrl: string,
 ) {
-	const forwardedHost = firstForwardedValue(
-		headers.get("x-forwarded-host"),
-	);
+	const forwardedHost = firstForwardedValue(headers.get("x-forwarded-host"));
 	const requestHost =
 		forwardedHost ??
 		firstForwardedValue(headers.get("host")) ??
@@ -50,8 +74,7 @@ export function getCanonicalLibraryRedirect(
 		: requestUrl.protocol.replace(/:$/u, "");
 	const canonicalUrl = new URL(baseUrl);
 	const hasCanonicalHost =
-		requestHost.toLowerCase() ===
-		canonicalUrl.host.toLowerCase();
+		requestHost.toLowerCase() === canonicalUrl.host.toLowerCase();
 	const hasCanonicalProtocol =
 		requestProtocol === null ||
 		requestProtocol.toLowerCase() ===
@@ -64,8 +87,5 @@ export function getCanonicalLibraryRedirect(
 		return null;
 	}
 
-	return new URL(
-		requestUrl.pathname + requestUrl.search,
-		canonicalUrl,
-	);
+	return new URL(requestUrl.pathname + requestUrl.search, canonicalUrl);
 }

@@ -29,6 +29,22 @@ function loginRequest(password: string, address: string) {
 	});
 }
 
+function proxiedLoginRequest(password: string, address: string) {
+	const body = new FormData();
+	body.set("password", password);
+	return new NextRequest("http://web:3000/api/admin/session", {
+		body,
+		headers: {
+			host: "web:3000",
+			origin: "https://library.example.org",
+			"x-forwarded-host": "library.example.org",
+			"x-forwarded-proto": "https",
+			"x-real-ip": address,
+		},
+		method: "POST",
+	});
+}
+
 describe("admin session routes", () => {
 	it("keeps every admin data handler behind the shared session gate", async () => {
 		const root = join(process.cwd(), "src/app/api/admin");
@@ -71,6 +87,23 @@ describe("admin session routes", () => {
 		expect(cookie).toContain("Path=/");
 		expect(cookie).not.toContain("Domain=");
 		expect(cookie).not.toContain("Secure");
+	});
+
+	it("accepts the public HTTPS origin behind the deployment proxy", async () => {
+		const response = await login(
+			proxiedLoginRequest(
+				"correct horse battery staple",
+				"198.51.100.24",
+			),
+		);
+
+		expect(response.status).toBe(303);
+		expect(response.headers.get("location")).toBe(
+			"https://library.example.org/admin",
+		);
+		expect(response.headers.get("set-cookie")).toContain(
+			"evidence_library_admin=",
+		);
 	});
 
 	it("rejects a wrong password without creating a cookie", async () => {
@@ -147,5 +180,24 @@ describe("admin session routes", () => {
 		expect(response.status).toBe(303);
 		expect(cookie).toContain("evidence_library_admin=");
 		expect(cookie).toContain("Max-Age=0");
+	});
+
+	it("accepts logout through the public HTTPS proxy origin", async () => {
+		const response = await logout(
+			new NextRequest("http://web:3000/api/admin/session/logout", {
+				headers: {
+					host: "web:3000",
+					origin: "https://library.example.org",
+					"x-forwarded-host": "library.example.org",
+					"x-forwarded-proto": "https",
+				},
+				method: "POST",
+			}),
+		);
+
+		expect(response.status).toBe(303);
+		expect(response.headers.get("location")).toBe(
+			"https://library.example.org/admin",
+		);
 	});
 });
