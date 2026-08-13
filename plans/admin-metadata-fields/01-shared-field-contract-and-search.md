@@ -29,19 +29,19 @@ names.
 
 ### Dates
 
-The stored bibliographic value stays exactly as entered after trimming. A
-shared parser returns:
+The stored bibliographic value is either a four-digit year or an exact ISO
+calendar date. A shared parser returns:
 
 - the understood year;
-- the precision: year, month, day, season, or literal;
-- a numeric sort value when the date is understood; and
+- the precision: year or day;
+- a numeric sort value;
 - an ISO date only for an exact calendar day.
 
-Unrecognised flexible text remains visible but has no derived year or sort
-value. Impossible ISO-looking values are rejected.
+Month-only, season, flexible-text, and impossible dates are rejected.
 
-The editor provides a precision choice and the matching year, month, exact
-date, or flexible-date control. Access date uses a calendar date control.
+The editor provides two precision choices: Exact date and Year. Exact date
+uses a calendar control. Year uses a number input. Access date uses a calendar
+date control.
 
 ### Other fields
 
@@ -58,8 +58,8 @@ date, or flexible-date control. Access date uses a calendar date control.
 2. Make admin drafts and source batches canonical while both database column
    sets still exist.
 3. Fix Zotero import, writeback, and item-type transitions through the codec.
-4. Add failing date tests for year, month, day, season, flexible text, and
-   impossible dates. Implement the pure parser.
+4. Add failing date tests for year, exact day, and rejected month, season,
+   flexible text, and impossible dates. Implement the pure parser.
 5. Add failing validation tests for typed fields. Implement the shared field
    contract and server checks.
 6. Add failing projection and public API tests for canonical-only records.

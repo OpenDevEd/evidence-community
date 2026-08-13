@@ -21,12 +21,13 @@ This causes three user-visible failures:
 2. Zotero import, writeback, and the editor translate item-specific names such
    as `caseName` and `dateDecided` at their boundaries.
 3. Use one shared field contract for the editor and server validation.
-4. Bibliographic dates support year, month, exact date, and flexible text. They
-   are not ordinary HTML date values.
-5. Flexible text stays visible, but search derives a year or sort value only
-   when the date is understood.
-6. Partial dates use a precision-aware sort value. They do not pretend to be
-   January 1.
+4. Bibliographic dates support only an exact calendar date or a four-digit
+   year. The editor uses a date picker for an exact date and a number input for
+   a year.
+5. Month-only, season, and flexible-text dates are rejected. This is a clean
+   breaking rule with no compatibility path.
+6. A year uses a precision-aware sort value. It does not pretend to be January
+   1.
 7. Bibliographic numbers such as volume, issue, pages, ISBN, and patent number
    stay text. They may contain letters, ranges, or punctuation.
 8. Remove all 58 duplicate Zotero alias columns. Add the missing canonical
