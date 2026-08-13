@@ -296,6 +296,7 @@ async function mockPublishedBook(
 		itemCount?: number;
 		itemPageSize?: number;
 		initialCollectionKeys?: string[];
+		initialDraftPayload?: Record<string, unknown>;
 		listFailure?: boolean;
 		listFailureCount?: number;
 		listRowOverrides?: Partial<Record<string, unknown>>;
@@ -334,6 +335,7 @@ async function mockPublishedBook(
 	let editing = false;
 	let draftPayload: Record<string, unknown> = {
 		...structuredClone(publishedPayload),
+		...(options.initialDraftPayload ?? {}),
 		collections: [...(options.initialCollectionKeys ?? [])],
 	};
 	let draftRevision = 1;
@@ -2543,17 +2545,6 @@ test("uses controls that preserve every supported metadata value", async ({
 		.toBe(true);
 
 	const itemType = inspector.getByRole("combobox", { name: "Item type" });
-	await itemType.fill("Annotation");
-	await page.getByRole("option", { name: "Annotation", exact: true }).click();
-	const annotationColor = inspector.getByLabel("Annotation Color", {
-		exact: true,
-	});
-	await expect(annotationColor).toHaveAttribute("type", "text");
-	await expect(annotationColor).toHaveValue("");
-	await expect(
-		inspector.getByLabel("Annotation Color picker", { exact: true }),
-	).toHaveAttribute("type", "color");
-
 	await itemType.fill("Case");
 	await page.getByRole("option", { name: "Case", exact: true }).click();
 	await expect(
@@ -2578,6 +2569,30 @@ test("uses controls that preserve every supported metadata value", async ({
 			savedDrafts.some((payload) => payload.dateDecided === "2024"),
 		)
 		.toBe(true);
+});
+
+test("keeps an empty annotation colour empty", async ({ page }) => {
+	await mockPublishedBook(page, {
+		initialDraftPayload: {
+			annotationColor: "",
+			annotationPosition: '{"pageIndex":0,"rects":[]}',
+			annotationType: "highlight",
+			itemType: "Annotation",
+			parentItem: "PARENT01",
+		},
+	});
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await inspector.getByRole("button", { name: "Edit" }).click();
+
+	const annotationColor = inspector.getByLabel("Annotation Color", {
+		exact: true,
+	});
+	await expect(annotationColor).toHaveAttribute("type", "text");
+	await expect(annotationColor).toHaveValue("");
+	await expect(
+		inspector.getByLabel("Annotation Color picker", { exact: true }),
+	).toHaveAttribute("type", "color");
 });
 
 test("shows draft differences with the published value and a revert action", async ({
