@@ -230,8 +230,8 @@ async function verifyConstraints(client: pg.Client) {
 
 		await client.query(`
 			INSERT INTO "zenodoPublishJournal"
-				("itemKey", "provider", "environment", "operationType", "payloadHash", "depositionId", "draftRecordId", "status")
-			VALUES ('D2TESTA2', 'zenodo', 'sandbox', 'zenodo_create', repeat('a', 64), 'dep-1', 'draft-1', 'preparing')
+				("itemKey", "provider", "environment", "operationType", "payloadHash", "payloadSnapshot", "depositionId", "draftRecordId", "status")
+			VALUES ('D2TESTA2', 'zenodo', 'sandbox', 'zenodo_create', repeat('a', 64), '{}'::jsonb, 'dep-1', 'draft-1', 'preparing')
 		`);
 		await expectConstraintViolation(
 			client,
@@ -251,8 +251,8 @@ async function verifyConstraints(client: pg.Client) {
 			() =>
 				client.query(`
 					INSERT INTO "zenodoPublishJournal"
-						("itemKey", "provider", "environment", "operationType", "payloadHash", "depositionId", "draftRecordId", "status")
-					VALUES ('D2TESTA2', 'zenodo', 'sandbox', 'surprise', repeat('b', 64), 'dep-2', 'draft-2', 'preparing')
+						("itemKey", "provider", "environment", "operationType", "payloadHash", "payloadSnapshot", "depositionId", "draftRecordId", "status")
+					VALUES ('D2TESTA2', 'zenodo', 'sandbox', 'surprise', repeat('b', 64), '{}'::jsonb, 'dep-2', 'draft-2', 'preparing')
 				`),
 		);
 		await expectConstraintViolation(
@@ -262,8 +262,8 @@ async function verifyConstraints(client: pg.Client) {
 			() =>
 				client.query(`
 					INSERT INTO "zenodoPublishJournal"
-						("itemKey", "provider", "environment", "operationType", "payloadHash", "depositionId", "draftRecordId", "status")
-					VALUES ('D2TESTA3', 'zenodo', 'sandbox', 'zenodo_create', repeat('b', 64), 'dep-3', 'draft-3', 'preparing')
+						("itemKey", "provider", "environment", "operationType", "payloadHash", "payloadSnapshot", "depositionId", "draftRecordId", "status")
+					VALUES ('D2TESTA3', 'zenodo', 'sandbox', 'zenodo_create', repeat('b', 64), '{}'::jsonb, 'dep-3', 'draft-3', 'preparing')
 				`),
 		);
 
