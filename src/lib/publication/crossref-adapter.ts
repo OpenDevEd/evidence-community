@@ -28,6 +28,7 @@ import {
 import { readPublicationRepositorySnapshot } from "./repository";
 import { currentManagedDoi, providerState } from "./state-adapter";
 import {
+	assertPublicationJobLease,
 	claimPublicationJobs,
 	deferPublicationJob,
 	enqueueItemSearchReprojection,
@@ -139,6 +140,8 @@ async function buildCrossrefPlan(
 async function recordCrossrefPending(
 	database: Database,
 	input: {
+		jobId: number;
+		workerId: string;
 		recordId: string;
 		stage: "relation_clear" | "deposit";
 		payloadHash: string;
@@ -148,37 +151,41 @@ async function recordCrossrefPending(
 		pendingReason: string;
 	},
 ) {
-	await database
-		.insert(publicationSyncState)
-		.values({
-			itemKey: input.recordId,
-			provider: "crossref",
-			environment: "test",
-			pendingStage: input.stage,
-			pendingPayloadHash: input.payloadHash,
-			pendingBatchId: input.batchId,
-			pendingFilename: input.filename,
-			pendingSubmittedAt: input.submittedAt,
-			pendingReason: input.pendingReason,
-			updatedAt: input.submittedAt,
-		})
-		.onConflictDoUpdate({
-			target: [
-				publicationSyncState.itemKey,
-				publicationSyncState.provider,
-				publicationSyncState.environment,
-			],
-			set: {
+	await database.transaction(async (transaction) => {
+		await lockItemMutation(transaction, input.recordId);
+		await assertPublicationJobLease(transaction, input);
+		await transaction
+			.insert(publicationSyncState)
+			.values({
+				itemKey: input.recordId,
+				provider: "crossref",
+				environment: "test",
 				pendingStage: input.stage,
 				pendingPayloadHash: input.payloadHash,
-				pendingPayloadSnapshot: null,
 				pendingBatchId: input.batchId,
 				pendingFilename: input.filename,
 				pendingSubmittedAt: input.submittedAt,
 				pendingReason: input.pendingReason,
 				updatedAt: input.submittedAt,
-			},
-		});
+			})
+			.onConflictDoUpdate({
+				target: [
+					publicationSyncState.itemKey,
+					publicationSyncState.provider,
+					publicationSyncState.environment,
+				],
+				set: {
+					pendingStage: input.stage,
+					pendingPayloadHash: input.payloadHash,
+					pendingPayloadSnapshot: null,
+					pendingBatchId: input.batchId,
+					pendingFilename: input.filename,
+					pendingSubmittedAt: input.submittedAt,
+					pendingReason: input.pendingReason,
+					updatedAt: input.submittedAt,
+				},
+			});
+	});
 }
 
 function patchValues(
@@ -320,12 +327,12 @@ async function settleCrossrefWorkerFailure(
 		failedAt: Date;
 		delayMs: number;
 		error: string;
-		deadLetter: boolean;
+		retryLimit: number;
 	},
 ) {
-	await database.transaction(async (transaction) => {
+	return database.transaction(async (transaction) => {
 		await lockItemMutation(transaction, input.itemKey);
-		await transaction
+		const [state] = await transaction
 			.insert(publicationSyncState)
 			.values({
 				itemKey: input.itemKey,
@@ -348,15 +355,21 @@ async function settleCrossrefWorkerFailure(
 					consecutiveFailures: sql`${publicationSyncState.consecutiveFailures} + 1`,
 					updatedAt: input.failedAt,
 				},
+			})
+			.returning({
+				consecutiveFailures: publicationSyncState.consecutiveFailures,
 			});
+		const deadLetter =
+			(state?.consecutiveFailures ?? 1) >= input.retryLimit;
 		await deferPublicationJob(transaction, {
 			jobId: input.jobId,
 			workerId: input.workerId,
 			deferredAt: input.failedAt,
 			delayMs: input.delayMs,
 			error: input.error,
-			deadLetter: input.deadLetter,
+			deadLetter,
 		});
+		return deadLetter;
 	});
 }
 
@@ -372,8 +385,13 @@ function failedResult(results: readonly PublicationSyncOperationResult[]) {
 }
 
 function isPermanentCrossrefFailure(failureClass: string) {
-	return failureClass === "CROSSREF_FAILED";
+	return (
+		failureClass === "CROSSREF_FAILED" ||
+		failureClass === "CROSSREF_PENDING_STALE"
+	);
 }
+
+const CROSSREF_PENDING_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
 
 export async function runCrossrefPublicationJobsOnce(
 	database: Database,
@@ -387,16 +405,21 @@ export async function runCrossrefPublicationJobsOnce(
 	const workerId = options.workerId ?? `crossref-once-${process.pid}`;
 	const now = options.now ?? (() => new Date());
 	const workerConfig = config.services.publication.worker;
-	const claimed = await claimPublicationJobs(database, {
-		provider: "crossref",
-		environment: "test",
-		workerId,
-		limit: workerConfig.batchSize,
-		leaseSeconds: workerConfig.leaseSeconds,
-		claimedAt: now(),
-	});
 	const outcomes: Array<{ jobId: number; status: string }> = [];
-	for (const job of claimed) {
+	for (
+		let processed = 0;
+		processed < workerConfig.batchSize;
+		processed += 1
+	) {
+		const [job] = await claimPublicationJobs(database, {
+			provider: "crossref",
+			environment: "test",
+			workerId,
+			limit: 1,
+			leaseSeconds: workerConfig.leaseSeconds,
+			claimedAt: now(),
+		});
+		if (!job) break;
 		try {
 			const built = await buildCrossrefPlan(
 				database,
@@ -449,7 +472,11 @@ export async function runCrossrefPublicationJobsOnce(
 					crossref: requireConfig(config),
 					crossrefJournal: {
 						recordCrossrefPendingDeposit: (pending) =>
-							recordCrossrefPending(database, pending),
+							recordCrossrefPending(database, {
+								...pending,
+								jobId: job.id,
+								workerId,
+							}),
 					},
 					now,
 				});
@@ -460,23 +487,42 @@ export async function runCrossrefPublicationJobsOnce(
 				previousState: built.previousState,
 				operationResults: results,
 				observedAt: settledAt,
+				crossrefPendingMaxAgeMs: CROSSREF_PENDING_MAX_AGE_MS,
 			});
-			const failure = failedResult(results);
+			const operationFailure = failedResult(results);
+			const stateFailure =
+				settlement.statePatch.failure?.provider === "crossref"
+					? settlement.statePatch.failure
+					: null;
+			const failure = operationFailure
+				? {
+						failureClass: operationFailure.failureClass,
+						summary: operationFailure.failureSummary,
+						consecutiveCount: stateFailure?.consecutiveCount ?? 1,
+					}
+				: stateFailure
+					? {
+							failureClass: stateFailure.failureClass,
+							summary: stateFailure.summary,
+							consecutiveCount: stateFailure.consecutiveCount,
+						}
+					: null;
 			const pending = results.some(
 				(result) => result.status === "pending",
 			);
 			const deadLetter = failure
 				? isPermanentCrossrefFailure(failure.failureClass) ||
-					job.attempts >= workerConfig.retryLimit
+					failure.consecutiveCount >= workerConfig.retryLimit
 				: false;
 			const jobResult = failure
 				? {
 						status: "deferred" as const,
 						delayMs: Math.min(
-							60_000 * 2 ** Math.max(job.attempts - 1, 0),
+							60_000 *
+								2 ** Math.max(failure.consecutiveCount - 1, 0),
 							3_600_000,
 						),
-						error: failure.failureSummary,
+						error: failure.summary,
 						deadLetter,
 					}
 				: pending
@@ -525,16 +571,19 @@ export async function runCrossrefPublicationJobsOnce(
 				error instanceof Error
 					? error.message
 					: "Crossref worker failed";
-			const deadLetter = job.attempts >= workerConfig.retryLimit;
 			try {
-				await settleCrossrefWorkerFailure(database, {
+				const deadLetter = await settleCrossrefWorkerFailure(database, {
 					jobId: job.id,
 					workerId,
 					itemKey: job.itemKey,
 					failedAt,
 					delayMs: 60_000,
 					error: summary,
-					deadLetter,
+					retryLimit: workerConfig.retryLimit,
+				});
+				outcomes.push({
+					jobId: job.id,
+					status: deadLetter ? "failed" : "retrying",
 				});
 			} catch (settlementError) {
 				if (settlementError instanceof PublicationJobLeaseLostError) {
@@ -543,10 +592,6 @@ export async function runCrossrefPublicationJobsOnce(
 				}
 				throw settlementError;
 			}
-			outcomes.push({
-				jobId: job.id,
-				status: deadLetter ? "failed" : "retrying",
-			});
 		}
 	}
 	return outcomes;

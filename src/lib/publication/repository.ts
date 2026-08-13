@@ -1,6 +1,6 @@
 import { and, asc, desc, eq, inArray } from "drizzle-orm";
 
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import {
 	doiNamespace,
 	publicationIdentifier,
@@ -13,8 +13,7 @@ import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 
-type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
-type Executor = Database | Transaction;
+type Executor = Database | DatabaseTransaction;
 
 export type PublicationRepositorySnapshot = {
 	record: typeof item.$inferSelect | null;
@@ -129,7 +128,10 @@ export async function readPublicationRepositorySnapshot(
 		attachmentKeys.length === 0
 			? []
 			: await database
-					.select({ itemKey: itemToTag.itemKey, name: itemToTag.tagName })
+					.select({
+						itemKey: itemToTag.itemKey,
+						name: itemToTag.tagName,
+					})
 					.from(itemToTag)
 					.where(inArray(itemToTag.itemKey, attachmentKeys));
 	const tagsByAttachment = new Map<string, string[]>();

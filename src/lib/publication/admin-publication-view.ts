@@ -42,8 +42,6 @@ import {
 	targetFor,
 } from "./state-adapter";
 
-export { PublicationItemNotFoundError } from "./errors";
-
 type PublicationConfig = LibraryServerConfig["services"]["publication"];
 type PublicationEnvironment = "test" | "sandbox";
 

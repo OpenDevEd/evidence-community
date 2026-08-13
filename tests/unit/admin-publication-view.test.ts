@@ -3,10 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import {
-	buildAdminPublicationViewFromSnapshot,
-	PublicationItemNotFoundError,
-} from "@/lib/publication/admin-publication-view";
+import { buildAdminPublicationViewFromSnapshot } from "@/lib/publication/admin-publication-view";
+import { PublicationItemNotFoundError } from "@/lib/publication/errors";
 import type { PublicationRepositorySnapshot } from "@/lib/publication/repository";
 
 type Snapshot = PublicationRepositorySnapshot;

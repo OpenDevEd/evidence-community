@@ -15,7 +15,10 @@ export class CrossrefActivationConfigurationError extends Error {
 export class CrossrefActivationValidationError extends Error {
 	readonly fields: Readonly<Record<string, string>>;
 
-	constructor(message: string, fields: Readonly<Record<string, string>> = {}) {
+	constructor(
+		message: string,
+		fields: Readonly<Record<string, string>> = {},
+	) {
 		super(message);
 		this.name = "CrossrefActivationValidationError";
 		this.fields = fields;
@@ -24,11 +27,14 @@ export class CrossrefActivationValidationError extends Error {
 
 export class CrossrefDoiConflictError extends CrossrefActivationValidationError {
 	constructor(conflicts: readonly { source: string; doi: string }[]) {
-		super("This record contains different DOI values. Make them match first.", {
-			DOI: conflicts
-				.map(({ source, doi }) => `${source}: ${doi}`)
-				.join("; "),
-		});
+		super(
+			"This record contains different DOI values. Make them match first.",
+			{
+				DOI: conflicts
+					.map(({ source, doi }) => `${source}: ${doi}`)
+					.join("; "),
+			},
+		);
 		this.name = "CrossrefDoiConflictError";
 	}
 }
@@ -45,9 +51,9 @@ export class ExternalCrossrefDoiError extends Error {
 	}
 }
 
-export class CrossrefPublicationItemNotFoundError extends Error {
-	constructor(itemKey: string) {
-		super(`Publication record was not found: ${itemKey}`);
-		this.name = "CrossrefPublicationItemNotFoundError";
+export class CrossrefDoiAlreadyManagedError extends Error {
+	constructor(doi: string, itemKey: string) {
+		super(`DOI ${doi} is already managed by record ${itemKey}.`);
+		this.name = "CrossrefDoiAlreadyManagedError";
 	}
 }

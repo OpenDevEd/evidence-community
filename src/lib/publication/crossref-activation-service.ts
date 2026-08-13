@@ -1,5 +1,5 @@
 import { mapCrossrefRecord } from "@opendeved/doi-sync-core";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull, sql } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutation } from "@/db/canonical-mutation-lock";
@@ -24,17 +24,19 @@ import { readPublicationRepositorySnapshot } from "./repository";
 import {
 	CrossrefActivationConfigurationError,
 	CrossrefActivationValidationError,
+	CrossrefDoiAlreadyManagedError,
 	CrossrefDoiConflictError,
-	CrossrefPublicationItemNotFoundError,
 	ExternalCrossrefDoiError,
+	PublicationItemNotFoundError,
 } from "./errors";
 
 export {
 	CrossrefActivationConfigurationError,
 	CrossrefActivationValidationError,
+	CrossrefDoiAlreadyManagedError,
 	CrossrefDoiConflictError,
-	CrossrefPublicationItemNotFoundError,
 	ExternalCrossrefDoiError,
+	PublicationItemNotFoundError,
 } from "./errors";
 
 type PublicationConfig = Pick<
@@ -159,7 +161,7 @@ export async function activateCrossrefPublication(
 			"test",
 		);
 		const record = snapshot.record;
-		if (!record) throw new CrossrefPublicationItemNotFoundError(itemKey);
+		if (!record) throw new PublicationItemNotFoundError(itemKey);
 
 		const existingTarget = snapshot.targets.find(
 			(target) =>
@@ -220,6 +222,26 @@ export async function activateCrossrefPublication(
 						prefix: crossref.prefix,
 						suffixNamespace: crossref.suffixNamespace,
 					});
+		await transaction.execute(
+			sql`SELECT pg_advisory_xact_lock(hashtextextended('publication:crossref-doi:' || ${doi}, 0))`,
+		);
+		const [existingIdentifier] = await transaction
+			.select({ itemKey: publicationIdentifier.itemKey })
+			.from(publicationIdentifier)
+			.where(
+				and(
+					eq(publicationIdentifier.registrar, "crossref"),
+					eq(publicationIdentifier.environment, "test"),
+					eq(publicationIdentifier.doi, doi),
+				),
+			)
+			.limit(1);
+		if (existingIdentifier && existingIdentifier.itemKey !== itemKey) {
+			throw new CrossrefDoiAlreadyManagedError(
+				doi,
+				existingIdentifier.itemKey,
+			);
+		}
 		let publicationRecord;
 		try {
 			publicationRecord = buildPublicationRecordSnapshot({
@@ -348,9 +370,13 @@ export async function retryCrossrefPublication(
 					eq(publicationSyncJob.itemKey, itemKey),
 					eq(publicationSyncJob.provider, "crossref"),
 					eq(publicationSyncJob.environment, "test"),
+					isNull(publicationSyncJob.supersededAt),
 				),
 			)
-			.orderBy(desc(publicationSyncJob.createdAt), desc(publicationSyncJob.id))
+			.orderBy(
+				desc(publicationSyncJob.createdAt),
+				desc(publicationSyncJob.id),
+			)
 			.limit(1)
 			.for("update");
 		if (!job?.deadLetteredAt) {

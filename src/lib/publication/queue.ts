@@ -1,14 +1,13 @@
 import { outbox } from "@opendeved/evidence-library-core";
 import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import {
 	publicationSyncJob,
 	type PublicationProvider,
 } from "@/db/schema/publication";
 
-type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
-type Executor = Database | Transaction;
+type Executor = Database | DatabaseTransaction;
 
 export class PublicationJobLeaseLostError extends Error {
 	constructor() {
@@ -17,8 +16,26 @@ export class PublicationJobLeaseLostError extends Error {
 	}
 }
 
+export async function assertPublicationJobLease(
+	transaction: DatabaseTransaction,
+	input: { jobId: number; workerId: string },
+) {
+	const [job] = await transaction
+		.select({ id: publicationSyncJob.id })
+		.from(publicationSyncJob)
+		.where(
+			and(
+				eq(publicationSyncJob.id, input.jobId),
+				eq(publicationSyncJob.leaseOwner, input.workerId),
+			),
+		)
+		.limit(1)
+		.for("update");
+	if (!job) throw new PublicationJobLeaseLostError();
+}
+
 export async function enqueueItemSearchReprojection(
-	transaction: Transaction,
+	transaction: DatabaseTransaction,
 	input: { itemKey: string; revision: number; queuedAt: Date },
 ) {
 	await transaction

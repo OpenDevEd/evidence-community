@@ -1,9 +1,7 @@
 import { eq } from "drizzle-orm";
 
-import type { Database } from "@/db/database-schema";
+import type { DatabaseTransaction } from "@/db/database-schema";
 import { doiNamespace } from "@/db/schema/publication";
-
-type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 export type AllocateManagedCrossrefDoiInput = {
 	environment: "test";
@@ -32,7 +30,7 @@ function validateInput(input: AllocateManagedCrossrefDoiInput) {
 }
 
 export async function allocateManagedCrossrefDoi(
-	transaction: Transaction,
+	transaction: DatabaseTransaction,
 	input: AllocateManagedCrossrefDoiInput,
 ) {
 	validateInput(input);
@@ -57,14 +55,14 @@ export async function allocateManagedCrossrefDoi(
 	}
 
 	if (
-			stored.prefix !== input.prefix ||
-			stored.suffixNamespace !== input.suffixNamespace
+		stored.prefix !== input.prefix ||
+		stored.suffixNamespace !== input.suffixNamespace
 	) {
-			if (stored.nextSequence !== 1) {
-				throw new DoiNamespaceConfigurationError(
-					"The DOI prefix or suffix namespace cannot change after the first DOI is reserved",
-				);
-			}
+		if (stored.nextSequence !== 1) {
+			throw new DoiNamespaceConfigurationError(
+				"The DOI prefix or suffix namespace cannot change after the first DOI is reserved",
+			);
+		}
 
 		await transaction
 			.update(doiNamespace)

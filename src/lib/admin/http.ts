@@ -36,7 +36,7 @@ import { CollectionWritebackUnavailableError } from "./collection-mutation-servi
 import {
 	CrossrefActivationConfigurationError,
 	CrossrefActivationValidationError,
-	CrossrefPublicationItemNotFoundError,
+	CrossrefDoiAlreadyManagedError,
 	ExternalCrossrefDoiError,
 	PublicationItemNotFoundError,
 } from "@/lib/publication/errors";
@@ -94,7 +94,6 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 		error instanceof ItemNotFoundError ||
 		error instanceof NativeFileNotFoundError ||
 		error instanceof CollectionNotFoundError ||
-		error instanceof CrossrefPublicationItemNotFoundError ||
 		error instanceof PublicationItemNotFoundError
 	) {
 		return {
@@ -103,7 +102,10 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 			status: 404,
 		};
 	}
-	if (error instanceof ExternalCrossrefDoiError) {
+	if (
+		error instanceof ExternalCrossrefDoiError ||
+		error instanceof CrossrefDoiAlreadyManagedError
+	) {
 		return {
 			code: "conflict",
 			message: error.message,
@@ -118,7 +120,9 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 		};
 	}
 	if (error instanceof CrossrefActivationValidationError) {
-		const details = validationErrorPayload(error.message, { ...error.fields });
+		const details = validationErrorPayload(error.message, {
+			...error.fields,
+		});
 		return { ...details, status: 400 };
 	}
 	if (

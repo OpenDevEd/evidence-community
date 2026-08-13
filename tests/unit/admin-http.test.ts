@@ -16,6 +16,7 @@ import { InvalidPdfError } from "@/lib/admin/pdf-processing";
 import {
 	CrossrefActivationConfigurationError,
 	CrossrefActivationValidationError,
+	CrossrefDoiAlreadyManagedError,
 	ExternalCrossrefDoiError,
 } from "@/lib/publication/errors";
 
@@ -48,6 +49,10 @@ describe("admin API error mapping", () => {
 				"Crossref test publishing is not configured for this library.",
 			),
 			new ExternalCrossrefDoiError("10.9999/external"),
+			new CrossrefDoiAlreadyManagedError(
+				"10.5555/library.000001",
+				"ABCDEFGH",
+			),
 		]) {
 			const response = adminErrorResponse(error);
 			expect(response.status).toBe(409);
