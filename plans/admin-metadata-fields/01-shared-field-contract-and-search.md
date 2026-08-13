@@ -126,3 +126,6 @@ Expected changes include:
   of adding compatibility reads or a backfill.
 - Search settings change. A full development reindex is required.
 - Zotero dates are flexible. Do not replace them with one required day picker.
+- The private server already applied the original `0025_publication-model.sql`.
+  Restore that migration byte-for-byte and move its newer constraint changes
+  into the next unapplied forward migration before deploying this schema.
