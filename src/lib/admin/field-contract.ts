@@ -115,7 +115,7 @@ export function normalizeAdminFieldValue(
 		utf8ByteLength(value) > 65_535
 	) {
 		return {
-			error: "Shorten this field to 65,535 simple characters or fewer.",
+			error: "This value is too long. Shorten it and try again.",
 			value,
 		};
 	}

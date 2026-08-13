@@ -113,19 +113,28 @@ Expected changes include:
 ## Deployment check
 
 1. Run `npx vitest run tests/unit/admin-field-contract.test.ts
-   tests/unit/native-item-validation.test.ts
+   tests/unit/admin-draft-route.test.ts tests/unit/native-item-validation.test.ts
    tests/unit/item-draft-patch.test.ts tests/unit/public-item-details.test.ts`,
    `npm run test:unit`, and `npx tsc --noEmit`.
 2. Run `npm run test:search-index` and `npm run test:search-worker`.
 3. Run the admin Playwright tests named `uses controls that preserve every
    supported metadata value` and `keeps an empty annotation colour empty` in
    Chromium and WebKit.
-4. Run the source import and Zotero writeback real-service checks.
+
+The generated unit audit checks all 770 vendored field appearances against the
+single contract used by the editor and server. Browser tests cover one real
+control from every distinct control kind plus autosave and alias round-trips;
+they do not duplicate the same control for every item type.
+4. Run `npm run test:source-writer`, `npm run test:zotero-source`, and
+   `npm run test:source-writeback`.
 5. Wipe and resync the isolated development data.
 6. Rebuild the development Meilisearch index.
 7. Open a case and a normal record in `/admin`, then confirm their public title,
    year filter, and Newest/Oldest order.
-8. Confirm the running Next.js app has no compile or unhandled errors.
+8. Run `npx pm2 logs next --lines 5 --nostream`; confirm a recent
+   `✓ Compiled` and no module, type, compile, or unhandled errors. For the
+   deployed Evidence Library, read the Coolify deployment log and confirm the
+   production build compiled and both Compose services are healthy.
 
 ## Completion rules
 

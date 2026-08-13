@@ -52,7 +52,13 @@ function BibliographicDateField({
 	value,
 }: CommonFieldProps) {
 	const [mode, setMode] = useState<DateMode>(() => dateMode(value));
-	const displayedMode = value ? dateMode(value) : mode;
+	const parsedValue = parseBibliographicDate(value);
+	const displayedMode =
+		parsedValue.kind === "parsed" && parsedValue.precision === "day"
+			? "day"
+			: parsedValue.kind === "parsed" && parsedValue.precision === "year"
+				? "year"
+				: mode;
 	const inputType = displayedMode === "day" ? "date" : "number";
 	return (
 		<div className="grid gap-2 sm:grid-cols-[9rem_minmax(0,1fr)]">

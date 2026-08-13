@@ -5,6 +5,7 @@ import type {
 	AdminSource,
 } from "@/lib/admin/types";
 import type { AdminItemBatchResult } from "@/lib/admin/item-batch-contract";
+import { adminCanonicalPayloadToItemFields } from "@/lib/admin/item-fields";
 
 import {
 	measureAdminSearchIndexTrigger,
@@ -292,6 +293,7 @@ async function mockPublishedBook(
 			expectedPayload: Record<string, unknown>;
 			payload: Record<string, unknown>;
 		}) => Promise<Record<string, unknown> | void>;
+		canonicalDraftResponses?: boolean;
 		failDraftSave?: boolean;
 		itemCount?: number;
 		itemPageSize?: number;
@@ -556,8 +558,22 @@ async function mockPublishedBook(
 			draftPayload =
 				(await options.beforeDraftSaveResponse?.(body)) ?? body.payload;
 			draftRevision += 1;
+			const canonicalPayload = options.canonicalDraftResponses
+				? Object.fromEntries(
+						Object.entries(draftPayload).map(([field, value]) => [
+							field === "language" ? "languageName" : field,
+							value,
+						]),
+					)
+				: draftPayload;
+			const responsePayload = options.canonicalDraftResponses
+				? adminCanonicalPayloadToItemFields(
+						canonicalPayload,
+						String(canonicalPayload.itemType ?? ""),
+					)
+				: canonicalPayload;
 			await route.fulfill({
-				json: { draft: publishedDraft(draftPayload, draftRevision) },
+				json: { draft: publishedDraft(responsePayload, draftRevision) },
 			});
 			return;
 		}
@@ -2521,6 +2537,7 @@ test("uses controls that preserve every supported metadata value", async ({
 }) => {
 	const savedDrafts: Record<string, unknown>[] = [];
 	await mockPublishedBook(page, {
+		canonicalDraftResponses: true,
 		onDraftSave: (payload) => savedDrafts.push(structuredClone(payload)),
 	});
 	await page.goto("/admin");
@@ -2550,6 +2567,7 @@ test("uses controls that preserve every supported metadata value", async ({
 			savedDrafts.some((payload) => payload.language === "French"),
 		)
 		.toBe(true);
+	await expect(inspector.getByRole("status")).toHaveText("Saved");
 	await expect(language).toHaveValue("French");
 
 	const itemType = inspector.getByRole("combobox", { name: "Item type" });
@@ -2571,7 +2589,8 @@ test("uses controls that preserve every supported metadata value", async ({
 	const decided = inspector.getByLabel("Date Decided", { exact: true });
 	await expect(decided).toHaveAttribute("type", "number");
 	await expect(decided).toHaveAttribute("inputmode", "numeric");
-	await decided.fill("2024");
+	await decided.pressSequentially("2024");
+	await expect(decided).toHaveAttribute("type", "number");
 	await expect
 		.poll(() =>
 			savedDrafts.some((payload) => payload.dateDecided === "2024"),

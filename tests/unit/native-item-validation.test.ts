@@ -240,7 +240,7 @@ describe("native item draft validation", () => {
 			[
 				"annotationPageLabel",
 				{ ...annotation, annotationPageLabel: "é".repeat(26) },
-				"Shorten Annotation Page Label to 50 simple characters or fewer.",
+				"Annotation Page Label is too long. Shorten it and try again.",
 			],
 			[
 				"annotationPosition",
@@ -248,7 +248,7 @@ describe("native item draft validation", () => {
 					...annotation,
 					annotationPosition: JSON.stringify({ value: "p".repeat(65_536) }),
 				},
-				"Shorten Annotation Position to 65,535 simple characters or fewer.",
+				"Annotation Position is too long. Shorten it and try again.",
 			],
 		] as const) {
 			try {

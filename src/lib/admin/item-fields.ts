@@ -96,7 +96,7 @@ export function zoteroStructuralFieldErrors(
 	) {
 		errors.push({
 			field: "annotationPageLabel",
-			message: "Shorten Annotation Page Label to 50 simple characters or fewer.",
+			message: "Annotation Page Label is too long. Shorten it and try again.",
 		});
 	}
 	if (
@@ -123,7 +123,7 @@ export function zoteroStructuralFieldErrors(
 	if (utf8ByteLength(annotationPosition) > 65_535) {
 		errors.push({
 			field: "annotationPosition",
-			message: "Shorten Annotation Position to 65,535 simple characters or fewer.",
+			message: "Annotation Position is too long. Shorten it and try again.",
 		});
 		return errors;
 	}

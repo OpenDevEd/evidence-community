@@ -7,10 +7,10 @@ import {
 import { humanizeAdminField } from "@/components/admin/admin-schema";
 
 describe("admin item fields", () => {
-	it("keeps child-only Zotero types out of top-level creation and conversion", () => {
-		expect(isTopLevelAdminItemType("attachment")).toBe(false);
+	it("allows standalone notes and attachments but requires annotation parents", () => {
+		expect(isTopLevelAdminItemType("attachment")).toBe(true);
 		expect(isTopLevelAdminItemType("Annotation")).toBe(false);
-		expect(isTopLevelAdminItemType("note")).toBe(false);
+		expect(isTopLevelAdminItemType("note")).toBe(true);
 		expect(isTopLevelAdminItemType("report")).toBe(true);
 	});
 
