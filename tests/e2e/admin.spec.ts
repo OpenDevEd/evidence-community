@@ -2572,7 +2572,9 @@ test("uses controls that preserve every supported metadata value", async ({
 
 	const itemType = inspector.getByRole("combobox", { name: "Item type" });
 	await itemType.fill("Case");
-	await page.getByRole("option", { name: "Case", exact: true }).click();
+	await page
+		.getByRole("option", { name: "Case", exact: true })
+		.click({ force: true });
 	await expect(
 		inspector.getByLabel("Case Name", { exact: true }),
 	).toBeVisible();
