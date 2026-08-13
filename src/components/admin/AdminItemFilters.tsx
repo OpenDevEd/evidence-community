@@ -391,6 +391,11 @@ export function AdminItemFilters({
 		({ filterable, id }) =>
 			filterable && !drafts.some((entry) => entry.column === id),
 	);
+	const applyFilters = () => {
+		if (!parsed) return;
+		onChange(parsed);
+		setOpen(false);
+	};
 
 	return (
 		<Popover
@@ -443,8 +448,13 @@ export function AdminItemFilters({
 			</PopoverTrigger>
 			<PopoverContent
 				aria-label="Filter records"
+				as="form"
 				className="box-border flex max-h-[calc(100dvh-72px)] w-[min(420px,calc(100vw-24px))] min-w-0 max-w-none flex-col overflow-hidden rounded-xl border border-black/[0.08] bg-white p-0 shadow-lg dark:border-white/[0.09] dark:bg-card"
 				data-admin-filter-popover
+				onSubmit={(event) => {
+					event.preventDefault();
+					applyFilters();
+				}}
 			>
 				<div className="flex h-11 w-full shrink-0 items-center justify-between border-b border-black/[0.06] px-3 dark:border-white/[0.06]">
 					<span className="text-sm font-semibold text-black/80 dark:text-white/85">
@@ -652,6 +662,7 @@ export function AdminItemFilters({
 					<Button
 						onPress={() => setOpen(false)}
 						size="xs"
+						type="button"
 						variant="transparent"
 					>
 						Cancel
@@ -659,12 +670,8 @@ export function AdminItemFilters({
 					<Button
 						color="accent"
 						isDisabled={!parsed}
-						onPress={() => {
-							if (!parsed) return;
-							onChange(parsed);
-							setOpen(false);
-						}}
 						size="xs"
+						type="submit"
 						variant="solid"
 					>
 						Apply

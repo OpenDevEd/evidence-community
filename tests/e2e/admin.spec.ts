@@ -1307,7 +1307,7 @@ test("creates a collection in a searched location without a full-list select", a
 	await dialog
 		.getByRole("textbox", { name: "Name" })
 		.fill("Nested collection");
-	await dialog.getByRole("button", { name: "Create" }).click();
+	await dialog.getByRole("textbox", { name: "Name" }).press("Enter");
 	await expect
 		.poll(() => createRequest)
 		.toEqual({
@@ -1410,7 +1410,7 @@ test("creates and renames collections in an editable Zotero source", async ({
 	await page.getByRole("menuitem", { name: "New inside" }).click();
 	dialog = page.getByRole("dialog", { name: "New collection" });
 	await dialog.getByRole("textbox", { name: "Name" }).fill("Remote child");
-	await dialog.getByRole("button", { name: "Create" }).click();
+	await dialog.getByRole("textbox", { name: "Name" }).press("Enter");
 	await expect
 		.poll(() => createRequest)
 		.toEqual({
@@ -1429,7 +1429,7 @@ test("creates and renames collections in an editable Zotero source", async ({
 	await dialog
 		.getByRole("textbox", { name: "Name" })
 		.fill("Renamed remote collection");
-	await dialog.getByRole("button", { name: "Rename" }).click();
+	await dialog.getByRole("textbox", { name: "Name" }).press("Enter");
 	await expect
 		.poll(() => renameRequest)
 		.toEqual({
@@ -1720,7 +1720,7 @@ test("persists advanced typed filters in the URL", async ({ page }) => {
 		)
 		.toBe(420);
 	await dialog.getByRole("textbox", { name: "Title value" }).fill("evidence");
-	await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+	await dialog.getByRole("textbox", { name: "Title value" }).press("Enter");
 
 	await expect
 		.poll(() => {

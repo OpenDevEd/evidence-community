@@ -27,7 +27,14 @@ import {
 	Trash2,
 	X,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type FormEvent,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { toast } from "sonner";
 
 import { LibraryLogoImages } from "@/components/library/LibraryIdentity";
@@ -1344,6 +1351,13 @@ export default function AdminWorkbench({
 			(error) => setCollectionErrors(formErrors(error)),
 		);
 
+	const submitCollectionForm = (event: FormEvent) => {
+		event.preventDefault();
+		if (collectionParentPickerOpen || !collectionName.trim() || busy)
+			return;
+		submitCollection();
+	};
+
 	const submitCollectionMove = () =>
 		void runBusy(
 			async () => {
@@ -2245,7 +2259,7 @@ export default function AdminWorkbench({
 					}
 				}}
 			>
-				<ModalContent>
+				<ModalContent as="form" onSubmit={submitCollectionForm}>
 					{(onClose) => (
 						<>
 							<ModalHeader>
@@ -2463,6 +2477,7 @@ export default function AdminWorkbench({
 								<Button
 									onPress={onClose}
 									size="xs"
+									type="button"
 									variant="transparent"
 								>
 									Cancel
@@ -2474,7 +2489,6 @@ export default function AdminWorkbench({
 											!collectionName.trim() || busy
 										}
 										isLoading={busy}
-										onPress={submitCollection}
 										size="xs"
 										startContent={
 											<FolderInput
@@ -2482,6 +2496,7 @@ export default function AdminWorkbench({
 												size={14}
 											/>
 										}
+										type="submit"
 										variant="solid"
 									>
 										{collectionDialog?.mode === "rename"
