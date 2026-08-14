@@ -8,6 +8,7 @@ import {
 	decideLibraryDatabaseAction,
 	parseLibraryDatabaseName,
 	quotePostgresIdentifier,
+	validateLibraryDatabaseTarget,
 } from "../src/lib/deployment/library-database";
 
 const { Client, escapeIdentifier, escapeLiteral } = pg;
@@ -34,9 +35,15 @@ export async function provisionLibraryDatabase(
 	});
 
 	const adminUrl = new URL(input.adminUrl);
-	if (adminUrl.protocol !== "postgres:" && adminUrl.protocol !== "postgresql:") {
+	if (
+		adminUrl.protocol !== "postgres:" &&
+		adminUrl.protocol !== "postgresql:"
+	) {
 		throw new Error("Administrator URL must be a PostgreSQL URL.");
 	}
+	const adminUser = decodeURIComponent(adminUrl.username);
+	if (!adminUser)
+		throw new Error("Administrator URL must include a login name.");
 
 	const client = new Client({ connectionString: adminUrl.toString() });
 	const lockName = `evidence-library-database:${database}`;
@@ -46,6 +53,39 @@ export async function provisionLibraryDatabase(
 			lockName,
 		]);
 		try {
+			const existingRoleResult = await client.query<{
+				can_bypass_rls: boolean;
+				can_create_database: boolean;
+				can_create_role: boolean;
+				can_replicate: boolean;
+				is_superuser: boolean;
+			}>(
+				`SELECT
+				   rolsuper AS is_superuser,
+				   rolcreatedb AS can_create_database,
+				   rolcreaterole AS can_create_role,
+				   rolreplication AS can_replicate,
+				   rolbypassrls AS can_bypass_rls
+				 FROM pg_roles
+				 WHERE rolname = $1`,
+				[user],
+			);
+			const existingRole = existingRoleResult.rows[0];
+			validateLibraryDatabaseTarget({
+				adminUser,
+				database,
+				existingRole: existingRole
+					? {
+							canBypassRls: existingRole.can_bypass_rls,
+							canCreateDatabase: existingRole.can_create_database,
+							canCreateRole: existingRole.can_create_role,
+							canReplicate: existingRole.can_replicate,
+							isSuperuser: existingRole.is_superuser,
+						}
+					: null,
+				user,
+			});
+
 			const existingDatabase = await client.query<{ owner: string }>(
 				`SELECT pg_get_userbyid(datdba) AS owner FROM pg_database WHERE datname = $1`,
 				[database],
@@ -110,13 +150,22 @@ export async function provisionLibraryDatabase(
 			});
 			await targetClient.connect();
 			try {
-				await targetClient.query("CREATE EXTENSION IF NOT EXISTS vector");
-				await targetClient.query("CREATE EXTENSION IF NOT EXISTS pg_trgm");
-				const extensions = await targetClient.query<{ extname: string }>(
+				await targetClient.query(
+					"CREATE EXTENSION IF NOT EXISTS vector",
+				);
+				await targetClient.query(
+					"CREATE EXTENSION IF NOT EXISTS pg_trgm",
+				);
+				const extensions = await targetClient.query<{
+					extname: string;
+				}>(
 					`SELECT extname FROM pg_extension WHERE extname = ANY($1::text[]) ORDER BY extname`,
 					[["pg_trgm", "vector"]],
 				);
-				if (extensions.rows.map((row) => row.extname).join(",") !== "pg_trgm,vector") {
+				if (
+					extensions.rows.map((row) => row.extname).join(",") !==
+					"pg_trgm,vector"
+				) {
 					throw new Error(
 						"PostgreSQL did not install the required pg_trgm and vector extensions.",
 					);
@@ -180,14 +229,17 @@ export async function provisionLibraryDatabase(
 				row.can_replicate ||
 				row.can_bypass_rls
 			) {
-				throw new Error("PostgreSQL did not accept the requested library access rules.");
+				throw new Error(
+					"PostgreSQL did not accept the requested library access rules.",
+				);
 			}
 
 			return { action, database, databaseUrl, user };
 		} finally {
-			await client.query("SELECT pg_advisory_unlock(hashtextextended($1, 0))", [
-				lockName,
-			]);
+			await client.query(
+				"SELECT pg_advisory_unlock(hashtextextended($1, 0))",
+				[lockName],
+			);
 		}
 	} finally {
 		await client.end();

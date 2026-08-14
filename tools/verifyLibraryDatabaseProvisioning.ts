@@ -15,6 +15,7 @@ if (!configuredAdminUrl) {
 	throw new Error("EVIDENCE_LIBRARY_ADMIN_DATABASE_URL is required.");
 }
 const adminUrl = new URL(configuredAdminUrl);
+const adminUser = decodeURIComponent(adminUrl.username);
 const runtimeHost = adminUrl.host;
 const suffix = `${Date.now().toString(36)}_${randomBytes(3).toString("hex")}`;
 const libraries = [
@@ -30,7 +31,10 @@ const libraries = [
 	},
 ] as const;
 
-async function migrateAndReadOwnDatabase(databaseUrl: string) {
+async function migrateAndReadOwnDatabase(
+	databaseUrl: string,
+	expectedOwner: string,
+) {
 	const pool = new Pool({ connectionString: databaseUrl, max: 1 });
 	try {
 		await migrate(drizzle(pool), { migrationsFolder: "drizzle" });
@@ -38,14 +42,25 @@ async function migrateAndReadOwnDatabase(databaseUrl: string) {
 			`SELECT COUNT(*)::text AS count FROM "status"`,
 		);
 		assert.equal(result.rows[0]?.count, "1");
-		const extensions = await pool.query<{ extname: string }>(
-			`SELECT extname FROM pg_extension WHERE extname = ANY($1::text[]) ORDER BY extname`,
+		const extensions = await pool.query<{ extname: string; owner: string }>(
+			`SELECT extension.extname, role.rolname AS owner
+			 FROM pg_extension AS extension
+			 JOIN pg_roles AS role ON role.oid = extension.extowner
+			 WHERE extension.extname = ANY($1::text[])
+			 ORDER BY extension.extname`,
 			[["pg_trgm", "vector"]],
 		);
-		assert.deepEqual(
-			extensions.rows.map((row) => row.extname),
-			["pg_trgm", "vector"],
+		assert.deepEqual(extensions.rows, [
+			{ extname: "pg_trgm", owner: adminUser },
+			{ extname: "vector", owner: adminUser },
+		]);
+		const relationOwners = await pool.query<{ owner: string }>(
+			`SELECT DISTINCT tableowner AS owner
+			 FROM pg_tables
+			 WHERE schemaname IN ('public', 'drizzle')
+			 ORDER BY tableowner`,
 		);
+		assert.deepEqual(relationOwners.rows, [{ owner: expectedOwner }]);
 	} finally {
 		await pool.end();
 	}
@@ -76,6 +91,21 @@ async function expectCrossDatabaseDenied(
 	);
 }
 
+async function readAdminRights() {
+	const client = new Client({ connectionString: adminUrl.toString() });
+	await client.connect();
+	try {
+		const result = await client.query(
+			`SELECT rolsuper, rolcreatedb, rolcreaterole, rolreplication, rolbypassrls
+			 FROM pg_roles WHERE rolname = $1`,
+			[adminUser],
+		);
+		return result.rows;
+	} finally {
+		await client.end();
+	}
+}
+
 async function cleanup() {
 	const client = new Client({ connectionString: adminUrl.toString() });
 	await client.connect();
@@ -102,6 +132,19 @@ async function cleanup() {
 async function main() {
 	const results: Awaited<ReturnType<typeof provisionLibraryDatabase>>[] = [];
 	try {
+		const beforeAdmin = await readAdminRights();
+		await assert.rejects(
+			provisionLibraryDatabase({
+				adminUrl: adminUrl.toString(),
+				database: `el_verify_guard_${suffix}`,
+				password: randomBytes(18).toString("base64url"),
+				runtimeHost,
+				user: adminUser,
+			}),
+			/protected/i,
+		);
+		assert.deepEqual(await readAdminRights(), beforeAdmin);
+
 		for (const library of libraries) {
 			const result = await provisionLibraryDatabase({
 				adminUrl: adminUrl.toString(),
@@ -112,7 +155,7 @@ async function main() {
 			});
 			assert.equal(result.action, "create");
 			results.push(result);
-			await migrateAndReadOwnDatabase(result.databaseUrl);
+			await migrateAndReadOwnDatabase(result.databaseUrl, library.user);
 		}
 
 		await expectCrossDatabaseDenied(
@@ -134,12 +177,13 @@ async function main() {
 			});
 			assert.equal(repeated.action, "normalize");
 			assert.equal(repeated.databaseUrl, results[index].databaseUrl);
-			await migrateAndReadOwnDatabase(repeated.databaseUrl);
+			await migrateAndReadOwnDatabase(repeated.databaseUrl, library.user);
 		}
 
 		console.log(
 			JSON.stringify({
 				crossDatabaseAccess: "denied",
+				administratorGuard: "passed",
 				databases: libraries.map((library) => library.database),
 				migrations: "passed",
 				rerun: "safe",

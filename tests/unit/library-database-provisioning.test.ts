@@ -5,6 +5,7 @@ import {
 	decideLibraryDatabaseAction,
 	parseLibraryDatabaseName,
 	quotePostgresIdentifier,
+	validateLibraryDatabaseTarget,
 } from "@/lib/deployment/library-database";
 
 describe("library database provisioning contract", () => {
@@ -86,5 +87,74 @@ describe("library database provisioning contract", () => {
 				requestedOwner: "library_user",
 			}),
 		).toThrow(/owned by other_user/);
+	});
+
+	it.each(["postgres", "template0", "template_library"])(
+		"rejects a reserved database name: %s",
+		(database) => {
+			expect(() =>
+				validateLibraryDatabaseTarget({
+					adminUser: "server_admin",
+					database,
+					existingRole: null,
+					user: "library_user",
+				}),
+			).toThrow(/reserved/i);
+		},
+	);
+
+	it.each(["postgres", "pg_read_all_data", "server_admin"])(
+		"rejects a protected login: %s",
+		(user) => {
+			expect(() =>
+				validateLibraryDatabaseTarget({
+					adminUser: "server_admin",
+					database: "library_database",
+					existingRole: null,
+					user,
+				}),
+			).toThrow(/login/i);
+		},
+	);
+
+	it.each([
+		"isSuperuser",
+		"canCreateDatabase",
+		"canCreateRole",
+		"canReplicate",
+		"canBypassRls",
+	] as const)("refuses to demote a role where %s is true", (right) => {
+		expect(() =>
+			validateLibraryDatabaseTarget({
+				adminUser: "server_admin",
+				database: "library_database",
+				existingRole: {
+					canBypassRls: false,
+					canCreateDatabase: false,
+					canCreateRole: false,
+					canReplicate: false,
+					isSuperuser: false,
+					[right]: true,
+				},
+				user: "library_user",
+			}),
+		).toThrow(/powerful server rights/i);
+	});
+
+	it("allows a restricted existing library login", () => {
+		expect(
+			validateLibraryDatabaseTarget({
+				adminUser: "server_admin",
+				database: "library_database",
+				existingRole: {
+					canBypassRls: false,
+					canCreateDatabase: false,
+					canCreateRole: false,
+					canReplicate: false,
+					isSuperuser: false,
+				},
+				user: "library_user",
+			}),
+		).toBeUndefined();
 	});
 });

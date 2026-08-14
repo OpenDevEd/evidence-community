@@ -3,6 +3,14 @@ const MAX_POSTGRES_IDENTIFIER_BYTES = 63;
 
 export type LibraryDatabaseAction = "create" | "normalize";
 
+export type ExistingLibraryRoleSecurity = {
+	canBypassRls: boolean;
+	canCreateDatabase: boolean;
+	canCreateRole: boolean;
+	canReplicate: boolean;
+	isSuperuser: boolean;
+};
+
 export function parseLibraryDatabaseName(value: string, label: string) {
 	const byteLength = Buffer.byteLength(value, "utf8");
 	if (
@@ -19,6 +27,44 @@ export function parseLibraryDatabaseName(value: string, label: string) {
 export function quotePostgresIdentifier(value: string) {
 	const identifier = parseLibraryDatabaseName(value, "PostgreSQL identifier");
 	return `"${identifier.replaceAll('"', '""')}"`;
+}
+
+export function validateLibraryDatabaseTarget(input: {
+	adminUser: string;
+	database: string;
+	existingRole: ExistingLibraryRoleSecurity | null;
+	user: string;
+}) {
+	if (
+		input.database === "postgres" ||
+		input.database.startsWith("template")
+	) {
+		throw new Error(
+			`The database name ${input.database} is reserved by PostgreSQL.`,
+		);
+	}
+	if (
+		input.user === "postgres" ||
+		input.user.startsWith("pg_") ||
+		input.user === input.adminUser
+	) {
+		throw new Error(
+			`The login ${input.user} is protected and cannot be used by a library.`,
+		);
+	}
+	const role = input.existingRole;
+	if (
+		role &&
+		(role.isSuperuser ||
+			role.canCreateDatabase ||
+			role.canCreateRole ||
+			role.canReplicate ||
+			role.canBypassRls)
+	) {
+		throw new Error(
+			`The login ${input.user} already has powerful server rights and will not be changed.`,
+		);
+	}
 }
 
 export function decideLibraryDatabaseAction(input: {
@@ -54,7 +100,8 @@ function parseInternalPostgresHost(value: string) {
 		url.username ||
 		url.password ||
 		url.pathname !== "" ||
-		(port !== null && (!Number.isInteger(port) || port < 1 || port > 65_535))
+		(port !== null &&
+			(!Number.isInteger(port) || port < 1 || port > 65_535))
 	) {
 		throw new Error(
 			"Internal PostgreSQL host must be a hostname with an optional port.",
