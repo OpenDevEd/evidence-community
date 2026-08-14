@@ -34,6 +34,7 @@ import {
 	publishedAdminItemPayload,
 } from "./item-draft-patch";
 import { effectiveItemParent } from "./item-draft-merge";
+import { rebaseNativeItemDraftPayload } from "./item-draft-rebase";
 import {
 	NativeItemValidationError,
 	validateNativeItemDraft,
@@ -536,12 +537,6 @@ async function saveItemDraftInTransaction(
 	options: ItemWritebackPolicyOptions = {},
 ) {
 	const access = await requireItemDraftAccess(transaction, itemKey, options);
-	const expected = validateNativeItemDraft(expectedPayload, {
-		allowIncompleteCreators: true,
-	});
-	const submitted = validateNativeItemDraft(payload, {
-		allowIncompleteCreators: true,
-	});
 	const [currentDraft] = await transaction
 		.select()
 		.from(itemDraft)
@@ -563,13 +558,10 @@ async function saveItemDraftInTransaction(
 		published ?? null,
 	);
 	const currentPayload = applyItemDraftPatch(basePayload, currentDraft.patch);
-	const editorChanges = createItemDraftPatch(
-		expected.payload,
-		submitted.payload,
-	);
-	const intendedPayload = applyItemDraftPatch(currentPayload, editorChanges);
-	const validated = validateNativeItemDraft(intendedPayload, {
-		allowIncompleteCreators: true,
+	const validated = rebaseNativeItemDraftPayload({
+		currentPayload,
+		expectedPayload,
+		payload,
 	});
 	const patch = createItemDraftPatch(basePayload, validated.payload);
 	await assertValidItemCollectionMembershipsInDatabase(
