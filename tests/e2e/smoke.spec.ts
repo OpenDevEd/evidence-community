@@ -664,7 +664,11 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 		expect(Object.hasOwn(facetDistribution, "institution")).toBe(false);
 	}
 
-	const itemsResponse = await request.get("/api/items");
+	const itemsResponse = await request.get(
+		expectedSearchItemTitle
+			? `/api/items?search=${encodeURIComponent(expectedSearchItemTitle)}`
+			: "/api/items",
+	);
 	expect(itemsResponse.status()).toBe(200);
 	const firstItem = (await itemsResponse.json()).items?.[0];
 	if (expectedSearchItemKey) {

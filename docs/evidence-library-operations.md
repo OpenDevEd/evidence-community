@@ -23,6 +23,11 @@ builds. The default deployment includes the search, source-sync, and
 source-writeback workers plus one private persistent Meilisearch service. A
 web-only deployment is incomplete.
 
+Set the Coolify application field `connect_to_docker_network` to `false` through
+the provisioning API. The checked-in Compose attaches only the four runtime
+containers to the external `coolify` network. Meilisearch stays on the private
+application network, so another library cannot share its service-name DNS.
+
 To change a Coolify deployment, update `LIBRARY_CONFIG_JSON` and redeploy the
 repository Compose file. The host-directory steps below are only for running
 the image directly with Docker. They do not apply to the Coolify Compose path.

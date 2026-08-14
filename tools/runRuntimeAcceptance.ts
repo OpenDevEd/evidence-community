@@ -1178,6 +1178,16 @@ async function main() {
 			"indigo-search-indexer",
 		);
 		for (const profile of profiles) {
+			assert.equal(
+				postgresScalar(
+					profile.name,
+					`SELECT "searchIndexRebuildPending" FROM "status" WHERE "id" = 1`,
+				),
+				"f",
+				`${profile.name} search rebuild marker must clear before worker health passes`,
+			);
+		}
+		for (const profile of profiles) {
 			await seedSearch(profile);
 		}
 		await verifySearchQueueIsolation(profiles);
@@ -1228,6 +1238,6 @@ async function main() {
 }
 
 main().catch((error) => {
-	console.error(error);
-	process.exitCode = 1;
+  console.error(error);
+  process.exitCode = 1;
 });

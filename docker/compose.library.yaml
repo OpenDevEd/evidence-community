@@ -15,6 +15,10 @@ x-source-build: &source-build
   context: .
   dockerfile: Dockerfile
 
+x-runtime-networks: &runtime-networks
+  - private
+  - coolify
+
 services:
   web:
     build:
@@ -24,6 +28,7 @@ services:
     environment: *runtime-environment
     configs:
       - *runtime-config
+    networks: *runtime-networks
     depends_on:
       search-indexer:
         condition: service_healthy
@@ -36,12 +41,13 @@ services:
     command:
       - /bin/sh
       - -euc
-      - npm run db:migrate && exec node_modules/.bin/tsx tools/runSearchIndexer.ts --rebuild-if-missing --watch
+      - npm run db:migrate && exec node_modules/.bin/tsx tools/runSearchIndexer.ts --watch
     environment:
       <<: *runtime-environment
       SEARCH_INDEX_WORKER_ID: search-indexer
     configs:
       - *runtime-config
+    networks: *runtime-networks
     depends_on:
       meilisearch:
         condition: service_healthy
@@ -62,6 +68,7 @@ services:
       SOURCE_SYNC_WORKER_ID: source-sync
     configs:
       - *runtime-config
+    networks: *runtime-networks
     depends_on:
       search-indexer:
         condition: service_healthy
@@ -76,6 +83,7 @@ services:
       SOURCE_WRITEBACK_WORKER_ID: source-writeback
     configs:
       - *runtime-config
+    networks: *runtime-networks
     depends_on:
       search-indexer:
         condition: service_healthy
@@ -95,6 +103,8 @@ services:
       retries: 12
     volumes:
       - meilisearch-data:/meili_data
+    networks:
+      - private
     restart: unless-stopped
 
 configs:
@@ -103,3 +113,9 @@ configs:
 
 volumes:
   meilisearch-data:
+
+networks:
+  private:
+  coolify:
+    name: coolify
+    external: true

@@ -10,6 +10,7 @@ type ComposeService = {
 	expose?: string[];
 	healthcheck?: { start_period?: string; test?: string[] };
 	image?: string;
+	networks?: Record<string, unknown>;
 	ports?: unknown[];
 	volumes?: Array<{ source: string; target: string }>;
 };
@@ -17,10 +18,14 @@ type ComposeService = {
 type ComposeModel = {
 	configs?: Record<string, { content?: string }>;
 	services?: Record<string, ComposeService>;
+	networks?: Record<string, { external?: boolean; name?: string }>;
 	volumes?: Record<string, unknown>;
 };
 
-function requireCondition(condition: unknown, message: string): asserts condition {
+function requireCondition(
+	condition: unknown,
+	message: string,
+): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
@@ -91,6 +96,11 @@ function main() {
 		"Meilisearch must not publish or expose a port",
 	);
 	requireCondition(
+		JSON.stringify(Object.keys(meilisearch.networks ?? {}).sort()) ===
+			JSON.stringify(["private"]),
+		"Meilisearch must join only the private application network",
+	);
+	requireCondition(
 		meilisearch.volumes?.some(
 			(volume) =>
 				volume.source === "meilisearch-data" &&
@@ -99,9 +109,7 @@ function main() {
 		"Meilisearch must use its named data volume",
 	);
 	requireCondition(
-		meilisearch.healthcheck?.test?.includes(
-			"http://127.0.0.1:7700/health",
-		),
+		meilisearch.healthcheck?.test?.includes("http://127.0.0.1:7700/health"),
 		"Meilisearch health check is missing",
 	);
 
@@ -112,15 +120,23 @@ function main() {
 		"Search indexer must wait for private Meilisearch",
 	);
 	requireCondition(
-		searchIndexer.command?.at(-1)?.includes("--rebuild-if-missing --watch"),
-		"Search indexer must rebuild a missing index before watching",
+		searchIndexer.command
+			?.at(-1)
+			?.includes("runSearchIndexer.ts --watch") &&
+			!searchIndexer.command?.at(-1)?.includes("--rebuild-if-missing"),
+		"Search indexer must use the durable bootstrap before watching",
 	);
 	requireCondition(
 		searchIndexer.healthcheck?.start_period === "1h0m0s",
 		"Search indexer needs a one-hour first-rebuild health window",
 	);
 
-	for (const name of ["web", "search-indexer", "source-sync", "source-writeback"]) {
+	for (const name of [
+		"web",
+		"search-indexer",
+		"source-sync",
+		"source-writeback",
+	]) {
 		const service = services[name];
 		requireCondition(service, `${name} service is missing`);
 		requireCondition(
@@ -136,19 +152,35 @@ function main() {
 			),
 			`${name} must mount the shared runtime configuration`,
 		);
-		requireCondition(!service.ports?.length, `${name} must not publish a host port`);
+		requireCondition(
+			!service.ports?.length,
+			`${name} must not publish a host port`,
+		);
+		requireCondition(
+			JSON.stringify(Object.keys(service.networks ?? {}).sort()) ===
+				JSON.stringify(["coolify", "private"]),
+			`${name} must join the private and shared database networks`,
+		);
 	}
 	requireCondition(
 		JSON.stringify(services.web.expose) === JSON.stringify(["3000"]),
 		"Only the web service may expose port 3000",
 	);
+	const renderedConfig = JSON.parse(
+		model.configs?.["library-config"]?.content ?? "null",
+	) as { services?: { search?: { host?: string } } } | null;
 	requireCondition(
-		libraryConfig.services.search.host === "http://meilisearch:7700",
-		"Runtime search host must use the private Compose service",
+		renderedConfig?.services?.search?.host === "http://meilisearch:7700",
+		"Rendered runtime search host must use the private Compose service",
 	);
 	requireCondition(
 		Boolean(model.volumes?.["meilisearch-data"]),
 		"Named Meilisearch volume is missing",
+	);
+	requireCondition(
+		model.networks?.coolify?.external === true &&
+			model.networks.coolify.name === "coolify",
+		"Shared PostgreSQL network must be the external Coolify network",
 	);
 
 	console.log(
