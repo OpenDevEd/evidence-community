@@ -14,8 +14,6 @@ x-library-service: &library-service
       condition: service_healthy
     postgres:
       condition: service_healthy
-    meilisearch:
-      condition: service_healthy
   restart: "no"
   healthcheck:
     test:
@@ -31,12 +29,20 @@ x-library-service: &library-service
 x-search-indexer-service: &search-indexer-service
   image: ${EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE:-evidence-library-acceptance-search-indexer:local}
   labels: *acceptance-labels
-  depends_on:
-    postgres:
-      condition: service_healthy
-    meilisearch:
-      condition: service_healthy
   restart: "no"
+
+x-meilisearch-service: &meilisearch-service
+  image: getmeili/meilisearch:v1.37
+  labels: *acceptance-labels
+  environment:
+    MEILI_MASTER_KEY: acceptance-master-key
+    MEILI_NO_ANALYTICS: "true"
+  healthcheck:
+    test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:7700/health"]
+    interval: 2s
+    timeout: 2s
+    retries: 60
+    start_period: 5s
 
 services:
   fixture:
@@ -121,20 +127,15 @@ services:
       retries: 60
       start_period: 5s
 
-  meilisearch:
-    image: getmeili/meilisearch:v1.37
-    labels: *acceptance-labels
-    environment:
-      MEILI_MASTER_KEY: acceptance-master-key
-      MEILI_NO_ANALYTICS: "true"
+  amber-meilisearch:
+    <<: *meilisearch-service
     ports:
-      - "${EVIDENCE_LIBRARY_ACCEPTANCE_MEILI_PORT:-7712}:7700"
-    healthcheck:
-      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:7700/health"]
-      interval: 2s
-      timeout: 2s
-      retries: 60
-      start_period: 5s
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_MEILI_PORT:-7712}:7700"
+
+  indigo-meilisearch:
+    <<: *meilisearch-service
+    ports:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_MEILI_PORT:-7713}:7700"
 
   amber:
     <<: *library-service
@@ -160,6 +161,11 @@ services:
 
   amber-search-indexer:
     <<: *search-indexer-service
+    depends_on:
+      amber-meilisearch:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     environment:
       LIBRARY_CONFIG_PATH: /runtime/config/library.json
       SEARCH_INDEX_WORKER_ID: acceptance-amber
@@ -168,6 +174,11 @@ services:
 
   indigo-search-indexer:
     <<: *search-indexer-service
+    depends_on:
+      indigo-meilisearch:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
     environment:
       LIBRARY_CONFIG_PATH: /runtime/config/library.json
       SEARCH_INDEX_WORKER_ID: acceptance-indigo

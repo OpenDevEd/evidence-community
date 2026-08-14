@@ -64,8 +64,10 @@ const image =
 const searchIndexerImage =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE ??
 	"evidence-library-acceptance-search-indexer:local";
-const meilisearchPort =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_MEILI_PORT ?? "7712";
+const amberMeilisearchPort =
+	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_MEILI_PORT ?? "7712";
+const indigoMeilisearchPort =
+	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_MEILI_PORT ?? "7713";
 const fixturePort =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT ?? "4443";
 const mailpitPort =
@@ -81,6 +83,8 @@ const commandEnvironment = {
 	...process.env,
 	EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE: image,
 	EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE: searchIndexerImage,
+	EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_MEILI_PORT: amberMeilisearchPort,
+	EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_MEILI_PORT: indigoMeilisearchPort,
 	EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT: fixturePort,
 	EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT: mailpitPort,
 	EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID: String(process.pid),
@@ -94,6 +98,7 @@ const persistentLabel =
 
 type Profile = {
 	config: LibraryServerConfig;
+	meilisearchPort: string;
 	name: "amber" | "indigo";
 	port: string;
 };
@@ -251,6 +256,7 @@ function reapAbandonedProjects() {
 function loadProfile(
 	name: Profile["name"],
 	port: string,
+	meilisearchPort: string,
 ): Profile {
 	const configPath = path.join(configDirectory, `${name}.json`);
 	const input = JSON.parse(readFileSync(configPath, "utf8")) as {
@@ -266,7 +272,7 @@ function loadProfile(
 	const config = libraryConfigSchema.parse(
 		input,
 	);
-	return { config, name, port };
+	return { config, meilisearchPort, name, port };
 }
 
 function prepareRuntimeConfig(profile: Profile) {
@@ -368,11 +374,12 @@ async function verifyRootOwnedConfigStartup() {
 }
 
 async function meilisearchRequest<T>(
+	profile: Profile,
 	pathname: string,
 	init?: RequestInit,
 ): Promise<T> {
 	const response = await fetch(
-		`http://127.0.0.1:${meilisearchPort}${pathname}`,
+		`http://127.0.0.1:${profile.meilisearchPort}${pathname}`,
 		{
 			...init,
 			headers: {
@@ -390,11 +397,12 @@ async function meilisearchRequest<T>(
 	return response.json() as Promise<T>;
 }
 
-async function waitForTask(taskUid: number) {
+async function waitForTask(profile: Profile, taskUid: number) {
 	const deadline = Date.now() + 60_000;
 
 	while (Date.now() < deadline) {
 		const task = await meilisearchRequest<MeilisearchTask>(
+			profile,
 			`/tasks/${taskUid}`,
 		);
 		if (task.status === "succeeded") return;
@@ -409,15 +417,16 @@ async function waitForTask(taskUid: number) {
 }
 
 async function enqueue(
+	profile: Profile,
 	pathname: string,
 	method: "POST" | "PATCH",
 	body: unknown,
 ) {
-	const task = await meilisearchRequest<MeilisearchTask>(pathname, {
+	const task = await meilisearchRequest<MeilisearchTask>(profile, pathname, {
 		method,
 		body: JSON.stringify(body),
 	});
-	await waitForTask(task.taskUid);
+	await waitForTask(profile, task.taskUid);
 }
 
 async function seedSearch(profile: Profile) {
@@ -432,7 +441,7 @@ async function seedSearch(profile: Profile) {
 		? "AMBER_SEARCH_FIXTURE"
 		: "INDIGO_SEARCH_FIXTURE";
 
-	await enqueue(`/indexes/${indexUid}/documents`, "POST", [
+	await enqueue(profile, `/indexes/${indexUid}/documents`, "POST", [
 		{
 			key: searchItemKey,
 			id: `${colorName.toUpperCase()}_ACCEPTANCE`,
@@ -468,13 +477,136 @@ async function seedSearch(profile: Profile) {
 	]);
 }
 
-async function seedSharedSearchIndexes() {
+async function seedSharedSearchIndexes(profile: Profile) {
 	for (const index of [
 		{ uid: "cache", primaryKey: "id" },
 		{ uid: "redirects", primaryKey: "id" },
 	]) {
-		await enqueue("/indexes", "POST", index);
+		await enqueue(profile, "/indexes", "POST", index);
 	}
+}
+
+function postgresScalar(database: Profile["name"], sql: string) {
+	return captureCompose(
+		"exec",
+		"--no-TTY",
+		"postgres",
+		"psql",
+		"--set",
+		"ON_ERROR_STOP=1",
+		"--username",
+		"library",
+		"--dbname",
+		database,
+		"--tuples-only",
+		"--no-align",
+		"--command",
+		sql,
+	).trim();
+}
+
+async function waitForOutboxProcessed(
+	profile: Profile,
+	key: string,
+	description: string,
+) {
+	const deadline = Date.now() + 90_000;
+	while (Date.now() < deadline) {
+		if (
+			postgresScalar(
+				profile.name,
+				`SELECT COUNT(*) FROM "outbox" WHERE "entityType" = 'item' AND "entityKey" = '${key}' AND "revision" = 1 AND "processedAt" IS NOT NULL`,
+			) === "1"
+		) {
+			return;
+		}
+		await new Promise((resolve) => setTimeout(resolve, 500));
+	}
+	throw new Error(`Timed out waiting for ${description}`);
+}
+
+async function meilisearchHasDocument(profile: Profile, key: string) {
+	const response = await fetch(
+		`http://127.0.0.1:${profile.meilisearchPort}/indexes/items/documents/${key}`,
+		{ headers: { Authorization: "Bearer acceptance-master-key" } },
+	);
+	if (response.status === 404) return false;
+	if (!response.ok) {
+		throw new Error(
+			`${profile.name} Meilisearch document check failed: ${response.status} ${await response.text()}`,
+		);
+	}
+	return true;
+}
+
+async function deleteMeilisearchDocument(profile: Profile, key: string) {
+	const task = await meilisearchRequest<MeilisearchTask>(
+		profile,
+		`/indexes/items/documents/${key}`,
+		{ method: "DELETE" },
+	);
+	await waitForTask(profile, task.taskUid);
+}
+
+async function verifySearchQueueIsolation(profiles: Profile[]) {
+	const amber = profiles.find((profile) => profile.name === "amber");
+	const indigo = profiles.find((profile) => profile.name === "indigo");
+	assert.ok(amber && indigo, "Both acceptance profiles are required");
+	const amberKey = "AMBR6789";
+	const indigoKey = "INDG6789";
+
+	compose("pause", "amber-meilisearch");
+	try {
+		postgresScalar(
+			"amber",
+			`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${amberKey}', 'native', '${amberKey}'); INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision") VALUES ('${amberKey}', 'native', '${amberKey}', 'Report', 'Amber isolated queue evidence', 1); INSERT INTO "outbox" ("entityType", "entityKey", "operation", "revision") VALUES ('item', '${amberKey}', 'upsert', 1)`,
+		);
+		postgresScalar(
+			"indigo",
+			`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${indigoKey}', 'native', '${indigoKey}'); INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision") VALUES ('${indigoKey}', 'native', '${indigoKey}', 'Report', 'Indigo isolated queue evidence', 1); INSERT INTO "outbox" ("entityType", "entityKey", "operation", "revision") VALUES ('item', '${indigoKey}', 'upsert', 1)`,
+		);
+
+		await waitForOutboxProcessed(
+			indigo,
+			indigoKey,
+			"Indigo indexing while Amber search is paused",
+		);
+		assert.equal(
+			postgresScalar(
+				"amber",
+				`SELECT COUNT(*) FROM "outbox" WHERE "entityType" = 'item' AND "entityKey" = '${amberKey}' AND "revision" = 1 AND "processedAt" IS NOT NULL`,
+			),
+			"0",
+			"Amber work must remain unfinished while only Amber Meilisearch is paused",
+		);
+	} finally {
+		compose("unpause", "amber-meilisearch");
+	}
+
+	await waitForOutboxProcessed(
+		amber,
+		amberKey,
+		"Amber indexing after its search service resumes",
+	);
+	assert.equal(await meilisearchHasDocument(amber, amberKey), true);
+	assert.equal(await meilisearchHasDocument(indigo, indigoKey), true);
+	assert.equal(await meilisearchHasDocument(amber, indigoKey), false);
+	assert.equal(await meilisearchHasDocument(indigo, amberKey), false);
+	await Promise.all([
+		deleteMeilisearchDocument(amber, amberKey),
+		deleteMeilisearchDocument(indigo, indigoKey),
+	]);
+	postgresScalar(
+		"amber",
+		`DELETE FROM "outbox" WHERE "entityType" = 'item' AND "entityKey" = '${amberKey}'; DELETE FROM "item" WHERE "key" = '${amberKey}'; DELETE FROM "itemIdentity" WHERE "key" = '${amberKey}'`,
+	);
+	postgresScalar(
+		"indigo",
+		`DELETE FROM "outbox" WHERE "entityType" = 'item' AND "entityKey" = '${indigoKey}'; DELETE FROM "item" WHERE "key" = '${indigoKey}'; DELETE FROM "itemIdentity" WHERE "key" = '${indigoKey}'`,
+	);
+	console.log(
+		"Pausing Amber search did not block Indigo, and both search services contain only their own database records.",
+	);
 }
 
 function publicExpectations(profile: Profile) {
@@ -1005,8 +1137,8 @@ async function verifyLiveConfigLifecycle(profile: Profile) {
 async function main() {
 	reapAbandonedProjects();
 	const profiles = [
-		loadProfile("amber", amberPort),
-		loadProfile("indigo", indigoPort),
+		loadProfile("amber", amberPort, amberMeilisearchPort),
+		loadProfile("indigo", indigoPort, indigoMeilisearchPort),
 	];
 
 	rmSync(runtimeDirectory, { recursive: true, force: true });
@@ -1031,9 +1163,12 @@ async function main() {
 			"--wait-timeout",
 			"180",
 			"postgres",
-			"meilisearch",
+			"amber-meilisearch",
+			"indigo-meilisearch",
 		);
-		await seedSharedSearchIndexes();
+		for (const profile of profiles) {
+			await seedSharedSearchIndexes(profile);
+		}
 		compose(
 			"up",
 			"--wait",
@@ -1045,6 +1180,7 @@ async function main() {
 		for (const profile of profiles) {
 			await seedSearch(profile);
 		}
+		await verifySearchQueueIsolation(profiles);
 		compose(
 			"up",
 			"--wait",
@@ -1076,7 +1212,8 @@ async function main() {
 			"fixture",
 			"mailpit",
 			"postgres",
-			"meilisearch",
+			"amber-meilisearch",
+			"indigo-meilisearch",
 		);
 		throw error;
 	} finally {

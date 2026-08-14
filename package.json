@@ -14,6 +14,7 @@
 		"test:unit": "vitest run",
 		"test:e2e": "playwright test",
 		"test:acceptance": "tsx ./tools/runRuntimeAcceptance.ts",
+		"test:library-compose": "tsx ./tools/verifyLibraryCompose.ts",
 		"test:source-model": "tsx ./tools/verifySourceModel.ts",
 		"test:publication-model": "tsx ./tools/verifyPublicationModel.ts",
 		"test:publication-reconciler": "vitest run --config vitest.publication-reconciler.config.ts",

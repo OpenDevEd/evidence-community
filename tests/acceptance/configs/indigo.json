@@ -242,9 +242,9 @@
       "url": "postgresql://library:library@postgres:5432/indigo"
     },
 		"search": {
-			"host": "http://meilisearch:7700",
+			"host": "http://indigo-meilisearch:7700",
 			"key": "acceptance-master-key",
-			"index": "acceptance_indigo"
+			"index": "items"
 		},
 		"storage": {
 			"url": "http://storage:5000",

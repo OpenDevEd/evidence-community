@@ -35,7 +35,7 @@ VALUES
 INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
 VALUES ('AMBR2345', 'native', 'AMBR2345');
 
-INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "institution", "date", "deleted")
+INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "publisher", "date", "deleted")
 VALUES (
 	'AMBR2345',
 	'native',
@@ -70,7 +70,7 @@ VALUES
 INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
 VALUES ('INDG2345', 'native', 'INDG2345');
 
-INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "institution", "date", "deleted")
+INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "publisher", "date", "deleted")
 VALUES (
 	'INDG2345',
 	'native',

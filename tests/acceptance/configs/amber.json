@@ -249,9 +249,9 @@
       "url": "postgresql://library:library@postgres:5432/amber"
     },
 		"search": {
-			"host": "http://meilisearch:7700",
+			"host": "http://amber-meilisearch:7700",
 			"key": "acceptance-master-key",
-			"index": "acceptance_amber"
+			"index": "items"
 		},
 		"storage": {
 			"url": "http://storage:5000",

@@ -86,8 +86,9 @@ and can be combined with either one-shot or watch mode.
 ## Production worker
 
 Deploy a library with `docker/compose.library.yaml`. It builds the web app and
-the required search worker from the same commit, mounts the same runtime config
-into both, and makes the search worker apply database migrations before it
+all current workers from the same commit, starts a private persistent
+Meilisearch service, mounts the same runtime config into the application
+containers, and makes the search worker apply database migrations before it
 starts. The web app waits until the worker is healthy.
 
 Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document, then use
@@ -95,12 +96,16 @@ the repository Compose file as the Coolify source of truth. Do not deploy the
 web target by itself and do not configure index settings with a separate
 Meilisearch command. The worker creates and updates those settings at startup.
 
-`docker/compose.library.yaml` always runs the web app and one search worker.
-For a library with source connections, first deploy that base stack and wait
-for the search worker to become healthy. Then deploy
-`docker/compose.sources.yaml` as a second Coolify application using the same
-commit and `LIBRARY_CONFIG_JSON`. The second file runs the source-sync and
-source-writeback workers without relying on Compose profiles.
+`docker/compose.library.yaml` is the only application deployment. It runs the
+web app, search worker, source-sync worker, source-writeback worker, and one
+private Meilisearch service. The source workers remain idle when no source is
+configured.
+
+Use `http://meilisearch:7700` as the runtime search host and set the runtime
+search key and `MEILISEARCH_MASTER_KEY` to the same private value. Meilisearch
+has no public port. If its named volume is new, the search worker rebuilds the
+index once from PostgreSQL before it becomes healthy. Ordinary restarts keep
+the existing index and only drain the saved outbox.
 
 Build the dedicated worker target from the same revision as the web image:
 

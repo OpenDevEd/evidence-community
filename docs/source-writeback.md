@@ -83,3 +83,7 @@ the ingestion worker:
 ```sh
 docker build --target source-writeback -t evidence-library-source-writeback .
 ```
+
+The normal `docker/compose.library.yaml` deployment already runs this worker
+inside the library's one Coolify application. Do not create a separate source
+worker application.

@@ -11,6 +11,10 @@ x-search-build: &search-build
   dockerfile: Dockerfile
   target: search-indexer
 
+x-source-build: &source-build
+  context: .
+  dockerfile: Dockerfile
+
 services:
   web:
     build:
@@ -32,20 +36,70 @@ services:
     command:
       - /bin/sh
       - -euc
-      - npm run db:migrate && exec node_modules/.bin/tsx tools/runSearchIndexer.ts --watch
+      - npm run db:migrate && exec node_modules/.bin/tsx tools/runSearchIndexer.ts --rebuild-if-missing --watch
     environment:
       <<: *runtime-environment
       SEARCH_INDEX_WORKER_ID: search-indexer
     configs:
       - *runtime-config
+    depends_on:
+      meilisearch:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "node_modules/.bin/tsx", "tools/checkSearchIndexerHealth.ts"]
       interval: 15s
       timeout: 5s
-      start_period: 300s
+      start_period: 1h
       retries: 3
+    restart: unless-stopped
+
+  source-sync:
+    build:
+      <<: *source-build
+      target: source-sync
+    environment:
+      <<: *runtime-environment
+      SOURCE_SYNC_WORKER_ID: source-sync
+    configs:
+      - *runtime-config
+    depends_on:
+      search-indexer:
+        condition: service_healthy
+    restart: unless-stopped
+
+  source-writeback:
+    build:
+      <<: *source-build
+      target: source-writeback
+    environment:
+      <<: *runtime-environment
+      SOURCE_WRITEBACK_WORKER_ID: source-writeback
+    configs:
+      - *runtime-config
+    depends_on:
+      search-indexer:
+        condition: service_healthy
+    restart: unless-stopped
+
+  meilisearch:
+    image: getmeili/meilisearch:v1.37
+    environment:
+      MEILI_ENV: production
+      MEILI_MASTER_KEY: "${MEILISEARCH_MASTER_KEY:?private Meilisearch key is required}"
+      MEILI_NO_ANALYTICS: "true"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:7700/health"]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 12
+    volumes:
+      - meilisearch-data:/meili_data
     restart: unless-stopped
 
 configs:
   library-config:
     content: "${LIBRARY_CONFIG_JSON:?library config JSON is required}"
+
+volumes:
+  meilisearch-data:

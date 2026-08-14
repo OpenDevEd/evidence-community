@@ -108,14 +108,15 @@ Each frontend chooses its tenant through one runtime manifest revision:
 
 ```text
 services.database.url -> the active revision's PostgreSQL database
-services.search.host  -> the active revision's Meilisearch service
-services.search.index -> the active revision's tenant-specific index
+services.search.host  -> the library application's private Meilisearch service
+services.search.index -> the index inside that private service
 ```
 
 At runtime:
 
-- Search, facets, sorting, and Meilisearch semantic search use the tenant's
-  Meilisearch index.
+- Search, facets, sorting, and Meilisearch semantic search use the library's
+  private Meilisearch service. Its task queue is not shared with another
+  library.
 - Status, user/authentication data, social collections, and page-level RAG
   embeddings use the tenant's PostgreSQL database.
 - Published PDFs and cover images are served from the shared Supabase storage

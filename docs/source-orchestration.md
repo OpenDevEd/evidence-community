@@ -46,6 +46,10 @@ Build the dedicated worker image with:
 docker build --target source-sync -t evidence-library-source-sync .
 ```
 
+The normal `docker/compose.library.yaml` deployment already runs this worker
+inside the library's one Coolify application. Do not create a separate source
+worker application.
+
 The source worker intentionally has no synthetic container health check.
 Per-connection attempts, lease heartbeats, last success, consecutive failures,
 and last error are durable in `sourceSyncRun` and `sourceSyncState`; an idle
