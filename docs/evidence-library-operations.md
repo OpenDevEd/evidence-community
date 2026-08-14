@@ -8,7 +8,7 @@ JSON document.
 
 | Input           | Required contract                                                                                                                       |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| Deployment      | Use `docker/compose.library.yaml` so the web app and search worker use one repository-owned release                                     |
+| Deployment      | Use `docker/compose.library.yaml` so the web app, workers, and private Meilisearch use one repository-owned release                     |
 | Image           | Build the repository `Dockerfile`; do not pass customer build arguments                                                                 |
 | Configuration   | Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document; Compose mounts it at `LIBRARY_CONFIG_PATH`                        |
 | Process         | Each image prepares config access as root, then runs as UID/GID `1001`                                                                  |
@@ -19,9 +19,9 @@ JSON document.
 
 The Compose file sets `LIBRARY_CONFIG_PATH`. Library values and secrets belong
 in `LIBRARY_CONFIG_JSON`, not in `NEXT_PUBLIC_*` variables or customer image
-builds. The default deployment always includes one search worker. A web-only
-deployment is incomplete because it cannot create search settings or publish
-records into Meilisearch.
+builds. The default deployment includes the search, source-sync, and
+source-writeback workers plus one private persistent Meilisearch service. A
+web-only deployment is incomplete.
 
 To change a Coolify deployment, update `LIBRARY_CONFIG_JSON` and redeploy the
 repository Compose file. The host-directory steps below are only for running
@@ -31,10 +31,41 @@ Run Compose from the repository root. This matches Coolify and keeps the build
 context on the repository Dockerfile and source tree:
 
 ```bash
-LIBRARY_CONFIG_JSON="$(jq -c . config/library.example.json)" \
+MEILISEARCH_MASTER_KEY="$(jq -r .services.search.key config/library.example.json)" \
+LIBRARY_CONFIG_JSON="$(jq -c '.services.search.host = "http://meilisearch:7700"' config/library.example.json)" \
   docker compose --project-directory . \
   -f docker/compose.library.yaml config
 ```
+
+## Create a library database
+
+Libraries share one PostgreSQL server, but each library has its own database
+and login. Create both with the checked-in command. Do not run one-off SQL:
+
+```bash
+npm run database:provision -- \
+  --admin-url "$EVIDENCE_LIBRARY_ADMIN_DATABASE_URL" \
+  --database example_library \
+  --user example_library_user \
+  --password "$EXAMPLE_LIBRARY_DATABASE_PASSWORD" \
+  --runtime-host evidence-library-postgres:5432
+```
+
+The command removes powerful login rights, removes role memberships, blocks
+public database access, and prints the database URL for the runtime config.
+Running the same command again is safe. It stops if the database belongs to a
+different login or the login already owns another database.
+
+Prove the rule against a real development PostgreSQL server:
+
+```bash
+EVIDENCE_LIBRARY_ADMIN_DATABASE_URL="$EVIDENCE_LIBRARY_ADMIN_DATABASE_URL" \
+  npm run test:database-provisioning
+```
+
+The check creates two temporary databases, runs every Drizzle migration, proves
+both cross-library connections fail, reruns provisioning, and removes its test
+databases and logins.
 
 ## HTTPS and admin access
 
@@ -157,8 +188,8 @@ attached to the previous inode, so single-file mounts support restart-based
 configuration delivery only.
 
 The same image can serve another library by starting another container with a
-different configuration directory, port, PostgreSQL database, and Meilisearch
-index.
+different configuration directory, port, PostgreSQL database, and private
+Meilisearch service.
 
 ## Observe health
 
