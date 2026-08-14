@@ -36,9 +36,13 @@ Plan 01 must land first because Plan 03 deploys its new Compose and search boots
 
 ## Migration choice
 
-No Evidence Library schema migration is needed. The existing `openscholar_e2e` database remains the first library database. The new database provisioner only creates PostgreSQL logins and databases and tightens database-level access. Search data is rebuilt into a new private Meilisearch volume.
+No Evidence Library schema migration is needed. The live app currently uses
+Coolify's PostgreSQL bootstrap superuser, so it moves to a fresh database and
+restricted login created by the repository provisioner. Development records in
+the old administrator-owned database are disposable and are not copied. Search
+data is rebuilt into a new private Meilisearch volume.
 
-Development verification may create a second temporary database and application. They must be deleted after the isolation proof. The current working application and its database must remain until the replacement is healthy.
+Development verification may create a second temporary database and application. They must be deleted after the isolation proof. The current working application and administrator database remain untouched until the replacement database and private search stack are healthy.
 
 ## Test rules
 

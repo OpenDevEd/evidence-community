@@ -7,11 +7,12 @@ Move the current development Evidence Library to its private Meilisearch stack, 
 ## Scope
 
 1. Push the tested `openscholar` commit.
-2. Rename database resource `jsl67a25e78gukd3izzxz4zf` to `evidence-library-postgres` without changing its data, image, or address.
-3. Update application `rzbo9als0hdnr4gegtx97qos` with the private Meilisearch key and a runtime config using `http://meilisearch:7700`.
-4. Deploy and verify the existing library before removing anything.
-5. Create a temporary second database/login and temporary Compose application through supported Coolify APIs, then prove database and queue isolation.
-6. Delete the temporary app/database/login and obsolete application `vntgj8bi5omift3a7u279ymd` only after every proof passes.
+2. Rename database resource `jsl67a25e78gukd3izzxz4zf` to `evidence-library-postgres` without changing its image or address.
+3. Create a fresh restricted database/login for the current library. Keep the Coolify bootstrap superuser out of every runtime config.
+4. Update application `rzbo9als0hdnr4gegtx97qos` with that restricted database URL, the private Meilisearch key, and a runtime config using `http://meilisearch:7700`.
+5. Deploy and verify the existing library before removing anything.
+6. Create a temporary second database/login and temporary Compose application through supported Coolify APIs, then prove database and queue isolation.
+7. Delete the temporary app/database/login and obsolete application `vntgj8bi5omift3a7u279ymd` only after every proof passes.
 
 Before the rename, read back `jsl67a25e78gukd3izzxz4zf` and require all of these exact facts: development environment, name `new-el-openscholar-e2e-db`, PostgreSQL image `pgvector/pgvector:pg17`, database `openscholar_e2e`, and healthy state. Before deleting `vntgj8bi5omift3a7u279ymd`, require development environment, name `new-el-openscholar-e2e`, repository `OpenDevEd/new-el`, branch `openscholar`, Dockerfile build pack, and the expected old development hostname. Abort on any mismatch.
 
@@ -19,13 +20,17 @@ Before the rename, read back `jsl67a25e78gukd3izzxz4zf` and require all of these
 
 The shared PostgreSQL resource joins Coolify's predefined `coolify` network. Each Compose application keeps its private application network and must also have Coolify's supported predefined-network connection enabled. Before deployment, read back that setting and the effective Compose network list. From every new app, resolve the shared database UUID and connect to port 5432 before starting migrations. The repository remains portable; it does not hard-code a host-wide Docker network into local Compose.
 
-The current application is updated in place only after repository checks pass. Its private Meilisearch volume is new, so the search worker performs the fail-closed one-time rebuild before the web service becomes ready. The old duplicate application remains available as rollback evidence until the current application and temporary proof tenant pass.
+The current application is updated in place only after repository checks pass.
+It starts against a fresh restricted database, runs every checked-in migration,
+and rebuilds its new private Meilisearch volume before the web service becomes
+ready. The old duplicate application remains available as rollback evidence
+until the current application and temporary proof tenant pass.
 
 ## Test-first steps
 
 1. Run the repository Compose, database, worker, acceptance, unit, type, lint, schema, and build checks before any live write.
 2. Read back and validate every exact Coolify target and the live 4.3.1 write contract.
-3. Rename and harden the shared PostgreSQL resource, then deploy the current application and finish its complete runtime checks.
+3. Rename the shared PostgreSQL resource, create the current library's restricted database/login, then deploy the current application and finish its complete runtime checks.
 4. Create the temporary database/login and temporary Compose app, prove internal PostgreSQL DNS/network access, then run the queue and database isolation matrix.
 5. Remove exact temporary resources and the validated obsolete duplicate, then rerun the current library checks and inventory.
 
@@ -40,7 +45,12 @@ The current application is updated in place only after repository checks pass. I
 
 ## Migration choice
 
-There is no PostgreSQL data migration for the current library. Search is rebuilt from PostgreSQL into the private Meilisearch volume. The temporary database is created fresh, migrated normally, and dropped after proof. The current database is never dropped or copied.
+There is no PostgreSQL data migration for the current library. Development data
+is disposable, so the current app starts from a fresh restricted database and
+search is built from that database into its private Meilisearch volume. The
+temporary database is created fresh, migrated normally, and dropped after
+proof. The administrator-owned bootstrap database is cleaned only after the
+new runtime passes every check.
 
 ## Live checks
 
@@ -59,6 +69,9 @@ For the current library:
 For isolation:
 
 - two separate PostgreSQL databases and logins on the one server;
+- both runtime logins report no superuser, database-creation, role-creation,
+  replication, or row-security bypass rights;
+- each runtime login owns only its own database and application objects;
 - two separate Meilisearch containers and volumes;
 - the same index name may exist independently in both services;
 - each database login is denied access to the other database;
@@ -101,6 +114,6 @@ npm run build
 ## Risks
 
 - Do not delete the obsolete app first; it is rollback evidence until the new stack works.
-- Do not drop `openscholar_e2e` or its login.
+- Do not demote or expose the Coolify bootstrap superuser.
 - A Coolify deployment marked finished is not enough. Inspect the actual containers and HTTP behavior.
 - The old shared Meilisearch may still serve older production libraries. Do not stop or delete that shared service in this plan.

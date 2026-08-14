@@ -42,7 +42,7 @@ STANDING RULES
 3. Test pure naming, quoting, and desired-state logic before external SQL.
 4. Use current official PostgreSQL 17 docs when a grant or utility statement is unclear.
 5. Use agents only for read-only maps or one completed major-step review.
-6. Never delete the existing development database or touch production tenants.
+6. Never put the Coolify bootstrap superuser in a library runtime URL. Create a fresh restricted database/login for the current development library and do not touch production tenants.
 
 EXECUTION RHYTHM
 Write failing pure tests, implement and clean the contract, commit the green unit, then add the real PostgreSQL verifier and commit after both access directions are proven.

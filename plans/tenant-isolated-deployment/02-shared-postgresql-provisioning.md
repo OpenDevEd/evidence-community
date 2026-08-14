@@ -36,7 +36,12 @@ Reuse `pg`, which is already a direct dependency, and the repository's normal `U
 
 ## Migration choice
 
-No application schema migration is added. The provisioner creates a new empty database; the existing search worker startup then runs the repository's checked-in Drizzle migrations. The existing `openscholar_e2e` database is only hardened in place and is never recreated.
+No application schema migration is added. The provisioner creates a new empty
+database; the existing search worker startup then runs the repository's
+checked-in Drizzle migrations. A Coolify bootstrap superuser must never appear
+in a library runtime URL. The current development library therefore gets a new
+restricted login and database. Its disposable records are not copied from the
+administrator-owned bootstrap database.
 
 ## Test-first steps
 
@@ -69,12 +74,18 @@ The real verifier uses `EVIDENCE_LIBRARY_ADMIN_DATABASE_URL`. It must create uni
 
 ## Deployment gate
 
-Run the command against the development shared PostgreSQL resource for the existing `openscholar_e2e` database and a temporary second library. Then verify with real `psql` connections that each login reaches only its own database. Do not delete or recreate the existing database.
+Run the command against the development shared PostgreSQL resource for a new
+current-library database and a temporary second library. Then verify with real
+`psql` connections that each login reaches only its own database. Keep the
+Coolify bootstrap superuser as server administration only; do not demote it or
+put it in a runtime config.
 
 ## Completion rules
 
 - Unit and real PostgreSQL checks pass.
-- The existing database remains intact.
+- The existing administrator database remains intact during cutover.
+- The current library runs with a restricted login that owns only its library database and application objects.
+- `vector` and `pg_trgm` are installed by the administrator before migrations.
 - Both cross-tenant connection attempts fail.
 - Rerunning the same desired state succeeds without a duplicate role or database.
 - The command prints a valid internal runtime URL and no manual SQL is needed.
@@ -84,3 +95,5 @@ Run the command against the development shared PostgreSQL resource for the exist
 - PostgreSQL grants can silently leave public database access enabled. The verifier must check both directions with the tenant logins.
 - `CREATE DATABASE` cannot run in a transaction. The advisory lock and ownership readback make a partial retry safe.
 - The shared server is one failure domain. Backups and capacity limits remain server-level operations.
+- Never use a broad `REASSIGN OWNED` from the Coolify bootstrap role. It also
+  owns PostgreSQL system databases and extensions.
