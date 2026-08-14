@@ -10,8 +10,9 @@ Create one repeatable repository-owned command that gives each Evidence Library 
 2. Add `tools/provisionLibraryDatabase.ts` using the existing `pg` package.
 3. Create or normalize a login with no superuser, database-creation, role-creation, or replication rights.
 4. Create a database owned by that login, revoke public connection access, and grant access only to the owner.
-5. Make rerunning the same request safe. Reject an existing database owned by a different login.
-6. Output the exact runtime database URL using an explicit internal host. Do not create Coolify resources or store the password elsewhere in this command.
+5. Install the repository-required `vector` and `pg_trgm` extensions with the administrator connection before the restricted login runs Drizzle migrations.
+6. Make rerunning the same request safe. Reject an existing database owned by a different login.
+7. Output the exact runtime database URL using an explicit internal host. Do not create Coolify resources or store the password elsewhere in this command.
 
 ## Design
 
@@ -27,6 +28,8 @@ Names use lowercase letters, numbers, and underscores and must fit PostgreSQL's 
 
 Acquire a PostgreSQL advisory lock for the target database while provisioning. Check role and database ownership before changing anything. The same desired request may run again and return the same result. A different owner is a hard error.
 
+The tenant login must stay restricted and cannot install trusted or superuser-only extensions. The provisioner therefore connects to the target database with the administrator URL and installs the exact extensions used by checked-in migrations: `vector` from `drizzle/0000_openscholar-source-model.sql` and `pg_trgm` from `drizzle/0007_admin_item_list_projection.sql`. Do not grant extension-install rights to the tenant login.
+
 This command is the runtime primitive that OpenScholar provisioning can call later. Do not add a second schema, shared tenant tables, or a compatibility mode.
 
 Reuse `pg`, which is already a direct dependency, and the repository's normal `URL` handling style. There is no existing database-URL builder to extend, so add exactly one pure URL builder beside the provisioning contract and use it from the CLI and tests.
@@ -40,7 +43,7 @@ No application schema migration is added. The provisioner creates a new empty da
 1. Add failing unit tests for names, quoting, URL building, and desired-state decisions.
 2. Implement the pure contract.
 3. Add a real PostgreSQL verifier that creates two temporary databases and logins on one server.
-4. Prove each login can migrate and read its own database.
+4. Prove both required extensions exist and each restricted login can run every migration and read its own database.
 5. Prove each login is denied access to the other database.
 6. Rerun provisioning and prove it changes nothing except resetting the requested password and access rules.
 
