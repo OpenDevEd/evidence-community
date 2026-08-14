@@ -28,6 +28,12 @@ Names use lowercase letters, numbers, and underscores and must fit PostgreSQL's 
 
 Acquire a PostgreSQL advisory lock for the target database while provisioning. Check role and database ownership before changing anything. The same desired request may run again and return the same result. A different owner is a hard error.
 
+Parse the administrator login from the administrator URL. Reject any requested
+login that matches it, is named `postgres`, starts with `pg_`, or already has
+superuser, database-creation, role-creation, replication, or row-security
+bypass rights. Reject the `postgres` database and every `template*` database.
+The command must never demote an existing privileged role.
+
 The tenant login must stay restricted and cannot install trusted or superuser-only extensions. The provisioner therefore connects to the target database with the administrator URL and installs the exact extensions used by checked-in migrations: `vector` from `drizzle/0000_openscholar-source-model.sql` and `pg_trgm` from `drizzle/0007_admin_item_list_projection.sql`. Do not grant extension-install rights to the tenant login.
 
 This command is the runtime primitive that OpenScholar provisioning can call later. Do not add a second schema, shared tenant tables, or a compatibility mode.
@@ -45,7 +51,7 @@ administrator-owned bootstrap database.
 
 ## Test-first steps
 
-1. Add failing unit tests for names, quoting, URL building, and desired-state decisions.
+1. Add failing unit tests for names, reserved names, administrator collisions, privileged existing roles, quoting, URL building, and desired-state decisions.
 2. Implement the pure contract.
 3. Add a real PostgreSQL verifier that creates two temporary databases and logins on one server.
 4. Prove both required extensions exist and each restricted login can run every migration and read its own database.
@@ -85,6 +91,7 @@ put it in a runtime config.
 - Unit and real PostgreSQL checks pass.
 - The existing administrator database remains intact during cutover.
 - The current library runs with a restricted login that owns only its library database and application objects.
+- The provisioner aborts before SQL changes when the requested login is the administrator or already has a powerful server right.
 - `vector` and `pg_trgm` are installed by the administrator before migrations.
 - Both cross-tenant connection attempts fail.
 - Rerunning the same desired state succeeds without a duplicate role or database.

@@ -6,7 +6,7 @@
 Implement plans/tenant-isolated-deployment/01-private-search-and-one-application.md after reading plans/tenant-isolated-deployment/00-README.md. Estimate 4 to 6 hours and keep working without asking questions already answered by the plan.
 
 STANDING RULES
-1. Reuse existing Compose, search rebuild, source-worker, and acceptance code before adding anything.
+1. Reuse existing Compose, search rebuild, source-worker, status singleton, and acceptance code before adding anything.
 2. Delete the replaced source-worker deployment path. Do not keep compatibility behavior.
 3. Use red, green, cleanup for pure command and search logic. Add integration checks with the implementation.
 4. Read current official Meilisearch, Docker Compose, and Coolify docs when a contract is unclear.
@@ -26,7 +26,7 @@ DEVIATIONS
 Commit safe work, revise the plan in Git with docs: [plan-01] revise <section> — <reason>, then continue. Write a blocker file only when no safe path exists.
 
 START NOW
-Read the README and plan. Read AGENTS.md. Check git status. Read the named code and current official docs. Add the first failing search-command test and begin.
+Read the README and plan. Read AGENTS.md. Check git status. Read the named code and current official docs. Add the first failing durable search-bootstrap test and begin.
 
 Go.
 ```

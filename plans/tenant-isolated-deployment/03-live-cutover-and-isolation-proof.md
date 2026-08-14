@@ -18,7 +18,14 @@ Before the rename, read back `jsl67a25e78gukd3izzxz4zf` and require all of these
 
 ## Design
 
-The shared PostgreSQL resource joins Coolify's predefined `coolify` network. Each Compose application keeps its private application network and must also have Coolify's supported predefined-network connection enabled. Before deployment, read back that setting and the effective Compose network list. From every new app, resolve the shared database UUID and connect to port 5432 before starting migrations. The repository remains portable; it does not hard-code a host-wide Docker network into local Compose.
+The shared PostgreSQL resource joins Coolify's predefined `coolify` network.
+Each repository Compose application declares `coolify` as an external network
+for the four runtime containers only. Coolify's automatic destination-network
+attachment must be disabled so it cannot also attach Meilisearch. Coolify still
+adds the private application UUID network to every service. Before deployment,
+read back the setting and effective network list. From every runtime container,
+resolve the shared database UUID and connect to port 5432. The network rule is
+checked into Compose and applied through supported Coolify API fields.
 
 The current application is updated in place only after repository checks pass.
 It starts against a fresh restricted database, runs every checked-in migration,
@@ -31,7 +38,7 @@ until the current application and temporary proof tenant pass.
 1. Run the repository Compose, database, worker, acceptance, unit, type, lint, schema, and build checks before any live write.
 2. Read back and validate every exact Coolify target and the live 4.3.1 write contract.
 3. Rename the shared PostgreSQL resource, create the current library's restricted database/login, then deploy the current application and finish its complete runtime checks.
-4. Create the temporary database/login and temporary Compose app, prove internal PostgreSQL DNS/network access, then run the queue and database isolation matrix.
+4. Create the temporary database/login and temporary Compose app, prove internal PostgreSQL DNS/network access and private search DNS, then run the queue and database isolation matrix.
 5. Remove exact temporary resources and the validated obsolete duplicate, then rerun the current library checks and inventory.
 
 ## Files and external records
@@ -79,13 +86,15 @@ For isolation:
 - the current library finishes while the temporary job waits;
 - resume the temporary service and confirm its job then finishes;
 - each test record is absent from the other library.
+- from each worker, `meilisearch` resolves to only that application's search container;
+- each effective Meilisearch service is absent from the external PostgreSQL network.
 
 ## Supported control-plane rules
 
 - Use Coolify API/CLI only. Never write Coolify database rows directly.
 - Before each environment write, list records, match `key` plus `is_preview=false`, preserve all flags, update, and read back.
 - Coolify is 4.3.1, so confirm the live controller contract before the first write rather than relying on the older 4.1.2 snapshot.
-- Confirm every application has the supported predefined-network connection enabled and that the effective Compose joins the `coolify` network before using the shared database UUID as a host.
+- Confirm every application has Coolify's automatic destination-network connection disabled. Read back that only the four runtime containers join the explicit external database network before using the shared database UUID as a host.
 - Wait for exact deployment IDs and confirm the deployed commit, images, containers, logs, and public HTTP behavior.
 
 ## Exact repository checks

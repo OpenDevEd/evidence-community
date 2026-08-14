@@ -8,10 +8,10 @@ The development library currently appears in Coolify as two applications and one
 
 1. One Evidence Library is one Coolify Compose application.
 2. That application contains the web app, search worker, source-sync worker, source-writeback worker, and one private Meilisearch service.
-3. Meilisearch has a named volume, no public port, and one queue used only by that library.
+3. Meilisearch has a named volume, no public port, and one queue used only by that library. It never joins the shared PostgreSQL network.
 4. All Evidence Libraries share one PostgreSQL server. Each library gets its own database and login. No tables are shared between libraries.
 5. Storage and Zotero translation may remain shared services. Storage buckets remain separate per library.
-6. PostgreSQL remains the source of truth. A missing private Meilisearch index is rebuilt from PostgreSQL once, then normal outbox processing continues.
+6. PostgreSQL remains the source of truth. A durable database marker stays pending until a missing or interrupted private-index rebuild finishes, then normal outbox processing continues.
 7. `docker/compose.sources.yaml` is deleted when its workers move into the main Compose file. There is no second deployment path.
 8. OpenScholar will later call these deployment primitives. This plan does not build the self-service subscription flow or the cross-repository publishing API.
 
@@ -36,7 +36,8 @@ Plan 01 must land first because Plan 03 deploys its new Compose and search boots
 
 ## Migration choice
 
-No Evidence Library schema migration is needed. The live app currently uses
+One additive Evidence Library schema migration adds the durable search-rebuild
+marker. The live app currently uses
 Coolify's PostgreSQL bootstrap superuser, so it moves to a fresh database and
 restricted login created by the repository provisioner. Development records in
 the old administrator-owned database are disposable and are not copied. Search
@@ -48,6 +49,7 @@ Development verification may create a second temporary database and application.
 
 - Test the search command and database naming/SQL logic before integration work.
 - Render the effective Compose JSON and test services, health checks, volumes, dependencies, and public ports. Do not test YAML text.
+- Prove Meilisearch is attached only to the private application network while the four runtime containers also reach the external PostgreSQL network.
 - Use two real PostgreSQL databases and two real Meilisearch services.
 - Pause one Meilisearch service and prove the other library still indexes.
 - Verify both directions of database denial with the real tenant logins.
