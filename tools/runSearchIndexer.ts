@@ -6,6 +6,7 @@ import { loadLibraryConfig } from "../src/config/library-config/source";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { RevisionAwareMeilisearchFactory } from "../src/lib/meilisearch-factory";
 import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal";
+import { parseSearchIndexCommand } from "../src/lib/search-index/command";
 import {
 	drainSearchOutbox,
 	ensureSearchIndex,
@@ -26,80 +27,12 @@ import {
 	writeSearchIndexWorkerInstance,
 } from "../src/lib/search-index/worker-instance";
 
-const usage =
-	"Usage: npm run search:index -- [--rebuild] [--requeue-dead-letters] [--watch] [--max-events <1-1000000>] [--poll-ms <100-60000>] [--worker-id <id>]";
-
-type Command = {
-	maxEvents: number;
-	pollMs: number;
-	rebuild: boolean;
-	requeueDeadLetters: boolean;
-	watch: boolean;
-	workerId: string;
-};
-
-function requireValue(args: string[], index: number) {
-	const value = args[index + 1];
-	if (!value || value.startsWith("--")) throw new Error(usage);
-	return value;
-}
-
-function parseCommand(args: string[]): Command {
-	let maxEvents = 10_000;
-	let pollMs = 1_000;
-	let rebuild = false;
-	let requeueDeadLetters = false;
-	let watch = false;
-	let workerId =
-		process.env.SEARCH_INDEX_WORKER_ID?.trim() ||
-		`${hostname()}:${process.pid}`;
-
-	for (let index = 0; index < args.length; index += 1) {
-		const argument = args[index];
-		if (argument === "--rebuild") {
-			rebuild = true;
-			continue;
-		}
-		if (argument === "--watch") {
-			watch = true;
-			continue;
-		}
-		if (argument === "--requeue-dead-letters") {
-			requeueDeadLetters = true;
-			continue;
-		}
-		if (argument === "--max-events") {
-			maxEvents = Number(requireValue(args, index));
-			index += 1;
-			continue;
-		}
-		if (argument === "--poll-ms") {
-			pollMs = Number(requireValue(args, index));
-			index += 1;
-			continue;
-		}
-		if (argument === "--worker-id") {
-			workerId = requireValue(args, index);
-			index += 1;
-			continue;
-		}
-		throw new Error(usage);
-	}
-	if (!Number.isSafeInteger(pollMs) || pollMs < 100 || pollMs > 60_000) {
-		throw new Error(usage);
-	}
-	return {
-		maxEvents,
-		pollMs,
-		rebuild,
-		requeueDeadLetters,
-		watch,
-		workerId,
-	};
-}
-
 async function main() {
-	const command = parseCommand(process.argv.slice(2));
+	const command = parseSearchIndexCommand(
+		process.argv.slice(2),
+		process.env.SEARCH_INDEX_WORKER_ID?.trim() ||
+			`${hostname()}:${process.pid}`,
+	);
 	const config = await loadLibraryConfig();
 	const instanceId = randomUUID();
 	await writeSearchIndexWorkerInstance(
@@ -201,9 +134,25 @@ async function main() {
 				}),
 			);
 		} else {
-			await ensureSearchIndex(service, {
+			const setup = await ensureSearchIndex(service, {
 				signal: abortController.signal,
 			});
+			if (command.rebuildIfMissing && setup.created) {
+				const plan = await rebuildSearchIndex(
+					databaseResource.database,
+					service,
+					{ signal: abortController.signal },
+				);
+				console.log(
+					JSON.stringify({
+						deleted: plan.deleted,
+						indexed: plan.indexed,
+						rebuild: true,
+						rebuildReason: "index-missing",
+						requeued,
+					}),
+				);
+			}
 		}
 		await writeWorkerState(
 			{

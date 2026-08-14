@@ -843,6 +843,7 @@ export async function ensureSearchIndex(
 	} = {},
 ) {
 	const taskTimeoutMs = options.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS;
+	let created = false;
 	throwIfAborted(options.signal);
 	try {
 		await abortable(
@@ -867,6 +868,7 @@ export async function ensureSearchIndex(
 					taskClient: service.index.tasks,
 				},
 			);
+			created = true;
 		} catch (creationError) {
 			if (!(
 				creationError instanceof SearchIndexTaskError &&
@@ -919,6 +921,7 @@ export async function ensureSearchIndex(
 			taskClient: service.index.tasks,
 		},
 	);
+	return { created };
 }
 
 export async function rebuildSearchIndex(
