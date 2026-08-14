@@ -1,11 +1,10 @@
 export const SEARCH_INDEX_USAGE =
-	"Usage: npm run search:index -- [--rebuild | --rebuild-if-missing] [--requeue-dead-letters] [--watch] [--max-events <1-1000000>] [--poll-ms <100-60000>] [--worker-id <id>]";
+	"Usage: npm run search:index -- [--rebuild] [--requeue-dead-letters] [--watch] [--max-events <1-1000000>] [--poll-ms <100-60000>] [--worker-id <id>]";
 
 export type SearchIndexCommand = {
 	maxEvents: number;
 	pollMs: number;
 	rebuild: boolean;
-	rebuildIfMissing: boolean;
 	requeueDeadLetters: boolean;
 	watch: boolean;
 	workerId: string;
@@ -24,7 +23,6 @@ export function parseSearchIndexCommand(
 	let maxEvents = 10_000;
 	let pollMs = 1_000;
 	let rebuild = false;
-	let rebuildIfMissing = false;
 	let requeueDeadLetters = false;
 	let watch = false;
 	let workerId = defaultWorkerId;
@@ -33,10 +31,6 @@ export function parseSearchIndexCommand(
 		const argument = args[index];
 		if (argument === "--rebuild") {
 			rebuild = true;
-			continue;
-		}
-		if (argument === "--rebuild-if-missing") {
-			rebuildIfMissing = true;
 			continue;
 		}
 		if (argument === "--watch") {
@@ -67,7 +61,6 @@ export function parseSearchIndexCommand(
 
 	workerId = workerId.trim();
 	if (
-		(rebuild && rebuildIfMissing) ||
 		!Number.isSafeInteger(maxEvents) ||
 		maxEvents < 1 ||
 		maxEvents > 1_000_000 ||
@@ -84,7 +77,6 @@ export function parseSearchIndexCommand(
 		maxEvents,
 		pollMs,
 		rebuild,
-		rebuildIfMissing,
 		requeueDeadLetters,
 		watch,
 		workerId,

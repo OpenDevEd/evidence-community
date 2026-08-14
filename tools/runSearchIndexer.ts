@@ -8,6 +8,11 @@ import { RevisionAwareMeilisearchFactory } from "../src/lib/meilisearch-factory"
 import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal";
 import { parseSearchIndexCommand } from "../src/lib/search-index/command";
 import {
+	searchIndexRebuildIsPending,
+	setSearchIndexRebuildPending,
+	shouldRebuildSearchIndex,
+} from "../src/lib/search-index/bootstrap-state";
+import {
 	drainSearchOutbox,
 	ensureSearchIndex,
 	requeueSearchOutboxDeadLetters,
@@ -113,17 +118,41 @@ async function main() {
 			updatedAt: config.updatedAt,
 		});
 		const requeued = command.requeueDeadLetters
-			? (
-					await requeueSearchOutboxDeadLetters(
-						databaseResource.database,
-					)
-				).length
+			? (await requeueSearchOutboxDeadLetters(databaseResource.database))
+					.length
 			: 0;
-		if (command.rebuild) {
+		let rebuildPending = await searchIndexRebuildIsPending(
+			databaseResource.database,
+		);
+		if (command.rebuild && !rebuildPending) {
+			await setSearchIndexRebuildPending(databaseResource.database, true);
+			rebuildPending = true;
+		}
+		const setup = await ensureSearchIndex(service, {
+			onMissing: async () => {
+				await setSearchIndexRebuildPending(
+					databaseResource.database,
+					true,
+				);
+				rebuildPending = true;
+			},
+			signal: abortController.signal,
+		});
+		if (
+			shouldRebuildSearchIndex({
+				forceRebuild: command.rebuild,
+				indexCreated: setup.created,
+				rebuildPending,
+			})
+		) {
 			const plan = await rebuildSearchIndex(
 				databaseResource.database,
 				service,
 				{ signal: abortController.signal },
+			);
+			await setSearchIndexRebuildPending(
+				databaseResource.database,
+				false,
 			);
 			console.log(
 				JSON.stringify({
@@ -133,26 +162,6 @@ async function main() {
 					requeued,
 				}),
 			);
-		} else {
-			const setup = await ensureSearchIndex(service, {
-				signal: abortController.signal,
-			});
-			if (command.rebuildIfMissing && setup.created) {
-				const plan = await rebuildSearchIndex(
-					databaseResource.database,
-					service,
-					{ signal: abortController.signal },
-				);
-				console.log(
-					JSON.stringify({
-						deleted: plan.deleted,
-						indexed: plan.indexed,
-						rebuild: true,
-						rebuildReason: "index-missing",
-						requeued,
-					}),
-				);
-			}
 		}
 		await writeWorkerState(
 			{

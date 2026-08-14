@@ -1,0 +1,1 @@
+ALTER TABLE "status" ADD COLUMN "searchIndexRebuildPending" boolean DEFAULT true NOT NULL;

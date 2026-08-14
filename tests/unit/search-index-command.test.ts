@@ -11,18 +11,16 @@ describe("search index command", () => {
 			maxEvents: 10_000,
 			pollMs: 1_000,
 			rebuild: false,
-			rebuildIfMissing: false,
 			requeueDeadLetters: false,
 			watch: false,
 			workerId: "host:123",
 		});
 	});
 
-	it("parses first-start rebuild and watch options", () => {
+	it("parses watch options", () => {
 		expect(
 			parseSearchIndexCommand(
 				[
-					"--rebuild-if-missing",
 					"--requeue-dead-letters",
 					"--watch",
 					"--max-events",
@@ -38,19 +36,15 @@ describe("search index command", () => {
 			maxEvents: 250,
 			pollMs: 5_000,
 			rebuild: false,
-			rebuildIfMissing: true,
 			requeueDeadLetters: true,
 			watch: true,
 			workerId: "worker-a",
 		});
 	});
 
-	it("rejects two rebuild modes", () => {
+	it("rejects the removed optional missing-index mode", () => {
 		expect(() =>
-			parseSearchIndexCommand(
-				["--rebuild", "--rebuild-if-missing"],
-				"host:123",
-			),
+			parseSearchIndexCommand(["--rebuild-if-missing"], "host:123"),
 		).toThrow(SEARCH_INDEX_USAGE);
 	});
 

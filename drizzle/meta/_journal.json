@@ -211,6 +211,13 @@
       "when": 1786635112064,
       "tag": "0029_remove-unused-apc-fields",
       "breakpoints": true
+    },
+    {
+      "idx": 30,
+      "version": "7",
+      "when": 1786707376939,
+      "tag": "0030_durable-search-bootstrap",
+      "breakpoints": true
     }
   ]
 }

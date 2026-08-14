@@ -103,9 +103,12 @@ configured.
 
 Use `http://meilisearch:7700` as the runtime search host and set the runtime
 search key and `MEILISEARCH_MASTER_KEY` to the same private value. Meilisearch
-has no public port. If its named volume is new, the search worker rebuilds the
-index once from PostgreSQL before it becomes healthy. Ordinary restarts keep
-the existing index and only drain the saved outbox.
+has no public port and joins only the private application network. The four
+runtime containers also join the external `coolify` network to reach shared
+PostgreSQL. Coolify's automatic destination-network attachment must stay off.
+If the named search volume is new, the worker records a pending rebuild in
+PostgreSQL before creating the index. It clears that marker only after the full
+rebuild succeeds. An interrupted rebuild resumes before health becomes ready.
 
 Build the dedicated worker target from the same revision as the web image:
 

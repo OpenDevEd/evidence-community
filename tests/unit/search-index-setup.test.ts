@@ -26,7 +26,10 @@ function succeededTask(uid: number): Task {
 	};
 }
 
-function service(indexExists: boolean): MeilisearchService {
+function service(
+	indexExists: boolean,
+	events: string[] = [],
+): MeilisearchService {
 	let taskUid = 0;
 	const nextTask = () => Promise.resolve({ taskUid: ++taskUid });
 	const index = {
@@ -36,18 +39,18 @@ function service(indexExists: boolean): MeilisearchService {
 		updateSettings: nextTask,
 	} as unknown as Index;
 	const client = {
-		createIndex: nextTask,
+		createIndex: () => {
+			events.push("create");
+			return nextTask();
+		},
 		getRawIndex: async () => {
 			if (indexExists) return { uid: "items" };
-			throw new MeilisearchApiError(
-				new Response(null, { status: 404 }),
-				{
-					code: "index_not_found",
-					link: "https://www.meilisearch.com/docs/reference/errors/error_codes#index-not-found",
-					message: "Index items not found.",
-					type: "invalid_request",
-				},
-			);
+			throw new MeilisearchApiError(new Response(null, { status: 404 }), {
+				code: "index_not_found",
+				link: "https://www.meilisearch.com/docs/reference/errors/error_codes#index-not-found",
+				message: "Index items not found.",
+				type: "invalid_request",
+			});
 		},
 	} as unknown as Meilisearch;
 	return {
@@ -61,9 +64,17 @@ function service(indexExists: boolean): MeilisearchService {
 
 describe("search index setup", () => {
 	it("reports a newly created index", async () => {
-		await expect(ensureSearchIndex(service(false))).resolves.toEqual({
+		const events: string[] = [];
+		await expect(
+			ensureSearchIndex(service(false, events), {
+				onMissing: async () => {
+					events.push("mark-pending");
+				},
+			}),
+		).resolves.toEqual({
 			created: true,
 		});
+		expect(events).toEqual(["mark-pending", "create"]);
 	});
 
 	it("reports an existing index", async () => {

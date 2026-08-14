@@ -838,6 +838,7 @@ export async function requeueSearchOutboxDeadLetters(
 export async function ensureSearchIndex(
 	service: MeilisearchService,
 	options: {
+		onMissing?: () => Promise<void>;
 		signal?: AbortSignal;
 		taskTimeoutMs?: number;
 	} = {},
@@ -857,6 +858,8 @@ export async function ensureSearchIndex(
 		)) {
 			throw error;
 		}
+		await options.onMissing?.();
+		throwIfAborted(options.signal);
 		try {
 			await waitForSuccessfulTask(
 				service.client.createIndex(service.indexName, {

@@ -1,5 +1,11 @@
 import { sql } from "drizzle-orm";
-import { check, integer, pgTable, timestamp } from "drizzle-orm/pg-core";
+import {
+	boolean,
+	check,
+	integer,
+	pgTable,
+	timestamp,
+} from "drizzle-orm/pg-core";
 
 export const status = pgTable(
 	"status",
@@ -7,6 +13,9 @@ export const status = pgTable(
 		id: integer("id").primaryKey().default(1),
 		totalRecords: integer("totalRecords").notNull().default(0),
 		totalItems: integer("totalItems").notNull().default(0),
+		searchIndexRebuildPending: boolean("searchIndexRebuildPending")
+			.notNull()
+			.default(true),
 		databaseUpdatedAt: timestamp("databaseUpdatedAt")
 			.notNull()
 			.defaultNow(),
