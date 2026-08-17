@@ -29,6 +29,7 @@ Move the finished DOI publication work onto the current `openscholar` branch wit
 10. Merge and deploy with providers disabled first. Enable and qualify only `docs-pen`. The other development library stays disabled until the canary passes and a later explicit step enables it.
 11. `docs-pen` uses suffix namespace `docs-pen.`. Its separate database, publication worker, and Meilisearch keep its queue and search work isolated.
 12. Sandbox writes are allowed only through the environment-gated qualification tools. Production Crossref and Zenodo values remain impossible in the schema.
+13. Clean Docker builds install the public DOI core through HTTPS. npm records this Git dependency as an SSH URL in `package-lock.json`, so the shared dependency image must rewrite that exact GitHub SSH prefix to public HTTPS before any npm install. Do not add a deploy key, token, or cache-dependent fallback.
 
 ## Existing code to reuse
 
@@ -88,6 +89,7 @@ These are the required public seams for the test-first work:
 - Confirm `test:library-compose` and `test:database-provisioning` exist immediately after the port, before relying on them in the full gate.
 - Run schema checks, TypeScript, lint, unit tests, database provisioning, library Compose checks, publication worker checks, full acceptance, and browser tests.
 - Build the production image and inspect the effective Compose model: web/source/search/publication workers use the runtime networks; Meilisearch stays private; web selects the Coolify network for the proxy.
+- Prove a clean dependency image can install the pinned public DOI core without an SSH client, SSH key, or warm npm cache.
 
 ### 4. Add real sandbox qualification tools
 
@@ -170,4 +172,5 @@ Clean forward migration. No compatibility columns, fallback reads, or dual schem
 - Zenodo Sandbox can be reset. Preserve the local evidence and distinguish a sandbox reset from application failure.
 - A provider request can succeed before the response is received. Every qualification retry must use the saved job, identifier, and journal rather than creating another target.
 - Existing published-file rows need a valid canonical attachment MD5 before migration 0032 can become required.
+- npm normalizes the pinned GitHub dependency to an SSH URL in `package-lock.json`; the Docker dependency stage must keep the checked-in HTTPS rewrite or clean server builds will fail before compilation.
 - The user has authorized sandbox deployment and provider writes only for `docs-pen`; production and the other library remain out of scope.
