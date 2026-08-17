@@ -646,14 +646,17 @@ async function runZenodo(
 	return evidence.zenodo;
 }
 
-function zenodoFile(record: Record<string, unknown>, filename: string) {
+export function zenodoFile(
+	record: Record<string, unknown>,
+	filename: string,
+) {
 	const files = record.files;
 	if (Array.isArray(files)) {
 		return files.find(
 			(file) =>
 				file &&
 				typeof file === "object" &&
-				(file as Record<string, unknown>).filename === filename,
+				(file as Record<string, unknown>).key === filename,
 		) as Record<string, unknown> | undefined;
 	}
 	if (files && typeof files === "object") {
