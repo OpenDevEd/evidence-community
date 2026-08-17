@@ -17,7 +17,7 @@ Implement plans/crossref-zenodo-publication/02-publication-state-and-config.md i
 ## 03 — Manual Crossref activation
 
 ```text
-Implement plans/crossref-zenodo-publication/03-crossref-activation.md. Crossref activation must be an explicit per-item admin action and the only way to create a Crossref publication target. Reuse the phase-02 resolver to normalize DOI from item.DOI, Zotero-style extra, and DOI link attachments tagged _r:doi before allocation; matching values collapse, conflicts block, and an existing DOI in any source must never mint a duplicate. Validate public parent state, supported Crossref 5.5 item type, required metadata, stable landing URL, test configuration, and DOI ownership. The browser must not submit a prefix, suffix, counter, or DOI. Atomically reserve a non-recycled DOI from the server-configured prefix/namespace only when no resolved DOI exists, write it immediately to canonical item.DOI, increment the revision, create the target/identifier/job/receipt, and queue the search outbox plus ordinary configured source writeback. Return the exact reserved DOI immediately but keep its lifecycle reserved/in progress until Crossref verification. Verification enqueues exactly one search reprojection but no second item revision or source-writeback job. Manual retry resets the latest dead-lettered job to due while preserving attempt history. Add the named provisional one-shot runner for local phase-03/04 verification. Implement Crossref test planning/execution/pending verification through doi-sync-core. Use provider fakes in normal tests; do not call real Crossref yet. Run every listed focused test. Do not implement Zenodo or UI, push, or update Outline.
+Implement plans/crossref-zenodo-publication/03-crossref-activation.md. Crossref activation must be an explicit per-item admin action and the only way to create a Crossref publication target. Reuse the phase-02 resolver to normalize DOI from item.DOI, Zotero-style extra, and DOI link attachments tagged _r:doi before allocation; matching values collapse, conflicts block, and an existing DOI in any source must never mint a duplicate. A DOI found only in metadata is external regardless of prefix. Reuse is valid only when this item already has a matching managed publicationIdentifier row created by this library; delete the prefix-only reuse branch. Validate public parent state, supported Crossref 5.5 item type, required metadata, stable landing URL, test configuration, and DOI ownership. The browser must not submit a prefix, suffix, counter, or DOI. Atomically reserve a non-recycled DOI from the server-configured prefix/namespace only when no resolved DOI exists, write it immediately to canonical item.DOI, increment the revision, create the target/identifier/job/receipt, and queue the search outbox plus ordinary configured source writeback. Return the exact reserved DOI immediately but keep its lifecycle reserved/in progress until Crossref verification. Verification enqueues exactly one search reprojection but no second item revision or source-writeback job. Manual retry resets the latest dead-lettered job to due while preserving attempt history. Add the named provisional one-shot runner for local phase-03/04 verification. Implement Crossref test planning/execution/pending verification through doi-sync-core. Use provider fakes in normal tests; do not call real Crossref yet. Run every listed focused test. Do not implement Zenodo or UI, push, or update Outline.
 ```
 
 ## 04 — Manual Zenodo activation
@@ -51,7 +51,7 @@ Read plans/crossref-zenodo-publication/08-openscholar-integration-and-docs-pen-c
 
 STANDING RULES
 1. Reuse the current tenant Compose, admin services, publication modules, worker helpers, fake provider, and runtime tools before adding anything.
-2. Make clean breaking changes. Do not restore Tailscale, add compatibility fields, or keep both old and new migration paths.
+2. Make clean breaking changes. Delete every Tailscale runtime, verifier, test, package script, and operations-doc path; only plans may still mention Tailscale. Do not add compatibility fields or keep both old and new migration paths.
 3. Read installed Next.js route-handler documentation before editing app routes. Do not add useEffect for app state.
 4. Use behavior tests at the admin view, activation API, unpublish API, migration/runtime, real provider lifecycle, and tenant-isolation seams. Never test Tailwind classes.
 5. Use current official Crossref and Zenodo docs and the installed doi-sync-core source. Do not guess provider behavior.
@@ -60,10 +60,12 @@ STANDING RULES
 
 EXECUTION RHYTHM
 - Commit this plan before code.
+- Recreate all seven DOI-branch migrations 0025-0031 as consolidated 0031-0033 migrations generated from current openscholar migration 0030. Compare the final snapshots so no publication or canonical metadata field is lost.
 - For DOI preview, ownership, and unpublish safety, write one failing behavior test, make it pass, and commit each green unit.
 - Resolve integration conflicts by preserving the current openscholar behavior and adding only the publication concern.
 - Run focused checks after each unit, then the complete local gate before any push.
 - Deploy disabled first, verify, then enable sandbox configuration and run the real lifecycle.
+- If qualification fails, redeploy the saved disabled configuration without deleting DOI or publication state.
 
 COMMIT DISCIPLINE
 - Use conventional commit prefixes and add `[plan-08]` to every plan-08 commit.

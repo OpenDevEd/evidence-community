@@ -11,7 +11,7 @@ Move the finished DOI publication work onto the current `openscholar` branch wit
 - Merge base: `fa3bf5db2e1e87711dd87c1f5b773e2cc838846b`.
 - The DOI branch has 15 unique commits and is missing 51 newer `openscholar` commits.
 - A test merge reports 11 conflict paths. The largest conflicts are tenant Compose, Drizzle history, the file route, acceptance Compose, and admin browser coverage.
-- Crossref test authentication succeeds when the stored `email:role` login is normalized to `email/role` by `crossrefLoginId` in the pinned core.
+- Crossref test authentication succeeds through `crossrefLoginId` in the pinned core. It accepts a bare organization role or converts a stored personal `email:role` login to Crossref's `email/role` form.
 - The Zenodo Sandbox token authenticates successfully.
 - The branch passes 108 unit files and 818 tests, TypeScript, lint, schema checks, and the disposable fake-provider publication lifecycle. Real provider qualification is still missing.
 
@@ -24,7 +24,7 @@ Move the finished DOI publication work onto the current `openscholar` branch wit
 5. The Crossref confirmation shows the configured namespace, such as `10.53832/docs-pen.…`. It never shows an exact unreserved counter value. The exact DOI appears only after PostgreSQL reserves it.
 6. A DOI is managed only when this library reserved it in `publicationIdentifier`. A DOI found only in item metadata remains external, even when it uses the configured prefix. This phase does not adopt existing DOIs.
 7. Records with an active Crossref or Zenodo target cannot be unpublished until a later withdrawal/tombstone design exists. The API returns a plain error explaining how to proceed.
-8. Current `openscholar` owns migrations 0029 and 0030. Publication migrations become 0031, 0032, and 0033, with snapshots and the journal regenerated from the current 0030 state.
+8. Current `openscholar` owns migrations through 0030. All seven DOI-branch migrations, 0025 through 0031 including 0026 canonical metadata fields, are recreated as consolidated migrations 0031-0033 generated from the current 0030 snapshot. The final 0033 snapshot is compared with the DOI branch's 0031 snapshot so no publication table or column is lost.
 9. The new required file MD5 is populated from the canonical attachment item's existing `md5` value before the column becomes required. The migration must stop with a clear database error if an existing published file has no valid MD5. No nullable compatibility field remains.
 10. Merge and deploy with providers disabled first. Enable and qualify only `docs-pen`. The other development library stays disabled until the canary passes and a later explicit step enables it.
 11. `docs-pen` uses suffix namespace `docs-pen.`. Its separate database, publication worker, and Meilisearch keep its queue and search work isolated.
@@ -66,12 +66,14 @@ These are the required public seams for the test-first work:
 - Keep current Compose and add only the publication worker and its health dependency.
 - Keep current authentication in the file route while adding the Zenodo file-correction request contract.
 - Keep current acceptance services and add the fake publication provider and publication worker.
-- Delete both stale Tailscale paths.
+- Delete `docker/compose.tailscale-development.yaml`, `ops/tailscale-development/`, `tools/verifyTailscaleDevelopmentDeployment.ts`, `tests/unit/tailscale-development-deployment.test.ts`, the `test:tailscale-development` package script, and the Tailscale deployment section in `docs/evidence-library-operations.md`.
+- Require `git grep -i tailscale` to return matches only under `plans/`.
 
 ### 2. Fix DOI ownership, preview, and unpublish safety test-first
 
 - Add a failing view/browser test proving the confirmation contains `prefix/namespace…` and no exact sequence.
 - Remove `previewDoi` and the read-only next-counter guess from the admin view.
+- Remove the second exact-number placeholder ending in `000000` from `admin-publication-view.ts`; before reservation the UI may show only the namespace.
 - Add a failing activation/API test proving a same-prefix metadata DOI is external unless a managed identifier row already exists for this item.
 - Delete the prefix-only adoption path. Do not add a compatibility claim flow.
 - Add failing service and route tests proving active publication targets block unpublish without changing PostgreSQL or Meilisearch receipts.
@@ -79,16 +81,18 @@ These are the required public seams for the test-first work:
 
 ### 3. Rebuild migrations and prove the merged runtime
 
-- Recreate publication migrations as 0031-0033 from current 0030.
+- Recreate all schema work from DOI-branch migrations 0025-0031 as consolidated migrations 0031-0033 from current 0030, including the canonical metadata fields from old migration 0026.
 - Populate `itemFilePublication.md5` from the canonical attachment row, validate it, then set it required.
 - Regenerate Drizzle snapshots and `_journal.json`; never hand-merge snapshot JSON.
+- Compare the generated final snapshot with the DOI branch's final 0031 snapshot and account for every publication table and column.
+- Confirm `test:library-compose` and `test:database-provisioning` exist immediately after the port, before relying on them in the full gate.
 - Run schema checks, TypeScript, lint, unit tests, database provisioning, library Compose checks, publication worker checks, full acceptance, and browser tests.
 - Build the production image and inspect the effective Compose model: web/source/search/publication workers use the runtime networks; Meilisearch stays private; web selects the Coolify network for the proxy.
 
 ### 4. Add real sandbox qualification tools
 
 - Add the three Phase 07 scripts: `test:crossref-test-live`, `test:zenodo-sandbox-live`, and `test:publication-sandbox-lifecycle`.
-- Each tool requires an explicit environment gate and exits before a provider call when the gate, test/sandbox endpoint, credentials, fresh fixture identity, or unique namespace is missing.
+- Each tool requires an explicit environment gate and exits before a provider call when the gate, test/sandbox endpoint, credentials, fresh fixture identity, or unique namespace is missing. Credential errors must accept both bare organization-role logins and personal logins normalized by `crossrefLoginId`.
 - Use the application publication API and worker. Do not submit directly with a second provider client.
 - Poll saved receipts and provider diagnostics. Do not use arbitrary sleeps as success checks.
 - Preserve Crossref batch/submission IDs and Zenodo record/version IDs in the final evidence.
@@ -100,6 +104,7 @@ These are the required public seams for the test-first work:
 - Update the compact `LIBRARY_CONFIG_JSON` with Crossref Test, Zenodo Sandbox, `docs-pen.`, and the existing worker defaults. Read the exact saved environment value back before redeploying.
 - Run the complete real sandbox lifecycle once. Do not reuse a failed or successful DOI for a fresh run.
 - Verify the public page, admin state after reload, publication worker health, search receipt, database rows, Crossref diagnostic, and Zenodo record/PDF/checksum.
+- If qualification fails after providers are enabled, redeploy the named, previously verified disabled `LIBRARY_CONFIG_JSON`. Keep every DOI, identifier, target, job, journal, and provider receipt; never delete a `publicationIdentifier` to roll back configuration.
 - Update the existing Evidence Library current-state and runbook Outline pages only after the pushed commit and live checks are proven. Read both pages back.
 
 ## Exact checks

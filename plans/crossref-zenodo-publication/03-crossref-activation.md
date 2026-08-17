@@ -28,10 +28,9 @@ If the resolved item has no DOI, the confirmation view says that Crossref will a
 
 The Crossref prefix is assigned to the member account and comes from `services.publication.crossref.prefix`. The suffix namespace also comes from server-only library configuration. PostgreSQL appends a zero-padded counter while holding the namespace row lock. The browser cannot submit a prefix, suffix, counter, or complete DOI.
 
-If the resolved item has a DOI, regardless of whether it came from `item.DOI`, `extra`, or a tagged DOI attachment:
+If the resolved item has a DOI in metadata but this library has no matching managed `publicationIdentifier` row for the item, the DOI is external regardless of prefix. It remains available for bibliographic display and blocks Crossref activation with an actionable response. It does not satisfy the managed Crossref DOI option for Zenodo.
 
-- A DOI under the configured prefix is reused, never replaced. Activation queues a deposit and verification using that exact DOI. It becomes a verified managed identifier only after the configured Crossref account accepts and Crossref verifies the record.
-- A DOI under another prefix is classified external and blocks Crossref activation with an actionable response. It remains available for bibliographic display, but it does not satisfy the managed Crossref DOI option for Zenodo.
+Reuse is valid only when this item already has a matching managed `publicationIdentifier` row created by the local reservation transaction. Delete the prefix-only reuse branch from `classifyCrossrefActivationDoi`; the configured prefix alone never proves local ownership.
 
 The worker builds a complete schema 5.5 document, validates locally, submits to Crossref test, parses deposit diagnostics, and stores either terminal failure, pending verification, or active state. Accepted-but-not-indexed submissions remain `verifying`; they are never reported active from a successful HTTP request alone.
 
@@ -41,7 +40,7 @@ Manual retry follows the existing writeback donor: it resets the latest dead-let
 
 ## TDD sequence
 
-1. Add route/contract tests for unsupported type, missing fields, private/draft item, missing config, server-owned prefix/namespace, ignored client DOI input, direct-field DOI, Extra-only DOI, attachment-only DOI, matching multi-source DOI, conflicting DOI sources, external DOI, duplicate activation, and valid activation.
+1. Add route/contract tests for unsupported type, missing fields, private/draft item, missing config, server-owned prefix/namespace, ignored client DOI input, direct-field DOI, Extra-only DOI, attachment-only DOI, matching multi-source DOI, conflicting DOI sources, same-prefix metadata DOI classified external, managed identifier reuse, duplicate activation, and valid activation.
 2. Add activation transaction tests proving the canonical DOI/revision, identifier reservation, target, publication job, search outbox event, source writeback, and receipt commit or roll back together.
 3. Add concurrent activation tests proving one DOI allocation and one active target.
 4. Add settlement tests proving verification changes the identifier lifecycle and enqueues exactly one parent search reprojection in the same transaction, without creating a second item revision or source-writeback job.
@@ -66,7 +65,7 @@ Manual retry follows the existing writeback donor: it resets the latest dead-let
 
 ## Migration stance
 
-No legacy activation endpoint or status field is introduced. Existing unclassified DOI values from `item.DOI` or `extra` remain bibliographic identifiers until manual activation classifies them.
+No legacy activation endpoint or status field is introduced. Existing DOI values from `item.DOI`, `extra`, or tagged DOI attachments remain external bibliographic identifiers unless this library already has a matching managed `publicationIdentifier` row for the item.
 
 ## Exact test plan
 

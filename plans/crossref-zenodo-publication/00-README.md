@@ -28,7 +28,7 @@ Required Outline context was read before planning: Start Here, Evidence Library 
 6. The Zenodo identifier policy becomes immutable when the first Zenodo record is published.
 7. A Zenodo activation without a published file remains locally `waiting_for_file`; it does not create an empty remote draft.
 8. Crossref activation is available only for item types with an explicit, schema-valid Crossref 5.5 mapping. There is no generic report fallback.
-9. Existing third-party DOIs remain bibliographic identifiers. They are not adopted as OpenDevEd-managed Crossref registrations unless the configured Crossref account owns the DOI prefix and provider verification confirms the record is maintainable.
+9. A DOI found only in item metadata remains an external bibliographic identifier, even when it uses the configured Crossref prefix. Reuse is valid only when this library already has a managed `publicationIdentifier` row for the item. This work does not adopt existing DOIs.
 10. DOI discovery normalizes the canonical `item.DOI` field, Zotero-style `extra` metadata, and DOI link attachments tagged `_r:doi` before classification. Conflicting values block activation; an existing DOI in any source can never fall through to allocation.
 11. Immediate jobs are the delivery path. Nightly reconciliation is the repair path.
 12. Crossref test and Zenodo Sandbox must pass the complete real-service matrix before any production-enablement work is planned.
