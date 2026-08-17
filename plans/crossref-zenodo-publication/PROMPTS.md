@@ -43,3 +43,46 @@ Implement plans/crossref-zenodo-publication/06-admin-publication-ui.md. Read the
 ```text
 Implement plans/crossref-zenodo-publication/07-sandbox-qualification.md. Use only Crossref test and Zenodo Sandbox. Use the MEE worker smoke:sandbox command as the shared-client baseline; the core has no live smoke runner. Build fail-closed, environment-gated Evidence Library real-service verifiers and execute the complete matrix for manual activation, supported mapper families, both Zenodo policies, files, metadata, retries, crash recovery, reconciliation, native/source-linked boundaries, environment isolation, and persisted UI progress. Fix defects in their owning layer; do not weaken tests or use arbitrary success timers. Run all shared-core, MEE-worker, Evidence Library, real-service, acceptance, and Playwright checks listed in the phase. Update canonical repository docs only with verified behavior. Do not introduce production configuration, deploy, push, or update Outline without explicit authorization.
 ```
+
+## 08 — Current-branch integration and docs-pen canary
+
+```text
+Read plans/crossref-zenodo-publication/08-openscholar-integration-and-docs-pen-canary.md, plans/crossref-zenodo-publication/00-README.md, and plans/crossref-zenodo-publication/07-sandbox-qualification.md. This is a multi-hour integration, test, and development deployment. Keep working through the complete plan without asking questions whose answers are already in those files.
+
+STANDING RULES
+1. Reuse the current tenant Compose, admin services, publication modules, worker helpers, fake provider, and runtime tools before adding anything.
+2. Make clean breaking changes. Do not restore Tailscale, add compatibility fields, or keep both old and new migration paths.
+3. Read installed Next.js route-handler documentation before editing app routes. Do not add useEffect for app state.
+4. Use behavior tests at the admin view, activation API, unpublish API, migration/runtime, real provider lifecycle, and tenant-isolation seams. Never test Tailwind classes.
+5. Use current official Crossref and Zenodo docs and the installed doi-sync-core source. Do not guess provider behavior.
+6. Provider writes are allowed only against Crossref Test and Zenodo Sandbox for docs-pen after the disabled deployment is healthy. Production and the other library are out of scope.
+7. Use GPT-5.6 Sol for delegated agents. Have Fable 5 review this plan before implementation and review the completed major step after all local checks pass.
+
+EXECUTION RHYTHM
+- Commit this plan before code.
+- For DOI preview, ownership, and unpublish safety, write one failing behavior test, make it pass, and commit each green unit.
+- Resolve integration conflicts by preserving the current openscholar behavior and adding only the publication concern.
+- Run focused checks after each unit, then the complete local gate before any push.
+- Deploy disabled first, verify, then enable sandbox configuration and run the real lifecycle.
+
+COMMIT DISCIPLINE
+- Use conventional commit prefixes and add `[plan-08]` to every plan-08 commit.
+- Stage named files only. Never commit failing work.
+- Push only after the complete local gate passes, then read back the remote SHA.
+
+WHEN TO STOP
+- Stop only for a missing required API, a provider result that cannot be safely retried, or a migration failure that requires deleting data outside the authorized docs-pen development scope.
+- Do not stop for conflict volume, long tests, token worry, or an answer already fixed in the plan.
+- Do not report completion until the exact Coolify deployment is finished, all six runtime services are healthy, and the real sandbox lifecycle is verified.
+
+DEVIATIONS
+- If the plan is wrong but the safe path is clear, commit safe work, update this numbered plan, commit `docs: [plan-08] revise <section> — <reason>`, then continue.
+- If a required API is missing, commit safe work, add `plans/crossref-zenodo-publication/08-BLOCKER.md`, and stop without a workaround.
+
+START NOW
+- Read the three plan files, AGENTS.md, current git status, current branch tips, installed Next.js route-handler docs, and the pinned DOI core source.
+- Confirm the worktree is clean and begin with the plan commit and Fable 5 plan review.
+- Then start the first red test.
+
+Go.
+```

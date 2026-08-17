@@ -1,6 +1,6 @@
 # Crossref and Zenodo publication
 
-Status: shared core and MEE worker complete; Evidence Library work is planned but not implemented. No provider writes, schema mutations, or production enablement are authorized by this plan.
+Status: Evidence Library phases 02-06 are implemented on `codex/doi-publication-integration`, but that branch is not merged or deployed. Phase 08 now owns the clean integration into the current `openscholar` branch and the `docs-pen` sandbox canary. Production provider writes remain out of scope.
 
 ## Goal
 
@@ -250,3 +250,4 @@ The development database is disposable. Add clean tables and constraints without
 5. [05 — Durable delivery and nightly reconciliation](./05-worker-and-reconciliation.md)
 6. [06 — Admin DOI publishing UI](./06-admin-publication-ui.md)
 7. [07 — Real sandbox qualification and documentation](./07-sandbox-qualification.md)
+8. [08 — Current-branch integration and docs-pen canary](./08-openscholar-integration-and-docs-pen-canary.md)
