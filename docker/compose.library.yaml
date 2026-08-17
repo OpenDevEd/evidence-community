@@ -32,6 +32,8 @@ services:
     depends_on:
       search-indexer:
         condition: service_healthy
+    labels:
+      - "traefik.docker.network=coolify"
     restart: unless-stopped
     expose:
       - "3000"

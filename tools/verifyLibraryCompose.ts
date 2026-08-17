@@ -10,6 +10,7 @@ type ComposeService = {
 	expose?: string[];
 	healthcheck?: { start_period?: string; test?: string[] };
 	image?: string;
+	labels?: Record<string, string>;
 	networks?: Record<string, unknown>;
 	ports?: unknown[];
 	volumes?: Array<{ source: string; target: string }>;
@@ -165,6 +166,10 @@ function main() {
 	requireCondition(
 		JSON.stringify(services.web.expose) === JSON.stringify(["3000"]),
 		"Only the web service may expose port 3000",
+	);
+	requireCondition(
+		services.web.labels?.["traefik.docker.network"] === "coolify",
+		"The public proxy must reach web through the shared Coolify network",
 	);
 	const renderedConfig = JSON.parse(
 		model.configs?.["library-config"]?.content ?? "null",
