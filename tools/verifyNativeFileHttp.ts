@@ -119,27 +119,80 @@ async function assertIndexingReceipts(
 			),
 		`${context} returned an incomplete receipt set: ${JSON.stringify(receipts)}`,
 	);
-	const rows = await db
-		.select({
-			entityKey: outbox.entityKey,
-			entityType: outbox.entityType,
-			revision: outbox.revision,
-		})
-		.from(outbox)
-		.where(
-			or(
-				...receipts.map((receipt) =>
-					and(
-						eq(outbox.entityType, receipt.entityType),
-						eq(outbox.entityKey, receipt.entityKey),
-						eq(outbox.revision, receipt.revision),
-					),
-				),
+	const receiptFilter = or(
+		...receipts.map((receipt) =>
+			and(
+				eq(outbox.entityType, receipt.entityType),
+				eq(outbox.entityKey, receipt.entityKey),
+				eq(outbox.revision, receipt.revision),
 			),
+		),
+	);
+	const deadline = Date.now() + 90_000;
+	while (Date.now() < deadline) {
+		const rows = await db
+			.select({
+				deadLetteredAt: outbox.deadLetteredAt,
+				entityKey: outbox.entityKey,
+				entityType: outbox.entityType,
+				processedAt: outbox.processedAt,
+				revision: outbox.revision,
+			})
+			.from(outbox)
+			.where(receiptFilter);
+		assert(
+			rows.length === receipts.length,
+			`${context} returned receipts that do not match its outbox rows`,
 		);
+		const failed = rows.find(
+			({ deadLetteredAt }) => deadLetteredAt !== null,
+		);
+		assert(
+			!failed,
+			`${context} failed to update public search for ${failed?.entityKey}`,
+		);
+		if (rows.every(({ processedAt }) => processedAt !== null)) return;
+		await new Promise((resolve) => setTimeout(resolve, 500));
+	}
+	throw new Error(`${context} timed out while updating public search`);
+}
+
+async function mutateFixtureAndWait(
+	db: ReturnType<typeof createPostgresDatabaseResource>["database"],
+	path: string,
+	init: RequestInit,
+	key: string,
+	context: string,
+) {
+	const response = await jsonRequest(path, init);
+	const receiptKeys =
+		(
+			response.indexingReceipts as
+				| Array<{
+						entityKey: string;
+						entityType: "collection" | "item";
+						revision: number;
+				  }>
+				| undefined
+		)?.map(({ entityKey }) => entityKey) ?? [];
 	assert(
-		rows.length === receipts.length,
-		`${context} returned receipts that do not match its outbox rows`,
+		receiptKeys.includes(key),
+		`${context} did not return a search receipt for ${key}`,
+	);
+	await assertIndexingReceipts(db, response, receiptKeys, context);
+}
+
+async function unpublishFixtureAndWait(
+	db: ReturnType<typeof createPostgresDatabaseResource>["database"],
+	key: string,
+	context: string,
+) {
+	await mutateFixtureAndWait(
+		db,
+		`/api/admin/items/${key}/unpublish`,
+		{ method: "POST", body: "{}" },
+		key,
+		context,
 	);
 }
 
@@ -410,10 +463,12 @@ async function verify() {
 			{ cache: "no-store" },
 		);
 		assert(!removedResponse.ok, "HTTP file unpublish left the PDF public");
-		await jsonRequest(`/api/admin/items/${attachmentKey}/unpublish`, {
-			method: "POST",
-			body: "{}",
-		});
+		await unpublishFixtureAndWait(
+			db,
+			attachmentKey,
+			"Attachment unpublish",
+		);
+		await unpublishFixtureAndWait(db, parentKey, "Parent unpublish");
 
 		console.log(
 			JSON.stringify({
@@ -431,7 +486,11 @@ async function verify() {
 		try {
 			const [publishedFixtures, draftFixtures] = await Promise.all([
 				db
-					.select({ key: item.key })
+					.select({
+						deleted: item.deleted,
+						key: item.key,
+						parentItem: item.parentItem,
+					})
 					.from(item)
 					.where(inArray(item.title, fixtureTitles)),
 				db
@@ -453,6 +512,33 @@ async function verify() {
 			];
 
 			if (cleanupKeys.length > 0) {
+				const publishedFileFixtures = await db
+					.select({ itemKey: itemFilePublication.itemKey })
+					.from(itemFilePublication)
+					.where(inArray(itemFilePublication.itemKey, cleanupKeys));
+				for (const { itemKey } of publishedFileFixtures) {
+					await mutateFixtureAndWait(
+						db,
+						`/api/admin/items/${itemKey}/file`,
+						{ method: "DELETE" },
+						itemKey,
+						`Cleanup PDF unpublish for ${itemKey}`,
+					);
+				}
+				for (const fixture of publishedFixtures.sort(
+					(left, right) =>
+						Number(left.parentItem === null) -
+						Number(right.parentItem === null),
+				)) {
+					if (fixture.deleted === 0) {
+						await unpublishFixtureAndWait(
+							db,
+							fixture.key,
+							`Cleanup unpublish for ${fixture.key}`,
+						);
+					}
+				}
+
 				const [fileDrafts, filePublications] = await Promise.all([
 					db
 						.select({
@@ -597,6 +683,27 @@ async function verify() {
 					databaseResidue.every((rows) => rows.length === 0),
 					`HTTP file verification cleanup left database residue: ${JSON.stringify(databaseResidue)}`,
 				);
+
+				for (const title of fixtureTitles) {
+					const publicResults = await fetch(
+						`${baseUrl}/api/items?search=${encodeURIComponent(title)}&cleanup=${runMarker}`,
+						{ cache: "no-store" },
+					).then(async (response) => {
+						assert(
+							response.ok,
+							`Public search cleanup check returned ${response.status}`,
+						);
+						return response.json() as Promise<{
+							items?: Array<{ key?: string }>;
+						}>;
+					});
+					assert(
+						!(publicResults.items ?? []).some(({ key }) =>
+							cleanupKeys.includes(key ?? ""),
+						),
+						`HTTP file verification cleanup left ${title} in public search`,
+					);
+				}
 			}
 		} finally {
 			await database.dispose();
