@@ -6,10 +6,20 @@ import {
 	itemFileDraft,
 	outbox,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray } from "drizzle-orm";
+import {
+	buildPublicationFileManifestHash,
+	zenodoFileCorrectionStartDeadline,
+} from "@opendeved/doi-sync-core";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import { lockItemMutations } from "@/db/canonical-mutation-lock";
+import {
+	publicationIdentifier,
+	publicationSyncState,
+	publicationTarget,
+	zenodoFileCorrectionApproval,
+} from "@/db/schema/publication";
 import { itemFilePublication } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
@@ -19,6 +29,7 @@ import {
 	markItemWritebackDirty,
 } from "@/lib/source-writeback/queue";
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
+import { buildPublicationFileManifest } from "@/lib/publication/record-adapter";
 
 import type { EvidenceFileStorage } from "./file-storage";
 import { advanceOpenItemDraftBaseRevision as advanceOpenNativeDraftBaseRevision } from "./native-item-service";
@@ -47,6 +58,162 @@ export class NativeFileValidationError extends AdminValidationError {
 		super(message, fields);
 		this.name = "NativeFileValidationError";
 	}
+}
+
+function formatUtcDateTime(value: Date) {
+	return `${value.toLocaleString("en", {
+		dateStyle: "medium",
+		timeStyle: "short",
+		timeZone: "UTC",
+	})} UTC`;
+}
+
+export class ZenodoPdfCorrectionConfirmationRequiredError extends Error {
+	constructor(readonly approveBy: Date) {
+		super(
+			`This record uses its Crossref DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at ${formatUtcDateTime(approveBy)}.`,
+		);
+		this.name = "ZenodoPdfCorrectionConfirmationRequiredError";
+	}
+}
+
+type PdfCorrectionRequirement = {
+	doi: string;
+	fileManifestHash: string;
+	approveBy: Date;
+};
+
+function publicationFileManifestHash(
+	files: readonly (typeof itemFilePublication.$inferSelect)[],
+) {
+	try {
+		return buildPublicationFileManifestHash(
+			buildPublicationFileManifest(files),
+		);
+	} catch (error) {
+		throw new NativeFileValidationError(
+			"The published PDFs cannot be prepared for Zenodo.",
+			{
+				file:
+					error instanceof Error
+						? error.message
+						: "Check the staged PDF and try again.",
+			},
+		);
+	}
+}
+
+async function zenodoPdfCorrectionRequirement(
+	database: Database | DatabaseTransaction,
+	input: {
+		fileManifestHash: () => string;
+		now: Date;
+		parentItemKey: string;
+	},
+): Promise<PdfCorrectionRequirement | null> {
+	const [target] = await database
+		.select({ identifierPolicy: publicationTarget.identifierPolicy })
+		.from(publicationTarget)
+		.where(
+			and(
+				eq(publicationTarget.itemKey, input.parentItemKey),
+				eq(publicationTarget.provider, "zenodo"),
+				eq(publicationTarget.environment, "sandbox"),
+				isNull(publicationTarget.deactivatedAt),
+			),
+		)
+		.limit(1);
+	if (target?.identifierPolicy !== "reuse-crossref") return null;
+
+	const [state] = await database
+		.select({
+			firstPublishedAt: publicationSyncState.zenodoFirstPublishedAt,
+			lastFileManifestHash: publicationSyncState.lastFileManifestHash,
+			recordId: publicationSyncState.zenodoRecordId,
+		})
+		.from(publicationSyncState)
+		.where(
+			and(
+				eq(publicationSyncState.itemKey, input.parentItemKey),
+				eq(publicationSyncState.provider, "zenodo"),
+				eq(publicationSyncState.environment, "sandbox"),
+			),
+		)
+		.limit(1);
+	if (!state?.recordId) return null;
+	if (!state.lastFileManifestHash || !state.firstPublishedAt) {
+		throw new NativeFileValidationError(
+			"Zenodo's saved PDF state is incomplete.",
+			{
+				file: "Retry the Zenodo sync before replacing this PDF.",
+			},
+		);
+	}
+	const fileManifestHash = input.fileManifestHash();
+	if (state.lastFileManifestHash === fileManifestHash) return null;
+
+	const approveBy = zenodoFileCorrectionStartDeadline(
+		state.firstPublishedAt,
+	);
+	if (input.now > approveBy) {
+		throw new NativeFileValidationError(
+			"The Zenodo PDF correction window has closed.",
+			{
+				file: `This PDF change cannot be approved after ${formatUtcDateTime(approveBy)}.`,
+			},
+		);
+	}
+
+	const [identifier] = await database
+		.select({ doi: publicationIdentifier.doi })
+		.from(publicationIdentifier)
+		.where(
+			and(
+				eq(publicationIdentifier.itemKey, input.parentItemKey),
+				eq(publicationIdentifier.registrar, "crossref"),
+				eq(publicationIdentifier.environment, "test"),
+				eq(publicationIdentifier.role, "primary"),
+				eq(publicationIdentifier.ownership, "managed"),
+				eq(publicationIdentifier.lifecycle, "verified"),
+				eq(publicationIdentifier.isCurrent, true),
+			),
+		)
+		.limit(1);
+	if (!identifier) {
+		throw new NativeFileValidationError(
+			"The Crossref DOI needed for this Zenodo correction is unavailable.",
+			{ file: "Retry the Crossref sync before replacing this PDF." },
+		);
+	}
+	return {
+		doi: identifier.doi,
+		fileManifestHash,
+		approveBy,
+	};
+}
+
+async function saveZenodoPdfCorrectionApproval(
+	transaction: DatabaseTransaction,
+	input: PdfCorrectionRequirement & { itemKey: string; now: Date },
+) {
+	await transaction
+		.update(zenodoFileCorrectionApproval)
+		.set({ supersededAt: input.now, updatedAt: input.now })
+		.where(
+			and(
+				eq(zenodoFileCorrectionApproval.itemKey, input.itemKey),
+				isNull(zenodoFileCorrectionApproval.consumedAt),
+				isNull(zenodoFileCorrectionApproval.supersededAt),
+			),
+		);
+	await transaction.insert(zenodoFileCorrectionApproval).values({
+		itemKey: input.itemKey,
+		doi: input.doi,
+		fileManifestHash: input.fileManifestHash,
+		approvedAt: input.now,
+		createdAt: input.now,
+		updatedAt: input.now,
+	});
 }
 
 type StageNativePdfInput = {
@@ -464,10 +631,12 @@ export async function publishNativePdf(
 		expectedUploadRevision,
 		itemKey,
 		publicationTags,
+		zenodoFileChange,
 	}: {
 		expectedUploadRevision: number;
 		itemKey: string;
 		publicationTags: readonly string[];
+		zenodoFileChange?: "minor_correction";
 	},
 ) {
 	const normalizedPublicationTags = normalizePublicationTags(publicationTags);
@@ -493,6 +662,58 @@ export async function publishNativePdf(
 		draft.extractedText === null
 	) {
 		throw new NativeFileConflictError(itemKey);
+	}
+	const [attachmentBeforePublish, previousPublication, currentFiles] =
+		await Promise.all([
+			db
+				.select({ revision: item.revision })
+				.from(item)
+				.where(eq(item.key, itemKey))
+				.limit(1)
+				.then((rows) => rows[0]),
+			db
+				.select()
+				.from(itemFilePublication)
+				.where(eq(itemFilePublication.itemKey, itemKey))
+				.limit(1)
+				.then((rows) => rows[0]),
+			db
+				.select()
+				.from(itemFilePublication)
+				.where(
+					eq(
+						itemFilePublication.parentItemKey,
+						draft.parentItemKey,
+					),
+				),
+		]);
+	if (attachmentBeforePublish) {
+		const prospectiveFile = {
+			...(previousPublication ?? {}),
+			itemKey,
+			contentType: PDF_CONTENT_TYPE,
+			filename: draft.filename,
+			md5: previousPublication?.md5 ?? "",
+			revision: attachmentBeforePublish.revision + 1,
+			sha256: draft.actualSha256,
+			sizeBytes: draft.actualSizeBytes,
+		};
+		const prospectiveFiles = previousPublication
+			? currentFiles.map((file) =>
+					file.itemKey === itemKey ? prospectiveFile : file,
+				)
+			: [...currentFiles, prospectiveFile];
+		const requirement = await zenodoPdfCorrectionRequirement(db, {
+			fileManifestHash: () =>
+				publicationFileManifestHash(prospectiveFiles),
+			now: new Date(),
+			parentItemKey: draft.parentItemKey,
+		});
+		if (requirement && zenodoFileChange !== "minor_correction") {
+			throw new ZenodoPdfCorrectionConfirmationRequiredError(
+				requirement.approveBy,
+			);
+		}
 	}
 
 	const [pdfBytes, coverBytes] = await Promise.all([
@@ -664,6 +885,7 @@ export async function publishNativePdf(
 				contentType: PDF_CONTENT_TYPE,
 				sizeBytes: lockedDraft.actualSizeBytes!,
 				sha256: lockedDraft.actualSha256!,
+				md5,
 				coverObjectPath: publicPaths.cover,
 				coverPublicUrl,
 				coverWidth: lockedDraft.coverWidth!,
@@ -681,6 +903,34 @@ export async function publishNativePdf(
 					set: publicationValues,
 				})
 				.returning();
+			const parentFiles = await transaction
+				.select()
+				.from(itemFilePublication)
+				.where(
+					eq(itemFilePublication.parentItemKey, parent.key),
+				);
+			const correctionRequirement =
+				await zenodoPdfCorrectionRequirement(transaction, {
+					fileManifestHash: () =>
+						publicationFileManifestHash(parentFiles),
+					now,
+					parentItemKey: parent.key,
+				});
+			if (
+				correctionRequirement &&
+				zenodoFileChange !== "minor_correction"
+			) {
+				throw new ZenodoPdfCorrectionConfirmationRequiredError(
+					correctionRequirement.approveBy,
+				);
+			}
+			if (correctionRequirement) {
+				await saveZenodoPdfCorrectionApproval(transaction, {
+					itemKey: parent.key,
+					...correctionRequirement,
+					now,
+				});
+			}
 			await transaction.insert(outbox).values([
 				{
 					entityType: "item",
@@ -856,6 +1106,7 @@ export async function unpublishNativePdfWithContext(
 	db: Database,
 	storage: EvidenceFileStorage,
 	itemKey: string,
+	zenodoFileChange?: "minor_correction",
 ) {
 	const result = await db.transaction(async (transaction) => {
 		const [initialPublication] = await transaction
@@ -982,6 +1233,32 @@ export async function unpublishNativePdfWithContext(
 		await transaction
 			.delete(itemFilePublication)
 			.where(eq(itemFilePublication.itemKey, itemKey));
+		const remainingFiles = await transaction
+			.select()
+			.from(itemFilePublication)
+			.where(eq(itemFilePublication.parentItemKey, parent.key));
+		const correctionRequirement =
+			await zenodoPdfCorrectionRequirement(transaction, {
+				fileManifestHash: () =>
+					publicationFileManifestHash(remainingFiles),
+				now,
+				parentItemKey: parent.key,
+			});
+		if (
+			correctionRequirement &&
+			zenodoFileChange !== "minor_correction"
+		) {
+			throw new ZenodoPdfCorrectionConfirmationRequiredError(
+				correctionRequirement.approveBy,
+			);
+		}
+		if (correctionRequirement) {
+			await saveZenodoPdfCorrectionApproval(transaction, {
+				itemKey: parent.key,
+				...correctionRequirement,
+				now,
+			});
+		}
 		await transaction.insert(outbox).values([
 			{
 				entityType: "item",
@@ -1043,6 +1320,14 @@ export async function unpublishNativePdf(
 	db: Database,
 	storage: EvidenceFileStorage,
 	itemKey: string,
+	zenodoFileChange?: "minor_correction",
 ) {
-	return (await unpublishNativePdfWithContext(db, storage, itemKey)).item;
+	return (
+		await unpublishNativePdfWithContext(
+			db,
+			storage,
+			itemKey,
+			zenodoFileChange,
+		)
+	).item;
 }

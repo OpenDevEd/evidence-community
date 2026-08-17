@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	describeAdminPublicationProviderState,
 	resolveAdminPublicationProviderState,
 	type AdminPublicationStateInput,
 } from "@/lib/publication/admin-publication-state";
@@ -19,6 +20,60 @@ const base: AdminPublicationStateInput = {
 };
 
 describe("admin publication provider state", () => {
+	it.each([
+		["blocked", "Fix item details", false],
+		["inactive", "Not activated", false],
+		["queued", "Queued", true],
+		["working", "Publishing", true],
+		["verifying", "Checking Crossref", true],
+		["retrying", "Retrying automatically", true],
+		["repair_pending", "Waiting for repair", false],
+		["synced", "Synced", false],
+		["failed", "Needs attention", false],
+	] as const)(
+		"describes %s without browser-owned status rules",
+		(state, label, shouldPoll) => {
+			expect(
+				describeAdminPublicationProviderState({
+					provider: "crossref",
+					state,
+					waitingOn: null,
+					firstBlocker: state === "blocked" ? "Add a title" : null,
+				}),
+			).toMatchObject({ label, shouldPoll });
+		},
+	);
+
+	it("explains how a missing job is repaired", () => {
+		expect(
+			describeAdminPublicationProviderState({
+				provider: "zenodo",
+				state: "repair_pending",
+				waitingOn: null,
+				firstBlocker: null,
+			}),
+		).toEqual({
+			label: "Waiting for repair",
+			description:
+				"The nightly repair check will queue the missing Zenodo update.",
+			shouldPoll: false,
+		});
+	});
+
+	it.each([
+		["crossref", "Waiting for Crossref", true],
+		["file", "Waiting for a PDF", false],
+	] as const)("describes Zenodo waiting on %s", (waitingOn, label, shouldPoll) => {
+		expect(
+			describeAdminPublicationProviderState({
+				provider: "zenodo",
+				state: "waiting",
+				waitingOn,
+				firstBlocker: null,
+			}),
+		).toMatchObject({ label, shouldPoll });
+	});
+
 	it.each([
 		["disabled config", { configured: false }, "blocked"],
 		["validation blocker", { blockers: ["Add a title"] }, "blocked"],

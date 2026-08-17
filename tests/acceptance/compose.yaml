@@ -49,12 +49,17 @@ services:
     image: caddy:2.11.4-alpine
     labels: *acceptance-labels
     environment:
+      APP_HTTPS_PORT: "${EVIDENCE_LIBRARY_ACCEPTANCE_APP_HTTPS_PORT:-4444}"
       FIXTURE_PORT: "${EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT:-4443}"
     networks:
       default:
         aliases:
           - collector.localhost
+          - sandbox.zenodo.org
+          - storage
+          - test.crossref.org
     ports:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_APP_HTTPS_PORT:-4444}:${EVIDENCE_LIBRARY_ACCEPTANCE_APP_HTTPS_PORT:-4444}"
       - "${EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT:-4443}:${EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT:-4443}"
     tmpfs:
       - /config
@@ -69,6 +74,27 @@ services:
         - --quiet
         - --spider
         - "https://127.0.0.1:${EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT:-4443}/health"
+      interval: 2s
+      timeout: 2s
+      retries: 60
+      start_period: 5s
+
+  publication-provider-fake:
+    image: node:22-alpine
+    labels: *acceptance-labels
+    command: ["node", "/fixture/publication-provider-fake.mjs"]
+    environment:
+      PORT: "4000"
+    ports:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_FAKE_PORT:-4010}:4000"
+    volumes:
+      - ./fixture:/fixture:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch("http://127.0.0.1:4000/health").then((response) => { if (!response.ok) process.exit(1) }).catch(() => process.exit(1))
       interval: 2s
       timeout: 2s
       retries: 60
@@ -184,6 +210,26 @@ services:
       SEARCH_INDEX_WORKER_ID: acceptance-indigo
     volumes:
       - "${EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR:?runtime directory is required}/indigo:/runtime/config:ro"
+
+  amber-publication-worker:
+    image: ${EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE:-evidence-library-acceptance-publication-worker:local}
+    labels: *acceptance-labels
+    depends_on:
+      ca-exporter:
+        condition: service_completed_successfully
+      fixture:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      publication-provider-fake:
+        condition: service_healthy
+    environment:
+      LIBRARY_CONFIG_PATH: /runtime/config/library.json
+      NODE_EXTRA_CA_CERTS: /ca/root.crt
+      PUBLICATION_WORKER_ID: acceptance-amber-publication
+    volumes:
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR:?runtime directory is required}/amber:/runtime/config:ro"
+      - caddy_ca:/ca:ro
 
 volumes:
   caddy_ca:

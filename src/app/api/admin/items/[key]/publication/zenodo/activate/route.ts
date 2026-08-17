@@ -10,6 +10,7 @@ import {
 	requireAdminSession,
 } from "@/lib/admin/http";
 import { activateZenodoPublication } from "@/lib/publication/zenodo-activation-service";
+import { buildAdminPublicationView } from "@/lib/publication/admin-publication-view-service";
 
 const requestSchema = z
 	.object({
@@ -29,14 +30,16 @@ export async function POST(
 		const body = requestSchema.parse(await readOptionalAdminJson(request));
 		const config = await getLibraryConfig();
 		const database = await getDatabaseForConfig(config);
+		const activation = await activateZenodoPublication(
+			database,
+			key,
+			config,
+			body.identifierPolicy,
+		);
 		return NextResponse.json(
 			{
-				activation: await activateZenodoPublication(
-					database,
-					key,
-					config,
-					body.identifierPolicy,
-				),
+				activation,
+				publication: await buildAdminPublicationView(key),
 			},
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);

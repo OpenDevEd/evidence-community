@@ -8,6 +8,7 @@ import {
 	requireAdminSession,
 } from "@/lib/admin/http";
 import { activateCrossrefPublication } from "@/lib/publication/crossref-activation-service";
+import { buildAdminPublicationView } from "@/lib/publication/admin-publication-view-service";
 
 export async function POST(
 	request: NextRequest,
@@ -20,13 +21,15 @@ export async function POST(
 		const { key } = await params;
 		const config = await getLibraryConfig();
 		const database = await getDatabaseForConfig(config);
+		const activation = await activateCrossrefPublication(
+			database,
+			key,
+			config,
+		);
 		return NextResponse.json(
 			{
-				activation: await activateCrossrefPublication(
-					database,
-					key,
-					config,
-				),
+				activation,
+				publication: await buildAdminPublicationView(key),
 			},
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);

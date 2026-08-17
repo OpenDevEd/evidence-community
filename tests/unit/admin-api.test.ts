@@ -1,12 +1,16 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+	activateAdminCrossrefPublication,
+	activateAdminZenodoPublication,
+	getAdminPublication,
 	getAdminLibrary,
 	getAdminSearchIndexOverview,
 	getAdminSearchIndexReceipts,
 	mutateAdminItems,
 	publishAdminItem,
 	retryAdminSearchIndex,
+	retryAdminZenodoPublication,
 } from "@/components/admin/admin-api";
 
 afterEach(() => {
@@ -24,6 +28,35 @@ describe("admin API client", () => {
 				}`,
 		);
 	};
+
+	it("uses the item publication routes and sends only the Zenodo DOI policy", async () => {
+		const fetchMock = vi.fn().mockImplementation(async () =>
+			new Response(
+				JSON.stringify({ publication: { itemKey: "A/B" } }),
+				{
+					headers: { "Content-Type": "application/json" },
+					status: 200,
+				},
+			),
+		);
+		vi.stubGlobal("fetch", fetchMock);
+
+		await getAdminPublication("A/B");
+		await activateAdminCrossrefPublication("A/B");
+		await activateAdminZenodoPublication("A/B", "mint-zenodo");
+		await retryAdminZenodoPublication("A/B");
+
+		expect(fetchMock.mock.calls.map(([path]) => path)).toEqual([
+			"/api/admin/items/A%2FB/publication",
+			"/api/admin/items/A%2FB/publication/crossref/activate",
+			"/api/admin/items/A%2FB/publication/zenodo/activate",
+			"/api/admin/items/A%2FB/publication/zenodo/retry",
+		]);
+		expect(fetchMock.mock.calls[2]?.[1]).toMatchObject({
+			body: JSON.stringify({ identifierPolicy: "mint-zenodo" }),
+			method: "POST",
+		});
+	});
 
 	it("sends one request for a batch mutation", async () => {
 		const fetchMock = vi.fn().mockResolvedValue(

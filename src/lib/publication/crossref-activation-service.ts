@@ -69,7 +69,7 @@ export type CrossrefActivationReceipt = {
 
 export function classifyCrossrefActivationDoi(
 	input: BibliographicDoiInput,
-	prefix: string,
+	managedDoi: string | null = null,
 ):
 	| { kind: "allocate" }
 	| { kind: "reuse"; doi: string; sources: readonly string[] } {
@@ -78,14 +78,14 @@ export function classifyCrossrefActivationDoi(
 		throw new CrossrefDoiConflictError(resolution.conflicts);
 	}
 	if (resolution.status === "none") return { kind: "allocate" };
-	if (!resolution.doi.startsWith(`${prefix}/`)) {
-		throw new ExternalCrossrefDoiError(resolution.doi);
+	if (managedDoi === resolution.doi) {
+		return {
+			kind: "reuse",
+			doi: resolution.doi,
+			sources: resolution.sources,
+		};
 	}
-	return {
-		kind: "reuse",
-		doi: resolution.doi,
-		sources: resolution.sources,
-	};
+	throw new ExternalCrossrefDoiError(resolution.doi);
 }
 
 function requireCrossrefConfig(config: PublicationConfig) {
@@ -159,6 +159,13 @@ export async function activateCrossrefPublication(
 		);
 		const record = snapshot.record;
 		if (!record) throw new PublicationItemNotFoundError(itemKey);
+		const managedIdentifier = snapshot.identifiers.find(
+			(candidate) =>
+				candidate.registrar === "crossref" &&
+				candidate.environment === "test" &&
+				candidate.role === "primary" &&
+				candidate.ownership === "managed",
+		);
 
 		const existingTarget = snapshot.targets.find(
 			(target) =>
@@ -167,26 +174,19 @@ export async function activateCrossrefPublication(
 				target.deactivatedAt === null,
 		);
 		if (existingTarget) {
-			const identifier = snapshot.identifiers.find(
-				(candidate) =>
-					candidate.registrar === "crossref" &&
-					candidate.environment === "test" &&
-					candidate.role === "primary" &&
-					candidate.ownership === "managed",
-			);
 			const job = snapshot.jobs.find(
 				(candidate) =>
 					candidate.provider === "crossref" &&
 					candidate.environment === "test" &&
 					candidate.supersededAt === null,
 			);
-			if (!identifier || !job) {
+			if (!managedIdentifier || !job) {
 				throw new Error("The saved Crossref activation is incomplete");
 			}
 			return receipt({
 				itemKey,
-				doi: identifier.doi,
-				lifecycle: identifier.lifecycle,
+				doi: managedIdentifier.doi,
+				lifecycle: managedIdentifier.lifecycle,
 				canonicalRevision: job.canonicalRevision,
 				job,
 			});
@@ -209,7 +209,7 @@ export async function activateCrossrefPublication(
 				extra: record.extra,
 				attachments: snapshot.attachments,
 			},
-			crossref.prefix,
+			managedIdentifier?.doi ?? null,
 		);
 		const doi =
 			classification.kind === "reuse"

@@ -282,12 +282,16 @@ export async function enqueuePublicationJobsForItem(
 			| "file_changed"
 			| "crossref_verified"
 			| "nightly_reconciliation"
+			| "provider_audit"
 		>;
 		now: Date;
 		providers?: readonly PublicationProvider[];
 		idempotencyDiscriminator?: string;
 	},
 ) {
+	if (input.reason === "provider_audit" && !input.idempotencyDiscriminator) {
+		throw new Error("Provider audit jobs require a stable audit id");
+	}
 	const [targets, publishedFiles, managedCrossrefIdentifiers] =
 		await Promise.all([
 			transaction
@@ -334,12 +338,14 @@ export async function enqueuePublicationJobsForItem(
 		) {
 			continue;
 		}
-		await supersedeUnleasedPublicationJobs(transaction, {
-			itemKey: input.itemKey,
-			provider: target.provider,
-			environment: target.environment,
-			now: input.now,
-		});
+		if (input.reason !== "provider_audit") {
+			await supersedeUnleasedPublicationJobs(transaction, {
+				itemKey: input.itemKey,
+				provider: target.provider,
+				environment: target.environment,
+				now: input.now,
+			});
+		}
 		if (
 			target.provider === "zenodo" &&
 			(fileRevision === null ||

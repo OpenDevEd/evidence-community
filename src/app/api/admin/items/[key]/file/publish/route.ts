@@ -15,6 +15,7 @@ import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
 const bodySchema = z
 	.object({
 		expectedUploadRevision: z.number().int().positive(),
+		zenodoFileChange: z.literal("minor_correction").optional(),
 	})
 	.strict();
 

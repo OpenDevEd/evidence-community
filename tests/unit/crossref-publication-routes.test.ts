@@ -62,6 +62,10 @@ describe("Crossref publication admin routes", () => {
 			params: Promise.resolve({ key: "ABCDEFGH" }),
 		});
 		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			activation: { doi: "10.5555/library.000001" },
+			publication: { itemKey: "ABCDEFGH" },
+		});
 		expect(response.headers.get("cache-control")).toBe("private, no-store");
 		expect(mocks.activate).toHaveBeenCalledWith(
 			mocks.database,
@@ -92,6 +96,7 @@ describe("Crossref publication admin routes", () => {
 		);
 		expect(await response.json()).toEqual({
 			activation: { job: { id: 1, state: "retrying" } },
+			publication: { itemKey: "ABCDEFGH" },
 		});
 		expect(mocks.retry).toHaveBeenCalledWith(mocks.database, "ABCDEFGH");
 	});

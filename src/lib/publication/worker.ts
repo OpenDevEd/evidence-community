@@ -1,4 +1,4 @@
-import type { CrossrefDepositor, ZenodoWriter } from "@opendeved/doi-sync-core";
+import type { CrossrefDepositor } from "@opendeved/doi-sync-core";
 import { and, desc, eq, gte } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -9,6 +9,7 @@ import type { EvidenceFileStorage } from "@/lib/admin/file-storage";
 import { runCrossrefPublicationJobsOnce } from "./crossref-adapter";
 import { runNightlyPublicationReconciliation } from "./reconciler";
 import { runZenodoPublicationJobsOnce } from "./zenodo-adapter";
+import type { ZenodoPublicationProvider } from "./zenodo-adapter";
 import type { PublicationWorkerStage } from "./worker-contract";
 
 type PublicationConfig = Pick<LibraryServerConfig, "identity" | "services">;
@@ -100,7 +101,7 @@ export async function runPublicationWorkerCycle(
 		signal?: AbortSignal;
 		heartbeatIntervalMs?: number;
 		crossrefProvider?: CrossrefDepositor;
-		zenodoProvider?: ZenodoWriter;
+		zenodoProvider?: ZenodoPublicationProvider;
 		onStage?: (stage: PublicationWorkerStage) => Promise<void>;
 		operations?: PublicationWorkerOperations;
 	} = { workerId: `publication-worker-${process.pid}` },

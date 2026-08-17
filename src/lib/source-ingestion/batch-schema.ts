@@ -120,6 +120,16 @@ const attachmentFileSchema = z
 					"managedPublication requires PDF metadata, public file, cover, dimensions, and extracted text",
 			});
 		}
+		if (
+			file.managedPublication &&
+			(file.md5 === null || !/^[0-9a-f]{32}$/u.test(file.md5))
+		) {
+			context.addIssue({
+				code: "custom",
+				path: ["md5"],
+				message: "managedPublication requires a lowercase MD5 checksum",
+			});
+		}
 	});
 
 const sourceDatesSchema = z

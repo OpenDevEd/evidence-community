@@ -17,13 +17,15 @@ import {
 	type BibliographicDoiResolution,
 } from "./bibliographic-doi";
 import {
+	describeAdminPublicationProviderState,
 	resolveAdminPublicationProviderState,
+	type AdminPublicationProviderStatus,
 	type AdminPublicationProviderState,
 } from "./admin-publication-state";
 import {
 	buildPublicationFileManifest,
 	buildPublicationIdentifiers,
-	buildPublicationRecordSnapshot,
+	inspectPublicationRecordSnapshot,
 } from "./record-adapter";
 import type { PublicationRepositorySnapshot } from "./repository";
 import { PublicationItemNotFoundError } from "./errors";
@@ -78,6 +80,7 @@ export type AdminPublicationProviderView = {
 	provider: PublicationProvider;
 	environment: "test" | "sandbox";
 	displayState: AdminPublicationProviderState;
+	status: AdminPublicationProviderStatus;
 	waitingOn: "crossref" | "file" | null;
 	blockers: readonly string[];
 	capabilities: {
@@ -85,8 +88,7 @@ export type AdminPublicationProviderView = {
 		canRetry: boolean;
 		actionLabel: string;
 		allowedIdentifierPolicies: readonly (
-			| "reuse-crossref"
-			| "mint-zenodo"
+			"reuse-crossref" | "mint-zenodo"
 		)[];
 	};
 	exact: {
@@ -101,6 +103,12 @@ export type AdminPublicationProviderView = {
 		recentJobs: readonly AdminPublicationJobSummary[];
 		identifiers: readonly AdminPublicationIdentifierSummary[];
 		pending: boolean;
+		pendingSubmission: {
+			batchId: string;
+			filename: string;
+			submittedAt: string;
+			reason: string | null;
+		} | null;
 		journal: boolean;
 		failure: {
 			failureClass: string;
@@ -130,7 +138,11 @@ function iso(value: Date | null) {
 }
 
 function unique(messages: readonly (string | null | undefined)[]) {
-	return [...new Set(messages.filter((message): message is string => Boolean(message)))];
+	return [
+		...new Set(
+			messages.filter((message): message is string => Boolean(message)),
+		),
+	];
 }
 
 function latestJobFor(
@@ -154,7 +166,11 @@ function planSummary(
 	unavailableReason = "LOCAL_VALIDATION_FAILED",
 ): AdminPublicationPlanSummary {
 	if (!plan) {
-		return { status: "unavailable", reason: unavailableReason, operations: [] };
+		return {
+			status: "unavailable",
+			reason: unavailableReason,
+			operations: [],
+		};
 	}
 	return {
 		status: plan.status,
@@ -162,7 +178,9 @@ function planSummary(
 		operations:
 			plan.status === "write_required"
 				? plan.operations
-						.filter((operation) => operation.type.startsWith(provider))
+						.filter((operation) =>
+							operation.type.startsWith(provider),
+						)
 						.map((operation) => operation.type)
 				: [],
 	};
@@ -191,12 +209,14 @@ function identifierSummaries(
 	provider: PublicationProvider,
 	environment: PublicationEnvironment,
 ): readonly AdminPublicationIdentifierSummary[] {
-	return identifiersFor(snapshot, provider, environment).map((identifier) => ({
-		doi: identifier.doi,
-		lifecycle: identifier.lifecycle,
-		ownership: identifier.ownership,
-		role: identifier.role,
-	}));
+	return identifiersFor(snapshot, provider, environment).map(
+		(identifier) => ({
+			doi: identifier.doi,
+			lifecycle: identifier.lifecycle,
+			ownership: identifier.ownership,
+			role: identifier.role,
+		}),
+	);
 }
 
 function planIssues(plan: PublicationSyncPlan | null) {
@@ -213,14 +233,17 @@ function planIssues(plan: PublicationSyncPlan | null) {
 			"The record does not meet Zenodo publication requirements",
 		ZENODO_IDENTIFIER_POLICY_IMMUTABLE:
 			"The Zenodo DOI policy cannot change after the first publication",
+		ZENODO_FIRST_PUBLICATION_TIME_REQUIRED:
+			"Zenodo did not return the publication date needed to safely replace this PDF",
+		ZENODO_FILE_CORRECTION_APPROVAL_REQUIRED:
+			"Approve this exact PDF as a minor correction before publishing it",
+		ZENODO_FILE_CORRECTION_WINDOW_CLOSED:
+			"The allowed time for this Zenodo PDF correction has ended",
 	};
 	return [messages[plan.reason]];
 }
 
-function environment(
-	config: PublicationConfig,
-	provider: PublicationProvider,
-) {
+function environment(config: PublicationConfig, provider: PublicationProvider) {
 	return config[provider].environment;
 }
 
@@ -236,7 +259,9 @@ function providerFailure(
 	environment: PublicationEnvironment,
 ) {
 	const row = stateFor(snapshot, provider, environment);
-	return row?.lastFailureClass && row.lastFailureSummary && row.consecutiveFailures > 0
+	return row?.lastFailureClass &&
+		row.lastFailureSummary &&
+		row.consecutiveFailures > 0
 		? {
 				failureClass: row.lastFailureClass,
 				summary: row.lastFailureSummary,
@@ -252,6 +277,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 	now?: Date;
 }): AdminPublicationView {
 	const { snapshot } = input;
+	const observedAt = input.now ?? new Date();
 	const record = snapshot.record;
 	if (!record) throw new PublicationItemNotFoundError(input.itemKey);
 
@@ -283,13 +309,16 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 	)
 		.filter((identifier) => identifier.ownership === "managed")
 		.map((identifier) => identifier.doi);
-	const bibliographicDoi = resolveBibliographicDoi({
-		DOI: record.DOI,
-		extra: record.extra,
-		attachments: snapshot.attachments,
-	}, {
-		ignoredDois: managedZenodoDois,
-	});
+	const bibliographicDoi = resolveBibliographicDoi(
+		{
+			DOI: record.DOI,
+			extra: record.extra,
+			attachments: snapshot.attachments,
+		},
+		{
+			ignoredDois: managedZenodoDois,
+		},
+	);
 	const identifiers = buildPublicationIdentifiers({
 		bibliographicDoi: bibliographicDoi.doi,
 		managedCrossrefDoi: crossrefDoi,
@@ -302,50 +331,52 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		files = buildPublicationFileManifest(snapshot.files);
 	} catch (error) {
 		fileError =
-			error instanceof Error && error.message.includes("duplicate filename")
+			error instanceof Error &&
+			error.message.includes("duplicate filename")
 				? "Published files must use different filenames"
 				: error instanceof Error
 					? `Published files are invalid: ${error.message}`
-				: "The published files cannot be prepared for Zenodo";
+					: "The published files cannot be prepared for Zenodo";
 	}
 
 	let publicationRecord = null;
-	let recordError: string | null = null;
+	let validationRecord = null;
+	let recordErrors: readonly string[] = [];
 	try {
-		publicationRecord = buildPublicationRecordSnapshot({
+		const inspected = inspectPublicationRecordSnapshot({
 			record,
 			tags: snapshot.tags,
 			baseUrl: input.config.identity.baseUrl,
 			license: publicationConfig.zenodo.license,
 		});
+		validationRecord = inspected.record;
+		recordErrors = inspected.issues;
+		if (inspected.issues.length === 0) publicationRecord = inspected.record;
 	} catch (error) {
-		recordError = error instanceof Error ? error.message : "The record is invalid";
+		recordErrors = [
+			error instanceof Error ? error.message : "The record is invalid",
+		];
 	}
 
-	const crossrefTarget = targetFor(
-		snapshot,
-		"crossref",
-		crossrefEnvironment,
-	);
+	const crossrefTarget = targetFor(snapshot, "crossref", crossrefEnvironment);
 	const zenodoTarget = targetFor(snapshot, "zenodo", zenodoEnvironment);
-	const crossrefState = stateFor(
-		snapshot,
-		"crossref",
-		crossrefEnvironment,
-	);
+	const crossrefState = stateFor(snapshot, "crossref", crossrefEnvironment);
 	const zenodoState = stateFor(snapshot, "zenodo", zenodoEnvironment);
 	const managedCrossref = identifiersFor(
 		snapshot,
 		"crossref",
 		crossrefEnvironment,
 	).find(
-		(identifier) => identifier.role === "primary" && identifier.ownership === "managed",
+		(identifier) =>
+			identifier.role === "primary" && identifier.ownership === "managed",
 	);
 
 	const sharedBlockers = unique([
-		record.deleted === 1 ? "Restore this record before publishing it" : null,
+		record.deleted === 1
+			? "Restore this record before publishing it"
+			: null,
 		record.parentItem ? "Only parent records can be published" : null,
-		recordError,
+		...recordErrors,
 		bibliographicDoi.status === "conflict"
 			? "This record contains different DOI values. Make them match before publishing it"
 			: null,
@@ -365,31 +396,28 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			? "The record DOI does not match its reserved Crossref DOI"
 			: null;
 	const existingBibliographicDoi =
-		bibliographicDoi.status === "resolved" &&
-		!managedCrossref
+		bibliographicDoi.status === "resolved" && !managedCrossref
 			? bibliographicDoi.doi
 			: null;
-	const crossrefExternalDoi =
-		existingBibliographicDoi &&
-		publicationConfig.crossref.prefix &&
-		!existingBibliographicDoi.startsWith(`${publicationConfig.crossref.prefix}/`)
-			? existingBibliographicDoi
-			: null;
+	const crossrefExternalDoi = existingBibliographicDoi;
 	let crossrefValidation: readonly string[] = [];
 	let zenodoValidation: readonly string[] = [];
-	if (publicationRecord && publicationConfig.crossref.prefix) {
+	if (validationRecord && publicationConfig.crossref.prefix) {
 		const validationDoi =
 			managedCrossref?.doi ??
-			(bibliographicDoi.status === "resolved" ? bibliographicDoi.doi : null) ??
-			`${publicationConfig.crossref.prefix}/${publicationConfig.crossref.suffixNamespace ?? "preview."}000000`;
-		const mapped = mapCrossrefRecord(publicationRecord, validationDoi);
+			(bibliographicDoi.status === "resolved"
+				? bibliographicDoi.doi
+				: null) ??
+			`${publicationConfig.crossref.prefix}/${publicationConfig.crossref.suffixNamespace ?? "preview."}validation`;
+		const mapped = mapCrossrefRecord(validationRecord, validationDoi);
 		if (!mapped.ok) {
 			crossrefValidation = mapped.issues.map((issue) => issue.message);
 		}
 	}
-	if (publicationRecord) {
+	if (validationRecord) {
 		const validationPlan = planPublicationSync({
-			record: publicationRecord,
+			observedAt,
+			record: validationRecord,
 			files,
 			identifiers: {},
 			targets: {
@@ -405,9 +433,9 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 	}
 	const crossrefRelationWaiting = Boolean(
 		crossrefTarget &&
-			zenodoTarget?.identifierPolicy === "mint-zenodo" &&
-			zenodoVersionDoi &&
-			zenodoValidation.length > 0,
+		zenodoTarget?.identifierPolicy === "mint-zenodo" &&
+		zenodoVersionDoi &&
+		zenodoValidation.length > 0,
 	);
 
 	let crossrefPlan: PublicationSyncPlan | null = null;
@@ -446,6 +474,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 							}
 						: undefined;
 				crossrefPlan = planPublicationSync({
+					observedAt,
 					record: publicationRecord,
 					files,
 					identifiers,
@@ -453,7 +482,8 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 						crossref: crossrefTarget
 							? {
 									enabled: true,
-									environment: publicationConfig.crossref.environment,
+									environment:
+										publicationConfig.crossref.environment,
 								}
 							: { enabled: false },
 						zenodo:
@@ -463,7 +493,8 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 								? {
 										enabled: true,
 										environment:
-											publicationConfig.zenodo.environment,
+											publicationConfig.zenodo
+												.environment,
 										identifierPolicy: "mint-zenodo",
 									}
 								: { enabled: false },
@@ -479,6 +510,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		}
 		try {
 			zenodoPlan = planPublicationSync({
+				observedAt,
 				record: publicationRecord,
 				files,
 				identifiers,
@@ -487,7 +519,8 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 					zenodo: zenodoTarget?.identifierPolicy
 						? {
 								enabled: true,
-								environment: publicationConfig.zenodo.environment,
+								environment:
+									publicationConfig.zenodo.environment,
 								identifierPolicy: zenodoTarget.identifierPolicy,
 							}
 						: { enabled: false },
@@ -540,7 +573,9 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		zenodoTarget?.identifierPolicy === "reuse-crossref" &&
 		managedCrossref?.lifecycle !== "verified"
 			? ("crossref" as const)
-			: zenodoTarget && files.files.length === 0 && zenodoJournals.length === 0
+			: zenodoTarget &&
+				  files.files.length === 0 &&
+				  zenodoJournals.length === 0
 				? ("file" as const)
 				: null;
 	const displayLinks = buildDoiDisplayLinks({
@@ -586,7 +621,8 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 				blockers,
 				plan: planState,
 				job,
-				pending: provider === "crossref" && Boolean(state?.pendingStage),
+				pending:
+					provider === "crossref" && Boolean(state?.pendingStage),
 				journal: provider === "zenodo" && zenodoJournals.length === 1,
 				failure: Boolean(failure),
 				waitingOn: providerWaitingOn,
@@ -600,18 +636,38 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 						"mint-zenodo" as const,
 					] as const)
 				: [];
+		const pendingSubmission =
+			provider === "crossref" &&
+			state?.pendingBatchId &&
+			state.pendingFilename &&
+			state.pendingSubmittedAt
+				? {
+						batchId: state.pendingBatchId,
+						filename: state.pendingFilename,
+						submittedAt: state.pendingSubmittedAt.toISOString(),
+						reason: state.pendingReason,
+					}
+				: null;
 
 		return {
 			provider,
 			environment: providerEnvironment,
 			displayState,
+			status: describeAdminPublicationProviderState({
+				provider,
+				state: displayState,
+				waitingOn: providerWaitingOn,
+				firstBlocker: blockers[0] ?? null,
+			}),
 			waitingOn: providerWaitingOn,
 			blockers,
 			capabilities: {
 				canActivate: !target && blockers.length === 0,
 				canRetry: Boolean(target) && displayState === "failed",
 				actionLabel:
-					provider === "crossref" ? "Activate Crossref DOI" : "Publish to Zenodo",
+					provider === "crossref"
+						? "Activate Crossref DOI"
+						: "Publish to Zenodo",
 				allowedIdentifierPolicies,
 			},
 			exact: {
@@ -641,7 +697,9 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 					provider,
 					providerEnvironment,
 				),
-				pending: provider === "crossref" && Boolean(state?.pendingStage),
+				pending:
+					provider === "crossref" && Boolean(state?.pendingStage),
+				pendingSubmission,
 				journal: provider === "zenodo" && zenodoJournals.length === 1,
 				failure,
 			},
@@ -652,14 +710,17 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 						snapshot,
 						provider,
 						providerEnvironment,
-					).find(
-						(row) => row.doi === link.value,
-					);
-					const status = identifier?.lifecycle === "reserved" ? "reserved" : "active";
+					).find((row) => row.doi === link.value);
+					const status =
+						identifier?.lifecycle === "reserved"
+							? "reserved"
+							: "active";
 					return {
 						...link,
 						label:
-							status === "reserved" ? `Reserved ${link.label}` : link.label,
+							status === "reserved"
+								? `Reserved ${link.label}`
+								: link.label,
 						status,
 					};
 				}),
@@ -675,7 +736,8 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			publicationConfig.crossref.suffixNamespace
 				? {
 						prefix: publicationConfig.crossref.prefix,
-						suffixNamespace: publicationConfig.crossref.suffixNamespace,
+						suffixNamespace:
+							publicationConfig.crossref.suffixNamespace,
 					}
 				: null,
 		providers: {

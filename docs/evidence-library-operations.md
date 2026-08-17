@@ -329,10 +329,42 @@ npm run lint
 npx tsc --noEmit
 npm run schema:check
 npm run test:unit
+npm run test:e2e
 npm run test:acceptance
 ```
+
+`npm run test:e2e` starts a disposable library, PostgreSQL, Meilisearch,
+Mailpit, and local HTTPS fixtures. It runs the browser checks one at a time so
+real record changes cannot interfere with another test, then removes the
+runtime.
 
 `npm run test:acceptance` starts real PostgreSQL, Meilisearch, Mailpit, and
 HTTPS upstream fixtures. It verifies two libraries, independently enabled and
 disabled integrations, mobile behavior, secret boundaries, live activation,
 rejection, last-valid retention, and rollback using the same image.
+
+## Real publication sandbox checks
+
+These commands may write only to the docs-pen Crossref Test and Zenodo Sandbox
+accounts. They create one record and reuse one saved evidence file across all
+three checks.
+
+```bash
+export PUBLICATION_SANDBOX_CONFIRM=docs-pen
+export PUBLICATION_SANDBOX_BASE_URL=https://docs-pen.opendev.space
+export PUBLICATION_SANDBOX_RUN_ID=docs-pen-$(date +%Y%m%d-%H%M%S)
+export PUBLICATION_EXPECTED_CROSSREF_PREFIX=10.53832
+export PUBLICATION_EXPECTED_CROSSREF_NAMESPACE=docs-pen.
+export PUBLICATION_SANDBOX_EVIDENCE_PATH=/tmp/${PUBLICATION_SANDBOX_RUN_ID}.json
+export EVIDENCE_LIBRARY_ADMIN_PASSWORD='<docs-pen admin password>'
+
+npm run test:crossref-test-live
+npm run test:zenodo-sandbox-live
+npm run test:publication-sandbox-lifecycle
+```
+
+The scripts stop before creating a record unless the website, provider
+environments, DOI prefix, namespace, admin login, and publication worker all
+match docs-pen. The final JSON contains the record keys, DOI, Crossref Test
+submission IDs, Zenodo Sandbox record ID, and PDF hashes. It does not contain
+provider credentials.

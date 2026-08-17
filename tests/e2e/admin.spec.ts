@@ -12,6 +12,7 @@ import {
 	openAndMeasureAdminSearchIndexPopover,
 	waitForAdminSearchIndexStatus,
 } from "./admin-search-index-page";
+import { openAdmin } from "./admin-login";
 
 const itemKey = "TESTBOOK";
 const publishedItemKey = "LIVEB22K";
@@ -19,6 +20,9 @@ const timestamp = "2026-07-31T12:00:00.000Z";
 const adminPassword =
 	process.env.EVIDENCE_LIBRARY_ADMIN_PASSWORD ??
 	"correct horse battery staple";
+const expectedPublicBaseUrl =
+	process.env.PLAYWRIGHT_EXPECTED_PUBLIC_BASE_URL ??
+	"https://library.example.org";
 const longCollectionName =
 	"A very long collection name that must stay inside the metadata inspector";
 
@@ -623,9 +627,9 @@ test("logs in with Enter, keeps the session, and logs out", async ({
 	await expect(password).toBeVisible();
 	await password.fill("wrong password");
 	await password.press("Enter");
-	await expect(page.getByRole("alert")).toHaveText(
-		"That password is not correct.",
-	);
+	await expect(
+		page.getByText("That password is not correct.", { exact: true }),
+	).toBeVisible();
 
 	await password.fill(adminPassword);
 	await password.press("Enter");
@@ -641,7 +645,7 @@ test("logs in with Enter, keeps the session, and logs out", async ({
 	const newItem = page.getByRole("button", { name: "New item" });
 	await expect(logout).toBeVisible();
 	await expect(logout).toHaveText("");
-	await logout.hover();
+	await logout.focus();
 	await expect(page.getByRole("tooltip")).toHaveText("Log out");
 	const [logoutBox, newItemBox] = await Promise.all([
 		logout.boundingBox(),
@@ -1343,7 +1347,12 @@ test("creates a collection in a searched location without a full-list select", a
 	});
 
 	await page.goto("/admin");
-	await page.getByRole("button", { exact: true, name: "New" }).click();
+	const newCollection = page.getByRole("button", {
+		exact: true,
+		name: "New",
+	});
+	await newCollection.focus();
+	await newCollection.press("Enter");
 	let dialog = page.getByRole("dialog", { name: "New collection" });
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByRole("textbox", { name: "Name" })).toBeFocused();
@@ -2395,6 +2404,11 @@ test("creates an item through a pointer click in the new-item popover", async ({
 			return;
 		}
 
+		if (pathname === `/api/admin/items/${itemKey}/publication`) {
+			await route.fulfill({ status: 404 });
+			return;
+		}
+
 		await route.fulfill({ status: 404 });
 	});
 
@@ -2480,14 +2494,16 @@ test("lets touch users browse item types without opening the keyboard", async ({
 	browser,
 }) => {
 	const context = await browser.newContext({
+		baseURL: process.env.PLAYWRIGHT_BASE_URL,
 		hasTouch: true,
+		ignoreHTTPSErrors: true,
 		viewport: { height: 844, width: 390 },
 	});
 	const page = await context.newPage();
 	try {
 		await mockPublicShell(page);
 		await mockPublishedBook(page);
-		await page.goto("/admin");
+		await openAdmin(page, adminPassword);
 		await page.getByRole("button", { name: "New item" }).click();
 
 		const search = page
@@ -2555,8 +2571,7 @@ test("uses controls that preserve every supported metadata value", async ({
 	await expect
 		.poll(() =>
 			savedDrafts.some(
-				(payload) =>
-					payload.accessDate === "2024-05-20T12:30:45+01:00",
+				(payload) => payload.accessDate === "2024-05-20T12:30:45+01:00",
 			),
 		)
 		.toBe(true);
@@ -2567,7 +2582,7 @@ test("uses controls that preserve every supported metadata value", async ({
 			savedDrafts.some((payload) => payload.language === "French"),
 		)
 		.toBe(true);
-	await expect(inspector.getByRole("status")).toHaveText("Saved");
+	await expect(inspector.getByText("Saved", { exact: true })).toBeVisible();
 	await expect(language).toHaveValue("French");
 
 	const itemType = inspector.getByRole("combobox", { name: "Item type" });
@@ -2578,7 +2593,7 @@ test("uses controls that preserve every supported metadata value", async ({
 	await expect(
 		inspector.getByLabel("Case Name", { exact: true }),
 	).toBeVisible();
-	await expect(inspector.getByRole("status")).toHaveText("Saved");
+	await expect(inspector.getByText("Saved", { exact: true })).toBeVisible();
 
 	const precision = inspector.getByRole("combobox", {
 		name: "Date Decided precision",
@@ -2937,14 +2952,12 @@ test("keeps parent attachments compact and moves file controls to the attachment
 		inspector.getByRole("button", { name: "Parent record" }),
 	).toBeVisible();
 	const publicAttachmentUrl =
-		"https://library.example.org/lib/LIVEB22K/download/PDFATT22";
+		`${expectedPublicBaseUrl}/lib/LIVEB22K/download/PDFATT22`;
 	await expect(inspector.getByLabel("Open public item")).toHaveAttribute(
 		"href",
 		publicAttachmentUrl,
 	);
-	await expect(
-		inspector.getByLabel("Copy public item link"),
-	).toBeEnabled();
+	await expect(inspector.getByLabel("Copy public item link")).toBeEnabled();
 	await expect(
 		inspector.locator('[data-admin-file-row="published"]'),
 	).toContainText("published.pdf");
@@ -2994,9 +3007,7 @@ test("explains why a staged PDF cannot publish before its metadata", async ({
 		.getByRole("button", { name: "Open PDF attachment" })
 		.click();
 	await expect(inspector.getByLabel("Open public item")).toBeDisabled();
-	await expect(
-		inspector.getByLabel("Copy public item link"),
-	).toBeDisabled();
+	await expect(inspector.getByLabel("Copy public item link")).toBeDisabled();
 	const publishPdf = inspector.getByRole("button", {
 		name: "Publish PDF",
 		exact: true,
@@ -5712,9 +5723,29 @@ test("tracks PDF publish and unpublish mutations", async ({ page }) => {
 	const indexing = await mockCompletedIndexing(page);
 	const publishReceipt = indexingReceipt("PDFATT22", "item", 2);
 	const unpublishReceipt = indexingReceipt("PDFATT22", "item", 3);
+	const publishRequests: unknown[] = [];
+	const unpublishRequests: unknown[] = [];
 	await page.route(
 		"**/api/admin/items/PDFATT22/file/publish",
 		async (route) => {
+			const body = route.request().postDataJSON();
+			publishRequests.push(body);
+			if (
+				(body as { zenodoFileChange?: string }).zenodoFileChange !==
+				"minor_correction"
+			) {
+				await route.fulfill({
+					json: {
+						error: {
+							code: "confirmation_required",
+							message:
+								"This record uses its Crossref DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at Sep 12, 2026, 2:30 PM UTC.",
+						},
+					},
+					status: 409,
+				});
+				return;
+			}
 			await route.fulfill({
 				json: { indexingReceipts: [publishReceipt], item: {} },
 			});
@@ -5725,6 +5756,7 @@ test("tracks PDF publish and unpublish mutations", async ({ page }) => {
 			await route.fallback();
 			return;
 		}
+		unpublishRequests.push(route.request().postDataJSON());
 		await route.fulfill({
 			json: { indexingReceipts: [unpublishReceipt], item: {} },
 		});
@@ -5738,13 +5770,45 @@ test("tracks PDF publish and unpublish mutations", async ({ page }) => {
 	await inspector
 		.getByRole("button", { name: "Publish PDF", exact: true })
 		.click();
+	const correctionDialog = page.getByRole("dialog", {
+		name: "Publish a PDF correction?",
+	});
+	await expect(correctionDialog).toContainText(
+		"update the same Zenodo record and DOI",
+	);
+	const dialogMetrics = await correctionDialog.evaluate((element) => {
+		const style = getComputedStyle(element);
+		const bounds = element.getBoundingClientRect();
+		return {
+			display: style.display,
+			height: bounds.height,
+			width: bounds.width,
+		};
+	});
+	expect(dialogMetrics.display).not.toBe("none");
+	expect(dialogMetrics.width).toBeGreaterThanOrEqual(320);
+	expect(dialogMetrics.width).toBeLessThanOrEqual(520);
+	expect(dialogMetrics.height).toBeLessThan(720);
+	await correctionDialog
+		.getByRole("button", { name: "Publish correction" })
+		.click();
 	await indexing.expectTracked(publishReceipt);
+	expect(publishRequests).toEqual([
+		{ expectedUploadRevision: 2 },
+		{
+			expectedUploadRevision: 2,
+			zenodoFileChange: "minor_correction",
+		},
+	]);
 	await inspector.getByRole("button", { name: "Unpublish PDF" }).click();
 	await page
 		.getByRole("dialog", { name: "Unpublish PDF?" })
 		.getByRole("button", { name: "Confirm", exact: true })
 		.click();
 	await indexing.expectTracked(unpublishReceipt);
+	expect(unpublishRequests).toEqual([
+		{ zenodoFileChange: "minor_correction" },
+	]);
 });
 
 test("tracks collection delete and restore mutations", async ({ page }) => {

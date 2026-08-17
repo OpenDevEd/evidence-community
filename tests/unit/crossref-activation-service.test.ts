@@ -11,10 +11,11 @@ import {
 describe("Crossref activation DOI classification", () => {
 	it("allocates only when every DOI source is empty", () => {
 		expect(
-			classifyCrossrefActivationDoi(
-				{ DOI: null, extra: null, attachments: [] },
-				"10.5555",
-			),
+			classifyCrossrefActivationDoi({
+				DOI: null,
+				extra: null,
+				attachments: [],
+			}),
 		).toEqual({ kind: "allocate" });
 	});
 
@@ -24,52 +25,57 @@ describe("Crossref activation DOI classification", () => {
 		[
 			{
 				attachments: [
-					{ url: "https://doi.org/10.5555/library.1", tags: ["_r:doi"] },
+					{
+						url: "https://doi.org/10.5555/library.1",
+						tags: ["_r:doi"],
+					},
 				],
 			},
 			["attachment[0]"],
 		],
-	] as const)("reuses a DOI owned by the configured prefix", (input, sources) => {
-		expect(classifyCrossrefActivationDoi(input, "10.5555")).toEqual({
-			kind: "reuse",
-			doi: "10.5555/library.1",
-			sources,
-		});
+	] as const)(
+		"rejects a metadata DOI even under the configured prefix",
+		(input, _sources) => {
+			expect(() => classifyCrossrefActivationDoi(input)).toThrow(
+				ExternalCrossrefDoiError,
+			);
+		},
+	);
+
+	it("rejects matching metadata DOI sources as one external DOI", () => {
+		expect(() =>
+			classifyCrossrefActivationDoi({
+				DOI: "10.5555/library.1",
+				extra: "DOI: https://doi.org/10.5555/library.1",
+			}),
+		).toThrow(ExternalCrossrefDoiError);
 	});
 
-	it("collapses matching DOI sources", () => {
+	it("reuses a DOI only when this item already owns the managed identifier", () => {
 		expect(
 			classifyCrossrefActivationDoi(
-				{
-					DOI: "10.5555/library.1",
-					extra: "DOI: https://doi.org/10.5555/library.1",
-				},
-				"10.5555",
+				{ DOI: "10.5555/library.1" },
+				"10.5555/library.1",
 			),
-		).toMatchObject({
+		).toEqual({
 			kind: "reuse",
-			sources: ["item.DOI", "item.extra.DOI"],
+			doi: "10.5555/library.1",
+			sources: ["item.DOI"],
 		});
 	});
 
 	it("rejects conflicting DOI sources", () => {
 		expect(() =>
-			classifyCrossrefActivationDoi(
-				{
-					DOI: "10.5555/library.1",
-					extra: "DOI: 10.5555/library.2",
-				},
-				"10.5555",
-			),
+			classifyCrossrefActivationDoi({
+				DOI: "10.5555/library.1",
+				extra: "DOI: 10.5555/library.2",
+			}),
 		).toThrow(CrossrefDoiConflictError);
 	});
 
 	it("rejects a DOI owned by another prefix", () => {
 		expect(() =>
-			classifyCrossrefActivationDoi(
-				{ DOI: "10.9999/external" },
-				"10.5555",
-			),
+			classifyCrossrefActivationDoi({ DOI: "10.9999/external" }),
 		).toThrow(ExternalCrossrefDoiError);
 	});
 });

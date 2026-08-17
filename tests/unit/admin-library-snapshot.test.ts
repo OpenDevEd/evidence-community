@@ -1,9 +1,24 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { Database } from "@/db";
-import { getAdminLibrarySnapshot } from "@/lib/admin/library-query-service";
+const mocks = vi.hoisted(() => ({
+	getLibraryConfig: vi.fn(),
+}));
 
 vi.mock("server-only", () => ({}));
+vi.mock("@/config/library-config/server", () => ({
+	getLibraryConfig: mocks.getLibraryConfig,
+}));
+
+import { libraryConfigSchema } from "@/config/library-config/schema";
+import type { Database } from "@/db";
+import { getAdminLibrarySnapshot } from "@/lib/admin/library-query-service";
+import { minimalLibraryConfig } from "../fixtures/library-config";
+
+beforeEach(() => {
+	mocks.getLibraryConfig.mockResolvedValue(
+		libraryConfigSchema.parse(minimalLibraryConfig),
+	);
+});
 
 describe("admin library snapshot", () => {
 	it("loads sources without querying or returning the collection catalogue", async () => {

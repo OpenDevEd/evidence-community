@@ -1,0 +1,2 @@
+ALTER TABLE "publicationSyncJob" DROP CONSTRAINT "publicationSyncJob_reason_valid";--> statement-breakpoint
+ALTER TABLE "publicationSyncJob" ADD CONSTRAINT "publicationSyncJob_reason_valid" CHECK ("publicationSyncJob"."reason" IN ('manual_activation', 'manual_retry', 'record_changed', 'file_changed', 'crossref_verified', 'nightly_reconciliation', 'provider_audit'));

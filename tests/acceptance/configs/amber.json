@@ -1,253 +1,226 @@
 {
-  "schemaVersion": 1,
-  "revision": "acceptance-amber-1",
-  "updatedAt": "2026-07-28T13:35:00Z",
-  "identity": {
-    "name": "Amber Evidence Library",
-    "shortName": "Amber Evidence",
-    "baseUrl": "https://amber.example.org",
-    "fundingPartners": [
-      {
-        "id": "amber-foundation",
-        "name": "Amber Foundation"
-      }
-    ],
-    "assets": {
-      "logoDark": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png",
-      "logoLight": "https://raw.githubusercontent.com/github/explore/main/topics/javascript/javascript.png",
-      "favicon": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png",
-      "icons": [
-        "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png"
-      ],
-      "logoStyles": "width: 3rem;\nheight: 3rem;\nborder-radius: 9999px;"
-    }
-  },
-  "institutions": [
-    {
-      "id": "amber-institute",
-      "name": "Amber Institute",
-      "logoUrl": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png"
-    }
-  ],
-  "theme": {
-    "layout": "wide",
-    "colors": {
-      "accent": "#E68124",
-      "link": "#1976D2",
-      "collection": "#009900",
-      "doi": "#CC0000",
-      "tertiary": "#5CACFD",
-      "backgroundDark": "#0F0F0F",
-      "backgroundLight": "#F4F2EE",
-      "cardDark": "#141414",
-      "cardLight": "#FFFFFF"
-    },
-    "defaultMode": "system",
-    "forcedMode": null,
-    "fonts": {
-      "heading": {
-        "source": "google",
-        "family": "Montserrat"
-      },
-      "body": {
-        "source": "google",
-        "family": "Ubuntu"
-      },
-      "weights": [
-        300,
-        400,
-        500,
-        700
-      ]
-    }
-  },
-  "navigation": {
-    "links": [
-      {
-        "id": "evidence",
-        "label": "Amber Evidence",
-        "href": "/lib",
-        "icon": "EvidenceLibrary",
-        "children": [
-          {
-            "id": "privacy",
-            "label": "Amber Privacy",
-            "href": "/privacy"
-          }
-        ]
-      },
-      {
-        "id": "external",
-        "label": "Amber Network",
-        "href": "https://react.dev",
-        "icon": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png",
-        "target": "blank"
-      }
-    ]
-  },
-  "footer": {
-    "sections": [
-      {
-        "id": "resources",
-        "title": "Amber Resources",
-        "links": [
-          {
-            "id": "library",
-            "label": "Amber Library",
-            "href": "/lib"
-          }
-        ]
-      }
-    ],
-    "socialLinks": [
-      {
-        "provider": "linkedin",
-        "href": "https://linkedin.com/company/example"
-      }
-    ],
-    "funders": [
-      {
-        "id": "amber-foundation",
-        "name": "Amber Foundation",
-        "logoUrl": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png",
-        "href": "https://react.dev"
-      }
-    ],
-    "disclaimer": "Amber evidence is provided for public learning.",
-    "attribution": "Curated by the Amber Evidence team."
-  },
-  "contact": {
-    "email": "amber@example.org",
-    "phone": "+212522000001",
-    "address": "1 Amber Avenue\nCasablanca, Morocco"
-  },
-  "legal": {
-    "privacyPolicy": "/privacy",
-    "cookiePolicy": "/cookie-policy",
-    "termsOfService": "https://amber.example.org/terms"
-  },
-  "localization": {
-    "locales": [
-      "en-GB",
-      "fr"
-    ],
-    "defaultLocale": "en-GB",
-    "detectLocale": true,
-    "localePriority": [
-      "fr",
-      "en-GB"
-    ]
-  },
-  "search": {
-    "fullText": true,
-    "tags": true,
-    "country": true,
-    "authorCountry": true,
-    "embeddings": false,
-    "scopes": [
-      "title_abstract_author_and_keywords",
-      "title",
-      "authors"
-    ],
-    "defaultScope": "title_abstract_author_and_keywords"
-  },
-  "filters": {
-    "institution": {
-      "mode": "facet-with-featured-value",
-      "label": "institutions",
-      "featuredValue": "Amber Institute"
-    },
-    "countryLibrary": true,
-    "collectionsExpanded": false,
-    "years": {
-      "enabled": true,
-      "minimum": 2000,
-      "maximum": 2026
-    }
-  },
-  "content": {
-    "tags": {
-      "comingSoon": [
-        "coming-soon"
-      ],
-      "internal": [
-        "internal-only"
-      ],
-      "hidden": [
-        "hidden-record"
-      ],
-      "description": [
-        "collection-description"
-      ],
-      "redirects": [
-        "redirect-record"
-      ],
-      "publish": [
-        "publish-record"
-      ]
-    }
-  },
-  "citations": {
-    "showUrl": true
-  },
-  "features": {
-    "themeSwitcher": true,
-    "languageSwitcher": true,
-    "login": true,
-    "navbarSearch": true,
-    "userCollections": false,
-    "ai": true,
-    "aiSearch": false,
-    "deepResearch": false,
-    "relatedResources": false,
-    "collections": true,
-    "collectionNotes": true,
-    "countryFocus": true,
-    "authorFilter": true,
-    "authorLocation": true,
-    "yearsDropdown": true,
-    "downloads": true,
-    "atomFeed": true
-  },
-  "collections": [
-    {
-      "id": "ZBJ4NBSL",
-      "title": "Amber Runtime First",
-      "enabled": true,
-      "order": 1
-    },
-    {
-      "id": "BBN8BK5J",
-      "title": "Amber Runtime Themes",
-      "enabled": true,
-      "order": 2
-    },
-    {
-      "id": "IW8VHV4Z",
-      "title": "Hidden Work",
-      "enabled": false,
-      "order": 0
-    }
-  ],
-  "gapMaps": [
-    {
-      "id": "amber-runtime-map",
-      "slug": "amber-runtime-map",
-      "label": "Amber Runtime Gap Map",
-      "description": "A locally served runtime gap map.",
-      "sourceUrl": "https://fixture/gapmaps/amber-runtime-map.html",
-      "enabled": true
-    }
-  ],
-  "exports": {
-    "ris": "https://fixture/exports/amber-library.ris",
-    "bibtex": "https://fixture/exports/amber-library.bib",
-    "atom": "https://fixture/exports/amber-library.atom"
-  },
-  "services": {
-    "database": {
-      "url": "postgresql://library:library@postgres:5432/amber"
-    },
+	"schemaVersion": 1,
+	"revision": "acceptance-amber-1",
+	"updatedAt": "2026-07-28T13:35:00Z",
+	"identity": {
+		"name": "Amber Evidence Library",
+		"shortName": "Amber Evidence",
+		"baseUrl": "https://amber.example.org",
+		"fundingPartners": [
+			{
+				"id": "amber-foundation",
+				"name": "Amber Foundation"
+			}
+		],
+		"assets": {
+			"logoDark": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png",
+			"logoLight": "https://raw.githubusercontent.com/github/explore/main/topics/javascript/javascript.png",
+			"favicon": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png",
+			"icons": [
+				"https://raw.githubusercontent.com/github/explore/main/topics/react/react.png"
+			],
+			"logoStyles": "width: 3rem;\nheight: 3rem;\nborder-radius: 9999px;"
+		}
+	},
+	"institutions": [
+		{
+			"id": "amber-institute",
+			"name": "Amber Institute",
+			"logoUrl": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png"
+		}
+	],
+	"theme": {
+		"layout": "wide",
+		"colors": {
+			"accent": "#E68124",
+			"link": "#1976D2",
+			"collection": "#009900",
+			"doi": "#CC0000",
+			"tertiary": "#5CACFD",
+			"backgroundDark": "#0F0F0F",
+			"backgroundLight": "#F4F2EE",
+			"cardDark": "#141414",
+			"cardLight": "#FFFFFF"
+		},
+		"defaultMode": "system",
+		"forcedMode": null,
+		"fonts": {
+			"heading": {
+				"source": "google",
+				"family": "Montserrat"
+			},
+			"body": {
+				"source": "google",
+				"family": "Ubuntu"
+			},
+			"weights": [300, 400, 500, 700]
+		}
+	},
+	"navigation": {
+		"links": [
+			{
+				"id": "evidence",
+				"label": "Amber Evidence",
+				"href": "/lib",
+				"icon": "EvidenceLibrary",
+				"children": [
+					{
+						"id": "privacy",
+						"label": "Amber Privacy",
+						"href": "/privacy"
+					}
+				]
+			},
+			{
+				"id": "external",
+				"label": "Amber Network",
+				"href": "https://react.dev",
+				"icon": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png",
+				"target": "blank"
+			}
+		]
+	},
+	"footer": {
+		"sections": [
+			{
+				"id": "resources",
+				"title": "Amber Resources",
+				"links": [
+					{
+						"id": "library",
+						"label": "Amber Library",
+						"href": "/lib"
+					}
+				]
+			}
+		],
+		"socialLinks": [
+			{
+				"provider": "linkedin",
+				"href": "https://linkedin.com/company/example"
+			}
+		],
+		"funders": [
+			{
+				"id": "amber-foundation",
+				"name": "Amber Foundation",
+				"logoUrl": "https://raw.githubusercontent.com/github/explore/main/topics/react/react.png",
+				"href": "https://react.dev"
+			}
+		],
+		"disclaimer": "Amber evidence is provided for public learning.",
+		"attribution": "Curated by the Amber Evidence team."
+	},
+	"contact": {
+		"email": "amber@example.org",
+		"phone": "+212522000001",
+		"address": "1 Amber Avenue\nCasablanca, Morocco"
+	},
+	"legal": {
+		"privacyPolicy": "/privacy",
+		"cookiePolicy": "/cookie-policy",
+		"termsOfService": "https://amber.example.org/terms"
+	},
+	"localization": {
+		"locales": ["en-GB", "fr"],
+		"defaultLocale": "en-GB",
+		"detectLocale": true,
+		"localePriority": ["fr", "en-GB"]
+	},
+	"search": {
+		"fullText": true,
+		"tags": true,
+		"country": true,
+		"authorCountry": true,
+		"embeddings": false,
+		"scopes": ["title_abstract_author_and_keywords", "title", "authors"],
+		"defaultScope": "title_abstract_author_and_keywords"
+	},
+	"filters": {
+		"institution": {
+			"mode": "facet-with-featured-value",
+			"label": "institutions",
+			"featuredValue": "Amber Institute"
+		},
+		"countryLibrary": true,
+		"collectionsExpanded": false,
+		"years": {
+			"enabled": true,
+			"minimum": 2000,
+			"maximum": 2026
+		}
+	},
+	"content": {
+		"tags": {
+			"comingSoon": ["coming-soon"],
+			"internal": ["internal-only"],
+			"hidden": ["hidden-record"],
+			"description": ["collection-description"],
+			"redirects": ["redirect-record"],
+			"publish": ["publish-record"]
+		}
+	},
+	"citations": {
+		"showUrl": true
+	},
+	"features": {
+		"themeSwitcher": true,
+		"languageSwitcher": true,
+		"login": true,
+		"navbarSearch": true,
+		"userCollections": false,
+		"ai": true,
+		"aiSearch": false,
+		"deepResearch": false,
+		"relatedResources": false,
+		"collections": true,
+		"collectionNotes": true,
+		"countryFocus": true,
+		"authorFilter": true,
+		"authorLocation": true,
+		"yearsDropdown": true,
+		"downloads": true,
+		"atomFeed": true
+	},
+	"collections": [
+		{
+			"id": "ZBJ4NBSL",
+			"title": "Amber Runtime First",
+			"enabled": true,
+			"order": 1
+		},
+		{
+			"id": "BBN8BK5J",
+			"title": "Amber Runtime Themes",
+			"enabled": true,
+			"order": 2
+		},
+		{
+			"id": "IW8VHV4Z",
+			"title": "Hidden Work",
+			"enabled": false,
+			"order": 0
+		}
+	],
+	"gapMaps": [
+		{
+			"id": "amber-runtime-map",
+			"slug": "amber-runtime-map",
+			"label": "Amber Runtime Gap Map",
+			"description": "A locally served runtime gap map.",
+			"sourceUrl": "https://fixture/gapmaps/amber-runtime-map.html",
+			"enabled": true
+		}
+	],
+	"exports": {
+		"ris": "https://fixture/exports/amber-library.ris",
+		"bibtex": "https://fixture/exports/amber-library.bib",
+		"atom": "https://fixture/exports/amber-library.atom"
+	},
+	"services": {
+		"database": {
+			"url": "postgresql://library:library@postgres:5432/amber"
+		},
 		"search": {
 			"host": "http://amber-meilisearch:7700",
 			"key": "acceptance-master-key",
@@ -260,80 +233,107 @@
 			"publicBucket": "amber-public",
 			"maxPdfBytes": 104857600
 		},
-		"zotero": {}
-  },
-  "ai": {
-    "providers": [
-      {
-        "provider": "google",
-        "enabled": true,
-        "apiKey": "google-api-key",
-        "defaultModel": "gemini-2.5-flash",
-        "largeModel": "gemini-2.5-pro",
-        "smallModel": "gemini-2.5-flash"
-      }
-    ],
-    "prompts": {
-      "questions": "Answer the user's question from the supplied evidence.",
-      "chat": "Discuss the supplied evidence.",
-      "explain": "Explain the supplied evidence.",
-      "summarize": "Amber runtime summary prompt."
-    }
-  },
-  "analytics": {
-    "posthog": {
-      "host": "https://collector.localhost:4443",
-      "key": "phc_acceptance_amber_runtime"
-    },
-    "utmDurationSeconds": 600
-  },
-  "authentication": {
-    "secret": "amber-acceptance-auth-secret-0000000000000000",
-    "google": {
-      "enabled": false
-    }
-  },
-  "email": {
-    "contactRecipient": "contact-amber@example.org",
-    "takedownRecipient": "takedown-amber@example.org",
-    "smtp": {
-      "host": "mailpit",
-      "port": 1025,
-      "security": "none",
-      "from": "runtime-amber@example.org"
-    }
-  },
-  "generation": {
-    "sitemap": true,
-    "redirects": true
-  },
-  "processing": {
-    "structureRules": [
-      {
-        "id": "structure-one",
-        "priority": 10,
-        "condition": "has-pdf",
-        "action": "append-system-instruction",
-        "value": "Use the configured quotation structure."
-      }
-    ],
-    "pdfRules": [
-      {
-        "id": "pdf-one",
-        "priority": 20,
-        "condition": "has-pdf",
-        "action": "append-system-instruction",
-        "value": "Use stored PDF page numbers."
-      }
-    ],
-    "sharedRules": [
-      {
-        "id": "enabled-runtime-rule",
-        "priority": 5,
-        "condition": "always",
-        "action": "append-system-instruction",
-        "value": "Amber runtime processing instruction."
-      }
-    ]
-  }
+		"zotero": {},
+		"publication": {
+			"crossref": {
+				"enabled": true,
+				"environment": "test",
+				"loginId": "acceptance-login",
+				"depositorName": "Amber Evidence Library",
+				"email": "doi-acceptance@example.org",
+				"password": "acceptance-password",
+				"registrant": "Amber Evidence Library",
+				"prefix": "10.5555",
+				"suffixNamespace": "acceptance."
+			},
+			"zenodo": {
+				"enabled": true,
+				"environment": "sandbox",
+				"token": "acceptance-sandbox-token",
+				"defaultIdentifierPolicy": "reuse-crossref",
+				"accessRight": "open",
+				"license": "cc-by-4.0"
+			},
+			"worker": {
+				"batchSize": 25,
+				"leaseSeconds": 60,
+				"retryLimit": 3,
+				"nightlyUtcTime": "23:59"
+			}
+		}
+	},
+	"ai": {
+		"providers": [
+			{
+				"provider": "google",
+				"enabled": true,
+				"apiKey": "google-api-key",
+				"defaultModel": "gemini-2.5-flash",
+				"largeModel": "gemini-2.5-pro",
+				"smallModel": "gemini-2.5-flash"
+			}
+		],
+		"prompts": {
+			"questions": "Answer the user's question from the supplied evidence.",
+			"chat": "Discuss the supplied evidence.",
+			"explain": "Explain the supplied evidence.",
+			"summarize": "Amber runtime summary prompt."
+		}
+	},
+	"analytics": {
+		"posthog": {
+			"host": "https://collector.localhost:4443",
+			"key": "phc_acceptance_amber_runtime"
+		},
+		"utmDurationSeconds": 600
+	},
+	"authentication": {
+		"secret": "amber-acceptance-auth-secret-0000000000000000",
+		"google": {
+			"enabled": false
+		}
+	},
+	"email": {
+		"contactRecipient": "contact-amber@example.org",
+		"takedownRecipient": "takedown-amber@example.org",
+		"smtp": {
+			"host": "mailpit",
+			"port": 1025,
+			"security": "none",
+			"from": "runtime-amber@example.org"
+		}
+	},
+	"generation": {
+		"sitemap": true,
+		"redirects": true
+	},
+	"processing": {
+		"structureRules": [
+			{
+				"id": "structure-one",
+				"priority": 10,
+				"condition": "has-pdf",
+				"action": "append-system-instruction",
+				"value": "Use the configured quotation structure."
+			}
+		],
+		"pdfRules": [
+			{
+				"id": "pdf-one",
+				"priority": 20,
+				"condition": "has-pdf",
+				"action": "append-system-instruction",
+				"value": "Use stored PDF page numbers."
+			}
+		],
+		"sharedRules": [
+			{
+				"id": "enabled-runtime-rule",
+				"priority": 5,
+				"condition": "always",
+				"action": "append-system-instruction",
+				"value": "Amber runtime processing instruction."
+			}
+		]
+	}
 }

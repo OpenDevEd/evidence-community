@@ -17,6 +17,7 @@ import {
 	ArrowDown,
 	ArrowLeft,
 	ArrowUp,
+	BadgeCheck,
 	Building2,
 	Check,
 	ChevronRight,
@@ -89,6 +90,11 @@ import {
 import { firstAdminFieldError, validationTargetId } from "./admin-validation";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
 import { AdminMetadataField } from "./AdminMetadataField";
+import {
+	AdminPublicationHeaderStatus,
+	AdminPublicationStatus,
+} from "./AdminPublicationStatus";
+import { useAdminPublication } from "./useAdminPublication";
 
 type SaveState = "conflict" | "error" | "idle" | "saved" | "saving";
 
@@ -116,6 +122,18 @@ const inspectorSelectClassNames = {
 	trigger: "h-10 min-h-10 rounded-xl",
 	value: "text-sm",
 } as const;
+
+function publicationInputVersion(detail: AdminItemDetail) {
+	return [
+		String(detail.revision),
+		...detail.attachments
+			.map(
+				(attachment) =>
+					`${attachment.key}:${attachment.revision}:${attachment.filePublication?.uploadRevision ?? 0}:${attachment.filePublication?.publishedAt ?? ""}`,
+			)
+			.sort(),
+	].join("|");
+}
 
 function FieldLabel({
 	action,
@@ -245,15 +263,17 @@ function Section({
 	actions,
 	children,
 	icon: Icon,
+	id,
 	title,
 }: {
 	actions?: React.ReactNode;
 	children: React.ReactNode;
 	icon: typeof Plus;
+	id?: string;
 	title: string;
 }) {
 	return (
-		<section className="py-5 first:pt-0">
+		<section className="scroll-mt-4 py-5 first:pt-0" id={id}>
 			<div className="mb-3 flex min-h-6 items-center gap-2.5">
 				<Icon
 					aria-hidden
@@ -1448,6 +1468,7 @@ export function AdminInspector({
 	onOpenDraft,
 	onPublish,
 	onPublishFile,
+	onPublicationChanged,
 	onReloadDraft,
 	onRetry,
 	onRestore,
@@ -1477,6 +1498,7 @@ export function AdminInspector({
 	onOpenDraft: () => void;
 	onPublish: () => void;
 	onPublishFile: (key: string, uploadRevision: number) => void;
+	onPublicationChanged: () => void;
 	onReloadDraft: () => void;
 	onRetry: () => void;
 	onRestore: () => void;
@@ -1517,6 +1539,10 @@ export function AdminInspector({
 		detail?.key ?? null,
 		detail?.writeback?.sourceKey ?? null,
 		detail?.revision ?? null,
+	);
+	const publication = useAdminPublication(
+		detail && !detail.parentItem && detail.published ? detail.key : null,
+		detail ? publicationInputVersion(detail) : null,
 	);
 	const publishedCollectionNames = useMemo(
 		() =>
@@ -1697,6 +1723,19 @@ export function AdminInspector({
 								status={sourceWriteback.status}
 							/>
 						) : null}
+						{!detail.parentItem ? (
+							<AdminPublicationHeaderStatus
+								onPress={() =>
+									document
+										.getElementById("admin-doi-publishing")
+										?.scrollIntoView({
+											behavior: "smooth",
+											block: "start",
+										})
+								}
+								state={publication}
+							/>
+						) : null}
 						<SaveIndicator
 							message={saveMessage}
 							onReload={onReloadDraft}
@@ -1818,7 +1857,29 @@ export function AdminInspector({
 				className="min-h-0 flex-1 overflow-y-auto px-4 pb-8 pt-4"
 				data-admin-region="inspector-scroll"
 			>
-				<Section icon={FilePenLine} title="Metadata">
+				{!detail.parentItem ? (
+					<Section
+						icon={BadgeCheck}
+						id="admin-doi-publishing"
+						title="DOI publishing"
+					>
+						<AdminPublicationStatus
+							itemKey={detail.key}
+							onOpenAttachments={() =>
+								document
+									.getElementById("admin-attachments")
+									?.scrollIntoView({
+										behavior: "smooth",
+										block: "start",
+									})
+							}
+							onRecordChanged={onPublicationChanged}
+							published={Boolean(detail.published)}
+							state={publication}
+						/>
+					</Section>
+				) : null}
+				<Section icon={FilePenLine} id="admin-metadata" title="Metadata">
 					<MetadataEditor
 						key={`${detail.key}:${String(payload.itemType ?? detail.itemType)}`}
 						definitions={definitions}
@@ -1943,6 +2004,7 @@ export function AdminInspector({
 					icon={
 						detail.itemType === "Attachment" ? FileText : Paperclip
 					}
+					id="admin-attachments"
 					title={
 						detail.itemType === "Attachment" ? "PDF" : "Attachments"
 					}

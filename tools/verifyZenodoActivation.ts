@@ -4,6 +4,10 @@ import type {
 	ZenodoPreparedDraft,
 	ZenodoWriter,
 } from "@opendeved/doi-sync-core";
+import {
+	buildZenodoWritePayload,
+	jsonValueSchema,
+} from "@opendeved/doi-sync-core";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client, Pool } from "pg";
@@ -21,7 +25,11 @@ import {
 	ZenodoActivationValidationError,
 	ZenodoIdentifierPolicyLockedError,
 } from "../src/lib/publication/zenodo-activation-service";
-import { runZenodoPublicationJobsOnce } from "../src/lib/publication/zenodo-adapter";
+import { buildCrossrefPlan } from "../src/lib/publication/crossref-adapter";
+import {
+	runZenodoPublicationJobsOnce,
+	type ZenodoPublicationProvider,
+} from "../src/lib/publication/zenodo-adapter";
 import {
 	claimNextPublicationJob,
 	deferPublicationJob,
@@ -95,6 +103,9 @@ async function seedPublishedFile(
 	const sha256 = bytes
 		? createHash("sha256").update(bytes).digest("hex")
 		: "a".repeat(64);
+	const md5 = bytes
+		? createHash("md5").update(bytes).digest("hex")
+		: "b".repeat(32);
 	await client.query(
 		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ($1, 'native', $1)`,
 		[fileKey],
@@ -108,12 +119,12 @@ async function seedPublishedFile(
 		`INSERT INTO "itemFilePublication" (
 			"itemKey", "sourceConnectionKey", "parentItemKey", "uploadRevision", "revision",
 			"sourceObjectPath", "sourceCoverObjectPath", "objectPath", "publicUrl", "filename",
-			"contentType", "sizeBytes", "sha256", "coverObjectPath", "coverPublicUrl",
+			"contentType", "sizeBytes", "sha256", "md5", "coverObjectPath", "coverPublicUrl",
 			"coverWidth", "coverHeight", "pageCount", "publicationTags", "publishedAt"
 		) VALUES (
 			$1, 'native', $2, 1, 1,
 			$3, $4, $5, $6, $7,
-			'application/pdf', $8, $9, $10, $11,
+			'application/pdf', $8, $9, $10, $11, $12,
 			100, 140, 1, '[]'::jsonb, now()
 		)`,
 		[
@@ -126,6 +137,7 @@ async function seedPublishedFile(
 			`${fileKey}.pdf`,
 			size,
 			sha256,
+			md5,
 			`public/${fileKey}.png`,
 			`https://files.example.org/${fileKey}.png`,
 		],
@@ -146,37 +158,44 @@ let fakeZenodoRecordNumber = 1000;
 
 function successfulZenodoProvider(
 	input: { discardCount?: { value: number } } = {},
-): ZenodoWriter {
+): ZenodoPublicationProvider {
 	const prepared = async (
-		onPreparedDraft:
-			((draft: ZenodoPreparedDraft) => Promise<void>) | undefined,
+		request: Pick<
+			Parameters<ZenodoWriter["prepareUpdateRecordMetadata"]>[0],
+			"doiPolicy" | "metadata" | "resourceUrl" | "onPreparedDraft"
+		>,
 	) => {
 		fakeZenodoRecordNumber += 1;
 		const draft = {
 			depositionId: String(fakeZenodoRecordNumber),
 			draftRecordId: String(fakeZenodoRecordNumber),
 			parentId: String(fakeZenodoRecordNumber + 10_000),
-			payloadSnapshot: { title: "Zenodo activation record" },
+			payloadSnapshot: jsonValueSchema.parse(
+				buildZenodoWritePayload({
+					doiPolicy: request.doiPolicy,
+					metadata: request.metadata,
+					resourceUrl: request.resourceUrl,
+				}),
+			),
 		};
-		await onPreparedDraft?.(draft);
+		await request.onPreparedDraft?.(draft);
 		return draft;
 	};
 	return {
+		verifyPublishedState: async () => ({ status: "matched" }),
 		findRecordByDoi: async () => ({ status: "not_found" }),
 		deleteUnpublishedDraft: async () => undefined,
 		discardPreparedDraft: async () => {
 			if (input.discardCount) input.discardCount.value += 1;
 		},
-		prepareCreateRecord: async (request) =>
-			prepared(request.onPreparedDraft),
-		prepareUpdateRecordMetadata: async (request) =>
-			prepared(request.onPreparedDraft),
-		prepareUpdateRecordFiles: async (request) =>
-			prepared(request.onPreparedDraft),
-		prepareNewVersion: async (request) => prepared(request.onPreparedDraft),
+		prepareCreateRecord: prepared,
+		prepareUpdateRecordMetadata: prepared,
+		prepareUpdateRecordFiles: prepared,
+		prepareNewVersion: prepared,
 		publishDraft: async ({ draft }) => ({
 			latestRecordId: draft.draftRecordId,
 			parentId: draft.parentId ?? draft.draftRecordId,
+			publishedAt: new Date("2030-08-13T12:00:00.000Z"),
 			versionDoi: `10.5072/zenodo.${draft.draftRecordId}`,
 			conceptDoi: `10.5072/zenodo.${draft.parentId ?? draft.draftRecordId}`,
 			links: {},
@@ -233,6 +252,7 @@ function collisionProvider(doi: string): ZenodoWriter {
 		publishDraft: async ({ draft }) => ({
 			latestRecordId: draft.draftRecordId,
 			parentId: draft.parentId ?? draft.draftRecordId,
+			publishedAt: new Date("2030-08-13T12:00:00.000Z"),
 			versionDoi: doi,
 			conceptDoi: `10.5072/zenodo.${draft.parentId ?? draft.draftRecordId}`,
 			links: {},
@@ -249,7 +269,11 @@ function metadataUpdateProvider(input: {
 	const provider = successfulZenodoProvider();
 	return {
 		...provider,
-		publishDraft: async () => ({ ...input, links: {} }),
+		publishDraft: async () => ({
+			...input,
+			publishedAt: new Date("2030-08-13T12:00:00.000Z"),
+			links: {},
+		}),
 	};
 }
 
@@ -583,6 +607,14 @@ async function verify(database: Database, client: Client) {
 	);
 	await seedParent(client, { key: "ZENWRKAA" });
 	await seedPublishedFile(client, "ZENWRKAA", "ZENPDFWA", publishedBytes);
+	await seedCrossref(client, {
+		itemKey: "ZENWRKAA",
+		doi: "10.5555/library.10",
+		lifecycle: "verified",
+	});
+	await client.query(
+		`UPDATE "item" SET "DOI" = '10.5555/library.10' WHERE "key" = 'ZENWRKAA'`,
+	);
 	const workerActivation = await activateZenodoPublication(
 		database,
 		"ZENWRKAA",
@@ -649,6 +681,37 @@ async function verify(database: Database, client: Client) {
 			"concept,version",
 		"Zenodo identifiers were not normalized into the publication table",
 	);
+	const relationJob = await client.query<{ idempotencyKey: string }>(
+		`SELECT "idempotencyKey" FROM "publicationSyncJob"
+		 WHERE "itemKey" = 'ZENWRKAA' AND "provider" = 'crossref'
+			AND "processedAt" IS NULL AND "supersededAt" IS NULL`,
+	);
+	assert(
+		relationJob.rows.length === 1 &&
+			relationJob.rows[0]?.idempotencyKey.includes(
+				`zenodo-version:${publishedState.rows[0]?.versionDoi}`,
+			),
+		"A new Zenodo version DOI did not queue its Crossref relation update",
+	);
+	const relationPlan = await buildCrossrefPlan(database, "ZENWRKAA", config);
+	const crossrefSnapshot = relationPlan.plan.status === "write_required"
+		? relationPlan.plan.snapshots.crossrefPayload
+		: null;
+	assert(
+		crossrefSnapshot &&
+			typeof crossrefSnapshot === "object" &&
+			!Array.isArray(crossrefSnapshot) &&
+			(crossrefSnapshot as Record<string, unknown>).relation &&
+			JSON.stringify((crossrefSnapshot as Record<string, unknown>).relation).includes(
+				publishedState.rows[0]?.versionDoi ?? "missing",
+			),
+		"The Crossref plan omitted the current Zenodo version relation",
+	);
+	await client.query(
+		`UPDATE "publicationSyncJob" SET "supersededAt" = '2030-08-13T10:15:00Z'
+		 WHERE "itemKey" = 'ZENWRKAA' AND "provider" = 'crossref'
+			AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL`,
+	);
 	const firstPublished = publishedState.rows[0];
 	assert(
 		firstPublished?.recordId &&
@@ -704,6 +767,319 @@ async function verify(database: Database, client: Client) {
 			firstPublished.fileManifestHash &&
 			preservedFileState.rows[0]?.fileManifestSnapshot != null,
 		"A metadata-only Zenodo update erased the settled file state",
+	);
+	const auditBaseline = await client.query<{
+		fileManifestHash: string;
+		payloadHash: string;
+		payloadSnapshot: Record<string, unknown>;
+	}>(
+		`SELECT
+			"lastPayloadHash" AS "payloadHash",
+			"lastPayloadSnapshot" AS "payloadSnapshot",
+			"lastFileManifestHash" AS "fileManifestHash"
+		 FROM "publicationSyncState"
+		 WHERE "itemKey" = 'ZENWRKAA' AND "provider" = 'zenodo'`,
+	);
+	const baseline = auditBaseline.rows[0];
+	assert(
+		baseline?.payloadHash && baseline.payloadSnapshot && baseline.fileManifestHash,
+		"The Zenodo audit fixture has no saved provider state",
+	);
+	const auditConfig = {
+		...config,
+		services: {
+			...config.services,
+			publication: {
+				...config.services.publication,
+				worker: { ...config.services.publication.worker, batchSize: 1 },
+			},
+		},
+	} as LibraryServerConfig;
+	const matchedAudit = await client.query<{ id: number }>(
+		`INSERT INTO "publicationSyncJob" (
+			"itemKey", "provider", "environment", "canonicalRevision", "fileRevision",
+			"reason", "idempotencyKey", "nextAttemptAt"
+		) VALUES (
+			'ZENWRKAA', 'zenodo', 'sandbox', 2, 1,
+			'provider_audit', 'publication:zenodo:sandbox:ZENWRKAA:mint-zenodo:2:1:audit:matched',
+			'2030-08-13T10:45:00Z'
+		) RETURNING "id"`,
+	);
+	const matchedAuditResult = await runZenodoPublicationJobsOnce(
+		database,
+		auditConfig,
+		memoryStorage(new Map([["public/ZENPDFWA.pdf", publishedBytes]])),
+		{
+			provider: successfulZenodoProvider(),
+			workerId: "zenodo-audit-worker",
+			now: () => new Date("2030-08-13T10:45:00Z"),
+		},
+	);
+	const matchedAuditJob = await client.query<{ lastError: string | null }>(
+		`SELECT "lastError" FROM "publicationSyncJob" WHERE "id" = $1`,
+		[matchedAudit.rows[0]?.id],
+	);
+	assert(
+		matchedAuditResult.some(
+			(outcome) =>
+				outcome.jobId === Number(matchedAudit.rows[0]?.id) &&
+				outcome.status === "audited",
+		),
+		`A matching Zenodo audit did not finish with a real receipt: ${JSON.stringify(matchedAuditResult)} ${matchedAuditJob.rows[0]?.lastError ?? ""}`,
+	);
+	const failedAudit = await client.query<{ id: number }>(
+		`INSERT INTO "publicationSyncJob" (
+			"itemKey", "provider", "environment", "canonicalRevision", "fileRevision",
+			"reason", "idempotencyKey", "nextAttemptAt"
+		) VALUES (
+			'ZENWRKAA', 'zenodo', 'sandbox', 2, 1,
+			'provider_audit', 'publication:zenodo:sandbox:ZENWRKAA:mint-zenodo:2:1:audit:failed',
+			'2030-08-13T10:45:30Z'
+		) RETURNING "id"`,
+	);
+	const failedAuditResult = await runZenodoPublicationJobsOnce(
+		database,
+		auditConfig,
+		memoryStorage(new Map([["public/ZENPDFWA.pdf", publishedBytes]])),
+		{
+			provider: {
+				...successfulZenodoProvider(),
+				verifyPublishedState: async () => {
+					throw new Error("Zenodo audit service unavailable");
+				},
+			},
+			workerId: "zenodo-failed-audit-worker",
+			now: () => new Date("2030-08-13T10:45:30Z"),
+		},
+	);
+	const failedAuditJob = await client.query<{
+		attempts: number;
+		lastError: string | null;
+		processedAt: Date | null;
+	}>(
+		`SELECT "attempts", "lastError", "processedAt"
+		 FROM "publicationSyncJob" WHERE "id" = $1`,
+		[failedAudit.rows[0]?.id],
+	);
+	assert(
+		failedAuditResult.some(
+			(outcome) =>
+				outcome.jobId === Number(failedAudit.rows[0]?.id) &&
+				outcome.status === "retrying",
+		) &&
+			failedAuditJob.rows[0]?.attempts === 1 &&
+			failedAuditJob.rows[0]?.processedAt === null &&
+			failedAuditJob.rows[0]?.lastError?.includes(
+				"Zenodo audit service unavailable",
+			),
+		"A temporary Zenodo audit failure was not kept for retry",
+	);
+	await client.query(
+		`UPDATE "publicationSyncJob" SET "supersededAt" = '2030-08-13T10:45:31Z'
+		 WHERE "id" = $1`,
+		[failedAudit.rows[0]?.id],
+	);
+
+	const driftAudit = await client.query<{ id: number }>(
+		`INSERT INTO "publicationSyncJob" (
+			"itemKey", "provider", "environment", "canonicalRevision", "fileRevision",
+			"reason", "idempotencyKey", "nextAttemptAt"
+		) VALUES (
+			'ZENWRKAA', 'zenodo', 'sandbox', 2, 1,
+			'provider_audit', 'publication:zenodo:sandbox:ZENWRKAA:mint-zenodo:2:1:audit:drift',
+			'2030-08-13T10:46:00Z'
+		) RETURNING "id"`,
+	);
+	const driftAuditResult = await runZenodoPublicationJobsOnce(
+		database,
+		auditConfig,
+		memoryStorage(new Map([["public/ZENPDFWA.pdf", publishedBytes]])),
+		{
+			provider: {
+				...successfulZenodoProvider(),
+				verifyPublishedState: async () => ({
+					status: "drifted",
+					metadataReasons: ["metadata.title"],
+					fileReasons: [],
+				}),
+			},
+			workerId: "zenodo-drift-audit-worker",
+			now: () => new Date("2030-08-13T10:46:00Z"),
+		},
+	);
+	assert(
+		driftAuditResult.some(
+			(outcome) =>
+				outcome.jobId === Number(driftAudit.rows[0]?.id) &&
+				outcome.status === "drifted",
+		),
+		"Zenodo metadata drift was not detected",
+	);
+	const driftSettlement = await client.query<{
+		fileManifestHash: string | null;
+		payloadHash: string | null;
+		repairKey: string | null;
+	}>(
+		`SELECT
+			pss."lastPayloadHash" AS "payloadHash",
+			pss."lastFileManifestHash" AS "fileManifestHash",
+			(
+				SELECT psj."idempotencyKey" FROM "publicationSyncJob" psj
+				WHERE psj."itemKey" = pss."itemKey"
+					AND psj."reason" = 'nightly_reconciliation'
+					AND psj."supersededAt" IS NULL
+				ORDER BY psj."id" DESC LIMIT 1
+			) AS "repairKey"
+		 FROM "publicationSyncState" pss
+		 WHERE pss."itemKey" = 'ZENWRKAA' AND pss."provider" = 'zenodo'`,
+	);
+	assert(
+		driftSettlement.rows[0]?.payloadHash === null &&
+			driftSettlement.rows[0]?.fileManifestHash === baseline.fileManifestHash &&
+			driftSettlement.rows[0]?.repairKey?.endsWith(
+				`audit:${driftAudit.rows[0]?.id}`,
+			),
+		`Zenodo metadata drift did not clear only metadata state and queue one repair: ${JSON.stringify(driftSettlement.rows[0])}`,
+	);
+	await client.query(
+		`UPDATE "publicationSyncState"
+		 SET "lastPayloadHash" = $1, "lastPayloadSnapshot" = $2::jsonb
+		 WHERE "itemKey" = 'ZENWRKAA' AND "provider" = 'zenodo'`,
+		[baseline.payloadHash, JSON.stringify(baseline.payloadSnapshot)],
+	);
+	await client.query(
+		`UPDATE "publicationSyncJob" SET "supersededAt" = '2030-08-13T10:47:00Z'
+		 WHERE "itemKey" = 'ZENWRKAA' AND "reason" = 'nightly_reconciliation'
+			AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL`,
+	);
+	const fileDriftAudit = await client.query<{ id: number }>(
+		`INSERT INTO "publicationSyncJob" (
+			"itemKey", "provider", "environment", "canonicalRevision", "fileRevision",
+			"reason", "idempotencyKey", "nextAttemptAt"
+		) VALUES (
+			'ZENWRKAA', 'zenodo', 'sandbox', 2, 1,
+			'provider_audit', 'publication:zenodo:sandbox:ZENWRKAA:mint-zenodo:2:1:audit:file-drift',
+			'2030-08-13T10:48:00Z'
+		) RETURNING "id"`,
+	);
+	const fileDriftResult = await runZenodoPublicationJobsOnce(
+		database,
+		auditConfig,
+		memoryStorage(new Map([["public/ZENPDFWA.pdf", publishedBytes]])),
+		{
+			provider: {
+				...successfulZenodoProvider(),
+				verifyPublishedState: async () => ({
+					status: "drifted",
+					metadataReasons: [],
+					fileReasons: ["files.ZENPDFWA.pdf.md5"],
+				}),
+			},
+			workerId: "zenodo-file-audit-worker",
+			now: () => new Date("2030-08-13T10:48:00Z"),
+		},
+	);
+	assert(
+		fileDriftResult.some(
+			(outcome) =>
+				outcome.jobId === Number(fileDriftAudit.rows[0]?.id) &&
+				outcome.status === "drifted",
+		),
+		"Zenodo file drift was not detected",
+	);
+	const fileDriftState = await client.query<{
+		fileManifestHash: string | null;
+		payloadHash: string | null;
+	}>(
+		`SELECT
+			"lastPayloadHash" AS "payloadHash",
+			"lastFileManifestHash" AS "fileManifestHash"
+		 FROM "publicationSyncState"
+		 WHERE "itemKey" = 'ZENWRKAA' AND "provider" = 'zenodo'`,
+	);
+	assert(
+		fileDriftState.rows[0]?.payloadHash === baseline.payloadHash &&
+			fileDriftState.rows[0]?.fileManifestHash === null,
+		"Zenodo file drift did not preserve the settled metadata bundle",
+	);
+	await client.query(
+		`UPDATE "publicationSyncState"
+		 SET "lastFileManifestHash" = $1,
+			"lastFileManifestSnapshot" = $2::jsonb
+		 WHERE "itemKey" = 'ZENWRKAA' AND "provider" = 'zenodo'`,
+		[
+			baseline.fileManifestHash,
+			JSON.stringify(preservedFileState.rows[0]?.fileManifestSnapshot),
+		],
+	);
+	await client.query(
+		`UPDATE "publicationSyncJob" SET "supersededAt" = '2030-08-13T10:49:00Z'
+		 WHERE "itemKey" = 'ZENWRKAA' AND "reason" = 'nightly_reconciliation'
+			AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL`,
+	);
+	const staleAudit = await client.query<{ id: number }>(
+		`INSERT INTO "publicationSyncJob" (
+			"itemKey", "provider", "environment", "canonicalRevision", "fileRevision",
+			"reason", "idempotencyKey", "nextAttemptAt"
+		) VALUES (
+			'ZENWRKAA', 'zenodo', 'sandbox', 2, 1,
+			'provider_audit', 'publication:zenodo:sandbox:ZENWRKAA:mint-zenodo:2:1:audit:stale',
+			'2030-08-13T10:50:00Z'
+		) RETURNING "id"`,
+	);
+	const changedHash = "c".repeat(64);
+	await runZenodoPublicationJobsOnce(
+		database,
+		auditConfig,
+		memoryStorage(new Map([["public/ZENPDFWA.pdf", publishedBytes]])),
+		{
+			provider: {
+				...successfulZenodoProvider(),
+				verifyPublishedState: async () => {
+					await client.query(
+						`UPDATE "publicationSyncState" SET "lastPayloadHash" = $1
+						 WHERE "itemKey" = 'ZENWRKAA' AND "provider" = 'zenodo'`,
+						[changedHash],
+					);
+					return {
+						status: "drifted",
+						metadataReasons: ["metadata.title"],
+						fileReasons: [],
+					};
+				},
+			},
+			workerId: "zenodo-stale-audit-worker",
+			now: () => new Date("2030-08-13T10:50:00Z"),
+		},
+	);
+	const staleAuditState = await client.query<{
+		auditStatus: string;
+		payloadHash: string | null;
+		repairCount: number;
+	}>(
+		`SELECT
+			pss."lastPayloadHash" AS "payloadHash",
+			psj."resultReceipt"->'audit'->>'status' AS "auditStatus",
+			(
+				SELECT count(*)::int FROM "publicationSyncJob" repair
+				WHERE repair."idempotencyKey" LIKE $2
+			) AS "repairCount"
+		 FROM "publicationSyncState" pss
+		 JOIN "publicationSyncJob" psj ON psj."id" = $1
+		 WHERE pss."itemKey" = 'ZENWRKAA' AND pss."provider" = 'zenodo'`,
+		[staleAudit.rows[0]?.id, `%audit:${staleAudit.rows[0]?.id}`],
+	);
+	assert(
+		staleAuditState.rows[0]?.payloadHash === changedHash &&
+			staleAuditState.rows[0]?.auditStatus === "skipped" &&
+			Number(staleAuditState.rows[0]?.repairCount) === 0,
+		"A stale Zenodo audit overwrote newer local publication state",
+	);
+	await client.query(
+		`UPDATE "publicationSyncState"
+		 SET "lastPayloadHash" = $1, "lastPayloadSnapshot" = $2::jsonb
+		 WHERE "itemKey" = 'ZENWRKAA' AND "provider" = 'zenodo'`,
+		[baseline.payloadHash, JSON.stringify(baseline.payloadSnapshot)],
 	);
 
 	const recoveryBytes = new TextEncoder().encode(

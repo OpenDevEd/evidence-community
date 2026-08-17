@@ -9,14 +9,18 @@ import {
 	sourceConnection,
 	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
+import { buildPublicationFileManifestHash } from "@opendeved/doi-sync-core";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { itemFilePublication } from "../src/db/schema/source";
 import {
+	publicationIdentifier,
 	publicationSyncJob,
+	publicationSyncState,
 	publicationTarget,
+	zenodoFileCorrectionApproval,
 } from "../src/db/schema/publication";
 import { item } from "../src/db/schema/tables/item";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
@@ -32,7 +36,9 @@ import {
 	publishNativePdf,
 	stageNativePdfUpload,
 	unpublishNativePdf,
+	ZenodoPdfCorrectionConfirmationRequiredError,
 } from "../src/lib/admin/native-file-service";
+import { buildPublicationFileManifest } from "../src/lib/publication/record-adapter";
 import {
 	createNativeItemDraft,
 	getItemDraft as getNativeItemDraft,
@@ -131,6 +137,265 @@ async function createPdf(title: string) {
 
 function fileHash(bytes: Uint8Array) {
 	return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function verifyCrossrefBackedPdfCorrectionApproval(
+	db: ReturnType<typeof createPostgresDatabaseResource>["database"],
+	storage: MemoryFileStorage,
+	createdKeys: string[],
+) {
+	const parentDraft = await createNativeItemDraft(db, {
+		itemType: "Report",
+		title: "Crossref-backed PDF correction parent",
+	});
+	const attachmentDraft = await createNativeItemDraft(db, {
+		itemType: "Attachment",
+		parentItem: parentDraft.itemKey,
+		title: "Crossref-backed PDF correction attachment",
+	});
+	createdKeys.push(parentDraft.itemKey, attachmentDraft.itemKey);
+	const initialBytes = await createPdf("Crossref-backed original PDF");
+	const initialStage = await stageNativePdfUpload(db, storage, {
+		itemKey: attachmentDraft.itemKey,
+		filename: "crossref-original.pdf",
+		expectedSizeBytes: initialBytes.byteLength,
+		expectedSha256: fileHash(initialBytes),
+		maxPdfBytes: 10_000_000,
+	});
+	storage.privateFiles.set(initialStage.upload.path, initialBytes);
+	const initialReady = await completeNativePdfUpload(db, storage, {
+		itemKey: attachmentDraft.itemKey,
+		expectedUploadRevision: initialStage.fileDraft.uploadRevision,
+		maxPdfBytes: 10_000_000,
+	});
+	await publishNativeItemDraft(db, parentDraft.itemKey);
+	await publishNativeItemDraft(db, attachmentDraft.itemKey);
+	const initialPublication = await publishNativePdf(db, storage, {
+		itemKey: attachmentDraft.itemKey,
+		expectedUploadRevision: initialReady.uploadRevision,
+		publicationTags: PUBLICATION_TAGS,
+	});
+	const firstPublishedAt = new Date(Date.now() - 24 * 60 * 60 * 1000);
+	const baselineManifest = buildPublicationFileManifest([
+		initialPublication.file,
+	]);
+	const managedDoi = "10.5555/library.file-correction";
+	await db.insert(publicationTarget).values([
+		{
+			itemKey: parentDraft.itemKey,
+			provider: "crossref",
+			environment: "test",
+			requestedBy: "native-file-test",
+		},
+		{
+			itemKey: parentDraft.itemKey,
+			provider: "zenodo",
+			environment: "sandbox",
+			identifierPolicy: "reuse-crossref",
+			requestedBy: "native-file-test",
+		},
+	]);
+	await db.insert(publicationIdentifier).values({
+		itemKey: parentDraft.itemKey,
+		registrar: "crossref",
+		environment: "test",
+		role: "primary",
+		doi: managedDoi,
+		ownership: "managed",
+		lifecycle: "verified",
+		isCurrent: true,
+		reservedAt: firstPublishedAt,
+		verifiedAt: firstPublishedAt,
+	});
+	await db.insert(publicationSyncState).values({
+		itemKey: parentDraft.itemKey,
+		provider: "zenodo",
+		environment: "sandbox",
+		identifierPolicy: "reuse-crossref",
+		lastPayloadHash: "c".repeat(64),
+		lastPayloadSnapshot: {},
+		lastFileManifestHash:
+			buildPublicationFileManifestHash(baselineManifest),
+		lastFileManifestSnapshot: baselineManifest as unknown as Record<
+			string,
+			unknown
+		>,
+		zenodoRecordId: "7001",
+		zenodoParentId: "7000",
+		zenodoFirstPublishedAt: firstPublishedAt,
+	});
+
+	const correctionBytes = await createPdf("Crossref-backed corrected PDF");
+	const correctionStage = await stageNativePdfUpload(db, storage, {
+		itemKey: attachmentDraft.itemKey,
+		filename: "crossref-correction.pdf",
+		expectedSizeBytes: correctionBytes.byteLength,
+		expectedSha256: fileHash(correctionBytes),
+		maxPdfBytes: 10_000_000,
+	});
+	storage.privateFiles.set(correctionStage.upload.path, correctionBytes);
+	const correctionReady = await completeNativePdfUpload(db, storage, {
+		itemKey: attachmentDraft.itemKey,
+		expectedUploadRevision: correctionStage.fileDraft.uploadRevision,
+		maxPdfBytes: 10_000_000,
+	});
+	const publicFileCount = storage.publicFiles.size;
+	let confirmationRequired = false;
+	try {
+		await publishNativePdf(db, storage, {
+			itemKey: attachmentDraft.itemKey,
+			expectedUploadRevision: correctionReady.uploadRevision,
+			publicationTags: PUBLICATION_TAGS,
+		});
+	} catch (error) {
+		confirmationRequired =
+			error instanceof ZenodoPdfCorrectionConfirmationRequiredError;
+	}
+	const approvalsBeforeConfirmation = await db
+		.select({ id: zenodoFileCorrectionApproval.id })
+		.from(zenodoFileCorrectionApproval)
+		.where(eq(zenodoFileCorrectionApproval.itemKey, parentDraft.itemKey));
+	assert(
+		confirmationRequired &&
+			approvalsBeforeConfirmation.length === 0 &&
+			storage.publicFiles.size === publicFileCount,
+		"Crossref-backed PDF replacement did not stop before confirmation",
+	);
+
+	const correctedPublication = await publishNativePdf(db, storage, {
+		itemKey: attachmentDraft.itemKey,
+		expectedUploadRevision: correctionReady.uploadRevision,
+		publicationTags: PUBLICATION_TAGS,
+		zenodoFileChange: "minor_correction",
+	});
+	const [approval] = await db
+		.select()
+		.from(zenodoFileCorrectionApproval)
+		.where(eq(zenodoFileCorrectionApproval.itemKey, parentDraft.itemKey));
+	const correctedManifestHash = buildPublicationFileManifestHash(
+		buildPublicationFileManifest([correctedPublication.file]),
+	);
+	const zenodoJobs = await db
+		.select()
+		.from(publicationSyncJob)
+		.where(
+			and(
+				eq(publicationSyncJob.itemKey, parentDraft.itemKey),
+				eq(publicationSyncJob.provider, "zenodo"),
+				isNull(publicationSyncJob.supersededAt),
+			),
+		);
+	assert(
+		approval?.doi === managedDoi &&
+			approval.fileManifestHash === correctedManifestHash &&
+			approval.consumedAt === null &&
+			approval.supersededAt === null &&
+			correctedPublication.file.sha256 === fileHash(correctionBytes) &&
+			zenodoJobs.some((job) => job.reason === "file_changed"),
+		"Confirmed PDF correction did not save the exact approval with its worker job",
+	);
+	const publicFilesBeforeUnpublish = storage.publicFiles.size;
+	let unpublishConfirmationRequired = false;
+	try {
+		await unpublishNativePdf(db, storage, attachmentDraft.itemKey);
+	} catch (error) {
+		unpublishConfirmationRequired =
+			error instanceof ZenodoPdfCorrectionConfirmationRequiredError;
+	}
+	const [publicationBeforeUnpublishConfirmation] = await db
+		.select({ itemKey: itemFilePublication.itemKey })
+		.from(itemFilePublication)
+		.where(eq(itemFilePublication.itemKey, attachmentDraft.itemKey))
+		.limit(1);
+	assert(
+		unpublishConfirmationRequired &&
+			publicationBeforeUnpublishConfirmation?.itemKey ===
+				attachmentDraft.itemKey &&
+			storage.publicFiles.size === publicFilesBeforeUnpublish,
+		"Crossref-backed PDF removal did not stop before confirmation",
+	);
+	await unpublishNativePdf(
+		db,
+		storage,
+		attachmentDraft.itemKey,
+		"minor_correction",
+	);
+	const [removalApproval] = await db
+		.select()
+		.from(zenodoFileCorrectionApproval)
+		.where(
+			and(
+				eq(zenodoFileCorrectionApproval.itemKey, parentDraft.itemKey),
+				isNull(zenodoFileCorrectionApproval.consumedAt),
+				isNull(zenodoFileCorrectionApproval.supersededAt),
+			),
+		)
+		.limit(1);
+	assert(
+		removalApproval?.fileManifestHash ===
+			buildPublicationFileManifestHash(
+				buildPublicationFileManifest([]),
+			) && storage.publicFiles.size === 0,
+		"Confirmed PDF removal did not save the exact approval before cleanup",
+	);
+}
+
+async function verifyNonZenodoDuplicateFilenames(
+	db: ReturnType<typeof createPostgresDatabaseResource>["database"],
+	storage: MemoryFileStorage,
+	createdKeys: string[],
+) {
+	const parent = await createNativeItemDraft(db, {
+		itemType: "Report",
+		title: "Non-Zenodo duplicate filename parent",
+	});
+	const attachments = await Promise.all([
+		createNativeItemDraft(db, {
+			itemType: "Attachment",
+			parentItem: parent.itemKey,
+			title: "Duplicate filename attachment one",
+		}),
+		createNativeItemDraft(db, {
+			itemType: "Attachment",
+			parentItem: parent.itemKey,
+			title: "Duplicate filename attachment two",
+		}),
+	]);
+	createdKeys.push(parent.itemKey, ...attachments.map(({ itemKey }) => itemKey));
+	await publishNativeItemDraft(db, parent.itemKey);
+	for (const [index, attachment] of attachments.entries()) {
+		const bytes = await createPdf(`Duplicate filename PDF ${index + 1}`);
+		const staged = await stageNativePdfUpload(db, storage, {
+			itemKey: attachment.itemKey,
+			filename: "shared.pdf",
+			expectedSizeBytes: bytes.byteLength,
+			expectedSha256: fileHash(bytes),
+			maxPdfBytes: 10_000_000,
+		});
+		storage.privateFiles.set(staged.upload.path, bytes);
+		const ready = await completeNativePdfUpload(db, storage, {
+			itemKey: attachment.itemKey,
+			expectedUploadRevision: staged.fileDraft.uploadRevision,
+			maxPdfBytes: 10_000_000,
+		});
+		await publishNativeItemDraft(db, attachment.itemKey);
+		await publishNativePdf(db, storage, {
+			itemKey: attachment.itemKey,
+			expectedUploadRevision: ready.uploadRevision,
+			publicationTags: PUBLICATION_TAGS,
+		});
+	}
+	const publications = await db
+		.select({ itemKey: itemFilePublication.itemKey })
+		.from(itemFilePublication)
+		.where(eq(itemFilePublication.parentItemKey, parent.itemKey));
+	assert(
+		publications.length === 2,
+		"Non-Zenodo PDF publishing ran Zenodo filename validation",
+	);
+	for (const attachment of attachments) {
+		await unpublishNativePdf(db, storage, attachment.itemKey);
+	}
 }
 
 async function verify() {
@@ -730,6 +995,16 @@ async function verify() {
 			Number(storage.privateFiles.size) === 0,
 			"File lifecycle retained private objects after cleanup",
 		);
+		await verifyNonZenodoDuplicateFilenames(
+			db,
+			storage,
+			createdKeys,
+		);
+		await verifyCrossrefBackedPdfCorrectionApproval(
+			db,
+			storage,
+			createdKeys,
+		);
 		const conflictingParentDraft = await createNativeItemDraft(db, {
 			itemType: "Report",
 			title: "Conflicting completion parent",
@@ -880,6 +1155,17 @@ async function verify() {
 			await db
 				.delete(publicationSyncJob)
 				.where(inArray(publicationSyncJob.itemKey, createdKeys));
+			await db
+				.delete(zenodoFileCorrectionApproval)
+				.where(
+					inArray(zenodoFileCorrectionApproval.itemKey, createdKeys),
+				);
+			await db
+				.delete(publicationIdentifier)
+				.where(inArray(publicationIdentifier.itemKey, createdKeys));
+			await db
+				.delete(publicationSyncState)
+				.where(inArray(publicationSyncState.itemKey, createdKeys));
 			await db
 				.delete(publicationTarget)
 				.where(inArray(publicationTarget.itemKey, createdKeys));

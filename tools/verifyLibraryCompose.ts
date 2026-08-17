@@ -68,6 +68,7 @@ function main() {
 		JSON.stringify(serviceNames) ===
 			JSON.stringify([
 				"meilisearch",
+				"publication-worker",
 				"search-indexer",
 				"source-sync",
 				"source-writeback",
@@ -137,6 +138,7 @@ function main() {
 		"search-indexer",
 		"source-sync",
 		"source-writeback",
+		"publication-worker",
 	]) {
 		const service = services[name];
 		requireCondition(service, `${name} service is missing`);
@@ -163,6 +165,18 @@ function main() {
 			`${name} must join the private and shared database networks`,
 		);
 	}
+	const publicationWorker = services["publication-worker"];
+	requireCondition(
+		publicationWorker?.depends_on?.["search-indexer"]?.condition ===
+			"service_healthy",
+		"Publication worker must wait for the search indexer",
+	);
+	requireCondition(
+		publicationWorker?.healthcheck?.test?.includes(
+			".next/publication/health.mjs",
+		),
+		"Publication worker health check is missing",
+	);
 	requireCondition(
 		JSON.stringify(services.web.expose) === JSON.stringify(["3000"]),
 		"Only the web service may expose port 3000",

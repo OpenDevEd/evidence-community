@@ -44,7 +44,7 @@ export class ExternalCrossrefDoiError extends Error {
 
 	constructor(doi: string) {
 		super(
-			`This record already uses ${doi}, which is not owned by this library's Crossref prefix.`,
+			`This record already uses ${doi}, but this library did not reserve it. Crossref activation is unavailable.`,
 		);
 		this.name = "ExternalCrossrefDoiError";
 		this.doi = doi;

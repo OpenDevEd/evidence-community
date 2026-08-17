@@ -31,6 +31,12 @@ const stageBodySchema = z
 	})
 	.strict();
 
+const unpublishBodySchema = z
+	.object({
+		zenodoFileChange: z.literal("minor_correction"),
+	})
+	.strict();
+
 export async function GET(request: NextRequest, { params }: RouteContext) {
 	const denied = await requireAdminSession(request);
 	if (denied) return denied;
@@ -92,14 +98,18 @@ export async function DELETE(request: NextRequest, { params }: RouteContext) {
 	if (denied) return denied;
 
 	try {
-		const [{ key }, runtime] = await Promise.all([
+		const [{ key }, body, runtime] = await Promise.all([
 			params,
+			readAdminJson(request).then((value) =>
+				unpublishBodySchema.parse(value),
+			),
 			getNativeFileRuntime(),
 		]);
 		const unpublished = await unpublishNativePdfWithContext(
 			runtime.db,
 			runtime.storage,
 			key,
+			body.zenodoFileChange,
 		);
 		const { item } = unpublished;
 		return NextResponse.json(

@@ -129,12 +129,12 @@ async function seedPublishedFile(
 		`INSERT INTO "itemFilePublication" (
 			"itemKey", "sourceConnectionKey", "parentItemKey", "uploadRevision", "revision",
 			"sourceObjectPath", "sourceCoverObjectPath", "objectPath", "publicUrl", "filename",
-			"contentType", "sizeBytes", "sha256", "coverObjectPath", "coverPublicUrl",
+			"contentType", "sizeBytes", "sha256", "md5", "coverObjectPath", "coverPublicUrl",
 			"coverWidth", "coverHeight", "pageCount", "publicationTags", "publishedAt"
 		) VALUES (
 			$1, 'reconciler-source', $2, 1, 1,
 			$3, $4, $5, $6, $7,
-			'application/pdf', 12, $8, $9, $10,
+			'application/pdf', 12, $8, $9, $10, $11,
 			100, 140, 1, '[]'::jsonb, now()
 		)`,
 		[
@@ -146,6 +146,7 @@ async function seedPublishedFile(
 			`https://files.example.org/${itemKey}.pdf`,
 			`${itemKey}.pdf`,
 			"a".repeat(64),
+			"b".repeat(32),
 			`public/${itemKey}.png`,
 			`https://files.example.org/${itemKey}.png`,
 		],
@@ -238,7 +239,7 @@ async function verify(database: Database, client: Client) {
 	assert(
 		first.scannedTargets === 9 &&
 			first.pages === 5 &&
-			first.enqueuedJobs === 5,
+			first.enqueuedJobs === 6,
 		`The nightly scan did not use keyset pages or queue only missing work: ${JSON.stringify(first)}`,
 	);
 	const queued = await client.query<{
@@ -251,15 +252,17 @@ async function verify(database: Database, client: Client) {
 		 WHERE "supersededAt" IS NULL ORDER BY "itemKey"`,
 	);
 	assert(
-		queued.rows.length === 7 &&
+		queued.rows.length === 8 &&
 			queued.rows.filter((row) => row.reason === "nightly_reconciliation")
 				.length === 5 &&
+			queued.rows.filter((row) => row.reason === "provider_audit").length ===
+				1 &&
 			!queued.rows.some((row) =>
-				["RECNAAAD", "RECNAAAF", "RECNAAAG", "RECNAAAJ"].includes(
+				["RECNAAAF", "RECNAAAG", "RECNAAAJ"].includes(
 					row.itemKey,
 				),
 			),
-		"The nightly scan queued a synced, inactive, or deleted record",
+		"The nightly scan did not separate synced audits from repair work",
 	);
 	const repairedCurrentRevision = queued.rows.filter(
 		(row) => row.itemKey === "RECNAAAK",

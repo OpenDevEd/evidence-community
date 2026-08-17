@@ -4,6 +4,7 @@ import {
 	planPublicationSync,
 	settlePublicationSyncState,
 	type CrossrefDepositor,
+	type CrossrefRelation,
 	type ProviderSyncState,
 	type ProviderSyncStatePatch,
 	type PublicationSyncOperationResult,
@@ -26,7 +27,8 @@ import {
 	buildPublicationRecordSnapshot,
 } from "./record-adapter";
 import { readPublicationRepositorySnapshot } from "./repository";
-import { currentManagedDoi, providerState } from "./state-adapter";
+import { settlePublicationProviderAudit } from "./provider-audit";
+import { currentManagedDoi, providerState, targetFor } from "./state-adapter";
 import {
 	assertPublicationJobLease,
 	claimNextPublicationJob,
@@ -66,6 +68,7 @@ export async function buildCrossrefPlan(
 	database: Database | DatabaseTransaction,
 	itemKey: string,
 	config: PublicationConfig,
+	observedAt = new Date(),
 ) {
 	const publicationConfig = config.services.publication;
 	const snapshot = await readPublicationRepositorySnapshot(
@@ -118,25 +121,158 @@ export async function buildCrossrefPlan(
 	const identifiers = buildPublicationIdentifiers({
 		bibliographicDoi: bibliographicDoi.doi,
 		managedCrossrefDoi,
+		zenodoVersionDoi: currentManagedDoi(
+			snapshot,
+			"zenodo",
+			"sandbox",
+			"version",
+		),
+		zenodoConceptDoi: currentManagedDoi(
+			snapshot,
+			"zenodo",
+			"sandbox",
+			"concept",
+		),
 	});
-	const previousState = providerState(
+	const crossrefState = providerState(
 		snapshot,
 		"crossref",
 		publicationConfig,
 	);
+	const zenodoState = providerState(snapshot, "zenodo", publicationConfig);
+	const zenodoTarget = targetFor(snapshot, "zenodo", "sandbox");
+	const includeZenodoRelation =
+		zenodoTarget?.identifierPolicy === "mint-zenodo" &&
+		Boolean(
+			zenodoState?.zenodo?.lastSuccess && zenodoState.zenodo.identifiers,
+		);
+	const previousState =
+		crossrefState || (includeZenodoRelation && zenodoState)
+			? {
+					...(crossrefState?.crossref
+						? { crossref: crossrefState.crossref }
+						: {}),
+					...(includeZenodoRelation && zenodoState?.zenodo
+						? { zenodo: zenodoState.zenodo }
+						: {}),
+					...(crossrefState?.failure
+						? { failure: crossrefState.failure }
+						: {}),
+				}
+			: undefined;
 	return {
 		plan: planPublicationSync({
+			observedAt,
 			record,
 			files,
 			identifiers,
 			targets: {
 				crossref: { enabled: true, environment: "test" },
-				zenodo: { enabled: false },
+				zenodo: includeZenodoRelation
+					? {
+							enabled: true,
+							environment: "sandbox",
+							identifierPolicy: "mint-zenodo",
+						}
+					: { enabled: false },
 			},
 			...(previousState ? { state: previousState } : {}),
 		}),
 		previousState,
 	};
+}
+
+async function auditCrossrefPublishedState(
+	database: Database,
+	config: PublicationConfig,
+	input: {
+		job: NonNullable<Awaited<ReturnType<typeof claimNextPublicationJob>>>;
+		workerId: string;
+		built: Awaited<ReturnType<typeof buildCrossrefPlan>>;
+		provider?: CrossrefDepositor;
+		heartbeatIntervalMs?: number;
+		signal?: AbortSignal;
+		now: () => Date;
+	},
+) {
+	const lastSuccess = input.built.previousState?.crossref?.lastSuccess;
+	if (!lastSuccess)
+		throw new Error("The Crossref audit job has no saved provider state");
+	const plan = input.built.plan;
+	if (plan.status !== "noop") {
+		return settlePublicationProviderAudit(database, {
+			jobId: input.job.id,
+			workerId: input.workerId,
+			itemKey: input.job.itemKey,
+			provider: "crossref",
+			environment: "test",
+			expectedPayloadHash: lastSuccess.payloadHash,
+			observation: {
+				status: "skipped",
+				reason: "The local publication changed before the remote audit started.",
+			},
+			settledAt: input.now(),
+		});
+	}
+	if (!plan.crossrefRecord) {
+		throw new Error("The Crossref audit has no mapped publication record");
+	}
+	const crossrefSnapshot = plan.snapshots.crossrefPayload;
+	const relation =
+		crossrefSnapshot &&
+		typeof crossrefSnapshot === "object" &&
+		!Array.isArray(crossrefSnapshot)
+			? (crossrefSnapshot as Record<string, unknown>).relation
+			: undefined;
+	const expectedRelation =
+		relation && typeof relation === "object" && !Array.isArray(relation)
+			? (relation as unknown as CrossrefRelation)
+			: undefined;
+	const verification = await withPublicationJobHeartbeat(
+		database,
+		{
+			jobId: input.job.id,
+			workerId: input.workerId,
+			leaseSeconds: config.services.publication.worker.leaseSeconds,
+			heartbeatIntervalMs: input.heartbeatIntervalMs,
+			now: input.now,
+			signal: input.signal,
+		},
+		(signal) => {
+			const provider =
+				input.provider ??
+				new CrossrefApiClient({
+					fetch: (url, init) => fetch(url, { ...init, signal }),
+					poll: { maxAttempts: 1, delayMs: 0 },
+				});
+			return provider.verifyPublication({
+				environment: "test",
+				emailAddress: requireConfig(config).emailAddress,
+				record: plan.crossrefRecord!,
+				...(expectedRelation ? { relation: expectedRelation } : {}),
+			});
+		},
+	);
+	return settlePublicationProviderAudit(database, {
+		jobId: input.job.id,
+		workerId: input.workerId,
+		itemKey: input.job.itemKey,
+		provider: "crossref",
+		environment: "test",
+		expectedPayloadHash: lastSuccess.payloadHash,
+		observation:
+			verification.status === "matched"
+				? { status: "matched" }
+				: {
+						status: "drifted",
+						metadataReasons: [
+							verification.reason ??
+								"Crossref metadata does not match the saved deposit.",
+						],
+						fileReasons: [],
+					},
+		settledAt: input.now(),
+	});
 }
 
 async function recordCrossrefPending(
@@ -444,7 +580,35 @@ export async function runCrossrefPublicationJobsOnce(
 				database,
 				job.itemKey,
 				config,
+				now(),
 			);
+			if (job.reason === "provider_audit") {
+				const audit = await auditCrossrefPublishedState(
+					database,
+					config,
+					{
+						job,
+						workerId,
+						built,
+						...(options.provider
+							? { provider: options.provider }
+							: {}),
+						...(options.heartbeatIntervalMs
+							? {
+									heartbeatIntervalMs:
+										options.heartbeatIntervalMs,
+								}
+							: {}),
+						...(options.signal ? { signal: options.signal } : {}),
+						now,
+					},
+				);
+				outcomes.push({
+					jobId: job.id,
+					status: audit.status === "drifted" ? "drifted" : "audited",
+				});
+				continue;
+			}
 			if (
 				built.plan.status === "skipped" ||
 				built.plan.status === "waiting_for_file"
@@ -480,8 +644,18 @@ export async function runCrossrefPublicationJobsOnce(
 				continue;
 			}
 
+			const crossrefPlan =
+				built.plan.status === "write_required"
+					? {
+							...built.plan,
+							operations: built.plan.operations.filter(
+								(operation) =>
+									operation.type.startsWith("crossref_"),
+							),
+						}
+					: built.plan;
 			let results: readonly PublicationSyncOperationResult[] = [];
-			if (built.plan.status === "write_required") {
+			if (crossrefPlan.status === "write_required") {
 				results = await withPublicationJobHeartbeat(
 					database,
 					{
@@ -494,7 +668,7 @@ export async function runCrossrefPublicationJobsOnce(
 					},
 					(signal) =>
 						executeLivePublicationSyncPlan({
-							plan: built.plan,
+							plan: crossrefPlan,
 							credentials: {},
 							providers: {
 								crossref:
@@ -519,7 +693,7 @@ export async function runCrossrefPublicationJobsOnce(
 			}
 			const settledAt = now();
 			const settlement = settlePublicationSyncState({
-				plan: built.plan,
+				plan: crossrefPlan,
 				previousState: built.previousState,
 				operationResults: results,
 				observedAt: settledAt,

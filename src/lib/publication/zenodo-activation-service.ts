@@ -194,6 +194,7 @@ function prepareZenodoActivation(input: {
 	snapshot: PublicationRepositorySnapshot;
 	config: PublicationConfig;
 	zenodo: ReturnType<typeof requireZenodoConfig>;
+	now: Date;
 	requestedPolicy?: ZenodoIdentifierPolicy;
 }) {
 	const { snapshot } = input;
@@ -264,6 +265,7 @@ function prepareZenodoActivation(input: {
 		);
 	}
 	const validationPlan = planPublicationSync({
+		observedAt: input.now,
 		record: publicationRecord,
 		files,
 		identifiers: buildPublicationIdentifiers({
@@ -326,10 +328,12 @@ export async function activateZenodoPublication(
 		);
 		const record = snapshot.record;
 		if (!record) throw new PublicationItemNotFoundError(itemKey);
+		const now = new Date();
 		const prepared = prepareZenodoActivation({
 			snapshot,
 			config,
 			zenodo,
+			now,
 			requestedPolicy,
 		});
 		const { fileRevision, policy, waitingOn } = prepared;
@@ -347,7 +351,6 @@ export async function activateZenodoPublication(
 			throw new ZenodoIdentifierPolicyLockedError();
 		}
 
-		const now = new Date();
 		await transaction
 			.insert(publicationTarget)
 			.values({
@@ -481,10 +484,12 @@ export async function retryZenodoPublication(
 		if (!target?.identifierPolicy) {
 			throw new Error("The saved Zenodo activation is incomplete");
 		}
+		const now = new Date();
 		const prepared = prepareZenodoActivation({
 			snapshot,
 			config,
 			zenodo,
+			now,
 			requestedPolicy: target.identifierPolicy,
 		});
 		if (prepared.waitingOn) {
@@ -516,7 +521,6 @@ export async function retryZenodoPublication(
 				"This Zenodo publication does not have a failed job to retry.",
 			);
 		}
-		const now = new Date();
 		if (prepared.fileRevision === null) {
 			throw new Error("A ready Zenodo retry must have a published file");
 		}

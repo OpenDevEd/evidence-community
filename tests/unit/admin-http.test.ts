@@ -16,9 +16,13 @@ import {
 } from "@/lib/admin/http";
 import { CollectionWritebackUnavailableError } from "@/lib/admin/collection-mutation-service";
 import { CollectionValidationError } from "@/lib/admin/native-collection-service";
-import { NativeFileValidationError } from "@/lib/admin/native-file-service";
+import {
+	NativeFileValidationError,
+	ZenodoPdfCorrectionConfirmationRequiredError,
+} from "@/lib/admin/native-file-service";
 import {
 	ItemHasChildrenError as NativeItemHasChildrenError,
+	ItemHasActivePublicationError as NativeItemHasActivePublicationError,
 	ItemHasPublishedFileError as NativeItemHasPublishedFileError,
 	ItemParentUnavailableError as NativeItemParentUnavailableError,
 } from "@/lib/admin/native-item-service";
@@ -126,6 +130,22 @@ describe("admin API error mapping", () => {
 			expect(response.status).toBe(409);
 			expect((await response.json()).error.code).toBe("conflict");
 		}
+	});
+
+	it("returns a distinct PDF correction confirmation", async () => {
+		const response = adminErrorResponse(
+			new ZenodoPdfCorrectionConfirmationRequiredError(
+				new Date("2030-09-12T14:30:00.000Z"),
+			),
+		);
+		expect(response.status).toBe(409);
+		expect(await response.json()).toEqual({
+			error: {
+				code: "confirmation_required",
+				message:
+					"This record uses its Crossref DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at Sep 12, 2030, 2:30 PM UTC.",
+			},
+		});
 	});
 
 	it("unwraps Drizzle foreign-key and check violations as bad requests", async () => {
@@ -236,6 +256,10 @@ describe("admin API error mapping", () => {
 
 	it("explains item preconditions instead of calling them stale edits", async () => {
 		const cases = [
+			[
+				new NativeItemHasActivePublicationError("ABCD2345"),
+				"This record is still published through Crossref or Zenodo. Keep it published until withdrawal support is available.",
+			],
 			[
 				new NativeItemHasPublishedFileError("ABCD2345"),
 				"Unpublish this attachment's PDF before unpublishing the attachment.",

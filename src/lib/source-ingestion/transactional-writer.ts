@@ -1591,6 +1591,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 					contentType: record.file.contentType!,
 					sizeBytes: publication.sizeBytes,
 					sha256: publication.sha256,
+					md5: record.file.md5!,
 					coverObjectPath: publication.coverObjectPath,
 					coverPublicUrl: record.file.coverUrl!,
 					coverWidth: record.file.coverWidth!,
@@ -1733,6 +1734,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 							contentType: sql.raw(`excluded."contentType"`),
 							sizeBytes: sql.raw(`excluded."sizeBytes"`),
 							sha256: sql.raw(`excluded."sha256"`),
+							md5: sql.raw(`excluded."md5"`),
 							coverObjectPath: sql.raw(
 								`excluded."coverObjectPath"`,
 							),

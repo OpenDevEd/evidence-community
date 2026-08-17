@@ -46,6 +46,7 @@ export type EvidenceLibraryPublishedFile = {
 	contentType: string;
 	sizeBytes: number;
 	sha256: string;
+	md5: string;
 };
 
 const PRIVATE_TAGS = new Set([
@@ -158,6 +159,18 @@ export function buildPublicationRecordSnapshot(input: {
 }): PublicationRecordSnapshot {
 	const title = normalizeText(input.record.title);
 	if (!title) throw new Error("Add a title before activating publication");
+	return buildPublicationRecordSnapshotWithTitle(input, title);
+}
+
+function buildPublicationRecordSnapshotWithTitle(
+	input: {
+		record: EvidenceLibraryPublicationRecord;
+		tags: readonly string[];
+		baseUrl: string;
+		license: string;
+	},
+	title: string,
+): PublicationRecordSnapshot {
 
 	const optional = {
 		abstract: normalizeText(input.record.abstractNote),
@@ -188,6 +201,25 @@ export function buildPublicationRecordSnapshot(input: {
 			Object.entries(optional).filter((entry): entry is [string, string] => Boolean(entry[1])),
 		),
 	});
+}
+
+export function inspectPublicationRecordSnapshot(input: {
+	record: EvidenceLibraryPublicationRecord;
+	tags: readonly string[];
+	baseUrl: string;
+	license: string;
+}): {
+	issues: readonly string[];
+	record: PublicationRecordSnapshot;
+} {
+	const title = normalizeText(input.record.title);
+	return {
+		issues: title ? [] : ["Add a title before activating publication"],
+		record: buildPublicationRecordSnapshotWithTitle(
+			input,
+			title ?? "Missing title",
+		),
+	};
 }
 
 export function buildPublicationFileManifest(

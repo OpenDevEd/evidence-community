@@ -3,6 +3,7 @@ import type { ZodError, ZodIssue } from "zod";
 export type AdminErrorCode =
 	| "already_exists"
 	| "conflict"
+	| "confirmation_required"
 	| "internal_error"
 	| "invalid_reference"
 	| "not_found"

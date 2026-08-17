@@ -1182,11 +1182,40 @@ export default function AdminWorkbench({
 		void runBusy(
 			async () => {
 				setFileErrors((current) => withoutRecordError(current, key));
-				const result = await publishAdminPdf(key, uploadRevision);
-				await waitForIndexing(result);
-				if (detail) await loadDetail(detail.key);
-				await loadItems();
-				toast.success("PDF published");
+				const finishPublication = async (
+					zenodoFileChange?: "minor_correction",
+				) => {
+					const result = await publishAdminPdf(
+						key,
+						uploadRevision,
+						zenodoFileChange,
+					);
+					await waitForIndexing(result);
+					if (detail) await loadDetail(detail.key);
+					await loadItems();
+					toast.success("PDF published");
+				};
+				try {
+					await finishPublication();
+				} catch (error) {
+					if (
+						!(error instanceof AdminApiError) ||
+						error.code !== "confirmation_required"
+					) {
+						throw error;
+					}
+					setConfirmDialog({
+						title: "Publish a PDF correction?",
+						message: error.message,
+						confirmLabel: "Publish correction",
+						action: () => finishPublication("minor_correction"),
+						onError: (confirmationError) =>
+							setFileErrors((current) => ({
+								...current,
+								[key]: fileErrorMessage(confirmationError),
+							})),
+					});
+				}
 			},
 			(error) =>
 				setFileErrors((current) => ({
@@ -1220,9 +1249,12 @@ export default function AdminWorkbench({
 		setConfirmDialog({
 			title: "Unpublish PDF?",
 			message:
-				"The attachment metadata will stay published. The PDF can be staged again later.",
+				"The attachment metadata will stay published. If this record uses its Crossref DOI in Zenodo, this also confirms the removal as a minor correction.",
 			action: async () => {
-				const result = await unpublishAdminPdf(key);
+				const result = await unpublishAdminPdf(
+					key,
+					"minor_correction",
+				);
 				await waitForIndexing(result);
 				setFileErrors((current) => withoutRecordError(current, key));
 				if (detail) await loadDetail(detail.key);
@@ -2181,6 +2213,11 @@ export default function AdminWorkbench({
 							onOpenDraft={openCurrentDraft}
 							onPublish={publishCurrent}
 							onPublishFile={publishPdf}
+							onPublicationChanged={() =>
+								detail
+									? void refreshCurrent(detail.key)
+									: undefined
+							}
 							onReloadDraft={reloadConflictedDraft}
 							onRetry={() =>
 								selectedKey

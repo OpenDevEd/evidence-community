@@ -900,6 +900,7 @@ export function createItemFilePublicationTable(itemColumns: {
 			contentType: varchar("contentType", { length: 128 }).notNull(),
 			sizeBytes: bigint("sizeBytes", { mode: "number" }).notNull(),
 			sha256: varchar("sha256", { length: 64 }).notNull(),
+			md5: varchar("md5", { length: 32 }).notNull(),
 			coverObjectPath: varchar("coverObjectPath", {
 				length: 1024,
 			}).notNull(),
@@ -937,6 +938,10 @@ export function createItemFilePublicationTable(itemColumns: {
 			check(
 				"itemFilePublication_sha256_valid",
 				sql`${table.sha256} ~ '^[0-9a-f]{64}$'`,
+			),
+			check(
+				"itemFilePublication_md5_valid",
+				sql`${table.md5} ~ '^[0-9a-f]{32}$'`,
 			),
 			check(
 				"itemFilePublication_dimensions_positive",

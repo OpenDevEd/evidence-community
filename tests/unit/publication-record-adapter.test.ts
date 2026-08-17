@@ -123,6 +123,7 @@ describe("publication record adapter", () => {
 					contentType: "application/pdf",
 					sizeBytes: 123,
 					sha256: "a".repeat(64),
+					md5: "b".repeat(32),
 				},
 			]),
 		).toEqual({

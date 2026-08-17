@@ -1,6 +1,12 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:3100";
+const baseURL = process.env.PLAYWRIGHT_BASE_URL;
+
+if (!baseURL) {
+	throw new Error(
+		"PLAYWRIGHT_BASE_URL is required. Run npm run test:e2e to start the disposable test runtime.",
+	);
+}
 
 export default defineConfig({
 	testDir: "./tests/e2e",
@@ -33,13 +39,4 @@ export default defineConfig({
 			use: { ...devices["Desktop Safari"] },
 		},
 	],
-	webServer: process.env.PLAYWRIGHT_BASE_URL
-		? undefined
-		: {
-				command:
-					"LIBRARY_CONFIG_PATH=config/library.example.json npm run dev -- --hostname 127.0.0.1 --port 3100",
-				reuseExistingServer: false,
-				timeout: 120_000,
-				url: `${baseURL}/api/library-config/health`,
-			},
 });

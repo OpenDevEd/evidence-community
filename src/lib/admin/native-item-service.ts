@@ -5,7 +5,14 @@ import {
 	itemSourceLink,
 	outbox,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, sql, type InferInsertModel } from "drizzle-orm";
+import {
+	and,
+	eq,
+	inArray,
+	isNull,
+	sql,
+	type InferInsertModel,
+} from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -17,6 +24,7 @@ import { reserveItemIdentity } from "@/db/record-identity";
 import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemFilePublication } from "@/db/schema/source";
+import { publicationTarget } from "@/db/schema/publication";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { tag } from "@/db/schema/tables/tag";
@@ -113,6 +121,13 @@ export class ItemHasPublishedFileError extends Error {
 			`Unpublish the file before unpublishing attachment metadata: ${itemKey}`,
 		);
 		this.name = "ItemHasPublishedFileError";
+	}
+}
+
+export class ItemHasActivePublicationError extends Error {
+	constructor(itemKey: string) {
+		super(`Record has an active DOI publication: ${itemKey}`);
+		this.name = "ItemHasActivePublicationError";
 	}
 }
 
@@ -1085,6 +1100,20 @@ async function unpublishNativeItemAttempt(
 				item: current,
 				stagedPrivatePaths: discarded?.stagedPrivatePaths ?? [],
 			};
+		}
+		const [activePublication] = await transaction
+			.select({ provider: publicationTarget.provider })
+			.from(publicationTarget)
+			.where(
+				and(
+					eq(publicationTarget.itemKey, itemKey),
+					isNull(publicationTarget.deactivatedAt),
+				),
+			)
+			.limit(1)
+			.for("update");
+		if (activePublication) {
+			throw new ItemHasActivePublicationError(itemKey);
 		}
 		const liveChildren = await transaction
 			.select({ key: item.key })

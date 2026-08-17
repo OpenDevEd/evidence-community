@@ -10,6 +10,12 @@ export type AdminPublicationProviderState =
 	| "synced"
 	| "failed";
 
+export type AdminPublicationProviderStatus = {
+	label: string;
+	description: string;
+	shouldPoll: boolean;
+};
+
 export type AdminPublicationPlanState =
 	| "unavailable"
 	| "skipped"
@@ -40,6 +46,104 @@ export type AdminPublicationStateInput = {
 	failure: boolean;
 	waitingOn: "crossref" | "file" | null;
 };
+
+export function describeAdminPublicationProviderState(input: {
+	provider: "crossref" | "zenodo";
+	state: AdminPublicationProviderState;
+	waitingOn: "crossref" | "file" | null;
+	firstBlocker: string | null;
+}): AdminPublicationProviderStatus {
+	const providerName = input.provider === "crossref" ? "Crossref" : "Zenodo";
+
+	if (input.state === "blocked") {
+		return {
+			label: "Fix item details",
+			description:
+				input.firstBlocker ?? `${providerName} publishing is unavailable.`,
+			shouldPoll: false,
+		};
+	}
+	if (input.state === "inactive") {
+		return input.provider === "crossref"
+			? {
+					label: "Not activated",
+					description: "Reserve and register a Crossref DOI for this record.",
+					shouldPoll: false,
+				}
+			: {
+					label: "Not activated",
+					description: "Publish this record and its files to Zenodo.",
+					shouldPoll: false,
+				};
+	}
+	if (input.state === "waiting") {
+		return input.waitingOn === "crossref"
+			? {
+					label: "Waiting for Crossref",
+					description:
+						"Zenodo will publish after Crossref verifies the reserved DOI.",
+					shouldPoll: true,
+				}
+			: {
+					label: "Waiting for a PDF",
+					description: "Publish a PDF attachment to continue with Zenodo.",
+					shouldPoll: false,
+				};
+	}
+	if (input.state === "queued") {
+		return {
+			label: "Queued",
+			description: `${providerName} publishing will start when the worker is ready.`,
+			shouldPoll: true,
+		};
+	}
+	if (input.state === "working") {
+		return {
+			label: "Publishing",
+			description: `${providerName} is publishing this record now.`,
+			shouldPoll: true,
+		};
+	}
+	if (input.state === "verifying") {
+		return input.provider === "crossref"
+			? {
+					label: "Checking Crossref",
+					description: "Crossref received the record and is checking it.",
+					shouldPoll: true,
+				}
+			: {
+					label: "Finishing publication",
+					description: "Zenodo received the record and is finishing publication.",
+					shouldPoll: true,
+				};
+	}
+	if (input.state === "retrying") {
+		return {
+			label: "Retrying automatically",
+			description: `${providerName} publishing will try again automatically.`,
+			shouldPoll: true,
+		};
+	}
+	if (input.state === "repair_pending") {
+		return {
+			label: "Waiting for repair",
+			description: `The nightly repair check will queue the missing ${providerName} update.`,
+			shouldPoll: false,
+		};
+	}
+	if (input.state === "synced") {
+		return {
+			label: "Synced",
+			description: `${providerName} matches the current published record.`,
+			shouldPoll: false,
+		};
+	}
+	return {
+		label: "Needs attention",
+		description: `${providerName} publishing failed. Review the error and try again.`,
+		shouldPoll: false,
+	};
+}
 
 export function resolveAdminPublicationProviderState(
 	input: AdminPublicationStateInput,

@@ -20,6 +20,7 @@ import type {
 	AdminItemBatchResponse,
 	AdminItemBatchResult,
 } from "@/lib/admin/item-batch-contract";
+import type { AdminPublicationView } from "@/lib/publication/admin-publication-view";
 import { ADMIN_ITEM_BATCH_SIZE } from "@/lib/admin/item-batch-contract";
 import type {
 	AdminSearchIndexMutationResult,
@@ -77,6 +78,7 @@ function fallbackError(status: number): AdminErrorPayload["error"] {
 const adminErrorCodes = new Set<AdminErrorCode>([
 	"already_exists",
 	"conflict",
+	"confirmation_required",
 	"internal_error",
 	"invalid_reference",
 	"not_found",
@@ -259,6 +261,52 @@ export async function getAdminItem(key: string) {
 			`/api/admin/items/${encodeURIComponent(key)}`,
 		)
 	).item;
+}
+
+type AdminPublicationMutationResponse = {
+	publication: AdminPublicationView;
+};
+
+export async function getAdminPublication(key: string) {
+	return (
+		await requestJson<{ publication: AdminPublicationView }>(
+			`/api/admin/items/${encodeURIComponent(key)}/publication`,
+		)
+	).publication;
+}
+
+export function activateAdminCrossrefPublication(key: string) {
+	return requestJson<AdminPublicationMutationResponse>(
+		`/api/admin/items/${encodeURIComponent(key)}/publication/crossref/activate`,
+		{ method: "POST" },
+	);
+}
+
+export function retryAdminCrossrefPublication(key: string) {
+	return requestJson<AdminPublicationMutationResponse>(
+		`/api/admin/items/${encodeURIComponent(key)}/publication/crossref/retry`,
+		{ method: "POST" },
+	);
+}
+
+export function activateAdminZenodoPublication(
+	key: string,
+	identifierPolicy: "mint-zenodo" | "reuse-crossref",
+) {
+	return requestJson<AdminPublicationMutationResponse>(
+		`/api/admin/items/${encodeURIComponent(key)}/publication/zenodo/activate`,
+		{
+			body: JSON.stringify({ identifierPolicy }),
+			method: "POST",
+		},
+	);
+}
+
+export function retryAdminZenodoPublication(key: string) {
+	return requestJson<AdminPublicationMutationResponse>(
+		`/api/admin/items/${encodeURIComponent(key)}/publication/zenodo/retry`,
+		{ method: "POST" },
+	);
 }
 
 export async function createAdminDraft(payload: Record<string, unknown>) {
@@ -575,21 +623,32 @@ export function discardAdminPdfDraft(key: string) {
 	);
 }
 
-export function publishAdminPdf(key: string, expectedUploadRevision: number) {
+export function publishAdminPdf(
+	key: string,
+	expectedUploadRevision: number,
+	zenodoFileChange?: "minor_correction",
+) {
 	return requestIndexingMutation<{ item: Record<string, unknown> }>(
 		`/api/admin/items/${encodeURIComponent(key)}/file/publish`,
 		{
 			method: "POST",
-			body: JSON.stringify({ expectedUploadRevision }),
+			body: JSON.stringify({
+				expectedUploadRevision,
+				...(zenodoFileChange ? { zenodoFileChange } : {}),
+			}),
 		},
 	);
 }
 
-export function unpublishAdminPdf(key: string) {
+export function unpublishAdminPdf(
+	key: string,
+	zenodoFileChange: "minor_correction",
+) {
 	return requestIndexingMutation<{ item: Record<string, unknown> }>(
 		`/api/admin/items/${encodeURIComponent(key)}/file`,
 		{
 			method: "DELETE",
+			body: JSON.stringify({ zenodoFileChange }),
 		},
 	);
 }

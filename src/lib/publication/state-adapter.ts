@@ -6,6 +6,7 @@ import {
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { PublicationProvider } from "@/db/schema/publication";
 
+import { fileCorrectionApprovalFromRow } from "./file-correction-approval";
 import type { PublicationRepositorySnapshot } from "./repository";
 
 type PublicationConfig = LibraryServerConfig["services"]["publication"];
@@ -67,7 +68,9 @@ export function providerState(
 	const expectedEnvironment = config[provider].environment;
 	const row = stateFor(snapshot, provider, expectedEnvironment);
 	const failure =
-		row?.lastFailureClass && row.lastFailureSummary && row.consecutiveFailures > 0
+		row?.lastFailureClass &&
+		row.lastFailureSummary &&
+		row.consecutiveFailures > 0
 			? {
 					provider,
 					failureClass: row.lastFailureClass,
@@ -94,14 +97,23 @@ export function providerState(
 								stage: row.pendingStage,
 								payloadHash: row.pendingPayloadHash,
 								...(row.pendingPayloadSnapshot
-									? { payloadSnapshot: row.pendingPayloadSnapshot }
+									? {
+											payloadSnapshot:
+												row.pendingPayloadSnapshot,
+										}
 									: {}),
-								...(row.pendingBatchId ? { batchId: row.pendingBatchId } : {}),
-								...(row.pendingFilename ? { filename: row.pendingFilename } : {}),
+								...(row.pendingBatchId
+									? { batchId: row.pendingBatchId }
+									: {}),
+								...(row.pendingFilename
+									? { filename: row.pendingFilename }
+									: {}),
 								...(row.pendingSubmittedAt
 									? { submittedAt: row.pendingSubmittedAt }
 									: {}),
-								...(row.pendingReason ? { reason: row.pendingReason } : {}),
+								...(row.pendingReason
+									? { reason: row.pendingReason }
+									: {}),
 							},
 						}
 					: {}),
@@ -114,6 +126,11 @@ export function providerState(
 		(journal) => journal.provider === "zenodo",
 	);
 	const journal = journals.length === 1 ? journals[0] : null;
+	const journalApproval = journal?.fileCorrectionApprovalId
+		? snapshot.fileCorrectionApprovals.find(
+				(approval) => approval.id === journal.fileCorrectionApprovalId,
+			)
+		: null;
 	const target = targetFor(snapshot, "zenodo", config.zenodo.environment);
 	if (!row && !journal) return undefined;
 	const identifierPolicy = row?.identifierPolicy ?? target?.identifierPolicy;
@@ -122,6 +139,25 @@ export function providerState(
 		zenodo: {
 			environment: config.zenodo.environment,
 			identifierPolicy,
+			...(row?.zenodoFirstPublishedAt
+				? { firstPublishedAt: row.zenodoFirstPublishedAt }
+				: {}),
+			...(snapshot.fileCorrectionApprovals.some(
+				(approval) =>
+					approval.consumedAt !== null ||
+					approval.supersededAt !== null,
+			)
+				? {
+						consumedFileCorrectionApprovalIds:
+							snapshot.fileCorrectionApprovals
+								.filter(
+									(approval) =>
+										approval.consumedAt !== null ||
+										approval.supersededAt !== null,
+								)
+								.map((approval) => String(approval.id)),
+					}
+				: {}),
 			...(row?.lastPayloadHash && row.lastPayloadSnapshot
 				? {
 						lastSuccess: {
@@ -131,7 +167,10 @@ export function providerState(
 								? { fileManifestHash: row.lastFileManifestHash }
 								: {}),
 							...(row.lastFileManifestSnapshot
-								? { fileManifestSnapshot: row.lastFileManifestSnapshot }
+								? {
+										fileManifestSnapshot:
+											row.lastFileManifestSnapshot,
+									}
 								: {}),
 						},
 					}
@@ -163,12 +202,22 @@ export function providerState(
 							operationType: journal.operationType,
 							depositionId: journal.depositionId,
 							draftRecordId: journal.draftRecordId,
-							...(journal.parentId ? { parentId: journal.parentId } : {}),
+							...(journal.parentId
+								? { parentId: journal.parentId }
+								: {}),
 							payloadHash: journal.payloadHash,
 							...(journal.fileManifestHash
 								? { fileManifestHash: journal.fileManifestHash }
 								: {}),
 							status: journal.status,
+							...(journalApproval
+								? {
+										fileCorrectionApproval:
+											fileCorrectionApprovalFromRow(
+												journalApproval,
+											),
+									}
+								: {}),
 						},
 					}
 				: {}),

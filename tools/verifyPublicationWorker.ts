@@ -3,7 +3,11 @@ import { createHash } from "node:crypto";
 import type {
 	CrossrefDepositor,
 	ZenodoPreparedDraft,
-	ZenodoWriter,
+} from "@opendeved/doi-sync-core";
+import {
+	buildPublicationFileManifestHash,
+	buildZenodoWritePayload,
+	jsonValueSchema,
 } from "@opendeved/doi-sync-core";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -22,6 +26,10 @@ import {
 import { getAdminPublicationWorkerOverview } from "../src/lib/admin/publication-worker-service";
 import { activateCrossrefPublication } from "../src/lib/publication/crossref-activation-service";
 import {
+	runZenodoPublicationJobsOnce,
+	type ZenodoPublicationProvider,
+} from "../src/lib/publication/zenodo-adapter";
+import {
 	publicationNightlyRunIsDue,
 	runPublicationWorkerCycle,
 } from "../src/lib/publication/worker";
@@ -35,6 +43,10 @@ import {
 	updatePublicationWorker,
 } from "../src/lib/publication/worker-state";
 import { activateZenodoPublication } from "../src/lib/publication/zenodo-activation-service";
+import { enqueuePublicationJobsForItem } from "../src/lib/publication/queue";
+import { buildPublicationFileManifest } from "../src/lib/publication/record-adapter";
+import { readPublicationRepositorySnapshot } from "../src/lib/publication/repository";
+import { providerState } from "../src/lib/publication/state-adapter";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
@@ -107,18 +119,19 @@ async function seedRecord(client: Client) {
 		`INSERT INTO "itemFilePublication" (
 			"itemKey", "sourceConnectionKey", "parentItemKey", "uploadRevision", "revision",
 			"sourceObjectPath", "sourceCoverObjectPath", "objectPath", "publicUrl", "filename",
-			"contentType", "sizeBytes", "sha256", "coverObjectPath", "coverPublicUrl",
+			"contentType", "sizeBytes", "sha256", "md5", "coverObjectPath", "coverPublicUrl",
 			"coverWidth", "coverHeight", "pageCount", "publicationTags", "publishedAt"
 		) VALUES (
 			'PUBFILAA', 'native', 'PUBWRKAA', 1, 1,
 			'private/PUBFILAA.pdf', 'private/PUBFILAA.png', 'public/PUBFILAA.pdf',
 			'https://files.example.org/PUBFILAA.pdf', 'PUBFILAA.pdf', 'application/pdf',
-			$1, $2, 'public/PUBFILAA.png', 'https://files.example.org/PUBFILAA.png',
+			$1, $2, $3, 'public/PUBFILAA.png', 'https://files.example.org/PUBFILAA.png',
 			100, 140, 1, '[]'::jsonb, now()
 		)`,
 		[
 			fileBytes.byteLength,
 			createHash("sha256").update(fileBytes).digest("hex"),
+			createHash("md5").update(fileBytes).digest("hex"),
 		],
 	);
 	return fileBytes;
@@ -160,41 +173,244 @@ function successfulCrossrefProvider(gate?: {
 	};
 }
 
-function successfulZenodoProvider(): ZenodoWriter {
+function successfulZenodoProvider(
+	publishedAt = new Date("2030-08-13T12:00:00.000Z"),
+): ZenodoPublicationProvider {
 	const prepared = async (
-		onPreparedDraft:
-			| ((draft: ZenodoPreparedDraft) => Promise<void>)
-			| undefined,
+		request: {
+			doiPolicy: Parameters<typeof buildZenodoWritePayload>[0]["doiPolicy"];
+			metadata: Parameters<typeof buildZenodoWritePayload>[0]["metadata"];
+			resourceUrl: string;
+			onPreparedDraft?: (draft: ZenodoPreparedDraft) => Promise<void>;
+		},
 	) => {
 		const draft = {
 			depositionId: "7001",
 			draftRecordId: "7001",
 			parentId: "7000",
-			payloadSnapshot: { title: "Publication worker record" },
+			payloadSnapshot: jsonValueSchema.parse(
+				buildZenodoWritePayload({
+					doiPolicy: request.doiPolicy,
+					metadata: request.metadata,
+					resourceUrl: request.resourceUrl,
+				}),
+			),
 		};
-		await onPreparedDraft?.(draft);
+		await request.onPreparedDraft?.(draft);
 		return draft;
 	};
 	return {
+		verifyPublishedState: async () => ({ status: "matched" }),
 		findRecordByDoi: async () => ({ status: "not_found" }),
 		deleteUnpublishedDraft: async () => undefined,
 		discardPreparedDraft: async () => undefined,
-		prepareCreateRecord: async (request) =>
-			prepared(request.onPreparedDraft),
-		prepareUpdateRecordMetadata: async (request) =>
-			prepared(request.onPreparedDraft),
-		prepareUpdateRecordFiles: async (request) =>
-			prepared(request.onPreparedDraft),
-		prepareNewVersion: async (request) =>
-			prepared(request.onPreparedDraft),
+		prepareCreateRecord: prepared,
+		prepareUpdateRecordMetadata: prepared,
+		prepareUpdateRecordFiles: prepared,
+		prepareNewVersion: prepared,
 		publishDraft: async ({ draft }) => ({
 			latestRecordId: draft.draftRecordId,
 			parentId: draft.parentId ?? draft.draftRecordId,
+			publishedAt,
 			versionDoi: `10.5072/zenodo.${draft.draftRecordId}`,
 			conceptDoi: `10.5072/zenodo.${draft.parentId ?? draft.draftRecordId}`,
 			links: {},
 		}),
 	};
+}
+
+async function verifyCrossrefBackedPdfCorrection(
+	database: Database,
+	client: Client,
+) {
+	const correctionBytes = new TextEncoder().encode(
+		"worker pdf fixture with a minor correction",
+	);
+	const approvedAt = new Date("2030-08-20T12:00:00.000Z");
+	await client.query(
+		`UPDATE "itemFilePublication"
+		 SET "uploadRevision" = 2,
+			 "revision" = 2,
+			 "sizeBytes" = $1,
+			 "sha256" = $2,
+			 "md5" = $3,
+			 "publishedAt" = $4,
+			 "updatedAt" = $4
+		 WHERE "itemKey" = 'PUBFILAA'`,
+		[
+			correctionBytes.byteLength,
+			createHash("sha256").update(correctionBytes).digest("hex"),
+			createHash("md5").update(correctionBytes).digest("hex"),
+			approvedAt,
+		],
+	);
+	await client.query(
+		`UPDATE "item" SET "revision" = 2, "updatedAt" = $1 WHERE "key" = 'PUBWRKAA'`,
+		[approvedAt],
+	);
+	const snapshot = await readPublicationRepositorySnapshot(
+		database,
+		"PUBWRKAA",
+		"test",
+	);
+	const fileManifestHash = buildPublicationFileManifestHash(
+		buildPublicationFileManifest(snapshot.files),
+	);
+	const [identifier] = await client.query<{ doi: string }>(
+		`SELECT "doi" FROM "publicationIdentifier"
+		 WHERE "itemKey" = 'PUBWRKAA'
+			 AND "registrar" = 'crossref'
+			 AND "role" = 'primary'
+			 AND "isCurrent" = true`,
+	).then((result) => result.rows);
+	assert(identifier, "The PDF correction had no active Crossref DOI");
+	await client.query(
+		`INSERT INTO "zenodoFileCorrectionApproval"
+			("itemKey", "doi", "fileManifestHash", "approvedAt")
+		 VALUES ('PUBWRKAA', $1, $2, $3)`,
+		[identifier.doi, fileManifestHash, approvedAt],
+	);
+	await database.transaction((transaction) =>
+		enqueuePublicationJobsForItem(transaction, {
+			itemKey: "PUBWRKAA",
+			canonicalRevision: 2,
+			reason: "file_changed",
+			now: approvedAt,
+			providers: ["zenodo"],
+		}),
+	);
+	const outcomes = await runZenodoPublicationJobsOnce(
+		database,
+		config,
+		memoryStorage(correctionBytes),
+		{
+			workerId: "publication-file-correction",
+			now: () => approvedAt,
+			provider: successfulZenodoProvider(
+				new Date("2030-08-20T12:00:00.000Z"),
+			),
+		},
+	);
+	const [jobState] = await client.query<{
+		lastError: string | null;
+	}>(`SELECT "lastError" FROM "publicationSyncJob" WHERE "id" = $1`, [
+		outcomes[0]?.jobId,
+	]).then((result) => result.rows);
+	assert(
+		outcomes.length === 1 && outcomes[0]?.status === "succeeded",
+		`The approved PDF correction did not finish: ${JSON.stringify(outcomes)} ${jobState?.lastError ?? ""}`,
+	);
+	const result = await client.query<{
+		consumedAt: Date | null;
+		fileCorrectionApprovalId: string | null;
+		versionDoi: string | null;
+		firstPublishedAt: Date | null;
+	}>(`SELECT
+		(SELECT "consumedAt" FROM "zenodoFileCorrectionApproval" WHERE "itemKey" = 'PUBWRKAA') AS "consumedAt",
+		(SELECT "fileCorrectionApprovalId"::text FROM "zenodoPublishJournal" WHERE "itemKey" = 'PUBWRKAA' ORDER BY "updatedAt" DESC LIMIT 1) AS "fileCorrectionApprovalId",
+		(SELECT "zenodoVersionDoi" FROM "publicationSyncState" WHERE "itemKey" = 'PUBWRKAA' AND "provider" = 'zenodo') AS "versionDoi",
+		(SELECT "zenodoFirstPublishedAt" FROM "publicationSyncState" WHERE "itemKey" = 'PUBWRKAA' AND "provider" = 'zenodo') AS "firstPublishedAt"`);
+	const saved = result.rows[0];
+	assert(
+		saved?.consumedAt?.toISOString() === approvedAt.toISOString() &&
+			saved.fileCorrectionApprovalId !== null &&
+			saved.versionDoi === "10.5072/zenodo.7001" &&
+			saved.firstPublishedAt?.toISOString() ===
+				"2030-08-13T12:00:00.000Z",
+		"The worker did not consume the exact approval and preserve the original Zenodo version",
+	);
+	const savedApprovalId = saved.fileCorrectionApprovalId;
+	const durableState = providerState(
+		await readPublicationRepositorySnapshot(database, "PUBWRKAA", "test"),
+		"zenodo",
+		config.services.publication,
+	);
+	assert(
+		durableState?.zenodo?.consumedFileCorrectionApprovalIds?.includes(
+			savedApprovalId,
+		) === true,
+		"The consumed Zenodo PDF correction approval was not restored into worker state",
+	);
+}
+
+async function verifyMismatchedPdfCorrectionApprovalIsBlocked(
+	database: Database,
+	client: Client,
+) {
+	const changedAt = new Date("2030-08-21T12:00:00.000Z");
+	const mismatchedBytes = new TextEncoder().encode(
+		"worker pdf fixture with a stale approval",
+	);
+	await client.query(
+		`UPDATE "itemFilePublication"
+		 SET "uploadRevision" = 3,
+			 "revision" = 3,
+			 "sizeBytes" = $1,
+			 "sha256" = $2,
+			 "md5" = $3,
+			 "publishedAt" = $4,
+			 "updatedAt" = $4
+		 WHERE "itemKey" = 'PUBFILAA'`,
+		[
+			mismatchedBytes.byteLength,
+			createHash("sha256").update(mismatchedBytes).digest("hex"),
+			createHash("md5").update(mismatchedBytes).digest("hex"),
+			changedAt,
+		],
+	);
+	await client.query(
+		`UPDATE "item" SET "revision" = 3, "updatedAt" = $1 WHERE "key" = 'PUBWRKAA'`,
+		[changedAt],
+	);
+	await client.query(
+		`INSERT INTO "zenodoFileCorrectionApproval"
+			("itemKey", "doi", "fileManifestHash", "approvedAt")
+		 VALUES ('PUBWRKAA', '10.5555/library.000001', repeat('a', 64), $1)`,
+		[changedAt],
+	);
+	await database.transaction((transaction) =>
+		enqueuePublicationJobsForItem(transaction, {
+			itemKey: "PUBWRKAA",
+			canonicalRevision: 3,
+			reason: "file_changed",
+			now: changedAt,
+			providers: ["zenodo"],
+		}),
+	);
+	let providerCalls = 0;
+	const provider = successfulZenodoProvider();
+	const outcomes = await runZenodoPublicationJobsOnce(
+		database,
+		config,
+		memoryStorage(mismatchedBytes),
+		{
+			workerId: "publication-unapproved-correction",
+			now: () => changedAt,
+			provider: {
+				...provider,
+				prepareUpdateRecordFiles: async (...args) => {
+					providerCalls += 1;
+					return provider.prepareUpdateRecordFiles(...args);
+				},
+			},
+		},
+	);
+	const [job] = await client.query<{
+		deadLetteredAt: Date | null;
+		lastError: string | null;
+	}>(`SELECT "deadLetteredAt", "lastError"
+		FROM "publicationSyncJob"
+		WHERE "itemKey" = 'PUBWRKAA' AND "canonicalRevision" = 3 AND "provider" = 'zenodo'`,
+	).then((result) => result.rows);
+	assert(
+		outcomes.length === 1 &&
+			outcomes[0]?.status === "failed" &&
+			providerCalls === 0 &&
+			job?.deadLetteredAt?.toISOString() === changedAt.toISOString() &&
+			job.lastError?.includes("ZENODO_FILE_CORRECTION_APPROVAL_REQUIRED") ===
+				true,
+		`A Crossref-backed PDF correction with the wrong approval hash was not stopped immediately: ${JSON.stringify({ outcomes, providerCalls, job })}`,
+	);
 }
 
 async function verifyWorkerLease(database: Database) {
@@ -446,16 +662,20 @@ async function verifyWorkerCycle(database: Database, client: Client) {
 		verifiedIdentifiers: string;
 		crossrefState: string;
 		zenodoState: string;
+		zenodoFirstPublishedAt: Date | null;
 	}>(`SELECT
 		(SELECT count(*) FROM "publicationSyncJob" WHERE "itemKey" = 'PUBWRKAA' AND "processedAt" IS NOT NULL)::text AS "processedJobs",
 		(SELECT count(*) FROM "publicationIdentifier" WHERE "itemKey" = 'PUBWRKAA' AND "lifecycle" = 'verified')::text AS "verifiedIdentifiers",
 		(SELECT count(*) FROM "publicationSyncState" WHERE "itemKey" = 'PUBWRKAA' AND "provider" = 'crossref' AND "lastPayloadHash" IS NOT NULL)::text AS "crossrefState",
-		(SELECT count(*) FROM "publicationSyncState" WHERE "itemKey" = 'PUBWRKAA' AND "provider" = 'zenodo' AND "lastPayloadHash" IS NOT NULL)::text AS "zenodoState"`);
+		(SELECT count(*) FROM "publicationSyncState" WHERE "itemKey" = 'PUBWRKAA' AND "provider" = 'zenodo' AND "lastPayloadHash" IS NOT NULL)::text AS "zenodoState",
+		(SELECT "zenodoFirstPublishedAt" FROM "publicationSyncState" WHERE "itemKey" = 'PUBWRKAA' AND "provider" = 'zenodo') AS "zenodoFirstPublishedAt"`);
 	assert(
 		rows.rows[0]?.processedJobs === "2" &&
 			rows.rows[0]?.verifiedIdentifiers === "3" &&
 			rows.rows[0]?.crossrefState === "1" &&
-			rows.rows[0]?.zenodoState === "1",
+			rows.rows[0]?.zenodoState === "1" &&
+			rows.rows[0]?.zenodoFirstPublishedAt?.toISOString() ===
+				"2030-08-13T12:00:00.000Z",
 		"The worker did not save both provider results",
 	);
 	const completedAt = new Date(now.getTime() + 1_000);
@@ -503,8 +723,9 @@ async function verifyWorkerCycle(database: Database, client: Client) {
 			!completedOverview.queue.hasFailed,
 		"The admin status did not report the completed worker state",
 	);
+	await verifyCrossrefBackedPdfCorrection(database, client);
 
-	const nightlyAt = new Date("2030-08-13T23:59:01.000Z");
+	const nightlyAt = new Date("2030-08-20T23:59:01.000Z");
 	assert(
 		await publicationNightlyRunIsDue(database, config, nightlyAt),
 		"The nightly run was not due after its UTC boundary",
@@ -521,13 +742,17 @@ async function verifyWorkerCycle(database: Database, client: Client) {
 		},
 	);
 	assert(
-		nightly.nightly === "succeeded" && nightly.outcomes.length === 0,
-		"A converged nightly run created provider work",
+		nightly.nightly === "succeeded" &&
+			nightly.outcomes
+				.map(({ provider, status }) => `${provider}:${status}`)
+				.join(",") === "crossref:audited,zenodo:audited",
+		`A converged nightly run did not audit both providers: ${JSON.stringify(nightly)}`,
 	);
 	assert(
 		!(await publicationNightlyRunIsDue(database, config, nightlyAt)),
 		"The nightly run stayed due after it completed",
 	);
+	await verifyMismatchedPdfCorrectionApprovalIsBlocked(database, client);
 }
 
 async function verifyIsolatedDatabase() {
@@ -553,10 +778,6 @@ async function verifyIsolatedDatabase() {
 	} finally {
 		await client?.end();
 		await pool?.end();
-		await admin.query(
-			`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
-			[databaseName],
-		);
 		await admin.query(`DROP DATABASE IF EXISTS "${databaseName}"`);
 		await admin.end();
 	}

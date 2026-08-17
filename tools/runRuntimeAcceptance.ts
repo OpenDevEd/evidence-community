@@ -1,12 +1,8 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import {
-	mkdirSync,
-	readFileSync,
-	rmSync,
-	writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { stat, writeFile } from "node:fs/promises";
+import { createServer } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -28,21 +24,19 @@ import {
 	parseHexColor,
 } from "../src/config/library-config/theme";
 import { getOrderedRuntimeLocales } from "../src/i18n/runtime";
-import {
-	localesNames,
-	shortLocalesNames,
-} from "../src/i18n/routing";
+import { localesNames, shortLocalesNames } from "../src/i18n/routing";
 import { replaceFileAtomically } from "../src/lib/atomic-file";
+import {
+	createAdminTestSession,
+	type AdminTestSession,
+	withAdminTestSession,
+} from "./adminSession";
 
 const rootDirectory = path.resolve(
 	path.dirname(fileURLToPath(import.meta.url)),
 	"..",
 );
-const acceptanceDirectory = path.join(
-	rootDirectory,
-	"tests",
-	"acceptance",
-);
+const acceptanceDirectory = path.join(rootDirectory, "tests", "acceptance");
 const composeFile = path.join(acceptanceDirectory, "compose.yaml");
 const configDirectory = path.join(acceptanceDirectory, "configs");
 const composeProject =
@@ -64,37 +58,99 @@ const image =
 const searchIndexerImage =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE ??
 	"evidence-library-acceptance-search-indexer:local";
-const amberMeilisearchPort =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_MEILI_PORT ?? "7712";
-const indigoMeilisearchPort =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_MEILI_PORT ?? "7713";
-const fixturePort =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT ?? "4443";
-const mailpitPort =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT ?? "38025";
-const amberPort =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT ?? "3142";
-const indigoPort =
-	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_PORT ?? "3143";
+const publicationWorkerImage =
+	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE ??
+	"evidence-library-acceptance-publication-worker:local";
+const acceptanceAdminPassword = "correct horse battery staple";
+
+async function availablePort(environmentValue: string | undefined) {
+	if (environmentValue) return environmentValue;
+	return new Promise<string>((resolve, reject) => {
+		const server = createServer();
+		server.once("error", reject);
+		server.listen(0, "127.0.0.1", () => {
+			const address = server.address();
+			if (!address || typeof address === "string") {
+				server.close();
+				reject(new Error("Could not allocate a local test port"));
+				return;
+			}
+			server.close((error) => {
+				if (error) reject(error);
+				else resolve(String(address.port));
+			});
+		});
+	});
+}
+
+let meilisearchPort = "";
+let amberMeilisearchPort = "";
+let indigoMeilisearchPort = "";
+let fixturePort = "";
+let appHttpsPort = "";
+let mailpitPort = "";
+let publicationFakePort = "";
+let amberPort = "";
+let indigoPort = "";
+let postgresPort = "";
 const keepRunning = process.argv.includes("--keep");
 const skipBuild = process.argv.includes("--skip-build");
+const e2eOnly = process.argv.includes("--e2e");
 
-const commandEnvironment = {
+const commandEnvironment: NodeJS.ProcessEnv = {
 	...process.env,
 	EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE: image,
+	EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE:
+		publicationWorkerImage,
 	EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE: searchIndexerImage,
-	EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_MEILI_PORT: amberMeilisearchPort,
-	EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_MEILI_PORT: indigoMeilisearchPort,
-	EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT: fixturePort,
-	EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT: mailpitPort,
 	EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID: String(process.pid),
 	EVIDENCE_LIBRARY_ACCEPTANCE_PERSISTENT: String(keepRunning),
 	EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR: runtimeDirectory,
 };
-const ownerLabel =
-	"org.opendeved.evidence-library.acceptance.owner-pid";
-const persistentLabel =
-	"org.opendeved.evidence-library.acceptance.persistent";
+const ownerLabel = "org.opendeved.evidence-library.acceptance.owner-pid";
+const persistentLabel = "org.opendeved.evidence-library.acceptance.persistent";
+
+async function initializeAcceptancePorts() {
+	[
+		meilisearchPort,
+		amberMeilisearchPort,
+		indigoMeilisearchPort,
+		fixturePort,
+		appHttpsPort,
+		mailpitPort,
+		publicationFakePort,
+		amberPort,
+		indigoPort,
+		postgresPort,
+	] = await Promise.all([
+		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_MEILI_PORT),
+		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_MEILI_PORT),
+		availablePort(
+			process.env.EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_MEILI_PORT,
+		),
+		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT),
+		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_APP_HTTPS_PORT),
+		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT),
+		availablePort(
+			process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_FAKE_PORT,
+		),
+		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT),
+		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_PORT),
+		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_POSTGRES_PORT),
+	]);
+	Object.assign(commandEnvironment, {
+		EVIDENCE_LIBRARY_ACCEPTANCE_FIXTURE_PORT: fixturePort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_APP_HTTPS_PORT: appHttpsPort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_MEILI_PORT: meilisearchPort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_MEILI_PORT: amberMeilisearchPort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_MEILI_PORT: indigoMeilisearchPort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_FAKE_PORT: publicationFakePort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT: mailpitPort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT: amberPort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_PORT: indigoPort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_POSTGRES_PORT: postgresPort,
+	});
+}
 
 type Profile = {
 	config: LibraryServerConfig;
@@ -120,7 +176,11 @@ type RuntimeConfigHealth = {
 	} | null;
 };
 
-function run(command: string, args: string[], environment = commandEnvironment) {
+function run(
+	command: string,
+	args: string[],
+	environment = commandEnvironment,
+) {
 	const result = spawnSync(command, args, {
 		cwd: rootDirectory,
 		env: environment,
@@ -156,18 +216,10 @@ function composeForProject(
 ) {
 	run(
 		"docker",
-		[
-			"compose",
-			"--file",
-			composeFile,
-			"--project-name",
-			project,
-			...args,
-		],
+		["compose", "--file", composeFile, "--project-name", project, ...args],
 		{
 			...commandEnvironment,
-			EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR:
-				projectRuntimeDirectory,
+			EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR: projectRuntimeDirectory,
 		},
 	);
 }
@@ -222,8 +274,7 @@ function reapAbandonedProjects() {
 	for (const [project, state] of projects) {
 		if (
 			state.persistent ||
-			(Number.isInteger(state.ownerPid) &&
-				processIsAlive(state.ownerPid))
+			(Number.isInteger(state.ownerPid) && processIsAlive(state.ownerPid))
 		) {
 			if (project === composeProject) {
 				throw new Error(
@@ -261,17 +312,22 @@ function loadProfile(
 	const configPath = path.join(configDirectory, `${name}.json`);
 	const input = JSON.parse(readFileSync(configPath, "utf8")) as {
 		analytics?: { posthog?: { host?: string } };
+		authentication?: Record<string, unknown>;
 	};
 	if (input.analytics?.posthog?.host) {
-		const collectorUrl = new URL(
-			input.analytics.posthog.host,
-		);
+		const collectorUrl = new URL(input.analytics.posthog.host);
 		collectorUrl.port = fixturePort;
 		input.analytics.posthog.host = collectorUrl.origin;
 	}
-	const config = libraryConfigSchema.parse(
-		input,
-	);
+	const passwordCandidate = structuredClone(input);
+	passwordCandidate.authentication = {
+		...passwordCandidate.authentication,
+		adminPassword: acceptanceAdminPassword,
+	};
+	const passwordResult = libraryConfigSchema.safeParse(passwordCandidate);
+	const config = passwordResult.success
+		? passwordResult.data
+		: libraryConfigSchema.parse(input);
 	return { config, meilisearchPort, name, port };
 }
 
@@ -639,8 +695,8 @@ function publicExpectations(profile: Profile) {
 	const defaultScope =
 		scopes.find((scope) => scope.key === config.search.defaultScope) ??
 		PLATFORM_SEARCH_SCOPE_OPTIONS[0];
-	const externalNavigation = config.navigation.links.find(
-		(link) => link.href.startsWith("https://"),
+	const externalNavigation = config.navigation.links.find((link) =>
+		link.href.startsWith("https://"),
 	);
 	const logoStyleToken = config.identity.assets.logoStyles
 		?.split(";")
@@ -649,10 +705,7 @@ function publicExpectations(profile: Profile) {
 		.at(-1);
 	const googleFonts = Array.from(
 		new Set(
-			[
-				config.theme.fonts.heading,
-				config.theme.fonts.body,
-			]
+			[config.theme.fonts.heading, config.theme.fonts.body]
 				.filter((font) => font.source === "google")
 				.map((font) => font.family),
 		),
@@ -663,16 +716,10 @@ function publicExpectations(profile: Profile) {
 		(config.theme.defaultMode === "system"
 			? "light"
 			: config.theme.defaultMode);
-	const searchItemPrefix =
-		profile.name === "amber" ? "Amber" : "Indigo";
-	const databaseItemKey =
-		profile.name === "amber" ? "AMBR2345" : "INDG2345";
-	const enabledGapMap = config.gapMaps.find(
-		(gapMap) => gapMap.enabled,
-	);
-	const disabledGapMap = config.gapMaps.find(
-		(gapMap) => !gapMap.enabled,
-	);
+	const searchItemPrefix = profile.name === "amber" ? "Amber" : "Indigo";
+	const databaseItemKey = profile.name === "amber" ? "AMBR2345" : "INDG2345";
+	const enabledGapMap = config.gapMaps.find((gapMap) => gapMap.enabled);
+	const disabledGapMap = config.gapMaps.find((gapMap) => !gapMap.enabled);
 
 	return {
 		PLAYWRIGHT_BASE_URL: `http://127.0.0.1:${profile.port}`,
@@ -680,8 +727,8 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_CONFIG_REVISION: config.revision,
 		PLAYWRIGHT_EXPECTED_CONFIG_UPDATED_AT: config.updatedAt,
 		PLAYWRIGHT_EXPECTED_IDENTITY_NAME: config.identity.name,
-		PLAYWRIGHT_EXPECTED_IDENTITY_SHORT_NAME:
-			config.identity.shortName,
+		PLAYWRIGHT_EXPECTED_IDENTITY_SHORT_NAME: config.identity.shortName,
+		PLAYWRIGHT_EXPECTED_PUBLIC_BASE_URL: config.identity.baseUrl,
 		PLAYWRIGHT_EXPECTED_LOGO_URL:
 			activeTheme === "dark"
 				? config.identity.assets.logoDark
@@ -690,24 +737,18 @@ function publicExpectations(profile: Profile) {
 			config.identity.assets.logoDark,
 			config.identity.assets.logoLight,
 		].join("|"),
-		PLAYWRIGHT_EXPECTED_FAVICON_URL:
-			config.identity.assets.favicon,
+		PLAYWRIGHT_EXPECTED_FAVICON_URL: config.identity.assets.favicon,
 		PLAYWRIGHT_EXPECTED_LOGO_STYLE_TOKEN: logoStyleToken ?? "",
 		PLAYWRIGHT_EXPECTED_ACCENT_RGB: formatRgbChannels(
 			parseHexColor(config.theme.colors.accent),
 		),
-		PLAYWRIGHT_EXPECTED_GOOGLE_FONT_FAMILIES:
-			googleFonts.join("|"),
+		PLAYWRIGHT_EXPECTED_GOOGLE_FONT_FAMILIES: googleFonts.join("|"),
 		PLAYWRIGHT_EXPECTED_LOADED_LOGO: "true",
 		PLAYWRIGHT_EXPECTED_THEME_CLASS: activeTheme,
-		PLAYWRIGHT_EXPECTED_SEARCH_ITEM_KEY:
-			`${searchItemPrefix.toUpperCase()}_SEARCH_FIXTURE`,
-		PLAYWRIGHT_EXPECTED_SEARCH_ITEM_TITLE:
-			`${searchItemPrefix} runtime evidence`,
-		PLAYWRIGHT_EXPECTED_DATABASE_ITEM_KEY:
-			databaseItemKey,
-		PLAYWRIGHT_EXPECTED_DATABASE_ITEM_TITLE:
-			`${searchItemPrefix} database evidence`,
+		PLAYWRIGHT_EXPECTED_SEARCH_ITEM_KEY: `${searchItemPrefix.toUpperCase()}_SEARCH_FIXTURE`,
+		PLAYWRIGHT_EXPECTED_SEARCH_ITEM_TITLE: `${searchItemPrefix} runtime evidence`,
+		PLAYWRIGHT_EXPECTED_DATABASE_ITEM_KEY: databaseItemKey,
+		PLAYWRIGHT_EXPECTED_DATABASE_ITEM_TITLE: `${searchItemPrefix} database evidence`,
 		PLAYWRIGHT_EXPECTED_NAVIGATION_LABEL:
 			config.navigation.links[0]?.label ?? "",
 		PLAYWRIGHT_EXPECTED_EXTERNAL_NAVIGATION_LABEL:
@@ -718,21 +759,16 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_CONTACT_PHONE: config.contact.phone ?? "",
 		PLAYWRIGHT_EXPECTED_CONTACT_ADDRESS:
 			config.contact.address?.split("\n")[0] ?? "",
-		PLAYWRIGHT_EXPECTED_FUNDER_NAME:
-			config.footer.funders[0]?.name ?? "",
-		PLAYWRIGHT_EXPECTED_DISCLAIMER:
-			config.footer.disclaimer ?? "",
-		PLAYWRIGHT_EXPECTED_ATTRIBUTION:
-			config.footer.attribution ?? "",
-		PLAYWRIGHT_EXPECTED_DEFAULT_LOCALE:
-			config.localization.defaultLocale,
+		PLAYWRIGHT_EXPECTED_FUNDER_NAME: config.footer.funders[0]?.name ?? "",
+		PLAYWRIGHT_EXPECTED_DISCLAIMER: config.footer.disclaimer ?? "",
+		PLAYWRIGHT_EXPECTED_ATTRIBUTION: config.footer.attribution ?? "",
+		PLAYWRIGHT_EXPECTED_DEFAULT_LOCALE: config.localization.defaultLocale,
 		PLAYWRIGHT_EXPECTED_ENABLED_LOCALES:
 			config.localization.locales.join(","),
 		PLAYWRIGHT_EXPECTED_DISABLED_LOCALE: disabledLocale,
-		PLAYWRIGHT_EXPECTED_DETECTED_LOCALE:
-			config.localization.detectLocale
-				? (switchLocale ?? "")
-				: "",
+		PLAYWRIGHT_EXPECTED_DETECTED_LOCALE: config.localization.detectLocale
+			? (switchLocale ?? "")
+			: "",
 		PLAYWRIGHT_EXPECTED_LANGUAGE_SWITCHER: String(
 			config.features.languageSwitcher,
 		),
@@ -745,74 +781,50 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_SWITCH_LOCALE_LABEL: switchLocale
 			? localesNames[switchLocale]
 			: "",
-		PLAYWRIGHT_EXPECTED_SWITCH_BACK_LOCALE_LABEL:
-			switchLocale
-				? localesNames[config.localization.defaultLocale]
-				: "",
-		PLAYWRIGHT_EXPECTED_CONSENT_DECLINE:
-			messages.ui.cookieDecline,
+		PLAYWRIGHT_EXPECTED_SWITCH_BACK_LOCALE_LABEL: switchLocale
+			? localesNames[config.localization.defaultLocale]
+			: "",
+		PLAYWRIGHT_EXPECTED_CONSENT_DECLINE: messages.ui.cookieDecline,
 		PLAYWRIGHT_EXPECTED_SEARCH_SCOPE_COUNT: String(scopes.length),
 		PLAYWRIGHT_EXPECTED_DEFAULT_SEARCH_SCOPE_LABEL:
 			messages.scopes[defaultScope.key] ?? defaultScope.name,
-		PLAYWRIGHT_EXPECTED_YEAR_FILTER: String(
-			config.filters.years.enabled,
-		),
+		PLAYWRIGHT_EXPECTED_YEAR_FILTER: String(config.filters.years.enabled),
 		PLAYWRIGHT_EXPECTED_INSTITUTION_FILTER_LABEL:
 			messages.ui[config.filters.institution.label] ??
 			config.filters.institution.label,
-		PLAYWRIGHT_EXPECTED_CITATION_URL: String(
-			config.citations.showUrl,
-		),
-		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(
-			config.search.embeddings,
-		),
-		PLAYWRIGHT_EXPECTED_COUNTRY_FACET: String(
-			config.search.country,
-		),
+		PLAYWRIGHT_EXPECTED_CITATION_URL: String(config.citations.showUrl),
+		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(config.search.embeddings),
+		PLAYWRIGHT_EXPECTED_COUNTRY_FACET: String(config.search.country),
 		PLAYWRIGHT_EXPECTED_AUTHOR_COUNTRY_FACET: String(
 			config.search.authorCountry,
 		),
 		PLAYWRIGHT_EXPECTED_INSTITUTION_FACET: String(
 			config.filters.institution.mode !== "hidden",
 		),
-		PLAYWRIGHT_EXPECTED_NAVBAR_SEARCH: String(
-			config.features.navbarSearch,
-		),
+		PLAYWRIGHT_EXPECTED_NAVBAR_SEARCH: String(config.features.navbarSearch),
 		PLAYWRIGHT_EXPECTED_THEME_SWITCHER: String(
 			config.features.themeSwitcher,
 		),
 		PLAYWRIGHT_EXPECTED_LOGIN: String(config.features.login),
 		PLAYWRIGHT_EXPECTED_AI: String(config.features.ai),
-		PLAYWRIGHT_EXPECTED_AI_SEARCH: String(
-			config.features.aiSearch,
-		),
-		PLAYWRIGHT_EXPECTED_DEEP_RESEARCH: String(
-			config.features.deepResearch,
-		),
-		PLAYWRIGHT_EXPECTED_GAP_MAP: String(
-			Boolean(enabledGapMap),
-		),
+		PLAYWRIGHT_EXPECTED_AI_SEARCH: String(config.features.aiSearch),
+		PLAYWRIGHT_EXPECTED_DEEP_RESEARCH: String(config.features.deepResearch),
+		PLAYWRIGHT_EXPECTED_GAP_MAP: String(Boolean(enabledGapMap)),
 		PLAYWRIGHT_EXPECTED_EXPORT_RIS: String(
-			config.features.downloads &&
-				Boolean(config.exports.ris),
+			config.features.downloads && Boolean(config.exports.ris),
 		),
 		PLAYWRIGHT_EXPECTED_EXPORT_BIBTEX: String(
-			config.features.downloads &&
-				Boolean(config.exports.bibtex),
+			config.features.downloads && Boolean(config.exports.bibtex),
 		),
 		PLAYWRIGHT_EXPECTED_EXPORT_ATOM: String(
-			config.features.atomFeed &&
-				Boolean(config.exports.atom),
+			config.features.atomFeed && Boolean(config.exports.atom),
 		),
 		PLAYWRIGHT_EXPECTED_ANALYTICS: String(
 			Boolean(
-				config.analytics.posthog.host &&
-					config.analytics.posthog.key,
+				config.analytics.posthog.host && config.analytics.posthog.key,
 			),
 		),
-		PLAYWRIGHT_EXPECTED_AUTHENTICATION: String(
-			config.features.login,
-		),
+		PLAYWRIGHT_EXPECTED_AUTHENTICATION: String(config.features.login),
 		PLAYWRIGHT_EXPECTED_EMAIL: String(
 			Boolean(config.email.contactRecipient),
 		),
@@ -823,13 +835,10 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_IGNORE_HTTPS_ERRORS: "true",
 		PLAYWRIGHT_GAP_MAP_SLUG: enabledGapMap?.slug ?? "",
 		PLAYWRIGHT_GAP_MAP_LABEL: enabledGapMap?.label ?? "",
-		PLAYWRIGHT_DISABLED_GAP_MAP_SLUG:
-			disabledGapMap?.slug ?? "",
-		PLAYWRIGHT_DISABLED_GAP_MAP_LABEL:
-			disabledGapMap?.label ?? "",
+		PLAYWRIGHT_DISABLED_GAP_MAP_SLUG: disabledGapMap?.slug ?? "",
+		PLAYWRIGHT_DISABLED_GAP_MAP_LABEL: disabledGapMap?.label ?? "",
 		PLAYWRIGHT_GAP_MAP_MARKER: "AMBER_GAP_MAP_FIXTURE",
-		PLAYWRIGHT_CONTACT_RECIPIENT:
-			config.email.contactRecipient ?? "",
+		PLAYWRIGHT_CONTACT_RECIPIENT: config.email.contactRecipient ?? "",
 		PLAYWRIGHT_EMAIL_SENDER: config.email.smtp.from ?? "",
 	};
 }
@@ -877,6 +886,184 @@ function runBrowserSuite(profile: Profile) {
 			...commandEnvironment,
 			...publicExpectations(profile),
 		},
+	);
+}
+
+function runAdminBrowserSuite(profile: Profile) {
+	console.log(`\nRunning ${profile.name} admin browser suite`);
+	run(
+		"npx",
+		[
+			"playwright",
+			"test",
+			"tests/e2e/admin.spec.ts",
+			"tests/e2e/admin-runtime.spec.ts",
+			"--workers",
+			"1",
+		],
+		{
+			...commandEnvironment,
+			...publicExpectations(profile),
+			PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
+			EVIDENCE_LIBRARY_ADMIN_PASSWORD: acceptanceAdminPassword,
+			PLAYWRIGHT_ADMIN_UI: "true",
+			PLAYWRIGHT_EXPECTED_ADMIN_ITEM_TITLE: "Amber database evidence",
+			PLAYWRIGHT_RUNTIME_E2E: "true",
+		},
+	);
+}
+
+function runEndToEndBrowserSuite(profile: Profile) {
+	console.log(`\nRunning the complete browser suite against ${profile.name}`);
+	run("npx", ["playwright", "test", "--workers", "1"], {
+		...commandEnvironment,
+		...publicExpectations(profile),
+		PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
+		EVIDENCE_LIBRARY_ADMIN_PASSWORD: acceptanceAdminPassword,
+		PLAYWRIGHT_ADMIN_UI: "true",
+		PLAYWRIGHT_EXPECTED_ADMIN_ITEM_TITLE: "Amber database evidence",
+		PLAYWRIGHT_RUNTIME_E2E: "true",
+	});
+}
+
+function runPublicationBrowserPhase(
+	profile: Profile,
+	phase: "reserve" | "crossref-settle" | "edit" | "edit-settle" | "zenodo",
+) {
+	console.log(`\nRunning ${profile.name} DOI admin ${phase} acceptance`);
+	run(
+		"npx",
+		[
+			"playwright",
+			"test",
+			"tests/e2e/admin-publication.spec.ts",
+			"--project",
+			"chromium",
+		],
+		{
+			...commandEnvironment,
+			EVIDENCE_LIBRARY_ADMIN_PASSWORD: acceptanceAdminPassword,
+			PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
+			PLAYWRIGHT_IGNORE_HTTPS_ERRORS: "true",
+			PLAYWRIGHT_PUBLICATION_EXPECTED_DOI: "10.5555/acceptance.000002",
+			PLAYWRIGHT_PUBLICATION_EDITED_TITLE:
+				"Amber DOI admin interface report — Edited",
+			PLAYWRIGHT_PUBLICATION_ITEM_KEY: "PUBUIA23",
+			PLAYWRIGHT_PUBLICATION_PHASE: phase,
+		},
+	);
+}
+
+async function readPublicationProviderState() {
+	const response = await fetch(
+		`http://127.0.0.1:${publicationFakePort}/_test/state`,
+	);
+	assert.equal(response.ok, true);
+	return (await response.json()) as {
+		crossrefDeposits: number;
+		crossref: { doi: string; title: string } | null;
+	};
+}
+
+async function makeCrossrefVerificationDue(itemKey: string) {
+	await waitForPublicationState(
+		() =>
+			postgresScalar(
+				"amber",
+				`SELECT count(*) FROM "publicationSyncState"
+				 WHERE "itemKey" = '${itemKey}' AND "provider" = 'crossref'
+					AND "pendingStage" = 'deposit'`,
+			) === "1",
+		`Crossref deposit for ${itemKey}`,
+	);
+	postgresScalar(
+		"amber",
+		`UPDATE "publicationSyncJob" SET "nextAttemptAt" = now()
+		 WHERE "itemKey" = '${itemKey}' AND "provider" = 'crossref'
+			AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL`,
+	);
+	await waitForPublicationState(
+		() =>
+			postgresScalar(
+				"amber",
+				`SELECT count(*) FROM "publicationSyncJob"
+				 WHERE "itemKey" = '${itemKey}' AND "provider" = 'crossref'
+					AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL
+					AND "supersededAt" IS NULL`,
+			) === "0",
+		`Crossref verification for ${itemKey}`,
+	);
+}
+
+async function verifyPublicationAdminInterface(profile: Profile) {
+	const providerBefore = await readPublicationProviderState();
+	compose("stop", "amber-publication-worker");
+	runPublicationBrowserPhase(profile, "reserve");
+	compose(
+		"up",
+		"--wait",
+		"--wait-timeout",
+		"180",
+		"amber-publication-worker",
+	);
+	await makeCrossrefVerificationDue("PUBUIA23");
+	runPublicationBrowserPhase(profile, "crossref-settle");
+	runPublicationBrowserPhase(profile, "edit");
+	await makeCrossrefVerificationDue("PUBUIA23");
+	runPublicationBrowserPhase(profile, "edit-settle");
+	runPublicationBrowserPhase(profile, "zenodo");
+
+	const databaseState = JSON.parse(
+		postgresScalar(
+			"amber",
+			`SELECT json_build_object(
+				'title', (SELECT "title" FROM "item" WHERE "key" = 'PUBUIA23'),
+				'doiCount', (
+					SELECT count(*) FROM "publicationIdentifier"
+					WHERE "itemKey" = 'PUBUIA23' AND "registrar" = 'crossref'
+						AND "isCurrent" = true
+				),
+				'activationJobs', (
+					SELECT count(*) FROM "publicationSyncJob"
+					WHERE "itemKey" = 'PUBUIA23' AND "provider" = 'crossref'
+						AND "reason" = 'manual_activation' AND "processedAt" IS NOT NULL
+				),
+				'editJobs', (
+					SELECT count(*) FROM "publicationSyncJob"
+					WHERE "itemKey" = 'PUBUIA23' AND "provider" = 'crossref'
+						AND "reason" = 'record_changed' AND "processedAt" IS NOT NULL
+				),
+				'failedJobs', (
+					SELECT count(*) FROM "publicationSyncJob"
+					WHERE "itemKey" = 'PUBUIA23' AND "deadLetteredAt" IS NOT NULL
+				)
+			)`,
+		),
+	) as {
+		title: string;
+		doiCount: number;
+		activationJobs: number;
+		editJobs: number;
+		failedJobs: number;
+	};
+	assert.deepEqual(databaseState, {
+		title: "Amber DOI admin interface report — Edited",
+		doiCount: 1,
+		activationJobs: 1,
+		editJobs: 1,
+		failedJobs: 0,
+	});
+	const providerAfter = await readPublicationProviderState();
+	assert.equal(
+		providerAfter.crossrefDeposits,
+		providerBefore.crossrefDeposits + 2,
+	);
+	assert.deepEqual(providerAfter.crossref, {
+		doi: "10.5555/acceptance.000002",
+		title: "Amber DOI admin interface report — Edited",
+	});
+	console.log(
+		"The admin interface reserved a DOI, redeposited an edit under the same DOI, published to Zenodo Sandbox, and retained both states after reload.",
 	);
 }
 
@@ -947,6 +1134,162 @@ function cleanupAcceptanceUsers() {
 	);
 }
 
+async function adminPublicationRequest<T>(
+	profile: Profile,
+	session: AdminTestSession,
+	pathname: string,
+	init?: RequestInit,
+) {
+	const response = await fetch(
+		`http://127.0.0.1:${profile.port}${pathname}`,
+		{
+			...init,
+			headers: withAdminTestSession(session, init?.headers),
+		},
+	);
+	const body = await response.text();
+	assert.equal(
+		response.ok,
+		true,
+		`${init?.method ?? "GET"} ${pathname} failed: ${response.status} ${body}`,
+	);
+	return JSON.parse(body) as T;
+}
+
+async function waitForPublicationState(
+	predicate: () => boolean,
+	description: string,
+) {
+	const deadline = Date.now() + 60_000;
+	while (Date.now() < deadline) {
+		if (predicate()) return;
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	throw new Error(`Timed out waiting for ${description}`);
+}
+
+async function verifyPublicationLifecycle(profile: Profile) {
+	const session = await createAdminTestSession(
+		`http://127.0.0.1:${profile.port}`,
+		acceptanceAdminPassword,
+	);
+	await adminPublicationRequest(
+		profile,
+		session,
+		"/api/admin/items/PUBACC23/publication/crossref/activate",
+		{ method: "POST" },
+	);
+	await adminPublicationRequest(
+		profile,
+		session,
+		"/api/admin/items/PUBACC23/publication/zenodo/activate",
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ identifierPolicy: "reuse-crossref" }),
+		},
+	);
+	compose(
+		"up",
+		"--wait",
+		"--wait-timeout",
+		"180",
+		"amber-publication-worker",
+	);
+	await waitForPublicationState(
+		() =>
+			postgresScalar(
+				"amber",
+				`SELECT count(*) FROM "publicationSyncState"
+				 WHERE "itemKey" = 'PUBACC23' AND "provider" = 'crossref'
+					AND "pendingStage" = 'deposit'`,
+			) === "1",
+		"Crossref test deposit acceptance",
+	);
+	postgresScalar(
+		"amber",
+		`UPDATE "publicationSyncJob" SET "nextAttemptAt" = now()
+		 WHERE "itemKey" = 'PUBACC23' AND "provider" = 'crossref'
+			AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL`,
+	);
+	await waitForPublicationState(
+		() =>
+			postgresScalar(
+				"amber",
+				`SELECT count(*) FROM "publicationSyncState"
+				 WHERE "itemKey" = 'PUBACC23' AND "provider" = 'zenodo'
+					AND "lastPayloadHash" IS NOT NULL
+					AND "lastFileManifestHash" IS NOT NULL
+					AND "zenodoRecordId" IS NOT NULL`,
+			) === "1",
+		"Zenodo Sandbox publication settlement",
+	);
+	const databaseState = JSON.parse(
+		postgresScalar(
+			"amber",
+			`SELECT json_build_object(
+				'crossrefVerified', (
+					SELECT count(*) FROM "publicationIdentifier"
+					WHERE "itemKey" = 'PUBACC23' AND "registrar" = 'crossref'
+						AND "lifecycle" = 'verified' AND "isCurrent" = true
+				),
+				'zenodoSettled', (
+					SELECT count(*) FROM "publicationSyncState"
+					WHERE "itemKey" = 'PUBACC23' AND "provider" = 'zenodo'
+						AND "lastPayloadHash" IS NOT NULL
+				),
+				'failedJobs', (
+					SELECT count(*) FROM "publicationSyncJob"
+					WHERE "itemKey" = 'PUBACC23' AND "deadLetteredAt" IS NOT NULL
+				)
+			)`,
+		),
+	) as {
+		crossrefVerified: number;
+		zenodoSettled: number;
+		failedJobs: number;
+	};
+	assert.deepEqual(databaseState, {
+		crossrefVerified: 1,
+		zenodoSettled: 1,
+		failedJobs: 0,
+	});
+	const providerResponse = await fetch(
+		`http://127.0.0.1:${publicationFakePort}/_test/state`,
+	);
+	assert.equal(providerResponse.ok, true);
+	const providerState = (await providerResponse.json()) as {
+		crossrefDeposits: number;
+		zenodo: Array<{
+			id: string;
+			published: boolean;
+			doi: string | null;
+			files: string[];
+		}>;
+	};
+	assert.equal(providerState.crossrefDeposits, 1);
+	assert.deepEqual(providerState.zenodo, [
+		{
+			id: "7001",
+			published: true,
+			doi: "10.5555/acceptance.000001",
+			files: ["amber-doi-acceptance.pdf"],
+		},
+	]);
+	const overview = await adminPublicationRequest<{
+		providers: { crossref: boolean; zenodo: boolean };
+		queue: { hasFailed: boolean };
+		worker: { active: boolean; ready: boolean } | null;
+	}>(profile, session, "/api/admin/publication");
+	assert.deepEqual(overview.providers, { crossref: true, zenodo: true });
+	assert.equal(overview.queue.hasFailed, false);
+	assert.equal(overview.worker?.active, true);
+	assert.equal(overview.worker?.ready, true);
+	console.log(
+		"Crossref Test and Zenodo Sandbox publication passed through the real local worker.",
+	);
+}
+
 async function waitForRuntimeHealth(
 	profile: Profile,
 	predicate: (health: RuntimeConfigHealth) => boolean,
@@ -974,10 +1317,7 @@ async function waitForRuntimeHealth(
 	);
 }
 
-async function expectRenderedIdentity(
-	profile: Profile,
-	expectedName: string,
-) {
+async function expectRenderedIdentity(profile: Profile, expectedName: string) {
 	const response = await fetch(
 		`http://127.0.0.1:${profile.port}/${profile.config.localization.defaultLocale}/lib`,
 	);
@@ -1033,8 +1373,7 @@ async function observeAtomicActivation(
 		assert.equal(health.state, "active");
 		assert.equal(health.rejected, null);
 		assert.ok(
-			health.active &&
-				allowedRevisions.includes(health.active.revision),
+			health.active && allowedRevisions.includes(health.active.revision),
 			`Unexpected revision during atomic activation: ${JSON.stringify(health)}`,
 		);
 	}
@@ -1135,6 +1474,7 @@ async function verifyLiveConfigLifecycle(profile: Profile) {
 }
 
 async function main() {
+	await initializeAcceptancePorts();
 	reapAbandonedProjects();
 	const profiles = [
 		loadProfile("amber", amberPort, amberMeilisearchPort),
@@ -1155,8 +1495,18 @@ async function main() {
 				searchIndexerImage,
 				".",
 			]);
+			if (!e2eOnly) {
+				run("docker", [
+					"build",
+					"--target",
+					"publication-worker",
+					"--tag",
+					publicationWorkerImage,
+					".",
+				]);
+			}
 		}
-		await verifyRootOwnedConfigStartup();
+		if (!e2eOnly) await verifyRootOwnedConfigStartup();
 		compose(
 			"up",
 			"--wait",
@@ -1174,10 +1524,12 @@ async function main() {
 			"--wait",
 			"--wait-timeout",
 			"180",
-			"amber-search-indexer",
-			"indigo-search-indexer",
+			...(e2eOnly
+				? ["amber-search-indexer"]
+				: ["amber-search-indexer", "indigo-search-indexer"]),
 		);
-		for (const profile of profiles) {
+		const activeProfiles = e2eOnly ? profiles.slice(0, 1) : profiles;
+		for (const profile of activeProfiles) {
 			assert.equal(
 				postgresScalar(
 					profile.name,
@@ -1187,10 +1539,33 @@ async function main() {
 				`${profile.name} search rebuild marker must clear before worker health passes`,
 			);
 		}
-		for (const profile of profiles) {
+		for (const profile of activeProfiles) {
 			await seedSearch(profile);
 		}
-		await verifySearchQueueIsolation(profiles);
+		if (!e2eOnly) await verifySearchQueueIsolation(profiles);
+		if (e2eOnly) {
+			compose(
+				"up",
+				"--wait",
+				"--wait-timeout",
+				"180",
+				"amber",
+				"amber-search-indexer",
+			);
+			await verifyPublicationLifecycle(profiles[0]);
+			await verifyPublicationAdminInterface(profiles[0]);
+			runEndToEndBrowserSuite(profiles[0]);
+			cleanupAcceptanceUsers();
+			console.log(
+				"\nEnd-to-end browser tests passed against a disposable runtime.",
+			);
+			if (keepRunning) {
+				console.log(
+					`Amber: http://127.0.0.1:${amberPort}\nCompose project: ${composeProject}`,
+				);
+			}
+			return;
+		}
 		compose(
 			"up",
 			"--wait",
@@ -1202,8 +1577,11 @@ async function main() {
 			"indigo-search-indexer",
 		);
 		await verifyLiveConfigLifecycle(profiles[0]);
+		await verifyPublicationLifecycle(profiles[0]);
+		await verifyPublicationAdminInterface(profiles[0]);
 		profiles.forEach(verifyServerAnalyticsTransport);
 		profiles.forEach(runBrowserSuite);
+		runAdminBrowserSuite(profiles[0]);
 		cleanupAcceptanceUsers();
 		console.log("\nRuntime acceptance passed for Amber and Indigo.");
 		if (keepRunning) {
@@ -1220,6 +1598,8 @@ async function main() {
 			"amber",
 			"indigo",
 			"fixture",
+			"publication-provider-fake",
+			"amber-publication-worker",
 			"mailpit",
 			"postgres",
 			"amber-meilisearch",
@@ -1238,6 +1618,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(error);
-  process.exitCode = 1;
+	console.error(error);
+	process.exitCode = 1;
 });

@@ -25,6 +25,7 @@ import {
 	assignItemDraftToCollection as assignNativeItemDraftToCollection,
 	createNativeItemDraft,
 	discardItemDraft as discardNativeItemDraft,
+	ItemHasActivePublicationError,
 	ItemDraftConflictError as NativeDraftConflictError,
 	openItemDraft as openNativeItemDraft,
 	publishItemDraft as publishNativeItemDraft,
@@ -398,6 +399,29 @@ async function verify() {
 				title: "Restored published title",
 			},
 		});
+		let activePublicationBlocked = false;
+		try {
+			await unpublishNativeItem(db, draft.itemKey);
+		} catch (error) {
+			activePublicationBlocked =
+				error instanceof ItemHasActivePublicationError;
+		}
+		assert(
+			activePublicationBlocked,
+			"An active DOI publication did not block record unpublishing",
+		);
+		const [stillPublished] = await db
+			.select({ deleted: item.deleted, revision: item.revision })
+			.from(item)
+			.where(eq(item.key, draft.itemKey));
+		assert(
+			stillPublished?.deleted === 0 && stillPublished.revision === 2,
+			"The blocked unpublish changed the canonical record",
+		);
+		await db
+			.update(publicationTarget)
+			.set({ deactivatedAt: new Date() })
+			.where(eq(publicationTarget.itemKey, draft.itemKey));
 		const unpublishedWithDraft = await unpublishNativeItem(
 			db,
 			draft.itemKey,
@@ -439,14 +463,8 @@ async function verify() {
 			.from(publicationSyncJob)
 			.where(eq(publicationSyncJob.itemKey, draft.itemKey));
 		assert(
-			publicationJobsAfterSecondUnpublish.length === 2 &&
-				publicationJobsAfterSecondUnpublish.some(
-					(job) =>
-						job.provider === "crossref" &&
-						job.canonicalRevision === 4 &&
-						job.reason === "record_changed",
-				),
-			"Record restore did not queue Crossref or unpublish queued extra work",
+			publicationJobsAfterSecondUnpublish.length === 1,
+			"A deactivated DOI target or record unpublish queued extra publication work",
 		);
 		const [deletedProjection] = await db
 			.select()

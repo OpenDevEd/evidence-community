@@ -4,6 +4,7 @@ import { ZodError } from "zod";
 
 const mocks = vi.hoisted(() => ({
 	activate: vi.fn(),
+	buildView: vi.fn(),
 	config: { revision: "test-config" },
 	database: { kind: "database" },
 	retry: vi.fn(),
@@ -37,6 +38,9 @@ vi.mock("@/lib/publication/zenodo-activation-service", () => ({
 	activateZenodoPublication: mocks.activate,
 	retryZenodoPublication: mocks.retry,
 }));
+vi.mock("@/lib/publication/admin-publication-view-service", () => ({
+	buildAdminPublicationView: mocks.buildView,
+}));
 
 import { POST as activate } from "@/app/api/admin/items/[key]/publication/zenodo/activate/route";
 import { POST as retry } from "@/app/api/admin/items/[key]/publication/zenodo/retry/route";
@@ -46,6 +50,7 @@ describe("Zenodo publication admin routes", () => {
 		mocks.activate.mockReset();
 		mocks.retry.mockReset();
 		mocks.activate.mockResolvedValue({ state: "waiting_for_file" });
+		mocks.buildView.mockResolvedValue({ itemKey: "ABCDEFGH" });
 		mocks.retry.mockResolvedValue({ job: { id: 2, state: "retrying" } });
 	});
 
@@ -60,6 +65,10 @@ describe("Zenodo publication admin routes", () => {
 			{ params: Promise.resolve({ key: "ABCDEFGH" }) },
 		);
 		expect(response.status).toBe(200);
+		expect(await response.json()).toEqual({
+			activation: { state: "waiting_for_file" },
+			publication: { itemKey: "ABCDEFGH" },
+		});
 		expect(mocks.activate).toHaveBeenCalledWith(
 			mocks.database,
 			"ABCDEFGH",
@@ -98,6 +107,7 @@ describe("Zenodo publication admin routes", () => {
 		);
 		expect(await response.json()).toEqual({
 			activation: { job: { id: 2, state: "retrying" } },
+			publication: { itemKey: "ABCDEFGH" },
 		});
 		expect(mocks.retry).toHaveBeenCalledWith(
 			mocks.database,

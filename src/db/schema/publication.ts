@@ -43,6 +43,7 @@ export const PUBLICATION_JOB_REASONS = [
 	"file_changed",
 	"crossref_verified",
 	"nightly_reconciliation",
+	"provider_audit",
 ] as const;
 export const ZENODO_JOURNAL_OPERATIONS = [
 	"zenodo_create",
@@ -270,6 +271,7 @@ export const publicationSyncState = pgTable(
 		zenodoParentId: varchar("zenodoParentId", { length: 255 }),
 		zenodoVersionDoi: varchar("zenodoVersionDoi", { length: 255 }),
 		zenodoConceptDoi: varchar("zenodoConceptDoi", { length: 255 }),
+		zenodoFirstPublishedAt: timestampWithTimezone("zenodoFirstPublishedAt"),
 		orphanDraftDepositionId: varchar("orphanDraftDepositionId", {
 			length: 255,
 		}),
@@ -305,6 +307,7 @@ export const publicationSyncState = pgTable(
 					AND ${table.zenodoParentId} IS NULL
 					AND ${table.zenodoVersionDoi} IS NULL
 					AND ${table.zenodoConceptDoi} IS NULL
+					AND ${table.zenodoFirstPublishedAt} IS NULL
 					AND ${table.orphanDraftDepositionId} IS NULL)
 				OR (${table.provider} = 'zenodo'
 					AND ${table.environment} = 'sandbox'
@@ -414,7 +417,7 @@ export const publicationSyncJob = pgTable(
 		),
 		check(
 			"publicationSyncJob_reason_valid",
-			sql`${table.reason} IN ('manual_activation', 'manual_retry', 'record_changed', 'file_changed', 'crossref_verified', 'nightly_reconciliation')`,
+			sql`${table.reason} IN ('manual_activation', 'manual_retry', 'record_changed', 'file_changed', 'crossref_verified', 'nightly_reconciliation', 'provider_audit')`,
 		),
 		check(
 			"publicationSyncJob_lease_bundle_valid",
@@ -452,6 +455,71 @@ export const publicationSyncJob = pgTable(
 	],
 );
 
+export const zenodoFileCorrectionApproval = pgTable(
+	"zenodoFileCorrectionApproval",
+	{
+		id: bigint("id", { mode: "number" })
+			.primaryKey()
+			.generatedAlwaysAsIdentity(),
+		itemKey: varchar("itemKey", { length: 8 }).notNull(),
+		provider: text("provider", { enum: ["zenodo"] })
+			.notNull()
+			.default("zenodo"),
+		environment: text("environment", { enum: ["sandbox"] })
+			.notNull()
+			.default("sandbox"),
+		doi: varchar("doi", { length: 255 }).notNull(),
+		fileManifestHash: varchar("fileManifestHash", { length: 64 }).notNull(),
+		approvedAt: timestampWithTimezone("approvedAt").notNull(),
+		consumedAt: timestampWithTimezone("consumedAt"),
+		supersededAt: timestampWithTimezone("supersededAt"),
+		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
+		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
+	},
+	(table) => [
+		foreignKey({
+			name: "zenodoFileCorrectionApproval_target_fk",
+			columns: [table.itemKey, table.provider, table.environment],
+			foreignColumns: [
+				publicationTarget.itemKey,
+				publicationTarget.provider,
+				publicationTarget.environment,
+			],
+		}).onDelete("cascade"),
+		check(
+			"zenodoFileCorrectionApproval_provider_environment_valid",
+			sql`${table.provider} = 'zenodo' AND ${table.environment} = 'sandbox'`,
+		),
+		check(
+			"zenodoFileCorrectionApproval_doi_valid",
+			sql`${table.doi} ~ '^10\\.[0-9]{4,9}/[^[:space:]]{1,200}$' AND ${table.doi} = lower(${table.doi})`,
+		),
+		check(
+			"zenodoFileCorrectionApproval_hash_valid",
+			sql`${table.fileManifestHash} ~ '^[0-9a-f]{64}$'`,
+		),
+		check(
+			"zenodoFileCorrectionApproval_terminal_state_valid",
+			sql`num_nonnulls(${table.consumedAt}, ${table.supersededAt}) <= 1
+				AND (${table.consumedAt} IS NULL OR ${table.consumedAt} >= ${table.approvedAt})
+				AND (${table.supersededAt} IS NULL OR ${table.supersededAt} >= ${table.approvedAt})`,
+		),
+		unique("zenodoFileCorrectionApproval_item_id_unique").on(
+			table.itemKey,
+			table.id,
+		),
+		uniqueIndex("zenodoFileCorrectionApproval_active_item_unique")
+			.on(table.itemKey, table.provider, table.environment)
+			.where(
+				sql`${table.consumedAt} IS NULL AND ${table.supersededAt} IS NULL`,
+			),
+		index("zenodoFileCorrectionApproval_item_status_idx").on(
+			table.itemKey,
+			table.approvedAt,
+		),
+	],
+);
+
 export const zenodoPublishJournal = pgTable(
 	"zenodoPublishJournal",
 	{
@@ -472,6 +540,9 @@ export const zenodoPublishJournal = pgTable(
 		payloadSnapshot: jsonb("payloadSnapshot").$type<JsonObject>().notNull(),
 		fileManifestHash: varchar("fileManifestHash", { length: 64 }),
 		fileManifestSnapshot: jsonb("fileManifestSnapshot").$type<JsonObject>(),
+		fileCorrectionApprovalId: bigint("fileCorrectionApprovalId", {
+			mode: "number",
+		}),
 		depositionId: varchar("depositionId", { length: 255 }).notNull(),
 		draftRecordId: varchar("draftRecordId", { length: 255 }).notNull(),
 		parentId: varchar("parentId", { length: 255 }),
@@ -496,6 +567,14 @@ export const zenodoPublishJournal = pgTable(
 				publicationTarget.environment,
 			],
 		}).onDelete("cascade"),
+		foreignKey({
+			name: "zenodoPublishJournal_file_correction_approval_fk",
+			columns: [table.itemKey, table.fileCorrectionApprovalId],
+			foreignColumns: [
+				zenodoFileCorrectionApproval.itemKey,
+				zenodoFileCorrectionApproval.id,
+			],
+		}),
 		check(
 			"zenodoPublishJournal_provider_environment_valid",
 			sql`${table.provider} = 'zenodo' AND ${table.environment} = 'sandbox'`,
@@ -509,6 +588,13 @@ export const zenodoPublishJournal = pgTable(
 		check(
 			"zenodoPublishJournal_operation_valid",
 			sql`${table.operationType} IN ('zenodo_create', 'zenodo_metadata_update', 'zenodo_file_update', 'zenodo_new_version')`,
+		),
+		check(
+			"zenodoPublishJournal_file_correction_approval_valid",
+			sql`(
+				(${table.operationType} = 'zenodo_file_update' AND ${table.fileCorrectionApprovalId} IS NOT NULL)
+				OR (${table.operationType} <> 'zenodo_file_update' AND ${table.fileCorrectionApprovalId} IS NULL)
+			)`,
 		),
 		check(
 			"zenodoPublishJournal_published_bundle_valid",
@@ -530,6 +616,9 @@ export const zenodoPublishJournal = pgTable(
 		index("zenodoPublishJournal_item_status_idx").on(
 			table.itemKey,
 			table.status,
+		),
+		index("zenodoPublishJournal_file_correction_approval_idx").on(
+			table.fileCorrectionApprovalId,
 		),
 	],
 );

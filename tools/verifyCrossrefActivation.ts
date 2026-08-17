@@ -110,12 +110,12 @@ async function seedPublishedFile(
 		`INSERT INTO "itemFilePublication" (
 			"itemKey", "sourceConnectionKey", "parentItemKey", "uploadRevision", "revision",
 			"sourceObjectPath", "sourceCoverObjectPath", "objectPath", "publicUrl", "filename",
-			"contentType", "sizeBytes", "sha256", "coverObjectPath", "coverPublicUrl",
+			"contentType", "sizeBytes", "sha256", "md5", "coverObjectPath", "coverPublicUrl",
 			"coverWidth", "coverHeight", "pageCount", "publicationTags", "publishedAt"
 		) VALUES (
 			$1, 'zotero-activation', $2, 1, 1,
 			$3, $4, $5, $6, $7,
-			'application/pdf', 12, $8, $9, $10,
+			'application/pdf', 12, $8, $9, $10, $11,
 			100, 140, 1, '[]'::jsonb, now()
 		)`,
 		[
@@ -127,6 +127,7 @@ async function seedPublishedFile(
 			`https://files.example.org/${fileKey}.pdf`,
 			`${fileKey}.pdf`,
 			"a".repeat(64),
+			"b".repeat(32),
 			`public/${fileKey}.png`,
 			`https://files.example.org/${fileKey}.png`,
 		],
@@ -519,6 +520,176 @@ async function verify(database: Database, client: Client) {
 			settled.rows[0]?.pendingStage === null,
 		"Verified settlement changed the wrong durable facts",
 	);
+	const auditBaseline = await client.query<{
+		payloadHash: string;
+		payloadSnapshot: Record<string, unknown>;
+	}>(
+		`SELECT
+			"lastPayloadHash" AS "payloadHash",
+			"lastPayloadSnapshot" AS "payloadSnapshot"
+		 FROM "publicationSyncState"
+		 WHERE "itemKey" = 'CRACTAAB' AND "provider" = 'crossref'`,
+	);
+	const baseline = auditBaseline.rows[0];
+	assert(
+		baseline?.payloadHash && baseline.payloadSnapshot,
+		"The Crossref audit fixture has no saved provider state",
+	);
+	const auditConfig = {
+		...config,
+		services: {
+			...config.services,
+			publication: {
+				...config.services.publication,
+				worker: { ...config.services.publication.worker, batchSize: 1 },
+			},
+		},
+	} as LibraryServerConfig;
+	const matchedAudit = await client.query<{ id: number }>(
+		`INSERT INTO "publicationSyncJob" (
+			"itemKey", "provider", "environment", "canonicalRevision", "reason",
+			"idempotencyKey", "nextAttemptAt"
+		) VALUES (
+			'CRACTAAB', 'crossref', 'test', 2, 'provider_audit',
+			'publication:crossref:test:CRACTAAB:2:audit:matched',
+			'2030-08-12T23:01:00Z'
+		) RETURNING "id"`,
+	);
+	const matchedAuditResult = await runCrossrefPublicationJobsOnce(
+		database,
+		auditConfig,
+		{
+			provider: successfulProvider(),
+			workerId: "crossref-audit-worker",
+			now: () => new Date("2030-08-12T23:01:00Z"),
+		},
+	);
+	assert(
+		matchedAuditResult.some(
+			(outcome) =>
+				outcome.jobId === Number(matchedAudit.rows[0]?.id) &&
+				outcome.status === "audited",
+		),
+		"A matching Crossref audit did not finish with a real receipt",
+	);
+	const failedAudit = await client.query<{ id: number }>(
+		`INSERT INTO "publicationSyncJob" (
+			"itemKey", "provider", "environment", "canonicalRevision", "reason",
+			"idempotencyKey", "nextAttemptAt"
+		) VALUES (
+			'CRACTAAB', 'crossref', 'test', 2, 'provider_audit',
+			'publication:crossref:test:CRACTAAB:2:audit:failed',
+			'2030-08-12T23:01:30Z'
+		) RETURNING "id"`,
+	);
+	const failedAuditResult = await runCrossrefPublicationJobsOnce(
+		database,
+		auditConfig,
+		{
+			provider: {
+				...successfulProvider(),
+				verifyPublication: async () => {
+					throw new Error("Crossref audit service unavailable");
+				},
+			},
+			workerId: "crossref-failed-audit-worker",
+			now: () => new Date("2030-08-12T23:01:30Z"),
+		},
+	);
+	const failedAuditJob = await client.query<{
+		attempts: number;
+		lastError: string | null;
+		processedAt: Date | null;
+	}>(
+		`SELECT "attempts", "lastError", "processedAt"
+		 FROM "publicationSyncJob" WHERE "id" = $1`,
+		[failedAudit.rows[0]?.id],
+	);
+	assert(
+		failedAuditResult.some(
+			(outcome) =>
+				outcome.jobId === Number(failedAudit.rows[0]?.id) &&
+				outcome.status === "retrying",
+		) &&
+			failedAuditJob.rows[0]?.attempts === 1 &&
+			failedAuditJob.rows[0]?.processedAt === null &&
+			failedAuditJob.rows[0]?.lastError?.includes(
+				"Crossref audit service unavailable",
+			),
+		"A temporary Crossref audit failure was not kept for retry",
+	);
+	await client.query(
+		`UPDATE "publicationSyncJob" SET "supersededAt" = '2030-08-12T23:01:31Z'
+		 WHERE "id" = $1`,
+		[failedAudit.rows[0]?.id],
+	);
+	const driftAudit = await client.query<{ id: number }>(
+		`INSERT INTO "publicationSyncJob" (
+			"itemKey", "provider", "environment", "canonicalRevision", "reason",
+			"idempotencyKey", "nextAttemptAt"
+		) VALUES (
+			'CRACTAAB', 'crossref', 'test', 2, 'provider_audit',
+			'publication:crossref:test:CRACTAAB:2:audit:drift',
+			'2030-08-12T23:02:00Z'
+		) RETURNING "id"`,
+	);
+	const driftAuditResult = await runCrossrefPublicationJobsOnce(
+		database,
+		auditConfig,
+		{
+			provider: {
+				...successfulProvider(),
+				verifyPublication: async () => ({
+					status: "pending",
+					reason: "Crossref title differs",
+				}),
+			},
+			workerId: "crossref-drift-audit-worker",
+			now: () => new Date("2030-08-12T23:02:00Z"),
+		},
+	);
+	assert(
+		driftAuditResult.some(
+			(outcome) =>
+				outcome.jobId === Number(driftAudit.rows[0]?.id) &&
+				outcome.status === "drifted",
+		),
+		"Crossref remote drift was not detected",
+	);
+	const driftState = await client.query<{
+		payloadHash: string | null;
+		repairKey: string | null;
+	}>(
+		`SELECT
+			pss."lastPayloadHash" AS "payloadHash",
+			(
+				SELECT psj."idempotencyKey" FROM "publicationSyncJob" psj
+				WHERE psj."itemKey" = pss."itemKey"
+					AND psj."reason" = 'nightly_reconciliation'
+					AND psj."supersededAt" IS NULL
+				ORDER BY psj."id" DESC LIMIT 1
+			) AS "repairKey"
+		 FROM "publicationSyncState" pss
+		 WHERE pss."itemKey" = 'CRACTAAB' AND pss."provider" = 'crossref'`,
+	);
+	assert(
+		driftState.rows[0]?.payloadHash === null &&
+			driftState.rows[0]?.repairKey?.endsWith(
+				`audit:${driftAudit.rows[0]?.id}`,
+			),
+		"Crossref drift did not clear the saved payload and queue one repair",
+	);
+	await client.query(
+		`UPDATE "publicationSyncState"
+		 SET "lastPayloadHash" = $1, "lastPayloadSnapshot" = $2::jsonb
+		 WHERE "itemKey" = 'CRACTAAB' AND "provider" = 'crossref'`,
+		[baseline.payloadHash, JSON.stringify(baseline.payloadSnapshot)],
+	);
+	await client.query(
+		`UPDATE "publicationSyncJob" SET "supersededAt" = '2030-08-12T23:03:00Z'
+		 WHERE "itemKey" = 'CRACTAAB' AND "reason" = 'nightly_reconciliation'
+			AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL`,
+	);
 
 	await seedItem(client, { key: "CRACTAAE" });
 	const pendingActivation = await activateCrossrefPublication(
@@ -813,6 +984,114 @@ async function verify(database: Database, client: Client) {
 				wakeActivation.canonicalRevision &&
 			Number(zenodoWakeJobs.rows[0].fileRevision) === 1,
 		"Verified Crossref DOI did not wake the ready reuse-Crossref Zenodo target",
+	);
+
+	await client.query(
+		`UPDATE "publicationSyncJob"
+		 SET "leaseOwner" = NULL, "leaseExpiresAt" = NULL, "supersededAt" = now()
+		 WHERE "provider" = 'crossref' AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL`,
+	);
+	await seedItem(client, { key: "CRACTAAT" });
+	await seedPublishedFile(client, "CRACTAAT", "CRPDFAAT");
+	const dualActivation = await activateCrossrefPublication(
+		database,
+		"CRACTAAT",
+		config,
+	);
+	const dualInitial = await runCrossrefPublicationJobsOnce(database, config, {
+		provider: successfulProvider(),
+		workerId: "crossref-dual-initial-worker",
+		now: () => new Date("2030-08-19T10:00:00Z"),
+	});
+	assert(
+		dualInitial.some(
+			(outcome) =>
+				outcome.jobId === dualActivation.job.id &&
+				outcome.status === "succeeded",
+		),
+		"The dual-provider fixture did not settle its initial Crossref deposit",
+	);
+	await client.query(
+		`INSERT INTO "publicationTarget" (
+			"itemKey", "provider", "environment", "identifierPolicy", "requestedBy"
+		) VALUES (
+			'CRACTAAT', 'zenodo', 'sandbox', 'mint-zenodo', 'crossref-isolation-test'
+		)`,
+	);
+	await client.query(
+		`INSERT INTO "publicationIdentifier" (
+			"itemKey", "registrar", "environment", "role", "doi", "ownership",
+			"lifecycle", "isCurrent", "reservedAt", "verifiedAt"
+		) VALUES
+			('CRACTAAT', 'zenodo', 'sandbox', 'version', '10.5072/zenodo.9001', 'managed', 'verified', true, now(), now()),
+			('CRACTAAT', 'zenodo', 'sandbox', 'concept', '10.5072/zenodo.9000', 'managed', 'verified', true, now(), now())`,
+	);
+	await client.query(
+		`INSERT INTO "publicationSyncState" (
+			"itemKey", "provider", "environment", "identifierPolicy",
+			"lastPayloadHash", "lastPayloadSnapshot", "lastFileManifestHash",
+			"lastFileManifestSnapshot", "zenodoRecordId", "zenodoParentId",
+			"zenodoVersionDoi", "zenodoConceptDoi"
+		) VALUES (
+			'CRACTAAT', 'zenodo', 'sandbox', 'mint-zenodo', $1, '{}'::jsonb,
+			$2, '{}'::jsonb, '9001', '9000', '10.5072/zenodo.9001',
+			'10.5072/zenodo.9000'
+		)`,
+		["a".repeat(64), "b".repeat(64)],
+	);
+	await client.query(
+		`UPDATE "item"
+		 SET "title" = 'Crossref edit while Zenodo is stale',
+			"abstractNote" = 'A complete description for both publication providers.',
+			"revision" = "revision" + 1
+		 WHERE "key" = 'CRACTAAT'`,
+	);
+	await client.query(
+		`UPDATE "publicationSyncState"
+		 SET "lastFailureClass" = 'CROSSREF_WORKER_FAILED',
+			"lastFailureSummary" = 'Earlier temporary Crossref failure',
+			"consecutiveFailures" = 7
+		 WHERE "itemKey" = 'CRACTAAT' AND "provider" = 'crossref'`,
+	);
+	const dualJob = await client.query<{ id: number }>(
+		`INSERT INTO "publicationSyncJob" (
+			"itemKey", "provider", "environment", "canonicalRevision", "reason",
+			"idempotencyKey", "nextAttemptAt"
+		) VALUES (
+			'CRACTAAT', 'crossref', 'test', 3, 'record_changed',
+			'publication:crossref:test:CRACTAAT:dual-provider-isolation',
+			'2030-08-19T10:01:00Z'
+		) RETURNING "id"`,
+	);
+	const dualUpdate = await runCrossrefPublicationJobsOnce(database, config, {
+		provider: successfulProvider(),
+		workerId: "crossref-dual-update-worker",
+		now: () => new Date("2030-08-19T10:01:00Z"),
+	});
+	const dualJobState = await client.query<{
+		consecutiveFailures: number;
+		lastError: string | null;
+		processedAt: Date | null;
+	}>(
+		`SELECT psj."lastError", psj."processedAt", pss."consecutiveFailures"
+		 FROM "publicationSyncJob" psj
+		 JOIN "publicationSyncState" pss
+			ON pss."itemKey" = psj."itemKey"
+			AND pss."provider" = psj."provider"
+			AND pss."environment" = psj."environment"
+		 WHERE psj."id" = $1`,
+		[dualJob.rows[0]?.id],
+	);
+	assert(
+		dualUpdate.some(
+			(outcome) =>
+				outcome.jobId === Number(dualJob.rows[0]?.id) &&
+				outcome.status === "succeeded",
+		) &&
+			dualJobState.rows[0]?.processedAt != null &&
+			dualJobState.rows[0]?.lastError === null &&
+			dualJobState.rows[0]?.consecutiveFailures === 0,
+		`The Crossref worker tried to execute stale Zenodo work from the shared plan: ${JSON.stringify({ dualUpdate, job: dualJobState.rows[0] })}`,
 	);
 
 	await seedItem(client, { key: "CRACTAAS" });

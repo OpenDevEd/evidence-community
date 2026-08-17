@@ -238,13 +238,15 @@ async function reconcileTarget(
 			config,
 			now,
 		});
-		if (view.providers[target.provider].displayState !== "repair_pending") {
-			return 0;
-		}
+		const displayState = view.providers[target.provider].displayState;
+		if (displayState !== "repair_pending" && displayState !== "synced") return 0;
 		const jobs = await enqueuePublicationJobsForItem(transaction, {
 			itemKey: target.itemKey,
 			canonicalRevision: currentTarget.revision,
-			reason: "nightly_reconciliation",
+			reason:
+				displayState === "synced"
+					? "provider_audit"
+					: "nightly_reconciliation",
 			now,
 			providers: [target.provider],
 			idempotencyDiscriminator: runId,

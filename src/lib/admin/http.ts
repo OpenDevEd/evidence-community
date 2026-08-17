@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 
 import {
 	ItemDraftConflictError,
+	ItemHasActivePublicationError,
 	ItemHasChildrenError,
 	ItemHasPublishedFileError,
 	ItemMutationConflictError,
@@ -15,6 +16,7 @@ import {
 	NativeFileConflictError,
 	NativeFileNotFoundError,
 	NativeFileValidationError,
+	ZenodoPdfCorrectionConfirmationRequiredError,
 } from "./native-file-service";
 import { EvidenceFileStorageError } from "./file-storage";
 import { InvalidPdfError } from "./pdf-processing";
@@ -140,6 +142,13 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 			status: 409,
 		};
 	}
+	if (error instanceof ZenodoPdfCorrectionConfirmationRequiredError) {
+		return {
+			code: "confirmation_required",
+			message: error.message,
+			status: 409,
+		};
+	}
 	if (
 		error instanceof CrossrefActivationConfigurationError ||
 		error instanceof ZenodoActivationConfigurationError
@@ -207,6 +216,14 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 			code: "conflict",
 			message:
 				"Unpublish this attachment's PDF before unpublishing the attachment.",
+			status: 409,
+		};
+	}
+	if (error instanceof ItemHasActivePublicationError) {
+		return {
+			code: "conflict",
+			message:
+				"This record is still published through Crossref or Zenodo. Keep it published until withdrawal support is available.",
 			status: 409,
 		};
 	}

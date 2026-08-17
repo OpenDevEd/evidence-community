@@ -7,6 +7,7 @@ import {
 	publicationSyncJob,
 	publicationSyncState,
 	publicationTarget,
+	zenodoFileCorrectionApproval,
 	zenodoPublishJournal,
 } from "@/db/schema/publication";
 import { itemFilePublication } from "@/db/schema/source";
@@ -28,6 +29,7 @@ export type PublicationRepositorySnapshot = {
 	identifiers: readonly (typeof publicationIdentifier.$inferSelect)[];
 	states: readonly (typeof publicationSyncState.$inferSelect)[];
 	jobs: readonly (typeof publicationSyncJob.$inferSelect)[];
+	fileCorrectionApprovals: readonly (typeof zenodoFileCorrectionApproval.$inferSelect)[];
 	journals: readonly (typeof zenodoPublishJournal.$inferSelect)[];
 	namespace: typeof doiNamespace.$inferSelect | null;
 };
@@ -47,6 +49,7 @@ export async function readPublicationRepositorySnapshot(
 		identifiers,
 		states,
 		jobs,
+		fileCorrectionApprovals,
 		journals,
 		namespace,
 	] = await Promise.all([
@@ -98,6 +101,14 @@ export async function readPublicationRepositorySnapshot(
 			.orderBy(
 				desc(publicationSyncJob.createdAt),
 				desc(publicationSyncJob.id),
+			),
+		database
+			.select()
+			.from(zenodoFileCorrectionApproval)
+			.where(eq(zenodoFileCorrectionApproval.itemKey, itemKey))
+			.orderBy(
+				desc(zenodoFileCorrectionApproval.approvedAt),
+				desc(zenodoFileCorrectionApproval.id),
 			),
 		database
 			.select()
@@ -153,6 +164,7 @@ export async function readPublicationRepositorySnapshot(
 		identifiers,
 		states,
 		jobs,
+		fileCorrectionApprovals,
 		journals,
 		namespace,
 	};

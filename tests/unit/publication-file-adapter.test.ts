@@ -31,6 +31,7 @@ function row(
 		contentType: "application/pdf",
 		sizeBytes: 3,
 		sha256: "a".repeat(64),
+		md5: "b".repeat(32),
 		coverObjectPath: "public/PDFABCDE.png",
 		coverPublicUrl: "https://files.example.org/PDFABCDE.png",
 		coverWidth: 100,

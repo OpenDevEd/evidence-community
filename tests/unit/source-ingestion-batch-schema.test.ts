@@ -158,6 +158,36 @@ describe("sourceIngestionBatchSchema", () => {
 			).toBe(true);
 		}
 	});
+
+	it("requires an exact MD5 for a managed published file", () => {
+		const input = batch();
+		(input.items[0]! as { file: unknown }).file = {
+			...input.items[0]!.file!,
+			md5: "not-an-md5",
+			linkMode: "imported_file",
+			mtime: null,
+			charset: null,
+			fullText: "PDF text",
+			managedPublication: {
+				objectPath: "published/document.pdf",
+				coverObjectPath: "published/cover.png",
+				sizeBytes: 12,
+				sha256: "a".repeat(64),
+				pageCount: 1,
+				staged: false,
+			},
+		};
+		const parsed = sourceIngestionBatchSchema.safeParse(input);
+		expect(parsed.success).toBe(false);
+		if (!parsed.success) {
+			expect(parsed.error.issues).toContainEqual(
+				expect.objectContaining({
+					path: ["items", 0, "file", "md5"],
+					message: "managedPublication requires a lowercase MD5 checksum",
+				}),
+			);
+		}
+	});
 });
 
 describe("sourceItemFingerprint", () => {

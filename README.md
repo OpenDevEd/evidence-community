@@ -24,8 +24,13 @@ npm run lint
 npx tsc --noEmit
 npm run schema:check
 npm run test:unit
+npm run test:e2e
 npm run test:acceptance
 ```
+
+The E2E command builds the application, starts disposable PostgreSQL and
+Meilisearch services, runs the browser suite against them, and removes the
+test data and containers when it finishes.
 
 The acceptance command builds one production image, starts two independently
 configured libraries with PostgreSQL and Meilisearch, exercises their runtime

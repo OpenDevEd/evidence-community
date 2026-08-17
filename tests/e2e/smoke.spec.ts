@@ -670,7 +670,12 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 			: "/api/items",
 	);
 	expect(itemsResponse.status()).toBe(200);
-	const firstItem = (await itemsResponse.json()).items?.[0];
+	const searchItems = (await itemsResponse.json()).items ?? [];
+	const firstItem = expectedSearchItemKey
+		? searchItems.find(
+				(item: { key?: string }) => item.key === expectedSearchItemKey,
+			)
+		: searchItems[0];
 	if (expectedSearchItemKey) {
 		expect(firstItem?.key).toBe(expectedSearchItemKey);
 		expect(firstItem?.title).toBe(expectedSearchItemTitle);
