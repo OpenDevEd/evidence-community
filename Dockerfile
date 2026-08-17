@@ -9,7 +9,8 @@ WORKDIR /app
 FROM base AS npm-deps-base
 
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends git \
+	&& apt-get install -y --no-install-recommends ca-certificates git \
+	&& git config --system url."https://github.com/".insteadOf "ssh://git@github.com/" \
 	&& rm -rf /var/lib/apt/lists/*
 
 FROM npm-deps-base AS deps
