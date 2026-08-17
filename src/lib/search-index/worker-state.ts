@@ -5,6 +5,10 @@ import {
 import { and, eq } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import {
+	createWorkerStateReporter,
+	type WorkerStateReporter,
+} from "@/lib/worker-state-reporter";
 
 const MAX_WORKER_ID_LENGTH = 255;
 const INSTANCE_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]{0,63}$/u;
@@ -22,14 +26,8 @@ export type SearchIndexWorkerProgress = {
 	stage: SearchIndexWorkerStage;
 };
 
-export type SearchIndexWorkerStateReporter = {
-	current: () => SearchIndexWorkerProgress;
-	flush: () => Promise<void>;
-	report: (
-		progress: SearchIndexWorkerProgress,
-		force?: boolean,
-	) => Promise<void>;
-};
+export type SearchIndexWorkerStateReporter =
+	WorkerStateReporter<SearchIndexWorkerProgress>;
 
 function normalizedWorkerId(workerId: string) {
 	const normalized = workerId.trim();
@@ -65,40 +63,7 @@ export function createSearchIndexWorkerStateReporter(options: {
 		heartbeatAt: Date,
 	) => Promise<unknown>;
 }): SearchIndexWorkerStateReporter {
-	const minimumWriteIntervalMs = options.minimumWriteIntervalMs ?? 1_000;
-	if (
-		!Number.isSafeInteger(minimumWriteIntervalMs) ||
-		minimumWriteIntervalMs < 0
-	) {
-		throw new Error("minimumWriteIntervalMs must be a nonnegative integer");
-	}
-	const currentTime = options.now ?? (() => new Date());
-	let progress = options.initialProgress;
-	let lastWriteAt = 0;
-	let queue = Promise.resolve();
-
-	return {
-		current: () => progress,
-		flush: () => queue,
-		report: (nextProgress, force = false) => {
-			progress = nextProgress;
-			const heartbeatAt = currentTime();
-			if (
-				!force &&
-				heartbeatAt.getTime() - lastWriteAt < minimumWriteIntervalMs
-			) {
-				return queue;
-			}
-			lastWriteAt = heartbeatAt.getTime();
-			const operation = queue
-				.catch(() => undefined)
-				.then(async () => {
-					await options.write(nextProgress, heartbeatAt);
-				});
-			queue = operation.catch(() => undefined);
-			return operation;
-		},
-	};
+	return createWorkerStateReporter(options);
 }
 
 export function searchIndexWorkerIsActive(

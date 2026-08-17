@@ -5,7 +5,7 @@ import {
 	adminErrorResponse,
 	requireAdminSession,
 } from "@/lib/admin/http";
-import { buildAdminPublicationView } from "@/lib/publication/admin-publication-view";
+import { buildAdminPublicationView } from "@/lib/publication/admin-publication-view-service";
 
 export async function GET(
 	request: NextRequest,

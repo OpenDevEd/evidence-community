@@ -1,5 +1,3 @@
-import "server-only";
-
 import {
 	mapCrossrefRecord,
 	planPublicationSync,
@@ -11,9 +9,7 @@ import {
 	type DoiDisplayLink,
 } from "@opendeved/doi-sync-core/display";
 
-import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { getDatabaseForConfig } from "@/db";
 import type { PublicationProvider } from "@/db/schema/publication";
 
 import {
@@ -29,10 +25,7 @@ import {
 	buildPublicationIdentifiers,
 	buildPublicationRecordSnapshot,
 } from "./record-adapter";
-import {
-	readPublicationRepositorySnapshot,
-	type PublicationRepositorySnapshot,
-} from "./repository";
+import type { PublicationRepositorySnapshot } from "./repository";
 import { PublicationItemNotFoundError } from "./errors";
 import {
 	currentManagedDoi,
@@ -690,17 +683,4 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			zenodo: providerView("zenodo", zenodoPlan, zenodoBlockers),
 		},
 	};
-}
-
-export async function buildAdminPublicationView(
-	itemKey: string,
-): Promise<AdminPublicationView> {
-	const config = await getLibraryConfig();
-	const database = await getDatabaseForConfig(config);
-	const snapshot = await readPublicationRepositorySnapshot(
-		database,
-		itemKey,
-		config.services.publication.crossref.environment,
-	);
-	return buildAdminPublicationViewFromSnapshot({ itemKey, snapshot, config });
 }

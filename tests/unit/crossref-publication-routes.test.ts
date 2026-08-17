@@ -30,7 +30,7 @@ vi.mock("@/lib/publication/crossref-activation-service", () => ({
 	activateCrossrefPublication: mocks.activate,
 	retryCrossrefPublication: mocks.retry,
 }));
-vi.mock("@/lib/publication/admin-publication-view", () => ({
+vi.mock("@/lib/publication/admin-publication-view-service", () => ({
 	buildAdminPublicationView: mocks.buildView,
 }));
 

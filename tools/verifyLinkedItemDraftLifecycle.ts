@@ -370,7 +370,7 @@ async function verify() {
 				JSON.stringify(publishedLink?.dirtyFields) ===
 					JSON.stringify([
 						"collections",
-						"language",
+						"languageName",
 						"tags",
 						"title",
 					]) &&

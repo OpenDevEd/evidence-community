@@ -15,6 +15,11 @@ x-source-build: &source-build
   context: .
   dockerfile: Dockerfile
 
+x-publication-build: &publication-build
+  context: .
+  dockerfile: Dockerfile
+  target: publication-worker
+
 x-runtime-networks: &runtime-networks
   - private
   - coolify
@@ -30,6 +35,8 @@ services:
       - *runtime-config
     networks: *runtime-networks
     depends_on:
+      publication-worker:
+        condition: service_healthy
       search-indexer:
         condition: service_healthy
     labels:
@@ -89,6 +96,25 @@ services:
     depends_on:
       search-indexer:
         condition: service_healthy
+    restart: unless-stopped
+
+  publication-worker:
+    build: *publication-build
+    environment:
+      <<: *runtime-environment
+      PUBLICATION_WORKER_ID: publication-worker
+    configs:
+      - *runtime-config
+    networks: *runtime-networks
+    depends_on:
+      search-indexer:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", ".next/publication/health.mjs"]
+      interval: 15s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
     restart: unless-stopped
 
   meilisearch:

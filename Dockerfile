@@ -63,56 +63,52 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 ENTRYPOINT ["evidence-library-entrypoint"]
 CMD ["node_modules/.bin/next", "start"]
 
-FROM base AS search-indexer
+FROM base AS worker-base
 
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
-ENV SEARCH_INDEX_WORKER_ID=search-indexer
-ENV SEARCH_INDEX_WORKER_INSTANCE_PATH=/tmp/evidence-library-search-indexer-instance
 
 WORKDIR /app
 
 RUN groupadd --system --gid 1001 nodejs \
-	&& useradd --system --uid 1001 --gid nodejs indexer
+	&& useradd --system --uid 1001 --gid nodejs worker
 
 COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/evidence-library-entrypoint
 
-COPY --from=deps --chown=indexer:nodejs /app/node_modules ./node_modules
-COPY --chown=indexer:nodejs packages ./packages
-COPY --chown=indexer:nodejs drizzle ./drizzle
-COPY --chown=indexer:nodejs src ./src
-COPY --chown=indexer:nodejs tools ./tools
-COPY --chown=indexer:nodejs drizzle.config.ts package.json tsconfig.json ./
+COPY --from=deps --chown=worker:nodejs /app/node_modules ./node_modules
+COPY --chown=worker:nodejs packages ./packages
+COPY --chown=worker:nodejs drizzle ./drizzle
+COPY --chown=worker:nodejs src ./src
+COPY --chown=worker:nodejs tools ./tools
+COPY --chown=worker:nodejs drizzle.config.ts package.json tsconfig.json ./
 
 RUN npm --prefix packages/evidence-library-core run build
+
+ENTRYPOINT ["evidence-library-entrypoint"]
+
+FROM worker-base AS search-indexer
+
+ENV SEARCH_INDEX_WORKER_ID=search-indexer
+ENV SEARCH_INDEX_WORKER_INSTANCE_PATH=/tmp/evidence-library-search-indexer-instance
 
 HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
 	CMD ["node_modules/.bin/tsx", "tools/checkSearchIndexerHealth.ts"]
 
-ENTRYPOINT ["evidence-library-entrypoint"]
 CMD ["node_modules/.bin/tsx", "tools/runSearchIndexer.ts", "--watch"]
 
-FROM base AS source-worker-base
+FROM worker-base AS publication-worker
 
-ENV NODE_ENV=production
-ENV NEXT_TELEMETRY_DISABLED=1
+ENV PUBLICATION_WORKER_ID=publication-worker
+ENV PUBLICATION_WORKER_INSTANCE_PATH=/tmp/evidence-library-publication-worker-instance
 
-WORKDIR /app
+RUN npm run publication:worker:build
 
-RUN groupadd --system --gid 1001 nodejs \
-	&& useradd --system --uid 1001 --gid nodejs sourceworker
+HEALTHCHECK --interval=15s --timeout=5s --start-period=20s --retries=3 \
+	CMD ["node", ".next/publication/health.mjs"]
 
-COPY --chmod=0755 docker/entrypoint.sh /usr/local/bin/evidence-library-entrypoint
+CMD ["node", ".next/publication/worker.mjs", "--watch"]
 
-COPY --from=deps --chown=sourceworker:nodejs /app/node_modules ./node_modules
-COPY --chown=sourceworker:nodejs packages ./packages
-COPY --chown=sourceworker:nodejs src ./src
-COPY --chown=sourceworker:nodejs tools ./tools
-COPY --chown=sourceworker:nodejs package.json tsconfig.json ./
-
-RUN npm --prefix packages/evidence-library-core run build
-
-ENTRYPOINT ["evidence-library-entrypoint"]
+FROM worker-base AS source-worker-base
 FROM source-worker-base AS source-sync
 
 ENV SOURCE_SYNC_WORKER_ID=source-sync
