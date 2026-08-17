@@ -34,6 +34,15 @@ type PublicationSandboxEvidence = {
 		editedRevision: number;
 		redepositSubmission: AdminPublicationView["providers"]["crossref"]["exact"]["pendingSubmission"];
 	};
+	crossrefProgress?: {
+		doi: string;
+		jobId: number;
+		verifiedAt?: string;
+		pendingSubmission?: AdminPublicationView["providers"]["crossref"]["exact"]["pendingSubmission"];
+		editedTitle?: string;
+		editedRevision?: number;
+		redepositSubmission?: AdminPublicationView["providers"]["crossref"]["exact"]["pendingSubmission"];
+	};
 	attachment?: {
 		key: string;
 		filename: string;
@@ -71,6 +80,13 @@ function requiredEnvironment(name: string) {
 
 function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
+}
+
+export function applySandboxDraftChanges(
+	payload: Record<string, unknown>,
+	changes: Record<string, unknown>,
+) {
+	return { ...payload, ...changes };
 }
 
 function pause(milliseconds: number) {
@@ -329,85 +345,129 @@ async function runCrossref(
 		before.providers.crossref.blockers.length === 0,
 		`Crossref activation is blocked: ${before.providers.crossref.blockers.join("; ")}`,
 	);
-	const activationPath = `/api/admin/items/${parent.key}/publication/crossref/activate`;
-	const first = await client.request<{
-		activation: { doi: string; job: { id: number } };
-	}>(activationPath, { method: "POST" });
-	const second = await client.request<{
-		activation: { doi: string; job: { id: number } };
-	}>(activationPath, { method: "POST" });
-	assert(
-		first.activation.doi === second.activation.doi,
-		"Crossref activation is not idempotent",
-	);
-	assert(
-		first.activation.doi.startsWith(`${input.prefix}/${input.namespace}`),
-		"Crossref reserved a DOI outside the docs-pen namespace",
-	);
-	let pendingSubmission: AdminPublicationView["providers"]["crossref"]["exact"]["pendingSubmission"] =
-		null;
-	const settled = await waitFor({
-		description: "Crossref Test verification",
-		timeoutMs: input.timeoutMs,
-		read: () => publication(client, parent.key),
-		onRead(view) {
-			pendingSubmission ??=
-				view.providers.crossref.exact.pendingSubmission;
-			const failure = view.providers.crossref.exact.failure;
-			if (failure) throw new Error(`Crossref failed: ${failure.summary}`);
-		},
-		accept: (view) =>
-			Boolean(pendingSubmission) &&
-			view.providers.crossref.displayState === "synced" &&
-			view.providers.crossref.exact.identifiers.some(
-				(identifier) =>
-					identifier.doi === first.activation.doi &&
-					identifier.lifecycle === "verified" &&
-					identifier.ownership === "managed",
+	let progress = evidence.crossrefProgress;
+	if (!progress) {
+		const activationPath = `/api/admin/items/${parent.key}/publication/crossref/activate`;
+		const first = await client.request<{
+			activation: { doi: string; job: { id: number } };
+		}>(activationPath, { method: "POST" });
+		const second = await client.request<{
+			activation: { doi: string; job: { id: number } };
+		}>(activationPath, { method: "POST" });
+		assert(
+			first.activation.doi === second.activation.doi,
+			"Crossref activation is not idempotent",
+		);
+		assert(
+			first.activation.doi.startsWith(
+				`${input.prefix}/${input.namespace}`,
 			),
-	});
-	assert(
-		settled.providers.crossref.exact.job?.deadLetteredAt === null,
-		"Crossref job was dead-lettered",
-	);
-	const draft = (
+			"Crossref reserved a DOI outside the docs-pen namespace",
+		);
+		progress = {
+			doi: first.activation.doi,
+			jobId: first.activation.job.id,
+		};
+		evidence.crossrefProgress = progress;
+		saveEvidence(input.evidencePath, evidence);
+	}
+
+	let pendingSubmission = progress.pendingSubmission ?? null;
+	if (!progress.verifiedAt) {
+		const settled = await waitFor({
+			description: "Crossref Test verification",
+			timeoutMs: input.timeoutMs,
+			read: () => publication(client, parent.key),
+			onRead(view) {
+				const observed =
+					view.providers.crossref.exact.pendingSubmission;
+				if (!pendingSubmission && observed) {
+					pendingSubmission = observed;
+					progress.pendingSubmission = observed;
+					saveEvidence(input.evidencePath, evidence);
+				}
+				const failure = view.providers.crossref.exact.failure;
+				if (failure)
+					throw new Error(`Crossref failed: ${failure.summary}`);
+			},
+			accept: (view) =>
+				Boolean(pendingSubmission) &&
+				view.providers.crossref.displayState === "synced" &&
+				view.providers.crossref.exact.identifiers.some(
+					(identifier) =>
+						identifier.doi === progress.doi &&
+						identifier.lifecycle === "verified" &&
+						identifier.ownership === "managed",
+				),
+		});
+		assert(
+			settled.providers.crossref.exact.job?.deadLetteredAt === null,
+			"Crossref job was dead-lettered",
+		);
+		progress.verifiedAt = new Date().toISOString();
+		saveEvidence(input.evidencePath, evidence);
+	}
+	assert(pendingSubmission, "Crossref submission evidence is missing");
+
+	const editedTitle =
+		progress.editedTitle ?? `${parent.title} — metadata update`;
+	let editedRevision = progress.editedRevision;
+	if (!editedRevision) {
+		const draft = (
+			await client.request<{ draft: AdminDraft }>(
+				`/api/admin/items/${parent.key}/draft`,
+				{ method: "POST" },
+			)
+		).draft;
 		await client.request<{ draft: AdminDraft }>(
 			`/api/admin/items/${parent.key}/draft`,
-			{ method: "POST" },
-		)
-	).draft;
-	const editedTitle = `${parent.title} — metadata update`;
-	await client.request<{ draft: AdminDraft }>(
-		`/api/admin/items/${parent.key}/draft`,
-		{
-			method: "PUT",
-			body: JSON.stringify({
-				expectedDraftRevision: draft.draftRevision,
-				expectedPayload: draft.payload,
-				payload: { title: editedTitle },
-			}),
-		},
-	);
-	const republished = await client.request<IndexingMutation>(
-		`/api/admin/items/${parent.key}/publish`,
-		{ method: "POST", body: "{}" },
-	);
-	await waitForReceipts(
-		client,
-		republished.indexingReceipts,
-		input.timeoutMs,
-	);
-	const editedRevision = republished.item?.revision;
-	assert(typeof editedRevision === "number", "Edited record has no revision");
-	let redepositSubmission: AdminPublicationView["providers"]["crossref"]["exact"]["pendingSubmission"] =
-		null;
+			{
+				method: "PUT",
+				body: JSON.stringify({
+					expectedDraftRevision: draft.draftRevision,
+					expectedPayload: draft.payload,
+					payload: applySandboxDraftChanges(draft.payload, {
+						title: editedTitle,
+					}),
+				}),
+			},
+		);
+		const republished = await client.request<IndexingMutation>(
+			`/api/admin/items/${parent.key}/publish`,
+			{ method: "POST", body: "{}" },
+		);
+		await waitForReceipts(
+			client,
+			republished.indexingReceipts,
+			input.timeoutMs,
+		);
+		editedRevision = republished.item?.revision;
+		assert(
+			typeof editedRevision === "number",
+			"Edited record has no revision",
+		);
+		progress.editedTitle = editedTitle;
+		progress.editedRevision = editedRevision;
+		evidence.parent = {
+			...parent,
+			title: editedTitle,
+			revision: editedRevision,
+		};
+		saveEvidence(input.evidencePath, evidence);
+	}
+
+	let redepositSubmission = progress.redepositSubmission ?? null;
 	await waitFor({
 		description: "Crossref metadata redeposit",
 		timeoutMs: input.timeoutMs,
 		read: () => publication(client, parent.key),
 		onRead(view) {
-			redepositSubmission ??=
-				view.providers.crossref.exact.pendingSubmission;
+			const observed = view.providers.crossref.exact.pendingSubmission;
+			if (!redepositSubmission && observed) {
+				redepositSubmission = observed;
+				progress.redepositSubmission = observed;
+				saveEvidence(input.evidencePath, evidence);
+			}
 			const failure = view.providers.crossref.exact.failure;
 			if (failure)
 				throw new Error(
@@ -419,23 +479,25 @@ async function runCrossref(
 			view.canonicalRevision >= editedRevision &&
 			view.providers.crossref.displayState === "synced" &&
 			view.providers.crossref.exact.identifiers.some(
-				(identifier) => identifier.doi === first.activation.doi,
+				(identifier) => identifier.doi === progress.doi,
 			),
 	});
+	assert(redepositSubmission, "Crossref redeposit evidence is missing");
 	evidence.parent = {
 		...parent,
 		title: editedTitle,
 		revision: editedRevision,
 	};
 	evidence.crossref = {
-		doi: first.activation.doi,
-		jobId: first.activation.job.id,
-		verifiedAt: new Date().toISOString(),
+		doi: progress.doi,
+		jobId: progress.jobId,
+		verifiedAt: progress.verifiedAt ?? new Date().toISOString(),
 		pendingSubmission,
 		editedTitle,
 		editedRevision,
 		redepositSubmission,
 	};
+	delete evidence.crossrefProgress;
 	saveEvidence(input.evidencePath, evidence);
 	return evidence.crossref;
 }
