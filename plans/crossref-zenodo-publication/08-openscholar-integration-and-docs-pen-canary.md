@@ -24,7 +24,7 @@ Move the finished DOI publication work onto the current `openscholar` branch wit
 5. The Crossref confirmation shows the configured namespace, such as `10.53832/docs-pen.…`. It never shows an exact unreserved counter value. The exact DOI appears only after PostgreSQL reserves it.
 6. A DOI is managed only when this library reserved it in `publicationIdentifier`. A DOI found only in item metadata remains external, even when it uses the configured prefix. This phase does not adopt existing DOIs.
 7. Records with an active Crossref or Zenodo target cannot be unpublished until a later withdrawal/tombstone design exists. The API returns a plain error explaining how to proceed.
-8. Current `openscholar` owns migrations through 0030. All seven DOI-branch migrations, 0025 through 0031 including 0026 canonical metadata fields, are recreated as consolidated migrations 0031-0033 generated from the current 0030 snapshot. The final 0033 snapshot is compared with the DOI branch's 0031 snapshot so no publication table or column is lost.
+8. Migrations 0025-0028 are already shared by both branches and remain unchanged. Current `openscholar` then owns 0029 and 0030. The DOI branch's three divergent migrations—0029 provider audits, 0030 file MD5, and 0031 Zenodo corrections—become 0031, 0032, and 0033, generated from the current `openscholar` 0030 snapshot. The final schema must contain the union of current `openscholar` and DOI-branch fields.
 9. The new required file MD5 is populated from the canonical attachment item's existing `md5` value before the column becomes required. The migration must stop with a clear database error if an existing published file has no valid MD5. No nullable compatibility field remains.
 10. Merge and deploy with providers disabled first. Enable and qualify only `docs-pen`. The other development library stays disabled until the canary passes and a later explicit step enables it.
 11. `docs-pen` uses suffix namespace `docs-pen.`. Its separate database, publication worker, and Meilisearch keep its queue and search work isolated.
@@ -81,10 +81,10 @@ These are the required public seams for the test-first work:
 
 ### 3. Rebuild migrations and prove the merged runtime
 
-- Recreate all schema work from DOI-branch migrations 0025-0031 as consolidated migrations 0031-0033 from current 0030, including the canonical metadata fields from old migration 0026.
+- Keep the already-shared migrations 0025-0028 unchanged. Recreate only the DOI branch's three divergent migrations as 0031 provider audits, 0032 file MD5, and 0033 Zenodo corrections from current `openscholar` 0030.
 - Populate `itemFilePublication.md5` from the canonical attachment row, validate it, then set it required.
 - Regenerate Drizzle snapshots and `_journal.json`; never hand-merge snapshot JSON.
-- Compare the generated final snapshot with the DOI branch's final 0031 snapshot and account for every publication table and column.
+- Compare the generated final schema with both branch tips and account for every current `openscholar` field and every DOI publication field.
 - Confirm `test:library-compose` and `test:database-provisioning` exist immediately after the port, before relying on them in the full gate.
 - Run schema checks, TypeScript, lint, unit tests, database provisioning, library Compose checks, publication worker checks, full acceptance, and browser tests.
 - Build the production image and inspect the effective Compose model: web/source/search/publication workers use the runtime networks; Meilisearch stays private; web selects the Coolify network for the proxy.

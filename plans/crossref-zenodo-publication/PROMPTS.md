@@ -60,7 +60,7 @@ STANDING RULES
 
 EXECUTION RHYTHM
 - Commit this plan before code.
-- Recreate all seven DOI-branch migrations 0025-0031 as consolidated 0031-0033 migrations generated from current openscholar migration 0030. Compare the final snapshots so no publication or canonical metadata field is lost.
+- Keep shared migrations 0025-0028 unchanged. Recreate only the DOI branch's divergent 0029-0031 work as 0031 provider audits, 0032 file MD5, and 0033 Zenodo corrections generated from current openscholar migration 0030. Compare the final schema with both branch tips so no current or publication field is lost.
 - For DOI preview, ownership, and unpublish safety, write one failing behavior test, make it pass, and commit each green unit.
 - Resolve integration conflicts by preserving the current openscholar behavior and adding only the publication concern.
 - Run focused checks after each unit, then the complete local gate before any push.
