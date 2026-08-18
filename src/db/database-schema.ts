@@ -11,6 +11,7 @@ import * as collectionTable from "./schema/tables/collection";
 import * as adminItemListProjectionTable from "./schema/tables/adminItemListProjection";
 import * as embeddingsTable from "./schema/tables/embeddings";
 import * as itemTable from "./schema/tables/item";
+import * as itemLinkTable from "./schema/tables/itemLink";
 import * as itemToCollectionTable from "./schema/tables/itemToCollection";
 import * as itemToTagTable from "./schema/tables/itemToTag";
 import * as itemToUserCollectionRelations from "./schema/relations/itemToUserCollection";
@@ -32,6 +33,7 @@ export const schema = {
 	...sourceTables,
 	...publicationTables,
 	...itemToCollectionTable,
+	...itemLinkTable,
 	...itemToTagTable,
 	...languageTable,
 	...tagTable,
