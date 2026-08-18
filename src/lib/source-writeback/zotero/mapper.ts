@@ -224,6 +224,8 @@ export function createZoteroItemPayload(
 		const field = databaseItemFieldToPayloadField(databaseField);
 		if (field === "itemType" || value === null || value === undefined)
 			continue;
+		// Record links live in the library's own link table, not in Zotero fields.
+		if (field === "links") continue;
 		if (!validFields.has(field)) {
 			throw new ZoteroWritebackMappingError(
 				`Canonical writeback payload field is not valid for ${definition.itemType}: ${field}`,
@@ -257,6 +259,7 @@ export function createZoteroItemPatch(
 	const data: Record<string, unknown> = {};
 	for (const databaseField of [...new Set(dirtyFields)].sort()) {
 		const field = databaseItemFieldToPayloadField(databaseField);
+		if (field === "links") continue;
 		if (!knownEditableFields.has(field)) {
 			throw new ZoteroWritebackMappingError(
 				`Canonical writeback dirty field is not a Zotero field: ${databaseField}`,

@@ -13,6 +13,13 @@ function attachmentDetail(key: string): AdminItemDetail {
 		editable: true,
 		fileDraft: null,
 		filePublication: null,
+		links: {
+			fromSources: [],
+			incoming: [],
+			keys: { cites: [], related: [] },
+			publishedKeys: { cites: [], related: [] },
+			targets: [],
+		},
 		fileState: "none",
 		itemType: "Attachment",
 		key,
