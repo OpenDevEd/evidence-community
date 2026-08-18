@@ -49,7 +49,11 @@ export function useAdminSourceWriteback(
 		setLoading(true);
 		try {
 			setStatus(
-				await getAdminSourceWritebackStatus(itemKey, controller.signal),
+				await getAdminSourceWritebackStatus(
+					itemKey,
+					sourceKey,
+					controller.signal,
+				),
 			);
 			setError(null);
 		} catch (caught) {
@@ -79,10 +83,10 @@ export function useAdminSourceWriteback(
 	}, [error, itemKey, refresh, sourceKey, status]);
 
 	const retry = useCallback(async () => {
-		if (!itemKey || retrying) return;
+		if (!itemKey || !sourceKey || retrying) return;
 		setRetrying(true);
 		try {
-			setStatus(await retryAdminSourceWriteback(itemKey));
+			setStatus(await retryAdminSourceWriteback(itemKey, sourceKey));
 			setError(null);
 		} catch (caught) {
 			setError(message(caught));

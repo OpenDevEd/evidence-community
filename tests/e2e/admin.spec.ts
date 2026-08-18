@@ -268,16 +268,7 @@ function publishedDetail(
 		tags: [],
 		title: publishedPayload.title,
 		updatedAt: timestamp,
-		writeback: {
-			effective: false,
-			itemEnabled: false,
-			reason: "not-linked",
-			sourceEnabled: false,
-			sourceKey: null,
-			sourceLabel: null,
-			sourceStatus: null,
-			supported: false,
-		},
+		writeback: { available: [], originSourceKey: null, selected: [] },
 	};
 }
 
@@ -695,19 +686,28 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 		state: editing ? "edited" : "published",
 		title: String(draftPayload.title),
 		writeback: {
-			effective: true,
-			itemEnabled: true,
-			reason: "ok",
-			sourceEnabled: true,
-			sourceKey: importedSource.key,
-			sourceLabel: importedSource.label,
-			sourceStatus: "active",
-			supported: true,
+			available: [
+				{
+					effective: true,
+					isOrigin: true,
+					itemEnabled: true,
+					linkExists: true,
+					provider: "zotero",
+					reason: "ok",
+					sourceEnabled: true,
+					sourceKey: importedSource.key,
+					sourceLabel: importedSource.label,
+					sourceStatus: "active",
+					supported: true,
+				},
+			],
+			originSourceKey: importedSource.key,
+			selected: [importedSource.key],
 		},
 	});
 
 	await page.route(
-		`**/api/admin/items/${publishedItemKey}/writeback/status`,
+		`**/api/admin/items/${publishedItemKey}/writeback/status?source=*`,
 		async (route) => {
 			const states = ["queued", "sending", "synced"] as const;
 			const state = forceFailure
@@ -734,7 +734,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 		},
 	);
 	await page.route(
-		`**/api/admin/items/${publishedItemKey}/writeback/retry`,
+		`**/api/admin/items/${publishedItemKey}/writeback/retry?source=*`,
 		async (route) => {
 			retryRequests += 1;
 			forceFailure = false;

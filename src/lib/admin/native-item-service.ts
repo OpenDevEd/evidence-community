@@ -49,12 +49,17 @@ import {
 import { NATIVE_SOURCE_CONNECTION_KEY as NATIVE_CONNECTION_KEY } from "./constants";
 import { itemCollectionSourceIsAssignable } from "./item-collection-policy";
 import {
+	applyParentWritebackLinks,
+	cascadeChildWritebackLinks,
+	enqueueFullWritebackForSources,
 	enqueueSourceWritebackJob,
-	ensureDefaultWritebackLink,
+	ensureItemWritebackLinks,
+	fullItemWritebackFields,
 	markItemWritebackDirty,
 } from "@/lib/source-writeback/queue";
 import {
-	resolveItemWritebackPolicy,
+	importedItemEditBlockReason,
+	resolveItemWritebackTargets,
 	type SourceWritebackConfiguration,
 	type SourceWritebackReason,
 } from "@/lib/source-writeback/policy";
@@ -65,6 +70,15 @@ type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
 export type ItemWritebackPolicyOptions = {
 	writebackConfig?: SourceWritebackConfiguration;
+};
+
+export type ItemPublishOptions = ItemWritebackPolicyOptions & {
+	/**
+	 * The sources this record should write back to from now on. Omit to keep
+	 * the stored selection. Ignored for attachments and notes, which always
+	 * follow their parent.
+	 */
+	sourceKeys?: readonly string[];
 };
 
 export async function advanceOpenItemDraftBaseRevision(
@@ -164,14 +178,15 @@ async function requireItemDraftAccess(
 		return { identity };
 	}
 
-	const writeback = await resolveItemWritebackPolicy(
+	// An imported record stays editable while its origin source can receive
+	// writeback, even when the admin has unchecked that source for this record.
+	const targets = await resolveItemWritebackTargets(
 		executor,
 		itemKey,
 		options.writebackConfig ?? { sources: [] },
 	);
-	if (!writeback.effective) {
-		throw new ItemWritebackUnavailableError(itemKey, writeback.reason);
-	}
+	const blocked = importedItemEditBlockReason(targets);
+	if (blocked) throw new ItemWritebackUnavailableError(itemKey, blocked);
 	return { identity };
 }
 
@@ -696,7 +711,7 @@ export async function assignItemDraftToCollection(
 export async function publishItemDraftWithContext(
 	db: Database,
 	itemKey: string,
-	options: ItemWritebackPolicyOptions = {},
+	options: ItemPublishOptions = {},
 ) {
 	const [lockCandidate, lockDraft] = await Promise.all([
 		db
@@ -977,21 +992,49 @@ export async function publishItemDraftWithContext(
 				"tags",
 			);
 		}
-		if (changedFields.length > 0 || sourceMembershipChanged) {
-			if (access.identity.sourceConnectionKey === NATIVE_CONNECTION_KEY) {
-				await ensureDefaultWritebackLink(transaction, itemKey);
-			}
+		// The record's source selection is saved with the publish. Children
+		// always copy their parent; top-level records use the request, or keep
+		// what was stored. Sources enabled just now receive the whole record.
+		const selection = lockedParentItem
+			? await applyParentWritebackLinks(transaction, {
+					itemKey,
+					parentItemKey: lockedParentItem,
+				})
+			: options.sourceKeys !== undefined
+				? await ensureItemWritebackLinks(transaction, {
+						configuration: options.writebackConfig ?? { sources: [] },
+						itemKey,
+						sourceKeys: options.sourceKeys,
+					})
+				: { enabled: [], newlyEnabled: [] };
+		const changedChildren = lockedParentItem
+			? []
+			: await cascadeChildWritebackLinks(transaction, itemKey);
+		const dirtyFieldsBySource: Record<string, readonly string[]> = {};
+		if (sourceMembershipChanged) {
+			dirtyFieldsBySource[access.identity.sourceConnectionKey] = [
+				"collections",
+			];
+		}
+		for (const sourceKey of selection.newlyEnabled) {
+			dirtyFieldsBySource[sourceKey] = fullItemWritebackFields();
+		}
+		if (
+			changedFields.length > 0 ||
+			Object.keys(dirtyFieldsBySource).length > 0
+		) {
 			await markItemWritebackDirty(transaction, {
 				canonicalRevision: nextRevision,
 				dirtyFields: changedFields,
-				dirtyFieldsBySource: sourceMembershipChanged
-					? {
-							[access.identity.sourceConnectionKey]: [
-								"collections",
-							],
-						}
-					: undefined,
+				dirtyFieldsBySource,
 				itemKey,
+				updatedAt: now,
+			});
+		}
+		for (const child of changedChildren) {
+			await enqueueFullWritebackForSources(transaction, {
+				itemKey: child.itemKey,
+				sourceKeys: child.newlyEnabled,
 				updatedAt: now,
 			});
 		}

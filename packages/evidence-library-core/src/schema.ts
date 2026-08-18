@@ -98,7 +98,6 @@ export const sourceConnection = pgTable(
 		provider: text("provider", { enum: SOURCE_PROVIDERS }).notNull(),
 		scopeKind: text("scopeKind", { enum: SOURCE_SCOPE_KINDS }).notNull(),
 		externalScopeKey: varchar("externalScopeKey", { length: 512 }),
-		defaultWriteback: boolean("defaultWriteback").notNull().default(false),
 		config: jsonb("config").$type<JsonObject>().notNull().default({}),
 		syncCursor: jsonb("syncCursor")
 			.$type<JsonObject>()
@@ -130,16 +129,6 @@ export const sourceConnection = pgTable(
 			"sourceConnection_status_valid",
 			sql`${table.status} IN ('active', 'paused', 'removed')`,
 		),
-		check(
-			"sourceConnection_default_writeback_remote",
-				sql`NOT ${table.defaultWriteback} OR (
-				${table.provider} <> 'native'
-					AND ${table.status} <> 'removed'
-			)`,
-		),
-		uniqueIndex("sourceConnection_one_default_writeback")
-			.on(table.defaultWriteback)
-			.where(sql`${table.defaultWriteback} = true`),
 		uniqueIndex("sourceConnection_provider_scope_unique")
 			.on(table.provider, table.externalScopeKey)
 			.where(sql`${table.externalScopeKey} IS NOT NULL`),
@@ -397,9 +386,6 @@ export const itemSourceLink = pgTable(
 			table.sourceConnectionKey,
 			table.sourceRecordKey,
 		),
-		uniqueIndex("itemSourceLink_one_writeback_per_item")
-			.on(table.itemKey)
-			.where(sql`${table.writebackEnabled} = true`),
 		index("itemSourceLink_connection_idx").on(table.sourceConnectionKey),
 	],
 );

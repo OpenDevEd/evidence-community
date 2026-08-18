@@ -31,8 +31,8 @@ crash. Adapter retries receive the same idempotency key, and adapters must make
 repeated calls safe because a process can fail after the remote write but
 before local acknowledgement.
 
-The provider-neutral worker and fake adapter verifier cover default-target
-linking, native creation, imported updates, parent-before-child ordering,
+The provider-neutral worker and fake adapter verifier cover per-record
+source selection, native creation, imported updates, parent-before-child ordering,
 in-flight edits, heartbeat renewal, lease exclusion, lease expiry, retry,
 dead-lettering, pause/resume, paused-target item creation, stale job suppression,
 snapshots, and duplicate enqueue calls:

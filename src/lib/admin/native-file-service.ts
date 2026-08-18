@@ -25,7 +25,7 @@ import { item } from "@/db/schema/tables/item";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { tag } from "@/db/schema/tables/tag";
 import {
-	ensureDefaultWritebackLink,
+	applyParentWritebackLinks,
 	markItemWritebackDirty,
 } from "@/lib/source-writeback/queue";
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
@@ -945,7 +945,10 @@ export async function publishNativePdf(
 					revision: parentNextRevision,
 				},
 			]);
-			await ensureDefaultWritebackLink(transaction, itemKey);
+			await applyParentWritebackLinks(transaction, {
+				itemKey,
+				parentItemKey: parent.key,
+			});
 			await markItemWritebackDirty(transaction, {
 				canonicalRevision: nextRevision,
 				dirtyFields: ["tags", "url"],
@@ -1273,7 +1276,10 @@ export async function unpublishNativePdfWithContext(
 				revision: parentRevision,
 			},
 		]);
-		await ensureDefaultWritebackLink(transaction, itemKey);
+		await applyParentWritebackLinks(transaction, {
+			itemKey,
+			parentItemKey: parent.key,
+		});
 		await markItemWritebackDirty(transaction, {
 			canonicalRevision: attachmentRevision,
 			dirtyFields: ["tags", "url"],

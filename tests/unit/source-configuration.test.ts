@@ -14,7 +14,6 @@ describe("manifest-owned source configuration", () => {
 			provider: "zotero",
 			scopeKind: "group",
 			externalScopeKey: "6632364",
-			defaultWriteback: true,
 			config: config.sources[0].settings,
 			status: "active",
 		});
@@ -26,11 +25,9 @@ describe("manifest-owned source configuration", () => {
 		const input = structuredClone(maximalLibraryConfig) as {
 			sources: Array<{
 				enabled: boolean;
-				defaultWriteback: boolean;
 			}>;
 		};
 		input.sources[0].enabled = false;
-		input.sources[0].defaultWriteback = false;
 		const config = libraryConfigSchema.parse(input);
 
 		expect(configuredSourceConnectionValues(config.sources[0]).status).toBe(

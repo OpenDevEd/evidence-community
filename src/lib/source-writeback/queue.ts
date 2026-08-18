@@ -5,9 +5,18 @@ import {
 	sourceWritebackJob,
 	type SourceWritebackOperation,
 } from "@opendeved/evidence-library-core";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, inArray, ne } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { item } from "@/db/schema/tables/item";
+import { editableItemDatabaseFields } from "@/lib/admin/item-draft-patch";
+import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
+
+import {
+	configuredWritebackSourceKeys,
+	WRITEBACK_SUPPORTED_PROVIDERS,
+	type SourceWritebackConfiguration,
+} from "./policy";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
@@ -280,58 +289,292 @@ export async function markItemWritebackDirty(
 // an upsert for the link's retained dirtyFields. Disabled links deliberately
 // keep those fields after their older jobs are superseded.
 
-export async function ensureDefaultWritebackLink(
+export class SourceWritebackUnknownSourceError extends Error {
+	constructor(readonly sourceKeys: readonly string[]) {
+		super(
+			`These sources cannot receive writeback for this record: ${sourceKeys.join(", ")}`,
+		);
+		this.name = "SourceWritebackUnknownSourceError";
+	}
+}
+
+/**
+ * Works out how a record's source links must change so that exactly the
+ * given sources are enabled. Links are never deleted; unselected sources are
+ * only disabled so their history and remote copy stay.
+ */
+export function planItemWritebackLinkChanges({
+	allowedSourceKeys,
+	existingLinks,
+	sourceKeys,
+}: {
+	allowedSourceKeys: ReadonlySet<string>;
+	existingLinks: readonly {
+		sourceConnectionKey: string;
+		writebackEnabled: boolean;
+	}[];
+	sourceKeys: readonly string[];
+}) {
+	const wanted = [...new Set(sourceKeys)];
+	const invalid = wanted.filter((key) => !allowedSourceKeys.has(key));
+	const enabled = wanted.filter((key) => allowedSourceKeys.has(key));
+	const enabledSet = new Set(enabled);
+	const existingByKey = new Map(
+		existingLinks.map((link) => [link.sourceConnectionKey, link] as const),
+	);
+	const insert = enabled.filter((key) => !existingByKey.has(key));
+	const enable = enabled.filter((key) => {
+		const link = existingByKey.get(key);
+		return link !== undefined && !link.writebackEnabled;
+	});
+	const disable = existingLinks
+		.filter(
+			(link) =>
+				link.writebackEnabled && !enabledSet.has(link.sourceConnectionKey),
+		)
+		.map((link) => link.sourceConnectionKey);
+	return {
+		disable,
+		enable,
+		enabled,
+		insert,
+		invalid,
+		newlyEnabled: enabled.filter(
+			(key) => insert.includes(key) || enable.includes(key),
+		),
+	};
+}
+
+async function allowedWritebackSourceKeys(
+	transaction: Transaction,
+	configuration: SourceWritebackConfiguration,
+) {
+	const configured = configuredWritebackSourceKeys(configuration);
+	const rows = await transaction
+		.select({ key: sourceConnection.key, provider: sourceConnection.provider })
+		.from(sourceConnection)
+		.where(ne(sourceConnection.status, "removed"))
+		.for("key share");
+	return new Set(
+		rows
+			.filter(
+				(row) =>
+					configured.has(row.key) &&
+					WRITEBACK_SUPPORTED_PROVIDERS.some(
+						(provider) => provider === row.provider,
+					),
+			)
+			.map((row) => row.key),
+	);
+}
+
+async function applyItemWritebackLinkPlan(
+	transaction: Transaction,
+	itemKey: string,
+	plan: ReturnType<typeof planItemWritebackLinkChanges>,
+) {
+	if (plan.invalid.length > 0) {
+		throw new SourceWritebackUnknownSourceError(plan.invalid);
+	}
+	for (const sourceConnectionKey of plan.insert) {
+		const [inserted] = await transaction
+			.insert(itemSourceLink)
+			.values({
+				itemKey,
+				sourceConnectionKey,
+				sourceRecordKey: itemKey,
+				writebackEnabled: true,
+			})
+			.onConflictDoNothing()
+			.returning({ itemKey: itemSourceLink.itemKey });
+		if (!inserted) {
+			throw new SourceWritebackTargetKeyCollisionError(
+				itemKey,
+				sourceConnectionKey,
+			);
+		}
+	}
+	if (plan.enable.length > 0) {
+		await transaction
+			.update(itemSourceLink)
+			.set({ updatedAt: new Date(), writebackEnabled: true })
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, itemKey),
+					inArray(itemSourceLink.sourceConnectionKey, plan.enable),
+				),
+			);
+	}
+	if (plan.disable.length > 0) {
+		await transaction
+			.update(itemSourceLink)
+			.set({ updatedAt: new Date(), writebackEnabled: false })
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, itemKey),
+					inArray(itemSourceLink.sourceConnectionKey, plan.disable),
+				),
+			);
+	}
+	return { enabled: plan.enabled, newlyEnabled: plan.newlyEnabled };
+}
+
+async function lockedItemWritebackLinks(
 	transaction: Transaction,
 	itemKey: string,
 ) {
-	const [enabledLink] = await transaction
-		.select()
+	return transaction
+		.select({
+			sourceConnectionKey: itemSourceLink.sourceConnectionKey,
+			writebackEnabled: itemSourceLink.writebackEnabled,
+		})
+		.from(itemSourceLink)
+		.where(eq(itemSourceLink.itemKey, itemKey))
+		.for("update");
+}
+
+/**
+ * Makes exactly `sourceKeys` the enabled writeback sources for one record.
+ *
+ * A new link uses the record's own key as the remote key. Unselected links
+ * are disabled, never deleted. The caller must hold the record's mutation
+ * lock and, when the record is published, enqueue a writeback for every
+ * `newlyEnabled` source.
+ */
+export async function ensureItemWritebackLinks(
+	transaction: Transaction,
+	{
+		configuration,
+		itemKey,
+		sourceKeys,
+	}: {
+		configuration: SourceWritebackConfiguration;
+		itemKey: string;
+		sourceKeys: readonly string[];
+	},
+) {
+	const [allowed, existingLinks] = await Promise.all([
+		allowedWritebackSourceKeys(transaction, configuration),
+		lockedItemWritebackLinks(transaction, itemKey),
+	]);
+	return applyItemWritebackLinkPlan(
+		transaction,
+		itemKey,
+		planItemWritebackLinkChanges({
+			allowedSourceKeys: allowed,
+			existingLinks,
+			sourceKeys,
+		}),
+	);
+}
+
+/**
+ * Copies the parent's enabled sources onto one child record (an attachment
+ * or note). The parent's selection was validated when it was set, so no
+ * config check is needed here.
+ */
+export async function applyParentWritebackLinks(
+	transaction: Transaction,
+	{ itemKey, parentItemKey }: { itemKey: string; parentItemKey: string },
+) {
+	const [sourceKeys, existingLinks] = await Promise.all([
+		resolveChildWritebackSourceKeys(transaction, parentItemKey),
+		lockedItemWritebackLinks(transaction, itemKey),
+	]);
+	return applyItemWritebackLinkPlan(
+		transaction,
+		itemKey,
+		planItemWritebackLinkChanges({
+			allowedSourceKeys: new Set(sourceKeys),
+			existingLinks,
+			sourceKeys,
+		}),
+	);
+}
+
+/** Every field a source receives when a record is sent to it for the first time. */
+export function fullItemWritebackFields() {
+	return [
+		...editableItemDatabaseFields.map(databaseItemFieldToPayloadField),
+		"tags",
+	];
+}
+
+/**
+ * Sends the whole current record to sources that were just enabled for it.
+ * Used when a published record gains a source outside a normal publish, or
+ * when a publish changes nothing else. Unpublished records are skipped.
+ */
+export async function enqueueFullWritebackForSources(
+	transaction: Transaction,
+	{
+		itemKey,
+		sourceKeys,
+		updatedAt = new Date(),
+	}: {
+		itemKey: string;
+		sourceKeys: readonly string[];
+		updatedAt?: Date;
+	},
+) {
+	if (sourceKeys.length === 0) return;
+	const [row] = await transaction
+		.select({ deleted: item.deleted, revision: item.revision })
+		.from(item)
+		.where(eq(item.key, itemKey))
+		.limit(1);
+	if (!row || row.deleted === 1) return;
+	const fields = fullItemWritebackFields();
+	await markItemWritebackDirty(transaction, {
+		canonicalRevision: row.revision,
+		dirtyFields: [],
+		dirtyFieldsBySource: Object.fromEntries(
+			sourceKeys.map((sourceKey) => [sourceKey, fields]),
+		),
+		itemKey,
+		updatedAt,
+	});
+}
+
+/** The sources a parent record currently sends to; children copy this. */
+export async function resolveChildWritebackSourceKeys(
+	transaction: Transaction,
+	parentItemKey: string,
+) {
+	const links = await transaction
+		.select({ sourceConnectionKey: itemSourceLink.sourceConnectionKey })
 		.from(itemSourceLink)
 		.where(
 			and(
-				eq(itemSourceLink.itemKey, itemKey),
+				eq(itemSourceLink.itemKey, parentItemKey),
 				eq(itemSourceLink.writebackEnabled, true),
 			),
-		)
-		.limit(1);
-	if (enabledLink) return enabledLink;
+		);
+	return links.map((link) => link.sourceConnectionKey);
+}
 
-	const [target] = await transaction
-		.select({ key: sourceConnection.key })
-		.from(sourceConnection)
-		.where(
-			and(
-				eq(sourceConnection.defaultWriteback, true),
-				ne(sourceConnection.status, "removed"),
-			),
-		)
-		.limit(1)
-		.for("key share");
-	if (!target) return null;
-
-	const [insertedLink] = await transaction
-		.insert(itemSourceLink)
-		.values({
-			itemKey,
-			sourceConnectionKey: target.key,
-			sourceRecordKey: itemKey,
-			writebackEnabled: true,
-		})
-		.onConflictDoNothing()
-		.returning();
-	if (insertedLink) return insertedLink;
-
-	const [existingLink] = await transaction
-		.select()
-		.from(itemSourceLink)
-		.where(
-			and(
-				eq(itemSourceLink.itemKey, itemKey),
-				eq(itemSourceLink.sourceConnectionKey, target.key),
-			),
-		)
-		.limit(1)
-		.for("update");
-	if (existingLink) return existingLink;
-	throw new SourceWritebackTargetKeyCollisionError(itemKey, target.key);
+/**
+ * Applies the parent's selection to every child record (attachments and
+ * notes) so they always follow the parent. Returns the child keys whose
+ * enabled sources changed, with the sources that became newly enabled.
+ */
+export async function cascadeChildWritebackLinks(
+	transaction: Transaction,
+	parentItemKey: string,
+) {
+	const children = await transaction
+		.select({ key: item.key })
+		.from(item)
+		.where(eq(item.parentItem, parentItemKey));
+	const changed: { itemKey: string; newlyEnabled: string[] }[] = [];
+	for (const child of children) {
+		const result = await applyParentWritebackLinks(transaction, {
+			itemKey: child.key,
+			parentItemKey,
+		});
+		if (result.newlyEnabled.length > 0) {
+			changed.push({ itemKey: child.key, newlyEnabled: result.newlyEnabled });
+		}
+	}
+	return changed;
 }

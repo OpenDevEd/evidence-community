@@ -16,7 +16,8 @@ import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { getLibraryConfig } from "@/config/library-config/server";
 import {
 	evaluateSourceWritebackPolicy,
-	resolveItemWritebackPolicy,
+	importedItemEditBlockReason,
+	resolveItemWritebackTargets,
 } from "@/lib/source-writeback/policy";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
@@ -280,7 +281,7 @@ export async function getAdminItemDetail(
 				.where(eq(itemFilePublication.itemKey, itemKey))
 				.limit(1)
 				.then((rows) => rows[0] ?? null),
-			resolveItemWritebackPolicy(db, itemKey, config),
+			resolveItemWritebackTargets(db, itemKey, config),
 		]);
 	if (!published && !draft) throw new ItemNotFoundError(itemKey);
 
@@ -364,7 +365,7 @@ export async function getAdminItemDetail(
 		draft: draftJson(draft, payload),
 		editable:
 			summary.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY ||
-			writeback.effective,
+			importedItemEditBlockReason(writeback) === null,
 		fileDraft: fileDraftJson(fileDraft),
 		filePublication: filePublicationJson(filePublication),
 		parentItem,

@@ -73,8 +73,7 @@ import {
 	AdminCollectionPicker,
 } from "./AdminCollectionPicker";
 import { FileStateChip, RecordStateChip } from "./AdminStatus";
-import { AdminSourceWritebackStatus } from "./AdminSourceWritebackStatus";
-import { useAdminSourceWriteback } from "./useAdminSourceWriteback";
+import { AdminItemSourceWritebackBadge } from "./AdminItemSourceWritebackBadge";
 import {
 	computeAdminDraftDiff,
 	EMPTY_ADMIN_DRAFT_DIFF,
@@ -1535,11 +1534,6 @@ export function AdminInspector({
 	const { entries: publishedCollectionEntries } = useResolvedAdminCollections(
 		diff.collections ?? [],
 	);
-	const sourceWriteback = useAdminSourceWriteback(
-		detail?.key ?? null,
-		detail?.writeback?.sourceKey ?? null,
-		detail?.revision ?? null,
-	);
 	const publication = useAdminPublication(
 		detail && !detail.parentItem && detail.published ? detail.key : null,
 		detail ? publicationInputVersion(detail) : null,
@@ -1693,7 +1687,11 @@ export function AdminInspector({
 								<Tooltip
 									content={
 										writebackUnavailableMessage[
-											detail.writeback?.reason ?? "not-linked"
+											detail.writeback.available.find(
+												(target) =>
+													target.sourceKey ===
+													detail.writeback.originSourceKey,
+											)?.reason ?? "not-linked"
 										]
 									}
 								>
@@ -1709,20 +1707,19 @@ export function AdminInspector({
 					<div className="mt-2 flex flex-wrap items-center gap-1.5">
 						<RecordStateChip state={detail.state} />
 						<FileStateChip state={detail.fileState} />
-						{detail.writeback?.sourceKey ? (
-							<AdminSourceWritebackStatus
-								error={sourceWriteback.error}
-								loading={sourceWriteback.loading}
-								onRefresh={() => void sourceWriteback.refresh()}
-								onRetry={() => void sourceWriteback.retry()}
-								retrying={sourceWriteback.retrying}
+						{detail.writeback.selected.map((sourceKey) => (
+							<AdminItemSourceWritebackBadge
+								itemKey={detail.key}
+								key={sourceKey}
+								revision={detail.revision}
+								sourceKey={sourceKey}
 								sourceLabel={
-									detail.writeback.sourceLabel ??
-									detail.writeback.sourceKey
+									detail.writeback.available.find(
+										(target) => target.sourceKey === sourceKey,
+									)?.sourceLabel ?? sourceKey
 								}
-								status={sourceWriteback.status}
 							/>
-						) : null}
+						))}
 						{!detail.parentItem ? (
 							<AdminPublicationHeaderStatus
 								onPress={() =>

@@ -17,8 +17,10 @@ import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import {
 	createNativeItemDraft,
+	type ItemPublishOptions,
 	openItemDraft,
 	publishItemDraft,
+	publishItemDraftWithContext,
 	saveItemDraft,
 	type ItemWritebackPolicyOptions,
 	unpublishNativeItem,
@@ -58,7 +60,6 @@ async function verify() {
 	const marker = `${process.pid}-${Date.now()}`;
 	const connectionKey = `zotero-writeback-${marker}`.slice(0, 64);
 	const createdItemKeys: string[] = [];
-	let previousDefaultKeys: string[] = [];
 	let behavior: "block" | "fail" | "success" = "success";
 	let releaseBlocked = () => {};
 	let markBlocked = () => {};
@@ -71,6 +72,11 @@ async function verify() {
 			sources: [{ key: connectionKey, writebackEnabled: true }],
 		},
 	} satisfies ItemWritebackPolicyOptions;
+	// Native records choose their writeback sources when they publish.
+	const publishToSource = {
+		...writebackPolicyOptions,
+		sourceKeys: [connectionKey],
+	} satisfies ItemPublishOptions;
 
 	const registry = new SourceWritebackAdapterRegistry([
 		{
@@ -122,20 +128,7 @@ async function verify() {
 	};
 
 	try {
-		previousDefaultKeys = (
-			await db
-				.select({ key: sourceConnection.key })
-				.from(sourceConnection)
-				.where(eq(sourceConnection.defaultWriteback, true))
-		).map(({ key }) => key);
-		if (previousDefaultKeys.length > 0) {
-			await db
-				.update(sourceConnection)
-				.set({ defaultWriteback: false })
-				.where(inArray(sourceConnection.key, previousDefaultKeys));
-		}
 		await db.insert(sourceConnection).values({
-			defaultWriteback: true,
 			externalScopeKey: `writeback-${marker}`,
 			key: connectionKey,
 			provider: "zotero",
@@ -169,7 +162,7 @@ async function verify() {
 		assert(
 			preservedDisabledLink?.writebackEnabled === false &&
 				disabledJobs.length === 0,
-			"Publishing silently re-enabled a deliberately disabled source link",
+			"Publishing without choosing sources re-enabled a deliberately disabled source link",
 		);
 
 		const collisionOwner = await createNativeItemDraft(db, {
@@ -189,7 +182,11 @@ async function verify() {
 		});
 		let collisionRejected = false;
 		try {
-			await publishItemDraft(db, collisionDraft.itemKey);
+			await publishItemDraftWithContext(
+				db,
+				collisionDraft.itemKey,
+				publishToSource,
+			);
 		} catch (error) {
 			collisionRejected =
 				error instanceof SourceWritebackTargetKeyCollisionError;
@@ -206,7 +203,13 @@ async function verify() {
 			title: "First title",
 		});
 		createdItemKeys.push(nativeDraft.itemKey);
-		const firstPublished = await publishItemDraft(db, nativeDraft.itemKey);
+		const firstPublished = (
+			await publishItemDraftWithContext(
+				db,
+				nativeDraft.itemKey,
+				publishToSource,
+			)
+		).item;
 		const [[firstLink], [firstJob]] = await Promise.all([
 			db
 				.select()
@@ -224,7 +227,7 @@ async function verify() {
 				firstLink.writebackEnabled &&
 				firstJob?.operation === "upsert" &&
 				firstJob.canonicalRevision === 1,
-			"A native first publish did not attach to the default writeback target and queue creation",
+			"A native first publish did not link the chosen writeback source and queue creation",
 		);
 
 		const firstResult =
@@ -257,7 +260,11 @@ async function verify() {
 			parentItem: parentDraft.itemKey,
 		});
 		createdItemKeys.push(parentDraft.itemKey, childDraft.itemKey);
-		await publishItemDraft(db, parentDraft.itemKey);
+		await publishItemDraftWithContext(
+			db,
+			parentDraft.itemKey,
+			publishToSource,
+		);
 		await publishItemDraft(db, childDraft.itemKey);
 		const [parentJob] = await db
 			.select({ id: sourceWritebackJob.id })
@@ -321,7 +328,11 @@ async function verify() {
 			failedParentDraft.itemKey,
 			blockedChildDraft.itemKey,
 		);
-		await publishItemDraft(db, failedParentDraft.itemKey);
+		await publishItemDraftWithContext(
+			db,
+			failedParentDraft.itemKey,
+			publishToSource,
+		);
 		await publishItemDraft(db, blockedChildDraft.itemKey);
 		const [failedParentJob] = await db
 			.select({ id: sourceWritebackJob.id })
@@ -476,6 +487,7 @@ async function verify() {
 		const failedStatus = await getAdminSourceWritebackStatus(
 			db,
 			nativeDraft.itemKey,
+			connectionKey,
 			writebackPolicyOptions.writebackConfig,
 		);
 		assert(
@@ -487,6 +499,7 @@ async function verify() {
 		const requeuedStatus = await retryAdminSourceWriteback(
 			db,
 			nativeDraft.itemKey,
+			connectionKey,
 			writebackPolicyOptions.writebackConfig,
 		);
 		assert(
@@ -499,6 +512,7 @@ async function verify() {
 		const syncedStatus = await getAdminSourceWritebackStatus(
 			db,
 			nativeDraft.itemKey,
+			connectionKey,
 			writebackPolicyOptions.writebackConfig,
 		);
 		assert(
@@ -512,7 +526,11 @@ async function verify() {
 			title: "Never-created remote item",
 		});
 		createdItemKeys.push(staleDraft.itemKey);
-		await publishItemDraft(db, staleDraft.itemKey);
+		await publishItemDraftWithContext(
+			db,
+			staleDraft.itemKey,
+			publishToSource,
+		);
 		await unpublishNativeItem(db, staleDraft.itemKey);
 		const callsBeforeSupersession = calls.length;
 		const staleUpsert =
@@ -645,7 +663,11 @@ async function verify() {
 			title: "Created while writeback is paused",
 		});
 		createdItemKeys.push(pausedNativeDraft.itemKey);
-		await publishItemDraft(db, pausedNativeDraft.itemKey);
+		await publishItemDraftWithContext(
+			db,
+			pausedNativeDraft.itemKey,
+			publishToSource,
+		);
 		const [pausedNativeLink] = await db
 			.select()
 			.from(itemSourceLink)
@@ -653,7 +675,7 @@ async function verify() {
 		assert(
 			pausedNativeLink?.sourceConnectionKey === connectionKey &&
 				pausedNativeLink.writebackEnabled,
-			"Publishing while the default target was paused stranded a native item without a writeback link",
+			"Publishing while the chosen source was paused stranded a native item without a writeback link",
 		);
 		const deferred = await processNextSourceWritebackJob(consumerOptions);
 		const [deferredJob] = await db
@@ -798,18 +820,8 @@ async function verify() {
 				.where(inArray(itemIdentity.key, createdItemKeys));
 		}
 		await db
-			.update(sourceConnection)
-			.set({ defaultWriteback: false })
-			.where(eq(sourceConnection.key, connectionKey));
-		await db
 			.delete(sourceConnection)
 			.where(eq(sourceConnection.key, connectionKey));
-		if (previousDefaultKeys.length > 0) {
-			await db
-				.update(sourceConnection)
-				.set({ defaultWriteback: true })
-				.where(inArray(sourceConnection.key, previousDefaultKeys));
-		}
 		await resource.dispose();
 	}
 }

@@ -94,22 +94,34 @@ export type AdminItemDetail = AdminItemSummary & {
 	writeback: AdminItemWriteback;
 };
 
-export type AdminItemWriteback = {
+export type AdminItemWritebackReason =
+	| "item-locked"
+	| "not-linked"
+	| "ok"
+	| "source-disabled"
+	| "source-paused"
+	| "source-removed"
+	| "unsupported-provider";
+
+export type AdminItemWritebackTarget = {
 	effective: boolean;
+	isOrigin: boolean;
 	itemEnabled: boolean;
-	reason:
-		| "item-locked"
-		| "not-linked"
-		| "ok"
-		| "source-disabled"
-		| "source-paused"
-		| "source-removed"
-		| "unsupported-provider";
+	linkExists: boolean;
+	provider: string;
+	reason: AdminItemWritebackReason;
 	sourceEnabled: boolean;
-	sourceKey: string | null;
-	sourceLabel: string | null;
+	sourceKey: string;
+	sourceLabel: string;
 	sourceStatus: string | null;
 	supported: boolean;
+};
+
+/** The sources a record may write back to, and which ones the admin chose. */
+export type AdminItemWriteback = {
+	available: AdminItemWritebackTarget[];
+	originSourceKey: string | null;
+	selected: string[];
 };
 
 export type AdminCollection = {

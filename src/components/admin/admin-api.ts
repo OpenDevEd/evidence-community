@@ -371,11 +371,12 @@ export function unpublishAdminItem(key: string) {
 
 async function sourceWritebackStatusRequest(
 	key: string,
+	sourceKey: string,
 	method: "GET" | "POST",
 	signal?: AbortSignal,
 ): Promise<AdminSourceWritebackStatus> {
 	const response = await requestJson<unknown>(
-		`/api/admin/items/${encodeURIComponent(key)}/writeback/${method === "GET" ? "status" : "retry"}`,
+		`/api/admin/items/${encodeURIComponent(key)}/writeback/${method === "GET" ? "status" : "retry"}?source=${encodeURIComponent(sourceKey)}`,
 		{ method, signal },
 	);
 	const status =
@@ -389,13 +390,14 @@ async function sourceWritebackStatusRequest(
 
 export function getAdminSourceWritebackStatus(
 	key: string,
+	sourceKey: string,
 	signal?: AbortSignal,
 ) {
-	return sourceWritebackStatusRequest(key, "GET", signal);
+	return sourceWritebackStatusRequest(key, sourceKey, "GET", signal);
 }
 
-export function retryAdminSourceWriteback(key: string) {
-	return sourceWritebackStatusRequest(key, "POST");
+export function retryAdminSourceWriteback(key: string, sourceKey: string) {
+	return sourceWritebackStatusRequest(key, sourceKey, "POST");
 }
 
 function itemBatchChunks(input: AdminItemBatchRequest) {

@@ -6,8 +6,7 @@ import {
 	itemSourceLink,
 	reserveCanonicalRecordKey,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, notExists } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { and, eq, inArray } from "drizzle-orm";
 
 import type { Database } from "./database-schema";
 
@@ -193,8 +192,9 @@ export async function reserveItemSourceLinks(
 			const itemKey = result.get(sourceRecordKey);
 			return itemKey ? [itemKey] : [];
 		});
+		// A record imported from a source writes back to that source by
+		// default. The admin can change this per record later.
 		if (insertedItemKeys.length > 0) {
-			const enabledLink = alias(itemSourceLink, "enabledItemSourceLink");
 			await db
 				.update(itemSourceLink)
 				.set({ writebackEnabled: true })
@@ -204,23 +204,6 @@ export async function reserveItemSourceLinks(
 						eq(
 							itemSourceLink.sourceConnectionKey,
 							sourceConnectionKey,
-						),
-						notExists(
-							db
-								.select({ itemKey: enabledLink.itemKey })
-								.from(enabledLink)
-								.where(
-									and(
-										eq(
-											enabledLink.itemKey,
-											itemSourceLink.itemKey,
-										),
-										eq(
-											enabledLink.writebackEnabled,
-											true,
-										),
-									),
-								),
 						),
 					),
 				);

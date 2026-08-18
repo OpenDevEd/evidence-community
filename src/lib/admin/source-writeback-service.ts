@@ -6,8 +6,10 @@ import { and, desc, eq, isNotNull } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import {
-	resolveItemWritebackPolicy,
+	findWritebackTarget,
+	resolveItemWritebackTargets,
 	type SourceWritebackConfiguration,
+	type SourceWritebackReason,
 } from "@/lib/source-writeback/policy";
 
 import type { AdminSourceWritebackStatus } from "./source-writeback-contract";
@@ -42,7 +44,7 @@ export class AdminSourceWritebackRetryError extends Error {
 }
 
 function policyState(
-	reason: Awaited<ReturnType<typeof resolveItemWritebackPolicy>>["reason"],
+	reason: SourceWritebackReason,
 ): AdminSourceWritebackStatus["state"] | null {
 	if (reason === "source-disabled") return "disabled";
 	if (reason === "source-paused") return "paused";
@@ -97,12 +99,14 @@ function statusJson(
 export async function getAdminSourceWritebackStatus(
 	database: Database,
 	itemKey: string,
+	sourceKey: string,
 	config: SourceWritebackConfiguration,
 	now = new Date(),
 ) {
-	const policy = await resolveItemWritebackPolicy(database, itemKey, config);
-	const blockedState = policyState(policy.reason);
-	if (!policy.sourceKey) return statusJson(blockedState ?? "locked", null, null);
+	const targets = await resolveItemWritebackTargets(database, itemKey, config);
+	const target = findWritebackTarget(targets, sourceKey);
+	if (!target) return statusJson("locked", sourceKey, null);
+	const blockedState = policyState(target.reason);
 
 	const [links, jobs] = await Promise.all([
 		database
@@ -115,7 +119,7 @@ export async function getAdminSourceWritebackStatus(
 			.where(
 				and(
 					eq(itemSourceLink.itemKey, itemKey),
-					eq(itemSourceLink.sourceConnectionKey, policy.sourceKey),
+					eq(itemSourceLink.sourceConnectionKey, sourceKey),
 				),
 			)
 			.limit(1),
@@ -136,7 +140,7 @@ export async function getAdminSourceWritebackStatus(
 			.where(
 				and(
 					eq(sourceWritebackJob.itemKey, itemKey),
-					eq(sourceWritebackJob.sourceConnectionKey, policy.sourceKey),
+					eq(sourceWritebackJob.sourceConnectionKey, sourceKey),
 					eq(sourceWritebackJob.superseded, false),
 				),
 			)
@@ -147,7 +151,7 @@ export async function getAdminSourceWritebackStatus(
 	const link = links[0] ?? null;
 	return statusJson(
 		blockedState ?? resolveAdminSourceWritebackState(job, link, now),
-		policy.sourceKey,
+		sourceKey,
 		job,
 	);
 }
@@ -155,12 +159,14 @@ export async function getAdminSourceWritebackStatus(
 export async function retryAdminSourceWriteback(
 	database: Database,
 	itemKey: string,
+	sourceKey: string,
 	config: SourceWritebackConfiguration,
 	requeuedAt = new Date(),
 ) {
 	const current = await getAdminSourceWritebackStatus(
 		database,
 		itemKey,
+		sourceKey,
 		config,
 		requeuedAt,
 	);
@@ -201,5 +207,11 @@ export async function retryAdminSourceWriteback(
 			"not-failed",
 		);
 	}
-	return getAdminSourceWritebackStatus(database, itemKey, config, requeuedAt);
+	return getAdminSourceWritebackStatus(
+		database,
+		itemKey,
+		sourceKey,
+		config,
+		requeuedAt,
+	);
 }

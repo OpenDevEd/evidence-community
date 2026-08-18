@@ -18,12 +18,26 @@ export async function POST(
 
 	try {
 		const { key } = await params;
+		const sourceKey = request.nextUrl.searchParams.get("source");
+		if (!sourceKey) {
+			return NextResponse.json(
+				{ error: "Missing source. Add ?source=<source key>." },
+				{ headers: ADMIN_RESPONSE_HEADERS, status: 400 },
+			);
+		}
 		const [database, config] = await Promise.all([
 			getDatabase(),
 			getLibraryConfig(),
 		]);
 		return NextResponse.json(
-			{ status: await retryAdminSourceWriteback(database, key, config) },
+			{
+				status: await retryAdminSourceWriteback(
+					database,
+					key,
+					sourceKey,
+					config,
+				),
+			},
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {

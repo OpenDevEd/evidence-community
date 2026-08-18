@@ -31,6 +31,7 @@ import {
 import {
 	createNativeItemDraft,
 	publishItemDraft,
+	publishItemDraftWithContext,
 	removeNativeItem,
 } from "../src/lib/admin/native-item-service";
 import { runSourceConnection } from "../src/lib/source-ingestion/orchestrator";
@@ -332,8 +333,6 @@ async function verifyLiveWriteback() {
 	const itemKeys: string[] = [];
 	const privatePaths = new Set<string>();
 	const publicPaths = new Set<string>();
-	let previousDefaultKeys: string[] = [];
-	let writebackDefaultsCaptured = false;
 	let zoteroClient: ZoteroApiClient | null = null;
 	let zoteroPrefix: string | null = null;
 	let syncRuntime: ReturnType<typeof createSourceSyncRuntime> | null = null;
@@ -363,23 +362,14 @@ async function verifyLiveWriteback() {
 			publicationTags.length > 0,
 			"The active configuration needs at least one PDF publication tag",
 		);
-		previousDefaultKeys = (
-			await database
-				.select({ key: sourceConnection.key })
-				.from(sourceConnection)
-				.where(eq(sourceConnection.defaultWriteback, true))
-		).map(({ key }) => key);
-		writebackDefaultsCaptured = true;
-		if (previousDefaultKeys.length > 0) {
-			await database
-				.update(sourceConnection)
-				.set({ defaultWriteback: false })
-				.where(inArray(sourceConnection.key, previousDefaultKeys));
-		}
-		await database
-			.update(sourceConnection)
-			.set({ defaultWriteback: true })
-			.where(eq(sourceConnection.key, LIVE_ZOTERO_CONNECTION_KEY));
+		assert(
+			config.sources.some(
+				(source) =>
+					source.key === LIVE_ZOTERO_CONNECTION_KEY &&
+					source.writebackEnabled,
+			),
+			"The active configuration must enable writeback for the live Zotero source",
+		);
 
 		const marker = `openscholar-live-writeback-${process.pid}-${Date.now()}`;
 		const parentDraft = await createNativeItemDraft(database, {
@@ -396,7 +386,11 @@ async function verifyLiveWriteback() {
 		});
 		itemKeys.push(parentDraft.itemKey, attachmentDraft.itemKey);
 
-		await publishItemDraft(database, parentDraft.itemKey);
+		// The parent chooses the live Zotero source; the attachment copies it.
+		await publishItemDraftWithContext(database, parentDraft.itemKey, {
+			sourceKeys: [LIVE_ZOTERO_CONNECTION_KEY],
+			writebackConfig: config,
+		});
 		await publishItemDraft(database, attachmentDraft.itemKey);
 		const metadataWriteback = await drainWriteback(
 			database,
@@ -768,34 +762,7 @@ async function verifyLiveWriteback() {
 		try {
 			await cleanupLocalItems(database, itemKeys);
 		} finally {
-			try {
-				if (writebackDefaultsCaptured) {
-					await database.transaction(async (transaction) => {
-						await transaction
-							.update(sourceConnection)
-							.set({ defaultWriteback: false })
-							.where(
-								eq(
-									sourceConnection.key,
-									LIVE_ZOTERO_CONNECTION_KEY,
-								),
-							);
-						if (previousDefaultKeys.length > 0) {
-							await transaction
-								.update(sourceConnection)
-								.set({ defaultWriteback: true })
-								.where(
-									inArray(
-										sourceConnection.key,
-										previousDefaultKeys,
-									),
-								);
-						}
-					});
-				}
-			} finally {
-				await databaseResource.dispose();
-			}
+			await databaseResource.dispose();
 		}
 	}
 }
