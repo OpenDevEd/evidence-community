@@ -602,10 +602,27 @@ export async function resolveChildWritebackSourceKeys(
 	return links.map((link) => link.sourceConnectionKey);
 }
 
+/** The keys of a record's attachments and notes. */
+export async function childItemKeys(
+	executor: Database | Transaction,
+	parentItemKey: string,
+) {
+	const children = await executor
+		.select({ key: item.key })
+		.from(item)
+		.where(eq(item.parentItem, parentItemKey));
+	return children.map((child) => child.key);
+}
+
 /**
  * Applies the parent's selection to every child record (attachments and
  * notes) so they always follow the parent. Returns the child keys whose
  * enabled sources changed, with the sources that became newly enabled.
+ *
+ * The caller must already hold the mutation locks of the parent and its
+ * children (`lockItemMutations([parent, ...childItemKeys])`), so a child
+ * publish running at the same time cannot copy a selection that is about
+ * to change.
  */
 export async function cascadeChildWritebackLinks(
 	transaction: Transaction,

@@ -7,7 +7,10 @@ import {
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
-import { lockItemMutation } from "@/db/canonical-mutation-lock";
+import {
+	lockItemMutation,
+	lockItemMutations,
+} from "@/db/canonical-mutation-lock";
 import { item } from "@/db/schema/tables/item";
 import {
 	findWritebackTarget,
@@ -17,6 +20,7 @@ import {
 } from "@/lib/source-writeback/policy";
 import {
 	cascadeChildWritebackLinks,
+	childItemKeys,
 	enqueueFullWritebackForSources,
 	ensureItemWritebackLinks,
 } from "@/lib/source-writeback/queue";
@@ -295,8 +299,11 @@ export async function setAdminItemWritebackSources(
 	config: SourceWritebackConfiguration,
 	now = new Date(),
 ) {
+	// Lock the record and its attachments and notes together, in one sorted
+	// set, so a child publish cannot copy a selection that is about to change.
+	const childKeys = await childItemKeys(database, itemKey);
 	await database.transaction(async (transaction) => {
-		await lockItemMutation(transaction, itemKey);
+		await lockItemMutations(transaction, [itemKey, ...childKeys]);
 		const [identity] = await transaction
 			.select({ key: itemIdentity.key })
 			.from(itemIdentity)

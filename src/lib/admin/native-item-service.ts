@@ -51,6 +51,7 @@ import { itemCollectionSourceIsAssignable } from "./item-collection-policy";
 import {
 	applyParentWritebackLinks,
 	cascadeChildWritebackLinks,
+	childItemKeys,
 	enqueueFullWritebackForSources,
 	enqueueSourceWritebackJob,
 	ensureItemWritebackLinks,
@@ -735,11 +736,18 @@ export async function publishItemDraftWithContext(
 		lockCandidate?.parentItem,
 		lockDraft.patch,
 	);
+	// A top-level record also locks its attachments and notes: publishing
+	// may change which sources they follow, and their own publish must not
+	// copy a selection that is about to change.
+	const childKeys = lockedParentItem ? [] : await childItemKeys(db, itemKey);
 	const advisoryLockKeys = [
 		...new Set(
-			[itemKey, lockCandidate?.parentItem, lockedParentItem].filter(
-				(key): key is string => typeof key === "string",
-			),
+			[
+				itemKey,
+				lockCandidate?.parentItem,
+				lockedParentItem,
+				...childKeys,
+			].filter((key): key is string => typeof key === "string"),
 		),
 	];
 	return db.transaction(async (transaction) => {
