@@ -66,3 +66,12 @@ The Zotero commands change the new dedicated Zotero group. That is expected.
 - Zotero rate limits during the browser tool. Reuse the wait helpers from `verifyLiveZoteroWriteback.ts`.
 - The Zotero API key must have write access to the new group. Check with one `GET /groups/{id}/items?limit=1` and one write before running the tool.
 - Do not reuse any database name, bucket, or Meilisearch key from the two older libraries.
+
+## Execution notes — 2026-08-18
+
+- New library created as planned: Coolify app `uqkhvfadx7uy7fegax2zdrsk`, deployment `utzd2qf3vav5mxbqtcz62cog`, database `openscholar_writeback_e2e`, buckets `openscholar-writeback-e2e-private`/`-public`, Zotero group `6641415`, config revision `openscholar-writeback-e2e-1`. Coolify generates `MEILISEARCH_MASTER_KEY` from the Compose file on app creation; the config's `services.search.key` was set to that value. `docker_compose_domains` routes the app; Coolify's default `fqdn` on compose apps cannot be cleared and is unused.
+- The local live harness needed a fresh local Supabase (temp project in `/tmp/openscholar-supabase`, `supabase start` with the two buckets in `config.toml`), the throwaway Postgres on 55435 reset and migrated, and `config/library.local.json` corrected (no `defaultWriteback`, https `baseUrl`, new revision).
+- Sending a record whole to a source named every DB column, and Zotero rejected fields the item type does not have. `fullItemWritebackFields(row)` now names only fields the record holds (plus tags, never `itemType`). Found by the live tool on the attachment cascade.
+- `tools/verifyAdminZoteroWriteback.ts` (`npm run test:admin-zotero-live`) needs `ADMIN_ZOTERO_ORIGIN`, `ADMIN_ZOTERO_PASSWORD`, `ADMIN_ZOTERO_GROUP`, `ADMIN_ZOTERO_API_KEY` and `--confirm-group <id>`. Two failed early runs left records behind; they were unpublished through the admin API and Zotero confirmed the deletions.
+- Container health from the deployment log: Meilisearch, search-indexer and publication-worker reported healthy; web, source-sync and source-writeback started (web served health/lib/admin; writeback proven by the browser tool). Publication (Crossref/Zenodo) is disabled in this library's config, so the admin shows "DOI needs attention" — expected.
+- The old two development libraries were not touched (D19). Outline pages 03 and 04 updated and re-read.
