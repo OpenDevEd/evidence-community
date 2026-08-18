@@ -20,7 +20,7 @@ The sync worker reconciles before its first sweep, so the first full import and 
 2. Add failing pure registry tests proving both import and writeback resolve the same API key by source key and that an unknown source fails plainly.
 3. Add a real PostgreSQL reconciliation test for create, update, remove, restore, default switching, identity changes, and repeated/concurrent calls.
 4. Implement the new manifest schema, source registry, and reconciler. Delete the environment credential resolver and `credentialRef` from the Drizzle schema.
-5. Generate migration 0034 and regenerated schema artifacts. Update examples, local and acceptance configs, and every fixture/caller to the new contract.
+5. Generate migration 0034 and regenerated schema artifacts. Update examples, local configuration, and every fixture/caller to the new contract. Acceptance profiles have no Zotero sources and remain valid unchanged.
 6. Update real Zotero source and writeback verifiers so their database starts without a Zotero row. The worker must create it from the manifest before syncing or writing.
 7. Update worker and operations documentation. Remove every instruction that asks for a Zotero environment variable or manual source row.
 8. Push the tested branch, update docs-pen's one JSON manifest, redeploy, and verify the automatic import and one controlled round trip against Zotero group `6632364`.
@@ -38,11 +38,10 @@ The sync worker reconciles before its first sweep, so the first full import and 
 - `tools/runSourceSync.ts`
 - `tools/runSourceWriteback.ts`
 - `packages/evidence-library-core/src/schema.ts`
-- migration `drizzle/0034_manifest-owned-source-credentials.sql` and generated metadata
+- migration `drizzle/0034_manifest-owned-zotero-sources.sql` and generated metadata
 - `config/library.example.json`
 - `config/library.local.json`
 - `tests/fixtures/library-config.ts`
-- acceptance runtime configs
 - source, Zotero, writeback, schema, public-config, and Compose tests
 - `docs/source-ingestion-contract.md`
 - `docs/source-orchestration.md`
@@ -52,8 +51,9 @@ The sync worker reconciles before its first sweep, so the first full import and 
 ## Exact tests
 
 ```sh
-npx vitest run tests/unit/library-config-schema.test.ts tests/unit/library-config-public.test.ts tests/unit/source-credentials.test.ts tests/unit/source-configuration.test.ts tests/unit/zotero-source.test.ts tests/unit/zotero-write-adapter.test.ts tests/unit/source-writeback-policy.test.ts
+npx vitest run tests/unit/library-config-schema.test.ts tests/unit/library-config-public.test.tsx tests/unit/library-config-artifacts.test.ts tests/unit/source-configuration.test.ts tests/unit/source-writeback-runtime.test.ts tests/unit/zotero-source.test.ts tests/unit/zotero-write-adapter.test.ts tests/unit/source-writeback-policy.test.ts
 npm run schema:check
+npm run test:source-configuration
 npm run test:source-model
 npm run test:source-orchestrator
 npm run test:zotero-source
@@ -97,4 +97,3 @@ Deploy docs-pen from the exact pushed commit. Its `LIBRARY_CONFIG_JSON` must con
 - Removing a source must retain its durable origin row and cursor while stopping sync and writeback.
 - The server-only API key must not enter public config or admin responses.
 - Switching the default writeback source must clear the old default in the same transaction before setting the new one.
-
