@@ -45,6 +45,11 @@ import {
 	drainSourceWritebackJobs,
 	type SourceWritebackProcessResult,
 } from "../src/lib/source-writeback/consumer";
+import {
+	getAdminSourceWritebackStatus,
+	resolveAdminSourceWritebackConflict,
+	setAdminItemWritebackSources,
+} from "../src/lib/admin/source-writeback-service";
 import { createSourceWritebackRuntime } from "../src/lib/source-writeback/runtime";
 import {
 	assertLiveZoteroConnection,
@@ -654,6 +659,108 @@ async function verifyLiveWriteback() {
 			"The unpublished PDF still exists in public storage",
 		);
 
+		// Pause the source, change the record in Zotero, turn the source back
+		// on: the worker must stop in "conflict" and each choice must end in
+		// the documented state on both sides.
+		const [localBefore] = await database
+			.select({ title: item.title })
+			.from(item)
+			.where(eq(item.key, parentDraft.itemKey));
+		await setAdminItemWritebackSources(
+			database,
+			parentDraft.itemKey,
+			[],
+			config,
+		);
+		const pausedRemote = await zotero.client.item(
+			zotero.prefix,
+			parentDraft.itemKey,
+		);
+		await zotero.client.patchItem(
+			zotero.prefix,
+			parentDraft.itemKey,
+			{ title: "Changed in Zotero while paused" },
+			pausedRemote.data.version,
+		);
+		await setAdminItemWritebackSources(
+			database,
+			parentDraft.itemKey,
+			[LIVE_ZOTERO_CONNECTION_KEY],
+			config,
+		);
+		const conflictDrain = await drainWriteback(
+			database,
+			config,
+			itemKeys,
+			"conflict-check",
+		);
+		const conflictStatus = await getAdminSourceWritebackStatus(
+			database,
+			parentDraft.itemKey,
+			LIVE_ZOTERO_CONNECTION_KEY,
+			config,
+		);
+		assert(
+			conflictDrain.some((result) => result.status === "conflict") &&
+				conflictStatus.state === "conflict",
+			"A Zotero change made while the source was paused was not detected as a conflict",
+		);
+		const conflictRuntime = createSourceWritebackRuntime(config);
+		await resolveAdminSourceWritebackConflict(
+			database,
+			parentDraft.itemKey,
+			LIVE_ZOTERO_CONNECTION_KEY,
+			"send-local",
+			config,
+			conflictRuntime,
+		);
+		await drainWriteback(database, config, itemKeys, "conflict-send-local");
+		const afterSendLocal = await zotero.client.item(
+			zotero.prefix,
+			parentDraft.itemKey,
+		);
+		assert(
+			afterSendLocal.data.data.title === localBefore?.title,
+			"Choosing to send this record did not overwrite the Zotero title",
+		);
+
+		await setAdminItemWritebackSources(
+			database,
+			parentDraft.itemKey,
+			[],
+			config,
+		);
+		await zotero.client.patchItem(
+			zotero.prefix,
+			parentDraft.itemKey,
+			{ title: "Zotero wins this time" },
+			afterSendLocal.data.version,
+		);
+		await setAdminItemWritebackSources(
+			database,
+			parentDraft.itemKey,
+			[LIVE_ZOTERO_CONNECTION_KEY],
+			config,
+		);
+		await drainWriteback(database, config, itemKeys, "conflict-check-2");
+		const loadRemoteStatus = await resolveAdminSourceWritebackConflict(
+			database,
+			parentDraft.itemKey,
+			LIVE_ZOTERO_CONNECTION_KEY,
+			"load-remote",
+			config,
+			conflictRuntime,
+		);
+		const [localAfterLoad] = await database
+			.select({ title: item.title })
+			.from(item)
+			.where(eq(item.key, parentDraft.itemKey));
+		assert(
+			loadRemoteStatus.state === "synced" &&
+				localAfterLoad?.title === "Zotero wins this time",
+			"Choosing to load Zotero's version did not replace the local record",
+		);
+
 		await removeNativeItem(database, attachmentDraft.itemKey);
 		await drainWriteback(database, config, itemKeys, "attachment-delete");
 		assert(
@@ -726,6 +833,7 @@ async function verifyLiveWriteback() {
 					finalInbound,
 					groupId: ZOTERO_PLAYGROUND.groupId,
 					inbound,
+					conflictChoices: ["send-local", "load-remote"],
 					metadataWriteback,
 					parentKey: parentDraft.itemKey,
 					status: "ok",

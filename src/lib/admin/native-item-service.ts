@@ -1017,7 +1017,7 @@ export async function publishItemDraftWithContext(
 			];
 		}
 		for (const sourceKey of selection.newlyEnabled) {
-			dirtyFieldsBySource[sourceKey] = fullItemWritebackFields();
+			dirtyFieldsBySource[sourceKey] = fullItemWritebackFields(published);
 		}
 		if (
 			changedFields.length > 0 ||

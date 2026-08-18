@@ -503,10 +503,23 @@ export async function applyParentWritebackLinks(
 	);
 }
 
-/** Every field a source receives when a record is sent to it for the first time. */
-export function fullItemWritebackFields() {
+/**
+ * The fields a source receives when the whole record is sent to it. Only
+ * fields the record actually holds a value for are named, plus tags. Empty
+ * fields are left out because many of them do not exist for the record's
+ * item type at the source, and the item type itself is not sent as a change.
+ */
+export function fullItemWritebackFields(row: Readonly<Record<string, unknown>>) {
 	return [
-		...editableItemDatabaseFields.map(databaseItemFieldToPayloadField),
+		...editableItemDatabaseFields
+			.filter(
+				(field) =>
+					field !== "itemType" &&
+					row[field] !== null &&
+					row[field] !== undefined &&
+					row[field] !== "",
+			)
+			.map(databaseItemFieldToPayloadField),
 		"tags",
 	];
 }
@@ -530,12 +543,12 @@ export async function enqueueFullWritebackForSources(
 ) {
 	if (sourceKeys.length === 0) return;
 	const [row] = await transaction
-		.select({ deleted: item.deleted, revision: item.revision })
+		.select()
 		.from(item)
 		.where(eq(item.key, itemKey))
 		.limit(1);
 	if (!row || row.deleted === 1) return;
-	const fields = fullItemWritebackFields();
+	const fields = fullItemWritebackFields(row);
 	await markItemWritebackDirty(transaction, {
 		canonicalRevision: row.revision,
 		dirtyFields: [],
