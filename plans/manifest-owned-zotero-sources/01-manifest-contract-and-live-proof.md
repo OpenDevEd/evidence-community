@@ -24,6 +24,7 @@ The sync worker reconciles before its first sweep, so the first full import and 
 6. Update real Zotero source and writeback verifiers so their database starts without a Zotero row. The worker must create it from the manifest before syncing or writing.
 7. Update worker and operations documentation. Remove every instruction that asks for a Zotero environment variable or manual source row.
 8. Push the tested branch, update docs-pen's one JSON manifest, redeploy, and verify the automatic import and one controlled round trip against Zotero group `6632364`.
+9. Keep the full acceptance gate green. The repeat run exposed an older citation fallback regression: a valid citation already stored on the search item disappears when the citation endpoint returns no replacement. Add a browser-facing unit regression, preserve that valid citation, and still hide the old `Loading...` placeholder when no citation service result exists.
 
 ## Files
 
@@ -47,6 +48,8 @@ The sync worker reconciles before its first sweep, so the first full import and 
 - `docs/source-orchestration.md`
 - `docs/source-writeback.md`
 - `docs/zotero-source-adapter.md`
+- `src/components/features/newlib/ItemPage.tsx`
+- `tests/unit/item-details-card.test.tsx`
 
 ## Exact tests
 
