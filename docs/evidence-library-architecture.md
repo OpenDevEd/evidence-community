@@ -122,6 +122,14 @@ At runtime:
 - Published PDFs and cover images are served from the shared Supabase storage
   project.
 - Citation conversion uses the shared Zotero translation server.
+- Links between records ("cites" and "related") live in the `itemLink` table
+  in the tenant's PostgreSQL database. Each directed link is stored once with an
+  `origin` of `manual` (made in `/admin`) or `source:<connection>` (mirrored
+  from a source such as Zotero `dc:relation`). "Cited by" and "related to this
+  record" are read with a reverse query, never copied onto the other record.
+  The public item page, `/api/item/[key]` (`item.links`) and
+  `/api/citations/[key]` read that table; the record's `relations` JSON keeps
+  provider data such as `owl:sameAs` and OpenAlex counts only.
 - Each tenant's application configuration controls branding, locale, analytics,
   feature flags, and public base URL.
 
@@ -133,6 +141,7 @@ At runtime:
 | Meilisearch client | `src/lib/meilisearch.ts` |
 | Search and document filtering | `src/lib/search.ts`, `src/lib/actions.ts` |
 | Item API and attachment download | `src/app/api/item/` |
+| Record links (cites / related) | `src/lib/links/item-links.ts`, `src/db/schema/tables/itemLink.ts` |
 | Item page and attachment rendering | `src/app/[locale]/lib/[key]/page.tsx`, `src/components/features/newlib/ItemPage.tsx` |
 | Application RAG/page embeddings | `src/lib/ai.ts`, `src/app/api/ai/` |
 | Zotero translation-server client | `src/lib/citations.ts` |
