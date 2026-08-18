@@ -2197,6 +2197,7 @@ async function mockBookWithAttachment(
 		state: attachmentState,
 		title: "PDF attachment",
 		updatedAt: timestamp,
+		writeback: { available: [], originSourceKey: null, selected: [] },
 	};
 	const parentDetail = {
 		...publishedDetail(false),
@@ -2398,6 +2399,11 @@ test("creates an item through a pointer click in the new-item popover", async ({
 						tags: [],
 						title: "Untitled",
 						updatedAt: timestamp,
+						writeback: {
+							available: [],
+							originSourceKey: null,
+							selected: [],
+						},
 					},
 				},
 			});
