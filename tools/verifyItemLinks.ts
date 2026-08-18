@@ -3,7 +3,14 @@ import { and, eq, inArray } from "drizzle-orm";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { item } from "../src/db/schema/tables/item";
 import { itemLink } from "../src/db/schema/tables/itemLink";
-import { itemDraft, itemIdentity, outbox } from "../src/db/schema/source";
+import {
+	itemDraft,
+	itemIdentity,
+	itemSourceLink,
+	outbox,
+	sourceConnection,
+	sourceWritebackJob,
+} from "../src/db/schema/source";
 import { NativeItemValidationError } from "../src/lib/admin/native-item-validation";
 import {
 	createNativeItemDraft,
@@ -55,6 +62,7 @@ const KEYS = ["LNKA2345", "LNKB2345", "LNKC2345", "LNKD2345"] as const;
 const [A, B, C, D] = KEYS;
 const SOURCE = "zotero-openscholar-test";
 const nativeKeys: string[] = [];
+const WRITEBACK_SOURCE = `verify-links-${process.pid}`;
 
 async function verify() {
 	const resource = createPostgresDatabaseResource(databaseUrl!);
@@ -363,10 +371,136 @@ async function verify() {
 			.from(itemDraft)
 			.where(eq(itemDraft.itemKey, draftA.itemKey));
 		assert(stillDraft.length === 1, "A failed publish must keep the draft");
+		// Writeback: a "related" change marks the record dirty on its source with `relations`;
+		// a "cites" change never does. Removing a manual related link also drops the source's
+		// mirrored reverse row for that source.
+		// The database may already give A a default writeback link (library config).
+		// Use it when present; otherwise create a verifier-owned source and link.
+		const [existingEnabledLink] = await db
+			.select({ sourceConnectionKey: itemSourceLink.sourceConnectionKey })
+			.from(itemSourceLink)
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, draftA.itemKey),
+					eq(itemSourceLink.writebackEnabled, true),
+				),
+			)
+			.limit(1);
+		let writebackSourceKey = existingEnabledLink?.sourceConnectionKey;
+		if (!writebackSourceKey) {
+			await db.insert(sourceConnection).values({
+				externalScopeKey: `verify-links-${Date.now()}`,
+				key: WRITEBACK_SOURCE,
+				provider: "zotero",
+				scopeKind: "group",
+			});
+			await db.insert(itemSourceLink).values({
+				itemKey: draftA.itemKey,
+				sourceConnectionKey: WRITEBACK_SOURCE,
+				sourceRecordKey: draftA.itemKey,
+				writebackEnabled: true,
+			});
+			writebackSourceKey = WRITEBACK_SOURCE;
+		}
+		await db
+			.insert(itemSourceLink)
+			.values({
+				itemKey: draftB.itemKey,
+				sourceConnectionKey: writebackSourceKey,
+				sourceRecordKey: draftB.itemKey,
+				writebackEnabled: false,
+			})
+			.onConflictDoNothing();
+		await db.insert(itemLink).values({
+			fromKey: draftB.itemKey,
+			toKey: draftA.itemKey,
+			kind: "related",
+			origin: sourceItemLinkOrigin(writebackSourceKey),
+		});
+		const jobsBefore = await db
+			.select({ id: sourceWritebackJob.id })
+			.from(sourceWritebackJob)
+			.where(eq(sourceWritebackJob.itemKey, draftA.itemKey));
+		const relatedDraft = await openItemDraft(db, draftA.itemKey);
+		await saveItemDraft(db, {
+			itemKey: draftA.itemKey,
+			expectedDraftRevision: relatedDraft.draftRevision,
+			expectedPayload: relatedDraft.payload,
+			payload: {
+				...relatedDraft.payload,
+				links: { cites: [], related: [B, draftB.itemKey] },
+			},
+		});
+		await publishItemDraft(db, draftA.itemKey);
+		const jobsAfterRelated = await db
+			.select({
+				dirtyFields: sourceWritebackJob.dirtyFields,
+				id: sourceWritebackJob.id,
+			})
+			.from(sourceWritebackJob)
+			.where(eq(sourceWritebackJob.itemKey, draftA.itemKey))
+			.orderBy(sourceWritebackJob.id);
+		const newRelatedJobs = jobsAfterRelated.filter(
+			(job) => !jobsBefore.some((before) => before.id === job.id),
+		);
+		assert(
+			newRelatedJobs.length === 1 &&
+				(newRelatedJobs[0]!.dirtyFields as string[]).includes("relations"),
+			`A related change must enqueue one writeback job with relations: ${JSON.stringify(newRelatedJobs)}`,
+		);
+		const citesDraft = await openItemDraft(db, draftA.itemKey);
+		await saveItemDraft(db, {
+			itemKey: draftA.itemKey,
+			expectedDraftRevision: citesDraft.draftRevision,
+			expectedPayload: citesDraft.payload,
+			payload: {
+				...citesDraft.payload,
+				links: { cites: [draftB.itemKey], related: [B, draftB.itemKey] },
+			},
+		});
+		await publishItemDraft(db, draftA.itemKey);
+		const jobsAfterCites = await db
+			.select({ id: sourceWritebackJob.id })
+			.from(sourceWritebackJob)
+			.where(eq(sourceWritebackJob.itemKey, draftA.itemKey));
+		assert(
+			jobsAfterCites.length === jobsAfterRelated.length,
+			"A cites-only change must not enqueue a writeback job",
+		);
+		const removeDraft = await openItemDraft(db, draftA.itemKey);
+		await saveItemDraft(db, {
+			itemKey: draftA.itemKey,
+			expectedDraftRevision: removeDraft.draftRevision,
+			expectedPayload: removeDraft.payload,
+			payload: {
+				...removeDraft.payload,
+				links: { cites: [draftB.itemKey], related: [B] },
+			},
+		});
+		await publishItemDraft(db, draftA.itemKey);
+		const mirroredRows = await db
+			.select({ origin: itemLink.origin })
+			.from(itemLink)
+			.where(
+				and(
+					eq(itemLink.fromKey, draftB.itemKey),
+					eq(itemLink.toKey, draftA.itemKey),
+				),
+			);
+		assert(
+			mirroredRows.length === 0,
+			"Removing a manual related link must drop the source's mirrored reverse row",
+		);
+
+		// Unpublishing/removing a record is a soft delete: rows stay, public reads hide them.
 		await removeNativeItem(db, draftB.itemKey);
 		assert(
-			(await getManualLinkKeys(db, draftA.itemKey)).cites.length === 0,
-			"Removing a record must cascade its incoming links",
+			(await getManualLinkKeys(db, draftA.itemKey)).cites.join() === draftB.itemKey,
+			"Unpublishing a record must keep the link rows",
+		);
+		assert(
+			(await getPublicItemLinks(db, draftA.itemKey)).cites.length === 0,
+			"Unpublished targets must be hidden from public links",
 		);
 
 		console.log("Item link verification passed");
@@ -378,6 +512,10 @@ async function verify() {
 
 async function cleanup(db: ReturnType<typeof createPostgresDatabaseResource>["database"]) {
 	const keys = [...KEYS, ...nativeKeys];
+	await db
+		.delete(sourceWritebackJob)
+		.where(inArray(sourceWritebackJob.itemKey, keys));
+	await db.delete(itemSourceLink).where(inArray(itemSourceLink.itemKey, keys));
 	await db.delete(outbox).where(inArray(outbox.entityKey, keys));
 	await db.delete(itemDraft).where(inArray(itemDraft.itemKey, keys));
 	await db.delete(item).where(inArray(item.key, keys));
@@ -389,6 +527,7 @@ async function cleanup(db: ReturnType<typeof createPostgresDatabaseResource>["da
 				eq(itemIdentity.sourceConnectionKey, "native"),
 			),
 		);
+	await db.delete(sourceConnection).where(eq(sourceConnection.key, WRITEBACK_SOURCE));
 }
 
 verify().catch((error) => {

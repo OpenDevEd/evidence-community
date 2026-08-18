@@ -36,6 +36,7 @@ import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
 import {
 	existingItemKeys,
 	getManualLinkKeys,
+	removeMirroredSourceRelatedLinks,
 	replaceManualLinks,
 } from "@/lib/links/item-links";
 import { ITEM_LINK_PAYLOAD_KINDS } from "./item-fields";
@@ -465,6 +466,8 @@ async function publishItemLinks(
 		);
 	}
 	const changed = new Set<string>();
+	let relatedChanged = false;
+	const removedRelated: string[] = [];
 	for (const kind of ITEM_LINK_PAYLOAD_KINDS) {
 		const result = await replaceManualLinks(transaction, {
 			fromKey: itemKey,
@@ -472,8 +475,12 @@ async function publishItemLinks(
 			toKeys: links[kind],
 		});
 		for (const key of [...result.added, ...result.removed]) changed.add(key);
+		if (kind === "related" && (result.added.length > 0 || result.removed.length > 0)) {
+			relatedChanged = true;
+			removedRelated.push(...result.removed);
+		}
 	}
-	return [...changed].sort();
+	return { changedTargets: [...changed].sort(), relatedChanged, removedRelated };
 }
 
 export async function createNativeItemDraft(db: Database, payload: unknown) {
@@ -1007,15 +1014,34 @@ export async function publishItemDraftWithContext(
 			);
 		}
 
-		const changedLinkTargets = await publishItemLinks(
+		const publishedLinks = await publishItemLinks(
 			transaction,
 			itemKey,
 			validated.links,
 		);
+		const changedLinkTargets = publishedLinks.changedTargets;
 		if (
 			changedLinkTargets.some((key) => !advisoryLockKeys.includes(key))
 		) {
 			throw new ItemDraftConflictError(itemKey);
+		}
+		if (publishedLinks.removedRelated.length > 0) {
+			const writebackSources = await transaction
+				.select({ sourceConnectionKey: itemSourceLink.sourceConnectionKey })
+				.from(itemSourceLink)
+				.where(
+					and(
+						eq(itemSourceLink.itemKey, itemKey),
+						eq(itemSourceLink.writebackEnabled, true),
+					),
+				);
+			await removeMirroredSourceRelatedLinks(transaction, {
+				itemKey,
+				sourceConnectionKeys: writebackSources.map(
+					(row) => row.sourceConnectionKey,
+				),
+				targetKeys: publishedLinks.removedRelated,
+			});
 		}
 
 		await transaction.insert(outbox).values({
@@ -1085,6 +1111,9 @@ export async function publishItemDraftWithContext(
 		const changedFields = Object.keys(draft.patch).filter(
 			(field) => field !== "collections" && field !== "links",
 		);
+		// A changed "related" set changes what the source shows as Related, so the
+		// record's relations must be written back. "Cites" never reaches a source.
+		if (publishedLinks.relatedChanged) changedFields.push("relations");
 		if (current?.deleted === 1) {
 			changedFields.push(
 				...editableItemDatabaseFields.map(
