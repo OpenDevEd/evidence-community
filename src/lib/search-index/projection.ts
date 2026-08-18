@@ -1,6 +1,6 @@
 import { sourceConnection } from "@opendeved/evidence-library-core";
 import { itemTypeZoteroFieldName } from "@opendeved/evidence-library-core/zotero-schema";
-import { asc, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import {
@@ -8,11 +8,16 @@ import {
 	withCancellableDatabaseTransaction,
 } from "@/db/cancellable-transaction";
 import { collection } from "@/db/schema/tables/collection";
+import {
+	publicationIdentifier,
+	publicationSyncState,
+} from "@/db/schema/publication";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { chunkValues } from "@/lib/chunk-values";
 import { bibliographicDateSearchFields } from "@/lib/bibliographic-date";
+import { buildPublicationIdentifierSummary } from "@/lib/publication/publication-identifier-summary";
 
 export type SearchProjectionEvent = {
 	entityKey: string;
@@ -297,7 +302,7 @@ async function buildSearchProjectionPlanForKeys(
 		...activeParentKeys,
 		...children.map((child) => child.key),
 	];
-	const [tagRows, membershipRows] =
+	const [tagRows, membershipRows, identifierRows, zenodoStateRows] =
 		allDocumentItemKeys.length > 0
 			? await Promise.all([
 					database
@@ -318,8 +323,42 @@ async function buildSearchProjectionPlanForKeys(
 							asc(itemToCollection.itemKey),
 							asc(itemToCollection.collectionKey),
 						),
+					database
+						.select({
+							doi: publicationIdentifier.doi,
+							itemKey: publicationIdentifier.itemKey,
+							lifecycle: publicationIdentifier.lifecycle,
+							registrar: publicationIdentifier.registrar,
+							role: publicationIdentifier.role,
+						})
+						.from(publicationIdentifier)
+						.where(
+							and(
+								inArray(publicationIdentifier.itemKey, activeParentKeys),
+								eq(publicationIdentifier.isCurrent, true),
+							),
+						)
+						.orderBy(
+							asc(publicationIdentifier.itemKey),
+							asc(publicationIdentifier.registrar),
+							asc(publicationIdentifier.role),
+						),
+					database
+						.select({
+							itemKey: publicationSyncState.itemKey,
+							zenodoParentId: publicationSyncState.zenodoParentId,
+							zenodoRecordId: publicationSyncState.zenodoRecordId,
+						})
+						.from(publicationSyncState)
+						.where(
+							and(
+								inArray(publicationSyncState.itemKey, activeParentKeys),
+								eq(publicationSyncState.provider, "zenodo"),
+								eq(publicationSyncState.environment, "sandbox"),
+							),
+						),
 				])
-			: [[], []];
+			: [[], [], [], []];
 
 	const tagsByItem = new Map<string, string[]>();
 	for (const row of tagRows) {
@@ -333,6 +372,18 @@ async function buildSearchProjectionPlanForKeys(
 		keys.push(row.collectionKey);
 		collectionsByItem.set(row.itemKey, keys);
 	}
+	const identifiersByItem = new Map<
+		string,
+		Array<(typeof identifierRows)[number]>
+	>();
+	for (const row of identifierRows) {
+		const identifiers = identifiersByItem.get(row.itemKey) ?? [];
+		identifiers.push(row);
+		identifiersByItem.set(row.itemKey, identifiers);
+	}
+	const zenodoStateByItem = new Map(
+		zenodoStateRows.map((row) => [row.itemKey, row]),
+	);
 	const childrenByParent = new Map<string, ItemRow[]>();
 	for (const child of children) {
 		if (!child.parentItem) continue;
@@ -363,6 +414,17 @@ async function buildSearchProjectionPlanForKeys(
 					fullTextPDF: fullTextPages(child.fullTextPDF),
 				}))
 				.filter((entry) => entry.fullTextPDF.length > 0);
+			const zenodoState = zenodoStateByItem.get(parent.key);
+			const publicationIdentifiers = buildPublicationIdentifierSummary({
+				identifiers: identifiersByItem.get(parent.key) ?? [],
+				zenodoState: zenodoState
+					? {
+							environment: "sandbox",
+							zenodoParentId: zenodoState.zenodoParentId,
+							zenodoRecordId: zenodoState.zenodoRecordId,
+						}
+					: null,
+			});
 
 			return {
 				...cleanRow(parent),
@@ -381,6 +443,7 @@ async function buildSearchProjectionPlanForKeys(
 				metadataSearch: metadataSearchValues(parent),
 				key: parent.key,
 				provider,
+				...(publicationIdentifiers ? { publicationIdentifiers } : {}),
 				revision: parent.revision,
 				sourceConnectionKey: parent.sourceConnectionKey,
 				sourceExternalScopeKey,

@@ -7,6 +7,11 @@ import { and, eq, inArray, isNull } from "drizzle-orm";
 import { Meilisearch, MeilisearchApiError, type Task } from "meilisearch";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
+import {
+	publicationIdentifier,
+	publicationSyncState,
+	publicationTarget,
+} from "../src/db/schema/publication";
 import { collection } from "../src/db/schema/tables/collection";
 import { item } from "../src/db/schema/tables/item";
 import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
@@ -93,6 +98,15 @@ async function cleanupDatabase(
 	database: ReturnType<typeof createPostgresDatabaseResource>["database"],
 ) {
 	await database.delete(outbox).where(inArray(outbox.entityKey, entityKeys));
+	await database
+		.delete(publicationIdentifier)
+		.where(inArray(publicationIdentifier.itemKey, entityKeys));
+	await database
+		.delete(publicationSyncState)
+		.where(inArray(publicationSyncState.itemKey, entityKeys));
+	await database
+		.delete(publicationTarget)
+		.where(inArray(publicationTarget.itemKey, entityKeys));
 	await database.delete(item).where(inArray(item.key, entityKeys));
 	await database
 		.delete(collection)
@@ -249,6 +263,55 @@ async function verify() {
 			collectionKey: childCollectionKey,
 			itemKey: parentKey,
 		});
+		await database.insert(publicationTarget).values([
+			{
+				environment: "test",
+				itemKey: parentKey,
+				provider: "crossref",
+				requestedBy: "search-index-verifier",
+			},
+			{
+				environment: "sandbox",
+				identifierPolicy: "reuse-crossref",
+				itemKey: parentKey,
+				provider: "zenodo",
+				requestedBy: "search-index-verifier",
+			},
+		]);
+		await database.insert(publicationIdentifier).values([
+			{
+				doi: "10.53832/search.000001",
+				environment: "test",
+				isCurrent: true,
+				itemKey: parentKey,
+				lifecycle: "verified",
+				ownership: "managed",
+				registrar: "crossref",
+				role: "primary",
+				verifiedAt: new Date(),
+			},
+			{
+				doi: "10.53832/search.000001",
+				environment: "sandbox",
+				isCurrent: true,
+				itemKey: parentKey,
+				lifecycle: "verified",
+				ownership: "managed",
+				registrar: "zenodo",
+				role: "version",
+				verifiedAt: new Date(),
+			},
+		]);
+		await database.insert(publicationSyncState).values({
+			environment: "sandbox",
+			identifierPolicy: "reuse-crossref",
+			itemKey: parentKey,
+			provider: "zenodo",
+			zenodoFirstPublishedAt: new Date(),
+			zenodoParentId: "700000",
+			zenodoRecordId: "700001",
+			zenodoVersionDoi: "10.53832/search.000001",
+		});
 		const [initialEvent] = await database
 			.insert(outbox)
 			.values({
@@ -315,6 +378,15 @@ async function verify() {
 			key: string;
 			metadataSearch: string[];
 			provider: string;
+			publicationIdentifiers: {
+				crossref: { doi: string; lifecycle: string };
+				zenodo: {
+					baseUrl: string;
+					conceptRecordId: string;
+					recordId: string;
+					versionDoi: string;
+				};
+			};
 			revision: number;
 			tags: string[];
 			year: string;
@@ -345,6 +417,21 @@ async function verify() {
 				initialDocument.attachmentsData[0].tags.includes(tagName) &&
 				initialDocument.fullTextPDFs[0]?.fullTextPDF[1]?.page === 2,
 			"Attachment metadata and page text were not projected",
+		);
+		assert(
+			initialDocument.publicationIdentifiers.crossref.doi ===
+				"10.53832/search.000001" &&
+				initialDocument.publicationIdentifiers.crossref.lifecycle ===
+					"verified" &&
+				initialDocument.publicationIdentifiers.zenodo.versionDoi ===
+					"10.53832/search.000001" &&
+				initialDocument.publicationIdentifiers.zenodo.recordId ===
+					"700001" &&
+				initialDocument.publicationIdentifiers.zenodo.conceptRecordId ===
+					"700000" &&
+				initialDocument.publicationIdentifiers.zenodo.baseUrl ===
+					"https://sandbox.zenodo.org",
+			"Managed publication identifiers were not projected",
 		);
 		const [acknowledged] = await database
 			.select()
