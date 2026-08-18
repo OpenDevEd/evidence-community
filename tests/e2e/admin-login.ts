@@ -8,8 +8,12 @@ export async function openAdmin(
 	await page.goto("/admin");
 
 	const passwordInput = page.getByRole("textbox", { name: "Admin password" });
+	const newItemButton = page.getByRole("button", { name: "New item" });
+	await passwordInput.or(newItemButton).first().waitFor({ state: "visible" });
 	if (await passwordInput.isVisible()) {
 		await passwordInput.fill(password);
 		await page.getByRole("button", { name: "Continue" }).click();
 	}
+
+	await newItemButton.waitFor({ state: "visible" });
 }

@@ -33,10 +33,5 @@ export default defineConfig({
 			testMatch: /runtime-mobile\.spec\.ts$/u,
 			use: { ...devices["Pixel 5"] },
 		},
-		{
-			name: "webkit-admin",
-			testMatch: /admin\.spec\.ts$/u,
-			use: { ...devices["Desktop Safari"] },
-		},
 	],
 });

@@ -2500,20 +2500,16 @@ test("lets touch users browse item types without opening the keyboard", async ({
 		viewport: { height: 844, width: 390 },
 	});
 	const page = await context.newPage();
-	try {
-		await mockPublicShell(page);
-		await mockPublishedBook(page);
-		await openAdmin(page, adminPassword);
-		await page.getByRole("button", { name: "New item" }).click();
+	await mockPublicShell(page);
+	await mockPublishedBook(page);
+	await openAdmin(page, adminPassword);
+	await page.getByRole("button", { name: "New item" }).click();
 
-		const search = page
-			.getByRole("dialog", { name: "New item" })
-			.getByRole("textbox", { name: "Find an item type" });
-		await expect(search).toBeVisible();
-		await expect(search).not.toBeFocused();
-	} finally {
-		await context.close();
-	}
+	const search = page
+		.getByRole("dialog", { name: "New item" })
+		.getByRole("textbox", { name: "Find an item type" });
+	await expect(search).toBeVisible();
+	await expect(search).not.toBeFocused();
 });
 
 test("disables every metadata field until editing starts", async ({ page }) => {
@@ -5058,6 +5054,10 @@ test("navigates one stable grid tab stop through virtualized cells", async ({
 		page.getByRole("dialog", { name: "Add record to collection" }),
 	).toHaveCount(0);
 	await expect(grid).toBeFocused();
+	await expect(grid).toHaveAttribute(
+		"aria-activedescendant",
+		`admin-item-grid-cell-${publishedItemKey}-title`,
+	);
 	await grid.press("F2");
 	const assignmentButton = page.getByRole("button", {
 		name: "Drag or assign Published book",

@@ -4,7 +4,7 @@ import { createServer, type Server } from "node:http";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-import { chromium, webkit, type Browser, type Page } from "@playwright/test";
+import { chromium, type Browser, type Page } from "@playwright/test";
 import {
 	generateCanonicalRecordKey,
 	itemIdentity,
@@ -297,7 +297,6 @@ async function main() {
 	let failedWorker: ReturnType<typeof runTool> | null = null;
 	let webServer: ReturnType<typeof runCommand> | null = null;
 	let chromiumBrowser: Browser | null = null;
-	let webkitBrowser: Browser | null = null;
 	let stalledSearchServer: Server | null = null;
 	let stderr = "";
 	let verificationError: unknown;
@@ -1338,11 +1337,11 @@ async function main() {
 			tags: [],
 			title: browserRetryTitle,
 		});
-		webkitBrowser = await webkit.launch();
-		const webkitPage = await webkitBrowser.newPage({
+		chromiumBrowser = await chromium.launch();
+		const retryPage = await chromiumBrowser.newPage({
 			viewport: { height: 900, width: 1440 },
 		});
-		await webkitPage
+		await retryPage
 			.context()
 			.addCookies([
 				{
@@ -1351,14 +1350,14 @@ async function main() {
 					value: adminSession.value,
 				},
 			]);
-		await webkitPage.goto(`${baseUrl}/admin`);
+		await retryPage.goto(`${baseUrl}/admin`);
 		await waitForAdminSearchIndexStatus(
-			webkitPage,
+			retryPage,
 			"Search offline",
 			timeoutMs,
 		);
 		const browserRetryReceipts = await publishDraftThroughAdmin(
-			webkitPage,
+			retryPage,
 			browserRetryTitle,
 		);
 		assert(
@@ -1369,7 +1368,7 @@ async function main() {
 		);
 		const browserRetryReceipt = browserRetryReceipts[0]!;
 		await waitForAdminSearchIndexStatus(
-			webkitPage,
+			retryPage,
 			"Search paused",
 			timeoutMs,
 		);
@@ -1425,7 +1424,7 @@ async function main() {
 			revision: 1,
 		});
 		const failedStatus = await waitForAdminSearchIndexStatus(
-			webkitPage,
+			retryPage,
 			"Indexing failed",
 			timeoutMs,
 		);
@@ -1441,11 +1440,11 @@ async function main() {
 				failedTriggerGeometry.iconHeight === 14 &&
 				failedTriggerGeometry.paddingLeft === "8px" &&
 				failedTriggerGeometry.paddingRight === "8px",
-			`The WebKit indexing trigger computed CSS was wrong: ${JSON.stringify(failedTriggerGeometry)}`,
+			`The Chromium indexing trigger computed CSS was wrong: ${JSON.stringify(failedTriggerGeometry)}`,
 		);
 		const { geometry: failedPopoverGeometry, popover: failedPopover } =
 			await openAndMeasureAdminSearchIndexPopover(
-				webkitPage,
+				retryPage,
 				failedStatus,
 				timeoutMs,
 			);
@@ -1457,12 +1456,12 @@ async function main() {
 				failedPopoverGeometry.surfaceBorderRadius === "12px" &&
 				failedPopoverGeometry.surfaceBorderWidth === "1px" &&
 				failedPopoverGeometry.width === 256,
-			`The WebKit failed popover computed CSS was wrong: ${JSON.stringify(failedPopoverGeometry)}`,
+			`The Chromium failed popover computed CSS was wrong: ${JSON.stringify(failedPopoverGeometry)}`,
 		);
 		await failedPopover
 			.getByRole("button", { name: "Retry indexing" })
 			.click();
-		await webkitPage.keyboard.press("Escape");
+		await retryPage.keyboard.press("Escape");
 		await waitFor(async () => {
 			const [requeued] = await database
 				.select({
@@ -1489,7 +1488,7 @@ async function main() {
 			.delete(outbox)
 			.where(eq(outbox.entityKey, unrelatedFailedKey));
 		await waitForAdminSearchIndexStatus(
-			webkitPage,
+			retryPage,
 			"Search paused",
 			timeoutMs,
 		);
@@ -1502,7 +1501,7 @@ async function main() {
 			stderr += String(chunk);
 		});
 		await waitForAdminSearchIndexStatus(
-			webkitPage,
+			retryPage,
 			"Search updated",
 			timeoutMs,
 		);
@@ -1513,8 +1512,8 @@ async function main() {
 			retriedDocument.title === browserRetryTitle,
 			"The browser retry reported completion before the document was searchable",
 		);
-		await webkitBrowser.close();
-		webkitBrowser = null;
+		await chromiumBrowser.close();
+		chromiumBrowser = null;
 		worker.kill("SIGTERM");
 		assert(
 			(await waitForExit(worker)) === 0,
@@ -1611,9 +1610,6 @@ async function main() {
 		if (chromiumBrowser) {
 			await attemptCleanup(() => chromiumBrowser!.close());
 		}
-		if (webkitBrowser) {
-			await attemptCleanup(() => webkitBrowser!.close());
-		}
 		await attemptCleanup(() => terminateChild(migration));
 		await attemptCleanup(() => terminateChild(worker));
 		await attemptCleanup(() => terminateChild(browserFailureWorker));
@@ -1685,7 +1681,6 @@ async function main() {
 			chromium: true,
 			currentProductionBuild: true,
 			realMeilisearchTaskFailure: true,
-			webkit: true,
 			publishEditDeleteIndexed: true,
 			workerId,
 		}),

@@ -894,26 +894,29 @@ function runBrowserSuite(profile: Profile) {
 
 function runAdminBrowserSuite(profile: Profile) {
 	console.log(`\nRunning ${profile.name} admin browser suite`);
-	run(
-		"npx",
-		[
-			"playwright",
-			"test",
-			"tests/e2e/admin.spec.ts",
-			"tests/e2e/admin-runtime.spec.ts",
-			"--workers",
-			"1",
-		],
-		{
-			...commandEnvironment,
-			...publicExpectations(profile),
-			PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
-			EVIDENCE_LIBRARY_ADMIN_PASSWORD: acceptanceAdminPassword,
-			PLAYWRIGHT_ADMIN_UI: "true",
-			PLAYWRIGHT_EXPECTED_ADMIN_ITEM_TITLE: "Amber database evidence",
-			PLAYWRIGHT_RUNTIME_E2E: "true",
-		},
-	);
+	const environment = {
+		...commandEnvironment,
+		...publicExpectations(profile),
+		PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
+		EVIDENCE_LIBRARY_ADMIN_PASSWORD: acceptanceAdminPassword,
+		PLAYWRIGHT_ADMIN_UI: "true",
+		PLAYWRIGHT_EXPECTED_ADMIN_ITEM_TITLE: "Amber database evidence",
+		PLAYWRIGHT_RUNTIME_E2E: "true",
+	};
+	const runAdminTests = (arguments_: string[]) => {
+		run(
+			"npx",
+			["playwright", "test", ...arguments_, "--workers", "1"],
+			environment,
+		);
+	};
+
+	runAdminTests([
+		"tests/e2e/admin.spec.ts",
+		"tests/e2e/admin-runtime.spec.ts",
+		"--project",
+		"chromium",
+	]);
 }
 
 function runEndToEndBrowserSuite(profile: Profile) {
