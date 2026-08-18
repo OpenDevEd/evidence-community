@@ -76,6 +76,8 @@ npm run build
 
 The two live Zotero commands intentionally mutate only test group `6632364` and their isolated local services. Run them only after the unit and real local service suites pass.
 
+The acceptance runner must execute every Chromium admin test once and every WebKit admin test once. Split the WebKit tests across two fresh Playwright runs so a long-lived WebKit worker cannot make a late navigation hang. A shard is a test-runner boundary only; it must not skip or duplicate tests.
+
 ## Deployment gate
 
 Deploy docs-pen from the exact pushed commit. Its `LIBRARY_CONFIG_JSON` must contain the single Zotero source definition and no extra Zotero environment variable. Read back the effective config and container environments. Then verify:
