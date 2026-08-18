@@ -61,3 +61,11 @@ Not deployed in this plan. The runtime is deployed once in Plan 03. Local proof:
 
 - `reserveItemSourceLinks` runs inside the import transaction; dropping the guard changes no row for existing imports but must not create two enabled links for the same source. The unique (source, sourceRecordKey) rule still prevents that.
 - `requireItemDraftAccess` currently blocks non-native items with “no effective policy”. Loosening it wrongly could let an imported record be edited with writeback silently off. The test in step 2 must cover the disabled-source case.
+
+## Execution notes — 2026-08-18
+
+- There is no database helper for unit tests. Database behaviour is proven by the real-service tools. The list policy and the link plan are pure functions (`buildItemWritebackTargets`, `planItemWritebackLinkChanges`) with unit tests; the thin database wrappers are covered by `test:source-writeback`, `test:native-file-lifecycle` and `test:source-configuration`.
+- The four doc lines that described the removed default source were corrected in this plan instead of Plan 04, so the docs are never wrong on the branch.
+- `publishItemDraftWithContext` gained an optional `sourceKeys` option now, so the tools can choose a source explicitly. Plan 02 wires the route.
+- Status and retry routes take `?source=<key>` now, and the inspector shows one badge per selected source. Plan 02 builds the dialog on top.
+- Real-service tools ran against a throwaway local Postgres (`pgvector/pgvector:pg17` on port 55435). `test:crossref-activation` fails on the untouched base commit with the same DOI-reservation error, so it is not part of this plan's gate.
