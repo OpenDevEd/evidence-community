@@ -2586,6 +2586,9 @@ test("uses controls that preserve every supported metadata value", async ({
 	await expect(language).toHaveValue("French");
 
 	const itemType = inspector.getByRole("combobox", { name: "Item type" });
+	await itemType.evaluate((element) =>
+		element.scrollIntoView({ block: "center" }),
+	);
 	await itemType.fill("Case");
 	await page
 		.getByRole("option", { name: "Case", exact: true })
