@@ -37,6 +37,9 @@ import { collection } from "@/db/schema/tables/collection";
 import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
+import { replaceSourceRelatedLinks } from "@/lib/links/item-links";
+
+import { parseZoteroItemUri } from "./zotero/uri";
 import { tag } from "@/db/schema/tables/tag";
 import {
 	NativeItemValidationError,
@@ -1844,6 +1847,64 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 			(rowChunk) => transaction.insert(itemToCollection).values(rowChunk),
 		);
 
+		// Mirror the source's "related" links (Zotero dc:relation) for every top-level
+		// record in this batch. Only records from the same source resolve; the rest
+		// are counted as unresolved and retried on the next sync of that record.
+		const relatedTargetsByRecordKey = new Map<string, string[]>();
+		let unresolvedRelations = 0;
+		for (const record of itemUpserts) {
+			if (record.parentSourceRecordKey) continue;
+			const relations = normalizedItems.get(record.sourceRecordKey)!.item
+				.relations as Record<string, unknown> | null | undefined;
+			const value = relations?.["dc:relation"];
+			const uris = Array.isArray(value)
+				? value
+				: typeof value === "string"
+					? [value]
+					: [];
+			relatedTargetsByRecordKey.set(
+				record.sourceRecordKey,
+				uris.flatMap((uri) => {
+					const parsed =
+						typeof uri === "string" ? parseZoteroItemUri(uri) : null;
+					if (!parsed) {
+						unresolvedRelations += 1;
+						return [];
+					}
+					return [parsed.itemKey];
+				}),
+			);
+		}
+		const relatedSourceKeys = [
+			...new Set([...relatedTargetsByRecordKey.values()].flat()),
+		].filter((key) => !itemKeys.has(key));
+		const relatedIdentity = await loadIdentityMap(
+			transaction,
+			"item",
+			batch.sourceConnectionKey,
+			relatedSourceKeys,
+		);
+		const relatedLinkRows: { fromKey: string; toKey: string }[] = [];
+		for (const [sourceRecordKey, targets] of relatedTargetsByRecordKey) {
+			const fromKey = itemKeys.get(sourceRecordKey)!;
+			for (const target of targets) {
+				const toKey = itemKeys.get(target) ?? relatedIdentity.get(target);
+				if (!toKey) {
+					unresolvedRelations += 1;
+					continue;
+				}
+				if (toKey === fromKey) continue;
+				relatedLinkRows.push({ fromKey, toKey });
+			}
+		}
+		await replaceSourceRelatedLinks(transaction, {
+			sourceConnectionKey: batch.sourceConnectionKey,
+			fromKeys: [...relatedTargetsByRecordKey.keys()].map(
+				(sourceRecordKey) => itemKeys.get(sourceRecordKey)!,
+			),
+			links: relatedLinkRows,
+		});
+
 		const aliasRows = itemUpserts.flatMap((record) =>
 			record.aliases.map((alias) => ({
 				sourceConnectionKey: batch.sourceConnectionKey,
@@ -2276,6 +2337,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				collections: collectionEvents.size,
 				items: itemEvents.size,
 				outboxEvents: outboxRows.length,
+				unresolvedRelations,
 			},
 		};
 	});
