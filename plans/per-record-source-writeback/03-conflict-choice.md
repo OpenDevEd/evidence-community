@@ -55,3 +55,12 @@ Local only. Real proof runs in Plan 04 against Zotero: pause, edit the Zotero it
 
 - “Load remote” reuses the ingestion writer, which may reset local-only fields (files, publication data). The unit test must show attachments and publication rows survive; if they do not, limit the import to metadata fields and say so in the helper text.
 - Zotero returns item versions as integers; store as the existing string `remoteVersion` and compare through the adapter, not with `<`.
+
+## Execution notes — 2026-08-18
+
+- No new job operation was needed. Migration 0036 adds two link columns: `remoteCheckRequired` (set when a source with a remote copy is turned back on; cleared when the worker has checked it) and `conflictRemoteVersion` (non-null means the source changed while paused). The `conflict` state is derived from `conflictRemoteVersion` before any job state.
+- The writeback adapter contract gained `readVersion` and `readRecord`. `readRecord` returns the source's copy in the ingestion writer's shape, so “Load the source's version” stays provider-neutral: clear the link's local dirty fields, then `writeSourceIngestionBatch` with one record and the connection's current cursor as both expected and next cursor. The writer acknowledges the version because the link has no dirty fields left.
+- “Send this record” accepts the source's current version as seen (`lastAcknowledgedRemoteVersion = remoteVersion = conflictRemoteVersion`) and re-arms a full send.
+- Re-enabling a source at a revision whose job had already run queued nothing, because the job's idempotency key blocked a second insert. `enqueueFullWritebackForSources` now re-arms that job. This also fixes the Plan 02 “send right away” path for that case.
+- Real-database proof lives in `tools/verifySourceWriteback.ts` with the fake adapter: unchanged source resumes; changed source stops in `conflict`; a publish during the conflict sends nothing; `send-local` overwrites the source; `load-remote` replaces the record and ends `synced`. Plan 04 repeats the path against real Zotero.
+- The status popover shows the two choices only in the `conflict` state; each needs a second click (“Confirm”) and can be cancelled. Browser test: “resolves a source conflict with a confirmed choice”.
