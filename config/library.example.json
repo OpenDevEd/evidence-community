@@ -211,7 +211,13 @@
 	"sources": [
 		{
 			"key": "zotero-example",
-			"writebackEnabled": false
+			"provider": "zotero",
+			"groupId": "6632364",
+			"apiKey": "replace-with-zotero-api-key",
+			"enabled": true,
+			"writebackEnabled": false,
+			"defaultWriteback": false,
+			"settings": {}
 		}
 	],
 	"services": {

@@ -1,26 +1,27 @@
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+
 export type SourceCredentialResolver = (
-	reference: string,
+	sourceKey: string,
 ) => Promise<string | null>;
 
 export class SourceCredentialNotFoundError extends Error {
-	constructor(reference: string) {
-		super(`Source credential was not found: ${reference}`);
+	constructor(sourceKey: string) {
+		super(`No API key is configured for source ${sourceKey}.`);
 		this.name = "SourceCredentialNotFoundError";
 	}
 }
 
-export function createEnvironmentCredentialResolver(
-	environment: Readonly<Record<string, string | undefined>> = process.env,
+export function createManifestSourceCredentialResolver(
+	sources: LibraryServerConfig["sources"],
 ): SourceCredentialResolver {
-	return async (reference) => {
-		const prefix = "env:";
-		if (!reference.startsWith(prefix)) {
-			throw new SourceCredentialNotFoundError(reference);
+	const credentials = new Map(
+		sources.map((source) => [source.key, source.apiKey] as const),
+	);
+	return async (sourceKey) => {
+		const apiKey = credentials.get(sourceKey);
+		if (!apiKey) {
+			throw new SourceCredentialNotFoundError(sourceKey);
 		}
-		const name = reference.slice(prefix.length);
-		if (!/^[A-Z][A-Z0-9_]*$/.test(name)) {
-			throw new SourceCredentialNotFoundError(reference);
-		}
-		return environment[name] ?? null;
+		return apiKey;
 	};
 }

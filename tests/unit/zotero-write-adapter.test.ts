@@ -381,7 +381,6 @@ function request(
 				requestTimeoutMs: 1_000,
 			},
 			createdAt: new Date(0),
-			credentialRef: "env:ZOTERO_API_KEY",
 			defaultWriteback: true,
 			externalScopeKey: "6632364",
 			key: "zotero-test",

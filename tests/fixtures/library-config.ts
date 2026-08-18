@@ -264,7 +264,13 @@ export const maximalLibraryConfig = {
 	sources: [
 		{
 			key: "zotero-maximal",
+			provider: "zotero",
+			groupId: "6632364",
+			apiKey: "maximal-zotero-api-key",
+			enabled: true,
 			writebackEnabled: true,
+			defaultWriteback: true,
+			settings: {},
 		},
 	],
 	services: {

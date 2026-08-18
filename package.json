@@ -18,6 +18,7 @@
 		"database:provision": "tsx ./tools/provisionLibraryDatabase.ts",
 		"test:database-provisioning": "tsx ./tools/verifyLibraryDatabaseProvisioning.ts",
 		"test:source-model": "tsx ./tools/verifySourceModel.ts",
+		"test:source-configuration": "tsx ./tools/verifySourceConfiguration.ts",
 		"test:publication-model": "tsx ./tools/verifyPublicationModel.ts",
 		"test:publication-reconciler": "vitest run --config vitest.publication-reconciler.config.ts",
 		"test:publication-worker": "vitest run --config vitest.publication-worker.config.ts",

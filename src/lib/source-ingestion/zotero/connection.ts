@@ -103,13 +103,10 @@ export async function createZoteroConnectionClient(
 	const config = zoteroConnectionConfigSchema.parse(connection.config);
 	const scope = zoteroScope(connection);
 	let apiKey: string | null = null;
-	if (connection.credentialRef) {
-		if (!options.credentialResolver) {
-			throw new SourceCredentialNotFoundError(connection.credentialRef);
-		}
-		apiKey = await options.credentialResolver(connection.credentialRef);
+	if (options.credentialResolver) {
+		apiKey = await options.credentialResolver(connection.key);
 		if (!apiKey) {
-			throw new SourceCredentialNotFoundError(connection.credentialRef);
+			throw new SourceCredentialNotFoundError(connection.key);
 		}
 	}
 	return {

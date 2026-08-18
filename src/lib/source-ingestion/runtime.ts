@@ -2,7 +2,7 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { createSupabaseFileStorage } from "@/lib/admin/file-storage";
 
-import { createEnvironmentCredentialResolver } from "./credentials";
+import { createManifestSourceCredentialResolver } from "./credentials";
 import { createDefaultSourceAdapterRegistry } from "./default-registry";
 import { createZoteroAttachmentProcessor } from "./zotero/attachment-processor";
 
@@ -11,7 +11,9 @@ export function createSourceSyncRuntime(
 	database: Database,
 ) {
 	const storage = createSupabaseFileStorage(config.services.storage);
-	const credentialResolver = createEnvironmentCredentialResolver();
+	const credentialResolver = createManifestSourceCredentialResolver(
+		config.sources,
+	);
 	const attachmentProcessor = createZoteroAttachmentProcessor({
 		database,
 		maxPdfBytes: config.services.storage.maxPdfBytes,

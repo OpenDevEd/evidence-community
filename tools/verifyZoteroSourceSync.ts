@@ -16,11 +16,11 @@ import { item } from "../src/db/schema/tables/item";
 import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import { tag } from "../src/db/schema/tables/tag";
-import { createEnvironmentCredentialResolver } from "../src/lib/source-ingestion/credentials";
 import { syncZoteroSource } from "../src/lib/source-ingestion/zotero/sync";
 
 const databaseUrl = process.env.DATABASE_URL_POST;
 if (!databaseUrl) throw new Error("DATABASE_URL_POST is required");
+const credentialResolver = async () => process.env.LOCAL_ZOTERO_API_KEY ?? null;
 const verifiedDatabaseUrl = databaseUrl;
 
 const connectionKey = "zotero-local-e2e";
@@ -528,7 +528,6 @@ async function verify() {
 			provider: "zotero",
 			scopeKind: "group",
 			externalScopeKey: "999",
-			credentialRef: "env:LOCAL_ZOTERO_API_KEY",
 			config: {
 				apiBaseUrl: `http://127.0.0.1:${address.port}`,
 				maxConsistencyRetries: 4,
@@ -543,7 +542,7 @@ async function verify() {
 			await syncZoteroSource({
 				database,
 				sourceConnectionKey: connectionKey,
-				credentialResolver: createEnvironmentCredentialResolver(),
+				credentialResolver,
 				attachmentProcessor: async () => {
 					if (failAttachmentOnce) {
 						failAttachmentOnce = false;
@@ -598,7 +597,7 @@ async function verify() {
 		const initial = await syncZoteroSource({
 			database,
 			sourceConnectionKey: connectionKey,
-			credentialResolver: createEnvironmentCredentialResolver(),
+			credentialResolver,
 			attachmentProcessor,
 			sleep: async () => {},
 		});
@@ -825,7 +824,7 @@ async function verify() {
 		const replay = await syncZoteroSource({
 			database,
 			sourceConnectionKey: connectionKey,
-			credentialResolver: createEnvironmentCredentialResolver(),
+			credentialResolver,
 			attachmentProcessor,
 			sleep: async () => {},
 		});
@@ -836,7 +835,7 @@ async function verify() {
 		const settledReplay = await syncZoteroSource({
 			database,
 			sourceConnectionKey: connectionKey,
-			credentialResolver: createEnvironmentCredentialResolver(),
+			credentialResolver,
 			attachmentProcessor,
 			sleep: async () => {},
 		});
@@ -886,7 +885,7 @@ async function verify() {
 		await syncZoteroSource({
 			database,
 			sourceConnectionKey: connectionKey,
-			credentialResolver: createEnvironmentCredentialResolver(),
+			credentialResolver,
 			sleep: async () => {},
 		});
 		const [
@@ -1012,7 +1011,7 @@ async function verify() {
 		await syncZoteroSource({
 			database,
 			sourceConnectionKey: connectionKey,
-			credentialResolver: createEnvironmentCredentialResolver(),
+			credentialResolver,
 			sleep: async () => {},
 		});
 		const [changedAfterTrash, membershipAfterTrash] = await Promise.all([
@@ -1055,7 +1054,7 @@ async function verify() {
 		await syncZoteroSource({
 			database,
 			sourceConnectionKey: connectionKey,
-			credentialResolver: createEnvironmentCredentialResolver(),
+			credentialResolver,
 			sleep: async () => {},
 		});
 		const [updatedParent, deletedAttachment, deletedAnnotation] =
@@ -1102,7 +1101,7 @@ async function verify() {
 		const drifted = await syncZoteroSource({
 			database,
 			sourceConnectionKey: connectionKey,
-			credentialResolver: createEnvironmentCredentialResolver(),
+			credentialResolver,
 			sleep: async () => {},
 		});
 		const [stableParent, finalConnection] = await Promise.all([
@@ -1169,7 +1168,7 @@ async function verify() {
 		const restored = await syncZoteroSource({
 			database,
 			sourceConnectionKey: connectionKey,
-			credentialResolver: createEnvironmentCredentialResolver(),
+			credentialResolver,
 			sleep: async () => {},
 		});
 		const [

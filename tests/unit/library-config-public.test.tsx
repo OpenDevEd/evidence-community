@@ -74,6 +74,7 @@ describe("public library configuration", () => {
 			"maximal-storage-service-role-key",
 			"maximal-private",
 			"maximal-public",
+			"maximal-zotero-api-key",
 			"google-api-key",
 			"google-client-id",
 			"google-client-secret-value",

@@ -104,10 +104,11 @@ async function actionableWritebackJobs(database: Database) {
 
 async function drainWriteback(
 	database: Database,
+	config: Awaited<ReturnType<typeof loadLibraryConfig>>,
 	itemKeys: readonly string[],
 	label: string,
 ) {
-	const runtime = createSourceWritebackRuntime();
+	const runtime = createSourceWritebackRuntime(config);
 	const results: SourceWritebackProcessResult[] = [];
 	for (let pass = 0; pass < MAX_DRAIN_PASSES; pass += 1) {
 		results.push(
@@ -348,10 +349,6 @@ async function verifyLiveWriteback() {
 			.where(eq(sourceConnection.key, LIVE_ZOTERO_CONNECTION_KEY))
 			.limit(1);
 		assertLiveZoteroConnection(connection);
-		assert(
-			connection.credentialRef,
-			`Source connection ${LIVE_ZOTERO_CONNECTION_KEY} needs a credential reference`,
-		);
 
 		syncRuntime = createSourceSyncRuntime(config, database);
 		const zotero = await createZoteroConnectionClient(connection, {
@@ -403,6 +400,7 @@ async function verifyLiveWriteback() {
 		await publishItemDraft(database, attachmentDraft.itemKey);
 		const metadataWriteback = await drainWriteback(
 			database,
+			config,
 			itemKeys,
 			"metadata",
 		);
@@ -464,7 +462,7 @@ async function verifyLiveWriteback() {
 		});
 		publicPaths.add(published.file.objectPath);
 		publicPaths.add(published.file.coverObjectPath);
-		await drainWriteback(database, itemKeys, "pdf-publish");
+		await drainWriteback(database, config, itemKeys, "pdf-publish");
 
 		const publishedRemote = await remoteItem(
 			zotero.client,
@@ -617,7 +615,7 @@ async function verifyLiveWriteback() {
 		await verifyNativeSeparation(database, itemKeys);
 
 		await unpublishNativePdf(database, storage, attachmentDraft.itemKey);
-		await drainWriteback(database, itemKeys, "pdf-unpublish");
+		await drainWriteback(database, config, itemKeys, "pdf-unpublish");
 		const unpublishedRemote = await remoteItem(
 			zotero.client,
 			zotero.prefix,
@@ -663,7 +661,7 @@ async function verifyLiveWriteback() {
 		);
 
 		await removeNativeItem(database, attachmentDraft.itemKey);
-		await drainWriteback(database, itemKeys, "attachment-delete");
+		await drainWriteback(database, config, itemKeys, "attachment-delete");
 		assert(
 			await remoteItemIsMissing(
 				zotero.client,
@@ -682,7 +680,7 @@ async function verifyLiveWriteback() {
 		);
 
 		await removeNativeItem(database, parentDraft.itemKey);
-		await drainWriteback(database, itemKeys, "parent-delete");
+		await drainWriteback(database, config, itemKeys, "parent-delete");
 		assert(
 			await remoteItemIsMissing(
 				zotero.client,

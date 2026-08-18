@@ -420,7 +420,6 @@ async function verify() {
 				.where(inArray(sourceConnection.key, previousDefaultKeys));
 		}
 		await db.insert(sourceConnection).values({
-			credentialRef: "env:NATIVE_FILE_WRITEBACK_TEST_KEY",
 			defaultWriteback: true,
 			externalScopeKey: connectionKey,
 			key: connectionKey,

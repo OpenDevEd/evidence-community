@@ -88,10 +88,46 @@ describe("library configuration fixtures", () => {
 		expect(config.gapMaps).toHaveLength(1);
 		expect(config.gapMaps[0]?.enabled).toBe(true);
 		expect(config.sources).toEqual([
-			{ key: "zotero-maximal", writebackEnabled: true },
+			{
+				key: "zotero-maximal",
+				provider: "zotero",
+				groupId: "6632364",
+				apiKey: "maximal-zotero-api-key",
+				enabled: true,
+				writebackEnabled: true,
+				defaultWriteback: true,
+				settings: {
+					apiBaseUrl: "https://api.zotero.org",
+					attachmentDownloadTimeoutMs: 120_000,
+					maxConsistencyRetries: 4,
+					maxRecordsPerBatch: 500,
+					maxSnapshotRecords: 100_000,
+					requestTimeoutMs: 30_000,
+				},
+			},
 		]);
 		expect(config.ai.providers[0].enabled).toBe(true);
 		expect(config.processing.sharedRules).toHaveLength(1);
+	});
+
+	it("requires one manifest-owned Zotero identity and credential contract", () => {
+		const missingCredential = cloneLibraryConfig(maximalLibraryConfig);
+		delete (missingCredential.sources![0] as { apiKey?: string }).apiKey;
+		expect(libraryConfigSchema.safeParse(missingCredential).success).toBe(
+			false,
+		);
+
+		const invalidDefault = cloneLibraryConfig(maximalLibraryConfig);
+		invalidDefault.sources![0].writebackEnabled = false;
+		expect(libraryConfigSchema.safeParse(invalidDefault).success).toBe(false);
+
+		const duplicateGroup = cloneLibraryConfig(maximalLibraryConfig);
+		duplicateGroup.sources!.push({
+			...duplicateGroup.sources![0],
+			key: "zotero-duplicate",
+			defaultWriteback: false,
+		});
+		expect(libraryConfigSchema.safeParse(duplicateGroup).success).toBe(false);
 	});
 
 	it("enables configured gap maps by default", () => {

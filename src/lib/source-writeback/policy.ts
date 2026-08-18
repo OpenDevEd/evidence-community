@@ -9,12 +9,17 @@ import {
 } from "@opendeved/evidence-library-core";
 import { desc, eq } from "drizzle-orm";
 
-import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
+export type SourceWritebackConfiguration = {
+	sources: readonly {
+		key: string;
+		writebackEnabled: boolean;
+	}[];
+};
 
 export const WRITEBACK_SUPPORTED_PROVIDERS = [
 	"zotero",
@@ -59,7 +64,7 @@ function sourceLabel(
 }
 
 export function configuredWritebackSourceKeys(
-	config: Pick<LibraryServerConfig, "sources">,
+	config: SourceWritebackConfiguration,
 ) {
 	return new Set(
 		config.sources
@@ -69,7 +74,7 @@ export function configuredWritebackSourceKeys(
 }
 
 export function isSourceWritebackEnabled(
-	config: Pick<LibraryServerConfig, "sources">,
+	config: SourceWritebackConfiguration,
 	sourceConnectionKey: string,
 ) {
 	return configuredWritebackSourceKeys(config).has(sourceConnectionKey);
@@ -77,7 +82,7 @@ export function isSourceWritebackEnabled(
 
 export function evaluateSourceWritebackPolicy(
 	link: SourceWritebackPolicyLink | null,
-	config: Pick<LibraryServerConfig, "sources">,
+	config: SourceWritebackConfiguration,
 ): SourceWritebackPolicy {
 	if (!link) {
 		return {
@@ -122,7 +127,7 @@ export function evaluateSourceWritebackPolicy(
 export async function resolveItemWritebackPolicy(
 	executor: Executor,
 	itemKey: string,
-	config: Pick<LibraryServerConfig, "sources">,
+	config: SourceWritebackConfiguration,
 ): Promise<SourceWritebackPolicy> {
 	const [identity] = await executor
 		.select({ sourceConnectionKey: itemIdentity.sourceConnectionKey })
@@ -175,7 +180,7 @@ export async function resolveItemWritebackPolicy(
 export async function resolveCollectionWritebackPolicy(
 	executor: Executor,
 	collectionKey: string,
-	config: Pick<LibraryServerConfig, "sources">,
+	config: SourceWritebackConfiguration,
 ): Promise<SourceWritebackPolicy> {
 	const [identity] = await executor
 		.select({ sourceConnectionKey: collectionIdentity.sourceConnectionKey })

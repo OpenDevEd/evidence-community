@@ -2,6 +2,7 @@ import { hostname } from "node:os";
 
 import { loadLibraryConfig } from "../src/config/library-config/source";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
+import { reconcileConfiguredSources } from "../src/lib/source-ingestion/configuration";
 import {
 	runActiveSourceConnections,
 	runSourceConnection,
@@ -147,6 +148,10 @@ async function main() {
 	process.on("SIGTERM", stop);
 
 	try {
+		await reconcileConfiguredSources(
+			databaseResource.database,
+			config.sources,
+		);
 		const runtime = createSourceSyncRuntime(
 			config,
 			databaseResource.database,

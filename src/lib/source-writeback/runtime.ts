@@ -1,4 +1,5 @@
-import { createEnvironmentCredentialResolver } from "@/lib/source-ingestion/credentials";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { createManifestSourceCredentialResolver } from "@/lib/source-ingestion/credentials";
 
 import { SourceWritebackAdapterRegistry } from "./adapter";
 import {
@@ -11,10 +12,13 @@ export type SourceWritebackRuntimeOptions = {
 };
 
 export function createSourceWritebackRuntime(
+	config: LibraryServerConfig,
 	options: SourceWritebackRuntimeOptions = {},
 ) {
 	return {
-		credentialResolver: createEnvironmentCredentialResolver(),
+		credentialResolver: createManifestSourceCredentialResolver(
+			config.sources,
+		),
 		registry: new SourceWritebackAdapterRegistry([
 			createZoteroWritebackAdapter(options.zotero),
 		]),

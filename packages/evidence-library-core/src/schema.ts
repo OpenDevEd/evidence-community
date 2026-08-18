@@ -98,7 +98,6 @@ export const sourceConnection = pgTable(
 		provider: text("provider", { enum: SOURCE_PROVIDERS }).notNull(),
 		scopeKind: text("scopeKind", { enum: SOURCE_SCOPE_KINDS }).notNull(),
 		externalScopeKey: varchar("externalScopeKey", { length: 512 }),
-		credentialRef: varchar("credentialRef", { length: 255 }),
 		defaultWriteback: boolean("defaultWriteback").notNull().default(false),
 		config: jsonb("config").$type<JsonObject>().notNull().default({}),
 		syncCursor: jsonb("syncCursor")
@@ -133,10 +132,9 @@ export const sourceConnection = pgTable(
 		),
 		check(
 			"sourceConnection_default_writeback_remote",
-			sql`NOT ${table.defaultWriteback} OR (
+				sql`NOT ${table.defaultWriteback} OR (
 				${table.provider} <> 'native'
-				AND ${table.status} <> 'removed'
-				AND ${table.credentialRef} IS NOT NULL
+					AND ${table.status} <> 'removed'
 			)`,
 		),
 		uniqueIndex("sourceConnection_one_default_writeback")

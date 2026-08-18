@@ -171,18 +171,12 @@ async function verifyPipeline() {
 			.where(eq(sourceConnection.key, LIVE_ZOTERO_CONNECTION_KEY))
 			.limit(1);
 		assertLiveZoteroConnection(connection);
-		assert(
-			connection.credentialRef,
-			`Source connection ${LIVE_ZOTERO_CONNECTION_KEY} needs a credential reference`,
-		);
 
 		const runtime = createSourceSyncRuntime(config, database);
-		const apiKey = await runtime.credentialResolver(
-			connection.credentialRef,
-		);
+		const apiKey = await runtime.credentialResolver(connection.key);
 		assert(
 			apiKey,
-			`Credential ${connection.credentialRef} is not available`,
+			`Source ${connection.key} has no API key in the library configuration`,
 		);
 		const publishTag = config.content.tags.publish[0];
 		assert(publishTag, "The active configuration needs a PDF publication tag");

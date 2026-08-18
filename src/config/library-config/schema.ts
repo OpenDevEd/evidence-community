@@ -1,6 +1,8 @@
 import { isSourceConnectionKey } from "@opendeved/evidence-library-core";
 import { z } from "zod";
 
+import { zoteroConnectionConfigSchema } from "@/lib/source-ingestion/zotero/schema";
+
 import {
 	PLATFORM_AI_MODEL_CATALOG,
 	PLATFORM_AI_PROVIDERS,
@@ -1088,17 +1090,46 @@ const sourceConfigurationSchema = z
 			.min(1)
 			.max(64)
 			.refine(isSourceConnectionKey, "Invalid source connection key"),
+		provider: z.literal("zotero"),
+		groupId: z.string().trim().regex(/^\d+$/u).max(512),
+		apiKey: secretSchema(1, 512),
+		enabled: z.boolean().default(true),
 		writebackEnabled: z.boolean().default(false),
+		defaultWriteback: z.boolean().default(false),
+		settings: zoteroConnectionConfigSchema.prefault({}),
 	})
-	.strict();
+	.strict()
+	.superRefine((source, context) => {
+		if (source.defaultWriteback && !source.writebackEnabled) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "The default writeback source must allow writeback",
+				path: ["writebackEnabled"],
+			});
+		}
+		if (!source.enabled && source.defaultWriteback) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "The default writeback source must be enabled",
+				path: ["enabled"],
+			});
+		}
+	});
 
 const sourcesSchema = z
 	.array(sourceConfigurationSchema)
 	.max(100)
 	.default([])
-	.superRefine((sources, context) =>
-		addDuplicateIssues(sources, context, (source) => source.key),
-	);
+	.superRefine((sources, context) => {
+		addDuplicateIssues(sources, context, (source) => source.key);
+		addDuplicateIssues(sources, context, (source) => source.groupId);
+		if (sources.filter((source) => source.defaultWriteback).length > 1) {
+			context.addIssue({
+				code: z.ZodIssueCode.custom,
+				message: "Only one source can be the default writeback source",
+			});
+		}
+	});
 
 const aiProviderSchema = z
 	.object({

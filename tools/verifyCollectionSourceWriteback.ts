@@ -106,7 +106,6 @@ async function verify() {
 
 	try {
 		await database.insert(sourceConnection).values({
-			credentialRef: "env:COLLECTION_WRITEBACK_TEST_KEY",
 			externalScopeKey: marker,
 			key: connectionKey,
 			provider: "zotero",

@@ -366,7 +366,8 @@
 			"services.publication.crossref.password",
 			"services.publication.zenodo.token",
 			"services.search.key",
-			"services.storage.serviceRoleKey"
+			"services.storage.serviceRoleKey",
+			"sources[].apiKey"
 		]
 	},
 	"options": {

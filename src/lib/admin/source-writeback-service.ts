@@ -4,9 +4,11 @@ import {
 } from "@opendeved/evidence-library-core";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 
-import type { LibraryServerConfig } from "@/config/library-config/schema";
 import type { Database } from "@/db/database-schema";
-import { resolveItemWritebackPolicy } from "@/lib/source-writeback/policy";
+import {
+	resolveItemWritebackPolicy,
+	type SourceWritebackConfiguration,
+} from "@/lib/source-writeback/policy";
 
 import type { AdminSourceWritebackStatus } from "./source-writeback-contract";
 
@@ -95,7 +97,7 @@ function statusJson(
 export async function getAdminSourceWritebackStatus(
 	database: Database,
 	itemKey: string,
-	config: Pick<LibraryServerConfig, "sources">,
+	config: SourceWritebackConfiguration,
 	now = new Date(),
 ) {
 	const policy = await resolveItemWritebackPolicy(database, itemKey, config);
@@ -153,7 +155,7 @@ export async function getAdminSourceWritebackStatus(
 export async function retryAdminSourceWriteback(
 	database: Database,
 	itemKey: string,
-	config: Pick<LibraryServerConfig, "sources">,
+	config: SourceWritebackConfiguration,
 	requeuedAt = new Date(),
 ) {
 	const current = await getAdminSourceWritebackStatus(

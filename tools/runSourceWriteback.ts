@@ -2,6 +2,7 @@ import { hostname } from "node:os";
 
 import { loadLibraryConfig } from "../src/config/library-config/source";
 import { createPostgresDatabaseResource } from "../src/db/postgres";
+import { reconcileConfiguredSources } from "../src/lib/source-ingestion/configuration";
 import { parseSourceWritebackCommand } from "../src/lib/source-writeback/command";
 import type { SourceWritebackProcessResult } from "../src/lib/source-writeback/consumer";
 import { isSourceWritebackEnabled } from "../src/lib/source-writeback/policy";
@@ -46,7 +47,11 @@ async function main() {
 	process.on("SIGTERM", stop);
 
 	try {
-		const runtime = createSourceWritebackRuntime();
+		await reconcileConfiguredSources(
+			databaseResource.database,
+			config.sources,
+		);
+		const runtime = createSourceWritebackRuntime(config);
 		const result = await runSourceWritebackWorker({
 			credentialResolver: runtime.credentialResolver,
 			database: databaseResource.database,

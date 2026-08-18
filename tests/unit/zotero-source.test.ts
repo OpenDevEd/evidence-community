@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	SourceCredentialNotFoundError,
-	createEnvironmentCredentialResolver,
+	createManifestSourceCredentialResolver,
 } from "@/lib/source-ingestion/credentials";
 import { sourceIngestionBatchSchema } from "@/lib/source-ingestion/batch-schema";
 import {
@@ -36,12 +36,21 @@ describe("Zotero source configuration", () => {
 		).toBe(false);
 	});
 
-	it("resolves explicit environment references only", async () => {
-		const resolver = createEnvironmentCredentialResolver({
-			ZOTERO_TEST_KEY: "secret",
-		});
-		await expect(resolver("env:ZOTERO_TEST_KEY")).resolves.toBe("secret");
-		await expect(resolver("vault:zotero")).rejects.toBeInstanceOf(
+	it("resolves credentials by manifest source key only", async () => {
+		const resolver = createManifestSourceCredentialResolver([
+			{
+				key: "zotero-test",
+				provider: "zotero",
+				groupId: "6632364",
+				apiKey: "secret",
+				enabled: true,
+				writebackEnabled: true,
+				defaultWriteback: true,
+				settings: zoteroConnectionConfigSchema.parse({}),
+			},
+		]);
+		await expect(resolver("zotero-test")).resolves.toBe("secret");
+		await expect(resolver("missing-source")).rejects.toBeInstanceOf(
 			SourceCredentialNotFoundError,
 		);
 	});

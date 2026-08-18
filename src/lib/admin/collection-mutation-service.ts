@@ -7,7 +7,6 @@ import {
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod";
 
-import type { LibraryServerConfig } from "@/config/library-config/schema";
 import {
 	lockCollectionMutation,
 	lockCollectionMutations,
@@ -21,6 +20,7 @@ import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import {
 	evaluateSourceWritebackPolicy,
 	resolveCollectionWritebackPolicy,
+	type SourceWritebackConfiguration,
 	type SourceWritebackReason,
 } from "@/lib/source-writeback/policy";
 import {
@@ -51,7 +51,7 @@ import {
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 export type CollectionMutationOptions = {
-	writebackConfig: Pick<LibraryServerConfig, "sources">;
+	writebackConfig: SourceWritebackConfiguration;
 };
 
 const createCollectionInputSchema = z

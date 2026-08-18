@@ -15,7 +15,6 @@ import {
 } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
-import type { LibraryServerConfig } from "@/config/library-config/schema";
 import {
 	lockItemMutation,
 	lockItemMutations,
@@ -56,6 +55,7 @@ import {
 } from "@/lib/source-writeback/queue";
 import {
 	resolveItemWritebackPolicy,
+	type SourceWritebackConfiguration,
 	type SourceWritebackReason,
 } from "@/lib/source-writeback/policy";
 import { enqueuePublicationJobsForItem } from "@/lib/publication/queue";
@@ -64,7 +64,7 @@ type ItemInsert = InferInsertModel<typeof item>;
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
 export type ItemWritebackPolicyOptions = {
-	writebackConfig?: Pick<LibraryServerConfig, "sources">;
+	writebackConfig?: SourceWritebackConfiguration;
 };
 
 export async function advanceOpenItemDraftBaseRevision(

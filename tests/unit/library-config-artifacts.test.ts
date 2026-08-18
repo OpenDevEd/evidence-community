@@ -91,6 +91,7 @@ describe("library configuration artifacts", () => {
 				"ai.providers[].apiKey",
 				"authentication.adminPassword",
 				"authentication.secret",
+				"sources[].apiKey",
 				"services.database.url",
 				"services.search.key",
 				"services.publication.crossref.loginId",
