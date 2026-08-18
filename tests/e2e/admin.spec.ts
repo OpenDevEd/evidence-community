@@ -998,6 +998,102 @@ test("chooses writeback sources without publishing and when unpublishing", async
 	});
 });
 
+test("resolves a source conflict with a confirmed choice", async ({
+	page,
+}) => {
+	await mockCompletedIndexing(page);
+	await mockPublishedBook(page, { additionalSources: [importedSource] });
+	let state: "conflict" | "queued" | "synced" = "conflict";
+	let resolveBody: unknown;
+	let resolveSource: string | null = null;
+	const statusJson = () => ({
+		status: {
+			attempts: 0,
+			canonicalRevision: 1,
+			error: null,
+			jobId: 5,
+			nextAttemptAt: timestamp,
+			processedAt: state === "synced" ? timestamp : null,
+			sourceKey: importedSource.key,
+			state,
+		},
+	});
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/writeback/status?source=*`,
+		async (route) => route.fulfill({ json: statusJson() }),
+	);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/writeback/resolve?source=*`,
+		async (route) => {
+			resolveSource = new URL(route.request().url()).searchParams.get(
+				"source",
+			);
+			resolveBody = route.request().postDataJSON();
+			state = "queued";
+			await route.fulfill({ json: statusJson() });
+		},
+	);
+	await page.route(`**/api/admin/items/${publishedItemKey}`, async (route) =>
+		route.fulfill({
+			json: {
+				item: {
+					...publishedDetail(false),
+					writeback: {
+						available: [
+							{
+								effective: true,
+								isOrigin: false,
+								itemEnabled: true,
+								linkExists: true,
+								provider: "zotero",
+								reason: "ok",
+								sourceEnabled: true,
+								sourceKey: importedSource.key,
+								sourceLabel: importedSource.label,
+								sourceStatus: "active",
+								supported: true,
+							},
+						],
+						originSourceKey: null,
+						selected: [importedSource.key],
+					},
+				},
+			},
+		}),
+	);
+
+	await page.goto("/admin");
+	const badge = page.locator('[data-admin-writeback-status="conflict"]');
+	await expect(badge).toBeVisible();
+	await badge.click();
+	const popover = page.locator("[data-admin-writeback-popover]");
+	await expect(popover.locator("[data-admin-writeback-conflict]")).toBeVisible();
+	const sendLocal = popover.locator('[data-admin-writeback-resolve="send-local"]');
+	const loadRemote = popover.locator('[data-admin-writeback-resolve="load-remote"]');
+	await expect(sendLocal).toHaveText(`Send this record to ${importedSource.label}`);
+	await expect(loadRemote).toHaveText(`Load ${importedSource.label}’s version`);
+	await expect(
+		popover.getByText(`Replaces this record with the ${importedSource.label} copy.`, { exact: false }),
+	).toBeVisible();
+
+	// The first click arms the choice; nothing is sent until it is confirmed.
+	await loadRemote.click();
+	await expect(loadRemote).toHaveText("Confirm");
+	expect(resolveBody).toBeUndefined();
+	await popover.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(loadRemote).toHaveText(`Load ${importedSource.label}’s version`);
+
+	await sendLocal.click();
+	await expect(sendLocal).toHaveText("Confirm");
+	await sendLocal.click();
+	await expect.poll(() => resolveBody).toEqual({ choice: "send-local" });
+	expect(resolveSource).toBe(importedSource.key);
+	await expect(page.locator("[data-admin-writeback-status]")).toHaveAttribute(
+		"data-admin-writeback-status",
+		"queued",
+	);
+});
+
 test("searches and assigns records with the collection picker", async ({
 	page,
 }) => {
