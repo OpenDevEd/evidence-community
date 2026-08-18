@@ -68,26 +68,46 @@ describe("search index worker embedder state", () => {
 		).toBe("SearchIndexTaskError: embedding failed");
 	});
 
-	it("gives rebuild document tasks the embedding wait only when the embedder is active", () => {
+	it("gives rebuild document tasks the embedding wait whenever an embedder is configured", () => {
 		const embedder = {
 			source: "openAi" as const,
 			model: "text-embedding-3-small",
 			apiKey: "key",
 		};
+		expect(resolveRebuildTaskTimeoutMs({ embedder })).toBe(
+			EMBEDDER_TASK_TIMEOUT_MS,
+		);
+		expect(resolveRebuildTaskTimeoutMs({ embedder: null })).toBeUndefined();
+	});
+
+	it("does not wipe an existing index when the embedder step failed", () => {
+		const embedderError = "SearchIndexTaskError: embedding failed";
 		expect(
-			resolveRebuildTaskTimeoutMs({ embedder, embedderError: null }),
-		).toBe(EMBEDDER_TASK_TIMEOUT_MS);
+			shouldRebuildSearchIndex({
+				embedderError,
+				forceRebuild: true,
+				indexCreated: false,
+				rebuildPending: false,
+			}),
+		).toBe(false);
 		expect(
-			resolveRebuildTaskTimeoutMs({
-				embedder,
+			shouldRebuildSearchIndex({
+				embedderError,
+				forceRebuild: false,
+				indexCreated: false,
+				rebuildPending: true,
+			}),
+		).toBe(false);
+	});
+
+	it("still fills a brand-new index when the embedder step failed", () => {
+		expect(
+			shouldRebuildSearchIndex({
 				embedderError: "SearchIndexTaskError: embedding failed",
+				forceRebuild: false,
+				indexCreated: true,
+				rebuildPending: true,
 			}),
-		).toBeUndefined();
-		expect(
-			resolveRebuildTaskTimeoutMs({
-				embedder: null,
-				embedderError: null,
-			}),
-		).toBeUndefined();
+		).toBe(true);
 	});
 });

@@ -176,8 +176,14 @@ async function main() {
 					: String(error);
 			console.error(`Search index embedder failed: ${embedderError}`);
 		}
+		if (embedderError && rebuildPending && !setup.created) {
+			console.error(
+				"Search index rebuild stays pending: the embedder step failed and the existing records are kept.",
+			);
+		}
 		if (
 			shouldRebuildSearchIndex({
+				embedderError,
 				forceRebuild: command.rebuild,
 				indexCreated: setup.created,
 				rebuildPending,
@@ -190,7 +196,6 @@ async function main() {
 					signal: abortController.signal,
 					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
 						embedder: config.search.embedder,
-						embedderError,
 					}),
 				},
 			);
@@ -214,7 +219,9 @@ async function main() {
 				currentEventCount: 0,
 				currentTaskUid: null,
 				lastCompletedAt: registeredWorker.lastCompletedAt,
-				lastError: embedderError ?? registeredWorker.lastError,
+				// Startup finished, so a previous run's error is gone; only a
+				// failed embedder from this run stays visible.
+				lastError: embedderError,
 				stage: "idle",
 			},
 			true,

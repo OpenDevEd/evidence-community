@@ -54,11 +54,13 @@ None.
 - The embedder task waits up to 60 minutes; ordinary tasks still use 5 minutes.
 - A failed embedder task does not stop the worker; worker state shows `lastError`.
 - The Similar Resources route answers 503 with a plain message when the embedder is missing (`invalid_search_embedder`) or its provider fails on the query (`vector_embedding_error`).
-- A failed embedder stays in worker `lastError` after later record batches succeed; only the next worker start clears it.
-- With an embedder set, the startup rebuild's document tasks use the 60-minute wait, because they embed too.
+- A failed embedder stays in worker `lastError` after later record batches succeed. A worker start that applies the embedder cleanly clears the previous run's error.
+- With an embedder configured, the startup rebuild's document tasks use the 60-minute wait, because they embed too.
+- When the embedder step fails on an index that already has records, the rebuild stays pending and the records are kept; a brand-new index is still filled.
 
 ## Risks
 
+- Declined review idea: giving normal outbox batches the 60-minute wait. The worker holds a 5-minute lease on those events; waiting longer than the lease risks another worker re-claiming and re-sending them. Slow batches should get smaller, not longer.
 - Declined review idea: removing a failed embedder before draining the outbox. That drops every vector and forces a paid re-embed on any provider blip. Outbox retries with backoff cover an outage instead.
 - Known, out of scope (#107): `src/app/api/ai/chat/search.ts` swallows per-query search errors and answers "No relevant items". That is how the missing embedder stayed hidden. Chat should surface search failures as unavailable.
 
