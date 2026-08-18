@@ -110,6 +110,7 @@ const appearance = {
 type ConflictChoice = "load-remote" | "send-local";
 
 export function AdminSourceWritebackStatus({
+	canLoadRemote = true,
 	error,
 	loading,
 	onRefresh,
@@ -119,6 +120,7 @@ export function AdminSourceWritebackStatus({
 	sourceLabel,
 	status,
 }: {
+	canLoadRemote?: boolean;
 	error: string | null;
 	loading: boolean;
 	onRefresh: () => void;
@@ -130,9 +132,12 @@ export function AdminSourceWritebackStatus({
 }) {
 	const state = status?.state ?? "idle";
 	// Both conflict choices lose data on one side, so each needs a second click.
+	// The armed choice belongs to one conflict: it is dropped as soon as the
+	// state is no longer "conflict" (the badge is also keyed per record+source).
 	const [pendingChoice, setPendingChoice] = useState<ConflictChoice | null>(
 		null,
 	);
+	const armedChoice = state === "conflict" ? pendingChoice : null;
 	const config = appearance[state];
 	const Icon = loading && !status ? LoaderCircle : config.icon;
 	const spin = (loading && !status) || config.spin;
@@ -196,8 +201,9 @@ export function AdminSourceWritebackStatus({
 									onResolve("send-local");
 								}}
 								onPick={setPendingChoice}
-								pending={pendingChoice}
+								pending={armedChoice}
 							/>
+							{canLoadRemote ? (
 							<ConflictChoiceButton
 								choice="load-remote"
 								description={`Replaces this record with the ${sourceLabel} copy. Unpublished local changes are lost.`}
@@ -208,8 +214,9 @@ export function AdminSourceWritebackStatus({
 									onResolve("load-remote");
 								}}
 								onPick={setPendingChoice}
-								pending={pendingChoice}
+								pending={armedChoice}
 							/>
+							) : null}
 						</div>
 					) : state === "failed" ? (
 						<Button

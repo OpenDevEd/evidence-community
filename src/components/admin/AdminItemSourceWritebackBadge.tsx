@@ -5,11 +5,14 @@ import { useAdminSourceWriteback } from "./useAdminSourceWriteback";
 
 /** One writeback status badge for one record and one source. */
 export function AdminItemSourceWritebackBadge({
+	canLoadRemote,
 	itemKey,
 	revision,
 	sourceKey,
 	sourceLabel,
 }: {
+	/** Attachments and notes follow their parent; only the parent may load the source's copy. */
+	canLoadRemote: boolean;
 	itemKey: string;
 	revision: number | null;
 	sourceKey: string;
@@ -18,6 +21,7 @@ export function AdminItemSourceWritebackBadge({
 	const writeback = useAdminSourceWriteback(itemKey, sourceKey, revision);
 	return (
 		<AdminSourceWritebackStatus
+			canLoadRemote={canLoadRemote}
 			error={writeback.error}
 			loading={writeback.loading}
 			onRefresh={() => void writeback.refresh()}

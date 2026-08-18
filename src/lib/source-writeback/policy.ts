@@ -213,7 +213,10 @@ export function buildItemWritebackTargets({
 			isOrigin: origin === key,
 			linkExists: link !== null,
 			provider: connection.provider,
-			reason: link ? policy.reason : "not-linked",
+			// An unlinked target has no link to be "locked"; every other reason
+			// (paused, disabled, removed, unsupported) still applies to it.
+			reason:
+				link || policy.reason !== "item-locked" ? policy.reason : "not-linked",
 			sourceKey: connection.key,
 			sourceLabel: sourceLabel(
 				connection.provider,

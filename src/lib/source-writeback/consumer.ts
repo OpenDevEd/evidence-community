@@ -445,13 +445,17 @@ async function markSuperseded(
 	if (!updated) throw new SourceWritebackLeaseLostError(job.id);
 }
 
+// Both link updates below only apply while the link is still enabled and
+// still waiting for this check. If the admin unticked the source or the check
+// was already answered meanwhile, they change nothing and return false so the
+// caller supersedes the job instead of sending or recording a stale result.
 async function recordRemoteConflict(
 	options: SourceWritebackConsumerOptions,
 	itemKey: string,
 	sourceConnectionKey: string,
 	conflictRemoteVersion: string,
 ) {
-	await options.database
+	const updated = await options.database
 		.update(itemSourceLink)
 		.set({
 			conflictRemoteVersion,
@@ -463,8 +467,12 @@ async function recordRemoteConflict(
 			and(
 				eq(itemSourceLink.itemKey, itemKey),
 				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
+				eq(itemSourceLink.writebackEnabled, true),
+				eq(itemSourceLink.remoteCheckRequired, true),
 			),
-		);
+		)
+		.returning({ itemKey: itemSourceLink.itemKey });
+	return updated.length > 0;
 }
 
 async function clearRemoteCheck(
@@ -472,15 +480,19 @@ async function clearRemoteCheck(
 	itemKey: string,
 	sourceConnectionKey: string,
 ) {
-	await options.database
+	const updated = await options.database
 		.update(itemSourceLink)
 		.set({ remoteCheckRequired: false, updatedAt: currentTime(options) })
 		.where(
 			and(
 				eq(itemSourceLink.itemKey, itemKey),
 				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
+				eq(itemSourceLink.writebackEnabled, true),
+				eq(itemSourceLink.remoteCheckRequired, true),
 			),
-		);
+		)
+		.returning({ itemKey: itemSourceLink.itemKey });
+	return updated.length > 0;
 }
 
 async function loadItemRequest(
@@ -1208,44 +1220,6 @@ export async function processNextSourceWritebackJob(
 			return { ...resultBase, status: "deferred" };
 		}
 		const adapter = options.registry.get(loaded.state.connection.provider);
-		if (
-			loaded.request.entity === "item" &&
-			loaded.request.operation === "upsert" &&
-			"remoteCheckRequired" in loaded.state.link &&
-			loaded.state.link.remoteCheckRequired
-		) {
-			const remoteVersion = await adapter.readVersion(
-				{
-					entity: "item",
-					sourceConnection: loaded.state.connection,
-					sourceRecordKey: loaded.request.sourceRecordKey,
-				},
-				{
-					credentialResolver: options.credentialResolver,
-					signal: options.signal ?? new AbortController().signal,
-				},
-			);
-			const decision = decideRemoteVersionCheck({
-				lastAcknowledgedRemoteVersion:
-					loaded.state.link.lastAcknowledgedRemoteVersion,
-				remoteVersion,
-			});
-			if (decision.outcome === "conflict") {
-				await recordRemoteConflict(
-					options,
-					loaded.request.itemKey,
-					job.sourceConnectionKey,
-					decision.conflictRemoteVersion,
-				);
-				await markSuperseded(options, job, validated.workerId);
-				return { ...resultBase, status: "conflict" };
-			}
-			await clearRemoteCheck(
-				options,
-				loaded.request.itemKey,
-				job.sourceConnectionKey,
-			);
-		}
 		const heartbeatAbort = new AbortController();
 		const operationAbort = new AbortController();
 		const combinedSignal = options.signal
@@ -1265,17 +1239,72 @@ export async function processNextSourceWritebackJob(
 			},
 		);
 		let writeResult: SourceWritebackResult;
+		let checkOutcome: "conflict" | "proceed" | "stale" = "proceed";
 		try {
-			writeResult = await adapter.write(loaded.request, {
-				credentialResolver: options.credentialResolver,
-				signal: combinedSignal,
-			});
+			// A source turned back on is checked for changes made while it was
+			// paused, under the same lease and heartbeat as the write itself.
+			if (
+				loaded.request.entity === "item" &&
+				loaded.request.operation === "upsert" &&
+				"remoteCheckRequired" in loaded.state.link &&
+				loaded.state.link.remoteCheckRequired
+			) {
+				const remoteVersion = await adapter.readVersion(
+					{
+						entity: "item",
+						sourceConnection: loaded.state.connection,
+						sourceRecordKey: loaded.request.sourceRecordKey,
+					},
+					{
+						credentialResolver: options.credentialResolver,
+						signal: combinedSignal,
+					},
+				);
+				const decision = decideRemoteVersionCheck({
+					lastAcknowledgedRemoteVersion:
+						loaded.state.link.lastAcknowledgedRemoteVersion,
+					remoteVersion,
+				});
+				const applied =
+					decision.outcome === "conflict"
+						? await recordRemoteConflict(
+								options,
+								loaded.request.itemKey,
+								job.sourceConnectionKey,
+								decision.conflictRemoteVersion,
+							)
+						: await clearRemoteCheck(
+								options,
+								loaded.request.itemKey,
+								job.sourceConnectionKey,
+							);
+				checkOutcome = !applied
+					? "stale"
+					: decision.outcome === "conflict"
+						? "conflict"
+						: "proceed";
+			}
+			if (checkOutcome !== "proceed") {
+				writeResult = { remoteVersion: null, sourceRecordKey: "" };
+			} else {
+				writeResult = await adapter.write(loaded.request, {
+					credentialResolver: options.credentialResolver,
+					signal: combinedSignal,
+				});
+			}
 		} finally {
 			heartbeatAbort.abort();
 			await heartbeat;
 		}
 		if (heartbeatFailure) throw heartbeatFailure;
 		throwIfAborted(options.signal);
+		if (checkOutcome !== "proceed") {
+			await markSuperseded(options, job, validated.workerId);
+			return {
+				...resultBase,
+				status: checkOutcome === "conflict" ? "conflict" : "superseded",
+			};
+		}
 		await acknowledgeJob(options, job, writeResult, validated.workerId);
 		return { ...resultBase, status: "processed" };
 	} catch (error) {

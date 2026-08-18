@@ -94,7 +94,7 @@ export function useAdminSourceWriteback(
 		} finally {
 			setRetrying(false);
 		}
-	}, [itemKey, retrying]);
+	}, [itemKey, retrying, sourceKey]);
 
 	const resolve = useCallback(
 		async (choice: "load-remote" | "send-local") => {

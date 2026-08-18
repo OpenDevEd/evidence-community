@@ -267,6 +267,11 @@ export function createZoteroItemPatch(
 			continue;
 		}
 		const hasValue = Object.hasOwn(payload, databaseField);
+		const value = payload[databaseField];
+		const empty = value === null || value === undefined || value === "";
+		// A field this item type does not have, holding nothing locally, has
+		// nothing to send: skip it. Sending a whole record names every field.
+		if (!validFields.has(field) && !itemTypeChanging && empty) continue;
 		if (!validFields.has(field) && (!itemTypeChanging || hasValue)) {
 			throw new ZoteroWritebackMappingError(
 				`Canonical writeback dirty field is not valid for ${definition.itemType}: ${field}`,

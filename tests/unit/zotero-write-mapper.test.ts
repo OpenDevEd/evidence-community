@@ -252,8 +252,11 @@ describe("Zotero writeback mapping", () => {
 				{ previousItemType: "report" },
 			),
 		).toThrow(ZoteroWritebackMappingError);
+		expect(createZoteroItemPatch({ itemType: "Book" }, ["type"])).toEqual(
+			{},
+		);
 		expect(() =>
-			createZoteroItemPatch({ itemType: "Book" }, ["type"]),
+			createZoteroItemPatch({ itemType: "Book", type: "Present" }, ["type"]),
 		).toThrow(ZoteroWritebackMappingError);
 	});
 

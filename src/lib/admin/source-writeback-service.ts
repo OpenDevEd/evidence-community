@@ -338,7 +338,7 @@ export type AdminWritebackConflictChoice = "load-remote" | "send-local";
 export class AdminSourceWritebackConflictError extends Error {
 	constructor(
 		message: string,
-		readonly kind: "not-in-conflict" | "remote-missing",
+		readonly kind: "not-in-conflict" | "not-supported" | "remote-missing",
 	) {
 		super(message);
 		this.name = "AdminSourceWritebackConflictError";
@@ -428,6 +428,19 @@ export async function resolveAdminSourceWritebackConflict(
 		return getAdminSourceWritebackStatus(database, itemKey, sourceKey, config, now);
 	}
 
+	// The source's copy of an attachment or note comes without its file
+	// details here, so only a top-level record may load the source's version.
+	const [record] = await database
+		.select({ parentItem: item.parentItem })
+		.from(item)
+		.where(eq(item.key, itemKey))
+		.limit(1);
+	if (record?.parentItem) {
+		throw new AdminSourceWritebackConflictError(
+			"Attachments and notes follow their parent record. Load the source’s version on the parent instead.",
+			"not-supported",
+		);
+	}
 	const adapter = runtime.registry.get(current.connection.provider);
 	const remote = await adapter.readRecord(
 		{

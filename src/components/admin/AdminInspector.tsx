@@ -1712,8 +1712,9 @@ export function AdminInspector({
 						<FileStateChip state={detail.fileState} />
 						{detail.writeback.selected.map((sourceKey) => (
 							<AdminItemSourceWritebackBadge
+								canLoadRemote={!detail.parentItem}
 								itemKey={detail.key}
-								key={sourceKey}
+								key={`${detail.key}:${sourceKey}`}
 								revision={detail.revision}
 								sourceKey={sourceKey}
 								sourceLabel={

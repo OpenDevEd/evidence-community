@@ -5,7 +5,7 @@ import {
 	sourceWritebackJob,
 	type SourceWritebackOperation,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
+import { and, eq, inArray, ne, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
@@ -504,21 +504,16 @@ export async function applyParentWritebackLinks(
 }
 
 /**
- * The fields a source receives when the whole record is sent to it. Only
- * fields the record actually holds a value for are named, plus tags. Empty
- * fields are left out because many of them do not exist for the record's
- * item type at the source, and the item type itself is not sent as a change.
+ * The fields a source receives when the whole record is sent to it: every
+ * editable field plus tags, so empty local fields clear stale remote values.
+ * The item type is not named because that would mean a type change. The
+ * provider mapper skips fields the item type does not have when they are
+ * empty locally.
  */
-export function fullItemWritebackFields(row: Readonly<Record<string, unknown>>) {
+export function fullItemWritebackFields() {
 	return [
 		...editableItemDatabaseFields
-			.filter(
-				(field) =>
-					field !== "itemType" &&
-					row[field] !== null &&
-					row[field] !== undefined &&
-					row[field] !== "",
-			)
+			.filter((field) => field !== "itemType")
 			.map(databaseItemFieldToPayloadField),
 		"tags",
 	];
@@ -543,12 +538,12 @@ export async function enqueueFullWritebackForSources(
 ) {
 	if (sourceKeys.length === 0) return;
 	const [row] = await transaction
-		.select()
+		.select({ deleted: item.deleted, revision: item.revision })
 		.from(item)
 		.where(eq(item.key, itemKey))
 		.limit(1);
 	if (!row || row.deleted === 1) return;
-	const fields = fullItemWritebackFields(row);
+	const fields = fullItemWritebackFields();
 	await markItemWritebackDirty(transaction, {
 		canonicalRevision: row.revision,
 		dirtyFields: [],
@@ -558,8 +553,10 @@ export async function enqueueFullWritebackForSources(
 		itemKey,
 		updatedAt,
 	});
-	// The job for this revision may already have run before the source was
-	// paused. Its idempotency key blocks a second insert, so re-arm it.
+	// A job for this revision may already exist: run, superseded, dead, or
+	// still pending with only a few fields. Its idempotency key blocks a second
+	// insert, so make that job carry the whole record and be runnable again.
+	// A lease another worker holds right now is left alone.
 	for (const sourceConnectionKey of sourceKeys) {
 		await transaction
 			.update(sourceWritebackJob)
@@ -568,8 +565,6 @@ export async function enqueueFullWritebackForSources(
 				deadLetteredAt: null,
 				dirtyFields: fields,
 				lastError: null,
-				leaseExpiresAt: null,
-				leaseOwner: null,
 				nextAttemptAt: updatedAt,
 				processedAt: null,
 				superseded: false,
@@ -580,11 +575,6 @@ export async function enqueueFullWritebackForSources(
 					eq(sourceWritebackJob.sourceConnectionKey, sourceConnectionKey),
 					eq(sourceWritebackJob.canonicalRevision, row.revision),
 					eq(sourceWritebackJob.operation, "upsert"),
-					or(
-						isNotNull(sourceWritebackJob.processedAt),
-						eq(sourceWritebackJob.superseded, true),
-						isNotNull(sourceWritebackJob.deadLetteredAt),
-					),
 				),
 			);
 	}
