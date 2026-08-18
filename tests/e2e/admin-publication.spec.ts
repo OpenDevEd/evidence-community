@@ -230,5 +230,50 @@ test("publishes to Zenodo and keeps both DOI states after reload", async ({
 	await expect(
 		publication.getByRole("button", { name: /Activate|Publish to Zenodo/u }),
 	).toHaveCount(0);
+
+	const publicResponse = await page.request.get(`/api/item/${itemKey}`);
+	expect(publicResponse.ok()).toBe(true);
+	const publicItem = (await publicResponse.json()).item as {
+		publicationIdentifiers?: {
+			crossref?: { doi: string; lifecycle: string };
+			zenodo?: {
+				baseUrl?: string;
+				conceptRecordId?: string;
+				recordId?: string;
+				versionDoi?: string;
+			};
+		};
+	};
+	expect(publicItem.publicationIdentifiers).toMatchObject({
+		crossref: {
+			doi: expectedDoi,
+			lifecycle: "verified",
+		},
+		zenodo: {
+			baseUrl: "https://sandbox.zenodo.org",
+			versionDoi: expectedDoi,
+		},
+	});
+	const zenodoRecordId = publicItem.publicationIdentifiers?.zenodo?.recordId;
+	const zenodoConceptRecordId =
+		publicItem.publicationIdentifiers?.zenodo?.conceptRecordId;
+	expect(zenodoRecordId).toMatch(/^\d+$/u);
+	expect(zenodoConceptRecordId).toMatch(/^\d+$/u);
+
+	await page.goto(`/lib/${itemKey}`);
+	await dismissConsent(page);
+	await expect(page.getByRole("heading", { name: "Identifiers" })).toBeVisible();
+	await expect(page.getByText("Crossref DOI", { exact: true })).toBeVisible();
+	await expect(page.getByRole("img", { name: "Crossref" })).toBeVisible();
+	await expect(page.getByText("Archive record", { exact: true })).toBeVisible();
+	await expect(page.getByText("Concept record", { exact: true })).toBeVisible();
+	await expect(
+		page.getByRole("link", { name: zenodoRecordId!, exact: true }),
+	).toBeVisible();
+	await expect(
+		page.getByRole("link", { name: zenodoConceptRecordId!, exact: true }),
+	).toBeVisible();
+	await expect(page.getByRole("img", { name: "Zenodo" })).toHaveCount(2);
+	await expect(page.getByRole("img", { name: "DOI" })).toHaveCount(0);
 	await page.screenshot({ path: testInfo.outputPath("publication-synced.png"), fullPage: true });
 });

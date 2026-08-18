@@ -11,9 +11,8 @@ import {
 	IoDownloadOutline,
 	IoChevronBack,
 	IoDownload,
-	IoLinkOutline,
 } from "react-icons/io5";
-import { SiZenodo } from "react-icons/si";
+import { SiDoi, SiZenodo } from "react-icons/si";
 import { BsQuote } from "react-icons/bs";
 import { Avatar } from "@nextui-org/avatar";
 import { HiAcademicCap } from "react-icons/hi2";
@@ -891,7 +890,7 @@ function IdentifierLogo({ link }: { link: IdentifierDisplayLink }) {
 					aria-label="Zenodo"
 				/>
 			) : (
-				<IoLinkOutline className="size-5 text-doi" aria-label="DOI" />
+				<SiDoi className="size-5 text-doi" aria-label="DOI" />
 			)}
 		</div>
 	);
@@ -1370,15 +1369,27 @@ export default function ItemPage({
 	data: ItemGetResponse;
 	loading: boolean;
 }) {
-	const loading = data?.item ? false : loadingProp;
+	const itemKey = data?.item?.key;
+	const { data: refreshedData } = useSWR<ItemGetResponse>(
+		itemKey ? `/item/${itemKey}` : null,
+		fetcher,
+		{
+			fallbackData: data,
+			keepPreviousData: true,
+			revalidateOnMount: true,
+		},
+	);
+	const currentData = refreshedData ?? data;
+	const loading = currentData?.item ? false : loadingProp;
 
 	useEffect(() => {
+		// Zotero Connector listens for this browser event to refresh its page snapshot.
 		document.dispatchEvent(
 			new Event("ZoteroItemUpdated", { bubbles: true, cancelable: true }),
 		);
-	}, [data?.item]);
+	}, [currentData?.item]);
 
-	const item = transformItem(loading ? undefined : data?.item)!;
+	const item = transformItem(loading ? undefined : currentData?.item)!;
 
 	return (
 		<PageContainer>
