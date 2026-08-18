@@ -30,6 +30,7 @@ import {
 	FileText,
 	Folder,
 	History,
+	Link2,
 	Lock,
 	Paperclip,
 	Pencil,
@@ -89,6 +90,7 @@ import {
 } from "./admin-schema";
 import { firstAdminFieldError, validationTargetId } from "./admin-validation";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
+import { AdminLinksEditor } from "./AdminLinksEditor";
 import { AdminMetadataField } from "./AdminMetadataField";
 import {
 	AdminPublicationHeaderStatus,
@@ -1554,6 +1556,17 @@ export function AdminInspector({
 			),
 		[publishedCollectionEntries],
 	);
+	const linkTitles = useMemo(
+		() =>
+			new Map(
+				(detail?.links.targets ?? []).map((target) => [
+					target.key,
+					target.title,
+				]),
+			),
+		[detail?.links.targets],
+	);
+	const finePointer = useFinePointer();
 	useEffect(() => {
 		if (!detailKey || validationRevision === 0) {
 			return;
@@ -1954,6 +1967,44 @@ export function AdminInspector({
 						payload={payload}
 						readOnly={readOnly}
 						recordKey={detail.key}
+					/>
+				</Section>
+				<Section
+					actions={
+						diff.links ? (
+							<ChangedMarker
+								label="links"
+								onRevert={() =>
+									onChange({ ...payload, links: diff.links })
+								}
+								publishedValue={
+									<PublishedList
+										values={[
+											...diff.links.cites.map(
+												(key) =>
+													`Cites: ${linkTitles.get(key) ?? key}`,
+											),
+											...diff.links.related.map(
+												(key) =>
+													`Related: ${linkTitles.get(key) ?? key}`,
+											),
+										]}
+									/>
+								}
+							/>
+						) : undefined
+					}
+					icon={Link2}
+					title="Links"
+				>
+					<AdminLinksEditor
+						detail={detail}
+						errors={validationErrors}
+						onChange={onChange}
+						payload={payload}
+						pickerAutoFocus={finePointer}
+						readOnly={readOnly}
+						sources={sources}
 					/>
 				</Section>
 				{!detail.parentItem ? (

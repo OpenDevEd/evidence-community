@@ -179,4 +179,46 @@ describe("computeAdminDraftDiff", () => {
 			),
 		).toEqual(EMPTY_ADMIN_DRAFT_DIFF);
 	});
+
+	it("reports link changes against the published link keys and ignores order", () => {
+		const base = detail({
+			links: {
+				fromSources: [],
+				incoming: [],
+				keys: { cites: ["AAAA2345"], related: [] },
+				publishedKeys: { cites: ["AAAA2345"], related: ["BBBB2345"] },
+				targets: [],
+			},
+		});
+		const payload = {
+			collections: ["CURRENT"],
+			creators: [],
+			itemType: "book",
+			language: "English",
+			tags: ["evidence"],
+			title: "Published title",
+		};
+		expect(
+			computeAdminDraftDiff(
+				base,
+				{ ...payload, links: { cites: ["AAAA2345"], related: ["BBBB2345"] } },
+				definition,
+			).links,
+		).toBeNull();
+		expect(
+			computeAdminDraftDiff(
+				base,
+				{ ...payload, links: { related: ["BBBB2345"], cites: ["AAAA2345"] } },
+				definition,
+			).links,
+		).toBeNull();
+		expect(
+			computeAdminDraftDiff(
+				base,
+				{ ...payload, links: { cites: [], related: ["BBBB2345", "CCCC2345"] } },
+				definition,
+			).links,
+		).toEqual({ cites: ["AAAA2345"], related: ["BBBB2345"] });
+		expect(computeAdminDraftDiff(base, payload, definition).links).toBeNull();
+	});
 });

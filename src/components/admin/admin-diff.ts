@@ -1,4 +1,8 @@
-import type { AdminCreator, AdminItemDetail } from "@/lib/admin/types";
+import type {
+	AdminCreator,
+	AdminItemDetail,
+	AdminItemLinkKeys,
+} from "@/lib/admin/types";
 
 import {
 	adminFieldDescriptors,
@@ -10,6 +14,8 @@ export type AdminDraftDiff = {
 	creators: AdminCreator[] | null;
 	fields: Record<string, string>;
 	itemType: string | null;
+	/** Published link keys when the draft changed them, otherwise null. */
+	links: AdminItemLinkKeys | null;
 	tags: string[] | null;
 };
 
@@ -18,8 +24,24 @@ export const EMPTY_ADMIN_DRAFT_DIFF: AdminDraftDiff = {
 	creators: null,
 	fields: {},
 	itemType: null,
+	links: null,
 	tags: null,
 };
+
+export function linkKeysFromPayload(
+	payload: Record<string, unknown>,
+	fallback: AdminItemLinkKeys,
+): AdminItemLinkKeys {
+	const value = payload.links;
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return fallback;
+	}
+	const record = value as Record<string, unknown>;
+	return {
+		cites: stringList(record.cites),
+		related: stringList(record.related),
+	};
+}
 
 function textValue(value: unknown) {
 	return value === null || value === undefined || value === ""
@@ -100,6 +122,14 @@ export function computeAdminDraftDiff(
 		normalizedSet(stringList(payload.collections)),
 		normalizedSet(originalCollections),
 	);
+	const originalLinks = detail.links.publishedKeys;
+	const currentLinks = linkKeysFromPayload(payload, originalLinks);
+	const linksChanged =
+		!sameValue(normalizedSet(currentLinks.cites), normalizedSet(originalLinks.cites)) ||
+		!sameValue(
+			normalizedSet(currentLinks.related),
+			normalizedSet(originalLinks.related),
+		);
 
 	return {
 		collections: collectionsChanged ? originalCollections : null,
@@ -109,6 +139,7 @@ export function computeAdminDraftDiff(
 			currentItemType.toLowerCase() !== originalItemType.toLowerCase()
 				? originalItemType
 				: null,
+		links: linksChanged ? originalLinks : null,
 		tags: tagsChanged ? originalTags : null,
 	};
 }
