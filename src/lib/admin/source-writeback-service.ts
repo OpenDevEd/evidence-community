@@ -1,16 +1,26 @@
 import {
+	itemIdentity,
 	itemSourceLink,
 	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
+import { lockItemMutation } from "@/db/canonical-mutation-lock";
+import { item } from "@/db/schema/tables/item";
 import {
 	findWritebackTarget,
 	resolveItemWritebackTargets,
 	type SourceWritebackConfiguration,
 	type SourceWritebackReason,
 } from "@/lib/source-writeback/policy";
+import {
+	cascadeChildWritebackLinks,
+	enqueueFullWritebackForSources,
+	ensureItemWritebackLinks,
+} from "@/lib/source-writeback/queue";
+
+import { ItemNotFoundError } from "./native-item-service";
 
 import type { AdminSourceWritebackStatus } from "./source-writeback-contract";
 
@@ -214,4 +224,64 @@ export async function retryAdminSourceWriteback(
 		config,
 		requeuedAt,
 	);
+}
+
+export class ItemWritebackSourcesChildError extends Error {
+	constructor(itemKey: string) {
+		super(
+			`Attachments and notes follow their parent record: ${itemKey}`,
+		);
+		this.name = "ItemWritebackSourcesChildError";
+	}
+}
+
+/**
+ * Changes which sources a record writes to, without publishing. Children
+ * follow. A published record is sent to every newly chosen source at once;
+ * a draft waits for its first publish. Unchecked sources keep their link and
+ * remote copy; their pending jobs are superseded by the worker.
+ */
+export async function setAdminItemWritebackSources(
+	database: Database,
+	itemKey: string,
+	sourceKeys: readonly string[],
+	config: SourceWritebackConfiguration,
+	now = new Date(),
+) {
+	await database.transaction(async (transaction) => {
+		await lockItemMutation(transaction, itemKey);
+		const [identity] = await transaction
+			.select({ key: itemIdentity.key })
+			.from(itemIdentity)
+			.where(eq(itemIdentity.key, itemKey))
+			.limit(1);
+		if (!identity) throw new ItemNotFoundError(itemKey);
+		const [published] = await transaction
+			.select({ parentItem: item.parentItem })
+			.from(item)
+			.where(eq(item.key, itemKey))
+			.limit(1);
+		if (published?.parentItem) {
+			throw new ItemWritebackSourcesChildError(itemKey);
+		}
+		const selection = await ensureItemWritebackLinks(transaction, {
+			configuration: config,
+			itemKey,
+			sourceKeys,
+		});
+		const children = await cascadeChildWritebackLinks(transaction, itemKey);
+		await enqueueFullWritebackForSources(transaction, {
+			itemKey,
+			sourceKeys: selection.newlyEnabled,
+			updatedAt: now,
+		});
+		for (const child of children) {
+			await enqueueFullWritebackForSources(transaction, {
+				itemKey: child.itemKey,
+				sourceKeys: child.newlyEnabled,
+				updatedAt: now,
+			});
+		}
+	});
+	return resolveItemWritebackTargets(database, itemKey, config);
 }

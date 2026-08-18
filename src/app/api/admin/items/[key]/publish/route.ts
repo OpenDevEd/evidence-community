@@ -5,10 +5,12 @@ import { getDatabase } from "@/db";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
+	readOptionalAdminJson,
 	requireAdminSession,
 } from "@/lib/admin/http";
 import { publishItemDraftWithContext } from "@/lib/admin/native-item-service";
 import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
+import { adminPublishRequestSchema } from "@/lib/admin/writeback-request-contract";
 
 export async function POST(
 	request: NextRequest,
@@ -19,6 +21,9 @@ export async function POST(
 
 	try {
 		const { key } = await params;
+		const { sourceKeys } = adminPublishRequestSchema.parse(
+			await readOptionalAdminJson(request),
+		);
 		const [db, writebackConfig] = await Promise.all([
 			getDatabase(),
 			getLibraryConfig(),
@@ -26,7 +31,7 @@ export async function POST(
 		const { indexingRecords, item } = await publishItemDraftWithContext(
 			db,
 			key,
-			{ writebackConfig },
+			{ sourceKeys, writebackConfig },
 		);
 		return NextResponse.json(
 			{

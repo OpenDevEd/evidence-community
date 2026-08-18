@@ -1072,10 +1072,20 @@ export async function publishItemDraft(
 
 class NativeItemLockSetChangedError extends Error {}
 
+export type ItemUnpublishOptions = {
+	/**
+	 * Selected sources that should also delete their copy. Omit to remove the
+	 * record from every source it currently writes to. Unlisted sources keep
+	 * their copy and stay selected.
+	 */
+	removeFromSourceKeys?: readonly string[];
+};
+
 async function unpublishNativeItemAttempt(
 	db: Database,
 	itemKey: string,
 	discardDraft: boolean,
+	options: ItemUnpublishOptions = {},
 ) {
 	return db.transaction(async (transaction) => {
 		await lockItemMutation(transaction, itemKey);
@@ -1219,7 +1229,7 @@ async function unpublishNativeItemAttempt(
 			operation: "delete",
 			revision: nextRevision,
 		});
-		const [writebackLink] = await transaction
+		const writebackLinks = await transaction
 			.select()
 			.from(itemSourceLink)
 			.where(
@@ -1228,9 +1238,15 @@ async function unpublishNativeItemAttempt(
 					eq(itemSourceLink.writebackEnabled, true),
 				),
 			)
-			.limit(1)
+			.orderBy(itemSourceLink.sourceConnectionKey)
 			.for("update");
-		if (writebackLink) {
+		const removeFrom = options.removeFromSourceKeys
+			? new Set(options.removeFromSourceKeys)
+			: null;
+		for (const writebackLink of writebackLinks) {
+			if (removeFrom && !removeFrom.has(writebackLink.sourceConnectionKey)) {
+				continue;
+			}
 			await enqueueSourceWritebackJob(transaction, {
 				canonicalRevision: nextRevision,
 				dirtyFields: writebackLink.dirtyFields,
@@ -1288,6 +1304,7 @@ async function unpublishNativeItemAttempt(
 export async function unpublishNativeItemWithOutcome(
 	db: Database,
 	itemKey: string,
+	options: ItemUnpublishOptions = {},
 ) {
 	for (let attempt = 0; attempt < 3; attempt += 1) {
 		try {
@@ -1295,6 +1312,7 @@ export async function unpublishNativeItemWithOutcome(
 				db,
 				itemKey,
 				false,
+				options,
 			);
 			if (!outcome.item) throw new ItemNotFoundError(itemKey);
 			return { ...outcome, item: outcome.item };
