@@ -516,4 +516,47 @@ describe("native item draft validation", () => {
 			itemType: "Book",
 		});
 	});
+
+	it("normalizes record links and rejects bad link lists", () => {
+		expect(
+			validateNativeItemDraft({
+				itemType: "Book",
+				links: { cites: [" WXYZ6789 ", "QRST2345"], related: ["WXYZ6789"] },
+			}).links,
+		).toEqual({ cites: ["QRST2345", "WXYZ6789"], related: ["WXYZ6789"] });
+		expect(
+			validateNativeItemDraft({ itemType: "Book" }).links,
+		).toEqual({ cites: [], related: [] });
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "Book",
+				links: { cites: ["WXYZ6789", "WXYZ6789"], related: [] },
+			}),
+		).toThrow("Remove the duplicate");
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "Book",
+				links: { cites: ["not-a-key"], related: [] },
+			}),
+		).toThrow("Choose valid linked records.");
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "Book",
+				links: { cites: [], related: [], mentions: [] },
+			}),
+		).toThrow("Choose valid linked records.");
+		expect(() =>
+			validateNativeItemDraft({
+				itemType: "Book",
+				links: {
+					cites: Array.from({ length: 501 }, (_, index) =>
+						`K${String(2_000_000 + index)}`
+							.replace(/0/g, "A")
+							.replace(/1/g, "B"),
+					),
+					related: [],
+				},
+			}),
+		).toThrow("Choose valid linked records.");
+	});
 });

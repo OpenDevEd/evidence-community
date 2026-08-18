@@ -13,6 +13,8 @@ import {
 	adminSharedPayloadFieldsForZoteroItemType,
 	adminSpecialFieldsForZoteroItemType,
 	isTopLevelAdminItemType,
+	ITEM_LINK_PAYLOAD_KINDS,
+	MAX_ITEM_LINKS_PER_KIND,
 	zoteroStructuralFieldErrors,
 } from "@/lib/admin/item-fields";
 import {
@@ -117,8 +119,11 @@ export class NativeItemValidationError extends AdminValidationError {
 	}
 }
 
+export type ValidatedItemLinks = { cites: string[]; related: string[] };
+
 export type ValidatedNativeItemDraft = {
 	collectionKeys: string[];
+	links: ValidatedItemLinks;
 	item: Omit<
 		ItemWrite,
 		| "createdAt"
@@ -162,6 +167,33 @@ function zoteroDefinitionFor(itemTypeValue: string): ZoteroItemTypeDefinition {
 		);
 	}
 	return definition;
+}
+
+function parseItemLinks(value: unknown): ValidatedItemLinks {
+	if (value === undefined) return { cites: [], related: [] };
+	const invalid = () =>
+		new NativeItemValidationError("Choose valid linked records.", {
+			links: "One or more linked records are invalid.",
+		});
+	if (!value || typeof value !== "object" || Array.isArray(value)) throw invalid();
+	const record = value as Record<string, unknown>;
+	for (const key of Object.keys(record)) {
+		if (!(ITEM_LINK_PAYLOAD_KINDS as readonly string[]).includes(key)) {
+			throw invalid();
+		}
+	}
+	const parsed = { cites: [] as string[], related: [] as string[] };
+	for (const kind of ITEM_LINK_PAYLOAD_KINDS) {
+		const keys = parseUniqueStrings(record[kind], `links.${kind}`, 64);
+		if (
+			keys.length > MAX_ITEM_LINKS_PER_KIND ||
+			keys.some((key) => !isCanonicalRecordKey(key))
+		) {
+			throw invalid();
+		}
+		parsed[kind] = keys;
+	}
+	return parsed;
 }
 
 function parseUniqueStrings(value: unknown, field: string, maxLength: number) {
@@ -427,12 +459,15 @@ export function validateNativeItemDraft(
 		);
 	}
 	const tags = parseUniqueStrings(payload.tags, "tags", 255);
+	const links = parseItemLinks(payload.links);
 	normalizedPayload.collections = collectionKeys;
 	normalizedPayload.tags = tags;
+	if (payload.links !== undefined) normalizedPayload.links = links;
 
 	return {
 		collectionKeys,
 		item: itemValues as ValidatedNativeItemDraft["item"],
+		links,
 		payload: normalizedPayload,
 		tags,
 	};
