@@ -362,6 +362,15 @@ describe("native item draft validation", () => {
 			}),
 		).toThrow("Check the record relationships");
 
+		for (const legacyLinks of [{ cites: ["ABCD2345"] }, { citedBy: ["ABCD2345"] }]) {
+			expect(() =>
+				validateNativeItemDraft({
+					itemType: "Book",
+					relations: legacyLinks,
+				}),
+			).toThrow("Check the record relationships");
+		}
+
 		expect(
 			validateNativeItemDraft({
 				itemType: "Book",

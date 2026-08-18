@@ -103,8 +103,6 @@ const relationsSchema = z
 		"mendeleyDB:relatedRemoteDocumentUUID": stringOrStringsSchema.optional(),
 		"mendeleyDB:remoteDocumentUUID": stringOrStringsSchema.optional(),
 		cited_by: z.number().int().nonnegative().optional(),
-		citedBy: z.array(z.string()).optional(),
-		cites: z.array(z.string()).optional(),
 		referenced_works: z.array(z.string()).optional(),
 		related_works: stringOrStringsSchema.optional(),
 	})
