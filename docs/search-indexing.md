@@ -56,6 +56,31 @@ valid events are acknowledged and only the poison event consumes retries or
 becomes a dead letter. Transport failures retain the batch because splitting
 cannot repair an unavailable service.
 
+## Embedder
+
+Similar Resources, AI search, and chat use Meilisearch hybrid search. Hybrid
+search needs an embedder on the index. The library configuration describes it
+in `search.embedder`:
+
+- `null` turns embeddings off. Related resources cannot be enabled.
+- `{ "source": "openAi", "model": "text-embedding-3-small", "apiKey": "…" }`
+  uses OpenAI through Meilisearch.
+- `{ "source": "rest", "url": "…", "request": { … "{{text}}" … }, "response": { … "{{embedding}}" … } }`
+  uses any HTTP embedding service.
+
+The worker writes the embedder under the fixed name `default`
+(`PLATFORM_SEARCH_EMBEDDER`) when it starts, together with the platform
+document template (`src/lib/search-index/embedder-settings.ts`) and
+`documentTemplateMaxBytes: 8000`. Meilisearch embeds every record inside that
+one settings task, so the worker waits up to 60 minutes for it. If the task
+fails, the worker logs the error, records it as `lastError`, and keeps indexing
+records without embeddings. Setting `search.embedder` to `null` removes the
+embedder and its vectors.
+
+Changing `search.embedder` needs a search-worker restart. Check
+`GET /indexes/<index>/stats`: `numberOfEmbeddedDocuments` must equal
+`numberOfDocuments`.
+
 ## Local operation
 
 Start a local Meilisearch:

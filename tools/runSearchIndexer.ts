@@ -14,6 +14,7 @@ import {
 } from "../src/lib/search-index/bootstrap-state";
 import {
 	drainSearchOutbox,
+	applySearchIndexEmbedder,
 	ensureSearchIndex,
 	requeueSearchOutboxDeadLetters,
 	rebuildSearchIndex,
@@ -138,6 +139,41 @@ async function main() {
 			},
 			signal: abortController.signal,
 		});
+		let embedderError: string | null = null;
+		try {
+			await applySearchIndexEmbedder(service, config.search.embedder, {
+				batchClient: service.client.batches,
+				onProgress: async (progress) => {
+					await writeWorkerState(
+						{
+							currentBatchProgress: progress.batchProgress,
+							currentBatchUid: progress.batchUid,
+							currentEventCount: 0,
+							currentTaskUid: progress.taskUid,
+							lastCompletedAt: registeredWorker.lastCompletedAt,
+							lastError: registeredWorker.lastError,
+							stage: progress.stage,
+						},
+						progress.stage !== reporter.current().stage,
+					);
+				},
+				signal: abortController.signal,
+			});
+		} catch (error) {
+			if (
+				error instanceof SearchOutboxAbortError &&
+				abortController.signal.aborted
+			) {
+				throw error;
+			}
+			// A broken embedder must not stop record indexing. The next worker
+			// start retries it, and Similar Resources stays unavailable until then.
+			embedderError =
+				error instanceof Error
+					? `${error.name}: ${error.message}`
+					: String(error);
+			console.error(`Search index embedder failed: ${embedderError}`);
+		}
 		if (
 			shouldRebuildSearchIndex({
 				forceRebuild: command.rebuild,
@@ -170,7 +206,7 @@ async function main() {
 				currentEventCount: 0,
 				currentTaskUid: null,
 				lastCompletedAt: registeredWorker.lastCompletedAt,
-				lastError: registeredWorker.lastError,
+				lastError: embedderError ?? registeredWorker.lastError,
 				stage: "idle",
 			},
 			true,
