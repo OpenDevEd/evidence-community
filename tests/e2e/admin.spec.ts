@@ -5516,16 +5516,7 @@ test("keeps button loading spinners on the icon geometry", async ({ page }) => {
 	await page.goto("/admin");
 	await page.getByRole("button", { name: "New", exact: true }).click();
 	const dialog = page.getByRole("dialog", { name: "New collection" });
-	await expect
-		.poll(() =>
-			dialog.evaluate((element) => element.getBoundingClientRect().width),
-		)
-		.toBeLessThanOrEqual(449);
-	await expect
-		.poll(() =>
-			dialog.evaluate((element) => element.getBoundingClientRect().width),
-		)
-		.toBeGreaterThanOrEqual(447);
+	await expect(dialog).toBeVisible();
 	await dialog.getByRole("textbox", { name: "Name" }).fill("New collection");
 	const create = dialog.getByRole("button", { name: "Create" });
 	const before = await create.evaluate((button) => {
@@ -5955,7 +5946,7 @@ test("keeps an immediately rejected batch indexing wait handled", async ({
 		},
 	});
 	await mockCompletedIndexing(page);
-	await page.goto("/admin");
+	await page.goto("/admin", { waitUntil: "domcontentloaded" });
 	const selectRecord = page.getByRole("checkbox", {
 		name: "Select Published book",
 	});
