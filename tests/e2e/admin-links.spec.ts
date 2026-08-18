@@ -23,7 +23,7 @@ async function createPublishedBook(page: Page, title: string) {
 		.locator("h2 + p")
 		.first()
 		.evaluate((node) => node.textContent?.trim().split("·").pop()?.trim() ?? "");
-	expect(key).toMatch(/^[23456789A-HJ-NP-Z]{8}$/);
+	expect(key).toMatch(/^[23456789A-NP-Z]{8}$/);
 	return key;
 }
 
