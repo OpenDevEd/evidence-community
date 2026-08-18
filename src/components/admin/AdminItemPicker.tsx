@@ -100,7 +100,7 @@ export function AdminItemPicker({
 	return (
 		<div className="space-y-2" data-admin-item-picker>
 			<Input
-				aria-label="Search records"
+				aria-label="Search records to link"
 				autoFocus={autoFocus}
 				classNames={{ input: "text-sm", inputWrapper: "h-10 min-h-10 rounded-xl" }}
 				placeholder="Search records by title, author or key"

@@ -40,7 +40,7 @@ describe("AdminItemPicker", () => {
 	});
 
 	function input() {
-		return container.querySelector<HTMLInputElement>('input[aria-label="Search records"]')!;
+		return container.querySelector<HTMLInputElement>('input[aria-label="Search records to link"]')!;
 	}
 
 	async function typeQuery(value: string) {
