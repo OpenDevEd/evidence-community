@@ -99,7 +99,8 @@ Library databases and deployments are not migrated or modified.
   start with their origin source selected; native items start with none.
   Attachments and notes always copy their parent's selection.
 - Unpublishing retains the canonical row as a tombstone and emits a delete
-  event plus a remote delete job when the native item has a writeback target.
+  event plus one remote delete job for each selected source the admin ticks
+  in the unpublish dialog. Unticked sources keep their copy and stay selected.
   Repeated unpublish requests are idempotent. Canonical identities are not
   recycled after publication.
 - Opening a draft from a tombstoned item is the explicit restore path;

@@ -19,7 +19,9 @@ JSON document.
 
 The Compose file sets `LIBRARY_CONFIG_PATH`. Library values and secrets belong
 in `LIBRARY_CONFIG_JSON`, not in `NEXT_PUBLIC_*` variables or customer image
-builds. The default deployment includes the search, source-sync, and
+builds. `sources[]` lists every Zotero group the library can import from and,
+with `writebackEnabled: true`, write to; records choose their own sources at
+publish time and there is no default writeback source. The default deployment includes the search, source-sync, and
 source-writeback workers plus one private persistent Meilisearch service. A
 web-only deployment is incomplete.
 

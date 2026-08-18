@@ -45,6 +45,25 @@ DATABASE_URL_POST=postgresql://library:library@127.0.0.1:55435/library \
 The concrete Zotero adapter owns Web API payload mapping, optimistic version
 checks, conflict refetch, and create/delete idempotency.
 
+## Which sources a record writes to
+
+Each record chooses its writeback sources when it is published or unpublished.
+There is no default source. The `/admin` Publish and Restore buttons open one
+dialog ("Also update"), Unpublish opens the same dialog ("Also remove from"),
+and a Sources button beside Publish changes the choice without publishing. The
+choice is stored on `itemSourceLink.writebackEnabled`; a record may write to
+any number of sources. Attachments and notes always copy their parent. A
+published record is sent whole to a source it gains outside a publish.
+
+Unticking a source stops its pending and future jobs (the worker supersedes
+them) and keeps the link and the remote copy. Ticking it again sets
+`remoteCheckRequired`; the worker reads the source's current version before
+sending. If the source changed while the link was paused, the link enters the
+`conflict` state (`conflictRemoteVersion`), nothing is sent, and the status
+popover offers two confirmed choices: send this record over the source, or
+load the source's copy over this record. Ordinary in-flight `412` conflicts
+still reload and resend as before.
+
 ## Run the worker
 
 The worker reads the active library configuration for the PostgreSQL URL,
