@@ -26,8 +26,9 @@ The search worker writes the configured embedder to Meilisearch under the name `
 
 1. `tests/unit/search-index-embedder-settings.test.ts`: failing tests for `buildEmbedderSettings` with `null`, `openAi`, and `rest`; assert exact objects, `documentTemplateMaxBytes === 8000`, and that the template mentions title and abstract fields.
 2. `tests/unit/search-index-setup.test.ts`: extend the mocked client to record `updateSettings` calls; add failing tests that `applySearchIndexEmbedder` sends the embedders object, uses the 60-minute timeout, and throws `SearchIndexTaskError` when the mocked task fails.
-3. A worker-startup test or script assertion that a failing embedder task leaves the worker running with `lastError` set (can be part of Plan 03's script if a unit test needs too much mocking; say which).
-4. Make them green.
+3. The worker's two decisions live in pure helpers in `bootstrap-state.ts` and are unit-tested in `tests/unit/search-index-bootstrap.test.ts`: `resolveIdleLastError` (a failed embedder stays in `lastError` after later batches succeed) and `resolveRebuildTaskTimeoutMs` (rebuild document tasks get the embedding wait only when the embedder is active).
+4. `tests/unit/similar-resources-route.test.ts` covers the Similar Resources route: shared embedder name in the search call, 503 for `invalid_search_embedder` and `vector_embedding_error`, other Meilisearch errors rethrown, empty result without a search when the embedder or the feature is off, 404 for an unknown record.
+5. Make them green.
 
 ## Files
 

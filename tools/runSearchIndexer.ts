@@ -9,13 +9,14 @@ import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal"
 import { parseSearchIndexCommand } from "../src/lib/search-index/command";
 import {
 	searchIndexRebuildIsPending,
+	resolveIdleLastError,
+	resolveRebuildTaskTimeoutMs,
 	setSearchIndexRebuildPending,
 	shouldRebuildSearchIndex,
 } from "../src/lib/search-index/bootstrap-state";
 import {
 	drainSearchOutbox,
 	applySearchIndexEmbedder,
-	EMBEDDER_TASK_TIMEOUT_MS,
 	ensureSearchIndex,
 	requeueSearchOutboxDeadLetters,
 	rebuildSearchIndex,
@@ -187,12 +188,10 @@ async function main() {
 				service,
 				{
 					signal: abortController.signal,
-					// With an embedder, every document task also embeds, so
-					// the rebuild gets the longer embedding wait.
-					taskTimeoutMs:
-						config.search.embedder && !embedderError
-							? EMBEDDER_TASK_TIMEOUT_MS
-							: undefined,
+					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
+						embedder: config.search.embedder,
+						embedderError,
+					}),
 				},
 			);
 			await setSearchIndexRebuildPending(
@@ -268,12 +267,12 @@ async function main() {
 							results.length > 0
 								? new Date()
 								: (previousProgress.lastCompletedAt ?? null),
-						// A failed embedder stays visible until the next
-						// worker start applies it, even after records index.
-						lastError:
-							results.length > 0
-								? embedderError
-								: (previousProgress.lastError ?? embedderError),
+						lastError: resolveIdleLastError({
+							embedderError,
+							previousLastError:
+								previousProgress.lastError ?? null,
+							processedEvents: results.length,
+						}),
 						stage: "idle",
 					},
 					true,
