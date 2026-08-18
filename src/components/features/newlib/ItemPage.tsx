@@ -698,10 +698,6 @@ function ProcessHTML(html: string) {
 	});
 }
 
-function usableCitation(value: string | null | undefined) {
-	return value?.trim() === "<div>Loading...</div>" ? "" : value || "";
-}
-
 export function ItemCitation({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
 	const { citations, identity } = useLibraryConfig();
@@ -716,15 +712,12 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 			revalidateIfStale: false,
 		}
 	);
-	const indexedCitation = usableCitation(item?.citation);
-	const serverCitation = usableCitation(citationResponse?.citation);
 	const resolvedCitation = isCitationFetching
-		? indexedCitation
-		: serverCitation || indexedCitation;
-	const isWaitingForCitation = isCitationFetching && !resolvedCitation;
+		? item?.citation || ""
+		: citationResponse?.citation || "";
 
 	const { citationCopy, citationHtml, isLoading } = useMemo(() => {
-		if (isWaitingForCitation) {
+		if (isCitationFetching || resolvedCitation === "<div>Loading...</div>") {
 			return { isLoading: true };
 		}
 
@@ -773,7 +766,7 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 	}, [
 		citations.showUrl,
 		identity.baseUrl,
-		isWaitingForCitation,
+		isCitationFetching,
 		item?.key,
 		resolvedCitation,
 	]);

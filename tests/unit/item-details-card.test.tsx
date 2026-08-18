@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Item } from "@/app/api/item/types";
 
 const testState = vi.hoisted(() => ({
+	citationsShowUrl: false,
 	collectionsEnabled: false,
 	swrResult: {
 		data: undefined as { citation: string | null } | undefined,
@@ -37,7 +38,7 @@ vi.mock("swr", () => ({
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryConfig: () => ({
 		identity: { baseUrl: "https://library.example.org" },
-		citations: { showUrl: false },
+		citations: { showUrl: testState.citationsShowUrl },
 	}),
 	useLibraryFeature: (feature: string) =>
 		feature === "collections" && testState.collectionsEnabled,
@@ -59,6 +60,7 @@ describe("public item empty sections", () => {
 	let root: Root;
 
 	beforeEach(() => {
+		testState.citationsShowUrl = false;
 		testState.collectionsEnabled = false;
 		testState.swrResult = { data: undefined, isLoading: false };
 		container = document.createElement("div");
@@ -126,28 +128,27 @@ describe("public item empty sections", () => {
 		expect(container.textContent).toContain("A useful citation.");
 	});
 
-	it("keeps a valid indexed citation when the server has no replacement", async () => {
+	it("adds the public item URL when citation URLs are enabled", async () => {
+		testState.citationsShowUrl = true;
 		testState.swrResult = {
-			data: { citation: null },
+			data: { citation: "A useful citation." },
 			isLoading: false,
 		};
 
 		await act(async () => {
 			root.render(
 				<ItemCitation
-					item={
-						{
-							key: "REPORT01",
-							title: "A report",
-							citation: "A citation stored with the search record.",
-						} as Item
-					}
+					item={{ key: "REPORT01", title: "A report" } as Item}
 				/>,
 			);
 		});
 
+		const publicLink = container.querySelector("a");
+		expect(publicLink?.href).toBe(
+			"https://library.example.org/lib/REPORT01",
+		);
 		expect(container.textContent).toContain(
-			"A citation stored with the search record.",
+			"Available at https://library.example.org/lib/REPORT01.",
 		);
 	});
 

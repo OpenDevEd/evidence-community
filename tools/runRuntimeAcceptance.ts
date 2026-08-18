@@ -792,7 +792,10 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_INSTITUTION_FILTER_LABEL:
 			messages.ui[config.filters.institution.label] ??
 			config.filters.institution.label,
-		PLAYWRIGHT_EXPECTED_CITATION_URL: String(config.citations.showUrl),
+		PLAYWRIGHT_EXPECTED_CITATION_URL: String(
+			config.citations.showUrl &&
+				Boolean(config.services.zotero.translationUrl),
+		),
 		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(config.search.embeddings),
 		PLAYWRIGHT_EXPECTED_COUNTRY_FACET: String(config.search.country),
 		PLAYWRIGHT_EXPECTED_AUTHOR_COUNTRY_FACET: String(
