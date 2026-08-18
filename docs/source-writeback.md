@@ -47,9 +47,10 @@ checks, conflict refetch, and create/delete idempotency.
 
 ## Run the worker
 
-The worker reads the active library configuration for the PostgreSQL URL and
-resolves each source connection's `credentialRef` from the process environment.
-It does not need a separate provider configuration file.
+The worker reads the active library configuration for the PostgreSQL URL,
+configured Zotero group, and API key. Before draining jobs, it reconciles the
+manifest with durable source state. It does not need a separate provider file,
+Zotero environment variable, or manual database row.
 
 Run one bounded drain locally:
 

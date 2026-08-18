@@ -1,19 +1,21 @@
 # Zotero source adapter
 
-The Zotero adapter is a read-only Web API v3 source. It converts a group or
+The Zotero adapter is a Web API v3 source. It converts a group
 personal library into provider-neutral batches and commits them through the
 same transactional writer used by every other source.
 
-## Connection
+## Configuration
 
-A Zotero `sourceConnection` uses:
+A Zotero source is defined once in `LIBRARY_CONFIG_JSON`:
 
+- `key`: the stable source name used by imported records;
 - `provider`: `zotero`;
-- `scopeKind`: `group` or `personal-library`;
-- `externalScopeKey`: the Zotero group or user ID;
-- `credentialRef`: optional resolver reference, such as
-  `env:ZOTERO_API_KEY` for the local worker;
-- `config`: the strict object below.
+- `groupId`: the Zotero group ID;
+- `apiKey`: the Zotero API key;
+- `enabled`: whether background import runs;
+- `writebackEnabled`: whether local edits may be sent to Zotero;
+- `defaultWriteback`: whether new native records use this Zotero group;
+- `settings`: the strict request settings below.
 
 | Field                   |                  Default | Constraint             |
 | ----------------------- | -----------------------: | ---------------------- |
@@ -23,10 +25,11 @@ A Zotero `sourceConnection` uses:
 | `maxSnapshotRecords`    |                 `100000` | Integer, 1–1,000,000   |
 | `requestTimeoutMs`      |                  `30000` | Integer, 1,000–120,000 |
 
-The database stores only the credential reference. A resolver supplies the
-actual API key to the worker. Public libraries can omit both. When a key is
-configured, the adapter verifies that it can read the exact group or personal
-library before syncing.
+The import and writeback workers read the same manifest entry. Before their
+first sweep, they create or update the durable database row automatically.
+PostgreSQL keeps the cursor, run history, health, and record links, but never
+the API key. The public configuration omits the complete `sources` section.
+No extra environment variable or manual source-row setup is needed.
 
 ## Incremental snapshot
 

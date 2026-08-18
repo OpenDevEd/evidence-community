@@ -27,14 +27,16 @@ Library databases and deployments are not migrated or modified.
 ## Connections
 
 - The built-in native connection is exactly `native`.
-- Zotero, Mendeley, DSpace, EPrints, and OpenAlex may each have multiple
-  connections in one Evidence Library.
+- Zotero connections are declared in `LIBRARY_CONFIG_JSON`. Both source
+  workers reconcile those declarations before their first sweep.
+- The current manifest supports Zotero group libraries. Other provider types
+  remain database model capabilities until their manifest contracts are built.
 - Duplicate non-null remote scopes for the same provider are rejected.
 - OpenAlex queries are mutable configuration. Separate OpenAlex connections may
   intentionally hold the same query because connection identity, scheduling,
   and import history remain independent.
-- Credentials are referenced by `credentialRef`; secrets are not stored in the
-  source record.
+- Zotero API keys stay in the server-only manifest. They are not copied into
+  the source row or public configuration.
 - At most one non-removed remote connection is marked `defaultWriteback`. The
   target may be paused without losing queued work or stranding new items. A
   native item's first publication links it to that target with the canonical

@@ -1,21 +1,22 @@
 # Source synchronization worker
 
-The Evidence Library owns its source synchronization lifecycle. The worker is
-database-driven: connections, cursors, attempts, leases, and health survive
-container restarts and do not depend on a provider-specific process manager.
+The Evidence Library owns its source synchronization lifecycle. The manifest
+defines each Zotero group and API key. PostgreSQL stores the durable cursor,
+attempts, leases, health, and record links so they survive container restarts.
 
 ## Runtime flow
 
-1. Select an active external `sourceConnection`.
-2. Lock its `sourceSyncState` and claim a time-bounded lease.
-3. Create a `sourceSyncRun` attempt.
-4. Resolve the adapter from `SourceAdapterRegistry`.
-5. Run the adapter while maintaining automatic and adapter-requested
+1. Reconcile the manifest sources with the durable database rows.
+2. Select an active external `sourceConnection`.
+3. Lock its `sourceSyncState` and claim a time-bounded lease.
+4. Create a `sourceSyncRun` attempt.
+5. Resolve the adapter from `SourceAdapterRegistry`.
+6. Run the adapter while maintaining automatic and adapter-requested
    heartbeats.
-6. Commit either a bounded success summary or a failure and release the lease.
+7. Commit either a bounded success summary or a failure and release the lease.
 
-Provider adapters receive the canonical database, the complete connection, an
-optional credential resolver, and a heartbeat function. They are responsible
+Provider adapters receive the canonical database, the complete connection, a
+manifest credential resolver, and a heartbeat function. They are responsible
 for fetching provider pages, mapping them to the provider-neutral ingestion
 contract, and calling `writeSourceIngestionBatch`. The writer, not the
 orchestrator, atomically advances the durable provider cursor with canonical
@@ -32,6 +33,11 @@ npm run source:sync -- --concurrency 4
 npm run source:sync -- --watch --poll-ms 60000
 npm run source:sync -- --connection zotero-example --watch
 ```
+
+No source provisioning command is required. Adding a valid `sources[]` entry
+to the manifest and restarting the worker creates the durable row and starts
+the first import. Removing the entry marks the row removed without deleting
+its cursor or record history.
 
 The default worker identity is `<hostname>:<pid>`. A stable container identity
 may be supplied with `SOURCE_SYNC_WORKER_ID` or `--worker-id`. Watch mode runs
