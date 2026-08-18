@@ -58,6 +58,14 @@ None.
 - With an embedder configured, the startup rebuild's document tasks use the 60-minute wait, because they embed too.
 - When the embedder step fails on an index that already has records, the rebuild stays pending and the records are kept; a brand-new index is still filled.
 
+## Item page loading rule (added 2026-08-18)
+
+Found while checking the local library. Rule: a block that is not configured never renders; a configured block shows a skeleton while waiting and never pops in.
+
+- Citation: the public configuration gains `citations.enabled` (a Zotero translation server is configured). Not enabled → the row is not rendered at all. Enabled → skeleton (`data-citation-state="loading"`) then the text (`data-citation-state="ready"`).
+- Similar Resources: feature off → nothing. Feature on → skeleton cards inside `#vector-relations` with `aria-busy="true"` while the item or the request loads, then the results (`aria-busy="false"`). Only an error or an empty answer hides the block.
+- Tests: `tests/unit/item-details-card.test.tsx`, `tests/unit/vector-relations.test.tsx`, `tests/unit/library-config-public.test.tsx`.
+
 ## Risks
 
 - Declined review idea: giving normal outbox batches the 60-minute wait. The worker holds a 5-minute lease on those events; waiting longer than the lease risks another worker re-claiming and re-sending them. Slow batches should get smaller, not longer.

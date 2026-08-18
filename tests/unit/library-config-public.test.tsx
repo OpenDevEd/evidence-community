@@ -57,6 +57,10 @@ describe("public library configuration", () => {
 		expect(publicConfig.ai.providers[0]).not.toHaveProperty("apiKey");
 		expect(publicConfig.search).not.toHaveProperty("embedder");
 		expect(publicConfig.search.embeddings).toBe(true);
+		expect(publicConfig.citations).toEqual({
+			enabled: Boolean(serverConfig.services.zotero.translationUrl),
+			showUrl: serverConfig.citations.showUrl,
+		});
 		expect(publicConfig.authentication).toEqual({
 			google: { enabled: true },
 		});

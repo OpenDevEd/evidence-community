@@ -883,6 +883,15 @@ const citationsSchema = z
 	.strict()
 	.prefault({});
 
+// The public copy adds whether a citation server is configured, so the
+// item page can leave the citation row out instead of loading and hiding it.
+const publicCitationsSchema = z
+	.object({
+		enabled: z.boolean(),
+		showUrl: z.boolean(),
+	})
+	.strict();
+
 const featuresSchema = z
 	.object({
 		themeSwitcher: z.boolean().default(false),
@@ -1824,7 +1833,7 @@ export const publicLibraryConfigSchema = z
 		search: publicSearchSchema,
 		filters: filtersSchema,
 		content: contentSchema,
-		citations: citationsSchema,
+		citations: publicCitationsSchema,
 		features: featuresSchema,
 		collections: collectionsSchema,
 		gapMaps: publicGapMapsSchema,

@@ -36,7 +36,10 @@ export function projectPublicLibraryConfig(
 		search: projectPublicSearch(config.search),
 		filters: config.filters,
 		content: config.content,
-		citations: config.citations,
+		citations: {
+			enabled: Boolean(config.services.zotero.translationUrl),
+			showUrl: config.citations.showUrl,
+		},
 		features: config.features,
 		collections: config.collections,
 		gapMaps: getEnabledGapMaps(config.gapMaps),

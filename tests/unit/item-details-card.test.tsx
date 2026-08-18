@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Item } from "@/app/api/item/types";
 
 const testState = vi.hoisted(() => ({
+	citationsEnabled: true,
 	citationsShowUrl: false,
 	collectionsEnabled: false,
 	swrResult: {
@@ -38,7 +39,10 @@ vi.mock("swr", () => ({
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryConfig: () => ({
 		identity: { baseUrl: "https://library.example.org" },
-		citations: { showUrl: testState.citationsShowUrl },
+		citations: {
+			enabled: testState.citationsEnabled,
+			showUrl: testState.citationsShowUrl,
+		},
 	}),
 	useLibraryFeature: (feature: string) =>
 		feature === "collections" && testState.collectionsEnabled,
@@ -60,6 +64,7 @@ describe("public item empty sections", () => {
 	let root: Root;
 
 	beforeEach(() => {
+		testState.citationsEnabled = true;
 		testState.citationsShowUrl = false;
 		testState.collectionsEnabled = false;
 		testState.swrResult = { data: undefined, isLoading: false };
@@ -86,6 +91,39 @@ describe("public item empty sections", () => {
 		expect(container.querySelectorAll("svg")).toHaveLength(1);
 	});
 
+	it("never renders the citation row when no citation server is configured", async () => {
+		testState.citationsEnabled = false;
+		testState.swrResult = { data: undefined, isLoading: true };
+
+		await act(async () => {
+			root.render(
+				<ItemCitation
+					item={{ key: "REPORT01", title: "A report" } as Item}
+				/>,
+			);
+		});
+
+		expect(container.textContent).not.toContain("itemCitationTitle");
+		expect(container.querySelector("[data-citation-state]")).toBeNull();
+	});
+
+	it("shows a citation skeleton while the configured server answers", async () => {
+		testState.swrResult = { data: undefined, isLoading: true };
+
+		await act(async () => {
+			root.render(
+				<ItemCitation
+					item={{ key: "REPORT01", title: "A report" } as Item}
+				/>,
+			);
+		});
+
+		expect(container.textContent).toContain("itemCitationTitle");
+		expect(
+			container.querySelector('[data-citation-state="loading"]'),
+		).not.toBeNull();
+	});
+
 	it("does not show citation loading after the server returns no citation", async () => {
 		testState.swrResult = {
 			data: { citation: null },
@@ -107,7 +145,7 @@ describe("public item empty sections", () => {
 		});
 
 		expect(container.textContent).not.toContain("itemCitationTitle");
-		expect(container.querySelector('[data-loaded="false"]')).toBeNull();
+		expect(container.querySelector("[data-citation-state]")).toBeNull();
 	});
 
 	it("shows a citation returned by the server", async () => {
