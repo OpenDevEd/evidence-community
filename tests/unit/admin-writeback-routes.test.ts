@@ -134,7 +134,10 @@ describe("admin writeback request bodies", () => {
 	});
 
 	it("resolves a conflict with one of the two choices and needs the source key", async () => {
-		resolveAdminSourceWritebackConflict.mockResolvedValue(conflictStatus);
+		resolveAdminSourceWritebackConflict.mockResolvedValue({
+			indexingRecords: [{ key: "ABCD2345", revision: 4 }],
+			status: conflictStatus,
+		});
 		const { POST } = await import("@/app/api/admin/items/[key]/writeback/resolve/route");
 		const response = await POST(
 			post("writeback/resolve?source=zotero-a", { choice: "send-local" }),
@@ -149,7 +152,10 @@ describe("admin writeback request bodies", () => {
 			{ sources: [] },
 			expect.objectContaining({ registry: {} }),
 		);
-		expect(await response.json()).toEqual({ status: conflictStatus });
+		expect(await response.json()).toEqual({
+			indexingReceipts: [{ entityKey: "ABCD2345", entityType: "item", revision: 4 }],
+			status: conflictStatus,
+		});
 
 		expect((await POST(post("writeback/resolve", { choice: "load-remote" }), params)).status).toBe(400);
 		expect((await POST(post("writeback/resolve?source=zotero-a", { choice: "overwrite" }), params)).status).toBe(400);

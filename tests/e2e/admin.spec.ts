@@ -1030,7 +1030,7 @@ test("resolves a source conflict with a confirmed choice", async ({
 			);
 			resolveBody = route.request().postDataJSON();
 			state = "queued";
-			await route.fulfill({ json: statusJson() });
+			await route.fulfill({ json: { indexingReceipts: [], ...statusJson() } });
 		},
 	);
 	await page.route(`**/api/admin/items/${publishedItemKey}`, async (route) =>

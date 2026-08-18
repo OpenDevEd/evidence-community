@@ -2288,6 +2288,14 @@ export default function AdminWorkbench({
 							onOpenDraft={openCurrentDraft}
 							onManageSources={manageSources}
 							onPublish={publishCurrent}
+							onWritebackResolved={(result) => {
+								if (!detail) return;
+								const recordKey = detail.key;
+								void runBusy(async () => {
+									await waitForIndexing(result);
+									await Promise.all([loadDetail(recordKey), loadItems()]);
+								});
+							}}
 							onPublishFile={publishPdf}
 							onPublicationChanged={() =>
 								detail

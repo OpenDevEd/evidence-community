@@ -1,5 +1,7 @@
 "use client";
 
+import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
+
 import { AdminSourceWritebackStatus } from "./AdminSourceWritebackStatus";
 import { useAdminSourceWriteback } from "./useAdminSourceWriteback";
 
@@ -7,6 +9,7 @@ import { useAdminSourceWriteback } from "./useAdminSourceWriteback";
 export function AdminItemSourceWritebackBadge({
 	canLoadRemote,
 	itemKey,
+	onResolved,
 	revision,
 	sourceKey,
 	sourceLabel,
@@ -14,11 +17,18 @@ export function AdminItemSourceWritebackBadge({
 	/** Attachments and notes follow their parent; only the parent may load the source's copy. */
 	canLoadRemote: boolean;
 	itemKey: string;
+	/** Called after a conflict choice, so the record can be reloaded and search updates tracked. */
+	onResolved: (result: AdminSearchIndexMutationResult) => void;
 	revision: number | null;
 	sourceKey: string;
 	sourceLabel: string;
 }) {
-	const writeback = useAdminSourceWriteback(itemKey, sourceKey, revision);
+	const writeback = useAdminSourceWriteback(
+		itemKey,
+		sourceKey,
+		revision,
+		onResolved,
+	);
 	return (
 		<AdminSourceWritebackStatus
 			canLoadRemote={canLoadRemote}

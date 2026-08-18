@@ -1120,16 +1120,37 @@ async function acknowledgeJob(
 					},
 				});
 		}
+		// Fields marked dirty for this same revision while the job was in
+		// flight (for example a whole-record send asked while the source was
+		// being turned back on) still need to go. Re-arm this job with them
+		// instead of leaving them behind with no runnable job.
+		const leftover =
+			job.operation === "upsert" &&
+			currentItem.revision === job.canonicalRevision &&
+			currentLink.writebackEnabled &&
+			dirtyFields.length > 0;
 		const [acknowledged] = await transaction
 			.update(sourceWritebackJob)
-			.set({
-				completedRemoteVersion: result.remoteVersion,
-				completedSourceRecordKey: result.sourceRecordKey,
-				lastError: null,
-				leaseExpiresAt: null,
-				leaseOwner: null,
-				processedAt: completedAt,
-			})
+			.set(
+				leftover
+					? {
+							attempts: 0,
+							dirtyFields,
+							lastError: null,
+							leaseExpiresAt: null,
+							leaseOwner: null,
+							nextAttemptAt: completedAt,
+							processedAt: null,
+						}
+					: {
+							completedRemoteVersion: result.remoteVersion,
+							completedSourceRecordKey: result.sourceRecordKey,
+							lastError: null,
+							leaseExpiresAt: null,
+							leaseOwner: null,
+							processedAt: completedAt,
+						},
+			)
 			.where(
 				and(
 					eq(sourceWritebackJob.id, job.id),

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
 import {
 	adminSourceWritebackShouldPollFast,
 	type AdminSourceWritebackStatus,
@@ -30,6 +31,7 @@ export function useAdminSourceWriteback(
 	itemKey: string | null,
 	sourceKey: string | null,
 	revision: number | null,
+	onResolved?: (result: AdminSearchIndexMutationResult) => void,
 ) {
 	const [status, setStatus] = useState<AdminSourceWritebackStatus | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -101,21 +103,21 @@ export function useAdminSourceWriteback(
 			if (!itemKey || !sourceKey || retrying) return;
 			setRetrying(true);
 			try {
-				setStatus(
-					await resolveAdminSourceWritebackConflict(
-						itemKey,
-						sourceKey,
-						choice,
-					),
+				const result = await resolveAdminSourceWritebackConflict(
+					itemKey,
+					sourceKey,
+					choice,
 				);
+				setStatus(result.status);
 				setError(null);
+				onResolved?.(result);
 			} catch (caught) {
 				setError(message(caught));
 			} finally {
 				setRetrying(false);
 			}
 		},
-		[itemKey, retrying, sourceKey],
+		[itemKey, onResolved, retrying, sourceKey],
 	);
 
 	return { error, loading, refresh, resolve, retry, retrying, status };

@@ -437,7 +437,7 @@ export async function resolveAdminSourceWritebackConflict(
 	sourceKey: string,
 	choice: "load-remote" | "send-local",
 ) {
-	const response = await requestJson<unknown>(
+	const response = await requestIndexingMutation<{ status: unknown }>(
 		`/api/admin/items/${encodeURIComponent(key)}/writeback/resolve?source=${encodeURIComponent(sourceKey)}`,
 		{
 			body: JSON.stringify({ choice }),
@@ -445,13 +445,9 @@ export async function resolveAdminSourceWritebackConflict(
 			method: "POST",
 		},
 	);
-	const status =
-		response && typeof response === "object" && "status" in response
-			? response.status
-			: undefined;
-	const parsed = adminSourceWritebackStatusSchema.safeParse(status);
+	const parsed = adminSourceWritebackStatusSchema.safeParse(response.status);
 	if (!parsed.success) throw invalidSourceWritebackResponse();
-	return parsed.data;
+	return { indexingReceipts: response.indexingReceipts, status: parsed.data };
 }
 
 function itemBatchChunks(input: AdminItemBatchRequest) {

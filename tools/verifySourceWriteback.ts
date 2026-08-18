@@ -911,7 +911,7 @@ async function verify() {
 			conflictConfig,
 		);
 		assert(
-			sendLocal.state === "queued" &&
+			sendLocal.status.state === "queued" &&
 				sentLocal.status === "processed" &&
 				sentStatus.state === "synced" &&
 				calls.at(-1)?.payload.title === "Edited during conflict",
@@ -975,7 +975,7 @@ async function verify() {
 			.from(itemSourceLink)
 			.where(eq(itemSourceLink.itemKey, conflictDraft.itemKey));
 		assert(
-			loadRemote.state === "synced" &&
+			loadRemote.status.state === "synced" &&
 				loadedItem?.title === "Source title wins" &&
 				loadedLink?.conflictRemoteVersion === null &&
 				loadedLink.lastAcknowledgedRemoteVersion === "1000",

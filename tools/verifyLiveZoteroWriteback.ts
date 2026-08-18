@@ -756,7 +756,7 @@ async function verifyLiveWriteback() {
 			.from(item)
 			.where(eq(item.key, parentDraft.itemKey));
 		assert(
-			loadRemoteStatus.state === "synced" &&
+			loadRemoteStatus.status.state === "synced" &&
 				localAfterLoad?.title === "Zotero wins this time",
 			"Choosing to load Zotero's version did not replace the local record",
 		);

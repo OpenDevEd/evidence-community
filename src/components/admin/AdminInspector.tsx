@@ -74,6 +74,8 @@ import {
 	AdminCollectionPicker,
 } from "./AdminCollectionPicker";
 import { FileStateChip, RecordStateChip } from "./AdminStatus";
+import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
+
 import { AdminItemSourceWritebackBadge } from "./AdminItemSourceWritebackBadge";
 import {
 	computeAdminDraftDiff,
@@ -1470,6 +1472,7 @@ export function AdminInspector({
 	onPublish,
 	onPublishFile,
 	onPublicationChanged,
+	onWritebackResolved,
 	onReloadDraft,
 	onRetry,
 	onRestore,
@@ -1501,6 +1504,7 @@ export function AdminInspector({
 	onPublish: () => void;
 	onPublishFile: (key: string, uploadRevision: number) => void;
 	onPublicationChanged: () => void;
+	onWritebackResolved: (result: AdminSearchIndexMutationResult) => void;
 	onReloadDraft: () => void;
 	onRetry: () => void;
 	onRestore: () => void;
@@ -1715,6 +1719,7 @@ export function AdminInspector({
 								canLoadRemote={!detail.parentItem}
 								itemKey={detail.key}
 								key={`${detail.key}:${sourceKey}`}
+								onResolved={onWritebackResolved}
 								revision={detail.revision}
 								sourceKey={sourceKey}
 								sourceLabel={

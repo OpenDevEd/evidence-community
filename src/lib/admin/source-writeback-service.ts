@@ -363,7 +363,10 @@ export async function resolveAdminSourceWritebackConflict(
 		signal?: AbortSignal;
 	},
 	now = new Date(),
-) {
+): Promise<{
+	indexingRecords: { key: string; revision: number }[];
+	status: AdminSourceWritebackStatus;
+}> {
 	const [current] = await database
 		.select({ connection: sourceConnection, link: itemSourceLink })
 		.from(itemSourceLink)
@@ -425,7 +428,16 @@ export async function resolveAdminSourceWritebackConflict(
 				updatedAt: now,
 			});
 		});
-		return getAdminSourceWritebackStatus(database, itemKey, sourceKey, config, now);
+		return {
+			indexingRecords: [],
+			status: await getAdminSourceWritebackStatus(
+				database,
+				itemKey,
+				sourceKey,
+				config,
+				now,
+			),
+		};
 	}
 
 	// The source's copy of an attachment or note comes without its file
@@ -460,9 +472,33 @@ export async function resolveAdminSourceWritebackConflict(
 		);
 	}
 	// The source wins: forget local edits on this link so the import is not
-	// masked, then import the source's copy through the normal writer.
+	// masked, then import the source's copy through the normal writer. The
+	// remote read took time, so the conflict is re-checked under the record
+	// lock first: another request may have resolved it or unticked the source.
 	await database.transaction(async (transaction) => {
 		await lockItemMutation(transaction, itemKey);
+		const [link] = await transaction
+			.select({
+				conflictRemoteVersion: itemSourceLink.conflictRemoteVersion,
+				writebackEnabled: itemSourceLink.writebackEnabled,
+			})
+			.from(itemSourceLink)
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, itemKey),
+					eq(itemSourceLink.sourceConnectionKey, sourceKey),
+				),
+			)
+			.for("update");
+		if (
+			!link?.writebackEnabled ||
+			link.conflictRemoteVersion !== current.link.conflictRemoteVersion
+		) {
+			throw new AdminSourceWritebackConflictError(
+				"This conflict was already resolved or the source was unticked. Refresh and try again.",
+				"not-in-conflict",
+			);
+		}
 		await transaction
 			.update(itemSourceLink)
 			.set({
@@ -487,5 +523,19 @@ export async function resolveAdminSourceWritebackConflict(
 		nextCursor: current.connection.syncCursor,
 		sourceConnectionKey: sourceKey,
 	});
-	return getAdminSourceWritebackStatus(database, itemKey, sourceKey, config, now);
+	const [imported] = await database
+		.select({ key: item.key, revision: item.revision })
+		.from(item)
+		.where(eq(item.key, itemKey))
+		.limit(1);
+	return {
+		indexingRecords: imported ? [imported] : [],
+		status: await getAdminSourceWritebackStatus(
+			database,
+			itemKey,
+			sourceKey,
+			config,
+			now,
+		),
+	};
 }

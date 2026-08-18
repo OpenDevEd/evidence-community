@@ -5,7 +5,7 @@ import {
 	sourceWritebackJob,
 	type SourceWritebackOperation,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
@@ -556,7 +556,8 @@ export async function enqueueFullWritebackForSources(
 	// A job for this revision may already exist: run, superseded, dead, or
 	// still pending with only a few fields. Its idempotency key blocks a second
 	// insert, so make that job carry the whole record and be runnable again.
-	// A lease another worker holds right now is left alone.
+	// A job a worker is running right now is left alone: the fields stay dirty
+	// on the link and the worker re-arms the job for them when it finishes.
 	for (const sourceConnectionKey of sourceKeys) {
 		await transaction
 			.update(sourceWritebackJob)
@@ -575,6 +576,10 @@ export async function enqueueFullWritebackForSources(
 					eq(sourceWritebackJob.sourceConnectionKey, sourceConnectionKey),
 					eq(sourceWritebackJob.canonicalRevision, row.revision),
 					eq(sourceWritebackJob.operation, "upsert"),
+					or(
+						isNull(sourceWritebackJob.leaseOwner),
+						sql`${sourceWritebackJob.leaseExpiresAt} <= ${updatedAt}`,
+					),
 				),
 			);
 	}
