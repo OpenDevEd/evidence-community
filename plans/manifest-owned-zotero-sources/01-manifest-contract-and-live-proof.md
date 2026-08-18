@@ -25,6 +25,7 @@ The sync worker reconciles before its first sweep, so the first full import and 
 7. Update worker and operations documentation. Remove every instruction that asks for a Zotero environment variable or manual source row.
 8. Push the tested branch, update docs-pen's one JSON manifest, redeploy, and verify the automatic import and one controlled round trip against Zotero group `6632364`.
 9. Keep the full acceptance gate green. The repeat run exposed a stale browser expectation, not a product bug: Amber enables citation URL display but has no Zotero translation service, so the page correctly hides the citation after the endpoint returns no result. Make the acceptance expectation require both URL display and a configured translation service. Keep unit coverage for a returned citation and for the empty result. Do not revive the old indexed-citation fallback.
+10. Keep the full browser gate reliable. The metadata control test must bring the animated item-type list into view before selecting from it in WebKit. The loading-spinner test must test spinner and button geometry only; dialog sizing stays covered by the dedicated collection-dialog browser checks instead of a second exact-width assertion.
 
 ## Files
 
@@ -50,6 +51,7 @@ The sync worker reconciles before its first sweep, so the first full import and 
 - `docs/zotero-source-adapter.md`
 - `tools/runRuntimeAcceptance.ts`
 - `tests/unit/item-details-card.test.tsx`
+- `tests/e2e/admin.spec.ts`
 
 ## Exact tests
 
