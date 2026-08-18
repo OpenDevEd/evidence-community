@@ -914,6 +914,7 @@ function runAdminBrowserSuite(profile: Profile) {
 	runAdminTests([
 		"tests/e2e/admin.spec.ts",
 		"tests/e2e/admin-runtime.spec.ts",
+		"tests/e2e/admin-links.spec.ts",
 		"--project",
 		"chromium",
 	]);
