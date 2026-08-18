@@ -13,7 +13,10 @@ import {
 	adminSharedPayloadFieldsForZoteroItemType,
 	zoteroStructuralFieldErrors,
 } from "@/lib/admin/item-fields";
-import { canonicalItemTypeToZotero } from "@/lib/item-field-codec";
+import {
+	canonicalItemTypeToZotero,
+	databaseItemFieldToPayloadField,
+} from "@/lib/item-field-codec";
 
 const knownEditableFields = new Set([
 	...ADMIN_SHARED_PAYLOAD_FIELDS,
@@ -217,7 +220,8 @@ export function createZoteroItemPayload(
 	};
 	if (validFields.has("collections")) data.collections = [];
 	if (validFields.has("relations")) data.relations = {};
-	for (const [field, value] of Object.entries(payload)) {
+	for (const [databaseField, value] of Object.entries(payload)) {
+		const field = databaseItemFieldToPayloadField(databaseField);
 		if (field === "itemType" || value === null || value === undefined)
 			continue;
 		if (!validFields.has(field)) {
@@ -251,17 +255,18 @@ export function createZoteroItemPatch(
 	const validFields = allowedFields(definition);
 	const itemTypeChanging = dirtyFields.includes("itemType");
 	const data: Record<string, unknown> = {};
-	for (const field of [...new Set(dirtyFields)].sort()) {
+	for (const databaseField of [...new Set(dirtyFields)].sort()) {
+		const field = databaseItemFieldToPayloadField(databaseField);
 		if (!knownEditableFields.has(field)) {
 			throw new ZoteroWritebackMappingError(
-				`Canonical writeback dirty field is not a Zotero field: ${field}`,
+				`Canonical writeback dirty field is not a Zotero field: ${databaseField}`,
 			);
 		}
 		if (field === "itemType") {
 			data.itemType = definition.itemType;
 			continue;
 		}
-		const hasValue = Object.hasOwn(payload, field);
+		const hasValue = Object.hasOwn(payload, databaseField);
 		if (!validFields.has(field) && (!itemTypeChanging || hasValue)) {
 			throw new ZoteroWritebackMappingError(
 				`Canonical writeback dirty field is not valid for ${definition.itemType}: ${field}`,
@@ -277,7 +282,7 @@ export function createZoteroItemPatch(
 		}
 		data[providerField(targetDefinition, field)] = fieldValue(
 			field,
-			payload[field],
+			payload[databaseField],
 			!hasValue,
 			definition,
 		);

@@ -145,6 +145,28 @@ describe("Zotero writeback mapping", () => {
 			dateEnacted: "2025",
 			nameOfAct: "Evidence Act",
 		});
+		expect(
+			createZoteroItemPayload(
+				{
+					itemType: "Report",
+					languageName: "en",
+					title: "Language mapping",
+				},
+				"LANG2345",
+			),
+		).toMatchObject({ language: "en" });
+		expect(
+			createZoteroItemPatch(
+				{ itemType: "Report", languageName: "ar" },
+				["languageName"],
+			),
+		).toEqual({ language: "ar" });
+		expect(
+			createZoteroItemPatch(
+				{ itemType: "Report" },
+				["languageName"],
+			),
+		).toEqual({ language: "" });
 	});
 
 	it("maps dirty removals to Zotero PATCH clear values", () => {
