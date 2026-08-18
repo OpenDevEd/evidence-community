@@ -71,8 +71,13 @@ function service(client: Meilisearch, indexName: string): MeilisearchService {
 	};
 }
 
-async function successfulTask(taskPromise: { waitTask: () => Promise<Task> }) {
-	const task = await taskPromise.waitTask();
+const SETUP_TASK_TIMEOUT_MS = 5 * 60 * 1_000;
+
+async function successfulTask(taskPromise: {
+	waitTask: (options?: { timeout?: number }) => Promise<Task>;
+}) {
+	// A freshly started container can take tens of seconds for its first writes.
+	const task = await taskPromise.waitTask({ timeout: SETUP_TASK_TIMEOUT_MS });
 	assert(
 		task.status === "succeeded",
 		`Meilisearch task ${task.uid} failed: ${task.error?.message}`,
@@ -266,7 +271,24 @@ async function runIndex(
 	});
 }
 
+const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1", "[::1]"]);
+
+/**
+ * The script creates and deletes its own indexes on whatever Meilisearch it is
+ * pointed at. Only allow that on a local instance unless the caller opts in
+ * with EMBEDDER_TEST_ALLOW_REMOTE=1.
+ */
+function assertSafeMeilisearchHost(host: string) {
+	if (process.env.EMBEDDER_TEST_ALLOW_REMOTE === "1") return;
+	const hostname = new URL(host).hostname;
+	assert(
+		LOOPBACK_HOSTS.has(hostname),
+		`Refusing to run against ${host}: MEILISEARCH_HOST must be a local Meilisearch. Set EMBEDDER_TEST_ALLOW_REMOTE=1 to override.`,
+	);
+}
+
 async function main() {
+	assertSafeMeilisearchHost(meilisearchHost);
 	const stub: StubState = { requests: 0, texts: [] };
 	const { server, port } = await startStub(stub);
 	console.log(
@@ -297,10 +319,18 @@ async function main() {
 			}),
 		);
 	} finally {
-		for (const indexName of INDEX_NAMES) {
-			await deleteIndexIfPresent(client, indexName);
+		try {
+			for (const indexName of INDEX_NAMES) {
+				await deleteIndexIfPresent(client, indexName);
+			}
+		} catch (cleanupError) {
+			// Report cleanup trouble without hiding the real failure.
+			console.error(
+				`Index cleanup failed: ${cleanupError instanceof Error ? cleanupError.message : cleanupError}`,
+			);
+		} finally {
+			server.close();
 		}
-		server.close();
 	}
 }
 
