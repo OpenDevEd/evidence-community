@@ -216,7 +216,6 @@
 			"apiKey": "replace-with-zotero-api-key",
 			"enabled": true,
 			"writebackEnabled": false,
-			"defaultWriteback": false,
 			"settings": {}
 		}
 	],

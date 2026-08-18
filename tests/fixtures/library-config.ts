@@ -269,7 +269,6 @@ export const maximalLibraryConfig = {
 			apiKey: "maximal-zotero-api-key",
 			enabled: true,
 			writebackEnabled: true,
-			defaultWriteback: true,
 			settings: {},
 		},
 	],

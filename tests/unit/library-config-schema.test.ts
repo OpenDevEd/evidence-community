@@ -95,7 +95,6 @@ describe("library configuration fixtures", () => {
 				apiKey: "maximal-zotero-api-key",
 				enabled: true,
 				writebackEnabled: true,
-				defaultWriteback: true,
 				settings: {
 					apiBaseUrl: "https://api.zotero.org",
 					attachmentDownloadTimeoutMs: 120_000,
@@ -117,17 +116,36 @@ describe("library configuration fixtures", () => {
 			false,
 		);
 
-		const invalidDefault = cloneLibraryConfig(maximalLibraryConfig);
-		invalidDefault.sources![0].writebackEnabled = false;
-		expect(libraryConfigSchema.safeParse(invalidDefault).success).toBe(false);
-
 		const duplicateGroup = cloneLibraryConfig(maximalLibraryConfig);
 		duplicateGroup.sources!.push({
 			...duplicateGroup.sources![0],
 			key: "zotero-duplicate",
-			defaultWriteback: false,
 		});
 		expect(libraryConfigSchema.safeParse(duplicateGroup).success).toBe(false);
+	});
+
+	it("allows many writeback sources and no default writeback source", () => {
+		const twoWriteback = cloneLibraryConfig(maximalLibraryConfig);
+		twoWriteback.sources!.push({
+			...twoWriteback.sources![0],
+			key: "zotero-second",
+			groupId: "7000001",
+			writebackEnabled: true,
+		});
+		const parsed = libraryConfigSchema.safeParse(twoWriteback);
+		expect(parsed.success).toBe(true);
+		expect(
+			parsed.data?.sources.filter((source) => source.writebackEnabled),
+		).toHaveLength(2);
+
+		const readOnly = cloneLibraryConfig(maximalLibraryConfig);
+		readOnly.sources![0].writebackEnabled = false;
+		expect(libraryConfigSchema.safeParse(readOnly).success).toBe(true);
+
+		const legacyDefault = cloneLibraryConfig(maximalLibraryConfig);
+		(legacyDefault.sources![0] as Record<string, unknown>).defaultWriteback =
+			true;
+		expect(libraryConfigSchema.safeParse(legacyDefault).success).toBe(false);
 	});
 
 	it("enables configured gap maps by default", () => {

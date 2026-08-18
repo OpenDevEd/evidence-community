@@ -1380,10 +1380,6 @@
 						"default": false,
 						"type": "boolean"
 					},
-					"defaultWriteback": {
-						"default": false,
-						"type": "boolean"
-					},
 					"settings": {
 						"default": {},
 						"type": "object",
