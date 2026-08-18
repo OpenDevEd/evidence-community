@@ -67,6 +67,11 @@ import { Link } from "@/i18n/routing";
 
 import { AdminInspector } from "./AdminInspector";
 import {
+	AdminWritebackSourcesDialog,
+	type WritebackDialogRequest,
+} from "./AdminWritebackSourcesDialog";
+import { resolveWritebackDialogOptions } from "./writeback-selection";
+import {
 	adminCollectionPath,
 	AdminCollectionPicker,
 } from "./AdminCollectionPicker";
@@ -92,6 +97,7 @@ import {
 	mutateAdminItems,
 	openAdminDraft,
 	publishAdminItem,
+	setAdminItemWritebackSources,
 	publishAdminPdf,
 	renameAdminCollection,
 	restoreAdminCollection,
@@ -431,6 +437,13 @@ export default function AdminWorkbench({
 	const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
 		null,
 	);
+	const [writebackDialog, setWritebackDialog] = useState<
+		| (WritebackDialogRequest & {
+				action: "manage" | "publish" | "restore" | "unpublish";
+				recordKey: string;
+		  })
+		| null
+	>(null);
 	const searchIndex = useAdminSearchIndex();
 	const editableCollectionSourceKeys = useMemo(
 		() =>
@@ -1036,13 +1049,11 @@ export default function AdminWorkbench({
 		[searchIndex.trackAndWait],
 	);
 
-	const publishCurrent = () => {
-		if (!detail?.draft) return;
-		const recordKey = detail.key;
+	const runPublish = (recordKey: string, sourceKeys?: string[]) =>
 		void runBusy(
 			async () => {
 				await flushDraft(recordKey, draftPayload);
-				const result = await publishAdminItem(recordKey);
+				const result = await publishAdminItem(recordKey, sourceKeys);
 				await waitForIndexing(result);
 				clearRecordErrors([recordKey]);
 				setValidationErrors({});
@@ -1051,6 +1062,57 @@ export default function AdminWorkbench({
 			},
 			(error) => captureInspectorValidation(recordKey, error),
 		);
+
+	// Publish, restore and unpublish ask which sources to update first. When
+	// the library has no writeback source, or the record is an attachment or
+	// note (they follow their parent), the action runs at once.
+	const askWritebackSources = (
+		action: "manage" | "publish" | "restore" | "unpublish",
+	) => {
+		if (!detail) return false;
+		const options = detail.parentItem
+			? null
+			: resolveWritebackDialogOptions(detail.writeback);
+		if (!options) return false;
+		setWritebackDialog({
+			action,
+			mode:
+				action === "unpublish"
+					? "unpublish"
+					: action === "manage"
+						? "manage"
+						: "publish",
+			options,
+			recordKey: detail.key,
+		});
+		return true;
+	};
+
+	const publishCurrent = () => {
+		if (!detail?.draft) return;
+		if (askWritebackSources("publish")) return;
+		runPublish(detail.key);
+	};
+
+	const manageSources = () => {
+		askWritebackSources("manage");
+	};
+
+	const confirmWritebackDialog = (sourceKeys: string[]) => {
+		const request = writebackDialog;
+		if (!request) return;
+		setWritebackDialog(null);
+		const recordKey = request.recordKey;
+		if (request.action === "publish") runPublish(recordKey, sourceKeys);
+		else if (request.action === "restore") runRestore(recordKey, sourceKeys);
+		else if (request.action === "unpublish") runUnpublish(recordKey, sourceKeys);
+		else {
+			void runBusy(async () => {
+				await setAdminItemWritebackSources(recordKey, sourceKeys);
+				toast.success("Sources saved");
+				await loadDetail(recordKey);
+			});
+		}
 	};
 
 	const openCurrentDraft = () =>
@@ -1060,13 +1122,11 @@ export default function AdminWorkbench({
 			await Promise.all([loadDetail(detail.key), loadItems()]);
 		});
 
-	const restoreCurrent = () => {
-		if (!detail) return;
-		const recordKey = detail.key;
+	const runRestore = (recordKey: string, sourceKeys?: string[]) =>
 		void runBusy(
 			async () => {
 				await openAdminDraft(recordKey);
-				const result = await publishAdminItem(recordKey);
+				const result = await publishAdminItem(recordKey, sourceKeys);
 				await waitForIndexing(result);
 				clearRecordErrors([recordKey]);
 				setValidationErrors({});
@@ -1075,6 +1135,11 @@ export default function AdminWorkbench({
 			},
 			(error) => captureInspectorValidation(recordKey, error),
 		);
+
+	const restoreCurrent = () => {
+		if (!detail) return;
+		if (askWritebackSources("restore")) return;
+		runRestore(detail.key);
 	};
 
 	const duplicateCurrent = () =>
@@ -1116,17 +1181,27 @@ export default function AdminWorkbench({
 		});
 	};
 
+	const runUnpublish = (recordKey: string, removeFromSourceKeys?: string[]) =>
+		void runBusy(async () => {
+			const result = await unpublishAdminItem(recordKey, removeFromSourceKeys);
+			await waitForIndexing(result);
+			await Promise.all([loadDetail(recordKey), loadItems()]);
+			toast.success("Record unpublished");
+		});
+
 	const unpublishCurrent = () => {
 		if (!detail) return;
+		if (askWritebackSources("unpublish")) return;
+		const recordKey = detail.key;
 		setConfirmDialog({
 			title: "Unpublish record?",
 			message:
 				"It will leave the public library and remain recoverable here.",
 			danger: true,
 			action: async () => {
-				const result = await unpublishAdminItem(detail.key);
+				const result = await unpublishAdminItem(recordKey);
 				await waitForIndexing(result);
-				await Promise.all([loadDetail(detail.key), loadItems()]);
+				await Promise.all([loadDetail(recordKey), loadItems()]);
 				toast.success("Record unpublished");
 			},
 		});
@@ -2211,6 +2286,7 @@ export default function AdminWorkbench({
 							onDiscardFile={discardPdfDraft}
 							onDuplicate={duplicateCurrent}
 							onOpenDraft={openCurrentDraft}
+							onManageSources={manageSources}
 							onPublish={publishCurrent}
 							onPublishFile={publishPdf}
 							onPublicationChanged={() =>
@@ -2724,6 +2800,13 @@ export default function AdminWorkbench({
 					)}
 				</ModalContent>
 			</DialogModal>
+
+			<AdminWritebackSourcesDialog
+				busy={busy}
+				onClose={() => setWritebackDialog(null)}
+				onConfirm={confirmWritebackDialog}
+				request={writebackDialog}
+			/>
 
 			<DialogModal
 				isOpen={Boolean(confirmDialog)}

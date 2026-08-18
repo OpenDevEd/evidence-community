@@ -7,6 +7,7 @@ import type {
 	AdminItemDetail,
 	AdminItemDraft,
 	AdminItemListPage,
+	AdminItemWriteback,
 	AdminLibrarySnapshot,
 } from "@/lib/admin/types";
 import type { AdminCollectionSearchState } from "@/lib/admin/collection-catalog-contract";
@@ -355,18 +356,48 @@ export function discardAdminDraft(key: string) {
 	);
 }
 
-export function publishAdminItem(key: string) {
+/** Publish a record. `sourceKeys` chooses its writeback sources; omit to keep the stored choice. */
+export function publishAdminItem(key: string, sourceKeys?: string[]) {
 	return requestIndexingMutation<{ item: Record<string, unknown> }>(
 		`/api/admin/items/${encodeURIComponent(key)}/publish`,
-		{ method: "POST" },
+		{
+			body: sourceKeys ? JSON.stringify({ sourceKeys }) : undefined,
+			headers: sourceKeys ? { "content-type": "application/json" } : undefined,
+			method: "POST",
+		},
 	);
 }
 
-export function unpublishAdminItem(key: string) {
+/** Unpublish a record. `removeFromSourceKeys` lists the sources that also delete their copy. */
+export function unpublishAdminItem(key: string, removeFromSourceKeys?: string[]) {
 	return requestIndexingMutation<{ item: Record<string, unknown> }>(
 		`/api/admin/items/${encodeURIComponent(key)}/unpublish`,
-		{ method: "POST" },
+		{
+			body: removeFromSourceKeys
+				? JSON.stringify({ removeFromSourceKeys })
+				: undefined,
+			headers: removeFromSourceKeys
+				? { "content-type": "application/json" }
+				: undefined,
+			method: "POST",
+		},
 	);
+}
+
+/** Change which sources a record writes to, without publishing. */
+export async function setAdminItemWritebackSources(
+	key: string,
+	sourceKeys: string[],
+) {
+	const response = await requestJson<{ writeback: AdminItemWriteback }>(
+		`/api/admin/items/${encodeURIComponent(key)}/writeback/sources`,
+		{
+			body: JSON.stringify({ sourceKeys }),
+			headers: { "content-type": "application/json" },
+			method: "PUT",
+		},
+	);
+	return response.writeback;
 }
 
 async function sourceWritebackStatusRequest(

@@ -89,15 +89,38 @@ export function resolveAdminSourceWritebackState(
 	return "idle";
 }
 
+const KEY_COLLISION_ERROR_NAMES = [
+	"SourceWritebackTargetKeyCollisionError",
+	"ZoteroWritebackKeyCollisionError",
+];
+
+/**
+ * Turns a stored worker error into words an admin can act on. A key collision
+ * means the source already has a different item with this record's key; the
+ * only way forward is to delete that item at the source and retry.
+ */
+export function describeAdminWritebackError(
+	error: string | null,
+	{ itemKey, sourceLabel }: { itemKey: string; sourceLabel: string },
+) {
+	if (!error) return null;
+	const name = error.split(":", 1)[0] ?? "";
+	if (KEY_COLLISION_ERROR_NAMES.includes(name)) {
+		return `${sourceLabel} already has a different item with key ${itemKey}. Delete that item in ${sourceLabel}, then retry.`;
+	}
+	return error;
+}
+
 function statusJson(
 	state: AdminSourceWritebackStatus["state"],
 	sourceKey: string | null,
 	job: WritebackJobRow | null,
+	describe: (error: string | null) => string | null = (error) => error,
 ): AdminSourceWritebackStatus {
 	return {
 		attempts: job?.attempts ?? 0,
 		canonicalRevision: job?.canonicalRevision ?? null,
-		error: job?.lastError ?? null,
+		error: describe(job?.lastError ?? null),
 		jobId: job?.id ?? null,
 		nextAttemptAt: job?.nextAttemptAt.toISOString() ?? null,
 		processedAt: job?.processedAt?.toISOString() ?? null,
@@ -163,6 +186,11 @@ export async function getAdminSourceWritebackStatus(
 		blockedState ?? resolveAdminSourceWritebackState(job, link, now),
 		sourceKey,
 		job,
+		(error) =>
+			describeAdminWritebackError(error, {
+				itemKey,
+				sourceLabel: target.sourceLabel,
+			}),
 	);
 }
 

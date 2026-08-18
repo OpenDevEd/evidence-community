@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { resolveAdminSourceWritebackState } from "@/lib/admin/source-writeback-service";
+import {
+	describeAdminWritebackError,
+	resolveAdminSourceWritebackState,
+} from "@/lib/admin/source-writeback-service";
 
 const now = new Date("2026-08-07T12:00:00.000Z");
 const baseJob = {
@@ -61,5 +64,33 @@ describe("admin source writeback state", () => {
 				now,
 			),
 		).toBe("idle");
+	});
+});
+
+describe("describeAdminWritebackError", () => {
+	it("explains a key collision in plain words", () => {
+		expect(
+			describeAdminWritebackError(
+				"ZoteroWritebackKeyCollisionError: Zotero item key ABCD2345 already exists with different data",
+				{ itemKey: "ABCD2345", sourceLabel: "Zotero · 6632364" },
+			),
+		).toBe(
+			"Zotero · 6632364 already has a different item with key ABCD2345. Delete that item in Zotero · 6632364, then retry.",
+		);
+	});
+
+	it("passes other errors through and keeps null", () => {
+		expect(
+			describeAdminWritebackError("ZoteroApiError: 503 busy", {
+				itemKey: "ABCD2345",
+				sourceLabel: "Zotero · 6632364",
+			}),
+		).toBe("ZoteroApiError: 503 busy");
+		expect(
+			describeAdminWritebackError(null, {
+				itemKey: "ABCD2345",
+				sourceLabel: "Zotero · 6632364",
+			}),
+		).toBeNull();
 	});
 });

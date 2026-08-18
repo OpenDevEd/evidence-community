@@ -30,6 +30,7 @@ import {
 	FileText,
 	Folder,
 	History,
+	Link2,
 	Lock,
 	Paperclip,
 	Pencil,
@@ -1465,6 +1466,7 @@ export function AdminInspector({
 	onDiscardFile,
 	onDuplicate,
 	onOpenDraft,
+	onManageSources,
 	onPublish,
 	onPublishFile,
 	onPublicationChanged,
@@ -1495,6 +1497,7 @@ export function AdminInspector({
 	onDiscardFile: (key: string) => void;
 	onDuplicate: () => void;
 	onOpenDraft: () => void;
+	onManageSources: () => void;
 	onPublish: () => void;
 	onPublishFile: (key: string, uploadRevision: number) => void;
 	onPublicationChanged: () => void;
@@ -1740,6 +1743,25 @@ export function AdminInspector({
 						/>
 					</div>
 					<div className="mt-4 flex flex-wrap items-center gap-2">
+						{!detail.parentItem &&
+						detail.writeback.available.length > 0 ? (
+							<Tooltip content="Choose which sources receive this record's updates">
+								<span>
+									<Button
+										aria-label="Sources"
+										className="h-9 rounded-xl px-2"
+										data-admin-writeback-sources-button
+										isDisabled={busy}
+										isIconOnly
+										onPress={onManageSources}
+										size="xs"
+										variant="transparent"
+									>
+										<Link2 aria-hidden size={15} />
+									</Button>
+								</span>
+							</Tooltip>
+						) : null}
 						{!detail.editable ? (
 							<Button
 								className="h-9 rounded-xl px-3 font-semibold"
