@@ -143,24 +143,30 @@ async function main() {
 		});
 		let embedderError: string | null = null;
 		try {
+			// The worker stays in the "starting" stage here. The stored
+			// worker state cannot describe a settings task (it requires
+			// outbox events for "waiting"/"indexing"), so progress goes to
+			// the log instead.
+			let lastEmbedderStage = "";
 			await applySearchIndexEmbedder(service, config.search.embedder, {
 				batchClient: service.client.batches,
 				onProgress: async (progress) => {
-					await writeWorkerState(
-						{
-							currentBatchProgress: progress.batchProgress,
-							currentBatchUid: progress.batchUid,
-							currentEventCount: 0,
-							currentTaskUid: progress.taskUid,
-							lastCompletedAt: registeredWorker.lastCompletedAt,
-							lastError: registeredWorker.lastError,
-							stage: progress.stage,
-						},
-						progress.stage !== reporter.current().stage,
-					);
+					const line = `${progress.stage} task ${progress.taskUid ?? "?"}${
+						progress.batchProgress === null
+							? ""
+							: ` ${progress.batchProgress}%`
+					}`;
+					if (line === lastEmbedderStage) return;
+					lastEmbedderStage = line;
+					console.log(`Search index embedder: ${line}`);
 				},
 				signal: abortController.signal,
 			});
+			console.log(
+				config.search.embedder
+					? "Search index embedder: ready"
+					: "Search index embedder: removed",
+			);
 		} catch (error) {
 			if (
 				error instanceof SearchOutboxAbortError &&
