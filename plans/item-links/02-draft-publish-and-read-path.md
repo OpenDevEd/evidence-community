@@ -28,6 +28,7 @@ Unpublish (`:1213`) and restore need no link change (D10). `removeNativeItem` (`
 **Public read path.**
 
 - New server helper use: `getPublicItemLinks(db, key)` from Plan 01 in the item page loader that renders `ItemPage`, passed down to `Relations.tsx` as `links` (`{ cites, citedBy, related }`) plus `sameAs: string[]` from `relations["owl:sameAs"]`.
+- Delete `cites` and `citedBy` from `RelationsType` (`src/types/item.ts`) and drop the array-based counts in `ItemHeader.tsx:32-35` and `items/Resource.tsx:149-151` (they keep the provider `cited_by`/`referenced_works` counts).
 - `Relations.tsx`: delete `extractCitesKeys`/`extractCitedByKeys`; "Related resources" keys = `links.related ∪ sameAs`; hide a tab whose count is 0 unless it is the only tab. Cards still load through `POST /api/items/batch` (`route.ts:42-104`).
 - `ItemPage.tsx:1255-1290` passes the new props; the header stat block at `:621-626` (`cited_by`, `referenced_works`) is unchanged.
 - `GET /api/citations/[key]` (`route.ts`): read `citedBy` keys from PostgreSQL via `getPublicItemLinks`, then keep the Meilisearch keyed lookup for cards and facets (`:50-107`). `totalCitations = citedByKeys.length`. Delete the `cited_by` fallback (`:153-156`).

@@ -22,7 +22,7 @@ Store every link between two records once in PostgreSQL. Bring Zotero "Related" 
 - `getPublicItemLinks(db, key)` → `{ cites: string[], citedBy: string[], related: string[] }` where `related` is the union of both directions, de-duplicated, and every listed key belongs to an item with `deleted = 0`.
 - `replaceSourceRelatedLinks(tx, { sourceConnectionKey, fromKeys, links })` → deletes rows with `origin = source:<key>` and `kind = related` for `fromKeys`, inserts the given rows, and never touches `origin = manual`.
 
-**Validator cleanup**: remove `citedBy` and `cites` from the `relations` schema in `src/lib/admin/native-item-validation.ts:106-107` and from `RelationsType` in `src/types/item.ts`. `cited_by`, `referenced_works`, `owl:sameAs`, `dc:relation` stay.
+**Validator cleanup**: remove `citedBy` and `cites` from the `relations` schema in `src/lib/admin/native-item-validation.ts:106-107`. `cited_by`, `referenced_works`, `owl:sameAs`, `dc:relation` stay. The TypeScript `RelationsType` in `src/types/item.ts` and its readers (`Relations.tsx`, `ItemHeader.tsx`, `Resource.tsx`, `/api/citations/[key]`) are changed in Plan 02 together with the read-path swap, so every commit compiles.
 
 **Zotero on sync**: in `src/lib/source-ingestion/transactional-writer.ts`, right after the tag and collection replacement for `changedItemKeys` (`:1288-1345`):
 
@@ -84,7 +84,7 @@ Start the local stack (`docker/compose.library.yaml` or the acceptance stack in 
 ## Completion rules
 
 - `itemLink` exists with the constraints above; `npm run schema:check` is green.
-- `cites`/`citedBy` no longer exist in `src/types/item.ts`, the validator, or any test fixture.
+- The validator rejects `cites`/`citedBy`; no test fixture uses them. (`src/types/item.ts` and its readers change in Plan 02.)
 - A Zotero sync creates, replaces and removes `source:` related rows and never touches `manual` rows.
 - Unresolved relations are counted in the sync result.
 - All listed tests pass.
