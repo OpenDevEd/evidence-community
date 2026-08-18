@@ -762,6 +762,7 @@ export async function publishItemDraftWithContext(
 				await loadPublishedItemPayload(transaction, itemKey),
 				initialDraft.patch,
 			),
+			{ requireTitle: true },
 		);
 		const parentItemKey = initialValidated.item.parentItem;
 		const relatedParentKeys = [
@@ -801,6 +802,7 @@ export async function publishItemDraftWithContext(
 				),
 				draft.patch,
 			),
+			{ requireTitle: true },
 		);
 		if (validated.item.parentItem !== parentItemKey) {
 			throw new ItemDraftConflictError(itemKey);

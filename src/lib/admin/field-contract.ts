@@ -50,7 +50,7 @@ export function adminFieldContract(descriptor: AdminFieldDescriptor): {
 }
 
 function isCalendarDate(value: string) {
-	const match = /^(-?\d{4})-(\d{2})-(\d{2})$/u.exec(value);
+	const match = /^(\d{4})-(\d{2})-(\d{2})$/u.exec(value);
 	if (!match) return false;
 	const year = Number(match[1]);
 	const month = Number(match[2]);
@@ -74,25 +74,26 @@ function isCalendarDate(value: string) {
 	return day <= daysInMonth[month - 1]!;
 }
 
-function isAccessDate(value: string) {
-	if (value === "CURRENT_TIMESTAMP") return true;
-	const match = /^(-?\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):?(\d{2}))?)?$/u.exec(
+function normalizeAccessDate(value: string) {
+	const match = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):?(\d{2}))?)?$/u.exec(
 		value,
 	);
-	if (!match || !isCalendarDate(match[1]!)) return false;
-	if (match[2] === undefined) return true;
+	if (!match || !isCalendarDate(match[1]!)) return null;
+	if (match[2] === undefined) return match[1]!;
 	const hour = Number(match[2]);
 	const minute = Number(match[3]);
 	const second = Number(match[4]);
-	if (hour > 23 || minute > 59 || second > 59) return false;
-	if (match[6] === undefined) return true;
+	if (hour > 23 || minute > 59 || second > 59) return null;
+	if (match[6] === undefined) return match[1]!;
 	const offsetHour = Number(match[6]);
 	const offsetMinute = Number(match[7]);
 	return (
 		offsetHour <= 14 &&
 		offsetMinute <= 59 &&
 		(offsetHour < 14 || offsetMinute === 0)
-	);
+	)
+		? match[1]!
+		: null;
 }
 
 export function utf8ByteLength(value: string) {
@@ -130,9 +131,10 @@ export function normalizeAdminFieldValue(
 		return { value };
 	}
 	if (kind === "access-date") {
-		return isAccessDate(value)
-			? { value }
-			: { error: "Enter a real access date or timestamp.", value };
+		const accessDate = normalizeAccessDate(value);
+		return accessDate
+			? { value: accessDate }
+			: { error: "Choose an access date.", value };
 	}
 	if (kind === "url") {
 		try {

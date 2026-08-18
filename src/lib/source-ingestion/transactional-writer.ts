@@ -177,6 +177,7 @@ function sourceItemValues(
 	try {
 		validated = validateNativeItemDraft(record.metadata, {
 			requireChildParent: false,
+			requireTitle: true,
 		});
 	} catch (error) {
 		if (error instanceof NativeItemValidationError) {

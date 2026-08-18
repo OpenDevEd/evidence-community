@@ -121,6 +121,22 @@ export function AdminMetadataField({
 			</div>
 		);
 	}
+	if (kind === "access-date") {
+		return (
+			<Input
+				aria-label={props.label}
+				classNames={inputClassNames}
+				data-field-kind={kind}
+				errorMessage={props.error}
+				id={props.id}
+				isDisabled={props.disabled}
+				isInvalid={Boolean(props.error)}
+				type="date"
+				value={props.value}
+				onValueChange={props.onValueChange}
+			/>
+		);
+	}
 	if (kind === "multiline") {
 		return (
 			<Textarea
@@ -207,11 +223,6 @@ export function AdminMetadataField({
 			inputMode={inputMode}
 			isDisabled={props.disabled}
 			isInvalid={Boolean(props.error)}
-			placeholder={
-				kind === "access-date"
-					? "YYYY-MM-DD, timestamp, or CURRENT_TIMESTAMP"
-					: undefined
-			}
 			spellCheck={kind === "url" ? false : undefined}
 			type={inputType}
 			value={props.value}

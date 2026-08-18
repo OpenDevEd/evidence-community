@@ -204,6 +204,7 @@ export function validateNativeItemDraft(
 	options: {
 		allowIncompleteCreators?: boolean;
 		requireChildParent?: boolean;
+		requireTitle?: boolean;
 	} = {},
 ): ValidatedNativeItemDraft {
 	const payloadResult = payloadObjectSchema.safeParse(input);
@@ -391,6 +392,20 @@ export function validateNativeItemDraft(
 			Object.fromEntries(
 				structuralErrors.map(({ field, message }) => [field, message]),
 			),
+		);
+	}
+	const titleDescriptor = fieldDescriptors.find(
+		({ semanticField }) => semanticField === "title",
+	);
+	if (
+		options.requireTitle &&
+		titleDescriptor &&
+		(typeof normalizedPayload.title !== "string" ||
+			normalizedPayload.title.trim().length === 0)
+	) {
+		throw new NativeItemValidationError(
+			"Enter a title before publishing.",
+			{ [titleDescriptor.field]: "Enter a title before publishing." },
 		);
 	}
 

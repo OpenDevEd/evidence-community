@@ -134,26 +134,33 @@ describe("admin metadata field contract", () => {
 		}
 	});
 
-	it("accepts every Zotero access-date format", () => {
+	it("stores Zotero access dates as calendar dates", () => {
 		const descriptor = {
 			field: "accessDate",
 			semanticField: "accessDate",
 			type: "text" as const,
 		};
+		expect(normalizeAdminFieldValue(descriptor, "2024-05-20")).toEqual({
+			value: "2024-05-20",
+		});
 		for (const value of [
-			"2024-05-20",
 			"2024-05-20 12:30:45",
 			"2024-05-20T12:30:45.123Z",
 			"2024-05-20T12:30:45+01:00",
 			"2024-05-20T12:30:45+0100",
-			"-0044-03-15",
-			"CURRENT_TIMESTAMP",
 		]) {
-			expect(normalizeAdminFieldValue(descriptor, value)).toEqual({ value });
+			expect(normalizeAdminFieldValue(descriptor, value)).toEqual({
+				value: "2024-05-20",
+			});
 		}
-		for (const value of ["2024-99-99", "2024-05-20T25:00:00Z", "yesterday"]) {
+		for (const value of [
+			"2024-99-99",
+			"2024-05-20T25:00:00Z",
+			"CURRENT_TIMESTAMP",
+			"yesterday",
+		]) {
 			expect(normalizeAdminFieldValue(descriptor, value).error).toBe(
-				"Enter a real access date or timestamp.",
+				"Choose an access date.",
 			);
 		}
 	});

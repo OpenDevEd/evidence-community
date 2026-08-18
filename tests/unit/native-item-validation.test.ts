@@ -196,7 +196,7 @@ describe("native item draft validation", () => {
 			["date", "2024-02-31", "Enter an exact date or a four-digit year"],
 			["date", "2024-05", "Enter an exact date or a four-digit year"],
 			["date", "Spring 2024", "Enter an exact date or a four-digit year"],
-			["accessDate", "2024-99-99", "Enter a real access date or timestamp"],
+			["accessDate", "2024-99-99", "Choose an access date"],
 			["url", "example.com", "Enter a full HTTP or HTTPS address"],
 		] as const) {
 			try {
@@ -215,6 +215,47 @@ describe("native item draft validation", () => {
 				dateDecided: "2024-05",
 			}),
 		).toThrow("Check date decided");
+	});
+
+	it("requires a title only when publishing", () => {
+		expect(
+			validateNativeItemDraft({ itemType: "book", title: "" }).payload,
+		).toMatchObject({ itemType: "Book", title: "" });
+
+		let checked = 0;
+		for (const definition of getZoteroSchema().itemTypes) {
+			const titleDescriptor = describeZoteroItemTypeFields(
+				definition.itemType,
+			).find(({ semanticField }) => semanticField === "title");
+			if (!titleDescriptor) continue;
+			checked += 1;
+			try {
+				validateNativeItemDraft(
+					{
+						itemType: definition.itemType,
+						[titleDescriptor.field]: "   ",
+					},
+					{ requireTitle: true },
+				);
+				expect.unreachable(
+					`Expected ${definition.itemType} without a title to fail`,
+				);
+			} catch (error) {
+				expect(error).toMatchObject({
+					fields: {
+						[titleDescriptor.field]: "Enter a title before publishing.",
+					},
+				});
+			}
+		}
+		expect(checked).toBe(38);
+
+		expect(
+			validateNativeItemDraft(
+				{ itemType: "book", title: "A complete record" },
+				{ requireTitle: true },
+			).payload,
+		).toMatchObject({ title: "A complete record" });
 	});
 
 	it("enforces Zotero note and annotation limits", () => {

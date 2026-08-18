@@ -305,7 +305,7 @@ function buildParentFixtures(collections: Record<string, string>) {
 				date: "2024-01-02",
 				websiteTitle: "OpenScholar Test",
 				url: "https://example.org/openscholar-fixture",
-				accessDate: "2026-08-06T00:00:00Z",
+				accessDate: "2026-08-06",
 				language: "en",
 				extra: `OpenScholar fixture ID: ${metadataOnlyId}`,
 				tags: fixtureTags(metadataOnlyId, "metadata-only"),

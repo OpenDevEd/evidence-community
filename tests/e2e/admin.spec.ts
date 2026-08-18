@@ -2566,12 +2566,12 @@ test("uses controls that preserve every supported metadata value", async ({
 	await expect(url).toHaveAttribute("type", "url");
 	await expect(doi).toHaveAttribute("type", "text");
 	await expect(doi).toHaveAttribute("data-field-kind", "text");
-	await expect(accessDate).toHaveAttribute("type", "text");
-	await accessDate.fill("2024-05-20T12:30:45+01:00");
+	await expect(accessDate).toHaveAttribute("type", "date");
+	await accessDate.fill("2024-05-20");
 	await expect
 		.poll(() =>
 			savedDrafts.some(
-				(payload) => payload.accessDate === "2024-05-20T12:30:45+01:00",
+				(payload) => payload.accessDate === "2024-05-20",
 			),
 		)
 		.toBe(true);
