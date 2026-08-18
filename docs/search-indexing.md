@@ -81,6 +81,17 @@ Changing `search.embedder` needs a search-worker restart. Check
 `GET /indexes/<index>/stats`: `numberOfEmbeddedDocuments` must equal
 `numberOfDocuments`.
 
+To prove the embedder flow against a real Meilisearch without any paid
+provider, start the dedicated test container and run the script. It starts a
+local REST embedder stub, then checks enable, search, change, disable, and
+rebuild on two indexes:
+
+```sh
+docker compose -f tests/embedder/compose.yaml up -d --wait
+npm run test:search-embedder
+docker compose -f tests/embedder/compose.yaml down
+```
+
 ## Local operation
 
 Start a local Meilisearch:
