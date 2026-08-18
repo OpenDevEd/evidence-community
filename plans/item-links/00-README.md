@@ -71,7 +71,7 @@ Run only on a fresh local database (`npm run database:provision` against a new l
 - Test-first for pure logic: URI parsing, link validation, draft merge, writeback relation mapping.
 - Real local PostgreSQL through the `tools/verify*.ts` style for the publish transaction, cascade, unpublish/restore and sync mirroring.
 - Behaviour only: roles, labels, `data-admin-*` values, database rows, API responses, real Zotero state. No class-name tests.
-- Browser tests run in the existing `chromium` and `mobile-chromium` projects.
+- Admin browser tests run in the existing `chromium` project (the `mobile-chromium` project only runs the public mobile spec).
 
 ## Agent use
 

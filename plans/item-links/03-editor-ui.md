@@ -23,7 +23,7 @@ An editor can search for a record, add it under "Cites" or "Related", remove it,
 1. Failing unit tests (`tests/unit/admin-links-editor.test.tsx`) for `AdminLinksEditor`: renders four lists with headings; added/removed markers computed from `links` vs `publishedLinks`; remove button disabled for `source:` rows; revert calls the handler with `links` removed; read-only lists have no buttons.
 2. Failing unit tests for `AdminItemPicker`: excludes self and already-linked keys; Enter adds the highlighted row; empty search shows a hint, not the whole library.
 3. Implement both components and wire the card.
-4. Browser test in `tests/e2e/admin.spec.ts` (projects `chromium` and `mobile-chromium`): open a fixture record → Links → search a second fixture record → add under Cites → marker `added` visible → publish → marker `unchanged`, `[data-admin-link-kind="cites"]` count 1 → open the second record → "Cited by" lists the first → remove → publish → gone. Also: add then Revert → no draft change.
+4. Real-stack browser test `tests/e2e/admin-links.spec.ts` (project `chromium`, gated on `PLAYWRIGHT_RUNTIME_E2E=true` like `admin-runtime.spec.ts`; the `mobile-chromium` project only runs the public mobile spec in this repo): create two records → Links → search the second → add under Cites → marker `added` → publish → marker `unchanged` → open the second record → "Cited by" lists the first and has no buttons → public `/api/item/<key>` lists it → remove → Revert restores → remove → publish → gone. Registered in `tools/runRuntimeAcceptance.ts` admin suite.
 5. Public browser check in the same run: the first record's public page shows "Cites" with the second record; the second shows "Cited by".
 
 ## Files
@@ -32,7 +32,7 @@ An editor can search for a record, add it under "Cites" or "Related", remove it,
 - `src/components/admin/AdminLinksEditor.tsx` (new), `AdminItemPicker.tsx` (new)
 - `src/components/admin/admin-api.ts` (only if a lighter list call is needed)
 - `tests/unit/admin-links-editor.test.tsx`, `tests/unit/admin-item-picker.test.tsx`
-- `tests/e2e/admin.spec.ts`
+- `tests/e2e/admin-links.spec.ts` (new), `tools/runRuntimeAcceptance.ts`
 - i18n: new `admin` keys for headings, buttons and hints in all nine `src/messages/*.json` files.
 
 ## Migration choice
@@ -58,7 +58,7 @@ Local stack with the acceptance fixtures. Walk the browser scenario by hand once
 
 - Links can be added, removed, reverted and published from `/admin` without a page reload.
 - Source rows are visible and locked; manual rows are editable.
-- Browser tests pass in both Playwright projects.
+- The real-stack browser test passes in the `chromium` project (the only project that runs admin specs).
 - No effect-based state syncing was added; picker and list state come from props, draft state and event handlers.
 
 ## Risks
