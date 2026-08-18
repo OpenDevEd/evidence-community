@@ -126,6 +126,31 @@ describe("public item empty sections", () => {
 		expect(container.textContent).toContain("A useful citation.");
 	});
 
+	it("keeps a valid indexed citation when the server has no replacement", async () => {
+		testState.swrResult = {
+			data: { citation: null },
+			isLoading: false,
+		};
+
+		await act(async () => {
+			root.render(
+				<ItemCitation
+					item={
+						{
+							key: "REPORT01",
+							title: "A report",
+							citation: "A citation stored with the search record.",
+						} as Item
+					}
+				/>,
+			);
+		});
+
+		expect(container.textContent).toContain(
+			"A citation stored with the search record.",
+		);
+	});
+
 	it("does not show Collections when none can be displayed", async () => {
 		testState.collectionsEnabled = true;
 
