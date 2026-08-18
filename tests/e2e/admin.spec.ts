@@ -239,6 +239,14 @@ function publishedDraft(
 	};
 }
 
+const emptyLinks = {
+	fromSources: [],
+	incoming: [],
+	keys: { cites: [], related: [] },
+	publishedKeys: { cites: [], related: [] },
+	targets: [],
+};
+
 function publishedDetail(
 	editing: boolean,
 	draftPayload: Record<string, unknown> = publishedPayload,
@@ -256,6 +264,7 @@ function publishedDetail(
 		editable: true,
 		itemType: "book",
 		key: publishedItemKey,
+		links: emptyLinks,
 		parentItem: null,
 		parentState: null,
 		published: publishedPayload,
@@ -2218,6 +2227,7 @@ async function mockBookWithAttachment(
 					},
 		publishedCollectionKeys: [],
 		publishedTags: [],
+		links: emptyLinks,
 		tags: [],
 	};
 
@@ -2386,6 +2396,7 @@ test("creates an item through a pointer click in the new-item popover", async ({
 						fileState: "none",
 						itemType: "book",
 						key: itemKey,
+						links: emptyLinks,
 						parentItem: null,
 						parentState: null,
 						published: null,
