@@ -26,6 +26,7 @@ The sync worker reconciles before its first sweep, so the first full import and 
 8. Push the tested branch, update docs-pen's one JSON manifest, redeploy, and verify the automatic import and one controlled round trip against Zotero group `6632364`.
 9. Keep the full acceptance gate green. The repeat run exposed a stale browser expectation, not a product bug: Amber enables citation URL display but has no Zotero translation service, so the page correctly hides the citation after the endpoint returns no result. Make the acceptance expectation require both URL display and a configured translation service. Keep unit coverage for a returned citation and for the empty result. Do not revive the old indexed-citation fallback.
 10. Keep the full browser gate reliable. The metadata control test must bring the animated item-type list into view before selecting from it. The loading-spinner test must test spinner and button geometry only; dialog sizing stays covered by the dedicated collection-dialog browser checks instead of a second exact-width assertion.
+11. Fix the live writeback mapping found by the docs-pen round trip. Database payloads and dirty fields use `languageName`, while Zotero uses `language`. Reuse the shared item-field codec in both full-item and patch mapping, and cover updates and clears in `tests/unit/zotero-write-mapper.test.ts`.
 
 ## Files
 
@@ -37,6 +38,7 @@ The sync worker reconciles before its first sweep, so the first full import and 
 - `src/lib/source-ingestion/orchestrator.ts`
 - new shared source reconciliation module under `src/lib/source-ingestion/`
 - `src/lib/source-writeback/runtime.ts`
+- `src/lib/source-writeback/zotero/mapper.ts`
 - `tools/runSourceSync.ts`
 - `tools/runSourceWriteback.ts`
 - `packages/evidence-library-core/src/schema.ts`
@@ -45,6 +47,7 @@ The sync worker reconciles before its first sweep, so the first full import and 
 - `config/library.local.json`
 - `tests/fixtures/library-config.ts`
 - source, Zotero, writeback, schema, public-config, and Compose tests
+- `tests/unit/zotero-write-mapper.test.ts`
 - `docs/source-ingestion-contract.md`
 - `docs/source-orchestration.md`
 - `docs/source-writeback.md`
