@@ -34,6 +34,12 @@ import {
 } from "./item-payload";
 import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
 import {
+	existingItemKeys,
+	getManualLinkKeys,
+	replaceManualLinks,
+} from "@/lib/links/item-links";
+import { ITEM_LINK_PAYLOAD_KINDS } from "./item-fields";
+import {
 	applyItemDraftPatch,
 	createItemDraftPatch,
 	editableItemDatabaseFields,
@@ -369,7 +375,7 @@ async function loadPublishedItemPayload(
 	itemKey: string,
 	published?: typeof item.$inferSelect | null,
 ) {
-	const [publishedRow, tagRows, collectionRows, filePublication] =
+	const [publishedRow, tagRows, collectionRows, filePublication, links] =
 		await Promise.all([
 			published === undefined
 				? executor
@@ -393,12 +399,81 @@ async function loadPublishedItemPayload(
 				.where(eq(itemFilePublication.itemKey, itemKey))
 				.limit(1)
 				.then((rows) => rows[0] ?? null),
+			getManualLinkKeys(executor, itemKey),
 		]);
 	return publishedAdminItemPayload(publishedRow, {
 		collectionKeys: collectionRows.map(({ key }) => key),
 		hasPublishedFile: Boolean(filePublication),
+		links,
 		tags: tagRows.map(({ name }) => name),
 	});
+}
+
+/** Every record this draft links to or currently links to, so publish can lock them in one sorted set. */
+async function linkTargetKeys(
+	executor: Executor,
+	itemKey: string,
+	patch: Record<string, unknown>,
+) {
+	const current = await getManualLinkKeys(executor, itemKey);
+	const patched = patch.links;
+	const fromPatch =
+		patched && typeof patched === "object" && !Array.isArray(patched)
+			? ITEM_LINK_PAYLOAD_KINDS.flatMap((kind) => {
+					const value = (patched as Record<string, unknown>)[kind];
+					return Array.isArray(value)
+						? value.filter((key): key is string => typeof key === "string")
+						: [];
+				})
+			: [];
+	return [...new Set([...current.cites, ...current.related, ...fromPatch])].filter(
+		(key) => key !== itemKey,
+	);
+}
+
+/**
+ * Writes the editor's links for a record and returns every other record whose
+ * "cited by" or "related" view changed, so the caller can reindex them.
+ */
+function assertNoSelfLinks(
+	itemKey: string,
+	links: { cites: string[]; related: string[] },
+) {
+	for (const kind of ITEM_LINK_PAYLOAD_KINDS) {
+		if (links[kind].includes(itemKey)) {
+			throw new NativeItemValidationError(
+				"A record cannot link to itself.",
+				{ links: "A record cannot link to itself." },
+			);
+		}
+	}
+}
+
+async function publishItemLinks(
+	transaction: Transaction,
+	itemKey: string,
+	links: { cites: string[]; related: string[] },
+) {
+	assertNoSelfLinks(itemKey, links);
+	const wanted = [...new Set([...links.cites, ...links.related])];
+	const existing = await existingItemKeys(transaction, wanted);
+	const missing = wanted.filter((key) => !existing.has(key));
+	if (missing.length > 0) {
+		throw new NativeItemValidationError(
+			`Linked record ${missing[0]} no longer exists.`,
+			{ links: `Linked record ${missing.join(", ")} no longer exists.` },
+		);
+	}
+	const changed = new Set<string>();
+	for (const kind of ITEM_LINK_PAYLOAD_KINDS) {
+		const result = await replaceManualLinks(transaction, {
+			fromKey: itemKey,
+			kind,
+			toKeys: links[kind],
+		});
+		for (const key of [...result.added, ...result.removed]) changed.add(key);
+	}
+	return [...changed].sort();
 }
 
 export async function createNativeItemDraft(db: Database, payload: unknown) {
@@ -579,6 +654,7 @@ async function saveItemDraftInTransaction(
 		payload,
 	});
 	const patch = createItemDraftPatch(basePayload, validated.payload);
+	assertNoSelfLinks(itemKey, validated.links);
 	await assertValidItemCollectionMembershipsInDatabase(
 		transaction,
 		itemKey,
@@ -720,11 +796,15 @@ export async function publishItemDraftWithContext(
 		lockCandidate?.parentItem,
 		lockDraft.patch,
 	);
+	const lockLinkTargets = await linkTargetKeys(db, itemKey, lockDraft.patch);
 	const advisoryLockKeys = [
 		...new Set(
-			[itemKey, lockCandidate?.parentItem, lockedParentItem].filter(
-				(key): key is string => typeof key === "string",
-			),
+			[
+				itemKey,
+				lockCandidate?.parentItem,
+				lockedParentItem,
+				...lockLinkTargets,
+			].filter((key): key is string => typeof key === "string"),
 		),
 	];
 	return db.transaction(async (transaction) => {
@@ -927,6 +1007,17 @@ export async function publishItemDraftWithContext(
 			);
 		}
 
+		const changedLinkTargets = await publishItemLinks(
+			transaction,
+			itemKey,
+			validated.links,
+		);
+		if (
+			changedLinkTargets.some((key) => !advisoryLockKeys.includes(key))
+		) {
+			throw new ItemDraftConflictError(itemKey);
+		}
+
 		await transaction.insert(outbox).values({
 			entityType: "item",
 			entityKey: itemKey,
@@ -934,6 +1025,31 @@ export async function publishItemDraftWithContext(
 			revision: nextRevision,
 		});
 		const indexingRecords = [{ key: itemKey, revision: nextRevision }];
+		for (const linkTargetKey of changedLinkTargets) {
+			if (relatedParentKeys.includes(linkTargetKey)) continue;
+			const target = lockedItems.find(
+				(candidate) => candidate.key === linkTargetKey,
+			);
+			if (!target) continue;
+			const targetRevision = target.revision + 1;
+			await transaction
+				.update(item)
+				.set({ revision: targetRevision, updatedAt: now })
+				.where(eq(item.key, target.key));
+			await advanceOpenItemDraftBaseRevision(
+				transaction,
+				target.key,
+				target.revision,
+				targetRevision,
+			);
+			await transaction.insert(outbox).values({
+				entityType: "item",
+				entityKey: target.key,
+				operation: "upsert",
+				revision: targetRevision,
+			});
+			indexingRecords.push({ key: target.key, revision: targetRevision });
+		}
 		for (const relatedParentKey of relatedParentKeys) {
 			const relatedParent = lockedItems.find(
 				(candidate) => candidate.key === relatedParentKey,
@@ -967,7 +1083,7 @@ export async function publishItemDraftWithContext(
 			});
 		}
 		const changedFields = Object.keys(draft.patch).filter(
-			(field) => field !== "collections",
+			(field) => field !== "collections" && field !== "links",
 		);
 		if (current?.deleted === 1) {
 			changedFields.push(
