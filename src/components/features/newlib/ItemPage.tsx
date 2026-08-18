@@ -1254,7 +1254,6 @@ function ItemVectorRelations({ item }: { item: Item | undefined }) {
 
 function ItemRelations({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
-	const relations = item?.relations as RelationsType;
 	const [selectedTab, setSelectedTab] = useState("general");
 
 	const descriptions: Record<string, string> = {
@@ -1269,7 +1268,8 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 		<div className="flex flex-col gap-4">
 			<div className="w-full">
 				<Relations
-					value={item?.relations as RelationsType}
+					links={item?.links}
+					relations={item?.relations as RelationsType}
 					selectedTab={selectedTab}
 					onTabChange={setSelectedTab}
 					showTabsOnly={true}
@@ -1279,7 +1279,8 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 				{descriptions[selectedTab] || descriptions.general}
 			</p>
 			<Relations
-				value={item?.relations as RelationsType}
+				links={item?.links}
+				relations={item?.relations as RelationsType}
 				selectedTab={selectedTab}
 				onTabChange={setSelectedTab}
 				showContentOnly={true}

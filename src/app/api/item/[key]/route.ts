@@ -11,6 +11,7 @@ import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { hasAnyTag } from "@/lib/tags";
+import { getPublicItemLinks } from "@/lib/links/item-links";
 
 async function getMeilisearchItem(
 	key: string,
@@ -64,6 +65,8 @@ export async function getItemRaw(
 	}
 
 	result.attachmentsData = result.attachmentsData?.filter((attachment: any) => attachment.deleted === 0);
+	const linksDb = await getDatabaseForConfig(libraryConfig);
+	result.links = await getPublicItemLinks(linksDb, key);
 
 	return {
 		item: result,

@@ -29,10 +29,7 @@ function getCitationCount(item: Item | undefined) {
 	const relations = item.relations as RelationsType;
 	if (!relations) return 0;
 	
-	const citedByCount = relations.cited_by || 0;
-	const citedByArrayCount = Array.isArray(relations.citedBy) ? relations.citedBy.length : 0;
-	
-	return citedByCount + citedByArrayCount;
+	return (relations.cited_by || 0) + (item.links?.citedBy.length ?? 0);
 }
 
 function formatInstitutions(institutions: string[] | undefined) {

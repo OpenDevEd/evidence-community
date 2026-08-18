@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Item } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { RelationsType } from "@/types/item";
+import { getDatabaseForConfig } from "@/db";
+import { getPublicItemLinks } from "@/lib/links/item-links";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -47,12 +48,6 @@ async function getSourceItem(
 		}
 		return null;
 	}
-}
-
-function extractCitedByKeys(relations: RelationsType): string[] {
-	const obj = relations || {};
-	const citedBy = obj["citedBy"] || [];
-	return Array.isArray(citedBy) ? citedBy : [];
 }
 
 async function getCitingItems(
@@ -145,13 +140,10 @@ export async function GET(
 		});
 	}
 
-	// Extract citedBy keys from the source item's relations
-	const relations = sourceItem.relations as RelationsType;
-	const citedByKeys = extractCitedByKeys(relations);
-	const citedByCount = relations?.cited_by || 0;
-
-	// Total citations = max of citedBy array length and cited_by count
-	const totalCitations = Math.max(citedByKeys.length, citedByCount);
+	// Records that cite this one come from the link table in PostgreSQL.
+	const linksDb = await getDatabaseForConfig(libraryConfig);
+	const { citedBy: citedByKeys } = await getPublicItemLinks(linksDb, key);
+	const totalCitations = citedByKeys.length;
 
 	// Fetch citing items with pagination and facets
 	const {
