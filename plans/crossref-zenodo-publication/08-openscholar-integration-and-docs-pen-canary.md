@@ -35,6 +35,7 @@ Move the finished DOI publication work onto the current `openscholar` branch wit
 
 - `src/lib/publication/namespace-repository.ts`: atomic namespace allocation and immutable namespace checks.
 - `src/lib/publication/bibliographic-doi.ts`: one DOI resolver for item metadata.
+- `src/lib/publication/publication-display-adapter.ts`: the existing public identifier shape and Crossref/Zenodo display rules.
 - `src/lib/publication/admin-publication-view.ts`: the only server-built admin view.
 - `src/lib/publication/crossref-activation-service.ts`: activation transaction and managed identifier rows.
 - `src/lib/admin/native-item-service.ts`: canonical publish/unpublish transaction and mutation locks.
@@ -56,6 +57,7 @@ These are the required public seams for the test-first work:
 4. Migration/runtime: a current tenant database upgrades through 0031-0033, preserves a published PDF with a valid MD5, and starts all workers.
 5. Provider lifecycle: the environment-gated tools create one fresh test record, deposit it to Crossref Test, verify it, redeposit a metadata edit under the same DOI, publish the PDF to Zenodo Sandbox using that DOI, and re-read both remote records.
 6. Tenant boundary: `docs-pen` receives the target, jobs, identifiers, worker activity, and search update; the other library receives none.
+7. Public identifiers: the search copy contains the current managed identifier summary, so the public item page shows the Crossref DOI and Zenodo records with their provider labels and icons. A reused Crossref DOI appears once, not once per provider.
 
 ## Implementation steps
 
@@ -109,6 +111,15 @@ These are the required public seams for the test-first work:
 - If qualification fails after providers are enabled, redeploy the named, previously verified disabled `LIBRARY_CONFIG_JSON`. Keep every DOI, identifier, target, job, journal, and provider receipt; never delete a `publicationIdentifier` to roll back configuration.
 - Update the existing Evidence Library current-state and runbook Outline pages only after the pushed commit and live checks are proven. Read both pages back.
 
+### 6. Finish the public managed-identifier projection
+
+- Add a pure helper that converts current `publicationIdentifier` and Zenodo `publicationSyncState` rows into the existing `PublicationIdentifierSummary`. Do not infer a registrar from the DOI prefix.
+- Batch-read those rows inside the existing search projection transaction and add the summary only to its parent item document. Do not add a separate public database request.
+- Reuse `buildPublicationDisplay` and the existing Crossref and Zenodo icons. Keep an unclassified imported DOI as a generic DOI.
+- Prove `reuse-crossref` produces one Crossref DOI link plus Zenodo archive and concept-record links. Prove `mint-zenodo` produces Zenodo version DOI, concept DOI, archive, and concept-record links.
+- Rebuild each deployed library's Meilisearch index after deployment so existing records receive the new summary.
+- Verify the same public API and page URLs without cache-busting parameters. On `docs-pen`, record `WB67ISLP` must show the Crossref DOI and Zenodo records `588743` and `588742`.
+
 ## Exact checks
 
 ```sh
@@ -125,6 +136,7 @@ npm run test:crossref-activation
 npm run test:zenodo-activation
 npm run test:native-lifecycle
 npm run test:linked-item-lifecycle
+npm run test:search-index
 npm run test:search-worker
 npm run test:acceptance
 npm run test:e2e
@@ -147,6 +159,7 @@ The exact Coolify deployment returned by the deploy request must finish with `st
 - web, search-indexer, source-sync, source-writeback, publication-worker, and private Meilisearch are running and healthy;
 - the publication overview reports Crossref Test and Zenodo Sandbox enabled only after the configuration deployment;
 - every worker has a fresh heartbeat and no failed or dead-lettered work;
+- the public API returns managed Crossref and Zenodo identifier data, and the public page renders the provider-specific rows without a duplicate DOI;
 - the other development library has no publication target, identifier, or job from the canary.
 
 ## Data migration choice
@@ -163,6 +176,7 @@ Clean forward migration. No compatibility columns, fallback reads, or dual schem
 - Every exact local check above passes.
 - The exact pushed SHA is live and healthy on `docs-pen`.
 - One fresh Crossref Test deposit, metadata redeposit, and Zenodo Sandbox publication settle successfully and remain correct after reload.
+- Existing managed identifiers appear on the public page after the deployed search rebuild, with the Crossref DOI shown once and Zenodo archive links shown separately.
 - The original development library remains unchanged and healthy.
 - Outline records only the verified pushed and deployed result.
 
@@ -172,5 +186,6 @@ Clean forward migration. No compatibility columns, fallback reads, or dual schem
 - Zenodo Sandbox can be reset. Preserve the local evidence and distinguish a sandbox reset from application failure.
 - A provider request can succeed before the response is received. Every qualification retry must use the saved job, identifier, and journal rather than creating another target.
 - Existing published-file rows need a valid canonical attachment MD5 before migration 0032 can become required.
+- Existing Meilisearch documents do not gain the new managed-identifier summary until the index is rebuilt.
 - npm normalizes the pinned GitHub dependency to an SSH URL in `package-lock.json`; the Docker dependency stage must keep the checked-in HTTPS rewrite or clean server builds will fail before compilation.
 - The user has authorized sandbox deployment and provider writes only for `docs-pen`; production and the other library remain out of scope.

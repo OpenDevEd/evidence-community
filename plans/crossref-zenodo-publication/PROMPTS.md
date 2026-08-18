@@ -53,7 +53,7 @@ STANDING RULES
 1. Reuse the current tenant Compose, admin services, publication modules, worker helpers, fake provider, and runtime tools before adding anything.
 2. Make clean breaking changes. Delete every Tailscale runtime, verifier, test, package script, and operations-doc path; only plans may still mention Tailscale. Do not add compatibility fields or keep both old and new migration paths.
 3. Read installed Next.js route-handler documentation before editing app routes. Do not add useEffect for app state.
-4. Use behavior tests at the admin view, activation API, unpublish API, migration/runtime, real provider lifecycle, and tenant-isolation seams. Never test Tailwind classes.
+4. Use behavior tests at the admin view, activation API, unpublish API, public managed-identifier search projection, migration/runtime, real provider lifecycle, and tenant-isolation seams. Never test Tailwind classes.
 5. Use current official Crossref and Zenodo docs and the installed doi-sync-core source. Do not guess provider behavior.
 6. Provider writes are allowed only against Crossref Test and Zenodo Sandbox for docs-pen after the disabled deployment is healthy. Production and the other library are out of scope.
 7. Use GPT-5.6 Sol for delegated agents. Have Fable 5 review this plan before implementation and review the completed major step after all local checks pass.
@@ -61,10 +61,10 @@ STANDING RULES
 EXECUTION RHYTHM
 - Commit this plan before code.
 - Keep shared migrations 0025-0028 unchanged. Recreate only the DOI branch's divergent 0029-0031 work as 0031 provider audits, 0032 file MD5, and 0033 Zenodo corrections generated from current openscholar migration 0030. Compare the final schema with both branch tips so no current or publication field is lost.
-- For DOI preview, ownership, and unpublish safety, write one failing behavior test, make it pass, and commit each green unit.
+- For DOI preview, ownership, unpublish safety, and public managed identifiers, write one failing behavior test, make it pass, and commit each green unit.
 - Resolve integration conflicts by preserving the current openscholar behavior and adding only the publication concern.
 - Run focused checks after each unit, then the complete local gate before any push.
-- Deploy disabled first, verify, then enable sandbox configuration and run the real lifecycle.
+- Deploy disabled first, verify, then enable sandbox configuration and run the real lifecycle. Rebuild each deployed search index after a projection-shape change and verify the same public URLs without cache-busting parameters.
 - If qualification fails, redeploy the saved disabled configuration without deleting DOI or publication state.
 
 COMMIT DISCIPLINE
