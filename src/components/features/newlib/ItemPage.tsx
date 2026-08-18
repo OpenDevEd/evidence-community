@@ -587,7 +587,7 @@ function ItemDetailsRow({
 	);
 }
 
-function ItemDetails({ item }: { item: Item | undefined }) {
+export function ItemDetails({ item }: { item: Item | undefined }) {
 	const { loading } = use(LoadingContext);
 	const t = useTranslations("ui");
 	const { identity } = useLibraryConfig();
@@ -596,6 +596,7 @@ function ItemDetails({ item }: { item: Item | undefined }) {
 	const details = item
 		? selectPublicItemDetails(item, identity.baseUrl)
 		: [];
+	if (!loading && details.length === 0) return null;
 
 	return (
 		<SidebarCard title={t("itemPublicationDetailsTitle")}>
