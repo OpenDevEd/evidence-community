@@ -33,6 +33,7 @@ import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 import { trackPageView } from "@/lib/analytics";
 import { SessionProvider } from "next-auth/react";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { mergeLastFetchedItems } from "@/lib/last-fetched-items";
 
 
 type RuntimeStatus = InferSelectModel<typeof statusTable>;
@@ -150,19 +151,9 @@ export function useLastFetchedData() {
 
 	const setLastFetchedDataAsResponse = useCallback(
 		(data: ItemsGetResponse) => {
-			setLastFetchedData((prev) => {
-				const allItems = [...(prev?.items ?? []), ...data.items];
-
-				const uniqueItems = allItems.reduce((acc, item) => {
-					acc.set(item.key, item);
-					item.citation = "<div>Loading...</div>";
-					return acc;
-				}, new Map());
-
-				return {
-					items: Array.from(uniqueItems.values()).slice(-100),
-				} as ItemsGetResponse;
-			});
+			setLastFetchedData((previous) =>
+				mergeLastFetchedItems(previous, data),
+			);
 		},
 		[setLastFetchedData]
 	);
