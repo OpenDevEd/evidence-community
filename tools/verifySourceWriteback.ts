@@ -24,6 +24,7 @@ import {
 	saveItemDraft,
 	type ItemWritebackPolicyOptions,
 	unpublishNativeItem,
+	unpublishNativeItemWithOutcome,
 } from "../src/lib/admin/native-item-service";
 import {
 	getAdminSourceWritebackStatus,
@@ -62,6 +63,7 @@ async function verify() {
 	const db = resource.database;
 	const marker = `${process.pid}-${Date.now()}`;
 	const connectionKey = `zotero-writeback-${marker}`.slice(0, 64);
+	const secondConnectionKey = `zotero-second-${marker}`.slice(0, 64);
 	const createdItemKeys: string[] = [];
 	let behavior: "block" | "fail" | "success" = "success";
 	let releaseBlocked = () => {};
@@ -143,6 +145,12 @@ async function verify() {
 		await db.insert(sourceConnection).values({
 			externalScopeKey: `writeback-${marker}`,
 			key: connectionKey,
+			provider: "zotero",
+			scopeKind: "group",
+		});
+		await db.insert(sourceConnection).values({
+			externalScopeKey: `second-${marker}`,
+			key: secondConnectionKey,
 			provider: "zotero",
 			scopeKind: "group",
 		});
@@ -974,6 +982,120 @@ async function verify() {
 			"Choosing to load the source's version did not replace this record",
 		);
 
+		// A record may write to several sources. Unchecking one supersedes its
+		// pending job and leaves its remote copy; unpublish deletes only at the
+		// sources the admin ticks.
+		const twoSourceConfig = {
+			sources: [
+				{ key: connectionKey, writebackEnabled: true },
+				{ key: secondConnectionKey, writebackEnabled: true },
+			],
+		};
+		const twoSourceDraft = await createNativeItemDraft(db, {
+			itemType: "report",
+			title: "Sent to two sources",
+		});
+		createdItemKeys.push(twoSourceDraft.itemKey);
+		await publishItemDraftWithContext(db, twoSourceDraft.itemKey, {
+			sourceKeys: [connectionKey, secondConnectionKey],
+			writebackConfig: twoSourceConfig,
+		});
+		const twoLinks = await db
+			.select({
+				sourceConnectionKey: itemSourceLink.sourceConnectionKey,
+				writebackEnabled: itemSourceLink.writebackEnabled,
+			})
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, twoSourceDraft.itemKey));
+		const twoJobs = await db
+			.select({ sourceConnectionKey: sourceWritebackJob.sourceConnectionKey })
+			.from(sourceWritebackJob)
+			.where(
+				and(
+					eq(sourceWritebackJob.itemKey, twoSourceDraft.itemKey),
+					isNull(sourceWritebackJob.processedAt),
+				),
+			);
+		assert(
+			twoLinks.length === 2 &&
+				twoLinks.every((link) => link.writebackEnabled) &&
+				twoJobs.length === 2,
+			"Publishing to two sources did not create two enabled links and two jobs",
+		);
+		const callsBeforeUncheck = calls.length;
+		await setAdminItemWritebackSources(
+			db,
+			twoSourceDraft.itemKey,
+			[connectionKey],
+			twoSourceConfig,
+		);
+		const firstOfTwo = await processNextSourceWritebackJob(consumerOptions);
+		const secondOfTwo = await processNextSourceWritebackJob(consumerOptions);
+		const statuses = [firstOfTwo.status, secondOfTwo.status].sort();
+		assert(
+			statuses.join(",") === "processed,superseded" &&
+				calls.length === callsBeforeUncheck + 1 &&
+				calls.at(-1)?.sourceConnection.key === connectionKey,
+			"Unchecking one of two sources did not supersede only that source's job",
+		);
+		const [keptSecondLink] = await db
+			.select({ writebackEnabled: itemSourceLink.writebackEnabled })
+			.from(itemSourceLink)
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, twoSourceDraft.itemKey),
+					eq(itemSourceLink.sourceConnectionKey, secondConnectionKey),
+				),
+			);
+		assert(
+			keptSecondLink?.writebackEnabled === false,
+			"The unchecked source lost its link instead of being disabled",
+		);
+		await setAdminItemWritebackSources(
+			db,
+			twoSourceDraft.itemKey,
+			[connectionKey, secondConnectionKey],
+			twoSourceConfig,
+		);
+		const resentSecond = await processNextSourceWritebackJob(consumerOptions);
+		assert(
+			resentSecond.status === "processed" &&
+				calls.at(-1)?.sourceConnection.key === secondConnectionKey,
+			"Re-checking the second source did not send the record there",
+		);
+		await unpublishNativeItemWithOutcome(db, twoSourceDraft.itemKey, {
+			removeFromSourceKeys: [secondConnectionKey],
+		});
+		const deleteJobs = await db
+			.select({
+				operation: sourceWritebackJob.operation,
+				sourceConnectionKey: sourceWritebackJob.sourceConnectionKey,
+			})
+			.from(sourceWritebackJob)
+			.where(
+				and(
+					eq(sourceWritebackJob.itemKey, twoSourceDraft.itemKey),
+					eq(sourceWritebackJob.operation, "delete"),
+				),
+			);
+		assert(
+			deleteJobs.length === 1 &&
+				deleteJobs[0]?.sourceConnectionKey === secondConnectionKey,
+			"Unpublishing did not delete only at the ticked source",
+		);
+		const afterUnpublishLinks = await db
+			.select({
+				sourceConnectionKey: itemSourceLink.sourceConnectionKey,
+				writebackEnabled: itemSourceLink.writebackEnabled,
+			})
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, twoSourceDraft.itemKey));
+		assert(
+			afterUnpublishLinks.length === 2 &&
+				afterUnpublishLinks.every((link) => link.writebackEnabled),
+			"Unpublishing changed the record's source selection",
+		);
+
 		console.log(
 			JSON.stringify(
 				{
@@ -1016,7 +1138,9 @@ async function verify() {
 		}
 		await db
 			.delete(sourceConnection)
-			.where(eq(sourceConnection.key, connectionKey));
+			.where(
+				inArray(sourceConnection.key, [connectionKey, secondConnectionKey]),
+			);
 		await resource.dispose();
 	}
 }
