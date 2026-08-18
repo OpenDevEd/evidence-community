@@ -76,7 +76,7 @@ npm run build
 
 The two live Zotero commands intentionally mutate only test group `6632364` and their isolated local services. Run them only after the unit and real local service suites pass.
 
-The acceptance runner must execute every Chromium admin test once and every WebKit admin test once. Split the WebKit tests across two fresh Playwright runs so a long-lived WebKit worker cannot make a late navigation hang. A shard is a test-runner boundary only; it must not skip or duplicate tests. The shared admin login helper must wait for the authenticated navigation to render before a test looks for records.
+The acceptance runner must execute every admin test in Chromium. WebKit is not a supported project and must not be part of local or deployment acceptance. The shared admin login helper must wait for the authenticated navigation to render before a test looks for records.
 
 ## Deployment gate
 
