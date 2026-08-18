@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 export const adminSourceWritebackStateSchema = z.enum([
+	"conflict",
 	"disabled",
 	"failed",
 	"idle",

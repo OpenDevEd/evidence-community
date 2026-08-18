@@ -147,6 +147,28 @@ export class SourceWritebackCollectionParentUnavailableError extends Error {
 	}
 }
 
+/**
+ * Decides what to do after reading the source's current version for a link
+ * that was re-enabled. Same version as we last acknowledged, or no remote
+ * copy at all: send. Anything else: the source changed while updates were
+ * paused, so stop and let the admin choose.
+ */
+export function decideRemoteVersionCheck({
+	lastAcknowledgedRemoteVersion,
+	remoteVersion,
+}: {
+	lastAcknowledgedRemoteVersion: string | null;
+	remoteVersion: string | null;
+}):
+	| { conflictRemoteVersion: string; outcome: "conflict" }
+	| { outcome: "proceed" } {
+	if (remoteVersion === null) return { outcome: "proceed" };
+	if (remoteVersion === lastAcknowledgedRemoteVersion) {
+		return { outcome: "proceed" };
+	}
+	return { conflictRemoteVersion: remoteVersion, outcome: "conflict" };
+}
+
 function validateOptions(options: SourceWritebackConsumerOptions) {
 	const workerId = validateSourceWritebackWorkerId(options.workerId);
 	const leaseDurationMs =

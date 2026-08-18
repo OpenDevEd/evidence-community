@@ -4,6 +4,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
 import {
 	CircleAlert,
 	CircleCheck,
+	GitCompareArrows,
 	Clock3,
 	CloudOff,
 	CloudUpload,
@@ -18,6 +19,14 @@ import { Button } from "@/components/nextui/Button";
 import type { AdminSourceWritebackStatus as WritebackStatus } from "@/lib/admin/source-writeback-contract";
 
 const appearance = {
+	conflict: {
+		className: "text-amber-600 dark:text-amber-300",
+		description:
+			"This source changed while updates were paused. Choose which version to keep before anything is sent.",
+		icon: GitCompareArrows,
+		label: "Needs a decision",
+		spin: false,
+	},
 	disabled: {
 		className: "text-black/45 dark:text-white/45",
 		description: "Writeback is disabled for this source in the library configuration.",

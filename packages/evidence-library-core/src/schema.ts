@@ -367,6 +367,15 @@ export const itemSourceLink = pgTable(
 			.notNull()
 			.default([]),
 		writebackEnabled: boolean("writebackEnabled").notNull().default(false),
+		// Set when the admin re-enables a source that already has a remote
+		// copy. The worker compares versions before it sends anything.
+		remoteCheckRequired: boolean("remoteCheckRequired")
+			.notNull()
+			.default(false),
+		// The source's version when it was found to have changed while this
+		// link was paused. Non-null means "conflict": nothing is sent until the
+		// admin chooses which side wins.
+		conflictRemoteVersion: varchar("conflictRemoteVersion", { length: 255 }),
 		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
 		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
 	},

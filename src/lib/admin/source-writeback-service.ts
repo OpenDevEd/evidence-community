@@ -40,8 +40,19 @@ type WritebackJobRow = Pick<
 
 type WritebackLinkRow = Pick<
 	typeof itemSourceLink.$inferSelect,
-	"dirtyFields" | "lastAcknowledgedRemoteVersion"
+	"conflictRemoteVersion" | "dirtyFields" | "lastAcknowledgedRemoteVersion"
 >;
+
+export type AdminSourceWritebackAction = "load-remote" | "retry" | "send-local";
+
+/** The actions an admin may take in a given writeback state. */
+export function adminSourceWritebackActions(
+	state: AdminSourceWritebackStatus["state"],
+): AdminSourceWritebackAction[] {
+	if (state === "conflict") return ["send-local", "load-remote"];
+	if (state === "failed") return ["retry"];
+	return [];
+}
 
 export class AdminSourceWritebackRetryError extends Error {
 	constructor(
@@ -69,6 +80,7 @@ export function resolveAdminSourceWritebackState(
 	link: WritebackLinkRow | null,
 	now = new Date(),
 ): AdminSourceWritebackStatus["state"] {
+	if (link?.conflictRemoteVersion) return "conflict";
 	if (job?.deadLetteredAt) return "failed";
 	if (
 		job?.leaseOwner &&
@@ -144,6 +156,7 @@ export async function getAdminSourceWritebackStatus(
 	const [links, jobs] = await Promise.all([
 		database
 			.select({
+				conflictRemoteVersion: itemSourceLink.conflictRemoteVersion,
 				dirtyFields: itemSourceLink.dirtyFields,
 				lastAcknowledgedRemoteVersion:
 					itemSourceLink.lastAcknowledgedRemoteVersion,

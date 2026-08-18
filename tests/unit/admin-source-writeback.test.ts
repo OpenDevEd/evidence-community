@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	adminSourceWritebackActions,
 	describeAdminWritebackError,
 	resolveAdminSourceWritebackState,
 } from "@/lib/admin/source-writeback-service";
@@ -53,14 +54,22 @@ describe("admin source writeback state", () => {
 		expect(
 			resolveAdminSourceWritebackState(
 				{ ...baseJob, processedAt: now },
-				{ dirtyFields: [], lastAcknowledgedRemoteVersion: "42" },
+				{
+					conflictRemoteVersion: null,
+					dirtyFields: [],
+					lastAcknowledgedRemoteVersion: "42",
+				},
 				now,
 			),
 		).toBe("synced");
 		expect(
 			resolveAdminSourceWritebackState(
 				null,
-				{ dirtyFields: ["title"], lastAcknowledgedRemoteVersion: "41" },
+				{
+					conflictRemoteVersion: null,
+					dirtyFields: ["title"],
+					lastAcknowledgedRemoteVersion: "41",
+				},
 				now,
 			),
 		).toBe("idle");
@@ -92,5 +101,41 @@ describe("describeAdminWritebackError", () => {
 				sourceLabel: "Zotero · 6632364",
 			}),
 		).toBeNull();
+	});
+});
+
+describe("conflict state", () => {
+	it("reports conflict when the source changed while updates were paused, before any job state", () => {
+		expect(
+			resolveAdminSourceWritebackState(
+				{ ...baseJob, processedAt: now },
+				{
+					conflictRemoteVersion: "50",
+					dirtyFields: [],
+					lastAcknowledgedRemoteVersion: "42",
+				},
+				now,
+			),
+		).toBe("conflict");
+		expect(
+			resolveAdminSourceWritebackState(
+				{ ...baseJob, deadLetteredAt: now },
+				{
+					conflictRemoteVersion: "50",
+					dirtyFields: ["title"],
+					lastAcknowledgedRemoteVersion: "42",
+				},
+				now,
+			),
+		).toBe("conflict");
+	});
+
+	it("allows only the two resolve choices in the conflict state", () => {
+		expect(adminSourceWritebackActions("conflict")).toEqual([
+			"send-local",
+			"load-remote",
+		]);
+		expect(adminSourceWritebackActions("failed")).toEqual(["retry"]);
+		expect(adminSourceWritebackActions("synced")).toEqual([]);
 	});
 });
