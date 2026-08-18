@@ -25,6 +25,16 @@ export const adminWritebackSourcesRequestSchema = z
 	})
 	.strict();
 
+/** Body of `POST /api/admin/items/[key]/writeback/resolve?source=<key>`. */
+export const adminWritebackResolveRequestSchema = z
+	.object({
+		choice: z.enum(["load-remote", "send-local"]),
+	})
+	.strict();
+
+export type AdminWritebackResolveRequest = z.infer<
+	typeof adminWritebackResolveRequestSchema
+>;
 export type AdminPublishRequest = z.infer<typeof adminPublishRequestSchema>;
 export type AdminUnpublishRequest = z.infer<typeof adminUnpublishRequestSchema>;
 export type AdminWritebackSourcesRequest = z.infer<

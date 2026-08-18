@@ -34,6 +34,7 @@ import {
 	validationErrorPayload,
 } from "./errors";
 import {
+	AdminSourceWritebackConflictError,
 	AdminSourceWritebackRetryError,
 	ItemWritebackSourcesChildError,
 } from "./source-writeback-service";
@@ -246,6 +247,9 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 				"The parent record is unavailable. Restore or publish it, then try again.",
 			status: 409,
 		};
+	}
+	if (error instanceof AdminSourceWritebackConflictError) {
+		return { code: "conflict", message: error.message, status: 409 };
 	}
 	if (error instanceof ItemWritebackSourcesChildError) {
 		return {

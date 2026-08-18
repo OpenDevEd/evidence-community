@@ -106,6 +106,7 @@ export type SourceWritebackProcessResult = {
 	jobId?: number;
 	operation?: "upsert" | "delete";
 	status:
+		| "conflict"
 		| "dead-lettered"
 		| "deferred"
 		| "idle"
@@ -444,6 +445,44 @@ async function markSuperseded(
 	if (!updated) throw new SourceWritebackLeaseLostError(job.id);
 }
 
+async function recordRemoteConflict(
+	options: SourceWritebackConsumerOptions,
+	itemKey: string,
+	sourceConnectionKey: string,
+	conflictRemoteVersion: string,
+) {
+	await options.database
+		.update(itemSourceLink)
+		.set({
+			conflictRemoteVersion,
+			remoteCheckRequired: false,
+			remoteVersion: conflictRemoteVersion,
+			updatedAt: currentTime(options),
+		})
+		.where(
+			and(
+				eq(itemSourceLink.itemKey, itemKey),
+				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
+			),
+		);
+}
+
+async function clearRemoteCheck(
+	options: SourceWritebackConsumerOptions,
+	itemKey: string,
+	sourceConnectionKey: string,
+) {
+	await options.database
+		.update(itemSourceLink)
+		.set({ remoteCheckRequired: false, updatedAt: currentTime(options) })
+		.where(
+			and(
+				eq(itemSourceLink.itemKey, itemKey),
+				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
+			),
+		);
+}
+
 async function loadItemRequest(
 	options: SourceWritebackConsumerOptions,
 	job: Extract<ClaimedJob, { itemKey: string }>,
@@ -480,7 +519,9 @@ async function loadItemRequest(
 			!state.link.writebackEnabled ||
 			state.connection.status === "removed" ||
 			(job.operation === "upsert" && state.item.deleted === 1) ||
-			(job.operation === "delete" && state.item.deleted === 0)
+			(job.operation === "delete" && state.item.deleted === 0) ||
+			// Nothing is sent while the admin still has to choose which side wins.
+			(job.operation === "upsert" && state.link.conflictRemoteVersion !== null)
 		) {
 			return { disposition: "supersede" as const, request: null, state };
 		}
@@ -1167,6 +1208,44 @@ export async function processNextSourceWritebackJob(
 			return { ...resultBase, status: "deferred" };
 		}
 		const adapter = options.registry.get(loaded.state.connection.provider);
+		if (
+			loaded.request.entity === "item" &&
+			loaded.request.operation === "upsert" &&
+			"remoteCheckRequired" in loaded.state.link &&
+			loaded.state.link.remoteCheckRequired
+		) {
+			const remoteVersion = await adapter.readVersion(
+				{
+					entity: "item",
+					sourceConnection: loaded.state.connection,
+					sourceRecordKey: loaded.request.sourceRecordKey,
+				},
+				{
+					credentialResolver: options.credentialResolver,
+					signal: options.signal ?? new AbortController().signal,
+				},
+			);
+			const decision = decideRemoteVersionCheck({
+				lastAcknowledgedRemoteVersion:
+					loaded.state.link.lastAcknowledgedRemoteVersion,
+				remoteVersion,
+			});
+			if (decision.outcome === "conflict") {
+				await recordRemoteConflict(
+					options,
+					loaded.request.itemKey,
+					job.sourceConnectionKey,
+					decision.conflictRemoteVersion,
+				);
+				await markSuperseded(options, job, validated.workerId);
+				return { ...resultBase, status: "conflict" };
+			}
+			await clearRemoteCheck(
+				options,
+				loaded.request.itemKey,
+				job.sourceConnectionKey,
+			);
+		}
 		const heartbeatAbort = new AbortController();
 		const operationAbort = new AbortController();
 		const combinedSignal = options.signal

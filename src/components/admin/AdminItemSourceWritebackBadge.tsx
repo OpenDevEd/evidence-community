@@ -21,6 +21,7 @@ export function AdminItemSourceWritebackBadge({
 			error={writeback.error}
 			loading={writeback.loading}
 			onRefresh={() => void writeback.refresh()}
+			onResolve={(choice) => void writeback.resolve(choice)}
 			onRetry={() => void writeback.retry()}
 			retrying={writeback.retrying}
 			sourceLabel={sourceLabel}

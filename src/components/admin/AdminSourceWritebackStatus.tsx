@@ -1,6 +1,7 @@
 "use client";
 
 import { Popover, PopoverContent, PopoverTrigger } from "@nextui-org/react";
+import { useState } from "react";
 import {
 	CircleAlert,
 	CircleCheck,
@@ -106,10 +107,13 @@ const appearance = {
 	},
 } as const;
 
+type ConflictChoice = "load-remote" | "send-local";
+
 export function AdminSourceWritebackStatus({
 	error,
 	loading,
 	onRefresh,
+	onResolve,
 	onRetry,
 	retrying,
 	sourceLabel,
@@ -118,12 +122,17 @@ export function AdminSourceWritebackStatus({
 	error: string | null;
 	loading: boolean;
 	onRefresh: () => void;
+	onResolve: (choice: ConflictChoice) => void;
 	onRetry: () => void;
 	retrying: boolean;
 	sourceLabel: string;
 	status: WritebackStatus | null;
 }) {
 	const state = status?.state ?? "idle";
+	// Both conflict choices lose data on one side, so each needs a second click.
+	const [pendingChoice, setPendingChoice] = useState<ConflictChoice | null>(
+		null,
+	);
 	const config = appearance[state];
 	const Icon = loading && !status ? LoaderCircle : config.icon;
 	const spin = (loading && !status) || config.spin;
@@ -175,7 +184,34 @@ export function AdminSourceWritebackStatus({
 							{error ?? status?.error}
 						</p>
 					) : null}
-					{state === "failed" ? (
+					{state === "conflict" ? (
+						<div className="space-y-2" data-admin-writeback-conflict>
+							<ConflictChoiceButton
+								choice="send-local"
+								description={`Replaces the ${sourceLabel} copy with this record. Changes made in ${sourceLabel} while updates were paused are lost there.`}
+								disabled={retrying}
+								label={`Send this record to ${sourceLabel}`}
+								onConfirm={() => {
+									setPendingChoice(null);
+									onResolve("send-local");
+								}}
+								onPick={setPendingChoice}
+								pending={pendingChoice}
+							/>
+							<ConflictChoiceButton
+								choice="load-remote"
+								description={`Replaces this record with the ${sourceLabel} copy. Unpublished local changes are lost.`}
+								disabled={retrying}
+								label={`Load ${sourceLabel}’s version`}
+								onConfirm={() => {
+									setPendingChoice(null);
+									onResolve("load-remote");
+								}}
+								onPick={setPendingChoice}
+								pending={pendingChoice}
+							/>
+						</div>
+					) : state === "failed" ? (
 						<Button
 							className="w-full"
 							color="accent"
@@ -195,5 +231,53 @@ export function AdminSourceWritebackStatus({
 				</div>
 			</PopoverContent>
 		</Popover>
+	);
+}
+
+function ConflictChoiceButton({
+	choice,
+	description,
+	disabled,
+	label,
+	onConfirm,
+	onPick,
+	pending,
+}: {
+	choice: ConflictChoice;
+	description: string;
+	disabled: boolean;
+	label: string;
+	onConfirm: () => void;
+	onPick: (choice: ConflictChoice | null) => void;
+	pending: ConflictChoice | null;
+}) {
+	const armed = pending === choice;
+	return (
+		<div className="space-y-1">
+			<Button
+				className="w-full"
+				color={armed ? "accent" : undefined}
+				data-admin-writeback-resolve={choice}
+				isDisabled={disabled}
+				onPress={() => (armed ? onConfirm() : onPick(choice))}
+				size="xs"
+				variant={armed ? "solid" : undefined}
+			>
+				{armed ? "Confirm" : label}
+			</Button>
+			<p className="text-xs leading-5 text-black/55 dark:text-white/55">
+				{description}
+			</p>
+			{armed ? (
+				<Button
+					className="w-full"
+					onPress={() => onPick(null)}
+					size="xs"
+					variant="transparent"
+				>
+					Cancel
+				</Button>
+			) : null}
+		</div>
 	);
 }

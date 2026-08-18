@@ -9,6 +9,7 @@ import {
 
 import {
 	getAdminSourceWritebackStatus,
+	resolveAdminSourceWritebackConflict,
 	retryAdminSourceWriteback,
 } from "./admin-api";
 
@@ -95,5 +96,27 @@ export function useAdminSourceWriteback(
 		}
 	}, [itemKey, retrying]);
 
-	return { error, loading, refresh, retry, retrying, status };
+	const resolve = useCallback(
+		async (choice: "load-remote" | "send-local") => {
+			if (!itemKey || !sourceKey || retrying) return;
+			setRetrying(true);
+			try {
+				setStatus(
+					await resolveAdminSourceWritebackConflict(
+						itemKey,
+						sourceKey,
+						choice,
+					),
+				);
+				setError(null);
+			} catch (caught) {
+				setError(message(caught));
+			} finally {
+				setRetrying(false);
+			}
+		},
+		[itemKey, retrying, sourceKey],
+	);
+
+	return { error, loading, refresh, resolve, retry, retrying, status };
 }

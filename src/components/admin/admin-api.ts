@@ -431,6 +431,29 @@ export function retryAdminSourceWriteback(key: string, sourceKey: string) {
 	return sourceWritebackStatusRequest(key, sourceKey, "POST");
 }
 
+/** Resolve a source conflict: send this record over the source, or load the source's copy. */
+export async function resolveAdminSourceWritebackConflict(
+	key: string,
+	sourceKey: string,
+	choice: "load-remote" | "send-local",
+) {
+	const response = await requestJson<unknown>(
+		`/api/admin/items/${encodeURIComponent(key)}/writeback/resolve?source=${encodeURIComponent(sourceKey)}`,
+		{
+			body: JSON.stringify({ choice }),
+			headers: { "content-type": "application/json" },
+			method: "POST",
+		},
+	);
+	const status =
+		response && typeof response === "object" && "status" in response
+			? response.status
+			: undefined;
+	const parsed = adminSourceWritebackStatusSchema.safeParse(status);
+	if (!parsed.success) throw invalidSourceWritebackResponse();
+	return parsed.data;
+}
+
 function itemBatchChunks(input: AdminItemBatchRequest) {
 	return Array.from(
 		{ length: Math.ceil(input.keys.length / ADMIN_ITEM_BATCH_SIZE) },

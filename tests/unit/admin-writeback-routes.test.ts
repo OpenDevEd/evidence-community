@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const publishItemDraftWithContext = vi.fn();
 const unpublishNativeItemWithOutcome = vi.fn();
 const setAdminItemWritebackSources = vi.fn();
+const resolveAdminSourceWritebackConflict = vi.fn();
 
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: vi.fn(async () => ({ sources: [] })),
@@ -32,7 +33,14 @@ vi.mock("@/lib/admin/native-item-service", () => ({
 	unpublishNativeItemWithOutcome,
 }));
 vi.mock("@/lib/admin/source-writeback-service", () => ({
+	resolveAdminSourceWritebackConflict,
 	setAdminItemWritebackSources,
+}));
+vi.mock("@/lib/source-writeback/runtime", () => ({
+	createSourceWritebackRuntime: vi.fn(() => ({
+		credentialResolver: vi.fn(),
+		registry: {},
+	})),
 }));
 
 const base = "https://library.example.org/api/admin/items/ABCD2345";
@@ -43,6 +51,16 @@ const post = (path: string, body?: unknown) =>
 		headers: { "content-type": "application/json" },
 		method: path === "writeback/sources" ? "PUT" : "POST",
 	});
+const conflictStatus = {
+	attempts: 0,
+	canonicalRevision: 3,
+	error: null,
+	jobId: null,
+	nextAttemptAt: null,
+	processedAt: null,
+	sourceKey: "zotero-a",
+	state: "queued",
+};
 
 describe("admin writeback request bodies", () => {
 	beforeEach(() => {
@@ -113,5 +131,27 @@ describe("admin writeback request bodies", () => {
 		});
 
 		expect((await PUT(post("writeback/sources", {}), params)).status).toBe(400);
+	});
+
+	it("resolves a conflict with one of the two choices and needs the source key", async () => {
+		resolveAdminSourceWritebackConflict.mockResolvedValue(conflictStatus);
+		const { POST } = await import("@/app/api/admin/items/[key]/writeback/resolve/route");
+		const response = await POST(
+			post("writeback/resolve?source=zotero-a", { choice: "send-local" }),
+			params,
+		);
+		expect(response.status).toBe(200);
+		expect(resolveAdminSourceWritebackConflict).toHaveBeenCalledWith(
+			{},
+			"ABCD2345",
+			"zotero-a",
+			"send-local",
+			{ sources: [] },
+			expect.objectContaining({ registry: {} }),
+		);
+		expect(await response.json()).toEqual({ status: conflictStatus });
+
+		expect((await POST(post("writeback/resolve", { choice: "load-remote" }), params)).status).toBe(400);
+		expect((await POST(post("writeback/resolve?source=zotero-a", { choice: "overwrite" }), params)).status).toBe(400);
 	});
 });

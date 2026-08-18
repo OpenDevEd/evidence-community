@@ -10,6 +10,8 @@ import { sourceWritebackIdempotencyKey } from "@/lib/source-writeback/queue";
 describe("SourceWritebackAdapterRegistry", () => {
 	const zotero = {
 		provider: "zotero" as const,
+		readRecord: vi.fn(),
+		readVersion: vi.fn(),
 		write: vi.fn(),
 	};
 

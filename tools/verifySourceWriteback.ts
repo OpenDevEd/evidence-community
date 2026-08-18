@@ -27,13 +27,16 @@ import {
 } from "../src/lib/admin/native-item-service";
 import {
 	getAdminSourceWritebackStatus,
+	resolveAdminSourceWritebackConflict,
 	retryAdminSourceWriteback,
+	setAdminItemWritebackSources,
 } from "../src/lib/admin/source-writeback-service";
 import type { JsonValue } from "../src/lib/source-ingestion/batch-schema";
 import { sourcePayloadHash } from "../src/lib/source-ingestion/fingerprint";
 import { writeSourceIngestionBatch } from "../src/lib/source-ingestion/transactional-writer";
 import {
 	SourceWritebackAdapterRegistry,
+	type SourceWritebackRemoteRecord,
 	type SourceWritebackRequest,
 } from "../src/lib/source-writeback/adapter";
 import {
@@ -78,9 +81,18 @@ async function verify() {
 		sourceKeys: [connectionKey],
 	} satisfies ItemPublishOptions;
 
+	// The fake source reports one shared version counter; a test can override
+	// it to simulate a remote edit while a link was paused.
+	const fakeRemote: {
+		record: SourceWritebackRemoteRecord | null;
+		version: (() => string | null) | null;
+	} = { record: null, version: null };
 	const registry = new SourceWritebackAdapterRegistry([
 		{
 			provider: "zotero",
+			readRecord: async () => fakeRemote.record,
+			readVersion: async () =>
+				fakeRemote.version ? fakeRemote.version() : String(version),
 			write: async (request, { signal }) => {
 				calls.push(structuredClone(request));
 				if (behavior === "fail")
@@ -777,6 +789,189 @@ async function verify() {
 		assert(
 			duplicateRows.length === 1,
 			"Duplicate enqueue calls created more than one revision job",
+		);
+
+		// Turning a source back on checks it first. Unchanged: updates resume.
+		// Changed while paused: the link stops in "conflict" until the admin
+		// chooses to send this record or load the source's copy.
+		const conflictDraft = await createNativeItemDraft(db, {
+			itemType: "report",
+			title: "Paused, then checked again",
+		});
+		createdItemKeys.push(conflictDraft.itemKey);
+		await publishItemDraftWithContext(
+			db,
+			conflictDraft.itemKey,
+			publishToSource,
+		);
+		behavior = "success";
+		const firstConflictSend =
+			await processNextSourceWritebackJob(consumerOptions);
+		assert(
+			firstConflictSend.status === "processed",
+			"The record chosen for the conflict scenario did not reach the source",
+		);
+		const conflictConfig = writebackPolicyOptions.writebackConfig;
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[],
+			conflictConfig,
+		);
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[connectionKey],
+			conflictConfig,
+		);
+		const [recheckLink] = await db
+			.select()
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, conflictDraft.itemKey));
+		assert(
+			recheckLink?.writebackEnabled && recheckLink.remoteCheckRequired,
+			"Turning a linked source back on did not ask the worker to check it first",
+		);
+		const resumed = await processNextSourceWritebackJob(consumerOptions);
+		const [resumedLink] = await db
+			.select()
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, conflictDraft.itemKey));
+		assert(
+			resumed.status === "processed" &&
+				resumedLink?.remoteCheckRequired === false &&
+				resumedLink.conflictRemoteVersion === null,
+			`An unchanged source did not simply resume after the check: ${JSON.stringify({ resumed, resumedLink, version })}`,
+		);
+
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[],
+			conflictConfig,
+		);
+		fakeRemote.version = () => "999";
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[connectionKey],
+			conflictConfig,
+		);
+		const callsBeforeConflict = calls.length;
+		const checked = await processNextSourceWritebackJob(consumerOptions);
+		const conflictStatus = await getAdminSourceWritebackStatus(
+			db,
+			conflictDraft.itemKey,
+			connectionKey,
+			conflictConfig,
+		);
+		assert(
+			checked.status === "conflict" &&
+				conflictStatus.state === "conflict" &&
+				calls.length === callsBeforeConflict,
+			"A source that changed while paused did not stop in the conflict state",
+		);
+		const conflictEdit = await openItemDraft(db, conflictDraft.itemKey);
+		await saveItemDraft(db, {
+			expectedDraftRevision: conflictEdit.draftRevision,
+			expectedPayload: conflictEdit.payload,
+			itemKey: conflictDraft.itemKey,
+			payload: { ...conflictEdit.payload, title: "Edited during conflict" },
+		});
+		await publishItemDraft(db, conflictDraft.itemKey);
+		const blockedSend = await processNextSourceWritebackJob(consumerOptions);
+		assert(
+			blockedSend.status === "superseded" &&
+				calls.length === callsBeforeConflict,
+			"A publish during an unresolved conflict was sent to the source",
+		);
+
+		const sendLocal = await resolveAdminSourceWritebackConflict(
+			db,
+			conflictDraft.itemKey,
+			connectionKey,
+			"send-local",
+			conflictConfig,
+			{ credentialResolver: async () => "fake", registry },
+		);
+		fakeRemote.version = null;
+		const sentLocal = await processNextSourceWritebackJob(consumerOptions);
+		const sentStatus = await getAdminSourceWritebackStatus(
+			db,
+			conflictDraft.itemKey,
+			connectionKey,
+			conflictConfig,
+		);
+		assert(
+			sendLocal.state === "queued" &&
+				sentLocal.status === "processed" &&
+				sentStatus.state === "synced" &&
+				calls.at(-1)?.payload.title === "Edited during conflict",
+			"Choosing to send this record did not overwrite the source copy",
+		);
+
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[],
+			conflictConfig,
+		);
+		fakeRemote.version = () => "1000";
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[connectionKey],
+			conflictConfig,
+		);
+		const secondCheck = await processNextSourceWritebackJob(consumerOptions);
+		assert(
+			secondCheck.status === "conflict",
+			"The second remote change was not detected as a conflict",
+		);
+		fakeRemote.record = {
+			mappingProfileVersion: "fake-writeback-v1",
+			record: {
+				aliases: [],
+				collections: [],
+				file: null,
+				metadata: {
+					abstractNote: "Written at the source",
+					itemType: "Report",
+					title: "Source title wins",
+				},
+				operation: "upsert",
+				parentSourceRecordKey: null,
+				processingIssue: null,
+				raw: { key: conflictDraft.itemKey, version: 1000 },
+				remoteVersion: "1000",
+				sourceDates: null,
+				sourceRecordKey: conflictDraft.itemKey,
+			},
+		};
+		const loadRemote = await resolveAdminSourceWritebackConflict(
+			db,
+			conflictDraft.itemKey,
+			connectionKey,
+			"load-remote",
+			conflictConfig,
+			{ credentialResolver: async () => "fake", registry },
+		);
+		fakeRemote.record = null;
+		fakeRemote.version = null;
+		const [loadedItem] = await db
+			.select({ title: item.title })
+			.from(item)
+			.where(eq(item.key, conflictDraft.itemKey));
+		const [loadedLink] = await db
+			.select()
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, conflictDraft.itemKey));
+		assert(
+			loadRemote.state === "synced" &&
+				loadedItem?.title === "Source title wins" &&
+				loadedLink?.conflictRemoteVersion === null &&
+				loadedLink.lastAcknowledgedRemoteVersion === "1000",
+			"Choosing to load the source's version did not replace this record",
 		);
 
 		console.log(

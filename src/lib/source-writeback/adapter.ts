@@ -4,6 +4,7 @@ import type {
 } from "@opendeved/evidence-library-core";
 import type { InferSelectModel } from "drizzle-orm";
 
+import type { SourceIngestionBatch } from "@/lib/source-ingestion/batch-schema";
 import type { SourceCredentialResolver } from "@/lib/source-ingestion/credentials";
 
 export type SourceWritebackConnection = InferSelectModel<
@@ -46,8 +47,30 @@ export type SourceWritebackContext = {
 	signal: AbortSignal;
 };
 
+export type SourceWritebackVersionRequest = {
+	entity: "collection" | "item";
+	sourceConnection: SourceWritebackConnection;
+	sourceRecordKey: string;
+};
+
+/** One remote record in the shape the ingestion writer accepts. */
+export type SourceWritebackRemoteRecord = {
+	mappingProfileVersion: string;
+	record: SourceIngestionBatch["items"][number];
+};
+
 export type SourceWritebackAdapter = {
 	provider: Exclude<SourceProvider, "native">;
+	/** The source's copy of one item, mapped for import, or null when it has none. */
+	readRecord: (
+		request: SourceWritebackVersionRequest & { entity: "item" },
+		context: SourceWritebackContext,
+	) => Promise<SourceWritebackRemoteRecord | null>;
+	/** The source's current version of one record, or null when it has no copy. */
+	readVersion: (
+		request: SourceWritebackVersionRequest,
+		context: SourceWritebackContext,
+	) => Promise<string | null>;
 	write: (
 		request: SourceWritebackRequest,
 		context: SourceWritebackContext,

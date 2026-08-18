@@ -1,6 +1,7 @@
 import {
 	itemIdentity,
 	itemSourceLink,
+	sourceConnection,
 	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
@@ -19,6 +20,11 @@ import {
 	enqueueFullWritebackForSources,
 	ensureItemWritebackLinks,
 } from "@/lib/source-writeback/queue";
+import type {
+	SourceWritebackAdapterRegistry,
+} from "@/lib/source-writeback/adapter";
+import type { SourceCredentialResolver } from "@/lib/source-ingestion/credentials";
+import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
 
 import { ItemNotFoundError } from "./native-item-service";
 
@@ -325,4 +331,148 @@ export async function setAdminItemWritebackSources(
 		}
 	});
 	return resolveItemWritebackTargets(database, itemKey, config);
+}
+
+export type AdminWritebackConflictChoice = "load-remote" | "send-local";
+
+export class AdminSourceWritebackConflictError extends Error {
+	constructor(
+		message: string,
+		readonly kind: "not-in-conflict" | "remote-missing",
+	) {
+		super(message);
+		this.name = "AdminSourceWritebackConflictError";
+	}
+}
+
+/**
+ * Resolves a conflict the worker found when a paused source was turned back
+ * on. `send-local` accepts the source's current version as seen and sends
+ * this record over it. `load-remote` imports the source's copy over this
+ * record, including fields edited here, and marks the link synced.
+ */
+export async function resolveAdminSourceWritebackConflict(
+	database: Database,
+	itemKey: string,
+	sourceKey: string,
+	choice: AdminWritebackConflictChoice,
+	config: SourceWritebackConfiguration,
+	runtime: {
+		credentialResolver: SourceCredentialResolver;
+		registry: SourceWritebackAdapterRegistry;
+		signal?: AbortSignal;
+	},
+	now = new Date(),
+) {
+	const [current] = await database
+		.select({ connection: sourceConnection, link: itemSourceLink })
+		.from(itemSourceLink)
+		.innerJoin(
+			sourceConnection,
+			eq(sourceConnection.key, itemSourceLink.sourceConnectionKey),
+		)
+		.where(
+			and(
+				eq(itemSourceLink.itemKey, itemKey),
+				eq(itemSourceLink.sourceConnectionKey, sourceKey),
+			),
+		)
+		.limit(1);
+	if (!current?.link.conflictRemoteVersion) {
+		throw new AdminSourceWritebackConflictError(
+			"This record has no source conflict to resolve. Refresh and try again.",
+			"not-in-conflict",
+		);
+	}
+
+	if (choice === "send-local") {
+		await database.transaction(async (transaction) => {
+			await lockItemMutation(transaction, itemKey);
+			const [link] = await transaction
+				.select({ conflictRemoteVersion: itemSourceLink.conflictRemoteVersion })
+				.from(itemSourceLink)
+				.where(
+					and(
+						eq(itemSourceLink.itemKey, itemKey),
+						eq(itemSourceLink.sourceConnectionKey, sourceKey),
+					),
+				)
+				.for("update");
+			if (!link?.conflictRemoteVersion) {
+				throw new AdminSourceWritebackConflictError(
+					"This record has no source conflict to resolve. Refresh and try again.",
+					"not-in-conflict",
+				);
+			}
+			await transaction
+				.update(itemSourceLink)
+				.set({
+					conflictRemoteVersion: null,
+					lastAcknowledgedRemoteVersion: link.conflictRemoteVersion,
+					remoteCheckRequired: false,
+					remoteVersion: link.conflictRemoteVersion,
+					updatedAt: now,
+				})
+				.where(
+					and(
+						eq(itemSourceLink.itemKey, itemKey),
+						eq(itemSourceLink.sourceConnectionKey, sourceKey),
+					),
+				);
+			await enqueueFullWritebackForSources(transaction, {
+				itemKey,
+				sourceKeys: [sourceKey],
+				updatedAt: now,
+			});
+		});
+		return getAdminSourceWritebackStatus(database, itemKey, sourceKey, config, now);
+	}
+
+	const adapter = runtime.registry.get(current.connection.provider);
+	const remote = await adapter.readRecord(
+		{
+			entity: "item",
+			sourceConnection: current.connection,
+			sourceRecordKey: current.link.sourceRecordKey,
+		},
+		{
+			credentialResolver: runtime.credentialResolver,
+			signal: runtime.signal ?? new AbortController().signal,
+		},
+	);
+	if (!remote) {
+		throw new AdminSourceWritebackConflictError(
+			"The source no longer has this record. Choose “Send this record” to create it again.",
+			"remote-missing",
+		);
+	}
+	// The source wins: forget local edits on this link so the import is not
+	// masked, then import the source's copy through the normal writer.
+	await database.transaction(async (transaction) => {
+		await lockItemMutation(transaction, itemKey);
+		await transaction
+			.update(itemSourceLink)
+			.set({
+				conflictRemoteVersion: null,
+				dirtyFields: [],
+				remoteCheckRequired: false,
+				updatedAt: now,
+			})
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, itemKey),
+					eq(itemSourceLink.sourceConnectionKey, sourceKey),
+				),
+			);
+	});
+	await writeSourceIngestionBatch(database, {
+		collections: [],
+		expectedCursor: current.connection.syncCursor,
+		fetchedAt: now,
+		items: [remote.record],
+		mappingProfileVersion: remote.mappingProfileVersion,
+		nextCursor: current.connection.syncCursor,
+		sourceConnectionKey: sourceKey,
+	});
+	return getAdminSourceWritebackStatus(database, itemKey, sourceKey, config, now);
 }

@@ -5,7 +5,7 @@ import {
 	sourceWritebackJob,
 	type SourceWritebackOperation,
 } from "@opendeved/evidence-library-core";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, ne, or, sql } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { item } from "@/db/schema/tables/item";
@@ -395,9 +395,15 @@ async function applyItemWritebackLinkPlan(
 		}
 	}
 	if (plan.enable.length > 0) {
+		// A source that already holds a copy must be checked for changes made
+		// while this link was paused, before anything is sent to it.
 		await transaction
 			.update(itemSourceLink)
-			.set({ updatedAt: new Date(), writebackEnabled: true })
+			.set({
+				remoteCheckRequired: sql`${itemSourceLink.remoteVersion} IS NOT NULL`,
+				updatedAt: new Date(),
+				writebackEnabled: true,
+			})
 			.where(
 				and(
 					eq(itemSourceLink.itemKey, itemKey),
@@ -408,7 +414,12 @@ async function applyItemWritebackLinkPlan(
 	if (plan.disable.length > 0) {
 		await transaction
 			.update(itemSourceLink)
-			.set({ updatedAt: new Date(), writebackEnabled: false })
+			.set({
+				conflictRemoteVersion: null,
+				remoteCheckRequired: false,
+				updatedAt: new Date(),
+				writebackEnabled: false,
+			})
 			.where(
 				and(
 					eq(itemSourceLink.itemKey, itemKey),
@@ -534,6 +545,36 @@ export async function enqueueFullWritebackForSources(
 		itemKey,
 		updatedAt,
 	});
+	// The job for this revision may already have run before the source was
+	// paused. Its idempotency key blocks a second insert, so re-arm it.
+	for (const sourceConnectionKey of sourceKeys) {
+		await transaction
+			.update(sourceWritebackJob)
+			.set({
+				attempts: 0,
+				deadLetteredAt: null,
+				dirtyFields: fields,
+				lastError: null,
+				leaseExpiresAt: null,
+				leaseOwner: null,
+				nextAttemptAt: updatedAt,
+				processedAt: null,
+				superseded: false,
+			})
+			.where(
+				and(
+					eq(sourceWritebackJob.itemKey, itemKey),
+					eq(sourceWritebackJob.sourceConnectionKey, sourceConnectionKey),
+					eq(sourceWritebackJob.canonicalRevision, row.revision),
+					eq(sourceWritebackJob.operation, "upsert"),
+					or(
+						isNotNull(sourceWritebackJob.processedAt),
+						eq(sourceWritebackJob.superseded, true),
+						isNotNull(sourceWritebackJob.deadLetteredAt),
+					),
+				),
+			);
+	}
 }
 
 /** The sources a parent record currently sends to; children copy this. */
