@@ -77,6 +77,7 @@ import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import Image from "next/image";
 import { getCanonicalWebsiteItemUrl } from "@/lib/canonical-item-url";
 import { selectPublicItemDetails } from "@/lib/public-item-details";
+import { buildSiteUrl } from "@/lib/site-url";
 
 export const LoadingContext = createContext<{ loading: boolean }>({
 	loading: false,
@@ -697,10 +698,9 @@ function ProcessHTML(html: string) {
 	});
 }
 
-function ItemCitation({ item }: { item: Item | undefined }) {
+export function ItemCitation({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
-	const { citations } = useLibraryConfig();
-	const [origin, setOrigin] = useState("");
+	const { citations, identity } = useLibraryConfig();
 	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{
 		citation: string | null;
 	}>(
@@ -712,13 +712,9 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 			revalidateIfStale: false,
 		}
 	);
-	const resolvedCitation = citationResponse?.citation || item?.citation || "";
-
-	useEffect(() => {
-		if (typeof window !== "undefined") {
-			setOrigin(window.location.origin);
-		}
-	}, []);
+	const resolvedCitation = isCitationFetching
+		? item?.citation || ""
+		: citationResponse?.citation || "";
 
 	const { citationCopy, citationHtml, isLoading } = useMemo(() => {
 		if (isCitationFetching || resolvedCitation === "<div>Loading...</div>") {
@@ -739,9 +735,7 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 			};
 		}
 
-		const urlStr = origin
-			? `${origin}/lib/${item.key}`
-			: `/lib/${item.key}`;
+		const urlStr = buildSiteUrl(`/lib/${item.key}`, identity.baseUrl);
 		const linkHtml = `<a href="${urlStr}" target="_blank" rel="noopener noreferrer" class="text-link hover:underline">${urlStr}</a>`;
 
 		// Copy Text Logic
@@ -771,11 +765,12 @@ function ItemCitation({ item }: { item: Item | undefined }) {
 		};
 	}, [
 		citations.showUrl,
+		identity.baseUrl,
 		isCitationFetching,
 		item?.key,
-		origin,
 		resolvedCitation,
 	]);
+	if (!isLoading && !citationHtml && !citationCopy) return null;
 
 	return (
 		<ItemPropertyRowWrapper
@@ -1145,15 +1140,17 @@ function ItemCollection({
 	);
 }
 
-function ItemCollections({ item }: { item: Item | undefined }) {
+export function ItemCollections({ item }: { item: Item | undefined }) {
 	const isCollectionsEnabled = useLibraryFeature("collections");
 	const t = useTranslations("ui");
 
 	if (!isCollectionsEnabled) return null;
 
-	const collectionsAncestry = (item?.collectionsData as Collection[]) || [];
+	const visibleCollections = ((item?.collectionsData as Collection[]) || []).filter(
+		(collection) => collection.originalFacet,
+	);
 
-	const groupedCollections = collectionsAncestry.reduce(
+	const groupedCollections = visibleCollections.reduce(
 		(acc, collection) => {
 			const title = collection.title || "Unknown";
 			if (!acc[title]) {
@@ -1177,18 +1174,13 @@ function ItemCollections({ item }: { item: Item | undefined }) {
 								{title}
 							</h4>
 							<ul className="text-base text-black/60 dark:text-white/60 flex flex-wrap gap-2">
-								{collections
-									.filter(
-										(collection) =>
-											collection.originalFacet,
-									)
-									.map((collection) => (
-										<ItemCollection
-											key={collection.key}
-											collection={collection}
-											item={item}
-										/>
-									))}
+								{collections.map((collection) => (
+									<ItemCollection
+										key={collection.key}
+										collection={collection}
+										item={item}
+									/>
+								))}
 							</ul>
 						</div>
 					),

@@ -49,6 +49,17 @@ function HeaderSection({ children }: { children: React.ReactNode }) {
 	);
 }
 
+export function ItemHeaderYear({ year }: { year?: string | null }) {
+	if (!year) return null;
+
+	return (
+		<HeaderSection>
+			<FaCalendar className="size-4" aria-hidden="true" />
+			{year}
+		</HeaderSection>
+	);
+}
+
 function ItemHeaderInstitution({ item }: { item: Item | undefined }) {
 	if (!item?.institution?.length) return null;
 	return (
@@ -116,10 +127,7 @@ export default function ItemHeader({
 					<ItemHeaderInstitution item={item} />
 					<ItemHeaderInternal item={item} />
 					<div className="flex items-center gap-4 flex-wrap">
-						<HeaderSection>
-							<FaCalendar className="size-4" />
-							{item?.year}
-						</HeaderSection>
+						<ItemHeaderYear year={item?.year} />
 
 						<HeaderSection>
 							<IoDocumentText className="size-4" />
