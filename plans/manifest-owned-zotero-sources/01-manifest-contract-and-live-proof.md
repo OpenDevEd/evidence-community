@@ -50,7 +50,9 @@ The sync worker reconciles before its first sweep, so the first full import and 
 - `docs/zotero-source-adapter.md`
 - `src/components/features/newlib/ItemPage.tsx`
 - `src/context/Providers.tsx`
+- `src/lib/last-fetched-items.ts`
 - `tests/unit/item-details-card.test.tsx`
+- `tests/unit/last-fetched-items.test.ts`
 
 ## Exact tests
 
