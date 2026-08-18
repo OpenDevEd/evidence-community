@@ -119,6 +119,7 @@ These are the required public seams for the test-first work:
 - Prove `reuse-crossref` produces one Crossref DOI link plus Zenodo archive and concept-record links. Prove `mint-zenodo` produces Zenodo version DOI, concept DOI, archive, and concept-record links.
 - Rebuild each deployed library's Meilisearch index after deployment so existing records receive the new summary.
 - Verify the same public API and page URLs without cache-busting parameters. On `docs-pen`, record `WB67ISLP` must show the Crossref DOI and Zenodo records `588743` and `588742`.
+- Keep the server-rendered item as the first paint, then use the existing SWR fetcher to refresh that same public item in the background. This prevents a previously cached item page from hiding a provider update without replacing the page with a loading state.
 
 ## Exact checks
 
