@@ -54,3 +54,11 @@ Local only in this plan: `npm run dev`, open `/admin`, sign in, open a native re
 
 - `AdminInspector.tsx` is large. Keep the dialog in its own file and add only the button and the per-source status loop.
 - The acceptance suite mocks `writeback/status`. Extend the mock to the new sources route; do not mock the publish body away.
+
+## Execution notes — 2026-08-18
+
+- Route unit tests follow the repository pattern and mock the service layer (`tests/unit/admin-writeback-routes.test.ts`). They prove request parsing and pass-through for publish (`sourceKeys`), unpublish (`removeFromSourceKeys`) and `PUT writeback/sources`. Link, cascade and delete-per-source behaviour is proven by the real-service tools from Plan 01 and by Plan 04's live proof.
+- `admin-runtime.spec.ts` needed no change: the acceptance libraries have no `sources[]`, so Publish runs at once there. The dialog flows are covered in `admin.spec.ts` ("edits an imported record…" and the new "chooses writeback sources without publishing and when unpublishing").
+- The "npm run dev" gate was replaced by the acceptance stack (`npm run test:acceptance`). A local `next dev` against the throwaway Postgres crashes in the public filters provider when Meilisearch has no facet settings; that is environment setup, not this change, and the acceptance stack is the truthful runtime check.
+- The dialog helper treats a source that is turned off, paused or removed as unchecked and disabled even when the record still stores it as selected; confirming the dialog then clears that stored selection. The badge for such a source therefore disappears after the next publish instead of showing `disabled`.
+- Key collision wording lives in `describeAdminWritebackError` (`source-writeback-service.ts`) so both status and retry responses use it.
