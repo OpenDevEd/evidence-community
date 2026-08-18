@@ -7,6 +7,7 @@ import {
 	createUIMessageStreamResponse,
 } from "ai";
 import { z } from "zod";
+import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import { cleanItemForAI, formatRange, getTimeDuration } from "@/lib/utils";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { SearchResponse } from "meilisearch";
@@ -133,7 +134,7 @@ export async function getAnswerFromSearchAgentic(
 	const startTime = Date.now();
 	const { index: searchIndex } =
 		await getMeilisearchForConfig(config);
-	if (!config.search.embeddings) {
+	if (!config.search.embedder) {
 		throw new Error("Semantic search is disabled");
 	}
 
@@ -294,7 +295,7 @@ You must output an object conforming to the provided schema.`;
 					const result: SearchResponse<Item> =
 						await searchIndex.search("", {
 							q: searchQueryInstruction.query,
-							hybrid: { embedder: "openai", semanticRatio: 1 },
+							hybrid: { embedder: PLATFORM_SEARCH_EMBEDDER, semanticRatio: 1 },
 							filter: [
 								inferredYearRange === "0"
 									? null

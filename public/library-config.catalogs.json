@@ -242,6 +242,14 @@
 			},
 			{
 				"allowCustom": false,
+				"path": "search.embedder.source",
+				"values": [
+					"openAi",
+					"rest"
+				]
+			},
+			{
+				"allowCustom": false,
 				"path": "search.scopes[]",
 				"values": [
 					"title_abstract_author_and_keywords",
@@ -361,6 +369,7 @@
 			"authentication.secret",
 			"email.smtp.password",
 			"email.smtp.username",
+			"search.embedder.apiKey",
 			"services.database.url",
 			"services.publication.crossref.loginId",
 			"services.publication.crossref.password",

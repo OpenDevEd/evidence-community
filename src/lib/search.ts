@@ -13,6 +13,7 @@ import {
 	getRuntimeSearchFacets,
 	normalizeRuntimeYearRange,
 	resolveRuntimeSearchScope,
+	type RuntimeSearch,
 } from "@/config/library-config/search";
 import type {
 	LibraryPublicConfig,
@@ -135,10 +136,9 @@ function applyCollectionsData(items: ListItem[], collections: Collection[]) {
 
 function resolveSearchRequest(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
-	libraryConfig: Pick<
-		LibraryPublicConfig,
-		"content" | "filters" | "search"
-	>,
+	libraryConfig: Pick<LibraryPublicConfig, "content" | "filters"> & {
+		search: RuntimeSearch;
+	},
 ) {
 	const pageNum = Math.max(1, Number(searchParams.page || 1));
 	const limitNum = ITEMS_PER_PAGE;

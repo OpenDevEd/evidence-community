@@ -1,4 +1,5 @@
 import { getCachedItem, getCachedItemSmall } from "@/app/api/cache";
+import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import { getItem } from "@/app/api/item/[key]/route";
 import { Item } from "@/app/api/item/types";
 import { EXCLUDED_ITEM_TYPES } from "@/constants/items";
@@ -11,7 +12,7 @@ import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 export async function GET(request: NextRequest, props: { params: Promise<{ key: string }> }) {
 	const config = await getLibraryConfig();
 	if (
-		!config.search.embeddings ||
+		!config.search.embedder ||
 		!isLibraryFeatureEnabled(config.features, "relatedResources")
 	) {
 		return NextResponse.json({ hits: [], totalHits: 0 }, {
@@ -54,7 +55,7 @@ export async function GET(request: NextRequest, props: { params: Promise<{ key: 
 	const result = await index.search("", {
 			q: description,
 			hybrid: {
-				embedder: "openai",
+				embedder: PLATFORM_SEARCH_EMBEDDER,
 				semanticRatio: 0.7,
 			},
 			filter: [

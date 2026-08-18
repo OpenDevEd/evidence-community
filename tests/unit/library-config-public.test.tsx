@@ -55,6 +55,8 @@ describe("public library configuration", () => {
 		expect(publicConfig).not.toHaveProperty("processing");
 		expect(publicConfig).not.toHaveProperty("sources");
 		expect(publicConfig.ai.providers[0]).not.toHaveProperty("apiKey");
+		expect(publicConfig.search).not.toHaveProperty("embedder");
+		expect(publicConfig.search.embeddings).toBe(true);
 		expect(publicConfig.authentication).toEqual({
 			google: { enabled: true },
 		});
@@ -70,6 +72,8 @@ describe("public library configuration", () => {
 		for (const privateValue of [
 			"postgresql://library:password@database:5432/library",
 			"maximal-search-key",
+			"maximal-embedding-api-key",
+			"text-embedding-3-small",
 			"https://storage.example.org",
 			"maximal-storage-service-role-key",
 			"maximal-private",

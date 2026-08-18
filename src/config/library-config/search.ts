@@ -4,7 +4,7 @@ import {
 } from "./catalogs";
 import type { LibraryPublicConfig } from "./schema";
 
-type RuntimeSearch = LibraryPublicConfig["search"];
+export type RuntimeSearch = Omit<LibraryPublicConfig["search"], "embeddings">;
 type RuntimeFilters = LibraryPublicConfig["filters"];
 
 export function getRuntimeSearchScopeOptions(search: RuntimeSearch) {

@@ -41,12 +41,12 @@ export async function POST(req: Request) {
 			status: 403,
 		});
 	}
-	if (!key && !config.search.embeddings) {
+	if (!key && !config.search.embedder) {
 		return new NextResponse("Semantic search is disabled", {
 			status: 403,
 		});
 	}
-	if (key && mode !== "quick" && !config.search.embeddings) {
+	if (key && mode !== "quick" && !config.search.embedder) {
 		return new NextResponse(
 			"PDF research requires semantic search",
 			{ status: 403 },

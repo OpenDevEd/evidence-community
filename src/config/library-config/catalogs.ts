@@ -204,4 +204,4 @@ export const PLATFORM_RULE_CONDITIONS = ["always", "has-pdf"] as const;
 
 export const PLATFORM_RULE_ACTIONS = ["append-system-instruction"] as const;
 
-export const PLATFORM_SEARCH_EMBEDDER = "openai";
+export const PLATFORM_SEARCH_EMBEDDER = "default";

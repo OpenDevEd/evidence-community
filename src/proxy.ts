@@ -19,8 +19,10 @@ import {
 	getUnlocalizedPathname,
 	isLoginProfilePath,
 } from "./lib/runtime-routing";
-import { resolveRuntimeSearchScope } from "./config/library-config/search";
-import type { LibraryPublicConfig } from "./config/library-config/schema";
+import {
+	resolveRuntimeSearchScope,
+	type RuntimeSearch,
+} from "./config/library-config/search";
 import {
 	consumeAIRateLimit,
 	type AIRateLimitStatus,
@@ -139,7 +141,7 @@ function encodeKey(key: string): string {
 
 function mapLegacySearchParams(
 	request: NextRequest,
-	runtimeSearch: LibraryPublicConfig["search"],
+	runtimeSearch: RuntimeSearch,
 ) {
 	const originalSearchParams = new URLSearchParams(
 		request.nextUrl.searchParams,
