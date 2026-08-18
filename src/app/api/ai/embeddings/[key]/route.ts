@@ -11,6 +11,13 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 
+// Meilisearch reports a missing embedder with the first code and a failing
+// embedding provider with the second. Both mean "not ready", not a bug.
+const EMBEDDER_NOT_READY_CODES = new Set([
+	"invalid_search_embedder",
+	"vector_embedding_error",
+]);
+
 export async function GET(
 	request: NextRequest,
 	props: { params: Promise<{ key: string }> },
@@ -74,7 +81,8 @@ export async function GET(
 	} catch (error) {
 		if (
 			error instanceof MeilisearchApiError &&
-			error.cause?.code === "invalid_search_embedder"
+			error.cause?.code &&
+			EMBEDDER_NOT_READY_CODES.has(error.cause.code)
 		) {
 			return NextResponse.json(
 				{ error: "Similar resources are not ready" },

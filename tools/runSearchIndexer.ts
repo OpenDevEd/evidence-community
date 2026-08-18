@@ -15,6 +15,7 @@ import {
 import {
 	drainSearchOutbox,
 	applySearchIndexEmbedder,
+	EMBEDDER_TASK_TIMEOUT_MS,
 	ensureSearchIndex,
 	requeueSearchOutboxDeadLetters,
 	rebuildSearchIndex,
@@ -184,7 +185,15 @@ async function main() {
 			const plan = await rebuildSearchIndex(
 				databaseResource.database,
 				service,
-				{ signal: abortController.signal },
+				{
+					signal: abortController.signal,
+					// With an embedder, every document task also embeds, so
+					// the rebuild gets the longer embedding wait.
+					taskTimeoutMs:
+						config.search.embedder && !embedderError
+							? EMBEDDER_TASK_TIMEOUT_MS
+							: undefined,
+				},
 			);
 			await setSearchIndexRebuildPending(
 				databaseResource.database,
@@ -259,10 +268,12 @@ async function main() {
 							results.length > 0
 								? new Date()
 								: (previousProgress.lastCompletedAt ?? null),
+						// A failed embedder stays visible until the next
+						// worker start applies it, even after records index.
 						lastError:
 							results.length > 0
-								? null
-								: previousProgress.lastError,
+								? embedderError
+								: (previousProgress.lastError ?? embedderError),
 						stage: "idle",
 					},
 					true,

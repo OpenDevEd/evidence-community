@@ -1671,6 +1671,14 @@ export function createLibraryConfigSchema(
 			);
 		}
 
+		if (config.features.aiSearch && !config.search.embedder) {
+			addRequiredIssue(
+				context,
+				["features", "aiSearch"],
+				"AI search requires an embedder",
+			);
+		}
+
 		if (config.features.collectionNotes && !config.features.collections) {
 			addRequiredIssue(
 				context,

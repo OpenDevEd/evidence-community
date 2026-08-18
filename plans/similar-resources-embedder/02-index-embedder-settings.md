@@ -52,9 +52,14 @@ None.
 - With an `openAi` or `rest` embedder, `updateSettings` receives the full object with template and `documentTemplateMaxBytes: 8000` under the name `default`.
 - The embedder task waits up to 60 minutes; ordinary tasks still use 5 minutes.
 - A failed embedder task does not stop the worker; worker state shows `lastError`.
-- The Similar Resources route answers 503 with a plain message when the embedder is missing.
+- The Similar Resources route answers 503 with a plain message when the embedder is missing (`invalid_search_embedder`) or its provider fails on the query (`vector_embedding_error`).
+- A failed embedder stays in worker `lastError` after later record batches succeed; only the next worker start clears it.
+- With an embedder set, the startup rebuild's document tasks use the 60-minute wait, because they embed too.
 
 ## Risks
+
+- Declined review idea: removing a failed embedder before draining the outbox. That drops every vector and forces a paid re-embed on any provider blip. Outbox retries with backoff cover an outage instead.
+- Known, out of scope (#107): `src/app/api/ai/chat/search.ts` swallows per-query search errors and answers "No relevant items". That is how the missing embedder stayed hidden. Chat should surface search failures as unavailable.
 
 - Meilisearch may reject nulling a name that does not exist. Verify in Plan 03 before choosing.
 - A large library re-embed can exceed 60 minutes on a slow provider. The worker then logs a timeout, keeps running, and retries on the next start while Meilisearch finishes the task in the background. Acceptable for now.

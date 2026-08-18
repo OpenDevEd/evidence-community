@@ -119,7 +119,9 @@ describe("library configuration fixtures", () => {
 
 		const invalidDefault = cloneLibraryConfig(maximalLibraryConfig);
 		invalidDefault.sources![0].writebackEnabled = false;
-		expect(libraryConfigSchema.safeParse(invalidDefault).success).toBe(false);
+		expect(libraryConfigSchema.safeParse(invalidDefault).success).toBe(
+			false,
+		);
 
 		const duplicateGroup = cloneLibraryConfig(maximalLibraryConfig);
 		duplicateGroup.sources!.push({
@@ -127,7 +129,9 @@ describe("library configuration fixtures", () => {
 			key: "zotero-duplicate",
 			defaultWriteback: false,
 		});
-		expect(libraryConfigSchema.safeParse(duplicateGroup).success).toBe(false);
+		expect(libraryConfigSchema.safeParse(duplicateGroup).success).toBe(
+			false,
+		);
 	});
 
 	it("enables configured gap maps by default", () => {
@@ -948,10 +952,12 @@ describe("search embedder", () => {
 		expect(catalogSchema.safeParse(config).success).toBe(true);
 	});
 
-	it("accepts a null embedder when related resources are off", () => {
+	it("accepts a null embedder when related resources and AI search are off", () => {
 		const config: any = cloneLibraryConfig();
 		config.search.embedder = null;
 		config.features.relatedResources = false;
+		config.features.aiSearch = false;
+		config.features.deepResearch = false;
 		const result = catalogSchema.safeParse(config);
 		expect(result.success).toBe(true);
 		if (result.success) expect(result.data.search.embedder).toBeNull();
@@ -961,6 +967,13 @@ describe("search embedder", () => {
 		expectCatalogIssue((config: any) => {
 			config.search.embedder = null;
 		}, "Related resources require an embedder");
+	});
+
+	it("reports the AI search rule with a path", () => {
+		expectCatalogIssue((config: any) => {
+			config.search.embedder = null;
+			config.features.relatedResources = false;
+		}, "AI search requires an embedder");
 	});
 
 	it.each([
