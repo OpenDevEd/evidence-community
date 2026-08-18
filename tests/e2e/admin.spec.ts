@@ -773,9 +773,11 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 			await route.fulfill({ status: 405 });
 		},
 	);
+	let publishBody: unknown;
 	await page.route(
 		`**/api/admin/items/${publishedItemKey}/publish`,
 		async (route) => {
+			publishBody = route.request().postDataJSON();
 			editing = false;
 			revision += 1;
 			writebackStarted = true;
@@ -799,6 +801,25 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 	await title.fill("Imported edit for writeback");
 	await expect(page.getByText("Saved", { exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Publish", exact: true }).click();
+
+	// Publishing asks which sources to update. The origin is preselected.
+	const publishDialog = page.getByRole("dialog", {
+		name: "Publish this record",
+	});
+	await expect(publishDialog).toBeVisible();
+	await expect(
+		publishDialog.locator("[data-admin-writeback-dialog='publish']"),
+	).toBeVisible();
+	const originBox = publishDialog.getByRole("checkbox", {
+		name: `${importedSource.label} Origin`,
+	});
+	await expect(originBox).toBeChecked();
+	await publishDialog
+		.getByRole("button", { name: "Publish", exact: true })
+		.click();
+	await expect.poll(() => publishBody).toEqual({
+		sourceKeys: [importedSource.key],
+	});
 
 	const status = page.locator("[data-admin-writeback-status]");
 	await expect(status).toHaveAttribute(
@@ -861,6 +882,120 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 		"synced",
 		{ timeout: 5_000 },
 	);
+});
+
+test("chooses writeback sources without publishing and when unpublishing", async ({
+	page,
+}) => {
+	await mockCompletedIndexing(page);
+	const book = await mockPublishedBook(page, {
+		additionalSources: [importedSource],
+	});
+	let selected: string[] = [];
+	const writeback = () => ({
+		available: [
+			{
+				effective: selected.includes(importedSource.key),
+				isOrigin: false,
+				itemEnabled: selected.includes(importedSource.key),
+				linkExists: selected.includes(importedSource.key),
+				provider: "zotero",
+				reason: selected.includes(importedSource.key) ? "ok" : "not-linked",
+				sourceEnabled: true,
+				sourceKey: importedSource.key,
+				sourceLabel: importedSource.label,
+				sourceStatus: "active",
+				supported: true,
+			},
+		],
+		originSourceKey: null,
+		selected,
+	});
+	let sourcesBody: unknown;
+	let unpublishBody: unknown;
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/writeback/sources`,
+		async (route) => {
+			sourcesBody = route.request().postDataJSON();
+			selected = (sourcesBody as { sourceKeys: string[] }).sourceKeys;
+			await route.fulfill({ json: { writeback: writeback() } });
+		},
+	);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/writeback/status?source=*`,
+		async (route) => {
+			await route.fulfill({
+				json: {
+					status: {
+						attempts: 0,
+						canonicalRevision: 1,
+						error: null,
+						jobId: 5,
+						nextAttemptAt: timestamp,
+						processedAt: timestamp,
+						sourceKey: importedSource.key,
+						state: "synced",
+					},
+				},
+			});
+		},
+	);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/unpublish`,
+		async (route) => {
+			unpublishBody = route.request().postDataJSON();
+			await route.fulfill({ json: { indexingReceipts: [], item: {} } });
+		},
+	);
+	await page.route(`**/api/admin/items/${publishedItemKey}`, async (route) =>
+		route.fulfill({
+			json: { item: { ...publishedDetail(false), writeback: writeback() } },
+		}),
+	);
+	book.setEditing(false);
+
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await expect(page.locator("[data-admin-writeback-status]")).toHaveCount(0);
+
+	// The Sources button changes the choice without publishing.
+	await inspector.getByRole("button", { name: "Sources", exact: true }).click();
+	const sourcesDialog = page.getByRole("dialog", {
+		name: "Sources for this record",
+	});
+	await expect(sourcesDialog).toBeVisible();
+	const box = sourcesDialog.getByRole("checkbox", {
+		name: importedSource.label,
+	});
+	await expect(box).not.toBeChecked();
+	await box.check();
+	await sourcesDialog.getByRole("button", { name: "Save", exact: true }).click();
+	await expect.poll(() => sourcesBody).toEqual({
+		sourceKeys: [importedSource.key],
+	});
+	await expect(page.locator("[data-admin-writeback-status]")).toHaveAttribute(
+		"data-admin-writeback-status",
+		"synced",
+	);
+
+	// Unpublishing asks which copies to remove, preselected to the choice.
+	await inspector.getByRole("button", { name: "Unpublish" }).click();
+	const unpublishDialog = page.getByRole("dialog", {
+		name: "Unpublish this record",
+	});
+	await expect(unpublishDialog).toBeVisible();
+	await expect(
+		unpublishDialog.locator("[data-admin-writeback-dialog='unpublish']"),
+	).toBeVisible();
+	await expect(
+		unpublishDialog.getByRole("checkbox", { name: importedSource.label }),
+	).toBeChecked();
+	await unpublishDialog
+		.getByRole("button", { name: "Unpublish", exact: true })
+		.click();
+	await expect.poll(() => unpublishBody).toEqual({
+		removeFromSourceKeys: [importedSource.key],
+	});
 });
 
 test("searches and assigns records with the collection picker", async ({

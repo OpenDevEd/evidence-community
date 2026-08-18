@@ -105,8 +105,9 @@ function WritebackDialogForm({
 								size="sm"
 							>
 								{option.sourceLabel}
+								{option.isOrigin ? " " : null}
 								{option.isOrigin ? (
-									<span className="ms-2 rounded-full border border-black/15 px-1.5 text-xs text-black/60 dark:border-white/15 dark:text-white/60">
+									<span className="ms-1 rounded-full border border-black/15 px-1.5 text-xs text-black/60 dark:border-white/15 dark:text-white/60">
 										Origin
 									</span>
 								) : null}
