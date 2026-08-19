@@ -243,25 +243,32 @@ export async function replaceSourceRelatedLinks(
 }
 
 /**
- * Replaces the editor's outgoing links of one kind for a record.
- * Only `manual` rows change. Returns the keys that were added and removed.
+ * Replaces the editor's links of one kind for a record. Only `manual` rows change.
+ * `cites` is directed, so only rows starting at `fromKey` are looked at.
+ * `related` is one link seen from both sides: rows in either direction count as
+ * present, removal deletes the row whichever side stored it, and new links are
+ * stored as `fromKey → toKey`. Returns the other-end keys added and removed.
  */
 export async function replaceManualLinks(
 	tx: Executor,
 	input: { fromKey: string; kind: ItemLinkKind; toKeys: string[] },
 ): Promise<{ added: string[]; removed: string[] }> {
 	const wanted = [...new Set(input.toKeys)].filter((key) => key !== input.fromKey);
+	const symmetric = input.kind === "related";
+	const ownRows = and(
+		eq(itemLink.kind, input.kind),
+		eq(itemLink.origin, MANUAL_ITEM_LINK_ORIGIN),
+		symmetric
+			? or(eq(itemLink.fromKey, input.fromKey), eq(itemLink.toKey, input.fromKey))
+			: eq(itemLink.fromKey, input.fromKey),
+	);
 	const current = await tx
-		.select({ toKey: itemLink.toKey })
+		.select({ fromKey: itemLink.fromKey, toKey: itemLink.toKey })
 		.from(itemLink)
-		.where(
-			and(
-				eq(itemLink.fromKey, input.fromKey),
-				eq(itemLink.kind, input.kind),
-				eq(itemLink.origin, MANUAL_ITEM_LINK_ORIGIN),
-			),
-		);
-	const currentKeys = new Set(current.map((row) => row.toKey));
+		.where(ownRows);
+	const otherEnd = (row: { fromKey: string; toKey: string }) =>
+		row.fromKey === input.fromKey ? row.toKey : row.fromKey;
+	const currentKeys = new Set(current.map(otherEnd));
 	const added = wanted.filter((key) => !currentKeys.has(key));
 	const removed = [...currentKeys].filter((key) => !wanted.includes(key));
 	if (removed.length > 0) {
@@ -269,10 +276,10 @@ export async function replaceManualLinks(
 			.delete(itemLink)
 			.where(
 				and(
-					eq(itemLink.fromKey, input.fromKey),
-					eq(itemLink.kind, input.kind),
-					eq(itemLink.origin, MANUAL_ITEM_LINK_ORIGIN),
-					inArray(itemLink.toKey, removed),
+					ownRows,
+					symmetric
+						? or(inArray(itemLink.toKey, removed), inArray(itemLink.fromKey, removed))
+						: inArray(itemLink.toKey, removed),
 				),
 			);
 	}
@@ -289,24 +296,35 @@ export async function replaceManualLinks(
 	return { added, removed };
 }
 
-/** Outgoing `manual` link keys per kind, as stored in the record draft payload. */
+/**
+ * `manual` link keys per kind, as stored in the record draft payload:
+ * outgoing `cites`, and `related` in both directions (one link, two sides).
+ */
 export async function getManualLinkKeys(
 	db: Executor,
 	fromKey: string,
 ): Promise<{ cites: string[]; related: string[] }> {
 	const rows = await db
-		.select({ toKey: itemLink.toKey, kind: itemLink.kind })
+		.select({ fromKey: itemLink.fromKey, toKey: itemLink.toKey, kind: itemLink.kind })
 		.from(itemLink)
 		.where(
 			and(
-				eq(itemLink.fromKey, fromKey),
 				eq(itemLink.origin, MANUAL_ITEM_LINK_ORIGIN),
+				or(
+					eq(itemLink.fromKey, fromKey),
+					and(eq(itemLink.toKey, fromKey), eq(itemLink.kind, "related")),
+				),
 			),
 		)
-		.orderBy(asc(itemLink.createdAt), asc(itemLink.toKey));
+		.orderBy(asc(itemLink.createdAt), asc(itemLink.toKey), asc(itemLink.fromKey));
+	const related = new Set<string>();
+	for (const row of rows) {
+		if (row.kind !== "related") continue;
+		related.add(row.fromKey === fromKey ? row.toKey : row.fromKey);
+	}
 	return {
 		cites: rows.filter((row) => row.kind === "cites").map((row) => row.toKey),
-		related: rows.filter((row) => row.kind === "related").map((row) => row.toKey),
+		related: [...related],
 	};
 }
 

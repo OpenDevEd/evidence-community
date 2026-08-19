@@ -177,6 +177,31 @@ async function verify() {
 			manual.cites.join() === C && manual.related.join() === D,
 			"getManualLinkKeys must group manual rows by kind",
 		);
+		// "related" is one link seen from both sides: D lists A, and D can remove it
+		assert(
+			(await getManualLinkKeys(db, D)).related.join() === A,
+			"The other side of a manual related row must list it too",
+		);
+		const fromD = await replaceManualLinks(db, {
+			fromKey: D,
+			kind: "related",
+			toKeys: [A],
+		});
+		assert(
+			fromD.added.length === 0 && fromD.removed.length === 0,
+			"Keeping an existing related link from the other side must change nothing",
+		);
+		const dropFromD = await replaceManualLinks(db, {
+			fromKey: D,
+			kind: "related",
+			toKeys: [],
+		});
+		assert(
+			dropFromD.removed.join() === A &&
+				(await getManualLinkKeys(db, A)).related.length === 0,
+			"Removing a related link from the other side must delete the stored row",
+		);
+		await replaceManualLinks(db, { fromKey: A, kind: "related", toKeys: [D] });
 
 		// Source mirroring never touches manual rows; it may assert a pair the editor also owns
 		const mirror = await replaceSourceRelatedLinks(db, {
