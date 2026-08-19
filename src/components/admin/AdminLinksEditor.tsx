@@ -1,6 +1,5 @@
 "use client";
 
-import { Chip } from "@nextui-org/react";
 import { Link2, Lock, Plus, X } from "lucide-react";
 
 import { Button } from "@/components/nextui/Button";
@@ -74,9 +73,10 @@ function LinkRow({
 	row: AdminLinkRowPlan;
 }>) {
 	const changeLabel = CHANGE_LABELS[row.change];
+	const meta = [row.itemType, row.key].filter(Boolean).join(" · ");
 	return (
 		<li
-			className={`flex min-h-11 items-center gap-2 rounded-lg bg-black/[0.03] px-2.5 text-xs text-black/70 dark:bg-white/[0.04] dark:text-white/75 ${
+			className={`flex min-h-11 items-center gap-2 rounded-lg bg-black/[0.03] px-2.5 py-1.5 text-xs text-black/70 dark:bg-white/[0.04] dark:text-white/75 ${
 				row.change === "removed" ? "opacity-60" : ""
 			}`}
 			data-admin-link-change={row.change}
@@ -95,33 +95,32 @@ function LinkRow({
 					className={`block truncate font-medium ${
 						row.change === "removed" ? "line-through" : ""
 					}`}
+					title={row.title}
 				>
 					{row.title}
 				</span>
 				<span className="block truncate text-[11px] text-black/40 dark:text-white/40">
-					{[row.itemType, row.key].filter(Boolean).join(" · ")}
+					{meta}
+					{changeLabel ? (
+						<>
+							{meta ? " · " : ""}
+							<span className="text-accent">{changeLabel}</span>
+						</>
+					) : null}
+					{row.deleted ? (
+						<>
+							{" · "}
+							<span className="text-warning">Unpublished</span>
+						</>
+					) : null}
+					{row.sourceLabel ? (
+						<>
+							{" · "}
+							<span>{row.sourceLabel}</span>
+						</>
+					) : null}
 				</span>
 			</span>
-			{changeLabel ? (
-				<Chip
-					className="h-5"
-					color={row.change === "added" ? "primary" : "default"}
-					size="sm"
-					variant="flat"
-				>
-					{changeLabel}
-				</Chip>
-			) : null}
-			{row.deleted ? (
-				<Chip className="h-5" size="sm" variant="flat">
-					Unpublished
-				</Chip>
-			) : null}
-			{row.sourceLabel ? (
-				<Chip className="h-5" size="sm" variant="flat">
-					{row.sourceLabel}
-				</Chip>
-			) : null}
 			<LinkRowAction onRemove={onRemove} readOnly={readOnly} row={row} />
 		</li>
 	);

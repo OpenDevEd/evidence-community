@@ -1002,9 +1002,27 @@ export default function AdminWorkbench({
 		linkPick?.kind && detail?.draft && linkPick.forKey === detail.key
 			? linkPick.kind
 			: null;
+	// Titles of rows picked so far, kept even after a search scrolls them out of the list.
+	const [pickedLinkTargets, setPickedLinkTargets] = useState<
+		ReadonlyMap<string, AdminLinkTarget>
+	>(new Map());
 	const addLinkKeys = useCallback(
 		(kind: AdminItemLinkKind, keys: readonly string[]) => {
 			if (!detail?.draft) return;
+			setPickedLinkTargets((current) => {
+				const next = new Map(current);
+				for (const row of items) {
+					if (keys.includes(row.key)) {
+						next.set(row.key, {
+							deleted: row.state === "deleted",
+							itemType: row.itemType,
+							key: row.key,
+							title: row.title?.trim() || "Untitled record",
+						});
+					}
+				}
+				return next;
+			});
 			const payload = draftPayloadRef.current;
 			const current = linkKeysFromPayload(payload, detail.links.publishedKeys);
 			const next = [
@@ -1016,17 +1034,19 @@ export default function AdminWorkbench({
 			if (next.length === current[kind].length) return;
 			updatePayload({ ...payload, links: { ...current, [kind]: next } });
 		},
-		[detail, updatePayload],
+		[detail, items, updatePayload],
 	);
 	const linkTargets = useMemo<AdminLinkTarget[]>(
-		() =>
-			items.map((row) => ({
+		() => [
+			...pickedLinkTargets.values(),
+			...items.map((row) => ({
 				deleted: row.state === "deleted",
 				itemType: row.itemType,
 				key: row.key,
 				title: row.title?.trim() || "Untitled record",
 			})),
-		[items],
+		],
+		[items, pickedLinkTargets],
 	);
 	useEffect(() => {
 		// Escape leaves pick mode: a document keyboard listener is the only way
