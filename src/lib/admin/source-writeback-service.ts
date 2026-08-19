@@ -419,7 +419,7 @@ export async function resolveAdminSourceWritebackConflict(
 				.set({
 					conflictRemoteVersion: null,
 					lastAcknowledgedRemoteVersion: link.conflictRemoteVersion,
-					remoteCheckRequired: false,
+					remoteCheckRequestedAt: null,
 					remoteVersion: link.conflictRemoteVersion,
 					updatedAt: now,
 				})
@@ -511,7 +511,7 @@ export async function resolveAdminSourceWritebackConflict(
 			.set({
 				conflictRemoteVersion: null,
 				dirtyFields: [],
-				remoteCheckRequired: false,
+				remoteCheckRequestedAt: null,
 				updatedAt: now,
 			})
 			.where(

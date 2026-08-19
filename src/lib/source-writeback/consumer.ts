@@ -453,13 +453,14 @@ async function recordRemoteConflict(
 	options: SourceWritebackConsumerOptions,
 	itemKey: string,
 	sourceConnectionKey: string,
+	checkRequestedAt: Date,
 	conflictRemoteVersion: string,
 ) {
 	const updated = await options.database
 		.update(itemSourceLink)
 		.set({
 			conflictRemoteVersion,
-			remoteCheckRequired: false,
+			remoteCheckRequestedAt: null,
 			remoteVersion: conflictRemoteVersion,
 			updatedAt: currentTime(options),
 		})
@@ -468,7 +469,7 @@ async function recordRemoteConflict(
 				eq(itemSourceLink.itemKey, itemKey),
 				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
 				eq(itemSourceLink.writebackEnabled, true),
-				eq(itemSourceLink.remoteCheckRequired, true),
+				eq(itemSourceLink.remoteCheckRequestedAt, checkRequestedAt),
 			),
 		)
 		.returning({ itemKey: itemSourceLink.itemKey });
@@ -479,16 +480,17 @@ async function clearRemoteCheck(
 	options: SourceWritebackConsumerOptions,
 	itemKey: string,
 	sourceConnectionKey: string,
+	checkRequestedAt: Date,
 ) {
 	const updated = await options.database
 		.update(itemSourceLink)
-		.set({ remoteCheckRequired: false, updatedAt: currentTime(options) })
+		.set({ remoteCheckRequestedAt: null, updatedAt: currentTime(options) })
 		.where(
 			and(
 				eq(itemSourceLink.itemKey, itemKey),
 				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
 				eq(itemSourceLink.writebackEnabled, true),
-				eq(itemSourceLink.remoteCheckRequired, true),
+				eq(itemSourceLink.remoteCheckRequestedAt, checkRequestedAt),
 			),
 		)
 		.returning({ itemKey: itemSourceLink.itemKey });
@@ -1264,12 +1266,13 @@ export async function processNextSourceWritebackJob(
 		try {
 			// A source turned back on is checked for changes made while it was
 			// paused, under the same lease and heartbeat as the write itself.
-			if (
+			const checkRequestedAt =
 				loaded.request.entity === "item" &&
 				loaded.request.operation === "upsert" &&
-				"remoteCheckRequired" in loaded.state.link &&
-				loaded.state.link.remoteCheckRequired
-			) {
+				"remoteCheckRequestedAt" in loaded.state.link
+					? loaded.state.link.remoteCheckRequestedAt
+					: null;
+			if (checkRequestedAt && loaded.request.entity === "item") {
 				const remoteVersion = await adapter.readVersion(
 					{
 						entity: "item",
@@ -1292,12 +1295,14 @@ export async function processNextSourceWritebackJob(
 								options,
 								loaded.request.itemKey,
 								job.sourceConnectionKey,
+								checkRequestedAt,
 								decision.conflictRemoteVersion,
 							)
 						: await clearRemoteCheck(
 								options,
 								loaded.request.itemKey,
 								job.sourceConnectionKey,
+								checkRequestedAt,
 							);
 				checkOutcome = !applied
 					? "stale"

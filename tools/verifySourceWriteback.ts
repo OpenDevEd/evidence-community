@@ -837,7 +837,8 @@ async function verify() {
 			.from(itemSourceLink)
 			.where(eq(itemSourceLink.itemKey, conflictDraft.itemKey));
 		assert(
-			recheckLink?.writebackEnabled && recheckLink.remoteCheckRequired,
+			recheckLink?.writebackEnabled &&
+				recheckLink.remoteCheckRequestedAt !== null,
 			"Turning a linked source back on did not ask the worker to check it first",
 		);
 		const resumed = await processNextSourceWritebackJob(consumerOptions);
@@ -847,7 +848,7 @@ async function verify() {
 			.where(eq(itemSourceLink.itemKey, conflictDraft.itemKey));
 		assert(
 			resumed.status === "processed" &&
-				resumedLink?.remoteCheckRequired === false &&
+				resumedLink?.remoteCheckRequestedAt === null &&
 				resumedLink.conflictRemoteVersion === null,
 			`An unchanged source did not simply resume after the check: ${JSON.stringify({ resumed, resumedLink, version })}`,
 		);

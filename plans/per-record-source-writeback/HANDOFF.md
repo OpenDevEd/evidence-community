@@ -6,7 +6,7 @@ Date: 2026-08-18. Evidence Library branch `codex/per-record-source-writeback`, c
 
 1. `sources[]` no longer has `defaultWriteback`. Each entry is `{ key, provider: "zotero", groupId, apiKey, enabled, writebackEnabled, settings }`. The schema is strict, so a config that still sends `defaultWriteback` is rejected.
 2. Records choose their own writeback sources when they are published or unpublished (`POST …/publish { sourceKeys }`, `POST …/unpublish { removeFromSourceKeys }`), or through `PUT …/writeback/sources { sourceKeys }`. Attachments and notes copy their parent.
-3. Writeback status is per source: `GET/POST …/writeback/status|retry?source=<key>`. A new `conflict` state and `POST …/writeback/resolve?source=<key> { choice: "send-local" | "load-remote" }` exist. Migrations 0035 and 0036.
+3. Writeback status is per source: `GET/POST …/writeback/status|retry?source=<key>`. A new `conflict` state and `POST …/writeback/resolve?source=<key> { choice: "send-local" | "load-remote" }` exist. Migrations 0035–0038.
 
 ## What OpenScholar must do
 

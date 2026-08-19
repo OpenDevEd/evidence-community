@@ -58,7 +58,7 @@ Local only. Real proof runs in Plan 04 against Zotero: pause, edit the Zotero it
 
 ## Execution notes — 2026-08-18
 
-- No new job operation was needed. Migration 0036 adds two link columns: `remoteCheckRequired` (set when a source with a remote copy is turned back on; cleared when the worker has checked it) and `conflictRemoteVersion` (non-null means the source changed while paused). The `conflict` state is derived from `conflictRemoteVersion` before any job state.
+- No new job operation was needed. Migration 0036 adds two link columns: `remoteCheckRequestedAt` (the moment a source with a remote copy was turned back on; cleared when the worker has answered that exact check, so an older check can never answer a newer re-tick) and `conflictRemoteVersion` (non-null means the source changed while paused). The `conflict` state is derived from `conflictRemoteVersion` before any job state.
 - The writeback adapter contract gained `readVersion` and `readRecord`. `readRecord` returns the source's copy in the ingestion writer's shape, so “Load the source's version” stays provider-neutral: clear the link's local dirty fields, then `writeSourceIngestionBatch` with one record and the connection's current cursor as both expected and next cursor. The writer acknowledges the version because the link has no dirty fields left.
 - “Send this record” accepts the source's current version as seen (`lastAcknowledgedRemoteVersion = remoteVersion = conflictRemoteVersion`) and re-arms a full send.
 - Re-enabling a source at a revision whose job had already run queued nothing, because the job's idempotency key blocked a second insert. `enqueueFullWritebackForSources` now re-arms that job. This also fixes the Plan 02 “send right away” path for that case.

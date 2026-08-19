@@ -57,7 +57,7 @@ published record is sent whole to a source it gains outside a publish.
 
 Unticking a source stops its pending and future jobs (the worker supersedes
 them) and keeps the link and the remote copy. Ticking it again sets
-`remoteCheckRequired`; the worker reads the source's current version before
+`remoteCheckRequestedAt`; the worker reads the source's current version before
 sending. If the source changed while the link was paused, the link enters the
 `conflict` state (`conflictRemoteVersion`), nothing is sent, and the status
 popover offers two confirmed choices: send this record over the source, or

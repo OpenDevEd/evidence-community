@@ -396,12 +396,14 @@ async function applyItemWritebackLinkPlan(
 	}
 	if (plan.enable.length > 0) {
 		// A source that already holds a copy must be checked for changes made
-		// while this link was paused, before anything is sent to it.
+		// while this link was paused, before anything is sent to it. The check
+		// is bound to this exact moment so an older check cannot answer for it.
+		const enabledAt = new Date();
 		await transaction
 			.update(itemSourceLink)
 			.set({
-				remoteCheckRequired: sql`${itemSourceLink.remoteVersion} IS NOT NULL`,
-				updatedAt: new Date(),
+				remoteCheckRequestedAt: sql`CASE WHEN ${itemSourceLink.remoteVersion} IS NOT NULL THEN ${enabledAt.toISOString()}::timestamptz ELSE NULL END`,
+				updatedAt: enabledAt,
 				writebackEnabled: true,
 			})
 			.where(
@@ -416,7 +418,7 @@ async function applyItemWritebackLinkPlan(
 			.update(itemSourceLink)
 			.set({
 				conflictRemoteVersion: null,
-				remoteCheckRequired: false,
+				remoteCheckRequestedAt: null,
 				updatedAt: new Date(),
 				writebackEnabled: false,
 			})
