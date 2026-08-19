@@ -11,6 +11,7 @@ import { desc, eq } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
+import { sourceDisplayLabel } from "@/lib/admin/source-label";
 
 type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 type Executor = Database | Transaction;
@@ -46,22 +47,13 @@ export type SourceWritebackPolicy = {
 };
 
 type SourceWritebackPolicyLink = {
+	displayName?: string | null;
 	externalScopeKey: string | null;
 	itemEnabled: boolean;
 	provider: SourceProvider;
 	sourceKey: string;
 	sourceStatus: SourceConnectionStatus;
 };
-
-function sourceLabel(
-	provider: SourceProvider,
-	externalScopeKey: string | null,
-	key: string,
-) {
-	return provider === NATIVE_SOURCE_CONNECTION_KEY
-		? "Native"
-		: `${provider[0]!.toUpperCase()}${provider.slice(1)} · ${externalScopeKey ?? key}`;
-}
 
 export function configuredWritebackSourceKeys(
 	config: SourceWritebackConfiguration,
@@ -114,11 +106,12 @@ export function evaluateSourceWritebackPolicy(
 		reason,
 		sourceEnabled,
 		sourceKey: link.sourceKey,
-		sourceLabel: sourceLabel(
-			link.provider,
-			link.externalScopeKey,
-			link.sourceKey,
-		),
+		sourceLabel: sourceDisplayLabel({
+			displayName: link.displayName,
+			externalScopeKey: link.externalScopeKey,
+			key: link.sourceKey,
+			provider: link.provider,
+		}),
 		sourceStatus: link.sourceStatus,
 		supported,
 	};
@@ -139,6 +132,7 @@ export type ItemWritebackTargets = {
 };
 
 type WritebackTargetConnection = {
+	displayName?: string | null;
 	externalScopeKey: string | null;
 	key: string;
 	provider: SourceProvider;
@@ -194,6 +188,7 @@ export function buildItemWritebackTargets({
 		const link = linkBySource.get(key) ?? null;
 		const policy = evaluateSourceWritebackPolicy(
 			{
+				displayName: connection.displayName,
 				externalScopeKey: connection.externalScopeKey,
 				itemEnabled: link?.writebackEnabled ?? false,
 				provider: connection.provider,
@@ -218,11 +213,7 @@ export function buildItemWritebackTargets({
 			reason:
 				link || policy.reason !== "item-locked" ? policy.reason : "not-linked",
 			sourceKey: connection.key,
-			sourceLabel: sourceLabel(
-				connection.provider,
-				connection.externalScopeKey,
-				connection.key,
-			),
+			sourceLabel: sourceDisplayLabel(connection),
 		});
 	}
 
@@ -276,6 +267,7 @@ export async function resolveItemWritebackTargets(
 			.limit(1),
 		executor
 			.select({
+				displayName: sourceConnection.displayName,
 				externalScopeKey: sourceConnection.externalScopeKey,
 				key: sourceConnection.key,
 				provider: sourceConnection.provider,
@@ -337,6 +329,7 @@ export async function resolveCollectionWritebackPolicy(
 	const { connection, link } = selected;
 	return evaluateSourceWritebackPolicy(
 		{
+			displayName: connection.displayName,
 			externalScopeKey: connection.externalScopeKey,
 			itemEnabled: link.writebackEnabled,
 			provider: connection.provider,

@@ -98,6 +98,10 @@ export const sourceConnection = pgTable(
 		provider: text("provider", { enum: SOURCE_PROVIDERS }).notNull(),
 		scopeKind: text("scopeKind", { enum: SOURCE_SCOPE_KINDS }).notNull(),
 		externalScopeKey: varchar("externalScopeKey", { length: 512 }),
+		// The source's own name for this library (for example the Zotero group
+		// name), read from the provider by the sync worker. Shown instead of
+		// the provider and scope id wherever sources are listed.
+		displayName: varchar("displayName", { length: 255 }),
 		config: jsonb("config").$type<JsonObject>().notNull().default({}),
 		syncCursor: jsonb("syncCursor")
 			.$type<JsonObject>()

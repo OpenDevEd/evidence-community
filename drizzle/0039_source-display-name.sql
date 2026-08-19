@@ -1,0 +1,1 @@
+ALTER TABLE "sourceConnection" ADD COLUMN "displayName" varchar(255);

@@ -21,6 +21,7 @@ import {
 } from "@/lib/source-writeback/policy";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
+import { sourceDisplayLabel } from "./source-label";
 import {
 	adminCanonicalDraftToItemFields,
 	adminCanonicalPayloadToItemFields,
@@ -415,6 +416,7 @@ export async function getAdminLibrarySnapshot(
 	const sources = sourceRows.map((row) => {
 		const policy = evaluateSourceWritebackPolicy(
 			{
+				displayName: row.displayName,
 				externalScopeKey: row.externalScopeKey,
 				itemEnabled: true,
 				provider: row.provider,
@@ -425,12 +427,7 @@ export async function getAdminLibrarySnapshot(
 		);
 		return {
 			key: row.key,
-			label:
-				row.provider === NATIVE_SOURCE_CONNECTION_KEY
-					? "Native"
-					: `${row.provider[0]!.toUpperCase()}${row.provider.slice(1)} · ${
-							row.externalScopeKey ?? row.key
-						}`,
+			label: sourceDisplayLabel(row),
 			provider: row.provider,
 			readOnly:
 				row.provider !== NATIVE_SOURCE_CONNECTION_KEY &&

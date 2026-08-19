@@ -7,6 +7,7 @@ import { Button } from "@/components/nextui/Button";
 import { Checkbox } from "@/components/nextui/Checkbox";
 import DialogModal from "@/components/nextui/DialogModal";
 
+import { SourceProviderIcon } from "./SourceProviderIcon";
 import {
 	writebackDialogText,
 	type WritebackDialogMode,
@@ -104,6 +105,11 @@ function WritebackDialogForm({
 								}
 								size="sm"
 							>
+								<SourceProviderIcon
+									className="me-1.5 inline-block align-[-2px]"
+									provider={option.provider}
+									size={13}
+								/>
 								{option.sourceLabel}
 								{option.isOrigin ? " " : null}
 								{option.isOrigin ? (

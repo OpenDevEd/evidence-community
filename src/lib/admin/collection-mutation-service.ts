@@ -125,6 +125,7 @@ async function requireSourceTarget(
 	const policy = evaluateSourceWritebackPolicy(
 		connection
 			? {
+					displayName: connection.displayName,
 					externalScopeKey: connection.externalScopeKey,
 					itemEnabled: true,
 					provider: connection.provider,

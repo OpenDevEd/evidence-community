@@ -46,8 +46,8 @@ describe("resolveWritebackDialogOptions", () => {
 				selected: ["b"],
 			}),
 		).toEqual([
-			{ checked: false, disabled: false, helper: null, isOrigin: false, sourceKey: "a", sourceLabel: "Zotero · a" },
-			{ checked: true, disabled: false, helper: null, isOrigin: true, sourceKey: "b", sourceLabel: "Zotero · b" },
+			{ checked: false, disabled: false, helper: null, isOrigin: false, provider: "zotero", sourceKey: "a", sourceLabel: "Zotero · a" },
+			{ checked: true, disabled: false, helper: null, isOrigin: true, provider: "zotero", sourceKey: "b", sourceLabel: "Zotero · b" },
 		]);
 	});
 

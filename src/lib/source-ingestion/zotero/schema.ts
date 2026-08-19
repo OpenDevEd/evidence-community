@@ -28,6 +28,12 @@ export const zoteroConnectionConfigSchema = z
 	})
 	.strict();
 
+export const zoteroGroupResponseSchema = z
+	.object({
+		data: z.object({ name: z.string().trim().min(1).max(255) }).loose(),
+	})
+	.loose();
+
 export const zoteroKeyAccessSchema = z
 	.object({
 		access: z

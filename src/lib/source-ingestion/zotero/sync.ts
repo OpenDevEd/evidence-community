@@ -2,6 +2,7 @@ import {
 	collectionIdentity,
 	collectionSourceSnapshot,
 	itemSourceLink,
+	sourceConnection,
 } from "@opendeved/evidence-library-core";
 import { and, eq, isNull, ne, or, sql } from "drizzle-orm";
 
@@ -752,6 +753,32 @@ function expandLocalDescendantDeletes(
 	return { ...manifest, entries: retainedEntries };
 }
 
+/**
+ * Reads the group's name from Zotero and stores it on the connection so the
+ * admin sees the library's real name instead of "Zotero · <id>". A failure
+ * here never blocks the sync; the name is cosmetic.
+ */
+async function recordLibraryName(
+	database: Database,
+	connection: { displayName: string | null; key: string },
+	client: ZoteroApiClient,
+	scope: Parameters<ZoteroApiClient["libraryName"]>[0],
+) {
+	try {
+		const name = await client.libraryName(scope);
+		if (!name || name === connection.displayName) return;
+		await database
+			.update(sourceConnection)
+			.set({ displayName: name, updatedAt: new Date() })
+			.where(eq(sourceConnection.key, connection.key));
+	} catch (error) {
+		console.warn(
+			`Could not read the Zotero library name for ${connection.key}:`,
+			error instanceof Error ? error.message : error,
+		);
+	}
+}
+
 export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 	const connection = await loadZoteroSourceConnection(
 		options.database,
@@ -764,6 +791,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 			sleep: options.sleep,
 		});
 	await client.verifyKeyAccess(scope);
+	await recordLibraryName(options.database, connection, client, scope);
 	const attachmentContext: ZoteroAttachmentProcessorContext = {
 		client,
 		prefix,

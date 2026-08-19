@@ -7,6 +7,7 @@ export type WritebackDialogOption = {
 	disabled: boolean;
 	helper: string | null;
 	isOrigin: boolean;
+	provider: string;
 	sourceKey: string;
 	sourceLabel: string;
 };
@@ -37,6 +38,7 @@ export function resolveWritebackDialogOptions(
 			disabled,
 			helper,
 			isOrigin: target.isOrigin,
+			provider: target.provider,
 			sourceKey: target.sourceKey,
 			sourceLabel: target.sourceLabel,
 		};

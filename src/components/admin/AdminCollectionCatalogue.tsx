@@ -6,7 +6,6 @@ import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import {
 	Archive,
 	ChevronRight,
-	Cloud,
 	Folder,
 	FolderInput,
 	FolderOpen,
@@ -36,6 +35,8 @@ import { Dropdown } from "@/components/nextui/Dropdown";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
+
+import { SourceProviderIcon } from "./SourceProviderIcon";
 import { itemCollectionSourceIsAssignable } from "@/lib/admin/item-collection-policy";
 import type {
 	AdminCollectionCatalogEntry,
@@ -1381,13 +1382,15 @@ export function AdminCollectionCatalogue({
 											}
 											size={13}
 										/>
-										{row.source.key ===
-										NATIVE_SOURCE_CONNECTION_KEY ? (
-											<Folder aria-hidden size={14} />
-										) : row.source.readOnly ? (
+										{row.source.key !==
+											NATIVE_SOURCE_CONNECTION_KEY &&
+										row.source.readOnly ? (
 											<Lock aria-hidden size={13} />
 										) : (
-											<Cloud aria-hidden size={13} />
+											<SourceProviderIcon
+												provider={row.source.provider}
+												size={13}
+											/>
 										)}
 										<span className="truncate">
 											{row.source.label}

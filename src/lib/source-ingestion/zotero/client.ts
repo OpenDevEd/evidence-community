@@ -1,6 +1,7 @@
 import {
 	zoteroCollectionResponseSchema,
 	zoteroDeletedSchema,
+	zoteroGroupResponseSchema,
 	zoteroItemResponseSchema,
 	zoteroKeyAccessSchema,
 	zoteroVersionsSchema,
@@ -305,6 +306,17 @@ export class ZoteroApiClient {
 				403,
 			);
 		}
+	}
+
+	/** The library's own name: the group name for a group, null for a personal library. */
+	async libraryName(scope: ZoteroLibraryScope, signal?: AbortSignal) {
+		if (scope.kind !== "group") return null;
+		const response = await this.request(
+			`groups/${encodeURIComponent(scope.externalScopeKey)}`,
+			undefined,
+			{ signal },
+		);
+		return zoteroGroupResponseSchema.parse(await response.json()).data.name;
 	}
 
 	async item(
