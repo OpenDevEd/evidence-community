@@ -2014,6 +2014,7 @@ export function AdminInspector({
 						errors={validationErrors}
 						knownTargets={linkTargets}
 						onChange={onChange}
+						onOpenRecord={onBackToParent}
 						onStartPick={onStartLinkPick}
 						onStopPick={onStopLinkPick}
 						payload={payload}

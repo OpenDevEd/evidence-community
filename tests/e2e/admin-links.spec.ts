@@ -109,6 +109,13 @@ test("links two records, shows both sides, and removes the link again", async ({
 		inspector.getByRole("button", { name: "Changed: show published links" }),
 	).toHaveCount(0);
 
+	// Clicking a linked title opens that record in the editor
+	await links
+		.locator('[data-admin-link-list="cites"]')
+		.getByRole("button", { name: `Open ${citedTitle}` })
+		.click();
+	await expect(inspector.getByRole("heading", { name: citedTitle })).toBeVisible();
+
 	// The other side sees "Cited by"
 	inspector = await openRecord(page, citedKey);
 	const citedBy = inspector.locator('[data-admin-link-incoming="cites"]');
@@ -117,7 +124,7 @@ test("links two records, shows both sides, and removes the link again", async ({
 		"data-admin-link-origin",
 		"manual",
 	);
-	await expect(citedBy.getByRole("button")).toHaveCount(0);
+	await expect(citedBy.getByRole("button", { name: /^Remove/ })).toHaveCount(0);
 
 	// Public API of the cited record lists the citing record once caches clear
 	await expect

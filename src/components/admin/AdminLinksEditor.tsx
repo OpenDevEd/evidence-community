@@ -64,16 +64,22 @@ function LinkRowAction({
 }
 
 function LinkRow({
+	onOpen,
 	onRemove,
 	readOnly,
 	row,
 }: Readonly<{
+	/** Open the linked record in the editor. */
+	onOpen?: (key: string) => void;
 	onRemove?: () => void;
 	readOnly: boolean;
 	row: AdminLinkRowPlan;
 }>) {
 	const changeLabel = CHANGE_LABELS[row.change];
 	const meta = [row.itemType, row.key].filter(Boolean).join(" · ");
+	const titleClassName = `block max-w-full truncate text-left font-medium ${
+		row.change === "removed" ? "line-through" : ""
+	}`;
 	return (
 		<li
 			className={`flex min-h-11 items-center gap-2 rounded-lg bg-black/[0.03] px-2.5 py-1.5 text-xs text-black/70 dark:bg-white/[0.04] dark:text-white/75 ${
@@ -91,14 +97,21 @@ function LinkRow({
 				strokeWidth={1.7}
 			/>
 			<span className="min-w-0 flex-1">
-				<span
-					className={`block truncate font-medium ${
-						row.change === "removed" ? "line-through" : ""
-					}`}
-					title={row.title}
-				>
-					{row.title}
-				</span>
+				{onOpen ? (
+					<button
+						aria-label={`Open ${row.title}`}
+						className={`${titleClassName} w-full rounded hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus`}
+						onClick={() => onOpen(row.key)}
+						title={row.title}
+						type="button"
+					>
+						{row.title}
+					</button>
+				) : (
+					<span className={titleClassName} title={row.title}>
+						{row.title}
+					</span>
+				)}
 				<span className="block truncate text-[11px] text-black/40 dark:text-white/40">
 					{meta}
 					{changeLabel ? (
@@ -137,6 +150,7 @@ export function AdminLinksEditor({
 	errors,
 	knownTargets = [],
 	onChange,
+	onOpenRecord,
 	onStartPick,
 	onStopPick,
 	payload,
@@ -149,6 +163,8 @@ export function AdminLinksEditor({
 	/** Titles for records the table already knows, so freshly picked rows show a title. */
 	knownTargets?: readonly AdminLinkTarget[];
 	onChange: (payload: Record<string, unknown>) => void;
+	/** Open a linked record in the editor (clicking a row title). */
+	onOpenRecord?: (key: string) => void;
 	/** Turn the record table into a picker for this kind. */
 	onStartPick?: (kind: AdminItemLinkKind) => void;
 	onStopPick?: () => void;
@@ -222,6 +238,7 @@ export function AdminLinksEditor({
 								{rows.map((row) => (
 									<LinkRow
 										key={`${row.origin}:${row.key}`}
+										onOpen={onOpenRecord}
 										onRemove={() =>
 											setKeys(
 												kind,
@@ -255,7 +272,12 @@ export function AdminLinksEditor({
 						) : (
 							<ul aria-label={INCOMING_TITLES[kind]} className="space-y-1">
 								{rows.map((row) => (
-									<LinkRow key={`${row.origin}:${row.key}`} readOnly row={row} />
+									<LinkRow
+										key={`${row.origin}:${row.key}`}
+										onOpen={onOpenRecord}
+										readOnly
+										row={row}
+									/>
 								))}
 							</ul>
 						)}

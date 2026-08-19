@@ -141,13 +141,13 @@ describe("AdminLinksEditor", () => {
 
 		const sourceRow = container.querySelector('[data-admin-link-key="SRCA2345"]');
 		expect(sourceRow?.getAttribute("data-admin-link-origin")).toBe("source:zotero-main");
-		expect(sourceRow?.querySelector("button")).toBeNull();
+		expect(sourceRow?.querySelector('button[aria-label^="Remove"]')).toBeNull();
 		expect(sourceRow?.querySelector('[aria-label="Read only"]')).not.toBeNull();
 		expect(sourceRow?.textContent).toContain("Main Zotero group");
 
 		const incoming = container.querySelector('[data-admin-link-incoming="cites"]');
 		expect(incoming?.textContent).toContain("Citing book");
-		expect(incoming?.querySelector("button")).toBeNull();
+		expect(incoming?.querySelector('button[aria-label^="Remove"]')).toBeNull();
 	});
 
 	it("removes a manual link through onChange and keeps everything else", async () => {
@@ -190,6 +190,32 @@ describe("AdminLinksEditor", () => {
 		expect(container.textContent).toContain("Click records in the list to add them under Cites");
 		await act(async () => done!.click());
 		expect(onStopPick).toHaveBeenCalled();
+	});
+
+	it("opens a linked record when its title is clicked", async () => {
+		const onOpenRecord = vi.fn();
+		await act(async () => {
+			root.render(
+				<AdminLinksEditor
+					detail={detail()}
+					errors={{}}
+					onChange={vi.fn()}
+					onOpenRecord={onOpenRecord}
+					payload={{ itemType: "Book", links: { cites: ["AAAA2345"], related: [] } }}
+					readOnly={false}
+					sources={sources}
+				/>,
+			);
+		});
+		const open = container.querySelector<HTMLButtonElement>('button[aria-label="Open Kept book"]');
+		expect(open).not.toBeNull();
+		await act(async () => open!.click());
+		expect(onOpenRecord).toHaveBeenCalledWith("AAAA2345");
+		// Incoming rows open too
+		const openIncoming = container.querySelector<HTMLButtonElement>(
+			'button[aria-label="Open Citing book"]',
+		);
+		expect(openIncoming).not.toBeNull();
 	});
 
 	it("offers no add or remove controls when read only", async () => {
