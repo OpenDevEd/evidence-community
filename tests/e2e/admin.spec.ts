@@ -179,6 +179,7 @@ const deletedCollection: AdminCollectionCatalogEntry = {
 };
 
 const importedSource: AdminSource = {
+	collectionCount: 1,
 	key: "zotero-group",
 	label: "Zotero group",
 	provider: "zotero",
@@ -1442,6 +1443,7 @@ test("uses the same collection traversal model for multi-select", async ({
 	const extraSources: AdminSource[] = Array.from(
 		{ length: 12 },
 		(_, index) => ({
+			collectionCount: 1,
 			key: `multi-source-${index}`,
 			label: `Multi source ${index + 1}`,
 			provider: "zotero",
@@ -2195,6 +2197,7 @@ test("filters by searched native and imported collections without loading an opt
 	const extraSources: AdminSource[] = Array.from(
 		{ length: 12 },
 		(_, index) => ({
+			collectionCount: 1,
 			key: `source-${index}`,
 			label: `Source ${index + 1}`,
 			provider: "zotero",
@@ -3361,6 +3364,7 @@ test("restores branch focus when a collection retry finishes empty", async ({
 	page,
 }) => {
 	const emptySource: AdminSource = {
+		collectionCount: 0,
 		key: "empty-import",
 		label: "Empty import",
 		provider: "zotero",
@@ -3421,6 +3425,7 @@ test("does not steal focus when a collection load finishes after the user leaves
 	page,
 }) => {
 	const slowSource: AdminSource = {
+		collectionCount: 1,
 		key: "slow-import",
 		label: "Slow import",
 		provider: "zotero",

@@ -150,6 +150,8 @@ export type AdminCollectionCatalogPage = {
 };
 
 export type AdminSource = {
+	/** Active collections this source holds; tells the tree whether to offer a chevron. */
+	collectionCount: number;
 	key: string;
 	label: string;
 	provider: string;

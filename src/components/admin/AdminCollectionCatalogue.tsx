@@ -517,16 +517,20 @@ type CatalogueStatusRow = Exclude<
 	{ kind: "collection" } | { kind: "source" }
 >;
 
+/**
+ * Whether a source row offers a chevron. The library snapshot says how many
+ * collections a source holds, so collapsed sources stay unfetched; once a
+ * branch has loaded, its real contents win.
+ */
 function sourceHasCollections(
 	state: AdminCollectionCatalogueState,
-	sourceKey: string,
+	source: AdminSource,
 ) {
-	const branch = state.branches.get(adminCollectionBranchKey(sourceKey, null));
-	return Boolean(
-		branch &&
-			branch.status === "ready" &&
-			branch.items.length + branch.revealed.length > 0,
-	);
+	const branch = state.branches.get(adminCollectionBranchKey(source.key, null));
+	if (branch && branch.status === "ready") {
+		return branch.items.length + branch.revealed.length > 0;
+	}
+	return source.collectionCount > 0;
 }
 
 export function AdminCollectionCatalogue({
@@ -769,12 +773,9 @@ export function AdminCollectionCatalogue({
 		view,
 	]);
 
-	// Root branches load for every source, not only expanded ones, so a
-	// source row knows whether it has any collections (and hides its chevron
-	// when it has none).
 	useEffect(() => {
 		if (searchMode) return;
-		const expandedRootBranches = sources.map(({ key: sourceKey }) => ({
+		const expandedRootBranches = [...expandedSources].map((sourceKey) => ({
 			branch: catalogueState.branches.get(
 				adminCollectionBranchKey(sourceKey, null),
 			),
@@ -792,7 +793,7 @@ export function AdminCollectionCatalogue({
 			.slice(0, capacity)) {
 			void loadChildren(sourceKey, null);
 		}
-	}, [catalogueState.branches, loadChildren, searchMode, sources]);
+	}, [catalogueState.branches, expandedSources, loadChildren, searchMode]);
 
 	const catalogueTreeState = useMemo(
 		() =>
@@ -1389,7 +1390,7 @@ export function AdminCollectionCatalogue({
 									>
 										{sourceHasCollections(
 											catalogueTreeState,
-											row.source.key,
+											row.source,
 										) ? (
 											<ChevronRight
 												aria-hidden

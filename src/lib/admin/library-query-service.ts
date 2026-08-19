@@ -406,13 +406,24 @@ export function toAdminCollection(
 export async function getAdminLibrarySnapshot(
 	db: Database,
 ): Promise<AdminLibrarySnapshot> {
-	const [sourceRows, config] = await Promise.all([
+	const [sourceRows, config, collectionCounts] = await Promise.all([
 		db
 			.select()
 			.from(sourceConnection)
 			.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key)),
 		getLibraryConfig(),
+		db
+			.select({
+				count: sql<number>`count(*)::int`,
+				sourceConnectionKey: collection.sourceConnectionKey,
+			})
+			.from(collection)
+			.where(eq(collection.deleted, 0))
+			.groupBy(collection.sourceConnectionKey),
 	]);
+	const collectionCountBySource = new Map(
+		collectionCounts.map((row) => [row.sourceConnectionKey, row.count]),
+	);
 	const sources = sourceRows.map((row) => {
 		const policy = evaluateSourceWritebackPolicy(
 			{
@@ -426,6 +437,7 @@ export async function getAdminLibrarySnapshot(
 			config,
 		);
 		return {
+			collectionCount: collectionCountBySource.get(row.key) ?? 0,
 			key: row.key,
 			label: sourceDisplayLabel(row),
 			provider: row.provider,
@@ -441,6 +453,8 @@ export async function getAdminLibrarySnapshot(
 	});
 	if (!sources.some(({ key }) => key === NATIVE_SOURCE_CONNECTION_KEY)) {
 		sources.unshift({
+			collectionCount:
+				collectionCountBySource.get(NATIVE_SOURCE_CONNECTION_KEY) ?? 0,
 			key: NATIVE_SOURCE_CONNECTION_KEY,
 			label: "Native",
 			provider: NATIVE_SOURCE_CONNECTION_KEY,
