@@ -2246,6 +2246,7 @@ export default function AdminWorkbench({
 								</div>
 								)
 							}
+							bulkDisabledKey={activeLinkPick ? detail?.key ?? null : null}
 							bulkKeys={pickedLinkKeys ?? bulkKeys}
 							dragEnabled={!busy}
 							error={listError}

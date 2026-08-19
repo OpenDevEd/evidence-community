@@ -588,6 +588,7 @@ function SortHeader({
 export function AdminItemTable({
 	banner,
 	bulkActions,
+	bulkDisabledKey = null,
 	bulkKeys,
 	dragEnabled,
 	hasMore,
@@ -612,6 +613,8 @@ export function AdminItemTable({
 	/** Shown between the toolbar and the grid, e.g. the link pick-mode notice. */
 	banner?: ReactNode;
 	bulkActions?: ReactNode;
+	/** Row whose checkbox stays disabled (the record being edited while picking links). */
+	bulkDisabledKey?: string | null;
 	bulkKeys: ReadonlySet<string>;
 	dragEnabled: boolean;
 	hasMore: boolean;
@@ -641,9 +644,13 @@ export function AdminItemTable({
 
 	const [activeResizeColumn, setActiveResizeColumn] =
 		useState<AdminItemColumnId | null>(null);
+	// A record cannot link to itself, so its own row is left out while picking links.
+	const selectable = bulkDisabledKey
+		? items.filter(({ key }) => key !== bulkDisabledKey)
+		: items;
 	const allVisibleSelected =
-		items.length > 0 && items.every(({ key }) => bulkKeys.has(key));
-	const someVisibleSelected = items.some(({ key }) => bulkKeys.has(key));
+		selectable.length > 0 && selectable.every(({ key }) => bulkKeys.has(key));
+	const someVisibleSelected = selectable.some(({ key }) => bulkKeys.has(key));
 	const tableItems = useMemo<AdminTableItem[]>(
 		() =>
 			items.map((record) => ({
@@ -678,6 +685,7 @@ export function AdminItemTable({
 					>
 						<Checkbox
 							aria-label={`Select ${row.original.title}`}
+							isDisabled={row.original.key === bulkDisabledKey}
 							isSelected={row.original.bulkSelected}
 							onValueChange={(selected) =>
 								onToggleBulk(row.original.key, selected)

@@ -51,6 +51,8 @@ async function openRecord(page: Page, key: string) {
 test("links two records, shows both sides, and removes the link again", async ({
 	page,
 }, testInfo) => {
+	// Real stack: several publishes wait for search receipts, so give the flow room.
+	test.setTimeout(180_000);
 	const stamp = `${testInfo.workerIndex}-${testInfo.retry}-${Date.now()}`;
 	const citingTitle = `Link e2e citing ${stamp}`;
 	const citedTitle = `Link e2e cited ${stamp}`;
@@ -82,6 +84,10 @@ test("links two records, shows both sides, and removes the link again", async ({
 	await links.getByRole("button", { name: "Add to Related" }).click();
 	const relatedBanner = page.locator('[data-admin-link-pick-banner="related"]');
 	await expect(relatedBanner).toBeVisible();
+	// The record being edited cannot be picked for itself
+	await page.getByRole("textbox", { name: "Search records" }).fill(`Link e2e citing ${stamp}`);
+	await expect(page.getByRole("checkbox", { name: `Select ${citingTitle}` })).toBeDisabled();
+	await page.getByRole("textbox", { name: "Search records" }).fill(citedTitle);
 	const citedCheckbox = page.getByRole("checkbox", { name: `Select ${citedTitle}` });
 	await expect(citedCheckbox).not.toBeChecked();
 	await citedCheckbox.check();
