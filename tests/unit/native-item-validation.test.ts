@@ -68,6 +68,19 @@ describe("native item draft validation", () => {
 		).toThrow("Use only one name for Language");
 	});
 
+	it("rejects an attachment without a parent record", () => {
+		try {
+			validateNativeItemDraft({ itemType: "Attachment", title: "Loose PDF" });
+			expect.unreachable("A parentless attachment must not validate");
+		} catch (error) {
+			expect(error).toMatchObject({
+				fields: {
+					parentItem: "Choose the record this attachment belongs to.",
+				},
+			});
+		}
+	});
+
 	it("can validate source child metadata before parent references are resolved", () => {
 		expect(
 			validateNativeItemDraft(
@@ -109,7 +122,10 @@ describe("native item draft validation", () => {
 			) {
 				payload.note = "Example note";
 			}
-			if (definition.itemType === "attachment") {
+			if (
+				definition.itemType === "attachment" ||
+				definition.itemType === "note"
+			) {
 				payload.parentItem = "ABCD2345";
 			}
 			if (definition.itemType === "annotation") {
@@ -145,7 +161,10 @@ describe("native item draft validation", () => {
 				payload[field.field] = value;
 				expected.set(field.field, value);
 			}
-			if (definition.itemType === "attachment") {
+			if (
+				definition.itemType === "attachment" ||
+				definition.itemType === "note"
+			) {
 				payload.parentItem = "ABCD2345";
 			}
 			if (definition.itemType === "annotation") {
@@ -234,6 +253,10 @@ describe("native item draft validation", () => {
 					{
 						itemType: definition.itemType,
 						[titleDescriptor.field]: "   ",
+						...(definition.itemType === "attachment" ||
+						definition.itemType === "note"
+							? { parentItem: "ABCD2345" }
+							: {}),
 					},
 					{ requireTitle: true },
 				);
@@ -336,17 +359,11 @@ describe("native item draft validation", () => {
 		expect(() =>
 			validateNativeItemDraft({
 				collections: ["ABCD2345"],
-				itemType: "Note",
-				note: "Standalone note",
-			}),
-		).not.toThrow();
-		expect(() =>
-			validateNativeItemDraft({
-				collections: ["ABCD2345"],
 				itemType: "Attachment",
-				title: "Standalone file",
+				parentItem: "ABCD2345",
+				title: "Child file",
 			}),
-		).not.toThrow();
+		).toThrow("Child records inherit collections from their parent");
 
 		expect(() =>
 			validateNativeItemDraft({

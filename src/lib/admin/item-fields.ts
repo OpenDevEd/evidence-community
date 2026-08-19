@@ -18,7 +18,10 @@ export const ADMIN_SHARED_PAYLOAD_FIELDS = new Set([
 ]);
 
 const PARENT_CAPABLE_ITEM_TYPES = new Set(["annotation", "attachment", "note"]);
-const PARENT_REQUIRED_ITEM_TYPES = new Set(["annotation"]);
+// Attachments, notes and annotations always belong to a record. None of
+// them is a record of its own: not creatable from the New item list, and
+// not listed in the public library on its own.
+const PARENT_REQUIRED_ITEM_TYPES = new Set(["annotation", "attachment", "note"]);
 
 export function adminSharedPayloadFieldsForZoteroItemType(definition: {
 	creatorTypes: readonly unknown[];
@@ -196,6 +199,22 @@ export function adminCanonicalDraftToItemFields<
 	};
 }
 
+/** Item types an admin may create as a record of their own. */
 export function isTopLevelAdminItemType(itemType: string) {
-	return itemType.toLowerCase() !== "annotation";
+	return !PARENT_REQUIRED_ITEM_TYPES.has(itemType.toLowerCase());
+}
+
+/**
+ * Whether a record belongs in the public library as a result of its own.
+ * Children never do, and a parentless attachment, note or annotation (for
+ * example one imported from a source) never does either.
+ */
+export function isPublicTopLevelItem(record: {
+	itemType: string;
+	parentItem: string | null;
+}) {
+	return (
+		record.parentItem === null &&
+		!PARENT_REQUIRED_ITEM_TYPES.has(record.itemType.toLowerCase())
+	);
 }

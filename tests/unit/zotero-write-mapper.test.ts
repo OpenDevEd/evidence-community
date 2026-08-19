@@ -13,7 +13,7 @@ describe("Zotero writeback mapping", () => {
 		expect(itemType.enumValues).toHaveLength(getZoteroItemTypes().size);
 		for (const canonicalItemType of itemType.enumValues) {
 			const childFields =
-				canonicalItemType === "Attachment"
+				canonicalItemType === "Attachment" || canonicalItemType === "Note"
 					? { parentItem: "PARENT23" }
 					: canonicalItemType === "Annotation"
 						? {
@@ -39,9 +39,15 @@ describe("Zotero writeback mapping", () => {
 		}
 	});
 
-	it("allows standalone attachments but rejects incomplete annotations", () => {
+	it("requires a parent for attachments and rejects incomplete annotations", () => {
 		expect(() =>
 			createZoteroItemPayload({ itemType: "Attachment" }, "ATTACH23"),
+		).toThrow(ZoteroWritebackMappingError);
+		expect(() =>
+			createZoteroItemPayload(
+				{ itemType: "Attachment", parentItem: "PARENT23" },
+				"ATTACH23",
+			),
 		).not.toThrow();
 		expect(() =>
 			createZoteroItemPayload(
@@ -191,8 +197,11 @@ describe("Zotero writeback mapping", () => {
 			title: "Current title",
 		});
 		expect(
-			createZoteroItemPatch({ itemType: "Note" }, ["parentItem"]),
-		).toEqual({ parentItem: false });
+			createZoteroItemPatch(
+				{ itemType: "Note", parentItem: "PARENT23" },
+				["parentItem"],
+			),
+		).toEqual({ parentItem: "PARENT23" });
 	});
 
 	it("creates native attachments as linked PDF URLs", () => {
