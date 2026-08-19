@@ -85,6 +85,17 @@ describe("AdminItemPicker", () => {
 		expect(options).toEqual(["FREE2345"]);
 	});
 
+	it("says when more records match than it can show", async () => {
+		api.getAdminItems.mockResolvedValue({ hasMore: true, items: rows, nextCursor: "next" });
+		await act(async () => {
+			root.render(
+				<AdminItemPicker excludeKeys={[]} onPick={vi.fn()} selfKey="SELF2345" />,
+			);
+		});
+		await typeQuery("rec");
+		expect(container.textContent).toContain("More records match");
+	});
+
 	it("picks the highlighted record with Enter", async () => {
 		const onPick = vi.fn();
 		await act(async () => {

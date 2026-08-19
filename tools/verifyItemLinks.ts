@@ -227,7 +227,10 @@ async function verify() {
 		const publicA = await getPublicItemLinks(db, A);
 		assert(
 			publicA.cites.join() === C &&
-				publicA.related.slice().sort().join() === [B, D].join() &&
+				publicA.related
+					.slice()
+					.sort((left, right) => left.localeCompare(right))
+					.join() === [B, D].join() &&
 				publicA.citedBy.length === 0,
 			`Public links for A are wrong: ${JSON.stringify(publicA)}`,
 		);
@@ -350,19 +353,33 @@ async function verify() {
 				Object.keys(draftPayloadAfterPublish.patch).length === 0,
 			"Reopening the record must show published links with an empty patch",
 		);
-		const removed = await saveItemDraft(db, {
+		// A save that leaves out `links` keeps the published links.
+		const { links: _omitted, ...payloadWithoutLinks } = draftPayloadAfterPublish.payload;
+		const keptLinks = await saveItemDraft(db, {
 			itemKey: draftA.itemKey,
 			expectedDraftRevision: draftPayloadAfterPublish.draftRevision,
 			expectedPayload: draftPayloadAfterPublish.payload,
+			payload: { ...payloadWithoutLinks, title: "Publish link source (edited)" },
+		});
+		assert(
+			JSON.stringify(keptLinks.payload.links) ===
+				JSON.stringify({ cites: [draftB.itemKey], related: [B] }) &&
+				keptLinks.patch.links === undefined,
+			`A save without links must keep the current links: ${JSON.stringify(keptLinks.patch)}`,
+		);
+		const removed = await saveItemDraft(db, {
+			itemKey: draftA.itemKey,
+			expectedDraftRevision: keptLinks.draftRevision,
+			expectedPayload: keptLinks.payload,
 			payload: {
-				...draftPayloadAfterPublish.payload,
+				...keptLinks.payload,
 				links: { cites: [], related: [B] },
 			},
 		});
 		assert(
 			JSON.stringify(removed.patch.links) ===
 				JSON.stringify({ cites: [], related: [B] }),
-			"Removing a link must show only the links field in the patch",
+			"Removing a link must record the links field in the patch",
 		);
 		await publishItemDraft(db, draftA.itemKey);
 		const afterRemove = await getManualLinkKeys(db, draftA.itemKey);

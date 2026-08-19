@@ -6,7 +6,7 @@ import { itemSourceLink } from "@/db/schema/source";
 import { formatZoteroItemUri } from "@/lib/source-ingestion/zotero/uri";
 import { isManualItemLinkOrigin } from "@/lib/links/item-links";
 
-type Executor = Database | DatabaseTransaction;
+type Executor = Pick<Database | DatabaseTransaction, "select">;
 
 export type RelatedLinkRow = {
 	fromKey: string;
@@ -49,7 +49,7 @@ export function relatedLinkUris({
 		}
 	}
 	const uris: string[] = [];
-	for (const target of [...new Set(targets)]) {
+	for (const target of new Set(targets)) {
 		const remoteKey = remoteKeys.get(target);
 		if (!remoteKey) continue;
 		uris.push(

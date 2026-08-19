@@ -436,6 +436,26 @@ async function linkTargetKeys(
  * Writes the editor's links for a record and returns every other record whose
  * "cited by" or "related" view changed, so the caller can reindex them.
  */
+/**
+ * A save that says nothing about links keeps the links the editor already has.
+ * Only an explicit `links` value (even empty lists) changes them.
+ */
+function keepLinksWhenOmitted(
+	payload: unknown,
+	currentPayload: Record<string, unknown>,
+) {
+	if (
+		!payload ||
+		typeof payload !== "object" ||
+		Array.isArray(payload) ||
+		Object.hasOwn(payload, "links") ||
+		currentPayload.links === undefined
+	) {
+		return payload;
+	}
+	return { ...(payload as Record<string, unknown>), links: currentPayload.links };
+}
+
 function assertNoSelfLinks(
 	itemKey: string,
 	links: { cites: string[]; related: string[] },
@@ -480,7 +500,11 @@ async function publishItemLinks(
 			removedRelated.push(...result.removed);
 		}
 	}
-	return { changedTargets: [...changed].sort(), relatedChanged, removedRelated };
+	return {
+		changedTargets: [...changed].sort((left, right) => left.localeCompare(right)),
+		relatedChanged,
+		removedRelated,
+	};
 }
 
 export async function createNativeItemDraft(db: Database, payload: unknown) {
@@ -658,7 +682,7 @@ async function saveItemDraftInTransaction(
 	const validated = rebaseNativeItemDraftPayload({
 		currentPayload,
 		expectedPayload,
-		payload,
+		payload: keepLinksWhenOmitted(payload, currentPayload),
 	});
 	const patch = createItemDraftPatch(basePayload, validated.payload);
 	assertNoSelfLinks(itemKey, validated.links);

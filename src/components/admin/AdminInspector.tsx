@@ -1969,6 +1969,7 @@ export function AdminInspector({
 						recordKey={detail.key}
 					/>
 				</Section>
+				{!detail.parentItem ? (
 				<Section
 					actions={
 						diff.links ? (
@@ -2007,6 +2008,7 @@ export function AdminInspector({
 						sources={sources}
 					/>
 				</Section>
+				) : null}
 				{!detail.parentItem ? (
 					<Section
 						actions={

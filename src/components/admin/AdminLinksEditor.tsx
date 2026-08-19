@@ -38,15 +38,44 @@ const CHANGE_LABELS: Record<AdminLinkRowPlan["change"], string | null> = {
 	unchanged: null,
 };
 
+function LinkRowAction({
+	onRemove,
+	readOnly,
+	row,
+}: Readonly<{
+	onRemove?: () => void;
+	readOnly: boolean;
+	row: AdminLinkRowPlan;
+}>) {
+	if (row.origin !== "manual") {
+		return (
+			<Tooltip content={`Comes from ${row.sourceLabel ?? "a source"}. Change it there.`}>
+				<Lock aria-label="Read only" className="shrink-0 opacity-40" size={11} />
+			</Tooltip>
+		);
+	}
+	if (!row.removable || readOnly || !onRemove) return null;
+	return (
+		<button
+			aria-label={`Remove ${row.title} from ${OUTGOING_TITLES[row.kind]}`}
+			className="grid size-7 shrink-0 place-items-center rounded-md text-black/35 hover:bg-black/[0.06] hover:text-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/35 dark:hover:bg-white/[0.07] dark:hover:text-white/75"
+			onClick={onRemove}
+			type="button"
+		>
+			<X aria-hidden size={13} />
+		</button>
+	);
+}
+
 function LinkRow({
 	onRemove,
 	readOnly,
 	row,
-}: {
+}: Readonly<{
 	onRemove?: () => void;
 	readOnly: boolean;
 	row: AdminLinkRowPlan;
-}) {
+}>) {
 	const changeLabel = CHANGE_LABELS[row.change];
 	return (
 		<li
@@ -96,20 +125,7 @@ function LinkRow({
 					{row.sourceLabel}
 				</Chip>
 			) : null}
-			{row.origin !== "manual" ? (
-				<Tooltip content={`Comes from ${row.sourceLabel ?? "a source"}. Change it there.`}>
-					<Lock aria-label="Read only" className="shrink-0 opacity-40" size={11} />
-				</Tooltip>
-			) : row.removable && !readOnly && onRemove ? (
-				<button
-					aria-label={`Remove ${row.title} from ${OUTGOING_TITLES[row.kind]}`}
-					className="grid size-7 shrink-0 place-items-center rounded-md text-black/35 hover:bg-black/[0.06] hover:text-black/70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:text-white/35 dark:hover:bg-white/[0.07] dark:hover:text-white/75"
-					onClick={onRemove}
-					type="button"
-				>
-					<X aria-hidden size={13} />
-				</button>
-			) : null}
+			<LinkRowAction onRemove={onRemove} readOnly={readOnly} row={row} />
 		</li>
 	);
 }
@@ -126,7 +142,7 @@ export function AdminLinksEditor({
 	pickerAutoFocus,
 	readOnly,
 	sources,
-}: {
+}: Readonly<{
 	detail: AdminItemDetail;
 	errors: AdminFieldErrors;
 	onChange: (payload: Record<string, unknown>) => void;
@@ -134,7 +150,7 @@ export function AdminLinksEditor({
 	pickerAutoFocus?: boolean;
 	readOnly: boolean;
 	sources: AdminSource[];
-}) {
+}>) {
 	const [pickerKind, setPickerKind] = useState<AdminItemLinkKind | null>(null);
 	const [knownTargets, setKnownTargets] = useState<AdminLinkTarget[]>([]);
 	const error = firstAdminFieldError(errors, "links");

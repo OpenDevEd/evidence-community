@@ -11,10 +11,12 @@ export type RelationTabPlan = {
 const TAB_ORDER: RelationTabKey[] = ["general", "cites", "citedBy"];
 
 function tailKeys(value: unknown): string[] {
-	const values = Array.isArray(value) ? value : value ? [value] : [];
+	let values: unknown[] = [];
+	if (Array.isArray(value)) values = value;
+	else if (value) values = [value];
 	return values.flatMap((entry) => {
 		if (typeof entry !== "string") return [];
-		const key = entry.split("/").filter(Boolean).pop();
+		const key = entry.split("/").findLast((part) => part.length > 0);
 		return key ? [key] : [];
 	});
 }

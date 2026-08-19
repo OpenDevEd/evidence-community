@@ -23,14 +23,15 @@ export function AdminItemPicker({
 	excludeKeys,
 	onPick,
 	selfKey,
-}: {
+}: Readonly<{
 	autoFocus?: boolean;
 	excludeKeys: readonly string[];
 	onPick: (target: AdminLinkTarget) => void;
 	selfKey: string;
-}) {
+}>) {
 	const [query, setQuery] = useState("");
 	const [rows, setRows] = useState<AdminItemListRow[]>([]);
+	const [hasMore, setHasMore] = useState(false);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [highlighted, setHighlighted] = useState(0);
@@ -46,6 +47,7 @@ export function AdminItemPicker({
 		const trimmed = value.trim();
 		if (!trimmed) {
 			setRows([]);
+			setHasMore(false);
 			setLoading(false);
 			setError(null);
 			return;
@@ -74,13 +76,14 @@ export function AdminItemPicker({
 				.then((page) => {
 					if (version !== requestVersion.current) return;
 					setRows(page.items);
+					setHasMore(page.hasMore);
 					setError(null);
 					setLoading(false);
 				})
-				.catch((caught: unknown) => {
+				.catch((error_: unknown) => {
 					if (abort.signal.aborted || version !== requestVersion.current) return;
 					setError(
-						caught instanceof Error ? caught.message : "Search failed.",
+						error_ instanceof Error ? error_.message : "Search failed.",
 					);
 					setLoading(false);
 				});
@@ -88,6 +91,9 @@ export function AdminItemPicker({
 	};
 
 	const options = pickableLinkTargets(rows, { excludeKeys, selfKey });
+	const emptyMessage = query.trim()
+		? "No matching records."
+		: "Type to search the library.";
 	const pick = (row: AdminItemListRow) => {
 		onPick({
 			deleted: row.state === "deleted",
@@ -132,15 +138,14 @@ export function AdminItemPicker({
 				<div className="grid min-h-10 place-items-center">
 					<Spinner label="Searching records" size="sm" />
 				</div>
-			) : !query.trim() ? (
-				<p className="text-xs text-black/40 dark:text-white/40">
-					Type to search the library.
-				</p>
-			) : options.length === 0 ? (
+			) : null}
+			{!loading && options.length === 0 ? (
 				<p className="text-xs text-black/40 dark:text-white/40" role="status">
-					No matching records.
+					{emptyMessage}
+					{hasMore ? " Only the first matches were checked; type more of the title." : ""}
 				</p>
-			) : (
+			) : null}
+			{!loading && options.length > 0 ? (
 				<ul
 					aria-label="Matching records"
 					className="max-h-72 space-y-1 overflow-y-auto"
@@ -175,7 +180,12 @@ export function AdminItemPicker({
 						</li>
 					))}
 				</ul>
-			)}
+			) : null}
+			{!loading && options.length > 0 && hasMore ? (
+				<p className="text-xs text-black/40 dark:text-white/40" role="status">
+					More records match. Type more of the title to narrow the list.
+				</p>
+			) : null}
 		</div>
 	);
 }

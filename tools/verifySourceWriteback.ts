@@ -801,7 +801,7 @@ async function verify() {
 		await publishItemDraft(db, relatedSource.itemKey);
 		const callsBeforeRelated = calls.length;
 		const relatedResult = await processNextSourceWritebackJob(consumerOptions);
-		const relatedCall = calls[calls.length - 1];
+		const relatedCall = calls.at(-1);
 		const sentRelations = relatedCall?.payload.relations as
 			| Record<string, unknown>
 			| undefined;
