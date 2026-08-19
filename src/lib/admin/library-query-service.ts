@@ -283,14 +283,21 @@ async function adminItemLinks(
 		getOutgoingLinks(db, itemKey),
 		getIncomingLinks(db, itemKey),
 	]);
-	const fromSources: AdminLinkRow[] = outgoing
-		.filter((row) => !isManualItemLinkOrigin(row.origin))
-		.map((row) => ({ key: row.toKey, kind: row.kind, origin: row.origin }));
-	const incomingRows: AdminLinkRow[] = incoming.map((row) => ({
-		key: row.fromKey,
-		kind: row.kind,
-		origin: row.origin,
-	}));
+	// "related" is one link seen from both sides, so a source row pointing at this
+	// record is shown like one starting here. Only "cites" keeps a direction.
+	const fromSources: AdminLinkRow[] = [
+		...outgoing
+			.filter((row) => !isManualItemLinkOrigin(row.origin))
+			.map((row) => ({ key: row.toKey, kind: row.kind, origin: row.origin })),
+		...incoming
+			.filter(
+				(row) => row.kind === "related" && !isManualItemLinkOrigin(row.origin),
+			)
+			.map((row) => ({ key: row.fromKey, kind: row.kind, origin: row.origin })),
+	];
+	const citedBy: AdminLinkRow[] = incoming
+		.filter((row) => row.kind === "cites")
+		.map((row) => ({ key: row.fromKey, kind: row.kind, origin: row.origin }));
 	const targetKeys = [
 		...new Set([
 			...keys.keys.cites,
@@ -298,7 +305,7 @@ async function adminItemLinks(
 			...keys.publishedKeys.cites,
 			...keys.publishedKeys.related,
 			...fromSources.map((row) => row.key),
-			...incomingRows.map((row) => row.key),
+			...citedBy.map((row) => row.key),
 		]),
 	];
 	const targetRows =
@@ -314,8 +321,8 @@ async function adminItemLinks(
 					.where(inArray(item.key, targetKeys))
 			: [];
 	return {
+		citedBy,
 		fromSources,
-		incoming: incomingRows,
 		keys: keys.keys,
 		publishedKeys: keys.publishedKeys,
 		targets: targetRows.map((row) => ({

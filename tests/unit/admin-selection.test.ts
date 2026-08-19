@@ -15,7 +15,7 @@ function attachmentDetail(key: string): AdminItemDetail {
 		filePublication: null,
 		links: {
 			fromSources: [],
-			incoming: [],
+			citedBy: [],
 			keys: { cites: [], related: [] },
 			publishedKeys: { cites: [], related: [] },
 			targets: [],

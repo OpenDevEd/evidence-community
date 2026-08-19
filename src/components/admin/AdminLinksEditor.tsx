@@ -20,13 +20,10 @@ const OUTGOING_TITLES: Record<AdminItemLinkKind, string> = {
 	cites: "Cites",
 	related: "Related",
 };
-const INCOMING_TITLES: Record<AdminItemLinkKind, string> = {
-	cites: "Cited by",
-	related: "Related to this record",
-};
+const CITED_BY_TITLE = "Cited by";
 const OUTGOING_HINTS: Record<AdminItemLinkKind, string> = {
 	cites: "Records this record cites.",
-	related: "Records connected to this record.",
+	related: "Records connected to this record. Both records show the link and either can remove it.",
 };
 const CHANGE_LABELS: Record<AdminLinkRowPlan["change"], string | null> = {
 	added: "Added in this draft",
@@ -140,8 +137,8 @@ function LinkRow({
 }
 
 /**
- * Links section of the record editor: two editable lists (Cites, Related) and
- * two read-only lists (Cited by, Related to this record).
+ * Links section of the record editor: two editable lists (Cites, Related — one
+ * link shown from both sides) and one read-only list (Cited by).
  * "Add to …" does not open a dialog: it asks the workbench to turn the record
  * table into a picker (`onStartPick`), and rows clicked there are added here.
  */
@@ -254,36 +251,27 @@ export function AdminLinksEditor({
 					</div>
 				);
 			})}
-			{ADMIN_LINK_KINDS.map((kind) => {
-				const rows = plan.incoming[kind];
-				return (
-					<div
-						key={`incoming-${kind}`}
-						className="space-y-1.5"
-						data-admin-link-incoming={kind}
-					>
-						<h4 className="text-xs font-semibold text-black/60 dark:text-white/65">
-							{INCOMING_TITLES[kind]}
-						</h4>
-						{rows.length === 0 ? (
-							<p className="flex min-h-9 items-center text-xs text-black/35 dark:text-white/35">
-								No records yet.
-							</p>
-						) : (
-							<ul aria-label={INCOMING_TITLES[kind]} className="space-y-1">
-								{rows.map((row) => (
-									<LinkRow
-										key={`${row.origin}:${row.key}`}
-										onOpen={onOpenRecord}
-										readOnly
-										row={row}
-									/>
-								))}
-							</ul>
-						)}
-					</div>
-				);
-			})}
+			<div className="space-y-1.5" data-admin-link-incoming="cites">
+				<h4 className="text-xs font-semibold text-black/60 dark:text-white/65">
+					{CITED_BY_TITLE}
+				</h4>
+				{plan.citedBy.length === 0 ? (
+					<p className="flex min-h-9 items-center text-xs text-black/35 dark:text-white/35">
+						No records yet.
+					</p>
+				) : (
+					<ul aria-label={CITED_BY_TITLE} className="space-y-1">
+						{plan.citedBy.map((row) => (
+							<LinkRow
+								key={`${row.origin}:${row.key}`}
+								onOpen={onOpenRecord}
+								readOnly
+								row={row}
+							/>
+						))}
+					</ul>
+				)}
+			</div>
 		</div>
 	);
 }

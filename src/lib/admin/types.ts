@@ -87,7 +87,7 @@ export type AdminLinkTarget = {
 	title: string;
 };
 
-/** A link row that the editor cannot change here: it comes from a source or points at this record. */
+/** A link row that the editor cannot change here: it comes from a source or is a citation of this record. */
 export type AdminLinkRow = {
 	key: string;
 	kind: AdminItemLinkKind;
@@ -97,13 +97,13 @@ export type AdminLinkRow = {
 export type AdminItemLinkKeys = Record<AdminItemLinkKind, string[]>;
 
 export type AdminItemLinks = {
-	/** Records this record links to, according to sources (read-only here). */
+	/** Records that cite this record (read-only here). */
+	citedBy: AdminLinkRow[];
+	/** Links owned by sources, read-only here: outgoing `cites`, and `related` in either direction. */
 	fromSources: AdminLinkRow[];
-	/** Records that link to this record ("cited by", "related to this record"). */
-	incoming: AdminLinkRow[];
-	/** Editor-owned outgoing link keys as currently drafted. */
+	/** Editor-owned link keys as currently drafted: outgoing `cites`, `related` from both sides. */
 	keys: AdminItemLinkKeys;
-	/** Editor-owned outgoing link keys as published. */
+	/** Editor-owned link keys as published. */
 	publishedKeys: AdminItemLinkKeys;
 	/** Titles and states for every key named above. */
 	targets: AdminLinkTarget[];

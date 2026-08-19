@@ -20,10 +20,7 @@ const sources: AdminSource[] = [
 
 const links = {
 	fromSources: [{ key: "SRC12345", kind: "related" as const, origin: "source:zotero-main" }],
-	incoming: [
-		{ key: "INCA2345", kind: "cites" as const, origin: "manual" },
-		{ key: "INCB2345", kind: "related" as const, origin: "source:zotero-main" },
-	],
+	citedBy: [{ key: "INCA2345", kind: "cites" as const, origin: "manual" }],
 	keys: { cites: ["AAAA2345"], related: [] },
 	publishedKeys: { cites: ["AAAA2345", "GONE2345"], related: [] },
 	targets: [
@@ -35,7 +32,7 @@ const links = {
 };
 
 describe("planAdminLinks", () => {
-	it("marks drafted, removed and source rows and lists incoming links per kind", () => {
+	it("marks drafted, removed and source rows and lists who cites this record", () => {
 		const plan = planAdminLinks({
 			keys: { cites: ["AAAA2345", "NEWW2345"], related: [] },
 			knownTargets: [
@@ -60,9 +57,8 @@ describe("planAdminLinks", () => {
 				title: "From Zotero",
 			}),
 		]);
-		expect(plan.incoming.cites.map((row) => row.title)).toEqual(["Citing book"]);
-		expect(plan.incoming.related.map((row) => [row.key, row.title, row.sourceLabel])).toEqual([
-			["INCB2345", "INCB2345", "Main Zotero group"],
+		expect(plan.citedBy.map((row) => [row.title, row.removable])).toEqual([
+			["Citing book", false],
 		]);
 	});
 

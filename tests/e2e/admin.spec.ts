@@ -241,7 +241,7 @@ function publishedDraft(
 
 const emptyLinks = {
 	fromSources: [],
-	incoming: [],
+	citedBy: [],
 	keys: { cites: [], related: [] },
 	publishedKeys: { cites: [], related: [] },
 	targets: [],

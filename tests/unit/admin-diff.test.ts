@@ -38,7 +38,7 @@ function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 		filePublication: null,
 		links: {
 			fromSources: [],
-			incoming: [],
+			citedBy: [],
 			keys: { cites: [], related: [] },
 			publishedKeys: { cites: [], related: [] },
 			targets: [],
@@ -184,7 +184,7 @@ describe("computeAdminDraftDiff", () => {
 		const base = detail({
 			links: {
 				fromSources: [],
-				incoming: [],
+				citedBy: [],
 				keys: { cites: ["AAAA2345"], related: [] },
 				publishedKeys: { cites: ["AAAA2345"], related: ["BBBB2345"] },
 				targets: [],

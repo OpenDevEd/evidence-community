@@ -1025,10 +1025,16 @@ export default function AdminWorkbench({
 			});
 			const payload = draftPayloadRef.current;
 			const current = linkKeysFromPayload(payload, detail.links.publishedKeys);
+			// Links a source owns are already there; the editor does not add a second one.
+			const sourceOwned = new Set(
+				detail.links.fromSources
+					.filter((row) => row.kind === kind)
+					.map((row) => row.key),
+			);
 			const next = [
 				...new Set([
 					...current[kind],
-					...keys.filter((key) => key !== detail.key),
+					...keys.filter((key) => key !== detail.key && !sourceOwned.has(key)),
 				]),
 			];
 			if (next.length === current[kind].length) return;
@@ -1048,14 +1054,18 @@ export default function AdminWorkbench({
 		[detail, updatePayload],
 	);
 	// In pick mode the table's checkboxes show and change the linked records.
+	// Source-owned links show as ticked too; unticking them changes nothing here.
 	const pickedLinkKeys = useMemo(
 		() =>
 			activeLinkPick && detail
-				? new Set(
-						linkKeysFromPayload(draftPayload, detail.links.publishedKeys)[
+				? new Set([
+						...linkKeysFromPayload(draftPayload, detail.links.publishedKeys)[
 							activeLinkPick
 						],
-					)
+						...detail.links.fromSources
+							.filter((row) => row.kind === activeLinkPick)
+							.map((row) => row.key),
+					])
 				: null,
 		[activeLinkPick, detail, draftPayload],
 	);

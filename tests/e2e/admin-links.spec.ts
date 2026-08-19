@@ -139,6 +139,21 @@ test("links two records, shows both sides, and removes the link again", async ({
 	);
 	await expect(citedBy.getByRole("button", { name: /^Remove/ })).toHaveCount(0);
 
+	// "Related" is one link: the other side lists it in its own Related list and can remove it
+	const otherSideRelated = inspector.locator(
+		`[data-admin-link-list="related"] [data-admin-link-key="${citingKey}"]`,
+	);
+	await expect(otherSideRelated).toHaveAttribute("data-admin-link-change", "unchanged");
+	await expect(inspector.locator('[data-admin-link-incoming="related"]')).toHaveCount(0);
+	await inspector.getByRole("button", { name: "Edit" }).click();
+	await inspector.getByRole("button", { name: `Remove ${citingTitle} from Related` }).click();
+	await expect(otherSideRelated).toHaveAttribute("data-admin-link-change", "removed");
+	await inspector.getByRole("button", { name: "Publish", exact: true }).click();
+	await expect(inspector.getByRole("button", { name: "Edit" })).toBeVisible({
+		timeout: 60_000,
+	});
+	await expect(otherSideRelated).toHaveCount(0);
+
 	// Public API of the cited record lists the citing record once caches clear
 	await expect
 		.poll(() => publicCitedBy(page, citedKey), { timeout: 60_000 })
@@ -146,6 +161,9 @@ test("links two records, shows both sides, and removes the link again", async ({
 
 	// Remove, revert, remove again, publish
 	inspector = await openRecord(page, citingKey);
+	await expect(
+		inspector.locator(`[data-admin-link-list="related"] [data-admin-link-key="${citedKey}"]`),
+	).toHaveCount(0);
 	await inspector.getByRole("button", { name: "Edit" }).click();
 	const removeButton = inspector.getByRole("button", {
 		name: `Remove ${citedTitle} from Cites`,

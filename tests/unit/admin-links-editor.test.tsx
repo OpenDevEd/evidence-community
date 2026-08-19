@@ -36,7 +36,7 @@ function detail(): AdminItemDetail {
 		key: "SELF2345",
 		links: {
 			fromSources: [{ key: "SRCA2345", kind: "related", origin: "source:zotero-main" }],
-			incoming: [{ key: "INCA2345", kind: "cites", origin: "manual" }],
+			citedBy: [{ key: "INCA2345", kind: "cites", origin: "manual" }],
 			keys: { cites: ["AAAA2345"], related: [] },
 			publishedKeys: { cites: ["AAAA2345", "GONE2345"], related: [] },
 			targets: [
@@ -117,13 +117,13 @@ describe("AdminLinksEditor", () => {
 		return onChange;
 	}
 
-	it("shows the four lists with change markers and locked source rows", async () => {
+	it("shows the three lists with change markers and locked source rows", async () => {
 		await render({
 			itemType: "Book",
 			links: { cites: ["AAAA2345", "NEWW2345"], related: [] },
 		});
 		const headings = [...container.querySelectorAll("h4")].map((node) => node.textContent);
-		expect(headings).toEqual(["Cites", "Related", "Cited by", "Related to this record"]);
+		expect(headings).toEqual(["Cites", "Related", "Cited by"]);
 
 		const cites = [...container.querySelectorAll('[data-admin-link-kind="cites"]')]
 			.filter((node) => node.closest('[data-admin-link-list="cites"]'))

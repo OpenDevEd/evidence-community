@@ -22,8 +22,10 @@ export type AdminLinkRowPlan = {
 };
 
 export type AdminLinksPlan = {
+	/** Editable lists: Cites (outgoing) and Related (one link, both sides). */
 	outgoing: Record<AdminItemLinkKind, AdminLinkRowPlan[]>;
-	incoming: Record<AdminItemLinkKind, AdminLinkRowPlan[]>;
+	/** Read-only "Cited by" rows. */
+	citedBy: AdminLinkRowPlan[];
 };
 
 export const ADMIN_LINK_KINDS: readonly AdminItemLinkKind[] = ["cites", "related"];
@@ -38,8 +40,8 @@ export function sourceLabelForOrigin(
 }
 
 /**
- * Builds what the Links section shows: outgoing rows per kind (drafted, removed,
- * and source-owned) and incoming rows per kind. Pure, so it can be unit tested.
+ * Builds what the Links section shows: editable rows per kind (drafted, removed,
+ * and source-owned) and the read-only "Cited by" rows. Pure, so it can be unit tested.
  */
 export function planAdminLinks({
 	keys,
@@ -47,7 +49,7 @@ export function planAdminLinks({
 	links,
 	sources,
 }: {
-	/** Draft outgoing manual keys, per kind. */
+	/** Draft manual keys, per kind. */
 	keys: Record<AdminItemLinkKind, string[]>;
 	/** Targets picked in this session that the server detail does not know yet. */
 	knownTargets: readonly AdminLinkTarget[];
@@ -107,20 +109,20 @@ export function planAdminLinks({
 		}
 	}
 
-	const incoming = { cites: [] as AdminLinkRowPlan[], related: [] as AdminLinkRowPlan[] };
-	for (const row of links.incoming) {
-		if (incoming[row.kind].some((existing) => existing.key === row.key)) continue;
-		incoming[row.kind].push({
+	const citedBy: AdminLinkRowPlan[] = [];
+	for (const row of links.citedBy) {
+		if (citedBy.some((existing) => existing.key === row.key)) continue;
+		citedBy.push({
 			...describe(row.key),
 			change: "unchanged",
-			kind: row.kind,
+			kind: "cites",
 			origin: row.origin,
 			removable: false,
 			sourceLabel: sourceLabelForOrigin(row.origin, sources),
 		});
 	}
 
-	return { incoming, outgoing };
+	return { citedBy, outgoing };
 }
 
 /** Records the picker may offer: not this record, not already linked under this kind. */
