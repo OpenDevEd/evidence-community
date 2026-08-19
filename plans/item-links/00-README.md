@@ -15,7 +15,7 @@ Grounded: **2026-08-18** against `origin/openscholar` at `a413cede`. Design agre
 
 | ID | Decision | Consequence |
 |---|---|---|
-| D1 | One new table `itemLink(fromKey, toKey, kind, origin, createdAt, updatedAt)`. `kind` is `cites` or `related`. `origin` is `manual` or `source:<sourceConnectionKey>`. PK `(fromKey, toKey, kind)`, check `fromKey <> toKey`, index `(toKey, kind)`, cascade FKs to `item.key`. | Same style as `itemToCollection` plus a check like `sourceWritebackJob`. |
+| D1 | One new table `itemLink(fromKey, toKey, kind, origin, createdAt, updatedAt)`. `kind` is `cites` or `related`. `origin` is `manual` or `source:<sourceConnectionKey>`. PK `(fromKey, toKey, kind, origin)` — one row per owner, readers de-duplicate the logical link — check `fromKey <> toKey`, index `(toKey, kind)`, cascade FKs to `item.key`. (Revised 2026-08-19 after PR review: the origin-less key made a manual link clash with a source row and let two sources overwrite each other.) | Same style as `itemToCollection` plus a check like `sourceWritebackJob`. |
 | D2 | In-library links only. Both ends are records in this library. | No external DOI/OpenAlex targets. Unresolvable Zotero relations are skipped, not stored. |
 | D3 | Links are directed. "Cited by" and "related to this record" are read with a reverse query. Never copied onto the other record. | Public tabs and admin read-only lists query `toKey`. |
 | D4 | Manual rows belong to the editor. Source rows belong to the source. A sync never changes a manual row. A sync mirrors its own rows: gone in the source → deleted here. | Origin rule in both directions. |

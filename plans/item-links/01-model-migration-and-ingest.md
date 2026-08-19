@@ -13,14 +13,14 @@ Store every link between two records once in PostgreSQL. Bring Zotero "Related" 
 - `kind` text: `cites` | `related` (check)
 - `origin` text: `manual` | `source:<sourceConnectionKey>` (check: `manual` or starts with `source:`)
 - `createdAt`, `updatedAt` timestamps
-- PK `(fromKey, toKey, kind)`; check `fromKey <> toKey`; index `itemLink_to_idx (toKey, kind)`; index `itemLink_origin_idx (origin, fromKey)`.
+- PK `(fromKey, toKey, kind, origin)` (one row per owner; revised 2026-08-19); check `fromKey <> toKey`; index `itemLink_to_idx (toKey, kind)`; index `itemLink_origin_idx (origin, fromKey)`.
 
 **Link read helpers** in a new `src/lib/links/item-links.ts` (pure SQL, no UI):
 
 - `getOutgoingLinks(db, key, { kind? })` → rows ordered by `createdAt`.
 - `getIncomingLinks(db, key, { kind? })`.
 - `getPublicItemLinks(db, key)` → `{ cites: string[], citedBy: string[], related: string[] }` where `related` is the union of both directions, de-duplicated, and every listed key belongs to an item with `deleted = 0`.
-- `replaceSourceRelatedLinks(tx, { sourceConnectionKey, fromKeys, links })` → deletes rows with `origin = source:<key>` and `kind = related` for `fromKeys`, inserts the given rows, and never touches `origin = manual`.
+- `replaceSourceRelatedLinks(tx, { sourceConnectionKey, fromKeys, links })` → deletes rows with `origin = source:<key>` and `kind = related` for `fromKeys`, inserts the given rows, never touches other owners, and returns the other-end keys whose view changed so the writer can reindex them (revised 2026-08-19).
 
 **Validator cleanup**: remove `citedBy` and `cites` from the `relations` schema in `src/lib/admin/native-item-validation.ts:106-107`. `cited_by`, `referenced_works`, `owl:sameAs`, `dc:relation` stay. The TypeScript `RelationsType` in `src/types/item.ts` and its readers (`Relations.tsx`, `ItemHeader.tsx`, `Resource.tsx`, `/api/citations/[key]`) are changed in Plan 02 together with the read-path swap, so every commit compiles.
 
@@ -28,7 +28,7 @@ Store every link between two records once in PostgreSQL. Bring Zotero "Related" 
 
 1. Read `metadata.relations["dc:relation"]` from each changed item record (string or string array of Zotero URIs like `http://zotero.org/groups/<gid>/items/<KEY>` or `.../users/<uid>/items/<KEY>`).
 2. Parse the trailing item key with a new pure helper `parseZoteroItemUri(uri)` → `{ libraryType, libraryId, itemKey } | null` in `src/lib/source-ingestion/zotero/uri.ts`.
-3. Resolve keys with the existing `loadIdentityMap(transaction, "item", sourceConnectionKey, keys)` (`:307-355`). Only keys in the same source connection resolve. Anything else is unresolved.
+3. Accept only URIs whose library type and id match the connection (`scopeKind` group/personal-library and `externalScopeKey`), then resolve keys with the existing `loadIdentityMap(transaction, "item", sourceConnectionKey, keys)` (`:307-355`). Anything else — other libraries, unparseable URIs, unknown keys — is unresolved (revised 2026-08-19).
 4. Call `replaceSourceRelatedLinks` for the changed items. Skip self-links.
 5. Count unresolved URIs and return them in the sync result. Zotero returns `{ batches, records, targetVersion }` (`zotero/sync.ts:885-890`); add `unresolvedRelations: number`. The orchestrator already persists that object (`orchestrator.ts:299-347`), so it shows in `sourceSyncRun.result` and `sourceSyncState.lastResult`.
 

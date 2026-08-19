@@ -718,21 +718,17 @@ async function verifyLiveWriteback() {
 					inArray(itemLink.fromKey, [parentDraft.itemKey, relatedDraft.itemKey]),
 				),
 			);
-		assert(
+		const sourceOrigin = `source:${LIVE_ZOTERO_CONNECTION_KEY}`;
+		const hasRow = (fromKey: string, toKey: string, origin: string) =>
 			linkRowsAfterSync.some(
-				(row) =>
-					row.fromKey === parentDraft.itemKey &&
-					row.toKey === relatedDraft.itemKey &&
-					row.origin === "manual",
-			) &&
-				linkRowsAfterSync.some(
-					(row) =>
-						row.fromKey === relatedDraft.itemKey &&
-						row.toKey === parentDraft.itemKey &&
-						row.origin === `source:${LIVE_ZOTERO_CONNECTION_KEY}`,
-				) &&
-				linkRowsAfterSync.length === 2,
-			`Inbound sync did not mirror the related link as expected: ${JSON.stringify(linkRowsAfterSync)}`,
+				(row) => row.fromKey === fromKey && row.toKey === toKey && row.origin === origin,
+			);
+		assert(
+			hasRow(parentDraft.itemKey, relatedDraft.itemKey, "manual") &&
+				hasRow(parentDraft.itemKey, relatedDraft.itemKey, sourceOrigin) &&
+				hasRow(relatedDraft.itemKey, parentDraft.itemKey, sourceOrigin) &&
+				linkRowsAfterSync.length === 3,
+			`Inbound sync did not mirror the related link on both items as expected: ${JSON.stringify(linkRowsAfterSync)}`,
 		);
 		const unlinkDraft = await openItemDraft(database, parentDraft.itemKey);
 		await saveItemDraft(database, {

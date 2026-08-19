@@ -123,9 +123,10 @@ At runtime:
   project.
 - Citation conversion uses the shared Zotero translation server.
 - Links between records ("cites" and "related") live in the `itemLink` table
-  in the tenant's PostgreSQL database. Each directed link is stored once with an
-  `origin` of `manual` (made in `/admin`) or `source:<connection>` (mirrored
-  from a source such as Zotero `dc:relation`). "Cited by" and "related to this
+  in the tenant's PostgreSQL database. Each directed link is stored once per
+  owner: `origin` is `manual` (made in `/admin`) or `source:<connection>`
+  (mirrored from a source such as Zotero `dc:relation`); readers show each
+  linked record once. "Cited by" and "related to this
   record" are read with a reverse query, never copied onto the other record.
   The public item page, `/api/item/[key]` (`item.links`) and
   `/api/citations/[key]` read that table; the record's `relations` JSON keeps

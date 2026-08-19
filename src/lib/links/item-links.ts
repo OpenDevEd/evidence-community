@@ -334,10 +334,11 @@ function uniquePairs(links: { fromKey: string; toKey: string }[]) {
 }
 
 /**
- * Deletes the source-owned reverse rows `targetKey → itemKey` (kind `related`) for the
- * given sources. Used when the editor removes a manual related link: Zotero clears its
- * mirror without bumping the other item's version, so the mirrored row would otherwise
- * linger until that record next syncs. The next sync restores it if the source still has it.
+ * Deletes source-owned `related` rows between `itemKey` and `targetKeys` in both
+ * directions for the given sources. Used when the editor removes a manual related
+ * link: the record is about to tell those sources to drop the pair, and Zotero
+ * clears its mirror without bumping the other item's version, so the mirrored rows
+ * would otherwise linger. The next sync restores them if a source still has the pair.
  */
 export async function removeMirroredSourceRelatedLinks(
 	tx: Executor,
@@ -346,20 +347,25 @@ export async function removeMirroredSourceRelatedLinks(
 	if (input.targetKeys.length === 0 || input.sourceConnectionKeys.length === 0) {
 		return 0;
 	}
+	const origins = input.sourceConnectionKeys.map(sourceItemLinkOrigin);
 	const removed = await tx
 		.delete(itemLink)
 		.where(
 			and(
-				eq(itemLink.toKey, input.itemKey),
 				eq(itemLink.kind, "related"),
-				inArray(itemLink.fromKey, input.targetKeys),
-				inArray(
-					itemLink.origin,
-					input.sourceConnectionKeys.map(sourceItemLinkOrigin),
+				inArray(itemLink.origin, origins),
+				or(
+					and(
+						eq(itemLink.toKey, input.itemKey),
+						inArray(itemLink.fromKey, input.targetKeys),
+					),
+					and(
+						eq(itemLink.fromKey, input.itemKey),
+						inArray(itemLink.toKey, input.targetKeys),
+					),
 				),
 			),
 		)
 		.returning({ fromKey: itemLink.fromKey });
 	return removed.length;
 }
-
