@@ -586,6 +586,7 @@ function SortHeader({
 }
 
 export function AdminItemTable({
+	banner,
 	bulkActions,
 	bulkKeys,
 	dragEnabled,
@@ -608,6 +609,8 @@ export function AdminItemTable({
 	sort,
 	sortDirection,
 }: {
+	/** Shown between the toolbar and the grid, e.g. the link pick-mode notice. */
+	banner?: ReactNode;
 	bulkActions?: ReactNode;
 	bulkKeys: ReadonlySet<string>;
 	dragEnabled: boolean;
@@ -1112,6 +1115,7 @@ export function AdminItemTable({
 				onResetPreferences={onResetPreferences}
 				preferences={preferences}
 			/>
+			{banner}
 			<div
 				ref={tableScrollRef}
 				className="min-h-0 flex-1 overflow-auto"

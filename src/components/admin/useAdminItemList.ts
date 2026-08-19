@@ -61,6 +61,7 @@ export function useAdminItemList(
 	detail: AdminItemDetail | null,
 	requestedColumns: readonly AdminItemColumnId[],
 	initialFilters: AdminItemViewFilters,
+	options: { pinSelection?: boolean } = {},
 ) {
 	const routeSearchParams = useSearchParams();
 	const routeSearch = routeSearchParams.toString();
@@ -77,6 +78,8 @@ export function useAdminItemList(
 	const requestController = useRef<AbortController | null>(null);
 	const detailRef = useRef(detail);
 	detailRef.current = detail;
+	const pinSelectionRef = useRef(Boolean(options.pinSelection));
+	pinSelectionRef.current = Boolean(options.pinSelection);
 
 	useEffect(() => {
 		const next = writeAdminItemViewFilters(
@@ -130,6 +133,7 @@ export function useAdminItemList(
 							visibleKeys,
 							detailRef.current,
 							page.items[0]?.key ?? null,
+							{ pinned: pinSelectionRef.current },
 						),
 					);
 				}

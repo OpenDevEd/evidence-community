@@ -74,7 +74,7 @@ Implement plans/item-links/03-editor-ui.md after reading plans/item-links/00-REA
 STANDING RULES
 1. Reuse AdminInspector's tags and collections cards, AdminCollectionPicker.tsx, DialogModal/Checkbox/Button from src/components/nextui, getAdminItems from admin-api.ts, and the existing draft save path. No new API route.
 2. No useEffect for state syncing. Picker and list state come from props, draft state and handlers.
-3. Red, green, clean up for AdminLinksEditor and AdminItemPicker with react-dom + act (no Testing Library in this repo). Real-stack browser test in tests/e2e/admin-links.spec.ts (chromium project, gated on PLAYWRIGHT_RUNTIME_E2E). There is no WebKit project; mobile-chromium only runs the public mobile spec.
+3. Red, green, clean up for AdminLinksEditor (pick mode via the record table, no dialog) with react-dom + act (no Testing Library in this repo). Real-stack browser test in tests/e2e/admin-links.spec.ts (chromium project, gated on PLAYWRIGHT_RUNTIME_E2E). There is no WebKit project; mobile-chromium only runs the public mobile spec.
 4. Test roles, labels, visible text and data-admin-* values only. Never class names.
 5. Do not delegate or run a reviewer unless the user asks.
 6. Wording is provider-neutral: source label, never "Zotero" in generic UI.

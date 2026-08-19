@@ -59,6 +59,8 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import type {
 	AdminCreator,
 	AdminItemDetail,
+	AdminItemLinkKind,
+	AdminLinkTarget,
 	AdminSource,
 } from "@/lib/admin/types";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
@@ -1460,6 +1462,8 @@ export function AdminInspector({
 	detail,
 	error,
 	fileErrors = {},
+	linkPickKind = null,
+	linkTargets = [],
 	loading,
 	onBackToParent,
 	onChange,
@@ -1475,6 +1479,8 @@ export function AdminInspector({
 	onRetry,
 	onRestore,
 	onSelectAttachment,
+	onStartLinkPick,
+	onStopLinkPick,
 	onUnpublish,
 	onUnpublishFile,
 	onUpload,
@@ -1490,6 +1496,10 @@ export function AdminInspector({
 	detail: AdminItemDetail | null;
 	error: string | null;
 	fileErrors: Record<string, string>;
+	/** Link kind the record table is currently picking for, if any. */
+	linkPickKind?: AdminItemLinkKind | null;
+	/** Records the table knows, so picked links show a title right away. */
+	linkTargets?: readonly AdminLinkTarget[];
 	loading: boolean;
 	onBackToParent: (key: string) => void;
 	onChange: (payload: Record<string, unknown>) => void;
@@ -1505,6 +1515,8 @@ export function AdminInspector({
 	onRetry: () => void;
 	onRestore: () => void;
 	onSelectAttachment: (key: string) => void;
+	onStartLinkPick?: (kind: AdminItemLinkKind) => void;
+	onStopLinkPick?: () => void;
 	onUnpublish: () => void;
 	onUnpublishFile: (key: string) => void;
 	onUpload: (key: string, file: File) => void;
@@ -1566,7 +1578,6 @@ export function AdminInspector({
 			),
 		[detail?.links.targets],
 	);
-	const finePointer = useFinePointer();
 	useEffect(() => {
 		if (!detailKey || validationRevision === 0) {
 			return;
@@ -2001,9 +2012,12 @@ export function AdminInspector({
 					<AdminLinksEditor
 						detail={detail}
 						errors={validationErrors}
+						knownTargets={linkTargets}
 						onChange={onChange}
+						onStartPick={onStartLinkPick}
+						onStopPick={onStopLinkPick}
 						payload={payload}
-						pickerAutoFocus={finePointer}
+						pickingKind={linkPickKind}
 						readOnly={readOnly}
 						sources={sources}
 					/>

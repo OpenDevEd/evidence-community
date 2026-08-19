@@ -82,4 +82,15 @@ describe("resolveAdminSelection", () => {
 			),
 		).toBe("ITEM0001");
 	});
+
+	it("keeps the open record selected while it is pinned, even when hidden", () => {
+		expect(
+			resolveAdminSelection("OPEN2345", new Set(["AAAA2345"]), null, "AAAA2345", {
+				pinned: true,
+			}),
+		).toBe("OPEN2345");
+		expect(
+			resolveAdminSelection("OPEN2345", new Set(["AAAA2345"]), null, "AAAA2345"),
+		).toBe("AAAA2345");
+	});
 });

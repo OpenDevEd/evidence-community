@@ -7,9 +7,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AdminItemDetail, AdminSource } from "@/lib/admin/types";
 
 vi.mock("server-only", () => ({}));
-vi.mock("@/components/admin/admin-api", () => ({
-	getAdminItems: vi.fn(async () => ({ hasMore: false, items: [], nextCursor: null })),
-}));
 
 import { AdminLinksEditor } from "@/components/admin/AdminLinksEditor";
 
@@ -93,14 +90,25 @@ describe("AdminLinksEditor", () => {
 		payload: Record<string, unknown>,
 		onChange = vi.fn(),
 		readOnly = false,
+		pick: {
+			onStartPick?: (kind: "cites" | "related") => void;
+			onStopPick?: () => void;
+			pickingKind?: "cites" | "related" | null;
+		} = {},
 	) {
 		await act(async () => {
 			root.render(
 				<AdminLinksEditor
 					detail={detail()}
 					errors={{}}
+					knownTargets={[
+						{ deleted: false, itemType: "Thesis", key: "NEWW2345", title: "Just picked" },
+					]}
 					onChange={onChange}
+					onStartPick={pick.onStartPick}
+					onStopPick={pick.onStopPick}
 					payload={payload}
+					pickingKind={pick.pickingKind ?? null}
 					readOnly={readOnly}
 					sources={sources}
 				/>,
@@ -158,8 +166,36 @@ describe("AdminLinksEditor", () => {
 		});
 	});
 
+	it("hands picking over to the record table instead of opening a dialog", async () => {
+		const onStartPick = vi.fn();
+		const onStopPick = vi.fn();
+		await render({ itemType: "Book", links: { cites: [], related: [] } }, vi.fn(), false, {
+			onStartPick,
+			onStopPick,
+		});
+		expect(container.querySelector('[role="dialog"]')).toBeNull();
+		const add = container.querySelector<HTMLButtonElement>('[data-admin-link-pick="cites"]');
+		expect(add?.textContent).toBe("Add to Cites");
+		await act(async () => add!.click());
+		expect(onStartPick).toHaveBeenCalledWith("cites");
+
+		await render({ itemType: "Book", links: { cites: [], related: [] } }, vi.fn(), false, {
+			onStartPick,
+			onStopPick,
+			pickingKind: "cites",
+		});
+		const done = container.querySelector<HTMLButtonElement>('[data-admin-link-pick="cites"]');
+		expect(done?.textContent).toBe("Done picking");
+		expect(done?.getAttribute("aria-pressed")).toBe("true");
+		expect(container.textContent).toContain("Click records in the list to add them under Cites");
+		await act(async () => done!.click());
+		expect(onStopPick).toHaveBeenCalled();
+	});
+
 	it("offers no add or remove controls when read only", async () => {
-		await render({ itemType: "Book", links: { cites: ["AAAA2345"], related: [] } }, vi.fn(), true);
+		await render({ itemType: "Book", links: { cites: ["AAAA2345"], related: [] } }, vi.fn(), true, {
+			onStartPick: vi.fn(),
+		});
 		expect(container.querySelector('button[aria-label^="Remove"]')).toBeNull();
 		expect(container.textContent).not.toContain("Add to Cites");
 	});

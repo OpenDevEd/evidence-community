@@ -59,17 +59,37 @@ test("links two records, shows both sides, and removes the link again", async ({
 	const citedKey = await createPublishedBook(page, citedTitle);
 	const citingKey = await createPublishedBook(page, citingTitle);
 
-	// Add: citing → cited
+	// Add: citing → cited, by picking the cited record straight from the record table
 	let inspector = await openRecord(page, citingKey);
 	await inspector.getByRole("button", { name: "Edit" }).click();
 	const links = inspector.getByRole("group", { name: "Links" });
 	await links.getByRole("button", { name: "Add to Cites" }).click();
-	const dialog = page.getByRole("dialog", { name: "Add to Cites" });
-	await dialog
-		.getByRole("textbox", { name: "Search records to link" })
-		.fill(citedTitle);
-	await dialog.locator(`[data-admin-picker-key="${citedKey}"]`).click();
-	await expect(dialog).toBeHidden();
+	const banner = page.locator('[data-admin-link-pick-banner="cites"]');
+	await expect(banner).toContainText("Click records to add them under Cites");
+	await expect(page.getByRole("dialog")).toHaveCount(0);
+	await page.getByRole("textbox", { name: "Search records" }).fill(citedTitle);
+	const citedRow = page.locator(`[data-record-key="${citedKey}"]`);
+	await expect(citedRow).toBeVisible({ timeout: 30_000 });
+	await citedRow.click();
+	// Picking must not switch the inspector away from the citing record
+	await expect(inspector.getByRole("heading", { name: citingTitle })).toBeVisible();
+	await banner.getByRole("button", { name: "Done" }).click();
+	await expect(banner).toHaveCount(0);
+	// The open record stays in the inspector even though the search hides it
+	await expect(inspector.getByRole("heading", { name: citingTitle })).toBeVisible();
+
+	// Checked rows can be added in one go (here: the same record under Related)
+	await links.getByRole("button", { name: "Add to Related" }).click();
+	const relatedBanner = page.locator('[data-admin-link-pick-banner="related"]');
+	await expect(relatedBanner).toBeVisible();
+	await page.getByRole("checkbox", { name: `Select ${citedTitle}` }).check();
+	await relatedBanner.getByRole("button", { name: "Add 1 checked" }).click();
+	await expect(
+		links.locator(`[data-admin-link-list="related"] [data-admin-link-key="${citedKey}"]`),
+	).toHaveAttribute("data-admin-link-change", "added");
+	await page.keyboard.press("Escape");
+	await expect(relatedBanner).toHaveCount(0);
+	await page.getByRole("textbox", { name: "Search records" }).fill("");
 
 	const addedRow = links.locator(
 		`[data-admin-link-list="cites"] [data-admin-link-key="${citedKey}"]`,
