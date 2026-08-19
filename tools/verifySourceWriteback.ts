@@ -33,7 +33,10 @@ import {
 	setAdminItemWritebackSources,
 } from "../src/lib/admin/source-writeback-service";
 import type { JsonValue } from "../src/lib/source-ingestion/batch-schema";
-import { sourcePayloadHash } from "../src/lib/source-ingestion/fingerprint";
+import {
+	sourceItemFingerprint,
+	sourcePayloadHash,
+} from "../src/lib/source-ingestion/fingerprint";
 import { writeSourceIngestionBatch } from "../src/lib/source-ingestion/transactional-writer";
 import {
 	SourceWritebackAdapterRegistry,
@@ -957,6 +960,28 @@ async function verify() {
 				sourceRecordKey: conflictDraft.itemKey,
 			},
 		};
+		// The inbound sync may already have stored this remote version in the
+		// snapshot while the record was masked; loading the source's copy must
+		// still apply it.
+		await db
+			.insert(sourceSnapshot)
+			.values({
+				fetchedAt: new Date(),
+				itemKey: conflictDraft.itemKey,
+				mappingProfileVersion: "fake-writeback-v1",
+				payload: fakeRemote.record.record as Record<string, unknown>,
+				payloadHash: sourceItemFingerprint(fakeRemote.record.record as never),
+				remoteVersion: "1000",
+				sourceConnectionKey: connectionKey,
+			})
+			.onConflictDoUpdate({
+				target: [sourceSnapshot.itemKey, sourceSnapshot.sourceConnectionKey],
+				set: {
+					payload: fakeRemote.record.record as Record<string, unknown>,
+					payloadHash: sourceItemFingerprint(fakeRemote.record.record as never),
+					remoteVersion: "1000",
+				},
+			});
 		const loadRemote = await resolveAdminSourceWritebackConflict(
 			db,
 			conflictDraft.itemKey,

@@ -11,6 +11,7 @@ import {
 	lockItemMutation,
 	lockItemMutations,
 } from "@/db/canonical-mutation-lock";
+import { sourceSnapshot } from "@/db/schema/source";
 import { item } from "@/db/schema/tables/item";
 import {
 	findWritebackTarget,
@@ -518,6 +519,18 @@ export async function resolveAdminSourceWritebackConflict(
 				and(
 					eq(itemSourceLink.itemKey, itemKey),
 					eq(itemSourceLink.sourceConnectionKey, sourceKey),
+				),
+			);
+		// The inbound sync may already have recorded this remote version in
+		// the source snapshot while the record was masked by dirty fields. The
+		// writer skips a record whose snapshot matches, so forget the snapshot:
+		// the admin asked for the source's copy to be applied.
+		await transaction
+			.delete(sourceSnapshot)
+			.where(
+				and(
+					eq(sourceSnapshot.itemKey, itemKey),
+					eq(sourceSnapshot.sourceConnectionKey, sourceKey),
 				),
 			);
 	});
