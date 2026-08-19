@@ -26,6 +26,7 @@ x-runtime-networks: &runtime-networks
 
 services:
   web:
+    init: true
     build:
       context: .
       dockerfile: Dockerfile
@@ -46,6 +47,7 @@ services:
       - "3000"
 
   search-indexer:
+    init: true
     build: *search-build
     command:
       - /bin/sh
@@ -69,6 +71,7 @@ services:
     restart: unless-stopped
 
   source-sync:
+    init: true
     build:
       <<: *source-build
       target: source-sync
@@ -84,6 +87,7 @@ services:
     restart: unless-stopped
 
   source-writeback:
+    init: true
     build:
       <<: *source-build
       target: source-writeback
@@ -99,6 +103,7 @@ services:
     restart: unless-stopped
 
   publication-worker:
+    init: true
     build: *publication-build
     environment:
       <<: *runtime-environment
@@ -118,6 +123,7 @@ services:
     restart: unless-stopped
 
   meilisearch:
+    init: true
     image: getmeili/meilisearch:v1.37
     environment:
       MEILI_ENV: production

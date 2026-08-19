@@ -2,8 +2,12 @@ x-acceptance-labels: &acceptance-labels
   org.opendeved.evidence-library.acceptance.owner-pid: "${EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID:?owner pid is required}"
   org.opendeved.evidence-library.acceptance.persistent: "${EVIDENCE_LIBRARY_ACCEPTANCE_PERSISTENT:-false}"
 
+# `init: true` runs a tiny init as PID 1 so killed healthcheck probes are reaped.
+# Without it a failing 2-second probe leaves one zombie per run and can exhaust
+# the Docker VM's process table (seen 2026-08-19 with ~49k zombies in `fixture`).
 x-library-service: &library-service
   image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
+  init: true
   labels: *acceptance-labels
   depends_on:
     ca-exporter:
@@ -28,11 +32,13 @@ x-library-service: &library-service
 
 x-search-indexer-service: &search-indexer-service
   image: ${EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE:-evidence-library-acceptance-search-indexer:local}
+  init: true
   labels: *acceptance-labels
   restart: "no"
 
 x-meilisearch-service: &meilisearch-service
   image: getmeili/meilisearch:v1.37
+  init: true
   labels: *acceptance-labels
   environment:
     MEILI_MASTER_KEY: acceptance-master-key
@@ -47,6 +53,7 @@ x-meilisearch-service: &meilisearch-service
 services:
   fixture:
     image: caddy:2.11.4-alpine
+    init: true
     labels: *acceptance-labels
     environment:
       APP_HTTPS_PORT: "${EVIDENCE_LIBRARY_ACCEPTANCE_APP_HTTPS_PORT:-4444}"
@@ -81,6 +88,7 @@ services:
 
   publication-provider-fake:
     image: node:22-alpine
+    init: true
     labels: *acceptance-labels
     command: ["node", "/fixture/publication-provider-fake.mjs"]
     environment:
@@ -118,6 +126,7 @@ services:
 
   mailpit:
     image: axllent/mailpit:v1.30.0
+    init: true
     labels: *acceptance-labels
     environment:
       MP_DATABASE: /data/mailpit.db
@@ -134,6 +143,7 @@ services:
 
   postgres:
     image: pgvector/pgvector:pg17
+    init: true
     labels: *acceptance-labels
     environment:
       POSTGRES_USER: library
@@ -213,6 +223,7 @@ services:
 
   amber-publication-worker:
     image: ${EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE:-evidence-library-acceptance-publication-worker:local}
+    init: true
     labels: *acceptance-labels
     depends_on:
       ca-exporter:
