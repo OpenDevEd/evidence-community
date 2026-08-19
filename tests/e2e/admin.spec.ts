@@ -1615,8 +1615,9 @@ test("creates a collection in a searched location without a full-list select", a
 				paddingRight: style.paddingRight,
 			};
 		});
+	// The location row shares the name and source controls' 1px border.
 	expect(locationGeometry).toEqual({
-		borderWidth: "0px",
+		borderWidth: "1px",
 		paddingLeft: "12px",
 		paddingRight: "12px",
 	});
