@@ -913,17 +913,23 @@ test("chooses writeback sources without publishing and when unpublishing", async
 	});
 	let sourcesBody: unknown;
 	let unpublishBody: unknown;
+	// After the choice is saved the server reports the job as waiting for a
+	// while, then synced. The chip must follow by polling, with no reload.
+	let statusPolls = 0;
 	await page.route(
 		`**/api/admin/items/${publishedItemKey}/writeback/sources`,
 		async (route) => {
 			sourcesBody = route.request().postDataJSON();
 			selected = (sourcesBody as { sourceKeys: string[] }).sourceKeys;
+			statusPolls = 0;
 			await route.fulfill({ json: { writeback: writeback() } });
 		},
 	);
 	await page.route(
 		`**/api/admin/items/${publishedItemKey}/writeback/status?source=*`,
 		async (route) => {
+			statusPolls += 1;
+			const state = statusPolls <= 3 ? "queued" : "synced";
 			await route.fulfill({
 				json: {
 					status: {
@@ -932,9 +938,9 @@ test("chooses writeback sources without publishing and when unpublishing", async
 						error: null,
 						jobId: 5,
 						nextAttemptAt: timestamp,
-						processedAt: timestamp,
+						processedAt: state === "synced" ? timestamp : null,
 						sourceKey: importedSource.key,
-						state: "synced",
+						state,
 					},
 				},
 			});
@@ -975,8 +981,14 @@ test("chooses writeback sources without publishing and when unpublishing", async
 	});
 	await expect(page.locator("[data-admin-writeback-status]")).toHaveAttribute(
 		"data-admin-writeback-status",
-		"synced",
+		"queued",
 	);
+	await expect(page.locator("[data-admin-writeback-status]")).toHaveAttribute(
+		"data-admin-writeback-status",
+		"synced",
+		{ timeout: 15_000 },
+	);
+	expect(statusPolls).toBeGreaterThanOrEqual(4);
 
 	// Unpublishing asks which copies to remove, preselected to the choice.
 	await inspector.getByRole("button", { name: "Unpublish" }).click();

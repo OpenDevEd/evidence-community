@@ -191,6 +191,9 @@ async function main() {
 			const remote = await zoteroItem(parentKey!);
 			return remote && remote.data.title === `${title} (local only)` ? remote : null;
 		});
+		// The chip must show the result by itself, without a page reload.
+		await page.locator('[data-admin-writeback-status="synced"]').waitFor({ timeout: 240_000 });
+		summary.chipSyncedWithoutReload = true;
 		// The attachment must go first: unpublish it, then the parent.
 		await inspector.getByRole("button", { name: /^Open (?!public item)/u }).first().click();
 		const unpublishPdf = inspector.getByRole("button", { name: "Unpublish PDF", exact: true });

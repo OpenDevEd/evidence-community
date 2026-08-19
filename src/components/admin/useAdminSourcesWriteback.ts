@@ -108,18 +108,22 @@ export function useAdminSourcesWriteback(
 		return () => requestRef.current?.abort();
 	}, [refresh, revision]);
 
-	const anyError = Object.values(entries).some((entry) => entry.error);
-	const pollFast = Object.values(entries).some((entry) =>
-		adminSourceWritebackShouldPollFast(entry.status),
-	);
+	// Re-armed after every poll result (`entries` is a new object each time),
+	// not only when the summary changes: a source can stay "queued" across
+	// several polls and must still be asked again until it settles.
 	useEffect(() => {
-		if (!itemKey || !keys || anyError) return;
+		if (!itemKey || !keys) return;
+		const list = Object.values(entries);
+		if (list.some((entry) => entry.error)) return;
+		const pollFast = list.some((entry) =>
+			adminSourceWritebackShouldPollFast(entry.status),
+		);
 		const timer = window.setTimeout(
 			() => void refresh(),
 			pollFast ? ACTIVE_POLL_MS : IDLE_POLL_MS,
 		);
 		return () => window.clearTimeout(timer);
-	}, [anyError, itemKey, keys, pollFast, refresh]);
+	}, [entries, itemKey, keys, refresh]);
 
 	const retry = useCallback(
 		async (sourceKey: string) => {
