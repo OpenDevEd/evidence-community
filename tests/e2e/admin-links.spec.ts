@@ -75,6 +75,15 @@ test("links two records, shows both sides, and removes the link again", async ({
 	await citedRow.click();
 	// Picking must not switch the inspector away from the citing record
 	await expect(inspector.getByRole("heading", { name: citingTitle })).toBeVisible();
+	// A second click on the same row toggles the link off again, a third adds it back
+	const citesRow = links.locator(
+		`[data-admin-link-list="cites"] [data-admin-link-key="${citedKey}"]`,
+	);
+	await expect(citesRow).toHaveAttribute("data-admin-link-change", "added");
+	await citedRow.click();
+	await expect(citesRow).toHaveCount(0);
+	await citedRow.click();
+	await expect(citesRow).toHaveAttribute("data-admin-link-change", "added");
 	await banner.getByRole("button", { name: "Done" }).click();
 	await expect(banner).toHaveCount(0);
 	// The open record stays in the inspector even though the search hides it

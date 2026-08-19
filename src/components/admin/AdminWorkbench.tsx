@@ -2282,7 +2282,7 @@ export default function AdminWorkbench({
 										<span className="min-w-0 flex-1">
 											Tick or click records to add them under{" "}
 											<strong>{activeLinkPick === "cites" ? "Cites" : "Related"}</strong>{" "}
-											for “{detail.title || detail.key}”; untick to remove. Esc to finish.
+											for “{detail.title || detail.key}”; click or untick again to remove. Esc to finish.
 										</span>
 										<Button
 											onPress={() =>
@@ -2303,7 +2303,9 @@ export default function AdminWorkbench({
 							onResetPreferences={resetItemTablePreferences}
 							onSelect={(key) => {
 								if (activeLinkPick) {
-									addLinkKeys(activeLinkPick, [key]);
+									// A row click toggles the link, same as its checkbox.
+									if (pickedLinkKeys?.has(key)) removeLinkKeys(activeLinkPick, [key]);
+									else addLinkKeys(activeLinkPick, [key]);
 									return;
 								}
 								setLinkPick(null);
