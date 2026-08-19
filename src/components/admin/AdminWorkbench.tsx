@@ -70,6 +70,7 @@ import {
 	AdminWritebackSourcesDialog,
 	type WritebackDialogRequest,
 } from "./AdminWritebackSourcesDialog";
+import { SourceProviderIcon } from "./SourceProviderIcon";
 import { resolveWritebackDialogOptions } from "./writeback-selection";
 import {
 	adminCollectionPath,
@@ -206,6 +207,29 @@ function parentCollectionLocation(
 	};
 }
 
+const collectionControlClassNames = {
+	input: "text-sm",
+	inputWrapper: "h-10 min-h-10 rounded-xl",
+} as const;
+
+/** Label above control, the one shape every field in the collection dialogs uses. */
+function CollectionField({
+	children,
+	label,
+}: {
+	children: React.ReactNode;
+	label: string;
+}) {
+	return (
+		<div className="space-y-1.5">
+			<div className="text-xs font-medium text-black/60 dark:text-white/65">
+				{label}
+			</div>
+			{children}
+		</div>
+	);
+}
+
 function CollectionLocationButton({
 	buttonRef,
 	label,
@@ -220,13 +244,10 @@ function CollectionLocationButton({
 	topLevelSource: string;
 }) {
 	return (
-		<div className="space-y-1.5">
-			<div className="text-xs font-medium text-black/60 dark:text-white/65">
-				{label}
-			</div>
+		<CollectionField label={label}>
 			<button
 				aria-label={`Change ${label.toLowerCase()}, current ${location?.name ?? "Top level"}, ${location?.path ?? topLevelSource}`}
-				className="flex min-h-14 w-full items-center gap-2.5 rounded-xl bg-black/[0.035] px-3 text-left transition-colors hover:bg-black/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:bg-white/[0.045] dark:hover:bg-white/[0.07]"
+				className="flex min-h-12 w-full items-center gap-2.5 rounded-xl border border-black/10 bg-white px-3 text-left transition-colors hover:bg-black/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:border-white/10 dark:bg-secondary dark:hover:bg-white/[0.04]"
 				data-admin-collection-location
 				onClick={onPress}
 				ref={buttonRef}
@@ -251,7 +272,7 @@ function CollectionLocationButton({
 					size={14}
 				/>
 			</button>
-		</div>
+		</CollectionField>
 	);
 }
 
@@ -2414,7 +2435,12 @@ export default function AdminWorkbench({
 								) : collectionDialog?.mode === "rename" ? (
 									"Rename collection"
 								) : (
-									"New collection"
+									<span className="flex flex-col gap-0.5">
+										<span>New collection</span>
+										<span className="text-[13px] font-normal text-black/55 dark:text-white/55">
+											Collections group records inside one source.
+										</span>
+									</span>
 								)}
 							</ModalHeader>
 							<ModalBody>
@@ -2479,14 +2505,16 @@ export default function AdminWorkbench({
 									/>
 								) : (
 									<>
+										<CollectionField label="Name">
 										<Input
+											aria-label="Name"
 											autoFocus={finePointer}
+											classNames={collectionControlClassNames}
 											errorMessage={collectionErrors.name}
 											isInvalid={Boolean(
 												collectionErrors.name,
 											)}
-											label="Name"
-											labelPlacement="outside"
+											placeholder="Collection name"
 											value={collectionName}
 											onValueChange={(value) => {
 												setCollectionName(value);
@@ -2499,22 +2527,53 @@ export default function AdminWorkbench({
 												);
 											}}
 										/>
+										</CollectionField>
 										{collectionDialog?.mode === "create" ? (
 											<>
 												{collectionDialog.parentCollection ===
 													null &&
 												editableCollectionSourceKeys.length >
 													1 ? (
+													<CollectionField label="Source">
 													<Select
 														aria-label="Collection source"
 														classNames={{
 															base: "max-w-none",
+															innerWrapper: "gap-2",
 															trigger:
 																"h-10 min-h-10 rounded-xl",
-															value: "text-left text-sm",
+															value: "text-left text-sm font-normal",
 														}}
-														label="Source"
-														labelPlacement="outside"
+														placement="left"
+														renderValue={(items) =>
+															items.map((item) => {
+																const source =
+																	library.sources.find(
+																		({ key }) =>
+																			key === item.key,
+																	);
+																return (
+																	<span
+																		className="flex items-center gap-2"
+																		key={String(item.key)}
+																	>
+																		<span className="grid size-4 shrink-0 place-items-center">
+																			<SourceProviderIcon
+																				provider={
+																					source?.provider ??
+																					"zotero"
+																				}
+																				size={14}
+																			/>
+																		</span>
+																		<span className="truncate">
+																			{source?.label ??
+																				String(item.key)}
+																		</span>
+																	</span>
+																);
+															})
+														}
 														onSelectionChange={(
 															keys,
 														) => {
@@ -2555,6 +2614,17 @@ export default function AdminWorkbench({
 																	key={
 																		source.key
 																	}
+																	startContent={
+																		<SourceProviderIcon
+																			provider={
+																				source.provider
+																			}
+																			size={14}
+																		/>
+																	}
+																	textValue={
+																		source.label
+																	}
 																>
 																	{
 																		source.label
@@ -2562,6 +2632,7 @@ export default function AdminWorkbench({
 																</SelectItem>
 															))}
 													</Select>
+													</CollectionField>
 												) : null}
 												<CollectionLocationButton
 													label="Location"
