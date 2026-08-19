@@ -3411,9 +3411,10 @@ test("restores branch focus when a collection retry finishes empty", async ({
 	await page.keyboard.press("Enter");
 	await expect(tree.getByRole("treeitem", { name: "Loading" })).toBeFocused();
 	await expect(source).toBeFocused();
-	await expect(
-		tree.getByText("No collections here", { exact: true }),
-	).toBeVisible();
+	// The load finished: the loading row is gone and nothing is listed under
+	// a source without collections.
+	await expect(tree.getByRole("treeitem", { name: "Loading" })).toHaveCount(0);
+	await expect(tree.getByText("No collections here")).toHaveCount(0);
 });
 
 test("does not steal focus when a collection load finishes after the user leaves", async ({
@@ -3461,9 +3462,7 @@ test("does not steal focus when a collection load finishes after the user leaves
 	});
 	await nativeSource.focus();
 	releaseLoad();
-	await expect(
-		tree.getByText("No collections here", { exact: true }),
-	).toBeVisible();
+	await expect(tree.getByRole("treeitem", { name: "Loading" })).toHaveCount(0);
 	await expect(nativeSource).toBeFocused();
 });
 
