@@ -1,6 +1,9 @@
 import { getZoteroItemTypes } from "@opendeved/evidence-library-core/zotero-schema";
 import { describe, expect, it } from "vitest";
 
+import { editableItemDatabaseFields } from "@/lib/admin/item-draft-patch";
+import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
+
 import { itemType } from "@/db/schema/enums/itemType";
 import {
 	createZoteroItemPatch,
@@ -267,6 +270,26 @@ describe("Zotero writeback mapping", () => {
 		expect(() =>
 			createZoteroItemPatch({ itemType: "Book", type: "Present" }, ["type"]),
 		).toThrow(ZoteroWritebackMappingError);
+	});
+
+	it("sends a restored record whole without naming fields of other item types", () => {
+		// A tombstone restore marks every editable field dirty, itemType
+		// included, while the type itself does not change.
+		const everyField = [
+			...editableItemDatabaseFields.map(databaseItemFieldToPayloadField),
+			"tags",
+		];
+		const patch = createZoteroItemPatch(
+			{ itemType: "Book", title: "Restored" },
+			everyField,
+			{ previousItemType: "book" },
+		);
+		expect(patch.itemType).toBe("book");
+		expect(patch.title).toBe("Restored");
+		expect(
+			Object.keys(patch).filter((key) => key.startsWith("annotation")),
+		).toEqual([]);
+		expect(patch).not.toHaveProperty("reportType");
 	});
 
 	it("rejects invalid canonical fields instead of silently losing data", () => {
