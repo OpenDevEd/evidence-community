@@ -357,6 +357,27 @@ async function loadIdentityMap(
 	);
 }
 
+function relationUris(value: unknown): string[] {
+	if (Array.isArray(value)) {
+		return value.filter((entry): entry is string => typeof entry === "string");
+	}
+	return typeof value === "string" ? [value] : [];
+}
+
+/** A Zotero item URI resolves only inside the library this connection reads. */
+function uriBelongsToConnection(
+	reference: { libraryId: string; libraryType: "group" | "user" },
+	connection: { externalScopeKey: string | null; scopeKind: string },
+) {
+	if (!connection.externalScopeKey) return false;
+	const expectedType =
+		connection.scopeKind === "group" ? "group" : "user";
+	return (
+		reference.libraryType === expectedType &&
+		reference.libraryId === connection.externalScopeKey
+	);
+}
+
 async function resolveCollectionReferences(
 	transaction: Transaction,
 	currentSourceConnectionKey: string,
@@ -1848,26 +1869,21 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		);
 
 		// Mirror the source's "related" links (Zotero dc:relation) for every top-level
-		// record in this batch. Only records from the same source resolve; the rest
-		// are counted as unresolved and retried on the next sync of that record.
+		// record in this batch. Only URIs that name this connection's own library
+		// resolve; every other URI is counted as unresolved and retried on the next
+		// sync of that record.
 		const relatedTargetsByRecordKey = new Map<string, string[]>();
 		let unresolvedRelations = 0;
 		for (const record of itemUpserts) {
 			if (record.parentSourceRecordKey) continue;
 			const relations = normalizedItems.get(record.sourceRecordKey)!.item
 				.relations as Record<string, unknown> | null | undefined;
-			const value = relations?.["dc:relation"];
-			const uris = Array.isArray(value)
-				? value
-				: typeof value === "string"
-					? [value]
-					: [];
+			const uris = relationUris(relations?.["dc:relation"]);
 			relatedTargetsByRecordKey.set(
 				record.sourceRecordKey,
 				uris.flatMap((uri) => {
-					const parsed =
-						typeof uri === "string" ? parseZoteroItemUri(uri) : null;
-					if (!parsed) {
+					const parsed = parseZoteroItemUri(uri);
+					if (!parsed || !uriBelongsToConnection(parsed, connection)) {
 						unresolvedRelations += 1;
 						return [];
 					}
@@ -1897,7 +1913,7 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 				relatedLinkRows.push({ fromKey, toKey });
 			}
 		}
-		await replaceSourceRelatedLinks(transaction, {
+		const relatedLinkChange = await replaceSourceRelatedLinks(transaction, {
 			sourceConnectionKey: batch.sourceConnectionKey,
 			fromKeys: [...relatedTargetsByRecordKey.keys()].map(
 				(sourceRecordKey) => itemKeys.get(sourceRecordKey)!,
@@ -2181,6 +2197,11 @@ export async function writeSourceIngestionBatch(db: Database, input: unknown) {
 		for (const key of itemDeleteKeys) {
 			const oldParent = existingItemByKey.get(key)?.parentItem;
 			if (oldParent) affectedParentKeys.add(oldParent);
+		}
+		// A changed source link also changes what the other record shows as
+		// "related", so that record is reindexed like an affected parent.
+		for (const key of relatedLinkChange.changedTargets) {
+			affectedParentKeys.add(key);
 		}
 		const parentKeysToBump = [...affectedParentKeys]
 			.filter((key) => !directlyChangedItemKeys.has(key))

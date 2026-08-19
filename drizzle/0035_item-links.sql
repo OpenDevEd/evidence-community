@@ -5,7 +5,7 @@ CREATE TABLE "itemLink" (
 	"origin" varchar(72) NOT NULL,
 	"createdAt" timestamp with time zone DEFAULT now() NOT NULL,
 	"updatedAt" timestamp with time zone DEFAULT now() NOT NULL,
-	CONSTRAINT "itemLink_fromKey_toKey_kind_pk" PRIMARY KEY("fromKey","toKey","kind"),
+	CONSTRAINT "itemLink_fromKey_toKey_kind_origin_pk" PRIMARY KEY("fromKey","toKey","kind","origin"),
 	CONSTRAINT "itemLink_not_self" CHECK ("itemLink"."fromKey" <> "itemLink"."toKey"),
 	CONSTRAINT "itemLink_kind_valid" CHECK ("itemLink"."kind" in ('cites', 'related')),
 	CONSTRAINT "itemLink_origin_valid" CHECK ("itemLink"."origin" = 'manual' or "itemLink"."origin" ~ '^source:[a-z][a-z0-9]*(?:-[a-z0-9]+)*$')

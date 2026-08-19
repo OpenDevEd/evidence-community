@@ -1,5 +1,5 @@
 {
-  "id": "c12c4b0a-b45d-41f4-89b9-8b82f8a55c18",
+  "id": "495d18f1-a8dc-40fe-bc9e-f6a023fbac15",
   "prevId": "30a01de0-f970-4ae0-8fbb-0494d2d543c2",
   "version": "7",
   "dialect": "postgresql",
@@ -5673,12 +5673,13 @@
         }
       },
       "compositePrimaryKeys": {
-        "itemLink_fromKey_toKey_kind_pk": {
-          "name": "itemLink_fromKey_toKey_kind_pk",
+        "itemLink_fromKey_toKey_kind_origin_pk": {
+          "name": "itemLink_fromKey_toKey_kind_origin_pk",
           "columns": [
             "fromKey",
             "toKey",
-            "kind"
+            "kind",
+            "origin"
           ]
         }
       },

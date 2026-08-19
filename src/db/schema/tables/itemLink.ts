@@ -17,9 +17,10 @@ export const MANUAL_ITEM_LINK_ORIGIN = "manual";
 export const SOURCE_ITEM_LINK_ORIGIN_PREFIX = "source:";
 
 /**
- * One directed link between two library records.
+ * One directed link between two library records, as asserted by one owner.
  * "Cited by" and "related to this record" are read with a reverse query, never copied.
  * `origin` says who owns the row: the editor (`manual`) or a source (`source:<key>`).
+ * The same pair may be asserted by several owners; readers de-duplicate the logical link.
  */
 export const itemLink = pgTable(
 	"itemLink",
@@ -36,7 +37,9 @@ export const itemLink = pgTable(
 		updatedAt: timestamp({ withTimezone: true }).notNull().defaultNow(),
 	},
 	(table) => [
-		primaryKey({ columns: [table.fromKey, table.toKey, table.kind] }),
+		primaryKey({
+			columns: [table.fromKey, table.toKey, table.kind, table.origin],
+		}),
 		index("itemLink_to_idx").on(table.toKey, table.kind),
 		index("itemLink_origin_idx").on(table.origin, table.fromKey),
 		check("itemLink_not_self", sql`${table.fromKey} <> ${table.toKey}`),

@@ -126,17 +126,27 @@ async function verify() {
 			kind: "cites",
 			origin: "manual",
 		});
+		// The same pair may be asserted by several owners, but only once per owner.
+		await db.insert(itemLink).values({
+			fromKey: A,
+			toKey: B,
+			kind: "cites",
+			origin: sourceItemLinkOrigin(SOURCE),
+		});
 		await expectRejected(
 			() =>
 				db.insert(itemLink).values({
 					fromKey: A,
 					toKey: B,
 					kind: "cites",
-					origin: sourceItemLinkOrigin(SOURCE),
+					origin: "manual",
 				}),
-			/itemLink_fromKey_toKey_kind_pk|duplicate key/,
-			"The same pair and kind may exist only once",
+			/itemLink_fromKey_toKey_kind_origin_pk|duplicate key/,
+			"The same pair, kind and owner may exist only once",
 		);
+		await db
+			.delete(itemLink)
+			.where(and(eq(itemLink.fromKey, A), eq(itemLink.origin, sourceItemLinkOrigin(SOURCE))));
 
 		// Manual replacement
 		const first = await replaceManualLinks(db, {
@@ -164,7 +174,7 @@ async function verify() {
 			"getManualLinkKeys must group manual rows by kind",
 		);
 
-		// Source mirroring never touches manual rows and skips manual pairs
+		// Source mirroring never touches manual rows; it may assert a pair the editor also owns
 		const mirror = await replaceSourceRelatedLinks(db, {
 			sourceConnectionKey: SOURCE,
 			fromKeys: [A, B],
@@ -176,8 +186,10 @@ async function verify() {
 			],
 		});
 		assert(
-			mirror.inserted === 2 && mirror.skippedManual === 1,
-			`Source mirroring must insert A→B and B→A, skip the manual A→D pair and the self link (got ${JSON.stringify(mirror)})`,
+			mirror.inserted === 3 &&
+				mirror.removed === 0 &&
+				mirror.changedTargets.join() === [A, B, D].join(),
+			`Source mirroring must insert A→D, A→B and B→A, skip the self link, and report the other ends (got ${JSON.stringify(mirror)})`,
 		);
 		const manualAfterMirror = await getManualLinkKeys(db, A);
 		assert(
@@ -189,7 +201,12 @@ async function verify() {
 			fromKeys: [A, B],
 			links: [{ fromKey: B, toKey: A }],
 		});
-		assert(secondMirror.inserted === 1, "Second mirror inserts the remaining pair");
+		assert(
+			secondMirror.inserted === 1 &&
+				secondMirror.removed === 3 &&
+				secondMirror.changedTargets.join() === [B, D].join(),
+			`Second mirror keeps B→A and reports only the pairs that changed (got ${JSON.stringify(secondMirror)})`,
+		);
 		const aOutgoing = await getOutgoingLinks(db, A);
 		assert(
 			aOutgoing.length === 2 &&

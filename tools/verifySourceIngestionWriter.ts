@@ -134,7 +134,7 @@ async function verify() {
 				key: "zotero-links-writer",
 				provider: "zotero",
 				scopeKind: "group",
-				externalScopeKey: "writer-zotero-links",
+				externalScopeKey: "999",
 			},
 		]);
 
@@ -2068,6 +2068,8 @@ async function verify() {
 								relatedUri("RELB2345"),
 								relatedUri("MISSNG23"),
 								relatedUri("RELA2345"),
+								// Same key, another library: must stay unresolved.
+								"http://zotero.org/groups/998/items/RELB2345",
 							],
 						},
 					},
@@ -2104,8 +2106,8 @@ async function verify() {
 			`Zotero related links were not mirrored: ${JSON.stringify(linksAfterOne)}`,
 		);
 		assert(
-			linksBatchOne.written.unresolvedRelations === 1,
-			`Unresolved relations must be counted (got ${String(linksBatchOne.written.unresolvedRelations)})`,
+			linksBatchOne.written.unresolvedRelations === 2,
+			`Unresolved and foreign-library relations must be counted (got ${String(linksBatchOne.written.unresolvedRelations)})`,
 		);
 		await db.insert(itemLink).values({
 			fromKey: relaKey,
@@ -2133,6 +2135,11 @@ async function verify() {
 				},
 			],
 		});
+		const relbAfterRemoval = await db
+			.select({ revision: item.revision })
+			.from(item)
+			.where(eq(item.key, relbKey))
+			.then((rows) => rows[0]!);
 		const linksAfterTwo = await db
 			.select()
 			.from(itemLink)
@@ -2154,6 +2161,17 @@ async function verify() {
 						row.origin === "source:zotero-links-writer",
 				),
 			`Resync must drop the source's stale related row and keep manual rows: ${JSON.stringify(linksAfterTwo)}`,
+		);
+		const relbOutbox = await db
+			.select({ revision: outbox.revision })
+			.from(outbox)
+			.where(eq(outbox.entityKey, relbKey))
+			.orderBy(outbox.id);
+		assert(
+			relbOutbox.length >= 2 &&
+				relbOutbox.at(-1)!.revision === relbAfterRemoval.revision &&
+				linksBatchTwo.written.outboxEvents >= 2,
+			`Removing a source link must reindex the other record: ${JSON.stringify({ outbox: relbOutbox, revisionAfter: relbAfterRemoval.revision, written: linksBatchTwo.written })}`,
 		);
 
 		console.log(
