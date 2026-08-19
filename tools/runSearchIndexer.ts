@@ -182,7 +182,14 @@ async function main() {
 					: String(error);
 			console.error(`Search index embedder failed: ${embedderError}`);
 		}
-		if (embedderError && rebuildPending && !setup.created) {
+		const indexHasRecords = embedderError
+			? (await service.index.getStats()).numberOfDocuments > 0
+			: false;
+		if (
+			embedderError &&
+			indexHasRecords &&
+			(rebuildPending || command.rebuild)
+		) {
 			console.error(
 				"Search index rebuild stays pending: the embedder step failed and the existing records are kept.",
 			);
@@ -192,6 +199,7 @@ async function main() {
 				embedderError,
 				forceRebuild: command.rebuild,
 				indexCreated: setup.created,
+				indexHasRecords,
 				rebuildPending,
 			})
 		) {

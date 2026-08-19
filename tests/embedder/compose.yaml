@@ -12,7 +12,7 @@ services:
       MEILI_NO_ANALYTICS: "true"
       MEILI_ENV: development
     ports:
-      - "127.0.0.1:57710:7700"
+      - "127.0.0.1:${EMBEDDER_TEST_MEILI_PORT:-57710}:7700"
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

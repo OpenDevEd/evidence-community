@@ -92,6 +92,13 @@ npm run test:search-embedder
 docker compose -f tests/embedder/compose.yaml down
 ```
 
+If port 57710 is taken, pick another one for both steps:
+
+```sh
+EMBEDDER_TEST_MEILI_PORT=57730 docker compose -f tests/embedder/compose.yaml up -d --wait
+MEILISEARCH_HOST=http://127.0.0.1:57730 npm run test:search-embedder
+```
+
 ## Local operation
 
 Start a local Meilisearch:

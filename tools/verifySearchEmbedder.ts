@@ -18,7 +18,10 @@ const meilisearchKey = process.env.MEILISEARCH_KEY ?? "embedder-test-key";
 // Host name the Meilisearch container uses to reach this process.
 const stubHost = process.env.EMBEDDER_STUB_HOST ?? "host.docker.internal";
 const DIMENSIONS = 8;
-const INDEX_NAMES = ["embedder-a", "embedder-b"] as const;
+// Unique per run, so two verifier processes on one Meilisearch never delete
+// each other's indexes, and a pre-existing index is never touched.
+const RUN_ID = `${process.pid.toString(36)}${Date.now().toString(36)}`;
+const INDEX_NAMES = [`embedder-a-${RUN_ID}`, `embedder-b-${RUN_ID}`] as const;
 
 type StubState = { requests: number; texts: string[] };
 

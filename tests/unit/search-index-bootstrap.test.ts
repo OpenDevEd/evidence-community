@@ -80,13 +80,14 @@ describe("search index worker embedder state", () => {
 		expect(resolveRebuildTaskTimeoutMs({ embedder: null })).toBeUndefined();
 	});
 
-	it("does not wipe an existing index when the embedder step failed", () => {
+	it("does not wipe an index that has records when the embedder step failed", () => {
 		const embedderError = "SearchIndexTaskError: embedding failed";
 		expect(
 			shouldRebuildSearchIndex({
 				embedderError,
 				forceRebuild: true,
 				indexCreated: false,
+				indexHasRecords: true,
 				rebuildPending: false,
 			}),
 		).toBe(false);
@@ -95,9 +96,22 @@ describe("search index worker embedder state", () => {
 				embedderError,
 				forceRebuild: false,
 				indexCreated: false,
+				indexHasRecords: true,
 				rebuildPending: true,
 			}),
 		).toBe(false);
+	});
+
+	it("still fills an existing empty index when the embedder step failed", () => {
+		expect(
+			shouldRebuildSearchIndex({
+				embedderError: "SearchIndexTaskError: embedding failed",
+				forceRebuild: false,
+				indexCreated: false,
+				indexHasRecords: false,
+				rebuildPending: true,
+			}),
+		).toBe(true);
 	});
 
 	it("still fills a brand-new index when the embedder step failed", () => {
@@ -106,6 +120,7 @@ describe("search index worker embedder state", () => {
 				embedderError: "SearchIndexTaskError: embedding failed",
 				forceRebuild: false,
 				indexCreated: true,
+				indexHasRecords: false,
 				rebuildPending: true,
 			}),
 		).toBe(true);

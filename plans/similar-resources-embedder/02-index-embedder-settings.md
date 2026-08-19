@@ -56,7 +56,8 @@ None.
 - The Similar Resources route answers 503 with a plain message when the embedder is missing (`invalid_search_embedder`) or its provider fails on the query (`vector_embedding_error`).
 - A failed embedder stays in worker `lastError` after later record batches succeed. A worker start that applies the embedder cleanly clears the previous run's error.
 - With an embedder configured, the startup rebuild's document tasks use the 60-minute wait, because they embed too.
-- When the embedder step fails on an index that already has records, the rebuild stays pending and the records are kept; a brand-new index is still filled.
+- When the embedder step fails on an index that already has records (checked with the live document count), the rebuild stays pending and the records are kept; an empty index is still filled.
+- The embedder task is polled every 2 seconds, not every 100 ms, because it can run for a long time.
 
 ## Item page loading rule (added 2026-08-18)
 

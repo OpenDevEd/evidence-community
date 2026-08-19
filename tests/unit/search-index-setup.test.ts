@@ -4,11 +4,12 @@ import {
 	type Meilisearch,
 	type Task,
 } from "meilisearch";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { MeilisearchService } from "@/lib/meilisearch-factory";
 import {
 	applySearchIndexEmbedder,
+	EMBEDDER_TASK_POLL_INTERVAL_MS,
 	EMBEDDER_TASK_TIMEOUT_MS,
 	ensureSearchIndex,
 	SearchIndexTaskError,
@@ -116,8 +117,38 @@ describe("search index embedder", () => {
 		response: { embedding: "{{embedding}}" },
 	};
 
-	it("waits up to an hour for the embedder task", () => {
+	it("waits up to an hour for the embedder task and polls slowly", () => {
 		expect(EMBEDDER_TASK_TIMEOUT_MS).toBe(60 * 60 * 1_000);
+		expect(EMBEDDER_TASK_POLL_INTERVAL_MS).toBeGreaterThanOrEqual(1_000);
+	});
+
+	it("polls the embedder task at the slow interval", async () => {
+		vi.useFakeTimers();
+		try {
+			const getTask = vi.fn();
+			let calls = 0;
+			getTask.mockImplementation(async (uid: number) => ({
+				...succeededTask(uid),
+				status: ++calls < 3 ? "processing" : "succeeded",
+			}));
+			const target = service(true);
+			(target.index as unknown as { tasks: { getTask: unknown } }).tasks =
+				{
+					getTask,
+				};
+			const pending = applySearchIndexEmbedder(target, restEmbedder);
+			await vi.advanceTimersByTimeAsync(
+				EMBEDDER_TASK_POLL_INTERVAL_MS - 1,
+			);
+			expect(getTask).toHaveBeenCalledTimes(1);
+			await vi.advanceTimersByTimeAsync(
+				EMBEDDER_TASK_POLL_INTERVAL_MS * 2,
+			);
+			await pending;
+			expect(getTask).toHaveBeenCalledTimes(3);
+		} finally {
+			vi.useRealTimers();
+		}
 	});
 
 	it("sends only the embedders setting and returns the task", async () => {

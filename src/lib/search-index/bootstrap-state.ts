@@ -34,16 +34,18 @@ export function resolveRebuildTaskTimeoutMs(input: {
  * A rebuild deletes every document before adding them again. When the
  * embedder step failed on an index that already has records, keep those
  * records and leave the rebuild pending: adding documents would need the
- * broken embedder and could leave the public index empty. A brand-new index
- * has nothing to lose, so it is still filled.
+ * broken embedder and could leave the public index empty. An empty index
+ * (brand-new, or created by an earlier worker that stopped) has nothing to
+ * lose, so it is still filled.
  */
 export function shouldRebuildSearchIndex(input: {
 	embedderError?: string | null;
 	forceRebuild: boolean;
 	indexCreated: boolean;
+	indexHasRecords?: boolean;
 	rebuildPending: boolean;
 }) {
-	if (input.embedderError && !input.indexCreated) return false;
+	if (input.embedderError && input.indexHasRecords) return false;
 	return input.forceRebuild || input.indexCreated || input.rebuildPending;
 }
 
