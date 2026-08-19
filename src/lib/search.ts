@@ -47,6 +47,7 @@ export const LIST_ITEM_FIELDS = [
 	"fullNames",
 	"institution",
 	"languageName",
+	"links",
 	"relations",
 	"tags",
 	"collections",

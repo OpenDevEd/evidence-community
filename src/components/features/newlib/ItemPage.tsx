@@ -32,6 +32,7 @@ import {
 	localizeOrUseIfCapitalized,
 } from "@/lib/utils";
 import Relations from "@/components/features/newlib/Relations";
+import { planRelationTabs } from "@/components/features/newlib/relation-tabs";
 import { DownloadButton } from "@/components/features/newlib/DownloadModal";
 import AiWrapper from "@/components/features/newlib/AiWrapper";
 import ZoteroDropdown from "@/components/features/newlib/ZoteroDropdown";
@@ -1261,8 +1262,21 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 		cites: t("citesResource"),
 		citedBy: t("citedByResource"),
 	};
+	// The tabs hide empty lists, so describe the tab that is really shown.
+	const { activeTab } = planRelationTabs({
+		activeTab: selectedTab,
+		links: item?.links,
+		relations: item?.relations as RelationsType,
+	});
+	const hasLinks = Boolean(
+		item?.links &&
+			(item.links.cites.length > 0 ||
+				item.links.citedBy.length > 0 ||
+				item.links.related.length > 0),
+	);
 
-	if (item?.provider === "openalex") return null;
+	// OpenAlex records show provider relations elsewhere; only in-library links belong here.
+	if (item?.provider === "openalex" && !hasLinks) return null;
 
 	return (
 		<div className="flex flex-col gap-4">
@@ -1276,7 +1290,7 @@ function ItemRelations({ item }: { item: Item | undefined }) {
 				/>
 			</div>
 			<p className="text-black/60 dark:text-white/60">
-				{descriptions[selectedTab] || descriptions.general}
+				{descriptions[activeTab] || descriptions.general}
 			</p>
 			<Relations
 				links={item?.links}

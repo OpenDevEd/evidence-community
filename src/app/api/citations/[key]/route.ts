@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Item } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { getDatabaseForConfig } from "@/db";
+import type { RelationsType } from "@/types/item";
 import { getPublicItemLinks } from "@/lib/links/item-links";
 import { PUBLIC_READ_CACHE_CONTROL } from "@/lib/http-cache";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -140,10 +141,14 @@ export async function GET(
 		});
 	}
 
-	// Records that cite this one come from the link table in PostgreSQL.
+	// Records that cite this one come from the link table in PostgreSQL. Provider
+	// data may still carry a larger citation count for works outside this library.
 	const linksDb = await getDatabaseForConfig(libraryConfig);
-	const { citedBy: citedByKeys } = await getPublicItemLinks(linksDb, key);
-	const totalCitations = citedByKeys.length;
+	const { citedBy: citedByKeys } = await getPublicItemLinks(linksDb, key, {
+		hiddenTags,
+	});
+	const providerCitedBy = (sourceItem.relations as RelationsType)?.cited_by ?? 0;
+	const totalCitations = Math.max(citedByKeys.length, providerCitedBy);
 
 	// Fetch citing items with pagination and facets
 	const {

@@ -66,7 +66,9 @@ export async function getItemRaw(
 
 	result.attachmentsData = result.attachmentsData?.filter((attachment: any) => attachment.deleted === 0);
 	const linksDb = await getDatabaseForConfig(libraryConfig);
-	result.links = await getPublicItemLinks(linksDb, key);
+	result.links = await getPublicItemLinks(linksDb, key, {
+		hiddenTags: content.tags.hidden,
+	});
 
 	return {
 		item: result,

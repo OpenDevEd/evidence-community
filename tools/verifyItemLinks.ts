@@ -2,6 +2,8 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
 import { item } from "../src/db/schema/tables/item";
+import { itemToTag } from "../src/db/schema/tables/itemToTag";
+import { tag } from "../src/db/schema/tables/tag";
 import { itemLink } from "../src/db/schema/tables/itemLink";
 import {
 	itemDraft,
@@ -24,6 +26,7 @@ import {
 	getManualLinkKeys,
 	getOutgoingLinks,
 	getPublicItemLinks,
+	getPublicItemLinksForKeys,
 	replaceManualLinks,
 	replaceSourceRelatedLinks,
 	sourceItemLinkOrigin,
@@ -62,6 +65,7 @@ const KEYS = ["LNKA2345", "LNKB2345", "LNKC2345", "LNKD2345"] as const;
 const [A, B, C, D] = KEYS;
 const SOURCE = "zotero-openscholar-test";
 const nativeKeys: string[] = [];
+const HIDDEN_TAG = "verify-links-hidden";
 const WRITEBACK_SOURCE = `verify-links-${process.pid}`;
 
 async function verify() {
@@ -243,6 +247,20 @@ async function verify() {
 			(await getPublicItemLinks(db, A)).cites.join() === C,
 			"Restored targets must reappear",
 		);
+		// Records carrying a configured hidden tag stay out of public links.
+		await db.insert(tag).values({ name: HIDDEN_TAG }).onConflictDoNothing();
+		await db.insert(itemToTag).values({ itemKey: C, tagName: HIDDEN_TAG });
+		assert(
+			(await getPublicItemLinks(db, A, { hiddenTags: [HIDDEN_TAG] })).cites.length === 0 &&
+				(await getPublicItemLinks(db, C, { hiddenTags: [HIDDEN_TAG] })).citedBy.join() === A,
+			"Hidden-tag targets must be left out of public links",
+		);
+		const batched = await getPublicItemLinksForKeys(db, [A, C]);
+		assert(
+			batched.get(A)?.cites.join() === C && batched.get(C)?.citedBy.join() === A,
+			`Batched public links must match the single read: ${JSON.stringify([...batched])}`,
+		);
+		await db.delete(itemToTag).where(eq(itemToTag.itemKey, C));
 
 		// Cascade
 		await db.delete(item).where(eq(item.key, D));
@@ -536,6 +554,7 @@ async function cleanup(db: ReturnType<typeof createPostgresDatabaseResource>["da
 	await db.delete(outbox).where(inArray(outbox.entityKey, keys));
 	await db.delete(itemDraft).where(inArray(itemDraft.itemKey, keys));
 	await db.delete(item).where(inArray(item.key, keys));
+	await db.delete(tag).where(eq(tag.name, HIDDEN_TAG));
 	await db
 		.delete(itemIdentity)
 		.where(
