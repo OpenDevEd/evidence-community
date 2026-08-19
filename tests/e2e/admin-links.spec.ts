@@ -65,7 +65,7 @@ test("links two records, shows both sides, and removes the link again", async ({
 	const links = inspector.getByRole("group", { name: "Links" });
 	await links.getByRole("button", { name: "Add to Cites" }).click();
 	const banner = page.locator('[data-admin-link-pick-banner="cites"]');
-	await expect(banner).toContainText("Click records to add them under Cites");
+	await expect(banner).toContainText("Tick or click records to add them under Cites");
 	await expect(page.getByRole("dialog")).toHaveCount(0);
 	await page.getByRole("textbox", { name: "Search records" }).fill(citedTitle);
 	const citedRow = page.locator(`[data-record-key="${citedKey}"]`);
@@ -78,15 +78,22 @@ test("links two records, shows both sides, and removes the link again", async ({
 	// The open record stays in the inspector even though the search hides it
 	await expect(inspector.getByRole("heading", { name: citingTitle })).toBeVisible();
 
-	// Checked rows can be added in one go (here: the same record under Related)
+	// The checkboxes add and remove links while picking (here: the same record under Related)
 	await links.getByRole("button", { name: "Add to Related" }).click();
 	const relatedBanner = page.locator('[data-admin-link-pick-banner="related"]');
 	await expect(relatedBanner).toBeVisible();
-	await page.getByRole("checkbox", { name: `Select ${citedTitle}` }).check();
-	await relatedBanner.getByRole("button", { name: "Add 1 checked" }).click();
-	await expect(
-		links.locator(`[data-admin-link-list="related"] [data-admin-link-key="${citedKey}"]`),
-	).toHaveAttribute("data-admin-link-change", "added");
+	const citedCheckbox = page.getByRole("checkbox", { name: `Select ${citedTitle}` });
+	await expect(citedCheckbox).not.toBeChecked();
+	await citedCheckbox.check();
+	const relatedRow = links.locator(
+		`[data-admin-link-list="related"] [data-admin-link-key="${citedKey}"]`,
+	);
+	await expect(relatedRow).toHaveAttribute("data-admin-link-change", "added");
+	await expect(citedCheckbox).toBeChecked();
+	await citedCheckbox.uncheck();
+	await expect(relatedRow).toHaveCount(0);
+	await citedCheckbox.check();
+	await expect(relatedRow).toHaveAttribute("data-admin-link-change", "added");
 	await page.keyboard.press("Escape");
 	await expect(relatedBanner).toHaveCount(0);
 	await page.getByRole("textbox", { name: "Search records" }).fill("");

@@ -1036,6 +1036,29 @@ export default function AdminWorkbench({
 		},
 		[detail, items, updatePayload],
 	);
+	const removeLinkKeys = useCallback(
+		(kind: AdminItemLinkKind, keys: readonly string[]) => {
+			if (!detail?.draft) return;
+			const payload = draftPayloadRef.current;
+			const current = linkKeysFromPayload(payload, detail.links.publishedKeys);
+			const next = current[kind].filter((key) => !keys.includes(key));
+			if (next.length === current[kind].length) return;
+			updatePayload({ ...payload, links: { ...current, [kind]: next } });
+		},
+		[detail, updatePayload],
+	);
+	// In pick mode the table's checkboxes show and change the linked records.
+	const pickedLinkKeys = useMemo(
+		() =>
+			activeLinkPick && detail
+				? new Set(
+						linkKeysFromPayload(draftPayload, detail.links.publishedKeys)[
+							activeLinkPick
+						],
+					)
+				: null,
+		[activeLinkPick, detail, draftPayload],
+	);
 	const linkTargets = useMemo<AdminLinkTarget[]>(
 		() => [
 			...pickedLinkTargets.values(),
@@ -2144,6 +2167,7 @@ export default function AdminWorkbench({
 					>
 						<AdminItemTable
 							bulkActions={
+								activeLinkPick ? null : (
 								<div
 									aria-label="Bulk actions"
 									className="flex h-full min-w-0 items-center gap-1 overflow-hidden"
@@ -2220,8 +2244,9 @@ export default function AdminWorkbench({
 										</span>
 									) : null}
 								</div>
+								)
 							}
-							bulkKeys={bulkKeys}
+							bulkKeys={pickedLinkKeys ?? bulkKeys}
 							dragEnabled={!busy}
 							error={listError}
 							hasMore={hasMore}
@@ -2244,18 +2269,10 @@ export default function AdminWorkbench({
 										role="status"
 									>
 										<span className="min-w-0 flex-1">
-											Click records to add them under{" "}
+											Tick or click records to add them under{" "}
 											<strong>{activeLinkPick === "cites" ? "Cites" : "Related"}</strong>{" "}
-											for “{detail.title || detail.key}”. Esc to finish.
+											for “{detail.title || detail.key}”; untick to remove. Esc to finish.
 										</span>
-										<Button
-											isDisabled={bulkKeys.size === 0}
-											onPress={() => addLinkKeys(activeLinkPick, [...bulkKeys])}
-											size="xs"
-											variant="transparent"
-										>
-											Add {bulkKeys.size} checked
-										</Button>
 										<Button
 											onPress={() =>
 												setLinkPick((current) =>
@@ -2283,21 +2300,32 @@ export default function AdminWorkbench({
 								setMobilePane("inspector");
 							}}
 							onSort={changeSort}
-							onToggleBulk={(key, selected) =>
+							onToggleBulk={(key, selected) => {
+								if (activeLinkPick) {
+									if (selected) addLinkKeys(activeLinkPick, [key]);
+									else removeLinkKeys(activeLinkPick, [key]);
+									return;
+								}
 								setBulkKeys((current) => {
 									const next = new Set(current);
 									if (selected) next.add(key);
 									else next.delete(key);
 									return next;
-								})
-							}
-							onToggleVisible={(selected) =>
+								});
+							}}
+							onToggleVisible={(selected) => {
+								if (activeLinkPick) {
+									const visible = items.map(({ key }) => key);
+									if (selected) addLinkKeys(activeLinkPick, visible);
+									else removeLinkKeys(activeLinkPick, visible);
+									return;
+								}
 								setBulkKeys(
 									selected
 										? new Set(items.map(({ key }) => key))
 										: new Set(),
-								)
-							}
+								);
+							}}
 							selectedKey={selectedKey}
 							sort={filters.sort}
 							sortDirection={filters.sortDirection}
