@@ -99,7 +99,7 @@ async function publishThroughDialog(page: Page, inspector: ReturnType<Page["loca
 	await inspector.getByRole("button", { name: "Publish", exact: true }).click();
 	const dialog = page.getByRole("dialog", { name: "Publish this record" });
 	await dialog.waitFor({ state: "visible", timeout: 15_000 });
-	const box = dialog.getByRole("checkbox").first();
+	const box = dialog.getByRole("switch").first();
 	if (tick) await box.check();
 	else await box.uncheck();
 	await dialog.getByRole("button", { name: "Publish", exact: true }).click();
@@ -167,7 +167,7 @@ async function main() {
 		await inspector.getByRole("button", { name: "Sources", exact: true }).click();
 		const sources = page.getByRole("dialog", { name: "Sources for this record" });
 		await sources.waitFor({ state: "visible" });
-		await sources.getByRole("checkbox").first().uncheck();
+		await sources.getByRole("switch").first().uncheck();
 		await sources.getByRole("button", { name: "Save", exact: true }).click();
 		await page.getByText("Sources saved", { exact: true }).waitFor({ timeout: 30_000 });
 		const versionBeforeEdit = (await zoteroItem(parentKey))!.version;
@@ -184,7 +184,7 @@ async function main() {
 		// 4. Unpublish with the source ticked; Zotero deletes the copy.
 		await inspector.getByRole("button", { name: "Sources", exact: true }).click();
 		await sources.waitFor({ state: "visible" });
-		await sources.getByRole("checkbox").first().check();
+		await sources.getByRole("switch").first().check();
 		await sources.getByRole("button", { name: "Save", exact: true }).click();
 		await page.getByText("Sources saved", { exact: true }).waitFor({ timeout: 30_000 });
 		await waitFor("Zotero update after re-tick", async () => {
@@ -213,7 +213,7 @@ async function main() {
 		await inspector.getByRole("button", { name: "Unpublish", exact: true }).click();
 		const unpublish = page.getByRole("dialog", { name: "Unpublish this record" });
 		await unpublish.waitFor({ state: "visible" });
-		await unpublish.getByRole("checkbox").first().check();
+		await unpublish.getByRole("switch").first().check();
 		await unpublish.getByRole("button", { name: "Unpublish", exact: true }).click();
 		await page.getByText("Record unpublished", { exact: true }).waitFor({ timeout: 60_000 });
 		await waitFor("Zotero deletion", async () => ((await zoteroItem(parentKey!)) === null ? true : null));

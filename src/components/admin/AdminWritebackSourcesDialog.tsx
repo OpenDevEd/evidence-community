@@ -1,14 +1,21 @@
 "use client";
 
-import { ModalBody, ModalContent, ModalFooter, ModalHeader } from "@nextui-org/react";
+import {
+	ModalBody,
+	ModalContent,
+	ModalFooter,
+	ModalHeader,
+} from "@nextui-org/react";
+import { Home } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/nextui/Button";
-import { Checkbox } from "@/components/nextui/Checkbox";
 import DialogModal from "@/components/nextui/DialogModal";
+import { Switch } from "@/components/nextui/Switch";
 
 import { SourceProviderIcon } from "./SourceProviderIcon";
 import {
+	writebackDialogSummary,
 	writebackDialogText,
 	type WritebackDialogMode,
 	type WritebackDialogOption,
@@ -20,9 +27,10 @@ export type WritebackDialogRequest = {
 };
 
 /**
- * One dialog for three moments: publish ("Also update"), unpublish ("Also
- * remove from") and the Sources button ("Send future updates to"). It only
- * asks which sources; it never resolves conflicts.
+ * One dialog for three moments: publish, unpublish and the Sources button.
+ * The first row is this library, which always takes part; every source
+ * below is a switch with one line saying what it has and does today. It
+ * only asks which sources; it never resolves conflicts.
  */
 export function AdminWritebackSourcesDialog({
 	busy,
@@ -41,7 +49,7 @@ export function AdminWritebackSourcesDialog({
 			onOpenChange={(open) => {
 				if (!open) onClose();
 			}}
-			size="md"
+			size="lg"
 		>
 			<ModalContent>
 				{request ? (
@@ -57,6 +65,12 @@ export function AdminWritebackSourcesDialog({
 		</DialogModal>
 	);
 }
+
+const toneClass = {
+	off: "bg-black/30 dark:bg-white/35",
+	ok: "bg-emerald-500",
+	warn: "bg-amber-500",
+} as const;
 
 function WritebackDialogForm({
 	busy,
@@ -78,20 +92,61 @@ function WritebackDialogForm({
 					.map((option) => option.sourceKey),
 			),
 	);
+	const rowClass =
+		"flex min-h-[52px] items-center gap-3 border-b border-black/[0.08] py-2.5 dark:border-white/[0.09]";
 	return (
 		<>
-			<ModalHeader>{text.title}</ModalHeader>
-			<ModalBody>
-				<fieldset
-					className="flex flex-col gap-2"
+			<ModalHeader className="flex-col items-start gap-1 pb-1">
+				<span>{text.title}</span>
+				<span className="text-[13px] font-normal leading-5 text-black/60 dark:text-white/60">
+					{text.intro}
+				</span>
+			</ModalHeader>
+			<ModalBody className="py-2">
+				<div
+					className="border-t border-black/[0.08] dark:border-white/[0.09]"
 					data-admin-writeback-dialog={request.mode}
+					role="group"
 				>
-					<legend className="mb-2 text-sm text-black/60 dark:text-white/60">
-						{text.group}
-					</legend>
+					<div className={rowClass} data-admin-writeback-here>
+						<span className="grid size-7 shrink-0 place-items-center text-black/70 dark:text-white/70">
+							<Home aria-hidden size={16} />
+						</span>
+						<div className="min-w-0 flex-1">
+							<p className="truncate text-sm font-medium">This library</p>
+							<p className="text-xs text-black/55 dark:text-white/55">
+								{text.here}
+							</p>
+						</div>
+						<span className="text-[11px] font-medium uppercase tracking-wide text-black/40 dark:text-white/40">
+							Always
+						</span>
+					</div>
 					{request.options.map((option) => (
-						<div className="flex flex-col" key={option.sourceKey}>
-							<Checkbox
+						<div className={rowClass} key={option.sourceKey}>
+							<span className="grid size-7 shrink-0 place-items-center text-black/75 dark:text-white/75">
+								<SourceProviderIcon provider={option.provider} size={17} />
+							</span>
+							<div className="min-w-0 flex-1">
+								<p className="flex min-w-0 items-center gap-2 text-sm font-medium">
+									<span className="truncate">{option.sourceLabel}</span>
+									{option.isOrigin ? (
+										<span className="shrink-0 rounded border border-black/15 px-1 text-[10.5px] font-normal text-black/60 dark:border-white/15 dark:text-white/60">
+											origin
+										</span>
+									) : null}
+								</p>
+								<p className="flex items-center gap-1.5 text-xs text-black/55 dark:text-white/55">
+									<span
+										aria-hidden
+										className={`size-1.5 shrink-0 rounded-full ${toneClass[option.status.tone]}`}
+									/>
+									{option.status.text}
+								</p>
+							</div>
+							<Switch
+								aria-label={option.sourceLabel}
+								color="accent"
 								data-admin-writeback-source={option.sourceKey}
 								isDisabled={option.disabled || busy}
 								isSelected={checked.has(option.sourceKey)}
@@ -103,46 +158,37 @@ function WritebackDialogForm({
 										return next;
 									})
 								}
-								size="sm"
-							>
-								<SourceProviderIcon
-									className="me-1.5 inline-block align-[-2px]"
-									provider={option.provider}
-									size={13}
-								/>
-								{option.sourceLabel}
-								{option.isOrigin ? " " : null}
-								{option.isOrigin ? (
-									<span className="ms-1 rounded-full border border-black/15 px-1.5 text-xs text-black/60 dark:border-white/15 dark:text-white/60">
-										Origin
-									</span>
-								) : null}
-							</Checkbox>
-							{option.helper ? (
-								<span className="ms-8 text-xs text-black/50 dark:text-white/50">
-									{option.helper}
-								</span>
-							) : null}
+							/>
 						</div>
 					))}
-				</fieldset>
+				</div>
 			</ModalBody>
-			<ModalFooter>
-				<Button
-					isDisabled={busy}
-					onPress={onClose}
-					size="xs"
-					variant="transparent"
+			<ModalFooter className="items-center justify-between pt-2">
+				<span
+					className="text-[12.5px] text-black/60 dark:text-white/60"
+					data-admin-writeback-summary
 				>
-					Cancel
-				</Button>
-				<Button
-					isDisabled={busy}
-					onPress={() => onConfirm([...checked])}
-					size="xs"
-				>
-					{text.confirm}
-				</Button>
+					{writebackDialogSummary(request.mode, checked.size)}
+				</span>
+				<div className="flex items-center gap-1.5">
+					<Button
+						isDisabled={busy}
+						onPress={onClose}
+						size="xs"
+						variant="transparent"
+					>
+						Cancel
+					</Button>
+					<Button
+						color="accent"
+						isDisabled={busy}
+						onPress={() => onConfirm([...checked])}
+						size="xs"
+						variant="solid"
+					>
+						{text.confirm}
+					</Button>
+				</div>
 			</ModalFooter>
 		</>
 	);

@@ -1070,21 +1070,17 @@ export default function AdminWorkbench({
 		action: "manage" | "publish" | "restore" | "unpublish",
 	) => {
 		if (!detail) return false;
+		const mode =
+			action === "unpublish"
+				? "unpublish"
+				: action === "manage"
+					? "manage"
+					: "publish";
 		const options = detail.parentItem
 			? null
-			: resolveWritebackDialogOptions(detail.writeback);
+			: resolveWritebackDialogOptions(detail.writeback, mode);
 		if (!options) return false;
-		setWritebackDialog({
-			action,
-			mode:
-				action === "unpublish"
-					? "unpublish"
-					: action === "manage"
-						? "manage"
-						: "publish",
-			options,
-			recordKey: detail.key,
-		});
+		setWritebackDialog({ action, mode, options, recordKey: detail.key });
 		return true;
 	};
 

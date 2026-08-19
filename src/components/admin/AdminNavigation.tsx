@@ -145,10 +145,12 @@ export function AdminNavigation({
 								}
 								type="button"
 							>
-								<SourceProviderIcon
-									provider={entry.provider}
-									size={14}
-								/>
+								<span className="grid size-[14px] shrink-0 place-items-center">
+									<SourceProviderIcon
+										provider={entry.provider}
+										size={14}
+									/>
+								</span>
 								<span className="min-w-0 flex-1 truncate">
 									{entry.label}
 								</span>

@@ -810,9 +810,13 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 	await expect(
 		publishDialog.locator("[data-admin-writeback-dialog='publish']"),
 	).toBeVisible();
-	const originBox = publishDialog.getByRole("checkbox", {
-		name: `${importedSource.label} Origin`,
+	const originBox = publishDialog.getByRole("switch", {
+		name: importedSource.label,
 	});
+	await expect(
+		publishDialog.getByText("This library", { exact: true }),
+	).toBeVisible();
+	await expect(publishDialog.getByText("Always", { exact: true })).toBeVisible();
 	await expect(originBox).toBeChecked();
 	await publishDialog
 		.getByRole("button", { name: "Publish", exact: true })
@@ -970,7 +974,7 @@ test("chooses writeback sources without publishing and when unpublishing", async
 		name: "Sources for this record",
 	});
 	await expect(sourcesDialog).toBeVisible();
-	const box = sourcesDialog.getByRole("checkbox", {
+	const box = sourcesDialog.getByRole("switch", {
 		name: importedSource.label,
 	});
 	await expect(box).not.toBeChecked();
@@ -1000,7 +1004,7 @@ test("chooses writeback sources without publishing and when unpublishing", async
 		unpublishDialog.locator("[data-admin-writeback-dialog='unpublish']"),
 	).toBeVisible();
 	await expect(
-		unpublishDialog.getByRole("checkbox", { name: importedSource.label }),
+		unpublishDialog.getByRole("switch", { name: importedSource.label }),
 	).toBeChecked();
 	await unpublishDialog
 		.getByRole("button", { name: "Unpublish", exact: true })
