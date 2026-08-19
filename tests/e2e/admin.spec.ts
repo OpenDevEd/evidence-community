@@ -793,7 +793,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 
 	await page.goto("/admin");
 	await expect(
-		page.getByRole("button", { name: `${importedSource.label}: Synced` }),
+		page.getByRole("button", { name: "Sources: Synced to 1 source" }),
 	).toBeVisible();
 	await page.getByRole("button", { name: "Edit", exact: true }).click();
 	const title = page.getByRole("textbox", { name: "Title", exact: true });

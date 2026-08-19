@@ -76,7 +76,7 @@ import {
 import { FileStateChip, RecordStateChip } from "./AdminStatus";
 import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
 
-import { AdminItemSourceWritebackBadge } from "./AdminItemSourceWritebackBadge";
+import { AdminSourcesWritebackStatus } from "./AdminSourceWritebackStatus";
 import {
 	computeAdminDraftDiff,
 	EMPTY_ADMIN_DRAFT_DIFF,
@@ -1714,21 +1714,25 @@ export function AdminInspector({
 					<div className="mt-2 flex flex-wrap items-center gap-1.5">
 						<RecordStateChip state={detail.state} />
 						<FileStateChip state={detail.fileState} />
-						{detail.writeback.selected.map((sourceKey) => (
-							<AdminItemSourceWritebackBadge
+						{detail.writeback.selected.length > 0 ? (
+							<AdminSourcesWritebackStatus
 								canLoadRemote={!detail.parentItem}
 								itemKey={detail.key}
-								key={`${detail.key}:${sourceKey}`}
+								key={detail.key}
 								onResolved={onWritebackResolved}
 								revision={detail.revision}
-								sourceKey={sourceKey}
-								sourceLabel={
-									detail.writeback.available.find(
-										(target) => target.sourceKey === sourceKey,
-									)?.sourceLabel ?? sourceKey
-								}
+								sources={detail.writeback.selected.map((sourceKey) => {
+									const target = detail.writeback.available.find(
+										(candidate) => candidate.sourceKey === sourceKey,
+									);
+									return {
+										provider: target?.provider ?? "zotero",
+										sourceKey,
+										sourceLabel: target?.sourceLabel ?? sourceKey,
+									};
+								})}
 							/>
-						))}
+						) : null}
 						{!detail.parentItem ? (
 							<AdminPublicationHeaderStatus
 								onPress={() =>
