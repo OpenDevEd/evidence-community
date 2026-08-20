@@ -467,7 +467,18 @@ async function verify() {
 			standaloneResult?.eventIds.length === 1,
 			`The standalone event was not processed alone: ${JSON.stringify(standaloneResult)}`,
 		);
-		await goodService.index.getDocument(reparentedKey);
+		// A parentless attachment is not a public record, so it must stay out
+		// of the search index even when its own event is processed.
+		try {
+			await goodService.index.getDocument(reparentedKey);
+			throw new Error("A parentless attachment was indexed on its own");
+		} catch (error) {
+			assert(
+				error instanceof MeilisearchApiError &&
+					error.cause?.code === "document_not_found",
+				`The standalone attachment check failed for an unexpected reason: ${error instanceof Error ? `${error.name}: ${error.message}` : String(error)}`,
+			);
+		}
 		await database
 			.update(item)
 			.set({ parentItem: parentKey, revision: 2 })

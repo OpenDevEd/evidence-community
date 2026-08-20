@@ -151,16 +151,29 @@ async function verify() {
 			SET "writebackEnabled" = true
 			WHERE "itemKey" = 'AAAA2345' AND "sourceConnectionKey" = 'zotero-alpha'
 		`);
-		await expectConstraintViolation(
-			"single writeback link per item",
-			"itemSourceLink_one_writeback_per_item",
-			() =>
-				client.query(`
-					INSERT INTO "itemSourceLink"
-						("itemKey", "sourceConnectionKey", "sourceRecordKey", "writebackEnabled")
-					VALUES ('AAAA2345', 'zotero-beta', 'SECOND234', true)
-				`),
-		);
+		// A record may write back to several sources at once, so a second
+		// enabled link must be accepted.
+		await client.query(`
+			INSERT INTO "itemSourceLink"
+				("itemKey", "sourceConnectionKey", "sourceRecordKey", "writebackEnabled")
+			VALUES ('AAAA2345', 'zotero-beta', 'SECOND234', true)
+		`);
+		const enabledLinks = await client.query(`
+			SELECT "sourceConnectionKey"
+			FROM "itemSourceLink"
+			WHERE "itemKey" = 'AAAA2345' AND "writebackEnabled" = true
+		`);
+		if (enabledLinks.rows.length !== 2) {
+			throw new Error(
+				"A record could not keep writeback links to two sources",
+			);
+		}
+		// Remove the second link again so the later alias checks still see a
+		// record that only the alpha source owns.
+		await client.query(`
+			DELETE FROM "itemSourceLink"
+			WHERE "itemKey" = 'AAAA2345' AND "sourceConnectionKey" = 'zotero-beta'
+		`);
 
 		await expectConstraintViolation(
 			"canonical item key format",

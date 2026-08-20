@@ -572,7 +572,9 @@ async function main() {
 			`${baseUrl}/api/admin/search-index/retry`,
 			{
 				body: JSON.stringify({ scope: "all" }),
-				headers: { "Content-Type": "application/json" },
+				headers: withAdminTestSession(adminSession, {
+					"Content-Type": "application/json",
+				}),
 				method: "POST",
 			},
 		);
@@ -697,15 +699,17 @@ async function main() {
 		worker.stderr?.on("data", (chunk) => {
 			stderr += String(chunk);
 		});
+		// Startup wipes a previous run's error; only a failed embedder from
+		// the new run may stay visible, and this worker has no embedder.
 		await waitFor(async () => {
 			const state = await getSearchIndexWorker(database, workerId);
 			return Boolean(
 				state &&
 				state.stage === "idle" &&
-				state.lastError?.includes("previous delivery failed") &&
+				state.lastError === null &&
 				searchIndexWorkerIsActive(state),
 			);
-		}, "The watch worker did not preserve its previous error while becoming idle");
+		}, "The restarted watch worker did not clear the previous run's error");
 
 		const health = runTool("tools/checkSearchIndexerHealth.ts", [], env);
 		let healthOutput = "";
@@ -723,7 +727,9 @@ async function main() {
 			draft: { itemKey: string };
 		}>(baseUrl, "/api/admin/items/drafts", {
 			body: JSON.stringify({
-				abstractNote: "x".repeat(2_000_000),
+				// The abstract stays under the 65,535-byte field limit while
+				// still being large enough to produce a real indexing task.
+				abstractNote: "x".repeat(60_000),
 				collections: [],
 				creators: [],
 				itemType: "Report",
@@ -1122,8 +1128,13 @@ async function main() {
 			.context()
 			.addCookies([
 				{
+					// The production server sets a __Host- cookie, which needs
+					// Secure and path "/". Chromium still sends it to 127.0.0.1.
+					domain: "127.0.0.1",
 					name: adminSession.name,
-					url: baseUrl,
+					path: "/",
+					sameSite: "Lax",
+					secure: true,
 					value: adminSession.value,
 				},
 			]);
@@ -1158,7 +1169,7 @@ async function main() {
 			const fixtures = await Promise.all(
 				fixtureChunk.map((index) =>
 					createDraft({
-						abstractNote: `progress-${index}-${"x".repeat(500_000)}`,
+						abstractNote: `progress-${index}-${"x".repeat(60_000)}`,
 						collections: [],
 						creators: [],
 						itemType: "Report",
@@ -1345,8 +1356,13 @@ async function main() {
 			.context()
 			.addCookies([
 				{
+					// The production server sets a __Host- cookie, which needs
+					// Secure and path "/". Chromium still sends it to 127.0.0.1.
+					domain: "127.0.0.1",
 					name: adminSession.name,
-					url: baseUrl,
+					path: "/",
+					sameSite: "Lax",
+					secure: true,
 					value: adminSession.value,
 				},
 			]);
