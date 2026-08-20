@@ -188,7 +188,12 @@ export const maximalLibraryConfig = {
 		tags: true,
 		country: true,
 		authorCountry: true,
-		embeddings: true,
+		embedder: {
+			source: "openAi",
+			model: "text-embedding-3-small",
+			apiKey: "maximal-embedding-api-key",
+			dimensions: 1536,
+		},
 		scopes: ["title_abstract_author_and_keywords", "title", "authors"],
 		defaultScope: "title_abstract_author_and_keywords",
 	},

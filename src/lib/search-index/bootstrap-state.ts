@@ -3,11 +3,49 @@ import { eq } from "drizzle-orm";
 import type { Database } from "@/db/database-schema";
 import { status } from "@/db/schema/tables/status";
 
+import { EMBEDDER_TASK_TIMEOUT_MS } from "./consumer";
+import type { SearchEmbedderConfiguration } from "./embedder-settings";
+
+/**
+ * Decides what the worker records as `lastError` after an outbox pass.
+ * A successful batch clears an ordinary indexing error, but a failed embedder
+ * stays visible until the next worker start applies it again.
+ */
+export function resolveIdleLastError(input: {
+	embedderError: string | null;
+	previousLastError: string | null;
+	processedEvents: number;
+}) {
+	if (input.processedEvents > 0) return input.embedderError;
+	return input.previousLastError ?? input.embedderError;
+}
+
+/**
+ * With an active embedder, every document task also embeds, so the startup
+ * rebuild gets the longer embedding wait. Without one, the default applies.
+ */
+export function resolveRebuildTaskTimeoutMs(input: {
+	embedder: SearchEmbedderConfiguration;
+}) {
+	return input.embedder ? EMBEDDER_TASK_TIMEOUT_MS : undefined;
+}
+
+/**
+ * A rebuild deletes every document before adding them again. When the
+ * embedder step failed on an index that already has records, keep those
+ * records and leave the rebuild pending: adding documents would need the
+ * broken embedder and could leave the public index empty. An empty index
+ * (brand-new, or created by an earlier worker that stopped) has nothing to
+ * lose, so it is still filled.
+ */
 export function shouldRebuildSearchIndex(input: {
+	embedderError?: string | null;
 	forceRebuild: boolean;
 	indexCreated: boolean;
+	indexHasRecords?: boolean;
 	rebuildPending: boolean;
 }) {
+	if (input.embedderError && input.indexHasRecords) return false;
 	return input.forceRebuild || input.indexCreated || input.rebuildPending;
 }
 

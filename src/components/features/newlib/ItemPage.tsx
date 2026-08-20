@@ -703,7 +703,7 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 	const { data: citationResponse, isLoading: isCitationFetching } = useSWR<{
 		citation: string | null;
 	}>(
-		item?.key ? `/item/${item.key}/citation` : null,
+		citations.enabled && item?.key ? `/item/${item.key}/citation` : null,
 		fetcher,
 		{
 			revalidateOnFocus: false,
@@ -769,6 +769,8 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 		item?.key,
 		resolvedCitation,
 	]);
+	// No citation server configured: the row never appears.
+	if (!citations.enabled) return null;
 	if (!isLoading && !citationHtml && !citationCopy) return null;
 
 	return (
@@ -779,6 +781,7 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 			<AnimatePresence>
 				{isLoading ? (
 					<motion.div
+						data-citation-state="loading"
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0 }}
@@ -791,6 +794,7 @@ export function ItemCitation({ item }: { item: Item | undefined }) {
 					</motion.div>
 				) : (
 					<motion.div
+						data-citation-state="ready"
 						initial={{ opacity: 0 }}
 						animate={{ opacity: 1 }}
 						exit={{ opacity: 0 }}

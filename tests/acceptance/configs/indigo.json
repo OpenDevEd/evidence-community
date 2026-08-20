@@ -141,7 +141,7 @@
     "tags": false,
     "country": false,
     "authorCountry": false,
-    "embeddings": false,
+    "embedder": null,
     "scopes": [
       "title"
     ],

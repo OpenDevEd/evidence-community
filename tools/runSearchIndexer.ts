@@ -9,11 +9,14 @@ import { installProcessFetchAbortSignal } from "../src/lib/process-fetch-signal"
 import { parseSearchIndexCommand } from "../src/lib/search-index/command";
 import {
 	searchIndexRebuildIsPending,
+	resolveIdleLastError,
+	resolveRebuildTaskTimeoutMs,
 	setSearchIndexRebuildPending,
 	shouldRebuildSearchIndex,
 } from "../src/lib/search-index/bootstrap-state";
 import {
 	drainSearchOutbox,
+	applySearchIndexEmbedder,
 	ensureSearchIndex,
 	requeueSearchOutboxDeadLetters,
 	rebuildSearchIndex,
@@ -138,17 +141,77 @@ async function main() {
 			},
 			signal: abortController.signal,
 		});
+		let embedderError: string | null = null;
+		try {
+			// The worker stays in the "starting" stage here. The stored
+			// worker state cannot describe a settings task (it requires
+			// outbox events for "waiting"/"indexing"), so progress goes to
+			// the log instead.
+			let lastEmbedderStage = "";
+			await applySearchIndexEmbedder(service, config.search.embedder, {
+				batchClient: service.client.batches,
+				onProgress: async (progress) => {
+					const line = `${progress.stage} task ${progress.taskUid ?? "?"}${
+						progress.batchProgress === null
+							? ""
+							: ` ${progress.batchProgress}%`
+					}`;
+					if (line === lastEmbedderStage) return;
+					lastEmbedderStage = line;
+					console.log(`Search index embedder: ${line}`);
+				},
+				signal: abortController.signal,
+			});
+			console.log(
+				config.search.embedder
+					? "Search index embedder: ready"
+					: "Search index embedder: removed",
+			);
+		} catch (error) {
+			if (
+				error instanceof SearchOutboxAbortError &&
+				abortController.signal.aborted
+			) {
+				throw error;
+			}
+			// A broken embedder must not stop record indexing. The next worker
+			// start retries it, and Similar Resources stays unavailable until then.
+			embedderError =
+				error instanceof Error
+					? `${error.name}: ${error.message}`
+					: String(error);
+			console.error(`Search index embedder failed: ${embedderError}`);
+		}
+		const indexHasRecords = embedderError
+			? (await service.index.getStats()).numberOfDocuments > 0
+			: false;
+		if (
+			embedderError &&
+			indexHasRecords &&
+			(rebuildPending || command.rebuild)
+		) {
+			console.error(
+				"Search index rebuild stays pending: the embedder step failed and the existing records are kept.",
+			);
+		}
 		if (
 			shouldRebuildSearchIndex({
+				embedderError,
 				forceRebuild: command.rebuild,
 				indexCreated: setup.created,
+				indexHasRecords,
 				rebuildPending,
 			})
 		) {
 			const plan = await rebuildSearchIndex(
 				databaseResource.database,
 				service,
-				{ signal: abortController.signal },
+				{
+					signal: abortController.signal,
+					taskTimeoutMs: resolveRebuildTaskTimeoutMs({
+						embedder: config.search.embedder,
+					}),
+				},
 			);
 			await setSearchIndexRebuildPending(
 				databaseResource.database,
@@ -170,7 +233,9 @@ async function main() {
 				currentEventCount: 0,
 				currentTaskUid: null,
 				lastCompletedAt: registeredWorker.lastCompletedAt,
-				lastError: registeredWorker.lastError,
+				// Startup finished, so a previous run's error is gone; only a
+				// failed embedder from this run stays visible.
+				lastError: embedderError,
 				stage: "idle",
 			},
 			true,
@@ -223,10 +288,12 @@ async function main() {
 							results.length > 0
 								? new Date()
 								: (previousProgress.lastCompletedAt ?? null),
-						lastError:
-							results.length > 0
-								? null
-								: previousProgress.lastError,
+						lastError: resolveIdleLastError({
+							embedderError,
+							previousLastError:
+								previousProgress.lastError ?? null,
+							processedEvents: results.length,
+						}),
 						stage: "idle",
 					},
 					true,

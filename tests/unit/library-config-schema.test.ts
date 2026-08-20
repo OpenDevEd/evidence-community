@@ -121,7 +121,9 @@ describe("library configuration fixtures", () => {
 			...duplicateGroup.sources![0],
 			key: "zotero-duplicate",
 		});
-		expect(libraryConfigSchema.safeParse(duplicateGroup).success).toBe(false);
+		expect(libraryConfigSchema.safeParse(duplicateGroup).success).toBe(
+			false,
+		);
 	});
 
 	it("allows many writeback sources and no default writeback source", () => {
@@ -356,9 +358,9 @@ describe("cross-field activation rules", () => {
 			},
 		],
 		[
-			"related resources without embeddings",
+			"related resources without an embedder",
 			(config: any) => {
-				config.search.embeddings = false;
+				config.search.embedder = null;
 			},
 		],
 		[
@@ -936,5 +938,143 @@ describe("manifest-wide activation", () => {
 		};
 
 		expect(catalogSchema.safeParse(config).success).toBe(false);
+	});
+});
+
+describe("search embedder", () => {
+	const restEmbedder = {
+		source: "rest" as const,
+		url: "http://embedder.internal:8080/embed",
+		apiKey: "rest-embedding-key",
+		dimensions: 8,
+		request: { input: "{{text}}" },
+		response: { embedding: "{{embedding}}" },
+		headers: { "X-Library": "test" },
+	};
+
+	it("accepts a complete openAi embedder", () => {
+		const config: any = cloneLibraryConfig();
+		config.search.embedder = {
+			source: "openAi",
+			model: "text-embedding-3-small",
+			apiKey: "openai-embedding-key",
+		};
+		expect(catalogSchema.safeParse(config).success).toBe(true);
+	});
+
+	it("accepts a complete rest embedder", () => {
+		const config: any = cloneLibraryConfig();
+		config.search.embedder = restEmbedder;
+		expect(catalogSchema.safeParse(config).success).toBe(true);
+	});
+
+	it("accepts a null embedder when related resources and AI search are off", () => {
+		const config: any = cloneLibraryConfig();
+		config.search.embedder = null;
+		config.features.relatedResources = false;
+		config.features.aiSearch = false;
+		config.features.deepResearch = false;
+		const result = catalogSchema.safeParse(config);
+		expect(result.success).toBe(true);
+		if (result.success) expect(result.data.search.embedder).toBeNull();
+	});
+
+	it("reports the related resources rule with a path", () => {
+		expectCatalogIssue((config: any) => {
+			config.search.embedder = null;
+		}, "Related resources require an embedder");
+	});
+
+	it("reports the AI search rule with a path", () => {
+		expectCatalogIssue((config: any) => {
+			config.search.embedder = null;
+			config.features.relatedResources = false;
+		}, "AI search requires an embedder");
+	});
+
+	it.each([
+		[
+			"the removed embeddings flag",
+			(config: any) => {
+				config.search.embeddings = true;
+			},
+		],
+		[
+			"an unknown source",
+			(config: any) => {
+				config.search.embedder = { source: "ollama", model: "x" };
+			},
+		],
+		[
+			"openAi without an API key",
+			(config: any) => {
+				config.search.embedder = {
+					source: "openAi",
+					model: "text-embedding-3-small",
+				};
+			},
+		],
+		[
+			"openAi without a model",
+			(config: any) => {
+				config.search.embedder = {
+					source: "openAi",
+					apiKey: "openai-embedding-key",
+				};
+			},
+		],
+		[
+			"openAi with zero dimensions",
+			(config: any) => {
+				config.search.embedder = {
+					source: "openAi",
+					model: "text-embedding-3-small",
+					apiKey: "openai-embedding-key",
+					dimensions: 0,
+				};
+			},
+		],
+		[
+			"rest without a URL",
+			(config: any) => {
+				const { url: _url, ...rest } = restEmbedder;
+				config.search.embedder = rest;
+			},
+		],
+		[
+			"rest with a query string URL",
+			(config: any) => {
+				config.search.embedder = {
+					...restEmbedder,
+					url: "http://embedder.internal:8080/embed?x=1",
+				};
+			},
+		],
+		[
+			"rest whose request lacks {{text}}",
+			(config: any) => {
+				config.search.embedder = {
+					...restEmbedder,
+					request: { input: "hello" },
+				};
+			},
+		],
+		[
+			"rest whose response lacks {{embedding}}",
+			(config: any) => {
+				config.search.embedder = {
+					...restEmbedder,
+					response: { data: "nothing" },
+				};
+			},
+		],
+		[
+			"rest with an unknown field",
+			(config: any) => {
+				config.search.embedder = { ...restEmbedder, model: "x" };
+			},
+		],
+	])("rejects %s", (_label, mutate) => {
+		expectCatalogInvalid(mutate);
 	});
 });

@@ -154,7 +154,7 @@ export const findRelevantContent = async (
 	itemKey: string | null,
 	userSpecifiedPage: number,
 ): Promise<RAGResult[]> => {
-	if (!itemKey || !config.search.embeddings) {
+	if (!itemKey || !config.search.embedder) {
 		return [];
 	}
 

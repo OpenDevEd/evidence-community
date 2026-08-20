@@ -1,0 +1,23 @@
+# Fresh Meilisearch for `npm run test:search-embedder`.
+# `--experimental-allowed-ip-networks` lets Meilisearch call the local REST
+# embedder stub on the host. Never add that flag to docker/compose.library.yaml.
+services:
+  meilisearch:
+    image: getmeili/meilisearch:v1.37
+    command:
+      - meilisearch
+      - --experimental-allowed-ip-networks=0.0.0.0/0
+    environment:
+      MEILI_MASTER_KEY: embedder-test-key
+      MEILI_NO_ANALYTICS: "true"
+      MEILI_ENV: development
+    ports:
+      - "127.0.0.1:${EMBEDDER_TEST_MEILI_PORT:-57710}:7700"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://127.0.0.1:7700/health"]
+      interval: 2s
+      timeout: 2s
+      retries: 60
+      start_period: 5s

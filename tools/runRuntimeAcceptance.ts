@@ -796,7 +796,7 @@ function publicExpectations(profile: Profile) {
 			config.citations.showUrl &&
 				Boolean(config.services.zotero.translationUrl),
 		),
-		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(config.search.embeddings),
+		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(config.search.embedder !== null),
 		PLAYWRIGHT_EXPECTED_COUNTRY_FACET: String(config.search.country),
 		PLAYWRIGHT_EXPECTED_AUTHOR_COUNTRY_FACET: String(
 			config.search.authorCountry,

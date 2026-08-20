@@ -955,10 +955,6 @@
 					"default": true,
 					"type": "boolean"
 				},
-				"embeddings": {
-					"default": true,
-					"type": "boolean"
-				},
 				"scopes": {
 					"minItems": 1,
 					"maxItems": 8,
@@ -988,6 +984,109 @@
 						"fields",
 						"documents",
 						"everywhere"
+					]
+				},
+				"embedder": {
+					"default": null,
+					"anyOf": [
+						{
+							"oneOf": [
+								{
+									"type": "object",
+									"properties": {
+										"source": {
+											"type": "string",
+											"const": "openAi"
+										},
+										"model": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 128
+										},
+										"apiKey": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 512,
+											"writeOnly": true
+										},
+										"dimensions": {
+											"type": "integer",
+											"minimum": 1,
+											"maximum": 65536
+										}
+									},
+									"required": [
+										"source",
+										"model",
+										"apiKey"
+									],
+									"additionalProperties": false
+								},
+								{
+									"type": "object",
+									"properties": {
+										"source": {
+											"type": "string",
+											"const": "rest"
+										},
+										"url": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 2048,
+											"format": "uri"
+										},
+										"apiKey": {
+											"type": "string",
+											"minLength": 1,
+											"maxLength": 512,
+											"writeOnly": true
+										},
+										"dimensions": {
+											"type": "integer",
+											"minimum": 1,
+											"maximum": 65536
+										},
+										"request": {
+											"type": "object",
+											"propertyNames": {
+												"type": "string"
+											},
+											"additionalProperties": {}
+										},
+										"response": {
+											"type": "object",
+											"propertyNames": {
+												"type": "string"
+											},
+											"additionalProperties": {}
+										},
+										"headers": {
+											"type": "object",
+											"propertyNames": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 128
+											},
+											"additionalProperties": {
+												"type": "string",
+												"minLength": 1,
+												"maxLength": 1024
+											}
+										}
+									},
+									"required": [
+										"source",
+										"url",
+										"request",
+										"response"
+									],
+									"additionalProperties": false
+								}
+							]
+						},
+						{
+							"type": "null"
+						}
 					]
 				}
 			},

@@ -31,6 +31,10 @@ import {
 	generateSearchProjectionPlans,
 	type SearchProjectionPlan,
 } from "./projection";
+import {
+	buildEmbedderSettings,
+	type SearchEmbedderConfiguration,
+} from "./embedder-settings";
 
 const DEFAULT_LEASE_DURATION_MS = 5 * 60 * 1_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 30 * 1_000;
@@ -38,6 +42,11 @@ const DEFAULT_MAX_ATTEMPTS = 15;
 const DEFAULT_RETRY_BASE_MS = 5_000;
 const DEFAULT_RETRY_MAX_MS = 60 * 60 * 1_000;
 const DEFAULT_TASK_TIMEOUT_MS = 5 * 60 * 1_000;
+/** Adding or changing an embedder makes Meilisearch re-embed every record. */
+export const EMBEDDER_TASK_TIMEOUT_MS = 60 * 60 * 1_000;
+/** A re-embed can run for a long time; ask Meilisearch about it every 2 s. */
+export const EMBEDDER_TASK_POLL_INTERVAL_MS = 2_000;
+const DEFAULT_TASK_POLL_INTERVAL_MS = 100;
 const DEFAULT_MAX_DOCUMENT_BATCH_BYTES = 20 * 1024 * 1024;
 const MAX_ERROR_LENGTH = 32 * 1_024;
 
@@ -432,10 +441,13 @@ async function waitForSuccessfulTask(
 		batchClient?: Meilisearch["batches"];
 		eventIds?: number[];
 		onProgress?: SearchOutboxConsumerOptions["onProgress"];
+		pollIntervalMs?: number;
 		signal?: AbortSignal;
 		taskClient?: Index["tasks"];
 	} = {},
 ) {
+	const pollIntervalMs =
+		options.pollIntervalMs ?? DEFAULT_TASK_POLL_INTERVAL_MS;
 	if (!options.taskClient) {
 		const task = await taskPromise.waitTask({
 			interval: 50,
@@ -491,7 +503,9 @@ async function waitForSuccessfulTask(
 				taskUid: task.uid,
 			});
 			try {
-				await delay(100, undefined, { signal: options.signal });
+				await delay(pollIntervalMs, undefined, {
+					signal: options.signal,
+				});
 			} catch (error) {
 				if (options.signal?.aborted) throw new SearchOutboxAbortError();
 				throw error;
@@ -925,6 +939,36 @@ export async function ensureSearchIndex(
 		},
 	);
 	return { created };
+}
+
+/**
+ * Writes the library's embedder to the index under the platform name and
+ * waits for Meilisearch to finish embedding. `null` removes it.
+ */
+export async function applySearchIndexEmbedder(
+	service: MeilisearchService,
+	embedder: SearchEmbedderConfiguration,
+	options: {
+		batchClient?: Meilisearch["batches"];
+		onProgress?: SearchOutboxConsumerOptions["onProgress"];
+		signal?: AbortSignal;
+		taskTimeoutMs?: number;
+	} = {},
+) {
+	throwIfAborted(options.signal);
+	return waitForSuccessfulTask(
+		service.index.updateSettings({
+			embedders: buildEmbedderSettings(embedder),
+		}),
+		options.taskTimeoutMs ?? EMBEDDER_TASK_TIMEOUT_MS,
+		{
+			batchClient: options.batchClient,
+			onProgress: options.onProgress,
+			pollIntervalMs: EMBEDDER_TASK_POLL_INTERVAL_MS,
+			signal: options.signal,
+			taskClient: service.index.tasks,
+		},
+	);
 }
 
 export async function rebuildSearchIndex(

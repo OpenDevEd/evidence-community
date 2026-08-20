@@ -132,7 +132,7 @@
 		"tags": true,
 		"country": true,
 		"authorCountry": true,
-		"embeddings": false,
+		"embedder": null,
 		"scopes": ["title_abstract_author_and_keywords", "title", "authors"],
 		"defaultScope": "title_abstract_author_and_keywords"
 	},

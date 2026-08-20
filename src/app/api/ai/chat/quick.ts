@@ -1,4 +1,5 @@
 import { ModelMessage, streamText, tool } from "ai";
+import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import { Item } from "../../item/types";
 import { z } from "zod";
 import {
@@ -128,7 +129,7 @@ Before you answer, classify the user’s intent into one of two categories:
 						!cleanItem
 					) {
 						const isGlobalChat = cleanItem === null;
-						if (!config.search.embeddings) {
+						if (!config.search.embedder) {
 							if (!isGlobalChat) {
 								return fullTextPDFs?.[0]?.fullTextPDF ??
 									"There is no PDF attached to this item.";
@@ -201,7 +202,7 @@ Before you answer, classify the user’s intent into one of two categories:
 					userSpecifiedSort,
 					userSpecifiedAmountOfResults,
 				}) => {
-					if (!config.search.embeddings) {
+					if (!config.search.embedder) {
 						return { hits: [], totalHits: 0 };
 					}
 
@@ -210,7 +211,7 @@ Before you answer, classify the user’s intent into one of two categories:
 						result = await searchIndex.search(q, {
 								q,
 								hybrid: {
-									embedder: "openai",
+									embedder: PLATFORM_SEARCH_EMBEDDER,
 									semanticRatio: 0.5,
 								},
 								filter: [

@@ -10,6 +10,11 @@ const publicConfigCache = new WeakMap<
 	LibraryPublicConfig
 >();
 
+function projectPublicSearch(search: LibraryServerConfig["search"]) {
+	const { embedder, ...options } = search;
+	return { ...options, embeddings: embedder !== null };
+}
+
 export function projectPublicLibraryConfig(
 	config: LibraryServerConfig,
 ): LibraryPublicConfig {
@@ -28,10 +33,13 @@ export function projectPublicLibraryConfig(
 		contact: config.contact,
 		legal: config.legal,
 		localization: config.localization,
-		search: config.search,
+		search: projectPublicSearch(config.search),
 		filters: config.filters,
 		content: config.content,
-		citations: config.citations,
+		citations: {
+			enabled: Boolean(config.services.zotero.translationUrl),
+			showUrl: config.citations.showUrl,
+		},
 		features: config.features,
 		collections: config.collections,
 		gapMaps: getEnabledGapMaps(config.gapMaps),
@@ -52,8 +60,7 @@ export function projectPublicLibraryConfig(
 		analytics: config.analytics,
 		authentication: {
 			google: {
-				enabled:
-					config.authentication.google.enabled,
+				enabled: config.authentication.google.enabled,
 			},
 		},
 	});

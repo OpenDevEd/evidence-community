@@ -15,6 +15,7 @@ import {
 	PLATFORM_RULE_CONDITIONS,
 	PLATFORM_SEARCH_SCOPES,
 	PLATFORM_SOCIAL_PROVIDERS,
+	type PlatformSearchScope,
 } from "./catalogs";
 import {
 	addDuplicateIssues,
@@ -655,57 +656,136 @@ const localizationSchema = z
 
 const scopeSchema = z.enum(PLATFORM_SEARCH_SCOPES);
 
-const searchSchema = z
+const embedderDimensionsSchema = z.number().int().min(1).max(65_536);
+
+const embedderModelSchema = z.string().trim().min(1).max(128);
+
+function containsPlaceholder(value: unknown, placeholder: string): boolean {
+	if (typeof value === "string") return value.includes(placeholder);
+	if (Array.isArray(value)) {
+		return value.some((entry) => containsPlaceholder(entry, placeholder));
+	}
+	if (value && typeof value === "object") {
+		return Object.values(value).some((entry) =>
+			containsPlaceholder(entry, placeholder),
+		);
+	}
+	return false;
+}
+
+function embedderTemplateSchema(placeholder: string) {
+	return z
+		.record(z.string(), z.unknown())
+		.refine((value) => containsPlaceholder(value, placeholder), {
+			message: `Template must contain ${placeholder}`,
+		});
+}
+
+const openAiEmbedderSchema = z
 	.object({
-		fullText: z.boolean().default(true),
-		tags: z.boolean().default(true),
-		country: z.boolean().default(true),
-		authorCountry: z.boolean().default(true),
-		embeddings: z.boolean().default(true),
-		scopes: z
-			.array(scopeSchema)
-			.min(1)
-			.max(PLATFORM_SEARCH_SCOPES.length)
-			.superRefine((scopes, context) =>
-				addDuplicateIssues(scopes, context, (scope) => scope),
-			)
-			.optional(),
-		defaultScope: scopeSchema.optional(),
+		source: z.literal("openAi"),
+		model: embedderModelSchema,
+		apiKey: secretSchema(1, 512),
+		dimensions: embedderDimensionsSchema.optional(),
 	})
+	.strict();
+
+const restEmbedderSchema = z
+	.object({
+		source: z.literal("rest"),
+		url: serviceUrlSchema,
+		apiKey: secretSchema(1, 512).optional(),
+		dimensions: embedderDimensionsSchema.optional(),
+		request: embedderTemplateSchema("{{text}}"),
+		response: embedderTemplateSchema("{{embedding}}"),
+		headers: z
+			.record(singleLineStringSchema(128), singleLineStringSchema(1024))
+			.optional(),
+	})
+	.strict();
+
+export const searchEmbedderSchema = z
+	.discriminatedUnion("source", [openAiEmbedderSchema, restEmbedderSchema])
+	.nullable()
+	.default(null);
+
+const searchOptionsShape = {
+	fullText: z.boolean().default(true),
+	tags: z.boolean().default(true),
+	country: z.boolean().default(true),
+	authorCountry: z.boolean().default(true),
+	scopes: z
+		.array(scopeSchema)
+		.min(1)
+		.max(PLATFORM_SEARCH_SCOPES.length)
+		.superRefine((scopes, context) =>
+			addDuplicateIssues(scopes, context, (scope) => scope),
+		)
+		.optional(),
+	defaultScope: scopeSchema.optional(),
+};
+
+type SearchOptions = {
+	fullText: boolean;
+	scopes?: PlatformSearchScope[];
+	defaultScope?: PlatformSearchScope;
+};
+
+function applySearchScopeDefaults<Search extends SearchOptions>(
+	search: Search,
+) {
+	const scopes =
+		search.scopes ??
+		PLATFORM_SEARCH_SCOPES.filter(
+			(scope) => search.fullText || scope !== "documents",
+		);
+	return {
+		...search,
+		scopes,
+		defaultScope: search.defaultScope ?? scopes[0]!,
+	};
+}
+
+function refineSearchScopes(
+	search: {
+		fullText: boolean;
+		scopes: PlatformSearchScope[];
+		defaultScope: PlatformSearchScope;
+	},
+	context: z.RefinementCtx,
+) {
+	if (!search.scopes.includes(search.defaultScope)) {
+		context.addIssue({
+			code: z.ZodIssueCode.custom,
+			message: "Default scope must be enabled",
+			path: ["defaultScope"],
+		});
+	}
+	if (!search.fullText) {
+		search.scopes.forEach((scope, index) => {
+			if (scope === "documents") {
+				context.addIssue({
+					code: z.ZodIssueCode.custom,
+					message: "Documents scope requires full-text search",
+					path: ["scopes", index],
+				});
+			}
+		});
+	}
+}
+
+const searchSchema = z
+	.object({ ...searchOptionsShape, embedder: searchEmbedderSchema })
 	.strict()
 	.prefault({})
-	.transform((search) => {
-		const scopes =
-			search.scopes ??
-			PLATFORM_SEARCH_SCOPES.filter(
-				(scope) => search.fullText || scope !== "documents",
-			);
-		return {
-			...search,
-			scopes,
-			defaultScope: search.defaultScope ?? scopes[0],
-		};
-	})
-	.superRefine((search, context) => {
-		if (!search.scopes.includes(search.defaultScope)) {
-			context.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "Default scope must be enabled",
-				path: ["defaultScope"],
-			});
-		}
-		if (!search.fullText) {
-			search.scopes.forEach((scope, index) => {
-				if (scope === "documents") {
-					context.addIssue({
-						code: z.ZodIssueCode.custom,
-						message: "Documents scope requires full-text search",
-						path: ["scopes", index],
-					});
-				}
-			});
-		}
-	});
+	.transform(applySearchScopeDefaults)
+	.superRefine(refineSearchScopes);
+
+const publicSearchSchema = z
+	.object({ ...searchOptionsShape, embeddings: z.boolean() })
+	.strict()
+	.transform(applySearchScopeDefaults)
+	.superRefine(refineSearchScopes);
 
 const filtersSchema = z
 	.object({
@@ -802,6 +882,15 @@ const citationsSchema = z
 	})
 	.strict()
 	.prefault({});
+
+// The public copy adds whether a citation server is configured, so the
+// item page can leave the citation row out instead of loading and hiding it.
+const publicCitationsSchema = z
+	.object({
+		enabled: z.boolean(),
+		showUrl: z.boolean(),
+	})
+	.strict();
 
 const featuresSchema = z
 	.object({
@@ -937,8 +1026,14 @@ const crossrefPublicationSchema = z
 			],
 			["email", "Enabled Crossref publication requires an email address"],
 			["password", "Enabled Crossref publication requires a password"],
-			["registrant", "Enabled Crossref publication requires a registrant"],
-			["prefix", "Enabled Crossref publication requires an assigned prefix"],
+			[
+				"registrant",
+				"Enabled Crossref publication requires a registrant",
+			],
+			[
+				"prefix",
+				"Enabled Crossref publication requires an assigned prefix",
+			],
 			[
 				"suffixNamespace",
 				"Enabled Crossref publication requires a library DOI suffix namespace",
@@ -1554,11 +1649,19 @@ export function createLibraryConfigSchema(
 			}
 		}
 
-		if (config.features.relatedResources && !config.search.embeddings) {
+		if (config.features.relatedResources && !config.search.embedder) {
 			addRequiredIssue(
 				context,
 				["features", "relatedResources"],
-				"Related resources require embeddings",
+				"Related resources require an embedder",
+			);
+		}
+
+		if (config.features.aiSearch && !config.search.embedder) {
+			addRequiredIssue(
+				context,
+				["features", "aiSearch"],
+				"AI search requires an embedder",
 			);
 		}
 
@@ -1704,10 +1807,10 @@ export const publicLibraryConfigSchema = z
 		contact: contactSchema,
 		legal: legalSchema,
 		localization: localizationSchema,
-		search: searchSchema,
+		search: publicSearchSchema,
 		filters: filtersSchema,
 		content: contentSchema,
-		citations: citationsSchema,
+		citations: publicCitationsSchema,
 		features: featuresSchema,
 		collections: collectionsSchema,
 		gapMaps: publicGapMapsSchema,
