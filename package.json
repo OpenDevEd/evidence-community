@@ -45,7 +45,7 @@
 		"test:search-worker": "npm run build && tsx ./tools/verifySearchIndexerWorker.ts",
 		"test:native-lifecycle": "tsx ./tools/verifyNativeItemLifecycle.ts",
 		"test:item-links": "tsx ./tools/verifyItemLinks.ts",
-		"test:linked-item-lifecycle": "tsx ./tools/verifyLinkedItemDraftLifecycle.ts",
+		"test:linked-item-lifecycle": "tsx --conditions=react-server ./tools/verifyLinkedItemDraftLifecycle.ts",
 		"test:source-writeback": "tsx ./tools/verifySourceWriteback.ts",
 		"test:collection-writeback": "tsx ./tools/verifyCollectionSourceWriteback.ts",
 		"test:source-collections": "tsx ./tools/verifySourceCollectionLifecycle.ts",
