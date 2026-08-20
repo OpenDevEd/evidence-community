@@ -13,7 +13,7 @@ const CopyButton = forwardRef<
 	any,
 	{
 		itemData?: Item | ListItem | undefined;
-		content?: string;
+		content?: string | (() => string);
 		text?: string;
 		textOnCopy?: string;
 		className?: string;
@@ -32,10 +32,14 @@ const CopyButton = forwardRef<
 	const locale = useLocale();
 	const t = useTranslations("ui");
 
-	const handleCopy = () => {
+	const handleCopy = async () => {
 		if (content || contentRef) {
-			const contentToCopy = content || contentRef?.current?.textContent;
-			navigator.clipboard.writeText(contentToCopy.trim());
+			const contentToCopy =
+				typeof content === "function"
+					? content()
+					: content || contentRef?.current?.textContent;
+			if (!contentToCopy) return;
+			await navigator.clipboard.writeText(contentToCopy.trim());
 		} else {
 			const currentUrl = window.location.href;
 			const url = new URL(currentUrl);
@@ -45,7 +49,7 @@ const CopyButton = forwardRef<
 				url.pathname = `/lib/${itemData?.key}`;
 			}
 			url.search = "";
-			navigator.clipboard.writeText(url.toString());
+			await navigator.clipboard.writeText(url.toString());
 		}
 		setIsCopied(true);
 		clearCopied();

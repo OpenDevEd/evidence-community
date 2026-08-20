@@ -9,6 +9,7 @@ import { twMerge } from "tailwind-merge";
 import { usePathname } from "@/i18n/routing";
 import { style } from "@/../tailwind.config";
 import { FeatureFlagsContext } from "@/context/Providers";
+import { useInlineChatLayout } from "@/context/InlineChatLayout";
 
 import { Logo } from "./Logo";
 import NavLinks from "./NavLinks";
@@ -37,6 +38,7 @@ export default function Navbar() {
 	const { data: session } = useSession();
 	const { featureFlags } = useContext(FeatureFlagsContext);
 	const styleVariant = (style as NavbarStyleVariant) || "small";
+	const { engaged: chatEngaged } = useInlineChatLayout();
 
 	const {
 		isOpen: isLoginModalOpen,
@@ -100,17 +102,34 @@ export default function Navbar() {
 		<>
 		<header
 			className={twMerge(
-				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-[transform,border-radius] origin-top",
+				"w-full max-w-[96rem] px-0 xl:px-14 sticky top-0 xl:relative z-50 pt-0 print:hidden transition-[transform,border-radius] duration-[450ms] ease-[cubic-bezier(0.16,1,0.3,1)] origin-top",
 				styleVariant === "wide" && "bg-white dark:bg-secondary max-w-none",
 				isMapPage &&
 					(styleVariant !== "wide"
 						? "xl:absolute xl:top-6 xl:scale-75"
-						: "xl:absolute xl:scale-75 xl:rounded-b-2xl")
+						: "xl:absolute xl:scale-75 xl:rounded-b-2xl"),
+				// Split chat mode reuses the map's scaled-down navbar, but
+				// stays sticky and in flow: pulling the header out of flow
+				// mid-page (the map does it on load) would make the content
+				// jump, and the chat panel pins directly beneath it so
+				// scrolling only moves the results.
+				// Small style floats 1.625rem below the top in split mode
+				// (MainWrapper); sticking at that same offset keeps the header
+				// and the chat panel beneath it from jumping when scrolling.
+				chatEngaged &&
+					!isMapPage &&
+					(styleVariant !== "wide"
+						? "xl:sticky xl:top-[1.625rem] xl:scale-75"
+						: "xl:sticky xl:top-0 xl:scale-75 xl:rounded-b-2xl")
 			)}
 		>
 			<div
 				className={twMerge(
-					"xl:h-[6.5rem] h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10",
+					"xl:h-[6.5rem] h-20 bg-white dark:bg-secondary xl:rounded-2xl flex items-center p-4 py-6 xl:p-8 gap-6 z-10 transition-[height,padding] duration-[450ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
+					// Compact header only where the split layout exists (lg+);
+					// on phones the chat stacks in flow and the navbar keeps
+					// its normal size.
+					chatEngaged && "lg:h-14 lg:py-2",
 					styleVariant === "wide" &&
 						"bg-transparent max-w-[96rem] mx-auto xl:px-14",
 					// When the search bar is docked beneath the navbar (non-wide

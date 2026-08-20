@@ -2,7 +2,8 @@
 
 import { useRef, useState, useEffect } from "react";
 import { Item } from "@/app/api/item/types";
-import { Link, Skeleton, Spinner } from "@nextui-org/react";
+import { Link, Spinner } from "@nextui-org/react";
+import { Skeleton } from "@/components/nextui/Skeleton";
 import { twMerge } from "tailwind-merge";
 import Image from "next/image";
 import { LuDownload } from "react-icons/lu";
@@ -23,32 +24,9 @@ import { useSession } from "next-auth/react";
 import { Session } from "next-auth";
 import { useUtm } from "@/hooks/useUtm";
 import { StoredUtm } from "../UtmProvider";
-
-function downloadLink(url: string, filename: string) {
-	fetch(url)
-		.then((response) => response.blob())
-		.then((blob) => {
-			const link = document.createElement("a");
-			link.href = URL.createObjectURL(blob);
-			link.download = filename;
-			link.click();
-		})
-		.catch(console.error);
-}
-
-function getAttachmentFromOpenAlex(work: any) {
-	const potentialLocations = [
-		work.locations?.find((location: any) => location.pdf_url),
-		work.locations?.find((location: any) => location.landing_page_url),
-		work.locations?.[0],
-	];
-
-	const pdfUrl = potentialLocations.find(
-		(location) => location?.pdf_url && location.is_oa
-	)?.pdf_url;
-
-	return pdfUrl;
-}
+import { getOpenAlexPdfUrl } from "@/lib/openalex";
+import { buildPdfDownloadPath } from "@/lib/ai/citations";
+import { downloadFile } from "@/lib/download";
 
 function getPayload(
 	data: Item,
@@ -105,8 +83,8 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 	);
 	const pdfUrl =
 		isExternal && !isLoadingOpenAlex && itemFromOpenAlex
-			? getAttachmentFromOpenAlex(itemFromOpenAlex)
-			: null;
+			? getOpenAlexPdfUrl(itemFromOpenAlex)
+			: undefined;
 	const shouldShowLoading = isExternal && isLoadingOpenAlex;
 
 	// Update height measurements when window resizes
@@ -126,10 +104,9 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 		return () => window.removeEventListener("resize", updateHeights);
 	}, [loaded]); // Re-run when image is loaded
 
-	const downloadURL = `/lib/${data.parentItem}/download/${data.key}`;
+	const downloadURL = buildPdfDownloadPath(data.parentItem || item.key, data.key);
 
-	// Shared component for rendering the attachment image
-	const AttachmentImage = ({ className }: { className?: string }) => (
+	const renderAttachmentImage = (className?: string) => (
 		<>
 			{data?.PDFCoverPageImage ? (
 				<Skeleton isLoaded={loaded} className="rounded-xl w-full">
@@ -159,8 +136,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 		</>
 	);
 
-	// Shared component for rendering the title
-	const AttachmentTitle = ({ className }: { className?: string }) => (
+	const renderAttachmentTitle = (className?: string) => (
 		<h4 className={twMerge("text-lg font-medium", className)}>
 			<Link
 				href={isExternal ? pdfUrl : downloadURL}
@@ -172,8 +148,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 		</h4>
 	);
 
-	// Shared component for rendering the action buttons
-	const AttachmentButtons = ({ className }: { className?: string }) => (
+	const renderAttachmentButtons = (className?: string) => (
 		<div className={twMerge("flex gap-2", className)}>
 			{!isExternal ? (
 				<>
@@ -194,7 +169,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 								payloadToPosthog(payload)
 							);
 
-							window.open(downloadURL, "_blank");
+							window.open(downloadURL, "_blank", "noopener,noreferrer");
 						}}
 						startContent={<FaEye className="size-5" />}
 					>
@@ -219,7 +194,9 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 								payloadToPosthog(payload)
 							);
 
-							downloadLink(data.url || "", data.filename || "");
+							downloadFile(data.url || "", data.filename || "").catch(
+								console.error,
+							);
 						}}
 					>
 						{t("downloadAttachment")}
@@ -243,7 +220,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						posthog.capture("view_attachment", payloadToPosthog(payload));
 
 						
-						window.open(pdfUrl, "_blank");
+						window.open(pdfUrl, "_blank", "noopener,noreferrer");
 					}}
 				>
 					{t("openDocument")}
@@ -286,7 +263,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						canHover && "md:hover:top-[var(--image-height)]"
 					)}
 				>
-					<AttachmentImage />
+					{renderAttachmentImage()}
 				</div>
 			)}
 			<div
@@ -298,8 +275,8 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					shouldShowLoading && "opacity-0"
 				)}
 			>
-				<AttachmentTitle className="line-clamp-2 lg:line-clamp-none" />
-				<AttachmentButtons className="flex-wrap md:flex-nowrap" />
+				{renderAttachmentTitle("line-clamp-2 lg:line-clamp-none")}
+				{renderAttachmentButtons("flex-wrap md:flex-nowrap")}
 			</div>
 		</Card>
 	);

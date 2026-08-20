@@ -35,9 +35,9 @@ export default function Banner() {
 			isKeyboardDismissDisabled
 			size="xl"
 			isOpen={isPreferencesOpen}
-			backdrop="blur"
+			backdrop="opaque"
 			classNames={{
-				base: "backdrop-blur-xl bg-background_light/60 dark:bg-card/60 border border-divider",
+				base: "bg-background_light dark:bg-card border border-divider",
 			}}
 		>
 			<ModalContent className="p-6 pb-4">

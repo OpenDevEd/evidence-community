@@ -802,15 +802,20 @@ export default function CollectionsList({
 				color={isCustomFilterInstitutionSelected ? "tertiary" : "secondary"}
 				variant={isCustomFilterInstitutionSelected ? "solid" : "flat"}
 				onPress={() => handleInstitutionSelect(customFilterInstitution)}
-				className="w-full flex justify-start mb-4"
+				className="w-full min-w-0 flex justify-start mb-4"
 				startContent={
 					INSTITUTION_LOGOS[customFilterInstitution]({
-						className: "h-6",
+						className: "h-6 shrink-0",
 					})
 				}
-				endContent={<IoFilter className="size-5 ml-auto" />}
+				endContent={<IoFilter className="size-5 ml-auto shrink-0" />}
+				title={`${t("filterBy")} ${customFilterInstitution}`}
 			>
-				{t("filterBy")} {customFilterInstitution}
+				{/* Long institution names truncate instead of pushing the
+				    icons out of the button. */}
+				<span className="min-w-0 flex-1 truncate text-left">
+					{t("filterBy")} {customFilterInstitution}
+				</span>
 			</Button>
 		);
 	}, [queryParams.institution, handleInstitutionSelect, t]);
@@ -857,14 +862,17 @@ export default function CollectionsList({
 						</div>
 					</div>
 					<div className="">
+						{/* No `layout` on these: it made them animate on mount
+						    whenever the sidebar's size settled around them.
+						    popLayout alone handles the swap. */}
 						<AnimatePresence mode="popLayout" initial={false}>
 							{sameYear ? (
 								<motion.div
 									initial={{ opacity: 0, y: 10 }}
 									animate={{ opacity: 1, y: 0 }}
 									exit={{ opacity: 0, y: 10 }}
+									transition={{ duration: 0.2, ease: "easeOut" }}
 									key="same-year"
-									layout
 									className="w-full"
 								>
 								<YearPicker
@@ -880,8 +888,8 @@ export default function CollectionsList({
 									initial={{ opacity: 0, y: 10 }}
 									animate={{ opacity: 1, y: 0 }}
 									exit={{ opacity: 0, y: 10 }}
+									transition={{ duration: 0.2, ease: "easeOut" }}
 									key="year-range"
-									layout
 									className="flex gap-4 w-full"
 								>
 								{[

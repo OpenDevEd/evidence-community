@@ -1,5 +1,8 @@
 import type { Config } from "tailwindcss";
 import { nextui } from "@nextui-org/react";
+import containerQueries from "@tailwindcss/container-queries";
+import typography from "@tailwindcss/typography";
+import tailwindcssAnimate from "tailwindcss-animate";
 import jsonConfig from "./src/constants/config.json";
 
 export const style = process.env.NEXT_PUBLIC_STYLE || jsonConfig?.style || "small";
@@ -171,6 +174,7 @@ const config: Config = {
     "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
     "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
     "./node_modules/@nextui-org/theme/dist/**/*.{js,ts,jsx,tsx}",
+    "./node_modules/streamdown/dist/*.js",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
@@ -200,9 +204,16 @@ const config: Config = {
           '50%': { backgroundPosition: '100% 50%' },
           '100%': { backgroundPosition: '0% 50%' },
         },
+        'rise-in': {
+          '0%': { opacity: '0', transform: 'scale(0.9) translateY(4px)' },
+          '100%': { opacity: '1', transform: 'scale(1) translateY(0)' },
+        },
       },
       animation: {
         'gradient-x': 'gradient-x 2s ease infinite',
+        // "backwards" (not "both") so the final keyframe stops applying on
+        // completion and hover/active transforms work again.
+        'rise-in': 'rise-in 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards',
       },
     },
   },
@@ -217,8 +228,9 @@ const config: Config = {
         }
       });
     },
-    require('@tailwindcss/container-queries'),
-    require('@tailwindcss/typography'),
+    containerQueries,
+    typography,
+    tailwindcssAnimate,
     nextui({
       themes: {
         dark: {

@@ -14,6 +14,7 @@ export default function PrefetchLink({
 			href={href}
 			onMouseDown={(e) => {
 				if (!href) return;
+				if (props.target && props.target !== "_self") return;
 
 				if (
 					e.button !== 0 ||

@@ -1,7 +1,7 @@
 "use client";
 import Image from "next/image";
 import { Button } from "@/components/nextui/Button";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { style } from "@/../tailwind.config";
 import { useTranslations } from "next-intl";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -94,6 +94,14 @@ function FooterFieldColumn({
 
 function Logo() {
 	const [isLoaded, setIsLoaded] = useState(false);
+	// onLoad never fires for an image that completed before hydration (cached
+	// logo), which left the skeleton shimmering forever — an infinite
+	// compositor animation on every page. Check `complete` on mount.
+	const markLoadedIfComplete = useCallback((node: HTMLImageElement | null) => {
+		// A broken/missing logo is also "done": never leave the skeleton
+		// shimmering (an infinite compositor animation) for a 404.
+		if (node?.complete) setIsLoaded(true);
+	}, []);
 	const status = useStatus();
 	const { companyName } = parseCompanyName(status?.companyName);
 	const t = useTranslations("ui");
@@ -112,11 +120,16 @@ function Logo() {
 			{["dark", "light"].map((themeToMatch) => (
 				<Image
 					key={themeToMatch}
+					ref={markLoadedIfComplete}
 					alt={t("logoAlt", {
 						company: companyName,
 						theme: themeToMatch,
 					})}
 					onLoad={() => setIsLoaded(true)}
+					onError={() => setIsLoaded(true)}
+					// Below the fold: lazy would leave the skeleton shimmering
+					// (an infinite animation) until the user scrolls here.
+					loading="eager"
 					className={twMerge(
 						themeToMatch === "light"
 							? "dark:hidden"
@@ -485,9 +498,9 @@ export default function Footer() {
 						size="xl"
 						isOpen={policyDialogOpen}
 						onClose={() => setPolicyDialogOpen(false)}
-						backdrop="blur"
+						backdrop="opaque"
 						classNames={{
-							base: "backdrop-blur-xl bg-background_light/60 dark:bg-card/60 border border-divider",
+							base: "bg-background_light dark:bg-card border border-divider",
 						}}
 					>
 						<ModalContent className="p-6 pb-4">

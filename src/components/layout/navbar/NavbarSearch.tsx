@@ -18,19 +18,23 @@ import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Pagination } from "@/components/nextui/Pagination";
 import { ItemsGetResponse } from "@/app/api/items/types";
-import { searchParamsLoader, serializeSearchParams } from "@/lib/searchParams";
+import {
+	hasYearConstraint,
+	searchParamsLoader,
+	serializeSearchParams,
+} from "@/lib/searchParams";
 import { buildItemsQuery, buildFacetsQuery, fetcher } from "@/lib/utils";
 import { useDebounce } from "@/hooks/useDebounce";
 import {
 	SORT_OPTIONS,
 	SCOPE_OPTIONS,
-	INSTITUTION_LOGOS,
-	COMING_SOON_TAG,
-	INTERNAL_TAG,
 } from "@/constants/items";
-import { hasTag } from "@/lib/tags";
 import { countryFacetOptions } from "@/constants/misc";
-import { zoteroMarkupToSingleLine } from "@/lib/zoteroMarkup";
+import {
+	PublicationHoverPreview,
+	PublicationStatusBadges,
+	publicationPreviewData,
+} from "@/components/features/items/PublicationHoverPreview";
 
 // Lazily loaded so the heavy collections/filters graph stays out of the
 // always-present navbar bundle until the user opens Explore.
@@ -75,117 +79,6 @@ const scopeSelectClassNames = {
 	base: "!mt-0 w-full !max-w-none xl:!max-w-96 shrink-0",
 };
 
-function formatFullDate(
-	item: any,
-	formatter: ReturnType<typeof useFormatter>,
-): string {
-	const value = item?.datePublished || item?.date;
-	if (!value) return "";
-	const parsed = new Date(value);
-	if (isNaN(parsed.getTime())) {
-		return typeof value === "string" ? value : "";
-	}
-	return formatter.dateTime(parsed, {
-		year: "numeric",
-		month: "long",
-		day: "numeric",
-	});
-}
-
-// Abstracts can contain HTML/entities; produce a clean, single-paragraph
-// preview for the hover tooltip.
-function abstractPreview(item: any): string {
-	const raw = typeof item?.abstractNote === "string" ? item.abstractNote : "";
-	return zoteroMarkupToSingleLine(raw);
-}
-
-function toInitials(name: string): string {
-	if (!name) return "";
-	const initials = name
-		.split(" ")
-		.map((part) => part[0])
-		.filter(Boolean)
-		.join(". ");
-	return initials ? `${initials}.` : "";
-}
-
-// APA-style author byline, matching how the results card formats authors.
-function formatAuthors(item: any, etAl: string): string {
-	const creators = Array.isArray(item?.creators) ? item.creators : [];
-	if (!creators.length) return "";
-	const authorString = (author: any) =>
-		author?.name ||
-		[author?.lastName, toInitials(author?.firstName)]
-			.filter(Boolean)
-			.join(", ");
-	if (creators.length <= 2) {
-		return creators.map(authorString).filter(Boolean).join(" & ");
-	}
-	const first = creators.find((author: any) => author?.lastName || author?.name);
-	return first ? `${authorString(first)} ${etAl}` : "";
-}
-
-// Matches an institution to its logo the same way the results card does.
-function getOrgLogo(item: any): any {
-	const raw = Array.isArray(item?.institution)
-		? item.institution
-		: item?.institution
-			? [item.institution]
-			: [];
-	const institutions = raw.filter(Boolean) as string[];
-	if (!institutions.length) return null;
-	const withLogo = institutions.find((inst) =>
-		Object.keys(INSTITUTION_LOGOS).some((key) => inst.includes(key)),
-	);
-	const selected = withLogo || institutions[0];
-	const entry = Object.entries(INSTITUTION_LOGOS).find(([key]) =>
-		selected.includes(key),
-	);
-	return entry?.[1] ?? null;
-}
-
-// Status badges (coming soon / internal), styled like the results card.
-function StatusBadges({
-	comingSoon,
-	internal,
-	comingSoonLabel,
-	internalLabel,
-	fullWidth = false,
-}: {
-	comingSoon: boolean;
-	internal: boolean;
-	comingSoonLabel: string;
-	internalLabel: string;
-	fullWidth?: boolean;
-}) {
-	if (!comingSoon && !internal) return null;
-	const widthClass = fullWidth ? "w-full text-center" : "shrink-0";
-	return (
-		<>
-			{comingSoon && (
-				<span
-					className={twMerge(
-						"rounded-lg border border-accent bg-black/10 px-2 py-0.5 text-xs font-medium text-accent",
-						widthClass,
-					)}
-				>
-					{comingSoonLabel}
-				</span>
-			)}
-			{internal && (
-				<span
-					className={twMerge(
-						"rounded-lg border border-danger bg-black/10 px-2 py-0.5 text-xs font-medium text-danger",
-						widthClass,
-					)}
-				>
-					{internalLabel}
-				</span>
-			)}
-		</>
-	);
-}
-
 export default function NavbarSearch() {
 	const router = useRouter();
 	const t = useTranslations("ui");
@@ -211,7 +104,7 @@ export default function NavbarSearch() {
 		(params.collections?.length || 0) +
 		(params.institution?.length || 0) +
 		(params.author ? 1 : 0) +
-		(params.range ? 1 : 0) +
+		(hasYearConstraint(params.range) ? 1 : 0) +
 		countryFacetOptions.reduce(
 			(acc, facet) =>
 				acc + ((params as any)[facet.queryParam]?.length || 0),
@@ -220,18 +113,23 @@ export default function NavbarSearch() {
 
 	// Local input value (immediate) kept in sync with the `search` param, which
 	// is updated debounced so the preview tracks typing without per-key churn.
-	const [searchInput, setSearchInput] = useState(params.search);
+	const [searchDraft, setSearchDraft] = useState({
+		parameter: params.search,
+		value: params.search,
+	});
+	const searchInput =
+		searchDraft.parameter === params.search
+			? searchDraft.value
+			: params.search;
+	const setSearchInput = useCallback(
+		(value: string) =>
+			setSearchDraft({ parameter: params.search, value }),
+		[params.search],
+	);
 	const [debounceSearch] = useDebounce(
 		(value: string) => setParams({ search: value, page: 1 }),
 		250,
 	);
-	const lastSyncedSearch = useRef(params.search);
-	useEffect(() => {
-		if (params.search !== lastSyncedSearch.current) {
-			setSearchInput(params.search);
-		}
-		lastSyncedSearch.current = params.search;
-	}, [params.search]);
 
 	const [isOpen, setIsOpen] = useState(false);
 	const [highlight, setHighlight] = useState(-1);
@@ -450,12 +348,19 @@ export default function NavbarSearch() {
 								</div>
 							) : (
 								results.map((item: any, index: number) => {
-									const abstract = abstractPreview(item);
-									const authors = formatAuthors(item, t("etAl"));
-									const OrgLogo = getOrgLogo(item);
-									const fullDate = formatFullDate(item, formatter);
-									const isComingSoon = hasTag(item?.tags, COMING_SOON_TAG);
-									const isInternal = hasTag(item?.tags, INTERNAL_TAG);
+									const preview = publicationPreviewData(
+										item,
+										formatter,
+										t("etAl"),
+									);
+									const {
+										abstract,
+										authors,
+										OrgLogo,
+										fullDate,
+										isComingSoon,
+										isInternal,
+									} = preview;
 									const isCurrent =
 										!!currentItemKey &&
 										item.key === currentItemKey;
@@ -506,7 +411,7 @@ export default function NavbarSearch() {
 															{authors}
 														</span>
 													)}
-													<StatusBadges
+													<PublicationStatusBadges
 														comingSoon={isComingSoon}
 														internal={isInternal}
 														comingSoonLabel={t("inProgress")}
@@ -536,69 +441,12 @@ export default function NavbarSearch() {
 											closeDelay={0}
 											className="max-w-sm rounded-2xl border border-black/5 bg-white dark:border-white/10 dark:bg-card"
 											content={
-												<div className="flex max-w-sm flex-col gap-1.5 px-1 py-1">
-													<div
-														className="line-clamp-3 text-sm font-medium text-black/80 dark:text-white/80"
-														dangerouslySetInnerHTML={{
-															__html: item.title ?? "",
-														}}
-													/>
-													{(authors ||
-														OrgLogo ||
-														fullDate ||
-														isComingSoon ||
-														isInternal) && (
-														<div className="flex flex-col gap-1.5 text-xs">
-															{(OrgLogo ||
-																authors ||
-																fullDate) && (
-																<div className="flex items-center gap-1.5">
-																	{OrgLogo && <OrgLogo />}
-																	{authors && (
-																		<span className="min-w-0 truncate font-medium text-black/70 dark:text-white/70">
-																			{authors}
-																		</span>
-																	)}
-																	{authors && fullDate && (
-																		<span className="text-black/25 dark:text-white/25">
-																			·
-																		</span>
-																	)}
-																	{fullDate && (
-																		<span className="shrink-0 text-black/40 dark:text-white/40">
-																			{fullDate}
-																		</span>
-																	)}
-																</div>
-															)}
-															{(isComingSoon ||
-																isInternal) && (
-																<div className="flex flex-col gap-1.5">
-																	<StatusBadges
-																		comingSoon={isComingSoon}
-																		internal={isInternal}
-																		comingSoonLabel={t(
-																			"inProgress",
-																		)}
-																		internalLabel={t(
-																			"internal",
-																		)}
-																		fullWidth
-																	/>
-																</div>
-															)}
-														</div>
-													)}
-													{abstract ? (
-														<p className="line-clamp-3 text-xs leading-relaxed text-black/55 dark:text-white/55">
-															{abstract}
-														</p>
-													) : (
-														<p className="text-xs italic text-black/35 dark:text-white/35">
-															{t("noAbstract")}
-														</p>
-													)}
-												</div>
+												<PublicationHoverPreview
+													preview={preview}
+													comingSoonLabel={t("inProgress")}
+													internalLabel={t("internal")}
+													noAbstractLabel={t("noAbstract")}
+												/>
 											}
 										>
 											{row}

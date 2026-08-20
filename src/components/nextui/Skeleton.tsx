@@ -11,7 +11,12 @@ export const Skeleton = extendVariants(NextUISkeleton, {
     },
     custom: {
       default: {
-        base: "rtl:before:translate-x-0"
+        // Once loaded NextUI switches the base to overflow-visible but keeps
+        // the shimmer ::before (translated a full width to the left). It is
+        // invisible yet still hit-testable, so it stole clicks from whatever
+        // sat beside the card (the inline chat). Pseudo-elements must never
+        // take pointer events.
+        base: "rtl:before:translate-x-0 before:pointer-events-none after:pointer-events-none"
       }
     }
   },

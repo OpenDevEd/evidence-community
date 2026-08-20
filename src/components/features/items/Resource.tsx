@@ -1,12 +1,13 @@
 import { twMerge } from "tailwind-merge";
 import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
-import { fetcher, firstNonNullOrEmpty, setter, transformItem } from "@/lib/utils";
-import { Skeleton } from "@/components/nextui/Skeleton";
 import {
-	ModalBody,
-	ModalContent,
-	useDisclosure,
-} from "@nextui-org/react";
+	fetcher,
+	firstNonNullOrEmpty,
+	setter,
+	transformItem,
+} from "@/lib/utils";
+import { Skeleton } from "@/components/nextui/Skeleton";
+import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
 import { RelationsType } from "@/types/item";
 import ResourceAuthors from "./ResourceAuthors";
 import ResourceDivider from "./ResourceDivider";
@@ -58,7 +59,7 @@ export function AddButton({
 	const isUserCollectionsEnabled = useFeatureFlagEnabled("user-collections");
 	const t = useTranslations("ui");
 	const highlightedCollections = Object.keys(
-		itemData ? session?.user.itemsCollections[itemData.key] ?? {} : {}
+		itemData ? (session?.user.itemsCollections[itemData.key] ?? {}) : {},
 	);
 	const onCollectionSelect = async (pressedCollectionId: string) => {
 		setLoading(true);
@@ -137,44 +138,71 @@ function FixURL(url: string | null) {
 	return url;
 }
 
-function CitationCounts({ itemData }: { itemData: Item | ListItem | undefined }) {
+function CitationCounts({
+	itemData,
+	openLinksInNewTab,
+}: {
+	itemData: Item | ListItem | undefined;
+	openLinksInNewTab?: boolean;
+}) {
 	const t = useTranslations("ui");
 	const resourceHref = useResourceHref();
 	const relations = itemData?.relations as RelationsType;
 	const isOpenAlex = itemData?.groupExternalId === 1;
 
-	const citesCount = (Array.isArray(relations?.cites) ? relations.cites.length : 0)
-		+ (Array.isArray(relations?.referenced_works) ? relations.referenced_works.length : 0);
-	const citedByCount = (relations?.cited_by || 0) + (Array.isArray(relations?.citedBy) ? relations.citedBy.length : 0);
+	const citesCount =
+		(Array.isArray(relations?.cites) ? relations.cites.length : 0) +
+		(Array.isArray(relations?.referenced_works)
+			? relations.referenced_works.length
+			: 0);
+	const citedByCount =
+		(relations?.cited_by || 0) +
+		(Array.isArray(relations?.citedBy) ? relations.citedBy.length : 0);
 
 	if (citesCount === 0 && citedByCount === 0) return null;
 
 	return (
-		<div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-			{citedByCount > 0 && (
-				isOpenAlex ? (
+		<div
+			className="flex items-center gap-2"
+			onClick={(e) => e.stopPropagation()}
+		>
+			{citedByCount > 0 &&
+				(isOpenAlex ? (
 					<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium">
 						<BsQuote className="size-3.5" />
 						<span>{citedByCount}</span>
-						<span className="text-accent/70 hidden @[480px]:inline">{t("citationsLowercase")}</span>
+						<span className="text-accent/70 hidden @[480px]:inline">
+							{t("citationsLowercase")}
+						</span>
 					</span>
 				) : (
 					<Link
-						href={resourceHref(itemData?.key ?? "", { base: "/citation" })}
+						href={resourceHref(itemData?.key ?? "", {
+							base: "/citation",
+						})}
+						target={openLinksInNewTab ? "_blank" : undefined}
+						rel={
+							openLinksInNewTab
+								? "noopener noreferrer"
+								: undefined
+						}
 						className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-accent/10 dark:bg-accent/20 text-accent text-xs font-medium hover:bg-accent/20 dark:hover:bg-accent/30 transition-colors"
 					>
 						<BsQuote className="size-3.5" />
 						<span>{citedByCount}</span>
-						<span className="text-accent/70 hidden @[480px]:inline">{t("citationsLowercase")}</span>
+						<span className="text-accent/70 hidden @[480px]:inline">
+							{t("citationsLowercase")}
+						</span>
 						<IoChevronForward className="size-3 opacity-50 ml-0.5" />
 					</Link>
-				)
-			)}
+				))}
 			{citesCount > 0 && (
 				<span className="inline-flex items-center gap-1.5 h-8 px-3 rounded-xl bg-black/5 dark:bg-white/10 text-black/60 dark:text-white/70 text-xs font-medium">
 					<TbBlockquote className="size-3.5" />
 					<span>{citesCount}</span>
-					<span className="opacity-70 hidden @[480px]:inline">{t("references").toLowerCase()}</span>
+					<span className="opacity-70 hidden @[480px]:inline">
+						{t("references").toLowerCase()}
+					</span>
 				</span>
 			)}
 		</div>
@@ -188,6 +216,7 @@ function ResourceInteractions({
 	revalidateResults,
 	collectionId,
 	itemHref,
+	openLinksInNewTab,
 }: {
 	itemData: Item | ListItem | undefined;
 	isLoading: boolean;
@@ -195,6 +224,7 @@ function ResourceInteractions({
 	revalidateResults?: any;
 	collectionId?: string;
 	itemHref?: string;
+	openLinksInNewTab?: boolean;
 }) {
 	const t = useTranslations("ui");
 
@@ -202,14 +232,27 @@ function ResourceInteractions({
 		<div className="p-2 bg-black/[4%] dark:bg-secondary rounded-b-xl shrink-0">
 			<Skeleton isLoaded={!isLoading} className="w-full rounded-2xl">
 				<div className="w-full rounded-2xl flex flex-row items-center">
-					<CitationCounts itemData={itemData} />
+					<CitationCounts
+						itemData={itemData}
+						openLinksInNewTab={openLinksInNewTab}
+					/>
 					<div className="flex-1 flex items-center justify-end z-10 gap-2">
 						{itemHref && (
 							<Button
 								as={Link}
 								href={itemHref}
+								target={
+									openLinksInNewTab ? "_blank" : undefined
+								}
+								rel={
+									openLinksInNewTab
+										? "noopener noreferrer"
+										: undefined
+								}
 								size="sm"
-								startContent={<IoChevronForward className="size-3.5" />}
+								startContent={
+									<IoChevronForward className="size-3.5" />
+								}
 							>
 								{t("viewDetails")}
 							</Button>
@@ -287,23 +330,19 @@ function ResourceArticle({
 					<ResourceDivider />
 					{finalItemData?.datePublished &&
 						!isNaN(
-							new Date(
-								finalItemData.datePublished
-							).getTime()
+							new Date(finalItemData.datePublished).getTime(),
 						) && (
 							<>
 								<ResourceData
 									element="time"
 									datetime={new Date(
-										finalItemData.datePublished
+										finalItemData.datePublished,
 									).toISOString()}
 									text={format.dateTime(
-										new Date(
-											finalItemData.datePublished
-										),
+										new Date(finalItemData.datePublished),
 										{
 											dateStyle: "medium",
-										}
+										},
 									)}
 									classNames={{
 										text: "text-black/60 dark:text-white/60 font-normal",
@@ -331,7 +370,7 @@ function ResourceArticle({
 					isLoaded={!finalIsLoading}
 					className={twMerge(
 						"w-full min-h-0 rounded-2xl ",
-						!finalItemData ? "min-h-20" : "min-h-0"
+						!finalItemData ? "min-h-20" : "min-h-0",
 					)}
 				>
 					<ZoteroRichText
@@ -355,6 +394,7 @@ export default function Resource({
 	className,
 	as = "li",
 	hideUnapi,
+	openLinksInNewTab = false,
 }: {
 	itemData?: Item | ListItem | undefined;
 	abstract: boolean;
@@ -366,6 +406,7 @@ export default function Resource({
 	className?: string;
 	as?: "li" | "div";
 	hideUnapi?: boolean;
+	openLinksInNewTab?: boolean;
 }) {
 	const [referrer, setReferrer] = useQueryState("referrer");
 	const t = useTranslations("ui");
@@ -412,11 +453,18 @@ export default function Resource({
 			as={as}
 			className={twMerge(
 				"@container w-full bg-white dark:bg-white/[4%] rounded-xl flex flex-col not-prose",
-				className
+				className,
 			)}
 		>
 			{/* add COINs here */}
-			{transformedItem && <div className="hidden" dangerouslySetInnerHTML={{ __html: generateCOinS(transformedItem) }} />}
+			{transformedItem && (
+				<div
+					className="hidden"
+					dangerouslySetInnerHTML={{
+						__html: generateCOinS(transformedItem),
+					}}
+				/>
+			)}
 			{/* unAPI id marker for Zotero */}
 			{finalItemData?.key && !hideUnapi && (
 				<abbr className="unapi-id" title={finalItemData.key}></abbr>
@@ -427,10 +475,10 @@ export default function Resource({
 					target="_blank"
 					rel="noopener noreferrer"
 					className={twMerge(
-						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
+						"p-4 @[720px]:p-6 hover:brightness-90 transition-[filter] flex-1",
 						!finalItemData?.key && "!pointer-events-none",
-						(!finalIsLoading && !finalItemData?.key) && "no-data",
-						(!finalIsLoading && finalItemData?.key) && "has-data",
+						!finalIsLoading && !finalItemData?.key && "no-data",
+						!finalIsLoading && finalItemData?.key && "has-data",
 					)}
 				>
 					<ResourceArticle
@@ -447,11 +495,13 @@ export default function Resource({
 			) : (
 				<PrefetchLink
 					href={finalItemData?.key ? itemTargetHref : ""}
+					target={openLinksInNewTab ? "_blank" : undefined}
+					rel={openLinksInNewTab ? "noopener noreferrer" : undefined}
 					className={twMerge(
-						"p-4 @[720px]:p-6 hover:brightness-90 transition-all flex-1",
+						"p-4 @[720px]:p-6 hover:brightness-90 transition-[filter] flex-1",
 						!finalItemData?.key && "!pointer-events-none",
-						(!finalIsLoading && !finalItemData?.key) && "no-data",
-						(!finalIsLoading && finalItemData?.key) && "has-data",
+						!finalIsLoading && !finalItemData?.key && "no-data",
+						!finalIsLoading && finalItemData?.key && "has-data",
 					)}
 				>
 					<ResourceArticle
@@ -473,6 +523,7 @@ export default function Resource({
 				revalidateResults={revalidateResults}
 				collectionId={collectionId}
 				itemHref={gapMapHref ? itemTargetHref : undefined}
+				openLinksInNewTab={openLinksInNewTab}
 			/>
 		</ResourceWrapper>
 	);

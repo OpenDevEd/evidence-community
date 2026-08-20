@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import Image from "next/image";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
@@ -20,6 +20,12 @@ interface LogoProps {
 
 export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 	const [isLoaded, setIsLoaded] = useState(false);
+	// Cached images complete before hydration and never fire onLoad.
+	const markLoadedIfComplete = useCallback((node: HTMLImageElement | null) => {
+		// A broken/missing logo is also "done": never leave the skeleton
+		// shimmering (an infinite compositor animation) for a 404.
+		if (node?.complete) setIsLoaded(true);
+	}, []);
 	const status = useStatus();
 	const { companyName } = parseCompanyName(status?.companyName);
 	const t = useTranslations("ui");
@@ -45,7 +51,9 @@ export function Logo({ interactive = true, dbStyle = "navbar" }: LogoProps) {
 				<Image
 					data-component="navbar"
 					key={themeToMatch}
+					ref={markLoadedIfComplete}
 					onLoad={() => setIsLoaded(true)}
+					onError={() => setIsLoaded(true)}
 					src={
 						themeToMatch === "dark"
 							? `/logos/${companyName.toLowerCase()}/logo.png`

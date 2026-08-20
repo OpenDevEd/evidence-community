@@ -1,14 +1,9 @@
 "use client";
 import { Button } from "@/components/nextui/Button";
+import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import CollectionsList from "@/components/features/collections/CollectionsList";
 import ExploreModal from "@/components/features/collections/ExploreModal";
-import {
-	IoChatboxOutline,
-	IoChatbubblesOutline,
-	IoGrid,
-	IoSearch,
-	IoSend,
-} from "react-icons/io5";
+import { IoGrid, IoSearch } from "react-icons/io5";
 import { Select } from "@/components/nextui/Select";
 import { Input } from "@/components/nextui/Input";
 import { SelectItem } from "@/components/nextui/SelectItem";
@@ -27,7 +22,13 @@ import {
 	Tooltip,
 	useDisclosure,
 } from "@nextui-org/react";
-import React, { ReactNode, use, useRef, useState, useEffect } from "react";
+import React, {
+	useEffect,
+	ReactNode,
+	use,
+	useRef,
+	useState,
+} from "react";
 import { Tabs, Tab } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { AiOutlineCompass } from "react-icons/ai";
@@ -35,11 +36,8 @@ import { useDebounce } from "@/hooks/useDebounce";
 import { SORT_OPTIONS, SCOPE_OPTIONS } from "@/constants/items";
 import HelpModal from "@/components/features/modals/HelpModal";
 import { useFormatter, useTranslations } from "next-intl";
-import {
-	GiArchiveResearch,
-	GiConsoleController,
-	GiStarSwirl,
-} from "react-icons/gi";
+import { GiArchiveResearch } from "react-icons/gi";
+import { LuEye } from "react-icons/lu";
 import { FaSort } from "react-icons/fa";
 import { HiOutlineViewList } from "react-icons/hi";
 import { BiHelpCircle, BiTrash } from "react-icons/bi";
@@ -50,14 +48,14 @@ import GenericHeader from "../features/modals/GenericHeader";
 import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList, { ItemsContext } from "../features/items/ItemsList";
 import { SearchBar } from "@/components/features/SearchBar";
+import { useModEnterHint } from "@/hooks/useShortcutHints";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
-import ChatModal, { ChatMode } from "../features/modals/ChatModal";
-import ModelSelector from "../features/ai/ModelSelector";
+import ChatModal from "../features/modals/ChatModal";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import DialogModal from "../nextui/DialogModal";
 import AIHeader from "../features/ai/AIHeader";
 import { useLocalStorage } from "usehooks-ts";
-import { AnimatePresence, motion } from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useModalError } from "@/hooks/useModalError";
 import { z } from "zod";
 import { Props } from "next/script";
@@ -65,6 +63,9 @@ import { toast } from "@/components/layout/Toast";
 import { Formatter } from "recharts/types/component/DefaultTooltipContent";
 import { BsStars } from "react-icons/bs";
 import useBreakpoint, { useBreakpointBelow } from "@/hooks/useBreakpoint";
+import useSWR from "swr";
+import { fetcher } from "@/lib/utils";
+import { normalizeLibrarySearchContext } from "@/lib/search-context";
 
 function DropDownIcon({
 	Icon,
@@ -95,7 +96,7 @@ const genericSelectClassNames = {
 // Re-exported here so existing consumers (e.g. Map) can keep importing it from this module.
 export { SearchBar };
 
-function SortComponent({
+export function SortComponent({
 	itemsContext,
 }: {
 	itemsContext: ReturnType<typeof useItemsList>;
@@ -151,7 +152,7 @@ function SortComponent({
 	);
 }
 
-function ScopeComponent({
+export function ScopeComponent({
 	itemsContext,
 }: {
 	itemsContext: ReturnType<typeof useItemsList>;
@@ -223,6 +224,7 @@ function SearchTabContent({
 	view,
 	setView,
 	showHeader,
+	askAI,
 }: {
 	header: ReactNode;
 	itemsContext: ReturnType<typeof useItemsList>;
@@ -233,10 +235,30 @@ function SearchTabContent({
 	view: string;
 	setView: (view: string) => void;
 	showHeader: boolean;
+	/** When set, the search field grows an "Ask AI" action. */
+	askAI?: (text: string) => void;
 }) {
 	const t = useTranslations("ui");
 	const tAI = useTranslations("ai");
 	const formatter = useFormatter();
+	// Server renders no hint; the client resolves the OS-correct one.
+	const shortcutHint = useModEnterHint();
+	// Insert the Ask AI button only after a frame has actually been painted
+	// without it. If it is inserted before first paint (fast hydration —
+	// notably Firefox), its entrance animation runs against frames nobody
+	// sees and it appears to just pop in.
+	const [revealAskAI, setRevealAskAI] = useState(false);
+	useEffect(() => {
+		if (!shortcutHint) return;
+		let raf2 = 0;
+		const raf1 = requestAnimationFrame(() => {
+			raf2 = requestAnimationFrame(() => setRevealAskAI(true));
+		});
+		return () => {
+			cancelAnimationFrame(raf1);
+			cancelAnimationFrame(raf2);
+		};
+	}, [shortcutHint]);
 
 	const {
 		isOpen: isExploreOpen,
@@ -272,7 +294,6 @@ function SearchTabContent({
 								{showHeader && t("searchTitle")}
 							</>
 						)}
-						{!showHeader && <SearchModeSwitch mode={"search"} />}
 					</div>
 					<Button
 						startContent={
@@ -331,6 +352,54 @@ function SearchTabContent({
 					<SearchBar
 						handleSearchChange={itemsContext.handleSearchChange}
 						search={itemsContext.queryParams.search}
+						focusOnRequest
+						// Asking consumes the text as a question — it must not
+						// linger as a search filter.
+						onCmdEnter={
+							askAI &&
+							((text: string, clear: () => void) => {
+								clear();
+								askAI(text);
+							})
+						}
+						endContent={
+							askAI &&
+							((liveText: string, clear: () => void) =>
+								// Client-only: nothing renders until the OS
+								// shortcut is known, then the whole button
+								// enters with a CSS keyframe animation — CSS
+								// animations run unconditionally on DOM
+								// insertion, immune to the hydration/
+								// StrictMode timing that swallows JS-driven
+								// mount animations in dev. Plain button:
+								// react-aria press detection breaks inside
+								// the Input's endContent.
+								revealAskAI &&
+								shortcutHint && (
+									<button
+										type="button"
+										onMouseDown={(e) => e.preventDefault()}
+										onClick={() => {
+											clear();
+											askAI(liveText);
+										}}
+										// NB: no `duration-*` here — tailwindcss-animate
+										// makes it override animation-duration
+										// and squash the entrance.
+										// Compact below lg: the mobile bar is only 40px
+										// tall (vs 48px), so the pill slims to 28px with
+										// a matching radius, and the keyboard hint (no
+										// keyboard on touch) is desktop-only.
+										className="flex h-7 shrink-0 animate-rise-in items-center gap-1 self-center rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-transform hover:scale-[1.02] active:scale-[0.97] lg:h-9 lg:gap-1.5 lg:rounded-[10px] lg:pl-3 lg:pr-1.5 lg:text-sm"
+									>
+										<BsStars className="size-3.5 shrink-0 lg:size-4" />
+										{tAI("askAI")}
+										<kbd className="ml-0.5 hidden rounded-md bg-white/20 px-1.5 py-0.5 font-sans text-[0.6875rem] font-medium leading-none text-white/90 lg:inline">
+											{shortcutHint}
+										</kbd>
+									</button>
+								))
+						}
 					/>
 					{<ScopeComponent itemsContext={itemsContext} />}
 					{itemsContext.userData && (
@@ -439,297 +508,21 @@ function SearchTabContent({
 	);
 }
 
-function AITabContent({
-	onSwitchToSearch,
-	onChatOpen,
-	externalInput,
-	setExternalInput,
-}: {
-	onSwitchToSearch: () => void;
-	onChatOpen: () => void;
-	externalInput: string;
-	setExternalInput: (input: string) => void;
-}) {
-	const {
-		modelObject: { icon: Icon },
-		selectedModel,
-		setSelectedModel,
-	} = useSelectedModel();
-
-	const {
-		isOpen: isModelOpen,
-		onOpen: onModelOpen,
-		onOpenChange: onModelOpenChange,
-	} = useDisclosure();
-	const {
-		isOpen: isSmartScreeningOpen,
-		onOpen: onSmartScreeningOpen,
-		onOpenChange: onSmartScreeningOpenChange,
-	} = useDisclosure();
-	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
-	const { isDeepResearchEnabled } = useIsAISearchEnabled();
-	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		onChatOpen();
-	};
-
-	const tAI = useTranslations("ai");
-	const tUI = useTranslations("ui");
-	const t = useTranslations("ui");
-
-	return (
-		<div className="flex flex-col gap-4 lg:pb-2 lg:pt-0 py-[2.375rem]">
-			<ModelSelector
-				isOpen={isModelOpen}
-				onOpenChange={onModelOpenChange}
-				selectedModel={selectedModel}
-				onModelChange={setSelectedModel}
-			/>
-
-			<SmartScreeningModal
-				isOpen={isSmartScreeningOpen}
-				onOpenChange={onSmartScreeningOpenChange}
-			/>
-
-			<div className="flex items-end justify-start h-12">
-				<div className="flex items-end gap-4">
-					{/* <h1 className="text-black dark:text-white/60 font-medium text-2xl lg:text-3xl">
-						{tAI("askAI") || "Ask AI"}
-					</h1> */}
-					<SearchModeSwitch mode={"ai"} />
-				</div>
-			</div>
-
-			<form
-				onSubmit={handleSubmit}
-				className="flex justify-center items-center gap-4"
-			>
-				<div className="flex gap-4 w-full items-center">
-					<Tooltip content={t("openChatTooltip")}>
-						<Button
-							isIconOnly
-							startContent={<IoChatboxOutline />}
-							size="md"
-							className="!p-0"
-							onPress={onChatOpen}
-						></Button>
-					</Tooltip>
-					<div className="relative flex-1">
-						<Input
-							autoComplete="off"
-							value={externalInput}
-							onValueChange={setExternalInput}
-							startContent={
-								<Button
-									isIconOnly
-									variant="invisible"
-									className="shrink-0"
-									onPress={onModelOpen}
-								>
-									<Icon className="size-6 bg-accent rounded-full p-1 aspect-square shrink-0 fill-white" />
-								</Button>
-							}
-							endContent={
-								<div className="flex items-center gap-1">
-									{isDeepResearchEnabled && (
-										<Tooltip
-											content={tUI("researchModeTooltip")}
-										>
-											<Button
-												isIconOnly
-												size="sm"
-												variant="default"
-												className="shrink-0"
-												onPress={() =>
-													setMode(
-														mode === "full"
-															? "quick"
-															: "full",
-													)
-												}
-												aria-label={tUI("researchMode")}
-											>
-												<GiArchiveResearch
-													className={twMerge(
-														"size-4",
-														mode === "full"
-															? "text-accent"
-															: "text-black/60 dark:text-white/60",
-													)}
-												/>
-											</Button>
-										</Tooltip>
-									)}
-									<Button
-										type="submit"
-										isIconOnly
-										variant="default"
-										className="shrink-0"
-										size="sm"
-										onPress={onChatOpen}
-									>
-										<IoSend className="size-4" />
-									</Button>
-								</div>
-							}
-							placeholder={tAI("askMeAnythingPublications")}
-							className="w-full"
-							classNames={{
-								inputWrapper:
-									"h-12 p-3 rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-								input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base",
-							}}
-						/>
-					</div>
-					<Tooltip content={t("smartScreening")}>
-						<Button
-							isIconOnly
-							startContent={<GiStarSwirl />}
-							size="md"
-							className="!p-0"
-							onPress={onSmartScreeningOpen}
-						></Button>
-					</Tooltip>
-				</div>
-			</form>
-
-			<div className="text-start text-sm text-black/60 dark:text-white/40 mr-auto">
-				{tAI("aiDescription") ||
-					"Ask questions about the evidence library or get help with your research. "}
-			</div>
-		</div>
-	);
-}
-
-export type SearchMode = "search" | "ai" | "research";
-
 export function useIsAISearchEnabled() {
-	const isAISearchEnabled = useFeatureFlagEnabled("ai-search");
+	const isAISearchFeatureEnabled = useFeatureFlagEnabled("ai-search");
 	const isDeepResearchEnabled = useFeatureFlagEnabled("deep-research");
+	const { data: aiStatus } = useSWR<{ enabled: boolean }>(
+		"/ai/status",
+		fetcher,
+	);
+	const isAISearchEnabled =
+		isAISearchFeatureEnabled && aiStatus?.enabled === true;
 	return {
 		isAISearchEnabled,
 		isDeepResearchEnabled: isAISearchEnabled && isDeepResearchEnabled,
 	};
 }
 
-function useSelectedSearchMode(
-	mode: ChatMode,
-	selectedTab: SearchMode,
-	isAISearchEnabled: boolean,
-) {
-	if (selectedTab === "search" || !isAISearchEnabled) return "search";
-	if (selectedTab === "ai") return mode === "full" ? "research" : "ai";
-	return "search";
-}
-
-export function useSearchMode() {
-	const t = useTranslations("ui");
-	const tAI = useTranslations("ai");
-	const [selectedTabOriginal, setSelectedTab] = useLocalStorage<SearchMode>(
-		"selectedSearchTab",
-		"search",
-	);
-	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
-	const { isAISearchEnabled, isDeepResearchEnabled } = useIsAISearchEnabled();
-
-	const selectedTab = useSelectedSearchMode(
-		mode,
-		selectedTabOriginal,
-		isAISearchEnabled,
-	);
-
-	const tabData: Record<
-		SearchMode,
-		{
-			text: string;
-			tooltip: string;
-			icon: ReactNode;
-			action: () => void;
-			disabled: boolean;
-		}
-	> = {
-		search: {
-			text: t("search"),
-			tooltip: t("searchTooltip"),
-			icon: <IoSearch className="size-5" />,
-			action: () => setSelectedTab("search"),
-			disabled: false,
-		},
-		ai: {
-			text: t("quickAnswer"),
-			tooltip: t("quickAnswerTooltip"),
-			icon: <BsStars className="size-5" />,
-			action: () => {
-				setMode("quick");
-				setSelectedTab("ai");
-			},
-			disabled: !isAISearchEnabled,
-		},
-		research: {
-			text: t("deepResearch"),
-			tooltip: t("deepResearchTooltip"),
-			icon: <GiArchiveResearch className="size-5" />,
-			action: () => {
-				setMode("full");
-				setSelectedTab("ai");
-			},
-			disabled: !isDeepResearchEnabled,
-		},
-	};
-
-	const activeCount = Object.keys(tabData).filter(
-		(mode) => !tabData[mode as SearchMode].disabled,
-	).length;
-
-	return { selectedTab, tabData, setSelectedTab, activeCount };
-}
-
-function SearchModeSwitch({ mode: selectedTab }: { mode: SearchMode }) {
-	const t = useTranslations("ui");
-	const { tabData } = useSearchMode();
-	const isMobile = useBreakpointBelow("lg");
-	const isReallySmall = useBreakpointBelow(null, "400px");
-
-	return (
-		<div className="flex gap-2">
-			{Object.keys(tabData).map((mode) => (
-				<Tooltip
-					content={tabData[mode as SearchMode].tooltip}
-					key={mode}
-				>
-					{!tabData[mode as SearchMode].disabled && (
-						<Button
-							key={mode}
-							startContent={tabData[mode as SearchMode].icon}
-							className={twMerge(
-								"h-10",
-								isMobile &&
-									(mode === selectedTab || isReallySmall) &&
-									"!min-w-0 !aspect-square !p-0",
-							)}
-							variant="light"
-							color={
-								mode === selectedTab ? "accent" : "secondary"
-							}
-							onPress={() => tabData[mode as SearchMode].action()}
-						>
-							<span
-								className={twMerge(
-									isMobile &&
-										(mode === selectedTab ||
-											isReallySmall) &&
-										"hidden",
-								)}
-							>
-								{tabData[mode as SearchMode].text}
-							</span>
-						</Button>
-					)}
-				</Tooltip>
-			))}
-		</div>
-	);
-}
 
 export function ContentInteractions({
 	abstract,
@@ -749,105 +542,130 @@ export function ContentInteractions({
 	header?: ReactNode;
 }) {
 	const itemsContext = use(ItemsContext);
-	const { selectedTab, setSelectedTab, activeCount } = useSearchMode();
 	const {
 		isOpen: isChatOpen,
 		onOpen: onChatOpen,
 		onOpenChange: onChatOpenChange,
 	} = useDisclosure();
-	const {
-		modelObject: { icon: Icon },
-		selectedModel,
-		setSelectedModel,
-	} = useSelectedModel();
+	const { selectedModel } = useSelectedModel();
+	// Gate on the server-provided flag only: the async /ai/status check made
+	// the Ask AI button pop in late. If AI turns out to be down, the chat
+	// itself surfaces the error.
+	const isAISearchFlagEnabled = useFeatureFlagEnabled("ai-search");
 	const [externalInput, setExternalInput] = useState<string>("");
+	const searchContext = itemsContext.userData
+		? undefined
+		: normalizeLibrarySearchContext(itemsContext.queryParams);
+	const { setEngaged, setPendingInput, setPendingSend } =
+		useInlineChatLayout();
+	const canUseInlineChat = !itemsContext.userData;
+
+	// One search field, two verbs: typing filters the library live, "Ask AI"
+	// (or Cmd+Enter) hands the text to the chat.
+	const askAI = (text: string) => {
+		const trimmed = text.trim();
+		if (canUseInlineChat) {
+			setPendingInput(trimmed);
+			setPendingSend(trimmed.length > 0);
+			setEngaged(true);
+			return;
+		}
+		setExternalInput(trimmed);
+		onChatOpen();
+	};
 
 	return (
 		<div className="relative">
 			<ChatModal
+				key={selectedModel}
 				isOpen={isChatOpen}
 				onOpenChange={onChatOpenChange}
-				modelIndex={selectedModel}
+				modelId={selectedModel}
 				externalInput={externalInput}
 				setExternalInput={setExternalInput}
+				searchContext={searchContext}
 			/>
-			<AnimatePresence mode="wait">
-				{selectedTab === "search" && (
-					<motion.div
-						key="search-content"
-						initial={{ opacity: 0, x: -20, scale: 0.95 }}
-						animate={{ opacity: 1, x: 0, scale: 1 }}
-						exit={{ opacity: 0, x: 20, scale: 0.95 }}
-						transition={{
-							duration: 0.4,
-							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
-						}}
-						className="w-full p-1"
-					>
-						<SearchTabContent
-							header={header}
-							itemsContext={itemsContext}
-							extraFilters={extraFilters}
-							countLabel={countLabel}
-							abstract={abstract}
-							onAbstractChange={onAbstractChange}
-							view={view}
-							setView={setView}
-							showHeader={activeCount === 1}
-						/>
-					</motion.div>
-				)}
-				{selectedTab === "ai" && (
-					<motion.div
-						key="ai-content"
-						initial={{ opacity: 0, x: 20, scale: 0.95 }}
-						animate={{ opacity: 1, x: 0, scale: 1 }}
-						exit={{ opacity: 0, x: -20, scale: 0.95 }}
-						transition={{
-							duration: 0.4,
-							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
-						}}
-						className="w-full p-1"
-					>
-						<AITabContent
-							onSwitchToSearch={() => setSelectedTab("search")}
-							onChatOpen={onChatOpen}
-							externalInput={externalInput}
-							setExternalInput={setExternalInput}
-						/>
-					</motion.div>
-				)}
-
-				{selectedTab === "research" && (
-					<motion.div
-						key="research-content"
-						initial={{ opacity: 0, x: 20, scale: 0.95 }}
-						animate={{ opacity: 1, x: 0, scale: 1 }}
-						exit={{ opacity: 0, x: -20, scale: 0.95 }}
-						transition={{
-							duration: 0.4,
-							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
-						}}
-						className="w-full p-1"
-					>
-						<AITabContent
-							onSwitchToSearch={() => setSelectedTab("search")}
-							onChatOpen={onChatOpen}
-							externalInput={externalInput}
-							setExternalInput={setExternalInput}
-						/>
-					</motion.div>
-				)}
-			</AnimatePresence>
+			<SearchTabContent
+				header={header}
+				itemsContext={itemsContext}
+				extraFilters={extraFilters}
+				countLabel={countLabel}
+				abstract={abstract}
+				onAbstractChange={onAbstractChange}
+				view={view}
+				setView={setView}
+				showHeader
+				askAI={isAISearchFlagEnabled ? askAI : undefined}
+			/>
 		</div>
 	);
 }
 
 function MainContent() {
 	const props = useItemsList();
+	const { engaged } = useInlineChatLayout();
+	const prefersReducedMotion = useReducedMotion();
 
 	return (
 		<>
+			{/*
+			 * Two layers: the outer div animates the layout space (width),
+			 * while the inner card keeps its natural width and slides under
+			 * the chat panel (which paints above it) instead of being
+			 * clipped by the collapsing box.
+			 */}
+			<motion.div
+				initial={false}
+				// Height collapses too: a width-0 sidebar would otherwise
+				// still set the row's height, leaving a long blank scroll
+				// under a short result list in split mode.
+				animate={{
+					width: engaged ? 0 : "auto",
+					height: engaged ? 0 : "auto",
+					marginRight: engaged ? "-2.5rem" : "0rem",
+				}}
+				// Close: reclaim width on exactly the grid track's curve and
+				// delay (see ResourcesView) so the results column grows
+				// monotonically into its final width — a spring here races
+				// the track and squeezes the results before they can open.
+				transition={
+					engaged
+						? // Open: same expo-out clock as the grid track, so the
+							// results column's width changes on one curve.
+							{ duration: 0.45, ease: [0.16, 1, 0.3, 1] }
+						: {
+								// Slightly behind the track's 80ms: fr tracks
+								// lag in pixel terms early in their curve.
+								delay: 0.13,
+								duration: 0.42,
+								ease: [0.16, 1, 0.3, 1],
+							}
+				}
+				inert={engaged || undefined}
+				className={twMerge(
+					"hidden shrink-0 lg:block",
+					engaged && "pointer-events-none",
+				)}
+			>
+			<motion.div
+				initial={false}
+				animate={
+					engaged
+						? { opacity: 0, x: prefersReducedMotion ? 0 : 48 }
+						: { opacity: 1, x: 0 }
+				}
+				transition={
+					engaged
+						? { duration: 0.35, ease: "easeOut" }
+						: {
+								delay: 0.2,
+								type: "spring",
+								bounce: 0.15,
+								duration: 0.55,
+							}
+				}
+				className="lg:w-[24rem] xl:w-[28.5rem]"
+			>
 			<CollectionsList
 				data={props.collectionsData}
 				handleCheckboxChange={props.handleCheckboxChange}
@@ -861,6 +679,11 @@ function MainContent() {
 				handleCountrySelect={props.handleCountrySelect}
 				handleAuthorCountrySelect={props.handleAuthorCountrySelect}
 			/>
+			</motion.div>
+			</motion.div>
+			{/* Mobile filters live in the Explore modal; the sidebar's
+			    non-modal root is hidden below lg, so no mobile copy here —
+			    an empty one still costs a gap slot above the content. */}
 			<ItemsList props={props} />
 		</>
 	);
@@ -874,7 +697,7 @@ export type SmartScreeningField = {
 	type: (typeof smartScreeningFieldTypes)[number];
 };
 
-function SmartScreeningModal({
+export function SmartScreeningModal({
 	isOpen,
 	onOpenChange,
 }: {
@@ -889,18 +712,13 @@ function SmartScreeningModal({
 		"smart-screening-fields",
 		[],
 	);
-	const [localFields, setLocalFields] = useState<SmartScreeningField[]>([]);
+	const [localFields, setLocalFields] = useState<SmartScreeningField[]>(
+		() => [...fields],
+	);
 	const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({});
 	const placeholderExample = `${t("label")} (${smartScreeningFieldTypes.join(
 		" | ",
 	)}): ${t("description")}`;
-
-	useEffect(() => {
-		if (isOpen) {
-			setLocalFields([...fields]);
-			setFieldErrors({});
-		}
-	}, [isOpen, fields]);
 
 	const fieldSchema = z.object({
 		label: z.string().min(1, t("labelRequired")).max(64, t("labelTooLong")),
@@ -1354,9 +1172,27 @@ function SmartScreeningModal({
 }
 
 export default function EvidenceLibrary() {
+	const { engaged } = useInlineChatLayout();
 	return (
-		<PageContainer>
-			<div className="flex xl:gap-[2.5rem] gap-8 flex-col lg:flex-row">
+		<PageContainer
+			className={twMerge(
+				// Same clock as the grid reflow (ResourcesView) so the page
+				// settles in one motion, not two.
+				"transition-[padding] duration-[450ms] ease-[cubic-bezier(0.16,1,0.3,1)]",
+				// In split chat mode: overflow-hidden would break the chat
+				// panel's sticky positioning (main becomes the sticky
+				// scrollport), and the default top padding leaves a dead band
+				// under the shrunken navbar.
+				// The scaled navbar still occupies its full layout height, so
+				// its visual shrink already leaves a gap — no top padding
+				// needed at xl.
+				engaged && "overflow-visible pt-4 lg:pt-5 xl:pt-0",
+			)}
+		>
+			{/* Inline-size container: the split view's chat column pins its
+			    width to a fraction of this (stable) row width so its content
+			    never reflows while the grid track animates. */}
+			<div className="flex xl:gap-[2.5rem] gap-8 flex-col lg:flex-row lg:[container-type:inline-size]">
 				<MainContent />
 			</div>
 		</PageContainer>
