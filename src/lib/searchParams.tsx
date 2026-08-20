@@ -38,3 +38,11 @@ export const searchParamsLoader = {
 export const serializeSearchParams = createSerializer(searchParamsLoader);
 
 export const loadSearchParams = createLoader(searchParamsLoader);
+/**
+ * A `range` param carries a year filter only once it contains a year; a bare
+ * "-" is just range mode with nothing picked yet and must not count as a
+ * filter or render a chip.
+ */
+export function hasYearConstraint(range: string | undefined | null) {
+	return /\d/.test(range ?? "");
+}
