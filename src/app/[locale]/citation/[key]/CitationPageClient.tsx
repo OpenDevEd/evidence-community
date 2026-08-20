@@ -342,7 +342,7 @@ function CitationYearChart({
 											transform: 'translate(-50%, -100%) translateY(-10px)',
 										}}
 									>
-										<div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-default-200 dark:border-default-100 shadow-xl rounded-xl p-3 min-w-[140px]">
+										<div className="bg-white dark:bg-zinc-900 border border-default-200 dark:border-default-100 shadow-xl rounded-xl p-3 min-w-[140px]">
 											<div className="flex items-center gap-2">
 												<FaCalendar className="text-default-400 text-tiny" />
 												<span className="text-tiny font-bold uppercase tracking-wider text-default-500">
@@ -518,7 +518,7 @@ function CitationsCountryChart({
 											transform: 'translate(-50%, -100%) translateY(-10px)',
 										}}
 									>
-										<div className="bg-white/90 dark:bg-zinc-900/90 backdrop-blur-md border border-default-200 dark:border-default-100 shadow-xl rounded-xl p-3 min-w-[140px]">
+										<div className="bg-white dark:bg-zinc-900 border border-default-200 dark:border-default-100 shadow-xl rounded-xl p-3 min-w-[140px]">
 											<div className="flex items-center gap-2 mb-1">
 												{tooltipState.country === "UNKNOWN" ? (
 													<FaGlobeAmericas className="w-4 h-3 text-gray-400" />
@@ -758,4 +758,3 @@ export default function CitationPageClient({
 		</PageContainer>
 	);
 }
-

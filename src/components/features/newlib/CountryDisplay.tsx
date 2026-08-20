@@ -45,47 +45,15 @@ const pulseVariants: Variants = {
 	},
 };
 
-interface BackgroundLayerProps {
-	country: string;
-	isHovered: boolean;
-}
-
 const BackgroundLayer = ({
-	country,
 	isHovered,
-}: BackgroundLayerProps) => (
+}: {
+	isHovered: boolean;
+}) => (
 	<>
 		{/* Base background */}
 		<div className="absolute inset-0 z-0 bg-gradient-to-br from-white/90 via-white/80 to-background/5 dark:hidden" />
 		<div className="absolute inset-0 z-0 hidden bg-gradient-to-br from-background/80 to-background/40 dark:block" />
-
-		{/* Blurred flag background */}
-		<motion.div
-			className="absolute inset-0 z-[1] h-full w-full mix-blend-multiply dark:hidden"
-			initial={{ opacity: 0 }}
-			animate={{ opacity: isHovered ? 0.75 : 0 }}
-			transition={{ duration: 0.4 }}
-			style={{
-				backgroundImage: `url(https://flagcdn.com/w640/${country.toLowerCase()}.png)`,
-				backgroundSize: "150% 150%",
-				backgroundPosition: "center",
-				filter: "blur(20px)",
-				transform: "scale(1.2)",
-			}}
-		/>
-		<motion.div
-			className="absolute inset-0 z-[1] hidden h-full w-full dark:block"
-			initial={{ opacity: 0 }}
-			animate={{ opacity: isHovered ? 0.5 : 0 }}
-			transition={{ duration: 0.4 }}
-			style={{
-				backgroundImage: `url(https://flagcdn.com/w640/${country.toLowerCase()}.png)`,
-				backgroundSize: "150% 150%",
-				backgroundPosition: "center",
-				filter: "blur(20px)",
-				transform: "scale(1.2)",
-			}}
-		/>
 
 		{/* Gradient overlay */}
 		<motion.div
@@ -105,10 +73,9 @@ const BackgroundLayer = ({
 
 interface FlagImageProps {
 	country: string;
-	isHovered: boolean;
 }
 
-const FlagImage = ({ country, isHovered }: FlagImageProps) => (
+const FlagImage = ({ country }: FlagImageProps) => (
 	<div className="relative group">
 		<motion.div
 			className="relative z-[6] h-12 w-16 overflow-hidden rounded-lg shadow-lg shadow-black/5 dark:shadow-black/10"
@@ -128,14 +95,6 @@ const FlagImage = ({ country, isHovered }: FlagImageProps) => (
 				whileHover={{ backgroundColor: "rgba(0,0,0,0.1)" }}
 			/>
 		</motion.div>
-		<motion.div
-			className="absolute -bottom-1 -right-1 z-[4] h-full w-full rounded-lg bg-accent/15 blur-xl dark:bg-accent/20"
-			initial={false}
-			animate={{
-				scale: isHovered ? 1.1 : 1,
-				opacity: isHovered ? 1 : 0,
-			}}
-		/>
 	</div>
 );
 
@@ -163,23 +122,17 @@ const CountryCard = ({
 		>
 			<motion.div
 				className={twMerge(
-					"relative h-full overflow-hidden rounded-xl border p-4 backdrop-blur-md transition-shadow duration-300 dark:border-white/10",
+					"relative h-full overflow-hidden rounded-xl border p-4 transition-shadow duration-300 dark:border-white/10",
 					isHovered
 						? "shadow-xl shadow-black/[0.12] dark:shadow-black/20"
 						: "shadow-medium dark:shadow-lg"
 				)}
 				initial={false}
 			>
-				<BackgroundLayer
-					country={country}
-					isHovered={isHovered}
-				/>
+				<BackgroundLayer isHovered={isHovered} />
 
 				<div className="relative flex items-center gap-4 z-[5]">
-					<FlagImage
-						country={country}
-						isHovered={isHovered}
-					/>
+					<FlagImage country={country} />
 
 					<div className="flex-1 min-w-0 relative z-[6] pr-6">
 						<div className="flex items-center gap-2 mb-1 w-full">

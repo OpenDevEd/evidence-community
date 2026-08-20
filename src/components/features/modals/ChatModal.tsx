@@ -1,158 +1,362 @@
 "use client";
 
 import { Button } from "@/components/nextui/Button";
+import { Logo } from "@/components/layout/navbar/Logo";
+import { PoweredByOpenScholar } from "@/components/features/ai/PoweredByOpenScholar";
 import {
 	ModalContent,
 	ModalBody,
-	ModalFooter,
-	ScrollShadow,
+	ButtonGroup,
 	Spinner,
+	useDisclosure,
 } from "@nextui-org/react";
-import { LuUser } from "react-icons/lu";
+import { LuCheck, LuHash, LuType, LuUser, LuX } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { ImSpinner8 } from "react-icons/im";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useRef } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ItemGetResponse } from "@/app/api/item/types";
-import { IoSend } from "react-icons/io5";
+import { IoChevronDown } from "react-icons/io5";
 import { useLocale, useTranslations } from "next-intl";
-import { UIMessage, useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
-import AIHeader from "../ai/AIHeader";
+import { useChat } from "@ai-sdk/react";
+import {
+	DefaultChatTransport,
+	isReasoningUIPart,
+	isTextUIPart,
+	isToolUIPart,
+} from "ai";
+import type { ResearchUIMessage } from "@/lib/ai/agent";
+import type { AIModelId } from "@/lib/ai/models";
 
-// Type alias for backward compatibility
-type Message = UIMessage;
+export type Message = ResearchUIMessage;
+type VisibleMessagePart = {
+	key: string;
+	part: Message["parts"][number];
+};
 
-// Helper functions to work with the new parts-based message format
-function getMessageContent(message: Message): string {
-	if (!message.parts) return '';
-	return message.parts
-		.map(part => {
-			if (part.type === 'text') return part.text;
-			return '';
-		})
-		.join('');
-}
-
-function createTextMessage(role: 'system' | 'user' | 'assistant' | 'data', content: string, id: string): Message {
+export function createTextMessage(
+	role: "user" | "assistant",
+	content: string,
+	id: string,
+): Message {
 	return {
 		id,
 		role,
-		parts: [{ type: 'text', text: content }],
+		parts: [{ type: "text", text: content }],
 	} as Message;
 }
-import FullScreenModal from "@/components/nextui/FullScreenModal";
-import { models } from "@/constants/ai";
-import { FaTools } from "react-icons/fa";
+
+function withLatestRequestContext(
+	messages: Message[],
+	context: ReturnType<typeof createResearchRequestContextSnapshot>,
+) {
+	if (
+		researchRequestContextsEqual(
+			latestResearchRequestContext(messages),
+			context,
+		)
+	) {
+		return messages;
+	}
+
+	const messageIndex = messages.findLastIndex(
+		({ role }) => role === "user",
+	);
+	if (messageIndex < 0) return messages;
+
+	const updated = [...messages];
+	updated[messageIndex] = {
+		...updated[messageIndex],
+		parts: [
+			...updated[messageIndex].parts,
+			researchRequestContextPart(context),
+		],
+	};
+	return updated;
+}
+import { getAIModelForUI } from "@/constants/ai";
 import { AIMarkdown } from "../markdown/Markdown";
 import posthog from "posthog-js";
-import { Input } from "@/components/nextui/Input";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Textarea } from "@/components/nextui/Textarea";
-import { AnimatePresence, motion } from "framer-motion";
-import { RiRefreshLine, RiResetLeftFill } from "react-icons/ri";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { RiResetLeftFill } from "react-icons/ri";
 import { useLocalStorage } from "usehooks-ts";
-import { SmartScreeningField, useIsAISearchEnabled } from "@/components/pages/EvidenceLibrary";
-import useSWRMutation from "swr/mutation";
-import { cleanAIResponse, fetcher, setter } from "@/lib/utils";
-import { getRateLimits, runScreening } from "@/lib/actions";
+import {
+	SmartScreeningModal,
+	type SmartScreeningField,
+	useIsAISearchEnabled,
+} from "@/components/pages/EvidenceLibrary";
 import Resource from "../items/Resource";
-import { GiStarSwirl } from "react-icons/gi";
-import { FaExclamationTriangle } from "react-icons/fa";
-import { Switch } from "@/components/nextui/Switch";
-import { BsQuestionCircleFill } from "react-icons/bs";
-import { Card } from "@/components/nextui/Card";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import { publicationPdfCitationSources } from "@/lib/ai/citations";
+import { clientAIError, uiMessageText } from "@/lib/ai/client";
+import { AI_CONTEXT_TOO_LARGE_MESSAGE } from "@/lib/ai/error-message";
+import type { LibrarySearchContext } from "@/lib/search-context";
+import {
+	createResearchRequestContextSnapshot,
+	latestResearchRequestContext,
+	researchRequestContextsEqual,
+	researchRequestContextPart,
+} from "@/lib/ai/request-context";
+import { useStickToBottom } from "use-stick-to-bottom";
+import { ChatErrorCard, useScrollEdges } from "../ai/chat-shared";
+import { ToolActivity } from "../ai/ToolActivity";
+import {
+	AIGeneratedContentControls,
+	AIStructuredContentControls,
+	type ControlAction,
+	type GeneratedContent,
+} from "./AIControls";
+import {
+	isScreeningResultsData,
+	screeningExportContent,
+	type ScreeningResultsData,
+} from "@/lib/ai/screening-export";
+import {
+	CHAT_EXPORT_OUTPUT,
+	chatMessageContent,
+	chatTranscriptContent,
+	type ChatTranscriptFormat,
+} from "@/lib/ai/transcript-export";
+import {
+	PiBinocularsBold,
+	PiGearSixBold,
+	PiPaperPlaneTiltFill,
+	PiPlayFill,
+	PiXBold,
+} from "react-icons/pi";
 
-export const maxDuration = 240;
-
-interface ScreeningResults {
-	result: {
-		[resourceId: string]: {
-			screeningFields: {
-				[key: string]: string;
-			};
-		};
-	};
-	fields: SmartScreeningField[];
+function parseScreeningResults(messageId: string, content: string) {
+	if (!messageId.startsWith("screening-")) return null;
+	try {
+		const parsed: unknown = JSON.parse(content);
+		return isScreeningResultsData(parsed) ? parsed : null;
+	} catch {
+		return null;
+	}
 }
 
-function ScreeningResults({ results }: { results: ScreeningResults }) {
+function visibleMessageParts(message: Message): VisibleMessagePart[] {
+	let reasoningCount = 0;
+	let textCount = 0;
+
+	return message.parts.reduce<VisibleMessagePart[]>((parts, part) => {
+		if (isReasoningUIPart(part) && part.text.trim()) {
+			reasoningCount += 1;
+			parts.push({ key: `reasoning-${reasoningCount}`, part });
+		}
+
+		if (isToolUIPart(part)) {
+			parts.push({ key: `tool-${part.toolCallId}`, part });
+		}
+
+		if (isTextUIPart(part) && part.text.trim()) {
+			textCount += 1;
+			parts.push({ key: `text-${textCount}`, part });
+		}
+
+		return parts;
+	}, []);
+}
+
+function ScreeningResults({ results }: { results: ScreeningResultsData }) {
+	const tUI = useTranslations("ui");
+	const resultEntries = Object.entries(results.result);
+	const formats = useMemo(() => {
+		const generated = screeningExportContent(
+			results,
+			typeof window === "undefined" ? undefined : window.location.origin,
+		);
+		return {
+			plaintext: {
+				content: generated.plaintext,
+				extension: "txt",
+				mimeType: "text/plain;charset=utf-8",
+			},
+			markdown: {
+				content: generated.markdown,
+				extension: "md",
+				mimeType: "text/markdown;charset=utf-8",
+			},
+			html: {
+				content: generated.html,
+				extension: "html",
+				mimeType: "text/html;charset=utf-8",
+			},
+			csv: {
+				content: generated.csv,
+				extension: "csv",
+				mimeType: "text/csv;charset=utf-8",
+			},
+		} satisfies Record<ControlAction, GeneratedContent>;
+	}, [results]);
+	const exportControls = (
+		<AIStructuredContentControls
+			formats={formats}
+			downloadName="smart-screening-results"
+			appearance="header"
+		/>
+	);
+
 	return (
-		<div className="w-full space-y-6">
-			{Object.entries(results.result).map(([resourceId, value]) => (
-				<div
-					key={resourceId}
-					className="border border-white dark:border-secondary-600 rounded-2xl overflow-hidden"
-				>
-					<Resource itemKey={resourceId} abstract={true} />
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-4">
-						{Object.entries(value.screeningFields).map(
-							([fieldKey, fieldValue]) => {
-								const fieldInfo = results.fields.find(
-									(field) => field.label === fieldKey
-								);
+		<div className="w-full space-y-4">
+			<div className="flex flex-col gap-3 rounded-2xl bg-black/[0.025] p-3 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between">
+				<div className="min-w-0 px-1">
+					<h2 className="text-lg font-medium text-black/80 dark:text-white/80">
+						{tUI("smartScreening")}
+					</h2>
+					<p className="text-xs text-black/45 dark:text-white/45">
+						{tUI.rich("resourcesCount", {
+							count: resultEntries.length,
+							number: (chunks) => chunks,
+						})}
+					</p>
+				</div>
+				<div className="flex items-center gap-1 self-end sm:self-auto">
+					{exportControls}
+				</div>
+			</div>
+
+			<div className="space-y-4">
+				{resultEntries.map(([resourceId, value]) => (
+					<article
+						key={resourceId}
+						className="overflow-hidden rounded-2xl bg-white/80 shadow-[0_14px_36px_-30px_rgba(0,0,0,0.45)] dark:bg-white/[0.035]"
+					>
+						<Resource
+							itemKey={resourceId}
+							abstract={true}
+							as="div"
+							openLinksInNewTab
+							className="rounded-none bg-transparent dark:bg-transparent [&>div:last-child]:rounded-none"
+						/>
+						<div className="grid grid-cols-1 gap-3 bg-black/[0.025] p-3 dark:bg-black/[0.15] sm:p-4 md:grid-cols-2">
+							{results.fields.map((field, fieldIndex) => {
+								const fieldValue =
+									value.screeningFields[field.label] ?? null;
+								const isBoolean = field.type === "boolean";
+								const fieldIcon =
+									field.type === "number" ? (
+										<LuHash />
+									) : field.type === "string" ? (
+										<LuType />
+									) : fieldValue === true ? (
+										<LuCheck />
+									) : (
+										<LuX />
+									);
 
 								return (
-									<div
-										key={fieldKey}
-										className="border-b pb-2 border-white dark:border-secondary-600"
+									<section
+										key={field.label}
+										className={twMerge(
+											"min-w-0 rounded-xl bg-white/80 p-4 shadow-[0_1px_0_rgba(0,0,0,0.035)] dark:bg-white/[0.045] dark:shadow-none",
+											results.fields.length % 2 === 1 &&
+												fieldIndex ===
+													results.fields.length - 1 &&
+												"md:col-span-2",
+										)}
 									>
-										<h3 className="font-medium text-sm text-black/60 dark:text-white/60">
-											{`${fieldKey} (${fieldInfo?.type})`}
-										</h3>
-										<div className="mt-1">
-											{String(fieldValue)}
+										<div className="flex items-start justify-between gap-3">
+											<h3 className="min-w-0 text-xs font-medium leading-5 text-black/50 dark:text-white/50">
+												{field.label}
+											</h3>
+											<span
+												className={twMerge(
+													"grid size-7 shrink-0 place-items-center rounded-lg bg-black/[0.045] text-sm text-black/40 dark:bg-white/[0.06] dark:text-white/40",
+													isBoolean &&
+														fieldValue === true &&
+														"bg-accent/10 text-accent dark:bg-accent/15 dark:text-accent",
+												)}
+												title={field.type}
+												role="img"
+												aria-label={field.type}
+											>
+												{fieldIcon}
+											</span>
 										</div>
-									</div>
+										<p
+											className={twMerge(
+												"mt-2 break-words text-base font-medium leading-6 text-black/80 dark:text-white/80",
+												isBoolean &&
+													fieldValue === true &&
+													"text-accent dark:text-accent",
+											)}
+										>
+											{String(fieldValue)}
+										</p>
+									</section>
 								);
-							}
-						)}
-					</div>
-				</div>
-			))}
+							})}
+						</div>
+					</article>
+				))}
+			</div>
+
+			<div className="flex justify-end rounded-2xl bg-black/[0.025] p-1 dark:bg-white/[0.04]">
+				<div className="flex items-center gap-1">{exportControls}</div>
+			</div>
 		</div>
 	);
 }
 
-function MessageComponent({
+export function MessageComponent({
 	message,
-	modelIndex,
-	isMutating,
-	isWaiting,
-	handleScreening,
-	smartScreeningFields,
+	modelId,
 	error,
+	pdfSources,
+	isStreaming,
 }: {
 	message: Message;
-	modelIndex: number;
-	isMutating: boolean;
-	isWaiting: boolean;
-	handleScreening: (content: string) => void;
-	smartScreeningFields: SmartScreeningField[];
+	modelId: AIModelId;
 	error: boolean;
+	pdfSources: Record<string, string>;
+	isStreaming: boolean;
 }) {
-	const tUI = useTranslations("ui");
-
-	const annotations = useMemo<Array<{ id: string; message: string }>>(() => {
-		// In v6, tool parts are named `tool-${toolName}` instead of "tool-invocation"
-		// For now, we'll just return an empty array since the old annotations system
-		// may not be supported. You can customize this based on your needs.
-		return [];
-	}, [message]);
+	const content = uiMessageText(message);
+	const visibleParts = visibleMessageParts(message);
+	const screeningResults = useMemo(
+		() => parseScreeningResults(message.id, content),
+		[content, message.id],
+	);
+	const hasFinalAnswer = message.parts.some(
+		(part) => isTextUIPart(part) && part.text.trim(),
+	);
+	const showMessageActions =
+		message.role === "assistant" &&
+		!isStreaming &&
+		!error &&
+		!screeningResults &&
+		!message.id.includes("error") &&
+		hasFinalAnswer;
+	const getMessageContent = useCallback(
+		async (action: ControlAction): Promise<GeneratedContent> => {
+			if (action === "csv") {
+				throw new Error("CSV is not available for chat messages.");
+			}
+			const format = action satisfies ChatTranscriptFormat;
+			const exported = await chatMessageContent(
+				format,
+				message,
+				window.location.origin,
+			);
+			return { content: exported, ...CHAT_EXPORT_OUTPUT[format] };
+		},
+		[message],
+	);
 
 	return (
 		<>
 			<div
 				className={twMerge(
 					"rounded-full bg-accent dark:bg-accent p-2",
-					message.role !== "user" && "hidden"
+					message.role !== "user" && "hidden",
 				)}
 			>
 				{message.role === "user" ? (
 					<LuUser className="size-4 text-white" />
 				) : (
-					React.createElement(models[modelIndex].icon, {
+					React.createElement(getAIModelForUI(modelId).icon, {
 						className: "size-4 invert shrink-0",
 					})
 				)}
@@ -162,89 +366,88 @@ function MessageComponent({
 					"p-0 text-wrap max-w-full overflow-hidden break-words text-lg",
 					message.role === "user" &&
 						"bg-white dark:bg-secondary rounded-xl",
-					message.role !== "user" && "w-full px-8",
+					message.role !== "user" && "w-full",
 					message.id.includes("error") &&
-						"text-red-500 dark:text-red-500 italic"
+						"text-red-500 dark:text-red-500 italic",
 				)}
 			>
-				{annotations.length > 0 && (
-					<div className="flex items-center gap-2">
-						<div className="w-full flex flex-col rounded-t-xl p-0 text-wrap max-w-full overflow-hidden break-words text-lg opacity-80 divide-accent dark:divide-accent-300 relative">
-							<AnimatePresence mode="popLayout">
-								{annotations.length > 0 && (
-									<motion.div
-										key={
-											annotations[annotations.length - 1]
-												.id || annotations.length - 1
-										}
-										initial={{ opacity: 0, x: -20 }}
-										animate={{ opacity: 1, x: 0 }}
-										exit={{ opacity: 0, x: 20 }}
-										transition={{ duration: 0.3 }}
-										className={twMerge(
-											"flex items-center gap-2 bg-clip-text text-transparent",
-											isWaiting
-												? "bg-gradient-to-r from-accent via-accent-700 to-accent animate-gradient-x"
-												: "bg-gradient-to-r from-accent to-accent-700"
-										)}
-									>
-										{React.createElement(
-											models[modelIndex].icon,
-											{
-												className: "size-4 fill-accent shrink-0",
-											}
-										)}
-										{
-											annotations[annotations.length - 1]
-												.message
-										}
-									</motion.div>
-								)}
-							</AnimatePresence>
-						</div>
-					</div>
-				)}
-				{getMessageContent(message).trim().length === 0 && !error ? (
-					<div className={twMerge("p-4 opacity-60 ")}>
-						<div className="w-fit bg-black flex items-center justify-center rounded-full p-2">
+				{visibleParts.length === 0 && !error ? (
+					<div className="flex items-center gap-3 p-4">
+						<div className="flex w-fit items-center justify-center rounded-full bg-black p-2 opacity-60">
 							<Spinner />
 						</div>
 					</div>
-				) : message.role === "assistant" && getMessageContent(message).startsWith('{') ? (
-					<ScreeningResults results={JSON.parse(getMessageContent(message))} />
 				) : (
 					<>
-						<AIMarkdown
-							className={twMerge(
-								"p-4 prose dark:prose-invert space-y-4 w-full max-w-full",
-								message.role !== "user" && "p-0 mt-6"
-							)}
-						>
-							{cleanAIResponse(getMessageContent(message))}
-						</AIMarkdown>
-						{message.role === "assistant" &&
-							getMessageContent(message).includes("/lib/") &&
-							smartScreeningFields.length > 0 && (
-								<div className="flex items-center gap-2 mt-8">
-									<Button
-										isDisabled={isWaiting}
-										startContent={
-											isMutating ? (
-												<ImSpinner8 className="animate-spin" />
-											) : (
-												<GiStarSwirl />
-											)
-										}
-										size="sm"
-										color="accent"
-										onClick={() =>
-											handleScreening(getMessageContent(message))
-										}
-									>
-										{tUI("smartScreening")}
-									</Button>
-								</div>
-							)}
+						{screeningResults ? (
+							<ScreeningResults results={screeningResults} />
+						) : message.role === "assistant" ? (
+							visibleParts.map(({ key, part }, partIndex) => {
+								const isLastPart =
+									partIndex === visibleParts.length - 1;
+
+								if (
+									isReasoningUIPart(part) &&
+									part.text.trim()
+								) {
+									return (
+										<div key={key} className="mt-4">
+											<AIMarkdown
+												pdfSources={pdfSources}
+												isAnimating={
+													isStreaming && isLastPart
+												}
+												className="prose prose-sm max-w-full text-black/50 dark:prose-invert dark:text-white/50 [&_p]:my-1.5 [&_strong]:font-medium [&_strong]:text-black/60 dark:[&_strong]:text-white/60"
+											>
+												{part.text}
+											</AIMarkdown>
+										</div>
+									);
+								}
+
+								if (isToolUIPart(part)) {
+									return (
+										<div key={key} className="mt-2">
+											<ToolActivity part={part} />
+										</div>
+									);
+								}
+
+								if (isTextUIPart(part) && part.text.trim()) {
+									return (
+										<AIMarkdown
+											key={key}
+											pdfSources={pdfSources}
+											isAnimating={
+												isStreaming && isLastPart
+											}
+											className="mt-6 w-full max-w-full space-y-4 p-0 prose dark:prose-invert"
+										>
+											{part.text}
+										</AIMarkdown>
+									);
+								}
+
+								return null;
+							})
+						) : content.trim() ? (
+							<AIMarkdown
+								pdfSources={pdfSources}
+								isAnimating={isStreaming}
+								className="w-full max-w-full space-y-4 p-4 prose dark:prose-invert"
+							>
+								{content}
+							</AIMarkdown>
+						) : null}
+						{showMessageActions && (
+							<div className="mt-3 flex items-center gap-0.5">
+								<AIGeneratedContentControls
+									getContent={getMessageContent}
+									downloadName="ai-response"
+									appearance="inline"
+								/>
+							</div>
+						)}
 					</>
 				)}
 			</div>
@@ -252,515 +455,976 @@ function MessageComponent({
 	);
 }
 
-export type ChatMode = "full" | "quick";
+export type ChatMode = "research" | "quick";
 
 export default function ChatModal({
 	isOpen,
 	onOpenChange,
 	data,
-	modelIndex,
+	modelId,
 	questions,
 	externalInput,
 	setExternalInput,
-	isEmbedded,
-	setIsEmbedded,
+	searchContext,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 	data?: ItemGetResponse | undefined;
-	modelIndex: number;
+	modelId: AIModelId;
 	questions?: undefined | string[];
 	externalInput?: string;
 	setExternalInput?: (input: string) => void;
-	isEmbedded?: boolean | null;
-	setIsEmbedded?: React.Dispatch<React.SetStateAction<boolean | null>>;
-	mode?: string;
+	searchContext?: LibrarySearchContext;
 }) {
-	const [smartScreeningFields, setSmartScreeningFields] = useLocalStorage<
-		SmartScreeningField[]
-	>("smart-screening-fields", []);
+	const pdfSources = useMemo(
+		() =>
+			publicationPdfCitationSources(
+				data?.item?.key,
+				data?.item?.attachmentsData,
+			),
+		[data?.item?.key, data?.item?.attachmentsData],
+	);
+	const [smartScreeningFields] = useLocalStorage<SmartScreeningField[]>(
+		"smart-screening-fields",
+		[],
+	);
+	const {
+		isOpen: isSmartScreeningOpen,
+		onOpen: onSmartScreeningOpen,
+		onOpenChange: onSmartScreeningOpenChange,
+	} = useDisclosure();
 	const { isDeepResearchEnabled } = useIsAISearchEnabled();
-	const [internalMode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
+	const [internalMode, setMode] = useLocalStorage<ChatMode>(
+		"chat-mode",
+		"quick",
+	);
 	const mode: ChatMode = isDeepResearchEnabled ? internalMode : "quick";
 
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
 	const locale = useLocale();
-	const inputRef = useRef<any>(null);
-	const [input, setInput] = useState('');
+	const prefersReducedMotion = useReducedMotion();
+	const [input, setInput] = useState("");
+	const [isComposerFocused, setIsComposerFocused] = useState(false);
 	const {
 		messages,
 		sendMessage,
 		error,
 		status,
 		regenerate,
-		stop,
 		setMessages,
-	} = useChat({
+		clearError,
+	} = useChat<ResearchUIMessage>({
+		throttle: 50,
 		transport: new DefaultChatTransport({
 			api: "/api/ai/chat",
 			headers: {
 				"Accept-Language": locale,
 			},
-			body: {
-				key: data?.item?.key,
-				modelIndex,
+			body: () => ({
+				itemKey: data?.item?.key,
+				modelId,
 				distinctId: posthog.get_distinct_id(),
-				smartScreeningFields,
 				mode,
-			},
+				searchContext,
+			}),
 		}),
 		messages: [
-			createTextMessage("assistant", t("chatPlaceholder", { title: data?.item?.title || "" }), "start"),
+			createTextMessage(
+				"assistant",
+				t("chatPlaceholder", { title: data?.item?.title || "" }),
+				"start",
+			),
 		],
-		onFinish() {
-			inputRef?.current?.focus();
-		},
-		onError: (e) => {
-			const isRateLimited = e.message.includes("Rate limit exceeded");
-			if (!isRateLimited) {
-				// appendMessage(createTextMessage("assistant", t("errorMessage"), "error-" + Date.now()));
-			} else {
-				(async () => {
-					const rateLimits = await getRateLimits();
-					appendMessage(createTextMessage(
-						"assistant",
-						t("rateLimitedMessage", {
-							seconds: rateLimits.retryAfter || 0,
-						}),
-						"error-" + Date.now()
-					));
-				})();
-			}
-		},
 	});
+	const currentRequestContext = useCallback(
+		() =>
+			createResearchRequestContextSnapshot({
+				currentPublication: data?.item?.key
+					? {
+							key: data.item.key,
+							title:
+								data.item.title || "Untitled publication",
+						}
+					: undefined,
+				searchContext,
+			}),
+		[data?.item?.key, data?.item?.title, searchContext],
+	);
+	const sendMessageWithContext = useCallback(
+		(text: string) => {
+			const context = currentRequestContext();
+			const parts: Message["parts"] = [];
+			if (
+				!researchRequestContextsEqual(
+					latestResearchRequestContext(messages),
+					context,
+				)
+			) {
+				parts.push(researchRequestContextPart(context));
+			}
+			parts.push({ type: "text", text });
+			return sendMessage({ parts });
+		},
+		[currentRequestContext, messages, sendMessage],
+	);
+	const resetChat = useCallback(() => {
+		clearError();
+		setMessages((currentMessages) => currentMessages.slice(0, 1));
+	}, [clearError, setMessages]);
 
-	const isLoading = status === 'submitted' || status === 'streaming';
-	const reload = () => regenerate();
-	const append = (message: { role: 'user' | 'assistant'; content: string }) => {
-		sendMessage({ text: message.content });
-	};
+	const isLoading = status === "submitted" || status === "streaming";
+	const isInputReady = input.trim().length > 0 && !isLoading;
+	const reload = useCallback(() => {
+		setMessages((currentMessages) =>
+			withLatestRequestContext(
+				currentMessages,
+				currentRequestContext(),
+			),
+		);
+		return regenerate();
+	}, [currentRequestContext, regenerate, setMessages]);
+	const [isMutating, setIsMutating] = useState(false);
 	const handleSubmit = (e: React.FormEvent) => {
 		e.preventDefault();
-		if (input.trim()) {
-			sendMessage({ text: input });
-			setInput('');
-		}
+		// Ignore submits while a response is generating; the input keeps its
+		// text so nothing is lost.
+		if (isLoading || isMutating || !input.trim()) return;
+		void sendMessageWithContext(input);
+		setInput("");
 	};
 
-	const [isMutating, setIsMutating] = useState(false);
-
-	const messageListRef = useRef<HTMLDivElement>(null);
+	const { scrollRef, contentRef, isAtBottom, scrollToBottom } =
+		useStickToBottom({
+			initial: "smooth",
+			resize: "smooth",
+		});
 
 	const appendMessage = (message: Message) => {
-		setMessages((prevMessages) => [...prevMessages, message]);
+		setMessages((prevMessages) => [
+			...prevMessages.filter(({ id }) => id !== message.id),
+			message,
+		]);
 	};
 
-	useEffect(() => {
-		const apply = () => {
-			if (messageListRef.current) {
-				messageListRef.current.scrollTop =
-					messageListRef.current.scrollHeight;
-			}
-		};
-		const observer = new MutationObserver(apply);
-		if (messageListRef.current) {
-			observer.observe(messageListRef.current as Node, {
-				childList: true,
-				subtree: true,
-			});
-		}
-		apply();
-		return () => observer.disconnect();
-	}, [messages]);
+	const conversationStarted = messages.length > 1;
+	const { edges: scrollEdges, ref: scrollEdgesRef } = useScrollEdges();
+	const messagesScrollRef = useCallback(
+		(element: HTMLDivElement | null) => {
+			scrollRef(element);
+			scrollEdgesRef(element);
+		},
+		[scrollRef, scrollEdgesRef],
+	);
+	const screenableContent = useMemo(
+		() =>
+			messages
+				.filter(
+					(message) =>
+						message.role === "assistant" &&
+						!message.id.startsWith("screening-"),
+				)
+				.map(uiMessageText)
+				.filter((content) => content.includes("/lib/"))
+				.join("\n"),
+		[messages],
+	);
+	const canRunScreening =
+		smartScreeningFields.length > 0 && screenableContent.length > 0;
 
 	useEffect(() => {
-		if (externalInput && isOpen) {
-			append({
-				role: "user",
-				content: externalInput,
-			});
+		if (externalInput && isOpen && !isLoading && !isMutating) {
+			void sendMessageWithContext(externalInput);
 			setExternalInput?.("");
 		}
-	}, [externalInput, isOpen]);
+	}, [
+		externalInput,
+		isOpen,
+		isLoading,
+		isMutating,
+		sendMessageWithContext,
+		setExternalInput,
+	]);
 
-	const reponseExists = messages.some(
-		(message, index) => index > 0 && message.role === "assistant"
-	);
+	const isWaitingForAssistant = isLoading && messages.at(-1)?.role === "user";
 
 	const handleScreening = async (content: string) => {
-		const keys = content.match(/lib\/(\w+)/g);
-		if (!keys) {
+		const keys = Array.from(
+			content.matchAll(/\/lib\/([A-Za-z0-9:_-]+)/g),
+			(match) => match[1],
+		);
+		if (!keys.length || smartScreeningFields.length === 0) {
 			return;
 		}
-		const keysArray = keys.map((key) => key.replace("lib/", ""));
+		const keysArray = [...new Set(keys)].slice(0, 25);
 		setIsMutating(true);
 		try {
-			const result = await runScreening(
-				keysArray,
-				modelIndex,
-				smartScreeningFields,
-				posthog.get_distinct_id()
-			);
-		if (Object.keys(result).length > 0) {
-			appendMessage(createTextMessage(
-				"assistant",
-				JSON.stringify({
-					result: result,
+			const response = await fetch("/api/ai/screen", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					keys: keysArray,
+					modelId,
 					fields: smartScreeningFields,
+					distinctId: posthog.get_distinct_id(),
 				}),
-				"screening-" + Date.now()
-			));
-		} else {
-			appendMessage(createTextMessage(
-				"assistant",
-				tUI("noResourcesForScreening"),
-				"screening-" + Date.now()
-			));
-		}
+			});
+			if (!response.ok) throw new Error(await response.text());
+			const result = await response.json();
+			if (Object.keys(result).length > 0) {
+				appendMessage(
+					createTextMessage(
+						"assistant",
+						JSON.stringify({
+							result: result,
+							fields: smartScreeningFields,
+						}),
+						"screening-result",
+					),
+				);
+			} else {
+				appendMessage(
+					createTextMessage(
+						"assistant",
+						tUI("noResourcesForScreening"),
+						"screening-result",
+					),
+				);
+			}
 		} catch (error) {
 			console.error(error);
+			const visibleError = clientAIError(
+				error instanceof Error ? error : new Error(String(error)),
+			);
+			appendMessage(
+				createTextMessage(
+					"assistant",
+					visibleError.message,
+					"screening-error",
+				),
+			);
 		} finally {
 			setIsMutating(false);
 		}
 	};
 
 	const isWaiting = (isLoading || isMutating) && !error;
+	const getTranscriptContent = useCallback(
+		async (action: ControlAction): Promise<GeneratedContent> => {
+			if (action === "csv") {
+				throw new Error("CSV is not available for chat transcripts.");
+			}
 
-	const hasPDFs = data?.item?.attachmentsData?.some(
-		(attachment) => attachment.PDFCoverPageImage
+			const format = action satisfies ChatTranscriptFormat;
+			const content = await chatTranscriptContent(
+				format,
+				messages.slice(1),
+				{
+					title: t("askAI"),
+					user: tUI("genericUser"),
+					assistant: getAIModelForUI(modelId).name,
+					reasoning: t("reasoning"),
+					smartScreening: tUI("smartScreening"),
+				},
+				window.location.origin,
+			);
+			return { content, ...CHAT_EXPORT_OUTPUT[format] };
+		},
+		[messages, modelId, t, tUI],
 	);
+	const visibleChatError = error ? clientAIError(error) : undefined;
+	const isContextTooLarge =
+		visibleChatError?.message === AI_CONTEXT_TOO_LARGE_MESSAGE;
+	const visibleChatErrorMessage =
+		visibleChatError &&
+		(visibleChatError.message.includes("RATE_LIMITED") ||
+			visibleChatError.message.includes("Rate limit exceeded"))
+			? t("rateLimitedMessage", { seconds: 60 })
+			: visibleChatError?.message || t("errorMessage");
 
 	return (
-		<DialogModal
-			size="full"
-			scrollBehavior="inside"
-			hideCloseButton
-			isOpen={isOpen}
-			onOpenChange={onOpenChange}
-			classNames={{
-				base: "border-none dark:border-none",
-			}}
-		>
-			<ModalContent>
-				{(onClose) => (
-					<>
-						<AIHeader
-							isLoading={isWaiting}
-							onClose={onClose}
-							className="sticky top-0 bg-white dark:bg-secondary-400 z-20"
-						>
-							{t("askAI")}
-							<Button
-								startContent={<RiResetLeftFill />}
-								variant="light"
-								size="sm"
-								className="ml-4"
-								aria-label={tUI("resetAriaLabel")}
-								isDisabled={isWaiting}
-								onClick={() => {
-									setMessages([...messages.slice(0, 1)]);
-								}}
-							>
-								{tUI("resetChat")}
-							</Button>
-						</AIHeader>
-						<ModalBody className="p-0 w-full overflow-hidden">
-							<div
-								className={twMerge(
-									"w-full h-full relative",
-									reponseExists
-										? "grid grid-rows-[1fr_auto]"
-										: "flex justify-center items-center"
-								)}
-							>
-								{reponseExists && (
+		<>
+			{isSmartScreeningOpen && (
+				<SmartScreeningModal
+					isOpen
+					onOpenChange={onSmartScreeningOpenChange}
+				/>
+			)}
+			<DialogModal
+				size="full"
+				scrollBehavior="inside"
+				hideCloseButton
+				isDismissable={false}
+				isOpen={isOpen}
+				onOpenChange={onOpenChange}
+				classNames={{
+					base: "m-0 h-dvh min-h-dvh max-h-dvh w-screen max-w-none rounded-none border-none dark:border-none",
+					wrapper: "overflow-hidden p-0",
+				}}
+			>
+				<ModalContent className="relative h-full min-h-0 overflow-hidden">
+					{(onClose) => (
+						<>
+							{/* Institution branding, same mark as the navbar;
+							    OpenScholar is credited in the site footer. */}
+							<div className="pointer-events-none absolute left-4 top-4 z-30 flex h-12 items-center sm:left-6 sm:top-5 [&_img]:max-h-10 [&_img]:w-auto">
+								<div className="pointer-events-auto">
+									<Logo interactive={false} />
+								</div>
+							</div>
+							<div className="pointer-events-none absolute right-4 top-4 z-30 flex items-center gap-2 sm:right-6 sm:top-5">
+								<div className="pointer-events-auto flex h-10 items-center gap-0.5 rounded-full border border-black/[0.08] bg-white p-1 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-secondary-400 dark:shadow-none">
+									<Button
+										startContent={<RiResetLeftFill />}
+										variant="transparent"
+										size="sm"
+										className="h-8 min-w-0 gap-1.5 rounded-2xl px-2.5 text-sm text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.06] data-[disabled=true]:bg-transparent"
+										aria-label={tUI("resetAriaLabel")}
+										isDisabled={isWaiting}
+										onClick={resetChat}
+									>
+										<span className="hidden lg:block">
+											{tUI("resetChat")}
+										</span>
+									</Button>
+									<AIGeneratedContentControls
+										getContent={getTranscriptContent}
+										downloadName="chat-transcript"
+										isDisabled={
+											!conversationStarted || isWaiting
+										}
+										appearance="header"
+									/>
+								</div>
+								<Button
+									onPress={onClose}
+									isIconOnly
+									variant="transparent"
+									className="pointer-events-auto size-10 rounded-full border border-black/[0.08] bg-white text-black/55 shadow-[0_4px_20px_rgba(0,0,0,0.04)] hover:bg-black/[0.035] hover:text-black/75 dark:border-white/10 dark:bg-secondary-400 dark:text-white/55 dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:text-white/75"
+									aria-label={tUI("closePopupAriaLabel")}
+								>
+									<PiXBold className="size-4" />
+								</Button>
+							</div>
+							<ModalBody className="min-h-0 w-full overflow-hidden p-0">
+								<div
+									className={twMerge(
+										"relative h-full min-h-0 min-w-0 w-full",
+										conversationStarted
+											? "grid grid-rows-[minmax(0,1fr)_auto]"
+											: "flex justify-center items-center",
+									)}
+								>
+									{conversationStarted && (
+										<motion.div
+											layoutId="chat-messages"
+											layout="position"
+											transition={{
+												type: "spring",
+												bounce: 0.25,
+												duration: 0.5,
+											}}
+											className="relative h-full min-h-0 min-w-0 w-full overflow-hidden"
+										>
+											<div
+												ref={messagesScrollRef}
+												className="no-scrollbar h-full w-full overflow-y-auto overflow-x-hidden"
+											>
+												<div
+													ref={contentRef}
+													className="mx-auto flex min-h-full max-w-[96rem] flex-col gap-8 pb-8 pt-28 lg:px-24"
+												>
+													{messages.map(
+														(message, index) =>
+															index > 0 && (
+																<motion.div
+																	initial={{
+																		x:
+																			message.role ===
+																			"user"
+																				? 100
+																				: -100,
+																		opacity: 0,
+																	}}
+																	animate={{
+																		x: 0,
+																		opacity: 1,
+																	}}
+																	transition={{
+																		type: "spring",
+																		stiffness: 260,
+																		damping: 20,
+																	}}
+																	key={
+																		message.id
+																	}
+																	className={twMerge(
+																		"flex items-start justify-start gap-2 w-full",
+																		message.role ===
+																			"user" &&
+																			"flex-row-reverse",
+																	)}
+																>
+																	<MessageComponent
+																		message={
+																			message
+																		}
+																		modelId={
+																			modelId
+																		}
+																		error={
+																			!!error
+																		}
+																		pdfSources={
+																			pdfSources
+																		}
+
+																		isStreaming={
+																			status ===
+																				"streaming" &&
+																			index ===
+																				messages.length -
+																					1 &&
+																			message.role ===
+																				"assistant"
+																		}
+																	/>
+																</motion.div>
+															),
+													)}
+													{isWaitingForAssistant && (
+														<motion.div
+															initial={{
+																opacity: 0,
+																x: -40,
+															}}
+															animate={{
+																opacity: 1,
+																x: 0,
+															}}
+															className="flex w-full items-start justify-start gap-2"
+														>
+															<MessageComponent
+																message={createTextMessage(
+																	"assistant",
+																	"",
+																	"pending-assistant",
+																)}
+																modelId={
+																	modelId
+																}
+																error={false}
+																pdfSources={
+																	pdfSources
+																}
+																isStreaming={
+																	false
+																}
+															/>
+														</motion.div>
+													)}
+													{visibleChatError && (
+														<motion.div
+															initial={{
+																opacity: 0,
+																y: 16,
+																scale: 0.97,
+															}}
+															animate={{
+																opacity: 1,
+																y: 0,
+																scale: 1,
+															}}
+															exit={{
+																opacity: 0,
+																y: 16,
+																scale: 0.97,
+															}}
+															transition={{
+																type: "spring",
+																bounce: 0.3,
+																duration: 0.5,
+															}}
+															className="flex w-full justify-center px-4"
+														>
+															<ChatErrorCard
+																message={
+																	visibleChatErrorMessage
+																}
+																isContextTooLarge={
+																	isContextTooLarge
+																}
+																onReset={
+																	resetChat
+																}
+																onRetry={reload}
+																className="max-w-xl"
+															/>
+														</motion.div>
+													)}
+												</div>
+											</div>
+											<div
+												aria-hidden
+												className={twMerge(
+													"pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-background_light via-background_light/75 to-transparent transition-opacity duration-300 ease-out dark:from-card dark:via-card/75",
+													scrollEdges.top ? "opacity-100" : "opacity-0",
+												)}
+											/>
+											<div
+												aria-hidden
+												className={twMerge(
+													"pointer-events-none absolute inset-x-0 bottom-0 z-10 h-20 bg-gradient-to-t from-background_light via-background_light/75 to-transparent transition-opacity duration-300 ease-out dark:from-card dark:via-card/75",
+													scrollEdges.bottom ? "opacity-100" : "opacity-0",
+												)}
+											/>
+											{!isAtBottom && (
+												<Button
+													isIconOnly
+													size="sm"
+													className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full shadow-md"
+													aria-label="Scroll to bottom"
+													onPress={() =>
+														void scrollToBottom()
+													}
+												>
+													<IoChevronDown className="size-4" />
+												</Button>
+											)}
+										</motion.div>
+									)}
 									<motion.div
-										layoutId="chat-messages"
+										layoutId="chat-input"
 										layout="position"
 										transition={{
 											type: "spring",
 											bounce: 0.25,
 											duration: 0.5,
 										}}
-										className="w-full h-full overflow-y-scroll"
+										className="relative flex min-w-0 w-full flex-col items-center"
 									>
-										<ScrollShadow
-											className="w-full overflow-y-scroll overflow-x-hidden py-8 h-full"
-											ref={messageListRef}
-										>
-											<div className="max-w-[96rem] lg:px-24 mx-auto flex flex-col gap-8 ">
-												{messages.map(
-													(message, index) =>
-														index > 0 && (
-															<motion.div
-																initial={{
-																	x:
-																		message.role ===
-																		"user"
-																			? 100
-																			: -100,
-																	opacity: 0,
-																}}
-																animate={{
-																	x: 0,
-																	opacity: 1,
-																}}
-																transition={{
-																	type: "spring",
-																	stiffness: 260,
-																	damping: 20,
-																}}
-																key={index}
-																className={twMerge(
-																	"flex items-start justify-start gap-2 w-full",
-																	message.role ===
-																		"user" &&
-																		"flex-row-reverse px-8"
-																)}
-															>
-																<MessageComponent
-																	message={
-																		message
-																	}
-																	modelIndex={
-																		modelIndex
-																	}
-																	isMutating={
-																		isMutating
-																	}
-																	isWaiting={
-																		isWaiting
-																	}
-																	handleScreening={
-																		handleScreening
-																	}
-																	smartScreeningFields={
-																		smartScreeningFields
-																	}
-																	error={!!error}
-																/>
-															</motion.div>
-														)
-												)}
-												{error && (
+										<AnimatePresence>
+											{conversationStarted &&
+												isWaiting && (
 													<motion.div
-														initial={{ opacity: 0, y: -100 }}
-														animate={{ opacity: 1, y: 0 }}
-														exit={{ opacity: 0, y: -100 }}
-														className="flex justify-center items-center gap-2 w-full"
+														aria-hidden="true"
+														initial={{ opacity: 0 }}
+														animate={{ opacity: 1 }}
+														exit={{ opacity: 0 }}
+														transition={{
+															duration:
+																prefersReducedMotion
+																	? 0
+																	: 0.2,
+														}}
+														className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px overflow-hidden"
 													>
-														{t("errorMessage")}
-														<Button
-															color="accent"
-															isIconOnly
-															onClick={() => {
-																reload()
-															}}
-														>
-															<RiRefreshLine
-																className="size-4"
-															/>
-														</Button>
+														<div className="h-full w-full animate-gradient-x bg-gradient-to-r from-transparent via-accent/35 to-transparent bg-[length:200%_100%] motion-reduce:animate-none motion-reduce:bg-accent/20" />
 													</motion.div>
 												)}
-											</div>
-										</ScrollShadow>
-									</motion.div>
-								)}
-								<AnimatePresence>
-									{isEmbedded === false && hasPDFs && (
-										<motion.div
-											className="absolute top-0 left-0 w-full h-auto z-10"
-											initial={{ opacity: 0, y: -100 }}
-											animate={{ opacity: 1, y: 0 }}
-											exit={{ opacity: 0, y: -100 }}
-											transition={{
-												duration: 0.4,
-												ease: "easeInOut",
-											}}
+										</AnimatePresence>
+										<form
+											className={twMerge(
+												"relative flex min-w-0 w-full flex-col gap-4 p-4 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] sm:gap-8 sm:p-8",
+											)}
+											onSubmit={handleSubmit}
 										>
-											<div className="max-w-3xl mx-auto mt-4 px-4">
-												<div className="flex items-center gap-3 text-black/80 dark:text-white/80 bg-white/90 dark:bg-secondary/90 rounded-xl p-3 backdrop-blur-sm">
-													<div className="flex-shrink-0 bg-accent-900/40 p-2 rounded-lg">
-														<FaExclamationTriangle className="size-4 text-accent" />
-													</div>
-													<div className="flex-1">
-														<p className="font-medium">
-															{tUI(
-																"preparingDocuments"
-															)}
-														</p>
-														<p className="text-sm text-black/60 dark:text-white/60">
-															{tUI(
-																"documentProcessingInfo"
-															)}
-														</p>
-													</div>
-												</div>
-											</div>
-										</motion.div>
-									)}
-								</AnimatePresence>
-								<motion.div
-									layoutId="chat-input"
-									layout="position"
-									transition={{
-										type: "spring",
-										bounce: 0.25,
-										duration: 0.5,
-									}}
-									className="w-full flex justify-center lg:items-center items-end h-full"
-								>
-									<form
-										className={twMerge(
-											"w-full p-8 flex flex-col gap-8 relative"
-										)}
-										onSubmit={handleSubmit}
-									>
-										<AnimatePresence mode="popLayout">
-											{questions &&
-												!isWaiting &&
-												!reponseExists && (
-													<motion.ul
-														key="questions"
-														initial={{
-															opacity: 0,
-															y: 100,
-														}}
-														animate={{
-															opacity: 1,
-															y: 0,
-														}}
-														exit={{
-															opacity: 0,
-															y: -100,
-														}}
-														className="w-full flex flex-col lg:flex-row gap-4 max-w-[96rem] lg:px-14 mx-auto"
-													>
-														{(Array.isArray(
-															questions
-														)
-															? questions
-															: []
-														).map(
-															(
-																question,
-																index
-															) => (
-																<li key={index}>
-																	<Button
-																		className="text-wrap p-4 bg-transparent dark:bg-transparent min-h-fit h-full"
-																		size="sm"
-																		onClick={() => {
-																			setInput(
-																				question
-																			);
-																			inputRef.current.focus();
-																		}}
-																	>
-																		{
+											<AnimatePresence mode="popLayout">
+												{questions &&
+													!isWaiting &&
+													!conversationStarted && (
+														<motion.ul
+															key="questions"
+															initial={{
+																opacity: 0,
+																y: 100,
+															}}
+															animate={{
+																opacity: 1,
+																y: 0,
+															}}
+															exit={{
+																opacity: 0,
+																y: -100,
+															}}
+															className="w-full flex flex-col lg:flex-row gap-4 max-w-[96rem] lg:px-14 mx-auto"
+														>
+															{(Array.isArray(
+																questions,
+															)
+																? questions
+																: []
+															).map(
+																(question) => (
+																	<li
+																		key={
 																			question
 																		}
-																	</Button>
-																</li>
-															)
-														)}
-													</motion.ul>
-												)}
-											<motion.div
-												key="textarea"
-												layout
-												transition={{
-													type: "spring",
-													bounce: 0.25,
-													duration: 0.5,
-												}}
-												className="w-full z-10"
-											>
-												<Textarea
-													minRows={1}
-													onKeyDown={(e) => {
+																	>
+																		<Button
+																			className="text-wrap p-4 bg-transparent dark:bg-transparent min-h-fit h-full"
+																			size="sm"
+																			onClick={() => {
+																				setInput(
+																					question,
+																				);
+																			}}
+																		>
+																			{
+																				question
+																			}
+																		</Button>
+																	</li>
+																),
+															)}
+														</motion.ul>
+													)}
+												<motion.div
+													key="textarea"
+													layout
+													initial={false}
+													animate={{
+														y:
+															isComposerFocused &&
+															!prefersReducedMotion
+																? -2
+																: 0,
+														scale:
+															isComposerFocused &&
+															!prefersReducedMotion
+																? 1.004
+																: 1,
+													}}
+													whileHover={
+														prefersReducedMotion ||
+														isWaiting
+															? undefined
+															: { y: -1 }
+													}
+													transition={{
+														type: "spring",
+														stiffness: 360,
+														damping: 28,
+													}}
+													onFocusCapture={() =>
+														setIsComposerFocused(
+															true,
+														)
+													}
+													onBlurCapture={(event) => {
 														if (
-															e.key === "Enter" &&
-															!e.shiftKey
+															!event.currentTarget.contains(
+																event.relatedTarget,
+															)
 														) {
-															e.preventDefault();
-															handleSubmit(e);
+															setIsComposerFocused(
+																false,
+															);
 														}
 													}}
-													ref={inputRef}
-													autoFocus
-													autoComplete="off"
-													label={t("askAI")}
-													endContent={
-														<Button
-															isDisabled={
+													className="group/composer relative z-10 mx-auto w-full max-w-3xl min-w-0 overflow-hidden rounded-3xl border border-black/[0.08] bg-white p-2 shadow-[0_12px_40px_-34px_rgba(0,0,0,0.45)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent/45 focus-within:shadow-[0_18px_48px_-32px_rgba(235,126,29,0.38)] dark:border-white/10 dark:bg-card dark:shadow-none dark:focus-within:shadow-[0_18px_48px_-32px_rgba(235,126,29,0.22)]"
+												>
+													<motion.div
+														aria-hidden="true"
+														initial={false}
+														animate={{
+															opacity:
+																isComposerFocused ||
 																isWaiting
+																	? 1
+																	: 0,
+															scaleX:
+																isComposerFocused ||
+																isWaiting
+																	? 1
+																	: 0.35,
+														}}
+														transition={{
+															duration:
+																prefersReducedMotion
+																	? 0
+																	: 0.24,
+															ease: [
+																0.22, 1, 0.36,
+																1,
+															],
+														}}
+														className="pointer-events-none absolute inset-x-8 top-0 h-px origin-center bg-gradient-to-r from-transparent via-accent to-transparent"
+													/>
+													<Textarea
+														minRows={1}
+														// The composer resizes the message viewport
+														// above it; re-pin through the hook so it
+														// isn't mistaken for the user scrolling up.
+														onHeightChange={() => {
+															if (isAtBottom)
+																void scrollToBottom({
+																	animation: "instant",
+																});
+														}}
+														onKeyDown={(e) => {
+															if (
+																e.key ===
+																	"Enter" &&
+																!e.shiftKey &&
+																!e.nativeEvent
+																	.isComposing
+															) {
+																e.preventDefault();
+																handleSubmit(e);
 															}
-															type="submit"
-															isIconOnly
-															className="flex items-center justify-center h-full aspect-square !p-0"
-															aria-label={tUI(
-																"sendMessageAriaLabel"
+														}}
+														autoFocus
+														autoComplete="off"
+														aria-label={t("askAI")}
+														placeholder={t(
+															data?.item?.title
+																? "askMeAnything"
+																: "askMeAnythingPublications",
+														)}
+														value={input}
+														onValueChange={setInput}
+														classNames={{
+															base: "w-full min-w-0",
+															inputWrapper:
+																"min-h-14 !rounded-2xl !border-0 !bg-transparent !px-2 !py-1 !shadow-none group-data-[focus=true]:!bg-transparent group-data-[hover=true]:!bg-transparent data-[focus=true]:!outline-none dark:!bg-transparent",
+															input: "text-base leading-6",
+														}}
+													/>
+													<div className="mt-1 flex min-w-0 items-center justify-between gap-2 border-t border-black/[0.06] px-1 pt-2 dark:border-white/[0.08]">
+														<div className="flex min-w-0 items-center gap-1">
+															{isDeepResearchEnabled && (
+																<Tooltip
+																	content={tUI(
+																		"researchModeTooltip",
+																	)}
+																>
+																	<Button
+																		type="button"
+																		size="sm"
+																		variant="transparent"
+																		aria-pressed={
+																			mode ===
+																			"research"
+																		}
+																		aria-label={tUI(
+																			"researchMode",
+																		)}
+																		onPress={() =>
+																			setMode(
+																				mode ===
+																					"research"
+																					? "quick"
+																					: "research",
+																			)
+																		}
+																		className={twMerge(
+																			"h-8 min-w-8 gap-1.5 rounded-2xl bg-black/[0.035] px-2 text-black/55 transition-colors hover:bg-black/[0.06] dark:bg-white/[0.05] dark:text-white/55 dark:hover:bg-white/[0.08]",
+																			mode ===
+																				"research" &&
+																				"bg-accent/10 text-accent hover:bg-accent/15 dark:bg-accent/15 dark:text-accent",
+																		)}
+																	>
+																		<motion.span
+																			initial={
+																				false
+																			}
+																			animate={{
+																				scale:
+																					mode ===
+																					"research"
+																						? 1.12
+																						: 1,
+																				rotate:
+																					mode ===
+																					"research"
+																						? 0
+																						: -8,
+																			}}
+																			transition={{
+																				type: "spring",
+																				stiffness: 420,
+																				damping: 22,
+																			}}
+																			className="grid place-items-center"
+																		>
+																			<PiBinocularsBold className="size-4 shrink-0" />
+																		</motion.span>
+																		<span className="hidden whitespace-nowrap sm:inline">
+																			{tUI(
+																				"researchMode",
+																			)}
+																		</span>
+																	</Button>
+																</Tooltip>
 															)}
-														>
-															{isWaiting ? (
-																<ImSpinner8 className="animate-spin" />
-															) : (
-																<IoSend className="size-4 text-black dark:text-white/60" />
-															)}
-														</Button>
-													}
-													placeholder={t(
-														data?.item?.title ? "askMeAnything" : "askMeAnythingPublications"
-													)}
-													value={input}
-													onValueChange={setInput}
-													classNames={{
-														base: twMerge(
-															"lg:w-1/3 lg:mx-auto data-[focus=true]:lg:w-2/5 active:lg:scale-90 data-[focus]:active:lg:scale-100 transition-all duration-500 ease-spring data-[focus=true]:opacity-100"
-														),
-													}}
-												/>
-												{isDeepResearchEnabled && <div className={twMerge("flex items-center gap-2 justify-center mt-8 transition-all duration-500 ease-spring", reponseExists && "mt-4")}>
-													<Card color="card" className={twMerge("flex flex-row p-4 py-3 rounded-2xl items-center gap-4 !transition-all duration-600", mode === "quick" && "opacity-50 hover:opacity-100")}>
-														<Switch
-															isSelected={
-																mode === "full"
+															<ButtonGroup className="shrink-0 overflow-hidden rounded-2xl bg-black/[0.035] dark:bg-white/[0.05]">
+																<Tooltip
+																	content={`${tUI("smartScreening")} ${tUI("settings")}`}
+																>
+																	<Button
+																		type="button"
+																		size="sm"
+																		variant="transparent"
+																		className="h-8 min-w-8 gap-1.5 rounded-none border-0 px-2 text-black/55 transition-colors hover:bg-black/[0.05] dark:text-white/55 dark:hover:bg-white/[0.06]"
+																		isDisabled={
+																			isMutating
+																		}
+																		aria-label={`${tUI("smartScreening")} ${tUI("settings")}`}
+																		onPress={
+																			onSmartScreeningOpen
+																		}
+																	>
+																		<PiGearSixBold className="size-4 shrink-0 transition-transform duration-300 group-hover:rotate-45 motion-reduce:transition-none" />
+																		<span className="hidden whitespace-nowrap sm:inline">
+																			{tUI(
+																				"smartScreening",
+																			)}
+																		</span>
+																	</Button>
+																</Tooltip>
+																<Tooltip
+																	content={
+																		smartScreeningFields.length ===
+																		0
+																			? tUI(
+																					"noFieldsAdded",
+																				)
+																			: screenableContent.length ===
+																				  0
+																				? tUI(
+																						"noResourcesForScreening",
+																					)
+																				: tUI(
+																						"smartScreening",
+																					)
+																	}
+																>
+																	<Button
+																		isIconOnly
+																		type="button"
+																		size="sm"
+																		variant="transparent"
+																		className="!h-8 !w-8 !min-w-8 shrink-0 rounded-none border-0 border-l border-black/[0.06] bg-accent/10 text-accent transition-colors hover:bg-accent/15 dark:border-white/[0.08] dark:bg-accent/15 dark:text-accent dark:hover:bg-accent/20"
+																		isDisabled={
+																			isLoading ||
+																			isMutating ||
+																			!canRunScreening
+																		}
+																		aria-label={tUI(
+																			"smartScreening",
+																		)}
+																		onPress={() =>
+																			void handleScreening(
+																				screenableContent,
+																			)
+																		}
+																	>
+																		{isMutating ? (
+																			<ImSpinner8 className="size-3.5 animate-spin" />
+																		) : (
+																			<PiPlayFill className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
+																		)}
+																	</Button>
+																</Tooltip>
+															</ButtonGroup>
+														</div>
+														<motion.div
+															whileHover={
+																prefersReducedMotion ||
+																isWaiting
+																	? undefined
+																	: {
+																			scale: 1.07,
+																		}
 															}
-															onValueChange={(
-																value: boolean
-															) => {
-																setMode(
-																	value
-																		? "full"
-																		: "quick"
-																);
-															}}
-															color="accent"
-															size="sm"
-															classNames={{
-																label: twMerge("text-sm transition-colors duration-300", mode === "full" && "!text-accent"),
-																base: "gap-4"
-															}}
+															whileTap={
+																prefersReducedMotion ||
+																isWaiting
+																	? undefined
+																	: {
+																			scale: 0.9,
+																		}
+															}
+															className="shrink-0"
 														>
-															{tUI("researchMode")}
-														</Switch>
-														<Tooltip content={tUI("researchModeTooltip")}>
-															<BsQuestionCircleFill className={twMerge("text-black/60 dark:text-white/60 transition-colors duration-300", mode === "full" && "!text-accent")} />
-														</Tooltip>
-													</Card>
-												</div>}
-											</motion.div>
-										</AnimatePresence>
-									</form>
-								</motion.div>
-							</div>
-						</ModalBody>
-					</>
-				)}
-			</ModalContent>
-		</DialogModal>
+															<Button
+																isDisabled={
+																	isWaiting
+																}
+																type="submit"
+																isIconOnly
+																color="accent"
+																size="sm"
+																className="group/send !h-8 !w-8 !min-w-8 shrink-0 rounded-2xl border-0"
+																aria-label={tUI(
+																	"sendMessageAriaLabel",
+																)}
+															>
+																<AnimatePresence
+																	mode="wait"
+																	initial={
+																		false
+																	}
+																>
+																	<motion.span
+																		key={
+																			isWaiting
+																				? "waiting"
+																				: isInputReady
+																					? "ready"
+																					: "idle"
+																		}
+																		initial={
+																			prefersReducedMotion
+																				? false
+																				: {
+																						opacity: 0,
+																						scale: 0.72,
+																						x: -2,
+																						y: 2,
+																					}
+																		}
+																		animate={{
+																			opacity: 1,
+																			scale: 1,
+																			x: 0,
+																			y: 0,
+																		}}
+																		exit={{
+																			opacity: 0,
+																			scale: 0.72,
+																		}}
+																		transition={{
+																			type: "spring",
+																			stiffness: 520,
+																			damping: 30,
+																		}}
+																		className="grid place-items-center"
+																	>
+																		{isWaiting ? (
+																			<ImSpinner8 className="size-4 animate-spin" />
+																		) : (
+																			<PiPaperPlaneTiltFill className="size-4 transition-transform duration-200 group-hover/send:translate-x-0.5 group-hover/send:-translate-y-0.5 motion-reduce:transition-none" />
+																		)}
+																	</motion.span>
+																</AnimatePresence>
+															</Button>
+														</motion.div>
+													</div>
+												</motion.div>
+											</AnimatePresence>
+										</form>
+										<div className="-mt-1 flex w-full justify-center pb-3 sm:-mt-4 sm:pb-4">
+											<PoweredByOpenScholar />
+										</div>
+									</motion.div>
+								</div>
+							</ModalBody>
+						</>
+					)}
+				</ModalContent>
+			</DialogModal>
+		</>
 	);
 }

@@ -70,6 +70,7 @@ import ZoteroRichText from "@/components/features/items/ZoteroRichText";
 import CitationDoiLink from "@/components/features/items/CitationDoiLink";
 import { resolveCitationDisplayMode } from "@/lib/citationMode.mts";
 import { zoteroMarkupToPlainText } from "@/lib/zoteroMarkup";
+import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import {
 	buildDoiDisplayLinks,
 	type DoiDisplayAttachment,
@@ -1179,8 +1180,7 @@ function ItemCollection({
 						"data-[showing=false]:slide-out-to-bottom-1",
 					].join(" "),
 					content: [
-						"bg-secondary-100/80",
-						"backdrop-blur-md",
+						"bg-secondary-100",
 						"border border-white/10",
 						"shadow-[0_0_20px_rgba(0,0,0,0.1)]",
 						"dark:shadow-[0_0_20px_rgba(255,255,255,0.1)]",
@@ -1284,13 +1284,7 @@ function ItemCountry({ item }: { item: Item | undefined }) {
 
 function ItemAttachments({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
-	const validAttachments = item?.attachmentsData?.filter(
-		(attachment) =>
-			attachment.PDFCoverPageImage ||
-			attachment.tags?.some(
-				(tag) => tag.toLowerCase() === "_auto-process",
-			),
-	);
+	const validAttachments = item?.attachmentsData?.filter(isVisiblePdfAttachment);
 
 	if (!validAttachments?.length) return null;
 

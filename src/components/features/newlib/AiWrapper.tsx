@@ -14,8 +14,8 @@ import GenerativeModal from "@/components/features/modals/GenerativeModal";
 import ChatModal from "@/components/features/modals/ChatModal";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
-import { fetcher, fetcherPOST, isAIAllowed } from "@/lib/utils";
-import { useRef, useState } from "react";
+import { fetcher, fetcherPOST } from "@/lib/utils";
+import { useEffect, useMemo, useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
 import { AIHistory } from "@/types/ai";
@@ -26,6 +26,11 @@ import posthog from "posthog-js";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { twMerge } from "tailwind-merge";
+import { hasVisiblePdfAttachment } from "@/lib/attachment-visibility";
+import type { AIModelId } from "@/lib/ai/models";
+import { publicationPdfCitationSources } from "@/lib/ai/citations";
+import { toast } from "@/components/layout/Toast";
+import { upsertAIHistory } from "@/lib/ai/history";
 
 function randomUUID() {
 	return (
@@ -36,19 +41,14 @@ function randomUUID() {
 
 function AiButton({
 	data,
-	isEmbedded,
-	setIsEmbedded,
 	variant,
 }: {
 	data: ItemGetResponse | undefined;
-	isEmbedded: boolean | null;
-	setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>>;
 	variant?: "default" | "inline";
 }) {
 	const { selectedModel, setSelectedModel } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
-		modelIndex: selectedModel,
 		distinctId: posthog.get_distinct_id(),
 	};
 	const locale = useLocale();
@@ -58,7 +58,7 @@ function AiButton({
 	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
 		useDisclosure();
 		
-	const { data: questions } = useSWR(
+	const { data: questions, error: questionsError } = useSWR<string[]>(
 		isChatOpen ?[
 			`/ai/questions`,
 			body,
@@ -73,9 +73,21 @@ function AiButton({
 			revalidateIfStale: false,
 		}
 	);
-	const id = useRef(randomUUID());
+	const [id, setId] = useState(randomUUID);
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
+	useEffect(() => {
+		if (!(questionsError instanceof Error)) return;
+		toast({ title: questionsError.message, type: "error" });
+	}, [questionsError]);
+	const pdfSources = useMemo(
+		() =>
+			publicationPdfCitationSources(
+				data?.item?.key,
+				data?.item?.attachmentsData,
+			),
+		[data?.item?.key, data?.item?.attachmentsData],
+	);
 
 	const [histories, setHistories] = useLocalStorage<
 		Record<string, AIHistory[]>
@@ -83,45 +95,43 @@ function AiButton({
 
 	const updateHistory = (prompt: string, completion: string, id: string) => {
 		setHistories((prev) => {
-			const newHistory = prev[prompt] || [];
-			const obj = newHistory.find((item) => item.id === id);
-			if (obj) {
-				obj.content = completion;
-			} else {
-				newHistory.unshift({
+			const history = prev[prompt] || [];
+			const existing = history.find((item) => item.id === id);
+			return {
+				...prev,
+				[prompt]: upsertAIHistory(history, {
 					id,
 					content: completion,
-					date: new Date(),
+					date: existing?.date ?? new Date(),
 					title: data!.item!.title!,
 					key: data!.item!.key!,
-					modelIndex: selectedModel,
-				});
-			}
-			return { ...prev, [prompt]: newHistory };
+					modelId: selectedModel,
+				}),
+			};
 		});
 	};
 
 	const summaryFeature = useAIFeature(
 		"summarize",
-		id.current,
+		id,
 		updateHistory,
 		data,
 		selectedModel
 	);
 	const explainFeature = useAIFeature(
 		"explain",
-		id.current,
+		id,
 		updateHistory,
 		data,
 		selectedModel
 	);
 
-	const handleModelChange = (modelIndex: number) => {
-		setSelectedModel(modelIndex);
+	const handleModelChange = (modelId: AIModelId) => {
+		setSelectedModel(modelId);
 		[summaryFeature, explainFeature].forEach((feature) => {
 			feature.setCompletion("");
 		});
-		id.current = crypto.randomUUID();
+		setId(crypto.randomUUID());
 	};
 
 	return (
@@ -140,13 +150,12 @@ function AiButton({
 					onModelChange={handleModelChange}
 				/>
 				<ChatModal
+					key={selectedModel}
 					isOpen={isChatOpen}
 					onOpenChange={onChatOpenChange}
 					data={data}
-					modelIndex={selectedModel}
+					modelId={selectedModel}
 					questions={questions}
-					isEmbedded={isEmbedded}
-					setIsEmbedded={setIsEmbedded}
 				/>
 				{[summaryFeature, explainFeature].map((feature) => (
 					<GenerativeModal
@@ -155,6 +164,8 @@ function AiButton({
 						onOpenChange={feature.onOpenChange}
 						content={feature.response}
 						title={t(feature.key)}
+						isLoading={feature.isLoading}
+						hasCurrentRequest={feature.hasRequested}
 						error={feature.error}
 						history={histories[feature.key] || []}
 						setHistory={(history) =>
@@ -163,7 +174,12 @@ function AiButton({
 								[feature.key]: history,
 							}))
 						}
-						id={id.current}
+						id={id}
+						currentTitle={data!.item!.title!}
+						currentKey={data!.item!.key!}
+						currentModelId={selectedModel}
+						onClearCurrent={() => feature.setCompletion("")}
+						pdfSources={pdfSources}
 					/>
 				))}
 				<Dropdown
@@ -223,28 +239,16 @@ export default function AiWrapper({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
-
-	const { data: embedded } = useSWR(
-		(data?.item && process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true") ? `/item/${data?.item?.key}/embedded` : null,
-		fetcher,
-		{
-			onSuccess: (data) => {
-				setIsEmbedded(data);
-			},
-		}
-	);
-
-	const aiAllowed = isAIAllowed(data?.item);
+	const { data: aiStatus } = useSWR<{ enabled: boolean }>("/ai/status", fetcher);
+	const aiAllowed = hasVisiblePdfAttachment(data?.item);
 	const isAIEnabled = useFeatureFlagEnabled("ai-features");
 
-	if (!isAIEnabled || !aiAllowed) return null;
+	if (!isAIEnabled || !aiAllowed || aiStatus?.enabled !== true) return null;
 
 	return (
 		<AiButton
+			key={data?.item?.key}
 			data={data}
-			isEmbedded={isEmbedded}
-			setIsEmbedded={setIsEmbedded}
 			variant={variant}
 		/>
 	);

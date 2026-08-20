@@ -5,12 +5,13 @@ import AIHeader from "../ai/AIHeader";
 import FullScreenModal from "../../nextui/FullScreenModal";
 import { ListModalBody, ListModalBodyItem } from "@/components/nextui/ListModalBody";
 import DialogModal from "@/components/nextui/DialogModal";
+import type { AIModelId } from "@/lib/ai/models";
 
 interface ModelSelectorProps {
   isOpen: boolean;
   onOpenChange: () => void;
-  selectedModel: number;
-  onModelChange: (index: number) => void;
+  selectedModel: AIModelId;
+  onModelChange: (modelId: AIModelId) => void;
 }
 
 export default function ModelSelector({
@@ -28,19 +29,20 @@ export default function ModelSelector({
         <ListModalBody
           description={t("changeAbtract")}
           onAction={(index) => {
-            const modelIndex = Number(index);
-            if (modelIndex === selectedModel) return;
-            onModelChange(modelIndex);
+            const model = models[Number(index)];
+            if (!model || model.id === selectedModel) return;
+            onModelChange(model.id);
           }}
-          highlightedIndexes={[selectedModel]}
+          highlightedIndexes={[
+            models.findIndex((model) => model.id === selectedModel),
+          ]}
           list={models.map((model): ListModalBodyItem => ({
             name: model.name,
-            subtitle: model.company,
-            description: model.model ?? "",
+            description: model.company,
             icon: model.icon,
           }))}
         />
       </ModalContent>
     </DialogModal>
   );
-} 
+}

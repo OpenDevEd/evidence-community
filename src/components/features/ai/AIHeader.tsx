@@ -7,17 +7,20 @@ export default function AIHeader({
 	isLoading,
 	onClose,
 	children,
+	actions,
 	className,
 }: {
 	isLoading?: boolean;
 	onClose: () => void;
 	children?: React.ReactNode;
+	actions?: React.ReactNode;
 	className?: string;
 }) {
 	return (
 		<GenericHeader
 			onClose={onClose}
 			startContent={<BsStars className="text-accent" />}
+			actions={actions}
 			classNames={{
 				base: twMerge("flex items-center justify-between gap-2", className),
 				title: "flex items-center gap-2",

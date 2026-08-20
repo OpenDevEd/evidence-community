@@ -9,10 +9,10 @@ import Resource from "../items/Resource";
 
 export default function VectorRelations({ item, loading }: { item: Item | undefined, loading: boolean }) {
 	const { lastFetchedData, setLastFetchedData } = useLastFetchedData();
-	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources") && process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true";
-	const { data: embeddings, isLoading } = useSWR(
+	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources");
+	const { data: similarResources, isLoading } = useSWR(
 		isRelatedItemsEnabled && item?.key && !loading
-			? `/ai/embeddings/${item?.key}`
+			? `/similar/${item?.key}`
 			: null,
 		fetcher,
 		{
@@ -30,7 +30,7 @@ export default function VectorRelations({ item, loading }: { item: Item | undefi
 	);
 
 	if (!isRelatedItemsEnabled) return null;
-	if (!embeddings?.hits?.length && !isLoading && !loading) return null;
+	if (!similarResources?.hits?.length && !isLoading && !loading) return null;
 
 	return (
 		<div id="vector-relations" className="flex flex-col md:grid grid-cols-2 gap-4">
@@ -42,7 +42,7 @@ export default function VectorRelations({ item, loading }: { item: Item | undefi
 					isLoading={true}
 					hideUnapi={true}
 				/>
-			)) : embeddings?.hits.map((hit: any, index: number) => (
+			)) : similarResources?.hits.map((hit: any, index: number) => (
 				<Resource
 					key={index}
 					itemData={hit}

@@ -3,223 +3,25 @@
 import { ItemGetResponse } from "@/app/api/item/types";
 import ItemRow from "@/components/features/items/ItemRow";
 import ItemControls from "@/components/features/items/ItemControls";
-import { BsStars } from "react-icons/bs";
-import { Button } from "@/components/nextui/Button";
 import {
-	Dropdown,
-	DropdownItem,
-	DropdownTrigger,
-	DropdownMenu,
-	useDisclosure,
 	Spinner,
 	Divider,
 } from "@nextui-org/react";
-import GenerativeModal from "../features/modals/GenerativeModal";
-import ChatModal from "../features/modals/ChatModal";
 import { useRouter } from "@/i18n/routing";
-import { useLocale, useTranslations } from "next-intl";
+import { useTranslations } from "next-intl";
 import useSWR from "swr";
-import { fetcher, fetcherPOST, getExtraValues, isAIAllowed } from "@/lib/utils";
+import { fetcher, getExtraValues } from "@/lib/utils";
 import Resource from "../features/items/Resource";
 import { Skeleton } from "../nextui/Skeleton";
-import { useMemo, useRef, useState } from "react";
-import { useLocalStorage } from "usehooks-ts";
-import { motion } from "framer-motion";
 import { useFeatureFlagEnabled, useLastFetchedData } from "@/context/Providers";
-import { AIHistory } from "@/types/ai";
-import ModelSelector from "../features/ai/ModelSelector";
-import { useAIFeature } from "@/hooks/useAIFeature";
-import { AI_DROPDOWN_ITEMS } from "@/components/features/ai/AIDropdownItems";
 import { buildHierarchy } from "@/lib/collections";
 import { Collection } from "@/app/api/collections/types";
 import { CollectionsRow } from "@/lib/items";
 import { ItemsGetResponse } from "@/app/api/items/types";
 import PageContainer from "../layout/PageContainer";
-import { models } from "@/constants/ai";
-import posthog from "posthog-js";
-import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { useQueryState } from "nuqs";
 import { getSafeReferrer } from "@/constants/misc";
-
-function randomUUID() {
-	return (
-		Math.random().toString(36).substring(2, 15) +
-		Math.random().toString(36).substring(2, 15)
-	);
-}
-
-function AiButton({
-	data,
-	isEmbedded,
-	setIsEmbedded,
-}: {
-	data: ItemGetResponse | undefined;
-	isEmbedded: boolean | null;
-	setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>>;
-}) {
-	const { selectedModel, setSelectedModel } = useSelectedModel();
-	const body = {
-		prompt: data?.item?.key,
-		modelIndex: selectedModel,
-		distinctId: posthog.get_distinct_id(),
-	};
-	const locale = useLocale();
-	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
-		useDisclosure();
-
-	const { data: questions } = useSWR(
-		isChatOpen ? [
-			`/ai/questions`,
-			body,
-			{
-				"Accept-Language": locale,
-			},
-		] : null,
-		fetcherPOST,
-		{
-			revalidateOnFocus: false,
-			revalidateOnReconnect: false,
-			revalidateIfStale: false,
-		}
-	);
-	const id = useRef(randomUUID());
-	const t = useTranslations("ai");
-	const tUI = useTranslations("ui");
-
-	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
-		useDisclosure();
-
-	const [histories, setHistories] = useLocalStorage<
-		Record<string, AIHistory[]>
-	>(`ai-history`, {});
-
-	const updateHistory = (prompt: string, completion: string, id: string) => {
-		setHistories((prev) => {
-			const newHistory = prev[prompt] || [];
-			const obj = newHistory.find((item) => item.id === id);
-			if (obj) {
-				obj.content = completion;
-			} else {
-				newHistory.unshift({
-					id,
-					content: completion,
-					date: new Date(),
-					title: data!.item!.title!,
-					key: data!.item!.key!,
-					modelIndex: selectedModel,
-				});
-			}
-			return { ...prev, [prompt]: newHistory };
-		});
-	};
-
-	const summaryFeature = useAIFeature(
-		"summarize",
-		id.current,
-		updateHistory,
-		data,
-		selectedModel
-	);
-	const explainFeature = useAIFeature(
-		"explain",
-		id.current,
-		updateHistory,
-		data,
-		selectedModel
-	);
-
-	const handleModelChange = (modelIndex: number) => {
-		setSelectedModel(modelIndex);
-		[summaryFeature, explainFeature].forEach((feature) => {
-			feature.setCompletion("");
-		});
-		id.current = crypto.randomUUID();
-	};
-
-	return (
-		<motion.div
-			className="fixed bottom-0 right-0 z-40 print:hidden"
-			initial={{ opacity: 0, x: 100 }}
-			animate={{ opacity: 1, x: 0 }}
-		>
-			<div className="flex items-center justify-center p-4">
-				<ModelSelector
-					isOpen={isChangeOpen}
-					onOpenChange={onChangeOpenChange}
-					selectedModel={selectedModel}
-					onModelChange={handleModelChange}
-				/>
-				<ChatModal
-					isOpen={isChatOpen}
-					onOpenChange={onChatOpenChange}
-					data={data}
-					modelIndex={selectedModel}
-					questions={questions}
-					isEmbedded={isEmbedded}
-					setIsEmbedded={setIsEmbedded}
-				/>
-				{[summaryFeature, explainFeature].map((feature) => (
-					<GenerativeModal
-						key={feature.key}
-						isOpen={feature.isOpen}
-						onOpenChange={feature.onOpenChange}
-						content={feature.response}
-						title={t(feature.key)}
-						error={feature.error}
-						history={histories[feature.key] || []}
-						setHistory={(history) =>
-							setHistories((prev) => ({
-								...prev,
-								[feature.key]: history,
-							}))
-						}
-						id={id.current}
-					/>
-				))}
-				<Dropdown
-					classNames={{
-						content: "bg-white dark:bg-secondary",
-					}}
-				>
-					<DropdownTrigger>
-						<Button
-							isIconOnly
-							aria-label={tUI("aiMenuAriaLabel")}
-							className="!p-0 rounded-full bg-gradient-to-r from-accent-400 to-accent-700 !text-white !outline-0 border-0 shadow-[0_0_12px_4px_rgba(255,255,255,0.1)] shadow-accent"
-						>
-							<BsStars />
-						</Button>
-					</DropdownTrigger>
-					<DropdownMenu
-						items={AI_DROPDOWN_ITEMS(
-							t,
-							selectedModel,
-							onChangeOpenChange,
-							summaryFeature,
-							explainFeature,
-							onChatOpenChange
-						)}
-						itemClasses={{
-							base: "data-[hover]:bg-accent dark:data-[hover]:bg-accent data-[hover]:text-white dark:data-[hover]:text-white",
-						}}
-					>
-						{(item) => (
-							<DropdownItem
-								key={item.key}
-								description={item.description}
-								onPress={item.onPress}
-								startContent={item.startContent}
-								className="gap-4"
-							>
-								{item.label}
-							</DropdownItem>
-						)}
-					</DropdownMenu>
-				</Dropdown>
-			</div>
-		</motion.div>
-	);
-}
+import AiWrapper from "@/components/features/newlib/AiWrapper";
 
 const skippedRows = ["relations", "citation", "DOI"];
 
@@ -247,21 +49,16 @@ export default function Item({
 	data: ItemGetResponse | undefined;
 	loading: boolean;
 }) {
-	const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
-	const [referrerState, setReferrer] = useQueryState("referrer");
+	const [referrerState] = useQueryState("referrer");
 	const referrer = getSafeReferrer(referrerState);
 	const router = useRouter();
 	const t = useTranslations("ui");
-	const tArticle = useTranslations("article");
-	const isAIEnabled = useFeatureFlagEnabled("ai-features");
-	const isRelatedItemsEnabled =
-		useFeatureFlagEnabled("related-resources") &&
-		process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true";
+	const isRelatedItemsEnabled = useFeatureFlagEnabled("related-resources");
 	const isCollectionsEnabled = useFeatureFlagEnabled("collections");
-	const { lastFetchedData, setLastFetchedData } = useLastFetchedData();
-	const { data: embeddings } = useSWR(
+	const { setLastFetchedData } = useLastFetchedData();
+	const { data: similarResources } = useSWR(
 		isRelatedItemsEnabled && data?.item && !loading
-			? `/ai/embeddings/${data?.item?.key}`
+			? `/similar/${data?.item?.key}`
 			: null,
 		fetcher,
 		{
@@ -277,22 +74,9 @@ export default function Item({
 			revalidateIfStale: false,
 		}
 	);
-	const { data: embedded } = useSWR(
-		(data?.item && process.env.NEXT_PUBLIC_DISABLE_EMBEDDINGS !== "true") ? `/item/${data?.item?.key}/embedded` : null,
-		fetcher,
-		{
-			onSuccess: (data) => {
-				setIsEmbedded(data);
-			},
-		}
-	);
-
-	const aiAllowed = isAIAllowed(data?.item);
-
-	const hierarchy = useMemo(() => {
-		if (!data?.item?.collectionsData) return null;
-		return buildHierarchy(data.item.collectionsData);
-	}, [data?.item?.collectionsData]);
+	const hierarchy = data?.item?.collectionsData
+		? buildHierarchy(data.item.collectionsData)
+		: null;
 
 	return (
 		<PageContainer id="main-content" className="flex flex-col gap-4">
@@ -388,23 +172,17 @@ export default function Item({
 					)}
 				</div>
 			</div>
-			{isAIEnabled && data?.item && !loading && aiAllowed && (
-				<AiButton
-					data={data}
-					isEmbedded={isEmbedded}
-					setIsEmbedded={setIsEmbedded}
-				/>
-			)}
+			{data?.item && !loading && <AiWrapper data={data} />}
 			<div className="w-full dark:bg-card bg-white rounded-2xl dark:border dark:border-white/[8%] print:hidden p-4 lg:p-10 gap-10 flex flex-col empty:hidden">
 				{isRelatedItemsEnabled && data?.item && (
 					<div className="gap-8">
 						<RowContainer title={t("recommendedItems")}>
 							<Skeleton
-								isLoaded={!!embeddings}
+								isLoaded={!!similarResources}
 								className="data-[loaded]:min-h-0 min-h-screen rounded-2xl w-full"
 							>
 								<ul className="grid grid-cols-1 gap-4">
-									{embeddings?.hits.map((hit: any) => (
+									{similarResources?.hits.map((hit: any) => (
 										<Resource
 											key={hit.id}
 											itemData={hit}

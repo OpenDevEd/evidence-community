@@ -18,6 +18,7 @@ import {
 import type { InferSelectModel } from "drizzle-orm";
 import { useLocalStorage } from "usehooks-ts";
 import { useTranslations } from "next-intl";
+import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
 import { NuqsAdapter } from "nuqs/adapters/next/app";
 import { Toaster } from "sonner";
 import { useQueryState } from "nuqs";
@@ -254,6 +255,7 @@ export default function Providers({
 							<FeatureFlagsContext.Provider value={{ featureFlags }}>
 								<CacheProvider status={status} gapmaps={gapmaps}>
 									<NextUIProvider navigate={router.push}>
+										<InlineChatLayoutProvider>
 										<Suspense>
 											<PramNotificationProvider>
 												<PageView />
@@ -261,6 +263,7 @@ export default function Providers({
 										</Suspense>
 										<UtmAttributionProvider />
 										{children}
+										</InlineChatLayoutProvider>
 										<AnalyticsVendors
 											googleAnalyticsId={googleAnalyticsId}
 										/>
