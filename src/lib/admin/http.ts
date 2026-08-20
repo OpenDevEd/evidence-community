@@ -33,7 +33,12 @@ import {
 	type AdminErrorPayload,
 	validationErrorPayload,
 } from "./errors";
-import { AdminSourceWritebackRetryError } from "./source-writeback-service";
+import {
+	AdminSourceWritebackConflictError,
+	AdminSourceWritebackRetryError,
+	ItemWritebackSourcesChildError,
+} from "./source-writeback-service";
+import { SourceWritebackUnknownSourceError } from "@/lib/source-writeback/queue";
 import { CollectionWritebackUnavailableError } from "./collection-mutation-service";
 import {
 	CrossrefActivationConfigurationError,
@@ -242,6 +247,24 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 				"The parent record is unavailable. Restore or publish it, then try again.",
 			status: 409,
 		};
+	}
+	if (error instanceof AdminSourceWritebackConflictError) {
+		return { code: "conflict", message: error.message, status: 409 };
+	}
+	if (error instanceof ItemWritebackSourcesChildError) {
+		return {
+			code: "conflict",
+			message:
+				"Attachments and notes follow their parent record. Change the sources on the parent.",
+			status: 409,
+		};
+	}
+	if (error instanceof SourceWritebackUnknownSourceError) {
+		const details = validationErrorPayload(
+			"Choose only sources that can receive updates for this record.",
+			{ sourceKeys: error.message },
+		);
+		return { ...details, status: 400 };
 	}
 	if (error instanceof ZodError) {
 		const details = validationErrorPayload(

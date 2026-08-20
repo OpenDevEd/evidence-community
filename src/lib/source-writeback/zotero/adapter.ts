@@ -477,6 +477,52 @@ export function createZoteroWritebackAdapter(
 
 	return {
 		provider: "zotero",
+		async readRecord(request, context) {
+			const { client, prefix } = await createZoteroConnectionClient(
+				request.sourceConnection,
+				{
+					credentialResolver: context.credentialResolver,
+					fetch: options.fetch,
+					sleep,
+				},
+			);
+			const remote = await remoteItem(
+				client,
+				prefix,
+				request.sourceRecordKey,
+				context.signal,
+			);
+			if (!remote) return null;
+			return {
+				mappingProfileVersion: ZOTERO_MAPPING_PROFILE_VERSION,
+				record: await mapZoteroItem(remote.data),
+			};
+		},
+		async readVersion(request, context) {
+			const { client, prefix } = await createZoteroConnectionClient(
+				request.sourceConnection,
+				{
+					credentialResolver: context.credentialResolver,
+					fetch: options.fetch,
+					sleep,
+				},
+			);
+			const remote =
+				request.entity === "collection"
+					? await remoteCollection(
+							client,
+							prefix,
+							request.sourceRecordKey,
+							context.signal,
+						)
+					: await remoteItem(
+							client,
+							prefix,
+							request.sourceRecordKey,
+							context.signal,
+						);
+			return remote ? String(remote.data.version) : null;
+		},
 		async write(request, context) {
 			const { client, config, prefix, scope } =
 				await createZoteroConnectionClient(request.sourceConnection, {

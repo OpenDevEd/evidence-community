@@ -98,7 +98,10 @@ export const sourceConnection = pgTable(
 		provider: text("provider", { enum: SOURCE_PROVIDERS }).notNull(),
 		scopeKind: text("scopeKind", { enum: SOURCE_SCOPE_KINDS }).notNull(),
 		externalScopeKey: varchar("externalScopeKey", { length: 512 }),
-		defaultWriteback: boolean("defaultWriteback").notNull().default(false),
+		// The source's own name for this library (for example the Zotero group
+		// name), read from the provider by the sync worker. Shown instead of
+		// the provider and scope id wherever sources are listed.
+		displayName: varchar("displayName", { length: 255 }),
 		config: jsonb("config").$type<JsonObject>().notNull().default({}),
 		syncCursor: jsonb("syncCursor")
 			.$type<JsonObject>()
@@ -130,16 +133,6 @@ export const sourceConnection = pgTable(
 			"sourceConnection_status_valid",
 			sql`${table.status} IN ('active', 'paused', 'removed')`,
 		),
-		check(
-			"sourceConnection_default_writeback_remote",
-				sql`NOT ${table.defaultWriteback} OR (
-				${table.provider} <> 'native'
-					AND ${table.status} <> 'removed'
-			)`,
-		),
-		uniqueIndex("sourceConnection_one_default_writeback")
-			.on(table.defaultWriteback)
-			.where(sql`${table.defaultWriteback} = true`),
 		uniqueIndex("sourceConnection_provider_scope_unique")
 			.on(table.provider, table.externalScopeKey)
 			.where(sql`${table.externalScopeKey} IS NOT NULL`),
@@ -378,6 +371,15 @@ export const itemSourceLink = pgTable(
 			.notNull()
 			.default([]),
 		writebackEnabled: boolean("writebackEnabled").notNull().default(false),
+		// Set to the moment the admin re-enables a source that already has a
+		// remote copy. The worker compares versions before it sends anything,
+		// and its answer only counts for this exact request: a newer untick or
+		// re-tick moves the timestamp and makes an older check stale.
+		// The source's version when it was found to have changed while this
+		// link was paused. Non-null means "conflict": nothing is sent until the
+		// admin chooses which side wins.
+		remoteCheckRequestedAt: timestampWithTimezone("remoteCheckRequestedAt"),
+		conflictRemoteVersion: varchar("conflictRemoteVersion", { length: 255 }),
 		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
 		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
 	},
@@ -397,9 +399,6 @@ export const itemSourceLink = pgTable(
 			table.sourceConnectionKey,
 			table.sourceRecordKey,
 		),
-		uniqueIndex("itemSourceLink_one_writeback_per_item")
-			.on(table.itemKey)
-			.where(sql`${table.writebackEnabled} = true`),
 		index("itemSourceLink_connection_idx").on(table.sourceConnectionKey),
 	],
 );

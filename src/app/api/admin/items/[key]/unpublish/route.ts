@@ -4,10 +4,12 @@ import { getDatabase } from "@/db";
 import {
 	ADMIN_RESPONSE_HEADERS,
 	adminErrorResponse,
+	readOptionalAdminJson,
 	requireAdminSession,
 } from "@/lib/admin/http";
 import { unpublishNativeItemWithOutcome } from "@/lib/admin/native-item-service";
 import { adminSearchIndexReceipt } from "@/lib/admin/search-index-contract";
+import { adminUnpublishRequestSchema } from "@/lib/admin/writeback-request-contract";
 
 export async function POST(
 	request: NextRequest,
@@ -18,9 +20,13 @@ export async function POST(
 
 	try {
 		const { key } = await params;
+		const { removeFromSourceKeys } = adminUnpublishRequestSchema.parse(
+			await readOptionalAdminJson(request),
+		);
 		const result = await unpublishNativeItemWithOutcome(
 			await getDatabase(),
 			key,
+			{ removeFromSourceKeys },
 		);
 		const { item } = result;
 		return NextResponse.json(

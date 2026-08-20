@@ -18,6 +18,13 @@ export async function GET(
 
 	try {
 		const { key } = await params;
+		const sourceKey = request.nextUrl.searchParams.get("source");
+		if (!sourceKey) {
+			return NextResponse.json(
+				{ error: "Missing source. Add ?source=<source key>." },
+				{ headers: ADMIN_RESPONSE_HEADERS, status: 400 },
+			);
+		}
 		const [database, config] = await Promise.all([
 			getDatabase(),
 			getLibraryConfig(),
@@ -27,6 +34,7 @@ export async function GET(
 				status: await getAdminSourceWritebackStatus(
 					database,
 					key,
+					sourceKey,
 					config,
 				),
 			},

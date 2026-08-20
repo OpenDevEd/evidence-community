@@ -67,6 +67,12 @@ import { Link } from "@/i18n/routing";
 
 import { AdminInspector } from "./AdminInspector";
 import {
+	AdminWritebackSourcesDialog,
+	type WritebackDialogRequest,
+} from "./AdminWritebackSourcesDialog";
+import { SourceProviderIcon } from "./SourceProviderIcon";
+import { resolveWritebackDialogOptions } from "./writeback-selection";
+import {
 	adminCollectionPath,
 	AdminCollectionPicker,
 } from "./AdminCollectionPicker";
@@ -92,6 +98,7 @@ import {
 	mutateAdminItems,
 	openAdminDraft,
 	publishAdminItem,
+	setAdminItemWritebackSources,
 	publishAdminPdf,
 	renameAdminCollection,
 	restoreAdminCollection,
@@ -200,6 +207,29 @@ function parentCollectionLocation(
 	};
 }
 
+const collectionControlClassNames = {
+	input: "text-sm",
+	inputWrapper: "h-10 min-h-10 rounded-xl",
+} as const;
+
+/** Label above control, the one shape every field in the collection dialogs uses. */
+function CollectionField({
+	children,
+	label,
+}: {
+	children: React.ReactNode;
+	label: string;
+}) {
+	return (
+		<div className="space-y-1.5">
+			<div className="text-xs font-medium text-black/60 dark:text-white/65">
+				{label}
+			</div>
+			{children}
+		</div>
+	);
+}
+
 function CollectionLocationButton({
 	buttonRef,
 	label,
@@ -214,13 +244,10 @@ function CollectionLocationButton({
 	topLevelSource: string;
 }) {
 	return (
-		<div className="space-y-1.5">
-			<div className="text-xs font-medium text-black/60 dark:text-white/65">
-				{label}
-			</div>
+		<CollectionField label={label}>
 			<button
 				aria-label={`Change ${label.toLowerCase()}, current ${location?.name ?? "Top level"}, ${location?.path ?? topLevelSource}`}
-				className="flex min-h-14 w-full items-center gap-2.5 rounded-xl bg-black/[0.035] px-3 text-left transition-colors hover:bg-black/[0.055] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:bg-white/[0.045] dark:hover:bg-white/[0.07]"
+				className="flex min-h-12 w-full items-center gap-2.5 rounded-xl border border-black/10 bg-white px-3 text-left transition-colors hover:bg-black/[0.04] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:border-white/10 dark:bg-secondary dark:hover:bg-white/[0.04]"
 				data-admin-collection-location
 				onClick={onPress}
 				ref={buttonRef}
@@ -245,7 +272,7 @@ function CollectionLocationButton({
 					size={14}
 				/>
 			</button>
-		</div>
+		</CollectionField>
 	);
 }
 
@@ -431,6 +458,13 @@ export default function AdminWorkbench({
 	const [confirmDialog, setConfirmDialog] = useState<ConfirmDialog | null>(
 		null,
 	);
+	const [writebackDialog, setWritebackDialog] = useState<
+		| (WritebackDialogRequest & {
+				action: "manage" | "publish" | "restore" | "unpublish";
+				recordKey: string;
+		  })
+		| null
+	>(null);
 	const searchIndex = useAdminSearchIndex();
 	const editableCollectionSourceKeys = useMemo(
 		() =>
@@ -1036,13 +1070,11 @@ export default function AdminWorkbench({
 		[searchIndex.trackAndWait],
 	);
 
-	const publishCurrent = () => {
-		if (!detail?.draft) return;
-		const recordKey = detail.key;
+	const runPublish = (recordKey: string, sourceKeys?: string[]) =>
 		void runBusy(
 			async () => {
 				await flushDraft(recordKey, draftPayload);
-				const result = await publishAdminItem(recordKey);
+				const result = await publishAdminItem(recordKey, sourceKeys);
 				await waitForIndexing(result);
 				clearRecordErrors([recordKey]);
 				setValidationErrors({});
@@ -1051,6 +1083,53 @@ export default function AdminWorkbench({
 			},
 			(error) => captureInspectorValidation(recordKey, error),
 		);
+
+	// Publish, restore and unpublish ask which sources to update first. When
+	// the library has no writeback source, or the record is an attachment or
+	// note (they follow their parent), the action runs at once.
+	const askWritebackSources = (
+		action: "manage" | "publish" | "restore" | "unpublish",
+	) => {
+		if (!detail) return false;
+		const mode =
+			action === "unpublish"
+				? "unpublish"
+				: action === "manage"
+					? "manage"
+					: "publish";
+		const options = detail.parentItem
+			? null
+			: resolveWritebackDialogOptions(detail.writeback, mode);
+		if (!options) return false;
+		setWritebackDialog({ action, mode, options, recordKey: detail.key });
+		return true;
+	};
+
+	const publishCurrent = () => {
+		if (!detail?.draft) return;
+		if (askWritebackSources("publish")) return;
+		runPublish(detail.key);
+	};
+
+	const manageSources = () => {
+		askWritebackSources("manage");
+	};
+
+	const confirmWritebackDialog = (sourceKeys: string[]) => {
+		const request = writebackDialog;
+		if (!request) return;
+		setWritebackDialog(null);
+		const recordKey = request.recordKey;
+		if (request.action === "publish") runPublish(recordKey, sourceKeys);
+		else if (request.action === "restore") runRestore(recordKey, sourceKeys);
+		else if (request.action === "unpublish") runUnpublish(recordKey, sourceKeys);
+		else {
+			void runBusy(async () => {
+				await setAdminItemWritebackSources(recordKey, sourceKeys);
+				toast.success("Sources saved");
+				await loadDetail(recordKey);
+			});
+		}
 	};
 
 	const openCurrentDraft = () =>
@@ -1060,13 +1139,11 @@ export default function AdminWorkbench({
 			await Promise.all([loadDetail(detail.key), loadItems()]);
 		});
 
-	const restoreCurrent = () => {
-		if (!detail) return;
-		const recordKey = detail.key;
+	const runRestore = (recordKey: string, sourceKeys?: string[]) =>
 		void runBusy(
 			async () => {
 				await openAdminDraft(recordKey);
-				const result = await publishAdminItem(recordKey);
+				const result = await publishAdminItem(recordKey, sourceKeys);
 				await waitForIndexing(result);
 				clearRecordErrors([recordKey]);
 				setValidationErrors({});
@@ -1075,6 +1152,11 @@ export default function AdminWorkbench({
 			},
 			(error) => captureInspectorValidation(recordKey, error),
 		);
+
+	const restoreCurrent = () => {
+		if (!detail) return;
+		if (askWritebackSources("restore")) return;
+		runRestore(detail.key);
 	};
 
 	const duplicateCurrent = () =>
@@ -1116,17 +1198,27 @@ export default function AdminWorkbench({
 		});
 	};
 
+	const runUnpublish = (recordKey: string, removeFromSourceKeys?: string[]) =>
+		void runBusy(async () => {
+			const result = await unpublishAdminItem(recordKey, removeFromSourceKeys);
+			await waitForIndexing(result);
+			await Promise.all([loadDetail(recordKey), loadItems()]);
+			toast.success("Record unpublished");
+		});
+
 	const unpublishCurrent = () => {
 		if (!detail) return;
+		if (askWritebackSources("unpublish")) return;
+		const recordKey = detail.key;
 		setConfirmDialog({
 			title: "Unpublish record?",
 			message:
 				"It will leave the public library and remain recoverable here.",
 			danger: true,
 			action: async () => {
-				const result = await unpublishAdminItem(detail.key);
+				const result = await unpublishAdminItem(recordKey);
 				await waitForIndexing(result);
-				await Promise.all([loadDetail(detail.key), loadItems()]);
+				await Promise.all([loadDetail(recordKey), loadItems()]);
 				toast.success("Record unpublished");
 			},
 		});
@@ -2211,7 +2303,16 @@ export default function AdminWorkbench({
 							onDiscardFile={discardPdfDraft}
 							onDuplicate={duplicateCurrent}
 							onOpenDraft={openCurrentDraft}
+							onManageSources={manageSources}
 							onPublish={publishCurrent}
+							onWritebackResolved={(result) => {
+								if (!detail) return;
+								const recordKey = detail.key;
+								void runBusy(async () => {
+									await waitForIndexing(result);
+									await Promise.all([loadDetail(recordKey), loadItems()]);
+								});
+							}}
 							onPublishFile={publishPdf}
 							onPublicationChanged={() =>
 								detail
@@ -2334,7 +2435,12 @@ export default function AdminWorkbench({
 								) : collectionDialog?.mode === "rename" ? (
 									"Rename collection"
 								) : (
-									"New collection"
+									<span className="flex flex-col gap-0.5">
+										<span>New collection</span>
+										<span className="text-[13px] font-normal text-black/55 dark:text-white/55">
+											Collections group records inside one source.
+										</span>
+									</span>
 								)}
 							</ModalHeader>
 							<ModalBody>
@@ -2399,14 +2505,16 @@ export default function AdminWorkbench({
 									/>
 								) : (
 									<>
+										<CollectionField label="Name">
 										<Input
+											aria-label="Name"
 											autoFocus={finePointer}
+											classNames={collectionControlClassNames}
 											errorMessage={collectionErrors.name}
 											isInvalid={Boolean(
 												collectionErrors.name,
 											)}
-											label="Name"
-											labelPlacement="outside"
+											placeholder="Collection name"
 											value={collectionName}
 											onValueChange={(value) => {
 												setCollectionName(value);
@@ -2419,22 +2527,53 @@ export default function AdminWorkbench({
 												);
 											}}
 										/>
+										</CollectionField>
 										{collectionDialog?.mode === "create" ? (
 											<>
 												{collectionDialog.parentCollection ===
 													null &&
 												editableCollectionSourceKeys.length >
 													1 ? (
+													<CollectionField label="Source">
 													<Select
 														aria-label="Collection source"
 														classNames={{
 															base: "max-w-none",
+															innerWrapper: "gap-2",
 															trigger:
 																"h-10 min-h-10 rounded-xl",
-															value: "text-left text-sm",
+															value: "text-left text-sm font-normal",
 														}}
-														label="Source"
-														labelPlacement="outside"
+														placement="left"
+														renderValue={(items) =>
+															items.map((item) => {
+																const source =
+																	library.sources.find(
+																		({ key }) =>
+																			key === item.key,
+																	);
+																return (
+																	<span
+																		className="flex items-center gap-2"
+																		key={String(item.key)}
+																	>
+																		<span className="grid size-4 shrink-0 place-items-center">
+																			<SourceProviderIcon
+																				provider={
+																					source?.provider ??
+																					"zotero"
+																				}
+																				size={14}
+																			/>
+																		</span>
+																		<span className="truncate">
+																			{source?.label ??
+																				String(item.key)}
+																		</span>
+																	</span>
+																);
+															})
+														}
 														onSelectionChange={(
 															keys,
 														) => {
@@ -2475,6 +2614,17 @@ export default function AdminWorkbench({
 																	key={
 																		source.key
 																	}
+																	startContent={
+																		<SourceProviderIcon
+																			provider={
+																				source.provider
+																			}
+																			size={14}
+																		/>
+																	}
+																	textValue={
+																		source.label
+																	}
 																>
 																	{
 																		source.label
@@ -2482,6 +2632,7 @@ export default function AdminWorkbench({
 																</SelectItem>
 															))}
 													</Select>
+													</CollectionField>
 												) : null}
 												<CollectionLocationButton
 													label="Location"
@@ -2724,6 +2875,13 @@ export default function AdminWorkbench({
 					)}
 				</ModalContent>
 			</DialogModal>
+
+			<AdminWritebackSourcesDialog
+				busy={busy}
+				onClose={() => setWritebackDialog(null)}
+				onConfirm={confirmWritebackDialog}
+				request={writebackDialog}
+			/>
 
 			<DialogModal
 				isOpen={Boolean(confirmDialog)}

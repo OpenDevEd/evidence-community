@@ -246,6 +246,41 @@
       "when": 1787016757396,
       "tag": "0034_manifest-owned-zotero-sources",
       "breakpoints": true
+    },
+    {
+      "idx": 35,
+      "version": "7",
+      "when": 1787047823444,
+      "tag": "0035_per-record-source-writeback",
+      "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1787050010546,
+      "tag": "0036_writeback-conflict-check",
+      "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1787123790307,
+      "tag": "0037_writeback-drop-check-flag",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1787123792758,
+      "tag": "0038_writeback-check-request-time",
+      "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1787132584005,
+      "tag": "0039_source-display-name",
+      "breakpoints": true
     }
   ]
 }

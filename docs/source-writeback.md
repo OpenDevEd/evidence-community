@@ -31,8 +31,8 @@ crash. Adapter retries receive the same idempotency key, and adapters must make
 repeated calls safe because a process can fail after the remote write but
 before local acknowledgement.
 
-The provider-neutral worker and fake adapter verifier cover default-target
-linking, native creation, imported updates, parent-before-child ordering,
+The provider-neutral worker and fake adapter verifier cover per-record
+source selection, native creation, imported updates, parent-before-child ordering,
 in-flight edits, heartbeat renewal, lease exclusion, lease expiry, retry,
 dead-lettering, pause/resume, paused-target item creation, stale job suppression,
 snapshots, and duplicate enqueue calls:
@@ -44,6 +44,25 @@ DATABASE_URL_POST=postgresql://library:library@127.0.0.1:55435/library \
 
 The concrete Zotero adapter owns Web API payload mapping, optimistic version
 checks, conflict refetch, and create/delete idempotency.
+
+## Which sources a record writes to
+
+Each record chooses its writeback sources when it is published or unpublished.
+There is no default source. The `/admin` Publish and Restore buttons open one
+dialog ("Also update"), Unpublish opens the same dialog ("Also remove from"),
+and a Sources button beside Publish changes the choice without publishing. The
+choice is stored on `itemSourceLink.writebackEnabled`; a record may write to
+any number of sources. Attachments and notes always copy their parent. A
+published record is sent whole to a source it gains outside a publish.
+
+Unticking a source stops its pending and future jobs (the worker supersedes
+them) and keeps the link and the remote copy. Ticking it again sets
+`remoteCheckRequestedAt`; the worker reads the source's current version before
+sending. If the source changed while the link was paused, the link enters the
+`conflict` state (`conflictRemoteVersion`), nothing is sent, and the status
+popover offers two confirmed choices: send this record over the source, or
+load the source's copy over this record. Ordinary in-flight `412` conflicts
+still reload and resend as before.
 
 ## Run the worker
 

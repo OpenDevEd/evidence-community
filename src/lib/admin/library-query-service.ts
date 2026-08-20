@@ -16,10 +16,12 @@ import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { getLibraryConfig } from "@/config/library-config/server";
 import {
 	evaluateSourceWritebackPolicy,
-	resolveItemWritebackPolicy,
+	importedItemEditBlockReason,
+	resolveItemWritebackTargets,
 } from "@/lib/source-writeback/policy";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "./constants";
+import { sourceDisplayLabel } from "./source-label";
 import {
 	adminCanonicalDraftToItemFields,
 	adminCanonicalPayloadToItemFields,
@@ -280,7 +282,7 @@ export async function getAdminItemDetail(
 				.where(eq(itemFilePublication.itemKey, itemKey))
 				.limit(1)
 				.then((rows) => rows[0] ?? null),
-			resolveItemWritebackPolicy(db, itemKey, config),
+			resolveItemWritebackTargets(db, itemKey, config),
 		]);
 	if (!published && !draft) throw new ItemNotFoundError(itemKey);
 
@@ -364,7 +366,7 @@ export async function getAdminItemDetail(
 		draft: draftJson(draft, payload),
 		editable:
 			summary.sourceConnectionKey === NATIVE_SOURCE_CONNECTION_KEY ||
-			writeback.effective,
+			importedItemEditBlockReason(writeback) === null,
 		fileDraft: fileDraftJson(fileDraft),
 		filePublication: filePublicationJson(filePublication),
 		parentItem,
@@ -404,16 +406,28 @@ export function toAdminCollection(
 export async function getAdminLibrarySnapshot(
 	db: Database,
 ): Promise<AdminLibrarySnapshot> {
-	const [sourceRows, config] = await Promise.all([
+	const [sourceRows, config, collectionCounts] = await Promise.all([
 		db
 			.select()
 			.from(sourceConnection)
 			.orderBy(asc(sourceConnection.provider), asc(sourceConnection.key)),
 		getLibraryConfig(),
+		db
+			.select({
+				count: sql<number>`count(*)::int`,
+				sourceConnectionKey: collection.sourceConnectionKey,
+			})
+			.from(collection)
+			.where(eq(collection.deleted, 0))
+			.groupBy(collection.sourceConnectionKey),
 	]);
+	const collectionCountBySource = new Map(
+		collectionCounts.map((row) => [row.sourceConnectionKey, row.count]),
+	);
 	const sources = sourceRows.map((row) => {
 		const policy = evaluateSourceWritebackPolicy(
 			{
+				displayName: row.displayName,
 				externalScopeKey: row.externalScopeKey,
 				itemEnabled: true,
 				provider: row.provider,
@@ -423,13 +437,9 @@ export async function getAdminLibrarySnapshot(
 			config,
 		);
 		return {
+			collectionCount: collectionCountBySource.get(row.key) ?? 0,
 			key: row.key,
-			label:
-				row.provider === NATIVE_SOURCE_CONNECTION_KEY
-					? "Native"
-					: `${row.provider[0]!.toUpperCase()}${row.provider.slice(1)} · ${
-							row.externalScopeKey ?? row.key
-						}`,
+			label: sourceDisplayLabel(row),
 			provider: row.provider,
 			readOnly:
 				row.provider !== NATIVE_SOURCE_CONNECTION_KEY &&
@@ -443,6 +453,8 @@ export async function getAdminLibrarySnapshot(
 	});
 	if (!sources.some(({ key }) => key === NATIVE_SOURCE_CONNECTION_KEY)) {
 		sources.unshift({
+			collectionCount:
+				collectionCountBySource.get(NATIVE_SOURCE_CONNECTION_KEY) ?? 0,
 			key: NATIVE_SOURCE_CONNECTION_KEY,
 			label: "Native",
 			provider: NATIVE_SOURCE_CONNECTION_KEY,

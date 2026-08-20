@@ -1,0 +1,1 @@
+ALTER TABLE "itemSourceLink" DROP COLUMN "remoteCheckRequired";

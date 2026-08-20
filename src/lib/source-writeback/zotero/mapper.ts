@@ -253,6 +253,9 @@ export function createZoteroItemPatch(
 		: null;
 	assertStructuralFields(payload, definition);
 	const validFields = allowedFields(definition);
+	const previousValidFields = previousDefinition
+		? allowedFields(previousDefinition)
+		: null;
 	const itemTypeChanging = dirtyFields.includes("itemType");
 	const data: Record<string, unknown> = {};
 	for (const databaseField of [...new Set(dirtyFields)].sort()) {
@@ -267,20 +270,38 @@ export function createZoteroItemPatch(
 			continue;
 		}
 		const hasValue = Object.hasOwn(payload, databaseField);
-		if (!validFields.has(field) && (!itemTypeChanging || hasValue)) {
+		const value = payload[databaseField];
+		const empty = value === null || value === undefined || value === "";
+		if (!validFields.has(field)) {
+			// A field the new item type does not have. When the type is
+			// changing and the old type had it, Zotero must see it cleared.
+			if (
+				itemTypeChanging &&
+				previousDefinition &&
+				previousValidFields?.has(field)
+			) {
+				if (hasValue && !empty) {
+					throw new ZoteroWritebackMappingError(
+						`Canonical writeback dirty field is not valid for ${definition.itemType}: ${field}`,
+					);
+				}
+				data[providerField(previousDefinition, field)] = fieldValue(
+					field,
+					payload[databaseField],
+					true,
+					definition,
+				);
+				continue;
+			}
+			// Holding nothing locally, there is nothing to send: skip it. A
+			// whole-record send or a restore names every field, including
+			// fields that belong to other item types.
+			if (empty) continue;
 			throw new ZoteroWritebackMappingError(
 				`Canonical writeback dirty field is not valid for ${definition.itemType}: ${field}`,
 			);
 		}
-		const targetDefinition = validFields.has(field)
-			? definition
-			: previousDefinition;
-		if (!targetDefinition) {
-			throw new ZoteroWritebackMappingError(
-				`Previous Zotero item type is required to clear ${field}`,
-			);
-		}
-		data[providerField(targetDefinition, field)] = fieldValue(
+		data[providerField(definition, field)] = fieldValue(
 			field,
 			payload[databaseField],
 			!hasValue,

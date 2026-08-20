@@ -6,7 +6,6 @@ import { defaultRangeExtractor, useVirtualizer } from "@tanstack/react-virtual";
 import {
 	Archive,
 	ChevronRight,
-	Cloud,
 	Folder,
 	FolderInput,
 	FolderOpen,
@@ -36,6 +35,8 @@ import { Dropdown } from "@/components/nextui/Dropdown";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
+
+import { SourceProviderIcon } from "./SourceProviderIcon";
 import { itemCollectionSourceIsAssignable } from "@/lib/admin/item-collection-policy";
 import type {
 	AdminCollectionCatalogEntry,
@@ -55,6 +56,7 @@ import {
 	adminCollectionCatalogueReducer,
 	flattenAdminCollectionCatalogue,
 	type AdminCollectionCatalogueRow,
+	type AdminCollectionCatalogueState,
 	useAdminCollectionCatalogue,
 } from "./useAdminCollectionCatalogue";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
@@ -437,11 +439,11 @@ function CollectionRow({
 			>
 				<Icon
 					aria-hidden
-					className={
+					className={`shrink-0 ${
 						selected
 							? "text-accent-700 dark:text-accent-300"
 							: "opacity-55"
-					}
+					}`}
 					size={14}
 				/>
 				<span className="min-w-0 flex-1 truncate">
@@ -514,6 +516,22 @@ type CatalogueStatusRow = Exclude<
 	AdminCollectionCatalogueRow,
 	{ kind: "collection" } | { kind: "source" }
 >;
+
+/**
+ * Whether a source row offers a chevron. The library snapshot says how many
+ * collections a source holds, so collapsed sources stay unfetched; once a
+ * branch has loaded, its real contents win.
+ */
+function sourceHasCollections(
+	state: AdminCollectionCatalogueState,
+	source: AdminSource,
+) {
+	const branch = state.branches.get(adminCollectionBranchKey(source.key, null));
+	if (branch && branch.status === "ready") {
+		return branch.items.length + branch.revealed.length > 0;
+	}
+	return source.collectionCount > 0;
+}
 
 export function AdminCollectionCatalogue({
 	busy,
@@ -1370,26 +1388,35 @@ export function AdminCollectionCatalogue({
 										tabIndex={focusedId === id ? 0 : -1}
 										type="button"
 									>
-										<ChevronRight
-											aria-hidden
-											className={
-												expandedSources.has(
-													row.source.key,
-												)
-													? "rotate-90"
-													: ""
-											}
-											size={13}
-										/>
-										{row.source.key ===
-										NATIVE_SOURCE_CONNECTION_KEY ? (
-											<Folder aria-hidden size={14} />
-										) : row.source.readOnly ? (
-											<Lock aria-hidden size={13} />
+										{sourceHasCollections(
+											catalogueTreeState,
+											row.source,
+										) ? (
+											<ChevronRight
+												aria-hidden
+												className={`shrink-0 ${
+													expandedSources.has(row.source.key)
+														? "rotate-90"
+														: ""
+												}`}
+												size={13}
+											/>
 										) : (
-											<Cloud aria-hidden size={13} />
+											<span aria-hidden className="size-[13px] shrink-0" />
 										)}
-										<span className="truncate">
+										<span className="grid size-[13px] shrink-0 place-items-center">
+											{row.source.key !==
+												NATIVE_SOURCE_CONNECTION_KEY &&
+											row.source.readOnly ? (
+												<Lock aria-hidden size={13} />
+											) : (
+												<SourceProviderIcon
+													provider={row.source.provider}
+													size={13}
+												/>
+											)}
+										</span>
+										<span className="min-w-0 truncate">
 											{row.source.label}
 										</span>
 									</button>
@@ -1478,11 +1505,13 @@ export function AdminCollectionCatalogue({
 										view={view}
 									/>
 								) : row.kind === "empty" ? (
-									<div className="flex h-full items-center px-3 text-[11px] text-black/35 dark:text-white/35">
-										{view === "deleted"
-											? "No deleted collections"
-											: "No collections here"}
-									</div>
+									row.branchKey === "search" ? (
+										<div className="flex h-full items-center px-3 text-[11px] text-black/35 dark:text-white/35">
+											{view === "deleted"
+												? "No deleted collections"
+												: "No matching collections"}
+										</div>
+									) : null
 								) : (
 									<button
 										aria-disabled={row.kind === "loading"}

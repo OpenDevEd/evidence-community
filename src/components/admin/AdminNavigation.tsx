@@ -2,7 +2,6 @@
 
 import {
 	CircleCheck,
-	Cloud,
 	CloudUpload,
 	Database,
 	FileClock,
@@ -17,6 +16,8 @@ import {
 import { type ReactNode, useRef } from "react";
 
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
+
+import { SourceProviderIcon } from "./SourceProviderIcon";
 import type {
 	AdminCollectionCatalogEntry,
 	AdminRecordState,
@@ -128,10 +129,6 @@ export function AdminNavigation({
 				<NavigationHeading icon={Database} title="Sources" />
 				<div className={navigationListSurfaceClass}>
 					{sources.map((entry) => {
-						const Icon =
-							entry.provider === NATIVE_SOURCE_CONNECTION_KEY
-								? Database
-								: Cloud;
 						return (
 							<button
 								key={entry.key}
@@ -148,7 +145,12 @@ export function AdminNavigation({
 								}
 								type="button"
 							>
-								<Icon aria-hidden size={14} />
+								<span className="grid size-[14px] shrink-0 place-items-center">
+									<SourceProviderIcon
+										provider={entry.provider}
+										size={14}
+									/>
+								</span>
 								<span className="min-w-0 flex-1 truncate">
 									{entry.label}
 								</span>

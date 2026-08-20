@@ -59,7 +59,8 @@
 		"schema:generate": "npm run schema:generate:library-config && npm run schema:generate:zotero",
 		"schema:generate:library-config": "tsx ./tools/generateLibraryConfigArtifacts.ts",
 		"schema:generate:zotero": "tsx ./tools/generateZoteroSchema.ts",
-		"schema:check": "tsx ./tools/generateLibraryConfigArtifacts.ts --check && tsx ./tools/generateZoteroSchema.ts --check"
+		"schema:check": "tsx ./tools/generateLibraryConfigArtifacts.ts --check && tsx ./tools/generateZoteroSchema.ts --check",
+		"test:admin-zotero-live": "tsx ./tools/verifyAdminZoteroWriteback.ts"
 	},
 	"dependencies": {
 		"@ai-sdk/anthropic": "^3.0.103",

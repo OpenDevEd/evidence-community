@@ -1,5 +1,7 @@
 import { sourceConnection } from "@opendeved/evidence-library-core";
 import { itemTypeZoteroFieldName } from "@opendeved/evidence-library-core/zotero-schema";
+
+import { isPublicTopLevelItem } from "@/lib/admin/item-fields";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
@@ -287,7 +289,7 @@ async function buildSearchProjectionPlanForKeys(
 		.where(inArray(item.key, topLevelKeys))
 		.orderBy(asc(item.key));
 	const activeParents = itemRows.filter(
-		(row) => row.item.parentItem === null && row.item.deleted !== 1,
+		(row) => isPublicTopLevelItem(row.item) && row.item.deleted !== 1,
 	);
 	const activeParentKeys = activeParents.map(({ item }) => item.key);
 	const children =

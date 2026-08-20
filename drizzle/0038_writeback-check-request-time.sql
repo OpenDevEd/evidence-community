@@ -1,0 +1,1 @@
+ALTER TABLE "itemSourceLink" ADD COLUMN "remoteCheckRequestedAt" timestamp with time zone;

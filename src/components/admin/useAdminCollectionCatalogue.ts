@@ -412,18 +412,9 @@ export function flattenAdminCollectionCatalogue(
 			});
 			return;
 		}
-		if (branch.items.length === 0 && branch.revealed.length === 0) {
-			rows.push({
-				branchKey,
-				depth,
-				kind: "empty",
-				parentCollection,
-				positionInSet: 1,
-				setSize: 1,
-				sourceConnectionKey,
-			});
-			return;
-		}
+		// A source or collection without children shows nothing under it; the
+		// missing chevron already says so.
+		if (branch.items.length === 0 && branch.revealed.length === 0) return;
 		const visibleEntries = [
 			...branch.items.map((entry) => ({ entry, revealed: false })),
 			...branch.revealed.map((entry) => ({ entry, revealed: true })),

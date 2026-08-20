@@ -31,6 +31,7 @@ import {
 import {
 	createNativeItemDraft,
 	publishItemDraft,
+	publishItemDraftWithContext,
 	removeNativeItem,
 } from "../src/lib/admin/native-item-service";
 import { runSourceConnection } from "../src/lib/source-ingestion/orchestrator";
@@ -44,6 +45,11 @@ import {
 	drainSourceWritebackJobs,
 	type SourceWritebackProcessResult,
 } from "../src/lib/source-writeback/consumer";
+import {
+	getAdminSourceWritebackStatus,
+	resolveAdminSourceWritebackConflict,
+	setAdminItemWritebackSources,
+} from "../src/lib/admin/source-writeback-service";
 import { createSourceWritebackRuntime } from "../src/lib/source-writeback/runtime";
 import {
 	assertLiveZoteroConnection,
@@ -332,8 +338,6 @@ async function verifyLiveWriteback() {
 	const itemKeys: string[] = [];
 	const privatePaths = new Set<string>();
 	const publicPaths = new Set<string>();
-	let previousDefaultKeys: string[] = [];
-	let writebackDefaultsCaptured = false;
 	let zoteroClient: ZoteroApiClient | null = null;
 	let zoteroPrefix: string | null = null;
 	let syncRuntime: ReturnType<typeof createSourceSyncRuntime> | null = null;
@@ -363,23 +367,14 @@ async function verifyLiveWriteback() {
 			publicationTags.length > 0,
 			"The active configuration needs at least one PDF publication tag",
 		);
-		previousDefaultKeys = (
-			await database
-				.select({ key: sourceConnection.key })
-				.from(sourceConnection)
-				.where(eq(sourceConnection.defaultWriteback, true))
-		).map(({ key }) => key);
-		writebackDefaultsCaptured = true;
-		if (previousDefaultKeys.length > 0) {
-			await database
-				.update(sourceConnection)
-				.set({ defaultWriteback: false })
-				.where(inArray(sourceConnection.key, previousDefaultKeys));
-		}
-		await database
-			.update(sourceConnection)
-			.set({ defaultWriteback: true })
-			.where(eq(sourceConnection.key, LIVE_ZOTERO_CONNECTION_KEY));
+		assert(
+			config.sources.some(
+				(source) =>
+					source.key === LIVE_ZOTERO_CONNECTION_KEY &&
+					source.writebackEnabled,
+			),
+			"The active configuration must enable writeback for the live Zotero source",
+		);
 
 		const marker = `openscholar-live-writeback-${process.pid}-${Date.now()}`;
 		const parentDraft = await createNativeItemDraft(database, {
@@ -396,7 +391,11 @@ async function verifyLiveWriteback() {
 		});
 		itemKeys.push(parentDraft.itemKey, attachmentDraft.itemKey);
 
-		await publishItemDraft(database, parentDraft.itemKey);
+		// The parent chooses the live Zotero source; the attachment copies it.
+		await publishItemDraftWithContext(database, parentDraft.itemKey, {
+			sourceKeys: [LIVE_ZOTERO_CONNECTION_KEY],
+			writebackConfig: config,
+		});
 		await publishItemDraft(database, attachmentDraft.itemKey);
 		const metadataWriteback = await drainWriteback(
 			database,
@@ -660,6 +659,108 @@ async function verifyLiveWriteback() {
 			"The unpublished PDF still exists in public storage",
 		);
 
+		// Pause the source, change the record in Zotero, turn the source back
+		// on: the worker must stop in "conflict" and each choice must end in
+		// the documented state on both sides.
+		const [localBefore] = await database
+			.select({ title: item.title })
+			.from(item)
+			.where(eq(item.key, parentDraft.itemKey));
+		await setAdminItemWritebackSources(
+			database,
+			parentDraft.itemKey,
+			[],
+			config,
+		);
+		const pausedRemote = await zotero.client.item(
+			zotero.prefix,
+			parentDraft.itemKey,
+		);
+		await zotero.client.patchItem(
+			zotero.prefix,
+			parentDraft.itemKey,
+			{ title: "Changed in Zotero while paused" },
+			pausedRemote.data.version,
+		);
+		await setAdminItemWritebackSources(
+			database,
+			parentDraft.itemKey,
+			[LIVE_ZOTERO_CONNECTION_KEY],
+			config,
+		);
+		const conflictDrain = await drainWriteback(
+			database,
+			config,
+			itemKeys,
+			"conflict-check",
+		);
+		const conflictStatus = await getAdminSourceWritebackStatus(
+			database,
+			parentDraft.itemKey,
+			LIVE_ZOTERO_CONNECTION_KEY,
+			config,
+		);
+		assert(
+			conflictDrain.some((result) => result.status === "conflict") &&
+				conflictStatus.state === "conflict",
+			"A Zotero change made while the source was paused was not detected as a conflict",
+		);
+		const conflictRuntime = createSourceWritebackRuntime(config);
+		await resolveAdminSourceWritebackConflict(
+			database,
+			parentDraft.itemKey,
+			LIVE_ZOTERO_CONNECTION_KEY,
+			"send-local",
+			config,
+			conflictRuntime,
+		);
+		await drainWriteback(database, config, itemKeys, "conflict-send-local");
+		const afterSendLocal = await zotero.client.item(
+			zotero.prefix,
+			parentDraft.itemKey,
+		);
+		assert(
+			afterSendLocal.data.data.title === localBefore?.title,
+			"Choosing to send this record did not overwrite the Zotero title",
+		);
+
+		await setAdminItemWritebackSources(
+			database,
+			parentDraft.itemKey,
+			[],
+			config,
+		);
+		await zotero.client.patchItem(
+			zotero.prefix,
+			parentDraft.itemKey,
+			{ title: "Zotero wins this time" },
+			afterSendLocal.data.version,
+		);
+		await setAdminItemWritebackSources(
+			database,
+			parentDraft.itemKey,
+			[LIVE_ZOTERO_CONNECTION_KEY],
+			config,
+		);
+		await drainWriteback(database, config, itemKeys, "conflict-check-2");
+		const loadRemoteStatus = await resolveAdminSourceWritebackConflict(
+			database,
+			parentDraft.itemKey,
+			LIVE_ZOTERO_CONNECTION_KEY,
+			"load-remote",
+			config,
+			conflictRuntime,
+		);
+		const [localAfterLoad] = await database
+			.select({ title: item.title })
+			.from(item)
+			.where(eq(item.key, parentDraft.itemKey));
+		assert(
+			loadRemoteStatus.status.state === "synced" &&
+				localAfterLoad?.title === "Zotero wins this time",
+			"Choosing to load Zotero's version did not replace the local record",
+		);
+
 		await removeNativeItem(database, attachmentDraft.itemKey);
 		await drainWriteback(database, config, itemKeys, "attachment-delete");
 		assert(
@@ -732,6 +833,7 @@ async function verifyLiveWriteback() {
 					finalInbound,
 					groupId: ZOTERO_PLAYGROUND.groupId,
 					inbound,
+					conflictChoices: ["send-local", "load-remote"],
 					metadataWriteback,
 					parentKey: parentDraft.itemKey,
 					status: "ok",
@@ -768,34 +870,7 @@ async function verifyLiveWriteback() {
 		try {
 			await cleanupLocalItems(database, itemKeys);
 		} finally {
-			try {
-				if (writebackDefaultsCaptured) {
-					await database.transaction(async (transaction) => {
-						await transaction
-							.update(sourceConnection)
-							.set({ defaultWriteback: false })
-							.where(
-								eq(
-									sourceConnection.key,
-									LIVE_ZOTERO_CONNECTION_KEY,
-								),
-							);
-						if (previousDefaultKeys.length > 0) {
-							await transaction
-								.update(sourceConnection)
-								.set({ defaultWriteback: true })
-								.where(
-									inArray(
-										sourceConnection.key,
-										previousDefaultKeys,
-									),
-								);
-						}
-					});
-				}
-			} finally {
-				await databaseResource.dispose();
-			}
+			await databaseResource.dispose();
 		}
 	}
 }

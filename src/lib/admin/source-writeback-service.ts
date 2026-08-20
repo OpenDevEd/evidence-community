@@ -1,14 +1,37 @@
 import {
+	itemIdentity,
 	itemSourceLink,
+	sourceConnection,
 	sourceWritebackJob,
 } from "@opendeved/evidence-library-core";
 import { and, desc, eq, isNotNull } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
 import {
-	resolveItemWritebackPolicy,
+	lockItemMutation,
+	lockItemMutations,
+} from "@/db/canonical-mutation-lock";
+import { sourceSnapshot } from "@/db/schema/source";
+import { item } from "@/db/schema/tables/item";
+import {
+	findWritebackTarget,
+	resolveItemWritebackTargets,
 	type SourceWritebackConfiguration,
+	type SourceWritebackReason,
 } from "@/lib/source-writeback/policy";
+import {
+	cascadeChildWritebackLinks,
+	childItemKeys,
+	enqueueFullWritebackForSources,
+	ensureItemWritebackLinks,
+} from "@/lib/source-writeback/queue";
+import type {
+	SourceWritebackAdapterRegistry,
+} from "@/lib/source-writeback/adapter";
+import type { SourceCredentialResolver } from "@/lib/source-ingestion/credentials";
+import { writeSourceIngestionBatch } from "@/lib/source-ingestion/transactional-writer";
+
+import { ItemNotFoundError } from "./native-item-service";
 
 import type { AdminSourceWritebackStatus } from "./source-writeback-contract";
 
@@ -28,8 +51,19 @@ type WritebackJobRow = Pick<
 
 type WritebackLinkRow = Pick<
 	typeof itemSourceLink.$inferSelect,
-	"dirtyFields" | "lastAcknowledgedRemoteVersion"
+	"conflictRemoteVersion" | "dirtyFields" | "lastAcknowledgedRemoteVersion"
 >;
+
+export type AdminSourceWritebackAction = "load-remote" | "retry" | "send-local";
+
+/** The actions an admin may take in a given writeback state. */
+export function adminSourceWritebackActions(
+	state: AdminSourceWritebackStatus["state"],
+): AdminSourceWritebackAction[] {
+	if (state === "conflict") return ["send-local", "load-remote"];
+	if (state === "failed") return ["retry"];
+	return [];
+}
 
 export class AdminSourceWritebackRetryError extends Error {
 	constructor(
@@ -42,7 +76,7 @@ export class AdminSourceWritebackRetryError extends Error {
 }
 
 function policyState(
-	reason: Awaited<ReturnType<typeof resolveItemWritebackPolicy>>["reason"],
+	reason: SourceWritebackReason,
 ): AdminSourceWritebackStatus["state"] | null {
 	if (reason === "source-disabled") return "disabled";
 	if (reason === "source-paused") return "paused";
@@ -57,6 +91,7 @@ export function resolveAdminSourceWritebackState(
 	link: WritebackLinkRow | null,
 	now = new Date(),
 ): AdminSourceWritebackStatus["state"] {
+	if (link?.conflictRemoteVersion) return "conflict";
 	if (job?.deadLetteredAt) return "failed";
 	if (
 		job?.leaseOwner &&
@@ -77,15 +112,38 @@ export function resolveAdminSourceWritebackState(
 	return "idle";
 }
 
+const KEY_COLLISION_ERROR_NAMES = [
+	"SourceWritebackTargetKeyCollisionError",
+	"ZoteroWritebackKeyCollisionError",
+];
+
+/**
+ * Turns a stored worker error into words an admin can act on. A key collision
+ * means the source already has a different item with this record's key; the
+ * only way forward is to delete that item at the source and retry.
+ */
+export function describeAdminWritebackError(
+	error: string | null,
+	{ itemKey, sourceLabel }: { itemKey: string; sourceLabel: string },
+) {
+	if (!error) return null;
+	const name = error.split(":", 1)[0] ?? "";
+	if (KEY_COLLISION_ERROR_NAMES.includes(name)) {
+		return `${sourceLabel} already has a different item with key ${itemKey}. Delete that item in ${sourceLabel}, then retry.`;
+	}
+	return error;
+}
+
 function statusJson(
 	state: AdminSourceWritebackStatus["state"],
 	sourceKey: string | null,
 	job: WritebackJobRow | null,
+	describe: (error: string | null) => string | null = (error) => error,
 ): AdminSourceWritebackStatus {
 	return {
 		attempts: job?.attempts ?? 0,
 		canonicalRevision: job?.canonicalRevision ?? null,
-		error: job?.lastError ?? null,
+		error: describe(job?.lastError ?? null),
 		jobId: job?.id ?? null,
 		nextAttemptAt: job?.nextAttemptAt.toISOString() ?? null,
 		processedAt: job?.processedAt?.toISOString() ?? null,
@@ -97,16 +155,19 @@ function statusJson(
 export async function getAdminSourceWritebackStatus(
 	database: Database,
 	itemKey: string,
+	sourceKey: string,
 	config: SourceWritebackConfiguration,
 	now = new Date(),
 ) {
-	const policy = await resolveItemWritebackPolicy(database, itemKey, config);
-	const blockedState = policyState(policy.reason);
-	if (!policy.sourceKey) return statusJson(blockedState ?? "locked", null, null);
+	const targets = await resolveItemWritebackTargets(database, itemKey, config);
+	const target = findWritebackTarget(targets, sourceKey);
+	if (!target) return statusJson("locked", sourceKey, null);
+	const blockedState = policyState(target.reason);
 
 	const [links, jobs] = await Promise.all([
 		database
 			.select({
+				conflictRemoteVersion: itemSourceLink.conflictRemoteVersion,
 				dirtyFields: itemSourceLink.dirtyFields,
 				lastAcknowledgedRemoteVersion:
 					itemSourceLink.lastAcknowledgedRemoteVersion,
@@ -115,7 +176,7 @@ export async function getAdminSourceWritebackStatus(
 			.where(
 				and(
 					eq(itemSourceLink.itemKey, itemKey),
-					eq(itemSourceLink.sourceConnectionKey, policy.sourceKey),
+					eq(itemSourceLink.sourceConnectionKey, sourceKey),
 				),
 			)
 			.limit(1),
@@ -136,7 +197,7 @@ export async function getAdminSourceWritebackStatus(
 			.where(
 				and(
 					eq(sourceWritebackJob.itemKey, itemKey),
-					eq(sourceWritebackJob.sourceConnectionKey, policy.sourceKey),
+					eq(sourceWritebackJob.sourceConnectionKey, sourceKey),
 					eq(sourceWritebackJob.superseded, false),
 				),
 			)
@@ -147,20 +208,27 @@ export async function getAdminSourceWritebackStatus(
 	const link = links[0] ?? null;
 	return statusJson(
 		blockedState ?? resolveAdminSourceWritebackState(job, link, now),
-		policy.sourceKey,
+		sourceKey,
 		job,
+		(error) =>
+			describeAdminWritebackError(error, {
+				itemKey,
+				sourceLabel: target.sourceLabel,
+			}),
 	);
 }
 
 export async function retryAdminSourceWriteback(
 	database: Database,
 	itemKey: string,
+	sourceKey: string,
 	config: SourceWritebackConfiguration,
 	requeuedAt = new Date(),
 ) {
 	const current = await getAdminSourceWritebackStatus(
 		database,
 		itemKey,
+		sourceKey,
 		config,
 		requeuedAt,
 	);
@@ -201,5 +269,293 @@ export async function retryAdminSourceWriteback(
 			"not-failed",
 		);
 	}
-	return getAdminSourceWritebackStatus(database, itemKey, config, requeuedAt);
+	return getAdminSourceWritebackStatus(
+		database,
+		itemKey,
+		sourceKey,
+		config,
+		requeuedAt,
+	);
+}
+
+export class ItemWritebackSourcesChildError extends Error {
+	constructor(itemKey: string) {
+		super(
+			`Attachments and notes follow their parent record: ${itemKey}`,
+		);
+		this.name = "ItemWritebackSourcesChildError";
+	}
+}
+
+/**
+ * Changes which sources a record writes to, without publishing. Children
+ * follow. A published record is sent to every newly chosen source at once;
+ * a draft waits for its first publish. Unchecked sources keep their link and
+ * remote copy; their pending jobs are superseded by the worker.
+ */
+export async function setAdminItemWritebackSources(
+	database: Database,
+	itemKey: string,
+	sourceKeys: readonly string[],
+	config: SourceWritebackConfiguration,
+	now = new Date(),
+) {
+	// Lock the record and its attachments and notes together, in one sorted
+	// set, so a child publish cannot copy a selection that is about to change.
+	const childKeys = await childItemKeys(database, itemKey);
+	await database.transaction(async (transaction) => {
+		await lockItemMutations(transaction, [itemKey, ...childKeys]);
+		const [identity] = await transaction
+			.select({ key: itemIdentity.key })
+			.from(itemIdentity)
+			.where(eq(itemIdentity.key, itemKey))
+			.limit(1);
+		if (!identity) throw new ItemNotFoundError(itemKey);
+		const [published] = await transaction
+			.select({ parentItem: item.parentItem })
+			.from(item)
+			.where(eq(item.key, itemKey))
+			.limit(1);
+		if (published?.parentItem) {
+			throw new ItemWritebackSourcesChildError(itemKey);
+		}
+		const selection = await ensureItemWritebackLinks(transaction, {
+			configuration: config,
+			itemKey,
+			sourceKeys,
+		});
+		const children = await cascadeChildWritebackLinks(transaction, itemKey);
+		await enqueueFullWritebackForSources(transaction, {
+			itemKey,
+			sourceKeys: selection.newlyEnabled,
+			updatedAt: now,
+		});
+		for (const child of children) {
+			await enqueueFullWritebackForSources(transaction, {
+				itemKey: child.itemKey,
+				sourceKeys: child.newlyEnabled,
+				updatedAt: now,
+			});
+		}
+	});
+	return resolveItemWritebackTargets(database, itemKey, config);
+}
+
+export type AdminWritebackConflictChoice = "load-remote" | "send-local";
+
+export class AdminSourceWritebackConflictError extends Error {
+	constructor(
+		message: string,
+		readonly kind: "not-in-conflict" | "not-supported" | "remote-missing",
+	) {
+		super(message);
+		this.name = "AdminSourceWritebackConflictError";
+	}
+}
+
+/**
+ * Resolves a conflict the worker found when a paused source was turned back
+ * on. `send-local` accepts the source's current version as seen and sends
+ * this record over it. `load-remote` imports the source's copy over this
+ * record, including fields edited here, and marks the link synced.
+ */
+export async function resolveAdminSourceWritebackConflict(
+	database: Database,
+	itemKey: string,
+	sourceKey: string,
+	choice: AdminWritebackConflictChoice,
+	config: SourceWritebackConfiguration,
+	runtime: {
+		credentialResolver: SourceCredentialResolver;
+		registry: SourceWritebackAdapterRegistry;
+		signal?: AbortSignal;
+	},
+	now = new Date(),
+): Promise<{
+	indexingRecords: { key: string; revision: number }[];
+	status: AdminSourceWritebackStatus;
+}> {
+	const [current] = await database
+		.select({ connection: sourceConnection, link: itemSourceLink })
+		.from(itemSourceLink)
+		.innerJoin(
+			sourceConnection,
+			eq(sourceConnection.key, itemSourceLink.sourceConnectionKey),
+		)
+		.where(
+			and(
+				eq(itemSourceLink.itemKey, itemKey),
+				eq(itemSourceLink.sourceConnectionKey, sourceKey),
+			),
+		)
+		.limit(1);
+	if (!current?.link.conflictRemoteVersion) {
+		throw new AdminSourceWritebackConflictError(
+			"This record has no source conflict to resolve. Refresh and try again.",
+			"not-in-conflict",
+		);
+	}
+
+	if (choice === "send-local") {
+		await database.transaction(async (transaction) => {
+			await lockItemMutation(transaction, itemKey);
+			const [link] = await transaction
+				.select({ conflictRemoteVersion: itemSourceLink.conflictRemoteVersion })
+				.from(itemSourceLink)
+				.where(
+					and(
+						eq(itemSourceLink.itemKey, itemKey),
+						eq(itemSourceLink.sourceConnectionKey, sourceKey),
+					),
+				)
+				.for("update");
+			if (!link?.conflictRemoteVersion) {
+				throw new AdminSourceWritebackConflictError(
+					"This record has no source conflict to resolve. Refresh and try again.",
+					"not-in-conflict",
+				);
+			}
+			await transaction
+				.update(itemSourceLink)
+				.set({
+					conflictRemoteVersion: null,
+					lastAcknowledgedRemoteVersion: link.conflictRemoteVersion,
+					remoteCheckRequestedAt: null,
+					remoteVersion: link.conflictRemoteVersion,
+					updatedAt: now,
+				})
+				.where(
+					and(
+						eq(itemSourceLink.itemKey, itemKey),
+						eq(itemSourceLink.sourceConnectionKey, sourceKey),
+					),
+				);
+			await enqueueFullWritebackForSources(transaction, {
+				itemKey,
+				sourceKeys: [sourceKey],
+				updatedAt: now,
+			});
+		});
+		return {
+			indexingRecords: [],
+			status: await getAdminSourceWritebackStatus(
+				database,
+				itemKey,
+				sourceKey,
+				config,
+				now,
+			),
+		};
+	}
+
+	// The source's copy of an attachment or note comes without its file
+	// details here, so only a top-level record may load the source's version.
+	const [record] = await database
+		.select({ parentItem: item.parentItem })
+		.from(item)
+		.where(eq(item.key, itemKey))
+		.limit(1);
+	if (record?.parentItem) {
+		throw new AdminSourceWritebackConflictError(
+			"Attachments and notes follow their parent record. Load the source’s version on the parent instead.",
+			"not-supported",
+		);
+	}
+	const adapter = runtime.registry.get(current.connection.provider);
+	const remote = await adapter.readRecord(
+		{
+			entity: "item",
+			sourceConnection: current.connection,
+			sourceRecordKey: current.link.sourceRecordKey,
+		},
+		{
+			credentialResolver: runtime.credentialResolver,
+			signal: runtime.signal ?? new AbortController().signal,
+		},
+	);
+	if (!remote) {
+		throw new AdminSourceWritebackConflictError(
+			"The source no longer has this record. Choose “Send this record” to create it again.",
+			"remote-missing",
+		);
+	}
+	// The source wins: forget local edits on this link so the import is not
+	// masked, then import the source's copy through the normal writer. The
+	// remote read took time, so the conflict is re-checked under the record
+	// lock first: another request may have resolved it or unticked the source.
+	await database.transaction(async (transaction) => {
+		await lockItemMutation(transaction, itemKey);
+		const [link] = await transaction
+			.select({
+				conflictRemoteVersion: itemSourceLink.conflictRemoteVersion,
+				writebackEnabled: itemSourceLink.writebackEnabled,
+			})
+			.from(itemSourceLink)
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, itemKey),
+					eq(itemSourceLink.sourceConnectionKey, sourceKey),
+				),
+			)
+			.for("update");
+		if (
+			!link?.writebackEnabled ||
+			link.conflictRemoteVersion !== current.link.conflictRemoteVersion
+		) {
+			throw new AdminSourceWritebackConflictError(
+				"This conflict was already resolved or the source was unticked. Refresh and try again.",
+				"not-in-conflict",
+			);
+		}
+		await transaction
+			.update(itemSourceLink)
+			.set({
+				conflictRemoteVersion: null,
+				dirtyFields: [],
+				remoteCheckRequestedAt: null,
+				updatedAt: now,
+			})
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, itemKey),
+					eq(itemSourceLink.sourceConnectionKey, sourceKey),
+				),
+			);
+		// The inbound sync may already have recorded this remote version in
+		// the source snapshot while the record was masked by dirty fields. The
+		// writer skips a record whose snapshot matches, so forget the snapshot:
+		// the admin asked for the source's copy to be applied.
+		await transaction
+			.delete(sourceSnapshot)
+			.where(
+				and(
+					eq(sourceSnapshot.itemKey, itemKey),
+					eq(sourceSnapshot.sourceConnectionKey, sourceKey),
+				),
+			);
+	});
+	await writeSourceIngestionBatch(database, {
+		collections: [],
+		expectedCursor: current.connection.syncCursor,
+		fetchedAt: now,
+		items: [remote.record],
+		mappingProfileVersion: remote.mappingProfileVersion,
+		nextCursor: current.connection.syncCursor,
+		sourceConnectionKey: sourceKey,
+	});
+	const [imported] = await database
+		.select({ key: item.key, revision: item.revision })
+		.from(item)
+		.where(eq(item.key, itemKey))
+		.limit(1);
+	return {
+		indexingRecords: imported ? [imported] : [],
+		status: await getAdminSourceWritebackStatus(
+			database,
+			itemKey,
+			sourceKey,
+			config,
+			now,
+		),
+	};
 }

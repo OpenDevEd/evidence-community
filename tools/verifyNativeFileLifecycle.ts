@@ -45,6 +45,7 @@ import {
 	ItemHasPublishedFileError as NativeItemHasPublishedFileError,
 	openItemDraft as openNativeItemDraft,
 	publishItemDraft as publishNativeItemDraft,
+	publishItemDraftWithContext as publishNativeItemDraftWithContext,
 	removeNativeItem,
 	saveItemDraft as saveNativeItemDraft,
 	unpublishNativeItem,
@@ -404,23 +405,9 @@ async function verify() {
 	const storage = new MemoryFileStorage();
 	const createdKeys: string[] = [];
 	const connectionKey = `native-file-writeback-${process.pid}-${Date.now()}`;
-	let previousDefaultKeys: string[] = [];
 
 	try {
-		previousDefaultKeys = (
-			await db
-				.select({ key: sourceConnection.key })
-				.from(sourceConnection)
-				.where(eq(sourceConnection.defaultWriteback, true))
-		).map(({ key }) => key);
-		if (previousDefaultKeys.length > 0) {
-			await db
-				.update(sourceConnection)
-				.set({ defaultWriteback: false })
-				.where(inArray(sourceConnection.key, previousDefaultKeys));
-		}
 		await db.insert(sourceConnection).values({
-			defaultWriteback: true,
 			externalScopeKey: connectionKey,
 			key: connectionKey,
 			provider: "zotero",
@@ -491,7 +478,13 @@ async function verify() {
 			"Staged file leaked into published metadata",
 		);
 
-		await publishNativeItemDraft(db, parentDraft.itemKey);
+		// The parent chooses the writeback source; the attachment copies it.
+		await publishNativeItemDraftWithContext(db, parentDraft.itemKey, {
+			sourceKeys: [connectionKey],
+			writebackConfig: {
+				sources: [{ key: connectionKey, writebackEnabled: true }],
+			},
+		});
 		const openParentDraft = await openNativeItemDraft(
 			db,
 			parentDraft.itemKey,
@@ -1199,12 +1192,6 @@ async function verify() {
 		await db
 			.delete(sourceConnection)
 			.where(eq(sourceConnection.key, connectionKey));
-		if (previousDefaultKeys.length > 0) {
-			await db
-				.update(sourceConnection)
-				.set({ defaultWriteback: true })
-				.where(inArray(sourceConnection.key, previousDefaultKeys));
-		}
 		await resource.dispose();
 	}
 }

@@ -13,8 +13,8 @@ A Zotero source is defined once in `LIBRARY_CONFIG_JSON`:
 - `groupId`: the Zotero group ID;
 - `apiKey`: the Zotero API key;
 - `enabled`: whether background import runs;
-- `writebackEnabled`: whether local edits may be sent to Zotero;
-- `defaultWriteback`: whether new native records use this Zotero group;
+- `writebackEnabled`: whether records may choose this group as a writeback
+  source when they are published;
 - `settings`: the strict request settings below.
 
 | Field                   |                  Default | Constraint             |

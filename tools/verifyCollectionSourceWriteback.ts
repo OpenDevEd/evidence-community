@@ -49,6 +49,8 @@ async function verify() {
 	const registry = new SourceWritebackAdapterRegistry([
 		{
 			provider: "zotero",
+			readRecord: async () => null,
+			readVersion: async () => null,
 			write: async (request) => {
 				calls.push(structuredClone(request));
 				version += 1;

@@ -106,6 +106,7 @@ export type SourceWritebackProcessResult = {
 	jobId?: number;
 	operation?: "upsert" | "delete";
 	status:
+		| "conflict"
 		| "dead-lettered"
 		| "deferred"
 		| "idle"
@@ -145,6 +146,28 @@ export class SourceWritebackCollectionParentUnavailableError extends Error {
 		);
 		this.name = "SourceWritebackCollectionParentUnavailableError";
 	}
+}
+
+/**
+ * Decides what to do after reading the source's current version for a link
+ * that was re-enabled. Same version as we last acknowledged, or no remote
+ * copy at all: send. Anything else: the source changed while updates were
+ * paused, so stop and let the admin choose.
+ */
+export function decideRemoteVersionCheck({
+	lastAcknowledgedRemoteVersion,
+	remoteVersion,
+}: {
+	lastAcknowledgedRemoteVersion: string | null;
+	remoteVersion: string | null;
+}):
+	| { conflictRemoteVersion: string; outcome: "conflict" }
+	| { outcome: "proceed" } {
+	if (remoteVersion === null) return { outcome: "proceed" };
+	if (remoteVersion === lastAcknowledgedRemoteVersion) {
+		return { outcome: "proceed" };
+	}
+	return { conflictRemoteVersion: remoteVersion, outcome: "conflict" };
 }
 
 function validateOptions(options: SourceWritebackConsumerOptions) {
@@ -422,6 +445,58 @@ async function markSuperseded(
 	if (!updated) throw new SourceWritebackLeaseLostError(job.id);
 }
 
+// Both link updates below only apply while the link is still enabled and
+// still waiting for this check. If the admin unticked the source or the check
+// was already answered meanwhile, they change nothing and return false so the
+// caller supersedes the job instead of sending or recording a stale result.
+async function recordRemoteConflict(
+	options: SourceWritebackConsumerOptions,
+	itemKey: string,
+	sourceConnectionKey: string,
+	checkRequestedAt: Date,
+	conflictRemoteVersion: string,
+) {
+	const updated = await options.database
+		.update(itemSourceLink)
+		.set({
+			conflictRemoteVersion,
+			remoteCheckRequestedAt: null,
+			remoteVersion: conflictRemoteVersion,
+			updatedAt: currentTime(options),
+		})
+		.where(
+			and(
+				eq(itemSourceLink.itemKey, itemKey),
+				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
+				eq(itemSourceLink.writebackEnabled, true),
+				eq(itemSourceLink.remoteCheckRequestedAt, checkRequestedAt),
+			),
+		)
+		.returning({ itemKey: itemSourceLink.itemKey });
+	return updated.length > 0;
+}
+
+async function clearRemoteCheck(
+	options: SourceWritebackConsumerOptions,
+	itemKey: string,
+	sourceConnectionKey: string,
+	checkRequestedAt: Date,
+) {
+	const updated = await options.database
+		.update(itemSourceLink)
+		.set({ remoteCheckRequestedAt: null, updatedAt: currentTime(options) })
+		.where(
+			and(
+				eq(itemSourceLink.itemKey, itemKey),
+				eq(itemSourceLink.sourceConnectionKey, sourceConnectionKey),
+				eq(itemSourceLink.writebackEnabled, true),
+				eq(itemSourceLink.remoteCheckRequestedAt, checkRequestedAt),
+			),
+		)
+		.returning({ itemKey: itemSourceLink.itemKey });
+	return updated.length > 0;
+}
+
 async function loadItemRequest(
 	options: SourceWritebackConsumerOptions,
 	job: Extract<ClaimedJob, { itemKey: string }>,
@@ -458,7 +533,9 @@ async function loadItemRequest(
 			!state.link.writebackEnabled ||
 			state.connection.status === "removed" ||
 			(job.operation === "upsert" && state.item.deleted === 1) ||
-			(job.operation === "delete" && state.item.deleted === 0)
+			(job.operation === "delete" && state.item.deleted === 0) ||
+			// Nothing is sent while the admin still has to choose which side wins.
+			(job.operation === "upsert" && state.link.conflictRemoteVersion !== null)
 		) {
 			return { disposition: "supersede" as const, request: null, state };
 		}
@@ -1045,16 +1122,37 @@ async function acknowledgeJob(
 					},
 				});
 		}
+		// Fields marked dirty for this same revision while the job was in
+		// flight (for example a whole-record send asked while the source was
+		// being turned back on) still need to go. Re-arm this job with them
+		// instead of leaving them behind with no runnable job.
+		const leftover =
+			job.operation === "upsert" &&
+			currentItem.revision === job.canonicalRevision &&
+			currentLink.writebackEnabled &&
+			dirtyFields.length > 0;
 		const [acknowledged] = await transaction
 			.update(sourceWritebackJob)
-			.set({
-				completedRemoteVersion: result.remoteVersion,
-				completedSourceRecordKey: result.sourceRecordKey,
-				lastError: null,
-				leaseExpiresAt: null,
-				leaseOwner: null,
-				processedAt: completedAt,
-			})
+			.set(
+				leftover
+					? {
+							attempts: 0,
+							dirtyFields,
+							lastError: null,
+							leaseExpiresAt: null,
+							leaseOwner: null,
+							nextAttemptAt: completedAt,
+							processedAt: null,
+						}
+					: {
+							completedRemoteVersion: result.remoteVersion,
+							completedSourceRecordKey: result.sourceRecordKey,
+							lastError: null,
+							leaseExpiresAt: null,
+							leaseOwner: null,
+							processedAt: completedAt,
+						},
+			)
 			.where(
 				and(
 					eq(sourceWritebackJob.id, job.id),
@@ -1164,17 +1262,75 @@ export async function processNextSourceWritebackJob(
 			},
 		);
 		let writeResult: SourceWritebackResult;
+		let checkOutcome: "conflict" | "proceed" | "stale" = "proceed";
 		try {
-			writeResult = await adapter.write(loaded.request, {
-				credentialResolver: options.credentialResolver,
-				signal: combinedSignal,
-			});
+			// A source turned back on is checked for changes made while it was
+			// paused, under the same lease and heartbeat as the write itself.
+			const checkRequestedAt =
+				loaded.request.entity === "item" &&
+				loaded.request.operation === "upsert" &&
+				"remoteCheckRequestedAt" in loaded.state.link
+					? loaded.state.link.remoteCheckRequestedAt
+					: null;
+			if (checkRequestedAt && loaded.request.entity === "item") {
+				const remoteVersion = await adapter.readVersion(
+					{
+						entity: "item",
+						sourceConnection: loaded.state.connection,
+						sourceRecordKey: loaded.request.sourceRecordKey,
+					},
+					{
+						credentialResolver: options.credentialResolver,
+						signal: combinedSignal,
+					},
+				);
+				const decision = decideRemoteVersionCheck({
+					lastAcknowledgedRemoteVersion:
+						loaded.state.link.lastAcknowledgedRemoteVersion,
+					remoteVersion,
+				});
+				const applied =
+					decision.outcome === "conflict"
+						? await recordRemoteConflict(
+								options,
+								loaded.request.itemKey,
+								job.sourceConnectionKey,
+								checkRequestedAt,
+								decision.conflictRemoteVersion,
+							)
+						: await clearRemoteCheck(
+								options,
+								loaded.request.itemKey,
+								job.sourceConnectionKey,
+								checkRequestedAt,
+							);
+				checkOutcome = !applied
+					? "stale"
+					: decision.outcome === "conflict"
+						? "conflict"
+						: "proceed";
+			}
+			if (checkOutcome !== "proceed") {
+				writeResult = { remoteVersion: null, sourceRecordKey: "" };
+			} else {
+				writeResult = await adapter.write(loaded.request, {
+					credentialResolver: options.credentialResolver,
+					signal: combinedSignal,
+				});
+			}
 		} finally {
 			heartbeatAbort.abort();
 			await heartbeat;
 		}
 		if (heartbeatFailure) throw heartbeatFailure;
 		throwIfAborted(options.signal);
+		if (checkOutcome !== "proceed") {
+			await markSuperseded(options, job, validated.workerId);
+			return {
+				...resultBase,
+				status: checkOutcome === "conflict" ? "conflict" : "superseded",
+			};
+		}
 		await acknowledgeJob(options, job, writeResult, validated.workerId);
 		return { ...resultBase, status: "processed" };
 	} catch (error) {

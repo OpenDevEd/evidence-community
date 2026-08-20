@@ -45,7 +45,6 @@ describe("Zotero source configuration", () => {
 				apiKey: "secret",
 				enabled: true,
 				writebackEnabled: true,
-				defaultWriteback: true,
 				settings: zoteroConnectionConfigSchema.parse({}),
 			},
 		]);

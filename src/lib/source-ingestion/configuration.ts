@@ -22,7 +22,6 @@ export function configuredSourceConnectionValues(source: ConfiguredSource) {
 		provider: source.provider,
 		scopeKind: "group" as const,
 		externalScopeKey: source.groupId,
-		defaultWriteback: source.defaultWriteback,
 		config: source.settings,
 		status: source.enabled ? ("active" as const) : ("paused" as const),
 	};
@@ -70,18 +69,12 @@ async function reconcileInTransaction(
 		}
 	}
 
-	await transaction
-		.update(sourceConnection)
-		.set({ defaultWriteback: false })
-		.where(ne(sourceConnection.provider, "native"));
-
 	const configuredKeys = new Set(sources.map((source) => source.key));
 	for (const row of current) {
 		if (!configuredKeys.has(row.key)) {
 			await transaction
 				.update(sourceConnection)
 				.set({
-					defaultWriteback: false,
 					status: "removed",
 					updatedAt: new Date(),
 				})
@@ -97,7 +90,6 @@ async function reconcileInTransaction(
 				.update(sourceConnection)
 				.set({
 					config: values.config,
-					defaultWriteback: values.defaultWriteback,
 					status: values.status,
 					updatedAt: new Date(),
 				})

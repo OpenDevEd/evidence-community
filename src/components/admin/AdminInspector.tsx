@@ -30,6 +30,7 @@ import {
 	FileText,
 	Folder,
 	History,
+	Link2,
 	Lock,
 	Paperclip,
 	Pencil,
@@ -73,8 +74,9 @@ import {
 	AdminCollectionPicker,
 } from "./AdminCollectionPicker";
 import { FileStateChip, RecordStateChip } from "./AdminStatus";
-import { AdminSourceWritebackStatus } from "./AdminSourceWritebackStatus";
-import { useAdminSourceWriteback } from "./useAdminSourceWriteback";
+import type { AdminSearchIndexMutationResult } from "@/lib/admin/search-index-contract";
+
+import { AdminSourcesWritebackStatus } from "./AdminSourceWritebackStatus";
 import {
 	computeAdminDraftDiff,
 	EMPTY_ADMIN_DRAFT_DIFF,
@@ -1466,9 +1468,11 @@ export function AdminInspector({
 	onDiscardFile,
 	onDuplicate,
 	onOpenDraft,
+	onManageSources,
 	onPublish,
 	onPublishFile,
 	onPublicationChanged,
+	onWritebackResolved,
 	onReloadDraft,
 	onRetry,
 	onRestore,
@@ -1496,9 +1500,11 @@ export function AdminInspector({
 	onDiscardFile: (key: string) => void;
 	onDuplicate: () => void;
 	onOpenDraft: () => void;
+	onManageSources: () => void;
 	onPublish: () => void;
 	onPublishFile: (key: string, uploadRevision: number) => void;
 	onPublicationChanged: () => void;
+	onWritebackResolved: (result: AdminSearchIndexMutationResult) => void;
 	onReloadDraft: () => void;
 	onRetry: () => void;
 	onRestore: () => void;
@@ -1534,11 +1540,6 @@ export function AdminInspector({
 	);
 	const { entries: publishedCollectionEntries } = useResolvedAdminCollections(
 		diff.collections ?? [],
-	);
-	const sourceWriteback = useAdminSourceWriteback(
-		detail?.key ?? null,
-		detail?.writeback?.sourceKey ?? null,
-		detail?.revision ?? null,
 	);
 	const publication = useAdminPublication(
 		detail && !detail.parentItem && detail.published ? detail.key : null,
@@ -1693,7 +1694,11 @@ export function AdminInspector({
 								<Tooltip
 									content={
 										writebackUnavailableMessage[
-											detail.writeback?.reason ?? "not-linked"
+											detail.writeback.available.find(
+												(target) =>
+													target.sourceKey ===
+													detail.writeback.originSourceKey,
+											)?.reason ?? "not-linked"
 										]
 									}
 								>
@@ -1709,18 +1714,23 @@ export function AdminInspector({
 					<div className="mt-2 flex flex-wrap items-center gap-1.5">
 						<RecordStateChip state={detail.state} />
 						<FileStateChip state={detail.fileState} />
-						{detail.writeback?.sourceKey ? (
-							<AdminSourceWritebackStatus
-								error={sourceWriteback.error}
-								loading={sourceWriteback.loading}
-								onRefresh={() => void sourceWriteback.refresh()}
-								onRetry={() => void sourceWriteback.retry()}
-								retrying={sourceWriteback.retrying}
-								sourceLabel={
-									detail.writeback.sourceLabel ??
-									detail.writeback.sourceKey
-								}
-								status={sourceWriteback.status}
+						{detail.writeback.selected.length > 0 ? (
+							<AdminSourcesWritebackStatus
+								canLoadRemote={!detail.parentItem}
+								itemKey={detail.key}
+								key={detail.key}
+								onResolved={onWritebackResolved}
+								revision={detail.revision}
+								sources={detail.writeback.selected.map((sourceKey) => {
+									const target = detail.writeback.available.find(
+										(candidate) => candidate.sourceKey === sourceKey,
+									);
+									return {
+										provider: target?.provider ?? "zotero",
+										sourceKey,
+										sourceLabel: target?.sourceLabel ?? sourceKey,
+									};
+								})}
 							/>
 						) : null}
 						{!detail.parentItem ? (
@@ -1743,6 +1753,25 @@ export function AdminInspector({
 						/>
 					</div>
 					<div className="mt-4 flex flex-wrap items-center gap-2">
+						{!detail.parentItem &&
+						detail.writeback.available.length > 0 ? (
+							<Tooltip content="Choose which sources receive this record's updates">
+								<span>
+									<Button
+										aria-label="Sources"
+										className="h-9 rounded-xl px-2"
+										data-admin-writeback-sources-button
+										isDisabled={busy}
+										isIconOnly
+										onPress={onManageSources}
+										size="xs"
+										variant="transparent"
+									>
+										<Link2 aria-hidden size={15} />
+									</Button>
+								</span>
+							</Tooltip>
+						) : null}
 						{!detail.editable ? (
 							<Button
 								className="h-9 rounded-xl px-3 font-semibold"

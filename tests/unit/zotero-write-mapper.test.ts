@@ -1,6 +1,9 @@
 import { getZoteroItemTypes } from "@opendeved/evidence-library-core/zotero-schema";
 import { describe, expect, it } from "vitest";
 
+import { editableItemDatabaseFields } from "@/lib/admin/item-draft-patch";
+import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
+
 import { itemType } from "@/db/schema/enums/itemType";
 import {
 	createZoteroItemPatch,
@@ -13,7 +16,7 @@ describe("Zotero writeback mapping", () => {
 		expect(itemType.enumValues).toHaveLength(getZoteroItemTypes().size);
 		for (const canonicalItemType of itemType.enumValues) {
 			const childFields =
-				canonicalItemType === "Attachment"
+				canonicalItemType === "Attachment" || canonicalItemType === "Note"
 					? { parentItem: "PARENT23" }
 					: canonicalItemType === "Annotation"
 						? {
@@ -39,9 +42,15 @@ describe("Zotero writeback mapping", () => {
 		}
 	});
 
-	it("allows standalone attachments but rejects incomplete annotations", () => {
+	it("requires a parent for attachments and rejects incomplete annotations", () => {
 		expect(() =>
 			createZoteroItemPayload({ itemType: "Attachment" }, "ATTACH23"),
+		).toThrow(ZoteroWritebackMappingError);
+		expect(() =>
+			createZoteroItemPayload(
+				{ itemType: "Attachment", parentItem: "PARENT23" },
+				"ATTACH23",
+			),
 		).not.toThrow();
 		expect(() =>
 			createZoteroItemPayload(
@@ -191,8 +200,11 @@ describe("Zotero writeback mapping", () => {
 			title: "Current title",
 		});
 		expect(
-			createZoteroItemPatch({ itemType: "Note" }, ["parentItem"]),
-		).toEqual({ parentItem: false });
+			createZoteroItemPatch(
+				{ itemType: "Note", parentItem: "PARENT23" },
+				["parentItem"],
+			),
+		).toEqual({ parentItem: "PARENT23" });
 	});
 
 	it("creates native attachments as linked PDF URLs", () => {
@@ -252,9 +264,32 @@ describe("Zotero writeback mapping", () => {
 				{ previousItemType: "report" },
 			),
 		).toThrow(ZoteroWritebackMappingError);
+		expect(createZoteroItemPatch({ itemType: "Book" }, ["type"])).toEqual(
+			{},
+		);
 		expect(() =>
-			createZoteroItemPatch({ itemType: "Book" }, ["type"]),
+			createZoteroItemPatch({ itemType: "Book", type: "Present" }, ["type"]),
 		).toThrow(ZoteroWritebackMappingError);
+	});
+
+	it("sends a restored record whole without naming fields of other item types", () => {
+		// A tombstone restore marks every editable field dirty, itemType
+		// included, while the type itself does not change.
+		const everyField = [
+			...editableItemDatabaseFields.map(databaseItemFieldToPayloadField),
+			"tags",
+		];
+		const patch = createZoteroItemPatch(
+			{ itemType: "Book", title: "Restored" },
+			everyField,
+			{ previousItemType: "book" },
+		);
+		expect(patch.itemType).toBe("book");
+		expect(patch.title).toBe("Restored");
+		expect(
+			Object.keys(patch).filter((key) => key.startsWith("annotation")),
+		).toEqual([]);
+		expect(patch).not.toHaveProperty("reportType");
 	});
 
 	it("rejects invalid canonical fields instead of silently losing data", () => {

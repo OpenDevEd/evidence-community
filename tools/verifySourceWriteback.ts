@@ -17,21 +17,30 @@ import { itemToCollection } from "../src/db/schema/tables/itemToCollection";
 import { itemToTag } from "../src/db/schema/tables/itemToTag";
 import {
 	createNativeItemDraft,
+	type ItemPublishOptions,
 	openItemDraft,
 	publishItemDraft,
+	publishItemDraftWithContext,
 	saveItemDraft,
 	type ItemWritebackPolicyOptions,
 	unpublishNativeItem,
+	unpublishNativeItemWithOutcome,
 } from "../src/lib/admin/native-item-service";
 import {
 	getAdminSourceWritebackStatus,
+	resolveAdminSourceWritebackConflict,
 	retryAdminSourceWriteback,
+	setAdminItemWritebackSources,
 } from "../src/lib/admin/source-writeback-service";
 import type { JsonValue } from "../src/lib/source-ingestion/batch-schema";
-import { sourcePayloadHash } from "../src/lib/source-ingestion/fingerprint";
+import {
+	sourceItemFingerprint,
+	sourcePayloadHash,
+} from "../src/lib/source-ingestion/fingerprint";
 import { writeSourceIngestionBatch } from "../src/lib/source-ingestion/transactional-writer";
 import {
 	SourceWritebackAdapterRegistry,
+	type SourceWritebackRemoteRecord,
 	type SourceWritebackRequest,
 } from "../src/lib/source-writeback/adapter";
 import {
@@ -57,8 +66,8 @@ async function verify() {
 	const db = resource.database;
 	const marker = `${process.pid}-${Date.now()}`;
 	const connectionKey = `zotero-writeback-${marker}`.slice(0, 64);
+	const secondConnectionKey = `zotero-second-${marker}`.slice(0, 64);
 	const createdItemKeys: string[] = [];
-	let previousDefaultKeys: string[] = [];
 	let behavior: "block" | "fail" | "success" = "success";
 	let releaseBlocked = () => {};
 	let markBlocked = () => {};
@@ -71,10 +80,24 @@ async function verify() {
 			sources: [{ key: connectionKey, writebackEnabled: true }],
 		},
 	} satisfies ItemWritebackPolicyOptions;
+	// Native records choose their writeback sources when they publish.
+	const publishToSource = {
+		...writebackPolicyOptions,
+		sourceKeys: [connectionKey],
+	} satisfies ItemPublishOptions;
 
+	// The fake source reports one shared version counter; a test can override
+	// it to simulate a remote edit while a link was paused.
+	const fakeRemote: {
+		record: SourceWritebackRemoteRecord | null;
+		version: (() => string | null) | null;
+	} = { record: null, version: null };
 	const registry = new SourceWritebackAdapterRegistry([
 		{
 			provider: "zotero",
+			readRecord: async () => fakeRemote.record,
+			readVersion: async () =>
+				fakeRemote.version ? fakeRemote.version() : String(version),
 			write: async (request, { signal }) => {
 				calls.push(structuredClone(request));
 				if (behavior === "fail")
@@ -122,22 +145,15 @@ async function verify() {
 	};
 
 	try {
-		previousDefaultKeys = (
-			await db
-				.select({ key: sourceConnection.key })
-				.from(sourceConnection)
-				.where(eq(sourceConnection.defaultWriteback, true))
-		).map(({ key }) => key);
-		if (previousDefaultKeys.length > 0) {
-			await db
-				.update(sourceConnection)
-				.set({ defaultWriteback: false })
-				.where(inArray(sourceConnection.key, previousDefaultKeys));
-		}
 		await db.insert(sourceConnection).values({
-			defaultWriteback: true,
 			externalScopeKey: `writeback-${marker}`,
 			key: connectionKey,
+			provider: "zotero",
+			scopeKind: "group",
+		});
+		await db.insert(sourceConnection).values({
+			externalScopeKey: `second-${marker}`,
+			key: secondConnectionKey,
 			provider: "zotero",
 			scopeKind: "group",
 		});
@@ -169,7 +185,7 @@ async function verify() {
 		assert(
 			preservedDisabledLink?.writebackEnabled === false &&
 				disabledJobs.length === 0,
-			"Publishing silently re-enabled a deliberately disabled source link",
+			"Publishing without choosing sources re-enabled a deliberately disabled source link",
 		);
 
 		const collisionOwner = await createNativeItemDraft(db, {
@@ -189,7 +205,11 @@ async function verify() {
 		});
 		let collisionRejected = false;
 		try {
-			await publishItemDraft(db, collisionDraft.itemKey);
+			await publishItemDraftWithContext(
+				db,
+				collisionDraft.itemKey,
+				publishToSource,
+			);
 		} catch (error) {
 			collisionRejected =
 				error instanceof SourceWritebackTargetKeyCollisionError;
@@ -206,7 +226,13 @@ async function verify() {
 			title: "First title",
 		});
 		createdItemKeys.push(nativeDraft.itemKey);
-		const firstPublished = await publishItemDraft(db, nativeDraft.itemKey);
+		const firstPublished = (
+			await publishItemDraftWithContext(
+				db,
+				nativeDraft.itemKey,
+				publishToSource,
+			)
+		).item;
 		const [[firstLink], [firstJob]] = await Promise.all([
 			db
 				.select()
@@ -224,7 +250,7 @@ async function verify() {
 				firstLink.writebackEnabled &&
 				firstJob?.operation === "upsert" &&
 				firstJob.canonicalRevision === 1,
-			"A native first publish did not attach to the default writeback target and queue creation",
+			"A native first publish did not link the chosen writeback source and queue creation",
 		);
 
 		const firstResult =
@@ -257,7 +283,11 @@ async function verify() {
 			parentItem: parentDraft.itemKey,
 		});
 		createdItemKeys.push(parentDraft.itemKey, childDraft.itemKey);
-		await publishItemDraft(db, parentDraft.itemKey);
+		await publishItemDraftWithContext(
+			db,
+			parentDraft.itemKey,
+			publishToSource,
+		);
 		await publishItemDraft(db, childDraft.itemKey);
 		const [parentJob] = await db
 			.select({ id: sourceWritebackJob.id })
@@ -321,7 +351,11 @@ async function verify() {
 			failedParentDraft.itemKey,
 			blockedChildDraft.itemKey,
 		);
-		await publishItemDraft(db, failedParentDraft.itemKey);
+		await publishItemDraftWithContext(
+			db,
+			failedParentDraft.itemKey,
+			publishToSource,
+		);
 		await publishItemDraft(db, blockedChildDraft.itemKey);
 		const [failedParentJob] = await db
 			.select({ id: sourceWritebackJob.id })
@@ -476,6 +510,7 @@ async function verify() {
 		const failedStatus = await getAdminSourceWritebackStatus(
 			db,
 			nativeDraft.itemKey,
+			connectionKey,
 			writebackPolicyOptions.writebackConfig,
 		);
 		assert(
@@ -487,6 +522,7 @@ async function verify() {
 		const requeuedStatus = await retryAdminSourceWriteback(
 			db,
 			nativeDraft.itemKey,
+			connectionKey,
 			writebackPolicyOptions.writebackConfig,
 		);
 		assert(
@@ -499,6 +535,7 @@ async function verify() {
 		const syncedStatus = await getAdminSourceWritebackStatus(
 			db,
 			nativeDraft.itemKey,
+			connectionKey,
 			writebackPolicyOptions.writebackConfig,
 		);
 		assert(
@@ -512,7 +549,11 @@ async function verify() {
 			title: "Never-created remote item",
 		});
 		createdItemKeys.push(staleDraft.itemKey);
-		await publishItemDraft(db, staleDraft.itemKey);
+		await publishItemDraftWithContext(
+			db,
+			staleDraft.itemKey,
+			publishToSource,
+		);
 		await unpublishNativeItem(db, staleDraft.itemKey);
 		const callsBeforeSupersession = calls.length;
 		const staleUpsert =
@@ -645,7 +686,11 @@ async function verify() {
 			title: "Created while writeback is paused",
 		});
 		createdItemKeys.push(pausedNativeDraft.itemKey);
-		await publishItemDraft(db, pausedNativeDraft.itemKey);
+		await publishItemDraftWithContext(
+			db,
+			pausedNativeDraft.itemKey,
+			publishToSource,
+		);
 		const [pausedNativeLink] = await db
 			.select()
 			.from(itemSourceLink)
@@ -653,7 +698,7 @@ async function verify() {
 		assert(
 			pausedNativeLink?.sourceConnectionKey === connectionKey &&
 				pausedNativeLink.writebackEnabled,
-			"Publishing while the default target was paused stranded a native item without a writeback link",
+			"Publishing while the chosen source was paused stranded a native item without a writeback link",
 		);
 		const deferred = await processNextSourceWritebackJob(consumerOptions);
 		const [deferredJob] = await db
@@ -757,6 +802,326 @@ async function verify() {
 			"Duplicate enqueue calls created more than one revision job",
 		);
 
+		// Turning a source back on checks it first. Unchanged: updates resume.
+		// Changed while paused: the link stops in "conflict" until the admin
+		// chooses to send this record or load the source's copy.
+		const conflictDraft = await createNativeItemDraft(db, {
+			itemType: "report",
+			title: "Paused, then checked again",
+		});
+		createdItemKeys.push(conflictDraft.itemKey);
+		await publishItemDraftWithContext(
+			db,
+			conflictDraft.itemKey,
+			publishToSource,
+		);
+		behavior = "success";
+		const firstConflictSend =
+			await processNextSourceWritebackJob(consumerOptions);
+		assert(
+			firstConflictSend.status === "processed",
+			"The record chosen for the conflict scenario did not reach the source",
+		);
+		const conflictConfig = writebackPolicyOptions.writebackConfig;
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[],
+			conflictConfig,
+		);
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[connectionKey],
+			conflictConfig,
+		);
+		const [recheckLink] = await db
+			.select()
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, conflictDraft.itemKey));
+		assert(
+			recheckLink?.writebackEnabled &&
+				recheckLink.remoteCheckRequestedAt !== null,
+			"Turning a linked source back on did not ask the worker to check it first",
+		);
+		const resumed = await processNextSourceWritebackJob(consumerOptions);
+		const [resumedLink] = await db
+			.select()
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, conflictDraft.itemKey));
+		assert(
+			resumed.status === "processed" &&
+				resumedLink?.remoteCheckRequestedAt === null &&
+				resumedLink.conflictRemoteVersion === null,
+			`An unchanged source did not simply resume after the check: ${JSON.stringify({ resumed, resumedLink, version })}`,
+		);
+
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[],
+			conflictConfig,
+		);
+		fakeRemote.version = () => "999";
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[connectionKey],
+			conflictConfig,
+		);
+		const callsBeforeConflict = calls.length;
+		const checked = await processNextSourceWritebackJob(consumerOptions);
+		const conflictStatus = await getAdminSourceWritebackStatus(
+			db,
+			conflictDraft.itemKey,
+			connectionKey,
+			conflictConfig,
+		);
+		assert(
+			checked.status === "conflict" &&
+				conflictStatus.state === "conflict" &&
+				calls.length === callsBeforeConflict,
+			"A source that changed while paused did not stop in the conflict state",
+		);
+		const conflictEdit = await openItemDraft(db, conflictDraft.itemKey);
+		await saveItemDraft(db, {
+			expectedDraftRevision: conflictEdit.draftRevision,
+			expectedPayload: conflictEdit.payload,
+			itemKey: conflictDraft.itemKey,
+			payload: { ...conflictEdit.payload, title: "Edited during conflict" },
+		});
+		await publishItemDraft(db, conflictDraft.itemKey);
+		const blockedSend = await processNextSourceWritebackJob(consumerOptions);
+		assert(
+			blockedSend.status === "superseded" &&
+				calls.length === callsBeforeConflict,
+			"A publish during an unresolved conflict was sent to the source",
+		);
+
+		const sendLocal = await resolveAdminSourceWritebackConflict(
+			db,
+			conflictDraft.itemKey,
+			connectionKey,
+			"send-local",
+			conflictConfig,
+			{ credentialResolver: async () => "fake", registry },
+		);
+		fakeRemote.version = null;
+		const sentLocal = await processNextSourceWritebackJob(consumerOptions);
+		const sentStatus = await getAdminSourceWritebackStatus(
+			db,
+			conflictDraft.itemKey,
+			connectionKey,
+			conflictConfig,
+		);
+		assert(
+			sendLocal.status.state === "queued" &&
+				sentLocal.status === "processed" &&
+				sentStatus.state === "synced" &&
+				calls.at(-1)?.payload.title === "Edited during conflict",
+			"Choosing to send this record did not overwrite the source copy",
+		);
+
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[],
+			conflictConfig,
+		);
+		fakeRemote.version = () => "1000";
+		await setAdminItemWritebackSources(
+			db,
+			conflictDraft.itemKey,
+			[connectionKey],
+			conflictConfig,
+		);
+		const secondCheck = await processNextSourceWritebackJob(consumerOptions);
+		assert(
+			secondCheck.status === "conflict",
+			"The second remote change was not detected as a conflict",
+		);
+		fakeRemote.record = {
+			mappingProfileVersion: "fake-writeback-v1",
+			record: {
+				aliases: [],
+				collections: [],
+				file: null,
+				metadata: {
+					abstractNote: "Written at the source",
+					itemType: "Report",
+					title: "Source title wins",
+				},
+				operation: "upsert",
+				parentSourceRecordKey: null,
+				processingIssue: null,
+				raw: { key: conflictDraft.itemKey, version: 1000 },
+				remoteVersion: "1000",
+				sourceDates: null,
+				sourceRecordKey: conflictDraft.itemKey,
+			},
+		};
+		// The inbound sync may already have stored this remote version in the
+		// snapshot while the record was masked; loading the source's copy must
+		// still apply it.
+		await db
+			.insert(sourceSnapshot)
+			.values({
+				fetchedAt: new Date(),
+				itemKey: conflictDraft.itemKey,
+				mappingProfileVersion: "fake-writeback-v1",
+				payload: fakeRemote.record.record as Record<string, unknown>,
+				payloadHash: sourceItemFingerprint(fakeRemote.record.record as never),
+				remoteVersion: "1000",
+				sourceConnectionKey: connectionKey,
+			})
+			.onConflictDoUpdate({
+				target: [sourceSnapshot.itemKey, sourceSnapshot.sourceConnectionKey],
+				set: {
+					payload: fakeRemote.record.record as Record<string, unknown>,
+					payloadHash: sourceItemFingerprint(fakeRemote.record.record as never),
+					remoteVersion: "1000",
+				},
+			});
+		const loadRemote = await resolveAdminSourceWritebackConflict(
+			db,
+			conflictDraft.itemKey,
+			connectionKey,
+			"load-remote",
+			conflictConfig,
+			{ credentialResolver: async () => "fake", registry },
+		);
+		fakeRemote.record = null;
+		fakeRemote.version = null;
+		const [loadedItem] = await db
+			.select({ title: item.title })
+			.from(item)
+			.where(eq(item.key, conflictDraft.itemKey));
+		const [loadedLink] = await db
+			.select()
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, conflictDraft.itemKey));
+		assert(
+			loadRemote.status.state === "synced" &&
+				loadedItem?.title === "Source title wins" &&
+				loadedLink?.conflictRemoteVersion === null &&
+				loadedLink.lastAcknowledgedRemoteVersion === "1000",
+			"Choosing to load the source's version did not replace this record",
+		);
+
+		// A record may write to several sources. Unchecking one supersedes its
+		// pending job and leaves its remote copy; unpublish deletes only at the
+		// sources the admin ticks.
+		const twoSourceConfig = {
+			sources: [
+				{ key: connectionKey, writebackEnabled: true },
+				{ key: secondConnectionKey, writebackEnabled: true },
+			],
+		};
+		const twoSourceDraft = await createNativeItemDraft(db, {
+			itemType: "report",
+			title: "Sent to two sources",
+		});
+		createdItemKeys.push(twoSourceDraft.itemKey);
+		await publishItemDraftWithContext(db, twoSourceDraft.itemKey, {
+			sourceKeys: [connectionKey, secondConnectionKey],
+			writebackConfig: twoSourceConfig,
+		});
+		const twoLinks = await db
+			.select({
+				sourceConnectionKey: itemSourceLink.sourceConnectionKey,
+				writebackEnabled: itemSourceLink.writebackEnabled,
+			})
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, twoSourceDraft.itemKey));
+		const twoJobs = await db
+			.select({ sourceConnectionKey: sourceWritebackJob.sourceConnectionKey })
+			.from(sourceWritebackJob)
+			.where(
+				and(
+					eq(sourceWritebackJob.itemKey, twoSourceDraft.itemKey),
+					isNull(sourceWritebackJob.processedAt),
+				),
+			);
+		assert(
+			twoLinks.length === 2 &&
+				twoLinks.every((link) => link.writebackEnabled) &&
+				twoJobs.length === 2,
+			"Publishing to two sources did not create two enabled links and two jobs",
+		);
+		const callsBeforeUncheck = calls.length;
+		await setAdminItemWritebackSources(
+			db,
+			twoSourceDraft.itemKey,
+			[connectionKey],
+			twoSourceConfig,
+		);
+		const firstOfTwo = await processNextSourceWritebackJob(consumerOptions);
+		const secondOfTwo = await processNextSourceWritebackJob(consumerOptions);
+		const statuses = [firstOfTwo.status, secondOfTwo.status].sort();
+		assert(
+			statuses.join(",") === "processed,superseded" &&
+				calls.length === callsBeforeUncheck + 1 &&
+				calls.at(-1)?.sourceConnection.key === connectionKey,
+			"Unchecking one of two sources did not supersede only that source's job",
+		);
+		const [keptSecondLink] = await db
+			.select({ writebackEnabled: itemSourceLink.writebackEnabled })
+			.from(itemSourceLink)
+			.where(
+				and(
+					eq(itemSourceLink.itemKey, twoSourceDraft.itemKey),
+					eq(itemSourceLink.sourceConnectionKey, secondConnectionKey),
+				),
+			);
+		assert(
+			keptSecondLink?.writebackEnabled === false,
+			"The unchecked source lost its link instead of being disabled",
+		);
+		await setAdminItemWritebackSources(
+			db,
+			twoSourceDraft.itemKey,
+			[connectionKey, secondConnectionKey],
+			twoSourceConfig,
+		);
+		const resentSecond = await processNextSourceWritebackJob(consumerOptions);
+		assert(
+			resentSecond.status === "processed" &&
+				calls.at(-1)?.sourceConnection.key === secondConnectionKey,
+			"Re-checking the second source did not send the record there",
+		);
+		await unpublishNativeItemWithOutcome(db, twoSourceDraft.itemKey, {
+			removeFromSourceKeys: [secondConnectionKey],
+		});
+		const deleteJobs = await db
+			.select({
+				operation: sourceWritebackJob.operation,
+				sourceConnectionKey: sourceWritebackJob.sourceConnectionKey,
+			})
+			.from(sourceWritebackJob)
+			.where(
+				and(
+					eq(sourceWritebackJob.itemKey, twoSourceDraft.itemKey),
+					eq(sourceWritebackJob.operation, "delete"),
+				),
+			);
+		assert(
+			deleteJobs.length === 1 &&
+				deleteJobs[0]?.sourceConnectionKey === secondConnectionKey,
+			"Unpublishing did not delete only at the ticked source",
+		);
+		const afterUnpublishLinks = await db
+			.select({
+				sourceConnectionKey: itemSourceLink.sourceConnectionKey,
+				writebackEnabled: itemSourceLink.writebackEnabled,
+			})
+			.from(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, twoSourceDraft.itemKey));
+		assert(
+			afterUnpublishLinks.length === 2 &&
+				afterUnpublishLinks.every((link) => link.writebackEnabled),
+			"Unpublishing changed the record's source selection",
+		);
+
 		console.log(
 			JSON.stringify(
 				{
@@ -798,18 +1163,10 @@ async function verify() {
 				.where(inArray(itemIdentity.key, createdItemKeys));
 		}
 		await db
-			.update(sourceConnection)
-			.set({ defaultWriteback: false })
-			.where(eq(sourceConnection.key, connectionKey));
-		await db
 			.delete(sourceConnection)
-			.where(eq(sourceConnection.key, connectionKey));
-		if (previousDefaultKeys.length > 0) {
-			await db
-				.update(sourceConnection)
-				.set({ defaultWriteback: true })
-				.where(inArray(sourceConnection.key, previousDefaultKeys));
-		}
+			.where(
+				inArray(sourceConnection.key, [connectionKey, secondConnectionKey]),
+			);
 		await resource.dispose();
 	}
 }

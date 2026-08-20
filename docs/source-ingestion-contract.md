@@ -37,11 +37,11 @@ Library databases and deployments are not migrated or modified.
   and import history remain independent.
 - Zotero API keys stay in the server-only manifest. They are not copied into
   the source row or public configuration.
-- At most one non-removed remote connection is marked `defaultWriteback`. The
-  target may be paused without losing queued work or stranding new items. A
-  native item's first publication links it to that target with the canonical
-  eight-character key as its pending provider key. With no default target,
-  native publication remains local-only.
+- There is no default writeback source. Each record chooses the sources it
+  writes to when it is published, and can change them later. A record may
+  write to any number of sources. A new link uses the record's canonical
+  eight-character key as its pending provider key. A paused source keeps its
+  queued work. A record with no selected source stays local-only.
 - Zotero uses Web API v3. Its durable cursor records the last complete library
   version and, during large imports, the target version plus the source
   snapshot and next deterministic manifest offset. It also retains soft-trash
@@ -95,10 +95,12 @@ Library databases and deployments are not migrated or modified.
 - A writeback-enabled link also receives one durable `sourceWritebackJob` for
   the new canonical revision in the publication transaction. The stable
   source/item/revision/operation idempotency key makes duplicate enqueue calls
-  harmless. Imported items use their existing remote key and version; native
-  items use the configured default connection.
+  harmless. Imported items use their existing remote key and version and
+  start with their origin source selected; native items start with none.
+  Attachments and notes always copy their parent's selection.
 - Unpublishing retains the canonical row as a tombstone and emits a delete
-  event plus a remote delete job when the native item has a writeback target.
+  event plus one remote delete job for each selected source the admin ticks
+  in the unpublish dialog. Unticked sources keep their copy and stay selected.
   Repeated unpublish requests are idempotent. Canonical identities are not
   recycled after publication.
 - Opening a draft from a tombstoned item is the explicit restore path;

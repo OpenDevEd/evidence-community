@@ -338,8 +338,8 @@ function batchLeaseStealingProvider(
 
 async function verify(database: Database, client: Client) {
 	await client.query(
-		`INSERT INTO "sourceConnection" ("key", "provider", "scopeKind", "externalScopeKey", "defaultWriteback")
-		 VALUES ('zotero-activation', 'zotero', 'group', 'activation-test', true)`,
+		`INSERT INTO "sourceConnection" ("key", "provider", "scopeKind", "externalScopeKey")
+		 VALUES ('zotero-activation', 'zotero', 'group', 'activation-test')`,
 	);
 	await seedItem(client, { key: "CRACTAAB" });
 	const first = await activateCrossrefPublication(

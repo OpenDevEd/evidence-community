@@ -43,7 +43,6 @@ async function verify() {
 		apiKey: "source-configuration-test-key",
 		enabled: true,
 		writebackEnabled: true,
-		defaultWriteback: false,
 		settings,
 		...overrides,
 	});
@@ -53,8 +52,9 @@ async function verify() {
 			.delete(sourceConnection)
 			.where(inArray(sourceConnection.key, testKeys));
 
+		// Two sources may both allow writeback. Records pick their own targets.
 		await reconcileConfiguredSources(database, [
-			source(primaryKey, "900000001", { defaultWriteback: true }),
+			source(primaryKey, "900000001"),
 			source(secondaryKey, "900000002"),
 		]);
 		let rows = await database
@@ -63,10 +63,11 @@ async function verify() {
 			.where(inArray(sourceConnection.key, testKeys));
 		assert(rows.length === 2, "Configured sources were not created");
 		assert(
-			rows.some(
-				(row) => row.key === primaryKey && row.defaultWriteback,
+			rows.every(
+				(row) =>
+					row.status === "active" && !("defaultWriteback" in row),
 			),
-			"The configured default writeback source was not saved",
+			"Two writeback-enabled sources were not both saved as active without a default flag",
 		);
 
 		await database
@@ -76,15 +77,11 @@ async function verify() {
 		await Promise.all([
 			reconcileConfiguredSources(database, [
 				source(primaryKey, "900000001"),
-				source(secondaryKey, "900000002", {
-					defaultWriteback: true,
-				}),
+				source(secondaryKey, "900000002"),
 			]),
 			reconcileConfiguredSources(database, [
 				source(primaryKey, "900000001"),
-				source(secondaryKey, "900000002", {
-					defaultWriteback: true,
-				}),
+				source(secondaryKey, "900000002"),
 			]),
 		]);
 		await reconcileConfiguredSources(database, [
@@ -103,7 +100,7 @@ async function verify() {
 			"Reconciliation replaced the saved Zotero cursor",
 		);
 		assert(
-			secondary?.status === "paused" && !secondary.defaultWriteback,
+			secondary?.status === "paused",
 			"Repeated reconciliation did not apply the exact manifest state",
 		);
 
@@ -115,7 +112,7 @@ async function verify() {
 			.from(sourceConnection)
 			.where(eq(sourceConnection.key, secondaryKey));
 		assert(
-			removed?.status === "removed" && !removed.defaultWriteback,
+			removed?.status === "removed",
 			"An omitted source was not removed cleanly",
 		);
 

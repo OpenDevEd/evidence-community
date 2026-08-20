@@ -30,6 +30,7 @@ const entry = (
 });
 
 const nativeSource: AdminSource = {
+	collectionCount: 0,
 	key: "native",
 	label: "Native",
 	provider: "native",

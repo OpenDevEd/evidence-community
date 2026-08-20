@@ -179,6 +179,7 @@ const deletedCollection: AdminCollectionCatalogEntry = {
 };
 
 const importedSource: AdminSource = {
+	collectionCount: 1,
 	key: "zotero-group",
 	label: "Zotero group",
 	provider: "zotero",
@@ -268,16 +269,7 @@ function publishedDetail(
 		tags: [],
 		title: publishedPayload.title,
 		updatedAt: timestamp,
-		writeback: {
-			effective: false,
-			itemEnabled: false,
-			reason: "not-linked",
-			sourceEnabled: false,
-			sourceKey: null,
-			sourceLabel: null,
-			sourceStatus: null,
-			supported: false,
-		},
+		writeback: { available: [], originSourceKey: null, selected: [] },
 	};
 }
 
@@ -695,19 +687,28 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 		state: editing ? "edited" : "published",
 		title: String(draftPayload.title),
 		writeback: {
-			effective: true,
-			itemEnabled: true,
-			reason: "ok",
-			sourceEnabled: true,
-			sourceKey: importedSource.key,
-			sourceLabel: importedSource.label,
-			sourceStatus: "active",
-			supported: true,
+			available: [
+				{
+					effective: true,
+					isOrigin: true,
+					itemEnabled: true,
+					linkExists: true,
+					provider: "zotero",
+					reason: "ok",
+					sourceEnabled: true,
+					sourceKey: importedSource.key,
+					sourceLabel: importedSource.label,
+					sourceStatus: "active",
+					supported: true,
+				},
+			],
+			originSourceKey: importedSource.key,
+			selected: [importedSource.key],
 		},
 	});
 
 	await page.route(
-		`**/api/admin/items/${publishedItemKey}/writeback/status`,
+		`**/api/admin/items/${publishedItemKey}/writeback/status?source=*`,
 		async (route) => {
 			const states = ["queued", "sending", "synced"] as const;
 			const state = forceFailure
@@ -734,7 +735,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 		},
 	);
 	await page.route(
-		`**/api/admin/items/${publishedItemKey}/writeback/retry`,
+		`**/api/admin/items/${publishedItemKey}/writeback/retry?source=*`,
 		async (route) => {
 			retryRequests += 1;
 			forceFailure = false;
@@ -773,9 +774,11 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 			await route.fulfill({ status: 405 });
 		},
 	);
+	let publishBody: unknown;
 	await page.route(
 		`**/api/admin/items/${publishedItemKey}/publish`,
 		async (route) => {
+			publishBody = route.request().postDataJSON();
 			editing = false;
 			revision += 1;
 			writebackStarted = true;
@@ -791,7 +794,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 
 	await page.goto("/admin");
 	await expect(
-		page.getByRole("button", { name: `${importedSource.label}: Synced` }),
+		page.getByRole("button", { name: "Sources: Synced to 1 source" }),
 	).toBeVisible();
 	await page.getByRole("button", { name: "Edit", exact: true }).click();
 	const title = page.getByRole("textbox", { name: "Title", exact: true });
@@ -799,6 +802,29 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 	await title.fill("Imported edit for writeback");
 	await expect(page.getByText("Saved", { exact: true })).toBeVisible();
 	await page.getByRole("button", { name: "Publish", exact: true }).click();
+
+	// Publishing asks which sources to update. The origin is preselected.
+	const publishDialog = page.getByRole("dialog", {
+		name: "Publish this record",
+	});
+	await expect(publishDialog).toBeVisible();
+	await expect(
+		publishDialog.locator("[data-admin-writeback-dialog='publish']"),
+	).toBeVisible();
+	const originBox = publishDialog.getByRole("switch", {
+		name: importedSource.label,
+	});
+	await expect(
+		publishDialog.getByText("This library", { exact: true }),
+	).toBeVisible();
+	await expect(publishDialog.getByText("Always", { exact: true })).toBeVisible();
+	await expect(originBox).toBeChecked();
+	await publishDialog
+		.getByRole("button", { name: "Publish", exact: true })
+		.click();
+	await expect.poll(() => publishBody).toEqual({
+		sourceKeys: [importedSource.key],
+	});
 
 	const status = page.locator("[data-admin-writeback-status]");
 	await expect(status).toHaveAttribute(
@@ -860,6 +886,228 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 		"data-admin-writeback-status",
 		"synced",
 		{ timeout: 5_000 },
+	);
+});
+
+test("chooses writeback sources without publishing and when unpublishing", async ({
+	page,
+}) => {
+	await mockCompletedIndexing(page);
+	const book = await mockPublishedBook(page, {
+		additionalSources: [importedSource],
+	});
+	let selected: string[] = [];
+	const writeback = () => ({
+		available: [
+			{
+				effective: selected.includes(importedSource.key),
+				isOrigin: false,
+				itemEnabled: selected.includes(importedSource.key),
+				linkExists: selected.includes(importedSource.key),
+				provider: "zotero",
+				reason: selected.includes(importedSource.key) ? "ok" : "not-linked",
+				sourceEnabled: true,
+				sourceKey: importedSource.key,
+				sourceLabel: importedSource.label,
+				sourceStatus: "active",
+				supported: true,
+			},
+		],
+		originSourceKey: null,
+		selected,
+	});
+	let sourcesBody: unknown;
+	let unpublishBody: unknown;
+	// After the choice is saved the server reports the job as waiting for a
+	// while, then synced. The chip must follow by polling, with no reload.
+	let statusPolls = 0;
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/writeback/sources`,
+		async (route) => {
+			sourcesBody = route.request().postDataJSON();
+			selected = (sourcesBody as { sourceKeys: string[] }).sourceKeys;
+			statusPolls = 0;
+			await route.fulfill({ json: { writeback: writeback() } });
+		},
+	);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/writeback/status?source=*`,
+		async (route) => {
+			statusPolls += 1;
+			const state = statusPolls <= 3 ? "queued" : "synced";
+			await route.fulfill({
+				json: {
+					status: {
+						attempts: 0,
+						canonicalRevision: 1,
+						error: null,
+						jobId: 5,
+						nextAttemptAt: timestamp,
+						processedAt: state === "synced" ? timestamp : null,
+						sourceKey: importedSource.key,
+						state,
+					},
+				},
+			});
+		},
+	);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/unpublish`,
+		async (route) => {
+			unpublishBody = route.request().postDataJSON();
+			await route.fulfill({ json: { indexingReceipts: [], item: {} } });
+		},
+	);
+	await page.route(`**/api/admin/items/${publishedItemKey}`, async (route) =>
+		route.fulfill({
+			json: { item: { ...publishedDetail(false), writeback: writeback() } },
+		}),
+	);
+	book.setEditing(false);
+
+	await page.goto("/admin");
+	const inspector = page.locator("#admin-inspector-pane");
+	await expect(page.locator("[data-admin-writeback-status]")).toHaveCount(0);
+
+	// The Sources button changes the choice without publishing.
+	await inspector.getByRole("button", { name: "Sources", exact: true }).click();
+	const sourcesDialog = page.getByRole("dialog", {
+		name: "Sources for this record",
+	});
+	await expect(sourcesDialog).toBeVisible();
+	const box = sourcesDialog.getByRole("switch", {
+		name: importedSource.label,
+	});
+	await expect(box).not.toBeChecked();
+	await box.check();
+	await sourcesDialog.getByRole("button", { name: "Save", exact: true }).click();
+	await expect.poll(() => sourcesBody).toEqual({
+		sourceKeys: [importedSource.key],
+	});
+	await expect(page.locator("[data-admin-writeback-status]")).toHaveAttribute(
+		"data-admin-writeback-status",
+		"queued",
+	);
+	await expect(page.locator("[data-admin-writeback-status]")).toHaveAttribute(
+		"data-admin-writeback-status",
+		"synced",
+		{ timeout: 15_000 },
+	);
+	expect(statusPolls).toBeGreaterThanOrEqual(4);
+
+	// Unpublishing asks which copies to remove, preselected to the choice.
+	await inspector.getByRole("button", { name: "Unpublish" }).click();
+	const unpublishDialog = page.getByRole("dialog", {
+		name: "Unpublish this record",
+	});
+	await expect(unpublishDialog).toBeVisible();
+	await expect(
+		unpublishDialog.locator("[data-admin-writeback-dialog='unpublish']"),
+	).toBeVisible();
+	await expect(
+		unpublishDialog.getByRole("switch", { name: importedSource.label }),
+	).toBeChecked();
+	await unpublishDialog
+		.getByRole("button", { name: "Unpublish", exact: true })
+		.click();
+	await expect.poll(() => unpublishBody).toEqual({
+		removeFromSourceKeys: [importedSource.key],
+	});
+});
+
+test("resolves a source conflict with a confirmed choice", async ({
+	page,
+}) => {
+	await mockCompletedIndexing(page);
+	await mockPublishedBook(page, { additionalSources: [importedSource] });
+	let state: "conflict" | "queued" | "synced" = "conflict";
+	let resolveBody: unknown;
+	let resolveSource: string | null = null;
+	const statusJson = () => ({
+		status: {
+			attempts: 0,
+			canonicalRevision: 1,
+			error: null,
+			jobId: 5,
+			nextAttemptAt: timestamp,
+			processedAt: state === "synced" ? timestamp : null,
+			sourceKey: importedSource.key,
+			state,
+		},
+	});
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/writeback/status?source=*`,
+		async (route) => route.fulfill({ json: statusJson() }),
+	);
+	await page.route(
+		`**/api/admin/items/${publishedItemKey}/writeback/resolve?source=*`,
+		async (route) => {
+			resolveSource = new URL(route.request().url()).searchParams.get(
+				"source",
+			);
+			resolveBody = route.request().postDataJSON();
+			state = "queued";
+			await route.fulfill({ json: { indexingReceipts: [], ...statusJson() } });
+		},
+	);
+	await page.route(`**/api/admin/items/${publishedItemKey}`, async (route) =>
+		route.fulfill({
+			json: {
+				item: {
+					...publishedDetail(false),
+					writeback: {
+						available: [
+							{
+								effective: true,
+								isOrigin: false,
+								itemEnabled: true,
+								linkExists: true,
+								provider: "zotero",
+								reason: "ok",
+								sourceEnabled: true,
+								sourceKey: importedSource.key,
+								sourceLabel: importedSource.label,
+								sourceStatus: "active",
+								supported: true,
+							},
+						],
+						originSourceKey: null,
+						selected: [importedSource.key],
+					},
+				},
+			},
+		}),
+	);
+
+	await page.goto("/admin");
+	const badge = page.locator('[data-admin-writeback-status="conflict"]');
+	await expect(badge).toBeVisible();
+	await badge.click();
+	const popover = page.locator("[data-admin-writeback-popover]");
+	await expect(popover.locator("[data-admin-writeback-conflict]")).toBeVisible();
+	const sendLocal = popover.locator('[data-admin-writeback-resolve="send-local"]');
+	const loadRemote = popover.locator('[data-admin-writeback-resolve="load-remote"]');
+	await expect(sendLocal).toHaveText(`Send this record to ${importedSource.label}`);
+	await expect(loadRemote).toHaveText(`Load ${importedSource.label}’s version`);
+	await expect(
+		popover.getByText(`Replaces this record with the ${importedSource.label} copy.`, { exact: false }),
+	).toBeVisible();
+
+	// The first click arms the choice; nothing is sent until it is confirmed.
+	await loadRemote.click();
+	await expect(loadRemote).toHaveText("Confirm");
+	expect(resolveBody).toBeUndefined();
+	await popover.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(loadRemote).toHaveText(`Load ${importedSource.label}’s version`);
+
+	await sendLocal.click();
+	await expect(sendLocal).toHaveText("Confirm");
+	await sendLocal.click();
+	await expect.poll(() => resolveBody).toEqual({ choice: "send-local" });
+	expect(resolveSource).toBe(importedSource.key);
+	await expect(page.locator("[data-admin-writeback-status]")).toHaveAttribute(
+		"data-admin-writeback-status",
+		"queued",
 	);
 });
 
@@ -1195,6 +1443,7 @@ test("uses the same collection traversal model for multi-select", async ({
 	const extraSources: AdminSource[] = Array.from(
 		{ length: 12 },
 		(_, index) => ({
+			collectionCount: 1,
 			key: `multi-source-${index}`,
 			label: `Multi source ${index + 1}`,
 			provider: "zotero",
@@ -1366,8 +1615,9 @@ test("creates a collection in a searched location without a full-list select", a
 				paddingRight: style.paddingRight,
 			};
 		});
+	// The location row shares the name and source controls' 1px border.
 	expect(locationGeometry).toEqual({
-		borderWidth: "0px",
+		borderWidth: "1px",
 		paddingLeft: "12px",
 		paddingRight: "12px",
 	});
@@ -1948,6 +2198,7 @@ test("filters by searched native and imported collections without loading an opt
 	const extraSources: AdminSource[] = Array.from(
 		{ length: 12 },
 		(_, index) => ({
+			collectionCount: 1,
 			key: `source-${index}`,
 			label: `Source ${index + 1}`,
 			provider: "zotero",
@@ -2197,6 +2448,7 @@ async function mockBookWithAttachment(
 		state: attachmentState,
 		title: "PDF attachment",
 		updatedAt: timestamp,
+		writeback: { available: [], originSourceKey: null, selected: [] },
 	};
 	const parentDetail = {
 		...publishedDetail(false),
@@ -2398,6 +2650,11 @@ test("creates an item through a pointer click in the new-item popover", async ({
 						tags: [],
 						title: "Untitled",
 						updatedAt: timestamp,
+						writeback: {
+							available: [],
+							originSourceKey: null,
+							selected: [],
+						},
 					},
 				},
 			});
@@ -3108,6 +3365,7 @@ test("restores branch focus when a collection retry finishes empty", async ({
 	page,
 }) => {
 	const emptySource: AdminSource = {
+		collectionCount: 0,
 		key: "empty-import",
 		label: "Empty import",
 		provider: "zotero",
@@ -3158,15 +3416,17 @@ test("restores branch focus when a collection retry finishes empty", async ({
 	await page.keyboard.press("Enter");
 	await expect(tree.getByRole("treeitem", { name: "Loading" })).toBeFocused();
 	await expect(source).toBeFocused();
-	await expect(
-		tree.getByText("No collections here", { exact: true }),
-	).toBeVisible();
+	// The load finished: the loading row is gone and nothing is listed under
+	// a source without collections.
+	await expect(tree.getByRole("treeitem", { name: "Loading" })).toHaveCount(0);
+	await expect(tree.getByText("No collections here")).toHaveCount(0);
 });
 
 test("does not steal focus when a collection load finishes after the user leaves", async ({
 	page,
 }) => {
 	const slowSource: AdminSource = {
+		collectionCount: 1,
 		key: "slow-import",
 		label: "Slow import",
 		provider: "zotero",
@@ -3208,9 +3468,7 @@ test("does not steal focus when a collection load finishes after the user leaves
 	});
 	await nativeSource.focus();
 	releaseLoad();
-	await expect(
-		tree.getByText("No collections here", { exact: true }),
-	).toBeVisible();
+	await expect(tree.getByRole("treeitem", { name: "Loading" })).toHaveCount(0);
 	await expect(nativeSource).toBeFocused();
 });
 

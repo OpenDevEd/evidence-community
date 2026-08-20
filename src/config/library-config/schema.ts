@@ -1095,26 +1095,9 @@ const sourceConfigurationSchema = z
 		apiKey: secretSchema(1, 512),
 		enabled: z.boolean().default(true),
 		writebackEnabled: z.boolean().default(false),
-		defaultWriteback: z.boolean().default(false),
 		settings: zoteroConnectionConfigSchema.prefault({}),
 	})
-	.strict()
-	.superRefine((source, context) => {
-		if (source.defaultWriteback && !source.writebackEnabled) {
-			context.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "The default writeback source must allow writeback",
-				path: ["writebackEnabled"],
-			});
-		}
-		if (!source.enabled && source.defaultWriteback) {
-			context.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "The default writeback source must be enabled",
-				path: ["enabled"],
-			});
-		}
-	});
+	.strict();
 
 const sourcesSchema = z
 	.array(sourceConfigurationSchema)
@@ -1123,12 +1106,6 @@ const sourcesSchema = z
 	.superRefine((sources, context) => {
 		addDuplicateIssues(sources, context, (source) => source.key);
 		addDuplicateIssues(sources, context, (source) => source.groupId);
-		if (sources.filter((source) => source.defaultWriteback).length > 1) {
-			context.addIssue({
-				code: z.ZodIssueCode.custom,
-				message: "Only one source can be the default writeback source",
-			});
-		}
 	});
 
 const aiProviderSchema = z

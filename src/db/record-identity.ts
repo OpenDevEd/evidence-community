@@ -193,6 +193,9 @@ export async function reserveItemSourceLinks(
 			const itemKey = result.get(sourceRecordKey);
 			return itemKey ? [itemKey] : [];
 		});
+		// A record imported from a source writes back to that source by
+		// default, but only when the record has no enabled source yet. A
+		// record the admin already directs elsewhere keeps that choice.
 		if (insertedItemKeys.length > 0) {
 			const enabledLink = alias(itemSourceLink, "enabledItemSourceLink");
 			await db
@@ -211,14 +214,8 @@ export async function reserveItemSourceLinks(
 								.from(enabledLink)
 								.where(
 									and(
-										eq(
-											enabledLink.itemKey,
-											itemSourceLink.itemKey,
-										),
-										eq(
-											enabledLink.writebackEnabled,
-											true,
-										),
+										eq(enabledLink.itemKey, itemSourceLink.itemKey),
+										eq(enabledLink.writebackEnabled, true),
 									),
 								),
 						),
