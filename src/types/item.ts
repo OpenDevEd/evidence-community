@@ -5,6 +5,4 @@ export type RelationsType = {
     "related_works"?: string | string[];
     "cited_by"?: number;
     "referenced_works"?: string[];
-    "cites"?: string[];
-    "citedBy"?: string[];
 } | undefined;

@@ -77,6 +77,38 @@ export type AdminAttachment = AdminItemSummary & {
 	sourceFileUrl: string | null;
 };
 
+export type AdminItemLinkKind = "cites" | "related";
+
+/** A record on the other end of a link, with enough to show a row without another request. */
+export type AdminLinkTarget = {
+	deleted: boolean;
+	itemType: string;
+	key: string;
+	title: string;
+};
+
+/** A link row that the editor cannot change here: it comes from a source or is a citation of this record. */
+export type AdminLinkRow = {
+	key: string;
+	kind: AdminItemLinkKind;
+	origin: string;
+};
+
+export type AdminItemLinkKeys = Record<AdminItemLinkKind, string[]>;
+
+export type AdminItemLinks = {
+	/** Records that cite this record (read-only here). */
+	citedBy: AdminLinkRow[];
+	/** Links owned by sources, read-only here: outgoing `cites`, and `related` in either direction. */
+	fromSources: AdminLinkRow[];
+	/** Editor-owned link keys as currently drafted: outgoing `cites`, `related` from both sides. */
+	keys: AdminItemLinkKeys;
+	/** Editor-owned link keys as published. */
+	publishedKeys: AdminItemLinkKeys;
+	/** Titles and states for every key named above. */
+	targets: AdminLinkTarget[];
+};
+
 export type AdminItemDetail = AdminItemSummary & {
 	attachments: AdminAttachment[];
 	collectionKeys: string[];
@@ -84,6 +116,7 @@ export type AdminItemDetail = AdminItemSummary & {
 	editable: boolean;
 	fileDraft: AdminFileDraft | null;
 	filePublication: AdminFilePublication | null;
+	links: AdminItemLinks;
 	parentItem: string | null;
 	parentState: AdminRecordState | null;
 	published: Record<string, unknown> | null;

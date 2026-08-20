@@ -10,8 +10,16 @@ interface Institution {
   display_name?: string;
 }
 
+/** Links between library records, read from PostgreSQL. Only published records are listed. */
+export type ItemLinks = {
+  cites: string[];
+  citedBy: string[];
+  related: string[];
+};
+
 export type Item = InferSelectModel<typeof item> & {
   provider?: SourceProvider;
+  links?: ItemLinks;
   sourceExternalScopeKey?: string | null;
   tags?: string[];
   collections?: string[];

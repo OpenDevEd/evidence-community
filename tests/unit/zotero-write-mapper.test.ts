@@ -292,6 +292,26 @@ describe("Zotero writeback mapping", () => {
 		expect(patch).not.toHaveProperty("reportType");
 	});
 
+	it("never sends record links to Zotero as a field", () => {
+		const payload = createZoteroItemPayload(
+			{
+				itemType: "Book",
+				links: { cites: ["WXYZ6789"], related: ["QRST2345"] },
+				title: "Linked book",
+			},
+			"BXXK2345",
+		);
+		expect(payload).not.toHaveProperty("links");
+		expect(payload.title).toBe("Linked book");
+		expect(payload.relations).toEqual({});
+		expect(
+			createZoteroItemPatch(
+				{ itemType: "Book", links: { cites: [], related: [] } },
+				["links"],
+			),
+		).toEqual({});
+	});
+
 	it("rejects invalid canonical fields instead of silently losing data", () => {
 		expect(() =>
 			createZoteroItemPayload(

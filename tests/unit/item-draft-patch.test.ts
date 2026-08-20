@@ -5,7 +5,10 @@ import {
 	createItemDraftPatch,
 	effectiveItemParent,
 } from "@/lib/admin/item-draft-merge";
-import { editableItemDatabaseFields } from "@/lib/admin/item-draft-patch";
+import {
+	editableItemDatabaseFields,
+	publishedAdminItemPayload,
+} from "@/lib/admin/item-draft-patch";
 
 describe("item draft patches", () => {
 	it("contains only real editable record fields", () => {
@@ -122,5 +125,32 @@ describe("item draft patches", () => {
 		expect(
 			effectiveItemParent("PARENT23", { parentItem: "PARENT45" }),
 		).toBe("PARENT45");
+	});
+
+	it("stores links as one pseudo-field and drops it when reverted", () => {
+		const published = publishedAdminItemPayload(
+			{ itemType: "Report", key: "ABCD2345", title: "Published" } as never,
+			{ links: { cites: ["WXYZ6789"], related: [] } },
+		);
+		expect(published.links).toEqual({ cites: ["WXYZ6789"], related: [] });
+		expect(
+			publishedAdminItemPayload(
+				{ itemType: "Report", key: "ABCD2345" } as never,
+			).links,
+		).toBeUndefined();
+
+		const patch = createItemDraftPatch(published, {
+			...published,
+			links: { cites: ["WXYZ6789", "QRST2345"], related: [] },
+		});
+		expect(patch).toEqual({
+			links: { cites: ["WXYZ6789", "QRST2345"], related: [] },
+		});
+		expect(
+			createItemDraftPatch(published, {
+				...published,
+				links: { cites: ["WXYZ6789"], related: [] },
+			}),
+		).toEqual({});
 	});
 });

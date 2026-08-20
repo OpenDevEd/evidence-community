@@ -33,6 +33,10 @@ import { item } from "@/db/schema/tables/item";
 import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { publishedAdminItemPayload } from "@/lib/admin/item-draft-patch";
+import {
+	relatedRemoteUris,
+	relationsForWriteback,
+} from "@/lib/source-writeback/related-links";
 import type { SourceCredentialResolver } from "@/lib/source-ingestion/credentials";
 
 import {
@@ -664,6 +668,18 @@ async function loadItemRequest(
 			tags: tagRows.map(({ name }) => name),
 		});
 		if (parentSourceRecordKey) payload.parentItem = parentSourceRecordKey;
+		// The link table, not the record's JSON, decides which items are "related" in the source.
+		const relations = relationsForWriteback(
+			state.item.relations as Record<string, unknown> | null,
+			await relatedRemoteUris(transaction, {
+				connection: state.connection,
+				itemKey: job.itemKey,
+				sourceConnectionKey: job.sourceConnectionKey,
+			}),
+		);
+		if (Object.keys(relations).length > 0 || payload.relations !== undefined) {
+			payload.relations = relations;
+		}
 
 		const request: SourceWritebackRequest = {
 			dirtyFields: job.dirtyFields,

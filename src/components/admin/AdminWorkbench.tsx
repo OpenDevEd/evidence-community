@@ -49,8 +49,10 @@ import { Tooltip } from "@/components/nextui/Tooltip";
 import type {
 	AdminCollectionCatalogEntry,
 	AdminItemDetail,
+	AdminItemLinkKind,
 	AdminItemViewFilters,
 	AdminLibrarySnapshot,
+	AdminLinkTarget,
 	AdminRecordState,
 } from "@/lib/admin/types";
 import type { AdminItemSortColumnId } from "@/lib/admin/item-list-contract";
@@ -115,6 +117,7 @@ import {
 	humanizeAdminField,
 	payloadForItemType,
 } from "./admin-schema";
+import { linkKeysFromPayload } from "./admin-diff";
 import { focusAdminDragHandle } from "./admin-focus";
 import {
 	AdminDragDropRoot,
@@ -390,6 +393,14 @@ export default function AdminWorkbench({
 		sources: [],
 	});
 	const [detail, setDetail] = useState<AdminItemDetail | null>(null);
+	// "Pick from the table" mode for record links: which kind, for which record.
+	// `kind: null` means picking is finished but the record stays pinned in the
+	// inspector until the editor selects another row, so a search filter used
+	// while picking cannot swap the open draft away.
+	const [linkPick, setLinkPick] = useState<{
+		forKey: string;
+		kind: AdminItemLinkKind | null;
+	} | null>(null);
 	const {
 		preferences: itemTablePreferences,
 		requestedColumns,
@@ -410,7 +421,9 @@ export default function AdminWorkbench({
 		setFilters,
 		setItems,
 		setSelectedKey,
-	} = useAdminItemList(detail, requestedColumns, initialFilters);
+	} = useAdminItemList(detail, requestedColumns, initialFilters, {
+		pinSelection: linkPick !== null && linkPick.forKey === detail?.key,
+	});
 	const [detailLoading, setDetailLoading] = useState(false);
 	const [detailError, setDetailError] = useState<string | null>(null);
 	const [draftPayload, setDraftPayload] = useState<Record<string, unknown>>(
@@ -1017,6 +1030,103 @@ export default function AdminWorkbench({
 		},
 		[definitions, detail, draftPayload, queueDraftSave],
 	);
+
+	// Pick mode is only live while the same record is still open as a draft.
+	const activeLinkPick =
+		linkPick?.kind && detail?.draft && linkPick.forKey === detail.key
+			? linkPick.kind
+			: null;
+	// Titles of rows picked so far, kept even after a search scrolls them out of the list.
+	const [pickedLinkTargets, setPickedLinkTargets] = useState<
+		ReadonlyMap<string, AdminLinkTarget>
+	>(new Map());
+	const addLinkKeys = useCallback(
+		(kind: AdminItemLinkKind, keys: readonly string[]) => {
+			if (!detail?.draft) return;
+			setPickedLinkTargets((current) => {
+				const next = new Map(current);
+				for (const row of items) {
+					if (keys.includes(row.key)) {
+						next.set(row.key, {
+							deleted: row.state === "deleted",
+							itemType: row.itemType,
+							key: row.key,
+							title: row.title?.trim() || "Untitled record",
+						});
+					}
+				}
+				return next;
+			});
+			const payload = draftPayloadRef.current;
+			const current = linkKeysFromPayload(payload, detail.links.publishedKeys);
+			// Links a source owns are already there; the editor does not add a second one.
+			const sourceOwned = new Set(
+				detail.links.fromSources
+					.filter((row) => row.kind === kind)
+					.map((row) => row.key),
+			);
+			const next = [
+				...new Set([
+					...current[kind],
+					...keys.filter((key) => key !== detail.key && !sourceOwned.has(key)),
+				]),
+			];
+			if (next.length === current[kind].length) return;
+			updatePayload({ ...payload, links: { ...current, [kind]: next } });
+		},
+		[detail, items, updatePayload],
+	);
+	const removeLinkKeys = useCallback(
+		(kind: AdminItemLinkKind, keys: readonly string[]) => {
+			if (!detail?.draft) return;
+			const payload = draftPayloadRef.current;
+			const current = linkKeysFromPayload(payload, detail.links.publishedKeys);
+			const next = current[kind].filter((key) => !keys.includes(key));
+			if (next.length === current[kind].length) return;
+			updatePayload({ ...payload, links: { ...current, [kind]: next } });
+		},
+		[detail, updatePayload],
+	);
+	// In pick mode the table's checkboxes show and change the linked records.
+	// Source-owned links show as ticked too; unticking them changes nothing here.
+	const pickedLinkKeys = useMemo(
+		() =>
+			activeLinkPick && detail
+				? new Set([
+						...linkKeysFromPayload(draftPayload, detail.links.publishedKeys)[
+							activeLinkPick
+						],
+						...detail.links.fromSources
+							.filter((row) => row.kind === activeLinkPick)
+							.map((row) => row.key),
+					])
+				: null,
+		[activeLinkPick, detail, draftPayload],
+	);
+	const linkTargets = useMemo<AdminLinkTarget[]>(
+		() => [
+			...pickedLinkTargets.values(),
+			...items.map((row) => ({
+				deleted: row.state === "deleted",
+				itemType: row.itemType,
+				key: row.key,
+				title: row.title?.trim() || "Untitled record",
+			})),
+		],
+		[items, pickedLinkTargets],
+	);
+	useEffect(() => {
+		// Escape leaves pick mode: a document keyboard listener is the only way
+		// to catch it wherever focus is (table cell, banner, inspector).
+		if (!activeLinkPick) return;
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setLinkPick((current) => (current ? { ...current, kind: null } : null));
+			}
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [activeLinkPick]);
 
 	const runBusy = useCallback(
 		async (
@@ -2159,6 +2269,7 @@ export default function AdminWorkbench({
 					>
 						<AdminItemTable
 							bulkActions={
+								activeLinkPick ? null : (
 								<div
 									aria-label="Bulk actions"
 									className="flex h-full min-w-0 items-center gap-1 overflow-hidden"
@@ -2235,8 +2346,10 @@ export default function AdminWorkbench({
 										</span>
 									) : null}
 								</div>
+								)
 							}
-							bulkKeys={bulkKeys}
+							bulkDisabledKey={activeLinkPick ? detail?.key ?? null : null}
+							bulkKeys={pickedLinkKeys ?? bulkKeys}
 							dragEnabled={!busy}
 							error={listError}
 							hasMore={hasMore}
@@ -2251,29 +2364,73 @@ export default function AdminWorkbench({
 							onRequestCollectionAssignment={
 								requestRecordAssignment
 							}
+							banner={
+								activeLinkPick && detail ? (
+									<div
+										className="flex min-h-9 flex-wrap items-center gap-2 border-b border-accent/30 bg-accent/10 px-3 py-1.5 text-xs text-black/75 dark:text-white/80"
+										data-admin-link-pick-banner={activeLinkPick}
+										role="status"
+									>
+										<span className="min-w-0 flex-1">
+											Tick or click records to add them under{" "}
+											<strong>{activeLinkPick === "cites" ? "Cites" : "Related"}</strong>{" "}
+											for “{detail.title || detail.key}”; click or untick again to remove. Esc to finish.
+										</span>
+										<Button
+											onPress={() =>
+												setLinkPick((current) =>
+													current ? { ...current, kind: null } : null,
+												)
+											}
+											size="xs"
+											variant="solid"
+										>
+											Done
+										</Button>
+									</div>
+								) : null
+							}
 							onRetry={() => void loadItems()}
 							onPreferencesChange={setItemTablePreferences}
 							onResetPreferences={resetItemTablePreferences}
 							onSelect={(key) => {
+								if (activeLinkPick) {
+									// A row click toggles the link, same as its checkbox.
+									if (pickedLinkKeys?.has(key)) removeLinkKeys(activeLinkPick, [key]);
+									else addLinkKeys(activeLinkPick, [key]);
+									return;
+								}
+								setLinkPick(null);
 								setSelectedKey(key);
 								setMobilePane("inspector");
 							}}
 							onSort={changeSort}
-							onToggleBulk={(key, selected) =>
+							onToggleBulk={(key, selected) => {
+								if (activeLinkPick) {
+									if (selected) addLinkKeys(activeLinkPick, [key]);
+									else removeLinkKeys(activeLinkPick, [key]);
+									return;
+								}
 								setBulkKeys((current) => {
 									const next = new Set(current);
 									if (selected) next.add(key);
 									else next.delete(key);
 									return next;
-								})
-							}
-							onToggleVisible={(selected) =>
+								});
+							}}
+							onToggleVisible={(selected) => {
+								if (activeLinkPick) {
+									const visible = items.map(({ key }) => key);
+									if (selected) addLinkKeys(activeLinkPick, visible);
+									else removeLinkKeys(activeLinkPick, visible);
+									return;
+								}
 								setBulkKeys(
 									selected
 										? new Set(items.map(({ key }) => key))
 										: new Set(),
-								)
-							}
+								);
+							}}
 							selectedKey={selectedKey}
 							sort={filters.sort}
 							sortDirection={filters.sortDirection}
@@ -2296,8 +2453,21 @@ export default function AdminWorkbench({
 							error={detailError}
 							fileErrors={fileErrors}
 							loading={detailLoading}
+							linkPickKind={activeLinkPick}
+							linkTargets={linkTargets}
 							onBackToParent={(key) => setSelectedKey(key)}
 							onChange={updatePayload}
+							onStartLinkPick={(kind) => {
+								if (!detail) return;
+								setLinkPick({ forKey: detail.key, kind });
+								setMobilePane("list");
+							}}
+							onStopLinkPick={() => {
+								setLinkPick((current) =>
+									current ? { ...current, kind: null } : null,
+								);
+								setMobilePane("inspector");
+							}}
 							onCreateAttachment={createAttachment}
 							onDiscardDraft={discardCurrent}
 							onDiscardFile={discardPdfDraft}

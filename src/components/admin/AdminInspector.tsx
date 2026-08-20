@@ -59,6 +59,8 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import type {
 	AdminCreator,
 	AdminItemDetail,
+	AdminItemLinkKind,
+	AdminLinkTarget,
 	AdminSource,
 } from "@/lib/admin/types";
 import { NATIVE_SOURCE_CONNECTION_KEY } from "@/lib/admin/constants";
@@ -91,6 +93,7 @@ import {
 } from "./admin-schema";
 import { firstAdminFieldError, validationTargetId } from "./admin-validation";
 import { useResolvedAdminCollections } from "./useResolvedAdminCollections";
+import { AdminLinksEditor } from "./AdminLinksEditor";
 import { AdminMetadataField } from "./AdminMetadataField";
 import {
 	AdminPublicationHeaderStatus,
@@ -1460,6 +1463,8 @@ export function AdminInspector({
 	detail,
 	error,
 	fileErrors = {},
+	linkPickKind = null,
+	linkTargets = [],
 	loading,
 	onBackToParent,
 	onChange,
@@ -1477,6 +1482,8 @@ export function AdminInspector({
 	onRetry,
 	onRestore,
 	onSelectAttachment,
+	onStartLinkPick,
+	onStopLinkPick,
 	onUnpublish,
 	onUnpublishFile,
 	onUpload,
@@ -1492,6 +1499,10 @@ export function AdminInspector({
 	detail: AdminItemDetail | null;
 	error: string | null;
 	fileErrors: Record<string, string>;
+	/** Link kind the record table is currently picking for, if any. */
+	linkPickKind?: AdminItemLinkKind | null;
+	/** Records the table knows, so picked links show a title right away. */
+	linkTargets?: readonly AdminLinkTarget[];
 	loading: boolean;
 	onBackToParent: (key: string) => void;
 	onChange: (payload: Record<string, unknown>) => void;
@@ -1509,6 +1520,8 @@ export function AdminInspector({
 	onRetry: () => void;
 	onRestore: () => void;
 	onSelectAttachment: (key: string) => void;
+	onStartLinkPick?: (kind: AdminItemLinkKind) => void;
+	onStopLinkPick?: () => void;
 	onUnpublish: () => void;
 	onUnpublishFile: (key: string) => void;
 	onUpload: (key: string, file: File) => void;
@@ -1554,6 +1567,16 @@ export function AdminInspector({
 				]),
 			),
 		[publishedCollectionEntries],
+	);
+	const linkTitles = useMemo(
+		() =>
+			new Map(
+				(detail?.links.targets ?? []).map((target) => [
+					target.key,
+					target.title,
+				]),
+			),
+		[detail?.links.targets],
 	);
 	useEffect(() => {
 		if (!detailKey || validationRevision === 0) {
@@ -1985,6 +2008,50 @@ export function AdminInspector({
 						recordKey={detail.key}
 					/>
 				</Section>
+				{!detail.parentItem ? (
+				<Section
+					actions={
+						diff.links ? (
+							<ChangedMarker
+								label="links"
+								onRevert={() =>
+									onChange({ ...payload, links: diff.links })
+								}
+								publishedValue={
+									<PublishedList
+										values={[
+											...diff.links.cites.map(
+												(key) =>
+													`Cites: ${linkTitles.get(key) ?? key}`,
+											),
+											...diff.links.related.map(
+												(key) =>
+													`Related: ${linkTitles.get(key) ?? key}`,
+											),
+										]}
+									/>
+								}
+							/>
+						) : undefined
+					}
+					icon={Link2}
+					title="Links"
+				>
+					<AdminLinksEditor
+						detail={detail}
+						errors={validationErrors}
+						knownTargets={linkTargets}
+						onChange={onChange}
+						onOpenRecord={onBackToParent}
+						onStartPick={onStartLinkPick}
+						onStopPick={onStopLinkPick}
+						payload={payload}
+						pickingKind={linkPickKind}
+						readOnly={readOnly}
+						sources={sources}
+					/>
+				</Section>
+				) : null}
 				{!detail.parentItem ? (
 					<Section
 						actions={

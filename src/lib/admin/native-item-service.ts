@@ -34,6 +34,13 @@ import {
 } from "./item-payload";
 import { databaseItemFieldToPayloadField } from "@/lib/item-field-codec";
 import {
+	existingItemKeys,
+	getManualLinkKeys,
+	removeMirroredSourceRelatedLinks,
+	replaceManualLinks,
+} from "@/lib/links/item-links";
+import { ITEM_LINK_PAYLOAD_KINDS } from "./item-fields";
+import {
 	applyItemDraftPatch,
 	createItemDraftPatch,
 	editableItemDatabaseFields,
@@ -385,7 +392,7 @@ async function loadPublishedItemPayload(
 	itemKey: string,
 	published?: typeof item.$inferSelect | null,
 ) {
-	const [publishedRow, tagRows, collectionRows, filePublication] =
+	const [publishedRow, tagRows, collectionRows, filePublication, links] =
 		await Promise.all([
 			published === undefined
 				? executor
@@ -409,12 +416,111 @@ async function loadPublishedItemPayload(
 				.where(eq(itemFilePublication.itemKey, itemKey))
 				.limit(1)
 				.then((rows) => rows[0] ?? null),
+			getManualLinkKeys(executor, itemKey),
 		]);
 	return publishedAdminItemPayload(publishedRow, {
 		collectionKeys: collectionRows.map(({ key }) => key),
 		hasPublishedFile: Boolean(filePublication),
+		links,
 		tags: tagRows.map(({ name }) => name),
 	});
+}
+
+/** Every record this draft links to or currently links to, so publish can lock them in one sorted set. */
+async function linkTargetKeys(
+	executor: Executor,
+	itemKey: string,
+	patch: Record<string, unknown>,
+) {
+	const current = await getManualLinkKeys(executor, itemKey);
+	const patched = patch.links;
+	const fromPatch =
+		patched && typeof patched === "object" && !Array.isArray(patched)
+			? ITEM_LINK_PAYLOAD_KINDS.flatMap((kind) => {
+					const value = (patched as Record<string, unknown>)[kind];
+					return Array.isArray(value)
+						? value.filter((key): key is string => typeof key === "string")
+						: [];
+				})
+			: [];
+	return [...new Set([...current.cites, ...current.related, ...fromPatch])].filter(
+		(key) => key !== itemKey,
+	);
+}
+
+/**
+ * Writes the editor's links for a record and returns every other record whose
+ * "cited by" or "related" view changed, so the caller can reindex them.
+ */
+/**
+ * A save that says nothing about links keeps the links the editor already has.
+ * Only an explicit `links` value (even empty lists) changes them.
+ */
+function keepLinksWhenOmitted(
+	payload: unknown,
+	currentPayload: Record<string, unknown>,
+) {
+	if (
+		!payload ||
+		typeof payload !== "object" ||
+		Array.isArray(payload) ||
+		Object.hasOwn(payload, "links") ||
+		currentPayload.links === undefined
+	) {
+		return payload;
+	}
+	return { ...(payload as Record<string, unknown>), links: currentPayload.links };
+}
+
+function assertNoSelfLinks(
+	itemKey: string,
+	links: { cites: string[]; related: string[] },
+) {
+	for (const kind of ITEM_LINK_PAYLOAD_KINDS) {
+		if (links[kind].includes(itemKey)) {
+			throw new NativeItemValidationError(
+				"A record cannot link to itself.",
+				{ links: "A record cannot link to itself." },
+			);
+		}
+	}
+}
+
+async function publishItemLinks(
+	transaction: Transaction,
+	itemKey: string,
+	links: { cites: string[]; related: string[] },
+) {
+	assertNoSelfLinks(itemKey, links);
+	const wanted = [...new Set([...links.cites, ...links.related])];
+	const existing = await existingItemKeys(transaction, wanted);
+	const missing = wanted.filter((key) => !existing.has(key));
+	if (missing.length > 0) {
+		throw new NativeItemValidationError(
+			`Linked record ${missing[0]} no longer exists.`,
+			{ links: `Linked record ${missing.join(", ")} no longer exists.` },
+		);
+	}
+	const changed = new Set<string>();
+	let relatedChanged = false;
+	const removedRelated: string[] = [];
+	for (const kind of ITEM_LINK_PAYLOAD_KINDS) {
+		const result = await replaceManualLinks(transaction, {
+			fromKey: itemKey,
+			kind,
+			toKeys: links[kind],
+		});
+		for (const key of [...result.added, ...result.removed]) changed.add(key);
+		if (kind === "related" && (result.added.length > 0 || result.removed.length > 0)) {
+			relatedChanged = true;
+			removedRelated.push(...result.removed);
+		}
+	}
+	return {
+		changedTargets: [...changed].sort((left, right) => left.localeCompare(right)),
+		relatedChanged,
+		removedRelated,
+	};
 }
 
 export async function createNativeItemDraft(db: Database, payload: unknown) {
@@ -592,9 +698,10 @@ async function saveItemDraftInTransaction(
 	const validated = rebaseNativeItemDraftPayload({
 		currentPayload,
 		expectedPayload,
-		payload,
+		payload: keepLinksWhenOmitted(payload, currentPayload),
 	});
 	const patch = createItemDraftPatch(basePayload, validated.payload);
+	assertNoSelfLinks(itemKey, validated.links);
 	await assertValidItemCollectionMembershipsInDatabase(
 		transaction,
 		itemKey,
@@ -740,6 +847,7 @@ export async function publishItemDraftWithContext(
 	// may change which sources they follow, and their own publish must not
 	// copy a selection that is about to change.
 	const childKeys = lockedParentItem ? [] : await childItemKeys(db, itemKey);
+	const lockLinkTargets = await linkTargetKeys(db, itemKey, lockDraft.patch);
 	const advisoryLockKeys = [
 		...new Set(
 			[
@@ -747,6 +855,7 @@ export async function publishItemDraftWithContext(
 				lockCandidate?.parentItem,
 				lockedParentItem,
 				...childKeys,
+				...lockLinkTargets,
 			].filter((key): key is string => typeof key === "string"),
 		),
 	];
@@ -950,6 +1059,36 @@ export async function publishItemDraftWithContext(
 			);
 		}
 
+		const publishedLinks = await publishItemLinks(
+			transaction,
+			itemKey,
+			validated.links,
+		);
+		const changedLinkTargets = publishedLinks.changedTargets;
+		if (
+			changedLinkTargets.some((key) => !advisoryLockKeys.includes(key))
+		) {
+			throw new ItemDraftConflictError(itemKey);
+		}
+		if (publishedLinks.removedRelated.length > 0) {
+			const writebackSources = await transaction
+				.select({ sourceConnectionKey: itemSourceLink.sourceConnectionKey })
+				.from(itemSourceLink)
+				.where(
+					and(
+						eq(itemSourceLink.itemKey, itemKey),
+						eq(itemSourceLink.writebackEnabled, true),
+					),
+				);
+			await removeMirroredSourceRelatedLinks(transaction, {
+				itemKey,
+				sourceConnectionKeys: writebackSources.map(
+					(row) => row.sourceConnectionKey,
+				),
+				targetKeys: publishedLinks.removedRelated,
+			});
+		}
+
 		await transaction.insert(outbox).values({
 			entityType: "item",
 			entityKey: itemKey,
@@ -957,6 +1096,31 @@ export async function publishItemDraftWithContext(
 			revision: nextRevision,
 		});
 		const indexingRecords = [{ key: itemKey, revision: nextRevision }];
+		for (const linkTargetKey of changedLinkTargets) {
+			if (relatedParentKeys.includes(linkTargetKey)) continue;
+			const target = lockedItems.find(
+				(candidate) => candidate.key === linkTargetKey,
+			);
+			if (!target) continue;
+			const targetRevision = target.revision + 1;
+			await transaction
+				.update(item)
+				.set({ revision: targetRevision, updatedAt: now })
+				.where(eq(item.key, target.key));
+			await advanceOpenItemDraftBaseRevision(
+				transaction,
+				target.key,
+				target.revision,
+				targetRevision,
+			);
+			await transaction.insert(outbox).values({
+				entityType: "item",
+				entityKey: target.key,
+				operation: "upsert",
+				revision: targetRevision,
+			});
+			indexingRecords.push({ key: target.key, revision: targetRevision });
+		}
 		for (const relatedParentKey of relatedParentKeys) {
 			const relatedParent = lockedItems.find(
 				(candidate) => candidate.key === relatedParentKey,
@@ -990,8 +1154,11 @@ export async function publishItemDraftWithContext(
 			});
 		}
 		const changedFields = Object.keys(draft.patch).filter(
-			(field) => field !== "collections",
+			(field) => field !== "collections" && field !== "links",
 		);
+		// A changed "related" set changes what the source shows as Related, so the
+		// record's relations must be written back. "Cites" never reaches a source.
+		if (publishedLinks.relatedChanged) changedFields.push("relations");
 		if (current?.deleted === 1) {
 			changedFields.push(
 				...editableItemDatabaseFields.map(

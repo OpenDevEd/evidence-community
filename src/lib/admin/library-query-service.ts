@@ -15,6 +15,12 @@ import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { getLibraryConfig } from "@/config/library-config/server";
 import {
+	getIncomingLinks,
+	getManualLinkKeys,
+	getOutgoingLinks,
+	isManualItemLinkOrigin,
+} from "@/lib/links/item-links";
+import {
 	evaluateSourceWritebackPolicy,
 	importedItemEditBlockReason,
 	resolveItemWritebackTargets,
@@ -45,8 +51,12 @@ import type {
 	AdminFileState,
 	AdminItemDetail,
 	AdminItemDraft,
+	AdminItemLinkKeys,
+	AdminItemLinkKind,
+	AdminItemLinks,
 	AdminItemSummary,
 	AdminLibrarySnapshot,
+	AdminLinkRow,
 	AdminRecordState,
 } from "./types";
 
@@ -251,6 +261,81 @@ async function getAdminAttachments(
 	});
 }
 
+function payloadLinkKeys(
+	payload: Record<string, unknown>,
+): AdminItemLinkKeys | null {
+	const value = payload.links;
+	if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+	const record = value as Record<string, unknown>;
+	const list = (kind: AdminItemLinkKind) =>
+		Array.isArray(record[kind])
+			? (record[kind] as unknown[]).filter(
+					(key): key is string => typeof key === "string",
+				)
+			: [];
+	return { cites: list("cites"), related: list("related") };
+}
+
+async function adminItemLinks(
+	db: Database,
+	itemKey: string,
+	keys: { keys: AdminItemLinkKeys; publishedKeys: AdminItemLinkKeys },
+): Promise<AdminItemLinks> {
+	const [outgoing, incoming] = await Promise.all([
+		getOutgoingLinks(db, itemKey),
+		getIncomingLinks(db, itemKey),
+	]);
+	// "related" is one link seen from both sides, so a source row pointing at this
+	// record is shown like one starting here. Only "cites" keeps a direction.
+	const fromSources: AdminLinkRow[] = [
+		...outgoing
+			.filter((row) => !isManualItemLinkOrigin(row.origin))
+			.map((row) => ({ key: row.toKey, kind: row.kind, origin: row.origin })),
+		...incoming
+			.filter(
+				(row) => row.kind === "related" && !isManualItemLinkOrigin(row.origin),
+			)
+			.map((row) => ({ key: row.fromKey, kind: row.kind, origin: row.origin })),
+	];
+	const citedBy: AdminLinkRow[] = incoming
+		.filter((row) => row.kind === "cites")
+		.map((row) => ({ key: row.fromKey, kind: row.kind, origin: row.origin }));
+	const targetKeys = [
+		...new Set([
+			...keys.keys.cites,
+			...keys.keys.related,
+			...keys.publishedKeys.cites,
+			...keys.publishedKeys.related,
+			...fromSources.map((row) => row.key),
+			...citedBy.map((row) => row.key),
+		]),
+	];
+	const targetRows =
+		targetKeys.length > 0
+			? await db
+					.select({
+						deleted: item.deleted,
+						itemType: item.itemType,
+						key: item.key,
+						title: item.title,
+					})
+					.from(item)
+					.where(inArray(item.key, targetKeys))
+			: [];
+	return {
+		citedBy,
+		fromSources,
+		keys: keys.keys,
+		publishedKeys: keys.publishedKeys,
+		targets: targetRows.map((row) => ({
+			deleted: row.deleted === 1,
+			itemType: row.itemType,
+			key: row.key,
+			title: row.title?.trim() || "Untitled record",
+		})),
+	};
+}
+
 export async function getAdminItemDetail(
 	db: Database,
 	itemKey: string,
@@ -286,24 +371,27 @@ export async function getAdminItemDetail(
 		]);
 	if (!published && !draft) throw new ItemNotFoundError(itemKey);
 
-	const [tagRows, membershipRows, attachments] = await Promise.all([
-		published
-			? db
-					.select({ name: itemToTag.tagName })
-					.from(itemToTag)
-					.where(eq(itemToTag.itemKey, itemKey))
-			: Promise.resolve([]),
-		published
-			? db
-					.select({ key: itemToCollection.collectionKey })
-					.from(itemToCollection)
-					.where(eq(itemToCollection.itemKey, itemKey))
-			: Promise.resolve([]),
-		getAdminAttachments(db, itemKey),
-	]);
+	const [tagRows, membershipRows, attachments, publishedLinkKeys] =
+		await Promise.all([
+			published
+				? db
+						.select({ name: itemToTag.tagName })
+						.from(itemToTag)
+						.where(eq(itemToTag.itemKey, itemKey))
+				: Promise.resolve([]),
+			published
+				? db
+						.select({ key: itemToCollection.collectionKey })
+						.from(itemToCollection)
+						.where(eq(itemToCollection.itemKey, itemKey))
+				: Promise.resolve([]),
+			getAdminAttachments(db, itemKey),
+			getManualLinkKeys(db, itemKey),
+		]);
 	const basePayload = publishedAdminItemPayload(published, {
 		collectionKeys: membershipRows.map(({ key }) => key),
 		hasPublishedFile: Boolean(filePublication),
+		links: publishedLinkKeys,
 		tags: tagRows.map(({ name }) => name),
 	});
 	const payload = draft
@@ -313,6 +401,11 @@ export async function getAdminItemDetail(
 	const draftCollections = draft
 		? payloadStringList(payload, "collections")
 		: null;
+	const draftLinkKeys = payloadLinkKeys(payload) ?? publishedLinkKeys;
+	const links = await adminItemLinks(db, itemKey, {
+		keys: draftLinkKeys,
+		publishedKeys: publishedLinkKeys,
+	});
 	const parentItem =
 		typeof payload.parentItem === "string" ? payload.parentItem : null;
 	const [parentPublished, parentDraft] = parentItem
@@ -369,6 +462,7 @@ export async function getAdminItemDetail(
 			importedItemEditBlockReason(writeback) === null,
 		fileDraft: fileDraftJson(fileDraft),
 		filePublication: filePublicationJson(filePublication),
+		links,
 		parentItem,
 		parentState:
 			parentItem && (parentPublished || parentDraft)

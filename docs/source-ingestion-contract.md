@@ -210,6 +210,16 @@ Collection membership replacement is scoped to the source being ingested.
 Memberships whose collection belongs to another source, including native
 curation collections, are retained across remote updates.
 
+Related-link replacement (`itemLink` rows of kind `related`) is scoped to the
+source being ingested and to that source's own rows (`origin = source:<key>`);
+each owner keeps its own row for a pair. Zotero `dc:relation` URIs resolve only
+when they name this connection's own library and a record of that source; other
+libraries, unparseable URIs and unknown keys are counted as
+`unresolvedRelations` in the sync result and retried the next time that record
+syncs. Rows owned by the editor (`origin = manual`) or by another source are
+never changed by a sync. The record on the other end of a changed source link is
+reindexed like an affected parent so its public "related" view updates.
+
 A remote deletion tombstones the canonical item only when that connection owns
 the canonical record. For linked native or differently owned items, it marks
 the source link as remotely deleted while preserving local metadata and files.

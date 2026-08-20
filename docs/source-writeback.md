@@ -63,6 +63,29 @@ sending. If the source changed while the link was paused, the link enters the
 popover offers two confirmed choices: send this record over the source, or
 load the source's copy over this record. Ordinary in-flight `412` conflicts
 still reload and resend as before.
+### Related links
+
+The `itemLink` table, not the record's `relations` JSON, decides what a source
+sees as "related". When the worker builds an item payload it replaces
+`relations["dc:relation"]` with the link table's answer for that source:
+
+- every outgoing `related` row (manual or source-owned), plus incoming rows the
+  editor made from the other record;
+- only targets that have a live link on the same source connection become
+  URIs (`http://zotero.org/groups/<id>/items/<key>`);
+- incoming source-owned rows are left out because they are the source's own
+  mirror of the other item.
+
+Other predicates in the JSON (`owl:sameAs`, Mendeley identifiers) are kept.
+Publishing a record whose manual "related" set changed marks that record dirty
+with `relations`; the source mirrors the pair onto the other item itself.
+Removing a manual related link also drops the mirrored source-owned reverse row
+so both public pages update at once; the next sync restores it if the source
+still has it. "Cites" links are never written to a source.
+
+`npm run test:source-writeback` covers the payload rule with the fake adapter and
+`npm run test:zotero-writeback-live` proves the round trip against the Zotero
+playground group.
 
 ## Run the worker
 

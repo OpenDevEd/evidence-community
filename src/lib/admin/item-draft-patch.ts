@@ -42,10 +42,13 @@ export function publishedAdminItemPayload(
 	{
 		collectionKeys = [],
 		hasPublishedFile = false,
+		links,
 		tags = [],
 	}: {
 		collectionKeys?: string[];
 		hasPublishedFile?: boolean;
+		/** Editor-owned outgoing links. Leave out for payloads that must not carry links (writeback). */
+		links?: { cites: string[]; related: string[] };
 		tags?: string[];
 	} = {},
 ) {
@@ -60,6 +63,9 @@ export function publishedAdminItemPayload(
 	}
 	payload.collections = [...collectionKeys].sort();
 	payload.tags = [...tags].sort();
+	if (links) {
+		payload.links = { cites: [...links.cites], related: [...links.related] };
+	}
 	return payload;
 }
 

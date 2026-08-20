@@ -914,10 +914,12 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 					batches: 1,
 					records: 0,
 					targetVersion: manifest.targetVersion,
+					unresolvedRelations: 0,
 				};
 			}
 
 			let batches = 0;
+			let unresolvedRelations = 0;
 			while (offset < manifest.entries.length) {
 				const end = Math.min(
 					offset + config.maxRecordsPerBatch,
@@ -946,7 +948,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 									targetVersion: manifest.targetVersion,
 								},
 							};
-				await writeSourceIngestionBatch(options.database, {
+				const written = await writeSourceIngestionBatch(options.database, {
 					...mapped,
 					expectedCursor,
 					fetchedAt,
@@ -954,6 +956,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 					nextCursor,
 					sourceConnectionKey: options.sourceConnectionKey,
 				});
+				unresolvedRelations += written.written.unresolvedRelations;
 				await options.attachmentProcessor?.flushCleanup?.(
 					options.sourceConnectionKey,
 				);
@@ -965,6 +968,7 @@ export async function syncZoteroSource(options: SyncZoteroSourceOptions) {
 				batches,
 				records: manifest.entries.length,
 				targetVersion: manifest.targetVersion,
+				unresolvedRelations,
 			};
 		} catch (error) {
 			if (

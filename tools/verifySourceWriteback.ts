@@ -1122,6 +1122,65 @@ async function verify() {
 			"Unpublishing changed the record's source selection",
 		);
 
+		// Related links: the payload sent to the source carries dc:relation from the link table
+		// for targets linked to this source, and nothing for targets that are not.
+		const relatedSource = await createNativeItemDraft(db, {
+			itemType: "report",
+			title: "Related source record",
+		});
+		const relatedTarget = await createNativeItemDraft(db, {
+			itemType: "report",
+			title: "Related target record",
+		});
+		const unlinkedTarget = await createNativeItemDraft(db, {
+			itemType: "report",
+			title: "Related target without a source link",
+		});
+		createdItemKeys.push(
+			relatedSource.itemKey,
+			relatedTarget.itemKey,
+			unlinkedTarget.itemKey,
+		);
+		await publishItemDraft(db, relatedTarget.itemKey);
+		await publishItemDraft(db, relatedSource.itemKey);
+		await publishItemDraft(db, unlinkedTarget.itemKey);
+		await db
+			.delete(itemSourceLink)
+			.where(eq(itemSourceLink.itemKey, unlinkedTarget.itemKey));
+		while ((await processNextSourceWritebackJob(consumerOptions)).status !== "idle") {
+			// drain creates
+		}
+		const relatedDraft = await openItemDraft(db, relatedSource.itemKey);
+		await saveItemDraft(db, {
+			itemKey: relatedSource.itemKey,
+			expectedDraftRevision: relatedDraft.draftRevision,
+			expectedPayload: relatedDraft.payload,
+			payload: {
+				...relatedDraft.payload,
+				links: {
+					cites: [],
+					related: [relatedTarget.itemKey, unlinkedTarget.itemKey],
+				},
+			},
+		});
+		await publishItemDraft(db, relatedSource.itemKey);
+		const callsBeforeRelated = calls.length;
+		const relatedResult = await processNextSourceWritebackJob(consumerOptions);
+		const relatedCall = calls.at(-1);
+		const sentRelations = relatedCall?.payload.relations as
+			| Record<string, unknown>
+			| undefined;
+		assert(
+			relatedResult.status === "processed" &&
+				calls.length === callsBeforeRelated + 1 &&
+				relatedCall?.entity === "item" &&
+				relatedCall.itemKey === relatedSource.itemKey &&
+				relatedCall.dirtyFields.includes("relations") &&
+				sentRelations?.["dc:relation"] ===
+					`http://zotero.org/groups/writeback-${marker}/items/${relatedTarget.itemKey}`,
+			`Related writeback payload is wrong: ${JSON.stringify({ dirtyFields: relatedCall?.dirtyFields, relations: sentRelations, status: relatedResult.status })}`,
+		);
+
 		console.log(
 			JSON.stringify(
 				{

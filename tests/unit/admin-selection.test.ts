@@ -13,6 +13,13 @@ function attachmentDetail(key: string): AdminItemDetail {
 		editable: true,
 		fileDraft: null,
 		filePublication: null,
+		links: {
+			fromSources: [],
+			citedBy: [],
+			keys: { cites: [], related: [] },
+			publishedKeys: { cites: [], related: [] },
+			targets: [],
+		},
 		fileState: "none",
 		itemType: "Attachment",
 		key,
@@ -69,5 +76,16 @@ describe("resolveAdminSelection", () => {
 				"ITEM0001",
 			),
 		).toBe("ITEM0001");
+	});
+
+	it("keeps the open record selected while it is pinned, even when hidden", () => {
+		expect(
+			resolveAdminSelection("OPEN2345", new Set(["AAAA2345"]), null, "AAAA2345", {
+				pinned: true,
+			}),
+		).toBe("OPEN2345");
+		expect(
+			resolveAdminSelection("OPEN2345", new Set(["AAAA2345"]), null, "AAAA2345"),
+		).toBe("AAAA2345");
 	});
 });

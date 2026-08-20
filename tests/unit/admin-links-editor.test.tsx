@@ -1,0 +1,223 @@
+// @vitest-environment jsdom
+
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { AdminItemDetail, AdminSource } from "@/lib/admin/types";
+
+vi.mock("server-only", () => ({}));
+
+import { AdminLinksEditor } from "@/components/admin/AdminLinksEditor";
+
+const sources: AdminSource[] = [
+	{
+		key: "zotero-main",
+		label: "Main Zotero group",
+		provider: "zotero",
+		readOnly: false,
+		status: "active",
+		writeback: { enabled: true, supported: true },
+	} as AdminSource,
+];
+
+function detail(): AdminItemDetail {
+	return {
+		attachments: [],
+		collectionKeys: [],
+		creators: [],
+		date: null,
+		draft: null,
+		editable: true,
+		fileDraft: null,
+		filePublication: null,
+		fileState: "none",
+		itemType: "Book",
+		key: "SELF2345",
+		links: {
+			fromSources: [{ key: "SRCA2345", kind: "related", origin: "source:zotero-main" }],
+			citedBy: [{ key: "INCA2345", kind: "cites", origin: "manual" }],
+			keys: { cites: ["AAAA2345"], related: [] },
+			publishedKeys: { cites: ["AAAA2345", "GONE2345"], related: [] },
+			targets: [
+				{ deleted: false, itemType: "Book", key: "AAAA2345", title: "Kept book" },
+				{ deleted: false, itemType: "Report", key: "GONE2345", title: "Removed report" },
+				{ deleted: false, itemType: "Book", key: "SRCA2345", title: "From Zotero" },
+				{ deleted: false, itemType: "Book", key: "INCA2345", title: "Citing book" },
+			],
+		},
+		parentItem: null,
+		parentState: null,
+		published: { itemType: "Book", title: "Self" },
+		publishedCollectionKeys: [],
+		publishedTags: [],
+		revision: 2,
+		sourceConnectionKey: "native",
+		sourceFileUrl: null,
+		state: "published",
+		tags: [],
+		title: "Self",
+		updatedAt: "2026-01-01T00:00:00.000Z",
+		writeback: {
+			available: [],
+			originSourceKey: null,
+			selected: [],
+		},
+	};
+}
+
+describe("AdminLinksEditor", () => {
+	let container: HTMLDivElement;
+	let root: Root;
+
+	beforeEach(() => {
+		container = document.createElement("div");
+		document.body.append(container);
+		root = createRoot(container);
+	});
+
+	afterEach(async () => {
+		await act(async () => root.unmount());
+		container.remove();
+	});
+
+	async function render(
+		payload: Record<string, unknown>,
+		onChange = vi.fn(),
+		readOnly = false,
+		pick: {
+			onStartPick?: (kind: "cites" | "related") => void;
+			onStopPick?: () => void;
+			pickingKind?: "cites" | "related" | null;
+		} = {},
+	) {
+		await act(async () => {
+			root.render(
+				<AdminLinksEditor
+					detail={detail()}
+					errors={{}}
+					knownTargets={[
+						{ deleted: false, itemType: "Thesis", key: "NEWW2345", title: "Just picked" },
+					]}
+					onChange={onChange}
+					onStartPick={pick.onStartPick}
+					onStopPick={pick.onStopPick}
+					payload={payload}
+					pickingKind={pick.pickingKind ?? null}
+					readOnly={readOnly}
+					sources={sources}
+				/>,
+			);
+		});
+		return onChange;
+	}
+
+	it("shows the three lists with change markers and locked source rows", async () => {
+		await render({
+			itemType: "Book",
+			links: { cites: ["AAAA2345", "NEWW2345"], related: [] },
+		});
+		const headings = [...container.querySelectorAll("h4")].map((node) => node.textContent);
+		expect(headings).toEqual(["Cites", "Related", "Cited by"]);
+
+		const cites = [...container.querySelectorAll('[data-admin-link-kind="cites"]')]
+			.filter((node) => node.closest('[data-admin-link-list="cites"]'))
+			.map((node) => [
+				node.getAttribute("data-admin-link-key"),
+				node.getAttribute("data-admin-link-change"),
+			]);
+		expect(cites).toEqual([
+			["AAAA2345", "unchanged"],
+			["NEWW2345", "added"],
+			["GONE2345", "removed"],
+		]);
+		expect(container.textContent).toContain("Added in this draft");
+		expect(container.textContent).toContain("Removed in this draft");
+
+		const sourceRow = container.querySelector('[data-admin-link-key="SRCA2345"]');
+		expect(sourceRow?.getAttribute("data-admin-link-origin")).toBe("source:zotero-main");
+		expect(sourceRow?.querySelector('button[aria-label^="Remove"]')).toBeNull();
+		expect(sourceRow?.querySelector('[aria-label="Read only"]')).not.toBeNull();
+		expect(sourceRow?.textContent).toContain("Main Zotero group");
+
+		const incoming = container.querySelector('[data-admin-link-incoming="cites"]');
+		expect(incoming?.textContent).toContain("Citing book");
+		expect(incoming?.querySelector('button[aria-label^="Remove"]')).toBeNull();
+	});
+
+	it("removes a manual link through onChange and keeps everything else", async () => {
+		const onChange = await render({
+			itemType: "Book",
+			links: { cites: ["AAAA2345"], related: ["BBBB2345"] },
+		});
+		const remove = container.querySelector<HTMLButtonElement>(
+			'button[aria-label="Remove Kept book from Cites"]',
+		);
+		expect(remove).not.toBeNull();
+		await act(async () => remove!.click());
+		expect(onChange).toHaveBeenCalledWith({
+			itemType: "Book",
+			links: { cites: [], related: ["BBBB2345"] },
+		});
+	});
+
+	it("hands picking over to the record table instead of opening a dialog", async () => {
+		const onStartPick = vi.fn();
+		const onStopPick = vi.fn();
+		await render({ itemType: "Book", links: { cites: [], related: [] } }, vi.fn(), false, {
+			onStartPick,
+			onStopPick,
+		});
+		expect(container.querySelector('[role="dialog"]')).toBeNull();
+		const add = container.querySelector<HTMLButtonElement>('[data-admin-link-pick="cites"]');
+		expect(add?.textContent).toBe("Add to Cites");
+		await act(async () => add!.click());
+		expect(onStartPick).toHaveBeenCalledWith("cites");
+
+		await render({ itemType: "Book", links: { cites: [], related: [] } }, vi.fn(), false, {
+			onStartPick,
+			onStopPick,
+			pickingKind: "cites",
+		});
+		const done = container.querySelector<HTMLButtonElement>('[data-admin-link-pick="cites"]');
+		expect(done?.textContent).toBe("Done picking");
+		expect(done?.getAttribute("aria-pressed")).toBe("true");
+		expect(container.textContent).toContain("Click records in the list to add them under Cites");
+		await act(async () => done!.click());
+		expect(onStopPick).toHaveBeenCalled();
+	});
+
+	it("opens a linked record when its title is clicked", async () => {
+		const onOpenRecord = vi.fn();
+		await act(async () => {
+			root.render(
+				<AdminLinksEditor
+					detail={detail()}
+					errors={{}}
+					onChange={vi.fn()}
+					onOpenRecord={onOpenRecord}
+					payload={{ itemType: "Book", links: { cites: ["AAAA2345"], related: [] } }}
+					readOnly={false}
+					sources={sources}
+				/>,
+			);
+		});
+		const open = container.querySelector<HTMLButtonElement>('button[aria-label="Open Kept book"]');
+		expect(open).not.toBeNull();
+		await act(async () => open!.click());
+		expect(onOpenRecord).toHaveBeenCalledWith("AAAA2345");
+		// Incoming rows open too
+		const openIncoming = container.querySelector<HTMLButtonElement>(
+			'button[aria-label="Open Citing book"]',
+		);
+		expect(openIncoming).not.toBeNull();
+	});
+
+	it("offers no add or remove controls when read only", async () => {
+		await render({ itemType: "Book", links: { cites: ["AAAA2345"], related: [] } }, vi.fn(), true, {
+			onStartPick: vi.fn(),
+		});
+		expect(container.querySelector('button[aria-label^="Remove"]')).toBeNull();
+		expect(container.textContent).not.toContain("Add to Cites");
+	});
+});

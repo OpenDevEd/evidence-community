@@ -80,6 +80,9 @@ export function editablePayloadFromDetail(
 	if (sharedFields.has("collections")) {
 		payload.collections = detail.collectionKeys;
 	}
+	if (sharedFields.has("links")) {
+		payload.links = detail.links.publishedKeys;
+	}
 	if (sharedFields.has("creators")) {
 		payload.creators = published.creators ?? detail.creators;
 	}

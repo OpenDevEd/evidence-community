@@ -1,5 +1,6 @@
 "use client";
 
+import type { ItemLinks } from "@/app/api/item/types";
 import { RelationsType } from "@/types/item";
 import useSWR from "swr";
 import { fetcherPOST } from "@/lib/utils";
@@ -9,45 +10,14 @@ import { ListItem } from "@/app/api/item/types";
 import Resource from "../items/Resource";
 import { useTranslations } from "next-intl";
 import { ItemsBatchResponse } from "@/app/api/items/batch/route";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Tabs, Tab } from "@/components/nextui/Tabs";
 import { Pagination } from "@/components/nextui/Pagination";
 import { Select } from "@/components/nextui/Select";
 import { SelectItem } from "@/components/nextui/SelectItem";
 import { Spinner } from "@nextui-org/react";
 import { twMerge } from "tailwind-merge";
-
-function extractGeneralRelationKeys(relations: RelationsType): string[] {
-	const obj = relations || {};
-	const relationsObject = {
-		"dc:relation": obj["dc:relation"] || [],
-		"owl:sameAs": obj["owl:sameAs"] || [],
-		related_works: obj["related_works"] || [],
-	};
-
-	const keys: string[] = [];
-	Object.values(relationsObject).forEach((value) => {
-		const valueArray = Array.isArray(value) ? value : [value];
-		valueArray.forEach((v) => {
-			const key = typeof v === "string" ? v.split("/").pop() : null;
-			if (key) keys.push(key);
-		});
-	});
-
-	return keys;
-}
-
-function extractCitesKeys(relations: RelationsType): string[] {
-	const obj = relations || {};
-	const cites = obj["cites"] || [];
-	return Array.isArray(cites) ? cites : [];
-}
-
-function extractCitedByKeys(relations: RelationsType): string[] {
-	const obj = relations || {};
-	const citedBy = obj["citedBy"] || [];
-	return Array.isArray(citedBy) ? citedBy : [];
-}
+import { planRelationTabs, type RelationTabKey } from "./relation-tabs";
 
 function CountBadge({ count, isLoading, className = "" }: { count: number; isLoading: boolean; className?: string }) {
 	return (
@@ -235,14 +205,30 @@ function RelationsDesktopTabs({
 	);
 }
 
+function useRelationItems(keys: string[], page: number) {
+	return useSWR<ItemsBatchResponse>(
+		keys.length > 0 ? [`/items/batch`, { keys, page, perPage: 20 }] : null,
+		fetcherPOST,
+		{
+			revalidateOnFocus: false,
+			revalidateIfStale: false,
+			revalidateOnReconnect: false,
+			shouldRetryOnError: false,
+			keepPreviousData: true,
+		},
+	);
+}
+
 export default function Relations({
-	value,
+	links,
+	relations,
 	selectedTab,
 	onTabChange,
 	showTabsOnly,
 	showContentOnly,
 }: {
-	value: RelationsType;
+	links: ItemLinks | undefined;
+	relations: RelationsType;
 	selectedTab?: string;
 	onTabChange?: (key: string) => void;
 	showTabsOnly?: boolean;
@@ -250,16 +236,16 @@ export default function Relations({
 }) {
 	const t = useTranslations("ui");
 	const [internalSelectedTab, setInternalSelectedTab] = useState("general");
-	const activeTab = selectedTab ?? internalSelectedTab;
+	const requestedTab = selectedTab ?? internalSelectedTab;
 	const handleTabChange = onTabChange ?? setInternalSelectedTab;
 
-	const [pages, setPages] = useState({
+	const [pages, setPages] = useState<Record<RelationTabKey, number>>({
 		general: 1,
 		cites: 1,
 		citedBy: 1,
 	});
 
-	const handlePageChange = (key: keyof typeof pages, page: number) => {
+	const handlePageChange = (key: RelationTabKey, page: number) => {
 		setPages((prev) => ({ ...prev, [key]: page }));
 		const element = document.getElementById("relations-tabs");
 		if (element) {
@@ -267,94 +253,49 @@ export default function Relations({
 		}
 	};
 
-	const generalKeys = useMemo(() => extractGeneralRelationKeys(value), [value]);
-	const citesKeys = useMemo(() => extractCitesKeys(value), [value]);
-	const citedByKeys = useMemo(() => extractCitedByKeys(value), [value]);
+	const plan = planRelationTabs({ activeTab: requestedTab, links, relations });
+	const activeTab = plan.activeTab;
+	const keysFor = (key: RelationTabKey) =>
+		plan.tabs.find((tab) => tab.key === key)?.keys ?? [];
 
-	const { data: generalData, isLoading: generalLoading } =
-		useSWR<ItemsBatchResponse>(
-			generalKeys.length > 0
-				? [`/items/batch`, { keys: generalKeys, page: pages.general, perPage: 20 }]
-				: null,
-			fetcherPOST,
-			{
-				revalidateOnFocus: false,
-				revalidateIfStale: false,
-				revalidateOnReconnect: false,
-				shouldRetryOnError: false,
-				keepPreviousData: true,
-			}
-		);
+	const { data: generalData, isLoading: generalLoading } = useRelationItems(
+		keysFor("general"),
+		pages.general,
+	);
+	const { data: citesData, isLoading: citesLoading } = useRelationItems(
+		keysFor("cites"),
+		pages.cites,
+	);
+	const { data: citedByData, isLoading: citedByLoading } = useRelationItems(
+		keysFor("citedBy"),
+		pages.citedBy,
+	);
 
-	const { data: citesData, isLoading: citesLoading } =
-		useSWR<ItemsBatchResponse>(
-			citesKeys.length > 0
-				? [`/items/batch`, { keys: citesKeys, page: pages.cites, perPage: 20 }]
-				: null,
-			fetcherPOST,
-			{
-				revalidateOnFocus: false,
-				revalidateIfStale: false,
-				revalidateOnReconnect: false,
-				shouldRetryOnError: false,
-				keepPreviousData: true,
-			}
-		);
+	const labels: Record<RelationTabKey, string> = {
+		general: t("relatedResources"),
+		cites: t("cites"),
+		citedBy: t("citedBy"),
+	};
+	const dataFor: Record<
+		RelationTabKey,
+		{ data: ItemsBatchResponse | undefined; isLoading: boolean }
+	> = {
+		general: { data: generalData, isLoading: generalLoading },
+		cites: { data: citesData, isLoading: citesLoading },
+		citedBy: { data: citedByData, isLoading: citedByLoading },
+	};
 
-	const { data: citedByData, isLoading: citedByLoading } =
-		useSWR<ItemsBatchResponse>(
-			citedByKeys.length > 0
-				? [`/items/batch`, { keys: citedByKeys, page: pages.citedBy, perPage: 20 }]
-				: null,
-			fetcherPOST,
-			{
-				revalidateOnFocus: false,
-				revalidateIfStale: false,
-				revalidateOnReconnect: false,
-				shouldRetryOnError: false,
-				keepPreviousData: true,
-			}
-		);
-
-	const generalItems = generalData?.items ?? [];
-	const citesItems = citesData?.items ?? [];
-	const citedByItems = citedByData?.items ?? [];
-
-	const tabs: RelationTab[] = [
-		{
-			key: "general",
-			label: t("relatedResources"),
-			keys: generalKeys,
-			items: generalItems,
-			isLoading: generalLoading,
-			count: generalData?.total ?? generalKeys.length,
-			totalPages: generalData?.totalPages ?? 1,
-			currentPage: pages.general,
-			onPageChange: (page: number) => handlePageChange("general", page),
-		},
-		{
-			key: "cites",
-			label: t("cites"),
-			keys: citesKeys,
-			items: citesItems,
-			isLoading: citesLoading,
-			count: citesData?.total ?? citesKeys.length,
-			totalPages: citesData?.totalPages ?? 1,
-			currentPage: pages.cites,
-			onPageChange: (page: number) => handlePageChange("cites", page),
-		},
-		{
-			key: "citedBy",
-			label: t("citedBy"),
-			keys: citedByKeys,
-			items: citedByItems,
-			isLoading: citedByLoading,
-			count: citedByData?.total ?? citedByKeys.length,
-			totalPages: citedByData?.totalPages ?? 1,
-			currentPage: pages.citedBy,
-			onPageChange: (page: number) => handlePageChange("citedBy", page),
-		},
-	];
+	const tabs: RelationTab[] = plan.tabs.map(({ key, keys }) => ({
+		key,
+		label: labels[key],
+		keys,
+		items: dataFor[key].data?.items ?? [],
+		isLoading: dataFor[key].isLoading,
+		count: dataFor[key].data?.total ?? keys.length,
+		totalPages: dataFor[key].data?.totalPages ?? 1,
+		currentPage: pages[key],
+		onPageChange: (page: number) => handlePageChange(key, page),
+	}));
 
 	if (showTabsOnly) {
 		return (

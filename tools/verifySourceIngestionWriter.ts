@@ -12,6 +12,7 @@ import {
 import { and, eq, inArray, isNull } from "drizzle-orm";
 
 import { createPostgresDatabaseResource } from "../src/db/postgres";
+import { itemLink } from "../src/db/schema/tables/itemLink";
 import {
 	publicationSyncJob,
 	publicationTarget,
@@ -50,6 +51,7 @@ const connectionKeys = [
 	"zotero-staging-writer",
 	"zotero-native-link-writer",
 	"zotero-native-file-writer",
+	"zotero-links-writer",
 ];
 const tagNames = [
 	"attachment-tag",
@@ -127,6 +129,12 @@ async function verify() {
 				provider: "zotero",
 				scopeKind: "group",
 				externalScopeKey: "writer-zotero-native-file",
+			},
+			{
+				key: "zotero-links-writer",
+				provider: "zotero",
+				scopeKind: "group",
+				externalScopeKey: "999",
 			},
 		]);
 
@@ -2037,6 +2045,135 @@ async function verify() {
 			parentEvents.at(-1)?.operation === "delete",
 			"Deleting a child resurrected its tombstoned parent in the outbox",
 		);
+		// Zotero "related" links are mirrored into itemLink for the ingesting source only.
+		const relatedUri = (key: string) =>
+			`http://zotero.org/groups/999/items/${key}`;
+		const linksBatchOne = await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-links-writer",
+				expectedCursor: {},
+				nextCursor: { version: 1 },
+			}),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "RELA2345",
+					remoteVersion: "1",
+					raw: { key: "RELA2345", version: 1 },
+					metadata: {
+						itemType: "Book",
+						title: "Related one",
+						relations: {
+							"dc:relation": [
+								relatedUri("RELB2345"),
+								relatedUri("MISSNG23"),
+								relatedUri("RELA2345"),
+								// Same key, another library: must stay unresolved.
+								"http://zotero.org/groups/998/items/RELB2345",
+							],
+						},
+					},
+				},
+				{
+					operation: "upsert",
+					sourceRecordKey: "RELB2345",
+					remoteVersion: "1",
+					raw: { key: "RELB2345", version: 1 },
+					metadata: {
+						itemType: "Book",
+						title: "Related two",
+						relations: { "dc:relation": relatedUri("RELA2345") },
+					},
+				},
+			],
+		});
+		const relaKey = linksBatchOne.itemKeys.RELA2345!;
+		const relbKey = linksBatchOne.itemKeys.RELB2345!;
+		const linksAfterOne = await db
+			.select()
+			.from(itemLink)
+			.where(inArray(itemLink.fromKey, [relaKey, relbKey]))
+			.orderBy(itemLink.fromKey);
+		assert(
+			linksAfterOne.length === 2 &&
+				linksAfterOne.every(
+					(row) =>
+						row.kind === "related" &&
+						row.origin === "source:zotero-links-writer",
+				) &&
+				linksAfterOne[0]!.toKey === relbKey &&
+				linksAfterOne[1]!.toKey === relaKey,
+			`Zotero related links were not mirrored: ${JSON.stringify(linksAfterOne)}`,
+		);
+		assert(
+			linksBatchOne.written.unresolvedRelations === 2,
+			`Unresolved and foreign-library relations must be counted (got ${String(linksBatchOne.written.unresolvedRelations)})`,
+		);
+		await db.insert(itemLink).values({
+			fromKey: relaKey,
+			toKey: relbKey,
+			kind: "cites",
+			origin: "manual",
+		});
+		const linksBatchTwo = await writeSourceIngestionBatch(db, {
+			...baseBatch({
+				connectionKey: "zotero-links-writer",
+				expectedCursor: { version: 1 },
+				nextCursor: { version: 2 },
+			}),
+			items: [
+				{
+					operation: "upsert",
+					sourceRecordKey: "RELA2345",
+					remoteVersion: "2",
+					raw: { key: "RELA2345", version: 2 },
+					metadata: {
+						itemType: "Book",
+						title: "Related one",
+						relations: {},
+					},
+				},
+			],
+		});
+		const relbAfterRemoval = await db
+			.select({ revision: item.revision })
+			.from(item)
+			.where(eq(item.key, relbKey))
+			.then((rows) => rows[0]!);
+		const linksAfterTwo = await db
+			.select()
+			.from(itemLink)
+			.where(inArray(itemLink.fromKey, [relaKey, relbKey]))
+			.orderBy(itemLink.fromKey, itemLink.kind);
+		assert(
+			linksBatchTwo.written.unresolvedRelations === 0 &&
+				linksAfterTwo.length === 2 &&
+				linksAfterTwo.some(
+					(row) =>
+						row.fromKey === relaKey &&
+						row.kind === "cites" &&
+						row.origin === "manual",
+				) &&
+				linksAfterTwo.some(
+					(row) =>
+						row.fromKey === relbKey &&
+						row.kind === "related" &&
+						row.origin === "source:zotero-links-writer",
+				),
+			`Resync must drop the source's stale related row and keep manual rows: ${JSON.stringify(linksAfterTwo)}`,
+		);
+		const relbOutbox = await db
+			.select({ revision: outbox.revision })
+			.from(outbox)
+			.where(eq(outbox.entityKey, relbKey))
+			.orderBy(outbox.id);
+		assert(
+			relbOutbox.length >= 2 &&
+				relbOutbox.at(-1)!.revision === relbAfterRemoval.revision &&
+				linksBatchTwo.written.outboxEvents >= 2,
+			`Removing a source link must reindex the other record: ${JSON.stringify({ outbox: relbOutbox, revisionAfter: relbAfterRemoval.revision, written: linksBatchTwo.written })}`,
+		);
+
 		console.log(
 			JSON.stringify({
 				attachmentKey,

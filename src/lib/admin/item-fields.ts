@@ -12,10 +12,14 @@ export const ADMIN_SHARED_PAYLOAD_FIELDS = new Set([
 	"collections",
 	"creators",
 	"itemType",
+	"links",
 	"parentItem",
 	"relations",
 	"tags",
 ]);
+
+export const ITEM_LINK_PAYLOAD_KINDS = ["cites", "related"] as const;
+export const MAX_ITEM_LINKS_PER_KIND = 500;
 
 const PARENT_CAPABLE_ITEM_TYPES = new Set(["annotation", "attachment", "note"]);
 // Attachments, notes and annotations always belong to a record. None of

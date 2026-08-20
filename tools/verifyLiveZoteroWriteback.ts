@@ -30,10 +30,13 @@ import {
 } from "../src/lib/admin/native-file-service";
 import {
 	createNativeItemDraft,
+	openItemDraft,
 	publishItemDraft,
 	publishItemDraftWithContext,
 	removeNativeItem,
+	saveItemDraft,
 } from "../src/lib/admin/native-item-service";
+import { itemLink } from "../src/db/schema/tables/itemLink";
 import { runSourceConnection } from "../src/lib/source-ingestion/orchestrator";
 import { createSourceSyncRuntime } from "../src/lib/source-ingestion/runtime";
 import {
@@ -759,6 +762,117 @@ async function verifyLiveWriteback() {
 			loadRemoteStatus.status.state === "synced" &&
 				localAfterLoad?.title === "Zotero wins this time",
 			"Choosing to load Zotero's version did not replace the local record",
+		);
+
+		// Related links: a manual "related" link between two native records reaches Zotero
+		// as dc:relation on both items, survives an unrelated owl:sameAs, comes back as a
+		// source-owned row on the next sync, and disappears on both sides when removed.
+		const relatedDraft = await createNativeItemDraft(database, {
+			itemType: "Report",
+			tags: [marker],
+			title: `OpenScholar live writeback related ${marker}`,
+		});
+		itemKeys.push(relatedDraft.itemKey);
+		await publishItemDraft(database, relatedDraft.itemKey);
+		await drainWriteback(database, config, itemKeys, "related-create");
+		const relatedUri = `http://zotero.org/groups/${ZOTERO_PLAYGROUND.groupId}/items/${relatedDraft.itemKey}`;
+		const parentUri = `http://zotero.org/groups/${ZOTERO_PLAYGROUND.groupId}/items/${parentDraft.itemKey}`;
+		const sameAsUri = `http://zotero.org/groups/${ZOTERO_PLAYGROUND.groupId}/items/${attachmentDraft.itemKey}`;
+		const linkDraft = await openItemDraft(database, parentDraft.itemKey);
+		await saveItemDraft(database, {
+			itemKey: parentDraft.itemKey,
+			expectedDraftRevision: linkDraft.draftRevision,
+			expectedPayload: linkDraft.payload,
+			payload: {
+				...linkDraft.payload,
+				links: { cites: [attachmentDraft.itemKey], related: [relatedDraft.itemKey] },
+				relations: { "owl:sameAs": sameAsUri },
+			},
+		});
+		await publishItemDraft(database, parentDraft.itemKey);
+		await drainWriteback(database, config, itemKeys, "related-add");
+		const [remoteParentLinked, remoteRelatedLinked] = await Promise.all([
+			remoteItem(zotero.client, zotero.prefix, parentDraft.itemKey),
+			remoteItem(zotero.client, zotero.prefix, relatedDraft.itemKey),
+		]);
+		const parentRelations = remoteParentLinked.data.relations as Record<string, unknown>;
+		const relatedRelations = remoteRelatedLinked.data.relations as Record<string, unknown>;
+		assert(
+			parentRelations["dc:relation"] === relatedUri &&
+				parentRelations["owl:sameAs"] === sameAsUri &&
+				relatedRelations["dc:relation"] === parentUri,
+			`Related link did not reach Zotero on both items: ${JSON.stringify({ parentRelations, relatedRelations })}`,
+		);
+		await runSourceConnection({
+			credentialResolver: syncRuntime.credentialResolver,
+			database,
+			registry: syncRuntime.registry,
+			sourceConnectionKey: LIVE_ZOTERO_CONNECTION_KEY,
+			workerId: `zotero-live-writeback-related-inbound:${process.pid}`,
+		});
+		const linkRowsAfterSync = await database
+			.select({ fromKey: itemLink.fromKey, origin: itemLink.origin, toKey: itemLink.toKey })
+			.from(itemLink)
+			.where(
+				and(
+					eq(itemLink.kind, "related"),
+					inArray(itemLink.fromKey, [parentDraft.itemKey, relatedDraft.itemKey]),
+				),
+			);
+		const sourceOrigin = `source:${LIVE_ZOTERO_CONNECTION_KEY}`;
+		const hasRow = (fromKey: string, toKey: string, origin: string) =>
+			linkRowsAfterSync.some(
+				(row) => row.fromKey === fromKey && row.toKey === toKey && row.origin === origin,
+			);
+		assert(
+			hasRow(parentDraft.itemKey, relatedDraft.itemKey, "manual") &&
+				hasRow(parentDraft.itemKey, relatedDraft.itemKey, sourceOrigin) &&
+				hasRow(relatedDraft.itemKey, parentDraft.itemKey, sourceOrigin) &&
+				linkRowsAfterSync.length === 3,
+			`Inbound sync did not mirror the related link on both items as expected: ${JSON.stringify(linkRowsAfterSync)}`,
+		);
+		const unlinkDraft = await openItemDraft(database, parentDraft.itemKey);
+		await saveItemDraft(database, {
+			itemKey: parentDraft.itemKey,
+			expectedDraftRevision: unlinkDraft.draftRevision,
+			expectedPayload: unlinkDraft.payload,
+			payload: {
+				...unlinkDraft.payload,
+				links: { cites: [attachmentDraft.itemKey], related: [] },
+			},
+		});
+		await publishItemDraft(database, parentDraft.itemKey);
+		await drainWriteback(database, config, itemKeys, "related-remove");
+		const [remoteParentUnlinked, remoteRelatedUnlinked] = await Promise.all([
+			remoteItem(zotero.client, zotero.prefix, parentDraft.itemKey),
+			remoteItem(zotero.client, zotero.prefix, relatedDraft.itemKey),
+		]);
+		const parentAfter = remoteParentUnlinked.data.relations as Record<string, unknown>;
+		const relatedAfter = remoteRelatedUnlinked.data.relations as Record<string, unknown>;
+		assert(
+			parentAfter["dc:relation"] === undefined &&
+				parentAfter["owl:sameAs"] === sameAsUri &&
+				relatedAfter["dc:relation"] === undefined,
+			`Removing the related link did not clear both Zotero items: ${JSON.stringify({ parentAfter, relatedAfter })}`,
+		);
+		const linkRowsAfterRemove = await database
+			.select({ fromKey: itemLink.fromKey })
+			.from(itemLink)
+			.where(
+				and(
+					eq(itemLink.kind, "related"),
+					inArray(itemLink.fromKey, [parentDraft.itemKey, relatedDraft.itemKey]),
+				),
+			);
+		assert(
+			linkRowsAfterRemove.length === 0,
+			`Removing the related link left rows behind: ${JSON.stringify(linkRowsAfterRemove)}`,
+		);
+		await removeNativeItem(database, relatedDraft.itemKey);
+		await drainWriteback(database, config, itemKeys, "related-delete");
+		assert(
+			await remoteItemIsMissing(zotero.client, zotero.prefix, relatedDraft.itemKey),
+			"Deleting the related record did not delete its Zotero item",
 		);
 
 		await removeNativeItem(database, attachmentDraft.itemKey);
