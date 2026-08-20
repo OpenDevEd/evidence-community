@@ -88,4 +88,19 @@ describe("search index embedder settings", () => {
 			);
 		}
 	});
+
+	it("guards every field so a record with no title still renders", () => {
+		// Meilisearch fails the whole embedding task when the template reads
+		// a field the document does not have. Every field must sit inside an
+		// `{% if doc.<field> %}` guard.
+		const reads = [
+			...PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE.matchAll(/{{\s*doc\.(\w+)/g),
+		].map((match) => match[1]);
+		expect(reads.length).toBeGreaterThan(0);
+		for (const field of reads) {
+			expect(PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE).toContain(
+				`{% if doc.${field} %}`,
+			);
+		}
+	});
 });

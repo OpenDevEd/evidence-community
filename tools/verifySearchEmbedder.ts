@@ -154,6 +154,16 @@ function documents(indexName: string) {
 			itemType: "journalArticle",
 			deleted: 0,
 		},
+		{
+			// The live compose-e2e library held an untitled ComputerProgram.
+			// Meilisearch fails the whole embedding task when the template
+			// reads a field the document does not have.
+			key: `${indexName}-6`,
+			fullNames: [],
+			tags: [],
+			itemType: "computerProgram",
+			deleted: 0,
+		},
 	];
 }
 

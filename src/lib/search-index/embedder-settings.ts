@@ -23,8 +23,11 @@ export const PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE_MAX_BYTES = 8000;
  * projected search document (see `projection.ts`): title, abstract, creator
  * names, tags, and year. Libraries cannot change it.
  */
+// Every field sits inside an `if` guard. Meilisearch fails the whole
+// embedding task when a template reads a field that a document does not have,
+// and records such as an untitled ComputerProgram carry no `title`.
 export const PLATFORM_EMBEDDER_DOCUMENT_TEMPLATE = [
-	"A research record titled '{{doc.title}}'.",
+	"A research record{% if doc.title %} titled '{{doc.title}}'{% endif %}.",
 	"{% if doc.abstractNote %}Abstract: {{doc.abstractNote}}.{% endif %}",
 	"{% if doc.fullNames %}Authors: {{doc.fullNames | join: ', '}}.{% endif %}",
 	"{% if doc.tags %}Keywords: {{doc.tags | join: ', '}}.{% endif %}",
