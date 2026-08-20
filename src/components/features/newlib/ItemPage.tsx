@@ -1,5 +1,6 @@
 "use client";
 
+import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { Item, ItemGetResponse, Author } from "@/app/api/item/types";
 import PageContainer from "@/components/layout/PageContainer";
 import { Card } from "@/components/nextui/Card";
@@ -530,6 +531,13 @@ function formatValue(
 	value: any,
 	formatter: ReturnType<typeof useFormatter>,
 ) {
+	// Access dates are calendar dates. Old records may still hold text such as
+	// CURRENT_TIMESTAMP (issue #103); hide anything the admin rule rejects.
+	if (key === "accessDate") {
+		return typeof value === "string" && normalizeAccessDate(value)
+			? formatDate(value, formatter)
+			: false;
+	}
 	if (
 		key.toLowerCase().includes("date") ||
 		["createdAt", "updatedAt"].includes(key)
