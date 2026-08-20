@@ -773,7 +773,10 @@ async function verifyLiveWriteback() {
 			title: `OpenScholar live writeback related ${marker}`,
 		});
 		itemKeys.push(relatedDraft.itemKey);
-		await publishItemDraft(database, relatedDraft.itemKey);
+		await publishItemDraftWithContext(database, relatedDraft.itemKey, {
+			sourceKeys: [LIVE_ZOTERO_CONNECTION_KEY],
+			writebackConfig: config,
+		});
 		await drainWriteback(database, config, itemKeys, "related-create");
 		const relatedUri = `http://zotero.org/groups/${ZOTERO_PLAYGROUND.groupId}/items/${relatedDraft.itemKey}`;
 		const parentUri = `http://zotero.org/groups/${ZOTERO_PLAYGROUND.groupId}/items/${parentDraft.itemKey}`;

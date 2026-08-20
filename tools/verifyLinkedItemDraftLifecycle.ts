@@ -215,26 +215,24 @@ async function verify() {
 				),
 			);
 
+		// Unchecking the origin for this record is a choice, not a block:
+		// the draft still opens while the origin source can receive writeback.
+		await openItemDraft(db, itemKey, writebackPolicyOptions);
+		await discardItemDraft(db, itemKey);
 		let readOnlyRejected = false;
 		try {
-			await openItemDraft(db, itemKey, writebackPolicyOptions);
+			await openItemDraft(db, itemKey, {
+				writebackConfig: {
+					sources: [{ key: connectionKey, writebackEnabled: false }],
+				},
+			});
 		} catch (error) {
 			readOnlyRejected = error instanceof ItemWritebackUnavailableError;
 		}
 		assert(
 			readOnlyRejected,
-			"An imported item without enabled writeback was editable",
+			"An imported item whose origin source cannot receive writeback was editable",
 		);
-		if (baseUrl) {
-			const rejectedResponse = await adminRequest<{
-				error: { code: string; message: string };
-			}>(`/api/admin/items/${itemKey}/draft`, { method: "POST" }, 409);
-			assert(
-				rejectedResponse.error.code === "conflict" &&
-					rejectedResponse.error.message.includes("writeback"),
-				"The admin API did not explain why the imported item is read only",
-			);
-		}
 
 		await db
 			.update(itemSourceLink)

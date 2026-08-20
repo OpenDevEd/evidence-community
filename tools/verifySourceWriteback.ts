@@ -1141,12 +1141,18 @@ async function verify() {
 			relatedTarget.itemKey,
 			unlinkedTarget.itemKey,
 		);
-		await publishItemDraft(db, relatedTarget.itemKey);
-		await publishItemDraft(db, relatedSource.itemKey);
+		await publishItemDraftWithContext(
+			db,
+			relatedTarget.itemKey,
+			publishToSource,
+		);
+		await publishItemDraftWithContext(
+			db,
+			relatedSource.itemKey,
+			publishToSource,
+		);
+		// Published without choosing a source, so it never gets a source link.
 		await publishItemDraft(db, unlinkedTarget.itemKey);
-		await db
-			.delete(itemSourceLink)
-			.where(eq(itemSourceLink.itemKey, unlinkedTarget.itemKey));
 		while ((await processNextSourceWritebackJob(consumerOptions)).status !== "idle") {
 			// drain creates
 		}
