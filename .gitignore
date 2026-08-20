@@ -65,3 +65,7 @@ src/app/manifest.json
 .env.sentry-build-plugin
 
 public/apa.csl
+.env.local.opendeved.bak
+.coolify-project-envs.txt
+.coolify-project-envs-additions.txt
+.coolify-service-new-el-opendeved.txt
