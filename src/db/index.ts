@@ -25,7 +25,6 @@ import * as userCollectionTable from './schema/tables/userCollection';
 import * as userCollectionRelations from './schema/relations/userCollection';
 import * as itemToUserCollectionTable from './schema/tables/itemToUserCollection';
 import * as itemToUserCollectionRelations from './schema/relations/itemToUserCollection';
-import * as embeddingsTable from './schema/tables/embeddings';
 
 import * as statusTable from './schema/tables/status';
 
@@ -51,7 +50,6 @@ export const schema = {
     ...itemToUserCollectionTable,
     ...itemToUserCollectionRelations,
     ...statusTable,
-    ...embeddingsTable,
 }
 
 type DBType = NodePgDatabase<typeof schema>;

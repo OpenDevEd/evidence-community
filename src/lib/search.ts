@@ -14,6 +14,7 @@ import { inferParserType } from "nuqs";
 import { cacheLife, cacheTag } from "next/cache";
 import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
 import meilisearchClient from "./meilisearch";
+import { FULL_TEXT_PDF_FILTER } from "./search-filter-constants";
 import { searchParamsLoader } from "./searchParams";
 import { formatRange } from "./utils";
 
@@ -67,11 +68,28 @@ type SearchFacetsResult = {
 	facetDistribution: FacetDistribution;
 };
 
+export type LibrarySearchParams = Partial<
+	inferParserType<typeof searchParamsLoader>
+>;
+
+export type CompiledLibrarySearchRequest = {
+	search: string;
+	pageNum: number;
+	limitNum: number;
+	sortOption?: string;
+	finalFilters: string[];
+	attributesToSearchOn: string[];
+	country: string[];
+	author_country: string[];
+};
+
 function cleanTheAttributesToSearchOn(fields: string[]) {
 	let nextFields = fields;
 
 	if (process.env.NEXT_PUBLIC_DISABLE_FULLTEXT === "true") {
-		nextFields = nextFields.filter((field) => !field.includes("fullTextPDF"));
+		nextFields = nextFields.filter(
+			(field) => !field.includes("fullTextPDF"),
+		);
 	}
 
 	if (process.env.NEXT_PUBLIC_DISABLE_TAGS === "true") {
@@ -82,9 +100,9 @@ function cleanTheAttributesToSearchOn(fields: string[]) {
 }
 
 async function getCachedDisplayedAttributes() {
-	'use cache'
-	cacheLife({ revalidate: 60 })
-	cacheTag('attributes')
+	"use cache";
+	cacheLife({ revalidate: 60 });
+	cacheTag("attributes");
 	return meilisearchClient
 		.index(process.env.MEILI_INDEX || config.index)
 		.getDisplayedAttributes();
@@ -92,25 +110,29 @@ async function getCachedDisplayedAttributes() {
 
 export async function getMainAttributes() {
 	const attributes = await getCachedDisplayedAttributes();
-	return attributes.filter((attribute) => !attribute.endsWith("fullTextPDFs"));
+	return attributes.filter(
+		(attribute) => !attribute.endsWith("fullTextPDFs"),
+	);
 }
 
 function toLightweightItem(item: any): ListItem {
 	const nextItem = { ...item } as ListItem;
 
 	if (nextItem.attachmentsData) {
-		nextItem.attachmentsData = nextItem.attachmentsData.map((attachment: any) => {
-			const {
-				note,
-				fullTextPDF,
-				fullTextPDFs,
-				PDFCoverPageImage,
-				PDFCoverPageWidth,
-				PDFCoverPageHeight,
-				...rest
-			} = attachment || {};
-			return rest;
-		});
+		nextItem.attachmentsData = nextItem.attachmentsData.map(
+			(attachment: any) => {
+				const {
+					note,
+					fullTextPDF,
+					fullTextPDFs,
+					PDFCoverPageImage,
+					PDFCoverPageWidth,
+					PDFCoverPageHeight,
+					...rest
+				} = attachment || {};
+				return rest;
+			},
+		);
 	}
 
 	if (nextItem.fullTextPDFs) {
@@ -121,20 +143,27 @@ function toLightweightItem(item: any): ListItem {
 }
 
 function applyCollectionsData(items: ListItem[], collections: Collection[]) {
-	const collectionMap = new Map(collections.map((collection) => [collection.key, collection]));
+	const collectionMap = new Map(
+		collections.map((collection) => [collection.key, collection]),
+	);
 
 	for (const item of items) {
 		item.collectionsData = item.collectionsAncestry
 			?.map((collectionKey: string) => collectionMap.get(collectionKey))
-			.filter((collectionData): collectionData is Collection => !!collectionData);
+			.filter(
+				(collectionData): collectionData is Collection =>
+					!!collectionData,
+			);
 
-		item.attachmentsData = item.attachmentsData?.filter((attachment: any) => attachment.deleted === 0);
+		item.attachmentsData = item.attachmentsData?.filter(
+			(attachment: any) => attachment.deleted === 0,
+		);
 	}
 }
 
-function resolveSearchRequest(
-	searchParams: Partial<inferParserType<typeof searchParamsLoader>>
-) {
+export function compileLibrarySearchRequest(
+	searchParams: LibrarySearchParams,
+): CompiledLibrarySearchRequest {
 	const pageNum = Math.max(1, Number(searchParams.page || 1));
 	const limitNum = ITEMS_PER_PAGE;
 	const sort = searchParams.sort || SORT_OPTIONS[0].key;
@@ -159,19 +188,25 @@ function resolveSearchRequest(
 		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
 		range ? formatRange(range) : null,
 		...(Array.isArray(institution)
-			? institution.map((institutionValue) => `institution = "${institutionValue}"`)
+			? institution.map(
+					(institutionValue) =>
+						`institution = ${JSON.stringify(institutionValue)}`,
+				)
 			: []),
 		...createCountryFilters(country, author_country),
-		author ? `fullNames = "${author}"` : null,
-		scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
-		...collections.map((collection) => `collectionsAncestry = "${collection}"`),
+		author ? `fullNames = ${JSON.stringify(author)}` : null,
+		scope === "documents" ? FULL_TEXT_PDF_FILTER : null,
+		...collections.map(
+			(collection) =>
+				`collectionsAncestry = ${JSON.stringify(collection)}`,
+		),
 		"deleted != 1",
 		`tags NOT IN ${JSON.stringify(blockedTags)}`,
 	].filter((filter): filter is string => filter !== null);
 
 	const attributesToSearchOn = cleanTheAttributesToSearchOn(
-		SCOPE_OPTIONS.find((option) => option.key === scope)?.attributesToSearchOn ||
-			SCOPE_OPTIONS[0].attributesToSearchOn
+		SCOPE_OPTIONS.find((option) => option.key === scope)
+			?.attributesToSearchOn || SCOPE_OPTIONS[0].attributesToSearchOn,
 	);
 
 	return {
@@ -187,20 +222,28 @@ function resolveSearchRequest(
 }
 
 export async function getPublicItems(
-	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
+	searchParams: LibrarySearchParams,
 	options: {
 		includeHeavyFields?: boolean;
-	} = {}
+	} = {},
 ): Promise<SearchItemsResult> {
-	const { search, pageNum, limitNum, sortOption, finalFilters, attributesToSearchOn } =
-		resolveSearchRequest(searchParams);
+	const {
+		search,
+		pageNum,
+		limitNum,
+		sortOption,
+		finalFilters,
+		attributesToSearchOn,
+	} = compileLibrarySearchRequest(searchParams);
 
 	const includeHeavyFields = options.includeHeavyFields === true;
 	const attributesToRetrieve = includeHeavyFields
 		? await getMainAttributes()
 		: [...LIST_ITEM_FIELDS];
 
-	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
+	const index = meilisearchClient.index(
+		process.env.MEILI_INDEX || config.index,
+	);
 
 	const [searchResults, collections] = await Promise.all([
 		index.search(search, {
@@ -215,12 +258,13 @@ export async function getPublicItems(
 	]);
 
 	const items = (searchResults.hits as ListItem[]).map((item) =>
-		includeHeavyFields ? item : toLightweightItem(item)
+		includeHeavyFields ? item : toLightweightItem(item),
 	);
 
 	applyCollectionsData(items, collections as Collection[]);
 
-	const totalCount = searchResults.estimatedTotalHits || searchResults.hits.length;
+	const totalCount =
+		searchResults.estimatedTotalHits || searchResults.hits.length;
 
 	return {
 		items,
@@ -232,10 +276,15 @@ export async function getPublicItems(
 }
 
 export async function getPublicFacets(
-	searchParams: Partial<inferParserType<typeof searchParamsLoader>>
+	searchParams: LibrarySearchParams,
 ): Promise<SearchFacetsResult> {
-	const { search, finalFilters, attributesToSearchOn, country, author_country } =
-		resolveSearchRequest(searchParams);
+	const {
+		search,
+		finalFilters,
+		attributesToSearchOn,
+		country,
+		author_country,
+	} = compileLibrarySearchRequest(searchParams);
 
 	const facets = [...DEFAULT_FACETS];
 	if (process.env.NEXT_PUBLIC_DISABLE_COUNTRY !== "true") {
@@ -245,7 +294,9 @@ export async function getPublicFacets(
 		facets.push("creators.institutions.country_code");
 	}
 
-	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
+	const index = meilisearchClient.index(
+		process.env.MEILI_INDEX || config.index,
+	);
 
 	const searchResults = await index.search(search, {
 		offset: 0,
@@ -264,23 +315,31 @@ export async function getPublicFacets(
 					acc[facet.key + "_uncategorized"] =
 						searchResults.facetDistribution?.[facet.key] || {};
 					return acc;
-				}, {} as FacetDistribution)
+				}, {} as FacetDistribution),
 			),
 			{
 				country,
 				author_country,
-			}
+			},
 		),
 	};
 }
 
 export async function getItemsPaginationMeta(
-	searchParams: Partial<inferParserType<typeof searchParamsLoader>>
+	searchParams: LibrarySearchParams,
 ): Promise<SearchCountOnlyResult> {
-	const { search, pageNum, limitNum, sortOption, finalFilters, attributesToSearchOn } =
-		resolveSearchRequest(searchParams);
+	const {
+		search,
+		pageNum,
+		limitNum,
+		sortOption,
+		finalFilters,
+		attributesToSearchOn,
+	} = compileLibrarySearchRequest(searchParams);
 
-	const index = meilisearchClient.index(process.env.MEILI_INDEX || config.index);
+	const index = meilisearchClient.index(
+		process.env.MEILI_INDEX || config.index,
+	);
 
 	const searchResults = await index.search(search, {
 		offset: 0,
@@ -290,7 +349,8 @@ export async function getItemsPaginationMeta(
 		filter: finalFilters,
 	});
 
-	const totalItems = searchResults.estimatedTotalHits || searchResults.hits.length;
+	const totalItems =
+		searchResults.estimatedTotalHits || searchResults.hits.length;
 
 	return {
 		currentPage: pageNum,

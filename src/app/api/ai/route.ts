@@ -1,82 +1,126 @@
-import { NextResponse } from "next/server";
 import config from "@/constants/config.json";
-import { getCachedItem } from "../cache";
-import { generateText, streamText } from 'ai';
-import { getModel, trackUsage } from "@/lib/ai";
 import { routing } from "@/i18n/routing";
-import { isAIAllowed } from "@/lib/utils";
+import {
+	AIError,
+	aiErrorResponse,
+	aiStreamErrorMessage,
+	normalizeAIError,
+} from "@/lib/ai/errors";
+import { loadPublication, publicationPromptParts } from "@/lib/ai/attachments";
+import { getCachedStatus } from "@/app/api/cache";
+import { parseCompanyName } from "@/lib/utils";
+import {
+	createOpenRouterSessionId,
+	openRouterResponseCacheHeaders,
+	OPENROUTER_RESPONSE_CACHE_TTL,
+} from "@/lib/ai/openrouter-cache";
+import { getOpenRouterModel } from "@/lib/ai/provider";
+import { publicationGenerationSchema } from "@/lib/ai/schemas";
+import { trackAIUsage } from "@/lib/ai/telemetry";
+import {
+	EVIDENCE_CITATION_INSTRUCTIONS,
+	currentDateContext,
+	publicationSystemContext,
+} from "@/lib/ai/prompt-context";
+import { streamText } from "ai";
 
-export const maxDuration = 60;
+export const maxDuration = 240;
 
-export async function POST(req: Request) {
-	const { searchParams } = new URL(req.url);
-	const prompt = searchParams.get("prompt") || "summarize";
-	const locale = req.headers.get("Accept-Language") || routing.defaultLocale;
-	const systemPrompt = config.prompts[prompt as keyof typeof config.prompts]?.join("\n")
-	const sharedRules = config.shared_rules.join("\n")
-	const pdfRules = config.pdf_rules.join("\n")
-	const structureRules = config.structure_rules.join("\n")
-	const { prompt: key, modelIndex, distinctId } = await req.json();
+export async function POST(request: Request) {
+	const startedAt = Date.now();
 
-	if (!systemPrompt || prompt === "chat") {
-		return new NextResponse("Invalid prompt", { status: 400 });
-	}
-
-	const item = await getCachedItem(key!);
-
-	if (!item || !item.item) {
-		return new NextResponse("Item not found", { status: 404 });
-	}
-
-	const { provider, modelName, error } = getModel(modelIndex);
-
-	if (error) {
-		return new NextResponse(error, { status: 404 });
-	}
-
-	const {fullTextPDFs, ...cleanItem} = item.item;
-
-	if (!isAIAllowed(cleanItem)) {
-		return new NextResponse("AI not allowed", { status: 403 });
-	}
-	
-	for (const attachment of cleanItem.attachmentsData || []) {
-		const fullTextPDF = fullTextPDFs?.find((f: any) => f.key === attachment.key)?.fullTextPDF
-		if (fullTextPDF) {
-			attachment.fullTextPDF = fullTextPDF as any;
+	try {
+		const body = publicationGenerationSchema.safeParse(
+			await request.json(),
+		);
+		if (!body.success) {
+			throw new AIError("INVALID_REQUEST", "Invalid AI request.", 400);
 		}
-	}
 
-	const result = streamText({
-		model: provider!(modelName!) as any,
-		system: [
-			`LOCALE: ${locale}\n`,
-			systemPrompt,
-			sharedRules,
-			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? pdfRules : "",
-			item?.item?.attachmentsData?.[0]?.fullTextPDF?.[0] ? structureRules : "",
-		].join("\n"),
-		prompt: JSON.stringify(cleanItem),
-		temperature: 1,
-		providerOptions: {
-			openai: {
-				reasoningEffort: "minimal",
-			},
-			google: {
-				thinkingConfig: {
-					thinkingBudget: 0,
+		const { prompt: itemKey, feature, modelId, distinctId } = body.data;
+		const publication = await loadPublication(itemKey);
+		if (!publication) {
+			throw new AIError("ITEM_NOT_FOUND", "Item not found.", 404);
+		}
+		if (publication.files.length + publication.unavailable.length === 0) {
+			throw new AIError(
+				"INVALID_REQUEST",
+				"This publication has no visible PDF attachments.",
+				403,
+			);
+		}
+
+		const locale =
+			request.headers.get("Accept-Language") || routing.defaultLocale;
+		const sessionId = createOpenRouterSessionId(
+			"publication",
+			modelId,
+			locale,
+			itemKey,
+		);
+		const model = getOpenRouterModel(modelId, { sessionId });
+		const featurePrompt = config.prompts[feature].join("\n");
+		const result = streamText({
+			model,
+			system: publicationSystemContext(
+				locale,
+				parseCompanyName((await getCachedStatus()).companyName)
+					.companyName,
+			),
+			messages: [
+				{
+					role: "user",
+					content: publicationPromptParts(
+						publication,
+						[
+							currentDateContext(),
+							featurePrompt,
+							feature === "summarize"
+								? "Summarize this publication."
+								: "Explain this publication in detail.",
+							EVIDENCE_CITATION_INSTRUCTIONS,
+							"If no full PDF is available, clearly state that the full text was unavailable.",
+						].join("\n"),
+						modelId,
+					),
 				},
+			],
+			headers: openRouterResponseCacheHeaders(
+				OPENROUTER_RESPONSE_CACHE_TTL.publication,
+			),
+			onFinish: ({ usage, providerMetadata, response }) => {
+				trackAIUsage({
+					feature,
+					modelId,
+					distinctId,
+					startedAt,
+					success: true,
+					usage,
+					providerMetadata,
+					responseHeaders: response.headers,
+				});
 			},
-		},
-		onFinish(event) {
-			trackUsage("ai_" + prompt, event, distinctId, prompt);
-		},
-	})
+			onError: ({ error }) => {
+				const normalized = normalizeAIError(error, {
+					context: "document",
+				});
+				trackAIUsage({
+					feature,
+					modelId,
+					distinctId,
+					startedAt,
+					success: false,
+					errorCode: normalized.code,
+				});
+			},
+		});
 
-	return result.toTextStreamResponse({
-		headers: {
-			'Content-Type': 'text/event-stream',
-		},
-	})
-
+		return result.toUIMessageStreamResponse({
+			sendReasoning: false,
+			onError: (error) =>
+				aiStreamErrorMessage(error, { context: "document" }),
+		});
+	} catch (error) {
+		return aiErrorResponse(error, { context: "document" });
+	}
 }

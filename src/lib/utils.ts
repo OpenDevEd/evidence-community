@@ -1,4 +1,4 @@
-import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
+import { Item, ListItem } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SCOPE_OPTIONS } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
@@ -77,11 +77,6 @@ export function convertStringFromDatabaseToObject(string: string) {
 	return companyLogoStyleObject || {}
 }
 
-export function getTimeDuration(startTime: number): string {
-	const duration = (Date.now() - startTime) / 1000; // in seconds
-	return `[${duration.toFixed(1)}s] `;
-}
-
 export function getDynamicStyles(cssString: string): React.CSSProperties {
 	if (!cssString) return {};
 
@@ -101,23 +96,6 @@ export function getDynamicStyles(cssString: string): React.CSSProperties {
 	});
 
 	return styleObj as React.CSSProperties;
-}
-
-export function cleanItemForAI(item: ItemGetResponse["item"] | ListItem | undefined) {
-	if (!item) return null;
-	return {
-		...item,
-		fullTextPDFs: undefined,
-		tags: undefined,
-		collectionsAncestry: undefined,
-		fullNames: undefined,
-		collections: undefined,
-		collectionsData: item.collectionsData?.map(({ name, title }) => ([title, name].filter(Boolean).join(" > "))),
-		attachmentsData: item.attachmentsData?.map(({ filename, url }) => ({
-			filename,
-			url,
-		})),
-	}
 }
 
 export function formatRange(range: string | null) {
@@ -140,18 +118,26 @@ export function formatRange(range: string | null) {
 	].filter(Boolean).join(" AND ");
 }
 
-// Non-JSON here means the request never reached the API route (proxy or CDN
-// error page, browser-check challenge, rate limit) — surface a controlled
-// error instead of letting res.json() crash on HTML. JSON error payloads on
-// non-2xx responses still parse as before.
-const parseJsonResponse = (res: Response) => {
+const parseJsonResponse = async (res: Response) => {
 	const contentType = res.headers.get("content-type") ?? "";
 	if (!contentType.includes("application/json")) {
 		throw new Error(
 			`Expected JSON from ${res.url} but got ${res.status} ${contentType || "(no content type)"}`
 		);
 	}
-	return res.json();
+
+	const data = await res.json();
+	if (!res.ok) {
+		const message =
+			typeof data?.error?.message === "string"
+				? data.error.message
+				: typeof data?.message === "string"
+					? data.message
+					: `Request failed with status ${res.status}`;
+		throw new Error(message);
+	}
+
+	return data;
 };
 
 export const fetcher = (url: string) =>
@@ -218,26 +204,6 @@ export function getExtraValues(extraUnsplit: string) {
 	return finalMap;
 }
 
-export function isAIAllowed(item: Item | undefined) {
-	if (!item) return false;
-	const allowedInstitutions = ["EdTech Hub", "Open Development & Education", "eEkitabu"];
-	const allowedTags = ["_ai_enabled"]
-
-	if (item.attachmentsData?.some(attachment => attachment.PDFCoverPageImage) ||
-		(Array.isArray(item.institution)
-			? item.institution.some(inst => allowedInstitutions.includes(inst))
-			: allowedInstitutions.includes(item.institution || "")) ||
-		allowedTags.some(tag => item.tags?.includes(tag))) {
-		return true;
-	}
-
-	return false;
-}
-
-export function generateRandomID(length: number = 12) {
-	return Math.random().toString(36).substring(2, 2 + length);
-}
-
 export function escapeXml(unsafe: string) {
 	return unsafe
 		.replace(/&/g, "&amp;")
@@ -254,28 +220,6 @@ export function unescapeXML(safe: string) {
 		.replace(/&gt;/g, ">")
 		.replace(/&quot;/g, '"')
 		.replace(/&apos;/g, "'");
-}
-
-export function cleanAIResponse(response: string) {
-
-	// General regex to match any characters in brackets followed by /lib/ paths
-	const linkRegex = /\[(.*?)\](?:\(|\[)(\/lib\/[^)\]]+)(?:\)|\])([.,;:!?]*)/g;
-
-	// If no links, return the original response
-	if (!response.match(linkRegex)) return response;
-
-	const seenPaths = new Set();
-
-	// Replace links based on their path component
-	const result = response.replace(linkRegex, (match, label, path, punctuation) => {
-		if (!seenPaths.has(path)) {
-			seenPaths.add(path);
-			return `[${label}](${path})`; // Keep first occurrence but remove trailing punctuation
-		}
-		return ''; // Remove duplicate links
-	});
-
-	return result;
 }
 
 export function parseCompanyName(raw: string | null | undefined): {
@@ -335,7 +279,7 @@ export function ItemToZoteroJSON(item: Item): ZoteroItem {
 export function isSentenceCase(val: any) {
 	const matches = val.match(/^\W*(\w+)(.*?)$/);
 	if (matches && matches.length > 2) {
-		const [_, firstWord] = matches; // eslint-disable-line no-unused-vars
+		const [, firstWord] = matches;
 		let remainingWords = matches[2];
 		const firstLetter = firstWord.substr(0, 1);
 		if (firstLetter.toUpperCase() !== firstLetter) {

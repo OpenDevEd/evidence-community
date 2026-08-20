@@ -7,6 +7,10 @@ import { PUBLIC_READ_CACHE_CONTROL } from "./lib/http-cache";
 import meilisearch from "./lib/meilisearch";
 import { getConfiguredSiteOrigin } from "./lib/site-url";
 import { normalizePathname } from "./lib/path";
+import {
+	aiRateLimitHeaders,
+	consumeAIRateLimit,
+} from "./lib/ai/rate-limit";
 
 function handleLegacyScope(
 	request: NextRequest,
@@ -365,6 +369,34 @@ export default async function proxy(request: NextRequest) {
 		url.pathname = `/api/feed/${id}`;
 		return NextResponse.rewrite(url);
 	} else if (request.nextUrl.pathname.startsWith("/api/")) {
+		if (
+			request.method === "POST" &&
+			(request.nextUrl.pathname === "/api/ai" ||
+				request.nextUrl.pathname.startsWith("/api/ai/"))
+		) {
+			const clientIp = request.headers.get("x-real-ip")?.trim() || "unknown";
+			const rateLimit = consumeAIRateLimit(clientIp);
+			const headers = aiRateLimitHeaders(rateLimit);
+
+			if (!rateLimit.allowed) {
+				return NextResponse.json(
+					{
+						error: {
+							code: "RATE_LIMITED",
+							message: "Rate limit exceeded.",
+						},
+					},
+					{ status: 429, headers },
+				);
+			}
+
+			const response = NextResponse.next();
+			for (const [name, value] of Object.entries(headers)) {
+				response.headers.set(name, value);
+			}
+			return response;
+		}
+
 		return NextResponse.next();
 	}
 

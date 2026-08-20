@@ -14,6 +14,10 @@ const nextConfig = {
 		staleTimes: {
 			dynamic: 30,
 		},
+		// Turbopack's dev server otherwise grows to several GB over a long
+		// session and the whole machine starts swapping; cap its in-memory
+		// graph so it evicts instead.
+		turbopackMemoryLimit: 2 * 1024 * 1024 * 1024,
 	},
 	reactCompiler: true,
 	images: {
