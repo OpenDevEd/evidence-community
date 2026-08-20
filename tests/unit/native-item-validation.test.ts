@@ -215,7 +215,6 @@ describe("native item draft validation", () => {
 			["date", "2024-02-31", "Enter an exact date or a four-digit year"],
 			["date", "2024-05", "Enter an exact date or a four-digit year"],
 			["date", "Spring 2024", "Enter an exact date or a four-digit year"],
-			["accessDate", "2024-99-99", "Choose an access date"],
 			["url", "example.com", "Enter a full HTTP or HTTPS address"],
 		] as const) {
 			try {
@@ -234,6 +233,15 @@ describe("native item draft validation", () => {
 				dateDecided: "2024-05",
 			}),
 		).toThrow("Check date decided");
+
+		// A stored access date that is not a calendar date (issue #103) is
+		// cleared on save instead of leaving the record impossible to edit.
+		expect(
+			validateNativeItemDraft({
+				itemType: "book",
+				accessDate: "CURRENT_TIMESTAMP",
+			}).item,
+		).toMatchObject({ accessDate: "" });
 	});
 
 	it("requires a title only when publishing", () => {

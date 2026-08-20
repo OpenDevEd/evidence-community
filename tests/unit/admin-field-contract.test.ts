@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 
 import {
 	adminFieldContract,
+	normalizeAccessDate,
 	normalizeAdminFieldValue,
 } from "@/lib/admin/field-contract";
 
@@ -153,15 +154,27 @@ describe("admin metadata field contract", () => {
 				value: "2024-05-20",
 			});
 		}
+	});
+
+	it("drops an access date that is not a calendar date instead of blocking the save", () => {
+		// The editor uses a calendar control, so a non-date can only come from
+		// old stored data (records published with the text CURRENT_TIMESTAMP
+		// before the control existed) or an API caller. Blocking the save left
+		// those records stuck; clearing the value lets the next save fix them.
+		const descriptor = {
+			field: "accessDate",
+			semanticField: "accessDate",
+			type: "text" as const,
+		};
 		for (const value of [
 			"2024-99-99",
 			"2024-05-20T25:00:00Z",
 			"CURRENT_TIMESTAMP",
 			"yesterday",
 		]) {
-			expect(normalizeAdminFieldValue(descriptor, value).error).toBe(
-				"Choose an access date.",
-			);
+			expect(normalizeAdminFieldValue(descriptor, value)).toEqual({
+				value: "",
+			});
 		}
 	});
 
@@ -211,5 +224,10 @@ describe("admin metadata field contract", () => {
 				"é".repeat(32_768),
 			).error,
 		).toBe("This value is too long. Shorten it and try again.");
+	});
+
+	it("exposes the access date rule the public page uses to hide non-dates", () => {
+		expect(normalizeAccessDate("2024-05-20T12:30:45Z")).toBe("2024-05-20");
+		expect(normalizeAccessDate("CURRENT_TIMESTAMP")).toBeNull();
 	});
 });

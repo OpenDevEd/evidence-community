@@ -1,4 +1,5 @@
 import { ReactNode, useRef, useMemo, memo, useState, useEffect } from "react";
+import { normalizeAccessDate } from "@/lib/admin/field-contract";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Collection } from "@/app/api/collections/types";
 import { Accordion, AccordionItem, Divider, Link } from "@nextui-org/react";
@@ -73,6 +74,16 @@ function formatDate({ value, formatter }: FormatterProps) {
 	});
 
 	return <p>{returnedDate}</p>;
+}
+
+// Access dates are calendar dates. Old records may still hold text such as
+// CURRENT_TIMESTAMP (issue #103); a visitor must never see that, so anything
+// the admin rule does not accept as a date is hidden instead of printed.
+function formatAccessDate(props: FormatterProps) {
+	if (typeof props.value !== "string" || !normalizeAccessDate(props.value)) {
+		return false;
+	}
+	return formatDate(props);
 }
 
 function Citation({ value, loading, item }: FormatterProps) {
@@ -642,7 +653,7 @@ export const valueFormatter: Record<
 	creators: ItemCreators,
 	collectionsData: () => false,
 	date: formatDate,
-	accessDate: formatDate,
+	accessDate: formatAccessDate,
 	url: ({ value }) => (
 		<Link
 			href={value}

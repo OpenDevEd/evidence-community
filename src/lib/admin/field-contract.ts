@@ -74,7 +74,8 @@ function isCalendarDate(value: string) {
 	return day <= daysInMonth[month - 1]!;
 }
 
-function normalizeAccessDate(value: string) {
+/** Returns the calendar date of an access date, or null when it is not one. */
+export function normalizeAccessDate(value: string) {
 	const match = /^(\d{4}-\d{2}-\d{2})(?:[ T](\d{2}):(\d{2}):(\d{2})(?:\.\d+)?(?:Z|([+-])(\d{2}):?(\d{2}))?)?$/u.exec(
 		value,
 	);
@@ -131,10 +132,11 @@ export function normalizeAdminFieldValue(
 		return { value };
 	}
 	if (kind === "access-date") {
-		const accessDate = normalizeAccessDate(value);
-		return accessDate
-			? { value: accessDate }
-			: { error: "Choose an access date.", value };
+		// The editor uses a calendar control, so a value that is not a calendar
+		// date can only come from old stored data (for example the text
+		// CURRENT_TIMESTAMP) or an API caller. Clear it instead of blocking the
+		// save, so the next save repairs the record.
+		return { value: normalizeAccessDate(value) ?? "" };
 	}
 	if (kind === "url") {
 		try {
