@@ -112,6 +112,74 @@ function hasToolCall(
 	);
 }
 
+/**
+ * Moves PDFs out of readPublications tool results and into a user message
+ * that immediately follows them. A tool message carrying a binary file is
+ * translated by OpenRouter into each provider's function-response format,
+ * and for Gemini that translation is unreliable: the model intermittently
+ * never sees the PDF and reports the full text as unavailable. Files in a
+ * user message are handled consistently by every provider (it is how
+ * Summary and Explain already attach PDFs). Idempotent: prepareStep rebuilds
+ * from the raw step messages each time.
+ */
+const PDF_HANDOFF_TEXT =
+	"The PDF files for the publications returned by readPublications are attached to this message. Use them as the evidence for that read, citing pages as instructed in the tool result.";
+
+function liftToolResultFilesToUserMessage(
+	messages: ModelMessage[],
+): ModelMessage[] {
+	const result: ModelMessage[] = [];
+	for (const message of messages) {
+		if (message.role !== "tool") {
+			result.push(message);
+			continue;
+		}
+		const toolMessage = message as ToolModelMessage;
+		const lifted: Array<{
+			type: "file";
+			mediaType: string;
+			filename?: string;
+			data: Uint8Array | URL;
+		}> = [];
+		const content = toolMessage.content.map((part) => {
+			if (
+				part.type !== "tool-result" ||
+				part.toolName !== "readPublications" ||
+				part.output.type !== "content"
+			) {
+				return part;
+			}
+			const value = part.output.value.flatMap((item) => {
+				if (item.type !== "file") return [item];
+				const data = item.data as
+					| { type: "data"; data: Uint8Array }
+					| { type: "url"; url: URL };
+				lifted.push({
+					type: "file",
+					mediaType: item.mediaType,
+					filename: item.filename,
+					data: data.type === "url" ? data.url : data.data,
+				});
+				return [
+					{
+						type: "text" as const,
+						text: `(The file ${JSON.stringify(item.filename ?? "document.pdf")} is attached in the user message that follows this tool result.)`,
+					},
+				];
+			});
+			return { ...part, output: { type: "content" as const, value } };
+		});
+		result.push({ ...toolMessage, content } as ToolModelMessage);
+		if (lifted.length > 0) {
+			result.push({
+				role: "user",
+				content: [{ type: "text", text: PDF_HANDOFF_TEXT }, ...lifted],
+			});
+		}
+	}
+	return result;
+}
+
 function withLatestToolResultCacheBreakpoint(
 	messages: ModelMessage[],
 	modelId: AIModelId,
@@ -122,21 +190,31 @@ function withLatestToolResultCacheBreakpoint(
 		messageIndex -= 1
 	) {
 		const message = messages[messageIndex];
-		if (message.role !== "tool") continue;
+		// The breakpoint goes after the latest tool output — which, for a
+		// read, is the user message carrying the lifted PDFs (so the PDF
+		// itself is cached), otherwise the tool message.
+		const isPdfHandoff =
+			message.role === "user" &&
+			Array.isArray(message.content) &&
+			message.content[0]?.type === "text" &&
+			message.content[0].text === PDF_HANDOFF_TEXT;
+		if (message.role !== "tool" && !isPdfHandoff) continue;
+		if (!Array.isArray(message.content)) continue;
 
-		const toolMessage = message as ToolModelMessage;
-		const partIndex = toolMessage.content.findLastIndex(
-			(part) => part.type === "tool-result",
+		const partIndex = message.content.findLastIndex((part) =>
+			isPdfHandoff ? part.type === "file" : part.type === "tool-result",
 		);
 		if (partIndex < 0) continue;
 
-		const part = toolMessage.content[partIndex];
-		if (part.type !== "tool-result") continue;
-		const content = [...toolMessage.content];
+		const part = message.content[partIndex] as {
+			type: string;
+			providerOptions?: Record<string, unknown>;
+		};
 		const cacheProviderOptions =
 			openRouterExplicitCacheProviderOptions(modelId);
 		if (!cacheProviderOptions) return undefined;
 		const currentOpenRouterOptions = part.providerOptions?.openrouter;
+		const content = [...message.content] as typeof message.content;
 		content[partIndex] = {
 			...part,
 			providerOptions: {
@@ -149,9 +227,12 @@ function withLatestToolResultCacheBreakpoint(
 					...cacheProviderOptions.openrouter,
 				},
 			},
-		};
+		} as unknown as (typeof content)[number];
 		const cachedMessages = [...messages];
-		cachedMessages[messageIndex] = { ...toolMessage, content };
+		cachedMessages[messageIndex] = {
+			...message,
+			content,
+		} as ModelMessage;
 		return cachedMessages;
 	}
 
@@ -181,14 +262,12 @@ export function createResearchAgent({
 		tools,
 		toolOrder: ["searchLibrary", "readPublications"],
 		stopWhen: isStepCount(mode === "research" ? 12 : 6),
-		prepareStep: async ({ steps, messages, stepNumber }) => {
-			const cachedMessages = withLatestToolResultCacheBreakpoint(
-				messages,
-				modelId,
-			);
-			const cacheSettings = cachedMessages
-				? { messages: cachedMessages }
-				: {};
+		prepareStep: async ({ steps, messages: rawMessages, stepNumber }) => {
+			const messages = liftToolResultFilesToUserMessage(rawMessages);
+			const cachedMessages =
+				withLatestToolResultCacheBreakpoint(messages, modelId) ??
+				messages;
+			const cacheSettings = { messages: cachedMessages };
 			logDevelopmentAgent("step.started", {
 				sessionId,
 				mode,
