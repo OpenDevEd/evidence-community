@@ -41,6 +41,7 @@ function publication(
 		status: { label: state, description: state, shouldPoll },
 		waitingOn: null,
 		blockers: [],
+		externalDoi: null,
 		capabilities: {
 			canActivate: state === "inactive",
 			canRetry: false,

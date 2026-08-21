@@ -83,6 +83,8 @@ export type AdminPublicationProviderView = {
 	status: AdminPublicationProviderStatus;
 	waitingOn: "crossref" | "file" | null;
 	blockers: readonly string[];
+	/** A DOI that came with the record from another source, if any. */
+	externalDoi: string | null;
 	capabilities: {
 		canActivate: boolean;
 		canRetry: boolean;
@@ -399,7 +401,6 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		bibliographicDoi.status === "resolved" && !managedCrossref
 			? bibliographicDoi.doi
 			: null;
-	const crossrefExternalDoi = existingBibliographicDoi;
 	let crossrefValidation: readonly string[] = [];
 	let zenodoValidation: readonly string[] = [];
 	if (validationRecord && publicationConfig.crossref.prefix) {
@@ -545,9 +546,6 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			: null,
 		namespaceMismatch,
 		canonicalManagedMismatch,
-		crossrefExternalDoi
-			? `This record already has an external DOI (${crossrefExternalDoi}), so Crossref cannot assign another one`
-			: null,
 		stateErrors.crossref,
 		...crossrefValidation,
 		...planIssues(crossrefPlan),
@@ -557,9 +555,6 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		fileError,
 		!publicationConfig.zenodo.enabled
 			? "Zenodo Sandbox publishing is not configured for this library"
-			: null,
-		existingBibliographicDoi
-			? `This record already has an external DOI (${existingBibliographicDoi}), so Zenodo publishing is unavailable`
 			: null,
 		zenodoJournals.length > 1
 			? "More than one unfinished Zenodo publication exists for this record"
@@ -626,11 +621,14 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 				journal: provider === "zenodo" && zenodoJournals.length === 1,
 				failure: Boolean(failure),
 				waitingOn: providerWaitingOn,
+				externalDoi: existingBibliographicDoi,
 			},
 			input.now,
 		);
 		const allowedIdentifierPolicies =
-			provider === "zenodo" && zenodoBlockers.length === 0
+			provider === "zenodo" &&
+			zenodoBlockers.length === 0 &&
+			displayState !== "external"
 				? ([
 						...(managedCrossref ? ["reuse-crossref" as const] : []),
 						"mint-zenodo" as const,
@@ -658,11 +656,15 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 				state: displayState,
 				waitingOn: providerWaitingOn,
 				firstBlocker: blockers[0] ?? null,
+				externalDoi: existingBibliographicDoi,
 			}),
 			waitingOn: providerWaitingOn,
-			blockers,
+			// A record that brought its own DOI has nothing to fix here.
+			blockers: displayState === "external" ? [] : blockers,
+			externalDoi: existingBibliographicDoi,
 			capabilities: {
-				canActivate: !target && blockers.length === 0,
+				canActivate:
+					!target && blockers.length === 0 && displayState !== "external",
 				canRetry: Boolean(target) && displayState === "failed",
 				actionLabel:
 					provider === "crossref"
