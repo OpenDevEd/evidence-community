@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateObject } from 'ai';
-import { trackUsage } from "@/lib/ai-usage";
+import { trackAIUsage } from "@/lib/ai/telemetry";
 import { getRuntimeRequestLocale } from "@/i18n/server";
 import { isAIAllowed } from "@/lib/utils";
 import { getCachedItem } from "../../cache";
@@ -25,6 +25,7 @@ export async function POST(req: Request) {
     const { prompt: key, provider, distinctId } = await req.json();
     const prompt = "questions"
 
+    const startedAt = Date.now();
     const item = await getCachedItem(key!);
 
     if (!item || !item.item) {
@@ -91,13 +92,15 @@ export async function POST(req: Request) {
             prompt: JSON.stringify(fullTextPDFs)
         })
 
-        await trackUsage(
-            libraryConfig,
-            "ai_" + prompt,
-            result,
+        await trackAIUsage(libraryConfig, {
+            feature: prompt,
+            modelId: models.defaultModelId,
             distinctId,
-            prompt,
-        );
+            startedAt,
+            success: true,
+            usage: result.usage,
+            providerMetadata: result.providerMetadata,
+        });
 
         return NextResponse.json(result.object.questions);
     } catch (error) {

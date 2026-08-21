@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCachedItem } from "../cache";
 import { streamText } from 'ai';
-import { trackUsage } from "@/lib/ai-usage";
+import { trackAIUsage } from "@/lib/ai/telemetry";
 import { getRuntimeRequestLocale } from "@/i18n/server";
 import { isAIAllowed } from "@/lib/utils";
 import { getLibraryConfig } from "@/config/library-config/server";
@@ -29,6 +29,7 @@ export async function POST(req: Request) {
 		return new NextResponse("Invalid prompt", { status: 400 });
 	}
 
+	const startedAt = Date.now();
 	const item = await getCachedItem(key!);
 
 	if (!item || !item.item) {
@@ -80,13 +81,15 @@ export async function POST(req: Request) {
 			},
 		},
 		async onFinish(event) {
-			await trackUsage(
-				libraryConfig,
-				"ai_" + prompt,
-				event,
+			await trackAIUsage(libraryConfig, {
+				feature: prompt,
+				modelId: models.defaultModelId,
 				distinctId,
-				prompt,
-			);
+				startedAt,
+				success: true,
+				usage: event.usage,
+				providerMetadata: event.providerMetadata,
+			});
 		},
 	})
 
