@@ -50,7 +50,11 @@
 }
 
 body {
-	overflow-x: hidden;
+	/* `clip`, not `hidden`: hidden makes <body> a scroll container, so when an
+	   overlay locks scrolling (react-aria sets html { overflow: hidden }) the
+	   viewport stops scrolling, scrollY snaps to 0, sticky panels lose their
+	   anchor and the wheel goes dead. clip only clips. */
+	overflow-x: clip;
 }
 
 .zotero-rich-text {
