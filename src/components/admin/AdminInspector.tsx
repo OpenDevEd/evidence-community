@@ -320,19 +320,15 @@ function SaveIndicator({
 	if (state === "idle") return null;
 	return (
 		<div
-			aria-live={
-				state === "error" || state === "conflict"
-					? "assertive"
-					: "polite"
-			}
+			aria-live={state === "error" ? "assertive" : "polite"}
 			className={`flex items-center gap-1.5 text-[11px] ${
-				state === "error" || state === "conflict"
+				state === "error"
 					? "text-danger"
-					: "text-black/40 dark:text-white/40"
+					: state === "conflict"
+						? "text-amber-800 dark:text-amber-200"
+						: "text-black/40 dark:text-white/40"
 			}`}
-			role={
-				state === "error" || state === "conflict" ? "alert" : "status"
-			}
+			role={state === "error" ? "alert" : "status"}
 		>
 			{state === "saving" ? (
 				<Spinner size="sm" />
@@ -360,26 +356,47 @@ function SaveIndicator({
 	);
 }
 
+/**
+ * Headline for the field summary. A conflict is not a mistake the editor made,
+ * so it must not read like a validation error.
+ */
+export function fieldSummaryHeadline(count: number, tone: "conflict" | "validation") {
+	const fields = count === 1 ? "field" : "fields";
+	return tone === "conflict"
+		? `${count} ${fields} changed in another session. Reload to see the new ${count === 1 ? "value" : "values"}.`
+		: `Fix ${count} ${fields} before publishing.`;
+}
+
 function ValidationSummary({
 	errors,
 	recordKey,
+	tone,
 }: {
 	errors: AdminFieldErrors;
 	recordKey: string;
+	tone: "conflict" | "validation";
 }) {
 	const entries = Object.entries(errors);
 	if (entries.length === 0) return null;
+	const conflict = tone === "conflict";
 	return (
 		<div
 			id={`admin-${recordKey}-validation-summary`}
-			className="mt-3 rounded-xl bg-danger/[0.08] px-3 py-2.5 text-xs text-danger outline-none focus-visible:ring-2 focus-visible:ring-danger"
-			role="alert"
+			className={`mt-3 rounded-xl px-3 py-2.5 text-xs outline-none focus-visible:ring-2 ${
+				conflict
+					? "bg-amber-500/[0.1] text-amber-800 focus-visible:ring-amber-500 dark:text-amber-200"
+					: "bg-danger/[0.08] text-danger focus-visible:ring-danger"
+			}`}
+			role={conflict ? "status" : "alert"}
 			tabIndex={-1}
 		>
 			<div className="flex items-center gap-2 font-medium">
-				<AlertCircle aria-hidden size={14} />
-				Fix {entries.length} {entries.length === 1 ? "field" : "fields"}{" "}
-				before publishing.
+				{conflict ? (
+					<RotateCcw aria-hidden size={14} />
+				) : (
+					<AlertCircle aria-hidden size={14} />
+				)}
+				{fieldSummaryHeadline(entries.length, tone)}
 			</div>
 			<ul className="mt-1.5 space-y-1 pl-5">
 				{entries.map(([path, message]) => {
@@ -388,7 +405,7 @@ function ValidationSummary({
 						<li key={path}>
 							{targetId ? (
 								<button
-									className="text-left underline decoration-danger/40 underline-offset-2 hover:decoration-danger"
+									className={`text-left underline underline-offset-2 ${conflict ? "decoration-amber-500/50 hover:decoration-amber-600" : "decoration-danger/40 hover:decoration-danger"}`}
 									type="button"
 									onClick={() =>
 										document
@@ -1901,6 +1918,7 @@ export function AdminInspector({
 					<ValidationSummary
 						errors={validationErrors}
 						recordKey={detail.key}
+						tone={saveState === "conflict" ? "conflict" : "validation"}
 					/>
 				</div>
 			</div>
