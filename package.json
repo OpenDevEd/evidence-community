@@ -84,7 +84,7 @@
 		"@dnd-kit/react": "^0.5.0",
 		"@napi-rs/canvas": "^1.0.3",
 		"@nextui-org/react": "^2.6.11",
-		"@opendeved/doi-sync-core": "git+https://github.com/OpenDevEd/doi-sync-core.git#98ce257e8399e0f140209b94dabc74401a21164b",
+		"@opendeved/doi-sync-core": "git+https://github.com/OpenDevEd/doi-sync-core.git#525e3fbfd0a73ec71b739535e1fd77b306309d24",
 		"@opendeved/evidence-library-core": "file:packages/evidence-library-core",
 		"@supabase/supabase-js": "^2.111.0",
 		"@swc/helpers": "^0.5.23",
