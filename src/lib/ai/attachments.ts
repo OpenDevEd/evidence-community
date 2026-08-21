@@ -227,7 +227,11 @@ export async function loadPublication(
 	itemKey: string,
 	options: { inline?: boolean } = {},
 ): Promise<LoadedPublication | null> {
-	const response = await getCachedItem(itemKey);
+	// Always the live record, never the "use cache" layer: attachment keys
+	// are what the model cites, and a cached item that failed to revalidate
+	// kept handing out keys from older versions of the record, which the
+	// download route and citation popover could not match.
+	const response = await getCachedItem(itemKey, true);
 	const item = response?.item;
 	if (!item) return null;
 
