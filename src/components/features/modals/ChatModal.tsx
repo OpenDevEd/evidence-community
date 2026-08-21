@@ -303,7 +303,6 @@ export default function ChatModal({
 				key: data?.item?.key,
 				provider,
 				distinctId: getAnalyticsDistinctId(),
-				smartScreeningFields,
 				mode,
 			},
 		}),
@@ -463,7 +462,7 @@ export default function ChatModal({
 								className={twMerge(
 									"w-full h-full relative",
 									reponseExists
-										? "grid grid-rows-[1fr_auto]"
+							? "grid grid-rows-chat"
 										: "flex justify-center items-center"
 								)}
 							>
@@ -482,7 +481,7 @@ export default function ChatModal({
 											className="w-full overflow-y-scroll overflow-x-hidden py-8 h-full"
 											ref={messageListRef}
 										>
-											<div className="max-w-[96rem] lg:px-24 mx-auto flex flex-col gap-8 ">
+												<div className="max-w-screen-2xl lg:px-24 mx-auto flex flex-col gap-8 ">
 												{messages.map(
 													(message, index) =>
 														index > 0 && (
@@ -596,7 +595,7 @@ export default function ChatModal({
 															opacity: 0,
 															y: -100,
 														}}
-														className="w-full flex flex-col lg:flex-row gap-4 max-w-[96rem] lg:px-14 mx-auto"
+														className="w-full flex flex-col lg:flex-row gap-4 max-w-screen-2xl lg:px-14 mx-auto"
 													>
 														{(Array.isArray(
 															questions

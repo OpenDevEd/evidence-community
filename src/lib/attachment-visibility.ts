@@ -14,9 +14,3 @@ export function isVisiblePdfAttachment(
 	);
 }
 
-export function hasVisiblePdfAttachment(item: {
-	attachmentsData?: AttachmentVisibilityFields[] | null;
-} | null | undefined) {
-	return Boolean(item?.attachmentsData?.some(isVisiblePdfAttachment));
-}
-

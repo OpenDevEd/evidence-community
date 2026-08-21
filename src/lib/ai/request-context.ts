@@ -18,7 +18,7 @@ const currentPublicationSchema = z
 	})
 	.strict();
 
-export const researchRequestContextSnapshotSchema = z
+const researchRequestContextSnapshotSchema = z
 	.object({
 		currentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 		currentPublication: currentPublicationSchema.nullable(),
@@ -29,10 +29,6 @@ export const researchRequestContextSnapshotSchema = z
 export type ResearchRequestContextSnapshot = z.infer<
 	typeof researchRequestContextSnapshotSchema
 >;
-
-export type ResearchUIData = {
-	requestContext: ResearchRequestContextSnapshot;
-};
 
 export function createResearchRequestContextSnapshot({
 	currentPublication,

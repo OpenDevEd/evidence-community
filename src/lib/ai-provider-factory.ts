@@ -25,7 +25,7 @@ export type AIProviderClientFactories = Record<
 	AIProviderClientFactory
 >;
 
-export type ResolvedAIModels = {
+type ResolvedAIModels = {
 	provider: AIProviderId;
 	defaultModel: LanguageModel;
 	defaultModelId: string;

@@ -3,7 +3,7 @@ import { z } from "zod";
 import { librarySearchContextSchema } from "@/lib/search-context";
 import { isAIModelId, type AIModelId } from "./models";
 
-export const aiModelIdSchema = z.custom<AIModelId>(isAIModelId, {
+const aiModelIdSchema = z.custom<AIModelId>(isAIModelId, {
 	message: "Unsupported AI model",
 });
 
@@ -24,13 +24,6 @@ export const publicationGenerationSchema = z
 	})
 	.strict();
 
-export const starterQuestionsSchema = z
-	.object({
-		prompt: itemKeySchema,
-		distinctId: distinctIdSchema,
-	})
-	.strict();
-
 export const chatRequestSchema = z
 	.object({
 		id: z.string().trim().min(1).max(200),
@@ -45,7 +38,7 @@ export const chatRequestSchema = z
 	})
 	.strict();
 
-export const smartScreeningFieldSchema = z
+const smartScreeningFieldSchema = z
 	.object({
 		label: z.string().trim().min(1).max(120),
 		description: z.string().trim().min(1).max(1000),
@@ -70,7 +63,3 @@ export const screeningRequestSchema = z
 			path: ["fields"],
 		},
 	);
-
-export type ChatRequest = z.infer<typeof chatRequestSchema>;
-export type ScreeningRequest = z.infer<typeof screeningRequestSchema>;
-export type SmartScreeningField = z.infer<typeof smartScreeningFieldSchema>;

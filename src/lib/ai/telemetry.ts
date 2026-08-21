@@ -5,7 +5,7 @@ import { getPostHogForConfig } from "@/lib/posthog";
 import type { AIErrorCode } from "./errors";
 
 /** The AI features a library can bill, count, and compare. */
-export type AIFeature =
+type AIFeature =
 	| "summarize"
 	| "explain"
 	| "questions"
@@ -61,22 +61,29 @@ function headerValues(headers: ResponseHeaders | undefined, name: string) {
  * The gateway reports what a request actually cost. Anything else (a direct
  * provider, or a provider that reports nothing) simply has no cost to record.
  */
-function gatewayCost(providerMetadata: unknown): number | null {
-	if (Array.isArray(providerMetadata)) {
-		const costs = providerMetadata
-			.map(gatewayCost)
-			.filter((cost): cost is number => cost !== null);
-		return costs.length
-			? costs.reduce((total, cost) => total + cost, 0)
-			: null;
-	}
-	if (!providerMetadata || typeof providerMetadata !== "object") return null;
-	const openrouter = Reflect.get(providerMetadata, "openrouter");
-	if (!openrouter || typeof openrouter !== "object") return null;
-	const usage = Reflect.get(openrouter, "usage");
-	if (!usage || typeof usage !== "object") return null;
-	const cost = Reflect.get(usage, "cost");
+function objectProperty(value: unknown, property: string) {
+	return value && typeof value === "object"
+		? Reflect.get(value, property)
+		: undefined;
+}
+
+function openRouterCost(providerMetadata: unknown): number | null {
+	const openrouter = objectProperty(providerMetadata, "openrouter");
+	const usage = objectProperty(openrouter, "usage");
+	const cost = objectProperty(usage, "cost");
 	return typeof cost === "number" && Number.isFinite(cost) ? cost : null;
+}
+
+function gatewayCost(providerMetadata: unknown): number | null {
+	const costs = (Array.isArray(providerMetadata)
+		? providerMetadata
+		: [providerMetadata]
+	)
+		.map(openRouterCost)
+		.filter((cost): cost is number => cost !== null);
+	return costs.length === 0
+		? null
+		: costs.reduce((total, cost) => total + cost, 0);
 }
 
 /**

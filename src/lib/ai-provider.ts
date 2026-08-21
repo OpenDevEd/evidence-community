@@ -48,5 +48,4 @@ export async function getAIProviderForConfig(
 export {
 	AIProviderUnavailableError,
 	type AIProviderId,
-	type ResolvedAIModels,
 } from "./ai-provider-factory";

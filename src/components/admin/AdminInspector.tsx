@@ -482,7 +482,7 @@ function MetadataEditor({
 					allowsCustomValue={false}
 					className="max-w-none"
 					classNames={{
-						listboxWrapper: "max-h-[320px]",
+							listboxWrapper: "max-h-80",
 					}}
 					inputProps={{
 						classNames: inspectorInputClassNames,
@@ -1682,7 +1682,7 @@ export function AdminInspector({
 				<div>
 					<div className="flex items-start gap-3">
 						<div className="min-w-0 flex-1">
-							<h2 className="text-lg font-semibold leading-snug tracking-[-0.01em] text-black/90 dark:text-white/95">
+								<h2 className="text-lg font-semibold leading-snug tracking-inspector-title text-black/90 dark:text-white/95">
 								{detail.title}
 							</h2>
 							<p className="mt-1 text-xs text-black/40 dark:text-white/40">

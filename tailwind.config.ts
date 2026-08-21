@@ -81,8 +81,14 @@ const config: Config = {
 		"./src/**/*.{js,ts,jsx,tsx}",
 	],
 	theme: {
-		extend: {
+			extend: {
 			colors,
+			gridTemplateRows: {
+				chat: "minmax(0, 1fr) auto",
+			},
+			letterSpacing: {
+				"inspector-title": "-0.01em",
+			},
 			fontFamily: {
 				sans: ["var(--font-body)", "sans-serif"],
 				heading: ["var(--font-heading)", "sans-serif"],

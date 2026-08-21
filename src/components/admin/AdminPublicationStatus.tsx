@@ -49,6 +49,7 @@ const appearance = {
 } as const;
 
 type PublicationHook = ReturnType<typeof useAdminPublication>;
+type ZenodoPolicy = "mint-zenodo" | "reuse-crossref";
 
 function focusSection(id: string) {
 	document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -186,6 +187,41 @@ function ProviderRow({
 	);
 }
 
+function publicationHeaderAppearance(
+	providers: AdminPublicationProviderView[],
+) {
+	const active = providers.filter((provider) => provider.exact.targetActive);
+	const needsAttention = providers.some((provider) =>
+		["blocked", "failed"].includes(provider.displayState),
+	);
+	if (active.length === 0 && !needsAttention) return null;
+	const changing = providers.some((provider) => provider.status.shouldPoll);
+	if (needsAttention) {
+		return {
+			className: "text-danger",
+			Icon: AlertCircle,
+			label: "DOI needs attention",
+			spin: false,
+		};
+	}
+	if (changing) {
+		return {
+			className: "text-accent",
+			Icon: LoaderCircle,
+			label: "DOI publishing",
+			spin: true,
+		};
+	}
+	return {
+		className: "text-emerald-600 dark:text-emerald-300",
+		Icon: BadgeCheck,
+		label: active.every((provider) => provider.displayState === "synced")
+			? "DOI synced"
+			: "DOI active",
+		spin: false,
+	};
+}
+
 export function AdminPublicationHeaderStatus({
 	onPress,
 	state,
@@ -195,33 +231,118 @@ export function AdminPublicationHeaderStatus({
 }) {
 	const publication = state.publication;
 	if (!publication) return null;
-	const providers = Object.values(publication.providers);
-	const active = providers.filter((provider) => provider.exact.targetActive);
-	const needsAttention = providers.find((provider) =>
-		["blocked", "failed"].includes(provider.displayState),
+	const status = publicationHeaderAppearance(
+		Object.values(publication.providers),
 	);
-	if (active.length === 0 && !needsAttention) return null;
-	const changing = providers.find((provider) => provider.status.shouldPoll);
-	const label = needsAttention
-		? "DOI needs attention"
-		: changing
-			? "DOI publishing"
-			: active.every((provider) => provider.displayState === "synced")
-				? "DOI synced"
-				: "DOI active";
-	const Icon = needsAttention ? AlertCircle : changing ? LoaderCircle : BadgeCheck;
+	if (!status) return null;
+	const { className, Icon, label, spin } = status;
 	return (
 		<button
-			className={`inline-flex h-6 items-center gap-1 whitespace-nowrap text-[11px] font-medium transition-opacity hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus ${needsAttention ? "text-danger" : changing ? "text-accent" : "text-emerald-600 dark:text-emerald-300"}`}
+			className={`inline-flex h-6 items-center gap-1 whitespace-nowrap text-[11px] font-medium transition-opacity hover:opacity-70 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus ${className}`}
 			onClick={onPress}
 			type="button"
 		>
 			<span className="grid size-3 shrink-0 place-items-center overflow-hidden">
-				<Icon aria-hidden className={changing && !needsAttention ? "animate-spin" : undefined} size={12} />
+				<Icon aria-hidden className={spin ? "animate-spin" : undefined} size={12} />
 			</span>
 			{label}
 		</button>
 	);
+}
+
+function UnpublishedStatus() {
+	return (
+		<div
+			className="flex items-center gap-3 rounded-xl bg-black/[0.025] p-3.5 text-xs text-black/45 dark:bg-white/[0.035] dark:text-white/45"
+			role="status"
+		>
+			<FileText aria-hidden className="shrink-0" size={16} />
+			<span>Publish this record before activating a DOI.</span>
+		</div>
+	);
+}
+
+function LoadingPublicationStatus({ state }: { state: PublicationHook }) {
+	return (
+		<div
+			className="flex min-h-24 items-center justify-center rounded-xl bg-black/[0.025] text-xs text-black/45 dark:bg-white/[0.035] dark:text-white/45"
+			role="status"
+		>
+			{state.error ? (
+				<div className="flex items-center gap-2 px-3 text-danger">
+					<AlertCircle aria-hidden size={14} />
+					<span>{state.error}</span>
+					<Button
+						onPress={() => void state.refresh()}
+						size="xs"
+						variant="transparent"
+					>
+						Try again
+					</Button>
+				</div>
+			) : (
+				<div className="flex items-center gap-2">
+					<span className="grid size-4 place-items-center overflow-hidden">
+						<LoaderCircle aria-hidden className="animate-spin" size={16} />
+					</span>
+					Loading DOI publishing
+				</div>
+			)}
+		</div>
+	);
+}
+
+function PublicationActionError({
+	actionError,
+	fieldErrors,
+	itemKey,
+}: {
+	actionError: string | null;
+	fieldErrors: Record<string, string>;
+	itemKey: string;
+}) {
+	if (!actionError) return null;
+	const entries = Object.entries(fieldErrors);
+	return (
+		<div className="bg-danger/[0.06] p-3 text-xs text-danger" role="alert">
+			<p className="font-medium">{actionError}</p>
+			{entries.length > 0 ? (
+				<ul className="mt-1.5 space-y-1">
+					{entries.map(([path, message]) => {
+						const target = validationTargetId(itemKey, path);
+						return (
+							<li key={path}>
+								{target ? (
+									<button
+										className="text-left underline underline-offset-2"
+										onClick={() => document.getElementById(target)?.focus()}
+										type="button"
+									>
+										{message}
+									</button>
+								) : (
+									message
+								)}
+							</li>
+						);
+					})}
+				</ul>
+			) : null}
+		</div>
+	);
+}
+
+function selectedZenodoPolicy(
+	itemKey: string,
+	choice: { itemKey: string; policy: ZenodoPolicy } | null,
+	allowedPolicies: readonly ZenodoPolicy[],
+): ZenodoPolicy {
+	if (choice?.itemKey === itemKey && allowedPolicies.includes(choice.policy)) {
+		return choice.policy;
+	}
+	return allowedPolicies.includes("reuse-crossref")
+		? "reuse-crossref"
+		: "mint-zenodo";
 }
 
 export function AdminPublicationStatus({
@@ -241,46 +362,17 @@ export function AdminPublicationStatus({
 	const [zenodoOpen, setZenodoOpen] = useState(false);
 	const [policyChoice, setPolicyChoice] = useState<{
 		itemKey: string;
-		policy: "mint-zenodo" | "reuse-crossref";
+		policy: ZenodoPolicy;
 	} | null>(null);
-	if (!published) {
-		return (
-			<div
-				className="flex items-center gap-3 rounded-xl bg-black/[0.025] p-3.5 text-xs text-black/45 dark:bg-white/[0.035] dark:text-white/45"
-				role="status"
-			>
-				<FileText aria-hidden className="shrink-0" size={16} />
-				<span>Publish this record before activating a DOI.</span>
-			</div>
-		);
-	}
+	if (!published) return <UnpublishedStatus />;
 	const publication = state.publication;
-	if (!publication) {
-		return (
-			<div className="flex min-h-24 items-center justify-center rounded-xl bg-black/[0.025] text-xs text-black/45 dark:bg-white/[0.035] dark:text-white/45" role="status">
-				{state.error ? (
-					<div className="flex items-center gap-2 px-3 text-danger">
-						<AlertCircle aria-hidden size={14} />
-						<span>{state.error}</span>
-						<Button onPress={() => void state.refresh()} size="xs" variant="transparent">Try again</Button>
-					</div>
-				) : (
-					<div className="flex items-center gap-2">
-						<span className="grid size-4 place-items-center overflow-hidden"><LoaderCircle aria-hidden className="animate-spin" size={16} /></span>
-						Loading DOI publishing
-					</div>
-				)}
-			</div>
-		);
-	}
+	if (!publication) return <LoadingPublicationStatus state={state} />;
 	const allowedPolicies = publication.providers.zenodo.capabilities.allowedIdentifierPolicies;
-	const defaultPolicy = allowedPolicies.includes("reuse-crossref")
-		? "reuse-crossref"
-		: "mint-zenodo";
-	const zenodoPolicy =
-		policyChoice?.itemKey === itemKey && allowedPolicies.includes(policyChoice.policy)
-			? policyChoice.policy
-			: defaultPolicy;
+	const zenodoPolicy = selectedZenodoPolicy(
+		itemKey,
+		policyChoice,
+		allowedPolicies,
+	);
 	const complete = async (action: () => Promise<boolean>) => {
 		const succeeded = await action();
 		if (succeeded) onRecordChanged();
@@ -290,25 +382,13 @@ export function AdminPublicationStatus({
 	return (
 		<>
 			<div className="divide-y divide-black/[0.06] overflow-hidden rounded-xl bg-black/[0.025] dark:divide-white/[0.07] dark:bg-white/[0.035]">
-				{state.actionError && !crossrefOpen && !zenodoOpen ? (
-					<div className="bg-danger/[0.06] p-3 text-xs text-danger" role="alert">
-						<p className="font-medium">{state.actionError}</p>
-						{Object.entries(state.actionFieldErrors).length > 0 ? (
-							<ul className="mt-1.5 space-y-1">
-								{Object.entries(state.actionFieldErrors).map(([path, message]) => {
-									const target = validationTargetId(itemKey, path);
-									return (
-										<li key={path}>
-											{target ? (
-												<button className="text-left underline underline-offset-2" onClick={() => document.getElementById(target)?.focus()} type="button">{message}</button>
-											) : message}
-										</li>
-									);
-								})}
-							</ul>
-						) : null}
-					</div>
-				) : null}
+					<PublicationActionError
+						actionError={
+							crossrefOpen || zenodoOpen ? null : state.actionError
+						}
+						fieldErrors={state.actionFieldErrors}
+						itemKey={itemKey}
+					/>
 				<ProviderRow
 					busy={state.isMutating}
 					onActivate={() => {
