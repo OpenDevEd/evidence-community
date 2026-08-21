@@ -1,8 +1,9 @@
-import { getLibraryConfig } from "@/config/library-config/server";
 import {
 	isLibraryFeatureEnabled,
 	type LibraryFeatureId,
 } from "@/config/library-config/features";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { getLibraryConfig } from "@/config/library-config/server";
 import { getRuntimeRequestLocale } from "@/i18n/server";
 import {
 	AIProviderUnavailableError,
@@ -36,73 +37,122 @@ const chatBodySchema = z
 	})
 	.strict();
 
-function requestFeature(body: unknown): LibraryFeatureId {
-	if (!body || typeof body !== "object") return "aiSearch";
-	if (Reflect.get(body, "key")) return "ai";
-	return Reflect.get(body, "mode") === "quick"
-		? "aiSearch"
-		: "deepResearch";
+type ChatBody = z.infer<typeof chatBodySchema>;
+type ResolvedModels = Awaited<ReturnType<typeof getAIProviderForConfig>>;
+
+class AIRequestError extends Error {
+	readonly response: NextResponse;
+
+	constructor(message: string, status: number) {
+		super(message);
+		this.response = new NextResponse(message, { status });
+	}
 }
 
-function invalidRequest(message = "Invalid AI request") {
-	return new NextResponse(message, { status: 400 });
+function failRequest(message: string, status: number): never {
+	throw new AIRequestError(message, status);
 }
 
-async function readRequest(req: Request) {
+function isObject(value: unknown): value is object {
+	if (!value) return false;
+	return typeof value === "object";
+}
+
+async function requestBody(req: Request) {
 	try {
-		return { ok: true as const, body: await req.json() };
+		return await req.json();
 	} catch {
-		return { ok: false as const, response: invalidRequest() };
+		return failRequest("Invalid AI request", 400);
 	}
 }
 
-async function publicationContext(key: string | undefined) {
+function requestFeature(body: unknown): LibraryFeatureId {
+	if (!isObject(body)) return "aiSearch";
+	if (Reflect.get(body, "key")) return "ai";
+	if (Reflect.get(body, "mode") === "quick") return "aiSearch";
+	return "deepResearch";
+}
+
+function requireFeature(config: LibraryServerConfig, body: unknown) {
+	const feature = requestFeature(body);
+	if (!isLibraryFeatureEnabled(config.features, feature)) {
+		failRequest(`${feature} is disabled`, 403);
+	}
+}
+
+function parseChatBody(body: unknown): ChatBody {
+	const parsed = chatBodySchema.safeParse(body);
+	if (!parsed.success) return failRequest("Invalid AI request", 400);
+	return parsed.data;
+}
+
+function requireSemanticSearch(config: LibraryServerConfig, key?: string) {
+	if (!key && !config.search.embedder) {
+		failRequest("Semantic search is disabled", 403);
+	}
+}
+
+async function publicationContext(key?: string) {
 	if (!key) return { item: null, fullTextPDFs: undefined };
-	const result = await getCachedItem(key);
-	if (!result?.item) {
-		return { response: new NextResponse("Item not found", { status: 404 }) };
-	}
-	const { fullTextPDFs, ...item } = result.item;
-	if (!isAIAllowed(item)) {
-		return { response: new NextResponse("AI not allowed", { status: 403 }) };
-	}
+	const cachedItem = await requireCachedItem(key);
+	const { fullTextPDFs, ...item } = cachedItem;
+	if (!isAIAllowed(item)) return failRequest("AI not allowed", 403);
 	return { item, fullTextPDFs };
 }
 
-export async function POST(req: Request) {
-	const request = await readRequest(req);
-	if (!request.ok) return request.response;
-	const config = await getLibraryConfig();
-	const requiredFeature = requestFeature(request.body);
-	if (!isLibraryFeatureEnabled(config.features, requiredFeature)) {
-		return new NextResponse(`${requiredFeature} is disabled`, { status: 403 });
-	}
+async function requireCachedItem(key: string) {
+	const result = await getCachedItem(key);
+	if (!result || !result.item) return failRequest("Item not found", 404);
+	return result.item;
+}
 
-	const parsed = chatBodySchema.safeParse(request.body);
-	if (!parsed.success) return invalidRequest();
-	const { distinctId, key, messages, mode, provider } = parsed.data;
-	if (!key && !config.search.embedder) {
-		return new NextResponse("Semantic search is disabled", { status: 403 });
-	}
+async function validatedMessages(messages: ChatBody["messages"]) {
+	const result = await safeValidateUIMessages({ messages });
+	if (!result.success) return failRequest("Invalid AI request", 400);
+	return result.data;
+}
 
-	const context = await publicationContext(key);
-	if ("response" in context) return context.response;
-	const validatedMessages = await safeValidateUIMessages({ messages });
-	if (!validatedMessages.success) return invalidRequest();
-
-	let models;
+async function resolvedModels(
+	config: LibraryServerConfig,
+	provider: string,
+) {
 	try {
-		models = await getAIProviderForConfig(config, provider);
+		return await getAIProviderForConfig(config, provider);
 	} catch (error) {
-		if (!(error instanceof AIProviderUnavailableError)) throw error;
-		return new NextResponse(error.message, { status: 404 });
+		if (error instanceof AIProviderUnavailableError) {
+			return failRequest(error.message, 404);
+		}
+		throw error;
 	}
+}
 
+function selectedModel(mode: ChatBody["mode"], models: ResolvedModels) {
+	if (mode === "full") {
+		return { model: models.largeModel, modelId: models.largeModelId };
+	}
+	return { model: models.defaultModel, modelId: models.defaultModelId };
+}
+
+function publicationPrompt(context: Awaited<ReturnType<typeof publicationContext>>) {
+	if (!context.item) return "There is no current publication.";
+	return `Current publication: ${JSON.stringify({
+		...context.item,
+		fullTextPDFs: context.fullTextPDFs,
+	})}`;
+}
+
+async function createChatResponse(req: Request) {
+	const body = await requestBody(req);
+	const config = await getLibraryConfig();
+	requireFeature(config, body);
+	const data = parseChatBody(body);
+	requireSemanticSearch(config, data.key);
+	const context = await publicationContext(data.key);
+	const messages = await validatedMessages(data.messages);
+	const models = await resolvedModels(config, data.provider);
+	const { model, modelId } = selectedModel(data.mode, models);
 	const locale = await getRuntimeRequestLocale(req);
 	const startedAt = Date.now();
-	const model = mode === "full" ? models.largeModel : models.defaultModel;
-	const modelId =
-		mode === "full" ? models.largeModelId : models.defaultModelId;
 	const result = streamText({
 		model,
 		system: [
@@ -110,19 +160,14 @@ export async function POST(req: Request) {
 				hasPdf: Boolean(context.fullTextPDFs?.length),
 				locale,
 			}),
-			context.item
-				? `Current publication: ${JSON.stringify({
-					...context.item,
-					fullTextPDFs: context.fullTextPDFs,
-				})}`
-				: "There is no current publication.",
+			publicationPrompt(context),
 		].join("\n"),
-		messages: await convertToModelMessages(validatedMessages.data),
+		messages: await convertToModelMessages(messages),
 		async onFinish(event) {
 			await trackAIUsage(config, {
 				feature: "chat",
 				modelId,
-				distinctId,
+				distinctId: data.distinctId,
 				startedAt,
 				success: true,
 				usage: event.usage,
@@ -130,8 +175,16 @@ export async function POST(req: Request) {
 			});
 		},
 	});
-
 	return result.toUIMessageStreamResponse({
 		onError: (error) => aiStreamErrorMessage(error, { context: "conversation" }),
 	});
+}
+
+export async function POST(req: Request) {
+	try {
+		return await createChatResponse(req);
+	} catch (error) {
+		if (error instanceof AIRequestError) return error.response;
+		throw error;
+	}
 }

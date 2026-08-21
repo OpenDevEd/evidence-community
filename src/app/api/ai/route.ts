@@ -1,60 +1,65 @@
-import { NextResponse } from "next/server";
-import { streamText } from 'ai';
-import { trackAIUsage } from "@/lib/ai/telemetry";
-import { getRuntimeRequestLocale } from "@/i18n/server";
-import { getLibraryConfig } from "@/config/library-config/server";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { getLibraryConfig } from "@/config/library-config/server";
 import { getAISystemPrompt } from "@/lib/ai-prompts";
-import { loadAIPublication } from "./publication";
+import { trackAIUsage } from "@/lib/ai/telemetry";
+import { streamText } from "ai";
+import { NextResponse } from "next/server";
+import type { Item } from "../item/types";
+import {
+	loadAIPublication,
+	loadAIPublicationRequest,
+} from "./publication";
 
 export const maxDuration = 60;
 
-export async function POST(req: Request) {
-	const libraryConfig = await getLibraryConfig();
-	if (!isLibraryFeatureEnabled(libraryConfig.features, "ai")) {
-		return new NextResponse("AI is disabled", { status: 403 });
-	}
+type PublicationPrompt = "explain" | "summarize";
 
-	const { searchParams } = new URL(req.url);
-	const prompt = searchParams.get("prompt") || "summarize";
-	const locale = await getRuntimeRequestLocale(req);
-	const { prompt: key, provider, distinctId } = await req.json();
+function publicationPrompt(req: Request): PublicationPrompt | null {
+	const value = new URL(req.url).searchParams.get("prompt") ?? "summarize";
+	if (value === "summarize" || value === "explain") return value;
+	return null;
+}
 
-	if (prompt !== "summarize" && prompt !== "explain") {
-		return new NextResponse("Invalid prompt", { status: 400 });
-	}
+function itemWithFullText(
+	item: Omit<Item, "fullTextPDFs">,
+	fullTextPDFs: Item["fullTextPDFs"],
+) {
+	const attachments = item.attachmentsData ?? [];
+	const documents = fullTextPDFs ?? [];
+	return {
+		...item,
+		attachmentsData: attachments.map((attachment) => ({
+			...attachment,
+			fullTextPDF: documents.find(
+				(document) => document.key === attachment.key,
+			)?.fullTextPDF,
+		})),
+	};
+}
 
-	const publication = await loadAIPublication(libraryConfig, key, provider);
-	if (!publication.ok) return publication.response;
-	const { fullTextPDFs, item: cleanItem, models, startedAt } = publication;
-	
-	for (const attachment of cleanItem.attachmentsData || []) {
-		const fullTextPDF = fullTextPDFs?.find((f: any) => f.key === attachment.key)?.fullTextPDF
-		if (fullTextPDF) {
-			attachment.fullTextPDF = fullTextPDF as any;
-		}
-	}
-
+function streamPublication(
+	config: LibraryServerConfig,
+	prompt: PublicationPrompt,
+	locale: string,
+	publication: Awaited<ReturnType<typeof loadAIPublication>> & { ok: true },
+	distinctId: string | null | undefined,
+) {
+	const { fullTextPDFs, item, models, startedAt } = publication;
 	const result = streamText({
 		model: models.defaultModel,
-		system: getAISystemPrompt(libraryConfig, prompt, {
+		system: getAISystemPrompt(config, prompt, {
 			hasPdf: Boolean(fullTextPDFs?.length),
 			locale,
 		}),
-		prompt: JSON.stringify(cleanItem),
+		prompt: JSON.stringify(itemWithFullText(item, fullTextPDFs)),
 		temperature: 1,
 		providerOptions: {
-			openai: {
-				reasoningEffort: "low",
-			},
-			google: {
-				thinkingConfig: {
-					thinkingBudget: 0,
-				},
-			},
+			openai: { reasoningEffort: "low" },
+			google: { thinkingConfig: { thinkingBudget: 0 } },
 		},
 		async onFinish(event) {
-			await trackAIUsage(libraryConfig, {
+			await trackAIUsage(config, {
 				feature: prompt,
 				modelId: models.defaultModelId,
 				distinctId,
@@ -64,12 +69,22 @@ export async function POST(req: Request) {
 				providerMetadata: event.providerMetadata,
 			});
 		},
-	})
+	});
 
 	return result.toTextStreamResponse({
-		headers: {
-			'Content-Type': 'text/event-stream',
-		},
-	})
+		headers: { "Content-Type": "text/event-stream" },
+	});
+}
 
+export async function POST(req: Request) {
+	const config = await getLibraryConfig();
+	if (!isLibraryFeatureEnabled(config.features, "ai")) {
+		return new NextResponse("AI is disabled", { status: 403 });
+	}
+	const prompt = publicationPrompt(req);
+	if (!prompt) return new NextResponse("Invalid prompt", { status: 400 });
+	const { distinctId, locale, publication } =
+		await loadAIPublicationRequest(config, req);
+	if (!publication.ok) return publication.response;
+	return streamPublication(config, prompt, locale, publication, distinctId);
 }

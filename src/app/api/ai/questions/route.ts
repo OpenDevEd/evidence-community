@@ -1,83 +1,103 @@
-import { NextResponse } from "next/server";
-import { generateObject } from 'ai';
-import { trackAIUsage } from "@/lib/ai/telemetry";
-import { getRuntimeRequestLocale } from "@/i18n/server";
-import { z } from "zod";
-import { getLibraryConfig } from "@/config/library-config/server";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { getLibraryConfig } from "@/config/library-config/server";
 import { getAISystemPrompt } from "@/lib/ai-prompts";
-import { loadAIPublication } from "../publication";
+import { trackAIUsage } from "@/lib/ai/telemetry";
+import { generateObject } from "ai";
+import { NextResponse } from "next/server";
+import { z } from "zod";
+import type { Item } from "../../item/types";
+import {
+	loadAIPublication,
+	loadAIPublicationRequest,
+} from "../publication";
 
 export const maxDuration = 60;
 
+const questionsSchema = z.object({
+	questions: z
+		.array(z.string().describe("A question about the PDF content"))
+		.length(5)
+		.describe("Five questions about the PDF content"),
+});
+
+function hasFullTextPDFs(
+	value: Item["fullTextPDFs"],
+): value is NonNullable<Item["fullTextPDFs"]> {
+	return Array.isArray(value) && value.length > 0;
+}
+
+function questionDocuments(
+	fullTextPDFs: NonNullable<Item["fullTextPDFs"]>,
+	attachments: Item["attachmentsData"],
+) {
+	return fullTextPDFs.map(({ key, ...document }) => ({
+		...document,
+		title: attachments?.find((attachment) => attachment.key === key)?.title,
+	}));
+}
+
+async function generateQuestions(
+	config: LibraryServerConfig,
+	locale: string,
+	publication: Awaited<ReturnType<typeof loadAIPublication>> & { ok: true },
+	fullTextPDFs: NonNullable<Item["fullTextPDFs"]>,
+	distinctId: string | null | undefined,
+) {
+	const { item, models, startedAt } = publication;
+	const documents = questionDocuments(
+		fullTextPDFs,
+		item.attachmentsData,
+	);
+	try {
+		const result = await generateObject({
+			model: models.defaultModel,
+			system: [
+				getAISystemPrompt(config, "questions", { hasPdf: true, locale }),
+				"You are given PDF documents as JSON objects with a title and fullTextPDF pages.",
+				"Generate five questions about the text in the same language as the locale.",
+			].join("\n"),
+			schema: questionsSchema,
+			temperature: 1,
+			providerOptions: {
+				openai: { reasoningEffort: "low" },
+				google: { thinkingConfig: { thinkingBudget: 0 } },
+			},
+			prompt: JSON.stringify(documents),
+		});
+
+		await trackAIUsage(config, {
+			feature: "questions",
+			modelId: models.defaultModelId,
+			distinctId,
+			startedAt,
+			success: true,
+			usage: result.usage,
+			providerMetadata: result.providerMetadata,
+		});
+		return NextResponse.json(result.object.questions);
+	} catch (error) {
+		console.error(error);
+		return new NextResponse("Error generating questions", { status: 500 });
+	}
+}
+
 export async function POST(req: Request) {
-    const libraryConfig = await getLibraryConfig();
-    if (!isLibraryFeatureEnabled(libraryConfig.features, "ai")) {
-        return new NextResponse("AI is disabled", { status: 403 });
-    }
-
-    const locale = await getRuntimeRequestLocale(req);
-    const { prompt: key, provider, distinctId } = await req.json();
-    const prompt = "questions"
-
-	const publication = await loadAIPublication(libraryConfig, key, provider);
+	const config = await getLibraryConfig();
+	if (!isLibraryFeatureEnabled(config.features, "ai")) {
+		return new NextResponse("AI is disabled", { status: 403 });
+	}
+	const { distinctId, locale, publication } =
+		await loadAIPublicationRequest(config, req);
 	if (!publication.ok) return publication.response;
-	const { fullTextPDFs, item: cleanItem, models, startedAt } = publication;
-
-    if (fullTextPDFs?.length === 0) {
-        return new NextResponse("No PDF attachments found", { status: 404 });
-    }
-
-    fullTextPDFs?.forEach((f: any) => {
-        f.title = cleanItem.attachmentsData?.find((f: any) => f.key === f.key)?.title;
-        delete f.key;
-    });
-
-    try {
-        const result = await generateObject({
-            model: models.defaultModel,
-            system: [
-                getAISystemPrompt(libraryConfig, "questions", {
-                    hasPdf: Boolean(fullTextPDFs?.length),
-                    locale,
-                }),
-                "You are given a PDF document in the following JSON format:",
-                "{ \"title\": \"PDF Title\", \"fullTextPDF\": Array<{ text: string; page: number; }> }[]",
-                "You need to generate 5 questions about the PDF content.",
-                "The questions should be related to the text in fullTextPDF.text",
-                "The questions should be in the same language as the locale.",
-            ].join("\n"),
-            schema: z.object({
-                questions: z.array(z.string().describe("A question to be answered by the AI regarding the PDF content"))
-                    .min(5).max(5).describe("5 questions about the PDF content"),
-            }),
-            temperature: 1,
-            providerOptions: {
-                openai: {
-                    reasoningEffort: "low",
-                },
-                google: {
-                    thinkingConfig: {
-                        thinkingBudget: 0,
-                    },
-                },
-            },
-            prompt: JSON.stringify(fullTextPDFs)
-        })
-
-        await trackAIUsage(libraryConfig, {
-            feature: prompt,
-            modelId: models.defaultModelId,
-            distinctId,
-            startedAt,
-            success: true,
-            usage: result.usage,
-            providerMetadata: result.providerMetadata,
-        });
-
-        return NextResponse.json(result.object.questions);
-    } catch (error) {
-        console.error(error)
-        return new NextResponse("Error generating questions", { status: 500 });
-    }
+	if (!hasFullTextPDFs(publication.fullTextPDFs)) {
+		return new NextResponse("No PDF attachments found", { status: 404 });
+	}
+	return generateQuestions(
+		config,
+		locale,
+		publication,
+		publication.fullTextPDFs,
+		distinctId,
+	);
 }

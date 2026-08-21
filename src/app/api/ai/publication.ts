@@ -1,4 +1,5 @@
 import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { getRuntimeRequestLocale } from "@/i18n/server";
 import {
 	AIProviderUnavailableError,
 	getAIProviderForConfig,
@@ -16,6 +17,23 @@ function failure(message: string, status: number) {
 
 function validItemKey(key: unknown): key is string {
 	return typeof key === "string" && key.length > 0;
+}
+
+function optionalDistinctId(value: unknown) {
+	if (typeof value === "string") return value;
+	if (value === null) return null;
+	return undefined;
+}
+
+function parseAIPublicationRequest(body: unknown) {
+	if (!body || typeof body !== "object") {
+		return { key: undefined, provider: undefined, distinctId: undefined };
+	}
+	return {
+		key: Reflect.get(body, "prompt"),
+		provider: Reflect.get(body, "provider"),
+		distinctId: optionalDistinctId(Reflect.get(body, "distinctId")),
+	};
 }
 
 async function loadItem(key: unknown) {
@@ -61,5 +79,20 @@ export async function loadAIPublication(
 		item,
 		models: modelResult.models,
 		startedAt,
+	};
+}
+
+export async function loadAIPublicationRequest(
+	config: LibraryServerConfig,
+	req: Request,
+) {
+	const locale = await getRuntimeRequestLocale(req);
+	const { key, provider, distinctId } = parseAIPublicationRequest(
+		await req.json(),
+	);
+	return {
+		distinctId,
+		locale,
+		publication: await loadAIPublication(config, key, provider),
 	};
 }
