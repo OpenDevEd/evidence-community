@@ -802,3 +802,131 @@ describe("admin publication view", () => {
 		).toThrow(PublicationItemNotFoundError);
 	});
 });
+
+describe("identifiers view", () => {
+	it("treats a record with no DOI as optional work, not a problem", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({ record: record({ abstractNote: undefined }) }),
+			config,
+		});
+		const { identifiers } = view;
+		expect(identifiers.doi).toBeNull();
+		expect(identifiers.registration).toEqual({ state: "none" });
+		expect(identifiers.archive).toEqual({ state: "none" });
+		expect(identifiers.attention).toBe(false);
+		expect(identifiers.actions.map((action) => action.id)).toEqual([
+			"register-crossref",
+			"mint-zenodo",
+		]);
+		const zenodo = identifiers.actions.find((a) => a.id === "mint-zenodo")!;
+		expect(zenodo.available).toBe(true);
+		expect(zenodo.ready).toBe(false);
+		expect(zenodo.readiness).toContainEqual({
+			label: "Zenodo requires an abstract or description",
+			ok: false,
+			field: "abstractNote",
+		});
+	});
+
+	it("reports a ready action with one positive line instead of an empty list", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot(),
+			config,
+		});
+		const crossref = view.identifiers.actions.find(
+			(a) => a.id === "register-crossref",
+		)!;
+		expect(crossref.ready).toBe(true);
+		expect(crossref.readiness).toEqual([
+			{ label: "Record details", ok: true, field: null },
+		]);
+	});
+
+	it("shows a DOI the record brought with it as a fact and drops Crossref", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({ record: record({ DOI: "10.9999/external" }) }),
+			config,
+		});
+		const { identifiers } = view;
+		expect(identifiers.doi).toEqual({
+			value: "10.9999/external",
+			origin: "record",
+			url: "https://doi.org/10.9999/external",
+		});
+		expect(identifiers.actions.map((a) => a.id)).toEqual(["archive-zenodo"]);
+		const archive = identifiers.actions[0]!;
+		expect(archive.available).toBe(false);
+		expect(archive.readiness[0]!.ok).toBe(false);
+		expect(identifiers.attention).toBe(false);
+	});
+
+	it("names the source when the DOI came in through a source connection", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({
+					DOI: "10.9999/external",
+					sourceConnectionKey: "zotero-playground",
+				}),
+			}),
+			config,
+		});
+		expect(view.identifiers.doi?.origin).toBe("source");
+	});
+
+	it("shows a managed Crossref DOI as registration in progress", () => {
+		const managed = identifier({
+			provider: "crossref",
+			doi: "10.5555/library.000042",
+			lifecycle: "reserved",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: managed.doi }),
+				targets: [target("crossref")],
+				identifiers: [managed],
+			}),
+			config,
+		});
+		const { identifiers } = view;
+		expect(identifiers.doi).toMatchObject({
+			value: managed.doi,
+			origin: "crossref",
+		});
+		expect(identifiers.registration).toMatchObject({
+			state: "active",
+			provider: "crossref",
+		});
+		expect(identifiers.actions.map((a) => a.id)).toEqual(["archive-zenodo"]);
+	});
+
+	it("asks for attention only when something activated has failed", () => {
+		const managed = identifier({
+			provider: "crossref",
+			doi: "10.5555/library.000042",
+			lifecycle: "reserved",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: managed.doi }),
+				targets: [target("crossref")],
+				identifiers: [managed],
+				jobs: [
+					job({
+						id: 1,
+						attempts: 8,
+						deadLetteredAt: new Date("2026-08-12T10:30:00Z"),
+					}),
+				],
+			}),
+			config,
+		});
+		expect(view.providers.crossref.displayState).toBe("failed");
+		expect(view.identifiers.attention).toBe(true);
+	});
+});

@@ -121,6 +121,57 @@ export type AdminPublicationProviderView = {
 	links: readonly AdminPublicationLink[];
 };
 
+export type AdminIdentifiersActionId =
+	| "register-crossref"
+	| "archive-zenodo"
+	| "mint-zenodo";
+
+export type AdminIdentifiersReadinessItem = {
+	label: string;
+	ok: boolean;
+	/** Record field to jump to when the item is not ok, when known. */
+	field: string | null;
+};
+
+export type AdminIdentifiersAction = {
+	id: AdminIdentifiersActionId;
+	provider: PublicationProvider;
+	label: string;
+	/** Configured for this library and not already active. */
+	available: boolean;
+	readiness: readonly AdminIdentifiersReadinessItem[];
+	/** Every readiness item is ok. */
+	ready: boolean;
+};
+
+export type AdminIdentifiersActivity =
+	| { state: "none" }
+	| {
+			state: "active";
+			provider: PublicationProvider;
+			displayState: AdminPublicationProviderState;
+			status: AdminPublicationProviderStatus;
+			links: readonly AdminPublicationLink[];
+	  };
+
+/**
+ * What the editor sees at a glance: does the record have a DOI, where it
+ * came from, whether it is archived, and what they could do next. Built
+ * from the provider views; nothing here is red until something the editor
+ * activated has failed.
+ */
+export type AdminIdentifiersView = {
+	doi: {
+		value: string;
+		origin: "crossref" | "zenodo" | "source" | "record";
+		url: string;
+	} | null;
+	registration: AdminIdentifiersActivity;
+	archive: AdminIdentifiersActivity;
+	attention: boolean;
+	actions: readonly AdminIdentifiersAction[];
+};
+
 export type AdminPublicationView = {
 	itemKey: string;
 	canonicalRevision: number;
@@ -133,7 +184,112 @@ export type AdminPublicationView = {
 		crossref: AdminPublicationProviderView;
 		zenodo: AdminPublicationProviderView;
 	};
+	identifiers: AdminIdentifiersView;
 };
+
+const readinessFieldHints: ReadonlyArray<[RegExp, string]> = [
+	[/\btitle\b/iu, "title"],
+	[/abstract|description/iu, "abstractNote"],
+	[/\b(author|creator)s?\b/iu, "creators"],
+	[/\b(year|date)\b/iu, "date"],
+	[/item type/iu, "itemType"],
+	[/\blanguage\b/iu, "language"],
+	[/\bpublisher\b/iu, "publisher"],
+	[/\b(rights|licen[cs]e)\b/iu, "rights"],
+];
+
+function readinessFromBlockers(
+	blockers: readonly string[],
+): AdminIdentifiersReadinessItem[] {
+	if (blockers.length === 0) {
+		return [{ label: "Record details", ok: true, field: null }];
+	}
+	return blockers.map((label) => ({
+		label,
+		ok: false,
+		field: readinessFieldHints.find(([test]) => test.test(label))?.[1] ?? null,
+	}));
+}
+
+function buildIdentifiersView(input: {
+	crossref: AdminPublicationProviderView;
+	zenodo: AdminPublicationProviderView;
+	crossrefDoi: string | null;
+	zenodoVersionDoi: string | null;
+	externalDoi: string | null;
+	fromSource: boolean;
+	configured: { crossref: boolean; zenodo: boolean };
+}): AdminIdentifiersView {
+	const { crossref, zenodo } = input;
+	const doi = input.crossrefDoi
+		? { value: input.crossrefDoi, origin: "crossref" as const }
+		: input.zenodoVersionDoi
+			? { value: input.zenodoVersionDoi, origin: "zenodo" as const }
+			: input.externalDoi
+				? {
+						value: input.externalDoi,
+						origin: input.fromSource ? ("source" as const) : ("record" as const),
+					}
+				: null;
+	const activity = (
+		view: AdminPublicationProviderView,
+	): AdminIdentifiersActivity =>
+		view.exact.targetActive
+			? {
+					state: "active",
+					provider: view.provider,
+					displayState: view.displayState,
+					status: view.status,
+					links: view.links,
+				}
+			: { state: "none" };
+	const action = (
+		id: AdminIdentifiersActionId,
+		view: AdminPublicationProviderView,
+		label: string,
+		extra?: { available: false; reason: string },
+	): AdminIdentifiersAction => {
+		const readiness = extra
+			? [{ label: extra.reason, ok: false, field: null }]
+			: readinessFromBlockers(view.blockers);
+		return {
+			id,
+			provider: view.provider,
+			label,
+			available: extra ? false : input.configured[view.provider],
+			readiness,
+			ready: readiness.every((item) => item.ok),
+		};
+	};
+	const actions: AdminIdentifiersAction[] = [];
+	const hasOutsideDoi = doi !== null && doi.origin !== "crossref";
+	if (!crossref.exact.targetActive && !hasOutsideDoi) {
+		actions.push(action("register-crossref", crossref, "Register a DOI with Crossref"));
+	}
+	if (!zenodo.exact.targetActive) {
+		if (hasOutsideDoi) {
+			actions.push(
+				action("archive-zenodo", zenodo, "Archive on Zenodo", {
+					available: false,
+					reason:
+						"Archiving under a DOI that was not registered here is not available yet",
+				}),
+			);
+		} else if (doi?.origin === "crossref") {
+			actions.push(action("archive-zenodo", zenodo, "Archive on Zenodo"));
+		} else {
+			actions.push(action("mint-zenodo", zenodo, "Archive on Zenodo and get its DOI"));
+		}
+	}
+	return {
+		doi: doi ? { ...doi, url: `https://doi.org/${doi.value}` } : null,
+		registration: activity(crossref),
+		archive: activity(zenodo),
+		attention:
+			crossref.displayState === "failed" || zenodo.displayState === "failed",
+		actions,
+	};
+}
 
 function iso(value: Date | null) {
 	return value?.toISOString() ?? null;
@@ -729,6 +885,8 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		};
 	};
 
+	const crossrefView = providerView("crossref", crossrefPlan, crossrefBlockers);
+	const zenodoView = providerView("zenodo", zenodoPlan, zenodoBlockers);
 	return {
 		itemKey: record.key,
 		canonicalRevision: record.revision,
@@ -742,9 +900,21 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 							publicationConfig.crossref.suffixNamespace,
 					}
 				: null,
-		providers: {
-			crossref: providerView("crossref", crossrefPlan, crossrefBlockers),
-			zenodo: providerView("zenodo", zenodoPlan, zenodoBlockers),
-		},
+		providers: { crossref: crossrefView, zenodo: zenodoView },
+		identifiers: buildIdentifiersView({
+			crossref: crossrefView,
+			zenodo: zenodoView,
+			crossrefDoi: crossrefDoi ?? null,
+			zenodoVersionDoi: zenodoVersionDoi ?? null,
+			externalDoi: existingBibliographicDoi,
+			fromSource: Boolean(
+				record.sourceConnectionKey &&
+					record.sourceConnectionKey !== "native",
+			),
+			configured: {
+				crossref: configured(publicationConfig, "crossref"),
+				zenodo: configured(publicationConfig, "zenodo"),
+			},
+		}),
 	};
 }
