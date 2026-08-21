@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { generateObject } from 'ai';
-import { trackUsage } from "@/lib/ai";
+import { trackUsage } from "@/lib/ai-usage";
 import { getRuntimeRequestLocale } from "@/i18n/server";
 import { isAIAllowed } from "@/lib/utils";
 import { getCachedItem } from "../../cache";

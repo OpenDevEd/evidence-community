@@ -9,7 +9,7 @@ vi.mock("@/lib/posthog", () => ({
 }));
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { trackUsage } from "@/lib/ai";
+import { trackUsage } from "@/lib/ai-usage";
 
 const config = {
 	revision: "analytics-usage",

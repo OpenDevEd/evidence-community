@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCachedItem } from "../cache";
 import { streamText } from 'ai';
-import { trackUsage } from "@/lib/ai";
+import { trackUsage } from "@/lib/ai-usage";
 import { getRuntimeRequestLocale } from "@/i18n/server";
 import { isAIAllowed } from "@/lib/utils";
 import { getLibraryConfig } from "@/config/library-config/server";
