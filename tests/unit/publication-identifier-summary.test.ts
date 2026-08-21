@@ -10,12 +10,14 @@ describe("buildPublicationIdentifierSummary", () => {
 				{
 					doi: "10.53832/docs-pen.000002",
 					lifecycle: "verified",
+					ownership: "managed",
 					registrar: "crossref",
 					role: "primary",
 				},
 				{
 					doi: "10.53832/docs-pen.000002",
 					lifecycle: "verified",
+					ownership: "managed",
 					registrar: "zenodo",
 					role: "version",
 				},
@@ -76,12 +78,14 @@ describe("buildPublicationIdentifierSummary", () => {
 					{
 						doi: "10.5281/zenodo.700002",
 						lifecycle: "verified",
+						ownership: "managed",
 						registrar: "zenodo",
 						role: "version",
 					},
 					{
 						doi: "10.5281/zenodo.700001",
 						lifecycle: "verified",
+						ownership: "managed",
 						registrar: "zenodo",
 						role: "concept",
 					},
@@ -110,5 +114,32 @@ describe("buildPublicationIdentifierSummary", () => {
 				zenodoState: null,
 			}),
 		).toBeUndefined();
+	});
+
+	it("shows a DOI Zenodo archived under as the record's DOI, not a Zenodo DOI", () => {
+		const summary = buildPublicationIdentifierSummary({
+			identifiers: [
+				{
+					doi: "10.1016/j.cell.2013.05.039",
+					lifecycle: "verified",
+					ownership: "external",
+					registrar: "zenodo",
+					role: "version",
+				},
+			],
+			zenodoState: {
+				environment: "sandbox",
+				zenodoParentId: "589936",
+				zenodoRecordId: "589937",
+			},
+		});
+
+		expect(summary).toEqual({
+			zenodo: {
+				recordId: "589937",
+				conceptRecordId: "589936",
+				baseUrl: "https://sandbox.zenodo.org",
+			},
+		});
 	});
 });

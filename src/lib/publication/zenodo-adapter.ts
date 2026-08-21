@@ -162,6 +162,18 @@ async function buildZenodoPlan(
 		),
 	});
 	const previousState = providerState(snapshot, "zenodo", publicationConfig);
+	const archivedExternalDoi =
+		target.identifierPolicy === "reuse-external"
+			? previousState?.zenodo?.identifiers?.versionDoi
+			: undefined;
+	if (archivedExternalDoi && bibliographicDoi.doi !== archivedExternalDoi) {
+		// The archive was made under the DOI the record had then. A changed
+		// record DOI must not be pushed to Zenodo unchecked; the admin shows
+		// the same reason as a blocker.
+		throw new Error(
+			`The record DOI no longer matches the DOI archived on Zenodo (${archivedExternalDoi})`,
+		);
+	}
 	const activeFileCorrectionApproval = snapshot.fileCorrectionApprovals.find(
 		(approval) =>
 			approval.consumedAt === null && approval.supersededAt === null,

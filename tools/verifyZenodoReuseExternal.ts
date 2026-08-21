@@ -202,7 +202,17 @@ async function main() {
 		await waitForReceipts(client, republished.indexingReceipts);
 		const after = (await client.request<{ publication: AdminPublicationView }>(`/api/admin/items/${key}/publication`)).publication;
 		assert(after.providers.zenodo.blockers.some((b) => b.includes("no longer matches the DOI archived on Zenodo")), `No mismatch blocker: ${after.providers.zenodo.blockers.join(" | ")}`);
-		log("doi-change-blocked", { blocker: after.providers.zenodo.blockers[0] });
+		// The worker must refuse the queued update for the same reason, and
+		// Zenodo must still carry the original DOI.
+		const refused = await waitFor({
+			description: "the worker to refuse the changed DOI",
+			read: async () => (await client.request<{ publication: AdminPublicationView }>(`/api/admin/items/${key}/publication`)).publication,
+			accept: (view) => Boolean(view.providers.zenodo.exact.failure?.summary.includes("no longer matches the DOI archived on Zenodo")),
+		});
+		const zenodoAfter = await fetch(`https://sandbox.zenodo.org/api/records/${recordId}`).then((r) => r.json() as Promise<{ doi?: string; pids?: { doi?: { identifier?: string } } }>);
+		const remoteAfter = zenodoAfter.pids?.doi?.identifier ?? zenodoAfter.doi;
+		assert(remoteAfter === externalDoi, `Zenodo record ${recordId} DOI changed to ${remoteAfter}`);
+		log("doi-change-blocked", { blocker: after.providers.zenodo.blockers[0], workerFailure: refused.providers.zenodo.exact.failure?.summary, zenodoDoi: remoteAfter });
 
 		console.log(JSON.stringify({ ok: true, key, recordId, doi: externalDoi }));
 	} finally {
