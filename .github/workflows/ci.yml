@@ -84,31 +84,26 @@ jobs:
     name: Fallow code quality
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 10
+    env:
+      FALLOW_PUSH_BASE_REF: refs/tags/fallow-ci-baseline-2026-08-21
     steps:
       - name: Check out the repository history
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
+          fetch-tags: true
+
+      - name: Test the comparison rules
+        run: bash tests/ci/fallow-comparison.test.sh
 
       - name: Resolve the comparison commit
         id: comparison
         shell: bash
         env:
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BASE_SHA: ${{ github.event.before }}
+          PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
         run: |
           set -euo pipefail
-
-          comparison_sha="$PR_BASE_SHA"
-          if test -z "$comparison_sha"; then
-            comparison_sha="$PUSH_BASE_SHA"
-          fi
-
-          if test -z "$comparison_sha" || test "$comparison_sha" = "0000000000000000000000000000000000000000"; then
-            comparison_sha="$(git rev-parse HEAD^)"
-          fi
-
-          git cat-file -e "${comparison_sha}^{commit}"
+          comparison_sha="$(bash .github/scripts/resolve-fallow-comparison.sh)"
           echo "sha=$comparison_sha" >> "$GITHUB_OUTPUT"
 
       - name: Block new code-quality problems
