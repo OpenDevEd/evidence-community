@@ -22,14 +22,30 @@ Do not add queues, orchestration platforms, custom retrieval infrastructure, com
 
 ## Confirmed provider and model contract
 
+Revised by the user on 2026-08-21. The earlier single-gateway decision (Cloudflare AI Gateway Unified Billing, only secret `CLOUDFLARE_API_TOKEN`, remove OpenRouter) is replaced by three credential paths. OpenRouter stays supported.
+
 - Upgrade to the latest stable Vercel AI SDK available at implementation time.
-- Use Cloudflare AI Gateway Unified Billing as the only application LLM gateway, integrated through the Vercel AI SDK.
-- Use Cloudflare's current AI REST API through the smallest compatible Vercel AI SDK provider adapter; do not introduce a second AI framework or call Cloudflare directly from feature routes.
-- The only secret application LLM environment variable is `CLOUDFLARE_API_TOKEN`. Keep the non-secret Cloudflare account ID, gateway ID, and selectable model list in code.
-- Keep the selectable model list in code, not environment variables.
-- Remove OpenRouter and the separate Anthropic, Google, Mistral, DeepSeek, OpenAI provider integrations, plus the unused direct OpenAI SDK, when nothing else uses them.
-- Do not build cross-model fallback. If the selected Cloudflare-routed model request fails, return a controlled error.
+- There is no single mandatory gateway. Each library connects to models through exactly one of three credential paths:
+  1. **Direct provider keys** — the library supplies its own API keys for a limited set of supported providers.
+  2. **OpenRouter key** — the library supplies its own OpenRouter API key.
+  3. **OpenScholar credits** — requests run through the OpenScholar API endpoint so usage bills to the owner's OpenScholar account under its unified billing handling.
+- All three paths select models from the same stored OpenScholar model list. The server validates every request's provider/model against that stored list and rejects anything not on it; never trust a client-supplied model identifier.
+- Provider API keys live in the library runtime manifest (the same pattern as `search.embedder`), never in client-visible configuration or environment variables.
+- Test deployments use path 2 (the library's own OpenRouter key).
+- Do not build cross-model fallback. If the selected model request fails, return a controlled error.
 - Changing the selected model starts a new conversation.
+
+### Path 3 design (confirmed by the user on 2026-08-21)
+
+OpenScholar already has a credits-billed OpenAI-compatible gateway (`/api/wallet/v1/chat/completions` in `openalex-count`, Bearer wallet keys) and a public model catalog (`GET /api/wallet/v1/models`, no auth). Path 3 adds a shared-secret mode for Evidence Libraries instead of using per-library API keys:
+
+- **True proxy.** The Evidence Library sends the complete request — messages, tool definitions, and inline PDFs — to an OpenScholar endpoint. OpenScholar calls the provider through its own provider configuration and streams the reply back. Everything travels through the proxy; the stream bytes pass through untouched.
+- **Shared-secret authentication, no per-library keys.** One secret is distributed to both applications' server-side configuration. Each request also carries the calling library's identity. OpenScholar resolves that library to its owning account and bills it.
+- **Reuse the existing billing pipeline unchanged**: reserve an estimated cost, stream, settle actual token usage at OpenScholar's pricing markup, against the owner's credit balance. Never kill a stream mid-token; enforce hard step/token caps instead.
+- **Account-level quota in OpenScholar** sits on top of the library's own per-IP limiter. The two limiters protect different things and stay separate.
+- **Model list stays public.** Libraries fetch `GET /api/wallet/v1/models`, cache it with a last-known-good fallback, and all three paths validate provider/model against it server-side.
+- The existing wallet-key gateway remains for its current consumers but is not used by Evidence Libraries. Once the shared-secret mode exists, it is the only supported way libraries use OpenScholar credits.
+- Implementation is split across repositories: the shared-secret endpoint and library→owner resolution live in `openalex-count`; the client lives here. Paths 1 and 2 must not wait on it.
 
 Selectable models:
 
@@ -50,7 +66,7 @@ Hidden configured models, confirmed by the user on 2026-08-18:
 - Hidden models may be used programmatically and must remain valid server-side model identifiers.
 - While OpenRouter is the active development gateway, both hidden Claude models use Anthropic automatic prompt caching and explicit large-context breakpoints with a one-hour TTL.
 
-Resolve each target to its current Cloudflare catalog ID during implementation and verify direct PDF input, streaming, and tool calling before enabling it. Do not guess or preserve stale OpenRouter-specific IDs.
+Resolve each target to its current provider or OpenRouter model ID from the stored OpenScholar model list during implementation, and verify direct PDF input, streaming, and tool calling before enabling it. Do not guess or preserve stale IDs.
 
 `openai/gpt-5.6-luna` is the default and the fixed cheap model for generated starter questions. GPT-5.6 Sol, Terra, Pro/batch variants, and Claude models other than the two hidden entries above are excluded.
 
@@ -208,7 +224,7 @@ Conceptual input:
 
 - Keep this independent from the application LLM provider.
 - Leave its existing Meilisearch behavior and configuration untouched.
-- It must continue to work when `CLOUDFLARE_API_TOKEN` is missing or Cloudflare AI Gateway is unavailable.
+- It must continue to work when no AI credential path is configured or the configured provider is unavailable.
 - Its Meilisearch request does not count as an AI endpoint request for application rate limiting.
 
 ## Meilisearch boundary
@@ -234,7 +250,7 @@ Conceptual input:
 - Validate every AI route request and every tool input with typed schemas.
 - Keep model and feature identifiers as closed code-defined values.
 - Stream controlled errors that the existing UI can display. Missing key, provider failure, invalid input, unavailable PDF, oversize provider rejection, tool failure, and exhausted step limit must not crash the app.
-- When `CLOUDFLARE_API_TOKEN` is absent, disable Cloudflare-backed AI features cleanly in the UI and reject direct API calls cleanly. Similar Resources remains available.
+- When no AI credential path is configured, disable AI features cleanly in the UI and reject direct API calls cleanly. Similar Resources remains available.
 - Send PostHog metadata only: feature, selected model, token usage, cost, duration, tool counts, success/failure, and a safe error category.
 - Never send complete prompts, chat contents, abstracts, search bodies, or PDF contents to PostHog.
 - Keep structured server-side AI search diagnostics permanently enabled in development. Log each tool call's requested and effective filters, compiled Meilisearch options, result counts and keys, timings, failures, and the agent's search/read step decisions. Keep these diagnostics out of production.
@@ -249,7 +265,7 @@ Remove obsolete application code completely rather than leaving compatibility pa
 - The dead `/api/ai/embeddings` hello-world route.
 - Static provider-index/model-index coupling, unsafe provider casts, duplicated chat routes, mixed stream protocols, and obsolete message access.
 - The broken bespoke Deep Research pipeline after its behavior is replaced by the bounded shared agent.
-- Direct provider packages and the unused `openai` package after repository-wide usage verification.
+- Provider packages that no supported credential path uses, after repository-wide usage verification. Keep the adapters the direct-provider path needs.
 
 Do not create a database migration and do not drop or alter the existing embeddings table. Remove code that reads or writes it, then leave the dormant table in the database.
 
@@ -271,7 +287,7 @@ Treat PDF text, metadata, abstracts, search results, filenames, and user content
 
 The work is complete only when all of the following are true:
 
-1. All retained features work through the Vercel AI SDK and Cloudflare AI Gateway Unified Billing with the confirmed models and default.
+1. All retained features work through the Vercel AI SDK using one of the three confirmed credential paths, with the confirmed models and default.
 2. Summary, Explain, starter questions, and publication chat use direct visible PDFs and never run application embeddings/RAG.
 3. Quick and research chat share one backend, use the two typed tools, obey their step/batch limits, stream one UI-message protocol, and emit correct citations.
 4. Per-IP limits and controlled failure states work without authentication; Smart Screening uses one structured batch request; Similar Resources still works independently.
