@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
 
+import {
+	describeZoteroItemTypeFields,
+	getZoteroSchema,
+} from "@opendeved/evidence-library-core/zotero-schema";
+import enGBMessages from "@/messages/en-GB.json";
 import { selectPublicItemDetails } from "@/lib/public-item-details";
 
 describe("public item details", () => {
@@ -30,6 +35,18 @@ describe("public item details", () => {
 			{ label: "reportType", value: "Evidence review" },
 			{ label: "language", value: "English" },
 		]);
+	});
+
+	it("has labels for every field in the Zotero schema", () => {
+		const missingFields = [
+			...new Set(
+				getZoteroSchema().itemTypes.flatMap(({ itemType }) =>
+					describeZoteroItemTypeFields(itemType).map(({ field }) => field),
+				),
+			),
+		].filter((field) => !Object.hasOwn(enGBMessages.article, field));
+
+		expect(missingFields).toEqual([]);
 	});
 
 	it("keeps an external source URL but hides the library's own item URL", () => {
