@@ -23,9 +23,14 @@ Development reads `config/library.local.json` by default. Set
 npm run lint
 npx tsc --noEmit
 npm run schema:check
+npm run quality:fallow -- --base origin/openscholar
 npm run test:unit
 npm run test:e2e
 ```
+
+Fallow checks changed code for new dead code, complexity, duplication, and
+styling problems. Run every check through Blacksmith Testbox rather than on the
+local machine.
 
 The E2E command builds one production image and starts two independently
 configured libraries with disposable PostgreSQL, Meilisearch, Mailpit, workers,

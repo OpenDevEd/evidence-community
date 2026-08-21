@@ -196,9 +196,15 @@ Do not test Tailwind classes, CSS class strings, or inline styles. Use Playwrigh
 npm run lint
 npx tsc --noEmit
 npm run schema:check
+npm run quality:fallow -- --base origin/openscholar
 npm run test:unit
 npm run test:e2e
 ```
+
+Fallow checks only the code changed from the base commit. It blocks new dead
+code, complexity, duplication, and styling problems without treating the
+existing codebase as clean. Run it in Blacksmith Testbox, not on the local
+machine.
 
 ### Real-service checks
 

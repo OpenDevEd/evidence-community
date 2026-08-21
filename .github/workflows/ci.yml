@@ -80,19 +80,63 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+  code-quality:
+    name: Fallow code quality
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 10
+    steps:
+      - name: Check out the repository history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+
+      - name: Resolve the comparison commit
+        id: comparison
+        shell: bash
+        env:
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PUSH_BASE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+
+          comparison_sha="$PR_BASE_SHA"
+          if test -z "$comparison_sha"; then
+            comparison_sha="$PUSH_BASE_SHA"
+          fi
+
+          if test -z "$comparison_sha" || test "$comparison_sha" = "0000000000000000000000000000000000000000"; then
+            comparison_sha="$(git rev-parse HEAD^)"
+          fi
+
+          git cat-file -e "${comparison_sha}^{commit}"
+          echo "sha=$comparison_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Block new code-quality problems
+        uses: fallow-rs/fallow@ecf5a314fd3e10974acb4f5a7f867c433030522d # v3.17.0
+        with:
+          command: audit
+          version: 3.17.0
+          gate: new-only
+          changed-since: ${{ steps.comparison.outputs.sha }}
+          fail-on-issues: true
+          annotations: true
+
   ci:
     name: CI
     runs-on: blacksmith-2vcpu-ubuntu-2404
     timeout-minutes: 5
     if: always()
     needs:
+      - code-quality
       - static-checks
       - runtime
     steps:
       - name: Require every CI lane to pass
         env:
+          CODE_QUALITY: ${{ needs.code-quality.result }}
           STATIC_CHECKS: ${{ needs.static-checks.result }}
           RUNTIME: ${{ needs.runtime.result }}
         run: |
+          test "$CODE_QUALITY" = success
           test "$STATIC_CHECKS" = success
           test "$RUNTIME" = success
