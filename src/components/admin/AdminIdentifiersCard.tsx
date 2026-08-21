@@ -59,7 +59,7 @@ const confirmLabel: Record<AdminIdentifiersActionId, string> = {
 
 /** One short line for the closed card. */
 export function identifiersGlance(view: AdminIdentifiersView) {
-	const doi = view.doi ? view.doi.value : "No DOI · optional";
+	const doi = view.doi ? view.doi.value : "No DOI";
 	const archiveState =
 		view.archive.state === "active"
 			? view.archive.displayState === "synced"
@@ -306,7 +306,7 @@ export function AdminIdentifiersCard({
 						</div>
 					) : (
 						<p className="py-3 text-xs leading-5 text-black/55 dark:text-white/55">
-							A DOI is optional. Register one through Crossref, or archive the record and PDF on Zenodo and use the DOI Zenodo gives it.
+							No DOI yet.
 						</p>
 					)}
 					{identifiers.registration.state === "active" ? (

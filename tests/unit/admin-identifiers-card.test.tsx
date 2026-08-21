@@ -118,11 +118,10 @@ describe("AdminIdentifiersCard", () => {
 		)!;
 	}
 
-	it("is closed by default and says a missing DOI is optional, with nothing red", async () => {
+	it("is closed by default and shows a missing DOI without any error", async () => {
 		await render(identifiers());
 		expect(toggle().getAttribute("aria-expanded")).toBe("false");
 		expect(container.textContent).toContain("No DOI");
-		expect(container.textContent).toContain("optional");
 		expect(container.querySelector("[role=alert]")).toBeNull();
 		expect(container.textContent).not.toContain("Fix");
 	});
