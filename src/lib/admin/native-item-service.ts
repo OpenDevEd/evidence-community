@@ -48,7 +48,10 @@ import {
 	publishedAdminItemPayload,
 } from "./item-draft-patch";
 import { effectiveItemParent } from "./item-draft-merge";
-import { rebaseNativeItemDraftPayload } from "./item-draft-rebase";
+import {
+	mergeConcurrentDraftEdits,
+	rebaseNativeItemDraftPayload,
+} from "./item-draft-rebase";
 import {
 	NativeItemValidationError,
 	validateNativeItemDraft,
@@ -114,9 +117,17 @@ export class ItemNotFoundError extends Error {
 }
 
 export class ItemDraftConflictError extends Error {
-	constructor(itemKey: string) {
-		super(`Item draft is stale: ${itemKey}`);
+	/** Fields changed to different values by this editor and another session. */
+	readonly fields: readonly string[];
+
+	constructor(itemKey: string, fields: readonly string[] = []) {
+		super(
+			fields.length > 0
+				? `Item draft changed in another session (${fields.join(", ")}): ${itemKey}`
+				: `Item draft is stale: ${itemKey}`,
+		);
 		this.name = "ItemDraftConflictError";
+		this.fields = fields;
 	}
 }
 
@@ -680,7 +691,7 @@ async function saveItemDraftInTransaction(
 		.where(eq(itemDraft.itemKey, itemKey))
 		.for("update")
 		.limit(1);
-	if (currentDraft?.draftRevision !== expectedDraftRevision) {
+	if (!currentDraft) {
 		throw new ItemDraftConflictError(itemKey);
 	}
 	const [published] = await transaction
@@ -695,10 +706,27 @@ async function saveItemDraftInTransaction(
 		published ?? null,
 	);
 	const currentPayload = applyItemDraftPatch(basePayload, currentDraft.patch);
+	let submittedPayload = keepLinksWhenOmitted(payload, currentPayload);
+	let baselinePayload = expectedPayload;
+	if (currentDraft.draftRevision !== expectedDraftRevision) {
+		// Another session saved this draft after the editor loaded it (for
+		// example a second browser tab). Keep both sets of changes when they
+		// touched different fields; refuse only a same-field disagreement.
+		const merge = mergeConcurrentDraftEdits({
+			currentPayload,
+			expectedPayload,
+			payload: submittedPayload,
+		});
+		if (merge.kind === "conflict") {
+			throw new ItemDraftConflictError(itemKey, merge.fields);
+		}
+		submittedPayload = merge.payload;
+		baselinePayload = currentPayload;
+	}
 	const validated = rebaseNativeItemDraftPayload({
 		currentPayload,
-		expectedPayload,
-		payload: keepLinksWhenOmitted(payload, currentPayload),
+		expectedPayload: baselinePayload,
+		payload: submittedPayload,
 	});
 	const patch = createItemDraftPatch(basePayload, validated.payload);
 	assertNoSelfLinks(itemKey, validated.links);
@@ -719,7 +747,7 @@ async function saveItemDraftInTransaction(
 		.where(
 			and(
 				eq(itemDraft.itemKey, itemKey),
-				eq(itemDraft.draftRevision, expectedDraftRevision),
+				eq(itemDraft.draftRevision, currentDraft.draftRevision),
 			),
 		)
 		.returning();

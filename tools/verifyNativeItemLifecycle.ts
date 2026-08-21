@@ -144,18 +144,40 @@ async function verify() {
 			"Draft save did not synchronously refresh projected metadata",
 		);
 
-		let staleSaveRejected = false;
+		// A second session that loaded the draft before the save above and
+		// changed a different field keeps both changes.
+		const mergedSave = await saveNativeItemDraft(db, {
+			itemKey: draft.itemKey,
+			expectedDraftRevision: 1,
+			expectedPayload: draft.payload,
+			payload: { ...draft.payload, abstractNote: "Added in another tab" },
+		});
+		assert(
+			mergedSave.draftRevision === 3 &&
+				mergedSave.payload.title === "First published title" &&
+				mergedSave.payload.abstractNote === "Added in another tab",
+			`Concurrent edits to different fields were not merged: ${JSON.stringify(mergedSave.payload)}`,
+		);
+
+		// The same stale session changing the same field to a different value
+		// is refused and names the field.
+		let staleSaveRejected: string[] | null = null;
 		try {
 			await saveNativeItemDraft(db, {
 				itemKey: draft.itemKey,
 				expectedDraftRevision: 1,
-				expectedPayload: saved.payload,
-				payload: { itemType: "Book", title: "Stale edit" },
+				expectedPayload: draft.payload,
+				payload: { ...draft.payload, title: "Stale edit" },
 			});
 		} catch (error) {
-			staleSaveRejected = error instanceof NativeDraftConflictError;
+			if (error instanceof NativeDraftConflictError) {
+				staleSaveRejected = [...error.fields];
+			}
 		}
-		assert(staleSaveRejected, "A stale draft update was accepted");
+		assert(
+			staleSaveRejected?.join(",") === "title",
+			`A same-field stale draft update was not refused: ${JSON.stringify(staleSaveRejected)}`,
+		);
 
 		const firstPublication = await publishNativeItemDraft(
 			db,
