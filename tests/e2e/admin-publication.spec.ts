@@ -16,8 +16,15 @@ async function openPublicationRecord(page: Page) {
 	await row.click();
 	const inspector = page.locator("#admin-inspector-pane");
 	await expect(
-		inspector.getByRole("heading", { name: "DOI publishing", exact: true }),
+		inspector.getByRole("heading", { name: "Identifiers", exact: true }),
 	).toBeVisible();
+	// The identifiers card is closed by default; open it for the details.
+	const toggle = inspector
+		.locator("#admin-doi-publishing button[aria-expanded]")
+		.first();
+	if ((await toggle.getAttribute("aria-expanded")) === "false") {
+		await toggle.click();
+	}
 	return inspector;
 }
 
@@ -63,7 +70,13 @@ test("[publication:reserve] reserves a Crossref DOI from the admin interface", a
 		'[data-admin-publication-provider="crossref"]',
 	);
 
-	await crossref
+	await publication
+		.getByRole("button", { name: "Register a DOI with Crossref" })
+		.click();
+	await expect(
+		publication.getByRole("list", { name: "Before registering" }),
+	).toContainText("Record details");
+	await publication
 		.getByRole("button", { name: "Activate Crossref DOI" })
 		.click();
 	const dialog = page.getByRole("dialog", { name: "Activate Crossref DOI" });
@@ -92,9 +105,7 @@ test("[publication:crossref-settle] shows the verified Crossref DOI before Zenod
 	await expect(crossref.getByText("Synced", { exact: true })).toBeVisible();
 	await expect(crossref.getByRole("link", { name: expectedDoi })).toBeVisible();
 	await expect(
-		publication
-			.locator('[data-admin-publication-provider="zenodo"]')
-			.getByText("Not activated", { exact: true }),
+		publication.getByRole("button", { name: "Archive on Zenodo" }),
 	).toBeVisible();
 	await page.screenshot({
 		path: testInfo.outputPath("crossref-synced.png"),
@@ -187,10 +198,11 @@ test("[publication:zenodo] publishes to Zenodo and keeps both DOI states after r
 	});
 	await expect(crossref.getByRole("link", { name: expectedDoi })).toBeVisible();
 
-	const zenodo = publication.locator(
-		'[data-admin-publication-provider="zenodo"]',
-	);
-	await zenodo.getByRole("button", { name: "Publish to Zenodo" }).click();
+	await publication.getByRole("button", { name: "Archive on Zenodo" }).click();
+	await expect(
+		publication.getByRole("list", { name: "Before archiving" }),
+	).toBeVisible();
+	await publication.getByRole("button", { name: "Publish to Zenodo" }).click();
 	const dialog = page.getByRole("dialog", { name: "Publish to Zenodo" });
 	await expectCompactDialog(page, dialog);
 	const reuse = dialog.getByRole("radio", { name: /Use the Crossref DOI/u });
@@ -198,6 +210,9 @@ test("[publication:zenodo] publishes to Zenodo and keeps both DOI states after r
 	await page.screenshot({ path: testInfo.outputPath("zenodo-dialog.png"), fullPage: true });
 	await dialog.getByRole("button", { name: "Publish to Zenodo" }).click();
 	await expect(dialog).toBeHidden();
+	const zenodo = publication.locator(
+		'[data-admin-publication-provider="zenodo"]',
+	);
 	await expect(zenodo.getByText("Synced", { exact: true })).toBeVisible({
 		timeout: 60_000,
 	});

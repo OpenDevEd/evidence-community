@@ -1931,7 +1931,7 @@ export function AdminInspector({
 					<Section
 						icon={BadgeCheck}
 						id="admin-doi-publishing"
-						title="DOI publishing"
+						title="Identifiers"
 					>
 						<AdminPublicationStatus
 							itemKey={detail.key}
