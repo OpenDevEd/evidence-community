@@ -12,4 +12,6 @@ runs:
 
     - name: Install dependencies
       shell: bash
-      run: npm ci --prefer-offline --no-audit --no-fund
+      run: |
+        npm ci --prefer-offline --no-audit --no-fund --ignore-scripts
+        npm rebuild @parcel/watcher @swc/core bcrypt esbuild sharp
