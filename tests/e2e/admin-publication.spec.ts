@@ -55,7 +55,7 @@ async function expectCompactDialog(page: Page, dialog: Locator) {
 	);
 }
 
-test("reserves a Crossref DOI from the admin interface", async ({ page }, testInfo) => {
+test("[publication:reserve] reserves a Crossref DOI from the admin interface", async ({ page }, testInfo) => {
 	test.skip(phase !== "reserve", "Reservation phase only");
 	const inspector = await openPublicationRecord(page);
 	const publication = inspector.locator("#admin-doi-publishing");
@@ -78,7 +78,7 @@ test("reserves a Crossref DOI from the admin interface", async ({ page }, testIn
 	await page.screenshot({ path: testInfo.outputPath("crossref-queued.png"), fullPage: true });
 });
 
-test("shows the verified Crossref DOI before Zenodo activation", async ({
+test("[publication:crossref-settle] shows the verified Crossref DOI before Zenodo activation", async ({
 	page,
 }, testInfo) => {
 	test.setTimeout(60_000);
@@ -102,7 +102,7 @@ test("shows the verified Crossref DOI before Zenodo activation", async ({
 	});
 });
 
-test("publishes a metadata edit under the same Crossref DOI", async ({
+test("[publication:edit] publishes a metadata edit under the same Crossref DOI", async ({
 	page,
 }, testInfo) => {
 	test.setTimeout(60_000);
@@ -138,7 +138,7 @@ test("publishes a metadata edit under the same Crossref DOI", async ({
 	});
 });
 
-test("shows the edited metadata after Crossref verifies it", async ({
+test("[publication:edit-settle] shows the edited metadata after Crossref verifies it", async ({
 	page,
 }, testInfo) => {
 	test.setTimeout(60_000);
@@ -172,7 +172,7 @@ test("shows the edited metadata after Crossref verifies it", async ({
 	});
 });
 
-test("publishes to Zenodo and keeps both DOI states after reload", async ({
+test("[publication:zenodo] publishes to Zenodo and keeps both DOI states after reload", async ({
 	page,
 }, testInfo) => {
 	test.setTimeout(120_000);

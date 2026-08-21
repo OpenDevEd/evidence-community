@@ -332,18 +332,14 @@ npx tsc --noEmit
 npm run schema:check
 npm run test:unit
 npm run test:e2e
-npm run test:acceptance
 ```
 
-`npm run test:e2e` starts a disposable library, PostgreSQL, Meilisearch,
-Mailpit, and local HTTPS fixtures. It runs the browser checks one at a time so
-real record changes cannot interfere with another test, then removes the
-runtime.
-
-`npm run test:acceptance` starts real PostgreSQL, Meilisearch, Mailpit, and
-HTTPS upstream fixtures. It verifies two libraries, independently enabled and
-disabled integrations, mobile behavior, secret boundaries, live activation,
-rejection, last-valid retention, and rollback using the same image.
+`npm run test:e2e` starts two disposable libraries, PostgreSQL, Meilisearch,
+Mailpit, workers, and local HTTPS fixtures for external services. It runs every
+desktop and mobile browser check, including the complete mocked Crossref and
+Zenodo publication flow. It also verifies independently enabled and disabled
+integrations, secret boundaries, live activation, rejection, last-valid
+retention, and rollback using the same production image.
 
 ## Real publication sandbox checks
 

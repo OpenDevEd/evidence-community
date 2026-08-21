@@ -95,7 +95,6 @@ let indigoPort = "";
 let postgresPort = "";
 const keepRunning = process.argv.includes("--keep");
 const skipBuild = process.argv.includes("--skip-build");
-const e2eOnly = process.argv.includes("--e2e");
 
 const commandEnvironment: NodeJS.ProcessEnv = {
 	...process.env,
@@ -920,19 +919,6 @@ function runAdminBrowserSuite(profile: Profile) {
 	]);
 }
 
-function runEndToEndBrowserSuite(profile: Profile) {
-	console.log(`\nRunning the complete browser suite against ${profile.name}`);
-	run("npx", ["playwright", "test", "--workers", "1"], {
-		...commandEnvironment,
-		...publicExpectations(profile),
-		PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
-		EVIDENCE_LIBRARY_ADMIN_PASSWORD: acceptanceAdminPassword,
-		PLAYWRIGHT_ADMIN_UI: "true",
-		PLAYWRIGHT_EXPECTED_ADMIN_ITEM_TITLE: "Amber database evidence",
-		PLAYWRIGHT_RUNTIME_E2E: "true",
-	});
-}
-
 function runPublicationBrowserPhase(
 	profile: Profile,
 	phase: "reserve" | "crossref-settle" | "edit" | "edit-settle" | "zenodo",
@@ -946,6 +932,10 @@ function runPublicationBrowserPhase(
 			"tests/e2e/admin-publication.spec.ts",
 			"--project",
 			"chromium",
+			"--grep",
+			`\\[publication:${phase}\\]`,
+			"--workers",
+			"1",
 		],
 		{
 			...commandEnvironment,
@@ -1502,18 +1492,16 @@ async function main() {
 				searchIndexerImage,
 				".",
 			]);
-			if (!e2eOnly) {
-				run("docker", [
-					"build",
-					"--target",
-					"publication-worker",
-					"--tag",
-					publicationWorkerImage,
-					".",
-				]);
-			}
+			run("docker", [
+				"build",
+				"--target",
+				"publication-worker",
+				"--tag",
+				publicationWorkerImage,
+				".",
+			]);
 		}
-		if (!e2eOnly) await verifyRootOwnedConfigStartup();
+		await verifyRootOwnedConfigStartup();
 		compose(
 			"up",
 			"--wait",
@@ -1531,12 +1519,10 @@ async function main() {
 			"--wait",
 			"--wait-timeout",
 			"180",
-			...(e2eOnly
-				? ["amber-search-indexer"]
-				: ["amber-search-indexer", "indigo-search-indexer"]),
+			"amber-search-indexer",
+			"indigo-search-indexer",
 		);
-		const activeProfiles = e2eOnly ? profiles.slice(0, 1) : profiles;
-		for (const profile of activeProfiles) {
+		for (const profile of profiles) {
 			assert.equal(
 				postgresScalar(
 					profile.name,
@@ -1546,33 +1532,10 @@ async function main() {
 				`${profile.name} search rebuild marker must clear before worker health passes`,
 			);
 		}
-		for (const profile of activeProfiles) {
+		for (const profile of profiles) {
 			await seedSearch(profile);
 		}
-		if (!e2eOnly) await verifySearchQueueIsolation(profiles);
-		if (e2eOnly) {
-			compose(
-				"up",
-				"--wait",
-				"--wait-timeout",
-				"180",
-				"amber",
-				"amber-search-indexer",
-			);
-			await verifyPublicationLifecycle(profiles[0]);
-			await verifyPublicationAdminInterface(profiles[0]);
-			runEndToEndBrowserSuite(profiles[0]);
-			cleanupAcceptanceUsers();
-			console.log(
-				"\nEnd-to-end browser tests passed against a disposable runtime.",
-			);
-			if (keepRunning) {
-				console.log(
-					`Amber: http://127.0.0.1:${amberPort}\nCompose project: ${composeProject}`,
-				);
-			}
-			return;
-		}
+		await verifySearchQueueIsolation(profiles);
 		compose(
 			"up",
 			"--wait",
