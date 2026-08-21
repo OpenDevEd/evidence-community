@@ -891,7 +891,7 @@ export default function AdminWorkbench({
 				const failure = {
 					fields:
 						error instanceof AdminApiError &&
-						error.code === "validation_failed"
+						(error.code === "validation_failed" || error.status === 409)
 							? error.fields
 							: {},
 					message: errorMessage(error),

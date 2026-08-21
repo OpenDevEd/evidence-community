@@ -173,6 +173,20 @@ export function adminErrorDetails(error: unknown): AdminErrorDetails {
 		});
 		return { ...details, status: 400 };
 	}
+	if (error instanceof ItemDraftConflictError && error.fields.length > 0) {
+		return {
+			code: "conflict",
+			fields: Object.fromEntries(
+				error.fields.map((field) => [
+					field,
+					"Changed in another session.",
+				]),
+			),
+			message:
+				"Another session changed the same field while you were editing it. Reload to see its value, then make your change again.",
+			status: 409,
+		};
+	}
 	if (
 		error instanceof ItemDraftConflictError ||
 		error instanceof CollectionConflictError ||
