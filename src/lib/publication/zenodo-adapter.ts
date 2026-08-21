@@ -320,7 +320,7 @@ async function saveZenodoIdentifiers(
 				set: {
 					itemKey: input.itemKey,
 					role: value.role,
-					ownership: "managed",
+					ownership: value.ownership,
 					lifecycle: "verified",
 					isCurrent: true,
 					verifiedAt: input.observedAt,
