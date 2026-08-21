@@ -1,3 +1,4 @@
+import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import {
 	mapCrossrefRecord,
 	planPublicationSync,
@@ -89,9 +90,7 @@ export type AdminPublicationProviderView = {
 		canActivate: boolean;
 		canRetry: boolean;
 		actionLabel: string;
-		allowedIdentifierPolicies: readonly (
-			"reuse-crossref" | "mint-zenodo"
-		)[];
+		allowedIdentifierPolicies: readonly ZenodoIdentifierPolicy[];
 	};
 	exact: {
 		targetActive: boolean;
@@ -99,7 +98,7 @@ export type AdminPublicationProviderView = {
 			requestedBy: string;
 			requestedAt: string;
 		} | null;
-		identifierPolicy: "reuse-crossref" | "mint-zenodo" | null;
+		identifierPolicy: ZenodoIdentifierPolicy | null;
 		plan: AdminPublicationPlanSummary;
 		job: AdminPublicationJobSummary | null;
 		recentJobs: readonly AdminPublicationJobSummary[];
@@ -247,16 +246,13 @@ function buildIdentifiersView(input: {
 		id: AdminIdentifiersActionId,
 		view: AdminPublicationProviderView,
 		label: string,
-		extra?: { available: false; reason: string },
 	): AdminIdentifiersAction => {
-		const readiness = extra
-			? [{ label: extra.reason, ok: false, field: null }]
-			: readinessFromBlockers(view.blockers);
+		const readiness = readinessFromBlockers(view.blockers);
 		return {
 			id,
 			provider: view.provider,
 			label,
-			available: extra ? false : input.configured[view.provider],
+			available: input.configured[view.provider],
 			readiness,
 			ready: readiness.every((item) => item.ok),
 		};
@@ -267,15 +263,7 @@ function buildIdentifiersView(input: {
 		actions.push(action("register-crossref", crossref, "Register a DOI with Crossref"));
 	}
 	if (!zenodo.exact.targetActive) {
-		if (hasOutsideDoi) {
-			actions.push(
-				action("archive-zenodo", zenodo, "Archive on Zenodo", {
-					available: false,
-					reason:
-						"Archiving under a DOI that was not registered here is not available yet",
-				}),
-			);
-		} else if (doi?.origin === "crossref") {
+		if (hasOutsideDoi || doi?.origin === "crossref") {
 			actions.push(action("archive-zenodo", zenodo, "Archive on Zenodo"));
 		} else {
 			actions.push(action("mint-zenodo", zenodo, "Archive on Zenodo and get its DOI"));
@@ -383,6 +371,8 @@ function planIssues(plan: PublicationSyncPlan | null) {
 	const messages: Record<typeof plan.reason, string> = {
 		MISSING_MANAGED_CROSSREF_DOI:
 			"Activate and verify the Crossref DOI required by this publication",
+		MISSING_EXTERNAL_DOI:
+			"Add the record's DOI before archiving it on Zenodo under that DOI",
 		MISSING_ZENODO_PROVIDER_RECORD_ID:
 			"The saved Zenodo DOI is missing its Zenodo record ID",
 		CROSSREF_VALIDATION_FAILED:
@@ -557,6 +547,14 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		bibliographicDoi.status === "resolved" && !managedCrossref
 			? bibliographicDoi.doi
 			: null;
+	const archivedExternalDoi =
+		zenodoTarget?.identifierPolicy === "reuse-external"
+			? (zenodoState?.zenodoVersionDoi ?? null)
+			: null;
+	const archivedDoiMismatch =
+		archivedExternalDoi && existingBibliographicDoi !== archivedExternalDoi
+			? `The record DOI no longer matches the DOI archived on Zenodo (${archivedExternalDoi})`
+			: null;
 	let crossrefValidation: readonly string[] = [];
 	let zenodoValidation: readonly string[] = [];
 	if (validationRecord && publicationConfig.crossref.prefix) {
@@ -709,6 +707,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 	const zenodoBlockers = unique([
 		...sharedBlockers,
 		fileError,
+		archivedDoiMismatch,
 		!publicationConfig.zenodo.enabled
 			? "Zenodo Sandbox publishing is not configured for this library"
 			: null,
@@ -781,15 +780,15 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			},
 			input.now,
 		);
-		const allowedIdentifierPolicies =
-			provider === "zenodo" &&
-			zenodoBlockers.length === 0 &&
-			displayState !== "external"
-				? ([
-						...(managedCrossref ? ["reuse-crossref" as const] : []),
-						"mint-zenodo" as const,
-					] as const)
-				: [];
+		const allowedIdentifierPolicies: ZenodoIdentifierPolicy[] =
+			provider !== "zenodo" || zenodoBlockers.length > 0
+				? []
+				: existingBibliographicDoi
+					? ["reuse-external"]
+					: [
+							...(managedCrossref ? (["reuse-crossref"] as const) : []),
+							"mint-zenodo",
+						];
 		const pendingSubmission =
 			provider === "crossref" &&
 			state?.pendingBatchId &&

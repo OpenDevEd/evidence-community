@@ -21,6 +21,7 @@ export const PUBLICATION_PROVIDERS = ["crossref", "zenodo"] as const;
 export const PUBLICATION_ENVIRONMENTS = ["test", "sandbox"] as const;
 export const ZENODO_IDENTIFIER_POLICIES = [
 	"reuse-crossref",
+	"reuse-external",
 	"mint-zenodo",
 ] as const;
 export const PUBLICATION_IDENTIFIER_ROLES = [
@@ -153,7 +154,7 @@ export const publicationTarget = pgTable(
 				(${table.provider} = 'crossref' AND ${table.identifierPolicy} IS NULL)
 				OR (${table.provider} = 'zenodo'
 					AND ${table.identifierPolicy} IS NOT NULL
-					AND ${table.identifierPolicy} IN ('reuse-crossref', 'mint-zenodo'))
+					AND ${table.identifierPolicy} IN ('reuse-crossref', 'reuse-external', 'mint-zenodo'))
 			)`,
 		),
 		index("publicationTarget_item_active_idx")

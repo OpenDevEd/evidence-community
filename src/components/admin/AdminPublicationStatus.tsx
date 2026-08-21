@@ -1,5 +1,6 @@
 "use client";
 
+import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import {
 	AlertCircle,
 	BadgeCheck,
@@ -86,7 +87,7 @@ export function AdminPublicationStatus({
 	const [zenodoOpen, setZenodoOpen] = useState(false);
 	const [policyChoice, setPolicyChoice] = useState<{
 		itemKey: string;
-		policy: "mint-zenodo" | "reuse-crossref";
+		policy: ZenodoIdentifierPolicy;
 	} | null>(null);
 	if (!published) {
 		return (
@@ -119,9 +120,11 @@ export function AdminPublicationStatus({
 		);
 	}
 	const allowedPolicies = publication.providers.zenodo.capabilities.allowedIdentifierPolicies;
-	const defaultPolicy = allowedPolicies.includes("reuse-crossref")
-		? "reuse-crossref"
-		: "mint-zenodo";
+	const defaultPolicy = allowedPolicies.includes("reuse-external")
+		? "reuse-external"
+		: allowedPolicies.includes("reuse-crossref")
+			? "reuse-crossref"
+			: "mint-zenodo";
 	const zenodoPolicy =
 		policyChoice?.itemKey === itemKey && allowedPolicies.includes(policyChoice.policy)
 			? policyChoice.policy
@@ -166,7 +169,12 @@ export function AdminPublicationStatus({
 						}
 						setPolicyChoice({
 							itemKey,
-							policy: action === "archive-zenodo" ? "reuse-crossref" : "mint-zenodo",
+							policy:
+								action === "archive-zenodo"
+									? allowedPolicies.includes("reuse-external")
+										? "reuse-external"
+										: "reuse-crossref"
+									: "mint-zenodo",
 						});
 						setZenodoOpen(true);
 					}}

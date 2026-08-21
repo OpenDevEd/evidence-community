@@ -1,3 +1,4 @@
+import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import {
 	executeLivePublicationSyncPlan,
 	planPublicationSync,
@@ -233,6 +234,7 @@ async function saveZenodoIdentifiers(
 		itemKey: string;
 		identifiers: ZenodoRecordIdentifiers;
 		observedAt: Date;
+		identifierPolicy: ZenodoIdentifierPolicy;
 	},
 ) {
 	const [previousVersion] = await transaction
@@ -249,12 +251,30 @@ async function saveZenodoIdentifiers(
 		)
 		.limit(1);
 	const previousVersionDoi = previousVersion?.doi;
+	// Under reuse-external Zenodo reports the record's own DOI back as its
+	// version DOI. That DOI was never minted here, so it is stored as external.
+	const versionOwnership =
+		input.identifierPolicy === "reuse-external"
+			? ("external" as const)
+			: ("managed" as const);
 	const values = [
 		...(input.identifiers.versionDoi
-			? [{ role: "version" as const, doi: input.identifiers.versionDoi }]
+			? [
+					{
+						role: "version" as const,
+						doi: input.identifiers.versionDoi,
+						ownership: versionOwnership,
+					},
+				]
 			: []),
 		...(input.identifiers.conceptDoi
-			? [{ role: "concept" as const, doi: input.identifiers.conceptDoi }]
+			? [
+					{
+						role: "concept" as const,
+						doi: input.identifiers.conceptDoi,
+						ownership: "managed" as const,
+					},
+				]
 			: []),
 	];
 	await assertNoIdentifierCollision(
@@ -283,7 +303,7 @@ async function saveZenodoIdentifiers(
 				environment: "sandbox",
 				role: value.role,
 				doi: value.doi,
-				ownership: "managed",
+				ownership: value.ownership,
 				lifecycle: "verified",
 				isCurrent: true,
 				reservedAt: input.observedAt,
@@ -423,14 +443,6 @@ function createZenodoJournal(
 					throw new Error(
 						"The prepared Zenodo draft was not journaled",
 					);
-				const zenodoVersionChanged = await saveZenodoIdentifiers(
-					transaction,
-					{
-						itemKey: input.recordId,
-						identifiers: input.identifiers,
-						observedAt: input.observedAt,
-					},
-				);
 				const [target] = await transaction
 					.select({
 						identifierPolicy: publicationTarget.identifierPolicy,
@@ -447,6 +459,15 @@ function createZenodoJournal(
 				if (!target?.identifierPolicy) {
 					throw new Error("The Zenodo target has no DOI policy");
 				}
+				const zenodoVersionChanged = await saveZenodoIdentifiers(
+					transaction,
+					{
+						itemKey: input.recordId,
+						identifiers: input.identifiers,
+						observedAt: input.observedAt,
+						identifierPolicy: target.identifierPolicy,
+					},
+				);
 				const [existingState] = await transaction
 					.select({
 						lastFileManifestHash:
@@ -651,7 +672,7 @@ function createZenodoJournal(
 function zenodoPatchValues(
 	patch: ProviderSyncStatePatch,
 	previousState: ProviderSyncState | undefined,
-	identifierPolicy: "reuse-crossref" | "mint-zenodo",
+	identifierPolicy: ZenodoIdentifierPolicy,
 	now: Date,
 ) {
 	const zenodo = patch.zenodo;
@@ -807,7 +828,7 @@ async function settleZenodoState(
 		canonicalRevision: number;
 		patch: ProviderSyncStatePatch;
 		previousState: ProviderSyncState | undefined;
-		identifierPolicy: "reuse-crossref" | "mint-zenodo";
+		identifierPolicy: ZenodoIdentifierPolicy;
 		settledAt: Date;
 		jobResult:
 			| { status: "finished"; receipt: Record<string, unknown> }
@@ -855,6 +876,7 @@ async function settleZenodoState(
 		) {
 			await saveZenodoIdentifiers(transaction, {
 				itemKey: input.itemKey,
+				identifierPolicy: input.identifierPolicy,
 				identifiers: {
 					latestRecordId: values.zenodoRecordId,
 					parentId: values.zenodoParentId,

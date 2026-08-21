@@ -148,7 +148,11 @@ function ActivityRow({
 					) : null}
 					{provider.exact.identifierPolicy ? (
 						<span className="text-[11px] text-black/40 dark:text-white/40">
-							{provider.exact.identifierPolicy === "reuse-crossref" ? "Uses the Crossref DOI" : "Uses Zenodo DOIs"}
+							{provider.exact.identifierPolicy === "reuse-crossref"
+								? "Uses the Crossref DOI"
+								: provider.exact.identifierPolicy === "reuse-external"
+									? "Uses the record's own DOI"
+									: "Uses Zenodo DOIs"}
 						</span>
 					) : null}
 				</div>

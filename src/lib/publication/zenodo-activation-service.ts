@@ -77,16 +77,31 @@ export type ZenodoActivationReceipt = {
 export function resolveZenodoActivationPolicy(
 	input: ZenodoActivationPolicyInput,
 ): ZenodoIdentifierPolicy {
-	if (
+	// A DOI the record brought with it (not the one Crossref registered here).
+	const ownDoi =
 		input.bibliographicDoi &&
 		input.bibliographicDoi !== input.managedCrossref?.doi
-	) {
-		throw new ZenodoActivationValidationError(
-			`This record already uses ${input.bibliographicDoi}. Zenodo cannot assign another DOI in this version.`,
-			{
-				DOI: "Remove the external DOI before publishing this record to Zenodo.",
-			},
-		);
+			? input.bibliographicDoi
+			: null;
+	if (input.requestedPolicy === "reuse-external") {
+		if (!ownDoi) {
+			throw new ZenodoActivationValidationError(
+				input.bibliographicDoi
+					? "This record's DOI was registered here through Crossref. Choose \"Use the Crossref DOI\" instead."
+					: "Add the record's DOI before archiving it on Zenodo under that DOI.",
+				{ DOI: "Enter the DOI this record already has." },
+			);
+		}
+		return "reuse-external";
+	}
+	if (ownDoi) {
+		if (input.requestedPolicy) {
+			throw new ZenodoActivationValidationError(
+				`This record already has the DOI ${ownDoi}. Zenodo can archive it under that DOI, but cannot assign another one.`,
+				{ identifierPolicy: "Choose \"Use the record's existing DOI\"." },
+			);
+		}
+		return "reuse-external";
 	}
 	const policy = input.requestedPolicy ?? input.configuredDefault;
 	if (policy === "reuse-crossref" && !input.managedCrossref) {
@@ -99,6 +114,48 @@ export function resolveZenodoActivationPolicy(
 		);
 	}
 	return policy;
+}
+
+export type DoiResolver = (
+	url: string,
+) => Promise<{ ok: boolean; status: number }>;
+
+const defaultDoiResolver: DoiResolver = async (url) => {
+	const response = await fetch(url, {
+		method: "HEAD",
+		redirect: "manual",
+		signal: AbortSignal.timeout(8_000),
+	});
+	return {
+		ok: response.status >= 200 && response.status < 400,
+		status: response.status,
+	};
+};
+
+/**
+ * Zenodo will happily archive under any DOI string. Before reusing a DOI the
+ * record brought with it, make sure doi.org knows it, so a typo never ends up
+ * as a Zenodo record's DOI.
+ */
+export async function assertDoiResolves(
+	doi: string,
+	resolve: DoiResolver = defaultDoiResolver,
+): Promise<void> {
+	let result: { ok: boolean; status: number };
+	try {
+		result = await resolve(`https://doi.org/${doi}`);
+	} catch {
+		throw new ZenodoActivationValidationError(
+			`The DOI ${doi} could not be checked with doi.org right now. Try again in a moment.`,
+			{ DOI: "Could not be checked with doi.org." },
+		);
+	}
+	if (!result.ok) {
+		throw new ZenodoActivationValidationError(
+			`The DOI ${doi} does not resolve at doi.org (status ${result.status}). Check the DOI before archiving under it.`,
+			{ DOI: "This DOI does not resolve at doi.org." },
+		);
+	}
 }
 
 function requireZenodoConfig(config: PublicationConfig) {
@@ -317,6 +374,7 @@ export async function activateZenodoPublication(
 	config: PublicationConfig,
 	requestedPolicy?: ZenodoIdentifierPolicy,
 	requestedBy = "admin-bypass",
+	options: { resolveDoi?: DoiResolver } = {},
 ): Promise<ZenodoActivationReceipt> {
 	const zenodo = requireZenodoConfig(config);
 	return database.transaction(async (transaction) => {
@@ -337,6 +395,15 @@ export async function activateZenodoPublication(
 			requestedPolicy,
 		});
 		const { fileRevision, policy, waitingOn } = prepared;
+		if (policy === "reuse-external") {
+			const ownDoi = resolveBibliographicDoi({
+				DOI: record.DOI,
+				extra: record.extra,
+				attachments: snapshot.attachments,
+			}).doi;
+			if (!ownDoi) throw new PublicationItemNotFoundError(itemKey);
+			await assertDoiResolves(ownDoi, options.resolveDoi);
+		}
 
 		const existingTarget = snapshot.targets.find(
 			(target) =>

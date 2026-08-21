@@ -87,7 +87,7 @@ function snapshot(changes: Partial<Snapshot> = {}): Snapshot {
 
 function target(
 	provider: "crossref" | "zenodo",
-	identifierPolicy: "reuse-crossref" | "mint-zenodo" | null = null,
+	identifierPolicy: "reuse-crossref" | "reuse-external" | "mint-zenodo" | null = null,
 ) {
 	return {
 		itemKey: "ABCDEFGH",
@@ -253,7 +253,7 @@ describe("admin publication view", () => {
 		expect(view.providers.zenodo.capabilities.canActivate).toBe(false);
 		expect(
 			view.providers.zenodo.capabilities.allowedIdentifierPolicies,
-		).toEqual([]);
+		).toEqual(["reuse-external"]);
 	});
 
 	it("treats a metadata-only DOI on this library's prefix as external too", () => {
@@ -858,8 +858,10 @@ describe("identifiers view", () => {
 		});
 		expect(identifiers.actions.map((a) => a.id)).toEqual(["archive-zenodo"]);
 		const archive = identifiers.actions[0]!;
-		expect(archive.available).toBe(false);
-		expect(archive.readiness[0]!.ok).toBe(false);
+		expect(archive.available).toBe(true);
+		expect(
+			view.providers.zenodo.capabilities.allowedIdentifierPolicies,
+		).toEqual(["reuse-external"]);
 		expect(identifiers.attention).toBe(false);
 	});
 
@@ -928,5 +930,56 @@ describe("identifiers view", () => {
 		});
 		expect(view.providers.crossref.displayState).toBe("failed");
 		expect(view.identifiers.attention).toBe(true);
+	});
+
+	function archivedUnderOwnDoi(recordDoi: string) {
+		return snapshot({
+			record: record({ DOI: recordDoi }),
+			targets: [target("zenodo", "reuse-external")],
+			// Settlement stores the reused DOI as external, never managed.
+			identifiers: [
+				identifier({
+					provider: "zenodo",
+					doi: "10.9999/external",
+					role: "version",
+					ownership: "external",
+				}),
+			],
+			states: [
+				syncState({
+					provider: "zenodo",
+					environment: "sandbox",
+					identifierPolicy: "reuse-external",
+					zenodoRecordId: "588743",
+					zenodoParentId: "588742",
+					zenodoVersionDoi: "10.9999/external",
+					zenodoFirstPublishedAt: new Date("2026-08-21T10:00:00Z"),
+				}),
+			],
+		});
+	}
+
+	it("keeps the record's own DOI as the record's after Zenodo archived under it", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: archivedUnderOwnDoi("10.9999/external"),
+			config,
+		});
+		expect(view.identifiers.doi).toMatchObject({
+			value: "10.9999/external",
+			origin: "record",
+		});
+		expect(view.providers.zenodo.blockers).toEqual([]);
+	});
+
+	it("blocks Zenodo when the record DOI was changed after archiving under it", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: archivedUnderOwnDoi("10.9999/changed"),
+			config,
+		});
+		expect(view.providers.zenodo.blockers).toContainEqual(
+			expect.stringContaining("no longer matches the DOI archived on Zenodo"),
+		);
 	});
 });
