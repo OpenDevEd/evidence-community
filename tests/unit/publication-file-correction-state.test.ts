@@ -4,8 +4,25 @@ vi.mock("server-only", () => ({}));
 
 import type { PublicationRepositorySnapshot } from "@/lib/publication/repository";
 import { providerState } from "@/lib/publication/state-adapter";
+import { zenodoPdfCorrectionIdentifier } from "@/lib/admin/native-file-service";
 
 describe("Zenodo PDF correction state", () => {
+	it("uses the DOI that each reuse policy actually archived", () => {
+		expect(zenodoPdfCorrectionIdentifier("reuse-crossref")).toEqual({
+			environment: "test",
+			ownership: "managed",
+			registrar: "crossref",
+			role: "primary",
+		});
+		expect(zenodoPdfCorrectionIdentifier("reuse-external")).toEqual({
+			environment: "sandbox",
+			ownership: "external",
+			registrar: "zenodo",
+			role: "version",
+		});
+		expect(zenodoPdfCorrectionIdentifier("mint-zenodo")).toBeNull();
+	});
+
 	it("marks a superseded journal approval unavailable before remote publish", () => {
 		const approvedAt = new Date("2030-08-20T12:00:00.000Z");
 		const snapshot: PublicationRepositorySnapshot = {

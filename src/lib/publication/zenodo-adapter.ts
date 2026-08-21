@@ -87,6 +87,53 @@ function requireConfig(config: PublicationConfig) {
 	return { ...zenodo, token: zenodo.token };
 }
 
+function requireZenodoPlanningRecord(snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>) {
+	const record = snapshot.record;
+	if (!record) throw new Error("The publication record no longer exists");
+	if (record.deleted === 1) {
+		throw new Error("Restore this record before publishing it to Zenodo");
+	}
+	if (record.parentItem) {
+		throw new Error("Only parent records can be published to Zenodo");
+	}
+	return record;
+}
+
+function managedZenodoDoiValues(
+	snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>,
+) {
+	return snapshot.identifiers
+		.filter(
+			(identifier) =>
+				identifier.registrar === "zenodo" &&
+				identifier.environment === "sandbox" &&
+				identifier.ownership === "managed",
+		)
+		.map((identifier) => identifier.doi);
+}
+
+function activeFileCorrectionApproval(
+	snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>,
+) {
+	return snapshot.fileCorrectionApprovals.find(
+		(approval) =>
+			approval.consumedAt === null && approval.supersededAt === null,
+	);
+}
+
+function assertArchivedExternalDoiMatches(input: {
+	identifierPolicy: ZenodoIdentifierPolicy;
+	archivedExternalDoi: string | undefined;
+	bibliographicDoi: string | null;
+}) {
+	if (input.identifierPolicy !== "reuse-external") return;
+	if (!input.archivedExternalDoi) return;
+	if (input.bibliographicDoi === input.archivedExternalDoi) return;
+	throw new Error(
+		`The record DOI no longer matches the DOI archived on Zenodo (${input.archivedExternalDoi})`,
+	);
+}
+
 async function buildZenodoPlan(
 	database: Database,
 	itemKey: string,
@@ -99,14 +146,7 @@ async function buildZenodoPlan(
 		itemKey,
 		publicationConfig.crossref.environment,
 	);
-	const record = snapshot.record;
-	if (!record) throw new Error("The publication record no longer exists");
-	if (record.deleted === 1) {
-		throw new Error("Restore this record before publishing it to Zenodo");
-	}
-	if (record.parentItem) {
-		throw new Error("Only parent records can be published to Zenodo");
-	}
+	const record = requireZenodoPlanningRecord(snapshot);
 	const target = targetFor(snapshot, "zenodo", "sandbox");
 	if (!target?.identifierPolicy) {
 		throw new Error("The record does not have an active Zenodo target");
@@ -117,14 +157,7 @@ async function buildZenodoPlan(
 		"test",
 		"primary",
 	);
-	const managedZenodoDois = snapshot.identifiers
-		.filter(
-			(identifier) =>
-				identifier.registrar === "zenodo" &&
-				identifier.environment === "sandbox" &&
-				identifier.ownership === "managed",
-		)
-		.map((identifier) => identifier.doi);
+	const managedZenodoDois = managedZenodoDoiValues(snapshot);
 	const bibliographicDoi = resolveBibliographicDoi(
 		{
 			DOI: record.DOI,
@@ -162,22 +195,12 @@ async function buildZenodoPlan(
 		),
 	});
 	const previousState = providerState(snapshot, "zenodo", publicationConfig);
-	const archivedExternalDoi =
-		target.identifierPolicy === "reuse-external"
-			? previousState?.zenodo?.identifiers?.versionDoi
-			: undefined;
-	if (archivedExternalDoi && bibliographicDoi.doi !== archivedExternalDoi) {
-		// The archive was made under the DOI the record had then. A changed
-		// record DOI must not be pushed to Zenodo unchecked; the admin shows
-		// the same reason as a blocker.
-		throw new Error(
-			`The record DOI no longer matches the DOI archived on Zenodo (${archivedExternalDoi})`,
-		);
-	}
-	const activeFileCorrectionApproval = snapshot.fileCorrectionApprovals.find(
-		(approval) =>
-			approval.consumedAt === null && approval.supersededAt === null,
-	);
+	assertArchivedExternalDoiMatches({
+		identifierPolicy: target.identifierPolicy,
+		archivedExternalDoi: previousState?.zenodo?.identifiers?.versionDoi,
+		bibliographicDoi: bibliographicDoi.doi,
+	});
+	const correctionApproval = activeFileCorrectionApproval(snapshot);
 	return {
 		identifierPolicy: target.identifierPolicy,
 		plan: planPublicationSync({
@@ -194,11 +217,11 @@ async function buildZenodoPlan(
 				},
 			},
 			...(previousState ? { state: previousState } : {}),
-			...(activeFileCorrectionApproval
+			...(correctionApproval
 				? {
 						zenodoFileChangeApproval:
 							fileCorrectionApprovalFromRow(
-								activeFileCorrectionApproval,
+								correctionApproval,
 							),
 					}
 				: {}),

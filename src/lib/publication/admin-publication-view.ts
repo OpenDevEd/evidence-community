@@ -210,7 +210,7 @@ function readinessFromBlockers(
 	}));
 }
 
-function buildIdentifiersView(input: {
+type IdentifiersViewInput = {
 	crossref: AdminPublicationProviderView;
 	zenodo: AdminPublicationProviderView;
 	crossrefDoi: string | null;
@@ -218,64 +218,113 @@ function buildIdentifiersView(input: {
 	externalDoi: string | null;
 	fromSource: boolean;
 	configured: { crossref: boolean; zenodo: boolean };
-}): AdminIdentifiersView {
-	const { crossref, zenodo } = input;
-	const doi = input.crossrefDoi
-		? { value: input.crossrefDoi, origin: "crossref" as const }
-		: input.zenodoVersionDoi
-			? { value: input.zenodoVersionDoi, origin: "zenodo" as const }
-			: input.externalDoi
-				? {
-						value: input.externalDoi,
-						origin: input.fromSource ? ("source" as const) : ("record" as const),
-					}
-				: null;
-	const activity = (
-		view: AdminPublicationProviderView,
-	): AdminIdentifiersActivity =>
-		view.exact.targetActive
-			? {
-					state: "active",
-					provider: view.provider,
-					displayState: view.displayState,
-					status: view.status,
-					links: view.links,
-				}
-			: { state: "none" };
-	const action = (
-		id: AdminIdentifiersActionId,
-		view: AdminPublicationProviderView,
-		label: string,
-	): AdminIdentifiersAction => {
-		const readiness = readinessFromBlockers(view.blockers);
+};
+
+type IdentifierDoi = NonNullable<AdminIdentifiersView["doi"]>;
+
+function identifierDoi(input: IdentifiersViewInput): IdentifierDoi | null {
+	if (input.crossrefDoi) {
 		return {
-			id,
-			provider: view.provider,
-			label,
-			available: input.configured[view.provider],
-			readiness,
-			ready: readiness.every((item) => item.ok),
+			value: input.crossrefDoi,
+			origin: "crossref",
+			url: `https://doi.org/${input.crossrefDoi}`,
 		};
+	}
+	if (input.zenodoVersionDoi) {
+		return {
+			value: input.zenodoVersionDoi,
+			origin: "zenodo",
+			url: `https://doi.org/${input.zenodoVersionDoi}`,
+		};
+	}
+	if (!input.externalDoi) return null;
+	return {
+		value: input.externalDoi,
+		origin: input.fromSource ? "source" : "record",
+		url: `https://doi.org/${input.externalDoi}`,
 	};
+}
+
+function identifierActivity(
+	view: AdminPublicationProviderView,
+): AdminIdentifiersActivity {
+	if (!view.exact.targetActive) return { state: "none" };
+	return {
+		state: "active",
+		provider: view.provider,
+		displayState: view.displayState,
+		status: view.status,
+		links: view.links,
+	};
+}
+
+function identifierAction(
+	input: IdentifiersViewInput,
+	id: AdminIdentifiersActionId,
+	view: AdminPublicationProviderView,
+	label: string,
+): AdminIdentifiersAction {
+	const readiness = readinessFromBlockers(view.blockers);
+	return {
+		id,
+		provider: view.provider,
+		label,
+		available: input.configured[view.provider],
+		readiness,
+		ready: readiness.every((item) => item.ok),
+	};
+}
+
+function identifierActions(
+	input: IdentifiersViewInput,
+	doi: IdentifierDoi | null,
+) {
 	const actions: AdminIdentifiersAction[] = [];
 	const hasOutsideDoi = doi !== null && doi.origin !== "crossref";
-	if (!crossref.exact.targetActive && !hasOutsideDoi) {
-		actions.push(action("register-crossref", crossref, "Register a DOI with Crossref"));
+	if (!input.crossref.exact.targetActive && !hasOutsideDoi) {
+		actions.push(
+			identifierAction(
+				input,
+				"register-crossref",
+				input.crossref,
+				"Register a DOI with Crossref",
+			),
+		);
 	}
-	if (!zenodo.exact.targetActive) {
+	if (!input.zenodo.exact.targetActive) {
 		if (hasOutsideDoi || doi?.origin === "crossref") {
-			actions.push(action("archive-zenodo", zenodo, "Archive on Zenodo"));
+			actions.push(
+				identifierAction(
+					input,
+					"archive-zenodo",
+					input.zenodo,
+					"Archive on Zenodo",
+				),
+			);
 		} else {
-			actions.push(action("mint-zenodo", zenodo, "Archive on Zenodo and get its DOI"));
+			actions.push(
+				identifierAction(
+					input,
+					"mint-zenodo",
+					input.zenodo,
+					"Archive on Zenodo and get its DOI",
+				),
+			);
 		}
 	}
+	return actions;
+}
+
+function buildIdentifiersView(input: IdentifiersViewInput): AdminIdentifiersView {
+	const doi = identifierDoi(input);
 	return {
-		doi: doi ? { ...doi, url: `https://doi.org/${doi.value}` } : null,
-		registration: activity(crossref),
-		archive: activity(zenodo),
+		doi,
+		registration: identifierActivity(input.crossref),
+		archive: identifierActivity(input.zenodo),
 		attention:
-			crossref.displayState === "failed" || zenodo.displayState === "failed",
-		actions,
+			input.crossref.displayState === "failed" ||
+			input.zenodo.displayState === "failed",
+		actions: identifierActions(input, doi),
 	};
 }
 

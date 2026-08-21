@@ -58,7 +58,7 @@ const confirmLabel: Record<AdminIdentifiersActionId, string> = {
 };
 
 /** One short line for the closed card. */
-export function identifiersGlance(view: AdminIdentifiersView) {
+function identifiersGlance(view: AdminIdentifiersView) {
 	const doi = view.doi ? view.doi.value : "No DOI";
 	const archiveState =
 		view.archive.state === "active"
@@ -232,6 +232,235 @@ function Readiness({
 	);
 }
 
+function attentionLabel(identifiers: AdminIdentifiersView) {
+	if (!identifiers.attention) return identifiersGlance(identifiers).archive;
+	if (
+		identifiers.registration.state === "active" &&
+		identifiers.registration.displayState === "failed"
+	) {
+		return "Registration needs attention";
+	}
+	return "Archive needs attention";
+}
+
+function IdentifiersHeader({
+	bodyId,
+	identifiers,
+	onToggle,
+	open,
+}: {
+	bodyId: string;
+	identifiers: AdminIdentifiersView;
+	onToggle: () => void;
+	open: boolean;
+}) {
+	const glance = identifiersGlance(identifiers);
+	const GlanceIcon = identifiers.attention
+		? AlertCircle
+		: identifiers.doi
+			? BadgeCheck
+			: Circle;
+	const iconColor = identifiers.attention
+		? "text-danger"
+		: identifiers.doi
+			? "text-emerald-600 dark:text-emerald-300"
+			: "text-black/35 dark:text-white/35";
+	return (
+		<button
+			aria-controls={bodyId}
+			aria-expanded={open}
+			className="flex w-full items-center gap-3 p-3.5 text-left hover:bg-black/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:hover:bg-white/[0.03]"
+			onClick={onToggle}
+			type="button"
+		>
+			<span className={`grid size-4 shrink-0 place-items-center ${iconColor}`}>
+				<GlanceIcon aria-hidden size={16} strokeWidth={2} />
+			</span>
+			<span className="min-w-0 flex-1">
+				<span
+					className={`block truncate text-sm font-semibold ${identifiers.doi ? "font-mono" : ""} text-black/85 dark:text-white/90`}
+				>
+					{glance.doi}
+				</span>
+				<span
+					className={`block text-[11px] ${identifiers.attention ? "text-danger" : "text-black/45 dark:text-white/45"}`}
+				>
+					{attentionLabel(identifiers)}
+				</span>
+			</span>
+			<ChevronDown
+				aria-hidden
+				className={`shrink-0 text-black/40 transition-transform dark:text-white/40 ${open ? "rotate-180" : ""}`}
+				size={16}
+			/>
+		</button>
+	);
+}
+
+function IdentifierDoi({ doi }: { doi: NonNullable<AdminIdentifiersView["doi"]> }) {
+	return (
+		<div className="flex items-center gap-2 py-3">
+			<div className="min-w-0 flex-1">
+				<p className="text-[11px] text-black/40 dark:text-white/40">
+					DOI · {originLabel[doi.origin]}
+				</p>
+				<a
+					className="block truncate font-mono text-sm font-medium text-black/80 underline decoration-black/15 underline-offset-2 dark:text-white/85 dark:decoration-white/20"
+					href={doi.url}
+					rel="noreferrer"
+					target="_blank"
+				>
+					{doi.value}
+				</a>
+			</div>
+			<Tooltip content="Copy DOI">
+				<Button
+					aria-label="Copy DOI"
+					isIconOnly
+					onPress={() => copy("DOI", doi.value)}
+					size="xs"
+					variant="transparent"
+				>
+					<Copy aria-hidden size={13} />
+				</Button>
+			</Tooltip>
+			<Tooltip content="Open DOI">
+				<Button
+					as="a"
+					aria-label="Open DOI"
+					href={doi.url}
+					isIconOnly
+					rel="noreferrer"
+					size="xs"
+					target="_blank"
+					variant="transparent"
+				>
+					<ExternalLink aria-hidden size={13} />
+				</Button>
+			</Tooltip>
+		</div>
+	);
+}
+
+function IdentifierActions({
+	actions,
+	busy,
+	itemKey,
+	onActivate,
+	picked,
+	setPicked,
+}: {
+	actions: readonly AdminIdentifiersAction[];
+	busy: boolean;
+	itemKey: string;
+	onActivate: (action: AdminIdentifiersActionId) => void;
+	picked: AdminIdentifiersActionId | null;
+	setPicked: (action: AdminIdentifiersActionId | null) => void;
+}) {
+	if (actions.length === 0) return null;
+	const pickedAction = actions.find((action) => action.id === picked) ?? null;
+	if (pickedAction) {
+		return (
+			<div className="py-3">
+				<Readiness
+					action={pickedAction}
+					busy={busy}
+					itemKey={itemKey}
+					onClose={() => setPicked(null)}
+					onConfirm={() => onActivate(pickedAction.id)}
+				/>
+			</div>
+		);
+	}
+	return (
+		<div className="flex flex-wrap items-center gap-1.5 py-3">
+			{actions.map((action) => (
+				<Button
+					key={action.id}
+					isDisabled={busy}
+					onPress={() => setPicked(action.id)}
+					size="xs"
+					startContent={
+						action.id === "register-crossref" ? (
+							<BadgeCheck aria-hidden size={13} />
+						) : (
+							<Archive aria-hidden size={13} />
+						)
+					}
+					variant="flat"
+				>
+					{action.label}
+				</Button>
+			))}
+		</div>
+	);
+}
+
+function IdentifiersBody({
+	bodyId,
+	busy,
+	identifiers,
+	itemKey,
+	onActivate,
+	onOpenAttachments,
+	onRetry,
+	picked,
+	providers,
+	setPicked,
+}: {
+	bodyId: string;
+	busy: boolean;
+	identifiers: AdminIdentifiersView;
+	itemKey: string;
+	onActivate: (action: AdminIdentifiersActionId) => void;
+	onOpenAttachments: () => void;
+	onRetry: (provider: "crossref" | "zenodo") => void;
+	picked: AdminIdentifiersActionId | null;
+	providers: { crossref: AdminPublicationProviderView; zenodo: AdminPublicationProviderView };
+	setPicked: (action: AdminIdentifiersActionId | null) => void;
+}) {
+	return (
+		<div
+			className="divide-y divide-black/[0.06] border-t border-black/[0.06] px-3.5 dark:divide-white/[0.07] dark:border-white/[0.07]"
+			id={bodyId}
+		>
+			{identifiers.doi ? (
+				<IdentifierDoi doi={identifiers.doi} />
+			) : (
+				<p className="py-3 text-xs leading-5 text-black/55 dark:text-white/55">No DOI yet.</p>
+			)}
+			{identifiers.registration.state === "active" ? (
+				<ActivityRow
+					activity={identifiers.registration}
+					busy={busy}
+					onOpenAttachments={onOpenAttachments}
+					onRetry={() => onRetry("crossref")}
+					provider={providers.crossref}
+					title="Crossref registration"
+				/>
+			) : null}
+			{identifiers.archive.state === "active" ? (
+				<ActivityRow
+					activity={identifiers.archive}
+					busy={busy}
+					onOpenAttachments={onOpenAttachments}
+					onRetry={() => onRetry("zenodo")}
+					provider={providers.zenodo}
+					title="Zenodo archive"
+				/>
+			) : null}
+			<IdentifierActions
+				actions={identifiers.actions}
+				busy={busy}
+				itemKey={itemKey}
+				onActivate={onActivate}
+				picked={picked}
+				setPicked={setPicked}
+			/>
+		</div>
+	);
+}
+
 export function AdminIdentifiersCard({
 	busy,
 	identifiers,
@@ -252,89 +481,29 @@ export function AdminIdentifiersCard({
 	const [userOpen, setUserOpen] = useState<boolean | null>(null);
 	const [picked, setPicked] = useState<AdminIdentifiersActionId | null>(null);
 	const open = userOpen ?? identifiers.attention;
-	const glance = identifiersGlance(identifiers);
-	const pickedAction = identifiers.actions.find((action) => action.id === picked) ?? null;
 	const bodyId = `admin-${itemKey}-identifiers`;
-	const GlanceIcon = identifiers.attention ? AlertCircle : identifiers.doi ? BadgeCheck : Circle;
 
 	return (
 		<div className="overflow-hidden rounded-xl bg-black/[0.025] dark:bg-white/[0.035]">
-			<button
-				aria-controls={bodyId}
-				aria-expanded={open}
-				className="flex w-full items-center gap-3 p-3.5 text-left hover:bg-black/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:hover:bg-white/[0.03]"
-				onClick={() => setUserOpen(!open)}
-				type="button"
-			>
-				<span
-					className={`grid size-4 shrink-0 place-items-center ${
-						identifiers.attention
-							? "text-danger"
-							: identifiers.doi
-								? "text-emerald-600 dark:text-emerald-300"
-								: "text-black/35 dark:text-white/35"
-					}`}
-				>
-					<GlanceIcon aria-hidden size={16} strokeWidth={2} />
-				</span>
-				<span className="min-w-0 flex-1">
-					<span className={`block truncate text-sm font-semibold ${identifiers.doi ? "font-mono" : ""} text-black/85 dark:text-white/90`}>
-						{glance.doi}
-					</span>
-					<span className={`block text-[11px] ${identifiers.attention ? "text-danger" : "text-black/45 dark:text-white/45"}`}>
-						{identifiers.attention ? identifiers.registration.state === "active" && identifiers.registration.displayState === "failed" ? "Registration needs attention" : "Archive needs attention" : glance.archive}
-					</span>
-				</span>
-				<ChevronDown aria-hidden className={`shrink-0 text-black/40 transition-transform dark:text-white/40 ${open ? "rotate-180" : ""}`} size={16} />
-			</button>
+			<IdentifiersHeader
+				bodyId={bodyId}
+				identifiers={identifiers}
+				onToggle={() => setUserOpen(!open)}
+				open={open}
+			/>
 			{open ? (
-				<div className="divide-y divide-black/[0.06] border-t border-black/[0.06] px-3.5 dark:divide-white/[0.07] dark:border-white/[0.07]" id={bodyId}>
-					{identifiers.doi ? (
-						<div className="flex items-center gap-2 py-3">
-							<div className="min-w-0 flex-1">
-								<p className="text-[11px] text-black/40 dark:text-white/40">DOI · {originLabel[identifiers.doi.origin]}</p>
-								<a className="block truncate font-mono text-sm font-medium text-black/80 underline decoration-black/15 underline-offset-2 dark:text-white/85 dark:decoration-white/20" href={identifiers.doi.url} rel="noreferrer" target="_blank">
-									{identifiers.doi.value}
-								</a>
-							</div>
-							<Tooltip content="Copy DOI">
-								<Button aria-label="Copy DOI" isIconOnly onPress={() => copy("DOI", identifiers.doi!.value)} size="xs" variant="transparent">
-									<Copy aria-hidden size={13} />
-								</Button>
-							</Tooltip>
-							<Tooltip content="Open DOI">
-								<Button as="a" aria-label="Open DOI" href={identifiers.doi.url} isIconOnly rel="noreferrer" size="xs" target="_blank" variant="transparent">
-									<ExternalLink aria-hidden size={13} />
-								</Button>
-							</Tooltip>
-						</div>
-					) : (
-						<p className="py-3 text-xs leading-5 text-black/55 dark:text-white/55">
-							No DOI yet.
-						</p>
-					)}
-					{identifiers.registration.state === "active" ? (
-						<ActivityRow activity={identifiers.registration} busy={busy} onOpenAttachments={onOpenAttachments} onRetry={() => onRetry("crossref")} provider={providers.crossref} title="Crossref registration" />
-					) : null}
-					{identifiers.archive.state === "active" ? (
-						<ActivityRow activity={identifiers.archive} busy={busy} onOpenAttachments={onOpenAttachments} onRetry={() => onRetry("zenodo")} provider={providers.zenodo} title="Zenodo archive" />
-					) : null}
-					{identifiers.actions.length > 0 ? (
-						<div className="py-3">
-							{pickedAction ? (
-								<Readiness action={pickedAction} busy={busy} itemKey={itemKey} onClose={() => setPicked(null)} onConfirm={() => onActivate(pickedAction.id)} />
-							) : (
-								<div className="flex flex-wrap items-center gap-1.5">
-									{identifiers.actions.map((action) => (
-										<Button key={action.id} isDisabled={busy} onPress={() => setPicked(action.id)} size="xs" startContent={action.id === "register-crossref" ? <BadgeCheck aria-hidden size={13} /> : <Archive aria-hidden size={13} />} variant="flat">
-											{action.label}
-										</Button>
-									))}
-								</div>
-							)}
-						</div>
-					) : null}
-				</div>
+				<IdentifiersBody
+					bodyId={bodyId}
+					busy={busy}
+					identifiers={identifiers}
+					itemKey={itemKey}
+					onActivate={onActivate}
+					onOpenAttachments={onOpenAttachments}
+					onRetry={onRetry}
+					picked={picked}
+					providers={providers}
+					setPicked={setPicked}
+				/>
 			) : null}
 		</div>
 	);

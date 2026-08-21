@@ -3,7 +3,7 @@ import { and, desc, eq, isNull } from "drizzle-orm";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { lockItemMutation } from "@/db/canonical-mutation-lock";
-import type { Database } from "@/db/database-schema";
+import type { Database, DatabaseTransaction } from "@/db/database-schema";
 import {
 	publicationSyncJob,
 	publicationSyncState,
@@ -368,6 +368,149 @@ function prepareZenodoActivation(input: {
 	};
 }
 
+async function assertExternalDoiResolvable(input: {
+	itemKey: string;
+	policy: ZenodoIdentifierPolicy;
+	snapshot: PublicationRepositorySnapshot;
+	resolveDoi?: DoiResolver;
+}) {
+	if (input.policy !== "reuse-external") return;
+	const record = input.snapshot.record;
+	if (!record) throw new PublicationItemNotFoundError(input.itemKey);
+	const ownDoi = resolveBibliographicDoi({
+		DOI: record.DOI,
+		extra: record.extra,
+		attachments: input.snapshot.attachments,
+	}).doi;
+	if (!ownDoi) throw new PublicationItemNotFoundError(input.itemKey);
+	await assertDoiResolves(ownDoi, input.resolveDoi);
+}
+
+function assertZenodoPolicyMayChange(
+	snapshot: PublicationRepositorySnapshot,
+	policy: ZenodoIdentifierPolicy,
+) {
+	const existingTarget = snapshot.targets.find(
+		(target) =>
+			target.provider === "zenodo" && target.environment === "sandbox",
+	);
+	if (
+		existingTarget?.identifierPolicy &&
+		existingTarget.identifierPolicy !== policy &&
+		zenodoHasStarted(snapshot)
+	) {
+		throw new ZenodoIdentifierPolicyLockedError();
+	}
+}
+
+async function saveZenodoActivationTarget(
+	transaction: DatabaseTransaction,
+	input: {
+		itemKey: string;
+		policy: ZenodoIdentifierPolicy;
+		requestedBy: string;
+		now: Date;
+	},
+) {
+	await transaction
+		.insert(publicationTarget)
+		.values({
+			itemKey: input.itemKey,
+			provider: "zenodo",
+			environment: "sandbox",
+			identifierPolicy: input.policy,
+			requestedBy: input.requestedBy,
+			requestedAt: input.now,
+			updatedAt: input.now,
+		})
+		.onConflictDoUpdate({
+			target: [
+				publicationTarget.itemKey,
+				publicationTarget.provider,
+				publicationTarget.environment,
+			],
+			set: {
+				identifierPolicy: input.policy,
+				requestedBy: input.requestedBy,
+				deactivatedAt: null,
+				updatedAt: input.now,
+			},
+		});
+	await transaction
+		.update(publicationSyncState)
+		.set({ identifierPolicy: input.policy, updatedAt: input.now })
+		.where(
+			and(
+				eq(publicationSyncState.itemKey, input.itemKey),
+				eq(publicationSyncState.provider, "zenodo"),
+				eq(publicationSyncState.environment, "sandbox"),
+			),
+		);
+}
+
+async function selectZenodoActivationJob(
+	transaction: DatabaseTransaction,
+	input: {
+		itemKey: string;
+		policy: ZenodoIdentifierPolicy;
+		canonicalRevision: number;
+		fileRevision: number | null;
+		waitingOn: "crossref" | "file" | null;
+		jobs: PublicationRepositorySnapshot["jobs"];
+		now: Date;
+	},
+) {
+	const activeJobs = activeZenodoJobs(input.jobs);
+	const leasedJob = activeJobs.find((job) => job.leaseOwner !== null) ?? null;
+	if (input.waitingOn && leasedJob) {
+		throw new ZenodoActivationValidationError(
+			"Zenodo publication is already running. Wait for it to finish, then reload this record.",
+		);
+	}
+	if (input.waitingOn) {
+		await supersedeUnleasedPublicationJobs(transaction, {
+			itemKey: input.itemKey,
+			provider: "zenodo",
+			environment: "sandbox",
+			now: input.now,
+		});
+		return null;
+	}
+	if (leasedJob) return leasedJob;
+	if (input.fileRevision === null) {
+		throw new Error("A ready Zenodo job must have a published file");
+	}
+	const nextJob = {
+		itemKey: input.itemKey,
+		identifierPolicy: input.policy,
+		canonicalRevision: input.canonicalRevision,
+		fileRevision: input.fileRevision,
+		now: input.now,
+	};
+	const expectedIdempotencyKey = publicationJobIdempotencyKey({
+		...nextJob,
+		provider: "zenodo",
+		environment: "sandbox",
+	});
+	const matchingJob =
+		activeJobs.find(
+			(candidate) => candidate.idempotencyKey === expectedIdempotencyKey,
+		) ?? null;
+	if (matchingJob) return matchingJob;
+	await supersedeUnleasedPublicationJobs(transaction, {
+		itemKey: input.itemKey,
+		provider: "zenodo",
+		environment: "sandbox",
+		now: input.now,
+	});
+	return savePublicationJob(transaction, {
+		...nextJob,
+		provider: "zenodo",
+		environment: "sandbox",
+		reason: "manual_activation",
+	});
+}
+
 export async function activateZenodoPublication(
 	database: Database,
 	itemKey: string,
@@ -395,121 +538,28 @@ export async function activateZenodoPublication(
 			requestedPolicy,
 		});
 		const { fileRevision, policy, waitingOn } = prepared;
-		if (policy === "reuse-external") {
-			const ownDoi = resolveBibliographicDoi({
-				DOI: record.DOI,
-				extra: record.extra,
-				attachments: snapshot.attachments,
-			}).doi;
-			if (!ownDoi) throw new PublicationItemNotFoundError(itemKey);
-			await assertDoiResolves(ownDoi, options.resolveDoi);
-		}
-
-		const existingTarget = snapshot.targets.find(
-			(target) =>
-				target.provider === "zenodo" &&
-				target.environment === "sandbox",
-		);
-		if (
-			existingTarget?.identifierPolicy &&
-			existingTarget.identifierPolicy !== policy &&
-			zenodoHasStarted(snapshot)
-		) {
-			throw new ZenodoIdentifierPolicyLockedError();
-		}
-
-		await transaction
-			.insert(publicationTarget)
-			.values({
-				itemKey,
-				provider: "zenodo",
-				environment: "sandbox",
-				identifierPolicy: policy,
-				requestedBy,
-				requestedAt: now,
-				updatedAt: now,
-			})
-			.onConflictDoUpdate({
-				target: [
-					publicationTarget.itemKey,
-					publicationTarget.provider,
-					publicationTarget.environment,
-				],
-				set: {
-					identifierPolicy: policy,
-					requestedBy,
-					deactivatedAt: null,
-					updatedAt: now,
-				},
-			});
-		await transaction
-			.update(publicationSyncState)
-			.set({ identifierPolicy: policy, updatedAt: now })
-			.where(
-				and(
-					eq(publicationSyncState.itemKey, itemKey),
-					eq(publicationSyncState.provider, "zenodo"),
-					eq(publicationSyncState.environment, "sandbox"),
-				),
-			);
-
-		const activeJobs = activeZenodoJobs(snapshot.jobs);
-		const leasedJob =
-			activeJobs.find((job) => job.leaseOwner !== null) ?? null;
-		if (waitingOn && leasedJob) {
-			throw new ZenodoActivationValidationError(
-				"Zenodo publication is already running. Wait for it to finish, then reload this record.",
-			);
-		}
-
-		let job: typeof publicationSyncJob.$inferSelect | null = null;
-		if (waitingOn) {
-			await supersedeUnleasedPublicationJobs(transaction, {
-				itemKey,
-				provider: "zenodo",
-				environment: "sandbox",
-				now,
-			});
-		} else if (leasedJob) {
-			job = leasedJob;
-		} else {
-			if (fileRevision === null) {
-				throw new Error(
-					"A ready Zenodo job must have a published file",
-				);
-			}
-			const nextJob = {
-				itemKey,
-				identifierPolicy: policy,
-				canonicalRevision: record.revision,
-				fileRevision,
-				now,
-			};
-			const expectedIdempotencyKey = publicationJobIdempotencyKey({
-				...nextJob,
-				provider: "zenodo",
-				environment: "sandbox",
-			});
-			job =
-				activeJobs.find(
-					(candidate) =>
-						candidate.idempotencyKey === expectedIdempotencyKey,
-				) ?? null;
-			if (!job) {
-				await supersedeUnleasedPublicationJobs(transaction, {
-					itemKey,
-					provider: "zenodo",
-					environment: "sandbox",
-					now,
-				});
-				job = await savePublicationJob(transaction, {
-					...nextJob,
-					provider: "zenodo",
-					environment: "sandbox",
-					reason: "manual_activation",
-				});
-			}
-		}
+		await assertExternalDoiResolvable({
+			itemKey,
+			policy,
+			snapshot,
+			resolveDoi: options.resolveDoi,
+		});
+		assertZenodoPolicyMayChange(snapshot, policy);
+		await saveZenodoActivationTarget(transaction, {
+			itemKey,
+			policy,
+			requestedBy,
+			now,
+		});
+		const job = await selectZenodoActivationJob(transaction, {
+			itemKey,
+			policy,
+			canonicalRevision: record.revision,
+			fileRevision,
+			waitingOn,
+			jobs: snapshot.jobs,
+			now,
+		});
 		const providerRecordExists = snapshot.states.some(
 			(state) =>
 				state.provider === "zenodo" &&
