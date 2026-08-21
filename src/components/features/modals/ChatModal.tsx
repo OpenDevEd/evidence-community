@@ -58,7 +58,6 @@ import { getRateLimits, runScreening } from "@/lib/actions";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
 import Resource from "../items/Resource";
 import { GiStarSwirl } from "react-icons/gi";
-import { FaExclamationTriangle } from "react-icons/fa";
 import { Switch } from "@/components/nextui/Switch";
 import { BsQuestionCircleFill } from "react-icons/bs";
 import { Card } from "@/components/nextui/Card";
@@ -264,8 +263,6 @@ export default function ChatModal({
 	questions,
 	externalInput,
 	setExternalInput,
-	isEmbedded,
-	setIsEmbedded,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -274,8 +271,6 @@ export default function ChatModal({
 	questions?: undefined | string[];
 	externalInput?: string;
 	setExternalInput?: (input: string) => void;
-	isEmbedded?: boolean | null;
-	setIsEmbedded?: React.Dispatch<React.SetStateAction<boolean | null>>;
 	mode?: string;
 }) {
 	const [smartScreeningFields, setSmartScreeningFields] = useLocalStorage<
@@ -429,10 +424,6 @@ export default function ChatModal({
 
 	const isWaiting = (isLoading || isMutating) && !error;
 
-	const hasPDFs = data?.item?.attachmentsData?.some(
-		(attachment) => attachment.PDFCoverPageImage
-	);
-
 	return (
 		<DialogModal
 			size="full"
@@ -570,40 +561,7 @@ export default function ChatModal({
 										</ScrollShadow>
 									</motion.div>
 								)}
-								<AnimatePresence>
-									{isEmbedded === false && hasPDFs && (
-										<motion.div
-											className="absolute top-0 left-0 w-full h-auto z-10"
-											initial={{ opacity: 0, y: -100 }}
-											animate={{ opacity: 1, y: 0 }}
-											exit={{ opacity: 0, y: -100 }}
-											transition={{
-												duration: 0.4,
-												ease: "easeInOut",
-											}}
-										>
-											<div className="max-w-3xl mx-auto mt-4 px-4">
-												<div className="flex items-center gap-3 text-black/80 dark:text-white/80 bg-white/90 dark:bg-secondary/90 rounded-xl p-3 backdrop-blur-sm">
-													<div className="flex-shrink-0 bg-accent-900/40 p-2 rounded-lg">
-														<FaExclamationTriangle className="size-4 text-accent" />
-													</div>
-													<div className="flex-1">
-														<p className="font-medium">
-															{tUI(
-																"preparingDocuments"
-															)}
-														</p>
-														<p className="text-sm text-black/60 dark:text-white/60">
-															{tUI(
-																"documentProcessingInfo"
-															)}
-														</p>
-													</div>
-												</div>
-											</div>
-										</motion.div>
-									)}
-								</AnimatePresence>
+								
 								<motion.div
 									layoutId="chat-input"
 									layout="position"

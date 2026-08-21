@@ -40,13 +40,9 @@ function randomUUID() {
 
 function AiButton({
 	data,
-	isEmbedded,
-	setIsEmbedded,
 	variant,
 }: {
 	data: ItemGetResponse | undefined;
-	isEmbedded: boolean | null;
-	setIsEmbedded: React.Dispatch<React.SetStateAction<boolean | null>>;
 	variant?: "default" | "inline";
 }) {
 	const {
@@ -153,8 +149,6 @@ function AiButton({
 					data={data}
 					provider={selectedProviderId}
 					questions={questions}
-					isEmbedded={isEmbedded}
-					setIsEmbedded={setIsEmbedded}
 				/>
 				{[summaryFeature, explainFeature].map((feature) => (
 					<GenerativeModal
@@ -231,21 +225,6 @@ export default function AiWrapper({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const [isEmbedded, setIsEmbedded] = useState<boolean | null>(null);
-	const { search } = useLibraryConfig();
-
-	const { data: embedded } = useSWR(
-		data?.item && search.embeddings
-			? `/item/${data.item.key}/embedded`
-			: null,
-		fetcher,
-		{
-			onSuccess: (data) => {
-				setIsEmbedded(data);
-			},
-		}
-	);
-
 	const aiAllowed = isAIAllowed(data?.item);
 	const isAIEnabled = useLibraryFeature("ai");
 
@@ -254,8 +233,6 @@ export default function AiWrapper({
 	return (
 		<AiButton
 			data={data}
-			isEmbedded={isEmbedded}
-			setIsEmbedded={setIsEmbedded}
 			variant={variant}
 		/>
 	);
