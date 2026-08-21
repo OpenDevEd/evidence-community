@@ -6,10 +6,6 @@ on:
         type: string
         description: "Testbox session ID"
         required: true
-  pull_request:
-    paths:
-      - '.github/workflows/blacksmith-testbox.yml'
-      - '.github/actions/setup-project/action.yml'
 
 jobs:
   runtime:
