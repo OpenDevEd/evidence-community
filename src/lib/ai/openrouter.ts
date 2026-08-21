@@ -1,6 +1,12 @@
 import { createHash } from "node:crypto";
+import type { OpenRouterChatSettings } from "@openrouter/ai-sdk-provider";
 
-import { getAIModel, type AIModelId, type AIProvider } from "./models";
+import {
+	getAIModel,
+	maximumReasoningEffort,
+	type AIModelId,
+	type AIProvider,
+} from "./models";
 
 /**
  * How long the gateway may reuse an identical response, per feature. Chat
@@ -52,7 +58,7 @@ export function openRouterModelSettings(
 	provider: AIProvider,
 	modelId: AIModelId,
 	options: { sessionId?: string } = {},
-) {
+): OpenRouterChatSettings {
 	const model = openRouterModel(provider, modelId);
 	if (!model) return {};
 
@@ -89,5 +95,25 @@ export function openRouterResponseCacheHeaders(
 		"X-OpenRouter-Cache": "true",
 		"X-OpenRouter-Cache-TTL": String(ttlSeconds),
 		...(options.refresh ? { "X-OpenRouter-Cache-Clear": "true" } : {}),
+	};
+}
+
+/**
+ * Raises a model to the reasoning level the contract verified for it. Deep
+ * Research uses this when it chooses which publications to read and when it
+ * writes the answer. A model with no verified level keeps its default.
+ */
+export function openRouterMaximumReasoningSettings(
+	provider: AIProvider,
+	modelId: AIModelId,
+	settings: OpenRouterChatSettings,
+): OpenRouterChatSettings | undefined {
+	if (provider !== "openrouter") return undefined;
+	const effort = maximumReasoningEffort(modelId);
+	if (!effort) return undefined;
+
+	return {
+		...settings,
+		extraBody: { ...settings.extraBody, reasoning: { effort } },
 	};
 }

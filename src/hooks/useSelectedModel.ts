@@ -19,6 +19,9 @@ export function useSelectedModel() {
 			(provider) => provider.provider === storedProvider,
 		) ?? availableProviders[0] ?? null;
 	const selectedProviderId = selectedProvider?.provider ?? null;
+	// The chat backend picks a model, not a provider: it is the default model
+	// this library configured for the chosen provider.
+	const selectedModelId = selectedProvider?.defaultModel ?? null;
 	const providerPresentation =
 		getAIProviderPresentation(selectedProviderId);
 
@@ -26,6 +29,7 @@ export function useSelectedModel() {
 		availableProviders,
 		selectedProvider,
 		selectedProviderId,
+		selectedModelId,
 		setSelectedProvider,
 		providerPresentation,
 	}

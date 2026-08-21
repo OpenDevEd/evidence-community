@@ -14,7 +14,8 @@ import GenerativeModal from "@/components/features/modals/GenerativeModal";
 import ChatModal from "@/components/features/modals/ChatModal";
 import { useLocale, useTranslations } from "next-intl";
 import useSWR from "swr";
-import { fetcher, fetcherPOST, isAIAllowed } from "@/lib/utils";
+import { fetcher, fetcherPOST } from "@/lib/utils";
+import { hasVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { useState } from "react";
 import { useLocalStorage } from "usehooks-ts";
 import { motion } from "framer-motion";
@@ -47,6 +48,7 @@ function AiButton({
 }) {
 	const {
 		selectedProviderId,
+		selectedModelId,
 		setSelectedProvider,
 	} = useSelectedModel();
 	const body = {
@@ -148,6 +150,7 @@ function AiButton({
 					onOpenChange={onChatOpenChange}
 					data={data}
 					provider={selectedProviderId}
+					modelId={selectedModelId}
 					questions={questions}
 				/>
 				{[summaryFeature, explainFeature].map((feature) => (
@@ -224,7 +227,7 @@ export default function AiWrapper({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const aiAllowed = isAIAllowed(data?.item);
+	const aiAllowed = hasVisiblePdfAttachment(data?.item);
 	const isAIEnabled = useLibraryFeature("ai");
 
 	if (!isAIEnabled || !aiAllowed) return null;

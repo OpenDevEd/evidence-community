@@ -1,4 +1,4 @@
-import { Item, ItemGetResponse, ListItem } from "@/app/api/item/types";
+import { Item, ListItem } from "@/app/api/item/types";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import { SORT_OPTIONS } from "@/constants/items";
 import { loadSearchParams, serializeSearchParams } from "./searchParams";
@@ -59,28 +59,6 @@ export function getCountryInfo(country: string) {
 
 export function localizeOrUseIfCapitalized(label: string, t: any) {
 	return label.charAt(0).toUpperCase() === label.charAt(0) ? label : t(label);
-}
-
-export function getTimeDuration(startTime: number): string {
-	const duration = (Date.now() - startTime) / 1000; // in seconds
-	return `[${duration.toFixed(1)}s] `;
-}
-
-export function cleanItemForAI(item: ItemGetResponse["item"] | ListItem | undefined) {
-	if (!item) return null;
-	return {
-		...item,
-		fullTextPDFs: undefined,
-		tags: undefined,
-		collectionsAncestry: undefined,
-		fullNames: undefined,
-		collections: undefined,
-		collectionsData: item.collectionsData?.map(({ name, title }) => ([title, name].filter(Boolean).join(" > "))),
-		attachmentsData: item.attachmentsData?.map(({ filename, url }) => ({
-			filename,
-			url,
-		})),
-	}
 }
 
 export function formatRange(range: string | null) {
@@ -179,22 +157,6 @@ export function getExtraValues(extraUnsplit: string) {
 	}
 
 	return finalMap;
-}
-
-export function isAIAllowed(item: Item | undefined) {
-	if (!item) return false;
-	const allowedInstitutions = ["EdTech Hub", "Open Development & Education", "eEkitabu"];
-	const allowedTags = ["_ai_enabled"]
-
-	if (item.attachmentsData?.some(attachment => attachment.PDFCoverPageImage) ||
-		(Array.isArray(item.institution)
-			? item.institution.some(inst => allowedInstitutions.includes(inst))
-			: allowedInstitutions.includes(item.institution || "")) ||
-		allowedTags.some(tag => item.tags?.includes(tag))) {
-		return true;
-	}
-
-	return false;
 }
 
 export function generateRandomID(length: number = 12) {

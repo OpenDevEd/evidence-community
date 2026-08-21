@@ -4,7 +4,7 @@ import {
 	AIProviderUnavailableError,
 	getAIProviderForConfig,
 } from "@/lib/ai-provider";
-import { isAIAllowed } from "@/lib/utils";
+import { hasVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { NextResponse } from "next/server";
 import { getCachedItem } from "../cache";
 
@@ -69,8 +69,8 @@ export async function loadAIPublication(
 	const modelResult = await loadModels(config, provider);
 	if (!modelResult.ok) return modelResult;
 	const { fullTextPDFs, ...item } = itemResult.item;
-	if (!isAIAllowed(item)) {
-		return failure("AI not allowed", 403);
+	if (!hasVisiblePdfAttachment(item)) {
+		return failure("This publication has no readable PDF", 403);
 	}
 
 	return {

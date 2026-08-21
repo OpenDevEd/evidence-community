@@ -3,6 +3,7 @@ import "server-only";
 import type { LanguageModel } from "ai";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
+import type { LanguageModelFactory } from "@/lib/ai-provider-factory";
 import { getAIProviderForConfig } from "@/lib/ai-provider";
 import { AIError } from "./errors";
 import {
@@ -21,6 +22,8 @@ export type ResolvedAIModel = {
 	provider: AIProvider;
 	modelId: AIModelId;
 	model: LanguageModel;
+	/** Rebuilds this model with per-request gateway settings. */
+	createModel: LanguageModelFactory;
 };
 
 function unavailable(modelId: unknown): AIError {
@@ -62,6 +65,7 @@ export async function resolveAIModel(
 				provider: provider.provider,
 				modelId: requestedModelId,
 				model: match[1],
+				createModel: models.createModel,
 			};
 		}
 	}

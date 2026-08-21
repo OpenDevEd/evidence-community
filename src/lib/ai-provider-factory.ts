@@ -5,7 +5,10 @@ import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createMistral } from "@ai-sdk/mistral";
 import { createOpenAI } from "@ai-sdk/openai";
-import { createOpenRouter } from "@openrouter/ai-sdk-provider";
+import {
+	createOpenRouter,
+	type OpenRouterChatSettings,
+} from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -16,7 +19,16 @@ export type AIProviderId =
 export type AIProviderConfiguration =
 	LibraryServerConfig["ai"]["providers"];
 
-type LanguageModelFactory = (modelId: string) => LanguageModel;
+/**
+ * Per-request gateway settings. Only the OpenRouter path uses them; every
+ * direct provider ignores them.
+ */
+export type ProviderModelSettings = OpenRouterChatSettings;
+
+export type LanguageModelFactory = (
+	modelId: string,
+	settings?: ProviderModelSettings,
+) => LanguageModel;
 export type AIProviderClientFactory = (
 	apiKey: string,
 ) => LanguageModelFactory;
@@ -27,6 +39,8 @@ export type AIProviderClientFactories = Record<
 
 type ResolvedAIModels = {
 	provider: AIProviderId;
+	/** Builds a model of this provider, with optional per-request settings. */
+	createModel: LanguageModelFactory;
 	defaultModel: LanguageModel;
 	defaultModelId: string;
 	largeModel: LanguageModel;
@@ -58,7 +72,8 @@ const providerClientFactories: AIProviderClientFactories = {
 	},
 	openrouter(apiKey) {
 		const provider = createOpenRouter({ apiKey, compatibility: "strict" });
-		return (modelId) => provider.languageModel(modelId);
+		return (modelId, settings) =>
+			provider.languageModel(modelId, settings);
 	},
 };
 
@@ -99,6 +114,7 @@ export class AIProviderService {
 			const resolvedSmallModel = smallModel ?? defaultModel;
 			models.set(provider, {
 				provider,
+				createModel,
 				defaultModel: createModel(defaultModel),
 				defaultModelId: defaultModel,
 				largeModel: createModel(resolvedLargeModel),

@@ -63,6 +63,7 @@ import { BsQuestionCircleFill } from "react-icons/bs";
 import { Card } from "@/components/nextui/Card";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import type { AIProviderId } from "@/lib/ai-provider-factory";
+import { clientAIError } from "@/lib/ai/client";
 
 export const maxDuration = 240;
 
@@ -253,13 +254,14 @@ function MessageComponent({
 	);
 }
 
-export type ChatMode = "full" | "quick";
+export type ChatMode = "research" | "quick";
 
 export default function ChatModal({
 	isOpen,
 	onOpenChange,
 	data,
 	provider,
+	modelId,
 	questions,
 	externalInput,
 	setExternalInput,
@@ -268,6 +270,7 @@ export default function ChatModal({
 	onOpenChange: (open: boolean) => void;
 	data?: ItemGetResponse | undefined;
 	provider: AIProviderId | null;
+	modelId: string | null;
 	questions?: undefined | string[];
 	externalInput?: string;
 	setExternalInput?: (input: string) => void;
@@ -277,8 +280,14 @@ export default function ChatModal({
 		SmartScreeningField[]
 	>("smart-screening-fields", []);
 	const { isDeepResearchEnabled } = useIsAISearchEnabled();
-	const [internalMode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
-	const mode: ChatMode = isDeepResearchEnabled ? internalMode : "quick";
+	const [internalMode, setMode] = useLocalStorage<ChatMode>(
+		"chat-mode",
+		"research",
+	);
+	const mode: ChatMode =
+		isDeepResearchEnabled && internalMode === "research"
+			? "research"
+			: "quick";
 
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
@@ -300,8 +309,8 @@ export default function ChatModal({
 				"Accept-Language": locale,
 			},
 			body: {
-				key: data?.item?.key,
-				provider,
+				itemKey: data?.item?.key,
+				modelId,
 				distinctId: getAnalyticsDistinctId(),
 				mode,
 			},
@@ -312,22 +321,28 @@ export default function ChatModal({
 		onFinish() {
 			inputRef?.current?.focus();
 		},
-		onError: (e) => {
-			const isRateLimited = e.message.includes("Rate limit exceeded");
-			if (!isRateLimited) {
-				// appendMessage(createTextMessage("assistant", t("errorMessage"), "error-" + Date.now()));
-			} else {
-				(async () => {
-					const rateLimits = await getRateLimits();
-					appendMessage(createTextMessage(
+		onError: (error) => {
+			const message = clientAIError(error).message;
+			if (!message.includes("Rate limit exceeded")) {
+				appendMessage(
+					createTextMessage(
 						"assistant",
-						t("rateLimitedMessage", {
-							seconds: rateLimits.retryAfter || 0,
-						}),
-						"error-" + Date.now()
-					));
-				})();
+						message,
+						"error-" + Date.now(),
+					),
+				);
+				return;
 			}
+			(async () => {
+				const rateLimits = await getRateLimits();
+				appendMessage(createTextMessage(
+					"assistant",
+					t("rateLimitedMessage", {
+						seconds: rateLimits.retryAfter || 0,
+					}),
+					"error-" + Date.now()
+				));
+			})();
 		},
 	});
 
@@ -686,28 +701,28 @@ export default function ChatModal({
 													<Card color="card" className={twMerge("flex flex-row p-4 py-3 rounded-2xl items-center gap-4 !transition-all duration-600", mode === "quick" && "opacity-50 hover:opacity-100")}>
 														<Switch
 															isSelected={
-																mode === "full"
+																mode === "research"
 															}
 															onValueChange={(
 																value: boolean
 															) => {
 																setMode(
 																	value
-																		? "full"
+																		? "research"
 																		: "quick"
 																);
 															}}
 															color="accent"
 															size="sm"
 															classNames={{
-																label: twMerge("text-sm transition-colors duration-300", mode === "full" && "!text-accent"),
+																label: twMerge("text-sm transition-colors duration-300", mode === "research" && "!text-accent"),
 																base: "gap-4"
 															}}
 														>
 															{tUI("researchMode")}
 														</Switch>
 														<Tooltip content={tUI("researchModeTooltip")}>
-															<BsQuestionCircleFill className={twMerge("text-black/60 dark:text-white/60 transition-colors duration-300", mode === "full" && "!text-accent")} />
+															<BsQuestionCircleFill className={twMerge("text-black/60 dark:text-white/60 transition-colors duration-300", mode === "research" && "!text-accent")} />
 														</Tooltip>
 													</Card>
 												</div>}

@@ -18,7 +18,7 @@ const currentPublicationSchema = z
 	})
 	.strict();
 
-const researchRequestContextSnapshotSchema = z
+export const researchRequestContextSnapshotSchema = z
 	.object({
 		currentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 		currentPublication: currentPublicationSchema.nullable(),
@@ -29,6 +29,11 @@ const researchRequestContextSnapshotSchema = z
 export type ResearchRequestContextSnapshot = z.infer<
 	typeof researchRequestContextSnapshotSchema
 >;
+
+/** The data parts a chat message may carry alongside its text. */
+export type ResearchUIData = {
+	requestContext: ResearchRequestContextSnapshot;
+};
 
 export function createResearchRequestContextSnapshot({
 	currentPublication,

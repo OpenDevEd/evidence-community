@@ -482,7 +482,7 @@ function AITabContent({
 		onOpen: onSmartScreeningOpen,
 		onOpenChange: onSmartScreeningOpenChange,
 	} = useDisclosure();
-	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
+	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "research");
 	const { isDeepResearchEnabled } = useIsAISearchEnabled();
 	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
@@ -560,9 +560,9 @@ function AITabContent({
 												className="shrink-0"
 												onPress={() =>
 													setMode(
-														mode === "full"
+														mode === "research"
 															? "quick"
-															: "full",
+															: "research",
 													)
 												}
 												aria-label={tUI("researchMode")}
@@ -570,7 +570,7 @@ function AITabContent({
 												<GiArchiveResearch
 													className={twMerge(
 														"size-4",
-														mode === "full"
+														mode === "research"
 															? "text-accent"
 															: "text-black/60 dark:text-white/60",
 													)}
@@ -637,7 +637,7 @@ function useSelectedSearchMode(
 	isAISearchEnabled: boolean,
 ) {
 	if (selectedTab === "search" || !isAISearchEnabled) return "search";
-	if (selectedTab === "ai") return mode === "full" ? "research" : "ai";
+	if (selectedTab === "ai") return mode === "research" ? "research" : "ai";
 	return "search";
 }
 
@@ -648,7 +648,7 @@ export function useSearchMode() {
 		"selectedSearchTab",
 		"search",
 	);
-	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "full");
+	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "research");
 	const { isAISearchEnabled, isDeepResearchEnabled } = useIsAISearchEnabled();
 
 	const selectedTab = useSelectedSearchMode(
@@ -689,7 +689,7 @@ export function useSearchMode() {
 			tooltip: t("deepResearchTooltip"),
 			icon: <GiArchiveResearch className="size-5" />,
 			action: () => {
-				setMode("full");
+				setMode("research");
 				setSelectedTab("ai");
 			},
 			disabled: !isDeepResearchEnabled,
@@ -777,6 +777,7 @@ export function ContentInteractions({
 	const {
 		providerPresentation: { icon: Icon },
 		selectedProviderId,
+		selectedModelId,
 	} = useSelectedModel();
 	const [externalInput, setExternalInput] = useState<string>("");
 
@@ -786,6 +787,7 @@ export function ContentInteractions({
 				isOpen={isChatOpen}
 				onOpenChange={onChatOpenChange}
 				provider={selectedProviderId}
+				modelId={selectedModelId}
 				externalInput={externalInput}
 				setExternalInput={setExternalInput}
 			/>
@@ -1369,7 +1371,7 @@ function SmartScreeningModal({
 export default function EvidenceLibrary() {
 	return (
 		<PageContainer>
-			<div className="flex xl:gap-[2.5rem] gap-8 flex-col lg:flex-row">
+			<div className="flex xl:gap-10 gap-8 flex-col lg:flex-row">
 				<MainContent />
 			</div>
 		</PageContainer>

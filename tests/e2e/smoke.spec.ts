@@ -548,7 +548,7 @@ test("enforces the runtime AI gate in both directions", async ({
 			headers,
 		}),
 		request.post("/api/ai/chat", {
-			data: { messages: [], mode: "full" },
+			data: { messages: [], mode: "research" },
 			headers,
 		}),
 	]);
