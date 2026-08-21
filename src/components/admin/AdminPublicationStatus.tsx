@@ -28,6 +28,11 @@ import {
 
 const appearance = {
 	blocked: { icon: AlertCircle, className: "text-danger", spin: false },
+	external: {
+		icon: CircleCheck,
+		className: "text-black/50 dark:text-white/50",
+		spin: false,
+	},
 	failed: { icon: AlertCircle, className: "text-danger", spin: false },
 	inactive: {
 		icon: Circle,

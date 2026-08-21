@@ -17,6 +17,7 @@ const base: AdminPublicationStateInput = {
 	journal: false,
 	failure: false,
 	waitingOn: null,
+	externalDoi: null,
 };
 
 describe("admin publication provider state", () => {
@@ -30,6 +31,7 @@ describe("admin publication provider state", () => {
 		["repair_pending", "Waiting for repair", false],
 		["synced", "Synced", false],
 		["failed", "Needs attention", false],
+		["external", "Has a DOI", false],
 	] as const)(
 		"describes %s without browser-owned status rules",
 		(state, label, shouldPoll) => {
@@ -39,10 +41,39 @@ describe("admin publication provider state", () => {
 					state,
 					waitingOn: null,
 					firstBlocker: state === "blocked" ? "Add a title" : null,
+					externalDoi: state === "external" ? "10.9999/external" : null,
 				}),
 			).toMatchObject({ label, shouldPoll });
 		},
 	);
+
+	it("treats a DOI from another source as a settled fact, not a problem", () => {
+		expect(
+			describeAdminPublicationProviderState({
+				provider: "crossref",
+				state: "external",
+				waitingOn: null,
+				firstBlocker: null,
+				externalDoi: "10.9999/external",
+			}),
+		).toEqual({
+			label: "Has a DOI",
+			description:
+				"This record already has the DOI 10.9999/external from another source. Crossref registration is not needed.",
+			shouldPoll: false,
+		});
+		expect(
+			describeAdminPublicationProviderState({
+				provider: "zenodo",
+				state: "external",
+				waitingOn: null,
+				firstBlocker: null,
+				externalDoi: "10.9999/external",
+			}).description,
+		).toBe(
+			"This record already has the DOI 10.9999/external from another source. Zenodo publishing is not used for it.",
+		);
+	});
 
 	it("explains how a missing job is repaired", () => {
 		expect(
@@ -77,6 +108,21 @@ describe("admin publication provider state", () => {
 	it.each([
 		["disabled config", { configured: false }, "blocked"],
 		["validation blocker", { blockers: ["Add a title"] }, "blocked"],
+		[
+			"external DOI",
+			{ targetActive: false, externalDoi: "10.9999/external" },
+			"external",
+		],
+		[
+			"external DOI even when the provider is not configured",
+			{ configured: false, targetActive: false, externalDoi: "10.9999/external" },
+			"external",
+		],
+		[
+			"external DOI after someone activated the provider anyway",
+			{ targetActive: true, externalDoi: "10.9999/external" },
+			"repair_pending",
+		],
 		["inactive target", { targetActive: false }, "inactive"],
 		[
 			"missing file",

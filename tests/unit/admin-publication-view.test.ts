@@ -236,31 +236,36 @@ describe("admin publication view", () => {
 		expect(JSON.stringify(view)).not.toContain("000042");
 	});
 
-	it("blocks duplicate publication when the record has an external DOI", () => {
+	it("shows a record with a DOI from another source as settled, not blocked", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({ record: record({ DOI: "10.9999/external" }) }),
 			config,
 		});
 
-		expect(view.providers.crossref.displayState).toBe("blocked");
-		expect(view.providers.zenodo.displayState).toBe("blocked");
-		expect(view.providers.crossref.blockers[0]).toContain("external DOI");
+		expect(view.providers.crossref.displayState).toBe("external");
+		expect(view.providers.zenodo.displayState).toBe("external");
+		expect(view.providers.crossref.externalDoi).toBe("10.9999/external");
+		expect(view.providers.crossref.status.label).toBe("Has a DOI");
+		expect(view.providers.crossref.blockers).toEqual([]);
+		expect(view.providers.zenodo.blockers).toEqual([]);
+		expect(view.providers.crossref.capabilities.canActivate).toBe(false);
+		expect(view.providers.zenodo.capabilities.canActivate).toBe(false);
 		expect(
 			view.providers.zenodo.capabilities.allowedIdentifierPolicies,
 		).toEqual([]);
 	});
 
-	it("blocks a metadata-only DOI even when it uses this library's prefix", () => {
+	it("treats a metadata-only DOI on this library's prefix as external too", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({ record: record({ DOI: "10.5555/existing" }) }),
 			config,
 		});
 
-		expect(view.providers.crossref.displayState).toBe("blocked");
-		expect(view.providers.zenodo.displayState).toBe("blocked");
-		expect(view.providers.crossref.blockers[0]).toContain("external DOI");
+		expect(view.providers.crossref.displayState).toBe("external");
+		expect(view.providers.zenodo.displayState).toBe("external");
+		expect(view.providers.crossref.externalDoi).toBe("10.5555/existing");
 	});
 
 	it("does not treat an external identifier on the configured prefix as managed", () => {
