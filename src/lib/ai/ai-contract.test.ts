@@ -155,6 +155,10 @@ test("OpenRouter cache settings are stable and regeneration can refresh response
 		createOpenRouterModelSettings(DEFAULT_AI_MODEL_ID, { sessionId }),
 		{
 			usage: { include: true },
+			provider: {
+				order: ["amazon-bedrock/us-east-1"],
+				allow_fallbacks: true,
+			},
 			extraBody: { session_id: sessionId },
 		},
 	);
@@ -619,6 +623,24 @@ test("search context normalisation never throws on transient URL states", () => 
 		normalizeLibrarySearchContext({ sort: "nope" }).sort,
 		SORT_OPTIONS[0].key,
 	);
+});
+
+test("preferred OpenRouter providers are requested per model with fallbacks", () => {
+	const luna = createOpenRouterModelSettings("openai/gpt-5.6-luna") as {
+		provider?: { order: string[]; allow_fallbacks: boolean };
+	};
+	assert.deepEqual(luna.provider, {
+		order: ["amazon-bedrock/us-east-1"],
+		allow_fallbacks: true,
+	});
+	const gemini = createOpenRouterModelSettings("google/gemini-3.7-flash") as {
+		provider?: { order: string[] };
+	};
+	assert.deepEqual(gemini.provider?.order, ["google-ai-studio"]);
+	const grok = createOpenRouterModelSettings("x-ai/grok-4.6") as {
+		provider?: unknown;
+	};
+	assert.equal(grok.provider, undefined);
 });
 
 test("current-results cursors may start at an unaligned offset (last window)", () => {

@@ -31,11 +31,23 @@ export function createOpenRouterModelSettings(
 	modelId: AIModelId,
 	options: { sessionId?: string } = {},
 ) {
-	const topLevelCacheControl =
-		getAIModel(modelId).openRouter.promptCache.topLevel;
+	const { promptCache, providerOrder } = getAIModel(modelId).openRouter;
+	const topLevelCacheControl = promptCache.topLevel;
 
 	return {
 		usage: { include: true as const },
+		// Preferred OpenRouter providers for this model (e.g. Bedrock for
+		// Luna, AI Studio for Gemini). Fallbacks stay enabled so a provider
+		// outage degrades to another host of the same model, never to a
+		// different model.
+		...(providerOrder.length > 0
+			? {
+					provider: {
+						order: [...providerOrder],
+						allow_fallbacks: true,
+					},
+				}
+			: {}),
 		...(topLevelCacheControl
 			? { cache_control: topLevelCacheControl }
 			: {}),

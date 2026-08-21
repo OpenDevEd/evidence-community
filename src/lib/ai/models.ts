@@ -6,6 +6,11 @@ export const AI_MODELS = [
 		hidden: false,
 		maximumReasoningEffort: "max",
 		openRouter: {
+			// OpenRouter endpoint tags to try first (same model, different
+			// host); other providers remain as fallbacks. Luna needs the
+			// regional tag — the bare "amazon-bedrock" slug is not matched
+			// against this model's Bedrock endpoint.
+			providerOrder: ["amazon-bedrock/us-east-1"],
 			promptCache: {
 				mode: "automatic",
 				topLevel: null,
@@ -20,6 +25,7 @@ export const AI_MODELS = [
 		hidden: false,
 		maximumReasoningEffort: "high",
 		openRouter: {
+			providerOrder: ["google-ai-studio"],
 			promptCache: {
 				mode: "automatic",
 				topLevel: null,
@@ -34,6 +40,7 @@ export const AI_MODELS = [
 		hidden: false,
 		maximumReasoningEffort: "xhigh",
 		openRouter: {
+			providerOrder: [],
 			promptCache: {
 				mode: "automatic",
 				topLevel: null,
@@ -48,6 +55,7 @@ export const AI_MODELS = [
 		hidden: true,
 		maximumReasoningEffort: "max",
 		openRouter: {
+			providerOrder: [],
 			promptCache: {
 				mode: "anthropic-explicit",
 				topLevel: { type: "ephemeral", ttl: "1h" },
@@ -62,6 +70,7 @@ export const AI_MODELS = [
 		hidden: true,
 		maximumReasoningEffort: "max",
 		openRouter: {
+			providerOrder: [],
 			promptCache: {
 				mode: "anthropic-explicit",
 				topLevel: { type: "ephemeral", ttl: "1h" },
