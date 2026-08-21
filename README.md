@@ -25,16 +25,13 @@ npx tsc --noEmit
 npm run schema:check
 npm run test:unit
 npm run test:e2e
-npm run test:acceptance
 ```
 
-The E2E command builds the application, starts disposable PostgreSQL and
-Meilisearch services, runs the browser suite against them, and removes the
-test data and containers when it finishes.
-
-The acceptance command builds one production image, starts two independently
-configured libraries with PostgreSQL and Meilisearch, exercises their runtime
-integrations and mobile UI, and proves live activation and rollback.
+The E2E command builds one production image and starts two independently
+configured libraries with disposable PostgreSQL, Meilisearch, Mailpit, workers,
+and local external-service fixtures. It runs every desktop and mobile browser
+check, verifies live configuration activation and rollback, then removes all
+test data and containers.
 
 ## Documentation
 

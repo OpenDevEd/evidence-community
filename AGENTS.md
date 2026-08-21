@@ -197,7 +197,7 @@ npm run lint
 npx tsc --noEmit
 npm run schema:check
 npm run test:unit
-npm run test:acceptance
+npm run test:e2e
 ```
 
 ### Real-service checks
