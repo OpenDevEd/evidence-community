@@ -187,7 +187,7 @@ Conceptual input:
 
 - Keep automatic generation when publication chat opens.
 - Use fixed GPT-5.6 Luna regardless of the user's selected model.
-- Read the directly attached visible PDFs, not embeddings.
+- Revised by the user on 2026-08-21: starter questions use publication metadata plus abstract only. They do not read PDFs (cheaper and faster) and never use embeddings.
 - Return exactly five localized questions.
 - A failure must not prevent the chat modal from opening or being used.
 
