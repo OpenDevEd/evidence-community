@@ -3,11 +3,6 @@
 import { usersToLikes } from "@/db/schema/tables/userToLikes";
 import { InferSelectModel } from "drizzle-orm";
 import { Session } from "next-auth";
-import {
-	EXCLUDED_ITEM_TYPES,
-	ITEMS_PER_PAGE,
-	SORT_OPTIONS,
-} from "@/constants/items";
 import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
 import { BibTeXExporter } from "@/lib/formatAsBibTeX";
@@ -23,21 +18,15 @@ import { Collection } from "@/app/api/collections/types";
 import { z } from "zod";
 import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "./searchParams";
-import { formatRange } from "@/lib/utils";
 import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
 import { generateObject } from "ai";
 import { headers } from "next/headers";
 import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc";
 import { FacetDistribution } from "meilisearch";
-import { addRegionsToFacetDistribution, createCountryFilters } from "./country";
-import { getMainAttributes } from "@/lib/search";
+import { addRegionsToFacetDistribution } from "./country";
+import { getMainAttributes, resolveSearchRequest } from "@/lib/search";
 import { getLibraryConfig } from "@/config/library-config/server";
-import {
-	getRuntimeSearchAttributes,
-	getRuntimeSearchFacets,
-	normalizeRuntimeYearRange,
-	resolveRuntimeSearchScope,
-} from "@/config/library-config/search";
+import { getRuntimeSearchFacets } from "@/config/library-config/search";
 import {
 	AIProviderUnavailableError,
 	getAIProviderForConfig,
@@ -382,59 +371,22 @@ export async function searchIndex(
 ) {
 	const items = async () => {
 		const libraryConfig = await getLibraryConfig();
-		const pageNum = Math.max(1, Number(searchParams.page || 1));
-		const limitNum = ITEMS_PER_PAGE;
-		const sort = searchParams.sort || SORT_OPTIONS[0].key;
-		const search = searchParams.search || "";
-		const scope = resolveRuntimeSearchScope(
-			searchParams.scope,
-			libraryConfig.search,
-		);
-		const range = normalizeRuntimeYearRange(
-			searchParams.range,
-			libraryConfig.filters,
-		);
-		const institution =
-			libraryConfig.filters.institution.mode === "hidden"
-				? []
-				: searchParams.institution || [];
-		const country = libraryConfig.search.country
-			? searchParams.country || []
-			: [];
-		const author_country = libraryConfig.search.authorCountry
-			? searchParams.author_country || []
-			: [];
-		const author = searchParams.author || "";
-		const hiddenTags = libraryConfig.content.tags.hidden;
+		const {
+			attributesToSearchOn,
+			author_country,
+			country,
+			finalFilters: baseFilters,
+			limitNum,
+			pageNum,
+			search,
+			sortOption,
+		} = resolveSearchRequest(searchParams, libraryConfig);
 		const { index: searchIndex } =
 			await getMeilisearchForConfig(libraryConfig);
-		// If no search query and relevance is selected, default to desc (newest)
-		// Otherwise, use the selected sort
-		const effectiveSort = search.trim().length === 0 && sort === SORT_OPTIONS[0].key
-			? SORT_OPTIONS[1].key
-			: sort;
-		const sortOption =
-			SORT_OPTIONS.find((option) => option.key === effectiveSort)?.sort ||
-			SORT_OPTIONS[0].sort;
-
-		// Generate hierarchical country filters
-		const countryFilters = createCountryFilters(country, author_country);
-
 		const finalFilters = [
-			`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
-			range ? formatRange(range) : null,
-			...(Array.isArray(institution)
-				? institution.map((value) => meilisearchEquals("institution", value))
-				: []),
-			...countryFilters, // Replace the old country filters with our hierarchical ones
-			author ? meilisearchEquals("fullNames", author) : null,
-			scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
+			...baseFilters,
 			...(Array.isArray(extraFilters) ? extraFilters : []),
-			"deleted != 1",
-			hiddenTags.length
-				? `tags NOT IN ${JSON.stringify(hiddenTags)}`
-				: null,
-		].filter((f): f is string => f !== null);
+		];
 
 		const allAttributes = await getMainAttributes(libraryConfig);
 
@@ -442,10 +394,7 @@ export async function searchIndex(
 			searchIndex.search(search, {
 				offset: (pageNum - 1) * limitNum,
 				limit: limitNum,
-				attributesToSearchOn: getRuntimeSearchAttributes(
-					scope,
-					libraryConfig.search,
-				),
+				attributesToSearchOn,
 				attributesToRetrieve: allAttributes,
 				...(sortOption ? { sort: [sortOption] } : {}),
 				...extraProperties,

@@ -38,6 +38,7 @@ import {
 	normalizeRuntimeYearRange,
 	resolveRuntimeSearchScope,
 } from "@/config/library-config/search";
+import { abstractPlainText } from "@/lib/abstract-text";
 
 // Lazily loaded so the heavy collections/filters graph stays out of the
 // always-present navbar bundle until the user opens Explore.
@@ -97,23 +98,6 @@ function formatFullDate(
 		month: "long",
 		day: "numeric",
 	});
-}
-
-// Abstracts can contain HTML/entities; produce a clean, single-paragraph
-// preview for the hover tooltip.
-function abstractPreview(item: any): string {
-	const raw = typeof item?.abstractNote === "string" ? item.abstractNote : "";
-	if (!raw) return "";
-	return raw
-		.replace(/<[^>]*>/g, " ")
-		.replace(/&nbsp;/g, " ")
-		.replace(/&amp;/g, "&")
-		.replace(/&quot;/g, '"')
-		.replace(/&#39;|&apos;/g, "'")
-		.replace(/&lt;/g, "<")
-		.replace(/&gt;/g, ">")
-		.replace(/\s+/g, " ")
-		.trim();
 }
 
 function toInitials(name: string): string {
@@ -463,7 +447,7 @@ export default function NavbarSearch() {
 					<div
 						role="listbox"
 						aria-label={t("search")}
-						className="absolute left-0 right-0 top-full mt-2 z-50 flex max-h-[70vh] flex-col overflow-hidden rounded-2xl border border-black/5 bg-card_light shadow-xl dark:border-white/10 dark:bg-card"
+						className="absolute left-0 right-0 top-full mt-2 z-50 flex max-h-suggestions flex-col overflow-hidden rounded-2xl border border-black/5 bg-card_light shadow-xl dark:border-white/10 dark:bg-card"
 					>
 						<div ref={listRef} className="min-h-0 flex-1 overflow-y-auto py-2">
 							{results.length === 0 ? (
@@ -480,7 +464,7 @@ export default function NavbarSearch() {
 								</div>
 							) : (
 								results.map((item: any, index: number) => {
-									const abstract = abstractPreview(item);
+									const abstract = abstractPlainText(item?.abstractNote);
 									const authors = formatAuthors(item, t("etAl"));
 									const configuredInstitution =
 										findInstitutionWithLogo(

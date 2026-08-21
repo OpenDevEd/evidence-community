@@ -86,6 +86,10 @@ const config: Config = {
 			gridTemplateRows: {
 				chat: "minmax(0, 1fr) auto",
 			},
+			maxHeight: {
+				// The navbar suggestion list must not cover the whole screen.
+				suggestions: "70vh",
+			},
 			letterSpacing: {
 				"inspector-title": "-0.01em",
 			},
