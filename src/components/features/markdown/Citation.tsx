@@ -7,6 +7,7 @@ import { forwardRef, type ComponentProps, type ReactNode } from "react";
 import { BiBookOpen } from "react-icons/bi";
 import { LuDownload, LuExternalLink } from "react-icons/lu";
 import useSWR from "swr";
+import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { twMerge } from "tailwind-merge";
 import {
 	InlineCitation,
@@ -229,9 +230,18 @@ function PdfPreview({
 		{ revalidateOnFocus: false },
 	);
 	const item = data?.item;
-	const attachment = item?.attachmentsData?.find(
-		(candidate) => candidate.key === attachmentKey,
-	);
+	// Mirror the download route: an unknown attachment key resolves to the
+	// publication's single visible PDF (stale/invented keys from the model).
+	const attachment =
+		item?.attachmentsData?.find(
+			(candidate) => candidate.key === attachmentKey,
+		) ??
+		(() => {
+			const visible = (item?.attachmentsData ?? []).filter(
+				isVisiblePdfAttachment,
+			);
+			return visible.length === 1 ? visible[0] : undefined;
+		})();
 	const preview = item
 		? publicationPreviewData(item, formatter, t("etAl"))
 		: null;

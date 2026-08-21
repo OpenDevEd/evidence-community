@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getItemRaw } from "../../route";
 import { PDFDocument } from "pdf-lib";
+import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
+import { getRequestOrigin } from "@/lib/site-url";
+
+function singleVisiblePdf<T extends Parameters<typeof isVisiblePdfAttachment>[0]>(
+	attachments: T[],
+) {
+	const visible = attachments.filter(isVisiblePdfAttachment);
+	return visible.length === 1 ? visible[0] : undefined;
+}
 
 async function modifyPDFMetadata(
 	pdfUrl: string,
@@ -46,12 +55,15 @@ export async function GET(
 		);
 	}
 
-	const attachment = result.item.attachmentsData.find(
-		(a) => a.key === attachmentKey
-	);
+	const attachment =
+		result.item.attachmentsData.find((a) => a.key === attachmentKey) ??
+		// AI citations occasionally carry a stale or invented attachment key.
+		// When the publication has exactly one visible PDF there is no
+		// ambiguity about what was meant, so serve it instead of failing.
+		singleVisiblePdf(result.item.attachmentsData);
 
 	if (!attachment || !attachment.url) {
-		const itemPageUrl = new URL(`/lib/${itemKey}`, request.url);
+		const itemPageUrl = new URL(`/lib/${itemKey}`, getRequestOrigin(request));
 		itemPageUrl.searchParams.set("error", "PDFNotFound");
 		return NextResponse.redirect(itemPageUrl);
 	}

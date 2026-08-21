@@ -765,11 +765,11 @@ export default function ChatModal({
 				<ModalContent className="relative h-full min-h-0 overflow-hidden">
 					{(onClose) => (
 						<>
-							{/* Institution branding, same mark as the navbar;
-							    OpenScholar is credited in the site footer. */}
+							{/* Institution branding: the navbar's logo, including its
+							    home link. OpenScholar is credited under the composer. */}
 							<div className="pointer-events-none absolute left-4 top-4 z-30 flex h-12 items-center sm:left-6 sm:top-5 [&_img]:max-h-10 [&_img]:w-auto">
 								<div className="pointer-events-auto">
-									<Logo interactive={false} />
+									<Logo />
 								</div>
 							</div>
 							<div className="pointer-events-none absolute right-4 top-4 z-30 flex items-center gap-2 sm:right-6 sm:top-5">
@@ -1415,7 +1415,10 @@ export default function ChatModal({
 												</motion.div>
 											</AnimatePresence>
 										</form>
-										<div className="-mt-1 flex w-full justify-center pb-3 sm:-mt-4 sm:pb-4">
+										{/* Pulled up into the form's bottom padding; the form is
+										    position:relative, so this needs its own stacking
+										    context or the form swallows the clicks. */}
+										<div className="relative z-10 -mt-1 flex w-full justify-center pb-3 sm:-mt-4 sm:pb-4">
 											<PoweredByOpenScholar />
 										</div>
 									</motion.div>

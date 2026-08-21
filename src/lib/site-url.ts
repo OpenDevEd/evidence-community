@@ -53,3 +53,27 @@ export function getSiteHost() {
 
 	return new URL(siteOrigin).host;
 }
+
+/**
+ * Public origin for a request handled behind a reverse proxy. `request.url`
+ * is the upstream address there (e.g. https://localhost:3000), so redirects
+ * built from it would send users to localhost. Prefer the proxy's forwarded
+ * host, then the configured site origin, then the request itself.
+ */
+export function getRequestOrigin(request: {
+	headers: { get(name: string): string | null };
+	nextUrl: { origin: string };
+}) {
+	const forwardedHost = request.headers
+		.get("x-forwarded-host")
+		?.split(",")[0]
+		?.trim();
+	if (forwardedHost) {
+		const proto =
+			request.headers.get("x-forwarded-proto")?.split(",")[0]?.trim() ||
+			"https";
+		const origin = normalizeSiteOrigin(`${proto}://${forwardedHost}`);
+		if (origin) return origin;
+	}
+	return getConfiguredSiteOrigin() ?? request.nextUrl.origin;
+}
