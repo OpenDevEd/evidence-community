@@ -27,6 +27,7 @@
 		"test:publication-worker": "vitest run --config vitest.publication-worker.config.ts",
 		"test:crossref-activation": "vitest run --config vitest.crossref.config.ts",
 		"test:zenodo-activation": "vitest run --config vitest.zenodo.config.ts",
+		"test:zenodo-reuse-external": "tsx ./tools/verifyZenodoReuseExternal.ts",
 		"test:crossref-test-live": "tsx ./tools/verifyCrossrefTestPublication.ts",
 		"test:zenodo-sandbox-live": "tsx ./tools/verifyZenodoSandboxPublication.ts",
 		"test:publication-sandbox-lifecycle": "tsx ./tools/verifyPublicationSandboxLifecycle.ts",

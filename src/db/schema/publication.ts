@@ -313,7 +313,7 @@ export const publicationSyncState = pgTable(
 				OR (${table.provider} = 'zenodo'
 					AND ${table.environment} = 'sandbox'
 					AND ${table.identifierPolicy} IS NOT NULL
-					AND ${table.identifierPolicy} IN ('reuse-crossref', 'mint-zenodo')
+					AND ${table.identifierPolicy} IN ('reuse-crossref', 'reuse-external', 'mint-zenodo')
 					AND ${table.pendingStage} IS NULL
 					AND ${table.pendingPayloadHash} IS NULL
 					AND ${table.pendingPayloadSnapshot} IS NULL
