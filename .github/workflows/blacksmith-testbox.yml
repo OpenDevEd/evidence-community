@@ -26,6 +26,14 @@ jobs:
 
       - uses: ./.github/actions/setup-project
 
+      - name: Keep Node.js 22 on the Testbox command path
+        shell: bash
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          ln -sfn "$(command -v node)" "$HOME/.local/bin/node"
+          ln -sfn "$(command -v npm)" "$HOME/.local/bin/npm"
+          ln -sfn "$(command -v npx)" "$HOME/.local/bin/npx"
+
       - name: Restore the Playwright browser cache
         uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
         with:
