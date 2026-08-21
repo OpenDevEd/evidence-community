@@ -40,6 +40,11 @@ export const AI_PROVIDER_PRESENTATION = {
 		company: "OpenAI",
 		icon: ChatGPT,
 	},
+	openrouter: {
+		name: "OpenRouter",
+		company: "OpenRouter",
+		icon: BsStars,
+	},
 } satisfies Record<
 	AIProviderId,
 	AIProviderPresentation

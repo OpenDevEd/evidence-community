@@ -1793,7 +1793,8 @@
 									"google",
 									"anthropic",
 									"mistral",
-									"deepseek"
+									"deepseek",
+									"openrouter"
 								]
 							},
 							"enabled": {

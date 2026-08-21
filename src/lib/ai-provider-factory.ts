@@ -5,6 +5,7 @@ import { createDeepSeek } from "@ai-sdk/deepseek";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
 import { createMistral } from "@ai-sdk/mistral";
 import { createOpenAI } from "@ai-sdk/openai";
+import { createOpenRouter } from "@openrouter/ai-sdk-provider";
 import type { LanguageModel } from "ai";
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -54,6 +55,10 @@ const providerClientFactories: AIProviderClientFactories = {
 	openai(apiKey) {
 		const provider = createOpenAI({ apiKey });
 		return (modelId) => provider(modelId);
+	},
+	openrouter(apiKey) {
+		const provider = createOpenRouter({ apiKey, compatibility: "strict" });
+		return (modelId) => provider.languageModel(modelId);
 	},
 };
 
