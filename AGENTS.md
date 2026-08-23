@@ -186,6 +186,12 @@ If coding shows that the plan is wrong, commit safe work first. Update and commi
 
 ## Tests
 
+Before writing, changing, or reviewing a test, read
+[`docs/test-quality.md`](docs/test-quality.md). It defines what counts as useful
+proof, how to choose the test boundary, which AI-generated test patterns to
+reject, and the bad examples that must not be copied from this repository or
+OpenScholar.
+
 Use red → green → clean up for plain logic. Add or update behavior tests in the same change. Prefer roles, labels, visible text, `aria-*`, `data-*`, database rows, API responses, and real worker state.
 
 Do not test Tailwind classes, CSS class strings, or inline styles. Use Playwright or screenshots for layout and visual styling.

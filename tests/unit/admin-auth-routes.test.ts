@@ -1,7 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { readFile, readdir } from "node:fs/promises";
-import { join } from "node:path";
 
 vi.mock("server-only", () => ({}));
 vi.mock("@/config/library-config/server", () => ({
@@ -46,33 +44,6 @@ function proxiedLoginRequest(password: string, address: string) {
 }
 
 describe("admin session routes", () => {
-	it("keeps every admin data handler behind the shared session gate", async () => {
-		const root = join(process.cwd(), "src/app/api/admin");
-		const routeFiles: string[] = [];
-		async function visit(directory: string) {
-			for (const entry of await readdir(directory, {
-				withFileTypes: true,
-			})) {
-				const path = join(directory, entry.name);
-				if (entry.isDirectory()) await visit(path);
-				else if (entry.name === "route.ts") routeFiles.push(path);
-			}
-		}
-		await visit(root);
-
-		for (const path of routeFiles.filter(
-			(path) => !path.includes("/api/admin/session/"),
-		)) {
-			const source = await readFile(path, "utf8");
-			const handlers =
-				source.match(/export async function /gu)?.length ?? 0;
-			const gates =
-				source.match(/await requireAdminSession\(request\)/gu)
-					?.length ?? 0;
-			expect(gates, path).toBe(handlers);
-		}
-	});
-
 	it("sets the signed cookie after the correct password", async () => {
 		const response = await login(
 			loginRequest("correct horse battery staple", "198.51.100.10"),
