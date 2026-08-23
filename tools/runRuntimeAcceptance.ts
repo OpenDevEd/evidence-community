@@ -63,6 +63,7 @@ const publicationWorkerImage =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE ??
 	"evidence-library-acceptance-publication-worker:local";
 const acceptanceAdminPassword = "correct horse battery staple";
+const cleanupOnly = process.argv.includes("--cleanup");
 
 async function availablePort(environmentValue: string | undefined) {
 	if (environmentValue) return environmentValue;
@@ -278,7 +279,7 @@ function processIsAlive(pid: number) {
 	}
 }
 
-function reapAbandonedProjects() {
+function reapAbandonedProjects(options: { includePersistent?: boolean } = {}) {
 	const rows = capture("docker", [
 		"ps",
 		"--all",
@@ -301,11 +302,11 @@ function reapAbandonedProjects() {
 		});
 	}
 
+	let removedProjects = 0;
 	for (const [project, state] of projects) {
-		if (
-			state.persistent ||
-			(Number.isInteger(state.ownerPid) && processIsAlive(state.ownerPid))
-		) {
+		const ownerIsAlive =
+			Number.isInteger(state.ownerPid) && processIsAlive(state.ownerPid);
+		if (ownerIsAlive || (state.persistent && !options.includePersistent)) {
 			if (project === composeProject) {
 				throw new Error(
 					`Acceptance project ${project} is already in use; choose a different EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT and ports`,
@@ -331,7 +332,10 @@ function reapAbandonedProjects() {
 			recursive: true,
 			force: true,
 		});
+		removedProjects += 1;
 	}
+
+	return removedProjects;
 }
 
 function loadProfile(
@@ -1509,6 +1513,18 @@ async function verifyLiveConfigLifecycle(profile: Profile) {
 }
 
 async function main() {
+	if (cleanupOnly) {
+		const removedProjects = reapAbandonedProjects({
+			includePersistent: true,
+		});
+		console.log(
+			removedProjects === 0
+				? "No abandoned acceptance projects found."
+				: `Removed ${removedProjects} abandoned acceptance project${removedProjects === 1 ? "" : "s"}.`,
+		);
+		return;
+	}
+
 	await initializeAcceptancePorts();
 	reapAbandonedProjects();
 	const profiles = [
