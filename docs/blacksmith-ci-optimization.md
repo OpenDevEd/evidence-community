@@ -73,6 +73,10 @@ prebuilt Bake images passed in 5m53s. A local four-worker stress run exposed
 resource-related browser timeouts, which is why local and Blacksmith worker
 counts are intentionally different.
 
+After local acceptance work, run `npm run test:acceptance:cleanup`. It removes
+finished or interrupted acceptance environments, including environments started
+with `--keep`, while leaving active tests and unrelated containers alone.
+
 GitHub remains the required merge proof. Read the exact runtime job and final
 aggregate `CI` job. Use Blacksmith Testbox only to reproduce a clean-Linux or
 GitHub-only failure. Do not make Testbox the normal development loop.

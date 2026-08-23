@@ -222,6 +222,19 @@ stability. GitHub sets four workers on its Blacksmith runner. Do not export
 `CI=true` or `PLAYWRIGHT_WORKERS=4` locally unless you are deliberately stress
 testing the machine.
 
+Every local acceptance run must leave Docker clean. The normal command removes
+its environment automatically. Use `--keep` only while you are actively
+inspecting that environment. Before ending the task, run:
+
+```sh
+npm run test:acceptance:cleanup
+```
+
+This removes acceptance environments whose test process has ended, including
+ones started with `--keep`. A testing task is not done until this command reports
+that no abandoned acceptance projects remain. Do not stop unrelated development
+containers.
+
 Do not run the full acceptance suite after every edit or commit. GitHub keeps
 the complete acceptance suite as a required merge check. Use Blacksmith Testbox
 only to reproduce a failure that needs a clean Linux machine or differs from

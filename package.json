@@ -17,6 +17,7 @@
 		"test": "vitest run",
 		"test:unit": "npm test --",
 		"test:acceptance": "tsx ./tools/runRuntimeAcceptance.ts",
+		"test:acceptance:cleanup": "tsx ./tools/runRuntimeAcceptance.ts --cleanup",
 		"test:library-compose": "tsx ./tools/verifyLibraryCompose.ts",
 		"database:provision": "tsx ./tools/provisionLibraryDatabase.ts",
 		"test:database-provisioning": "tsx ./tools/verifyLibraryDatabaseProvisioning.ts",
