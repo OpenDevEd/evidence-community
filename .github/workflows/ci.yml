@@ -3,10 +3,10 @@ name: CI
 on:
   push:
     branches:
-      - openscholar
+      - main
   pull_request:
     branches:
-      - openscholar
+      - main
   workflow_dispatch:
 
 permissions:

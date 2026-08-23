@@ -35,7 +35,7 @@ OpenScholar lives in `OpenDevEd/openalex-count` on branch `dev`. It owns researc
 
 Do not rebuild OpenScholar’s research tools here. The two repositories must talk through a clear API that is authenticated, versioned, and safe to retry.
 
-The active branch in this repository is `openscholar`.
+The active branch in this repository is `main`.
 
 ## Read Outline before product or roadmap work
 
@@ -88,7 +88,7 @@ When two sources disagree, use this order:
 4. The relevant product roadmap.
 5. Old plans, prototypes, transcripts, and audits.
 
-The `openscholar` branch is the source of truth for current progress. The old “start from `main`” rule was only used to rebuild a clean GitHub milestone list. It must not erase work that now exists on this branch.
+The `main` branch is the source of truth for current progress.
 
 Zotero sync and writeback already work here. This includes source collection management, collection membership writeback, and drag and bulk collection actions. Read the code before planning. Never list Zotero writeback as untouched future work.
 
@@ -196,7 +196,7 @@ Do not test Tailwind classes, CSS class strings, or inline styles. Use Playwrigh
 npm run lint
 npx tsc --noEmit
 npm run schema:check
-npm run quality:fallow -- --base origin/openscholar
+npm run quality:fallow -- --base origin/main
 npm run test:unit
 npm run test:e2e
 ```
@@ -230,7 +230,7 @@ For documentation-only work, run `git diff --check`. Also check every command, b
 
 ## Development data and live systems
 
-Development data on `openscholar` is disposable. Prefer a clean schema change over compatibility code or a backfill. If a schema change breaks development rows, wipe and reseed the affected local or development data unless the task specifically needs a production migration.
+Development data on `main` is disposable. Prefer a clean schema change over compatibility code or a backfill. If a schema change breaks development rows, wipe and reseed the affected local or development data unless the task specifically needs a production migration.
 
 Existing Evidence Library production tenants are off limits unless the user names the exact system and gives permission. Do not change shared Coolify, PostgreSQL, Meilisearch, Supabase, Zotero groups, domains, or tenant data on your own.
 

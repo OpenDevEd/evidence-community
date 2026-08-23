@@ -23,7 +23,7 @@ Development reads `config/library.local.json` by default. Set
 npm run lint
 npx tsc --noEmit
 npm run schema:check
-npm run quality:fallow -- --base origin/openscholar
+npm run quality:fallow -- --base origin/main
 npm run test:unit
 npm run test:e2e
 ```
