@@ -37,6 +37,11 @@ const rootDirectory = path.resolve(
 	"..",
 );
 const acceptanceDirectory = path.join(rootDirectory, "tests", "acceptance");
+const junitOutputDirectory = path.join(
+	rootDirectory,
+	"test-results",
+	"junit",
+);
 const composeFile = path.join(acceptanceDirectory, "compose.yaml");
 const configDirectory = path.join(acceptanceDirectory, "configs");
 const composeProject =
@@ -191,6 +196,21 @@ function run(
 			`${command} ${args.join(" ")} exited with status ${result.status}`,
 		);
 	}
+}
+
+function playwrightEnvironment(
+	label: string,
+	environment: NodeJS.ProcessEnv,
+) {
+	if (!process.env.CI) return environment;
+	mkdirSync(junitOutputDirectory, { recursive: true });
+	return {
+		...environment,
+		PLAYWRIGHT_JUNIT_OUTPUT_FILE: path.join(
+			junitOutputDirectory,
+			`${label}.xml`,
+		),
+	};
 }
 
 function capture(command: string, args: string[]) {
@@ -856,10 +876,10 @@ function runBrowserSuite(profile: Profile) {
 			"--project",
 			"chromium",
 		],
-		{
+		playwrightEnvironment(`${profile.name}-smoke`, {
 			...commandEnvironment,
 			...publicExpectations(profile),
-		},
+		}),
 	);
 	run(
 		"npx",
@@ -870,10 +890,10 @@ function runBrowserSuite(profile: Profile) {
 			"--project",
 			"chromium",
 		],
-		{
+		playwrightEnvironment(`${profile.name}-integrations`, {
 			...commandEnvironment,
 			...publicExpectations(profile),
-		},
+		}),
 	);
 	run(
 		"npx",
@@ -884,10 +904,10 @@ function runBrowserSuite(profile: Profile) {
 			"--project",
 			"mobile-chromium",
 		],
-		{
+		playwrightEnvironment(`${profile.name}-mobile`, {
 			...commandEnvironment,
 			...publicExpectations(profile),
-		},
+		}),
 	);
 }
 
@@ -895,7 +915,7 @@ function runAdminBrowserSuite(profile: Profile) {
 	console.log(`\nRunning ${profile.name} admin browser suite`);
 	const adminWorkers =
 		process.env.PLAYWRIGHT_WORKERS ?? (process.env.CI ? undefined : "1");
-	const environment = {
+	const environment = playwrightEnvironment(`${profile.name}-admin`, {
 		...commandEnvironment,
 		...publicExpectations(profile),
 		PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
@@ -903,7 +923,7 @@ function runAdminBrowserSuite(profile: Profile) {
 		PLAYWRIGHT_ADMIN_UI: "true",
 		PLAYWRIGHT_EXPECTED_ADMIN_ITEM_TITLE: "Amber database evidence",
 		PLAYWRIGHT_RUNTIME_E2E: "true",
-	};
+	});
 	const runAdminTests = (arguments_: string[]) => {
 		run(
 			"npx",
@@ -944,7 +964,7 @@ function runPublicationBrowserPhase(
 			"--workers",
 			"1",
 		],
-		{
+		playwrightEnvironment(`${profile.name}-publication-${phase}`, {
 			...commandEnvironment,
 			EVIDENCE_LIBRARY_ADMIN_PASSWORD: acceptanceAdminPassword,
 			PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
@@ -954,7 +974,7 @@ function runPublicationBrowserPhase(
 				"Amber DOI admin interface report — Edited",
 			PLAYWRIGHT_PUBLICATION_ITEM_KEY: "PUBUIA23",
 			PLAYWRIGHT_PUBLICATION_PHASE: phase,
-		},
+		}),
 	);
 }
 

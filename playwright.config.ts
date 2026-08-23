@@ -19,7 +19,20 @@ export default defineConfig({
 	forbidOnly: Boolean(process.env.CI),
 	retries: process.env.CI ? 2 : 0,
 	workers: process.env.CI ? ciWorkers : undefined,
-	reporter: "list",
+	reporter: process.env.CI
+		? [
+				["list"],
+				[
+					"junit",
+					{
+						outputFile:
+							process.env.PLAYWRIGHT_JUNIT_OUTPUT_FILE ??
+							"test-results/playwright.xml",
+						stripANSIControlSequences: true,
+					},
+				],
+			]
+		: "list",
 	use: {
 		baseURL,
 		ignoreHTTPSErrors:
