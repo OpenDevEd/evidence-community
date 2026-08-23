@@ -37,11 +37,7 @@ const rootDirectory = path.resolve(
 	"..",
 );
 const acceptanceDirectory = path.join(rootDirectory, "tests", "acceptance");
-const junitOutputDirectory = path.join(
-	rootDirectory,
-	"test-results",
-	"junit",
-);
+const testResultsDirectory = path.join(rootDirectory, "test-results");
 const composeFile = path.join(acceptanceDirectory, "compose.yaml");
 const configDirectory = path.join(acceptanceDirectory, "configs");
 const composeProject =
@@ -204,12 +200,14 @@ function playwrightEnvironment(
 	environment: NodeJS.ProcessEnv,
 ) {
 	if (!process.env.CI) return environment;
-	mkdirSync(junitOutputDirectory, { recursive: true });
-	const outputFile = path.join(junitOutputDirectory, `${label}.xml`);
+	const suiteResultsDirectory = path.join(testResultsDirectory, label);
+	const outputFile = path.join(suiteResultsDirectory, "junit.xml");
+	mkdirSync(suiteResultsDirectory, { recursive: true });
 	junitReportFiles.add(outputFile);
 	return {
 		...environment,
 		PLAYWRIGHT_JUNIT_OUTPUT_FILE: outputFile,
+		PLAYWRIGHT_OUTPUT_DIR: path.join(suiteResultsDirectory, "artifacts"),
 	};
 }
 

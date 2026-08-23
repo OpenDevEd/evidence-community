@@ -15,6 +15,7 @@ if (!Number.isInteger(ciWorkers) || ciWorkers < 1) {
 
 export default defineConfig({
 	testDir: "./tests/e2e",
+	outputDir: process.env.PLAYWRIGHT_OUTPUT_DIR,
 	fullyParallel: true,
 	forbidOnly: Boolean(process.env.CI),
 	retries: process.env.CI ? 2 : 0,
