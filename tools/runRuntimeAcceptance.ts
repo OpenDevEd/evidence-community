@@ -111,6 +111,7 @@ const commandEnvironment: NodeJS.ProcessEnv = {
 	EVIDENCE_LIBRARY_ACCEPTANCE_PERSISTENT: String(keepRunning),
 	EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR: runtimeDirectory,
 };
+const junitReportFiles = new Set<string>();
 const ownerLabel = "org.opendeved.evidence-library.acceptance.owner-pid";
 const persistentLabel = "org.opendeved.evidence-library.acceptance.persistent";
 
@@ -204,13 +205,25 @@ function playwrightEnvironment(
 ) {
 	if (!process.env.CI) return environment;
 	mkdirSync(junitOutputDirectory, { recursive: true });
+	const outputFile = path.join(junitOutputDirectory, `${label}.xml`);
+	junitReportFiles.add(outputFile);
 	return {
 		...environment,
-		PLAYWRIGHT_JUNIT_OUTPUT_FILE: path.join(
-			junitOutputDirectory,
-			`${label}.xml`,
-		),
+		PLAYWRIGHT_JUNIT_OUTPUT_FILE: outputFile,
 	};
+}
+
+function verifyJunitReports() {
+	if (!process.env.CI) return;
+	assert.ok(junitReportFiles.size > 0, "No Playwright JUnit reports expected");
+	for (const reportFile of junitReportFiles) {
+		assert.match(
+			readFileSync(reportFile, "utf8"),
+			/<testsuites?\b/u,
+			`Playwright JUnit report is missing or invalid: ${reportFile}`,
+		);
+	}
+	console.log(`Wrote ${junitReportFiles.size} Playwright JUnit reports.`);
 }
 
 function capture(command: string, args: string[]) {
@@ -1576,6 +1589,7 @@ async function main() {
 		profiles.forEach(verifyServerAnalyticsTransport);
 		profiles.forEach(runBrowserSuite);
 		runAdminBrowserSuite(profiles[0]);
+		verifyJunitReports();
 		cleanupAcceptanceUsers();
 		console.log("\nRuntime acceptance passed for Amber and Indigo.");
 		if (keepRunning) {
