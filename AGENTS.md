@@ -217,6 +217,11 @@ flows:
 npm run test:acceptance
 ```
 
+The normal local command keeps the large admin browser suite at one worker for
+stability. GitHub sets four workers on its Blacksmith runner. Do not export
+`CI=true` or `PLAYWRIGHT_WORKERS=4` locally unless you are deliberately stress
+testing the machine.
+
 Do not run the full acceptance suite after every edit or commit. GitHub keeps
 the complete acceptance suite as a required merge check. Use Blacksmith Testbox
 only to reproduce a failure that needs a clean Linux machine or differs from
