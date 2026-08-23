@@ -338,6 +338,18 @@ Zenodo publication flow. It also verifies independently enabled and disabled
 integrations, secret boundaries, live activation, rejection, last-valid
 retention, and rollback using the same production image.
 
+The command removes its Docker environment when it ends. If a run was
+interrupted, or was started with `--keep` for live inspection, remove its
+environment before ending the work:
+
+```bash
+npm run test:acceptance:cleanup
+```
+
+The cleanup command removes only Evidence Library acceptance environments whose
+test process has ended. It leaves active tests and unrelated development
+containers running.
+
 ## Real publication sandbox checks
 
 These commands may write only to the docs-pen Crossref Test and Zenodo Sandbox
