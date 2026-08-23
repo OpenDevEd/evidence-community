@@ -4,7 +4,7 @@ const baseURL = process.env.PLAYWRIGHT_BASE_URL;
 
 if (!baseURL) {
 	throw new Error(
-		"PLAYWRIGHT_BASE_URL is required. Run npm run test:e2e to start the disposable test runtime.",
+		"PLAYWRIGHT_BASE_URL is required. Run npm run test:acceptance to start the disposable test runtime.",
 	);
 }
 

@@ -192,19 +192,35 @@ Do not test Tailwind classes, CSS class strings, or inline styles. Use Playwrigh
 
 ### Main checks
 
+During implementation, run the smallest relevant test on the local machine:
+
 ```sh
-npm run lint
-npx tsc --noEmit
-npm run schema:check
-npm run quality:fallow -- --base origin/main
-npm run test:unit
-npm run test:e2e
+npm test -- tests/unit/library-config-source.test.ts
 ```
 
-Fallow checks only the code changed from the base commit. It blocks new dead
-code, complexity, duplication, and styling problems without treating the
-existing codebase as clean. Run it in Blacksmith Testbox, not on the local
-machine.
+Before pushing code, run the fast branch checks locally:
+
+```sh
+npm run check:changed
+```
+
+This runs lint, TypeScript, generated-schema checks, all unit tests, and Fallow.
+Fallow checks only code changed from `origin/main`. It blocks new dead code,
+complexity, duplication, and styling problems without treating the existing
+codebase as clean.
+
+Run the full acceptance suite once before pushing when a change affects the
+browser, runtime configuration, database, workers, search, files, or provider
+flows:
+
+```sh
+npm run test:acceptance
+```
+
+Do not run the full acceptance suite after every edit or commit. GitHub keeps
+the complete acceptance suite as a required merge check. Use Blacksmith Testbox
+only to reproduce a failure that needs a clean Linux machine or differs from
+GitHub. Warm one Testbox, reuse it for the investigation, and stop it afterward.
 
 ### Real-service checks
 

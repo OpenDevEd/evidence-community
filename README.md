@@ -19,24 +19,37 @@ Development reads `config/library.local.json` by default. Set
 
 ## Checks
 
+Run focused tests while changing code:
+
 ```bash
-npm run lint
-npx tsc --noEmit
-npm run schema:check
-npm run quality:fallow -- --base origin/main
-npm run test:unit
-npm run test:e2e
+npm test -- tests/unit/library-config-source.test.ts
 ```
 
-Fallow checks changed code for new dead code, complexity, duplication, and
-styling problems. Run every check through Blacksmith Testbox rather than on the
-local machine.
+Before pushing, run the fast branch checks on your machine:
 
-The E2E command builds one production image and starts two independently
+```bash
+npm run check:changed
+```
+
+This runs lint, TypeScript, generated-schema checks, all unit tests, and Fallow.
+Fallow checks changed code for new dead code, complexity, duplication, and
+styling problems.
+
+Run the full local acceptance suite once when a change affects the browser,
+runtime configuration, database, workers, search, files, or provider flows:
+
+```bash
+npm run test:acceptance
+```
+
+The acceptance command builds one production image and starts two independently
 configured libraries with disposable PostgreSQL, Meilisearch, Mailpit, workers,
 and local external-service fixtures. It runs every desktop and mobile browser
 check, verifies live configuration activation and rollback, then removes all
-test data and containers.
+test data and containers. GitHub runs this complete suite before code can merge.
+
+Use Blacksmith Testbox only to reproduce a failure that needs a clean Linux
+machine or differs from GitHub. It is not the normal local development loop.
 
 ## Documentation
 

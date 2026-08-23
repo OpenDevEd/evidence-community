@@ -87,7 +87,7 @@ COMMIT DISCIPLINE
 Allowed prefixes, [plan-03] on every commit, no hook bypass, no failing tests, named files only.
 
 WHEN TO STOP
-Stop only for a missing required API, an unsafe target, or a plan error that cannot be corrected from evidence. All "Exact tests" green including npm run test:e2e and npm run test:acceptance.
+Stop only for a missing required API, an unsafe target, or a plan error that cannot be corrected from evidence. All "Exact tests" green including npm run test:acceptance.
 
 DEVIATIONS
 Commit safe work, revise the plan with docs: [plan-03] revise <section> — <reason>, continue. Blocker file only when no safe path exists.

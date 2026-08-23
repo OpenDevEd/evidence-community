@@ -115,7 +115,7 @@ Each commit must leave the application buildable and locally runnable.
 
 - Add Vitest for schema, loader, projection, and service-factory tests.
 - Add Playwright for full application/runtime checks.
-- Add `test`, `test:unit`, and `test:e2e` scripts.
+- Add `test`, `test:unit`, and `test:acceptance` scripts.
 - Add one existing-behavior smoke test before changing configuration.
 
 Verification: lint, type-check, the initial unit test, and the smoke test pass.

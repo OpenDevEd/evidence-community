@@ -44,7 +44,7 @@ None.
 ```sh
 npx vitest run tests/unit/admin-links-editor.test.tsx tests/unit/admin-selection.test.ts
 npm run test:unit
-npm run test:e2e
+npm run test:acceptance
 npm run test:acceptance
 npx tsc --noEmit
 npm run lint

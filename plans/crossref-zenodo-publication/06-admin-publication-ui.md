@@ -132,7 +132,7 @@ No hidden legacy controls and no automatic activation on item creation or ordina
 
 ```sh
 npm run test:unit
-npm run test:e2e -- --grep "DOI publishing"
+npm run test:acceptance
 npm run test:acceptance
 npx tsc --noEmit
 npm run lint

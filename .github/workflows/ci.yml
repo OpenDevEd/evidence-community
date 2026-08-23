@@ -29,11 +29,11 @@ jobs:
           - name: Lint
             command: npm run lint
           - name: Type check
-            command: ./node_modules/.bin/tsc --noEmit
+            command: npm run typecheck
           - name: Generated schemas
             command: npm run schema:check
           - name: Unit tests
-            command: npm run test:unit
+            command: npm test
     steps:
       - name: Check out the repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -69,7 +69,7 @@ jobs:
           cache-key: evidence-library-runtime
 
       - name: Run end-to-end tests
-        run: npm run test:e2e
+        run: npm run test:acceptance
 
       - name: Upload failure evidence
         if: failure()

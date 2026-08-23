@@ -81,7 +81,7 @@ npm run test:publication-worker
 npm run test:crossref-test-live
 npm run test:zenodo-sandbox-live
 npm run test:publication-sandbox-lifecycle
-npm run test:e2e -- --grep "DOI publishing"
+npm run test:acceptance
 git diff --check
 ```
 

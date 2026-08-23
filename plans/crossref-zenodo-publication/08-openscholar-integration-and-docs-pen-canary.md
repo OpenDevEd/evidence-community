@@ -140,7 +140,7 @@ npm run test:linked-item-lifecycle
 npm run test:search-index
 npm run test:search-worker
 npm run test:acceptance
-npm run test:e2e
+npm run test:acceptance
 npm run build
 ```
 

@@ -327,14 +327,11 @@ running before removing a stale lock.
 Run the complete local contract before deploying the shared image:
 
 ```bash
-npm run lint
-npx tsc --noEmit
-npm run schema:check
-npm run test:unit
-npm run test:e2e
+npm run check:changed
+npm run test:acceptance
 ```
 
-`npm run test:e2e` starts two disposable libraries, PostgreSQL, Meilisearch,
+`npm run test:acceptance` starts two disposable libraries, PostgreSQL, Meilisearch,
 Mailpit, workers, and local HTTPS fixtures for external services. It runs every
 desktop and mobile browser check, including the complete mocked Crossref and
 Zenodo publication flow. It also verifies independently enabled and disabled
