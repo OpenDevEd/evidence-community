@@ -905,7 +905,7 @@ function runAdminBrowserSuite(profile: Profile) {
 	const runAdminTests = (arguments_: string[]) => {
 		run(
 			"npx",
-			["playwright", "test", ...arguments_, "--workers", "1"],
+			["playwright", "test", ...arguments_],
 			environment,
 		);
 	};

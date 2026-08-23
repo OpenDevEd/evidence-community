@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const baseURL = process.env.PLAYWRIGHT_BASE_URL;
+const ciWorkers = Number(process.env.PLAYWRIGHT_WORKERS ?? "1");
 
 if (!baseURL) {
 	throw new Error(
@@ -8,12 +9,16 @@ if (!baseURL) {
 	);
 }
 
+if (!Number.isInteger(ciWorkers) || ciWorkers < 1) {
+	throw new Error("PLAYWRIGHT_WORKERS must be a positive whole number.");
+}
+
 export default defineConfig({
 	testDir: "./tests/e2e",
 	fullyParallel: true,
 	forbidOnly: Boolean(process.env.CI),
 	retries: process.env.CI ? 2 : 0,
-	workers: process.env.CI ? 1 : undefined,
+	workers: process.env.CI ? ciWorkers : undefined,
 	reporter: "list",
 	use: {
 		baseURL,
