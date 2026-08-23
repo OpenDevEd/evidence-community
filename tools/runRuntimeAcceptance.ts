@@ -893,6 +893,8 @@ function runBrowserSuite(profile: Profile) {
 
 function runAdminBrowserSuite(profile: Profile) {
 	console.log(`\nRunning ${profile.name} admin browser suite`);
+	const adminWorkers =
+		process.env.PLAYWRIGHT_WORKERS ?? (process.env.CI ? undefined : "1");
 	const environment = {
 		...commandEnvironment,
 		...publicExpectations(profile),
@@ -905,7 +907,12 @@ function runAdminBrowserSuite(profile: Profile) {
 	const runAdminTests = (arguments_: string[]) => {
 		run(
 			"npx",
-			["playwright", "test", ...arguments_],
+			[
+				"playwright",
+				"test",
+				...arguments_,
+				...(adminWorkers ? ["--workers", adminWorkers] : []),
+			],
 			environment,
 		);
 	};
@@ -1483,22 +1490,19 @@ async function main() {
 
 	try {
 		if (!skipBuild) {
-			run("docker", ["build", "--tag", image, "."]);
 			run("docker", [
-				"build",
-				"--target",
-				"search-indexer",
-				"--tag",
-				searchIndexerImage,
-				".",
-			]);
-			run("docker", [
-				"build",
-				"--target",
-				"publication-worker",
-				"--tag",
-				publicationWorkerImage,
-				".",
+				"buildx",
+				"bake",
+				"--file",
+				"docker-bake.acceptance.hcl",
+				"--load",
+				"--set",
+				`app.tags=${image}`,
+				"--set",
+				`search-indexer.tags=${searchIndexerImage}`,
+				"--set",
+				`publication-worker.tags=${publicationWorkerImage}`,
+				"acceptance",
 			]);
 		}
 		await verifyRootOwnedConfigStartup();
