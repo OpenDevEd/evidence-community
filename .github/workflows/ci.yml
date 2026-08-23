@@ -46,7 +46,7 @@ jobs:
   runtime:
     name: Runtime acceptance
     # This suite includes every browser spec and builds the production image.
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     timeout-minutes: 45
     env:
       PLAYWRIGHT_WORKERS: "4"
