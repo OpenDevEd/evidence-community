@@ -24,6 +24,7 @@ import {
 	validateLibraryConfigFile,
 } from "@/config/library-config/source";
 import { MAX_LIBRARY_CONFIG_BYTES } from "@/config/library-config/schema";
+import { replaceFileAtomically } from "@/lib/atomic-file";
 import {
 	cloneLibraryConfig,
 	minimalLibraryConfig,
@@ -33,7 +34,11 @@ let tempDirectory: string;
 let configPath: string;
 
 async function writeConfig(config: unknown) {
-	await writeFile(configPath, JSON.stringify(config, null, "\t"), "utf8");
+	await replaceFileAtomically({
+		content: JSON.stringify(config, null, "\t"),
+		mode: 0o600,
+		targetPath: configPath,
+	});
 }
 
 function expectSourceError(

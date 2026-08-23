@@ -231,8 +231,29 @@ test("[publication:zenodo] publishes to Zenodo and keeps both DOI states after r
 		publication.getByRole("button", { name: /Activate|Publish to Zenodo/u }),
 	).toHaveCount(0);
 
+	await expect
+		.poll(
+			async () => {
+				const response = await page.request.get(`/api/item/${itemKey}`);
+				if (!response.ok()) return null;
+				return (await response.json()).item?.publicationIdentifiers;
+			},
+			{
+				message: "the public search projection to include the Zenodo record",
+				timeout: 60_000,
+			},
+		)
+		.toMatchObject({
+			crossref: {
+				doi: expectedDoi,
+				lifecycle: "verified",
+			},
+			zenodo: {
+				baseUrl: "https://sandbox.zenodo.org",
+				versionDoi: expectedDoi,
+			},
+		});
 	const publicResponse = await page.request.get(`/api/item/${itemKey}`);
-	expect(publicResponse.ok()).toBe(true);
 	const publicItem = (await publicResponse.json()).item as {
 		publicationIdentifiers?: {
 			crossref?: { doi: string; lifecycle: string };
@@ -244,16 +265,6 @@ test("[publication:zenodo] publishes to Zenodo and keeps both DOI states after r
 			};
 		};
 	};
-	expect(publicItem.publicationIdentifiers).toMatchObject({
-		crossref: {
-			doi: expectedDoi,
-			lifecycle: "verified",
-		},
-		zenodo: {
-			baseUrl: "https://sandbox.zenodo.org",
-			versionDoi: expectedDoi,
-		},
-	});
 	const zenodoRecordId = publicItem.publicationIdentifiers?.zenodo?.recordId;
 	const zenodoConceptRecordId =
 		publicItem.publicationIdentifiers?.zenodo?.conceptRecordId;
