@@ -209,6 +209,8 @@
     "requestSent": "Pedido de remoção enviado",
     "requestSentDesc": "Analisaremos sua solicitação e entraremos em contato o mais breve possível.",
     "requestFailed": "Falha ao enviar a solicitação de remoção",
+    "errorTitle": "Algo correu mal",
+    "retry": "Tentar novamente",
     "tryAgainLater": "Por favor, tente novamente mais tarde",
     "invalidLinks": "Link(s) inválido(s):",
     "resourceNotFound": "Recurso(s) não existe(m):",

@@ -209,6 +209,8 @@
     "requestSent": "Requête de suppression envoyée",
     "requestSentDesc": "Nous examinerons votre demande et vous répondrons dès que possible.",
     "requestFailed": "Échec de l'envoi de la demande de retrait",
+    "errorTitle": "Une erreur est survenue",
+    "retry": "Réessayer",
     "tryAgainLater": "Veuillez réessayer plus tard",
     "invalidLinks": "Lien(s) non valide(s) :",
     "resourceNotFound": "La/les ressource(s) n'existe(nt) pas :",

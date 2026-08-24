@@ -97,6 +97,8 @@ import { BsQuestionCircleFill } from "react-icons/bs";
 import { Card } from "@/components/nextui/Card";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { clientAIError } from "@/lib/ai/client";
+import { AI_CONTEXT_TOO_LARGE_MESSAGE } from "@/lib/ai/error-message";
+import { ChatErrorCard } from "@/components/features/ai/chat-shared";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { ToolActivity } from "@/components/features/ai/ToolActivity";
 import { LuCheck, LuHash, LuType, LuX } from "react-icons/lu";
@@ -120,6 +122,15 @@ import {
 } from "@/lib/ai/transcript-export";
 
 export const maxDuration = 240;
+
+/** What to tell the reader, and whether a reset is the way out. */
+function describeChatFailure(error: Error | undefined, fallback: string) {
+	const readable = error ? clientAIError(error) : undefined;
+	return {
+		message: readable?.message || fallback,
+		isContextTooLarge: readable?.message === AI_CONTEXT_TOO_LARGE_MESSAGE,
+	};
+}
 
 /** Only a screening reply carries results, and only if they are well formed. */
 function parseScreeningResults(messageId: string, content: string) {
@@ -644,6 +655,8 @@ export default function ChatModal({
 	};
 
 	const isWaiting = (isLoading || isMutating) && !error;
+	const resetChat = () => setMessages([...messages.slice(0, 1)]);
+	const chatFailure = describeChatFailure(error, t("errorMessage"));
 	const exportTranscript = useCallback(
 		async (action: ControlAction): Promise<GeneratedContent> => {
 			if (action === "csv") {
@@ -694,9 +707,7 @@ export default function ChatModal({
 								className="ml-4"
 								aria-label={tUI("resetAriaLabel")}
 								isDisabled={isWaiting}
-								onClick={() => {
-									setMessages([...messages.slice(0, 1)]);
-								}}
+								onClick={resetChat}
 							>
 								{tUI("resetChat")}
 							</Button>
@@ -790,20 +801,16 @@ export default function ChatModal({
 														initial={{ opacity: 0, y: -100 }}
 														animate={{ opacity: 1, y: 0 }}
 														exit={{ opacity: 0, y: -100 }}
-														className="flex justify-center items-center gap-2 w-full"
+														className="flex w-full justify-center"
 													>
-														{t("errorMessage")}
-														<Button
-															color="accent"
-															isIconOnly
-															onClick={() => {
-																reload()
-															}}
-														>
-															<RiRefreshLine
-																className="size-4"
-															/>
-														</Button>
+														<ChatErrorCard
+															message={chatFailure.message}
+															isContextTooLarge={
+																chatFailure.isContextTooLarge
+															}
+															onReset={resetChat}
+															onRetry={reload}
+														/>
 													</motion.div>
 												)}
 											</div>

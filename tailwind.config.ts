@@ -91,9 +91,9 @@ const config: Config = {
 				"ai-panel": "2.375rem",
 				// Lines up a tool step's details under its title.
 				"tool-step": "1.375rem",
-				// The round icon inside a citation chip, and its glyph.
-				"citation-icon": "1.125rem",
-				"citation-glyph": "0.6875rem",
+				// Small icon sizes shared by chat and citation controls.
+				"icon-md": "1.125rem",
+				"icon-xs": "0.6875rem",
 			},
 			fontSize: {
 				citation: "0.68rem",
@@ -139,6 +139,7 @@ const config: Config = {
 					"cubic-bezier(0.68, -0.55, 0.265, 1.55)",
 			},
 			boxShadow: {
+				"card-soft": "0 4px 20px rgba(0, 0, 0, 0.05)",
 				"accent-glow":
 					"0 0 15px theme(colors.accent.DEFAULT / 0.25)",
 			},

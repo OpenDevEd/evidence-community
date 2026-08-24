@@ -209,6 +209,8 @@
     "requestSent": "Takedown request sent",
     "requestSentDesc": "We will review your request and get back to you as soon as possible.",
     "requestFailed": "Failed to send takedown request",
+    "errorTitle": "Something went wrong",
+    "retry": "Retry",
     "tryAgainLater": "Please try again later",
     "invalidLinks": "Invalid link(s):",
     "resourceNotFound": "Resource(s) doesn't exist:",

@@ -78,9 +78,9 @@ function CitationChipContents({ children }: { children: ReactNode }) {
 		<>
 			<span
 				aria-hidden="true"
-				className="grid size-citation-icon shrink-0 place-items-center rounded-full bg-accent/[0.12] text-accent transition-colors group-hover/chip:bg-accent group-hover/chip:text-white dark:bg-accent/20"
+				className="grid size-icon-md shrink-0 place-items-center rounded-full bg-accent/[0.12] text-accent transition-colors group-hover/chip:bg-accent group-hover/chip:text-white dark:bg-accent/20"
 			>
-				<BiBookOpen className="size-citation-glyph" />
+				<BiBookOpen className="size-icon-xs" />
 			</span>
 			{children}
 		</>

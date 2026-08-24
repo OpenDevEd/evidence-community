@@ -209,6 +209,8 @@
     "requestSent": "下架请求已发送",
     "requestSentDesc": "我们将审核您的请求，并尽快给您答复。",
     "requestFailed": "未能发送下架请求",
+    "errorTitle": "出现错误",
+    "retry": "重试",
     "tryAgainLater": "请稍后再试",
     "invalidLinks": "无效链接：",
     "resourceNotFound": "资源不存在:",

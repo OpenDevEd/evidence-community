@@ -209,6 +209,8 @@
     "requestSent": "Entfernungsanfrage gesendet",
     "requestSentDesc": "Wir werden Ihre Anfrage prüfen und uns so bald wie möglich bei Ihnen melden.",
     "requestFailed": "Fehler beim Senden der Takedown-Anfrage",
+    "errorTitle": "Etwas ist schiefgelaufen",
+    "retry": "Erneut versuchen",
     "tryAgainLater": "Bitte versuchen Sie es später erneut",
     "invalidLinks": "Ungültige Verknüpfung(en):",
     "resourceNotFound": "Ressource(n) existiert nicht:",

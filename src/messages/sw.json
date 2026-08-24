@@ -210,6 +210,8 @@
     "requestSent": "Ombi la kuondolewa limetumwa",
     "requestSentDesc": "Tutapitia ombi lako na tutawasiliana nawe haraka iwezekanavyo.",
     "requestFailed": "Imeshindwa kutuma ombi la kuondoa",
+    "errorTitle": "Hitilafu imetokea",
+    "retry": "Jaribu tena",
     "tryAgainLater": "Tafadhali jaribu tena baadaye",
     "invalidLinks": "Viungo(s) batili:",
     "resourceNotFound": "Rasilimali haipo:",
