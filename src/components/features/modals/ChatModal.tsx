@@ -99,55 +99,184 @@ import { Tooltip } from "@/components/nextui/Tooltip";
 import { clientAIError } from "@/lib/ai/client";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { ToolActivity } from "@/components/features/ai/ToolActivity";
+import { LuCheck, LuHash, LuType, LuX } from "react-icons/lu";
+import {
+	AIGeneratedContentControls,
+	AIStructuredContentControls,
+	type ControlAction,
+	type GeneratedContent,
+} from "./AIControls";
+import {
+	isScreeningResultsData,
+	screeningExportContent,
+	type ScreeningFieldValue,
+	type ScreeningResultsData,
+} from "@/lib/ai/screening-export";
+import {
+	CHAT_EXPORT_OUTPUT,
+	chatMessageContent,
+	chatTranscriptContent,
+	type ChatTranscriptFormat,
+} from "@/lib/ai/transcript-export";
 
 export const maxDuration = 240;
 
-interface ScreeningResults {
-	result: {
-		[resourceId: string]: {
-			screeningFields: {
-				[key: string]: string;
-			};
-		};
-	};
-	fields: SmartScreeningField[];
+/** Only a screening reply carries results, and only if they are well formed. */
+function parseScreeningResults(messageId: string, content: string) {
+	if (!messageId.startsWith("screening-")) return null;
+	try {
+		const parsed: unknown = JSON.parse(content);
+		return isScreeningResultsData(parsed) ? parsed : null;
+	} catch {
+		return null;
+	}
 }
 
-function ScreeningResults({ results }: { results: ScreeningResults }) {
-	return (
-		<div className="w-full space-y-6">
-			{Object.entries(results.result).map(([resourceId, value]) => (
-				<div
-					key={resourceId}
-					className="border border-white dark:border-secondary-600 rounded-2xl overflow-hidden"
-				>
-					<Resource itemKey={resourceId} abstract={true} />
-					<div className="grid grid-cols-1 md:grid-cols-2 gap-2 p-4">
-						{Object.entries(value.screeningFields).map(
-							([fieldKey, fieldValue]) => {
-								const fieldInfo = results.fields.find(
-									(field) => field.label === fieldKey
-								);
+function ScreeningResults({ results }: { results: ScreeningResultsData }) {
+	const tUI = useTranslations("ui");
+	const resultEntries = Object.entries(results.result);
+	const formats = useMemo(() => {
+		const generated = screeningExportContent(
+			results,
+			typeof window === "undefined" ? undefined : window.location.origin,
+		);
+		return {
+			plaintext: {
+				content: generated.plaintext,
+				extension: "txt",
+				mimeType: "text/plain;charset=utf-8",
+			},
+			markdown: {
+				content: generated.markdown,
+				extension: "md",
+				mimeType: "text/markdown;charset=utf-8",
+			},
+			html: {
+				content: generated.html,
+				extension: "html",
+				mimeType: "text/html;charset=utf-8",
+			},
+			csv: {
+				content: generated.csv,
+				extension: "csv",
+				mimeType: "text/csv;charset=utf-8",
+			},
+		} satisfies Record<ControlAction, GeneratedContent>;
+	}, [results]);
+	const exportControls = (
+		<AIStructuredContentControls
+			formats={formats}
+			downloadName="smart-screening-results"
+			appearance="header"
+		/>
+	);
 
-								return (
-									<div
-										key={fieldKey}
-										className="border-b pb-2 border-white dark:border-secondary-600"
-									>
-										<h3 className="font-medium text-sm text-black/60 dark:text-white/60">
-											{`${fieldKey} (${fieldInfo?.type})`}
-										</h3>
-										<div className="mt-1">
-											{String(fieldValue)}
-										</div>
-									</div>
-								);
-							}
-						)}
-					</div>
+	return (
+		<div className="w-full space-y-4">
+			<div className="flex flex-col gap-3 rounded-2xl bg-black/[0.025] p-3 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between">
+				<div className="min-w-0 px-1">
+					<h2 className="text-lg font-medium text-black/80 dark:text-white/80">
+						{tUI("smartScreening")}
+					</h2>
+					<p className="text-xs text-black/45 dark:text-white/45">
+						{tUI.rich("resourcesCount", {
+							count: resultEntries.length,
+							number: (chunks) => chunks,
+						})}
+					</p>
 				</div>
-			))}
+				<div className="flex items-center gap-1 self-end sm:self-auto">
+					{exportControls}
+				</div>
+			</div>
+
+			<div className="space-y-4">
+				{resultEntries.map(([resourceId, value]) => (
+					<article
+						key={resourceId}
+						className="overflow-hidden rounded-2xl bg-white/80 dark:bg-white/[0.035]"
+					>
+						<Resource itemKey={resourceId} abstract={true} as="div" />
+						<div className="grid grid-cols-1 gap-3 bg-black/[0.025] p-3 dark:bg-black/[0.15] sm:p-4 md:grid-cols-2">
+							{results.fields.map((field, fieldIndex) => (
+								<ScreeningField
+									key={field.label}
+									field={field}
+									value={value.screeningFields[field.label] ?? null}
+									isLast={fieldIndex === results.fields.length - 1}
+									fieldCount={results.fields.length}
+								/>
+							))}
+						</div>
+					</article>
+				))}
+			</div>
+
+			<div className="flex justify-end rounded-2xl bg-black/[0.025] p-1 dark:bg-white/[0.04]">
+				<div className="flex items-center gap-1">{exportControls}</div>
+			</div>
 		</div>
+	);
+}
+
+function ScreeningFieldIcon({
+	type,
+	value,
+}: {
+	type: ScreeningResultsData["fields"][number]["type"];
+	value: ScreeningFieldValue;
+}) {
+	if (type === "number") return <LuHash />;
+	if (type === "string") return <LuType />;
+	return value === true ? <LuCheck /> : <LuX />;
+}
+
+function ScreeningField({
+	field,
+	value,
+	fieldCount,
+	isLast,
+}: {
+	field: ScreeningResultsData["fields"][number];
+	value: ScreeningFieldValue;
+	fieldCount: number;
+	isLast: boolean;
+}) {
+	const isBoolean = field.type === "boolean";
+	const isTrue = isBoolean && value === true;
+
+	return (
+		<section
+			className={twMerge(
+				"min-w-0 rounded-xl bg-white/80 p-4 dark:bg-white/[0.045]",
+				fieldCount % 2 === 1 && isLast && "md:col-span-2",
+			)}
+		>
+			<div className="flex items-start justify-between gap-3">
+				<h3 className="min-w-0 text-xs font-medium leading-5 text-black/50 dark:text-white/50">
+					{field.label}
+				</h3>
+				<span
+					className={twMerge(
+						"grid size-7 shrink-0 place-items-center rounded-lg bg-black/[0.045] text-sm text-black/40 dark:bg-white/[0.06] dark:text-white/40",
+						isTrue &&
+							"bg-accent/10 text-accent dark:bg-accent/15 dark:text-accent",
+					)}
+					role="img"
+					aria-label={field.type}
+				>
+					<ScreeningFieldIcon type={field.type} value={value} />
+				</span>
+			</div>
+			<p
+				className={twMerge(
+					"mt-2 break-words text-base font-medium leading-6 text-black/80 dark:text-white/80",
+					isTrue && "text-accent dark:text-accent",
+				)}
+			>
+				{String(value)}
+			</p>
+		</section>
 	);
 }
 
@@ -173,6 +302,32 @@ function MessageComponent({
 
 	const visibleParts = useMemo(
 		() => visibleMessageParts(message),
+		[message],
+	);
+	const screeningResults = useMemo(
+		() => parseScreeningResults(message.id, getMessageContent(message)),
+		[message],
+	);
+	const showMessageActions =
+		message.role === "assistant" &&
+		!isWaiting &&
+		!error &&
+		!screeningResults &&
+		!message.id.includes("error") &&
+		getMessageContent(message).trim().length > 0;
+	const exportMessage = useCallback(
+		async (action: ControlAction): Promise<GeneratedContent> => {
+			if (action === "csv") {
+				throw new Error("CSV is not available for chat messages.");
+			}
+			const format = action satisfies ChatTranscriptFormat;
+			const exported = await chatMessageContent(
+				format,
+				message,
+				window.location.origin,
+			);
+			return { content: exported, ...CHAT_EXPORT_OUTPUT[format] };
+		},
 		[message],
 	);
 
@@ -208,8 +363,8 @@ function MessageComponent({
 							<Spinner />
 						</div>
 					</div>
-				) : message.role === "assistant" && getMessageContent(message).startsWith('{') ? (
-					<ScreeningResults results={JSON.parse(getMessageContent(message))} />
+				) : screeningResults ? (
+					<ScreeningResults results={screeningResults} />
 				) : (
 					<>
 						{message.role === "assistant" ? (
@@ -252,6 +407,15 @@ function MessageComponent({
 							>
 								{cleanAIResponse(getMessageContent(message))}
 							</AIMarkdown>
+						)}
+						{showMessageActions && (
+							<div className="mt-3 flex items-center gap-0.5">
+								<AIGeneratedContentControls
+									getContent={exportMessage}
+									downloadName="ai-response"
+									appearance="inline"
+								/>
+							</div>
 						)}
 						{message.role === "assistant" &&
 							getMessageContent(message).includes("/lib/") &&
@@ -480,6 +644,28 @@ export default function ChatModal({
 	};
 
 	const isWaiting = (isLoading || isMutating) && !error;
+	const exportTranscript = useCallback(
+		async (action: ControlAction): Promise<GeneratedContent> => {
+			if (action === "csv") {
+				throw new Error("CSV is not available for chat transcripts.");
+			}
+			const format = action satisfies ChatTranscriptFormat;
+			const content = await chatTranscriptContent(
+				format,
+				messages.slice(1),
+				{
+					title: t("askAI"),
+					user: tUI("genericUser"),
+					assistant: getAIModelPresentation(modelId).name,
+					reasoning: t("reasoning"),
+					smartScreening: tUI("smartScreening"),
+				},
+				window.location.origin,
+			);
+			return { content, ...CHAT_EXPORT_OUTPUT[format] };
+		},
+		[messages, modelId, t, tUI],
+	);
 
 	return (
 		<DialogModal
@@ -514,6 +700,12 @@ export default function ChatModal({
 							>
 								{tUI("resetChat")}
 							</Button>
+							<AIGeneratedContentControls
+								getContent={exportTranscript}
+								downloadName="chat-transcript"
+								isDisabled={!reponseExists || isWaiting}
+								appearance="header"
+							/>
 						</AIHeader>
 						<ModalBody className="p-0 w-full overflow-hidden">
 							<div

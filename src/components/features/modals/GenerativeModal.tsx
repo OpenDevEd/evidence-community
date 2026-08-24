@@ -29,7 +29,7 @@ import {
 	BsCodeSlash,
 	BsMarkdown,
 } from "react-icons/bs";
-import { AIControls } from "./AIControls";
+import { AIContentControls } from "./AIControls";
 import { twMerge } from "tailwind-merge";
 import useBreakpoint from "@/hooks/useBreakpoint";
 import { RiErrorWarningFill } from "react-icons/ri";
@@ -189,55 +189,9 @@ export default function GenerativeModal({
 											>
 												{t("history")}
 											</Button>
-											<AIControls
-												controls={[
-													{
-														label: t("copyAsPlainText"),
-														icon: <BsBodyText />,
-														action: "plaintext",
-													},
-													{
-														label: t("copyAsMarkdown"),
-														icon: <BsMarkdown />,
-														action: "markdown",
-													},
-													{
-														label: t("copyAsHTML"),
-														icon: <BsCodeSlash />,
-														action: "html",
-													},
-												]}
-												contentRef={contentRef}
+											<AIContentControls
 												content={contentToDisplay}
-												type="copy"
-												buttonLabel={t("copy")}
-												buttonIcon={<BiCopy />}
-											/>
-											<AIControls
 												contentRef={contentRef}
-												controls={[
-													{
-														label: t("exportAsPlainText"),
-														icon: <BsBodyText />,
-														action: "plaintext",
-													},
-													{
-														label: t("exportAsMarkdown"),
-														icon: <BsMarkdown />,
-														action: "markdown",
-													},
-													{
-														label: t("exportAsHTML"),
-														icon: <BsCodeSlash />,
-														action: "html",
-													}
-												]}
-												content={contentToDisplay}
-												type="download"
-												buttonLabel={t("export")}
-												buttonIcon={
-													<BiSolidBookContent />
-												}
 											/>
 											{selectedHistoryItem && (
 												<Tooltip
