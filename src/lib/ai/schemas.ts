@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { librarySearchContextSchema } from "@/lib/search-context";
+import { SMART_SCREENING_FIELD_TYPES } from "@/types/ai";
 import { isAIModelId, type AIModelId } from "./models";
 
 const aiModelIdSchema = z.custom<AIModelId>(isAIModelId, {
@@ -49,7 +50,7 @@ const smartScreeningFieldSchema = z
 	.object({
 		label: z.string().trim().min(1).max(120),
 		description: z.string().trim().min(1).max(1000),
-		type: z.enum(["string", "number", "boolean"]),
+		type: z.enum(SMART_SCREENING_FIELD_TYPES),
 	})
 	.strict();
 

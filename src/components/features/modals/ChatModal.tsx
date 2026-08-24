@@ -88,7 +88,7 @@ import { useIsAISearchEnabled } from "@/components/pages/EvidenceLibrary";
 import type { SmartScreeningField } from "@/types/ai";
 import useSWRMutation from "swr/mutation";
 import { cleanAIResponse, fetcher, setter } from "@/lib/utils";
-import { getRateLimits, runScreening } from "@/lib/actions";
+import { getRateLimits } from "@/lib/actions";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
 import Resource from "../items/Resource";
 import { GiStarSwirl } from "react-icons/gi";
@@ -283,6 +283,9 @@ function MessageComponent({
 	);
 }
 
+/** The contract screens at most twenty-five publications in one request. */
+const SCREENING_BATCH_LIMIT = 25;
+
 export type ChatMode = "research" | "quick";
 
 export default function ChatModal({
@@ -430,19 +433,29 @@ export default function ChatModal({
 	);
 
 	const handleScreening = async (content: string) => {
-		if (!modelId) return;
-		const keys = content.match(/lib\/(\w+)/g);
-		if (!keys) {
+		const keys = Array.from(
+			content.matchAll(/\/lib\/([A-Za-z0-9:_-]+)/g),
+			(match) => match[1],
+		);
+		if (!modelId || !keys.length || smartScreeningFields.length === 0) {
 			return;
 		}
-		const keysArray = keys.map((key) => key.replace("lib/", ""));
+		// One request screens at most twenty-five publications.
+		const keysArray = [...new Set(keys)].slice(0, SCREENING_BATCH_LIMIT);
 		setIsMutating(true);
 		try {
-			const result = await runScreening(
-				keysArray,
-				modelId,
-				smartScreeningFields,
-			);
+			const response = await fetch("/api/ai/screen", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					keys: keysArray,
+					modelId,
+					fields: smartScreeningFields,
+					distinctId: getAnalyticsDistinctId(),
+				}),
+			});
+			if (!response.ok) throw new Error(await response.text());
+			const result = await response.json();
 		if (Object.keys(result).length > 0) {
 			appendMessage(createTextMessage(
 				"assistant",

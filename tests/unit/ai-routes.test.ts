@@ -4,6 +4,8 @@ const mocks = vi.hoisted(() => ({
 	convertToModelMessages: vi.fn(async (messages) => messages),
 	createResearchAgent: vi.fn(),
 	generateObject: vi.fn(),
+	generateText: vi.fn(),
+	getCachedItemSmall: vi.fn(),
 	loadPublication: vi.fn(),
 	loadPublicationMetadata: vi.fn(),
 	provider: vi.fn(),
@@ -63,6 +65,7 @@ vi.mock("@/lib/ai-prompts", () => ({
 	getAISystemPrompt: vi.fn(() => "System prompt"),
 }));
 vi.mock("@/app/api/cache", () => ({
+	getCachedItemSmall: mocks.getCachedItemSmall,
 	getCachedItem: vi.fn(async () => ({
 		item: {
 			key: "ITEM0001",
@@ -89,12 +92,15 @@ vi.mock("@/app/api/cache", () => ({
 vi.mock("ai", () => ({
 	convertToModelMessages: mocks.convertToModelMessages,
 	generateObject: mocks.generateObject,
+	generateText: mocks.generateText,
+	Output: { object: vi.fn((options) => options) },
 	safeValidateUIMessages: mocks.validateMessages,
 	streamText: mocks.streamText,
 }));
 
 import { POST as chat } from "@/app/api/ai/chat/route";
 import { POST as questions } from "@/app/api/ai/questions/route";
+import { POST as screen } from "@/app/api/ai/screen/route";
 import { POST as publication } from "@/app/api/ai/route";
 
 function post(path: string, body: Record<string, unknown>) {
@@ -171,6 +177,26 @@ describe("AI routes", () => {
 				},
 			],
 			unavailable: [],
+		});
+		mocks.getCachedItemSmall.mockImplementation(async (key: string) => ({
+			item: {
+				key,
+				title: `Publication ${key}`,
+				abstractNote: `<p>About ${key}</p>`,
+			},
+		}));
+		mocks.generateText.mockResolvedValue({
+			output: {
+				results: [
+					{
+						key: "ITEM0001",
+						screeningFields: { field_0: "Kenya", field_1: true },
+					},
+				],
+			},
+			providerMetadata: {},
+			response: { headers: {} },
+			usage: { totalTokens: 30 },
 		});
 		mocks.loadPublicationMetadata.mockResolvedValue({
 			key: "ITEM0001",
@@ -285,6 +311,101 @@ describe("AI routes", () => {
 
 		expect(mocks.generateObject.mock.calls[0]?.[0].model).toEqual({
 			id: "openai/gpt-5.6-luna",
+		});
+	});
+
+	it("screens each publication against the reader's own questions", async () => {
+		const response = await screen(
+			post("/api/ai/screen", {
+				keys: ["ITEM0001", "ITEM0002"],
+				modelId: "openai/gpt-5.6-luna",
+				fields: [
+					{
+						label: "Country",
+						description: "Which country the study covers",
+						type: "string",
+					},
+					{
+						label: "Randomised",
+						description: "Whether the study was randomised",
+						type: "boolean",
+					},
+				],
+			}),
+		);
+
+		expect(response.status).toBe(200);
+		await expect(response.json()).resolves.toEqual({
+			ITEM0001: {
+				title: "Publication ITEM0001",
+				screeningFields: { Country: "Kenya", Randomised: true },
+			},
+			ITEM0002: {
+				title: "Publication ITEM0002",
+				screeningFields: { Country: null, Randomised: null },
+			},
+		});
+	});
+
+	it("sends only titles and abstracts to the model", async () => {
+		await screen(
+			post("/api/ai/screen", {
+				keys: ["ITEM0001"],
+				modelId: "openai/gpt-5.6-luna",
+				fields: [
+					{
+						label: "Country",
+						description: "Which country the study covers",
+						type: "string",
+					},
+				],
+			}),
+		);
+
+		const prompt = String(mocks.generateText.mock.calls[0]?.[0].prompt);
+		expect(prompt).toContain("About ITEM0001");
+		expect(prompt).not.toContain("fullTextPDF");
+	});
+
+	it("refuses to screen more than twenty-five publications at once", async () => {
+		const response = await screen(
+			post("/api/ai/screen", {
+				keys: Array.from({ length: 26 }, (_, index) => `KEY${index}`),
+				modelId: "openai/gpt-5.6-luna",
+				fields: [
+					{
+						label: "Country",
+						description: "Which country the study covers",
+						type: "string",
+					},
+				],
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(mocks.generateText).not.toHaveBeenCalled();
+	});
+
+	it("says when none of the publications exist", async () => {
+		mocks.getCachedItemSmall.mockResolvedValue({ item: null });
+
+		const response = await screen(
+			post("/api/ai/screen", {
+				keys: ["MISSING1"],
+				modelId: "openai/gpt-5.6-luna",
+				fields: [
+					{
+						label: "Country",
+						description: "Which country the study covers",
+						type: "string",
+					},
+				],
+			}),
+		);
+
+		expect(response.status).toBe(404);
+		await expect(response.json()).resolves.toMatchObject({
+			error: { code: "ITEM_NOT_FOUND" },
 		});
 	});
 

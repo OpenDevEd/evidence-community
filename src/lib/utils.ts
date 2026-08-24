@@ -159,10 +159,6 @@ export function getExtraValues(extraUnsplit: string) {
 	return finalMap;
 }
 
-export function generateRandomID(length: number = 12) {
-	return Math.random().toString(36).substring(2, 2 + length);
-}
-
 export function unescapeXML(safe: string) {
 	return safe
 		.replace(/&amp;/g, "&")
