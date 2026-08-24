@@ -1,16 +1,25 @@
 import type { ZodError, ZodIssue } from "zod";
 
-export type AdminErrorCode =
-	| "already_exists"
-	| "conflict"
-	| "confirmation_required"
-	| "forbidden"
-	| "internal_error"
-	| "invalid_reference"
-	| "not_found"
-	| "storage_unavailable"
-	| "unauthorized"
-	| "validation_failed";
+const adminErrorCodes = [
+	"already_exists",
+	"conflict",
+	"confirmation_required",
+	"forbidden",
+	"internal_error",
+	"invalid_reference",
+	"not_found",
+	"storage_unavailable",
+	"unauthorized",
+	"validation_failed",
+] as const;
+
+const adminErrorCodeSet: ReadonlySet<string> = new Set(adminErrorCodes);
+
+export type AdminErrorCode = (typeof adminErrorCodes)[number];
+
+export function isAdminErrorCode(value: unknown): value is AdminErrorCode {
+	return typeof value === "string" && adminErrorCodeSet.has(value);
+}
 
 export type AdminFieldErrors = Record<string, string>;
 
