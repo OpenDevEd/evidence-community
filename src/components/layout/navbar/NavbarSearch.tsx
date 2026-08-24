@@ -38,7 +38,15 @@ import {
 	normalizeRuntimeYearRange,
 	resolveRuntimeSearchScope,
 } from "@/config/library-config/search";
-import { abstractPlainText } from "@/lib/abstract-text";
+import {
+	PublicationHoverPreview,
+	PublicationStatusBadges,
+	hasBylineDetails,
+	hasPreviewDetails,
+	InstitutionLogo,
+	publicationPreviewData,
+	type PublicationPreviewData,
+} from "@/components/features/items/PublicationHoverPreview";
 
 // Lazily loaded so the heavy collections/filters graph stays out of the
 // always-present navbar bundle until the user opens Explore.
@@ -83,88 +91,91 @@ const scopeSelectClassNames = {
 	base: "!mt-0 w-full !max-w-none xl:!max-w-96 shrink-0",
 };
 
-function formatFullDate(
-	item: any,
-	formatter: ReturnType<typeof useFormatter>,
-): string {
-	const value = item?.datePublished || item?.date;
-	if (!value) return "";
-	const parsed = new Date(value);
-	if (isNaN(parsed.getTime())) {
-		return typeof value === "string" ? value : "";
-	}
-	return formatter.dateTime(parsed, {
-		year: "numeric",
-		month: "long",
-		day: "numeric",
-	});
-}
+type SuggestionLabels = {
+	comingSoon: string;
+	institutionAlt: (name: string) => string;
+	internal: string;
+};
 
-function toInitials(name: string): string {
-	if (!name) return "";
-	const initials = name
-		.split(" ")
-		.map((part) => part[0])
-		.filter(Boolean)
-		.join(". ");
-	return initials ? `${initials}.` : "";
-}
-
-// APA-style author byline, matching how the results card formats authors.
-function formatAuthors(item: any, etAl: string): string {
-	const creators = Array.isArray(item?.creators) ? item.creators : [];
-	if (!creators.length) return "";
-	const authorString = (author: any) =>
-		author?.name ||
-		[author?.lastName, toInitials(author?.firstName)]
-			.filter(Boolean)
-			.join(", ");
-	if (creators.length <= 2) {
-		return creators.map(authorString).filter(Boolean).join(" & ");
-	}
-	const first = creators.find((author: any) => author?.lastName || author?.name);
-	return first ? `${authorString(first)} ${etAl}` : "";
-}
-
-// Status badges (coming soon / internal), styled like the results card.
-function StatusBadges({
-	comingSoon,
-	internal,
-	comingSoonLabel,
-	internalLabel,
-	fullWidth = false,
+function SuggestionByline({
+	preview,
+	labels,
 }: {
-	comingSoon: boolean;
-	internal: boolean;
-	comingSoonLabel: string;
-	internalLabel: string;
-	fullWidth?: boolean;
+	preview: PublicationPreviewData;
+	labels: SuggestionLabels;
 }) {
-	if (!comingSoon && !internal) return null;
-	const widthClass = fullWidth ? "w-full text-center" : "shrink-0";
+	const { authors, institution, isComingSoon, isInternal } = preview;
+	if (!hasBylineDetails(preview)) return null;
+
 	return (
-		<>
-			{comingSoon && (
-				<span
-					className={twMerge(
-						"rounded-lg border border-accent bg-black/10 px-2 py-0.5 text-xs font-medium text-accent",
-						widthClass,
-					)}
-				>
-					{comingSoonLabel}
-				</span>
-			)}
-			{internal && (
-				<span
-					className={twMerge(
-						"rounded-lg border border-danger bg-black/10 px-2 py-0.5 text-xs font-medium text-danger",
-						widthClass,
-					)}
-				>
-					{internalLabel}
-				</span>
-			)}
-		</>
+		<span className="flex items-center gap-1.5 text-xs text-black/50 dark:text-white/50">
+			<InstitutionLogo
+				institution={institution}
+				institutionAlt={labels.institutionAlt}
+				className="size-4 shrink-0 rounded bg-white/80 object-contain p-0.5"
+			/>
+			{authors && <span className="min-w-0 truncate">{authors}</span>}
+			<PublicationStatusBadges
+				comingSoon={isComingSoon}
+				internal={isInternal}
+				comingSoonLabel={labels.comingSoon}
+				internalLabel={labels.internal}
+			/>
+		</span>
+	);
+}
+
+function suggestionRowClassName(isCurrent: boolean, isHighlighted: boolean) {
+	// A transparent left border on every row keeps alignment; the current item
+	// gets an accent bar and tint to mark "you are here".
+	return twMerge(
+		"flex cursor-pointer flex-col gap-0.5 border-l-2 border-l-transparent px-4 py-2 no-underline",
+		isCurrent && "border-l-accent bg-accent/5",
+		isHighlighted && "bg-accent/10",
+	);
+}
+
+function suggestionTitleClassName(isCurrent: boolean) {
+	return twMerge(
+		"line-clamp-1 text-sm font-medium text-black/80 dark:text-white/80",
+		isCurrent && "text-accent dark:text-accent",
+	);
+}
+
+function SuggestionRow({
+	href,
+	isCurrent,
+	isHighlighted,
+	onOpenChange,
+	onHighlight,
+	preview,
+	title,
+	labels,
+}: {
+	href: string;
+	isCurrent: boolean;
+	isHighlighted: boolean;
+	onOpenChange: (open: boolean) => void;
+	onHighlight: () => void;
+	preview: PublicationPreviewData;
+	title?: string;
+	labels: SuggestionLabels;
+}) {
+	return (
+		<Link
+			href={href}
+			onClick={() => onOpenChange(false)}
+			onMouseEnter={onHighlight}
+			role="option"
+			aria-selected={isHighlighted}
+			aria-current={isCurrent ? "true" : undefined}
+			className={suggestionRowClassName(isCurrent, isHighlighted)}
+		>
+			<span className={suggestionTitleClassName(isCurrent)}>
+				{title || "-"}
+			</span>
+			<SuggestionByline preview={preview} labels={labels} />
+		</Link>
 	);
 }
 
@@ -464,101 +475,42 @@ export default function NavbarSearch() {
 								</div>
 							) : (
 								results.map((item: any, index: number) => {
-									const abstract = abstractPlainText(item?.abstractNote);
-									const authors = formatAuthors(item, t("etAl"));
-									const configuredInstitution =
-										findInstitutionWithLogo(
-											configuredInstitutions,
-											item?.institution,
-										);
-									const fullDate = formatFullDate(item, formatter);
-									const isComingSoon = hasAnyTag(
-										item?.tags,
-										content.tags.comingSoon,
-									);
-									const isInternal = hasAnyTag(
-										item?.tags,
-										content.tags.internal,
-									);
+									const preview = publicationPreviewData(item, {
+										contentTags: content.tags,
+										etAl: t("etAl"),
+										formatter,
+										institutions: configuredInstitutions,
+									});
 									const isCurrent =
 										!!currentItemKey &&
 										item.key === currentItemKey;
 									const row = (
-										<Link
+										<SuggestionRow
 											key={item.key}
 											href={
 												`/lib/${item.key}` +
-												serializeSearchParams(buildTargetParams())
+												serializeSearchParams(
+													buildTargetParams(),
+												)
 											}
-											onClick={() => setIsOpen(false)}
-											onMouseEnter={() => setHighlight(index)}
-											role="option"
-											aria-selected={highlight === index}
-											aria-current={
-												isCurrent ? "true" : undefined
-											}
-											className={twMerge(
-												// transparent left border on every row keeps
-												// alignment consistent; the current item gets
-												// an accent bar + tint to mark "you are here".
-												"flex cursor-pointer flex-col gap-0.5 border-l-2 border-l-transparent px-4 py-2 no-underline",
-												isCurrent &&
-													"border-l-accent bg-accent/5",
-												highlight === index &&
-													"bg-accent/10",
-											)}
-										>
-											<span
-												className={twMerge(
-													"line-clamp-1 text-sm font-medium text-black/80 dark:text-white/80",
-													isCurrent &&
-														"text-accent dark:text-accent",
-												)}
-											>
-												{item.title || "-"}
-											</span>
-											{(configuredInstitution ||
-												authors ||
-												isComingSoon ||
-												isInternal) && (
-												<span className="flex items-center gap-1.5 text-xs text-black/50 dark:text-white/50">
-													{configuredInstitution?.logoUrl && (
-														<RuntimeAsset
-															reference={
-																configuredInstitution.logoUrl
-															}
-															alt={t("institutionLogoAlt", {
-																name: configuredInstitution.name,
-															})}
-															className="size-4 shrink-0 rounded bg-white/80 object-contain p-0.5"
-														/>
-													)}
-													{authors && (
-														<span className="min-w-0 truncate">
-															{authors}
-														</span>
-													)}
-													<StatusBadges
-														comingSoon={isComingSoon}
-														internal={isInternal}
-														comingSoonLabel={t("inProgress")}
-														internalLabel={t("internal")}
-													/>
-												</span>
-											)}
-										</Link>
+											isCurrent={isCurrent}
+											isHighlighted={highlight === index}
+											onOpenChange={setIsOpen}
+											onHighlight={() => setHighlight(index)}
+											preview={preview}
+											title={item.title}
+											labels={{
+												comingSoon: t("inProgress"),
+												institutionAlt: (name) =>
+													t("institutionLogoAlt", { name }),
+												internal: t("internal"),
+											}}
+										/>
 									);
 
-									// Show the preview whenever there's anything to show; the
-									// abstract section falls back to a faded placeholder.
-									if (
-										!abstract &&
-										!authors &&
-										!fullDate &&
-										!isComingSoon &&
-										!isInternal
-									)
-										return row;
+									// Show the preview whenever there is anything to
+									// show; the abstract falls back to a placeholder.
+									if (!hasPreviewDetails(preview)) return row;
 
 									return (
 										<Tooltip
@@ -568,82 +520,15 @@ export default function NavbarSearch() {
 											closeDelay={0}
 											className="max-w-sm rounded-2xl border border-black/5 bg-card_light dark:border-white/10 dark:bg-card"
 											content={
-												<div className="flex max-w-sm flex-col gap-1.5 px-1 py-1">
-													<div
-														className="line-clamp-3 text-sm font-medium text-black/80 dark:text-white/80"
-														dangerouslySetInnerHTML={{
-															__html: item.title ?? "",
-														}}
-													/>
-													{(authors ||
-														configuredInstitution ||
-														fullDate ||
-														isComingSoon ||
-														isInternal) && (
-														<div className="flex flex-col gap-1.5 text-xs">
-															{(configuredInstitution ||
-																authors ||
-																fullDate) && (
-																<div className="flex items-center gap-1.5">
-																	{configuredInstitution?.logoUrl && (
-																		<RuntimeAsset
-																			reference={
-																				configuredInstitution.logoUrl
-																			}
-																			alt={t(
-																				"institutionLogoAlt",
-																				{
-																					name: configuredInstitution.name,
-																				},
-																			)}
-																			className="size-6 shrink-0 rounded-md bg-white/80 object-contain p-0.5"
-																		/>
-																	)}
-																	{authors && (
-																		<span className="min-w-0 truncate font-medium text-black/70 dark:text-white/70">
-																			{authors}
-																		</span>
-																	)}
-																	{authors && fullDate && (
-																		<span className="text-black/25 dark:text-white/25">
-																			·
-																		</span>
-																	)}
-																	{fullDate && (
-																		<span className="shrink-0 text-black/40 dark:text-white/40">
-																			{fullDate}
-																		</span>
-																	)}
-																</div>
-															)}
-															{(isComingSoon ||
-																isInternal) && (
-																<div className="flex flex-col gap-1.5">
-																	<StatusBadges
-																		comingSoon={isComingSoon}
-																		internal={isInternal}
-																		comingSoonLabel={t(
-																			"inProgress",
-																		)}
-																		internalLabel={t(
-																			"internal",
-																		)}
-																		fullWidth
-																	/>
-																</div>
-															)}
-														</div>
-													)}
-													{abstract ? (
-														<p className="line-clamp-3 text-xs leading-relaxed text-black/55 dark:text-white/55">
-															{abstract}
-														</p>
-													) : (
-														<p className="text-xs italic text-black/35 dark:text-white/35">
-															{t("noAbstract")}
-														</p>
-													)}
-												</div>
+												<PublicationHoverPreview
+													preview={preview}
+													comingSoonLabel={t("inProgress")}
+													institutionAlt={(name) =>
+														t("institutionLogoAlt", { name })
+													}
+													internalLabel={t("internal")}
+													noAbstractLabel={t("noAbstract")}
+												/>
 											}
 										>
 											{row}

@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useFormatter, useTranslations } from "next-intl";
 import { forwardRef, type ComponentProps, type ReactNode } from "react";
 import { BiBookOpen } from "react-icons/bi";
 import { LuDownload, LuExternalLink } from "react-icons/lu";
@@ -17,7 +17,12 @@ import {
 	InlineCitationSource,
 } from "@/components/ai-elements/InlineCitation";
 import CopyButton from "@/components/features/items/CopyButton";
+import {
+	PublicationHoverPreview,
+	publicationPreviewData,
+} from "@/components/features/items/PublicationHoverPreview";
 import { Skeleton } from "@/components/nextui/Skeleton";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { abstractPlainText } from "@/lib/abstract-text";
 import { isVisiblePdfAttachment } from "@/lib/attachment-visibility";
 import { downloadFile } from "@/lib/download";
@@ -362,6 +367,98 @@ function PublicationStrip({
 				</span>
 			</Link>
 		</div>
+	);
+}
+
+function PublicationLinkPreview({
+	itemKey,
+	href,
+}: {
+	itemKey: string;
+	href: string;
+}) {
+	const t = useTranslations("ui");
+	const formatter = useFormatter();
+	const { content, identity, institutions } = useLibraryConfig();
+	const { data, isLoading } = useSWR<ItemGetResponse>(
+		`/item/${itemKey}`,
+		fetcher,
+		{ revalidateOnFocus: false },
+	);
+
+	if (isLoading) {
+		return (
+			<div className="flex w-full flex-col gap-2 p-3">
+				<Skeleton className="h-4 w-4/5 rounded-lg" />
+				<Skeleton className="h-3 w-3/5 rounded-lg" />
+				<Skeleton className="h-12 w-full rounded-xl" />
+			</div>
+		);
+	}
+
+	if (!data?.item) return null;
+
+	return (
+		<div className="p-3">
+			<div className="mb-2 flex items-center justify-between gap-3 border-b border-black/[0.06] pb-2 dark:border-white/[0.08]">
+				<span className="flex min-w-0 items-center gap-1.5 text-xs font-medium text-black/45 dark:text-white/45">
+					<SiteFavicon className="size-3.5 rounded-favicon" />
+					<span className="truncate">{identity.name}</span>
+				</span>
+				<CitationCopyLink href={href} />
+			</div>
+			<PublicationHoverPreview
+				preview={publicationPreviewData(data.item, {
+					contentTags: content.tags,
+					etAl: t("etAl"),
+					formatter,
+					institutions,
+				})}
+				comingSoonLabel={t("inProgress")}
+				institutionAlt={(name) => t("institutionLogoAlt", { name })}
+				internalLabel={t("internal")}
+				noAbstractLabel={t("noAbstract")}
+			/>
+		</div>
+	);
+}
+
+/**
+ * A link the assistant wrote to a publication in this library: marked with
+ * the library's own icon, and previewed on hover.
+ */
+export function PublicationLink({
+	href,
+	itemKey,
+	children,
+}: {
+	href: string;
+	itemKey: string;
+	children: ReactNode;
+}) {
+	return (
+		<InlineCitation className="inline align-baseline">
+			<InlineCitationCard>
+				<InlineCitationCardTrigger>
+					<Link
+						href={href}
+						target="_blank"
+						rel="noopener noreferrer"
+						className="group/library-link -mx-0.5 rounded-md px-0.5 py-px font-medium text-accent no-underline decoration-accent/35 decoration-1 underline-offset-2 box-decoration-clone transition-colors duration-200 ease-out hover:bg-accent/[0.09] hover:text-accent-600 hover:decoration-accent focus-visible:bg-accent/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/25 motion-reduce:transition-none dark:hover:bg-accent/[0.12] dark:hover:text-accent-300"
+					>
+						<SiteFavicon className="me-1 size-3.5 rounded-favicon align-middle opacity-75 ring-1 ring-black/[0.06] transition-opacity duration-200 ease-out group-hover/library-link:opacity-100 dark:ring-white/10" />
+						<span className="underline decoration-inherit">
+							{children}
+						</span>
+					</Link>
+				</InlineCitationCardTrigger>
+				<InlineCitationCardBody className="w-96 max-w-[calc(100vw-1.5rem)]">
+					<InlineCitationSource>
+						<PublicationLinkPreview itemKey={itemKey} href={href} />
+					</InlineCitationSource>
+				</InlineCitationCardBody>
+			</InlineCitationCard>
+		</InlineCitation>
 	);
 }
 

@@ -12,7 +12,10 @@ import Resource from "../items/Resource";
 import React from "react";
 import { Card } from "@/components/nextui/Card";
 import { parsePageCitation } from "@/lib/ai/citations";
-import { PageCitation } from "@/components/features/markdown/Citation";
+import {
+	PageCitation,
+	PublicationLink,
+} from "@/components/features/markdown/Citation";
 
 function createRehypeWrapper(pattern: RegExp, className: string) {
 	return () => (tree: Node) => {
@@ -85,6 +88,14 @@ export const rehypeResourceWrapper = createRehypeWrapperForTag(
 	"ResourceWrapper"
 );
 
+const publicationHrefPattern = /^\/lib\/([^/?#]+)\/?(?:[?#].*)?$/;
+
+function publicationKey(href: unknown) {
+	return typeof href === "string"
+		? href.match(publicationHrefPattern)?.[1]
+		: undefined;
+}
+
 function PageCitationSpan({ children }: { children: ReactNode }) {
 	const { page, href } = parsePageCitation(String(children ?? ""));
 	return <PageCitation href={href} page={page} />;
@@ -147,10 +158,17 @@ export function AIMarkdown({
 					) : (
 						<span>{children}</span>
 					),
-				// A titled link to a publication stays a link. Only the
-				// explicit RESOURCE token becomes a full card.
+				// A titled link to a publication stays a link, marked as this
+				// library's own. Only the RESOURCE token becomes a full card.
 				a: ({ href, children }) =>
-					href?.startsWith("/") ? (
+					publicationKey(href) ? (
+						<PublicationLink
+							href={href as string}
+							itemKey={publicationKey(href) as string}
+						>
+							{children}
+						</PublicationLink>
+					) : href?.startsWith("/") ? (
 						<Link href={href} className="text-link underline">
 							{children}
 						</Link>
