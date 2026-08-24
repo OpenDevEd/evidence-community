@@ -666,7 +666,11 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 	expect(replay.headers()["set-cookie"]).toBeUndefined();
 	expect(new URL(replayLocation).pathname).toBe("/admin/access-error");
 	await page.goto(replayLocation);
-	await expect(page.getByRole("alert")).toBeVisible();
+	await expect(
+		page.getByRole("alert").filter({
+			hasText: /admin link is invalid, expired, or has already been used/iu,
+		}),
+	).toBeVisible();
 	await expect(
 		page.getByRole("link", { name: "Back to OpenScholar" }),
 	).toHaveAttribute(
