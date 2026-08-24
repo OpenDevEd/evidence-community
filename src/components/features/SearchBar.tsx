@@ -61,7 +61,10 @@ export function SearchBar({
 		sourceSearch: search,
 		value: search,
 	});
-	const [debouncedSearch] = useDebounce(handleSearchChange, 300);
+	const [debouncedSearch, , cancelSearch] = useDebounce(
+		handleSearchChange,
+		300,
+	);
 	const t = useTranslations("ui");
 	const localValue =
 		draft.sourceSearch === search || draft.value === search
@@ -76,11 +79,12 @@ export function SearchBar({
 	}
 
 	const clear = useCallback(() => {
+		// Drop the search that was still waiting to run: letting it through
+		// would change the page address a second time, moments later.
+		cancelSearch();
 		setDraft({ sourceSearch: search, value: "" });
-		// Replaces whatever search was still waiting to run.
-		debouncedSearch("");
 		handleSearchChange("");
-	}, [debouncedSearch, handleSearchChange, search]);
+	}, [cancelSearch, handleSearchChange, search]);
 
 	return (
 		<Input
