@@ -26,6 +26,7 @@ import {
 import { getOrderedRuntimeLocales } from "../src/i18n/runtime";
 import { localesNames, shortLocalesNames } from "../src/i18n/routing";
 import { replaceFileAtomically } from "../src/lib/atomic-file";
+import { requireLibraryComposeServiceReadiness } from "../src/lib/deployment/library-compose-contract";
 import {
 	createAdminTestSession,
 	type AdminTestSession,
@@ -340,11 +341,14 @@ function libraryComposeArguments(project: string, ...args: string[]) {
 	];
 }
 
-function requireRunningProcess(processes: ComposeProcess[], service: string) {
-	const matches = processes.filter((process) => process.Service === service);
-	assert.equal(matches.length, 1, `${service} must have one container`);
-	assert.equal(matches[0].State, "running", `${service} must be running`);
-	return matches[0];
+function requireRepositoryComposeServicesReady(processes: ComposeProcess[]) {
+	requireLibraryComposeServiceReadiness(
+		processes.map((process) => ({
+			health: process.Health || null,
+			service: process.Service,
+			state: process.State,
+		})),
+	);
 }
 
 async function requireHttpSuccess(url: string, description: string) {
@@ -403,20 +407,7 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 			.trim()
 			.split("\n")
 			.map((line) => JSON.parse(line) as ComposeProcess);
-		for (const service of [
-			"web",
-			"search-indexer",
-			"publication-worker",
-			"meilisearch",
-		] as const) {
-			assert.equal(
-				requireRunningProcess(processes, service).Health,
-				"healthy",
-				`${service} must be healthy`,
-			);
-		}
-		requireRunningProcess(processes, "source-sync");
-		requireRunningProcess(processes, "source-writeback");
+		requireRepositoryComposeServicesReady(processes);
 
 		const baseUrl = `http://127.0.0.1:${libraryComposePort}`;
 		const healthResponse = await requireHttpSuccess(

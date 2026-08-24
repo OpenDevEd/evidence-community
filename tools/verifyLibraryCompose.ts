@@ -2,6 +2,8 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { LIBRARY_COMPOSE_SERVICES } from "../src/lib/deployment/library-compose-contract";
+
 type ComposeService = {
 	command?: string[];
 	configs?: Array<{ source: string; target: string }>;
@@ -66,14 +68,7 @@ function main() {
 	const serviceNames = Object.keys(services).sort();
 	requireCondition(
 		JSON.stringify(serviceNames) ===
-			JSON.stringify([
-				"meilisearch",
-				"publication-worker",
-				"search-indexer",
-				"source-sync",
-				"source-writeback",
-				"web",
-			]),
+			JSON.stringify([...LIBRARY_COMPOSE_SERVICES].sort()),
 		`Unexpected services: ${serviceNames.join(", ")}`,
 	);
 
@@ -133,13 +128,9 @@ function main() {
 		"Search indexer needs a one-hour first-rebuild health window",
 	);
 
-	for (const name of [
-		"web",
-		"search-indexer",
-		"source-sync",
-		"source-writeback",
-		"publication-worker",
-	]) {
+	for (const name of LIBRARY_COMPOSE_SERVICES.filter(
+		(name) => name !== "meilisearch",
+	)) {
 		const service = services[name];
 		requireCondition(service, `${name} service is missing`);
 		requireCondition(
