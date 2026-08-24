@@ -108,6 +108,65 @@ function ProviderLinks({ provider }: { provider: AdminPublicationProviderView })
 	);
 }
 
+/** The issues holding a provider up, beyond the first one shown above. */
+function ProviderBlockers({ blockers }: { blockers: readonly string[] }) {
+	if (blockers.length < 2) return null;
+
+	return (
+		<details className="mt-2 text-xs text-danger">
+			<summary className="cursor-pointer font-medium">Show all issues</summary>
+			<ul className="mt-1.5 space-y-1 pl-4">
+				{blockers.slice(1).map((blocker) => <li key={blocker}>{blocker}</li>)}
+			</ul>
+		</details>
+	);
+}
+
+/** What the editor can do about this provider right now. */
+function ProviderActions({
+	busy,
+	onActivate,
+	onOpenAttachments,
+	onRetry,
+	provider,
+}: {
+	busy: boolean;
+	onActivate: () => void;
+	onOpenAttachments: () => void;
+	onRetry: () => void;
+	provider: AdminPublicationProviderView;
+}) {
+	return (
+		<div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+			{provider.capabilities.canActivate ? (
+				<Button color="accent" isDisabled={busy} onPress={onActivate} size="xs" variant="solid">
+					{provider.capabilities.actionLabel}
+				</Button>
+			) : null}
+			{provider.capabilities.canRetry ? (
+				<Button isDisabled={busy} onPress={onRetry} size="xs" startContent={<RefreshCw aria-hidden size={13} />} variant="transparent">
+					Retry now
+				</Button>
+			) : null}
+			{provider.waitingOn === "file" ? (
+				<Button onPress={onOpenAttachments} size="xs" startContent={<FileText aria-hidden size={13} />} variant="transparent">
+					Open attachments
+				</Button>
+			) : null}
+			{provider.waitingOn === "crossref" ? (
+				<Button onPress={() => focusSection("admin-doi-publishing")} size="xs" variant="transparent">
+					Open Crossref status
+				</Button>
+			) : null}
+			{provider.exact.identifierPolicy ? (
+				<span className="text-[11px] text-black/40 dark:text-white/40">
+					{provider.exact.identifierPolicy === "reuse-crossref" ? "Uses the Crossref DOI" : "Uses Zenodo DOIs"}
+				</span>
+			) : null}
+		</div>
+	);
+}
+
 function ProviderRow({
 	busy,
 	onActivate,
@@ -146,41 +205,14 @@ function ProviderRow({
 					</div>
 					<p className="mt-2 text-xs leading-5 text-black/55 dark:text-white/55">{provider.status.description}</p>
 					<ProviderLinks provider={provider} />
-					{provider.blockers.length > 1 ? (
-						<details className="mt-2 text-xs text-danger">
-							<summary className="cursor-pointer font-medium">Show all issues</summary>
-							<ul className="mt-1.5 space-y-1 pl-4">
-								{provider.blockers.slice(1).map((blocker) => <li key={blocker}>{blocker}</li>)}
-							</ul>
-						</details>
-					) : null}
-					<div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-						{provider.capabilities.canActivate ? (
-							<Button color="accent" isDisabled={busy} onPress={onActivate} size="xs" variant="solid">
-								{provider.capabilities.actionLabel}
-							</Button>
-						) : null}
-						{provider.capabilities.canRetry ? (
-							<Button isDisabled={busy} onPress={onRetry} size="xs" startContent={<RefreshCw aria-hidden size={13} />} variant="transparent">
-								Retry now
-							</Button>
-						) : null}
-						{provider.waitingOn === "file" ? (
-							<Button onPress={onOpenAttachments} size="xs" startContent={<FileText aria-hidden size={13} />} variant="transparent">
-								Open attachments
-							</Button>
-						) : null}
-						{provider.waitingOn === "crossref" ? (
-							<Button onPress={() => focusSection("admin-doi-publishing")} size="xs" variant="transparent">
-								Open Crossref status
-							</Button>
-						) : null}
-						{provider.exact.identifierPolicy ? (
-							<span className="text-[11px] text-black/40 dark:text-white/40">
-								{provider.exact.identifierPolicy === "reuse-crossref" ? "Uses the Crossref DOI" : "Uses Zenodo DOIs"}
-							</span>
-						) : null}
-					</div>
+					<ProviderBlockers blockers={provider.blockers} />
+					<ProviderActions
+						busy={busy}
+						onActivate={onActivate}
+						onOpenAttachments={onOpenAttachments}
+						onRetry={onRetry}
+						provider={provider}
+					/>
 				</div>
 			</div>
 		</div>

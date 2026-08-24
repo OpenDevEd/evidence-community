@@ -114,6 +114,9 @@ const config: Config = {
 			},
 			maxWidth: {
 				chat: "96rem",
+				// The workbench row: the record's own controls.
+				"workbench-control": "120px",
+				"workbench-field": "520px",
 				// A long filter name is cut short so the row still fits.
 				"filter-chip": "16rem",
 				"results-note": "16rem",
@@ -134,6 +137,19 @@ const config: Config = {
 			minHeight: {
 				"chat-column": "28rem",
 			},
+			minWidth: {
+				"workbench-field": "260px",
+			},
+			width: {
+				"workbench-control": "120px",
+				"workbench-list": "150px",
+			},
+			gridTemplateColumns: {
+				// The workbench row: what changed, then its two controls.
+				"workbench-row": "minmax(0,1fr) auto auto",
+				// The workbench itself: records, the record, its details.
+				workbench: "240px minmax(0,1fr) 360px",
+			},
 			backgroundSize: {
 				shimmer: "200% 100%",
 			},
@@ -141,6 +157,9 @@ const config: Config = {
 				// The navbar suggestion list must not cover the whole screen.
 				suggestions: "70vh",
 				"results-note": "32rem",
+				// A long list inside the workbench scrolls rather than
+				// pushing everything below it off the screen.
+				"workbench-menu": "52vh",
 				// The filter chips grow to fit, up to most of the screen.
 				"filter-chips": "32rem",
 			},

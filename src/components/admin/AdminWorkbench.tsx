@@ -1976,17 +1976,17 @@ export default function AdminWorkbench({
 		<main className="fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
 			<h1 className="sr-only">Library administration</h1>
 			<header
-				className="grid min-h-28 shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-3 sm:flex sm:min-h-16 xl:relative"
+				className="grid min-h-28 shrink-0 grid-cols-workbench-row items-center gap-2 px-3 py-3 sm:flex sm:min-h-16 xl:relative"
 				data-admin-region="toolbar"
 			>
 				<Link
 					aria-label="Open library"
-					className="col-start-1 row-start-1 flex h-10 min-w-0 max-w-[120px] items-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:mr-1 sm:w-[120px] sm:shrink-0 xl:absolute xl:left-1/2 xl:mr-0 xl:w-[150px] xl:max-w-none xl:-translate-x-1/2"
+					className="col-start-1 row-start-1 flex h-10 min-w-0 max-w-workbench-control items-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:mr-1 sm:w-workbench-control sm:shrink-0 xl:absolute xl:left-1/2 xl:mr-0 xl:w-workbench-list xl:max-w-none xl:-translate-x-1/2"
 					href={homeHref}
 				>
 					<LibraryLogoImages className="max-h-7 max-w-full object-contain" />
 				</Link>
-				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:min-w-[260px] sm:max-w-[520px] sm:flex-1">
+				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:min-w-workbench-field sm:max-w-workbench-field sm:flex-1">
 					<Input
 						aria-label="Search records"
 						className="min-w-0 flex-1"
@@ -2155,7 +2155,7 @@ export default function AdminWorkbench({
 										onValueChange={setNewItemSearch}
 									/>
 								</div>
-								<div className="flex max-h-[52vh] flex-col gap-1 overflow-y-auto p-1">
+								<div className="flex max-h-workbench-menu flex-col gap-1 overflow-y-auto p-1">
 									{filteredDefinitions.map((definition) => (
 										<button
 											key={definition.itemType}
@@ -2189,7 +2189,7 @@ export default function AdminWorkbench({
 					assignRecordsToCollection(itemKeys, collectionKey)
 				}
 			>
-				<div className="grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3 xl:grid-cols-[240px_minmax(0,1fr)_360px]">
+				<div className="grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3 xl:grid-cols-workbench">
 					<aside
 						id="admin-navigation-pane"
 						aria-label="Filters and collections"
