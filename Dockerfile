@@ -87,6 +87,17 @@ RUN npm --prefix packages/evidence-library-core run build
 
 ENTRYPOINT ["evidence-library-entrypoint"]
 
+FROM worker-base AS database-provisioner
+
+ENV PORT=3000
+
+EXPOSE 3000
+
+HEALTHCHECK --interval=15s --timeout=5s --start-period=10s --retries=3 \
+	CMD ["node", "-e", "fetch(`http://127.0.0.1:${process.env.PORT ?? 3000}/health`).then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+
+CMD ["node_modules/.bin/tsx", "tools/runLibraryDatabaseProvisioner.ts"]
+
 FROM worker-base AS search-indexer
 
 ENV SEARCH_INDEX_WORKER_ID=search-indexer
