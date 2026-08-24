@@ -11,6 +11,7 @@ JSON document.
 | Deployment      | Use `docker/compose.library.yaml` so the web app, workers, and private Meilisearch use one repository-owned release                     |
 | Image           | Build the repository `Dockerfile`; do not pass customer build arguments                                                                 |
 | Configuration   | Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document; Compose mounts it at `LIBRARY_CONFIG_PATH`                        |
+| Release         | Set Coolify's `SOURCE_COMMIT` value on every service through the checked-in release label                                                |
 | Process         | Each image prepares config access as root, then runs as UID/GID `1001`                                                                  |
 | Network         | Expose `PORT`, default `3000`, through the deployment proxy                                                                             |
 | Client identity | The deployment proxy must overwrite `X-Real-IP`; never expose the application origin directly                                           |
@@ -40,9 +41,70 @@ context on the repository Dockerfile and source tree:
 ```bash
 MEILISEARCH_MASTER_KEY="$(jq -r .services.search.key config/library.example.json)" \
 LIBRARY_CONFIG_JSON="$(jq -c '.services.search.host = "http://meilisearch:7700"' config/library.example.json)" \
+SOURCE_COMMIT="$(git rev-parse HEAD)" \
   docker compose --project-directory . \
   -f docker/compose.library.yaml config
 ```
+
+Every service gets the label
+`org.opendeved.evidence-library.release=$SOURCE_COMMIT`. Keep **Include Source
+Commit in Build** off. Coolify 4.3.10 already exports `SOURCE_COMMIT` to the
+Compose deployment with this setting off, so the release label still resolves.
+Turning the setting on also sends the commit into Docker builds and invalidates
+the build cache on every commit. Use Coolify's built-in value. Do not create
+another release variable.
+
+## Run the library runtime verifier
+
+Deploy one runtime verifier for the development server from
+`docker/compose.runtime-verifier.yaml`. It has two services:
+
+- `runtime-verifier` is the only service on the external `coolify` network and
+  the only service that receives a public HTTPS domain.
+- `docker-socket-proxy` mounts the host Docker socket and stays on an internal
+  network. The pinned Tecnativa proxy allows container reads and blocks POST,
+  events, ping, version, and every other Docker API section.
+
+The verifier container never mounts `/var/run/docker.sock`. It calls the proxy
+at `http://docker-socket-proxy:2375`. Set one Coolify environment value:
+
+| Variable | Value |
+| --- | --- |
+| `EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN` | Bearer token containing 32 to 1024 bytes |
+
+`PORT` defaults to `3000` and the Compose file sets the internal Docker proxy
+URL. Assign the public HTTPS domain to `runtime-verifier:3000`. Do not assign a
+domain or host port to `docker-socket-proxy`.
+
+The executable is also available as a package command:
+
+```bash
+EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN='<32-byte-or-longer token>' \
+EVIDENCE_LIBRARY_RUNTIME_VERIFIER_DOCKER_URL='http://127.0.0.1:2375' \
+  npm run runtime:verifier
+```
+
+The verifier accepts one request:
+
+```http
+POST /v1/library-runtime/readiness
+Authorization: Bearer <EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN>
+Content-Type: application/json
+
+{"applicationUuid":"<24-character Coolify application UUID>","commit":"<40-character Git commit>"}
+```
+
+It asks Docker for containers whose `com.docker.compose.project` label exactly
+matches the requested application UUID. It checks the Coolify and project
+labels before inspecting a container, then checks them again in the inspect
+response. It returns ready only when the six expected services are running,
+the services with health checks are healthy, every release label matches the
+requested commit, and Meilisearch has no published host port.
+
+Docker calls time out after two seconds. Each response is capped at 512 KiB,
+and one application can return at most 24 containers. Bad Docker data and proxy
+errors return the fixed `runtime_inspection_failed` response. Docker error text
+never reaches the caller.
 
 ## Create a library database
 
@@ -444,6 +506,7 @@ Run the complete local contract before deploying the shared image:
 
 ```bash
 npm run check:changed
+SOURCE_COMMIT="$(git rev-parse HEAD)" npm run test:library-compose
 npm run test:acceptance
 ```
 
