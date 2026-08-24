@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { connection, NextRequest, NextResponse } from "next/server";
 
 import {
 	adminSessionCookieName,
@@ -19,6 +19,8 @@ function adminRedirect(request: NextRequest, path = "/admin") {
 }
 
 export async function GET(request: NextRequest) {
+	await connection();
+
 	const config = await getAdminAccessConfig();
 	const codes = request.nextUrl.searchParams.getAll("code");
 	if (codes.length !== 1) {

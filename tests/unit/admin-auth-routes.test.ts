@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("server-only", () => ({}));
+vi.mock("next/server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("next/server")>()),
+	connection: vi.fn(),
+}));
 
 const libraryId = "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5";
 const machineCredential = `els_${"a".repeat(43)}`;
