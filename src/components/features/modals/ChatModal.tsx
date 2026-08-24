@@ -1,15 +1,13 @@
 "use client";
 
-import { ModalBody, ModalContent, Spinner } from "@nextui-org/react";
+import { ModalBody, ModalContent } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import React, { useMemo } from "react";
+import React from "react";
 import { IoChevronDown } from "react-icons/io5";
-import { LuCheck, LuHash, LuType, LuUser, LuX } from "react-icons/lu";
 import { PiXBold } from "react-icons/pi";
 import { RiResetLeftFill } from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
-import { isReasoningUIPart, isTextUIPart, isToolUIPart } from "ai";
 
 import { PoweredByOpenScholar } from "@/components/features/ai/PoweredByOpenScholar";
 import { SmartScreeningModal } from "@/components/features/ai/SmartScreeningModal";
@@ -17,354 +15,27 @@ import { Logo } from "@/components/layout/navbar/Logo";
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Textarea } from "@/components/nextui/Textarea";
-import { getAIModelPresentation } from "@/constants/ai";
 import type { ItemGetResponse } from "@/app/api/item/types";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
 import { createTextMessage } from "@/lib/ai/chat-messages";
-import { uiMessageText } from "@/lib/ai/client";
 import type { AIModelId } from "@/lib/ai/models";
-import {
-	isScreeningResultsData,
-	screeningExportContent,
-	type ScreeningResultsData,
-} from "@/lib/ai/screening-export";
 import type { LibrarySearchContext } from "@/lib/search-context";
-import type { ChatMode } from "@/types/ai";
-import { ChatComposerControls, ChatComposerShell } from "../ai/ChatComposerControls";
+import {
+	ChatComposerControls,
+	ChatComposerShell,
+} from "../ai/ChatComposerControls";
 import { ChatErrorCard } from "../ai/chat-shared";
-import { useChatFailure, useMessageExport } from "../ai/useChatActions";
-import { ToolActivity } from "../ai/ToolActivity";
+import { useChatFailure } from "../ai/useChatActions";
+import { MessageComponent } from "../ai/ChatMessage";
 import { useChatWindow } from "../ai/useChatWindow";
-import Resource from "../items/Resource";
-import { AIMarkdown } from "../markdown/Markdown";
 import {
 	AIGeneratedContentControls,
-	AIStructuredContentControls,
 	type ControlAction,
 	type GeneratedContent,
 } from "./AIControls";
 
 type ChatWindowState = ReturnType<typeof useChatWindow>;
 type Message = ResearchUIMessage;
-type VisibleMessagePart = {
-	key: string;
-	part: Message["parts"][number];
-};
-
-function parseScreeningResults(messageId: string, content: string) {
-	if (!messageId.startsWith("screening-")) return null;
-	try {
-		const parsed: unknown = JSON.parse(content);
-		return isScreeningResultsData(parsed) ? parsed : null;
-	} catch {
-		return null;
-	}
-}
-
-function visibleMessageParts(message: Message): VisibleMessagePart[] {
-	let reasoningCount = 0;
-	let textCount = 0;
-
-	return message.parts.reduce<VisibleMessagePart[]>((parts, part) => {
-		if (isReasoningUIPart(part) && part.text.trim()) {
-			reasoningCount += 1;
-			parts.push({ key: `reasoning-${reasoningCount}`, part });
-		}
-
-		if (isToolUIPart(part)) {
-			parts.push({ key: `tool-${part.toolCallId}`, part });
-		}
-
-		if (isTextUIPart(part) && part.text.trim()) {
-			textCount += 1;
-			parts.push({ key: `text-${textCount}`, part });
-		}
-
-		return parts;
-	}, []);
-}
-
-function ScreeningResults({ results }: { results: ScreeningResultsData }) {
-	const tUI = useTranslations("ui");
-	const resultEntries = Object.entries(results.result);
-	const formats = useMemo(() => {
-		const generated = screeningExportContent(
-			results,
-			typeof window === "undefined" ? undefined : window.location.origin,
-		);
-		return {
-			plaintext: {
-				content: generated.plaintext,
-				extension: "txt",
-				mimeType: "text/plain;charset=utf-8",
-			},
-			markdown: {
-				content: generated.markdown,
-				extension: "md",
-				mimeType: "text/markdown;charset=utf-8",
-			},
-			html: {
-				content: generated.html,
-				extension: "html",
-				mimeType: "text/html;charset=utf-8",
-			},
-			csv: {
-				content: generated.csv,
-				extension: "csv",
-				mimeType: "text/csv;charset=utf-8",
-			},
-		} satisfies Record<ControlAction, GeneratedContent>;
-	}, [results]);
-	const exportControls = (
-		<AIStructuredContentControls
-			formats={formats}
-			downloadName="smart-screening-results"
-			appearance="header"
-		/>
-	);
-
-	return (
-		<div className="w-full space-y-4">
-			<div className="flex flex-col gap-3 rounded-2xl bg-black/[0.025] p-3 dark:bg-white/[0.04] sm:flex-row sm:items-center sm:justify-between">
-				<div className="min-w-0 px-1">
-					<h2 className="text-lg font-medium text-black/80 dark:text-white/80">
-						{tUI("smartScreening")}
-					</h2>
-					<p className="text-xs text-black/45 dark:text-white/45">
-						{tUI.rich("resourcesCount", {
-							count: resultEntries.length,
-							number: (chunks) => chunks,
-						})}
-					</p>
-				</div>
-				<div className="flex items-center gap-1 self-end sm:self-auto">
-					{exportControls}
-				</div>
-			</div>
-
-			<div className="space-y-4">
-				{resultEntries.map(([resourceId, value]) => (
-					<article
-						key={resourceId}
-						className="overflow-hidden rounded-2xl bg-white/80 shadow-card-lifted dark:bg-white/[0.035]"
-					>
-						<Resource
-							itemKey={resourceId}
-							abstract={true}
-							as="div"
-							className="rounded-none bg-transparent dark:bg-transparent [&>div:last-child]:rounded-none"
-						/>
-						<div className="grid grid-cols-1 gap-3 bg-black/[0.025] p-3 dark:bg-black/[0.15] sm:p-4 md:grid-cols-2">
-							{results.fields.map((field, fieldIndex) => {
-								const fieldValue =
-									value.screeningFields[field.label] ?? null;
-								const isBoolean = field.type === "boolean";
-								const fieldIcon =
-									field.type === "number" ? (
-										<LuHash />
-									) : field.type === "string" ? (
-										<LuType />
-									) : fieldValue === true ? (
-										<LuCheck />
-									) : (
-										<LuX />
-									);
-
-								return (
-									<section
-										key={field.label}
-										className={twMerge(
-											"min-w-0 rounded-xl bg-white/80 p-4 shadow-card-hairline dark:bg-white/[0.045] dark:shadow-none",
-											results.fields.length % 2 === 1 &&
-												fieldIndex ===
-													results.fields.length - 1 &&
-												"md:col-span-2",
-										)}
-									>
-										<div className="flex items-start justify-between gap-3">
-											<h3 className="min-w-0 text-xs font-medium leading-5 text-black/50 dark:text-white/50">
-												{field.label}
-											</h3>
-											<span
-												className={twMerge(
-													"grid size-7 shrink-0 place-items-center rounded-lg bg-black/[0.045] text-sm text-black/40 dark:bg-white/[0.06] dark:text-white/40",
-													isBoolean &&
-														fieldValue === true &&
-														"bg-accent/10 text-accent dark:bg-accent/15 dark:text-accent",
-												)}
-												title={field.type}
-												role="img"
-												aria-label={field.type}
-											>
-												{fieldIcon}
-											</span>
-										</div>
-										<p
-											className={twMerge(
-												"mt-2 break-words text-base font-medium leading-6 text-black/80 dark:text-white/80",
-												isBoolean &&
-													fieldValue === true &&
-													"text-accent dark:text-accent",
-											)}
-										>
-											{String(fieldValue)}
-										</p>
-									</section>
-								);
-							})}
-						</div>
-					</article>
-				))}
-			</div>
-
-			<div className="flex justify-end rounded-2xl bg-black/[0.025] p-1 dark:bg-white/[0.04]">
-				<div className="flex items-center gap-1">{exportControls}</div>
-			</div>
-		</div>
-	);
-}
-
-function MessageComponent({
-	message,
-	modelId,
-	error,
-	pdfSources,
-	isStreaming,
-}: {
-	message: Message;
-	modelId: AIModelId;
-	error: boolean;
-	pdfSources: Record<string, string>;
-	isStreaming: boolean;
-}) {
-	const content = uiMessageText(message);
-	const visibleParts = visibleMessageParts(message);
-	const screeningResults = useMemo(
-		() => parseScreeningResults(message.id, content),
-		[content, message.id],
-	);
-	const hasFinalAnswer = message.parts.some(
-		(part) => isTextUIPart(part) && part.text.trim(),
-	);
-	const showMessageActions =
-		message.role === "assistant" &&
-		!isStreaming &&
-		!error &&
-		!screeningResults &&
-		!message.id.includes("error") &&
-		hasFinalAnswer;
-	const getMessageContent = useMessageExport(message);
-
-	return (
-		<>
-			<div
-				className={twMerge(
-					"rounded-full bg-accent dark:bg-accent p-2",
-					message.role !== "user" && "hidden",
-				)}
-			>
-				{message.role === "user" ? (
-					<LuUser className="size-4 text-white" />
-				) : (
-					React.createElement(getAIModelPresentation(modelId).icon, {
-						className: "size-4 invert shrink-0",
-					})
-				)}
-			</div>
-			<div
-				className={twMerge(
-					"p-0 text-wrap max-w-full overflow-hidden break-words text-lg",
-					message.role === "user" &&
-						"bg-white dark:bg-secondary rounded-xl",
-					message.role !== "user" && "w-full",
-					message.id.includes("error") &&
-						"text-red-500 dark:text-red-500 italic",
-				)}
-			>
-				{visibleParts.length === 0 && !error ? (
-					<div className="flex items-center gap-3 p-4">
-						<div className="flex w-fit items-center justify-center rounded-full bg-black p-2 opacity-60">
-							<Spinner />
-						</div>
-					</div>
-				) : (
-					<>
-						{screeningResults ? (
-							<ScreeningResults results={screeningResults} />
-						) : message.role === "assistant" ? (
-							visibleParts.map(({ key, part }, partIndex) => {
-								const isLastPart =
-									partIndex === visibleParts.length - 1;
-
-								if (
-									isReasoningUIPart(part) &&
-									part.text.trim()
-								) {
-									return (
-										<div key={key} className="mt-4">
-											<AIMarkdown
-												pdfSources={pdfSources}
-												isAnimating={
-													isStreaming && isLastPart
-												}
-												className="prose prose-sm max-w-full text-black/50 dark:prose-invert dark:text-white/50 [&_p]:my-1.5 [&_strong]:font-medium [&_strong]:text-black/60 dark:[&_strong]:text-white/60"
-											>
-												{part.text}
-											</AIMarkdown>
-										</div>
-									);
-								}
-
-								if (isToolUIPart(part)) {
-									return (
-										<div key={key} className="mt-2">
-											<ToolActivity part={part} />
-										</div>
-									);
-								}
-
-								if (isTextUIPart(part) && part.text.trim()) {
-									return (
-										<AIMarkdown
-											key={key}
-											pdfSources={pdfSources}
-											isAnimating={
-												isStreaming && isLastPart
-											}
-											className="mt-6 w-full max-w-full space-y-4 p-0 prose dark:prose-invert"
-										>
-											{part.text}
-										</AIMarkdown>
-									);
-								}
-
-								return null;
-							})
-						) : content.trim() ? (
-							<AIMarkdown
-								pdfSources={pdfSources}
-								isAnimating={isStreaming}
-								className="w-full max-w-full space-y-4 p-4 prose dark:prose-invert"
-							>
-								{content}
-							</AIMarkdown>
-						) : null}
-						{showMessageActions && (
-							<div className="mt-3 flex items-center gap-0.5">
-								<AIGeneratedContentControls
-									getContent={getMessageContent}
-									downloadName="ai-response"
-									appearance="inline"
-								/>
-							</div>
-						)}
-					</>
-				)}
-			</div>
-		</>
-	);
-}
-
 type ChatMessageListProps = {
 	chatFailure: ReturnType<typeof useChatFailure>;
 	contentRef: (element: HTMLDivElement | null) => void;

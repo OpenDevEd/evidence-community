@@ -26,6 +26,11 @@ import { DownloadModal } from "../newlib/DownloadModal";
 import { CardBody, useDisclosure } from "@nextui-org/react";
 import { ItemsContext } from "../items/ItemsList";
 import { useFiltersContext } from "@/context/FiltersProvider";
+import { useInlineChatLayout } from "@/context/InlineChatLayout";
+import { useSelectedModel } from "@/hooks/useSelectedModel";
+import { normalizeLibrarySearchContext } from "@/lib/search-context";
+import InlineLibraryChat from "../ai/InlineLibraryChat";
+import { BucketList } from "../ai/ContextBucket";
 import { countryFacetOptions } from "@/constants/misc";
 import Image from "next/image";
 import { getCountryInfo } from "@/lib/utils";
@@ -91,7 +96,7 @@ function Chip({
 			{startContent}
 			<span
 				className={twMerge(
-					"block max-w-[16rem] truncate",
+					"block max-w-filter-chip truncate",
 					classNames.title
 				)}
 			>
@@ -152,7 +157,7 @@ export function FilterChips() {
 		<div
 			className={twMerge(
 				"flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0",
-				filtersCount > 0 && "max-h-[32rem] mb-4 opacity-100"
+				filtersCount > 0 && "max-h-filter-chips mb-4 opacity-100"
 			)}
 		>
 			{/* On mobile the chips scroll horizontally inside their own track so a
@@ -668,11 +673,14 @@ export function ResourcesView({
 	const [view, setView] = useState("list");
 	const { status } = useContext(CacheContext) as CacheContextType;
 
-	return (
-		<section
-			id="main-content"
-			className="w-full flex flex-col gap-4 overflow-hidden"
-		>
+	const { bucketEntries, engaged } = useInlineChatLayout();
+	const { selectedModelId } = useSelectedModel();
+	const searchContext = normalizeLibrarySearchContext(
+		useFiltersContext().queryParams,
+	);
+
+	const results = (
+		<>
 			<NoteView />
 			<ContentInteractions
 				header={header}
@@ -687,6 +695,34 @@ export function ResourcesView({
 			<ResourcesList abstract={abstract} view={view} />
 			<PaginationControls />
 			<ContentActions />
+		</>
+	);
+
+	return (
+		<section
+			id="main-content"
+			className="w-full flex flex-col gap-4 overflow-hidden"
+		>
+			{engaged && selectedModelId ? (
+				// Split view: the conversation on one side, and what it has
+				// found on the other.
+				<div className="grid w-full grid-cols-1 gap-6 lg:grid-cols-2">
+					<InlineLibraryChat
+						key={selectedModelId}
+						modelId={selectedModelId}
+						searchContext={searchContext}
+					/>
+					<div className="flex min-w-0 flex-col gap-4">
+						{bucketEntries.length > 0 ? (
+							<BucketList entries={bucketEntries} />
+						) : (
+							results
+						)}
+					</div>
+				</div>
+			) : (
+				results
+			)}
 			<div className="text-center lg:text-end text-black/60 dark:text-white/60 text-sm">
 				{t("lastUpdate", {
 					date: format.dateTime(new Date(status.databaseUpdatedAt), {

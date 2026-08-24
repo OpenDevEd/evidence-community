@@ -2,29 +2,22 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useReducedMotion } from "framer-motion";
-import { useDisclosure } from "@nextui-org/react";
-import { useLocalStorage } from "usehooks-ts";
 import { useStickToBottom } from "use-stick-to-bottom";
 
 import type { ItemGetResponse } from "@/app/api/item/types";
 import { publicationPdfCitationSources } from "@/lib/ai/citations";
 import { createResearchRequestContextSnapshot } from "@/lib/ai/request-context";
-import {
-	createTextMessage,
-	withLatestRequestContext,
-} from "@/lib/ai/chat-messages";
+import { withLatestRequestContext } from "@/lib/ai/chat-messages";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
 import type { AIModelId } from "@/lib/ai/models";
 import type { LibrarySearchContext } from "@/lib/search-context";
-import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
-import type { ChatMode, SmartScreeningField } from "@/types/ai";
+import type { ChatMode } from "@/types/ai";
 import { useScrollEdges } from "./chat-shared";
 import {
 	useAppendMessage,
 	useChatFailure,
-	useChatScreening,
-	useScreenableContent,
-	useScreeningTooltip,
+	useChatMode,
+	useScreeningControls,
 	useSendWithContext,
 	useTranscriptExport,
 } from "./useChatActions";
@@ -69,21 +62,6 @@ function useExternalQuestion({
 		onAsk(externalInput);
 		setExternalInput?.("");
 	}, [externalInput, isReady, onAsk, setExternalInput]);
-}
-
-/** Research mode is only offered when the library turns it on. */
-function useChatMode() {
-	const { isDeepResearchEnabled } = useIsAISearchEnabled();
-	const [storedMode, setMode] = useLocalStorage<ChatMode>(
-		"chat-mode",
-		"quick",
-	);
-
-	return {
-		isDeepResearchEnabled,
-		mode: isDeepResearchEnabled ? storedMode : ("quick" as ChatMode),
-		setMode,
-	};
 }
 
 /** The conversation: its messages, and the ways they change. */
@@ -160,52 +138,6 @@ function useChatConversation({
 			sendMessage,
 		}),
 		status,
-	};
-}
-
-/** Screening the answers on screen against the reader's saved fields. */
-function useScreeningControls({
-	appendMessage,
-	messages,
-	modelId,
-}: {
-	appendMessage: (message: ResearchUIMessage) => void;
-	messages: ResearchUIMessage[];
-	modelId: AIModelId;
-}) {
-	const [smartScreeningFields] = useLocalStorage<SmartScreeningField[]>(
-		"smart-screening-fields",
-		[],
-	);
-	const {
-		isOpen: isSmartScreeningOpen,
-		onOpen: onSmartScreeningOpen,
-		onOpenChange: onSmartScreeningOpenChange,
-	} = useDisclosure();
-	const [isMutating, setIsMutating] = useState(false);
-	const screenableContent = useScreenableContent(messages);
-
-	return {
-		canRunScreening:
-			smartScreeningFields.length > 0 && screenableContent.length > 0,
-		handleScreening: useChatScreening({
-			appendMessage,
-			createMessage: (content, id) =>
-				createTextMessage("assistant", content, id),
-			modelId,
-			setIsMutating,
-			smartScreeningFields,
-		}),
-		isMutating,
-		isSmartScreeningOpen,
-		onSmartScreeningOpen,
-		onSmartScreeningOpenChange,
-		screenableContent,
-		screeningTooltip: useScreeningTooltip({
-			fieldCount: smartScreeningFields.length,
-			screenableContent,
-		}),
-		smartScreeningFields,
 	};
 }
 

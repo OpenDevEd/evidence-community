@@ -114,7 +114,14 @@ const config: Config = {
 			},
 			maxWidth: {
 				chat: "96rem",
+				// A long filter name is cut short so the row still fits.
+				"filter-chip": "16rem",
 				"results-note": "16rem",
+			},
+			scale: {
+				// The Ask AI button lifts a little under the pointer.
+				97: "0.97",
+				102: "1.02",
 			},
 			height: {
 				// The chat beside the results fills the viewport minus the
@@ -134,6 +141,8 @@ const config: Config = {
 				// The navbar suggestion list must not cover the whole screen.
 				suggestions: "70vh",
 				"results-note": "32rem",
+				// The filter chips grow to fit, up to most of the screen.
+				"filter-chips": "32rem",
 			},
 			letterSpacing: {
 				"inspector-title": "-0.01em",
@@ -176,9 +185,20 @@ const config: Config = {
 					"50%": { backgroundPosition: "100% 50%" },
 					"100%": { backgroundPosition: "0% 50%" },
 				},
+				"rise-in": {
+					"0%": {
+						opacity: "0",
+						transform: "scale(0.9) translateY(4px)",
+					},
+					"100%": { opacity: "1", transform: "scale(1) translateY(0)" },
+				},
 			},
 			animation: {
 				"gradient-x": "gradient-x 2s ease infinite",
+				// "backwards" rather than "both", so the last frame stops
+				// applying once it is done and hover still moves the button.
+				"rise-in":
+					"rise-in 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) backwards",
 			},
 		},
 	},

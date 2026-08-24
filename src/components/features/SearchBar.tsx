@@ -1,29 +1,67 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { IoSearch } from "react-icons/io5";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 import { PropsOf } from "@nextui-org/react";
 import { Input } from "@/components/nextui/Input";
 import { useDebounce } from "@/hooks/useDebounce";
+import { useInlineChatLayout } from "@/context/InlineChatLayout";
+
+/** A focus request older than this belongs to an earlier page visit. */
+const FOCUS_REQUEST_MAX_AGE_MS = 1000;
 
 export function SearchBar({
 	handleSearchChange,
 	search,
 	classNames,
 	endContent,
+	focusOnRequest,
+	onCmdEnter,
 }: {
 	handleSearchChange: (search: string) => void;
 	search: string;
 	classNames?: PropsOf<typeof Input>["classNames"];
-	endContent?: ReactNode;
+	/**
+	 * Either a fixed node, or a function given the text in the field right
+	 * now and a way to empty it. Use the function for buttons that take the
+	 * text away instead of searching with it.
+	 */
+	endContent?: ReactNode | ((liveText: string, clear: () => void) => ReactNode);
+	/**
+	 * Take focus when the chat beside the results asks for it. Only the main
+	 * library field should: the copy inside the chat is gone by then.
+	 */
+	focusOnRequest?: boolean;
+	/** Ctrl or Cmd with Enter: the text in the field, and a way to empty it. */
+	onCmdEnter?: (text: string, clear: () => void) => void;
 }) {
+	// The extended field does not hand back the input itself, so it is found
+	// through the wrapper around it.
+	const baseRef = useRef<HTMLDivElement>(null);
+	const { searchFocusRequest } = useInlineChatLayout();
+
+	useEffect(() => {
+		// This also runs when the field comes back after the split view
+		// closes, which is what it is for. An old request must not steal
+		// focus on a later visit.
+		if (
+			!focusOnRequest ||
+			Date.now() - searchFocusRequest > FOCUS_REQUEST_MAX_AGE_MS
+		) {
+			return;
+		}
+		const element = baseRef.current?.querySelector("input");
+		if (!element) return;
+		element.focus({ preventScroll: true });
+		element.setSelectionRange(element.value.length, element.value.length);
+	}, [focusOnRequest, searchFocusRequest]);
 	const [draft, setDraft] = useState({
 		sourceSearch: search,
 		value: search,
 	});
-	const [debouncedSearch, debounceRef] = useDebounce(handleSearchChange, 300);
+	const [debouncedSearch] = useDebounce(handleSearchChange, 300);
 	const t = useTranslations("ui");
 	const localValue =
 		draft.sourceSearch === search || draft.value === search
@@ -37,20 +75,31 @@ export function SearchBar({
 		});
 	}
 
+	const clear = useCallback(() => {
+		setDraft({ sourceSearch: search, value: "" });
+		// Replaces whatever search was still waiting to run.
+		debouncedSearch("");
+		handleSearchChange("");
+	}, [debouncedSearch, handleSearchChange, search]);
+
 	return (
 		<Input
+			baseRef={baseRef}
 			autoCorrect="off"
+			onKeyDown={(event) => {
+				if (event.key !== "Enter" || !(event.metaKey || event.ctrlKey)) {
+					return;
+				}
+				event.preventDefault();
+				onCmdEnter?.(localValue, clear);
+			}}
 			value={localValue}
 			onChange={(e) => {
 				const value = e.target.value;
 				setDraft({ sourceSearch: search, value });
 				debouncedSearch(value);
 			}}
-			onClear={() => {
-				if (debounceRef.current) clearTimeout(debounceRef.current);
-				setDraft({ sourceSearch: search, value: "" });
-				handleSearchChange("");
-			}}
+			onClear={clear}
 			placeholder={t("search")}
 			size={"lg"}
 			classNames={{
@@ -68,7 +117,11 @@ export function SearchBar({
 					className="size-6 fill-current text-black/60 dark:text-white/40"
 				/>
 			}
-			endContent={endContent}
+			endContent={
+				typeof endContent === "function"
+					? endContent(localValue, clear)
+					: endContent
+			}
 		/>
 	);
 }

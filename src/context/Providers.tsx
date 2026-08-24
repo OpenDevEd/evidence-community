@@ -32,6 +32,7 @@ import { toast as toastComponent } from "@/components/layout/Toast";
 import { UtmAttributionProvider } from "@/components/features/UtmProvider";
 import { trackPageView } from "@/lib/analytics";
 import { SessionProvider } from "next-auth/react";
+import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 
@@ -254,7 +255,9 @@ export default function Providers({
 										</PramNotificationProvider>
 									</Suspense>
 									<UtmAttributionProvider />
-									{children}
+									<InlineChatLayoutProvider>
+										{children}
+									</InlineChatLayoutProvider>
 									<AnalyticsVendors
 										googleAnalyticsId={
 											analytics.google.measurementId ?? ""

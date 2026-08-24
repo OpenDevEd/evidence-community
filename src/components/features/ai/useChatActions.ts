@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslations } from "next-intl";
 import type { UIMessage } from "ai";
+import { useDisclosure } from "@nextui-org/react";
+import { useLocalStorage } from "usehooks-ts";
 
 import {
 	CHAT_EXPORT_OUTPUT,
@@ -24,7 +26,11 @@ import {
 	researchRequestContextsEqual,
 	type ResearchRequestContextSnapshot,
 } from "@/lib/ai/request-context";
-import type { SmartScreeningField } from "@/types/ai";
+import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
+import type { ChatMode, SmartScreeningField } from "@/types/ai";
+import type { ResearchUIMessage } from "@/lib/ai/agent";
+import { createTextMessage } from "@/lib/ai/chat-messages";
+import type { AIModelId } from "@/lib/ai/models";
 
 /** The contract screens at most twenty-five publications in one request. */
 const SCREENING_BATCH_LIMIT = 25;
@@ -64,7 +70,7 @@ async function screenPublications({
  * Screens the publications named in one answer and adds the results as the
  * next message. Shared by the chat window and the chat beside the results.
  */
-export function useChatScreening<TMessage extends UIMessage>({
+function useChatScreening<TMessage extends UIMessage>({
 	appendMessage,
 	createMessage,
 	modelId,
@@ -131,7 +137,7 @@ export function useChatScreening<TMessage extends UIMessage>({
  * The answers a reader can screen: assistant messages that name at least one
  * publication, and are not themselves a screening result.
  */
-export function useScreenableContent<TMessage extends UIMessage>(
+function useScreenableContent<TMessage extends UIMessage>(
 	messages: TMessage[],
 ) {
 	return useMemo(
@@ -197,7 +203,7 @@ export function useAppendMessage<TMessage extends UIMessage>(
 }
 
 /** Why the screening button is or is not available right now. */
-export function useScreeningTooltip({
+function useScreeningTooltip({
 	fieldCount,
 	screenableContent,
 }: {
@@ -284,5 +290,66 @@ export function useChatFailure(error: Error | undefined) {
 		message: isRateLimited
 			? t("rateLimitedMessage", { seconds: 60 })
 			: readable?.message || t("errorMessage"),
+	};
+}
+
+/** Research mode is only offered when the library turns it on. */
+export function useChatMode() {
+	const { isDeepResearchEnabled } = useIsAISearchEnabled();
+	const [storedMode, setMode] = useLocalStorage<ChatMode>(
+		"chat-mode",
+		"quick",
+	);
+
+	return {
+		isDeepResearchEnabled,
+		mode: isDeepResearchEnabled ? storedMode : ("quick" as ChatMode),
+		setMode,
+	};
+}
+
+/** Screening the answers on screen against the reader's saved fields. */
+export function useScreeningControls({
+	appendMessage,
+	messages,
+	modelId,
+}: {
+	appendMessage: (message: ResearchUIMessage) => void;
+	messages: ResearchUIMessage[];
+	modelId: AIModelId;
+}) {
+	const [smartScreeningFields] = useLocalStorage<SmartScreeningField[]>(
+		"smart-screening-fields",
+		[],
+	);
+	const {
+		isOpen: isSmartScreeningOpen,
+		onOpen: onSmartScreeningOpen,
+		onOpenChange: onSmartScreeningOpenChange,
+	} = useDisclosure();
+	const [isMutating, setIsMutating] = useState(false);
+	const screenableContent = useScreenableContent(messages);
+
+	return {
+		canRunScreening:
+			smartScreeningFields.length > 0 && screenableContent.length > 0,
+		handleScreening: useChatScreening({
+			appendMessage,
+			createMessage: (content, id) =>
+				createTextMessage("assistant", content, id),
+			modelId,
+			setIsMutating,
+			smartScreeningFields,
+		}),
+		isMutating,
+		isSmartScreeningOpen,
+		onSmartScreeningOpen,
+		onSmartScreeningOpenChange,
+		screenableContent,
+		screeningTooltip: useScreeningTooltip({
+			fieldCount: smartScreeningFields.length,
+			screenableContent,
+		}),
+		smartScreeningFields,
 	};
 }

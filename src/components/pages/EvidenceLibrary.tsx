@@ -78,6 +78,8 @@ import {
 } from "@/context/LibraryConfigProvider";
 import { getRuntimeSearchScopeOptions } from "@/config/library-config/search";
 import { useFiltersContext } from "@/context/FiltersProvider";
+import { useInlineChatLayout } from "@/context/InlineChatLayout";
+import { useModEnterHint } from "@/hooks/useShortcutHints";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
 import { SmartScreeningModal } from "@/components/features/ai/SmartScreeningModal";
@@ -238,7 +240,104 @@ function ScopeComponent({
 	);
 }
 
+/** Hands whatever is in the search field to the assistant. */
+function AskAIButton({
+	hint,
+	onAsk,
+}: {
+	hint: string;
+	onAsk: () => void;
+}) {
+	const tAI = useTranslations("ai");
+
+	return (
+		// A plain button: press handling inside the search field's own
+		// content breaks the one the rest of the site uses.
+		<button
+			type="button"
+			onMouseDown={(event) => event.preventDefault()}
+			onClick={onAsk}
+			// Smaller on a phone, where the search field is shorter and
+			// there is no keyboard to show a shortcut for.
+			className="flex h-7 shrink-0 animate-rise-in items-center gap-1 self-center rounded-lg bg-accent px-2.5 text-xs font-medium text-white transition-transform hover:scale-102 active:scale-97 lg:h-9 lg:gap-1.5 lg:rounded-large lg:pl-3 lg:pr-1.5 lg:text-sm"
+		>
+			<BsStars className="size-3.5 shrink-0 lg:size-4" />
+			{tAI("askAI")}
+			<kbd className="ml-0.5 hidden rounded-md bg-white/20 px-1.5 py-0.5 font-sans text-citation font-medium leading-none text-white/90 lg:inline">
+				{hint}
+			</kbd>
+		</button>
+	);
+}
+
+/** The search field and the filters beside it. */
+function LibraryFilters({
+	askAI,
+	extraFilters,
+	itemsContext,
+}: {
+	askAI?: (text: string) => void;
+	extraFilters: ReactNode;
+	itemsContext: ReturnType<typeof useItemsList>;
+}) {
+	// The server does not know the reader's keyboard, so the hint waits.
+	const shortcutHint = useModEnterHint();
+
+	if (itemsContext.config.interactionsStyle === "one-line") {
+		return (
+			<div className="flex gap-4">
+				<ScopeComponent itemsContext={itemsContext} />
+				<SortComponent itemsContext={itemsContext} />
+			</div>
+		);
+	}
+
+	return (
+		<section
+			role="search"
+			className={twMerge(
+				"lg:flex lg:flex-row gap-4",
+				itemsContext.userData ? "grid grid-cols-2" : "flex flex-col",
+			)}
+		>
+			<SearchBar
+				handleSearchChange={itemsContext.handleSearchChange}
+				search={itemsContext.queryParams.search}
+				focusOnRequest
+				// Asking uses the text as a question, so it must not stay
+				// behind as a filter as well.
+				onCmdEnter={
+					askAI &&
+					((text: string, clear: () => void) => {
+						clear();
+						askAI(text);
+					})
+				}
+				endContent={
+					askAI &&
+					shortcutHint &&
+					((liveText: string, clear: () => void) => (
+						<AskAIButton
+							hint={shortcutHint}
+							onAsk={() => {
+								clear();
+								askAI(liveText);
+							}}
+						/>
+					))
+				}
+			/>
+			<ScopeComponent itemsContext={itemsContext} />
+			{itemsContext.userData ? (
+				<SortComponent itemsContext={itemsContext} />
+			) : null}
+			{extraFilters}
+		</section>
+	);
+}
+
 function SearchTabContent({
+	askAI,
 	header,
 	itemsContext,
 	extraFilters,
@@ -258,6 +357,8 @@ function SearchTabContent({
 	view: string;
 	setView: (view: string) => void;
 	showHeader: boolean;
+	/** Hand the text in the search field to the assistant instead. */
+	askAI?: (text: string) => void;
 }) {
 	const t = useTranslations("ui");
 	const tAI = useTranslations("ai");
@@ -337,33 +438,11 @@ function SearchTabContent({
 				</div>
 			</div>
 
-			{/* Search and filters */}
-			{itemsContext.config.interactionsStyle === "one-line" ? (
-				<div className="flex gap-4">
-					<ScopeComponent itemsContext={itemsContext} />
-					<SortComponent itemsContext={itemsContext} />
-				</div>
-			) : (
-				<section
-					role="search"
-					className={twMerge(
-						"lg:flex lg:flex-row gap-4",
-						!itemsContext.userData
-							? "flex flex-col"
-							: "grid grid-cols-2",
-					)}
-				>
-					<SearchBar
-						handleSearchChange={itemsContext.handleSearchChange}
-						search={itemsContext.queryParams.search}
-					/>
-					{<ScopeComponent itemsContext={itemsContext} />}
-					{itemsContext.userData && (
-						<SortComponent itemsContext={itemsContext} />
-					)}
-					{extraFilters}
-				</section>
-			)}
+			<LibraryFilters
+				askAI={askAI}
+				extraFilters={extraFilters}
+				itemsContext={itemsContext}
+			/>
 
 			{/* Results count and view controls */}
 			<section className="flex justify-between h-10 lg:h-12 gap-8">
@@ -468,12 +547,10 @@ function SearchTabContent({
 function AskBoxActions({
 	isDeepResearchEnabled,
 	mode,
-	onChatOpen,
 	setMode,
 }: {
 	isDeepResearchEnabled: boolean;
 	mode: ChatMode;
-	onChatOpen: () => void;
 	setMode: (mode: ChatMode) => void;
 }) {
 	const tUI = useTranslations("ui");
@@ -508,7 +585,6 @@ function AskBoxActions({
 				variant="default"
 				className="shrink-0"
 				size="sm"
-				onPress={onChatOpen}
 			>
 				<IoSend className="size-4" />
 			</Button>
@@ -545,9 +621,18 @@ function AITabContent({
 	} = useDisclosure();
 	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "research");
 	const { isDeepResearchEnabled } = useIsAISearchEnabled();
+	const { setEngaged, setPendingInput, setPendingSend } =
+		useInlineChatLayout();
+	// Asking a question opens the chat beside the results rather than over
+	// them, so the reader keeps their list while they read the answer.
 	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		onChatOpen();
+		const question = externalInput.trim();
+		setPendingInput(question);
+		setPendingSend(question.length > 0);
+		setExternalInput("");
+		setEngaged(true);
+		onSwitchToSearch();
 	};
 
 	const tAI = useTranslations("ai");
@@ -614,7 +699,6 @@ function AITabContent({
 										isDeepResearchEnabled
 									}
 									mode={mode}
-									onChatOpen={onChatOpen}
 									setMode={setMode}
 								/>
 							}
@@ -825,6 +909,17 @@ export function ContentInteractions({
 	const searchContext = normalizeLibrarySearchContext(
 		useFiltersContext().queryParams,
 	);
+	const { isAISearchEnabled } = useIsAISearchEnabled();
+	const { setEngaged, setPendingInput, setPendingSend } =
+		useInlineChatLayout();
+	// One search field, two things to do with it: typing filters the library
+	// as you go, and Ask AI hands the same text to the assistant.
+	const askAI = (text: string) => {
+		const question = text.trim();
+		setPendingInput(question);
+		setPendingSend(question.length > 0);
+		setEngaged(true);
+	};
 
 	return (
 		<div className="relative">
@@ -851,6 +946,7 @@ export function ContentInteractions({
 							view={view}
 							setView={setView}
 							showHeader={activeCount === 1}
+							askAI={isAISearchEnabled ? askAI : undefined}
 						/>
 					</ContentTabPanel>
 				) : (
