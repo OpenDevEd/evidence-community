@@ -11,6 +11,7 @@ import Link from "next/link";
 import Resource from "../items/Resource";
 import React from "react";
 import { Card } from "@/components/nextui/Card";
+import { parsePageCitation } from "@/lib/ai/citations";
 
 function createRehypeWrapper(pattern: RegExp, className: string) {
 	return () => (tree: Node) => {
@@ -83,25 +84,45 @@ export const rehypeResourceWrapper = createRehypeWrapperForTag(
 	"ResourceWrapper"
 );
 
-function Highlight({
-	children,
-	className,
-}: {
-	children: ReactNode;
-	className: string;
-}) {
-	if (className === "PageHighlight") {
+/**
+ * One citation shows both its publication source and the exact page, and
+ * opens that page of the PDF. A citation the assistant made up has no link,
+ * so it stays a plain label instead of a broken one.
+ */
+function PageCitation({ children }: { children: ReactNode }) {
+	const { page, href } = parsePageCitation(String(children ?? ""));
+	const label = (
+		<>
+			<BiSolidBookBookmark className="text-accent-400 size-3" />
+			<span className="text-xs font-normal">Source</span>
+			<span className="text-sm font-medium">p.&nbsp;{page}</span>
+		</>
+	);
+
+	if (!href) {
 		return (
 			<Card className="inline-flex flex-row items-center gap-0.5 px-2 py-0 h-fit">
-				<BiSolidBookBookmark className="text-accent-400 size-3" />
-				<span className="text-xs font-normal">P.</span>
-				<span className="text-sm font-medium">
-					{children}
-				</span>
+				{label}
 			</Card>
 		);
 	}
 
+	return (
+		<Card className="inline-flex flex-row items-center gap-0.5 px-2 py-0 h-fit">
+			<Link
+				href={href}
+				target="_blank"
+				rel="noopener noreferrer"
+				aria-label={`Open the cited source at page ${page}`}
+				className="inline-flex flex-row items-center gap-0.5"
+			>
+				{label}
+			</Link>
+		</Card>
+	);
+}
+
+function SectionHighlight({ children }: { children: ReactNode }) {
 	return (
 		<Card className="inline-flex flex-row items-center gap-0.5 px-2 py-0 h-fit">
 			<BiSolidBookContent className="text-accent-400" />
@@ -141,12 +162,14 @@ export function AIMarkdown({
 				rehypeQuoteWrapper,
 				rehypePageWrapper,
 				rehypeSectionWrapper,
+				rehypeResourceWrapper,
 			]}
 			components={{
 				span: ({ children, className }) =>
-					className === "PageHighlight" ||
-						className === "SectionHighlight" ? (
-						<Highlight className={className}>{children}</Highlight>
+					className === "PageHighlight" ? (
+						<PageCitation>{children}</PageCitation>
+					) : className === "SectionHighlight" ? (
+						<SectionHighlight>{children}</SectionHighlight>
 					) : className === "QuoteHighlight" ? (
 						<QuoteHighlight>{children}</QuoteHighlight>
 					) : className === "ResourceWrapper" ? (
@@ -156,9 +179,13 @@ export function AIMarkdown({
 					) : (
 						<span>{children}</span>
 					),
+				// A titled link to a publication stays a link. Only the
+				// explicit RESOURCE token becomes a full card.
 				a: ({ href, children }) =>
 					href?.startsWith("/") ? (
-						<ResourceWrapper>{href}</ResourceWrapper>
+						<Link href={href} className="text-link underline">
+							{children}
+						</Link>
 					) : (
 						<a href={href} className="text-link underline" target="_blank" rel="noopener noreferrer">
 							{children}
