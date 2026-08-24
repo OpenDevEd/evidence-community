@@ -4,6 +4,15 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("server-only", () => ({}));
+vi.mock("next-intl", () => ({
+	useTranslations: () => (key: string) => key,
+	useFormatter: () => ({ dateTime: (value: Date) => value.toISOString() }),
+}));
+vi.mock("swr", () => ({ default: () => ({ data: undefined, isLoading: false }) }));
+// The citation card reaches the shared fetch helper, which drags the signed-in
+// app in behind it. These tests only need the rendered citation.
+vi.mock("@/lib/actions", () => ({ areLinksValid: vi.fn(async () => true) }));
 vi.mock("@/components/features/items/Resource", () => ({
 	default: ({ itemKey }: { itemKey?: string }) => (
 		<article aria-label={`Publication card ${itemKey}`} />
@@ -43,6 +52,9 @@ describe("what an AI answer shows the reader", () => {
 		);
 		expect(citation?.textContent).toContain("12");
 		expect(container.textContent).toContain("Source");
+		expect(citation?.getAttribute("aria-label")).toBe(
+			"Open citation source at page 12",
+		);
 		expect(container.textContent).not.toContain("PAGE/");
 		expect(container.textContent).not.toContain("/download/");
 	});
@@ -53,6 +65,11 @@ describe("what an AI answer shows the reader", () => {
 		expect(container.querySelector("a")).toBeNull();
 		expect(container.textContent).toContain("Source");
 		expect(container.textContent).toContain("3");
+		expect(
+			container.querySelector(
+				'[aria-label="Citation source unavailable at page 3"]',
+			),
+		).not.toBeNull();
 	});
 
 	it("never turns an invented citation target into a citation link", async () => {

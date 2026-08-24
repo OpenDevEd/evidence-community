@@ -12,6 +12,7 @@ import Resource from "../items/Resource";
 import React from "react";
 import { Card } from "@/components/nextui/Card";
 import { parsePageCitation } from "@/lib/ai/citations";
+import { PageCitation } from "@/components/features/markdown/Citation";
 
 function createRehypeWrapper(pattern: RegExp, className: string) {
 	return () => (tree: Node) => {
@@ -84,42 +85,9 @@ export const rehypeResourceWrapper = createRehypeWrapperForTag(
 	"ResourceWrapper"
 );
 
-/**
- * One citation shows both its publication source and the exact page, and
- * opens that page of the PDF. A citation the assistant made up has no link,
- * so it stays a plain label instead of a broken one.
- */
-function PageCitation({ children }: { children: ReactNode }) {
+function PageCitationSpan({ children }: { children: ReactNode }) {
 	const { page, href } = parsePageCitation(String(children ?? ""));
-	const label = (
-		<>
-			<BiSolidBookBookmark className="text-accent-400 size-3" />
-			<span className="text-xs font-normal">Source</span>
-			<span className="text-sm font-medium">p.&nbsp;{page}</span>
-		</>
-	);
-
-	if (!href) {
-		return (
-			<Card className="inline-flex flex-row items-center gap-0.5 px-2 py-0 h-fit">
-				{label}
-			</Card>
-		);
-	}
-
-	return (
-		<Card className="inline-flex flex-row items-center gap-0.5 px-2 py-0 h-fit">
-			<Link
-				href={href}
-				target="_blank"
-				rel="noopener noreferrer"
-				aria-label={`Open the cited source at page ${page}`}
-				className="inline-flex flex-row items-center gap-0.5"
-			>
-				{label}
-			</Link>
-		</Card>
-	);
+	return <PageCitation href={href} page={page} />;
 }
 
 function SectionHighlight({ children }: { children: ReactNode }) {
@@ -167,7 +135,7 @@ export function AIMarkdown({
 			components={{
 				span: ({ children, className }) =>
 					className === "PageHighlight" ? (
-						<PageCitation>{children}</PageCitation>
+						<PageCitationSpan>{children}</PageCitationSpan>
 					) : className === "SectionHighlight" ? (
 						<SectionHighlight>{children}</SectionHighlight>
 					) : className === "QuoteHighlight" ? (

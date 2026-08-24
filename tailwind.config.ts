@@ -91,6 +91,25 @@ const config: Config = {
 				"ai-panel": "2.375rem",
 				// Lines up a tool step's details under its title.
 				"tool-step": "1.375rem",
+				// The round icon inside a citation chip, and its glyph.
+				"citation-icon": "1.125rem",
+				"citation-glyph": "0.6875rem",
+			},
+			fontSize: {
+				citation: "0.68rem",
+			},
+			borderRadius: {
+				favicon: "0.2rem",
+			},
+			transitionProperty: {
+				citation:
+					"transform, border-color, background-color, box-shadow, color",
+			},
+			transformOrigin: {
+				"hover-card": "var(--radix-hover-card-content-transform-origin)",
+			},
+			zIndex: {
+				"hover-card": "10000",
 			},
 			maxHeight: {
 				// The navbar suggestion list must not cover the whole screen.
