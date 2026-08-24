@@ -313,14 +313,12 @@ function LibraryFilters({
 						askAI(text);
 					})
 				}
-				endContent={
-					askAI &&
-					shortcutHint &&
-					// The button hands over whatever the field holds when it is
-					// pressed, not what it held when the button was drawn.
-					((_liveText: string, ask: () => void) => (
-						<AskAIButton hint={shortcutHint} onAsk={ask} />
-					))
+				trailing={
+					askAI && shortcutHint
+						? (ask: () => void) => (
+								<AskAIButton hint={shortcutHint} onAsk={ask} />
+							)
+						: undefined
 				}
 			/>
 			<ScopeComponent itemsContext={itemsContext} />

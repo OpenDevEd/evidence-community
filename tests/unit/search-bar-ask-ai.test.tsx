@@ -110,7 +110,7 @@ describe("asking the assistant from the search field", () => {
 					handleSearchChange={vi.fn()}
 					search=""
 					onAsk={onAsk}
-					endContent={(_liveText, ask) => (
+					trailing={(ask) => (
 						<button type="button" data-testid="ask" onClick={ask}>
 							Ask
 						</button>
@@ -130,15 +130,13 @@ describe("asking the assistant from the search field", () => {
 		expect(field().value).toBe("");
 	});
 
-	it("shows the reader what the field holds right now", async () => {
+	it("draws its trailing control", async () => {
 		await act(async () => {
 			root.render(
 				<SearchBar
 					handleSearchChange={vi.fn()}
 					search=""
-					endContent={(liveText) => (
-						<span data-testid="live">{liveText}</span>
-					)}
+					trailing={() => <span data-testid="live">seen</span>}
 				/>,
 			);
 		});
@@ -147,6 +145,6 @@ describe("asking the assistant from the search field", () => {
 
 		expect(
 			container.querySelector('[data-testid="live"]')?.textContent,
-		).toBe("school meals");
+		).toBe("seen");
 	});
 });

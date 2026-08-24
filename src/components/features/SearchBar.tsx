@@ -19,16 +19,19 @@ export function SearchBar({
 	endContent,
 	focusOnRequest,
 	onAsk,
+	trailing,
 }: {
 	handleSearchChange: (search: string) => void;
 	search: string;
 	classNames?: PropsOf<typeof Input>["classNames"];
+	/** A fixed node drawn inside the field, such as an icon. */
+	endContent?: ReactNode;
 	/**
-	 * Either a fixed node, or a function given the text in the field right
-	 * now and a way to hand that text to {@link onAsk}. Use the function for
-	 * buttons that take the text away instead of searching with it.
+	 * Drawn over the end of the field, outside it. Anything the field draws
+	 * inside itself keeps the text as it was when the field was first drawn,
+	 * so a control that acts on what the reader typed belongs here.
 	 */
-	endContent?: ReactNode | ((liveText: string, ask: () => void) => ReactNode);
+	trailing?: (ask: () => void) => ReactNode;
 	/**
 	 * Take focus when the chat beside the results asks for it. Only the main
 	 * library field should: the copy inside the chat is gone by then.
@@ -93,7 +96,7 @@ export function SearchBar({
 
 	const ask = () => onAsk?.(localValue, clear);
 
-	return (
+	const field = (
 		<Input
 			baseRef={baseRef}
 			autoCorrect="off"
@@ -128,11 +131,18 @@ export function SearchBar({
 					className="size-6 fill-current text-black/60 dark:text-white/40"
 				/>
 			}
-			endContent={
-				typeof endContent === "function"
-					? endContent(localValue, ask)
-					: endContent
-			}
+			endContent={endContent}
 		/>
+	);
+
+	if (!trailing) return field;
+
+	return (
+		<div className="relative flex min-w-0 flex-1 items-center">
+			{field}
+			<div className="absolute inset-y-0 right-3 flex items-center">
+				{trailing(ask)}
+			</div>
+		</div>
 	);
 }
