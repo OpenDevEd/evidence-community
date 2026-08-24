@@ -118,7 +118,7 @@ let indigoMeilisearchPort = "";
 let fixturePort = "";
 let appHttpsPort = "";
 let mailpitPort = "";
-let publicationFakePort = "";
+let runtimeProviderFakePort = "";
 let amberPort = "";
 let indigoPort = "";
 let libraryComposePort = "";
@@ -159,7 +159,7 @@ async function initializeAcceptancePorts() {
 		fixturePort,
 		appHttpsPort,
 		mailpitPort,
-		publicationFakePort,
+		runtimeProviderFakePort,
 		amberPort,
 		indigoPort,
 		libraryComposePort,
@@ -174,7 +174,7 @@ async function initializeAcceptancePorts() {
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_APP_HTTPS_PORT),
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT),
 		availablePort(
-			process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_FAKE_PORT,
+			process.env.EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_PROVIDER_FAKE_PORT,
 		),
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT),
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_PORT),
@@ -189,7 +189,8 @@ async function initializeAcceptancePorts() {
 		EVIDENCE_LIBRARY_ACCEPTANCE_MEILI_PORT: meilisearchPort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_MEILI_PORT: amberMeilisearchPort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_MEILI_PORT: indigoMeilisearchPort,
-		EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_FAKE_PORT: publicationFakePort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_PROVIDER_FAKE_PORT:
+			runtimeProviderFakePort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT: mailpitPort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT: amberPort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_PORT: indigoPort,
@@ -1173,9 +1174,11 @@ function runAdminBrowserSuite(profile: Profile) {
 		...commandEnvironment,
 		...publicExpectations(profile),
 		PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
-		EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL: `http://127.0.0.1:${publicationFakePort}`,
+		EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL: `http://127.0.0.1:${runtimeProviderFakePort}`,
 		EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID:
 			profile.config.authentication.openScholar.libraryId,
+		EVIDENCE_LIBRARY_OPENSCHOLAR_WRONG_LIBRARY_ID:
+			acceptanceOpenScholar.indigo.libraryId,
 		EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL:
 			profile.config.authentication.openScholar.loginPageUrl,
 		PLAYWRIGHT_ADMIN_UI: "true",
@@ -1224,7 +1227,7 @@ function runPublicationBrowserPhase(
 		],
 		playwrightEnvironment(`${profile.name}-publication-${phase}`, {
 			...commandEnvironment,
-			EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL: `http://127.0.0.1:${publicationFakePort}`,
+			EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL: `http://127.0.0.1:${runtimeProviderFakePort}`,
 			EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID:
 				profile.config.authentication.openScholar.libraryId,
 			EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL:
@@ -1242,7 +1245,7 @@ function runPublicationBrowserPhase(
 
 async function readPublicationProviderState() {
 	const response = await fetch(
-		`http://127.0.0.1:${publicationFakePort}/_test/state`,
+		`http://127.0.0.1:${runtimeProviderFakePort}/_test/state`,
 	);
 	assert.equal(response.ok, true);
 	return (await response.json()) as {
@@ -1253,7 +1256,7 @@ async function readPublicationProviderState() {
 
 async function issueAcceptanceAdminLoginCode() {
 	const response = await fetch(
-		`http://127.0.0.1:${publicationFakePort}/_test/admin-login-codes`,
+		`http://127.0.0.1:${runtimeProviderFakePort}/_test/admin-login-codes`,
 		{ method: "POST" },
 	);
 	assert.equal(response.status, 201);
@@ -1552,7 +1555,7 @@ async function verifyPublicationLifecycle(profile: Profile) {
 		failedJobs: 0,
 	});
 	const providerResponse = await fetch(
-		`http://127.0.0.1:${publicationFakePort}/_test/state`,
+		`http://127.0.0.1:${runtimeProviderFakePort}/_test/state`,
 	);
 	assert.equal(providerResponse.ok, true);
 	const providerState = (await providerResponse.json()) as {
@@ -1676,7 +1679,7 @@ async function verifyZenodoReuseExternalLifecycle(profile: Profile) {
 	});
 
 	const providerResponse = await fetch(
-		`http://127.0.0.1:${publicationFakePort}/_test/state`,
+		`http://127.0.0.1:${runtimeProviderFakePort}/_test/state`,
 	);
 	assert.equal(providerResponse.ok, true);
 	const providerState = (await providerResponse.json()) as {
@@ -1997,7 +2000,7 @@ async function main() {
 			"amber",
 			"indigo",
 			"fixture",
-			"publication-provider-fake",
+			"runtime-provider-fake",
 			"amber-publication-worker",
 			"mailpit",
 			"postgres",

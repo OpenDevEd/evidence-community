@@ -8,7 +8,7 @@ import {
 
 const ADMIN_LOGIN_CODE_PATTERN = /^elc_[A-Za-z0-9_-]{43}$/u;
 const ADMIN_LOGIN_REDEMPTION_PATH =
-	"/api/evidence-libraries/admin-login/redeem";
+	"/api/v1/evidence-libraries/admin-login/redeem";
 
 const redemptionResponseSchema = adminSessionIdentitySchema;
 

@@ -675,6 +675,21 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 	);
 });
 
+test("rejects a one-time code for another library", async ({ page }) => {
+	const wrongLibraryId =
+		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_WRONG_LIBRARY_ID;
+	expect(wrongLibraryId).toBeTruthy();
+	await page.context().clearCookies();
+
+	const code = await issueAdminLoginCode(wrongLibraryId);
+	const response = await createAdminBrowserSession(page, code);
+
+	expect(response.headers()["set-cookie"]).toBeUndefined();
+	expect(new URL(response.headers().location).pathname).toBe(
+		"/admin/access-error",
+	);
+});
+
 test("edits an imported record and shows its writeback lifecycle", async ({
 	page,
 }) => {

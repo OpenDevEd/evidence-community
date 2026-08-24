@@ -89,7 +89,7 @@ invalid when either part is missing.
 OpenScholar sends the browser to `/api/admin/session?code=elc_...`. The
 Evidence Library sends that code, its configured library ID, and its machine
 credential to
-`POST /api/evidence-libraries/admin-login/redeem` on the configured Convex
+`POST /api/v1/evidence-libraries/admin-login/redeem` on the configured Convex
 site. A successful response creates a signed 12-hour cookie containing the
 returned Clerk user, Clerk organization, target library, and owner/editor
 role. The cookie is HTTP-only, same-site lax, host-only, and secure in
@@ -398,6 +398,25 @@ npm run test:acceptance:cleanup
 The cleanup command removes only Evidence Library acceptance environments whose
 test process has ended. It leaves active tests and unrelated development
 containers running.
+
+## Real-service admin codes
+
+Real-service checks that call the deployed admin HTTP API require
+`EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE` to contain a fresh `elc_` code for that
+library. OpenScholar codes are single-use, so request a new code before every
+command. This applies to these checks:
+
+```bash
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:search-worker
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:native-file-http
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:admin-item-batch-http
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:linked-item-lifecycle
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:admin-zotero-live -- --confirm-group <group-id>
+```
+
+The linked-item check needs the code only when `EVIDENCE_LIBRARY_TEST_URL` is
+set and its HTTP checks run. The acceptance suite issues its own disposable
+codes and does not need this environment value.
 
 ## Real publication sandbox checks
 

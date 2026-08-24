@@ -48,7 +48,7 @@ Store sanitized test evidence as machine-readable run summaries and concise docu
 - new `tools/verifyZenodoSandboxPublication.ts`
 - new `tools/verifyPublicationSandboxLifecycle.ts`
 - `package.json`
-- `tests/acceptance/compose.yaml`, `tests/acceptance/fixture/publication-provider-fake.mjs`, `tests/e2e/admin-publication.spec.ts`, and `playwright.config.ts`
+- `tests/acceptance/compose.yaml`, `tests/acceptance/fixture/runtime-provider-fake.mjs`, `tests/e2e/admin-publication.spec.ts`, and `playwright.config.ts`
 - `docs/publication-sync.md`
 - `docs/evidence-library-operations.md`
 - `docs/evidence-library-customization-map.md`

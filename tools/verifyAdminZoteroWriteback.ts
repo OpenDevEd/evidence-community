@@ -8,7 +8,7 @@
  * prove Zotero deletes the copy. Zotero is read through its Web API.
  *
  *   ADMIN_ZOTERO_ORIGIN=https://... \
- *   ADMIN_ZOTERO_LOGIN_CODE=elc_... \
+ *   EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE=elc_... \
  *   ADMIN_ZOTERO_GROUP=6641415 \
  *   ADMIN_ZOTERO_API_KEY=... \
  *   npm run test:admin-zotero-live -- --confirm-group 6641415
@@ -17,10 +17,10 @@ import { setTimeout as delay } from "node:timers/promises";
 
 import { chromium, type Page } from "@playwright/test";
 
+import { createAdminTestSession } from "./adminSession";
 import { createFixturePdf } from "./seedZoteroPlayground";
 
 const origin = process.env.ADMIN_ZOTERO_ORIGIN;
-const loginCode = process.env.ADMIN_ZOTERO_LOGIN_CODE;
 const groupId = process.env.ADMIN_ZOTERO_GROUP;
 const apiKey = process.env.ADMIN_ZOTERO_API_KEY;
 const sourceLabelHint = process.env.ADMIN_ZOTERO_SOURCE_LABEL ?? null;
@@ -33,7 +33,7 @@ function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
-assert(origin && loginCode && groupId && apiKey, "Set ADMIN_ZOTERO_ORIGIN, ADMIN_ZOTERO_LOGIN_CODE, ADMIN_ZOTERO_GROUP and ADMIN_ZOTERO_API_KEY");
+assert(origin && groupId && apiKey, "Set ADMIN_ZOTERO_ORIGIN, ADMIN_ZOTERO_GROUP and ADMIN_ZOTERO_API_KEY");
 assert(confirmedGroup === groupId, `Pass --confirm-group ${groupId} to confirm the Zotero group this tool writes to`);
 assert(/^https:\/\//u.test(origin), "ADMIN_ZOTERO_ORIGIN must be an https origin");
 
@@ -68,9 +68,11 @@ async function waitFor<T>(label: string, read: () => Promise<T | null>, timeoutM
 }
 
 async function login(page: Page) {
-	await page.goto(
-		`${origin}/api/admin/session?code=${encodeURIComponent(loginCode!)}`,
-	);
+	const session = await createAdminTestSession(origin!);
+	await page.context().addCookies([
+		{ name: session.name, url: origin!, value: session.value },
+	]);
+	await page.goto(`${origin}/admin`);
 	const newItem = page.getByRole("button", { name: "New item" });
 	await newItem.waitFor({ state: "visible" });
 }

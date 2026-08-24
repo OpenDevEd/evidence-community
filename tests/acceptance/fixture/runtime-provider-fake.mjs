@@ -1,3 +1,5 @@
+// fallow-ignore-file unused-file
+// Docker Compose starts this fixture directly; it is not imported by TypeScript.
 import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 
@@ -124,6 +126,7 @@ function crossrefValue(tag) {
 		: null;
 }
 
+// fallow-ignore-next-line complexity
 const server = createServer(async (request, response) => {
 	const url = new URL(
 		request.url ?? "/",
@@ -169,7 +172,7 @@ const server = createServer(async (request, response) => {
 	}
 
 	if (
-		url.pathname === "/api/evidence-libraries/admin-login/redeem" &&
+		url.pathname === "/api/v1/evidence-libraries/admin-login/redeem" &&
 		method === "POST"
 	) {
 		const credential =

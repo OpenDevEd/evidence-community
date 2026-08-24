@@ -96,7 +96,7 @@ describe("admin session routes", () => {
 			verifyAdminSessionToken(token, { libraryId, secret }),
 		).toMatchObject(redeemedIdentity);
 		expect(fetchMock).toHaveBeenCalledWith(
-			"https://spotted-woodpecker-546.convex.site/api/evidence-libraries/admin-login/redeem",
+			"https://spotted-woodpecker-546.convex.site/api/v1/evidence-libraries/admin-login/redeem",
 			{
 				body: JSON.stringify({ libraryId, code }),
 				cache: "no-store",

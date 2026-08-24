@@ -42,7 +42,7 @@ Move the finished DOI publication work onto the current `openscholar` branch wit
 - `src/lib/admin/errors.ts` and `src/lib/admin/http.ts`: plain admin API errors.
 - `src/lib/worker-instance.ts` and `src/lib/worker-state-reporter.ts`: shared worker runtime.
 - Current `docker/compose.library.yaml`: tenant networks, private Meilisearch, source workers, and Coolify proxy selection.
-- `tests/acceptance/fixture/publication-provider-fake.mjs`: deterministic provider behavior.
+- `tests/acceptance/fixture/runtime-provider-fake.mjs`: deterministic provider behavior.
 - `tools/runRuntimeAcceptance.ts`: disposable browser, worker, database, and provider lifecycle.
 - `tools/provisionLibraryDatabase.ts`: restricted tenant database creation.
 - `docs/evidence-library-operations.md`: live deployment and Coolify environment procedure.

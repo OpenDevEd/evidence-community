@@ -1,9 +1,10 @@
 import type { APIResponse, Page } from "@playwright/test";
 
-export async function issueAdminLoginCode() {
+export async function issueAdminLoginCode(
+	libraryId = process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID,
+) {
 	const fakeUrl = process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL;
 	if (fakeUrl) {
-		const libraryId = process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID;
 		const response = await fetch(
 			new URL("/_test/admin-login-codes", fakeUrl),
 			{

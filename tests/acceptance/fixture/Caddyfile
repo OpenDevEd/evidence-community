@@ -59,12 +59,12 @@ https://openscholar.localhost:{$FIXTURE_PORT} {
 
 https://openscholar-convex.localhost:{$FIXTURE_PORT} {
 	tls internal
-	reverse_proxy publication-provider-fake:4000
+	reverse_proxy runtime-provider-fake:4000
 }
 
 https://test.crossref.org, https://sandbox.zenodo.org {
 	tls internal
-	reverse_proxy publication-provider-fake:4000
+	reverse_proxy runtime-provider-fake:4000
 }
 
 https://doi.org {
@@ -73,5 +73,5 @@ https://doi.org {
 }
 
 http://storage:5000 {
-	reverse_proxy publication-provider-fake:4000
+	reverse_proxy runtime-provider-fake:4000
 }
