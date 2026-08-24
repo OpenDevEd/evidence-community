@@ -12,22 +12,25 @@ export const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1_000;
 
 const adminRoleSchema = z.enum(["owner", "editor"]);
 
-const adminSessionSchema = z
+export const adminSessionIdentitySchema = z
 	.object({
 		clerkOrganizationId: z.string().trim().min(1).max(512),
 		clerkUserId: z.string().trim().min(1).max(512),
 		consumedAt: z.number().int().nonnegative(),
-		expiresAt: z.number().int().positive(),
 		libraryId: z.string().trim().min(1).max(128),
 		role: adminRoleSchema,
+	})
+	.strict();
+
+const adminSessionSchema = adminSessionIdentitySchema
+	.extend({
+		expiresAt: z.number().int().positive(),
 		version: z.literal(2),
 	})
 	.strict();
 
-export type AdminRole = z.infer<typeof adminRoleSchema>;
-export type AdminSessionIdentity = Omit<
-	z.infer<typeof adminSessionSchema>,
-	"expiresAt" | "version"
+export type AdminSessionIdentity = z.infer<
+	typeof adminSessionIdentitySchema
 >;
 export type AdminSession = AdminSessionIdentity & { expiresAt: number };
 
@@ -126,8 +129,11 @@ export function verifyAdminSessionToken(
 	}
 }
 
-export async function getAdminSession(token: string | undefined) {
-	const config = await getAdminAccessConfig();
+export async function getAdminSession(
+	token: string | undefined,
+	config?: AdminSessionSigningConfig,
+) {
+	config ??= await getAdminAccessConfig();
 	return verifyAdminSessionToken(token, config);
 }
 

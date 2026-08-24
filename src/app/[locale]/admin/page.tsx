@@ -7,7 +7,7 @@ import AdminWorkbench from "@/components/admin/AdminWorkbench";
 import {
 	adminSessionCookieName,
 	getAdminAccessConfig,
-	verifyAdminSessionToken,
+	getAdminSession,
 } from "@/lib/admin/access";
 import { parseAdminItemViewFilters } from "@/lib/admin/item-filter-state";
 
@@ -20,7 +20,7 @@ export default async function AdminPage({
 	const resolvedSearchParams = await searchParams;
 	const cookieStore = await cookies();
 	const adminConfig = await getAdminAccessConfig();
-	const session = verifyAdminSessionToken(
+	const session = await getAdminSession(
 		cookieStore.get(adminSessionCookieName())?.value,
 		adminConfig,
 	);

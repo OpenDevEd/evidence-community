@@ -1,25 +1,16 @@
 import "server-only";
 
-import { z } from "zod";
-
-import type {
-	AdminAccessConfig,
-	AdminSessionIdentity,
+import {
+	adminSessionIdentitySchema,
+	type AdminAccessConfig,
+	type AdminSessionIdentity,
 } from "@/lib/admin/access";
 
-export const ADMIN_LOGIN_CODE_PATTERN = /^elc_[A-Za-z0-9_-]{43}$/u;
+const ADMIN_LOGIN_CODE_PATTERN = /^elc_[A-Za-z0-9_-]{43}$/u;
 const ADMIN_LOGIN_REDEMPTION_PATH =
 	"/api/evidence-libraries/admin-login/redeem";
 
-const redemptionResponseSchema = z
-	.object({
-		clerkOrganizationId: z.string().trim().min(1).max(512),
-		clerkUserId: z.string().trim().min(1).max(512),
-		consumedAt: z.number().int().nonnegative(),
-		libraryId: z.string().trim().min(1).max(128),
-		role: z.enum(["owner", "editor"]),
-	})
-	.strict();
+const redemptionResponseSchema = adminSessionIdentitySchema;
 
 export async function redeemAdminLoginCode(
 	code: string,
