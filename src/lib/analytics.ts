@@ -325,9 +325,13 @@ export function initializeClientAnalytics(
 	return analyticsEnabled;
 }
 
-export function getAnalyticsDistinctId() {
+/**
+ * The reader's analytics id, or nothing when analytics are off or turned
+ * down. Requests leave the field out rather than sending an empty one.
+ */
+export function getAnalyticsDistinctId(): string | undefined {
 	if (!analyticsEnabled || !posthogClient) {
-		return null;
+		return undefined;
 	}
 
 	return posthogClient.get_distinct_id();

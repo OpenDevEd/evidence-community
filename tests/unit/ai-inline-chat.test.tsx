@@ -17,7 +17,10 @@ vi.mock("@/i18n/routing", () => ({
 	useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 	Link: ({ children }: { children: unknown }) => children,
 }));
-vi.mock("@/lib/analytics", () => ({ getAnalyticsDistinctId: () => "test" }));
+const analyticsId = { value: undefined as string | undefined };
+vi.mock("@/lib/analytics", () => ({
+	getAnalyticsDistinctId: () => analyticsId.value,
+}));
 vi.mock("@/context/LibraryConfigProvider", () => ({
 	useLibraryConfig: () => ({
 		ai: {
@@ -86,10 +89,11 @@ function answerStream(text: string) {
 describe("the chat beside the search results", () => {
 	let container: HTMLDivElement;
 	let root: Root;
-	let asked: unknown[];
+	let asked: Record<string, unknown>[];
 
 	beforeEach(() => {
 		window.localStorage.clear();
+		analyticsId.value = undefined;
 		asked = [];
 		container = document.createElement("div");
 		document.body.append(container);
@@ -97,7 +101,9 @@ describe("the chat beside the search results", () => {
 		vi.stubGlobal(
 			"fetch",
 			vi.fn(async (_url: string, init: RequestInit) => {
-				asked.push(JSON.parse(String(init.body)));
+				asked.push(
+					JSON.parse(String(init.body)) as Record<string, unknown>,
+				);
 
 				return new Response(answerStream("Two studies say yes."), {
 					headers: { "Content-Type": "text/event-stream" },
@@ -237,15 +243,29 @@ describe("the chat beside the search results", () => {
 	});
 
 	it("sends the chosen model and mode with the question", async () => {
+		analyticsId.value = "reader-1";
 		await render();
 		await type("Does teacher training help?");
 		await send();
 
 		expect(asked).toHaveLength(1);
 		expect(asked[0]).toMatchObject({
+			distinctId: "reader-1",
 			modelId: "gemini-2.5-flash",
 			mode: "quick",
 		});
+	});
+
+	// A reader who turns cookies down has no analytics id. Sending an empty
+	// one made the library refuse every question they asked.
+	it("leaves the analytics id out when there is none", async () => {
+		analyticsId.value = undefined;
+		await render();
+		await type("Does teacher training help?");
+		await send();
+
+		expect(asked).toHaveLength(1);
+		expect(Object.keys(asked[0] as object)).not.toContain("distinctId");
 	});
 
 	it("keeps the text when Shift and Enter are pressed together", async () => {

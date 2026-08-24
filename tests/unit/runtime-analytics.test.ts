@@ -101,6 +101,8 @@ describe("runtime browser analytics", () => {
 				utmDurationSeconds: 600,
 			}),
 		).toBe(false);
-		expect(getAnalyticsDistinctId()).toBeNull();
+		// Nothing rather than an empty id: requests leave the field out, and
+		// the AI routes refuse a request that carries an empty one.
+		expect(getAnalyticsDistinctId()).toBeUndefined();
 	});
 });
