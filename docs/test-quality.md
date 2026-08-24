@@ -7,6 +7,34 @@ commit one until every assertion proves real behavior.
 This guide applies to unit, integration, browser, worker, provider, and AI-output
 tests. The commands and cleanup rules remain in `AGENTS.md`.
 
+## First decide whether a test belongs
+
+Use the `test-decision` skill before touching a test file or assertion. A code
+change does not automatically require a test change.
+
+Do not add or change a test for a change that only affects:
+
+- ordinary interface copy;
+- visual styling or layout;
+- comments or documentation; or
+- a refactor that keeps the same public behavior.
+
+Run the existing checks that cover the changed area. Inspect copy and visual
+changes in the real browser or a screenshot. Exact wording needs an assertion
+only when that wording is itself a lasting legal, security, accessibility, or
+protocol contract. A product owner asking for different ordinary copy once does
+not turn every word in that copy into a permanent contract.
+
+Before changing tests, write down:
+
+1. The behavior or contract that changed.
+2. The defect the test would catch.
+3. Why existing coverage does not catch it.
+4. The smallest boundary where the result is visible.
+5. Why harmless copy or refactoring would not break the test.
+
+If those five answers are not clear, do not change the test.
+
 ## What a useful test must prove
 
 Every test must have all of these:
@@ -90,6 +118,23 @@ checks. They do not prove runtime behavior and must not be counted as unit,
 integration, or acceptance coverage.
 
 ## Bad and good examples
+
+### Do not freeze ordinary copy
+
+Bad:
+
+```ts
+expect(card.textContent).not.toContain("optional");
+```
+
+This assertion was almost added for a one-line change from `No DOI · optional`
+to `No DOI`. It does not protect DOI behavior. It freezes one discarded word
+and would fail during harmless copy editing.
+
+Good: change the copy, run the existing component checks, and inspect the card
+in the real browser. Add no test. If the wording were a fixed accessibility
+name or an exact protocol error required by a client, assert that named contract
+at its real boundary and explain why it must stay exact.
 
 ### Prove authentication at the HTTP boundary
 
@@ -283,6 +328,8 @@ patterns to replace.
 
 Before committing a test change, answer all of these with evidence:
 
+- Does this change need a test change at all, or is it only copy, style,
+  comments, documentation, or a behavior-preserving refactor?
 - What user, API, data, worker, provider, or model behavior does each new test
   prove?
 - Which exact defect would make it fail?
