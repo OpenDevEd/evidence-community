@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useReducedMotion } from "framer-motion";
 import { useStickToBottom } from "use-stick-to-bottom";
 
@@ -57,11 +57,25 @@ function useExternalQuestion({
 	onAsk: (question: string) => void;
 	setExternalInput?: (input: string) => void;
 }) {
+	const askedRef = useRef<string | null>(null);
+	const handlersRef = useRef({ onAsk, setExternalInput });
+
 	useEffect(() => {
-		if (!externalInput || !isReady) return;
-		onAsk(externalInput);
-		setExternalInput?.("");
-	}, [externalInput, isReady, onAsk, setExternalInput]);
+		handlersRef.current = { onAsk, setExternalInput };
+	});
+	useEffect(() => {
+		// The question is cleared once asked, which also arms the next one, so
+		// the same question can be asked again later.
+		if (!externalInput) {
+			askedRef.current = null;
+
+			return;
+		}
+		if (!isReady || askedRef.current === externalInput) return;
+		askedRef.current = externalInput;
+		handlersRef.current.onAsk(externalInput);
+		handlersRef.current.setExternalInput?.("");
+	}, [externalInput, isReady]);
 }
 
 /** The conversation: its messages, and the ways they change. */

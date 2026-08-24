@@ -102,7 +102,14 @@ describe("the chat beside the search results", () => {
 		);
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
+		// The window draws into the page itself, so it has to be taken down
+		// or the next test types into the one before it.
+		await act(async () => {
+			root.unmount();
+		});
+		container.remove();
+		document.body.replaceChildren();
 		vi.unstubAllGlobals();
 	});
 
