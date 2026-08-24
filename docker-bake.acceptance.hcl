@@ -1,5 +1,5 @@
 group "acceptance" {
-  targets = ["app", "search-indexer", "publication-worker"]
+  targets = ["app", "search-indexer", "source-sync", "source-writeback", "publication-worker"]
 }
 
 target "acceptance-image" {
@@ -17,6 +17,18 @@ target "search-indexer" {
   inherits = ["acceptance-image"]
   target   = "search-indexer"
   tags     = ["evidence-library-acceptance-search-indexer:local"]
+}
+
+target "source-sync" {
+  inherits = ["acceptance-image"]
+  target   = "source-sync"
+  tags     = ["evidence-library-acceptance-source-sync:local"]
+}
+
+target "source-writeback" {
+  inherits = ["acceptance-image"]
+  target   = "source-writeback"
+  tags     = ["evidence-library-acceptance-source-writeback:local"]
 }
 
 target "publication-worker" {

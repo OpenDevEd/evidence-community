@@ -39,6 +39,15 @@ const rootDirectory = path.resolve(
 const acceptanceDirectory = path.join(rootDirectory, "tests", "acceptance");
 const testResultsDirectory = path.join(rootDirectory, "test-results");
 const composeFile = path.join(acceptanceDirectory, "compose.yaml");
+const libraryComposeFile = path.join(
+	rootDirectory,
+	"docker",
+	"compose.library.yaml",
+);
+const libraryComposeOverrideFile = path.join(
+	acceptanceDirectory,
+	"compose.library.override.yaml",
+);
 const configDirectory = path.join(acceptanceDirectory, "configs");
 const composeProject =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT ??
@@ -48,6 +57,7 @@ if (!/^[a-z0-9][a-z0-9_-]*$/.test(composeProject)) {
 		"EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT must contain only lowercase letters, numbers, hyphens, and underscores",
 	);
 }
+const libraryComposeProject = `${composeProject}-library`;
 const runtimeDirectory = path.join(
 	acceptanceDirectory,
 	"runtime",
@@ -59,6 +69,12 @@ const image =
 const searchIndexerImage =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE ??
 	"evidence-library-acceptance-search-indexer:local";
+const sourceSyncImage =
+	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_SYNC_IMAGE ??
+	"evidence-library-acceptance-source-sync:local";
+const sourceWritebackImage =
+	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_WRITEBACK_IMAGE ??
+	"evidence-library-acceptance-source-writeback:local";
 const publicationWorkerImage =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE ??
 	"evidence-library-acceptance-publication-worker:local";
@@ -94,6 +110,7 @@ let mailpitPort = "";
 let publicationFakePort = "";
 let amberPort = "";
 let indigoPort = "";
+let libraryComposePort = "";
 let postgresPort = "";
 const keepRunning = process.argv.includes("--keep");
 const skipBuild = process.argv.includes("--skip-build");
@@ -104,6 +121,8 @@ const commandEnvironment: NodeJS.ProcessEnv = {
 	EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE:
 		publicationWorkerImage,
 	EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE: searchIndexerImage,
+	EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_SYNC_IMAGE: sourceSyncImage,
+	EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_WRITEBACK_IMAGE: sourceWritebackImage,
 	EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID: String(process.pid),
 	EVIDENCE_LIBRARY_ACCEPTANCE_PERSISTENT: String(keepRunning),
 	EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR: runtimeDirectory,
@@ -111,6 +130,7 @@ const commandEnvironment: NodeJS.ProcessEnv = {
 const junitReportFiles = new Set<string>();
 const ownerLabel = "org.opendeved.evidence-library.acceptance.owner-pid";
 const persistentLabel = "org.opendeved.evidence-library.acceptance.persistent";
+const composeKindLabel = "org.opendeved.evidence-library.acceptance.compose";
 
 async function initializeAcceptancePorts() {
 	[
@@ -123,6 +143,7 @@ async function initializeAcceptancePorts() {
 		publicationFakePort,
 		amberPort,
 		indigoPort,
+		libraryComposePort,
 		postgresPort,
 	] = await Promise.all([
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_MEILI_PORT),
@@ -138,6 +159,9 @@ async function initializeAcceptancePorts() {
 		),
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT),
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_PORT),
+		availablePort(
+			process.env.EVIDENCE_LIBRARY_ACCEPTANCE_LIBRARY_COMPOSE_PORT,
+		),
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_POSTGRES_PORT),
 	]);
 	Object.assign(commandEnvironment, {
@@ -150,6 +174,7 @@ async function initializeAcceptancePorts() {
 		EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT: mailpitPort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT: amberPort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_PORT: indigoPort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_LIBRARY_COMPOSE_PORT: libraryComposePort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_POSTGRES_PORT: postgresPort,
 	});
 }
@@ -225,10 +250,14 @@ function verifyJunitReports() {
 	console.log(`Wrote ${junitReportFiles.size} Playwright JUnit reports.`);
 }
 
-function capture(command: string, args: string[]) {
+function capture(
+	command: string,
+	args: string[],
+	environment = commandEnvironment,
+) {
 	const result = spawnSync(command, args, {
 		cwd: rootDirectory,
-		env: commandEnvironment,
+		env: environment,
 		encoding: "utf8",
 	});
 	if (result.error) throw result.error;
@@ -270,6 +299,148 @@ function captureCompose(...args: string[]) {
 	]);
 }
 
+type ComposeProcess = {
+	Health: string;
+	Service: string;
+	State: string;
+};
+
+function libraryComposeArguments(project: string, ...args: string[]) {
+	return [
+		"compose",
+		"--project-directory",
+		rootDirectory,
+		"--file",
+		libraryComposeFile,
+		"--file",
+		libraryComposeOverrideFile,
+		"--project-name",
+		project,
+		...args,
+	];
+}
+
+function requireRunningProcess(processes: ComposeProcess[], service: string) {
+	const matches = processes.filter((process) => process.Service === service);
+	assert.equal(matches.length, 1, `${service} must have one container`);
+	assert.equal(matches[0].State, "running", `${service} must be running`);
+	return matches[0];
+}
+
+async function requireHttpSuccess(url: string, description: string) {
+	const response = await fetch(url);
+	assert.equal(response.status, 200, `${description} must respond`);
+	return response;
+}
+
+async function verifyRepositoryComposeStartup(profile: Profile) {
+	const config = structuredClone(profile.config);
+	config.services.database.url =
+		"postgresql://library:library@postgres:5432/library_compose";
+	config.services.search.host = "http://meilisearch:7700";
+	const environment = {
+		...commandEnvironment,
+		EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK: `${composeProject}_default`,
+		LIBRARY_CONFIG_JSON: JSON.stringify(config),
+		MEILISEARCH_MASTER_KEY: config.services.search.key,
+	};
+	const compose = (...args: string[]) =>
+		run(
+			"docker",
+			libraryComposeArguments(libraryComposeProject, ...args),
+			environment,
+		);
+	captureCompose(
+		"exec",
+		"--no-TTY",
+		"postgres",
+		"createdb",
+		"--username",
+		"library",
+		"library_compose",
+	);
+	const startedAt = Date.now();
+	try {
+		compose(
+			"up",
+			"--detach",
+			"--wait",
+			"--wait-timeout",
+			"180",
+			"--no-build",
+		);
+		const processes = capture(
+			"docker",
+			libraryComposeArguments(
+				libraryComposeProject,
+				"ps",
+				"--all",
+				"--format",
+				"{{json .}}",
+			),
+			environment,
+		)
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line) as ComposeProcess);
+		for (const service of [
+			"web",
+			"search-indexer",
+			"publication-worker",
+			"meilisearch",
+		] as const) {
+			assert.equal(
+				requireRunningProcess(processes, service).Health,
+				"healthy",
+				`${service} must be healthy`,
+			);
+		}
+		requireRunningProcess(processes, "source-sync");
+		requireRunningProcess(processes, "source-writeback");
+
+		const baseUrl = `http://127.0.0.1:${libraryComposePort}`;
+		const healthResponse = await requireHttpSuccess(
+			`${baseUrl}/api/library-config/health`,
+			"Configuration health",
+		);
+		const health = (await healthResponse.json()) as RuntimeConfigHealth;
+		assert.equal(health.state, "active");
+		assert.equal(health.active?.revision, config.revision);
+		assert.equal(health.rejected, null);
+		await requireHttpSuccess(
+			`${baseUrl}/${config.localization.defaultLocale}/lib`,
+			"Public library",
+		);
+		await requireHttpSuccess(`${baseUrl}/admin`, "Admin");
+	} finally {
+		compose("down", "--volumes");
+	}
+	assert.equal(
+		capture(
+			"docker",
+			libraryComposeArguments(
+				libraryComposeProject,
+				"ps",
+				"--all",
+				"--quiet",
+			),
+			environment,
+		).trim(),
+		"",
+		"Repository Compose teardown must remove its containers",
+	);
+	console.log(
+		`Repository Compose started revision ${config.revision} and stopped in ${((Date.now() - startedAt) / 1_000).toFixed(1)} seconds.`,
+	);
+}
+
+async function verifyBaseAcceptanceServicesSurvived() {
+	await waitForComposeServiceHealthy("postgres");
+	await waitForComposeServiceHealthy("amber-meilisearch");
+	await waitForComposeServiceHealthy("indigo-meilisearch");
+	console.log("Repository Compose teardown left the base services healthy.");
+}
+
 async function waitForComposeServiceHealthy(
 	service: string,
 	timeoutMs = 30_000,
@@ -299,6 +470,26 @@ function processIsAlive(pid: number) {
 	}
 }
 
+function removeLibraryComposeProject(project: string) {
+	const baseProject = project.slice(0, -"-library".length);
+	run(
+		"docker",
+		libraryComposeArguments(
+			project,
+			"down",
+			"--volumes",
+			"--remove-orphans",
+		),
+		{
+			...commandEnvironment,
+			EVIDENCE_LIBRARY_ACCEPTANCE_LIBRARY_COMPOSE_PORT: "1",
+			EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK: `${baseProject}_default`,
+			LIBRARY_CONFIG_JSON: "{}",
+			MEILISEARCH_MASTER_KEY: "cleanup",
+		},
+	);
+}
+
 function reapAbandonedProjects(options: { includePersistent?: boolean } = {}) {
 	const rows = capture("docker", [
 		"ps",
@@ -306,17 +497,18 @@ function reapAbandonedProjects(options: { includePersistent?: boolean } = {}) {
 		"--filter",
 		`label=${ownerLabel}`,
 		"--format",
-		`{{.Label "com.docker.compose.project"}}|{{.Label "${ownerLabel}"}}|{{.Label "${persistentLabel}"}}`,
+		`{{.Label "com.docker.compose.project"}}|{{.Label "${ownerLabel}"}}|{{.Label "${persistentLabel}"}}|{{.Label "${composeKindLabel}"}}`,
 	]);
 	const projects = new Map<
 		string,
-		{ ownerPid: number; persistent: boolean }
+		{ libraryCompose: boolean; ownerPid: number; persistent: boolean }
 	>();
 
 	for (const row of rows.split("\n").filter(Boolean)) {
-		const [project, ownerPid, persistent] = row.split("|");
+		const [project, ownerPid, persistent, composeKind] = row.split("|");
 		if (!project) continue;
 		projects.set(project, {
+			libraryCompose: composeKind === "library",
 			ownerPid: Number(ownerPid),
 			persistent: persistent === "true",
 		});
@@ -341,13 +533,17 @@ function reapAbandonedProjects(options: { includePersistent?: boolean } = {}) {
 			project,
 		);
 		console.log(`Removing abandoned acceptance project ${project}`);
-		composeForProject(
-			project,
-			abandonedRuntimeDirectory,
-			"down",
-			"--volumes",
-			"--remove-orphans",
-		);
+		if (state.libraryCompose) {
+			removeLibraryComposeProject(project);
+		} else {
+			composeForProject(
+				project,
+				abandonedRuntimeDirectory,
+				"down",
+				"--volumes",
+				"--remove-orphans",
+			);
+		}
 		rmSync(abandonedRuntimeDirectory, {
 			recursive: true,
 			force: true,
@@ -1681,6 +1877,10 @@ async function main() {
 				"--set",
 				`search-indexer.tags=${searchIndexerImage}`,
 				"--set",
+				`source-sync.tags=${sourceSyncImage}`,
+				"--set",
+				`source-writeback.tags=${sourceWritebackImage}`,
+				"--set",
 				`publication-worker.tags=${publicationWorkerImage}`,
 				"acceptance",
 			]);
@@ -1695,6 +1895,8 @@ async function main() {
 			"amber-meilisearch",
 			"indigo-meilisearch",
 		);
+		await verifyRepositoryComposeStartup(profiles[0]);
+		await verifyBaseAcceptanceServicesSurvived();
 		for (const profile of profiles) {
 			await seedSharedSearchIndexes(profile);
 		}

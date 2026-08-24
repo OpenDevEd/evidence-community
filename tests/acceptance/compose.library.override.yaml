@@ -1,0 +1,35 @@
+x-acceptance-labels: &acceptance-labels
+    - "org.opendeved.evidence-library.acceptance.owner-pid=${EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID:?owner pid is required}"
+    - "org.opendeved.evidence-library.acceptance.persistent=${EVIDENCE_LIBRARY_ACCEPTANCE_PERSISTENT:-false}"
+    - "org.opendeved.evidence-library.acceptance.compose=library"
+
+services:
+    web:
+        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_IMAGE:-evidence-library-acceptance:local}
+        labels: *acceptance-labels
+        ports:
+            - "${EVIDENCE_LIBRARY_ACCEPTANCE_LIBRARY_COMPOSE_PORT:?library Compose port is required}:3000"
+
+    search-indexer:
+        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE:-evidence-library-acceptance-search-indexer:local}
+        labels: *acceptance-labels
+
+    source-sync:
+        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_SYNC_IMAGE:-evidence-library-acceptance-source-sync:local}
+        labels: *acceptance-labels
+
+    source-writeback:
+        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_WRITEBACK_IMAGE:-evidence-library-acceptance-source-writeback:local}
+        labels: *acceptance-labels
+
+    publication-worker:
+        image: ${EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE:-evidence-library-acceptance-publication-worker:local}
+        labels: *acceptance-labels
+
+    meilisearch:
+        labels: *acceptance-labels
+
+networks:
+    coolify:
+        name: ${EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK:?acceptance project network is required}
+        external: true
