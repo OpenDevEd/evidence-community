@@ -47,7 +47,65 @@ LIBRARY_CONFIG_JSON="$(jq -c '.services.search.host = "http://meilisearch:7700"'
 ## Create a library database
 
 Libraries share one PostgreSQL server, but each library has its own database
-and login. Create both with the checked-in command. Do not run one-off SQL:
+and login. OpenScholar creates them through the database provisioner. Build the
+small provisioner image from its named Docker target:
+
+```bash
+docker build --target database-provisioner \
+  --tag evidence-library-database-provisioner .
+```
+
+The container reads these values only from its environment:
+
+| Variable | Value |
+| --- | --- |
+| `EVIDENCE_LIBRARY_ADMIN_DATABASE_URL` | PostgreSQL administrator URL used to create databases, logins, and extensions |
+| `EVIDENCE_LIBRARY_DATABASE_RUNTIME_HOST` | Internal PostgreSQL host and optional port written into each library's runtime URL |
+| `EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN` | Bearer token with at least 32 bytes |
+| `PORT` | HTTP port, default `3000` |
+
+`GET /health` returns `{"status":"ok"}`. Database setup uses one endpoint:
+
+```http
+POST /v1/library-databases/reconcile
+Authorization: Bearer <EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN>
+Content-Type: application/json
+
+{"libraryId":"<OpenScholar Evidence Library ID>","password":"<saved database password>"}
+```
+
+The request accepts only `libraryId` and `password`. The service derives the
+database and login names from the library ID. Callers cannot send a PostgreSQL
+host, administrator URL, database name, login name, migration path, or SQL.
+
+A successful request returns:
+
+```json
+{
+  "libraryId": "<same OpenScholar Evidence Library ID>",
+  "outcome": "created",
+  "databaseName": "el_...",
+  "loginName": "el_..._user",
+  "databaseUrl": "postgresql://..."
+}
+```
+
+`libraryId` is the exact ID from the request so OpenScholar can bind the receipt
+to the setup operation. `outcome` is `created` for a new database, `matched`
+when the saved request already matches PostgreSQL, and `updated` when
+reconciliation repairs a safe existing database. Error responses use the bounded
+`{"error":{"code":"...","message":"..."}}` shape and do not return database
+errors or environment values.
+
+The administrator creates the login and database, removes powerful rights and
+role memberships, revokes public database access, and installs `vector` and
+`pg_trgm`. The restricted library login then runs every checked-in Drizzle
+migration. A retry uses the same names and password. The service stops if
+another login owns the database, the login has server-wide rights, or it owns
+another database.
+
+Operators can run the same reconciler directly for a chosen database and login.
+Do not replace it with one-off SQL:
 
 ```bash
 npm run database:provision -- \
@@ -58,10 +116,8 @@ npm run database:provision -- \
   --runtime-host evidence-library-postgres:5432
 ```
 
-The command removes powerful login rights, removes role memberships, blocks
-public database access, and prints the database URL for the runtime config.
-Running the same command again is safe. It stops if the database belongs to a
-different login or the login already owns another database.
+The command prints the same outcome, database name, login name, and runtime URL
+as the HTTP service.
 
 Prove the rule against a real development PostgreSQL server:
 
@@ -70,9 +126,10 @@ EVIDENCE_LIBRARY_ADMIN_DATABASE_URL="$EVIDENCE_LIBRARY_ADMIN_DATABASE_URL" \
   npm run test:database-provisioning
 ```
 
-The check creates two temporary databases, runs every Drizzle migration, proves
-both cross-library connections fail, reruns provisioning, and removes its test
-databases and logins.
+The check creates two temporary databases, confirms reconciliation ran every
+Drizzle migration, proves both cross-library connections fail, checks
+`created`, `matched`, and `updated`, rejects a conflicting owner, and removes
+its test databases and logins.
 
 ## HTTPS and admin access
 
