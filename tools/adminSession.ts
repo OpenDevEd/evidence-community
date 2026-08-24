@@ -6,17 +6,15 @@ export type AdminTestSession = {
 
 export async function createAdminTestSession(
 	baseUrl: string,
-	password = process.env.EVIDENCE_LIBRARY_ADMIN_PASSWORD,
+	code = process.env.EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE,
 ): Promise<AdminTestSession> {
-	if (!password) {
-		throw new Error("EVIDENCE_LIBRARY_ADMIN_PASSWORD is required");
+	if (!code) {
+		throw new Error("EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE is required");
 	}
 
-	const body = new FormData();
-	body.set("password", password);
-	const response = await fetch(`${baseUrl}/api/admin/session`, {
-		body,
-		method: "POST",
+	const url = new URL("/api/admin/session", baseUrl);
+	url.searchParams.set("code", code);
+	const response = await fetch(url, {
 		redirect: "manual",
 	});
 	if (response.status !== 303) {

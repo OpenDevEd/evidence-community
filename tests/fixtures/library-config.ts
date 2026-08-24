@@ -28,6 +28,17 @@ export const minimalLibraryConfig = {
 		locales: ["en-GB"],
 		defaultLocale: "en-GB",
 	},
+	authentication: {
+		openScholar: {
+			convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
+			libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
+			loginPageUrl:
+				"https://openscholar.example.org/evidence-libraries/minimal",
+			machineCredential:
+				"els_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		},
+		secret: "minimal-auth-secret-123456789012345",
+	},
 	services: {
 		database: {
 			url: "postgresql://library:password@database:5432/library",
@@ -353,11 +364,18 @@ export const maximalLibraryConfig = {
 		utmDurationSeconds: 2_592_000,
 	},
 	authentication: {
-		adminPassword: "correct horse battery staple",
 		google: {
 			enabled: true,
 			clientId: "google-client-id",
 			clientSecret: "google-client-secret-value",
+		},
+		openScholar: {
+			convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
+			libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
+			loginPageUrl:
+				"https://openscholar.example.org/evidence-libraries/amber",
+			machineCredential:
+				"els_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
 		secret: "12345678901234567890123456789012",
 	},

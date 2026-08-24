@@ -71,7 +71,7 @@ describe("public library configuration", () => {
 			"clientSecret",
 		);
 		expect(publicConfig.authentication).not.toHaveProperty("secret");
-		expect(publicConfig.authentication).not.toHaveProperty("adminPassword");
+		expect(publicConfig.authentication).not.toHaveProperty("openScholar");
 
 		for (const privateValue of [
 			"postgresql://library:password@database:5432/library",
@@ -87,7 +87,9 @@ describe("public library configuration", () => {
 			"google-client-id",
 			"google-client-secret-value",
 			"12345678901234567890123456789012",
-			"correct horse battery staple",
+			"els_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			"kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
+			"https://spotted-woodpecker-546.convex.site",
 			"smtp-password",
 			"smtp-user",
 			"https://exports.example.org/library.ris",

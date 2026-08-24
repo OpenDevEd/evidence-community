@@ -51,7 +51,7 @@ Expose exact worker health and per-item receipts. Do not synthesize progress or 
 - `package.json`
 - deployment/container definitions that already launch search/source workers
 - `tests/acceptance/compose.yaml` with a publication-worker service and deterministic Crossref/Zenodo fake-provider service
-- new `tests/acceptance/fixture/publication-provider-fake.mjs` exposing test-only state, failure, delay, and recovery controls
+- new `tests/acceptance/fixture/runtime-provider-fake.mjs` exposing test-only state, failure, delay, and recovery controls
 - canonical mutation services only at their transactional enqueue seam
 - new admin health/status API routes
 

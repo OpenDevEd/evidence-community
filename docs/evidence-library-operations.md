@@ -80,21 +80,30 @@ Every library uses the normal Compose file and a public HTTPS origin. Set
 `identity.baseUrl` to that exact HTTPS origin. Coolify must force HTTP requests
 to HTTPS and route the hostname to the `web` service on port `3000`.
 
-The private runtime configuration must contain both
-`authentication.adminPassword` and `authentication.secret`. The password form
-creates a signed 12-hour cookie. The cookie is HTTP-only, same-site strict,
-host-only, and secure in production. It contains no password. Changing either
-private value signs out every existing session.
+Every deployed library must configure `authentication.openScholar` with its
+OpenScholar Convex site origin, Evidence Library ID, OpenScholar login page,
+and `els_` machine credential. It must also set `authentication.secret` for
+cookie signing. These fields are private and the runtime configuration is
+invalid when either part is missing.
 
-The public library stays open. `/admin` shows the password form when signed
-out. Every admin data API returns `401` with `Cache-Control: private, no-store`
-unless it receives a valid cookie. Login failures share a small fixed window
-per client address. The deployment proxy must overwrite `X-Real-IP` so an
-internet caller cannot choose that address.
+OpenScholar sends the browser to `/api/admin/session?code=elc_...`. The
+Evidence Library sends that code, its configured library ID, and its machine
+credential to
+`POST /api/v1/evidence-libraries/admin-login/redeem` on the configured Convex
+site. A successful response creates a signed 12-hour cookie containing the
+returned Clerk user, Clerk organization, target library, and owner/editor
+role. The cookie is HTTP-only, same-site lax, host-only, and secure in
+production. Codes are single-use; rejected, expired, replayed, or
+wrong-library codes do not create a session.
 
-After deployment, check the HTTP redirect, the HTTPS certificate, the login
-form, reload persistence, logout, and one real PDF upload. In the browser,
-`window.isSecureContext` must be true and `crypto.subtle` must exist.
+The public library stays open. Signed-out and failed `/admin` visits link back
+to the configured OpenScholar page. Every admin data API returns `401` with
+`Cache-Control: private, no-store` unless it receives a valid cookie.
+
+After deployment, create a fresh code in OpenScholar and check the redirect,
+HTTPS certificate, reload persistence, logout, code replay rejection, and one
+real PDF upload. In the browser, `window.isSecureContext` must be true and
+`crypto.subtle` must exist.
 
 ## Prepare a library for direct Docker use
 
@@ -390,6 +399,25 @@ The cleanup command removes only Evidence Library acceptance environments whose
 test process has ended. It leaves active tests and unrelated development
 containers running.
 
+## Real-service admin codes
+
+Real-service checks that call the deployed admin HTTP API require
+`EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE` to contain a fresh `elc_` code for that
+library. OpenScholar codes are single-use, so request a new code before every
+command. This applies to these checks:
+
+```bash
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:search-worker
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:native-file-http
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:admin-item-batch-http
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:linked-item-lifecycle
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:admin-zotero-live -- --confirm-group <group-id>
+```
+
+The linked-item check needs the code only when `EVIDENCE_LIBRARY_TEST_URL` is
+set and its HTTP checks run. The acceptance suite issues its own disposable
+codes and does not need this environment value.
+
 ## Real publication sandbox checks
 
 These commands may write only to the docs-pen Crossref Test and Zenodo Sandbox
@@ -403,10 +431,13 @@ export PUBLICATION_SANDBOX_RUN_ID=docs-pen-$(date +%Y%m%d-%H%M%S)
 export PUBLICATION_EXPECTED_CROSSREF_PREFIX=10.53832
 export PUBLICATION_EXPECTED_CROSSREF_NAMESPACE=docs-pen.
 export PUBLICATION_SANDBOX_EVIDENCE_PATH=/tmp/${PUBLICATION_SANDBOX_RUN_ID}.json
-export EVIDENCE_LIBRARY_ADMIN_PASSWORD='<docs-pen admin password>'
-
+export EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh docs-pen elc_ code>'
 npm run test:crossref-test-live
+
+export EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<another fresh docs-pen elc_ code>'
 npm run test:zenodo-sandbox-live
+
+export EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<another fresh docs-pen elc_ code>'
 npm run test:publication-sandbox-lifecycle
 ```
 

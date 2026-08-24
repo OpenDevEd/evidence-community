@@ -1341,7 +1341,6 @@ const analyticsSchema = z
 
 const authenticationSchema = z
 	.object({
-		adminPassword: secretSchema(12, 512).optional(),
 		google: z
 			.object({
 				enabled: z.boolean().default(false),
@@ -1350,10 +1349,23 @@ const authenticationSchema = z
 			})
 			.strict()
 			.prefault({}),
-		secret: secretSchema(32, 512).optional(),
+		openScholar: z
+			.object({
+				convexSiteUrl: publicHttpsOriginSchema,
+				libraryId: singleLineStringSchema(128).refine(
+					(value) => /^[a-z0-9]+$/u.test(value),
+					"OpenScholar library ID must contain lowercase letters and numbers only",
+				),
+				loginPageUrl: publicHttpsUrlSchema,
+				machineCredential: secretSchema(47, 47).refine(
+					(value) => /^els_[A-Za-z0-9_-]{43}$/u.test(value),
+					"OpenScholar machine credential must use the els_ format",
+				),
+			})
+			.strict(),
+		secret: secretSchema(32, 512),
 	})
-	.strict()
-	.prefault({});
+	.strict();
 
 const smtpSchema = z
 	.object({

@@ -317,7 +317,6 @@ async function main() {
 		const isolatedConfig = JSON.parse(
 			await readFile(sourceConfigPath, "utf8"),
 		) as {
-			authentication: { adminPassword: string };
 			services: {
 				database: { url: string };
 				search: { host: string; index: string; key: string };
@@ -437,10 +436,7 @@ async function main() {
 				return false;
 			}
 		}, `The isolated admin server did not start: ${webOutput}`);
-		adminSession = await createAdminTestSession(
-			baseUrl,
-			isolatedConfig.authentication.adminPassword,
-		);
+		adminSession = await createAdminTestSession(baseUrl);
 
 		const statusKeys = Array.from({ length: 6 }, () =>
 			generateCanonicalRecordKey(),

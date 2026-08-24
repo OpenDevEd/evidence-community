@@ -51,9 +51,20 @@ https://localhost:{$APP_HTTPS_PORT}, https://127.0.0.1:{$APP_HTTPS_PORT} {
 	reverse_proxy amber:3000
 }
 
+https://openscholar.localhost:{$FIXTURE_PORT} {
+	tls internal
+	header Content-Type "text/html; charset=utf-8"
+	respond "<!doctype html><html lang=\"en\"><head><title>OpenScholar acceptance</title></head><body><h1>OpenScholar acceptance</h1></body></html>" 200
+}
+
+https://openscholar-convex.localhost:{$FIXTURE_PORT} {
+	tls internal
+	reverse_proxy runtime-provider-fake:4000
+}
+
 https://test.crossref.org, https://sandbox.zenodo.org {
 	tls internal
-	reverse_proxy publication-provider-fake:4000
+	reverse_proxy runtime-provider-fake:4000
 }
 
 https://doi.org {
@@ -62,5 +73,5 @@ https://doi.org {
 }
 
 http://storage:5000 {
-	reverse_proxy publication-provider-fake:4000
+	reverse_proxy runtime-provider-fake:4000
 }

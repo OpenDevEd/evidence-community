@@ -29,7 +29,6 @@ const catalogSchema = createLibraryConfigSchema({
 	collectionIds: libraryCollectionIds,
 	institutionNames: libraryInstitutionNames,
 });
-
 function expectCatalogInvalid(
 	mutate: (config: ReturnType<typeof cloneLibraryConfig>) => void,
 ) {
@@ -174,16 +173,29 @@ describe("reusable field schemas", () => {
 		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
 	});
 
-	it("accepts a private admin password but rejects a short one", () => {
+	it("accepts a library-bound OpenScholar machine credential", () => {
 		const input = cloneLibraryConfig(maximalLibraryConfig);
-		(input.authentication ??= {}).adminPassword =
-			"correct horse battery staple";
 		expect(
-			libraryConfigSchema.parse(input).authentication.adminPassword,
-		).toBe("correct horse battery staple");
+			libraryConfigSchema.parse(input).authentication.openScholar,
+		).toEqual(maximalLibraryConfig.authentication?.openScholar);
 
-		input.authentication.adminPassword = "short";
+		input.authentication!.openScholar!.machineCredential =
+			"els_not-a-machine-credential";
 		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+
+	it("requires both OpenScholar admin access and its signing secret", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		delete (input.authentication as { secret?: string }).secret;
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+
+		const missingOpenScholar = cloneLibraryConfig(minimalLibraryConfig);
+		delete (
+			missingOpenScholar.authentication as { openScholar?: unknown }
+		).openScholar;
+		expect(libraryConfigSchema.safeParse(missingOpenScholar).success).toBe(
+			false,
+		);
 	});
 
 	it.each([

@@ -107,8 +107,11 @@ Library databases and deployments are not migrated or modified.
   publishing that draft clears the tombstone and emits a new upsert revision.
   A linked tombstone marks every editable provider field dirty so writeback can
   recreate a remotely deleted record rather than silently diverging.
-- The admin password creates a signed, short-lived, HTTP-only cookie. Every
-  `/api/admin/items/**` response requires that cookie and is private and
+- OpenScholar creates a short-lived, one-time admin code. The browser sends
+  only that opaque code to the Evidence Library. The Evidence Library redeems
+  it with its own machine credential, then signs the returned user,
+  organization, library, and owner/editor role into its HTTP-only cookie.
+  Every `/api/admin/items/**` response requires that cookie and is private and
   non-cacheable.
 
 ## Native PDF files

@@ -120,7 +120,7 @@ Technical details such as job ID, attempt, environment, and provider message liv
 - new/updated admin component tests
 - new `tests/e2e/admin-publication.spec.ts`
 - extend `tests/acceptance/compose.yaml`
-- extend `tests/acceptance/fixture/publication-provider-fake.mjs`
+- extend `tests/acceptance/fixture/runtime-provider-fake.mjs`
 - `playwright.config.ts`
 - `docs/admin-item-list.md`
 

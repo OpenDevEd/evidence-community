@@ -45,7 +45,7 @@ container image can be started repeatedly with different mounted documents.
 | `services` | PostgreSQL, Meilisearch, Zotero translation | Valid service URLs and bounded credentials/index |
 | `ai` | Providers, models, keys, prompts | Platform provider/model catalogs and feature dependencies |
 | `analytics` | PostHog, Google Analytics, UTM retention | Valid hosts/IDs and bounded retention |
-| `authentication` | Google login and auth secret | Required only when login is enabled |
+| `authentication` | Required OpenScholar service access and session signing; optional Google login | OpenScholar site, library, login page, machine credential, and signing secret are required; Google credentials are complete when enabled |
 | `email` | Contact/takedown recipients and SMTP | Complete credential pairs and valid transport settings |
 | `generation` | Sitemap and legacy-redirect route availability | Runtime booleans |
 | `processing` | Structure, PDF, and shared processing rules | Platform condition/action catalogs |
