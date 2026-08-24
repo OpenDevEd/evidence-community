@@ -97,8 +97,21 @@ production. Codes are single-use; rejected, expired, replayed, or
 wrong-library codes do not create a session.
 
 The public library stays open. Signed-out and failed `/admin` visits link back
-to the configured OpenScholar page. Every admin data API returns `401` with
-`Cache-Control: private, no-store` unless it receives a valid cookie.
+to the configured OpenScholar page. Admin pages and APIs use one role policy:
+
+- Owners and Editors can use the existing content tools for records,
+  collections, files, publishing, search status, and source writeback.
+- Library setup, configuration, deployment, and membership actions are
+  Owner-only. This runtime does not currently expose those actions, so no
+  existing content route is restricted to Owners.
+
+An invalid or missing cookie returns `401`. A valid role without the requested
+permission returns `403`. Both API responses use
+`Cache-Control: private, no-store`.
+
+Workers do not read the admin cookie or copy its user identity into work. Search,
+source sync, source writeback, and publication workers claim saved PostgreSQL
+work and use the library's runtime service credentials.
 
 After deployment, create a fresh code in OpenScholar and check the redirect,
 HTTPS certificate, reload persistence, logout, code replay rejection, and one
