@@ -4,6 +4,7 @@ export type AdminErrorCode =
 	| "already_exists"
 	| "conflict"
 	| "confirmation_required"
+	| "forbidden"
 	| "internal_error"
 	| "invalid_reference"
 	| "not_found"

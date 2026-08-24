@@ -3,10 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import {
+	ADMIN_CONTENT_PERMISSION,
+	ADMIN_LIBRARY_PERMISSION,
 	ADMIN_SESSION_COOKIE,
 	ADMIN_SESSION_TTL_MS,
 	adminSessionCookieName,
 	adminSessionCookieOptions,
+	adminRoleHasPermission,
 	createAdminSessionToken,
 	verifyAdminSessionToken,
 } from "@/lib/admin/access";
@@ -24,6 +27,21 @@ const redeemedIdentity = {
 };
 
 describe("admin access", () => {
+	it("allows both roles to manage content and only Owners to manage the library", () => {
+		expect(adminRoleHasPermission("owner", ADMIN_CONTENT_PERMISSION)).toBe(
+			true,
+		);
+		expect(adminRoleHasPermission("editor", ADMIN_CONTENT_PERMISSION)).toBe(
+			true,
+		);
+		expect(adminRoleHasPermission("owner", ADMIN_LIBRARY_PERMISSION)).toBe(
+			true,
+		);
+		expect(adminRoleHasPermission("editor", ADMIN_LIBRARY_PERMISSION)).toBe(
+			false,
+		);
+	});
+
 	it("returns the identity and role from an unexpired signed session", () => {
 		const now = Date.UTC(2026, 7, 24, 12);
 		const token = createAdminSessionToken(
