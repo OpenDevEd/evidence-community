@@ -59,7 +59,7 @@ const confirmLabel: Record<AdminIdentifiersActionId, string> = {
 
 /** One short line for the closed card. */
 function identifiersGlance(view: AdminIdentifiersView) {
-	const doi = view.doi ? view.doi.value : "No DOI · optional";
+	const doi = view.doi ? view.doi.value : "No DOI";
 	const archiveRecord =
 		view.archive.state === "active"
 			? view.archive.links.find((link) => link.kind === "record")
