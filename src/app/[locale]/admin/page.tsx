@@ -5,9 +5,10 @@ import { connection } from "next/server";
 import { AdminAccess } from "@/components/admin/AdminAccess";
 import AdminWorkbench from "@/components/admin/AdminWorkbench";
 import {
+	ADMIN_CONTENT_PERMISSION,
 	adminSessionCookieName,
+	authorizeAdminSession,
 	getAdminAccessConfig,
-	getAdminSession,
 } from "@/lib/admin/access";
 import { parseAdminItemViewFilters } from "@/lib/admin/item-filter-state";
 
@@ -20,11 +21,12 @@ export default async function AdminPage({
 	const resolvedSearchParams = await searchParams;
 	const cookieStore = await cookies();
 	const adminConfig = await getAdminAccessConfig();
-	const session = await getAdminSession(
+	const authorization = await authorizeAdminSession(
 		cookieStore.get(adminSessionCookieName())?.value,
+		ADMIN_CONTENT_PERMISSION,
 		adminConfig,
 	);
-	if (!session) {
+	if (authorization.status !== "authorized") {
 		return <AdminAccess loginPageUrl={adminConfig.loginPageUrl} />;
 	}
 	const urlSearchParams = new URLSearchParams();

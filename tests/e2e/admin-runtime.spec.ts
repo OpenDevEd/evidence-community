@@ -74,7 +74,7 @@ test("rejects every protected admin request without a session", async ({
 	}
 });
 
-test("loads an admin record from the real library database", async ({
+test("lets an Editor load a record from the real library database", async ({
 	page,
 }) => {
 	await openAdmin(page);
@@ -88,7 +88,7 @@ test("loads an admin record from the real library database", async ({
 	).toHaveValue(expectedTitle);
 });
 
-test("creates and publishes a native record through the real stack", async ({
+test("lets an Editor create and publish a native record through the real stack", async ({
 	page,
 }, testInfo) => {
 	const title = `Runtime published book ${testInfo.workerIndex}-${testInfo.retry}-${Date.now()}`;

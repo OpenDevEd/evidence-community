@@ -2,18 +2,39 @@ import { DrizzleQueryError } from "drizzle-orm";
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 
-const access = vi.hoisted(() => ({ authorized: false }));
+vi.mock("server-only", () => ({}));
 
-vi.mock("@/lib/admin/access", () => ({
-	adminSessionCookieName: () => "evidence_library_admin",
-	isAdminSessionAuthorized: () => access.authorized,
+const signingConfig = {
+	libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
+	secret: "12345678901234567890123456789012",
+};
+
+vi.mock("@/config/library-config/server", () => ({
+	getLibraryConfig: () => ({
+		authentication: {
+			openScholar: {
+				convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
+				libraryId: signingConfig.libraryId,
+				loginPageUrl:
+					"https://openscholar.example.org/evidence-libraries/amber",
+				machineCredential: `els_${"a".repeat(43)}`,
+			},
+			secret: signingConfig.secret,
+		},
+	}),
 }));
 
 import {
 	adminErrorResponse,
 	readAdminJson,
-	requireAdminSession,
+	requireAdminPermission,
 } from "@/lib/admin/http";
+import {
+	ADMIN_CONTENT_PERMISSION,
+	ADMIN_LIBRARY_PERMISSION,
+	adminSessionCookieName,
+	createAdminSessionToken,
+} from "@/lib/admin/access";
 import { CollectionWritebackUnavailableError } from "@/lib/admin/collection-mutation-service";
 import { CollectionValidationError } from "@/lib/admin/native-collection-service";
 import {
@@ -45,12 +66,35 @@ function wrappedDatabaseError(code: string) {
 	return new DrizzleQueryError("insert into item", [], cause);
 }
 
+function adminRequest(role?: "owner" | "editor") {
+	const token = role
+		? createAdminSessionToken(
+				{
+					clerkOrganizationId: "org_2abc",
+					clerkUserId: "user_2abc",
+					consumedAt: Date.now(),
+					libraryId: signingConfig.libraryId,
+					role,
+				},
+				signingConfig,
+			)
+		: undefined;
+	return {
+		cookies: {
+			get: (name: string) =>
+				name === adminSessionCookieName() && token
+					? { value: token }
+					: undefined,
+		},
+	};
+}
+
 describe("admin API session gate", () => {
 	it("returns 401 without a valid session", async () => {
-		access.authorized = false;
-		const response = await requireAdminSession({
-			cookies: { get: () => undefined },
-		});
+		const response = await requireAdminPermission(
+			adminRequest(),
+			ADMIN_CONTENT_PERMISSION,
+		);
 
 		expect(response?.status).toBe(401);
 		expect(response?.headers.get("Cache-Control")).toBe(
@@ -63,12 +107,38 @@ describe("admin API session gate", () => {
 		});
 	});
 
-	it("allows a valid session", async () => {
-		access.authorized = true;
+	it("allows Owners and Editors to manage content", async () => {
+		for (const role of ["owner", "editor"] as const) {
+			expect(
+				await requireAdminPermission(
+					adminRequest(role),
+					ADMIN_CONTENT_PERMISSION,
+				),
+			).toBeNull();
+		}
+	});
+
+	it("returns 403 when an Editor requests an Owner-only permission", async () => {
+		const response = await requireAdminPermission(
+			adminRequest("editor"),
+			ADMIN_LIBRARY_PERMISSION,
+		);
+
+		expect(response?.status).toBe(403);
+		expect(response?.headers.get("Cache-Control")).toBe(
+			"private, no-store",
+		);
 		expect(
-			await requireAdminSession({
-				cookies: { get: () => ({ value: "valid" }) },
-			}),
+			await response?.json(),
+		).toMatchObject({ error: { code: "forbidden" } });
+	});
+
+	it("allows an Owner to manage the library", async () => {
+		expect(
+			await requireAdminPermission(
+				adminRequest("owner"),
+				ADMIN_LIBRARY_PERMISSION,
+			),
 		).toBeNull();
 	});
 });

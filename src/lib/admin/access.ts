@@ -12,6 +12,14 @@ export const ADMIN_SESSION_TTL_MS = 12 * 60 * 60 * 1_000;
 
 const adminRoleSchema = z.enum(["owner", "editor"]);
 
+export const ADMIN_CONTENT_PERMISSION = "content:manage";
+export const ADMIN_LIBRARY_PERMISSION = "library:manage";
+
+export type AdminPermission =
+	| typeof ADMIN_CONTENT_PERMISSION
+	| typeof ADMIN_LIBRARY_PERMISSION;
+export type AdminRole = z.infer<typeof adminRoleSchema>;
+
 export const adminSessionIdentitySchema = z
 	.object({
 		clerkOrganizationId: z.string().trim().min(1).max(512),
@@ -34,6 +42,11 @@ export type AdminSessionIdentity = z.infer<
 >;
 export type AdminSession = AdminSessionIdentity & { expiresAt: number };
 
+export type AdminSessionAuthorization =
+	| { session: AdminSession; status: "authorized" }
+	| { session: AdminSession; status: "forbidden" }
+	| { status: "unauthenticated" };
+
 export type AdminAccessConfig = {
 	convexSiteUrl: string;
 	libraryId: string;
@@ -46,6 +59,13 @@ export type AdminSessionSigningConfig = Pick<
 	AdminAccessConfig,
 	"libraryId" | "secret"
 >;
+
+export function adminRoleHasPermission(
+	role: AdminRole,
+	permission: AdminPermission,
+) {
+	return permission === ADMIN_CONTENT_PERMISSION || role === "owner";
+}
 
 export function adminSessionCookieOptions(environment = process.env.NODE_ENV) {
 	return {
@@ -129,7 +149,7 @@ export function verifyAdminSessionToken(
 	}
 }
 
-export async function getAdminSession(
+async function getAdminSession(
 	token: string | undefined,
 	config?: AdminSessionSigningConfig,
 ) {
@@ -137,6 +157,15 @@ export async function getAdminSession(
 	return verifyAdminSessionToken(token, config);
 }
 
-export async function isAdminSessionAuthorized(token: string | undefined) {
-	return Boolean(await getAdminSession(token));
+export async function authorizeAdminSession(
+	token: string | undefined,
+	permission: AdminPermission,
+	config?: AdminSessionSigningConfig,
+): Promise<AdminSessionAuthorization> {
+	const session = await getAdminSession(token, config);
+	if (!session) return { status: "unauthenticated" };
+	if (!adminRoleHasPermission(session.role, permission)) {
+		return { session, status: "forbidden" };
+	}
+	return { session, status: "authorized" };
 }
