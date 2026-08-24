@@ -18,7 +18,7 @@ import { Collection } from "@/app/api/collections/types";
 import { z } from "zod";
 import { inferParserType } from "nuqs";
 import { searchParamsLoader } from "./searchParams";
-import { SmartScreeningField } from "@/components/pages/EvidenceLibrary";
+import type { SmartScreeningField } from "@/types/ai";
 import { generateObject } from "ai";
 import { headers } from "next/headers";
 import { COUNTRY_HIERARCHY, countryFacetOptions, Entry } from "@/constants/misc";

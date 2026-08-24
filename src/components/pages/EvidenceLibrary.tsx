@@ -76,6 +76,12 @@ import {
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
 import { getRuntimeSearchScopeOptions } from "@/config/library-config/search";
+import { useFiltersContext } from "@/context/FiltersProvider";
+import { normalizeLibrarySearchContext } from "@/lib/search-context";
+import {
+	SMART_SCREENING_FIELD_TYPES,
+	type SmartScreeningField,
+} from "@/types/ai";
 
 function DropDownIcon({
 	Icon,
@@ -364,7 +370,7 @@ function SearchTabContent({
 				>
 					<h2
 						suppressHydrationWarning
-						className="text-black dark:text-white/80 text-lg leading-[1.125rem] flex items-center whitespace-pre relative"
+						className="text-black dark:text-white/80 text-lg leading-none flex items-center whitespace-pre relative"
 					>
 						<div className="flex flex-col md:flex-row md:items-center items-start md:gap-2 whitespace-normal">
 							{countLabel ||
@@ -494,7 +500,7 @@ function AITabContent({
 	const t = useTranslations("ui");
 
 	return (
-		<div className="flex flex-col gap-4 lg:pb-2 lg:pt-0 py-[2.375rem]">
+		<div className="flex flex-col gap-4 lg:pb-2 lg:pt-0 py-ai-panel">
 			<ModelSelector
 				isOpen={isModelOpen}
 				onOpenChange={onModelOpenChange}
@@ -779,6 +785,11 @@ export function ContentInteractions({
 		selectedModelId,
 	} = useSelectedModel();
 	const [externalInput, setExternalInput] = useState<string>("");
+	// What the reader is looking at right now, so the assistant can answer
+	// questions about these results.
+	const searchContext = normalizeLibrarySearchContext(
+		useFiltersContext().queryParams,
+	);
 
 	return (
 		<div className="relative">
@@ -788,6 +799,7 @@ export function ContentInteractions({
 				isOpen={isChatOpen}
 				onOpenChange={onChatOpenChange}
 				modelId={selectedModelId}
+				searchContext={searchContext}
 				externalInput={externalInput}
 				setExternalInput={setExternalInput}
 			/>
@@ -886,14 +898,6 @@ function MainContent() {
 	);
 }
 
-const smartScreeningFieldTypes = ["string", "number", "boolean"] as const;
-
-export type SmartScreeningField = {
-	label: string;
-	description: string;
-	type: (typeof smartScreeningFieldTypes)[number];
-};
-
 function SmartScreeningModal({
 	isOpen,
 	onOpenChange,
@@ -913,7 +917,7 @@ function SmartScreeningModal({
 		() => [...fields],
 	);
 	const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({});
-	const placeholderExample = `${t("label")} (${smartScreeningFieldTypes.join(
+	const placeholderExample = `${t("label")} (${SMART_SCREENING_FIELD_TYPES.join(
 		" | ",
 	)}): ${t("description")}`;
 
@@ -1019,7 +1023,7 @@ function SmartScreeningModal({
 				if (line.length > 0) {
 					localFields.push({
 						label: label?.trim(),
-						type: type?.trim() as (typeof smartScreeningFieldTypes)[number],
+						type: type?.trim() as (typeof SMART_SCREENING_FIELD_TYPES)[number],
 						description: description?.trim(),
 					});
 				}
@@ -1238,7 +1242,7 @@ function SmartScreeningModal({
 																		const selectedType =
 																			Array.from(
 																				value,
-																			)[0] as (typeof smartScreeningFieldTypes)[number];
+																			)[0] as (typeof SMART_SCREENING_FIELD_TYPES)[number];
 																		setLocalFields(
 																			localFields.map(
 																				(
@@ -1256,7 +1260,7 @@ function SmartScreeningModal({
 																		);
 																	}}
 																>
-																	{smartScreeningFieldTypes.map(
+																	{SMART_SCREENING_FIELD_TYPES.map(
 																		(
 																			type,
 																		) => (

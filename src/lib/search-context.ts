@@ -52,6 +52,17 @@ export type LibrarySearchContext = z.infer<
  * simply carries no year constraint, and an unknown scope or sort falls back
  * to the library's default.
  */
+const MAX_FILTER_VALUES = 100;
+const MAX_FILTER_VALUE_LENGTH = 300;
+
+/** Filters come from the URL, so keep only values the schema accepts. */
+function filterValues(values: readonly string[] | undefined) {
+	return (values ?? [])
+		.filter((value) => typeof value === "string" && value.trim())
+		.slice(0, MAX_FILTER_VALUES)
+		.map((value) => value.trim().slice(0, MAX_FILTER_VALUE_LENGTH));
+}
+
 export function normalizeLibrarySearchContext(
 	value: Partial<LibrarySearchContext>,
 ): LibrarySearchContext {
@@ -66,11 +77,11 @@ export function normalizeLibrarySearchContext(
 			: "",
 		sort: SORT_KEYS.includes(sort) ? sort : SORT_KEYS[0],
 		range: RANGE_PATTERN.test(range) ? range : "",
-		institution: value.institution ?? [],
-		country: value.country ?? [],
-		author_country: value.author_country ?? [],
-		author: value.author ?? "",
-		collections: value.collections ?? [],
+		institution: filterValues(value.institution),
+		country: filterValues(value.country),
+		author_country: filterValues(value.author_country),
+		author: (value.author ?? "").trim().slice(0, MAX_FILTER_VALUE_LENGTH),
+		collections: filterValues(value.collections),
 	});
 }
 

@@ -54,6 +54,20 @@ describe("the library result set the assistant can see", () => {
 		expect(context({ sort: "made-up-sort" }).sort).toBe("relevance");
 	});
 
+	it("survives a filter value far longer than the search accepts", () => {
+		const context = normalizeLibrarySearchContext({
+			search: "teacher training",
+			author: "a".repeat(500),
+			institution: ["b".repeat(500), "  ", "EdTech Hub"],
+		});
+
+		expect(context.author).toHaveLength(300);
+		expect(context.institution).toEqual([
+			"b".repeat(300),
+			"EdTech Hub",
+		]);
+	});
+
 	it("rejects an unknown field rather than passing it to search", () => {
 		expect(() =>
 			librarySearchContextSchema.parse({

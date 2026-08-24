@@ -316,6 +316,42 @@ describe("AI routes", () => {
 		});
 	});
 
+	it("tells the agent which results the reader is looking at", async () => {
+		const searchContext = {
+			search: "teacher training",
+			scope: "title_and_abstract",
+			sort: "relevance",
+			range: "2019-2024",
+			institution: ["EdTech Hub"],
+			country: [],
+			author_country: [],
+			author: "",
+			collections: [],
+		};
+
+		await chat(chatRequest({ searchContext }));
+
+		expect(
+			mocks.createResearchAgent.mock.calls[0]?.[0].searchContext,
+		).toEqual(searchContext);
+		const messages = mocks.convertToModelMessages.mock.calls[0]?.[0];
+		const contextPart = messages[0].parts.find(
+			(part: { type: string }) => part.type === "data-requestContext",
+		);
+		expect(contextPart.data.searchContext).toEqual(searchContext);
+	});
+
+	it("refuses a chat request whose result list was tampered with", async () => {
+		const response = await chat(
+			chatRequest({
+				searchContext: { search: "teacher training", scope: "everything" },
+			}),
+		);
+
+		expect(response.status).toBe(400);
+		expect(mocks.createResearchAgent).not.toHaveBeenCalled();
+	});
+
 	it("refuses a model this library does not offer", async () => {
 		const response = await chat(
 			chatRequest({ modelId: "anthropic/claude-opus-5" }),

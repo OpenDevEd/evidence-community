@@ -51,7 +51,8 @@ import { Textarea } from "@/components/nextui/Textarea";
 import { AnimatePresence, motion } from "framer-motion";
 import { RiRefreshLine, RiResetLeftFill } from "react-icons/ri";
 import { useLocalStorage } from "usehooks-ts";
-import { SmartScreeningField, useIsAISearchEnabled } from "@/components/pages/EvidenceLibrary";
+import { useIsAISearchEnabled } from "@/components/pages/EvidenceLibrary";
+import type { SmartScreeningField } from "@/types/ai";
 import useSWRMutation from "swr/mutation";
 import { cleanAIResponse, fetcher, setter } from "@/lib/utils";
 import { getRateLimits, runScreening } from "@/lib/actions";
@@ -63,6 +64,7 @@ import { BsQuestionCircleFill } from "react-icons/bs";
 import { Card } from "@/components/nextui/Card";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { clientAIError } from "@/lib/ai/client";
+import type { LibrarySearchContext } from "@/lib/search-context";
 
 export const maxDuration = 240;
 
@@ -260,6 +262,7 @@ export default function ChatModal({
 	onOpenChange,
 	data,
 	modelId,
+	searchContext,
 	questions,
 	externalInput,
 	setExternalInput,
@@ -268,6 +271,7 @@ export default function ChatModal({
 	onOpenChange: (open: boolean) => void;
 	data?: ItemGetResponse | undefined;
 	modelId: string | null;
+	searchContext?: LibrarySearchContext;
 	questions?: undefined | string[];
 	externalInput?: string;
 	setExternalInput?: (input: string) => void;
@@ -310,6 +314,7 @@ export default function ChatModal({
 				modelId,
 				distinctId: getAnalyticsDistinctId(),
 				mode,
+				searchContext,
 			},
 		}),
 		messages: [

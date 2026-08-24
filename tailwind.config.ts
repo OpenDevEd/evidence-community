@@ -86,6 +86,10 @@ const config: Config = {
 			gridTemplateRows: {
 				chat: "minmax(0, 1fr) auto",
 			},
+			spacing: {
+				// The library's AI panel column.
+				"ai-panel": "2.375rem",
+			},
 			maxHeight: {
 				// The navbar suggestion list must not cover the whole screen.
 				suggestions: "70vh",
