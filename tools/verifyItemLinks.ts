@@ -318,6 +318,7 @@ async function verify() {
 			.then((rows) => rows[0]!);
 		const savedA = await saveItemDraft(db, {
 			itemKey: draftA.itemKey,
+			expectedDraftGeneration: draftA.generation,
 			expectedDraftRevision: draftA.draftRevision,
 			expectedPayload: draftA.payload,
 			payload: {
@@ -334,6 +335,7 @@ async function verify() {
 			() =>
 				saveItemDraft(db, {
 					itemKey: draftA.itemKey,
+					expectedDraftGeneration: savedA.generation,
 					expectedDraftRevision: savedA.draftRevision,
 					expectedPayload: savedA.payload,
 					payload: {
@@ -382,6 +384,7 @@ async function verify() {
 		const { links: _omitted, ...payloadWithoutLinks } = draftPayloadAfterPublish.payload;
 		const keptLinks = await saveItemDraft(db, {
 			itemKey: draftA.itemKey,
+			expectedDraftGeneration: draftPayloadAfterPublish.generation,
 			expectedDraftRevision: draftPayloadAfterPublish.draftRevision,
 			expectedPayload: draftPayloadAfterPublish.payload,
 			payload: { ...payloadWithoutLinks, title: "Publish link source (edited)" },
@@ -394,6 +397,7 @@ async function verify() {
 		);
 		const removed = await saveItemDraft(db, {
 			itemKey: draftA.itemKey,
+			expectedDraftGeneration: keptLinks.generation,
 			expectedDraftRevision: keptLinks.draftRevision,
 			expectedPayload: keptLinks.payload,
 			payload: {
@@ -423,6 +427,7 @@ async function verify() {
 		const missingDraft = await openItemDraft(db, draftA.itemKey);
 		await saveItemDraft(db, {
 			itemKey: draftA.itemKey,
+			expectedDraftGeneration: missingDraft.generation,
 			expectedDraftRevision: missingDraft.draftRevision,
 			expectedPayload: missingDraft.payload,
 			payload: {
@@ -501,6 +506,7 @@ async function verify() {
 		const relatedDraft = await openItemDraft(db, draftA.itemKey);
 		await saveItemDraft(db, {
 			itemKey: draftA.itemKey,
+			expectedDraftGeneration: relatedDraft.generation,
 			expectedDraftRevision: relatedDraft.draftRevision,
 			expectedPayload: relatedDraft.payload,
 			payload: {
@@ -528,6 +534,7 @@ async function verify() {
 		const citesDraft = await openItemDraft(db, draftA.itemKey);
 		await saveItemDraft(db, {
 			itemKey: draftA.itemKey,
+			expectedDraftGeneration: citesDraft.generation,
 			expectedDraftRevision: citesDraft.draftRevision,
 			expectedPayload: citesDraft.payload,
 			payload: {
@@ -547,6 +554,7 @@ async function verify() {
 		const removeDraft = await openItemDraft(db, draftA.itemKey);
 		await saveItemDraft(db, {
 			itemKey: draftA.itemKey,
+			expectedDraftGeneration: removeDraft.generation,
 			expectedDraftRevision: removeDraft.draftRevision,
 			expectedPayload: removeDraft.payload,
 			payload: {

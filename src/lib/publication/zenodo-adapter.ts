@@ -1,3 +1,4 @@
+import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import {
 	executeLivePublicationSyncPlan,
 	planPublicationSync,
@@ -61,7 +62,12 @@ const PERMANENT_ZENODO_FAILURES = new Set([
 	"ZENODO_FIRST_PUBLICATION_TIME_REQUIRED",
 	"ZENODO_FILE_CORRECTION_APPROVAL_REQUIRED",
 	"ZENODO_FILE_CORRECTION_WINDOW_CLOSED",
+	"ZENODO_EXTERNAL_DOI_CHANGED",
 ]);
+
+class ZenodoExternalDoiChangedError extends Error {
+	override name = "ZENODO_EXTERNAL_DOI_CHANGED";
+}
 
 function parseFileCorrectionApprovalId(value: string | undefined) {
 	if (!value) return null;
@@ -86,6 +92,52 @@ function requireConfig(config: PublicationConfig) {
 	return { ...zenodo, token: zenodo.token };
 }
 
+function requireZenodoPlanningRecord(snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>) {
+	const record = snapshot.record;
+	if (!record) throw new Error("The publication record no longer exists");
+	if (record.deleted === 1) {
+		throw new Error("Restore this record before publishing it to Zenodo");
+	}
+	if (record.parentItem) {
+		throw new Error("Only parent records can be published to Zenodo");
+	}
+	return record;
+}
+
+function managedZenodoDoiValues(
+	snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>,
+) {
+	return snapshot.identifiers
+		.filter(
+			(identifier) =>
+				identifier.registrar === "zenodo" &&
+				identifier.environment === "sandbox" &&
+				identifier.ownership === "managed",
+		)
+		.map((identifier) => identifier.doi);
+}
+
+function activeFileCorrectionApproval(
+	snapshot: Awaited<ReturnType<typeof readPublicationRepositorySnapshot>>,
+) {
+	return snapshot.fileCorrectionApprovals.find(
+		(approval) =>
+			approval.consumedAt === null && approval.supersededAt === null,
+	);
+}
+
+function assertArchivedExternalDoiMatches(input: {
+	identifierPolicy: ZenodoIdentifierPolicy;
+	lockedExternalDoi: string | null;
+	bibliographicDoi: string | null;
+}) {
+	if (input.identifierPolicy !== "reuse-external") return;
+	if (input.lockedExternalDoi && input.bibliographicDoi === input.lockedExternalDoi) return;
+	throw new ZenodoExternalDoiChangedError(
+		`The record DOI no longer matches the DOI selected for Zenodo (${input.lockedExternalDoi ?? "missing"})`,
+	);
+}
+
 async function buildZenodoPlan(
 	database: Database,
 	itemKey: string,
@@ -98,14 +150,7 @@ async function buildZenodoPlan(
 		itemKey,
 		publicationConfig.crossref.environment,
 	);
-	const record = snapshot.record;
-	if (!record) throw new Error("The publication record no longer exists");
-	if (record.deleted === 1) {
-		throw new Error("Restore this record before publishing it to Zenodo");
-	}
-	if (record.parentItem) {
-		throw new Error("Only parent records can be published to Zenodo");
-	}
+	const record = requireZenodoPlanningRecord(snapshot);
 	const target = targetFor(snapshot, "zenodo", "sandbox");
 	if (!target?.identifierPolicy) {
 		throw new Error("The record does not have an active Zenodo target");
@@ -116,14 +161,7 @@ async function buildZenodoPlan(
 		"test",
 		"primary",
 	);
-	const managedZenodoDois = snapshot.identifiers
-		.filter(
-			(identifier) =>
-				identifier.registrar === "zenodo" &&
-				identifier.environment === "sandbox" &&
-				identifier.ownership === "managed",
-		)
-		.map((identifier) => identifier.doi);
+	const managedZenodoDois = managedZenodoDoiValues(snapshot);
 	const bibliographicDoi = resolveBibliographicDoi(
 		{
 			DOI: record.DOI,
@@ -161,10 +199,12 @@ async function buildZenodoPlan(
 		),
 	});
 	const previousState = providerState(snapshot, "zenodo", publicationConfig);
-	const activeFileCorrectionApproval = snapshot.fileCorrectionApprovals.find(
-		(approval) =>
-			approval.consumedAt === null && approval.supersededAt === null,
-	);
+	assertArchivedExternalDoiMatches({
+		identifierPolicy: target.identifierPolicy,
+		lockedExternalDoi: target.lockedExternalDoi,
+		bibliographicDoi: bibliographicDoi.doi,
+	});
+	const correctionApproval = activeFileCorrectionApproval(snapshot);
 	return {
 		identifierPolicy: target.identifierPolicy,
 		plan: planPublicationSync({
@@ -181,11 +221,11 @@ async function buildZenodoPlan(
 				},
 			},
 			...(previousState ? { state: previousState } : {}),
-			...(activeFileCorrectionApproval
+			...(correctionApproval
 				? {
 						zenodoFileChangeApproval:
 							fileCorrectionApprovalFromRow(
-								activeFileCorrectionApproval,
+								correctionApproval,
 							),
 					}
 				: {}),
@@ -233,6 +273,7 @@ async function saveZenodoIdentifiers(
 		itemKey: string;
 		identifiers: ZenodoRecordIdentifiers;
 		observedAt: Date;
+		identifierPolicy: ZenodoIdentifierPolicy;
 	},
 ) {
 	const [previousVersion] = await transaction
@@ -249,12 +290,30 @@ async function saveZenodoIdentifiers(
 		)
 		.limit(1);
 	const previousVersionDoi = previousVersion?.doi;
+	// Under reuse-external Zenodo reports the record's own DOI back as its
+	// version DOI. That DOI was never minted here, so it is stored as external.
+	const versionOwnership =
+		input.identifierPolicy === "reuse-external"
+			? ("external" as const)
+			: ("managed" as const);
 	const values = [
 		...(input.identifiers.versionDoi
-			? [{ role: "version" as const, doi: input.identifiers.versionDoi }]
+			? [
+					{
+						role: "version" as const,
+						doi: input.identifiers.versionDoi,
+						ownership: versionOwnership,
+					},
+				]
 			: []),
 		...(input.identifiers.conceptDoi
-			? [{ role: "concept" as const, doi: input.identifiers.conceptDoi }]
+			? [
+					{
+						role: "concept" as const,
+						doi: input.identifiers.conceptDoi,
+						ownership: "managed" as const,
+					},
+				]
 			: []),
 	];
 	await assertNoIdentifierCollision(
@@ -283,7 +342,7 @@ async function saveZenodoIdentifiers(
 				environment: "sandbox",
 				role: value.role,
 				doi: value.doi,
-				ownership: "managed",
+				ownership: value.ownership,
 				lifecycle: "verified",
 				isCurrent: true,
 				reservedAt: input.observedAt,
@@ -300,7 +359,7 @@ async function saveZenodoIdentifiers(
 				set: {
 					itemKey: input.itemKey,
 					role: value.role,
-					ownership: "managed",
+					ownership: value.ownership,
 					lifecycle: "verified",
 					isCurrent: true,
 					verifiedAt: input.observedAt,
@@ -423,14 +482,6 @@ function createZenodoJournal(
 					throw new Error(
 						"The prepared Zenodo draft was not journaled",
 					);
-				const zenodoVersionChanged = await saveZenodoIdentifiers(
-					transaction,
-					{
-						itemKey: input.recordId,
-						identifiers: input.identifiers,
-						observedAt: input.observedAt,
-					},
-				);
 				const [target] = await transaction
 					.select({
 						identifierPolicy: publicationTarget.identifierPolicy,
@@ -447,6 +498,15 @@ function createZenodoJournal(
 				if (!target?.identifierPolicy) {
 					throw new Error("The Zenodo target has no DOI policy");
 				}
+				const zenodoVersionChanged = await saveZenodoIdentifiers(
+					transaction,
+					{
+						itemKey: input.recordId,
+						identifiers: input.identifiers,
+						observedAt: input.observedAt,
+						identifierPolicy: target.identifierPolicy,
+					},
+				);
 				const [existingState] = await transaction
 					.select({
 						lastFileManifestHash:
@@ -651,7 +711,7 @@ function createZenodoJournal(
 function zenodoPatchValues(
 	patch: ProviderSyncStatePatch,
 	previousState: ProviderSyncState | undefined,
-	identifierPolicy: "reuse-crossref" | "mint-zenodo",
+	identifierPolicy: ZenodoIdentifierPolicy,
 	now: Date,
 ) {
 	const zenodo = patch.zenodo;
@@ -807,7 +867,7 @@ async function settleZenodoState(
 		canonicalRevision: number;
 		patch: ProviderSyncStatePatch;
 		previousState: ProviderSyncState | undefined;
-		identifierPolicy: "reuse-crossref" | "mint-zenodo";
+		identifierPolicy: ZenodoIdentifierPolicy;
 		settledAt: Date;
 		jobResult:
 			| { status: "finished"; receipt: Record<string, unknown> }
@@ -855,6 +915,7 @@ async function settleZenodoState(
 		) {
 			await saveZenodoIdentifiers(transaction, {
 				itemKey: input.itemKey,
+				identifierPolicy: input.identifierPolicy,
 				identifiers: {
 					latestRecordId: values.zenodoRecordId,
 					parentId: values.zenodoParentId,
@@ -1169,7 +1230,10 @@ export async function runZenodoPublicationJobsOnce(
 					error instanceof Error ? error.message : String(error),
 			});
 			const count = patch.failure?.consecutiveCount ?? 1;
-			const deadLetter = count >= workerConfig.retryLimit;
+			const deadLetter =
+				PERMANENT_ZENODO_FAILURES.has(
+					error instanceof Error ? error.name : "UNKNOWN_ERROR",
+				) || count >= workerConfig.retryLimit;
 			try {
 				await settleZenodoState(database, {
 					jobId: job.id,

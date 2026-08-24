@@ -6,6 +6,9 @@
 	font-size: 100%;
 	--select-popover-tertiary-color-mixed-bg: color-mix(in srgb, rgb(var(--color-tertiary-500) / var(--color-tertiary-500-alpha)) 10%, rgb(var(--color-background-500) / var(--color-background-500-alpha)) 90%);
 	--select-popover-tertiary-color-mixed-bg-light: rgb(var(--color-tertiary-500) / var(--color-tertiary-500-alpha));
+	--admin-toolbar-columns: minmax(0, 1fr) auto auto;
+	--admin-workbench-columns: 15rem minmax(0, 1fr) 22.5rem;
+	--admin-item-type-list-height: 52vh;
 }
 
 .select-popover-tertiary {
@@ -75,5 +78,19 @@ h6 {
 	.no-scrollbar {
 		-ms-overflow-style: none;
 		scrollbar-width: none;
+	}
+
+	.admin-toolbar-grid {
+		grid-template-columns: var(--admin-toolbar-columns);
+	}
+
+	.admin-item-type-list {
+		max-height: var(--admin-item-type-list-height);
+	}
+
+	@media (min-width: 1280px) {
+		.admin-workbench-grid {
+			grid-template-columns: var(--admin-workbench-columns);
+		}
 	}
 }

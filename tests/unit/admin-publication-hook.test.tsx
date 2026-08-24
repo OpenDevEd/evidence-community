@@ -41,6 +41,7 @@ function publication(
 		status: { label: state, description: state, shouldPoll },
 		waitingOn: null,
 		blockers: [],
+		externalDoi: null,
 		capabilities: {
 			canActivate: state === "inactive",
 			canRetry: false,
@@ -71,7 +72,7 @@ function publication(
 			crossref: provider("crossref"),
 			zenodo: provider("zenodo"),
 		},
-	} as AdminPublicationView;
+	} as unknown as AdminPublicationView;
 }
 
 type Hook = ReturnType<typeof useAdminPublication>;

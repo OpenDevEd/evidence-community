@@ -64,6 +64,23 @@ function publishedRecord(deposition) {
 	};
 }
 
+function draftFile(deposition, filename) {
+	const bytes = deposition.files.get(filename) ?? Buffer.alloc(0);
+	const encodedFilename = encodeURIComponent(filename);
+	return {
+		key: filename,
+		status: deposition.pendingFiles.has(filename) ? "pending" : "completed",
+		file_id: `file-${encodedFilename}`,
+		checksum: `md5:${createHash("md5").update(bytes).digest("hex")}`,
+		size: bytes.byteLength,
+		links: {
+			self: `https://sandbox.zenodo.org/api/records/${deposition.id}/draft/files/${encodedFilename}`,
+			content: `https://sandbox.zenodo.org/api/records/${deposition.id}/draft/files/${encodedFilename}/content`,
+			commit: `https://sandbox.zenodo.org/api/records/${deposition.id}/draft/files/${encodedFilename}/commit`,
+		},
+	};
+}
+
 function unixrefFromDeposit() {
 	const report = crossrefXml?.match(
 		/<report-paper\b[\s\S]*?<\/report-paper>/u,
@@ -113,8 +130,11 @@ const server = createServer(async (request, response) => {
 		});
 	}
 
-	if (method === "GET" && url.pathname.startsWith("/storage/v1/object/")) {
-		return text(response, 200, storageBytes, "application/pdf");
+	if (url.pathname.startsWith("/storage/v1/object/")) {
+		if (method === "GET") {
+			return text(response, 200, storageBytes, "application/pdf");
+		}
+		if (method === "DELETE") return json(response, 200, []);
 	}
 
 	if (url.pathname === "/servlet/deposit" && method === "POST") {
@@ -163,6 +183,7 @@ const server = createServer(async (request, response) => {
 			parentId: String(Number(id) - 1),
 			metadata: {},
 			files: new Map(),
+			pendingFiles: new Set(),
 			published: false,
 			publishedAt: null,
 		};
@@ -203,6 +224,95 @@ const server = createServer(async (request, response) => {
 			response.writeHead(204).end();
 			return;
 		}
+	}
+
+	const recordDraftMatch = url.pathname.match(
+		/^\/api\/records\/(\d+)\/draft$/u,
+	);
+	if (recordDraftMatch && method === "POST") {
+		const deposition = depositions.get(recordDraftMatch[1]);
+		if (!deposition?.published)
+			return json(response, 404, { message: "missing record" });
+		return json(response, 201, {
+			id: deposition.id,
+			parent: { id: deposition.parentId },
+			links: {
+				file_modification: `https://sandbox.zenodo.org/api/records/${deposition.id}/file-modification`,
+			},
+		});
+	}
+
+	const fileModificationMatch = url.pathname.match(
+		/^\/api\/records\/(\d+)\/file-modification$/u,
+	);
+	if (fileModificationMatch && method === "POST") {
+		return json(response, 200, { status: "accepted" });
+	}
+
+	const draftFilesMatch = url.pathname.match(
+		/^\/api\/records\/(\d+)\/draft\/files$/u,
+	);
+	if (draftFilesMatch) {
+		const deposition = depositions.get(draftFilesMatch[1]);
+		if (!deposition)
+			return json(response, 404, { message: "missing record" });
+		if (method === "GET") {
+			return json(response, 200, {
+				entries: [...deposition.files.keys()].map((filename) =>
+					draftFile(deposition, filename),
+				),
+			});
+		}
+		if (method === "POST") {
+			const requested = JSON.parse(
+				(await readBody(request)).toString("utf8"),
+			);
+			for (const { key } of requested) {
+				deposition.files.set(key, Buffer.alloc(0));
+				deposition.pendingFiles.add(key);
+			}
+			return json(response, 201, {
+				entries: [...deposition.files.keys()].map((filename) =>
+					draftFile(deposition, filename),
+				),
+			});
+		}
+	}
+
+	const draftFileMatch = url.pathname.match(
+		/^\/api\/records\/(\d+)\/draft\/files\/([^/]+)(?:\/(content|commit))?$/u,
+	);
+	if (draftFileMatch) {
+		const deposition = depositions.get(draftFileMatch[1]);
+		const filename = decodeURIComponent(draftFileMatch[2]);
+		const action = draftFileMatch[3];
+		if (!deposition)
+			return json(response, 404, { message: "missing record" });
+		if (method === "PUT" && action === "content") {
+			deposition.files.set(filename, await readBody(request));
+			return json(response, 200, draftFile(deposition, filename));
+		}
+		if (method === "POST" && action === "commit") {
+			deposition.pendingFiles.delete(filename);
+			return json(response, 200, draftFile(deposition, filename));
+		}
+		if (method === "DELETE" && !action) {
+			deposition.files.delete(filename);
+			deposition.pendingFiles.delete(filename);
+			response.writeHead(204).end();
+			return;
+		}
+	}
+
+	const publishDraftMatch = url.pathname.match(
+		/^\/api\/records\/(\d+)\/draft\/actions\/publish$/u,
+	);
+	if (publishDraftMatch && method === "POST") {
+		const deposition = depositions.get(publishDraftMatch[1]);
+		if (!deposition)
+			return json(response, 404, { message: "missing record" });
+		deposition.publishedAt = new Date().toISOString();
+		return json(response, 202, publishedRecord(deposition));
 	}
 
 	const publishMatch = url.pathname.match(

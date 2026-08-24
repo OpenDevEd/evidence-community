@@ -143,7 +143,7 @@ describe("admin API error mapping", () => {
 			error: {
 				code: "confirmation_required",
 				message:
-					"This record uses its Crossref DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at Sep 12, 2030, 2:30 PM UTC.",
+					"This record reuses its DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at Sep 12, 2030, 2:30 PM UTC.",
 			},
 		});
 	});

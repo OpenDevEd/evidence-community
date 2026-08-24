@@ -56,6 +56,11 @@ https://test.crossref.org, https://sandbox.zenodo.org {
 	reverse_proxy publication-provider-fake:4000
 }
 
+https://doi.org {
+	tls internal
+	respond 302
+}
+
 http://storage:5000 {
 	reverse_proxy publication-provider-fake:4000
 }

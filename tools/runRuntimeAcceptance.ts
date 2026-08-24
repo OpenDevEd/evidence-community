@@ -270,6 +270,26 @@ function captureCompose(...args: string[]) {
 	]);
 }
 
+async function waitForComposeServiceHealthy(
+	service: string,
+	timeoutMs = 30_000,
+) {
+	const containerId = captureCompose("ps", "--quiet", service).trim();
+	if (!containerId) throw new Error(`${service} does not have a running container`);
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const status = capture("docker", [
+			"inspect",
+			"--format",
+			"{{.State.Health.Status}}",
+			containerId,
+		]).trim();
+		if (status === "healthy") return;
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	throw new Error(`${service} did not become healthy after it resumed`);
+}
+
 function processIsAlive(pid: number) {
 	try {
 		process.kill(pid, 0);
@@ -678,6 +698,7 @@ async function verifySearchQueueIsolation(profiles: Profile[]) {
 		amberKey,
 		"Amber indexing after its search service resumes",
 	);
+	await waitForComposeServiceHealthy("amber-meilisearch");
 	assert.equal(await meilisearchHasDocument(amber, amberKey), true);
 	assert.equal(await meilisearchHasDocument(indigo, indigoKey), true);
 	assert.equal(await meilisearchHasDocument(amber, indigoKey), false);
@@ -1329,6 +1350,118 @@ async function verifyPublicationLifecycle(profile: Profile) {
 	);
 }
 
+async function verifyZenodoReuseExternalLifecycle(profile: Profile) {
+	const itemKey = "PUBEXT23";
+	const removedFileKey = "PUBEXPA3";
+	const externalDoi = "10.1038/nature12373";
+	const session = await createAdminTestSession(
+		`http://127.0.0.1:${profile.port}`,
+		acceptanceAdminPassword,
+	);
+
+	await adminPublicationRequest(
+		profile,
+		session,
+		`/api/admin/items/${itemKey}/publication/zenodo/activate`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ identifierPolicy: "reuse-external" }),
+		},
+	);
+	await waitForPublicationState(
+		() =>
+			postgresScalar(
+				"amber",
+				`SELECT count(*) FROM "publicationSyncState"
+				 WHERE "itemKey" = '${itemKey}' AND "provider" = 'zenodo'
+					AND "lastFileManifestHash" IS NOT NULL
+					AND "zenodoRecordId" IS NOT NULL`,
+			) === "1",
+		"external DOI Zenodo publication settlement",
+	);
+
+	await adminPublicationRequest(
+		profile,
+		session,
+		`/api/admin/items/${removedFileKey}/file`,
+		{
+			method: "DELETE",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ zenodoFileChange: "minor_correction" }),
+		},
+	);
+	await waitForPublicationState(
+		() =>
+			postgresScalar(
+				"amber",
+				`SELECT count(*) FROM "zenodoFileCorrectionApproval"
+				 WHERE "itemKey" = '${itemKey}' AND "consumedAt" IS NOT NULL`,
+			) === "1",
+		"external DOI file correction settlement",
+	);
+
+	const databaseState = JSON.parse(
+		postgresScalar(
+			"amber",
+			`SELECT json_build_object(
+				'externalDoi', (
+					SELECT "doi" FROM "publicationIdentifier"
+					WHERE "itemKey" = '${itemKey}' AND "registrar" = 'zenodo'
+						AND "role" = 'version' AND "ownership" = 'external'
+						AND "lifecycle" = 'verified' AND "isCurrent" = true
+				),
+				'publishedFiles', (
+					SELECT count(*) FROM "itemFilePublication"
+					WHERE "parentItemKey" = '${itemKey}'
+				),
+				'consumedApprovals', (
+					SELECT count(*) FROM "zenodoFileCorrectionApproval"
+					WHERE "itemKey" = '${itemKey}' AND "consumedAt" IS NOT NULL
+				),
+				'failedJobs', (
+					SELECT count(*) FROM "publicationSyncJob"
+					WHERE "itemKey" = '${itemKey}' AND "deadLetteredAt" IS NOT NULL
+				)
+			)`,
+		),
+	) as {
+		externalDoi: string;
+		publishedFiles: number;
+		consumedApprovals: number;
+		failedJobs: number;
+	};
+	assert.deepEqual(databaseState, {
+		externalDoi,
+		publishedFiles: 1,
+		consumedApprovals: 1,
+		failedJobs: 0,
+	});
+
+	const providerResponse = await fetch(
+		`http://127.0.0.1:${publicationFakePort}/_test/state`,
+	);
+	assert.equal(providerResponse.ok, true);
+	const providerState = (await providerResponse.json()) as {
+		zenodo: Array<{
+			id: string;
+			doi: string | null;
+			files: string[];
+			published: boolean;
+		}>;
+	};
+	const archive = providerState.zenodo.find(
+		(record) => record.doi === externalDoi,
+	);
+	assert.ok(archive, "The local Zenodo fake did not retain the external DOI record");
+	assert.equal(archive.doi, externalDoi);
+	assert.deepEqual(archive.files, ["amber-external-doi-b.pdf"]);
+	assert.equal(archive.published, true);
+	console.log(
+		"Amber archived an external DOI and completed a confirmed PDF correction against the local Zenodo fake.",
+	);
+}
+
 async function waitForRuntimeHealth(
 	profile: Profile,
 	predicate: (health: RuntimeConfigHealth) => boolean,
@@ -1599,6 +1732,7 @@ async function main() {
 		);
 		await verifyLiveConfigLifecycle(profiles[0]);
 		await verifyPublicationLifecycle(profiles[0]);
+		await verifyZenodoReuseExternalLifecycle(profiles[0]);
 		await verifyPublicationAdminInterface(profiles[0]);
 		profiles.forEach(verifyServerAnalyticsTransport);
 		profiles.forEach(runBrowserSuite);

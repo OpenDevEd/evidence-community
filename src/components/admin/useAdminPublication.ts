@@ -1,5 +1,6 @@
 "use client";
 
+import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import { useCallback, useRef, useState } from "react";
 import useSWR, { useSWRConfig } from "swr";
 
@@ -125,7 +126,7 @@ export function useAdminPublication(
 		actionFieldErrors: selectedAction?.fields ?? {},
 		activateCrossref: () =>
 			run("activate-crossref", activateAdminCrossrefPublication),
-		activateZenodo: (policy: "mint-zenodo" | "reuse-crossref") =>
+		activateZenodo: (policy: ZenodoIdentifierPolicy) =>
 			run("activate-zenodo", (key) =>
 				activateAdminZenodoPublication(key, policy),
 			),

@@ -17,6 +17,7 @@ import { openAdmin } from "./admin-login";
 const itemKey = "TESTBOOK";
 const publishedItemKey = "LIVEB22K";
 const timestamp = "2026-07-31T12:00:00.000Z";
+const draftGeneration = "c8df1386-3420-4f12-8c20-7fb1c31ae0ad";
 const adminPassword =
 	process.env.EVIDENCE_LIBRARY_ADMIN_PASSWORD ??
 	"correct horse battery staple";
@@ -233,6 +234,7 @@ function publishedDraft(
 		baseRevision: 1,
 		createdAt: timestamp,
 		draftRevision,
+		generation: draftGeneration,
 		itemKey: publishedItemKey,
 		payload,
 		sourceConnectionKey: "native",
@@ -681,6 +683,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 		baseRevision: revision,
 		createdAt: timestamp,
 		draftRevision,
+		generation: draftGeneration,
 		itemKey: publishedItemKey,
 		patch: {},
 		payload: draftPayload,
@@ -2616,6 +2619,7 @@ test("creates an item through a pointer click in the new-item popover", async ({
 						baseRevision: 0,
 						createdAt: timestamp,
 						draftRevision: 1,
+						generation: draftGeneration,
 						itemKey,
 						payload: submittedPayload,
 						sourceConnectionKey: "native",
@@ -2638,6 +2642,7 @@ test("creates an item through a pointer click in the new-item popover", async ({
 							baseRevision: 0,
 							createdAt: timestamp,
 							draftRevision: 1,
+							generation: draftGeneration,
 							itemKey,
 							payload: submittedPayload,
 							sourceConnectionKey: "native",
@@ -6002,7 +6007,7 @@ test("tracks PDF publish and unpublish mutations", async ({ page }) => {
 						error: {
 							code: "confirmation_required",
 							message:
-								"This record uses its Crossref DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at Sep 12, 2026, 2:30 PM UTC.",
+								"This record reuses its DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at Sep 12, 2026, 2:30 PM UTC.",
 						},
 					},
 					status: 409,

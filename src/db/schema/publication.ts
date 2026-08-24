@@ -21,6 +21,7 @@ export const PUBLICATION_PROVIDERS = ["crossref", "zenodo"] as const;
 export const PUBLICATION_ENVIRONMENTS = ["test", "sandbox"] as const;
 export const ZENODO_IDENTIFIER_POLICIES = [
 	"reuse-crossref",
+	"reuse-external",
 	"mint-zenodo",
 ] as const;
 export const PUBLICATION_IDENTIFIER_ROLES = [
@@ -129,6 +130,7 @@ export const publicationTarget = pgTable(
 		identifierPolicy: text("identifierPolicy", {
 			enum: ZENODO_IDENTIFIER_POLICIES,
 		}),
+		lockedExternalDoi: varchar("lockedExternalDoi", { length: 255 }),
 		requestedBy: varchar("requestedBy", { length: 255 }).notNull(),
 		requestedAt: timestampWithTimezone("requestedAt")
 			.notNull()
@@ -153,7 +155,18 @@ export const publicationTarget = pgTable(
 				(${table.provider} = 'crossref' AND ${table.identifierPolicy} IS NULL)
 				OR (${table.provider} = 'zenodo'
 					AND ${table.identifierPolicy} IS NOT NULL
-					AND ${table.identifierPolicy} IN ('reuse-crossref', 'mint-zenodo'))
+					AND ${table.identifierPolicy} IN ('reuse-crossref', 'reuse-external', 'mint-zenodo'))
+			)`,
+		),
+		check(
+			"publicationTarget_external_doi_valid",
+			sql`(
+				(${table.provider} = 'zenodo'
+					AND ${table.identifierPolicy} = 'reuse-external'
+					AND ${table.lockedExternalDoi} ~ '^10\\.[0-9]{4,9}/[^[:space:]]{1,200}$'
+					AND ${table.lockedExternalDoi} = lower(${table.lockedExternalDoi}))
+				OR (NOT (${table.provider} = 'zenodo' AND ${table.identifierPolicy} = 'reuse-external')
+					AND ${table.lockedExternalDoi} IS NULL)
 			)`,
 		),
 		index("publicationTarget_item_active_idx")
@@ -312,7 +325,7 @@ export const publicationSyncState = pgTable(
 				OR (${table.provider} = 'zenodo'
 					AND ${table.environment} = 'sandbox'
 					AND ${table.identifierPolicy} IS NOT NULL
-					AND ${table.identifierPolicy} IN ('reuse-crossref', 'mint-zenodo')
+					AND ${table.identifierPolicy} IN ('reuse-crossref', 'reuse-external', 'mint-zenodo')
 					AND ${table.pendingStage} IS NULL
 					AND ${table.pendingPayloadHash} IS NULL
 					AND ${table.pendingPayloadSnapshot} IS NULL

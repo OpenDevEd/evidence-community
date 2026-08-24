@@ -5,6 +5,11 @@ export type PublicPublicationIdentifierRow = {
 	role: "primary" | "version" | "concept";
 	doi: string;
 	lifecycle: "reserved" | "verified";
+	/**
+	 * `external` marks a DOI the record brought with it that Zenodo merely
+	 * archived under (reuse-external). It is the record's DOI, not a Zenodo DOI.
+	 */
+	ownership: "managed" | "external";
 };
 
 export type PublicZenodoStateRow = {
@@ -27,11 +32,15 @@ export function buildPublicationIdentifierSummary(input: {
 	);
 	const zenodoVersion = input.identifiers.find(
 		(identifier) =>
-			identifier.registrar === "zenodo" && identifier.role === "version",
+			identifier.registrar === "zenodo" &&
+			identifier.role === "version" &&
+			identifier.ownership === "managed",
 	);
 	const zenodoConcept = input.identifiers.find(
 		(identifier) =>
-			identifier.registrar === "zenodo" && identifier.role === "concept",
+			identifier.registrar === "zenodo" &&
+			identifier.role === "concept" &&
+			identifier.ownership === "managed",
 	);
 	const hasZenodo = Boolean(
 		zenodoVersion ||

@@ -62,6 +62,7 @@ services:
       default:
         aliases:
           - collector.localhost
+          - doi.org
           - sandbox.zenodo.org
           - storage
           - test.crossref.org

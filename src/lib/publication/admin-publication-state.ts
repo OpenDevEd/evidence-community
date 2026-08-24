@@ -8,7 +8,9 @@ export type AdminPublicationProviderState =
 	| "retrying"
 	| "repair_pending"
 	| "synced"
-	| "failed";
+	| "failed"
+	/** The record already has a DOI from another source; nothing to do here. */
+	| "external";
 
 export type AdminPublicationProviderStatus = {
 	label: string;
@@ -45,6 +47,8 @@ export type AdminPublicationStateInput = {
 	journal: boolean;
 	failure: boolean;
 	waitingOn: "crossref" | "file" | null;
+	/** A DOI that came with the record (imported or typed), not minted here. */
+	externalDoi: string | null;
 };
 
 export function describeAdminPublicationProviderState(input: {
@@ -52,8 +56,21 @@ export function describeAdminPublicationProviderState(input: {
 	state: AdminPublicationProviderState;
 	waitingOn: "crossref" | "file" | null;
 	firstBlocker: string | null;
+	externalDoi?: string | null;
 }): AdminPublicationProviderStatus {
 	const providerName = input.provider === "crossref" ? "Crossref" : "Zenodo";
+
+	if (input.state === "external") {
+		const doi = input.externalDoi ?? "from another source";
+		return {
+			label: "Has a DOI",
+			description:
+				input.provider === "crossref"
+					? `This record already has the DOI ${doi} from another source. Crossref registration is not needed.`
+					: `This record already has the DOI ${doi} from another source. Zenodo publishing is not used for it.`,
+			shouldPoll: false,
+		};
+	}
 
 	if (input.state === "blocked") {
 		return {
@@ -149,6 +166,10 @@ export function resolveAdminPublicationProviderState(
 	input: AdminPublicationStateInput,
 	now = new Date(),
 ): AdminPublicationProviderState {
+	// A DOI the record brought with it is a fact about the record, not a
+	// problem to fix. Nothing was activated here, so there is nothing to show
+	// as blocked.
+	if (!input.targetActive && input.externalDoi) return "external";
 	if (
 		!input.configured ||
 		input.blockers.length > 0 ||

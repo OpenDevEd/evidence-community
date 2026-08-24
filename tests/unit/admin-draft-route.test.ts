@@ -44,6 +44,7 @@ describe("admin draft route", () => {
 		const response = await PUT(
 			new NextRequest("https://library.example.org/api/admin/items/ABCD2345/draft", {
 				body: JSON.stringify({
+					expectedDraftGeneration: "c8df1386-3420-4f12-8c20-7fb1c31ae0ad",
 					expectedDraftRevision: 1,
 					expectedPayload: { itemType: "Book", language: "English" },
 					payload: { itemType: "Book", language: "French" },
@@ -63,5 +64,12 @@ describe("admin draft route", () => {
 			title: "A book",
 		});
 		expect(body.draft.payload).not.toHaveProperty("languageName");
+		expect(saveItemDraft).toHaveBeenCalledWith(
+			expect.anything(),
+			expect.objectContaining({
+				expectedDraftGeneration: "c8df1386-3420-4f12-8c20-7fb1c31ae0ad",
+			}),
+			expect.anything(),
+		);
 	});
 });

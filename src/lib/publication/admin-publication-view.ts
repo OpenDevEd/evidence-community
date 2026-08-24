@@ -1,3 +1,4 @@
+import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import {
 	mapCrossrefRecord,
 	planPublicationSync,
@@ -83,13 +84,13 @@ export type AdminPublicationProviderView = {
 	status: AdminPublicationProviderStatus;
 	waitingOn: "crossref" | "file" | null;
 	blockers: readonly string[];
+	/** A DOI that came with the record from another source, if any. */
+	externalDoi: string | null;
 	capabilities: {
 		canActivate: boolean;
 		canRetry: boolean;
 		actionLabel: string;
-		allowedIdentifierPolicies: readonly (
-			"reuse-crossref" | "mint-zenodo"
-		)[];
+		allowedIdentifierPolicies: readonly ZenodoIdentifierPolicy[];
 	};
 	exact: {
 		targetActive: boolean;
@@ -97,7 +98,7 @@ export type AdminPublicationProviderView = {
 			requestedBy: string;
 			requestedAt: string;
 		} | null;
-		identifierPolicy: "reuse-crossref" | "mint-zenodo" | null;
+		identifierPolicy: ZenodoIdentifierPolicy | null;
 		plan: AdminPublicationPlanSummary;
 		job: AdminPublicationJobSummary | null;
 		recentJobs: readonly AdminPublicationJobSummary[];
@@ -119,6 +120,57 @@ export type AdminPublicationProviderView = {
 	links: readonly AdminPublicationLink[];
 };
 
+export type AdminIdentifiersActionId =
+	| "register-crossref"
+	| "archive-zenodo"
+	| "mint-zenodo";
+
+export type AdminIdentifiersReadinessItem = {
+	label: string;
+	ok: boolean;
+	/** Record field to jump to when the item is not ok, when known. */
+	field: string | null;
+};
+
+export type AdminIdentifiersAction = {
+	id: AdminIdentifiersActionId;
+	provider: PublicationProvider;
+	label: string;
+	/** Configured for this library and not already active. */
+	available: boolean;
+	readiness: readonly AdminIdentifiersReadinessItem[];
+	/** Every readiness item is ok. */
+	ready: boolean;
+};
+
+export type AdminIdentifiersActivity =
+	| { state: "none" }
+	| {
+			state: "active";
+			provider: PublicationProvider;
+			displayState: AdminPublicationProviderState;
+			status: AdminPublicationProviderStatus;
+			links: readonly AdminPublicationLink[];
+	  };
+
+/**
+ * What the editor sees at a glance: does the record have a DOI, where it
+ * came from, whether it is archived, and what they could do next. Built
+ * from the provider views; nothing here is red until something the editor
+ * activated has failed.
+ */
+export type AdminIdentifiersView = {
+	doi: {
+		value: string;
+		origin: "crossref" | "zenodo" | "source" | "record";
+		url: string;
+	} | null;
+	registration: AdminIdentifiersActivity;
+	archive: AdminIdentifiersActivity;
+	attention: boolean;
+	actions: readonly AdminIdentifiersAction[];
+};
+
 export type AdminPublicationView = {
 	itemKey: string;
 	canonicalRevision: number;
@@ -131,7 +183,159 @@ export type AdminPublicationView = {
 		crossref: AdminPublicationProviderView;
 		zenodo: AdminPublicationProviderView;
 	};
+	identifiers: AdminIdentifiersView;
 };
+
+const readinessFieldHints: ReadonlyArray<[RegExp, string]> = [
+	[/\btitle\b/iu, "title"],
+	[/abstract|description/iu, "abstractNote"],
+	[/\b(author|creator)s?\b/iu, "creators"],
+	[/\b(year|date)\b/iu, "date"],
+	[/item type/iu, "itemType"],
+	[/\blanguage\b/iu, "language"],
+	[/\bpublisher\b/iu, "publisher"],
+	[/\b(rights|licen[cs]e)\b/iu, "rights"],
+];
+
+function readinessFromBlockers(
+	blockers: readonly string[],
+): AdminIdentifiersReadinessItem[] {
+	if (blockers.length === 0) {
+		return [{ label: "Record details", ok: true, field: null }];
+	}
+	return blockers.map((label) => ({
+		label,
+		ok: false,
+		field: readinessFieldHints.find(([test]) => test.test(label))?.[1] ?? null,
+	}));
+}
+
+type IdentifiersViewInput = {
+	crossref: AdminPublicationProviderView;
+	zenodo: AdminPublicationProviderView;
+	crossrefDoi: string | null;
+	zenodoVersionDoi: string | null;
+	externalDoi: string | null;
+	configured: { crossref: boolean; zenodo: boolean };
+};
+
+type IdentifierDoi = NonNullable<AdminIdentifiersView["doi"]>;
+
+function identifierDoi(input: IdentifiersViewInput): IdentifierDoi | null {
+	const urlFor = (doi: string) =>
+		buildDoiDisplayLinks({
+			bibliographicDoi: doi,
+			crossrefDoi: null,
+			zenodoVersionDoi: null,
+			zenodoConceptDoi: null,
+			zenodoRecordId: null,
+			zenodoConceptRecordId: null,
+			zenodoBaseUrl: null,
+		}).bibliographicDoi!.url;
+	if (input.crossrefDoi) {
+		return {
+			value: input.crossrefDoi,
+			origin: "crossref",
+			url: urlFor(input.crossrefDoi),
+		};
+	}
+	if (input.zenodoVersionDoi) {
+		return {
+			value: input.zenodoVersionDoi,
+			origin: "zenodo",
+			url: urlFor(input.zenodoVersionDoi),
+		};
+	}
+	if (!input.externalDoi) return null;
+	return {
+		value: input.externalDoi,
+		origin: "record",
+		url: urlFor(input.externalDoi),
+	};
+}
+
+function identifierActivity(
+	view: AdminPublicationProviderView,
+): AdminIdentifiersActivity {
+	if (!view.exact.targetActive) return { state: "none" };
+	return {
+		state: "active",
+		provider: view.provider,
+		displayState: view.displayState,
+		status: view.status,
+		links: view.links,
+	};
+}
+
+function identifierAction(
+	input: IdentifiersViewInput,
+	id: AdminIdentifiersActionId,
+	view: AdminPublicationProviderView,
+	label: string,
+): AdminIdentifiersAction {
+	const readiness = readinessFromBlockers(view.blockers);
+	return {
+		id,
+		provider: view.provider,
+		label,
+		available: input.configured[view.provider],
+		readiness,
+		ready: readiness.every((item) => item.ok),
+	};
+}
+
+function identifierActions(
+	input: IdentifiersViewInput,
+	doi: IdentifierDoi | null,
+) {
+	const actions: AdminIdentifiersAction[] = [];
+	const hasOutsideDoi = doi !== null && doi.origin !== "crossref";
+	if (!input.crossref.exact.targetActive && !hasOutsideDoi) {
+		actions.push(
+			identifierAction(
+				input,
+				"register-crossref",
+				input.crossref,
+				"Register a DOI with Crossref",
+			),
+		);
+	}
+	if (!input.zenodo.exact.targetActive) {
+		if (hasOutsideDoi || doi?.origin === "crossref") {
+			actions.push(
+				identifierAction(
+					input,
+					"archive-zenodo",
+					input.zenodo,
+					"Archive on Zenodo",
+				),
+			);
+		} else {
+			actions.push(
+				identifierAction(
+					input,
+					"mint-zenodo",
+					input.zenodo,
+					"Archive on Zenodo and get its DOI",
+				),
+			);
+		}
+	}
+	return actions;
+}
+
+function buildIdentifiersView(input: IdentifiersViewInput): AdminIdentifiersView {
+	const doi = identifierDoi(input);
+	return {
+		doi,
+		registration: identifierActivity(input.crossref),
+		archive: identifierActivity(input.zenodo),
+		attention:
+			input.crossref.displayState === "failed" ||
+			input.zenodo.displayState === "failed",
+		actions: identifierActions(input, doi),
+	};
+}
 
 function iso(value: Date | null) {
 	return value?.toISOString() ?? null;
@@ -225,6 +429,8 @@ function planIssues(plan: PublicationSyncPlan | null) {
 	const messages: Record<typeof plan.reason, string> = {
 		MISSING_MANAGED_CROSSREF_DOI:
 			"Activate and verify the Crossref DOI required by this publication",
+		MISSING_EXTERNAL_DOI:
+			"Add the record's DOI before archiving it on Zenodo under that DOI",
 		MISSING_ZENODO_PROVIDER_RECORD_ID:
 			"The saved Zenodo DOI is missing its Zenodo record ID",
 		CROSSREF_VALIDATION_FAILED:
@@ -399,7 +605,14 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		bibliographicDoi.status === "resolved" && !managedCrossref
 			? bibliographicDoi.doi
 			: null;
-	const crossrefExternalDoi = existingBibliographicDoi;
+	const archivedExternalDoi =
+		zenodoTarget?.identifierPolicy === "reuse-external"
+			? (zenodoState?.zenodoVersionDoi ?? null)
+			: null;
+	const archivedDoiMismatch =
+		archivedExternalDoi && existingBibliographicDoi !== archivedExternalDoi
+			? `The record DOI no longer matches the DOI archived on Zenodo (${archivedExternalDoi})`
+			: null;
 	let crossrefValidation: readonly string[] = [];
 	let zenodoValidation: readonly string[] = [];
 	if (validationRecord && publicationConfig.crossref.prefix) {
@@ -545,9 +758,6 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			: null,
 		namespaceMismatch,
 		canonicalManagedMismatch,
-		crossrefExternalDoi
-			? `This record already has an external DOI (${crossrefExternalDoi}), so Crossref cannot assign another one`
-			: null,
 		stateErrors.crossref,
 		...crossrefValidation,
 		...planIssues(crossrefPlan),
@@ -555,11 +765,9 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 	const zenodoBlockers = unique([
 		...sharedBlockers,
 		fileError,
+		archivedDoiMismatch,
 		!publicationConfig.zenodo.enabled
 			? "Zenodo Sandbox publishing is not configured for this library"
-			: null,
-		existingBibliographicDoi
-			? `This record already has an external DOI (${existingBibliographicDoi}), so Zenodo publishing is unavailable`
 			: null,
 		zenodoJournals.length > 1
 			? "More than one unfinished Zenodo publication exists for this record"
@@ -613,7 +821,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			provider,
 			providerEnvironment,
 		);
-		const displayState = resolveAdminPublicationProviderState(
+		const resolvedDisplayState = resolveAdminPublicationProviderState(
 			{
 				provider,
 				configured: configured(publicationConfig, provider),
@@ -626,16 +834,20 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 				journal: provider === "zenodo" && zenodoJournals.length === 1,
 				failure: Boolean(failure),
 				waitingOn: providerWaitingOn,
+				externalDoi: existingBibliographicDoi,
 			},
 			input.now,
 		);
-		const allowedIdentifierPolicies =
-			provider === "zenodo" && zenodoBlockers.length === 0
-				? ([
-						...(managedCrossref ? ["reuse-crossref" as const] : []),
-						"mint-zenodo" as const,
-					] as const)
-				: [];
+		const displayState = failure ? "failed" : resolvedDisplayState;
+		const allowedIdentifierPolicies: ZenodoIdentifierPolicy[] =
+			provider !== "zenodo" || zenodoBlockers.length > 0
+				? []
+				: existingBibliographicDoi
+					? ["reuse-external"]
+					: [
+							...(managedCrossref ? (["reuse-crossref"] as const) : []),
+							"mint-zenodo",
+						];
 		const pendingSubmission =
 			provider === "crossref" &&
 			state?.pendingBatchId &&
@@ -658,11 +870,18 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 				state: displayState,
 				waitingOn: providerWaitingOn,
 				firstBlocker: blockers[0] ?? null,
+				externalDoi: existingBibliographicDoi,
 			}),
 			waitingOn: providerWaitingOn,
-			blockers,
+			// Crossref has nothing to fix when another registrar owns the DOI.
+			blockers:
+				provider === "crossref" && displayState === "external"
+					? []
+					: blockers,
+			externalDoi: existingBibliographicDoi,
 			capabilities: {
-				canActivate: !target && blockers.length === 0,
+				canActivate:
+					!target && blockers.length === 0 && displayState !== "external",
 				canRetry: Boolean(target) && displayState === "failed",
 				actionLabel:
 					provider === "crossref"
@@ -727,6 +946,8 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 		};
 	};
 
+	const crossrefView = providerView("crossref", crossrefPlan, crossrefBlockers);
+	const zenodoView = providerView("zenodo", zenodoPlan, zenodoBlockers);
 	return {
 		itemKey: record.key,
 		canonicalRevision: record.revision,
@@ -740,9 +961,17 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 							publicationConfig.crossref.suffixNamespace,
 					}
 				: null,
-		providers: {
-			crossref: providerView("crossref", crossrefPlan, crossrefBlockers),
-			zenodo: providerView("zenodo", zenodoPlan, zenodoBlockers),
-		},
+		providers: { crossref: crossrefView, zenodo: zenodoView },
+		identifiers: buildIdentifiersView({
+			crossref: crossrefView,
+			zenodo: zenodoView,
+			crossrefDoi: crossrefDoi ?? null,
+			zenodoVersionDoi: zenodoVersionDoi ?? null,
+			externalDoi: existingBibliographicDoi,
+			configured: {
+				crossref: configured(publicationConfig, "crossref"),
+				zenodo: configured(publicationConfig, "zenodo"),
+			},
+		}),
 	};
 }

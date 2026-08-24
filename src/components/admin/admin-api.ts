@@ -1,5 +1,6 @@
 "use client";
 
+import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import type {
 	AdminCollection,
 	AdminCollectionCatalogEntry,
@@ -292,7 +293,7 @@ export function retryAdminCrossrefPublication(key: string) {
 
 export function activateAdminZenodoPublication(
 	key: string,
-	identifierPolicy: "mint-zenodo" | "reuse-crossref",
+	identifierPolicy: ZenodoIdentifierPolicy,
 ) {
 	return requestJson<AdminPublicationMutationResponse>(
 		`/api/admin/items/${encodeURIComponent(key)}/publication/zenodo/activate`,
@@ -330,6 +331,7 @@ export async function openAdminDraft(key: string) {
 
 export async function saveAdminDraft(
 	key: string,
+	expectedDraftGeneration: string,
 	expectedDraftRevision: number,
 	expectedPayload: Record<string, unknown>,
 	payload: Record<string, unknown>,
@@ -340,6 +342,7 @@ export async function saveAdminDraft(
 			{
 				method: "PUT",
 				body: JSON.stringify({
+					expectedDraftGeneration,
 					expectedDraftRevision,
 					expectedPayload,
 					payload,

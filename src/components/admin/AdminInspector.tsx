@@ -320,19 +320,15 @@ function SaveIndicator({
 	if (state === "idle") return null;
 	return (
 		<div
-			aria-live={
-				state === "error" || state === "conflict"
-					? "assertive"
-					: "polite"
-			}
+			aria-live={state === "error" ? "assertive" : "polite"}
 			className={`flex items-center gap-1.5 text-[11px] ${
-				state === "error" || state === "conflict"
+				state === "error"
 					? "text-danger"
-					: "text-black/40 dark:text-white/40"
+					: state === "conflict"
+						? "text-amber-800 dark:text-amber-200"
+						: "text-black/40 dark:text-white/40"
 			}`}
-			role={
-				state === "error" || state === "conflict" ? "alert" : "status"
-			}
+			role={state === "error" ? "alert" : "status"}
 		>
 			{state === "saving" ? (
 				<Spinner size="sm" />
@@ -360,26 +356,47 @@ function SaveIndicator({
 	);
 }
 
+/**
+ * Headline for the field summary. A conflict is not a mistake the editor made,
+ * so it must not read like a validation error.
+ */
+export function fieldSummaryHeadline(count: number, tone: "conflict" | "validation") {
+	const fields = count === 1 ? "field" : "fields";
+	return tone === "conflict"
+		? `${count} ${fields} changed in another session. Reload to see the new ${count === 1 ? "value" : "values"}.`
+		: `Fix ${count} ${fields} before publishing.`;
+}
+
 function ValidationSummary({
 	errors,
 	recordKey,
+	tone,
 }: {
 	errors: AdminFieldErrors;
 	recordKey: string;
+	tone: "conflict" | "validation";
 }) {
 	const entries = Object.entries(errors);
 	if (entries.length === 0) return null;
+	const conflict = tone === "conflict";
 	return (
 		<div
 			id={`admin-${recordKey}-validation-summary`}
-			className="mt-3 rounded-xl bg-danger/[0.08] px-3 py-2.5 text-xs text-danger outline-none focus-visible:ring-2 focus-visible:ring-danger"
-			role="alert"
+			className={`mt-3 rounded-xl px-3 py-2.5 text-xs outline-none focus-visible:ring-2 ${
+				conflict
+					? "bg-amber-500/[0.1] text-amber-800 focus-visible:ring-amber-500 dark:text-amber-200"
+					: "bg-danger/[0.08] text-danger focus-visible:ring-danger"
+			}`}
+			role={conflict ? "status" : "alert"}
 			tabIndex={-1}
 		>
 			<div className="flex items-center gap-2 font-medium">
-				<AlertCircle aria-hidden size={14} />
-				Fix {entries.length} {entries.length === 1 ? "field" : "fields"}{" "}
-				before publishing.
+				{conflict ? (
+					<RotateCcw aria-hidden size={14} />
+				) : (
+					<AlertCircle aria-hidden size={14} />
+				)}
+				{fieldSummaryHeadline(entries.length, tone)}
 			</div>
 			<ul className="mt-1.5 space-y-1 pl-5">
 				{entries.map(([path, message]) => {
@@ -388,7 +405,7 @@ function ValidationSummary({
 						<li key={path}>
 							{targetId ? (
 								<button
-									className="text-left underline decoration-danger/40 underline-offset-2 hover:decoration-danger"
+									className={`text-left underline underline-offset-2 ${conflict ? "decoration-amber-500/50 hover:decoration-amber-600" : "decoration-danger/40 hover:decoration-danger"}`}
 									type="button"
 									onClick={() =>
 										document
@@ -417,6 +434,7 @@ function MetadataEditor({
 	onChange,
 	payload,
 	readOnly,
+	lockedDoi,
 }: {
 	definitions: readonly AdminSchemaDefinition[];
 	detail: AdminItemDetail;
@@ -425,6 +443,7 @@ function MetadataEditor({
 	onChange: (payload: Record<string, unknown>) => void;
 	payload: Record<string, unknown>;
 	readOnly: boolean;
+	lockedDoi: string | null;
 }) {
 	const definition = definitionFor(
 		definitions,
@@ -465,7 +484,7 @@ function MetadataEditor({
 					allowsCustomValue={false}
 					className="max-w-none"
 					classNames={{
-						listboxWrapper: "max-h-[320px]",
+						listboxWrapper: "max-h-80",
 					}}
 					inputProps={{
 						classNames: inspectorInputClassNames,
@@ -550,6 +569,7 @@ function MetadataEditor({
 							descriptor={descriptor}
 							disabled={
 								readOnly ||
+								(field === "DOI" && Boolean(lockedDoi)) ||
 								(field === "annotationType" &&
 									String(
 										detail.published?.itemType ?? "",
@@ -563,6 +583,11 @@ function MetadataEditor({
 								updateField(field, next)
 							}
 						/>
+						{field === "DOI" && lockedDoi ? (
+							<p className="text-xs text-black/45 dark:text-white/45">
+								Deactivate Zenodo before changing this DOI.
+							</p>
+						) : null}
 					</div>
 				);
 			})}
@@ -576,12 +601,14 @@ function CreatorsEditor({
 	onChange,
 	payload,
 	readOnly,
+	recordKey,
 }: {
 	definition: AdminSchemaDefinition | undefined;
 	errors: AdminFieldErrors;
 	onChange: (payload: Record<string, unknown>) => void;
 	payload: Record<string, unknown>;
 	readOnly: boolean;
+	recordKey: string;
 }) {
 	const creators = Array.isArray(payload.creators)
 		? (payload.creators as AdminCreator[])
@@ -822,6 +849,7 @@ function CreatorsEditor({
 			{!readOnly && definition?.creatorTypes.length ? (
 				<Button
 					className="bg-black/[0.035] font-medium hover:bg-black/[0.06] dark:bg-white/[0.045] dark:hover:bg-white/[0.08]"
+					id={`admin-${recordKey}-creators`}
 					onPress={() =>
 						updateCreators([
 							...creators,
@@ -1558,6 +1586,7 @@ export function AdminInspector({
 		detail && !detail.parentItem && detail.published ? detail.key : null,
 		detail ? publicationInputVersion(detail) : null,
 	);
+	const [pendingPublicationField, setPendingPublicationField] = useState<string | null>(null);
 	const publishedCollectionNames = useMemo(
 		() =>
 			new Map(
@@ -1590,6 +1619,16 @@ export function AdminInspector({
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [detailKey, validationRevision]);
+	useEffect(() => {
+		if (!detailKey || !detail?.draft || !pendingPublicationField) return;
+		const targetId = validationTargetId(detailKey, pendingPublicationField);
+		if (!targetId) return;
+		const frame = requestAnimationFrame(() => {
+			document.getElementById(targetId)?.focus();
+			setPendingPublicationField(null);
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [detail?.draft, detailKey, pendingPublicationField]);
 
 	if (loading && !detail) {
 		return (
@@ -1621,6 +1660,10 @@ export function AdminInspector({
 	const itemUrl = buildAdminPublicItemUrl(detail, identity.baseUrl);
 	const showPublicLinkActions =
 		detail.itemType === "Attachment" || Boolean(itemUrl);
+	const goToPublicationField = (field: string) => {
+		setPendingPublicationField(field);
+		if (!detail.draft) onOpenDraft();
+	};
 
 	return (
 		<div
@@ -1665,7 +1708,7 @@ export function AdminInspector({
 				<div>
 					<div className="flex items-start gap-3">
 						<div className="min-w-0 flex-1">
-							<h2 className="text-lg font-semibold leading-snug tracking-[-0.01em] text-black/90 dark:text-white/95">
+							<h2 className="text-lg font-semibold leading-snug tracking-tight text-black/90 dark:text-white/95">
 								{detail.title}
 							</h2>
 							<p className="mt-1 text-xs text-black/40 dark:text-white/40">
@@ -1758,14 +1801,18 @@ export function AdminInspector({
 						) : null}
 						{!detail.parentItem ? (
 							<AdminPublicationHeaderStatus
-								onPress={() =>
-									document
-										.getElementById("admin-doi-publishing")
-										?.scrollIntoView({
+								onPress={() => {
+									const toggle = document.getElementById(
+										`admin-${detail.key}-identifiers-toggle`,
+									);
+									if (toggle?.getAttribute("aria-expanded") !== "true") {
+										toggle?.click();
+									}
+									document.getElementById("admin-doi-publishing")?.scrollIntoView({
 											behavior: "smooth",
 											block: "start",
-										})
-								}
+										});
+								}}
 								state={publication}
 							/>
 						) : null}
@@ -1901,6 +1948,7 @@ export function AdminInspector({
 					<ValidationSummary
 						errors={validationErrors}
 						recordKey={detail.key}
+						tone={saveState === "conflict" ? "conflict" : "validation"}
 					/>
 				</div>
 			</div>
@@ -1913,10 +1961,11 @@ export function AdminInspector({
 					<Section
 						icon={BadgeCheck}
 						id="admin-doi-publishing"
-						title="DOI publishing"
+						title="Identifiers"
 					>
 						<AdminPublicationStatus
 							itemKey={detail.key}
+							onGoToField={goToPublicationField}
 							onOpenAttachments={() =>
 								document
 									.getElementById("admin-attachments")
@@ -1941,6 +1990,13 @@ export function AdminInspector({
 						onChange={onChange}
 						payload={payload}
 						readOnly={readOnly}
+						lockedDoi={
+							publication.publication?.providers.zenodo.exact.targetActive &&
+							publication.publication.providers.zenodo.exact.identifierPolicy ===
+								"reuse-external"
+								? publication.publication.identifiers.doi?.value ?? null
+								: null
+						}
 					/>
 				</Section>
 				{definition?.creatorTypes.length ? (
@@ -1980,6 +2036,7 @@ export function AdminInspector({
 							onChange={onChange}
 							payload={payload}
 							readOnly={readOnly}
+							recordKey={detail.key}
 						/>
 					</Section>
 				) : null}

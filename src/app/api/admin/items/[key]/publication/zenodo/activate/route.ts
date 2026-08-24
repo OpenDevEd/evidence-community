@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 
+import { ZENODO_IDENTIFIER_POLICIES } from "@/db/schema/publication";
+
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getDatabaseForConfig } from "@/db";
 import {
@@ -12,11 +14,9 @@ import {
 import { activateZenodoPublication } from "@/lib/publication/zenodo-activation-service";
 import { buildAdminPublicationView } from "@/lib/publication/admin-publication-view-service";
 
-const requestSchema = z
-	.object({
-		identifierPolicy: z.enum(["reuse-crossref", "mint-zenodo"]).optional(),
-	})
-	.strict();
+const requestSchema = z.strictObject({
+	identifierPolicy: z.enum(ZENODO_IDENTIFIER_POLICIES).optional(),
+});
 
 export async function POST(
 	request: NextRequest,

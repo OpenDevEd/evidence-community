@@ -277,6 +277,7 @@ async function verify() {
 		await saveItemDraft(
 			db,
 			{
+				expectedDraftGeneration: opened.generation,
 				expectedDraftRevision: opened.draftRevision,
 				expectedPayload: opened.payload,
 				itemKey,
@@ -387,6 +388,7 @@ async function verify() {
 		await saveItemDraft(
 			db,
 			{
+				expectedDraftGeneration: secondEdit.generation,
 				expectedDraftRevision: secondEdit.draftRevision,
 				expectedPayload: secondEdit.payload,
 				itemKey,
@@ -520,6 +522,7 @@ async function verify() {
 				draft: Awaited<ReturnType<typeof saveItemDraft>>;
 			}>(`/api/admin/items/${itemKey}/draft`, {
 				body: JSON.stringify({
+					expectedDraftGeneration: httpDraft.generation,
 					expectedDraftRevision: httpDraft.draftRevision,
 					expectedPayload: httpDraft.payload,
 					payload: {
@@ -590,6 +593,7 @@ async function verify() {
 		});
 		const linkedNativeEdit = await openItemDraft(db, nativeParentKey);
 		await saveItemDraft(db, {
+			expectedDraftGeneration: linkedNativeEdit.generation,
 			expectedDraftRevision: linkedNativeEdit.draftRevision,
 			expectedPayload: linkedNativeEdit.payload,
 			itemKey: nativeParentKey,
