@@ -89,6 +89,8 @@ const config: Config = {
 			spacing: {
 				// The library's AI panel column.
 				"ai-panel": "2.375rem",
+				// Lines up a tool step's details under its title.
+				"tool-step": "1.375rem",
 			},
 			maxHeight: {
 				// The navbar suggestion list must not cover the whole screen.

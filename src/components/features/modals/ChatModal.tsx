@@ -17,7 +17,12 @@ import { ItemGetResponse } from "@/app/api/item/types";
 import { IoSend } from "react-icons/io5";
 import { useLocale, useTranslations } from "next-intl";
 import { UIMessage, useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import {
+	DefaultChatTransport,
+	isReasoningUIPart,
+	isTextUIPart,
+	isToolUIPart,
+} from "ai";
 import AIHeader from "../ai/AIHeader";
 
 // Type alias for backward compatibility
@@ -32,6 +37,34 @@ function getMessageContent(message: Message): string {
 			return '';
 		})
 		.join('');
+}
+
+type VisibleMessagePart = {
+	key: string;
+	part: Message["parts"][number];
+};
+
+function visibleMessageParts(message: Message): VisibleMessagePart[] {
+	let reasoningCount = 0;
+	let textCount = 0;
+
+	return message.parts.reduce<VisibleMessagePart[]>((parts, part) => {
+		if (isReasoningUIPart(part) && part.text.trim()) {
+			reasoningCount += 1;
+			parts.push({ key: `reasoning-${reasoningCount}`, part });
+		}
+
+		if (isToolUIPart(part)) {
+			parts.push({ key: `tool-${part.toolCallId}`, part });
+		}
+
+		if (isTextUIPart(part) && part.text.trim()) {
+			textCount += 1;
+			parts.push({ key: `text-${textCount}`, part });
+		}
+
+		return parts;
+	}, []);
 }
 
 function createTextMessage(role: 'system' | 'user' | 'assistant' | 'data', content: string, id: string): Message {
@@ -65,6 +98,7 @@ import { Card } from "@/components/nextui/Card";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import { clientAIError } from "@/lib/ai/client";
 import type { LibrarySearchContext } from "@/lib/search-context";
+import { ToolActivity } from "@/components/features/ai/ToolActivity";
 
 export const maxDuration = 240;
 
@@ -137,12 +171,10 @@ function MessageComponent({
 	const presentation = getAIModelPresentation(modelId);
 	const tUI = useTranslations("ui");
 
-	const annotations = useMemo<Array<{ id: string; message: string }>>(() => {
-		// In v6, tool parts are named `tool-${toolName}` instead of "tool-invocation"
-		// For now, we'll just return an empty array since the old annotations system
-		// may not be supported. You can customize this based on your needs.
-		return [];
-	}, [message]);
+	const visibleParts = useMemo(
+		() => visibleMessageParts(message),
+		[message],
+	);
 
 	return (
 		<>
@@ -170,43 +202,6 @@ function MessageComponent({
 						"text-red-500 dark:text-red-500 italic"
 				)}
 			>
-				{annotations.length > 0 && (
-					<div className="flex items-center gap-2">
-						<div className="w-full flex flex-col rounded-t-xl p-0 text-wrap max-w-full overflow-hidden break-words text-lg opacity-80 divide-accent dark:divide-accent-300 relative">
-							<AnimatePresence mode="popLayout">
-								{annotations.length > 0 && (
-									<motion.div
-										key={
-											annotations[annotations.length - 1]
-												.id || annotations.length - 1
-										}
-										initial={{ opacity: 0, x: -20 }}
-										animate={{ opacity: 1, x: 0 }}
-										exit={{ opacity: 0, x: 20 }}
-										transition={{ duration: 0.3 }}
-										className={twMerge(
-											"flex items-center gap-2 bg-clip-text text-transparent",
-											isWaiting
-												? "bg-gradient-to-r from-accent via-accent-700 to-accent animate-gradient-x"
-												: "bg-gradient-to-r from-accent to-accent-700"
-										)}
-									>
-										{React.createElement(
-											presentation.icon,
-											{
-												className: "size-4 fill-accent shrink-0",
-											}
-										)}
-										{
-											annotations[annotations.length - 1]
-												.message
-										}
-									</motion.div>
-								)}
-							</AnimatePresence>
-						</div>
-					</div>
-				)}
 				{getMessageContent(message).trim().length === 0 && !error ? (
 					<div className={twMerge("p-4 opacity-60 ")}>
 						<div className="w-fit bg-black flex items-center justify-center rounded-full p-2">
@@ -217,14 +212,47 @@ function MessageComponent({
 					<ScreeningResults results={JSON.parse(getMessageContent(message))} />
 				) : (
 					<>
-						<AIMarkdown
-							className={twMerge(
-								"p-4 prose dark:prose-invert space-y-4 w-full max-w-full",
-								message.role !== "user" && "p-0 mt-6"
-							)}
-						>
-							{cleanAIResponse(getMessageContent(message))}
-						</AIMarkdown>
+						{message.role === "assistant" ? (
+							visibleParts.map(({ key, part }) => {
+								if (isReasoningUIPart(part)) {
+									return (
+										<AIMarkdown
+											key={key}
+											className="mt-4 prose prose-sm max-w-full text-black/50 dark:prose-invert dark:text-white/50"
+										>
+											{part.text}
+										</AIMarkdown>
+									);
+								}
+
+								if (isToolUIPart(part)) {
+									return (
+										<div key={key} className="mt-2">
+											<ToolActivity part={part} />
+										</div>
+									);
+								}
+
+								if (isTextUIPart(part)) {
+									return (
+										<AIMarkdown
+											key={key}
+											className="p-0 mt-6 prose dark:prose-invert space-y-4 w-full max-w-full"
+										>
+											{cleanAIResponse(part.text)}
+										</AIMarkdown>
+									);
+								}
+
+								return null;
+							})
+						) : (
+							<AIMarkdown
+								className="p-4 prose dark:prose-invert space-y-4 w-full max-w-full"
+							>
+								{cleanAIResponse(getMessageContent(message))}
+							</AIMarkdown>
+						)}
 						{message.role === "assistant" &&
 							getMessageContent(message).includes("/lib/") &&
 							smartScreeningFields.length > 0 && (
