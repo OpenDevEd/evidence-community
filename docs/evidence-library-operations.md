@@ -22,11 +22,11 @@ in `LIBRARY_CONFIG_JSON`, not in `NEXT_PUBLIC_*` variables or customer image
 builds. `sources[]` lists every Zotero group the library can import from and,
 with `writebackEnabled: true`, write to; records choose their own sources at
 publish time and there is no default writeback source. The default deployment includes the search, source-sync, and
-source-writeback workers plus one private persistent Meilisearch service. A
-web-only deployment is incomplete.
+source-writeback, and publication workers plus one private persistent
+Meilisearch service. A web-only deployment is incomplete.
 
 Set the Coolify application field `connect_to_docker_network` to `false` through
-the provisioning API. The checked-in Compose attaches only the four runtime
+the provisioning API. The checked-in Compose attaches only the five runtime
 containers to the external `coolify` network. Meilisearch stays on the private
 application network, so another library cannot share its service-name DNS.
 
@@ -238,6 +238,43 @@ PostgreSQL, Meilisearch, SMTP, analytics, AI providers, or external assets are
 healthy; monitor those dependencies separately and run the acceptance suite
 before release.
 
+## Decide whether a Compose deployment is ready
+
+Keep the Coolify deployment result, Compose service state, and configuration
+response as separate evidence. Do not copy them into another readiness store.
+A library is ready only when all of these checks pass:
+
+1. Coolify reports that the requested deployment succeeded.
+2. `docker compose ps --all` reports one container for `web`,
+   `search-indexer`, `source-sync`, `source-writeback`, `publication-worker`,
+   and `meilisearch`. None is missing, exited, restarting, dead, or unhealthy.
+3. `web`, `search-indexer`, `publication-worker`, and `meilisearch` are
+   healthy. `source-sync` and `source-writeback` are running.
+4. `GET /api/library-config/health` returns `200`, reports `state: "active"`,
+   reports the requested `active.revision`, and has no rejected revision.
+5. The public library URL and `/admin` return a successful HTTP response.
+
+The source workers intentionally have no container health check. An idle source
+worker has no active connection lease to refresh. Its running container is the
+startup signal. Per-connection run and error records remain the source of truth
+for later import or writeback failures.
+
+Use the existing Compose result to name a missing, exited, or unhealthy
+container. Use the existing Coolify deployment result to name a failed build or
+deployment step. Do not replace either result with a second health state
+machine. A successful configuration response alone never makes the deployment
+ready.
+
+From a host with access to the application, inspect the same evidence with:
+
+```bash
+docker compose --project-directory . \
+  -f docker/compose.library.yaml ps --all --format json
+curl --fail-with-body https://library.example.org/api/library-config/health
+curl --fail-with-body https://library.example.org/en/lib
+curl --fail-with-body https://library.example.org/admin
+```
+
 ## Activate a change without restarting
 
 Validate and activate from a source checkout that can write the host directory:
@@ -331,10 +368,13 @@ npm run check:changed
 npm run test:acceptance
 ```
 
-`npm run test:acceptance` starts two disposable libraries, PostgreSQL, Meilisearch,
-Mailpit, workers, and local HTTPS fixtures for external services. It runs every
-desktop and mobile browser check, including the complete mocked Crossref and
-Zenodo publication flow. It also verifies independently enabled and disabled
+`npm run test:acceptance` first starts the repository Compose deployment with
+all five required processes and its private Meilisearch. It checks real Compose
+state and health, the active revision, the public site, and `/admin`. The rest
+of the suite starts two disposable libraries, PostgreSQL, Meilisearch, Mailpit,
+workers, and local HTTPS fixtures for external services. It runs every desktop
+and mobile browser check, including the complete mocked Crossref and Zenodo
+publication flow. It also verifies independently enabled and disabled
 integrations, secret boundaries, live activation, rejection, last-valid
 retention, and rollback using the same production image.
 
