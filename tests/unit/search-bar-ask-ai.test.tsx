@@ -57,14 +57,14 @@ describe("asking the assistant from the search field", () => {
 	}
 
 	it("hands over what was typed and empties the field", async () => {
-		const onCmdEnter = vi.fn((text: string, clear: () => void) => clear());
+		const onAsk = vi.fn((text: string, clear: () => void) => clear());
 		const handleSearchChange = vi.fn();
 		await act(async () => {
 			root.render(
 				<SearchBar
 					handleSearchChange={handleSearchChange}
 					search=""
-					onCmdEnter={onCmdEnter}
+					onAsk={onAsk}
 				/>,
 			);
 		});
@@ -72,19 +72,19 @@ describe("asking the assistant from the search field", () => {
 		await type("teacher training");
 		await pressCmdEnter();
 
-		expect(onCmdEnter.mock.calls[0]?.[0]).toBe("teacher training");
+		expect(onAsk.mock.calls[0]?.[0]).toBe("teacher training");
 		expect(field().value).toBe("");
 		expect(handleSearchChange).toHaveBeenLastCalledWith("");
 	});
 
 	it("does nothing special for Enter on its own", async () => {
-		const onCmdEnter = vi.fn();
+		const onAsk = vi.fn();
 		await act(async () => {
 			root.render(
 				<SearchBar
 					handleSearchChange={vi.fn()}
 					search=""
-					onCmdEnter={onCmdEnter}
+					onAsk={onAsk}
 				/>,
 			);
 		});
@@ -96,8 +96,38 @@ describe("asking the assistant from the search field", () => {
 			);
 		});
 
-		expect(onCmdEnter).not.toHaveBeenCalled();
+		expect(onAsk).not.toHaveBeenCalled();
 		expect(field().value).toBe("teacher training");
+	});
+
+	// The button used to be handed the text as it was when the button was
+	// drawn, which was stale by the time the reader pressed it.
+	it("hands over what the field holds when a button asks", async () => {
+		const onAsk = vi.fn((text: string, clear: () => void) => clear());
+		await act(async () => {
+			root.render(
+				<SearchBar
+					handleSearchChange={vi.fn()}
+					search=""
+					onAsk={onAsk}
+					endContent={(_liveText, ask) => (
+						<button type="button" data-testid="ask" onClick={ask}>
+							Ask
+						</button>
+					)}
+				/>,
+			);
+		});
+
+		await type("teacher training");
+		await act(async () => {
+			container
+				.querySelector('[data-testid="ask"]')
+				?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+
+		expect(onAsk.mock.calls[0]?.[0]).toBe("teacher training");
+		expect(field().value).toBe("");
 	});
 
 	it("shows the reader what the field holds right now", async () => {

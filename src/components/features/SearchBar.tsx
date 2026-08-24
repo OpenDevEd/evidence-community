@@ -18,24 +18,29 @@ export function SearchBar({
 	classNames,
 	endContent,
 	focusOnRequest,
-	onCmdEnter,
+	onAsk,
 }: {
 	handleSearchChange: (search: string) => void;
 	search: string;
 	classNames?: PropsOf<typeof Input>["classNames"];
 	/**
 	 * Either a fixed node, or a function given the text in the field right
-	 * now and a way to empty it. Use the function for buttons that take the
-	 * text away instead of searching with it.
+	 * now and a way to hand that text to {@link onAsk}. Use the function for
+	 * buttons that take the text away instead of searching with it.
 	 */
-	endContent?: ReactNode | ((liveText: string, clear: () => void) => ReactNode);
+	endContent?: ReactNode | ((liveText: string, ask: () => void) => ReactNode);
 	/**
 	 * Take focus when the chat beside the results asks for it. Only the main
 	 * library field should: the copy inside the chat is gone by then.
 	 */
 	focusOnRequest?: boolean;
-	/** Ctrl or Cmd with Enter: the text in the field, and a way to empty it. */
-	onCmdEnter?: (text: string, clear: () => void) => void;
+	/**
+	 * Takes the text away from the field: the reader is asking with it, not
+	 * searching for it. Both Ctrl or Cmd with Enter and any button in
+	 * `endContent` come through here, so they always send what the field
+	 * holds at that moment rather than what it held when it was drawn.
+	 */
+	onAsk?: (text: string, clear: () => void) => void;
 }) {
 	// The extended field does not hand back the input itself, so it is found
 	// through the wrapper around it.
@@ -86,6 +91,8 @@ export function SearchBar({
 		handleSearchChange("");
 	}, [cancelSearch, handleSearchChange, search]);
 
+	const ask = () => onAsk?.(localValue, clear);
+
 	return (
 		<Input
 			baseRef={baseRef}
@@ -95,7 +102,7 @@ export function SearchBar({
 					return;
 				}
 				event.preventDefault();
-				onCmdEnter?.(localValue, clear);
+				ask();
 			}}
 			value={localValue}
 			onChange={(e) => {
@@ -123,7 +130,7 @@ export function SearchBar({
 			}
 			endContent={
 				typeof endContent === "function"
-					? endContent(localValue, clear)
+					? endContent(localValue, ask)
 					: endContent
 			}
 		/>

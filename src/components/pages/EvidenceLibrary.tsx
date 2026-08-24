@@ -306,7 +306,7 @@ function LibraryFilters({
 				focusOnRequest
 				// Asking uses the text as a question, so it must not stay
 				// behind as a filter as well.
-				onCmdEnter={
+				onAsk={
 					askAI &&
 					((text: string, clear: () => void) => {
 						clear();
@@ -316,14 +316,10 @@ function LibraryFilters({
 				endContent={
 					askAI &&
 					shortcutHint &&
-					((liveText: string, clear: () => void) => (
-						<AskAIButton
-							hint={shortcutHint}
-							onAsk={() => {
-								clear();
-								askAI(liveText);
-							}}
-						/>
+					// The button hands over whatever the field holds when it is
+					// pressed, not what it held when the button was drawn.
+					((_liveText: string, ask: () => void) => (
+						<AskAIButton hint={shortcutHint} onAsk={ask} />
 					))
 				}
 			/>
