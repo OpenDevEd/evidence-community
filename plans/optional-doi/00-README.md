@@ -27,7 +27,8 @@ Agreed with the owner on 2026-08-21 (mockups reviewed):
   the worker or planner.
 - A DOI found only in record metadata stays external. It is never written
   to `publicationIdentifier` as managed.
-- No schema change for plans 01 and 02. Plan 03 adds one enum value.
+- No schema change for plans 01 and 02. Plan 03 adds the policy and stores the
+  outside DOI selected at activation so later edits cannot change it silently.
 - Header chip: quiet "No DOI" when there is none; red only on a failed
   activated target.
 - Both minting routes stay available when there is no DOI: Crossref
@@ -58,5 +59,19 @@ and failed. Plan 03 runs the Zenodo sandbox tool with an external DOI.
 
 ## Data migration
 
-None for 01 and 02. Plan 03: additive enum value on the Zenodo target
-identifier policy.
+None for 01 and 02. Plan 03 adds `lockedExternalDoi` to
+`publicationTarget`. Development data is disposable; there is no compatibility
+path for old `reuse-external` targets.
+
+## Agent use
+
+One agent may implement each numbered plan after its dependencies are merged.
+Use a separate reviewer for the database and worker changes in plan 03. Do not
+split one plan across agents because the tests and implementation must change
+together.
+
+## Sources
+
+- Current repository code and tests named above.
+- `@opendeved/doi-sync-core` at the commit pinned in `package.json`.
+- Zenodo Sandbox responses captured by `tools/publicationSandboxQualification.ts`.
