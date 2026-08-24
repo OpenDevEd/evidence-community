@@ -89,7 +89,7 @@ describe("library configuration artifacts", () => {
 		expect(catalog.fields.writeOnlyPaths).toEqual(
 			expect.arrayContaining([
 				"ai.providers[].apiKey",
-				"authentication.adminPassword",
+				"authentication.openScholar.machineCredential",
 				"authentication.secret",
 				"sources[].apiKey",
 				"services.database.url",

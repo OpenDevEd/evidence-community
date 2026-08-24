@@ -118,7 +118,7 @@ export async function requireAdminSession(request: {
 	}
 	return adminError({
 		code: "unauthorized",
-		message: "Enter the admin password to continue.",
+		message: "Open this library from OpenScholar to continue.",
 		status: 401,
 	});
 }

@@ -27,6 +27,7 @@ describe("runtime authentication service", () => {
 		input.features!.login = false;
 		input.features!.userCollections = false;
 		input.authentication = {
+			...input.authentication!,
 			google: {
 				enabled: false,
 			},

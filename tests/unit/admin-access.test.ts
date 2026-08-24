@@ -5,63 +5,76 @@ vi.mock("server-only", () => ({}));
 import {
 	ADMIN_SESSION_COOKIE,
 	ADMIN_SESSION_TTL_MS,
-	adminPasswordMatches,
 	adminSessionCookieName,
 	adminSessionCookieOptions,
 	createAdminSessionToken,
 	verifyAdminSessionToken,
 } from "@/lib/admin/access";
 
-const credentials = {
-	password: "correct horse battery staple",
+const signingConfig = {
+	libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
 	secret: "12345678901234567890123456789012",
+};
+const redeemedIdentity = {
+	clerkOrganizationId: "org_2abc",
+	clerkUserId: "user_2abc",
+	consumedAt: Date.UTC(2026, 7, 24, 11, 59),
+	libraryId: signingConfig.libraryId,
+	role: "editor" as const,
 };
 
 describe("admin access", () => {
-	it("accepts only the configured password", () => {
-		expect(
-			adminPasswordMatches("correct horse battery staple", credentials),
-		).toBe(true);
-		expect(adminPasswordMatches("wrong password", credentials)).toBe(false);
-	});
-
-	it("accepts an unexpired signed session", () => {
-		const now = Date.UTC(2026, 7, 13, 12);
-		const token = createAdminSessionToken(credentials, now);
-
-		expect(verifyAdminSessionToken(token, credentials, now + 1_000)).toBe(
-			true,
+	it("returns the identity and role from an unexpired signed session", () => {
+		const now = Date.UTC(2026, 7, 24, 12);
+		const token = createAdminSessionToken(
+			redeemedIdentity,
+			signingConfig,
+			now,
 		);
+
+		expect(
+			verifyAdminSessionToken(token, signingConfig, now + 1_000),
+		).toEqual({
+			...redeemedIdentity,
+			expiresAt: now + ADMIN_SESSION_TTL_MS,
+		});
 		expect(
 			verifyAdminSessionToken(
 				token,
-				credentials,
+				signingConfig,
 				now + ADMIN_SESSION_TTL_MS,
 			),
-		).toBe(false);
+		).toBeNull();
 	});
 
-	it("rejects tampered sessions and changed credentials", () => {
-		const now = Date.UTC(2026, 7, 13, 12);
-		const token = createAdminSessionToken(credentials, now);
-
-		expect(verifyAdminSessionToken(`${token}x`, credentials, now)).toBe(
-			false,
+	it("rejects tampered sessions and sessions for another library", () => {
+		const now = Date.UTC(2026, 7, 24, 12);
+		const token = createAdminSessionToken(
+			redeemedIdentity,
+			signingConfig,
+			now,
 		);
+
+		expect(
+			verifyAdminSessionToken(`${token}x`, signingConfig, now),
+		).toBeNull();
 		expect(
 			verifyAdminSessionToken(
 				token,
-				{ ...credentials, password: "a new password" },
+				{ ...signingConfig, libraryId: "another-library" },
 				now,
 			),
-		).toBe(false);
+		).toBeNull();
 		expect(
 			verifyAdminSessionToken(
 				token,
-				{ ...credentials, secret: "abcdefghijklmnopqrstuvwxyz123456" },
+				{
+					...signingConfig,
+					secret: "abcdefghijklmnopqrstuvwxyz123456",
+				},
 				now,
 			),
-		).toBe(false);
+		).toBeNull();
 	});
 
 	it("uses a host-only secure private cookie", () => {
@@ -74,7 +87,7 @@ describe("admin access", () => {
 			httpOnly: true,
 			maxAge: ADMIN_SESSION_TTL_MS / 1_000,
 			path: "/",
-			sameSite: "strict",
+			sameSite: "lax",
 			secure: true,
 		});
 		expect(adminSessionCookieOptions("production")).not.toHaveProperty(

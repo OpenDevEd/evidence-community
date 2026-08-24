@@ -1,72 +1,164 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 vi.mock("server-only", () => ({}));
+
+const libraryId = "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5";
+const machineCredential = `els_${"a".repeat(43)}`;
+const code = `elc_${"b".repeat(43)}`;
+const secret = "12345678901234567890123456789012";
+const openScholar = {
+	convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
+	libraryId,
+	loginPageUrl: "https://openscholar.example.org/evidence-libraries/amber",
+	machineCredential,
+};
+
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: () => ({
-		authentication: {
-			adminPassword: "correct horse battery staple",
-			secret: "12345678901234567890123456789012",
-		},
+		authentication: { openScholar, secret },
 	}),
 }));
 
-import { POST as login } from "@/app/api/admin/session/route";
+import { GET as redeem } from "@/app/api/admin/session/route";
 import { POST as logout } from "@/app/api/admin/session/logout/route";
+import {
+	adminSessionCookieName,
+	verifyAdminSessionToken,
+} from "@/lib/admin/access";
 
-function loginRequest(password: string, address: string) {
-	const body = new FormData();
-	body.set("password", password);
-	return new NextRequest("http://localhost/api/admin/session", {
-		body,
-		headers: {
-			origin: "http://localhost",
-			"x-real-ip": address,
-		},
-		method: "POST",
-	});
+const redeemedIdentity = {
+	clerkOrganizationId: "org_real",
+	clerkUserId: "user_real",
+	consumedAt: Date.UTC(2026, 7, 24, 12),
+	libraryId,
+	role: "editor" as const,
+};
+
+function redeemRequest(
+	query = `code=${encodeURIComponent(code)}`,
+	proxied = false,
+) {
+	return new NextRequest(
+		proxied
+			? `http://web:3000/api/admin/session?${query}`
+			: `http://localhost/api/admin/session?${query}`,
+		proxied
+			? {
+					headers: {
+						host: "web:3000",
+						"x-forwarded-host": "library.example.org",
+						"x-forwarded-proto": "https",
+					},
+				}
+			: undefined,
+	);
 }
 
-function proxiedLoginRequest(password: string, address: string) {
-	const body = new FormData();
-	body.set("password", password);
-	return new NextRequest("http://web:3000/api/admin/session", {
-		body,
-		headers: {
-			host: "web:3000",
-			origin: "https://library.example.org",
-			"x-forwarded-host": "library.example.org",
-			"x-forwarded-proto": "https",
-			"x-real-ip": address,
-		},
-		method: "POST",
-	});
+function sessionCookieValue(response: Response) {
+	const setCookie = response.headers.get("set-cookie") ?? "";
+	const match = setCookie.match(/evidence_library_admin=([^;]+)/u);
+	return match?.[1];
 }
 
 describe("admin session routes", () => {
-	it("sets the signed cookie after the correct password", async () => {
-		const response = await login(
-			loginRequest("correct horse battery staple", "198.51.100.10"),
-		);
-		const cookie = response.headers.get("set-cookie") ?? "";
+	let fetchMock: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		fetchMock = vi.fn();
+		vi.stubGlobal("fetch", fetchMock);
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	it("redeems the opaque code and signs only the returned identity", async () => {
+		fetchMock.mockResolvedValue(Response.json(redeemedIdentity));
+		const query = new URLSearchParams({
+			clerkOrganizationId: "org_attacker",
+			clerkUserId: "user_attacker",
+			code,
+			libraryId: "attacker-library",
+			role: "owner",
+		});
+
+		const response = await redeem(redeemRequest(query.toString()));
+		const token = sessionCookieValue(response);
 
 		expect(response.status).toBe(303);
 		expect(response.headers.get("location")).toBe("http://localhost/admin");
-		expect(cookie).toContain("evidence_library_admin=");
-		expect(cookie).toContain("HttpOnly");
-		expect(cookie).toContain("SameSite=strict");
-		expect(cookie).toContain("Path=/");
-		expect(cookie).not.toContain("Domain=");
-		expect(cookie).not.toContain("Secure");
+		expect(response.headers.get("set-cookie")).toContain("HttpOnly");
+		expect(response.headers.get("set-cookie")).toContain("SameSite=lax");
+		expect(response.headers.get("set-cookie")).toContain("Path=/");
+		expect(response.headers.get("set-cookie")).not.toContain("Domain=");
+		expect(
+			verifyAdminSessionToken(token, { libraryId, secret }),
+		).toMatchObject(redeemedIdentity);
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://spotted-woodpecker-546.convex.site/api/evidence-libraries/admin-login/redeem",
+			{
+				body: JSON.stringify({ libraryId, code }),
+				cache: "no-store",
+				headers: {
+					Accept: "application/json",
+					Authorization: `Bearer ${machineCredential}`,
+					"Content-Type": "application/json",
+				},
+				method: "POST",
+			},
+		);
 	});
 
-	it("accepts the public HTTPS origin behind the deployment proxy", async () => {
-		const response = await login(
-			proxiedLoginRequest(
-				"correct horse battery staple",
-				"198.51.100.24",
-			),
+	it.each([400, 401])(
+		"does not create a session when OpenScholar returns HTTP %i",
+		async (status) => {
+			fetchMock.mockResolvedValue(
+				Response.json({ error: "rejected" }, { status }),
+			);
+
+			const response = await redeem(redeemRequest());
+
+			expect(response.status).toBe(303);
+			expect(response.headers.get("location")).toBe(
+				"http://localhost/admin/access-error",
+			);
+			expect(response.headers.get("set-cookie")).toBeNull();
+		},
+	);
+
+	it("rejects a successful response for another library", async () => {
+		fetchMock.mockResolvedValue(
+			Response.json({
+				...redeemedIdentity,
+				libraryId: "kg2k5yaf2g58kz9kw7h3k2j3v6zq5h4p",
+			}),
 		);
+
+		const response = await redeem(redeemRequest());
+
+		expect(response.headers.get("location")).toBe(
+			"http://localhost/admin/access-error",
+		);
+		expect(response.headers.get("set-cookie")).toBeNull();
+	});
+
+	it("rejects a malformed code without contacting OpenScholar", async () => {
+		const response = await redeem(
+			redeemRequest("code=user_123&role=owner"),
+		);
+
+		expect(response.headers.get("location")).toBe(
+			"http://localhost/admin/access-error",
+		);
+		expect(response.headers.get("set-cookie")).toBeNull();
+		expect(fetchMock).not.toHaveBeenCalled();
+	});
+
+	it("uses the public HTTPS origin behind the deployment proxy", async () => {
+		fetchMock.mockResolvedValue(Response.json(redeemedIdentity));
+
+		const response = await redeem(redeemRequest(undefined, true));
 
 		expect(response.status).toBe(303);
 		expect(response.headers.get("location")).toBe(
@@ -74,68 +166,6 @@ describe("admin session routes", () => {
 		);
 		expect(response.headers.get("set-cookie")).toContain(
 			"evidence_library_admin=",
-		);
-	});
-
-	it("rejects a wrong password without creating a cookie", async () => {
-		const response = await login(
-			loginRequest("wrong password", "198.51.100.11"),
-		);
-
-		expect(response.status).toBe(303);
-		expect(response.headers.get("location")).toBe(
-			"http://localhost/admin?login=invalid",
-		);
-		expect(response.headers.get("set-cookie")).toBeNull();
-	});
-
-	it("does not count successful logins as failures", async () => {
-		for (let attempt = 0; attempt < 7; attempt += 1) {
-			const response = await login(
-				loginRequest("correct horse battery staple", "198.51.100.20"),
-			);
-			expect(response.headers.get("location")).toBe(
-				"http://localhost/admin",
-			);
-		}
-	});
-
-	it("limits repeated wrong passwords", async () => {
-		for (let attempt = 0; attempt < 5; attempt += 1) {
-			await login(loginRequest("wrong password", "198.51.100.21"));
-		}
-		const response = await login(
-			loginRequest("wrong password", "198.51.100.21"),
-		);
-		expect(response.headers.get("location")).toBe(
-			"http://localhost/admin?login=limited",
-		);
-	});
-
-	it("rejects a cross-site login", async () => {
-		const request = loginRequest(
-			"correct horse battery staple",
-			"198.51.100.12",
-		);
-		request.headers.set("origin", "https://attacker.example");
-
-		expect((await login(request)).status).toBe(403);
-	});
-
-	it("handles a malformed form as a failed password", async () => {
-		const response = await login(
-			new NextRequest("http://localhost/api/admin/session", {
-				body: "not a form",
-				headers: {
-					"content-type": "application/json",
-					origin: "http://localhost",
-					"x-real-ip": "198.51.100.23",
-				},
-				method: "POST",
-			}),
-		);
-		expect(response.headers.get("location")).toBe(
-			"http://localhost/admin?login=invalid",
 		);
 	});
 
@@ -149,7 +179,7 @@ describe("admin session routes", () => {
 		const cookie = response.headers.get("set-cookie") ?? "";
 
 		expect(response.status).toBe(303);
-		expect(cookie).toContain("evidence_library_admin=");
+		expect(cookie).toContain(`${adminSessionCookieName()}=`);
 		expect(cookie).toContain("Max-Age=0");
 	});
 

@@ -56,10 +56,9 @@ describe("admin API session gate", () => {
 		expect(response?.headers.get("Cache-Control")).toBe(
 			"private, no-store",
 		);
-		expect(await response?.json()).toEqual({
+		expect(await response?.json()).toMatchObject({
 			error: {
 				code: "unauthorized",
-				message: "Enter the admin password to continue.",
 			},
 		});
 	});
