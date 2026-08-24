@@ -8,7 +8,7 @@
  * prove Zotero deletes the copy. Zotero is read through its Web API.
  *
  *   ADMIN_ZOTERO_ORIGIN=https://... \
- *   ADMIN_ZOTERO_PASSWORD=... \
+ *   ADMIN_ZOTERO_LOGIN_CODE=elc_... \
  *   ADMIN_ZOTERO_GROUP=6641415 \
  *   ADMIN_ZOTERO_API_KEY=... \
  *   npm run test:admin-zotero-live -- --confirm-group 6641415
@@ -20,7 +20,7 @@ import { chromium, type Page } from "@playwright/test";
 import { createFixturePdf } from "./seedZoteroPlayground";
 
 const origin = process.env.ADMIN_ZOTERO_ORIGIN;
-const password = process.env.ADMIN_ZOTERO_PASSWORD;
+const loginCode = process.env.ADMIN_ZOTERO_LOGIN_CODE;
 const groupId = process.env.ADMIN_ZOTERO_GROUP;
 const apiKey = process.env.ADMIN_ZOTERO_API_KEY;
 const sourceLabelHint = process.env.ADMIN_ZOTERO_SOURCE_LABEL ?? null;
@@ -33,7 +33,7 @@ function assert(condition: unknown, message: string): asserts condition {
 	if (!condition) throw new Error(message);
 }
 
-assert(origin && password && groupId && apiKey, "Set ADMIN_ZOTERO_ORIGIN, ADMIN_ZOTERO_PASSWORD, ADMIN_ZOTERO_GROUP and ADMIN_ZOTERO_API_KEY");
+assert(origin && loginCode && groupId && apiKey, "Set ADMIN_ZOTERO_ORIGIN, ADMIN_ZOTERO_LOGIN_CODE, ADMIN_ZOTERO_GROUP and ADMIN_ZOTERO_API_KEY");
 assert(confirmedGroup === groupId, `Pass --confirm-group ${groupId} to confirm the Zotero group this tool writes to`);
 assert(/^https:\/\//u.test(origin), "ADMIN_ZOTERO_ORIGIN must be an https origin");
 
@@ -68,14 +68,10 @@ async function waitFor<T>(label: string, read: () => Promise<T | null>, timeoutM
 }
 
 async function login(page: Page) {
-	await page.goto(`${origin}/admin`);
-	const passwordInput = page.getByRole("textbox", { name: "Admin password" });
+	await page.goto(
+		`${origin}/api/admin/session?code=${encodeURIComponent(loginCode!)}`,
+	);
 	const newItem = page.getByRole("button", { name: "New item" });
-	await passwordInput.or(newItem).first().waitFor({ state: "visible" });
-	if (await passwordInput.isVisible()) {
-		await passwordInput.fill(password!);
-		await page.getByRole("button", { name: "Continue" }).click();
-	}
 	await newItem.waitFor({ state: "visible" });
 }
 

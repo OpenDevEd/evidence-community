@@ -65,10 +65,9 @@ test("rejects every protected admin request without a session", async ({
 			expect.soft(response.headers()["cache-control"], message).toBe(
 				"private, no-store",
 			);
-			expect.soft(await response.json(), message).toEqual({
+			expect.soft(await response.json(), message).toMatchObject({
 				error: {
 					code: "unauthorized",
-					message: "Enter the admin password to continue.",
 				},
 			});
 		});

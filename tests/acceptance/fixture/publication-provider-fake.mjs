@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 
 const port = Number(process.env.PORT ?? 4000);
@@ -6,6 +6,26 @@ const storageBytes = Buffer.from(
 	"Evidence Library publication acceptance PDF\n",
 );
 const depositions = new Map();
+const adminLoginCodes = new Map();
+function requiredEnvironment(name) {
+	const value = process.env[name];
+	if (!value) throw new Error(`${name} is required`);
+	return value;
+}
+const openScholarLibraries = new Map([
+	[
+		requiredEnvironment("OPENSCHOLAR_AMBER_MACHINE_CREDENTIAL"),
+		requiredEnvironment("OPENSCHOLAR_AMBER_LIBRARY_ID"),
+	],
+	[
+		requiredEnvironment("OPENSCHOLAR_INDIGO_MACHINE_CREDENTIAL"),
+		requiredEnvironment("OPENSCHOLAR_INDIGO_LIBRARY_ID"),
+	],
+]);
+const openScholarLibraryIds = new Set(openScholarLibraries.values());
+const defaultOpenScholarLibraryId = requiredEnvironment(
+	"OPENSCHOLAR_AMBER_LIBRARY_ID",
+);
 let nextDepositionId = 7001;
 let crossrefXml = null;
 let crossrefDeposits = 0;
@@ -112,8 +132,26 @@ const server = createServer(async (request, response) => {
 	const method = request.method ?? "GET";
 
 	if (url.pathname === "/health") return text(response, 200, "healthy");
+	if (url.pathname === "/_test/admin-login-codes" && method === "POST") {
+		const bytes = await readBody(request);
+		let libraryId = defaultOpenScholarLibraryId;
+		if (bytes.byteLength > 0) {
+			try {
+				libraryId = JSON.parse(bytes.toString("utf8")).libraryId;
+			} catch {
+				return json(response, 400, { error: "invalid_request" });
+			}
+		}
+		if (!openScholarLibraryIds.has(libraryId)) {
+			return json(response, 400, { error: "invalid_library" });
+		}
+		const code = `elc_${randomBytes(32).toString("base64url")}`;
+		adminLoginCodes.set(code, libraryId);
+		return json(response, 201, { code });
+	}
 	if (url.pathname === "/_test/state") {
 		return json(response, 200, {
+			adminLoginCodes: adminLoginCodes.size,
 			crossrefDeposits,
 			crossref: crossrefXml
 				? {
@@ -127,6 +165,42 @@ const server = createServer(async (request, response) => {
 				doi: deposition.metadata.doi ?? null,
 				files: [...deposition.files.keys()],
 			})),
+		});
+	}
+
+	if (
+		url.pathname === "/api/evidence-libraries/admin-login/redeem" &&
+		method === "POST"
+	) {
+		const credential =
+			request.headers.authorization?.match(/^Bearer ([^\s]+)$/u)?.[1];
+		const credentialLibraryId = openScholarLibraries.get(credential);
+		if (!credentialLibraryId) {
+			return json(response, 401, {
+				error: "invalid_service_credential",
+			});
+		}
+
+		let body;
+		try {
+			body = JSON.parse((await readBody(request)).toString("utf8"));
+		} catch {
+			return json(response, 400, { error: "invalid_request" });
+		}
+		if (
+			body?.libraryId !== credentialLibraryId ||
+			typeof body?.code !== "string" ||
+			adminLoginCodes.get(body.code) !== credentialLibraryId
+		) {
+			return json(response, 400, { error: "invalid_login_code" });
+		}
+		adminLoginCodes.delete(body.code);
+		return json(response, 200, {
+			libraryId: credentialLibraryId,
+			clerkUserId: "user_acceptance_admin",
+			clerkOrganizationId: "org_acceptance",
+			role: "editor",
+			consumedAt: Date.now(),
 		});
 	}
 

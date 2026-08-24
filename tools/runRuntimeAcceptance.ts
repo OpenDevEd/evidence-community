@@ -78,7 +78,18 @@ const sourceWritebackImage =
 const publicationWorkerImage =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE ??
 	"evidence-library-acceptance-publication-worker:local";
-const acceptanceAdminPassword = "correct horse battery staple";
+const acceptanceOpenScholar = {
+	amber: {
+		libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
+		machineCredential: "els_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		secret: "amber-acceptance-auth-secret-0000000000000000",
+	},
+	indigo: {
+		libraryId: "kg2k5yaf2g58kz9kw7h3k2j3v6zq5h4p",
+		machineCredential: "els_ccccccccccccccccccccccccccccccccccccccccccc",
+		secret: "indigo-acceptance-auth-secret-000000000000000",
+	},
+} as const;
 const cleanupOnly = process.argv.includes("--cleanup");
 
 async function availablePort(environmentValue: string | undefined) {
@@ -124,6 +135,14 @@ const commandEnvironment: NodeJS.ProcessEnv = {
 	EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_SYNC_IMAGE: sourceSyncImage,
 	EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_WRITEBACK_IMAGE: sourceWritebackImage,
 	EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID: String(process.pid),
+	EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_AMBER_LIBRARY_ID:
+		acceptanceOpenScholar.amber.libraryId,
+	EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_AMBER_MACHINE_CREDENTIAL:
+		acceptanceOpenScholar.amber.machineCredential,
+	EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_INDIGO_LIBRARY_ID:
+		acceptanceOpenScholar.indigo.libraryId,
+	EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_INDIGO_MACHINE_CREDENTIAL:
+		acceptanceOpenScholar.indigo.machineCredential,
 	EVIDENCE_LIBRARY_ACCEPTANCE_PERSISTENT: String(keepRunning),
 	EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR: runtimeDirectory,
 };
@@ -569,15 +588,18 @@ function loadProfile(
 		collectorUrl.port = fixturePort;
 		input.analytics.posthog.host = collectorUrl.origin;
 	}
-	const passwordCandidate = structuredClone(input);
-	passwordCandidate.authentication = {
-		...passwordCandidate.authentication,
-		adminPassword: acceptanceAdminPassword,
+	const openScholar = acceptanceOpenScholar[name];
+	input.authentication = {
+		...input.authentication,
+		openScholar: {
+			convexSiteUrl: `https://openscholar-convex.localhost:${fixturePort}`,
+			libraryId: openScholar.libraryId,
+			loginPageUrl: `https://openscholar.localhost:${fixturePort}/evidence-libraries/${name}`,
+			machineCredential: openScholar.machineCredential,
+		},
+		secret: openScholar.secret,
 	};
-	const passwordResult = libraryConfigSchema.safeParse(passwordCandidate);
-	const config = passwordResult.success
-		? passwordResult.data
-		: libraryConfigSchema.parse(input);
+	const config = libraryConfigSchema.parse(input);
 	return { config, meilisearchPort, name, port };
 }
 
@@ -1151,7 +1173,11 @@ function runAdminBrowserSuite(profile: Profile) {
 		...commandEnvironment,
 		...publicExpectations(profile),
 		PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
-		EVIDENCE_LIBRARY_ADMIN_PASSWORD: acceptanceAdminPassword,
+		EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL: `http://127.0.0.1:${publicationFakePort}`,
+		EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID:
+			profile.config.authentication.openScholar.libraryId,
+		EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL:
+			profile.config.authentication.openScholar.loginPageUrl,
 		PLAYWRIGHT_ADMIN_UI: "true",
 		PLAYWRIGHT_EXPECTED_ADMIN_ITEM_TITLE: "Amber database evidence",
 		PLAYWRIGHT_RUNTIME_E2E: "true",
@@ -1198,7 +1224,11 @@ function runPublicationBrowserPhase(
 		],
 		playwrightEnvironment(`${profile.name}-publication-${phase}`, {
 			...commandEnvironment,
-			EVIDENCE_LIBRARY_ADMIN_PASSWORD: acceptanceAdminPassword,
+			EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL: `http://127.0.0.1:${publicationFakePort}`,
+			EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID:
+				profile.config.authentication.openScholar.libraryId,
+			EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL:
+				profile.config.authentication.openScholar.loginPageUrl,
 			PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
 			PLAYWRIGHT_IGNORE_HTTPS_ERRORS: "true",
 			PLAYWRIGHT_PUBLICATION_EXPECTED_DOI: "10.5555/acceptance.000002",
@@ -1219,6 +1249,17 @@ async function readPublicationProviderState() {
 		crossrefDeposits: number;
 		crossref: { doi: string; title: string } | null;
 	};
+}
+
+async function issueAcceptanceAdminLoginCode() {
+	const response = await fetch(
+		`http://127.0.0.1:${publicationFakePort}/_test/admin-login-codes`,
+		{ method: "POST" },
+	);
+	assert.equal(response.status, 201);
+	const body = (await response.json()) as { code?: unknown };
+	assert.equal(typeof body.code, "string");
+	return body.code as string;
 }
 
 async function makeCrossrefVerificationDue(itemKey: string) {
@@ -1427,7 +1468,7 @@ async function waitForPublicationState(
 async function verifyPublicationLifecycle(profile: Profile) {
 	const session = await createAdminTestSession(
 		`http://127.0.0.1:${profile.port}`,
-		acceptanceAdminPassword,
+		await issueAcceptanceAdminLoginCode(),
 	);
 	await adminPublicationRequest(
 		profile,
@@ -1552,7 +1593,7 @@ async function verifyZenodoReuseExternalLifecycle(profile: Profile) {
 	const externalDoi = "10.1038/nature12373";
 	const session = await createAdminTestSession(
 		`http://127.0.0.1:${profile.port}`,
-		acceptanceAdminPassword,
+		await issueAcceptanceAdminLoginCode(),
 	);
 
 	await adminPublicationRequest(
