@@ -1,55 +1,57 @@
-import { AI_PROVIDER_PRESENTATION } from "@/constants/ai";
-import { useTranslations } from "next-intl";
 import { ModalContent } from "@nextui-org/react";
-import AIHeader from "../ai/AIHeader";
-import FullScreenModal from "../../nextui/FullScreenModal";
-import { ListModalBody, ListModalBodyItem } from "@/components/nextui/ListModalBody";
+import { useTranslations } from "next-intl";
+
 import DialogModal from "@/components/nextui/DialogModal";
-import type { AIProviderId } from "@/lib/ai-provider-factory";
-import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import {
+	ListModalBody,
+	type ListModalBodyItem,
+} from "@/components/nextui/ListModalBody";
+import { getAIModelPresentation } from "@/constants/ai";
+import { useSelectedModel } from "@/hooks/useSelectedModel";
+import AIHeader from "./AIHeader";
 
 interface ModelSelectorProps {
-  isOpen: boolean;
-  onOpenChange: () => void;
-  selectedProvider: AIProviderId | null;
-  onProviderChange: (provider: AIProviderId) => void;
+	isOpen: boolean;
+	onOpenChange: () => void;
+	selectedModelId: string | null;
+	onModelChange: (modelId: string) => void;
 }
 
 export default function ModelSelector({
-  isOpen,
-  onOpenChange,
-  selectedProvider,
-  onProviderChange,
+	isOpen,
+	onOpenChange,
+	selectedModelId,
+	onModelChange,
 }: ModelSelectorProps) {
-  const t = useTranslations("ai");
-  const { ai } = useLibraryConfig();
-  const providers = ai.providers.filter(
-    (provider) => provider.enabled && provider.defaultModel,
-  );
-  const selectedIndex = providers.findIndex(
-    (provider) => provider.provider === selectedProvider,
-  );
+	const t = useTranslations("ai");
+	const { models } = useSelectedModel();
+	const selectedIndex = models.findIndex(
+		(model) => model.id === selectedModelId,
+	);
 
-  return (
-    <DialogModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
-      <ModalContent>
-        <AIHeader onClose={onOpenChange}>{t("change")}</AIHeader>
-        <ListModalBody
-          description={t("changeAbtract")}
-          onAction={(index) => {
-            const provider = providers[Number(index)]?.provider;
-            if (!provider || provider === selectedProvider) return;
-            onProviderChange(provider);
-          }}
-          highlightedIndexes={selectedIndex >= 0 ? [selectedIndex] : []}
-          list={providers.map((provider): ListModalBodyItem => ({
-            name: AI_PROVIDER_PRESENTATION[provider.provider].name,
-            subtitle: AI_PROVIDER_PRESENTATION[provider.provider].company,
-            description: provider.defaultModel ?? "",
-            icon: AI_PROVIDER_PRESENTATION[provider.provider].icon,
-          }))}
-        />
-      </ModalContent>
-    </DialogModal>
-  );
+	return (
+		<DialogModal size="md" isOpen={isOpen} onOpenChange={onOpenChange}>
+			<ModalContent>
+				<AIHeader onClose={onOpenChange}>{t("change")}</AIHeader>
+				<ListModalBody
+					description={t("changeAbtract")}
+					onAction={(index) => {
+						const model = models[Number(index)];
+						if (!model || model.id === selectedModelId) return;
+						onModelChange(model.id);
+					}}
+					highlightedIndexes={selectedIndex >= 0 ? [selectedIndex] : []}
+					list={models.map((model): ListModalBodyItem => {
+						const presentation = getAIModelPresentation(model.id);
+						return {
+							name: presentation.name,
+							subtitle: presentation.company,
+							description: model.id,
+							icon: presentation.icon,
+						};
+					})}
+				/>
+			</ModalContent>
+		</DialogModal>
+	);
 }

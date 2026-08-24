@@ -29,7 +29,6 @@ import {
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
 import { twMerge } from "tailwind-merge";
-import type { AIProviderId } from "@/lib/ai-provider-factory";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
 
 function randomUUID() {
@@ -46,14 +45,9 @@ function AiButton({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const {
-		selectedProviderId,
-		selectedModelId,
-		setSelectedProvider,
-	} = useSelectedModel();
+	const { selectedModelId, setSelectedModelId } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
-		provider: selectedProviderId,
 		distinctId: getAnalyticsDistinctId(),
 	};
 	const locale = useLocale();
@@ -87,7 +81,7 @@ function AiButton({
 	>(`ai-history-v2`, {});
 
 	const updateHistory = (prompt: string, completion: string, id: string) => {
-		if (!selectedProviderId) return;
+		if (!selectedModelId) return;
 		setHistories((prev) => {
 			const newHistory = prev[prompt] || [];
 			const obj = newHistory.find((item) => item.id === id);
@@ -100,7 +94,7 @@ function AiButton({
 					date: new Date(),
 					title: data!.item!.title!,
 					key: data!.item!.key!,
-					provider: selectedProviderId,
+					modelId: selectedModelId,
 				});
 			}
 			return { ...prev, [prompt]: newHistory };
@@ -112,18 +106,18 @@ function AiButton({
 		id,
 		updateHistory,
 		data,
-		selectedProviderId
+		selectedModelId,
 	);
 	const explainFeature = useAIFeature(
 		"explain",
 		id,
 		updateHistory,
 		data,
-		selectedProviderId
+		selectedModelId,
 	);
 
-	const handleProviderChange = (provider: AIProviderId) => {
-		setSelectedProvider(provider);
+	const handleModelChange = (modelId: string) => {
+		setSelectedModelId(modelId);
 		[summaryFeature, explainFeature].forEach((feature) => {
 			feature.setCompletion("");
 		});
@@ -142,14 +136,15 @@ function AiButton({
 				<ModelSelector
 					isOpen={isChangeOpen}
 					onOpenChange={onChangeOpenChange}
-					selectedProvider={selectedProviderId}
-					onProviderChange={handleProviderChange}
+					selectedModelId={selectedModelId}
+					onModelChange={handleModelChange}
 				/>
 				<ChatModal
+					// Changing the model starts a new conversation.
+					key={selectedModelId ?? "no-model"}
 					isOpen={isChatOpen}
 					onOpenChange={onChatOpenChange}
 					data={data}
-					provider={selectedProviderId}
 					modelId={selectedModelId}
 					questions={questions}
 				/>
@@ -192,7 +187,7 @@ function AiButton({
 					<DropdownMenu
 						items={AI_DROPDOWN_ITEMS(
 							t,
-							selectedProviderId,
+							selectedModelId,
 							onChangeOpenChange,
 							summaryFeature,
 							explainFeature,

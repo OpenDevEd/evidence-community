@@ -27,11 +27,8 @@ import { addRegionsToFacetDistribution } from "./country";
 import { getMainAttributes, resolveSearchRequest } from "@/lib/search";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getRuntimeSearchFacets } from "@/config/library-config/search";
-import {
-	AIProviderUnavailableError,
-	getAIProviderForConfig,
-	type AIProviderId,
-} from "./ai-provider";
+import { AIError } from "@/lib/ai/errors";
+import { resolveAIModel } from "@/lib/ai/model-resolution";
 import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { CredentialsInput } from "@/lib/auth-credentials";
 import { authorizeForConfig } from "@/lib/auth-service";
@@ -71,7 +68,7 @@ export async function areLinksValid(links: string[]) {
 
 export async function runScreening(
 	keys: string[],
-	provider: AIProviderId,
+	modelId: string,
 	smartScreeningFields: SmartScreeningField[],
 ) {
 	const libraryConfig = await getLibraryConfig();
@@ -79,14 +76,11 @@ export async function runScreening(
 		return { error: "AI is disabled" };
 	}
 
-	let models;
+	let selectedModel;
 	try {
-		models = await getAIProviderForConfig(
-			libraryConfig,
-			provider,
-		);
+		selectedModel = await resolveAIModel(libraryConfig, modelId);
 	} catch (error) {
-		if (error instanceof AIProviderUnavailableError) {
+		if (error instanceof AIError) {
 			return { error: error.message };
 		}
 		throw error;
@@ -158,7 +152,7 @@ export async function runScreening(
 
 				const start = Date.now();
 				const result = await generateObject({
-					model: models.defaultModel,
+					model: selectedModel.model,
 					schema: singleItemSchema,
 					temperature: 1,
 					providerOptions: {

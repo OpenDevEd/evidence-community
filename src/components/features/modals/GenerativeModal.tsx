@@ -19,7 +19,7 @@ import {
 import { AIMarkdown } from "../markdown/Markdown";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
-import { getAIProviderPresentation } from "@/constants/ai";
+import { getAIModelPresentation } from "@/constants/ai";
 import React from "react";
 import { Button } from "@/components/nextui/Button";
 import { AIHistory } from "@/types/ai";
@@ -134,8 +134,8 @@ export default function GenerativeModal({
 														startContent={
 															<div className="size-8 aspect-square shrink-0 p-2 bg-accent rounded-full group icon-container">
 																{React.createElement(
-																	getAIProviderPresentation(
-																		item.provider
+																	getAIModelPresentation(
+																		item.modelId
 																	).icon,
 																	{
 																		className:

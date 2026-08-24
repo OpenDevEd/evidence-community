@@ -1,90 +1,69 @@
-import { isLibraryFeatureEnabled } from "@/config/library-config/features";
-import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { getLibraryConfig } from "@/config/library-config/server";
-import { getAISystemPrompt } from "@/lib/ai-prompts";
-import { trackAIUsage } from "@/lib/ai/telemetry";
 import { streamText } from "ai";
-import { NextResponse } from "next/server";
-import type { Item } from "../item/types";
-import {
-	loadAIPublication,
-	loadAIPublicationRequest,
-} from "./publication";
+
+import { getRuntimeRequestLocale } from "@/i18n/server";
+import { getAISystemPrompt } from "@/lib/ai-prompts";
+import { publicationPromptParts } from "@/lib/ai/attachments";
+import { aiErrorResponse } from "@/lib/ai/errors";
+import { publicationGenerationSchema } from "@/lib/ai/schemas";
+import { trackAIUsage } from "@/lib/ai/telemetry";
+import { loadSelectedPublication, readAIRequest } from "./publication";
 
 export const maxDuration = 60;
 
-type PublicationPrompt = "explain" | "summarize";
+const FEATURE_INSTRUCTIONS = {
+	summarize: "Summarize this publication.",
+	explain: "Explain this publication.",
+} as const;
 
-function publicationPrompt(req: Request): PublicationPrompt | null {
-	const value = new URL(req.url).searchParams.get("prompt") ?? "summarize";
-	if (value === "summarize" || value === "explain") return value;
-	return null;
-}
+export async function POST(request: Request) {
+	const startedAt = Date.now();
 
-function itemWithFullText(
-	item: Omit<Item, "fullTextPDFs">,
-	fullTextPDFs: Item["fullTextPDFs"],
-) {
-	const attachments = item.attachmentsData ?? [];
-	const documents = fullTextPDFs ?? [];
-	return {
-		...item,
-		attachmentsData: attachments.map((attachment) => ({
-			...attachment,
-			fullTextPDF: documents.find(
-				(document) => document.key === attachment.key,
-			)?.fullTextPDF,
-		})),
-	};
-}
+	try {
+		const { config, request: parsed } = await readAIRequest(
+			request,
+			publicationGenerationSchema,
+		);
+		const { distinctId, feature, modelId, prompt: itemKey } = parsed;
+		const { publication, selectedModel } = await loadSelectedPublication(
+			config,
+			{ itemKey, modelId },
+		);
+		const locale = await getRuntimeRequestLocale(request);
 
-function streamPublication(
-	config: LibraryServerConfig,
-	prompt: PublicationPrompt,
-	locale: string,
-	publication: Awaited<ReturnType<typeof loadAIPublication>> & { ok: true },
-	distinctId: string | null | undefined,
-) {
-	const { fullTextPDFs, item, models, startedAt } = publication;
-	const result = streamText({
-		model: models.defaultModel,
-		system: getAISystemPrompt(config, prompt, {
-			hasPdf: Boolean(fullTextPDFs?.length),
-			locale,
-		}),
-		prompt: JSON.stringify(itemWithFullText(item, fullTextPDFs)),
-		temperature: 1,
-		providerOptions: {
-			openai: { reasoningEffort: "low" },
-			google: { thinkingConfig: { thinkingBudget: 0 } },
-		},
-		async onFinish(event) {
-			await trackAIUsage(config, {
-				feature: prompt,
-				modelId: models.defaultModelId,
-				distinctId,
-				startedAt,
-				success: true,
-				usage: event.usage,
-				providerMetadata: event.providerMetadata,
-			});
-		},
-	});
+		const result = streamText({
+			model: selectedModel.model,
+			system: getAISystemPrompt(config, feature, {
+				hasPdf: publication.files.length > 0,
+				locale,
+			}),
+			messages: [
+				{
+					role: "user",
+					content: publicationPromptParts(
+						publication,
+						FEATURE_INSTRUCTIONS[feature],
+						selectedModel.provider,
+						selectedModel.modelId,
+					),
+				},
+			],
+			async onFinish(event) {
+				await trackAIUsage(config, {
+					feature,
+					modelId: selectedModel.modelId,
+					distinctId,
+					startedAt,
+					success: true,
+					usage: event.usage,
+					providerMetadata: event.providerMetadata,
+				});
+			},
+		});
 
-	return result.toTextStreamResponse({
-		headers: { "Content-Type": "text/event-stream" },
-	});
-}
-
-export async function POST(req: Request) {
-	const config = await getLibraryConfig();
-	if (!isLibraryFeatureEnabled(config.features, "ai")) {
-		return new NextResponse("AI is disabled", { status: 403 });
+		return result.toTextStreamResponse({
+			headers: { "Content-Type": "text/event-stream" },
+		});
+	} catch (error) {
+		return aiErrorResponse(error, { context: "document" });
 	}
-	const prompt = publicationPrompt(req);
-	if (!prompt) return new NextResponse("Invalid prompt", { status: 400 });
-	const { distinctId, locale, publication } =
-		await loadAIPublicationRequest(config, req);
-	if (!publication.ok) return publication.response;
-	return streamPublication(config, prompt, locale, publication, distinctId);
 }

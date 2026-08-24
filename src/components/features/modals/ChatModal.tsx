@@ -42,7 +42,7 @@ function createTextMessage(role: 'system' | 'user' | 'assistant' | 'data', conte
 	} as Message;
 }
 import FullScreenModal from "@/components/nextui/FullScreenModal";
-import { getAIProviderPresentation } from "@/constants/ai";
+import { getAIModelPresentation } from "@/constants/ai";
 import { FaTools } from "react-icons/fa";
 import { AIMarkdown } from "../markdown/Markdown";
 import { Input } from "@/components/nextui/Input";
@@ -62,7 +62,6 @@ import { Switch } from "@/components/nextui/Switch";
 import { BsQuestionCircleFill } from "react-icons/bs";
 import { Card } from "@/components/nextui/Card";
 import { Tooltip } from "@/components/nextui/Tooltip";
-import type { AIProviderId } from "@/lib/ai-provider-factory";
 import { clientAIError } from "@/lib/ai/client";
 
 export const maxDuration = 240;
@@ -118,7 +117,7 @@ function ScreeningResults({ results }: { results: ScreeningResults }) {
 
 function MessageComponent({
 	message,
-	provider,
+	modelId,
 	isMutating,
 	isWaiting,
 	handleScreening,
@@ -126,14 +125,14 @@ function MessageComponent({
 	error,
 }: {
 	message: Message;
-	provider: AIProviderId | null;
+	modelId: string | null;
 	isMutating: boolean;
 	isWaiting: boolean;
 	handleScreening: (content: string) => void;
 	smartScreeningFields: SmartScreeningField[];
 	error: boolean;
 }) {
-	const presentation = getAIProviderPresentation(provider);
+	const presentation = getAIModelPresentation(modelId);
 	const tUI = useTranslations("ui");
 
 	const annotations = useMemo<Array<{ id: string; message: string }>>(() => {
@@ -260,7 +259,6 @@ export default function ChatModal({
 	isOpen,
 	onOpenChange,
 	data,
-	provider,
 	modelId,
 	questions,
 	externalInput,
@@ -269,7 +267,6 @@ export default function ChatModal({
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 	data?: ItemGetResponse | undefined;
-	provider: AIProviderId | null;
 	modelId: string | null;
 	questions?: undefined | string[];
 	externalInput?: string;
@@ -400,7 +397,7 @@ export default function ChatModal({
 	);
 
 	const handleScreening = async (content: string) => {
-		if (!provider) return;
+		if (!modelId) return;
 		const keys = content.match(/lib\/(\w+)/g);
 		if (!keys) {
 			return;
@@ -410,7 +407,7 @@ export default function ChatModal({
 		try {
 			const result = await runScreening(
 				keysArray,
-				provider,
+				modelId,
 				smartScreeningFields,
 			);
 		if (Object.keys(result).length > 0) {
@@ -530,8 +527,8 @@ export default function ChatModal({
 																	message={
 																		message
 																	}
-																	provider={
-																		provider
+																	modelId={
+																		modelId
 																	}
 																	isMutating={
 																		isMutating

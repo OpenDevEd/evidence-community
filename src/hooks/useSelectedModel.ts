@@ -1,36 +1,32 @@
-import { getAIProviderPresentation } from "@/constants/ai";
-import { useLibraryConfig } from "@/context/LibraryConfigProvider";
-import type { AIProviderId } from "@/lib/ai-provider-factory";
 import { useLocalStorage } from "usehooks-ts";
 
+import { getAIModelPresentation } from "@/constants/ai";
+import { useLibraryConfig } from "@/context/LibraryConfigProvider";
+import { selectableAIModels } from "@/lib/ai/models";
+
+/**
+ * The model this reader picked. Libraries offer the models they configured,
+ * and a stored choice the library no longer offers falls back to the first
+ * one it does.
+ */
 export function useSelectedModel() {
 	const { ai } = useLibraryConfig();
-	const availableProviders = ai.providers.filter(
-		(provider) => provider.enabled && provider.defaultModel,
-	);
-	const fallbackProvider = availableProviders[0]?.provider ?? null;
-	const [storedProvider, setSelectedProvider] =
-		useLocalStorage<AIProviderId | null>(
-			"ai-provider",
-			fallbackProvider,
-		);
-	const selectedProvider =
-		availableProviders.find(
-			(provider) => provider.provider === storedProvider,
-		) ?? availableProviders[0] ?? null;
-	const selectedProviderId = selectedProvider?.provider ?? null;
-	// The chat backend picks a model, not a provider: it is the default model
-	// this library configured for the chosen provider.
-	const selectedModelId = selectedProvider?.defaultModel ?? null;
-	const providerPresentation =
-		getAIProviderPresentation(selectedProviderId);
+	const models = selectableAIModels(ai.providers);
+	const [storedModelId, setSelectedModelId] = useLocalStorage<
+		string | null
+	>("ai-model", null);
+
+	const selectedModel =
+		models.find((model) => model.id === storedModelId) ??
+		models[0] ??
+		null;
+	const selectedModelId = selectedModel?.id ?? null;
 
 	return {
-		availableProviders,
-		selectedProvider,
-		selectedProviderId,
+		models,
+		selectedModel,
 		selectedModelId,
-		setSelectedProvider,
-		providerPresentation,
-	}
+		setSelectedModelId,
+		modelPresentation: getAIModelPresentation(selectedModelId),
+	};
 }

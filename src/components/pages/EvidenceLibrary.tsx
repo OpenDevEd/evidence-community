@@ -467,9 +467,9 @@ function AITabContent({
 	setExternalInput: (input: string) => void;
 }) {
 	const {
-		providerPresentation: { icon: Icon },
-		selectedProviderId,
-		setSelectedProvider,
+		modelPresentation: { icon: Icon },
+		selectedModelId,
+		setSelectedModelId,
 	} = useSelectedModel();
 
 	const {
@@ -498,8 +498,8 @@ function AITabContent({
 			<ModelSelector
 				isOpen={isModelOpen}
 				onOpenChange={onModelOpenChange}
-				selectedProvider={selectedProviderId}
-				onProviderChange={setSelectedProvider}
+				selectedModelId={selectedModelId}
+				onModelChange={setSelectedModelId}
 			/>
 
 			{isSmartScreeningOpen ? (
@@ -775,8 +775,7 @@ export function ContentInteractions({
 		onOpenChange: onChatOpenChange,
 	} = useDisclosure();
 	const {
-		providerPresentation: { icon: Icon },
-		selectedProviderId,
+		modelPresentation: { icon: Icon },
 		selectedModelId,
 	} = useSelectedModel();
 	const [externalInput, setExternalInput] = useState<string>("");
@@ -784,9 +783,10 @@ export function ContentInteractions({
 	return (
 		<div className="relative">
 			<ChatModal
+				// Changing the model starts a new conversation.
+				key={selectedModelId ?? "no-model"}
 				isOpen={isChatOpen}
 				onOpenChange={onChatOpenChange}
-				provider={selectedProviderId}
 				modelId={selectedModelId}
 				externalInput={externalInput}
 				setExternalInput={setExternalInput}

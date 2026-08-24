@@ -1,98 +1,49 @@
+import type { ZodType } from "zod";
+
+import { isLibraryFeatureEnabled } from "@/config/library-config/features";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-import { getRuntimeRequestLocale } from "@/i18n/server";
-import {
-	AIProviderUnavailableError,
-	getAIProviderForConfig,
-} from "@/lib/ai-provider";
-import { hasVisiblePdfAttachment } from "@/lib/attachment-visibility";
-import { NextResponse } from "next/server";
-import { getCachedItem } from "../cache";
+import { getLibraryConfig } from "@/config/library-config/server";
+import { loadPublication } from "@/lib/ai/attachments";
+import { AIError } from "@/lib/ai/errors";
+import { resolveAIModel } from "@/lib/ai/model-resolution";
 
-function failure(message: string, status: number) {
-	return {
-		ok: false as const,
-		response: new NextResponse(message, { status }),
-	};
-}
-
-function validItemKey(key: unknown): key is string {
-	return typeof key === "string" && key.length > 0;
-}
-
-function optionalDistinctId(value: unknown) {
-	if (typeof value === "string") return value;
-	if (value === null) return null;
-	return undefined;
-}
-
-function parseAIPublicationRequest(body: unknown) {
-	if (!body || typeof body !== "object") {
-		return { key: undefined, provider: undefined, distinctId: undefined };
-	}
-	return {
-		key: Reflect.get(body, "prompt"),
-		provider: Reflect.get(body, "provider"),
-		distinctId: optionalDistinctId(Reflect.get(body, "distinctId")),
-	};
-}
-
-async function loadItem(key: unknown) {
-	if (!validItemKey(key)) {
-		return failure("Invalid item key", 400);
-	}
-	const result = await getCachedItem(key);
-	return result?.item
-		? { ok: true as const, item: result.item }
-		: failure("Item not found", 404);
-}
-
-async function loadModels(config: LibraryServerConfig, provider: unknown) {
-	try {
-		return {
-			ok: true as const,
-			models: await getAIProviderForConfig(config, provider),
-		};
-	} catch (error) {
-		if (!(error instanceof AIProviderUnavailableError)) throw error;
-		return failure(error.message, 404);
-	}
-}
-
-export async function loadAIPublication(
-	config: LibraryServerConfig,
-	key: unknown,
-	provider: unknown,
+/**
+ * The opening every publication route shares: the library must have AI
+ * switched on, and the request must match its schema before anything runs.
+ */
+export async function readAIRequest<T>(
+	request: Request,
+	schema: ZodType<T>,
 ) {
-	const startedAt = Date.now();
-	const itemResult = await loadItem(key);
-	if (!itemResult.ok) return itemResult;
-	const modelResult = await loadModels(config, provider);
-	if (!modelResult.ok) return modelResult;
-	const { fullTextPDFs, ...item } = itemResult.item;
-	if (!hasVisiblePdfAttachment(item)) {
-		return failure("This publication has no readable PDF", 403);
+	const config = await getLibraryConfig();
+	if (!isLibraryFeatureEnabled(config.features, "ai")) {
+		throw new AIError("AI_DISABLED", "AI is disabled", 403);
 	}
 
-	return {
-		ok: true as const,
-		fullTextPDFs,
-		item,
-		models: modelResult.models,
-		startedAt,
-	};
+	const parsed = schema.safeParse(await request.json().catch(() => null));
+	if (!parsed.success) {
+		throw new AIError("INVALID_REQUEST", "Invalid AI request.", 400);
+	}
+
+	return { config, request: parsed.data };
 }
 
-export async function loadAIPublicationRequest(
-	config: LibraryServerConfig,
-	req: Request,
+/**
+ * Everything a publication request needs: the model the reader picked, and
+ * the publication with every PDF they can see already attached.
+ */
+export async function loadSelectedPublication(
+	config: Pick<
+		LibraryServerConfig,
+		"ai" | "revision" | "updatedAt"
+	>,
+	{ itemKey, modelId }: { itemKey: string; modelId: unknown },
 ) {
-	const locale = await getRuntimeRequestLocale(req);
-	const { key, provider, distinctId } = parseAIPublicationRequest(
-		await req.json(),
-	);
-	return {
-		distinctId,
-		locale,
-		publication: await loadAIPublication(config, key, provider),
-	};
+	const selectedModel = await resolveAIModel(config, modelId);
+	const publication = await loadPublication(itemKey);
+	if (!publication) {
+		throw new AIError("ITEM_NOT_FOUND", "Item not found.", 404);
+	}
+
+	return { publication, selectedModel };
 }

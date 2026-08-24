@@ -24,6 +24,13 @@ export const publicationGenerationSchema = z
 	})
 	.strict();
 
+export const starterQuestionsSchema = z
+	.object({
+		prompt: itemKeySchema,
+		distinctId: distinctIdSchema,
+	})
+	.strict();
+
 export const chatRequestSchema = z
 	.object({
 		id: z.string().trim().min(1).max(200),
