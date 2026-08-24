@@ -114,6 +114,18 @@ const config: Config = {
 			},
 			maxWidth: {
 				chat: "96rem",
+				"results-note": "16rem",
+			},
+			height: {
+				// The chat beside the results fills the viewport minus the
+				// header stack above it, which differs per breakpoint.
+				"chat-column": "calc(100dvh - 14rem)",
+				"chat-column-lg": "calc(100dvh - 6.5rem)",
+				"chat-column-small": "calc(100dvh - 9.625rem)",
+				"chat-column-small-xl": "calc(100dvh - 8rem)",
+			},
+			minHeight: {
+				"chat-column": "28rem",
 			},
 			backgroundSize: {
 				shimmer: "200% 100%",
@@ -121,6 +133,7 @@ const config: Config = {
 			maxHeight: {
 				// The navbar suggestion list must not cover the whole screen.
 				suggestions: "70vh",
+				"results-note": "32rem",
 			},
 			letterSpacing: {
 				"inspector-title": "-0.01em",

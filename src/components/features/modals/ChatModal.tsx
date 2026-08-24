@@ -1,48 +1,65 @@
 "use client";
 
-import { Button } from "@/components/nextui/Button";
-import {
-	ModalContent,
-	ModalBody,
-	ModalFooter,
-	ScrollShadow,
-	Spinner,
-} from "@nextui-org/react";
-import { LuUser } from "react-icons/lu";
+import { ModalBody, ModalContent, Spinner } from "@nextui-org/react";
+import { AnimatePresence, motion } from "framer-motion";
+import { useTranslations } from "next-intl";
+import React, { useMemo } from "react";
+import { IoChevronDown } from "react-icons/io5";
+import { LuCheck, LuHash, LuType, LuUser, LuX } from "react-icons/lu";
+import { PiXBold } from "react-icons/pi";
+import { RiResetLeftFill } from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
-import { ImSpinner8 } from "react-icons/im";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useRef } from "react";
-import { ItemGetResponse } from "@/app/api/item/types";
-import { IoSend } from "react-icons/io5";
-import { useLocale, useTranslations } from "next-intl";
-import { UIMessage, useChat } from "@ai-sdk/react";
+import { isReasoningUIPart, isTextUIPart, isToolUIPart } from "ai";
+
+import { PoweredByOpenScholar } from "@/components/features/ai/PoweredByOpenScholar";
+import { SmartScreeningModal } from "@/components/features/ai/SmartScreeningModal";
+import { Logo } from "@/components/layout/navbar/Logo";
+import { Button } from "@/components/nextui/Button";
+import DialogModal from "@/components/nextui/DialogModal";
+import { Textarea } from "@/components/nextui/Textarea";
+import { getAIModelPresentation } from "@/constants/ai";
+import type { ItemGetResponse } from "@/app/api/item/types";
+import type { ResearchUIMessage } from "@/lib/ai/agent";
+import { createTextMessage } from "@/lib/ai/chat-messages";
+import { uiMessageText } from "@/lib/ai/client";
+import type { AIModelId } from "@/lib/ai/models";
 import {
-	DefaultChatTransport,
-	isReasoningUIPart,
-	isTextUIPart,
-	isToolUIPart,
-} from "ai";
-import AIHeader from "../ai/AIHeader";
+	isScreeningResultsData,
+	screeningExportContent,
+	type ScreeningResultsData,
+} from "@/lib/ai/screening-export";
+import type { LibrarySearchContext } from "@/lib/search-context";
+import type { ChatMode } from "@/types/ai";
+import { ChatComposerControls, ChatComposerShell } from "../ai/ChatComposerControls";
+import { ChatErrorCard } from "../ai/chat-shared";
+import { useChatFailure, useMessageExport } from "../ai/useChatActions";
+import { ToolActivity } from "../ai/ToolActivity";
+import { useChatWindow } from "../ai/useChatWindow";
+import Resource from "../items/Resource";
+import { AIMarkdown } from "../markdown/Markdown";
+import {
+	AIGeneratedContentControls,
+	AIStructuredContentControls,
+	type ControlAction,
+	type GeneratedContent,
+} from "./AIControls";
 
-// Type alias for backward compatibility
-type Message = UIMessage;
-
-// Helper functions to work with the new parts-based message format
-function getMessageContent(message: Message): string {
-	if (!message.parts) return '';
-	return message.parts
-		.map(part => {
-			if (part.type === 'text') return part.text;
-			return '';
-		})
-		.join('');
-}
-
+type ChatWindowState = ReturnType<typeof useChatWindow>;
+type Message = ResearchUIMessage;
 type VisibleMessagePart = {
 	key: string;
 	part: Message["parts"][number];
 };
+
+function parseScreeningResults(messageId: string, content: string) {
+	if (!messageId.startsWith("screening-")) return null;
+	try {
+		const parsed: unknown = JSON.parse(content);
+		return isScreeningResultsData(parsed) ? parsed : null;
+	} catch {
+		return null;
+	}
+}
 
 function visibleMessageParts(message: Message): VisibleMessagePart[] {
 	let reasoningCount = 0;
@@ -65,82 +82,6 @@ function visibleMessageParts(message: Message): VisibleMessagePart[] {
 
 		return parts;
 	}, []);
-}
-
-function createTextMessage(role: 'system' | 'user' | 'assistant' | 'data', content: string, id: string): Message {
-	return {
-		id,
-		role,
-		parts: [{ type: 'text', text: content }],
-	} as Message;
-}
-import FullScreenModal from "@/components/nextui/FullScreenModal";
-import { getAIModelPresentation } from "@/constants/ai";
-import { FaTools } from "react-icons/fa";
-import { AIMarkdown } from "../markdown/Markdown";
-import { Input } from "@/components/nextui/Input";
-import DialogModal from "@/components/nextui/DialogModal";
-import { Textarea } from "@/components/nextui/Textarea";
-import { AnimatePresence, motion } from "framer-motion";
-import { RiRefreshLine, RiResetLeftFill } from "react-icons/ri";
-import { useLocalStorage } from "usehooks-ts";
-import { useIsAISearchEnabled } from "@/components/pages/EvidenceLibrary";
-import type { SmartScreeningField } from "@/types/ai";
-import useSWRMutation from "swr/mutation";
-import { cleanAIResponse, fetcher, setter } from "@/lib/utils";
-import { getRateLimits } from "@/lib/actions";
-import { getAnalyticsDistinctId } from "@/lib/analytics";
-import Resource from "../items/Resource";
-import { GiStarSwirl } from "react-icons/gi";
-import { Switch } from "@/components/nextui/Switch";
-import { BsQuestionCircleFill } from "react-icons/bs";
-import { Card } from "@/components/nextui/Card";
-import { Tooltip } from "@/components/nextui/Tooltip";
-import { clientAIError } from "@/lib/ai/client";
-import { AI_CONTEXT_TOO_LARGE_MESSAGE } from "@/lib/ai/error-message";
-import { ChatErrorCard } from "@/components/features/ai/chat-shared";
-import type { LibrarySearchContext } from "@/lib/search-context";
-import { ToolActivity } from "@/components/features/ai/ToolActivity";
-import { LuCheck, LuHash, LuType, LuX } from "react-icons/lu";
-import {
-	AIGeneratedContentControls,
-	AIStructuredContentControls,
-	type ControlAction,
-	type GeneratedContent,
-} from "./AIControls";
-import {
-	isScreeningResultsData,
-	screeningExportContent,
-	type ScreeningFieldValue,
-	type ScreeningResultsData,
-} from "@/lib/ai/screening-export";
-import {
-	CHAT_EXPORT_OUTPUT,
-	chatMessageContent,
-	chatTranscriptContent,
-	type ChatTranscriptFormat,
-} from "@/lib/ai/transcript-export";
-
-export const maxDuration = 240;
-
-/** What to tell the reader, and whether a reset is the way out. */
-function describeChatFailure(error: Error | undefined, fallback: string) {
-	const readable = error ? clientAIError(error) : undefined;
-	return {
-		message: readable?.message || fallback,
-		isContextTooLarge: readable?.message === AI_CONTEXT_TOO_LARGE_MESSAGE,
-	};
-}
-
-/** Only a screening reply carries results, and only if they are well formed. */
-function parseScreeningResults(messageId: string, content: string) {
-	if (!messageId.startsWith("screening-")) return null;
-	try {
-		const parsed: unknown = JSON.parse(content);
-		return isScreeningResultsData(parsed) ? parsed : null;
-	} catch {
-		return null;
-	}
 }
 
 function ScreeningResults({ results }: { results: ScreeningResultsData }) {
@@ -205,19 +146,72 @@ function ScreeningResults({ results }: { results: ScreeningResultsData }) {
 				{resultEntries.map(([resourceId, value]) => (
 					<article
 						key={resourceId}
-						className="overflow-hidden rounded-2xl bg-white/80 dark:bg-white/[0.035]"
+						className="overflow-hidden rounded-2xl bg-white/80 shadow-card-lifted dark:bg-white/[0.035]"
 					>
-						<Resource itemKey={resourceId} abstract={true} as="div" />
+						<Resource
+							itemKey={resourceId}
+							abstract={true}
+							as="div"
+							className="rounded-none bg-transparent dark:bg-transparent [&>div:last-child]:rounded-none"
+						/>
 						<div className="grid grid-cols-1 gap-3 bg-black/[0.025] p-3 dark:bg-black/[0.15] sm:p-4 md:grid-cols-2">
-							{results.fields.map((field, fieldIndex) => (
-								<ScreeningField
-									key={field.label}
-									field={field}
-									value={value.screeningFields[field.label] ?? null}
-									isLast={fieldIndex === results.fields.length - 1}
-									fieldCount={results.fields.length}
-								/>
-							))}
+							{results.fields.map((field, fieldIndex) => {
+								const fieldValue =
+									value.screeningFields[field.label] ?? null;
+								const isBoolean = field.type === "boolean";
+								const fieldIcon =
+									field.type === "number" ? (
+										<LuHash />
+									) : field.type === "string" ? (
+										<LuType />
+									) : fieldValue === true ? (
+										<LuCheck />
+									) : (
+										<LuX />
+									);
+
+								return (
+									<section
+										key={field.label}
+										className={twMerge(
+											"min-w-0 rounded-xl bg-white/80 p-4 shadow-card-hairline dark:bg-white/[0.045] dark:shadow-none",
+											results.fields.length % 2 === 1 &&
+												fieldIndex ===
+													results.fields.length - 1 &&
+												"md:col-span-2",
+										)}
+									>
+										<div className="flex items-start justify-between gap-3">
+											<h3 className="min-w-0 text-xs font-medium leading-5 text-black/50 dark:text-white/50">
+												{field.label}
+											</h3>
+											<span
+												className={twMerge(
+													"grid size-7 shrink-0 place-items-center rounded-lg bg-black/[0.045] text-sm text-black/40 dark:bg-white/[0.06] dark:text-white/40",
+													isBoolean &&
+														fieldValue === true &&
+														"bg-accent/10 text-accent dark:bg-accent/15 dark:text-accent",
+												)}
+												title={field.type}
+												role="img"
+												aria-label={field.type}
+											>
+												{fieldIcon}
+											</span>
+										</div>
+										<p
+											className={twMerge(
+												"mt-2 break-words text-base font-medium leading-6 text-black/80 dark:text-white/80",
+												isBoolean &&
+													fieldValue === true &&
+													"text-accent dark:text-accent",
+											)}
+										>
+											{String(fieldValue)}
+										</p>
+									</section>
+								);
+							})}
 						</div>
 					</article>
 				))}
@@ -230,130 +224,49 @@ function ScreeningResults({ results }: { results: ScreeningResultsData }) {
 	);
 }
 
-function ScreeningFieldIcon({
-	type,
-	value,
-}: {
-	type: ScreeningResultsData["fields"][number]["type"];
-	value: ScreeningFieldValue;
-}) {
-	if (type === "number") return <LuHash />;
-	if (type === "string") return <LuType />;
-	return value === true ? <LuCheck /> : <LuX />;
-}
-
-function ScreeningField({
-	field,
-	value,
-	fieldCount,
-	isLast,
-}: {
-	field: ScreeningResultsData["fields"][number];
-	value: ScreeningFieldValue;
-	fieldCount: number;
-	isLast: boolean;
-}) {
-	const isBoolean = field.type === "boolean";
-	const isTrue = isBoolean && value === true;
-
-	return (
-		<section
-			className={twMerge(
-				"min-w-0 rounded-xl bg-white/80 p-4 dark:bg-white/[0.045]",
-				fieldCount % 2 === 1 && isLast && "md:col-span-2",
-			)}
-		>
-			<div className="flex items-start justify-between gap-3">
-				<h3 className="min-w-0 text-xs font-medium leading-5 text-black/50 dark:text-white/50">
-					{field.label}
-				</h3>
-				<span
-					className={twMerge(
-						"grid size-7 shrink-0 place-items-center rounded-lg bg-black/[0.045] text-sm text-black/40 dark:bg-white/[0.06] dark:text-white/40",
-						isTrue &&
-							"bg-accent/10 text-accent dark:bg-accent/15 dark:text-accent",
-					)}
-					role="img"
-					aria-label={field.type}
-				>
-					<ScreeningFieldIcon type={field.type} value={value} />
-				</span>
-			</div>
-			<p
-				className={twMerge(
-					"mt-2 break-words text-base font-medium leading-6 text-black/80 dark:text-white/80",
-					isTrue && "text-accent dark:text-accent",
-				)}
-			>
-				{String(value)}
-			</p>
-		</section>
-	);
-}
-
 function MessageComponent({
 	message,
 	modelId,
-	isMutating,
-	isWaiting,
-	handleScreening,
-	smartScreeningFields,
 	error,
+	pdfSources,
+	isStreaming,
 }: {
 	message: Message;
-	modelId: string | null;
-	isMutating: boolean;
-	isWaiting: boolean;
-	handleScreening: (content: string) => void;
-	smartScreeningFields: SmartScreeningField[];
+	modelId: AIModelId;
 	error: boolean;
+	pdfSources: Record<string, string>;
+	isStreaming: boolean;
 }) {
-	const presentation = getAIModelPresentation(modelId);
-	const tUI = useTranslations("ui");
-
-	const visibleParts = useMemo(
-		() => visibleMessageParts(message),
-		[message],
-	);
+	const content = uiMessageText(message);
+	const visibleParts = visibleMessageParts(message);
 	const screeningResults = useMemo(
-		() => parseScreeningResults(message.id, getMessageContent(message)),
-		[message],
+		() => parseScreeningResults(message.id, content),
+		[content, message.id],
+	);
+	const hasFinalAnswer = message.parts.some(
+		(part) => isTextUIPart(part) && part.text.trim(),
 	);
 	const showMessageActions =
 		message.role === "assistant" &&
-		!isWaiting &&
+		!isStreaming &&
 		!error &&
 		!screeningResults &&
 		!message.id.includes("error") &&
-		getMessageContent(message).trim().length > 0;
-	const exportMessage = useCallback(
-		async (action: ControlAction): Promise<GeneratedContent> => {
-			if (action === "csv") {
-				throw new Error("CSV is not available for chat messages.");
-			}
-			const format = action satisfies ChatTranscriptFormat;
-			const exported = await chatMessageContent(
-				format,
-				message,
-				window.location.origin,
-			);
-			return { content: exported, ...CHAT_EXPORT_OUTPUT[format] };
-		},
-		[message],
-	);
+		hasFinalAnswer;
+	const getMessageContent = useMessageExport(message);
 
 	return (
 		<>
 			<div
 				className={twMerge(
 					"rounded-full bg-accent dark:bg-accent p-2",
-					message.role !== "user" && "hidden"
+					message.role !== "user" && "hidden",
 				)}
 			>
 				{message.role === "user" ? (
 					<LuUser className="size-4 text-white" />
 				) : (
-					React.createElement(presentation.icon, {
+					React.createElement(getAIModelPresentation(modelId).icon, {
 						className: "size-4 invert shrink-0",
 					})
 				)}
@@ -363,31 +276,42 @@ function MessageComponent({
 					"p-0 text-wrap max-w-full overflow-hidden break-words text-lg",
 					message.role === "user" &&
 						"bg-white dark:bg-secondary rounded-xl",
-					message.role !== "user" && "w-full px-8",
+					message.role !== "user" && "w-full",
 					message.id.includes("error") &&
-						"text-red-500 dark:text-red-500 italic"
+						"text-red-500 dark:text-red-500 italic",
 				)}
 			>
-				{getMessageContent(message).trim().length === 0 && !error ? (
-					<div className={twMerge("p-4 opacity-60 ")}>
-						<div className="w-fit bg-black flex items-center justify-center rounded-full p-2">
+				{visibleParts.length === 0 && !error ? (
+					<div className="flex items-center gap-3 p-4">
+						<div className="flex w-fit items-center justify-center rounded-full bg-black p-2 opacity-60">
 							<Spinner />
 						</div>
 					</div>
-				) : screeningResults ? (
-					<ScreeningResults results={screeningResults} />
 				) : (
 					<>
-						{message.role === "assistant" ? (
-							visibleParts.map(({ key, part }) => {
-								if (isReasoningUIPart(part)) {
+						{screeningResults ? (
+							<ScreeningResults results={screeningResults} />
+						) : message.role === "assistant" ? (
+							visibleParts.map(({ key, part }, partIndex) => {
+								const isLastPart =
+									partIndex === visibleParts.length - 1;
+
+								if (
+									isReasoningUIPart(part) &&
+									part.text.trim()
+								) {
 									return (
-										<AIMarkdown
-											key={key}
-											className="mt-4 prose prose-sm max-w-full text-black/50 dark:prose-invert dark:text-white/50"
-										>
-											{part.text}
-										</AIMarkdown>
+										<div key={key} className="mt-4">
+											<AIMarkdown
+												pdfSources={pdfSources}
+												isAnimating={
+													isStreaming && isLastPart
+												}
+												className="prose prose-sm max-w-full text-black/50 dark:prose-invert dark:text-white/50 [&_p]:my-1.5 [&_strong]:font-medium [&_strong]:text-black/60 dark:[&_strong]:text-white/60"
+											>
+												{part.text}
+											</AIMarkdown>
+										</div>
 									);
 								}
 
@@ -399,59 +323,41 @@ function MessageComponent({
 									);
 								}
 
-								if (isTextUIPart(part)) {
+								if (isTextUIPart(part) && part.text.trim()) {
 									return (
 										<AIMarkdown
 											key={key}
-											isAnimating={isWaiting}
-											className="p-0 mt-6 prose dark:prose-invert space-y-4 w-full max-w-full"
+											pdfSources={pdfSources}
+											isAnimating={
+												isStreaming && isLastPart
+											}
+											className="mt-6 w-full max-w-full space-y-4 p-0 prose dark:prose-invert"
 										>
-											{cleanAIResponse(part.text)}
+											{part.text}
 										</AIMarkdown>
 									);
 								}
 
 								return null;
 							})
-						) : (
+						) : content.trim() ? (
 							<AIMarkdown
-								className="p-4 prose dark:prose-invert space-y-4 w-full max-w-full"
+								pdfSources={pdfSources}
+								isAnimating={isStreaming}
+								className="w-full max-w-full space-y-4 p-4 prose dark:prose-invert"
 							>
-								{cleanAIResponse(getMessageContent(message))}
+								{content}
 							</AIMarkdown>
-						)}
+						) : null}
 						{showMessageActions && (
 							<div className="mt-3 flex items-center gap-0.5">
 								<AIGeneratedContentControls
-									getContent={exportMessage}
+									getContent={getMessageContent}
 									downloadName="ai-response"
 									appearance="inline"
 								/>
 							</div>
 						)}
-						{message.role === "assistant" &&
-							getMessageContent(message).includes("/lib/") &&
-							smartScreeningFields.length > 0 && (
-								<div className="flex items-center gap-2 mt-8">
-									<Button
-										isDisabled={isWaiting}
-										startContent={
-											isMutating ? (
-												<ImSpinner8 className="animate-spin" />
-											) : (
-												<GiStarSwirl />
-											)
-										}
-										size="sm"
-										color="accent"
-										onClick={() =>
-											handleScreening(getMessageContent(message))
-										}
-									>
-										{tUI("smartScreening")}
-									</Button>
-								</div>
-							)}
 					</>
 				)}
 			</div>
@@ -459,525 +365,633 @@ function MessageComponent({
 	);
 }
 
-/** The contract screens at most twenty-five publications in one request. */
-const SCREENING_BATCH_LIMIT = 25;
+type ChatMessageListProps = {
+	chatFailure: ReturnType<typeof useChatFailure>;
+	contentRef: (element: HTMLDivElement | null) => void;
+	hasError: boolean;
+	isAtBottom: boolean;
+	isStreaming: boolean;
+	messages: Message[];
+	modelId: AIModelId;
+	onReset: () => void;
+	onRetry: () => void;
+	pdfSources: Record<string, string>;
+	scrollEdges: { top: boolean; bottom: boolean };
+	scrollRef: (element: HTMLDivElement | null) => void;
+	scrollToBottom: () => void;
+};
 
-export type ChatMode = "research" | "quick";
+/** One message, sliding in from the side that sent it. */
+function ChatMessageRow({
+	hasError,
+	isStreaming,
+	message,
+	modelId,
+	pdfSources,
+}: {
+	hasError: boolean;
+	isStreaming: boolean;
+	message: Message;
+	modelId: AIModelId;
+	pdfSources: Record<string, string>;
+}) {
+	const fromReader = message.role === "user";
+
+	return (
+		<motion.div
+			initial={{ x: fromReader ? 100 : -100, opacity: 0 }}
+			animate={{ x: 0, opacity: 1 }}
+			transition={{ type: "spring", stiffness: 260, damping: 20 }}
+			className={twMerge(
+				"flex items-start justify-start gap-2 w-full",
+				fromReader && "flex-row-reverse",
+			)}
+		>
+			<MessageComponent
+				message={message}
+				modelId={modelId}
+				error={hasError}
+				pdfSources={pdfSources}
+				isStreaming={isStreaming}
+			/>
+		</motion.div>
+	);
+}
+
+/** An empty reply bubble, shown while the assistant is still thinking. */
+function PendingReply({
+	modelId,
+	pdfSources,
+}: {
+	modelId: AIModelId;
+	pdfSources: Record<string, string>;
+}) {
+	return (
+		<motion.div
+			initial={{ opacity: 0, x: -40 }}
+			animate={{ opacity: 1, x: 0 }}
+			className="flex w-full items-start justify-start gap-2"
+		>
+			<MessageComponent
+				message={createTextMessage("assistant", "", "pending-assistant")}
+				modelId={modelId}
+				error={false}
+				pdfSources={pdfSources}
+				isStreaming={false}
+			/>
+		</motion.div>
+	);
+}
+
+/** Fades the conversation out where it runs past the top or bottom edge. */
+function ScrollEdgeFade({
+	atTop,
+	isVisible,
+}: {
+	atTop?: boolean;
+	isVisible: boolean;
+}) {
+	return (
+		<div
+			aria-hidden
+			className={twMerge(
+				"pointer-events-none absolute inset-x-0 z-10 bg-gradient-to-b from-background_light via-background_light/75 to-transparent transition-opacity duration-300 ease-out dark:from-card dark:via-card/75",
+				atTop ? "top-0 h-28" : "bottom-0 h-20 rotate-180",
+				isVisible ? "opacity-100" : "opacity-0",
+			)}
+		/>
+	);
+}
+
+/** The conversation itself, with its scroll behaviour and failure alert. */
+function ChatMessageList({
+	chatFailure,
+	contentRef,
+	hasError,
+	isAtBottom,
+	isStreaming,
+	messages,
+	modelId,
+	onReset,
+	onRetry,
+	pdfSources,
+	scrollEdges,
+	scrollRef,
+	scrollToBottom,
+}: ChatMessageListProps) {
+	const t = useTranslations("ai");
+	const lastIndex = messages.length - 1;
+	const isWaitingForReply = isStreaming && messages.at(-1)?.role === "user";
+
+	return (
+		<motion.div
+			layoutId="chat-messages"
+			layout="position"
+			transition={{ type: "spring", bounce: 0.25, duration: 0.5 }}
+			className="relative h-full min-h-0 min-w-0 w-full overflow-hidden"
+		>
+			<div
+				ref={scrollRef}
+				className="no-scrollbar h-full w-full overflow-y-auto overflow-x-hidden"
+			>
+				<div
+					ref={contentRef}
+					className="mx-auto flex min-h-full max-w-chat flex-col gap-8 pb-8 pt-28 lg:px-24"
+				>
+					{/* The greeting is the window's own text, not part of
+					    the conversation, so it is drawn elsewhere. */}
+					{messages.slice(1).map((message, index) => (
+						<ChatMessageRow
+							key={message.id}
+							hasError={hasError}
+							isStreaming={
+								isStreaming &&
+								index + 1 === lastIndex &&
+								message.role === "assistant"
+							}
+							message={message}
+							modelId={modelId}
+							pdfSources={pdfSources}
+						/>
+					))}
+					{isWaitingForReply ? (
+						<PendingReply
+							modelId={modelId}
+							pdfSources={pdfSources}
+						/>
+					) : null}
+					{chatFailure.hasFailed ? (
+						<motion.div
+							initial={{ opacity: 0, y: 16, scale: 0.97 }}
+							animate={{ opacity: 1, y: 0, scale: 1 }}
+							exit={{ opacity: 0, y: 16, scale: 0.97 }}
+							transition={{
+								type: "spring",
+								bounce: 0.3,
+								duration: 0.5,
+							}}
+							className="flex w-full justify-center px-4"
+						>
+							<ChatErrorCard
+								message={chatFailure.message}
+								isContextTooLarge={chatFailure.isContextTooLarge}
+								onReset={onReset}
+								onRetry={onRetry}
+								className="max-w-xl"
+							/>
+						</motion.div>
+					) : null}
+				</div>
+			</div>
+			<ScrollEdgeFade atTop isVisible={scrollEdges.top} />
+			<ScrollEdgeFade isVisible={scrollEdges.bottom} />
+			{isAtBottom ? null : (
+				<Button
+					isIconOnly
+					size="sm"
+					className="absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full shadow-md"
+					aria-label={t("jumpToLatest")}
+					onPress={() => scrollToBottom()}
+				>
+					<IoChevronDown className="size-4" />
+				</Button>
+			)}
+		</motion.div>
+	);
+}
+
+type ChatWindowComposerProps = {
+	chat: ChatWindowState;
+	hasPublication: boolean;
+	onHeightChange: () => void;
+	onScreen: () => void;
+	questions?: string[];
+};
+
+/** The suggested questions shown before the conversation starts. */
+function StarterQuestions({
+	onPick,
+	questions,
+}: {
+	onPick: (question: string) => void;
+	questions: string[];
+}) {
+	return (
+		<motion.ul
+			key="questions"
+			initial={{ opacity: 0, y: 100 }}
+			animate={{ opacity: 1, y: 0 }}
+			exit={{ opacity: 0, y: -100 }}
+			className="w-full flex flex-col lg:flex-row gap-4 max-w-chat lg:px-14 mx-auto"
+		>
+			{questions.map((question) => (
+				<li key={question}>
+					<Button
+						className="text-wrap p-4 bg-transparent dark:bg-transparent min-h-fit h-full"
+						size="sm"
+						onClick={() => {
+							onPick(question);
+						}}
+					>
+						{question}
+					</Button>
+				</li>
+			))}
+		</motion.ul>
+	);
+}
+
+/** The message box itself. Enter sends, Shift+Enter starts a new line. */
+function ChatMessageBox({
+	hasPublication,
+	input,
+	onHeightChange,
+	onSubmit,
+	setInput,
+}: {
+	hasPublication: boolean;
+	input: string;
+	onHeightChange: () => void;
+	onSubmit: (event: React.FormEvent) => void;
+	setInput: (input: string) => void;
+}) {
+	const t = useTranslations("ai");
+	const sendsOnEnter = (event: React.KeyboardEvent) =>
+		event.key === "Enter" &&
+		!event.shiftKey &&
+		!(event.nativeEvent as KeyboardEvent).isComposing;
+
+	return (
+		<Textarea
+			minRows={1}
+			// The composer resizes the message viewport above it; re-pin
+			// through the hook so it isn't mistaken for the user scrolling up.
+			onHeightChange={onHeightChange}
+			onKeyDown={(event) => {
+				if (!sendsOnEnter(event)) return;
+				event.preventDefault();
+				onSubmit(event);
+			}}
+			autoFocus
+			autoComplete="off"
+			aria-label={t("askAI")}
+			placeholder={t(
+				hasPublication ? "askMeAnything" : "askMeAnythingPublications",
+			)}
+			value={input}
+			onValueChange={setInput}
+			classNames={{
+				base: "w-full min-w-0",
+				inputWrapper:
+					"min-h-14 !rounded-2xl !border-0 !bg-transparent !px-2 !py-1 !shadow-none group-data-[focus=true]:!bg-transparent group-data-[hover=true]:!bg-transparent data-[focus=true]:!outline-none dark:!bg-transparent",
+				input: "text-base leading-6",
+			}}
+		/>
+	);
+}
+
+/** The hairline that lights up while the composer is in use. */
+function ComposerHairline({
+	isLit,
+	prefersReducedMotion,
+}: {
+	isLit: boolean;
+	prefersReducedMotion: boolean | null;
+}) {
+	return (
+		<motion.div
+			aria-hidden="true"
+			initial={false}
+			animate={{ opacity: isLit ? 1 : 0, scaleX: isLit ? 1 : 0.35 }}
+			transition={{
+				duration: prefersReducedMotion ? 0 : 0.24,
+				ease: [0.22, 1, 0.36, 1],
+			}}
+			className="pointer-events-none absolute inset-x-8 top-0 h-px origin-center bg-gradient-to-r from-transparent via-accent to-transparent"
+		/>
+	);
+}
+
+/** Starter questions, the message box, and the controls under it. */
+function ChatWindowComposer({
+	chat,
+	hasPublication,
+	onHeightChange,
+	onScreen,
+	questions,
+}: ChatWindowComposerProps) {
+	const {
+		canRunScreening,
+		conversationStarted,
+		handleSubmit,
+		input,
+		isComposerFocused,
+		isDeepResearchEnabled,
+		isInputReady,
+		isMutating,
+		isWaiting,
+		mode,
+		onSmartScreeningOpen,
+		prefersReducedMotion,
+		screeningTooltip,
+		setInput,
+		setIsComposerFocused,
+		setMode,
+	} = chat;
+	const showQuestions = !isWaiting && !conversationStarted;
+
+	return (
+		<form
+			className="relative flex min-w-0 w-full flex-col gap-4 p-4 [padding-bottom:max(1rem,env(safe-area-inset-bottom))] sm:gap-8 sm:p-8"
+			onSubmit={handleSubmit}
+		>
+			<AnimatePresence mode="popLayout">
+				{showQuestions && questions ? (
+					<StarterQuestions
+						onPick={setInput}
+						questions={questions}
+					/>
+				) : null}
+				<ChatComposerShell
+					className="mx-auto max-w-3xl rounded-3xl p-2 dark:bg-card"
+					isComposerFocused={isComposerFocused}
+					isWaiting={isWaiting}
+					prefersReducedMotion={prefersReducedMotion}
+					setComposerFocused={setIsComposerFocused}
+				>
+					<ComposerHairline
+						isLit={isComposerFocused || isWaiting}
+						prefersReducedMotion={prefersReducedMotion}
+					/>
+					<ChatMessageBox
+						hasPublication={hasPublication}
+						input={input}
+						onHeightChange={onHeightChange}
+						onSubmit={handleSubmit}
+						setInput={setInput}
+					/>
+					<ChatComposerControls
+						canScreen={canRunScreening}
+						isDeepResearchEnabled={isDeepResearchEnabled}
+						isInputReady={isInputReady}
+						isScreening={isMutating}
+						isWaiting={isWaiting}
+						mode={mode}
+						onModeChange={setMode}
+						onScreen={onScreen}
+						onScreeningSettings={onSmartScreeningOpen}
+						prefersReducedMotion={prefersReducedMotion}
+						screeningTooltip={screeningTooltip}
+					/>
+				</ChatComposerShell>
+			</AnimatePresence>
+		</form>
+	);
+}
+
+/** The window's own controls: reset, export, and close. */
+function ChatWindowTopBar({
+	conversationStarted,
+	getTranscriptContent,
+	isWaiting,
+	onClose,
+	onReset,
+}: {
+	conversationStarted: boolean;
+	getTranscriptContent: (action: ControlAction) => Promise<GeneratedContent>;
+	isWaiting: boolean;
+	onClose: () => void;
+	onReset: () => void;
+}) {
+	const tUI = useTranslations("ui");
+
+	return (
+		<>
+			{/* Institution branding: the navbar's logo, including its home
+			    link. OpenScholar is credited under the composer. */}
+			<div className="pointer-events-none absolute left-4 top-4 z-30 flex h-12 items-center sm:left-6 sm:top-5 [&_img]:max-h-10 [&_img]:w-auto">
+				<div className="pointer-events-auto">
+					<Logo />
+				</div>
+			</div>
+			<div className="pointer-events-none absolute right-4 top-4 z-30 flex items-center gap-2 sm:right-6 sm:top-5">
+				<div className="pointer-events-auto flex h-10 items-center gap-0.5 rounded-full border border-black/[0.08] bg-white p-1 shadow-card-flat dark:border-white/10 dark:bg-secondary-400 dark:shadow-none">
+					<Button
+						startContent={<RiResetLeftFill />}
+						variant="transparent"
+						size="sm"
+						className="h-8 min-w-0 gap-1.5 rounded-2xl px-2.5 text-sm text-black/60 hover:bg-black/[0.04] dark:text-white/60 dark:hover:bg-white/[0.06] data-[disabled=true]:bg-transparent"
+						aria-label={tUI("resetAriaLabel")}
+						isDisabled={isWaiting}
+						onClick={onReset}
+					>
+						<span className="hidden lg:block">
+							{tUI("resetChat")}
+						</span>
+					</Button>
+					<AIGeneratedContentControls
+						getContent={getTranscriptContent}
+						downloadName="chat-transcript"
+						isDisabled={!conversationStarted || isWaiting}
+						appearance="header"
+					/>
+				</div>
+				<Button
+					onPress={onClose}
+					isIconOnly
+					variant="transparent"
+					className="pointer-events-auto size-10 rounded-full border border-black/[0.08] bg-white text-black/55 shadow-card-flat hover:bg-black/[0.035] hover:text-black/75 dark:border-white/10 dark:bg-secondary-400 dark:text-white/55 dark:shadow-none dark:hover:bg-white/[0.06] dark:hover:text-white/75"
+					aria-label={tUI("closePopupAriaLabel")}
+				>
+					<PiXBold className="size-4" />
+				</Button>
+			</div>
+		</>
+	);
+}
 
 export default function ChatModal({
 	isOpen,
 	onOpenChange,
 	data,
 	modelId,
-	searchContext,
 	questions,
 	externalInput,
 	setExternalInput,
+	searchContext,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
 	data?: ItemGetResponse | undefined;
-	modelId: string | null;
-	searchContext?: LibrarySearchContext;
+	modelId: AIModelId;
 	questions?: undefined | string[];
 	externalInput?: string;
 	setExternalInput?: (input: string) => void;
-	mode?: string;
+	searchContext?: LibrarySearchContext;
 }) {
-	const [smartScreeningFields, setSmartScreeningFields] = useLocalStorage<
-		SmartScreeningField[]
-	>("smart-screening-fields", []);
-	const { isDeepResearchEnabled } = useIsAISearchEnabled();
-	const [internalMode, setMode] = useLocalStorage<ChatMode>(
-		"chat-mode",
-		"research",
-	);
-	const mode: ChatMode =
-		isDeepResearchEnabled && internalMode === "research"
-			? "research"
-			: "quick";
-
-	const t = useTranslations("ai");
-	const tUI = useTranslations("ui");
-	const locale = useLocale();
-	const inputRef = useRef<any>(null);
-	const [input, setInput] = useState('');
-	const {
-		messages,
-		sendMessage,
-		error,
-		status,
-		regenerate,
-		stop,
-		setMessages,
-	} = useChat({
-		transport: new DefaultChatTransport({
-			api: "/api/ai/chat",
-			headers: {
-				"Accept-Language": locale,
-			},
-			body: {
-				itemKey: data?.item?.key,
-				modelId,
-				distinctId: getAnalyticsDistinctId(),
-				mode,
-				searchContext,
-			},
-		}),
-		messages: [
-			createTextMessage("assistant", t("chatPlaceholder", { title: data?.item?.title || "" }), "start"),
-		],
-		onFinish() {
-			inputRef?.current?.focus();
-		},
-		onError: (error) => {
-			const message = clientAIError(error).message;
-			if (!message.includes("Rate limit exceeded")) {
-				appendMessage(
-					createTextMessage(
-						"assistant",
-						message,
-						"error-" + Date.now(),
-					),
-				);
-				return;
-			}
-			(async () => {
-				const rateLimits = await getRateLimits();
-				appendMessage(createTextMessage(
-					"assistant",
-					t("rateLimitedMessage", {
-						seconds: rateLimits.retryAfter || 0,
-					}),
-					"error-" + Date.now()
-				));
-			})();
-		},
+	const chat = useChatWindow({
+		data,
+		externalInput,
+		isOpen,
+		modelId,
+		searchContext,
+		setExternalInput,
 	});
-
-	const isLoading = status === 'submitted' || status === 'streaming';
-	const reload = () => regenerate();
-	const append = (message: { role: 'user' | 'assistant'; content: string }) => {
-		sendMessage({ text: message.content });
-	};
-	const handleSubmit = (e: React.FormEvent) => {
-		e.preventDefault();
-		if (input.trim()) {
-			sendMessage({ text: input });
-			setInput('');
-		}
-	};
-
-	const [isMutating, setIsMutating] = useState(false);
-
-	const messageListRef = useRef<HTMLDivElement>(null);
-
-	const appendMessage = (message: Message) => {
-		setMessages((prevMessages) => [...prevMessages, message]);
-	};
-
-	useEffect(() => {
-		const apply = () => {
-			if (messageListRef.current) {
-				messageListRef.current.scrollTop =
-					messageListRef.current.scrollHeight;
-			}
-		};
-		const observer = new MutationObserver(apply);
-		if (messageListRef.current) {
-			observer.observe(messageListRef.current as Node, {
-				childList: true,
-				subtree: true,
-			});
-		}
-		apply();
-		return () => observer.disconnect();
-	}, [messages]);
-
-	useEffect(() => {
-		if (externalInput && isOpen) {
-			append({
-				role: "user",
-				content: externalInput,
-			});
-			setExternalInput?.("");
-		}
-	}, [externalInput, isOpen]);
-
-	const reponseExists = messages.some(
-		(message, index) => index > 0 && message.role === "assistant"
-	);
-
-	const handleScreening = async (content: string) => {
-		const keys = Array.from(
-			content.matchAll(/\/lib\/([A-Za-z0-9:_-]+)/g),
-			(match) => match[1],
-		);
-		if (!modelId || !keys.length || smartScreeningFields.length === 0) {
-			return;
-		}
-		// One request screens at most twenty-five publications.
-		const keysArray = [...new Set(keys)].slice(0, SCREENING_BATCH_LIMIT);
-		setIsMutating(true);
-		try {
-			const response = await fetch("/api/ai/screen", {
-				method: "POST",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({
-					keys: keysArray,
-					modelId,
-					fields: smartScreeningFields,
-					distinctId: getAnalyticsDistinctId(),
-				}),
-			});
-			if (!response.ok) throw new Error(await response.text());
-			const result = await response.json();
-		if (Object.keys(result).length > 0) {
-			appendMessage(createTextMessage(
-				"assistant",
-				JSON.stringify({
-					result: result,
-					fields: smartScreeningFields,
-				}),
-				"screening-" + Date.now()
-			));
-		} else {
-			appendMessage(createTextMessage(
-				"assistant",
-				tUI("noResourcesForScreening"),
-				"screening-" + Date.now()
-			));
-		}
-		} catch (error) {
-			console.error(error);
-		} finally {
-			setIsMutating(false);
-		}
-	};
-
-	const isWaiting = (isLoading || isMutating) && !error;
-	const resetChat = () => setMessages([...messages.slice(0, 1)]);
-	const chatFailure = describeChatFailure(error, t("errorMessage"));
-	const exportTranscript = useCallback(
-		async (action: ControlAction): Promise<GeneratedContent> => {
-			if (action === "csv") {
-				throw new Error("CSV is not available for chat transcripts.");
-			}
-			const format = action satisfies ChatTranscriptFormat;
-			const content = await chatTranscriptContent(
-				format,
-				messages.slice(1),
-				{
-					title: t("askAI"),
-					user: tUI("genericUser"),
-					assistant: getAIModelPresentation(modelId).name,
-					reasoning: t("reasoning"),
-					smartScreening: tUI("smartScreening"),
-				},
-				window.location.origin,
-			);
-			return { content, ...CHAT_EXPORT_OUTPUT[format] };
-		},
-		[messages, modelId, t, tUI],
-	);
+	const {
+		canRunScreening,
+		chatFailure,
+		contentRef,
+		conversationStarted,
+		error,
+		getTranscriptContent,
+		handleScreening,
+		handleSubmit,
+		input,
+		isAtBottom,
+		isComposerFocused,
+		isDeepResearchEnabled,
+		isInputReady,
+		isMutating,
+		isSmartScreeningOpen,
+		isWaiting,
+		messages,
+		messagesScrollRef,
+		mode,
+		onSmartScreeningOpen,
+		onSmartScreeningOpenChange,
+		pdfSources,
+		prefersReducedMotion,
+		reload,
+		resetChat,
+		screenableContent,
+		screeningTooltip,
+		scrollEdges,
+		scrollToBottom,
+		setInput,
+		setIsComposerFocused,
+		setMode,
+		status,
+	} = chat;
 
 	return (
-		<DialogModal
-			size="full"
-			scrollBehavior="inside"
-			hideCloseButton
-			isOpen={isOpen}
-			onOpenChange={onOpenChange}
-			classNames={{
-				base: "border-none dark:border-none",
-			}}
-		>
-			<ModalContent>
-				{(onClose) => (
-					<>
-						<AIHeader
-							isLoading={isWaiting}
-							onClose={onClose}
-							className="sticky top-0 bg-white dark:bg-secondary-400 z-20"
-						>
-							{t("askAI")}
-							<Button
-								startContent={<RiResetLeftFill />}
-								variant="light"
-								size="sm"
-								className="ml-4"
-								aria-label={tUI("resetAriaLabel")}
-								isDisabled={isWaiting}
-								onClick={resetChat}
-							>
-								{tUI("resetChat")}
-							</Button>
-							<AIGeneratedContentControls
-								getContent={exportTranscript}
-								downloadName="chat-transcript"
-								isDisabled={!reponseExists || isWaiting}
-								appearance="header"
+		<>
+			{isSmartScreeningOpen && (
+				<SmartScreeningModal
+					isOpen
+					onOpenChange={onSmartScreeningOpenChange}
+				/>
+			)}
+			<DialogModal
+				size="full"
+				scrollBehavior="inside"
+				hideCloseButton
+				isDismissable={false}
+				isOpen={isOpen}
+				onOpenChange={onOpenChange}
+				classNames={{
+					base: "m-0 h-dvh min-h-dvh max-h-dvh w-screen max-w-none rounded-none border-none dark:border-none",
+					wrapper: "overflow-hidden p-0",
+				}}
+			>
+				<ModalContent className="relative h-full min-h-0 overflow-hidden">
+					{(onClose) => (
+						<>
+							{/* Institution branding: the navbar's logo, including its
+							    home link. OpenScholar is credited under the composer. */}
+							<ChatWindowTopBar
+								conversationStarted={conversationStarted}
+								getTranscriptContent={getTranscriptContent}
+								isWaiting={isWaiting}
+								onClose={onClose}
+								onReset={resetChat}
 							/>
-						</AIHeader>
-						<ModalBody className="p-0 w-full overflow-hidden">
-							<div
-								className={twMerge(
-									"w-full h-full relative",
-									reponseExists
-							? "grid grid-rows-chat"
-										: "flex justify-center items-center"
-								)}
-							>
-								{reponseExists && (
+							<ModalBody className="min-h-0 w-full overflow-hidden p-0">
+								<div
+									className={twMerge(
+										"relative h-full min-h-0 min-w-0 w-full",
+										conversationStarted
+											? "grid grid-rows-chat"
+											: "flex justify-center items-center",
+									)}
+								>
+									{conversationStarted && (
+										<ChatMessageList
+											chatFailure={chatFailure}
+											contentRef={contentRef}
+											isAtBottom={isAtBottom}
+											isStreaming={status === "streaming"}
+											hasError={Boolean(error)}
+											messages={messages}
+											modelId={modelId}
+											onReset={resetChat}
+											onRetry={reload}
+											pdfSources={pdfSources}
+											scrollEdges={scrollEdges}
+											scrollRef={messagesScrollRef}
+											scrollToBottom={scrollToBottom}
+										/>
+									)}
 									<motion.div
-										layoutId="chat-messages"
+										layoutId="chat-input"
 										layout="position"
 										transition={{
 											type: "spring",
 											bounce: 0.25,
 											duration: 0.5,
 										}}
-										className="w-full h-full overflow-y-scroll"
+										className="relative flex min-w-0 w-full flex-col items-center"
 									>
-										<ScrollShadow
-											className="w-full overflow-y-scroll overflow-x-hidden py-8 h-full"
-											ref={messageListRef}
-										>
-												<div className="max-w-screen-2xl lg:px-24 mx-auto flex flex-col gap-8 ">
-												{messages.map(
-													(message, index) =>
-														index > 0 && (
-															<motion.div
-																initial={{
-																	x:
-																		message.role ===
-																		"user"
-																			? 100
-																			: -100,
-																	opacity: 0,
-																}}
-																animate={{
-																	x: 0,
-																	opacity: 1,
-																}}
-																transition={{
-																	type: "spring",
-																	stiffness: 260,
-																	damping: 20,
-																}}
-																key={index}
-																className={twMerge(
-																	"flex items-start justify-start gap-2 w-full",
-																	message.role ===
-																		"user" &&
-																		"flex-row-reverse px-8"
-																)}
-															>
-																<MessageComponent
-																	message={
-																		message
-																	}
-																	modelId={
-																		modelId
-																	}
-																	isMutating={
-																		isMutating
-																	}
-																	isWaiting={
-																		isWaiting
-																	}
-																	handleScreening={
-																		handleScreening
-																	}
-																	smartScreeningFields={
-																		smartScreeningFields
-																	}
-																	error={!!error}
-																/>
-															</motion.div>
-														)
-												)}
-												{error && (
+										<AnimatePresence>
+											{conversationStarted &&
+												isWaiting && (
 													<motion.div
-														initial={{ opacity: 0, y: -100 }}
-														animate={{ opacity: 1, y: 0 }}
-														exit={{ opacity: 0, y: -100 }}
-														className="flex w-full justify-center"
+														aria-hidden="true"
+														initial={{ opacity: 0 }}
+														animate={{ opacity: 1 }}
+														exit={{ opacity: 0 }}
+														transition={{
+															duration:
+																prefersReducedMotion
+																	? 0
+																	: 0.2,
+														}}
+														className="pointer-events-none absolute inset-x-0 top-0 z-20 h-px overflow-hidden"
 													>
-														<ChatErrorCard
-															message={chatFailure.message}
-															isContextTooLarge={
-																chatFailure.isContextTooLarge
-															}
-															onReset={resetChat}
-															onRetry={reload}
-														/>
+														<div className="h-full w-full animate-gradient-x bg-gradient-to-r from-transparent via-accent/35 to-transparent bg-shimmer motion-reduce:animate-none motion-reduce:bg-accent/20" />
 													</motion.div>
 												)}
-											</div>
-										</ScrollShadow>
-									</motion.div>
-								)}
-								
-								<motion.div
-									layoutId="chat-input"
-									layout="position"
-									transition={{
-										type: "spring",
-										bounce: 0.25,
-										duration: 0.5,
-									}}
-									className="w-full flex justify-center lg:items-center items-end h-full"
-								>
-									<form
-										className={twMerge(
-											"w-full p-8 flex flex-col gap-8 relative"
-										)}
-										onSubmit={handleSubmit}
-									>
-										<AnimatePresence mode="popLayout">
-											{questions &&
-												!isWaiting &&
-												!reponseExists && (
-													<motion.ul
-														key="questions"
-														initial={{
-															opacity: 0,
-															y: 100,
-														}}
-														animate={{
-															opacity: 1,
-															y: 0,
-														}}
-														exit={{
-															opacity: 0,
-															y: -100,
-														}}
-														className="w-full flex flex-col lg:flex-row gap-4 max-w-screen-2xl lg:px-14 mx-auto"
-													>
-														{(Array.isArray(
-															questions
-														)
-															? questions
-															: []
-														).map(
-															(
-																question,
-																index
-															) => (
-																<li key={index}>
-																	<Button
-																		className="text-wrap p-4 bg-transparent dark:bg-transparent min-h-fit h-full"
-																		size="sm"
-																		onClick={() => {
-																			setInput(
-																				question
-																			);
-																			inputRef.current.focus();
-																		}}
-																	>
-																		{
-																			question
-																		}
-																	</Button>
-																</li>
-															)
-														)}
-													</motion.ul>
-												)}
-											<motion.div
-												key="textarea"
-												layout
-												transition={{
-													type: "spring",
-													bounce: 0.25,
-													duration: 0.5,
-												}}
-												className="w-full z-10"
-											>
-												<Textarea
-													minRows={1}
-													onKeyDown={(e) => {
-														if (
-															e.key === "Enter" &&
-															!e.shiftKey
-														) {
-															e.preventDefault();
-															handleSubmit(e);
-														}
-													}}
-													ref={inputRef}
-													autoFocus
-													autoComplete="off"
-													label={t("askAI")}
-													endContent={
-														<Button
-															isDisabled={
-																isWaiting
-															}
-															type="submit"
-															isIconOnly
-															className="flex items-center justify-center h-full aspect-square !p-0"
-															aria-label={tUI(
-																"sendMessageAriaLabel"
-															)}
-														>
-															{isWaiting ? (
-																<ImSpinner8 className="animate-spin" />
-															) : (
-																<IoSend className="size-4 text-black dark:text-white/60" />
-															)}
-														</Button>
-													}
-													placeholder={t(
-														data?.item?.title ? "askMeAnything" : "askMeAnythingPublications"
-													)}
-													value={input}
-													onValueChange={setInput}
-													classNames={{
-														base: twMerge(
-															"lg:w-1/3 lg:mx-auto data-[focus=true]:lg:w-2/5 active:lg:scale-90 data-[focus]:active:lg:scale-100 transition-all duration-500 ease-spring data-[focus=true]:opacity-100"
-														),
-													}}
-												/>
-												{isDeepResearchEnabled && <div className={twMerge("flex items-center gap-2 justify-center mt-8 transition-all duration-500 ease-spring", reponseExists && "mt-4")}>
-													<Card color="card" className={twMerge("flex flex-row p-4 py-3 rounded-2xl items-center gap-4 !transition-all duration-600", mode === "quick" && "opacity-50 hover:opacity-100")}>
-														<Switch
-															isSelected={
-																mode === "research"
-															}
-															onValueChange={(
-																value: boolean
-															) => {
-																setMode(
-																	value
-																		? "research"
-																		: "quick"
-																);
-															}}
-															color="accent"
-															size="sm"
-															classNames={{
-																label: twMerge("text-sm transition-colors duration-300", mode === "research" && "!text-accent"),
-																base: "gap-4"
-															}}
-														>
-															{tUI("researchMode")}
-														</Switch>
-														<Tooltip content={tUI("researchModeTooltip")}>
-															<BsQuestionCircleFill className={twMerge("text-black/60 dark:text-white/60 transition-colors duration-300", mode === "research" && "!text-accent")} />
-														</Tooltip>
-													</Card>
-												</div>}
-											</motion.div>
 										</AnimatePresence>
-									</form>
-								</motion.div>
-							</div>
-						</ModalBody>
-					</>
-				)}
-			</ModalContent>
-		</DialogModal>
+										<ChatWindowComposer
+											chat={chat}
+											hasPublication={Boolean(
+												data?.item?.title,
+											)}
+											onHeightChange={() => {
+												if (!isAtBottom) return;
+												void scrollToBottom({
+													animation: "instant",
+												});
+											}}
+											onScreen={() =>
+												void handleScreening(
+													screenableContent,
+												)
+											}
+											questions={questions}
+										/>
+										{/* Pulled up into the form's bottom padding; the form is
+										    position:relative, so this needs its own stacking
+										    context or the form swallows the clicks. */}
+										<div className="relative z-10 -mt-1 flex w-full justify-center pb-3 sm:-mt-4 sm:pb-4">
+											<PoweredByOpenScholar />
+										</div>
+									</motion.div>
+								</div>
+							</ModalBody>
+						</>
+					)}
+				</ModalContent>
+			</DialogModal>
+		</>
 	);
 }

@@ -19,3 +19,6 @@ export type SmartScreeningField = {
 	description: string;
 	type: (typeof SMART_SCREENING_FIELD_TYPES)[number];
 };
+
+/** Quick answers, or the slower Deep Research pass. */
+export type ChatMode = "research" | "quick";

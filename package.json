@@ -145,6 +145,7 @@
 		"toml": "^3.0.0",
 		"tsx": "^4.19.3",
 		"unist-util-visit": "^5.0.0",
+		"use-stick-to-bottom": "^1.1.6",
 		"usehooks-ts": "^3.1.0",
 		"xmlbuilder2": "^4.0.3",
 		"zod": "^4.4.3",

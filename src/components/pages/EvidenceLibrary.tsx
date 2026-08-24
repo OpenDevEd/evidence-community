@@ -58,7 +58,8 @@ import { useItemsList } from "@/hooks/useItemsList";
 import ItemsList, { ItemsContext } from "../features/items/ItemsList";
 import { SearchBar } from "@/components/features/SearchBar";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
-import ChatModal, { ChatMode } from "../features/modals/ChatModal";
+import ChatModal from "../features/modals/ChatModal";
+import type { ChatMode } from "@/types/ai";
 import ModelSelector from "../features/ai/ModelSelector";
 import DialogModal from "../nextui/DialogModal";
 import AIHeader from "../features/ai/AIHeader";
@@ -78,6 +79,8 @@ import {
 import { getRuntimeSearchScopeOptions } from "@/config/library-config/search";
 import { useFiltersContext } from "@/context/FiltersProvider";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
+import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
+import { SmartScreeningModal } from "@/components/features/ai/SmartScreeningModal";
 import {
 	SMART_SCREENING_FIELD_TYPES,
 	type SmartScreeningField,
@@ -461,6 +464,58 @@ function SearchTabContent({
 	);
 }
 
+/** The research toggle and send button inside the quick ask box. */
+function AskBoxActions({
+	isDeepResearchEnabled,
+	mode,
+	onChatOpen,
+	setMode,
+}: {
+	isDeepResearchEnabled: boolean;
+	mode: ChatMode;
+	onChatOpen: () => void;
+	setMode: (mode: ChatMode) => void;
+}) {
+	const tUI = useTranslations("ui");
+	const isResearch = mode === "research";
+
+	return (
+		<div className="flex items-center gap-1">
+			{isDeepResearchEnabled && (
+				<Tooltip content={tUI("researchModeTooltip")}>
+					<Button
+						isIconOnly
+						size="sm"
+						variant="default"
+						className="shrink-0"
+						onPress={() => setMode(isResearch ? "quick" : "research")}
+						aria-label={tUI("researchMode")}
+					>
+						<GiArchiveResearch
+							className={twMerge(
+								"size-4",
+								isResearch
+									? "text-accent"
+									: "text-black/60 dark:text-white/60",
+							)}
+						/>
+					</Button>
+				</Tooltip>
+			)}
+			<Button
+				type="submit"
+				isIconOnly
+				variant="default"
+				className="shrink-0"
+				size="sm"
+				onPress={onChatOpen}
+			>
+				<IoSend className="size-4" />
+			</Button>
+		</div>
+	);
+}
+
 function AITabContent({
 	onSwitchToSearch,
 	onChatOpen,
@@ -554,47 +609,14 @@ function AITabContent({
 								</Button>
 							}
 							endContent={
-								<div className="flex items-center gap-1">
-									{isDeepResearchEnabled && (
-										<Tooltip
-											content={tUI("researchModeTooltip")}
-										>
-											<Button
-												isIconOnly
-												size="sm"
-												variant="default"
-												className="shrink-0"
-												onPress={() =>
-													setMode(
-														mode === "research"
-															? "quick"
-															: "research",
-													)
-												}
-												aria-label={tUI("researchMode")}
-											>
-												<GiArchiveResearch
-													className={twMerge(
-														"size-4",
-														mode === "research"
-															? "text-accent"
-															: "text-black/60 dark:text-white/60",
-													)}
-												/>
-											</Button>
-										</Tooltip>
-									)}
-									<Button
-										type="submit"
-										isIconOnly
-										variant="default"
-										className="shrink-0"
-										size="sm"
-										onPress={onChatOpen}
-									>
-										<IoSend className="size-4" />
-									</Button>
-								</div>
+								<AskBoxActions
+									isDeepResearchEnabled={
+										isDeepResearchEnabled
+									}
+									mode={mode}
+									onChatOpen={onChatOpen}
+									setMode={setMode}
+								/>
 							}
 							placeholder={tAI("askMeAnythingPublications")}
 							className="w-full"
@@ -627,24 +649,14 @@ function AITabContent({
 
 export type SearchMode = "search" | "ai" | "research";
 
-export function useIsAISearchEnabled() {
-	const isAISearchEnabled = useLibraryFeature("aiSearch");
-	const isDeepResearchEnabled =
-		useLibraryFeature("deepResearch");
-	return {
-		isAISearchEnabled,
-		isDeepResearchEnabled,
-	};
-}
-
-function useSelectedSearchMode(
+function selectedSearchMode(
 	mode: ChatMode,
 	selectedTab: SearchMode,
 	isAISearchEnabled: boolean,
-) {
-	if (selectedTab === "search" || !isAISearchEnabled) return "search";
-	if (selectedTab === "ai") return mode === "research" ? "research" : "ai";
-	return "search";
+): SearchMode {
+	if (selectedTab !== "ai" || !isAISearchEnabled) return "search";
+
+	return mode === "research" ? "research" : "ai";
 }
 
 export function useSearchMode() {
@@ -657,7 +669,7 @@ export function useSearchMode() {
 	const [mode, setMode] = useLocalStorage<ChatMode>("chat-mode", "research");
 	const { isAISearchEnabled, isDeepResearchEnabled } = useIsAISearchEnabled();
 
-	const selectedTab = useSelectedSearchMode(
+	const selectedTab = selectedSearchMode(
 		mode,
 		selectedTabOriginal,
 		isAISearchEnabled,
@@ -756,6 +768,29 @@ function SearchModeSwitch({ mode: selectedTab }: { mode: SearchMode }) {
 	);
 }
 
+/** One tab's content, sliding in from the side it belongs to. */
+function ContentTabPanel({
+	children,
+	fromLeft,
+}: {
+	children: ReactNode;
+	fromLeft?: boolean;
+}) {
+	const offset = fromLeft ? -20 : 20;
+
+	return (
+		<motion.div
+			initial={{ opacity: 0, x: offset, scale: 0.95 }}
+			animate={{ opacity: 1, x: 0, scale: 1 }}
+			exit={{ opacity: 0, x: -offset, scale: 0.95 }}
+			transition={{ duration: 0.4, ease: [0.25, 0.46, 0.45, 0.94] }}
+			className="w-full p-1"
+		>
+			{children}
+		</motion.div>
+	);
+}
+
 export function ContentInteractions({
 	abstract,
 	onAbstractChange,
@@ -804,18 +839,8 @@ export function ContentInteractions({
 				setExternalInput={setExternalInput}
 			/>
 			<AnimatePresence mode="wait">
-				{selectedTab === "search" && (
-					<motion.div
-						key="search-content"
-						initial={{ opacity: 0, x: -20, scale: 0.95 }}
-						animate={{ opacity: 1, x: 0, scale: 1 }}
-						exit={{ opacity: 0, x: 20, scale: 0.95 }}
-						transition={{
-							duration: 0.4,
-							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
-						}}
-						className="w-full p-1"
-					>
+				{selectedTab === "search" ? (
+					<ContentTabPanel key="search-content" fromLeft>
 						<SearchTabContent
 							header={header}
 							itemsContext={itemsContext}
@@ -827,48 +852,16 @@ export function ContentInteractions({
 							setView={setView}
 							showHeader={activeCount === 1}
 						/>
-					</motion.div>
-				)}
-				{selectedTab === "ai" && (
-					<motion.div
-						key="ai-content"
-						initial={{ opacity: 0, x: 20, scale: 0.95 }}
-						animate={{ opacity: 1, x: 0, scale: 1 }}
-						exit={{ opacity: 0, x: -20, scale: 0.95 }}
-						transition={{
-							duration: 0.4,
-							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
-						}}
-						className="w-full p-1"
-					>
+					</ContentTabPanel>
+				) : (
+					<ContentTabPanel key="ai-content">
 						<AITabContent
 							onSwitchToSearch={() => setSelectedTab("search")}
 							onChatOpen={onChatOpen}
 							externalInput={externalInput}
 							setExternalInput={setExternalInput}
 						/>
-					</motion.div>
-				)}
-
-				{selectedTab === "research" && (
-					<motion.div
-						key="research-content"
-						initial={{ opacity: 0, x: 20, scale: 0.95 }}
-						animate={{ opacity: 1, x: 0, scale: 1 }}
-						exit={{ opacity: 0, x: -20, scale: 0.95 }}
-						transition={{
-							duration: 0.4,
-							ease: [0.25, 0.46, 0.45, 0.94], // Custom easing for smooth animation
-						}}
-						className="w-full p-1"
-					>
-						<AITabContent
-							onSwitchToSearch={() => setSelectedTab("search")}
-							onChatOpen={onChatOpen}
-							externalInput={externalInput}
-							setExternalInput={setExternalInput}
-						/>
-					</motion.div>
+					</ContentTabPanel>
 				)}
 			</AnimatePresence>
 		</div>
@@ -895,480 +888,6 @@ function MainContent() {
 			/>
 			<ItemsList props={props} />
 		</>
-	);
-}
-
-function SmartScreeningModal({
-	isOpen,
-	onOpenChange,
-}: {
-	isOpen: boolean;
-	onOpenChange: (open: boolean) => void;
-}) {
-	const t = useTranslations("ui");
-	const tabs = ["fields", "text"] as const;
-	const labels = [t("fields"), t("textLabel")] as const;
-	const [tab, setTab] = useState<(typeof tabs)[number]>(tabs[0]);
-	const [fields, setFields] = useLocalStorage<SmartScreeningField[]>(
-		"smart-screening-fields",
-		[],
-	);
-	const [localFields, setLocalFields] = useState<SmartScreeningField[]>(
-		() => [...fields],
-	);
-	const [fieldErrors, setFieldErrors] = useState<Record<number, string>>({});
-	const placeholderExample = `${t("label")} (${SMART_SCREENING_FIELD_TYPES.join(
-		" | ",
-	)}): ${t("description")}`;
-
-	const fieldSchema = z.object({
-		label: z.string().min(1, t("labelRequired")).max(64, t("labelTooLong")),
-		type: z.enum(["string", "number", "boolean"]),
-		description: z
-			.string()
-			.min(1, t("descriptionRequired"))
-			.max(1024, t("descriptionTooLong")),
-	});
-
-	const convertedText = fields
-		.map(
-			(field) =>
-				`${field.label.trim()} (${
-					field.type
-				}): ${field.description.trim()}`,
-		)
-		.join("\n");
-
-	const validatorFunction = (localFields: SmartScreeningField[]) => {
-		const newErrors: Record<number, string> = {};
-		let hasErrors = false;
-
-		// Check for duplicate labels
-		const labelCounts: Record<string, number[]> = {};
-		localFields.forEach((field, index) => {
-			const label = field.label.trim();
-			if (label) {
-				if (!labelCounts[label]) {
-					labelCounts[label] = [];
-				}
-				labelCounts[label].push(index);
-			}
-		});
-
-		// Mark duplicate labels as errors
-		Object.entries(labelCounts).forEach(([label, indices]) => {
-			if (indices.length > 1) {
-				indices.forEach((index) => {
-					newErrors[index] = `${t("fieldPrefix")} ${
-						index + 1
-					} ${label}: ${t("duplicateLabelError")}`;
-					hasErrors = true;
-				});
-			}
-		});
-
-		// Validate each field with Zod schema
-		localFields.forEach((field, index) => {
-			if (!newErrors[index]) {
-				// Only validate if not already marked as duplicate
-				try {
-					fieldSchema.parse(field);
-				} catch (error) {
-					if (error instanceof z.ZodError) {
-						const fieldError =
-							error.issues[0]?.message || t("invalidField");
-						newErrors[index] = `${t("fieldPrefix")} ${index + 1} ${
-							field.label
-						}: ${fieldError}`;
-						hasErrors = true;
-					}
-				}
-			}
-		});
-
-		setFieldErrors(newErrors);
-
-		if (!hasErrors) {
-			setFields(localFields);
-			toast({
-				title: t("fieldsSavedSuccess"),
-				description: t("fieldsSavedSuccess"),
-			});
-		} else {
-			toast({
-				title: "Please fix the errors in the fields",
-				description: Object.values(newErrors).join("\n"),
-			});
-		}
-	};
-
-	const handleFieldsSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		validatorFunction(localFields);
-	};
-
-	const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-		e.preventDefault();
-		const formData = new FormData(e.target as HTMLFormElement);
-		const text = formData.get("text");
-		const localFields: SmartScreeningField[] = [];
-		const lines = text?.toString().split("\n");
-		if (lines) {
-			lines.forEach((line) => {
-				const [key, ...rest] = line.split(":");
-				const [label, typeWithParentheses] = key?.split("(") || [];
-				const [type, parentheses] =
-					typeWithParentheses?.split(")") || [];
-				const description = rest.join(":").trim();
-				if (line.length > 0) {
-					localFields.push({
-						label: label?.trim(),
-						type: type?.trim() as (typeof SMART_SCREENING_FIELD_TYPES)[number],
-						description: description?.trim(),
-					});
-				}
-			});
-		}
-		validatorFunction(localFields);
-	};
-
-	return (
-		<DialogModal
-			size="xl"
-			scrollBehavior="inside"
-			isOpen={isOpen}
-			onOpenChange={onOpenChange}
-		>
-			<ModalContent>
-				{(onClose) => (
-					<>
-						<AIHeader onClose={onClose}>
-							{t("smartScreening")}
-						</AIHeader>
-						<div className="flex gap-0 px-6 py-2">
-							{tabs.map((t, i) => (
-								<Button
-									key={t}
-									size="md"
-									color={tab === t ? "accent" : "secondary"}
-									className={twMerge(
-										"rounded-none",
-										t === tabs[0] && "rounded-l-2xl",
-										t === tabs.at(-1) && "rounded-r-2xl",
-									)}
-									onPress={() => setTab(t)}
-								>
-									{labels[i]}
-								</Button>
-							))}
-						</div>
-						<ModalBody className="p-0 relative">
-							<ScrollShadow className="h-full">
-								{tab === "fields" ? (
-									<form
-										id="fields-form"
-										key="fields"
-										onSubmit={handleFieldsSubmit}
-										className="flex flex-col gap-6"
-									>
-										<AnimatePresence mode="sync">
-											<div
-												key="fields"
-												className="p-6 flex flex-col gap-6"
-											>
-												{localFields.length === 0 && (
-													<p
-														key="empty"
-														className="text-center text-black/60 dark:text-white/40 my-12 mt-14"
-													>
-														{t("noFieldsAdded")}
-													</p>
-												)}
-												{localFields.map(
-													(field, index) => (
-														<motion.div
-															key={index}
-															initial={{
-																opacity: 0,
-																y: 10,
-															}}
-															animate={{
-																opacity: 1,
-																y: 0,
-															}}
-															transition={{
-																duration: 0.3,
-															}}
-															className="flex flex-col gap-2"
-														>
-															<Input
-																isRequired
-																placeholder={t(
-																	"label",
-																)}
-																label={t(
-																	"label",
-																)}
-																value={
-																	field.label
-																}
-																isInvalid={
-																	!!fieldErrors[
-																		index
-																	] &&
-																	!field.label
-																}
-																errorMessage={
-																	fieldErrors[
-																		index
-																	] &&
-																	!field.label
-																		? fieldErrors[
-																				index
-																			]
-																		: undefined
-																}
-																onChange={(e) =>
-																	setLocalFields(
-																		localFields.map(
-																			(
-																				f,
-																				i,
-																			) =>
-																				i ===
-																				index
-																					? {
-																							...f,
-																							label: e
-																								.target
-																								.value,
-																						}
-																					: f,
-																		),
-																	)
-																}
-															/>
-															<Textarea
-																placeholder={t(
-																	"description",
-																)}
-																label={t(
-																	"description",
-																)}
-																value={
-																	field.description
-																}
-																isRequired={
-																	true
-																}
-																isInvalid={
-																	!!fieldErrors[
-																		index
-																	] &&
-																	!field.description
-																}
-																errorMessage={
-																	fieldErrors[
-																		index
-																	] &&
-																	!field.description
-																		? fieldErrors[
-																				index
-																			]
-																		: undefined
-																}
-																onChange={(e) =>
-																	setLocalFields(
-																		localFields.map(
-																			(
-																				f,
-																				i,
-																			) =>
-																				i ===
-																				index
-																					? {
-																							...f,
-																							description:
-																								e
-																									.target
-																									.value,
-																						}
-																					: f,
-																		),
-																	)
-																}
-																classNames={{
-																	inputWrapper:
-																		"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-																	input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
-																}}
-															/>
-															<div className="flex justify-between">
-																<Select
-																	color="tertiary"
-																	label={t(
-																		"typeLabel",
-																	)}
-																	placement="left"
-																	disallowEmptySelection={
-																		true
-																	}
-																	selectedKeys={
-																		field.type
-																			? [
-																					field.type,
-																				]
-																			: undefined
-																	}
-																	isInvalid={
-																		!!fieldErrors[
-																			index
-																		] &&
-																		!field.type
-																	}
-																	errorMessage={
-																		fieldErrors[
-																			index
-																		] &&
-																		!field.type
-																			? fieldErrors[
-																					index
-																				]
-																			: undefined
-																	}
-																	onSelectionChange={(
-																		value,
-																	) => {
-																		const selectedType =
-																			Array.from(
-																				value,
-																			)[0] as (typeof SMART_SCREENING_FIELD_TYPES)[number];
-																		setLocalFields(
-																			localFields.map(
-																				(
-																					f,
-																					i,
-																				) =>
-																					i ===
-																					index
-																						? {
-																								...f,
-																								type: selectedType,
-																							}
-																						: f,
-																			),
-																		);
-																	}}
-																>
-																	{SMART_SCREENING_FIELD_TYPES.map(
-																		(
-																			type,
-																		) => (
-																			<SelectItem
-																				key={
-																					type
-																				}
-																				value={
-																					type
-																				}
-																			>
-																				{
-																					type
-																				}
-																			</SelectItem>
-																		),
-																	)}
-																</Select>
-																<Button
-																	isIconOnly
-																	color="danger"
-																	onPress={() =>
-																		setLocalFields(
-																			localFields.filter(
-																				(
-																					_,
-																					i,
-																				) =>
-																					i !==
-																					index,
-																			),
-																		)
-																	}
-																	className="!p-0"
-																>
-																	<BiTrash className="size-4" />
-																</Button>
-															</div>
-														</motion.div>
-													),
-												)}
-											</div>
-										</AnimatePresence>
-									</form>
-								) : (
-									<form
-										id="text-form"
-										key="text"
-										onSubmit={handleSubmit}
-										className="flex flex-col gap-6 p-6"
-									>
-										<AnimatePresence mode="sync">
-											<Textarea
-												name="text"
-												defaultValue={convertedText}
-												classNames={{
-													inputWrapper:
-														"rounded-2xl border bg-white dark:bg-secondary border-white/10 group-data-[focus]:bg-white dark:group-data-[focus]:bg-secondary group-data-[hover]:bg-black/[4%] dark:group-data-[hover]:bg-white/[4%] data-[focus]:outline data-[focus]:outline-2 data-[focus]:outline-focus",
-													input: "placeholder:text-black/60 dark:placeholder:text-white/40 text-base lg:text-small",
-												}}
-												placeholder={placeholderExample}
-												label={t("textLabel")}
-											/>
-										</AnimatePresence>
-									</form>
-								)}
-							</ScrollShadow>
-						</ModalBody>
-						<div
-							key="fields-footer"
-							className="flex justify-end gap-4 z-10 p-2 rounded-b-2xl"
-						>
-							{tab === "fields" ? (
-								<>
-									<Button
-										size="md"
-										onPress={() =>
-											setLocalFields([
-												...localFields,
-												{
-													label: "",
-													type: "string",
-													description: "",
-												},
-											])
-										}
-									>
-										{t("addField")}
-									</Button>
-									<Button
-										type="submit"
-										form="fields-form"
-										color="accent"
-										size="md"
-									>
-										{t("saveFields")}
-									</Button>
-								</>
-							) : (
-								<Button type="submit" form="text-form">
-									{t("save")}
-								</Button>
-							)}
-						</div>
-					</>
-				)}
-			</ModalContent>
-		</DialogModal>
 	);
 }
 

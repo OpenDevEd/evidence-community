@@ -168,28 +168,6 @@ export function unescapeXML(safe: string) {
 		.replace(/&apos;/g, "'");
 }
 
-export function cleanAIResponse(response: string) {
-
-	// General regex to match any characters in brackets followed by /lib/ paths
-	const linkRegex = /\[(.*?)\](?:\(|\[)(\/lib\/[^)\]]+)(?:\)|\])([.,;:!?]*)/g;
-
-	// If no links, return the original response
-	if (!response.match(linkRegex)) return response;
-
-	const seenPaths = new Set();
-
-	// Replace links based on their path component
-	const result = response.replace(linkRegex, (match, label, path, punctuation) => {
-		if (!seenPaths.has(path)) {
-			seenPaths.add(path);
-			return `[${label}](${path})`; // Keep first occurrence but remove trailing punctuation
-		}
-		return ''; // Remove duplicate links
-	});
-
-	return result;
-}
-
 export function convertToImageURL(url: string) {
 	return url;
 }
