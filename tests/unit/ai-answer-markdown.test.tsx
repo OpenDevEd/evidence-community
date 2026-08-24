@@ -94,6 +94,27 @@ describe("what an AI answer shows the reader", () => {
 		).toBeNull();
 	});
 
+	it("repairs a link the assistant wrote without its leading slash", async () => {
+		await render("See [the study](lib/ABCD1234).");
+
+		expect(
+			container.querySelector('a[href="/lib/ABCD1234"]'),
+		).not.toBeNull();
+	});
+
+	it("shows unfinished formatting cleanly while the answer streams", async () => {
+		await act(async () => {
+			root.render(
+				<AIMarkdown isAnimating>
+					{"Radio reached **rural sch"}
+				</AIMarkdown>,
+			);
+		});
+
+		expect(container.textContent).toContain("Radio reached");
+		expect(container.textContent).not.toContain("**");
+	});
+
 	it("shows a full card only where the assistant asked for one", async () => {
 		await render("[RESOURCE /lib/ABCD1234 RESOURCE/]");
 

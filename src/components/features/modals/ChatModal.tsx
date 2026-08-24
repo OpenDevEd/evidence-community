@@ -403,6 +403,7 @@ function MessageComponent({
 									return (
 										<AIMarkdown
 											key={key}
+											isAnimating={isWaiting}
 											className="p-0 mt-6 prose dark:prose-invert space-y-4 w-full max-w-full"
 										>
 											{cleanAIResponse(part.text)}
