@@ -865,7 +865,7 @@ describe("identifiers view", () => {
 		expect(identifiers.attention).toBe(false);
 	});
 
-	it("names the source when the DOI came in through a source connection", () => {
+	it("does not claim field-level provenance for a source-linked record", () => {
 		const view = buildAdminPublicationViewFromSnapshot({
 			itemKey: "ABCDEFGH",
 			snapshot: snapshot({
@@ -876,7 +876,7 @@ describe("identifiers view", () => {
 			}),
 			config,
 		});
-		expect(view.identifiers.doi?.origin).toBe("source");
+		expect(view.identifiers.doi?.origin).toBe("record");
 	});
 
 	it("shows a managed Crossref DOI as registration in progress", () => {

@@ -434,6 +434,7 @@ function MetadataEditor({
 	onChange,
 	payload,
 	readOnly,
+	lockedDoi,
 }: {
 	definitions: readonly AdminSchemaDefinition[];
 	detail: AdminItemDetail;
@@ -442,6 +443,7 @@ function MetadataEditor({
 	onChange: (payload: Record<string, unknown>) => void;
 	payload: Record<string, unknown>;
 	readOnly: boolean;
+	lockedDoi: string | null;
 }) {
 	const definition = definitionFor(
 		definitions,
@@ -567,6 +569,7 @@ function MetadataEditor({
 							descriptor={descriptor}
 							disabled={
 								readOnly ||
+								(field === "DOI" && Boolean(lockedDoi)) ||
 								(field === "annotationType" &&
 									String(
 										detail.published?.itemType ?? "",
@@ -580,6 +583,11 @@ function MetadataEditor({
 								updateField(field, next)
 							}
 						/>
+						{field === "DOI" && lockedDoi ? (
+							<p className="text-xs text-black/45 dark:text-white/45">
+								Deactivate Zenodo before changing this DOI.
+							</p>
+						) : null}
 					</div>
 				);
 			})}
@@ -593,12 +601,14 @@ function CreatorsEditor({
 	onChange,
 	payload,
 	readOnly,
+	recordKey,
 }: {
 	definition: AdminSchemaDefinition | undefined;
 	errors: AdminFieldErrors;
 	onChange: (payload: Record<string, unknown>) => void;
 	payload: Record<string, unknown>;
 	readOnly: boolean;
+	recordKey: string;
 }) {
 	const creators = Array.isArray(payload.creators)
 		? (payload.creators as AdminCreator[])
@@ -839,6 +849,7 @@ function CreatorsEditor({
 			{!readOnly && definition?.creatorTypes.length ? (
 				<Button
 					className="bg-black/[0.035] font-medium hover:bg-black/[0.06] dark:bg-white/[0.045] dark:hover:bg-white/[0.08]"
+					id={`admin-${recordKey}-creators`}
 					onPress={() =>
 						updateCreators([
 							...creators,
@@ -1575,6 +1586,7 @@ export function AdminInspector({
 		detail && !detail.parentItem && detail.published ? detail.key : null,
 		detail ? publicationInputVersion(detail) : null,
 	);
+	const [pendingPublicationField, setPendingPublicationField] = useState<string | null>(null);
 	const publishedCollectionNames = useMemo(
 		() =>
 			new Map(
@@ -1607,6 +1619,16 @@ export function AdminInspector({
 		});
 		return () => cancelAnimationFrame(frame);
 	}, [detailKey, validationRevision]);
+	useEffect(() => {
+		if (!detailKey || !detail?.draft || !pendingPublicationField) return;
+		const targetId = validationTargetId(detailKey, pendingPublicationField);
+		if (!targetId) return;
+		const frame = requestAnimationFrame(() => {
+			document.getElementById(targetId)?.focus();
+			setPendingPublicationField(null);
+		});
+		return () => cancelAnimationFrame(frame);
+	}, [detail?.draft, detailKey, pendingPublicationField]);
 
 	if (loading && !detail) {
 		return (
@@ -1638,6 +1660,10 @@ export function AdminInspector({
 	const itemUrl = buildAdminPublicItemUrl(detail, identity.baseUrl);
 	const showPublicLinkActions =
 		detail.itemType === "Attachment" || Boolean(itemUrl);
+	const goToPublicationField = (field: string) => {
+		setPendingPublicationField(field);
+		if (!detail.draft) onOpenDraft();
+	};
 
 	return (
 		<div
@@ -1775,14 +1801,18 @@ export function AdminInspector({
 						) : null}
 						{!detail.parentItem ? (
 							<AdminPublicationHeaderStatus
-								onPress={() =>
-									document
-										.getElementById("admin-doi-publishing")
-										?.scrollIntoView({
+								onPress={() => {
+									const toggle = document.getElementById(
+										`admin-${detail.key}-identifiers-toggle`,
+									);
+									if (toggle?.getAttribute("aria-expanded") !== "true") {
+										toggle?.click();
+									}
+									document.getElementById("admin-doi-publishing")?.scrollIntoView({
 											behavior: "smooth",
 											block: "start",
-										})
-								}
+										});
+								}}
 								state={publication}
 							/>
 						) : null}
@@ -1935,6 +1965,7 @@ export function AdminInspector({
 					>
 						<AdminPublicationStatus
 							itemKey={detail.key}
+							onGoToField={goToPublicationField}
 							onOpenAttachments={() =>
 								document
 									.getElementById("admin-attachments")
@@ -1959,6 +1990,13 @@ export function AdminInspector({
 						onChange={onChange}
 						payload={payload}
 						readOnly={readOnly}
+						lockedDoi={
+							publication.publication?.providers.zenodo.exact.targetActive &&
+							publication.publication.providers.zenodo.exact.identifierPolicy ===
+								"reuse-external"
+								? publication.publication.identifiers.doi?.value ?? null
+								: null
+						}
 					/>
 				</Section>
 				{definition?.creatorTypes.length ? (
@@ -1998,6 +2036,7 @@ export function AdminInspector({
 							onChange={onChange}
 							payload={payload}
 							readOnly={readOnly}
+							recordKey={detail.key}
 						/>
 					</Section>
 				) : null}

@@ -15,6 +15,7 @@ import {
 	timestamp,
 	unique,
 	uniqueIndex,
+	uuid,
 	varchar,
 } from "drizzle-orm/pg-core";
 import {
@@ -629,6 +630,7 @@ export const itemDraft = pgTable(
 		draftRevision: bigint("draftRevision", { mode: "number" })
 			.notNull()
 			.default(1),
+		generation: uuid("generation").notNull().defaultRandom(),
 		createdAt: timestampWithTimezone("createdAt").notNull().defaultNow(),
 		updatedAt: timestampWithTimezone("updatedAt").notNull().defaultNow(),
 	},

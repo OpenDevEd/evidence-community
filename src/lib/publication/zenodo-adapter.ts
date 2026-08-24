@@ -62,7 +62,12 @@ const PERMANENT_ZENODO_FAILURES = new Set([
 	"ZENODO_FIRST_PUBLICATION_TIME_REQUIRED",
 	"ZENODO_FILE_CORRECTION_APPROVAL_REQUIRED",
 	"ZENODO_FILE_CORRECTION_WINDOW_CLOSED",
+	"ZENODO_EXTERNAL_DOI_CHANGED",
 ]);
+
+class ZenodoExternalDoiChangedError extends Error {
+	override name = "ZENODO_EXTERNAL_DOI_CHANGED";
+}
 
 function parseFileCorrectionApprovalId(value: string | undefined) {
 	if (!value) return null;
@@ -123,14 +128,13 @@ function activeFileCorrectionApproval(
 
 function assertArchivedExternalDoiMatches(input: {
 	identifierPolicy: ZenodoIdentifierPolicy;
-	archivedExternalDoi: string | undefined;
+	lockedExternalDoi: string | null;
 	bibliographicDoi: string | null;
 }) {
 	if (input.identifierPolicy !== "reuse-external") return;
-	if (!input.archivedExternalDoi) return;
-	if (input.bibliographicDoi === input.archivedExternalDoi) return;
-	throw new Error(
-		`The record DOI no longer matches the DOI archived on Zenodo (${input.archivedExternalDoi})`,
+	if (input.lockedExternalDoi && input.bibliographicDoi === input.lockedExternalDoi) return;
+	throw new ZenodoExternalDoiChangedError(
+		`The record DOI no longer matches the DOI selected for Zenodo (${input.lockedExternalDoi ?? "missing"})`,
 	);
 }
 
@@ -197,7 +201,7 @@ async function buildZenodoPlan(
 	const previousState = providerState(snapshot, "zenodo", publicationConfig);
 	assertArchivedExternalDoiMatches({
 		identifierPolicy: target.identifierPolicy,
-		archivedExternalDoi: previousState?.zenodo?.identifiers?.versionDoi,
+		lockedExternalDoi: target.lockedExternalDoi,
 		bibliographicDoi: bibliographicDoi.doi,
 	});
 	const correctionApproval = activeFileCorrectionApproval(snapshot);
@@ -1226,7 +1230,10 @@ export async function runZenodoPublicationJobsOnce(
 					error instanceof Error ? error.message : String(error),
 			});
 			const count = patch.failure?.consecutiveCount ?? 1;
-			const deadLetter = count >= workerConfig.retryLimit;
+			const deadLetter =
+				PERMANENT_ZENODO_FAILURES.has(
+					error instanceof Error ? error.name : "UNKNOWN_ERROR",
+				) || count >= workerConfig.retryLimit;
 			try {
 				await settleZenodoState(database, {
 					jobId: job.id,

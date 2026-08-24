@@ -128,7 +128,7 @@ describe("the record DOI must resolve before Zenodo reuses it", () => {
 				return { ok: true, status: 302 };
 			}),
 		).resolves.toBeUndefined();
-		expect(calls).toEqual(["https://doi.org/10.9999/external"]);
+		expect(calls).toEqual(["https://doi.org/10.9999%2Fexternal"]);
 	});
 
 	it("refuses a DOI that doi.org does not know", async () => {

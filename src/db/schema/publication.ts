@@ -130,6 +130,7 @@ export const publicationTarget = pgTable(
 		identifierPolicy: text("identifierPolicy", {
 			enum: ZENODO_IDENTIFIER_POLICIES,
 		}),
+		lockedExternalDoi: varchar("lockedExternalDoi", { length: 255 }),
 		requestedBy: varchar("requestedBy", { length: 255 }).notNull(),
 		requestedAt: timestampWithTimezone("requestedAt")
 			.notNull()
@@ -155,6 +156,17 @@ export const publicationTarget = pgTable(
 				OR (${table.provider} = 'zenodo'
 					AND ${table.identifierPolicy} IS NOT NULL
 					AND ${table.identifierPolicy} IN ('reuse-crossref', 'reuse-external', 'mint-zenodo'))
+			)`,
+		),
+		check(
+			"publicationTarget_external_doi_valid",
+			sql`(
+				(${table.provider} = 'zenodo'
+					AND ${table.identifierPolicy} = 'reuse-external'
+					AND ${table.lockedExternalDoi} ~ '^10\\.[0-9]{4,9}/[^[:space:]]{1,200}$'
+					AND ${table.lockedExternalDoi} = lower(${table.lockedExternalDoi}))
+				OR (NOT (${table.provider} = 'zenodo' AND ${table.identifierPolicy} = 'reuse-external')
+					AND ${table.lockedExternalDoi} IS NULL)
 			)`,
 		),
 		index("publicationTarget_item_active_idx")

@@ -48,6 +48,7 @@ import { SelectItem } from "@/components/nextui/SelectItem";
 import { Tooltip } from "@/components/nextui/Tooltip";
 import type {
 	AdminCollectionCatalogEntry,
+	AdminItemDraft,
 	AdminItemDetail,
 	AdminItemLinkKind,
 	AdminItemViewFilters,
@@ -142,6 +143,16 @@ import {
 	setSingleAdminItemFilter,
 	singleAdminItemFilterValue,
 } from "@/lib/admin/item-filter-state";
+
+function requiredDraftValue<T>(
+	values: Map<string, T>,
+	key: string,
+	label: string,
+) {
+	const value = values.get(key);
+	if (value === undefined) throw new Error(`${label} is missing for ${key}`);
+	return value;
+}
 
 type SaveState = "conflict" | "error" | "idle" | "saved" | "saving";
 
@@ -535,6 +546,7 @@ export default function AdminWorkbench({
 		>(),
 	);
 	const revisionByKey = useRef(new Map<string, number>());
+	const draftGenerationByKey = useRef(new Map<string, string>());
 	const savedPayloadByKey = useRef(new Map<string, string>());
 	const saveFailureByKey = useRef(
 		new Map<
@@ -604,16 +616,28 @@ export default function AdminWorkbench({
 			(saveGeneration.current.get(key) ?? 0) + 1,
 		);
 		revisionByKey.current.delete(key);
+		draftGenerationByKey.current.delete(key);
 		savedPayloadByKey.current.delete(key);
 		saveFailureByKey.current.delete(key);
+	}, []);
+	const rememberServerDraft = useCallback((key: string, draft: AdminItemDraft) => {
+		revisionByKey.current.set(key, draft.draftRevision);
+		draftGenerationByKey.current.set(key, draft.generation);
+		savedPayloadByKey.current.set(key, JSON.stringify(draft.payload));
 	}, []);
 
 	const applyDetail = useCallback(
 		(next: AdminItemDetail, replaceLocal = false) => {
-			if (replaceLocal) abandonPendingDraft(next.key);
+			const generationChanged = Boolean(
+				next.draft &&
+					draftGenerationByKey.current.has(next.key) &&
+					draftGenerationByKey.current.get(next.key) !== next.draft.generation,
+			);
+			const replaceKnownDraft = replaceLocal || generationChanged;
+			if (replaceKnownDraft) abandonPendingDraft(next.key);
 			const knownRevision = revisionByKey.current.get(next.key);
 			const staleDraft =
-				!replaceLocal &&
+				!replaceKnownDraft &&
 				next.draft &&
 				knownRevision !== undefined &&
 				next.draft.draftRevision < knownRevision;
@@ -654,14 +678,7 @@ export default function AdminWorkbench({
 			}
 			if (pending && next.draft) {
 				if (knownRevision === undefined) {
-					revisionByKey.current.set(
-						next.key,
-						next.draft.draftRevision,
-					);
-					savedPayloadByKey.current.set(
-						next.key,
-						JSON.stringify(next.draft.payload),
-					);
+					rememberServerDraft(next.key, next.draft);
 				}
 				const pendingPayload = pending.payload;
 				const pendingTitle =
@@ -687,13 +704,10 @@ export default function AdminWorkbench({
 				abandonPendingDraft(next.key);
 			}
 			if (next.draft) {
-				revisionByKey.current.set(next.key, next.draft.draftRevision);
-				savedPayloadByKey.current.set(
-					next.key,
-					JSON.stringify(next.draft.payload),
-				);
+				rememberServerDraft(next.key, next.draft);
 			} else {
 				revisionByKey.current.delete(next.key);
+				draftGenerationByKey.current.delete(next.key);
 				savedPayloadByKey.current.delete(next.key);
 			}
 			const payload = editablePayloadFromDetail(next, definitions);
@@ -704,7 +718,7 @@ export default function AdminWorkbench({
 					currentPayload: draftPayloadRef.current,
 					nextKey: next.key,
 					nextPayload: payload,
-					replaceLocal,
+					replaceLocal: replaceKnownDraft,
 				})
 			) {
 				setValidationErrors({});
@@ -718,7 +732,7 @@ export default function AdminWorkbench({
 			);
 			return true;
 		},
-		[abandonPendingDraft, definitions],
+		[abandonPendingDraft, definitions, rememberServerDraft],
 	);
 
 	const loadDetail = useCallback(
@@ -816,26 +830,33 @@ export default function AdminWorkbench({
 				setSaveMessage(null);
 			}
 			try {
-				const revision = revisionByKey.current.get(key);
-				if (!revision) {
-					throw new Error(`Draft revision is missing for ${key}`);
-				}
-				const expectedSerialized = savedPayloadByKey.current.get(key);
-				if (!expectedSerialized) {
-					throw new Error(
-						`Saved draft payload is missing for ${key}`,
-					);
-				}
+				const revision = requiredDraftValue(
+					revisionByKey.current,
+					key,
+					"Draft revision",
+				);
+				const expectedDraftGeneration = requiredDraftValue(
+					draftGenerationByKey.current,
+					key,
+					"Draft generation",
+				);
+				const expectedSerialized = requiredDraftValue(
+					savedPayloadByKey.current,
+					key,
+					"Saved draft payload",
+				);
 				const expectedPayload = JSON.parse(
 					expectedSerialized,
 				) as Record<string, unknown>;
 				const saved = await saveAdminDraft(
 					key,
+					expectedDraftGeneration,
 					revision,
 					expectedPayload,
 					payload,
 				);
 				revisionByKey.current.set(key, saved.draftRevision);
+				draftGenerationByKey.current.set(key, saved.generation);
 				savedPayloadByKey.current.set(
 					key,
 					JSON.stringify(saved.payload),
@@ -1976,17 +1997,17 @@ export default function AdminWorkbench({
 		<main className="fixed inset-x-0 top-0 z-0 flex h-dvh min-h-0 flex-col bg-background_light text-black dark:bg-background dark:text-white">
 			<h1 className="sr-only">Library administration</h1>
 			<header
-				className="grid min-h-28 shrink-0 grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-2 px-3 py-3 sm:flex sm:min-h-16 xl:relative"
+				className="admin-toolbar-grid grid min-h-28 shrink-0 items-center gap-2 px-3 py-3 sm:flex sm:min-h-16 xl:relative"
 				data-admin-region="toolbar"
 			>
 				<Link
 					aria-label="Open library"
-					className="col-start-1 row-start-1 flex h-10 min-w-0 max-w-[120px] items-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:mr-1 sm:w-[120px] sm:shrink-0 xl:absolute xl:left-1/2 xl:mr-0 xl:w-[150px] xl:max-w-none xl:-translate-x-1/2"
+					className="col-start-1 row-start-1 flex h-10 min-w-0 max-w-30 items-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:mr-1 sm:w-30 sm:shrink-0 xl:absolute xl:left-1/2 xl:mr-0 xl:w-36 xl:max-w-none xl:-translate-x-1/2"
 					href={homeHref}
 				>
 					<LibraryLogoImages className="max-h-7 max-w-full object-contain" />
 				</Link>
-				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:min-w-[260px] sm:max-w-[520px] sm:flex-1">
+				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:min-w-64 sm:max-w-lg sm:flex-1">
 					<Input
 						aria-label="Search records"
 						className="min-w-0 flex-1"
@@ -2155,7 +2176,7 @@ export default function AdminWorkbench({
 										onValueChange={setNewItemSearch}
 									/>
 								</div>
-								<div className="flex max-h-[52vh] flex-col gap-1 overflow-y-auto p-1">
+									<div className="admin-item-type-list flex flex-col gap-1 overflow-y-auto p-1">
 									{filteredDefinitions.map((definition) => (
 										<button
 											key={definition.itemType}
@@ -2189,7 +2210,7 @@ export default function AdminWorkbench({
 					assignRecordsToCollection(itemKeys, collectionKey)
 				}
 			>
-				<div className="grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3 xl:grid-cols-[240px_minmax(0,1fr)_360px]">
+				<div className="admin-workbench-grid grid min-h-0 flex-1 grid-cols-1 gap-3 px-3 pb-3">
 					<aside
 						id="admin-navigation-pane"
 						aria-label="Filters and collections"

@@ -1,0 +1,1 @@
+ALTER TABLE "itemDraft" ADD COLUMN "generation" uuid DEFAULT gen_random_uuid() NOT NULL;

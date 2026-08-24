@@ -784,6 +784,7 @@ async function verifyLiveWriteback() {
 		const linkDraft = await openItemDraft(database, parentDraft.itemKey);
 		await saveItemDraft(database, {
 			itemKey: parentDraft.itemKey,
+			expectedDraftGeneration: linkDraft.generation,
 			expectedDraftRevision: linkDraft.draftRevision,
 			expectedPayload: linkDraft.payload,
 			payload: {
@@ -837,6 +838,7 @@ async function verifyLiveWriteback() {
 		const unlinkDraft = await openItemDraft(database, parentDraft.itemKey);
 		await saveItemDraft(database, {
 			itemKey: parentDraft.itemKey,
+			expectedDraftGeneration: unlinkDraft.generation,
 			expectedDraftRevision: unlinkDraft.draftRevision,
 			expectedPayload: unlinkDraft.payload,
 			payload: {

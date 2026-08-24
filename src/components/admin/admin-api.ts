@@ -331,6 +331,7 @@ export async function openAdminDraft(key: string) {
 
 export async function saveAdminDraft(
 	key: string,
+	expectedDraftGeneration: string,
 	expectedDraftRevision: number,
 	expectedPayload: Record<string, unknown>,
 	payload: Record<string, unknown>,
@@ -341,6 +342,7 @@ export async function saveAdminDraft(
 			{
 				method: "PUT",
 				body: JSON.stringify({
+					expectedDraftGeneration,
 					expectedDraftRevision,
 					expectedPayload,
 					payload,

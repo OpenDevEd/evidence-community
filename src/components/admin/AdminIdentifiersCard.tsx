@@ -31,7 +31,7 @@ import { toast } from "sonner";
 import { validationTargetId } from "./admin-validation";
 
 const appearance = {
-	blocked: { icon: AlertCircle, className: "text-danger", spin: false },
+	blocked: { icon: AlertCircle, className: "text-amber-600 dark:text-amber-300", spin: false },
 	external: { icon: CircleCheck, className: "text-black/50 dark:text-white/50", spin: false },
 	failed: { icon: AlertCircle, className: "text-danger", spin: false },
 	inactive: { icon: Circle, className: "text-black/35 dark:text-white/35", spin: false },
@@ -59,11 +59,15 @@ const confirmLabel: Record<AdminIdentifiersActionId, string> = {
 
 /** One short line for the closed card. */
 function identifiersGlance(view: AdminIdentifiersView) {
-	const doi = view.doi ? view.doi.value : "No DOI";
+	const doi = view.doi ? view.doi.value : "No DOI · optional";
+	const archiveRecord =
+		view.archive.state === "active"
+			? view.archive.links.find((link) => link.kind === "record")
+			: null;
 	const archiveState =
 		view.archive.state === "active"
 			? view.archive.displayState === "synced"
-				? "Archived on Zenodo"
+				? `Archived on Zenodo${archiveRecord ? ` · record ${archiveRecord.value}` : ""}`
 				: view.archive.status.label
 			: "Not archived";
 	const archive = view.doi
@@ -77,6 +81,79 @@ function copy(label: string, value: string) {
 		.writeText(value)
 		.then(() => toast.success(`${label} copied`))
 		.catch(() => toast.error(`Could not copy ${label.toLowerCase()}`));
+}
+
+function ActivityDetails({
+	activity,
+	provider,
+}: {
+	activity: Extract<AdminIdentifiersActivity, { state: "active" }>;
+	provider: AdminPublicationProviderView;
+}) {
+	return (
+		<>
+			{provider.blockers.length > 0 ? (
+				<ul className="mt-1.5 space-y-1 text-xs text-black/55 dark:text-white/55">
+					{provider.blockers.map((blocker) => (
+						<li key={blocker}>• {blocker}</li>
+					))}
+				</ul>
+			) : null}
+			{activity.links.length > 0 ? (
+				<div className="mt-2 space-y-1.5">
+					{activity.links.map((link) => (
+						<div key={`${link.kind}:${link.value}`} className="flex min-w-0 items-center gap-1.5">
+							<a className="min-w-0 flex-1 truncate font-mono text-[11px] font-medium text-black/65 underline decoration-black/15 underline-offset-2 hover:decoration-black/40 dark:text-white/70 dark:decoration-white/20 dark:hover:decoration-white/50" href={link.url} rel="noreferrer" target="_blank">
+								{link.kind === "doi" ? link.value : link.label}
+							</a>
+							<Tooltip content={`Copy ${link.label}`}>
+								<Button aria-label={`Copy ${link.label}`} isIconOnly onPress={() => copy(link.label, link.kind === "doi" ? link.value : link.url)} size="xs" variant="transparent">
+									<Copy aria-hidden size={13} />
+								</Button>
+							</Tooltip>
+						</div>
+					))}
+				</div>
+			) : null}
+		</>
+	);
+}
+
+function ActivityControls({
+	busy,
+	onOpenAttachments,
+	onRetry,
+	provider,
+}: {
+	busy: boolean;
+	onOpenAttachments: () => void;
+	onRetry: () => void;
+	provider: AdminPublicationProviderView;
+}) {
+	const policy = provider.exact.identifierPolicy;
+	return (
+		<div className="mt-2 flex flex-wrap items-center gap-1.5">
+			{provider.capabilities.canRetry ? (
+				<Button isDisabled={busy} onPress={onRetry} size="xs" startContent={<RefreshCw aria-hidden size={13} />} variant="transparent">
+					Retry now
+				</Button>
+			) : null}
+			{provider.waitingOn === "file" ? (
+				<Button onPress={onOpenAttachments} size="xs" startContent={<FileText aria-hidden size={13} />} variant="transparent">
+					Open attachments
+				</Button>
+			) : null}
+			{policy ? (
+				<span className="text-[11px] text-black/40 dark:text-white/40">
+					{policy === "reuse-crossref"
+						? "Uses the Crossref DOI"
+						: policy === "reuse-external"
+							? "Uses the record's own DOI"
+							: "Uses Zenodo DOIs"}
+				</span>
+			) : null}
+		</div>
+	);
 }
 
 function ActivityRow({
@@ -114,48 +191,8 @@ function ActivityRow({
 					</span>
 				</div>
 				<p className="mt-1 text-xs leading-5 text-black/55 dark:text-white/55">{activity.status.description}</p>
-				{activity.links.length > 0 ? (
-					<div className="mt-2 space-y-1.5">
-						{activity.links.map((link) => (
-							<div key={`${link.kind}:${link.value}`} className="flex min-w-0 items-center gap-1.5">
-								<a
-									className="min-w-0 flex-1 truncate font-mono text-[11px] font-medium text-black/65 underline decoration-black/15 underline-offset-2 hover:decoration-black/40 dark:text-white/70 dark:decoration-white/20 dark:hover:decoration-white/50"
-									href={link.url}
-									rel="noreferrer"
-									target="_blank"
-								>
-									{link.kind === "doi" ? link.value : link.label}
-								</a>
-								<Tooltip content={`Copy ${link.label}`}>
-									<Button aria-label={`Copy ${link.label}`} isIconOnly onPress={() => copy(link.label, link.kind === "doi" ? link.value : link.url)} size="xs" variant="transparent">
-										<Copy aria-hidden size={13} />
-									</Button>
-								</Tooltip>
-							</div>
-						))}
-					</div>
-				) : null}
-				<div className="mt-2 flex flex-wrap items-center gap-1.5">
-					{provider.capabilities.canRetry ? (
-						<Button isDisabled={busy} onPress={onRetry} size="xs" startContent={<RefreshCw aria-hidden size={13} />} variant="transparent">
-							Retry now
-						</Button>
-					) : null}
-					{provider.waitingOn === "file" ? (
-						<Button onPress={onOpenAttachments} size="xs" startContent={<FileText aria-hidden size={13} />} variant="transparent">
-							Open attachments
-						</Button>
-					) : null}
-					{provider.exact.identifierPolicy ? (
-						<span className="text-[11px] text-black/40 dark:text-white/40">
-							{provider.exact.identifierPolicy === "reuse-crossref"
-								? "Uses the Crossref DOI"
-								: provider.exact.identifierPolicy === "reuse-external"
-									? "Uses the record's own DOI"
-									: "Uses Zenodo DOIs"}
-						</span>
-					) : null}
-				</div>
+				<ActivityDetails activity={activity} provider={provider} />
+				<ActivityControls busy={busy} onOpenAttachments={onOpenAttachments} onRetry={onRetry} provider={provider} />
 			</div>
 		</div>
 	);
@@ -167,12 +204,14 @@ function Readiness({
 	itemKey,
 	onClose,
 	onConfirm,
+	onGoToField,
 }: {
 	action: AdminIdentifiersAction;
 	busy: boolean;
 	itemKey: string;
 	onClose: () => void;
 	onConfirm: () => void;
+	onGoToField: (field: string) => void;
 }) {
 	const missing = action.readiness.filter((item) => !item.ok).length;
 	const verb = action.id === "register-crossref" ? "registering" : "archiving";
@@ -204,7 +243,7 @@ function Readiness({
 										{" "}
 										<button
 											className="text-accent underline underline-offset-2"
-											onClick={() => document.getElementById(target)?.focus()}
+											onClick={() => onGoToField(item.field!)}
 											type="button"
 										>
 											Go to field
@@ -248,11 +287,13 @@ function IdentifiersHeader({
 	identifiers,
 	onToggle,
 	open,
+	toggleId,
 }: {
 	bodyId: string;
 	identifiers: AdminIdentifiersView;
 	onToggle: () => void;
 	open: boolean;
+	toggleId: string;
 }) {
 	const glance = identifiersGlance(identifiers);
 	const GlanceIcon = identifiers.attention
@@ -271,6 +312,7 @@ function IdentifiersHeader({
 			aria-expanded={open}
 			className="flex w-full items-center gap-3 p-3.5 text-left hover:bg-black/[0.02] focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus dark:hover:bg-white/[0.03]"
 			onClick={onToggle}
+			id={toggleId}
 			type="button"
 		>
 			<span className={`grid size-4 shrink-0 place-items-center ${iconColor}`}>
@@ -347,6 +389,7 @@ function IdentifierActions({
 	busy,
 	itemKey,
 	onActivate,
+	onGoToField,
 	picked,
 	setPicked,
 }: {
@@ -354,6 +397,7 @@ function IdentifierActions({
 	busy: boolean;
 	itemKey: string;
 	onActivate: (action: AdminIdentifiersActionId) => void;
+	onGoToField: (field: string) => void;
 	picked: AdminIdentifiersActionId | null;
 	setPicked: (action: AdminIdentifiersActionId | null) => void;
 }) {
@@ -368,6 +412,7 @@ function IdentifierActions({
 					itemKey={itemKey}
 					onClose={() => setPicked(null)}
 					onConfirm={() => onActivate(pickedAction.id)}
+					onGoToField={onGoToField}
 				/>
 			</div>
 		);
@@ -402,6 +447,7 @@ function IdentifiersBody({
 	identifiers,
 	itemKey,
 	onActivate,
+	onGoToField,
 	onOpenAttachments,
 	onRetry,
 	picked,
@@ -413,6 +459,7 @@ function IdentifiersBody({
 	identifiers: AdminIdentifiersView;
 	itemKey: string;
 	onActivate: (action: AdminIdentifiersActionId) => void;
+	onGoToField: (field: string) => void;
 	onOpenAttachments: () => void;
 	onRetry: (provider: "crossref" | "zenodo") => void;
 	picked: AdminIdentifiersActionId | null;
@@ -454,6 +501,7 @@ function IdentifiersBody({
 				busy={busy}
 				itemKey={itemKey}
 				onActivate={onActivate}
+				onGoToField={onGoToField}
 				picked={picked}
 				setPicked={setPicked}
 			/>
@@ -466,6 +514,7 @@ export function AdminIdentifiersCard({
 	identifiers,
 	itemKey,
 	onActivate,
+	onGoToField,
 	onOpenAttachments,
 	onRetry,
 	providers,
@@ -474,14 +523,16 @@ export function AdminIdentifiersCard({
 	identifiers: AdminIdentifiersView;
 	itemKey: string;
 	onActivate: (action: AdminIdentifiersActionId) => void;
+	onGoToField: (field: string) => void;
 	onOpenAttachments: () => void;
 	onRetry: (provider: "crossref" | "zenodo") => void;
 	providers: { crossref: AdminPublicationProviderView; zenodo: AdminPublicationProviderView };
 }) {
 	const [userOpen, setUserOpen] = useState<boolean | null>(null);
 	const [picked, setPicked] = useState<AdminIdentifiersActionId | null>(null);
-	const open = userOpen ?? identifiers.attention;
+	const open = identifiers.attention || (userOpen ?? false);
 	const bodyId = `admin-${itemKey}-identifiers`;
+	const toggleId = `admin-${itemKey}-identifiers-toggle`;
 
 	return (
 		<div className="overflow-hidden rounded-xl bg-black/[0.025] dark:bg-white/[0.035]">
@@ -490,6 +541,7 @@ export function AdminIdentifiersCard({
 				identifiers={identifiers}
 				onToggle={() => setUserOpen(!open)}
 				open={open}
+				toggleId={toggleId}
 			/>
 			{open ? (
 				<IdentifiersBody
@@ -498,6 +550,7 @@ export function AdminIdentifiersCard({
 					identifiers={identifiers}
 					itemKey={itemKey}
 					onActivate={onActivate}
+					onGoToField={onGoToField}
 					onOpenAttachments={onOpenAttachments}
 					onRetry={onRetry}
 					picked={picked}

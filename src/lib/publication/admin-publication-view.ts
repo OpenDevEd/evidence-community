@@ -216,32 +216,41 @@ type IdentifiersViewInput = {
 	crossrefDoi: string | null;
 	zenodoVersionDoi: string | null;
 	externalDoi: string | null;
-	fromSource: boolean;
 	configured: { crossref: boolean; zenodo: boolean };
 };
 
 type IdentifierDoi = NonNullable<AdminIdentifiersView["doi"]>;
 
 function identifierDoi(input: IdentifiersViewInput): IdentifierDoi | null {
+	const urlFor = (doi: string) =>
+		buildDoiDisplayLinks({
+			bibliographicDoi: doi,
+			crossrefDoi: null,
+			zenodoVersionDoi: null,
+			zenodoConceptDoi: null,
+			zenodoRecordId: null,
+			zenodoConceptRecordId: null,
+			zenodoBaseUrl: null,
+		}).bibliographicDoi!.url;
 	if (input.crossrefDoi) {
 		return {
 			value: input.crossrefDoi,
 			origin: "crossref",
-			url: `https://doi.org/${input.crossrefDoi}`,
+			url: urlFor(input.crossrefDoi),
 		};
 	}
 	if (input.zenodoVersionDoi) {
 		return {
 			value: input.zenodoVersionDoi,
 			origin: "zenodo",
-			url: `https://doi.org/${input.zenodoVersionDoi}`,
+			url: urlFor(input.zenodoVersionDoi),
 		};
 	}
 	if (!input.externalDoi) return null;
 	return {
 		value: input.externalDoi,
-		origin: input.fromSource ? "source" : "record",
-		url: `https://doi.org/${input.externalDoi}`,
+		origin: "record",
+		url: urlFor(input.externalDoi),
 	};
 }
 
@@ -812,7 +821,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			provider,
 			providerEnvironment,
 		);
-		const displayState = resolveAdminPublicationProviderState(
+		const resolvedDisplayState = resolveAdminPublicationProviderState(
 			{
 				provider,
 				configured: configured(publicationConfig, provider),
@@ -829,6 +838,7 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			},
 			input.now,
 		);
+		const displayState = failure ? "failed" : resolvedDisplayState;
 		const allowedIdentifierPolicies: ZenodoIdentifierPolicy[] =
 			provider !== "zenodo" || zenodoBlockers.length > 0
 				? []
@@ -863,8 +873,11 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 				externalDoi: existingBibliographicDoi,
 			}),
 			waitingOn: providerWaitingOn,
-			// A record that brought its own DOI has nothing to fix here.
-			blockers: displayState === "external" ? [] : blockers,
+			// Crossref has nothing to fix when another registrar owns the DOI.
+			blockers:
+				provider === "crossref" && displayState === "external"
+					? []
+					: blockers,
 			externalDoi: existingBibliographicDoi,
 			capabilities: {
 				canActivate:
@@ -955,10 +968,6 @@ export function buildAdminPublicationViewFromSnapshot(input: {
 			crossrefDoi: crossrefDoi ?? null,
 			zenodoVersionDoi: zenodoVersionDoi ?? null,
 			externalDoi: existingBibliographicDoi,
-			fromSource: Boolean(
-				record.sourceConnectionKey &&
-					record.sourceConnectionKey !== "native",
-			),
 			configured: {
 				crossref: configured(publicationConfig, "crossref"),
 				zenodo: configured(publicationConfig, "zenodo"),

@@ -84,6 +84,7 @@ describe("AdminIdentifiersCard", () => {
 	let root: Root;
 
 	beforeEach(() => {
+		vi.clearAllMocks();
 		container = document.createElement("div");
 		document.body.append(container);
 		root = createRoot(container);
@@ -95,8 +96,12 @@ describe("AdminIdentifiersCard", () => {
 	});
 
 	const onActivate = vi.fn();
+	const onGoToField = vi.fn();
 
-	async function render(view: AdminIdentifiersView) {
+	async function render(
+		view: AdminIdentifiersView,
+		providers = { crossref: provider(), zenodo: provider({ provider: "zenodo" }) },
+	) {
 		await act(async () => {
 			root.render(
 				<AdminIdentifiersCard
@@ -104,9 +109,10 @@ describe("AdminIdentifiersCard", () => {
 					identifiers={view}
 					itemKey="ABCDEFGH"
 					onActivate={onActivate}
+					onGoToField={onGoToField}
 					onOpenAttachments={() => {}}
 					onRetry={() => {}}
-					providers={{ crossref: provider(), zenodo: provider({ provider: "zenodo" }) }}
+					providers={providers}
 				/>,
 			);
 		});
@@ -158,6 +164,20 @@ describe("AdminIdentifiersCard", () => {
 		expect(container.querySelector("[role=alert]")).toBeNull();
 	});
 
+	it("asks the inspector to open editing before focusing a missing field", async () => {
+		await render(identifiers());
+		await act(async () => toggle().click());
+		const register = [...container.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("Register a DOI with Crossref"),
+		)!;
+		await act(async () => register.click());
+		const goToField = [...container.querySelectorAll("button")].find((button) =>
+			button.textContent?.includes("Go to field"),
+		)!;
+		await act(async () => goToField.click());
+		expect(onGoToField).toHaveBeenCalledWith("title");
+	});
+
 	it("enables the confirm button for a ready action and hands over to the dialog", async () => {
 		await render(identifiers());
 		await act(async () => toggle().click());
@@ -191,5 +211,33 @@ describe("AdminIdentifiersCard", () => {
 		expect(toggle().getAttribute("aria-expanded")).toBe("true");
 		const alert = container.querySelector("[role=alert]");
 		expect(alert?.textContent).toContain("Needs attention");
+		await act(async () => toggle().click());
+		expect(toggle().getAttribute("aria-expanded")).toBe("true");
+	});
+
+	it("shows every blocker for an active target without marking a blocked row as failed", async () => {
+		await render(
+			identifiers({
+				archive: {
+					state: "active",
+					provider: "zenodo",
+					displayState: "blocked",
+					status: { label: "Waiting for details", description: "Add record details.", shouldPoll: false },
+					links: [],
+				},
+				actions: [],
+			}),
+			{
+				crossref: provider(),
+				zenodo: provider({
+					provider: "zenodo",
+					blockers: ["Add an abstract", "Publish a PDF"],
+				}),
+			},
+		);
+		await act(async () => toggle().click());
+		expect(container.textContent).toContain("Add an abstract");
+		expect(container.textContent).toContain("Publish a PDF");
+		expect(container.querySelector("[role=alert]")).toBeNull();
 	});
 });

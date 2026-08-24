@@ -36,6 +36,7 @@ describe("Zenodo PDF correction state", () => {
 					provider: "zenodo",
 					environment: "sandbox",
 					identifierPolicy: "reuse-crossref",
+					lockedExternalDoi: null,
 					requestedBy: "admin",
 					requestedAt: approvedAt,
 					deactivatedAt: null,

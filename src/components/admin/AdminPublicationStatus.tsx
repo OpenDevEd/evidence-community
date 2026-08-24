@@ -114,7 +114,15 @@ function PublicationLoading({ state }: { state: PublicationHook }) {
 	);
 }
 
-function PublicationActionError({ itemKey, state }: { itemKey: string; state: PublicationHook }) {
+function PublicationActionError({
+	itemKey,
+	onGoToField,
+	state,
+}: {
+	itemKey: string;
+	onGoToField: (field: string) => void;
+	state: PublicationHook;
+}) {
 	if (!state.actionError) return null;
 	return (
 		<div className="bg-danger/[0.06] p-3 text-xs text-danger" role="alert">
@@ -128,7 +136,7 @@ function PublicationActionError({ itemKey, state }: { itemKey: string; state: Pu
 								{target ? (
 									<button
 										className="text-left underline underline-offset-2"
-										onClick={() => document.getElementById(target)?.focus()}
+										onClick={() => onGoToField(path)}
 										type="button"
 									>
 										{message}
@@ -237,12 +245,14 @@ function PublicationActivationDialogs({
 
 function PublicationControls({
 	itemKey,
+	onGoToField,
 	onOpenAttachments,
 	onRecordChanged,
 	publication,
 	state,
 }: {
 	itemKey: string;
+	onGoToField: (field: string) => void;
 	onOpenAttachments: () => void;
 	onRecordChanged: () => void;
 	publication: Publication;
@@ -276,13 +286,19 @@ function PublicationControls({
 		<>
 			<div className="space-y-2">
 				{!crossrefOpen && !zenodoOpen ? (
-					<PublicationActionError itemKey={itemKey} state={state} />
+					<PublicationActionError
+						itemKey={itemKey}
+						onGoToField={onGoToField}
+						state={state}
+					/>
 				) : null}
 				<AdminIdentifiersCard
 					busy={state.isMutating}
 					identifiers={publication.identifiers}
 					itemKey={itemKey}
+					key={itemKey}
 					onActivate={activate}
+					onGoToField={onGoToField}
 					onOpenAttachments={onOpenAttachments}
 					onRetry={(provider) =>
 						void complete(
@@ -309,12 +325,14 @@ function PublicationControls({
 
 export function AdminPublicationStatus({
 	itemKey,
+	onGoToField,
 	onOpenAttachments,
 	onRecordChanged,
 	published,
 	state,
 }: {
 	itemKey: string;
+	onGoToField: (field: string) => void;
 	onOpenAttachments: () => void;
 	onRecordChanged: () => void;
 	published: boolean;
@@ -330,6 +348,7 @@ export function AdminPublicationStatus({
 	return (
 		<PublicationControls
 			itemKey={itemKey}
+			onGoToField={onGoToField}
 			onOpenAttachments={onOpenAttachments}
 			onRecordChanged={onRecordChanged}
 			publication={publication}

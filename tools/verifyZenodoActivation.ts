@@ -559,6 +559,94 @@ async function verify(database: Database, client: Client) {
 		"Rejected external DOI saved a target",
 	);
 
+	const externalBytes = new TextEncoder().encode("outside DOI PDF bytes");
+	await seedParent(client, { key: "ZENACTAJ", doi: "10.9999/external-ok" });
+	await seedPublishedFile(client, "ZENACTAJ", "ZENFILAJ", externalBytes);
+	const checkedDoiUrls: string[] = [];
+	const externalActivation = await activateZenodoPublication(
+		database,
+		"ZENACTAJ",
+		config,
+		"reuse-external",
+		"zenodo-activation-test",
+		{
+			resolveDoi: async (url) => {
+				checkedDoiUrls.push(url);
+				return { ok: true, status: 302 };
+			},
+		},
+	);
+	assert(externalActivation.state === "queued", "The outside DOI did not queue");
+	const lockedExternalTarget = await client.query<{ lockedExternalDoi: string | null }>(
+		`SELECT "lockedExternalDoi" FROM "publicationTarget" WHERE "itemKey" = 'ZENACTAJ'`,
+	);
+	assert(
+		checkedDoiUrls.join(",") === "https://doi.org/10.9999%2Fexternal-ok" &&
+			lockedExternalTarget.rows[0]?.lockedExternalDoi === "10.9999/external-ok",
+		"Activation did not check and lock the outside DOI",
+	);
+	await client.query(
+		`UPDATE "item" SET "DOI" = '10.9999/changed-after-activation' WHERE "key" = 'ZENACTAJ'`,
+	);
+	await client.query(
+		`UPDATE "publicationSyncJob"
+		 SET "nextAttemptAt" = '2099-01-01T00:00:00Z'
+		 WHERE "id" <> $1 AND "processedAt" IS NULL AND "deadLetteredAt" IS NULL AND "supersededAt" IS NULL AND "leaseOwner" IS NULL`,
+		[externalActivation.job?.id],
+	);
+	const changedExternalOutcome = await runZenodoPublicationJobsOnce(
+		database,
+		config,
+		memoryStorage(new Map([["public/ZENFILAJ.pdf", externalBytes]])),
+		{
+			provider: successfulZenodoProvider(),
+			workerId: "changed-external-doi-worker",
+			now: () => new Date("2030-08-13T11:00:00.000Z"),
+		},
+	);
+	assert(
+		changedExternalOutcome.some(
+			(outcome) =>
+				outcome.jobId === externalActivation.job?.id && outcome.status === "failed",
+		),
+		"A changed outside DOI was retried instead of failing permanently",
+	);
+	const changedExternalFailure = await client.query<{
+		deadLetteredAt: Date | null;
+		failureClass: string | null;
+	}>(
+		`SELECT psj."deadLetteredAt", pss."lastFailureClass" AS "failureClass"
+		 FROM "publicationSyncJob" psj
+		 JOIN "publicationSyncState" pss ON pss."itemKey" = psj."itemKey" AND pss."provider" = psj."provider"
+		 WHERE psj."id" = $1`,
+		[externalActivation.job?.id],
+	);
+	assert(
+		changedExternalFailure.rows[0]?.deadLetteredAt != null &&
+			changedExternalFailure.rows[0]?.failureClass === "ZENODO_EXTERNAL_DOI_CHANGED",
+		"The changed outside DOI did not leave a permanent failure record",
+	);
+
+	await seedParent(client, { key: "ZENACTAK", doi: "10.5555/library.2" });
+	await seedPublishedFile(client, "ZENACTAK", "ZENFILAK");
+	try {
+		await activateZenodoPublication(
+			database,
+			"ZENACTAK",
+			config,
+			"reuse-external",
+			"zenodo-activation-test",
+			{ resolveDoi: async () => ({ ok: true, status: 302 }) },
+		);
+		throw new Error("A DOI owned by another local record was reused");
+	} catch (error) {
+		if (!(error instanceof ZenodoActivationValidationError)) throw error;
+	}
+	const collisionTarget = await client.query(
+		`SELECT 1 FROM "publicationTarget" WHERE "itemKey" = 'ZENACTAK'`,
+	);
+	assert(collisionTarget.rowCount === 0, "A DOI collision saved a Zenodo target");
+
 	await seedParent(client, { key: "ZENACTAE" });
 	try {
 		await activateZenodoPublication(database, "ZENACTAE", config);

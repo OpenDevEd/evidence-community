@@ -27,6 +27,7 @@ function detail(overrides: Partial<AdminItemDetail> = {}): AdminItemDetail {
 			baseRevision: 1,
 			createdAt: "2026-01-01T00:00:00.000Z",
 			draftRevision: 1,
+			generation: "c8df1386-3420-4f12-8c20-7fb1c31ae0ad",
 			itemKey: "BOOK0001",
 			patch: {},
 			payload: {},
