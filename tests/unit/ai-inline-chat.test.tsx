@@ -2,6 +2,7 @@
 
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
+import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
@@ -42,7 +43,10 @@ vi.mock("next-auth/react", () => ({
 }));
 
 import InlineLibraryChat from "@/components/features/ai/InlineLibraryChat";
-import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
+import {
+	InlineChatLayoutProvider,
+	useInlineChatLayout,
+} from "@/context/InlineChatLayout";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
 	true;
@@ -123,6 +127,72 @@ describe("the chat beside the search results", () => {
 		});
 	}
 
+	/**
+	 * Stands in for the search field handing a question to the chat. The page
+	 * shows the chat because the reader asked, not because a question is
+	 * waiting. Clearing the field changes the page address, which rebuilds the
+	 * chat once, so the stand-in can do that too.
+	 */
+	function AskFromThePage({
+		openFirst = false,
+		question,
+		rebuild,
+	}: {
+		openFirst?: boolean;
+		question: string;
+		rebuild: boolean;
+	}) {
+		const { setPendingInput, setPendingSend } = useInlineChatLayout();
+		const [engaged, setEngaged] = useState(openFirst);
+		const [rebuilt, setRebuilt] = useState(false);
+		const gone = rebuild && !rebuilt;
+
+		return (
+			<>
+				<button
+					type="button"
+					data-testid="ask"
+					onClick={() => {
+						setPendingInput(question);
+						setPendingSend(true);
+						setEngaged(true);
+					}}
+				>
+					hand over
+				</button>
+				<button
+					type="button"
+					data-testid="settle"
+					onClick={() => setRebuilt(true)}
+				>
+					settle
+				</button>
+				{engaged && !gone ? (
+					<InlineLibraryChat modelId="gemini-2.5-flash" />
+				) : null}
+			</>
+		);
+	}
+
+	async function press(testId: string) {
+		await act(async () => {
+			container
+				.querySelector(`[data-testid="${testId}"]`)
+				?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+	}
+
+	async function handOver(question: string, rebuild = false) {
+		await act(async () => {
+			root.render(
+				<InlineChatLayoutProvider>
+					<AskFromThePage question={question} rebuild={rebuild} />
+				</InlineChatLayoutProvider>,
+			);
+		});
+		await press("ask");
+	}
+
 	function composer() {
 		const field = container.querySelector("textarea");
 		if (!field) throw new Error("the message box is missing");
@@ -193,6 +263,43 @@ describe("the chat beside the search results", () => {
 
 		expect(asked).toHaveLength(0);
 		expect(composer().value).toBe("Half a question");
+	});
+
+	it("asks a question handed over from the page as it opens", async () => {
+		await handOver("Does teacher training help?");
+
+		expect(asked).toHaveLength(1);
+		expect(container.textContent).toContain("Does teacher training help?");
+	});
+
+	it("still asks the question when the page rebuilds the chat", async () => {
+		// The chat is not there when the reader asks; the page settles first.
+		await handOver("Does teacher training help?", true);
+		await press("settle");
+
+		expect(asked).toHaveLength(1);
+		expect(container.textContent).toContain("Does teacher training help?");
+	});
+
+	it("asks a question that arrives after it has opened", async () => {
+		// The chat is already open when the reader asks from the page.
+		await act(async () => {
+			root.render(
+				<InlineChatLayoutProvider>
+					<AskFromThePage
+						question="Does teacher training help?"
+						rebuild={false}
+						openFirst
+					/>
+				</InlineChatLayoutProvider>,
+			);
+		});
+		expect(asked).toHaveLength(0);
+
+		await press("ask");
+
+		expect(asked).toHaveLength(1);
+		expect(container.textContent).toContain("Does teacher training help?");
 	});
 
 	it("ignores an empty question", async () => {

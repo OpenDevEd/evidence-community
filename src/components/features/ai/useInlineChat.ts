@@ -49,14 +49,8 @@ function useEscapeToClose(closeChat: () => void) {
 
 /** Text typed but not sent survives leaving the page and coming back. */
 function useComposerDraft() {
-	const {
-		composerDraft,
-		pendingInput,
-		pendingSend,
-		setComposerDraft,
-		setPendingInput,
-		setPendingSend,
-	} = useInlineChatLayout();
+	const { composerDraft, pendingInput, pendingSend, setComposerDraft } =
+		useInlineChatLayout();
 	// A question that is about to be asked should not also fill the box.
 	const [input, setInput] = useState(() =>
 		pendingSend ? "" : pendingInput || composerDraft,
@@ -70,18 +64,15 @@ function useComposerDraft() {
 		() => () => setComposerDraft(inputRef.current),
 		[setComposerDraft],
 	);
-	useEffect(
-		() => () => {
-			setPendingInput("");
-			setPendingSend(false);
-		},
-		[setPendingInput, setPendingSend],
-	);
 
 	return { input, setInput };
 }
 
-/** The question typed in the search bar is asked once, when the chat opens. */
+/**
+ * A question typed in the search bar is asked as soon as the chat can ask it,
+ * whether it was waiting before the chat opened or arrives just after. It is
+ * put down as it is picked up, so it is asked exactly once.
+ */
 function useOpeningQuestion({
 	onAsk,
 	onReady,
@@ -89,22 +80,25 @@ function useOpeningQuestion({
 	onAsk: (question: string) => void;
 	onReady: () => void;
 }) {
-	const { pendingInput, pendingSend } = useInlineChatLayout();
-	const askedRef = useRef(false);
-	const askRef = useRef({ onAsk, onReady, pendingInput, pendingSend });
+	const { pendingInput, pendingSend, setPendingInput, setPendingSend } =
+		useInlineChatLayout();
+	const handlersRef = useRef({ onAsk, onReady, setPendingInput, setPendingSend });
 
 	useEffect(() => {
-		askRef.current = { onAsk, onReady, pendingInput, pendingSend };
+		handlersRef.current = { onAsk, onReady, setPendingInput, setPendingSend };
 	});
 	useEffect(() => {
-		if (askedRef.current) return;
-		askedRef.current = true;
-		const { onAsk: ask, onReady: ready, ...pending } = askRef.current;
-		if (pending.pendingSend && pending.pendingInput.trim()) {
-			ask(pending.pendingInput.trim());
-		}
-		ready();
+		handlersRef.current.onReady();
 	}, []);
+	useEffect(() => {
+		const question = pendingInput.trim();
+		if (!pendingSend || !question) return;
+		const { onAsk: ask, setPendingInput: put, setPendingSend: stop } =
+			handlersRef.current;
+		put("");
+		stop(false);
+		ask(question);
+	}, [pendingInput, pendingSend]);
 }
 
 /** The conversation itself, and the ways it changes. */
