@@ -102,6 +102,7 @@ const config: Config = {
 				favicon: "0.2rem",
 			},
 			transitionProperty: {
+				composer: "border-color, box-shadow",
 				citation:
 					"transform, border-color, background-color, box-shadow, color",
 			},
@@ -110,6 +111,12 @@ const config: Config = {
 			},
 			zIndex: {
 				"hover-card": "10000",
+			},
+			maxWidth: {
+				chat: "96rem",
+			},
+			backgroundSize: {
+				shimmer: "200% 100%",
 			},
 			maxHeight: {
 				// The navbar suggestion list must not cover the whole screen.
@@ -140,6 +147,13 @@ const config: Config = {
 			},
 			boxShadow: {
 				"card-soft": "0 4px 20px rgba(0, 0, 0, 0.05)",
+				"card-flat": "0 4px 20px rgba(0, 0, 0, 0.04)",
+				"card-hairline": "0 1px 0 rgba(0, 0, 0, 0.035)",
+				"card-lifted": "0 14px 36px -30px rgba(0, 0, 0, 0.45)",
+				composer: "0 12px 40px -34px rgba(0, 0, 0, 0.45)",
+				"composer-focus": "0 18px 48px -32px rgba(235, 126, 29, 0.22)",
+				"composer-focus-dark":
+					"0 18px 48px -32px rgba(235, 126, 29, 0.38)",
 				"accent-glow":
 					"0 0 15px theme(colors.accent.DEFAULT / 0.25)",
 			},

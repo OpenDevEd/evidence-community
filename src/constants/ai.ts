@@ -5,6 +5,7 @@ import ChatGPT from "@/components/icons/ChatGPT";
 import Claude from "@/components/icons/Claude";
 import DeepSeek from "@/components/icons/DeepSeek";
 import Gemini from "@/components/icons/Gemini";
+import Grok from "@/components/icons/Grok";
 import Mistral from "@/components/icons/Mistral";
 import { getAIModel, isAIModelId } from "@/lib/ai/models";
 
@@ -23,6 +24,7 @@ const COMPANY_ICONS: Record<
 	Google: Gemini,
 	Mistral: Mistral,
 	OpenAI: ChatGPT,
+	xAI: Grok,
 };
 
 export const AI_FALLBACK_PRESENTATION: AIModelPresentation = {

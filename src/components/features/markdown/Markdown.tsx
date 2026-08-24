@@ -189,8 +189,17 @@ function publicationKey(href: unknown) {
 		: undefined;
 }
 
-function PageCitationSpan({ children }: { children: ReactNode }) {
-	const { page, href } = parsePageCitation(String(children ?? ""));
+function PageCitationSpan({
+	children,
+	pdfSources,
+}: {
+	children: ReactNode;
+	pdfSources: Record<string, string>;
+}) {
+	const { page, href } = parsePageCitation(
+		String(children ?? ""),
+		pdfSources,
+	);
 	return <PageCitation href={href} page={page} />;
 }
 
@@ -226,16 +235,25 @@ function ResourceWrapper({ children }: { children: ReactNode }) {
 	);
 }
 
+const EMPTY_PDF_SOURCES: Record<string, string> = {};
+
 export function AIMarkdown({
 	children,
 	className,
 	isAnimating = false,
+	pdfSources = EMPTY_PDF_SOURCES,
 	...props
-}: PropsWithChildren<{ className?: string; isAnimating?: boolean }>) {
+}: PropsWithChildren<{
+	className?: string;
+	isAnimating?: boolean;
+	pdfSources?: Record<string, string>;
+}>) {
 	const components: Components = {
 		span: ({ children, className }) =>
 			className === "PageHighlight" ? (
-				<PageCitationSpan>{children}</PageCitationSpan>
+				<PageCitationSpan pdfSources={pdfSources}>
+					{children}
+				</PageCitationSpan>
 			) : className === "SectionHighlight" ? (
 				<SectionHighlight>{children}</SectionHighlight>
 			) : className === "QuoteHighlight" ? (
