@@ -87,6 +87,8 @@ const config: Config = {
 				chat: "minmax(0, 1fr) auto",
 			},
 			spacing: {
+				// Where the header sits once it has shrunk for the chat.
+				split: "1.625rem",
 				// The library's AI panel column.
 				"ai-panel": "2.375rem",
 				// Lines up a tool step's details under its title.
@@ -102,6 +104,10 @@ const config: Config = {
 				favicon: "0.2rem",
 			},
 			transitionProperty: {
+				// What moves when the chat opens beside the results.
+				chrome: "transform, border-radius",
+				header: "height, padding",
+				"page-space": "padding",
 				composer: "border-color, box-shadow",
 				citation:
 					"transform, border-color, background-color, box-shadow, color",
@@ -114,6 +120,8 @@ const config: Config = {
 			},
 			maxWidth: {
 				chat: "96rem",
+				// Everything on a page lines up with the header's width.
+				site: "96rem",
 				// The workbench row: the record's own controls.
 				"workbench-control": "120px",
 				"workbench-field": "520px",
@@ -126,7 +134,12 @@ const config: Config = {
 				97: "0.97",
 				102: "1.02",
 			},
+			transitionDuration: {
+				// The header and the chat column open and close together.
+				split: "450ms",
+			},
 			height: {
+				navbar: "6.5rem",
 				// The chat beside the results fills the viewport minus the
 				// header stack above it, which differs per breakpoint.
 				"chat-column": "calc(100dvh - 14rem)",
@@ -182,6 +195,8 @@ const config: Config = {
 				"max-sm": { max: "639px" },
 			},
 			transitionTimingFunction: {
+				// The header and the chat column open and close together.
+				split: "cubic-bezier(0.16,1,0.3,1)",
 				spring: "cubic-bezier(0.68, -0.6, 0.32, 1.6)",
 				"bounce-custom":
 					"cubic-bezier(0.68, -0.55, 0.265, 1.55)",
