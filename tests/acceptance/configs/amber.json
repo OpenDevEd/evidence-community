@@ -132,7 +132,13 @@
 		"tags": true,
 		"country": true,
 		"authorCountry": true,
-		"embedder": null,
+		"embedder": {
+			"source": "rest",
+			"url": "http://fixture:5001/embeddings",
+			"dimensions": 8,
+			"request": { "input": "{{text}}" },
+			"response": { "embedding": "{{embedding}}" }
+		},
 		"scopes": ["title_abstract_author_and_keywords", "title", "authors"],
 		"defaultScope": "title_abstract_author_and_keywords"
 	},
@@ -170,7 +176,7 @@
 		"navbarSearch": true,
 		"userCollections": false,
 		"ai": true,
-		"aiSearch": false,
+		"aiSearch": true,
 		"deepResearch": false,
 		"relatedResources": false,
 		"collections": true,

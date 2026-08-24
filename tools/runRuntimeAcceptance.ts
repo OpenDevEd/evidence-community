@@ -830,7 +830,10 @@ function publicExpectations(profile: Profile) {
 			config.citations.showUrl &&
 				Boolean(config.services.zotero.translationUrl),
 		),
-		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(config.search.embedder !== null),
+		// Similar publications need both an embedder and the feature itself.
+		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(
+			config.search.embedder !== null && config.features.relatedResources,
+		),
 		PLAYWRIGHT_EXPECTED_COUNTRY_FACET: String(config.search.country),
 		PLAYWRIGHT_EXPECTED_AUTHOR_COUNTRY_FACET: String(
 			config.search.authorCountry,
@@ -906,6 +909,20 @@ function runBrowserSuite(profile: Profile) {
 			"chromium",
 		],
 		playwrightEnvironment(`${profile.name}-integrations`, {
+			...commandEnvironment,
+			...publicExpectations(profile),
+		}),
+	);
+	run(
+		"npx",
+		[
+			"playwright",
+			"test",
+			"tests/e2e/ai-chat.spec.ts",
+			"--project",
+			"chromium",
+		],
+		playwrightEnvironment(`${profile.name}-ai-chat`, {
 			...commandEnvironment,
 			...publicExpectations(profile),
 		}),
@@ -1561,6 +1578,9 @@ async function main() {
 			"postgres",
 			"amber-meilisearch",
 			"indigo-meilisearch",
+			// The search workers embed records as they start, so the stand-in
+			// embedding service has to be answering before they do.
+			"fixture",
 		);
 		for (const profile of profiles) {
 			await seedSharedSearchIndexes(profile);
@@ -1568,8 +1588,10 @@ async function main() {
 		compose(
 			"up",
 			"--wait",
+			// A library with an embedder turns every record into a vector as
+			// the worker starts, which takes longer than an ordinary start.
 			"--wait-timeout",
-			"180",
+			"420",
 			"amber-search-indexer",
 			"indigo-search-indexer",
 		);
@@ -1626,6 +1648,10 @@ async function main() {
 			"postgres",
 			"amber-meilisearch",
 			"indigo-meilisearch",
+			// A search worker that will not start is a common cause of a
+			// failed run, so show what it said before it gave up.
+			"amber-search-indexer",
+			"indigo-search-indexer",
 		);
 		throw error;
 	} finally {

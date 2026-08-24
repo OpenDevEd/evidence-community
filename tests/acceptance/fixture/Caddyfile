@@ -56,6 +56,17 @@ https://test.crossref.org, https://sandbox.zenodo.org {
 	reverse_proxy publication-provider-fake:4000
 }
 
+# A stand-in for the embedding service. Every record gets the same vector,
+# which is all the search index needs to accept and store one.
+http://fixture:5001 {
+	handle /embeddings {
+		header Content-Type "application/json"
+		respond "{\"embedding\":[0.11,0.22,0.33,0.44,0.55,0.66,0.77,0.88]}" 200
+	}
+
+	respond "not found" 404
+}
+
 http://storage:5000 {
 	reverse_proxy publication-provider-fake:4000
 }
