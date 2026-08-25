@@ -105,7 +105,7 @@ describe("library runtime Docker reader", () => {
 			(request, response) => {
 				const url = new URL(request.url ?? "/", "http://docker.test");
 				requests.push(`${request.method} ${url.pathname}`);
-				if (url.pathname === "/v1.51/containers/json") {
+				if (url.pathname === "/v1.41/containers/json") {
 					expect(url.searchParams.get("all")).toBe("true");
 					expect(JSON.parse(url.searchParams.get("filters") ?? "null")).toEqual({
 						label: [`com.docker.compose.project=${applicationUuid}`],
@@ -113,7 +113,7 @@ describe("library runtime Docker reader", () => {
 					sendJson(response, 200, [containerSummary()]);
 					return;
 				}
-				if (url.pathname === `/v1.51/containers/${containerId}/json`) {
+				if (url.pathname === `/v1.41/containers/${containerId}/json`) {
 					sendJson(response, 200, containerInspection());
 					return;
 				}
@@ -142,8 +142,8 @@ describe("library runtime Docker reader", () => {
 			},
 		);
 		expect(requests).toEqual([
-			"GET /v1.51/containers/json",
-			`GET /v1.51/containers/${containerId}/json`,
+			"GET /v1.41/containers/json",
+			`GET /v1.41/containers/${containerId}/json`,
 		]);
 	});
 
@@ -167,7 +167,7 @@ describe("library runtime Docker reader", () => {
 					await expect(readContainers(applicationUuid)).rejects.toThrow();
 				},
 			);
-			expect(paths).toEqual(["/v1.51/containers/json"]);
+			expect(paths).toEqual(["/v1.41/containers/json"]);
 		},
 	);
 
@@ -206,7 +206,7 @@ describe("library runtime Docker reader", () => {
 					response,
 					200,
 					url.pathname.endsWith("/json") &&
-						url.pathname !== "/v1.51/containers/json"
+						url.pathname !== "/v1.41/containers/json"
 						? body
 						: [containerSummary()],
 				);

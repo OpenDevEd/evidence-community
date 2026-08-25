@@ -8,7 +8,7 @@ import {
 	type LibraryRuntimeContainerReader,
 } from "../src/lib/deployment/library-runtime-verifier-http";
 
-const dockerApiVersion = "v1.51";
+const dockerApiVersion = "v1.41";
 const dockerRequestTimeoutMs = 2_000;
 const maximumDockerResponseBytes = 512 * 1_024;
 const maximumApplicationContainers = 24;
