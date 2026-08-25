@@ -74,7 +74,13 @@ function requireLabels(value: unknown) {
 	const labels: Record<string, string> = {};
 	for (const [key, candidate] of entries) {
 		if (Buffer.byteLength(key, "utf8") > 256) return invalidDockerResponse();
-		labels[key] = requireString(candidate);
+		if (
+			typeof candidate !== "string" ||
+			Buffer.byteLength(candidate, "utf8") > 8_192
+		) {
+			return invalidDockerResponse();
+		}
+		labels[key] = candidate;
 	}
 	return labels;
 }
