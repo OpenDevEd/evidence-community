@@ -33,6 +33,7 @@ const rejectedSummaryLabels: ReadonlyArray<{
 
 function containerLabels(overrides: Record<string, string> = {}) {
 	return {
+		"com.docker.compose.depends_on": "",
 		"com.docker.compose.project": applicationUuid,
 		"com.docker.compose.service": "web",
 		"coolify.managed": "true",
