@@ -48,11 +48,12 @@ SOURCE_COMMIT="$(git rev-parse HEAD)" \
 
 Every service gets the label
 `org.opendeved.evidence-library.release=$SOURCE_COMMIT`. Keep **Include Source
-Commit in Build** off. Coolify 4.3.10 already exports `SOURCE_COMMIT` to the
-Compose deployment with this setting off, so the release label still resolves.
+Commit in Build** off. OpenScholar writes `SOURCE_COMMIT` as a managed Coolify
+environment value and checks it after every application update. Do not rely on
+Coolify's built-in value: the development server left the Compose expression
+unchanged in running container labels when no application value existed.
 Turning the setting on also sends the commit into Docker builds and invalidates
-the build cache on every commit. Use Coolify's built-in value. Do not create
-another release variable.
+the build cache on every commit.
 
 ## Run the library runtime verifier
 
