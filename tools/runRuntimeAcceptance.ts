@@ -26,6 +26,7 @@ import {
 import { getOrderedRuntimeLocales } from "../src/i18n/runtime";
 import { localesNames, shortLocalesNames } from "../src/i18n/routing";
 import { replaceFileAtomically } from "../src/lib/atomic-file";
+import { requireLibraryComposeServiceReadiness } from "../src/lib/deployment/library-compose-contract";
 import {
 	createAdminTestSession,
 	type AdminTestSession,
@@ -125,6 +126,12 @@ let libraryComposePort = "";
 let postgresPort = "";
 const keepRunning = process.argv.includes("--keep");
 const skipBuild = process.argv.includes("--skip-build");
+const sourceCommit =
+	process.env.SOURCE_COMMIT?.trim() ??
+	spawnSync("git", ["rev-parse", "HEAD"], {
+		cwd: rootDirectory,
+		encoding: "utf8",
+	}).stdout.trim();
 
 const commandEnvironment: NodeJS.ProcessEnv = {
 	...process.env,
@@ -145,6 +152,7 @@ const commandEnvironment: NodeJS.ProcessEnv = {
 		acceptanceOpenScholar.indigo.machineCredential,
 	EVIDENCE_LIBRARY_ACCEPTANCE_PERSISTENT: String(keepRunning),
 	EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR: runtimeDirectory,
+	SOURCE_COMMIT: sourceCommit,
 };
 const junitReportFiles = new Set<string>();
 const ownerLabel = "org.opendeved.evidence-library.acceptance.owner-pid";
@@ -340,11 +348,14 @@ function libraryComposeArguments(project: string, ...args: string[]) {
 	];
 }
 
-function requireRunningProcess(processes: ComposeProcess[], service: string) {
-	const matches = processes.filter((process) => process.Service === service);
-	assert.equal(matches.length, 1, `${service} must have one container`);
-	assert.equal(matches[0].State, "running", `${service} must be running`);
-	return matches[0];
+function requireRepositoryComposeServicesReady(processes: ComposeProcess[]) {
+	requireLibraryComposeServiceReadiness(
+		processes.map((process) => ({
+			health: process.Health || null,
+			service: process.Service,
+			state: process.State,
+		})),
+	);
 }
 
 async function requireHttpSuccess(url: string, description: string) {
@@ -403,20 +414,7 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 			.trim()
 			.split("\n")
 			.map((line) => JSON.parse(line) as ComposeProcess);
-		for (const service of [
-			"web",
-			"search-indexer",
-			"publication-worker",
-			"meilisearch",
-		] as const) {
-			assert.equal(
-				requireRunningProcess(processes, service).Health,
-				"healthy",
-				`${service} must be healthy`,
-			);
-		}
-		requireRunningProcess(processes, "source-sync");
-		requireRunningProcess(processes, "source-writeback");
+		requireRepositoryComposeServicesReady(processes);
 
 		const baseUrl = `http://127.0.0.1:${libraryComposePort}`;
 		const healthResponse = await requireHttpSuccess(

@@ -1,0 +1,64 @@
+services:
+  runtime-verifier:
+    init: true
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime-verifier
+    environment:
+      EVIDENCE_LIBRARY_RUNTIME_VERIFIER_DOCKER_URL: http://docker-socket-proxy:2375
+      EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN: "${EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN:?runtime verifier token is required}"
+      PORT: "3000"
+    depends_on:
+      docker-socket-proxy:
+        condition: service_started
+    networks:
+      - verifier-private
+      - coolify
+    labels:
+      - "traefik.docker.network=coolify"
+    expose:
+      - "3000"
+    user: "1001:1001"
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  docker-socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459
+    environment:
+      CONTAINERS: "1"
+      DISABLE_IPV6: "1"
+      EVENTS: "0"
+      LOG_LEVEL: warning
+      PING: "0"
+      POST: "0"
+      VERSION: "0"
+    networks:
+      - verifier-private
+    volumes:
+      - type: bind
+        source: /var/run/docker.sock
+        target: /var/run/docker.sock
+        read_only: true
+    read_only: true
+    tmpfs:
+      - /run
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+networks:
+  verifier-private:
+    internal: true
+  coolify:
+    name: coolify
+    external: true

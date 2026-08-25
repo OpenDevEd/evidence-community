@@ -1,0 +1,486 @@
+import { once } from "node:events";
+import type { Server } from "node:http";
+
+import { describe, expect, it, vi } from "vitest";
+
+import {
+	LIBRARY_COMPOSE_RELEASE_LABEL,
+	LIBRARY_COMPOSE_SERVICES,
+	type LibraryComposeService,
+} from "@/lib/deployment/library-compose-contract";
+import {
+	createLibraryRuntimeVerifierServer,
+	type LibraryRuntimeContainerFact,
+	type LibraryRuntimeContainerReader,
+} from "@/lib/deployment/library-runtime-verifier-http";
+
+const token = "test-runtime-verifier-token-with-at-least-32-bytes";
+const applicationUuid = "a1b2c3d4e5f6g7h8i9j0k1l2";
+const commit = "a1b2c3d4e5f678901234567890abcdef12345678";
+
+function publishedPort(hostPort: number, containerPort: number) {
+	return {
+		containerPort,
+		hostIp: "0.0.0.0",
+		hostPort,
+		protocol: "tcp" as const,
+	};
+}
+
+function readyContainers(): LibraryRuntimeContainerFact[] {
+	return LIBRARY_COMPOSE_SERVICES.map((service) => ({
+		health:
+			service === "source-sync" || service === "source-writeback"
+				? null
+				: "healthy",
+		labels: { [LIBRARY_COMPOSE_RELEASE_LABEL]: commit },
+		publishedPorts: service === "web" ? [publishedPort(443, 3000)] : [],
+		service,
+		state: "running",
+	}));
+}
+
+async function closeServer(server: Server) {
+	await new Promise<void>((resolve, reject) => {
+		server.close((error) => (error ? reject(error) : resolve()));
+	});
+}
+
+async function withServer<T>(
+	readContainers: LibraryRuntimeContainerReader,
+	run: (baseUrl: string) => Promise<T>,
+) {
+	const server = createLibraryRuntimeVerifierServer({
+		readContainers,
+		token,
+	});
+	server.listen(0, "127.0.0.1");
+	await once(server, "listening");
+	const address = server.address();
+	if (!address || typeof address === "string") {
+		await closeServer(server);
+		throw new Error("The test server did not bind to a TCP port.");
+	}
+
+	try {
+		return await run(`http://127.0.0.1:${address.port}`);
+	} finally {
+		await closeServer(server);
+	}
+}
+
+function readinessUrl(baseUrl: string) {
+	return `${baseUrl}/v1/library-runtime/readiness`;
+}
+
+function authorizedJson(body: unknown) {
+	return {
+		body: JSON.stringify(body),
+		headers: {
+			Authorization: `Bearer ${token}`,
+			"Content-Type": "application/json",
+		},
+		method: "POST",
+	};
+}
+
+function readinessBody() {
+	return { applicationUuid, commit };
+}
+
+function expectedServiceError(
+	code: string,
+	message: string,
+	service: LibraryComposeService,
+) {
+	return { error: { code, message, service } };
+}
+
+describe("library runtime verifier HTTP contract", () => {
+	it("returns validated container facts for the requested application", async () => {
+		let receivedApplicationUuid: string | undefined;
+		await withServer(
+			async (candidateApplicationUuid) => {
+				receivedApplicationUuid = candidateApplicationUuid;
+				return readyContainers();
+			},
+			async (baseUrl) => {
+				const response = await fetch(
+					readinessUrl(baseUrl),
+					authorizedJson(readinessBody()),
+				);
+
+				expect(response.status).toBe(200);
+				expect(response.headers.get("cache-control")).toBe("no-store");
+				expect(await response.json()).toEqual({
+					applicationUuid,
+					commit,
+					ready: true,
+					services: readyContainers().map((container) => ({
+						health: container.health,
+						publishedPorts: container.publishedPorts,
+						releaseCommit: commit,
+						service: container.service,
+						state: container.state,
+					})),
+				});
+			},
+		);
+		expect(receivedApplicationUuid).toBe(applicationUuid);
+	});
+
+	it.each([
+		{ authorization: undefined, name: "missing" },
+		{ authorization: "Bearer wrong-token", name: "wrong" },
+	])("rejects a $name bearer token", async ({ authorization }) => {
+		await withServer(async () => readyContainers(), async (baseUrl) => {
+			const headers: Record<string, string> = {
+				"Content-Type": "application/json",
+			};
+			if (authorization) headers.Authorization = authorization;
+			const response = await fetch(readinessUrl(baseUrl), {
+				body: JSON.stringify(readinessBody()),
+				headers,
+				method: "POST",
+			});
+
+			expect(response.status).toBe(401);
+			expect(await response.json()).toEqual({
+				error: {
+					code: "unauthorized",
+					message: "A valid bearer token is required.",
+				},
+			});
+		});
+	});
+
+	it("accepts only the fixed POST endpoint and JSON content type", async () => {
+		await withServer(async () => readyContainers(), async (baseUrl) => {
+			const wrongMethod = await fetch(readinessUrl(baseUrl), {
+				headers: { Authorization: `Bearer ${token}` },
+			});
+			expect(wrongMethod.status).toBe(405);
+			expect(wrongMethod.headers.get("allow")).toBe("POST");
+
+			const wrongPath = await fetch(
+				`${readinessUrl(baseUrl)}/`,
+				authorizedJson(readinessBody()),
+			);
+			expect(wrongPath.status).toBe(404);
+
+			const healthPath = await fetch(`${baseUrl}/health`);
+			expect(healthPath.status).toBe(404);
+
+			const wrongContentType = await fetch(readinessUrl(baseUrl), {
+				body: JSON.stringify(readinessBody()),
+				headers: {
+					Authorization: `Bearer ${token}`,
+					"Content-Type": "text/plain",
+				},
+				method: "POST",
+			});
+			expect(wrongContentType.status).toBe(415);
+			expect(await wrongContentType.json()).toEqual({
+				error: {
+					code: "unsupported_media_type",
+					message: "Content-Type must be application/json.",
+				},
+			});
+		});
+	});
+
+	it.each([
+		{
+			body: "{not-json",
+			code: "invalid_json",
+			message: "The request body must be valid JSON.",
+		},
+		{
+			body: JSON.stringify({ ...readinessBody(), command: "docker ps" }),
+			code: "invalid_request",
+			message: "Send only applicationUuid and commit.",
+		},
+		{
+			body: JSON.stringify({ ...readinessBody(), applicationUuid: "too-short" }),
+			code: "invalid_request",
+			message:
+				"applicationUuid must be a 24-character lowercase Coolify UUID.",
+		},
+		{
+			body: JSON.stringify({ ...readinessBody(), commit: "A".repeat(40) }),
+			code: "invalid_request",
+			message: "commit must be a lowercase 40-character Git commit.",
+		},
+	])("returns the fixed $code input error", async (example) => {
+		await withServer(async () => readyContainers(), async (baseUrl) => {
+			const response = await fetch(readinessUrl(baseUrl), {
+				body: example.body,
+				headers: {
+					Authorization: `Bearer ${token}`,
+					"Content-Type": "application/json",
+				},
+				method: "POST",
+			});
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toEqual({
+				error: { code: example.code, message: example.message },
+			});
+		});
+	});
+
+	it("rejects a request body larger than the fixed limit", async () => {
+		await withServer(async () => readyContainers(), async (baseUrl) => {
+			const response = await fetch(
+				readinessUrl(baseUrl),
+				authorizedJson({
+					...readinessBody(),
+					padding: "x".repeat(5_000),
+				}),
+			);
+
+			expect(response.status).toBe(413);
+			expect(await response.json()).toEqual({
+				error: {
+					code: "payload_too_large",
+					message: "The request body is too large.",
+				},
+			});
+		});
+	});
+
+	it("rejects an unexpected Compose service without returning its name", async () => {
+		await withServer(
+			async () => [
+				...readyContainers(),
+				{
+					...readyContainers()[0],
+					service: "caller-controlled-secret-service",
+				},
+			],
+			async (baseUrl) => {
+				const response = await fetch(
+					readinessUrl(baseUrl),
+					authorizedJson(readinessBody()),
+				);
+				const body = await response.text();
+
+				expect(response.status).toBe(409);
+				expect(JSON.parse(body)).toEqual({
+					error: {
+						code: "unexpected_service",
+						message: "The runtime contains an unexpected Compose service.",
+					},
+				});
+				expect(body).not.toContain("caller-controlled-secret-service");
+			},
+		);
+	});
+
+	it("rejects a missing or duplicate service", async () => {
+		const containers = readyContainers();
+		await withServer(
+			async () => containers.filter(({ service }) => service !== "source-sync"),
+			async (baseUrl) => {
+				const response = await fetch(
+					readinessUrl(baseUrl),
+					authorizedJson(readinessBody()),
+				);
+				expect(response.status).toBe(409);
+				expect(await response.json()).toEqual(
+					expectedServiceError(
+						"missing_service",
+						"source-sync must have one container.",
+						"source-sync",
+					),
+				);
+			},
+		);
+
+		await withServer(
+			async () => [...containers, containers[0]],
+			async (baseUrl) => {
+				const response = await fetch(
+					readinessUrl(baseUrl),
+					authorizedJson(readinessBody()),
+				);
+				expect(response.status).toBe(409);
+				expect(await response.json()).toEqual(
+					expectedServiceError(
+						"duplicate_service",
+						"web must have one container.",
+						"web",
+					),
+				);
+			},
+		);
+	});
+
+	it.each(LIBRARY_COMPOSE_SERVICES)(
+		"rejects %s when it is not running",
+		async (failedService) => {
+			await withServer(
+				async () =>
+					readyContainers().map((container) =>
+						container.service === failedService
+							? { ...container, state: "exited" }
+							: container,
+					),
+				async (baseUrl) => {
+					const response = await fetch(
+						readinessUrl(baseUrl),
+						authorizedJson(readinessBody()),
+					);
+					expect(response.status).toBe(409);
+					expect(await response.json()).toEqual(
+						expectedServiceError(
+							"service_not_running",
+							`${failedService} must be running.`,
+							failedService,
+						),
+					);
+				},
+			);
+		},
+	);
+
+	it.each([
+		"web",
+		"search-indexer",
+		"publication-worker",
+		"meilisearch",
+	] as const)("rejects %s when it is unhealthy", async (failedService) => {
+		await withServer(
+			async () =>
+				readyContainers().map((container) =>
+					container.service === failedService
+						? { ...container, health: "unhealthy" }
+						: container,
+				),
+			async (baseUrl) => {
+				const response = await fetch(
+					readinessUrl(baseUrl),
+					authorizedJson(readinessBody()),
+				);
+				expect(response.status).toBe(409);
+				expect(await response.json()).toEqual(
+					expectedServiceError(
+						"service_unhealthy",
+						`${failedService} must be healthy.`,
+						failedService,
+					),
+				);
+			},
+		);
+	});
+
+	it.each(LIBRARY_COMPOSE_SERVICES)(
+		"rejects %s when its repository release label is stale",
+		async (failedService) => {
+			await withServer(
+				async () =>
+					readyContainers().map((container) =>
+						container.service === failedService
+							? {
+									...container,
+									labels: {
+										[LIBRARY_COMPOSE_RELEASE_LABEL]: "b".repeat(40),
+									},
+								}
+							: container,
+					),
+				async (baseUrl) => {
+					const response = await fetch(
+						readinessUrl(baseUrl),
+						authorizedJson(readinessBody()),
+					);
+					expect(response.status).toBe(409);
+					expect(await response.json()).toEqual(
+						expectedServiceError(
+							"release_mismatch",
+							`${failedService} must use the requested release.`,
+							failedService,
+						),
+					);
+				},
+			);
+		},
+	);
+
+	it("rejects a missing repository release label", async () => {
+		await withServer(
+			async () =>
+				readyContainers().map((container) =>
+					container.service === "source-writeback"
+						? { ...container, labels: {} }
+						: container,
+				),
+			async (baseUrl) => {
+				const response = await fetch(
+					readinessUrl(baseUrl),
+					authorizedJson(readinessBody()),
+				);
+				expect(response.status).toBe(409);
+				expect(await response.json()).toEqual(
+					expectedServiceError(
+						"release_mismatch",
+						"source-writeback must use the requested release.",
+						"source-writeback",
+					),
+				);
+			},
+		);
+	});
+
+	it("rejects a public Meilisearch port", async () => {
+		await withServer(
+			async () =>
+				readyContainers().map((container) =>
+					container.service === "meilisearch"
+						? { ...container, publishedPorts: [publishedPort(7700, 7700)] }
+						: container,
+				),
+			async (baseUrl) => {
+				const response = await fetch(
+					readinessUrl(baseUrl),
+					authorizedJson(readinessBody()),
+				);
+				expect(response.status).toBe(409);
+				expect(await response.json()).toEqual(
+					expectedServiceError(
+						"meilisearch_public_port",
+						"Meilisearch must not publish a host port.",
+						"meilisearch",
+					),
+				);
+			},
+		);
+	});
+
+	it("returns a fixed error and writes no logs when Docker inspection fails", async () => {
+		const consoleError = vi.spyOn(console, "error");
+		const secret = "docker-error-secret";
+		await withServer(
+			async () => {
+				throw new Error(secret);
+			},
+			async (baseUrl) => {
+				const response = await fetch(
+					readinessUrl(baseUrl),
+					authorizedJson(readinessBody()),
+				);
+				const body = await response.text();
+
+				expect(response.status).toBe(502);
+				expect(JSON.parse(body)).toEqual({
+					error: {
+						code: "runtime_inspection_failed",
+						message: "The library runtime could not be checked.",
+					},
+				});
+				expect(body).not.toContain(secret);
+			},
+		);
+		expect(consoleError).not.toHaveBeenCalled();
+	});
+});
