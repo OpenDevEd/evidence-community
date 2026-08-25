@@ -3,11 +3,10 @@ import type { Server } from "node:http";
 
 import { describe, expect, it } from "vitest";
 
-import {
-	LibraryDatabaseProvisioningError,
-} from "@/lib/deployment/library-database";
+import { LibraryDatabaseProvisioningError } from "@/lib/deployment/library-database";
 import {
 	createLibraryDatabaseProvisionerServer,
+	type LibraryDatabaseHttpDeleter,
 	type LibraryDatabaseHttpReconciler,
 } from "@/lib/deployment/library-database-provisioner-http";
 
@@ -19,8 +18,7 @@ const validBody = {
 const receipt = {
 	outcome: "created" as const,
 	databaseName: "el_539c844f0b6d75c24c8c1694fc41e72c9cf96aa29653ed2f",
-	loginName:
-		"el_539c844f0b6d75c24c8c1694fc41e72c9cf96aa29653ed2f_user",
+	loginName: "el_539c844f0b6d75c24c8c1694fc41e72c9cf96aa29653ed2f_user",
 	databaseUrl:
 		"postgresql://el_user:password@postgres.internal:5432/el_database",
 };
@@ -34,10 +32,17 @@ async function closeServer(server: Server) {
 async function withServer<T>(
 	reconcile: LibraryDatabaseHttpReconciler,
 	run: (baseUrl: string) => Promise<T>,
+	remove: LibraryDatabaseHttpDeleter = async ({ libraryId }) => ({
+		libraryId,
+		outcome: "absent",
+		databaseName: receipt.databaseName,
+		loginName: receipt.loginName,
+	}),
 ) {
 	const server = createLibraryDatabaseProvisionerServer({
 		onError: () => undefined,
 		reconcile,
+		remove,
 		token,
 	});
 	server.listen(0, "127.0.0.1");
@@ -69,6 +74,10 @@ function reconcileReceipt(): LibraryDatabaseHttpReconciler {
 
 function reconcileUrl(baseUrl: string) {
 	return `${baseUrl}/v1/library-databases/reconcile`;
+}
+
+function deleteUrl(baseUrl: string) {
+	return `${baseUrl}/v1/library-databases/delete`;
 }
 
 function authorizedJson(body: unknown) {
@@ -106,6 +115,56 @@ describe("library database provisioner HTTP contract", () => {
 			expect(await response.json()).toEqual({
 				libraryId: validBody.libraryId,
 				...receipt,
+			});
+		});
+	});
+
+	it("deletes only the library derived from the authenticated request", async () => {
+		const remove: LibraryDatabaseHttpDeleter = async (request) => {
+			expect(request).toEqual({ libraryId: validBody.libraryId });
+			return {
+				libraryId: request.libraryId,
+				outcome: "deleted",
+				databaseName: receipt.databaseName,
+				loginName: receipt.loginName,
+			};
+		};
+		await withServer(
+			reconcileReceipt(),
+			async (baseUrl) => {
+				const response = await fetch(
+					deleteUrl(baseUrl),
+					authorizedJson({ libraryId: validBody.libraryId }),
+				);
+
+				expect(response.status).toBe(200);
+				expect(await response.json()).toEqual({
+					libraryId: validBody.libraryId,
+					outcome: "deleted",
+					databaseName: receipt.databaseName,
+					loginName: receipt.loginName,
+				});
+			},
+			remove,
+		);
+	});
+
+	it("rejects caller-selected database deletion targets", async () => {
+		await withServer(reconcileReceipt(), async (baseUrl) => {
+			const response = await fetch(
+				deleteUrl(baseUrl),
+				authorizedJson({
+					libraryId: validBody.libraryId,
+					databaseName: receipt.databaseName,
+				}),
+			);
+
+			expect(response.status).toBe(400);
+			expect(await response.json()).toEqual({
+				error: {
+					code: "invalid_request",
+					message: "Send only libraryId.",
+				},
 			});
 		});
 	});
@@ -165,12 +224,14 @@ describe("library database provisioner HTTP contract", () => {
 		{
 			body: JSON.stringify({ libraryId: "", password: "password" }),
 			code: "invalid_request",
-			message: "libraryId must be a non-empty string of at most 256 bytes.",
+			message:
+				"libraryId must be a non-empty string of at most 256 bytes.",
 		},
 		{
 			body: JSON.stringify({ libraryId: "library", password: "" }),
 			code: "invalid_request",
-			message: "password must be a non-empty string of at most 1024 bytes.",
+			message:
+				"password must be a non-empty string of at most 1024 bytes.",
 		},
 	])("returns the bounded $code protocol error", async (example) => {
 		await withServer(reconcileReceipt(), async (baseUrl) => {
@@ -198,7 +259,8 @@ describe("library database provisioner HTTP contract", () => {
 			expect(wrongMethod.status).toBe(405);
 			expect(wrongMethod.headers.get("allow")).toBe("POST");
 
-			const wrongPath = await fetch(`${reconcileUrl(baseUrl)}/`,
+			const wrongPath = await fetch(
+				`${reconcileUrl(baseUrl)}/`,
 				authorizedJson(validBody),
 			);
 			expect(wrongPath.status).toBe(404);
@@ -239,7 +301,8 @@ describe("library database provisioner HTTP contract", () => {
 				expect(await response.json()).toEqual({
 					error: {
 						code: "database_owner_conflict",
-						message: "The library database is owned by another login.",
+						message:
+							"The library database is owned by another login.",
 					},
 				});
 			},
@@ -265,7 +328,8 @@ describe("library database provisioner HTTP contract", () => {
 				expect(JSON.parse(body)).toEqual({
 					error: {
 						code: "database_reconciliation_failed",
-						message: "The library database could not be reconciled.",
+						message:
+							"The library database could not be reconciled.",
 					},
 				});
 				expect(body).not.toContain(leakedPassword);

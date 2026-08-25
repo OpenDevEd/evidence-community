@@ -5,7 +5,10 @@ import {
 	parsePostgresAdminUrl,
 } from "../src/lib/deployment/library-database";
 import { createLibraryDatabaseProvisionerServer } from "../src/lib/deployment/library-database-provisioner-http";
-import { reconcileOpenScholarLibraryDatabase } from "../src/lib/deployment/provision-library-database";
+import {
+	deleteOpenScholarLibraryDatabase,
+	reconcileOpenScholarLibraryDatabase,
+} from "../src/lib/deployment/provision-library-database";
 
 function readRequiredEnvironment(name: string) {
 	const value = process.env[name];
@@ -50,6 +53,8 @@ async function main() {
 				password,
 				runtimeHost,
 			}),
+		remove: ({ libraryId }) =>
+			deleteOpenScholarLibraryDatabase({ adminUrl, libraryId }),
 		token,
 	});
 	const stop = () => {

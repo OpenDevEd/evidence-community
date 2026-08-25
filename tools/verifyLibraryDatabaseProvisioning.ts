@@ -9,6 +9,7 @@ import {
 	quotePostgresIdentifier,
 } from "../src/lib/deployment/library-database";
 import {
+	deleteOpenScholarLibraryDatabase,
 	reconcileLibraryDatabase,
 	reconcileOpenScholarLibraryDatabase,
 } from "../src/lib/deployment/provision-library-database";
@@ -164,6 +165,25 @@ async function cleanup() {
 	});
 }
 
+async function readLibraryResourceState(library: (typeof libraries)[number]) {
+	const client = new Client({ connectionString: adminUrl.toString() });
+	await client.connect();
+	try {
+		const result = await client.query<{
+			database_exists: boolean;
+			login_exists: boolean;
+		}>(
+			`SELECT
+			   EXISTS (SELECT 1 FROM pg_database WHERE datname = $1) AS database_exists,
+			   EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $2) AS login_exists`,
+			[library.databaseName, library.loginName],
+		);
+		return result.rows[0];
+	} finally {
+		await client.end();
+	}
+}
+
 async function main() {
 	try {
 		const beforeAdmin = await readAdminRights();
@@ -200,8 +220,14 @@ async function main() {
 			await readOwnDatabase(library);
 		}
 
-		await expectCrossDatabaseDenied(libraries[0], libraries[1].databaseName);
-		await expectCrossDatabaseDenied(libraries[1], libraries[0].databaseName);
+		await expectCrossDatabaseDenied(
+			libraries[0],
+			libraries[1].databaseName,
+		);
+		await expectCrossDatabaseDenied(
+			libraries[1],
+			libraries[0].databaseName,
+		);
 
 		await withAdminClient(async (client) => {
 			await client.query(
@@ -232,6 +258,25 @@ async function main() {
 				error.code === "database_owner_conflict",
 		);
 
+		for (const library of libraries) {
+			const deleted = await deleteOpenScholarLibraryDatabase({
+				adminUrl: adminUrl.toString(),
+				libraryId: library.libraryId,
+			});
+			assert.equal(deleted.outcome, "deleted");
+			assert.equal(deleted.databaseName, library.databaseName);
+			assert.equal(deleted.loginName, library.loginName);
+			assert.deepEqual(await readLibraryResourceState(library), {
+				database_exists: false,
+				login_exists: false,
+			});
+			const repeated = await deleteOpenScholarLibraryDatabase({
+				adminUrl: adminUrl.toString(),
+				libraryId: library.libraryId,
+			});
+			assert.equal(repeated.outcome, "absent");
+		}
+
 		console.log(
 			JSON.stringify({
 				administratorGuard: "passed",
@@ -240,6 +285,7 @@ async function main() {
 				databases: libraries.map((library) => library.databaseName),
 				migrations: "passed inside reconciliation",
 				outcomes: ["created", "matched", "updated"],
+				teardown: ["deleted", "absent"],
 			}),
 		);
 	} finally {

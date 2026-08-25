@@ -20,9 +20,13 @@ import {
 	parseLibraryDatabasePassword,
 	parseOpenScholarLibraryId,
 } from "./library-database";
-import type { LibraryDatabaseReconciliationResult } from "./provision-library-database";
+import type {
+	LibraryDatabaseDeletionResult,
+	LibraryDatabaseReconciliationResult,
+} from "./provision-library-database";
 
 const reconcilePath = "/v1/library-databases/reconcile";
+const deletePath = "/v1/library-databases/delete";
 const maximumBodyBytes = 16 * 1_024;
 
 type ReconcileRequest = {
@@ -34,9 +38,14 @@ export type LibraryDatabaseHttpReconciler = (
 	request: ReconcileRequest,
 ) => Promise<LibraryDatabaseReconciliationResult>;
 
+export type LibraryDatabaseHttpDeleter = (request: {
+	libraryId: string;
+}) => Promise<LibraryDatabaseDeletionResult>;
+
 type ProvisionerServerOptions = {
 	onError?: (error: unknown) => void;
 	reconcile: LibraryDatabaseHttpReconciler;
+	remove: LibraryDatabaseHttpDeleter;
 	token: string;
 };
 
@@ -81,18 +90,31 @@ function requirePassword(value: unknown) {
 }
 
 function parseReconcileRequest(serialized: string): ReconcileRequest {
-	const record = requireExactFields(requireRequestRecord(parseJson(serialized)));
+	const record = requireExactFields(
+		requireRequestRecord(parseJson(serialized)),
+	);
 	return {
 		libraryId: requireLibraryId(record.libraryId),
 		password: requirePassword(record.password),
 	};
 }
 
+function parseDeleteRequest(serialized: string) {
+	const body = parseJson(serialized);
+	if (!body || typeof body !== "object" || Array.isArray(body)) {
+		return invalidRequest("Send only libraryId.");
+	}
+	const record = body as Record<string, unknown>;
+	if (Object.keys(record).join(",") !== "libraryId") {
+		return invalidRequest("Send only libraryId.");
+	}
+	return { libraryId: requireLibraryId(record.libraryId) };
+}
+
 const conflictMessages = {
 	database_object_owner_conflict:
 		"The library database contains objects owned by another login.",
-	database_owner_conflict:
-		"The library database is owned by another login.",
+	database_owner_conflict: "The library database is owned by another login.",
 	extension_owner_conflict:
 		"A required database extension is owned by another login.",
 	login_database_conflict: "The library login owns another database.",
@@ -124,12 +146,35 @@ function sendReconciliationError(
 }
 
 function requireKnownPath(url: URL) {
-	if (!url.search && ["/health", reconcilePath].includes(url.pathname)) return;
+	if (
+		!url.search &&
+		["/health", reconcilePath, deletePath].includes(url.pathname)
+	)
+		return;
 	throw new HttpContractError({
 		code: "not_found",
 		message: "The requested endpoint does not exist.",
 		status: 404,
 	});
+}
+
+async function handleDeleteRequest(
+	request: IncomingMessage,
+	response: ServerResponse,
+	options: Required<ProvisionerServerOptions>,
+) {
+	requireMethod(request, "POST");
+	requireAuthorization(request, options.token);
+	requireJsonContentType(request);
+	const body = parseDeleteRequest(
+		await readBoundedBody(request, maximumBodyBytes),
+	);
+	try {
+		const result = await options.remove(body);
+		sendJson(response, 200, { libraryId: body.libraryId, ...result });
+	} catch (error: unknown) {
+		sendReconciliationError(response, error, options.onError);
+	}
 }
 
 async function handleReconcileRequest(
@@ -158,6 +203,10 @@ async function handleRequest(
 		sendJson(response, 200, { status: "ok" });
 		return;
 	}
+	if (url.pathname === deletePath) {
+		await handleDeleteRequest(request, response, options);
+		return;
+	}
 	await handleReconcileRequest(request, response, options);
 }
 
@@ -178,11 +227,14 @@ export function createLibraryDatabaseProvisionerServer(
 	options: ProvisionerServerOptions,
 ): Server {
 	if (Buffer.byteLength(options.token, "utf8") < 32) {
-		throw new Error("The database provisioner token must be at least 32 bytes.");
+		throw new Error(
+			"The database provisioner token must be at least 32 bytes.",
+		);
 	}
 	const resolved: Required<ProvisionerServerOptions> = {
 		onError: options.onError ?? ((error) => console.error(error)),
 		reconcile: options.reconcile,
+		remove: options.remove,
 		token: options.token,
 	};
 	return createFixedJsonHttpServer({

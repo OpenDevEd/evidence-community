@@ -11,7 +11,7 @@ JSON document.
 | Deployment      | Use `docker/compose.library.yaml` so the web app, workers, and private Meilisearch use one repository-owned release                     |
 | Image           | Build the repository `Dockerfile`; do not pass customer build arguments                                                                 |
 | Configuration   | Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document; Compose mounts it at `LIBRARY_CONFIG_PATH`                        |
-| Release         | Set Coolify's `SOURCE_COMMIT` value on every service through the checked-in release label                                                |
+| Release         | Set Coolify's `SOURCE_COMMIT` value on every service through the checked-in release label                                               |
 | Process         | Each image prepares config access as root, then runs as UID/GID `1001`                                                                  |
 | Network         | Expose `PORT`, default `3000`, through the deployment proxy                                                                             |
 | Client identity | The deployment proxy must overwrite `X-Real-IP`; never expose the application origin directly                                           |
@@ -71,8 +71,8 @@ Deploy one runtime verifier for the development server from
 The verifier container never mounts `/var/run/docker.sock`. It calls the proxy
 at `http://docker-socket-proxy:2375`. Set one Coolify environment value:
 
-| Variable | Value |
-| --- | --- |
+| Variable                                  | Value                                    |
+| ----------------------------------------- | ---------------------------------------- |
 | `EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN` | Bearer token containing 32 to 1024 bytes |
 
 `PORT` defaults to `3000` and the Compose file sets the internal Docker proxy
@@ -122,14 +122,14 @@ docker build --target database-provisioner \
 
 The container reads these values only from its environment:
 
-| Variable | Value |
-| --- | --- |
-| `EVIDENCE_LIBRARY_ADMIN_DATABASE_URL` | PostgreSQL administrator URL used to create databases, logins, and extensions |
-| `EVIDENCE_LIBRARY_DATABASE_RUNTIME_HOST` | Internal PostgreSQL host and optional port written into each library's runtime URL |
-| `EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN` | Bearer token with at least 32 bytes |
-| `PORT` | HTTP port, default `3000` |
+| Variable                                      | Value                                                                              |
+| --------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `EVIDENCE_LIBRARY_ADMIN_DATABASE_URL`         | PostgreSQL administrator URL used to create databases, logins, and extensions      |
+| `EVIDENCE_LIBRARY_DATABASE_RUNTIME_HOST`      | Internal PostgreSQL host and optional port written into each library's runtime URL |
+| `EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN` | Bearer token with at least 32 bytes                                                |
+| `PORT`                                        | HTTP port, default `3000`                                                          |
 
-`GET /health` returns `{"status":"ok"}`. Database setup uses one endpoint:
+`GET /health` returns `{"status":"ok"}`. Database setup uses this endpoint:
 
 ```http
 POST /v1/library-databases/reconcile
@@ -147,11 +147,11 @@ A successful request returns:
 
 ```json
 {
-  "libraryId": "<same OpenScholar Evidence Library ID>",
-  "outcome": "created",
-  "databaseName": "el_...",
-  "loginName": "el_..._user",
-  "databaseUrl": "postgresql://..."
+	"libraryId": "<same OpenScholar Evidence Library ID>",
+	"outcome": "created",
+	"databaseName": "el_...",
+	"loginName": "el_..._user",
+	"databaseUrl": "postgresql://..."
 }
 ```
 
@@ -168,6 +168,23 @@ role memberships, revokes public database access, and installs `vector` and
 migration. A retry uses the same names and password. The service stops if
 another login owns the database, the login has server-wide rights, or it owns
 another database.
+
+Development teardown uses the same authenticated service:
+
+```http
+POST /v1/library-databases/delete
+Authorization: Bearer <EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN>
+Content-Type: application/json
+
+{"libraryId":"<OpenScholar Evidence Library ID>"}
+```
+
+The request accepts only `libraryId`. The service derives the database and
+login names, stops connections to that database, drops the database, drops the
+restricted login, and reads both back. It refuses to delete a database owned by
+another login, a login with server-wide rights or role memberships, or a login
+that owns another database. A retry returns `outcome: "absent"` after both
+resources are gone.
 
 Operators can run the same reconciler directly for a chosen database and login.
 Do not replace it with one-off SQL:

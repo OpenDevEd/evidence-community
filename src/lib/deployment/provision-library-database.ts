@@ -62,11 +62,22 @@ export type ReconcileOpenScholarLibraryDatabaseInput = {
 	runtimeHost: string;
 };
 
+export type DeleteOpenScholarLibraryDatabaseInput = {
+	adminUrl: string;
+	libraryId: string;
+};
+
 export type LibraryDatabaseReconciliationResult = {
 	outcome: LibraryDatabaseOutcome;
 	databaseName: string;
 	loginName: string;
 	databaseUrl: string;
+};
+
+export type LibraryDatabaseDeletionResult = {
+	outcome: "absent" | "deleted";
+	databaseName: string;
+	loginName: string;
 };
 
 type ResolvedReconciliationInput = {
@@ -310,7 +321,10 @@ async function readTargetDatabaseState(input: {
 	const client = new Client({ connectionString: targetAdminUrl.toString() });
 	await client.connect();
 	try {
-		const extensions = await client.query<{ extname: string; owner: string }>(
+		const extensions = await client.query<{
+			extname: string;
+			owner: string;
+		}>(
 			`SELECT extension.extname, role.rolname AS owner
 			 FROM pg_extension AS extension
 			 JOIN pg_roles AS role ON role.oid = extension.extowner
@@ -329,8 +343,9 @@ async function readTargetDatabaseState(input: {
 		await assertApplicationObjectOwners(client, input.loginName);
 		return {
 			extensionsMatch:
-				extensions.rows.map((extension) => extension.extname).join(",") ===
-				"pg_trgm,vector",
+				extensions.rows
+					.map((extension) => extension.extname)
+					.join(",") === "pg_trgm,vector",
 			migrationsMatch: await readMigrationState(client),
 		};
 	} finally {
@@ -624,4 +639,135 @@ export async function reconcileOpenScholarLibraryDatabase(
 		password: input.password,
 		runtimeHost: input.runtimeHost,
 	});
+}
+
+type LockedDeletionInput = {
+	adminUser: string;
+	client: InstanceType<typeof Client>;
+	databaseName: string;
+	loginName: string;
+};
+
+function deletionReceipt(
+	input: LockedDeletionInput,
+	outcome: LibraryDatabaseDeletionResult["outcome"],
+): LibraryDatabaseDeletionResult {
+	return {
+		outcome,
+		databaseName: input.databaseName,
+		loginName: input.loginName,
+	};
+}
+
+async function validateLibraryDatabaseDeletion(
+	input: LockedDeletionInput,
+	role: ExistingLibraryRole | null,
+	databaseOwner: string | null,
+) {
+	validateLibraryDatabaseTarget({
+		adminUser: input.adminUser,
+		database: input.databaseName,
+		existingRole: role,
+		user: input.loginName,
+	});
+	if (databaseOwner !== null && databaseOwner !== input.loginName) {
+		throw new LibraryDatabaseProvisioningError(
+			"database_owner_conflict",
+			`The database is owned by ${databaseOwner}, not ${input.loginName}.`,
+		);
+	}
+	assertOwnsNoOtherDatabase(
+		input.loginName,
+		await readOwnedDatabaseNames(
+			input.client,
+			input.loginName,
+			input.databaseName,
+		),
+	);
+	if ((await readRoleMemberships(input.client, input.loginName)).length > 0) {
+		throw new LibraryDatabaseProvisioningError(
+			"login_security_conflict",
+			`The login ${input.loginName} belongs to another role and will not be deleted.`,
+		);
+	}
+}
+
+async function removeLibraryDatabaseResources(
+	input: LockedDeletionInput,
+	role: ExistingLibraryRole | null,
+	databaseOwner: string | null,
+) {
+	if (databaseOwner !== null) {
+		await input.client.query(
+			"SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()",
+			[input.databaseName],
+		);
+		await input.client.query(
+			`DROP DATABASE ${quotePostgresIdentifier(input.databaseName)}`,
+		);
+	}
+	if (role) {
+		await input.client.query(
+			`DROP ROLE ${quotePostgresIdentifier(input.loginName)}`,
+		);
+	}
+}
+
+async function verifyLibraryDatabaseDeletion(input: LockedDeletionInput) {
+	const databaseStillExists =
+		(await readDatabaseOwner(input.client, input.databaseName)) !== null;
+	const loginStillExists =
+		(await readExistingRole(input.client, input.loginName)) !== null;
+	if (!databaseStillExists && !loginStillExists) return;
+	throw new LibraryDatabaseProvisioningError(
+		"database_verification_failed",
+		"PostgreSQL still contains the library database or login after deletion.",
+	);
+}
+
+async function deleteLibraryDatabaseUnderLock(
+	input: LockedDeletionInput,
+): Promise<LibraryDatabaseDeletionResult> {
+	const role = await readExistingRole(input.client, input.loginName);
+	const databaseOwner = await readDatabaseOwner(
+		input.client,
+		input.databaseName,
+	);
+	if (!role && databaseOwner === null) {
+		return deletionReceipt(input, "absent");
+	}
+	await validateLibraryDatabaseDeletion(input, role, databaseOwner);
+	await removeLibraryDatabaseResources(input, role, databaseOwner);
+	await verifyLibraryDatabaseDeletion(input);
+	return deletionReceipt(input, "deleted");
+}
+
+export async function deleteOpenScholarLibraryDatabase(
+	input: DeleteOpenScholarLibraryDatabaseInput,
+): Promise<LibraryDatabaseDeletionResult> {
+	const adminUrl = parsePostgresAdminUrl(input.adminUrl);
+	const adminUser = decodeURIComponent(adminUrl.username);
+	const names = deriveLibraryDatabaseNames(input.libraryId);
+	const client = new Client({ connectionString: adminUrl.toString() });
+	const lockName = `evidence-library-database:${names.databaseName}`;
+	await client.connect();
+	try {
+		await client.query("SELECT pg_advisory_lock(hashtextextended($1, 0))", [
+			lockName,
+		]);
+		try {
+			return await deleteLibraryDatabaseUnderLock({
+				adminUser,
+				client,
+				...names,
+			});
+		} finally {
+			await client.query(
+				"SELECT pg_advisory_unlock(hashtextextended($1, 0))",
+				[lockName],
+			);
+		}
+	} finally {
+		await client.end();
+	}
 }
