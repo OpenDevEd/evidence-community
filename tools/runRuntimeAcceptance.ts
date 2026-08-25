@@ -126,25 +126,12 @@ let libraryComposePort = "";
 let postgresPort = "";
 const keepRunning = process.argv.includes("--keep");
 const skipBuild = process.argv.includes("--skip-build");
-
-function readSourceCommit() {
-	const configuredCommit = process.env.SOURCE_COMMIT?.trim();
-	if (configuredCommit) {
-		if (!/^[a-f0-9]{40}$/u.test(configuredCommit)) {
-			throw new Error("SOURCE_COMMIT must be a lowercase 40-character commit");
-		}
-		return configuredCommit;
-	}
-	const result = spawnSync("git", ["rev-parse", "HEAD"], {
+const sourceCommit =
+	process.env.SOURCE_COMMIT?.trim() ??
+	spawnSync("git", ["rev-parse", "HEAD"], {
 		cwd: rootDirectory,
 		encoding: "utf8",
-	});
-	const commit = result.stdout.trim();
-	if (result.status !== 0 || !/^[a-f0-9]{40}$/u.test(commit)) {
-		throw new Error("Could not read the Evidence Library source commit");
-	}
-	return commit;
-}
+	}).stdout.trim();
 
 const commandEnvironment: NodeJS.ProcessEnv = {
 	...process.env,
@@ -165,7 +152,7 @@ const commandEnvironment: NodeJS.ProcessEnv = {
 		acceptanceOpenScholar.indigo.machineCredential,
 	EVIDENCE_LIBRARY_ACCEPTANCE_PERSISTENT: String(keepRunning),
 	EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR: runtimeDirectory,
-	SOURCE_COMMIT: readSourceCommit(),
+	SOURCE_COMMIT: sourceCommit,
 };
 const junitReportFiles = new Set<string>();
 const ownerLabel = "org.opendeved.evidence-library.acceptance.owner-pid";
