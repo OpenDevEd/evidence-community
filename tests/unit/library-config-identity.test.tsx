@@ -55,6 +55,7 @@ describe("runtime library identity", () => {
 			expected: {
 				name: "Minimal Evidence Library",
 				shortName: "Minimal Evidence Library",
+				description: "Minimal Evidence Library",
 				baseUrl: "https://minimal.example.org",
 				favicon:
 					"https://assets.example.org/minimal/favicon.ico",
@@ -68,6 +69,8 @@ describe("runtime library identity", () => {
 			expected: {
 				name: "Maximal Evidence Library",
 				shortName: "Maximal Library",
+				description:
+					"The Maximal Evidence Library collects research about education in low- and middle-income countries.",
 				baseUrl: "https://maximal.example.org",
 				favicon:
 					"https://assets.example.org/maximal/favicon.png",
@@ -84,7 +87,7 @@ describe("runtime library identity", () => {
 			const metadata = buildLibraryMetadata(config.identity);
 
 			expect(metadata.title).toBe(expected.name);
-			expect(metadata.description).toBe(expected.name);
+			expect(metadata.description).toBe(expected.description);
 			expect(metadata.applicationName).toBe(expected.shortName);
 			expect(metadata.metadataBase).toEqual(
 				new URL(expected.baseUrl),
@@ -121,6 +124,52 @@ describe("runtime library identity", () => {
 		expect(maximalMarkup).toContain(
 			"Logo for Maximal Evidence Library in dark mode",
 		);
+	});
+
+	it("uses the library name for descriptions and no share image when none is set", () => {
+		const metadata = buildLibraryMetadata(minimalConfig.identity);
+
+		expect(metadata.description).toBe("Minimal Evidence Library");
+		expect(metadata.openGraph).toEqual({
+			title: "Minimal Evidence Library",
+			description: "Minimal Evidence Library",
+			siteName: "Minimal Evidence Library",
+			images: undefined,
+		});
+		expect(metadata.twitter).toEqual({
+			card: "summary",
+			title: "Minimal Evidence Library",
+			description: "Minimal Evidence Library",
+			images: undefined,
+		});
+	});
+
+	it("uses the configured description and share image for page and social previews", () => {
+		const identity = {
+			...maximalConfig.identity,
+			description: "Evidence about education, searchable and citable.",
+			assets: {
+				...maximalConfig.identity.assets,
+				shareImage: "https://assets.example.org/maximal/share.png",
+			},
+		};
+		const metadata = buildLibraryMetadata(identity);
+
+		expect(metadata.description).toBe(
+			"Evidence about education, searchable and citable.",
+		);
+		expect(metadata.openGraph).toEqual({
+			title: "Maximal Evidence Library",
+			description: "Evidence about education, searchable and citable.",
+			siteName: "Maximal Evidence Library",
+			images: ["https://assets.example.org/maximal/share.png"],
+		});
+		expect(metadata.twitter).toEqual({
+			card: "summary_large_image",
+			title: "Maximal Evidence Library",
+			description: "Evidence about education, searchable and citable.",
+			images: ["https://assets.example.org/maximal/share.png"],
+		});
 	});
 
 	it("deduplicates the favicon while keeping it first", () => {

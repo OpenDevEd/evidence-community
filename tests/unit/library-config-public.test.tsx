@@ -42,6 +42,19 @@ describe("public library configuration", () => {
 		);
 	});
 
+	it("includes the tagline, description, share image, and powered-by setting", () => {
+		expect(publicConfig.identity.tagline).toBe(
+			maximalLibraryConfig.identity.tagline,
+		);
+		expect(publicConfig.identity.description).toBe(
+			maximalLibraryConfig.identity.description,
+		);
+		expect(publicConfig.identity.assets.shareImage).toBe(
+			maximalLibraryConfig.identity.assets.shareImage,
+		);
+		expect(publicConfig.footer.poweredBy).toBe(false);
+	});
+
 	it("reuses the projection while the active server revision object is unchanged", () => {
 		expect(projectPublicLibraryConfig(serverConfig)).toBe(publicConfig);
 	});
