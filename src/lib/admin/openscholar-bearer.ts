@@ -4,11 +4,7 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 
 import { getLibraryConfig } from "@/config/library-config/server";
-
-/** OpenScholar reads per-library data; nothing here may be cached by a proxy. */
-export const OPENSCHOLAR_RESPONSE_HEADERS = {
-	"Cache-Control": "no-store",
-} as const;
+import { ADMIN_RESPONSE_HEADERS } from "./http";
 
 function bearerMatches(authorization: string | null, credential: string) {
 	const actual = Buffer.from(authorization ?? "", "utf8");
@@ -38,6 +34,6 @@ export async function requireOpenScholarBearer(request: Request) {
 				message: "Use the library's machine credential as a bearer token.",
 			},
 		},
-		{ headers: OPENSCHOLAR_RESPONSE_HEADERS, status: 401 },
+		{ headers: ADMIN_RESPONSE_HEADERS, status: 401 },
 	);
 }

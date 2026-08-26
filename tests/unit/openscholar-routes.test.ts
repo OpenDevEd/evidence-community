@@ -71,7 +71,7 @@ describe("OpenScholar collections route", () => {
 		);
 
 		expect(response.status).toBe(200);
-		expect(response.headers.get("cache-control")).toBe("no-store");
+		expect(response.headers.get("cache-control")).toBe("private, no-store");
 		expect(await response.json()).toEqual({
 			items: [
 				{
@@ -107,7 +107,7 @@ describe("OpenScholar institutions route", () => {
 		);
 
 		expect(response.status).toBe(200);
-		expect(response.headers.get("cache-control")).toBe("no-store");
+		expect(response.headers.get("cache-control")).toBe("private, no-store");
 		expect(await response.json()).toEqual({
 			items: [
 				{ count: 4, name: "Amber Institute" },

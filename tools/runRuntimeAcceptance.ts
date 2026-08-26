@@ -1411,7 +1411,10 @@ async function verifyOpenScholarReadApi(profile: Profile) {
 		items: { count: number; name: string }[];
 	}>(profile, "/api/openscholar/institutions");
 	assert.equal(institutions.response.status, 200);
-	assert.equal(institutions.response.headers.get("cache-control"), "no-store");
+	assert.equal(
+		institutions.response.headers.get("cache-control"),
+		"private, no-store",
+	);
 	assert.deepEqual(institutions.body.items, [
 		{ count: 1, name: "Amber Institute" },
 		{ count: 1, name: "Indigo College" },
