@@ -585,7 +585,8 @@
     "cookiePolicy": "سياسة ملفات تعريف الارتباط",
     "privacyPolicy": "سياسة الخصوصية",
     "termsOfService": "شروط الخدمة",
-    "legal": "قانوني"
+    "legal": "قانوني",
+    "poweredBy": "مدعوم من OpenScholar"
   },
   "itemType": {
     "Artwork": "عمل فني",

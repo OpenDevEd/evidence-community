@@ -585,7 +585,8 @@
     "cookiePolicy": "Cookie 政策",
     "privacyPolicy": "隐私政策",
     "termsOfService": "服务条款",
-    "legal": "法律信息"
+    "legal": "法律信息",
+    "poweredBy": "由 OpenScholar 提供支持"
   },
   "itemType": {
     "Artwork": "艺术作品",

@@ -253,6 +253,7 @@ function SearchTabContent({
 	const t = useTranslations("ui");
 	const tAI = useTranslations("ai");
 	const formatter = useFormatter();
+	const { identity } = useLibraryConfig();
 
 	const {
 		isOpen: isExploreOpen,
@@ -327,6 +328,15 @@ function SearchTabContent({
 					)}
 				</div>
 			</div>
+
+			{showHeader && identity.tagline && (
+				<p
+					data-library-tagline=""
+					className="text-lg text-black/60 dark:text-white/60"
+				>
+					{identity.tagline}
+				</p>
+			)}
 
 			{/* Search and filters */}
 			{itemsContext.config.interactionsStyle === "one-line" ? (

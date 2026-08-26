@@ -585,7 +585,8 @@
     "cookiePolicy": "Politique en matière de cookies",
     "privacyPolicy": "Politique de confidentialité",
     "termsOfService": "Conditions d'utilisation",
-    "legal": "Mentions légales"
+    "legal": "Mentions légales",
+    "poweredBy": "Propulsé par OpenScholar"
   },
   "itemType": {
     "Artwork": "Œuvre d'art",
