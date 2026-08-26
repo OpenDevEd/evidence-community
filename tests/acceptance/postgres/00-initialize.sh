@@ -47,6 +47,9 @@ VALUES (
 	0
 );
 
+INSERT INTO "itemToCollection" ("itemKey", "collectionKey")
+VALUES ('AMBR2345', 'ZBJ4NBSL');
+
 INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
 VALUES
 	('PUBACC23', 'native', 'PUBACC23'),
@@ -60,7 +63,7 @@ INSERT INTO "item" (
 	'Amber DOI acceptance report',
 	'This report proves the local Crossref and Zenodo publication flow.',
 	'2026-08-13',
-	'[{"creatorType":"author","firstName":"Ada","lastName":"Lovelace"}]'::jsonb,
+	'[{"creatorType":"author","firstName":"Ada","lastName":"Lovelace","institutions":[{"display_name":"Amber Institute","country_code":"GB"},{"display_name":"Indigo College","country_code":"KE"}]}]'::jsonb,
 	'Amber Evidence Library',
 	0
 );

@@ -602,14 +602,27 @@ const contactSchema = z
 	.strict()
 	.prefault({});
 
+const LEGAL_MARKDOWN_MAXIMUM = 200_000;
+const legalMarkdownSchema = nonEmptyStringSchema(LEGAL_MARKDOWN_MAXIMUM);
+
 const legalSchema = z
 	.object({
 		privacyPolicy: linkSchema.default("/privacy"),
 		cookiePolicy: linkSchema.default("/cookie-policy"),
 		termsOfService: linkSchema.optional(),
+		privacyMarkdown: legalMarkdownSchema.optional(),
+		cookieMarkdown: legalMarkdownSchema.optional(),
+		termsMarkdown: legalMarkdownSchema.optional(),
 	})
 	.strict()
-	.prefault({});
+	.prefault({})
+	.transform((legal) => ({
+		...legal,
+		// Owner-written terms live on the runtime's own /terms page unless the
+		// owner points the link somewhere else.
+		termsOfService:
+			legal.termsOfService ?? (legal.termsMarkdown ? "/terms" : undefined),
+	}));
 
 const localeSchema = z.enum(PLATFORM_LOCALES);
 

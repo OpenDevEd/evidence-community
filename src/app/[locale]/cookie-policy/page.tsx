@@ -1,11 +1,7 @@
 import PolicyPage from "@/components/pages/PolicyPage";
-import {
-	getPolicyMetadata,
-	readPolicyDocument,
-} from "@/lib/policy-documents";
+import { getPolicyMetadata, loadPolicyDocument } from "@/lib/policy-documents";
 import { Metadata } from "next";
 import { getTranslations } from "next-intl/server";
-import { getPolicyLastModified } from "@/lib/policy-documents";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { connection } from "next/server";
 
@@ -21,19 +17,18 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function CookiePolicyPage() {
 	await connection();
 	const config = await getLibraryConfig();
-	const [content, tFooter, tNav, lastUpdated] = await Promise.all([
-		readPolicyDocument("cookiePolicy", new URL(config.identity.baseUrl).host),
+	const [document, tFooter, tNav] = await Promise.all([
+		loadPolicyDocument(config, "cookiePolicy"),
 		getTranslations("footer"),
 		getTranslations("nav"),
-		getPolicyLastModified("cookiePolicy"),
 	]);
 
 	return (
 		<PolicyPage
-			content={content}
+			content={document!.content}
 			title="Cookie Policy"
 			description="Which cookies and local storage entries the site uses, which are essential, and which only activate after analytics consent is granted."
-			lastUpdated={lastUpdated}
+			lastUpdated={document!.lastUpdated}
 			otherPolicyLink={{
 				href: "/privacy",
 				label: tFooter("privacyPolicy"),

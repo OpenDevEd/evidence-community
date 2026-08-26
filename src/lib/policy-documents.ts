@@ -4,10 +4,20 @@ import { readFile, stat } from "fs/promises";
 import { join } from "path";
 import { cacheLife, cacheTag } from "next/cache";
 
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+
 const POLICY_DOCUMENT_PATHS = {
 	privacy: join(process.cwd(), "docs", "privacy-policy.md"),
 	cookiePolicy: join(process.cwd(), "docs", "cookie-policy.md"),
 } as const;
+
+export type PolicyDocumentKind = keyof typeof POLICY_DOCUMENT_PATHS | "terms";
+
+const POLICY_MANIFEST_FIELDS = {
+	cookiePolicy: "cookieMarkdown",
+	privacy: "privacyMarkdown",
+	terms: "termsMarkdown",
+} as const satisfies Record<PolicyDocumentKind, keyof LibraryServerConfig["legal"]>;
 
 const POLICY_SITE_HOST_TOKEN = "{{SITE_HOST}}";
 const POLICY_CONDITIONAL_CLOSE_TOKEN = "{{::}}";
@@ -181,7 +191,7 @@ function parsePolicyLastUpdated(content: string) {
 	return null;
 }
 
-export async function readPolicyDocument(
+async function readPolicyDocument(
 	document: keyof typeof POLICY_DOCUMENT_PATHS,
 	siteHost: string,
 ) {
@@ -194,7 +204,7 @@ export async function readPolicyDocument(
 	);
 }
 
-export async function getPolicyLastModified(document: keyof typeof POLICY_DOCUMENT_PATHS) {
+async function getPolicyLastModified(document: keyof typeof POLICY_DOCUMENT_PATHS) {
 	'use cache'
 	cacheLife({ revalidate: 3600 })
 	cacheTag('policy-modified-' + document)
@@ -209,8 +219,33 @@ export async function getPolicyLastModified(document: keyof typeof POLICY_DOCUME
 	return statedLastUpdated ?? (await stat(/* turbopackIgnore: true */ path)).mtime;
 }
 
+/**
+ * Owner-written text from the library manifest wins over the built-in
+ * document. The terms page exists only when the owner wrote terms.
+ */
+export async function loadPolicyDocument(
+	config: Pick<LibraryServerConfig, "identity" | "legal" | "updatedAt">,
+	document: PolicyDocumentKind,
+): Promise<{ content: string; lastUpdated: Date } | null> {
+	const siteHost = new URL(config.identity.baseUrl).host;
+	const manifestText = config.legal[POLICY_MANIFEST_FIELDS[document]];
+	if (manifestText) {
+		return {
+			content: populatePolicyDocument(manifestText, siteHost),
+			lastUpdated:
+				parsePolicyLastUpdated(manifestText) ?? new Date(config.updatedAt),
+		};
+	}
+	if (document === "terms") return null;
+	const [content, lastUpdated] = await Promise.all([
+		readPolicyDocument(document, siteHost),
+		getPolicyLastModified(document),
+	]);
+	return { content, lastUpdated };
+}
+
 export function getPolicyMetadata(
-	title: "Privacy Policy" | "Cookie Policy",
+	title: string,
 	description: string,
 	libraryName: string,
 ) {

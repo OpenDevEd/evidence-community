@@ -192,6 +192,10 @@ export const maximalLibraryConfig = {
 		privacyPolicy: "/privacy",
 		cookiePolicy: "/cookie-policy",
 		termsOfService: "https://maximal.example.org/terms",
+		privacyMarkdown:
+			"# Privacy notice\n\n{{SITE_HOST}} keeps only what the library needs.\n\n**Last updated:** 1 August 2026",
+		cookieMarkdown: "# Cookie notice\n\nOnly essential cookies are used.",
+		termsMarkdown: "# Terms of use\n\nUse the library for research and teaching.",
 	},
 	localization: {
 		locales: ["en-GB", "fr"],

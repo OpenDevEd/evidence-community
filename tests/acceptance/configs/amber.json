@@ -119,7 +119,7 @@
 	"legal": {
 		"privacyPolicy": "/privacy",
 		"cookiePolicy": "/cookie-policy",
-		"termsOfService": "https://amber.example.org/terms"
+		"termsMarkdown": "# Amber terms of use\n\nUse {{SITE_HOST}} for research and teaching.\n\n**Last updated:** 1 August 2026"
 	},
 	"localization": {
 		"locales": ["en-GB", "fr"],

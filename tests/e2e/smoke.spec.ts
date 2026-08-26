@@ -91,6 +91,8 @@ const expectedDefaultSearchScopeLabel =
 	"Title, abstract, authors and keywords";
 const expectedYearFilter =
 	process.env.PLAYWRIGHT_EXPECTED_YEAR_FILTER !== "false";
+const expectedTermsLink =
+	process.env.PLAYWRIGHT_EXPECTED_TERMS_LINK ?? "/terms";
 const expectedInstitutionFilterLabel =
 	process.env.PLAYWRIGHT_EXPECTED_INSTITUTION_FILTER_LABEL ??
 	"Institutions";
@@ -317,7 +319,12 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 		page
 			.locator("#footer")
 			.getByRole("link", { name: "Terms of Service", exact: true }),
-	).toHaveAttribute("href", /^https:\/\//u);
+	).toHaveAttribute(
+		"href",
+		expectedTermsLink.startsWith("/")
+			? new RegExp(`${expectedTermsLink}$`, "u")
+			: expectedTermsLink,
+	);
 
 	if (!expectedContactPage) {
 		await page.goto("/contact");

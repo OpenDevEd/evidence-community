@@ -223,6 +223,45 @@ describe("identity text and share settings", () => {
 	});
 });
 
+describe("legal page text", () => {
+	it.each(["privacyMarkdown", "cookieMarkdown", "termsMarkdown"] as const)(
+		"accepts %s up to 200 000 characters and rejects longer text",
+		(field) => {
+			const input = cloneLibraryConfig(minimalLibraryConfig);
+			input.legal = { [field]: "# Title\n\n" + "m".repeat(200_000 - 9) };
+			expect(libraryConfigSchema.safeParse(input).success).toBe(true);
+
+			input.legal = { [field]: "m".repeat(200_001) };
+			expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+		},
+	);
+
+	it("links the terms page when terms text is set and no link is given", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.legal = { termsMarkdown: "# Terms\n\nUse the library kindly." };
+		expect(libraryConfigSchema.parse(input).legal.termsOfService).toBe(
+			"/terms",
+		);
+	});
+
+	it("keeps an explicit terms link next to terms text", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.legal = {
+			termsMarkdown: "# Terms",
+			termsOfService: "https://minimal.example.org/legal/terms",
+		};
+		expect(libraryConfigSchema.parse(input).legal.termsOfService).toBe(
+			"https://minimal.example.org/legal/terms",
+		);
+	});
+
+	it("leaves the terms link unset without terms text", () => {
+		expect(
+			libraryConfigSchema.parse(minimalLibraryConfig).legal.termsOfService,
+		).toBeUndefined();
+	});
+});
+
 describe("reusable field schemas", () => {
 	it("rejects an HTTP public origin", () => {
 		const input = cloneLibraryConfig(minimalLibraryConfig);

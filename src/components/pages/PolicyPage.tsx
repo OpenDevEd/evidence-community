@@ -240,7 +240,7 @@ export default function PolicyPage({
 	description: string;
 	lastUpdated: Date;
 	otherPolicyLink: {
-		href: "/privacy" | "/cookie-policy";
+		href: string;
 		label: string;
 	};
 	homeLabel: string;

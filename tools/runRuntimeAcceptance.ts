@@ -998,6 +998,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_RUNTIME_ACCEPTANCE: "true",
 		PLAYWRIGHT_EXPECTED_CONFIG_REVISION: config.revision,
 		PLAYWRIGHT_EXPECTED_CONFIG_UPDATED_AT: config.updatedAt,
+		PLAYWRIGHT_EXPECTED_TERMS_LINK: config.legal.termsOfService ?? "",
 		PLAYWRIGHT_EXPECTED_IDENTITY_NAME: config.identity.name,
 		PLAYWRIGHT_EXPECTED_IDENTITY_SHORT_NAME: config.identity.shortName,
 		PLAYWRIGHT_EXPECTED_PUBLIC_BASE_URL: config.identity.baseUrl,
@@ -1373,6 +1374,107 @@ function countServerCollectorRequests(logs: string) {
 				line.includes('"method":"POST"') &&
 				/"uri":"\/(?:batch|e)\//u.test(line),
 		).length;
+}
+
+async function openScholarRead<T>(
+	profile: Profile,
+	pathname: string,
+	credential = profile.config.authentication.openScholar.machineCredential,
+) {
+	const response = await fetch(`http://127.0.0.1:${profile.port}${pathname}`, {
+		headers: { Authorization: `Bearer ${credential}` },
+	});
+	return { body: (await response.json()) as T, response };
+}
+
+type OpenScholarCollectionPage = {
+	items: {
+		count: number;
+		id: string;
+		parentId: string | null;
+		source: string;
+		title: string;
+	}[];
+	nextCursor: string | null;
+};
+
+async function verifyOpenScholarReadApi(profile: Profile) {
+	console.log(`\nVerifying ${profile.name} OpenScholar read API`);
+	const denied = await openScholarRead(
+		profile,
+		"/api/openscholar/institutions",
+		acceptanceOpenScholar.indigo.machineCredential,
+	);
+	assert.equal(denied.response.status, 401);
+
+	const institutions = await openScholarRead<{
+		items: { count: number; name: string }[];
+	}>(profile, "/api/openscholar/institutions");
+	assert.equal(institutions.response.status, 200);
+	assert.equal(
+		institutions.response.headers.get("cache-control"),
+		"private, no-store",
+	);
+	assert.deepEqual(institutions.body.items, [
+		{ count: 1, name: "Amber Institute" },
+		{ count: 1, name: "Indigo College" },
+	]);
+
+	const firstPage = await openScholarRead<OpenScholarCollectionPage>(
+		profile,
+		"/api/openscholar/collections?pageSize=2",
+	);
+	assert.equal(firstPage.response.status, 200);
+	assert.equal(firstPage.body.items.length, 2);
+	assert.ok(firstPage.body.nextCursor, "a second page must exist");
+	const secondPage = await openScholarRead<OpenScholarCollectionPage>(
+		profile,
+		`/api/openscholar/collections?pageSize=2&cursor=${encodeURIComponent(firstPage.body.nextCursor!)}`,
+	);
+	assert.equal(secondPage.response.status, 200);
+	const seen = new Set(
+		[...firstPage.body.items, ...secondPage.body.items].map(({ id }) => id),
+	);
+	assert.equal(
+		seen.size,
+		firstPage.body.items.length + secondPage.body.items.length,
+		"pages must not repeat collections",
+	);
+
+	const search = await openScholarRead<OpenScholarCollectionPage>(
+		profile,
+		"/api/openscholar/collections?query=source",
+	);
+	assert.deepEqual(search.body, {
+		items: [
+			{
+				count: 1,
+				id: "ZBJ4NBSL",
+				parentId: null,
+				source: "native",
+				title: "Amber source collection",
+			},
+		],
+		nextCursor: null,
+	});
+}
+
+async function verifyOwnerLegalText(profile: Profile) {
+	console.log(`\nVerifying ${profile.name} owner-written terms page`);
+	const response = await fetch(
+		`http://127.0.0.1:${profile.port}/${profile.config.localization.defaultLocale}/terms`,
+	);
+	assert.equal(response.status, 200);
+	const html = await response.text();
+	const siteHost = new URL(profile.config.identity.baseUrl).host;
+	assert.ok(
+		html.includes(`Use ${siteHost} for research and teaching.`),
+		"terms page must show the owner's text with the site host filled in",
+	);
+	assert.ok(
+		html.includes("Updated 01 August 2026"),
+		"terms page must read the date from the owner's text",
+	);
 }
 
 function verifyServerAnalyticsTransport(profile: Profile) {
@@ -1978,6 +2080,8 @@ async function main() {
 		await verifyPublicationLifecycle(profiles[0]);
 		await verifyZenodoReuseExternalLifecycle(profiles[0]);
 		await verifyPublicationAdminInterface(profiles[0]);
+		await verifyOpenScholarReadApi(profiles[0]);
+		await verifyOwnerLegalText(profiles[0]);
 		profiles.forEach(verifyServerAnalyticsTransport);
 		profiles.forEach(runBrowserSuite);
 		runAdminBrowserSuite(profiles[0]);
