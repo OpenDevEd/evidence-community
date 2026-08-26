@@ -3,6 +3,8 @@ import { alias } from "drizzle-orm/pg-core";
 
 import type { Database } from "@/db/database-schema";
 import { collection } from "@/db/schema/tables/collection";
+import { item } from "@/db/schema/tables/item";
+import { itemToCollection } from "@/db/schema/tables/itemToCollection";
 
 import {
 	decodeAdminCollectionChildrenCursor,
@@ -60,7 +62,19 @@ function catalogSelection(database: Database) {
 		key: collection.key,
 		name: collection.name,
 		nameSort: collectionNameSort,
-		numItems: collection.numItems,
+		// Live top-level records in the collection, counted from memberships so
+		// native and imported collections report the same kind of number.
+		recordCount: sql<number>`(${database
+			.select({ value: sql`count(*)` })
+			.from(itemToCollection)
+			.innerJoin(item, eq(item.key, itemToCollection.itemKey))
+			.where(
+				and(
+					eq(itemToCollection.collectionKey, collection.key),
+					eq(item.deleted, 0),
+					sql`coalesce(${item.parentItem}, '') = ''`,
+				),
+			)})`.mapWith(Number),
 		parentCollection: collection.parentCollection,
 		revision: collection.revision,
 		sortOrder: collection.sortOrder,
@@ -75,7 +89,7 @@ type CatalogRow = {
 	key: string;
 	name: string | null;
 	nameSort: string;
-	numItems: number | null;
+	recordCount: number;
 	parentCollection: string | null;
 	revision: number;
 	sortOrder: number | null;
@@ -156,7 +170,7 @@ async function hydrateCatalogRows(database: Database, rows: CatalogRow[]) {
 	return rows.map(
 		({
 			nameSort: _nameSort,
-			numItems: _numItems,
+			recordCount: _recordCount,
 			...row
 		}): AdminCollectionCatalogEntry => ({
 			...row,
@@ -349,7 +363,7 @@ export async function listOpenScholarCollections(
 	);
 	return {
 		items: pageRows.map((row) => ({
-			count: row.numItems ?? 0,
+			count: row.recordCount,
 			id: row.key,
 			parentId: row.parentCollection,
 			source: row.sourceConnectionKey,

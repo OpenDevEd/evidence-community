@@ -47,6 +47,9 @@ VALUES (
 	0
 );
 
+INSERT INTO "itemToCollection" ("itemKey", "collectionKey")
+VALUES ('AMBR2345', 'ZBJ4NBSL');
+
 INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
 VALUES
 	('PUBACC23', 'native', 'PUBACC23'),
