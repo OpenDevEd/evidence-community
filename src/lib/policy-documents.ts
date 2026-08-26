@@ -204,7 +204,7 @@ async function readPolicyDocument(
 	);
 }
 
-export async function getPolicyLastModified(document: keyof typeof POLICY_DOCUMENT_PATHS) {
+async function getPolicyLastModified(document: keyof typeof POLICY_DOCUMENT_PATHS) {
 	'use cache'
 	cacheLife({ revalidate: 3600 })
 	cacheTag('policy-modified-' + document)
