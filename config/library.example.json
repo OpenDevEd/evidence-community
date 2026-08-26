@@ -126,7 +126,7 @@
 	"legal": {
 		"privacyPolicy": "/privacy",
 		"cookiePolicy": "/cookie-policy",
-		"termsOfService": "https://library.example.org/terms"
+		"termsMarkdown": "# Terms of use\n\nUse the library for research and teaching.\n\n**Last updated:** 1 August 2026"
 	},
 	"localization": {
 		"locales": ["en-GB", "fr"],

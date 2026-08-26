@@ -32,7 +32,7 @@ container image can be started repeatedly with different mounted documents.
 | `navigation` | Internal and external navbar entries and icons | Bounded lists; platform icons or validated asset URLs |
 | `footer` | Sections, links, social links, attribution, disclaimer, "Powered by OpenScholar" link | Bounded unique IDs and validated links; `poweredBy` defaults to `true` |
 | `contact` | Review email, phone, address, PayPal link | Valid email/URL and bounded plain text |
-| `legal` | Privacy, cookie, and terms links | Internal paths or stable external URLs |
+| `legal` | Privacy, cookie, and terms links; optional owner-written page text (`privacyMarkdown`, `cookieMarkdown`, `termsMarkdown`) | Internal paths or stable external URLs; page text is Markdown up to 200 000 characters, `{{SITE_HOST}}` is replaced with the library host, and `termsOfService` defaults to `/terms` when `termsMarkdown` is set |
 | `localization` | Enabled locales, default, detection, priority | Platform locale catalog; default and priority must be enabled |
 | `search` | Search fields, semantic search, scopes, default scope | Platform scope catalog; default scope must be enabled |
 | `filters` | Institution mode/label, country mode, collection expansion, years | Explicit modes; valid year range |
