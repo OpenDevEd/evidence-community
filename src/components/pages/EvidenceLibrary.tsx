@@ -71,6 +71,7 @@ import { toast } from "@/components/layout/Toast";
 import { Formatter } from "recharts/types/component/DefaultTooltipContent";
 import { BsStars } from "react-icons/bs";
 import useBreakpoint, { useBreakpointBelow } from "@/hooks/useBreakpoint";
+import { LibraryTagline } from "@/components/library/LibraryTagline";
 import {
 	useLibraryConfig,
 	useLibraryFeature,
@@ -327,6 +328,8 @@ function SearchTabContent({
 					)}
 				</div>
 			</div>
+
+			<LibraryTagline show={showHeader} />
 
 			{/* Search and filters */}
 			{itemsContext.config.interactionsStyle === "one-line" ? (

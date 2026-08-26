@@ -165,6 +165,64 @@ describe("library configuration fixtures", () => {
 	});
 });
 
+describe("identity text and share settings", () => {
+	it("accepts a tagline up to 160 characters and rejects longer ones", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.identity.tagline = "t".repeat(160);
+		expect(libraryConfigSchema.safeParse(input).success).toBe(true);
+
+		input.identity.tagline = "t".repeat(161);
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+
+	it("rejects a tagline with a line break", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.identity.tagline = "Line one\nLine two";
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+
+	it("accepts a description up to 300 characters and rejects longer ones", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.identity.description = "d".repeat(300);
+		expect(libraryConfigSchema.safeParse(input).success).toBe(true);
+
+		input.identity.description = "d".repeat(301);
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+
+	it.each([
+		"https://assets.example.org/share.png",
+		"https://assets.example.org/share.jpg",
+		"https://assets.example.org/share.jpeg",
+		"https://assets.example.org/share.webp",
+	])("accepts a stable HTTPS share image: %s", (shareImage) => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.identity.assets.shareImage = shareImage;
+		expect(libraryConfigSchema.safeParse(input).success).toBe(true);
+	});
+
+	it.each([
+		["a query string", "https://assets.example.org/share.png?token=abc"],
+		["an SVG file", "https://assets.example.org/share.svg"],
+		["an HTTP URL", "http://assets.example.org/share.png"],
+		["no image extension", "https://assets.example.org/share"],
+	])("rejects a share image with %s", (_reason, shareImage) => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.identity.assets.shareImage = shareImage;
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+
+	it("shows the powered-by footer link by default and allows turning it off", () => {
+		expect(
+			libraryConfigSchema.parse(minimalLibraryConfig).footer.poweredBy,
+		).toBe(true);
+
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.footer = { poweredBy: false };
+		expect(libraryConfigSchema.parse(input).footer.poweredBy).toBe(false);
+	});
+});
+
 describe("reusable field schemas", () => {
 	it("rejects an HTTP public origin", () => {
 		const input = cloneLibraryConfig(minimalLibraryConfig);

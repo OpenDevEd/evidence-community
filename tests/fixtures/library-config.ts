@@ -65,6 +65,9 @@ export const maximalLibraryConfig = {
 	identity: {
 		name: "Maximal Evidence Library",
 		shortName: "Maximal Library",
+		tagline: "Evidence for better education decisions.",
+		description:
+			"The Maximal Evidence Library collects research about education in low- and middle-income countries.",
 		baseUrl: "https://maximal.example.org",
 		fundingPartners: [
 			{
@@ -85,6 +88,7 @@ export const maximalLibraryConfig = {
 				"https://assets.example.org/maximal/icon.ico",
 			],
 			logoStyles: "max-width: 12rem;\nheight: auto;",
+			shareImage: "https://assets.example.org/maximal/share.png",
 		},
 	},
 	institutions: [
@@ -177,6 +181,7 @@ export const maximalLibraryConfig = {
 		],
 		disclaimer: "Research evidence is provided as-is.",
 		attribution: "Built by OpenDevEd.",
+		poweredBy: false,
 	},
 	contact: {
 		email: "hello@example.org",
