@@ -92,6 +92,22 @@ export function parseAdminCollectionSearchRequest(
 	return searchRequestSchema.parse(value);
 }
 
+const openScholarCollectionRequestSchema = z.object({
+	cursor: z.string().min(1).nullable().default(null),
+	pageSize: z.coerce
+		.number()
+		.int()
+		.min(1)
+		.max(ADMIN_COLLECTION_MAX_PAGE_SIZE)
+		.default(ADMIN_COLLECTION_PAGE_SIZE),
+	query: z.string().trim().max(200).default(""),
+});
+
+/** OpenScholar pickers read the whole catalogue: every source, every state. */
+export function parseOpenScholarCollectionRequest(value: unknown) {
+	return openScholarCollectionRequestSchema.parse(value);
+}
+
 const searchCursorSchema = z.object({
 	v: z.literal(1),
 	key: collectionKeySchema,

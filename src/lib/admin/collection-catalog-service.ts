@@ -12,6 +12,7 @@ import {
 	parseAdminCollectionChildrenRequest,
 	parseAdminCollectionResolveKeys,
 	parseAdminCollectionSearchRequest,
+	parseOpenScholarCollectionRequest,
 	type AdminCollectionChildrenRequest,
 	type AdminCollectionSearchRequest,
 } from "./collection-catalog-contract";
@@ -26,6 +27,10 @@ const collectionNameSort = sql<string>`lower(coalesce(${collection.name}, ''))`;
 
 function dateString(value: Date | string) {
 	return value instanceof Date ? value.toISOString() : value;
+}
+
+function collectionTitle(name: string | null) {
+	return name?.trim() || "Untitled collection";
 }
 
 function containsPattern(value: string) {
@@ -55,6 +60,7 @@ function catalogSelection(database: Database) {
 		key: collection.key,
 		name: collection.name,
 		nameSort: collectionNameSort,
+		numItems: collection.numItems,
 		parentCollection: collection.parentCollection,
 		revision: collection.revision,
 		sortOrder: collection.sortOrder,
@@ -69,6 +75,7 @@ type CatalogRow = {
 	key: string;
 	name: string | null;
 	nameSort: string;
+	numItems: number | null;
 	parentCollection: string | null;
 	revision: number;
 	sortOrder: number | null;
@@ -147,11 +154,15 @@ async function hydrateCatalogRows(database: Database, rows: CatalogRow[]) {
 		rows.map(({ key }) => key),
 	);
 	return rows.map(
-		({ nameSort: _nameSort, ...row }): AdminCollectionCatalogEntry => ({
+		({
+			nameSort: _nameSort,
+			numItems: _numItems,
+			...row
+		}): AdminCollectionCatalogEntry => ({
 			...row,
 			ancestors: ancestors.get(row.key) ?? [],
 			deleted: row.deleted === 1,
-			name: row.name?.trim() || "Untitled collection",
+			name: collectionTitle(row.name),
 			updatedAt: dateString(row.updatedAt),
 		}),
 	);
@@ -222,11 +233,9 @@ export async function getAdminCollectionChildrenPage(
 	};
 }
 
-export async function searchAdminCollections(
-	database: Database,
-	input: unknown,
-): Promise<AdminCollectionCatalogPage> {
-	const request = parseAdminCollectionSearchRequest(input);
+type SearchCursor = ReturnType<typeof decodeAdminCollectionSearchCursor>;
+
+function decodeSearchCursor(request: AdminCollectionSearchRequest) {
 	const cursor = request.cursor
 		? decodeAdminCollectionSearchCursor(request.cursor)
 		: null;
@@ -241,7 +250,14 @@ export async function searchAdminCollections(
 			{ cursor: "Search again to start from the first result." },
 		);
 	}
+	return cursor;
+}
 
+async function searchCollectionRows(
+	database: Database,
+	request: AdminCollectionSearchRequest,
+	cursor: SearchCursor | null,
+) {
 	const conditions: SQL[] = [];
 	if (request.query) {
 		conditions.push(
@@ -273,24 +289,73 @@ export async function searchAdminCollections(
 		.limit(request.pageSize + 1);
 	const hasMore = rows.length > request.pageSize;
 	const pageRows = hasMore ? rows.slice(0, request.pageSize) : rows;
-	const items = await hydrateCatalogRows(database, pageRows);
-	const last = items.at(-1);
 	const lastRow = pageRows.at(-1);
-
 	return {
 		hasMore,
-		items,
 		nextCursor:
-			hasMore && last
+			hasMore && lastRow
 				? encodeAdminCollectionSearchCursor({
-						key: last.key,
-						name: lastRow!.nameSort,
+						key: lastRow.key,
+						name: lastRow.nameSort,
 						query: request.query.toLowerCase(),
-						rowSourceConnectionKey: last.sourceConnectionKey,
+						rowSourceConnectionKey: lastRow.sourceConnectionKey,
 						sourceConnectionKey: request.sourceConnectionKey,
 						state: request.state,
 					})
 				: null,
+		pageRows,
+	};
+}
+
+export async function searchAdminCollections(
+	database: Database,
+	input: unknown,
+): Promise<AdminCollectionCatalogPage> {
+	const request = parseAdminCollectionSearchRequest(input);
+	const { hasMore, nextCursor, pageRows } = await searchCollectionRows(
+		database,
+		request,
+		decodeSearchCursor(request),
+	);
+	return {
+		hasMore,
+		items: await hydrateCatalogRows(database, pageRows),
+		nextCursor,
+	};
+}
+
+export type OpenScholarCollection = {
+	count: number;
+	id: string;
+	parentId: string | null;
+	source: string;
+	title: string;
+};
+
+/** The full catalogue for OpenScholar pickers: every source and every state. */
+export async function listOpenScholarCollections(
+	database: Database,
+	input: unknown,
+): Promise<{ items: OpenScholarCollection[]; nextCursor: string | null }> {
+	const request: AdminCollectionSearchRequest = {
+		...parseOpenScholarCollectionRequest(input),
+		sourceConnectionKey: null,
+		state: "all",
+	};
+	const { nextCursor, pageRows } = await searchCollectionRows(
+		database,
+		request,
+		decodeSearchCursor(request),
+	);
+	return {
+		items: pageRows.map((row) => ({
+			count: row.numItems ?? 0,
+			id: row.key,
+			parentId: row.parentCollection,
+			source: row.sourceConnectionKey,
+			title: collectionTitle(row.name),
+		})),
+		nextCursor,
 	};
 }
 
