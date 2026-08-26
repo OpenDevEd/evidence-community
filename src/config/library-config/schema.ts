@@ -39,6 +39,7 @@ import {
 	stableHtmlUrlSchema,
 	stableIconUrlSchema,
 	stableImageUrlSchema,
+	stableShareImageUrlSchema,
 	stableWoff2UrlSchema,
 	tagSchema,
 	utcTimestampSchema,
@@ -170,6 +171,7 @@ const identityAssetsSchema = z
 				addDuplicateIssues(icons, context, (icon) => icon),
 			),
 		logoStyles: logoStylesSchema.default(""),
+		shareImage: stableShareImageUrlSchema.optional(),
 	})
 	.strict()
 	.transform((assets) => ({
@@ -181,6 +183,8 @@ const identitySchema = z
 	.object({
 		name: singleLineStringSchema(100),
 		shortName: singleLineStringSchema(40).optional(),
+		tagline: singleLineStringSchema(160).optional(),
+		description: plainTextSchema(300).optional(),
 		baseUrl: publicHttpsOriginSchema,
 		fundingPartners: z
 			.array(fundingPartnerSchema)
@@ -574,6 +578,7 @@ const footerSchema = z
 			),
 		disclaimer: plainTextSchema(2000).default(""),
 		attribution: plainTextSchema(500).default(""),
+		poweredBy: z.boolean().default(true),
 	})
 	.strict()
 	.prefault({});
@@ -1852,6 +1857,7 @@ export {
 	serviceUrlSchema,
 	stableIconUrlSchema,
 	stableImageUrlSchema,
+	stableShareImageUrlSchema,
 	tagSchema,
 	utcTimestampSchema,
 };
