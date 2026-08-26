@@ -71,6 +71,7 @@ import { toast } from "@/components/layout/Toast";
 import { Formatter } from "recharts/types/component/DefaultTooltipContent";
 import { BsStars } from "react-icons/bs";
 import useBreakpoint, { useBreakpointBelow } from "@/hooks/useBreakpoint";
+import { LibraryTagline } from "@/components/library/LibraryTagline";
 import {
 	useLibraryConfig,
 	useLibraryFeature,
@@ -253,7 +254,6 @@ function SearchTabContent({
 	const t = useTranslations("ui");
 	const tAI = useTranslations("ai");
 	const formatter = useFormatter();
-	const { identity } = useLibraryConfig();
 
 	const {
 		isOpen: isExploreOpen,
@@ -329,14 +329,7 @@ function SearchTabContent({
 				</div>
 			</div>
 
-			{showHeader && identity.tagline && (
-				<p
-					data-library-tagline=""
-					className="text-lg text-black/60 dark:text-white/60"
-				>
-					{identity.tagline}
-				</p>
-			)}
+			<LibraryTagline show={showHeader} />
 
 			{/* Search and filters */}
 			{itemsContext.config.interactionsStyle === "one-line" ? (

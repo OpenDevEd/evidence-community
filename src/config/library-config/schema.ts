@@ -1857,7 +1857,6 @@ export {
 	serviceUrlSchema,
 	stableIconUrlSchema,
 	stableImageUrlSchema,
-	stableShareImageUrlSchema,
 	tagSchema,
 	utcTimestampSchema,
 };
