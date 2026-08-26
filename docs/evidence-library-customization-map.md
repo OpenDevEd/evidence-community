@@ -15,6 +15,7 @@ or `NEXT_PUBLIC_*` variables.
 | Public projection | `src/config/library-config/public.ts` | `LibraryConfigProvider` |
 | Example document | `config/library.example.json` | Operators and tests |
 | Health check | `/api/library-config/health` | Deployment health checks |
+| OpenScholar read API | `/api/openscholar/collections`, `/api/openscholar/institutions` | OpenScholar configuration pickers; bearer token is `authentication.openScholar.machineCredential` |
 
 `LIBRARY_CONFIG_PATH` selects the document. It is deployment plumbing, not a
 library customization value. In production the path is required. The same

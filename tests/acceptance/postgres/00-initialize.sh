@@ -60,7 +60,7 @@ INSERT INTO "item" (
 	'Amber DOI acceptance report',
 	'This report proves the local Crossref and Zenodo publication flow.',
 	'2026-08-13',
-	'[{"creatorType":"author","firstName":"Ada","lastName":"Lovelace"}]'::jsonb,
+	'[{"creatorType":"author","firstName":"Ada","lastName":"Lovelace","institutions":[{"display_name":"Amber Institute","country_code":"GB"},{"display_name":"Indigo College","country_code":"KE"}]}]'::jsonb,
 	'Amber Evidence Library',
 	0
 );
