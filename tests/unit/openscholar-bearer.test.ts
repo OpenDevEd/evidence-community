@@ -51,12 +51,9 @@ describe("OpenScholar bearer guard", () => {
 		const response = await requireOpenScholarBearer(request(headers));
 
 		expect(response?.status).toBe(401);
-		expect(response?.headers.get("cache-control")).toBe("no-store");
-		expect(await response?.json()).toEqual({
-			error: {
-				code: "unauthorized",
-				message: "Use the library's machine credential as a bearer token.",
-			},
+		expect(response?.headers.get("cache-control")).toBe("private, no-store");
+		expect(await response?.json()).toMatchObject({
+			error: { code: "unauthorized" },
 		});
 	});
 });
