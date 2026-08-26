@@ -25,12 +25,12 @@ container image can be started repeatedly with different mounted documents.
 | Section | What it controls | Main constraints |
 | --- | --- | --- |
 | `schemaVersion`, `revision`, `updatedAt` | Contract version and revision identity | Schema version `1`; bounded revision; UTC timestamp |
-| `identity` | Name, short name, canonical origin, funding partners | HTTPS origin; bounded unique partner IDs |
-| `identity.assets` | Dark/light logos, favicon, app icons, logo CSS | Stable public URLs; CSS declarations only |
+| `identity` | Name, short name, tagline, description, canonical origin, funding partners | HTTPS origin; tagline is one line up to 160 characters; description up to 300 characters and used for page and social previews; bounded unique partner IDs |
+| `identity.assets` | Dark/light logos, favicon, app icons, logo CSS, share image | Stable public URLs; share image is a PNG, JPG, or WebP HTTPS URL without a query string; CSS declarations only |
 | `institutions` | Institution names and optional logos | Up to 200; unique IDs and case-insensitive names |
 | `theme` | Layout, colors, mode, fonts, weights | Catalog values and validated colors/font URLs |
 | `navigation` | Internal and external navbar entries and icons | Bounded lists; platform icons or validated asset URLs |
-| `footer` | Sections, links, social links, attribution, disclaimer | Bounded unique IDs and validated links |
+| `footer` | Sections, links, social links, attribution, disclaimer, "Powered by OpenScholar" link | Bounded unique IDs and validated links; `poweredBy` defaults to `true` |
 | `contact` | Review email, phone, address, PayPal link | Valid email/URL and bounded plain text |
 | `legal` | Privacy, cookie, and terms links | Internal paths or stable external URLs |
 | `localization` | Enabled locales, default, detection, priority | Platform locale catalog; default and priority must be enabled |
