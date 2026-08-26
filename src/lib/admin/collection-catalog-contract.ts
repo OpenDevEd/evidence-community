@@ -24,7 +24,7 @@ export type AdminCollectionSearchState = z.infer<
 	typeof collectionSearchStateSchema
 >;
 
-const childrenRequestSchema = z.object({
+const pagedRequestFields = {
 	cursor: z.string().min(1).nullable().default(null),
 	pageSize: z.coerce
 		.number()
@@ -32,6 +32,11 @@ const childrenRequestSchema = z.object({
 		.min(1)
 		.max(ADMIN_COLLECTION_MAX_PAGE_SIZE)
 		.default(ADMIN_COLLECTION_PAGE_SIZE),
+};
+const collectionQuerySchema = z.string().trim().max(200).default("");
+
+const childrenRequestSchema = z.object({
+	...pagedRequestFields,
 	parentCollection: collectionKeySchema.nullable().default(null),
 	sourceConnectionKey: z.string().trim().min(1).max(64),
 });
@@ -57,14 +62,8 @@ const childrenCursorSchema = z.object({
 
 const searchRequestSchema = z
 	.object({
-		cursor: z.string().min(1).nullable().default(null),
-		pageSize: z.coerce
-			.number()
-			.int()
-			.min(1)
-			.max(ADMIN_COLLECTION_MAX_PAGE_SIZE)
-			.default(ADMIN_COLLECTION_PAGE_SIZE),
-		query: z.string().trim().max(200).default(""),
+		...pagedRequestFields,
+		query: collectionQuerySchema,
 		sourceConnectionKey: z
 			.string()
 			.trim()
@@ -93,14 +92,8 @@ export function parseAdminCollectionSearchRequest(
 }
 
 const openScholarCollectionRequestSchema = z.object({
-	cursor: z.string().min(1).nullable().default(null),
-	pageSize: z.coerce
-		.number()
-		.int()
-		.min(1)
-		.max(ADMIN_COLLECTION_MAX_PAGE_SIZE)
-		.default(ADMIN_COLLECTION_PAGE_SIZE),
-	query: z.string().trim().max(200).default(""),
+	...pagedRequestFields,
+	query: collectionQuerySchema,
 });
 
 /** OpenScholar pickers read the whole catalogue: every source, every state. */
