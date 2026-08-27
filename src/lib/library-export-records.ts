@@ -187,19 +187,19 @@ async function attachTags(
 }
 
 /**
- * Reads the next page of records for a whole-library citation file.
+ * The query behind one page of a whole-library citation file.
  *
  * Paging walks the primary key upwards rather than counting from an offset.
  * A record added or removed while the file is being written can therefore
  * never make an untouched record appear twice or be skipped.
  */
-export async function readCitationRecordsPage(
+export function buildCitationRecordsQuery(
+	database: Database,
 	config: LibraryServerConfig,
 	afterKey: string | null,
 	limit: number,
-): Promise<Item[]> {
-	const database = await getDatabaseForConfig(config);
-	const records = await database
+) {
+	return database
 		.select(selectionFor(CITATION_RECORD_COLUMNS))
 		.from(item)
 		.where(
@@ -210,24 +210,44 @@ export async function readCitationRecordsPage(
 		)
 		.orderBy(asc(item.key))
 		.limit(limit);
-
-	return attachTags(database, records as Record<string, unknown>[]);
 }
 
-/**
- * Reads the newest records for the Atom feed, newest addition first.
- */
-export async function readNewestRecords(
+/** The query behind the Atom feed: newest addition first. */
+export function buildNewestRecordsQuery(
+	database: Database,
 	config: LibraryServerConfig,
 	limit: number,
-): Promise<Item[]> {
-	const database = await getDatabaseForConfig(config);
-	const records = await database
+) {
+	return database
 		.select(selectionFor(FEED_RECORD_COLUMNS))
 		.from(item)
 		.where(publicRecordCondition(database, config))
 		.orderBy(sql`${item.dateAdded} DESC NULLS LAST`, desc(item.key))
 		.limit(limit);
+}
+
+export async function readCitationRecordsPage(
+	config: LibraryServerConfig,
+	afterKey: string | null,
+	limit: number,
+): Promise<Item[]> {
+	const database = await getDatabaseForConfig(config);
+	const records = await buildCitationRecordsQuery(
+		database,
+		config,
+		afterKey,
+		limit,
+	);
+
+	return attachTags(database, records as Record<string, unknown>[]);
+}
+
+export async function readNewestRecords(
+	config: LibraryServerConfig,
+	limit: number,
+): Promise<Item[]> {
+	const database = await getDatabaseForConfig(config);
+	const records = await buildNewestRecordsQuery(database, config, limit);
 
 	return records as unknown as Item[];
 }
