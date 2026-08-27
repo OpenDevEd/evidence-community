@@ -1,25 +1,13 @@
 import { NextResponse } from "next/server";
-import { getCachedItem } from "../cache";
 import { streamText } from "ai";
 import { trackUsage } from "@/lib/ai";
 import { getRuntimeRequestLocale } from "@/i18n/server";
-import { isAIAllowed } from "@/lib/utils";
-import { getLibraryConfig } from "@/config/library-config/server";
-import { isLibraryFeatureEnabled } from "@/config/library-config/features";
-import {
-	AIProviderUnavailableError,
-	getAIProviderForConfig,
-} from "@/lib/ai-provider";
 import { getAISystemPrompt } from "@/lib/ai-prompts";
+import { prepareDocumentAIRequest } from "./document-request";
 
 export const maxDuration = 60;
 
 export async function POST(req: Request) {
-	const libraryConfig = await getLibraryConfig();
-	if (!isLibraryFeatureEnabled(libraryConfig.features, "ai")) {
-		return new NextResponse("AI is disabled", { status: 403 });
-	}
-
 	const { searchParams } = new URL(req.url);
 	const prompt = searchParams.get("prompt") || "summarize";
 	const locale = await getRuntimeRequestLocale(req);
@@ -29,27 +17,9 @@ export async function POST(req: Request) {
 		return new NextResponse("Invalid prompt", { status: 400 });
 	}
 
-	const item = await getCachedItem(key!);
-
-	if (!item || !item.item) {
-		return new NextResponse("Item not found", { status: 404 });
-	}
-
-	let models;
-	try {
-		models = await getAIProviderForConfig(libraryConfig, provider);
-	} catch (error) {
-		if (error instanceof AIProviderUnavailableError) {
-			return new NextResponse(error.message, { status: 404 });
-		}
-		throw error;
-	}
-
-	const { fullTextPDFs, ...cleanItem } = item.item;
-
-	if (!isAIAllowed(cleanItem)) {
-		return new NextResponse("AI not allowed", { status: 403 });
-	}
+	const prepared = await prepareDocumentAIRequest(key, provider);
+	if ("response" in prepared) return prepared.response;
+	const { cleanItem, fullTextPDFs, libraryConfig, models } = prepared;
 
 	for (const attachment of cleanItem.attachmentsData || []) {
 		const fullTextPDF = fullTextPDFs?.find(
