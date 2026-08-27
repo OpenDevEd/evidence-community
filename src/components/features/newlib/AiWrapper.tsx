@@ -52,28 +52,31 @@ function AiButton({
 		distinctId: posthog.get_distinct_id(),
 	};
 	const locale = useLocale();
-	
+
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
 	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
 		useDisclosure();
-		
+
 	const { data: questions, error: questionsError } = useSWR<string[]>(
-		isChatOpen ?[
-			`/ai/questions`,
-			body,
-			{
-				"Accept-Language": locale,
-			},
-		] : null,
+		isChatOpen
+			? [
+					`/ai/questions`,
+					body,
+					{
+						"Accept-Language": locale,
+					},
+				]
+			: null,
 		fetcherPOST,
 		{
 			revalidateOnFocus: false,
 			revalidateOnReconnect: false,
 			revalidateIfStale: false,
-		}
+		},
 	);
 	const [id, setId] = useState(randomUUID);
+	const [hasChatConversation, setHasChatConversation] = useState(false);
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
 	useEffect(() => {
@@ -116,18 +119,19 @@ function AiButton({
 		id,
 		updateHistory,
 		data,
-		selectedModel
+		selectedModel,
 	);
 	const explainFeature = useAIFeature(
 		"explain",
 		id,
 		updateHistory,
 		data,
-		selectedModel
+		selectedModel,
 	);
 
 	const handleModelChange = (modelId: AIModelId) => {
 		setSelectedModel(modelId);
+		setHasChatConversation(false);
 		[summaryFeature, explainFeature].forEach((feature) => {
 			feature.setCompletion("");
 		});
@@ -136,18 +140,26 @@ function AiButton({
 
 	return (
 		<motion.div
-			className={twMerge("", variant === "default" && "fixed bottom-0 right-0 z-40 print:hidden")}
+			className={twMerge(
+				"",
+				variant === "default" &&
+					"fixed bottom-0 right-0 z-40 print:hidden",
+			)}
 			initial={{ opacity: 0, x: 100 }}
 			animate={{ opacity: 1, x: 0 }}
 		>
-			<div className={twMerge(
-				"flex items-center justify-center",
-				variant === "default" && " p-4")}>
+			<div
+				className={twMerge(
+					"flex items-center justify-center",
+					variant === "default" && " p-4",
+				)}
+			>
 				<ModelSelector
 					isOpen={isChangeOpen}
 					onOpenChange={onChangeOpenChange}
 					selectedModel={selectedModel}
 					onModelChange={handleModelChange}
+					hasConversation={hasChatConversation}
 				/>
 				<ChatModal
 					key={selectedModel}
@@ -156,6 +168,8 @@ function AiButton({
 					data={data}
 					modelId={selectedModel}
 					questions={questions}
+					onModelChange={handleModelChange}
+					onConversationStateChange={setHasChatConversation}
 				/>
 				{[summaryFeature, explainFeature].map((feature) => (
 					<GenerativeModal
@@ -193,7 +207,7 @@ function AiButton({
 							aria-label={tUI("aiMenuAriaLabel")}
 							className={twMerge(
 								// "bg-gradient-to-r from-accent-400 to-accent-700 !text-white !outline-0 border-0 shadow-[0_0_12px_4px_rgba(255,255,255,0.1)] shadow-accent",
-								variant === "default" && "!p-0 rounded-full "
+								variant === "default" && "!p-0 rounded-full ",
 							)}
 							size={variant === "inline" ? "sm" : "lg"}
 						>
@@ -208,7 +222,7 @@ function AiButton({
 							onChangeOpenChange,
 							summaryFeature,
 							explainFeature,
-							onChatOpenChange
+							onChatOpenChange,
 						)}
 						itemClasses={{
 							base: "data-[hover]:bg-accent dark:data-[hover]:bg-accent data-[hover]:text-white dark:data-[hover]:text-white",
@@ -239,17 +253,14 @@ export default function AiWrapper({
 	data: ItemGetResponse | undefined;
 	variant?: "default" | "inline";
 }) {
-	const { data: aiStatus } = useSWR<{ enabled: boolean }>("/ai/status", fetcher);
+	const { data: aiStatus } = useSWR<{ enabled: boolean }>(
+		"/ai/status",
+		fetcher,
+	);
 	const aiAllowed = hasVisiblePdfAttachment(data?.item);
 	const isAIEnabled = useFeatureFlagEnabled("ai-features");
 
 	if (!isAIEnabled || !aiAllowed || aiStatus?.enabled !== true) return null;
 
-	return (
-		<AiButton
-			key={data?.item?.key}
-			data={data}
-			variant={variant}
-		/>
-	);
+	return <AiButton key={data?.item?.key} data={data} variant={variant} />;
 }

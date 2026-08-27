@@ -14,6 +14,16 @@ const itemKeySchema = z
 	.max(255)
 	.regex(/^[A-Za-z0-9:_-]+$/);
 
+export const SMART_SCREENING_LIMITS = {
+	items: 25,
+	fields: 20,
+	labelCharacters: 120,
+	descriptionCharacters: {
+		min: 20,
+		max: 1000,
+	},
+} as const;
+
 export const publicationGenerationSchema = z
 	.object({
 		prompt: itemKeySchema,
@@ -46,18 +56,29 @@ export const chatRequestSchema = z
 
 export const smartScreeningFieldSchema = z
 	.object({
-		label: z.string().trim().min(1).max(120),
-		description: z.string().trim().min(1).max(1000),
+		label: z
+			.string()
+			.trim()
+			.min(1)
+			.max(SMART_SCREENING_LIMITS.labelCharacters),
+		description: z
+			.string()
+			.trim()
+			.min(SMART_SCREENING_LIMITS.descriptionCharacters.min)
+			.max(SMART_SCREENING_LIMITS.descriptionCharacters.max),
 		type: z.enum(["string", "number", "boolean"]),
 	})
 	.strict();
 
 export const screeningRequestSchema = z
 	.object({
-		keys: z.array(itemKeySchema).min(1).max(25),
+		keys: z.array(itemKeySchema).min(1).max(SMART_SCREENING_LIMITS.items),
 		modelId: aiModelIdSchema,
 		distinctId: distinctIdSchema,
-		fields: z.array(smartScreeningFieldSchema).min(1).max(20),
+		fields: z
+			.array(smartScreeningFieldSchema)
+			.min(1)
+			.max(SMART_SCREENING_LIMITS.fields),
 	})
 	.strict()
 	.refine(

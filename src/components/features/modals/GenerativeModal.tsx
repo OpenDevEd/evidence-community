@@ -14,7 +14,7 @@ import { BiTrash } from "react-icons/bi";
 import { AIMarkdown } from "../markdown/Markdown";
 import { AnimatePresence, motion } from "framer-motion";
 import { useFormatter, useTranslations } from "next-intl";
-import { getAIModelForUI } from "@/constants/ai";
+import { findAIModelForUI } from "@/constants/ai";
 import React from "react";
 import { Button } from "@/components/nextui/Button";
 import { AIHistory } from "@/types/ai";
@@ -28,6 +28,7 @@ import { IoChevronDown } from "react-icons/io5";
 import type { AIModelId } from "@/lib/ai/models";
 import { upsertAIHistory } from "@/lib/ai/history";
 import { useStickToBottom } from "use-stick-to-bottom";
+import { BsStars } from "react-icons/bs";
 
 export default function GenerativeModal({
 	history,
@@ -165,47 +166,51 @@ export default function GenerativeModal({
 												}
 												disallowEmptySelection
 											>
-												{displayHistory.map((item) => (
-													<ListboxItem
-														key={item.id}
-														startContent={
-															<div className="size-8 aspect-square shrink-0 p-2 bg-accent rounded-full group icon-container">
-																{item.id ===
-																	id &&
-																isLoading ? (
-																	<ImSpinner8 className="h-full animate-spin fill-white" />
-																) : (
-																	React.createElement(
-																		getAIModelForUI(
-																			item.modelId,
-																		).icon,
-																		{
-																			className:
-																				"h-full fill-white group-[.icon-container:hover]:scale-90 transition-all duration-300",
-																		},
-																	)
+												{displayHistory.map((item) => {
+													const HistoryModelIcon =
+														findAIModelForUI(
+															item.modelId,
+														)?.icon ?? BsStars;
+													return (
+														<ListboxItem
+															key={item.id}
+															startContent={
+																<div className="size-8 aspect-square shrink-0 p-2 bg-accent rounded-full group icon-container">
+																	{item.id ===
+																		id &&
+																	isLoading ? (
+																		<ImSpinner8 className="h-full animate-spin fill-white" />
+																	) : (
+																		React.createElement(
+																			HistoryModelIcon,
+																			{
+																				className:
+																					"h-full fill-white group-[.icon-container:hover]:scale-90 transition-all duration-300",
+																			},
+																		)
+																	)}
+																</div>
+															}
+															className="data-[selected]:opacity-100 lg:opacity-50 p-2 pr-4 rounded-full"
+														>
+															<div className="text-base font-medium line-clamp-1 leading-5">
+																{item.title}
+															</div>
+															<div className="text-xs text-black/50 dark:text-white/50 leading-4">
+																{format.dateTime(
+																	new Date(
+																		item.date,
+																	),
+																	{
+																		year: "2-digit",
+																		month: "2-digit",
+																		day: "2-digit",
+																	},
 																)}
 															</div>
-														}
-														className="data-[selected]:opacity-100 lg:opacity-50 p-2 pr-4 rounded-full"
-													>
-														<div className="text-base font-medium line-clamp-1 leading-5">
-															{item.title}
-														</div>
-														<div className="text-xs text-black/50 dark:text-white/50 leading-4">
-															{format.dateTime(
-																new Date(
-																	item.date,
-																),
-																{
-																	year: "2-digit",
-																	month: "2-digit",
-																	day: "2-digit",
-																},
-															)}
-														</div>
-													</ListboxItem>
-												))}
+														</ListboxItem>
+													);
+												})}
 											</Listbox>
 										</ScrollShadow>
 									</motion.div>

@@ -11,6 +11,7 @@ import {
 import {
 	chatRequestSchema,
 	publicationGenerationSchema,
+	SMART_SCREENING_LIMITS,
 	screeningRequestSchema,
 } from "./schemas";
 import {
@@ -39,10 +40,7 @@ import {
 	EVIDENCE_CITATION_INSTRUCTIONS,
 } from "./prompt-context";
 import { screeningExportContent } from "./screening-export";
-import {
-	chatMessageContent,
-	chatTranscriptContent,
-} from "./transcript-export";
+import { chatMessageContent, chatTranscriptContent } from "./transcript-export";
 import {
 	createOpenRouterSessionId,
 	createOpenRouterModelSettings,
@@ -65,6 +63,7 @@ import {
 	CURRENT_RESULTS_WINDOW_SIZE,
 } from "./current-results-cursor";
 import { toolActivitySummary, type ResearchToolPart } from "./tool-activity";
+import { screeningSelection } from "./screening-selection";
 
 const SELECTABLE_MODEL_IDS = [
 	"openai/gpt-5.6-luna",
@@ -139,9 +138,9 @@ test("OpenRouter cache settings are stable and regeneration can refresh response
 	assert.deepEqual(
 		openRouterExplicitCacheProviderOptions(CLAUDE_SONNET_MODEL_ID),
 		{
-		openrouter: {
-			cacheControl: { type: "ephemeral", ttl: "1h" },
-		},
+			openrouter: {
+				cacheControl: { type: "ephemeral", ttl: "1h" },
+			},
 		},
 	);
 	assert.equal(
@@ -215,10 +214,7 @@ test("chat request context snapshots remain in place and append only when contex
 		},
 	];
 	assert.strictEqual(messages[0].parts[0], firstPart);
-	assert.deepEqual(
-		latestResearchRequestContext(withChangedContext),
-		changed,
-	);
+	assert.deepEqual(latestResearchRequestContext(withChangedContext), changed);
 	assert.match(researchRequestContextText(first), /2026-08-19/);
 	assert.match(researchRequestContextText(changed), /teacher/);
 });
@@ -422,6 +418,62 @@ test("AI request schemas reject unknown models and oversized screening batches",
 	);
 });
 
+test("Smart Screening uses one set of request limits", () => {
+	const validDescription = "x".repeat(
+		SMART_SCREENING_LIMITS.descriptionCharacters.min,
+	);
+	const validField = {
+		label: "Relevant",
+		description: validDescription,
+		type: "boolean" as const,
+	};
+
+	assert.equal(
+		screeningRequestSchema.safeParse({
+			keys: ["ITEM1"],
+			modelId: DEFAULT_AI_MODEL_ID,
+			fields: [validField],
+		}).success,
+		true,
+	);
+	assert.equal(
+		screeningRequestSchema.safeParse({
+			keys: ["ITEM1"],
+			modelId: DEFAULT_AI_MODEL_ID,
+			fields: [
+				{
+					...validField,
+					description: validDescription.slice(1),
+				},
+			],
+		}).success,
+		false,
+	);
+	assert.equal(
+		screeningRequestSchema.safeParse({
+			keys: ["ITEM1"],
+			modelId: DEFAULT_AI_MODEL_ID,
+			fields: Array.from(
+				{ length: SMART_SCREENING_LIMITS.fields + 1 },
+				(_, index) => ({ ...validField, label: `Field ${index}` }),
+			),
+		}).success,
+		false,
+	);
+});
+
+test("Smart Screening reports citations omitted from its bounded batch", () => {
+	const content = Array.from(
+		{ length: SMART_SCREENING_LIMITS.items + 2 },
+		(_, index) => `[Publication ${index}](/lib/ITEM${index})`,
+	).join("\n");
+	const selection = screeningSelection(`${content}\n[Duplicate](/lib/ITEM0)`);
+
+	assert.equal(selection.keys.length, SMART_SCREENING_LIMITS.items);
+	assert.equal(selection.total, SMART_SCREENING_LIMITS.items + 2);
+	assert.equal(selection.omitted, 2);
+});
+
 test("chat requests accept the current AI SDK transport envelope", () => {
 	const request = {
 		id: "chat-1",
@@ -617,7 +669,10 @@ test("current-results listing needs no queries, but plain searches still do", ()
 test("search context normalisation never throws on transient URL states", () => {
 	// "-" is range mode with no years picked yet; it carries no constraint.
 	assert.equal(normalizeLibrarySearchContext({ range: "-" }).range, "");
-	assert.equal(normalizeLibrarySearchContext({ range: "2015-" }).range, "2015-");
+	assert.equal(
+		normalizeLibrarySearchContext({ range: "2015-" }).range,
+		"2015-",
+	);
 	assert.equal(normalizeLibrarySearchContext({ range: "garbage" }).range, "");
 	assert.equal(
 		normalizeLibrarySearchContext({ sort: "nope" }).sort,
@@ -959,7 +1014,8 @@ test("AI failures and UI messages preserve useful details", () => {
 			{
 				lastError: Object.assign(new Error("Bad Gateway"), {
 					statusCode: 502,
-					responseBody: "<title>openrouter.ai | 502: Bad gateway</title>",
+					responseBody:
+						"<title>openrouter.ai | 502: Bad gateway</title>",
 				}),
 			},
 		),
@@ -1142,7 +1198,11 @@ test("per-message export includes only the final answer text", async () => {
 		id: "assistant-1",
 		role: "assistant",
 		parts: [
-			{ type: "reasoning", text: "Secret reasoning trace", state: "done" },
+			{
+				type: "reasoning",
+				text: "Secret reasoning trace",
+				state: "done",
+			},
 			{
 				type: "tool-searchLibrary",
 				toolCallId: "tool-1",
@@ -1175,7 +1235,11 @@ test("per-message export includes only the final answer text", async () => {
 	const plaintext = await chatMessageContent("plaintext", message);
 	assert.match(plaintext, /^Interim answer\n\nFinal answer Source, p\. 4/);
 
-	const html = await chatMessageContent("html", message, "https://example.org");
+	const html = await chatMessageContent(
+		"html",
+		message,
+		"https://example.org",
+	);
 	assert.match(html, /<strong>Final answer<\/strong>/);
 	assert.doesNotMatch(html, /Secret reasoning|<h2>/);
 });

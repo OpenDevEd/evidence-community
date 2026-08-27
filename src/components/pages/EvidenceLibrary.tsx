@@ -22,13 +22,7 @@ import {
 	Tooltip,
 	useDisclosure,
 } from "@nextui-org/react";
-import React, {
-	useEffect,
-	ReactNode,
-	use,
-	useRef,
-	useState,
-} from "react";
+import React, { useEffect, ReactNode, use, useRef, useState } from "react";
 import { Tabs, Tab } from "@nextui-org/react";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { AiOutlineCompass } from "react-icons/ai";
@@ -66,6 +60,7 @@ import useBreakpoint, { useBreakpointBelow } from "@/hooks/useBreakpoint";
 import useSWR from "swr";
 import { fetcher } from "@/lib/utils";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
+import { SMART_SCREENING_LIMITS } from "@/lib/ai/schemas";
 
 function DropDownIcon({
 	Icon,
@@ -523,7 +518,6 @@ export function useIsAISearchEnabled() {
 	};
 }
 
-
 export function ContentInteractions({
 	abstract,
 	onAbstractChange,
@@ -547,7 +541,7 @@ export function ContentInteractions({
 		onOpen: onChatOpen,
 		onOpenChange: onChatOpenChange,
 	} = useDisclosure();
-	const { selectedModel } = useSelectedModel();
+	const { selectedModel, setSelectedModel } = useSelectedModel();
 	// Gate on the server-provided flag only: the async /ai/status check made
 	// the Ask AI button pop in late. If AI turns out to be down, the chat
 	// itself surfaces the error.
@@ -584,6 +578,7 @@ export function ContentInteractions({
 				externalInput={externalInput}
 				setExternalInput={setExternalInput}
 				searchContext={searchContext}
+				onModelChange={setSelectedModel}
 			/>
 			<SearchTabContent
 				header={header}
@@ -647,39 +642,41 @@ function MainContent() {
 					engaged && "pointer-events-none",
 				)}
 			>
-			<motion.div
-				initial={false}
-				animate={
-					engaged
-						? { opacity: 0, x: prefersReducedMotion ? 0 : 48 }
-						: { opacity: 1, x: 0 }
-				}
-				transition={
-					engaged
-						? { duration: 0.35, ease: "easeOut" }
-						: {
-								delay: 0.2,
-								type: "spring",
-								bounce: 0.15,
-								duration: 0.55,
-							}
-				}
-				className="lg:w-[24rem] xl:w-[28.5rem]"
-			>
-			<CollectionsList
-				data={props.collectionsData}
-				handleCheckboxChange={props.handleCheckboxChange}
-				selectedCollections={props.selectedCollections}
-				hierarchy={props.hierarchy}
-				range={props.queryParams.range}
-				handleRangeChange={props.handleRangeChange}
-				facetDistribution={props.facetDistribution}
-				queryParams={props.queryParams}
-				handleInstitutionSelect={props.handleInstitutionSelect}
-				handleCountrySelect={props.handleCountrySelect}
-				handleAuthorCountrySelect={props.handleAuthorCountrySelect}
-			/>
-			</motion.div>
+				<motion.div
+					initial={false}
+					animate={
+						engaged
+							? { opacity: 0, x: prefersReducedMotion ? 0 : 48 }
+							: { opacity: 1, x: 0 }
+					}
+					transition={
+						engaged
+							? { duration: 0.35, ease: "easeOut" }
+							: {
+									delay: 0.2,
+									type: "spring",
+									bounce: 0.15,
+									duration: 0.55,
+								}
+					}
+					className="lg:w-[24rem] xl:w-[28.5rem]"
+				>
+					<CollectionsList
+						data={props.collectionsData}
+						handleCheckboxChange={props.handleCheckboxChange}
+						selectedCollections={props.selectedCollections}
+						hierarchy={props.hierarchy}
+						range={props.queryParams.range}
+						handleRangeChange={props.handleRangeChange}
+						facetDistribution={props.facetDistribution}
+						queryParams={props.queryParams}
+						handleInstitutionSelect={props.handleInstitutionSelect}
+						handleCountrySelect={props.handleCountrySelect}
+						handleAuthorCountrySelect={
+							props.handleAuthorCountrySelect
+						}
+					/>
+				</motion.div>
 			</motion.div>
 			{/* Mobile filters live in the Explore modal; the sidebar's
 			    non-modal root is hidden below lg, so no mobile copy here —
@@ -721,12 +718,28 @@ export function SmartScreeningModal({
 	)}): ${t("description")}`;
 
 	const fieldSchema = z.object({
-		label: z.string().min(1, t("labelRequired")).max(64, t("labelTooLong")),
+		label: z
+			.string()
+			.min(1, t("labelRequired"))
+			.max(
+				SMART_SCREENING_LIMITS.labelCharacters,
+				t("labelTooLong", {
+					count: SMART_SCREENING_LIMITS.labelCharacters,
+				}),
+			),
 		type: z.enum(["string", "number", "boolean"]),
 		description: z
 			.string()
-			.min(1, t("descriptionRequired"))
-			.max(1024, t("descriptionTooLong")),
+			.min(
+				SMART_SCREENING_LIMITS.descriptionCharacters.min,
+				t("descriptionMin20"),
+			)
+			.max(
+				SMART_SCREENING_LIMITS.descriptionCharacters.max,
+				t("descriptionTooLong", {
+					count: SMART_SCREENING_LIMITS.descriptionCharacters.max,
+				}),
+			),
 	});
 
 	const convertedText = fields
@@ -741,6 +754,13 @@ export function SmartScreeningModal({
 	const validatorFunction = (localFields: SmartScreeningField[]) => {
 		const newErrors: Record<number, string> = {};
 		let hasErrors = false;
+		if (localFields.length > SMART_SCREENING_LIMITS.fields) {
+			newErrors[SMART_SCREENING_LIMITS.fields] = t(
+				"tooManyScreeningFields",
+				{ count: SMART_SCREENING_LIMITS.fields },
+			);
+			hasErrors = true;
+		}
 
 		// Check for duplicate labels
 		const labelCounts: Record<string, number[]> = {};
@@ -911,6 +931,9 @@ export function SmartScreeningModal({
 																value={
 																	field.label
 																}
+																maxLength={
+																	SMART_SCREENING_LIMITS.labelCharacters
+																}
 																isInvalid={
 																	!!fieldErrors[
 																		index
@@ -956,6 +979,11 @@ export function SmartScreeningModal({
 																)}
 																value={
 																	field.description
+																}
+																maxLength={
+																	SMART_SCREENING_LIMITS
+																		.descriptionCharacters
+																		.max
 																}
 																isRequired={
 																	true
@@ -1136,6 +1164,10 @@ export function SmartScreeningModal({
 								<>
 									<Button
 										size="md"
+										isDisabled={
+											localFields.length >=
+											SMART_SCREENING_LIMITS.fields
+										}
 										onPress={() =>
 											setLocalFields([
 												...localFields,

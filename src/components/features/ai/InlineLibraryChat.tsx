@@ -2,11 +2,7 @@
 
 import { Chat, useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, isToolUIPart } from "ai";
-import {
-	AnimatePresence,
-	motion,
-	useReducedMotion,
-} from "framer-motion";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLocale, useTranslations } from "next-intl";
 import posthog from "posthog-js";
 import {
@@ -30,6 +26,7 @@ import { RiResetLeftFill } from "react-icons/ri";
 import { ButtonGroup, useDisclosure } from "@nextui-org/react";
 import { useLocalStorage } from "usehooks-ts";
 import ModelSelector from "@/components/features/ai/ModelSelector";
+import { ConfirmationModal } from "@/components/nextui/ConfirmationModal";
 import {
 	MessageComponent,
 	createTextMessage,
@@ -72,13 +69,10 @@ import type { LibrarySearchContext } from "@/lib/search-context";
 import { twMerge } from "tailwind-merge";
 import { useStickToBottom } from "use-stick-to-bottom";
 import { BucketSourcesLoader } from "./ContextBucket";
-import {
-	ChatErrorCard,
-	ShortcutHint,
-	useScrollEdges,
-} from "./chat-shared";
+import { ChatErrorCard, ShortcutHint, useScrollEdges } from "./chat-shared";
 import { SHORTCUT_KEYS } from "@/hooks/useShortcutHints";
 import { style as siteStyle } from "@/../tailwind.config";
+import { screeningSelection } from "@/lib/ai/screening-selection";
 
 /**
  * Publications the model touched, most recently touched first. Search hits
@@ -307,7 +301,8 @@ export default function InlineLibraryChat({
 							modelId: chatRequestRef.current?.modelId ?? modelId,
 							distinctId: posthog.get_distinct_id(),
 							mode: chatRequestRef.current?.mode ?? mode,
-							searchContext: chatRequestRef.current?.searchContext,
+							searchContext:
+								chatRequestRef.current?.searchContext,
 						}),
 					}),
 					messages: [
@@ -355,8 +350,7 @@ export default function InlineLibraryChat({
 			void sendMessageWithContext(pendingInput.trim());
 		}
 		requestAnimationFrame(() => {
-			const element =
-				composerFormRef.current?.querySelector("textarea");
+			const element = composerFormRef.current?.querySelector("textarea");
 			if (!element) return;
 			element.focus({ preventScroll: true });
 			element.setSelectionRange(
@@ -472,22 +466,19 @@ export default function InlineLibraryChat({
 	const canRunScreening =
 		smartScreeningFields.length > 0 && screenableContent.length > 0;
 
-	const handleScreening = async (content: string) => {
-		const keys = Array.from(
-			content.matchAll(/\/lib\/([A-Za-z0-9:_-]+)/g),
-			(match) => match[1],
-		);
+	const [pendingScreening, setPendingScreening] =
+		useState<ReturnType<typeof screeningSelection>>();
+	const runScreening = async (keys: string[]) => {
 		if (!keys.length || smartScreeningFields.length === 0) {
 			return;
 		}
-		const keysArray = [...new Set(keys)].slice(0, 25);
 		setIsMutating(true);
 		try {
 			const response = await fetch("/api/ai/screen", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					keys: keysArray,
+					keys,
 					modelId,
 					fields: smartScreeningFields,
 					distinctId: posthog.get_distinct_id(),
@@ -532,6 +523,15 @@ export default function InlineLibraryChat({
 		} finally {
 			setIsMutating(false);
 		}
+	};
+	const handleScreening = (content: string) => {
+		const selection = screeningSelection(content);
+		if (!selection.keys.length || smartScreeningFields.length === 0) return;
+		if (selection.omitted > 0) {
+			setPendingScreening(selection);
+			return;
+		}
+		void runScreening(selection.keys);
 	};
 
 	const getTranscriptContent = useCallback(
@@ -600,11 +600,36 @@ export default function InlineLibraryChat({
 					onOpenChange={onSmartScreeningOpenChange}
 				/>
 			)}
+			<ConfirmationModal
+				isOpen={pendingScreening !== undefined}
+				onOpenChange={(open) => {
+					if (!open) setPendingScreening(undefined);
+				}}
+				title={tUI("screeningLimitTitle", {
+					count: pendingScreening?.keys.length ?? 0,
+				})}
+				description={tUI("screeningLimitDescription", {
+					total: pendingScreening?.total ?? 0,
+					count: pendingScreening?.keys.length ?? 0,
+					omitted: pendingScreening?.omitted ?? 0,
+				})}
+				confirmLabel={tUI("screeningLimitConfirm", {
+					count: pendingScreening?.keys.length ?? 0,
+				})}
+				cancelLabel={tUI("cancel")}
+				onConfirm={() => {
+					if (!pendingScreening) return;
+					const { keys } = pendingScreening;
+					setPendingScreening(undefined);
+					void runScreening(keys);
+				}}
+			/>
 			<ModelSelector
 				isOpen={isModelOpen}
 				onOpenChange={onModelOpenChange}
 				selectedModel={selectedModel}
 				onModelChange={setSelectedModel}
+				hasConversation={conversationStarted}
 			/>
 			<div className="flex items-center justify-between gap-2 border-b border-black/[0.05] px-4 py-2.5 dark:border-white/[0.08]">
 				<span className="text-sm font-semibold text-black/70 dark:text-white/70">
@@ -632,7 +657,9 @@ export default function InlineLibraryChat({
 							size="sm"
 							variant="transparent"
 							aria-label={tUI("resetChat")}
-							startContent={<RiResetLeftFill className="size-3.5" />}
+							startContent={
+								<RiResetLeftFill className="size-3.5" />
+							}
 							// Icon-only on mobile where the header is tight;
 							// the label returns from lg.
 							className="h-7 w-7 min-w-0 gap-1 rounded-lg px-0 text-xs text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10 lg:w-auto lg:px-2"
@@ -758,291 +785,309 @@ export default function InlineLibraryChat({
 					ref={composerDockRef}
 					className="absolute inset-x-0 bottom-0 z-20 border-t border-black/[0.05] bg-white p-3 dark:border-white/[0.08] dark:bg-card"
 				>
-				<AnimatePresence>
-					{isWaiting && (
-						<motion.div
-							aria-hidden="true"
-							initial={{ opacity: 0 }}
-							animate={{ opacity: 1 }}
-							exit={{ opacity: 0 }}
-							transition={{
-								duration: prefersReducedMotion ? 0 : 0.2,
-							}}
-							className="pointer-events-none absolute inset-x-6 top-0 z-20 h-px overflow-hidden"
-						>
-							<div className="h-full w-full animate-gradient-x bg-gradient-to-r from-transparent via-accent/40 to-transparent bg-[length:200%_100%] motion-reduce:animate-none motion-reduce:bg-accent/20" />
-						</motion.div>
-					)}
-				</AnimatePresence>
-				<motion.div
-					initial={false}
-					animate={{
-						y:
-							isComposerFocused && !prefersReducedMotion
-								? -2
-								: 0,
-						scale:
-							isComposerFocused && !prefersReducedMotion
-								? 1.004
-								: 1,
-					}}
-					whileHover={
-						prefersReducedMotion || isWaiting
-							? undefined
-							: { y: -1 }
-					}
-					transition={{ type: "spring", stiffness: 360, damping: 28 }}
-					onFocusCapture={() => setIsComposerFocused(true)}
-					onBlurCapture={(event) => {
-						if (
-							!event.currentTarget.contains(event.relatedTarget)
-						) {
-							setIsComposerFocused(false);
-						}
-					}}
-					className="group/composer relative z-10 w-full min-w-0 overflow-hidden rounded-2xl border border-black/[0.08] bg-white p-1.5 shadow-[0_12px_40px_-34px_rgba(0,0,0,0.45)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent/45 focus-within:shadow-[0_18px_48px_-32px_rgba(235,126,29,0.38)] dark:border-white/10 dark:bg-secondary dark:shadow-none dark:focus-within:shadow-[0_18px_48px_-32px_rgba(235,126,29,0.22)]"
-				>
+					<AnimatePresence>
+						{isWaiting && (
+							<motion.div
+								aria-hidden="true"
+								initial={{ opacity: 0 }}
+								animate={{ opacity: 1 }}
+								exit={{ opacity: 0 }}
+								transition={{
+									duration: prefersReducedMotion ? 0 : 0.2,
+								}}
+								className="pointer-events-none absolute inset-x-6 top-0 z-20 h-px overflow-hidden"
+							>
+								<div className="h-full w-full animate-gradient-x bg-gradient-to-r from-transparent via-accent/40 to-transparent bg-[length:200%_100%] motion-reduce:animate-none motion-reduce:bg-accent/20" />
+							</motion.div>
+						)}
+					</AnimatePresence>
 					<motion.div
-						aria-hidden="true"
 						initial={false}
 						animate={{
-							opacity: isComposerFocused || isWaiting ? 1 : 0,
-							scaleX:
-								isComposerFocused || isWaiting ? 1 : 0.35,
+							y:
+								isComposerFocused && !prefersReducedMotion
+									? -2
+									: 0,
+							scale:
+								isComposerFocused && !prefersReducedMotion
+									? 1.004
+									: 1,
 						}}
+						whileHover={
+							prefersReducedMotion || isWaiting
+								? undefined
+								: { y: -1 }
+						}
 						transition={{
-							duration: prefersReducedMotion ? 0 : 0.24,
-							ease: [0.22, 1, 0.36, 1],
+							type: "spring",
+							stiffness: 360,
+							damping: 28,
 						}}
-						className="pointer-events-none absolute inset-x-8 top-0 h-px origin-center bg-gradient-to-r from-transparent via-accent to-transparent"
-					/>
-					<form ref={composerFormRef} onSubmit={handleSubmit}>
-						{/*
-						 * Plain textarea on purpose: NextUI's Textarea
-						 * (react-textarea-autosize) balloons on focus in
-						 * Firefox. The composer shell provides the visual
-						 * chrome; sizing is plain scrollHeight math.
-						 */}
-						<textarea
-							rows={1}
-							onKeyDown={(e) => {
-								// Enter or ⌘/Ctrl+Enter sends (the latter
-								// mirrors the Ask AI shortcut); Shift+Enter
-								// inserts a newline.
-								if (
-									e.key === "Enter" &&
-									!e.shiftKey &&
-									!e.nativeEvent.isComposing
-								) {
-									e.preventDefault();
-									handleSubmit(e);
-								}
+						onFocusCapture={() => setIsComposerFocused(true)}
+						onBlurCapture={(event) => {
+							if (
+								!event.currentTarget.contains(
+									event.relatedTarget,
+								)
+							) {
+								setIsComposerFocused(false);
+							}
+						}}
+						className="group/composer relative z-10 w-full min-w-0 overflow-hidden rounded-2xl border border-black/[0.08] bg-white p-1.5 shadow-[0_12px_40px_-34px_rgba(0,0,0,0.45)] transition-[border-color,box-shadow] duration-200 focus-within:border-accent/45 focus-within:shadow-[0_18px_48px_-32px_rgba(235,126,29,0.38)] dark:border-white/10 dark:bg-secondary dark:shadow-none dark:focus-within:shadow-[0_18px_48px_-32px_rgba(235,126,29,0.22)]"
+					>
+						<motion.div
+							aria-hidden="true"
+							initial={false}
+							animate={{
+								opacity: isComposerFocused || isWaiting ? 1 : 0,
+								scaleX:
+									isComposerFocused || isWaiting ? 1 : 0.35,
 							}}
-							autoComplete="off"
-							aria-label={t("askAI")}
-							placeholder={t("askMeAnythingPublications")}
-							value={input}
-							onChange={(e) => setInput(e.target.value)}
-							className="block max-h-36 w-full min-w-0 resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm leading-6 text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"
+							transition={{
+								duration: prefersReducedMotion ? 0 : 0.24,
+								ease: [0.22, 1, 0.36, 1],
+							}}
+							className="pointer-events-none absolute inset-x-8 top-0 h-px origin-center bg-gradient-to-r from-transparent via-accent to-transparent"
 						/>
-						<div className="mt-1 flex min-w-0 items-center justify-between gap-2 border-t border-black/[0.06] px-1 pt-1.5 dark:border-white/[0.08]">
-							<div className="flex min-w-0 items-center gap-1">
-								{isDeepResearchEnabled && (
-									<Tooltip
-										content={tUI("researchModeTooltip")}
-									>
-										<Button
-											type="button"
-											size="sm"
-											variant="transparent"
-											aria-pressed={mode === "research"}
-											aria-label={tUI("researchMode")}
-											onPress={() =>
-												setMode(
+						<form ref={composerFormRef} onSubmit={handleSubmit}>
+							{/*
+							 * Plain textarea on purpose: NextUI's Textarea
+							 * (react-textarea-autosize) balloons on focus in
+							 * Firefox. The composer shell provides the visual
+							 * chrome; sizing is plain scrollHeight math.
+							 */}
+							<textarea
+								rows={1}
+								onKeyDown={(e) => {
+									// Enter or ⌘/Ctrl+Enter sends (the latter
+									// mirrors the Ask AI shortcut); Shift+Enter
+									// inserts a newline.
+									if (
+										e.key === "Enter" &&
+										!e.shiftKey &&
+										!e.nativeEvent.isComposing
+									) {
+										e.preventDefault();
+										handleSubmit(e);
+									}
+								}}
+								autoComplete="off"
+								aria-label={t("askAI")}
+								placeholder={t("askMeAnythingPublications")}
+								value={input}
+								onChange={(e) => setInput(e.target.value)}
+								className="block max-h-36 w-full min-w-0 resize-none overflow-y-auto bg-transparent px-2 py-2 text-sm leading-6 text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"
+							/>
+							<div className="mt-1 flex min-w-0 items-center justify-between gap-2 border-t border-black/[0.06] px-1 pt-1.5 dark:border-white/[0.08]">
+								<div className="flex min-w-0 items-center gap-1">
+									{isDeepResearchEnabled && (
+										<Tooltip
+											content={tUI("researchModeTooltip")}
+										>
+											<Button
+												type="button"
+												size="sm"
+												variant="transparent"
+												aria-pressed={
 													mode === "research"
-														? "quick"
-														: "research",
-												)
-											}
-											className={twMerge(
-												"h-8 min-w-8 gap-1.5 rounded-xl bg-black/[0.035] px-2 text-black/55 transition-colors hover:bg-black/[0.06] dark:bg-white/[0.05] dark:text-white/55 dark:hover:bg-white/[0.08]",
-												mode === "research" &&
-													"bg-accent/10 text-accent hover:bg-accent/15 dark:bg-accent/15 dark:text-accent",
-											)}
-										>
-											<motion.span
-												initial={false}
-												animate={{
-													scale:
+												}
+												aria-label={tUI("researchMode")}
+												onPress={() =>
+													setMode(
 														mode === "research"
-															? 1.12
-															: 1,
-													rotate:
-														mode === "research"
-															? 0
-															: -8,
-												}}
-												transition={{
-													type: "spring",
-													stiffness: 420,
-													damping: 22,
-												}}
-												className="grid place-items-center"
+															? "quick"
+															: "research",
+													)
+												}
+												className={twMerge(
+													"h-8 min-w-8 gap-1.5 rounded-xl bg-black/[0.035] px-2 text-black/55 transition-colors hover:bg-black/[0.06] dark:bg-white/[0.05] dark:text-white/55 dark:hover:bg-white/[0.08]",
+													mode === "research" &&
+														"bg-accent/10 text-accent hover:bg-accent/15 dark:bg-accent/15 dark:text-accent",
+												)}
 											>
-												<PiBinocularsBold className="size-4 shrink-0" />
-											</motion.span>
-											<span className="hidden whitespace-nowrap xl:inline">
-												{tUI("researchMode")}
-											</span>
-										</Button>
-									</Tooltip>
-								)}
-								<ButtonGroup className="shrink-0 overflow-hidden rounded-xl bg-black/[0.035] dark:bg-white/[0.05]">
-									<Tooltip
-										content={`${tUI("smartScreening")} ${tUI("settings")}`}
-									>
-										<Button
-											type="button"
-											size="sm"
-											variant="transparent"
-											className="h-8 min-w-8 gap-1.5 rounded-none border-0 px-2 text-black/55 transition-colors hover:bg-black/[0.05] dark:text-white/55 dark:hover:bg-white/[0.06]"
-											isDisabled={isMutating}
-											aria-label={`${tUI("smartScreening")} ${tUI("settings")}`}
-											onPress={onSmartScreeningOpen}
+												<motion.span
+													initial={false}
+													animate={{
+														scale:
+															mode === "research"
+																? 1.12
+																: 1,
+														rotate:
+															mode === "research"
+																? 0
+																: -8,
+													}}
+													transition={{
+														type: "spring",
+														stiffness: 420,
+														damping: 22,
+													}}
+													className="grid place-items-center"
+												>
+													<PiBinocularsBold className="size-4 shrink-0" />
+												</motion.span>
+												<span className="hidden whitespace-nowrap xl:inline">
+													{tUI("researchMode")}
+												</span>
+											</Button>
+										</Tooltip>
+									)}
+									<ButtonGroup className="shrink-0 overflow-hidden rounded-xl bg-black/[0.035] dark:bg-white/[0.05]">
+										<Tooltip
+											content={`${tUI("smartScreening")} ${tUI("settings")}`}
 										>
-											<PiGearSixBold className="size-4 shrink-0 transition-transform duration-300 group-hover:rotate-45 motion-reduce:transition-none" />
-											<span className="hidden whitespace-nowrap xl:inline">
-												{tUI("smartScreening")}
-											</span>
-										</Button>
-									</Tooltip>
+											<Button
+												type="button"
+												size="sm"
+												variant="transparent"
+												className="h-8 min-w-8 gap-1.5 rounded-none border-0 px-2 text-black/55 transition-colors hover:bg-black/[0.05] dark:text-white/55 dark:hover:bg-white/[0.06]"
+												isDisabled={isMutating}
+												aria-label={`${tUI("smartScreening")} ${tUI("settings")}`}
+												onPress={onSmartScreeningOpen}
+											>
+												<PiGearSixBold className="size-4 shrink-0 transition-transform duration-300 group-hover:rotate-45 motion-reduce:transition-none" />
+												<span className="hidden whitespace-nowrap xl:inline">
+													{tUI("smartScreening")}
+												</span>
+											</Button>
+										</Tooltip>
+										<Tooltip
+											content={
+												smartScreeningFields.length ===
+												0
+													? tUI("noFieldsAdded")
+													: screenableContent.length ===
+														  0
+														? tUI(
+																"noResourcesForScreening",
+															)
+														: tUI("smartScreening")
+											}
+										>
+											<Button
+												isIconOnly
+												type="button"
+												size="sm"
+												variant="transparent"
+												className="!h-8 !w-8 !min-w-8 shrink-0 rounded-none border-0 border-l border-black/[0.06] bg-accent/10 text-accent transition-colors hover:bg-accent/15 dark:border-white/[0.08] dark:bg-accent/15 dark:text-accent dark:hover:bg-accent/20"
+												isDisabled={
+													isLoading ||
+													isMutating ||
+													!canRunScreening
+												}
+												aria-label={tUI(
+													"smartScreening",
+												)}
+												onPress={() =>
+													handleScreening(
+														screenableContent,
+													)
+												}
+											>
+												{isMutating ? (
+													<ImSpinner8 className="size-3.5 animate-spin" />
+												) : (
+													<PiPlayFill className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
+												)}
+											</Button>
+										</Tooltip>
+									</ButtonGroup>
+								</div>
+								<motion.div
+									whileHover={
+										prefersReducedMotion || isWaiting
+											? undefined
+											: { scale: 1.07 }
+									}
+									whileTap={
+										prefersReducedMotion || isWaiting
+											? undefined
+											: { scale: 0.9 }
+									}
+									className="shrink-0"
+								>
 									<Tooltip
 										content={
-											smartScreeningFields.length === 0
-												? tUI("noFieldsAdded")
-												: screenableContent.length ===
-													  0
-													? tUI(
-															"noResourcesForScreening",
-														)
-													: tUI("smartScreening")
+											<span className="flex flex-col gap-1">
+												<ShortcutHint
+													label={tUI(
+														"sendMessageAriaLabel",
+													)}
+													keys={[SHORTCUT_KEYS.enter]}
+												/>
+												<ShortcutHint
+													label={tUI("newLine")}
+													keys={[
+														`${SHORTCUT_KEYS.shift} ${SHORTCUT_KEYS.enter}`,
+													]}
+												/>
+											</span>
 										}
 									>
 										<Button
+											isDisabled={isWaiting}
+											type="submit"
 											isIconOnly
-											type="button"
+											color="accent"
 											size="sm"
-											variant="transparent"
-											className="!h-8 !w-8 !min-w-8 shrink-0 rounded-none border-0 border-l border-black/[0.06] bg-accent/10 text-accent transition-colors hover:bg-accent/15 dark:border-white/[0.08] dark:bg-accent/15 dark:text-accent dark:hover:bg-accent/20"
-											isDisabled={
-												isLoading ||
-												isMutating ||
-												!canRunScreening
-											}
-											aria-label={tUI("smartScreening")}
-											onPress={() =>
-												void handleScreening(
-													screenableContent,
-												)
-											}
-										>
-											{isMutating ? (
-												<ImSpinner8 className="size-3.5 animate-spin" />
-											) : (
-												<PiPlayFill className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5 motion-reduce:transition-none" />
+											className="group/send !h-8 !w-8 !min-w-8 shrink-0 rounded-xl border-0"
+											aria-label={tUI(
+												"sendMessageAriaLabel",
 											)}
+											aria-keyshortcuts="Enter"
+										>
+											<AnimatePresence
+												mode="wait"
+												initial={false}
+											>
+												<motion.span
+													key={
+														isWaiting
+															? "waiting"
+															: isInputReady
+																? "ready"
+																: "idle"
+													}
+													initial={
+														prefersReducedMotion
+															? false
+															: {
+																	opacity: 0,
+																	scale: 0.72,
+																	x: -2,
+																	y: 2,
+																}
+													}
+													animate={{
+														opacity: 1,
+														scale: 1,
+														x: 0,
+														y: 0,
+													}}
+													exit={{
+														opacity: 0,
+														scale: 0.72,
+													}}
+													transition={{
+														type: "spring",
+														stiffness: 520,
+														damping: 30,
+													}}
+													className="grid place-items-center"
+												>
+													{isWaiting ? (
+														<ImSpinner8 className="size-4 animate-spin" />
+													) : (
+														<PiPaperPlaneTiltFill className="size-4 transition-transform duration-200 group-hover/send:translate-x-0.5 group-hover/send:-translate-y-0.5 motion-reduce:transition-none" />
+													)}
+												</motion.span>
+											</AnimatePresence>
 										</Button>
 									</Tooltip>
-								</ButtonGroup>
+								</motion.div>
 							</div>
-							<motion.div
-								whileHover={
-									prefersReducedMotion || isWaiting
-										? undefined
-										: { scale: 1.07 }
-								}
-								whileTap={
-									prefersReducedMotion || isWaiting
-										? undefined
-										: { scale: 0.9 }
-								}
-								className="shrink-0"
-							>
-								<Tooltip
-									content={
-										<span className="flex flex-col gap-1">
-											<ShortcutHint
-												label={tUI("sendMessageAriaLabel")}
-												keys={[SHORTCUT_KEYS.enter]}
-											/>
-											<ShortcutHint
-												label={tUI("newLine")}
-												keys={[
-													`${SHORTCUT_KEYS.shift} ${SHORTCUT_KEYS.enter}`,
-												]}
-											/>
-										</span>
-									}
-								>
-								<Button
-									isDisabled={isWaiting}
-									type="submit"
-									isIconOnly
-									color="accent"
-									size="sm"
-									className="group/send !h-8 !w-8 !min-w-8 shrink-0 rounded-xl border-0"
-									aria-label={tUI("sendMessageAriaLabel")}
-									aria-keyshortcuts="Enter"
-								>
-									<AnimatePresence mode="wait" initial={false}>
-										<motion.span
-											key={
-												isWaiting
-													? "waiting"
-													: isInputReady
-														? "ready"
-														: "idle"
-											}
-											initial={
-												prefersReducedMotion
-													? false
-													: {
-															opacity: 0,
-															scale: 0.72,
-															x: -2,
-															y: 2,
-														}
-											}
-											animate={{
-												opacity: 1,
-												scale: 1,
-												x: 0,
-												y: 0,
-											}}
-											exit={{
-												opacity: 0,
-												scale: 0.72,
-											}}
-											transition={{
-												type: "spring",
-												stiffness: 520,
-												damping: 30,
-											}}
-											className="grid place-items-center"
-										>
-											{isWaiting ? (
-												<ImSpinner8 className="size-4 animate-spin" />
-											) : (
-												<PiPaperPlaneTiltFill className="size-4 transition-transform duration-200 group-hover/send:translate-x-0.5 group-hover/send:-translate-y-0.5 motion-reduce:transition-none" />
-											)}
-										</motion.span>
-									</AnimatePresence>
-								</Button>
-								</Tooltip>
-							</motion.div>
-						</div>
-					</form>
-				</motion.div>
+						</form>
+					</motion.div>
 				</div>
 			</div>
 		</section>

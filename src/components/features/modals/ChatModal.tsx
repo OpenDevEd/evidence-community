@@ -13,7 +13,13 @@ import {
 import { LuCheck, LuHash, LuType, LuUser, LuX } from "react-icons/lu";
 import { twMerge } from "tailwind-merge";
 import { ImSpinner8 } from "react-icons/im";
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { ItemGetResponse } from "@/app/api/item/types";
 import { IoChevronDown } from "react-icons/io5";
 import { useLocale, useTranslations } from "next-intl";
@@ -58,9 +64,7 @@ function withLatestRequestContext(
 		return messages;
 	}
 
-	const messageIndex = messages.findLastIndex(
-		({ role }) => role === "user",
-	);
+	const messageIndex = messages.findLastIndex(({ role }) => role === "user");
 	if (messageIndex < 0) return messages;
 
 	const updated = [...messages];
@@ -88,6 +92,8 @@ import {
 } from "@/components/pages/EvidenceLibrary";
 import Resource from "../items/Resource";
 import { Tooltip } from "@/components/nextui/Tooltip";
+import ModelSelector from "@/components/features/ai/ModelSelector";
+import { ConfirmationModal } from "@/components/nextui/ConfirmationModal";
 import { publicationPdfCitationSources } from "@/lib/ai/citations";
 import { clientAIError, uiMessageText } from "@/lib/ai/client";
 import { AI_CONTEXT_TOO_LARGE_MESSAGE } from "@/lib/ai/error-message";
@@ -125,6 +131,7 @@ import {
 	PiPlayFill,
 	PiXBold,
 } from "react-icons/pi";
+import { screeningSelection } from "@/lib/ai/screening-selection";
 
 function parseScreeningResults(messageId: string, content: string) {
 	if (!messageId.startsWith("screening-")) return null;
@@ -466,6 +473,8 @@ export default function ChatModal({
 	externalInput,
 	setExternalInput,
 	searchContext,
+	onModelChange,
+	onConversationStateChange,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -475,6 +484,8 @@ export default function ChatModal({
 	externalInput?: string;
 	setExternalInput?: (input: string) => void;
 	searchContext?: LibrarySearchContext;
+	onModelChange: (modelId: AIModelId) => void;
+	onConversationStateChange?: (hasConversation: boolean) => void;
 }) {
 	const pdfSources = useMemo(
 		() =>
@@ -492,6 +503,11 @@ export default function ChatModal({
 		isOpen: isSmartScreeningOpen,
 		onOpen: onSmartScreeningOpen,
 		onOpenChange: onSmartScreeningOpenChange,
+	} = useDisclosure();
+	const {
+		isOpen: isModelOpen,
+		onOpen: onModelOpen,
+		onOpenChange: onModelOpenChange,
 	} = useDisclosure();
 	const { isDeepResearchEnabled } = useIsAISearchEnabled();
 	const [internalMode, setMode] = useLocalStorage<ChatMode>(
@@ -543,8 +559,7 @@ export default function ChatModal({
 				currentPublication: data?.item?.key
 					? {
 							key: data.item.key,
-							title:
-								data.item.title || "Untitled publication",
+							title: data.item.title || "Untitled publication",
 						}
 					: undefined,
 				searchContext,
@@ -553,6 +568,7 @@ export default function ChatModal({
 	);
 	const sendMessageWithContext = useCallback(
 		(text: string) => {
+			onConversationStateChange?.(true);
 			const context = currentRequestContext();
 			const parts: Message["parts"] = [];
 			if (
@@ -566,21 +582,24 @@ export default function ChatModal({
 			parts.push({ type: "text", text });
 			return sendMessage({ parts });
 		},
-		[currentRequestContext, messages, sendMessage],
+		[
+			currentRequestContext,
+			messages,
+			onConversationStateChange,
+			sendMessage,
+		],
 	);
 	const resetChat = useCallback(() => {
 		clearError();
 		setMessages((currentMessages) => currentMessages.slice(0, 1));
-	}, [clearError, setMessages]);
+		onConversationStateChange?.(false);
+	}, [clearError, onConversationStateChange, setMessages]);
 
 	const isLoading = status === "submitted" || status === "streaming";
 	const isInputReady = input.trim().length > 0 && !isLoading;
 	const reload = useCallback(() => {
 		setMessages((currentMessages) =>
-			withLatestRequestContext(
-				currentMessages,
-				currentRequestContext(),
-			),
+			withLatestRequestContext(currentMessages, currentRequestContext()),
 		);
 		return regenerate();
 	}, [currentRequestContext, regenerate, setMessages]);
@@ -648,22 +667,19 @@ export default function ChatModal({
 
 	const isWaitingForAssistant = isLoading && messages.at(-1)?.role === "user";
 
-	const handleScreening = async (content: string) => {
-		const keys = Array.from(
-			content.matchAll(/\/lib\/([A-Za-z0-9:_-]+)/g),
-			(match) => match[1],
-		);
+	const [pendingScreening, setPendingScreening] =
+		useState<ReturnType<typeof screeningSelection>>();
+	const runScreening = async (keys: string[]) => {
 		if (!keys.length || smartScreeningFields.length === 0) {
 			return;
 		}
-		const keysArray = [...new Set(keys)].slice(0, 25);
 		setIsMutating(true);
 		try {
 			const response = await fetch("/api/ai/screen", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({
-					keys: keysArray,
+					keys,
 					modelId,
 					fields: smartScreeningFields,
 					distinctId: posthog.get_distinct_id(),
@@ -706,6 +722,15 @@ export default function ChatModal({
 		} finally {
 			setIsMutating(false);
 		}
+	};
+	const handleScreening = (content: string) => {
+		const selection = screeningSelection(content);
+		if (!selection.keys.length || smartScreeningFields.length === 0) return;
+		if (selection.omitted > 0) {
+			setPendingScreening(selection);
+			return;
+		}
+		void runScreening(selection.keys);
 	};
 
 	const isWaiting = (isLoading || isMutating) && !error;
@@ -750,6 +775,37 @@ export default function ChatModal({
 					onOpenChange={onSmartScreeningOpenChange}
 				/>
 			)}
+			<ModelSelector
+				isOpen={isModelOpen}
+				onOpenChange={onModelOpenChange}
+				selectedModel={modelId}
+				onModelChange={onModelChange}
+				hasConversation={conversationStarted}
+			/>
+			<ConfirmationModal
+				isOpen={pendingScreening !== undefined}
+				onOpenChange={(open) => {
+					if (!open) setPendingScreening(undefined);
+				}}
+				title={tUI("screeningLimitTitle", {
+					count: pendingScreening?.keys.length ?? 0,
+				})}
+				description={tUI("screeningLimitDescription", {
+					total: pendingScreening?.total ?? 0,
+					count: pendingScreening?.keys.length ?? 0,
+					omitted: pendingScreening?.omitted ?? 0,
+				})}
+				confirmLabel={tUI("screeningLimitConfirm", {
+					count: pendingScreening?.keys.length ?? 0,
+				})}
+				cancelLabel={tUI("cancel")}
+				onConfirm={() => {
+					if (!pendingScreening) return;
+					const { keys } = pendingScreening;
+					setPendingScreening(undefined);
+					void runScreening(keys);
+				}}
+			/>
 			<DialogModal
 				size="full"
 				scrollBehavior="inside"
@@ -774,6 +830,22 @@ export default function ChatModal({
 							</div>
 							<div className="pointer-events-none absolute right-4 top-4 z-30 flex items-center gap-2 sm:right-6 sm:top-5">
 								<div className="pointer-events-auto flex h-10 items-center gap-0.5 rounded-full border border-black/[0.08] bg-white p-1 shadow-[0_4px_20px_rgba(0,0,0,0.04)] dark:border-white/10 dark:bg-secondary-400 dark:shadow-none">
+									<Button
+										isIconOnly
+										variant="transparent"
+										size="sm"
+										className="h-8 w-8 min-w-0 rounded-2xl"
+										aria-label={t("change")}
+										onPress={onModelOpen}
+									>
+										{React.createElement(
+											getAIModelForUI(modelId).icon,
+											{
+												className:
+													"size-5 shrink-0 rounded-full bg-accent fill-white p-1",
+											},
+										)}
+									</Button>
 									<Button
 										startContent={<RiResetLeftFill />}
 										variant="transparent"
@@ -968,14 +1040,18 @@ export default function ChatModal({
 												aria-hidden
 												className={twMerge(
 													"pointer-events-none absolute inset-x-0 top-0 z-10 h-28 bg-gradient-to-b from-background_light via-background_light/75 to-transparent transition-opacity duration-300 ease-out dark:from-card dark:via-card/75",
-													scrollEdges.top ? "opacity-100" : "opacity-0",
+													scrollEdges.top
+														? "opacity-100"
+														: "opacity-0",
 												)}
 											/>
 											<div
 												aria-hidden
 												className={twMerge(
 													"pointer-events-none absolute inset-x-0 bottom-0 z-10 h-20 bg-gradient-to-t from-background_light via-background_light/75 to-transparent transition-opacity duration-300 ease-out dark:from-card dark:via-card/75",
-													scrollEdges.bottom ? "opacity-100" : "opacity-0",
+													scrollEdges.bottom
+														? "opacity-100"
+														: "opacity-0",
 												)}
 											/>
 											{!isAtBottom && (
@@ -1158,9 +1234,12 @@ export default function ChatModal({
 														// isn't mistaken for the user scrolling up.
 														onHeightChange={() => {
 															if (isAtBottom)
-																void scrollToBottom({
-																	animation: "instant",
-																});
+																void scrollToBottom(
+																	{
+																		animation:
+																			"instant",
+																	},
+																);
 														}}
 														onKeyDown={(e) => {
 															if (

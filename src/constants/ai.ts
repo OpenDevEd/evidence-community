@@ -22,6 +22,14 @@ const allModels = AI_MODELS.map((model) => ({
 
 export const models = allModels.filter(({ hidden }) => !hidden);
 
+export function findAIModelForUI(modelId: unknown) {
+	return typeof modelId === "string"
+		? allModels.find((model) => model.id === modelId)
+		: undefined;
+}
+
 export function getAIModelForUI(modelId: AIModelId) {
-	return allModels.find((model) => model.id === modelId)!;
+	const model = findAIModelForUI(modelId);
+	if (!model) throw new Error(`Unknown AI model: ${modelId}`);
+	return model;
 }
