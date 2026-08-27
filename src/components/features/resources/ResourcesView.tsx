@@ -34,7 +34,7 @@ import { Card } from "@/components/nextui/Card";
 import { Divider } from "@/components/nextui/Divider";
 import { AiOutlineCompass } from "react-icons/ai";
 import {
-	getWholeLibraryFileFormats,
+	getEnabledCitationFormats,
 	getLibraryExportPath,
 } from "@/config/library-config/exports";
 
@@ -430,8 +430,7 @@ function ContentActions() {
 	const { exports, identity } = useLibraryConfig();
 	const isDownloadEnabled = useLibraryFeature("downloads");
 	const isAtomFeedEnabled = useLibraryFeature("atomFeed");
-	const availableFormats =
-		getWholeLibraryFileFormats(exports);
+	const availableFormats = getEnabledCitationFormats(exports);
 
 	return (
 		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">

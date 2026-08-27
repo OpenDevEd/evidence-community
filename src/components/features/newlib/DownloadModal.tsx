@@ -17,11 +17,14 @@ import { Button } from "@/components/nextui/Button";
 import { Item } from "@/app/api/item/types";
 import { convertItem } from "@/lib/actions";
 import {
-	BIBLIOGRAPHIC_EXPORT_FORMATS,
+	getEnabledCitationFormats,
 	getLibraryExportExtension,
 	type BibliographicExportFormat,
 } from "@/config/library-config/exports";
-import { useLibraryFeature } from "@/context/LibraryConfigProvider";
+import {
+	useLibraryConfig,
+	useLibraryFeature,
+} from "@/context/LibraryConfigProvider";
 
 async function defaultAction(
 	itemData: Item,
@@ -85,7 +88,8 @@ export function DownloadModal({
 }) {
 	const t = useTranslations("ui");
 	const [loading, setLoading] = useState(false);
-	const availableFormats = formats ?? BIBLIOGRAPHIC_EXPORT_FORMATS;
+	const { exports } = useLibraryConfig();
+	const availableFormats = formats ?? getEnabledCitationFormats(exports);
 
 	return (
 		<DialogModal

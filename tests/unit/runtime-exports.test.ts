@@ -1,20 +1,30 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	getEnabledCitationFormats,
+	getLibraryExportContentType,
 	getLibraryExportPath,
-	getWholeLibraryFileFormats,
-	isApprovedLibraryExportContentType,
 } from "@/config/library-config/exports";
 
 describe("runtime exports", () => {
-	it("lists only the whole-library files that have an address", () => {
+	it("lists only the citation formats whose switch is on", () => {
 		expect(
-			getWholeLibraryFileFormats({
+			getEnabledCitationFormats({
 				ris: true,
 				bibtex: false,
 				atom: true,
 			}),
 		).toEqual(["ris"]);
+	});
+
+	it("lists nothing when both citation switches are off", () => {
+		expect(
+			getEnabledCitationFormats({
+				ris: false,
+				bibtex: false,
+				atom: true,
+			}),
+		).toEqual([]);
 	});
 
 	it.each([
@@ -26,18 +36,10 @@ describe("runtime exports", () => {
 	});
 
 	it.each([
-		["ris", "application/x-research-info-systems", true],
-		["ris", "text/plain; charset=utf-8", true],
-		["bibtex", "application/x-bibtex", true],
-		["atom", "application/atom+xml; charset=utf-8", true],
-		["atom", "text/html", false],
-		["bibtex", null, false],
-	] as const)(
-		"validates the %s upstream content type",
-		(format, contentType, approved) => {
-			expect(
-				isApprovedLibraryExportContentType(format, contentType),
-			).toBe(approved);
-		},
-	);
+		["ris", "application/x-research-info-systems; charset=utf-8"],
+		["bibtex", "application/x-bibtex; charset=utf-8"],
+		["atom", "application/atom+xml; charset=utf-8"],
+	] as const)("serves %s with its own content type", (format, type) => {
+		expect(getLibraryExportContentType(format)).toBe(type);
+	});
 });

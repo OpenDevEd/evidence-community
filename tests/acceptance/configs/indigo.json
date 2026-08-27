@@ -235,7 +235,9 @@
     }
   ],
   "exports": {
-    "ris": "https://fixture/exports/amber-library.ris"
+    "ris": false,
+    "bibtex": false,
+    "atom": false
   },
   "services": {
     "database": {

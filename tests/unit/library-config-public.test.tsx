@@ -105,9 +105,6 @@ describe("public library configuration", () => {
 			"https://spotted-woodpecker-546.convex.site",
 			"smtp-password",
 			"smtp-user",
-			"https://exports.example.org/library.ris",
-			"https://exports.example.org/library.bib",
-			"https://exports.example.org/library.atom",
 			"https://assets.example.org/gapmaps/gap-map-one.html",
 			"crossref-login",
 			"crossref-password",
@@ -128,7 +125,7 @@ describe("public library configuration", () => {
 		]);
 	});
 
-	it("projects export availability without exposing source URLs", () => {
+	it("passes the export switches through to the browser", () => {
 		expect(publicConfig.exports).toEqual({
 			ris: true,
 			bibtex: true,

@@ -282,9 +282,9 @@ export const maximalLibraryConfig = {
 		},
 	],
 	exports: {
-		ris: "https://exports.example.org/library.ris",
-		bibtex: "https://exports.example.org/library.bib",
-		atom: "https://exports.example.org/library.atom",
+		ris: true,
+		bibtex: true,
+		atom: true,
 	},
 	sources: [
 		{

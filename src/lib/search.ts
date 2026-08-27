@@ -135,6 +135,22 @@ function applyCollectionsData(items: ListItem[], collections: Collection[]) {
 	}
 }
 
+// The filters that decide which records the public library may show at all.
+// Search, the record list, and the whole-library exports all start here.
+export function getPublicRecordFilters(
+	libraryConfig: Pick<LibraryPublicConfig, "content">,
+) {
+	const hiddenTags = libraryConfig.content.tags.hidden;
+
+	return [
+		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
+		"deleted != 1",
+		hiddenTags.length
+			? `tags NOT IN ${JSON.stringify(hiddenTags)}`
+			: null,
+	].filter((filter): filter is string => filter !== null);
+}
+
 function resolveSearchRequest(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	libraryConfig: Pick<LibraryPublicConfig, "content" | "filters"> & {
@@ -165,7 +181,6 @@ function resolveSearchRequest(
 		: [];
 	const author = searchParams.author || "";
 	const collections = searchParams.collections || [];
-	const hiddenTags = libraryConfig.content.tags.hidden;
 
 	const effectiveSort =
 		search.trim().length === 0 && sort === SORT_OPTIONS[0].key
@@ -176,7 +191,7 @@ function resolveSearchRequest(
 		SORT_OPTIONS[0].sort;
 
 	const finalFilters = [
-		`itemType NOT IN ${JSON.stringify(EXCLUDED_ITEM_TYPES)}`,
+		...getPublicRecordFilters(libraryConfig),
 		range ? formatRange(range) : null,
 		...(Array.isArray(institution)
 			? institution.map((institutionValue) =>
@@ -189,10 +204,6 @@ function resolveSearchRequest(
 		...collections.map((collection) =>
 			meilisearchEquals("collectionsAncestry", collection),
 		),
-		"deleted != 1",
-		hiddenTags.length
-			? `tags NOT IN ${JSON.stringify(hiddenTags)}`
-			: null,
 	].filter((filter): filter is string => filter !== null);
 
 	const attributesToSearchOn = getRuntimeSearchAttributes(

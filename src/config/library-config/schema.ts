@@ -988,25 +988,16 @@ const publicGapMapSchema = gapMapSchema
 
 const publicGapMapsSchema = z.array(publicGapMapSchema).max(50).default([]);
 
-// Addresses of ready-made whole-library files. They are optional. Single-record
-// RIS and BibTeX downloads are built from the database and need only
-// `features.downloads`.
+// One switch per citation format. The library builds every file itself from
+// its own records, so there are no external file addresses here.
 const exportsSchema = z
 	.object({
-		ris: publicHttpsUrlSchema.optional(),
-		bibtex: publicHttpsUrlSchema.optional(),
-		atom: publicHttpsUrlSchema.optional(),
+		ris: z.boolean().default(true),
+		bibtex: z.boolean().default(true),
+		atom: z.boolean().default(false),
 	})
 	.strict()
 	.prefault({});
-
-const publicExportsSchema = z
-	.object({
-		ris: z.boolean(),
-		bibtex: z.boolean(),
-		atom: z.boolean(),
-	})
-	.strict();
 
 const crossrefPublicationSchema = z
 	.object({
@@ -1734,7 +1725,19 @@ export function createLibraryConfigSchema(
 			addRequiredIssue(
 				context,
 				["features", "atomFeed"],
-				"Atom feed requires an Atom endpoint",
+				"Atom feed requires the Atom export switch",
+			);
+		}
+
+		if (
+			config.features.downloads &&
+			!config.exports.ris &&
+			!config.exports.bibtex
+		) {
+			addRequiredIssue(
+				context,
+				["features", "downloads"],
+				"Downloads require the RIS or BibTeX export switch",
 			);
 		}
 
@@ -1835,7 +1838,7 @@ export const publicLibraryConfigSchema = z
 		features: featuresSchema,
 		collections: collectionsSchema,
 		gapMaps: publicGapMapsSchema,
-		exports: publicExportsSchema,
+		exports: exportsSchema,
 		ai: publicAiSchema,
 		analytics: analyticsSchema,
 		authentication: publicAuthenticationSchema,

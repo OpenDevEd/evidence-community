@@ -1,7 +1,4 @@
-import type {
-	LibraryPublicConfig,
-	LibraryServerConfig,
-} from "./schema";
+import type { LibraryPublicConfig } from "./schema";
 
 export const BIBLIOGRAPHIC_EXPORT_FORMATS = [
 	"ris",
@@ -23,24 +20,11 @@ const EXPORT_PATHS = {
 	atom: "/lib/atom.xml",
 } as const satisfies Record<LibraryExportFormat, string>;
 
-const APPROVED_CONTENT_TYPES = {
-	ris: new Set([
-		"application/x-research-info-systems",
-		"application/x-research-info-system",
-		"text/plain",
-	]),
-	bibtex: new Set([
-		"application/x-bibtex",
-		"text/bibtex",
-		"text/x-bibtex",
-		"text/plain",
-	]),
-	atom: new Set([
-		"application/atom+xml",
-		"application/xml",
-		"text/xml",
-	]),
-} satisfies Record<LibraryExportFormat, ReadonlySet<string>>;
+const EXPORT_CONTENT_TYPES = {
+	ris: "application/x-research-info-systems; charset=utf-8",
+	bibtex: "application/x-bibtex; charset=utf-8",
+	atom: "application/atom+xml; charset=utf-8",
+} as const satisfies Record<LibraryExportFormat, string>;
 
 export function isLibraryExportFormat(
 	value: string,
@@ -56,10 +40,9 @@ export function isBibliographicExportFormat(
 	);
 }
 
-// Whole-library RIS and BibTeX files come from an address in the
-// configuration. Single-record downloads are built from the database and do
-// not use this list.
-export function getWholeLibraryFileFormats(
+// The citation formats a reader may download. Single records and the whole
+// library use the same list, so a switched-off format is offered nowhere.
+export function getEnabledCitationFormats(
 	exports: LibraryPublicConfig["exports"],
 ) {
 	return BIBLIOGRAPHIC_EXPORT_FORMATS.filter(
@@ -71,22 +54,8 @@ export function getLibraryExportPath(format: LibraryExportFormat) {
 	return EXPORT_PATHS[format];
 }
 
-export function getLibraryExportSourceUrl(
-	exports: LibraryServerConfig["exports"],
-	format: LibraryExportFormat,
-) {
-	return exports[format];
-}
-
-export function isApprovedLibraryExportContentType(
-	format: LibraryExportFormat,
-	contentType: string | null,
-) {
-	if (!contentType) return false;
-
-	const normalizedContentType =
-		contentType.split(";", 1)[0]?.trim().toLowerCase() ?? "";
-	return APPROVED_CONTENT_TYPES[format].has(normalizedContentType);
+export function getLibraryExportContentType(format: LibraryExportFormat) {
+	return EXPORT_CONTENT_TYPES[format];
 }
 
 export function getLibraryExportExtension(

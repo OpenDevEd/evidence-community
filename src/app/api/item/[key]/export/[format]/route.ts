@@ -3,6 +3,7 @@ import { getCachedItemSmall } from '../../../../cache';
 import { convertItem } from '@/lib/actions';
 import { getLibraryConfig } from '@/config/library-config/server';
 import {
+    getLibraryExportContentType,
     getLibraryExportExtension,
     isBibliographicExportFormat,
 } from '@/config/library-config/exports';
@@ -21,7 +22,9 @@ export async function GET(
     }
 
     const config = await getLibraryConfig();
-    if (!config.features.downloads) {
+    // Downloads must be on and this format must be switched on. The same pair
+    // decides what the download dialog offers.
+    if (!config.features.downloads || !config.exports[format]) {
         return NextResponse.json(
             { message: "Export format not available" },
             { status: 404 },
@@ -42,7 +45,7 @@ export async function GET(
 
     return new Response(converted, {
         headers: {
-            "Content-Type": format === "ris" ? "application/x-research-info-systems" : "application/x-bibtex",
+            "Content-Type": getLibraryExportContentType(format),
             "Content-Disposition": `attachment; filename="${key}.${getLibraryExportExtension(format)}"`
         }
     });

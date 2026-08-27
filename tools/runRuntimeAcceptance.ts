@@ -1087,13 +1087,13 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_DEEP_RESEARCH: String(config.features.deepResearch),
 		PLAYWRIGHT_EXPECTED_GAP_MAP: String(Boolean(enabledGapMap)),
 		PLAYWRIGHT_EXPECTED_EXPORT_RIS: String(
-			config.features.downloads && Boolean(config.exports.ris),
+			config.features.downloads && config.exports.ris,
 		),
 		PLAYWRIGHT_EXPECTED_EXPORT_BIBTEX: String(
-			config.features.downloads && Boolean(config.exports.bibtex),
+			config.features.downloads && config.exports.bibtex,
 		),
 		PLAYWRIGHT_EXPECTED_EXPORT_ATOM: String(
-			config.features.atomFeed && Boolean(config.exports.atom),
+			config.features.atomFeed && config.exports.atom,
 		),
 		PLAYWRIGHT_EXPECTED_ANALYTICS: String(
 			Boolean(

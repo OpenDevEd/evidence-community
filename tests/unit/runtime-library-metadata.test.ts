@@ -38,7 +38,7 @@ import { cloneLibraryConfig } from "../fixtures/library-config";
 beforeEach(() => {
 	const input = libraryConfigSchema.parse(cloneLibraryConfig());
 	input.features.atomFeed = true;
-	input.exports.atom = "https://exports.example.org/library.atom";
+	input.exports.atom = true;
 	mocks.getLibraryConfig.mockResolvedValue(input);
 	mocks.getItemsPaginationMeta.mockResolvedValue({
 		currentPage: 1,

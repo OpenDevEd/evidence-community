@@ -509,15 +509,18 @@ running before removing a stale lock.
 - Enabled gap maps are streamed through
   `/gapmaps/<slug>.html`; the application server fetches their configured
   source URLs and accepts approved HTML content types.
-- Single-record RIS and BibTeX downloads are built from the database. They need
-  only `features.downloads`. Both formats are offered whenever that switch is
-  on, and no address in `exports` is required.
-- Whole-library files are different. Set `exports.ris`, `exports.bibtex`, or
-  `exports.atom` to the address of a ready-made file. Those files are streamed
-  through `/lib/export/ris`, `/lib/export/bibtex`, and `/lib/atom.xml`. The
-  application validates upstream status and content type. A whole-library
-  button appears only when its address is set.
-- Proxied gap maps and exports are not cached by the application.
+- The library builds every citation file itself from its own records. There are
+  no external file addresses. `exports.ris`, `exports.bibtex`, and `exports.atom`
+  are switches. RIS and BibTeX are on by default; the Atom feed is off.
+- Single-record downloads at `/lib/<key>/export/ris` and
+  `/lib/<key>/export/bibtex` need `features.downloads` and the switch for that
+  format. The download dialog offers only the formats that are switched on.
+- Whole-library files at `/lib/export/ris` and `/lib/export/bibtex` need the
+  same two switches. They are written a page at a time and stop after
+  20 000 records. The file is named after the library short name.
+- The Atom feed at `/lib/atom.xml` needs `features.atomFeed` and
+  `exports.atom`. It lists the 50 most recently added records.
+- Proxied gap maps and generated exports are not cached by the application.
 - PostgreSQL, Meilisearch, SMTP, server analytics, and AI provider endpoints
   must be reachable from the container network. Browser analytics hosts must
   also be reachable from the user's browser.
