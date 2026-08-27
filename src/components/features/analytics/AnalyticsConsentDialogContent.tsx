@@ -20,7 +20,7 @@ export function AnalyticsConsentDialogContent({
 		<ModalContent className="px-4 pb-4 pt-5 sm:px-6 sm:pb-5">
 			<ModalBody className="gap-0 p-0">
 				<header className="flex flex-col items-center text-center">
-					<LibraryLogoImages className="h-14 w-auto max-w-[14rem] object-contain" />
+					<LibraryLogoImages className="h-14 w-auto max-w-56 object-contain" />
 					<h2 className="mt-4 text-balance text-2xl font-semibold leading-tight tracking-tight text-foreground">
 						{t("cookieConsentTitle")}
 					</h2>

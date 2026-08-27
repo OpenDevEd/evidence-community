@@ -88,10 +88,7 @@ function Chip({
 			)}
 			{startContent}
 			<span
-				className={twMerge(
-					"block max-w-[16rem] truncate",
-					classNames.title,
-				)}
+				className={twMerge("block max-w-64 truncate", classNames.title)}
 			>
 				{title}
 			</span>
@@ -150,7 +147,7 @@ export function FilterChips() {
 		<div
 			className={twMerge(
 				"flex max-h-0 overflow-y-hidden transition-all duration-200 opacity-0 mb-0",
-				filtersCount > 0 && "max-h-[32rem] mb-4 opacity-100",
+				filtersCount > 0 && "max-h-128 mb-4 opacity-100",
 			)}
 		>
 			{/* On mobile the chips scroll horizontally inside their own track so a

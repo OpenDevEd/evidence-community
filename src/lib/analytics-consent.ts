@@ -24,7 +24,43 @@ export const DEFAULT_ANALYTICS_CONSENT_PREFERENCES = {
 } satisfies AnalyticsConsentPreferences;
 
 function isPolicy(value: AnalyticsConsentPolicy) {
-	return value.scope.length > 0 && Number.isInteger(value.version) && value.version > 0;
+	return (
+		value.scope.length > 0 &&
+		Number.isInteger(value.version) &&
+		value.version > 0
+	);
+}
+
+function isRecordObject(value: unknown): value is Record<string, unknown> {
+	return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function hasMatchingPolicy(
+	value: Record<string, unknown>,
+	policy: AnalyticsConsentPolicy,
+) {
+	return value.scope === policy.scope && value.version === policy.version;
+}
+
+function hasValidDecisionTime(value: unknown, now: number) {
+	return (
+		typeof value === "number" &&
+		Number.isFinite(value) &&
+		value > 0 &&
+		value <= now &&
+		now - value <= ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS * 1_000
+	);
+}
+
+function hasValidPreferences(value: unknown) {
+	if (!isRecordObject(value)) return false;
+	const analytics = value.analytics;
+	const sessionReplay = value.sessionReplay;
+	return (
+		typeof analytics === "boolean" &&
+		typeof sessionReplay === "boolean" &&
+		(!sessionReplay || analytics)
+	);
 }
 
 function isConsentRecord(
@@ -32,34 +68,11 @@ function isConsentRecord(
 	policy: AnalyticsConsentPolicy,
 	now: number,
 ): value is AnalyticsConsentRecord {
-	if (!value || typeof value !== "object" || Array.isArray(value)) return false;
-
-	const scope = Reflect.get(value, "scope");
-	const version = Reflect.get(value, "version");
-	const decidedAt = Reflect.get(value, "decidedAt");
-	const preferences = Reflect.get(value, "preferences");
-
-	if (
-		scope !== policy.scope ||
-		version !== policy.version ||
-		typeof decidedAt !== "number" ||
-		!Number.isFinite(decidedAt) ||
-		decidedAt <= 0 ||
-		decidedAt > now ||
-		now - decidedAt > ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS * 1_000 ||
-		!preferences ||
-		typeof preferences !== "object" ||
-		Array.isArray(preferences)
-	) {
-		return false;
-	}
-
-	const analytics = Reflect.get(preferences, "analytics");
-	const sessionReplay = Reflect.get(preferences, "sessionReplay");
 	return (
-		typeof analytics === "boolean" &&
-		typeof sessionReplay === "boolean" &&
-		(!sessionReplay || analytics)
+		isRecordObject(value) &&
+		hasMatchingPolicy(value, policy) &&
+		hasValidDecisionTime(value.decidedAt, now) &&
+		hasValidPreferences(value.preferences)
 	);
 }
 
@@ -73,7 +86,9 @@ export function createAnalyticsConsentRecord(
 	now = Date.now(),
 ): AnalyticsConsentRecord {
 	if (!isPolicy(policy)) {
-		throw new Error("Analytics consent policy needs a scope and positive version");
+		throw new Error(
+			"Analytics consent policy needs a scope and positive version",
+		);
 	}
 
 	return {
@@ -87,7 +102,9 @@ export function createAnalyticsConsentRecord(
 	};
 }
 
-export function analyticsConsentState(record: AnalyticsConsentRecord | null): AnalyticsConsentState {
+export function analyticsConsentState(
+	record: AnalyticsConsentRecord | null,
+): AnalyticsConsentState {
 	if (!record) return DEFAULT_ANALYTICS_CONSENT_STATE;
 	return record.preferences.analytics ? "granted" : "denied";
 }
@@ -112,7 +129,9 @@ export function parseAnalyticsConsentRecord(
 	}
 }
 
-export function serializeAnalyticsConsentRecord(record: AnalyticsConsentRecord): string {
+export function serializeAnalyticsConsentRecord(
+	record: AnalyticsConsentRecord,
+): string {
 	return encodeURIComponent(JSON.stringify(record));
 }
 

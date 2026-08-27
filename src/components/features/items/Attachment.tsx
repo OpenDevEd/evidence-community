@@ -120,7 +120,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					/>
 				</Skeleton>
 			) : (
-				<div className="rounded-xl bg-accent w-full aspect-[9/12]" />
+				<div className="aspect-3/4 w-full rounded-xl bg-accent" />
 			)}
 		</>
 	);
@@ -214,9 +214,9 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						} as any
 					}
 					className={twMerge(
-						"w-full max-w-[200px] mx-auto",
+						"mx-auto w-full max-w-50",
 						"md:w-24 lg:w-48 md:max-w-none md:mx-0 md:bottom-0 md:top-4 md:absolute md:overflow-hidden md:transition-all",
-						canHover && "md:hover:top-[var(--image-height)]",
+						canHover && "md:hover:top-(--image-height)",
 					)}
 				>
 					{attachmentImage}

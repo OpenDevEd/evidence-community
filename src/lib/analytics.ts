@@ -386,40 +386,56 @@ function startClientErrorTracking() {
 	};
 }
 
-async function applyPostHogConsent() {
+async function getReadyPostHog() {
 	if (
 		analyticsMode !== "granted" ||
 		!analyticsPreferences.analytics ||
-		!activeSignature ||
-		!(await initializePostHog(activeSignature)) ||
-		!posthogClient ||
-		!activeConfiguration
+		!activeSignature
 	) {
-		return false;
+		return null;
 	}
+	const expectedSignature = activeSignature;
+	if (!(await initializePostHog(expectedSignature))) return null;
+	if (!posthogClient || !activeConfiguration) return null;
+	return {
+		client: posthogClient,
+		configuration: activeConfiguration,
+		expectedSignature,
+	};
+}
 
+function applyPostHogPreferences({
+	client,
+	configuration,
+	expectedSignature,
+}: NonNullable<Awaited<ReturnType<typeof getReadyPostHog>>>) {
 	const locale = document.documentElement.lang || "unknown";
 	const consentSignature = [
-		activeSignature,
+		expectedSignature,
 		locale,
 		analyticsPreferences.sessionReplay,
 	].join("|");
-	if (appliedPostHogConsentSignature !== consentSignature) {
-		posthogClient.opt_in_capturing({ captureEventName: false });
-		posthogClient.setPersonProperties({
-			consent_policy_version:
-				activeConfiguration.analytics.consentPolicyVersion,
-			locale,
-			session_replay_enabled: analyticsPreferences.sessionReplay,
-			tenant_scope: activeConfiguration.scope,
-		});
-		if (analyticsPreferences.sessionReplay) {
-			posthogClient.startSessionRecording();
-		} else {
-			posthogClient.stopSessionRecording();
-		}
-		appliedPostHogConsentSignature = consentSignature;
+	if (appliedPostHogConsentSignature === consentSignature) return;
+
+	client.opt_in_capturing({ captureEventName: false });
+	client.setPersonProperties({
+		consent_policy_version: configuration.analytics.consentPolicyVersion,
+		locale,
+		session_replay_enabled: analyticsPreferences.sessionReplay,
+		tenant_scope: configuration.scope,
+	});
+	if (analyticsPreferences.sessionReplay) {
+		client.startSessionRecording();
+	} else {
+		client.stopSessionRecording();
 	}
+	appliedPostHogConsentSignature = consentSignature;
+}
+
+async function applyPostHogConsent() {
+	const readyPostHog = await getReadyPostHog();
+	if (!readyPostHog) return false;
+	applyPostHogPreferences(readyPostHog);
 	startClientErrorTracking();
 	return true;
 }

@@ -40,10 +40,10 @@ const SOCIAL_ICONS = {
 
 const SOCIAL_COLORS = {
 	github: "bg-black dark:bg-white text-white dark:text-black",
-	twitter: "bg-[rgb(29,161,242)] text-white",
-	linkedin: "bg-[rgb(0,119,181)] text-white",
-	youtube: "bg-[rgb(205,32,31)] text-white",
-	bluesky: "bg-[rgb(0,121,212)] text-white",
+	twitter: "bg-sky-500 text-white",
+	linkedin: "bg-sky-700 text-white",
+	youtube: "bg-red-600 text-white",
+	bluesky: "bg-sky-600 text-white",
 } satisfies Record<SocialProvider, string>;
 
 function FooterColumn({
@@ -83,7 +83,7 @@ function Logo() {
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className="flex h-[3.375rem] w-[14.5rem] items-center justify-center rounded-lg"
+			className="flex h-14 w-58 items-center justify-center rounded-lg"
 		>
 			<LibraryLogoImages
 				className="h-auto max-h-full w-auto max-w-full"
