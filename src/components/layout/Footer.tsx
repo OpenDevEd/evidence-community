@@ -114,7 +114,7 @@ export default function Footer() {
 			id="footer"
 			className="relative row-start-3 flex w-full flex-col items-center gap-12 bg-card_light px-6 py-12 print:hidden dark:bg-card lg:px-14"
 		>
-			<div className="grid w-full max-w-[96rem] grid-cols-1 gap-10 sm:grid-cols-2 xl:grid-cols-4">
+			<div className="grid w-full max-w-site grid-cols-1 gap-10 sm:grid-cols-2 xl:grid-cols-4">
 				<section className="flex flex-col items-center gap-6 sm:items-start">
 					<Logo />
 					<FundingPartners className="justify-center text-black/60 dark:text-white/60 sm:justify-start" />
@@ -259,7 +259,7 @@ export default function Footer() {
 			{footer.funders.length > 0 && (
 				<section
 					aria-label={tUI("fundingPartner")}
-					className="flex w-full max-w-[96rem] flex-wrap items-center justify-center gap-8 border-t border-black/10 pt-8 dark:border-white/10"
+					className="flex w-full max-w-site flex-wrap items-center justify-center gap-8 border-t border-black/10 pt-8 dark:border-white/10"
 				>
 					{footer.funders.map((funder) => {
 						const content = (

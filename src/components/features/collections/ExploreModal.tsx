@@ -28,7 +28,7 @@ export default function ExploreModal({
 
 	return (
 		<Modal
-			backdrop="blur"
+			backdrop="opaque"
 			size="2xl"
 			placement="center"
 			hideCloseButton
@@ -47,7 +47,7 @@ export default function ExploreModal({
 				// the filter list internally ourselves (below), which keeps the
 				// contained look while leaving backdrop hit-testing correct.
 				base: twMerge(
-					"bg-background_light/95 dark:bg-card/95 outline-none",
+					"bg-background_light dark:bg-card outline-none",
 					// Full-screen on mobile: pin the panel to the viewport height
 					// (NOT min-height — otherwise it grows past the screen and the
 					// inner scroll never engages), then scroll the list inside.
@@ -74,8 +74,12 @@ export default function ExploreModal({
 								hierarchy={itemsContext.hierarchy!}
 								isModal
 								range={itemsContext.queryParams.range}
-								handleRangeChange={itemsContext.handleRangeChange}
-								facetDistribution={itemsContext.facetDistribution}
+								handleRangeChange={
+									itemsContext.handleRangeChange
+								}
+								facetDistribution={
+									itemsContext.facetDistribution
+								}
 								queryParams={itemsContext.queryParams}
 								handleInstitutionSelect={
 									itemsContext.handleInstitutionSelect
