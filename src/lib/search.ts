@@ -151,75 +151,109 @@ export function getPublicRecordFilters(
 	].filter((filter): filter is string => filter !== null);
 }
 
+// An empty query has nothing to rank, so it falls back to newest first.
+function resolveSortOption(search: string, sort: string) {
+	const effectiveSort =
+		search.trim().length === 0 && sort === SORT_OPTIONS[0].key
+			? SORT_OPTIONS[1].key
+			: sort;
+
+	return (
+		SORT_OPTIONS.find((option) => option.key === effectiveSort)?.sort ||
+		SORT_OPTIONS[0].sort
+	);
+}
+
+function buildSearchFilters(
+	libraryConfig: Pick<LibraryPublicConfig, "content">,
+	selection: {
+		range: ReturnType<typeof normalizeRuntimeYearRange>;
+		institution: string[];
+		country: string[];
+		author_country: string[];
+		author: string;
+		scope: string;
+		collections: string[];
+	},
+) {
+	return [
+		...getPublicRecordFilters(libraryConfig),
+		selection.range ? formatRange(selection.range) : null,
+		...selection.institution.map((institutionValue) =>
+			meilisearchEquals("institution", institutionValue),
+		),
+		...createCountryFilters(selection.country, selection.author_country),
+		selection.author
+			? meilisearchEquals("fullNames", selection.author)
+			: null,
+		selection.scope === "documents"
+			? `fullTextPDFs.fullTextPDF.text EXISTS`
+			: null,
+		...selection.collections.map((collection) =>
+			meilisearchEquals("collectionsAncestry", collection),
+		),
+	].filter((filter): filter is string => filter !== null);
+}
+
+// A facet the library has switched off contributes nothing, whatever the URL
+// asks for.
+function resolveFacetSelection(
+	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
+	libraryConfig: Pick<LibraryPublicConfig, "filters"> & {
+		search: RuntimeSearch;
+	},
+) {
+	return {
+		institution:
+			libraryConfig.filters.institution.mode === "hidden"
+				? []
+				: searchParams.institution || [],
+		country: libraryConfig.search.country
+			? searchParams.country || []
+			: [],
+		author_country: libraryConfig.search.authorCountry
+			? searchParams.author_country || []
+			: [],
+		author: searchParams.author || "",
+		collections: searchParams.collections || [],
+	};
+}
+
 function resolveSearchRequest(
 	searchParams: Partial<inferParserType<typeof searchParamsLoader>>,
 	libraryConfig: Pick<LibraryPublicConfig, "content" | "filters"> & {
 		search: RuntimeSearch;
 	},
 ) {
-	const pageNum = Math.max(1, Number(searchParams.page || 1));
-	const limitNum = ITEMS_PER_PAGE;
-	const sort = searchParams.sort || SORT_OPTIONS[0].key;
 	const search = searchParams.search || "";
 	const scope = resolveRuntimeSearchScope(
 		searchParams.scope,
 		libraryConfig.search,
 	);
-	const range = normalizeRuntimeYearRange(
-		searchParams.range,
-		libraryConfig.filters,
-	);
-	const institution =
-		libraryConfig.filters.institution.mode === "hidden"
-			? []
-			: searchParams.institution || [];
-	const country = libraryConfig.search.country
-		? searchParams.country || []
-		: [];
-	const author_country = libraryConfig.search.authorCountry
-		? searchParams.author_country || []
-		: [];
-	const author = searchParams.author || "";
-	const collections = searchParams.collections || [];
-
-	const effectiveSort =
-		search.trim().length === 0 && sort === SORT_OPTIONS[0].key
-			? SORT_OPTIONS[1].key
-			: sort;
-	const sortOption =
-		SORT_OPTIONS.find((option) => option.key === effectiveSort)?.sort ||
-		SORT_OPTIONS[0].sort;
-
-	const finalFilters = [
-		...getPublicRecordFilters(libraryConfig),
-		range ? formatRange(range) : null,
-		...(Array.isArray(institution)
-			? institution.map((institutionValue) =>
-					meilisearchEquals("institution", institutionValue),
-				)
-			: []),
-		...createCountryFilters(country, author_country),
-		author ? meilisearchEquals("fullNames", author) : null,
-		scope === "documents" ? `fullTextPDFs.fullTextPDF.text EXISTS` : null,
-		...collections.map((collection) =>
-			meilisearchEquals("collectionsAncestry", collection),
-		),
-	].filter((filter): filter is string => filter !== null);
-
-	const attributesToSearchOn = getRuntimeSearchAttributes(
-		scope,
-		libraryConfig.search,
-	);
+	const facets = resolveFacetSelection(searchParams, libraryConfig);
 
 	return {
 		search,
-		pageNum,
-		limitNum,
-		sortOption,
-		finalFilters,
-		attributesToSearchOn,
-		country,
-		author_country,
+		pageNum: Math.max(1, Number(searchParams.page || 1)),
+		limitNum: ITEMS_PER_PAGE,
+		sortOption: resolveSortOption(
+			search,
+			searchParams.sort || SORT_OPTIONS[0].key,
+		),
+		finalFilters: buildSearchFilters(libraryConfig, {
+			...facets,
+			range: normalizeRuntimeYearRange(
+				searchParams.range,
+				libraryConfig.filters,
+			),
+			scope,
+		}),
+		attributesToSearchOn: getRuntimeSearchAttributes(
+			scope,
+			libraryConfig.search,
+		),
+		country: facets.country,
+		author_country: facets.author_country,
 	};
 }
 
