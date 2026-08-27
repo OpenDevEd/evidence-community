@@ -192,6 +192,7 @@ const RESERVED_ROUTE_SEGMENTS = new Set([
 	"profile",
 	"statistics",
 	"takedown",
+	"terms",
 ]);
 
 function getRedirectLookupPath(pathname: string) {

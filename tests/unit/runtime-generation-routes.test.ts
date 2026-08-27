@@ -135,16 +135,19 @@ describe("runtime sitemap routes", () => {
 
 describe("runtime redirect routes", () => {
 	it("uses configured redirect storage when redirects are enabled", async () => {
-		const findFirst = vi.fn().mockResolvedValue({
-			note: "legacy = /lib/NEWKEY01",
-		});
+		const limit = vi.fn().mockResolvedValue([
+			{ note: "legacy = /lib/NEWKEY01" },
+		]);
+		const select = vi.fn(() => ({
+			from: vi.fn(() => ({
+				where: vi.fn(() => ({ limit })),
+			})),
+		}));
 		const getDocument = vi.fn().mockResolvedValue({
 			value: "NEWKEY01",
 		});
 		mocks.getLibraryConfig.mockResolvedValue(config());
-		mocks.getDatabaseForConfig.mockResolvedValue({
-			query: { item: { findFirst } },
-		});
+		mocks.getDatabaseForConfig.mockResolvedValue({ select });
 		mocks.getMeilisearchForConfig.mockResolvedValue({
 			redirectsIndex: { getDocument },
 		});
@@ -168,7 +171,8 @@ describe("runtime redirect routes", () => {
 		expect(await itemResponse.json()).toEqual({
 			value: "NEWKEY01",
 		});
-		expect(findFirst).toHaveBeenCalledOnce();
+		expect(select).toHaveBeenCalledTimes(2);
+		expect(limit).toHaveBeenCalledWith(1);
 		expect(getDocument).toHaveBeenCalledOnce();
 	});
 
