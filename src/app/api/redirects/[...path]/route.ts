@@ -1,7 +1,7 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, exists, inArray, sql } from "drizzle-orm";
 import { cacheLife, cacheTag } from "next/cache";
 import { NextRequest, NextResponse } from "next/server";
-import { getDatabaseForConfig } from "@/db";
+import { getDatabaseForConfig, type Database } from "@/db";
 import { item } from "@/db/schema/tables/item";
 import { itemToTag } from "@/db/schema/tables/itemToTag";
 import { PRIVATE_NO_STORE_CACHE_CONTROL } from "@/lib/http-cache";
@@ -11,6 +11,41 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 type RedirectsResponse = {
 	destination: string | null;
 };
+
+/**
+ * Reads the live note that holds the owner's redirect list. The tag match
+ * stays in its own subquery so the tag table keeps its own name: the
+ * relational query builder rewrites every table in a hand-written condition
+ * to the record table, which asked PostgreSQL for a column that does not
+ * exist.
+ */
+export function buildRedirectsNoteQuery(
+	database: Database,
+	redirectTags: readonly string[],
+) {
+	return database
+		.select({ note: item.note })
+		.from(item)
+		.where(
+			and(
+				exists(
+					database
+						.select({ value: sql`1` })
+						.from(itemToTag)
+						.where(
+							and(
+								eq(itemToTag.itemKey, item.key),
+								inArray(itemToTag.tagName, [...redirectTags]),
+							),
+						)
+						.limit(1),
+				),
+				eq(item.itemType, "Note"),
+				eq(item.deleted, 0),
+			),
+		)
+		.limit(1);
+}
 
 async function getCachedRedirectsNote(
 	configRevision: string,
@@ -22,21 +57,9 @@ async function getCachedRedirectsNote(
 	cacheTag("redirects-note");
 	if (!redirectTags.length) return null;
 	const db = await getDatabaseForConfig(config);
+	const [note] = await buildRedirectsNoteQuery(db, redirectTags);
 
-	return db.query.item.findFirst({
-		where: and(
-			sql`exists (
-				select 1 from ${itemToTag}
-				where ${itemToTag.itemKey} = ${item.key}
-					and ${inArray(itemToTag.tagName, [...redirectTags])}
-			)`,
-			eq(item.itemType, "Note"),
-			eq(item.deleted, 0)
-		),
-		columns: {
-			note: true,
-		},
-	});
+	return note ?? null;
 }
 
 function decodeHtmlEntities(value: string) {
