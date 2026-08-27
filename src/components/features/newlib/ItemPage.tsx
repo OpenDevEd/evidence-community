@@ -1120,8 +1120,8 @@ function ItemCollection({
 					content: [
 						"bg-secondary-100",
 						"border border-white/10",
-						"shadow-[0_0_20px_rgba(0,0,0,0.1)]",
-						"dark:shadow-[0_0_20px_rgba(255,255,255,0.1)]",
+						"shadow-xl shadow-black/10",
+						"dark:shadow-white/10",
 					].join(" "),
 				}}
 			>
