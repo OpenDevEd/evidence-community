@@ -2,12 +2,10 @@ import { z } from "zod";
 
 import { AdminValidationError } from "./errors";
 
-export const OPENSCHOLAR_INSTITUTION_PAGE_SIZE = 50;
-export const OPENSCHOLAR_INSTITUTION_MAX_PAGE_SIZE = 200;
+const OPENSCHOLAR_INSTITUTION_PAGE_SIZE = 50;
+const OPENSCHOLAR_INSTITUTION_MAX_PAGE_SIZE = 200;
 
 const institutionSortSchema = z.enum(["count", "name"]);
-
-export type OpenScholarInstitutionSort = z.infer<typeof institutionSortSchema>;
 
 const institutionRequestSchema = z.object({
 	cursor: z.string().min(1).nullable().default(null),
