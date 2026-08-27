@@ -7,9 +7,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 vi.mock("next-intl", () => ({
 	useLocale: () => "en-GB",
-	useTranslations: () => Object.assign((key: string) => key, {
-		rich: (key: string) => key,
-	}),
+	useTranslations: () =>
+		Object.assign((key: string) => key, {
+			rich: (key: string) => key,
+		}),
 }));
 vi.mock("@/i18n/routing", () => ({
 	usePathname: () => "/lib",
@@ -39,8 +40,9 @@ vi.mock("@/context/LibraryConfigProvider", () => ({
 
 import ChatModal from "@/components/features/modals/ChatModal";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-	true;
+(
+	globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 // The test page has no layout engine, so nothing ever changes size.
 class NoResize {
@@ -156,6 +158,23 @@ describe("the full-screen chat window", () => {
 			"Does teacher training help?",
 		);
 		expect(document.body.textContent).toContain("Two studies say yes.");
+	});
+
+	it("reports when a conversation starts so outside model controls can warn", async () => {
+		const onConversationStateChange = vi.fn();
+		await render({ onConversationStateChange });
+
+		await ask("Does teacher training help?");
+
+		expect(onConversationStateChange).toHaveBeenCalledWith(true);
+	});
+
+	it("offers the model picker in the full-screen controls", async () => {
+		await render({ onModelChange: vi.fn() });
+
+		expect(
+			document.body.querySelector('button[aria-label="change"]'),
+		).not.toBeNull();
 	});
 
 	it("tells the assistant which publication is open", async () => {

@@ -1,4 +1,9 @@
-import { convertToModelMessages, safeValidateUIMessages } from "ai";
+import {
+	convertToModelMessages,
+	createUIMessageStreamResponse,
+	safeValidateUIMessages,
+	toUIMessageStream,
+} from "ai";
 
 import {
 	isLibraryFeatureEnabled,
@@ -8,10 +13,7 @@ import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { getLibraryConfig } from "@/config/library-config/server";
 import { getRuntimeRequestLocale } from "@/i18n/server";
 import { getAISystemPrompt } from "@/lib/ai-prompts";
-import {
-	createResearchAgent,
-	type ResearchUIMessage,
-} from "@/lib/ai/agent";
+import { createResearchAgent, type ResearchUIMessage } from "@/lib/ai/agent";
 import {
 	AIError,
 	aiErrorResponse,
@@ -181,23 +183,27 @@ export async function POST(request: Request) {
 			abortSignal: request.signal,
 		});
 
-		return result.toUIMessageStreamResponse({
-			originalMessages: validation.data,
-			sendReasoning: true,
-			onError: (error) => {
-				const normalized = normalizeAIError(error, {
-					context: "conversation",
-				});
-				void trackAIUsage(config, {
-					feature: "chat",
-					modelId,
-					distinctId,
-					startedAt,
-					success: false,
-					errorCode: normalized.code,
-				});
-				return aiStreamErrorMessage(normalized);
-			},
+		return createUIMessageStreamResponse({
+			stream: toUIMessageStream({
+				stream: result.stream,
+				tools: agent.tools,
+				originalMessages: validation.data,
+				sendReasoning: true,
+				onError: (error) => {
+					const normalized = normalizeAIError(error, {
+						context: "conversation",
+					});
+					void trackAIUsage(config, {
+						feature: "chat",
+						modelId,
+						distinctId,
+						startedAt,
+						success: false,
+						errorCode: normalized.code,
+					});
+					return aiStreamErrorMessage(normalized);
+				},
+			}),
 		});
 	} catch (error) {
 		return aiErrorResponse(error, { context: "conversation" });

@@ -242,13 +242,7 @@ function ScopeComponent({
 }
 
 /** Hands whatever is in the search field to the assistant. */
-function AskAIButton({
-	hint,
-	onAsk,
-}: {
-	hint: string;
-	onAsk: () => void;
-}) {
+function AskAIButton({ hint, onAsk }: { hint: string; onAsk: () => void }) {
 	const tAI = useTranslations("ai");
 
 	return (
@@ -562,7 +556,9 @@ function AskBoxActions({
 						size="sm"
 						variant="default"
 						className="shrink-0"
-						onPress={() => setMode(isResearch ? "quick" : "research")}
+						onPress={() =>
+							setMode(isResearch ? "quick" : "research")
+						}
 						aria-label={tUI("researchMode")}
 					>
 						<GiArchiveResearch
@@ -593,17 +589,20 @@ function AITabContent({
 	onSwitchToSearch,
 	onChatOpen,
 	externalInput,
+	hasChatConversation,
+	onModelChange,
 	setExternalInput,
 }: {
 	onSwitchToSearch: () => void;
 	onChatOpen: () => void;
 	externalInput: string;
+	hasChatConversation: boolean;
+	onModelChange: (modelId: string) => void;
 	setExternalInput: (input: string) => void;
 }) {
 	const {
 		modelPresentation: { icon: Icon },
 		selectedModelId,
-		setSelectedModelId,
 	} = useSelectedModel();
 
 	const {
@@ -642,7 +641,8 @@ function AITabContent({
 				isOpen={isModelOpen}
 				onOpenChange={onModelOpenChange}
 				selectedModelId={selectedModelId}
-				onModelChange={setSelectedModelId}
+				onModelChange={onModelChange}
+				hasConversation={hasChatConversation}
 			/>
 
 			{isSmartScreeningOpen ? (
@@ -899,8 +899,14 @@ export function ContentInteractions({
 	const {
 		modelPresentation: { icon: Icon },
 		selectedModelId,
+		setSelectedModelId,
 	} = useSelectedModel();
 	const [externalInput, setExternalInput] = useState<string>("");
+	const [hasChatConversation, setHasChatConversation] = useState(false);
+	const handleModelChange = (modelId: string) => {
+		setSelectedModelId(modelId);
+		setHasChatConversation(false);
+	};
 	// What the reader is looking at right now, so the assistant can answer
 	// questions about these results.
 	const searchContext = normalizeLibrarySearchContext(
@@ -926,6 +932,8 @@ export function ContentInteractions({
 				isOpen={isChatOpen}
 				onOpenChange={onChatOpenChange}
 				modelId={selectedModelId}
+				onModelChange={handleModelChange}
+				onConversationStateChange={setHasChatConversation}
 				searchContext={searchContext}
 				externalInput={externalInput}
 				setExternalInput={setExternalInput}
@@ -952,6 +960,8 @@ export function ContentInteractions({
 							onSwitchToSearch={() => setSelectedTab("search")}
 							onChatOpen={onChatOpen}
 							externalInput={externalInput}
+							hasChatConversation={hasChatConversation}
+							onModelChange={handleModelChange}
 							setExternalInput={setExternalInput}
 						/>
 					</ContentTabPanel>

@@ -31,17 +31,7 @@ import type { ChatMode, SmartScreeningField } from "@/types/ai";
 import type { ResearchUIMessage } from "@/lib/ai/agent";
 import { createTextMessage } from "@/lib/ai/chat-messages";
 import type { AIModelId } from "@/lib/ai/models";
-
-/** The contract screens at most twenty-five publications in one request. */
-const SCREENING_BATCH_LIMIT = 25;
-
-function publicationKeysIn(content: string) {
-	const keys = Array.from(
-		content.matchAll(/\/lib\/([A-Za-z0-9:_-]+)/g),
-		(match) => match[1],
-	);
-	return [...new Set(keys)].slice(0, SCREENING_BATCH_LIMIT);
-}
+import { screeningSelection } from "@/lib/ai/screening-selection";
 
 async function screenPublications({
 	fields,
@@ -86,10 +76,7 @@ function useChatScreening<TMessage extends UIMessage>({
 	const tUI = useTranslations("ui");
 
 	return useCallback(
-		async (content: string) => {
-			const keys = publicationKeysIn(content);
-			if (!keys.length || smartScreeningFields.length === 0) return;
-
+		async (keys: string[]) => {
 			setIsMutating(true);
 			try {
 				const result = await screenPublications({
@@ -281,7 +268,7 @@ export function useChatFailure(error: Error | undefined) {
 	const readable = error ? clientAIError(error) : undefined;
 	const isRateLimited = Boolean(
 		readable?.message.includes("RATE_LIMITED") ||
-			readable?.message.includes("Rate limit exceeded"),
+		readable?.message.includes("Rate limit exceeded"),
 	);
 
 	return {
@@ -328,23 +315,47 @@ export function useScreeningControls({
 		onOpenChange: onSmartScreeningOpenChange,
 	} = useDisclosure();
 	const [isMutating, setIsMutating] = useState(false);
+	const [pendingScreening, setPendingScreening] =
+		useState<ReturnType<typeof screeningSelection>>();
 	const screenableContent = useScreenableContent(messages);
+	const screen = useChatScreening({
+		appendMessage,
+		createMessage: (content, id) =>
+			createTextMessage("assistant", content, id),
+		modelId,
+		setIsMutating,
+		smartScreeningFields,
+	});
+	const handleScreening = useCallback(
+		(content: string) => {
+			const selection = screeningSelection(content);
+			if (!selection.keys.length || smartScreeningFields.length === 0)
+				return;
+			if (selection.omitted > 0) {
+				setPendingScreening(selection);
+				return;
+			}
+			void screen(selection.keys);
+		},
+		[screen, smartScreeningFields.length],
+	);
 
 	return {
 		canRunScreening:
 			smartScreeningFields.length > 0 && screenableContent.length > 0,
-		handleScreening: useChatScreening({
-			appendMessage,
-			createMessage: (content, id) =>
-				createTextMessage("assistant", content, id),
-			modelId,
-			setIsMutating,
-			smartScreeningFields,
-		}),
+		cancelPendingScreening: () => setPendingScreening(undefined),
+		confirmPendingScreening: () => {
+			if (!pendingScreening) return;
+			const { keys } = pendingScreening;
+			setPendingScreening(undefined);
+			void screen(keys);
+		},
+		handleScreening,
 		isMutating,
 		isSmartScreeningOpen,
 		onSmartScreeningOpen,
 		onSmartScreeningOpenChange,
+		pendingScreening,
 		screenableContent,
 		screeningTooltip: useScreeningTooltip({
 			fieldCount: smartScreeningFields.length,

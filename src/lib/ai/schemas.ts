@@ -16,6 +16,8 @@ const itemKeySchema = z
 	.max(255)
 	.regex(/^[A-Za-z0-9:_-]+$/);
 
+export const SCREENING_BATCH_LIMIT = 25;
+
 export const publicationGenerationSchema = z
 	.object({
 		prompt: itemKeySchema,
@@ -56,7 +58,7 @@ const smartScreeningFieldSchema = z
 
 export const screeningRequestSchema = z
 	.object({
-		keys: z.array(itemKeySchema).min(1).max(25),
+		keys: z.array(itemKeySchema).min(1).max(SCREENING_BATCH_LIMIT),
 		modelId: aiModelIdSchema,
 		distinctId: distinctIdSchema,
 		fields: z.array(smartScreeningFieldSchema).min(1).max(20),

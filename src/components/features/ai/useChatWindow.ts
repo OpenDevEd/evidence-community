@@ -83,11 +83,13 @@ function useChatConversation({
 	data,
 	mode,
 	modelId,
+	onConversationStateChange,
 	searchContext,
 }: {
 	data?: ItemGetResponse;
 	mode: ChatMode;
 	modelId: AIModelId;
+	onConversationStateChange?: (hasConversation: boolean) => void;
 	searchContext?: LibrarySearchContext;
 }) {
 	const publicationKey = data?.item?.key;
@@ -125,7 +127,8 @@ function useChatConversation({
 	const resetChat = useCallback(() => {
 		clearError();
 		setMessages((currentMessages) => currentMessages.slice(0, 1));
-	}, [clearError, setMessages]);
+		onConversationStateChange?.(false);
+	}, [clearError, onConversationStateChange, setMessages]);
 
 	// Retrying re-sends the last question, so it carries the context the
 	// reader is looking at now rather than the one they had before.
@@ -137,6 +140,19 @@ function useChatConversation({
 		return regenerate();
 	}, [currentRequestContext, regenerate, setMessages]);
 
+	const sendWithContext = useSendWithContext({
+		currentRequestContext,
+		messages,
+		sendMessage,
+	});
+	const sendMessageWithContext = useCallback(
+		(question: string) => {
+			onConversationStateChange?.(true);
+			return sendWithContext(question);
+		},
+		[onConversationStateChange, sendWithContext],
+	);
+
 	return {
 		appendMessage: useAppendMessage(setMessages),
 		chatFailure: useChatFailure(error),
@@ -146,11 +162,7 @@ function useChatConversation({
 		messages,
 		reload,
 		resetChat,
-		sendMessageWithContext: useSendWithContext({
-			currentRequestContext,
-			messages,
-			sendMessage,
-		}),
+		sendMessageWithContext,
 		status,
 	};
 }
@@ -193,6 +205,7 @@ export function useChatWindow({
 	externalInput,
 	isOpen,
 	modelId,
+	onConversationStateChange,
 	searchContext,
 	setExternalInput,
 }: {
@@ -200,6 +213,7 @@ export function useChatWindow({
 	externalInput?: string;
 	isOpen: boolean;
 	modelId: AIModelId;
+	onConversationStateChange?: (hasConversation: boolean) => void;
 	searchContext?: LibrarySearchContext;
 	setExternalInput?: (input: string) => void;
 }) {
@@ -214,6 +228,7 @@ export function useChatWindow({
 		data,
 		mode,
 		modelId,
+		onConversationStateChange,
 		searchContext,
 	});
 	const screening = useScreeningControls({

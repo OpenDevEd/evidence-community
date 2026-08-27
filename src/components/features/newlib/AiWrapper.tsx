@@ -51,28 +51,31 @@ function AiButton({
 		distinctId: getAnalyticsDistinctId(),
 	};
 	const locale = useLocale();
-	
+
 	const { isOpen: isChatOpen, onOpenChange: onChatOpenChange } =
 		useDisclosure();
 	const { isOpen: isChangeOpen, onOpenChange: onChangeOpenChange } =
 		useDisclosure();
-		
+
 	const { data: questions } = useSWR(
-		isChatOpen ?[
-			`/ai/questions`,
-			body,
-			{
-				"Accept-Language": locale,
-			},
-		] : null,
+		isChatOpen
+			? [
+					`/ai/questions`,
+					body,
+					{
+						"Accept-Language": locale,
+					},
+				]
+			: null,
 		fetcherPOST,
 		{
 			revalidateOnFocus: false,
 			revalidateOnReconnect: false,
 			revalidateIfStale: false,
-		}
+		},
 	);
 	const [id, setId] = useState(randomUUID);
+	const [hasChatConversation, setHasChatConversation] = useState(false);
 	const t = useTranslations("ai");
 	const tUI = useTranslations("ui");
 
@@ -118,6 +121,7 @@ function AiButton({
 
 	const handleModelChange = (modelId: string) => {
 		setSelectedModelId(modelId);
+		setHasChatConversation(false);
 		[summaryFeature, explainFeature].forEach((feature) => {
 			feature.setCompletion("");
 		});
@@ -126,18 +130,27 @@ function AiButton({
 
 	return (
 		<motion.div
-			className={twMerge("", variant === "default" && "fixed bottom-0 right-0 z-40 print:hidden")}
+			className={twMerge(
+				"",
+				variant === "default" &&
+					"fixed bottom-0 right-0 z-40 print:hidden",
+			)}
 			initial={{ opacity: 0, x: 100 }}
 			animate={{ opacity: 1, x: 0 }}
 		>
-			<div className={twMerge(
-				"flex items-center justify-center",
-				variant === "default" && " p-4")}>
+			<div
+				className={twMerge(
+					"flex items-center justify-center",
+					variant === "default" && " p-4",
+				)}
+			>
 				<ModelSelector
 					isOpen={isChangeOpen}
 					onOpenChange={onChangeOpenChange}
 					selectedModelId={selectedModelId}
 					onModelChange={handleModelChange}
+					hasConversation={hasChatConversation}
+					onResetConversation={() => setHasChatConversation(false)}
 				/>
 				<ChatModal
 					// Changing the model starts a new conversation.
@@ -146,6 +159,8 @@ function AiButton({
 					onOpenChange={onChatOpenChange}
 					data={data}
 					modelId={selectedModelId}
+					onModelChange={handleModelChange}
+					onConversationStateChange={setHasChatConversation}
 					questions={questions}
 				/>
 				{[summaryFeature, explainFeature].map((feature) => (
@@ -174,10 +189,10 @@ function AiButton({
 					<DropdownTrigger>
 						<Button
 							isIconOnly={variant === "default"}
-								aria-label={tUI("aiMenuAriaLabel")}
-								className={twMerge(
-									variant === "default" && "!p-0 rounded-full "
-								)}
+							aria-label={tUI("aiMenuAriaLabel")}
+							className={twMerge(
+								variant === "default" && "!p-0 rounded-full ",
+							)}
 							size={variant === "inline" ? "sm" : "lg"}
 						>
 							<BsStars />
@@ -191,7 +206,7 @@ function AiButton({
 							onChangeOpenChange,
 							summaryFeature,
 							explainFeature,
-							onChatOpenChange
+							onChatOpenChange,
 						)}
 						itemClasses={{
 							base: "data-[hover]:bg-accent dark:data-[hover]:bg-accent data-[hover]:text-white dark:data-[hover]:text-white",
@@ -227,10 +242,5 @@ export default function AiWrapper({
 
 	if (!isAIEnabled || !aiAllowed) return null;
 
-	return (
-		<AiButton
-			data={data}
-			variant={variant}
-		/>
-	);
+	return <AiButton data={data} variant={variant} />;
 }

@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
 	convertToModelMessages: vi.fn(async (messages) => messages),
+	createUIMessageStreamResponse: vi.fn(),
 	createResearchAgent: vi.fn(),
-	generateObject: vi.fn(),
 	generateText: vi.fn(),
 	getCachedItemSmall: vi.fn(),
 	loadPublication: vi.fn(),
@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
 	stream: vi.fn(),
 	streamText: vi.fn(),
 	trackAIUsage: vi.fn(),
+	toUIMessageStream: vi.fn(),
 	validateMessages: vi.fn(),
 	libraryConfig: {
 		ai: {
@@ -91,11 +92,12 @@ vi.mock("@/app/api/cache", () => ({
 }));
 vi.mock("ai", () => ({
 	convertToModelMessages: mocks.convertToModelMessages,
-	generateObject: mocks.generateObject,
+	createUIMessageStreamResponse: mocks.createUIMessageStreamResponse,
 	generateText: mocks.generateText,
 	Output: { object: vi.fn((options) => options) },
 	safeValidateUIMessages: mocks.validateMessages,
 	streamText: mocks.streamText,
+	toUIMessageStream: mocks.toUIMessageStream,
 }));
 
 import { POST as chat } from "@/app/api/ai/chat/route";
@@ -141,13 +143,12 @@ describe("AI routes", () => {
 			smallModel: { id: "google/gemini-3.7-flash" },
 			smallModelId: "google/gemini-3.7-flash",
 		});
-		mocks.streamText.mockReturnValue({
-			toTextStreamResponse: () => new Response("summary"),
-			toUIMessageStreamResponse: () => new Response("chat"),
-		});
-		mocks.stream.mockResolvedValue({
-			toUIMessageStreamResponse: () => new Response("agent answer"),
-		});
+		mocks.createUIMessageStreamResponse.mockImplementation(
+			({ stream }) => new Response(stream),
+		);
+		mocks.toUIMessageStream.mockImplementation(({ stream }) => stream);
+		mocks.streamText.mockReturnValue({ stream: "summary" });
+		mocks.stream.mockResolvedValue({ stream: "agent answer" });
 		mocks.createResearchAgent.mockReturnValue({
 			tools: { searchLibrary: {}, readPublications: {} },
 			stream: mocks.stream,
@@ -155,11 +156,6 @@ describe("AI routes", () => {
 		mocks.validateMessages.mockResolvedValue({
 			success: true,
 			data: [{ id: "message-1", role: "user", parts: [] }],
-		});
-		mocks.generateObject.mockResolvedValue({
-			object: { questions: ["One?", "Two?", "Three?", "Four?", "Five?"] },
-			providerMetadata: {},
-			usage: { totalTokens: 12 },
 		});
 		mocks.loadPublication.mockResolvedValue({
 			key: "ITEM0001",
@@ -187,6 +183,7 @@ describe("AI routes", () => {
 		}));
 		mocks.generateText.mockResolvedValue({
 			output: {
+				questions: ["One?", "Two?", "Three?", "Four?", "Five?"],
 				results: [
 					{
 						key: "ITEM0001",
@@ -300,7 +297,7 @@ describe("AI routes", () => {
 			"Four?",
 			"Five?",
 		]);
-		const call = mocks.generateObject.mock.calls[0]?.[0];
+		const call = mocks.generateText.mock.calls[0]?.[0];
 		expect(call.prompt).toContain("Radio lessons reached rural schools.");
 		expect(call.prompt).not.toContain("fullTextPDF");
 		expect(mocks.loadPublication).not.toHaveBeenCalled();
@@ -309,7 +306,7 @@ describe("AI routes", () => {
 	it("runs starter questions on the library's cheap fixed model", async () => {
 		await questions(post("/api/ai/questions", { prompt: "ITEM0001" }));
 
-		expect(mocks.generateObject.mock.calls[0]?.[0].model).toEqual({
+		expect(mocks.generateText.mock.calls[0]?.[0].model).toEqual({
 			id: "openai/gpt-5.6-luna",
 		});
 	});
@@ -465,7 +462,10 @@ describe("AI routes", () => {
 	it("refuses a chat request whose result list was tampered with", async () => {
 		const response = await chat(
 			chatRequest({
-				searchContext: { search: "teacher training", scope: "everything" },
+				searchContext: {
+					search: "teacher training",
+					scope: "everything",
+				},
 			}),
 		);
 

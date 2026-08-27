@@ -10,6 +10,7 @@ import { RiResetLeftFill } from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
 
 import ModelSelector from "@/components/features/ai/ModelSelector";
+import { ScreeningLimitConfirmation } from "@/components/features/ai/ScreeningLimitConfirmation";
 import { AIGeneratedContentControls } from "@/components/features/modals/AIControls";
 import { Button } from "@/components/nextui/Button";
 import { Tooltip } from "@/components/nextui/Tooltip";
@@ -19,7 +20,10 @@ import { useSelectedModel } from "@/hooks/useSelectedModel";
 import type { AIModelId } from "@/lib/ai/models";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { MessageComponent } from "./ChatMessage";
-import { ChatComposerControls, ChatComposerShell } from "./ChatComposerControls";
+import {
+	ChatComposerControls,
+	ChatComposerShell,
+} from "./ChatComposerControls";
 import { ChatErrorCard, ShortcutHint } from "./chat-shared";
 import { BucketSourcesLoader } from "./ContextBucket";
 import { SmartScreeningModal } from "./SmartScreeningModal";
@@ -70,9 +74,7 @@ function InlineChatHeader({
 						size="sm"
 						variant="transparent"
 						aria-label={tUI("resetChat")}
-						startContent={
-							<RiResetLeftFill className="size-3.5" />
-						}
+						startContent={<RiResetLeftFill className="size-3.5" />}
 						// Icon only where the header is tight; the words come
 						// back on a wider screen.
 						className="h-7 w-7 min-w-0 gap-1 rounded-lg px-0 text-xs text-black/50 hover:bg-black/5 dark:text-white/50 dark:hover:bg-white/10 lg:w-auto lg:px-2"
@@ -176,9 +178,7 @@ function InlineChatMessages({
 					{chatFailure.hasFailed ? (
 						<ChatErrorCard
 							message={chatFailure.message}
-							isContextTooLarge={
-								chatFailure.isContextTooLarge
-							}
+							isContextTooLarge={chatFailure.isContextTooLarge}
 							onReset={resetChat}
 							onRetry={reload}
 						/>
@@ -287,7 +287,10 @@ function InlineChatComposer({
 				<motion.div
 					aria-hidden="true"
 					initial={false}
-					animate={{ opacity: isLit ? 1 : 0, scaleX: isLit ? 1 : 0.35 }}
+					animate={{
+						opacity: isLit ? 1 : 0,
+						scaleX: isLit ? 1 : 0.35,
+					}}
 					transition={{
 						duration: prefersReducedMotion ? 0 : 0.24,
 						ease: [0.22, 1, 0.36, 1],
@@ -329,9 +332,7 @@ function InlineChatComposer({
 						isWaiting={chat.isWaiting}
 						mode={mode}
 						onModeChange={setMode}
-						onScreen={() =>
-							void handleScreening(screenableContent)
-						}
+						onScreen={() => void handleScreening(screenableContent)}
 						onScreeningSettings={onScreeningSettings}
 						prefersReducedMotion={prefersReducedMotion}
 						screeningTooltip={screeningTooltip}
@@ -389,6 +390,13 @@ export default function InlineLibraryChat({
 				onOpenChange={onModelOpenChange}
 				selectedModelId={selectedModelId}
 				onModelChange={setSelectedModelId}
+				hasConversation={chat.conversationStarted}
+				onResetConversation={chat.resetChat}
+			/>
+			<ScreeningLimitConfirmation
+				selection={chat.pendingScreening}
+				onCancel={chat.cancelPendingScreening}
+				onConfirm={chat.confirmPendingScreening}
 			/>
 			<InlineChatHeader chat={chat} onModelOpen={onModelOpen} />
 			<div className="relative min-h-0 flex-1">

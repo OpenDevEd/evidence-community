@@ -81,7 +81,7 @@ const config: Config = {
 		"./src/**/*.{js,ts,jsx,tsx}",
 	],
 	theme: {
-			extend: {
+		extend: {
 			colors,
 			gridTemplateRows: {
 				chat: "minmax(0, 1fr) auto",
@@ -113,7 +113,8 @@ const config: Config = {
 					"transform, border-color, background-color, box-shadow, color",
 			},
 			transformOrigin: {
-				"hover-card": "var(--radix-hover-card-content-transform-origin)",
+				"hover-card":
+					"var(--radix-hover-card-content-transform-origin)",
 			},
 			zIndex: {
 				"hover-card": "10000",
@@ -140,6 +141,7 @@ const config: Config = {
 			},
 			height: {
 				navbar: "6.5rem",
+				"generative-modal": "45rem",
 				// The chat beside the results fills the viewport minus the
 				// header stack above it, which differs per breakpoint.
 				"chat-column": "calc(100dvh - 14rem)",
@@ -154,6 +156,7 @@ const config: Config = {
 				"workbench-field": "260px",
 			},
 			width: {
+				dialog: "calc(100% - 2rem)",
 				"workbench-control": "120px",
 				"workbench-list": "150px",
 			},
@@ -198,8 +201,7 @@ const config: Config = {
 				// The header and the chat column open and close together.
 				split: "cubic-bezier(0.16,1,0.3,1)",
 				spring: "cubic-bezier(0.68, -0.6, 0.32, 1.6)",
-				"bounce-custom":
-					"cubic-bezier(0.68, -0.55, 0.265, 1.55)",
+				"bounce-custom": "cubic-bezier(0.68, -0.55, 0.265, 1.55)",
 			},
 			boxShadow: {
 				"card-soft": "0 4px 20px rgba(0, 0, 0, 0.05)",
@@ -210,8 +212,7 @@ const config: Config = {
 				"composer-focus": "0 18px 48px -32px rgba(235, 126, 29, 0.22)",
 				"composer-focus-dark":
 					"0 18px 48px -32px rgba(235, 126, 29, 0.38)",
-				"accent-glow":
-					"0 0 15px theme(colors.accent.DEFAULT / 0.25)",
+				"accent-glow": "0 0 15px theme(colors.accent.DEFAULT / 0.25)",
 			},
 			keyframes: {
 				"gradient-x": {
@@ -224,7 +225,10 @@ const config: Config = {
 						opacity: "0",
 						transform: "scale(0.9) translateY(4px)",
 					},
-					"100%": { opacity: "1", transform: "scale(1) translateY(0)" },
+					"100%": {
+						opacity: "1",
+						transform: "scale(1) translateY(0)",
+					},
 				},
 			},
 			animation: {

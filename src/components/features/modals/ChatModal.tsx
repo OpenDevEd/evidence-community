@@ -1,15 +1,17 @@
 "use client";
 
-import { ModalBody, ModalContent } from "@nextui-org/react";
+import { ModalBody, ModalContent, useDisclosure } from "@nextui-org/react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useTranslations } from "next-intl";
-import React from "react";
+import React, { type ComponentType } from "react";
 import { IoChevronDown } from "react-icons/io5";
 import { PiXBold } from "react-icons/pi";
 import { RiResetLeftFill } from "react-icons/ri";
 import { twMerge } from "tailwind-merge";
 
 import { PoweredByOpenScholar } from "@/components/features/ai/PoweredByOpenScholar";
+import ModelSelector from "@/components/features/ai/ModelSelector";
+import { ScreeningLimitConfirmation } from "@/components/features/ai/ScreeningLimitConfirmation";
 import { SmartScreeningModal } from "@/components/features/ai/SmartScreeningModal";
 import { Logo } from "@/components/layout/navbar/Logo";
 import { Button } from "@/components/nextui/Button";
@@ -20,6 +22,7 @@ import type { ResearchUIMessage } from "@/lib/ai/agent";
 import { createTextMessage } from "@/lib/ai/chat-messages";
 import type { AIModelId } from "@/lib/ai/models";
 import type { LibrarySearchContext } from "@/lib/search-context";
+import { getAIModelPresentation } from "@/constants/ai";
 import {
 	ChatComposerControls,
 	ChatComposerShell,
@@ -104,7 +107,11 @@ function PendingReply({
 			className="flex w-full items-start justify-start gap-2"
 		>
 			<MessageComponent
-				message={createTextMessage("assistant", "", "pending-assistant")}
+				message={createTextMessage(
+					"assistant",
+					"",
+					"pending-assistant",
+				)}
 				modelId={modelId}
 				error={false}
 				pdfSources={pdfSources}
@@ -205,7 +212,9 @@ function ChatMessageList({
 						>
 							<ChatErrorCard
 								message={chatFailure.message}
-								isContextTooLarge={chatFailure.isContextTooLarge}
+								isContextTooLarge={
+									chatFailure.isContextTooLarge
+								}
 								onReset={onReset}
 								onRetry={onRetry}
 								className="max-w-xl"
@@ -378,10 +387,7 @@ function ChatWindowComposer({
 		>
 			<AnimatePresence mode="popLayout">
 				{showQuestions && questions ? (
-					<StarterQuestions
-						onPick={setInput}
-						questions={questions}
-					/>
+					<StarterQuestions onPick={setInput} questions={questions} />
 				) : null}
 				<ChatComposerShell
 					className="mx-auto max-w-3xl rounded-3xl p-2 dark:bg-card"
@@ -425,15 +431,20 @@ function ChatWindowTopBar({
 	conversationStarted,
 	getTranscriptContent,
 	isWaiting,
+	ModelIcon,
 	onClose,
+	onModelOpen,
 	onReset,
 }: {
 	conversationStarted: boolean;
 	getTranscriptContent: (action: ControlAction) => Promise<GeneratedContent>;
 	isWaiting: boolean;
+	ModelIcon: ComponentType<{ className?: string }>;
 	onClose: () => void;
+	onModelOpen: () => void;
 	onReset: () => void;
 }) {
+	const tAI = useTranslations("ai");
 	const tUI = useTranslations("ui");
 
 	return (
@@ -447,6 +458,16 @@ function ChatWindowTopBar({
 			</div>
 			<div className="pointer-events-none absolute right-4 top-4 z-30 flex items-center gap-2 sm:right-6 sm:top-5">
 				<div className="pointer-events-auto flex h-10 items-center gap-0.5 rounded-full border border-black/[0.08] bg-white p-1 shadow-card-flat dark:border-white/10 dark:bg-secondary-400 dark:shadow-none">
+					<Button
+						isIconOnly
+						size="sm"
+						variant="transparent"
+						aria-label={tAI("change")}
+						className="h-8 w-8 min-w-0 rounded-2xl"
+						onPress={onModelOpen}
+					>
+						<ModelIcon className="size-6 shrink-0 rounded-full bg-accent fill-white p-1" />
+					</Button>
 					<Button
 						startContent={<RiResetLeftFill />}
 						variant="transparent"
@@ -490,6 +511,8 @@ export default function ChatModal({
 	externalInput,
 	setExternalInput,
 	searchContext,
+	onModelChange,
+	onConversationStateChange,
 }: {
 	isOpen: boolean;
 	onOpenChange: (open: boolean) => void;
@@ -499,12 +522,21 @@ export default function ChatModal({
 	externalInput?: string;
 	setExternalInput?: (input: string) => void;
 	searchContext?: LibrarySearchContext;
+	onModelChange?: (modelId: string) => void;
+	onConversationStateChange?: (hasConversation: boolean) => void;
 }) {
+	const {
+		isOpen: isModelOpen,
+		onOpen: onModelOpen,
+		onOpenChange: onModelOpenChange,
+	} = useDisclosure();
+	const modelPresentation = getAIModelPresentation(modelId);
 	const chat = useChatWindow({
 		data,
 		externalInput,
 		isOpen,
 		modelId,
+		onConversationStateChange,
 		searchContext,
 		setExternalInput,
 	});
@@ -546,6 +578,19 @@ export default function ChatModal({
 
 	return (
 		<>
+			<ModelSelector
+				isOpen={isModelOpen}
+				onOpenChange={onModelOpenChange}
+				selectedModelId={modelId}
+				onModelChange={(nextModelId) => onModelChange?.(nextModelId)}
+				hasConversation={conversationStarted}
+				onResetConversation={resetChat}
+			/>
+			<ScreeningLimitConfirmation
+				selection={chat.pendingScreening}
+				onCancel={chat.cancelPendingScreening}
+				onConfirm={chat.confirmPendingScreening}
+			/>
 			{isSmartScreeningOpen && (
 				<SmartScreeningModal
 					isOpen
@@ -573,7 +618,9 @@ export default function ChatModal({
 								conversationStarted={conversationStarted}
 								getTranscriptContent={getTranscriptContent}
 								isWaiting={isWaiting}
+								ModelIcon={modelPresentation.icon}
 								onClose={onClose}
+								onModelOpen={onModelOpen}
 								onReset={resetChat}
 							/>
 							<ModalBody className="min-h-0 w-full overflow-hidden p-0">
