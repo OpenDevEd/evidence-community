@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { create } from "xmlbuilder2";
+import { XMLParser, XMLValidator } from "fast-xml-parser";
 
 import { libraryConfigSchema } from "@/config/library-config/schema";
 import {
@@ -9,30 +9,23 @@ import {
 } from "../fixtures/library-config";
 
 const mocks = vi.hoisted(() => ({
-	getDocuments: vi.fn(),
 	getLibraryConfig: vi.fn(),
+	readCitationRecordsPage: vi.fn(),
+	readNewestRecords: vi.fn(),
+}));
+
+vi.mock("next/server", async (importOriginal) => ({
+	...(await importOriginal<typeof import("next/server")>()),
+	connection: vi.fn(async () => undefined),
 }));
 
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: mocks.getLibraryConfig,
 }));
 
-vi.mock("@/lib/meilisearch", () => ({
-	getMeilisearchForConfig: vi.fn(async () => ({
-		index: { getDocuments: mocks.getDocuments },
-	})),
-}));
-
-vi.mock("@/lib/search", () => ({
-	getMainAttributes: vi.fn(async () => [
-		"key",
-		"title",
-		"abstractNote",
-		"updatedAt",
-		"attachmentsData",
-		"fullTextPDFs",
-	]),
-	getPublicRecordFilters: vi.fn(() => ["deleted != 1"]),
+vi.mock("@/lib/library-export-records", () => ({
+	readCitationRecordsPage: mocks.readCitationRecordsPage,
+	readNewestRecords: mocks.readNewestRecords,
 }));
 
 vi.mock("@/lib/actions", () => ({
@@ -72,25 +65,31 @@ function requestFor(format: string) {
 	);
 }
 
-function pagesOf(...pages: Array<Array<Record<string, unknown>>>) {
-	mocks.getDocuments.mockReset();
-	for (const page of pages) {
-		mocks.getDocuments.mockResolvedValueOnce({ results: page });
-	}
-	mocks.getDocuments.mockResolvedValue({ results: [] });
+/** Serves the given record keys through the keyset reader the route uses. */
+function libraryHolding(...keys: string[]) {
+	const sorted = [...keys].sort();
+	mocks.readCitationRecordsPage.mockImplementation(
+		async (
+			_config: unknown,
+			afterKey: string | null,
+			limit: number,
+		) =>
+			sorted
+				.filter((key) => (afterKey === null ? true : key > afterKey))
+				.slice(0, limit)
+				.map((key) => ({ key, title: `Record ${key}` })),
+	);
 }
 
 beforeEach(() => {
 	mocks.getLibraryConfig.mockResolvedValue(configWith({}));
-	pagesOf([{ key: "ABCD1234", title: "A record" }]);
+	libraryHolding("ABCD1234");
+	mocks.readNewestRecords.mockResolvedValue([]);
 });
 
 describe("whole-library citation files", () => {
 	it("builds the RIS file from the library's own records", async () => {
-		pagesOf(
-			[{ key: "ABCD1234", title: "First" }],
-			[{ key: "EFGH5678", title: "Second" }],
-		);
+		libraryHolding("ABCD1234", "EFGH5678");
 
 		const response = await requestFor("ris");
 
@@ -116,15 +115,14 @@ describe("whole-library citation files", () => {
 		expect(await response.text()).toContain("@article{ABCD1234,");
 	});
 
-	it("never reads stored full text or cover images", async () => {
+	it("walks the record key instead of counting from an offset", async () => {
+		libraryHolding("ABCD1234", "EFGH5678");
+
 		await (await requestFor("ris")).text();
 
-		expect(mocks.getDocuments).toHaveBeenCalledWith(
-			expect.objectContaining({
-				fields: ["key", "title", "abstractNote", "updatedAt"],
-				filter: ["deleted != 1"],
-			}),
-		);
+		expect(
+			mocks.readCitationRecordsPage.mock.calls.map((call) => call[1]),
+		).toEqual([null, "EFGH5678"]);
 	});
 
 	it.each([
@@ -132,12 +130,12 @@ describe("whole-library citation files", () => {
 		["downloads are off", { downloads: false, atomFeed: false }],
 	])("returns 404 when %s", async (_name, changes) => {
 		mocks.getLibraryConfig.mockResolvedValue(configWith(changes));
-		mocks.getDocuments.mockClear();
+		mocks.readCitationRecordsPage.mockClear();
 
 		const response = await requestFor("ris");
 
 		expect(response.status).toBe(404);
-		expect(mocks.getDocuments).not.toHaveBeenCalled();
+		expect(mocks.readCitationRecordsPage).not.toHaveBeenCalled();
 	});
 
 	it("returns 404 for a format the library does not publish", async () => {
@@ -146,12 +144,17 @@ describe("whole-library citation files", () => {
 });
 
 describe("whole-library Atom feed", () => {
+	const parser = new XMLParser({
+		ignoreAttributes: false,
+		attributeNamePrefix: "@",
+	});
+
 	it("serves a valid Atom 1.0 feed of the newest records", async () => {
-		pagesOf([
+		mocks.readNewestRecords.mockResolvedValue([
 			{
 				key: "ABCD1234",
 				title: "First record",
-				abstractNote: "  A short   summary. ",
+				abstractNote: "A short summary.",
 				updatedAt: "2026-02-01T10:00:00.000Z",
 			},
 		]);
@@ -164,33 +167,23 @@ describe("whole-library Atom feed", () => {
 		);
 		expect(response.headers.has("content-disposition")).toBe(false);
 
-		const feed = create(await response.text()).end({ format: "object" }) as {
-			feed: Record<string, any>;
-		};
+		const xml = await response.text();
+		expect(XMLValidator.validate(xml)).toBe(true);
 
-		expect(feed.feed["@xmlns"]).toBe("http://www.w3.org/2005/Atom");
-		expect(feed.feed.id).toBe("https://maximal.example.org/lib");
-		expect(feed.feed.updated).toBe("2026-02-01T10:00:00.000Z");
-		expect(feed.feed.entry.id).toBe(
-			"https://maximal.example.org/lib/ABCD1234",
-		);
-		expect(feed.feed.entry.title).toBe("First record");
-		expect(feed.feed.entry.updated).toBe("2026-02-01T10:00:00.000Z");
-		expect(feed.feed.entry.summary["#"]).toBe("A short summary.");
-		expect(feed.feed.entry.link["@href"]).toBe(
-			"https://maximal.example.org/lib/ABCD1234",
-		);
+		const { feed } = parser.parse(xml);
+		expect(feed["@xmlns"]).toBe("http://www.w3.org/2005/Atom");
+		expect(feed.entry.id).toBe("https://maximal.example.org/lib/ABCD1234");
+		expect(feed.entry.title).toBe("First record");
+		expect(feed.entry.updated).toBe("2026-02-01T10:00:00.000Z");
+		expect(feed.entry.summary["#text"]).toBe("A short summary.");
 	});
 
-	it("asks for the newest records first", async () => {
+	it("asks for fifty records", async () => {
 		await requestFor("atom");
 
-		expect(mocks.getDocuments).toHaveBeenCalledWith(
-			expect.objectContaining({
-				limit: 50,
-				offset: 0,
-				sort: ["dateAdded:desc"],
-			}),
+		expect(mocks.readNewestRecords).toHaveBeenCalledWith(
+			expect.anything(),
+			50,
 		);
 	});
 
@@ -199,11 +192,11 @@ describe("whole-library Atom feed", () => {
 		["the Atom feed feature is off", { atomFeed: false }],
 	])("returns 404 when %s", async (_name, changes) => {
 		mocks.getLibraryConfig.mockResolvedValue(configWith(changes));
-		mocks.getDocuments.mockClear();
+		mocks.readNewestRecords.mockClear();
 
 		const response = await requestFor("atom");
 
 		expect(response.status).toBe(404);
-		expect(mocks.getDocuments).not.toHaveBeenCalled();
+		expect(mocks.readNewestRecords).not.toHaveBeenCalled();
 	});
 });

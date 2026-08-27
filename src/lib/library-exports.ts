@@ -3,56 +3,23 @@ import { create } from "xmlbuilder2";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import {
 	getLibraryExportPath,
+	LIBRARY_EXPORT_RECORD_CAP,
 	type BibliographicExportFormat,
 } from "@/config/library-config/exports";
 import type { Item } from "@/app/api/item/types";
 import { convertItem } from "@/lib/actions";
-import { getMeilisearchForConfig } from "@/lib/meilisearch";
-import { getMainAttributes, getPublicRecordFilters } from "@/lib/search";
+import {
+	readCitationRecordsPage,
+	readNewestRecords,
+} from "@/lib/library-export-records";
 import { buildSiteUrl } from "@/lib/site-url";
 
-// How many records one whole-library citation file may contain. A library with
-// more records stops at this many; the rest stay reachable one record at a
-// time. The cap keeps a single request inside a sensible memory and time
-// budget.
-export const LIBRARY_EXPORT_RECORD_CAP = 20_000;
-
-// How many records are read from the search index per round trip while the
-// file is being written.
+// How many records are read from the database per round trip while the file
+// is being written.
 export const LIBRARY_EXPORT_PAGE_SIZE = 250;
 
 // How many records the Atom feed lists.
 const ATOM_FEED_RECORD_COUNT = 50;
-
-// Stored full text and cover images are large and are never part of a
-// citation, so they are left out of every export read.
-const HEAVY_RECORD_FIELDS = new Set([
-	"attachmentsData",
-	"fullTextPDF",
-	"fullTextPDFs",
-	"PDFCoverPageImage",
-	"PDFCoverPageWidth",
-	"PDFCoverPageHeight",
-]);
-
-const ATOM_RECORD_FIELDS = [
-	"key",
-	"title",
-	"abstractNote",
-	"creators",
-	"fullNames",
-	"date",
-	"dateAdded",
-	"dateModified",
-	"updatedAt",
-] as const;
-
-async function getCitationRecordFields(config: LibraryServerConfig) {
-	const attributes = await getMainAttributes(config);
-	return attributes.filter(
-		(attribute) => !HEAVY_RECORD_FIELDS.has(attribute),
-	);
-}
 
 export function buildLibraryExportFilename(
 	shortName: string,
@@ -70,29 +37,13 @@ export function buildLibraryExportFilename(
 }
 
 /**
- * Reads one page of the records a visitor is allowed to see, straight from the
- * library's own data. `sort` is only accepted for sortable index attributes.
+ * Reads one page of records that start after `afterKey`. Injecting the reader
+ * keeps the paging rules testable without a database.
  */
-async function readPublicRecords(
-	config: LibraryServerConfig,
-	options: {
-		offset: number;
-		limit: number;
-		fields: readonly string[];
-		sort?: readonly string[];
-	},
-): Promise<Item[]> {
-	const { index } = await getMeilisearchForConfig(config);
-	const result = await index.getDocuments({
-		offset: options.offset,
-		limit: options.limit,
-		fields: [...options.fields],
-		filter: getPublicRecordFilters(config),
-		...(options.sort ? { sort: [...options.sort] } : {}),
-	});
-
-	return result.results as Item[];
-}
+export type CitationRecordReader = (
+	afterKey: string | null,
+	limit: number,
+) => Promise<Item[]>;
 
 /**
  * Turns one page of records into citation text. Records the converter cannot
@@ -110,42 +61,41 @@ export async function convertRecordsToCitations(
 }
 
 /**
- * Writes the whole library as one RIS or BibTeX file. Records are read and
- * converted a page at a time, so the response starts before the last record
- * has been read and memory stays flat.
+ * Writes the whole library as one RIS or BibTeX file.
+ *
+ * Records are read a page at a time, walking the record key upwards, so the
+ * response starts before the last record has been read, memory stays flat, and
+ * a record added or removed during the write cannot duplicate or skip another
+ * record. Writing stops after `LIBRARY_EXPORT_RECORD_CAP` records.
  */
-export async function streamLibraryCitations(
-	config: LibraryServerConfig,
+export function streamCitationRecords(
+	readPage: CitationRecordReader,
 	format: BibliographicExportFormat,
 ) {
 	const encoder = new TextEncoder();
-	// Resolved before the stream starts: the index settings are read through a
-	// request-scoped cache that is gone once the response is being sent.
-	const fields = await getCitationRecordFields(config);
-	let offset = 0;
+	let afterKey: string | null = null;
+	let written = 0;
 
 	return new ReadableStream<Uint8Array>({
 		async pull(controller) {
-			if (offset >= LIBRARY_EXPORT_RECORD_CAP) {
+			const remaining = LIBRARY_EXPORT_RECORD_CAP - written;
+			if (remaining <= 0) {
 				controller.close();
 				return;
 			}
 
-			const records = await readPublicRecords(config, {
-				offset,
-				limit: Math.min(
-					LIBRARY_EXPORT_PAGE_SIZE,
-					LIBRARY_EXPORT_RECORD_CAP - offset,
-				),
-				fields,
-			});
+			const records = await readPage(
+				afterKey,
+				Math.min(LIBRARY_EXPORT_PAGE_SIZE, remaining),
+			);
 
 			if (records.length === 0) {
 				controller.close();
 				return;
 			}
 
-			offset += records.length;
+			written += records.length;
+			afterKey = String(records[records.length - 1].key);
 
 			const entries = await convertRecordsToCitations(records, format);
 			if (entries.length > 0) {
@@ -157,19 +107,30 @@ export async function streamLibraryCitations(
 	});
 }
 
-function toRfc3339(value: unknown, fallback: Date) {
-	const date = typeof value === "string" || value instanceof Date
-		? new Date(value)
-		: null;
+export function streamLibraryCitations(
+	config: LibraryServerConfig,
+	format: BibliographicExportFormat,
+) {
+	return streamCitationRecords(
+		(afterKey, limit) => readCitationRecordsPage(config, afterKey, limit),
+		format,
+	);
+}
 
-	return (date && !Number.isNaN(date.getTime()) ? date : fallback)
-		.toISOString();
+function toRfc3339(value: unknown, fallback: Date) {
+	const date =
+		typeof value === "string" || value instanceof Date
+			? new Date(value)
+			: null;
+
+	return (
+		date && !Number.isNaN(date.getTime()) ? date : fallback
+	).toISOString();
 }
 
 function toPlainSummary(record: Item) {
-	const abstract = typeof record.abstractNote === "string"
-		? record.abstractNote
-		: "";
+	const abstract =
+		typeof record.abstractNote === "string" ? record.abstractNote : "";
 	const summary = abstract.replace(/\s+/gu, " ").trim();
 
 	return summary.length > 1000 ? `${summary.slice(0, 999)}…` : summary;
@@ -190,16 +151,18 @@ export function buildAtomFeed(
 	const entryDates = records.map((record) =>
 		toRfc3339(record.updatedAt ?? record.dateModified, now),
 	);
+	const feedUpdated =
+		entryDates.length > 0
+			? entryDates.slice().sort().at(-1)!
+			: toRfc3339(null, now);
 
-	const feed = create({ version: "1.0", encoding: "UTF-8" })
-		.ele("feed", { xmlns: "http://www.w3.org/2005/Atom" });
+	const feed = create({ version: "1.0", encoding: "UTF-8" }).ele("feed", {
+		xmlns: "http://www.w3.org/2005/Atom",
+	});
 
 	feed.ele("id").txt(libraryUrl).up();
 	feed.ele("title").txt(config.identity.name).up();
-	feed
-		.ele("updated")
-		.txt(entryDates.length > 0 ? entryDates.slice().sort().at(-1)! : toRfc3339(null, now))
-		.up();
+	feed.ele("updated").txt(feedUpdated).up();
 	feed.ele("link", { rel: "self", href: feedUrl }).up();
 	feed.ele("link", { rel: "alternate", href: libraryUrl }).up();
 	feed.ele("author").ele("name").txt(config.identity.name).up().up();
@@ -235,10 +198,5 @@ export function buildAtomFeed(
  * Reads the newest records for the Atom feed.
  */
 export function readAtomFeedRecords(config: LibraryServerConfig) {
-	return readPublicRecords(config, {
-		offset: 0,
-		limit: ATOM_FEED_RECORD_COUNT,
-		fields: ATOM_RECORD_FIELDS,
-		sort: ["dateAdded:desc"],
-	});
+	return readNewestRecords(config, ATOM_FEED_RECORD_COUNT);
 }

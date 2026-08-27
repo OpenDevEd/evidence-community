@@ -516,10 +516,18 @@ running before removing a stale lock.
   `/lib/<key>/export/bibtex` need `features.downloads` and the switch for that
   format. The download dialog offers only the formats that are switched on.
 - Whole-library files at `/lib/export/ris` and `/lib/export/bibtex` need the
-  same two switches. They are written a page at a time and stop after
-  20 000 records. The file is named after the library short name.
+  same two switches. They read PostgreSQL 250 records at a time, walking the
+  record key upwards, and stop after 20 000 records. Because paging follows the
+  record key rather than a row number, a record added or removed while the file
+  is being written cannot make another record appear twice or be missed. The
+  file is named after the library short name.
 - The Atom feed at `/lib/atom.xml` needs `features.atomFeed` and
   `exports.atom`. It lists the 50 most recently added records.
+- Exports read a fixed list of citation columns. Stored full text, cover
+  images, notes and file details are never loaded.
+- Exports show the same records as the public library. Records carrying a
+  hidden tag are left out. Records carrying a coming-soon or internal tag stay
+  in, because the public library shows them with a badge.
 - Proxied gap maps and generated exports are not cached by the application.
 - PostgreSQL, Meilisearch, SMTP, server analytics, and AI provider endpoints
   must be reachable from the container network. Browser analytics hosts must

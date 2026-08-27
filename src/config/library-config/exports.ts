@@ -14,6 +14,12 @@ export type BibliographicExportFormat =
 export type LibraryExportFormat =
 	(typeof LIBRARY_EXPORT_FORMATS)[number];
 
+// How many records one whole-library citation file may contain. A library
+// with more records stops at this many; the rest stay reachable one record at
+// a time. The cap keeps a single request inside a sensible memory and time
+// budget, and the download button never promises more than this.
+export const LIBRARY_EXPORT_RECORD_CAP = 20_000;
+
 const EXPORT_PATHS = {
 	ris: "/lib/export/ris",
 	bibtex: "/lib/export/bibtex",
@@ -48,6 +54,30 @@ export function getEnabledCitationFormats(
 	return BIBLIOGRAPHIC_EXPORT_FORMATS.filter(
 		(format) => exports[format],
 	);
+}
+
+/**
+ * The citation files a single record page may advertise. A record page must
+ * only point at a file the library actually serves, so a switched-off format
+ * is listed nowhere.
+ */
+export function getRecordCitationLinks(
+	exports: LibraryPublicConfig["exports"],
+	downloadsEnabled: boolean,
+	key: string,
+) {
+	if (!downloadsEnabled) return [];
+
+	return getEnabledCitationFormats(exports).map((format) => ({
+		contentType: getLibraryExportContentType(format).split(";", 1)[0],
+		path: `/lib/${key}/export/${format}`,
+	}));
+}
+
+// The whole-library file stops at the cap, so the download button must not
+// promise more records than the file will hold.
+export function getDownloadableRecordCount(totalRecords: number) {
+	return Math.min(Math.max(0, totalRecords), LIBRARY_EXPORT_RECORD_CAP);
 }
 
 export function getLibraryExportPath(format: LibraryExportFormat) {

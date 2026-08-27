@@ -804,6 +804,41 @@ async function seedSearch(profile: Profile) {
 	]);
 }
 
+// Records the whole-library exports and the Atom feed read straight from
+// PostgreSQL. One is an ordinary published record, one carries the library's
+// hidden tag, and one carries the internal badge tag that readers may still
+// see. The browser checks prove which of them reach an export file.
+export const EXPORT_RECORDS = {
+	published: { key: "AMBREXP1", title: "Amber export evidence" },
+	hidden: { key: "AMBRHID1", title: "Amber unlisted evidence" },
+	internal: { key: "AMBRINT1", title: "Amber badged evidence" },
+} as const;
+
+function seedExportRecords(profile: Profile) {
+	if (profile.name !== "amber") return;
+
+	const rows = [
+		[EXPORT_RECORDS.published, null],
+		[EXPORT_RECORDS.hidden, "hidden-record"],
+		[EXPORT_RECORDS.internal, "internal-only"],
+	] as const;
+
+	const statements = [
+		`INSERT INTO "tag" ("name") VALUES ('hidden-record'), ('internal-only') ON CONFLICT DO NOTHING`,
+		...rows.flatMap(([record, tag]) => [
+			`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${record.key}', 'native', '${record.key}')`,
+			`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded") VALUES ('${record.key}', 'native', '${record.key}', 'JournalArticle', '${record.title}', 1, '2026', now())`,
+			...(tag
+				? [
+						`INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES ('${record.key}', '${tag}')`,
+					]
+				: []),
+		]),
+	];
+
+	postgresScalar(profile.name, statements.join("; "));
+}
+
 async function seedSharedSearchIndexes(profile: Profile) {
 	for (const index of [
 		{ uid: "cache", primaryKey: "id" },
@@ -1095,6 +1130,12 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_EXPORT_ATOM: String(
 			config.features.atomFeed && config.exports.atom,
 		),
+		PLAYWRIGHT_EXPORT_PUBLISHED_TITLE:
+			profile.name === "amber" ? EXPORT_RECORDS.published.title : "",
+		PLAYWRIGHT_EXPORT_HIDDEN_TITLE:
+			profile.name === "amber" ? EXPORT_RECORDS.hidden.title : "",
+		PLAYWRIGHT_EXPORT_INTERNAL_TITLE:
+			profile.name === "amber" ? EXPORT_RECORDS.internal.title : "",
 		PLAYWRIGHT_EXPECTED_ANALYTICS: String(
 			Boolean(
 				config.analytics.posthog.host && config.analytics.posthog.key,
@@ -2064,6 +2105,7 @@ async function main() {
 		}
 		for (const profile of profiles) {
 			await seedSearch(profile);
+			seedExportRecords(profile);
 		}
 		await verifySearchQueueIsolation(profiles);
 		compose(

@@ -18,6 +18,10 @@ const expectedExportBibtex =
 	process.env.PLAYWRIGHT_EXPECTED_EXPORT_BIBTEX === "true";
 const expectedExportAtom =
 	process.env.PLAYWRIGHT_EXPECTED_EXPORT_ATOM === "true";
+const exportPublishedTitle =
+	process.env.PLAYWRIGHT_EXPORT_PUBLISHED_TITLE ?? "";
+const exportHiddenTitle = process.env.PLAYWRIGHT_EXPORT_HIDDEN_TITLE ?? "";
+const exportInternalTitle = process.env.PLAYWRIGHT_EXPORT_INTERNAL_TITLE ?? "";
 const expectedAnalytics =
 	process.env.PLAYWRIGHT_EXPECTED_ANALYTICS === "true";
 const expectedAuthentication =
@@ -136,7 +140,7 @@ test("builds only the whole-library exports that are switched on", async ({
 			enabled: expectedExportBibtex,
 			path: "/lib/export/bibtex",
 			contentType: "application/x-bibtex",
-			marker: "@",
+			marker: "@article{",
 			filename: "amber-evidence.bib",
 		},
 		{
@@ -157,7 +161,20 @@ test("builds only the whole-library exports that are switched on", async ({
 		expect(response.headers()["content-type"]).toContain(
 			expected.contentType,
 		);
-		expect(await response.text()).toContain(expected.marker);
+
+		const body = await response.text();
+		expect(body, expected.path).toContain(expected.marker);
+
+		if (exportPublishedTitle) {
+			// The file is built from the library's own records, so a published
+			// record must be in it and a hidden record must never be.
+			expect(body, expected.path).toContain(exportPublishedTitle);
+			expect(body, expected.path).not.toContain(exportHiddenTitle);
+			// Records carrying the internal badge tag stay public on the site,
+			// so they stay in the file too.
+			expect(body, expected.path).toContain(exportInternalTitle);
+		}
+
 		if (expected.filename) {
 			expect(response.headers()["content-disposition"]).toContain(
 				expected.filename,

@@ -12,8 +12,7 @@ import {
 	streamLibraryCitations,
 } from "@/lib/library-exports";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
-
-export const dynamic = "force-dynamic";
+import { connection } from "next/server";
 
 function notFound() {
 	return Response.json(
@@ -40,6 +39,9 @@ export async function GET(
 	_request: Request,
 	{ params }: { params: Promise<{ format: string }> },
 ) {
+	// Every export reads live records, so nothing here may be prerendered.
+	await connection();
+
 	const { format } = await params;
 	if (!isLibraryExportFormat(format)) return notFound();
 
@@ -66,7 +68,5 @@ export async function GET(
 		`attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
 	);
 
-	return new Response(await streamLibraryCitations(config, format), {
-		headers,
-	});
+	return new Response(streamLibraryCitations(config, format), { headers });
 }
