@@ -1,92 +1,28 @@
 "use client";
 
-import { StoredUtm, UTM_KEYS } from "@/components/features/UtmProvider";
 import type { LibraryPublicConfig } from "@/config/library-config/schema";
-import { PostHog } from "posthog-js";
+import type {
+	AnalyticsConsentPreferences,
+	AnalyticsConsentState,
+} from "@/lib/analytics-consent";
+import { sanitizeAnalyticsPath } from "@/lib/analytics-shared";
+import type { CaptureResult, PostHog } from "posthog-js";
 
 declare global {
 	interface Window {
-		// eslint-disable-next-line @typescript-eslint/no-wrapper-object-types
-		dataLayer?: Object[];
+		dataLayer?: unknown[];
 		gtag?: (...args: unknown[]) => void;
+		[key: `ga-disable-${string}`]: boolean | unknown;
 	}
 }
 
-export type PdfEventParams = {
-	file_id: string;
-	filename: string;
-	file_title?: string;
-	parent_type?: string;
-	parent_id?: string;
-	parent_title?: string;
-	file_size_bytes?: number;
-	file_mime_type?: string;
-	link_url?: string;
-	link_text?: string;
-	method?: "view" | "download" | "open";
-	file_md5?: string;
-	posthog_distinct_id?: string;
-	user_id?: string;
-} & StoredUtm["utm"];
-
-export function trackPDFDownload(params: PdfEventParams) {
-	if (!analyticsEnabled) {
-		return;
-	}
-
-	const event = {
-		engagement_time_msec: 1,
-		method: "download",
-		...params,
-	};
-	sendGoogleEvent("pdf_download", event);
-	posthogClient?.capture(
-		"download_attachment",
-		payloadToPosthog(params),
-	);
-}
-
-export function trackPDFView(params: PdfEventParams) {
-	if (!analyticsEnabled) {
-		return;
-	}
-
-	const event = {
-		engagement_time_msec: 1,
-		method: "view",
-		...params,
-	};
-	sendGoogleEvent("pdf_view", event);
-	posthogClient?.capture("view_attachment", payloadToPosthog(params));
-}
-
-function payloadToPosthog(params: PdfEventParams) {
-	const payload: Record<string, unknown> = {
-		key: params.file_id,
-		filename: params.filename,
-		fileTitle: params.file_title,
-		parentKey: params.parent_id,
-		parentTitle: params.parent_title,
-		parentType: params.parent_type,
-		fileMimeType: params.file_mime_type,
-		fileMd5: params.file_md5,
-		linkText: params.link_text,
-		linkUrl: params.link_url,
-		userId: params.user_id,
-	};
-
-	for (const key of UTM_KEYS) {
-		if (params[key]) {
-			payload[key] = params[key];
-		}
-	}
-
-	return payload;
-}
+export type ClientAnalyticsConfiguration = {
+	analytics: LibraryPublicConfig["analytics"];
+	scope: string;
+};
 
 export type AttachmentAnalyticsAction = "view" | "download" | "open";
 export type AttachmentAnalyticsSource = "internal" | "external";
-
 export type AttachmentAnalyticsPayload = {
 	action: AttachmentAnalyticsAction;
 	source: AttachmentAnalyticsSource;
@@ -95,99 +31,77 @@ export type AttachmentAnalyticsPayload = {
 	isAuthenticated: boolean;
 };
 
-let analyticsEnabled = false;
-let posthogClient: PostHog | null = null;
-let posthogConfiguration: LibraryPublicConfig["analytics"]["posthog"] | null =
-	null;
-let googleAnalyticsMeasurementId: string | null = null;
-let googleAnalyticsReady = false;
+export type LibraryResultsAnalyticsPayload = {
+	hasSearch: boolean;
+	filterCount: number;
+	page: number;
+	pageResultCount: number;
+	totalResultCount: number;
+	scope: string;
+	sort: string;
+};
+
+export type ContentActionAnalyticsPayload = {
+	action: "copy" | "download";
+	context:
+		| "ai_response"
+		| "chat_transcript"
+		| "generated_content"
+		| "library_records"
+		| "smart_screening";
+	format: string;
+};
 
 type QueuedGoogleEvent = {
 	eventName: string;
 	params: Record<string, unknown>;
 };
 
+const GOOGLE_COOKIE_PREFIXES = ["_ga", "_gid", "_gat"];
+const POSTHOG_STORAGE_PREFIXES = ["ph_", "__ph_", "posthog"];
+const SENSITIVE_PROPERTY_NAME =
+	/(^|_)(abstract|authorization|body|chat|content|email|file(name|_name)?|link_(text|url)|message|parent_title|password|pdf|prompt|query|response|search_(body|query|term)|text|title|token|transcript|user_id)(_|$)/i;
+
+let analyticsMode: AnalyticsConsentState = "pending";
+let analyticsPreferences: AnalyticsConsentPreferences = {
+	analytics: false,
+	sessionReplay: false,
+};
+let activeConfiguration: ClientAnalyticsConfiguration | null = null;
+let activeSignature: string | null = null;
+let posthogClient: PostHog | null = null;
+let posthogInitialization: Promise<boolean> | null = null;
+let appliedPostHogConsentSignature: string | null = null;
+let googleAnalyticsMeasurementId: string | null = null;
+let googleAnalyticsReady = false;
+let removeClientErrorListeners: (() => void) | null = null;
 const queuedGoogleEvents: QueuedGoogleEvent[] = [];
 
-function posthogConfigurationsEqual(
-	left: LibraryPublicConfig["analytics"]["posthog"] | null,
-	right: LibraryPublicConfig["analytics"]["posthog"],
-) {
-	return left?.host === right.host && left?.key === right.key;
+function analyticsDebug(message: string, details?: Record<string, unknown>) {
+	if (process.env.NODE_ENV === "production") return;
+	console.debug("[analytics]", message, details ?? {});
+}
+
+function configurationSignature(configuration: ClientAnalyticsConfiguration) {
+	const { analytics, scope } = configuration;
+	return [
+		scope,
+		analytics.consentPolicyVersion,
+		analytics.posthog.host ?? "",
+		analytics.posthog.uiHost ?? "",
+		analytics.posthog.key ?? "",
+		analytics.google.measurementId ?? "",
+	].join("|");
 }
 
 function gtag(...args: unknown[]) {
-	if (typeof window === "undefined") {
-		return;
-	}
-
+	if (typeof window === "undefined") return;
 	if (typeof window.gtag === "function") {
 		window.gtag(...args);
 		return;
 	}
-
 	window.dataLayer = window.dataLayer || [];
 	window.dataLayer.push(args);
-}
-
-function resetGoogleAnalyticsState() {
-	googleAnalyticsMeasurementId = null;
-	googleAnalyticsReady = false;
-	queuedGoogleEvents.length = 0;
-}
-
-function sendGoogleEvent(
-	eventName: string,
-	params: Record<string, unknown>
-) {
-	if (!googleAnalyticsMeasurementId) {
-		return;
-	}
-
-	if (!googleAnalyticsReady) {
-		queuedGoogleEvents.push({
-			eventName,
-			params,
-		});
-		return;
-	}
-
-	gtag("event", eventName, {
-		send_to: googleAnalyticsMeasurementId,
-		...params,
-	});
-}
-
-function flushQueuedGoogleEvents() {
-	if (!googleAnalyticsReady || !googleAnalyticsMeasurementId) {
-		return;
-	}
-
-	while (queuedGoogleEvents.length > 0) {
-		const nextEvent = queuedGoogleEvents.shift();
-		if (!nextEvent) {
-			continue;
-		}
-
-		gtag("event", nextEvent.eventName, {
-			send_to: googleAnalyticsMeasurementId,
-			...nextEvent.params,
-		});
-	}
-}
-
-export function sanitizeAnalyticsPath(path: string | undefined | null) {
-	if (!path) {
-		return "/";
-	}
-
-	try {
-		const url = new URL(path, "https://analytics.local");
-		return url.pathname || "/";
-	} catch {
-		const sanitized = path.split("?")[0]?.split("#")[0];
-		return sanitized || "/";
-	}
 }
 
 function getGoogleConsentUpdate(granted: boolean) {
@@ -199,54 +113,404 @@ function getGoogleConsentUpdate(granted: boolean) {
 	};
 }
 
-function clearGACookies() {
-	if (typeof document === "undefined") {
+function resetGoogleAnalyticsState() {
+	if (typeof window !== "undefined" && googleAnalyticsMeasurementId) {
+		window[`ga-disable-${googleAnalyticsMeasurementId}`] = true;
+	}
+	googleAnalyticsMeasurementId = null;
+	googleAnalyticsReady = false;
+	queuedGoogleEvents.length = 0;
+}
+
+function sendGoogleEvent(eventName: string, params: Record<string, unknown>) {
+	if (analyticsMode !== "granted" || !googleAnalyticsMeasurementId) return;
+	if (!googleAnalyticsReady) {
+		queuedGoogleEvents.push({ eventName, params });
 		return;
 	}
+	gtag("event", eventName, {
+		send_to: googleAnalyticsMeasurementId,
+		...params,
+	});
+}
 
+function flushQueuedGoogleEvents() {
+	if (!googleAnalyticsReady || !googleAnalyticsMeasurementId) return;
+	while (queuedGoogleEvents.length > 0) {
+		const nextEvent = queuedGoogleEvents.shift();
+		if (!nextEvent) continue;
+		gtag("event", nextEvent.eventName, {
+			send_to: googleAnalyticsMeasurementId,
+			...nextEvent.params,
+		});
+	}
+}
+
+function sanitizedCurrentUrl(value: unknown) {
+	const fallback =
+		typeof window === "undefined"
+			? "https://analytics.local"
+			: window.location.origin;
+	if (typeof value !== "string") return fallback;
+	try {
+		const url = new URL(value, fallback);
+		return `${url.origin}${url.pathname}`;
+	} catch {
+		return `${fallback}${sanitizeAnalyticsPath(value)}`;
+	}
+}
+
+function sanitizeString(value: string) {
+	return value
+		.replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
+		.replace(/https?:\/\/[^\s]+/gi, (url) => sanitizedCurrentUrl(url));
+}
+
+function sanitizePostHogEvent(event: CaptureResult | null) {
+	if (!event || analyticsMode !== "granted") return null;
+	const properties = Object.fromEntries(
+		Object.entries(event.properties).flatMap(([key, value]) => {
+			if (key === "$current_url")
+				return [[key, sanitizedCurrentUrl(value)]];
+			if (key === "$pathname") {
+				return [[key, sanitizeAnalyticsPath(String(value ?? "/"))]];
+			}
+			if (key === "$referrer" || key === "$initial_referrer") return [];
+			if (SENSITIVE_PROPERTY_NAME.test(key)) return [];
+			return [
+				[
+					key,
+					typeof value === "string" ? sanitizeString(value) : value,
+				],
+			];
+		}),
+	);
+	return { ...event, properties };
+}
+
+function clearCookies(prefixes: string[]) {
+	if (typeof document === "undefined") return;
 	const cookieNames = document.cookie
 		.split(";")
 		.map((cookie) => cookie.trim().split("=")[0])
-		.filter(Boolean);
+		.filter((name) => prefixes.some((prefix) => name.startsWith(prefix)));
 
 	for (const cookieName of cookieNames) {
-		if (
-			cookieName.startsWith("_ga") ||
-			cookieName.startsWith("_gid") ||
-			cookieName.startsWith("_gat")
-		) {
-			const base =
-				`${cookieName}=; Max-Age=0; Path=/; SameSite=Lax; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
-			document.cookie = base;
-			document.cookie = `${base}; Domain=${window.location.hostname}`;
-			document.cookie = `${base}; Domain=.${window.location.hostname}`;
-			const parts = window.location.hostname.split(".");
-			if (parts.length > 2) {
-				document.cookie = `${base}; Domain=.${parts.slice(1).join(".")}`;
+		const base = `${cookieName}=; Max-Age=0; Path=/; SameSite=Lax; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+		document.cookie = base;
+		document.cookie = `${base}; Domain=${window.location.hostname}`;
+		document.cookie = `${base}; Domain=.${window.location.hostname}`;
+		const parts = window.location.hostname.split(".");
+		if (parts.length > 2) {
+			document.cookie = `${base}; Domain=.${parts.slice(1).join(".")}`;
+		}
+	}
+}
+
+function clearPostHogStorage() {
+	if (typeof window === "undefined") return;
+	for (const storage of [window.localStorage, window.sessionStorage]) {
+		for (let index = storage.length - 1; index >= 0; index -= 1) {
+			const key = storage.key(index);
+			if (
+				key &&
+				POSTHOG_STORAGE_PREFIXES.some((prefix) =>
+					key.toLowerCase().startsWith(prefix),
+				)
+			) {
+				storage.removeItem(key);
 			}
 		}
 	}
 }
 
+function teardownPostHog() {
+	removeClientErrorListeners?.();
+	if (posthogClient) {
+		posthogClient.stopSessionRecording();
+		posthogClient.reset(true);
+		posthogClient.opt_out_capturing();
+	}
+	posthogClient = null;
+	posthogInitialization = null;
+	appliedPostHogConsentSignature = null;
+	clearCookies(POSTHOG_STORAGE_PREFIXES);
+	clearPostHogStorage();
+}
+
+async function initializePostHog(expectedSignature: string) {
+	if (posthogClient) return true;
+	const configuration = activeConfiguration;
+	if (
+		analyticsMode !== "granted" ||
+		typeof window === "undefined" ||
+		!configuration?.analytics.posthog.key ||
+		!configuration.analytics.posthog.host ||
+		activeSignature !== expectedSignature
+	) {
+		return false;
+	}
+	if (posthogInitialization) return posthogInitialization;
+
+	posthogInitialization = import("posthog-js")
+		.then(({ PostHog: PostHogClient }) => {
+			if (
+				analyticsMode !== "granted" ||
+				activeSignature !== expectedSignature ||
+				!activeConfiguration
+			) {
+				return false;
+			}
+
+			const posthog = activeConfiguration.analytics.posthog;
+			if (!posthog.key || !posthog.host) return false;
+			const nextClient = new PostHogClient();
+			nextClient.init(posthog.key, {
+				defaults: "2026-06-25",
+				api_host: posthog.host,
+				ui_host: posthog.uiHost ?? posthog.host,
+				autocapture: {
+					dom_event_allowlist: ["click", "change", "submit"],
+					element_allowlist: [
+						"a",
+						"button",
+						"form",
+						"input",
+						"select",
+						"textarea",
+						"label",
+					],
+					css_selector_ignorelist: [
+						".ph-no-capture",
+						"[data-ph-no-autocapture]",
+						"[data-analytics-sensitive]",
+						"[data-analytics-block]",
+					],
+					capture_copied_text: false,
+				},
+				capture_pageview: false,
+				capture_pageleave: true,
+				capture_performance: {
+					network_timing: false,
+					web_vitals: true,
+					web_vitals_attribution: ["INP", "LCP"],
+				},
+				capture_dead_clicks: true,
+				capture_heatmaps: true,
+				capture_exceptions: false,
+				disable_session_recording: true,
+				session_recording: {
+					blockSelector: "[data-analytics-block], .ph-no-capture",
+					maskTextSelector: "*",
+					maskAllInputs: true,
+					maskAllElementAttributes: true,
+					recordHeaders: false,
+					recordBody: false,
+					recordCrossOriginIframes: false,
+					captureCanvas: { recordCanvas: false },
+					captureJsonLd: false,
+				},
+				enable_recording_console_log: false,
+				mask_all_element_attributes: true,
+				mask_all_text: true,
+				mask_personal_data_properties: true,
+				person_profiles: "always",
+				opt_out_capturing_by_default: true,
+				opt_out_persistence_by_default: true,
+				respect_dnt: true,
+				save_campaign_params: true,
+				save_referrer: false,
+				before_send: sanitizePostHogEvent,
+			});
+			posthogClient = nextClient;
+			analyticsDebug("PostHog SDK initialized", {
+				scope: activeConfiguration.scope,
+			});
+			return true;
+		})
+		.catch((error) => {
+			console.error("Failed to initialize PostHog", error);
+			return false;
+		})
+		.finally(() => {
+			if (!posthogClient) posthogInitialization = null;
+		});
+
+	return posthogInitialization;
+}
+
+function clientErrorType(value: unknown) {
+	if (value instanceof Error && value.name) return value.name.slice(0, 80);
+	if (value && typeof value === "object") {
+		const name = Reflect.get(value, "name");
+		if (typeof name === "string" && name) return name.slice(0, 80);
+	}
+	return "UnknownError";
+}
+
+function startClientErrorTracking() {
+	if (
+		removeClientErrorListeners ||
+		!posthogClient ||
+		typeof window === "undefined"
+	)
+		return;
+	const onError = (event: ErrorEvent) => {
+		posthogClient?.capture("client_error", {
+			error_type: clientErrorType(event.error),
+			source: "window_error",
+		});
+	};
+	const onUnhandledRejection = (event: PromiseRejectionEvent) => {
+		posthogClient?.capture("client_error", {
+			error_type: clientErrorType(event.reason),
+			source: "unhandled_rejection",
+		});
+	};
+	window.addEventListener("error", onError);
+	window.addEventListener("unhandledrejection", onUnhandledRejection);
+	removeClientErrorListeners = () => {
+		window.removeEventListener("error", onError);
+		window.removeEventListener("unhandledrejection", onUnhandledRejection);
+		removeClientErrorListeners = null;
+	};
+}
+
+async function applyPostHogConsent() {
+	if (
+		analyticsMode !== "granted" ||
+		!analyticsPreferences.analytics ||
+		!activeSignature ||
+		!(await initializePostHog(activeSignature)) ||
+		!posthogClient ||
+		!activeConfiguration
+	) {
+		return false;
+	}
+
+	const locale = document.documentElement.lang || "unknown";
+	const consentSignature = [
+		activeSignature,
+		locale,
+		analyticsPreferences.sessionReplay,
+	].join("|");
+	if (appliedPostHogConsentSignature !== consentSignature) {
+		posthogClient.opt_in_capturing({ captureEventName: false });
+		posthogClient.setPersonProperties({
+			consent_policy_version:
+				activeConfiguration.analytics.consentPolicyVersion,
+			locale,
+			session_replay_enabled: analyticsPreferences.sessionReplay,
+			tenant_scope: activeConfiguration.scope,
+		});
+		if (analyticsPreferences.sessionReplay) {
+			posthogClient.startSessionRecording();
+		} else {
+			posthogClient.stopSessionRecording();
+		}
+		appliedPostHogConsentSignature = consentSignature;
+	}
+	startClientErrorTracking();
+	return true;
+}
+
+function withPostHog(capture: (client: PostHog) => void) {
+	if (analyticsMode !== "granted") return;
+	void applyPostHogConsent().then((ready) => {
+		if (ready && posthogClient && analyticsMode === "granted")
+			capture(posthogClient);
+	});
+}
+
+function sendRejectedAggregateEvent(
+	event:
+		| "page_view"
+		| "attachment_interaction"
+		| "library_results_loaded"
+		| "content_action",
+	properties: Record<string, unknown>,
+) {
+	if (analyticsMode !== "denied" || typeof window === "undefined") return;
+	void fetch("/api/analytics/events", {
+		method: "POST",
+		credentials: "same-origin",
+		keepalive: true,
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ event, properties }),
+	}).catch(() => {
+		// Analytics must never interrupt the application.
+	});
+}
+
+export async function applyClientAnalyticsConsent(
+	configuration: ClientAnalyticsConfiguration,
+	state: AnalyticsConsentState,
+	preferences: AnalyticsConsentPreferences,
+) {
+	const nextSignature = configurationSignature(configuration);
+	if (activeSignature !== nextSignature) {
+		teardownPostHog();
+		resetGoogleAnalyticsState();
+		activeConfiguration = configuration;
+		activeSignature = nextSignature;
+	}
+
+	analyticsMode = state;
+	analyticsPreferences = {
+		analytics: state === "granted" && preferences.analytics,
+		sessionReplay:
+			state === "granted" &&
+			preferences.analytics &&
+			preferences.sessionReplay,
+	};
+	analyticsDebug("Consent state applied", {
+		state,
+		scope: configuration.scope,
+		sessionReplay: analyticsPreferences.sessionReplay,
+	});
+
+	if (state !== "granted" || !analyticsPreferences.analytics) {
+		if (typeof window !== "undefined") {
+			window.gtag?.("consent", "update", getGoogleConsentUpdate(false));
+		}
+		resetGoogleAnalyticsState();
+		teardownPostHog();
+		clearCookies(GOOGLE_COOKIE_PREFIXES);
+		return false;
+	}
+
+	const measurementId = configuration.analytics.google.measurementId;
+	if (measurementId) prepareGoogleAnalytics(measurementId);
+	const posthogReady = await applyPostHogConsent();
+	return posthogReady || Boolean(measurementId);
+}
+
 export function clearAnalyticsStorage() {
+	analyticsMode = "pending";
+	analyticsPreferences = { analytics: false, sessionReplay: false };
 	if (typeof window !== "undefined") {
 		window.gtag?.("consent", "update", getGoogleConsentUpdate(false));
 	}
-
 	resetGoogleAnalyticsState();
+	teardownPostHog();
+	clearCookies(GOOGLE_COOKIE_PREFIXES);
+}
 
-	posthogClient?.opt_out_capturing();
-
-	analyticsEnabled = false;
-	clearGACookies();
+export function getAnalyticsDistinctId() {
+	if (analyticsMode !== "granted" || !posthogClient) return null;
+	return posthogClient.get_distinct_id();
 }
 
 export function prepareGoogleAnalytics(measurementId: string) {
+	if (analyticsMode !== "granted") return;
 	googleAnalyticsMeasurementId = measurementId;
 	googleAnalyticsReady = false;
+	if (typeof window !== "undefined")
+		window[`ga-disable-${measurementId}`] = false;
 }
 
 export function markGoogleAnalyticsReady(measurementId: string) {
+	if (analyticsMode !== "granted") return;
 	googleAnalyticsMeasurementId = measurementId;
 	googleAnalyticsReady = true;
 	flushQueuedGoogleEvents();
@@ -256,134 +520,104 @@ export function resetGoogleAnalytics() {
 	resetGoogleAnalyticsState();
 }
 
-export function initializePostHog(
-	configuration: LibraryPublicConfig["analytics"]["posthog"],
-) {
-	if (typeof window === "undefined") {
-		return false;
-	}
-
-	if (!configuration.host || !configuration.key) {
-		posthogClient?.opt_out_capturing();
-		posthogClient = null;
-		posthogConfiguration = null;
-		return false;
-	}
-
-	if (
-		posthogClient &&
-		posthogConfigurationsEqual(posthogConfiguration, configuration)
-	) {
-		return true;
-	}
-
-	posthogClient?.opt_out_capturing();
-	const nextClient = new PostHog();
-	nextClient.init(configuration.key, {
-		advanced_disable_flags: true,
-		advanced_disable_feature_flags_on_first_load: true,
-		api_host: configuration.host,
-		autocapture: false,
-		capture_pageleave: false,
-		capture_pageview: false,
-		disable_external_dependency_loading: true,
-		disable_session_recording: true,
-		mask_all_element_attributes: true,
-		mask_all_text: true,
-		mask_personal_data_properties: true,
-		opt_out_persistence_by_default: true,
-		person_profiles: "never",
-		respect_dnt: true,
-	});
-
-	posthogClient = nextClient;
-	posthogConfiguration = configuration;
-	return true;
-}
-
-export function initializeClientAnalytics(
-	configuration: LibraryPublicConfig["analytics"],
-) {
-	const measurementId = configuration.google.measurementId;
-	if (measurementId) {
-		if (googleAnalyticsMeasurementId !== measurementId) {
-			prepareGoogleAnalytics(measurementId);
-		}
-	} else {
-		resetGoogleAnalyticsState();
-	}
-
-	const posthogAvailable = initializePostHog(configuration.posthog);
-	if (posthogAvailable) {
-		posthogClient?.opt_in_capturing({
-			captureEventName: false,
-		});
-	}
-
-	analyticsEnabled =
-		posthogAvailable || Boolean(measurementId);
-	return analyticsEnabled;
-}
-
-export function getAnalyticsDistinctId() {
-	if (!analyticsEnabled || !posthogClient) {
-		return null;
-	}
-
-	return posthogClient.get_distinct_id();
-}
-
 export function updateGoogleConsent(granted: boolean) {
-	if (typeof window === "undefined") {
-		return;
-	}
-
+	if (typeof window === "undefined") return;
 	gtag("consent", "update", getGoogleConsentUpdate(granted));
 }
 
 export function trackPageView(path?: string) {
-	if (!analyticsEnabled) {
+	const pagePath = sanitizeAnalyticsPath(
+		path ||
+			(typeof window !== "undefined" ? window.location.pathname : "/"),
+	);
+	if (analyticsMode === "denied") {
+		sendRejectedAggregateEvent("page_view", { pagePath });
 		return;
 	}
+	if (analyticsMode !== "granted") return;
 
-	const pagePath = sanitizeAnalyticsPath(
-		path || (typeof window !== "undefined" ? window.location.pathname : "/")
-	);
-
+	const pageLocation =
+		typeof window === "undefined"
+			? pagePath
+			: `${window.location.origin}${pagePath}`;
 	sendGoogleEvent("page_view", {
 		page_path: pagePath,
+		page_location: pageLocation,
 	});
-
-	posthogClient?.capture("page_view", {
-		pagePath,
+	withPostHog((posthog) => {
+		posthog.capture("$pageview", {
+			$current_url: pageLocation,
+			$pathname: pagePath,
+		});
 	});
 }
 
 export function trackAttachmentInteraction(
-	payload: AttachmentAnalyticsPayload
+	payload: AttachmentAnalyticsPayload,
 ) {
-	if (!analyticsEnabled) {
-		return;
-	}
-
-	const basePayload = {
-		action: payload.action,
-		locale: payload.locale,
-		parent_type: payload.parentType || "unknown",
-		source: payload.source,
-		is_authenticated: payload.isAuthenticated,
-	};
-
-	sendGoogleEvent("attachment_interaction", {
-		engagement_time_msec: 1,
-		...basePayload,
-	});
-
-	posthogClient?.capture("attachment_interaction", {
+	const properties = {
 		action: payload.action,
 		locale: payload.locale,
 		parentType: payload.parentType || "unknown",
 		source: payload.source,
 		isAuthenticated: payload.isAuthenticated,
+	};
+	if (analyticsMode === "denied") {
+		sendRejectedAggregateEvent("attachment_interaction", properties);
+		return;
+	}
+	if (analyticsMode !== "granted") return;
+
+	sendGoogleEvent("attachment_interaction", {
+		engagement_time_msec: 1,
+		action: properties.action,
+		locale: properties.locale,
+		parent_type: properties.parentType,
+		source: properties.source,
+		is_authenticated: properties.isAuthenticated,
 	});
+	withPostHog((posthog) =>
+		posthog.capture("attachment_interaction", properties),
+	);
+}
+
+export function trackLibraryResultsLoaded(
+	payload: LibraryResultsAnalyticsPayload,
+) {
+	const properties = {
+		has_search: payload.hasSearch,
+		filter_count: Math.max(0, Math.floor(payload.filterCount)),
+		page: Math.max(1, Math.floor(payload.page)),
+		page_result_count: Math.max(0, Math.floor(payload.pageResultCount)),
+		total_result_count: Math.max(0, Math.floor(payload.totalResultCount)),
+		scope: payload.scope.slice(0, 80),
+		sort: payload.sort.slice(0, 80),
+	};
+	if (analyticsMode === "denied") {
+		sendRejectedAggregateEvent("library_results_loaded", properties);
+		return;
+	}
+	if (analyticsMode !== "granted") return;
+	sendGoogleEvent("view_search_results", {
+		search_term: payload.hasSearch ? "present" : "absent",
+		...properties,
+	});
+	withPostHog((posthog) =>
+		posthog.capture("library_results_loaded", properties),
+	);
+}
+
+export function trackContentAction(payload: ContentActionAnalyticsPayload) {
+	const properties = {
+		action: payload.action,
+		context: payload.context,
+		format: payload.format.slice(0, 30),
+	};
+	if (analyticsMode === "denied") {
+		sendRejectedAggregateEvent("content_action", properties);
+		return;
+	}
+	if (analyticsMode !== "granted") return;
+	sendGoogleEvent("content_action", properties);
+	withPostHog((posthog) => posthog.capture("content_action", properties));
 }
