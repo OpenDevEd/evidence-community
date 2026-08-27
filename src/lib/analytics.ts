@@ -39,6 +39,16 @@ export type LibraryResultsAnalyticsPayload = {
 	totalResultCount: number;
 	scope: string;
 	sort: string;
+	categoricalFilters?: Partial<
+		Record<
+			| "author_country"
+			| "collection"
+			| "country"
+			| "institution"
+			| "year_range",
+			string | string[]
+		>
+	>;
 };
 
 export type ContentActionAnalyticsPayload = {
@@ -598,12 +608,29 @@ export function trackLibraryResultsLoaded(
 		return;
 	}
 	if (analyticsMode !== "granted") return;
+	const categoricalFilters = Object.fromEntries(
+		Object.entries(payload.categoricalFilters ?? {}).flatMap(
+			([key, value]) => {
+				const values = (Array.isArray(value) ? value : [value])
+					.filter(
+						(entry): entry is string => typeof entry === "string",
+					)
+					.map((entry) => entry.trim().slice(0, 80))
+					.filter(Boolean)
+					.slice(0, 50);
+				return values.length > 0 ? [[`filter_${key}`, values]] : [];
+			},
+		),
+	);
 	sendGoogleEvent("view_search_results", {
 		search_term: payload.hasSearch ? "present" : "absent",
 		...properties,
 	});
 	withPostHog((posthog) =>
-		posthog.capture("library_results_loaded", properties),
+		posthog.capture("library_results_loaded", {
+			...properties,
+			...categoricalFilters,
+		}),
 	);
 }
 

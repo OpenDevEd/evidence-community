@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const posthog = vi.hoisted(() => ({
 	moduleLoads: 0,
@@ -43,6 +43,7 @@ import {
 	clearAnalyticsStorage,
 	getAnalyticsDistinctId,
 	markGoogleAnalyticsReady,
+	trackLibraryResultsLoaded,
 	trackPageView,
 } from "@/lib/analytics";
 
@@ -62,7 +63,13 @@ describe("runtime browser analytics", () => {
 		window.gtag = undefined;
 		posthog.instances.length = 0;
 		clearAnalyticsStorage();
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async () => new Response(null, { status: 202 })),
+		);
 	});
+
+	afterEach(() => vi.unstubAllGlobals());
 
 	it("does not load a vendor while consent is pending or denied", async () => {
 		await applyClientAnalyticsConsent(baseConfiguration, "pending", {
@@ -179,5 +186,61 @@ describe("runtime browser analytics", () => {
 		);
 		expect(second?.reset).toHaveBeenCalledWith(true);
 		expect(getAnalyticsDistinctId()).toBeNull();
+	});
+
+	it("keeps rejected results aggregate but adds allowlisted filters after consent", async () => {
+		const payload = {
+			hasSearch: true,
+			filterCount: 2,
+			page: 3,
+			pageResultCount: 20,
+			totalResultCount: 82,
+			scope: "title_abstract",
+			sort: "relevance",
+			categoricalFilters: {
+				country: ["Morocco"],
+				year_range: "2020-2026",
+			},
+		};
+		await applyClientAnalyticsConsent(baseConfiguration, "denied", {
+			analytics: false,
+			sessionReplay: false,
+		});
+		trackLibraryResultsLoaded(payload);
+
+		const aggregateBody = JSON.parse(
+			String(vi.mocked(fetch).mock.calls[0]?.[1]?.body),
+		);
+		expect(aggregateBody.properties).not.toHaveProperty(
+			"categoricalFilters",
+		);
+		expect(JSON.stringify(aggregateBody)).not.toContain("Morocco");
+
+		await applyClientAnalyticsConsent(
+			{
+				...baseConfiguration,
+				analytics: {
+					...baseConfiguration.analytics,
+					posthog: {
+						host: "https://analytics.runtime.example",
+						key: "phc_1234567890123456",
+					},
+				},
+			},
+			"granted",
+			{ analytics: true, sessionReplay: false },
+		);
+		const client = posthog.instances.at(-1);
+		trackLibraryResultsLoaded(payload);
+		await vi.waitFor(() => {
+			expect(client?.capture).toHaveBeenCalledWith(
+				"library_results_loaded",
+				expect.objectContaining({
+					filter_country: ["Morocco"],
+					filter_year_range: ["2020-2026"],
+					has_search: true,
+				}),
+			);
+		});
 	});
 });
