@@ -1,40 +1,65 @@
 import "server-only";
 
-import { getPostHogForConfig } from "./posthog";
 import type { Item } from "@/app/api/item/types";
 import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { buildSiteUrl } from "@/lib/site-url";
 import { getMeilisearchForConfig } from "./meilisearch";
+import {
+	captureServerAnalyticsEvent,
+	getServerAnalyticsContext,
+} from "@/lib/server-analytics";
+
+type AIUsage = {
+	inputTokens?: number;
+	outputTokens?: number;
+	totalTokens?: number;
+	inputTokenDetails?: {
+		cacheReadTokens?: number;
+		cacheWriteTokens?: number;
+	};
+	outputTokenDetails?: {
+		reasoningTokens?: number;
+	};
+};
+
+type AIUsageResult = {
+	finishReason?: string;
+	response?: { modelId?: string };
+	totalUsage?: AIUsage;
+	usage?: AIUsage;
+};
 
 export async function trackUsage(
 	config: LibraryServerConfig,
+	request: Request,
 	eventName: string,
-	event: any,
+	event: AIUsageResult,
 	distinctId: string | null | undefined,
-	prompt: string
+	durationMs: number,
 ) {
-	if (!distinctId) {
-		return;
-	}
-
 	try {
-		const posthogClient = await getPostHogForConfig(config);
-		if (!posthogClient) {
-			return;
-		}
+		const usage = event.totalUsage ?? event.usage;
+		const context = getServerAnalyticsContext(
+			config,
+			request,
+			distinctId ?? undefined,
+		);
 
-		const modelName = event.response.modelId;
-
-		posthogClient.capture({
+		await captureServerAnalyticsEvent(config, {
 			event: eventName,
-			distinctId,
+			context,
 			properties: {
-				model: modelName,
-				prompt,
-				prompt_tokens: event.usage?.promptTokens,
-				completion_tokens: event.usage?.completionTokens,
-				total_tokens: event.usage?.totalTokens,
+				model: event.response?.modelId ?? "unknown",
+				status: "completed",
+				finish_reason: event.finishReason ?? "unknown",
+				duration_ms: Math.max(0, Math.round(durationMs)),
+				input_tokens: usage?.inputTokens,
+				output_tokens: usage?.outputTokens,
+				total_tokens: usage?.totalTokens,
+				cache_read_tokens: usage?.inputTokenDetails?.cacheReadTokens,
+				cache_write_tokens: usage?.inputTokenDetails?.cacheWriteTokens,
+				reasoning_tokens: usage?.outputTokenDetails?.reasoningTokens,
 			},
 		});
 	} catch (error) {
@@ -83,9 +108,8 @@ function extractRAGPassages(
 	const formattedDocuments = hit._formatted?.fullTextPDFs;
 	const rawDocuments = hit.fullTextPDFs ?? [];
 	const documents = formattedDocuments ?? rawDocuments;
-	const queryTerms = userQuery
-		.toLocaleLowerCase()
-		.match(/[\p{L}\p{N}]{3,}/gu) ?? [];
+	const queryTerms =
+		userQuery.toLocaleLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? [];
 	const results: Array<{
 		order: number;
 		relevance: number;
@@ -95,13 +119,9 @@ function extractRAGPassages(
 
 	for (const [documentIndex, document] of documents.entries()) {
 		for (const [pageIndex, page] of document.fullTextPDF.entries()) {
-			const rawPage =
-				rawDocuments[documentIndex]?.fullTextPDF[pageIndex];
+			const rawPage = rawDocuments[documentIndex]?.fullTextPDF[pageIndex];
 			const pageNumber = rawPage?.page ?? page.page;
-			if (
-				userSpecifiedPage !== 0 &&
-				pageNumber !== userSpecifiedPage
-			) {
+			if (userSpecifiedPage !== 0 && pageNumber !== userSpecifiedPage) {
 				continue;
 			}
 
@@ -112,8 +132,7 @@ function extractRAGPassages(
 			if (!text) continue;
 			const normalizedText = text.toLocaleLowerCase();
 			const lexicalMatches = queryTerms.reduce(
-				(total, term) =>
-					total + countOccurrences(normalizedText, term),
+				(total, term) => total + countOccurrences(normalizedText, term),
 				0,
 			);
 			const highlightedMatches = countOccurrences(
@@ -138,8 +157,7 @@ function extractRAGPassages(
 	return results
 		.sort(
 			(left, right) =>
-				right.relevance - left.relevance ||
-				left.order - right.order,
+				right.relevance - left.relevance || left.order - right.order,
 		)
 		.slice(0, 10)
 		.map(({ result }) => result);

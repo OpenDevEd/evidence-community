@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCachedItem } from "../cache";
-import { streamText } from 'ai';
+import { streamText } from "ai";
 import { trackUsage } from "@/lib/ai";
 import { getRuntimeRequestLocale } from "@/i18n/server";
 import { isAIAllowed } from "@/lib/utils";
@@ -37,10 +37,7 @@ export async function POST(req: Request) {
 
 	let models;
 	try {
-		models = await getAIProviderForConfig(
-			libraryConfig,
-			provider,
-		);
+		models = await getAIProviderForConfig(libraryConfig, provider);
 	} catch (error) {
 		if (error instanceof AIProviderUnavailableError) {
 			return new NextResponse(error.message, { status: 404 });
@@ -48,19 +45,22 @@ export async function POST(req: Request) {
 		throw error;
 	}
 
-	const {fullTextPDFs, ...cleanItem} = item.item;
+	const { fullTextPDFs, ...cleanItem } = item.item;
 
 	if (!isAIAllowed(cleanItem)) {
 		return new NextResponse("AI not allowed", { status: 403 });
 	}
-	
+
 	for (const attachment of cleanItem.attachmentsData || []) {
-		const fullTextPDF = fullTextPDFs?.find((f: any) => f.key === attachment.key)?.fullTextPDF
+		const fullTextPDF = fullTextPDFs?.find(
+			(f: any) => f.key === attachment.key,
+		)?.fullTextPDF;
 		if (fullTextPDF) {
 			attachment.fullTextPDF = fullTextPDF as any;
 		}
 	}
 
+	const startedAt = Date.now();
 	const result = streamText({
 		model: models.defaultModel,
 		system: getAISystemPrompt(libraryConfig, prompt, {
@@ -82,18 +82,18 @@ export async function POST(req: Request) {
 		async onFinish(event) {
 			await trackUsage(
 				libraryConfig,
+				req,
 				"ai_" + prompt,
 				event,
 				distinctId,
-				prompt,
+				Date.now() - startedAt,
 			);
 		},
-	})
+	});
 
 	return result.toTextStreamResponse({
 		headers: {
-			'Content-Type': 'text/event-stream',
+			"Content-Type": "text/event-stream",
 		},
-	})
-
+	});
 }

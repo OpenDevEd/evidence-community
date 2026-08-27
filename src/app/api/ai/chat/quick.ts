@@ -2,10 +2,7 @@ import { ModelMessage, streamText, tool } from "ai";
 import { PLATFORM_SEARCH_EMBEDDER } from "@/config/library-config/catalogs";
 import { Item } from "../../item/types";
 import { z } from "zod";
-import {
-	findRelevantContent,
-	trackUsage,
-} from "@/lib/ai";
+import { findRelevantContent, trackUsage } from "@/lib/ai";
 import { SORT_OPTIONS } from "@/constants/items";
 import { SearchResponse } from "meilisearch";
 import { getMeilisearchForConfig } from "@/lib/meilisearch";
@@ -25,10 +22,10 @@ export async function quickChat(
 	coreMessages: ModelMessage[],
 	fullTextPDFs: any,
 	distinctId: string,
-	messages: any[]
+	messages: any[],
 ) {
-	const { index: searchIndex } =
-		await getMeilisearchForConfig(config);
+	const { index: searchIndex } = await getMeilisearchForConfig(config);
+	const startedAt = Date.now();
 	const result = streamText({
 		model: models.defaultModel,
 		system: [
@@ -45,7 +42,7 @@ export async function quickChat(
 			...(cleanItem
 				? [`ITEM: ${JSON.stringify(cleanItem)}`]
 				: [
-					`== DECISION PROCESS ==
+						`== DECISION PROCESS ==
 Before you answer, classify the user’s intent into one of two categories:
 
 1. LIST REQUEST
@@ -80,7 +77,7 @@ Before you answer, classify the user’s intent into one of two categories:
 - Do not include irrelevant or filler information.
 - Always include citation links [📚](/lib/KEY).
 - Responses should read like research summaries, not tool logs.`,
-				]),
+					]),
 		].join("\n"),
 		messages: coreMessages,
 		tools: {
@@ -93,26 +90,26 @@ Before you answer, classify the user’s intent into one of two categories:
 					userQuery: z
 						.string()
 						.describe(
-							"The specific research question or information request you want to extract from the content."
+							"The specific research question or information request you want to extract from the content.",
 						),
 					userSpecifiedPage: z
 						.number()
 						.optional()
 						.default(0)
 						.describe(
-							"The page number specified by the user. Use 0 if the user didn’t specify."
+							"The page number specified by the user. Use 0 if the user didn’t specify.",
 						),
 					userToolCallInformation: z
 						.string()
 						.default("Analyzing content...")
 						.describe(
-							`A short localized (${locale}) progress message shown while the tool is working, ending with ellipses.`
+							`A short localized (${locale}) progress message shown while the tool is working, ending with ellipses.`,
 						),
 					itemKey: z
 						.string()
 						.optional()
 						.describe(
-							"Supply when user asks about a specific item or when attempting to extract information from a specific item to answer a question."
+							"Supply when user asks about a specific item or when attempting to extract information from a specific item to answer a question.",
 						),
 				}),
 				execute: async ({
@@ -131,17 +128,22 @@ Before you answer, classify the user’s intent into one of two categories:
 						const isGlobalChat = cleanItem === null;
 						if (!config.search.embedder) {
 							if (!isGlobalChat) {
-								return fullTextPDFs?.[0]?.fullTextPDF ??
-									"There is no PDF attached to this item.";
+								return (
+									fullTextPDFs?.[0]?.fullTextPDF ??
+									"There is no PDF attached to this item."
+								);
 							}
 							if (!userDefinedKey) {
 								return "There is no PDF attached to this item.";
 							}
 							try {
-								const item = await getCachedItem(userDefinedKey);
-								return item?.item?.fullTextPDFs?.[0]
-									?.fullTextPDF ??
-									"There is no PDF attached to this item.";
+								const item =
+									await getCachedItem(userDefinedKey);
+								return (
+									item?.item?.fullTextPDFs?.[0]
+										?.fullTextPDF ??
+									"There is no PDF attached to this item."
+								);
 							} catch {
 								return "There is no PDF attached to this item.";
 							}
@@ -151,7 +153,7 @@ Before you answer, classify the user’s intent into one of two categories:
 							config,
 							userQuery,
 							cleanItem?.key || userDefinedKey || null,
-							userSpecifiedPage || 0
+							userSpecifiedPage || 0,
 						);
 						return relevantContent;
 					} else {
@@ -168,29 +170,29 @@ Before you answer, classify the user’s intent into one of two categories:
 					q: z
 						.string()
 						.describe(
-							"A rewritten semantic search query inferred from the user’s request."
+							"A rewritten semantic search query inferred from the user’s request.",
 						),
 					userToolCallInformation: z
 						.string()
 						.describe(
-							`A short localized (${locale}) progress message shown while the search runs, ending with ellipses.`
+							`A short localized (${locale}) progress message shown while the search runs, ending with ellipses.`,
 						),
 					userSpecifiedYearOrRange: z
 						.string()
 						.describe(
-							"Year or range constraint provided by the user. Use a single year (e.g., '2020') or a range (e.g., '1991-2001'). Use '0' if none specified."
+							"Year or range constraint provided by the user. Use a single year (e.g., '2020') or a range (e.g., '1991-2001'). Use '0' if none specified.",
 						),
 					userSpecifiedSort: z
 						.string()
 						.describe(
 							`Sort option inferred from the user’s intent. For example, 'newest' → 'desc', 'alphabetical' → 'authorAZ'. Available: ${SORT_OPTIONS.map(
-								(opt) => `${opt.key} (${opt.name})`
-							).join(", ")}`
+								(opt) => `${opt.key} (${opt.name})`,
+							).join(", ")}`,
 						),
 					userSpecifiedAmountOfResults: z
 						.number()
 						.describe(
-							"How many results the user expects. Default is 10."
+							"How many results the user expects. Default is 10.",
 						)
 						.max(50)
 						.min(1)
@@ -209,22 +211,23 @@ Before you answer, classify the user’s intent into one of two categories:
 					let result: SearchResponse<Item>;
 					try {
 						result = await searchIndex.search(q, {
-								q,
-								hybrid: {
-									embedder: PLATFORM_SEARCH_EMBEDDER,
-									semanticRatio: 0.5,
-								},
-								filter: [
-									userSpecifiedYearOrRange === "0"
-										? null
-										: formatRange(
-											userSpecifiedYearOrRange
-										),
-								].filter(Boolean) as string[],
-								limit: userSpecifiedAmountOfResults,
-							});
+							q,
+							hybrid: {
+								embedder: PLATFORM_SEARCH_EMBEDDER,
+								semanticRatio: 0.5,
+							},
+							filter: [
+								userSpecifiedYearOrRange === "0"
+									? null
+									: formatRange(userSpecifiedYearOrRange),
+							].filter(Boolean) as string[],
+							limit: userSpecifiedAmountOfResults,
+						});
 
-						const resultIds = result.hits.map((item: ItemsGetResponse["items"][number]) => item.key);
+						const resultIds = result.hits.map(
+							(item: ItemsGetResponse["items"][number]) =>
+								item.key,
+						);
 					} catch (e) {
 						console.error(e);
 						result = {
@@ -240,7 +243,7 @@ Before you answer, classify the user’s intent into one of two categories:
 						(item: ItemsGetResponse["items"][number]) => ({
 							...cleanItemForAI(item),
 							anchor: `/lib/${item.key}`,
-						})
+						}),
 					);
 
 					return {
@@ -261,10 +264,11 @@ Before you answer, classify the user’s intent into one of two categories:
 		async onFinish(event) {
 			await trackUsage(
 				config,
+				req,
 				"chat_completion",
 				event,
 				distinctId,
-				messages.at(-1)?.content
+				Date.now() - startedAt,
 			);
 		},
 	});
@@ -272,5 +276,4 @@ Before you answer, classify the user’s intent into one of two categories:
 	return result.toTextStreamResponse({
 		headers: { "Content-Type": "text/event-stream" },
 	});
-
 }

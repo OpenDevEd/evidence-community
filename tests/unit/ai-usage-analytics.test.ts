@@ -2,10 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const getPostHogForConfig = vi.hoisted(() => vi.fn());
+const analytics = vi.hoisted(() => ({
+	capture: vi.fn(),
+	context: vi.fn(),
+}));
 
-vi.mock("@/lib/posthog", () => ({
-	getPostHogForConfig,
+vi.mock("@/lib/server-analytics", () => ({
+	captureServerAnalyticsEvent: analytics.capture,
+	getServerAnalyticsContext: analytics.context,
 }));
 
 import type { LibraryServerConfig } from "@/config/library-config/schema";
@@ -15,123 +19,109 @@ const config = {
 	revision: "analytics-usage",
 	updatedAt: "2026-07-28T10:00:00.000Z",
 	analytics: {
+		consentPolicyVersion: 1,
 		posthog: {
 			host: "https://analytics.example.org",
 			key: "phc_1234567890123456",
 		},
 	},
+	identity: { baseUrl: "https://library.example.org" },
 } as LibraryServerConfig;
 
+const request = new Request("https://library.example.org/api/ai");
 const usage = {
+	finishReason: "stop",
 	response: { modelId: "runtime-model" },
-	usage: {
-		promptTokens: 10,
-		completionTokens: 20,
+	totalUsage: {
+		inputTokens: 10,
+		outputTokens: 20,
 		totalTokens: 30,
+		inputTokenDetails: {
+			cacheReadTokens: 4,
+			cacheWriteTokens: 2,
+		},
+		outputTokenDetails: { reasoningTokens: 5 },
 	},
 };
 
 describe("AI usage analytics", () => {
 	beforeEach(() => {
-		getPostHogForConfig.mockReset();
+		analytics.capture.mockReset();
+		analytics.context.mockReset();
+		analytics.context.mockReturnValue({
+			mode: "consented",
+			distinctId: "runtime-user",
+		});
 	});
 
-	it("records usage with the runtime PostHog client", async () => {
-		const capture = vi.fn();
-		getPostHogForConfig.mockResolvedValue({ capture });
-
+	it("records only model, status, duration, and token counts", async () => {
 		await trackUsage(
 			config,
+			request,
 			"ai_completion",
 			usage,
 			"runtime-user",
-			"Summarize this",
+			1250,
 		);
 
-		expect(capture).toHaveBeenCalledWith({
+		expect(analytics.context).toHaveBeenCalledWith(
+			config,
+			request,
+			"runtime-user",
+		);
+		expect(analytics.capture).toHaveBeenCalledWith(config, {
 			event: "ai_completion",
-			distinctId: "runtime-user",
+			context: { mode: "consented", distinctId: "runtime-user" },
 			properties: {
+				cache_read_tokens: 4,
+				cache_write_tokens: 2,
+				duration_ms: 1250,
+				finish_reason: "stop",
+				input_tokens: 10,
 				model: "runtime-model",
-				prompt: "Summarize this",
-				prompt_tokens: 10,
-				completion_tokens: 20,
+				output_tokens: 20,
+				reasoning_tokens: 5,
+				status: "completed",
 				total_tokens: 30,
 			},
 		});
+		const sent = JSON.stringify(analytics.capture.mock.calls);
+		expect(sent).not.toContain("prompt");
+		expect(sent).not.toContain("Summarize this");
+		expect(sent).not.toContain("response body");
 	});
 
-	it("does not fail completed AI work when analytics setup rejects", async () => {
-		const error = new Error("stale runtime revision");
-		getPostHogForConfig.mockRejectedValue(error);
-		const consoleError = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => undefined);
+	it("records anonymous aggregate usage when no browser identity is allowed", async () => {
+		analytics.context.mockReturnValue({ mode: "aggregate" });
 
-		await expect(
-			trackUsage(
-				config,
-				"ai_completion",
-				usage,
-				"runtime-user",
-				"Summarize this",
-			),
-		).resolves.toBeUndefined();
-		expect(consoleError).toHaveBeenCalledWith(
-			"Failed to record AI usage analytics",
-			error,
-		);
-	});
-
-	it("does not fail completed AI work when analytics capture throws", async () => {
-		const error = new Error("analytics transport failed");
-		getPostHogForConfig.mockResolvedValue({
-			capture: vi.fn(() => {
-				throw error;
-			}),
-		});
-		const consoleError = vi
-			.spyOn(console, "error")
-			.mockImplementation(() => undefined);
-
-		await expect(
-			trackUsage(
-				config,
-				"ai_completion",
-				usage,
-				"runtime-user",
-				"Summarize this",
-			),
-		).resolves.toBeUndefined();
-		expect(consoleError).toHaveBeenCalledWith(
-			"Failed to record AI usage analytics",
-			error,
-		);
-	});
-
-	it("skips capture when runtime PostHog is disabled", async () => {
-		getPostHogForConfig.mockResolvedValue(null);
-
-		await expect(
-			trackUsage(
-				config,
-				"ai_completion",
-				usage,
-				"runtime-user",
-				"Summarize this",
-			),
-		).resolves.toBeUndefined();
-	});
-
-	it("does not initialize analytics without a distinct ID", async () => {
 		await trackUsage(
 			config,
-			"ai_completion",
+			request,
+			"ai_questions",
 			usage,
-			null,
-			"Summarize this",
+			"spoofed-id",
+			5,
 		);
 
-		expect(getPostHogForConfig).not.toHaveBeenCalled();
+		expect(analytics.capture).toHaveBeenCalledWith(
+			config,
+			expect.objectContaining({ context: { mode: "aggregate" } }),
+		);
+	});
+
+	it("does not fail completed AI work when analytics rejects", async () => {
+		const error = new Error("analytics transport failed");
+		analytics.capture.mockRejectedValue(error);
+		const consoleError = vi
+			.spyOn(console, "error")
+			.mockImplementation(() => undefined);
+
+		await expect(
+			trackUsage(config, request, "ai_completion", usage, null, 9),
+		).resolves.toBeUndefined();
+		expect(consoleError).toHaveBeenCalledWith(
+			"Failed to record AI usage analytics",
+			error,
+		);
 	});
 });
