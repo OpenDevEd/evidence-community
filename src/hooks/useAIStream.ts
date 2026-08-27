@@ -3,7 +3,7 @@ import { clientAIError, uiMessageText } from "@/lib/ai/client";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { useLocale, useTranslations } from "next-intl";
-import posthog from "posthog-js";
+import { getAnalyticsDistinctId } from "@/lib/analytics";
 import { useState } from "react";
 
 export default function useAIStream(
@@ -96,7 +96,7 @@ export default function useAIStream(
 				body: {
 					prompt,
 					feature,
-					distinctId: posthog.get_distinct_id(),
+					distinctId: getAnalyticsDistinctId() ?? undefined,
 					...options.body,
 				},
 			},

@@ -1,23 +1,22 @@
 "use client";
 
-import { Button } from "../nextui/Button";
 import DialogModal from "../nextui/DialogModal";
 import GenericHeader from "../features/modals/GenericHeader";
-import { ModalBody, ModalContent, ModalFooter } from "@nextui-org/react";
+import { ModalBody, ModalContent } from "@nextui-org/react";
 import { useTranslations } from "next-intl";
 import { Logo } from "./navbar";
 import { useStatus } from "@/context/Providers";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import { Link } from "@/i18n/routing";
 import { resolveCompanyFooterPolicyLinks } from "@/lib/legal-links";
-import { usePathname, useRouter } from "@/i18n/routing";
+import { usePathname } from "@/i18n/routing";
 import { isPolicyPage } from "@/lib/legal-links";
+import { AnalyticsConsentPreferencesForm } from "@/components/features/analytics/AnalyticsConsentPreferencesForm";
 
 export default function Banner() {
-	const { isPreferencesOpen, setConsentState } = useAnalyticsConsent();
+	const { isPreferencesOpen } = useAnalyticsConsent();
 	const status = useStatus();
 	const pathname = usePathname();
-	const router = useRouter();
 	const t = useTranslations("ui");
 	const tFooter = useTranslations("footer");
 	const footer = status.companyFooter || {};
@@ -105,23 +104,8 @@ export default function Banner() {
 							</Link>
 						) : null}
 					</div>
+					<AnalyticsConsentPreferencesForm />
 				</ModalBody>
-				<ModalFooter className="flex-row flex-wrap items-center justify-center gap-3 pt-2">
-					<Button
-						color="tertiary"
-						onPress={() => setConsentState("granted")}
-						className="px-6 font-medium"
-					>
-						{t("cookieAccept")}
-					</Button>
-					<Button
-						color="tertiary"
-						onPress={() => setConsentState("denied")}
-						className="px-6 font-medium"
-					>
-						{t("cookieDecline")}
-					</Button>
-				</ModalFooter>
 			</ModalContent>
 		</DialogModal>
 	);

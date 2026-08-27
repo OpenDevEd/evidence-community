@@ -79,7 +79,7 @@ function withLatestRequestContext(
 }
 import { getAIModelForUI } from "@/constants/ai";
 import { AIMarkdown } from "../markdown/Markdown";
-import posthog from "posthog-js";
+import { getAnalyticsDistinctId } from "@/lib/analytics";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Textarea } from "@/components/nextui/Textarea";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
@@ -452,6 +452,7 @@ export function MessageComponent({
 									getContent={getMessageContent}
 									downloadName="ai-response"
 									appearance="inline"
+									analyticsContext="ai_response"
 								/>
 							</div>
 						)}
@@ -540,7 +541,7 @@ export default function ChatModal({
 			body: () => ({
 				itemKey: data?.item?.key,
 				modelId,
-				distinctId: posthog.get_distinct_id(),
+				distinctId: getAnalyticsDistinctId() ?? undefined,
 				mode,
 				searchContext,
 			}),
@@ -682,7 +683,7 @@ export default function ChatModal({
 					keys,
 					modelId,
 					fields: smartScreeningFields,
-					distinctId: posthog.get_distinct_id(),
+					distinctId: getAnalyticsDistinctId() ?? undefined,
 				}),
 			});
 			if (!response.ok) throw new Error(await response.text());
@@ -866,6 +867,7 @@ export default function ChatModal({
 											!conversationStarted || isWaiting
 										}
 										appearance="header"
+										analyticsContext="chat_transcript"
 									/>
 								</div>
 								<Button

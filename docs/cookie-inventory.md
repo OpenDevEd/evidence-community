@@ -1,34 +1,50 @@
-# Cookie Inventory
+# Cookie and analytics storage inventory
 
-This inventory reflects the current application behavior as of March 6, 2026.
+This inventory reflects the target Coolify implementation as of August 27,
+2026. Vendor-dashboard retention and regional settings must be verified during
+deployment before the policy is published.
 
-## Essential cookies
+## Strictly necessary
 
-| Name | Owner | Purpose | Required | Retention | Notes |
-| --- | --- | --- | --- | --- | --- |
-| `analytics_consent` | First-party application | Stores the user's analytics consent choice (`pending`, `granted`, `denied`). | Yes | 180 days | Used to gate PostHog and Google Analytics before they load. |
-| `NEXT_LOCALE` | First-party application / Next.js | Stores the user's language preference. | Yes | Browser-managed | Functional cookie for localized routing. |
-| `__cf_bm` | Cloudflare | Bot-management and abuse detection. | Yes | Cloudflare-managed, short-lived | Security/infrastructure cookie. |
-| `_cfuvid` | Cloudflare | Distinguishes visitors behind shared IPs for rate limiting and security controls. | Yes | Cloudflare-managed, short-lived | Security/infrastructure cookie. |
-| `__client_uat` | Clerk | Tracks session freshness for Clerk authentication flows. | Yes | Clerk-managed | Authentication/session helper. |
-| `__client_uat_<suffix>` | Clerk | Instance-scoped variant of Clerk session freshness state. | Yes | Clerk-managed | Authentication/session helper. |
-| `__clerk_db_jwt` | Clerk (development) | Development browser token for Clerk dev instances. | Yes in development | Clerk-managed | Development-only cookie; should not be documented as a production auth dependency. |
-| `__clerk_db_jwt_<suffix>` | Clerk (development) | Instance-scoped development browser token for Clerk dev instances. | Yes in development | Clerk-managed | Development-only cookie. |
+| Name | Owner | Purpose | Retention | Notes |
+| --- | --- | --- | --- | --- |
+| `analytics_consent` | Application | Versioned record containing the decision timestamp and separate analytics/replay booleans. | 180 days | Contains no analytics or user identifier. An old or malformed version is treated as pending and prompts again. |
+| `NEXT_LOCALE` | Application / Next.js | Language preference. | Browser-managed | Functional. |
+| Auth.js session, callback, and CSRF cookies | Application / Auth.js | Authentication and request protection when account features are used. | Auth.js-managed | Exact names vary with HTTPS and deployment configuration. |
+| `__cf_bm` | Cloudflare | Bot management and abuse detection. | Short-lived | Infrastructure/security. |
+| `_cfuvid` | Cloudflare | Rate-limiting and security support. | Short-lived | Infrastructure/security. |
 
-## Conditional analytics cookies and storage
+## Optional after product-analytics consent
 
-These must not exist before explicit consent is granted.
+| Name | Owner | Purpose | Retention | Notes |
+| --- | --- | --- | --- | --- |
+| `_ga`, `_ga_*`, `_gid`, `_gat*` | Google Analytics | Pseudonymous analytics identity and session/measurement state. | Google-managed | The application clears known values on revocation. Google is never loaded before consent. |
+| `ph_*` cookies | PostHog | Pseudonymous device/session persistence and PostHog consent state. | PostHog-managed | The application resets identity and clears known values on revocation. |
+| `ph_*`, `posthog*` in local/session storage | PostHog | Pseudonymous analytics persistence. | PostHog-managed | Only created after consent. |
+| `utm:active` in local storage | Application | Normalised campaign attribution. | Configurable; 30-day default | Only stored after consent and cleared on revocation. |
 
-| Name | Owner | Purpose | Required | Retention | Notes |
-| --- | --- | --- | --- | --- | --- |
-| `_ga` and `_ga_*` | Google Analytics | Analytics measurement and visit/session attribution. | No | Google-managed | Only loaded after `analytics_consent=granted`. |
-| `ph_*` cookies | PostHog | Analytics persistence for consented PostHog sessions. | No | PostHog-managed | Only created after consent. The app clears these on denial/revocation. |
-| `ph_*`, `posthog*`, `posthog-opted` in `localStorage` | PostHog | Client analytics persistence. | No | PostHog-managed | Stored locally, not cookies, but relevant for privacy review. |
-| `utm:active` in `localStorage` | First-party application | Stores consented UTM attribution data. | No | Configurable | Only persisted after consent. |
+## No-consent aggregate mode
 
-## Notes for policy drafting
+Rejected browser events use no analytics cookie or local-storage identity. The
+server forwards only schema-validated event properties, disables PostHog GeoIP
+and person processing, and uses one `aggregate:<library>:<UTC day>` key shared by
+all non-consented events for that library and day.
 
-- The screenshot-visible cookies `__cf_bm`, `_cfuvid`, `NEXT_LOCALE`, and Clerk cookies are not analytics cookies.
-- `analytics_consent` is the only first-party consent cookie introduced by this application for analytics gating.
-- Clerk cookie names can vary by environment and deployment shape. Production documentation should describe them by purpose rather than assuming every development cookie exists in production.
-- Google Analytics and PostHog are designed not to load before consent. If they appear before consent, that is a regression.
+This mode counts events. It does not produce a visitor, device, browser, or
+cross-day session count.
+
+The allowlist covers page paths, attachment actions, result-count outcomes,
+copy/export format and feature context, and content-free server AI telemetry.
+It never contains search text, selected filter values, generated content, or
+publication metadata.
+
+## Implementation checks
+
+- `posthog-js` may only be imported by `src/lib/analytics.ts`.
+- `posthog-node` may only be imported by `src/lib/posthog.ts`.
+- A request-body `distinctId` is accepted for server event linking only when the
+  versioned consent cookie independently confirms product-analytics consent.
+- AI telemetry never contains prompts, messages, abstracts, search bodies, PDF
+  contents, filenames, or OpenRouter generation IDs.
+- Session replay masks all text, inputs, and attributes and does not record
+  network bodies/headers, canvas, or cross-origin iframes.

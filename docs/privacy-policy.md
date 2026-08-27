@@ -1,309 +1,213 @@
-# **Privacy policy**
+# Privacy policy
 
-**{{SITE_HOST}} customer privacy notice**
+This notice explains how Open Development & Education processes personal
+information when you use {{SITE_HOST}}.
 
-Open Development & Education is the data controller for the personal information described in this notice.
+## Controller and contact
 
-This privacy notice tells you what to expect us to do with your personal information.
+Open Development & Education is the controller for the processing described in
+this notice.
 
-* Contact details
-* What information we collect, use, and why
-* Lawful bases and data protection rights
-* Where we get personal information from
-* How long we keep information
-* Who we share information with
-* Sharing information outside the UK
-* How to complain
+**Email:** contact@opendeved.net
 
-# **Contact details**
+## Information we process
 
-Email: contact@opendeved.net
+### Support and correspondence
 
-# **What information we collect, use, and why**
+If you contact us, we process your contact details, message, attachments,
+correspondence history, and related timestamps so that we can respond and keep an
+appropriate record.
 
-We collect or use the following personal information for **dealing with queries, complaints or claims**:
+### Account features
 
-* Names and contact details
-* Email correspondence content: your questions, complaints, feedback, and our responses
-* Communication records and timestamps
+If you create or use an account, we process the information needed to register,
+authenticate, maintain your session, and provide saved account features. An
+external sign-in provider may also process information when you choose that
+method.
 
-We collect or use the following information to **analyse how visitors use our website to improve user experience, fix technical issues, and develop better features**:
+### Product analytics after consent
 
-* IP address (used to derive approximate location: country, city, region)
-* Browser type and version
-* Operating system and device type
-* Screen resolution
-* Pages visited (page view events)
-* Referrer URL (which website you came from)
-* PDF file opens and downloads for files attached to library items
-* Pseudonymous identifiers (device ID)
-* UTM attribution data (campaign source, medium, and related parameters)
+If you enable product analytics, PostHog and Google Analytics process
+pseudonymous usage information including:
 
-**What we do NOT collect:**
-* We do not collect form input values, passwords, or payment information through analytics
-* We do not use third-party advertising or tracking cookies
-* We do not sell your data to advertisers
+- a random analytics identifier and session information;
+- page paths without query strings or fragments;
+- navigation, interface controls, searches and filters without search text;
+- publication and attachment actions without titles or filenames;
+- result counts and zero-result outcomes;
+- feature use, funnels, heatmaps, rage clicks, and dead clicks;
+- browser/device characteristics, performance metrics, and technical errors;
+- normalised campaign attribution;
+- AI feature, model, token, cost, duration, cache, tool-count, success/failure,
+  and safe error-category metadata.
 
-# **Lawful bases and data protection rights**
+This pseudonymous profile does not require an account. We do not attach your name
+or email address to it.
 
-Under UK data protection law, we must have a "lawful basis" for collecting and using your personal information. There is a list of possible [lawful bases](https://ico.org.uk/for-organisations/advice-for-small-organisations/getting-started-with-gdpr/data-protection-principles-definitions-and-key-terms/#lawfulbasis) in the UK GDPR. You can find out more about lawful bases on the ICO’s website.
+Google may process an IP address transiently during collection to provide
+measurement and approximate geography. Advertising storage, advertising user
+data, advertising personalisation, Google Signals, and ad personalisation remain
+disabled.
 
-Which lawful basis we rely on may affect your data protection rights, which are set out in brief below. You can find out more about your data protection rights and the exemptions which may apply on the ICO’s website:
+### Session replay after separate consent
 
-* **Your right of access** – You have the right to ask us for copies of your personal information. You can request other information, such as details about where we get personal information from and who we share personal information with. There are some exemptions, which means you may not receive all the information you ask for. [Read more about the right of access](https://ico.org.uk/for-organisations/advice-for-small-organisations/privacy-notices-and-cookies/create-your-own-privacy-notice/your-data-protection-rights/#roa).
-* **Your right to rectification** – You have the right to ask us to correct or delete personal information you think is inaccurate or incomplete. [Read more about the right to rectification](https://ico.org.uk/for-organisations/advice-for-small-organisations/privacy-notices-and-cookies/create-your-own-privacy-notice/your-data-protection-rights/#rtr).
-* **Your right to erasure** – You have the right to ask us to delete your personal information. [Read more about the right to erasure](https://ico.org.uk/for-organisations/advice-for-small-organisations/privacy-notices-and-cookies/create-your-own-privacy-notice/your-data-protection-rights/#rte).
-* **Your right to restriction of processing** – You have the right to ask us to limit how we can use your personal information. [Read more about the right to restriction of processing](https://ico.org.uk/for-organisations/advice-for-small-organisations/privacy-notices-and-cookies/create-your-own-privacy-notice/your-data-protection-rights/#rtrop).
-* **Your right to object to processing** – You have the right to object to the processing of your personal data. [Read more about the right to object to processing](https://ico.org.uk/for-organisations/advice-for-small-organisations/privacy-notices-and-cookies/create-your-own-privacy-notice/your-data-protection-rights/#rto).
-* **Your right to data portability** – You have the right to ask that we transfer the personal information you gave us to another organisation, or to you. [Read more about the right to data portability](https://ico.org.uk/for-organisations/advice-for-small-organisations/privacy-notices-and-cookies/create-your-own-privacy-notice/your-data-protection-rights/#rtdp).
-* **Your right to withdraw consent** – When we use consent as our lawful basis, you have the right to withdraw your consent at any time. [Read more about the right to withdraw consent](https://ico.org.uk/for-organisations/advice-for-small-organisations/privacy-notices-and-cookies/create-your-own-privacy-notice/your-data-protection-rights/#rtwc).
+If you also enable session replay and diagnostics, PostHog records a masked
+visual representation of interface activity and technical errors. The
+implementation masks all text, form inputs, and element attributes; excludes
+request and response bodies and headers; and disables canvas and cross-origin
+iframe recording.
 
-If you make a request, we must respond to you without undue delay and in any event within one month.
+### Aggregate operational measurement without analytics consent
 
-To make a data protection rights request, please contact us using the contact details at the top of this privacy notice.
+If analytics is pending or rejected, Google Analytics and the PostHog browser SDK
+remain unloaded. We may still record content-free aggregate operational events,
+including page-path counts, attachment-action counts, and AI cost/performance
+metadata, as well as result-count outcomes and copy/export actions without their
+content.
 
-# **Our lawful bases for the collection and use of your data**
+These aggregate events contain no browser, device, user, or session identifier;
+no IP address or user-agent forwarded as analytics properties; no referrer,
+campaign, query string, search text, title, filename, or user-provided content;
+and no PostHog person profile or geolocation processing. All such events for a
+library and UTC day share one rotating aggregate key, so they cannot measure a
+returning individual.
 
-Our lawful bases for collecting or using personal information for **dealing with queries, complaints or claims** are:
+### Infrastructure and security
 
-* **Legitimate interests** – we’re collecting or using your information because it benefits you, our organisation or someone else, without causing an undue risk of harm to anyone. All of your data protection rights may apply, except the right to portability. Our legitimate interests are:
-  * We need to respond to user queries, complaints, and support requests. This directly benefits users by resolving their issues and providing customer support. Keeping communication records helps us provide consistent support and reference previous interactions.
+Our hosting and security providers necessarily process connection and request
+information such as IP address, time, route, status, and user-agent to deliver the
+service, prevent abuse, enforce rate limits, diagnose failures, and protect the
+website. Security logs are separate from product analytics.
 
-For more information on our use of legitimate interests as a lawful basis, you can contact us using the contact details set out above.
+## Information excluded from analytics
 
-Our lawful bases for collecting or using personal information for **analysing how visitors use our website** are:
+We do not send the following to PostHog or Google Analytics:
 
-* **Consent** – we ask for your consent before setting analytics cookies through our cookie consent banner. You can withdraw consent at any time by:
-  * Clicking "Cookie Settings" in the footer of any page
-  * Deleting cookies through your browser settings
-  
-* **Legitimate interests** – for analytics data that doesn’t require cookies (such as server logs), we rely on legitimate interests. All of your data protection rights may apply, except the right to portability. Our legitimate interests are:
-  * Understanding how visitors use our website helps us improve user experience, fix technical issues, identify and resolve bugs, and develop features that users actually need. The data is pseudonymised where possible, and the benefits of improving our service outweigh the minimal privacy impact of collecting pseudonymous usage data.
+- AI prompts, conversations, model responses, or screening content;
+- search text;
+- PDF text, abstracts, document contents, publication titles, or filenames;
+- form-field values, passwords, access tokens, or authentication values;
+- payment information.
 
-For more information on our use of legitimate interests as a lawful basis, you can contact us using the contact details set out above.
+We do not sell personal information and do not use third-party advertising
+cookies.
 
+## Purposes and lawful bases
 
-# **Where we get personal information from**
+We rely on the following lawful bases:
 
-* **Directly from you** when you:
-  * Send us an email
-  * Contact us with questions or complaints
-
-* **Automatically collected** when you visit our website:
-  * From your browser (browser type, screen size, device information)
-  * From your network connection (IP address, approximate location)
-  * From your interactions with our site (pages visited, clicks, time spent)
-
-* **From PostHog analytics** – our website analytics platform that collects pseudonymous usage data on our behalf
-
-* **From Google Analytics** – our website analytics platform that collects pseudonymous visit and session data on our behalf
-
-* **From Cloudflare** – our infrastructure provider, which processes connection data for security, bot management, and performance purposes
-
-* **From Clerk** – our authentication provider, which processes session data to manage user sign-in flows
-
-# **How long we keep information**
-
-| Data Type                                              | Retention Period                            | Reason                                                                                        |
-| :----------------------------------------------------- | :------------------------------------------ | :-------------------------------------------------------------------------------------------- |
-| **Email correspondence**                               | 3 years from the date of last communication | To respond to follow-up queries, maintain communication history, and resolve disputes         |
-| **Support ticket records**                             | 3 years from the date of resolution         | To reference similar issues and improve support quality                                       |
-| **Website analytics data** (PostHog & Google Analytics) | 1 year from the date of collection          | To analyse trends, identify long-term patterns, and improve the product                       |
-| **IP address logs**                                    | 24 hours from the date of collection        | For security monitoring and fraud prevention                                                  |
-
-After these periods, we securely delete or anonymise personal information so it can no longer identify you.
-
-For more information on how long we store your personal information or the criteria we use to determine this, please contact us using the details provided above.
-
-# **Who we share information with**
-
-## **Data processors**
-
-**PostHog Inc.**
-
-This data processor does the following activities for us: 
-* Collects and stores website analytics data
-* Processes usage statistics and generates reports
-
-**Location:** United States
-
-**Google LLC (Google Analytics)**
-
-This data processor does the following activities for us:
-* Collects and stores pseudonymous website analytics data
-* Measures visit attribution and session-level traffic data
-* Generates usage reports
-
-Analytics data is only sent to Google Analytics after you have granted consent via our cookie banner.
-
-**Location:** United States (and globally distributed infrastructure)
-
-**Cloudflare, Inc.**
-
-This data processor does the following activities for us:
-* Hosts and delivers our website via its content delivery network (CDN)
-* Provides bot management, DDoS protection, and rate limiting
-* Processes connection-level data (IP address, request metadata) for security purposes
-
-**Location:** United States (and globally distributed edge network)
-
-**Clerk, Inc.**
-
-This data processor does the following activities for us:
-* Manages user authentication and sign-in flows
-* Maintains session state for authenticated users
-* Issues and validates session tokens
-
-**Location:** United States
-
-{{Vercel::}}
-**Vercel Inc.**
-
-This data processor does the following activities for us:
-* Hosts our website
-* Provides content delivery network (CDN) services
-* Processes server logs and connection data
-
-**Location:** United States and globally distributed edge network
-{{::}}
-{{DigitalOcean::}}
-**DigitalOcean, LLC**
-
-This data processor does the following activities for us:
-* Hosts our website
-* Processes server logs and connection data
-
-**Location:** United States (and globally distributed data centres)
-{{::}}
-
-# **Sharing information outside the UK**
-
-Where necessary, our data processors may share personal information outside of the UK. When doing so, they comply with the UK GDPR, making sure appropriate safeguards are in place.
-
-For further information about the safeguards for any of the transfers below, please contact us using the contact information provided above.
-
-**Organisation name:** PostHog Inc.
-
-**Category of recipient:** Analytics platform and data processor
-
-**Country where data is primarily processed:** United States
-
-**How the transfer complies with UK data protection law:** 
-
-Transfers to PostHog Inc. are made in reliance on its certification under the UK Extension to the EU-U.S. Data Privacy Framework.
-
----
-
-**Organisation name:** Google LLC
-
-**Category of recipient:** Analytics platform and data processor
-
-**Country the personal information is sent to:** United States (and globally distributed infrastructure)
-
-**How the transfer complies with UK data protection law:** 
-
-Transfers to Google LLC are made in reliance on its certification under the UK Extension to the EU-U.S. Data Privacy Framework.
-
----
-
-**Organisation name:** Cloudflare, Inc.
-
-**Category of recipient:** Infrastructure, security, and CDN provider
-
-**Country the personal information is sent to:** United States (and globally distributed edge network)
-
-**How the transfer complies with UK data protection law:** 
-
-Transfers to Cloudflare, Inc. are made in reliance on its certification under the UK Extension to the EU-U.S. Data Privacy Framework.
-
----
-
-**Organisation name:** Clerk, Inc.
-
-**Category of recipient:** Authentication and identity management provider
-
-**Country the personal information is sent to:** United States
-
-**How the transfer complies with UK data protection law:** 
-
-Transfers to Clerk, Inc. are made in reliance on its certification under the UK Extension to the EU-U.S. Data Privacy Framework.
-{{Vercel::}}
----
-
-**Organisation name:** Vercel Inc.
-
-**Category of recipient:** Website hosting provider
-
-**Country the personal information is sent to:** United States (and globally distributed edge network)
-
-**How the transfer complies with UK data protection law:** 
-
-Transfers to Vercel Inc. are made in reliance on its certification under the UK Extension to the EU-U.S. Data Privacy Framework.
-{{::}}
-{{DigitalOcean::}}
----
-
-**Organisation name:** DigitalOcean, LLC
-
-**Category of recipient:** Website hosting provider
-
-**Country the personal information is sent to:** United States (and globally distributed data centres)
-
-**How the transfer complies with UK data protection law:** 
-
-Transfers to DigitalOcean, LLC are made in reliance on its certification under the UK Extension to the EU-U.S. Data Privacy Framework.
-{{::}}
-
-# **How we protect personal information**
-
-We implement appropriate technical and organisational measures to protect your personal information:
-
-* **Encryption:** Data is encrypted in transit (HTTPS/TLS) and at rest
-* **Access controls:** Limited access to personal data on a need-to-know basis
-* **Pseudonymisation:** Analytics data is pseudonymised where possible
-* **Regular security reviews:** We monitor and update our security practices
-* **Secure data processors:** We only work with processors who meet high security standards
-* **Cookie consent management:** PostHog and Google Analytics only load after you grant consent
-
-# **Cookies**
-
-We use cookies to collect some of the analytics information described in this privacy notice. For detailed information about the cookies we use, please see our [Cookie Policy](/cookie-policy).
-
-Key points:
-* **Strictly necessary cookies** include our consent preference cookie (`analytics_consent`), a language preference cookie (`NEXT_LOCALE`), Cloudflare security cookies (`__cf_bm`, `_cfuvid`), and Clerk authentication cookies (`__client_uat`)
-* **Optional analytics cookies** from PostHog (`ph_*`) and Google Analytics (`_ga`, `_ga_*`) are only set after you grant consent
-* No third-party advertising or tracking cookies are used
-* You can accept or decline cookies via our cookie consent banner
-* You can change your preferences anytime via "Cookie Settings" in the footer
-
-# **How to complain**
-
-If you have any concerns about our use of your personal data, you can make a complaint to us using the contact details at the top of this privacy notice.
-
-If you remain unhappy with how we’ve used your data after raising a complaint with us, you can also complain to the ICO.
-
-The ICO’s address:
-
-Information Commissioner’s Office  
-Wycliffe House  
-Water Lane  
-Wilmslow  
-Cheshire  
-SK9 5AF
-
-Helpline number: 0303 123 1113
-
-Website: [https://www.ico.org.uk/make-a-complaint](https://www.ico.org.uk/make-a-complaint/)
-
-# **Changes to this privacy notice**
-
-We may update this privacy notice from time to time. When we make significant changes, we will:
-
-* Update the “Last updated” date below
-* For material changes affecting your rights, we may seek renewed consent where required
-
-We encourage you to review this privacy notice periodically to stay informed about how we protect your information.
-
-# **Last updated**
-
-March 6, 2026
+- **Consent:** pseudonymous PostHog product analytics, Google Analytics, and the
+  separately selectable session-replay purpose. You can withdraw consent at any
+  time through **Cookie settings** in the footer.
+- **Legitimate interests:** service delivery, content-free aggregate operational
+  measurement, cost and reliability monitoring, security, abuse prevention,
+  rate limiting, troubleshooting, and responding to support requests. Our
+  interests are operating and improving a reliable public evidence service. We
+  minimise the data, separate aggregate measurement from individual analytics,
+  and provide the right to object where applicable.
+- **Contract or steps at your request:** providing account features that you ask
+  to use.
+- **Legal obligation:** keeping or disclosing information when the law requires
+  it.
+
+## Consent and withdrawal
+
+The analytics preference contains separate choices for product analytics and
+session replay. Session replay cannot be enabled without product analytics.
+
+When you withdraw product-analytics consent, the application stops replay,
+disables Google collection, resets PostHog identity and persistence, clears known
+PostHog/Google analytics storage, and removes stored campaign attribution. The
+withdrawal affects future processing; previously lawfully collected information
+remains subject to the retention rules below.
+
+The necessary `analytics_consent` cookie stores only the policy version,
+timestamp, and preference booleans. It contains no analytics or user identifier.
+
+## Sources of information
+
+Information comes from:
+
+- you, when you use account features or contact us;
+- your browser and device after you grant the relevant analytics permission;
+- aggregate events generated by the application;
+- infrastructure and security providers that deliver and protect the service;
+- an external sign-in provider when you choose that option.
+
+## Recipients and processors
+
+We use the following categories of processor:
+
+- **PostHog:** consented product analytics, optional session replay and
+  diagnostics, and content-free server operational events;
+- **Google Analytics:** consented website measurement only;
+- **Cloudflare:** content delivery, security, bot management, DDoS protection,
+  and rate limiting;
+- **hosting and database providers:** application hosting, storage, backups, and
+  operational logs;
+- **email and sign-in providers:** only when you use the corresponding support or
+  account feature.
+
+Access is limited to people and processors that need the information for these
+purposes.
+
+## International transfers
+
+Some processors operate in the United States or other countries. Where personal
+information is transferred outside the UK or EEA, we use an available lawful
+transfer mechanism such as an adequacy decision, the UK Extension to the EU-US
+Data Privacy Framework, the EU-US Data Privacy Framework, approved contractual
+clauses, and any required supplementary safeguards. The applicable mechanism
+depends on the processor and destination.
+
+## Retention
+
+The intended operational retention limits are:
+
+| Information | Retention |
+| --- | --- |
+| PostHog product analytics events | Up to 14 months |
+| PostHog session replay | Up to 30 days |
+| Google Analytics user and event data | 2 months |
+| Aggregate operational analytics | Up to 13 months |
+| Raw infrastructure/security logs | Normally up to 30 days, unless an incident or legal requirement requires longer |
+| Support correspondence | Up to 3 years after the last communication |
+| Account information | While the account is active and for the period needed to close, secure, or meet legal requirements afterward |
+
+Vendor-dashboard settings must be configured to these limits. Backups may retain
+deleted information for a limited additional period before rotation.
+
+## Your rights
+
+Depending on the law that applies, you may have rights to:
+
+- access your personal information and related processing details;
+- correct inaccurate or incomplete information;
+- request deletion;
+- restrict processing;
+- object to processing based on legitimate interests;
+- receive portable information that you supplied where the right applies;
+- withdraw consent at any time;
+- complain to a data-protection authority.
+
+To exercise a right, contact **contact@opendeved.net**. We may need enough
+information to verify and locate the relevant record. For a pseudonymous
+PostHog profile, we may ask you to provide its browser analytics identifier so
+we can locate it.
+
+In the UK, you can also complain to the Information Commissioner's Office:
+[ico.org.uk/make-a-complaint](https://www.ico.org.uk/make-a-complaint/).
+
+## Security
+
+We use HTTPS, access controls, data minimisation, pseudonymisation, restricted
+processor access, backups, monitoring, and security review. No system can be
+guaranteed completely secure, but we review and improve these measures.
+
+## Changes to this notice
+
+We may update this notice when processing changes. Material changes to analytics
+purposes or processors can increment the consent-policy version and require a
+new choice.
+
+**Last updated:** August 27, 2026

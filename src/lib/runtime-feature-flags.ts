@@ -1,7 +1,7 @@
 import type { CompanyFooter } from "@/db/schema/tables/status";
 import { db } from "@/db";
 import { status as statusTable } from "@/db/schema/tables/status";
-import posthogClient from "@/lib/posthog";
+import { getPostHogClient } from "@/lib/posthog";
 import {
 	EMPTY_FEATURE_FLAGS,
 	type RuntimeFeatureFlags,
@@ -124,6 +124,8 @@ async function fetchFeatureFlagsFromPostHog() {
 	) {
 		return EMPTY_FEATURE_FLAGS;
 	}
+	const posthogClient = getPostHogClient();
+	if (!posthogClient) return EMPTY_FEATURE_FLAGS;
 
 	const response = await posthogClient.getAllFlagsAndPayloads(
 		getFeatureFlagsDistinctId()

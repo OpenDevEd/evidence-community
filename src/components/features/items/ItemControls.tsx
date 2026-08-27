@@ -40,6 +40,7 @@ import { useFeatureFlagEnabled } from "@/context/Providers";
 import { AddButton } from "./Resource";
 import DialogModal from "@/components/nextui/DialogModal";
 import { getZoteroGroupItemLinks } from "@/lib/zoteroLinks";
+import { trackContentAction } from "@/lib/analytics";
 
 type Interaction =
 	| "readDocument"
@@ -128,6 +129,12 @@ export function DownloadModal({
 								format === "ris" ? "ris" : "bib"
 							}`;
 							a.click();
+							URL.revokeObjectURL(url);
+							trackContentAction({
+								action: "download",
+								context: "library_records",
+								format,
+							});
 						} catch (error) {
 							console.error(error);
 						} finally {

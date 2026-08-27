@@ -1,6 +1,9 @@
 import "server-only";
 
-import posthogClient from "@/lib/posthog";
+import {
+	captureServerAnalyticsEvent,
+	type ServerAnalyticsContext,
+} from "@/lib/server-analytics";
 import type { AIModelId } from "./models";
 import type { AIErrorCode } from "./errors";
 
@@ -16,9 +19,9 @@ type TokenUsage = {
 };
 
 type TrackAIUsageOptions = {
+	analyticsContext: ServerAnalyticsContext;
 	feature: string;
 	modelId: AIModelId;
-	distinctId?: string;
 	startedAt: number;
 	success: boolean;
 	usage?: TokenUsage;
@@ -72,9 +75,9 @@ function getOpenRouterCost(providerMetadata: unknown): number | null {
 }
 
 export function trackAIUsage({
+	analyticsContext,
 	feature,
 	modelId,
-	distinctId,
 	startedAt,
 	success,
 	usage,
@@ -92,13 +95,9 @@ export function trackAIUsage({
 			responseHeaders,
 			"x-openrouter-cache-age",
 		).map(Number);
-		const generationIds = responseHeaderValues(
-			responseHeaders,
-			"x-generation-id",
-		);
-		posthogClient.capture({
+		captureServerAnalyticsEvent({
 			event: "ai_request",
-			distinctId: distinctId || "anonymous-ai-user",
+			context: analyticsContext,
 			properties: {
 				feature,
 				model: modelId,
@@ -117,7 +116,6 @@ export function trackAIUsage({
 					(status) => status.toUpperCase() === "HIT",
 				).length,
 				response_cache_ages_seconds: cacheAges.filter(Number.isFinite),
-				openrouter_generation_ids: generationIds,
 				duration_ms: Date.now() - startedAt,
 				tool_counts: toolCounts,
 				success,

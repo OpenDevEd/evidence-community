@@ -22,13 +22,14 @@ import {
 import { EVIDENCE_CITATION_INSTRUCTIONS } from "./prompt-context";
 import type { ResearchUIData } from "./request-context";
 import type { UIMessage } from "ai";
+import type { ServerAnalyticsContext } from "@/lib/server-analytics";
 
 type CreateResearchAgentOptions = {
 	mode: ResearchMode;
 	modelId: AIModelId;
 	locale: string;
 	companyName: string;
-	distinctId?: string;
+	analyticsContext: ServerAnalyticsContext;
 	sessionId: string;
 	refreshResponseCache?: boolean;
 	searchContext?: LibrarySearchContext;
@@ -244,7 +245,7 @@ export function createResearchAgent({
 	modelId,
 	locale,
 	companyName,
-	distinctId,
+	analyticsContext,
 	sessionId,
 	refreshResponseCache,
 	searchContext,
@@ -391,9 +392,9 @@ export function createResearchAgent({
 			});
 
 			trackAIUsage({
+				analyticsContext,
 				feature: mode === "research" ? "deep_research" : "quick_chat",
 				modelId,
-				distinctId,
 				startedAt,
 				success: true,
 				usage,

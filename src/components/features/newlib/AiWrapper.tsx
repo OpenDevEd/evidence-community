@@ -22,7 +22,7 @@ import { AIHistory } from "@/types/ai";
 import ModelSelector from "@/components/features/ai/ModelSelector";
 import { useAIFeature } from "@/hooks/useAIFeature";
 import { AI_DROPDOWN_ITEMS } from "@/components/features/ai/AIDropdownItems";
-import posthog from "posthog-js";
+import { getAnalyticsDistinctId } from "@/lib/analytics";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { twMerge } from "tailwind-merge";
@@ -49,7 +49,7 @@ function AiButton({
 	const { selectedModel, setSelectedModel } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
-		distinctId: posthog.get_distinct_id(),
+		distinctId: getAnalyticsDistinctId() ?? undefined,
 	};
 	const locale = useLocale();
 

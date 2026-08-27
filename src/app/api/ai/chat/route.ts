@@ -25,6 +25,7 @@ import {
 	type ResearchRequestContextSnapshot,
 } from "@/lib/ai/request-context";
 import { trackAIUsage } from "@/lib/ai/telemetry";
+import { getServerAnalyticsContext } from "@/lib/server-analytics";
 import { convertToModelMessages, safeValidateUIMessages } from "ai";
 
 export const maxDuration = 240;
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
 		}
 
 		const { modelId, distinctId, mode, itemKey, searchContext } = body.data;
+		const analyticsContext = getServerAnalyticsContext(request, distinctId);
 		if (!isOpenRouterConfigured()) {
 			throw new AIError(
 				"AI_DISABLED",
@@ -111,7 +113,7 @@ export async function POST(request: Request) {
 			modelId,
 			companyName,
 			locale,
-			distinctId,
+			analyticsContext,
 			sessionId,
 			refreshResponseCache: body.data.trigger === "regenerate-message",
 			startedAt,
@@ -161,10 +163,10 @@ export async function POST(request: Request) {
 					context: overflowContext,
 				});
 				trackAIUsage({
+					analyticsContext,
 					feature:
 						mode === "research" ? "deep_research" : "quick_chat",
 					modelId,
-					distinctId,
 					startedAt,
 					success: false,
 					errorCode: normalized.code,

@@ -85,8 +85,8 @@ function PageView() {
 
 	useEffect(() => {
 		if (
-			consentState !== "granted" ||
-			!analyticsReady ||
+			consentState === "pending" ||
+			(consentState === "granted" && !analyticsReady) ||
 			!pathname
 		) {
 			return;
@@ -252,6 +252,9 @@ export default function Providers({
 				<ToastAdapter>
 					<SessionProvider>
 						<AnalyticsConsentProvider>
+							<AnalyticsVendors
+								googleAnalyticsId={googleAnalyticsId}
+							/>
 							<FeatureFlagsContext.Provider value={{ featureFlags }}>
 								<CacheProvider status={status} gapmaps={gapmaps}>
 									<NextUIProvider navigate={router.push}>
@@ -264,10 +267,7 @@ export default function Providers({
 										<UtmAttributionProvider />
 										{children}
 										</InlineChatLayoutProvider>
-										<AnalyticsVendors
-											googleAnalyticsId={googleAnalyticsId}
-										/>
-									</NextUIProvider>
+							</NextUIProvider>
 								</CacheProvider>
 							</FeatureFlagsContext.Provider>
 						</AnalyticsConsentProvider>

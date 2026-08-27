@@ -8,6 +8,10 @@ import {
 import { getOpenRouterModel } from "@/lib/ai/provider";
 import { screeningRequestSchema } from "@/lib/ai/schemas";
 import { trackAIUsage } from "@/lib/ai/telemetry";
+import {
+	getServerAnalyticsContext,
+	type ServerAnalyticsContext,
+} from "@/lib/server-analytics";
 import { currentDateContext } from "@/lib/ai/prompt-context";
 import { zoteroMarkupToPlainText } from "@/lib/zoteroMarkup";
 import { generateText, Output } from "ai";
@@ -21,7 +25,7 @@ export async function POST(request: Request) {
 	let requestMetadata:
 		| {
 				modelId: Parameters<typeof getOpenRouterModel>[0];
-				distinctId?: string;
+				analyticsContext: ServerAnalyticsContext;
 		  }
 		| undefined;
 
@@ -35,7 +39,8 @@ export async function POST(request: Request) {
 			);
 		}
 		const { keys, modelId, distinctId, fields } = body.data;
-		requestMetadata = { modelId, distinctId };
+		const analyticsContext = getServerAnalyticsContext(request, distinctId);
+		requestMetadata = { modelId, analyticsContext };
 		const uniqueKeys = [...new Set(keys)];
 		const sessionId = createOpenRouterSessionId(
 			"screening",
@@ -163,9 +168,9 @@ export async function POST(request: Request) {
 		}
 
 		trackAIUsage({
+			analyticsContext,
 			feature: "smart_screening",
 			modelId,
-			distinctId,
 			startedAt,
 			success: true,
 			usage: result.usage,
@@ -178,9 +183,9 @@ export async function POST(request: Request) {
 		const normalized = normalizeAIError(error, { context: "request" });
 		if (requestMetadata) {
 			trackAIUsage({
+				analyticsContext: requestMetadata.analyticsContext,
 				feature: "smart_screening",
 				modelId: requestMetadata.modelId,
-				distinctId: requestMetadata.distinctId,
 				startedAt,
 				success: false,
 				errorCode: normalized.code,

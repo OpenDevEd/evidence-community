@@ -17,6 +17,7 @@ import {
 import { getOpenRouterModel } from "@/lib/ai/provider";
 import { publicationGenerationSchema } from "@/lib/ai/schemas";
 import { trackAIUsage } from "@/lib/ai/telemetry";
+import { getServerAnalyticsContext } from "@/lib/server-analytics";
 import {
 	EVIDENCE_CITATION_INSTRUCTIONS,
 	currentDateContext,
@@ -38,6 +39,7 @@ export async function POST(request: Request) {
 		}
 
 		const { prompt: itemKey, feature, modelId, distinctId } = body.data;
+		const analyticsContext = getServerAnalyticsContext(request, distinctId);
 		const publication = await loadPublication(itemKey);
 		if (!publication) {
 			throw new AIError("ITEM_NOT_FOUND", "Item not found.", 404);
@@ -88,11 +90,11 @@ export async function POST(request: Request) {
 			headers: openRouterResponseCacheHeaders(
 				OPENROUTER_RESPONSE_CACHE_TTL.publication,
 			),
-			onFinish: ({ usage, providerMetadata, response }) => {
+				onFinish: ({ usage, providerMetadata, response }) => {
 				trackAIUsage({
+					analyticsContext,
 					feature,
 					modelId,
-					distinctId,
 					startedAt,
 					success: true,
 					usage,
@@ -105,9 +107,9 @@ export async function POST(request: Request) {
 					context: "document",
 				});
 				trackAIUsage({
+					analyticsContext,
 					feature,
 					modelId,
-					distinctId,
 					startedAt,
 					success: false,
 					errorCode: normalized.code,

@@ -12,6 +12,10 @@ import {
 } from "react-icons/bs";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
+import {
+	trackContentAction,
+	type ContentActionAnalyticsPayload,
+} from "@/lib/analytics";
 
 export type ControlAction = "markdown" | "html" | "plaintext" | "csv";
 type ControlType = "copy" | "download";
@@ -39,6 +43,7 @@ interface AIControlsProps {
 	downloadName?: string;
 	isDisabled?: boolean;
 	appearance?: "default" | "header" | "inline";
+	analyticsContext: ContentActionAnalyticsPayload["context"];
 }
 
 export function AIControls({
@@ -50,6 +55,7 @@ export function AIControls({
 	downloadName,
 	isDisabled,
 	appearance = "default",
+	analyticsContext,
 }: AIControlsProps) {
 	const handleAction = async (action: ControlAction) => {
 		const generated = await getContent(action);
@@ -70,6 +76,11 @@ export function AIControls({
 			document.body.removeChild(a);
 			URL.revokeObjectURL(url);
 		}
+		trackContentAction({
+			action: type,
+			context: analyticsContext,
+			format: action,
+		});
 	};
 
 	return (
@@ -127,6 +138,7 @@ export function AIGeneratedContentControls({
 	isDisabled,
 	appearance = "default",
 	includeCsv = false,
+	analyticsContext,
 }: {
 	getContent: (
 		action: ControlAction,
@@ -135,6 +147,7 @@ export function AIGeneratedContentControls({
 	isDisabled?: boolean;
 	appearance?: "default" | "header" | "inline";
 	includeCsv?: boolean;
+	analyticsContext: ContentActionAnalyticsPayload["context"];
 }) {
 	const t = useTranslations("ai");
 	const copyControls: Control[] = [
@@ -187,6 +200,7 @@ export function AIGeneratedContentControls({
 				buttonIcon={<BiCopy />}
 				isDisabled={isDisabled}
 				appearance={appearance}
+				analyticsContext={analyticsContext}
 			/>
 			<AIControls
 				controls={exportControls}
@@ -197,6 +211,7 @@ export function AIGeneratedContentControls({
 				downloadName={downloadName}
 				isDisabled={isDisabled}
 				appearance={appearance}
+				analyticsContext={analyticsContext}
 			/>
 		</>
 	);
@@ -270,6 +285,7 @@ export function AIContentControls({
 			getContent={getContent}
 			isDisabled={isDisabled}
 			appearance={appearance}
+			analyticsContext="generated_content"
 		/>
 	);
 }
@@ -294,6 +310,7 @@ export function AIStructuredContentControls({
 			isDisabled={isDisabled}
 			appearance={appearance}
 			includeCsv
+			analyticsContext="smart_screening"
 		/>
 	);
 }

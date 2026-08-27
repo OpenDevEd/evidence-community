@@ -9,56 +9,19 @@ import Image from "next/image";
 import { LuDownload } from "react-icons/lu";
 import { Button } from "@/components/nextui/Button";
 import { FaEye } from "react-icons/fa";
-import posthog from "posthog-js";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Card } from "@/components/nextui/Card";
 import useSWR from "swr";
 import { fetcherExternal } from "@/lib/utils";
-import {
-	payloadToPosthog,
-	PdfEventParams,
-	trackPDFDownload,
-	trackPDFView,
-} from "@/lib/analytics";
+import { trackAttachmentInteraction } from "@/lib/analytics";
 import { useSession } from "next-auth/react";
-import { Session } from "next-auth";
-import { useUtm } from "@/hooks/useUtm";
-import { StoredUtm } from "../UtmProvider";
 import { getOpenAlexPdfUrl } from "@/lib/openalex";
 import { buildPdfDownloadPath } from "@/lib/ai/citations";
 import { downloadFile } from "@/lib/download";
 
-function getPayload(
-	data: Item,
-	item: Item,
-	session: Session | null,
-	method: PdfEventParams["method"],
-	link_text: string,
-	utm: StoredUtm | null
-): PdfEventParams {
-	const posthog_distinct_id = posthog?.get_distinct_id();
-
-	return {
-		file_id: data.key,
-		filename: data.filename || "",
-		file_title: data.title || "",
-		parent_id: item.key,
-		parent_title: item.title || "",
-		parent_type: item.itemType || "",
-		file_mime_type: data.contentType || "",
-		file_md5: data.md5 || "",
-		posthog_distinct_id: posthog_distinct_id,
-		user_id: session?.user.id || "",
-		method: method,
-		link_text: link_text,
-		link_url: data.url || "",
-		...utm?.utm,
-	};
-}
-
 export default function Attachment({ data, item }: { data: Item; item: Item }) {
-	const { data: session, update } = useSession();
-	const utm = useUtm();
+	const { data: session } = useSession();
+	const locale = useLocale();
 
 	const [loaded, setLoaded] = useState(false);
 	const canHover = loaded || !data?.PDFCoverPageImage;
@@ -155,19 +118,13 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					<Button
 						size="sm"
 						onPress={() => {
-							const payload = getPayload(
-								data,
-								item,
-								session,
-								"view",
-								t("viewAttachment"),
-								utm
-							);
-							trackPDFView(payload);
-							posthog.capture(
-								"view_attachment",
-								payloadToPosthog(payload)
-							);
+							trackAttachmentInteraction({
+								action: "view",
+								source: "internal",
+								parentType: item.itemType,
+								locale,
+								isAuthenticated: Boolean(session?.user),
+							});
 
 							window.open(downloadURL, "_blank", "noopener,noreferrer");
 						}}
@@ -180,19 +137,13 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						color="accent"
 						startContent={<LuDownload className="size-5" />}
 						onPress={() => {
-							const payload = getPayload(
-								data,
-								item,
-								session,
-								"download",
-								t("downloadAttachment"),
-								utm
-							);
-							trackPDFDownload(payload);
-							posthog.capture(
-								"download_attachment",
-								payloadToPosthog(payload)
-							);
+							trackAttachmentInteraction({
+								action: "download",
+								source: "internal",
+								parentType: item.itemType,
+								locale,
+								isAuthenticated: Boolean(session?.user),
+							});
 
 							downloadFile(data.url || "", data.filename || "").catch(
 								console.error,
@@ -207,17 +158,14 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					size="sm"
 					color="accent"
 					startContent={<LuDownload className="size-5" />}
-					onPress={() => {
-						const payload = getPayload(
-							data,
-							item,
-							session,
-							"open",
-							t("openDocument"),
-							utm
-						);
-						trackPDFView(payload);
-						posthog.capture("view_attachment", payloadToPosthog(payload));
+				onPress={() => {
+					trackAttachmentInteraction({
+						action: "open",
+						source: "external",
+						parentType: item.itemType,
+						locale,
+						isAuthenticated: Boolean(session?.user),
+					});
 
 						
 						window.open(pdfUrl, "_blank", "noopener,noreferrer");

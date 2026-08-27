@@ -12,6 +12,7 @@
 		"icons:generate": "npx tsx ./tools/generateIcons.ts",
 		"schema:generate": "npx tsx ./tools/generateSchema.ts",
 		"test:ai": "tsx --test src/lib/ai/ai-contract.test.ts",
+		"test:analytics": "NODE_OPTIONS='--conditions=react-server' tsx --test src/lib/analytics-consent.test.ts src/lib/analytics-event-schema.test.ts src/lib/analytics-shared.test.ts src/lib/analytics-boundary.test.ts src/lib/server-analytics.test.ts",
 		"test:citation-mode": "tsx --test src/lib/citationMode.test.mts src/lib/citationAnchor.test.tsx",
 		"test:zotero-markup": "tsx --test src/lib/zoteroMarkup.test.tsx"
 	},
@@ -22,7 +23,6 @@
 		"@citation-js/plugin-bibtex": "^0.7.17",
 		"@citation-js/plugin-csl": "^0.7.14",
 		"@citation-js/plugin-ris": "^0.7.16",
-		"@next/third-parties": "^16.2.6",
 		"@nextui-org/react": "^2.6.11",
 		"@opendeved/doi-sync-core": "git+https://github.com/OpenDevEd/doi-sync-core.git#63f9645b185e9b0a003aaba13ed51d98b50d7aa9",
 		"@openrouter/ai-sdk-provider": "^3.0.0",
@@ -30,7 +30,6 @@
 		"@radix-ui/react-hover-card": "^1.1.23",
 		"@tanstack/react-form": "^1.6.3",
 		"@uidotdev/usehooks": "^2.4.1",
-		"@vercel/analytics": "^1.4.1",
 		"@vercel/functions": "^3.6.2",
 		"ai": "^7.0.66",
 		"babel-plugin-react-compiler": "^1.0.0",
@@ -59,8 +58,8 @@
 		"nuqs": "^2.3.2",
 		"pdf-lib": "^1.17.1",
 		"pg": "^8.13.1",
-		"posthog-js": "^1.266.0",
-		"posthog-node": "^4.3.2",
+		"posthog-js": "^1.421.1",
+		"posthog-node": "^5.51.3",
 		"react": "^19.2.4",
 		"react-chartjs-2": "^5.3.1",
 		"react-dom": "^19.2.4",
@@ -120,9 +119,6 @@
 		"@types/react-dom": "$@types/react-dom",
 		"usehooks-ts": {
 			"react": "^19"
-		},
-		"@vercel/analytics": {
-			"next": "$next"
 		},
 		"next-auth": {
 			"next": "$next"

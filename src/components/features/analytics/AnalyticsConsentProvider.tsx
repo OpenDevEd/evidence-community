@@ -1,18 +1,18 @@
 "use client";
 
 import {
-	DEFAULT_ANALYTICS_CONSENT_STATE,
 	ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS,
 	ANALYTICS_CONSENT_COOKIE_NAME,
-	parseAnalyticsConsentState,
+	DEFAULT_ANALYTICS_CONSENT_PREFERENCES,
+	analyticsConsentState,
+	createAnalyticsConsentRecord,
+	parseAnalyticsConsentRecord,
+	serializeAnalyticsConsentRecord,
+	type AnalyticsConsentPreferences,
+	type AnalyticsConsentRecord,
 	type AnalyticsConsentState,
 } from "@/lib/analytics-consent";
-import {
-	clearAnalyticsStorage,
-	initializeClientAnalytics,
-	initializePostHog,
-	updateGoogleConsent,
-} from "@/lib/analytics";
+import { applyClientAnalyticsConsent } from "@/lib/analytics";
 import {
 	createContext,
 	useCallback,
@@ -25,37 +25,38 @@ import {
 type AnalyticsConsentContextValue = {
 	analyticsReady: boolean;
 	closePreferences: () => void;
+	consentPreferences: AnalyticsConsentPreferences;
 	consentState: AnalyticsConsentState;
 	isPreferencesOpen: boolean;
 	openPreferences: () => void;
+	setConsentPreferences: (
+		preferences: AnalyticsConsentPreferences,
+	) => void;
 	setConsentState: (nextState: AnalyticsConsentState) => void;
 };
 
 const AnalyticsConsentContext =
 	createContext<AnalyticsConsentContextValue | null>(null);
 
-function writeConsentCookie(nextState: AnalyticsConsentState) {
+function writeConsentCookie(record: AnalyticsConsentRecord) {
 	const secureCookie =
-		typeof window !== "undefined" && window.location.protocol === "https:"
-			? "; Secure"
-			: "";
-
-	document.cookie = `${ANALYTICS_CONSENT_COOKIE_NAME}=${nextState}; Max-Age=${ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secureCookie}`;
+		window.location.protocol === "https:" ? "; Secure" : "";
+	document.cookie = `${ANALYTICS_CONSENT_COOKIE_NAME}=${serializeAnalyticsConsentRecord(record)}; Max-Age=${ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secureCookie}`;
 }
 
 function readConsentCookie() {
-	if (typeof document === "undefined") {
-		return DEFAULT_ANALYTICS_CONSENT_STATE;
-	}
+	if (typeof document === "undefined") return null;
 
 	const cookieValue = document.cookie
 		.split("; ")
-		.find((entry) => entry.startsWith(`${ANALYTICS_CONSENT_COOKIE_NAME}=`))
+		.find((entry) =>
+			entry.startsWith(`${ANALYTICS_CONSENT_COOKIE_NAME}=`),
+		)
 		?.split("=")
 		.slice(1)
 		.join("=");
 
-	return parseAnalyticsConsentState(cookieValue);
+	return parseAnalyticsConsentRecord(cookieValue);
 }
 
 export function AnalyticsConsentProvider({
@@ -63,83 +64,90 @@ export function AnalyticsConsentProvider({
 }: {
 	children: React.ReactNode;
 }) {
-	const [consentState, setConsentStateValue] = useState<AnalyticsConsentState>(
-		DEFAULT_ANALYTICS_CONSENT_STATE
-	);
+	const [consentRecord, setConsentRecord] =
+		useState<AnalyticsConsentRecord | null>(null);
 	const [analyticsReady, setAnalyticsReady] = useState(false);
 	const [hasHydratedConsent, setHasHydratedConsent] = useState(false);
 	const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+	const consentState = analyticsConsentState(consentRecord);
+	const consentPreferences =
+		consentRecord?.preferences ?? DEFAULT_ANALYTICS_CONSENT_PREFERENCES;
 
 	useEffect(() => {
-		initializePostHog();
-		const nextConsentState = readConsentCookie();
-		setConsentStateValue(nextConsentState);
-		setIsPreferencesOpen(nextConsentState === "pending");
-		setHasHydratedConsent(true);
+		let cancelled = false;
+		const record = readConsentCookie();
+		const state = analyticsConsentState(record);
+		const preferences =
+			record?.preferences ?? DEFAULT_ANALYTICS_CONSENT_PREFERENCES;
+		applyClientAnalyticsConsent(state, preferences);
+		queueMicrotask(() => {
+			if (cancelled) return;
+			setConsentRecord(record);
+			setAnalyticsReady(state === "granted");
+			setIsPreferencesOpen(record === null);
+			setHasHydratedConsent(true);
+		});
+		return () => {
+			cancelled = true;
+		};
 	}, []);
 
-	useEffect(() => {
-		if (!hasHydratedConsent) {
-			return;
-		}
-
-		if (consentState !== "granted") {
-			setAnalyticsReady(false);
-			updateGoogleConsent(false);
-			return;
-		}
-
-		const didInitialize = initializeClientAnalytics();
-		updateGoogleConsent(true);
-		setAnalyticsReady(didInitialize);
-	}, [consentState, hasHydratedConsent]);
-
 	const closePreferences = useCallback(() => {
-		if (!hasHydratedConsent || consentState === "pending") {
-			return;
-		}
-
+		if (!hasHydratedConsent || !consentRecord) return;
 		setIsPreferencesOpen(false);
-	}, [consentState, hasHydratedConsent]);
+	}, [consentRecord, hasHydratedConsent]);
 
 	const openPreferences = useCallback(() => {
 		setIsPreferencesOpen(true);
 	}, []);
 
+	const setConsentPreferences = useCallback(
+		(preferences: AnalyticsConsentPreferences) => {
+			const record = createAnalyticsConsentRecord(preferences);
+			writeConsentCookie(record);
+			applyClientAnalyticsConsent(
+				analyticsConsentState(record),
+				record.preferences,
+			);
+			setConsentRecord(record);
+			setAnalyticsReady(record.preferences.analytics);
+			setIsPreferencesOpen(false);
+		},
+		[],
+	);
+
 	const setConsentState = useCallback(
 		(nextState: AnalyticsConsentState) => {
-			if (nextState === "pending") {
-				return;
-			}
-
-			writeConsentCookie(nextState);
-			setConsentStateValue(nextState);
-			setIsPreferencesOpen(false);
-
-			if (nextState === "denied") {
-				clearAnalyticsStorage();
-			}
+			if (nextState === "pending") return;
+			setConsentPreferences({
+				analytics: nextState === "granted",
+				sessionReplay: nextState === "granted",
+			});
 		},
-		[]
+		[setConsentPreferences],
 	);
 
 	const value = useMemo(
 		() => ({
 			analyticsReady,
 			closePreferences,
+			consentPreferences,
 			consentState,
 			isPreferencesOpen,
 			openPreferences,
+			setConsentPreferences,
 			setConsentState,
 		}),
 		[
 			analyticsReady,
 			closePreferences,
+			consentPreferences,
 			consentState,
 			isPreferencesOpen,
 			openPreferences,
+			setConsentPreferences,
 			setConsentState,
-		]
+		],
 	);
 
 	return (
@@ -153,9 +161,8 @@ export function useAnalyticsConsent() {
 	const value = useContext(AnalyticsConsentContext);
 	if (!value) {
 		throw new Error(
-			"useAnalyticsConsent must be used within AnalyticsConsentProvider"
+			"useAnalyticsConsent must be used within AnalyticsConsentProvider",
 		);
 	}
-
 	return value;
 }

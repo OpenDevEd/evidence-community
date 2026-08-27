@@ -12,6 +12,10 @@ import {
 import { getOpenRouterModel } from "@/lib/ai/provider";
 import { starterQuestionsSchema } from "@/lib/ai/schemas";
 import { trackAIUsage } from "@/lib/ai/telemetry";
+import {
+	getServerAnalyticsContext,
+	type ServerAnalyticsContext,
+} from "@/lib/server-analytics";
 import { publicationSystemContext } from "@/lib/ai/prompt-context";
 import { generateText, Output } from "ai";
 import { NextResponse } from "next/server";
@@ -27,14 +31,17 @@ const questionsOutput = Output.object({
 
 export async function POST(request: Request) {
 	const startedAt = Date.now();
-	let distinctId: string | undefined;
+	let analyticsContext: ServerAnalyticsContext = { mode: "aggregate" };
 
 	try {
 		const body = starterQuestionsSchema.safeParse(await request.json());
 		if (!body.success) {
 			throw new AIError("INVALID_REQUEST", "Invalid AI request.", 400);
 		}
-		distinctId = body.data.distinctId;
+		analyticsContext = getServerAnalyticsContext(
+			request,
+			body.data.distinctId,
+		);
 
 		// Starter questions only need the title and abstract: no PDFs, and the
 		// cheapest/fastest configuration of the fixed model.
@@ -86,9 +93,9 @@ export async function POST(request: Request) {
 		});
 
 		trackAIUsage({
+			analyticsContext,
 			feature: "starter_questions",
 			modelId: STARTER_QUESTIONS_MODEL_ID,
-			distinctId,
 			startedAt,
 			success: true,
 			usage: result.usage,
@@ -100,9 +107,9 @@ export async function POST(request: Request) {
 	} catch (error) {
 		const normalized = normalizeAIError(error);
 		trackAIUsage({
+			analyticsContext,
 			feature: "starter_questions",
 			modelId: STARTER_QUESTIONS_MODEL_ID,
-			distinctId,
 			startedAt,
 			success: false,
 			errorCode: normalized.code,

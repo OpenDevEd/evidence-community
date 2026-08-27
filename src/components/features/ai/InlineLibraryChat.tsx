@@ -4,7 +4,7 @@ import { Chat, useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, isToolUIPart } from "ai";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useLocale, useTranslations } from "next-intl";
-import posthog from "posthog-js";
+import { getAnalyticsDistinctId } from "@/lib/analytics";
 import {
 	useCallback,
 	useEffect,
@@ -299,7 +299,8 @@ export default function InlineLibraryChat({
 						}),
 						body: () => ({
 							modelId: chatRequestRef.current?.modelId ?? modelId,
-							distinctId: posthog.get_distinct_id(),
+							distinctId:
+								getAnalyticsDistinctId() ?? undefined,
 							mode: chatRequestRef.current?.mode ?? mode,
 							searchContext:
 								chatRequestRef.current?.searchContext,
@@ -481,7 +482,7 @@ export default function InlineLibraryChat({
 					keys,
 					modelId,
 					fields: smartScreeningFields,
-					distinctId: posthog.get_distinct_id(),
+					distinctId: getAnalyticsDistinctId() ?? undefined,
 				}),
 			});
 			if (!response.ok) throw new Error(await response.text());
@@ -651,6 +652,7 @@ export default function InlineLibraryChat({
 						downloadName="chat-transcript"
 						isDisabled={!conversationStarted || isWaiting}
 						appearance="header"
+						analyticsContext="chat_transcript"
 					/>
 					<Tooltip content={tUI("resetChat")} className="lg:hidden">
 						<Button

@@ -52,6 +52,7 @@ import { SearchBar } from "@/components/features/SearchBar";
 import { useInlineChatLayout } from "@/context/InlineChatLayout";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import { normalizeLibrarySearchContext } from "@/lib/search-context";
+import { trackLibraryResultsLoaded } from "@/lib/analytics";
 
 function Chip({
 	group,
@@ -130,11 +131,8 @@ function yearChipTitle(range: string): string {
 	return range;
 }
 
-function useFilterChips(
-	queryParams: Record<string, any>,
-	handleClearFilters?: () => void
-) {
-	const filtersCount =
+function countActiveFilters(queryParams: Record<string, any>) {
+	return (
 		(queryParams.collections?.length || 0) +
 		(queryParams.institution?.length || 0) +
 		(queryParams.author ? 1 : 0) +
@@ -142,7 +140,15 @@ function useFilterChips(
 		countryFacetOptions.reduce(
 			(acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0),
 			0
-		);
+		)
+	);
+}
+
+function useFilterChips(
+	queryParams: Record<string, any>,
+	handleClearFilters?: () => void
+) {
+	const filtersCount = countActiveFilters(queryParams);
 	const clearButton = () => {
 		handleClearFilters?.();
 	};
@@ -786,6 +792,32 @@ export function ResourcesView({
 	const searchContext = itemsContext.userData
 		? undefined
 		: normalizeLibrarySearchContext(itemsContext.queryParams);
+	const resultsAnalyticsSignature = useRef<string | null>(null);
+	useEffect(() => {
+		const data = itemsContext.itemsData;
+		if (!data || !searchContext) return;
+
+		// Keep the full context only in this local de-duplication key. Analytics
+		// receives booleans and counts, never the query or filter values.
+		const signature = JSON.stringify({
+			context: searchContext,
+			page: data.currentPage,
+			pageResultCount: data.items.length,
+			totalResultCount: data.totalItems,
+		});
+		if (resultsAnalyticsSignature.current === signature) return;
+		resultsAnalyticsSignature.current = signature;
+
+		trackLibraryResultsLoaded({
+			hasSearch: searchContext.search.trim().length > 0,
+			filterCount: countActiveFilters(searchContext),
+			page: data.currentPage,
+			pageResultCount: data.items.length,
+			totalResultCount: data.totalItems,
+			scope: searchContext.scope,
+			sort: searchContext.sort,
+		});
+	}, [itemsContext.itemsData, searchContext]);
 
 	return (
 		<section

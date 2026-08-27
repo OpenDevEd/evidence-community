@@ -1,0 +1,46 @@
+import {
+	analyticsConsentState,
+	readAnalyticsConsentCookieHeader,
+} from "@/lib/analytics-consent";
+import {
+	aggregateAnalyticsEventSchema,
+	normalizeAggregateAnalyticsProperties,
+} from "@/lib/analytics-event-schema";
+import { captureServerAnalyticsEvent } from "@/lib/server-analytics";
+import { NextResponse } from "next/server";
+
+export async function POST(request: Request) {
+	const fetchSite = request.headers.get("sec-fetch-site");
+	if (fetchSite && !["same-origin", "same-site", "none"].includes(fetchSite)) {
+		return NextResponse.json({ error: "Cross-site request rejected" }, { status: 403 });
+	}
+
+	const consent = readAnalyticsConsentCookieHeader(
+		request.headers.get("cookie"),
+	);
+	if (analyticsConsentState(consent) !== "denied") {
+		return new NextResponse(null, { status: 204 });
+	}
+
+	let payload: unknown;
+	try {
+		payload = await request.json();
+	} catch {
+		return NextResponse.json({ error: "Invalid analytics event" }, { status: 400 });
+	}
+
+	const parsed = aggregateAnalyticsEventSchema.safeParse(payload);
+	if (!parsed.success) {
+		return NextResponse.json({ error: "Invalid analytics event" }, { status: 400 });
+	}
+
+	const properties = normalizeAggregateAnalyticsProperties(parsed.data);
+
+	captureServerAnalyticsEvent({
+		event: parsed.data.event,
+		context: { mode: "aggregate" },
+		properties,
+	});
+
+	return new NextResponse(null, { status: 202 });
+}

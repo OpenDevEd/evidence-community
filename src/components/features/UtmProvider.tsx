@@ -4,6 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { useQueryStates, parseAsString } from 'nuqs';
 import { useLocalStorage } from 'usehooks-ts';
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
+import { registerAnalyticsAttribution } from "@/lib/analytics";
 
 type UTM = {
   utm_source?: string;
@@ -72,7 +73,7 @@ function getDurationMs(): number {
 function normalize(v?: string | null): string | undefined {
   if (v == null) return undefined;
   const t = v.trim();
-  return t ? t.toLowerCase() : undefined;
+  return t ? t.toLowerCase().slice(0, 100) : undefined;
 }
 
 function collectValidUtms(obj: Record<string, unknown>): UTM {
@@ -101,7 +102,7 @@ function utmEquals(a: UTM, b: UTM): boolean {
 
 
 export function UtmAttributionProvider() {
-  const { consentState } = useAnalyticsConsent();
+  const { analyticsReady, consentState } = useAnalyticsConsent();
   // Live UTMs from the URL (reactive)
   const [utmFromUrl] = useQueryStates({
     utm_source: parseAsString,
@@ -164,6 +165,11 @@ export function UtmAttributionProvider() {
       expiresAt: now + durationMs,
     });
   }, [consentState, durationMs, setStored, stored, utmFromUrl]);
+
+  useEffect(() => {
+    if (consentState !== "granted" || !analyticsReady || !stored) return;
+    registerAnalyticsAttribution(stored.utm);
+  }, [analyticsReady, consentState, stored]);
 
   return null;
 }

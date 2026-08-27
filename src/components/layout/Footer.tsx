@@ -19,12 +19,13 @@ import {
 import { resolveCompanyFooterPolicyLinks, isPolicyPage } from "@/lib/legal-links";
 import DialogModal from "@/components/nextui/DialogModal";
 import GenericHeader from "@/components/features/modals/GenericHeader";
-import { ModalBody, ModalContent, ModalFooter } from "@nextui-org/react";
+import { ModalBody, ModalContent } from "@nextui-org/react";
 import { Logo as BannerLogo } from "./navbar";
 import { useRouter } from "@/i18n/routing";
 import type { FooterLinkSection, LinkObject } from "@/db/schema/tables/status";
 import { FaGithub, FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
 import { RiBlueskyFill } from "react-icons/ri";
+import { AnalyticsConsentPreferencesForm } from "@/components/features/analytics/AnalyticsConsentPreferencesForm";
 
 function groupLinksBySection(
 	links: LinkObject[],
@@ -198,7 +199,7 @@ export default function Footer() {
 	const t = useTranslations("footer");
 	const tUI = useTranslations("ui");
 	const tNav = useTranslations("nav");
-	const { openPreferences, setConsentState } = useAnalyticsConsent();
+	const { openPreferences } = useAnalyticsConsent();
 	const status = useStatus();
 	const { companyName } = parseCompanyName(status?.companyName);
 	const pathname = usePathname();
@@ -514,31 +515,13 @@ export default function Footer() {
 								<p className="text-center text-default-500 mx-auto max-w-md mb-6">
 									{tUI("cookieConsentMessage")}
 								</p>
+								<AnalyticsConsentPreferencesForm
+									onComplete={() => {
+									setPolicyDialogOpen(false);
+									router.push("/");
+								}}
+								/>
 							</ModalBody>
-							<ModalFooter className="flex-row flex-wrap items-center justify-center gap-3 pt-2">
-								<Button
-									color="tertiary"
-									onPress={() => {
-										setPolicyDialogOpen(false);
-										setConsentState("granted");
-										router.push("/");
-									}}
-									className="px-6 font-medium"
-								>
-									{tUI("cookieAccept")}
-								</Button>
-								<Button
-									color="tertiary"
-									onPress={() => {
-										setPolicyDialogOpen(false);
-										setConsentState("denied");
-										router.push("/");
-									}}
-									className="px-6 font-medium"
-								>
-									{tUI("cookieDecline")}
-								</Button>
-							</ModalFooter>
 						</ModalContent>
 					</DialogModal>
 				)}
