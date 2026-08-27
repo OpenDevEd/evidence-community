@@ -22,7 +22,7 @@ export const LIBRARY_EXPORT_RECORD_CAP = 20_000;
 export const LIBRARY_EXPORT_PAGE_SIZE = 250;
 
 // How many records the Atom feed lists.
-export const ATOM_FEED_RECORD_COUNT = 50;
+const ATOM_FEED_RECORD_COUNT = 50;
 
 // Stored full text and cover images are large and are never part of a
 // citation, so they are left out of every export read.
@@ -73,7 +73,7 @@ export function buildLibraryExportFilename(
  * Reads one page of the records a visitor is allowed to see, straight from the
  * library's own data. `sort` is only accepted for sortable index attributes.
  */
-export async function readPublicRecords(
+async function readPublicRecords(
 	config: LibraryServerConfig,
 	options: {
 		offset: number;

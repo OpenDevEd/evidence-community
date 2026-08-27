@@ -1,10 +1,10 @@
 import type { LibraryPublicConfig } from "./schema";
 
-export const BIBLIOGRAPHIC_EXPORT_FORMATS = [
+const BIBLIOGRAPHIC_EXPORT_FORMATS = [
 	"ris",
 	"bibtex",
 ] as const;
-export const LIBRARY_EXPORT_FORMATS = [
+const LIBRARY_EXPORT_FORMATS = [
 	...BIBLIOGRAPHIC_EXPORT_FORMATS,
 	"atom",
 ] as const;
