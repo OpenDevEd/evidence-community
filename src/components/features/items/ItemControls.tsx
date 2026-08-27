@@ -39,6 +39,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useFeatureFlagEnabled } from "@/context/Providers";
 import { AddButton } from "./Resource";
 import DialogModal from "@/components/nextui/DialogModal";
+import { getZoteroGroupItemLinks } from "@/lib/zoteroLinks";
 
 type Interaction =
 	| "readDocument"
@@ -337,10 +338,8 @@ export default function ItemControls({
 					className: "hidden lg:flex",
 					startContent: <SiZotero className="size-3" />,
 					onPress: () => {
-						window.open(
-							`zotero://select/groups/${itemData?.groupExternalId}/items/${itemData?.key}`,
-							"_blank"
-						);
+						const url = getZoteroGroupItemLinks(itemData)?.desktop;
+						if (url) window.open(url, "_blank");
 					},
 				},
 			},
@@ -353,10 +352,8 @@ export default function ItemControls({
 					className: "hidden lg:flex",
 					startContent: <SiZotero className="size-3" />,
 					onPress: () => {
-						window.open(
-							`https://www.zotero.org/groups/${itemData?.groupExternalId}/items/${itemData?.key}`,
-							"_blank"
-						);
+						const url = getZoteroGroupItemLinks(itemData)?.web;
+						if (url) window.open(url, "_blank");
 					},
 				},
 			},
@@ -434,7 +431,7 @@ export default function ItemControls({
 				},
 			},
 		],
-		[itemData, router, config, setConfig]
+		[itemData, router, config, setConfig, t]
 	);
 
 	return (

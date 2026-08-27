@@ -11,18 +11,18 @@ import { BiChevronDown } from "react-icons/bi";
 import { Key } from "react";
 import { Item } from "@/app/api/item/types";
 import { useTranslations } from "next-intl";
-
-
+import { getZoteroGroupItemLinks } from "@/lib/zoteroLinks";
 
 export default function ZoteroDropdown({ item }: { item: Item | undefined }) {
 	const t = useTranslations("ui");
-	if (!item || item.groupExternalId === 1) return null;
+	const links = getZoteroGroupItemLinks(item);
+	if (!links) return null;
 
 	const handleAction = (key: Key) => {
 		if (key === "view") {
-			window.open(`https://zotero.org/users/local/zotero/items/${item.key}`, "_blank");
+			window.open(links.web, "_blank");
 		} else if (key === "open") {
-			window.open(`zotero://select/groups/${item.groupExternalId}/items/${item.key}`, "_blank");
+			window.open(links.desktop, "_blank");
 		}
 	};
 
