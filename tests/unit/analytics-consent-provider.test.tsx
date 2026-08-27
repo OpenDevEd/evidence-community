@@ -36,12 +36,38 @@ import {
 } from "@/components/features/analytics/AnalyticsConsentProvider";
 
 function ConsentController() {
-	const { setConsentState } = useAnalyticsConsent();
+	const { consentState, preferences, savePreferences, setConsentState } =
+		useAnalyticsConsent();
 	return (
-		<button type="button" onClick={() => setConsentState("granted")}>
-			Grant consent
-		</button>
+		<>
+			<output data-testid="consent-state">
+				{consentState}:{String(preferences.analytics)}:
+				{String(preferences.sessionReplay)}
+			</output>
+			<button type="button" onClick={() => setConsentState("granted")}>
+				Grant consent
+			</button>
+			<button type="button" onClick={() => setConsentState("denied")}>
+				Decline consent
+			</button>
+			<button
+				type="button"
+				onClick={() =>
+					savePreferences({ analytics: true, sessionReplay: false })
+				}
+			>
+				Save analytics only
+			</button>
+		</>
 	);
+}
+
+function clickButton(container: HTMLElement, label: string) {
+	const button = Array.from(container.querySelectorAll("button")).find(
+		(candidate) => candidate.textContent === label,
+	);
+	if (!button) throw new Error(`Missing button: ${label}`);
+	button.click();
 }
 
 describe("analytics consent provider", () => {
@@ -55,6 +81,7 @@ describe("analytics consent provider", () => {
 			}
 		).IS_REACT_ACT_ENVIRONMENT = true;
 		document.cookie = "analytics_consent=; Max-Age=0; Path=/";
+		runtime.config.identity.baseUrl = "https://library.example.org";
 		runtime.applyClientAnalyticsConsent.mockClear();
 		container = document.createElement("div");
 		root = createRoot(container);
@@ -88,7 +115,7 @@ describe("analytics consent provider", () => {
 		});
 
 		await act(async () => {
-			container.querySelector<HTMLButtonElement>("button")?.click();
+			clickButton(container, "Grant consent");
 			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 
@@ -108,5 +135,86 @@ describe("analytics consent provider", () => {
 			'"scope":"https://library.example.org"',
 		);
 		expect(decodeURIComponent(document.cookie)).toContain('"version":2');
+	});
+
+	it("saves product analytics without enabling replay", async () => {
+		await act(async () => {
+			root.render(
+				<AnalyticsConsentProvider>
+					<ConsentController />
+				</AnalyticsConsentProvider>,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		await act(async () => {
+			clickButton(container, "Save analytics only");
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		expect(container.querySelector("output")?.textContent).toBe(
+			"granted:true:false",
+		);
+		expect(decodeURIComponent(document.cookie)).toContain(
+			'"preferences":{"analytics":true,"sessionReplay":false}',
+		);
+	});
+
+	it("declines both product analytics and replay", async () => {
+		await act(async () => {
+			root.render(
+				<AnalyticsConsentProvider>
+					<ConsentController />
+				</AnalyticsConsentProvider>,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		await act(async () => {
+			clickButton(container, "Grant consent");
+			clickButton(container, "Decline consent");
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		expect(container.querySelector("output")?.textContent).toBe(
+			"denied:false:false",
+		);
+	});
+
+	it("asks again when the runtime changes to a different library", async () => {
+		await act(async () => {
+			root.render(
+				<AnalyticsConsentProvider>
+					<ConsentController />
+				</AnalyticsConsentProvider>,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		await act(async () => {
+			clickButton(container, "Grant consent");
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		runtime.config.identity.baseUrl = "https://other-library.example.org";
+		await act(async () => {
+			root.render(
+				<AnalyticsConsentProvider>
+					<ConsentController />
+				</AnalyticsConsentProvider>,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		await vi.waitFor(() => {
+			expect(container.querySelector("output")?.textContent).toBe(
+				"pending:false:false",
+			);
+		});
+		expect(runtime.applyClientAnalyticsConsent).toHaveBeenLastCalledWith(
+			{
+				analytics: runtime.config.analytics,
+				scope: "https://other-library.example.org",
+			},
+			"pending",
+			{ analytics: false, sessionReplay: false },
+		);
 	});
 });
