@@ -657,15 +657,19 @@ describe("cross-field activation rules", () => {
 		expectCatalogInvalid(mutate);
 	});
 
-	it("allows downloads without any whole-library file address", () => {
+	it("allows downloads with an empty exports group", () => {
 		const config = cloneLibraryConfig();
-		delete (config.exports as any).ris;
-		delete (config.exports as any).bibtex;
+		(config as any).exports = {};
 		(config.features as any).downloads = true;
+		(config.features as any).atomFeed = false;
 
 		const result = catalogSchema.safeParse(config);
 
 		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.exports).toEqual({});
+			expect(result.data.features.downloads).toBe(true);
+		}
 	});
 });
 

@@ -29,14 +29,14 @@ const mockedGetLibraryConfig = vi.mocked(getLibraryConfig);
 const mockedGetCachedItemSmall = vi.mocked(getCachedItemSmall);
 const mockedConvertItem = vi.mocked(convertItem);
 
+// A real, valid library that offers downloads and has no ready-made
+// whole-library file addresses at all.
 function configWithoutExportFiles() {
-	const config = libraryConfigSchema.parse(
-		cloneLibraryConfig(maximalLibraryConfig),
-	);
-	delete config.exports.ris;
-	delete config.exports.bibtex;
-	delete config.exports.atom;
-	return config;
+	const draft = cloneLibraryConfig(maximalLibraryConfig);
+	(draft.features as any).downloads = true;
+	(draft.features as any).atomFeed = false;
+	(draft as any).exports = {};
+	return libraryConfigSchema.parse(draft);
 }
 
 function requestFor(key: string, format: "ris" | "bibtex") {

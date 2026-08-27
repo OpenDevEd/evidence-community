@@ -413,7 +413,7 @@
           ["features.authorFilter", "Toggle", "Boolean", "true"],
           ["features.authorLocation", "Toggle", "Requires author-country search", "false"],
           ["features.yearsDropdown", "Toggle", "Requires year filter", "false"],
-          ["features.downloads", "Toggle", "Requires configured export", "false"],
+          ["features.downloads", "Toggle", "Boolean; offers RIS and BibTeX per record", "false"],
           ["features.atomFeed", "Toggle", "Requires Atom endpoint", "false"]
         ]
       },
@@ -431,9 +431,9 @@
           ["gapMaps[].label", "Text / key", "1–100 characters", "Required"],
           ["gapMaps[].description", "Text", "≤500 characters", "Optional"],
           ["gapMaps[].sourceUrl", "URL", "Stable external HTTPS HTML URL; served through same-site route", "Required"],
-          ["exports.ris", "URL", "HTTPS; approved RIS content type", "Optional"],
-          ["exports.bibtex", "URL", "HTTPS; approved BibTeX/text content type", "Optional"],
-          ["exports.atom", "URL", "HTTPS; Atom XML", "Optional"]
+          ["exports.ris", "URL", "HTTPS whole-library RIS file; approved content type", "Optional"],
+          ["exports.bibtex", "URL", "HTTPS whole-library BibTeX file; approved content type", "Optional"],
+          ["exports.atom", "URL", "HTTPS whole-library Atom feed", "Optional"]
         ]
       },
       {
