@@ -112,30 +112,55 @@ describe("whole-library citation stream", () => {
 	});
 
 	it("writes no record twice and skips none when the library changes mid-write", async () => {
-		const library = fakeLibrary(
-			Array.from({ length: 900 }, (_, index) =>
-				`R${String(index * 2).padStart(7, "0")}`,
-			),
+		// Keys are spaced apart so a new one can land behind the cursor.
+		const originalKeys = Array.from(
+			{ length: 900 },
+			(_, index) => `R${String(index * 2).padStart(7, "0")}`,
 		);
+		const library = fakeLibrary(originalKeys);
+		const behindTheCursor = "R0000001";
+		const removedBeforeItsTurn = originalKeys.at(-1)!;
 		let reads = 0;
+
 		const readPage: CitationRecordReader = async (afterKey, limit) => {
 			reads += 1;
-			// A new record lands before the point already written, and an
-			// unwritten record disappears, between the first and second page.
-			if (reads === 1) {
-				library.add("R0000001");
-				library.remove("R0001798");
+			// The first page has already been written by the time this runs
+			// for the second time. Only now does the library change: one
+			// record appears behind the point already written, and one that
+			// has not been written yet disappears.
+			if (reads === 2) {
+				expect(afterKey).not.toBeNull();
+				library.add(behindTheCursor);
+				library.remove(removedBeforeItsTurn);
 			}
 			return library.reader(afterKey, limit);
 		};
 
-		const written = keysIn(await readAll(streamCitationRecords(readPage, "ris")));
+		const written = keysIn(
+			await readAll(streamCitationRecords(readPage, "ris")),
+		);
 
-		expect(new Set(written).size).toBe(written.length);
-		expect([...written].sort()).toEqual(written);
-		expect(written).not.toContain("R0001798");
-		expect(written).toContain("R0000000");
-		expect(written).toContain("R0001796");
+		expect(reads).toBeGreaterThan(2);
+
+		const timesWritten = new Map<string, number>();
+		for (const key of written) {
+			timesWritten.set(key, (timesWritten.get(key) ?? 0) + 1);
+		}
+
+		// Every record that was there at the start and stayed there is
+		// written exactly once.
+		const untouchedKeys = originalKeys.filter(
+			(key) => key !== removedBeforeItsTurn,
+		);
+		for (const key of untouchedKeys) {
+			expect(timesWritten.get(key), key).toBe(1);
+		}
+
+		// The removed record never appears, and the one that arrived behind
+		// the cursor is simply not in this file.
+		expect(timesWritten.has(removedBeforeItsTurn)).toBe(false);
+		expect(timesWritten.has(behindTheCursor)).toBe(false);
+		expect(written).toHaveLength(untouchedKeys.length);
 	});
 
 	it("skips records the converter cannot read", async () => {
