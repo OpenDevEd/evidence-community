@@ -13,11 +13,12 @@ type RedirectsResponse = {
 };
 
 /**
- * Reads the live note that holds the owner's redirect list. The tag match
- * stays in its own subquery so the tag table keeps its own name: the
- * relational query builder rewrites every table in a hand-written condition
- * to the record table, which asked PostgreSQL for a column that does not
- * exist.
+ * Reads the live note that holds the owner's redirect list.
+ *
+ * The tag match runs as its own subquery on purpose. Drizzle's relational
+ * query builder renames every table in a hand-written condition to the record
+ * table, so the tag columns came out as "item"."itemKey" and PostgreSQL
+ * rejected the whole query.
  */
 export function buildRedirectsNoteQuery(
 	database: Database,
