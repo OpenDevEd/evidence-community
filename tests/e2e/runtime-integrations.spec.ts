@@ -18,10 +18,16 @@ const expectedExportBibtex =
 	process.env.PLAYWRIGHT_EXPECTED_EXPORT_BIBTEX === "true";
 const expectedExportAtom =
 	process.env.PLAYWRIGHT_EXPECTED_EXPORT_ATOM === "true";
-const exportPublishedTitle =
-	process.env.PLAYWRIGHT_EXPORT_PUBLISHED_TITLE ?? "";
-const exportHiddenTitle = process.env.PLAYWRIGHT_EXPORT_HIDDEN_TITLE ?? "";
-const exportInternalTitle = process.env.PLAYWRIGHT_EXPORT_INTERNAL_TITLE ?? "";
+const exportIncludedTitles = (
+	process.env.PLAYWRIGHT_EXPORT_INCLUDED_TITLES ?? ""
+)
+	.split("|")
+	.filter(Boolean);
+const exportExcludedTitles = (
+	process.env.PLAYWRIGHT_EXPORT_EXCLUDED_TITLES ?? ""
+)
+	.split("|")
+	.filter(Boolean);
 const expectedAnalytics =
 	process.env.PLAYWRIGHT_EXPECTED_ANALYTICS === "true";
 const expectedAuthentication =
@@ -165,14 +171,20 @@ test("builds only the whole-library exports that are switched on", async ({
 		const body = await response.text();
 		expect(body, expected.path).toContain(expected.marker);
 
-		if (exportPublishedTitle) {
-			// The file is built from the library's own records, so a published
-			// record must be in it and a hidden record must never be.
-			expect(body, expected.path).toContain(exportPublishedTitle);
-			expect(body, expected.path).not.toContain(exportHiddenTitle);
-			// Records carrying the internal badge tag stay public on the site,
-			// so they stay in the file too.
-			expect(body, expected.path).toContain(exportInternalTitle);
+		// The file is built from the library's own records. A published
+		// record and a record carrying the internal badge tag are both public,
+		// so both belong in it.
+		for (const title of exportIncludedTitles) {
+			expect(body, `${expected.path} must list ${title}`).toContain(
+				title,
+			);
+		}
+
+		// A hidden, deleted, child or draft-only record must never reach it.
+		for (const title of exportExcludedTitles) {
+			expect(body, `${expected.path} must not list ${title}`).not.toContain(
+				title,
+			);
 		}
 
 		if (expected.filename) {
