@@ -50,7 +50,10 @@ interface BackgroundLayerProps {
 	isHovered: boolean;
 }
 
-const BackgroundLayer = ({ country, isHovered }: BackgroundLayerProps) => (
+const BackgroundLayer = ({
+	country,
+	isHovered,
+}: BackgroundLayerProps) => (
 	<>
 		{/* Base background */}
 		<div className="absolute inset-0 z-0 bg-gradient-to-br from-white/90 via-white/80 to-background/5 dark:hidden" />
@@ -163,14 +166,20 @@ const CountryCard = ({
 					"relative h-full overflow-hidden rounded-xl border p-4 transition-shadow duration-300 dark:border-white/10",
 					isHovered
 						? "shadow-xl shadow-black/[0.12] dark:shadow-black/20"
-						: "shadow-medium dark:shadow-lg",
+						: "shadow-medium dark:shadow-lg"
 				)}
 				initial={false}
 			>
-				<BackgroundLayer country={country} isHovered={isHovered} />
+				<BackgroundLayer
+					country={country}
+					isHovered={isHovered}
+				/>
 
 				<div className="relative flex items-center gap-4 z-[5]">
-					<FlagImage country={country} isHovered={isHovered} />
+					<FlagImage
+						country={country}
+						isHovered={isHovered}
+					/>
 
 					<div className="flex-1 min-w-0 relative z-[6] pr-6">
 						<div className="flex items-center gap-2 mb-1 w-full">
@@ -187,7 +196,7 @@ const CountryCard = ({
 									"flex-1 truncate text-lg font-semibold transition-colors",
 									isHovered
 										? "text-accent"
-										: "text-black/90 dark:text-white/90",
+										: "text-black/90 dark:text-white/90"
 								)}
 							>
 								{countryName}
@@ -220,10 +229,13 @@ const CountryCard = ({
 	);
 };
 
-export function CountryDisplay({ countries }: CountryDisplayProps) {
+export function CountryDisplay({
+	countries,
+}: CountryDisplayProps) {
 	const [referrer] = useQueryState("referrer");
 	const [hoveredCountry, setHoveredCountry] = useState<string | null>(null);
-	const isCountryFocusEnabled = useLibraryFeature("countryFocus");
+	const isCountryFocusEnabled =
+		useLibraryFeature("countryFocus");
 
 	return (
 		<motion.div
@@ -237,17 +249,10 @@ export function CountryDisplay({ countries }: CountryDisplayProps) {
 					const ancestry = getCountryAncestry(country);
 					return (
 						<LinkWithParams
-							href={
-								isCountryFocusEnabled
-									? getSafeReferrer(referrer)
-									: undefined
-							}
+							href={isCountryFocusEnabled ? getSafeReferrer(referrer) : undefined}
 							params={
 								ancestry && isCountryFocusEnabled
-									? {
-											country: ancestry,
-											referrer: referrer ?? undefined,
-										}
+									? { country: ancestry, referrer: referrer ?? undefined }
 									: {}
 							}
 							key={country}

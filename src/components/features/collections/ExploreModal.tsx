@@ -74,12 +74,8 @@ export default function ExploreModal({
 								hierarchy={itemsContext.hierarchy!}
 								isModal
 								range={itemsContext.queryParams.range}
-								handleRangeChange={
-									itemsContext.handleRangeChange
-								}
-								facetDistribution={
-									itemsContext.facetDistribution
-								}
+								handleRangeChange={itemsContext.handleRangeChange}
+								facetDistribution={itemsContext.facetDistribution}
 								queryParams={itemsContext.queryParams}
 								handleInstitutionSelect={
 									itemsContext.handleInstitutionSelect
