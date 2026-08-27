@@ -34,7 +34,8 @@ import { Card } from "@/components/nextui/Card";
 import { Divider } from "@/components/nextui/Divider";
 import { AiOutlineCompass } from "react-icons/ai";
 import {
-	getWholeLibraryFileFormats,
+	getDownloadableRecordCount,
+	getEnabledCitationFormats,
 	getLibraryExportPath,
 } from "@/config/library-config/exports";
 
@@ -430,8 +431,10 @@ function ContentActions() {
 	const { exports, identity } = useLibraryConfig();
 	const isDownloadEnabled = useLibraryFeature("downloads");
 	const isAtomFeedEnabled = useLibraryFeature("atomFeed");
-	const availableFormats =
-		getWholeLibraryFileFormats(exports);
+	const availableFormats = getEnabledCitationFormats(exports);
+	// The whole-library file stops at the cap, so the button shows the cap
+	// rather than a number the download cannot deliver.
+	const downloadableRecords = getDownloadableRecordCount(totalItems);
 
 	return (
 		<div className="lg:flex lg:justify-end grid gap-4 flex-wrap empty:hidden">
@@ -445,10 +448,13 @@ function ContentActions() {
 			/>
 			{isDownloadEnabled && availableFormats.length > 0 && (
 				<Button
+					data-download-record-count={downloadableRecords}
 					endContent={<HiOutlineDownload className="size-6" />}
 					onPress={onOpen}
 				>
-					{t("downloadRecords", { count: format.number(totalItems) })}
+					{t("downloadRecords", {
+						count: format.number(downloadableRecords),
+					})}
 				</Button>
 			)}
 			{/* <Button

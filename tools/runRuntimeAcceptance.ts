@@ -804,6 +804,86 @@ async function seedSearch(profile: Profile) {
 	]);
 }
 
+// Records the whole-library exports and the Atom feed read straight from
+// PostgreSQL. Only the first two belong in an export file: an ordinary
+// published record, and one carrying the internal badge tag that readers may
+// still see. The rest must never appear — hidden by tag, deleted, a child of
+// another record, or a draft that was never published. The browser checks
+// prove which of them reach an export file.
+export const EXPORT_RECORDS = {
+	published: { key: "AMBREXP2", title: "Amber export evidence" },
+	internal: { key: "AMBRINT2", title: "Amber badged evidence" },
+	hidden: { key: "AMBRHID2", title: "Amber unlisted evidence" },
+	deleted: { key: "AMBRDEL2", title: "Amber withdrawn evidence" },
+	child: { key: "AMBRCHI2", title: "Amber attached evidence" },
+	draft: { key: "AMBRDRF2", title: "Amber unfinished evidence" },
+} as const;
+
+function seedExportRecords(profile: Profile) {
+	if (profile.name !== "amber") return;
+
+	const rows = [
+		{
+			record: EXPORT_RECORDS.published,
+			itemType: "JournalArticle",
+			deleted: 0,
+			parentItem: "NULL",
+			tag: "",
+		},
+		{
+			record: EXPORT_RECORDS.internal,
+			itemType: "JournalArticle",
+			deleted: 0,
+			parentItem: "NULL",
+			tag: "internal-only",
+		},
+		{
+			record: EXPORT_RECORDS.hidden,
+			itemType: "JournalArticle",
+			deleted: 0,
+			parentItem: "NULL",
+			tag: "hidden-record",
+		},
+		{
+			record: EXPORT_RECORDS.deleted,
+			itemType: "JournalArticle",
+			deleted: 1,
+			parentItem: "NULL",
+			tag: "",
+		},
+		{
+			record: EXPORT_RECORDS.child,
+			itemType: "Attachment",
+			deleted: 0,
+			parentItem: `'${EXPORT_RECORDS.published.key}'`,
+			tag: "",
+		},
+	] as const;
+
+	const identity = (key: string) =>
+		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${key}', 'native', '${key}')`;
+
+	const statements = [
+		`INSERT INTO "tag" ("name") VALUES ('hidden-record'), ('internal-only') ON CONFLICT DO NOTHING`,
+		...rows.flatMap((row) => [
+			identity(row.record.key),
+			`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem") VALUES ('${row.record.key}', 'native', '${row.record.key}', '${row.itemType}', '${row.record.title}', 1, '2026', now(), ${row.deleted}, ${row.parentItem})`,
+		]),
+		...rows
+			.filter((row) => row.tag)
+			.map(
+				(row) =>
+					`INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES ('${row.record.key}', '${row.tag}')`,
+			),
+		// A record that only ever existed as a draft has no published row at
+		// all, so no export can reach it.
+		identity(EXPORT_RECORDS.draft.key),
+		`INSERT INTO "itemDraft" ("itemKey", "sourceConnectionKey", "patch") VALUES ('${EXPORT_RECORDS.draft.key}', 'native', '{"title": "${EXPORT_RECORDS.draft.title}"}'::jsonb)`,
+	];
+
+	postgresScalar(profile.name, statements.join("; "));
+}
+
 async function seedSharedSearchIndexes(profile: Profile) {
 	for (const index of [
 		{ uid: "cache", primaryKey: "id" },
@@ -1087,14 +1167,30 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_DEEP_RESEARCH: String(config.features.deepResearch),
 		PLAYWRIGHT_EXPECTED_GAP_MAP: String(Boolean(enabledGapMap)),
 		PLAYWRIGHT_EXPECTED_EXPORT_RIS: String(
-			config.features.downloads && Boolean(config.exports.ris),
+			config.features.downloads && config.exports.ris,
 		),
 		PLAYWRIGHT_EXPECTED_EXPORT_BIBTEX: String(
-			config.features.downloads && Boolean(config.exports.bibtex),
+			config.features.downloads && config.exports.bibtex,
 		),
 		PLAYWRIGHT_EXPECTED_EXPORT_ATOM: String(
-			config.features.atomFeed && Boolean(config.exports.atom),
+			config.features.atomFeed && config.exports.atom,
 		),
+		PLAYWRIGHT_EXPORT_INCLUDED_TITLES:
+			profile.name === "amber"
+				? [
+						EXPORT_RECORDS.published.title,
+						EXPORT_RECORDS.internal.title,
+					].join("|")
+				: "",
+		PLAYWRIGHT_EXPORT_EXCLUDED_TITLES:
+			profile.name === "amber"
+				? [
+						EXPORT_RECORDS.hidden.title,
+						EXPORT_RECORDS.deleted.title,
+						EXPORT_RECORDS.child.title,
+						EXPORT_RECORDS.draft.title,
+					].join("|")
+				: "",
 		PLAYWRIGHT_EXPECTED_ANALYTICS: String(
 			Boolean(
 				config.analytics.posthog.host && config.analytics.posthog.key,
@@ -2064,6 +2160,7 @@ async function main() {
 		}
 		for (const profile of profiles) {
 			await seedSearch(profile);
+			seedExportRecords(profile);
 		}
 		await verifySearchQueueIsolation(profiles);
 		compose(

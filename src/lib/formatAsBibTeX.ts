@@ -1,5 +1,6 @@
 import { ItemGetResponse } from "@/app/api/item/types";
 import { Cite } from "@citation-js/core";
+import { withZoteroFieldNames } from "@/lib/item-field-codec";
 import "@citation-js/plugin-bibtex";
 import "@citation-js/plugin-ris";
 import "@citation-js/plugin-csl";
@@ -1118,9 +1119,14 @@ export class BibTeXExporter {
 	lines: string[];
 	cite: any;
 	options: any;
+	// A BibTeX entry may name each field once. The first value written wins.
+	private writtenFields = new Set<string>();
 
 	constructor(item: ItemGetResponse["item"], options: any = {}) {
-		this.item = { ...item };
+		// Records are stored under shared field names. Citation output asks for
+		// the name Zotero gives the field on this item type, so a report keeps
+		// its number and its language.
+		this.item = withZoteroFieldNames({ ...item } as Record<string, unknown>);
 
 		this.item.attachments =
 			this.item.attachments ||
@@ -1147,6 +1153,8 @@ export class BibTeXExporter {
 
 	writeField(field: string, value: string, isMacro: boolean = false) {
 		if (!value && typeof value != "number") return;
+		if (this.writtenFields.has(field)) return;
+		this.writtenFields.add(field);
 		value = value + ""; // convert integers to strings
 		this.writeLine(",\n\t" + field + " = ");
 		if (!isMacro) this.writeLine("{");

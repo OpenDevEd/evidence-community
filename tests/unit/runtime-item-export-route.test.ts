@@ -29,13 +29,12 @@ const mockedGetLibraryConfig = vi.mocked(getLibraryConfig);
 const mockedGetCachedItemSmall = vi.mocked(getCachedItemSmall);
 const mockedConvertItem = vi.mocked(convertItem);
 
-// A real, valid library that offers downloads and has no ready-made
-// whole-library file addresses at all.
-function configWithoutExportFiles() {
+// A real, valid library that offers downloads with both citation switches on.
+function configWithBothFormats() {
 	const draft = cloneLibraryConfig(maximalLibraryConfig);
 	(draft.features as any).downloads = true;
 	(draft.features as any).atomFeed = false;
-	(draft as any).exports = {};
+	(draft as any).exports = { ris: true, bibtex: true, atom: false };
 	return libraryConfigSchema.parse(draft);
 }
 
@@ -49,7 +48,7 @@ function requestFor(key: string, format: "ris" | "bibtex") {
 }
 
 beforeEach(() => {
-	mockedGetLibraryConfig.mockResolvedValue(configWithoutExportFiles());
+	mockedGetLibraryConfig.mockResolvedValue(configWithBothFormats());
 	mockedGetCachedItemSmall.mockResolvedValue({
 		item: { key: "ABCD1234", title: "A record" },
 	} as never);
@@ -58,10 +57,14 @@ beforeEach(() => {
 
 describe("single-record export route", () => {
 	it.each([
-		["ris", "application/x-research-info-systems", "ABCD1234.ris"],
-		["bibtex", "application/x-bibtex", "ABCD1234.bib"],
+		[
+			"ris",
+			"application/x-research-info-systems; charset=utf-8",
+			"ABCD1234.ris",
+		],
+		["bibtex", "application/x-bibtex; charset=utf-8", "ABCD1234.bib"],
 	] as const)(
-		"builds the %s download without a whole-library file address",
+		"builds the %s download from the record itself",
 		async (format, contentType, filename) => {
 			const response = await requestFor("ABCD1234", format);
 
@@ -75,7 +78,7 @@ describe("single-record export route", () => {
 	);
 
 	it("refuses when downloads are switched off", async () => {
-		const config = configWithoutExportFiles();
+		const config = configWithBothFormats();
 		config.features.downloads = false;
 		mockedGetLibraryConfig.mockResolvedValue(config);
 
@@ -83,5 +86,24 @@ describe("single-record export route", () => {
 
 		expect(response.status).toBe(404);
 		expect(mockedConvertItem).not.toHaveBeenCalled();
+	});
+
+	it("refuses a format whose switch is off", async () => {
+		const config = configWithBothFormats();
+		config.exports.bibtex = false;
+		mockedGetLibraryConfig.mockResolvedValue(config);
+
+		const response = await requestFor("ABCD1234", "bibtex");
+
+		expect(response.status).toBe(404);
+		expect(mockedConvertItem).not.toHaveBeenCalled();
+	});
+
+	it("still serves the format whose switch is on", async () => {
+		const config = configWithBothFormats();
+		config.exports.bibtex = false;
+		mockedGetLibraryConfig.mockResolvedValue(config);
+
+		expect((await requestFor("ABCD1234", "ris")).status).toBe(200);
 	});
 });

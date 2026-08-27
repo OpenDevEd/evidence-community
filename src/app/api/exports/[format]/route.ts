@@ -1,21 +1,18 @@
 import { getLibraryConfig } from "@/config/library-config/server";
 import {
+	getLibraryExportContentType,
 	getLibraryExportExtension,
-	getLibraryExportSourceUrl,
-	isApprovedLibraryExportContentType,
 	isLibraryExportFormat,
+	type LibraryExportFormat,
 } from "@/config/library-config/exports";
-
-function exportFilename(shortName: string, extension: string) {
-	const basename =
-		shortName
-			.normalize("NFKD")
-			.replace(/[^\p{Letter}\p{Number}]+/gu, "-")
-			.replace(/^-+|-+$/gu, "")
-			.toLowerCase() || "evidence-library";
-
-	return `${basename}.${extension}`;
-}
+import {
+	buildAtomFeed,
+	buildLibraryExportFilename,
+	readAtomFeedRecords,
+	streamLibraryCitations,
+} from "@/lib/library-exports";
+import type { LibraryServerConfig } from "@/config/library-config/schema";
+import { connection } from "next/server";
 
 function notFound() {
 	return Response.json(
@@ -27,75 +24,49 @@ function notFound() {
 	);
 }
 
+function isFormatAvailable(
+	config: LibraryServerConfig,
+	format: LibraryExportFormat,
+) {
+	if (format === "atom") {
+		return config.features.atomFeed && config.exports.atom;
+	}
+
+	return config.features.downloads && config.exports[format];
+}
+
 export async function GET(
-	request: Request,
+	_request: Request,
 	{ params }: { params: Promise<{ format: string }> },
 ) {
+	// Every export reads live records, so nothing here may be prerendered.
+	await connection();
+
 	const { format } = await params;
 	if (!isLibraryExportFormat(format)) return notFound();
 
 	const config = await getLibraryConfig();
-	const featureEnabled =
-		format === "atom"
-			? config.features.atomFeed
-			: config.features.downloads;
-	const sourceUrl = getLibraryExportSourceUrl(config.exports, format);
+	if (!isFormatAvailable(config, format)) return notFound();
 
-	if (!featureEnabled || !sourceUrl) return notFound();
+	const headers = new Headers({
+		"Cache-Control": "no-store",
+		"Content-Type": getLibraryExportContentType(format),
+		"X-Content-Type-Options": "nosniff",
+	});
 
-	let upstream: Response;
-	try {
-		upstream = await fetch(sourceUrl, {
-			cache: "no-store",
-			redirect: "follow",
-			signal: request.signal,
-		});
-	} catch {
-		return Response.json(
-			{ error: "LIBRARY_EXPORT_SOURCE_UNAVAILABLE" },
-			{
-				status: 502,
-				headers: { "Cache-Control": "no-store" },
-			},
-		);
+	if (format === "atom") {
+		const records = await readAtomFeedRecords(config);
+		return new Response(buildAtomFeed(config, records), { headers });
 	}
 
-	if (!upstream.ok || !upstream.body) {
-		return Response.json(
-			{ error: "LIBRARY_EXPORT_SOURCE_UNAVAILABLE" },
-			{
-				status: 502,
-				headers: { "Cache-Control": "no-store" },
-			},
-		);
-	}
-
-	const contentType = upstream.headers.get("content-type");
-	if (!isApprovedLibraryExportContentType(format, contentType)) {
-		await upstream.body.cancel().catch(() => undefined);
-		return Response.json(
-			{ error: "LIBRARY_EXPORT_SOURCE_CONTENT_TYPE_INVALID" },
-			{
-				status: 502,
-				headers: { "Cache-Control": "no-store" },
-			},
-		);
-	}
-
-	const filename = exportFilename(
+	const filename = buildLibraryExportFilename(
 		config.identity.shortName,
 		getLibraryExportExtension(format),
 	);
-	const headers = new Headers({
-		"Cache-Control": "no-store",
-		"Content-Type": contentType!,
-		"X-Content-Type-Options": "nosniff",
-	});
-	if (format !== "atom") {
-		headers.set(
-			"Content-Disposition",
-			`attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
-		);
-	}
-	return new Response(upstream.body, { headers });
+	headers.set(
+		"Content-Disposition",
+		`attachment; filename="${filename}"; filename*=UTF-8''${encodeURIComponent(filename)}`,
+	);
+
+	return new Response(streamLibraryCitations(config, format), { headers });
 }

@@ -503,9 +503,17 @@ describe("cross-field activation rules", () => {
 			},
 		],
 		[
-			"Atom feed without Atom endpoint",
+			"Atom feed without the Atom switch",
 			(config: any) => {
-				delete config.exports.atom;
+				config.exports.atom = false;
+			},
+		],
+		[
+			"downloads without a citation switch",
+			(config: any) => {
+				config.features.downloads = true;
+				config.exports.ris = false;
+				config.exports.bibtex = false;
 			},
 		],
 		[
@@ -657,9 +665,9 @@ describe("cross-field activation rules", () => {
 		expectCatalogInvalid(mutate);
 	});
 
-	it("allows downloads with an empty exports group", () => {
+	it("switches RIS and BibTeX on and the Atom feed off by default", () => {
 		const config = cloneLibraryConfig();
-		(config as any).exports = {};
+		delete (config as any).exports;
 		(config.features as any).downloads = true;
 		(config.features as any).atomFeed = false;
 
@@ -667,9 +675,22 @@ describe("cross-field activation rules", () => {
 
 		expect(result.success).toBe(true);
 		if (result.success) {
-			expect(result.data.exports).toEqual({});
+			expect(result.data.exports).toEqual({
+				ris: true,
+				bibtex: true,
+				atom: false,
+			});
 			expect(result.data.features.downloads).toBe(true);
 		}
+	});
+
+	it("allows downloads when only one citation switch is on", () => {
+		const config = cloneLibraryConfig();
+		(config as any).exports = { ris: false, bibtex: true, atom: false };
+		(config.features as any).downloads = true;
+		(config.features as any).atomFeed = false;
+
+		expect(catalogSchema.safeParse(config).success).toBe(true);
 	});
 });
 

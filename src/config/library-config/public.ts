@@ -43,11 +43,7 @@ export function projectPublicLibraryConfig(
 		features: config.features,
 		collections: config.collections,
 		gapMaps: getEnabledGapMaps(config.gapMaps),
-		exports: {
-			ris: Boolean(config.exports.ris),
-			bibtex: Boolean(config.exports.bibtex),
-			atom: Boolean(config.exports.atom),
-		},
+		exports: config.exports,
 		ai: {
 			providers: config.ai.providers.map((provider) => ({
 				provider: provider.provider,
