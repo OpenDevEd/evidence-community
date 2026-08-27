@@ -97,7 +97,6 @@
 		"@tanstack/react-table": "^8.21.3",
 		"@tanstack/react-virtual": "^3.14.9",
 		"@uidotdev/usehooks": "^2.4.1",
-		"@vercel/analytics": "^1.4.1",
 		"@vercel/functions": "^3.6.2",
 		"ai": "^7.0.73",
 		"babel-plugin-react-compiler": "^1.0.0",
@@ -127,8 +126,8 @@
 		"pdf-lib": "^1.17.1",
 		"pdfjs-dist": "^6.2.108",
 		"pg": "^8.13.1",
-		"posthog-js": "^1.266.0",
-		"posthog-node": "^4.3.2",
+		"posthog-js": "^1.421.2",
+		"posthog-node": "^5.51.3",
 		"react": "^19.2.4",
 		"react-chartjs-2": "^5.3.1",
 		"react-dom": "^19.2.4",
@@ -189,9 +188,6 @@
 		"@types/react-dom": "$@types/react-dom",
 		"usehooks-ts": {
 			"react": "^19"
-		},
-		"@vercel/analytics": {
-			"next": "$next"
 		},
 		"next-auth": {
 			"next": "$next"

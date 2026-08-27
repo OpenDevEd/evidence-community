@@ -16,7 +16,7 @@ https://fixture, https://collector.localhost:{$FIXTURE_PORT}, https://localhost:
 	}
 
 	@analytics {
-		path /e/* /i/* /batch* /decide/*
+		path /e/* /i/* /s/* /batch* /decide/*
 	}
 	handle @analytics {
 		header {
@@ -26,6 +26,48 @@ https://fixture, https://collector.localhost:{$FIXTURE_PORT}, https://localhost:
 			Content-Type "application/json"
 		}
 		respond "{\"status\":1}" 200
+	}
+
+	@posthogFlags {
+		path /flags/*
+	}
+	handle @posthogFlags {
+		header {
+			Access-Control-Allow-Headers "*"
+			Access-Control-Allow-Methods "GET, POST, OPTIONS"
+			Access-Control-Allow-Origin "*"
+			Content-Type "application/json"
+		}
+		respond `{
+			"errorsWhileComputingFlags": false,
+			"featureFlagPayloads": {},
+			"featureFlags": {},
+			"flags": {},
+			"requestId": "runtime-acceptance"
+		}` 200
+	}
+
+	@posthogConfig {
+		path /array/*/config
+	}
+	handle @posthogConfig {
+		header Access-Control-Allow-Origin "*"
+		header Content-Type "application/json"
+		respond `{
+			"autocapture_opt_out": false,
+			"captureDeadClicks": true,
+			"capturePerformance": {
+				"web_vitals": true
+			},
+			"hasFeatureFlags": false,
+			"heatmaps": true,
+			"isAuthenticated": false,
+			"sessionRecording": {},
+			"siteApps": [],
+			"supportedCompression": [],
+			"toolbarParams": {},
+			"toolbarVersion": "toolbar"
+		}` 200
 	}
 
 	respond "not found" 404

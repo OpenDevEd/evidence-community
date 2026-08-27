@@ -5,8 +5,7 @@ import { PostHog } from "posthog-node";
 import type { LibraryServerConfig } from "@/config/library-config/schema";
 import { RevisionAwareResourceFactory } from "./revision-aware-resource";
 
-export type PostHogConfiguration =
-	LibraryServerConfig["analytics"]["posthog"];
+export type PostHogConfiguration = LibraryServerConfig["analytics"]["posthog"];
 export type PostHogClient = Pick<PostHog, "capture" | "shutdown">;
 export type PostHogClientFactory = (
 	key: string,
@@ -43,8 +42,8 @@ export class RevisionAwarePostHogFactory {
 
 				const client = clientFactory(configuration.key, {
 					host: configuration.host,
-					flushAt: 1,
-					flushInterval: 0,
+					flushAt: 20,
+					flushInterval: 10_000,
 				});
 				return {
 					value: client,

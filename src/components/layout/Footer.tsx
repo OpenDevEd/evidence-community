@@ -1,26 +1,19 @@
 "use client";
 
 import { useState } from "react";
-import { ModalBody, ModalContent, ModalFooter } from "@nextui-org/react";
 import { useTranslations } from "next-intl";
 import { usePathname } from "next/navigation";
-import {
-	FaGithub,
-	FaLinkedin,
-	FaTwitter,
-	FaYoutube,
-} from "react-icons/fa";
+import { FaGithub, FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
 import { RiBlueskyFill } from "react-icons/ri";
 import type { IconType } from "react-icons";
 
-import GenericHeader from "@/components/features/modals/GenericHeader";
+import { AnalyticsConsentDialogContent } from "@/components/features/analytics/AnalyticsConsentDialogContent";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import {
 	FundingPartners,
 	LibraryLogoImages,
 } from "@/components/library/LibraryIdentity";
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";
-import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import {
@@ -47,10 +40,10 @@ const SOCIAL_ICONS = {
 
 const SOCIAL_COLORS = {
 	github: "bg-black dark:bg-white text-white dark:text-black",
-	twitter: "bg-[rgb(29,161,242)] text-white",
-	linkedin: "bg-[rgb(0,119,181)] text-white",
-	youtube: "bg-[rgb(205,32,31)] text-white",
-	bluesky: "bg-[rgb(0,121,212)] text-white",
+	twitter: "bg-sky-500 text-white",
+	linkedin: "bg-sky-700 text-white",
+	youtube: "bg-red-600 text-white",
+	bluesky: "bg-sky-600 text-white",
 } satisfies Record<SocialProvider, string>;
 
 function FooterColumn({
@@ -90,7 +83,7 @@ function Logo() {
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className="flex h-[3.375rem] w-[14.5rem] items-center justify-center rounded-lg"
+			className="flex h-14 w-58 items-center justify-center rounded-lg"
 		>
 			<LibraryLogoImages
 				className="h-auto max-h-full w-auto max-w-full"
@@ -104,13 +97,15 @@ export default function Footer() {
 	const t = useTranslations("footer");
 	const tUI = useTranslations("ui");
 	const { contact, footer, legal } = useLibraryConfig();
-	const { openPreferences, setConsentState } = useAnalyticsConsent();
+	const { openPreferences } = useAnalyticsConsent();
 	const pathname = usePathname();
 	const router = useRouter();
 	const isMapPage = pathname.includes("/map");
 	const onPolicyPage = isPolicyPage(pathname);
 	const [policyDialogOpen, setPolicyDialogOpen] = useState(false);
-	const hasContact = Boolean(contact.email || contact.phone || contact.address);
+	const hasContact = Boolean(
+		contact.email || contact.phone || contact.address,
+	);
 
 	if (isMapPage) return null;
 
@@ -127,7 +122,9 @@ export default function Footer() {
 						<dl className="flex flex-col gap-3 text-center text-black/60 dark:text-white/60 sm:text-left">
 							{contact.email && (
 								<div>
-									<dt className="font-medium">{t("email")}</dt>
+									<dt className="font-medium">
+										{t("email")}
+									</dt>
 									<dd>
 										<a
 											className="break-all font-bold hover:text-accent"
@@ -140,7 +137,9 @@ export default function Footer() {
 							)}
 							{contact.phone && (
 								<div>
-									<dt className="font-medium">{t("phone")}</dt>
+									<dt className="font-medium">
+										{t("phone")}
+									</dt>
 									<dd>
 										<a
 											className="font-bold hover:text-accent"
@@ -153,7 +152,9 @@ export default function Footer() {
 							)}
 							{contact.address && (
 								<div>
-									<dt className="font-medium">{t("address")}</dt>
+									<dt className="font-medium">
+										{t("address")}
+									</dt>
 									<dd className="whitespace-pre-line font-bold">
 										{contact.address}
 									</dd>
@@ -242,7 +243,10 @@ export default function Footer() {
 											aria-label={social.provider}
 											className={`flex size-11 items-center justify-center rounded-full ${SOCIAL_COLORS[social.provider]}`}
 										>
-											<Icon aria-hidden className="size-5" />
+											<Icon
+												aria-hidden
+												className="size-5"
+											/>
 										</Link>
 									</li>
 								);
@@ -270,7 +274,9 @@ export default function Footer() {
 									/>
 								)}
 								{!funder.logoUrl && (
-									<span className="font-medium">{funder.name}</span>
+									<span className="font-medium">
+										{funder.name}
+									</span>
 								)}
 							</span>
 						);
@@ -294,10 +300,14 @@ export default function Footer() {
 			{(footer.disclaimer || footer.attribution || footer.poweredBy) && (
 				<div className="flex w-full max-w-4xl flex-col gap-4 text-center text-sm text-black/60 dark:text-white/60">
 					{footer.disclaimer && (
-						<p className="whitespace-pre-line">{footer.disclaimer}</p>
+						<p className="whitespace-pre-line">
+							{footer.disclaimer}
+						</p>
 					)}
 					{footer.attribution && (
-						<p className="whitespace-pre-line">{footer.attribution}</p>
+						<p className="whitespace-pre-line">
+							{footer.attribution}
+						</p>
 					)}
 					{footer.poweredBy && (
 						<p data-library-powered-by="">
@@ -318,51 +328,20 @@ export default function Footer() {
 				<DialogModal
 					scrollBehavior="inside"
 					isDismissable
-					size="xl"
+					size="lg"
 					isOpen={policyDialogOpen}
 					onClose={() => setPolicyDialogOpen(false)}
-					backdrop="blur"
+					backdrop="opaque"
 					classNames={{
-						base: "backdrop-blur-xl bg-background_light/60 dark:bg-card/60 border border-divider",
+						base: "max-h-dvh border border-divider bg-background_light dark:bg-card",
 					}}
 				>
-					<ModalContent className="p-6 pb-4">
-						<div className="flex justify-center p-4">
-							<Logo />
-						</div>
-						<GenericHeader classNames={{ base: "justify-center" }}>
-							{tUI("cookieConsentTitle")}
-						</GenericHeader>
-						<ModalBody>
-							<p className="mx-auto mb-6 max-w-md text-center text-default-500">
-								{tUI("cookieConsentMessage")}
-							</p>
-						</ModalBody>
-						<ModalFooter className="flex-row flex-wrap items-center justify-center gap-3 pt-2">
-							<Button
-								color="tertiary"
-								onPress={() => {
-									setPolicyDialogOpen(false);
-									setConsentState("granted");
-									router.push("/");
-								}}
-								className="px-6 font-medium"
-							>
-								{tUI("cookieAccept")}
-							</Button>
-							<Button
-								color="tertiary"
-								onPress={() => {
-									setPolicyDialogOpen(false);
-									setConsentState("denied");
-									router.push("/");
-								}}
-								className="px-6 font-medium"
-							>
-								{tUI("cookieDecline")}
-							</Button>
-						</ModalFooter>
-					</ModalContent>
+					<AnalyticsConsentDialogContent
+						onComplete={() => {
+							setPolicyDialogOpen(false);
+							router.push("/");
+						}}
+					/>
 				</DialogModal>
 			)}
 

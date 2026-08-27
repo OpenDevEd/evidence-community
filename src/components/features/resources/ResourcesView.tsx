@@ -1,5 +1,5 @@
 "use client";
-import { ReactNode, use, useContext, useRef, useState } from "react";
+import { ReactNode, use, useContext, useEffect, useRef, useState } from "react";
 import { useFormatter, useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 import { AnimatePresence, motion } from "framer-motion";
@@ -14,10 +14,7 @@ import { HiOutlineDownload, HiOutlinePrinter } from "react-icons/hi";
 import { ITEMS_PER_PAGE } from "@/constants/items";
 import Resource from "../items/Resource";
 import { HiOutlineCodeBracketSquare } from "react-icons/hi2";
-import {
-	CacheContext,
-	CacheContextType,
-} from "@/context/Providers";
+import { CacheContext, CacheContextType } from "@/context/Providers";
 import {
 	useLibraryConfig,
 	useLibraryFeature,
@@ -43,6 +40,7 @@ import {
 	getEnabledCitationFormats,
 	getLibraryExportPath,
 } from "@/config/library-config/exports";
+import { trackLibraryResultsLoaded } from "@/lib/analytics";
 
 function Chip({
 	group,
@@ -74,7 +72,7 @@ function Chip({
 			variant="solid"
 			className={twMerge(
 				"shrink-0 p-1 h-auto ltr:pr-2 rtl:pl-2",
-				classNames.button
+				classNames.button,
 			)}
 			onPress={() => {
 				if (canClick.current) {
@@ -88,7 +86,7 @@ function Chip({
 				<span
 					className={twMerge(
 						"text-white dark:text-white/40 font-medium text-xs leading-3 dark:bg-black/50 bg-black/50 p-1 px-2 rounded-md",
-						classNames.group
+						classNames.group,
 					)}
 				>
 					{group}
@@ -121,9 +119,9 @@ function yearChipTitle(range: string): string {
 	return range;
 }
 
-function useFilterChips(
+function getFilterChipState(
 	queryParams: Record<string, any>,
-	handleClearFilters?: () => void
+	handleClearFilters?: () => void,
 ) {
 	const filtersCount =
 		(queryParams.collections?.length || 0) +
@@ -132,7 +130,7 @@ function useFilterChips(
 		(queryParams.range ? 1 : 0) +
 		countryFacetOptions.reduce(
 			(acc, facet) => acc + (queryParams[facet.queryParam]?.length || 0),
-			0
+			0,
 		);
 	const clearButton = () => {
 		handleClearFilters?.();
@@ -149,9 +147,9 @@ export function FilterChips() {
 	// library chips are the exact same resident instance (no remount flash).
 	const itemsContext = useFiltersContext();
 	const t = useTranslations("ui");
-	const { filtersCount, clearButton } = useFilterChips(
+	const { filtersCount, clearButton } = getFilterChipState(
 		itemsContext.queryParams,
-		itemsContext.handleClearFilters
+		itemsContext.handleClearFilters,
 	);
 
 	return (
@@ -176,10 +174,12 @@ export function FilterChips() {
 						>
 							<Chip
 								key={"year-" + itemsContext.queryParams.range}
-								divKey={"year-" + itemsContext.queryParams.range}
+								divKey={
+									"year-" + itemsContext.queryParams.range
+								}
 								group={t("year")}
 								title={yearChipTitle(
-									itemsContext.queryParams.range
+									itemsContext.queryParams.range,
 								)}
 								callback={() =>
 									itemsContext.handleRangeChange?.(null, null)
@@ -230,7 +230,7 @@ export function FilterChips() {
 										}
 										callback={() =>
 											(itemsContext as any)[facet.action](
-												value
+												value,
 											)
 										}
 										classNames={{
@@ -259,7 +259,7 @@ export function FilterChips() {
 										divKey={"institution-" + institution}
 										callback={() =>
 											itemsContext.handleInstitutionSelect?.(
-												institution
+												institution,
 											)
 										}
 										classNames={{
@@ -268,14 +268,14 @@ export function FilterChips() {
 										}}
 									/>
 								</motion.div>
-							)
+							),
 						)}
 					{itemsContext.collectionsData &&
 						itemsContext.selectedCollections?.map(
 							(collection: string) => {
 								const collectionData =
 									itemsContext.collectionsData?.collections.find(
-										(c) => c.key === collection
+										(c) => c.key === collection,
 									);
 								return (
 									<motion.div
@@ -298,15 +298,15 @@ export function FilterChips() {
 											divKey={collection}
 											callback={() =>
 												itemsContext.handleCheckboxChange?.(
-													collection
+													collection,
 												)
 											}
 										/>
 									</motion.div>
 								);
-							}
+							},
 						)}
-									{itemsContext.queryParams?.author && (
+					{itemsContext.queryParams?.author && (
 						<motion.div
 							key={"author-" + itemsContext.queryParams.author}
 							initial={{ opacity: 0, y: 10 }}
@@ -325,7 +325,7 @@ export function FilterChips() {
 								title={itemsContext.queryParams.author}
 								callback={() =>
 									itemsContext.handleAuthorSelect?.(
-										itemsContext.queryParams.author
+										itemsContext.queryParams.author,
 									)
 								}
 								classNames={{
@@ -335,7 +335,7 @@ export function FilterChips() {
 							/>
 						</motion.div>
 					)}
-</AnimatePresence>
+				</AnimatePresence>
 			</div>
 			<AnimatePresence initial={false}>
 				{filtersCount > 0 && (
@@ -392,7 +392,7 @@ function ResourcesList({
 					"gap-6 -mt-4",
 					view === "list" || actuallyNoData
 						? "flex flex-col"
-						: "grid grid-cols-2"
+						: "grid grid-cols-2",
 				)}
 			>
 				{actuallyNoData ? (
@@ -419,7 +419,7 @@ function ResourcesList({
 										itemsContext.queryParams.collectionId
 									}
 								/>
-							)
+							),
 					)
 				)}
 			</ul>
@@ -471,9 +471,7 @@ function ContentActions() {
 			{isAtomFeedEnabled && exports.atom && (
 				<Button
 					onPress={() => {
-						window.location.assign(
-							getLibraryExportPath("atom"),
-						);
+						window.location.assign(getLibraryExportPath("atom"));
 					}}
 					endContent={
 						<HiOutlineCodeBracketSquare className="size-6" />
@@ -553,7 +551,7 @@ export function removeTrailingEmptyElements(html: string): string {
 		const hasNonWhitespaceDirectText = Array.from(el.childNodes).some(
 			(n) =>
 				n.nodeType === Node.TEXT_NODE &&
-				(n.textContent?.trim() ?? "") !== ""
+				(n.textContent?.trim() ?? "") !== "",
 		);
 		const hasElementChildren = el.children.length > 0;
 		return !hasNonWhitespaceDirectText && !hasElementChildren;
@@ -609,10 +607,9 @@ export function NoteView() {
 	const itemsContext = useFiltersContext();
 	const selectedCollection = itemsContext.selectedCollections[0];
 	const collectionData = itemsContext.collectionsData?.collections.find(
-		(c) => c.key === selectedCollection
+		(c) => c.key === selectedCollection,
 	);
-	const isCollectionNoteEnabled =
-		useLibraryFeature("collectionNotes");
+	const isCollectionNoteEnabled = useLibraryFeature("collectionNotes");
 
 	return (
 		isCollectionNoteEnabled && (
@@ -648,7 +645,7 @@ export function NoteView() {
 										dangerouslySetInnerHTML={{
 											__html: removeTrailingEmptyElements(
 												itemsContext.noteData?.note
-													.note ?? ""
+													.note ?? "",
 											),
 										}}
 									/>
@@ -678,6 +675,56 @@ export function ResourcesView({
 	const [abstract, setAbstract] = useState(true);
 	const [view, setView] = useState("list");
 	const { status } = useContext(CacheContext) as CacheContextType;
+	const itemsContext = use(ItemsContext);
+	const lastTrackedResults = useRef<string | null>(null);
+
+	useEffect(() => {
+		if (
+			!itemsContext.itemsData ||
+			itemsContext.isItemsLoading ||
+			itemsContext.isItemsFetching
+		) {
+			return;
+		}
+
+		const query = itemsContext.queryParams;
+		const { filtersCount } = getFilterChipState(query);
+		const categoricalFilters = {
+			author_country: query.author_country,
+			collection: query.collections,
+			country: query.country,
+			institution: query.institution,
+			year_range: query.range,
+		};
+		const signature = JSON.stringify({
+			categoricalFilters,
+			page: query.page,
+			search: Boolean(query.search?.trim()),
+			scope: query.scope,
+			sort: query.sort,
+			total: itemsContext.itemsData.totalItems,
+			items: itemsContext.itemsData.items.length,
+			filtersCount,
+		});
+		if (lastTrackedResults.current === signature) return;
+		lastTrackedResults.current = signature;
+
+		trackLibraryResultsLoaded({
+			hasSearch: Boolean(query.search?.trim()),
+			filterCount: filtersCount,
+			page: query.page,
+			pageResultCount: itemsContext.itemsData.items.length,
+			totalResultCount: itemsContext.itemsData.totalItems,
+			scope: query.scope,
+			sort: query.sort,
+			categoricalFilters,
+		});
+	}, [
+		itemsContext.isItemsFetching,
+		itemsContext.isItemsLoading,
+		itemsContext.itemsData,
+		itemsContext.queryParams,
+	]);
 
 	const { bucketEntries, engaged } = useInlineChatLayout();
 	const { selectedModelId } = useSelectedModel();

@@ -35,7 +35,6 @@ import { SessionProvider } from "next-auth/react";
 import { InlineChatLayoutProvider } from "@/context/InlineChatLayout";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
-
 type RuntimeStatus = InferSelectModel<typeof statusTable>;
 export type CacheContextType = {
 	status: RuntimeStatus;
@@ -68,9 +67,9 @@ function PageView() {
 
 	useEffect(() => {
 		if (
-			consentState !== "granted" ||
-			!analyticsReady ||
-			!pathname
+			!pathname ||
+			consentState === "pending" ||
+			(consentState === "granted" && !analyticsReady)
 		) {
 			return;
 		}
@@ -117,7 +116,7 @@ function CacheProvider({
 	const [lastFetchedData, setLastFetchedData] =
 		useLocalStorage<ItemsGetResponse | null>(
 			"lastFetchedData",
-			{} as ItemsGetResponse
+			{} as ItemsGetResponse,
 		);
 
 	return (
@@ -146,7 +145,7 @@ export function useLastFetchedData() {
 	const [lastFetchedData, setLastFetchedData] =
 		useLocalStorage<ItemsGetResponse | null>(
 			"lastFetchedData",
-			{} as ItemsGetResponse
+			{} as ItemsGetResponse,
 		);
 
 	const setLastFetchedDataAsResponse = useCallback(
@@ -165,7 +164,7 @@ export function useLastFetchedData() {
 				} as ItemsGetResponse;
 			});
 		},
-		[setLastFetchedData]
+		[setLastFetchedData],
 	);
 
 	return {
@@ -174,11 +173,7 @@ export function useLastFetchedData() {
 	};
 }
 
-function ToastAdapter({
-	children,
-}: {
-	children: ReactNode;
-}) {
+function ToastAdapter({ children }: { children: ReactNode }) {
 	return (
 		<>
 			{children}
@@ -187,11 +182,7 @@ function ToastAdapter({
 	);
 }
 
-function PramNotificationProvider({
-	children,
-}: {
-	children: ReactNode;
-}) {
+function PramNotificationProvider({ children }: { children: ReactNode }) {
 	const [error, setError] = useQueryState("error");
 	const [message, setMessage] = useQueryState("message");
 	const t = useTranslations("ui");
@@ -242,9 +233,7 @@ export default function Providers({
 					<SessionProvider
 						session={isLoginEnabled ? undefined : null}
 						refetchOnWindowFocus={isLoginEnabled}
-						refetchWhenOffline={
-							isLoginEnabled ? undefined : false
-						}
+						refetchWhenOffline={isLoginEnabled ? undefined : false}
 					>
 						<AnalyticsConsentProvider>
 							<CacheProvider status={status} gapmaps={gapmaps}>

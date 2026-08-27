@@ -1,15 +1,9 @@
 "use client";
 
-import {
-	LuDownload
-} from "react-icons/lu";
+import { LuDownload } from "react-icons/lu";
 import { useTranslations } from "next-intl";
 import { PropsWithChildren, useState } from "react";
-import {
-	ModalContent,
-	PropsOf,
-	useDisclosure
-} from "@nextui-org/react";
+import { ModalContent, PropsOf, useDisclosure } from "@nextui-org/react";
 import GenericHeader from "../modals/GenericHeader";
 import { ListModalBody } from "@/components/nextui/ListModalBody";
 import DialogModal from "@/components/nextui/DialogModal";
@@ -25,6 +19,7 @@ import {
 	useLibraryConfig,
 	useLibraryFeature,
 } from "@/context/LibraryConfigProvider";
+import { trackContentAction } from "@/lib/analytics";
 
 async function defaultAction(
 	itemData: Item,
@@ -47,7 +42,8 @@ export function DownloadButton({
 	const isDownloadEnabled = useLibraryFeature("downloads");
 
 	const wrappedDefaultAction = (format: BibliographicExportFormat) => {
-		if (!itemData) throw new Error("Item data is required for default action");
+		if (!itemData)
+			throw new Error("Item data is required for default action");
 		return defaultAction(itemData, format);
 	};
 
@@ -118,6 +114,11 @@ export function DownloadModal({
 								document.body.appendChild(anchor);
 								anchor.click();
 								anchor.remove();
+								trackContentAction({
+									action: "download",
+									context: "library_records",
+									format,
+								});
 								return;
 							}
 
@@ -142,6 +143,11 @@ export function DownloadModal({
 							anchor.click();
 							anchor.remove();
 							URL.revokeObjectURL(url);
+							trackContentAction({
+								action: "download",
+								context: "library_records",
+								format,
+							});
 						} catch (error) {
 							console.error(error);
 						} finally {

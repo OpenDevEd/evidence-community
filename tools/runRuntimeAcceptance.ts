@@ -1137,6 +1137,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_SWITCH_BACK_LOCALE_LABEL: switchLocale
 			? localesNames[config.localization.defaultLocale]
 			: "",
+		PLAYWRIGHT_EXPECTED_CONSENT_ACCEPT: messages.ui.cookieAccept,
 		PLAYWRIGHT_EXPECTED_CONSENT_DECLINE: messages.ui.cookieDecline,
 		PLAYWRIGHT_EXPECTED_SEARCH_SCOPE_COUNT: String(scopes.length),
 		PLAYWRIGHT_EXPECTED_DEFAULT_SEARCH_SCOPE_LABEL:

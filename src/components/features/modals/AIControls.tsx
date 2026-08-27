@@ -12,6 +12,7 @@ import {
 } from "react-icons/bs";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
+import { trackContentAction } from "@/lib/analytics";
 
 export type ControlAction = "markdown" | "html" | "plaintext" | "csv";
 type ControlType = "copy" | "download";
@@ -70,6 +71,12 @@ function AIControls({
 			document.body.removeChild(a);
 			URL.revokeObjectURL(url);
 		}
+
+		trackContentAction({
+			action: type,
+			context: "generated_content",
+			format: action,
+		});
 	};
 
 	return (

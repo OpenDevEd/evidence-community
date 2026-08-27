@@ -57,6 +57,7 @@ machine or differs from GitHub. It is not the normal local development loop.
 
 - [Runtime customization map](docs/evidence-library-customization-map.md)
 - [Deployment and operations](docs/evidence-library-operations.md)
+- [Analytics and consent](docs/analytics.md)
 - [Configuration example](config/library.example.json)
 - [Machine-readable JSON Schema](public/library-config.schema.json)
 - [Machine-readable option catalogs](public/library-config.catalogs.json)

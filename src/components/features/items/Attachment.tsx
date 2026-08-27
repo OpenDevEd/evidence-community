@@ -8,20 +8,12 @@ import Image from "next/image";
 import { LuDownload } from "react-icons/lu";
 import { Button } from "@/components/nextui/Button";
 import { FaEye } from "react-icons/fa";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { Card } from "@/components/nextui/Card";
 import useSWR from "swr";
 import { fetcherExternal } from "@/lib/utils";
-import {
-	getAnalyticsDistinctId,
-	PdfEventParams,
-	trackPDFDownload,
-	trackPDFView,
-} from "@/lib/analytics";
+import { trackAttachmentInteraction } from "@/lib/analytics";
 import { useSession } from "next-auth/react";
-import { Session } from "next-auth";
-import { useUtm } from "@/hooks/useUtm";
-import { StoredUtm } from "../UtmProvider";
 
 function downloadLink(url: string, filename: string) {
 	fetch(url)
@@ -43,56 +35,40 @@ function getAttachmentFromOpenAlex(work: any) {
 	];
 
 	const pdfUrl = potentialLocations.find(
-		(location) => location?.pdf_url && location.is_oa
+		(location) => location?.pdf_url && location.is_oa,
 	)?.pdf_url;
 
 	return pdfUrl;
 }
 
-function getPayload(
-	data: Item,
-	item: Item,
-	session: Session | null,
-	method: PdfEventParams["method"],
-	link_text: string,
-	utm: StoredUtm | null
-): PdfEventParams {
-	const posthog_distinct_id = getAnalyticsDistinctId() ?? undefined;
-
-	return {
-		file_id: data.key,
-		filename: data.filename || "",
-		file_title: data.title || "",
-		parent_id: item.key,
-		parent_title: item.title || "",
-		parent_type: item.itemType || "",
-		file_mime_type: data.contentType || "",
-		file_md5: data.md5 || "",
-		posthog_distinct_id: posthog_distinct_id,
-		user_id: session?.user.id || "",
-		method: method,
-		link_text: link_text,
-		link_url: data.url || "",
-		...utm?.utm,
-	};
-}
-
 export default function Attachment({ data, item }: { data: Item; item: Item }) {
-	const { data: session, update } = useSession();
-	const utm = useUtm();
+	const { data: session } = useSession();
+	const locale = useLocale();
 
 	const [loaded, setLoaded] = useState(false);
 	const canHover = loaded || !data?.PDFCoverPageImage;
 	const imageRef = useRef<HTMLImageElement>(null);
 	const parentRef = useRef<HTMLLIElement>(null);
 	const [imageHeight, setImageHeight] = useState<number | undefined>(
-		undefined
+		undefined,
 	);
 	const [parentHeight, setParentHeight] = useState<number | undefined>(
-		undefined
+		undefined,
 	);
 	const t = useTranslations("ui");
 	const hasImage = data.PDFCoverPageImage;
+	const trackAttachment = (
+		action: "view" | "download" | "open",
+		source: "internal" | "external",
+	) => {
+		trackAttachmentInteraction({
+			action,
+			source,
+			parentType: item.itemType,
+			locale,
+			isAuthenticated: Boolean(session),
+		});
+	};
 
 	const isExternal =
 		!data.PDFCoverPageImage &&
@@ -100,7 +76,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 
 	const { data: itemFromOpenAlex, isLoading: isLoadingOpenAlex } = useSWR(
 		isExternal ? "https://api.openalex.org/works/" + data.parentItem : null,
-		fetcherExternal
+		fetcherExternal,
 	);
 	const pdfUrl =
 		isExternal && !isLoadingOpenAlex && itemFromOpenAlex
@@ -144,9 +120,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					/>
 				</Skeleton>
 			) : (
-				<div
-					className="rounded-xl bg-accent w-full aspect-[9/12]"
-				/>
+				<div className="aspect-3/4 w-full rounded-xl bg-accent" />
 			)}
 		</>
 	);
@@ -157,6 +131,12 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 				href={isExternal ? pdfUrl : downloadURL}
 				target="_blank"
 				className="dark:text-current text-current text-wrap-anywhere text-lg"
+				onClick={() =>
+					trackAttachment(
+						isExternal ? "open" : "view",
+						isExternal ? "external" : "internal",
+					)
+				}
 			>
 				{isExternal ? itemFromOpenAlex?.title : data.filename}
 			</Link>
@@ -170,16 +150,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					<Button
 						size="sm"
 						onPress={() => {
-							const payload = getPayload(
-								data,
-								item,
-								session,
-								"view",
-								t("viewAttachment"),
-								utm
-							);
-							trackPDFView(payload);
-
+							trackAttachment("view", "internal");
 							window.open(downloadURL, "_blank");
 						}}
 						startContent={<FaEye className="size-5" />}
@@ -191,16 +162,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						color="accent"
 						startContent={<LuDownload className="size-5" />}
 						onPress={() => {
-							const payload = getPayload(
-								data,
-								item,
-								session,
-								"download",
-								t("downloadAttachment"),
-								utm
-							);
-							trackPDFDownload(payload);
-
+							trackAttachment("download", "internal");
 							downloadLink(data.url || "", data.filename || "");
 						}}
 					>
@@ -213,17 +175,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					color="accent"
 					startContent={<LuDownload className="size-5" />}
 					onPress={() => {
-						const payload = getPayload(
-							data,
-							item,
-							session,
-							"open",
-							t("openDocument"),
-							utm
-						);
-						trackPDFView(payload);
-
-						
+						trackAttachment("open", "external");
 						window.open(pdfUrl, "_blank");
 					}}
 				>
@@ -239,7 +191,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 			ref={parentRef}
 			className={twMerge(
 				"flex flex-col gap-4 p-4 rounded-2xl w-full dark:bg-background",
-				hasImage && "md:relative md:overflow-visible"
+				hasImage && "md:relative md:overflow-visible",
 			)}
 			key={data.key}
 			color="card"
@@ -262,9 +214,9 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 						} as any
 					}
 					className={twMerge(
-						"w-full max-w-[200px] mx-auto",
+						"mx-auto w-full max-w-50",
 						"md:w-24 lg:w-48 md:max-w-none md:mx-0 md:bottom-0 md:top-4 md:absolute md:overflow-hidden md:transition-all",
-						canHover && "md:hover:top-[var(--image-height)]"
+						canHover && "md:hover:top-(--image-height)",
 					)}
 				>
 					{attachmentImage}
@@ -276,7 +228,7 @@ export default function Attachment({ data, item }: { data: Item; item: Item }) {
 					hasImage
 						? "md:h-full md:ltr:ml-28 md:rtl:mr-28 lg:ltr:ml-52 lg:rtl:mr-52"
 						: "",
-					shouldShowLoading && "opacity-0"
+					shouldShowLoading && "opacity-0",
 				)}
 			>
 				{attachmentTitle}
