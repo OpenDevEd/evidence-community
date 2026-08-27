@@ -11,11 +11,8 @@ export function AnalyticsConsentPreferencesForm({
 }: {
 	onComplete?: () => void;
 }) {
-	const {
-		consentPreferences,
-		setConsentPreferences,
-		setConsentState,
-	} = useAnalyticsConsent();
+	const { consentPreferences, setConsentPreferences, setConsentState } =
+		useAnalyticsConsent();
 	const [analytics, setAnalytics] = useState(consentPreferences.analytics);
 	const [sessionReplay, setSessionReplay] = useState(
 		consentPreferences.sessionReplay,
@@ -40,12 +37,14 @@ export function AnalyticsConsentPreferencesForm({
 	};
 
 	return (
-		<div className="flex flex-col gap-4">
-			<div className="grid gap-3">
-				<div className="flex items-start justify-between gap-5 rounded-xl border border-divider bg-default-50/60 p-4 dark:bg-default-100/20">
+		<div className="flex flex-col gap-3">
+			<div className="overflow-hidden rounded-2xl bg-default-100/65 p-1 dark:bg-default-100/25">
+				<div className="flex min-h-16 items-center justify-between gap-4 rounded-xl px-3 py-2.5">
 					<div className="min-w-0">
-						<p className="font-medium">{t("cookieAnalyticsLabel")}</p>
-						<p className="mt-1 text-sm text-default-500">
+						<p className="text-sm font-semibold">
+							{t("cookieAnalyticsLabel")}
+						</p>
+						<p className="mt-0.5 text-xs leading-4 text-default-500">
 							{t("cookieAnalyticsDescription")}
 						</p>
 					</div>
@@ -58,10 +57,13 @@ export function AnalyticsConsentPreferencesForm({
 						}}
 					/>
 				</div>
-				<div className="flex items-start justify-between gap-5 rounded-xl border border-divider bg-default-50/60 p-4 dark:bg-default-100/20">
+				<div className="mx-3 h-px bg-divider" />
+				<div className="flex min-h-16 items-center justify-between gap-4 rounded-xl px-3 py-2.5">
 					<div className="min-w-0">
-						<p className="font-medium">{t("cookieReplayLabel")}</p>
-						<p className="mt-1 text-sm text-default-500">
+						<p className="text-sm font-semibold">
+							{t("cookieReplayLabel")}
+						</p>
+						<p className="mt-0.5 text-xs leading-4 text-default-500">
 							{t("cookieReplayDescription")}
 						</p>
 					</div>
@@ -73,13 +75,11 @@ export function AnalyticsConsentPreferencesForm({
 					/>
 				</div>
 			</div>
-			<div className="flex flex-wrap items-center justify-center gap-3 pt-1">
+			<div className="grid grid-cols-2 gap-2">
 				<Button
 					color="tertiary"
-					onPress={() =>
-						finish(() => setConsentState("granted"))
-					}
-					className="px-6 font-medium"
+					onPress={() => finish(() => setConsentState("granted"))}
+					className="col-span-2 h-10 px-4 font-medium"
 				>
 					{t("cookieAccept")}
 				</Button>
@@ -93,14 +93,14 @@ export function AnalyticsConsentPreferencesForm({
 							}),
 						)
 					}
-					className="px-6 font-medium"
+					className="h-10 px-4 font-medium"
 				>
 					{t("cookieSavePreferences")}
 				</Button>
 				<Button
 					color="tertiary"
 					onPress={() => finish(() => setConsentState("denied"))}
-					className="px-6 font-medium"
+					className="h-10 px-4 font-medium"
 				>
 					{t("cookieDecline")}
 				</Button>

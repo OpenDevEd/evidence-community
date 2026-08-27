@@ -18,14 +18,11 @@ import {
 } from "@/lib/utils";
 import { resolveCompanyFooterPolicyLinks, isPolicyPage } from "@/lib/legal-links";
 import DialogModal from "@/components/nextui/DialogModal";
-import GenericHeader from "@/components/features/modals/GenericHeader";
-import { ModalBody, ModalContent } from "@nextui-org/react";
-import { Logo as BannerLogo } from "./navbar";
 import { useRouter } from "@/i18n/routing";
 import type { FooterLinkSection, LinkObject } from "@/db/schema/tables/status";
 import { FaGithub, FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
 import { RiBlueskyFill } from "react-icons/ri";
-import { AnalyticsConsentPreferencesForm } from "@/components/features/analytics/AnalyticsConsentPreferencesForm";
+import { AnalyticsConsentDialogContent } from "@/components/features/analytics/AnalyticsConsentDialogContent";
 
 function groupLinksBySection(
 	links: LinkObject[],
@@ -496,33 +493,20 @@ export default function Footer() {
 					<DialogModal
 						scrollBehavior="inside"
 						isDismissable
-						size="xl"
+						size="lg"
 						isOpen={policyDialogOpen}
 						onClose={() => setPolicyDialogOpen(false)}
 						backdrop="opaque"
 						classNames={{
-							base: "bg-background_light dark:bg-card border border-divider",
+							base: "max-h-[calc(100dvh-2rem)] bg-background_light dark:bg-card border border-divider",
 						}}
 					>
-						<ModalContent className="p-6 pb-4">
-							<div className="flex justify-center p-4">
-								<BannerLogo dbStyle="splash" />
-							</div>
-							<GenericHeader classNames={{ base: "justify-center" }}>
-								{tUI("cookieConsentTitle")}
-							</GenericHeader>
-							<ModalBody>
-								<p className="text-center text-default-500 mx-auto max-w-md mb-6">
-									{tUI("cookieConsentMessage")}
-								</p>
-								<AnalyticsConsentPreferencesForm
-									onComplete={() => {
-									setPolicyDialogOpen(false);
-									router.push("/");
-								}}
-								/>
-							</ModalBody>
-						</ModalContent>
+						<AnalyticsConsentDialogContent
+							onComplete={() => {
+								setPolicyDialogOpen(false);
+								router.push("/");
+							}}
+						/>
 					</DialogModal>
 				)}
 				<div className="absolute bottom-0 left-0 p-2 z-50 text-xs text-black/60 dark:text-white/60">
