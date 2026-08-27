@@ -1483,6 +1483,11 @@ async function openScholarRead<T>(
 	return { body: (await response.json()) as T, response };
 }
 
+type OpenScholarInstitutionPage = {
+	items: { count: number; name: string }[];
+	nextCursor: string | null;
+};
+
 type OpenScholarCollectionPage = {
 	items: {
 		count: number;
@@ -1503,18 +1508,57 @@ async function verifyOpenScholarReadApi(profile: Profile) {
 	);
 	assert.equal(denied.response.status, 401);
 
-	const institutions = await openScholarRead<{
-		items: { count: number; name: string }[];
-	}>(profile, "/api/openscholar/institutions");
+	const institutions = await openScholarRead<OpenScholarInstitutionPage>(
+		profile,
+		"/api/openscholar/institutions",
+	);
 	assert.equal(institutions.response.status, 200);
 	assert.equal(
 		institutions.response.headers.get("cache-control"),
 		"private, no-store",
 	);
-	assert.deepEqual(institutions.body.items, [
+	assert.deepEqual(institutions.body, {
+		items: [
+			{ count: 1, name: "Amber Institute" },
+			{ count: 1, name: "Indigo College" },
+		],
+		nextCursor: null,
+	});
+
+	// Both institutions have the same count, so paging one row at a time also
+	// proves the cursor breaks the tie by name.
+	const firstInstitution = await openScholarRead<OpenScholarInstitutionPage>(
+		profile,
+		"/api/openscholar/institutions?pageSize=1",
+	);
+	assert.deepEqual(firstInstitution.body.items, [
 		{ count: 1, name: "Amber Institute" },
-		{ count: 1, name: "Indigo College" },
 	]);
+	assert.ok(firstInstitution.body.nextCursor, "a second page must exist");
+	const secondInstitution = await openScholarRead<OpenScholarInstitutionPage>(
+		profile,
+		`/api/openscholar/institutions?pageSize=1&cursor=${encodeURIComponent(firstInstitution.body.nextCursor!)}`,
+	);
+	assert.deepEqual(secondInstitution.body, {
+		items: [{ count: 1, name: "Indigo College" }],
+		nextCursor: null,
+	});
+
+	const searchedInstitutions = await openScholarRead<OpenScholarInstitutionPage>(
+		profile,
+		"/api/openscholar/institutions?query=INDIGO",
+	);
+	assert.deepEqual(searchedInstitutions.body, {
+		items: [{ count: 1, name: "Indigo College" }],
+		nextCursor: null,
+	});
+
+	const staleCursor = await openScholarRead<{ error: { code: string } }>(
+		profile,
+		"/api/openscholar/institutions?cursor=not-a-cursor",
+	);
+	assert.equal(staleCursor.response.status, 400);
+	assert.equal(staleCursor.body.error.code, "validation_failed");
 
 	const firstPage = await openScholarRead<OpenScholarCollectionPage>(
 		profile,

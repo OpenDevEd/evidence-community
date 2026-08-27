@@ -15,7 +15,7 @@ or `NEXT_PUBLIC_*` variables.
 | Public projection | `src/config/library-config/public.ts` | `LibraryConfigProvider` |
 | Example document | `config/library.example.json` | Operators and tests |
 | Health check | `/api/library-config/health` | Deployment health checks |
-| OpenScholar read API | `/api/openscholar/collections`, `/api/openscholar/institutions` | OpenScholar configuration pickers; bearer token is `authentication.openScholar.machineCredential` |
+| OpenScholar read API | `/api/openscholar/collections`, `/api/openscholar/institutions` | OpenScholar configuration pickers; bearer token is `authentication.openScholar.machineCredential`; both answer one page at a time (see below) |
 
 `LIBRARY_CONFIG_PATH` selects the document. It is deployment plumbing, not a
 library customization value. In production the path is required. The same
@@ -56,6 +56,24 @@ and selectable values. The catalog adds rich option metadata, extensible-choice
 markers, and write-only paths. Custom refinements and cross-field dependencies
 remain authoritative in `src/config/library-config/schema.ts`; external tools
 must run `npm run config:validate -- <path>` before activation.
+
+## OpenScholar read API
+
+Both routes need `Authorization: Bearer <authentication.openScholar.machineCredential>`
+and answer one page at a time. A request without parameters returns the first
+page.
+
+| Route | Parameters | Answer |
+| --- | --- | --- |
+| `GET /api/openscholar/collections` | `query`, `cursor`, `pageSize` (1 to 100, default 50) | `{ "items": [{ "count", "id", "parentId", "source", "title" }], "nextCursor" }` |
+| `GET /api/openscholar/institutions` | `query`, `cursor`, `pageSize` (1 to 200, default 50, a larger number is reduced to 200), `sort` = `count` or `name` | `{ "items": [{ "count", "name" }], "nextCursor" }` |
+
+`query` matches anywhere in the name and ignores case. Institutions are
+ordered by record count, highest first, then by name; `sort=name` orders by
+name alone. `nextCursor` is `null` on the last page. Send it back unchanged to
+read the next page: it is opaque, and it only works with the same search and
+sort. A cursor that cannot be read, or that belongs to a different search,
+returns 400.
 
 ## Runtime assets
 
