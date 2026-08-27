@@ -105,6 +105,10 @@ describe("library configuration fixtures", () => {
 			},
 		]);
 		expect(config.ai.providers[0].enabled).toBe(true);
+		expect(config.analytics.consentPolicyVersion).toBe(1);
+		expect(config.analytics.posthog.uiHost).toBe(
+			"https://analytics-ui.example.org",
+		);
 		expect(config.processing.sharedRules).toHaveLength(1);
 	});
 
