@@ -72,7 +72,7 @@ function publication(
 			crossref: provider("crossref"),
 			zenodo: provider("zenodo"),
 		},
-	} as AdminPublicationView;
+	} as unknown as AdminPublicationView;
 }
 
 type Hook = ReturnType<typeof useAdminPublication>;

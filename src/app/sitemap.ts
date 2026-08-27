@@ -11,7 +11,10 @@ import {
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL } from "@/lib/utils";
 import { SITEMAP_SIZE } from "@/constants/misc";
-import { getPolicyLastModified } from "@/lib/policy-documents";
+import {
+	loadPolicyDocument,
+	type PolicyDocumentKind,
+} from "@/lib/policy-documents";
 import { getEnabledGapMaps } from "@/config/library-config/gap-maps";
 
 // Sitemap shards render per request so both shard enumeration and document
@@ -76,45 +79,37 @@ export default async function sitemap(props: {
 	let policyEntries: MetadataRoute.Sitemap = [];
 	let gapmapEntries: MetadataRoute.Sitemap = [];
 	if (identifier === 0) {
+		const policyPages: [PolicyDocumentKind, string][] = [
+			["privacy", "/privacy"],
+			["cookiePolicy", "/cookie-policy"],
+			["terms", "/terms"],
+		];
 		try {
-			const [privacyLastModified, cookiePolicyLastModified] = await Promise.all([
-				getPolicyLastModified("privacy"),
-				getPolicyLastModified("cookiePolicy"),
-			]);
-			policyEntries = [
-				{
-					url: buildLocalizedSiteUrl(
-							"/privacy",
+			const documents = await Promise.all(
+				policyPages.map(([kind]) => loadPolicyDocument(libraryConfig, kind)),
+			);
+			policyEntries = policyPages.flatMap(([, pathname], index) => {
+				const document = documents[index];
+				if (!document) return [];
+				return [
+					{
+						url: buildLocalizedSiteUrl(
+							pathname,
 							localization.defaultLocale,
 							localization,
 							baseUrl,
-					),
-					lastModified: privacyLastModified,
-					alternates: {
-						languages: buildLanguageAlternates(
-								"/privacy",
+						),
+						lastModified: document.lastUpdated,
+						alternates: {
+							languages: buildLanguageAlternates(
+								pathname,
 								localization,
 								baseUrl,
-						),
+							),
+						},
 					},
-				},
-				{
-					url: buildLocalizedSiteUrl(
-							"/cookie-policy",
-							localization.defaultLocale,
-							localization,
-							baseUrl,
-					),
-					lastModified: cookiePolicyLastModified,
-					alternates: {
-						languages: buildLanguageAlternates(
-								"/cookie-policy",
-								localization,
-								baseUrl,
-						),
-					},
-				},
-			];
+				];
+			});
 		} catch {
 			// Policy docs may not exist in all environments; skip gracefully.
 		}

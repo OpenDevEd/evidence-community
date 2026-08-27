@@ -1,4 +1,6 @@
-import { createHash } from "node:crypto";
+// fallow-ignore-file unused-file
+// Docker Compose starts this fixture directly; it is not imported by TypeScript.
+import { createHash, randomBytes } from "node:crypto";
 import { createServer } from "node:http";
 
 const port = Number(process.env.PORT ?? 4000);
@@ -6,6 +8,26 @@ const storageBytes = Buffer.from(
 	"Evidence Library publication acceptance PDF\n",
 );
 const depositions = new Map();
+const adminLoginCodes = new Map();
+function requiredEnvironment(name) {
+	const value = process.env[name];
+	if (!value) throw new Error(`${name} is required`);
+	return value;
+}
+const openScholarLibraries = new Map([
+	[
+		requiredEnvironment("OPENSCHOLAR_AMBER_MACHINE_CREDENTIAL"),
+		requiredEnvironment("OPENSCHOLAR_AMBER_LIBRARY_ID"),
+	],
+	[
+		requiredEnvironment("OPENSCHOLAR_INDIGO_MACHINE_CREDENTIAL"),
+		requiredEnvironment("OPENSCHOLAR_INDIGO_LIBRARY_ID"),
+	],
+]);
+const openScholarLibraryIds = new Set(openScholarLibraries.values());
+const defaultOpenScholarLibraryId = requiredEnvironment(
+	"OPENSCHOLAR_AMBER_LIBRARY_ID",
+);
 let nextDepositionId = 7001;
 let crossrefXml = null;
 let crossrefDeposits = 0;
@@ -64,6 +86,23 @@ function publishedRecord(deposition) {
 	};
 }
 
+function draftFile(deposition, filename) {
+	const bytes = deposition.files.get(filename) ?? Buffer.alloc(0);
+	const encodedFilename = encodeURIComponent(filename);
+	return {
+		key: filename,
+		status: deposition.pendingFiles.has(filename) ? "pending" : "completed",
+		file_id: `file-${encodedFilename}`,
+		checksum: `md5:${createHash("md5").update(bytes).digest("hex")}`,
+		size: bytes.byteLength,
+		links: {
+			self: `https://sandbox.zenodo.org/api/records/${deposition.id}/draft/files/${encodedFilename}`,
+			content: `https://sandbox.zenodo.org/api/records/${deposition.id}/draft/files/${encodedFilename}/content`,
+			commit: `https://sandbox.zenodo.org/api/records/${deposition.id}/draft/files/${encodedFilename}/commit`,
+		},
+	};
+}
+
 function unixrefFromDeposit() {
 	const report = crossrefXml?.match(
 		/<report-paper\b[\s\S]*?<\/report-paper>/u,
@@ -87,6 +126,7 @@ function crossrefValue(tag) {
 		: null;
 }
 
+// fallow-ignore-next-line complexity
 const server = createServer(async (request, response) => {
 	const url = new URL(
 		request.url ?? "/",
@@ -95,8 +135,26 @@ const server = createServer(async (request, response) => {
 	const method = request.method ?? "GET";
 
 	if (url.pathname === "/health") return text(response, 200, "healthy");
+	if (url.pathname === "/_test/admin-login-codes" && method === "POST") {
+		const bytes = await readBody(request);
+		let libraryId = defaultOpenScholarLibraryId;
+		if (bytes.byteLength > 0) {
+			try {
+				libraryId = JSON.parse(bytes.toString("utf8")).libraryId;
+			} catch {
+				return json(response, 400, { error: "invalid_request" });
+			}
+		}
+		if (!openScholarLibraryIds.has(libraryId)) {
+			return json(response, 400, { error: "invalid_library" });
+		}
+		const code = `elc_${randomBytes(32).toString("base64url")}`;
+		adminLoginCodes.set(code, libraryId);
+		return json(response, 201, { code });
+	}
 	if (url.pathname === "/_test/state") {
 		return json(response, 200, {
+			adminLoginCodes: adminLoginCodes.size,
 			crossrefDeposits,
 			crossref: crossrefXml
 				? {
@@ -113,8 +171,47 @@ const server = createServer(async (request, response) => {
 		});
 	}
 
-	if (method === "GET" && url.pathname.startsWith("/storage/v1/object/")) {
-		return text(response, 200, storageBytes, "application/pdf");
+	if (
+		url.pathname === "/api/v1/evidence-libraries/admin-login/redeem" &&
+		method === "POST"
+	) {
+		const credential =
+			request.headers.authorization?.match(/^Bearer ([^\s]+)$/u)?.[1];
+		const credentialLibraryId = openScholarLibraries.get(credential);
+		if (!credentialLibraryId) {
+			return json(response, 401, {
+				error: "invalid_service_credential",
+			});
+		}
+
+		let body;
+		try {
+			body = JSON.parse((await readBody(request)).toString("utf8"));
+		} catch {
+			return json(response, 400, { error: "invalid_request" });
+		}
+		if (
+			body?.libraryId !== credentialLibraryId ||
+			typeof body?.code !== "string" ||
+			adminLoginCodes.get(body.code) !== credentialLibraryId
+		) {
+			return json(response, 400, { error: "invalid_login_code" });
+		}
+		adminLoginCodes.delete(body.code);
+		return json(response, 200, {
+			libraryId: credentialLibraryId,
+			clerkUserId: "user_acceptance_admin",
+			clerkOrganizationId: "org_acceptance",
+			role: "editor",
+			consumedAt: Date.now(),
+		});
+	}
+
+	if (url.pathname.startsWith("/storage/v1/object/")) {
+		if (method === "GET") {
+			return text(response, 200, storageBytes, "application/pdf");
+		}
+		if (method === "DELETE") return json(response, 200, []);
 	}
 
 	if (url.pathname === "/servlet/deposit" && method === "POST") {
@@ -163,6 +260,7 @@ const server = createServer(async (request, response) => {
 			parentId: String(Number(id) - 1),
 			metadata: {},
 			files: new Map(),
+			pendingFiles: new Set(),
 			published: false,
 			publishedAt: null,
 		};
@@ -203,6 +301,95 @@ const server = createServer(async (request, response) => {
 			response.writeHead(204).end();
 			return;
 		}
+	}
+
+	const recordDraftMatch = url.pathname.match(
+		/^\/api\/records\/(\d+)\/draft$/u,
+	);
+	if (recordDraftMatch && method === "POST") {
+		const deposition = depositions.get(recordDraftMatch[1]);
+		if (!deposition?.published)
+			return json(response, 404, { message: "missing record" });
+		return json(response, 201, {
+			id: deposition.id,
+			parent: { id: deposition.parentId },
+			links: {
+				file_modification: `https://sandbox.zenodo.org/api/records/${deposition.id}/file-modification`,
+			},
+		});
+	}
+
+	const fileModificationMatch = url.pathname.match(
+		/^\/api\/records\/(\d+)\/file-modification$/u,
+	);
+	if (fileModificationMatch && method === "POST") {
+		return json(response, 200, { status: "accepted" });
+	}
+
+	const draftFilesMatch = url.pathname.match(
+		/^\/api\/records\/(\d+)\/draft\/files$/u,
+	);
+	if (draftFilesMatch) {
+		const deposition = depositions.get(draftFilesMatch[1]);
+		if (!deposition)
+			return json(response, 404, { message: "missing record" });
+		if (method === "GET") {
+			return json(response, 200, {
+				entries: [...deposition.files.keys()].map((filename) =>
+					draftFile(deposition, filename),
+				),
+			});
+		}
+		if (method === "POST") {
+			const requested = JSON.parse(
+				(await readBody(request)).toString("utf8"),
+			);
+			for (const { key } of requested) {
+				deposition.files.set(key, Buffer.alloc(0));
+				deposition.pendingFiles.add(key);
+			}
+			return json(response, 201, {
+				entries: [...deposition.files.keys()].map((filename) =>
+					draftFile(deposition, filename),
+				),
+			});
+		}
+	}
+
+	const draftFileMatch = url.pathname.match(
+		/^\/api\/records\/(\d+)\/draft\/files\/([^/]+)(?:\/(content|commit))?$/u,
+	);
+	if (draftFileMatch) {
+		const deposition = depositions.get(draftFileMatch[1]);
+		const filename = decodeURIComponent(draftFileMatch[2]);
+		const action = draftFileMatch[3];
+		if (!deposition)
+			return json(response, 404, { message: "missing record" });
+		if (method === "PUT" && action === "content") {
+			deposition.files.set(filename, await readBody(request));
+			return json(response, 200, draftFile(deposition, filename));
+		}
+		if (method === "POST" && action === "commit") {
+			deposition.pendingFiles.delete(filename);
+			return json(response, 200, draftFile(deposition, filename));
+		}
+		if (method === "DELETE" && !action) {
+			deposition.files.delete(filename);
+			deposition.pendingFiles.delete(filename);
+			response.writeHead(204).end();
+			return;
+		}
+	}
+
+	const publishDraftMatch = url.pathname.match(
+		/^\/api\/records\/(\d+)\/draft\/actions\/publish$/u,
+	);
+	if (publishDraftMatch && method === "POST") {
+		const deposition = depositions.get(publishDraftMatch[1]);
+		if (!deposition)
+			return json(response, 404, { message: "missing record" });
+		deposition.publishedAt = new Date().toISOString();
+		return json(response, 202, publishedRecord(deposition));
 	}
 
 	const publishMatch = url.pathname.match(

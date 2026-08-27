@@ -9,7 +9,8 @@ Use this gate before touching any test file or assertion.
 
 ## Read the repository rule
 
-Read `docs/test-quality.md` and the test section of `AGENTS.md`.
+Read `docs/test-quality.md` and the test section of `AGENTS.md`. If either file
+is absent, use this skill as the minimum rule.
 
 ## Decide before editing
 
@@ -51,8 +52,13 @@ Bad:
 expect(card.textContent).not.toContain("optional");
 ```
 
-Good: change the copy, run existing checks, and inspect the rendered result. Add
+This freezes ordinary wording and proves no DOI behavior.
+
+Good: change the copy, run existing checks, and inspect the rendered card. Add
 no test.
+
+A justified exact-text assertion names the durable contract it protects, such
+as an accessible control name or a protocol error consumed by a client.
 
 ## Report the decision
 

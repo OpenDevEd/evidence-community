@@ -51,7 +51,11 @@ vi.mock("@/lib/language-alternates", () => ({
 	),
 }));
 vi.mock("@/lib/policy-documents", () => ({
-	getPolicyLastModified: vi.fn(),
+	loadPolicyDocument: vi.fn(async (_config: unknown, kind: string) =>
+		kind === "terms"
+			? null
+			: { content: "", lastUpdated: new Date("2026-08-01T00:00:00Z") },
+	),
 }));
 vi.mock("@/lib/utils", () => ({
 	convertToImageURL: vi.fn((value: string) => value),

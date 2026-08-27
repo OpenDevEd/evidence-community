@@ -215,6 +215,12 @@ export const stableImageUrlSchema = urlSchema({
 	extensions: [".svg", ".png", ".webp"],
 });
 
+export const stableShareImageUrlSchema = urlSchema({
+	protocols: ["https:"],
+	stable: true,
+	extensions: [".png", ".jpg", ".jpeg", ".webp"],
+});
+
 export const stableIconUrlSchema = urlSchema({
 	protocols: ["https:"],
 	stable: true,

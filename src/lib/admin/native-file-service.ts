@@ -18,6 +18,7 @@ import {
 	publicationIdentifier,
 	publicationSyncState,
 	publicationTarget,
+	type ZenodoIdentifierPolicy,
 	zenodoFileCorrectionApproval,
 } from "@/db/schema/publication";
 import { itemFilePublication } from "@/db/schema/source";
@@ -71,7 +72,7 @@ function formatUtcDateTime(value: Date) {
 export class ZenodoPdfCorrectionConfirmationRequiredError extends Error {
 	constructor(readonly approveBy: Date) {
 		super(
-			`This record uses its Crossref DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at ${formatUtcDateTime(approveBy)}.`,
+			`This record reuses its DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at ${formatUtcDateTime(approveBy)}.`,
 		);
 		this.name = "ZenodoPdfCorrectionConfirmationRequiredError";
 	}
@@ -82,6 +83,35 @@ type PdfCorrectionRequirement = {
 	fileManifestHash: string;
 	approveBy: Date;
 };
+
+type PdfCorrectionIdentifier = {
+	environment: "test" | "sandbox";
+	ownership: "managed" | "external";
+	registrar: "crossref" | "zenodo";
+	role: "primary" | "version";
+};
+
+export function zenodoPdfCorrectionIdentifier(
+	identifierPolicy: ZenodoIdentifierPolicy | null,
+): PdfCorrectionIdentifier | null {
+	if (identifierPolicy === "reuse-crossref") {
+		return {
+			environment: "test",
+			ownership: "managed",
+			registrar: "crossref",
+			role: "primary",
+		};
+	}
+	if (identifierPolicy === "reuse-external") {
+		return {
+			environment: "sandbox",
+			ownership: "external",
+			registrar: "zenodo",
+			role: "version",
+		};
+	}
+	return null;
+}
 
 function publicationFileManifestHash(
 	files: readonly (typeof itemFilePublication.$inferSelect)[],
@@ -123,7 +153,10 @@ async function zenodoPdfCorrectionRequirement(
 			),
 		)
 		.limit(1);
-	if (target?.identifierPolicy !== "reuse-crossref") return null;
+	const identifierLookup = zenodoPdfCorrectionIdentifier(
+		target?.identifierPolicy ?? null,
+	);
+	if (!identifierLookup) return null;
 
 	const [state] = await database
 		.select({
@@ -170,10 +203,13 @@ async function zenodoPdfCorrectionRequirement(
 		.where(
 			and(
 				eq(publicationIdentifier.itemKey, input.parentItemKey),
-				eq(publicationIdentifier.registrar, "crossref"),
-				eq(publicationIdentifier.environment, "test"),
-				eq(publicationIdentifier.role, "primary"),
-				eq(publicationIdentifier.ownership, "managed"),
+				eq(publicationIdentifier.registrar, identifierLookup.registrar),
+				eq(
+					publicationIdentifier.environment,
+					identifierLookup.environment,
+				),
+				eq(publicationIdentifier.role, identifierLookup.role),
+				eq(publicationIdentifier.ownership, identifierLookup.ownership),
 				eq(publicationIdentifier.lifecycle, "verified"),
 				eq(publicationIdentifier.isCurrent, true),
 			),
@@ -181,8 +217,8 @@ async function zenodoPdfCorrectionRequirement(
 		.limit(1);
 	if (!identifier) {
 		throw new NativeFileValidationError(
-			"The Crossref DOI needed for this Zenodo correction is unavailable.",
-			{ file: "Retry the Crossref sync before replacing this PDF." },
+			"The DOI needed for this Zenodo correction is unavailable.",
+			{ file: "Retry the publication sync before replacing this PDF." },
 		);
 	}
 	return {

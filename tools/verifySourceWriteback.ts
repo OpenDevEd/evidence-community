@@ -395,6 +395,7 @@ async function verify() {
 
 		const openedSecond = await openItemDraft(db, nativeDraft.itemKey);
 		await saveItemDraft(db, {
+			expectedDraftGeneration: openedSecond.generation,
 			expectedDraftRevision: openedSecond.draftRevision,
 			expectedPayload: openedSecond.payload,
 			itemKey: nativeDraft.itemKey,
@@ -413,6 +414,7 @@ async function verify() {
 		await writeStarted;
 		const openedThird = await openItemDraft(db, nativeDraft.itemKey);
 		await saveItemDraft(db, {
+			expectedDraftGeneration: openedThird.generation,
 			expectedDraftRevision: openedThird.draftRevision,
 			expectedPayload: openedThird.payload,
 			itemKey: nativeDraft.itemKey,
@@ -455,6 +457,7 @@ async function verify() {
 
 		const openedRetry = await openItemDraft(db, nativeDraft.itemKey);
 		await saveItemDraft(db, {
+			expectedDraftGeneration: openedRetry.generation,
 			expectedDraftRevision: openedRetry.draftRevision,
 			expectedPayload: openedRetry.payload,
 			itemKey: nativeDraft.itemKey,
@@ -484,6 +487,7 @@ async function verify() {
 
 		const openedDeadLetter = await openItemDraft(db, nativeDraft.itemKey);
 		await saveItemDraft(db, {
+			expectedDraftGeneration: openedDeadLetter.generation,
 			expectedDraftRevision: openedDeadLetter.draftRevision,
 			expectedPayload: openedDeadLetter.payload,
 			itemKey: nativeDraft.itemKey,
@@ -573,6 +577,7 @@ async function verify() {
 
 		const restoreOpened = await openItemDraft(db, staleDraft.itemKey);
 		await saveItemDraft(db, {
+			expectedDraftGeneration: restoreOpened.generation,
 			expectedDraftRevision: restoreOpened.draftRevision,
 			expectedPayload: restoreOpened.payload,
 			itemKey: staleDraft.itemKey,
@@ -582,6 +587,7 @@ async function verify() {
 		await unpublishNativeItem(db, staleDraft.itemKey);
 		const secondRestoreOpened = await openItemDraft(db, staleDraft.itemKey);
 		await saveItemDraft(db, {
+			expectedDraftGeneration: secondRestoreOpened.generation,
 			expectedDraftRevision: secondRestoreOpened.draftRevision,
 			expectedPayload: secondRestoreOpened.payload,
 			itemKey: staleDraft.itemKey,
@@ -666,6 +672,7 @@ async function verify() {
 		await saveItemDraft(
 			db,
 			{
+				expectedDraftGeneration: importedOpened.generation,
 				expectedDraftRevision: importedOpened.draftRevision,
 				expectedPayload: importedOpened.payload,
 				itemKey: importedItemKey,
@@ -885,6 +892,7 @@ async function verify() {
 		);
 		const conflictEdit = await openItemDraft(db, conflictDraft.itemKey);
 		await saveItemDraft(db, {
+			expectedDraftGeneration: conflictEdit.generation,
 			expectedDraftRevision: conflictEdit.draftRevision,
 			expectedPayload: conflictEdit.payload,
 			itemKey: conflictDraft.itemKey,
@@ -1159,6 +1167,7 @@ async function verify() {
 		const relatedDraft = await openItemDraft(db, relatedSource.itemKey);
 		await saveItemDraft(db, {
 			itemKey: relatedSource.itemKey,
+			expectedDraftGeneration: relatedDraft.generation,
 			expectedDraftRevision: relatedDraft.draftRevision,
 			expectedPayload: relatedDraft.payload,
 			payload: {

@@ -26,6 +26,7 @@ import {
 import { getOrderedRuntimeLocales } from "../src/i18n/runtime";
 import { localesNames, shortLocalesNames } from "../src/i18n/routing";
 import { replaceFileAtomically } from "../src/lib/atomic-file";
+import { requireLibraryComposeServiceReadiness } from "../src/lib/deployment/library-compose-contract";
 import {
 	createAdminTestSession,
 	type AdminTestSession,
@@ -39,6 +40,15 @@ const rootDirectory = path.resolve(
 const acceptanceDirectory = path.join(rootDirectory, "tests", "acceptance");
 const testResultsDirectory = path.join(rootDirectory, "test-results");
 const composeFile = path.join(acceptanceDirectory, "compose.yaml");
+const libraryComposeFile = path.join(
+	rootDirectory,
+	"docker",
+	"compose.library.yaml",
+);
+const libraryComposeOverrideFile = path.join(
+	acceptanceDirectory,
+	"compose.library.override.yaml",
+);
 const configDirectory = path.join(acceptanceDirectory, "configs");
 const composeProject =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT ??
@@ -48,6 +58,7 @@ if (!/^[a-z0-9][a-z0-9_-]*$/.test(composeProject)) {
 		"EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT must contain only lowercase letters, numbers, hyphens, and underscores",
 	);
 }
+const libraryComposeProject = `${composeProject}-library`;
 const runtimeDirectory = path.join(
 	acceptanceDirectory,
 	"runtime",
@@ -59,10 +70,27 @@ const image =
 const searchIndexerImage =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE ??
 	"evidence-library-acceptance-search-indexer:local";
+const sourceSyncImage =
+	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_SYNC_IMAGE ??
+	"evidence-library-acceptance-source-sync:local";
+const sourceWritebackImage =
+	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_WRITEBACK_IMAGE ??
+	"evidence-library-acceptance-source-writeback:local";
 const publicationWorkerImage =
 	process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE ??
 	"evidence-library-acceptance-publication-worker:local";
-const acceptanceAdminPassword = "correct horse battery staple";
+const acceptanceOpenScholar = {
+	amber: {
+		libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
+		machineCredential: "els_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+		secret: "amber-acceptance-auth-secret-0000000000000000",
+	},
+	indigo: {
+		libraryId: "kg2k5yaf2g58kz9kw7h3k2j3v6zq5h4p",
+		machineCredential: "els_ccccccccccccccccccccccccccccccccccccccccccc",
+		secret: "indigo-acceptance-auth-secret-000000000000000",
+	},
+} as const;
 const cleanupOnly = process.argv.includes("--cleanup");
 
 async function availablePort(environmentValue: string | undefined) {
@@ -91,12 +119,19 @@ let indigoMeilisearchPort = "";
 let fixturePort = "";
 let appHttpsPort = "";
 let mailpitPort = "";
-let publicationFakePort = "";
+let runtimeProviderFakePort = "";
 let amberPort = "";
 let indigoPort = "";
+let libraryComposePort = "";
 let postgresPort = "";
 const keepRunning = process.argv.includes("--keep");
 const skipBuild = process.argv.includes("--skip-build");
+const sourceCommit =
+	process.env.SOURCE_COMMIT?.trim() ??
+	spawnSync("git", ["rev-parse", "HEAD"], {
+		cwd: rootDirectory,
+		encoding: "utf8",
+	}).stdout.trim();
 
 const commandEnvironment: NodeJS.ProcessEnv = {
 	...process.env,
@@ -104,13 +139,25 @@ const commandEnvironment: NodeJS.ProcessEnv = {
 	EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_WORKER_IMAGE:
 		publicationWorkerImage,
 	EVIDENCE_LIBRARY_ACCEPTANCE_SEARCH_INDEXER_IMAGE: searchIndexerImage,
+	EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_SYNC_IMAGE: sourceSyncImage,
+	EVIDENCE_LIBRARY_ACCEPTANCE_SOURCE_WRITEBACK_IMAGE: sourceWritebackImage,
 	EVIDENCE_LIBRARY_ACCEPTANCE_OWNER_PID: String(process.pid),
+	EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_AMBER_LIBRARY_ID:
+		acceptanceOpenScholar.amber.libraryId,
+	EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_AMBER_MACHINE_CREDENTIAL:
+		acceptanceOpenScholar.amber.machineCredential,
+	EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_INDIGO_LIBRARY_ID:
+		acceptanceOpenScholar.indigo.libraryId,
+	EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_INDIGO_MACHINE_CREDENTIAL:
+		acceptanceOpenScholar.indigo.machineCredential,
 	EVIDENCE_LIBRARY_ACCEPTANCE_PERSISTENT: String(keepRunning),
 	EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_DIR: runtimeDirectory,
+	SOURCE_COMMIT: sourceCommit,
 };
 const junitReportFiles = new Set<string>();
 const ownerLabel = "org.opendeved.evidence-library.acceptance.owner-pid";
 const persistentLabel = "org.opendeved.evidence-library.acceptance.persistent";
+const composeKindLabel = "org.opendeved.evidence-library.acceptance.compose";
 
 async function initializeAcceptancePorts() {
 	[
@@ -120,9 +167,10 @@ async function initializeAcceptancePorts() {
 		fixturePort,
 		appHttpsPort,
 		mailpitPort,
-		publicationFakePort,
+		runtimeProviderFakePort,
 		amberPort,
 		indigoPort,
+		libraryComposePort,
 		postgresPort,
 	] = await Promise.all([
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_MEILI_PORT),
@@ -134,10 +182,13 @@ async function initializeAcceptancePorts() {
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_APP_HTTPS_PORT),
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT),
 		availablePort(
-			process.env.EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_FAKE_PORT,
+			process.env.EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_PROVIDER_FAKE_PORT,
 		),
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT),
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_PORT),
+		availablePort(
+			process.env.EVIDENCE_LIBRARY_ACCEPTANCE_LIBRARY_COMPOSE_PORT,
+		),
 		availablePort(process.env.EVIDENCE_LIBRARY_ACCEPTANCE_POSTGRES_PORT),
 	]);
 	Object.assign(commandEnvironment, {
@@ -146,10 +197,12 @@ async function initializeAcceptancePorts() {
 		EVIDENCE_LIBRARY_ACCEPTANCE_MEILI_PORT: meilisearchPort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_MEILI_PORT: amberMeilisearchPort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_MEILI_PORT: indigoMeilisearchPort,
-		EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_FAKE_PORT: publicationFakePort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_PROVIDER_FAKE_PORT:
+			runtimeProviderFakePort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_MAILPIT_PORT: mailpitPort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_AMBER_PORT: amberPort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_INDIGO_PORT: indigoPort,
+		EVIDENCE_LIBRARY_ACCEPTANCE_LIBRARY_COMPOSE_PORT: libraryComposePort,
 		EVIDENCE_LIBRARY_ACCEPTANCE_POSTGRES_PORT: postgresPort,
 	});
 }
@@ -225,10 +278,14 @@ function verifyJunitReports() {
 	console.log(`Wrote ${junitReportFiles.size} Playwright JUnit reports.`);
 }
 
-function capture(command: string, args: string[]) {
+function capture(
+	command: string,
+	args: string[],
+	environment = commandEnvironment,
+) {
 	const result = spawnSync(command, args, {
 		cwd: rootDirectory,
-		env: commandEnvironment,
+		env: environment,
 		encoding: "utf8",
 	});
 	if (result.error) throw result.error;
@@ -270,6 +327,158 @@ function captureCompose(...args: string[]) {
 	]);
 }
 
+type ComposeProcess = {
+	Health: string;
+	Service: string;
+	State: string;
+};
+
+function libraryComposeArguments(project: string, ...args: string[]) {
+	return [
+		"compose",
+		"--project-directory",
+		rootDirectory,
+		"--file",
+		libraryComposeFile,
+		"--file",
+		libraryComposeOverrideFile,
+		"--project-name",
+		project,
+		...args,
+	];
+}
+
+function requireRepositoryComposeServicesReady(processes: ComposeProcess[]) {
+	requireLibraryComposeServiceReadiness(
+		processes.map((process) => ({
+			health: process.Health || null,
+			service: process.Service,
+			state: process.State,
+		})),
+	);
+}
+
+async function requireHttpSuccess(url: string, description: string) {
+	const response = await fetch(url);
+	assert.equal(response.status, 200, `${description} must respond`);
+	return response;
+}
+
+async function verifyRepositoryComposeStartup(profile: Profile) {
+	const config = structuredClone(profile.config);
+	config.services.database.url =
+		"postgresql://library:library@postgres:5432/library_compose";
+	config.services.search.host = "http://meilisearch:7700";
+	const environment = {
+		...commandEnvironment,
+		EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK: `${composeProject}_default`,
+		LIBRARY_CONFIG_JSON: JSON.stringify(config),
+		MEILISEARCH_MASTER_KEY: config.services.search.key,
+	};
+	const compose = (...args: string[]) =>
+		run(
+			"docker",
+			libraryComposeArguments(libraryComposeProject, ...args),
+			environment,
+		);
+	captureCompose(
+		"exec",
+		"--no-TTY",
+		"postgres",
+		"createdb",
+		"--username",
+		"library",
+		"library_compose",
+	);
+	const startedAt = Date.now();
+	try {
+		compose(
+			"up",
+			"--detach",
+			"--wait",
+			"--wait-timeout",
+			"180",
+			"--no-build",
+		);
+		const processes = capture(
+			"docker",
+			libraryComposeArguments(
+				libraryComposeProject,
+				"ps",
+				"--all",
+				"--format",
+				"{{json .}}",
+			),
+			environment,
+		)
+			.trim()
+			.split("\n")
+			.map((line) => JSON.parse(line) as ComposeProcess);
+		requireRepositoryComposeServicesReady(processes);
+
+		const baseUrl = `http://127.0.0.1:${libraryComposePort}`;
+		const healthResponse = await requireHttpSuccess(
+			`${baseUrl}/api/library-config/health`,
+			"Configuration health",
+		);
+		const health = (await healthResponse.json()) as RuntimeConfigHealth;
+		assert.equal(health.state, "active");
+		assert.equal(health.active?.revision, config.revision);
+		assert.equal(health.rejected, null);
+		await requireHttpSuccess(
+			`${baseUrl}/${config.localization.defaultLocale}/lib`,
+			"Public library",
+		);
+		await requireHttpSuccess(`${baseUrl}/admin`, "Admin");
+	} finally {
+		compose("down", "--volumes");
+	}
+	assert.equal(
+		capture(
+			"docker",
+			libraryComposeArguments(
+				libraryComposeProject,
+				"ps",
+				"--all",
+				"--quiet",
+			),
+			environment,
+		).trim(),
+		"",
+		"Repository Compose teardown must remove its containers",
+	);
+	console.log(
+		`Repository Compose started revision ${config.revision} and stopped in ${((Date.now() - startedAt) / 1_000).toFixed(1)} seconds.`,
+	);
+}
+
+async function verifyBaseAcceptanceServicesSurvived() {
+	await waitForComposeServiceHealthy("postgres");
+	await waitForComposeServiceHealthy("amber-meilisearch");
+	await waitForComposeServiceHealthy("indigo-meilisearch");
+	console.log("Repository Compose teardown left the base services healthy.");
+}
+
+async function waitForComposeServiceHealthy(
+	service: string,
+	timeoutMs = 30_000,
+) {
+	const containerId = captureCompose("ps", "--quiet", service).trim();
+	if (!containerId) throw new Error(`${service} does not have a running container`);
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		const status = capture("docker", [
+			"inspect",
+			"--format",
+			"{{.State.Health.Status}}",
+			containerId,
+		]).trim();
+		if (status === "healthy") return;
+		await new Promise((resolve) => setTimeout(resolve, 250));
+	}
+	throw new Error(`${service} did not become healthy after it resumed`);
+}
+
 function processIsAlive(pid: number) {
 	try {
 		process.kill(pid, 0);
@@ -279,6 +488,26 @@ function processIsAlive(pid: number) {
 	}
 }
 
+function removeLibraryComposeProject(project: string) {
+	const baseProject = project.slice(0, -"-library".length);
+	run(
+		"docker",
+		libraryComposeArguments(
+			project,
+			"down",
+			"--volumes",
+			"--remove-orphans",
+		),
+		{
+			...commandEnvironment,
+			EVIDENCE_LIBRARY_ACCEPTANCE_LIBRARY_COMPOSE_PORT: "1",
+			EVIDENCE_LIBRARY_ACCEPTANCE_PROJECT_NETWORK: `${baseProject}_default`,
+			LIBRARY_CONFIG_JSON: "{}",
+			MEILISEARCH_MASTER_KEY: "cleanup",
+		},
+	);
+}
+
 function reapAbandonedProjects(options: { includePersistent?: boolean } = {}) {
 	const rows = capture("docker", [
 		"ps",
@@ -286,17 +515,18 @@ function reapAbandonedProjects(options: { includePersistent?: boolean } = {}) {
 		"--filter",
 		`label=${ownerLabel}`,
 		"--format",
-		`{{.Label "com.docker.compose.project"}}|{{.Label "${ownerLabel}"}}|{{.Label "${persistentLabel}"}}`,
+		`{{.Label "com.docker.compose.project"}}|{{.Label "${ownerLabel}"}}|{{.Label "${persistentLabel}"}}|{{.Label "${composeKindLabel}"}}`,
 	]);
 	const projects = new Map<
 		string,
-		{ ownerPid: number; persistent: boolean }
+		{ libraryCompose: boolean; ownerPid: number; persistent: boolean }
 	>();
 
 	for (const row of rows.split("\n").filter(Boolean)) {
-		const [project, ownerPid, persistent] = row.split("|");
+		const [project, ownerPid, persistent, composeKind] = row.split("|");
 		if (!project) continue;
 		projects.set(project, {
+			libraryCompose: composeKind === "library",
 			ownerPid: Number(ownerPid),
 			persistent: persistent === "true",
 		});
@@ -321,13 +551,17 @@ function reapAbandonedProjects(options: { includePersistent?: boolean } = {}) {
 			project,
 		);
 		console.log(`Removing abandoned acceptance project ${project}`);
-		composeForProject(
-			project,
-			abandonedRuntimeDirectory,
-			"down",
-			"--volumes",
-			"--remove-orphans",
-		);
+		if (state.libraryCompose) {
+			removeLibraryComposeProject(project);
+		} else {
+			composeForProject(
+				project,
+				abandonedRuntimeDirectory,
+				"down",
+				"--volumes",
+				"--remove-orphans",
+			);
+		}
 		rmSync(abandonedRuntimeDirectory, {
 			recursive: true,
 			force: true,
@@ -353,15 +587,18 @@ function loadProfile(
 		collectorUrl.port = fixturePort;
 		input.analytics.posthog.host = collectorUrl.origin;
 	}
-	const passwordCandidate = structuredClone(input);
-	passwordCandidate.authentication = {
-		...passwordCandidate.authentication,
-		adminPassword: acceptanceAdminPassword,
+	const openScholar = acceptanceOpenScholar[name];
+	input.authentication = {
+		...input.authentication,
+		openScholar: {
+			convexSiteUrl: `https://openscholar-convex.localhost:${fixturePort}`,
+			libraryId: openScholar.libraryId,
+			loginPageUrl: `https://openscholar.localhost:${fixturePort}/evidence-libraries/${name}`,
+			machineCredential: openScholar.machineCredential,
+		},
+		secret: openScholar.secret,
 	};
-	const passwordResult = libraryConfigSchema.safeParse(passwordCandidate);
-	const config = passwordResult.success
-		? passwordResult.data
-		: libraryConfigSchema.parse(input);
+	const config = libraryConfigSchema.parse(input);
 	return { config, meilisearchPort, name, port };
 }
 
@@ -567,6 +804,86 @@ async function seedSearch(profile: Profile) {
 	]);
 }
 
+// Records the whole-library exports and the Atom feed read straight from
+// PostgreSQL. Only the first two belong in an export file: an ordinary
+// published record, and one carrying the internal badge tag that readers may
+// still see. The rest must never appear — hidden by tag, deleted, a child of
+// another record, or a draft that was never published. The browser checks
+// prove which of them reach an export file.
+export const EXPORT_RECORDS = {
+	published: { key: "AMBREXP2", title: "Amber export evidence" },
+	internal: { key: "AMBRINT2", title: "Amber badged evidence" },
+	hidden: { key: "AMBRHID2", title: "Amber unlisted evidence" },
+	deleted: { key: "AMBRDEL2", title: "Amber withdrawn evidence" },
+	child: { key: "AMBRCHI2", title: "Amber attached evidence" },
+	draft: { key: "AMBRDRF2", title: "Amber unfinished evidence" },
+} as const;
+
+function seedExportRecords(profile: Profile) {
+	if (profile.name !== "amber") return;
+
+	const rows = [
+		{
+			record: EXPORT_RECORDS.published,
+			itemType: "JournalArticle",
+			deleted: 0,
+			parentItem: "NULL",
+			tag: "",
+		},
+		{
+			record: EXPORT_RECORDS.internal,
+			itemType: "JournalArticle",
+			deleted: 0,
+			parentItem: "NULL",
+			tag: "internal-only",
+		},
+		{
+			record: EXPORT_RECORDS.hidden,
+			itemType: "JournalArticle",
+			deleted: 0,
+			parentItem: "NULL",
+			tag: "hidden-record",
+		},
+		{
+			record: EXPORT_RECORDS.deleted,
+			itemType: "JournalArticle",
+			deleted: 1,
+			parentItem: "NULL",
+			tag: "",
+		},
+		{
+			record: EXPORT_RECORDS.child,
+			itemType: "Attachment",
+			deleted: 0,
+			parentItem: `'${EXPORT_RECORDS.published.key}'`,
+			tag: "",
+		},
+	] as const;
+
+	const identity = (key: string) =>
+		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${key}', 'native', '${key}')`;
+
+	const statements = [
+		`INSERT INTO "tag" ("name") VALUES ('hidden-record'), ('internal-only') ON CONFLICT DO NOTHING`,
+		...rows.flatMap((row) => [
+			identity(row.record.key),
+			`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem") VALUES ('${row.record.key}', 'native', '${row.record.key}', '${row.itemType}', '${row.record.title}', 1, '2026', now(), ${row.deleted}, ${row.parentItem})`,
+		]),
+		...rows
+			.filter((row) => row.tag)
+			.map(
+				(row) =>
+					`INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES ('${row.record.key}', '${row.tag}')`,
+			),
+		// A record that only ever existed as a draft has no published row at
+		// all, so no export can reach it.
+		identity(EXPORT_RECORDS.draft.key),
+		`INSERT INTO "itemDraft" ("itemKey", "sourceConnectionKey", "patch") VALUES ('${EXPORT_RECORDS.draft.key}', 'native', '{"title": "${EXPORT_RECORDS.draft.title}"}'::jsonb)`,
+	];
+
+	postgresScalar(profile.name, statements.join("; "));
+}
+
 async function seedSharedSearchIndexes(profile: Profile) {
 	for (const index of [
 		{ uid: "cache", primaryKey: "id" },
@@ -678,6 +995,7 @@ async function verifySearchQueueIsolation(profiles: Profile[]) {
 		amberKey,
 		"Amber indexing after its search service resumes",
 	);
+	await waitForComposeServiceHealthy("amber-meilisearch");
 	assert.equal(await meilisearchHasDocument(amber, amberKey), true);
 	assert.equal(await meilisearchHasDocument(indigo, indigoKey), true);
 	assert.equal(await meilisearchHasDocument(amber, indigoKey), false);
@@ -760,6 +1078,7 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_RUNTIME_ACCEPTANCE: "true",
 		PLAYWRIGHT_EXPECTED_CONFIG_REVISION: config.revision,
 		PLAYWRIGHT_EXPECTED_CONFIG_UPDATED_AT: config.updatedAt,
+		PLAYWRIGHT_EXPECTED_TERMS_LINK: config.legal.termsOfService ?? "",
 		PLAYWRIGHT_EXPECTED_IDENTITY_NAME: config.identity.name,
 		PLAYWRIGHT_EXPECTED_IDENTITY_SHORT_NAME: config.identity.shortName,
 		PLAYWRIGHT_EXPECTED_PUBLIC_BASE_URL: config.identity.baseUrl,
@@ -830,10 +1149,7 @@ function publicExpectations(profile: Profile) {
 			config.citations.showUrl &&
 				Boolean(config.services.zotero.translationUrl),
 		),
-		// Similar publications need both an embedder and the feature itself.
-		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(
-			config.search.embedder !== null && config.features.relatedResources,
-		),
+		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(config.search.embedder !== null),
 		PLAYWRIGHT_EXPECTED_COUNTRY_FACET: String(config.search.country),
 		PLAYWRIGHT_EXPECTED_AUTHOR_COUNTRY_FACET: String(
 			config.search.authorCountry,
@@ -851,14 +1167,30 @@ function publicExpectations(profile: Profile) {
 		PLAYWRIGHT_EXPECTED_DEEP_RESEARCH: String(config.features.deepResearch),
 		PLAYWRIGHT_EXPECTED_GAP_MAP: String(Boolean(enabledGapMap)),
 		PLAYWRIGHT_EXPECTED_EXPORT_RIS: String(
-			config.features.downloads && Boolean(config.exports.ris),
+			config.features.downloads && config.exports.ris,
 		),
 		PLAYWRIGHT_EXPECTED_EXPORT_BIBTEX: String(
-			config.features.downloads && Boolean(config.exports.bibtex),
+			config.features.downloads && config.exports.bibtex,
 		),
 		PLAYWRIGHT_EXPECTED_EXPORT_ATOM: String(
-			config.features.atomFeed && Boolean(config.exports.atom),
+			config.features.atomFeed && config.exports.atom,
 		),
+		PLAYWRIGHT_EXPORT_INCLUDED_TITLES:
+			profile.name === "amber"
+				? [
+						EXPORT_RECORDS.published.title,
+						EXPORT_RECORDS.internal.title,
+					].join("|")
+				: "",
+		PLAYWRIGHT_EXPORT_EXCLUDED_TITLES:
+			profile.name === "amber"
+				? [
+						EXPORT_RECORDS.hidden.title,
+						EXPORT_RECORDS.deleted.title,
+						EXPORT_RECORDS.child.title,
+						EXPORT_RECORDS.draft.title,
+					].join("|")
+				: "",
 		PLAYWRIGHT_EXPECTED_ANALYTICS: String(
 			Boolean(
 				config.analytics.posthog.host && config.analytics.posthog.key,
@@ -918,20 +1250,6 @@ function runBrowserSuite(profile: Profile) {
 		[
 			"playwright",
 			"test",
-			"tests/e2e/ai-chat.spec.ts",
-			"--project",
-			"chromium",
-		],
-		playwrightEnvironment(`${profile.name}-ai-chat`, {
-			...commandEnvironment,
-			...publicExpectations(profile),
-		}),
-	);
-	run(
-		"npx",
-		[
-			"playwright",
-			"test",
 			"tests/e2e/runtime-mobile.spec.ts",
 			"--project",
 			"mobile-chromium",
@@ -951,7 +1269,13 @@ function runAdminBrowserSuite(profile: Profile) {
 		...commandEnvironment,
 		...publicExpectations(profile),
 		PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
-		EVIDENCE_LIBRARY_ADMIN_PASSWORD: acceptanceAdminPassword,
+		EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL: `http://127.0.0.1:${runtimeProviderFakePort}`,
+		EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID:
+			profile.config.authentication.openScholar.libraryId,
+		EVIDENCE_LIBRARY_OPENSCHOLAR_WRONG_LIBRARY_ID:
+			acceptanceOpenScholar.indigo.libraryId,
+		EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL:
+			profile.config.authentication.openScholar.loginPageUrl,
 		PLAYWRIGHT_ADMIN_UI: "true",
 		PLAYWRIGHT_EXPECTED_ADMIN_ITEM_TITLE: "Amber database evidence",
 		PLAYWRIGHT_RUNTIME_E2E: "true",
@@ -998,7 +1322,11 @@ function runPublicationBrowserPhase(
 		],
 		playwrightEnvironment(`${profile.name}-publication-${phase}`, {
 			...commandEnvironment,
-			EVIDENCE_LIBRARY_ADMIN_PASSWORD: acceptanceAdminPassword,
+			EVIDENCE_LIBRARY_OPENSCHOLAR_FAKE_URL: `http://127.0.0.1:${runtimeProviderFakePort}`,
+			EVIDENCE_LIBRARY_OPENSCHOLAR_LIBRARY_ID:
+				profile.config.authentication.openScholar.libraryId,
+			EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL:
+				profile.config.authentication.openScholar.loginPageUrl,
 			PLAYWRIGHT_BASE_URL: `https://localhost:${appHttpsPort}`,
 			PLAYWRIGHT_IGNORE_HTTPS_ERRORS: "true",
 			PLAYWRIGHT_PUBLICATION_EXPECTED_DOI: "10.5555/acceptance.000002",
@@ -1012,13 +1340,24 @@ function runPublicationBrowserPhase(
 
 async function readPublicationProviderState() {
 	const response = await fetch(
-		`http://127.0.0.1:${publicationFakePort}/_test/state`,
+		`http://127.0.0.1:${runtimeProviderFakePort}/_test/state`,
 	);
 	assert.equal(response.ok, true);
 	return (await response.json()) as {
 		crossrefDeposits: number;
 		crossref: { doi: string; title: string } | null;
 	};
+}
+
+async function issueAcceptanceAdminLoginCode() {
+	const response = await fetch(
+		`http://127.0.0.1:${runtimeProviderFakePort}/_test/admin-login-codes`,
+		{ method: "POST" },
+	);
+	assert.equal(response.status, 201);
+	const body = (await response.json()) as { code?: unknown };
+	assert.equal(typeof body.code, "string");
+	return body.code as string;
 }
 
 async function makeCrossrefVerificationDue(itemKey: string) {
@@ -1133,6 +1472,107 @@ function countServerCollectorRequests(logs: string) {
 		).length;
 }
 
+async function openScholarRead<T>(
+	profile: Profile,
+	pathname: string,
+	credential = profile.config.authentication.openScholar.machineCredential,
+) {
+	const response = await fetch(`http://127.0.0.1:${profile.port}${pathname}`, {
+		headers: { Authorization: `Bearer ${credential}` },
+	});
+	return { body: (await response.json()) as T, response };
+}
+
+type OpenScholarCollectionPage = {
+	items: {
+		count: number;
+		id: string;
+		parentId: string | null;
+		source: string;
+		title: string;
+	}[];
+	nextCursor: string | null;
+};
+
+async function verifyOpenScholarReadApi(profile: Profile) {
+	console.log(`\nVerifying ${profile.name} OpenScholar read API`);
+	const denied = await openScholarRead(
+		profile,
+		"/api/openscholar/institutions",
+		acceptanceOpenScholar.indigo.machineCredential,
+	);
+	assert.equal(denied.response.status, 401);
+
+	const institutions = await openScholarRead<{
+		items: { count: number; name: string }[];
+	}>(profile, "/api/openscholar/institutions");
+	assert.equal(institutions.response.status, 200);
+	assert.equal(
+		institutions.response.headers.get("cache-control"),
+		"private, no-store",
+	);
+	assert.deepEqual(institutions.body.items, [
+		{ count: 1, name: "Amber Institute" },
+		{ count: 1, name: "Indigo College" },
+	]);
+
+	const firstPage = await openScholarRead<OpenScholarCollectionPage>(
+		profile,
+		"/api/openscholar/collections?pageSize=2",
+	);
+	assert.equal(firstPage.response.status, 200);
+	assert.equal(firstPage.body.items.length, 2);
+	assert.ok(firstPage.body.nextCursor, "a second page must exist");
+	const secondPage = await openScholarRead<OpenScholarCollectionPage>(
+		profile,
+		`/api/openscholar/collections?pageSize=2&cursor=${encodeURIComponent(firstPage.body.nextCursor!)}`,
+	);
+	assert.equal(secondPage.response.status, 200);
+	const seen = new Set(
+		[...firstPage.body.items, ...secondPage.body.items].map(({ id }) => id),
+	);
+	assert.equal(
+		seen.size,
+		firstPage.body.items.length + secondPage.body.items.length,
+		"pages must not repeat collections",
+	);
+
+	const search = await openScholarRead<OpenScholarCollectionPage>(
+		profile,
+		"/api/openscholar/collections?query=source",
+	);
+	assert.deepEqual(search.body, {
+		items: [
+			{
+				count: 1,
+				id: "ZBJ4NBSL",
+				parentId: null,
+				source: "native",
+				title: "Amber source collection",
+			},
+		],
+		nextCursor: null,
+	});
+}
+
+async function verifyOwnerLegalText(profile: Profile) {
+	console.log(`\nVerifying ${profile.name} owner-written terms page`);
+	const response = await fetch(
+		`http://127.0.0.1:${profile.port}/${profile.config.localization.defaultLocale}/terms`,
+	);
+	assert.equal(response.status, 200);
+	const html = await response.text();
+	const siteHost = new URL(profile.config.identity.baseUrl).host;
+	assert.ok(
+		html.includes(`Use ${siteHost} for research and teaching.`),
+		"terms page must show the owner's text with the site host filled in",
+	);
+	assert.ok(
+		html.includes("Updated 01 August 2026"),
+		"terms page must read the date from the owner's text",
+	);
+}
+
 function verifyServerAnalyticsTransport(profile: Profile) {
 	const { host, key } = profile.config.analytics.posthog;
 	if (!host || !key) {
@@ -1227,7 +1667,7 @@ async function waitForPublicationState(
 async function verifyPublicationLifecycle(profile: Profile) {
 	const session = await createAdminTestSession(
 		`http://127.0.0.1:${profile.port}`,
-		acceptanceAdminPassword,
+		await issueAcceptanceAdminLoginCode(),
 	);
 	await adminPublicationRequest(
 		profile,
@@ -1311,7 +1751,7 @@ async function verifyPublicationLifecycle(profile: Profile) {
 		failedJobs: 0,
 	});
 	const providerResponse = await fetch(
-		`http://127.0.0.1:${publicationFakePort}/_test/state`,
+		`http://127.0.0.1:${runtimeProviderFakePort}/_test/state`,
 	);
 	assert.equal(providerResponse.ok, true);
 	const providerState = (await providerResponse.json()) as {
@@ -1343,6 +1783,118 @@ async function verifyPublicationLifecycle(profile: Profile) {
 	assert.equal(overview.worker?.ready, true);
 	console.log(
 		"Crossref Test and Zenodo Sandbox publication passed through the real local worker.",
+	);
+}
+
+async function verifyZenodoReuseExternalLifecycle(profile: Profile) {
+	const itemKey = "PUBEXT23";
+	const removedFileKey = "PUBEXPA3";
+	const externalDoi = "10.1038/nature12373";
+	const session = await createAdminTestSession(
+		`http://127.0.0.1:${profile.port}`,
+		await issueAcceptanceAdminLoginCode(),
+	);
+
+	await adminPublicationRequest(
+		profile,
+		session,
+		`/api/admin/items/${itemKey}/publication/zenodo/activate`,
+		{
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ identifierPolicy: "reuse-external" }),
+		},
+	);
+	await waitForPublicationState(
+		() =>
+			postgresScalar(
+				"amber",
+				`SELECT count(*) FROM "publicationSyncState"
+				 WHERE "itemKey" = '${itemKey}' AND "provider" = 'zenodo'
+					AND "lastFileManifestHash" IS NOT NULL
+					AND "zenodoRecordId" IS NOT NULL`,
+			) === "1",
+		"external DOI Zenodo publication settlement",
+	);
+
+	await adminPublicationRequest(
+		profile,
+		session,
+		`/api/admin/items/${removedFileKey}/file`,
+		{
+			method: "DELETE",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ zenodoFileChange: "minor_correction" }),
+		},
+	);
+	await waitForPublicationState(
+		() =>
+			postgresScalar(
+				"amber",
+				`SELECT count(*) FROM "zenodoFileCorrectionApproval"
+				 WHERE "itemKey" = '${itemKey}' AND "consumedAt" IS NOT NULL`,
+			) === "1",
+		"external DOI file correction settlement",
+	);
+
+	const databaseState = JSON.parse(
+		postgresScalar(
+			"amber",
+			`SELECT json_build_object(
+				'externalDoi', (
+					SELECT "doi" FROM "publicationIdentifier"
+					WHERE "itemKey" = '${itemKey}' AND "registrar" = 'zenodo'
+						AND "role" = 'version' AND "ownership" = 'external'
+						AND "lifecycle" = 'verified' AND "isCurrent" = true
+				),
+				'publishedFiles', (
+					SELECT count(*) FROM "itemFilePublication"
+					WHERE "parentItemKey" = '${itemKey}'
+				),
+				'consumedApprovals', (
+					SELECT count(*) FROM "zenodoFileCorrectionApproval"
+					WHERE "itemKey" = '${itemKey}' AND "consumedAt" IS NOT NULL
+				),
+				'failedJobs', (
+					SELECT count(*) FROM "publicationSyncJob"
+					WHERE "itemKey" = '${itemKey}' AND "deadLetteredAt" IS NOT NULL
+				)
+			)`,
+		),
+	) as {
+		externalDoi: string;
+		publishedFiles: number;
+		consumedApprovals: number;
+		failedJobs: number;
+	};
+	assert.deepEqual(databaseState, {
+		externalDoi,
+		publishedFiles: 1,
+		consumedApprovals: 1,
+		failedJobs: 0,
+	});
+
+	const providerResponse = await fetch(
+		`http://127.0.0.1:${runtimeProviderFakePort}/_test/state`,
+	);
+	assert.equal(providerResponse.ok, true);
+	const providerState = (await providerResponse.json()) as {
+		zenodo: Array<{
+			id: string;
+			doi: string | null;
+			files: string[];
+			published: boolean;
+		}>;
+	};
+	const archive = providerState.zenodo.find(
+		(record) => record.doi === externalDoi,
+	);
+	assert.ok(archive, "The local Zenodo fake did not retain the external DOI record");
+	assert.equal(archive.doi, externalDoi);
+	assert.deepEqual(archive.files, ["amber-external-doi-b.pdf"]);
+	assert.equal(archive.published, true);
+	console.log(
+		"Amber archived an external DOI and completed a confirmed PDF correction against the local Zenodo fake.",
 	);
 }
 
@@ -1565,6 +2117,10 @@ async function main() {
 				"--set",
 				`search-indexer.tags=${searchIndexerImage}`,
 				"--set",
+				`source-sync.tags=${sourceSyncImage}`,
+				"--set",
+				`source-writeback.tags=${sourceWritebackImage}`,
+				"--set",
 				`publication-worker.tags=${publicationWorkerImage}`,
 				"acceptance",
 			]);
@@ -1578,20 +2134,17 @@ async function main() {
 			"postgres",
 			"amber-meilisearch",
 			"indigo-meilisearch",
-			// The search workers embed records as they start, so the stand-in
-			// embedding service has to be answering before they do.
-			"fixture",
 		);
+		await verifyRepositoryComposeStartup(profiles[0]);
+		await verifyBaseAcceptanceServicesSurvived();
 		for (const profile of profiles) {
 			await seedSharedSearchIndexes(profile);
 		}
 		compose(
 			"up",
 			"--wait",
-			// A library with an embedder turns every record into a vector as
-			// the worker starts, which takes longer than an ordinary start.
 			"--wait-timeout",
-			"420",
+			"180",
 			"amber-search-indexer",
 			"indigo-search-indexer",
 		);
@@ -1607,6 +2160,7 @@ async function main() {
 		}
 		for (const profile of profiles) {
 			await seedSearch(profile);
+			seedExportRecords(profile);
 		}
 		await verifySearchQueueIsolation(profiles);
 		compose(
@@ -1621,7 +2175,10 @@ async function main() {
 		);
 		await verifyLiveConfigLifecycle(profiles[0]);
 		await verifyPublicationLifecycle(profiles[0]);
+		await verifyZenodoReuseExternalLifecycle(profiles[0]);
 		await verifyPublicationAdminInterface(profiles[0]);
+		await verifyOpenScholarReadApi(profiles[0]);
+		await verifyOwnerLegalText(profiles[0]);
 		profiles.forEach(verifyServerAnalyticsTransport);
 		profiles.forEach(runBrowserSuite);
 		runAdminBrowserSuite(profiles[0]);
@@ -1642,16 +2199,12 @@ async function main() {
 			"amber",
 			"indigo",
 			"fixture",
-			"publication-provider-fake",
+			"runtime-provider-fake",
 			"amber-publication-worker",
 			"mailpit",
 			"postgres",
 			"amber-meilisearch",
 			"indigo-meilisearch",
-			// A search worker that will not start is a common cause of a
-			// failed run, so show what it said before it gave up.
-			"amber-search-indexer",
-			"indigo-search-indexer",
 		);
 		throw error;
 	} finally {

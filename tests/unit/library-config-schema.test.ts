@@ -29,7 +29,6 @@ const catalogSchema = createLibraryConfigSchema({
 	collectionIds: libraryCollectionIds,
 	institutionNames: libraryInstitutionNames,
 });
-
 function expectCatalogInvalid(
 	mutate: (config: ReturnType<typeof cloneLibraryConfig>) => void,
 ) {
@@ -166,6 +165,103 @@ describe("library configuration fixtures", () => {
 	});
 });
 
+describe("identity text and share settings", () => {
+	it("accepts a tagline up to 160 characters and rejects longer ones", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.identity.tagline = "t".repeat(160);
+		expect(libraryConfigSchema.safeParse(input).success).toBe(true);
+
+		input.identity.tagline = "t".repeat(161);
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+
+	it("rejects a tagline with a line break", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.identity.tagline = "Line one\nLine two";
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+
+	it("accepts a description up to 300 characters and rejects longer ones", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.identity.description = "d".repeat(300);
+		expect(libraryConfigSchema.safeParse(input).success).toBe(true);
+
+		input.identity.description = "d".repeat(301);
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+
+	it.each([
+		"https://assets.example.org/share.png",
+		"https://assets.example.org/share.jpg",
+		"https://assets.example.org/share.jpeg",
+		"https://assets.example.org/share.webp",
+	])("accepts a stable HTTPS share image: %s", (shareImage) => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.identity.assets.shareImage = shareImage;
+		expect(libraryConfigSchema.safeParse(input).success).toBe(true);
+	});
+
+	it.each([
+		["a query string", "https://assets.example.org/share.png?token=abc"],
+		["an SVG file", "https://assets.example.org/share.svg"],
+		["an HTTP URL", "http://assets.example.org/share.png"],
+		["no image extension", "https://assets.example.org/share"],
+	])("rejects a share image with %s", (_reason, shareImage) => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.identity.assets.shareImage = shareImage;
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+
+	it("shows the powered-by footer link by default and allows turning it off", () => {
+		expect(
+			libraryConfigSchema.parse(minimalLibraryConfig).footer.poweredBy,
+		).toBe(true);
+
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.footer = { poweredBy: false };
+		expect(libraryConfigSchema.parse(input).footer.poweredBy).toBe(false);
+	});
+});
+
+describe("legal page text", () => {
+	it.each(["privacyMarkdown", "cookieMarkdown", "termsMarkdown"] as const)(
+		"accepts %s up to 200 000 characters and rejects longer text",
+		(field) => {
+			const input = cloneLibraryConfig(minimalLibraryConfig);
+			input.legal = { [field]: "# Title\n\n" + "m".repeat(200_000 - 9) };
+			expect(libraryConfigSchema.safeParse(input).success).toBe(true);
+
+			input.legal = { [field]: "m".repeat(200_001) };
+			expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+		},
+	);
+
+	it("links the terms page when terms text is set and no link is given", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.legal = { termsMarkdown: "# Terms\n\nUse the library kindly." };
+		expect(libraryConfigSchema.parse(input).legal.termsOfService).toBe(
+			"/terms",
+		);
+	});
+
+	it("keeps an explicit terms link next to terms text", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		input.legal = {
+			termsMarkdown: "# Terms",
+			termsOfService: "https://minimal.example.org/legal/terms",
+		};
+		expect(libraryConfigSchema.parse(input).legal.termsOfService).toBe(
+			"https://minimal.example.org/legal/terms",
+		);
+	});
+
+	it("leaves the terms link unset without terms text", () => {
+		expect(
+			libraryConfigSchema.parse(minimalLibraryConfig).legal.termsOfService,
+		).toBeUndefined();
+	});
+});
+
 describe("reusable field schemas", () => {
 	it("rejects an HTTP public origin", () => {
 		const input = cloneLibraryConfig(minimalLibraryConfig);
@@ -174,16 +270,29 @@ describe("reusable field schemas", () => {
 		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
 	});
 
-	it("accepts a private admin password but rejects a short one", () => {
+	it("accepts a library-bound OpenScholar machine credential", () => {
 		const input = cloneLibraryConfig(maximalLibraryConfig);
-		(input.authentication ??= {}).adminPassword =
-			"correct horse battery staple";
 		expect(
-			libraryConfigSchema.parse(input).authentication.adminPassword,
-		).toBe("correct horse battery staple");
+			libraryConfigSchema.parse(input).authentication.openScholar,
+		).toEqual(maximalLibraryConfig.authentication?.openScholar);
 
-		input.authentication.adminPassword = "short";
+		input.authentication!.openScholar!.machineCredential =
+			"els_not-a-machine-credential";
 		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+	});
+
+	it("requires both OpenScholar admin access and its signing secret", () => {
+		const input = cloneLibraryConfig(minimalLibraryConfig);
+		delete (input.authentication as { secret?: string }).secret;
+		expect(libraryConfigSchema.safeParse(input).success).toBe(false);
+
+		const missingOpenScholar = cloneLibraryConfig(minimalLibraryConfig);
+		delete (
+			missingOpenScholar.authentication as { openScholar?: unknown }
+		).openScholar;
+		expect(libraryConfigSchema.safeParse(missingOpenScholar).success).toBe(
+			false,
+		);
 	});
 
 	it.each([
@@ -394,16 +503,17 @@ describe("cross-field activation rules", () => {
 			},
 		],
 		[
-			"downloads without RIS or BibTeX",
+			"Atom feed without the Atom switch",
 			(config: any) => {
-				delete config.exports.ris;
-				delete config.exports.bibtex;
+				config.exports.atom = false;
 			},
 		],
 		[
-			"Atom feed without Atom endpoint",
+			"downloads without a citation switch",
 			(config: any) => {
-				delete config.exports.atom;
+				config.features.downloads = true;
+				config.exports.ris = false;
+				config.exports.bibtex = false;
 			},
 		],
 		[
@@ -553,6 +663,34 @@ describe("cross-field activation rules", () => {
 		],
 	])("rejects %s", (_name, mutate) => {
 		expectCatalogInvalid(mutate);
+	});
+
+	it("switches RIS and BibTeX on and the Atom feed off by default", () => {
+		const config = cloneLibraryConfig();
+		delete (config as any).exports;
+		(config.features as any).downloads = true;
+		(config.features as any).atomFeed = false;
+
+		const result = catalogSchema.safeParse(config);
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.exports).toEqual({
+				ris: true,
+				bibtex: true,
+				atom: false,
+			});
+			expect(result.data.features.downloads).toBe(true);
+		}
+	});
+
+	it("allows downloads when only one citation switch is on", () => {
+		const config = cloneLibraryConfig();
+		(config as any).exports = { ris: false, bibtex: true, atom: false };
+		(config.features as any).downloads = true;
+		(config.features as any).atomFeed = false;
+
+		expect(catalogSchema.safeParse(config).success).toBe(true);
 	});
 });
 

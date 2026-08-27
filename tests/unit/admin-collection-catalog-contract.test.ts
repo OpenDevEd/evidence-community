@@ -6,6 +6,7 @@ import {
 	parseAdminCollectionChildrenRequest,
 	parseAdminCollectionSearchRequest,
 	parseAdminCollectionView,
+	parseOpenScholarCollectionRequest,
 } from "@/lib/admin/collection-catalog-contract";
 
 describe("admin collection catalogue contract", () => {
@@ -88,5 +89,28 @@ describe("admin collection catalogue contract", () => {
 
 	it("rejects unknown catalogue views", () => {
 		expect(() => parseAdminCollectionView("everything")).toThrow();
+	});
+});
+
+describe("OpenScholar collection request", () => {
+	it("lists the whole catalogue when no search text is given", () => {
+		expect(parseOpenScholarCollectionRequest({})).toEqual({
+			cursor: null,
+			pageSize: 50,
+			query: "",
+		});
+	});
+
+	it("keeps search text, cursor, and a bounded page size", () => {
+		expect(
+			parseOpenScholarCollectionRequest({
+				cursor: "abc",
+				pageSize: "100",
+				query: "  teacher ",
+			}),
+		).toEqual({ cursor: "abc", pageSize: 100, query: "teacher" });
+		expect(() =>
+			parseOpenScholarCollectionRequest({ pageSize: "101" }),
+		).toThrow();
 	});
 });

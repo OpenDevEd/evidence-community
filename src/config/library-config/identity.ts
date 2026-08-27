@@ -18,18 +18,32 @@ export const LIBRARY_LOGO_SELECTOR = `[${LIBRARY_LOGO_DATA_ATTRIBUTE}]`;
 export function buildLibraryMetadata(
 	identity: LibraryIdentityConfig,
 ): Metadata {
-	const { assets, baseUrl, name, shortName } = identity;
+	const { assets, baseUrl, description, name, shortName } = identity;
 	const icons = Array.from(new Set([assets.favicon, ...assets.icons]));
+	const pageDescription = description ?? name;
+	const shareImages = assets.shareImage ? [assets.shareImage] : undefined;
 
 	return {
 		applicationName: shortName,
-		description: name,
+		description: pageDescription,
 		icons: {
 			icon: icons,
 			shortcut: assets.favicon,
 		},
 		metadataBase: new URL(baseUrl),
+		openGraph: {
+			title: name,
+			description: pageDescription,
+			siteName: name,
+			images: shareImages,
+		},
 		title: name,
+		twitter: {
+			card: shareImages ? "summary_large_image" : "summary",
+			title: name,
+			description: pageDescription,
+			images: shareImages,
+		},
 	};
 }
 

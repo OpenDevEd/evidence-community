@@ -3,12 +3,37 @@ import { describe, expect, it } from "vitest";
 import {
 	buildLibraryDatabaseUrl,
 	decideLibraryDatabaseAction,
+	deriveLibraryDatabaseNames,
 	parseLibraryDatabaseName,
 	quotePostgresIdentifier,
 	validateLibraryDatabaseTarget,
 } from "@/lib/deployment/library-database";
 
 describe("library database provisioning contract", () => {
+	it("derives stable PostgreSQL names from an opaque library ID", () => {
+		expect(
+			deriveLibraryDatabaseNames("j972k3h6k5k6x1m8v9z0"),
+		).toEqual({
+			databaseName:
+				"el_539c844f0b6d75c24c8c1694fc41e72c9cf96aa29653ed2f",
+			loginName:
+				"el_539c844f0b6d75c24c8c1694fc41e72c9cf96aa29653ed2f_user",
+		});
+	});
+
+	it("keeps different library IDs in different PostgreSQL names", () => {
+		expect(deriveLibraryDatabaseNames("library-one")).not.toEqual(
+			deriveLibraryDatabaseNames("library-two"),
+		);
+	});
+
+	it.each(["", " library", "library\n", "a".repeat(257)])(
+		"rejects an invalid library ID before deriving names: %j",
+		(libraryId) => {
+			expect(() => deriveLibraryDatabaseNames(libraryId)).toThrow(/Library ID/);
+		},
+	);
+
 	it("accepts safe PostgreSQL names up to 63 bytes", () => {
 		expect(parseLibraryDatabaseName("library_2026", "Database name")).toBe(
 			"library_2026",

@@ -1,5 +1,6 @@
 "use client";
 
+import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import type {
 	AdminCollection,
 	AdminCollectionCatalogEntry,
@@ -11,10 +12,11 @@ import type {
 	AdminLibrarySnapshot,
 } from "@/lib/admin/types";
 import type { AdminCollectionSearchState } from "@/lib/admin/collection-catalog-contract";
-import type {
-	AdminErrorCode,
-	AdminErrorPayload,
-	AdminFieldErrors,
+import {
+	isAdminErrorCode,
+	type AdminErrorCode,
+	type AdminErrorPayload,
+	type AdminFieldErrors,
 } from "@/lib/admin/errors";
 import type {
 	AdminItemBatchRequest,
@@ -76,17 +78,6 @@ function fallbackError(status: number): AdminErrorPayload["error"] {
 	};
 }
 
-const adminErrorCodes = new Set<AdminErrorCode>([
-	"already_exists",
-	"conflict",
-	"confirmation_required",
-	"internal_error",
-	"invalid_reference",
-	"not_found",
-	"storage_unavailable",
-	"validation_failed",
-]);
-
 function parsedError(
 	value: unknown,
 	status: number,
@@ -96,8 +87,7 @@ function parsedError(
 	}
 	const candidate = value as Record<string, unknown>;
 	if (
-		typeof candidate.code !== "string" ||
-		!adminErrorCodes.has(candidate.code as AdminErrorCode) ||
+		!isAdminErrorCode(candidate.code) ||
 		typeof candidate.message !== "string"
 	) {
 		return fallbackError(status);
@@ -114,7 +104,7 @@ function parsedError(
 		return fallbackError(status);
 	}
 	return {
-		code: candidate.code as AdminErrorCode,
+		code: candidate.code,
 		...(candidate.fields
 			? { fields: candidate.fields as AdminFieldErrors }
 			: {}),
@@ -292,7 +282,7 @@ export function retryAdminCrossrefPublication(key: string) {
 
 export function activateAdminZenodoPublication(
 	key: string,
-	identifierPolicy: "mint-zenodo" | "reuse-crossref",
+	identifierPolicy: ZenodoIdentifierPolicy,
 ) {
 	return requestJson<AdminPublicationMutationResponse>(
 		`/api/admin/items/${encodeURIComponent(key)}/publication/zenodo/activate`,
@@ -330,6 +320,7 @@ export async function openAdminDraft(key: string) {
 
 export async function saveAdminDraft(
 	key: string,
+	expectedDraftGeneration: string,
 	expectedDraftRevision: number,
 	expectedPayload: Record<string, unknown>,
 	payload: Record<string, unknown>,
@@ -340,6 +331,7 @@ export async function saveAdminDraft(
 			{
 				method: "PUT",
 				body: JSON.stringify({
+					expectedDraftGeneration,
 					expectedDraftRevision,
 					expectedPayload,
 					payload,

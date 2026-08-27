@@ -413,8 +413,8 @@
           ["features.authorFilter", "Toggle", "Boolean", "true"],
           ["features.authorLocation", "Toggle", "Requires author-country search", "false"],
           ["features.yearsDropdown", "Toggle", "Requires year filter", "false"],
-          ["features.downloads", "Toggle", "Requires configured export", "false"],
-          ["features.atomFeed", "Toggle", "Requires Atom endpoint", "false"]
+          ["features.downloads", "Toggle", "Requires exports.ris or exports.bibtex", "false"],
+          ["features.atomFeed", "Toggle", "Requires exports.atom", "false"]
         ]
       },
       {
@@ -431,9 +431,9 @@
           ["gapMaps[].label", "Text / key", "1–100 characters", "Required"],
           ["gapMaps[].description", "Text", "≤500 characters", "Optional"],
           ["gapMaps[].sourceUrl", "URL", "Stable external HTTPS HTML URL; served through same-site route", "Required"],
-          ["exports.ris", "URL", "HTTPS; approved RIS content type", "Optional"],
-          ["exports.bibtex", "URL", "HTTPS; approved BibTeX/text content type", "Optional"],
-          ["exports.atom", "URL", "HTTPS; Atom XML", "Optional"]
+          ["exports.ris", "Toggle", "Offers RIS per record and for the whole library", "true"],
+          ["exports.bibtex", "Toggle", "Offers BibTeX per record and for the whole library", "true"],
+          ["exports.atom", "Toggle", "Publishes the Atom feed at /lib/atom.xml", "false"]
         ]
       },
       {
@@ -471,10 +471,10 @@
           ["analytics.posthog.key", "Secret", "phc_ prefix; 20–200 characters", "Required when enabled"],
           ["analytics.google.measurementId", "Text", "G- plus 4–20 letters/numbers", "Optional"],
           ["analytics.utmDurationSeconds", "Number", "Integer 60–7,776,000", "2,592,000"],
+          ["authentication.openScholar", "Service access", "HTTPS site, library ID, login page, els_ credential", "Required"],
           ["authentication.google.enabled", "Toggle", "Requires features.login", "false"],
-          ["authentication.google.clientId", "Secret", "10–255 characters", "Required when login + Google auth enabled"],
-          ["authentication.google.clientSecret", "Secret", "20–512 characters", "Required when login + Google auth enabled"],
-          ["authentication.secret", "Secret", "32–512 characters", "Required when login enabled"],
+          ["authentication.google.clientId / clientSecret", "Secret pair", "10–255 / 20–512 characters", "Required when Google auth is enabled"],
+          ["authentication.secret", "Secret", "32–512 characters", "Required"],
           ["email.contactRecipient", "Email", "Valid; ≤254 characters", "Optional"],
           ["email.takedownRecipient", "Email", "Valid; ≤254 characters", "Optional"],
           ["email.smtp.host", "Host", "Hostname or IP; ≤253 characters", "Conditional"],
@@ -587,9 +587,6 @@
       "content.tags.redirects": ["User-defined valid tags"],
       "content.tags.publish": ["User-defined valid tags"],
       "gapMaps[].sourceUrl": ["HTTPS URL"],
-      "exports.ris": ["HTTPS RIS endpoint"],
-      "exports.bibtex": ["HTTPS BibTeX endpoint"],
-      "exports.atom": ["HTTPS Atom endpoint"],
       "services.database.url": ["postgres:", "postgresql:"],
       "services.search.host": ["http:", "https:"],
       "services.zotero.translationUrl": ["http:", "https:"],

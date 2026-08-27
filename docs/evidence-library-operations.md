@@ -11,6 +11,7 @@ JSON document.
 | Deployment      | Use `docker/compose.library.yaml` so the web app, workers, and private Meilisearch use one repository-owned release                     |
 | Image           | Build the repository `Dockerfile`; do not pass customer build arguments                                                                 |
 | Configuration   | Set `LIBRARY_CONFIG_JSON` to the complete validated runtime document; Compose mounts it at `LIBRARY_CONFIG_PATH`                        |
+| Release         | Set Coolify's `SOURCE_COMMIT` value on every service through the checked-in release label                                               |
 | Process         | Each image prepares config access as root, then runs as UID/GID `1001`                                                                  |
 | Network         | Expose `PORT`, default `3000`, through the deployment proxy                                                                             |
 | Client identity | The deployment proxy must overwrite `X-Real-IP`; never expose the application origin directly                                           |
@@ -22,11 +23,11 @@ in `LIBRARY_CONFIG_JSON`, not in `NEXT_PUBLIC_*` variables or customer image
 builds. `sources[]` lists every Zotero group the library can import from and,
 with `writebackEnabled: true`, write to; records choose their own sources at
 publish time and there is no default writeback source. The default deployment includes the search, source-sync, and
-source-writeback workers plus one private persistent Meilisearch service. A
-web-only deployment is incomplete.
+source-writeback, and publication workers plus one private persistent
+Meilisearch service. A web-only deployment is incomplete.
 
 Set the Coolify application field `connect_to_docker_network` to `false` through
-the provisioning API. The checked-in Compose attaches only the four runtime
+the provisioning API. The checked-in Compose attaches only the five runtime
 containers to the external `coolify` network. Meilisearch stays on the private
 application network, so another library cannot share its service-name DNS.
 
@@ -40,14 +41,153 @@ context on the repository Dockerfile and source tree:
 ```bash
 MEILISEARCH_MASTER_KEY="$(jq -r .services.search.key config/library.example.json)" \
 LIBRARY_CONFIG_JSON="$(jq -c '.services.search.host = "http://meilisearch:7700"' config/library.example.json)" \
+SOURCE_COMMIT="$(git rev-parse HEAD)" \
   docker compose --project-directory . \
   -f docker/compose.library.yaml config
 ```
 
+Every service gets the label
+`org.opendeved.evidence-library.release=$SOURCE_COMMIT`. Keep **Include Source
+Commit in Build** off and **Escape special characters in labels** off.
+OpenScholar manages both settings, writes `SOURCE_COMMIT` as a Coolify
+environment value, and checks the saved values after every application update.
+Coolify escapes dollar signs in labels by default; leaving that setting on
+stores the Compose expression as text instead of the release commit. Enabling
+source commits in builds also invalidates the Docker build cache on every
+commit. See Coolify's [application update API](https://coolify.io/docs/api-reference/api/applications/update-application-by-uuid)
+and [Docker Compose build settings](https://coolify.io/docs/applications/build-packs/docker-compose).
+
+## Run the library runtime verifier
+
+Deploy one runtime verifier for the development server from
+`docker/compose.runtime-verifier.yaml`. It has two services:
+
+- `runtime-verifier` is the only service on the external `coolify` network and
+  the only service that receives a public HTTPS domain.
+- `docker-socket-proxy` mounts the host Docker socket and stays on an internal
+  network. The pinned Tecnativa proxy allows container reads and blocks POST,
+  events, ping, version, and every other Docker API section.
+
+The verifier container never mounts `/var/run/docker.sock`. It calls the proxy
+at `http://docker-socket-proxy:2375`. Set one Coolify environment value:
+
+| Variable                                  | Value                                    |
+| ----------------------------------------- | ---------------------------------------- |
+| `EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN` | Bearer token containing 32 to 1024 bytes |
+
+`PORT` defaults to `3000` and the Compose file sets the internal Docker proxy
+URL. Assign the public HTTPS domain to `runtime-verifier:3000`. Do not assign a
+domain or host port to `docker-socket-proxy`.
+
+The executable is also available as a package command:
+
+```bash
+EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN='<32-byte-or-longer token>' \
+EVIDENCE_LIBRARY_RUNTIME_VERIFIER_DOCKER_URL='http://127.0.0.1:2375' \
+  npm run runtime:verifier
+```
+
+The verifier accepts one request:
+
+```http
+POST /v1/library-runtime/readiness
+Authorization: Bearer <EVIDENCE_LIBRARY_RUNTIME_VERIFIER_TOKEN>
+Content-Type: application/json
+
+{"applicationUuid":"<24-character Coolify application UUID>","commit":"<40-character Git commit>"}
+```
+
+It asks Docker for containers whose `com.docker.compose.project` label exactly
+matches the requested application UUID. It checks the Coolify and project
+labels before inspecting a container, then checks them again in the inspect
+response. It returns ready only when the six expected services are running,
+the services with health checks are healthy, every release label matches the
+requested commit, and Meilisearch has no published host port.
+
+Docker calls time out after two seconds. Each response is capped at 512 KiB,
+and one application can return at most 24 containers. Bad Docker data and proxy
+errors return the fixed `runtime_inspection_failed` response. Docker error text
+never reaches the caller.
+
 ## Create a library database
 
 Libraries share one PostgreSQL server, but each library has its own database
-and login. Create both with the checked-in command. Do not run one-off SQL:
+and login. OpenScholar creates them through the database provisioner. Build the
+small provisioner image from its named Docker target:
+
+```bash
+docker build --target database-provisioner \
+  --tag evidence-library-database-provisioner .
+```
+
+The container reads these values only from its environment:
+
+| Variable                                      | Value                                                                              |
+| --------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `EVIDENCE_LIBRARY_ADMIN_DATABASE_URL`         | PostgreSQL administrator URL used to create databases, logins, and extensions      |
+| `EVIDENCE_LIBRARY_DATABASE_RUNTIME_HOST`      | Internal PostgreSQL host and optional port written into each library's runtime URL |
+| `EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN` | Bearer token with at least 32 bytes                                                |
+| `PORT`                                        | HTTP port, default `3000`                                                          |
+
+`GET /health` returns `{"status":"ok"}`. Database setup uses this endpoint:
+
+```http
+POST /v1/library-databases/reconcile
+Authorization: Bearer <EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN>
+Content-Type: application/json
+
+{"libraryId":"<OpenScholar Evidence Library ID>","password":"<saved database password>"}
+```
+
+The request accepts only `libraryId` and `password`. The service derives the
+database and login names from the library ID. Callers cannot send a PostgreSQL
+host, administrator URL, database name, login name, migration path, or SQL.
+
+A successful request returns:
+
+```json
+{
+	"libraryId": "<same OpenScholar Evidence Library ID>",
+	"outcome": "created",
+	"databaseName": "el_...",
+	"loginName": "el_..._user",
+	"databaseUrl": "postgresql://..."
+}
+```
+
+`libraryId` is the exact ID from the request so OpenScholar can bind the receipt
+to the setup operation. `outcome` is `created` for a new database, `matched`
+when the saved request already matches PostgreSQL, and `updated` when
+reconciliation repairs a safe existing database. Error responses use the bounded
+`{"error":{"code":"...","message":"..."}}` shape and do not return database
+errors or environment values.
+
+The administrator creates the login and database, removes powerful rights and
+role memberships, revokes public database access, and installs `vector` and
+`pg_trgm`. The restricted library login then runs every checked-in Drizzle
+migration. A retry uses the same names and password. The service stops if
+another login owns the database, the login has server-wide rights, or it owns
+another database.
+
+Development teardown uses the same authenticated service:
+
+```http
+POST /v1/library-databases/delete
+Authorization: Bearer <EVIDENCE_LIBRARY_DATABASE_PROVISIONER_TOKEN>
+Content-Type: application/json
+
+{"libraryId":"<OpenScholar Evidence Library ID>"}
+```
+
+The request accepts only `libraryId`. The service derives the database and
+login names, stops connections to that database, drops the database, drops the
+restricted login, and reads both back. It refuses to delete a database owned by
+another login, a login with server-wide rights or role memberships, or a login
+that owns another database. A retry returns `outcome: "absent"` after both
+resources are gone.
+
+Operators can run the same reconciler directly for a chosen database and login.
+Do not replace it with one-off SQL:
 
 ```bash
 npm run database:provision -- \
@@ -58,10 +198,8 @@ npm run database:provision -- \
   --runtime-host evidence-library-postgres:5432
 ```
 
-The command removes powerful login rights, removes role memberships, blocks
-public database access, and prints the database URL for the runtime config.
-Running the same command again is safe. It stops if the database belongs to a
-different login or the login already owns another database.
+The command prints the same outcome, database name, login name, and runtime URL
+as the HTTP service.
 
 Prove the rule against a real development PostgreSQL server:
 
@@ -70,9 +208,10 @@ EVIDENCE_LIBRARY_ADMIN_DATABASE_URL="$EVIDENCE_LIBRARY_ADMIN_DATABASE_URL" \
   npm run test:database-provisioning
 ```
 
-The check creates two temporary databases, runs every Drizzle migration, proves
-both cross-library connections fail, reruns provisioning, and removes its test
-databases and logins.
+The check creates two temporary databases, confirms reconciliation ran every
+Drizzle migration, proves both cross-library connections fail, checks
+`created`, `matched`, and `updated`, rejects a conflicting owner, and removes
+its test databases and logins.
 
 ## HTTPS and admin access
 
@@ -80,21 +219,43 @@ Every library uses the normal Compose file and a public HTTPS origin. Set
 `identity.baseUrl` to that exact HTTPS origin. Coolify must force HTTP requests
 to HTTPS and route the hostname to the `web` service on port `3000`.
 
-The private runtime configuration must contain both
-`authentication.adminPassword` and `authentication.secret`. The password form
-creates a signed 12-hour cookie. The cookie is HTTP-only, same-site strict,
-host-only, and secure in production. It contains no password. Changing either
-private value signs out every existing session.
+Every deployed library must configure `authentication.openScholar` with its
+OpenScholar Convex site origin, Evidence Library ID, OpenScholar login page,
+and `els_` machine credential. It must also set `authentication.secret` for
+cookie signing. These fields are private and the runtime configuration is
+invalid when either part is missing.
 
-The public library stays open. `/admin` shows the password form when signed
-out. Every admin data API returns `401` with `Cache-Control: private, no-store`
-unless it receives a valid cookie. Login failures share a small fixed window
-per client address. The deployment proxy must overwrite `X-Real-IP` so an
-internet caller cannot choose that address.
+OpenScholar sends the browser to `/api/admin/session?code=elc_...`. The
+Evidence Library sends that code, its configured library ID, and its machine
+credential to
+`POST /api/v1/evidence-libraries/admin-login/redeem` on the configured Convex
+site. A successful response creates a signed 12-hour cookie containing the
+returned Clerk user, Clerk organization, target library, and owner/editor
+role. The cookie is HTTP-only, same-site lax, host-only, and secure in
+production. Codes are single-use; rejected, expired, replayed, or
+wrong-library codes do not create a session.
 
-After deployment, check the HTTP redirect, the HTTPS certificate, the login
-form, reload persistence, logout, and one real PDF upload. In the browser,
-`window.isSecureContext` must be true and `crypto.subtle` must exist.
+The public library stays open. Signed-out and failed `/admin` visits link back
+to the configured OpenScholar page. Admin pages and APIs use one role policy:
+
+- Owners and Editors can use the existing content tools for records,
+  collections, files, publishing, search status, and source writeback.
+- Library setup, configuration, deployment, and membership actions are
+  Owner-only. This runtime does not currently expose those actions, so no
+  existing content route is restricted to Owners.
+
+An invalid or missing cookie returns `401`. A valid role without the requested
+permission returns `403`. Both API responses use
+`Cache-Control: private, no-store`.
+
+Workers do not read the admin cookie or copy its user identity into work. Search,
+source sync, source writeback, and publication workers claim saved PostgreSQL
+work and use the library's runtime service credentials.
+
+After deployment, create a fresh code in OpenScholar and check the redirect,
+HTTPS certificate, reload persistence, logout, code replay rejection, and one
+real PDF upload. In the browser, `window.isSecureContext` must be true and
+`crypto.subtle` must exist.
 
 ## Prepare a library for direct Docker use
 
@@ -238,6 +399,43 @@ PostgreSQL, Meilisearch, SMTP, analytics, AI providers, or external assets are
 healthy; monitor those dependencies separately and run the acceptance suite
 before release.
 
+## Decide whether a Compose deployment is ready
+
+Keep the Coolify deployment result, Compose service state, and configuration
+response as separate evidence. Do not copy them into another readiness store.
+A library is ready only when all of these checks pass:
+
+1. Coolify reports that the requested deployment succeeded.
+2. `docker compose ps --all` reports one container for `web`,
+   `search-indexer`, `source-sync`, `source-writeback`, `publication-worker`,
+   and `meilisearch`. None is missing, exited, restarting, dead, or unhealthy.
+3. `web`, `search-indexer`, `publication-worker`, and `meilisearch` are
+   healthy. `source-sync` and `source-writeback` are running.
+4. `GET /api/library-config/health` returns `200`, reports `state: "active"`,
+   reports the requested `active.revision`, and has no rejected revision.
+5. The public library URL and `/admin` return a successful HTTP response.
+
+The source workers intentionally have no container health check. An idle source
+worker has no active connection lease to refresh. Its running container is the
+startup signal. Per-connection run and error records remain the source of truth
+for later import or writeback failures.
+
+Use the existing Compose result to name a missing, exited, or unhealthy
+container. Use the existing Coolify deployment result to name a failed build or
+deployment step. Do not replace either result with a second health state
+machine. A successful configuration response alone never makes the deployment
+ready.
+
+From a host with access to the application, inspect the same evidence with:
+
+```bash
+docker compose --project-directory . \
+  -f docker/compose.library.yaml ps --all --format json
+curl --fail-with-body https://library.example.org/api/library-config/health
+curl --fail-with-body https://library.example.org/en/lib
+curl --fail-with-body https://library.example.org/admin
+```
+
 ## Activate a change without restarting
 
 Validate and activate from a source checkout that can write the host directory:
@@ -311,10 +509,26 @@ running before removing a stale lock.
 - Enabled gap maps are streamed through
   `/gapmaps/<slug>.html`; the application server fetches their configured
   source URLs and accepts approved HTML content types.
-- Enabled RIS and BibTeX exports are streamed through `/lib/export/ris` and
-  `/lib/export/bibtex`; Atom is streamed through `/lib/atom.xml`. The
-  application validates upstream status and content type.
-- Proxied gap maps and exports are not cached by the application.
+- The library builds every citation file itself from its own records. There are
+  no external file addresses. `exports.ris`, `exports.bibtex`, and `exports.atom`
+  are switches. RIS and BibTeX are on by default; the Atom feed is off.
+- Single-record downloads at `/lib/<key>/export/ris` and
+  `/lib/<key>/export/bibtex` need `features.downloads` and the switch for that
+  format. The download dialog offers only the formats that are switched on.
+- Whole-library files at `/lib/export/ris` and `/lib/export/bibtex` need the
+  same two switches. They read PostgreSQL 250 records at a time, walking the
+  record key upwards, and stop after 20 000 records. Because paging follows the
+  record key rather than a row number, a record added or removed while the file
+  is being written cannot make another record appear twice or be missed. The
+  file is named after the library short name.
+- The Atom feed at `/lib/atom.xml` needs `features.atomFeed` and
+  `exports.atom`. It lists the 50 most recently added records.
+- Exports read a fixed list of citation columns. Stored full text, cover
+  images, notes and file details are never loaded.
+- Exports show the same records as the public library. Records carrying a
+  hidden tag are left out. Records carrying a coming-soon or internal tag stay
+  in, because the public library shows them with a badge.
+- Proxied gap maps and generated exports are not cached by the application.
 - PostgreSQL, Meilisearch, SMTP, server analytics, and AI provider endpoints
   must be reachable from the container network. Browser analytics hosts must
   also be reachable from the user's browser.
@@ -328,13 +542,17 @@ Run the complete local contract before deploying the shared image:
 
 ```bash
 npm run check:changed
+SOURCE_COMMIT="$(git rev-parse HEAD)" npm run test:library-compose
 npm run test:acceptance
 ```
 
-`npm run test:acceptance` starts two disposable libraries, PostgreSQL, Meilisearch,
-Mailpit, workers, and local HTTPS fixtures for external services. It runs every
-desktop and mobile browser check, including the complete mocked Crossref and
-Zenodo publication flow. It also verifies independently enabled and disabled
+`npm run test:acceptance` first starts the repository Compose deployment with
+all five required processes and its private Meilisearch. It checks real Compose
+state and health, the active revision, the public site, and `/admin`. The rest
+of the suite starts two disposable libraries, PostgreSQL, Meilisearch, Mailpit,
+workers, and local HTTPS fixtures for external services. It runs every desktop
+and mobile browser check, including the complete mocked Crossref and Zenodo
+publication flow. It also verifies independently enabled and disabled
 integrations, secret boundaries, live activation, rejection, last-valid
 retention, and rollback using the same production image.
 
@@ -350,6 +568,25 @@ The cleanup command removes only Evidence Library acceptance environments whose
 test process has ended. It leaves active tests and unrelated development
 containers running.
 
+## Real-service admin codes
+
+Real-service checks that call the deployed admin HTTP API require
+`EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE` to contain a fresh `elc_` code for that
+library. OpenScholar codes are single-use, so request a new code before every
+command. This applies to these checks:
+
+```bash
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:search-worker
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:native-file-http
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:admin-item-batch-http
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:linked-item-lifecycle
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' npm run test:admin-zotero-live -- --confirm-group <group-id>
+```
+
+The linked-item check needs the code only when `EVIDENCE_LIBRARY_TEST_URL` is
+set and its HTTP checks run. The acceptance suite issues its own disposable
+codes and does not need this environment value.
+
 ## Real publication sandbox checks
 
 These commands may write only to the docs-pen Crossref Test and Zenodo Sandbox
@@ -363,10 +600,13 @@ export PUBLICATION_SANDBOX_RUN_ID=docs-pen-$(date +%Y%m%d-%H%M%S)
 export PUBLICATION_EXPECTED_CROSSREF_PREFIX=10.53832
 export PUBLICATION_EXPECTED_CROSSREF_NAMESPACE=docs-pen.
 export PUBLICATION_SANDBOX_EVIDENCE_PATH=/tmp/${PUBLICATION_SANDBOX_RUN_ID}.json
-export EVIDENCE_LIBRARY_ADMIN_PASSWORD='<docs-pen admin password>'
-
+export EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh docs-pen elc_ code>'
 npm run test:crossref-test-live
+
+export EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<another fresh docs-pen elc_ code>'
 npm run test:zenodo-sandbox-live
+
+export EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<another fresh docs-pen elc_ code>'
 npm run test:publication-sandbox-lifecycle
 ```
 

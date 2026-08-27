@@ -7,6 +7,7 @@ import { Item, ItemGetResponse } from "@/app/api/item/types";
 import { Metadata } from "next";
 import { buildLanguageAlternates } from "@/lib/language-alternates";
 import { getLibraryConfig } from "@/config/library-config/server";
+import { getRecordCitationLinks } from "@/config/library-config/exports";
 import { buildSiteUrl } from "@/lib/site-url";
 import { convertToImageURL, getExtraValues } from "@/lib/utils";
 import ServerComponent from "./ServerComponent";
@@ -83,10 +84,17 @@ export async function generateMetadata(props: {
 				libraryConfig.localization,
 				baseUrl,
 			),
-			types: {
-				"application/x-research-info-systems": buildSiteUrl(`/lib/${item.key}/export/ris`, baseUrl),
-				"application/x-bibtex": buildSiteUrl(`/lib/${item.key}/export/bibtex`, baseUrl),
-			},
+			// Only advertise a citation file the library actually serves.
+			types: Object.fromEntries(
+				getRecordCitationLinks(
+					libraryConfig.exports,
+					libraryConfig.features.downloads,
+					item.key,
+				).map((link) => [
+					link.contentType,
+					buildSiteUrl(link.path, baseUrl),
+				]),
+			),
 			media: {
 				"image/jpeg": pdfWithImage
 					? convertToImageURL(pdfWithImage.PDFCoverPageImage ?? "")

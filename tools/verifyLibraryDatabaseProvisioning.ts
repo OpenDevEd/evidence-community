@@ -1,47 +1,69 @@
 import assert from "node:assert/strict";
 import { randomBytes } from "node:crypto";
 
-import { drizzle } from "drizzle-orm/node-postgres";
-import { migrate } from "drizzle-orm/node-postgres/migrator";
 import pg from "pg";
 
-import { quotePostgresIdentifier } from "../src/lib/deployment/library-database";
-import { provisionLibraryDatabase } from "./provisionLibraryDatabase";
+import {
+	deriveLibraryDatabaseNames,
+	LibraryDatabaseProvisioningError,
+	quotePostgresIdentifier,
+} from "../src/lib/deployment/library-database";
+import {
+	deleteOpenScholarLibraryDatabase,
+	reconcileLibraryDatabase,
+	reconcileOpenScholarLibraryDatabase,
+} from "../src/lib/deployment/provision-library-database";
 
-const { Client, Pool } = pg;
-
+const { Client, Pool, escapeLiteral } = pg;
 const configuredAdminUrl = process.env.EVIDENCE_LIBRARY_ADMIN_DATABASE_URL;
 if (!configuredAdminUrl) {
 	throw new Error("EVIDENCE_LIBRARY_ADMIN_DATABASE_URL is required.");
 }
 const adminUrl = new URL(configuredAdminUrl);
 const adminUser = decodeURIComponent(adminUrl.username);
-const runtimeHost = adminUrl.host;
+const runtimeHost =
+	process.env.EVIDENCE_LIBRARY_DATABASE_RUNTIME_HOST ?? adminUrl.host;
 const suffix = `${Date.now().toString(36)}_${randomBytes(3).toString("hex")}`;
-const libraries = [
-	{
-		database: `el_verify_amber_${suffix}`,
-		password: `amber-${randomBytes(18).toString("base64url")}`,
-		user: `el_verify_amber_user_${suffix}`,
-	},
-	{
-		database: `el_verify_indigo_${suffix}`,
-		password: `indigo-${randomBytes(18).toString("base64url")}`,
-		user: `el_verify_indigo_user_${suffix}`,
-	},
-] as const;
 
-async function migrateAndReadOwnDatabase(
-	databaseUrl: string,
-	expectedOwner: string,
-) {
-	const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+function libraryFixture(name: string) {
+	const libraryId = `database-verifier-${name}-${suffix}`;
+	return {
+		...deriveLibraryDatabaseNames(libraryId),
+		libraryId,
+		password: `${name}-${randomBytes(18).toString("base64url")}`,
+	};
+}
+
+const libraries = [libraryFixture("amber"), libraryFixture("indigo")];
+const conflict = libraryFixture("conflict");
+
+function adminReachableLibraryUrl(library: (typeof libraries)[number]) {
+	const url = new URL(adminUrl);
+	url.username = library.loginName;
+	url.password = library.password;
+	url.pathname = `/${library.databaseName}`;
+	return url.toString();
+}
+
+async function reconcileLibrary(library: (typeof libraries)[number]) {
+	return reconcileOpenScholarLibraryDatabase({
+		adminUrl: adminUrl.toString(),
+		libraryId: library.libraryId,
+		password: library.password,
+		runtimeHost,
+	});
+}
+
+async function readOwnDatabase(library: (typeof libraries)[number]) {
+	const pool = new Pool({
+		connectionString: adminReachableLibraryUrl(library),
+		max: 1,
+	});
 	try {
-		await migrate(drizzle(pool), { migrationsFolder: "drizzle" });
-		const result = await pool.query<{ count: string }>(
+		const status = await pool.query<{ count: string }>(
 			`SELECT COUNT(*)::text AS count FROM "status"`,
 		);
-		assert.equal(result.rows[0]?.count, "1");
+		assert.equal(status.rows[0]?.count, "1");
 		const extensions = await pool.query<{ extname: string; owner: string }>(
 			`SELECT extension.extname, role.rolname AS owner
 			 FROM pg_extension AS extension
@@ -60,18 +82,18 @@ async function migrateAndReadOwnDatabase(
 			 WHERE schemaname IN ('public', 'drizzle')
 			 ORDER BY tableowner`,
 		);
-		assert.deepEqual(relationOwners.rows, [{ owner: expectedOwner }]);
+		assert.deepEqual(relationOwners.rows, [{ owner: library.loginName }]);
 	} finally {
 		await pool.end();
 	}
 }
 
 async function expectCrossDatabaseDenied(
-	sourceUrl: string,
-	targetDatabase: string,
+	source: (typeof libraries)[number],
+	targetDatabaseName: string,
 ) {
-	const url = new URL(sourceUrl);
-	url.pathname = `/${targetDatabase}`;
+	const url = new URL(adminReachableLibraryUrl(source));
+	url.pathname = `/${targetDatabaseName}`;
 	const client = new Client({
 		connectionString: url.toString(),
 		connectionTimeoutMillis: 5_000,
@@ -87,7 +109,7 @@ async function expectCrossDatabaseDenied(
 		(error: unknown) =>
 			error instanceof Error &&
 			/error|denied|permission|not permitted/i.test(error.message),
-		`Expected ${url.username} to be denied access to ${targetDatabase}`,
+		`Expected ${source.loginName} to be denied access to ${targetDatabaseName}`,
 	);
 }
 
@@ -106,87 +128,164 @@ async function readAdminRights() {
 	}
 }
 
-async function cleanup() {
+async function withAdminClient(
+	run: (client: InstanceType<typeof Client>) => Promise<void>,
+) {
 	const client = new Client({ connectionString: adminUrl.toString() });
 	await client.connect();
 	try {
-		for (const library of libraries) {
+		await run(client);
+	} finally {
+		await client.end();
+	}
+}
+
+async function cleanup() {
+	await withAdminClient(async (client) => {
+		for (const databaseName of [
+			...libraries.map((library) => library.databaseName),
+			conflict.databaseName,
+		]) {
 			await client.query(
 				`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = $1 AND pid <> pg_backend_pid()`,
-				[library.database],
+				[databaseName],
 			);
 			await client.query(
-				`DROP DATABASE IF EXISTS ${quotePostgresIdentifier(library.database)}`,
+				`DROP DATABASE IF EXISTS ${quotePostgresIdentifier(databaseName)}`,
 			);
 		}
-		for (const library of libraries) {
+		for (const loginName of [
+			...libraries.map((library) => library.loginName),
+			conflict.loginName,
+		]) {
 			await client.query(
-				`DROP ROLE IF EXISTS ${quotePostgresIdentifier(library.user)}`,
+				`DROP ROLE IF EXISTS ${quotePostgresIdentifier(loginName)}`,
 			);
 		}
+	});
+}
+
+async function readLibraryResourceState(library: (typeof libraries)[number]) {
+	const client = new Client({ connectionString: adminUrl.toString() });
+	await client.connect();
+	try {
+		const result = await client.query<{
+			database_exists: boolean;
+			login_exists: boolean;
+		}>(
+			`SELECT
+			   EXISTS (SELECT 1 FROM pg_database WHERE datname = $1) AS database_exists,
+			   EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $2) AS login_exists`,
+			[library.databaseName, library.loginName],
+		);
+		return result.rows[0];
 	} finally {
 		await client.end();
 	}
 }
 
 async function main() {
-	const results: Awaited<ReturnType<typeof provisionLibraryDatabase>>[] = [];
 	try {
 		const beforeAdmin = await readAdminRights();
 		await assert.rejects(
-			provisionLibraryDatabase({
+			reconcileLibraryDatabase({
 				adminUrl: adminUrl.toString(),
-				database: `el_verify_guard_${suffix}`,
+				databaseName: `el_verify_guard_${suffix}`,
+				loginName: adminUser,
 				password: randomBytes(18).toString("base64url"),
 				runtimeHost,
-				user: adminUser,
 			}),
-			/protected/i,
+			(error: unknown) =>
+				error instanceof LibraryDatabaseProvisioningError &&
+				error.code === "login_security_conflict",
 		);
 		assert.deepEqual(await readAdminRights(), beforeAdmin);
 
 		for (const library of libraries) {
-			const result = await provisionLibraryDatabase({
-				adminUrl: adminUrl.toString(),
-				database: library.database,
-				password: library.password,
-				runtimeHost,
-				user: library.user,
-			});
-			assert.equal(result.action, "create");
-			results.push(result);
-			await migrateAndReadOwnDatabase(result.databaseUrl, library.user);
+			const result = await reconcileLibrary(library);
+			assert.equal(result.outcome, "created");
+			assert.equal(result.databaseName, library.databaseName);
+			assert.equal(result.loginName, library.loginName);
+			const runtimeUrl = new URL(result.databaseUrl);
+			assert.equal(runtimeUrl.host, runtimeHost);
+			assert.equal(runtimeUrl.pathname, `/${library.databaseName}`);
+			await readOwnDatabase(library);
+		}
+
+		for (const library of libraries) {
+			const repeated = await reconcileLibrary(library);
+			assert.equal(repeated.outcome, "matched");
+			assert.equal(repeated.databaseName, library.databaseName);
+			assert.equal(repeated.loginName, library.loginName);
+			await readOwnDatabase(library);
 		}
 
 		await expectCrossDatabaseDenied(
-			results[0].databaseUrl,
-			libraries[1].database,
+			libraries[0],
+			libraries[1].databaseName,
 		);
 		await expectCrossDatabaseDenied(
-			results[1].databaseUrl,
-			libraries[0].database,
+			libraries[1],
+			libraries[0].databaseName,
 		);
 
-		for (const [index, library] of libraries.entries()) {
-			const repeated = await provisionLibraryDatabase({
+		await withAdminClient(async (client) => {
+			await client.query(
+				`ALTER ROLE ${quotePostgresIdentifier(libraries[0].loginName)} PASSWORD ${escapeLiteral(`changed-${randomBytes(12).toString("base64url")}`)}`,
+			);
+			await client.query(
+				`GRANT CONNECT ON DATABASE ${quotePostgresIdentifier(libraries[0].databaseName)} TO PUBLIC`,
+			);
+		});
+		const repaired = await reconcileLibrary(libraries[0]);
+		assert.equal(repaired.outcome, "updated");
+		await readOwnDatabase(libraries[0]);
+
+		await withAdminClient(async (client) => {
+			await client.query(
+				`CREATE DATABASE ${quotePostgresIdentifier(conflict.databaseName)} OWNER ${quotePostgresIdentifier(adminUser)}`,
+			);
+		});
+		await assert.rejects(
+			reconcileOpenScholarLibraryDatabase({
 				adminUrl: adminUrl.toString(),
-				database: library.database,
-				password: library.password,
+				libraryId: conflict.libraryId,
+				password: conflict.password,
 				runtimeHost,
-				user: library.user,
+			}),
+			(error: unknown) =>
+				error instanceof LibraryDatabaseProvisioningError &&
+				error.code === "database_owner_conflict",
+		);
+
+		for (const library of libraries) {
+			const deleted = await deleteOpenScholarLibraryDatabase({
+				adminUrl: adminUrl.toString(),
+				libraryId: library.libraryId,
 			});
-			assert.equal(repeated.action, "normalize");
-			assert.equal(repeated.databaseUrl, results[index].databaseUrl);
-			await migrateAndReadOwnDatabase(repeated.databaseUrl, library.user);
+			assert.equal(deleted.outcome, "deleted");
+			assert.equal(deleted.databaseName, library.databaseName);
+			assert.equal(deleted.loginName, library.loginName);
+			assert.deepEqual(await readLibraryResourceState(library), {
+				database_exists: false,
+				login_exists: false,
+			});
+			const repeated = await deleteOpenScholarLibraryDatabase({
+				adminUrl: adminUrl.toString(),
+				libraryId: library.libraryId,
+			});
+			assert.equal(repeated.outcome, "absent");
 		}
 
 		console.log(
 			JSON.stringify({
-				crossDatabaseAccess: "denied",
 				administratorGuard: "passed",
-				databases: libraries.map((library) => library.database),
-				migrations: "passed",
-				rerun: "safe",
+				conflictingOwner: "rejected",
+				crossDatabaseAccess: "denied",
+				databases: libraries.map((library) => library.databaseName),
+				migrations: "passed inside reconciliation",
+				outcomes: ["created", "matched", "updated"],
+				teardown: ["deleted", "absent"],
 			}),
 		);
 	} finally {

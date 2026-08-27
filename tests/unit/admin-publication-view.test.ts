@@ -87,7 +87,7 @@ function snapshot(changes: Partial<Snapshot> = {}): Snapshot {
 
 function target(
 	provider: "crossref" | "zenodo",
-	identifierPolicy: "reuse-crossref" | "mint-zenodo" | null = null,
+	identifierPolicy: "reuse-crossref" | "reuse-external" | "mint-zenodo" | null = null,
 ) {
 	return {
 		itemKey: "ABCDEFGH",
@@ -253,7 +253,7 @@ describe("admin publication view", () => {
 		expect(view.providers.zenodo.capabilities.canActivate).toBe(false);
 		expect(
 			view.providers.zenodo.capabilities.allowedIdentifierPolicies,
-		).toEqual([]);
+		).toEqual(["reuse-external"]);
 	});
 
 	it("treats a metadata-only DOI on this library's prefix as external too", () => {
@@ -800,5 +800,186 @@ describe("admin publication view", () => {
 				config,
 			}),
 		).toThrow(PublicationItemNotFoundError);
+	});
+});
+
+describe("identifiers view", () => {
+	it("treats a record with no DOI as optional work, not a problem", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({ record: record({ abstractNote: undefined }) }),
+			config,
+		});
+		const { identifiers } = view;
+		expect(identifiers.doi).toBeNull();
+		expect(identifiers.registration).toEqual({ state: "none" });
+		expect(identifiers.archive).toEqual({ state: "none" });
+		expect(identifiers.attention).toBe(false);
+		expect(identifiers.actions.map((action) => action.id)).toEqual([
+			"register-crossref",
+			"mint-zenodo",
+		]);
+		const zenodo = identifiers.actions.find((a) => a.id === "mint-zenodo")!;
+		expect(zenodo.available).toBe(true);
+		expect(zenodo.ready).toBe(false);
+		expect(zenodo.readiness).toContainEqual({
+			label: "Zenodo requires an abstract or description",
+			ok: false,
+			field: "abstractNote",
+		});
+	});
+
+	it("reports a ready action with one positive line instead of an empty list", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot(),
+			config,
+		});
+		const crossref = view.identifiers.actions.find(
+			(a) => a.id === "register-crossref",
+		)!;
+		expect(crossref.ready).toBe(true);
+		expect(crossref.readiness).toEqual([
+			{ label: "Record details", ok: true, field: null },
+		]);
+	});
+
+	it("shows a DOI the record brought with it as a fact and drops Crossref", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({ record: record({ DOI: "10.9999/external" }) }),
+			config,
+		});
+		const { identifiers } = view;
+		expect(identifiers.doi).toEqual({
+			value: "10.9999/external",
+			origin: "record",
+			url: "https://doi.org/10.9999/external",
+		});
+		expect(identifiers.actions.map((a) => a.id)).toEqual(["archive-zenodo"]);
+		const archive = identifiers.actions[0]!;
+		expect(archive.available).toBe(true);
+		expect(
+			view.providers.zenodo.capabilities.allowedIdentifierPolicies,
+		).toEqual(["reuse-external"]);
+		expect(identifiers.attention).toBe(false);
+	});
+
+	it("does not claim field-level provenance for a source-linked record", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({
+					DOI: "10.9999/external",
+					sourceConnectionKey: "zotero-playground",
+				}),
+			}),
+			config,
+		});
+		expect(view.identifiers.doi?.origin).toBe("record");
+	});
+
+	it("shows a managed Crossref DOI as registration in progress", () => {
+		const managed = identifier({
+			provider: "crossref",
+			doi: "10.5555/library.000042",
+			lifecycle: "reserved",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: managed.doi }),
+				targets: [target("crossref")],
+				identifiers: [managed],
+			}),
+			config,
+		});
+		const { identifiers } = view;
+		expect(identifiers.doi).toMatchObject({
+			value: managed.doi,
+			origin: "crossref",
+		});
+		expect(identifiers.registration).toMatchObject({
+			state: "active",
+			provider: "crossref",
+		});
+		expect(identifiers.actions.map((a) => a.id)).toEqual(["archive-zenodo"]);
+	});
+
+	it("asks for attention only when something activated has failed", () => {
+		const managed = identifier({
+			provider: "crossref",
+			doi: "10.5555/library.000042",
+			lifecycle: "reserved",
+		});
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: snapshot({
+				record: record({ DOI: managed.doi }),
+				targets: [target("crossref")],
+				identifiers: [managed],
+				jobs: [
+					job({
+						id: 1,
+						attempts: 8,
+						deadLetteredAt: new Date("2026-08-12T10:30:00Z"),
+					}),
+				],
+			}),
+			config,
+		});
+		expect(view.providers.crossref.displayState).toBe("failed");
+		expect(view.identifiers.attention).toBe(true);
+	});
+
+	function archivedUnderOwnDoi(recordDoi: string) {
+		return snapshot({
+			record: record({ DOI: recordDoi }),
+			targets: [target("zenodo", "reuse-external")],
+			// Settlement stores the reused DOI as external, never managed.
+			identifiers: [
+				identifier({
+					provider: "zenodo",
+					doi: "10.9999/external",
+					role: "version",
+					ownership: "external",
+				}),
+			],
+			states: [
+				syncState({
+					provider: "zenodo",
+					environment: "sandbox",
+					identifierPolicy: "reuse-external",
+					zenodoRecordId: "588743",
+					zenodoParentId: "588742",
+					zenodoVersionDoi: "10.9999/external",
+					zenodoFirstPublishedAt: new Date("2026-08-21T10:00:00Z"),
+				}),
+			],
+		});
+	}
+
+	it("keeps the record's own DOI as the record's after Zenodo archived under it", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: archivedUnderOwnDoi("10.9999/external"),
+			config,
+		});
+		expect(view.identifiers.doi).toMatchObject({
+			value: "10.9999/external",
+			origin: "record",
+		});
+		expect(view.providers.zenodo.blockers).toEqual([]);
+	});
+
+	it("blocks Zenodo when the record DOI was changed after archiving under it", () => {
+		const view = buildAdminPublicationViewFromSnapshot({
+			itemKey: "ABCDEFGH",
+			snapshot: archivedUnderOwnDoi("10.9999/changed"),
+			config,
+		});
+		expect(view.providers.zenodo.blockers).toContainEqual(
+			expect.stringContaining("no longer matches the DOI archived on Zenodo"),
+		);
 	});
 });

@@ -20,7 +20,12 @@ import {
 } from "./native-file-service";
 import { EvidenceFileStorageError } from "./file-storage";
 import { InvalidPdfError } from "./pdf-processing";
-import { adminSessionCookieName, isAdminSessionAuthorized } from "./access";
+import {
+	ADMIN_CONTENT_PERMISSION,
+	adminSessionCookieName,
+	authorizeAdminSession,
+	type AdminPermission,
+} from "./access";
 import {
 	CollectionConflictError,
 	CollectionNotFoundError,
@@ -106,21 +111,36 @@ function adminError(details: AdminErrorDetails) {
 	);
 }
 
-export async function requireAdminSession(request: {
+type AdminRequest = {
 	cookies: { get(name: string): { value: string } | undefined };
-}) {
-	if (
-		await isAdminSessionAuthorized(
-			request.cookies.get(adminSessionCookieName())?.value,
-		)
-	) {
-		return null;
+};
+
+export async function requireAdminPermission(
+	request: AdminRequest,
+	permission: AdminPermission,
+) {
+	const authorization = await authorizeAdminSession(
+		request.cookies.get(adminSessionCookieName())?.value,
+		permission,
+	);
+	if (authorization.status === "authorized") return null;
+	if (authorization.status === "forbidden") {
+		return adminError({
+			code: "forbidden",
+			message: "Only a library Owner can do this.",
+			status: 403,
+		});
 	}
 	return adminError({
 		code: "unauthorized",
-		message: "Enter the admin password to continue.",
+		message: "Open this library from OpenScholar to continue.",
 		status: 401,
 	});
+}
+
+/** Shared content-permission guard for every current admin data route. */
+export function requireAdminSession(request: AdminRequest) {
+	return requireAdminPermission(request, ADMIN_CONTENT_PERMISSION);
 }
 
 export function adminErrorDetails(error: unknown): AdminErrorDetails {

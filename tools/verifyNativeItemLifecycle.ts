@@ -124,6 +124,7 @@ async function verify() {
 
 		const saved = await saveNativeItemDraft(db, {
 			itemKey: draft.itemKey,
+			expectedDraftGeneration: draft.generation,
 			expectedDraftRevision: 1,
 			expectedPayload: draft.payload,
 			payload: {
@@ -148,6 +149,7 @@ async function verify() {
 		// changed a different field keeps both changes.
 		const mergedSave = await saveNativeItemDraft(db, {
 			itemKey: draft.itemKey,
+			expectedDraftGeneration: draft.generation,
 			expectedDraftRevision: 1,
 			expectedPayload: draft.payload,
 			payload: { ...draft.payload, abstractNote: "Added in another tab" },
@@ -165,6 +167,7 @@ async function verify() {
 		try {
 			await saveNativeItemDraft(db, {
 				itemKey: draft.itemKey,
+				expectedDraftGeneration: draft.generation,
 				expectedDraftRevision: 1,
 				expectedPayload: draft.payload,
 				payload: { ...draft.payload, title: "Stale edit" },
@@ -213,6 +216,27 @@ async function verify() {
 				publishedTags[0]!.tagName === publishedTag,
 			"Published tags were not normalized",
 		);
+
+		const discardedGeneration = await openNativeItemDraft(db, draft.itemKey);
+		await discardNativeItemDraft(db, draft.itemKey);
+		await openNativeItemDraft(db, draft.itemKey);
+		let discardedGenerationRejected = false;
+		try {
+			await saveNativeItemDraft(db, {
+				itemKey: draft.itemKey,
+				expectedDraftGeneration: discardedGeneration.generation,
+				expectedDraftRevision: discardedGeneration.draftRevision,
+				expectedPayload: discardedGeneration.payload,
+				payload: { ...discardedGeneration.payload, title: "Discarded tab edit" },
+			});
+		} catch (error) {
+			discardedGenerationRejected = error instanceof NativeDraftConflictError;
+		}
+		assert(
+			discardedGenerationRejected,
+			"A tab from a discarded draft generation was allowed to overwrite the replacement draft",
+		);
+		await discardNativeItemDraft(db, draft.itemKey);
 		await db.insert(publicationTarget).values([
 			{
 				itemKey: draft.itemKey,

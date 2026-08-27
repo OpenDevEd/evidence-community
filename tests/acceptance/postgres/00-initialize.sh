@@ -47,6 +47,9 @@ VALUES (
 	0
 );
 
+INSERT INTO "itemToCollection" ("itemKey", "collectionKey")
+VALUES ('AMBR2345', 'ZBJ4NBSL');
+
 INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
 VALUES
 	('PUBACC23', 'native', 'PUBACC23'),
@@ -60,7 +63,7 @@ INSERT INTO "item" (
 	'Amber DOI acceptance report',
 	'This report proves the local Crossref and Zenodo publication flow.',
 	'2026-08-13',
-	'[{"creatorType":"author","firstName":"Ada","lastName":"Lovelace"}]'::jsonb,
+	'[{"creatorType":"author","firstName":"Ada","lastName":"Lovelace","institutions":[{"display_name":"Amber Institute","country_code":"GB"},{"display_name":"Indigo College","country_code":"KE"}]}]'::jsonb,
 	'Amber Evidence Library',
 	0
 );
@@ -89,6 +92,62 @@ INSERT INTO "itemFilePublication" (
 	'http://storage:5000/storage/v1/object/public/amber-public/publication/PUBPDF23.png',
 	100, 140, 1, '[]'::jsonb, now()
 );
+
+INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
+VALUES
+	('PUBEXT23', 'native', 'PUBEXT23'),
+	('PUBEXPA3', 'native', 'PUBEXPA3'),
+	('PUBEXPB2', 'native', 'PUBEXPB2');
+
+INSERT INTO "item" (
+	"key", "sourceConnectionKey", "sourceRecordKey", "itemType", "revision",
+	"title", "abstractNote", "date", "creators", "publisher", "DOI", "deleted"
+) VALUES (
+	'PUBEXT23', 'native', 'PUBEXT23', 'Report', 1,
+	'Amber external DOI archive report',
+	'This report proves Zenodo file corrections under a DOI the record brought with it.',
+	'2026-08-21',
+	'[{"creatorType":"author","firstName":"Katherine","lastName":"Johnson"}]'::jsonb,
+	'Amber Evidence Library',
+	'10.1038/nature12373',
+	0
+);
+
+INSERT INTO "item" (
+	"key", "sourceConnectionKey", "sourceRecordKey", "itemType", "parentItem",
+	"revision", "title", "deleted"
+) VALUES
+	('PUBEXPA3', 'native', 'PUBEXPA3', 'Attachment', 'PUBEXT23', 1, 'External DOI PDF A', 0),
+	('PUBEXPB2', 'native', 'PUBEXPB2', 'Attachment', 'PUBEXT23', 1, 'External DOI PDF B', 0);
+
+INSERT INTO "itemFilePublication" (
+	"itemKey", "sourceConnectionKey", "parentItemKey", "uploadRevision", "revision",
+	"sourceObjectPath", "sourceCoverObjectPath", "objectPath", "publicUrl", "filename",
+	"contentType", "sizeBytes", "sha256", "md5", "coverObjectPath", "coverPublicUrl",
+	"coverWidth", "coverHeight", "pageCount", "publicationTags", "publishedAt"
+) VALUES
+	(
+		'PUBEXPA3', 'native', 'PUBEXT23', 1, 1,
+		'private/PUBEXPA3.pdf', 'private/PUBEXPA3.png', 'publication/PUBEXPA3.pdf',
+		'http://storage:5000/storage/v1/object/public/amber-public/publication/PUBEXPA3.pdf',
+		'amber-external-doi-a.pdf', 'application/pdf', 44,
+		'5acda82c9654a06119402abf4060adb668e51d1da2115087c18a17bb421cad8f',
+		'3d5de4870b943f573e6f4401a5d91938',
+		'publication/PUBEXPA3.png',
+		'http://storage:5000/storage/v1/object/public/amber-public/publication/PUBEXPA3.png',
+		100, 140, 1, '[]'::jsonb, now()
+	),
+	(
+		'PUBEXPB2', 'native', 'PUBEXT23', 1, 1,
+		'private/PUBEXPB2.pdf', 'private/PUBEXPB2.png', 'publication/PUBEXPB2.pdf',
+		'http://storage:5000/storage/v1/object/public/amber-public/publication/PUBEXPB2.pdf',
+		'amber-external-doi-b.pdf', 'application/pdf', 44,
+		'5acda82c9654a06119402abf4060adb668e51d1da2115087c18a17bb421cad8f',
+		'3d5de4870b943f573e6f4401a5d91938',
+		'publication/PUBEXPB2.png',
+		'http://storage:5000/storage/v1/object/public/amber-public/publication/PUBEXPB2.png',
+		100, 140, 1, '[]'::jsonb, now()
+	);
 
 INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey")
 VALUES

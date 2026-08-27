@@ -30,6 +30,15 @@
 					"minLength": 1,
 					"maxLength": 40
 				},
+				"tagline": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 160
+				},
+				"description": {
+					"type": "string",
+					"maxLength": 300
+				},
 				"baseUrl": {
 					"type": "string",
 					"minLength": 1,
@@ -97,6 +106,12 @@
 						"logoStyles": {
 							"default": "",
 							"type": "string"
+						},
+						"shareImage": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 2048,
+							"format": "uri"
 						}
 					},
 					"required": [
@@ -790,6 +805,10 @@
 					"default": "",
 					"type": "string",
 					"maxLength": 500
+				},
+				"poweredBy": {
+					"default": true,
+					"type": "boolean"
 				}
 			},
 			"additionalProperties": false
@@ -866,6 +885,21 @@
 							"format": "uri"
 						}
 					]
+				},
+				"privacyMarkdown": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 200000
+				},
+				"cookieMarkdown": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 200000
+				},
+				"termsMarkdown": {
+					"type": "string",
+					"minLength": 1,
+					"maxLength": 200000
 				}
 			},
 			"additionalProperties": false
@@ -1424,22 +1458,16 @@
 			"type": "object",
 			"properties": {
 				"ris": {
-					"type": "string",
-					"minLength": 1,
-					"maxLength": 2048,
-					"format": "uri"
+					"default": true,
+					"type": "boolean"
 				},
 				"bibtex": {
-					"type": "string",
-					"minLength": 1,
-					"maxLength": 2048,
-					"format": "uri"
+					"default": true,
+					"type": "boolean"
 				},
 				"atom": {
-					"type": "string",
-					"minLength": 1,
-					"maxLength": 2048,
-					"format": "uri"
+					"default": false,
+					"type": "boolean"
 				}
 			},
 			"additionalProperties": false
@@ -1906,15 +1934,8 @@
 			"additionalProperties": false
 		},
 		"authentication": {
-			"default": {},
 			"type": "object",
 			"properties": {
-				"adminPassword": {
-					"type": "string",
-					"minLength": 12,
-					"maxLength": 512,
-					"writeOnly": true
-				},
 				"google": {
 					"default": {},
 					"type": "object",
@@ -1938,6 +1959,41 @@
 					},
 					"additionalProperties": false
 				},
+				"openScholar": {
+					"type": "object",
+					"properties": {
+						"convexSiteUrl": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 2048,
+							"format": "uri"
+						},
+						"libraryId": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 128
+						},
+						"loginPageUrl": {
+							"type": "string",
+							"minLength": 1,
+							"maxLength": 2048,
+							"format": "uri"
+						},
+						"machineCredential": {
+							"type": "string",
+							"minLength": 47,
+							"maxLength": 47,
+							"writeOnly": true
+						}
+					},
+					"required": [
+						"convexSiteUrl",
+						"libraryId",
+						"loginPageUrl",
+						"machineCredential"
+					],
+					"additionalProperties": false
+				},
 				"secret": {
 					"type": "string",
 					"minLength": 32,
@@ -1945,6 +2001,10 @@
 					"writeOnly": true
 				}
 			},
+			"required": [
+				"openScholar",
+				"secret"
+			],
 			"additionalProperties": false
 		},
 		"email": {
@@ -2179,7 +2239,8 @@
 		"identity",
 		"theme",
 		"localization",
-		"services"
+		"services",
+		"authentication"
 	],
 	"additionalProperties": false,
 	"$id": "/library-config.schema.json",

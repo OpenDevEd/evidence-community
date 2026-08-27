@@ -12,14 +12,16 @@ import {
 	openAndMeasureAdminSearchIndexPopover,
 	waitForAdminSearchIndexStatus,
 } from "./admin-search-index-page";
-import { openAdmin } from "./admin-login";
+import {
+	createAdminBrowserSession,
+	issueAdminLoginCode,
+	openAdmin,
+} from "./admin-login";
 
 const itemKey = "TESTBOOK";
 const publishedItemKey = "LIVEB22K";
 const timestamp = "2026-07-31T12:00:00.000Z";
-const adminPassword =
-	process.env.EVIDENCE_LIBRARY_ADMIN_PASSWORD ??
-	"correct horse battery staple";
+const draftGeneration = "c8df1386-3420-4f12-8c20-7fb1c31ae0ad";
 const expectedPublicBaseUrl =
 	process.env.PLAYWRIGHT_EXPECTED_PUBLIC_BASE_URL ??
 	"https://library.example.org";
@@ -115,11 +117,7 @@ async function mockPublicShell(page: Page) {
 
 test.beforeEach(async ({ page }) => {
 	await mockPublicShell(page);
-	const response = await page.request.post("/api/admin/session", {
-		form: { password: adminPassword },
-		maxRedirects: 0,
-	});
-	expect(response.status()).toBe(303);
+	await createAdminBrowserSession(page);
 });
 
 const teacherCollection = {
@@ -233,6 +231,7 @@ function publishedDraft(
 		baseRevision: 1,
 		createdAt: timestamp,
 		draftRevision,
+		generation: draftGeneration,
 		itemKey: publishedItemKey,
 		payload,
 		sourceConnectionKey: "native",
@@ -616,7 +615,7 @@ async function mockPublishedBook(
 	};
 }
 
-test("logs in with Enter, keeps the session, and logs out", async ({
+test("redeems a one-time code, keeps the session, and rejects replay", async ({
 	page,
 }) => {
 	test.setTimeout(90_000);
@@ -624,16 +623,16 @@ test("logs in with Enter, keeps the session, and logs out", async ({
 	await page.context().clearCookies();
 	await page.goto("/admin");
 
-	const password = page.getByLabel("Admin password");
-	await expect(password).toBeVisible();
-	await password.fill("wrong password");
-	await password.press("Enter");
-	await expect(
-		page.getByText("That password is not correct.", { exact: true }),
-	).toBeVisible();
-
-	await password.fill(adminPassword);
-	await password.press("Enter");
+	const code = await issueAdminLoginCode();
+	const callback = new URL(
+		"/api/admin/session",
+		process.env.PLAYWRIGHT_BASE_URL!,
+	);
+	callback.searchParams.set("code", code);
+	await page.goto(process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!);
+	await page.evaluate((url) => {
+		window.location.href = url;
+	}, callback.toString());
 	await expect(
 		page.getByRole("textbox", { name: "Search records" }),
 	).toBeVisible();
@@ -658,7 +657,41 @@ test("logs in with Enter, keeps the session, and logs out", async ({
 	expect(Math.abs(logoutBox!.y - newItemBox!.y)).toBeLessThanOrEqual(1);
 
 	await logout.click();
-	await expect(page.getByLabel("Admin password")).toBeVisible();
+	await expect(
+		page.getByRole("link", { name: "Back to OpenScholar" }),
+	).toBeVisible();
+
+	const replay = await createAdminBrowserSession(page, code);
+	const replayLocation = replay.headers().location;
+	expect(replay.headers()["set-cookie"]).toBeUndefined();
+	expect(new URL(replayLocation).pathname).toBe("/admin/access-error");
+	await page.goto(replayLocation);
+	await expect(
+		page.getByRole("alert").filter({
+			hasText: /admin link is invalid, expired, or has already been used/iu,
+		}),
+	).toBeVisible();
+	await expect(
+		page.getByRole("link", { name: "Back to OpenScholar" }),
+	).toHaveAttribute(
+		"href",
+		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!,
+	);
+});
+
+test("rejects a one-time code for another library", async ({ page }) => {
+	const wrongLibraryId =
+		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_WRONG_LIBRARY_ID;
+	expect(wrongLibraryId).toBeTruthy();
+	await page.context().clearCookies();
+
+	const code = await issueAdminLoginCode(wrongLibraryId);
+	const response = await createAdminBrowserSession(page, code);
+
+	expect(response.headers()["set-cookie"]).toBeUndefined();
+	expect(new URL(response.headers().location).pathname).toBe(
+		"/admin/access-error",
+	);
 });
 
 test("edits an imported record and shows its writeback lifecycle", async ({
@@ -681,6 +714,7 @@ test("edits an imported record and shows its writeback lifecycle", async ({
 		baseRevision: revision,
 		createdAt: timestamp,
 		draftRevision,
+		generation: draftGeneration,
 		itemKey: publishedItemKey,
 		patch: {},
 		payload: draftPayload,
@@ -2616,6 +2650,7 @@ test("creates an item through a pointer click in the new-item popover", async ({
 						baseRevision: 0,
 						createdAt: timestamp,
 						draftRevision: 1,
+						generation: draftGeneration,
 						itemKey,
 						payload: submittedPayload,
 						sourceConnectionKey: "native",
@@ -2638,6 +2673,7 @@ test("creates an item through a pointer click in the new-item popover", async ({
 							baseRevision: 0,
 							createdAt: timestamp,
 							draftRevision: 1,
+							generation: draftGeneration,
 							itemKey,
 							payload: submittedPayload,
 							sourceConnectionKey: "native",
@@ -2770,7 +2806,7 @@ test("lets touch users browse item types without opening the keyboard", async ({
 	const page = await context.newPage();
 	await mockPublicShell(page);
 	await mockPublishedBook(page);
-	await openAdmin(page, adminPassword);
+	await openAdmin(page);
 	await page.getByRole("button", { name: "New item" }).click();
 
 	const search = page
@@ -6002,7 +6038,7 @@ test("tracks PDF publish and unpublish mutations", async ({ page }) => {
 						error: {
 							code: "confirmation_required",
 							message:
-								"This record uses its Crossref DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at Sep 12, 2026, 2:30 PM UTC.",
+								"This record reuses its DOI in Zenodo. Changing its published PDFs will update the same Zenodo record and DOI. Confirm that this is a minor correction. Approval closes at Sep 12, 2026, 2:30 PM UTC.",
 						},
 					},
 					status: 409,

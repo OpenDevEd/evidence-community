@@ -6,6 +6,9 @@ x-runtime-config: &runtime-config
   target: /runtime/config/library.json
   mode: 0444
 
+x-runtime-labels: &runtime-labels
+  org.opendeved.evidence-library.release: "${SOURCE_COMMIT:?source commit is required}"
+
 x-search-build: &search-build
   context: .
   dockerfile: Dockerfile
@@ -41,7 +44,8 @@ services:
       search-indexer:
         condition: service_healthy
     labels:
-      - "traefik.docker.network=coolify"
+      <<: *runtime-labels
+      traefik.docker.network: coolify
     restart: unless-stopped
     expose:
       - "3000"
@@ -68,6 +72,7 @@ services:
       timeout: 5s
       start_period: 1h
       retries: 3
+    labels: *runtime-labels
     restart: unless-stopped
 
   source-sync:
@@ -84,6 +89,7 @@ services:
     depends_on:
       search-indexer:
         condition: service_healthy
+    labels: *runtime-labels
     restart: unless-stopped
 
   source-writeback:
@@ -100,6 +106,7 @@ services:
     depends_on:
       search-indexer:
         condition: service_healthy
+    labels: *runtime-labels
     restart: unless-stopped
 
   publication-worker:
@@ -120,6 +127,7 @@ services:
       timeout: 5s
       start_period: 30s
       retries: 3
+    labels: *runtime-labels
     restart: unless-stopped
 
   meilisearch:
@@ -139,6 +147,7 @@ services:
       - meilisearch-data:/meili_data
     networks:
       - private
+    labels: *runtime-labels
     restart: unless-stopped
 
 configs:

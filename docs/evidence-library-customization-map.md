@@ -15,6 +15,7 @@ or `NEXT_PUBLIC_*` variables.
 | Public projection | `src/config/library-config/public.ts` | `LibraryConfigProvider` |
 | Example document | `config/library.example.json` | Operators and tests |
 | Health check | `/api/library-config/health` | Deployment health checks |
+| OpenScholar read API | `/api/openscholar/collections`, `/api/openscholar/institutions` | OpenScholar configuration pickers; bearer token is `authentication.openScholar.machineCredential` |
 
 `LIBRARY_CONFIG_PATH` selects the document. It is deployment plumbing, not a
 library customization value. In production the path is required. The same
@@ -25,14 +26,14 @@ container image can be started repeatedly with different mounted documents.
 | Section | What it controls | Main constraints |
 | --- | --- | --- |
 | `schemaVersion`, `revision`, `updatedAt` | Contract version and revision identity | Schema version `1`; bounded revision; UTC timestamp |
-| `identity` | Name, short name, canonical origin, funding partners | HTTPS origin; bounded unique partner IDs |
-| `identity.assets` | Dark/light logos, favicon, app icons, logo CSS | Stable public URLs; CSS declarations only |
+| `identity` | Name, short name, tagline, description, canonical origin, funding partners | HTTPS origin; tagline is one line up to 160 characters; description up to 300 characters and used for page and social previews; bounded unique partner IDs |
+| `identity.assets` | Dark/light logos, favicon, app icons, logo CSS, share image | Stable public URLs; share image is a PNG, JPG, or WebP HTTPS URL without a query string; CSS declarations only |
 | `institutions` | Institution names and optional logos | Up to 200; unique IDs and case-insensitive names |
 | `theme` | Layout, colors, mode, fonts, weights | Catalog values and validated colors/font URLs |
 | `navigation` | Internal and external navbar entries and icons | Bounded lists; platform icons or validated asset URLs |
-| `footer` | Sections, links, social links, attribution, disclaimer | Bounded unique IDs and validated links |
+| `footer` | Sections, links, social links, attribution, disclaimer, "Powered by OpenScholar" link | Bounded unique IDs and validated links; `poweredBy` defaults to `true` |
 | `contact` | Review email, phone, address, PayPal link | Valid email/URL and bounded plain text |
-| `legal` | Privacy, cookie, and terms links | Internal paths or stable external URLs |
+| `legal` | Privacy, cookie, and terms links; optional owner-written page text (`privacyMarkdown`, `cookieMarkdown`, `termsMarkdown`) | Internal paths or stable external URLs; page text is Markdown up to 200 000 characters, `{{SITE_HOST}}` is replaced with the library host, and `termsOfService` defaults to `/terms` when `termsMarkdown` is set |
 | `localization` | Enabled locales, default, detection, priority | Platform locale catalog; default and priority must be enabled |
 | `search` | Search fields, semantic search, scopes, default scope | Platform scope catalog; default scope must be enabled |
 | `filters` | Institution mode/label, country mode, collection expansion, years | Explicit modes; valid year range |
@@ -41,11 +42,11 @@ container image can be started repeatedly with different mounted documents.
 | `features` | Theme/language/login/search/AI/download and related UI switches | Dependency validation in the schema |
 | `collections` | Enabled collection IDs, labels, ordering | Unique IDs and bounded order |
 | `gapMaps` | Runtime gap-map routes and source URLs | Unique IDs/slugs and stable URLs |
-| `exports` | RIS, BibTeX, and Atom endpoints | Optional public HTTPS URLs |
+| `exports` | One switch each for RIS, BibTeX, and the Atom feed | Booleans; the library builds every file from its own records |
 | `services` | PostgreSQL, Meilisearch, Zotero translation | Valid service URLs and bounded credentials/index |
 | `ai` | Providers, models, keys, prompts | Platform provider/model catalogs and feature dependencies |
 | `analytics` | PostHog, Google Analytics, UTM retention | Valid hosts/IDs and bounded retention |
-| `authentication` | Google login and auth secret | Required only when login is enabled |
+| `authentication` | Required OpenScholar service access and session signing; optional Google login | OpenScholar site, library, login page, machine credential, and signing secret are required; Google credentials are complete when enabled |
 | `email` | Contact/takedown recipients and SMTP | Complete credential pairs and valid transport settings |
 | `generation` | Sitemap and legacy-redirect route availability | Runtime booleans |
 | `processing` | Structure, PDF, and shared processing rules | Platform condition/action catalogs |

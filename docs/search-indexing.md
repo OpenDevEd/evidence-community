@@ -232,5 +232,9 @@ Meilisearch:
 ```sh
 LIBRARY_CONFIG_PATH=config/library.local.json \
 DATABASE_URL_POST=postgresql://library:library@127.0.0.1:55435/library \
+EVIDENCE_LIBRARY_ADMIN_LOGIN_CODE='<fresh elc_ code>' \
 npm run test:search-worker
 ```
+
+The code must belong to the library in `LIBRARY_CONFIG_PATH`. It is consumed by
+this run, so request a new code before running the command again.

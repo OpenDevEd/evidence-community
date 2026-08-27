@@ -18,6 +18,8 @@ x-library-service: &library-service
       condition: service_healthy
     postgres:
       condition: service_healthy
+    runtime-provider-fake:
+      condition: service_healthy
   restart: "no"
   healthcheck:
     test:
@@ -67,6 +69,9 @@ services:
       default:
         aliases:
           - collector.localhost
+          - doi.org
+          - openscholar-convex.localhost
+          - openscholar.localhost
           - sandbox.zenodo.org
           - storage
           - test.crossref.org
@@ -91,15 +96,19 @@ services:
       retries: 60
       start_period: 5s
 
-  publication-provider-fake:
+  runtime-provider-fake:
     image: node:22-alpine
     init: true
     labels: *acceptance-labels
-    command: ["node", "/fixture/publication-provider-fake.mjs"]
+    command: ["node", "/fixture/runtime-provider-fake.mjs"]
     environment:
+      OPENSCHOLAR_AMBER_LIBRARY_ID: "${EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_AMBER_LIBRARY_ID:?Amber OpenScholar library ID is required}"
+      OPENSCHOLAR_AMBER_MACHINE_CREDENTIAL: "${EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_AMBER_MACHINE_CREDENTIAL:?Amber OpenScholar machine credential is required}"
+      OPENSCHOLAR_INDIGO_LIBRARY_ID: "${EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_INDIGO_LIBRARY_ID:?Indigo OpenScholar library ID is required}"
+      OPENSCHOLAR_INDIGO_MACHINE_CREDENTIAL: "${EVIDENCE_LIBRARY_ACCEPTANCE_OPENSCHOLAR_INDIGO_MACHINE_CREDENTIAL:?Indigo OpenScholar machine credential is required}"
       PORT: "4000"
     ports:
-      - "${EVIDENCE_LIBRARY_ACCEPTANCE_PUBLICATION_FAKE_PORT:-4010}:4000"
+      - "${EVIDENCE_LIBRARY_ACCEPTANCE_RUNTIME_PROVIDER_FAKE_PORT:-4010}:4000"
     volumes:
       - ./fixture:/fixture:ro
     healthcheck:
@@ -237,7 +246,7 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
-      publication-provider-fake:
+      runtime-provider-fake:
         condition: service_healthy
     environment:
       LIBRARY_CONFIG_PATH: /runtime/config/library.json

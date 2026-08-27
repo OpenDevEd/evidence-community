@@ -28,6 +28,17 @@ export const minimalLibraryConfig = {
 		locales: ["en-GB"],
 		defaultLocale: "en-GB",
 	},
+	authentication: {
+		openScholar: {
+			convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
+			libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
+			loginPageUrl:
+				"https://openscholar.example.org/evidence-libraries/minimal",
+			machineCredential:
+				"els_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+		},
+		secret: "minimal-auth-secret-123456789012345",
+	},
 	services: {
 		database: {
 			url: "postgresql://library:password@database:5432/library",
@@ -54,6 +65,9 @@ export const maximalLibraryConfig = {
 	identity: {
 		name: "Maximal Evidence Library",
 		shortName: "Maximal Library",
+		tagline: "Evidence for better education decisions.",
+		description:
+			"The Maximal Evidence Library collects research about education in low- and middle-income countries.",
 		baseUrl: "https://maximal.example.org",
 		fundingPartners: [
 			{
@@ -74,6 +88,7 @@ export const maximalLibraryConfig = {
 				"https://assets.example.org/maximal/icon.ico",
 			],
 			logoStyles: "max-width: 12rem;\nheight: auto;",
+			shareImage: "https://assets.example.org/maximal/share.png",
 		},
 	},
 	institutions: [
@@ -166,6 +181,7 @@ export const maximalLibraryConfig = {
 		],
 		disclaimer: "Research evidence is provided as-is.",
 		attribution: "Built by OpenDevEd.",
+		poweredBy: false,
 	},
 	contact: {
 		email: "hello@example.org",
@@ -176,6 +192,10 @@ export const maximalLibraryConfig = {
 		privacyPolicy: "/privacy",
 		cookiePolicy: "/cookie-policy",
 		termsOfService: "https://maximal.example.org/terms",
+		privacyMarkdown:
+			"# Privacy notice\n\n{{SITE_HOST}} keeps only what the library needs.\n\n**Last updated:** 1 August 2026",
+		cookieMarkdown: "# Cookie notice\n\nOnly essential cookies are used.",
+		termsMarkdown: "# Terms of use\n\nUse the library for research and teaching.",
 	},
 	localization: {
 		locales: ["en-GB", "fr"],
@@ -262,9 +282,9 @@ export const maximalLibraryConfig = {
 		},
 	],
 	exports: {
-		ris: "https://exports.example.org/library.ris",
-		bibtex: "https://exports.example.org/library.bib",
-		atom: "https://exports.example.org/library.atom",
+		ris: true,
+		bibtex: true,
+		atom: true,
 	},
 	sources: [
 		{
@@ -353,11 +373,18 @@ export const maximalLibraryConfig = {
 		utmDurationSeconds: 2_592_000,
 	},
 	authentication: {
-		adminPassword: "correct horse battery staple",
 		google: {
 			enabled: true,
 			clientId: "google-client-id",
 			clientSecret: "google-client-secret-value",
+		},
+		openScholar: {
+			convexSiteUrl: "https://spotted-woodpecker-546.convex.site",
+			libraryId: "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
+			loginPageUrl:
+				"https://openscholar.example.org/evidence-libraries/amber",
+			machineCredential:
+				"els_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 		},
 		secret: "12345678901234567890123456789012",
 	},

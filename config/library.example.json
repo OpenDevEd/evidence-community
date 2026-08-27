@@ -5,6 +5,8 @@
 	"identity": {
 		"name": "Example Evidence Library",
 		"shortName": "Example Library",
+		"tagline": "Research evidence you can search, filter, and cite.",
+		"description": "The Example Evidence Library collects peer-reviewed research and reports about education, with full-text search and citation export.",
 		"baseUrl": "https://library.example.org",
 		"fundingPartners": [
 			{
@@ -20,7 +22,8 @@
 				"https://assets.example.org/library/icon.svg",
 				"https://assets.example.org/library/icon.ico"
 			],
-			"logoStyles": "max-width: 12rem;\nheight: auto;"
+			"logoStyles": "max-width: 12rem;\nheight: auto;",
+			"shareImage": "https://assets.example.org/library/share-card.png"
 		}
 	},
 	"institutions": [
@@ -112,7 +115,8 @@
 			}
 		],
 		"disclaimer": "Research evidence is provided as-is.",
-		"attribution": "Built by OpenDevEd."
+		"attribution": "Built by OpenDevEd.",
+		"poweredBy": true
 	},
 	"contact": {
 		"email": "hello@example.org",
@@ -122,7 +126,7 @@
 	"legal": {
 		"privacyPolicy": "/privacy",
 		"cookiePolicy": "/cookie-policy",
-		"termsOfService": "https://library.example.org/terms"
+		"termsMarkdown": "# Terms of use\n\nUse the library for research and teaching.\n\n**Last updated:** 1 August 2026"
 	},
 	"localization": {
 		"locales": ["en-GB", "fr"],
@@ -208,9 +212,9 @@
 		}
 	],
 	"exports": {
-		"ris": "https://exports.example.org/library.ris",
-		"bibtex": "https://exports.example.org/library.bib",
-		"atom": "https://exports.example.org/library.atom"
+		"ris": true,
+		"bibtex": true,
+		"atom": true
 	},
 	"sources": [
 		{
@@ -299,11 +303,16 @@
 		"utmDurationSeconds": 2592000
 	},
 	"authentication": {
-		"adminPassword": "correct horse battery staple",
 		"google": {
 			"enabled": true,
 			"clientId": "google-client-id",
 			"clientSecret": "google-client-secret-value"
+		},
+		"openScholar": {
+			"convexSiteUrl": "https://spotted-woodpecker-546.convex.site",
+			"libraryId": "kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
+			"loginPageUrl": "https://openscholar.example.org/evidence-libraries/amber",
+			"machineCredential": "els_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 		},
 		"secret": "12345678901234567890123456789012"
 	},

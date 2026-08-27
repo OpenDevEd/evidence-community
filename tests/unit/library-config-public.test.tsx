@@ -42,6 +42,19 @@ describe("public library configuration", () => {
 		);
 	});
 
+	it("includes the tagline, description, share image, and powered-by setting", () => {
+		expect(publicConfig.identity.tagline).toBe(
+			maximalLibraryConfig.identity.tagline,
+		);
+		expect(publicConfig.identity.description).toBe(
+			maximalLibraryConfig.identity.description,
+		);
+		expect(publicConfig.identity.assets.shareImage).toBe(
+			maximalLibraryConfig.identity.assets.shareImage,
+		);
+		expect(publicConfig.footer.poweredBy).toBe(false);
+	});
+
 	it("reuses the projection while the active server revision object is unchanged", () => {
 		expect(projectPublicLibraryConfig(serverConfig)).toBe(publicConfig);
 	});
@@ -71,7 +84,7 @@ describe("public library configuration", () => {
 			"clientSecret",
 		);
 		expect(publicConfig.authentication).not.toHaveProperty("secret");
-		expect(publicConfig.authentication).not.toHaveProperty("adminPassword");
+		expect(publicConfig.authentication).not.toHaveProperty("openScholar");
 
 		for (const privateValue of [
 			"postgresql://library:password@database:5432/library",
@@ -87,12 +100,11 @@ describe("public library configuration", () => {
 			"google-client-id",
 			"google-client-secret-value",
 			"12345678901234567890123456789012",
-			"correct horse battery staple",
+			"els_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			"kh7ejpj5mm3s2pvwmz9n08b2v98d3kn5",
+			"https://spotted-woodpecker-546.convex.site",
 			"smtp-password",
 			"smtp-user",
-			"https://exports.example.org/library.ris",
-			"https://exports.example.org/library.bib",
-			"https://exports.example.org/library.atom",
 			"https://assets.example.org/gapmaps/gap-map-one.html",
 			"crossref-login",
 			"crossref-password",
@@ -113,7 +125,7 @@ describe("public library configuration", () => {
 		]);
 	});
 
-	it("projects export availability without exposing source URLs", () => {
+	it("passes the export switches through to the browser", () => {
 		expect(publicConfig.exports).toEqual({
 			ris: true,
 			bibtex: true,

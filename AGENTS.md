@@ -188,7 +188,10 @@ If coding shows that the plan is wrong, commit safe work first. Update and commi
 
 Before creating, changing, deleting, or reviewing any test or assertion, use
 the `test-decision` skill and read
-[`docs/test-quality.md`](docs/test-quality.md).
+[`docs/test-quality.md`](docs/test-quality.md). It defines what counts as useful
+proof, how to choose the test boundary, which AI-generated test patterns to
+reject, and the bad examples that must not be copied from this repository or
+OpenScholar.
 
 Do not add or change tests for copy-only, style-only, comment-only,
 documentation-only, or behavior-preserving refactor changes. Run the existing

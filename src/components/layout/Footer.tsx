@@ -291,13 +291,25 @@ export default function Footer() {
 				</section>
 			)}
 
-			{(footer.disclaimer || footer.attribution) && (
+			{(footer.disclaimer || footer.attribution || footer.poweredBy) && (
 				<div className="flex w-full max-w-4xl flex-col gap-4 text-center text-sm text-black/60 dark:text-white/60">
 					{footer.disclaimer && (
 						<p className="whitespace-pre-line">{footer.disclaimer}</p>
 					)}
 					{footer.attribution && (
 						<p className="whitespace-pre-line">{footer.attribution}</p>
+					)}
+					{footer.poweredBy && (
+						<p data-library-powered-by="">
+							<a
+								href="https://openscholar.ai"
+								target="_blank"
+								rel="noopener noreferrer"
+								className="hover:text-accent"
+							>
+								{t("poweredBy")}
+							</a>
+						</p>
 					)}
 				</div>
 			)}

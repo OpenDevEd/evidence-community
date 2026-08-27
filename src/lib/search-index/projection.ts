@@ -331,6 +331,7 @@ async function buildSearchProjectionPlanForKeys(
 							doi: publicationIdentifier.doi,
 							itemKey: publicationIdentifier.itemKey,
 							lifecycle: publicationIdentifier.lifecycle,
+							ownership: publicationIdentifier.ownership,
 							registrar: publicationIdentifier.registrar,
 							role: publicationIdentifier.role,
 						})

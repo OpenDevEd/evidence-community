@@ -18,6 +18,16 @@ const expectedExportBibtex =
 	process.env.PLAYWRIGHT_EXPECTED_EXPORT_BIBTEX === "true";
 const expectedExportAtom =
 	process.env.PLAYWRIGHT_EXPECTED_EXPORT_ATOM === "true";
+const exportIncludedTitles = (
+	process.env.PLAYWRIGHT_EXPORT_INCLUDED_TITLES ?? ""
+)
+	.split("|")
+	.filter(Boolean);
+const exportExcludedTitles = (
+	process.env.PLAYWRIGHT_EXPORT_EXCLUDED_TITLES ?? ""
+)
+	.split("|")
+	.filter(Boolean);
 const expectedAnalytics =
 	process.env.PLAYWRIGHT_EXPECTED_ANALYTICS === "true";
 const expectedAuthentication =
@@ -121,27 +131,29 @@ test("proxies only configured gap maps", async ({ page, request }) => {
 	}
 });
 
-test("proxies only configured whole-library exports", async ({ request }) => {
+test("builds only the whole-library exports that are switched on", async ({
+	request,
+}) => {
 	for (const expected of [
 		{
 			enabled: expectedExportRis,
 			path: "/lib/export/ris",
 			contentType: "application/x-research-info-systems",
-			marker: "AMBER_RIS_FIXTURE",
+			marker: "TY  - ",
 			filename: "amber-evidence.ris",
 		},
 		{
 			enabled: expectedExportBibtex,
 			path: "/lib/export/bibtex",
 			contentType: "application/x-bibtex",
-			marker: "AMBER_BIBTEX_FIXTURE",
+			marker: "@article{",
 			filename: "amber-evidence.bib",
 		},
 		{
 			enabled: expectedExportAtom,
 			path: "/lib/atom.xml",
 			contentType: "application/atom+xml",
-			marker: "AMBER_ATOM_FIXTURE",
+			marker: '<feed xmlns="http://www.w3.org/2005/Atom">',
 			filename: null,
 		},
 	]) {
@@ -155,7 +167,26 @@ test("proxies only configured whole-library exports", async ({ request }) => {
 		expect(response.headers()["content-type"]).toContain(
 			expected.contentType,
 		);
-		expect(await response.text()).toContain(expected.marker);
+
+		const body = await response.text();
+		expect(body, expected.path).toContain(expected.marker);
+
+		// The file is built from the library's own records. A published
+		// record and a record carrying the internal badge tag are both public,
+		// so both belong in it.
+		for (const title of exportIncludedTitles) {
+			expect(body, `${expected.path} must list ${title}`).toContain(
+				title,
+			);
+		}
+
+		// A hidden, deleted, child or draft-only record must never reach it.
+		for (const title of exportExcludedTitles) {
+			expect(body, `${expected.path} must not list ${title}`).not.toContain(
+				title,
+			);
+		}
+
 		if (expected.filename) {
 			expect(response.headers()["content-disposition"]).toContain(
 				expected.filename,

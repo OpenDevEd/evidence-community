@@ -15,21 +15,6 @@ https://fixture, https://collector.localhost:{$FIXTURE_PORT}, https://localhost:
 		respond "<!doctype html><html lang=\"en\"><head><title>Amber runtime gap map</title></head><body><h1>AMBER_GAP_MAP_FIXTURE</h1></body></html>" 200
 	}
 
-	handle /exports/amber-library.ris {
-		header Content-Type "application/x-research-info-systems; charset=utf-8"
-		respond "TY  - GEN\nTI  - AMBER_RIS_FIXTURE\nER  -" 200
-	}
-
-	handle /exports/amber-library.bib {
-		header Content-Type "application/x-bibtex; charset=utf-8"
-		respond "AMBER_BIBTEX_FIXTURE" 200
-	}
-
-	handle /exports/amber-library.atom {
-		header Content-Type "application/atom+xml; charset=utf-8"
-		respond "<?xml version=\"1.0\" encoding=\"UTF-8\"?><feed xmlns=\"http://www.w3.org/2005/Atom\"><title>AMBER_ATOM_FIXTURE</title></feed>" 200
-	}
-
 	@analytics {
 		path /e/* /i/* /batch* /decide/*
 	}
@@ -51,9 +36,25 @@ https://localhost:{$APP_HTTPS_PORT}, https://127.0.0.1:{$APP_HTTPS_PORT} {
 	reverse_proxy amber:3000
 }
 
+https://openscholar.localhost:{$FIXTURE_PORT} {
+	tls internal
+	header Content-Type "text/html; charset=utf-8"
+	respond "<!doctype html><html lang=\"en\"><head><title>OpenScholar acceptance</title></head><body><h1>OpenScholar acceptance</h1></body></html>" 200
+}
+
+https://openscholar-convex.localhost:{$FIXTURE_PORT} {
+	tls internal
+	reverse_proxy runtime-provider-fake:4000
+}
+
 https://test.crossref.org, https://sandbox.zenodo.org {
 	tls internal
-	reverse_proxy publication-provider-fake:4000
+	reverse_proxy runtime-provider-fake:4000
+}
+
+https://doi.org {
+	tls internal
+	respond 302
 }
 
 # A stand-in for the embedding service. Every record gets the same vector,
@@ -68,5 +69,5 @@ http://fixture:5001 {
 }
 
 http://storage:5000 {
-	reverse_proxy publication-provider-fake:4000
+	reverse_proxy runtime-provider-fake:4000
 }

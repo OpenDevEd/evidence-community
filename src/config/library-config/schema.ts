@@ -39,6 +39,7 @@ import {
 	stableHtmlUrlSchema,
 	stableIconUrlSchema,
 	stableImageUrlSchema,
+	stableShareImageUrlSchema,
 	stableWoff2UrlSchema,
 	tagSchema,
 	utcTimestampSchema,
@@ -170,6 +171,7 @@ const identityAssetsSchema = z
 				addDuplicateIssues(icons, context, (icon) => icon),
 			),
 		logoStyles: logoStylesSchema.default(""),
+		shareImage: stableShareImageUrlSchema.optional(),
 	})
 	.strict()
 	.transform((assets) => ({
@@ -181,6 +183,8 @@ const identitySchema = z
 	.object({
 		name: singleLineStringSchema(100),
 		shortName: singleLineStringSchema(40).optional(),
+		tagline: singleLineStringSchema(160).optional(),
+		description: plainTextSchema(300).optional(),
 		baseUrl: publicHttpsOriginSchema,
 		fundingPartners: z
 			.array(fundingPartnerSchema)
@@ -574,6 +578,7 @@ const footerSchema = z
 			),
 		disclaimer: plainTextSchema(2000).default(""),
 		attribution: plainTextSchema(500).default(""),
+		poweredBy: z.boolean().default(true),
 	})
 	.strict()
 	.prefault({});
@@ -597,14 +602,27 @@ const contactSchema = z
 	.strict()
 	.prefault({});
 
+const LEGAL_MARKDOWN_MAXIMUM = 200_000;
+const legalMarkdownSchema = nonEmptyStringSchema(LEGAL_MARKDOWN_MAXIMUM);
+
 const legalSchema = z
 	.object({
 		privacyPolicy: linkSchema.default("/privacy"),
 		cookiePolicy: linkSchema.default("/cookie-policy"),
 		termsOfService: linkSchema.optional(),
+		privacyMarkdown: legalMarkdownSchema.optional(),
+		cookieMarkdown: legalMarkdownSchema.optional(),
+		termsMarkdown: legalMarkdownSchema.optional(),
 	})
 	.strict()
-	.prefault({});
+	.prefault({})
+	.transform((legal) => ({
+		...legal,
+		// Owner-written terms live on the runtime's own /terms page unless the
+		// owner points the link somewhere else.
+		termsOfService:
+			legal.termsOfService ?? (legal.termsMarkdown ? "/terms" : undefined),
+	}));
 
 const localeSchema = z.enum(PLATFORM_LOCALES);
 
@@ -970,22 +988,16 @@ const publicGapMapSchema = gapMapSchema
 
 const publicGapMapsSchema = z.array(publicGapMapSchema).max(50).default([]);
 
+// One switch per citation format. The library builds every file itself from
+// its own records, so there are no external file addresses here.
 const exportsSchema = z
 	.object({
-		ris: publicHttpsUrlSchema.optional(),
-		bibtex: publicHttpsUrlSchema.optional(),
-		atom: publicHttpsUrlSchema.optional(),
+		ris: z.boolean().default(true),
+		bibtex: z.boolean().default(true),
+		atom: z.boolean().default(false),
 	})
 	.strict()
 	.prefault({});
-
-const publicExportsSchema = z
-	.object({
-		ris: z.boolean(),
-		bibtex: z.boolean(),
-		atom: z.boolean(),
-	})
-	.strict();
 
 const crossrefPublicationSchema = z
 	.object({
@@ -1341,7 +1353,6 @@ const analyticsSchema = z
 
 const authenticationSchema = z
 	.object({
-		adminPassword: secretSchema(12, 512).optional(),
 		google: z
 			.object({
 				enabled: z.boolean().default(false),
@@ -1350,10 +1361,23 @@ const authenticationSchema = z
 			})
 			.strict()
 			.prefault({}),
-		secret: secretSchema(32, 512).optional(),
+		openScholar: z
+			.object({
+				convexSiteUrl: publicHttpsOriginSchema,
+				libraryId: singleLineStringSchema(128).refine(
+					(value) => /^[a-z0-9]+$/u.test(value),
+					"OpenScholar library ID must contain lowercase letters and numbers only",
+				),
+				loginPageUrl: publicHttpsUrlSchema,
+				machineCredential: secretSchema(47, 47).refine(
+					(value) => /^els_[A-Za-z0-9_-]{43}$/u.test(value),
+					"OpenScholar machine credential must use the els_ format",
+				),
+			})
+			.strict(),
+		secret: secretSchema(32, 512),
 	})
-	.strict()
-	.prefault({});
+	.strict();
 
 const smtpSchema = z
 	.object({
@@ -1697,6 +1721,14 @@ export function createLibraryConfigSchema(
 			);
 		}
 
+		if (config.features.atomFeed && !config.exports.atom) {
+			addRequiredIssue(
+				context,
+				["features", "atomFeed"],
+				"Atom feed requires the Atom export switch",
+			);
+		}
+
 		if (
 			config.features.downloads &&
 			!config.exports.ris &&
@@ -1705,15 +1737,7 @@ export function createLibraryConfigSchema(
 			addRequiredIssue(
 				context,
 				["features", "downloads"],
-				"Downloads require a RIS or BibTeX endpoint",
-			);
-		}
-
-		if (config.features.atomFeed && !config.exports.atom) {
-			addRequiredIssue(
-				context,
-				["features", "atomFeed"],
-				"Atom feed requires an Atom endpoint",
+				"Downloads require the RIS or BibTeX export switch",
 			);
 		}
 
@@ -1814,7 +1838,7 @@ export const publicLibraryConfigSchema = z
 		features: featuresSchema,
 		collections: collectionsSchema,
 		gapMaps: publicGapMapsSchema,
-		exports: publicExportsSchema,
+		exports: exportsSchema,
 		ai: publicAiSchema,
 		analytics: analyticsSchema,
 		authentication: publicAuthenticationSchema,

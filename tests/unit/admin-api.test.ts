@@ -256,6 +256,31 @@ describe("admin API client", () => {
 		});
 	});
 
+	it("preserves a forbidden response from the server", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue(
+				new Response(
+					JSON.stringify({
+						error: {
+							code: "forbidden",
+							message: "Only a library Owner can do this.",
+						},
+					}),
+					{
+						headers: { "Content-Type": "application/json" },
+						status: 403,
+					},
+				),
+			),
+		);
+
+		await expect(getAdminLibrary()).rejects.toMatchObject({
+			code: "forbidden",
+			status: 403,
+		});
+	});
+
 	it("falls back safely when an upstream error has the wrong shape", async () => {
 		vi.stubGlobal(
 			"fetch",

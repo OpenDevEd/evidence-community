@@ -1,5 +1,6 @@
 "use client";
 
+import type { ZenodoIdentifierPolicy } from "@/db/schema/publication";
 import {
 	ModalBody,
 	ModalContent,
@@ -146,8 +147,8 @@ export function AdminZenodoActivation({
 	isOpen: boolean;
 	onConfirm: () => Promise<boolean>;
 	onOpenChange: (open: boolean) => void;
-	onPolicyChange: (policy: "mint-zenodo" | "reuse-crossref") => void;
-	policy: "mint-zenodo" | "reuse-crossref";
+	onPolicyChange: (policy: ZenodoIdentifierPolicy) => void;
+	policy: ZenodoIdentifierPolicy;
 	publication: AdminPublicationView;
 }) {
 	const allowed = new Set(
@@ -176,10 +177,26 @@ export function AdminZenodoActivation({
 								value={policy}
 								onValueChange={(value) =>
 									onPolicyChange(
-										value as "mint-zenodo" | "reuse-crossref",
+										value as ZenodoIdentifierPolicy,
 									)
 								}
 							>
+								{allowed.has("reuse-external") ? (
+									<Radio
+										classNames={{
+											base: "m-0 max-w-none items-start rounded-xl bg-black/[0.035] p-3 data-[selected=true]:bg-accent/[0.08] dark:bg-white/[0.045] dark:data-[selected=true]:bg-accent/[0.12]",
+											label: "w-full",
+										}}
+										value="reuse-external"
+									>
+										<span className="block text-sm font-semibold text-black/80 dark:text-white/85">
+											Use the record&apos;s existing DOI
+										</span>
+										<span className="mt-0.5 block text-xs leading-5 text-black/50 dark:text-white/50">
+											{publication.identifiers.doi?.value ?? "The record's DOI"} stays the DOI. Nothing is registered; Zenodo keeps a copy of the record and PDF.
+										</span>
+									</Radio>
+								) : null}
 								<Radio
 									classNames={{
 										base: "m-0 max-w-none items-start rounded-xl bg-black/[0.035] p-3 data-[selected=true]:bg-accent/[0.08] dark:bg-white/[0.045] dark:data-[selected=true]:bg-accent/[0.12]",
