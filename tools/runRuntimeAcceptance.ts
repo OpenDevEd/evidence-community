@@ -1499,8 +1499,147 @@ type OpenScholarCollectionPage = {
 	nextCursor: string | null;
 };
 
-async function verifyOpenScholarReadApi(profile: Profile) {
-	console.log(`\nVerifying ${profile.name} OpenScholar read API`);
+// Institutions the picker must page through. Zephyr is named by three records
+// and Borough by two, so the count order and the name order differ, while the
+// fixture's own Amber Institute and Indigo College keep one count tie.
+const INSTITUTION_FIXTURES = [
+	{ institution: "Zephyr University", key: "INSTZEP1" },
+	{ institution: "Zephyr University", key: "INSTZEP2" },
+	{ institution: "Zephyr University", key: "INSTZEP3" },
+	{ institution: "Borough College", key: "INSTBOR1" },
+	{ institution: "Borough College", key: "INSTBOR2" },
+] as const;
+
+const INSTITUTIONS_BY_COUNT = [
+	{ count: 3, name: "Zephyr University" },
+	{ count: 2, name: "Borough College" },
+	{ count: 1, name: "Amber Institute" },
+	{ count: 1, name: "Indigo College" },
+];
+
+const INSTITUTIONS_BY_NAME = [
+	{ count: 1, name: "Amber Institute" },
+	{ count: 2, name: "Borough College" },
+	{ count: 1, name: "Indigo College" },
+	{ count: 3, name: "Zephyr University" },
+];
+
+function seedInstitutionRecords(profile: Profile) {
+	const statements = INSTITUTION_FIXTURES.flatMap((fixture) => [
+		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${fixture.key}', 'native', '${fixture.key}')`,
+		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem", "creators") VALUES ('${fixture.key}', 'native', '${fixture.key}', 'JournalArticle', 'Institution paging evidence ${fixture.key}', 1, '2026', now(), 0, NULL, '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"${fixture.institution}","country_code":"GB"}]}]'::jsonb)`,
+	]);
+	postgresScalar(profile.name, statements.join("; "));
+}
+
+function removeInstitutionRecords(profile: Profile) {
+	const keys = INSTITUTION_FIXTURES.map(({ key }) => `'${key}'`).join(", ");
+	postgresScalar(
+		profile.name,
+		`DELETE FROM "item" WHERE key IN (${keys}); DELETE FROM "itemIdentity" WHERE key IN (${keys})`,
+	);
+}
+
+/** Every institution the endpoint returns when it is read one row at a time. */
+async function pageThroughInstitutions(profile: Profile, sort: string) {
+	const seen: { count: number; name: string }[] = [];
+	let cursor: string | null = null;
+	do {
+		const page: {
+			body: OpenScholarInstitutionPage;
+			response: Response;
+		} = await openScholarRead<OpenScholarInstitutionPage>(
+			profile,
+			`/api/openscholar/institutions?pageSize=1&sort=${sort}${
+				cursor ? `&cursor=${encodeURIComponent(cursor)}` : ""
+			}`,
+		);
+		assert.equal(page.response.status, 200);
+		assert.equal(page.body.items.length, 1);
+		seen.push(...page.body.items);
+		cursor = page.body.nextCursor;
+	} while (cursor && seen.length <= INSTITUTIONS_BY_COUNT.length);
+	return seen;
+}
+
+async function verifyInstitutionCursorRules(profile: Profile) {
+	const firstPage = await openScholarRead<OpenScholarInstitutionPage>(
+		profile,
+		"/api/openscholar/institutions?pageSize=1",
+	);
+	const cursor = encodeURIComponent(firstPage.body.nextCursor!);
+	const mismatchBody = {
+		error: {
+			code: "validation_failed",
+			fields: {
+				cursor: "Search again to start from the first result.",
+			},
+			message:
+				"The saved institution position does not match this search. Search again.",
+		},
+	};
+
+	const otherSearch = await openScholarRead(
+		profile,
+		`/api/openscholar/institutions?pageSize=1&cursor=${cursor}&query=zephyr`,
+	);
+	assert.equal(otherSearch.response.status, 400);
+	assert.deepEqual(otherSearch.body, mismatchBody);
+
+	const otherSort = await openScholarRead(
+		profile,
+		`/api/openscholar/institutions?pageSize=1&cursor=${cursor}&sort=name`,
+	);
+	assert.equal(otherSort.response.status, 400);
+	assert.deepEqual(otherSort.body, mismatchBody);
+
+	const unreadable = await openScholarRead(
+		profile,
+		"/api/openscholar/institutions?cursor=not-a-cursor",
+	);
+	assert.equal(unreadable.response.status, 400);
+	assert.deepEqual(unreadable.body, {
+		error: {
+			code: "validation_failed",
+			fields: {
+				cursor: "Search again to start from the first result.",
+			},
+			message:
+				"The saved institution position is invalid or expired. Search again.",
+		},
+	});
+}
+
+/**
+ * The picker must never read the records themselves. The fixture is far too
+ * small for the planner to prefer an index, so sequential scans are turned off
+ * to show which index the search can use.
+ */
+function verifyInstitutionQueryPlans(profile: Profile) {
+	const paged = postgresScalar(
+		profile.name,
+		`EXPLAIN SELECT "institutionName", count(*) FROM "itemInstitution" GROUP BY "institutionName" ORDER BY count(*) DESC, "institutionName" ASC LIMIT 51`,
+	);
+	assert.ok(
+		paged.includes("itemInstitution"),
+		`the paged plan must read the projection:\n${paged}`,
+	);
+	assert.ok(
+		!/\bon "?item"?\b/iu.test(paged) && !/jsonb/iu.test(paged),
+		`the paged plan must not scan the records:\n${paged}`,
+	);
+
+	const searched = postgresScalar(
+		profile.name,
+		`SET LOCAL enable_seqscan = off; EXPLAIN SELECT "institutionName", count(*) FROM "itemInstitution" WHERE "institutionNameSort" LIKE '%zephyr%' ESCAPE '\\' GROUP BY "institutionName" ORDER BY count(*) DESC, "institutionName" ASC LIMIT 51`,
+	);
+	assert.ok(
+		searched.includes("itemInstitution_name_search_idx"),
+		`the search plan must use the trigram index:\n${searched}`,
+	);
+}
+
+async function verifyOpenScholarInstitutions(profile: Profile) {
 	const denied = await openScholarRead(
 		profile,
 		"/api/openscholar/institutions",
@@ -1518,47 +1657,42 @@ async function verifyOpenScholarReadApi(profile: Profile) {
 		"private, no-store",
 	);
 	assert.deepEqual(institutions.body, {
-		items: [
-			{ count: 1, name: "Amber Institute" },
-			{ count: 1, name: "Indigo College" },
-		],
+		items: INSTITUTIONS_BY_COUNT,
 		nextCursor: null,
 	});
 
-	// Both institutions have the same count, so paging one row at a time also
-	// proves the cursor breaks the tie by name.
-	const firstInstitution = await openScholarRead<OpenScholarInstitutionPage>(
-		profile,
-		"/api/openscholar/institutions?pageSize=1",
+	assert.deepEqual(
+		await pageThroughInstitutions(profile, "count"),
+		INSTITUTIONS_BY_COUNT,
+		"paging by count must keep the order and repeat nothing",
 	);
-	assert.deepEqual(firstInstitution.body.items, [
-		{ count: 1, name: "Amber Institute" },
-	]);
-	assert.ok(firstInstitution.body.nextCursor, "a second page must exist");
-	const secondInstitution = await openScholarRead<OpenScholarInstitutionPage>(
-		profile,
-		`/api/openscholar/institutions?pageSize=1&cursor=${encodeURIComponent(firstInstitution.body.nextCursor!)}`,
+	assert.deepEqual(
+		await pageThroughInstitutions(profile, "name"),
+		INSTITUTIONS_BY_NAME,
+		"paging by name must keep the order and repeat nothing",
 	);
-	assert.deepEqual(secondInstitution.body, {
-		items: [{ count: 1, name: "Indigo College" }],
-		nextCursor: null,
-	});
 
-	const searchedInstitutions = await openScholarRead<OpenScholarInstitutionPage>(
+	const searched = await openScholarRead<OpenScholarInstitutionPage>(
 		profile,
 		"/api/openscholar/institutions?query=INDIGO",
 	);
-	assert.deepEqual(searchedInstitutions.body, {
+	assert.deepEqual(searched.body, {
 		items: [{ count: 1, name: "Indigo College" }],
 		nextCursor: null,
 	});
 
-	const staleCursor = await openScholarRead<{ error: { code: string } }>(
-		profile,
-		"/api/openscholar/institutions?cursor=not-a-cursor",
-	);
-	assert.equal(staleCursor.response.status, 400);
-	assert.equal(staleCursor.body.error.code, "validation_failed");
+	await verifyInstitutionCursorRules(profile);
+	verifyInstitutionQueryPlans(profile);
+}
+
+async function verifyOpenScholarReadApi(profile: Profile) {
+	console.log(`\nVerifying ${profile.name} OpenScholar read API`);
+	seedInstitutionRecords(profile);
+	try {
+		await verifyOpenScholarInstitutions(profile);
+	} finally {
+		removeInstitutionRecords(profile);
+	}
 
 	const firstPage = await openScholarRead<OpenScholarCollectionPage>(
 		profile,
