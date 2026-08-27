@@ -17,7 +17,7 @@ const posthog = vi.hoisted(() => ({
 	}>,
 }));
 
-vi.mock("posthog-js", () => {
+vi.mock("posthog-js/dist/module.full.no-external", () => {
 	posthog.moduleLoads += 1;
 	return {
 		PostHog: class {

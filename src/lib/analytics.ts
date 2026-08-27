@@ -6,7 +6,10 @@ import type {
 	AnalyticsConsentState,
 } from "@/lib/analytics-consent";
 import { sanitizeAnalyticsPath } from "@/lib/analytics-shared";
-import type { CaptureResult, PostHog } from "posthog-js";
+import type {
+	CaptureResult,
+	PostHog,
+} from "posthog-js/dist/module.full.no-external";
 
 declare global {
 	interface Window {
@@ -262,7 +265,7 @@ async function initializePostHog(expectedSignature: string) {
 	}
 	if (posthogInitialization) return posthogInitialization;
 
-	posthogInitialization = import("posthog-js")
+	posthogInitialization = import("posthog-js/dist/module.full.no-external")
 		.then(({ PostHog: PostHogClient }) => {
 			if (
 				analyticsMode !== "granted" ||

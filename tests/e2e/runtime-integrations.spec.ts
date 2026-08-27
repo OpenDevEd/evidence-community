@@ -10,6 +10,11 @@ test.skip(
 	"requires the runtime acceptance services",
 );
 
+test.use({
+	userAgent:
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+});
+
 const expectedGapMap =
 	process.env.PLAYWRIGHT_EXPECTED_GAP_MAP === "true";
 const expectedExportRis =
@@ -49,6 +54,8 @@ const emailSender =
 const identityShortName =
 	process.env.PLAYWRIGHT_EXPECTED_IDENTITY_SHORT_NAME ??
 	"Evidence Library";
+const consentAccept =
+	process.env.PLAYWRIGHT_EXPECTED_CONSENT_ACCEPT ?? "Accept All & Continue";
 const consentDecline =
 	process.env.PLAYWRIGHT_EXPECTED_CONSENT_DECLINE ?? "Decline";
 const analyticsDeliveryWindowMs = 3_500;
@@ -171,13 +178,12 @@ test("sends analytics only for the configured and consented profile", async ({
 }) => {
 	await page.addInitScript(() => {
 		Object.defineProperties(Navigator.prototype, {
-			userAgent: {
-				get: () =>
-					"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
-			},
 			userAgentData: {
 				get: () => ({
-					brands: [{ brand: "Chromium", version: "151" }],
+					brands: [
+						{ brand: "Google Chrome", version: "151" },
+						{ brand: "Chromium", version: "151" },
+					],
 					mobile: false,
 					platform: "macOS",
 				}),
@@ -226,7 +232,7 @@ test("sends analytics only for the configured and consented profile", async ({
 	await page.goto("/lib");
 	await page
 		.getByRole("button", {
-			name: "Accept & Continue",
+			name: consentAccept,
 			exact: true,
 		})
 		.click();
@@ -257,6 +263,31 @@ test("sends analytics only for the configured and consented profile", async ({
 			);
 		}
 		expect(eventRequests.length).toBeGreaterThan(0);
+		await expect
+			.poll(
+				() =>
+					page.evaluate(() =>
+						Object.entries(localStorage).some(([key, value]) => {
+							if (!key.startsWith("ph_") || !key.endsWith("_posthog"))
+								return false;
+							try {
+								const replay = JSON.parse(value) as {
+									$debug_first_full_snapshot_timestamp?: number;
+									$sess_rec_flush_size?: { size?: number };
+								};
+								return (
+									typeof replay.$debug_first_full_snapshot_timestamp ===
+										"number" &&
+									(replay.$sess_rec_flush_size?.size ?? 0) > 0
+								);
+							} catch {
+								return false;
+							}
+						}),
+					),
+				{ timeout: 10_000 },
+			)
+			.toBe(true);
 		await page
 			.getByRole("button", {
 				name: "Cookie Settings",
