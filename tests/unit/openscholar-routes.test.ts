@@ -1,3 +1,4 @@
+import { PgDialect } from "drizzle-orm/pg-core";
 import { NextRequest } from "next/server";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -101,7 +102,7 @@ describe("OpenScholar collections route", () => {
 });
 
 describe("OpenScholar institutions route", () => {
-	it("returns every institution name with a numeric record count", async () => {
+	it("returns one page of institution names with numeric record counts", async () => {
 		const response = await getInstitutions(
 			request("/api/openscholar/institutions"),
 		);
@@ -113,7 +114,39 @@ describe("OpenScholar institutions route", () => {
 				{ count: 4, name: "Amber Institute" },
 				{ count: 1, name: "Indigo College" },
 			],
+			nextCursor: null,
 		});
+	});
+
+	it("passes the search text, page size and sort through to the query", async () => {
+		const response = await getInstitutions(
+			request(
+				"/api/openscholar/institutions?query=amber&pageSize=1&sort=name",
+			),
+		);
+
+		expect(response.status).toBe(200);
+		const { items, nextCursor } = (await response.json()) as {
+			items: { count: number; name: string }[];
+			nextCursor: string | null;
+		};
+		expect(items).toEqual([{ count: 4, name: "Amber Institute" }]);
+		expect(nextCursor).not.toBeNull();
+		const { params } = new PgDialect().sqlToQuery(execute.mock.calls[0][0]);
+		expect(params).toContain("%amber%");
+		expect(params).toContain(2);
+	});
+
+	it("refuses a cursor it cannot read", async () => {
+		const response = await getInstitutions(
+			request("/api/openscholar/institutions?cursor=not-a-cursor"),
+		);
+
+		expect(response.status).toBe(400);
+		expect(await response.json()).toMatchObject({
+			error: { code: "validation_failed" },
+		});
+		expect(execute).not.toHaveBeenCalled();
 	});
 
 	it("rejects a missing bearer", async () => {
