@@ -328,8 +328,6 @@ async function initializePostHog(expectedSignature: string) {
 				mask_all_text: true,
 				mask_personal_data_properties: true,
 				person_profiles: "always",
-				opt_out_capturing_by_default: true,
-				opt_out_persistence_by_default: true,
 				respect_dnt: true,
 				save_campaign_params: true,
 				save_referrer: false,
