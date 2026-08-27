@@ -988,6 +988,9 @@ const publicGapMapSchema = gapMapSchema
 
 const publicGapMapsSchema = z.array(publicGapMapSchema).max(50).default([]);
 
+// Addresses of ready-made whole-library files. They are optional. Single-record
+// RIS and BibTeX downloads are built from the database and need only
+// `features.downloads`.
 const exportsSchema = z
 	.object({
 		ris: publicHttpsUrlSchema.optional(),
@@ -1724,18 +1727,6 @@ export function createLibraryConfigSchema(
 				context,
 				["features", "yearsDropdown"],
 				"Years dropdown requires the years filter",
-			);
-		}
-
-		if (
-			config.features.downloads &&
-			!config.exports.ris &&
-			!config.exports.bibtex
-		) {
-			addRequiredIssue(
-				context,
-				["features", "downloads"],
-				"Downloads require a RIS or BibTeX endpoint",
 			);
 		}
 

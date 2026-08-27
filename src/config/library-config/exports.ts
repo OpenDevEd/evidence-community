@@ -56,7 +56,10 @@ export function isBibliographicExportFormat(
 	);
 }
 
-export function getEnabledBibliographicExportFormats(
+// Whole-library RIS and BibTeX files come from an address in the
+// configuration. Single-record downloads are built from the database and do
+// not use this list.
+export function getWholeLibraryFileFormats(
 	exports: LibraryPublicConfig["exports"],
 ) {
 	return BIBLIOGRAPHIC_EXPORT_FORMATS.filter(

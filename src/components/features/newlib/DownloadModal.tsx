@@ -17,14 +17,11 @@ import { Button } from "@/components/nextui/Button";
 import { Item } from "@/app/api/item/types";
 import { convertItem } from "@/lib/actions";
 import {
-	getEnabledBibliographicExportFormats,
+	BIBLIOGRAPHIC_EXPORT_FORMATS,
 	getLibraryExportExtension,
 	type BibliographicExportFormat,
 } from "@/config/library-config/exports";
-import {
-	useLibraryConfig,
-	useLibraryFeature,
-} from "@/context/LibraryConfigProvider";
+import { useLibraryFeature } from "@/context/LibraryConfigProvider";
 
 async function defaultAction(
 	itemData: Item,
@@ -45,16 +42,14 @@ export function DownloadButton({
 }) {
 	const { isOpen, onOpen, onOpenChange, onClose } = useDisclosure();
 	const isDownloadEnabled = useLibraryFeature("downloads");
-	const { exports } = useLibraryConfig();
-	const formats = getEnabledBibliographicExportFormats(exports);
 
 	const wrappedDefaultAction = (format: BibliographicExportFormat) => {
 		if (!itemData) throw new Error("Item data is required for default action");
 		return defaultAction(itemData, format);
 	};
 
-	if (!isDownloadEnabled || formats.length === 0) return null;
-	
+	if (!isDownloadEnabled) return null;
+
 	return (
 		<>
 			<Button {...props} onPress={onOpen}>
@@ -66,7 +61,6 @@ export function DownloadButton({
 				onClose={onClose}
 				action={action || wrappedDefaultAction}
 				fileName={fileName}
-				formats={formats}
 			/>
 		</>
 	);
@@ -91,9 +85,7 @@ export function DownloadModal({
 }) {
 	const t = useTranslations("ui");
 	const [loading, setLoading] = useState(false);
-	const { exports } = useLibraryConfig();
-	const availableFormats =
-		formats ?? getEnabledBibliographicExportFormats(exports);
+	const availableFormats = formats ?? BIBLIOGRAPHIC_EXPORT_FORMATS;
 
 	return (
 		<DialogModal

@@ -509,9 +509,14 @@ running before removing a stale lock.
 - Enabled gap maps are streamed through
   `/gapmaps/<slug>.html`; the application server fetches their configured
   source URLs and accepts approved HTML content types.
-- Enabled RIS and BibTeX exports are streamed through `/lib/export/ris` and
-  `/lib/export/bibtex`; Atom is streamed through `/lib/atom.xml`. The
-  application validates upstream status and content type.
+- Single-record RIS and BibTeX downloads are built from the database. They need
+  only `features.downloads`. Both formats are offered whenever that switch is
+  on, and no address in `exports` is required.
+- Whole-library files are different. Set `exports.ris`, `exports.bibtex`, or
+  `exports.atom` to the address of a ready-made file. Those files are streamed
+  through `/lib/export/ris`, `/lib/export/bibtex`, and `/lib/atom.xml`. The
+  application validates upstream status and content type. A whole-library
+  button appears only when its address is set.
 - Proxied gap maps and exports are not cached by the application.
 - PostgreSQL, Meilisearch, SMTP, server analytics, and AI provider endpoints
   must be reachable from the container network. Browser analytics hosts must

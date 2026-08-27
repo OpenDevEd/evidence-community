@@ -42,7 +42,7 @@ container image can be started repeatedly with different mounted documents.
 | `features` | Theme/language/login/search/AI/download and related UI switches | Dependency validation in the schema |
 | `collections` | Enabled collection IDs, labels, ordering | Unique IDs and bounded order |
 | `gapMaps` | Runtime gap-map routes and source URLs | Unique IDs/slugs and stable URLs |
-| `exports` | RIS, BibTeX, and Atom endpoints | Optional public HTTPS URLs |
+| `exports` | Addresses of ready-made whole-library RIS, BibTeX, and Atom files | Optional public HTTPS URLs; single-record downloads do not need them |
 | `services` | PostgreSQL, Meilisearch, Zotero translation | Valid service URLs and bounded credentials/index |
 | `ai` | Providers, models, keys, prompts | Platform provider/model catalogs and feature dependencies |
 | `analytics` | PostHog, Google Analytics, UTM retention | Valid hosts/IDs and bounded retention |

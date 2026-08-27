@@ -21,7 +21,7 @@ export async function GET(
     }
 
     const config = await getLibraryConfig();
-    if (!config.features.downloads || !config.exports[format]) {
+    if (!config.features.downloads) {
         return NextResponse.json(
             { message: "Export format not available" },
             { status: 404 },
