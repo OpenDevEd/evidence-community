@@ -1,15 +1,15 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	getEnabledBibliographicExportFormats,
 	getLibraryExportPath,
+	getWholeLibraryFileFormats,
 	isApprovedLibraryExportContentType,
 } from "@/config/library-config/exports";
 
 describe("runtime exports", () => {
-	it("exposes only configured bibliographic formats", () => {
+	it("lists only the whole-library files that have an address", () => {
 		expect(
-			getEnabledBibliographicExportFormats({
+			getWholeLibraryFileFormats({
 				ris: true,
 				bibtex: false,
 				atom: true,

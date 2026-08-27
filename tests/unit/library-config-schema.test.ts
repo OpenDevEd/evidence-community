@@ -503,13 +503,6 @@ describe("cross-field activation rules", () => {
 			},
 		],
 		[
-			"downloads without RIS or BibTeX",
-			(config: any) => {
-				delete config.exports.ris;
-				delete config.exports.bibtex;
-			},
-		],
-		[
 			"Atom feed without Atom endpoint",
 			(config: any) => {
 				delete config.exports.atom;
@@ -662,6 +655,17 @@ describe("cross-field activation rules", () => {
 		],
 	])("rejects %s", (_name, mutate) => {
 		expectCatalogInvalid(mutate);
+	});
+
+	it("allows downloads without any whole-library file address", () => {
+		const config = cloneLibraryConfig();
+		delete (config.exports as any).ris;
+		delete (config.exports as any).bibtex;
+		(config.features as any).downloads = true;
+
+		const result = catalogSchema.safeParse(config);
+
+		expect(result.success).toBe(true);
 	});
 });
 
