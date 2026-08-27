@@ -214,6 +214,8 @@ services:
     depends_on:
       amber-meilisearch:
         condition: service_healthy
+      fixture:
+        condition: service_healthy
       postgres:
         condition: service_healthy
     environment:

@@ -1150,7 +1150,9 @@ function publicExpectations(profile: Profile) {
 			config.citations.showUrl &&
 				Boolean(config.services.zotero.translationUrl),
 		),
-		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(config.search.embedder !== null),
+		PLAYWRIGHT_EXPECTED_EMBEDDINGS: String(
+			config.search.embedder !== null && config.features.relatedResources,
+		),
 		PLAYWRIGHT_EXPECTED_COUNTRY_FACET: String(config.search.country),
 		PLAYWRIGHT_EXPECTED_AUTHOR_COUNTRY_FACET: String(
 			config.search.authorCountry,
@@ -1563,13 +1565,18 @@ async function verifyOwnerLegalText(profile: Profile) {
 	);
 	assert.equal(response.status, 200);
 	const html = await response.text();
+	const renderedText = html
+		.replace(/<(script|style|template)\b[^>]*>[\s\S]*?<\/\1>/giu, " ")
+		.replace(/<[^>]*>/gu, " ")
+		.replace(/\s+/gu, " ")
+		.trim();
 	const siteHost = new URL(profile.config.identity.baseUrl).host;
 	assert.ok(
-		html.includes(`Use ${siteHost} for research and teaching.`),
+		renderedText.includes(`Use ${siteHost} for research and teaching.`),
 		"terms page must show the owner's text with the site host filled in",
 	);
 	assert.ok(
-		html.includes("Updated 01 August 2026"),
+		renderedText.includes("Updated 01 August 2026"),
 		"terms page must read the date from the owner's text",
 	);
 }
