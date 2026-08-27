@@ -333,7 +333,7 @@ export default function Footer() {
 					onClose={() => setPolicyDialogOpen(false)}
 					backdrop="opaque"
 					classNames={{
-						base: "max-h-[calc(100dvh-2rem)] border border-divider bg-background_light dark:bg-card",
+						base: "max-h-dvh border border-divider bg-background_light dark:bg-card",
 					}}
 				>
 					<AnalyticsConsentDialogContent
