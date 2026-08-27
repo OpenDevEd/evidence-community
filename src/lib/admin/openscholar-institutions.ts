@@ -1,7 +1,7 @@
 import { sql, type SQL } from "drizzle-orm";
 
 import type { Database } from "@/db/database-schema";
-import { item } from "@/db/schema/tables/item";
+import { itemInstitution } from "@/db/schema/tables/itemInstitution";
 
 import {
 	encodeOpenScholarInstitutionCursor,
@@ -29,6 +29,11 @@ function containsPattern(value: string) {
  * records name each one. Unlike the public institutions page this is not
  * limited to the most common country: OpenScholar pickers need the full list.
  *
+ * The rows come from the `itemInstitution` projection, which the same refresh
+ * function that maintains `adminItemListProjection` keeps in step with the
+ * records. Reading a projection means a search uses the trigram index and a
+ * page never unpacks a record's creators JSON.
+ *
  * Paging is keyset, not offset. The counts come from an aggregate, so the
  * "start after the last row" condition has to sit in HAVING.
  */
@@ -36,42 +41,32 @@ export function buildInstitutionCountsQuery(
 	request: OpenScholarInstitutionRequest,
 	cursor: OpenScholarInstitutionCursor | null,
 ): SQL {
-	const searchCondition = request.query
-		? sql` AND institution_data->>'display_name' ILIKE ${containsPattern(request.query)} ESCAPE '\\'`
+	// The stored sort column is already lower-cased, so a plain LIKE against a
+	// lower-cased pattern matches case-insensitively and can use the index.
+	const search = request.query
+		? sql` WHERE ${itemInstitution.institutionNameSort} LIKE ${containsPattern(request.query.toLowerCase())} ESCAPE '\\'`
 		: sql``;
 
 	const keyset = (() => {
 		if (!cursor) return sql``;
 		if (request.sort === "name") {
-			return sql` HAVING institution_name > ${cursor.name}`;
+			return sql` HAVING ${itemInstitution.institutionName} > ${cursor.name}`;
 		}
 		return sql` HAVING (
 			count(*) < ${cursor.count}
-			OR (count(*) = ${cursor.count} AND institution_name > ${cursor.name})
+			OR (count(*) = ${cursor.count} AND ${itemInstitution.institutionName} > ${cursor.name})
 		)`;
 	})();
 
 	const order =
 		request.sort === "name"
-			? sql`institution_name ASC`
-			: sql`count(*) DESC, institution_name ASC`;
+			? sql`${itemInstitution.institutionName} ASC`
+			: sql`count(*) DESC, ${itemInstitution.institutionName} ASC`;
 
 	return sql`
-		SELECT institution_name AS name, count(*) AS count
-		FROM (
-			SELECT DISTINCT
-				institution_data->>'display_name' AS institution_name,
-				${item.key} AS item_key
-			FROM ${item},
-			LATERAL jsonb_array_elements(${item.creators}) AS creator_data,
-			LATERAL jsonb_array_elements(creator_data->'institutions') AS institution_data
-			WHERE ${item.deleted} = 0
-			AND (${item.parentItem} IS NULL OR ${item.parentItem} = '')
-			AND jsonb_typeof(${item.creators}) = 'array'
-			AND jsonb_typeof(creator_data->'institutions') = 'array'
-			AND coalesce(institution_data->>'display_name', '') <> ''${searchCondition}
-		) AS institution_items
-		GROUP BY institution_name${keyset}
+		SELECT ${itemInstitution.institutionName} AS name, count(*) AS count
+		FROM ${itemInstitution}${search}
+		GROUP BY ${itemInstitution.institutionName}${keyset}
 		ORDER BY ${order}
 		LIMIT ${request.pageSize + 1}
 	`;

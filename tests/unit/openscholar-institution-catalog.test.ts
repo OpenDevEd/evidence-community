@@ -98,24 +98,27 @@ describe("institution counts query", () => {
 	it("asks for one row more than the page and walks by count then name", () => {
 		const { params, sql } = compile({});
 
-		expect(sql).toMatch(/order by\s+count\(\*\) desc, institution_name asc/iu);
+		expect(sql).toMatch(
+			/order by\s+count\(\*\) desc, "itemInstitution"\."institutionName" asc/iu,
+		);
 		expect(sql).not.toMatch(/offset/iu);
 		expect(sql).not.toMatch(/having/iu);
 		expect(params).toContain(51);
 	});
 
-	it("counts only live top-level records", () => {
+	it("reads the maintained projection instead of the records", () => {
 		const { sql } = compile({});
 
-		expect(sql).toContain('"deleted" = 0');
-		expect(sql).toMatch(/select distinct/iu);
-		expect(sql).toContain('("item"."parentItem" IS NULL');
+		expect(sql).toMatch(/from\s+"itemInstitution"/iu);
+		expect(sql).not.toMatch(/from\s+"item"[^I]/iu);
+		expect(sql).not.toMatch(/jsonb_array_elements|"creators"/iu);
 	});
 
-	it("matches search text anywhere in the name, ignoring case and wildcards", () => {
-		const { params, sql } = compile({ query: "%_\\amber" });
+	it("matches search text anywhere in the name through the indexed column", () => {
+		const { params, sql } = compile({ query: "%_\\AMBER" });
 
-		expect(sql).toContain("ILIKE");
+		expect(sql).toContain('"institutionNameSort" LIKE');
+		expect(sql).not.toMatch(/ilike|lower\(/iu);
 		expect(sql).toContain("ESCAPE '\\'");
 		expect(params).toContain("%\\%\\_\\\\amber%");
 	});
@@ -133,7 +136,7 @@ describe("institution counts query", () => {
 		expect(sql).toMatch(/having/iu);
 		expect(sql).toContain("count(*) <");
 		expect(sql).toContain("count(*) =");
-		expect(sql).toContain("institution_name >");
+		expect(sql).toContain('"institutionName" >');
 		expect(params).toContain(7);
 		expect(params).toContain("Amber Institute");
 	});
@@ -148,7 +151,9 @@ describe("institution counts query", () => {
 
 		const { params, sql } = compile({ cursor, sort: "name" });
 
-		expect(sql).toMatch(/order by\s+institution_name asc/iu);
+		expect(sql).toMatch(
+			/order by\s+"itemInstitution"\."institutionName" asc/iu,
+		);
 		expect(sql).not.toContain("count(*) desc");
 		expect(sql).not.toContain("count(*) <");
 		expect(params).toContain("Amber Institute");
