@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
 	getCanonicalLibraryRedirect,
 	getExternalRequestOrigin,
+	getRedirectLookupPath,
 	getUnlocalizedPathname,
 	isLoginProfilePath,
 } from "@/lib/runtime-routing";
@@ -106,5 +107,41 @@ describe("runtime route enforcement", () => {
 				}),
 			),
 		).toBe("https://library.example.org");
+	});
+});
+
+describe("unknown path lookup", () => {
+	it.each([
+		"/404",
+		"/admin",
+		"/citation",
+		"/contact",
+		"/cookie-policy",
+		"/gapmaps",
+		"/lib",
+		"/map",
+		"/newlib",
+		"/privacy",
+		"/profile",
+		"/statistics",
+		"/takedown",
+		"/terms",
+	])("treats the built-in page %s as a known route", (pathname) => {
+		expect(getRedirectLookupPath(pathname)).toBeNull();
+		expect(getRedirectLookupPath(`/en-GB${pathname}`)).toBeNull();
+	});
+
+	it("looks up a path the library does not serve", () => {
+		expect(getRedirectLookupPath("/old-report/2024")).toBe(
+			"old-report/2024",
+		);
+		expect(getRedirectLookupPath("/en-GB/old-report/2024")).toBe(
+			"old-report/2024",
+		);
+	});
+
+	it("has nothing to look up at the site root", () => {
+		expect(getRedirectLookupPath("/")).toBeNull();
+		expect(getRedirectLookupPath("/en-GB")).toBeNull();
 	});
 });

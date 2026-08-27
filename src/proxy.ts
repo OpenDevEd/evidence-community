@@ -16,6 +16,7 @@ import { getMeilisearchForConfig } from "./lib/meilisearch";
 import { normalizePathname } from "./lib/path";
 import {
 	getCanonicalLibraryRedirect,
+	getRedirectLookupPath,
 	getUnlocalizedPathname,
 	isLoginProfilePath,
 } from "./lib/runtime-routing";
@@ -175,39 +176,6 @@ function isLikelyZoteroKey(key: string) {
 
 function isLikelyBrokenKey(key: string) {
 	return /^\d+:[A-Z0-9]{8}$/.test(key);
-}
-
-const RESERVED_ROUTE_SEGMENTS = new Set([
-	"404",
-	"about",
-	"admin",
-	"api",
-	"citation",
-	"contact",
-	"cookie-policy",
-	"gapmaps",
-	"lib",
-	"map",
-	"newlib",
-	"privacy",
-	"profile",
-	"statistics",
-	"takedown",
-]);
-
-function getRedirectLookupPath(pathname: string) {
-	const segments = pathname.split("/").filter(Boolean);
-	if (segments.length === 0) return null;
-
-	const firstSegment = segments[0];
-	const pathSegments = getPlatformPathLocale(pathname)
-		? segments.slice(1)
-		: segments;
-
-	if (pathSegments.length === 0) return null;
-	if (RESERVED_ROUTE_SEGMENTS.has(pathSegments[0])) return null;
-
-	return pathSegments.join("/");
 }
 
 async function getNoteRedirectDestination(request: NextRequest) {
