@@ -117,10 +117,12 @@ export function isLoginProfilePath(pathname: string) {
 
 export const ADMIN_HOME_PATH = "/admin";
 
-export const ADMIN_PAGE_METHODS = "GET, HEAD";
+const adminPageMethods = ["GET", "HEAD"] as const;
+
+export const ADMIN_PAGE_METHODS = adminPageMethods.join(", ");
 
 export function isAdminPageMethod(method: string) {
-	return method === "GET" || method === "HEAD";
+	return adminPageMethods.some((pageMethod) => pageMethod === method);
 }
 
 export function isAdminPagePath(pathname: string) {

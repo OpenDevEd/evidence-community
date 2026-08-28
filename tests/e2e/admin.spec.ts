@@ -683,18 +683,52 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 	);
 });
 
-test("refuses anything but a page request on the admin page", async ({
-	page,
-}) => {
+test("answers admin requests on the library's own rules", async ({ page }) => {
+	const baseUrl = process.env.PLAYWRIGHT_BASE_URL!;
+	const loginPageUrl =
+		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!;
+	const disabledLocale = process.env.PLAYWRIGHT_EXPECTED_DISABLED_LOCALE!;
+	expect(disabledLocale).toBeTruthy();
+	const adminUrl = (path: string) => new URL(path, baseUrl).toString();
+
+	// The session from the shared setup is still in place here.
+	const signedInPost = await page.request.post(adminUrl("/admin"), {
+		data: "not a page request",
+		maxRedirects: 0,
+	});
+	expect(signedInPost.status()).toBe(405);
+	expect(signedInPost.headers().allow).toBe("GET, HEAD");
+
 	await page.context().clearCookies();
 
-	const response = await page.request.post(
-		new URL("/admin", process.env.PLAYWRIGHT_BASE_URL!).toString(),
+	const signedOutPost = await page.request.post(adminUrl("/admin"), {
+		data: "not a page request",
+		maxRedirects: 0,
+	});
+	expect(signedOutPost.status()).toBe(405);
+	expect(signedOutPost.headers().allow).toBe("GET, HEAD");
+
+	// A legacy search key must not turn a refused method into a redirect.
+	const legacyQueryPost = await page.request.post(
+		adminUrl("/admin?sort=date_desc"),
 		{ data: "not a page request", maxRedirects: 0 },
 	);
+	expect(legacyQueryPost.status()).toBe(405);
 
-	expect(response.status()).toBe(405);
-	expect(response.headers().allow).toBe("GET, HEAD");
+	const head = await page.request.head(adminUrl("/admin"), {
+		maxRedirects: 0,
+	});
+	expect(head.status()).toBe(307);
+	expect(head.headers().location).toBe(`${loginPageUrl}?return=%2Fadmin`);
+
+	const switchedOffLocale = await page.request.get(
+		adminUrl(`/${disabledLocale}/admin?sort=date_desc`),
+		{ maxRedirects: 0 },
+	);
+	expect(switchedOffLocale.status()).toBe(307);
+	expect(
+		new URL(switchedOffLocale.headers().location, baseUrl).toString(),
+	).toBe(adminUrl("/admin?sort=date_desc"));
 });
 
 test("rejects a one-time code for another library", async ({ page }) => {

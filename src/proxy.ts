@@ -277,6 +277,21 @@ function hasAdminSession(
 	);
 }
 
+function getDisabledLocaleRedirect(
+	request: NextRequest,
+	localization: LibraryServerConfig["localization"],
+) {
+	const pathname = getDisabledLocaleRedirectPathname(
+		request.nextUrl.pathname,
+		localization,
+	);
+	if (!pathname) return null;
+
+	const url = request.nextUrl.clone();
+	url.pathname = pathname;
+	return NextResponse.redirect(url, 307);
+}
+
 function getAdminPageResponse(
 	request: NextRequest,
 	authentication: LibraryServerConfig["authentication"],
@@ -298,6 +313,23 @@ function getAdminPageResponse(
 	);
 }
 
+// The admin page must answer with a real redirect. Rendering it and calling
+// redirect() there streams a 200 first, so the browser would see the
+// card-free page instead of the OpenScholar handoff. Nothing else may answer
+// first: a switched-off locale is dropped here, and the legacy query rules
+// never turn a refused method into a redirect.
+function getAdminRequestResponse(
+	request: NextRequest,
+	libraryConfig: LibraryServerConfig,
+) {
+	if (!isAdminPagePath(request.nextUrl.pathname)) return null;
+
+	return (
+		getDisabledLocaleRedirect(request, libraryConfig.localization) ??
+		getAdminPageResponse(request, libraryConfig.authentication)
+	);
+}
+
 export default async function proxy(request: NextRequest) {
 	const libraryConfig = await loadLibraryConfig();
 	const canonicalRedirect = getCanonicalLibraryRedirect(
@@ -314,6 +346,12 @@ export default async function proxy(request: NextRequest) {
 		url.pathname = "/lib";
 		return NextResponse.redirect(url);
 	}
+
+	const adminRequestResponse = getAdminRequestResponse(
+		request,
+		libraryConfig,
+	);
+	if (adminRequestResponse) return adminRequestResponse;
 
 	const newRequest = mapLegacySearchParams(request, libraryConfig.search);
 
@@ -462,26 +500,11 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.next();
 	}
 
-	const disabledLocaleRedirectPathname = getDisabledLocaleRedirectPathname(
-		request.nextUrl.pathname,
+	const disabledLocaleRedirect = getDisabledLocaleRedirect(
+		request,
 		libraryConfig.localization,
 	);
-	if (disabledLocaleRedirectPathname) {
-		const url = request.nextUrl.clone();
-		url.pathname = disabledLocaleRedirectPathname;
-		return NextResponse.redirect(url, 307);
-	}
-
-	// The admin page must answer with a real redirect. Rendering it and
-	// calling redirect() there streams a 200 first, so the browser would see
-	// the card-free page instead of the OpenScholar handoff. This runs after
-	// the locale rules so a switched-off locale is dropped here, not on
-	// OpenScholar.
-	const adminPageResponse = getAdminPageResponse(
-		request,
-		libraryConfig.authentication,
-	);
-	if (adminPageResponse) return adminPageResponse;
+	if (disabledLocaleRedirect) return disabledLocaleRedirect;
 
 	const hasOwnerWrittenTerms = Boolean(libraryConfig.legal.termsMarkdown);
 	if (libraryConfig.generation.redirects) {
