@@ -87,7 +87,7 @@ export const maximalLibraryConfig = {
 				"https://assets.example.org/maximal/icon.svg",
 				"https://assets.example.org/maximal/icon.ico",
 			],
-			logoStyles: "border-radius: 0.5rem;\nfilter: saturate(1.1);",
+			logoStyles: "border-radius: 8px;\nfilter: saturate(1.1);",
 			shareImage: "https://assets.example.org/maximal/share.png",
 		},
 	},

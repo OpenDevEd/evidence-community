@@ -16,7 +16,7 @@ interface LogoProps {
 }
 
 export function Logo({ interactive = true }: LogoProps) {
-	const { isLoaded, onLogoLoad } = useLibraryLogo();
+	const { isLoaded, onLogoSettled } = useLibraryLogo();
 	const { navigation } = useLibraryConfig();
 	const homeLink = getRuntimeHomeHref(navigation.links);
 
@@ -38,7 +38,7 @@ export function Logo({ interactive = true }: LogoProps) {
 					isLoaded ? "w-auto" : "w-logo-header",
 				)}
 				place="header"
-				onLoad={onLogoLoad}
+				onSettled={onLogoSettled}
 			/>
 		</div>
 	);

@@ -79,14 +79,14 @@ function FooterLink({ link }: { link: RuntimeLeafLink }) {
 }
 
 function Logo() {
-	const { isLoaded, onLogoLoad } = useLibraryLogo();
+	const { isLoaded, onLogoSettled } = useLibraryLogo();
 
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
 			className="flex h-12 w-logo-footer items-center justify-center rounded-lg"
 		>
-			<LibraryLogo onLoad={onLogoLoad} place="footer" />
+			<LibraryLogo onSettled={onLogoSettled} place="footer" />
 		</Skeleton>
 	);
 }

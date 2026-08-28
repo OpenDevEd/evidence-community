@@ -3,13 +3,7 @@
 /* Runtime asset hosts cannot be known to next/image at build time. */
 /* eslint-disable @next/next/no-img-element */
 
-import {
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-	type ReactNode,
-} from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import { useTheme } from "next-themes";
 import { twMerge } from "tailwind-merge";
@@ -19,90 +13,95 @@ import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 /**
- * The library's light and dark logo files. Deliberately not exported: every
- * logo on the site must go through a box below, which owns its height.
- */
-/**
- * Which of the two logo files is on screen right now, and whether that exact
- * file has finished loading.
+ * Which logo file is on screen right now, and whether that exact file has
+ * already settled — arrived, or failed for good.
  *
- * A library ships a light and a dark logo. Only one is ever shown, so only
- * that one may say the logo is ready: the other may still be on its way, or
- * may never arrive. Switching between light and dark swaps which file is
- * shown, so readiness is tied to the address of the file, not to a yes or no
- * that never goes back.
+ * A library ships a light and a dark logo, and switching between light and
+ * dark swaps which one is shown. Every file that settles is remembered, so a
+ * colour scheme that has been shown once never asks the bar to hold room for
+ * it again. Readiness is worked out while the page is being drawn, so it
+ * cannot flicker for a frame after a switch.
  */
 export function useLibraryLogo() {
 	const { identity } = useLibraryConfig();
 	const { resolvedTheme } = useTheme();
-	const [loadedSource, setLoadedSource] = useState<string | null>(null);
+	const [settledSources, setSettledSources] = useState<ReadonlySet<string>>(
+		() => new Set<string>(),
+	);
 	const shownSource =
 		resolvedTheme === "dark"
 			? identity.assets.logoDark
 			: identity.assets.logoLight;
+	const onLogoSettled = useCallback((source: string) => {
+		setSettledSources((current) =>
+			current.has(source) ? current : new Set(current).add(source),
+		);
+	}, []);
 
-	return {
-		isLoaded: loadedSource === shownSource,
-		onLogoLoad: setLoadedSource,
-		shownSource,
-	};
+	return { isLoaded: settledSources.has(shownSource), onLogoSettled };
 }
 
+/**
+ * The library's light and dark logo files. Deliberately not exported: every
+ * logo on the site must go through a box below, which owns its height.
+ */
 function LibraryLogoImages({
 	className,
-	onLoad,
+	onSettled,
 }: {
 	className?: string;
-	onLoad?: (source: string) => void;
+	onSettled?: (source: string) => void;
 }) {
 	const { identity } = useLibraryConfig();
-	const { resolvedTheme } = useTheme();
 	const t = useTranslations("ui");
-	const lightLogoRef = useRef<HTMLImageElement>(null);
-	const darkLogoRef = useRef<HTMLImageElement>(null);
-	const reportReady = useCallback(
+	/**
+	 * Both files are reported, not only the one on screen. The hidden one is
+	 * the picture the other colour scheme uses, and remembering it is what
+	 * stops the bar holding room for it a second time.
+	 */
+	const reportSettled = useCallback(
 		(element: HTMLImageElement | null) => {
-			if (!element) return;
-			if (getComputedStyle(element).display === "none") return;
-
-			onLoad?.(element.getAttribute("src") ?? "");
+			const source = element?.getAttribute("src");
+			if (source) onSettled?.(source);
 		},
-		[onLoad],
+		[onSettled],
 	);
-
-	// A picture that was already in the browser's store never fires its load
-	// event, so ask each one whether it is there. Switching between light and
-	// dark shows the other picture, so ask again then.
-	useEffect(() => {
-		for (const element of [lightLogoRef.current, darkLogoRef.current]) {
-			if (element?.complete) reportReady(element);
-		}
-	}, [reportReady, resolvedTheme]);
+	/**
+	 * A picture that was already in the browser's store finishes before the
+	 * page is wired up, so its load event never reaches us. Ask each one as it
+	 * is put on the page, which happens before anything is drawn.
+	 */
+	const checkAlreadyThere = useCallback(
+		(element: HTMLImageElement | null) => {
+			if (element?.complete) reportSettled(element);
+		},
+		[reportSettled],
+	);
 
 	return (
 		<>
 			<img
 				{...LIBRARY_LOGO_ATTRIBUTES}
-				ref={lightLogoRef}
+				ref={checkAlreadyThere}
 				alt={t("logoAlt", {
 					company: identity.name,
 					theme: "light",
 				})}
 				className={twMerge("dark:hidden", className)}
-				onError={(event) => reportReady(event.currentTarget)}
-				onLoad={(event) => reportReady(event.currentTarget)}
+				onError={(event) => reportSettled(event.currentTarget)}
+				onLoad={(event) => reportSettled(event.currentTarget)}
 				src={identity.assets.logoLight}
 			/>
 			<img
 				{...LIBRARY_LOGO_ATTRIBUTES}
-				ref={darkLogoRef}
+				ref={checkAlreadyThere}
 				alt={t("logoAlt", {
 					company: identity.name,
 					theme: "dark",
 				})}
 				className={twMerge("hidden dark:block", className)}
-				onError={(event) => reportReady(event.currentTarget)}
-				onLoad={(event) => reportReady(event.currentTarget)}
+				onError={(event) => reportSettled(event.currentTarget)}
+				onLoad={(event) => reportSettled(event.currentTarget)}
 				src={identity.assets.logoDark}
 			/>
 		</>
@@ -168,11 +167,11 @@ type LibraryLogoPlace = keyof typeof LIBRARY_LOGO_SIZES;
 /** The library's own logo, drawn inside the box its bar allows. */
 export function LibraryLogo({
 	className,
-	onLoad,
+	onSettled,
 	place,
 }: {
 	className?: string;
-	onLoad?: (source: string) => void;
+	onSettled?: (source: string) => void;
 	place: LibraryLogoPlace;
 }) {
 	return (
@@ -182,7 +181,7 @@ export function LibraryLogo({
 		>
 			<LibraryLogoImages
 				className={twMerge(BRAND_LOGO_IMAGE_CLASS, "max-w-full")}
-				onLoad={onLoad}
+				onSettled={onSettled}
 			/>
 		</BrandLogoBox>
 	);

@@ -33,8 +33,7 @@ vi.mock("@/components/library/LibraryIdentity", () => ({
 	LibraryLogo: () => null,
 	useLibraryLogo: () => ({
 		isLoaded: true,
-		onLogoLoad: () => undefined,
-		shownSource: "https://assets.example.org/logo.svg",
+		onLogoSettled: () => undefined,
 	}),
 }));
 

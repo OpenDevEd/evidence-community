@@ -192,9 +192,29 @@ function headerBoxWidth(page: Page) {
 		.evaluate((element) => element.getBoundingClientRect().width);
 }
 
-test("holds the room again when the other colour scheme is switched on", async ({
-	page,
-}) => {
+/** Turns the page from light to dark or back, and waits for the change. */
+async function switchColourScheme(page: Page) {
+	const chosen = await page.evaluate(() => {
+		const next = document.documentElement.classList.contains("dark")
+			? "light"
+			: "dark";
+		localStorage.setItem("theme", next);
+		window.dispatchEvent(
+			new StorageEvent("storage", { key: "theme", newValue: next }),
+		);
+		return next;
+	});
+
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				document.documentElement.classList.contains("dark"),
+			),
+		)
+		.toBe(chosen === "dark");
+}
+
+test("holds the room once for each logo and never again", async ({ page }) => {
 	const shape = logoShapes[0];
 	const files = holdLogoFiles(page, shape);
 	test.skip(
@@ -209,31 +229,34 @@ test("holds the room again when the other colour scheme is switched on", async (
 	files.release(files.visibleUrl);
 	await expect.poll(() => headerBoxWidth(page)).toBeCloseTo(40, 0);
 
-	// Switching the colour scheme shows the other picture, which has not
-	// arrived. The header must hold room for it again instead of jumping.
-	const chosen = await page.evaluate(() => {
-		const next = document.documentElement.classList.contains("dark")
-			? "light"
-			: "dark";
-		localStorage.setItem("theme", next);
-		window.dispatchEvent(
-			new StorageEvent("storage", { key: "theme", newValue: next }),
-		);
-		return next;
-	});
-	await expect
-		.poll(() =>
-			page.evaluate(() =>
-				document.documentElement.classList.contains("dark"),
-			),
-		)
-		.toBe(chosen === "dark");
+	// The other colour scheme's picture has not arrived, so the header holds
+	// room for it rather than jumping when it lands.
+	await switchColourScheme(page);
 	await expect
 		.poll(() => headerBoxWidth(page))
 		.toBeCloseTo(headerReservation, 0);
 
 	files.release(files.hiddenUrl);
 	await expect.poll(() => headerBoxWidth(page)).toBeCloseTo(40, 0);
+
+	// Both pictures are here now. Switching either way must never put the
+	// held room back, in any frame.
+	for (let round = 0; round < 2; round += 1) {
+		const widths: number[] = [];
+		const watch = setInterval(() => {
+			void headerBoxWidth(page)
+				.then((width) => widths.push(width))
+				.catch(() => undefined);
+		}, 20);
+
+		await switchColourScheme(page);
+		await page.waitForTimeout(400);
+		clearInterval(watch);
+
+		const widest = Math.max(...widths, await headerBoxWidth(page));
+		console.log(`switch ${round + 1}: widest header box ${widest}`);
+		expect(widest).toBeLessThan(headerReservation);
+	}
 });
 
 test("keeps a huge shadow and blur inside the logo box", async ({ page }) => {

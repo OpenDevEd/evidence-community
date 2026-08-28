@@ -209,30 +209,29 @@ describe("runtime library identity", () => {
 	it("emits the configured raw logo CSS against the shared logo selector", () => {
 		expect(buildLibraryLogoCss(minimalConfig.identity)).toBeNull();
 		expect(buildLibraryLogoCss(maximalConfig.identity)).toBe(
-			"[data-library-logo] {\nborder-radius: 0.5rem;\nfilter: saturate(1.1);\n}",
+			"[data-library-logo] {\nborder-radius: 8px;\nfilter: saturate(1.1);\n}",
 		);
 	});
 
 	it.each([
-		"border-radius: 9999px;\nborder: 3px solid #818cf8;\nfilter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.2));",
+		"border-radius: 9999px;\nborder: 3px solid #818cf8;\nfilter: saturate(1.1);",
 		// Capital letters, loose spacing, a missing last semicolon and
 		// "!important" are all ordinary CSS and must still be accepted.
-		"  BORDER-RADIUS :  8px !important ;\n\tBox-Shadow: 0 1px 2px rgb(0 0 0 / 0.2)  ",
+		"  BORDER-RADIUS :  8px !important ;\n\tBox-Shadow: inset 0 1px 2px rgb(0 0 0 / 0.2)  ",
 		"background-color: #fff; color: #111; border-top-left-radius: 4px;",
 		// A corner radius only ever cuts inwards, so it has no size limit.
 		"border-radius: 50%;",
 		"box-shadow: inset 0 0 4px rgb(0 0 0 / 0.3);",
-		"box-shadow: 0 2px 4px -2px #000;",
-		"filter: saturate(110%) blur(2px) brightness(1.05);",
+		// A shadow drawn inside the logo may name its colour any way it likes.
+		"box-shadow: inset 0 0 4px color-mix(in oklab, currentColor 30%, transparent);",
+		"filter: saturate(110%) brightness(1.05);",
 		// A colour may be written any way CSS allows. The angle and the
 		// percentages inside it are not sizes.
 		"color: hsl(120deg 100% 50%);",
 		"background-color: oklch(0.7 0.1 200);",
 		"border-color: color-mix(in srgb, #fff 40%, #000);",
+		"color: light-dark(#111, #eee);",
 		"filter: hue-rotate(90deg) opacity(50%);",
-		// Reach is what counts: 1 + 2 + 4 sideways and down, minus 2 pulled
-		// back in, stays inside the 8px the bar allows.
-		"box-shadow: 1px 2px 4px -2px #000;",
 	])("keeps logo CSS that only changes how the logo looks: %s", (logoStyles) => {
 		const input = structuredClone(maximalLibraryConfig);
 		input.identity.assets.logoStyles = logoStyles;
@@ -242,7 +241,7 @@ describe("runtime library identity", () => {
 
 	it("puts the configured logo CSS on the page unchanged", () => {
 		const logoStyles =
-			"filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.2));\nbox-shadow: 0 2px 4px -2px #000;";
+			"box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.2);\nfilter: saturate(1.1);";
 		const identity = {
 			...maximalConfig.identity,
 			assets: { ...maximalConfig.identity.assets, logoStyles },
@@ -318,10 +317,14 @@ describe("runtime library identity", () => {
 		"color: min(1px, 2px);",
 		"border-radius: clamp(1px, 2px, 3px);",
 		"box-shadow: 0 0 max(4px, 40px) #000;",
-		// Each number is small, but together the shadow reaches 32px out.
-		"box-shadow: 8px 8px 8px 8px red;",
-		"box-shadow: 0 0 4px #000, 20px 20px 20px red;",
-		"filter: drop-shadow(4px 4px 4px black);",
+		// Nothing may be drawn outside the logo, however small it is.
+		"box-shadow: 0 1px 2px #000;",
+		"box-shadow: inset 0 0 4px #000, 0 1px 2px #000;",
+		"filter: drop-shadow(0 1px 1px #000);",
+		"filter: blur(2px);",
+		// One unit, so there is nothing to convert and nothing to get wrong.
+		"border-radius: 0.5rem;",
+		"border-width: 0.25em;",
 		// Not CSS at all.
 		"color: red // blue;",
 	])("rejects unconfined logo CSS: %s", (logoStyles) => {

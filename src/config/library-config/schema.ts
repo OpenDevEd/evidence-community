@@ -103,22 +103,18 @@ const ALLOWED_LOGO_STYLE_LIST = Array.from(ALLOWED_LOGO_STYLE_PROPERTIES)
 const MAX_LOGO_STYLE_LENGTH = 10_000;
 
 /**
- * The largest length a logo rule may use, in pixels. A border, a shadow or a
- * blur bigger than this paints outside the box the bar gave the logo.
+ * The largest length a logo rule may use, in pixels. A border thicker than
+ * this would take over the picture behind it.
  */
 const MAX_LOGO_STYLE_LENGTH_PX = 8;
 
-/** How many pixels one unit is worth. Anything else is refused. */
-const LOGO_STYLE_LENGTH_UNITS: Record<string, number> = {
-	em: 16,
-	px: 1,
-	rem: 16,
-};
-
 /**
- * The only names a logo value may call. Everything else is refused, including
- * every sum such as `calc()`, which can hide a very large number inside a
- * value that reads as if it were small.
+ * The only names a logo value may call: a colour, or a change of colour.
+ *
+ * Nothing that draws beyond the edges of the picture is here. There is no
+ * `blur()` and no `drop-shadow()`, because both put ink outside the logo, and
+ * no sum such as `calc()`, which can hide a very large number inside a value
+ * that reads as if it were small.
  */
 const ALLOWED_LOGO_STYLE_FUNCTIONS = new Set([
 	// Colours.
@@ -129,15 +125,14 @@ const ALLOWED_LOGO_STYLE_FUNCTIONS = new Set([
 	"hwb",
 	"lab",
 	"lch",
+	"light-dark",
 	"oklab",
 	"oklch",
 	"rgb",
 	"rgba",
-	// Looks.
-	"blur",
+	// Changes of colour.
 	"brightness",
 	"contrast",
-	"drop-shadow",
 	"grayscale",
 	"hue-rotate",
 	"invert",
@@ -148,36 +143,18 @@ const ALLOWED_LOGO_STYLE_FUNCTIONS = new Set([
 
 const LOGO_STYLE_FUNCTION_PATTERN = /(-?[a-z][a-z0-9-]*)\s*\(/giu;
 
-/** Units that turn a number into a distance on the screen. */
-const LOGO_STYLE_LENGTH_UNIT_PATTERN = /^(px|rem|em)$/iu;
+/** The only unit that turns a number into a distance on the screen. */
+const LOGO_STYLE_LENGTH_UNIT_PATTERN = /^px$/iu;
 
 /** Units that are an angle or a share, never a distance. */
 const LOGO_STYLE_NON_LENGTH_UNIT_PATTERN = /^(%|deg|grad|rad|turn)$/iu;
 
-/** Every number with a unit after it, such as `12px` or `0.5rem`. */
+/** Every number with a unit after it, such as `12px`. */
 const LOGO_STYLE_LENGTH_PATTERN = /(-?(?:\d+\.?\d*|\.\d+))\s*([a-z%]+)/giu;
-
-/** A number with an optional length unit, which is what a shadow is made of. */
-const LOGO_STYLE_SHADOW_PART_PATTERN =
-	/-?(?:\d+\.?\d*|\.\d+)(?:px|rem|em)?/giu;
-
-/** One whole function call, brackets and all. */
-const LOGO_STYLE_CALL_PATTERN =
-	/[a-z-]+\([^()]*(?:\([^()]*\)[^()]*)*\)/giu;
-
-const LOGO_STYLE_DROP_SHADOW_PATTERN =
-	/drop-shadow\(([^()]*(?:\([^()]*\)[^()]*)*)\)/giu;
 
 /** A corner radius only ever cuts inwards, so its size is the owner's business. */
 function isCornerRadius(property: string) {
 	return property.endsWith("radius");
-}
-
-function toPixels(amount: string) {
-	const unit = amount.replace(/^-?[\d.]+/u, "").toLowerCase();
-	const pixelsPerUnit = unit === "" ? 1 : LOGO_STYLE_LENGTH_UNITS[unit];
-
-	return Number.parseFloat(amount) * (pixelsPerUnit ?? 1);
 }
 
 /** The first name in a value that a logo may not call. */
@@ -212,35 +189,14 @@ function splitLogoStyleLayers(value: string) {
 }
 
 /**
- * How far one shadow paints beyond the thing it is behind: how far it is
- * pushed sideways and down, plus how far it is blurred and spread.
+ * The first shadow in the value that would be drawn outside the logo. Only an
+ * `inset` shadow stays within the picture, so only that one is allowed.
  */
-function shadowReach(layer: string) {
-	const parts = layer
-		.replace(LOGO_STYLE_CALL_PATTERN, " ")
-		.replace(/#[0-9a-f]{3,8}/giu, " ")
-		.match(LOGO_STYLE_SHADOW_PART_PATTERN);
-	const [x = 0, y = 0, blur = 0, spread = 0] = (parts ?? []).map(toPixels);
+function findOutwardShadow(property: string, value: string) {
+	if (property !== "box-shadow") return null;
 
-	return Math.abs(x) + Math.abs(y) + blur + spread;
-}
-
-/** The furthest any shadow in this value paints outside the logo. */
-function findShadowTooFar(property: string, value: string) {
-	const layers =
-		property === "box-shadow"
-			? splitLogoStyleLayers(value)
-			: Array.from(
-					value.matchAll(LOGO_STYLE_DROP_SHADOW_PATTERN),
-					([, argument]) => argument,
-				);
-
-	for (const layer of layers) {
-		// An inset shadow is drawn inside the shape, never outside it.
-		if (/\binset\b/iu.test(layer)) continue;
-		if (shadowReach(layer) > MAX_LOGO_STYLE_LENGTH_PX) {
-			return shadowReach(layer);
-		}
+	for (const layer of splitLogoStyleLayers(value)) {
+		if (!/\binset\b/iu.test(layer)) return layer.trim();
 	}
 
 	return null;
@@ -254,9 +210,14 @@ function findLogoLengthProblem(property: string, value: string) {
 	for (const [, amount, unit] of sizes.matchAll(LOGO_STYLE_LENGTH_PATTERN)) {
 		if (LOGO_STYLE_NON_LENGTH_UNIT_PATTERN.test(unit)) continue;
 		if (!LOGO_STYLE_LENGTH_UNIT_PATTERN.test(unit)) {
-			return `Logo styles cannot measure "${property}" in "${unit}". Use px or rem.`;
+			return `Logo styles cannot measure "${property}" in "${unit}". Use px.`;
 		}
-		if (Math.abs(toPixels(`${amount}${unit}`)) > MAX_LOGO_STYLE_LENGTH_PX) {
+		// A corner radius only ever cuts inwards, so its size is the owner's
+		// business. Everything else has to stay small.
+		if (
+			!isCornerRadius(property) &&
+			Math.abs(Number.parseFloat(amount)) > MAX_LOGO_STYLE_LENGTH_PX
+		) {
 			return `Logo styles cannot use ${amount}${unit} for "${property}". Nothing may reach more than ${MAX_LOGO_STYLE_LENGTH_PX}px outside the logo.`;
 		}
 	}
@@ -280,14 +241,12 @@ function findLogoValueProblem(property: string, value: string) {
 		return `Logo styles cannot use "${forbidden.toLowerCase()}()". A logo may only be given plain colours, lengths and shapes.`;
 	}
 
-	if (isCornerRadius(property)) return null;
-
 	const lengthProblem = findLogoLengthProblem(property, value);
 	if (lengthProblem) return lengthProblem;
 
-	const tooFar = findShadowTooFar(property, value);
-	if (tooFar !== null) {
-		return `Logo styles cannot push a shadow ${tooFar}px out of "${property}". Everything must stay within ${MAX_LOGO_STYLE_LENGTH_PX}px of the logo.`;
+	const outward = findOutwardShadow(property, value);
+	if (outward !== null) {
+		return `Logo styles can only use a shadow drawn inside the logo. Write "inset" in "${outward}", or leave the shadow out.`;
 	}
 
 	return null;
