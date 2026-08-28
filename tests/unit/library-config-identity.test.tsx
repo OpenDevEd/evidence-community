@@ -224,6 +224,15 @@ describe("runtime library identity", () => {
 		"box-shadow: inset 0 0 4px rgb(0 0 0 / 0.3);",
 		"box-shadow: 0 2px 4px -2px #000;",
 		"filter: saturate(110%) blur(2px) brightness(1.05);",
+		// A colour may be written any way CSS allows. The angle and the
+		// percentages inside it are not sizes.
+		"color: hsl(120deg 100% 50%);",
+		"background-color: oklch(0.7 0.1 200);",
+		"border-color: color-mix(in srgb, #fff 40%, #000);",
+		"filter: hue-rotate(90deg) opacity(50%);",
+		// Reach is what counts: 1 + 2 + 4 sideways and down, minus 2 pulled
+		// back in, stays inside the 8px the bar allows.
+		"box-shadow: 1px 2px 4px -2px #000;",
 	])("keeps logo CSS that only changes how the logo looks: %s", (logoStyles) => {
 		const input = structuredClone(maximalLibraryConfig);
 		input.identity.assets.logoStyles = logoStyles;
@@ -303,6 +312,18 @@ describe("runtime library identity", () => {
 		"filter: drop-shadow(0 0 100px black);",
 		"border-width: 2rem;",
 		"border-width: 2vw;",
+		// Sums hide their real size, so no sum of any kind is allowed.
+		"filter: blur(calc(8px + 8px));",
+		"border-width: calc(2px * 20);",
+		"color: min(1px, 2px);",
+		"border-radius: clamp(1px, 2px, 3px);",
+		"box-shadow: 0 0 max(4px, 40px) #000;",
+		// Each number is small, but together the shadow reaches 32px out.
+		"box-shadow: 8px 8px 8px 8px red;",
+		"box-shadow: 0 0 4px #000, 20px 20px 20px red;",
+		"filter: drop-shadow(4px 4px 4px black);",
+		// Not CSS at all.
+		"color: red // blue;",
 	])("rejects unconfined logo CSS: %s", (logoStyles) => {
 		const input = structuredClone(maximalLibraryConfig);
 		input.identity.assets.logoStyles = logoStyles;

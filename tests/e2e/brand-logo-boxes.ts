@@ -89,7 +89,7 @@ async function rectangleOf(locator: Locator, what: string) {
  * Waits for every animation on the page that has an end. A shimmer that runs
  * for ever is left alone, or this would never return.
  */
-export async function waitForAnimations(page: Page) {
+async function waitForAnimations(page: Page) {
 	await page.evaluate(async () => {
 		const running = document
 			.getAnimations()

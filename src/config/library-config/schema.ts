@@ -116,33 +116,152 @@ const LOGO_STYLE_LENGTH_UNITS: Record<string, number> = {
 };
 
 /**
- * Names that fetch something, read something, or hand the value to another
- * rule. None of them belong in a logo's own look.
+ * The only names a logo value may call. Everything else is refused, including
+ * every sum such as `calc()`, which can hide a very large number inside a
+ * value that reads as if it were small.
  */
-const FORBIDDEN_LOGO_STYLE_FUNCTIONS = [
-	"attr",
-	"element",
-	"env",
-	"expression",
-	"image",
-	"image-set",
-	"src",
-	"url",
-	"var",
-];
+const ALLOWED_LOGO_STYLE_FUNCTIONS = new Set([
+	// Colours.
+	"color",
+	"color-mix",
+	"hsl",
+	"hsla",
+	"hwb",
+	"lab",
+	"lch",
+	"oklab",
+	"oklch",
+	"rgb",
+	"rgba",
+	// Looks.
+	"blur",
+	"brightness",
+	"contrast",
+	"drop-shadow",
+	"grayscale",
+	"hue-rotate",
+	"invert",
+	"opacity",
+	"saturate",
+	"sepia",
+]);
 
-const LOGO_STYLE_FUNCTION_PATTERN = new RegExp(
-	`(?:^|[^a-z-])(${FORBIDDEN_LOGO_STYLE_FUNCTIONS.join("|")})\\s*\\(`,
-	"iu",
-);
+const LOGO_STYLE_FUNCTION_PATTERN = /(-?[a-z][a-z0-9-]*)\s*\(/giu;
+
+/** Units that turn a number into a distance on the screen. */
+const LOGO_STYLE_LENGTH_UNIT_PATTERN = /^(px|rem|em)$/iu;
+
+/** Units that are an angle or a share, never a distance. */
+const LOGO_STYLE_NON_LENGTH_UNIT_PATTERN = /^(%|deg|grad|rad|turn)$/iu;
 
 /** Every number with a unit after it, such as `12px` or `0.5rem`. */
-const LOGO_STYLE_LENGTH_PATTERN =
-	/(-?(?:\d+\.?\d*|\.\d+))\s*([a-z%]+)/giu;
+const LOGO_STYLE_LENGTH_PATTERN = /(-?(?:\d+\.?\d*|\.\d+))\s*([a-z%]+)/giu;
+
+/** A number with an optional length unit, which is what a shadow is made of. */
+const LOGO_STYLE_SHADOW_PART_PATTERN =
+	/-?(?:\d+\.?\d*|\.\d+)(?:px|rem|em)?/giu;
+
+/** One whole function call, brackets and all. */
+const LOGO_STYLE_CALL_PATTERN =
+	/[a-z-]+\([^()]*(?:\([^()]*\)[^()]*)*\)/giu;
+
+const LOGO_STYLE_DROP_SHADOW_PATTERN =
+	/drop-shadow\(([^()]*(?:\([^()]*\)[^()]*)*)\)/giu;
 
 /** A corner radius only ever cuts inwards, so its size is the owner's business. */
 function isCornerRadius(property: string) {
 	return property.endsWith("radius");
+}
+
+function toPixels(amount: string) {
+	const unit = amount.replace(/^-?[\d.]+/u, "").toLowerCase();
+	const pixelsPerUnit = unit === "" ? 1 : LOGO_STYLE_LENGTH_UNITS[unit];
+
+	return Number.parseFloat(amount) * (pixelsPerUnit ?? 1);
+}
+
+/** The first name in a value that a logo may not call. */
+function findForbiddenFunction(value: string) {
+	for (const [, name] of value.matchAll(LOGO_STYLE_FUNCTION_PATTERN)) {
+		if (!ALLOWED_LOGO_STYLE_FUNCTIONS.has(name.toLowerCase())) {
+			return name;
+		}
+	}
+
+	return null;
+}
+
+/** Splits a value on the commas that separate whole parts of it. */
+function splitLogoStyleLayers(value: string) {
+	const layers: string[] = [];
+	let depth = 0;
+	let start = 0;
+
+	for (let index = 0; index < value.length; index += 1) {
+		const character = value[index];
+		if (character === "(") depth += 1;
+		if (character === ")") depth -= 1;
+		if (character === "," && depth === 0) {
+			layers.push(value.slice(start, index));
+			start = index + 1;
+		}
+	}
+	layers.push(value.slice(start));
+
+	return layers;
+}
+
+/**
+ * How far one shadow paints beyond the thing it is behind: how far it is
+ * pushed sideways and down, plus how far it is blurred and spread.
+ */
+function shadowReach(layer: string) {
+	const parts = layer
+		.replace(LOGO_STYLE_CALL_PATTERN, " ")
+		.replace(/#[0-9a-f]{3,8}/giu, " ")
+		.match(LOGO_STYLE_SHADOW_PART_PATTERN);
+	const [x = 0, y = 0, blur = 0, spread = 0] = (parts ?? []).map(toPixels);
+
+	return Math.abs(x) + Math.abs(y) + blur + spread;
+}
+
+/** The furthest any shadow in this value paints outside the logo. */
+function findShadowTooFar(property: string, value: string) {
+	const layers =
+		property === "box-shadow"
+			? splitLogoStyleLayers(value)
+			: Array.from(
+					value.matchAll(LOGO_STYLE_DROP_SHADOW_PATTERN),
+					([, argument]) => argument,
+				);
+
+	for (const layer of layers) {
+		// An inset shadow is drawn inside the shape, never outside it.
+		if (/\binset\b/iu.test(layer)) continue;
+		if (shadowReach(layer) > MAX_LOGO_STYLE_LENGTH_PX) {
+			return shadowReach(layer);
+		}
+	}
+
+	return null;
+}
+
+function findLogoLengthProblem(property: string, value: string) {
+	// A colour such as #818cf8 reads like a number with letters after it, so
+	// take colours out before looking for sizes.
+	const sizes = value.replace(/#[0-9a-f]{3,8}/giu, " ");
+
+	for (const [, amount, unit] of sizes.matchAll(LOGO_STYLE_LENGTH_PATTERN)) {
+		if (LOGO_STYLE_NON_LENGTH_UNIT_PATTERN.test(unit)) continue;
+		if (!LOGO_STYLE_LENGTH_UNIT_PATTERN.test(unit)) {
+			return `Logo styles cannot measure "${property}" in "${unit}". Use px or rem.`;
+		}
+		if (Math.abs(toPixels(`${amount}${unit}`)) > MAX_LOGO_STYLE_LENGTH_PX) {
+			return `Logo styles cannot use ${amount}${unit} for "${property}". Nothing may reach more than ${MAX_LOGO_STYLE_LENGTH_PX}px outside the logo.`;
+		}
+	}
+
+	return null;
 }
 
 /**
@@ -151,36 +270,24 @@ function isCornerRadius(property: string) {
  */
 function findLogoValueProblem(property: string, value: string) {
 	// A backslash can spell a name a different way, such as `\75 rl(` for
-	// `url(`, so no value may contain one.
-	if (value.includes("\\")) {
-		return `Logo styles cannot use "\\" in the value of "${property}".`;
+	// `url(`, so no value may contain one. `//` is not CSS at all.
+	if (value.includes("\\") || value.includes("//")) {
+		return `Logo styles cannot use "\\" or "//" in the value of "${property}".`;
 	}
 
-	const forbidden = LOGO_STYLE_FUNCTION_PATTERN.exec(value);
+	const forbidden = findForbiddenFunction(value);
 	if (forbidden) {
-		return `Logo styles cannot use "${forbidden[1].toLowerCase()}()". A logo may only be given plain colours, lengths and shapes.`;
+		return `Logo styles cannot use "${forbidden.toLowerCase()}()". A logo may only be given plain colours, lengths and shapes.`;
 	}
 
 	if (isCornerRadius(property)) return null;
 
-	// A colour such as #818cf8 reads like a number with letters after it, so
-	// take colours out before looking for sizes.
-	const sizes = value.replace(/#[0-9a-f]{3,8}/giu, " ");
+	const lengthProblem = findLogoLengthProblem(property, value);
+	if (lengthProblem) return lengthProblem;
 
-	for (const [, amount, unit] of sizes.matchAll(LOGO_STYLE_LENGTH_PATTERN)) {
-		const lowerUnit = unit.toLowerCase();
-		if (lowerUnit === "%") continue;
-
-		const pixelsPerUnit = LOGO_STYLE_LENGTH_UNITS[lowerUnit];
-		if (pixelsPerUnit === undefined) {
-			return `Logo styles cannot measure "${property}" in "${unit}". Use px or rem.`;
-		}
-		if (
-			Math.abs(Number.parseFloat(amount) * pixelsPerUnit) >
-			MAX_LOGO_STYLE_LENGTH_PX
-		) {
-			return `Logo styles cannot use ${amount}${unit} for "${property}". Nothing may reach more than ${MAX_LOGO_STYLE_LENGTH_PX}px outside the logo.`;
-		}
+	const tooFar = findShadowTooFar(property, value);
+	if (tooFar !== null) {
+		return `Logo styles cannot push a shadow ${tooFar}px out of "${property}". Everything must stay within ${MAX_LOGO_STYLE_LENGTH_PX}px of the logo.`;
 	}
 
 	return null;

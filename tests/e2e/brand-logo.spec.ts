@@ -17,6 +17,8 @@ const recordKey =
 	process.env.PLAYWRIGHT_EXPECTED_SEARCH_ITEM_KEY ?? "AMBER_SEARCH_FIXTURE";
 const hasNavbarSearch = process.env.PLAYWRIGHT_EXPECTED_NAVBAR_SEARCH !== "false";
 const headerReservation = 192;
+const hasThemeSwitcher =
+	process.env.PLAYWRIGHT_EXPECTED_THEME_SWITCHER !== "false";
 
 async function declineCookies(page: Page) {
 	await page
@@ -108,30 +110,12 @@ test("holds the widest a logo may be until the logo people see arrives", async (
 	page,
 }) => {
 	const shape = logoShapes[0];
-	const visibleUrl =
-		process.env.PLAYWRIGHT_EXPECTED_LOGO_URL ?? brandAssetUrls()[0];
-	const hiddenUrl =
-		brandAssetUrls().find((url) => url !== visibleUrl) ?? visibleUrl;
-
-	const gates = new Map<string, () => void>();
-	const held = new Map<string, Promise<void>>();
-	for (const url of new Set([visibleUrl, hiddenUrl])) {
-		held.set(
-			url,
-			new Promise<void>((resolve) => gates.set(url, resolve)),
-		);
-	}
-
-	await page.route(
-		(url) => held.has(url.toString()),
-		async (route) => {
-			await held.get(route.request().url());
-			await route.fulfill({
-				body: logoSvg(shape),
-				contentType: "image/svg+xml",
-			});
-		},
+	const { hiddenUrl, release, routed, visibleUrl } = holdLogoFiles(
+		page,
+		shape,
 	);
+
+	await routed;
 	await page.goto("/lib", { waitUntil: "domcontentloaded" });
 	await declineCookies(page);
 
@@ -145,7 +129,7 @@ test("holds the widest a logo may be until the logo people see arrives", async (
 	// The logo for the other colour scheme is never on screen. Its arrival
 	// must not make the header give up the room it is holding.
 	if (hiddenUrl !== visibleUrl) {
-		gates.get(hiddenUrl)!();
+		release(hiddenUrl);
 		await expect
 			.poll(() =>
 				page
@@ -159,11 +143,148 @@ test("holds the widest a logo may be until the logo people see arrives", async (
 		await expect.poll(slotWidth).toBeCloseTo(headerReservation, 0);
 	}
 
-	gates.get(visibleUrl)!();
+	release(visibleUrl);
 	await expectLogoFits(page, logoBoxes.header, shape, "loaded header");
 
 	// Once the picture is there the box is only as wide as the logo itself.
 	await expect.poll(slotWidth).toBeCloseTo(logoBoxes.header.height, 0);
+});
+
+/** Holds each logo file until the test lets it through. */
+function holdLogoFiles(page: Page, shape: LogoShape) {
+	const visibleUrl =
+		process.env.PLAYWRIGHT_EXPECTED_LOGO_URL ?? brandAssetUrls()[0];
+	const hiddenUrl =
+		brandAssetUrls().find((url) => url !== visibleUrl) ?? visibleUrl;
+	const gates = new Map<string, () => void>();
+	const held = new Map<string, Promise<void>>();
+
+	for (const url of new Set([visibleUrl, hiddenUrl])) {
+		held.set(
+			url,
+			new Promise<void>((resolve) => gates.set(url, resolve)),
+		);
+	}
+
+	const route = page.route(
+		(url) => held.has(url.toString()),
+		async (handler) => {
+			await held.get(handler.request().url());
+			await handler.fulfill({
+				body: logoSvg(shape),
+				contentType: "image/svg+xml",
+			});
+		},
+	);
+
+	return {
+		hiddenUrl,
+		release: (url: string) => gates.get(url)?.(),
+		routed: route,
+		visibleUrl,
+	};
+}
+
+function headerBoxWidth(page: Page) {
+	return page
+		.locator('[data-brand-logo-box="header"]')
+		.first()
+		.evaluate((element) => element.getBoundingClientRect().width);
+}
+
+test("holds the room again when the other colour scheme is switched on", async ({
+	page,
+}) => {
+	const shape = logoShapes[0];
+	const files = holdLogoFiles(page, shape);
+	test.skip(
+		!hasThemeSwitcher || files.hiddenUrl === files.visibleUrl,
+		"This library cannot switch between light and dark logos",
+	);
+
+	await files.routed;
+	await page.goto("/lib", { waitUntil: "domcontentloaded" });
+	await declineCookies(page);
+
+	files.release(files.visibleUrl);
+	await expect.poll(() => headerBoxWidth(page)).toBeCloseTo(40, 0);
+
+	// Switching the colour scheme shows the other picture, which has not
+	// arrived. The header must hold room for it again instead of jumping.
+	const chosen = await page.evaluate(() => {
+		const next = document.documentElement.classList.contains("dark")
+			? "light"
+			: "dark";
+		localStorage.setItem("theme", next);
+		window.dispatchEvent(
+			new StorageEvent("storage", { key: "theme", newValue: next }),
+		);
+		return next;
+	});
+	await expect
+		.poll(() =>
+			page.evaluate(() =>
+				document.documentElement.classList.contains("dark"),
+			),
+		)
+		.toBe(chosen === "dark");
+	await expect
+		.poll(() => headerBoxWidth(page))
+		.toBeCloseTo(headerReservation, 0);
+
+	files.release(files.hiddenUrl);
+	await expect.poll(() => headerBoxWidth(page)).toBeCloseTo(40, 0);
+});
+
+test("keeps a huge shadow and blur inside the logo box", async ({ page }) => {
+	const shape = logoShapes[0];
+	await serveShape(page, shape);
+	await page.goto("/lib");
+	await declineCookies(page);
+
+	const box = page.locator('[data-brand-logo-box="header"]').first();
+	await expect
+		.poll(() =>
+			box
+				.locator("img:visible")
+				.evaluate((element: HTMLImageElement) =>
+					element.complete ? element.naturalWidth || 1 : 0,
+				),
+		)
+		.toBeGreaterThan(0);
+
+	// A strip of the bar just above the logo. Nothing is drawn there.
+	const logo = (await box.boundingBox())!;
+	const strip = {
+		height: 10,
+		width: Math.round(logo.width) + 16,
+		x: Math.round(logo.x) - 8,
+		y: Math.round(logo.y) - 14,
+	};
+	const shot = () =>
+		page.screenshot({
+			animations: "disabled",
+			caret: "hide",
+			clip: strip,
+		});
+
+	const before = await shot();
+	await page.addStyleTag({
+		content:
+			"[data-library-logo]{box-shadow:0 0 200px 200px #ff0000 !important;filter:drop-shadow(0 0 200px #ff0000) !important}",
+	});
+	const withShadow = await shot();
+
+	expect(withShadow.equals(before)).toBe(true);
+
+	// And the shadow really is drawn: with the box no longer holding it in,
+	// the same strip of the bar changes.
+	await page.addStyleTag({
+		content: "[data-brand-logo-box]{overflow:visible !important}",
+	});
+	const withoutTheBox = await shot();
+
+	expect(withoutTheBox.equals(before)).toBe(false);
 });
 
 test.describe("on a narrow screen", () => {

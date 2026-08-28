@@ -7,9 +7,11 @@ import {
 	useCallback,
 	useEffect,
 	useRef,
+	useState,
 	type ReactNode,
 } from "react";
 import { useTranslations } from "next-intl";
+import { useTheme } from "next-themes";
 import { twMerge } from "tailwind-merge";
 
 import { LIBRARY_LOGO_ATTRIBUTES } from "@/config/library-config/identity";
@@ -20,40 +22,62 @@ import { useLibraryConfig } from "@/context/LibraryConfigProvider";
  * The library's light and dark logo files. Deliberately not exported: every
  * logo on the site must go through a box below, which owns its height.
  */
+/**
+ * Which of the two logo files is on screen right now, and whether that exact
+ * file has finished loading.
+ *
+ * A library ships a light and a dark logo. Only one is ever shown, so only
+ * that one may say the logo is ready: the other may still be on its way, or
+ * may never arrive. Switching between light and dark swaps which file is
+ * shown, so readiness is tied to the address of the file, not to a yes or no
+ * that never goes back.
+ */
+export function useLibraryLogo() {
+	const { identity } = useLibraryConfig();
+	const { resolvedTheme } = useTheme();
+	const [loadedSource, setLoadedSource] = useState<string | null>(null);
+	const shownSource =
+		resolvedTheme === "dark"
+			? identity.assets.logoDark
+			: identity.assets.logoLight;
+
+	return {
+		isLoaded: loadedSource === shownSource,
+		onLogoLoad: setLoadedSource,
+		shownSource,
+	};
+}
+
 function LibraryLogoImages({
 	className,
 	onLoad,
 }: {
 	className?: string;
-	onLoad?: () => void;
+	onLoad?: (source: string) => void;
 }) {
 	const { identity } = useLibraryConfig();
+	const { resolvedTheme } = useTheme();
 	const t = useTranslations("ui");
 	const lightLogoRef = useRef<HTMLImageElement>(null);
 	const darkLogoRef = useRef<HTMLImageElement>(null);
-	const hasReportedReady = useRef(false);
-	/**
-	 * A library ships a light and a dark logo, and only one of them is ever on
-	 * screen. The other may still be on its way, or may never arrive, so it
-	 * must not decide that the logo is ready: the box would give up the room
-	 * it is holding while the picture people can see is still missing.
-	 */
 	const reportReady = useCallback(
 		(element: HTMLImageElement | null) => {
-			if (hasReportedReady.current || !element) return;
+			if (!element) return;
 			if (getComputedStyle(element).display === "none") return;
 
-			hasReportedReady.current = true;
-			onLoad?.();
+			onLoad?.(element.getAttribute("src") ?? "");
 		},
 		[onLoad],
 	);
 
+	// A picture that was already in the browser's store never fires its load
+	// event, so ask each one whether it is there. Switching between light and
+	// dark shows the other picture, so ask again then.
 	useEffect(() => {
 		for (const element of [lightLogoRef.current, darkLogoRef.current]) {
 			if (element?.complete) reportReady(element);
 		}
-	}, [reportReady]);
+	}, [reportReady, resolvedTheme]);
 
 	return (
 		<>
@@ -111,7 +135,13 @@ function BrandLogoBox({
 }) {
 	return (
 		<span
-			className={twMerge("flex shrink-0 items-center", className)}
+			// Nothing is drawn outside this box. A library can give its logo a
+			// shadow, a border or a blur, and none of them can spill into the
+			// bar however the numbers are written.
+			className={twMerge(
+				"flex shrink-0 items-center overflow-hidden",
+				className,
+			)}
 			data-brand-logo-box={place}
 		>
 			{children}
@@ -142,7 +172,7 @@ export function LibraryLogo({
 	place,
 }: {
 	className?: string;
-	onLoad?: () => void;
+	onLoad?: (source: string) => void;
 	place: LibraryLogoPlace;
 }) {
 	return (

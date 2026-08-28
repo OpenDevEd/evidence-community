@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 
-import { LibraryLogo } from "@/components/library/LibraryIdentity";
+import {
+	LibraryLogo,
+	useLibraryLogo,
+} from "@/components/library/LibraryIdentity";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Link } from "@/i18n/routing";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -14,7 +16,7 @@ interface LogoProps {
 }
 
 export function Logo({ interactive = true }: LogoProps) {
-	const [isLoaded, setIsLoaded] = useState(false);
+	const { isLoaded, onLogoLoad } = useLibraryLogo();
 	const { navigation } = useLibraryConfig();
 	const homeLink = getRuntimeHomeHref(navigation.links);
 
@@ -36,7 +38,7 @@ export function Logo({ interactive = true }: LogoProps) {
 					isLoaded ? "w-auto" : "w-logo-header",
 				)}
 				place="header"
-				onLoad={() => setIsLoaded(true)}
+				onLoad={onLogoLoad}
 			/>
 		</div>
 	);

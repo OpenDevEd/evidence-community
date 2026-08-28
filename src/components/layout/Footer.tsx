@@ -13,6 +13,7 @@ import {
 	FunderLogo,
 	FundingPartners,
 	LibraryLogo,
+	useLibraryLogo,
 } from "@/components/library/LibraryIdentity";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Skeleton } from "@/components/nextui/Skeleton";
@@ -78,14 +79,14 @@ function FooterLink({ link }: { link: RuntimeLeafLink }) {
 }
 
 function Logo() {
-	const [isLoaded, setIsLoaded] = useState(false);
+	const { isLoaded, onLogoLoad } = useLibraryLogo();
 
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
 			className="flex h-12 w-logo-footer items-center justify-center rounded-lg"
 		>
-			<LibraryLogo place="footer" onLoad={() => setIsLoaded(true)} />
+			<LibraryLogo onLoad={onLogoLoad} place="footer" />
 		</Skeleton>
 	);
 }

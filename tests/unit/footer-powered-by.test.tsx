@@ -31,6 +31,11 @@ vi.mock("@/components/library/LibraryIdentity", () => ({
 	FundingPartners: () => null,
 	InstitutionLogo: () => null,
 	LibraryLogo: () => null,
+	useLibraryLogo: () => ({
+		isLoaded: true,
+		onLogoLoad: () => undefined,
+		shownSource: "https://assets.example.org/logo.svg",
+	}),
 }));
 
 const configState = { poweredBy: true };

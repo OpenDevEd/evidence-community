@@ -115,12 +115,24 @@ properties, browser-prefixed rules, at-rules and comments. One line of CSS
 used to be enough to push a logo straight out of its bar, so the runtime now
 allows only what is on the list rather than trying to name everything unsafe.
 
-The values are checked too. Nothing may fetch or read anything, so `url()`,
-`src()`, `image()`, `image-set()`, `element()`, `var()`, `env()`, `attr()`
-and `expression()` are refused, and so is a backslash, which can spell those
-names another way. Lengths are given in `px` or `rem` and may not exceed 8px,
-so a border, a shadow or a blur cannot paint far outside the logo. A corner
-radius has no limit, because it only ever cuts inwards.
+The values are checked too. A value may only call a colour or a look:
+`rgb`, `rgba`, `hsl`, `hsla`, `hwb`, `lab`, `lch`, `oklab`, `oklch`, `color`,
+`color-mix`, `blur`, `brightness`, `contrast`, `drop-shadow`, `grayscale`,
+`hue-rotate`, `invert`, `opacity`, `saturate` and `sepia`. Every other name is
+refused, including sums such as `calc()`, `min()` and `clamp()`, which can
+hide a very large number inside a value that reads as if it were small, and
+anything that fetches or reads, such as `url()` or `var()`. A backslash and
+`//` are refused as well.
+
+Lengths are given in `px` or `rem` and may not exceed 8px. A shadow is
+measured as a whole — how far it is pushed sideways and down, plus its blur
+and spread — and that total may not exceed 8px either. Angles and percentages
+inside a colour are not lengths. A corner radius has no limit, because it only
+ever cuts inwards.
+
+None of this is the last line of defence. Each logo box clips whatever is
+inside it, so a shadow, a border or a blur cannot reach the bar around it even
+if a check is ever wrong.
 
 ## Database boundary
 
