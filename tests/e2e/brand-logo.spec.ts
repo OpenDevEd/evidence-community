@@ -215,18 +215,22 @@ async function switchColourScheme(page: Page) {
 }
 
 /**
- * Reads the header logo box on every frame the browser draws, so a width that
- * appears for a single frame cannot slip past.
+ * Reads the header logo box straight away and then on every frame the browser
+ * draws, so a width that appears for a single frame cannot slip past.
+ *
+ * The first reading is taken there and then rather than on the next frame, so
+ * the count of readings is one more than the number of frames waited for.
  */
 async function startWatchingHeaderBox(page: Page) {
 	await page.evaluate(() => {
 		const box = document.querySelector('[data-brand-logo-box="header"]');
 		if (!box) throw new Error("The header logo box is not on the page");
 
-		const widths: number[] = [];
+		const read = () => box.getBoundingClientRect().width;
+		const widths: number[] = [read()];
 		let watching = true;
 		const readFrame = () => {
-			widths.push(box.getBoundingClientRect().width);
+			widths.push(read());
 			if (watching) requestAnimationFrame(readFrame);
 		};
 
@@ -252,8 +256,11 @@ async function stopWatchingHeaderBox(page: Page) {
 	});
 }
 
+/** How many frames to let the browser draw after each colour-scheme switch. */
+const SETTLE_FRAMES = 5;
+
 /** Lets the browser draw a few more frames, without waiting on the clock. */
-async function settleFrames(page: Page, frames = 5) {
+async function settleFrames(page: Page, frames = SETTLE_FRAMES) {
 	await page.evaluate(
 		(count) =>
 			new Promise<void>((resolve) => {
@@ -303,11 +310,15 @@ test("holds the room once for each logo and never again", async ({ page }) => {
 	await settleFrames(page);
 
 	const widths = await stopWatchingHeaderBox(page);
+	// One reading when the watch starts, then one for every frame waited for
+	// after each of the two switches. Anything fewer means the watch stopped
+	// reading and the result would prove nothing.
+	const guaranteedReadings = 1 + SETTLE_FRAMES * 2;
 	console.log(
-		`across both switches: ${widths.length} frames, widest header box ${Math.max(...widths)}`,
+		`across both switches: ${widths.length} readings, widest header box ${Math.max(...widths)}`,
 	);
 
-	expect(widths.length).toBeGreaterThan(10);
+	expect(widths.length).toBeGreaterThanOrEqual(guaranteedReadings);
 	expect(Math.max(...widths)).toBeCloseTo(logoBoxes.header.height, 0);
 });
 
