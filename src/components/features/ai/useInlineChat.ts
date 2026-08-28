@@ -16,6 +16,7 @@ import type { AIModelId } from "@/lib/ai/models";
 import type { ChatMode } from "@/types/ai";
 import type { LibrarySearchContext } from "@/lib/search-context";
 import { useScrollEdges } from "./chat-shared";
+import { useBucketPublications } from "./ContextBucket";
 import {
 	useAppendMessage,
 	useChatFailure,
@@ -64,7 +65,6 @@ function useInlineConversation({
 	searchContext?: LibrarySearchContext;
 }) {
 	const t = useTranslations("ai");
-	const { clearPdfSources } = useInlineChatLayout();
 	const {
 		chat,
 		messages,
@@ -87,8 +87,7 @@ function useInlineConversation({
 	const resetChat = useCallback(() => {
 		clearError();
 		setMessages((current) => current.slice(0, 1));
-		clearPdfSources();
-	}, [clearError, clearPdfSources, setMessages]);
+	}, [clearError, setMessages]);
 
 	return {
 		appendMessage: useAppendMessage(setMessages),
@@ -154,8 +153,7 @@ export function useInlineChat({
 	modelId: AIModelId;
 	searchContext?: LibrarySearchContext;
 }) {
-	const { pdfSources, requestSearchFocus, setEngaged } =
-		useInlineChatLayout();
+	const { requestSearchFocus, setEngaged } = useInlineChatLayout();
 	const { isDeepResearchEnabled, mode, setMode } = useChatMode();
 	const conversation = useInlineConversation({
 		mode,
@@ -167,6 +165,9 @@ export function useInlineChat({
 		messages: conversation.messages,
 		modelId,
 	});
+	// Loaded once for the whole chat, so where the cited pages live is worked
+	// out from the conversation itself rather than kept anywhere.
+	const publications = useBucketPublications(conversation.bucketEntries);
 	const [isComposerFocused, setIsComposerFocused] = useState(false);
 	const scrolling = useInlineScrolling();
 	const isWaiting =
@@ -209,8 +210,9 @@ export function useInlineChat({
 			conversation.isLoading &&
 			conversation.messages.at(-1)?.role === "user",
 		mode,
-		pdfSources,
+		pdfSources: publications.pdfSources,
 		prefersReducedMotion: useReducedMotion(),
+		publications,
 		setIsComposerFocused,
 		setMode,
 	};
@@ -231,10 +233,15 @@ export function useInlineChatComposer({
 	resizeComposer: () => void;
 }) {
 	const { draft, setDraft } = useInlineChatDraft();
-	const setInput = (value: string) => {
-		setDraft(value);
+
+	// Outside system: the message field's own height. The browser can only
+	// measure it once the new text has reached it, so this waits for the
+	// draft to be drawn rather than measuring the text it is replacing. It
+	// also catches a draft cleared from elsewhere, such as a question handed
+	// over from the search field.
+	useEffect(() => {
 		resizeComposer();
-	};
+	}, [draft, resizeComposer]);
 
 	return {
 		handleSubmit: (event: React.FormEvent) => {
@@ -242,10 +249,10 @@ export function useInlineChatComposer({
 			// A submit while an answer is arriving is turned away, and the
 			// field keeps its text so nothing is lost.
 			if (!ask(draft)) return;
-			setInput("");
+			setDraft("");
 		},
 		input: draft,
 		isInputReady: draft.trim().length > 0 && !isWaiting,
-		setInput,
+		setInput: setDraft,
 	};
 }

@@ -4,6 +4,7 @@ import {
 	aiWordingFiles,
 	localeMessages,
 	missingWording,
+	scanWording,
 	scanWordingInSource,
 	wordingProblems,
 	type Messages,
@@ -302,7 +303,9 @@ describe("the screens the check reads", () => {
 				"src/components/features/modals/AIControls.tsx",
 				"src/components/features/modals/ChatModal.tsx",
 				"src/components/features/modals/GenerativeModal.tsx",
+				"src/components/features/newlib/AiWrapper.tsx",
 				"src/components/pages/EvidenceLibrary.tsx",
+				"src/hooks/useAIStream.ts",
 			]),
 		);
 	});
@@ -319,6 +322,27 @@ describe("the screens the check reads", () => {
 		expect(problems).toHaveLength(1);
 		expect(problems[0]).toContain('"ai.copyAsCSV"');
 		expect(problems[0]).toContain("AIControls.tsx");
+	});
+
+	// The dropdown is handed its translator by the screen that draws it, so
+	// the check has to follow it there.
+	it("reports wording a handed-over translator needs but a language lost", () => {
+		const problems = damaged((messages) => {
+			delete messages.ai.summarizeDescription;
+		});
+
+		expect(problems).toHaveLength(1);
+		expect(problems[0]).toContain('"ai.summarizeDescription"');
+		expect(problems[0]).toContain("AIDropdownItems.tsx");
+	});
+
+	it("reports wording the streaming helper needs but a language lost", () => {
+		const problems = damaged((messages) => {
+			delete messages.ai.rateLimitedMessage;
+		});
+
+		expect(problems[0]).toContain('"ai.rateLimitedMessage"');
+		expect(problems[0]).toContain("useAIStream.ts");
 	});
 
 	it("reports wording the library page needs but a language lost", () => {
@@ -340,5 +364,111 @@ describe("the screens the check reads", () => {
 		expect(problems).toHaveLength(1);
 		expect(problems[0]).toContain("sorts");
 		expect(problems[0]).toContain("relevance");
+	});
+});
+
+describe("names that only look like the translator", () => {
+	it("lets a local of the same name hide the imported hook", () => {
+		const { uses } = scan(`
+			import { useTranslations } from "next-intl";
+			export function Screen() {
+				function useTranslations() {
+					return (key: string) => key;
+				}
+				const t = useTranslations("ai");
+				return <p>{t("not-wording")}</p>;
+			}
+		`);
+
+		expect(uses).toEqual([]);
+	});
+
+	it("lets an argument hide the name next-intl came in under", () => {
+		const { uses } = scan(`
+			import { useTranslations as useWording } from "next-intl";
+			export function Screen({ useWording }) {
+				const t = useWording("ai");
+				return <p>{t("not-wording")}</p>;
+			}
+		`);
+
+		expect(uses).toEqual([]);
+	});
+
+	it("lets a local hide a whole next-intl namespace", () => {
+		const { uses } = scan(`
+			import * as intl from "next-intl";
+			export function Screen() {
+				const intl = { useTranslations: (g: string) => (k: string) => k };
+				const t = intl.useTranslations("ai");
+				return <p>{t("not-wording")}</p>;
+			}
+		`);
+
+		expect(uses).toEqual([]);
+	});
+
+	it("still reads wording through a next-intl namespace", () => {
+		const { uses } = scan(`
+			import * as intl from "next-intl";
+			export function Screen() {
+				const t = intl.useTranslations("ai");
+				return <p>{t("askAI")}</p>;
+			}
+		`);
+
+		expect(names(uses)).toEqual(["ai.askAI"]);
+	});
+});
+
+describe("a translator handed to another function", () => {
+	it("follows the group from the place that hands it over", () => {
+		const { uses } = scanWording([
+			{
+				file: "menu.tsx",
+				source: `
+					export const MENU_ITEMS = (t: any, count: number) => [
+						{ label: t("change") },
+					];
+				`,
+			},
+			{
+				file: "Screen.tsx",
+				source: `
+					import { useTranslations } from "next-intl";
+					import { MENU_ITEMS } from "./menu";
+					export function Screen() {
+						const t = useTranslations("ai");
+						return <ul>{MENU_ITEMS(t, 2)}</ul>;
+					}
+				`,
+			},
+		]);
+
+		expect(names(uses)).toEqual(["ai.change"]);
+	});
+
+	it("leaves a plain argument alone", () => {
+		const { uses } = scanWording([
+			{
+				file: "menu.tsx",
+				source: `
+					export const MENU_ITEMS = (label: any) => [
+						{ label: label("change") },
+					];
+				`,
+			},
+			{
+				file: "Screen.tsx",
+				source: `
+					import { MENU_ITEMS } from "./menu";
+					export function Screen({ label }) {
+						return <ul>{MENU_ITEMS(label)}</ul>;
+					}
+				`,
+			},
+		]);
+
+		expect(uses).toEqual([]);
 	});
 });

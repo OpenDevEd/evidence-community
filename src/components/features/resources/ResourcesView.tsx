@@ -764,10 +764,13 @@ export function ResourcesView({
 						key={selectedModelId}
 						modelId={selectedModelId}
 						searchContext={searchContext}
-						renderSources={(bucketEntries) => (
+						renderSources={(bucketEntries, publications) => (
 							<div className="flex min-w-0 flex-col gap-4">
 								{bucketEntries.length > 0 ? (
-									<BucketList entries={bucketEntries} />
+									<BucketList
+										entries={bucketEntries}
+										publications={publications}
+									/>
 								) : (
 									results
 								)}

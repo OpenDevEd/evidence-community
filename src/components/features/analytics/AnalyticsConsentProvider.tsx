@@ -23,6 +23,7 @@ import {
 	useEffect,
 	useMemo,
 	useState,
+	useSyncExternalStore,
 } from "react";
 
 type AnalyticsConsentContextValue = {
@@ -53,6 +54,35 @@ function writeConsentCookie(
 	document.cookie = `${ANALYTICS_CONSENT_COOKIE_NAME}=${value}; Max-Age=${ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS}; Path=/; SameSite=Lax${secureCookie}`;
 }
 
+/**
+ * The decision is kept in a cookie, which nothing tells us about when it
+ * changes, so anything reading it is told by hand after it is written.
+ */
+const consentReaders = new Set<() => void>();
+
+function subscribeToConsentCookie(onChange: () => void) {
+	consentReaders.add(onChange);
+
+	return () => {
+		consentReaders.delete(onChange);
+	};
+}
+
+function consentCookieValue() {
+	if (typeof document === "undefined") return null;
+
+	return (
+		document.cookie
+			.split("; ")
+			.find((entry) =>
+				entry.startsWith(`${ANALYTICS_CONSENT_COOKIE_NAME}=`),
+			) ?? null
+	);
+}
+
+/** The server cannot see the browser's cookies, so it starts undecided. */
+const noConsentCookie = () => null;
+
 function readConsentCookie(policy: AnalyticsConsentPolicy) {
 	if (typeof document === "undefined") return null;
 	const cookieValue = document.cookie
@@ -77,31 +107,28 @@ export function AnalyticsConsentProvider({
 		}),
 		[config.analytics.consentPolicyVersion, config.identity.baseUrl],
 	);
-	const [consentState, setConsentStateValue] =
-		useState<AnalyticsConsentState>(DEFAULT_ANALYTICS_CONSENT_STATE);
-	const [preferences, setPreferences] = useState<AnalyticsConsentPreferences>(
-		DEFAULT_ANALYTICS_CONSENT_PREFERENCES,
+	// The decision is read as the page is drawn, so a reader who has already
+	// answered is never asked again, and one who has not is asked in the same
+	// breath as the page appearing rather than a moment after it.
+	const storedConsent = useSyncExternalStore(
+		subscribeToConsentCookie,
+		consentCookieValue,
+		noConsentCookie,
 	);
+	const record = useMemo(
+		() => (storedConsent === null ? null : readConsentCookie(policy)),
+		[policy, storedConsent],
+	);
+	const consentState = analyticsConsentState(record);
+	const preferences =
+		record?.preferences ?? DEFAULT_ANALYTICS_CONSENT_PREFERENCES;
 	const [analyticsReady, setAnalyticsReady] = useState(false);
-	const [hasHydratedConsent, setHasHydratedConsent] = useState(false);
-	const [isPreferencesOpen, setIsPreferencesOpen] = useState(false);
+	// Null until the reader opens or closes it themselves; until then the
+	// dialog is open exactly when there is no decision yet.
+	const [openedByReader, setOpenedByReader] = useState<boolean | null>(null);
+	const isPreferencesOpen = openedByReader ?? consentState === "pending";
 
 	useEffect(() => {
-		const hydrationTimer = window.setTimeout(() => {
-			const record = readConsentCookie(policy);
-			const nextState = analyticsConsentState(record);
-			setConsentStateValue(nextState);
-			setPreferences(
-				record?.preferences ?? DEFAULT_ANALYTICS_CONSENT_PREFERENCES,
-			);
-			setIsPreferencesOpen(nextState === "pending");
-			setHasHydratedConsent(true);
-		}, 0);
-		return () => window.clearTimeout(hydrationTimer);
-	}, [policy]);
-
-	useEffect(() => {
-		if (!hasHydratedConsent) return;
 		let active = true;
 		void applyClientAnalyticsConsent(
 			{ analytics: config.analytics, scope: policy.scope },
@@ -113,20 +140,14 @@ export function AnalyticsConsentProvider({
 		return () => {
 			active = false;
 		};
-	}, [
-		config.analytics,
-		consentState,
-		hasHydratedConsent,
-		policy.scope,
-		preferences,
-	]);
+	}, [config.analytics, consentState, policy.scope, preferences]);
 
 	const closePreferences = useCallback(() => {
-		if (!hasHydratedConsent || consentState === "pending") return;
-		setIsPreferencesOpen(false);
-	}, [consentState, hasHydratedConsent]);
+		if (consentState === "pending") return;
+		setOpenedByReader(false);
+	}, [consentState]);
 
-	const openPreferences = useCallback(() => setIsPreferencesOpen(true), []);
+	const openPreferences = useCallback(() => setOpenedByReader(true), []);
 
 	const savePreferences = useCallback(
 		(nextPreferences: AnalyticsConsentPreferences) => {
@@ -136,9 +157,8 @@ export function AnalyticsConsentProvider({
 					nextPreferences.analytics && nextPreferences.sessionReplay,
 			};
 			writeConsentCookie(policy, normalized);
-			setPreferences(normalized);
-			setConsentStateValue(normalized.analytics ? "granted" : "denied");
-			setIsPreferencesOpen(false);
+			for (const onChange of consentReaders) onChange();
+			setOpenedByReader(false);
 		},
 		[policy],
 	);

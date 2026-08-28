@@ -18,6 +18,7 @@ import { Tooltip } from "@/components/nextui/Tooltip";
 import { SHORTCUT_KEYS } from "@/constants/shortcuts";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import type { BucketEntry } from "@/context/InlineChatLayout";
+import type { BucketPublications } from "./ContextBucket";
 import { useSelectedModel } from "@/hooks/useSelectedModel";
 import type { AIModelId } from "@/lib/ai/models";
 import type { LibrarySearchContext } from "@/lib/search-context";
@@ -27,7 +28,6 @@ import {
 	ChatComposerShell,
 } from "./ChatComposerControls";
 import { ChatErrorCard, ShortcutHint } from "./chat-shared";
-import { BucketSourcesLoader } from "./ContextBucket";
 import { SmartScreeningModal } from "./SmartScreeningModal";
 import { useInlineChat, useInlineChatComposer } from "./useInlineChat";
 
@@ -362,7 +362,10 @@ export default function InlineLibraryChat({
 	 * are worked out from the conversation, so they are handed over here
 	 * rather than stored somewhere else.
 	 */
-	renderSources: (entries: BucketEntry[]) => ReactNode;
+	renderSources: (
+		entries: BucketEntry[],
+		publications: BucketPublications,
+	) => ReactNode;
 	searchContext?: LibrarySearchContext;
 }) {
 	const t = useTranslations("ai");
@@ -388,9 +391,6 @@ export default function InlineLibraryChat({
 				)}
 				aria-label={t("askAI")}
 			>
-				{chat.bucketEntries.map((entry) => (
-					<BucketSourcesLoader key={entry.key} itemKey={entry.key} />
-				))}
 				{chat.isSmartScreeningOpen ? (
 					<SmartScreeningModal
 						isOpen
@@ -419,7 +419,7 @@ export default function InlineLibraryChat({
 					/>
 				</div>
 			</section>
-			{renderSources(chat.bucketEntries)}
+			{renderSources(chat.bucketEntries, chat.publications)}
 		</>
 	);
 }

@@ -162,15 +162,19 @@ function useDockHeight({
 	useEffect(() => {
 		if (!scrolled) return;
 
+		let rearm: ReturnType<typeof setTimeout> | undefined;
 		const onClampScroll = () => {
 			if (!rearmOnNextScrollRef.current) return;
 			rearmOnNextScrollRef.current = false;
-			setTimeout(() => rearmStickToBottom(), REARM_SCROLL_MS);
+			rearm = setTimeout(() => rearmStickToBottom(), REARM_SCROLL_MS);
 		};
 
 		scrolled.addEventListener("scroll", onClampScroll);
 
-		return () => scrolled.removeEventListener("scroll", onClampScroll);
+		return () => {
+			clearTimeout(rearm);
+			scrolled.removeEventListener("scroll", onClampScroll);
+		};
 	}, [scrolled]);
 
 	return { composerDockHeight, composerDockRef, watchDockClamp };

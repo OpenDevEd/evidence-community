@@ -42,13 +42,6 @@ type InlineChatLayoutValue = {
 		modelId: string,
 		greeting: string,
 	) => Chat<ResearchUIMessage>;
-	/** Where the cited PDF pages live, for every publication in the bucket. */
-	pdfSources: Record<string, string>;
-	registerPdfSources: (
-		itemKey: string,
-		sources: Record<string, string>,
-	) => void;
-	clearPdfSources: () => void;
 };
 
 /** Text typed but not yet sent. One owner, so it survives page visits. */
@@ -63,9 +56,6 @@ const InlineChatLayoutContext = createContext<InlineChatLayoutValue>({
 	getInlineChat: () => {
 		throw new Error("The library chat is only available inside its page.");
 	},
-	pdfSources: {},
-	registerPdfSources: () => {},
-	clearPdfSources: () => {},
 });
 
 /**
@@ -83,51 +73,6 @@ const InlineChatDraftActionsContext = createContext<InlineChatDraftActions>({
 
 /** The split view only exists on the library list page. */
 const LIBRARY_PATHNAME = /^\/lib\/?$/;
-
-/** True when both records hold exactly the same paths. */
-function sameSources(
-	before: Record<string, string> | undefined,
-	after: Record<string, string>,
-) {
-	return (
-		Boolean(before) &&
-		Object.keys(before ?? {}).length === Object.keys(after).length &&
-		Object.entries(after).every(([name, path]) => before?.[name] === path)
-	);
-}
-
-/** Where the cited PDF pages live for each publication in the bucket. */
-function usePdfSources() {
-	const [pdfSourcesByItem, setPdfSourcesByItem] = useState<
-		Record<string, Record<string, string>>
-	>({});
-
-	const registerPdfSources = useCallback(
-		(itemKey: string, sources: Record<string, string>) => {
-			setPdfSourcesByItem((previous) =>
-				sameSources(previous[itemKey], sources)
-					? previous
-					: { ...previous, [itemKey]: sources },
-			);
-		},
-		[],
-	);
-	const clearPdfSources = useCallback(() => setPdfSourcesByItem({}), []);
-
-	const pdfSources = useMemo(
-		() =>
-			Object.assign({}, ...Object.values(pdfSourcesByItem)) as Record<
-				string,
-				string
-			>,
-		[pdfSourcesByItem],
-	);
-
-	return useMemo(
-		() => ({ clearPdfSources, pdfSources, registerPdfSources }),
-		[clearPdfSources, pdfSources, registerPdfSources],
-	);
-}
 
 /**
  * The one conversation the split view uses. It is kept outside React state on
@@ -185,12 +130,10 @@ export function InlineChatLayoutProvider({
 		() => setSearchFocusRequest(Date.now()),
 		[],
 	);
-	const sources = usePdfSources();
 	const getInlineChat = useChatHandle();
 
 	const value = useMemo(
 		() => ({
-			...sources,
 			engaged: engaged && LIBRARY_PATHNAME.test(pathname),
 			getInlineChat,
 			requestSearchFocus,
@@ -204,7 +147,6 @@ export function InlineChatLayoutProvider({
 			requestSearchFocus,
 			searchFocusRequest,
 			setEngaged,
-			sources,
 		],
 	);
 	const draftValue = useMemo(() => ({ draft }), [draft]);

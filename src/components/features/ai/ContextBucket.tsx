@@ -5,52 +5,76 @@ import useSWR from "swr";
 
 import type { ItemGetResponse } from "@/app/api/item/types";
 import Resource from "@/components/features/items/Resource";
-import {
-	useInlineChatLayout,
-	type BucketEntry,
-} from "@/context/InlineChatLayout";
+import type { BucketEntry } from "@/context/InlineChatLayout";
 import { publicationPdfCitationSources } from "@/lib/ai/citations";
 import { fetcher } from "@/lib/utils";
 
-function useBucketItem(itemKey: string) {
-	const { registerPdfSources } = useInlineChatLayout();
-	const { data, isLoading } = useSWR<ItemGetResponse>(
-		`/item/${itemKey}`,
-		fetcher,
-		{
-			revalidateOnFocus: false,
-			// Where its cited pages live is recorded as the publication
-			// arrives, which is the moment that decides them. Everything
-			// asking for the same publication shares one request, and the
-			// same paths recorded twice change nothing.
-			onSuccess: (response) =>
-				registerPdfSources(
-					itemKey,
-					publicationPdfCitationSources(
-						itemKey,
-						response.item?.attachmentsData,
-					),
-				),
-		},
-	);
+export type BucketPublication = NonNullable<ItemGetResponse["item"]>;
+export type BucketPublications = {
+	byKey: Record<string, BucketPublication>;
+	isLoading: boolean;
+	/** Where the cited PDF pages live, for every publication loaded so far. */
+	pdfSources: Record<string, string>;
+};
 
-	return { item: data?.item, isLoading };
-}
+const NO_PUBLICATIONS: BucketPublications = {
+	byKey: {},
+	isLoading: false,
+	pdfSources: {},
+};
 
 /**
- * Loads a publication without showing it, so page citations still resolve
- * while the reader is looking at something else. It shares its request with
- * the visible cards, so nothing is fetched twice.
+ * The publications the assistant has used, loaded once for the whole chat.
+ *
+ * Where each one's cited pages live is worked out from that data while the
+ * page is drawn, so it can never fall behind the conversation, and clearing
+ * the conversation clears it with no help from anyone.
  */
-export function BucketSourcesLoader({ itemKey }: { itemKey: string }) {
-	useBucketItem(itemKey);
+export function useBucketPublications(
+	entries: BucketEntry[],
+): BucketPublications {
+	const keys = entries.map((entry) => entry.key);
+	const { data, isLoading } = useSWR(
+		keys.length > 0 ? ["bucket-publications", ...keys] : null,
+		async () => {
+			const loaded = await Promise.all(
+				keys.map(async (key) => {
+					const response = (await fetcher(
+						`/item/${key}`,
+					)) as ItemGetResponse;
 
-	return null;
+					return [key, response.item] as const;
+				}),
+			);
+
+			return Object.fromEntries(
+				loaded.filter(([, item]) => item),
+			) as Record<string, BucketPublication>;
+		},
+		{ keepPreviousData: true, revalidateOnFocus: false },
+	);
+
+	if (!data) return { ...NO_PUBLICATIONS, isLoading };
+
+	return {
+		byKey: data,
+		isLoading,
+		pdfSources: Object.assign(
+			{},
+			...keys.map((key) =>
+				publicationPdfCitationSources(key, data[key]?.attachmentsData),
+			),
+		) as Record<string, string>,
+	};
 }
 
-function BucketCard({ itemKey }: { itemKey: string }) {
-	const { item, isLoading } = useBucketItem(itemKey);
-
+function BucketCard({
+	item,
+	isLoading,
+}: {
+	item?: BucketPublication;
+	isLoading: boolean;
+}) {
 	return (
 		<Resource
 			itemData={item}
@@ -66,7 +90,13 @@ function BucketCard({ itemKey }: { itemKey: string }) {
  * The publications the assistant has used in this conversation, most recently
  * used first. Shown beside the chat in the split view.
  */
-export function BucketList({ entries }: { entries: BucketEntry[] }) {
+export function BucketList({
+	entries,
+	publications,
+}: {
+	entries: BucketEntry[];
+	publications: BucketPublications;
+}) {
 	return (
 		<div className="flex min-w-0 flex-col gap-4">
 			<AnimatePresence initial={false} mode="popLayout">
@@ -86,7 +116,10 @@ export function BucketList({ entries }: { entries: BucketEntry[] }) {
 							duration: 0.55,
 						}}
 					>
-						<BucketCard itemKey={entry.key} />
+						<BucketCard
+							item={publications.byKey[entry.key]}
+							isLoading={publications.isLoading}
+						/>
 					</motion.div>
 				))}
 			</AnimatePresence>
