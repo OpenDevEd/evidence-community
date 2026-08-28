@@ -1552,7 +1552,7 @@ async function pageThroughInstitutions(
 ) {
 	const seen: { count: number; name: string }[] = [];
 	let cursor = "";
-	for (let page = 0; page <= INSTITUTIONS_BY_COUNT.length; page += 1) {
+	for (let page = 0; page < INSTITUTIONS_BY_COUNT.length; page += 1) {
 		const parameters = new URLSearchParams({
 			direction,
 			pageSize: "1",
@@ -1564,11 +1564,18 @@ async function pageThroughInstitutions(
 			`/api/openscholar/institutions?${parameters.toString()}`,
 		);
 		assert.equal(answer.response.status, 200);
+		assert.equal(
+			answer.body.items.length,
+			1,
+			`page ${page + 1} of ${sort} ${direction} must hold exactly one institution`,
+		);
 		seen.push(...answer.body.items);
-		if (!answer.body.nextCursor) break;
+		if (!answer.body.nextCursor) return seen;
 		cursor = answer.body.nextCursor;
 	}
-	return seen;
+	throw new Error(
+		`Paging ${sort} ${direction} still offered a cursor after ${INSTITUTIONS_BY_COUNT.length} pages`,
+	);
 }
 
 async function verifyInstitutionCursorRules(profile: Profile) {
@@ -1645,7 +1652,7 @@ function insertInstitutionRecord(
 		profile.name,
 		[
 			`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${key}', 'native', '${key}')`,
-			`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem", "creators") VALUES ('${key}', 'native', '${key}', 'JournalArticle', 'Institution evidence ${key}', 1, '2026', now(), 0, NULL, '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"${institution}"},"not-an-object"]}]'::jsonb)`,
+			`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem", "creators") VALUES ('${key}', 'native', '${key}', 'JournalArticle', 'Institution evidence ${key}', 1, '2026', now(), 0, NULL, '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"${institution}"},"not-an-object"]},{"creatorType":"author","lastName":"Shape","institutions":{"display_name":"Object Institute"}}]'::jsonb)`,
 		].join("; "),
 	);
 }
@@ -1668,6 +1675,9 @@ function verifyInstitutionProjectionLifecycle(profile: Profile) {
 		const change = (statement: string) =>
 			postgresScalar(profile.name, statement);
 		const names = () => institutionNamesFor(profile, LIFECYCLE_KEY);
+		// The record also names a creator whose institutions are an object and
+		// one entry that is a bare string, so this proves both JSON guards: the
+		// write went through and neither shape reached the projection.
 		assert.equal(names(), LIFECYCLE_INSTITUTION, "a new record is listed");
 
 		change(

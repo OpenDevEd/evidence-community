@@ -90,7 +90,7 @@ export function institutionCursorFor(request: OpenScholarInstitutionRequest) {
 	if (!request.cursor) return null;
 	const cursor = decodeOpenScholarInstitutionCursor(request.cursor);
 	if (
-		cursor.query !== request.query.toLowerCase() ||
+		cursor.query !== request.query ||
 		cursor.sort !== request.sort ||
 		cursor.direction !== request.direction
 	) {

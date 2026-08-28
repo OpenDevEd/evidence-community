@@ -1,3 +1,4 @@
+import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { z } from "zod";
 
 import { AdminValidationError } from "./errors";
@@ -18,7 +19,9 @@ export function parseAdminCollectionView(value: unknown) {
 	return result.data;
 }
 
-const collectionKeySchema = z.string().length(8);
+const collectionKeySchema = z.string().refine(isCanonicalRecordKey, {
+	message: "Collection ids are eight-character record keys",
+});
 const collectionSearchStateSchema = z.enum(["active", "all", "deleted"]);
 export type AdminCollectionSearchState = z.infer<
 	typeof collectionSearchStateSchema

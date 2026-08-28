@@ -113,7 +113,7 @@ export async function listInstitutionCounts(
 						count: last.count,
 						direction: request.direction,
 						name: last.name,
-						query: request.query.toLowerCase(),
+						query: request.query,
 						sort: request.sort,
 					})
 				: null,

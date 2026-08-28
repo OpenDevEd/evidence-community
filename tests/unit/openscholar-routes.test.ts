@@ -93,7 +93,7 @@ describe("OpenScholar collections route", () => {
 
 	it("passes a list of ids through so saved link targets can be named", async () => {
 		const response = await getCollections(
-			request("/api/openscholar/collections?ids=ABCD1234,EFGH5678"),
+			request("/api/openscholar/collections?ids=ABCD2345,EFGH6789"),
 		);
 
 		expect(response.status).toBe(200);
@@ -101,7 +101,7 @@ describe("OpenScholar collections route", () => {
 			expect.objectContaining({ execute }),
 			{
 				cursor: null,
-				ids: "ABCD1234,EFGH5678",
+				ids: "ABCD2345,EFGH6789",
 				pageSize: undefined,
 				query: undefined,
 			},

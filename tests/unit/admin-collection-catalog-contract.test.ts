@@ -74,7 +74,7 @@ describe("admin collection catalogue contract", () => {
 
 	it("round trips opaque child cursors", () => {
 		const cursor = {
-			key: "ABCD1234",
+			key: "ABCD2345",
 			name: "research",
 			parentCollection: null,
 			sortOrder: 1024,
@@ -118,36 +118,51 @@ describe("OpenScholar collection request", () => {
 	it("reads a list of ids and drops repeats", () => {
 		expect(
 			parseOpenScholarCollectionRequest({
-				ids: " ABCD1234 , EFGH5678 ,ABCD1234",
+				ids: " ABCD2345 , EFGH6789 ,ABCD2345",
 			}).ids,
-		).toEqual(["ABCD1234", "EFGH5678"]);
+		).toEqual(["ABCD2345", "EFGH6789"]);
 	});
 
 	it("refuses more ids than a picker may ask for at once", () => {
-		const ids = Array.from({ length: 201 }, (_unused, index) =>
-			`ID${String(index).padStart(6, "0")}`,
-		).join(",");
-
-		expect(() => parseOpenScholarCollectionRequest({ ids })).toThrow();
+		const alphabet = "23456789ABCDEFGHIJKLMNPQRSTUVWXYZ";
+		const ids = Array.from(
+			{ length: 201 },
+			(_unused, index) =>
+				`KEYCAP${alphabet[Math.floor(index / alphabet.length)]}${
+					alphabet[index % alphabet.length]
+				}`,
+		);
+		// Every id on its own is a real key, so the cap is the only reason to
+		// refuse this list.
+		expect(parseOpenScholarCollectionRequest({ ids: ids[200] }).ids).toEqual([
+			ids[200],
+		]);
+		expect(() =>
+			parseOpenScholarCollectionRequest({ ids: ids.join(",") }),
+		).toThrow();
 	});
 
 	it("refuses an id that is not a collection key", () => {
 		expect(() =>
 			parseOpenScholarCollectionRequest({ ids: "too-short" }),
 		).toThrow();
+		// Eight characters is not enough: 0, 1 and O are not record keys.
+		expect(() =>
+			parseOpenScholarCollectionRequest({ ids: "ABCD0123" }),
+		).toThrow();
 	});
 
 	it("refuses ids asked for together with a search or a page", () => {
 		expect(() =>
 			parseOpenScholarCollectionRequest({
-				ids: "ABCD1234",
+				ids: "ABCD2345",
 				query: "teacher",
 			}),
 		).toThrow();
 		expect(() =>
 			parseOpenScholarCollectionRequest({
 				cursor: "abc",
-				ids: "ABCD1234",
+				ids: "ABCD2345",
 			}),
 		).toThrow();
 	});
