@@ -5,6 +5,8 @@ import {
 	type Page,
 } from "@playwright/test";
 
+import { dismissConsent } from "./consent";
+
 test.skip(
 	process.env.PLAYWRIGHT_RUNTIME_ACCEPTANCE !== "true",
 	"requires the runtime acceptance services",
@@ -83,13 +85,6 @@ async function mailboxMessages(
 	const response = await request.get(`${mailpitOrigin}/api/v1/messages`);
 	expect(response.ok()).toBe(true);
 	return response.json() as Promise<{ messages?: unknown[] }>;
-}
-
-async function dismissConsent(page: Page) {
-	await page
-		.getByRole("button", { name: "Decline", exact: true })
-		.click({ timeout: 3_000 })
-		.catch(() => undefined);
 }
 
 function trackAnalyticsNetwork(page: Page) {

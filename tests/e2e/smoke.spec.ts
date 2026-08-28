@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissConsent } from "./consent";
+
 const expectedConfigRevision =
 	process.env.PLAYWRIGHT_EXPECTED_CONFIG_REVISION ?? "example-1";
 const expectedConfigUpdatedAt =
@@ -504,10 +506,7 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 test("renders navbar features from the runtime manifest", async ({ page }) => {
 	await page.setViewportSize({ width: 1600, height: 900 });
 	await page.goto("/en-GB/contact");
-	await page
-		.getByRole("button", { name: "Decline", exact: true })
-		.click({ timeout: 3_000 })
-		.catch(() => undefined);
+	await dismissConsent(page);
 
 	const navbarSearch = page.getByPlaceholder("Search", { exact: true });
 	const themeSwitcher = page.getByRole("button", {
@@ -606,10 +605,7 @@ test("enforces runtime search scopes, filters, embeddings, and citation URLs", a
 }) => {
 	await page.setViewportSize({ width: 1600, height: 1000 });
 	await page.goto("/en-GB/lib");
-	await page
-		.getByRole("button", { name: "Decline", exact: true })
-		.click({ timeout: 3_000 })
-		.catch(() => undefined);
+	await dismissConsent(page);
 
 	const scopeSelect = page.getByLabel("Search scope").first();
 	await expect(scopeSelect).toContainText(expectedDefaultSearchScopeLabel);

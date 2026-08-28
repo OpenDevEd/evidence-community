@@ -1,6 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
 import { openAdmin } from "./admin-login";
+import { dismissConsent } from "./consent";
 
 const itemKey = process.env.PLAYWRIGHT_PUBLICATION_ITEM_KEY ?? "";
 const expectedDoi = process.env.PLAYWRIGHT_PUBLICATION_EXPECTED_DOI ?? "";
@@ -28,13 +29,6 @@ async function openPublicationRecord(page: Page) {
 	// The identifiers card is closed by default; open it for the details.
 	await openIdentifierDetails(inspector.locator("#admin-doi-publishing"));
 	return inspector;
-}
-
-async function dismissConsent(page: Page) {
-	await page
-		.getByRole("button", { name: "Decline", exact: true })
-		.click({ timeout: 3_000 })
-		.catch(() => undefined);
 }
 
 async function expectCompactDialog(page: Page, dialog: Locator) {

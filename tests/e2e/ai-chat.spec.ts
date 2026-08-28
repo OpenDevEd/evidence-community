@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { dismissConsent } from "./consent";
 
 test.skip(
 	process.env.PLAYWRIGHT_RUNTIME_ACCEPTANCE !== "true",
@@ -27,10 +28,7 @@ function chatPanel(page: Page) {
 test.beforeEach(async ({ page }) => {
 	await page.setViewportSize({ width: 1600, height: 900 });
 	await page.goto("/en-GB/lib");
-	await page
-		.getByRole("button", { name: "Decline", exact: true })
-		.click({ timeout: 3_000 })
-		.catch(() => undefined);
+	await dismissConsent(page);
 	// The page has to be ready before the reader can type into it.
 	await expect(searchField(page)).toBeVisible();
 	await expect(askButton(page)).toBeVisible();

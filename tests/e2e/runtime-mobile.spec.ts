@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { dismissConsent } from "./consent";
+
 test.skip(
 	process.env.PLAYWRIGHT_RUNTIME_ACCEPTANCE !== "true",
 	"requires a materialized runtime acceptance profile",
@@ -18,10 +20,7 @@ test("renders the runtime navigation and feature controls on mobile", async ({
 	page,
 }) => {
 	await page.goto("/lib");
-	await page
-		.getByRole("button", { name: "Decline", exact: true })
-		.click({ timeout: 3_000 })
-		.catch(() => undefined);
+	await dismissConsent(page);
 
 	expect(page.viewportSize()?.width).toBeLessThanOrEqual(500);
 	expect(
