@@ -1396,6 +1396,20 @@ function runBrowserSuite(profile: Profile) {
 		[
 			"playwright",
 			"test",
+			"tests/e2e/ai-chat.spec.ts",
+			"--project",
+			"chromium",
+		],
+		playwrightEnvironment(`${profile.name}-ai-chat`, {
+			...commandEnvironment,
+			...publicExpectations(profile),
+		}),
+	);
+	run(
+		"npx",
+		[
+			"playwright",
+			"test",
 			"tests/e2e/runtime-integrations.spec.ts",
 			"--project",
 			"chromium",
