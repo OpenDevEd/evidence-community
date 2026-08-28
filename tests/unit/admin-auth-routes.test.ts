@@ -18,16 +18,35 @@ const openScholar = {
 	machineCredential,
 };
 
+const adminCookie = { value: undefined as string | undefined };
+
 vi.mock("@/config/library-config/server", () => ({
 	getLibraryConfig: () => ({
 		authentication: { openScholar, secret },
+		localization: { defaultLocale: "en-GB" },
 	}),
 }));
+vi.mock("next/headers", () => ({
+	cookies: async () => ({
+		get: (name: string) =>
+			name === "evidence_library_admin" && adminCookie.value
+				? { name, value: adminCookie.value }
+				: undefined,
+	}),
+}));
+vi.mock("@opendeved/evidence-library-core/zotero-schema", () => ({
+	getZoteroSchema: () => ({ itemTypes: [] }),
+}));
+vi.mock("@/components/admin/AdminWorkbench", () => ({
+	default: () => null,
+}));
 
+import AdminPage from "@/app/[locale]/admin/page";
 import { GET as redeem } from "@/app/api/admin/session/route";
 import { POST as logout } from "@/app/api/admin/session/logout/route";
 import {
 	adminSessionCookieName,
+	createAdminSessionToken,
 	verifyAdminSessionToken,
 } from "@/lib/admin/access";
 
@@ -57,6 +76,20 @@ function redeemRequest(
 				}
 			: undefined,
 	);
+}
+
+async function captureRedirect(render: Promise<unknown>) {
+	try {
+		await render;
+	} catch (error) {
+		const digest = (error as { digest?: string }).digest ?? "";
+		const parsed = digest.match(
+			/^NEXT_REDIRECT;(?:replace|push);(.*);(\d+);$/u,
+		);
+		if (parsed) return { status: Number(parsed[2]), url: parsed[1] };
+		throw error;
+	}
+	return null;
 }
 
 function sessionCookieValue(response: Response) {
@@ -125,7 +158,7 @@ describe("admin session routes", () => {
 
 			expect(response.status).toBe(303);
 			expect(response.headers.get("location")).toBe(
-				"http://localhost/admin/access-error",
+				`${openScholar.loginPageUrl}?error=invalid_code&return=%2Fadmin`,
 			);
 			expect(response.headers.get("set-cookie")).toBeNull();
 		},
@@ -142,7 +175,7 @@ describe("admin session routes", () => {
 		const response = await redeem(redeemRequest());
 
 		expect(response.headers.get("location")).toBe(
-			"http://localhost/admin/access-error",
+			`${openScholar.loginPageUrl}?error=invalid_code&return=%2Fadmin`,
 		);
 		expect(response.headers.get("set-cookie")).toBeNull();
 	});
@@ -153,7 +186,7 @@ describe("admin session routes", () => {
 		);
 
 		expect(response.headers.get("location")).toBe(
-			"http://localhost/admin/access-error",
+			`${openScholar.loginPageUrl}?error=invalid_code&return=%2Fadmin`,
 		);
 		expect(response.headers.get("set-cookie")).toBeNull();
 		expect(fetchMock).not.toHaveBeenCalled();
@@ -170,6 +203,54 @@ describe("admin session routes", () => {
 		);
 		expect(response.headers.get("set-cookie")).toContain(
 			"evidence_library_admin=",
+		);
+	});
+
+	it("returns to the admin page the visitor asked for", async () => {
+		fetchMock.mockResolvedValue(Response.json(redeemedIdentity));
+		const query = new URLSearchParams({
+			code,
+			return: "/en-GB/admin/items?scope=drafts",
+		});
+
+		const response = await redeem(redeemRequest(query.toString()));
+
+		expect(response.status).toBe(303);
+		expect(response.headers.get("location")).toBe(
+			"http://localhost/en-GB/admin/items?scope=drafts",
+		);
+		expect(response.headers.get("set-cookie")).toContain(
+			"evidence_library_admin=",
+		);
+	});
+
+	it.each(["https://evil.example.org/admin", "//evil.example.org", "/lib"])(
+		"ignores %s as a return target",
+		async (unsafeReturn) => {
+			fetchMock.mockResolvedValue(Response.json(redeemedIdentity));
+			const query = new URLSearchParams({ code, return: unsafeReturn });
+
+			const response = await redeem(redeemRequest(query.toString()));
+
+			expect(response.headers.get("location")).toBe(
+				"http://localhost/admin",
+			);
+		},
+	);
+
+	it("keeps the return path when the code is refused", async () => {
+		fetchMock.mockResolvedValue(
+			Response.json({ error: "rejected" }, { status: 400 }),
+		);
+		const query = new URLSearchParams({
+			code,
+			return: "/admin/items?scope=drafts",
+		});
+
+		const response = await redeem(redeemRequest(query.toString()));
+
+		expect(response.headers.get("location")).toBe(
+			`${openScholar.loginPageUrl}?error=invalid_code&return=%2Fadmin%2Fitems%3Fscope%3Ddrafts`,
 		);
 	});
 
@@ -204,5 +285,54 @@ describe("admin session routes", () => {
 		expect(response.headers.get("location")).toBe(
 			"https://library.example.org/admin",
 		);
+	});
+});
+
+describe("signed-out admin page", () => {
+	beforeEach(() => {
+		adminCookie.value = undefined;
+	});
+
+	it("sends the visitor to OpenScholar with the page to come back to", async () => {
+		const redirect = await captureRedirect(
+			AdminPage({
+				params: Promise.resolve({ locale: "en-GB" as const }),
+				searchParams: Promise.resolve({ scope: "drafts" }),
+			}),
+		);
+
+		expect(redirect).toEqual({
+			status: 307,
+			url: `${openScholar.loginPageUrl}?return=%2Fadmin%3Fscope%3Ddrafts`,
+		});
+	});
+
+	it("keeps the locale of the admin page it came from", async () => {
+		const redirect = await captureRedirect(
+			AdminPage({
+				params: Promise.resolve({ locale: "fr" as const }),
+				searchParams: Promise.resolve({}),
+			}),
+		);
+
+		expect(redirect?.url).toBe(
+			`${openScholar.loginPageUrl}?return=%2Ffr%2Fadmin`,
+		);
+	});
+
+	it("keeps a signed-in visitor on the admin page", async () => {
+		adminCookie.value = createAdminSessionToken(redeemedIdentity, {
+			libraryId,
+			secret,
+		});
+
+		const redirect = await captureRedirect(
+			AdminPage({
+				params: Promise.resolve({ locale: "en-GB" as const }),
+				searchParams: Promise.resolve({}),
+			}),
+		);
+
+		expect(redirect).toBeNull();
 	});
 });

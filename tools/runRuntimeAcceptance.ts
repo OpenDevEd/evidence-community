@@ -368,6 +368,47 @@ async function requireHttpSuccess(url: string, description: string) {
 	return response;
 }
 
+async function requireMethodNotAllowed(url: string, description: string) {
+	const response = await fetch(url, { method: "POST", redirect: "manual" });
+	await response.body?.cancel();
+	assert.equal(
+		response.status,
+		405,
+		`${description} must refuse anything but a page request`,
+	);
+	assert.equal(
+		response.headers.get("allow"),
+		"GET, HEAD",
+		`${description} must say which methods it accepts`,
+	);
+}
+
+// A same-site redirect may name only the path, so read the destination the
+// way a browser would before comparing it.
+function redirectDestination(response: Response, requestUrl: string) {
+	const location = response.headers.get("location");
+	return location ? new URL(location, requestUrl).toString() : "nowhere";
+}
+
+async function requireHttpRedirect(
+	url: string,
+	expectedLocationPrefix: string,
+	description: string,
+) {
+	const response = await fetch(url, { redirect: "manual" });
+	await response.body?.cancel();
+	assert.ok(
+		response.status >= 300 && response.status < 400,
+		`${description} must redirect, but answered HTTP ${response.status}`,
+	);
+	const destination = redirectDestination(response, url);
+	assert.ok(
+		destination.startsWith(expectedLocationPrefix),
+		`${description} must send the browser to ${expectedLocationPrefix}, but sent it to ${destination}`,
+	);
+	return response;
+}
+
 async function verifyRepositoryComposeStartup(profile: Profile) {
 	const config = structuredClone(profile.config);
 	config.services.database.url =
@@ -433,7 +474,24 @@ async function verifyRepositoryComposeStartup(profile: Profile) {
 			`${baseUrl}/${config.localization.defaultLocale}/lib`,
 			"Public library",
 		);
-		await requireHttpSuccess(`${baseUrl}/admin`, "Admin");
+		await requireHttpRedirect(
+			`${baseUrl}/admin`,
+			config.authentication.openScholar.loginPageUrl,
+			"Signed-out admin",
+		);
+		await requireMethodNotAllowed(`${baseUrl}/admin`, "Signed-out admin");
+		const switchedOffLocale = PLATFORM_LOCALES.find(
+			(locale) => !config.localization.locales.includes(locale),
+		);
+		assert.ok(
+			switchedOffLocale,
+			"The Compose profile must leave one locale switched off",
+		);
+		await requireHttpRedirect(
+			`${baseUrl}/${switchedOffLocale}/admin`,
+			`${baseUrl}/admin`,
+			"Admin under a switched-off locale",
+		);
 	} finally {
 		compose("down", "--volumes");
 	}

@@ -225,18 +225,29 @@ and `els_` machine credential. It must also set `authentication.secret` for
 cookie signing. These fields are private and the runtime configuration is
 invalid when either part is missing.
 
-OpenScholar sends the browser to `/api/admin/session?code=elc_...`. The
-Evidence Library sends that code, its configured library ID, and its machine
+Opening `/admin` without a valid session shows nothing. The library redirects
+the browser to the configured OpenScholar page and adds `return`, the admin
+path the person asked for. OpenScholar signs the person in, checks whether they
+may administer this library, and sends them back.
+
+OpenScholar sends the browser to `/api/admin/session?code=elc_...&return=/admin`.
+The Evidence Library sends that code, its configured library ID, and its machine
 credential to
 `POST /api/v1/evidence-libraries/admin-login/redeem` on the configured Convex
 site. A successful response creates a signed 12-hour cookie containing the
 returned Clerk user, Clerk organization, target library, and owner/editor
 role. The cookie is HTTP-only, same-site lax, host-only, and secure in
 production. Codes are single-use; rejected, expired, replayed, or
-wrong-library codes do not create a session.
+wrong-library codes do not create a session; they send the browser back to the
+OpenScholar page with `error=invalid_code`, which is where the person reads what
+went wrong.
 
-The public library stays open. Signed-out and failed `/admin` visits link back
-to the configured OpenScholar page. Admin pages and APIs use one role policy:
+`return` is checked here, not trusted. It must be a path inside this library's
+admin, such as `/admin`, `/admin/items?scope=drafts`, or `/en-GB/admin`.
+Anything else, including a full address or one starting with `//`, is replaced
+by `/admin`.
+
+The public library stays open. Admin pages and APIs use one role policy:
 
 - Owners and Editors can use the existing content tools for records,
   collections, files, publishing, search status, and source writeback.
@@ -413,7 +424,8 @@ A library is ready only when all of these checks pass:
    healthy. `source-sync` and `source-writeback` are running.
 4. `GET /api/library-config/health` returns `200`, reports `state: "active"`,
    reports the requested `active.revision`, and has no rejected revision.
-5. The public library URL and `/admin` return a successful HTTP response.
+5. The public library URL returns a successful HTTP response, and `/admin`
+   answers with a redirect to the configured OpenScholar page.
 
 The source workers intentionally have no container health check. An idle source
 worker has no active connection lease to refresh. Its running container is the
@@ -433,7 +445,8 @@ docker compose --project-directory . \
   -f docker/compose.library.yaml ps --all --format json
 curl --fail-with-body https://library.example.org/api/library-config/health
 curl --fail-with-body https://library.example.org/en/lib
-curl --fail-with-body https://library.example.org/admin
+curl --include --silent --output /dev/null --write-out '%{http_code} %{redirect_url}\n' \
+  https://library.example.org/admin
 ```
 
 ## Activate a change without restarting
@@ -548,7 +561,8 @@ npm run test:acceptance
 
 `npm run test:acceptance` first starts the repository Compose deployment with
 all five required processes and its private Meilisearch. It checks real Compose
-state and health, the active revision, the public site, and `/admin`. The rest
+state and health, the active revision, the public site, and the `/admin`
+redirect to OpenScholar. The rest
 of the suite starts two disposable libraries, PostgreSQL, Meilisearch, Mailpit,
 workers, and local HTTPS fixtures for external services. It runs every desktop
 and mobile browser check, including the complete mocked Crossref and Zenodo

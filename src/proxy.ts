@@ -2,6 +2,7 @@ import createMiddleware from "next-intl/middleware";
 import { NextRequest, NextResponse } from "next/server";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "./constants/items";
 import { loadLibraryConfig } from "./config/library-config/source";
+import type { LibraryServerConfig } from "./config/library-config/schema";
 import {
 	getDisabledLocaleRedirectPathname,
 	getOrderedRuntimeLocales,
@@ -15,9 +16,17 @@ import {
 import { getMeilisearchForConfig } from "./lib/meilisearch";
 import { normalizePathname } from "./lib/path";
 import {
+	adminSessionCookieName,
+	verifyAdminSessionToken,
+} from "./lib/admin/access";
+import {
+	ADMIN_PAGE_METHODS,
+	buildAdminLoginPageUrl,
 	getCanonicalLibraryRedirect,
 	getRedirectLookupPath,
 	getUnlocalizedPathname,
+	isAdminPageMethod,
+	isAdminPagePath,
 	isLoginProfilePath,
 } from "./lib/runtime-routing";
 import {
@@ -242,6 +251,85 @@ function redirectUnknownPathToNotFoundPage(
 	return NextResponse.redirect(url, 307);
 }
 
+function adminMethodNotAllowedResponse() {
+	return new NextResponse("Method Not Allowed", {
+		headers: {
+			Allow: ADMIN_PAGE_METHODS,
+			"Cache-Control": PRIVATE_NO_STORE_CACHE_CONTROL,
+			"Content-Type": "text/plain; charset=utf-8",
+		},
+		status: 405,
+	});
+}
+
+function hasAdminSession(
+	request: NextRequest,
+	authentication: LibraryServerConfig["authentication"],
+) {
+	return Boolean(
+		verifyAdminSessionToken(
+			request.cookies.get(adminSessionCookieName())?.value,
+			{
+				libraryId: authentication.openScholar.libraryId,
+				secret: authentication.secret,
+			},
+		),
+	);
+}
+
+function getDisabledLocaleRedirect(
+	request: NextRequest,
+	localization: LibraryServerConfig["localization"],
+) {
+	const pathname = getDisabledLocaleRedirectPathname(
+		request.nextUrl.pathname,
+		localization,
+	);
+	if (!pathname) return null;
+
+	const url = request.nextUrl.clone();
+	url.pathname = pathname;
+	return NextResponse.redirect(url, 307);
+}
+
+function getAdminPageResponse(
+	request: NextRequest,
+	authentication: LibraryServerConfig["authentication"],
+) {
+	if (!isAdminPagePath(request.nextUrl.pathname)) return null;
+	// An admin page only ever answers a page request. Sending anything else
+	// to OpenScholar would repeat the method and the body on another site.
+	if (!isAdminPageMethod(request.method)) {
+		return adminMethodNotAllowedResponse();
+	}
+	if (hasAdminSession(request, authentication)) return null;
+
+	return NextResponse.redirect(
+		buildAdminLoginPageUrl(
+			authentication.openScholar.loginPageUrl,
+			`${request.nextUrl.pathname}${request.nextUrl.search}`,
+		),
+		307,
+	);
+}
+
+// The admin page must answer with a real redirect. Rendering it and calling
+// redirect() there streams a 200 first, so the browser would see the
+// card-free page instead of the OpenScholar handoff. Nothing else may answer
+// first: a switched-off locale is dropped here, and the legacy query rules
+// never turn a refused method into a redirect.
+function getAdminRequestResponse(
+	request: NextRequest,
+	libraryConfig: LibraryServerConfig,
+) {
+	if (!isAdminPagePath(request.nextUrl.pathname)) return null;
+
+	return (
+		getDisabledLocaleRedirect(request, libraryConfig.localization) ??
+		getAdminPageResponse(request, libraryConfig.authentication)
+	);
+}
+
 export default async function proxy(request: NextRequest) {
 	const libraryConfig = await loadLibraryConfig();
 	const canonicalRedirect = getCanonicalLibraryRedirect(
@@ -258,6 +346,12 @@ export default async function proxy(request: NextRequest) {
 		url.pathname = "/lib";
 		return NextResponse.redirect(url);
 	}
+
+	const adminRequestResponse = getAdminRequestResponse(
+		request,
+		libraryConfig,
+	);
+	if (adminRequestResponse) return adminRequestResponse;
 
 	const newRequest = mapLegacySearchParams(request, libraryConfig.search);
 
@@ -406,15 +500,11 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.next();
 	}
 
-	const disabledLocaleRedirectPathname = getDisabledLocaleRedirectPathname(
-		request.nextUrl.pathname,
+	const disabledLocaleRedirect = getDisabledLocaleRedirect(
+		request,
 		libraryConfig.localization,
 	);
-	if (disabledLocaleRedirectPathname) {
-		const url = request.nextUrl.clone();
-		url.pathname = disabledLocaleRedirectPathname;
-		return NextResponse.redirect(url, 307);
-	}
+	if (disabledLocaleRedirect) return disabledLocaleRedirect;
 
 	const hasOwnerWrittenTerms = Boolean(libraryConfig.legal.termsMarkdown);
 	if (libraryConfig.generation.redirects) {

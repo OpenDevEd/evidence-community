@@ -41,10 +41,12 @@ export async function issueAdminLoginCode(
 export async function createAdminBrowserSession(
 	page: Page,
 	code?: string,
+	returnPath?: string,
 ): Promise<APIResponse> {
 	const baseUrl = process.env.PLAYWRIGHT_BASE_URL ?? page.url();
 	const url = new URL("/api/admin/session", baseUrl);
 	url.searchParams.set("code", code ?? (await issueAdminLoginCode()));
+	if (returnPath) url.searchParams.set("return", returnPath);
 	const response = await page.request.get(url.toString(), {
 		maxRedirects: 0,
 	});
@@ -54,21 +56,27 @@ export async function createAdminBrowserSession(
 	return response;
 }
 
-export async function openAdmin(page: Page) {
-	await page.goto("/admin");
-
-	const openScholarLink = page.getByRole("link", {
-		name: "Back to OpenScholar",
-	});
-	const newItemButton = page.getByRole("button", { name: "New item" });
-	await openScholarLink
-		.or(newItemButton)
-		.first()
-		.waitFor({ state: "visible" });
-	if (await openScholarLink.isVisible()) {
-		await createAdminBrowserSession(page);
-		await page.goto("/admin");
+export async function openAdmin(page: Page, returnPath = "/admin") {
+	const response = await createAdminBrowserSession(
+		page,
+		undefined,
+		returnPath,
+	);
+	const destination = response.headers().location;
+	const expectedDestination = new URL(
+		returnPath,
+		process.env.PLAYWRIGHT_BASE_URL ?? page.url(),
+	).toString();
+	if (destination !== expectedDestination) {
+		throw new Error(
+			`Admin login sent the browser to ${destination} instead of ${expectedDestination}`,
+		);
 	}
 
-	await newItemButton.waitFor({ state: "visible" });
+	// The workbench is proven by its controls, not by every asset finishing,
+	// so do not wait for the load event before looking for them.
+	await page.goto(destination, { waitUntil: "domcontentloaded" });
+	await page
+		.getByRole("button", { name: "New item" })
+		.waitFor({ state: "visible" });
 }

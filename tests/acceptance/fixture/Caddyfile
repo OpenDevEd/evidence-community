@@ -39,7 +39,9 @@ https://localhost:{$APP_HTTPS_PORT}, https://127.0.0.1:{$APP_HTTPS_PORT} {
 https://openscholar.localhost:{$FIXTURE_PORT} {
 	tls internal
 	header Content-Type "text/html; charset=utf-8"
-	respond "<!doctype html><html lang=\"en\"><head><title>OpenScholar acceptance</title></head><body><h1>OpenScholar acceptance</h1></body></html>" 200
+	# The page repeats the return path and the error the library sent, so a
+	# browser test can carry them back instead of inventing its own.
+	respond `<!doctype html><html lang="en"><head><title>OpenScholar acceptance</title></head><body><h1>OpenScholar acceptance</h1><p id="admin-return">{query.return}</p><p id="admin-error">{query.error}</p></body></html>` 200
 }
 
 https://openscholar-convex.localhost:{$FIXTURE_PORT} {

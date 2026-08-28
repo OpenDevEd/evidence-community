@@ -619,9 +619,17 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 	page,
 }) => {
 	test.setTimeout(90_000);
+	const loginPageUrl =
+		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!;
 	await mockPublishedBook(page);
 	await page.context().clearCookies();
-	await page.goto("/admin");
+	await page.goto("/admin?scope=drafts");
+
+	expect(page.url().startsWith(`${loginPageUrl}?`)).toBe(true);
+	// OpenScholar repeats the return path the library sent, and the browser
+	// carries that value back instead of inventing a destination.
+	const returnPath = await page.locator("#admin-return").innerText();
+	expect(returnPath).toBe("/admin?scope=drafts");
 
 	const code = await issueAdminLoginCode();
 	const callback = new URL(
@@ -629,10 +637,13 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 		process.env.PLAYWRIGHT_BASE_URL!,
 	);
 	callback.searchParams.set("code", code);
-	await page.goto(process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!);
+	callback.searchParams.set("return", returnPath);
 	await page.evaluate((url) => {
 		window.location.href = url;
 	}, callback.toString());
+	await page.waitForURL(
+		new URL("/admin?scope=drafts", process.env.PLAYWRIGHT_BASE_URL!).toString(),
+	);
 	await expect(
 		page.getByRole("textbox", { name: "Search records" }),
 	).toBeVisible();
@@ -657,26 +668,67 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 	expect(Math.abs(logoutBox!.y - newItemBox!.y)).toBeLessThanOrEqual(1);
 
 	await logout.click();
-	await expect(
-		page.getByRole("link", { name: "Back to OpenScholar" }),
-	).toBeVisible();
+	await page.waitForURL(`${loginPageUrl}?return=%2Fadmin`);
+	await expect(page.locator("#admin-return")).toHaveText("/admin");
 
-	const replay = await createAdminBrowserSession(page, code);
-	const replayLocation = replay.headers().location;
+	const replay = await createAdminBrowserSession(page, code, returnPath);
 	expect(replay.headers()["set-cookie"]).toBeUndefined();
-	expect(new URL(replayLocation).pathname).toBe("/admin/access-error");
-	await page.goto(replayLocation);
-	await expect(
-		page.getByRole("alert").filter({
-			hasText: /admin link is invalid, expired, or has already been used/iu,
-		}),
-	).toBeVisible();
-	await expect(
-		page.getByRole("link", { name: "Back to OpenScholar" }),
-	).toHaveAttribute(
-		"href",
-		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!,
+	expect(replay.headers().location).toBe(
+		`${loginPageUrl}?error=invalid_code&return=%2Fadmin%3Fscope%3Ddrafts`,
 	);
+	await page.goto(replay.headers().location);
+	await expect(page.locator("#admin-error")).toHaveText("invalid_code");
+	await expect(page.locator("#admin-return")).toHaveText(
+		"/admin?scope=drafts",
+	);
+});
+
+test("answers admin requests on the library's own rules", async ({ page }) => {
+	const baseUrl = process.env.PLAYWRIGHT_BASE_URL!;
+	const loginPageUrl =
+		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!;
+	const disabledLocale = process.env.PLAYWRIGHT_EXPECTED_DISABLED_LOCALE!;
+	expect(disabledLocale).toBeTruthy();
+	const adminUrl = (path: string) => new URL(path, baseUrl).toString();
+
+	// The session from the shared setup is still in place here.
+	const signedInPost = await page.request.post(adminUrl("/admin"), {
+		data: "not a page request",
+		maxRedirects: 0,
+	});
+	expect(signedInPost.status()).toBe(405);
+	expect(signedInPost.headers().allow).toBe("GET, HEAD");
+
+	await page.context().clearCookies();
+
+	const signedOutPost = await page.request.post(adminUrl("/admin"), {
+		data: "not a page request",
+		maxRedirects: 0,
+	});
+	expect(signedOutPost.status()).toBe(405);
+	expect(signedOutPost.headers().allow).toBe("GET, HEAD");
+
+	// A legacy search key must not turn a refused method into a redirect.
+	const legacyQueryPost = await page.request.post(
+		adminUrl("/admin?sort=date_desc"),
+		{ data: "not a page request", maxRedirects: 0 },
+	);
+	expect(legacyQueryPost.status()).toBe(405);
+
+	const head = await page.request.head(adminUrl("/admin"), {
+		maxRedirects: 0,
+	});
+	expect(head.status()).toBe(307);
+	expect(head.headers().location).toBe(`${loginPageUrl}?return=%2Fadmin`);
+
+	const switchedOffLocale = await page.request.get(
+		adminUrl(`/${disabledLocale}/admin?sort=date_desc`),
+		{ maxRedirects: 0 },
+	);
+	expect(switchedOffLocale.status()).toBe(307);
+	expect(
+		new URL(switchedOffLocale.headers().location, baseUrl).toString(),
+	).toBe(adminUrl("/admin?sort=date_desc"));
 });
 
 test("rejects a one-time code for another library", async ({ page }) => {
@@ -689,8 +741,8 @@ test("rejects a one-time code for another library", async ({ page }) => {
 	const response = await createAdminBrowserSession(page, code);
 
 	expect(response.headers()["set-cookie"]).toBeUndefined();
-	expect(new URL(response.headers().location).pathname).toBe(
-		"/admin/access-error",
+	expect(response.headers().location).toBe(
+		`${process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!}?error=invalid_code&return=%2Fadmin`,
 	);
 });
 
