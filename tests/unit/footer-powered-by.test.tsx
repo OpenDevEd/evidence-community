@@ -31,7 +31,6 @@ vi.mock("@/components/library/LibraryIdentity", () => ({
 	FundingPartners: () => null,
 	InstitutionLogo: () => null,
 	LibraryLogo: () => null,
-	LibraryLogoImages: () => null,
 }));
 
 const configState = { poweredBy: true };

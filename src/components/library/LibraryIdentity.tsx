@@ -16,7 +16,11 @@ import { LIBRARY_LOGO_ATTRIBUTES } from "@/config/library-config/identity";
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
-export function LibraryLogoImages({
+/**
+ * The library's light and dark logo files. Deliberately not exported: every
+ * logo on the site must go through a box below, which owns its height.
+ */
+function LibraryLogoImages({
 	className,
 	onLoad,
 }: {
@@ -113,7 +117,7 @@ function BrandLogoBox({
  * the only thing that can stop a very wide logo.
  */
 const LIBRARY_LOGO_SIZES = {
-	admin: "h-7 max-w-full",
+	admin: "h-7 max-w-logo-admin",
 	cookie: "h-8 max-w-logo-cookie",
 	footer: "h-12 max-w-logo-footer",
 	// The header shrinks before the navigation does, so a wide logo can never
@@ -188,7 +192,7 @@ export function InstitutionLogo({
 	return (
 		<BrandLogoBox
 			className={twMerge(shape.box, className)}
-			place="institution"
+			place={`institution-${size}`}
 		>
 			{logoUrl ? (
 				<RuntimeAsset

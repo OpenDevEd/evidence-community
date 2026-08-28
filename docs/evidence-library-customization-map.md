@@ -27,7 +27,7 @@ container image can be started repeatedly with different mounted documents.
 | --- | --- | --- |
 | `schemaVersion`, `revision`, `updatedAt` | Contract version and revision identity | Schema version `1`; bounded revision; UTC timestamp |
 | `identity` | Name, short name, tagline, description, canonical origin, funding partners | HTTPS origin; tagline is one line up to 160 characters; description up to 300 characters and used for page and social previews; bounded unique partner IDs |
-| `identity.assets` | Dark/light logos, favicon, app icons, logo CSS, share image | Stable public URLs; share image is a PNG, JPG, or WebP HTTPS URL without a query string; CSS declarations only |
+| `identity.assets` | Dark/light logos, favicon, app icons, logo CSS, share image | Stable public URLs; share image is a PNG, JPG, or WebP HTTPS URL without a query string; logo CSS only from the allowed list below |
 | `institutions` | Institution names and optional logos | Up to 200; unique IDs and case-insensitive names |
 | `theme` | Layout, colors, mode, fonts, weights | Catalog values and validated colors/font URLs |
 | `navigation` | Internal and external navbar entries and icons | Bounded lists; platform icons or validated asset URLs |
@@ -106,11 +106,14 @@ The image fills that height, keeps its shape, and stops at 12rem, 14rem and
 its own pixel size. Funder logos in the footer and institution logos on a
 record page, in a list and in a search suggestion use the same rule.
 
-`identity.assets.logoStyles` can still change how a logo looks: colour,
-border, corner radius, shadow, filter. It cannot change size or place. Any
-declaration that sets width, height, margin, padding, position, transform or
-display is refused when the configuration is validated, because those used to
-let one line of CSS push a logo straight out of its bar.
+`identity.assets.logoStyles` can still change how a logo looks, but only with
+rules from a written-out list: `background-color`, `color`, `filter`,
+`box-shadow`, `border-radius` with its four corners, and `border` with its
+sides, colours, styles and widths. Everything else is refused when the
+configuration is checked: sizes, spacing, position, transforms, custom
+properties, browser-prefixed rules, at-rules and comments. One line of CSS
+used to be enough to push a logo straight out of its bar, so the runtime now
+allows only what is on the list rather than trying to name everything unsafe.
 
 ## Database boundary
 

@@ -1472,6 +1472,7 @@ function runAdminBrowserSuite(profile: Profile) {
 		"tests/e2e/admin.spec.ts",
 		"tests/e2e/admin-runtime.spec.ts",
 		"tests/e2e/admin-links.spec.ts",
+		"tests/e2e/admin-brand-logo.spec.ts",
 		"--project",
 		"chromium",
 	]);

@@ -37,6 +37,7 @@ export function Logo({ interactive = true }: LogoProps) {
 
 	return (
 		<Skeleton
+			data-logo-slot="header"
 			isLoaded={isLoaded}
 			className={twMerge(
 				"flex h-9 min-w-0 max-w-logo-header shrink items-center justify-center rounded-lg xl:h-10",

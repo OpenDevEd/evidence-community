@@ -74,7 +74,6 @@ import {
 } from "@opendeved/doi-sync-core/display";
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
 import { InstitutionLogo } from "@/components/library/LibraryIdentity";
-import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import Image from "next/image";
 import { getCanonicalWebsiteItemUrl } from "@/lib/canonical-item-url";

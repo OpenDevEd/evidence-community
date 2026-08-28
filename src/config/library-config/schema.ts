@@ -1,4 +1,5 @@
 import { isSourceConnectionKey } from "@opendeved/evidence-library-core";
+import postcss, { type Root } from "postcss";
 import { z } from "zod";
 
 import { zoteroConnectionConfigSchema } from "@/lib/source-ingestion/zotero/schema";
@@ -57,167 +58,77 @@ const fundingPartnerSchema = z
 	})
 	.strict();
 
-type CssScanState = {
-	depth: number;
-	escaped: boolean;
-	quote: "'" | '"' | null;
-};
-
-function newCssScanState(): CssScanState {
-	return { depth: 0, escaped: false, quote: null };
-}
-
 /**
- * Reads one character of CSS text and remembers whether the reader is inside
- * an escape, a quoted string or brackets. Answers `true` only for a character
- * that stands on its own, which is the only place a separator can be.
+ * Everything a library may say about its logo. Each of these changes how the
+ * logo looks and nothing else. The bar decides how big the logo is and where
+ * it sits, so no rule that moves or resizes anything belongs here.
  */
-function isPlainCssCharacter(state: CssScanState, character: string) {
-	if (state.escaped) {
-		state.escaped = false;
-		return false;
-	}
-	if (character === "\\") {
-		state.escaped = true;
-		return false;
-	}
-	if (state.quote) {
-		if (character === state.quote) state.quote = null;
-		return false;
-	}
-	if (character === "'" || character === '"') {
-		state.quote = character;
-		return false;
-	}
-	if (character === "(") {
-		state.depth += 1;
-		return false;
-	}
-	if (character === ")") {
-		state.depth -= 1;
-		return false;
-	}
-
-	return state.depth === 0;
-}
-
-/**
- * Splits a CSS declaration list on the semicolons that separate declarations.
- * Returns `null` when a quote or bracket is left open, which means the text is
- * not a declaration list at all.
- */
-function splitCssDeclarations(value: string) {
-	const state = newCssScanState();
-	const declarations: string[] = [];
-	let start = 0;
-
-	for (let index = 0; index < value.length; index += 1) {
-		const character = value[index];
-		if (isPlainCssCharacter(state, character) && character === ";") {
-			declarations.push(value.slice(start, index));
-			start = index + 1;
-		}
-		if (state.depth < 0) return null;
-	}
-
-	if (state.quote || state.depth !== 0) return null;
-	declarations.push(value.slice(start));
-
-	return declarations;
-}
-
-const CSS_PROPERTY_PATTERN = /^(?:--[A-Za-z0-9_-]+|-?[A-Za-z][A-Za-z0-9-]*)$/;
-
-/**
- * The property name of one declaration, or `null` when the text is not a
- * declaration.
- */
-function cssDeclarationProperty(declaration: string) {
-	const trimmed = declaration.trim();
-	const state = newCssScanState();
-	let colon = -1;
-
-	for (let index = 0; index < trimmed.length; index += 1) {
-		const character = trimmed[index];
-		if (isPlainCssCharacter(state, character) && character === ":") {
-			colon = index;
-			break;
-		}
-	}
-
-	if (colon <= 0) return null;
-	const property = trimmed.slice(0, colon).trim();
-	if (!trimmed.slice(colon + 1).trim()) return null;
-
-	return CSS_PROPERTY_PATTERN.test(property) ? property : null;
-}
-
-function isCssDeclarationList(value: string) {
-	if (!value) return true;
-
-	const declarations = splitCssDeclarations(value);
-	if (!declarations) return false;
-
-	return declarations.every(
-		(declaration) =>
-			!declaration.trim() || cssDeclarationProperty(declaration) !== null,
-	);
-}
-
-/**
- * CSS that decides how much room the logo takes, or where it sits. The bar
- * owns both, so a library may not set them: a stray `height` used to push a
- * logo straight out of the header.
- */
-const LOGO_LAYOUT_PROPERTIES = new Set([
-	"all",
-	"aspect-ratio",
-	"block-size",
-	"bottom",
-	"box-sizing",
-	"contain",
-	"display",
-	"float",
-	"height",
-	"inline-size",
-	"left",
-	"max-block-size",
-	"max-height",
-	"max-inline-size",
-	"max-width",
-	"min-block-size",
-	"min-height",
-	"min-inline-size",
-	"min-width",
-	"position",
-	"right",
-	"rotate",
-	"scale",
-	"top",
-	"transform",
-	"transform-box",
-	"transform-origin",
-	"translate",
-	"width",
-	"zoom",
+const ALLOWED_LOGO_STYLE_PROPERTIES = new Set([
+	"background-color",
+	"border",
+	"border-bottom",
+	"border-bottom-color",
+	"border-bottom-left-radius",
+	"border-bottom-right-radius",
+	"border-bottom-style",
+	"border-bottom-width",
+	"border-color",
+	"border-left",
+	"border-left-color",
+	"border-left-style",
+	"border-left-width",
+	"border-radius",
+	"border-right",
+	"border-right-color",
+	"border-right-style",
+	"border-right-width",
+	"border-style",
+	"border-top",
+	"border-top-color",
+	"border-top-left-radius",
+	"border-top-right-radius",
+	"border-top-style",
+	"border-top-width",
+	"border-width",
+	"box-shadow",
+	"color",
+	"filter",
 ]);
 
-const LOGO_LAYOUT_PROPERTY_PREFIXES = ["inset", "margin", "padding"];
+const ALLOWED_LOGO_STYLE_LIST = Array.from(ALLOWED_LOGO_STYLE_PROPERTIES)
+	.sort()
+	.join(", ");
 
-function isLogoLayoutProperty(property: string) {
-	return (
-		LOGO_LAYOUT_PROPERTIES.has(property) ||
-		LOGO_LAYOUT_PROPERTY_PREFIXES.some(
-			(prefix) => property === prefix || property.startsWith(`${prefix}-`),
-		)
-	);
-}
+/**
+ * Reads the logo CSS the way a browser does and answers with the first thing
+ * wrong with it, or `null` when every line is allowed.
+ *
+ * A written-out list of allowed names is the only safe way to do this. A list
+ * of banned names always leaves a way through, such as `flex-basis`, a custom
+ * property, or the same rule behind a browser prefix.
+ */
+function findLogoStyleProblem(value: string) {
+	if (!value.trim()) return null;
 
-/** The first size or position property in the list, or `null` when there is none. */
-function findLogoLayoutProperty(value: string) {
-	for (const declaration of splitCssDeclarations(value) ?? []) {
-		const property = cssDeclarationProperty(declaration)?.toLowerCase();
-		if (property && isLogoLayoutProperty(property)) return property;
+	let root: Root;
+	try {
+		root = postcss.parse(value);
+	} catch {
+		return `Logo styles must be a list of CSS rules, such as "border-radius: 8px;". Allowed rules: ${ALLOWED_LOGO_STYLE_LIST}.`;
+	}
+
+	for (const node of root.nodes) {
+		if (node.type !== "decl") {
+			return `Logo styles may only contain CSS rules, one per line. Allowed rules: ${ALLOWED_LOGO_STYLE_LIST}.`;
+		}
+
+		const property = node.prop.trim().toLowerCase();
+		if (
+			property.startsWith("--") ||
+			!ALLOWED_LOGO_STYLE_PROPERTIES.has(property)
+		) {
+			return `Logo styles cannot set "${node.prop.trim()}". A logo may only change how it looks. Allowed rules: ${ALLOWED_LOGO_STYLE_LIST}.`;
+		}
 	}
 
 	return null;
@@ -229,17 +140,11 @@ const logoStylesSchema = rawStringSchema
 		message:
 			"Logo styles must contain CSS declarations only, without braces or markup",
 	})
-	.refine(isCssDeclarationList, {
-		message: "Logo styles must be a valid CSS declaration list",
-	})
 	.superRefine((value, context) => {
-		const property = findLogoLayoutProperty(value);
-		if (!property) return;
+		const problem = findLogoStyleProblem(value);
+		if (!problem) return;
 
-		context.addIssue({
-			code: "custom",
-			message: `Logo styles cannot set size or position. Remove "${property}". Each bar decides how tall the logo is drawn.`,
-		});
+		context.addIssue({ code: "custom", message: problem });
 	});
 
 const identityAssetsSchema = z

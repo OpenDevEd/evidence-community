@@ -6,7 +6,6 @@ import { usePathname } from "next/navigation";
 import { FaGithub, FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
 import { RiBlueskyFill } from "react-icons/ri";
 import type { IconType } from "react-icons";
-import { twMerge } from "tailwind-merge";
 
 import { AnalyticsConsentDialogContent } from "@/components/features/analytics/AnalyticsConsentDialogContent";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
@@ -15,7 +14,6 @@ import {
 	FundingPartners,
 	LibraryLogo,
 } from "@/components/library/LibraryIdentity";
-import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import DialogModal from "@/components/nextui/DialogModal";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import {

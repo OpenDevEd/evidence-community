@@ -4,7 +4,7 @@ import { NextIntlClientProvider } from "next-intl";
 
 import {
 	FundingPartners,
-	LibraryLogoImages,
+	LibraryLogo,
 } from "@/components/library/LibraryIdentity";
 import { LibraryLogoStyles } from "@/components/library/LibraryLogoStyles";
 import {
@@ -41,7 +41,7 @@ function renderIdentity(
 			}}
 		>
 			<LibraryConfigProvider config={config}>
-				<LibraryLogoImages />
+				<LibraryLogo place="header" />
 				<FundingPartners />
 			</LibraryConfigProvider>
 		</NextIntlClientProvider>,
@@ -213,10 +213,15 @@ describe("runtime library identity", () => {
 		);
 	});
 
-	it("keeps logo CSS that only changes how the logo looks", () => {
+	it.each([
+		"border-radius: 9999px;\nborder: 3px solid #818cf8;\nfilter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.2));",
+		// Capital letters, loose spacing, a missing last semicolon and
+		// "!important" are all ordinary CSS and must still be accepted.
+		"  BORDER-RADIUS :  8px !important ;\n\tBox-Shadow: 0 1px 2px rgb(0 0 0 / 0.2)  ",
+		"background-color: #fff; color: #111; border-top-left-radius: 4px;",
+	])("keeps logo CSS that only changes how the logo looks: %s", (logoStyles) => {
 		const input = structuredClone(maximalLibraryConfig);
-		input.identity.assets.logoStyles =
-			"border-radius: 9999px;\nborder: 3px solid #818cf8;\nfilter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.2));";
+		input.identity.assets.logoStyles = logoStyles;
 
 		expect(libraryConfigSchema.safeParse(input).success).toBe(true);
 	});
@@ -227,14 +232,14 @@ describe("runtime library identity", () => {
 			assets: {
 				...maximalConfig.identity.assets,
 				logoStyles:
-					'background-image: url("https://assets.example.org/logo.png");',
+					'filter: url("https://assets.example.org/soften.svg#blur");',
 			},
 		};
 
 		expect(
 			renderToStaticMarkup(<LibraryLogoStyles identity={identity} />),
 		).toContain(
-			'background-image: url("https://assets.example.org/logo.png");',
+			'filter: url("https://assets.example.org/soften.svg#blur");',
 		);
 	});
 
@@ -243,8 +248,8 @@ describe("runtime library identity", () => {
 		"</style><script>alert(1)</script>",
 		"not a CSS declaration",
 		"x".repeat(10_001),
-		// The bar owns the logo's size and place. These used to let a
-		// library push its logo straight out of the header.
+		// Size and place belong to the bar. These used to let a library push
+		// its logo straight out of the header.
 		"height: 150px;",
 		"width: 20rem;",
 		"max-height: 200px;",
@@ -255,6 +260,22 @@ describe("runtime library identity", () => {
 		"position: absolute; top: -20px;",
 		"display: none;",
 		"aspect-ratio: 1 / 4;",
+		// Anything outside the written-out list is refused, however it is
+		// spelled: layout rules with other names, a browser prefix, a custom
+		// property, an at-rule, or a comment.
+		"flex: 1 1 40rem;",
+		"flex-basis: 30rem;",
+		"align-self: stretch;",
+		"offset: path('M 0 0 L 200 0') 100%;",
+		"zoom: 4;",
+		"-webkit-transform: scale(3);",
+		"-moz-box-sizing: content-box;",
+		"--logo-height: 200px;",
+		"@media (min-width: 1px) { color: red; }",
+		"@import url('https://example.org/theme.css');",
+		"/* just a comment */",
+		"background-image: url('https://assets.example.org/logo.png');",
+		"content: 'x';",
 	])("rejects unconfined logo CSS: %s", (logoStyles) => {
 		const input = structuredClone(maximalLibraryConfig);
 		input.identity.assets.logoStyles = logoStyles;
