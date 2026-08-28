@@ -390,9 +390,12 @@ async function requireHttpRedirect(
 		response.status >= 300 && response.status < 400,
 		`${description} must redirect, but answered HTTP ${response.status}`,
 	);
+	// A same-site redirect may name only the path, so read it the way a
+	// browser would before comparing it.
 	const location = response.headers.get("location") ?? "";
+	const destination = location ? new URL(location, url).toString() : "";
 	assert.ok(
-		location.startsWith(expectedLocationPrefix),
+		destination.startsWith(expectedLocationPrefix),
 		`${description} must send the browser to ${expectedLocationPrefix}, but sent it to ${location || "nowhere"}`,
 	);
 	return response;
