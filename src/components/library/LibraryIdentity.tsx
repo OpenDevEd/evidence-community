@@ -75,8 +75,12 @@ export function LibraryLogoImages({
 /**
  * The rules every logo image carries. The box around it owns the height. The
  * image fills that height, keeps its shape, and is never cut off.
+ *
+ * No display rule belongs here. The light and dark copies of a logo switch
+ * each other off with `hidden`, and a display rule added later would win and
+ * show both at once.
  */
-export const BRAND_LOGO_IMAGE_CLASS = "block h-full w-auto object-contain";
+export const BRAND_LOGO_IMAGE_CLASS = "h-full w-auto object-contain";
 
 /**
  * A slot of a fixed height for a logo. Give it the height its bar has room

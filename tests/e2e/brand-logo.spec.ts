@@ -57,7 +57,12 @@ async function expectLogoFits(
 	bar: Locator,
 	capRem: number,
 ) {
-	const image = box.locator("img[data-library-logo]:visible").first();
+	const visibleImages = box.locator("img[data-library-logo]:visible");
+	// A library ships a light and a dark logo. Exactly one of them is on
+	// screen; showing both puts two logos side by side in the bar.
+	await expect(visibleImages).toHaveCount(1);
+
+	const image = visibleImages.first();
 	await expect
 		.poll(() =>
 			image.evaluate((element: HTMLImageElement) =>
