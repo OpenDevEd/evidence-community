@@ -56,16 +56,24 @@ export async function createAdminBrowserSession(
 	return response;
 }
 
-export async function openAdmin(page: Page) {
-	const response = await createAdminBrowserSession(page, undefined, "/admin");
-	const destination = new URL(response.headers().location);
-	if (destination.pathname !== "/admin" || destination.search !== "") {
+export async function openAdmin(page: Page, returnPath = "/admin") {
+	const response = await createAdminBrowserSession(
+		page,
+		undefined,
+		returnPath,
+	);
+	const destination = response.headers().location;
+	const expectedDestination = new URL(
+		returnPath,
+		process.env.PLAYWRIGHT_BASE_URL ?? page.url(),
+	).toString();
+	if (destination !== expectedDestination) {
 		throw new Error(
-			`Admin login sent the browser to ${destination.href} instead of the admin page`,
+			`Admin login sent the browser to ${destination} instead of ${expectedDestination}`,
 		);
 	}
 
-	await page.goto(destination.pathname);
+	await page.goto(destination);
 	await page
 		.getByRole("button", { name: "New item" })
 		.waitFor({ state: "visible" });

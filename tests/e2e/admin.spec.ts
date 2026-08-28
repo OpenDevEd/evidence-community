@@ -623,10 +623,13 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!;
 	await mockPublishedBook(page);
 	await page.context().clearCookies();
-	await page.goto("/admin");
+	await page.goto("/admin?scope=drafts");
 
 	expect(page.url().startsWith(`${loginPageUrl}?`)).toBe(true);
-	expect(new URL(page.url()).searchParams.get("return")).toBe("/admin");
+	// OpenScholar repeats the return path the library sent, and the browser
+	// carries that value back instead of inventing a destination.
+	const returnPath = await page.locator("#admin-return").innerText();
+	expect(returnPath).toBe("/admin?scope=drafts");
 
 	const code = await issueAdminLoginCode();
 	const callback = new URL(
@@ -634,10 +637,13 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 		process.env.PLAYWRIGHT_BASE_URL!,
 	);
 	callback.searchParams.set("code", code);
-	callback.searchParams.set("return", "/admin");
+	callback.searchParams.set("return", returnPath);
 	await page.evaluate((url) => {
 		window.location.href = url;
 	}, callback.toString());
+	await page.waitForURL(
+		new URL("/admin?scope=drafts", process.env.PLAYWRIGHT_BASE_URL!).toString(),
+	);
 	await expect(
 		page.getByRole("textbox", { name: "Search records" }),
 	).toBeVisible();
@@ -662,18 +668,33 @@ test("redeems a one-time code, keeps the session, and rejects replay", async ({
 	expect(Math.abs(logoutBox!.y - newItemBox!.y)).toBeLessThanOrEqual(1);
 
 	await logout.click();
-	await page.waitForURL((url) => url.href.startsWith(`${loginPageUrl}?`));
-	expect(new URL(page.url()).searchParams.get("return")).toBe("/admin");
-	await expect(
-		page.getByRole("heading", { name: "OpenScholar acceptance" }),
-	).toBeVisible();
+	await page.waitForURL(`${loginPageUrl}?return=%2Fadmin`);
+	await expect(page.locator("#admin-return")).toHaveText("/admin");
 
-	const replay = await createAdminBrowserSession(page, code);
-	const replayUrl = new URL(replay.headers().location);
+	const replay = await createAdminBrowserSession(page, code, returnPath);
 	expect(replay.headers()["set-cookie"]).toBeUndefined();
-	expect(`${replayUrl.origin}${replayUrl.pathname}`).toBe(loginPageUrl);
-	expect(replayUrl.searchParams.get("error")).toBe("invalid_code");
-	expect(replayUrl.searchParams.get("return")).toBe("/admin");
+	expect(replay.headers().location).toBe(
+		`${loginPageUrl}?error=invalid_code&return=%2Fadmin%3Fscope%3Ddrafts`,
+	);
+	await page.goto(replay.headers().location);
+	await expect(page.locator("#admin-error")).toHaveText("invalid_code");
+	await expect(page.locator("#admin-return")).toHaveText(
+		"/admin?scope=drafts",
+	);
+});
+
+test("refuses anything but a page request on the admin page", async ({
+	page,
+}) => {
+	await page.context().clearCookies();
+
+	const response = await page.request.post(
+		new URL("/admin", process.env.PLAYWRIGHT_BASE_URL!).toString(),
+		{ data: "not a page request", maxRedirects: 0 },
+	);
+
+	expect(response.status()).toBe(405);
+	expect(response.headers().allow).toBe("GET, HEAD");
 });
 
 test("rejects a one-time code for another library", async ({ page }) => {
@@ -684,13 +705,11 @@ test("rejects a one-time code for another library", async ({ page }) => {
 
 	const code = await issueAdminLoginCode(wrongLibraryId);
 	const response = await createAdminBrowserSession(page, code);
-	const location = new URL(response.headers().location);
 
 	expect(response.headers()["set-cookie"]).toBeUndefined();
-	expect(`${location.origin}${location.pathname}`).toBe(
-		process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!,
+	expect(response.headers().location).toBe(
+		`${process.env.EVIDENCE_LIBRARY_OPENSCHOLAR_LOGIN_PAGE_URL!}?error=invalid_code&return=%2Fadmin`,
 	);
-	expect(location.searchParams.get("error")).toBe("invalid_code");
 });
 
 test("edits an imported record and shows its writeback lifecycle", async ({
