@@ -73,7 +73,9 @@ export async function openAdmin(page: Page, returnPath = "/admin") {
 		);
 	}
 
-	await page.goto(destination);
+	// The workbench is proven by its controls, not by every asset finishing,
+	// so do not wait for the load event before looking for them.
+	await page.goto(destination, { waitUntil: "domcontentloaded" });
 	await page
 		.getByRole("button", { name: "New item" })
 		.waitFor({ state: "visible" });
