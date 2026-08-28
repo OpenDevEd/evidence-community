@@ -33,8 +33,6 @@ type LogoBox = {
 	boxHeight: number;
 	cap: number;
 	imageHeight: number;
-	/** Space kept inside the image, which the picture cannot use. */
-	padding: number;
 	place: string;
 };
 
@@ -43,35 +41,30 @@ const desktopBoxes = {
 		boxHeight: 32,
 		cap: 144,
 		imageHeight: 32,
-		padding: 0,
 		place: "cookie",
 	},
 	footer: {
 		boxHeight: 48,
 		cap: 224,
 		imageHeight: 48,
-		padding: 0,
 		place: "footer",
 	},
 	funder: {
 		boxHeight: 48,
 		cap: 160,
 		imageHeight: 48,
-		padding: 8,
 		place: "funder",
 	},
 	header: {
 		boxHeight: 40,
 		cap: 192,
 		imageHeight: 40,
-		padding: 0,
 		place: "header",
 	},
 	institution: {
 		boxHeight: 32,
 		cap: 32,
 		imageHeight: 32,
-		padding: 8,
 		place: "institution",
 	},
 } satisfies Record<string, LogoBox>;
@@ -134,9 +127,35 @@ async function expectLogoFits(
 
 	const boxRectangle = await rectangleOf(boxLocator, `${label} box`);
 	const imageRectangle = await rectangleOf(image, `${label} image`);
+	// Padding, and any border a library added itself, take room the picture
+	// cannot use. Read it from the page instead of assuming it is zero.
+	const inset = await image.evaluate((element) => {
+		const style = getComputedStyle(element);
+		const total = (...names: string[]) =>
+			names.reduce(
+				(sum, name) =>
+					sum + Number.parseFloat(style.getPropertyValue(name)),
+				0,
+			);
+
+		return {
+			horizontal: total(
+				"border-left-width",
+				"border-right-width",
+				"padding-left",
+				"padding-right",
+			),
+			vertical: total(
+				"border-top-width",
+				"border-bottom-width",
+				"padding-top",
+				"padding-bottom",
+			),
+		};
+	});
 	const expectedWidth = Math.min(
 		box.cap,
-		(box.imageHeight - box.padding) * shape.ratio + box.padding,
+		(box.imageHeight - inset.vertical) * shape.ratio + inset.horizontal,
 	);
 
 	console.log(
