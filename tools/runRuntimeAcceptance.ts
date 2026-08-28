@@ -379,6 +379,13 @@ async function requireMethodNotAllowed(url: string, description: string) {
 	);
 }
 
+// A same-site redirect may name only the path, so read the destination the
+// way a browser would before comparing it.
+function redirectDestination(response: Response, requestUrl: string) {
+	const location = response.headers.get("location");
+	return location ? new URL(location, requestUrl).toString() : "nowhere";
+}
+
 async function requireHttpRedirect(
 	url: string,
 	expectedLocationPrefix: string,
@@ -390,13 +397,10 @@ async function requireHttpRedirect(
 		response.status >= 300 && response.status < 400,
 		`${description} must redirect, but answered HTTP ${response.status}`,
 	);
-	// A same-site redirect may name only the path, so read it the way a
-	// browser would before comparing it.
-	const location = response.headers.get("location") ?? "";
-	const destination = location ? new URL(location, url).toString() : "";
+	const destination = redirectDestination(response, url);
 	assert.ok(
 		destination.startsWith(expectedLocationPrefix),
-		`${description} must send the browser to ${expectedLocationPrefix}, but sent it to ${location || "nowhere"}`,
+		`${description} must send the browser to ${expectedLocationPrefix}, but sent it to ${destination}`,
 	);
 	return response;
 }
