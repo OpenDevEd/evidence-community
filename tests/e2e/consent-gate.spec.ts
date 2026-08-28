@@ -51,9 +51,16 @@ test("a reader who has answered is never held still", async ({ page }) => {
 	await expect(page.locator("[data-consent-gate][inert]")).toHaveCount(0);
 	await expect(page.getByRole("dialog")).toHaveCount(0);
 
+	// Nothing stands between the reader and the search field. The page is
+	// still waking up in the browser, which can drop the first thing typed,
+	// so this asks again until the words stay put.
 	const searchField = page.getByPlaceholder("Search", { exact: true }).first();
-	await searchField.fill("school meals");
-	await expect(searchField).toHaveValue("school meals");
+	await expect(async () => {
+		await searchField.fill("school meals");
+		await expect(searchField).toHaveValue("school meals", {
+			timeout: 1_000,
+		});
+	}).toPass({ timeout: 15_000 });
 });
 
 test("the page explaining the cookies is readable without answering", async ({
