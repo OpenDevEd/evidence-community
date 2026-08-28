@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import {
+	buildAdminLoginPageUrl,
 	getCanonicalLibraryRedirect,
 	getExternalRequestOrigin,
 	getUnlocalizedPathname,
+	getValidatedAdminReturnPath,
 	isLoginProfilePath,
 } from "@/lib/runtime-routing";
 
@@ -106,5 +108,58 @@ describe("runtime route enforcement", () => {
 				}),
 			),
 		).toBe("https://library.example.org");
+	});
+});
+
+describe("admin return path", () => {
+	it.each([
+		["/admin", "/admin"],
+		["/admin/items?scope=drafts", "/admin/items?scope=drafts"],
+		["/en-GB/admin/items/ABCD1234", "/en-GB/admin/items/ABCD1234"],
+		["/admin?tab=records#top", "/admin?tab=records"],
+	])("keeps the admin path %s", (value, expected) => {
+		expect(getValidatedAdminReturnPath(value)).toBe(expected);
+	});
+
+	it.each([
+		"https://evil.example.org/admin",
+		"//evil.example.org/admin",
+		"/\\evil.example.org/admin",
+		"http://library.example.org/admin",
+		"/lib",
+		"/adminish",
+		"/en-GB/lib",
+		"admin",
+		"",
+	])("falls back to /admin for %s", (value) => {
+		expect(getValidatedAdminReturnPath(value)).toBe("/admin");
+	});
+
+	it("falls back to /admin when nothing was sent", () => {
+		expect(getValidatedAdminReturnPath(null)).toBe("/admin");
+		expect(getValidatedAdminReturnPath(undefined)).toBe("/admin");
+	});
+
+	it("sends the browser back to OpenScholar with the return path", () => {
+		expect(
+			buildAdminLoginPageUrl(
+				"https://openscholar.example.org/evidence-libraries/amber",
+				"/admin/items?scope=drafts",
+			),
+		).toBe(
+			"https://openscholar.example.org/evidence-libraries/amber?return=%2Fadmin%2Fitems%3Fscope%3Ddrafts",
+		);
+	});
+
+	it("marks a failed code exchange for OpenScholar", () => {
+		expect(
+			buildAdminLoginPageUrl(
+				"https://openscholar.example.org/evidence-libraries/amber",
+				"/admin",
+				"invalid_code",
+			),
+		).toBe(
+			"https://openscholar.example.org/evidence-libraries/amber?error=invalid_code&return=%2Fadmin",
+		);
 	});
 });
