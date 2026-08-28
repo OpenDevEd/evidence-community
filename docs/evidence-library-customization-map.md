@@ -99,6 +99,14 @@ shared image is built.
 There are no customer assets under `public/logos` or `public/assets`, and there
 is no customer-dependent `/images` rewrite.
 
+The bar decides how tall a logo is drawn. The header gives it 40px (36px on a
+phone), the footer 48px, and the cookie dialog 32px. The image fills that
+height, keeps its shape, and stops at 12rem, 14rem and 9rem wide. A square,
+wide or tall logo file therefore never opens the bar to its own pixel size.
+Funder logos in the footer and institution logos on a record page work the
+same way. `identity.assets.logoStyles` still overrides all of this, so a
+library that sets its own width or height owns the result.
+
 ## Database boundary
 
 The `status` table contains content/import status only:

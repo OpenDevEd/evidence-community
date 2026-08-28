@@ -27,6 +27,9 @@ vi.mock("@/components/features/analytics/AnalyticsConsentProvider", () => ({
 	}),
 }));
 vi.mock("@/components/library/LibraryIdentity", () => ({
+	BRAND_LOGO_IMAGE_CLASS: "",
+	BrandLogo: () => null,
+	BrandLogoBox: () => null,
 	FundingPartners: () => null,
 	LibraryLogoImages: () => null,
 }));

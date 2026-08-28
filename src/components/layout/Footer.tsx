@@ -6,12 +6,15 @@ import { usePathname } from "next/navigation";
 import { FaGithub, FaLinkedin, FaTwitter, FaYoutube } from "react-icons/fa";
 import { RiBlueskyFill } from "react-icons/ri";
 import type { IconType } from "react-icons";
+import { twMerge } from "tailwind-merge";
 
 import { AnalyticsConsentDialogContent } from "@/components/features/analytics/AnalyticsConsentDialogContent";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import {
+	BRAND_LOGO_IMAGE_CLASS,
+	BrandLogo,
+	BrandLogoBox,
 	FundingPartners,
-	LibraryLogoImages,
 } from "@/components/library/LibraryIdentity";
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import DialogModal from "@/components/nextui/DialogModal";
@@ -83,12 +86,9 @@ function Logo() {
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className="flex h-14 w-58 items-center justify-center rounded-lg"
+			className="flex h-12 w-logo-footer items-center justify-center rounded-lg"
 		>
-			<LibraryLogoImages
-				className="h-auto max-h-full w-auto max-w-full"
-				onLoad={() => setIsLoaded(true)}
-			/>
+			<BrandLogo place="footer" onLoad={() => setIsLoaded(true)} />
 		</Skeleton>
 	);
 }
@@ -265,13 +265,21 @@ export default function Footer() {
 						const content = (
 							<span className="flex items-center gap-3 text-black/70 dark:text-white/70">
 								{funder.logoUrl && (
-									<RuntimeAsset
-										reference={funder.logoUrl}
-										alt={funder.name}
-										className="h-12 w-auto max-w-40 rounded-md bg-white object-contain p-1"
-										width={160}
-										height={48}
-									/>
+									<BrandLogoBox
+										className="h-12 max-w-40 rounded-md bg-white p-1"
+										place="funder"
+									>
+										<RuntimeAsset
+											reference={funder.logoUrl}
+											alt={funder.name}
+											className={twMerge(
+												BRAND_LOGO_IMAGE_CLASS,
+												"max-w-full",
+											)}
+											width={160}
+											height={48}
+										/>
+									</BrandLogoBox>
 								)}
 								{!funder.logoUrl && (
 									<span className="font-medium">

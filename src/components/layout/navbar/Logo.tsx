@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 
-import { LibraryLogoImages } from "@/components/library/LibraryIdentity";
+import { BrandLogo } from "@/components/library/LibraryIdentity";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Link } from "@/i18n/routing";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -27,8 +27,9 @@ export function Logo({ interactive = true }: LogoProps) {
 					"cursor-pointer hover:brightness-90 hover:scale-95 active:scale-105"
 			)}
 		>
-			<LibraryLogoImages
-				className="pointer-events-none h-auto max-h-full w-auto max-w-full"
+			<BrandLogo
+				className="pointer-events-none"
+				place="header"
 				onLoad={() => setIsLoaded(true)}
 			/>
 		</div>
@@ -37,11 +38,9 @@ export function Logo({ interactive = true }: LogoProps) {
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className="w-[10.6875rem] h-[2.5rem] rounded-lg flex justify-center items-center"
+			className="w-[10.6875rem] h-9 xl:h-10 rounded-lg flex justify-center items-center"
 		>
 			{interactive ? <Link href={homeLink}>{logoContent}</Link> : logoContent}
 		</Skeleton>
 	);
 }
-
-export default Logo;

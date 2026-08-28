@@ -7,6 +7,7 @@ import {
 	useCallback,
 	useEffect,
 	useRef,
+	type ReactNode,
 } from "react";
 import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
@@ -68,6 +69,70 @@ export function LibraryLogoImages({
 				src={identity.assets.logoDark}
 			/>
 		</>
+	);
+}
+
+/**
+ * The rules every logo image carries. The box around it owns the height. The
+ * image fills that height, keeps its shape, and is never cut off.
+ */
+export const BRAND_LOGO_IMAGE_CLASS = "block h-full w-auto object-contain";
+
+/**
+ * A slot of a fixed height for a logo. Give it the height its bar has room
+ * for. A square, wide or tall image file then always draws at that height
+ * instead of opening the bar to its own pixel size.
+ */
+export function BrandLogoBox({
+	children,
+	className,
+	place,
+}: {
+	children: ReactNode;
+	className?: string;
+	place: string;
+}) {
+	return (
+		<span
+			className={twMerge("flex shrink-0 items-center", className)}
+			data-brand-logo-box={place}
+		>
+			{children}
+		</span>
+	);
+}
+
+/**
+ * How tall the library's own logo is drawn in each place, and how wide it may
+ * grow before the width is capped.
+ */
+const BRAND_LOGO_SIZES = {
+	cookie: { box: "h-8", image: "max-w-logo-cookie" },
+	footer: { box: "h-12", image: "max-w-logo-footer" },
+	header: { box: "h-9 xl:h-10", image: "max-w-logo-header" },
+} as const;
+
+export type BrandLogoPlace = keyof typeof BRAND_LOGO_SIZES;
+
+/** The library's own logo, drawn inside the box its bar allows. */
+export function BrandLogo({
+	className,
+	onLoad,
+	place,
+}: {
+	className?: string;
+	onLoad?: () => void;
+	place: BrandLogoPlace;
+}) {
+	const size = BRAND_LOGO_SIZES[place];
+
+	return (
+		<BrandLogoBox className={twMerge(size.box, className)} place={place}>
+			<LibraryLogoImages
+				className={twMerge(BRAND_LOGO_IMAGE_CLASS, size.image)}
+				onLoad={onLoad}
+			/>
+		</BrandLogoBox>
 	);
 }
 

@@ -73,6 +73,10 @@ import {
 	type DoiDisplayLink,
 } from "@opendeved/doi-sync-core/display";
 import { buildPublicationDisplay } from "@/lib/publication/publication-display-adapter";
+import {
+	BRAND_LOGO_IMAGE_CLASS,
+	BrandLogoBox,
+} from "@/components/library/LibraryIdentity";
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import Image from "next/image";
@@ -430,19 +434,25 @@ function ItemInstitution({ institution }: { institution?: string }) {
 			<ItemRow
 				key={institution}
 				icon={
-					<div className="w-8 h-8 rounded-lg flex items-center justify-center text-lg text-accent bg-accent/10 brightness-150 shrink-0">
+					<BrandLogoBox
+						className="size-8 justify-center rounded-lg bg-accent/10 text-lg text-accent brightness-150"
+						place="institution"
+					>
 						{configuredInstitution?.logoUrl ? (
 							<RuntimeAsset
 								reference={configuredInstitution.logoUrl}
 								alt=""
-								className="size-full rounded-lg bg-white object-contain p-1"
+								className={twMerge(
+									BRAND_LOGO_IMAGE_CLASS,
+									"max-w-full rounded-lg bg-white p-1",
+								)}
 								width={32}
 								height={32}
 							/>
 						) : (
 							<HiAcademicCap />
 						)}
-					</div>
+					</BrandLogoBox>
 				}
 				title={institution}
 			/>

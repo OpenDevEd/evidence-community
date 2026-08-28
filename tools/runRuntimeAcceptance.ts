@@ -1383,6 +1383,7 @@ function runBrowserSuite(profile: Profile) {
 			"playwright",
 			"test",
 			"tests/e2e/smoke.spec.ts",
+			"tests/e2e/brand-logo.spec.ts",
 			"--project",
 			"chromium",
 		],
