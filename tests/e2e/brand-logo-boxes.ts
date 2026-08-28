@@ -131,13 +131,30 @@ export async function expectLogoFits(
 		)
 		.toBeGreaterThan(0);
 	// A dialog scales as it opens, so anything read from the screen keeps
-	// changing while it moves. Let every animation on the page finish first.
+	// changing while it moves. Let the page settle before reading anything.
 	await waitForAnimations(page);
+	// Some of that movement is driven by JavaScript frame by frame, which the
+	// browser's own animation list does not know about. Wait until the box is
+	// drawn at the size its own layout says it is.
+	await expect
+		.poll(
+			() =>
+				boxLocator.evaluate((element: HTMLElement) =>
+					element.offsetHeight === 0
+						? 0
+						: element.getBoundingClientRect().height /
+							element.offsetHeight,
+				),
+			{ timeout: 15_000 },
+		)
+		.toBeCloseTo(1, 2);
 
 	// The layout box is the size CSS gave the logo. The drawn box is what a
 	// visitor sees. Both are checked: the layout box catches a wrong rule, the
-	// drawn box catches a stretch or a shrink applied somewhere above it.
-	const layout = await boxLocator.evaluate((element: HTMLElement) => {
+	// drawn box catches a stretch or a shrink applied somewhere above it. Both
+	// are read in one go, because a dialog slides as it opens and two separate
+	// readings would come from two different moments.
+	const measured = await boxLocator.evaluate((element: HTMLElement) => {
 		const picture = Array.from(element.querySelectorAll("img")).find(
 			(candidate) => getComputedStyle(candidate).display !== "none",
 		);
@@ -150,9 +167,19 @@ export async function expectLogoFits(
 					sum + Number.parseFloat(style.getPropertyValue(name)),
 				0,
 			);
+		const drawnRectangle = (target: Element) => {
+			const rectangle = target.getBoundingClientRect();
+			return {
+				height: rectangle.height,
+				width: rectangle.width,
+				x: rectangle.x,
+				y: rectangle.y,
+			};
+		};
 
 		return {
-			box: { height: element.offsetHeight, width: element.offsetWidth },
+			drawnBox: drawnRectangle(element),
+			drawnImage: drawnRectangle(picture),
 			// Padding, and any border a library added itself, take room the
 			// picture cannot use.
 			inset: {
@@ -169,19 +196,25 @@ export async function expectLogoFits(
 					"padding-bottom",
 				),
 			},
-			picture: {
+			layoutBox: {
+				height: element.offsetHeight,
+				width: element.offsetWidth,
+			},
+			layoutImage: {
 				height: picture.offsetHeight,
 				width: picture.offsetWidth,
 			},
 		};
 	});
-	expect(layout, `${label} must be on the page`).not.toBeNull();
+	expect(measured, `${label} must be on the page`).not.toBeNull();
 
 	const {
-		box: boxRectangle,
+		drawnBox,
+		drawnImage,
 		inset,
-		picture: imageRectangle,
-	} = layout!;
+		layoutBox: boxRectangle,
+		layoutImage: imageRectangle,
+	} = measured!;
 	const expectedImageWidth = Math.min(
 		box.cap,
 		(box.height - inset.vertical) * shape.ratio + inset.horizontal,
@@ -196,10 +229,6 @@ export async function expectLogoFits(
 	expect(boxRectangle.width).toBeCloseTo(expectedBoxWidth, 0);
 	expect(imageRectangle.height).toBeCloseTo(box.height, 0);
 	expect(imageRectangle.width).toBeCloseTo(expectedImageWidth, 0);
-
-	// What the visitor actually sees, at the size it is drawn on the screen.
-	const drawnBox = await rectangleOf(boxLocator, `${label} box`);
-	const drawnImage = await rectangleOf(image, `${label} image`);
 
 	expect(drawnBox.height).toBeCloseTo(box.height, 0);
 	expect(drawnBox.width).toBeCloseTo(expectedBoxWidth, 0);
