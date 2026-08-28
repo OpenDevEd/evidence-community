@@ -17,7 +17,16 @@ export function AnalyticsConsentDialogContent({
 	const tFooter = useTranslations("footer");
 
 	return (
-		<ModalContent className="px-4 pb-4 pt-5 sm:px-6 sm:pb-5">
+		/*
+		 * The dialog is named after its own title. NextUI only sets
+		 * `aria-labelledby` when one of its own `ModalHeader`s is used, and
+		 * that header carries its own text size, so the name is given here
+		 * instead and matches the heading below word for word.
+		 */
+		<ModalContent
+			aria-label={t("cookieConsentTitle")}
+			className="px-4 pb-4 pt-5 sm:px-6 sm:pb-5"
+		>
 			<ModalBody className="gap-0 p-0">
 				<header className="flex flex-col items-center text-center">
 					<LibraryLogoImages className="h-14 w-auto max-w-56 object-contain" />

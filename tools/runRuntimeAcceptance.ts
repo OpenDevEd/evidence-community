@@ -1296,6 +1296,7 @@ function publicExpectations(profile: Profile) {
 			: "",
 		PLAYWRIGHT_EXPECTED_CONSENT_ACCEPT: messages.ui.cookieAccept,
 		PLAYWRIGHT_EXPECTED_CONSENT_DECLINE: messages.ui.cookieDecline,
+		PLAYWRIGHT_EXPECTED_CONSENT_TITLE: messages.ui.cookieConsentTitle,
 		PLAYWRIGHT_EXPECTED_SEARCH_SCOPE_COUNT: String(scopes.length),
 		PLAYWRIGHT_EXPECTED_DEFAULT_SEARCH_SCOPE_LABEL:
 			messages.scopes[defaultScope.key] ?? defaultScope.name,

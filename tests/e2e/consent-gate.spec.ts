@@ -7,6 +7,11 @@ test.skip(
 	"Runtime acceptance only.",
 );
 
+/** What the cookie question calls itself, in the library's own language. */
+const consentTitle =
+	process.env.PLAYWRIGHT_EXPECTED_CONSENT_TITLE ??
+	"Help Us Improve Your Experience";
+
 test("a reader who has not answered cannot use the page yet", async ({
 	page,
 }) => {
@@ -24,6 +29,9 @@ test("a reader who has not answered cannot use the page yet", async ({
 			() => (document.activeElement as HTMLElement | null)?.tagName,
 		),
 	).not.toBe("INPUT");
+
+	// A screen reader is told what the question is before answering it.
+	await expect(page.getByRole("dialog", { name: consentTitle })).toBeVisible();
 
 	// Answering releases the page.
 	await dismissConsent(page);
