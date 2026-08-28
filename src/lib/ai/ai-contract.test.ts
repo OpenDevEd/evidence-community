@@ -20,7 +20,6 @@ import {
 } from "./tool-schemas";
 import { asSchema, generateText, type UIMessage } from "ai";
 import { createOpenRouter } from "@openrouter/ai-sdk-provider";
-import { consumeAIRateLimit } from "./rate-limit";
 import {
 	hasVisiblePdfAttachment,
 	isVisiblePdfAttachment,
@@ -363,24 +362,6 @@ test("PDF visibility exactly matches the publication attachment list", () => {
 		}),
 		true,
 	);
-});
-
-test("the per-IP limiter allows ten requests per minute and rejects the eleventh", () => {
-	const ip = `test-${crypto.randomUUID()}`;
-	const now = 1_000_000;
-	for (let request = 1; request <= 10; request += 1) {
-		const result = consumeAIRateLimit(ip, now);
-		assert.equal(result.allowed, true);
-		assert.equal(result.remaining, 10 - request);
-	}
-
-	const rejected = consumeAIRateLimit(ip, now);
-	assert.equal(rejected.allowed, false);
-	assert.equal(rejected.retryAfter, 60);
-
-	const reset = consumeAIRateLimit(ip, now + 60_000);
-	assert.equal(reset.allowed, true);
-	assert.equal(reset.remaining, 9);
 });
 
 test("AI request schemas reject unknown models and oversized screening batches", () => {

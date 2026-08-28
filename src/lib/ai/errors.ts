@@ -13,7 +13,8 @@ export type AIErrorCode =
 	| "ITEM_NOT_FOUND"
 	| "MODEL_UNAVAILABLE"
 	| "PROVIDER_ERROR"
-	| "RATE_LIMITED";
+	| "RATE_LIMITED"
+	| "RATE_LIMIT_UNAVAILABLE";
 
 export class AIError extends Error {
 	constructor(

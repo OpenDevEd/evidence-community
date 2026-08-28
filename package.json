@@ -11,7 +11,8 @@
 		"lint": "eslint .",
 		"icons:generate": "npx tsx ./tools/generateIcons.ts",
 		"schema:generate": "npx tsx ./tools/generateSchema.ts",
-		"test:ai": "tsx --test src/lib/ai/ai-contract.test.ts",
+		"test:ai": "tsx --test src/lib/ai/ai-contract.test.ts src/lib/ai/rate-limit.test.ts",
+		"test:ai-rate-limit": "tsx --test src/lib/ai/rate-limit.test.ts",
 		"test:analytics": "NODE_OPTIONS='--conditions=react-server' tsx --test src/lib/analytics-consent.test.ts src/lib/analytics-event-schema.test.ts src/lib/analytics-shared.test.ts src/lib/analytics-boundary.test.ts src/lib/server-analytics.test.ts",
 		"test:citation-mode": "tsx --test src/lib/citationMode.test.mts src/lib/citationAnchor.test.tsx",
 		"test:zotero-markup": "tsx --test src/lib/zoteroMarkup.test.tsx"
@@ -67,6 +68,7 @@
 		"react-markdown": "^9.0.1",
 		"react-simple-maps": "^3.0.0",
 		"recharts": "^2.15.4",
+		"redis": "^6.2.1",
 		"rehype-parse": "^9.0.1",
 		"rehype-react": "^8.0.0",
 		"rehype-sanitize": "^6.0.0",

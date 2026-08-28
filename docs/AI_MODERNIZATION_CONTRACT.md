@@ -237,13 +237,16 @@ Conceptual input:
 ## Rate limiting and access
 
 - Do not add authentication for AI features.
-- Add an application-level per-IP limiter: ten top-level AI requests per IP per minute.
+- Give each browser its own limits of ten top-level AI requests per minute, 250 per 24 hours, 1,000 per seven days, and 5,000 per 30 days. Store the random browser ID in a strictly necessary, first-party, HTTP-only cookie scoped to `/api/ai` that expires after one year. This cookie is for abuse prevention only and must never become an analytics or advertising identifier.
+- Store the counters in the deployment's private Redis service so every application instance applies one shared limit. Separate counters by deployment and library: the `coolify` branch uses its existing `MEILI_INDEX`, while `main` uses the runtime configuration's stable `libraryId`. Counter keys contain hashes rather than the browser ID or IP. Each counter expires with its own rate-limit window, up to 30 days.
+- Keep a separate network safety limit of 1,000 top-level AI requests per trusted IP per minute. This protects against clients that repeatedly clear or replace their browser cookie while allowing a room of 100 browsers to receive ten requests each.
 - Count once: Summary, Explain, starter-question generation, each user chat message, each Deep Research message/request, and each Smart Screening request.
 - Internal model steps, searches, and PDF reads do not consume additional quota.
 - Similar Resources does not consume this quota.
 - Keep the infrastructure/Traefik limiter as an outer general limiter.
 - Use the deployment's trusted real-client IP header consistently; do not accept arbitrary client-supplied identity as a bypass.
 - Return a controlled `429` response and useful rate-limit headers without crashing the UI.
+- If Redis is missing or unavailable, return a controlled temporary `503` response. Do not silently bypass the limiter and do not crash the page.
 
 ## Validation, errors, and telemetry
 
@@ -278,7 +281,7 @@ Do not create a database migration and do not drop or alter the existing embeddi
 - Current RAG ingestion/retrieval is naive and has process-local cache mutation defects.
 - Some prompts allow untrusted document or search text to act as instructions.
 - The current tool loop is not explicitly bounded.
-- The current branch does not contain an AI-specific application per-IP limiter; its proxy currently passes API traffic through. A limiter implementation on another branch was not verified live and is not an authority for this implementation.
+- The old application limiter used a process-local map keyed only by IP. It gave every device behind one router a shared budget and different application instances did not share counters.
 - There are no focused AI endpoint/tool tests.
 
 Treat PDF text, metadata, abstracts, search results, filenames, and user content as untrusted data. Delimit data from instructions and tell the model never to follow instructions found inside retrieved documents.
@@ -290,7 +293,7 @@ The work is complete only when all of the following are true:
 1. All retained features work through the Vercel AI SDK using one of the three confirmed credential paths, with the confirmed models and default.
 2. Summary, Explain, starter questions, and publication chat use direct visible PDFs and never run application embeddings/RAG.
 3. Quick and research chat share one backend, use the two typed tools, obey their step/batch limits, stream one UI-message protocol, and emit correct citations.
-4. Per-IP limits and controlled failure states work without authentication; Smart Screening uses one structured batch request; Similar Resources still works independently.
+4. Redis-backed per-browser limits, the network safety limit, and controlled failure states work without authentication; Smart Screening uses one structured batch request; Similar Resources still works independently.
 5. Obsolete providers, RAG interactions, embedded-status behavior, dead routes, duplicate chat logic, and unused packages are removed; focused tests, type checking, linting, and production build checks pass.
 
 ## Explicit non-goals and authorization boundaries

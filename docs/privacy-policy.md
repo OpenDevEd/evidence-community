@@ -79,6 +79,12 @@ information such as IP address, time, route, status, and user-agent to deliver t
 service, prevent abuse, enforce rate limits, diagnose failures, and protect the
 website. Security logs are separate from product analytics.
 
+When an AI feature is used, the server also gives the browser a random
+rate-limit ID. It is kept separate from analytics and is used only to avoid
+making everyone on one shared network use the same allowance. Redis stores
+hashed rate-limit keys for up to 30 days; it does not store the browser ID,
+prompt, answer, search, or document.
+
 ## Information excluded from analytics
 
 We do not send the following to PostHog or Google Analytics:
@@ -170,6 +176,8 @@ The intended operational retention limits are:
 | PostHog session replay | Up to 30 days |
 | Google Analytics user and event data | 2 months |
 | Aggregate operational analytics | Up to 13 months |
+| AI rate-limit browser ID | Up to 1 year |
+| AI rate-limit counters | Up to 30 days |
 | Raw infrastructure/security logs | Normally up to 30 days, unless an incident or legal requirement requires longer |
 | Support correspondence | Up to 3 years after the last communication |
 | Account information | While the account is active and for the period needed to close, secure, or meet legal requirements afterward |
@@ -210,4 +218,4 @@ We may update this notice when processing changes. Material changes to analytics
 purposes or processors can increment the consent-policy version and require a
 new choice.
 
-**Last updated:** August 27, 2026
+**Last updated:** August 28, 2026

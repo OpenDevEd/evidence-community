@@ -8,9 +8,33 @@ import meilisearch from "./lib/meilisearch";
 import { getConfiguredSiteOrigin } from "./lib/site-url";
 import { normalizePathname } from "./lib/path";
 import {
+	AI_RATE_LIMIT_COOKIE_NAME,
+	AI_RATE_LIMIT_COOKIE_PATH,
+	AI_RATE_LIMIT_COOKIE_MAX_AGE_SECONDS,
+	AIRateLimitUnavailableError,
 	aiRateLimitHeaders,
 	consumeAIRateLimit,
+	resolveAIRateLimitClientIdentity,
 } from "./lib/ai/rate-limit";
+
+function withAIRateLimitClientCookie(
+	response: NextResponse,
+	request: NextRequest,
+	identity: ReturnType<typeof resolveAIRateLimitClientIdentity>,
+) {
+	if (!identity.shouldSetCookie) return response;
+
+	response.cookies.set({
+		name: AI_RATE_LIMIT_COOKIE_NAME,
+		value: identity.clientId,
+		httpOnly: true,
+		sameSite: "strict",
+		secure: request.nextUrl.protocol === "https:",
+		path: AI_RATE_LIMIT_COOKIE_PATH,
+		maxAge: AI_RATE_LIMIT_COOKIE_MAX_AGE_SECONDS,
+	});
+	return response;
+}
 
 function handleLegacyScope(
 	request: NextRequest,
@@ -374,12 +398,45 @@ export default async function proxy(request: NextRequest) {
 			(request.nextUrl.pathname === "/api/ai" ||
 				request.nextUrl.pathname.startsWith("/api/ai/"))
 		) {
-			const clientIp = request.headers.get("x-real-ip")?.trim() || "unknown";
-			const rateLimit = consumeAIRateLimit(clientIp);
+			const clientIp =
+				request.headers.get("x-real-ip")?.trim() || "unknown";
+			const clientIdentity = resolveAIRateLimitClientIdentity(
+				request.cookies.get(AI_RATE_LIMIT_COOKIE_NAME)?.value,
+			);
+			let rateLimit;
+			try {
+				rateLimit = await consumeAIRateLimit({
+					clientId: clientIdentity.clientId,
+					clientIp,
+				});
+			} catch (error) {
+				if (!(error instanceof AIRateLimitUnavailableError))
+					throw error;
+				return withAIRateLimitClientCookie(
+					NextResponse.json(
+						{
+							error: {
+								code: "RATE_LIMIT_UNAVAILABLE",
+								message:
+									"AI access is temporarily unavailable. Try again shortly.",
+							},
+						},
+						{
+							status: 503,
+							headers: {
+								"Cache-Control": "no-store",
+								"Retry-After": "5",
+							},
+						},
+					),
+					request,
+					clientIdentity,
+				);
+			}
 			const headers = aiRateLimitHeaders(rateLimit);
 
 			if (!rateLimit.allowed) {
-				return NextResponse.json(
+				const response = NextResponse.json(
 					{
 						error: {
 							code: "RATE_LIMITED",
@@ -388,13 +445,22 @@ export default async function proxy(request: NextRequest) {
 					},
 					{ status: 429, headers },
 				);
+				return withAIRateLimitClientCookie(
+					response,
+					request,
+					clientIdentity,
+				);
 			}
 
 			const response = NextResponse.next();
 			for (const [name, value] of Object.entries(headers)) {
 				response.headers.set(name, value);
 			}
-			return response;
+			return withAIRateLimitClientCookie(
+				response,
+				request,
+				clientIdentity,
+			);
 		}
 
 		return NextResponse.next();
