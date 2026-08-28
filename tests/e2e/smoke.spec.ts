@@ -80,8 +80,6 @@ const expectedSwitchLocaleLabel =
 	process.env.PLAYWRIGHT_EXPECTED_SWITCH_LOCALE_LABEL ?? "";
 const expectedSwitchBackLocaleLabel =
 	process.env.PLAYWRIGHT_EXPECTED_SWITCH_BACK_LOCALE_LABEL ?? "";
-const expectedConsentDecline =
-	process.env.PLAYWRIGHT_EXPECTED_CONSENT_DECLINE ?? "Decline";
 const expectedSearchScopeCount = Number(
 	process.env.PLAYWRIGHT_EXPECTED_SEARCH_SCOPE_COUNT ?? "3",
 );
@@ -256,13 +254,7 @@ test("renders navigation, footer, contact, and legal data from runtime configura
 	page,
 }) => {
 	await page.goto("/lib");
-	await page
-		.getByRole("button", {
-			name: expectedConsentDecline,
-			exact: true,
-		})
-		.click({ timeout: 3_000 })
-		.catch(() => undefined);
+	await dismissConsent(page);
 
 	await expect(
 		page.getByRole("link", { name: expectedNavigationLabel, exact: true }),
@@ -404,11 +396,7 @@ test("enforces runtime locales, default, detection, order, and switcher visibili
 
 	await page.setViewportSize({ width: 1600, height: 900 });
 	await page.goto(`/${expectedDefaultLocale}/lib`);
-	const consentDecline = page.getByRole("button", {
-		name: expectedConsentDecline,
-		exact: true,
-	});
-	await consentDecline.click({ timeout: 3_000 }).catch(() => undefined);
+	await dismissConsent(page);
 
 	const secondaryNavigation = page.getByRole("navigation", {
 		name: "Secondary navigation",

@@ -1,5 +1,9 @@
 import { expect, type Page } from "@playwright/test";
 
+/** What the button that turns the cookies down says, in the library's language. */
+const DECLINE_LABEL =
+	process.env.PLAYWRIGHT_EXPECTED_CONSENT_DECLINE ?? "Decline";
+
 /** How long the consent dialog is given to appear after the page loads. */
 const CONSENT_APPEARS_WITHIN_MS = 15_000;
 
@@ -23,6 +27,6 @@ export async function dismissConsent(page: Page) {
 		.catch(() => undefined);
 	if ((await dialog.count()) === 0) return;
 
-	await page.getByRole("button", { name: "Decline", exact: true }).click();
+	await page.getByRole("button", { name: DECLINE_LABEL, exact: true }).click();
 	await expect(dialog).toHaveCount(0);
 }
