@@ -42,19 +42,20 @@ async function measureLibraryPage(page: Page, shape: LogoShape, prefix: string) 
 	);
 	await expectNoOverlapWithNavigation(page);
 
-	await expectLogoFits(
-		page,
-		logoBoxes.badge,
-		shape,
-		`${prefix}listing institution`,
-	);
-
 	await page
 		.locator('[data-brand-logo-box="footer"]')
 		.first()
 		.scrollIntoViewIfNeeded();
 	await expectLogoFits(page, logoBoxes.footer, shape, `${prefix}footer`);
 	await expectLogoFits(page, logoBoxes.funder, shape, `${prefix}funder`);
+}
+
+async function measureListingInstitution(page: Page, shape: LogoShape) {
+	const badge = page
+		.locator('[data-brand-logo-box="institution-badge"]')
+		.first();
+	await badge.scrollIntoViewIfNeeded();
+	await expectLogoFits(page, logoBoxes.badge, shape, "listing institution");
 }
 
 async function measureRecordPage(page: Page, shape: LogoShape, prefix: string) {
@@ -84,6 +85,7 @@ for (const shape of logoShapes) {
 		await page.goto("/lib");
 
 		await measureLibraryPage(page, shape, "");
+		await measureListingInstitution(page, shape);
 		await measureRecordPage(page, shape, "");
 	});
 }
@@ -123,23 +125,26 @@ test("holds the widest a logo may be while the picture is still loading", async 
 		},
 	);
 	await page.goto("/lib", { waitUntil: "domcontentloaded" });
+	await declineCookies(page);
 
-	const slot = page.locator('[data-logo-slot="header"]').first();
-	await expect
-		.poll(async () => (await slot.boundingBox())?.width ?? 0)
-		.toBeCloseTo(headerReservation, 0);
+	const slot = page.locator('[data-brand-logo-box="header"]').first();
+	await slot.waitFor({ state: "attached" });
+	const slotWidth = () =>
+		slot.evaluate((element) => element.getBoundingClientRect().width);
+
+	await expect.poll(slotWidth).toBeCloseTo(headerReservation, 0);
 
 	release();
 	await expectLogoFits(page, logoBoxes.header, shape, "loaded header");
 
-	// Once the picture is there the slot is only as wide as the logo itself.
-	await expect
-		.poll(async () => (await slot.boundingBox())?.width ?? 0)
-		.toBeCloseTo(logoBoxes.header.height, 0);
+	// Once the picture is there the box is only as wide as the logo itself.
+	await expect.poll(slotWidth).toBeCloseTo(logoBoxes.header.height, 0);
 });
 
 test.describe("on a narrow screen", () => {
-	test.use({ viewport: { width: 320, height: 720 } });
+	// Narrow enough that a logo at its full 12rem cap cannot fit beside
+	// anything else, so the header has to make it give way.
+	test.use({ viewport: { width: 240, height: 720 } });
 
 	test("shrinks the logo rather than pushing the header open", async ({
 		page,
@@ -151,8 +156,24 @@ test.describe("on a narrow screen", () => {
 
 		const box = page.locator('[data-brand-logo-box="header"]').first();
 		const image = box.locator("img:visible");
-		const boxRectangle = (await box.boundingBox())!;
-		const imageRectangle = (await image.boundingBox())!;
+		await expect
+			.poll(() =>
+				image.evaluate((element: HTMLImageElement) =>
+					element.complete ? element.naturalWidth || 1 : 0,
+				),
+			)
+			.toBeGreaterThan(0);
+
+		const boxRectangle = await box.evaluate((element: HTMLElement) => ({
+			height: element.offsetHeight,
+			width: element.offsetWidth,
+		}));
+		const imageRectangle = await image.evaluate(
+			(element: HTMLElement) => ({
+				height: element.offsetHeight,
+				width: element.offsetWidth,
+			}),
+		);
 		const bar = page.locator("header").filter({ has: box }).first();
 		const overflow = await bar.evaluate((element) => {
 			const row = element.firstElementChild ?? element;

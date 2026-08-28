@@ -105,17 +105,16 @@ export async function expectLogoFits(
 			),
 		)
 		.toBeGreaterThan(0);
-	// A dialog fades and scales in. Wait for the box to settle before reading it.
-	await expect
-		.poll(async () => (await boxLocator.boundingBox())?.height ?? 0)
-		.toBeCloseTo(box.height, 0);
+	// Read the layout box, not the drawn box. A dialog scales as it opens, so
+	// anything read from the screen keeps changing while it moves; the layout
+	// box is the size CSS actually gave the logo and never wobbles.
+	const layout = await boxLocator.evaluate((element: HTMLElement) => {
+		const picture = Array.from(element.querySelectorAll("img")).find(
+			(candidate) => getComputedStyle(candidate).display !== "none",
+		);
+		if (!picture) return null;
 
-	const boxRectangle = await rectangleOf(boxLocator, `${label} box`);
-	const imageRectangle = await rectangleOf(image, `${label} image`);
-	// Padding, and any border a library added itself, take room the picture
-	// cannot use. Read it from the page instead of assuming it is zero.
-	const inset = await image.evaluate((element) => {
-		const style = getComputedStyle(element);
+		const style = getComputedStyle(picture);
 		const total = (...names: string[]) =>
 			names.reduce(
 				(sum, name) =>
@@ -124,20 +123,36 @@ export async function expectLogoFits(
 			);
 
 		return {
-			horizontal: total(
-				"border-left-width",
-				"border-right-width",
-				"padding-left",
-				"padding-right",
-			),
-			vertical: total(
-				"border-top-width",
-				"border-bottom-width",
-				"padding-top",
-				"padding-bottom",
-			),
+			box: { height: element.offsetHeight, width: element.offsetWidth },
+			// Padding, and any border a library added itself, take room the
+			// picture cannot use.
+			inset: {
+				horizontal: total(
+					"border-left-width",
+					"border-right-width",
+					"padding-left",
+					"padding-right",
+				),
+				vertical: total(
+					"border-top-width",
+					"border-bottom-width",
+					"padding-top",
+					"padding-bottom",
+				),
+			},
+			picture: {
+				height: picture.offsetHeight,
+				width: picture.offsetWidth,
+			},
 		};
 	});
+	expect(layout, `${label} must be on the page`).not.toBeNull();
+
+	const {
+		box: boxRectangle,
+		inset,
+		picture: imageRectangle,
+	} = layout!;
 	const expectedImageWidth = Math.min(
 		box.cap,
 		(box.height - inset.vertical) * shape.ratio + inset.horizontal,

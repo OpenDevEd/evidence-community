@@ -163,7 +163,9 @@ const config: Config = {
 			},
 			width: {
 				dialog: "calc(100% - 2rem)",
-				// The footer logo's loading placeholder matches its cap.
+				// While a logo picture loads its box holds the widest that
+				// logo may ever be, so the bar does not jump when it lands.
+				"logo-header": "12rem",
 				"logo-footer": "14rem",
 				"workbench-control": "120px",
 				"workbench-list": "150px",

@@ -28,7 +28,13 @@ export function Logo({ interactive = true }: LogoProps) {
 			)}
 		>
 			<LibraryLogo
-				className="pointer-events-none"
+				className={twMerge(
+					"pointer-events-none",
+					// While the picture is on its way the box holds the widest
+					// a logo may be, so the bar does not jump when it lands.
+					// Once it is there the box is only as wide as the logo.
+					isLoaded ? "w-auto" : "w-logo-header",
+				)}
 				place="header"
 				onLoad={() => setIsLoaded(true)}
 			/>
@@ -37,15 +43,8 @@ export function Logo({ interactive = true }: LogoProps) {
 
 	return (
 		<Skeleton
-			data-logo-slot="header"
 			isLoaded={isLoaded}
-			className={twMerge(
-				"flex h-9 min-w-0 max-w-logo-header shrink items-center justify-center rounded-lg xl:h-10",
-				// While the picture is on its way the slot holds the widest a
-				// logo may be, so the bar does not jump when it arrives. Once
-				// it is there the slot is only as wide as the logo itself.
-				isLoaded ? "w-auto" : "w-logo-header",
-			)}
+			className="flex h-9 w-auto min-w-0 max-w-logo-header shrink items-center justify-center rounded-lg xl:h-10"
 		>
 			{interactive ? <Link href={homeLink}>{logoContent}</Link> : logoContent}
 		</Skeleton>
