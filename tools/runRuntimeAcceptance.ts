@@ -1503,11 +1503,11 @@ type OpenScholarCollectionPage = {
 // and Borough by two, so the count order and the name order differ, while the
 // fixture's own Amber Institute and Indigo College keep one count tie.
 const INSTITUTION_FIXTURES = [
-	{ institution: "Zephyr University", key: "INSTZEP1" },
-	{ institution: "Zephyr University", key: "INSTZEP2" },
-	{ institution: "Zephyr University", key: "INSTZEP3" },
-	{ institution: "Borough College", key: "INSTBOR1" },
-	{ institution: "Borough College", key: "INSTBOR2" },
+	{ institution: "Zephyr University", key: "ZEPHYRA2" },
+	{ institution: "Zephyr University", key: "ZEPHYRA3" },
+	{ institution: "Zephyr University", key: "ZEPHYRA4" },
+	{ institution: "Borough College", key: "BRGHCLA2" },
+	{ institution: "Borough College", key: "BRGHCLA3" },
 ] as const;
 
 const INSTITUTIONS_BY_COUNT = [
