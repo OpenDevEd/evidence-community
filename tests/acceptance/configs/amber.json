@@ -19,7 +19,7 @@
 			"icons": [
 				"https://raw.githubusercontent.com/github/explore/main/topics/react/react.png"
 			],
-			"logoStyles": "width: 3rem;\nheight: 3rem;\nborder-radius: 9999px;"
+			"logoStyles": "border-radius: 9999px;"
 		}
 	},
 	"institutions": [

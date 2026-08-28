@@ -100,12 +100,17 @@ There are no customer assets under `public/logos` or `public/assets`, and there
 is no customer-dependent `/images` rewrite.
 
 The bar decides how tall a logo is drawn. The header gives it 40px (36px on a
-phone), the footer 48px, and the cookie dialog 32px. The image fills that
-height, keeps its shape, and stops at 12rem, 14rem and 9rem wide. A square,
-wide or tall logo file therefore never opens the bar to its own pixel size.
-Funder logos in the footer and institution logos on a record page work the
-same way. `identity.assets.logoStyles` still overrides all of this, so a
-library that sets its own width or height owns the result.
+phone), the footer 48px, the cookie dialog 32px, and the admin toolbar 28px.
+The image fills that height, keeps its shape, and stops at 12rem, 14rem and
+9rem wide. A square, wide or tall logo file therefore never opens the bar to
+its own pixel size. Funder logos in the footer and institution logos on a
+record page, in a list and in a search suggestion use the same rule.
+
+`identity.assets.logoStyles` can still change how a logo looks: colour,
+border, corner radius, shadow, filter. It cannot change size or place. Any
+declaration that sets width, height, margin, padding, position, transform or
+display is refused when the configuration is validated, because those used to
+let one line of CSS push a logo straight out of its bar.
 
 ## Database boundary
 

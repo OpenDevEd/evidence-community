@@ -1,7 +1,7 @@
 "use client";
 
 import { AnalyticsConsentPreferencesForm } from "@/components/features/analytics/AnalyticsConsentPreferencesForm";
-import { BrandLogo } from "@/components/library/LibraryIdentity";
+import { LibraryLogo } from "@/components/library/LibraryIdentity";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 import { Link } from "@/i18n/routing";
 import { ModalBody, ModalContent } from "@nextui-org/react";
@@ -20,7 +20,7 @@ export function AnalyticsConsentDialogContent({
 		<ModalContent className="px-4 pb-4 pt-5 sm:px-6 sm:pb-5">
 			<ModalBody className="gap-0 p-0">
 				<header className="flex flex-col items-center text-center">
-					<BrandLogo place="cookie" />
+					<LibraryLogo place="cookie" />
 					<h2 className="mt-4 text-balance text-2xl font-semibold leading-tight tracking-tight text-foreground">
 						{t("cookieConsentTitle")}
 					</h2>

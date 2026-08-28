@@ -27,10 +27,10 @@ vi.mock("@/components/features/analytics/AnalyticsConsentProvider", () => ({
 	}),
 }));
 vi.mock("@/components/library/LibraryIdentity", () => ({
-	BRAND_LOGO_IMAGE_CLASS: "",
-	BrandLogo: () => null,
-	BrandLogoBox: () => null,
+	FunderLogo: () => null,
 	FundingPartners: () => null,
+	InstitutionLogo: () => null,
+	LibraryLogo: () => null,
 	LibraryLogoImages: () => null,
 }));
 

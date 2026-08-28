@@ -1,132 +1,262 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-const logoUrls = (
+const brandAssetUrls = (
+	process.env.PLAYWRIGHT_EXPECTED_BRAND_ASSET_URLS ??
 	process.env.PLAYWRIGHT_EXPECTED_LOGO_URLS ??
 	"https://assets.example.org/library/logo-light.webp"
 ).split("|");
 const consentDecline =
 	process.env.PLAYWRIGHT_EXPECTED_CONSENT_DECLINE ?? "Decline";
-
-const rootFontSize = 16;
+const recordKey =
+	process.env.PLAYWRIGHT_EXPECTED_SEARCH_ITEM_KEY ?? "AMBER_SEARCH_FIXTURE";
 
 /**
- * The three logo shapes an owner can upload. Each one is drawn at its own
- * pixel size, which is exactly what used to push the bars open.
+ * The picture shapes a library can upload. The last one carries no width or
+ * height at all, which is what an SVG exported from a drawing tool usually
+ * looks like.
  */
 const logoShapes = [
-	{ name: "square", width: 150, height: 150 },
-	{ name: "3:1 landscape", width: 300, height: 100 },
-	{ name: "1:2 portrait", width: 100, height: 200 },
-];
+	{ name: "square", ratio: 1, sized: true, viewBox: "0 0 150 150" },
+	{ name: "3:1 wide", ratio: 3, sized: true, viewBox: "0 0 300 100" },
+	{ name: "1:2 tall", ratio: 0.5, sized: true, viewBox: "0 0 100 200" },
+	{ name: "8:1 very wide", ratio: 8, sized: true, viewBox: "0 0 800 100" },
+	{ name: "4:1 sizeless", ratio: 4, sized: false, viewBox: "0 0 240 60" },
+] as const;
 
-function logoImage(width: number, height: number) {
-	return `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="#2563eb"/></svg>`;
+type LogoShape = (typeof logoShapes)[number];
+
+/**
+ * Every logo box on the page, the height its bar allows, the height its image
+ * fills inside that box, and the widest the image may ever be.
+ */
+type LogoBox = {
+	boxHeight: number;
+	cap: number;
+	exactWidth: boolean;
+	imageHeight: number;
+	place: string;
+};
+
+const desktopBoxes = {
+	cookie: {
+		boxHeight: 32,
+		cap: 144,
+		exactWidth: true,
+		imageHeight: 32,
+		place: "cookie",
+	},
+	footer: {
+		boxHeight: 48,
+		cap: 224,
+		exactWidth: true,
+		imageHeight: 48,
+		place: "footer",
+	},
+	funder: {
+		boxHeight: 48,
+		cap: 160,
+		exactWidth: false,
+		imageHeight: 40,
+		place: "funder",
+	},
+	header: {
+		boxHeight: 40,
+		cap: 192,
+		exactWidth: true,
+		imageHeight: 40,
+		place: "header",
+	},
+	institution: {
+		boxHeight: 32,
+		cap: 32,
+		exactWidth: false,
+		imageHeight: 32,
+		place: "institution",
+	},
+} satisfies Record<string, LogoBox>;
+
+const mobileHeader = { ...desktopBoxes.header, boxHeight: 36, imageHeight: 36 };
+
+function logoSvg(shape: LogoShape) {
+	const [, , width, height] = shape.viewBox.split(" ");
+	const size = shape.sized ? ` width="${width}" height="${height}"` : "";
+
+	return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${shape.viewBox}"${size}><rect width="${width}" height="${height}" fill="#2563eb"/></svg>`;
 }
 
-async function serveLogoShape(page: Page, width: number, height: number) {
+async function serveShape(page: Page, shape: LogoShape) {
 	await page.route(
-		(url) => logoUrls.includes(url.toString()),
+		(url) => brandAssetUrls.includes(url.toString()),
 		(route) =>
 			route.fulfill({
-				body: logoImage(width, height),
+				body: logoSvg(shape),
 				contentType: "image/svg+xml",
 			}),
 	);
 }
 
-async function dropOwnerLogoCss(page: Page) {
-	// The owner's own logo CSS is a deliberate override that can set any size.
-	// Switch it off so the measurement reads the sizing the runtime ships.
-	await page.evaluate(() => {
-		const ownerStyles = document.getElementById("library-logo-styles");
-		if (ownerStyles instanceof HTMLStyleElement) {
-			ownerStyles.disabled = true;
-		}
-	});
-}
-
-async function measure(locator: Locator, what: string) {
+async function rectangleOf(locator: Locator, what: string) {
 	const rectangle = await locator.boundingBox();
 	expect(rectangle, `${what} must be on the page`).not.toBeNull();
 	return rectangle!;
 }
 
+/**
+ * Checks one logo box: the bar's height, the image inside it, and the width
+ * cap. The numbers are exact, so a box that grows with its picture fails even
+ * when the picture still fits inside it.
+ */
 async function expectLogoFits(
-	place: string,
-	box: Locator,
-	bar: Locator,
-	capRem: number,
+	page: Page,
+	box: LogoBox,
+	shape: LogoShape,
+	label: string,
 ) {
-	const visibleImages = box.locator("img[data-library-logo]:visible");
-	// A library ships a light and a dark logo. Exactly one of them is on
-	// screen; showing both puts two logos side by side in the bar.
-	await expect(visibleImages).toHaveCount(1);
+	const boxLocator = page
+		.locator(`[data-brand-logo-box="${box.place}"]`)
+		.first();
+	const image = boxLocator.locator("img:visible");
 
-	const image = visibleImages.first();
+	// A library ships a light and a dark logo. Exactly one is ever on screen.
+	await expect(image).toHaveCount(1);
 	await expect
 		.poll(() =>
 			image.evaluate((element: HTMLImageElement) =>
-				element.complete ? element.naturalWidth : 0,
+				element.complete ? element.naturalWidth || 1 : 0,
 			),
 		)
 		.toBeGreaterThan(0);
+	// A dialog fades and scales in. Wait for the box to settle before reading it.
+	await expect
+		.poll(async () => (await boxLocator.boundingBox())?.height ?? 0)
+		.toBeCloseTo(box.boxHeight, 0);
 
-	const imageRectangle = await measure(image, `${place} logo`);
-	const boxRectangle = await measure(box, `${place} logo box`);
-	const barRectangle = await measure(bar, `${place} bar`);
-	const capPixels = capRem * rootFontSize;
+	const boxRectangle = await rectangleOf(boxLocator, `${label} box`);
+	const imageRectangle = await rectangleOf(image, `${label} image`);
+	const expectedWidth = Math.min(box.cap, box.imageHeight * shape.ratio);
 
 	console.log(
-		`${place}: image ${imageRectangle.width.toFixed(1)}x${imageRectangle.height.toFixed(1)} | box ${boxRectangle.width.toFixed(1)}x${boxRectangle.height.toFixed(1)} | bar height ${barRectangle.height.toFixed(1)} | cap ${capPixels}`,
+		`${label}: box ${boxRectangle.width.toFixed(1)}x${boxRectangle.height.toFixed(1)} | image ${imageRectangle.width.toFixed(1)}x${imageRectangle.height.toFixed(1)} | expected height ${box.boxHeight} | cap ${box.cap}`,
 	);
 
-	expect(imageRectangle.height).toBeLessThanOrEqual(
-		boxRectangle.height + 0.5,
-	);
-	expect(imageRectangle.width).toBeLessThanOrEqual(capPixels + 0.5);
-	expect(imageRectangle.y).toBeGreaterThanOrEqual(barRectangle.y - 0.5);
-	expect(imageRectangle.y + imageRectangle.height).toBeLessThanOrEqual(
-		barRectangle.y + barRectangle.height + 0.5,
+	expect(boxRectangle.height).toBeCloseTo(box.boxHeight, 0);
+	expect(imageRectangle.height).toBeCloseTo(box.imageHeight, 0);
+	expect(boxRectangle.width).toBeLessThanOrEqual(box.cap + 0.5);
+	expect(imageRectangle.width).toBeLessThanOrEqual(box.cap + 0.5);
+
+	if (box.exactWidth) {
+		expect(imageRectangle.width).toBeCloseTo(expectedWidth, 0);
+	}
+}
+
+async function declineCookies(page: Page) {
+	await page
+		.getByRole("button", { name: consentDecline, exact: true })
+		.click();
+	await expect(
+		page.locator('[data-brand-logo-box="cookie"]'),
+	).toHaveCount(0);
+}
+
+/** The navigation must never sit on top of the logo. */
+async function expectNoOverlapWithNavigation(page: Page) {
+	const headerBox = page.locator('[data-brand-logo-box="header"]').first();
+	const navigation = page.locator("header nav").first();
+	const logoRectangle = await rectangleOf(headerBox, "header logo box");
+	const navigationRectangle = await rectangleOf(navigation, "main navigation");
+
+	expect(logoRectangle.x + logoRectangle.width).toBeLessThanOrEqual(
+		navigationRectangle.x + 0.5,
 	);
 }
 
 for (const shape of logoShapes) {
-	test(`keeps a ${shape.name} logo inside the header, footer and cookie dialog`, async ({
-		page,
-	}) => {
-		await serveLogoShape(page, shape.width, shape.height);
+	test(`fits a ${shape.name} logo into every bar`, async ({ page }) => {
+		await serveShape(page, shape);
 		await page.goto("/lib");
-		await dropOwnerLogoCss(page);
 
-		const cookieBox = page.locator('[data-brand-logo-box="cookie"]');
-		await expect(cookieBox).toBeVisible();
 		await expectLogoFits(
+			page,
+			desktopBoxes.cookie,
+			shape,
 			`${shape.name} cookie dialog`,
-			cookieBox,
-			page.getByRole("dialog").first(),
-			9,
 		);
+		await declineCookies(page);
+
+		await expectLogoFits(
+			page,
+			desktopBoxes.header,
+			shape,
+			`${shape.name} header`,
+		);
+		await expectNoOverlapWithNavigation(page);
 
 		await page
-			.getByRole("button", { name: consentDecline, exact: true })
-			.click();
-		await expect(cookieBox).toBeHidden();
-
-		const headerBox = page.locator('[data-brand-logo-box="header"]');
+			.locator('[data-brand-logo-box="footer"]')
+			.first()
+			.scrollIntoViewIfNeeded();
 		await expectLogoFits(
-			`${shape.name} header`,
-			headerBox,
-			page.locator("header").filter({ has: headerBox }).first(),
-			12,
+			page,
+			desktopBoxes.footer,
+			shape,
+			`${shape.name} footer`,
+		);
+		await expectLogoFits(
+			page,
+			desktopBoxes.funder,
+			shape,
+			`${shape.name} funder`,
 		);
 
-		const footerBox = page.locator('[data-brand-logo-box="footer"]');
-		await footerBox.scrollIntoViewIfNeeded();
+		await page.goto(`/lib/${recordKey}`);
 		await expectLogoFits(
-			`${shape.name} footer`,
-			footerBox,
-			page.locator("footer").filter({ has: footerBox }).first(),
-			14,
+			page,
+			desktopBoxes.institution,
+			shape,
+			`${shape.name} record institution`,
 		);
 	});
 }
+
+test.describe("on a phone", () => {
+	test.use({ viewport: { width: 390, height: 844 } });
+
+	for (const shape of logoShapes) {
+		test(`fits a ${shape.name} logo into every bar`, async ({ page }) => {
+			await serveShape(page, shape);
+			await page.goto("/lib");
+
+			await expectLogoFits(
+				page,
+				desktopBoxes.cookie,
+				shape,
+				`phone ${shape.name} cookie dialog`,
+			);
+			await declineCookies(page);
+
+			await expectLogoFits(
+				page,
+				mobileHeader,
+				shape,
+				`phone ${shape.name} header`,
+			);
+
+			await page
+				.locator('[data-brand-logo-box="footer"]')
+				.first()
+				.scrollIntoViewIfNeeded();
+			await expectLogoFits(
+				page,
+				desktopBoxes.footer,
+				shape,
+				`phone ${shape.name} footer`,
+			);
+			await expectLogoFits(
+				page,
+				desktopBoxes.funder,
+				shape,
+				`phone ${shape.name} funder`,
+			);
+		});
+	}
+});

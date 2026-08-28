@@ -2,7 +2,7 @@ import { Item, ListItem } from "@/app/api/item/types";
 import ResourceData from "./ResourceData";
 import { useTranslations } from "next-intl";
 import { Author } from "@/app/api/item/types";
-import { RuntimeAsset } from "@/components/library/RuntimeAsset";
+import { InstitutionLogo } from "@/components/library/LibraryIdentity";
 import { findInstitutionWithLogo } from "@/config/library-config/institutions";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
@@ -49,12 +49,11 @@ export default function ResourceAuthors({
 		return (
 			(configuredInstitution || authorText) && <span className="max-w-80 truncate overflow-hidden flex items-center gap-2">
 				{configuredInstitution?.logoUrl && (
-					<RuntimeAsset
-						reference={configuredInstitution.logoUrl}
+					<InstitutionLogo
 						alt={t("institutionLogoAlt", {
 							name: configuredInstitution.name,
 						})}
-						className="size-6 shrink-0 rounded-md bg-white/80 object-contain p-0.5"
+						logoUrl={configuredInstitution.logoUrl}
 					/>
 				)}
 				{authorText}

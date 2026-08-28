@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { twMerge } from "tailwind-merge";
 
-import { BrandLogo } from "@/components/library/LibraryIdentity";
+import { LibraryLogo } from "@/components/library/LibraryIdentity";
 import { Skeleton } from "@/components/nextui/Skeleton";
 import { Link } from "@/i18n/routing";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
@@ -27,7 +27,7 @@ export function Logo({ interactive = true }: LogoProps) {
 					"cursor-pointer hover:brightness-90 hover:scale-95 active:scale-105"
 			)}
 		>
-			<BrandLogo
+			<LibraryLogo
 				className="pointer-events-none"
 				place="header"
 				onLoad={() => setIsLoaded(true)}
@@ -38,7 +38,13 @@ export function Logo({ interactive = true }: LogoProps) {
 	return (
 		<Skeleton
 			isLoaded={isLoaded}
-			className="w-[10.6875rem] h-9 xl:h-10 rounded-lg flex justify-center items-center"
+			className={twMerge(
+				"flex h-9 min-w-0 max-w-logo-header shrink items-center justify-center rounded-lg xl:h-10",
+				// While the picture is on its way the slot holds the widest a
+				// logo may be, so the bar does not jump when it arrives. Once
+				// it is there the slot is only as wide as the logo itself.
+				isLoaded ? "w-auto" : "w-logo-header",
+			)}
 		>
 			{interactive ? <Link href={homeLink}>{logoContent}</Link> : logoContent}
 		</Skeleton>

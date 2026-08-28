@@ -57,95 +57,170 @@ const fundingPartnerSchema = z
 	})
 	.strict();
 
-function isCssDeclarationList(value: string) {
-	if (!value) return true;
+type CssScanState = {
+	depth: number;
+	escaped: boolean;
+	quote: "'" | '"' | null;
+};
 
-	let declarationStart = 0;
-	let parentheses = 0;
-	let quote: "'" | '"' | null = null;
-	let escaped = false;
+function newCssScanState(): CssScanState {
+	return { depth: 0, escaped: false, quote: null };
+}
 
-	const isDeclaration = (declaration: string) => {
-		const trimmed = declaration.trim();
-		if (!trimmed) return true;
+/**
+ * Reads one character of CSS text and remembers whether the reader is inside
+ * an escape, a quoted string or brackets. Answers `true` only for a character
+ * that stands on its own, which is the only place a separator can be.
+ */
+function isPlainCssCharacter(state: CssScanState, character: string) {
+	if (state.escaped) {
+		state.escaped = false;
+		return false;
+	}
+	if (character === "\\") {
+		state.escaped = true;
+		return false;
+	}
+	if (state.quote) {
+		if (character === state.quote) state.quote = null;
+		return false;
+	}
+	if (character === "'" || character === '"') {
+		state.quote = character;
+		return false;
+	}
+	if (character === "(") {
+		state.depth += 1;
+		return false;
+	}
+	if (character === ")") {
+		state.depth -= 1;
+		return false;
+	}
 
-		let colon = -1;
-		let nestedParentheses = 0;
-		let nestedQuote: "'" | '"' | null = null;
-		let nestedEscape = false;
+	return state.depth === 0;
+}
 
-		for (let index = 0; index < trimmed.length; index += 1) {
-			const character = trimmed[index];
-			if (nestedEscape) {
-				nestedEscape = false;
-				continue;
-			}
-			if (character === "\\") {
-				nestedEscape = true;
-				continue;
-			}
-			if (nestedQuote) {
-				if (character === nestedQuote) nestedQuote = null;
-				continue;
-			}
-			if (character === "'" || character === '"') {
-				nestedQuote = character;
-				continue;
-			}
-			if (character === "(") nestedParentheses += 1;
-			if (character === ")") nestedParentheses -= 1;
-			if (character === ":" && nestedParentheses === 0) {
-				colon = index;
-				break;
-			}
-		}
-
-		if (colon <= 0) return false;
-		const property = trimmed.slice(0, colon).trim();
-		const declarationValue = trimmed.slice(colon + 1).trim();
-
-		return (
-			/^(?:--[A-Za-z0-9_-]+|-?[A-Za-z][A-Za-z0-9-]*)$/.test(property) &&
-			declarationValue.length > 0
-		);
-	};
+/**
+ * Splits a CSS declaration list on the semicolons that separate declarations.
+ * Returns `null` when a quote or bracket is left open, which means the text is
+ * not a declaration list at all.
+ */
+function splitCssDeclarations(value: string) {
+	const state = newCssScanState();
+	const declarations: string[] = [];
+	let start = 0;
 
 	for (let index = 0; index < value.length; index += 1) {
 		const character = value[index];
-		if (escaped) {
-			escaped = false;
-			continue;
+		if (isPlainCssCharacter(state, character) && character === ";") {
+			declarations.push(value.slice(start, index));
+			start = index + 1;
 		}
-		if (character === "\\") {
-			escaped = true;
-			continue;
-		}
-		if (quote) {
-			if (character === quote) quote = null;
-			continue;
-		}
-		if (character === "'" || character === '"') {
-			quote = character;
-			continue;
-		}
-		if (character === "(") parentheses += 1;
-		if (character === ")") {
-			parentheses -= 1;
-			if (parentheses < 0) return false;
-		}
-		if (character === ";" && parentheses === 0) {
-			if (!isDeclaration(value.slice(declarationStart, index))) {
-				return false;
-			}
-			declarationStart = index + 1;
+		if (state.depth < 0) return null;
+	}
+
+	if (state.quote || state.depth !== 0) return null;
+	declarations.push(value.slice(start));
+
+	return declarations;
+}
+
+const CSS_PROPERTY_PATTERN = /^(?:--[A-Za-z0-9_-]+|-?[A-Za-z][A-Za-z0-9-]*)$/;
+
+/**
+ * The property name of one declaration, or `null` when the text is not a
+ * declaration.
+ */
+function cssDeclarationProperty(declaration: string) {
+	const trimmed = declaration.trim();
+	const state = newCssScanState();
+	let colon = -1;
+
+	for (let index = 0; index < trimmed.length; index += 1) {
+		const character = trimmed[index];
+		if (isPlainCssCharacter(state, character) && character === ":") {
+			colon = index;
+			break;
 		}
 	}
 
-	return (
-		!quote &&
-		parentheses === 0 &&
-		isDeclaration(value.slice(declarationStart))
+	if (colon <= 0) return null;
+	const property = trimmed.slice(0, colon).trim();
+	if (!trimmed.slice(colon + 1).trim()) return null;
+
+	return CSS_PROPERTY_PATTERN.test(property) ? property : null;
+}
+
+function isCssDeclarationList(value: string) {
+	if (!value) return true;
+
+	const declarations = splitCssDeclarations(value);
+	if (!declarations) return false;
+
+	return declarations.every(
+		(declaration) =>
+			!declaration.trim() || cssDeclarationProperty(declaration) !== null,
 	);
+}
+
+/**
+ * CSS that decides how much room the logo takes, or where it sits. The bar
+ * owns both, so a library may not set them: a stray `height` used to push a
+ * logo straight out of the header.
+ */
+const LOGO_LAYOUT_PROPERTIES = new Set([
+	"all",
+	"aspect-ratio",
+	"block-size",
+	"bottom",
+	"box-sizing",
+	"contain",
+	"display",
+	"float",
+	"height",
+	"inline-size",
+	"left",
+	"max-block-size",
+	"max-height",
+	"max-inline-size",
+	"max-width",
+	"min-block-size",
+	"min-height",
+	"min-inline-size",
+	"min-width",
+	"position",
+	"right",
+	"rotate",
+	"scale",
+	"top",
+	"transform",
+	"transform-box",
+	"transform-origin",
+	"translate",
+	"width",
+	"zoom",
+]);
+
+const LOGO_LAYOUT_PROPERTY_PREFIXES = ["inset", "margin", "padding"];
+
+function isLogoLayoutProperty(property: string) {
+	return (
+		LOGO_LAYOUT_PROPERTIES.has(property) ||
+		LOGO_LAYOUT_PROPERTY_PREFIXES.some(
+			(prefix) => property === prefix || property.startsWith(`${prefix}-`),
+		)
+	);
+}
+
+/** The first size or position property in the list, or `null` when there is none. */
+function findLogoLayoutProperty(value: string) {
+	for (const declaration of splitCssDeclarations(value) ?? []) {
+		const property = cssDeclarationProperty(declaration)?.toLowerCase();
+		if (property && isLogoLayoutProperty(property)) return property;
+	}
+
+	return null;
 }
 
 const logoStylesSchema = rawStringSchema
@@ -156,6 +231,15 @@ const logoStylesSchema = rawStringSchema
 	})
 	.refine(isCssDeclarationList, {
 		message: "Logo styles must be a valid CSS declaration list",
+	})
+	.superRefine((value, context) => {
+		const property = findLogoLayoutProperty(value);
+		if (!property) return;
+
+		context.addIssue({
+			code: "custom",
+			message: `Logo styles cannot set size or position. Remove "${property}". Each bar decides how tall the logo is drawn.`,
+		});
 	});
 
 const identityAssetsSchema = z

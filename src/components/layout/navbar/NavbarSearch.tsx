@@ -43,7 +43,7 @@ import {
 	PublicationStatusBadges,
 	hasBylineDetails,
 	hasPreviewDetails,
-	InstitutionLogo,
+	PreviewInstitutionLogo,
 	publicationPreviewData,
 	type PublicationPreviewData,
 } from "@/components/features/items/PublicationHoverPreview";
@@ -109,10 +109,10 @@ function SuggestionByline({
 
 	return (
 		<span className="flex items-center gap-1.5 text-xs text-black/50 dark:text-white/50">
-			<InstitutionLogo
+			<PreviewInstitutionLogo
 				institution={institution}
 				institutionAlt={labels.institutionAlt}
-				className="size-4 shrink-0 rounded bg-white/80 object-contain p-0.5"
+				size="small"
 			/>
 			{authors && <span className="min-w-0 truncate">{authors}</span>}
 			<PublicationStatusBadges

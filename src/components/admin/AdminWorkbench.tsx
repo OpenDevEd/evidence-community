@@ -38,7 +38,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 
-import { LibraryLogoImages } from "@/components/library/LibraryIdentity";
+import { LibraryLogo } from "@/components/library/LibraryIdentity";
 import ThemeSwitcher from "@/components/layout/navbar/ThemeSwitcher";
 import { Button } from "@/components/nextui/Button";
 import DialogModal from "@/components/nextui/DialogModal";
@@ -2005,7 +2005,7 @@ export default function AdminWorkbench({
 					className="col-start-1 row-start-1 flex h-10 min-w-0 max-w-30 items-center rounded-xl focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus sm:mr-1 sm:w-30 sm:shrink-0 xl:absolute xl:left-1/2 xl:mr-0 xl:w-36 xl:max-w-none xl:-translate-x-1/2"
 					href={homeHref}
 				>
-					<LibraryLogoImages className="max-h-7 max-w-full object-contain" />
+					<LibraryLogo className="max-w-full" place="admin" />
 				</Link>
 				<div className="col-span-3 row-start-2 flex min-w-0 items-center gap-2 sm:min-w-64 sm:max-w-lg sm:flex-1">
 					<Input

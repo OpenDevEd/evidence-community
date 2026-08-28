@@ -133,6 +133,7 @@ const config: Config = {
 				"logo-header": "12rem",
 				"logo-footer": "14rem",
 				"logo-cookie": "9rem",
+				"logo-funder": "10rem",
 			},
 			scale: {
 				// The Ask AI button lifts a little under the pointer.

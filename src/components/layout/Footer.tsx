@@ -11,10 +11,9 @@ import { twMerge } from "tailwind-merge";
 import { AnalyticsConsentDialogContent } from "@/components/features/analytics/AnalyticsConsentDialogContent";
 import { useAnalyticsConsent } from "@/components/features/analytics/AnalyticsConsentProvider";
 import {
-	BRAND_LOGO_IMAGE_CLASS,
-	BrandLogo,
-	BrandLogoBox,
+	FunderLogo,
 	FundingPartners,
+	LibraryLogo,
 } from "@/components/library/LibraryIdentity";
 import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import DialogModal from "@/components/nextui/DialogModal";
@@ -88,7 +87,7 @@ function Logo() {
 			isLoaded={isLoaded}
 			className="flex h-12 w-logo-footer items-center justify-center rounded-lg"
 		>
-			<BrandLogo place="footer" onLoad={() => setIsLoaded(true)} />
+			<LibraryLogo place="footer" onLoad={() => setIsLoaded(true)} />
 		</Skeleton>
 	);
 }
@@ -265,21 +264,10 @@ export default function Footer() {
 						const content = (
 							<span className="flex items-center gap-3 text-black/70 dark:text-white/70">
 								{funder.logoUrl && (
-									<BrandLogoBox
-										className="h-12 max-w-40 rounded-md bg-white p-1"
-										place="funder"
-									>
-										<RuntimeAsset
-											reference={funder.logoUrl}
-											alt={funder.name}
-											className={twMerge(
-												BRAND_LOGO_IMAGE_CLASS,
-												"max-w-full",
-											)}
-											width={160}
-											height={48}
-										/>
-									</BrandLogoBox>
+									<FunderLogo
+										alt={funder.name}
+										logoUrl={funder.logoUrl}
+									/>
 								)}
 								{!funder.logoUrl && (
 									<span className="font-medium">

@@ -209,8 +209,16 @@ describe("runtime library identity", () => {
 	it("emits the configured raw logo CSS against the shared logo selector", () => {
 		expect(buildLibraryLogoCss(minimalConfig.identity)).toBeNull();
 		expect(buildLibraryLogoCss(maximalConfig.identity)).toBe(
-			"[data-library-logo] {\nmax-width: 12rem;\nheight: auto;\n}",
+			"[data-library-logo] {\nborder-radius: 0.5rem;\nfilter: saturate(1.1);\n}",
 		);
+	});
+
+	it("keeps logo CSS that only changes how the logo looks", () => {
+		const input = structuredClone(maximalLibraryConfig);
+		input.identity.assets.logoStyles =
+			"border-radius: 9999px;\nborder: 3px solid #818cf8;\nfilter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.2));";
+
+		expect(libraryConfigSchema.safeParse(input).success).toBe(true);
 	});
 
 	it("renders valid raw CSS without HTML entity escaping", () => {
@@ -235,6 +243,18 @@ describe("runtime library identity", () => {
 		"</style><script>alert(1)</script>",
 		"not a CSS declaration",
 		"x".repeat(10_001),
+		// The bar owns the logo's size and place. These used to let a
+		// library push its logo straight out of the header.
+		"height: 150px;",
+		"width: 20rem;",
+		"max-height: 200px;",
+		"MIN-WIDTH: 30rem;",
+		"border-radius: 4px; padding: 2rem;",
+		"margin-top: -40px;",
+		"transform: scale(3);",
+		"position: absolute; top: -20px;",
+		"display: none;",
+		"aspect-ratio: 1 / 4;",
 	])("rejects unconfined logo CSS: %s", (logoStyles) => {
 		const input = structuredClone(maximalLibraryConfig);
 		input.identity.assets.logoStyles = logoStyles;

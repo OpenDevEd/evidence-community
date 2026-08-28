@@ -13,6 +13,7 @@ import { useTranslations } from "next-intl";
 import { twMerge } from "tailwind-merge";
 
 import { LIBRARY_LOGO_ATTRIBUTES } from "@/config/library-config/identity";
+import { RuntimeAsset } from "@/components/library/RuntimeAsset";
 import { useLibraryConfig } from "@/context/LibraryConfigProvider";
 
 export function LibraryLogoImages({
@@ -80,14 +81,14 @@ export function LibraryLogoImages({
  * each other off with `hidden`, and a display rule added later would win and
  * show both at once.
  */
-export const BRAND_LOGO_IMAGE_CLASS = "h-full w-auto object-contain";
+const BRAND_LOGO_IMAGE_CLASS = "h-full w-auto object-contain";
 
 /**
  * A slot of a fixed height for a logo. Give it the height its bar has room
  * for. A square, wide or tall image file then always draws at that height
  * instead of opening the bar to its own pixel size.
  */
-export function BrandLogoBox({
+function BrandLogoBox({
 	children,
 	className,
 	place,
@@ -107,34 +108,126 @@ export function BrandLogoBox({
 }
 
 /**
- * How tall the library's own logo is drawn in each place, and how wide it may
- * grow before the width is capped.
+ * How tall the library's own logo is drawn in each place, and how wide the
+ * box lets it grow. The image never sets its own width, so the cap here is
+ * the only thing that can stop a very wide logo.
  */
-const BRAND_LOGO_SIZES = {
-	cookie: { box: "h-8", image: "max-w-logo-cookie" },
-	footer: { box: "h-12", image: "max-w-logo-footer" },
-	header: { box: "h-9 xl:h-10", image: "max-w-logo-header" },
+const LIBRARY_LOGO_SIZES = {
+	admin: "h-7 max-w-full",
+	cookie: "h-8 max-w-logo-cookie",
+	footer: "h-12 max-w-logo-footer",
+	// The header shrinks before the navigation does, so a wide logo can never
+	// push the buttons beside it off the bar.
+	header: "h-9 min-w-0 max-w-logo-header shrink xl:h-10",
 } as const;
 
-export type BrandLogoPlace = keyof typeof BRAND_LOGO_SIZES;
+export type LibraryLogoPlace = keyof typeof LIBRARY_LOGO_SIZES;
 
 /** The library's own logo, drawn inside the box its bar allows. */
-export function BrandLogo({
+export function LibraryLogo({
 	className,
 	onLoad,
 	place,
 }: {
 	className?: string;
 	onLoad?: () => void;
-	place: BrandLogoPlace;
+	place: LibraryLogoPlace;
 }) {
-	const size = BRAND_LOGO_SIZES[place];
+	return (
+		<BrandLogoBox
+			className={twMerge(LIBRARY_LOGO_SIZES[place], className)}
+			place={place}
+		>
+			<LibraryLogoImages
+				className={twMerge(BRAND_LOGO_IMAGE_CLASS, "max-w-full")}
+				onLoad={onLoad}
+			/>
+		</BrandLogoBox>
+	);
+}
+
+/**
+ * The sizes an institution's logo is drawn at: a small mark in a suggestion
+ * row, a badge beside a line of text, and the square on a record page.
+ */
+const INSTITUTION_LOGO_SIZES = {
+	badge: {
+		box: "size-6 justify-center",
+		image: "rounded-md bg-white/80 p-0.5",
+	},
+	small: {
+		box: "size-4 justify-center",
+		image: "rounded bg-white/80 p-0.5",
+	},
+	row: {
+		box: "size-8 justify-center rounded-lg bg-accent/10 text-lg text-accent brightness-150",
+		image: "rounded-lg bg-white p-1",
+	},
+} as const;
+
+/**
+ * An institution's logo in its own square box. Without a logo it shows the
+ * fallback, or nothing when the caller has none.
+ */
+export function InstitutionLogo({
+	alt,
+	className,
+	fallback,
+	logoUrl,
+	size = "badge",
+}: {
+	alt: string;
+	className?: string;
+	fallback?: ReactNode;
+	logoUrl?: string;
+	size?: keyof typeof INSTITUTION_LOGO_SIZES;
+}) {
+	if (!logoUrl && !fallback) return null;
+	const shape = INSTITUTION_LOGO_SIZES[size];
 
 	return (
-		<BrandLogoBox className={twMerge(size.box, className)} place={place}>
-			<LibraryLogoImages
-				className={twMerge(BRAND_LOGO_IMAGE_CLASS, size.image)}
-				onLoad={onLoad}
+		<BrandLogoBox
+			className={twMerge(shape.box, className)}
+			place="institution"
+		>
+			{logoUrl ? (
+				<RuntimeAsset
+					alt={alt}
+					className={twMerge(
+						BRAND_LOGO_IMAGE_CLASS,
+						"max-w-full",
+						shape.image,
+					)}
+					height={32}
+					reference={logoUrl}
+					width={32}
+				/>
+			) : (
+				fallback
+			)}
+		</BrandLogoBox>
+	);
+}
+
+/** A funder's logo in the footer, inside the box the footer row allows. */
+export function FunderLogo({
+	alt,
+	logoUrl,
+}: {
+	alt: string;
+	logoUrl: string;
+}) {
+	return (
+		<BrandLogoBox
+			className="h-12 max-w-logo-funder justify-center rounded-md bg-white"
+			place="funder"
+		>
+			<RuntimeAsset
+				alt={alt}
+				className={twMerge(BRAND_LOGO_IMAGE_CLASS, "max-w-full p-1")}
+				height={48}
+				reference={logoUrl}
+				width={160}
 			/>
 		</BrandLogoBox>
 	);
