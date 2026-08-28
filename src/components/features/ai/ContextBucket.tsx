@@ -8,7 +8,7 @@ import type { ItemsBatchResponse } from "@/app/api/items/batch/route";
 import type { ListItem } from "@/app/api/item/types";
 import Resource from "@/components/features/items/Resource";
 import type { BucketEntry } from "@/context/InlineChatLayout";
-import { publicationPdfCitationSources } from "@/lib/ai/citations";
+import { bucketPdfCitationSources } from "@/lib/ai/citations";
 import { fetcherPOST } from "@/lib/utils";
 
 export type BucketPublication = ListItem;
@@ -36,6 +36,9 @@ const BUCKET_PAGE_SIZE = 200;
 export function useBucketPublications(
 	entries: BucketEntry[],
 ): BucketPublications {
+	// The order the chat shows them in, kept as one value so the work below is
+	// only done again when the list itself changes.
+	const shownOrder = entries.map((entry) => entry.key).join(" ");
 	const wanted = [...new Set(entries.map((entry) => entry.key))].sort();
 	const { data, isLoading } = useSWR<ItemsBatchResponse>(
 		wanted.length > 0
@@ -62,18 +65,25 @@ export function useBucketPublications(
 
 	return useMemo(() => {
 		const byKey: Record<string, BucketPublication> = {};
-		const pdfSources: Record<string, string> = {};
+		const attachmentsByKey: Record<
+			string,
+			BucketPublication["attachmentsData"]
+		> = {};
 		for (const item of items ?? []) {
 			if (!item.key) continue;
 			byKey[item.key] = item;
-			Object.assign(
-				pdfSources,
-				publicationPdfCitationSources(item.key, item.attachmentsData),
-			);
+			attachmentsByKey[item.key] = item.attachmentsData;
 		}
 
-		return { byKey, isLoading, pdfSources };
-	}, [isLoading, items]);
+		return {
+			byKey,
+			isLoading,
+			pdfSources: bucketPdfCitationSources(
+				shownOrder ? shownOrder.split(" ") : [],
+				attachmentsByKey,
+			),
+		};
+	}, [isLoading, items, shownOrder]);
 }
 
 function BucketCard({
@@ -126,7 +136,10 @@ export function BucketList({
 					>
 						<BucketCard
 							item={publications.byKey[entry.key]}
-							isLoading={publications.isLoading}
+							isLoading={
+								publications.byKey[entry.key] === undefined &&
+								publications.isLoading
+							}
 						/>
 					</motion.div>
 				))}

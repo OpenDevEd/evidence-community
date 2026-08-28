@@ -4,6 +4,7 @@ import {
 	buildPdfDownloadPath,
 	parsePageCitation,
 	pdfFilename,
+	bucketPdfCitationSources,
 	publicationPdfCitationSources,
 } from "@/lib/ai/citations";
 import {
@@ -145,6 +146,35 @@ describe("turning a page citation into a link", () => {
 		expect(
 			parsePageCitation("Teacher training.pdf — 4", sources).href,
 		).toBe("/lib/ABCD1234/download/PDF0001#page=4");
+	});
+
+	it("keeps the newest publication when two PDFs share a name", () => {
+		const sources = bucketPdfCitationSources(["NEWEST01", "OLDEST01"], {
+			NEWEST01: [
+				{
+					key: "PDF0001",
+					filename: "paper.pdf",
+					PDFCoverPageImage: "cover.png",
+				},
+			],
+			OLDEST01: [
+				{
+					key: "PDF0002",
+					filename: "paper.pdf",
+					PDFCoverPageImage: "cover.png",
+				},
+			],
+		});
+
+		expect(sources).toEqual({
+			"paper.pdf": "/lib/NEWEST01/download/PDF0001",
+		});
+	});
+
+	it("has nothing for a publication that has not loaded yet", () => {
+		expect(
+			bucketPdfCitationSources(["NEWEST01"], { NEWEST01: undefined }),
+		).toEqual({});
 	});
 
 	it("drops a link the model invented", () => {

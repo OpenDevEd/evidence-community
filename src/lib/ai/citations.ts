@@ -44,6 +44,29 @@ export function publicationPdfCitationSources(
 	);
 }
 
+/**
+ * Where the cited pages live for a whole conversation.
+ *
+ * The publications come in the order the chat shows them, newest first. Two
+ * publications can have a PDF with the same name, so the older ones are put in
+ * first and the newest one wins.
+ */
+export function bucketPdfCitationSources(
+	keysNewestFirst: string[],
+	attachmentsByKey: Record<string, PdfAttachment[] | null | undefined>,
+) {
+	const sources: Record<string, string> = {};
+	for (let index = keysNewestFirst.length - 1; index >= 0; index -= 1) {
+		const key = keysNewestFirst[index];
+		Object.assign(
+			sources,
+			publicationPdfCitationSources(key, attachmentsByKey[key]),
+		);
+	}
+
+	return sources;
+}
+
 export function parsePageCitation(
 	value: string,
 	knownSources: Record<string, string> = {},
