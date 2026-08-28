@@ -66,8 +66,14 @@ vi.mock("@/lib/sitemap", () => ({
 		new URL(`/sitemap/${id}.xml`, baseUrl).toString(),
 }));
 
+import { drizzle } from "drizzle-orm/node-postgres";
+
 import { GET as getItemRedirect } from "@/app/api/item/[key]/redirects/route";
-import { GET as getNoteRedirect } from "@/app/api/redirects/[...path]/route";
+import {
+	buildRedirectsNoteQuery,
+	GET as getNoteRedirect,
+} from "@/app/api/redirects/[...path]/route";
+import { schema } from "@/db/database-schema";
 import robots from "@/app/robots";
 import sitemap, { generateSitemaps } from "@/app/sitemap";
 import { GET as getSitemapIndex } from "@/app/sitemap-index.xml/route";
@@ -135,16 +141,17 @@ describe("runtime sitemap routes", () => {
 
 describe("runtime redirect routes", () => {
 	it("uses configured redirect storage when redirects are enabled", async () => {
-		const findFirst = vi.fn().mockResolvedValue({
-			note: "legacy = /lib/NEWKEY01",
-		});
+		// A stub PostgreSQL client so the real query runs through Drizzle.
+		const query = vi
+			.fn()
+			.mockResolvedValue({ rows: [["legacy = /lib/NEWKEY01"]] });
 		const getDocument = vi.fn().mockResolvedValue({
 			value: "NEWKEY01",
 		});
 		mocks.getLibraryConfig.mockResolvedValue(config());
-		mocks.getDatabaseForConfig.mockResolvedValue({
-			query: { item: { findFirst } },
-		});
+		mocks.getDatabaseForConfig.mockResolvedValue(
+			drizzle({ query } as never, { schema }),
+		);
 		mocks.getMeilisearchForConfig.mockResolvedValue({
 			redirectsIndex: { getDocument },
 		});
@@ -168,7 +175,7 @@ describe("runtime redirect routes", () => {
 		expect(await itemResponse.json()).toEqual({
 			value: "NEWKEY01",
 		});
-		expect(findFirst).toHaveBeenCalledOnce();
+		expect(query).toHaveBeenCalledOnce();
 		expect(getDocument).toHaveBeenCalledOnce();
 	});
 
@@ -204,5 +211,29 @@ describe("runtime redirect routes", () => {
 		);
 		expect(mocks.getDatabaseForConfig).not.toHaveBeenCalled();
 		expect(mocks.getMeilisearchForConfig).not.toHaveBeenCalled();
+	});
+});
+
+describe("redirect note lookup query", () => {
+	// Drizzle only touches the client when a query runs, so an empty client is
+	// enough to compile a query to real SQL.
+	const compiled = buildRedirectsNoteQuery(
+		drizzle({} as never, { schema }) as never,
+		["redirect-record"],
+	).toSQL();
+
+	it("matches the tag rows on their own record key", () => {
+		expect(compiled.sql).toContain(`"itemToTag"."itemKey" = "item"."key"`);
+		expect(compiled.sql).toContain(`"itemToTag"."tagName"`);
+		expect(compiled.sql).not.toContain(`"item"."itemKey"`);
+		expect(compiled.sql).not.toContain(`"item"."tagName"`);
+	});
+
+	it("reads one live note carrying a redirect tag", () => {
+		expect(compiled.sql).toContain(`select "note" from "item"`);
+		expect(compiled.params).toContain("redirect-record");
+		expect(compiled.params).toContain("Note");
+		expect(compiled.params).toContain(0);
+		expect(compiled.params).toContain(1);
 	});
 });

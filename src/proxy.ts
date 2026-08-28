@@ -16,6 +16,7 @@ import { getMeilisearchForConfig } from "./lib/meilisearch";
 import { normalizePathname } from "./lib/path";
 import {
 	getCanonicalLibraryRedirect,
+	getRedirectLookupPath,
 	getUnlocalizedPathname,
 	isLoginProfilePath,
 } from "./lib/runtime-routing";
@@ -177,41 +178,14 @@ function isLikelyBrokenKey(key: string) {
 	return /^\d+:[A-Z0-9]{8}$/.test(key);
 }
 
-const RESERVED_ROUTE_SEGMENTS = new Set([
-	"404",
-	"about",
-	"admin",
-	"api",
-	"citation",
-	"contact",
-	"cookie-policy",
-	"gapmaps",
-	"lib",
-	"map",
-	"newlib",
-	"privacy",
-	"profile",
-	"statistics",
-	"takedown",
-]);
-
-function getRedirectLookupPath(pathname: string) {
-	const segments = pathname.split("/").filter(Boolean);
-	if (segments.length === 0) return null;
-
-	const firstSegment = segments[0];
-	const pathSegments = getPlatformPathLocale(pathname)
-		? segments.slice(1)
-		: segments;
-
-	if (pathSegments.length === 0) return null;
-	if (RESERVED_ROUTE_SEGMENTS.has(pathSegments[0])) return null;
-
-	return pathSegments.join("/");
-}
-
-async function getNoteRedirectDestination(request: NextRequest) {
-	const lookupPath = getRedirectLookupPath(request.nextUrl.pathname);
+async function getNoteRedirectDestination(
+	request: NextRequest,
+	hasOwnerWrittenTerms: boolean,
+) {
+	const lookupPath = getRedirectLookupPath(
+		request.nextUrl.pathname,
+		hasOwnerWrittenTerms,
+	);
 	if (!lookupPath) return null;
 
 	const apiUrl = new URL(
@@ -250,8 +224,15 @@ async function getNoteRedirectDestination(request: NextRequest) {
 	}
 }
 
-function redirectUnknownPathToNotFoundPage(request: NextRequest) {
-	if (!getRedirectLookupPath(request.nextUrl.pathname)) return null;
+function redirectUnknownPathToNotFoundPage(
+	request: NextRequest,
+	hasOwnerWrittenTerms: boolean,
+) {
+	if (
+		!getRedirectLookupPath(request.nextUrl.pathname, hasOwnerWrittenTerms)
+	) {
+		return null;
+	}
 
 	const url = request.nextUrl.clone();
 	const locale = getPlatformPathLocale(request.nextUrl.pathname);
@@ -435,15 +416,21 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.redirect(url, 307);
 	}
 
+	const hasOwnerWrittenTerms = Boolean(libraryConfig.legal.termsMarkdown);
 	if (libraryConfig.generation.redirects) {
-		const noteRedirectDestination =
-			await getNoteRedirectDestination(request);
+		const noteRedirectDestination = await getNoteRedirectDestination(
+			request,
+			hasOwnerWrittenTerms,
+		);
 		if (noteRedirectDestination) {
 			return NextResponse.redirect(noteRedirectDestination, 307);
 		}
 	}
 
-	const notFoundPageRedirect = redirectUnknownPathToNotFoundPage(request);
+	const notFoundPageRedirect = redirectUnknownPathToNotFoundPage(
+		request,
+		hasOwnerWrittenTerms,
+	);
 	if (notFoundPageRedirect) {
 		return notFoundPageRedirect;
 	}

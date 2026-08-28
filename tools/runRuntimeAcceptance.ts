@@ -888,6 +888,101 @@ function seedExportRecords(profile: Profile) {
 	postgresScalar(profile.name, statements.join("; "));
 }
 
+// The owner writes their redirect list in an ordinary note inside the
+// library. These rows prove the lookup reads the live note and nothing else.
+// Only AMBRRED2 may be used. A deleted note, a note that was never published,
+// a child record, a tag that differs only by capital letters, and a tag shaped
+// like a database attack must all be ignored.
+//
+// Every note that must be ignored owns an address that no other note mentions,
+// and the live note shares its addresses with nobody. The lookup reads one
+// note per request, so if the addresses overlapped a request could come back
+// empty simply because the database handed back the live note that day, and
+// the check would pass even with a broken filter. Separate addresses mean an
+// empty answer can only come from the note being left out.
+const REDIRECT_NOTE_DESTINATION = `/lib/${EXPORT_RECORDS.published.key}`;
+const REDIRECT_HOSTILE_TAG = `redirect-record'; DROP TABLE "item"; --`;
+
+function seedRedirectNotes(profile: Profile) {
+	if (profile.name !== "amber") return;
+
+	const liveNote = [
+		"# A line starting with a hash is a note to the owner",
+		`old-report/2024 = ${REDIRECT_NOTE_DESTINATION}`,
+		`terms/archive = ${REDIRECT_NOTE_DESTINATION}`,
+	].join("\n");
+
+	const notes = [
+		{
+			key: "AMBRRED2",
+			itemType: "Note",
+			deleted: 0,
+			parentItem: "NULL",
+			note: liveNote,
+			tag: "redirect-record",
+		},
+		{
+			key: "AMBRRED3",
+			itemType: "Note",
+			deleted: 1,
+			parentItem: "NULL",
+			note: `deleted-only/2024 = ${REDIRECT_NOTE_DESTINATION}`,
+			tag: "redirect-record",
+		},
+		{
+			key: "AMBRRED4",
+			itemType: "Attachment",
+			deleted: 0,
+			parentItem: `'${EXPORT_RECORDS.published.key}'`,
+			note: `child-only/2024 = ${REDIRECT_NOTE_DESTINATION}`,
+			tag: "redirect-record",
+		},
+		{
+			key: "AMBRRED5",
+			itemType: "Note",
+			deleted: 0,
+			parentItem: "NULL",
+			note: `Case-Only/2024 = ${REDIRECT_NOTE_DESTINATION}`,
+			tag: "Redirect-Record",
+		},
+		{
+			key: "AMBRRED6",
+			itemType: "Note",
+			deleted: 0,
+			parentItem: "NULL",
+			note: `injected-only/2024 = ${REDIRECT_NOTE_DESTINATION}`,
+			tag: REDIRECT_HOSTILE_TAG,
+		},
+	] as const;
+
+	const literal = (value: string) => `$seed$${value}$seed$`;
+	const statements = [
+		`INSERT INTO "tag" ("name") VALUES ('redirect-record'), ('Redirect-Record'), (${literal(
+			REDIRECT_HOSTILE_TAG,
+		)}) ON CONFLICT DO NOTHING`,
+		...notes.flatMap((row) => [
+			`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${row.key}', 'native', '${row.key}')`,
+			`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "note", "revision", "dateAdded", "deleted", "parentItem") VALUES ('${row.key}', 'native', '${row.key}', '${row.itemType}', ${literal(
+				row.note,
+			)}, 1, now(), ${row.deleted}, ${row.parentItem})`,
+			`INSERT INTO "itemToTag" ("itemKey", "tagName") VALUES ('${row.key}', ${literal(
+				row.tag,
+			)})`,
+		]),
+		// A note that only ever existed as a draft has no published row, so the
+		// lookup can never reach its lines.
+		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('AMBRRED7', 'native', 'AMBRRED7')`,
+		`INSERT INTO "itemDraft" ("itemKey", "sourceConnectionKey", "patch") VALUES ('AMBRRED7', 'native', ${literal(
+			JSON.stringify({
+				itemType: "Note",
+				note: `draft-only/2024 = ${REDIRECT_NOTE_DESTINATION}`,
+			}),
+		)}::jsonb)`,
+	];
+
+	postgresScalar(profile.name, statements.join("; "));
+}
+
 async function seedSharedSearchIndexes(profile: Profile) {
 	for (const index of [
 		{ uid: "cache", primaryKey: "id" },
@@ -1976,6 +2071,98 @@ async function verifyOwnerLegalText(profile: Profile) {
 	);
 }
 
+async function firstHopForPath(profile: Profile, pathname: string) {
+	const origin = `http://127.0.0.1:${profile.port}`;
+	const response = await fetch(`${origin}${pathname}`, {
+		redirect: "manual",
+	});
+	const location = response.headers.get("location");
+
+	return {
+		status: response.status,
+		pathname: location ? new URL(location, origin).pathname : null,
+	};
+}
+
+async function readRedirectLookup(profile: Profile, lookupPath: string) {
+	const response = await fetch(
+		`http://127.0.0.1:${profile.port}/api/redirects/${lookupPath}`,
+	);
+	assert.equal(
+		response.status,
+		200,
+		"the redirect lookup must answer, not fail",
+	);
+
+	return response.json();
+}
+
+async function verifyNoteRedirects(profile: Profile) {
+	console.log(`\nVerifying ${profile.name} owner-written redirects`);
+
+	// This runs the real query against PostgreSQL. A broken query answers 500
+	// and the proxy quietly gives up, so read the answer directly first.
+	assert.deepEqual(await readRedirectLookup(profile, "old-report/2024"), {
+		destination: REDIRECT_NOTE_DESTINATION,
+	});
+
+	for (const pathname of [
+		"/old-report/2024",
+		`/${profile.config.localization.defaultLocale}/old-report/2024`,
+		// A page below /terms belongs to the owner, even though /terms itself
+		// is a page the library serves.
+		"/terms/archive",
+	]) {
+		const moved = await firstHopForPath(profile, pathname);
+		assert.equal(moved.status, 307, `${pathname} must move the reader`);
+		assert.equal(
+			moved.pathname,
+			REDIRECT_NOTE_DESTINATION,
+			`${pathname} must move the reader to the address in the note`,
+		);
+	}
+
+	for (const [pathname, source] of [
+		["/deleted-only/2024", "a deleted note"],
+		["/draft-only/2024", "a note that was never published"],
+		["/child-only/2024", "a child record"],
+		["/Case-Only/2024", "a tag that differs only by capital letters"],
+		["/injected-only/2024", "a tag shaped like a database attack"],
+	] as const) {
+		assert.deepEqual(
+			await readRedirectLookup(profile, pathname.slice(1)),
+			{ destination: null },
+			`${source} must not create a redirect`,
+		);
+		// The live note must still answer right here. Together with the
+		// separate addresses above, this shows the empty answer came from the
+		// note being left out, not from the library reading some other note.
+		assert.deepEqual(
+			await readRedirectLookup(profile, "old-report/2024"),
+			{ destination: REDIRECT_NOTE_DESTINATION },
+			`the owner's own redirect must still work beside ${source}`,
+		);
+		const ignored = await firstHopForPath(profile, pathname);
+		assert.equal(
+			ignored.pathname,
+			"/404",
+			`${source} must end on the page-not-found screen`,
+		);
+	}
+
+	// An address shaped like a database attack must be answered, not crash.
+	const hostilePath = encodeURIComponent(`'; DROP TABLE "item"; --`);
+	assert.deepEqual(await readRedirectLookup(profile, hostilePath), {
+		destination: null,
+	});
+
+	// The library still reads its redirect list afterwards, so nothing was
+	// damaged.
+	assert.deepEqual(await readRedirectLookup(profile, "old-report/2024"), {
+		destination: REDIRECT_NOTE_DESTINATION,
+	});
+}
+
 function verifyServerAnalyticsTransport(profile: Profile) {
 	const { host, key } = profile.config.analytics.posthog;
 	if (!host || !key) {
@@ -2564,6 +2751,7 @@ async function main() {
 		for (const profile of profiles) {
 			await seedSearch(profile);
 			seedExportRecords(profile);
+			seedRedirectNotes(profile);
 		}
 		await verifySearchQueueIsolation(profiles);
 		compose(
@@ -2582,6 +2770,7 @@ async function main() {
 		await verifyPublicationAdminInterface(profiles[0]);
 		await verifyOpenScholarReadApi(profiles[0]);
 		await verifyOwnerLegalText(profiles[0]);
+		await verifyNoteRedirects(profiles[0]);
 		profiles.forEach(verifyServerAnalyticsTransport);
 		profiles.forEach(runBrowserSuite);
 		runAdminBrowserSuite(profiles[0]);

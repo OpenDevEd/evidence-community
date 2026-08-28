@@ -286,7 +286,7 @@ export default function PolicyPage({
 						<div className="space-y-5">
 							<div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-background_light/800 px-4 py-2 text-xs font-medium text-black/65 dark:border-white/10 dark:bg-card/80 dark:text-white/65">
 								<CalendarDays className="size-4" />
-								Updated {formatLastUpdated(lastUpdated)}
+								{`Updated ${formatLastUpdated(lastUpdated)}`}
 							</div>
 
 							<div className="max-w-3xl space-y-4">

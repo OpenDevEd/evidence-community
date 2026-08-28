@@ -55,6 +55,62 @@ export function getUnlocalizedPathname(pathname: string) {
 	return unlocalizedPathname || "/";
 }
 
+/**
+ * Every path segment the library serves itself, together with everything
+ * below it. A request that starts with one of these is a real page, so it
+ * must never be treated as an unknown address that needs a redirect or the
+ * "page not found" screen.
+ */
+const RESERVED_ROUTE_SEGMENTS = new Set([
+	"404",
+	"about",
+	"admin",
+	"api",
+	"citation",
+	"contact",
+	"cookie-policy",
+	"gapmaps",
+	"lib",
+	"map",
+	"newlib",
+	"privacy",
+	"profile",
+	"statistics",
+	"takedown",
+]);
+
+/**
+ * The address to look up in the owner's redirect list, or `null` when the
+ * request already points at a page the library serves.
+ *
+ * The terms page only exists when the owner wrote terms, and only at exactly
+ * `/terms`. Reserving the whole `/terms` branch would silently switch off the
+ * owner's own redirects for addresses such as `/terms/archive`.
+ */
+export function getRedirectLookupPath(
+	pathname: string,
+	hasOwnerWrittenTerms: boolean,
+) {
+	const segments = pathname.split("/").filter(Boolean);
+	if (segments.length === 0) return null;
+
+	const pathSegments = getPlatformPathLocale(pathname)
+		? segments.slice(1)
+		: segments;
+
+	if (pathSegments.length === 0) return null;
+	if (RESERVED_ROUTE_SEGMENTS.has(pathSegments[0])) return null;
+	if (
+		hasOwnerWrittenTerms &&
+		pathSegments.length === 1 &&
+		pathSegments[0] === "terms"
+	) {
+		return null;
+	}
+
+	return pathSegments.join("/");
+}
+
 export function isLoginProfilePath(pathname: string) {
 	return /^\/profile(?:\/|$)/u.test(getUnlocalizedPathname(pathname));
 }
