@@ -41,10 +41,10 @@ export function buildInstitutionCountsQuery(
 	request: OpenScholarInstitutionRequest,
 	cursor: OpenScholarInstitutionCursor | null,
 ): SQL {
-	// The stored sort column is already lower-cased, so a plain LIKE against a
-	// lower-cased pattern matches case-insensitively and can use the index.
+	// PostgreSQL folds both sides of the match, so a name such as "İstanbul"
+	// is found whatever case the search uses. The trigram index serves ILIKE.
 	const search = request.query
-		? sql` WHERE ${itemInstitution.institutionNameSort} LIKE ${containsPattern(request.query.toLowerCase())} ESCAPE '\\'`
+		? sql` WHERE ${itemInstitution.institutionName} ILIKE ${containsPattern(request.query)} ESCAPE '\\'`
 		: sql``;
 
 	const keyset = (() => {

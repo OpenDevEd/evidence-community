@@ -25,6 +25,10 @@ import {
 } from "../src/config/library-config/theme";
 import { getOrderedRuntimeLocales } from "../src/i18n/runtime";
 import { localesNames, shortLocalesNames } from "../src/i18n/routing";
+import { PgDialect } from "drizzle-orm/pg-core";
+
+import { parseOpenScholarInstitutionRequest } from "../src/lib/admin/institution-catalog-contract";
+import { buildInstitutionCountsQuery } from "../src/lib/admin/openscholar-institutions";
 import { replaceFileAtomically } from "../src/lib/atomic-file";
 import { requireLibraryComposeServiceReadiness } from "../src/lib/deployment/library-compose-contract";
 import {
@@ -1610,15 +1614,162 @@ async function verifyInstitutionCursorRules(profile: Profile) {
 	});
 }
 
+const LIFECYCLE_KEY = "LIFECYC2";
+const LIFECYCLE_INSTITUTION = "Lifecycle Institute";
+
+function institutionNamesFor(profile: Profile, key: string) {
+	return postgresScalar(
+		profile.name,
+		`SELECT coalesce(string_agg("institutionName", ', ' ORDER BY "institutionName"), '') FROM "itemInstitution" WHERE "itemKey" = '${key}'`,
+	);
+}
+
+function insertInstitutionRecord(
+	profile: Profile,
+	key: string,
+	institution: string,
+) {
+	postgresScalar(
+		profile.name,
+		[
+			`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${key}', 'native', '${key}')`,
+			`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem", "creators") VALUES ('${key}', 'native', '${key}', 'JournalArticle', 'Institution evidence ${key}', 1, '2026', now(), 0, NULL, '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"${institution}"},"not-an-object"]}]'::jsonb)`,
+		].join("; "),
+	);
+}
+
+function removeInstitutionRecord(profile: Profile, key: string) {
+	postgresScalar(
+		profile.name,
+		`DELETE FROM "itemDraft" WHERE "itemKey" = '${key}'; DELETE FROM "item" WHERE key = '${key}'; DELETE FROM "itemIdentity" WHERE key = '${key}'`,
+	);
+}
+
 /**
- * The picker must never read the records themselves. The fixture is far too
- * small for the planner to prefer an index, so sequential scans are turned off
- * to show which index the search can use.
+ * The institution rows must follow the published record: a draft alone never
+ * removes them, and a parent, a soft delete or a hard delete does.
  */
+function verifyInstitutionProjectionLifecycle(profile: Profile) {
+	console.log(`\nVerifying ${profile.name} institution projection lifecycle`);
+	insertInstitutionRecord(profile, LIFECYCLE_KEY, LIFECYCLE_INSTITUTION);
+	try {
+		const change = (statement: string) =>
+			postgresScalar(profile.name, statement);
+		const names = () => institutionNamesFor(profile, LIFECYCLE_KEY);
+		assert.equal(names(), LIFECYCLE_INSTITUTION, "a new record is listed");
+
+		change(
+			`INSERT INTO "itemDraft" ("itemKey", "sourceConnectionKey", "patch") VALUES ('${LIFECYCLE_KEY}', 'native', '{"parentItem": "AMBR2345"}'::jsonb)`,
+		);
+		assert.equal(
+			names(),
+			LIFECYCLE_INSTITUTION,
+			"an unpublished draft must not remove the institutions",
+		);
+
+		change(
+			`UPDATE "item" SET "parentItem" = 'AMBR2345' WHERE key = '${LIFECYCLE_KEY}'`,
+		);
+		assert.equal(names(), "", "a published child is not listed");
+		change(
+			`UPDATE "item" SET "parentItem" = NULL WHERE key = '${LIFECYCLE_KEY}'`,
+		);
+		assert.equal(names(), LIFECYCLE_INSTITUTION, "a record that becomes top-level is listed again");
+
+		change(`UPDATE "item" SET deleted = 1 WHERE key = '${LIFECYCLE_KEY}'`);
+		assert.equal(names(), "", "a deleted record is not listed");
+		change(`UPDATE "item" SET deleted = 0 WHERE key = '${LIFECYCLE_KEY}'`);
+		assert.equal(names(), LIFECYCLE_INSTITUTION, "a restored record is listed again");
+
+		change(
+			`SELECT refresh_admin_item_list_projection('${LIFECYCLE_KEY}'); SELECT refresh_admin_item_list_projection('${LIFECYCLE_KEY}')`,
+		);
+		assert.equal(
+			postgresScalar(
+				profile.name,
+				`SELECT count(*) FROM "itemInstitution" WHERE "itemKey" = '${LIFECYCLE_KEY}'`,
+			),
+			"1",
+			"refreshing twice must not duplicate a row",
+		);
+	} finally {
+		removeInstitutionRecord(profile, LIFECYCLE_KEY);
+	}
+	assert.equal(
+		institutionNamesFor(profile, LIFECYCLE_KEY),
+		"",
+		"a record deleted for good takes its institutions with it",
+	);
+}
+
+/**
+ * A record whose creators are not a list, or whose creator is not an object,
+ * must be skipped rather than stopping the write with a JSON error.
+ */
+function verifyMalformedCreatorsAreSkipped(profile: Profile) {
+	const key = "MALFRMD2";
+	insertInstitutionRecord(profile, key, "Malformed Institute");
+	try {
+		assert.equal(institutionNamesFor(profile, key), "Malformed Institute");
+		postgresScalar(
+			profile.name,
+			`UPDATE "item" SET creators = '{"creatorType": "author"}'::jsonb WHERE key = '${key}'`,
+		);
+		assert.equal(
+			institutionNamesFor(profile, key),
+			"",
+			"creators that are not a list must be skipped",
+		);
+	} finally {
+		removeInstitutionRecord(profile, key);
+	}
+}
+
+/**
+ * PostgreSQL folds the case of the search and of the stored name together, so
+ * a name with a dotted capital I is found however it is typed.
+ */
+async function verifyNonAsciiInstitutionSearch(profile: Profile) {
+	const institution = "İstanbul Üniversitesi";
+	insertInstitutionRecord(profile, "ISTANBU2", institution);
+	try {
+		for (const query of ["istanbul", "İSTANBUL", "üniversitesi"]) {
+			const found = await openScholarRead<OpenScholarInstitutionPage>(
+				profile,
+				`/api/openscholar/institutions?query=${encodeURIComponent(query)}`,
+			);
+			assert.deepEqual(
+				found.body,
+				{ items: [{ count: 1, name: institution }], nextCursor: null },
+				`searching for ${query} must find ${institution}`,
+			);
+		}
+	} finally {
+		removeInstitutionRecord(profile, "ISTANBU2");
+	}
+}
+
+/** The production query with its values written in, so EXPLAIN can read it. */
+function explainableInstitutionQuery(query: string) {
+	const request = parseOpenScholarInstitutionRequest(
+		query ? { query } : {},
+	);
+	const compiled = new PgDialect().sqlToQuery(
+		buildInstitutionCountsQuery(request, null),
+	);
+	return compiled.sql.replace(/\$(\d+)/gu, (_placeholder, position: string) => {
+		const value = compiled.params[Number(position) - 1];
+		return typeof value === "number"
+			? String(value)
+			: `'${String(value).replace(/'/gu, "''")}'`;
+	});
+}
+
+/** The picker must never read the records themselves. */
 function verifyInstitutionQueryPlans(profile: Profile) {
 	const paged = postgresScalar(
 		profile.name,
-		`EXPLAIN SELECT "institutionName", count(*) FROM "itemInstitution" GROUP BY "institutionName" ORDER BY count(*) DESC, "institutionName" ASC LIMIT 51`,
+		`EXPLAIN ${explainableInstitutionQuery("")}`,
 	);
 	assert.ok(
 		paged.includes("itemInstitution"),
@@ -1629,17 +1780,20 @@ function verifyInstitutionQueryPlans(profile: Profile) {
 		`the paged plan must not scan the records:\n${paged}`,
 	);
 
+	// The fixture is far too small for the planner to prefer any index, so this
+	// second plan only shows that the search is eligible for the trigram index.
 	const searched = postgresScalar(
 		profile.name,
-		`SET LOCAL enable_seqscan = off; EXPLAIN SELECT "institutionName", count(*) FROM "itemInstitution" WHERE "institutionNameSort" LIKE '%zephyr%' ESCAPE '\\' GROUP BY "institutionName" ORDER BY count(*) DESC, "institutionName" ASC LIMIT 51`,
+		`SET LOCAL enable_seqscan = off; EXPLAIN ${explainableInstitutionQuery("zephyr")}`,
 	);
 	assert.ok(
 		searched.includes("itemInstitution_name_search_idx"),
-		`the search plan must use the trigram index:\n${searched}`,
+		`the search plan must be able to use the trigram index:\n${searched}`,
 	);
 
 	console.log(
-		`Institution paged plan: ${paged.split("\n").join(" | ")}\nInstitution search plan: ${searched.split("\n").join(" | ")}`,
+		`Institution paged plan, production query, planner untouched: ${paged.split("\n").join(" | ")}\n` +
+			`Institution search plan, production query, sequential scans off to show the index is eligible: ${searched.split("\n").join(" | ")}`,
 	);
 }
 
@@ -1691,6 +1845,9 @@ async function verifyOpenScholarInstitutions(profile: Profile) {
 
 async function verifyOpenScholarReadApi(profile: Profile) {
 	console.log(`\nVerifying ${profile.name} OpenScholar read API`);
+	verifyInstitutionProjectionLifecycle(profile);
+	verifyMalformedCreatorsAreSkipped(profile);
+	await verifyNonAsciiInstitutionSearch(profile);
 	seedInstitutionRecords(profile);
 	try {
 		await verifyOpenScholarInstitutions(profile);

@@ -114,13 +114,14 @@ describe("institution counts query", () => {
 		expect(sql).not.toMatch(/jsonb_array_elements|"creators"/iu);
 	});
 
-	it("matches search text anywhere in the name through the indexed column", () => {
-		const { params, sql } = compile({ query: "%_\\AMBER" });
+	it("lets the database fold the case of the search and the stored name", () => {
+		const { params, sql } = compile({ query: "%_\\İstanbul" });
 
-		expect(sql).toContain('"institutionNameSort" LIKE');
-		expect(sql).not.toMatch(/ilike|lower\(/iu);
+		expect(sql).toContain('"institutionName" ILIKE');
 		expect(sql).toContain("ESCAPE '\\'");
-		expect(params).toContain("%\\%\\_\\\\amber%");
+		// The search word reaches PostgreSQL as typed: lower-casing it in
+		// JavaScript would not match the way PostgreSQL folds the stored name.
+		expect(params).toContain("%\\%\\_\\\\İstanbul%");
 	});
 
 	it("keeps rows with the same count from repeating or going missing", () => {

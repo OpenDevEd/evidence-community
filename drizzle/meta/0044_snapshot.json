@@ -1,5 +1,5 @@
 {
-  "id": "977e07c0-2b71-4527-bd61-1c78bd2a4cae",
+  "id": "457cd41f-11dc-42a9-9dec-130cc539af8e",
   "prevId": "10f6bde5-e89f-41f4-8b8a-786459d01d8b",
   "version": "7",
   "dialect": "postgresql",
@@ -5564,12 +5564,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
-        },
-        "institutionNameSort": {
-          "name": "institutionNameSort",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true
         }
       },
       "indexes": {
@@ -5598,7 +5592,7 @@
           "name": "itemInstitution_name_search_idx",
           "columns": [
             {
-              "expression": "institutionNameSort",
+              "expression": "institutionName",
               "isExpression": false,
               "asc": true,
               "nulls": "last",

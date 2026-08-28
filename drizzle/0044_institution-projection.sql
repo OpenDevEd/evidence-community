@@ -1,14 +1,38 @@
 CREATE TABLE "itemInstitution" (
 	"itemKey" varchar(8) NOT NULL,
 	"institutionName" text NOT NULL,
-	"institutionNameSort" text NOT NULL,
 	CONSTRAINT "itemInstitution_itemKey_institutionName_pk" PRIMARY KEY("itemKey","institutionName")
 );
 --> statement-breakpoint
-ALTER TABLE "itemInstitution" ADD CONSTRAINT "itemInstitution_itemKey_item_key_fk" FOREIGN KEY ("itemKey") REFERENCES "public"."item"("key") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "itemInstitution_name_idx" ON "itemInstitution" USING btree ("institutionName","itemKey");--> statement-breakpoint
-CREATE INDEX "itemInstitution_name_search_idx" ON "itemInstitution" USING gin ("institutionNameSort" gin_trgm_ops);
+CREATE INDEX "itemInstitution_name_search_idx" ON "itemInstitution" USING gin ("institutionName" gin_trgm_ops);
 --> statement-breakpoint
+
+-- One set-based backfill under one short lock. The admin projection is not
+-- rebuilt: only the new table needs filling.
+DO $$
+BEGIN
+	LOCK TABLE "item" IN SHARE MODE;
+
+	INSERT INTO "itemInstitution" ("itemKey", "institutionName")
+	SELECT DISTINCT
+		i.key,
+		btrim(institution_data ->> 'display_name')
+	FROM "item" i,
+	LATERAL jsonb_array_elements(
+		CASE WHEN jsonb_typeof(i.creators) = 'array' THEN i.creators ELSE '[]'::jsonb END
+	) AS creator_data,
+	LATERAL jsonb_array_elements(
+		CASE WHEN jsonb_typeof(creator_data -> 'institutions') = 'array'
+			THEN creator_data -> 'institutions' ELSE '[]'::jsonb END
+	) AS institution_data
+	WHERE i.deleted = 0
+		AND (i."parentItem" IS NULL OR i."parentItem" = '')
+		AND btrim(COALESCE(institution_data ->> 'display_name', '')) <> ''
+	ON CONFLICT DO NOTHING;
+END $$;--> statement-breakpoint
+
+ALTER TABLE "itemInstitution" ADD CONSTRAINT "itemInstitution_itemKey_item_key_fk" FOREIGN KEY ("itemKey") REFERENCES "public"."item"("key") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 
 CREATE OR REPLACE FUNCTION refresh_admin_item_list_projection(requested_key text)
 RETURNS void
@@ -42,26 +66,29 @@ BEGIN
 		WHERE key = requested_key::varchar(8);
 	END IF;
 
-	-- The institution rows follow the same record and the same lock. They are
-	-- rebuilt from the published record only, so the picker keeps counting
-	-- institutions named on live top-level records.
+	-- Institutions follow the published record only. A draft that moves a
+	-- record under a parent must not remove its institutions before it is
+	-- published, so this reads the requested record's own stored values.
 	DELETE FROM "itemInstitution"
-	WHERE "itemKey" IN (root_key, requested_key::varchar(8));
+	WHERE "itemKey" = requested_key::varchar(8);
 
-	INSERT INTO "itemInstitution" ("itemKey", "institutionName", "institutionNameSort")
+	INSERT INTO "itemInstitution" ("itemKey", "institutionName")
 	SELECT DISTINCT
-		root_key,
-		btrim(institution_data ->> 'display_name'),
-		lower(btrim(institution_data ->> 'display_name'))
+		i.key,
+		btrim(institution_data ->> 'display_name')
 	FROM "item" i,
-	LATERAL jsonb_array_elements(i.creators) AS creator_data,
-	LATERAL jsonb_array_elements(creator_data -> 'institutions') AS institution_data
-	WHERE i.key = root_key
+	LATERAL jsonb_array_elements(
+		CASE WHEN jsonb_typeof(i.creators) = 'array' THEN i.creators ELSE '[]'::jsonb END
+	) AS creator_data,
+	LATERAL jsonb_array_elements(
+		CASE WHEN jsonb_typeof(creator_data -> 'institutions') = 'array'
+			THEN creator_data -> 'institutions' ELSE '[]'::jsonb END
+	) AS institution_data
+	WHERE i.key = requested_key::varchar(8)
 		AND i.deleted = 0
 		AND (i."parentItem" IS NULL OR i."parentItem" = '')
-		AND jsonb_typeof(i.creators) = 'array'
-		AND jsonb_typeof(creator_data -> 'institutions') = 'array'
-		AND btrim(COALESCE(institution_data ->> 'display_name', '')) <> '';
+		AND btrim(COALESCE(institution_data ->> 'display_name', '')) <> ''
+	ON CONFLICT DO NOTHING;
 
 	WITH record AS (
 		SELECT
@@ -246,7 +273,4 @@ BEGIN
 		DELETE FROM "adminItemListProjection" WHERE key = root_key;
 	END IF;
 END;
-$$;--> statement-breakpoint
-
-SELECT refresh_admin_item_list_projection(key)
-FROM "itemIdentity";
+$$;

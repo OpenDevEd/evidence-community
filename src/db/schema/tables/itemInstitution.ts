@@ -15,9 +15,6 @@ export const itemInstitution = pgTable(
 			.notNull()
 			.references(() => item.key, { onDelete: "cascade" }),
 		institutionName: text("institutionName").notNull(),
-		// The lower-cased name the search matches, so a contains search can use
-		// the trigram index instead of reading every row.
-		institutionNameSort: text("institutionNameSort").notNull(),
 	},
 	(table) => [
 		primaryKey({ columns: [table.itemKey, table.institutionName] }),
@@ -25,9 +22,11 @@ export const itemInstitution = pgTable(
 			table.institutionName,
 			table.itemKey,
 		),
+		// PostgreSQL matches the search, so a name such as "İstanbul" folds the
+		// same way on both sides. The trigram index serves ILIKE.
 		index("itemInstitution_name_search_idx").using(
 			"gin",
-			table.institutionNameSort.op("gin_trgm_ops"),
+			table.institutionName.op("gin_trgm_ops"),
 		),
 	],
 );
