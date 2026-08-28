@@ -158,7 +158,7 @@ describe("admin session routes", () => {
 
 			expect(response.status).toBe(303);
 			expect(response.headers.get("location")).toBe(
-				"http://localhost/admin/access-error",
+				`${openScholar.loginPageUrl}?error=invalid_code&return=%2Fadmin`,
 			);
 			expect(response.headers.get("set-cookie")).toBeNull();
 		},
@@ -175,7 +175,7 @@ describe("admin session routes", () => {
 		const response = await redeem(redeemRequest());
 
 		expect(response.headers.get("location")).toBe(
-			"http://localhost/admin/access-error",
+			`${openScholar.loginPageUrl}?error=invalid_code&return=%2Fadmin`,
 		);
 		expect(response.headers.get("set-cookie")).toBeNull();
 	});
@@ -186,7 +186,7 @@ describe("admin session routes", () => {
 		);
 
 		expect(response.headers.get("location")).toBe(
-			"http://localhost/admin/access-error",
+			`${openScholar.loginPageUrl}?error=invalid_code&return=%2Fadmin`,
 		);
 		expect(response.headers.get("set-cookie")).toBeNull();
 		expect(fetchMock).not.toHaveBeenCalled();
@@ -203,6 +203,54 @@ describe("admin session routes", () => {
 		);
 		expect(response.headers.get("set-cookie")).toContain(
 			"evidence_library_admin=",
+		);
+	});
+
+	it("returns to the admin page the visitor asked for", async () => {
+		fetchMock.mockResolvedValue(Response.json(redeemedIdentity));
+		const query = new URLSearchParams({
+			code,
+			return: "/en-GB/admin/items?scope=drafts",
+		});
+
+		const response = await redeem(redeemRequest(query.toString()));
+
+		expect(response.status).toBe(303);
+		expect(response.headers.get("location")).toBe(
+			"http://localhost/en-GB/admin/items?scope=drafts",
+		);
+		expect(response.headers.get("set-cookie")).toContain(
+			"evidence_library_admin=",
+		);
+	});
+
+	it.each(["https://evil.example.org/admin", "//evil.example.org", "/lib"])(
+		"ignores %s as a return target",
+		async (unsafeReturn) => {
+			fetchMock.mockResolvedValue(Response.json(redeemedIdentity));
+			const query = new URLSearchParams({ code, return: unsafeReturn });
+
+			const response = await redeem(redeemRequest(query.toString()));
+
+			expect(response.headers.get("location")).toBe(
+				"http://localhost/admin",
+			);
+		},
+	);
+
+	it("keeps the return path when the code is refused", async () => {
+		fetchMock.mockResolvedValue(
+			Response.json({ error: "rejected" }, { status: 400 }),
+		);
+		const query = new URLSearchParams({
+			code,
+			return: "/admin/items?scope=drafts",
+		});
+
+		const response = await redeem(redeemRequest(query.toString()));
+
+		expect(response.headers.get("location")).toBe(
+			`${openScholar.loginPageUrl}?error=invalid_code&return=%2Fadmin%2Fitems%3Fscope%3Ddrafts`,
 		);
 	});
 
