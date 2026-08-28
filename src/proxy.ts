@@ -2,6 +2,7 @@ import createMiddleware from "next-intl/middleware";
 import { NextRequest, NextResponse } from "next/server";
 import { SCOPE_OPTIONS, SORT_OPTIONS } from "./constants/items";
 import { loadLibraryConfig } from "./config/library-config/source";
+import type { LibraryServerConfig } from "./config/library-config/schema";
 import {
 	getDisabledLocaleRedirectPathname,
 	getOrderedRuntimeLocales,
@@ -15,8 +16,14 @@ import {
 import { getMeilisearchForConfig } from "./lib/meilisearch";
 import { normalizePathname } from "./lib/path";
 import {
+	adminSessionCookieName,
+	verifyAdminSessionToken,
+} from "./lib/admin/access";
+import {
+	buildAdminLoginPageUrl,
 	getCanonicalLibraryRedirect,
 	getUnlocalizedPathname,
+	isAdminPagePath,
 	isLoginProfilePath,
 } from "./lib/runtime-routing";
 import {
@@ -261,6 +268,27 @@ function redirectUnknownPathToNotFoundPage(request: NextRequest) {
 	return NextResponse.redirect(url, 307);
 }
 
+function getAdminLoginRedirect(
+	request: NextRequest,
+	authentication: LibraryServerConfig["authentication"],
+) {
+	if (!isAdminPagePath(request.nextUrl.pathname)) return null;
+
+	const session = verifyAdminSessionToken(
+		request.cookies.get(adminSessionCookieName())?.value,
+		{
+			libraryId: authentication.openScholar.libraryId,
+			secret: authentication.secret,
+		},
+	);
+	if (session) return null;
+
+	return buildAdminLoginPageUrl(
+		authentication.openScholar.loginPageUrl,
+		`${request.nextUrl.pathname}${request.nextUrl.search}`,
+	);
+}
+
 export default async function proxy(request: NextRequest) {
 	const libraryConfig = await loadLibraryConfig();
 	const canonicalRedirect = getCanonicalLibraryRedirect(
@@ -270,6 +298,17 @@ export default async function proxy(request: NextRequest) {
 	);
 	if (canonicalRedirect) {
 		return NextResponse.redirect(canonicalRedirect, 308);
+	}
+
+	// The admin page must answer with a real redirect. Rendering it and
+	// calling redirect() there streams a 200 first, so the browser would see
+	// the card-free page instead of the OpenScholar handoff.
+	const adminLoginRedirect = getAdminLoginRedirect(
+		request,
+		libraryConfig.authentication,
+	);
+	if (adminLoginRedirect) {
+		return NextResponse.redirect(adminLoginRedirect, 307);
 	}
 
 	if (request.nextUrl.pathname === "/") {

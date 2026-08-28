@@ -61,6 +61,14 @@ export function isLoginProfilePath(pathname: string) {
 
 export const ADMIN_HOME_PATH = "/admin";
 
+export function isAdminPagePath(pathname: string) {
+	const unlocalizedPathname = getUnlocalizedPathname(pathname);
+	return (
+		unlocalizedPathname === ADMIN_HOME_PATH ||
+		unlocalizedPathname.startsWith("/admin/")
+	);
+}
+
 const adminReturnBaseOrigin = "https://return.invalid";
 
 /**

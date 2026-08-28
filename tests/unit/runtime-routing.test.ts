@@ -6,6 +6,7 @@ import {
 	getExternalRequestOrigin,
 	getUnlocalizedPathname,
 	getValidatedAdminReturnPath,
+	isAdminPagePath,
 	isLoginProfilePath,
 } from "@/lib/runtime-routing";
 
@@ -108,6 +109,25 @@ describe("runtime route enforcement", () => {
 				}),
 			),
 		).toBe("https://library.example.org");
+	});
+});
+
+describe("admin page paths", () => {
+	it.each(["/admin", "/admin/items", "/en-GB/admin", "/fr/admin/items"])(
+		"recognizes the admin page %s",
+		(pathname) => {
+			expect(isAdminPagePath(pathname)).toBe(true);
+		},
+	);
+
+	it.each([
+		"/lib",
+		"/adminish",
+		"/api/admin/items",
+		"/en-GB/api/admin/items",
+		"/",
+	])("leaves %s alone", (pathname) => {
+		expect(isAdminPagePath(pathname)).toBe(false);
 	});
 });
 
