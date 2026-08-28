@@ -34,6 +34,10 @@ import {
 	AnalyticsConsentProvider,
 	useAnalyticsConsent,
 } from "@/components/features/analytics/AnalyticsConsentProvider";
+import {
+	createAnalyticsConsentRecord,
+	serializeAnalyticsConsentRecord,
+} from "@/lib/analytics-consent";
 
 function ConsentController() {
 	const {
@@ -101,6 +105,58 @@ describe("analytics consent provider", () => {
 		await act(async () => {
 			root.unmount();
 		});
+	});
+
+	it("holds the page still until an undecided reader answers", async () => {
+		await act(async () => {
+			root.render(
+				<AnalyticsConsentProvider>
+					<ConsentController />
+				</AnalyticsConsentProvider>,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		const gate = container.querySelector("[data-consent-gate]");
+		expect(gate?.hasAttribute("inert")).toBe(true);
+
+		await act(async () => {
+			clickButton(container, "Decline consent");
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		expect(
+			container
+				.querySelector("[data-consent-gate]")
+				?.hasAttribute("inert"),
+		).toBe(false);
+	});
+
+	it("lets a reader who already answered straight through", async () => {
+		const record = createAnalyticsConsentRecord(
+			{ scope: "https://library.example.org", version: 2 },
+			{ analytics: false, sessionReplay: false },
+		);
+		document.cookie = `analytics_consent=${serializeAnalyticsConsentRecord(
+			record,
+		)}; Path=/`;
+
+		await act(async () => {
+			root.render(
+				<AnalyticsConsentProvider>
+					<ConsentController />
+				</AnalyticsConsentProvider>,
+			);
+		});
+
+		expect(
+			container
+				.querySelector("[data-consent-gate]")
+				?.hasAttribute("inert"),
+		).toBe(false);
+		expect(
+			container.querySelector('[data-testid="consent-open"]')?.textContent,
+		).toBe("false");
 	});
 
 	it("asks again when the policy the reader agreed to has moved on", async () => {

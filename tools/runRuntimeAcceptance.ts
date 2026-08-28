@@ -1410,6 +1410,20 @@ function runBrowserSuite(profile: Profile) {
 		[
 			"playwright",
 			"test",
+			"tests/e2e/consent-gate.spec.ts",
+			"--project",
+			"chromium",
+		],
+		playwrightEnvironment(`${profile.name}-consent-gate`, {
+			...commandEnvironment,
+			...publicExpectations(profile),
+		}),
+	);
+	run(
+		"npx",
+		[
+			"playwright",
+			"test",
 			"tests/e2e/runtime-integrations.spec.ts",
 			"--project",
 			"chromium",

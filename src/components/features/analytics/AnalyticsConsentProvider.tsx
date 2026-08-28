@@ -79,24 +79,18 @@ function consentCookieValue() {
 	);
 }
 
-/** The server cannot see the browser's cookies, so it starts undecided. */
-const noConsentCookie = () => null;
-
-function readConsentCookie(policy: AnalyticsConsentPolicy) {
-	if (typeof document === "undefined") return null;
-	const cookieValue = document.cookie
-		.split("; ")
-		.find((entry) => entry.startsWith(`${ANALYTICS_CONSENT_COOKIE_NAME}=`))
-		?.split("=")
-		.slice(1)
-		.join("=");
-	return parseAnalyticsConsentRecord(cookieValue, policy);
-}
-
 export function AnalyticsConsentProvider({
 	children,
+	storedConsentFromServer = null,
 }: {
 	children: React.ReactNode;
+	/**
+	 * The stored decision as the server saw it. Passing it means the very
+	 * first drawing of the page already knows whether the reader has
+	 * answered, so a returning reader is never gated and a new one is held
+	 * from the start rather than a moment later.
+	 */
+	storedConsentFromServer?: string | null;
 }) {
 	const config = useLibraryConfig();
 	const policy = useMemo(
@@ -112,10 +106,17 @@ export function AnalyticsConsentProvider({
 	const storedConsent = useSyncExternalStore(
 		subscribeToConsentCookie,
 		consentCookieValue,
-		noConsentCookie,
+		() => storedConsentFromServer,
 	);
 	const record = useMemo(
-		() => (storedConsent === null ? null : readConsentCookie(policy)),
+		() =>
+			storedConsent === null
+				? null
+				: parseAnalyticsConsentRecord(
+						storedConsent.split("=").slice(1).join("=") ||
+							undefined,
+						policy,
+					),
 		[policy, storedConsent],
 	);
 	const consentState = analyticsConsentState(record);
@@ -199,7 +200,15 @@ export function AnalyticsConsentProvider({
 
 	return (
 		<AnalyticsConsentContext.Provider value={value}>
-			{children}
+			{/*
+			 * Held still, not hidden. A reader who has not answered can see
+			 * the library but cannot use it, so nothing is typed into a page
+			 * that is about to be covered by the question. `display: contents`
+			 * keeps the page's own layout exactly as it was.
+			 */}
+			<div className="contents" data-consent-gate inert={isPreferencesOpen}>
+				{children}
+			</div>
 		</AnalyticsConsentContext.Provider>
 	);
 }
