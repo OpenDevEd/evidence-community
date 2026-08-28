@@ -56,7 +56,14 @@ test("opens the chat beside the results and closes it again", async ({
 	await expect(searchField(page)).toBeFocused();
 });
 
-test("answers a reader who has turned cookies down", async ({ page }) => {
+test("answers a reader who has turned cookies down", async ({ page }, run) => {
+	// The library counts how often one address may ask, by the address the
+	// server is told. This run asks from an address of its own, so being told
+	// to wait can never stand in for the question being taken.
+	await page.setExtraHTTPHeaders({
+		"x-real-ip": `10.${run.retry}.${run.workerIndex}.${run.repeatEachIndex + 1}`,
+	});
+
 	// Turning cookies down leaves the reader with no analytics id. The
 	// library used to refuse every question such a reader asked.
 	const asked = page.waitForResponse(
@@ -69,10 +76,7 @@ test("answers a reader who has turned cookies down", async ({ page }) => {
 	await askButton(page).click();
 
 	const answer = await asked;
-	// 200 means the question was taken. 429 means this reader has asked too
-	// often just now, which is a fair answer. 400 was the fault: the library
-	// turning the question away because it carried an empty analytics id.
-	expect([200, 429]).toContain(answer.status());
+	expect(answer.status()).toBe(200);
 	await expect(chatPanel(page)).toBeVisible();
 });
 

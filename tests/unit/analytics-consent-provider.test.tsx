@@ -176,7 +176,6 @@ describe("analytics consent provider", () => {
 					<ConsentController />
 				</AnalyticsConsentProvider>,
 			);
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 
 		await vi.waitFor(() => {
@@ -192,7 +191,6 @@ describe("analytics consent provider", () => {
 
 		await act(async () => {
 			clickButton(container, "Grant consent");
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 
 		await vi.waitFor(() => {
@@ -220,11 +218,9 @@ describe("analytics consent provider", () => {
 					<ConsentController />
 				</AnalyticsConsentProvider>,
 			);
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 		await act(async () => {
 			clickButton(container, "Save analytics only");
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 
 		expect(container.querySelector("output")?.textContent).toBe(
@@ -242,12 +238,10 @@ describe("analytics consent provider", () => {
 					<ConsentController />
 				</AnalyticsConsentProvider>,
 			);
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 		await act(async () => {
 			clickButton(container, "Grant consent");
 			clickButton(container, "Decline consent");
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 
 		expect(container.querySelector("output")?.textContent).toBe(
@@ -262,11 +256,9 @@ describe("analytics consent provider", () => {
 					<ConsentController />
 				</AnalyticsConsentProvider>,
 			);
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 		await act(async () => {
 			clickButton(container, "Grant consent");
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 
 		runtime.config.identity.baseUrl = "https://other-library.example.org";
@@ -276,7 +268,6 @@ describe("analytics consent provider", () => {
 					<ConsentController />
 				</AnalyticsConsentProvider>,
 			);
-			await new Promise((resolve) => setTimeout(resolve, 0));
 		});
 
 		await vi.waitFor(() => {

@@ -154,4 +154,3 @@ describe("loading the publications a conversation has used", () => {
 		expect(asked).toEqual([1, 2]);
 	});
 });
-
