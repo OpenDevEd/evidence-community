@@ -5,7 +5,6 @@ import {
 	ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS,
 	ANALYTICS_CONSENT_COOKIE_NAME,
 	DEFAULT_ANALYTICS_CONSENT_PREFERENCES,
-	DEFAULT_ANALYTICS_CONSENT_STATE,
 	analyticsConsentState,
 	createAnalyticsConsentRecord,
 	normalizeAnalyticsConsentScope,
@@ -123,10 +122,11 @@ export function AnalyticsConsentProvider({
 	const preferences =
 		record?.preferences ?? DEFAULT_ANALYTICS_CONSENT_PREFERENCES;
 	const [analyticsReady, setAnalyticsReady] = useState(false);
-	// Null until the reader opens or closes it themselves; until then the
-	// dialog is open exactly when there is no decision yet.
-	const [openedByReader, setOpenedByReader] = useState<boolean | null>(null);
-	const isPreferencesOpen = openedByReader ?? consentState === "pending";
+	const [openedByReader, setOpenedByReader] = useState(false);
+	// An undecided reader is always asked, whatever they closed before. That
+	// includes a reader whose old answer no longer covers what we do, because
+	// the policy has moved on since they gave it.
+	const isPreferencesOpen = consentState === "pending" || openedByReader;
 
 	useEffect(() => {
 		let active = true;

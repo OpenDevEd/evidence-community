@@ -1,15 +1,17 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import { useMemo } from "react";
 import useSWR from "swr";
 
-import type { ItemGetResponse } from "@/app/api/item/types";
+import type { ItemsBatchResponse } from "@/app/api/items/batch/route";
+import type { ListItem } from "@/app/api/item/types";
 import Resource from "@/components/features/items/Resource";
 import type { BucketEntry } from "@/context/InlineChatLayout";
 import { publicationPdfCitationSources } from "@/lib/ai/citations";
-import { fetcher } from "@/lib/utils";
+import { fetcherPOST } from "@/lib/utils";
 
-export type BucketPublication = NonNullable<ItemGetResponse["item"]>;
+export type BucketPublication = ListItem;
 export type BucketPublications = {
 	byKey: Record<string, BucketPublication>;
 	isLoading: boolean;
@@ -17,55 +19,61 @@ export type BucketPublications = {
 	pdfSources: Record<string, string>;
 };
 
-const NO_PUBLICATIONS: BucketPublications = {
-	byKey: {},
-	isLoading: false,
-	pdfSources: {},
-};
+/** Room for every publication one conversation could reasonably touch. */
+const BUCKET_PAGE_SIZE = 200;
 
 /**
- * The publications the assistant has used, loaded once for the whole chat.
+ * The publications the assistant has used, loaded together in one request.
  *
  * Where each one's cited pages live is worked out from that data while the
  * page is drawn, so it can never fall behind the conversation, and clearing
  * the conversation clears it with no help from anyone.
+ *
+ * The request is keyed by the publications themselves, sorted, so reusing a
+ * publication that is already loaded reorders the list without fetching it
+ * again.
  */
 export function useBucketPublications(
 	entries: BucketEntry[],
 ): BucketPublications {
-	const keys = entries.map((entry) => entry.key);
-	const { data, isLoading } = useSWR(
-		keys.length > 0 ? ["bucket-publications", ...keys] : null,
-		async () => {
-			const loaded = await Promise.all(
-				keys.map(async (key) => {
-					const response = (await fetcher(
-						`/item/${key}`,
-					)) as ItemGetResponse;
-
-					return [key, response.item] as const;
-				}),
-			);
-
-			return Object.fromEntries(
-				loaded.filter(([, item]) => item),
-			) as Record<string, BucketPublication>;
+	const wanted = [...new Set(entries.map((entry) => entry.key))].sort();
+	const { data, isLoading } = useSWR<ItemsBatchResponse>(
+		wanted.length > 0
+			? [
+					"/items/batch",
+					{
+						keys: wanted,
+						page: 1,
+						perPage: BUCKET_PAGE_SIZE,
+						includeHeavyFields: true,
+					},
+				]
+			: null,
+		fetcherPOST,
+		{
+			keepPreviousData: true,
+			revalidateIfStale: false,
+			revalidateOnFocus: false,
+			revalidateOnReconnect: false,
 		},
-		{ keepPreviousData: true, revalidateOnFocus: false },
 	);
 
-	if (!data) return { ...NO_PUBLICATIONS, isLoading };
+	const items = data?.items;
 
-	return {
-		byKey: data,
-		isLoading,
-		pdfSources: Object.assign(
-			{},
-			...keys.map((key) =>
-				publicationPdfCitationSources(key, data[key]?.attachmentsData),
-			),
-		) as Record<string, string>,
-	};
+	return useMemo(() => {
+		const byKey: Record<string, BucketPublication> = {};
+		const pdfSources: Record<string, string> = {};
+		for (const item of items ?? []) {
+			if (!item.key) continue;
+			byKey[item.key] = item;
+			Object.assign(
+				pdfSources,
+				publicationPdfCitationSources(item.key, item.attachmentsData),
+			);
+		}
+
+		return { byKey, isLoading, pdfSources };
+	}, [isLoading, items]);
 }
 
 function BucketCard({

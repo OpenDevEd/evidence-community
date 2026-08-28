@@ -36,14 +36,20 @@ import {
 } from "@/components/features/analytics/AnalyticsConsentProvider";
 
 function ConsentController() {
-	const { consentState, preferences, savePreferences, setConsentState } =
-		useAnalyticsConsent();
+	const {
+		consentState,
+		isPreferencesOpen,
+		preferences,
+		savePreferences,
+		setConsentState,
+	} = useAnalyticsConsent();
 	return (
 		<>
 			<output data-testid="consent-state">
 				{consentState}:{String(preferences.analytics)}:
 				{String(preferences.sessionReplay)}
 			</output>
+			<output data-testid="consent-open">{String(isPreferencesOpen)}</output>
 			<button type="button" onClick={() => setConsentState("granted")}>
 				Grant consent
 			</button>
@@ -82,6 +88,10 @@ describe("analytics consent provider", () => {
 		).IS_REACT_ACT_ENVIRONMENT = true;
 		document.cookie = "analytics_consent=; Max-Age=0; Path=/";
 		runtime.config.identity.baseUrl = "https://library.example.org";
+		runtime.config.analytics = {
+			...runtime.config.analytics,
+			consentPolicyVersion: 2,
+		};
 		runtime.applyClientAnalyticsConsent.mockClear();
 		container = document.createElement("div");
 		root = createRoot(container);
@@ -91,6 +101,52 @@ describe("analytics consent provider", () => {
 		await act(async () => {
 			root.unmount();
 		});
+	});
+
+	it("asks again when the policy the reader agreed to has moved on", async () => {
+		await act(async () => {
+			root.render(
+				<AnalyticsConsentProvider>
+					<ConsentController />
+				</AnalyticsConsentProvider>,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		// The reader answers, so the dialog closes and stays closed.
+		await act(async () => {
+			clickButton(container, "Decline consent");
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+		expect(
+			container.querySelector('[data-testid="consent-open"]')?.textContent,
+		).toBe("false");
+		expect(
+			container.querySelector('[data-testid="consent-state"]')
+				?.textContent,
+		).toContain("denied");
+
+		// A new policy means the old answer no longer covers what we do.
+		runtime.config.analytics = {
+			...runtime.config.analytics,
+			consentPolicyVersion: 3,
+		};
+		await act(async () => {
+			root.render(
+				<AnalyticsConsentProvider>
+					<ConsentController />
+				</AnalyticsConsentProvider>,
+			);
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		});
+
+		expect(
+			container.querySelector('[data-testid="consent-state"]')
+				?.textContent,
+		).toContain("pending");
+		expect(
+			container.querySelector('[data-testid="consent-open"]')?.textContent,
+		).toBe("true");
 	});
 
 	it("applies pending first and then stores scoped consent before granting", async () => {
