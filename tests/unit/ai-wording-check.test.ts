@@ -472,3 +472,76 @@ describe("a translator handed to another function", () => {
 		expect(uses).toEqual([]);
 	});
 });
+
+describe("names resolved to what they actually are", () => {
+	it("does not trust a local declared after it is used", () => {
+		const { uses } = scan(`
+			import { useTranslations } from "next-intl";
+			export function Screen() {
+				const t = useTranslations("ai");
+				return <p>{t("not-wording")}</p>;
+			}
+			function useTranslations(group: string) {
+				return (key: string) => key;
+			}
+		`);
+
+		expect(uses).toEqual([]);
+	});
+
+	it("follows the hook through a helper of another name", () => {
+		const { uses } = scanWording([
+			{
+				file: "wording.ts",
+				source: `
+					import { useTranslations } from "next-intl";
+					export const useAiWording = () => useTranslations("ai");
+				`,
+			},
+			{
+				file: "Screen.tsx",
+				source: `
+					import { useAiWording } from "./wording";
+					export function Screen() {
+						const t = useAiWording();
+						return <p>{t("askAI")}</p>;
+					}
+				`,
+			},
+		]);
+
+		expect(names(uses)).toEqual(["ai.askAI"]);
+	});
+
+	it("keeps two helpers of the same name in different files apart", () => {
+		const { uses } = scanWording([
+			{
+				file: "menu.tsx",
+				source: `
+					export const ITEMS = (t: any) => [{ label: t("change") }];
+				`,
+			},
+			{
+				file: "other.tsx",
+				source: `
+					export const ITEMS = (label: any) => [
+						{ label: label("not-wording") },
+					];
+				`,
+			},
+			{
+				file: "Screen.tsx",
+				source: `
+					import { useTranslations } from "next-intl";
+					import { ITEMS } from "./menu";
+					export function Screen() {
+						const t = useTranslations("ai");
+						return <ul>{ITEMS(t)}</ul>;
+					}
+				`,
+			},
+		]);
+
+		expect(names(uses)).toEqual(["ai.change"]);
+	});
+});
