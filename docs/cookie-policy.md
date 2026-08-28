@@ -18,6 +18,7 @@ These cookies support essential functions and do not require analytics consent.
 | --- | --- | --- | --- |
 | `analytics_consent` | {{SITE_HOST}} | Stores the consent-policy version, decision timestamp, product-analytics choice, and session-replay choice. It does not contain a user or analytics identifier. | 180 days |
 | `NEXT_LOCALE` | {{SITE_HOST}} / Next.js | Stores the selected language for localised routing. | Browser-managed |
+| `ai_rate_limit_id` | {{SITE_HOST}} | Gives this browser its own AI request allowance on shared networks. It is used only for abuse prevention, is not available to page scripts, and is not joined to analytics. | 1 year |
 | Auth.js session, callback, and CSRF cookies | {{SITE_HOST}} / Auth.js | Securely supports sign-in, sessions, and protection of authentication requests when account features are used. Exact names may use a secure prefix. | Session or authentication configuration |
 | `__cf_bm` | Cloudflare | Bot management and abuse protection. | Short-lived; Cloudflare-managed |
 | `_cfuvid` | Cloudflare | Security and rate-limiting support for visitors sharing an IP address. | Short-lived; Cloudflare-managed |
