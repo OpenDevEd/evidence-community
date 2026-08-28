@@ -12,8 +12,15 @@ export async function GET(request: NextRequest) {
 	if (denied) return denied;
 
 	try {
+		const { searchParams } = request.nextUrl;
 		return NextResponse.json(
-			{ items: await listInstitutionCounts(await getDatabase()) },
+			await listInstitutionCounts(await getDatabase(), {
+				cursor: searchParams.get("cursor"),
+				direction: searchParams.get("direction"),
+				pageSize: searchParams.get("pageSize") ?? undefined,
+				query: searchParams.get("query") ?? undefined,
+				sort: searchParams.get("sort") ?? undefined,
+			}),
 			{ headers: ADMIN_RESPONSE_HEADERS },
 		);
 	} catch (error) {

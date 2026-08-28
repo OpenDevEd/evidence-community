@@ -1,3 +1,4 @@
+import { isCanonicalRecordKey } from "@opendeved/evidence-library-core";
 import { z } from "zod";
 
 import { AdminValidationError } from "./errors";
@@ -18,7 +19,9 @@ export function parseAdminCollectionView(value: unknown) {
 	return result.data;
 }
 
-const collectionKeySchema = z.string().length(8);
+const collectionKeySchema = z.string().refine(isCanonicalRecordKey, {
+	message: "Collection ids are eight-character record keys",
+});
 const collectionSearchStateSchema = z.enum(["active", "all", "deleted"]);
 export type AdminCollectionSearchState = z.infer<
 	typeof collectionSearchStateSchema
@@ -91,10 +94,37 @@ export function parseAdminCollectionSearchRequest(
 	return searchRequestSchema.parse(value);
 }
 
-const openScholarCollectionRequestSchema = z.object({
-	...pagedRequestFields,
-	query: collectionQuerySchema,
-});
+const OPENSCHOLAR_COLLECTION_MAX_IDS = 200;
+
+/** A comma-separated list of collection ids, repeats removed. */
+const openScholarCollectionIdsSchema = z
+	.string()
+	.transform((value) =>
+		value
+			.split(",")
+			.map((id) => id.trim())
+			.filter(Boolean),
+	)
+	.pipe(z.array(collectionKeySchema).min(1).max(OPENSCHOLAR_COLLECTION_MAX_IDS))
+	.transform((ids) => [...new Set(ids)])
+	.nullable()
+	.default(null);
+
+const openScholarCollectionRequestSchema = z
+	.object({
+		...pagedRequestFields,
+		ids: openScholarCollectionIdsSchema,
+		query: collectionQuerySchema,
+	})
+	.superRefine((value, context) => {
+		if (value.ids && (value.query || value.cursor)) {
+			context.addIssue({
+				code: "custom",
+				message: "Ask for named collections or for a page, not both",
+				path: ["ids"],
+			});
+		}
+	});
 
 /** OpenScholar pickers read the whole catalogue: every source, every state. */
 export function parseOpenScholarCollectionRequest(value: unknown) {

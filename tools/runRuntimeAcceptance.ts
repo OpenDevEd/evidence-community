@@ -25,6 +25,10 @@ import {
 } from "../src/config/library-config/theme";
 import { getOrderedRuntimeLocales } from "../src/i18n/runtime";
 import { localesNames, shortLocalesNames } from "../src/i18n/routing";
+import { PgDialect } from "drizzle-orm/pg-core";
+
+import { parseOpenScholarInstitutionRequest } from "../src/lib/admin/institution-catalog-contract";
+import { buildInstitutionCountsQuery } from "../src/lib/admin/openscholar-institutions";
 import { replaceFileAtomically } from "../src/lib/atomic-file";
 import { requireLibraryComposeServiceReadiness } from "../src/lib/deployment/library-compose-contract";
 import {
@@ -1636,6 +1640,11 @@ async function openScholarRead<T>(
 	return { body: (await response.json()) as T, response };
 }
 
+type OpenScholarInstitutionPage = {
+	items: { count: number; name: string }[];
+	nextCursor: string | null;
+};
+
 type OpenScholarCollectionPage = {
 	items: {
 		count: number;
@@ -1647,8 +1656,323 @@ type OpenScholarCollectionPage = {
 	nextCursor: string | null;
 };
 
-async function verifyOpenScholarReadApi(profile: Profile) {
-	console.log(`\nVerifying ${profile.name} OpenScholar read API`);
+// Institutions the picker must page through. Zephyr is named by three records
+// and Borough by two, so the count order and the name order differ, while the
+// fixture's own Amber Institute and Indigo College keep one count tie.
+const INSTITUTION_FIXTURES = [
+	{ institution: "Zephyr University", key: "ZEPHYRA2" },
+	{ institution: "Zephyr University", key: "ZEPHYRA3" },
+	{ institution: "Zephyr University", key: "ZEPHYRA4" },
+	{ institution: "Borough College", key: "BRGHCLA2" },
+	{ institution: "Borough College", key: "BRGHCLA3" },
+] as const;
+
+const INSTITUTIONS_BY_COUNT = [
+	{ count: 3, name: "Zephyr University" },
+	{ count: 2, name: "Borough College" },
+	{ count: 1, name: "Amber Institute" },
+	{ count: 1, name: "Indigo College" },
+];
+
+const INSTITUTIONS_BY_NAME = [
+	{ count: 1, name: "Amber Institute" },
+	{ count: 2, name: "Borough College" },
+	{ count: 1, name: "Indigo College" },
+	{ count: 3, name: "Zephyr University" },
+];
+
+function seedInstitutionRecords(profile: Profile) {
+	const statements = INSTITUTION_FIXTURES.flatMap((fixture) => [
+		`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${fixture.key}', 'native', '${fixture.key}')`,
+		`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem", "creators") VALUES ('${fixture.key}', 'native', '${fixture.key}', 'JournalArticle', 'Institution paging evidence ${fixture.key}', 1, '2026', now(), 0, NULL, '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"${fixture.institution}","country_code":"GB"}]}]'::jsonb)`,
+	]);
+	postgresScalar(profile.name, statements.join("; "));
+}
+
+function removeInstitutionRecords(profile: Profile) {
+	const keys = INSTITUTION_FIXTURES.map(({ key }) => `'${key}'`).join(", ");
+	postgresScalar(
+		profile.name,
+		`DELETE FROM "item" WHERE key IN (${keys}); DELETE FROM "itemIdentity" WHERE key IN (${keys})`,
+	);
+}
+
+/** Every institution the endpoint returns when it is read one row at a time. */
+async function pageThroughInstitutions(
+	profile: Profile,
+	sort: string,
+	direction: string,
+) {
+	const seen: { count: number; name: string }[] = [];
+	let cursor = "";
+	for (let page = 0; page < INSTITUTIONS_BY_COUNT.length; page += 1) {
+		const parameters = new URLSearchParams({
+			direction,
+			pageSize: "1",
+			sort,
+		});
+		if (cursor) parameters.set("cursor", cursor);
+		const answer = await openScholarRead<OpenScholarInstitutionPage>(
+			profile,
+			`/api/openscholar/institutions?${parameters.toString()}`,
+		);
+		assert.equal(answer.response.status, 200);
+		assert.equal(
+			answer.body.items.length,
+			1,
+			`page ${page + 1} of ${sort} ${direction} must hold exactly one institution`,
+		);
+		seen.push(...answer.body.items);
+		if (!answer.body.nextCursor) return seen;
+		cursor = answer.body.nextCursor;
+	}
+	throw new Error(
+		`Paging ${sort} ${direction} still offered a cursor after ${INSTITUTIONS_BY_COUNT.length} pages`,
+	);
+}
+
+async function verifyInstitutionCursorRules(profile: Profile) {
+	const firstPage = await openScholarRead<OpenScholarInstitutionPage>(
+		profile,
+		"/api/openscholar/institutions?pageSize=1",
+	);
+	const cursor = encodeURIComponent(firstPage.body.nextCursor!);
+	const mismatchBody = {
+		error: {
+			code: "validation_failed",
+			fields: {
+				cursor: "Search again to start from the first result.",
+			},
+			message:
+				"The saved institution position does not match this search. Search again.",
+		},
+	};
+
+	const otherSearch = await openScholarRead(
+		profile,
+		`/api/openscholar/institutions?pageSize=1&cursor=${cursor}&query=zephyr`,
+	);
+	assert.equal(otherSearch.response.status, 400);
+	assert.deepEqual(otherSearch.body, mismatchBody);
+
+	const otherSort = await openScholarRead(
+		profile,
+		`/api/openscholar/institutions?pageSize=1&cursor=${cursor}&sort=name`,
+	);
+	assert.equal(otherSort.response.status, 400);
+	assert.deepEqual(otherSort.body, mismatchBody);
+
+	const otherDirection = await openScholarRead(
+		profile,
+		`/api/openscholar/institutions?pageSize=1&cursor=${cursor}&direction=asc`,
+	);
+	assert.equal(otherDirection.response.status, 400);
+	assert.deepEqual(otherDirection.body, mismatchBody);
+
+	const unreadable = await openScholarRead(
+		profile,
+		"/api/openscholar/institutions?cursor=not-a-cursor",
+	);
+	assert.equal(unreadable.response.status, 400);
+	assert.deepEqual(unreadable.body, {
+		error: {
+			code: "validation_failed",
+			fields: {
+				cursor: "Search again to start from the first result.",
+			},
+			message:
+				"The saved institution position is invalid or expired. Search again.",
+		},
+	});
+}
+
+const LIFECYCLE_KEY = "LIFECYC2";
+const LIFECYCLE_INSTITUTION = "Lifecycle Institute";
+
+function institutionNamesFor(profile: Profile, key: string) {
+	return postgresScalar(
+		profile.name,
+		`SELECT coalesce(string_agg("institutionName", ', ' ORDER BY "institutionName"), '') FROM "itemInstitution" WHERE "itemKey" = '${key}'`,
+	);
+}
+
+function insertInstitutionRecord(
+	profile: Profile,
+	key: string,
+	institution: string,
+) {
+	postgresScalar(
+		profile.name,
+		[
+			`INSERT INTO "itemIdentity" ("key", "sourceConnectionKey", "sourceRecordKey") VALUES ('${key}', 'native', '${key}')`,
+			`INSERT INTO "item" ("key", "sourceConnectionKey", "sourceRecordKey", "itemType", "title", "revision", "date", "dateAdded", "deleted", "parentItem", "creators") VALUES ('${key}', 'native', '${key}', 'JournalArticle', 'Institution evidence ${key}', 1, '2026', now(), 0, NULL, '[{"creatorType":"author","firstName":"Ines","lastName":"Seed","institutions":[{"display_name":"${institution}"},"not-an-object"]},{"creatorType":"author","lastName":"Shape","institutions":{"display_name":"Object Institute"}}]'::jsonb)`,
+		].join("; "),
+	);
+}
+
+function removeInstitutionRecord(profile: Profile, key: string) {
+	postgresScalar(
+		profile.name,
+		`DELETE FROM "itemDraft" WHERE "itemKey" = '${key}'; DELETE FROM "item" WHERE key = '${key}'; DELETE FROM "itemIdentity" WHERE key = '${key}'`,
+	);
+}
+
+/**
+ * The institution rows must follow the published record: a draft alone never
+ * removes them, and a parent, a soft delete or a hard delete does.
+ */
+function verifyInstitutionProjectionLifecycle(profile: Profile) {
+	console.log(`\nVerifying ${profile.name} institution projection lifecycle`);
+	insertInstitutionRecord(profile, LIFECYCLE_KEY, LIFECYCLE_INSTITUTION);
+	try {
+		const change = (statement: string) =>
+			postgresScalar(profile.name, statement);
+		const names = () => institutionNamesFor(profile, LIFECYCLE_KEY);
+		// The record also names a creator whose institutions are an object and
+		// one entry that is a bare string, so this proves both JSON guards: the
+		// write went through and neither shape reached the projection.
+		assert.equal(names(), LIFECYCLE_INSTITUTION, "a new record is listed");
+
+		change(
+			`INSERT INTO "itemDraft" ("itemKey", "sourceConnectionKey", "patch") VALUES ('${LIFECYCLE_KEY}', 'native', '{"parentItem": "AMBR2345"}'::jsonb)`,
+		);
+		assert.equal(
+			names(),
+			LIFECYCLE_INSTITUTION,
+			"an unpublished draft must not remove the institutions",
+		);
+
+		change(
+			`UPDATE "item" SET "parentItem" = 'AMBR2345' WHERE key = '${LIFECYCLE_KEY}'`,
+		);
+		assert.equal(names(), "", "a published child is not listed");
+		change(
+			`UPDATE "item" SET "parentItem" = NULL WHERE key = '${LIFECYCLE_KEY}'`,
+		);
+		assert.equal(names(), LIFECYCLE_INSTITUTION, "a record that becomes top-level is listed again");
+
+		change(`UPDATE "item" SET deleted = 1 WHERE key = '${LIFECYCLE_KEY}'`);
+		assert.equal(names(), "", "a deleted record is not listed");
+		change(`UPDATE "item" SET deleted = 0 WHERE key = '${LIFECYCLE_KEY}'`);
+		assert.equal(names(), LIFECYCLE_INSTITUTION, "a restored record is listed again");
+
+		change(
+			`SELECT refresh_admin_item_list_projection('${LIFECYCLE_KEY}'); SELECT refresh_admin_item_list_projection('${LIFECYCLE_KEY}')`,
+		);
+		assert.equal(
+			postgresScalar(
+				profile.name,
+				`SELECT count(*) FROM "itemInstitution" WHERE "itemKey" = '${LIFECYCLE_KEY}'`,
+			),
+			"1",
+			"refreshing twice must not duplicate a row",
+		);
+	} finally {
+		removeInstitutionRecord(profile, LIFECYCLE_KEY);
+	}
+	assert.equal(
+		institutionNamesFor(profile, LIFECYCLE_KEY),
+		"",
+		"a record deleted for good takes its institutions with it",
+	);
+}
+
+/**
+ * A record whose creators are not a list, or whose creator is not an object,
+ * must be skipped rather than stopping the write with a JSON error.
+ */
+function verifyMalformedCreatorsAreSkipped(profile: Profile) {
+	const key = "MALFRMD2";
+	insertInstitutionRecord(profile, key, "Malformed Institute");
+	try {
+		assert.equal(institutionNamesFor(profile, key), "Malformed Institute");
+		postgresScalar(
+			profile.name,
+			`UPDATE "item" SET creators = '{"creatorType": "author"}'::jsonb WHERE key = '${key}'`,
+		);
+		assert.equal(
+			institutionNamesFor(profile, key),
+			"",
+			"creators that are not a list must be skipped",
+		);
+	} finally {
+		removeInstitutionRecord(profile, key);
+	}
+}
+
+/**
+ * PostgreSQL folds the case of the search and of the stored name together, so
+ * a name with a dotted capital I is found however it is typed.
+ */
+async function verifyNonAsciiInstitutionSearch(profile: Profile) {
+	const institution = "İstanbul Üniversitesi";
+	insertInstitutionRecord(profile, "ISTANBU2", institution);
+	try {
+		for (const query of ["istanbul", "İSTANBUL", "üniversitesi"]) {
+			const found = await openScholarRead<OpenScholarInstitutionPage>(
+				profile,
+				`/api/openscholar/institutions?query=${encodeURIComponent(query)}`,
+			);
+			assert.deepEqual(
+				found.body,
+				{ items: [{ count: 1, name: institution }], nextCursor: null },
+				`searching for ${query} must find ${institution}`,
+			);
+		}
+	} finally {
+		removeInstitutionRecord(profile, "ISTANBU2");
+	}
+}
+
+/** The production query with its values written in, so EXPLAIN can read it. */
+function explainableInstitutionQuery(query: string) {
+	const request = parseOpenScholarInstitutionRequest(
+		query ? { query } : {},
+	);
+	const compiled = new PgDialect().sqlToQuery(
+		buildInstitutionCountsQuery(request, null),
+	);
+	return compiled.sql.replace(/\$(\d+)/gu, (_placeholder, position: string) => {
+		const value = compiled.params[Number(position) - 1];
+		return typeof value === "number"
+			? String(value)
+			: `'${String(value).replace(/'/gu, "''")}'`;
+	});
+}
+
+/** The picker must never read the records themselves. */
+function verifyInstitutionQueryPlans(profile: Profile) {
+	const paged = postgresScalar(
+		profile.name,
+		`EXPLAIN ${explainableInstitutionQuery("")}`,
+	);
+	assert.ok(
+		paged.includes("itemInstitution"),
+		`the paged plan must read the projection:\n${paged}`,
+	);
+	assert.ok(
+		!/\bon "?item"?\b/iu.test(paged) && !/jsonb/iu.test(paged),
+		`the paged plan must not scan the records:\n${paged}`,
+	);
+
+	// The fixture is far too small for the planner to prefer any index, so this
+	// second plan only shows that the search is eligible for the trigram index.
+	const searched = postgresScalar(
+		profile.name,
+		`SET LOCAL enable_seqscan = off; EXPLAIN ${explainableInstitutionQuery("zephyr")}`,
+	);
+	assert.ok(
+		searched.includes("itemInstitution_name_search_idx"),
+		`the search plan must be able to use the trigram index:\n${searched}`,
+	);
+
+	console.log(
+		`Institution paged plan, production query, planner untouched: ${paged.split("\n").join(" | ")}\n` +
+			`Institution search plan, production query, sequential scans off to show the index is eligible: ${searched.split("\n").join(" | ")}`,
+	);
+}
+
+async function verifyOpenScholarInstitutions(profile: Profile) {
 	const denied = await openScholarRead(
 		profile,
 		"/api/openscholar/institutions",
@@ -1656,18 +1980,69 @@ async function verifyOpenScholarReadApi(profile: Profile) {
 	);
 	assert.equal(denied.response.status, 401);
 
-	const institutions = await openScholarRead<{
-		items: { count: number; name: string }[];
-	}>(profile, "/api/openscholar/institutions");
+	const institutions = await openScholarRead<OpenScholarInstitutionPage>(
+		profile,
+		"/api/openscholar/institutions",
+	);
 	assert.equal(institutions.response.status, 200);
 	assert.equal(
 		institutions.response.headers.get("cache-control"),
 		"private, no-store",
 	);
-	assert.deepEqual(institutions.body.items, [
-		{ count: 1, name: "Amber Institute" },
-		{ count: 1, name: "Indigo College" },
-	]);
+	assert.deepEqual(institutions.body, {
+		items: INSTITUTIONS_BY_COUNT,
+		nextCursor: null,
+	});
+
+	assert.deepEqual(
+		await pageThroughInstitutions(profile, "count", "desc"),
+		INSTITUTIONS_BY_COUNT,
+		"paging by count must keep the order and repeat nothing",
+	);
+	assert.deepEqual(
+		await pageThroughInstitutions(profile, "name", "asc"),
+		INSTITUTIONS_BY_NAME,
+		"paging by name must keep the order and repeat nothing",
+	);
+	assert.deepEqual(
+		await pageThroughInstitutions(profile, "count", "asc"),
+		[...INSTITUTIONS_BY_COUNT].reverse().sort((first, second) =>
+			first.count === second.count
+				? first.name.localeCompare(second.name)
+				: first.count - second.count,
+		),
+		"paging by count upwards must keep the order and repeat nothing",
+	);
+	assert.deepEqual(
+		await pageThroughInstitutions(profile, "name", "desc"),
+		[...INSTITUTIONS_BY_NAME].reverse(),
+		"paging by name backwards must keep the order and repeat nothing",
+	);
+
+	const searched = await openScholarRead<OpenScholarInstitutionPage>(
+		profile,
+		"/api/openscholar/institutions?query=INDIGO",
+	);
+	assert.deepEqual(searched.body, {
+		items: [{ count: 1, name: "Indigo College" }],
+		nextCursor: null,
+	});
+
+	await verifyInstitutionCursorRules(profile);
+	verifyInstitutionQueryPlans(profile);
+}
+
+async function verifyOpenScholarReadApi(profile: Profile) {
+	console.log(`\nVerifying ${profile.name} OpenScholar read API`);
+	verifyInstitutionProjectionLifecycle(profile);
+	verifyMalformedCreatorsAreSkipped(profile);
+	await verifyNonAsciiInstitutionSearch(profile);
+	seedInstitutionRecords(profile);
+	try {
+		await verifyOpenScholarInstitutions(profile);
+	} finally {
+		removeInstitutionRecords(profile);
+	}
 
 	const firstPage = await openScholarRead<OpenScholarCollectionPage>(
 		profile,
@@ -1689,6 +2064,34 @@ async function verifyOpenScholarReadApi(profile: Profile) {
 		firstPage.body.items.length + secondPage.body.items.length,
 		"pages must not repeat collections",
 	);
+
+	// Saved link targets are named without opening the picker: the ids come
+	// back in the order they were asked for and an id that no longer exists is
+	// simply left out.
+	const named = await openScholarRead<OpenScholarCollectionPage>(
+		profile,
+		"/api/openscholar/collections?ids=BBN8BK5J,ZZZZZZZZ,ZBJ4NBSL",
+	);
+	assert.equal(named.response.status, 200);
+	assert.deepEqual(
+		named.body.items.map(({ id, title }) => [id, title]),
+		[
+			["BBN8BK5J", "Amber theme collection"],
+			["ZBJ4NBSL", "Amber source collection"],
+		],
+	);
+	assert.equal(named.body.nextCursor, null);
+	assert.equal(
+		named.body.items.find(({ id }) => id === "ZBJ4NBSL")?.count,
+		1,
+		"a named collection carries its record count",
+	);
+
+	const idsWithSearch = await openScholarRead(
+		profile,
+		"/api/openscholar/collections?ids=ZBJ4NBSL&query=source",
+	);
+	assert.equal(idsWithSearch.response.status, 400);
 
 	const search = await openScholarRead<OpenScholarCollectionPage>(
 		profile,
