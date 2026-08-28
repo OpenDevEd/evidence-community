@@ -178,8 +178,14 @@ function isLikelyBrokenKey(key: string) {
 	return /^\d+:[A-Z0-9]{8}$/.test(key);
 }
 
-async function getNoteRedirectDestination(request: NextRequest) {
-	const lookupPath = getRedirectLookupPath(request.nextUrl.pathname);
+async function getNoteRedirectDestination(
+	request: NextRequest,
+	hasOwnerWrittenTerms: boolean,
+) {
+	const lookupPath = getRedirectLookupPath(
+		request.nextUrl.pathname,
+		hasOwnerWrittenTerms,
+	);
 	if (!lookupPath) return null;
 
 	const apiUrl = new URL(
@@ -218,8 +224,15 @@ async function getNoteRedirectDestination(request: NextRequest) {
 	}
 }
 
-function redirectUnknownPathToNotFoundPage(request: NextRequest) {
-	if (!getRedirectLookupPath(request.nextUrl.pathname)) return null;
+function redirectUnknownPathToNotFoundPage(
+	request: NextRequest,
+	hasOwnerWrittenTerms: boolean,
+) {
+	if (
+		!getRedirectLookupPath(request.nextUrl.pathname, hasOwnerWrittenTerms)
+	) {
+		return null;
+	}
 
 	const url = request.nextUrl.clone();
 	const locale = getPlatformPathLocale(request.nextUrl.pathname);
@@ -403,15 +416,21 @@ export default async function proxy(request: NextRequest) {
 		return NextResponse.redirect(url, 307);
 	}
 
+	const hasOwnerWrittenTerms = Boolean(libraryConfig.legal.termsMarkdown);
 	if (libraryConfig.generation.redirects) {
-		const noteRedirectDestination =
-			await getNoteRedirectDestination(request);
+		const noteRedirectDestination = await getNoteRedirectDestination(
+			request,
+			hasOwnerWrittenTerms,
+		);
 		if (noteRedirectDestination) {
 			return NextResponse.redirect(noteRedirectDestination, 307);
 		}
 	}
 
-	const notFoundPageRedirect = redirectUnknownPathToNotFoundPage(request);
+	const notFoundPageRedirect = redirectUnknownPathToNotFoundPage(
+		request,
+		hasOwnerWrittenTerms,
+	);
 	if (notFoundPageRedirect) {
 		return notFoundPageRedirect;
 	}
