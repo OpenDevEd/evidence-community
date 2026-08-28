@@ -20,7 +20,8 @@ export type AnalyticsConsentRecord = AnalyticsConsentPolicy & {
 
 export const ANALYTICS_CONSENT_COOKIE_NAME = "analytics_consent";
 export const ANALYTICS_CONSENT_COOKIE_MAX_AGE_SECONDS = 60 * 60 * 24 * 180;
-export const DEFAULT_ANALYTICS_CONSENT_STATE: AnalyticsConsentState = "pending";
+/** Nobody has answered yet. */
+const DEFAULT_ANALYTICS_CONSENT_STATE: AnalyticsConsentState = "pending";
 export const DEFAULT_ANALYTICS_CONSENT_PREFERENCES = {
 	analytics: false,
 	sessionReplay: false,
