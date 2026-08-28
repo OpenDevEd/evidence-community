@@ -29,7 +29,7 @@ Revised by the user on 2026-08-21. The earlier single-gateway decision (Cloudfla
   1. **Direct provider keys** — the library supplies its own API keys for a limited set of supported providers.
   2. **OpenRouter key** — the library supplies its own OpenRouter API key.
   3. **OpenScholar credits** — requests run through the OpenScholar API endpoint so usage bills to the owner's OpenScholar account under its unified billing handling.
-- All three paths select models from the same stored OpenScholar model list. The server validates every request's provider/model against that stored list and rejects anything not on it; never trust a client-supplied model identifier.
+- All three paths select models from the same stored OpenScholar model list. The server validates every user request's provider/model against the visible entries in that stored list and rejects hidden or unknown models; never trust a client-supplied model identifier.
 - Provider API keys live in the library runtime manifest (the same pattern as `search.embedder`), never in client-visible configuration or environment variables.
 - Test deployments use path 2 (the library's own OpenRouter key).
 - Do not build cross-model fallback. If the selected model request fails, return a controlled error.
@@ -63,7 +63,7 @@ Hidden configured models, confirmed by the user on 2026-08-18:
 | Claude Opus 5   | `anthropic/claude-opus-5`   | No              |
 
 - Keep these Claude models in the central typed model registry with display metadata and provider configuration, but mark them hidden so they never appear in model lists or selection controls.
-- Hidden models may be used programmatically and must remain valid server-side model identifiers.
+- Hidden models may be used only by trusted programmatic code. Public AI request schemas must reject them even when a client sends their exact model IDs.
 - While OpenRouter is the active development gateway, both hidden Claude models use Anthropic automatic prompt caching and explicit large-context breakpoints with a one-hour TTL.
 
 Resolve each target to its current provider or OpenRouter model ID from the stored OpenScholar model list during implementation, and verify direct PDF input, streaming, and tool calling before enabling it. Do not guess or preserve stale IDs.

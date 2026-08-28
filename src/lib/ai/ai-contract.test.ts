@@ -100,7 +100,7 @@ test("Claude models are configured but hidden, and Luna remains the default", ()
 			feature: "summarize",
 			modelId: CLAUDE_SONNET_MODEL_ID,
 		}).success,
-		true,
+		false,
 	);
 });
 

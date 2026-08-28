@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { librarySearchContextSchema } from "@/lib/search-context";
-import { isAIModelId, type AIModelId } from "./models";
+import { isSelectableAIModelId, type AIModelId } from "./models";
 
-export const aiModelIdSchema = z.custom<AIModelId>(isAIModelId, {
+const selectableAIModelIdSchema = z.custom<AIModelId>(isSelectableAIModelId, {
 	message: "Unsupported AI model",
 });
 
@@ -28,7 +28,7 @@ export const publicationGenerationSchema = z
 	.object({
 		prompt: itemKeySchema,
 		feature: z.enum(["summarize", "explain"]),
-		modelId: aiModelIdSchema,
+		modelId: selectableAIModelIdSchema,
 		distinctId: distinctIdSchema,
 	})
 	.strict();
@@ -46,7 +46,7 @@ export const chatRequestSchema = z
 		messages: z.array(z.unknown()).min(1).max(100),
 		trigger: z.enum(["submit-message", "regenerate-message"]),
 		messageId: z.string().trim().min(1).max(200).optional(),
-		modelId: aiModelIdSchema,
+		modelId: selectableAIModelIdSchema,
 		distinctId: distinctIdSchema,
 		itemKey: itemKeySchema.optional(),
 		mode: z.enum(["quick", "research"]),
@@ -73,7 +73,7 @@ export const smartScreeningFieldSchema = z
 export const screeningRequestSchema = z
 	.object({
 		keys: z.array(itemKeySchema).min(1).max(SMART_SCREENING_LIMITS.items),
-		modelId: aiModelIdSchema,
+		modelId: selectableAIModelIdSchema,
 		distinctId: distinctIdSchema,
 		fields: z
 			.array(smartScreeningFieldSchema)
