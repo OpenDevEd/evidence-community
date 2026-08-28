@@ -115,6 +115,13 @@ properties, browser-prefixed rules, at-rules and comments. One line of CSS
 used to be enough to push a logo straight out of its bar, so the runtime now
 allows only what is on the list rather than trying to name everything unsafe.
 
+The values are checked too. Nothing may fetch or read anything, so `url()`,
+`src()`, `image()`, `image-set()`, `element()`, `var()`, `env()`, `attr()`
+and `expression()` are refused, and so is a backslash, which can spell those
+names another way. Lengths are given in `px` or `rem` and may not exceed 8px,
+so a border, a shadow or a blur cannot paint far outside the logo. A corner
+radius has no limit, because it only ever cuts inwards.
+
 ## Database boundary
 
 The `status` table contains content/import status only:

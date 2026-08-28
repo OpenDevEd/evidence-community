@@ -99,24 +99,113 @@ const ALLOWED_LOGO_STYLE_LIST = Array.from(ALLOWED_LOGO_STYLE_PROPERTIES)
 	.sort()
 	.join(", ");
 
-/**
- * Reads the logo CSS the way a browser does and answers with the first thing
- * wrong with it, or `null` when every line is allowed.
- *
- * A written-out list of allowed names is the only safe way to do this. A list
- * of banned names always leaves a way through, such as `flex-basis`, a custom
- * property, or the same rule behind a browser prefix.
- */
-function findLogoStyleProblem(value: string) {
-	if (!value.trim()) return null;
+/** The longest logo CSS a library may save. */
+const MAX_LOGO_STYLE_LENGTH = 10_000;
 
-	let root: Root;
-	try {
-		root = postcss.parse(value);
-	} catch {
-		return `Logo styles must be a list of CSS rules, such as "border-radius: 8px;". Allowed rules: ${ALLOWED_LOGO_STYLE_LIST}.`;
+/**
+ * The largest length a logo rule may use, in pixels. A border, a shadow or a
+ * blur bigger than this paints outside the box the bar gave the logo.
+ */
+const MAX_LOGO_STYLE_LENGTH_PX = 8;
+
+/** How many pixels one unit is worth. Anything else is refused. */
+const LOGO_STYLE_LENGTH_UNITS: Record<string, number> = {
+	em: 16,
+	px: 1,
+	rem: 16,
+};
+
+/**
+ * Names that fetch something, read something, or hand the value to another
+ * rule. None of them belong in a logo's own look.
+ */
+const FORBIDDEN_LOGO_STYLE_FUNCTIONS = [
+	"attr",
+	"element",
+	"env",
+	"expression",
+	"image",
+	"image-set",
+	"src",
+	"url",
+	"var",
+];
+
+const LOGO_STYLE_FUNCTION_PATTERN = new RegExp(
+	`(?:^|[^a-z-])(${FORBIDDEN_LOGO_STYLE_FUNCTIONS.join("|")})\\s*\\(`,
+	"iu",
+);
+
+/** Every number with a unit after it, such as `12px` or `0.5rem`. */
+const LOGO_STYLE_LENGTH_PATTERN =
+	/(-?(?:\d+\.?\d*|\.\d+))\s*([a-z%]+)/giu;
+
+/** A corner radius only ever cuts inwards, so its size is the owner's business. */
+function isCornerRadius(property: string) {
+	return property.endsWith("radius");
+}
+
+/**
+ * The first thing wrong with one rule's value, or `null` when the value only
+ * changes how the logo looks and stays inside its box.
+ */
+function findLogoValueProblem(property: string, value: string) {
+	// A backslash can spell a name a different way, such as `\75 rl(` for
+	// `url(`, so no value may contain one.
+	if (value.includes("\\")) {
+		return `Logo styles cannot use "\\" in the value of "${property}".`;
 	}
 
+	const forbidden = LOGO_STYLE_FUNCTION_PATTERN.exec(value);
+	if (forbidden) {
+		return `Logo styles cannot use "${forbidden[1].toLowerCase()}()". A logo may only be given plain colours, lengths and shapes.`;
+	}
+
+	if (isCornerRadius(property)) return null;
+
+	// A colour such as #818cf8 reads like a number with letters after it, so
+	// take colours out before looking for sizes.
+	const sizes = value.replace(/#[0-9a-f]{3,8}/giu, " ");
+
+	for (const [, amount, unit] of sizes.matchAll(LOGO_STYLE_LENGTH_PATTERN)) {
+		const lowerUnit = unit.toLowerCase();
+		if (lowerUnit === "%") continue;
+
+		const pixelsPerUnit = LOGO_STYLE_LENGTH_UNITS[lowerUnit];
+		if (pixelsPerUnit === undefined) {
+			return `Logo styles cannot measure "${property}" in "${unit}". Use px or rem.`;
+		}
+		if (
+			Math.abs(Number.parseFloat(amount) * pixelsPerUnit) >
+			MAX_LOGO_STYLE_LENGTH_PX
+		) {
+			return `Logo styles cannot use ${amount}${unit} for "${property}". Nothing may reach more than ${MAX_LOGO_STYLE_LENGTH_PX}px outside the logo.`;
+		}
+	}
+
+	return null;
+}
+
+/** What is wrong with the raw text, before any CSS reader touches it. */
+function findLogoTextProblem(value: string) {
+	// Everything here happens before the CSS reader sees the text. The reader
+	// follows a `sourceMappingURL` comment and opens the file it names, and it
+	// will work through a very long string for a long time, so neither of them
+	// ever reaches it.
+	if (value.length > MAX_LOGO_STYLE_LENGTH) {
+		return `Logo styles must be ${MAX_LOGO_STYLE_LENGTH} characters or fewer.`;
+	}
+	if (/[{}<>]/u.test(value)) {
+		return "Logo styles must contain CSS rules only, without braces or markup.";
+	}
+	if (value.includes("/*") || value.includes("*/")) {
+		return "Logo styles cannot contain comments.";
+	}
+
+	return null;
+}
+
+function findLogoRuleProblem(root: Root) {
 	for (const node of root.nodes) {
 		if (node.type !== "decl") {
 			return `Logo styles may only contain CSS rules, one per line. Allowed rules: ${ALLOWED_LOGO_STYLE_LIST}.`;
@@ -129,17 +218,39 @@ function findLogoStyleProblem(value: string) {
 		) {
 			return `Logo styles cannot set "${node.prop.trim()}". A logo may only change how it looks. Allowed rules: ${ALLOWED_LOGO_STYLE_LIST}.`;
 		}
+
+		const valueProblem = findLogoValueProblem(property, node.value);
+		if (valueProblem) return valueProblem;
 	}
 
 	return null;
 }
 
+/**
+ * Reads the logo CSS the way a browser does and answers with the first thing
+ * wrong with it, or `null` when every line is allowed.
+ *
+ * A written-out list of allowed names is the only safe way to do this. A list
+ * of banned names always leaves a way through, such as `flex-basis`, a custom
+ * property, or the same rule behind a browser prefix.
+ */
+function findLogoStyleProblem(value: string) {
+	if (!value.trim()) return null;
+
+	const textProblem = findLogoTextProblem(value);
+	if (textProblem) return textProblem;
+
+	try {
+		return findLogoRuleProblem(
+			postcss.parse(value, { from: undefined, map: false }),
+		);
+	} catch {
+		return `Logo styles must be a list of CSS rules, such as "border-radius: 8px;". Allowed rules: ${ALLOWED_LOGO_STYLE_LIST}.`;
+	}
+}
+
 const logoStylesSchema = rawStringSchema
-	.pipe(z.string().max(10_000))
-	.refine((value) => !/[{}<]/.test(value), {
-		message:
-			"Logo styles must contain CSS declarations only, without braces or markup",
-	})
+	.pipe(z.string().max(MAX_LOGO_STYLE_LENGTH))
 	.superRefine((value, context) => {
 		const problem = findLogoStyleProblem(value);
 		if (!problem) return;

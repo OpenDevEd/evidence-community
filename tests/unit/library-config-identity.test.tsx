@@ -219,6 +219,11 @@ describe("runtime library identity", () => {
 		// "!important" are all ordinary CSS and must still be accepted.
 		"  BORDER-RADIUS :  8px !important ;\n\tBox-Shadow: 0 1px 2px rgb(0 0 0 / 0.2)  ",
 		"background-color: #fff; color: #111; border-top-left-radius: 4px;",
+		// A corner radius only ever cuts inwards, so it has no size limit.
+		"border-radius: 50%;",
+		"box-shadow: inset 0 0 4px rgb(0 0 0 / 0.3);",
+		"box-shadow: 0 2px 4px -2px #000;",
+		"filter: saturate(110%) blur(2px) brightness(1.05);",
 	])("keeps logo CSS that only changes how the logo looks: %s", (logoStyles) => {
 		const input = structuredClone(maximalLibraryConfig);
 		input.identity.assets.logoStyles = logoStyles;
@@ -226,21 +231,17 @@ describe("runtime library identity", () => {
 		expect(libraryConfigSchema.safeParse(input).success).toBe(true);
 	});
 
-	it("renders valid raw CSS without HTML entity escaping", () => {
+	it("puts the configured logo CSS on the page unchanged", () => {
+		const logoStyles =
+			"filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.2));\nbox-shadow: 0 2px 4px -2px #000;";
 		const identity = {
 			...maximalConfig.identity,
-			assets: {
-				...maximalConfig.identity.assets,
-				logoStyles:
-					'filter: url("https://assets.example.org/soften.svg#blur");',
-			},
+			assets: { ...maximalConfig.identity.assets, logoStyles },
 		};
 
 		expect(
 			renderToStaticMarkup(<LibraryLogoStyles identity={identity} />),
-		).toContain(
-			'filter: url("https://assets.example.org/soften.svg#blur");',
-		);
+		).toContain(logoStyles);
 	});
 
 	it.each([
@@ -276,6 +277,32 @@ describe("runtime library identity", () => {
 		"/* just a comment */",
 		"background-image: url('https://assets.example.org/logo.png');",
 		"content: 'x';",
+		// A comment can carry a source-map address, which asks the CSS reader
+		// to open a file of the attacker's choosing.
+		"color: red; /*# sourceMappingURL=../../../../etc/passwd.map */",
+		"/*# sourceMappingURL=https://evil.example/a.map */",
+		"color: /* sneaky */ red;",
+		// Nothing may reach outside the page for a picture or a value.
+		"filter: url('https://evil.example/f.svg#x');",
+		"filter: src('https://evil.example/f.svg');",
+		"background-color: image('a.png');",
+		"background-color: element(#other);",
+		"color: var(--anything);",
+		"color: env(safe-area-inset-top);",
+		"color: attr(data-x);",
+		"color: expression(alert(1));",
+		"filter: \\75 rl('https://evil.example/f.svg');",
+		// Nothing may paint far outside the logo's own box.
+		"border-width: 40px;",
+		"border: 30px solid red;",
+		"border-left-width: 12px;",
+		"box-shadow: 0 0 4px 60px red;",
+		"box-shadow: 200px 0 0 red;",
+		"box-shadow: 0 0 1em #000;",
+		"filter: blur(80px);",
+		"filter: drop-shadow(0 0 100px black);",
+		"border-width: 2rem;",
+		"border-width: 2vw;",
 	])("rejects unconfined logo CSS: %s", (logoStyles) => {
 		const input = structuredClone(maximalLibraryConfig);
 		input.identity.assets.logoStyles = logoStyles;

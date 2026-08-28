@@ -18,7 +18,7 @@ export type LogoShape = (typeof logoShapes)[number];
  * One logo box: how tall its bar draws it, the widest the picture may be, and
  * the box's own width when the box is a fixed square.
  */
-export type LogoBox = {
+type LogoBox = {
 	cap: number;
 	fixedWidth?: number;
 	height: number;
@@ -85,6 +85,31 @@ async function rectangleOf(locator: Locator, what: string) {
  * and width, the picture's height and width. Every number is exact, so a box
  * that grows with its picture fails even when the picture still fits inside it.
  */
+/**
+ * Waits for every animation on the page that has an end. A shimmer that runs
+ * for ever is left alone, or this would never return.
+ */
+export async function waitForAnimations(page: Page) {
+	await page.evaluate(async () => {
+		const running = document
+			.getAnimations()
+			.filter(
+				(animation) =>
+					animation.effect?.getComputedTiming().iterations !==
+					Number.POSITIVE_INFINITY,
+			);
+
+		await Promise.race([
+			Promise.all(
+				running.map((animation) =>
+					animation.finished.catch(() => undefined),
+				),
+			),
+			new Promise((resolve) => setTimeout(resolve, 3_000)),
+		]);
+	});
+}
+
 export async function expectLogoFits(
 	page: Page,
 	box: LogoBox,
@@ -105,9 +130,13 @@ export async function expectLogoFits(
 			),
 		)
 		.toBeGreaterThan(0);
-	// Read the layout box, not the drawn box. A dialog scales as it opens, so
-	// anything read from the screen keeps changing while it moves; the layout
-	// box is the size CSS actually gave the logo and never wobbles.
+	// A dialog scales as it opens, so anything read from the screen keeps
+	// changing while it moves. Let every animation on the page finish first.
+	await waitForAnimations(page);
+
+	// The layout box is the size CSS gave the logo. The drawn box is what a
+	// visitor sees. Both are checked: the layout box catches a wrong rule, the
+	// drawn box catches a stretch or a shrink applied somewhere above it.
 	const layout = await boxLocator.evaluate((element: HTMLElement) => {
 		const picture = Array.from(element.querySelectorAll("img")).find(
 			(candidate) => getComputedStyle(candidate).display !== "none",
@@ -167,6 +196,25 @@ export async function expectLogoFits(
 	expect(boxRectangle.width).toBeCloseTo(expectedBoxWidth, 0);
 	expect(imageRectangle.height).toBeCloseTo(box.height, 0);
 	expect(imageRectangle.width).toBeCloseTo(expectedImageWidth, 0);
+
+	// What the visitor actually sees, at the size it is drawn on the screen.
+	const drawnBox = await rectangleOf(boxLocator, `${label} box`);
+	const drawnImage = await rectangleOf(image, `${label} image`);
+
+	expect(drawnBox.height).toBeCloseTo(box.height, 0);
+	expect(drawnBox.width).toBeCloseTo(expectedBoxWidth, 0);
+	expect(drawnImage.height).toBeCloseTo(box.height, 0);
+	expect(drawnImage.width).toBeCloseTo(expectedImageWidth, 0);
+
+	// And it sits inside its own box, not over the edge of it.
+	expect(drawnImage.x).toBeGreaterThanOrEqual(drawnBox.x - 0.5);
+	expect(drawnImage.y).toBeGreaterThanOrEqual(drawnBox.y - 0.5);
+	expect(drawnImage.x + drawnImage.width).toBeLessThanOrEqual(
+		drawnBox.x + drawnBox.width + 0.5,
+	);
+	expect(drawnImage.y + drawnImage.height).toBeLessThanOrEqual(
+		drawnBox.y + drawnBox.height + 0.5,
+	);
 }
 
 /** The navigation must never sit on top of the logo. */

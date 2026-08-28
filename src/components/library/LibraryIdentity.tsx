@@ -32,18 +32,26 @@ function LibraryLogoImages({
 	const lightLogoRef = useRef<HTMLImageElement>(null);
 	const darkLogoRef = useRef<HTMLImageElement>(null);
 	const hasReportedReady = useRef(false);
-	const reportReady = useCallback(() => {
-		if (hasReportedReady.current) return;
-		hasReportedReady.current = true;
-		onLoad?.();
-	}, [onLoad]);
+	/**
+	 * A library ships a light and a dark logo, and only one of them is ever on
+	 * screen. The other may still be on its way, or may never arrive, so it
+	 * must not decide that the logo is ready: the box would give up the room
+	 * it is holding while the picture people can see is still missing.
+	 */
+	const reportReady = useCallback(
+		(element: HTMLImageElement | null) => {
+			if (hasReportedReady.current || !element) return;
+			if (getComputedStyle(element).display === "none") return;
+
+			hasReportedReady.current = true;
+			onLoad?.();
+		},
+		[onLoad],
+	);
 
 	useEffect(() => {
-		if (
-			lightLogoRef.current?.complete ||
-			darkLogoRef.current?.complete
-		) {
-			reportReady();
+		for (const element of [lightLogoRef.current, darkLogoRef.current]) {
+			if (element?.complete) reportReady(element);
 		}
 	}, [reportReady]);
 
@@ -57,8 +65,8 @@ function LibraryLogoImages({
 					theme: "light",
 				})}
 				className={twMerge("dark:hidden", className)}
-				onError={reportReady}
-				onLoad={reportReady}
+				onError={(event) => reportReady(event.currentTarget)}
+				onLoad={(event) => reportReady(event.currentTarget)}
 				src={identity.assets.logoLight}
 			/>
 			<img
@@ -69,8 +77,8 @@ function LibraryLogoImages({
 					theme: "dark",
 				})}
 				className={twMerge("hidden dark:block", className)}
-				onError={reportReady}
-				onLoad={reportReady}
+				onError={(event) => reportReady(event.currentTarget)}
+				onLoad={(event) => reportReady(event.currentTarget)}
 				src={identity.assets.logoDark}
 			/>
 		</>
@@ -125,7 +133,7 @@ const LIBRARY_LOGO_SIZES = {
 	header: "h-9 min-w-0 max-w-logo-header shrink xl:h-10",
 } as const;
 
-export type LibraryLogoPlace = keyof typeof LIBRARY_LOGO_SIZES;
+type LibraryLogoPlace = keyof typeof LIBRARY_LOGO_SIZES;
 
 /** The library's own logo, drawn inside the box its bar allows. */
 export function LibraryLogo({

@@ -104,20 +104,28 @@ test.describe("on a phone", () => {
 	}
 });
 
-test("holds the widest a logo may be while the picture is still loading", async ({
+test("holds the widest a logo may be until the logo people see arrives", async ({
 	page,
 }) => {
-	let release = () => {};
-	const held = new Promise<void>((resolve) => {
-		release = resolve;
-	});
-	const urls = brandAssetUrls();
 	const shape = logoShapes[0];
+	const visibleUrl =
+		process.env.PLAYWRIGHT_EXPECTED_LOGO_URL ?? brandAssetUrls()[0];
+	const hiddenUrl =
+		brandAssetUrls().find((url) => url !== visibleUrl) ?? visibleUrl;
+
+	const gates = new Map<string, () => void>();
+	const held = new Map<string, Promise<void>>();
+	for (const url of new Set([visibleUrl, hiddenUrl])) {
+		held.set(
+			url,
+			new Promise<void>((resolve) => gates.set(url, resolve)),
+		);
+	}
 
 	await page.route(
-		(url) => urls.includes(url.toString()),
+		(url) => held.has(url.toString()),
 		async (route) => {
-			await held;
+			await held.get(route.request().url());
 			await route.fulfill({
 				body: logoSvg(shape),
 				contentType: "image/svg+xml",
@@ -134,7 +142,24 @@ test("holds the widest a logo may be while the picture is still loading", async 
 
 	await expect.poll(slotWidth).toBeCloseTo(headerReservation, 0);
 
-	release();
+	// The logo for the other colour scheme is never on screen. Its arrival
+	// must not make the header give up the room it is holding.
+	if (hiddenUrl !== visibleUrl) {
+		gates.get(hiddenUrl)!();
+		await expect
+			.poll(() =>
+				page
+					.locator(`img[src="${hiddenUrl}"]`)
+					.first()
+					.evaluate((element: HTMLImageElement) =>
+						element.complete ? element.naturalWidth || 1 : 0,
+					),
+			)
+			.toBeGreaterThan(0);
+		await expect.poll(slotWidth).toBeCloseTo(headerReservation, 0);
+	}
+
+	gates.get(visibleUrl)!();
 	await expectLogoFits(page, logoBoxes.header, shape, "loaded header");
 
 	// Once the picture is there the box is only as wide as the logo itself.
@@ -191,8 +216,15 @@ test.describe("on a narrow screen", () => {
 			0,
 		);
 		expect(overflow).toBeLessThanOrEqual(1);
-		// A very wide logo gives way instead of taking the whole bar.
+		// A very wide logo gives way instead of taking the whole bar, but it
+		// is still drawn: giving way must not squeeze it to nothing.
 		expect(boxRectangle.width).toBeLessThan(logoBoxes.header.cap);
+		expect(boxRectangle.width).toBeGreaterThanOrEqual(
+			logoBoxes.phoneHeader.height,
+		);
+		expect(imageRectangle.width).toBeGreaterThanOrEqual(
+			logoBoxes.phoneHeader.height,
+		);
 		await expectNoOverlapWithNavigation(page);
 	});
 });
