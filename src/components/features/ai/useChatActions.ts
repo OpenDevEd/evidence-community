@@ -20,6 +20,7 @@ import { getAIModelPresentation } from "@/constants/ai";
 import { clientAIError, uiMessageText } from "@/lib/ai/client";
 import { AI_CONTEXT_TOO_LARGE_MESSAGE } from "@/lib/ai/error-message";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
+import { analyticsIdField } from "@/lib/ai/chat-request";
 import type { ResearchRequestContextSnapshot } from "@/lib/ai/request-context";
 import { useIsAISearchEnabled } from "@/hooks/useAISearchMode";
 import type { ChatMode, SmartScreeningField } from "@/types/ai";
@@ -47,7 +48,7 @@ async function screenPublications({
 			keys,
 			modelId,
 			fields,
-			distinctId: getAnalyticsDistinctId(),
+			...analyticsIdField(getAnalyticsDistinctId()),
 		}),
 	});
 	if (!response.ok) throw new Error(await response.text());

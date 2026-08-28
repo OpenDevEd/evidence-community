@@ -18,6 +18,18 @@ export type ChatRequest = {
 	searchContext?: LibrarySearchContext;
 };
 
+/**
+ * The reader's analytics id as a piece of a request body, or nothing at all.
+ *
+ * A reader who has not agreed to analytics, or a library with analytics
+ * switched off, has no id. The library only accepts a real one, so the field
+ * is left out rather than sent empty: sending it empty made every question
+ * from such a reader be refused.
+ */
+export function analyticsIdField(distinctId: string | null | undefined) {
+	return distinctId ? { distinctId } : {};
+}
+
 /** The headers and extra body fields one question carries. */
 export function chatRequestOptions({
 	itemKey,
@@ -31,7 +43,7 @@ export function chatRequestOptions({
 		body: {
 			itemKey,
 			modelId,
-			distinctId: getAnalyticsDistinctId(),
+			...analyticsIdField(getAnalyticsDistinctId()),
 			mode,
 			searchContext,
 		},

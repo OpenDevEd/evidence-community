@@ -30,6 +30,7 @@ import {
 } from "@/context/LibraryConfigProvider";
 import { twMerge } from "tailwind-merge";
 import { getAnalyticsDistinctId } from "@/lib/analytics";
+import { analyticsIdField } from "@/lib/ai/chat-request";
 
 function randomUUID() {
 	return (
@@ -48,7 +49,7 @@ function AiButton({
 	const { selectedModelId, setSelectedModelId } = useSelectedModel();
 	const body = {
 		prompt: data?.item?.key,
-		distinctId: getAnalyticsDistinctId(),
+		...analyticsIdField(getAnalyticsDistinctId()),
 	};
 	const locale = useLocale();
 

@@ -56,6 +56,23 @@ test("opens the chat beside the results and closes it again", async ({
 	await expect(searchField(page)).toBeFocused();
 });
 
+test("answers a reader who has turned cookies down", async ({ page }) => {
+	// Turning cookies down leaves the reader with no analytics id. The
+	// library used to refuse every question such a reader asked.
+	const asked = page.waitForResponse(
+		(response) =>
+			response.url().includes("/api/ai/chat") &&
+			response.request().method() === "POST",
+	);
+
+	await searchField(page).fill("teacher training");
+	await askButton(page).click();
+
+	const answer = await asked;
+	expect(answer.status()).toBe(200);
+	await expect(chatPanel(page)).toBeVisible();
+});
+
 test("opens the chat from the keyboard without leaving the search field", async ({
 	page,
 }) => {

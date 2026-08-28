@@ -17,7 +17,9 @@ vi.mock("@/i18n/routing", () => ({
 	useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 	Link: ({ children }: { children: unknown }) => children,
 }));
-const analyticsId = { value: undefined as string | undefined };
+// The real reader has no analytics id until they agree to analytics, and
+// then it is null, not missing.
+const analyticsId = { value: null as string | null };
 vi.mock("@/lib/analytics", () => ({
 	getAnalyticsDistinctId: () => analyticsId.value,
 }));
@@ -103,7 +105,7 @@ describe("the chat beside the search results", () => {
 		window.localStorage.clear();
 		answering.held = false;
 		answering.release = () => {};
-		analyticsId.value = undefined;
+		analyticsId.value = null;
 		asked = [];
 		container = document.createElement("div");
 		document.body.append(container);
@@ -279,7 +281,7 @@ describe("the chat beside the search results", () => {
 	// A reader who turns cookies down has no analytics id. Sending an empty
 	// one made the library refuse every question they asked.
 	it("leaves the analytics id out when there is none", async () => {
-		analyticsId.value = undefined;
+		analyticsId.value = null;
 		await render();
 		await type("Does teacher training help?");
 		await send();

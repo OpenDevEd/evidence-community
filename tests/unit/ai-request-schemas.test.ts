@@ -35,6 +35,20 @@ describe("what a chat request may contain", () => {
 		expect(parsed.itemKey).toBe("ABCD1234");
 	});
 
+	it("takes a question from a reader who has no analytics id", () => {
+		const parsed = chatRequestSchema.parse(chatRequest);
+
+		expect(parsed.distinctId).toBeUndefined();
+	});
+
+	// The browser must leave the field out rather than send an empty one.
+	// Sending an empty one had the library refuse the question outright.
+	it("refuses an empty analytics id", () => {
+		expect(() =>
+			chatRequestSchema.parse({ ...chatRequest, distinctId: null }),
+		).toThrow();
+	});
+
 	it("refuses a model identifier that is not in the registry", () => {
 		expect(() =>
 			chatRequestSchema.parse({
