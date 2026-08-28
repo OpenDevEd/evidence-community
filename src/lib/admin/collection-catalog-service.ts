@@ -346,13 +346,45 @@ export type OpenScholarCollection = {
 	title: string;
 };
 
+function openScholarCollection(row: CatalogRow): OpenScholarCollection {
+	return {
+		count: row.recordCount,
+		id: row.key,
+		parentId: row.parentCollection,
+		source: row.sourceConnectionKey,
+		title: collectionTitle(row.name),
+	};
+}
+
+/**
+ * The named collections, in the order they were asked for. Ids that no longer
+ * exist are left out, so a saved link target that was deleted simply does not
+ * come back.
+ */
+async function openScholarCollectionsByIds(database: Database, ids: string[]) {
+	const rows = await database
+		.select(catalogSelection(database))
+		.from(collection)
+		.where(inArray(collection.key, ids));
+	const rowsByKey = new Map(rows.map((row) => [row.key, row]));
+	return {
+		items: ids.flatMap((id) => {
+			const row = rowsByKey.get(id);
+			return row ? [openScholarCollection(row)] : [];
+		}),
+		nextCursor: null,
+	};
+}
+
 /** The full catalogue for OpenScholar pickers: every source and every state. */
 export async function listOpenScholarCollections(
 	database: Database,
 	input: unknown,
 ): Promise<{ items: OpenScholarCollection[]; nextCursor: string | null }> {
+	const parsed = parseOpenScholarCollectionRequest(input);
+	if (parsed.ids) return openScholarCollectionsByIds(database, parsed.ids);
 	const request: AdminCollectionSearchRequest = {
-		...parseOpenScholarCollectionRequest(input),
+		...parsed,
 		sourceConnectionKey: null,
 		state: "all",
 	};
@@ -361,16 +393,7 @@ export async function listOpenScholarCollections(
 		request,
 		decodeSearchCursor(request),
 	);
-	return {
-		items: pageRows.map((row) => ({
-			count: row.recordCount,
-			id: row.key,
-			parentId: row.parentCollection,
-			source: row.sourceConnectionKey,
-			title: collectionTitle(row.name),
-		})),
-		nextCursor,
-	};
+	return { items: pageRows.map(openScholarCollection), nextCursor };
 }
 
 export async function resolveAdminCollections(
